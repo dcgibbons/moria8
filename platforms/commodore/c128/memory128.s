@@ -114,7 +114,7 @@
 .const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
-.const BANK1_DB_END     = $7a5f   // the names payload ends with it_unknown_idx at $7a4f, 16 bytes to grow; the tier cache has the rest
+.const BANK1_DB_END     = $7a5f   // the names payload ends with its streams at $79e6, 121 bytes to grow; the catalog has the rest
 // The tier cache took the DB region's last page when tiers gained the
 // cr_treasure SoA field (MON-014): tiers 1-4 needed 5520 bytes. Five DL 1
 // creatures added to tier 1 (2026-10-25) needed 5733: the cache's end moved
@@ -122,9 +122,11 @@
 // needed). Twenty-five more the same day: its start moved down to $7a00, into
 // the DB region's free tail above the item names ($79e1). The Long Bow,
 // Composite Bow and Heavy Crossbow names (2026-10-26) took 16 bytes back.
-// The names payload ends with it_unknown_idx at $7a4f, past its name
-// streams; the cache starts after it and 16 bytes of room to grow (main.s
-// checks the payload's true end).
+// The names payload ended with it_unknown_idx at $7a4f, past its name
+// streams, until the potions of gain stat (2026-11-07): it_unknown_idx moved
+// to the resident items payload and the banked streams took the chest-name
+// tokens, so it ends at $79e6 with 121 bytes to grow (main.s checks the
+// payload's true end).
 .const BANK1_TIER_CACHE_BASE = $7a60
 .const BANK1_TIER_CACHE_SIZE = $9568 - BANK1_TIER_CACHE_BASE  // up to reserved gap 0
 .const BANK1_TIER_CACHE_END  = BANK1_TIER_CACHE_BASE + BANK1_TIER_CACHE_SIZE - 1
@@ -161,6 +163,20 @@
 .const BANK1_HUFFMAN_END          = BANK1_RESERVED_TOP_END
 .const BANK1_HUFFMAN_NMI_VECTOR_BASE = $fffa
 .const BANK1_HUFFMAN_NMI_VECTOR_END  = $fffb
+#if HAL_PLATFORM_MONSTER_CATALOG
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md, C128M-007) takes the
+// tier cache window and the STARTUP overlay slot, which is no longer cached
+// (New Game loads OVL_STARTUP from disk):
+//   $7A60-$7E5F  name pool, 32 species slots x 32 B, written at species fetch
+//   $7E60-$9567  128.CAT: the catalog's 21 fields x 279 creatures, at boot
+//   $A000-$AFFF  128.CNM: the catalog's Huffman-coded names, at boot
+.const BANK1_CATALOG_POOL_BASE   = BANK1_TIER_CACHE_BASE
+.const BANK1_CATALOG_POOL_END    = BANK1_CATALOG_POOL_BASE + 32 * 32 - 1
+.const BANK1_CATALOG_FIELDS_BASE = BANK1_CATALOG_POOL_END + 1
+.const BANK1_CATALOG_FIELDS_END  = BANK1_TIER_CACHE_END
+.const BANK1_CATALOG_NAMES_BASE  = BANK1_OVERLAY_STARTUP_BASE
+.const BANK1_CATALOG_NAMES_END   = BANK1_OVERLAY_STARTUP_END
+#endif
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
 
@@ -893,6 +909,15 @@ mmu_common_helpers_blob_end:
 .assert "Tier cache window matches required preload footprint", BANK1_TIER_CACHE_SIZE, TIER_PRELOAD_REQUIRED
 .assert "Cache-owned Bank1 span stays below top common RAM", BANK1_CACHE_OWNED_END < BANK1_RESERVED_TOP_BASE, true
 .assert "Tier cache stays below overlay cache", BANK1_TIER_CACHE_END < BANK1_OVERLAY_STARTUP_BASE, true
+#if HAL_PLATFORM_MONSTER_CATALOG
+:AssertRegionBefore("Bank1 DB ends before the catalog name pool", BANK1_DB_END, BANK1_CATALOG_POOL_BASE)
+:AssertRegionBefore("Catalog name pool ends before the catalog fields", BANK1_CATALOG_POOL_END, BANK1_CATALOG_FIELDS_BASE)
+:AssertRegionBefore("Catalog fields end before reserved gap 0", BANK1_CATALOG_FIELDS_END, BANK1_RESERVED_GAP0_BASE)
+:AssertRegionBefore("DISARM small-overlay cache ends before the catalog names", BANK1_OVERLAY_DISARM_END, BANK1_CATALOG_NAMES_BASE)
+:AssertRegionBefore("Catalog names end before TOWN overlay slot", BANK1_CATALOG_NAMES_END, BANK1_OVERLAY_TOWN_BASE)
+.assert "Catalog field segment starts at its Bank1 span", BANK1_CATALOG_FIELDS_BASE, $7e60
+.assert "Catalog names segment starts at its Bank1 span", BANK1_CATALOG_NAMES_BASE, $a000
+#endif
 .assert "Overlay cache avoids $D000-$DFFF", BANK1_OVERLAY_DEATH_END < BANK1_RESERVED_IO_BASE, true
 .assert "DUNGEON overlay slot starts after $DFFF", BANK1_OVERLAY_DUNGEON_BASE > BANK1_RESERVED_IO_END, true
 .assert "Overlay cache fits in named owned Bank1 span", OVERLAY_CACHE_DISARM_END <= BANK1_CACHE_OWNED_END, true

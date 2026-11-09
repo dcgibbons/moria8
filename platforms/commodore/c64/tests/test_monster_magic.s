@@ -1,11 +1,13 @@
 // test_monster_magic.s — Runtime tests for monster_magic.s
 //
 // Tests: monster_can_cast (4 tests), wound/blind/confuse/fear spells against
-//        VMS Moria cast_spell (MON-011), monster_cast_breath and its fire
-//        resistances (VMS fire_dam), the shared player saving throw
-//        (player_save.s) and the paralysis touch save.
+//        VMS Moria cast_spell (MON-011), monster_cast_breath by element and
+//        its resistances (VMS light_dam, poison_gas, acid_dam, cold_dam,
+//        fire_dam; MON-025), Hold Person and Free Action, the Multi-Hued
+//        spell choice, the shared player saving throw (player_save.s) and the
+//        paralysis touch save.
 //
-// Results at $0400-$041c: $01 = pass, $00 = fail per test
+// Results at $0400-$0424: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 .pc = $0801 "BASIC Stub"
@@ -16,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #28
+    ldx #36
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -45,6 +47,7 @@ magic_check_new_spells:
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
+#define ITEM_ACTIONS_OVERLAY_EXTERNAL   // not exercised here; frees room below MAP_BASE (below)
 #import "../../common/reu.s"
 #import "../screen.s"
 #import "../../../../core/color.s"
@@ -97,6 +100,14 @@ store_enter:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
 
+// The item actions (an overlay in the product) are not exercised here: out of
+// the way above the I/O hole, as player_create is (the enchantment rules of
+// 2026-11-06 took the body past MAP_BASE).
+.segmentdef TestItemActions [start=$E000]
+.segment TestItemActions
+#import "../../../../core/item_actions_overlay.s"
+.segment Default
+
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
@@ -104,7 +115,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 29, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 37, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -149,6 +160,12 @@ test_start:
     lda #3
     sta zp_player_dlvl
     jsr dungeon_generate
+    // DL3's tier is the one in memory: with none (current_tier 0) the summon
+    // test's tier_check_transition loaded tier 1 from the drive, which has
+    // no disk here, and whether that serial exchange came back followed the
+    // cycle timing (an 18-byte layout shift hung it, 2026-11-07).
+    lda #1
+    sta current_tier
 
     // Place player at a known position
     lda #10
@@ -209,8 +226,8 @@ test_start:
     ldx #20
     lda cr_spell_chance,x
     sta tc_ok                   // Save original
-    lda #100
-    sta cr_spell_chance,x       // 100% chance
+    lda #1
+    sta cr_spell_chance,x       // 1 in 1: always
 
     // Place monster on floor near player — find suitable floor tiles
     // Use player position from dungeon gen
@@ -242,7 +259,7 @@ test_start:
     sta (zp_ptr0),y
 
     jsr monster_can_cast
-    bcc !t2_fail+               // Should set carry (100% chance)
+    bcc !t2_fail+               // Should set carry (1 in 1)
 
     lda #$01
     sta tc_results + 1
@@ -265,7 +282,7 @@ test_start:
 
     // Override chance to 100
     ldx #20
-    lda #100
+    lda #1
     sta cr_spell_chance,x
 
     // Place monster 12 tiles away
@@ -303,7 +320,7 @@ test_start:
 
     // Override chance to 100
     ldx #20
-    lda #100
+    lda #1
     sta cr_spell_chance,x
 
     // Place monster 3 tiles to the right of player
@@ -770,7 +787,7 @@ test_start:
     ldx #22
     lda cr_spell_chance,x
     pha
-    lda #100
+    lda #1
     sta cr_spell_chance,x
 
     ldx #6
@@ -897,7 +914,7 @@ test_start:
     pha
     lda cr_spell_flags + 22
     pha
-    lda #100
+    lda #1
     sta cr_spell_chance + 22
     lda #MSF_BLIND
     sta cr_spell_flags + 22
@@ -1243,7 +1260,7 @@ test_start:
     pha
     lda cr_spell_flags + 22
     pha
-    lda #100
+    lda #1
     sta cr_spell_chance + 22
     lda #MSF_SUMMON
     sta cr_spell_flags + 22
@@ -1337,6 +1354,210 @@ test_start:
     lda #0
     sta zp_eff_resist
 
+    // ==========================================
+    // Tests 30-37: breath by element (VMS spells 20-24: hp / 4 for
+    // lightning, / 3 for the others) and its damage routines, Hold Person
+    // (spell 10) and the Multi-Hued choice of spells (MON-025). The Giant
+    // Salamander (type 24) is given each element in turn.
+    // ==========================================
+    lda cr_spell_chance + 24
+    pha
+    // Test 30: lightning, HP 300 -> 75; fire and frost resistance do not help
+    lda #4 | MS_BREATH_LIGHTNING << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD
+    sta player_pflags
+    lda #3
+    sta zp_eff_resist
+    sta eff_resist_cold_timer
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #75
+    jsr tst_result_eq
+    sta tc_results + 29
+
+    // Test 31: frost, HP 270 -> 90; the cold ring and timer -> 90/3/3 = 10
+    lda #4 | MS_BREATH_FROST << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #<270
+    ldx #>270
+    jsr tst_breath
+    cmp #10
+    jsr tst_result_eq
+    sta tc_results + 30
+
+    // Test 32: fire, uncapped: HP 1200 -> 400, the player 500 -> 100
+    lda #4 | MS_BREATH_FIRE << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #0
+    sta player_pflags
+    sta zp_eff_resist
+    sta eff_resist_cold_timer
+    lda #<1200
+    ldx #>1200
+    jsr tst_breath
+    lda zp_player_hp_hi
+    bne !t32_fail+
+    lda zp_player_hp_lo
+    cmp #100
+!t32_fail:
+    jsr tst_result_eq
+    sta tc_results + 31
+
+    // Test 33: gas, HP 300 -> 100, and poisoned 0 -> 12 + randint(100)
+    lda #4 | MS_BREATH_GAS << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #0
+    sta zp_eff_poison
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #100
+    jsr tst_result_eq
+    sta tc_ok
+    lda zp_eff_poison
+    ldx #13
+    ldy #113
+    jsr tst_result_range
+    and tc_ok
+    sta tc_results + 32
+    lda #0
+    sta zp_eff_poison
+
+    // Test 34: acid, HP 300 -> 100; the only armour worn (Chain mail) is
+    // damaged (to-AC -1), so 100 div 2 = 50
+    lda #4 | MS_BREATH_ACID << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    ldx #EQUIP_BODY
+!t34_clear:
+    lda #FI_EMPTY
+    sta inv_item_id,x
+    lda #0
+    sta inv_to_ac,x
+    inx
+    cpx #EQUIP_HANDS + 1
+    bne !t34_clear-
+    lda #8                      // Chain mail
+    sta inv_item_id + EQUIP_BODY
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #50
+    jsr tst_result_eq
+    sta tc_ok
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$ff
+    jsr tst_result_eq
+    and tc_ok
+    sta tc_results + 33
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_BODY
+    lda #0
+    sta inv_to_ac + EQUIP_BODY
+
+    // Test 35: Hold Person: Free Action leaves the player unaffected; a
+    // failed save paralyses for randint(5) + 4; paralysed already, + 2
+    jsr tst_patch_save
+    lda #0
+    sta tst_save_mode           // The player fails the save
+    lda #24
+    sta zp_mon_type
+    lda #0
+    sta zp_mon_idx
+    sta zp_eff_paralyze
+    lda #PFLAG_FREE_ACT
+    sta player_pflags
+    jsr tst_prep
+    jsr monster_cast_hold
+    lda zp_eff_paralyze
+    cmp #0
+    jsr tst_result_eq
+    sta tc_ok
+    lda #0
+    sta player_pflags
+    jsr tst_prep
+    jsr monster_cast_hold
+    lda zp_eff_paralyze
+    ldx #5
+    ldy #10
+    jsr tst_result_range
+    and tc_ok
+    sta tc_ok
+    lda #3
+    sta zp_eff_paralyze
+    jsr tst_prep
+    jsr monster_cast_hold
+    lda zp_eff_paralyze
+    cmp #5
+    jsr tst_result_eq
+    and tc_ok
+    sta tc_results + 34
+    lda #0
+    sta zp_eff_paralyze
+    jsr tst_unpatch_save
+
+    // Test 36: Multi-Hued (all five): 60 breaths breathe each element
+    lda #4 | MS_BREATH_ALL << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #0
+    sta tst_kinds
+    lda #60
+    sta tc_loop
+!t36_loop:
+    lda #<30
+    ldx #>30
+    jsr tst_breath
+    ldx mm_kind
+    lda recall_spell_bit,x
+    ora tst_kinds
+    sta tst_kinds
+    dec tc_loop
+    bne !t36_loop-
+    lda tst_kinds
+    cmp #%00111110              // Elements 1-5, nothing else
+    jsr tst_result_eq
+    sta tc_results + 35
+
+    // Test 37: Cause Light Wounds and all five breaths are six choices, the
+    // breath five of them (VMS spell_choice): 60 picks breathe 40-60 times
+    // (about 50; one in two, about 30, before)
+    lda cr_spell_flags + 24
+    pha
+    lda #MSF_WOUND_LIGHT | MSF_BREATH
+    sta cr_spell_flags + 24
+    jsr tst_patch_save
+    lda #0
+    sta tst_save_mode
+    sta tst_kinds               // Breaths counted
+    lda #60
+    sta tc_loop
+!t37_loop:
+    lda #<3
+    ldx #>3
+    jsr tst_breath              // The breather in slot 0, HP 3 (breath 1)
+    jsr tst_prep
+    lda #0
+    sta recall_spells + 24
+    jsr monster_pick_spell
+    lda recall_spells + 24
+    and #MSF_BREATH             // Recall marks the breath's bit
+    beq !t37_next+
+    inc tst_kinds
+!t37_next:
+    dec tc_loop
+    bne !t37_loop-
+    jsr tst_unpatch_save
+    pla
+    sta cr_spell_flags + 24
+    lda tst_kinds
+    ldx #40
+    ldy #61
+    jsr tst_result_range
+    sta tc_results + 36
+    pla
+    sta cr_spell_chance + 24
+
 !tests_done:
     jmp test_exit_trampoline
 
@@ -1347,6 +1568,7 @@ tst_save_mode: .byte 0           // 0 = the player fails, 1 = the player saves
 tst_save_adj:  .byte 0           // Adjustment passed to player_saving_throw
 tst_save_orig: .byte 0, 0, 0
 tst_max:       .byte 0           // Test 8: highest damage seen
+tst_kinds:     .byte 0           // Tests 36-37: elements seen, breaths counted
 
 // tst_save_stub — Replaces player_saving_throw while patched.
 tst_save_stub:

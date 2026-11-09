@@ -205,6 +205,7 @@ reu_tier_offset_lo: .byte 0
 reu_tier_offset_hi: .byte 0
 reu_tier_bank:      .byte 0
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tiers (catalog_fetch.s reads records)
 // REU start offsets for each tier (filled during reu_load_all_tiers)
 // Index 0 unused; tier 1 always starts at offset 0
 reu_tier_start_lo:  .byte 0, 0, 0, 0, 0
@@ -255,6 +256,7 @@ reu_fetch_tier:
     sta hal_memory_cpu_port     // Restore bank config
     plp
     rts
+#endif
 
 
 // Computed from the platform overlay filename table (labels resolve in a
@@ -398,11 +400,13 @@ reu_show_status:
 
 // Display pointer tables (0-based index). These intentionally point at the
 // platform-owned KERNAL filename literals; do not add separate display copies.
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
 .label reu_fn_tier_lo = hal_storage_tier_name_lo
 .label reu_fn_tier_hi = hal_storage_tier_name_hi
+.assert "Tier filename table count stays in sync", hal_storage_tier_name_hi - hal_storage_tier_name_lo, 4
+#endif
 .label reu_fn_ovl_lo = hal_storage_overlay_name_lo
 .label reu_fn_ovl_hi = hal_storage_overlay_name_hi
-.assert "Tier filename table count stays in sync", hal_storage_tier_name_hi - hal_storage_tier_name_lo, 4
 .assert "Overlay filename table count stays in sync", hal_storage_overlay_name_hi - hal_storage_overlay_name_lo, REU_OVERLAY_COUNT
 
 // Progress message parts (reassembled by reu_render_progress)

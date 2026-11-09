@@ -10,11 +10,24 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from .launch import ROOT
 from .screen import screen_code_to_char
 
 TIER_DIR = ROOT / "platforms/commodore/c64/creature_data"
+# Ports built with the monster catalog (docs/MONSTER_CATALOG_DESIGN.md) meet
+# the catalog's creatures, not the tiers': the HAL flag in their policy file.
+CATALOG_PORTS = {"cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
+                 "c128": ROOT / "platforms/commodore/c128/main.s",
+                 "c64": ROOT / "platforms/commodore/c64/main.s",
+                 "plus4": ROOT / "platforms/commodore/plus4/main.s",
+                 "apple2": ROOT / "platforms/apple2/main.s",
+                 "bbcmaster": ROOT / "platforms/bbcmaster/main.s",
+                 "atari8": ROOT / "platforms/atari8/main.s"}
+CATALOG_DIR = ROOT / "platforms/shared/catalog"
+CATALOG_FLAG = "#define HAL_PLATFORM_MONSTER_CATALOG"
+_catalog_dir: Path | None = None
 MONSTER_ATTACK = ROOT / "core/monster_attack.s"
 TIER_LINE = re.compile(r"^//\s+\d+: \[\s*\d+\] DL\s*(\d+) (.+?)\s*$")
 TIER_TABLE = re.compile(r"^tier\d+_cr_(\w+):\n((?:[ \t]*\.byte[^\n]*\n)+)", re.M)
@@ -26,11 +39,58 @@ SPEED_MASK = 0x03         # cr_speed bits 3-5 hold random-move flags (MON-013)
 RANDOM_MASK = 0x38
 
 
+def use_port(name: str) -> None:
+    """Know the creatures of port ``name``'s build: the catalog's playable
+    creatures and the town roster when it is built with the catalog, else
+    the tiers."""
+    global _catalog_dir
+    policy = CATALOG_PORTS.get(name)
+    catalog = CATALOG_DIR if policy and CATALOG_FLAG in policy.read_text() else None
+    if catalog != _catalog_dir:
+        _catalog_dir = catalog
+        for value in list(globals().values()):
+            if hasattr(value, "cache_clear"):
+                value.cache_clear()
+
+
+def uses_catalog() -> bool:
+    """The port named in ``use_port`` is built with the monster catalog."""
+    return _catalog_dir is not None
+
+
+def _catalog() -> tuple[list[str], dict[str, list[int]]]:
+    """(names, byte tables by field) of the catalog's playable dungeon
+    creatures (platforms/shared/catalog: fields, index and names)."""
+    assert _catalog_dir is not None
+    data = _catalog_dir
+    bank = (data / "catalog_fields.s").read_text() + (data / "catalog_index.s").read_text()
+    town = int(re.search(r"^\.const CATALOG_TOWN_COUNT = (\d+)", bank, re.M).group(1))
+    names = re.findall(r"^catn_\d+:.*// (.+?)\s*$", (data / "catalog_names.s").read_text(), re.M)
+    def values(label: str) -> list[int]:   # the .byte lines after the label
+        body = re.search(rf"^{label}:[^\n]*\n((?:[ \t]*\.byte[^\n]*\n)+)", bank, re.M).group(1)
+        return [int(v, 16) for v in re.findall(r"\$([0-9a-fA-F]{2})", body)]
+
+    bitmap = values("cat_available")
+    keep = [i for i in range(town, len(names)) if bitmap[i // 8] >> (i % 8) & 1]
+    tables = {label: [v for i, v in enumerate(values(f"cat_cr_{label}")) if i in keep]
+              for label in re.findall(r"^cat_cr_(\w+):$", bank, re.M)}
+    return [names[i] for i in keep], tables
+
+
+def _tier_files() -> list[Path]:
+    """The tier files whose creatures the port meets: the town roster alone
+    beside the catalog."""
+    return sorted(TIER_DIR.glob("tier0.s" if _catalog_dir is not None else "tier[0-9].s"))
+
+
 @lru_cache(maxsize=1)
 def creature_levels() -> dict[str, int]:
     """Creature name -> native dungeon level, for every shipped creature."""
     levels: dict[str, int] = {}
-    for path in sorted(TIER_DIR.glob("tier[0-9].s")):
+    if _catalog_dir is not None:
+        names, tables = _catalog()
+        levels.update(zip(names, tables["level"]))
+    for path in _tier_files():
         for line in path.read_text().splitlines():
             match = TIER_LINE.match(line)
             if match:
@@ -48,8 +108,8 @@ def kinds_by_name() -> dict[str, tuple[str, int]]:
 @lru_cache(maxsize=1)
 def _tiers() -> list[tuple[list[str], dict[str, list[int]]]]:
     """(creature names, byte tables by label) for each shipped tier file."""
-    tiers = []
-    for path in sorted(TIER_DIR.glob("tier[0-9].s")):
+    tiers = [_catalog()] if _catalog_dir is not None else []
+    for path in _tier_files():
         text = path.read_text()
         names = [m.group(2) for m in map(TIER_LINE.match, text.splitlines()) if m]
         tables = {label: [int(v, 16) for v in re.findall(r"\$([0-9a-fA-F]{2})", body)]
@@ -108,13 +168,36 @@ def attack_tohit() -> list[int]:
 
 
 SPELL_WOUND_LIGHT, SPELL_BREATH, SPELL_WOUND_SERIOUS = 0x01, 0x02, 0x40   # cr_spell_flags (mm_spell_handlers)
+# cr_spell_chance (core/monster.s MS_*): the 1-in-N cast frequency in bits 0-3,
+# the breath element in bits 4-6 (all five: 6), Hold Person in bit 7.
+SPELL_FREQ_MASK = 0x0F
+BREATH_ELEMENTS = {1: "lightning", 2: "gas", 3: "acid", 4: "frost", 5: "fire"}
+ALL_ELEMENTS = frozenset(BREATH_ELEMENTS.values())
+
+
+def breath_elements(chance: int) -> frozenset[str]:
+    """The elements a breather's cr_spell_chance byte names (all five for a
+    Multi-Hued dragon)."""
+    kind = chance >> 4 & 7
+    return ALL_ELEMENTS if kind == 6 else frozenset({BREATH_ELEMENTS[kind]}) if kind in BREATH_ELEMENTS else ALL_ELEMENTS
+
+
+def breath_damage(chance: int, num: int, sides: int) -> int:
+    """A breath from full HP (monster_cast_breath, VMS spells 20-24): a
+    quarter for lightning, a third for the others; the bigger, all five."""
+    return num * sides // (4 if breath_elements(chance) == {"lightning"} else 3)
+
+
+def wound_burst(flags: int) -> int:
+    """The most Cause Light (3d8) or Serious (8d8) Wounds does."""
+    return max(24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0)
 
 
 @lru_cache(maxsize=1)
 def spell_burst() -> dict[tuple[str, int], int]:
     """(screen glyph, creature level) -> the most damage one spell does from
     the strongest shipped caster drawn that way: Cause Light Wounds 3d8,
-    Cause Serious Wounds 8d8, breath a third of its HP."""
+    Cause Serious Wounds 8d8, breath (``breath_damage``), resistance aside."""
     out: dict[tuple[str, int], int] = {}
     for _, tables in _tiers():
         for code, level, flags, chance, num, sides in zip(tables["display"], tables["level"],
@@ -122,24 +205,53 @@ def spell_burst() -> dict[tuple[str, int], int]:
                                                          tables["hd_num"], tables["hd_sides"]):
             if chance:
                 key = (screen_code_to_char(code), level)
-                most = max(24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0,
-                           num * sides // 3 if flags & SPELL_BREATH else 0)
+                most = max(wound_burst(flags), breath_damage(chance, num, sides) if flags & SPELL_BREATH else 0)
                 out[key] = max(out.get(key, 0), most)
+    return out
+
+
+@lru_cache(maxsize=1)
+def breath_info() -> dict[tuple[str, int], tuple[int, frozenset[str], int]]:
+    """(screen glyph, creature level) -> (the biggest breath, every element
+    breathed, the biggest other spell) of the shipped breathers drawn that
+    way: resistance divides a breath by its element (monster_cast_breath)."""
+    out: dict[tuple[str, int], tuple[int, frozenset[str], int]] = {}
+    for _, tables in _tiers():
+        for code, level, flags, chance, num, sides in zip(tables["display"], tables["level"],
+                                                         tables["spell_flags"], tables["spell_chance"],
+                                                         tables["hd_num"], tables["hd_sides"]):
+            if chance and flags & SPELL_BREATH:
+                key = (screen_code_to_char(code), level)
+                held = out.get(key, (0, frozenset(), 0))
+                out[key] = (max(held[0], breath_damage(chance, num, sides)), held[1] | breath_elements(chance),
+                            max(held[2], wound_burst(flags)))
+    return out
+
+
+@lru_cache(maxsize=1)
+def spell_rate() -> dict[tuple[str, int], float]:
+    """(screen glyph, creature level) -> the largest share of its turns the
+    shipped casters drawn that way spend casting (``spell_chance``: 1 in N)."""
+    out: dict[tuple[str, int], float] = {}
+    for _, tables in _tiers():
+        for code, level, chance in zip(tables["display"], tables["level"], tables["spell_chance"]):
+            if chance & SPELL_FREQ_MASK:
+                key = (screen_code_to_char(code), level)
+                out[key] = max(out.get(key, 0.0), 1 / (chance & SPELL_FREQ_MASK))
     return out
 
 
 @lru_cache(maxsize=None)
 def spell_max(depth: int) -> int:
     """Most damage one spell can do from a shipped caster native to ``depth``
-    or shallower: Cause Light Wounds 3d8, Cause Serious Wounds 8d8, breath a
-    third of the caster's HP (``core/monster_magic.s``)."""
+    or shallower: Cause Light Wounds 3d8, Cause Serious Wounds 8d8, breath
+    (``breath_damage``; ``core/monster_magic.s``)."""
     most = 0
     for _, tables in _tiers():
         for level, flags, chance, num, sides in zip(tables["level"], tables["spell_flags"], tables["spell_chance"],
                                                     tables["hd_num"], tables["hd_sides"]):
             if chance and level <= depth:
-                most = max(most, 24 if flags & SPELL_WOUND_LIGHT else 0, 64 if flags & SPELL_WOUND_SERIOUS else 0,
-                           num * sides // 3 if flags & SPELL_BREATH else 0)
+                most = max(most, wound_burst(flags), breath_damage(chance, num, sides) if flags & SPELL_BREATH else 0)
     return most
 
 
@@ -160,6 +272,30 @@ def ranged_kinds() -> frozenset[tuple[str, int]]:
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
                      for code, level, chance in zip(tables["display"], tables["level"], tables["spell_chance"])
                      if chance)
+
+
+ATK_PARALYZE = 11   # core/monster.s: the paralysing touch or gaze (mon_atk_effect_paralyze)
+ATK_POISON = 14     # ... and the poisoning one
+
+
+@lru_cache(maxsize=1)
+def poisoner_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) of the shipped creatures whose blows
+    poison: curing beside one is undone by its next hit."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, a, b in zip(tables["display"], tables["level"], tables["atk0_type"], tables["atk1_type"])
+                     if ATK_POISON in (a, b))
+
+
+@lru_cache(maxsize=1)
+def touch_paralyzers() -> frozenset[str]:
+    """Names of the shipped creatures whose blows paralyse (the Floating
+    Eye's gaze, the Iridescent Beetle's bite): its melee reach is the danger.
+    A Hold Person caster's "paralyzes you." reads the same, from any range
+    (monster_cast_hold), so walking out of its reach does nothing."""
+    return frozenset(name for names, tables in _tiers()
+                     for name, a, b in zip(names, tables["atk0_type"], tables["atk1_type"])
+                     if ATK_PARALYZE in (a, b))
 
 
 def casts(glyph: str, level: int) -> bool:
@@ -254,6 +390,22 @@ def breeder_kinds() -> frozenset[tuple[str, int]]:
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
                      for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
                      if flags & CF_BREEDER)
+
+
+MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0}   # a turn's moves by speed code (core/monster_ai.s)
+
+
+@lru_cache(maxsize=1)
+def moves() -> dict[tuple[str, int], float]:
+    """(screen glyph, creature level) -> moves (so rounds of attacks) a
+    player turn, of the fastest shipped creature drawn that way at that
+    level: a fast one acts twice (core/monster_ai.s)."""
+    out: dict[tuple[str, int], float] = {}
+    for _, tables in _tiers():
+        for code, level, speed in zip(tables["display"], tables["level"], tables["speed"]):
+            key = (screen_code_to_char(code), level)
+            out[key] = max(out.get(key, 0.0), MOVES.get(speed & SPEED_MASK, 1.0))
+    return out
 
 
 @lru_cache(maxsize=1)

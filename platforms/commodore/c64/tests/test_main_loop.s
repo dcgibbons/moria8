@@ -16,11 +16,14 @@
 #define TURN_PRODUCTION_REST_STATE
 
 bootstrap:
-    :BankOutBasic()
+    // RAM at $A000-$BFFF and $E000-$FFFF, I/O kept ($01 = $35): the test
+    // bodies run from under the KERNAL (TestBodies), so no IRQ.
+    sei
+    :BankOutKernal()
     jmp test_start
 
 test_finish:
-    ldx #52
+    ldx #54
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -330,7 +333,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 53, $ff
+tc_results: .fill 55, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -648,7 +651,16 @@ reset_state:
 run_case:
     lda #6
     sta test_cmd_budget
+    // The game runs as before, the KERNAL in and IRQs on (tests 51-53 read
+    // real keys through it); the test bodies under it run with both off.
+    // $36, not BankInKernal's $37: BASIC would hide Main's $A000 and up.
+    lda #$36
+    sta $01
+    cli
     jsr main_loop
+    sei
+    lda #$35
+    sta $01
     rts
 
 test_input_get_command:
@@ -1048,6 +1060,14 @@ test_monster_spawn_level:
 test_item_spawn_level:
     rts
 
+main_loop_default_end:
+// The test bodies, under the KERNAL: with them in Main the binary ran
+// 3.5 KB into MAP_BASE ($C000-$CEFF), where the game's map writes during a
+// case could overwrite test code (2026-11-07).
+// A block of Default, so the PRG loads it (a segment of its own is assembled
+// for its symbols only, as TestUnusedOverlay is); autostart's injection
+// writes the gap's zeros to the RAM under the I/O hole and the ROMs.
+.pc = $E700 "Test Bodies"
 test_start:
     sei
     cld
@@ -2233,22 +2253,6 @@ test_start:
     sta zp_player_y
     sta player_data + PL_MAP_Y
 
-    // Rows 28-31 overlap this suite's code ($C8FA-$C9BC); redirect them to
-    // scratch so the writes below cannot corrupt the running test.
-    ldx #28
-!t33_redir:
-    txa
-    sec
-    sbc #28
-    tay
-    lda t33_scratch_lo,y
-    sta map_row_lo,x
-    lda t33_scratch_hi,y
-    sta map_row_hi,x
-    inx
-    cpx #32
-    bne !t33_redir-
-
     ldx #28
 !t33_floor_loop:
     lda map_row_lo,x
@@ -2798,6 +2802,11 @@ test_start:
     // Paralysis 2: one paralyzed turn (2 -> 1), then the counter runs out at
     // the start of the next turn and the scripted REST is read and played:
     // 2 turns. The old order spent a second paralyzed turn (3 turns).
+    // The paralyzed turn ends as any turn does, the view updated and the map
+    // redrawn (TURN_RENDER_CONTRACT: teleport invalidates the scene at once):
+    // a monster's Teleport To moved the player there, and
+    // with the status line alone the map kept the old '@' until the next
+    // command (C64 Balrog playtest, 2026-11-07). So two view updates.
 !t48:
     jsr reset_state
     lda #47
@@ -2815,6 +2824,9 @@ test_start:
     bne !t48_fail+
     lda test_turn_calls
     cmp #2
+    bne !t48_fail+
+    lda test_viewport_calls
+    cmp #2                          // the paralyzed turn's, then the REST's
     bne !t48_fail+
     lda #$01
     sta tc_results + 47
@@ -2998,11 +3010,70 @@ test_start:
     bne !t53_fail+
     lda #$01
     sta tc_results + 52
-    jmp test_finish
+    jmp !t54+
 !t53_fail:
     lda #$00
     sta tc_results + 52
+
+    // Test 54: a disk prompt since the last pass (asset_load_ask_for_disk
+    // sets disk_prompt_redraw_pending) rebuilds the gameplay view before
+    // the next command is read, and the flag is cleared: that redraw, then
+    // the REST's own view update. A Plus/4 playtest level-up's failed load
+    // left "Insert program disk" over the map (2026-11-07).
+!t54:
+    jsr install_jump_patch           // scripted commands again after 51-53's real keys
+    jsr reset_state
+    lda #53
+    sta test_case_idx
+    lda #1
+    sta disk_prompt_redraw_pending
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda disk_prompt_redraw_pending
+    bne !t54_fail+
+    lda test_viewport_calls
+    cmp #2
+    bne !t54_fail+
+    lda #$01
+    sta tc_results + 53
+    jmp !t55+
+!t54_fail:
+    lda #0
+    sta disk_prompt_redraw_pending
+    sta tc_results + 53
+
+    // Test 55: the program-media prompt (disk_prompt_game_required_error)
+    // clears the screen, so it owes the next pass a redraw too: a Plus/4
+    // look's probe failed, a key brought the disk back and the game played
+    // on under "Insert program disk" (build queue, 2026-11-09).
+!t55:
+    lda #0
+    sta disk_prompt_redraw_pending
+#if PLATFORM_REQUIRES_MEDIA_PROBE
+    :PatchJump(hal_storage_require_program_media, t55_probe_ok)
+    :PatchJump(hal_storage_init_selected_drive, t55_return)
+#else
+    :PatchJump(disk_prompt_game, t55_probe_ok)
+#endif
+    :PatchJump(input_get_modal_dismiss_key, t55_return)
+    jsr disk_prompt_game_required_error
+    lda disk_prompt_redraw_pending
+    beq !t55_fail+
+    lda #$01
+    sta tc_results + 54
     jmp test_finish
+!t55_fail:
+    lda #0
+    sta tc_results + 54
+    jmp test_finish
+
+t55_probe_ok:
+    clc                              // the program disk answers this time
+t55_return:
+    rts
 
 // A trap of type 0 at the player's reset position (10, 10).
 t49_trap_under_player:
@@ -3016,12 +3087,6 @@ t49_trap_under_player:
     sta trap_type
     rts
 
-t33_scratch_lo: .byte <t33_scratch_28, <t33_scratch_29, <t33_scratch_30, <t33_scratch_31
-t33_scratch_hi: .byte >t33_scratch_28, >t33_scratch_29, >t33_scratch_30, >t33_scratch_31
-t33_scratch_28: .fill MAP_COLS, 0
-t33_scratch_29: .fill MAP_COLS, 0
-t33_scratch_30: .fill MAP_COLS, 0
-t33_scratch_31: .fill MAP_COLS, 0
-
 main_loop_test_end:
-.assert "Main-loop test body stays below TestCreateOverlay", main_loop_test_end <= $D000, true
+.assert "Main-loop Main stays below MAP_BASE", main_loop_default_end <= MAP_BASE, true
+.assert "Main-loop test bodies stay below the CPU vectors", main_loop_test_end <= $FFFA, true

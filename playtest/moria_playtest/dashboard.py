@@ -29,7 +29,10 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import math
+import statistics
 import re
+import subprocess
 import sys
 import time
 from contextlib import closing
@@ -461,7 +464,7 @@ def disk() -> dict[str, Any]:
 
 RATINGS = ("Easy", "Medium", "Hard", "Very Hard")
 RATING_MIN_RUNS = 5   # counted runs before a combination is rated
-SPELL_COVERAGE_LEVEL = 25   # criterion 2: the spells a class learns by this level
+SPELL_COVERAGE_LEVEL = 25   # criterion 2: the spells a class learns below this level, castable before it
 
 
 def rate(value: float, bounds: tuple[float, float, float], higher_is_easier: bool = True) -> str:
@@ -497,7 +500,8 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
         records = cached(home / "runs.jsonl", queue_records) or []
         main = [r for r in records if r.get("queue") == "main" and r.get("goal") == goal and r["outcome"] in counted
                 and r.get("epoch", "") == epoch]
-        return {"ratings": ratings(main), "features": queue_features(main), "runs": len(records),
+        return {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
+                "builds": build_history(records, counted), "runs": len(records),
                 "recent": records[-30:][::-1]}
     with closing(db):
         # Every insert takes a new rowid, so the count and the last rowid change with each.
@@ -509,8 +513,130 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
             main = run_records.records(db, f"queue = 'main' AND goal = ? AND outcome IN "
                                            f"({', '.join('?' * len(counted))})", (goal, *counted))
             main = [r for r in main if r.get("epoch", "") == epoch]   # the current epoch's runs only
-            _cache[key] = {"ratings": ratings(main), "features": queue_features(main)}
+            _cache[key] = {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
+                           "builds": build_history(run_records.records(db, "queue = 'build'"), counted)}
         return {**_cache[key], "runs": version[0], "recent": run_records.records(db, newest=30)}
+
+
+BUILD_HISTORY = 40      # builds the Builds card shows, newest last
+NOISE_FINDINGS = ("stall:", "load_retry:")   # findings that are no defect (watch.py does the same)
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """The 95% Wilson score interval of k successes in n."""
+    if not n:
+        return 0.0, 1.0
+    p, d = k / n, 1 + z * z / n
+    mid, half = (p + z * z / (2 * n)) / d, z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return max(0.0, mid - half), min(1.0, mid + half)
+
+
+_subjects: dict[str, str] = {}
+
+
+def commit_subject(commit: str) -> str:
+    """A commit's subject line, from this tree's git; "" when unknown."""
+    if commit and commit not in _subjects:
+        try:
+            done = subprocess.run(["git", "log", "-1", "--format=%s", commit], cwd=ROOT, capture_output=True,
+                                  text=True, timeout=10)
+            _subjects[commit] = done.stdout.strip() if done.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            _subjects[commit] = ""
+    return _subjects.get(commit, "")
+
+
+def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> list[dict[str, Any]]:
+    """The build queue's builds in the order they started playing (§23.4
+    Builds card): each one's live span (its first game's start to the next
+    build's), its counted games and goals reached, a 95% range on the rate,
+    the median last level, its findings, and the same counts by port. Each
+    build's ``detail`` by port feeds the build-queue panel, which shows the
+    build being played alone (maintainer, 2026-11-08: the counts reset with
+    each build): its counted games, goals reached, deaths, median last level,
+    the combinations played, and every finding with its run."""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for r in records:
+        if r.get("queue") == "build" and r.get("build"):
+            by.setdefault(r["build"], []).append(r)
+    ordered = sorted(by.items(), key=lambda kv: min(r.get("started") or 0 for r in kv[1]))
+    first = len(ordered) - len(ordered[-BUILD_HISTORY:])
+    builds = ordered[first:]
+    out = []
+    for i, (build, runs) in enumerate(builds):
+        games = [r for r in runs if r.get("outcome") in counted]
+        reached = sum(r["outcome"] == "reached" for r in games)
+        levels = sorted(r.get("clvl") or 0 for r in games)
+        ports: dict[str, list[int]] = {}
+        for r in games:
+            entry = ports.setdefault(r.get("platform") or "?", [0, 0])
+            entry[0] += 1
+            entry[1] += r["outcome"] == "reached"
+        detail: dict[str, dict[str, Any]] = {}
+        for r in runs:
+            d = detail.setdefault(r.get("platform") or "?", {"games": 0, "reached": 0, "died": 0, "levels": [],
+                                                             "played": set(), "findings": []})
+            found = [f for f in r.get("findings") or [] if not f.startswith(NOISE_FINDINGS)]
+            if found:
+                d["findings"].append({"id": r.get("id"), "character": r.get("character"), "text": found[0]})
+            if r.get("outcome") not in counted:
+                continue
+            d["games"] += 1
+            d["reached"] += r["outcome"] == "reached"
+            d["died"] += r["outcome"] == "died"
+            d["levels"].append(r.get("clvl") or 0)
+            d["played"].add(r.get("character"))
+        for d in detail.values():
+            port_levels = sorted(d.pop("levels"))
+            d["median_clvl"] = port_levels[len(port_levels) // 2] if port_levels else None
+            d["played"] = len(d["played"])
+        lo, hi = wilson(reached, len(games))
+        commit = runs[0].get("commit") or ""
+        out.append({"build": build, "ordinal": first + i,   # its place in the whole history: its colour
+                    "commit": commit[:12], "subject": commit_subject(commit),
+                    "start": min(r.get("started") or 0 for r in runs),
+                    "end": min(r.get("started") or 0 for r in builds[i + 1][1]) if i + 1 < len(builds) else None,
+                    "games": len(games), "reached": reached, "lo": round(lo, 3), "hi": round(hi, 3),
+                    "median_clvl": levels[len(levels) // 2] if levels else None,
+                    "findings": sum(any(not f.startswith(NOISE_FINDINGS) for f in r.get("findings") or [])
+                                    for r in runs),
+                    "ports": ports, "detail": detail})
+    return out
+
+
+DIFFICULTY_LEVELS = 25   # the main queue's goal level: the charts' x axis (§23.6)
+
+
+def difficulty(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """The Difficulty charts' counts (§23.6): per class and in all, how many
+    games reached each character level 1..DIFFICULTY_LEVELS (their last
+    level, capped there); how many ended at each level, by death or not;
+    and per combination its games, median last level and goals reached."""
+    top = DIFFICULTY_LEVELS
+
+    def last(record: dict[str, Any]) -> int:
+        return max(0, min(top, record.get("clvl") or 0))
+
+    def reach(runs: list[dict[str, Any]]) -> list[int]:
+        levels = [last(r) for r in runs]
+        return [sum(level >= n for level in levels) for n in range(1, top + 1)]
+
+    by_class: dict[str, list[dict[str, Any]]] = {}
+    by_combo: dict[str, list[dict[str, Any]]] = {}
+    died, other = [0] * (top + 1), [0] * (top + 1)
+    for record in records:
+        by_class.setdefault(record["character"].rsplit("-", 1)[1], []).append(record)
+        by_combo.setdefault(record["character"], []).append(record)
+        (died if record["outcome"] == "died" else other)[last(record)] += 1
+    grid = {}
+    for combo, runs in by_combo.items():
+        levels = sorted(last(r) for r in runs)
+        grid[combo] = {"runs": len(runs), "median": levels[len(levels) // 2],
+                       "reached": sum(r["outcome"] == "reached" for r in runs),
+                       "reach10": sum(level >= 10 for level in levels)}
+    return {"levels": top, "runs": len(records), "all": reach(records),
+            "classes": {k: {"runs": len(v), "reach": reach(v)} for k, v in by_class.items()},
+            "ends": {"died": died, "other": other}, "grid": grid}
 
 
 def ratings(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -545,11 +671,12 @@ def queue_features(records: list[dict[str, Any]]) -> dict[str, Any]:
         klass = record["character"].rsplit("-", 1)[1]
         entry = classes.get(klass)
         if entry is None:
-            # Criterion 2 (§23.2): every spell or prayer the class learns by
-            # level 25, with how often it was cast and its effect seen.
+            # Criterion 2 (§23.2): every spell or prayer the class learns
+            # below level 25 (one learned at 25 comes as the game ends), with
+            # how often it was cast and its effect seen.
             entry = classes[klass] = {"runs": 0, "layers": {}, "milestones": {}, "causes": {}, "spells": {
                 name: {"level": level, "cast": 0, "effect": 0, "evidence": ""}
-                for name, level in knowledge.spells(klass).items() if level <= SPELL_COVERAGE_LEVEL}}
+                for name, level in knowledge.spells(klass).items() if level < SPELL_COVERAGE_LEVEL}}
         entry["runs"] += 1
         for key, count in ((record.get("features") or {}).get("missiles") or {}).items():
             entry.setdefault("missiles", {"shots": 0, "kills": 0})[key] += count
@@ -579,6 +706,31 @@ def queue_live(home: Path, run_id: str, job: dict[str, Any], full: bool = False)
             "milestones": progress.get("milestones", {}), "status": status}
 
 
+def goal_summary(sub: dict[str, Any], counted: frozenset[str] | set[str]) -> dict[str, Any]:
+    """A subqueue's results as the M7 grid shows the main queue's: games and
+    combinations that reached the goal, character levels, and each
+    combination's runs (maintainer, 2026-11-03: with the main queue idle the
+    dashboard showed no goal counts for the A/B runs)."""
+    results = [r for r in sub.get("results", []) if r.get("outcome") in counted]
+    names = sorted({item["character"] for item in sub.get("items", [])})
+    clvls = sorted(r.get("clvl") or 0 for r in results)
+    grid = {}
+    for name in names:
+        mine = [r for r in results if r.get("character") == name]
+        grid[name] = {"runs": len(mine), "total": sum(i["character"] == name for i in sub.get("items", [])),
+                      "loops": sum(bool(r.get("loops")) for r in mine),
+                      "reached": sum(r["outcome"] == "reached" for r in mine),
+                      "best": max((r.get("clvl") or 0 for r in mine), default=None),
+                      "last": ({k: mine[-1].get(k) for k in ("outcome", "clvl", "max_dlvl", "cause")} if mine else None)}
+    return {"games": len(results), "reached": sum(r["outcome"] == "reached" for r in results),
+            "combos": len(names), "combos_reached": sum(g["reached"] > 0 for g in grid.values()),
+            "median_clvl": statistics.median(clvls) if clvls else None,
+            "clvl15": sum(c >= 15 for c in clvls), "clvl20": sum(c >= 20 for c in clvls),
+            "early": sum(r["outcome"] == "died" and (r.get("clvl") or 0) <= 5 for r in results),
+            "loops": sum(bool(r.get("loops")) for r in results),   # games with a loop finding (session.LoopWatch)
+            "grid": grid}
+
+
 def queue() -> dict[str, Any]:
     from . import queue as q
     home = q.HOME
@@ -587,18 +739,27 @@ def queue() -> dict[str, Any]:
     state = read_json(q.state_path(home, config["goal"], config.get("epoch", ""))) or {}
     running = read_json(home / "running.json") or {}
     runs = queue_runs(home, config["goal"], q.COUNTED, config.get("epoch", ""))
-    subs = []
-    for path in sorted((home / "subqueues").glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:12]:
+    def summary(path: Path) -> dict[str, Any]:
         sub = cached(path, read_json) or {}
-        subs.append({k: sub.get(k) for k in ("name", "created", "finished", "build", "note", "done", "cancelled",
-                                              "report", "variant", "ab")} |
-                    {"items": len(sub.get("items", [])), "results": len(sub.get("results", [])),
-                     "reached": sum(r["outcome"] == "reached" for r in sub.get("results", [])),
-                     "progress": q.subqueue_report(sub) if not sub.get("done") and sub.get("items") else None,
-                     "ab_report": (sub.get("ab_report") or q.ab_report(sub)) if sub.get("ab") else None})
+        return ({k: sub.get(k) for k in ("name", "created", "finished", "build", "note", "done", "cancelled",
+                                          "report", "variant", "ab")} |
+                {"items": len(sub.get("items", [])), "results": len(sub.get("results", [])),
+                 "reached": sum(r["outcome"] == "reached" for r in sub.get("results", [])),
+                 "progress": q.subqueue_report(sub) if not sub.get("done") and sub.get("items") else None,
+                 "ab_report": (sub.get("ab_report") or q.ab_report(sub)) if sub.get("ab") else None,
+                 "goal": goal_summary(sub, q.COUNTED)})
+
+    newest = {"key": lambda p: p.stat().st_mtime, "reverse": True}
+    subs = [summary(path) for path in sorted((home / "subqueues").glob("*.json"), **newest)[:12]]
+    # Moved out of subqueues/ when done (maintainer, 2026-11-04: "clean up the
+    # old queues and move them to history"): the History tab lists them.
+    archived = [summary(path) | {"archive": path.parent.name}
+                for path in sorted(home.glob("archive/*-subqueues/*.json"), **newest)]
     return {"now": time.time(), "service": {"up": time.time() - service.get("updated", 0) < 60,
                                             "updated": service.get("updated"), "build": service.get("build"),
-                                            "build_state": service.get("build_state", {}), "log": service.get("log", [])[-12:]},
+                                            "build_state": service.get("build_state", {}), "log": service.get("log", [])[-12:],
+                                            "build_queue_build": service.get("build_queue_build"),
+                                            "build_queue_state": service.get("build_queue_state", {})},
             "config": config, "races": list(RACE_KEYS), "classes": list(CLASSES), "characters": sorted(CHARACTERS),
             "goal": {"name": config["goal"], "what": GOALS[config["goal"]].description.split(". ")[0].rstrip(".") + "."
                      if config["goal"] in GOALS else ""},
@@ -607,12 +768,16 @@ def queue() -> dict[str, Any]:
             if state.get("slowest_success") else config["start_budget"],
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
-            "subqueues": subs, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
-            "ratings": runs["ratings"], "features": runs["features"],
+            "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
+            "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
+            "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
+            "builds": runs["builds"],
             "runs": runs["runs"], "recent": [{k: r.get(k) for k in ("id", "queue", "character", "platform", "outcome",
                                                                     "clvl", "max_dlvl", "steps", "ended")}
                                              | {"cause": (r.get("death") or {}).get("cause")}
-                                             for r in runs["recent"]]}
+                                             for r in runs["recent"]
+                                             # Only queues still shown: an archived subqueue's runs leave too
+                                             if r.get("queue") in {"main", "balrog", "build"} | {s["name"] for s in subs}]}
 
 
 def queue_run(run_id: str) -> dict[str, Any] | None:

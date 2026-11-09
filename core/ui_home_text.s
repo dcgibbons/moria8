@@ -1,9 +1,10 @@
 // ui_home_text.s — Home-mode UI strings
 
+// Padded to the store menu's 18 columns: it is written over that menu.
 hm_menu_str:
-    .text "D)ep R)et Q)uit" ; .byte 0
+    .text "D)ep R)et Q)uit   " ; .byte 0
 hm_retrieve_str:
-    .text "Which? (a-l)" ; .byte 0
+    .text "Which? (a-p)" ; .byte 0
 hm_deposit_title:
     .text "Deposit" ; .byte 0
 hm_which_str:

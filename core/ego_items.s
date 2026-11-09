@@ -15,6 +15,7 @@
 //   5 = Frost Brand  — +2d4 bonus dmg always
 //   6 = Defender     — +5 AC when wielded
 //   7 = Holy Avenger — x2 evil + x3 undead + +3 AC
+//   8 = Slay Dragon  — x4 dmg vs CF_DRAGON (VMS tot_dam, moria.inc; 2026-11-07)
 
 .const EGO_NONE          = 0
 .const EGO_SLAY_ANIMAL   = 1
@@ -24,6 +25,8 @@
 .const EGO_FROST_BRAND   = 5
 .const EGO_DEFENDER      = 6
 .const EGO_HOLY_AVENGER  = 7
+.const EGO_SLAY_DRAGON   = 8
+.assert "Ego IDs fill EGO_TYPE_COUNT", EGO_SLAY_DRAGON + 1, EGO_TYPE_COUNT
 // ============================================================
 // roll_ego_type — Determine ego type for a spawned item
 // Input: A = item type ID
@@ -60,11 +63,11 @@ roll_ego_type:
     cmp ego_chance
     bcs !ret_zero+          // roll >= chance → no ego
 
-    // Pick ego type: rng(7) + 1 → [1, 7]
-    lda #7
-    jsr rng_range           // [0, 6]
+    // Pick ego type: rng(EGO_TYPE_COUNT - 1) + 1 → [1, 8]
+    lda #EGO_TYPE_COUNT - 1
+    jsr rng_range           // [0, 7]
     clc
-    adc #1                  // [1, 7]
+    adc #1                  // [1, 8]
     rts
 
 !ret_zero:
@@ -93,22 +96,24 @@ ego_suffix_lo:
     .byte <ego_str_none
     .byte <ego_str_slay_animal, <ego_str_slay_evil, <ego_str_slay_undead
     .byte <ego_str_flame, <ego_str_frost
-    .byte <ego_str_defender, <ego_str_holy_avenger
+    .byte <ego_str_defender, <ego_str_holy_avenger, <ego_str_slay_dragon
 ego_suffix_hi:
     .byte >ego_str_none
     .byte >ego_str_slay_animal, >ego_str_slay_evil, >ego_str_slay_undead
     .byte >ego_str_flame, >ego_str_frost
-    .byte >ego_str_defender, >ego_str_holy_avenger
+    .byte >ego_str_defender, >ego_str_holy_avenger, >ego_str_slay_dragon
 
 // Ego suffix strings (screen codes, null-terminated)
 // These are in banked RAM at $F000+ so must be read while KERNAL is banked out.
-ego_str_none:         .byte 0
+.label ego_str_none = ego_str_slay_animal + 14   // the terminator of " (Slay Animal)": no suffix
 ego_str_slay_animal:  .text " (Slay Animal)" ; .byte 0
+.assert "ego_str_none is a terminator", ego_str_none - ego_str_slay_animal, 14
 ego_str_slay_evil:    .text " (Slay Evil)" ; .byte 0
 ego_str_slay_undead:  .text " (Slay Undead)" ; .byte 0
 ego_str_flame:        .text " (Flame)" ; .byte 0
 ego_str_frost:        .text " (Frost)" ; .byte 0
 ego_str_defender:     .text " (Defender)" ; .byte 0
+ego_str_slay_dragon:  .text " (Slay Dragon)" ; .byte 0
 #if HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL
 .label ego_str_holy_avenger = ego_str_holy_avenger_common
 #else
@@ -119,11 +124,13 @@ ego_str_holy_avenger: .text " (Holy Avenger)" ; .byte 0
 // Ego data tables (indexed by ego type 0-7)
 // ============================================================
 ego_slay_mask:
-    .byte 0, CF_ANIMAL, CF_EVIL, CF_UNDEAD, 0, 0, 0, CF_EVIL|CF_UNDEAD
+    .byte 0, CF_ANIMAL, CF_EVIL, CF_UNDEAD, 0, 0, 0, CF_EVIL|CF_UNDEAD, CF_DRAGON
 ego_slay_mult:
-    .byte 0, 2, 2, 3, 0, 0, 0, 2
+    .byte 0, 2, 2, 3, 0, 0, 0, 2, 4
 ego_ac_bonus:
-    .byte 0, 0, 0, 0, 0, 0, 5, 3
+    .byte 0, 0, 0, 0, 0, 0, 5, 3, 0
+.assert "ego_slay_mask has EGO_TYPE_COUNT entries", ego_slay_mult - ego_slay_mask, EGO_TYPE_COUNT
+.assert "ego_slay_mult has EGO_TYPE_COUNT entries", ego_ac_bonus - ego_slay_mult, EGO_TYPE_COUNT
 
 // ============================================================
 // ego_apply_damage — Apply ego damage modifiers (slay + bonus dice)
@@ -159,15 +166,19 @@ ego_apply_damage:
     lda #2                      // x2 for evil
 
 !ead_apply_mult:
-    // A = multiplier (2 or 3)
+    // A = multiplier (2, 3 or 4)
     cmp #3
     beq !ead_mult3+
-    // x2
+    // x2 or x4 (Slay Dragon): one or two doublings
+    lsr
+    tay
     lda cmb_damage
+!ead_double:
     asl
-    bcc !ead_mult_ok+
-    lda #255
-    bne !ead_mult_ok+
+    bcs !ead_mult_cap+
+    dey
+    bne !ead_double-
+    beq !ead_mult_ok+           // Always
 !ead_mult3:
     // x3 = x2 + x1
     lda cmb_damage

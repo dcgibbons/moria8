@@ -8,8 +8,9 @@ cx16_banks_preloaded: .byte 0
 cx16_preload_idx:     .byte 0
 
 // ============================================================
-// cx16_preload_banks — Preload all 19 runtime banked payloads from device 8
-// into RAM Banks 3..21 at $A000 at boot time.
+// cx16_preload_banks — Preload the runtime banked payloads from device 8
+// into RAM Banks 3..21 at $A000 at boot time (with the monster catalog,
+// Bank 22 instead of the tier Banks 5-8).
 // ============================================================
 cx16_preload_banks:
     lda #0
@@ -33,6 +34,16 @@ cx16_preload_banks:
     jsr cx16_kernal_load_banked_window
     bcs !fatal+
 
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // 3. Bank 22: the monster catalog (MONSTER.CAT; its names ride in Bank 4)
+    lda #CX16_BANK_CATALOG
+    sta CX16_RAM_BANK_REG
+    lda #cx16_catalog_name_len
+    ldx #<cx16_catalog_name
+    ldy #>cx16_catalog_name
+    jsr cx16_kernal_load_banked_window
+    bcs !fatal+
+#else
     // 3. Banks 5..8: MONSTER.DB.1..4
     lda #0
     sta cx16_preload_idx
@@ -55,6 +66,7 @@ cx16_preload_banks:
     lda cx16_preload_idx
     cmp #4
     bcc !tier_loop-
+#endif
 
     // 4. Banks 9..20: 12 overlays (OVL.START .. OVL.TITLE)
     lda #0
@@ -122,6 +134,7 @@ cx16_asset_try_bank_switch:
     dex
     bpl !find_ovl-
 
+#if !HAL_PLATFORM_MONSTER_CATALOG
     // Check 4 monster tiers -> Bank (index + 5)
     ldx #3
 !find_tier:
@@ -134,6 +147,7 @@ cx16_asset_try_bank_switch:
 !next_tier:
     dex
     bpl !find_tier-
+#endif
 
 !miss:
     sec
@@ -147,6 +161,7 @@ cx16_asset_try_bank_switch:
     clc
     rts
 
+#if !HAL_PLATFORM_MONSTER_CATALOG
 !found_tier:
     txa
     clc
@@ -154,3 +169,4 @@ cx16_asset_try_bank_switch:
     sta CX16_RAM_BANK_REG
     clc
     rts
+#endif

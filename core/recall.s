@@ -22,26 +22,12 @@
 #import "recall_array_data.s"
 #endif
 
-// Spell bit lookup table (7 entries, indexed by spell position 0-6)
+// Spell bit lookup table, indexed by spell handler (monster_magic.s): the
+// eight MSF bits, then Hold Person, which has no bit of its own and marks
+// bit 0 (recall shows only SPELLS: YES / NONE, ui_recall.s).
 recall_spell_bit:
     .byte 1, 2, 4, 8, 16, 32, 64, 128
+    .byte 1
 
-// ============================================================
-// recall_clear — Zero all recall data
-// Called when explicitly resetting monster knowledge.
-// (Not called on new character — umoria preserves recall
-// across deaths as meta-game knowledge.)
-// Clobbers: A, X
-// ============================================================
-recall_clear:
-    lda #0
-    ldx #0
-!rcl_loop:
-    :AuxWriteX(recall_kills)
-    :AuxWriteX(recall_deaths)
-    :AuxWriteX(recall_attacks)
-    :AuxWriteX(recall_spells)
-    inx
-    cpx #MAX_CREATURES
-    bcc !rcl_loop-
-    rts
+// Recall is never cleared: Umoria keeps it across deaths as meta-game
+// knowledge, and nothing resets it (recall_clear, unused, went 2026-11-08).

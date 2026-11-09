@@ -184,7 +184,7 @@ playtest-queue-status:
 playtest-queue-rebuild:
 	$(PLAYTEST_PY) -m moria_playtest.queue rebuild
 
-# Re-creates var/playtest-queue/queue.db from runs.jsonl (§23.10).
+# Re-creates var/moria8/queue.db from runs.jsonl (§23.10).
 playtest-queue-records-rebuild:
 	$(PLAYTEST_PY) -m moria_playtest.records rebuild
 
@@ -194,13 +194,13 @@ playtest-subqueue:
 		$(if $(SEEDS),--seeds $(SEEDS)) $(if $(RANDOM_SEEDS),--random-seeds $(RANDOM_SEEDS)) \
 		$(if $(QUEUE_BUILD),--build $(QUEUE_BUILD)) --platforms $(PORT) $(PLAYTEST_QUEUE_ARGS)
 
-# The evidence behind the strategy guide (§23.7): docs/STRATEGY_EVIDENCE.md
+# The evidence behind the strategy guide (§23.7): var/moria8/strategy-evidence.md
 # from the queue's run records. Reads files only.
 playtest-strategy-evidence:
 	$(PLAYTEST_PY) -m moria_playtest.strategy
 
 playtest-subqueue-cancel:
-	$(PLAYTEST_PY) -m moria_playtest.queue cancel --name $(NAME)
+	$(PLAYTEST_PY) -m moria_playtest.queue cancel --name $(NAME) $(if $(CHARACTERS),--characters $(CHARACTERS))
 
 # An A/B subqueue (§23.10): NAME=..., GOAL=... (default deep), CHARACTERS=a,b,
 # SEEDS=... or RANDOM_SEEDS=N (drawn once, both arms play them), VARIANT_A=...

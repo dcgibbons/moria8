@@ -9,8 +9,8 @@
 .const UEQ_FOOTER_COL = hal_layout_equipment_footer_col
 
 // ui_equip_display — Show equipped items.
-// Rows follow slot order EQUIP_WEAPON..EQUIP_SECONDARY; the reserved
-// EQUIP_CLOAK row stays blank until the cloak slot exists.
+// Rows follow slot order EQUIP_WEAPON..EQUIP_SECONDARY: both ring hands
+// (EQUIP_RING, EQUIP_RING2) show as "Ring:".
 // Preserves: nothing
 ui_equip_display:
     lda #<press_key_str
@@ -64,10 +64,6 @@ ui_equip_display_common:
     bcc !ueq_cont+
     jmp !ueq_done+
 !ueq_cont:
-    cmp #EQUIP_CLOAK - EQUIP_WEAPON    // reserved cloak row stays blank
-    bne !ueq_shown+
-    jmp !ueq_next+
-!ueq_shown:
 
     // Row = slot * stride + 2, with a continuation row on 40-column layouts.
 #if HAL_LAYOUT_EQUIPMENT_WRAP
@@ -205,10 +201,10 @@ ueq_lbl_second: .text "Second: " ; .byte 0
 ueq_label_ptrs_lo:
     .byte <ueq_lbl_weapon, <ueq_lbl_body, <ueq_lbl_shield, <ueq_lbl_head
     .byte <ueq_lbl_hands, <ueq_lbl_feet, <ueq_lbl_light, <ueq_lbl_ring
-    .byte <ueq_lbl_amulet, <ueq_lbl_second, <ueq_lbl_second   // reserved cloak row is never drawn
+    .byte <ueq_lbl_amulet, <ueq_lbl_ring, <ueq_lbl_second   // the left hand is a ring too
 
 ueq_label_ptrs_hi:
     .byte >ueq_lbl_weapon, >ueq_lbl_body, >ueq_lbl_shield, >ueq_lbl_head
     .byte >ueq_lbl_hands, >ueq_lbl_feet, >ueq_lbl_light, >ueq_lbl_ring
-    .byte >ueq_lbl_amulet, >ueq_lbl_second, >ueq_lbl_second
+    .byte >ueq_lbl_amulet, >ueq_lbl_ring, >ueq_lbl_second
 .assert "Equipment label table covers visible slots", ueq_label_ptrs_hi - ueq_label_ptrs_lo, VISIBLE_EQUIP_SLOTS

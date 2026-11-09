@@ -46,10 +46,7 @@ PRG_SPECS = (
     PrgSpec("OVL.STORAGE", 0xA000, 0xC000, "ovl_storage_end"),
     PrgSpec("OVL.TITLE", 0xA000, 0xC000, "ovl_title_end"),
     PrgSpec("OVL.CHEST", 0xA000, 0xC000, "ovl_chest_end"),
-    PrgSpec("MONSTER.DB.1", 0xA000, 0xC000, min_payload=512),
-    PrgSpec("MONSTER.DB.2", 0xA000, 0xC000, min_payload=512),
-    PrgSpec("MONSTER.DB.3", 0xA000, 0xC000, min_payload=512),
-    PrgSpec("MONSTER.DB.4", 0xA000, 0xC000, min_payload=512),
+    PrgSpec("MONSTER.CAT", 0xA000, 0xC000, "catalog_bank_end"),
     PrgSpec("TITLE", 0xA000, 0xC000, min_payload=256),
 )
 

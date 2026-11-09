@@ -56,12 +56,11 @@
 // ============================================================
 // Vector table & HAL aliases
 // ============================================================
+// Only the two the equipment wrap patches (ui_equipment_wrap.s): the clear,
+// colour and clear-row entries had no caller (removed 2026-11-07).
 screen_vectors:
-    jmp screen_clear        // +0: clear entire screen
-    jmp screen_put_char     // +3: put char at cursor
-    jmp screen_put_string   // +6: put string at (row,col)
-    jmp screen_set_color    // +9: set current text color
-    jmp screen_clear_row    // +12: clear a single row
+    jmp screen_put_char     // +0: put char at cursor
+    jmp screen_put_string   // +3: put string at (row,col)
 
 #import "../../core/ui_equipment_wrap.s"
 
@@ -69,8 +68,8 @@ screen_vectors:
 .label hal_screen_clear = screen_clear
 .label hal_screen_clear_row = screen_clear_row
 #if HAL_LAYOUT_EQUIPMENT_WRAP
-.label hal_screen_put_char = screen_vectors + 3
-.label hal_screen_put_string = screen_vectors + 6
+.label hal_screen_put_char = screen_vectors
+.label hal_screen_put_string = screen_vectors + 3
 #else
 .label hal_screen_put_char = screen_put_char
 .label hal_screen_put_string = screen_put_string

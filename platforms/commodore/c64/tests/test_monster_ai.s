@@ -55,9 +55,11 @@ test_finish:
 status_draw:
     rts
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
+// stat_display.s: its callers (status line, character sheet, creation) never
+// run here, and the second ring hand (2026-11-08) left the body 7 bytes over.
+#import "../../../../core/stat_display.s"
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
 .segment Default
@@ -102,14 +104,24 @@ monster_attack_player:
 player_update_hunger_state:
     sec
     rts
+// The production damage entries' shape (monster_attack.s): 8-bit, or 16-bit
+// with the high byte in mad_dmg_hi (breath); acid breath's armour damage
+// finds no armour here.
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+    clc
+    rts
 mon_atk_apply_damage:
+    lda #0
+    sta mad_dmg_hi
+mon_atk_apply_damage_16:
     lda zp_player_hp_lo
     sec
     sbc zp_combat_dmg
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
     lda zp_player_hp_hi
-    sbc #0
+    sbc mad_dmg_hi
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
     bmi !mad_dead+
@@ -1239,7 +1251,7 @@ test_start:
     sta $c6
 
     // Temporarily set spell_chance[0] = 100, spell_flags[0] = 1
-    lda #100
+    lda #1
     sta cr_spell_chance
     lda #MSF_WOUND_LIGHT
     sta cr_spell_flags
@@ -1297,7 +1309,7 @@ test_start:
     sta zp_game_flags
 
     // Set spell_chance[0] = 100
-    lda #100
+    lda #1
     sta cr_spell_chance
     lda #MSF_WOUND_LIGHT
     sta cr_spell_flags
@@ -1368,8 +1380,8 @@ test_start:
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
 
-    // Set spell data for creature type 0
-    lda #100
+    // Set spell data for creature type 0: always casts (1 in 1), breathes fire
+    lda #1 | MS_BREATH_FIRE << MS_BREATH_SHIFT
     sta cr_spell_chance
     lda #MSF_BREATH
     sta cr_spell_flags
@@ -1445,7 +1457,7 @@ test_start:
     sta $c6
 
     // Set spell data for creature type 0 — spell bit 6 only
-    lda #100
+    lda #1
     sta cr_spell_chance
     lda #MSF_WOUND_SERIOUS
     sta cr_spell_flags
@@ -2076,7 +2088,7 @@ test_start:
     lda #MF_AWAKE
     sta (zp_ptr0),y
 
-    lda #100
+    lda #1
     sta cr_spell_chance
     lda #MSF_SUMMON
     sta cr_spell_flags

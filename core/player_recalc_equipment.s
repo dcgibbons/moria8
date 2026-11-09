@@ -11,7 +11,11 @@ player_recalc_equipment:
     // Recalculate equipment-derived flags and combat values without rerolling
     // exceptional current stats established during character creation.
     #if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    // Persistent equipment flags are rebuilt by player_calc_stats.
+    // The persistent equipment flags (resistances, see invisible, Free
+    // Action): player_calc_stats rebuilds them too, but wearing or taking off
+    // a ring or amulet runs only this, so they went stale on the Apple IIe
+    // and BBC Master until the next stats rebuild (2026-11-08 review).
+    jsr player_recalc_pflags_equipment   // resident; this runs from OVL.ITEMS
     #elif PLAYER_RECALC_PFLAGS_EXTERNAL
     jsr hal_player_recalc_pflags
     #else
@@ -37,6 +41,7 @@ player_recalc_equipment:
     // Add Ring of Slaying to-hit and to-damage bonuses
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
     ldx #EQUIP_RING
+!pre_slay_ring:                 // each hand: EQUIP_RING, then EQUIP_RING2
     lda inv_item_id,x
     cmp #ITEM_TYPE_RING_SLAYING
     bne !pre_no_slay+
@@ -49,6 +54,9 @@ player_recalc_equipment:
     adc player_data + PL_TODMG
     sta player_data + PL_TODMG
 !pre_no_slay:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pre_slay_ring-
 #else
     jsr player_apply_slaying_bonuses
 #endif

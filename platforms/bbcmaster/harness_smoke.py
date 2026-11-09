@@ -25,6 +25,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import catalog_lore  # noqa: E402  (the generated monster catalog's data)
+sys.path.insert(0, str(ROOT / "tools"))
 from make_ssd import build_blank_ssd  # noqa: E402
 
 SSD_IMAGE = ROOT / "build" / "moria8-bbcmaster.ssd"
@@ -74,6 +76,8 @@ SCENARIOS = (
     "death_flow",
     "save_load",
     "disk_setup",
+    "acid_armour",
+    "catalog_spawn",
 )
 
 
@@ -87,6 +91,14 @@ def parse_symbols(sym_path: Path) -> dict[str, int]:
         if m:
             syms[m.group(1)] = int(m.group(2), 16)
     return syms
+
+
+def andy_mos_bytes() -> str:
+    """The corpus bytes at ANDY $8800-$882F, where the MOS mode change keeps
+    its ECF patterns (screen.s screen_init), as a Lua table."""
+    data = (ROOT / "build" / "bbcmaster" / "beeb.huffdata").read_bytes()
+    load = data[0] | data[1] << 8
+    return "{" + ",".join(str(b) for b in data[2 + 0x8800 - load:2 + 0x8830 - load]) + "}"
 
 
 def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
@@ -106,7 +118,11 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     inv_item_id = syms.get("inv_item_id", 0x2500)
     inv_qty = syms.get("inv_qty", 0x2521)
     monster_table = syms.get("monster_table", 0x2600)
+    mon_count = syms["zp_mon_count"]
+    recall_query_sc = syms["recall_query_sc"]
     cr_level = syms.get("cr_level", 0x2700)
+    cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
+        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
     save_device = syms.get("save_device", 0x0E20)
     disk_setup_done = syms.get("disk_setup_done", 0x0E21)
     disk_status = syms.get("disk_status", 0x1D6E)
@@ -114,6 +130,9 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     mos_err = syms.get("beeb_last_mos_error", 0x22AC)
     busy_addr = syms.get("generation_busy_active_api", 0x0E30)
     acccon_shadow = syms.get("beeb_acccon_shadow", 0x009D)
+    acid_syms = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
+        "cr_atk0_type", "cr_atk0_dice", "cr_atk0_sides", "cr_atk1_type", "cr_spell_chance", "cr_speed",
+        "inv_to_ac", "zp_player_ac", "player_pflags"))
 
     header = f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
@@ -134,6 +153,8 @@ local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
 local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (33)
 local MONSTER_TABLE_ADDR = 0x{monster_table:04X}
+local MON_COUNT_ADDR = 0x{mon_count:04X}
+local RECALL_QUERY_SC_ADDR = 0x{recall_query_sc:04X}
 local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
@@ -147,6 +168,10 @@ local MAP_BASE = 0x{MAP_BASE_ADDR:04X}
 local MAP_COLS = {MAP_COLS}
 local MAP_ROWS = {MAP_ROWS}
 local MAP_BANK = 0x{MAP_SWR_BANK:02X}
+{acid_syms}
+{cat_ids}
+local BALROG_ID = {catalog_lore.const("CATALOG_BALROG_ID")}
+local IGGY_ID = {catalog_lore.const("CATALOG_IGGY_ID")}
 
 local function wait_frames(n)
     for _ = 1, n do emu.wait(1/60) end
@@ -194,6 +219,20 @@ local function write_map_u8(x, y, val)
     prog:write_u8(0xFE30, MAP_BANK)
     prog:write_u8(MAP_BASE + y * MAP_COLS + x, val)
     prog:write_u8(0xFE30, rom)
+end
+
+-- Removes every live monster (its map square's monster bit too), so nothing
+-- on the level can see, disturb or reach the character.
+local function clear_monsters()
+    for i = 0, 31 do
+        local b = MONSTER_TABLE_ADDR + i * 12
+        if prog:read_u8(b + 2) ~= 0xFF then
+            local x, y = prog:read_u8(b), prog:read_u8(b + 1)
+            write_map_u8(x, y, read_map_u8(x, y) & 0xFE)
+            prog:write_u8(b + 2, 0xFF)
+        end
+    end
+    prog:write_u8(MON_COUNT_ADDR, 0)
 end
 
 local function rowtext(r)
@@ -456,11 +495,21 @@ function run()
     local dl1 = descend_to_dl1()
     assert_line("dlvl_1_reached", dl1 and prog:read_u8(DLVL_ADDR) == 1)
     assert_line("not_in_town", not in_town())
-    -- DL1's creatures come from tier 1, loaded from MONDB1 (it was missing
-    -- from the disk and every creature was named "?").
-    assert_line("tier_1_loaded", prog:read_u8(CURRENT_TIER_ADDR) == 1)
+    -- DL1's creatures come from the monster catalog (Bank 6): the first
+    -- live monster's species slot holds a catalog id (2026-11-05; the tier
+    -- era checked MONDB1 had loaded, after a disk without it named every
+    -- creature "?").
+    local species = false
+    for i = 0, 31 do
+        local t = prog:read_u8(MONSTER_TABLE_ADDR + i * 12 + 2)
+        if t < 32 then species = prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) ~= 0xFF break end
+    end
+    assert_line("catalog_species_loaded", species)
     -- Hurt, Ctrl+R auto-rests for many turns: the held-key probe's flags
-    -- once cancelled it at once (M6 playtest, input_run_key_held).
+    -- once cancelled it at once (M6 playtest, input_run_key_held). DL1 is
+    -- the boot's random level, and a creature in view would end the rest:
+    -- none is left to.
+    clear_monsters()
     prog:write_u8(PLAYER_HP_ADDR, 1)
     prog:write_u8(PLAYER_HP_ADDR + 1, 0)
     local t0 = prog:read_u8(TURN_ADDR) | (prog:read_u8(TURN_ADDR + 1) << 8)
@@ -534,6 +583,16 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
+    -- The Huffman corpus in ANDY survives the MOS mode change, whose VDU
+    -- workspace (ECF patterns) is $8800-$882F (screen_init, 2026-11-06).
+    local rom = prog:read_u8(0x00F4)
+    prog:write_u8(0xFE30, 0x84)
+    local intact = true
+    for i, b in ipairs(ANDY_MOS_BYTES) do
+        if prog:read_u8(0x8800 + i - 1) ~= b then intact = false end
+    end
+    prog:write_u8(0xFE30, rom)
+    assert_line("andy_corpus_intact", intact)
     assert_line("wizard_open", wizard_menu_open())
     press_until("ITEM", 0x47) -- 'G'
     send_key(0x39) -- '9'
@@ -566,9 +625,83 @@ function run()
         and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
         and inv_field(31, 0) == 0xFF)
     assert_line("exchange_one_turn", prog:read_u8(TURN_ADDR) == (turn0 + 1) % 256)
+    -- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it
+    -- in the death overlay and must return to the resident caller with no
+    -- OVL.ITEMS load first (2026-11-06: the build queue's panic, the load
+    -- evicting the router before its rts). The game goes on: a search takes
+    -- its turn.
+    drain_more(4)
+    inv_seed(0, {42, 1, 5, 0, 0, 0, 0, 0})
+    send_key(0x41) -- 'A' (aim)
+    assert_line("aim_prompt", wait_screen("Aim which wand", 80))
+    send_key(0x41) -- 'A'
+    assert_line("aim_direction", wait_screen("Direction?", 80))
+    send_key(0x4C) -- 'L'
+    wait_frames(30)
+    drain_more(1)                            -- "Direction? -more-"
+    -- Missed, or a townsperson was in its path: either way the wand worked.
+    local cloud = wait_screen("The cloud dissipates.", 80) or screen_has("looks confused")
+    if not cloud then
+        for r = 0, 3 do print("DIAG row " .. r .. ": " .. rowtext(r)) end
+    end
+    assert_line("cloud_dissipates", cloud)
+    drain_more(4)
+    local turn1 = prog:read_u8(TURN_ADDR)
+    send_key(0x53) -- 'S' (search)
+    wait_frames(60)
+    assert_line("play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn1)
+    -- A Scroll of Genocide reads its letter through recall_key_to_screen_code,
+    -- which lived in the recall view's overlay: with SPELL loaded the call ran
+    -- SPELL's bytes there, a stray store into the play slot that hung a later
+    -- level-up (2026-11-07). The letter must reach recall_query_sc.
+    drain_more(4)
+    prog:write_u8(RECALL_QUERY_SC_ADDR, 0)
+    inv_seed(1, {106, 1, 0, 0, 0, 0, 0, 0})
+    send_key(0x52) -- 'R' (read)
+    assert_line("genocide_read_prompt", wait_screen("Read which scroll", 80))
+    send_key(0x41) -- 'A'
+    assert_line("genocide_type_prompt", wait_screen("Type?", 80))
+    send_key(0x4A) -- 'J'
+    wait_frames(60)
+    assert_line("genocide_letter_read", prog:read_u8(RECALL_QUERY_SC_ADDR) == 0x0A)
+    -- A Scroll of Identify asks which item (2026-11-06: the BBC build
+    -- queue's two Identify reads showed a blank prompt).
+    drain_more(4)
+    inv_seed(1, {21, 1, 0, 0, 0, 0, 0, 0})
+    send_key(0x52) -- 'R' (read)
+    assert_line("read_prompt", wait_screen("Read which scroll", 80))
+    send_key(0x41) -- 'A'
+    local identify = wait_screen("Identify which item", 80)
+    assert_line("identify_prompt", identify)
+    send_key(0x1B) -- ESC: no item
+    -- Last, as the wears reorder the pack: wearing a ring or amulet rebuilds the equipment flags (player_pflags)
+    -- at once: on the compact play slot they stayed stale until the next
+    -- stats rebuild (2026-11-08 review). Resist Fire sets $01, a Ring of
+    -- Protection worn over it clears it, the Amulet of the Magi sets See
+    -- Invisible ($08) and Free Action ($10).
+    local function wear_slot_a(id, what)
+        drain_more(4)
+        wait_frames(30)
+        inv_seed(0, {id, 1, 0, 0, 0, 0, 2, 0})
+        send_key(0x57) -- 'W' (wear)
+        assert_line(what .. "_wear_prompt", wait_screen("Wear which item", 80))
+        send_key(0x41) -- 'A'
+        assert_line(what .. "_worn", wait_screen("You are wearing", 80))
+    end
+    prog:write_u8(PLAYER_PFLAGS_ADDR, 0)
+    wear_slot_a(109, "resist_fire_ring")
+    assert_line("resist_fire_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x01 == 0x01)
+    -- Two ring hands (VMS moria.inc:528, 2026-11-08): the left hand next,
+    -- then a third ring replaces the left-hand one
+    wear_slot_a(110, "resist_cold_ring")
+    assert_line("both_resist_flags", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x03 == 0x03)
+    wear_slot_a(23, "protection_ring")
+    assert_line("left_ring_replaced", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x03 == 0x01)
+    wear_slot_a(125, "magi_amulet")
+    assert_line("free_action_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x18 == 0x18)
     manager.machine:exit()
 end
-"""
+""".replace("ANDY_MOS_BYTES", andy_mos_bytes())
     elif scenario == "mage_list":
         body = """
 function run()
@@ -710,13 +843,14 @@ function run()
                 end
                 prog:write_u8(base + 0, cx)
                 prog:write_u8(base + 1, cy)
-                prog:write_u8(base + 2, 56) -- CREATURE_BALROG
+                prog:write_u8(base + 2, 0)  -- species slot 0, made the Balrog's:
+                prog:write_u8(CAT_SLOT_ID_LO_ADDR, BALROG_ID & 0xFF)
+                prog:write_u8(CAT_SLOT_ID_HI_ADDR, BALROG_ID >> 8)
                 prog:write_u8(base + 3, 1)  -- 1 HP
                 prog:write_u8(base + 4, 0)
                 prog:write_u8(base + 8, 0xFF)
                 prog:write_u8(base + 10, 0) -- MX_FLEE_LO = 0
                 prog:write_u8(base + 11, 0) -- MX_FLEE_HI = 0
-                prog:write_u8(CR_LEVEL_ADDR + 56, 100)
                 prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
                 write_map_u8(cx, cy, read_map_u8(cx, cy) | 0x01)
                 atk_key = k
@@ -741,6 +875,67 @@ function run()
     assert_line("retire_no_marker", wait_screen("No Save Disk marker found.", 80))
     send_key(0x59) -- 'Y' (initialize :1 and continue to winner screen)
     assert_line("retire_winner_screen", wait_screen("* Total Winner *", 150))
+    manager.machine:exit()
+end
+"""
+    elif scenario == "acid_armour":
+        # A monster's acid damages worn armour and recalculates AC through the
+        # items overlay (MON-015): player_recalc_equipment lives in OVL_ITEMS
+        # here, and a direct call ran whatever overlay was loaded (the X16
+        # dropped the player into the town at (31, 18), M7 queue 2026-11-02).
+        body = """
+function run()
+    local ok = start_new_game("A")
+    assert_line("chargen_town_ready", ok)
+    local dl1 = descend_to_dl1()
+    assert_line("descended_dl1", dl1)
+    drain_more(4)
+    local mt = MONSTER_TABLE_ADDR
+    local base = nil
+    for i = 0, 31 do
+        if prog:read_u8(mt + i * 12 + 2) ~= 0xFF then base = mt + i * 12 break end
+    end
+    assert_line("monster_found", base ~= nil)
+    local kind = prog:read_u8(base + 2)
+    local px0 = prog:read_u8(PLAYER_X_ADDR)
+    local py0 = prog:read_u8(PLAYER_Y_ADDR)
+    local mx, my = nil, nil
+    for _, c in ipairs({{px0 + 1, py0}, {px0 - 1, py0}, {px0, py0 + 1}, {px0, py0 - 1}}) do
+        if (read_map_u8(c[1], c[2]) & 0xF1) == 0 then mx, my = c[1], c[2] break end
+    end
+    assert_line("acid_spot", mx ~= nil)
+    local ox, oy = prog:read_u8(base + 0), prog:read_u8(base + 1)
+    write_map_u8(ox, oy, read_map_u8(ox, oy) & 0xFE)
+    prog:write_u8(base + 0, mx)
+    prog:write_u8(base + 1, my)
+    write_map_u8(mx, my, read_map_u8(mx, my) | 0x01)
+    prog:write_u8(base + 3, 200)                -- HP: it outlasts the test
+    prog:write_u8(base + 4, 0)
+    prog:write_u8(base + 5, 0x01)               -- MF_AWAKE
+    prog:write_u8(base + 7, 0)
+    prog:write_u8(CR_ATK0_TYPE_ADDR + kind, 6)  -- ATK_ACID 1d2
+    prog:write_u8(CR_ATK0_DICE_ADDR + kind, 1)
+    prog:write_u8(CR_ATK0_SIDES_ADDR + kind, 2)
+    prog:write_u8(CR_ATK1_TYPE_ADDR + kind, 0)
+    prog:write_u8(CR_SPELL_CHANCE_ADDR + kind, 0)
+    prog:write_u8(CR_SPEED_ADDR + kind, 1)
+    prog:write_u8(CR_LEVEL_ADDR + kind, 40)     -- its blows land
+    prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
+    local body = INV_TO_AC_ADDR + 23            -- EQUIP_BODY: the warrior's only armour
+    local to_ac0 = prog:read_u8(body)
+    local ac0 = prog:read_u8(ZP_PLAYER_AC_ADDR)
+    for _ = 1, 40 do
+        drain_more(4)
+        send_key(0x53)                          -- 's' search (PETSCII): a turn passes
+        wait_frames(20)
+        if prog:read_u8(body) ~= to_ac0 then break end
+    end
+    drain_more(4)
+    local drop = (to_ac0 - prog:read_u8(body)) & 0xFF
+    assert_line("acid_damaged", drop >= 1 and drop <= 3)
+    assert_line("acid_ac_recalc", prog:read_u8(ZP_PLAYER_AC_ADDR) == ((ac0 - drop) & 0xFF))
+    assert_line("acid_in_place", prog:read_u8(PLAYER_X_ADDR) == px0 and prog:read_u8(PLAYER_Y_ADDR) == py0
+                and prog:read_u8(DLVL_ADDR) == 1)
     manager.machine:exit()
 end
 """
@@ -821,6 +1016,97 @@ function run()
     manager.machine:exit()
 end
 """
+    elif scenario == "catalog_spawn":
+        # The monster catalog (2026-11-05): DL1 holds VMS's population (198x66,
+        # no area scale), every live species was fetched from Bank 6 (its level
+        # and its name in the Bank 4 pool match the catalog's), and from DL50 one
+        # awake Evil Iggy or Balrog joins the level (VMS place_win_monster).
+        count = catalog_lore.const("CATALOG_COUNT")
+        levels = catalog_lore.field("cat_cr_level")
+        names = [catalog_lore.name(cid) + [0] for cid in range(count)]
+        body = """
+local LEVELS = {CAT_LEVELS}
+local NAMES = {CAT_NAMES}
+local function slot_id(t)
+    return prog:read_u8(CAT_SLOT_ID_LO_ADDR + t) + prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) * 256
+end
+function run()
+    local ok = start_new_game("A")
+    assert_line("chargen_town_ready", ok)
+    assert_line("dlvl_1_reached", descend_to_dl1())
+    local mt = MONSTER_TABLE_ADDR
+    local count, types = 0, {}
+    for i = 0, 31 do
+        local t = prog:read_u8(mt + i * 12 + 2)
+        if t ~= 0xFF then count = count + 1 types[t] = true end
+    end
+    print("DIAG DL1 monsters: " .. count)
+    assert_line("cat_population", count >= 15)
+    local loaded, fields, names, low = true, true, true, false
+    for t, _ in pairs(types) do
+        if t >= 32 or prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) == 0xFF then
+            loaded = false
+        else
+            local cid = slot_id(t)
+            if LEVELS[cid + 1] < 8 then low = true end
+            if prog:read_u8(CR_LEVEL_ADDR + t) ~= LEVELS[cid + 1] then
+                fields = false
+                print("DIAG slot " .. t .. " id " .. cid .. " level " .. prog:read_u8(CR_LEVEL_ADDR + t))
+            end
+            local ptr = prog:read_u8(CR_NAME_LO_ADDR + t) + prog:read_u8(CR_NAME_HI_ADDR + t) * 256
+            local want = NAMES[cid + 1]
+            for k = 1, #want do
+                if prog:read_u8(ptr + k - 1) ~= want[k] then
+                    names = false
+                    print("DIAG slot " .. t .. " id " .. cid .. " name byte " .. k)
+                    break
+                end
+            end
+        end
+    end
+    assert_line("cat_slots_loaded", loaded)
+    assert_line("cat_fields", fields)
+    assert_line("cat_names", names)
+    assert_line("cat_low_levels", low)
+    assert_line("wizard_open", wizard_menu_open())
+    assert_line("wizard_dlvl_prompt", press_until("DLVL", 0x4C))
+    send_key(0x35) -- '5'
+    send_key(0x30) -- '0'
+    send_key(0x0D)
+    -- Settled: DL50, generation not busy and its screen gone, three checks
+    -- in a row (the level number changes before generation starts).
+    local settled = 0
+    for _ = 1, 200 do
+        wait_frames(10)
+        drain_more(2)
+        if prog:read_u8(DLVL_ADDR) == 50 and prog:read_u8(BUSY_ADDR) == 0 and not screen_has("GENERATING") then
+            settled = settled + 1
+            if settled >= 3 then break end
+        else
+            settled = 0
+        end
+    end
+    assert_line("cat_dl50", prog:read_u8(DLVL_ADDR) == 50)
+    local winners, awake, seen = 0, false, ""
+    for i = 0, 31 do
+        local b = mt + i * 12
+        local t = prog:read_u8(b + 2)
+        if t < 32 then
+            local cid = slot_id(t)
+            seen = seen .. " " .. cid
+            if cid == IGGY_ID or cid == BALROG_ID then
+                winners = winners + 1
+                awake = (prog:read_u8(b + 5) & 0x01) == 1 and prog:read_u8(b + 7) == 0
+            end
+        end
+    end
+    print("DIAG DL50 win creatures: " .. winners .. " ids:" .. seen)
+    assert_line("cat_win_creature", winners == 1)
+    assert_line("cat_win_awake", awake)
+    manager.machine:exit()
+end
+""".replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}").replace(
+            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}")
     else:
         raise ValueError(f"Unknown scenario: {scenario}")
 
@@ -937,7 +1223,7 @@ def run_scenario(
 
 def selftest() -> int:
     assert HOST_TIMEOUT_SECONDS <= 30, "AGENTS.md Rule 8 requires timeout <= 30s"
-    assert len(SCENARIOS) == 15, f"Expected 15 bbcm scenarios, got {len(SCENARIOS)}"
+    assert len(SCENARIOS) == 17, f"Expected 17 bbcm scenarios, got {len(SCENARIOS)}"
     syms = parse_symbols(SYM_PATH)
     if syms:
         assert syms.get("zp_player_x") == 0x002B, f"zp_player_x != $002B: {syms.get('zp_player_x')}"

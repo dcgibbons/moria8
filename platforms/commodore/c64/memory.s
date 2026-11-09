@@ -34,6 +34,24 @@
 .const CREATURE_END     = $c0ff
 .const PLATFORM_TIER_NAME_POOL_BASE = $d000 // Hidden RAM under I/O; active tier names
 .const PLATFORM_TIER_NAME_POOL_END  = $d7ff
+// The monster catalog splits that hidden span (core/monster_catalog.s,
+// common/catalog_fetch.s; maintainer, 2026-11-05): 32 species names of 32
+// bytes, then the level index and record-sector table MONSTER.IDX fills at boot.
+.const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
+.const CATALOG_NAME_POOL_END  = $d3ff
+.const CATALOG_HIDDEN_BASE    = CATALOG_NAME_POOL_END + 1
+.const CATALOG_HIDDEN_END     = $d4ff
+// The rest of that span (2026-11-08): the Huffman string index, copied there
+// at boot (main.s platform_services_install64) and read by
+// hal_huff_index_word, as on the Plus/4. Its two pages leave the index room
+// to grow; $D700-$D7FF is free.
+.const HUFF_INDEX_HIDDEN_BASE = CATALOG_HIDDEN_END + 1
+.const HUFF_INDEX_HIDDEN_END  = $d6ff
+// MONSTER.IDX's boot buffer: the map's last page, unused until the first
+// level, past the init-only tail; the $E000 window holds the title's overlay.
+.const CATALOG_IDX_LOAD       = $ce00
+.assert "MONSTER.IDX's boot buffer is in the map", CATALOG_IDX_LOAD >= MAP_BASE && CATALOG_IDX_LOAD + $ff <= MAP_END, true
+.assert "Catalog hidden span, then the Huffman index, lie in the old tier name pool", HUFF_INDEX_HIDDEN_BASE == CATALOG_HIDDEN_END + 1 && HUFF_INDEX_HIDDEN_END <= PLATFORM_TIER_NAME_POOL_END, true
 .const C64_TIER_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE // Legacy C64 tests
 .const C64_TIER_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)

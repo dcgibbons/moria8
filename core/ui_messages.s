@@ -152,30 +152,9 @@ msg_print_cached:
     jsr hal_screen_clear_row
 
     lda #MSG_ROW
-    sta zp_cursor_row
-    lda #0
-    sta zp_cursor_col
-
-    lda zp_text_color
-    pha
-    lda #COL_MSG_TEXT
-    sta zp_text_color
-    lda msg_src_lo
-    sta zp_ptr0
-    lda msg_src_hi
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    pla
-    sta zp_text_color
-
+    jsr mpc_put_row
     lda #MSG_PENDING
-    sta zp_msg_flags
-
-    lda msg_src_lo
-    sta zp_ptr0
-    lda msg_src_hi
-    sta zp_ptr0_hi
-    jmp msg_save_history
+    bne !mpc_flags_save+        // Always
 
 !use_row1:
     // --- State 1: row 0 used → print on row 1 ---
@@ -183,10 +162,27 @@ msg_print_cached:
     jsr hal_screen_clear_row
 
     lda #MSG_ROW + 1
+    jsr mpc_put_row
+
+    lda zp_cursor_col
+    sta msg_row1_col
+
+    lda #MSG_PENDING | MSG_FULL
+!mpc_flags_save:
+    sta zp_msg_flags
+
+    lda msg_src_lo
+    sta zp_ptr0
+    lda msg_src_hi
+    sta zp_ptr0_hi
+    jmp msg_save_history
+
+// mpc_put_row — Print the cached message on row A from column 0 in the
+// message colour (both rows shared one copy of this from 2026-11-07).
+mpc_put_row:
     sta zp_cursor_row
     lda #0
     sta zp_cursor_col
-
     lda zp_text_color
     pha
     lda #COL_MSG_TEXT
@@ -198,18 +194,7 @@ msg_print_cached:
     jsr hal_screen_put_string
     pla
     sta zp_text_color
-
-    lda zp_cursor_col
-    sta msg_row1_col
-
-    lda #MSG_PENDING | MSG_FULL
-    sta zp_msg_flags
-
-    lda msg_src_lo
-    sta zp_ptr0
-    lda msg_src_hi
-    sta zp_ptr0_hi
-    jmp msg_save_history
+    rts
 
 !show_more:
     // --- State 2: both rows full, 3rd message arriving ---

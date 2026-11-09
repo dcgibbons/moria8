@@ -6,7 +6,9 @@
 // still rely on a backend-local `screen_put_char`.
 
 nf_digit_buf:
-    .fill 5, 0
+    .fill 8, 0
+nf_value_2:
+    .byte 0                     // bits 16-23 of the value numeric_format_u24 converts
 
 // numeric_format_emit_screen — Emit nf_digit_buf[0..zp_temp2-1] via screen_put_char
 // Input: nf_digit_buf, zp_temp2 = digit count
@@ -47,53 +49,15 @@ screen_put_hex:
 // numeric_format_u8 — Convert an 8-bit value to screen-code digits
 // Input:  A = value (0-255)
 // Output: nf_digit_buf[0..zp_temp2-1] = digits, zp_temp2 = digit count
-// Clobbers: A, X, Y, zp_temp4
+// Clobbers: A, X, Y, zp_temp0, zp_temp1, zp_temp3, nf_value_2
+// One converter for 8, 16 and 24 bits: the shared 24-bit one paid for its
+// own room by replacing the 71-byte 8-bit routine (2026-11-05).
 numeric_format_u8:
-    sta zp_temp4
-    ldx #0
-    ldy #0
-    lda zp_temp4
-!hundreds:
-    cmp #100
-    bcc !hundreds_done+
-    sbc #100
-    iny
-    jmp !hundreds-
-!hundreds_done:
-    sta zp_temp4
-    tya
-    beq !tens+
-    ora #$30
-    sta nf_digit_buf,x
-    inx
-!tens:
-    ldy #0
-    lda zp_temp4
-!tens_loop:
-    cmp #10
-    bcc !ones+
-    sbc #10
-    iny
-    jmp !tens_loop-
-!ones:
-    sta zp_temp4
-    tya
-    bne !print_tens+
-    cpx #0
-    beq !print_ones+
-    lda #$30
-!print_tens:
-    ora #$30
-    sta nf_digit_buf,x
-    inx
-!print_ones:
-    lda zp_temp4
-    ora #$30
-    sta nf_digit_buf,x
-    inx
-    stx zp_temp2
-    rts
-
+    sta zp_temp0
+    lda #0
+    sta zp_temp1
+    ldy #2                      // hundreds first
+    bne nf_clear_top            // always
 // screen_put_decimal — Write an 8-bit value as decimal at cursor
 // Input: A = value (0-255)
 screen_put_decimal:
@@ -125,10 +89,22 @@ screen_put_decimal_lz2:
 // numeric_format_u16 — Convert zp_temp0/zp_temp1 to screen-code digits
 // Input:  zp_temp0 = lo, zp_temp1 = hi
 // Output: nf_digit_buf[0..zp_temp2-1] = digits, zp_temp2 = digit count
-// Clobbers: A, X, Y, zp_temp0-4
+// Clobbers: A, X, Y, zp_temp0-4, nf_value_2
 numeric_format_u16:
+    ldy #4                      // ten thousands first
+nf_clear_top:
+    lda #0
+    sta nf_value_2
+    beq nf_convert              // always
+// numeric_format_u24 — Convert a 24-bit value to screen-code digits (up to 8)
+// Input:  zp_temp0 = lo, zp_temp1 = mid, nf_value_2 = hi
+// Output and clobbers: as numeric_format_u16
+// Gold and experience are 24-bit (PL_GOLD_0-2, PL_XP_0-2): printed as 16-bit,
+// 65,547 gold showed as 11 (C128 Balrog queue, 2026-11-05).
+numeric_format_u24:
+    ldy #7                      // ten millions first
+nf_convert:
     ldx #0
-    ldy #4
 !digit_loop:
     lda #0
     sta zp_temp3
@@ -139,13 +115,19 @@ numeric_format_u16:
     pha
     lda zp_temp1
     sbc decimal_powers_hi,y
+    pha
+    lda nf_value_2
+    sbc decimal_powers_bank,y
     bcc !digit_done+
+    sta nf_value_2
+    pla
     sta zp_temp1
     pla
     sta zp_temp0
     inc zp_temp3
-    jmp !sub_loop-
+    bne !sub_loop-              // always: at most nine a digit
 !digit_done:
+    pla
     pla
     lda zp_temp3
     bne !print_digit+
@@ -174,7 +156,15 @@ screen_put_decimal_16:
     jsr numeric_format_u16
     jmp numeric_format_emit_screen
 
+// screen_put_decimal_u24 — Write a 24-bit value as decimal at cursor
+// Input: zp_temp0 = lo, zp_temp1 = mid, nf_value_2 = hi
+screen_put_decimal_u24:
+    jsr numeric_format_u24
+    jmp numeric_format_emit_screen
+
 decimal_powers_lo:
-    .byte <1, <10, <100, <1000, <10000
+    .byte <1, <10, <100, <1000, <10000, <100000, <1000000, <10000000
 decimal_powers_hi:
-    .byte >1, >10, >100, >1000, >10000
+    .byte >1, >10, >100, >1000, >10000, >100000, >1000000, >10000000
+decimal_powers_bank:
+    .byte 0, 0, 0, 0, 0, 100000 >> 16, 1000000 >> 16, 10000000 >> 16

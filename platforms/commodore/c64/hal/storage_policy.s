@@ -10,6 +10,9 @@
 // The save-slot probe reads the drive's status before any CHKIN on a slot
 // file (IEC: a CHKIN on a file the drive refused can hang the KERNAL).
 #define HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
+// hiscore_load asks the drive before reading HALL.OF.FAME (the probe is
+// resident here; core/score_io.s).
+#define HAL_STORAGE_SCORE_PROBES_FILE
 .const hal_storage_marker_file_num = 6
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
@@ -21,6 +24,26 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
+#if HAL_PLATFORM_MONSTER_CATALOG
+// $17: the monster catalog: the species table in the door-state block and 40
+// creature rows (a 160-byte recall block). Older saves name tier creatures,
+// so $17 is the oldest the loader takes and the legacy feature versions are
+// pinned at it (the 31-slot inventory version just below it, so its loader
+// compiles out).
+// $18: 16-item stores. $17 saves still load: save.s spreads their 12-item
+// stores over the 16-item rows (the Balrog queue's checkpoints are $17).
+// TODO(release): drop that migration, and pin the oldest version at $18.
+.const hal_storage_save_v1_version = $17
+.const hal_storage_save_known96_version = $17
+.const hal_storage_save_inv31_version = $16
+.const hal_storage_save_known_bits_version = $17
+.const hal_storage_save_baked_stats_version = $17
+.const hal_storage_save_known160_version = $17
+.const hal_storage_save_door_state_version = $17
+.const hal_storage_save_inv33_version = $17
+.const hal_storage_save_version = $18
+.const hal_storage_save_store16_version = $18
+#else
 .const hal_storage_save_v1_version = $0f
 .const hal_storage_save_known96_version = $10
 .const hal_storage_save_inv31_version = $11
@@ -29,7 +52,11 @@
 .const hal_storage_save_known160_version = $14
 .const hal_storage_save_door_state_version = $15
 .const hal_storage_save_inv33_version = $16
-.const hal_storage_save_version = $16
+.const hal_storage_save_version = $17
+.const hal_storage_save_store16_version = $17
+#endif
+// TODO(release): remove with the store migration in save.s.
+#define HAL_STORAGE_LEGACY_STORE12_MIGRATION
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP

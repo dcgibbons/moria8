@@ -75,14 +75,6 @@ M0 measures throughput from scratch (§9).
 
 Hand-written expert systems are the bots that have reached roguelike endgames:
 
-- **APWBorg (Angband Borg)** has won Angband, which descends from Moria. It
-  reads the screen and keeps its own model, and it has:
-  - per-grid *danger* computed from known monsters;
-  - *depth readiness* checklists that gate diving;
-  - a fixed priority stack (flee/heal, fight, upkeep, explore/dive);
-  - gear scoring;
-  - Word of Recall town cycles.
-  Wins are rare and came after years of rule tuning.
 - **AutoAscend**, a hand-coded NetHack bot, won the NeurIPS 2021 NetHack
   Challenge by a wide margin over neural agents.
 
@@ -702,7 +694,7 @@ Each milestone has a measurable exit criterion and an explicit stop rule.
 | **M4 `clvl10`, `reach_dl8`** (`reach_dl10` until 2026-10-24) | The brain rounds in §15.3: stationary hazards, fear and fast attackers, then what the re-measured clusters show | Both goals work (§7.2, ≥16/20); all frozen suites still pass; no `unknown_prompt`. Started 2026-10-22 (`/goal`, §15). **Met 2026-10-24 (§15.6).** |
 | **M5 Every race and class at M4** | §16: the M4 goals for every Warrior race, then Paladin and Priest, then Rogue and Ranger, then Mage, then every other race of each class | `clvl10` and `reach_dl8` work (§7.2, ≥16/20; ≥10/20 for Mages and Priests, §16.1 amended 2026-10-27) for each of the 31 race/class combinations, each frozen as its own suite; all frozen suites still pass; no `unknown_prompt`. Planned 2026-10-24 (§16). **M5a (every Warrior race) met 2026-10-25 (§16.8); M5b-M5e met 2026-10-26; M5f met 2026-10-27 (§20.5): 62 of 62 goals frozen.** |
 | **M6 Every port plays** | §21: a backend per platform (Plus/4, C128, the MAME ports Apple IIe, Atari 8-bit and BBC Master 128, then the Commander X16); the C64's frozen goals on each; a platform coverage map on the dashboard | On each of the seven ports, `clvl5` and `reach_dl5` frozen for the Half-Troll Warrior and a Human Warrior, Priest, Mage and Rogue (Paladin and Ranger are not in the primary set); no `unknown_prompt`; the C64 suites still pass. The C128 backend (below) is part of it. Planned 2026-10-27 (§21). **M6 met 2026-10-28 (§21.10): 70 of 70 goals frozen.** |
-| **M7 The continuous queue and the deep game** | §23: a continuous playtest queue (every race/class combination × platform, run for good, not only in M7) with one-shot subqueues for side sessions; one game per seed to clvl 25 and DL 30 on the C64, milestones recorded on the way; spells, prayers and ranged weapons in use, with the VMS `x` weapon swap; the feature grid, difficulty ratings, the compendium generator; a strategy guide per combination | On the C64 (§23.2): each of the 31 combinations has a character that reached clvl 25 and DL 30 in the same game; every spell and prayer each casting class can learn by clvl 25 has been cast and its effect checked; a strategy for each combination is published on moria8.org; the queue runs unattended following `origin/main`, with difficulty ratings and the feature grid on the dashboard; all frozen suites still pass. Planned 2026-10-27; defined 2026-10-31 (§23). |
+| **M7 The continuous queue and the deep game** | §23: a continuous playtest queue (every race/class combination × platform, run for good, not only in M7) with one-shot subqueues for side sessions; one game per seed to clvl 25 on the C64 (DL 30 too until 2026-11-02), milestones recorded on the way; spells, prayers and ranged weapons in use, with the VMS `x` weapon swap; the feature grid, difficulty ratings, the compendium generator; a strategy guide per combination | On the C64 (§23.2): each of the 31 combinations has a character that reached clvl 25 (at any depth since 2026-11-02); every spell and prayer each casting class can learn before clvl 25 has been cast and its effect checked; a strategy for each combination is published on moria8.org; the queue runs unattended following `origin/main`, with difficulty ratings and the feature grid on the dashboard; all frozen suites still pass. Planned 2026-10-27; defined 2026-10-31 (§23); met 2026-11-05 on the C128 (§23.2). |
 | **M8 Kill the Balrog and win** | §23.9: the queue's default goal becomes winning the game; the Balrog work of §12.1, §12.3 and §12.4 | Each of the 31 combinations wins the game (kills the Balrog) at least once on the C64. The rest is set when M8 starts; intermediate milestones may be added if needed (maintainer, 2026-10-31). |
 | **C128 backend** (M5c until 2026-10-26; not scheduled) | Half-Troll Warrior on `x128`, no brain work: the backend (§12.7) for VDC screen text, banked reads, the C128 keyboard buffer and the 198×66 map | Every frozen C64 suite passes on the C128 at its bar. Moved out of M5 by the maintainer on 2026-10-26 (§16.2) |
 
@@ -1056,7 +1048,7 @@ build SHA. It is adopted only when the hand list grows past about 100 entries.
 KickAss `.eval`, `.for`, and macros make full source parsing fragile, so the
 generator would cover only simple single-line forms and fail loudly otherwise.
 
-### 12.3 Full brain (Borg-style)
+### 12.3 Full brain (danger model and readiness)
 
 - **Danger model.** Per tile and horizon: expected damage from known monsters'
   speed, attack dice, and spell/breath chance. Read from the resident tier
@@ -1159,7 +1151,14 @@ or more is decided from the M0 item 8 contention measurements.
 ## 13. Maintainer decisions (2026-10-20)
 
 1. **Time limits.** Sessions are unlimited and run until the goal is reached,
-   with a 60 s timeout on every emulator response.
+   with a 60 s timeout on every emulator response. One exception since
+   2026-11-07 (maintainer: "address 1-5", item 4): the first key after a C128
+   snapshot restore gets 8 s more per 10^9 of the snapshot's CPU cycles
+   (`Port.undump_catch_up`, `Game.catch_up`). VICE 3.10 has no VDC snapshot
+   module, so x128's VDC raster alarm replays every line from the new
+   process's clock to the snapshot's before the monitor answers: measured
+   4.8-5.8 s per 10^9 cycles, 822 s for a 107,155-step main-queue game
+   (141.5 x 10^9 cycles), which the 60 s rule had killed every time.
    - **1a.** Goals are defined by the test system. The initial batch is
      `enter_dungeon`, `reach_dl2`, and `reach_clvl2`. No more goals until
      these work. The DL-before-clvl order is the author's choice.
@@ -2744,7 +2743,10 @@ M7 is met when all of these hold, on the C64:
 
 1. **The deep goal, every combination.** Each of the 31 race/class
    combinations (§12.6) has at least one character, played by the queue, that
-   reached clvl 25 and DL 30 in the same game. A success counts within the
+   reached clvl 25, at any depth (the maintainer, 2026-11-02: "Drop the
+   dungeon level goal, that one is irrelevant. The character level goal is
+   the main one"; until then also DL 30 in the same game; the epoch's
+   earlier runs were recounted by it). A success counts within the
    current epoch (§23.10): when game fixes change what a run means, the
    maintainer starts a new epoch and the count restarts (2026-11-01: the
    five successes before the monster-data fixes do not count); the grid
@@ -2753,14 +2755,24 @@ M7 is met when all of these hold, on the C64:
    first.)
 2. **Spell and prayer coverage, pooled per class.** For each casting class
    (Mage, Rogue and Ranger spells; Priest and Paladin prayers), every spell
-   or prayer the class can learn by clvl 25 has been cast successfully, and
-   its effect checked, in some run of that class.
+   or prayer the class can learn before clvl 25 has been cast successfully,
+   and its effect checked, in some run of that class. A spell learned at
+   clvl 25 itself comes as the game ends and is not counted (the
+   maintainer, 2026-11-05).
 3. **A strategy guide.** A strategy for each of the 31 combinations is
    published on moria8.org (§23.7).
 4. **The queue in service.** The queue runs unattended following
    `origin/main` (§23.4), and the dashboard shows the difficulty ratings and
    the feature grid (§23.6).
 5. **No regressions.** All frozen suites still pass (§7.2).
+
+**Met 2026-11-05 (maintainer).** All 31 combinations reached clvl 25 on
+the C128 main queue (epoch `2026-11-04-c128-catalog`; the last, the Gnome
+Mage, in run `20261105-104425-main-c128-gnome-mage-30402158`), which the
+maintainer took as M7 reached. Of the rest, spell coverage was complete but
+for two Paladin prayers (Earthquake, Sense Surroundings); the strategy
+guide, the queue following `origin/main` and the frozen-suite run stay where
+they are, and further coverage comes with the next milestone.
 
 Delivered in M7 but not exit gates themselves: the ranged policy and its
 usage report, the `x` weapon swap, and the compendium generator and
@@ -2772,13 +2784,17 @@ M7's goal plays one continuous game per seed, as a player does (the
 maintainer, 2026-10-29: "it should be the same game, no?"). The M3-M6 goals
 and their frozen suites stay as they are, one game per goal.
 
-- **Success:** the same character has clvl ≥ 25 and has stood on DL ≥ 30.
+- **Success:** the character reaches clvl 25, at any depth (2026-11-02;
+  until then it also had to have stood on DL ≥ 30). Depth stays the way to
+  the experience: the policy below still takes it down.
 - **Milestones** are recorded as they are reached: clvl 5, 10, 15, 20 and
   25; DL 5, 8, 10, 15, 20, 25 and 30; the first Word of Recall trip.
   Milestones within one game are correlated: they are progress, not separate
   results.
 - **One policy:** gain levels while weak, go down when ready, replacing the
-  goal-specific policies for this goal.
+  goal-specific policies for this goal. Ready is three character levels over
+  the depth; for Mages five from DL10 (2026-11-05: the last open
+  combinations were Mages dying at clvl 15-22 three over the depth).
 - **Failure:** the character dies; the step budget runs out; a harness error
   or hang (emulator crash, timeout, exception); or a game finding (a stack,
   invariant or `unknown_prompt` finding, also filed as a finding).
@@ -2787,6 +2803,11 @@ and their frozen suites stay as they are, one game per goal.
   (`budget_floor` in `playtest/queue.json`; the maintainer, 2026-10-31: 3×
   the first success, 502,428 steps, cut off slow characters still surviving
   on DL17-19).
+- **No level, no game:** a game that goes 150,000 steps without a character
+  level ends there as a budget-out, with a `no_level` finding
+  (`Goal.level_steps`, `session.LevelWatch`; 2026-11-04). In run K no game
+  that reached clvl 25 went more than 97,318 steps between two levels, while
+  its six budget-outs played 170,000-760,000 steps after their last.
 
 ### 23.4 The continuous queue
 
@@ -2794,9 +2815,27 @@ and their frozen suites stay as they are, one game per goal.
   platform, each with the queue's goal. In M7 only the C64's are active.
 - **Order.** A worker takes the head of its platform's queue. A run that
   succeeds goes to the back. A run that fails goes to the head to be
-  retried, up to 3 times in a row (tunable); after that it goes to the back,
-  marked "struggling" on the dashboard until it succeeds, so one weak
-  combination cannot hold a worker forever.
+  retried, up to 3 times in a row (tunable); after that it goes behind the
+  other combinations still without a success, ahead of those with one
+  (2026-11-04: M7 needs each once), marked "struggling" on the dashboard
+  until it succeeds, so one weak combination cannot hold a worker forever.
+- **Parallel runs (2026-11-04).** When the head of the queue has succeeded,
+  every combination without a success is in flight already; a free worker
+  then plays another run of the one of them with the fewest runs playing, up
+  to `parallel_cap` at once (3 by default; 12 in `playtest/queue.json` once two combinations were left), rather than replay a success. A parallel
+  run counts like any other (runs, best, success) but leaves the item's
+  place in the order to the item's own run. With ten combinations left,
+  14 of 24 workers had been replaying successes.
+- **The build queue (maintainer, 2026-11-05).** Beside the main queue, one
+  run at a time on every port, of the branch's newest commit, so each port
+  is played as it changes. Each port plays all 31 combinations in table
+  order, whatever each run's outcome, at a short goal (`clvl10`, its
+  budget scaled by the port's map area): once per build, then it waits for
+  the next build (maintainer, 2026-11-08: "it should just be after coverage
+  is complete, until the next build"). A new build starts again from the
+  first combination.
+  Its runs count only in its own state; they move nothing in the main or
+  Balrog queues and are not rated.
 - **Seeds.** Every run draws a new seed, recorded with the run (with the
   commit and build) so that any run can be replayed exactly. A retry tests
   the combination again, not the same dungeon.
@@ -2870,6 +2909,48 @@ The dashboard (§6.9) shows both activities:
   there.
 - **Spells and prayers.** The bot learns and casts each spell or prayer
   where it is useful, and each cast's effect is checked (criterion 2).
+  Spells whose effect is not seen yet are tried least cast first, the
+  cheapest among equals (2026-11-05: cheapest first, a Paladin tried Cure
+  Light Wounds at full HP 308 times and never reached Earthquake).
+- **Wands and staffs (2026-11-04).** Identified wands and staffs are kept;
+  the Magic Shop sells the best attack wand the gold allows (Frost,
+  Lightning, Stinking Cloud) and a Staff of Teleportation, from gold beyond
+  the gear reserve. An attack wand is aimed (`a`) at a creature in line that
+  is too strong for melee, dangerous, or met while hurt, and by a caster
+  without the mana for a spell; the Staff of Teleportation (`z`) and the
+  Wand of Teleport Away are the escapes when one is grave or nothing else is
+  left. Charges are counted from purchases, pick-ups and the pack list.
+- **Found items and identification (2026-11-04).** Potions, scrolls, wands
+  and staffs in view are picked up (useful known ones and unknown flavours
+  alike); found Cure potions, Phase Door and Word of Recall are counted as if
+  bought. An unknown potion or scroll is tried (drunk or read) with nothing
+  in view, HP at 90% or more, not blind or poisoned, as a player learns them
+  early. An unknown wand or staff is identified with the Identify spell or a
+  Scroll of Identify ("This is a ..." names it), then kept and used. Rings,
+  amulets and found armour and weapons are not handled yet.
+- **Casters out of mana (2026-11-05).** Most mid-game Mage deaths came at
+  1-2 mana. A caster under a quarter of its mana rests with nothing in view,
+  even just after a close call, instead of exploring on. A Phase Door that
+  lands back in contact within 30 steps is no escape: the next one is
+  Teleport Self (a level-21 Mage cast Phase Door 30 times in a Vorpal Bunny
+  swarm on DL17 and died with Teleport Self known). Out of mana where
+  danger forbids resting, it leaves the level rather than explore (a Gnome
+  Mage explored back into a Guardian Naga three times). An attack spell at a
+  breeder leaves half the mana for that escape: Mages had spent theirs bolt
+  by bolt on Huge White Bats and Vorpal Bunnies as they bred. Being hit
+  counts as contact for a losing heal, and makes the escape due, with
+  nothing seen beside: a blinded Mage healed 13 times among a Magic User's
+  summons until its mana was gone.
+- **Poison (2026-11-05).** From level 10 on the deep goals two Potions of
+  Neutralize Poison are carried, the cure that needs no mana: drunk when
+  poisoned below 60% HP with no cure castable and nothing beside (the next
+  bite poisons again). Black Mamba poison stacks bite by bite, and Gnome
+  Mages at 1 mana drained to death after the fight. Cure, Neutralize and
+  Slow Poison are not tried for their effect unpoisoned.
+- **Stationary creatures (2026-11-05).** Walking away counts a creature
+  that never moves as the slowest of all: a step out of a mold's reach
+  that comes no nearer anything else is taken. A level-26 Gnome Warrior,
+  too afraid to strike, searched beside a Green Mold until it died.
 - **Difficulty ratings.** Survival, median level at death and the share of
   early deaths, each rated Easy to Very Hard per combination, computed from
   the queue's continuous runs instead of the 40-seed batches §21.5 planned.
@@ -2913,16 +2994,38 @@ a win is unlikely until the bot plays much better.
 - **Workers.** `balrog_workers` in `playtest/queue.json` (2 to start) come
   out of `workers`, as a subqueue's do; the main queue pauses its newest runs
   to make room. The graduates take turns, a new random seed each run, so one
-  graduate fills both workers with two games.
+  graduate fills both workers with two games. From 2026-11-06 the highest
+  start goes first (maintainer: the highest-level save is likeliest to go
+  further and find something new; `Balrog.rank`): a combination already
+  playing is passed over while another can start, and equal levels take
+  turns.
 - **Goal.** `balrog` (`goals.py`): the game's winner flag, which the Balrog's
   death sets (`core/combat.s`). It plays as `deep`, with every tactic, down to
-  DL100, where the Balrog appears; the readiness taper carries on past DL30
-  and tops out at level 40 (`brain.ready_level`).
+  where the Balrog appears: DL100 with the tiers, DL50 with the monster
+  catalog (VMS `win_mon_appear`). Character level comes first (maintainer,
+  2026-11-02: level 38 to 40, really 40, and then the Balrog): readiness is
+  three levels over each depth with no taper, capped at level 40
+  (`brain.ready_level`), so a level-25 graduate plays about DL22 and only
+  level 40 goes below DL36. Until then it shared `deep`'s old taper (level 25
+  on DL30): the first saved-game graduates went straight from DL28 to
+  DL30-31, and seven runs died there at level 25-26. A start plays in the
+  current build, with its goals and the rest of its bot, when the game disks
+  are the same and its brain loads there: every class the start's pickle
+  names (`queue.pickled_classes`, from `brain.py`, `magic.py` and `view.py`)
+  is still there with no attribute the start's code never set
+  (`queue.same_game_and_brain`, by the source's `self.<name> =`
+  assignments). A View is built anew each step and never saved: on
+  2026-11-06 a field added to it retired eleven level-17-24 starts to level
+  1 until only the named classes counted. Otherwise it plays in its own build. In
+  town, Word of Recall no longer goes down to a deepest level too deep to
+  stay on: a level-25 graduate climbed from DL28, recalled up and recalled
+  back to DL28 over and over.
 - **Start (maintainer, 2026-11-01).** A run goes on from its graduate's M7
   success, not from the title: each run saves its whole brain beside every
   level-entry snapshot (`session.save_brain`, a pickle without the goal), and
-  an M7 success's last snapshot, taken on DL30, is copied to
-  `var/playtest-queue/balrog/<run>/` as its combination's start; a newer
+  an M7 success's last snapshot, taken where it reached clvl 25 (on DL30
+  until 2026-11-02), is copied to
+  `var/moria8/balrog/<run>/` as its combination's start; a newer
   success replaces it. The run restores the snapshot, loads the brain with
   the `balrog` goal and reseeds the game's RNG from its own seed, so runs from
   one start go their own ways. It plays in the start's build, bot included,
@@ -2930,8 +3033,70 @@ a win is unlikely until the bot plays much better.
   reach these runs as graduates succeed again on newer builds. A graduate
   with no start (a success from before brains were saved) plays from the title
   in the current build.
+- **C128 starts are saved games (2026-11-02).** VICE 3.10's C128 snapshot
+  leaves out the VDC, so a restored machine replays every VDC raster line
+  from the new emulator's power-on clock to the snapshot's before its CPU
+  runs: about 50 s of wall time per 2.5 emulated hours, with the monitor
+  silent, so every Balrog run from a DL28 start timed out (60 s) as a
+  `hang`. On a port marked `graduate_save` (`ports.py`; the C128) queue
+  runs have a drive 9 with a blank save disk; a deep success saves its game
+  there through the real UI (`graduate.py`: SHIFT+S, Disk Setup, initialize,
+  slot 1) and keeps the disk, its brain and its state in `graduate/`, which
+  becomes the start. A Balrog run boots, loads slot 1 from the title and
+  goes on with that brain and new dice. A success there that left no saved
+  game (an older build's) gets no start, and the Balrog queue skips that
+  graduate until it succeeds again. Main-queue hang recovery on the C128
+  still restores a snapshot, and would stall the same way.
+- **Checkpoints (maintainer, 2026-11-05).** Every Balrog death had thrown
+  its levels away: the first 8 games all died at level 25-28, a median
+  478,554 steps past their start, and the next run began at level 25 again.
+  Now a run keeps a checkpoint at each new character level, at the first
+  level entry after it with three quarters of its HP (`CHECKPOINT_HP`):
+  the level-entry snapshot, or on a `graduate_save` port its game saved
+  over slot 1 (`graduate.save` follows either save's screens) and loaded
+  back. When the run ends, its highest checkpoint past the combination's
+  start becomes the start (`balrog/<run>-clvl<N>/`, `Service.balrog_checkpoint`),
+  played in the run's build like any start; the start before it goes on the
+  item's `start_history`. A combination never steps back from its highest
+  start (maintainer, 2026-11-06): until then three runs from a checkpoint
+  without a new level stepped back to the start before it, a dwarf-priest
+  from level 30 to 16. Since 2026-11-07 a run also keeps a checkpoint at
+  its start's level when a level entry shows `ARMOUR_CHECKPOINT_AC` (5) more
+  AC than its latest start or checkpoint (`checkpoint_wanted`,
+  `clvl<N>-ac<AC>/`): a town visit's Enchant Armor and Black Market armour
+  had been lost with each death. It becomes the start when its AC is 5 past
+  the start's (a start from before then: past the run's own AC at it). A newer M7
+  success becomes the chain's base instead of replacing it. Each start
+  records `restores`, the chain's runs that ended before it, and a win
+  through checkpoints counts for M8 (maintainer: "it should count"), with
+  its restores in the item's `wins`. Later, once the gameplay tweaks are
+  done, a final Balrog queue plays from level 1 on an ongoing basis.
+- **The newest build, else level 1 (maintainer, 2026-11-06).** Until then a
+  start played the build that saved it unless the game was byte-identical
+  (`same_game_and_brain`), so as the C128 game changed every start stayed
+  on its old build: 23 of 31 on builds from before the checkpoint code,
+  with no checkpoint ever kept. Now every Balrog game plays the newest
+  build with its port (`Service.newest_build`: the main queue's or the
+  build queue's, by when made). A start goes on there when its save loads
+  (`start_loads`: the save's version within that build's loader's range,
+  `save_versions`, and a brain its bot loads) or, for a snapshot, the game
+  is the same (never on a `graduate_save` port). Otherwise the start and
+  its chain move to the item's `retired_starts` and the game is a new
+  character from level 1, which keeps a checkpoint at every new level
+  from 1, so the chain climbs from there. An M7 success leads a chain still
+  below level 25.
+- **On the C64, from level 1 (maintainer, 2026-11-06).** `balrog_platforms`
+  in `playtest/queue.json` names the ports the Balrog queue plays: every
+  combination of each joins (`Balrog.join`) and plays from level 1 until it
+  has a start, and no other port's M7 success joins. Set to the C64; the
+  C128's Balrog state moved to `archive/2026-11-06-state-balrog-c128.json`.
+  The main queue's build includes those ports. The C64 keeps its starts and
+  checkpoints as saved games, as the C128 does (`Port.graduate_save`), so
+  they go on in any newer build whose loader takes their save version; a
+  snapshot would restore only into the same game.
 - **Budget.** `balrog_budget`, 3,000,000 steps a run, counted from the
-  graduate's first step (DL30 took the first graduate 125,346).
+  graduate's first step (DL30 took the first graduate 125,346); a
+  checkpoint's run counts it from the checkpoint's step.
 - **Records.** Its runs are recorded as `queue` and `goal` `balrog`, apart
   from the M7 counts. The milestones run on to DL100 and level 40. The
   dashboard's Queue tab has an M8 section: each graduate's runs, wins, best
@@ -2944,7 +3109,7 @@ is `playtest/queue.json`, read every five seconds, so a change to the worker
 count, the goal, the retry cap or `paused` takes effect without a restart.
 
 **Where things live.** Everything the queue writes is under
-`var/playtest-queue/` (gitignored), not `build/`, because `make clean`
+`var/moria8/` (gitignored; `var/playtest-queue/` until 2026-11-01), not `build/`, because `make clean`
 removes `build/` and the run records are kept for good:
 
 | Path | What |
@@ -2955,10 +3120,12 @@ removes `build/` and the run records are kept for good:
 | `queue.db` | the same records in SQLite, which the dashboard queries; rebuilt from `runs.jsonl` |
 | `runs/<id>/` | a run's `job.json`, `result.json`, `progress.json` (milestones), trace, snapshots, findings and live status; removed `retention_days` after the run ends |
 | `builds/<id>/` | a build snapshot (below); removed once no kept run or open subqueue uses it |
-| `subqueues/<name>.json` | a subqueue, its items, results and report; `<name>.cancel` cancels it |
+| `subqueues/<name>.json` | a subqueue, its items, results and report; `<name>.cancel` cancels it, or only the characters it lists |
 | `state-balrog.json` | the Balrog queue (§23.9): its graduates, their turn order, runs, wins and best run |
-| `balrog/<run>/` | a Balrog start: the M7 success's DL30 snapshot and saved brain; removed once no graduate or run uses it |
+| `state-build.json` | the build queue: each port's build and its place in that build's coverage, and every combination's runs, goals reached, last and best run |
+| `balrog/<run>/` | a Balrog start: the M7 success's clvl-25 snapshot and saved brain; removed once no graduate or run uses it |
 | `service.json` | the service's heartbeat, config, build state and recent log |
+| `strategy-evidence.md` | `make playtest-strategy-evidence`'s report: the evidence behind the strategy guide (§23.7), regenerated from the records |
 
 **Run records.** The service appends each finished run's record to
 `runs.jsonl` and then inserts it into `queue.db` (`records.py`): one table,
@@ -2994,18 +3161,46 @@ head). A run that dies under a live service is an error and counts. A stale
 build (the disk does not match its program) is not counted either; the
 platform waits a minute. Seeds come from the system's random source.
 
+**The build queue** (`queue.BuildQueue`, `Service.refresh_ci`,
+`Service.start_build`; config `build_platforms`, `build_goal`). Every
+`fetch_every_s` the service compares HEAD with the build queue's build and,
+when HEAD has moved, snapshots HEAD's commit (`git archive`, never the
+working tree's edits) for every port in `build_platforms`; a failed build
+keeps the one before and shows its error. Each port with no build-queue run
+playing starts one: the next combination not yet played on this build, or
+again one whose run on it did not count (stale, abandoned); a port that has
+played every combination on the build waits for the next
+(`BuildQueue.pending`). Its workers come out of the total, as the
+Balrog queue's do. The MAME and Plus/4 ports need their ROMs in the
+service's environment (a drop-in beside `x16.conf`: `A2ROMS`,
+`ATARI8ROMS`, `BBCMROMS`, and JiffyDOS for the Plus/4 and so the C64). The
+dashboard's Build queue panel shows the build being played alone (the
+maintainer, 2026-11-08: the counts reset with each build): a row per port
+with its games, goals reached, deaths, findings, median level, coverage of
+the 31 combinations and the game playing now, and below it, collapsed, a
+grid like M6's "every port plays" with this build's last game per
+combination and port; the
+Builds over time card below it (`dashboard.build_history`, maintainer
+2026-11-06) draws each build's live span (its first game to the next build's)
+as a band labelled with the short hash, the share of its counted games that
+reached the goal as a step over a 95% Wilson range, all ports or one, with
+the commit subject, median level and findings on hover and in a table; a
+build with fewer than 10 games is dimmed; `make playtest-queue-status` prints each port's line.
+
 **Subqueues borrow workers by pausing.** A main-queue run lasts hours, so the
 service does not wait for one to end: it pauses the newest main runs (a
 `pause` file the run checks every 20 steps; it holds between steps, its
 emulator stopped at the input stop) until the main queue is down to its
 minimum, and resumes them as the subqueue drains. Nothing is lost.
 
-**Success on the deep goal** is clvl ≥ 25 with DL 30 stood on earlier in the
-same game (the run's deepest level). The goal's readiness keeps the
-character three levels over each depth to DL12, then tapers in a straight
-line to level 25 on DL30 (`brain.ready_level`'s `taper`); a plain margin
-would ask for level 33 on DL30. This is the first policy, for the baseline;
-step 3 tunes it.
+**Success on the deep goal** is clvl ≥ 25, at any depth (2026-11-02; until
+then also DL 30 stood on earlier in the same game). Its readiness keeps the
+character three levels over each depth, with no taper (`brain.ready_level`),
+so a level-25 character plays to DL22. Until 2026-11-02 it tapered in a
+straight line from DL12 to level 25 on DL30, made for the DL30 goal; left in
+place after the depth goal went (the maintainer: "we wanted to kill the
+depth goal and just work on character levels"), it sent level-24
+characters to DL28, where the best runs died.
 
 **Ratings** (`dashboard.ratings`), per combination once it has 5 counted
 runs: survival (runs not ended by death) Easy ≥ 75%, Medium ≥ 50%, Hard ≥
@@ -3031,9 +3226,14 @@ needs the bot to record each cast and its effect (step 3).
   subqueue; `REGRESS=1` (with `CHARACTERS=<one>` or all) submits the frozen
   suites, and its report gives each suite's score against its bar.
   `QUEUE_BUILD` defaults to `tree`: the change being tested.
-- `make playtest-subqueue-cancel NAME=ab1`.
+- `make playtest-subqueue-cancel NAME=ab1`; with `CHARACTERS=a,b`, only those
+  characters' runs (to stop replaying games a change cannot affect).
 - The dashboard's Queue tab (first) shows §23.6; the History tab holds the
-  M5 and M6 grids, the disk scenarios and the earlier rounds.
+  M7 grid (moved there once M7 was met; maintainer, 2026-11-06), the M5 and
+  M6 grids, the disk scenarios, the earlier rounds and the archived
+  subqueues: a finished subqueue moved from `subqueues/` to
+  `archive/<date>-subqueues/` leaves the Queue tab and is listed there,
+  newest first, as it was shown (2026-11-04).
 
 **Tactics and A/B subqueues (from 2026-11-01).** A single death says little
 about a tactic, so the deep goal's tactics are named and a subqueue can play
@@ -3136,6 +3336,8 @@ Paired subqueues (`make playtest-ab`, same seeds per arm, one build):
 | ab3 (2026-11-01) | frail casters: Cure Light Wounds before gear vs not | 5 frail × 8, 40k | dropped: 18 vs 18 seeds deeper, medians slightly worse (DL 2/clvl 4 vs DL 3/clvl 6) |
 | ab4 (2026-11-01) | frail casters: ready_margin 3 vs 5 | 5 frail × 8, 60k | not adopted: same deaths (Kobolds 7 vs 6, traps alike); margin 5 only stays shallower (A deeper on 16 seeds, B on 5, 19 tied) |
 | ab5 (2026-11-01) | frail casters: search mode back on at once vs after 20 steps | 5 frail × 8, 60k | dropped: rockfall 2 vs 2, A deeper on 15 seeds, B on 18, 7 tied |
+| ab6 (2026-11-01) | frail casters (Gnome, Halfling, Elf and Half-Elf Mages, Gnome Priest): to clvl 3, a creature the character loses to in melee and cannot kill with spells and spare flasks before contact counts as dangerous (leave the level, flee, phase) vs not | 5 × 8, 60k | dropped: worse with it: died on DL1-2 22 vs 18, reached DL5 16 vs 20, median DL 1 vs 5 (Kobold deaths 11 vs 7: fleeing an equal-speed creature is hit on the way); A deeper on 18 seeds, B on 15, 7 tied |
+| ab7 (2026-11-01) | deep Mages (Human, Elf, Half-Elf): below DL10, no attack spell at a dangerous creature the mana left cannot kill, unless cornered (retreat and Phase Door act instead) vs not | 3 × 8, 300k | dropped: no gain: median clvl 18 vs 19, clvl 20+ 5 vs 5, clvl 22+ 1 vs 2, none reached 25; higher clvl on 5 seeds vs 7, 12 tied |
 
 Frail casters (Gnome and Halfling Mages, Gnome Priests) die on DL1-3 at
 clvl 1-4 in both ab3 arms: Kobolds, small vermin and traps (a 2d6 pit or

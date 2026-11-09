@@ -28,6 +28,13 @@ item_wear:
     lda it_category,x
     tax
     lda equip_slot_for_cat,x
+    cmp #EQUIP_RING             // VMS moria.inc:528: the right hand when free,
+    bne !iw_slot+               // else the left, replacing its ring
+    ldy inv_item_id + EQUIP_RING
+    iny                         // FI_EMPTY ($ff): free
+    beq !iw_slot+
+    lda #EQUIP_RING2
+!iw_slot:
     sta piw_equip
 
     // VMS wear (moria.inc:539-552): a cursed item in the target slot stays on.
@@ -487,6 +494,8 @@ item_quaff:
 // Reached from item_quaff with A = potion type ID (96-100, 126, or other).
 !iq_dispatch_generic:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT || HAL_PLATFORM_COMPACT_PLAY_SLOT
+    cmp #ITEM_TYPE_POT_GAIN_STR
+    bcs !iqd_phase3+                // potions of gain stat (140-145)
     cmp #ITEM_TYPE_POT_HEALING
     bcc !iqd_not_p3+
     cmp #ITEM_TYPE_POT_CURE_CRITICAL + 1
@@ -516,6 +525,8 @@ item_quaff:
 !iqd_not_p3:
     jmp iq_effect_generic
 #else
+    cmp #ITEM_TYPE_POT_GAIN_STR
+    bcs !iq_effect_gain_stat+       // potions of gain stat (140-145)
     cmp #ITEM_TYPE_POT_HEALING
     beq !iq_effect_healing+
     cmp #ITEM_TYPE_POT_RESTORATION
@@ -533,6 +544,11 @@ item_quaff:
 !iq_effect_healing:
     jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
 
+!iq_effect_gain_stat:
+    jsr eff_potion_gain_stat        // A = the potion's type
+    sec
+    rts
+
 !iq_effect_cure_critical:
     // 6d7 HP, cures blindness, confusion and poison
     lda #EFF_CURE_ALL
@@ -548,10 +564,10 @@ item_quaff:
     jmp iq_msg_turn
 
 !iq_effect_resist_heat:
-    // Resist heat/fire for rng(10) + 10 turns
+    // Resist heat/fire for randint(10) + 10 turns
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc zp_eff_resist
@@ -563,11 +579,10 @@ item_quaff:
     rts
 
 !iq_effect_resist_cold:
-    // Resist cold for rng(10) + 10 turns (timer only; no cold-breath
-    // consumer exists yet)
+    // Resist cold for randint(10) + 10 turns (frost breath divides by it)
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc eff_resist_cold_timer
@@ -582,6 +597,7 @@ item_quaff:
     jsr eff_cure_poison
     ldx #HSTR_EFF_POISON_END
     jmp iq_msg_turn
+#import "eff_gain_stat.s"
 #endif
 
 

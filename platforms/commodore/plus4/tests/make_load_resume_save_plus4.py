@@ -4,23 +4,31 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-SAVE_VERSION = 0x03
+# The product build plays the monster catalog: its saves are version $0A and
+# older ones are refused (hal/storage_policy.s), so the fixture is written in
+# that format: 33 inventory slots, the 20-byte known-item bitset, the
+# door-state block followed by the species table, and 40 creature rows of
+# recall (save.s, as the C128 fixture).
+SAVE_VERSION = 0x0A
+ID_KNOWN_BYTES = 20
+MAX_DOOR_STATES = 16
+CATALOG_SLOTS = 32
 
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 96
 ITEM_ID_CAPACITY = 96
-STORE_TOTAL_SLOTS = 96
+STORE_TOTAL_SLOTS = 128
 MAX_ROOMS = 8
 MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
-RECALL_DATA_SIZE = 260
+RECALL_DATA_SIZE = 160   # 40 creature rows x 4 (core/recall_defs.s)
 # Current Plus/4 product load gate consumes this many map bytes before reading
 # the checksum. Keep this explicit until the storage HAL owns per-platform
 # record layout instead of inheriting the C64 save shape implicitly.
 LOAD_SAVE_MAP_SIZE = 3676
-TOTAL_INV_SLOTS = 31
+TOTAL_INV_SLOTS = 33
 
 PL_LEVEL = 19
 PL_DLEVEL = 20
@@ -57,9 +65,12 @@ def main() -> int:
     payload.extend(block(32))   # zp $40-$5f
     payload.extend(block(1))    # eff_fear_timer
     payload.extend(block(4))    # rng
-    for _ in range(8):
+    item_ids = block(TOTAL_INV_SLOTS)
+    item_ids[31] = item_ids[32] = 0xFF   # reserved cloak and secondary: empty
+    payload.extend(item_ids)
+    for _ in range(7):
         payload.extend(block(TOTAL_INV_SLOTS))
-    payload.extend(block(ITEM_ID_CAPACITY))
+    payload.extend(block(ID_KNOWN_BYTES))
     payload.extend(block(12))  # potion_shuffle
     payload.extend(block(12))  # scroll_shuffle
     payload.extend(block(4))   # ring_shuffle
@@ -76,6 +87,9 @@ def main() -> int:
     for _ in range(3):
         payload.extend(block(MAX_TRAPS))
     payload.extend(block(MAX_MONSTERS * MONSTER_ENTRY_SIZE))
+    payload.extend(block(1 + MAX_DOOR_STATES * 3))   # door-state table
+    payload.extend(block(CATALOG_SLOTS))              # species ids lo
+    payload.extend(block(CATALOG_SLOTS, 0xFF))        # species ids hi: all empty
     for _ in range(11):
         payload.extend(block(MAX_FLOOR_ITEMS))
     payload.extend(block(RECALL_DATA_SIZE))

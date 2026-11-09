@@ -10,9 +10,11 @@
 .const IF_IDENTIFIED = $02
 .const IF_TRIED      = $04    // Legacy pseudo-ID bit kept for save compatibility
 .const IF_SENSED     = $08    // Umoria-style auto-sensed "magik" marker
-.const EGO_TYPE_COUNT = 8
+.const EGO_TYPE_COUNT = 9
 .const ITEM_META_FLAGS_MASK = $0f
-.const ITEM_META_EGO_MASK   = $70
+// Ego bits 4-7 (bits 4-6 until Slay Dragon, 2026-11-07: bit 7 was unused,
+// so every saved store item reads as before).
+.const ITEM_META_EGO_MASK   = $f0
 .const ITEM_META_EGO_SHIFT  = 4
 
 // Floor Item Constants
@@ -21,6 +23,9 @@
 .const FI_EMPTY        = $ff
 
 // Equipment Slot Constants (indices 22-32 in unified table)
+// Rings: VMS's two hands (moria.inc:528, inventory[29] right, [30] left):
+// EQUIP_RING the right, EQUIP_RING2 the left (2026-11-08; slot 31 was
+// reserved for a cloak slot, which will take a new slot when it lands).
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY   = 23
 .const EQUIP_SHIELD = 24
@@ -28,11 +33,11 @@
 .const EQUIP_HANDS  = 26
 .const EQUIP_FEET   = 27
 .const EQUIP_LIGHT  = 28
-.const EQUIP_RING   = 29
+.const EQUIP_RING   = 29               // right hand: a ring goes here when it is free
 .const EQUIP_AMULET = 30
-.const EQUIP_CLOAK  = 31               // RESERVED: always empty until the cloak slot lands
+.const EQUIP_RING2  = 31               // left hand: else here, replacing what is worn
 .const EQUIP_SECONDARY = 32            // VMS inventory[34]: SHIFT+X swaps it with EQUIP_WEAPON
-.const EQUIP_LAST   = EQUIP_AMULET     // becomes EQUIP_CLOAK with the cloak
+.const EQUIP_LAST   = EQUIP_RING2
 .const EQUIP_END    = EQUIP_LAST + 1   // AC sum / pseudo-ID: never the secondary
 .const VISIBLE_EQUIP_LAST = EQUIP_SECONDARY   // equipment screen and take-off
 .const VISIBLE_EQUIP_END  = VISIBLE_EQUIP_LAST + 1
@@ -43,9 +48,9 @@
 .const TOTAL_INV_SLOTS = 33
 .const MAX_EQUIP_SLOTS = TOTAL_INV_SLOTS - MAX_INV_SLOTS
 .const LEGACY_INV30_SLOTS = 30         // saves before the amulet slot
-.const LEGACY_INV31_SLOTS = 31         // saves before the reserved cloak and secondary slots
-.assert "Reserved cloak slot follows the AC range", EQUIP_CLOAK, EQUIP_END
-.assert "Secondary weapon is the last inventory slot", EQUIP_SECONDARY == EQUIP_CLOAK + 1 && EQUIP_SECONDARY == TOTAL_INV_SLOTS - 1, true
+.const LEGACY_INV31_SLOTS = 31         // saves before the slot-31 (left ring) and secondary slots
+.assert "The left-hand ring ends the AC range", EQUIP_RING2 + 1, EQUIP_END
+.assert "Secondary weapon is the last inventory slot", EQUIP_SECONDARY == EQUIP_RING2 + 1 && EQUIP_SECONDARY == TOTAL_INV_SLOTS - 1, true
 .assert "Visible equipment covers every equipment slot", VISIBLE_EQUIP_END, TOTAL_INV_SLOTS
 
 // Item Category for Digging Tools
@@ -147,13 +152,17 @@
 .const PFLAG_RESIST_COLD = $02
 .const PFLAG_SPEED       = $04
 .const PFLAG_SEE_INVIS   = $08
+.const PFLAG_FREE_ACT    = $10   // Free Action: the Amulet of the Magi (VMS)
 
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 140
+.const ITEM_TYPE_COUNT = 146
+// VMS Moria potions of gain stat (values.inc; 2026-11-07), in PL_*_BASE order
+.const ITEM_TYPE_POT_GAIN_STR = 140
+.const ITEM_TYPE_POT_GAIN_CHR = 145
 .const ITEM_ID_CAPACITY = 160
 
 // Known-item identification state (Save Format V4)
@@ -165,12 +174,13 @@ id_known_bits: .fill ID_KNOWN_BYTES, 0
 idk_bit_mask: .byte 1, 2, 4, 8, 16, 32, 64, 128
 idk_mask:     .byte 0
 
-// id_known_test — Report whether item type X is identified/known.
-// Input:  X = item type ID
-// Output: A = 0 and Z set when the item is UNKNOWN (mirrors lda id_known,x)
+// idk_index_x / idk_index_a — The bit of item type X (or A): idk_mask = its
+// mask, Y = its byte in id_known_bits, A = that byte. Shared by the four
+// helpers below, which repeated it whole until 2026-11-07.
 // Clobbers: A, Y (X preserved)
-id_known_test:
+idk_index_x:
     txa
+idk_index_a:
     pha
     and #7
     tay
@@ -182,6 +192,14 @@ id_known_test:
     lsr
     tay
     lda id_known_bits,y
+    rts
+
+// id_known_test — Report whether item type X is identified/known.
+// Input:  X = item type ID
+// Output: A = 0 and Z set when the item is UNKNOWN (mirrors lda id_known,x)
+// Clobbers: A, Y (X preserved)
+id_known_test:
+    jsr idk_index_x
     and idk_mask
     rts
 
@@ -226,17 +244,8 @@ piq_quaff_identify:
 // Clobbers: A, Y (X preserved)
 id_known_set:
     txa
-    pha
-    and #7
-    tay
-    lda idk_bit_mask,y
-    sta idk_mask
-    pla
-    lsr
-    lsr
-    lsr
-    tay
-    lda id_known_bits,y
+idks_a:
+    jsr idk_index_a
     ora idk_mask
     sta id_known_bits,y
     rts
@@ -246,38 +255,18 @@ id_known_set:
 // Clobbers: A, Y (X preserved)
 id_known_set_y:
     tya
-    pha
-    and #7
-    tay
-    lda idk_bit_mask,y
-    sta idk_mask
-    pla
-    lsr
-    lsr
-    lsr
-    tay
-    lda id_known_bits,y
-    ora idk_mask
-    sta id_known_bits,y
-    rts
+    jmp idks_a
 
-// id_known_clear — Mark item type X as unknown.
+#if C64_UNIT_TEST || C128_UNIT_TEST
+// id_known_clear — Mark item type X as unknown. No product caller; the unit
+// tests keep it to reset knowledge (test_identify128.s has its own copy).
 // Input:  X = item type ID
 // Clobbers: A, Y (X preserved)
 id_known_clear:
-    txa
-    pha
-    and #7
-    tay
-    lda idk_bit_mask,y
+    jsr idk_index_x
+    lda idk_mask
     eor #$ff
-    sta idk_mask
-    pla
-    lsr
-    lsr
-    lsr
-    tay
-    lda id_known_bits,y
-    and idk_mask
+    and id_known_bits,y
     sta id_known_bits,y
     rts
+#endif

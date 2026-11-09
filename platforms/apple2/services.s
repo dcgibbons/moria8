@@ -3,7 +3,7 @@
 //
 // Sound: synchronous shaped speaker patterns at $C030, one per semantic ID
 // (SFX_* IDs from core/sound.s, which this port does not import). Patterns
-// live in A2AuxData (a2_sfx_patterns): fixed 16-byte slots of
+// live in A2HuffData (a2_sfx_patterns): fixed 16-byte slots of
 // (period, toggles) pairs, period 0 = end. Period: smaller = higher pitch;
 // one toggle is one $C030 access (~5*period+12 cy). Shapes mirror the C64
 // SID intent (core/sound.s): bump = low double thud, hit = high-to-low

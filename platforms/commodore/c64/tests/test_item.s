@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #64-1
+    ldx #69-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -87,14 +87,24 @@ monster_attack_player:
 player_update_hunger_state:
     sec
     rts
+// The production damage entries' shape (monster_attack.s): 8-bit, or 16-bit
+// with the high byte in mad_dmg_hi (breath); acid breath's armour damage
+// finds no armour here.
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+    clc
+    rts
 mon_atk_apply_damage:
+    lda #0
+    sta mad_dmg_hi
+mon_atk_apply_damage_16:
     lda zp_player_hp_lo
     sec
     sbc zp_combat_dmg
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
     lda zp_player_hp_hi
-    sbc #0
+    sbc mad_dmg_hi
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
     bmi !mad_dead+
@@ -134,7 +144,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 64, $ff
+tc_results: .fill 69, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -2000,7 +2010,9 @@ test_start:
     sta tc_results + 39
 
     // ==========================================
-    // Test 41: Enchant Armor on cursed item clears curse, sets p1=0
+    // Test 41: Enchant Armor on a cursed piece lifts the curse and adds one
+    // (VMS scrolls.inc + enchant(): at 0 or below it always rises; success
+    // clears the curse). It reset the bonus to 0 until 2026-11-06.
     // ==========================================
 !t41:
     jsr item_init_inventory
@@ -2037,8 +2049,9 @@ test_start:
 
     jsr item_read_scroll
 
-    // AC at EQUIP_BODY should be 0 (curse removed, reset)
+    // AC at EQUIP_BODY should be -2 (-3 + 1)
     lda inv_to_ac + EQUIP_BODY
+    cmp #$fe
     bne !t41_fail+
 
     // IF_CURSED should be cleared
@@ -2054,7 +2067,8 @@ test_start:
     sta tc_results + 40
 
     // ==========================================
-    // Test 42: Enchant Armor at cap (p1=5) does nothing
+    // Test 42: Enchant Armor at +5 adds at most one (VMS enchant(): 600 in
+    // 1000 fail there). It never went past +5 until 2026-11-06.
     // ==========================================
 !t42:
     jsr item_init_inventory
@@ -2091,10 +2105,12 @@ test_start:
 
     jsr item_read_scroll
 
-    // AC should still be 5 (not 6)
+    // AC should be 5 or 6
     lda inv_to_ac + EQUIP_BODY
     cmp #5
-    bne !t42_fail+
+    bcc !t42_fail+
+    cmp #7
+    bcs !t42_fail+
 
     lda #$01
     sta tc_results + 41
@@ -2472,6 +2488,7 @@ test_start:
     lda #0
     sta inv_p1
     sta inv_flags
+    sta zp_eff_resist                  // from zero: the roll alone
 
     lda #2
     sta $c6
@@ -2482,8 +2499,12 @@ test_start:
 
     jsr item_quaff
 
-    lda zp_eff_resist
-    bne !t48_rh_ok+
+    lda zp_eff_resist               // randint(10) + 10: 11-20
+    cmp #11
+    bcc !t48_rh_bad+
+    cmp #21
+    bcc !t48_rh_ok+
+!t48_rh_bad:
     jmp !t48_fail+
 !t48_rh_ok:
 
@@ -2499,6 +2520,7 @@ test_start:
     lda #0
     sta inv_p1
     sta inv_flags
+    sta eff_resist_cold_timer                  // from zero: the roll alone
 
     lda #2
     sta $c6
@@ -2509,8 +2531,12 @@ test_start:
 
     jsr item_quaff
 
-    lda eff_resist_cold_timer
-    bne !t48_rc_ok+
+    lda eff_resist_cold_timer       // randint(10) + 10: 11-20
+    cmp #11
+    bcc !t48_rc_bad+
+    cmp #21
+    bcc !t48_rc_ok+
+!t48_rc_bad:
     jmp !t48_fail+
 !t48_rc_ok:
 
@@ -2574,7 +2600,9 @@ test_start:
     jsr player_calc_stats
     lda player_pflags
     and #PFLAG_RESIST_FIRE
-    beq !t49_fail+
+    bne !t49_fire_ok+
+    jmp !t49_fail+
+!t49_fire_ok:
 
     // Ring of Speed equipped → PFLAG_SPEED
     jsr item_init_inventory
@@ -2585,10 +2613,13 @@ test_start:
     jsr player_calc_stats
     lda player_pflags
     and #PFLAG_SPEED
-    beq !t49_fail+
+    beq !t49_speed_fail+
     lda player_pflags
     and #PFLAG_RESIST_FIRE
-    bne !t49_fail+
+    beq !t49_speed_ok+
+!t49_speed_fail:
+    jmp !t49_fail+
+!t49_speed_ok:
 
     // Amulet of the Magi equipped → PFLAG_SEE_INVIS
     jsr item_init_inventory
@@ -2600,6 +2631,18 @@ test_start:
     lda player_pflags
     and #PFLAG_SEE_INVIS
     beq !t49_fail+
+    lda player_pflags            // and Free Action (2026-11-08, MON-025)
+    and #PFLAG_FREE_ACT
+    beq !t49_fail+
+    // The wear path rebuilds them too (player_recalc_equipment, as item_wear
+    // and item_takeoff run it): stale flags cleared, the amulet's set again
+    lda #0
+    sta player_pflags
+    jsr player_recalc_equipment
+    lda player_pflags
+    and #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
+    cmp #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
+    bne !t49_fail+
 
     // Ring of Slaying with +3/+4 to-hit/dam adds them to PL_TOHIT/PL_TODMG
     // (measure delta vs empty ring since stat adjustments also contribute)
@@ -2949,6 +2992,26 @@ test_start:
     bne !t58_fail+
     lda player_data + PL_GOLD_2
     bne !t58_fail+
+    // At 16,777,000 a pickup of 1,000 stops at 16,777,215, not 784
+    // (GoldCapOnCarry, 2026-11-08)
+    jsr t58_gold_setup
+    lda #$28                    // 16,777,000 = $FFFF28
+    sta player_data + PL_GOLD_0
+    lda #$ff
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+    lda #<1000
+    sta fi_add_qty
+    lda #>1000
+    sta fi_add_qty_hi
+    jsr floor_item_add
+    jsr item_pickup
+    bcc !t58_fail+
+    lda player_data + PL_GOLD_0
+    and player_data + PL_GOLD_1
+    and player_data + PL_GOLD_2
+    cmp #$ff
+    bne !t58_fail+
     lda #$01
     sta tc_results + 57
     jmp !t59+
@@ -3167,14 +3230,253 @@ test_start:
     bne !t64_fail+
     lda #$01
     sta tc_results + 63
-    jmp !tests_done+
+    jmp !t65+
 !t64_fail:
     lda #$00
     sta tc_results + 63
 
+    // Test 65: a full pack still takes a ration that stacks with one carried
+    // (VMS inven_check_num, Umoria inventoryCanCarryItemCount), and still
+    // refuses a dagger. Every pickup was "Your pack is full." until
+    // 2026-11-06: a Ranger's Create Food fell to the floor for good.
+!t65:
+    jsr item_init_inventory
+    lda #15                     // a Ration of Food in slot 0
+    jsr t59_add_one
+    ldx #1
+!t65_fill:
+    lda #2                      // daggers fill slots 1..21
+    sta inv_item_id,x
+    lda #1
+    sta inv_qty,x
+    inx
+    cpx #MAX_INV_SLOTS
+    bcc !t65_fill-
+    jsr t58_gold_setup
+    lda #15
+    jsr t59_add_one_setup
+    jsr floor_item_add          // a ration underfoot
+    jsr item_pickup
+    bcc !t65_fail+
+    lda inv_qty + 0
+    cmp #2                      // stacked
+    bne !t65_fail+
+    lda #20
+    ldy #12
+    jsr floor_item_find_at
+    bcs !t65_fail+              // gone from the floor
+    jsr t58_gold_setup
+    lda #2
+    jsr t59_add_one_setup
+    jsr floor_item_add          // a dagger underfoot
+    jsr item_pickup
+    bcs !t65_fail+              // no room: refused
+    lda #20
+    ldy #12
+    jsr floor_item_find_at
+    bcc !t65_fail+              // still on the floor
+    lda #$01
+    sta tc_results + 64
+    jmp !t66+
+!t65_fail:
+    lda #$00
+    sta tc_results + 64
+
+    // Test 66: Enchant Armor raises worn armour below zero (VMS enchant():
+    // a bonus of 0 or less always rises): Mithril Plate Mail [14,-14] from
+    // acid. An unsigned "to-AC < 5" skipped it until 2026-11-06.
+!t66:
+    jsr t66_armor_setup
+    lda #$f2                        // -14
+    sta inv_to_ac + EQUIP_BODY
+    jsr t66_read_one
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$f3                        // -13
+    bne !t66_fail+
+    lda #$01
+    sta tc_results + 65
+    jmp !t67+
+!t66_fail:
+    lda #$00
+    sta tc_results + 65
+
+    // Test 67: a cursed piece is enchanted first, and the curse lifts (VMS
+    // scrolls.inc: the cursed slot is chosen; success clears the flag).
+!t67:
+    jsr t66_armor_setup
+    lda #0
+    sta inv_to_ac + EQUIP_BODY
+    lda #9                          // a Small shield
+    sta inv_item_id + EQUIP_SHIELD
+    lda #1
+    sta inv_qty + EQUIP_SHIELD
+    lda #$fd                        // -3
+    sta inv_to_ac + EQUIP_SHIELD
+    lda #IF_CURSED
+    sta inv_flags + EQUIP_SHIELD
+    jsr t66_read_one
+    lda inv_to_ac + EQUIP_SHIELD
+    cmp #$fe                        // -2
+    bne !t67_fail+
+    lda inv_flags + EQUIP_SHIELD
+    and #IF_CURSED
+    bne !t67_fail+
+    lda inv_to_ac + EQUIP_BODY      // the clean body armour untouched
+    bne !t67_fail+
+    lda #$01
+    sta tc_results + 66
+    jmp !t68+
+!t67_fail:
+    lda #$00
+    sta tc_results + 66
+
+    // Test 68: at +10 a scroll succeeds 5 times in 1000 (VMS enchant()):
+    // ten scrolls leave it at +10 or +11, never the old flat +1 each.
+!t68:
+    jsr t66_armor_setup
+    lda #10
+    sta inv_to_ac + EQUIP_BODY
+    lda #10
+    sta t68_left
+!t68_loop:
+    jsr t66_read_one
+    dec t68_left
+    bne !t68_loop-
+    lda inv_to_ac + EQUIP_BODY
+    cmp #10
+    bcc !t68_fail+
+    cmp #12
+    bcs !t68_fail+
+    lda #$01
+    sta tc_results + 67
+    jmp !t69+
+!t68_fail:
+    lda #$00
+    sta tc_results + 67
+
+    // Test 69: two ring hands (VMS moria.inc:528, 2026-11-08): a ring goes
+    // on the right hand when it is free, else on the left, replacing its
+    // ring; both rings' flags and Slaying bonuses count.
+!t69:
+    jsr item_init_inventory
+    lda #ITEM_TYPE_RING_RESIST_FIRE
+    jsr t69_wear_ring
+    lda inv_item_id + EQUIP_RING
+    cmp #ITEM_TYPE_RING_RESIST_FIRE
+    bne !t69_fail_near+
+    lda inv_item_id + EQUIP_RING2           // the right hand first
+    cmp #FI_EMPTY
+    bne !t69_fail_near+
+    lda #ITEM_TYPE_RING_RESIST_COLD
+    jsr t69_wear_ring
+    lda inv_item_id + EQUIP_RING2           // then the left
+    cmp #ITEM_TYPE_RING_RESIST_COLD
+    bne !t69_fail_near+
+    jsr player_calc_stats
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD
+    beq !t69_both+
+!t69_fail_near:
+    jmp !t69_fail+
+!t69_both:
+    lda #ITEM_TYPE_RING_SPEED
+    jsr t69_wear_ring
+    lda inv_item_id + EQUIP_RING2           // the left hand's ring replaced
+    cmp #ITEM_TYPE_RING_SPEED
+    bne !t69_fail+
+    lda inv_item_id + EQUIP_RING
+    cmp #ITEM_TYPE_RING_RESIST_FIRE
+    bne !t69_fail+
+    lda inv_item_id                         // ... and back in the pack
+    cmp #ITEM_TYPE_RING_RESIST_COLD
+    bne !t69_fail+
+    jsr player_calc_stats
+    lda player_pflags
+    and #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_SPEED
+    cmp #PFLAG_RESIST_FIRE | PFLAG_SPEED
+    bne !t69_fail+
+    // Slaying on the left hand adds its to-hit and to-damage
+    jsr item_init_inventory
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sta t49_base_tohit
+    lda #ITEM_TYPE_RING_SLAYING
+    sta inv_item_id + EQUIP_RING2
+    lda #1
+    sta inv_qty + EQUIP_RING2
+    lda #3
+    sta inv_to_hit + EQUIP_RING2
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sec
+    sbc t49_base_tohit
+    cmp #3
+    bne !t69_fail+
+    lda #$01
+    sta tc_results + 68
+    jmp !tests_done+
+!t69_fail:
+    lda #$00
+    sta tc_results + 68
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+// t69_wear_ring — wear ring type A from pack slot 0 through item_wear ('A').
+t69_wear_ring:
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+    sta inv_to_hit
+    sta inv_to_dam
+    sta inv_to_ac
+    sta inv_ego
+    sta zp_msg_flags
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+    jmp item_wear
+
+// t66_armor_setup — empty pack and equipment, Chain mail (item 8) worn,
+// clean; the caller sets its to-AC and any other piece.
+t66_armor_setup:
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+    lda #8                          // Chain mail
+    sta inv_item_id + EQUIP_BODY
+    lda #1
+    sta inv_qty + EQUIP_BODY
+    lda #0
+    sta inv_flags + EQUIP_BODY
+    rts
+
+// t66_read_one — read one Enchant Armor scroll (type 35) from pack slot 0.
+t66_read_one:
+    lda #35
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+    lda #2
+    sta $c6
+    lda #$41                        // 'a': the scroll
+    sta $0277
+    lda #$20
+    sta $0278
+    jmp item_read_scroll
+
+t68_left: .byte 0
 
 // t62_add_torch — inv_add_item one wooden torch with A turns (p1).
 t62_add_torch:

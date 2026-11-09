@@ -39,6 +39,9 @@ PACK_ROW = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*?)\s*$")
 
 CURE_LIGHT, CURE_MEDIUM = "Cure Light Wounds", "Cure Medium Wounds"
 REMOVE_FEAR, DETECT_DOORS, CREATE_FOOD = "Remove Fear", "Detect Doors/Stairs", "Create Food"
+RESIST_HEAT_COLD = "Resist Heat and Cold"   # Priest book 5: Moria8 breath is all fire (monster_cast_breath)
+DETECT_EVIL = "Detect Evil"   # Priest book 1: the evil creatures on the level (dragons among them)
+LIGHT_SPELLS = ("Call Light", "Light Area")   # a Priest's and a Mage's: light what is around
 HEALS = (CURE_MEDIUM, CURE_LIGHT)   # best first
 PORTAL, SANCTUARY = "Portal", "Sanctuary"                 # escapes (Words of Wisdom)
 BLIND, CHANT, ORB = "Blind Creature", "Chant", "Orb of Draining"   # control, Bless x2, attack
@@ -57,7 +60,7 @@ MAGE_ATTACKS = {MAGIC_MISSILE: 7.0, STINKING_CLOUD: 9.0, LIGHTNING_BOLT: 13.5, F
 # How each spell is cast (core/player_magic_execute_overlay.s, the dispatch
 # tables): at a direction, on a pack item, or on the caster and what is
 # around it. M7 criterion 2 asks for every spell and prayer a class learns
-# by level 25 cast with its effect seen (§23.2).
+# below level 25, so can cast before reaching it, cast with its effect seen (§23.2).
 AIMED = frozenset({MAGIC_MISSILE, STINKING_CLOUD, "Confusion", LIGHTNING_BOLT, SLEEP_I, FROST_BOLT,
                    "Turn Stone to Mud", "Polymorph Other", FIRE_BOLT, "Slow Monster", FROST_BALL,
                    "Teleport Other", FIRE_BALL, BLIND, ORB})
@@ -177,6 +180,7 @@ class Magic:
         self.casting: dict[str, object] | None = None   # the cast whose effect is awaited
         self.signature: tuple[int, ...] = ()   # traps, doors and stairs in view at the last command screen
         self.refused: set[str] = set()        # refused without a turn: not again until the next level
+        self.lost_book: str | None = None     # a book found missing at a cast (the brain buys it again)
 
     @staticmethod
     def mana(obs: Observation) -> tuple[int, int]:
@@ -214,6 +218,15 @@ class Magic:
             # No turn passes: trying again would repeat forever.
             self.refused.add(self.last)
             self.last = None
+        spell = self.last or self.wanted
+        if spell and "Never mind." in messages and "which?" in messages:
+            # The spell's book is not carried (burnt or lost): the book prompt
+            # offered another, whose list has no such letter, and no turn
+            # passed (2026-11-05: Stinking Cloud cast 48,050 times without
+            # Magick I). Not again until the next level, and the book is lost.
+            self.refused.add(spell)
+            self.lost_book = self.known[spell].book if spell in self.known else None
+            self.last = self.wanted = None
         if "You have nothing there." in messages and (self.wanted is not None or self.studying):
             # No book of this kind carried: the book prompt never opened and
             # no turn passed (M5d round 1: a Ranger that dropped its book cast

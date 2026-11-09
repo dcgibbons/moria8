@@ -108,14 +108,7 @@ ranged_fire:
 
     // 4. Trace projectile, at most the launcher's range in squares
 rf_fly:
-    lda zp_player_x
-    sta proj_cx
-    sta tw_last_x
-    lda zp_player_y
-    sta proj_cy
-    sta tw_last_y
-    lda #0
-    sta rf_dist
+    jsr proj_start_at_player
     ldx rf_launcher
     lda rf_range_tbl,x
     sta proj_steps
@@ -129,24 +122,11 @@ rf_fly:
 !rf_miss_dark_tramp:
     jmp rf_miss_darkness
 !rf_step_ok:
-    inc rf_dist
-    lda proj_cx
-    sta tw_last_x
-    lda proj_cy
-    sta tw_last_y
-
-    // Check for monster
-    lda proj_cx
-    ldy proj_cy
-    jsr monster_find_at
+    jsr proj_landed             // carry set: a monster here, X = its slot
     bcc !rf_trace-              // No monster, keep tracing
 
     // 5. Hit a monster! X = slot index
-    stx cmb_slot
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    sta cmb_type
+    jsr proj_hit_setup
 
     jsr rf_calc_tohit
 
@@ -164,15 +144,8 @@ rf_fly:
     // 6. Hit! Roll damage
     jsr rf_roll_damage
 
-    // Critical hit by the ammunition's weight (VMS critical_blow)
-    ldx tw_item_id
-    lda it_weight,x
-    jsr combat_critical_blow_weight
-
-    // Apply damage
-    ldx cmb_slot
-    lda cmb_damage
-    jsr combat_apply_damage
+    // Critical hit by the ammunition's weight (VMS critical_blow), applied
+    jsr proj_crit_and_damage
     bcc !rf_hit_alive+
 
     // Monster killed — "YOU HAVE SLAIN THE <name>."
@@ -227,6 +200,51 @@ rf_consume_ammo:
 !rf_done:
     sec                         // Turn consumed
     rts
+
+// Shared with throw.s (always assembled with this file, same segment).
+// proj_start_at_player — A projectile at the player: proj_cx/cy and
+// tw_last_x/y = the player's square, rf_dist = 0.
+proj_start_at_player:
+    lda zp_player_x
+    sta proj_cx
+    sta tw_last_x
+    lda zp_player_y
+    sta proj_cy
+    sta tw_last_y
+    lda #0
+    sta rf_dist
+    rts
+
+// proj_landed — After a trace_step: one more square flown, the last one
+// reached is this one, and carry set with X = the slot of a monster on it.
+proj_landed:
+    inc rf_dist
+    lda proj_cx
+    sta tw_last_x
+    lda proj_cy
+    sta tw_last_y
+    lda proj_cx
+    ldy proj_cy
+    jmp monster_find_at
+
+// proj_hit_setup — X = the monster hit: cmb_slot and cmb_type.
+proj_hit_setup:
+    stx cmb_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cmb_type
+    rts
+
+// proj_crit_and_damage — The critical blow by tw_item_id's weight (VMS
+// critical_blow), then cmb_damage to cmb_slot: carry set when it dies.
+proj_crit_and_damage:
+    ldx tw_item_id
+    lda it_weight,x
+    jsr combat_critical_blow_weight
+    ldx cmb_slot
+    lda cmb_damage
+    jmp combat_apply_damage
 
 // rf_calc_tohit — The shot's hit chance for the squares flown (rf_dist)
 // Output: zp_combat_tohit

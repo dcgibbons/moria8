@@ -8,7 +8,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 13, $ff
+tc_results: .fill 14, $ff
 
 .pc = $080E "Test Code"
 
@@ -23,7 +23,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #12
+    ldx #13
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -637,10 +637,44 @@ test_start:
     bne !t12_fail+
     lda #$01
     sta tc_results + 12
-    jmp !done+
+    jmp !t13+
 !t12_fail:
     lda #$00
     sta tc_results + 12
+
+    // Test 13: the gas trap (CHEST_P1_TRAP_PARA) paralyses for 10 + rng(20)
+    // turns; with Free Action (PFLAG_FREE_ACT, the Amulet of the Magi) the
+    // player is unaffected (VMS "You are unaffected."; MON-025).
+!t13:
+    jsr test_reset
+    lda #0
+    sta player_pflags
+    lda #CHEST_P1_TRAP_PARA
+    ldx #5
+    jsr test_setup_chest
+    jsr chest_open_command
+    lda zp_eff_paralyze
+    cmp #10
+    bcc !t13_fail+
+    jsr test_reset
+    lda #PFLAG_FREE_ACT
+    sta player_pflags
+    lda #CHEST_P1_TRAP_PARA
+    ldx #5
+    jsr test_setup_chest
+    jsr chest_open_command
+    lda zp_eff_paralyze
+    bne !t13_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t13_done+
+!t13_fail:
+    lda #$00
+    sta tc_results + 13
+!t13_done:
+    lda #0
+    sta player_pflags
+    sta zp_eff_paralyze
 
 !done:
     jmp test_finish

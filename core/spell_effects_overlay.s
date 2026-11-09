@@ -3,9 +3,12 @@
 #import "df_target_row.s"
 // spell_effects_overlay.s — Spell effects whose only product callers live in
 // the spell-execution overlay (player_magic_execute_overlay.s) or the
-// spell-overlay player_magic_utility.s. Platforms with resident headroom
-// import this next to spell_effects.s; Apple IIe imports it into the spell
-// overlay so the resident image fits (see docs/CHEST_DESIGN.md step-8 notes).
+// spell-overlay player_magic_utility.s.
+// Owner: the spell overlay where it has room (C64 and Commander X16 OVL.SPELL);
+// resident elsewhere, next to spell_effects.s (the Apple IIe keeps only
+// eff_destroy_traps_doors in its spell overlay, EFF_DESTROY_TRAPS_DOORS_EXTERNAL;
+// docs/CHEST_DESIGN.md step-8 notes). Lifetime: one cast. Callers: the spell
+// dispatch tables only; nothing outside the spell overlay may call these.
 
 // ============================================================
 // eff_find_traps — Reveal all hidden traps in LOS range

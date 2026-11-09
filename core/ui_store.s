@@ -21,6 +21,8 @@
 .const HG_MAX_CONCESSION = 15
 
 .const USTORE_PRICE_COL = hal_layout_store_price_col
+// The gold sits right of the menu, on STORE_MENU_ROW.
+.const USTORE_GOLD_COL = 21
 
 // Message table indices for show_msg
 .const MSG_GOLD       = 0
@@ -144,7 +146,7 @@ store_draw_screen:
     lda #2
     jsr draw_separator_at_a
 
-    // Rows 3-14: Item list
+    // Rows 3-18: Item list
     lda #COL_LGREY
     sta zp_text_color
 
@@ -155,7 +157,7 @@ store_draw_screen:
     lda #3
     sta sd_row                  // Current display row
     lda #0
-    sta sd_save_x               // Slot counter 0-11
+    sta sd_save_x               // Slot counter 0-15
 
 !sds_item_loop:
     lda sd_save_x
@@ -236,37 +238,20 @@ store_draw_screen:
     jmp !sds_item_loop-
 
 !sds_items_done:
-    // Row 15: Separator
-    lda #COL_DGREY
-    sta zp_text_color
-    lda #15
-    jsr draw_separator_at_a
-
-    // Row 16: Gold display
-    ldx #MSG_GOLD
+    // Row 19: Menu, then the gold to its right
+    ldx #MSG_MENU
     jsr show_msg
+    ldx #MSG_GOLD
+    lda #USTORE_GOLD_COL
+    jsr show_msg_at_col
 
-    // Check for >65535 gold
-    lda player_data + PL_GOLD_2
-    bne !sds_big_gold+
-
-    // Normal display
     lda player_data + PL_GOLD_0
     sta zp_temp0
     lda player_data + PL_GOLD_1
     sta zp_temp1
-    jsr screen_put_decimal_16
-    jmp !sds_gold_done+
-
-!sds_big_gold:
-    lda #<uis_big_gold_str
-    ldy #>uis_big_gold_str
-    jsr uis_screen_put_inline
-
-!sds_gold_done:
-    // Row 18: Menu
-    ldx #MSG_MENU
-    jmp show_msg
+    lda player_data + PL_GOLD_2
+    sta nf_value_2
+    jmp screen_put_decimal_u24
 
 // ============================================================
 // Buy flow
@@ -276,7 +261,7 @@ store_draw_screen:
 // Input: zp_store_idx
 // Clobbers: everything
 store_buy:
-    // Prompt: "BUY WHICH ITEM? (A-L)"
+    // Prompt: "BUY WHICH ITEM? (A-P)"
     ldx #MSG_BUY_WHICH
     jsr store_clear_show_msg
 
@@ -290,7 +275,7 @@ store_buy:
     rts
 !sb_not_cancel:
 
-    // Convert PETSCII letter to slot index (A=0, L=11)
+    // Convert PETSCII letter to slot index (A=0, P=15)
     sec
     sbc #PETSCII_A
     bcs !sb_above_a+
@@ -298,7 +283,7 @@ store_buy:
 !sb_above_a:
     cmp #STORE_MAX_ITEMS
     bcc !sb_valid_slot+
-    rts                         // Above 'L'
+    rts                         // Above 'P'
 !sb_valid_slot:
 
     sta zp_store_slot
@@ -376,18 +361,8 @@ sbuy_execute:
     jmp sbuy_no_gold
 !sb_can_afford:
 
-    // Check inventory room
-    jsr inv_count_items
-    cmp #MAX_INV_SLOTS
-    bcc !sb_has_room+
-    jmp sbuy_full
-!sb_has_room:
-    jsr hg_decrease_insults
-
-    // --- Execute purchase ---
-    jsr gold_subtract_price
-
-    // Copy item from store to inventory
+    // Copy item from store to inventory: a full pack still takes one that
+    // stacks (VMS inven_check_num, Umoria inventoryCanCarryItemCount)
     ldx sb_abs_slot
     :AuxReadX(si_item_id)
     sta fi_add_id
@@ -406,6 +381,13 @@ sbuy_execute:
     :LoadStoreEgoX()
     sta fi_add_ego
     jsr inv_add_item
+    bcs !sb_has_room+
+    jmp sbuy_full
+!sb_has_room:
+    jsr hg_decrease_insults
+
+    // --- Execute purchase ---
+    jsr gold_subtract_price
 
     // Remove one from the store stack. An emptied slot clears only its
     // item id: every path that fills a slot writes all of its fields.
@@ -715,17 +697,18 @@ ssell_show_offer:
 // Helpers
 // ============================================================
 
-// show_msg — Display a table-driven overlay-local message
+// show_msg — Display a table-driven overlay-local message at column 1
+// (show_msg_at_col: at column A)
 // Input: X = message index (MSG_* constant)
-// All messages use column 1.
 // Clobbers: A, X, Y
 show_msg:
+    lda #1
+show_msg_at_col:
+    sta zp_cursor_col
     lda msg_tbl_color,x
     sta zp_text_color
     lda msg_tbl_row,x
     sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
     lda msg_tbl_lo,x
     sta zp_ptr0
     lda msg_tbl_hi,x
@@ -978,6 +961,31 @@ hg_div_mul_result_24x8:
 // hg_calc_percent_from_tmp_den — Convert tmp/den concession ratio into percent.
 // Input: hg_tmp0/1 = numerator, hg_den_lo/hi = denominator
 // Output: A = percentage (0-255, saturated)
+// hg_concession_pct — hg_pct = the concession percent
+// (hg_calc_percent_from_tmp_den), damped above HG_MAX_CONCESSION: carry set.
+// Below HG_MIN_CONCESSION, an insult: carry clear and hg_pct unchanged.
+hg_concession_pct:
+    jsr hg_calc_percent_from_tmp_den
+    cmp #HG_MIN_CONCESSION
+    bcc !done+
+    cmp #HG_MAX_CONCESSION + 1
+    bcc !ok+
+    sta hg_pct
+    lsr
+    lsr
+    sta hg_tmp0
+    lda hg_pct
+    sec
+    sbc hg_tmp0
+    cmp #HG_MAX_CONCESSION
+    bcs !ok+
+    lda #HG_MAX_CONCESSION
+!ok:
+    sta hg_pct
+    sec
+!done:
+    rts
+
 hg_calc_percent_from_tmp_den:
 !scale:
     lda hg_den_hi
@@ -1072,7 +1080,6 @@ haggle_buy:
     lda hg_min_lo
     ror
     sta hg_last_lo
-    lda hg_last_lo
     ora hg_last_hi
     bne !hb_last_ok+
     lda #1
@@ -1142,25 +1149,10 @@ haggle_buy:
     sbc hg_last_hi
     sta hg_den_hi
 
-    jsr hg_calc_percent_from_tmp_den
-    cmp #HG_MIN_CONCESSION
-    bcs !hb_pct_floor_ok+
-    jmp !hb_insult+
-!hb_pct_floor_ok:
-    cmp #HG_MAX_CONCESSION + 1
-    bcc !hb_pct_ok+
-    sta hg_pct
-    lsr
-    lsr
-    sta hg_tmp0
-    lda hg_pct
-    sec
-    sbc hg_tmp0
-    cmp #HG_MAX_CONCESSION
+    jsr hg_concession_pct
     bcs !hb_pct_ok+
-    lda #HG_MAX_CONCESSION
+    jmp !hb_insult+
 !hb_pct_ok:
-    sta hg_pct
 
     // step = ((ask - input) * pct) / 100 + 1
     lda hg_ask_lo
@@ -1213,19 +1205,10 @@ haggle_buy:
     cmp hg_ask_lo
     bcc !hb_store_last+
 !hb_accept_input:
-    lda hg_input_lo
-    sta hg_ask_lo
-    lda hg_input_hi
-    sta hg_ask_hi
-    jmp hg_do_accept
+    jmp hg_accept_input
 
 !hb_store_last:
-    lda hg_input_lo
-    sta hg_last_lo
-    lda hg_input_hi
-    sta hg_last_hi
-    jsr hg_show_counter
-    jsr hg_wait_for_ack
+    jsr hg_store_last_counter
     jmp !hb_loop-
 
 !hb_insult:
@@ -1253,7 +1236,6 @@ haggle_sell:
     lda hg_min_lo
     ror
     sta hg_ask_lo
-    lda hg_ask_lo
     ora hg_ask_hi
     bne !hs_init_ok+
     lda #1
@@ -1338,25 +1320,10 @@ haggle_sell:
     sbc hg_ask_hi
     sta hg_den_hi
 
-    jsr hg_calc_percent_from_tmp_den
-    cmp #HG_MIN_CONCESSION
-    bcs !hs_pct_floor_ok+
-    jmp !hs_insult+
-!hs_pct_floor_ok:
-    cmp #HG_MAX_CONCESSION + 1
-    bcc !hs_pct_ok+
-    sta hg_pct
-    lsr
-    lsr
-    sta hg_tmp0
-    lda hg_pct
-    sec
-    sbc hg_tmp0
-    cmp #HG_MAX_CONCESSION
+    jsr hg_concession_pct
     bcs !hs_pct_ok+
-    lda #HG_MAX_CONCESSION
+    jmp !hs_insult+
 !hs_pct_ok:
-    sta hg_pct
 
     // step = ((input - ask) * pct) / 100 + 1
     lda hg_input_lo
@@ -1416,19 +1383,10 @@ haggle_sell:
     jmp !hs_loop-
 
 !hs_accept_input:
-    lda hg_input_lo
-    sta hg_ask_lo
-    lda hg_input_hi
-    sta hg_ask_hi
-    jmp hg_do_accept
+    jmp hg_accept_input
 
 !hs_store_last:
-    lda hg_input_lo
-    sta hg_last_lo
-    lda hg_input_hi
-    sta hg_last_hi
-    jsr hg_show_counter
-    jsr hg_wait_for_ack
+    jsr hg_store_last_counter
     jmp !hs_loop-
 
 !hs_insult:
@@ -1456,6 +1414,22 @@ hg_do_kick:
     clc
     rts
 
+// hg_store_last_counter — The offer becomes the last one; show the counter
+// and wait for a key (both haggles).
+hg_store_last_counter:
+    lda hg_input_lo
+    sta hg_last_lo
+    lda hg_input_hi
+    sta hg_last_hi
+    jsr hg_show_counter
+    jmp hg_wait_for_ack
+
+// hg_accept_input — The offer becomes the price asked, and is accepted.
+hg_accept_input:
+    lda hg_input_lo
+    sta hg_ask_lo
+    lda hg_input_hi
+    sta hg_ask_hi
 // hg_do_accept — Shared accept handler (terminal)
 // Copies ask to price, shows "AGREED!", returns with carry set
 hg_do_accept:
@@ -1592,14 +1566,12 @@ hg_retry_str:
     .text "WHAT WAS THAT?" ; .byte 0
 uis_gold_str:
     .text "Gold: " ; .byte 0
-uis_big_gold_str:
-    .text ">65535" ; .byte 0
 uis_store_gp_pad_str:
     .text " GP    " ; .byte 0
 uis_menu_str:
     .text "B)uy  S)ell  Q)uit" ; .byte 0
 uis_buy_which_str:
-    .text "Buy which item? (a-l)" ; .byte 0
+    .text "Buy which item? (a-p)" ; .byte 0
 uis_price_str:
     .text "Price: " ; .byte 0
 uis_gp_buy_str:
@@ -1661,7 +1633,7 @@ msg_tbl_color:
     .byte COL_WHITE, COL_LGREEN, COL_WHITE, COL_WHITE, COL_WHITE
     .byte COL_WHITE, COL_WHITE, COL_WHITE, COL_WHITE, COL_LGREEN
 msg_tbl_row:
-    .byte 16, 18, 20, 22, 22
+    .byte STORE_MENU_ROW, STORE_MENU_ROW, 20, 22, 22
     .byte 21, 22, 22, 0, 23
     .byte 22, 23, 20, 21, 20
     .byte 21, 20, 20, 21, 22

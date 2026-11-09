@@ -223,3 +223,120 @@ class DeathCauseTest(unittest.TestCase):
                                     "You have been slain.", hp=0, before=9), "Black Mamba")
         self.assertEqual(self.cause("the Flask of Oil hits the Ko", "the Kobold hits you.",
                                     "You have been slain.", hp=-2), "Kobold")
+
+
+class GoalSummaryTest(unittest.TestCase):
+    """Maintainer, 2026-11-03: with the main queue idle, the dashboard showed
+    no goal counts for the A/B subqueues."""
+
+    def test_a_subqueue_counts_games_and_combinations_that_reached_the_goal(self) -> None:
+        from moria_playtest.queue import COUNTED
+        items = [{"character": c, "seed": n} for c in ("human-warrior", "elf-mage") for n in (1, 2)]
+        results = [{"character": "human-warrior", "outcome": "reached", "clvl": 25, "loops": 1},
+                   {"character": "human-warrior", "outcome": "died", "clvl": 18, "cause": "Orc"},
+                   {"character": "elf-mage", "outcome": "died", "clvl": 3, "cause": "Kobold"},
+                   {"character": "elf-mage", "outcome": "abandoned", "clvl": None}]
+        g = dashboard.goal_summary({"items": items, "results": results}, COUNTED)
+        self.assertEqual((g["games"], g["reached"], g["combos"], g["combos_reached"]), (3, 1, 2, 1))
+        self.assertEqual((g["median_clvl"], g["clvl15"], g["clvl20"], g["early"], g["loops"]), (18, 2, 1, 1, 1))
+        self.assertEqual(g["grid"]["elf-mage"], {"runs": 1, "total": 2, "loops": 0, "reached": 0, "best": 3,
+                                                 "last": {"outcome": "died", "clvl": 3, "max_dlvl": None,
+                                                          "cause": "Kobold"}})
+
+
+class ArchivedSubqueuesTest(unittest.TestCase):
+    """Maintainer, 2026-11-04: "clean up the old queues and move them to
+    history": a subqueue moved to archive/<date>-subqueues/ leaves the Queue
+    tab's list and is listed for the History tab."""
+
+    def test_an_archived_subqueue_is_listed_apart(self) -> None:
+        from unittest import mock
+        from moria_playtest import queue as q
+        sub = {"name": "", "build": "b", "done": True, "items": [{"character": "human-warrior", "seed": 1}],
+               "results": [{"character": "human-warrior", "outcome": "reached", "clvl": 25}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for path, name in ((home / "subqueues" / "live.json", "live"),
+                               (home / "archive" / "2026-11-04-subqueues" / "old.json", "old")):
+                path.parent.mkdir(parents=True)
+                path.write_text(json.dumps({**sub, "name": name}))
+            with mock.patch.object(q, "HOME", home), \
+                    mock.patch.object(q, "load_config", return_value={**q.DEFAULTS, "platforms": [], "epoch": "e"}):
+                data = dashboard.queue()
+        self.assertEqual([s["name"] for s in data["subqueues"]], ["live"])
+        self.assertEqual([(s["name"], s["archive"], s["reached"]) for s in data["archived"]],
+                         [("old", "2026-11-04-subqueues", 1)])
+
+    def test_the_build_queue_is_shown(self) -> None:
+        from unittest import mock
+        from moria_playtest import queue as q
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            buildq = q.BuildQueue(home)
+            combo = buildq.take("atari8")
+            buildq.finish({"id": "b1", "platform": "atari8", "character": combo, "outcome": "died", "clvl": 4})
+            buildq.save()
+            (home / "runs.jsonl").write_text(json.dumps({"id": "b1", "queue": "build", "platform": "atari8",
+                                                         "character": combo, "goal": "clvl10", "outcome": "died",
+                                                         "clvl": 4, "ended": 1.0}) + "\n")
+            with mock.patch.object(q, "HOME", home), \
+                    mock.patch.object(q, "load_config", return_value={**q.DEFAULTS, "platforms": [], "epoch": "e",
+                                                                      "build_platforms": ["atari8"]}):
+                data = dashboard.queue()
+        self.assertEqual(data["build_queue"]["platforms"]["atari8"]["items"][combo]["runs"], 1)
+        self.assertEqual([r["id"] for r in data["recent"]], ["b1"])
+
+
+
+class DifficultyTest(unittest.TestCase):
+    """The Difficulty charts' counts (§23.6): levels reached per class, the
+    level each game ended at, and each combination's median."""
+
+    def test_counts(self) -> None:
+        def run(combo: str, outcome: str, clvl: int | None) -> dict:
+            return {"character": combo, "outcome": outcome, "clvl": clvl}
+        records = [run("human-mage", "died", 1), run("human-mage", "died", 3), run("elf-mage", "budget", 12),
+                   run("human-warrior", "reached", 25), run("human-warrior", "died", None),
+                   run("human-warrior", "finding", 30)]   # past the goal level: counted at 25
+        d = dashboard.difficulty(records)
+        self.assertEqual((d["levels"], d["runs"]), (25, 6))
+        self.assertEqual(d["classes"]["mage"]["reach"][:4], [3, 2, 2, 1])   # clvl 1, 2, 3, 4
+        self.assertEqual(d["classes"]["warrior"]["reach"][0], 2)            # the clvl-0 game reached none
+        self.assertEqual(d["all"][24], 2)                                   # clvl 25
+        self.assertEqual((d["ends"]["died"][0], d["ends"]["died"][1], d["ends"]["died"][3]), (1, 1, 1))
+        self.assertEqual((d["ends"]["other"][12], d["ends"]["other"][25]), (1, 2))
+        self.assertEqual(d["grid"]["human-warrior"], {"runs": 3, "median": 25, "reached": 1, "reach10": 2})
+        self.assertEqual(d["grid"]["human-mage"]["median"], 3)
+
+
+class BuildHistoryTest(unittest.TestCase):
+    """The Builds card (§23.4): the build queue's builds in the order they
+    started, each live until the next one's first game, with its counted
+    games, goals reached and a 95% range, overall and by port."""
+
+    def test_spans_counts_and_ranges(self) -> None:
+        from unittest import mock
+
+        def run(build, started, port, outcome, clvl=10, findings=()):
+            return {"queue": "build", "build": build, "commit": build * 4, "started": started, "platform": port,
+                    "outcome": outcome, "clvl": clvl, "findings": list(findings), "id": f"{build}-{started}",
+                    "character": "human-warrior"}
+        records = [run("bbb", 200, "c64", "reached"), run("aaa", 100, "c64", "reached"),
+                   run("aaa", 110, "bbcmaster", "died", 4, ["stall: x", "hang: y"]),
+                   run("aaa", 120, "c64", "abandoned"), {"queue": "main", "build": "zzz", "started": 1, "outcome": "died"}]
+        with mock.patch.object(dashboard, "commit_subject", lambda c: f"subject {c[:3]}"):
+            builds = dashboard.build_history(records, ("reached", "died", "budget", "finding", "error"))
+        self.assertEqual([(b["build"], b["start"], b["end"]) for b in builds], [("aaa", 100, 200), ("bbb", 200, None)])
+        aaa = builds[0]
+        self.assertEqual((aaa["games"], aaa["reached"], aaa["median_clvl"], aaa["findings"]), (2, 1, 10, 1))
+        # The build-queue panel's counts by port, this build's alone (2026-11-08)
+        self.assertEqual(aaa["detail"]["bbcmaster"], {"games": 1, "reached": 0, "died": 1, "median_clvl": 4, "played": 1,
+                                                      "findings": [{"id": "aaa-110", "character": "human-warrior",
+                                                                    "text": "hang: y"}]})
+        self.assertEqual((aaa["detail"]["c64"]["games"], aaa["detail"]["c64"]["reached"]), (1, 1))   # abandoned not counted
+        self.assertEqual(builds[1]["detail"]["c64"]["games"], 1)
+        self.assertEqual(aaa["ports"], {"c64": [1, 1], "bbcmaster": [1, 0]})
+        self.assertEqual(aaa["subject"], "subject aaa")
+        self.assertLess(aaa["lo"], 0.5)
+        self.assertGreater(aaa["hi"], 0.5)
+        self.assertEqual(dashboard.wilson(0, 0), (0.0, 1.0))

@@ -330,16 +330,19 @@ The 2026-11-01 audit of all 150 shipped creatures against VMS 4.8 and Umoria
 need a design decision before any fix (maintainer: backlog them). Each makes
 deep monsters weaker or different than upstream:
 
-- Breath: a 255 cap on breath damage (`core/monster_magic.s` ~336), so an
-  Ancient Multi-Hued Dragon breathes at most 255 (upstream 693), and one
-  BREATH bit where upstream has up to five, so multi-breathers breathe half
-  as often. (The element itself is "Element-correct monster breath".)
+- Breath: DONE 2026-11-08 (MON-025): no 255 cap, and a Multi-Hued
+  dragon's five breaths are five choices of the cast. What still differs is
+  "Faithful breath: what the limited version leaves out".
 - Speed: capped at two moves a turn (`map_speed`); the Balrog, Invisible
   Stalker, Poltergeist and Huge Brown Bat lose a third of their actions, the
-  Iron Golem (upstream 1/3) moves 1/2. Speed code 3 is unused.
-- Lost monster spells: Hold Person, Slow, Blink, Teleport (self) and Drain
-  Mana are dropped, so the kept spells are cast more often; summons appear
-  beside the caster, not the player (VMS `creature.inc` ~991).
+  Iron Golem (upstream 1/3) moves 1/2. Speed code 3 is unused. (The
+  maintainer accepted extending the cadence to speed code 3 on 2026-11-08;
+  it was left out of the limited breath work and is still open, changing
+  MON-008.)
+- Lost monster spells: Slow, Blink, Teleport (self) and Drain Mana are
+  dropped, so the kept spells are cast more often (VMS counts each as a
+  choice); summons appear beside the caster, not the player (VMS
+  `creature.inc` ~991). Hold Person: DONE 2026-11-08 (MON-025).
 - Elemental resistance and weakness: bolts ignore a creature's matching
   breath bit (÷4) and hurt-by flags (×2) (VMS `spells.inc` fire_bolt;
   Umoria `spells.cpp` ~781-789); hurt-by-light/rock are dropped; no Slay
@@ -375,10 +378,10 @@ Two upstream mechanics Moria8 lacks (`docs/FEATURE_MAP.md` §6.4-§6.5 audit,
   player blindness (`zp_eff_blind`, the Blindness potion) exists. Give it a
   handler: upstream damage, then blindness unless saved, as VMS
   `creature.inc` `make_attack` case 10.
-- Free Action: the paralysis touch never reads `PLF_FREE_ACT`, and nothing in
-  Moria8 sets it (no ring or ego item grants it). Add the upstream source
-  (Ring of Free Action, the ego "of Free Action") and the check in the
-  paralysis handler.
+- Free Action: PARTLY DONE 2026-11-08 (MON-025). The Amulet of the Magi
+  grants it (`PFLAG_FREE_ACT`), and the paralysis touch, Hold Person and the
+  chest gas trap read it. Still missing are the other upstream sources, such
+  as the ego "of Free Action" on gloves (§8.2).
 
 Required work: the handlers per VMS, generator mapping, per-effect tests
 through `monster_attack_player`, FEATURE_MAP rows, and the byte budgets on
@@ -399,12 +402,35 @@ Two follow-ups from the no-HP attack fix (2026-11-01):
   through to a normal hit. No shipped creature has it there today, so this
   only matters once the special attacks are expanded.
 
-### Expand unsupported monster special attacks
+### Raise `MAX_MONSTERS` on the large-map ports, up to VMS's limit
 
-Moria8 maps several Umoria monster attack effects into compact substitutes.
-For example, fire/cold/lightning, blindness, stealing, disenchant, eating food,
-eating light, eating charges, stat drains, and experience drain are not all
-implemented as distinct effects.
+**Maintainer, 2026-11-05.** Every port holds 32 live monsters
+(`core/monster.s` `MAX_MONSTERS`). With the monster catalog a level can hold
+no more species than live monsters, so the creature rows are 32 dungeon
+species plus the 8 town creatures (40) on every catalog port. The 198x66
+ports (C128, CX16, and the Apple IIe and BBC Master once they take the
+catalog) have the room for more, and VMS's population on that map size
+reaches the 32-slot cap from about DL25 (`docs/MONSTER_CATALOG_DESIGN.md`,
+"Population on Moria8's maps").
+
+Raise `MAX_MONSTERS` on those ports, never above VMS's limit: `max_malloc =
+100 + 1` (VMS `constants.inc:107`; slot 0 unused, so 100 live monsters).
+Umoria's `MON_TOTAL_ALLOCATIONS` is 125 (`monster.h:57`); stay at VMS's 100.
+The species rows grow with it (`CAT_SLOTS = MAX_MONSTERS`), the 12-byte
+monster records, the save blocks and every table scan (`cat_slot_in_use`,
+the AI loop) grow too, and the generation cap of 26 (6 slots kept for
+summons, breeders, new arrivals and pits) is revisited with it. About 200
+resident bytes for 48 monsters, per the design doc's estimate.
+
+### High priority: the monster abilities Moria8 lacks
+
+**High priority (maintainer, 2026-11-02).** The monster catalog
+(`docs/MONSTER_CATALOG_DESIGN.md`) adds every VMS creature unless most of its
+abilities are missing; the rest play with the missing ones degraded. Every
+missing ability is high-priority work, because each one either degrades a
+creature in play or keeps one out. `tools/build_catalog.py` lists them
+(`catalog.json`: `backlog_abilities`, `degraded`, `ask_maintainer`,
+`skipped_not_in_todays_roster`).
 
 Until 2026-11-01 the no-HP effects were worse than missing: the generator
 mapped Lose experience (19), Steal Money/Object (12/13), Aggravate (20),
@@ -412,23 +438,53 @@ Disenchant (21) and Eat food/light/charges (22-24) to normal hits that dealt
 their dice as HP damage (Umoria `monster.cpp` ~1540-1800 applies none of them
 as HP damage). A Banshee's 14d8 experience drain hit for ~63 HP and killed 70
 of 102 queue characters past DL23. They now do no HP damage; the effects
-themselves remain to be added here, experience drain first (Banshees, wights,
-wraiths, vampires), then stealing (maintainer, 2026-11-01: "backlog it").
+themselves remain.
+
+Missing abilities, by the number of VMS creatures that have them (2026-11-02,
+in play degraded, asked about, or kept out):
+
+| Ability | Kind | Creatures |
+| --- | --- | --- |
+| Picks up objects | movement (`cmove` `0x100000`) | 29 |
+| Hold person | spell (`0x200`) | 24 |
+| Invisible | movement (`0x10000`) | 22 |
+| Drain mana | spell (`0x10000`) | 20 |
+| Blink | spell (`0x10`) | 18 |
+| Lose experience | touch (attack 19) | 17 |
+| Eats weaker creatures | movement (`0x80000`) | 15 |
+| Teleport self | spell (`0x20`) | 14 |
+| Fire touch | attack 5 | 11 |
+| Cold touch, slow, passes through walls | attack 7, spell `0x8000`, movement `0x40000` | 10 each |
+| Lose strength | touch (attack 2) | 9 |
+| Gas, acid, lightning and frost breath | spells `0x100000`, `0x200000`, `0x80000`, `0x400000` (all breath is fire today) | 8 each |
+| Lose dexterity | touch (attack 15) | 7 |
+| Lightning touch | attack 8 | 6 |
+| Disenchant | touch (attack 21) | 5 |
+| Steal gold, steal object, blinding touch, eat charges | attacks 12, 13, 10, 24 | 4 each |
+| Eat food, eat light | attacks 22, 23 | 3, 2 |
+| Lose constitution, wisdom, intelligence | attacks 16, 18, 17 | 1 each |
+
+The Balrog needs fire touch, eat charges, hold person, slow, drain mana,
+invisible, passing walls, eating weaker creatures and picking up objects:
+M8 depends on these.
+
+Separate player-side feature: creatures' reactions to the player's fire,
+frost, acid, light and sleep attacks (`cdefense` `0x10`-`0x200`, `0x1000`),
+on most of the catalog.
 
 Required work:
 
-- Prioritize high-impact special attacks from the shipped monster roster before
-  expanding the full monster catalog.
-- Add compact effect handlers for each accepted attack type.
-- Update `tools/parse_creatures.py` so imported data maps to real handlers
-  instead of normal/poison approximations when support exists.
-- Add per-effect tests for damage/status, messages, inventory/light/resource
-  mutation, and save/load impact where relevant.
+- Each ability as a compact engine handler, in the order above (most
+  creatures first), the Balrog's ahead of equals.
+- Add each to `SUPPORTED_ATTACKS`, `SUPPORTED_SPELLS` or `SUPPORTED_CMOVE` in
+  `tools/build_catalog.py`, so the creatures waiting on it stop degrading or
+  join the catalog.
+- Per-effect tests for damage and status, messages, inventory, light and
+  resource changes, and save/load where relevant.
 
 Acceptance target:
 
-- Shipped monsters no longer silently collapse high-impact upstream attacks
-  into misleading normal attacks.
+- No creature in play has a degraded ability.
 
 ### Add player slowness (sources and a separate slow counter)
 
@@ -453,35 +509,70 @@ Required work:
 
 ### Element-correct monster breath
 
-Monster breath (`core/monster_magic.s` `monster_cast_breath`) models only fire:
-every breather prints "breathes fire!", does HP/3, and only Resist Fire
-reduces it. Pinned VMS Moria (`creature.inc` `cast_spell`, spells 20-24) and
-Umoria (`monster.cpp`) have five elements: lightning (HP/4), gas, acid, frost
-and fire (HP/3), each with its own message and resistance, and the elemental
-damage routines also destroy vulnerable inventory items. Found during the AI
-playtest M3 spell audit (`docs/AI_PLAYTEST_DESIGN.md` §14.7); split from the
-wound/blind/confuse/fear alignment by maintainer decision (2026-10-21).
+DONE 2026-11-08, in the limited faithful form the maintainer chose ("do your
+limited but faithful version"; MON-025, `docs/FEATURE_MAP.md` §9.2).
 
-Shipped breathers start at DL14 (Giant White Dragon Fly) and include the
-young/mature/ancient dragons and the Balrog.
+- `cr_spell_chance` holds three things:
+  - bits 0-3: the upstream 1-in-N cast frequency (`randint(N) = 1` casts);
+  - bits 4-6: the breath element;
+  - bit 7: Hold Person.
+- Every breath prints its element: "The <name> breathes lightning." (gas,
+  acid, frost, fire).
+- Damage is the breather's HP / 4 for lightning and HP / 3 for the others,
+  16-bit and uncapped, through the VMS element routines:
+  - lightning `light_dam`;
+  - gas `poison_gas`: poisoned + 12 + randint(dam);
+  - acid `acid_dam`: a worn armour piece is damaged and halves it;
+  - frost `cold_dam`: the Resist Cold ring and timer, div 3 each;
+  - fire `fire_dam`: the Resist Fire ring and Resist Heat timer, div 3 each.
+- A Multi-Hued dragon's five breaths are five choices.
 
-Required work:
+Tests: C64 `test_monster_magic.s` t28-t37.
 
-- Carry a breath element per creature. `cr_spell_flags` has no free bit once
-  Cause Serious Wounds and fear use bits 6-7, so this needs a data-layout
-  decision (new per-creature field, packed spare bits, or a breather list)
-  and a `tools/parse_creatures.py` mapping from upstream breath bits.
-- Add the four missing breath messages within the Apple IIe and C128 memory
-  budgets.
-- Apply per-element resistance and, if accepted, upstream inventory
-  destruction for acid/fire/frost.
-- Tests per element for damage (HP/4 vs HP/3, resisted and unresisted),
-  message, and any inventory effect.
+### Faithful breath: what the limited version leaves out
 
-Acceptance target:
+Differences from pinned VMS Moria (and Umoria) left by the 2026-11-08 breath
+work. The maintainer chose the limited version after the full one measured
+about 900 B a port. Each is also a row in `docs/FEATURE_MAP.md`.
 
-- Every shipped breather uses its upstream element, damage divisor, message
-  and resistance, with the inventory-damage decision recorded.
+- **The ball.** VMS `spells.inc` `breath` is a radius-2 ball centred on the
+  player (the 5x5 square without its corners). Moria8 hits the player only.
+  - Monsters in the ball take the damage / (distance + 1), x2 if the element
+    hurts them (cdefense frost 0x10, fire 0x20, poison 0x40, acid 0x80,
+    light 0x100; about 200 of 279 creatures), / 4 if they breathe it. They
+    wake, and one killed drops its treasure. The Balrog's death still wins,
+    and the drop is placed at once, not after the player's next command.
+  - Floor items of the element's set are destroyed (lightning: rings and
+    wands; acid and fire: wooden and leather gear, staffs, scrolls, food,
+    and potions for fire; frost: potions). Fire and acid also destroy open
+    and closed doors.
+  - VMS flashes `*` on the ball's squares.
+  - The 2026-11-08 attempt cost about 761 B for this alone (review: about
+    350 B in one 5x5 pass). The weakness bits need a creature field the
+    catalog does not carry.
+- **Pack damage** (`misc.inc` `inven_damage`). Each matching pack slot
+  loses one item 2% of the time (VMS `randint(100) < 3`) for fire and acid,
+  4% for frost (potions). Umoria adds lightning (rings, wands, staffs, 3%:
+  "There are sparks coming from your pack!"). VMS's messages: "There is
+  smoke coming from your pack!", "Something shatters inside your pack!",
+  "There is an acrid smell coming from your pack!". Umoria also runs it from
+  fire, acid, frost and lightning touches and the fire and acid traps, which
+  Moria8 maps to plain damage. One shared routine: about 80 B, plus the
+  item classification and the messages.
+- **Resistances.** No Moria8 item resists lightning, acid or poison (VMS
+  armour egos), so those breaths are never reduced.
+- **Hold Person texts.** VMS is silent when it paralyses, and says "You are
+  unaffected..." to Free Action. Moria8 prints "The <name> paralyzes you."
+  (as its other effect spells print their effect, MON-011) and reuses the
+  chest trap's "You are unaffected.".
+- **Recall.** A Hold Person cast marks recall's spell bit 0 (Cause Light
+  Wounds). Recall shows only SPELLS: YES / NONE.
+- **Choices with no Moria8 form.** Upstream counts blink, teleport self,
+  slow and drain mana among the choices, so the kept spells are cast more
+  often here ("Lost monster spells" above).
+
+Acceptance target: each item decided as faithful (then implemented with tests
+and a measured byte cost) or recorded as an intentional 8-bit difference.
 
 ### Add "of Regeneration" equipment
 
@@ -591,6 +682,45 @@ test_tier.s t16-t17 (multi-tier up/down), 17/17. Verified end-to-end
 with a scripted level-jump-to-20 + teleport product build: previously
 JAMmed, now completes with the dungeon correctly repainted. Gates:
 make test exit 0, make test128 137/137.
+
+### Rubble blocks movement, and tunnelling needs no tool
+
+Found 2026-11-05 (C64 play): the player walks over rubble. Since the first
+movement code, `core/player_move.s` `walkable_table` marks rubble (tile 11)
+walkable. VMS Moria blocks it: `place_rubble` sets `fopen := false`
+(`misc.inc:1502`), and a move into it prints "There is rubble blocking your
+way." (`moria.inc:2588`); Umoria's rubble is `TILE_BLOCKED_FLOOR`, which
+`MAX_OPEN_SPACE` excludes. In both, rubble does not block sight
+(`MAX_CAVE_FLOOR` includes it); `docs/FEATURE_MAP.md`'s rubble row wrongly
+says it blocks LOS.
+
+It cannot be flipped alone. VMS tunnels with any weapon or bare hands: the
+digging ability is the player's strength plus a digging tool's bonus
+(`tabil := py.stat.cstr`, plus `25 + p1 * 50` for a digger; rubble falls when
+`tabil > randint(180)`, `moria.inc:2868-2935`). Moria8's `core/tunnel.s`
+refuses without a digging tool ("You have no tool to dig with."). VMS places
+rubble in corridors, so blocking rubble with Moria8's tunnelling could shut a
+character without a shovel off from the stairs.
+
+Required work:
+
+- Rubble blocks the player, with VMS's message, and blocks monsters (VMS:
+  only wall-passing kinds cross it); keep it see-through for the player's
+  and the monsters' line of sight (`los_trace.s` `mlos_tile_open` reads the
+  walkable table today).
+- Tunnelling with no digging tool uses the VMS strength-based ability, for
+  rubble and walls alike, scaled as `core/tunnel.s` scales the resistances.
+- Generation's connectivity check and stair reachability treat rubble as
+  passable only by tunnelling, or place it where VMS does.
+- The playtest bot tunnels through rubble that blocks its path.
+- Correct the FEATURE_MAP rubble and tunnelling rows.
+
+Acceptance target:
+
+- Walking into rubble prints the VMS message and does not move; tunnelling
+  rubble bare-handed clears it within a few turns at ordinary strength; no
+  generated level strands a character without a digging tool; the bot's
+  frozen suites hold.
 
 ### Locked/stuck/spiked doors
 
@@ -1161,6 +1291,41 @@ Acceptance target:
 - Full or substantially expanded Umoria creature roster can appear at the
   appropriate dungeon depths without breaking C64/C128 memory, loading, save,
   recall, or monster behavior contracts.
+
+### Byte recovery held back for speed or disk loads (2026-11-07)
+
+The 2026-11-07 memory pass (for the potions of gain stat) applied every
+candidate that kept the game as fast and loaded no more from disk. The
+maintainer held these three until they are needed ("hold off on any that are
+not and backlog them"). Estimates are the memory analysis's, not measured.
+
+- **Phase-3 potion handlers into an overlay (~190 B resident on C64, Plus/4,
+  Atari).** The eight special potions' handlers
+  (`core/player_item_commands.s`, `!piq_*`, ~210 B) would run from
+  `ItemActionsOverlay` or `ChestOverlay`, as on BBC, Apple and CX16. On ports
+  without a cache, drinking one of them would then load an overlay from disk.
+  A load-once home (Atari's `RuntimeBanked`, where the gain-stat effect went)
+  costs no disk load, but C64's `RuntimeBanked` has 65 B free and Plus/4's needs a
+  ROM-banking trampoline.
+- **`core/dungeon_los.s` row pointers and room bounds (~56 B).** APPLIED
+  2026-11-08, for the Atari's room for the faithful breath (49 B a port).
+  Four inline `map_row_lo/hi` loads became `jsr map_row_ptr0_x`, and the
+  room bounds of `light_room_x` and `reveal_room` became
+  `vis_room_bounds_x`. Each call adds 12 cycles:
+  - once per visibility row (`update_visibility`, a few rows a turn);
+  - once per room lit or revealed;
+  - about 100 cycles a turn in all.
+- **C128 save/load per-byte step (~68 B in `128.runtime`).** The checksum,
+  pointer and counter tail shared by `save_stage_from_ptr0_c128`,
+  `load_unstage_to_ptr0_c128`, `save_stage_map_c128` and
+  `load_unstage_map_c128` (`platforms/shared/save.s`) becomes one
+  subroutine: 12 cycles more for every byte saved or loaded (~0.1-0.2 s a
+  save, beside the disk time). `128.runtime` had 5 B free.
+
+Acceptance target:
+
+- Each is applied only when a feature needs the room, with its cost measured
+  (cycles on the hot path, or the disk loads added) and accepted.
 
 ## Apple IIe
 

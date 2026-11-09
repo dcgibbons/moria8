@@ -10,6 +10,11 @@
 // Overlay segments: produce separate PRGs at $E000.
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md) replaces the tiers in
+// the product build, its records read from the drive. The unit tests
+// (tests/*.s) do not import main.s and keep the tier roster.
+#define HAL_PLATFORM_MONSTER_CATALOG
+#define HAL_PLATFORM_CATALOG_RECORDS
 #define PLUS4_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define STORAGE_STATUS_HELPER
@@ -28,12 +33,20 @@
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$fbff]
+// Assembled for free RAM above the catalog index, stored in the init-only tail.
+.segmentdef Plus4HuffIndex    [start=$dd00, max=$deff]   // memory.s HUFF_INDEX_HIDDEN_BASE/END
 
 #import "../common/save_slot_policy.s"
 
 // Huffman data placement: resident on this platform.
 .macro HuffmanDataSegment() {
     .segment Default
+}
+// The Huffman string index lives in free RAM at HUFF_INDEX_HIDDEN_BASE
+// (memory.s; 2026-11-08, for the dragon breath's room), copied there at boot.
+#define HUFFMAN_INDEX_EXTERNAL
+.macro HuffmanIndexSegment() {
+    .segment Plus4HuffIndex
 }
 
 // Cast/pray cores stay resident on this platform.
@@ -121,8 +134,14 @@ basic_stub_end:
 
 // Bootstrap — MUST live below $A000 so BASIC's SYS can reach it
 // before BASIC ROM is banked out.
+.const KERNAL_SETMSG = $ff90
 entry:
     sei
+    // KERNAL messages off while the ROM is still visible: with them on, every
+    // LOAD printed "searching for <file>" over the game screen (2026-11-05,
+    // seen on the C64; the C128 boot does the same, boot128.s).
+    lda #0
+    jsr KERNAL_SETMSG
     jsr plus4_bank_ram
     jmp entry_main
 
@@ -429,6 +448,10 @@ tramp_dig_ability:
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../core/monster.s"
+#if HAL_PLATFORM_MONSTER_CATALOG
+#import "monster_catalog4.s"
+#import "../../../core/monster_catalog.s"
+#endif
 #import "../../../core/tier_manager.s"
 
 // Overlay state is platform-owned so product/test variant layout changes
@@ -691,8 +714,6 @@ plus4_dos_status_codes:
 // Entry point
 // ============================================================
 entry_main:
-    // Save BASIC's zero page state so we can restore on exit
-    jsr save_zp
     jsr disk_reset_session_state
     jsr plus4_install_ram_irq_vectors
 
@@ -700,6 +721,7 @@ entry_main:
 
     // Load banked runtime payload to $F000 before any $F000 trampoline calls.
     jsr init_load_banked
+    jsr plus4_huff_index_install    // before any message
 
     jsr generation_busy_install
     jsr plus4_platform_services_install
@@ -1260,7 +1282,8 @@ tramp_level_generate:
     rts
 
 // ============================================================
-// Special rooms trampolines — SEI + bank out KERNAL, call $F000+
+// Special rooms trampolines — SEI + bank in RAM, call OVL.GEN at $E000
+// (find_special_room: $F000)
 // ============================================================
 tramp_assign_special_room:
     php                         // Save interrupt state (caller may be in sei context)
@@ -1281,6 +1304,16 @@ tramp_vault_seal_entrance:
     rts
 
 tramp_spawn_special_room_monsters:
+    // In OVL.GEN: monster_spawn_level runs right after generation, but load
+    // it back if anything since has replaced it (2026-11-08)
+    lda current_overlay
+    cmp #OVL_DUNGEON_GEN
+    beq !tssrm_loaded+
+    ldx #OVL_DUNGEON_GEN - 1
+    jsr overlay_load_disk       // asks for the program disk until it loads
+    lda #OVL_DUNGEON_GEN
+    sta current_overlay
+!tssrm_loaded:
     sei
     jsr plus4_bank_ram
     jsr spawn_special_room_monsters
@@ -2103,10 +2136,20 @@ program_end:
 .assert "Program fits below MAP_BASE", program_end <= MAP_BASE, true
 
 // ============================================================
-// Init-only code below — lives past CREATURE_BASE, safe because
-// it runs once at startup before dungeon map or RLE workspace
-// are used. Overwritten during normal gameplay.
+// Past program_end: code and data the game no longer needs once a map is
+// drawn, overwritten from MAP_BASE on. Most runs once at startup; the
+// catalog boot load runs again on restart, so it is asserted below MAP_BASE.
 // ============================================================
+
+#if HAL_PLATFORM_CATALOG_RECORDS
+// The monster catalog's boot load: tier_init runs it at boot and again on
+// every restart (game_over_prompt jumps to restart_entry), after a game has
+// overwritten the map. So it is not init-only: it sits here, past
+// program_end, and must end below MAP_BASE, which the map overwrites.
+#import "../common/catalog_boot.s"
+.assert "Catalog boot loads follow the resident image", catalog_boot_load >= program_end, true
+.assert "Catalog boot loads end below the map (restart runs them again)", catalog_boot_end <= MAP_BASE, true
+#endif
 
 // init_load_banked — Load banked runtime payload to $F000.
 // Called once at startup before any $F000 trampoline is used.
@@ -2136,11 +2179,44 @@ init_load_banked:
     sta TED_BORDER
     jmp !load_failed-
 
+// plus4_huff_index_install — The Huffman string index to its RAM span.
+// Exactly the index: the first page, then the rest from its end down.
+plus4_huff_index_install:
+    ldx #0
+!phii_copy:
+    lda huff_index_stage,x
+    sta HUFF_INDEX_HIDDEN_BASE,x
+    inx
+    bne !phii_copy-
+    ldx #huff_index_stage_end - huff_index_stage - $100
+!phii_rest:
+    lda huff_index_stage + $ff,x
+    sta HUFF_INDEX_HIDDEN_BASE + $ff,x
+    dex
+    bne !phii_rest-
+    rts
+huff_index_stage:
+    .segmentout [segments="Plus4HuffIndex"]
+huff_index_stage_end:
+.assert "The Huffman index fits its two staged pages", huff_index_stage_end - huff_index_stage <= $200, true
+.assert "The Huffman index is past one page (plus4_huff_index_install)", huff_index_stage_end - huff_index_stage > $100, true
+.assert "The Huffman index's stage is the index", huff_index_stage_end - huff_index_stage, huff_str_index_end - huff_str_index
+.assert "The Huffman index starts its RAM span", huff_str_index == HUFF_INDEX_HIDDEN_BASE && HUFF_INDEX_HIDDEN_BASE == $dd00 && HUFF_INDEX_HIDDEN_END == $deff, true
+.assert "The Huffman index install lives in the init-only tail", plus4_huff_index_install >= program_end, true
+
+#if HAL_PLATFORM_CATALOG_RECORDS
+// MONSTER.IDX loads past the init-only tail at boot (catalog_boot_load).
+catalog_init_tail_end:
+.assert "MONSTER.IDX's boot buffer is past the init-only tail", catalog_init_tail_end <= CATALOG_IDX_LOAD, true
+#endif
+
 // ============================================================
 // Banked runtime payload — loadable PRG at $F000.
 // ============================================================
 .segment RuntimeBanked
-    #import "../../../core/special_rooms.s"
+    // find_special_room only: item placement calls it with OVL.CHEST loaded
+    // (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
+    #import "../../../core/special_rooms_find.s"
     #import "../../../core/ego_items.s"
     #import "../../../core/ui_home.s"
     #import "../../../core/item_desc_banked.s"
@@ -2316,6 +2392,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40
@@ -2410,8 +2487,11 @@ ovl_items_end:
 // Loaded on demand whenever stairs are used or a new game starts.
 // Shared constants and data tables stay in dungeon_data.s (main segment).
 .segment DungeonGenOverlay
+    #import "../../../core/special_rooms.s"
     #import "../../../core/dungeon_gen.s"
 ovl_gen_end:
+.assert "Special rooms run in OVL.GEN", assign_special_room >= $e000 && spawn_nest_gold < ovl_gen_end, true
+.assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room >= $f000, true
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
 

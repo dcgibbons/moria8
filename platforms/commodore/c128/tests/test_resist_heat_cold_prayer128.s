@@ -253,11 +253,7 @@ test_tramp_spell_execute_selected:
     inc test_spell_exec_calls
     lda pm_spell_idx
     sta test_last_spell_idx
-    lda #10
-    jsr rng_range
-    clc
-    adc #10
-    jsr pmx_add_resist_heat_cold_msg
+    jsr pmx_add_resist_heat_cold_msg    // its two randint(10) + 10 rolls
     rts
 
 test_pm_select_book:
@@ -418,7 +414,7 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_spell_execute_selected)
 
-    // Test 1: onset sets timer to 10, prints the resist message, reduces
+    // Test 1: onset sets each timer to 11 (rng 0: randint 1 + 10), prints the resist message, reduces
     // hostile breath damage, spends 7 mana, and marks slot 15 worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_resist_prayer_state
@@ -431,10 +427,10 @@ test_start:
     cmp #15
     bne !t1_fail+
     lda zp_eff_resist
-    cmp #10
+    cmp #11
     bne !t1_fail+
     lda eff_resist_cold_timer
-    cmp #10
+    cmp #11
     bne !t1_fail+
     lda test_msg_calls
     cmp #1
@@ -485,10 +481,10 @@ test_after_onset:
     cmp #15
     bne !t2_fail+
     lda zp_eff_resist
-    cmp #15
+    cmp #16
     bne !t2_fail+
-    lda eff_resist_cold_timer
-    cmp #15
+    lda eff_resist_cold_timer       // each timer extended on its own
+    cmp #18
     bne !t2_fail+
     lda test_msg_calls
     cmp #1

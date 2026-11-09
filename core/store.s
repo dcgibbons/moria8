@@ -402,6 +402,7 @@ gold_add_price:
     lda player_data + PL_GOLD_2
     adc #0
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()
     rts
 
 // store_find_empty_slot — Find first empty slot in current store

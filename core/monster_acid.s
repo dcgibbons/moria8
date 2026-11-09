@@ -12,13 +12,24 @@
 // is damaged!", to-AC - 1, equipment recalculated, and the damage halved.
 // No Moria8 armour resists acid, and the player has no acid resistance, so
 // those VMS branches do not exist; acid damage to pack items (VMS
-// inven_damage) is not implemented.
+// inven_damage) is not implemented (docs/BACKLOG.md). Acid breath also calls
+// mon_atk_acid_armour (core/monster_magic.s).
 // Input: zp_combat_dmg = rolled damage. Output: zp_combat_dmg (maybe halved).
 // Clobbers: everything except zp_combat_dmg and the mat_* scratch
 mon_atk_effect_acid:
     ldx #HSTR_MAT_ACID
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
+    jsr mon_atk_acid_armour
+    bcc !maea_done+
+    lsr zp_combat_dmg           // dam div 2
+!maea_done:
+    rts
+
+// mon_atk_acid_armour — VMS minus_ac(resist acid): C set when a worn armour
+// piece was damaged ("Your <item> is damaged!"), so acid_dam halves.
+// Clobbers: everything except zp_combat_dmg and the mat_* scratch
+mon_atk_acid_armour:
 
     // Count the occupied armour slots
     ldy #0
@@ -33,7 +44,7 @@ mon_atk_effect_acid:
     cpx #EQUIP_HANDS + 1
     bne !maea_count-
     tya
-    beq !maea_done+             // Nothing worn: full damage
+    beq !maaa_none+             // Nothing worn: full damage
 
     // randint(count): the chosen occupied slot, 0-based
     jsr rng_range               // A = [0, count-1]; preserves Y
@@ -57,13 +68,13 @@ mon_atk_effect_acid:
     bpl !maea_nonneg+
     clc
     adc inv_to_ac,x             // Signed sum in [-128, 14]
-    bmi !maea_done+
-    beq !maea_done+             // No AC left to lose: full damage
+    bmi !maaa_none+
+    beq !maaa_none+             // No AC left to lose: full damage
     bne !maea_damaged+          // Always taken
 !maea_nonneg:
     clc
     adc inv_to_ac,x             // Unsigned sum <= 142
-    beq !maea_done+
+    beq !maaa_none+
 !maea_damaged:
 
     // "Your <item> is damaged!" (VMS objdes before the to-AC drop)
@@ -80,9 +91,22 @@ mon_atk_effect_acid:
 
     ldx mat_acid_slot
     dec inv_to_ac,x             // > -16 here: cannot wrap
+#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
+    // player_recalc_equipment lives in OVL_ITEMS on this port: a direct jsr
+    // ran whatever overlay was loaded (X16 M7 queue, 2026-11-02). The
+    // overlay load may touch $80-$8F, so the damage rides the stack.
+    lda zp_combat_dmg
+    pha
+    jsr tramp_item_recalc
+    pla
+    sta zp_combat_dmg
+#else
     jsr player_recalc_equipment
-    lsr zp_combat_dmg           // dam div 2
-!maea_done:
+#endif
+    sec                         // Damaged: dam div 2
+    rts
+!maaa_none:
+    clc
     rts
 
 mat_acid_slot: .byte 0

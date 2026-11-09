@@ -83,14 +83,24 @@ test_exit_trampoline:
 #import "../../../../core/turn_render_state.s"
 // This stub lives in the $D000 test overlay so Main stays below MAP_BASE.
 .segment TestCreateOverlay
+// The production damage entries' shape (monster_attack.s): 8-bit, or 16-bit
+// with the high byte in mad_dmg_hi (breath); acid breath's armour damage
+// finds no armour here.
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+    clc
+    rts
 mon_atk_apply_damage:
+    lda #0
+    sta mad_dmg_hi
+mon_atk_apply_damage_16:
     lda zp_player_hp_lo
     sec
     sbc zp_combat_dmg
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
     lda zp_player_hp_hi
-    sbc #0
+    sbc mad_dmg_hi
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
     bmi !mad_dead+

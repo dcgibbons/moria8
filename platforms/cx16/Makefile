@@ -45,7 +45,7 @@ VERSION_INC  = $(BUILD)/version_strings.inc
 CX16_MAIN_SRC  = main.s
 CX16_TITLE_SRC = title_data_cx16.s
 CX16_TIER_DIR  = creature_data
-CX16_SOURCES   = $(wildcard *.s hal/*.s creature_data/*.s ../../core/*.s ../../platforms/shared/*.s ../../platforms/commodore/common/*.s)
+CX16_SOURCES   = $(wildcard *.s hal/*.s creature_data/*.s ../../core/*.s ../../platforms/shared/*.s ../../platforms/shared/catalog/*.s ../../platforms/commodore/common/*.s)
 
 CX16_MAIN_PRG  = $(OUTCX16)/MORIA8.PRG
 CX16_AUX_PRG   = $(OUTCX16)/CX16.AUXDATA
@@ -53,6 +53,9 @@ CX16_HUFF_PRG  = $(OUTCX16)/CX16.HUFFDATA
 CX16_OVL_PRGS  = $(OUTCX16)/OVL.START $(OUTCX16)/OVL.TOWN $(OUTCX16)/OVL.DEATH $(OUTCX16)/OVL.MODAL \
                  $(OUTCX16)/OVL.GEN $(OUTCX16)/OVL.HELP $(OUTCX16)/OVL.UI $(OUTCX16)/OVL.ITEMS \
                  $(OUTCX16)/OVL.SPELL $(OUTCX16)/OVL.CHEST $(OUTCX16)/OVL.STORAGE $(OUTCX16)/OVL.TITLE
+# The monster catalog (Banks 22-23) replaced the tiers on this port; the tier
+# rules below remain for builds without HAL_PLATFORM_MONSTER_CATALOG.
+CX16_CATALOG_PRGS = $(OUTCX16)/MONSTER.CAT
 CX16_TIER_PRGS = $(OUTCX16)/MONSTER.DB.1 $(OUTCX16)/MONSTER.DB.2 $(OUTCX16)/MONSTER.DB.3 $(OUTCX16)/MONSTER.DB.4
 CX16_TITLE_PRG = $(OUTCX16)/TITLE
 CX16_LICENSE   = $(OUTCX16)/LICENSE
@@ -65,7 +68,7 @@ CX16_MAIN_STAMP = $(OUTCX16)/.main.stamp
 
 all: build
 
-build: $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_TIER_PRGS) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER)
+build: $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER)
 	@mkdir -p "$(OUTCX16)"
 
 disk: $(CX16_ZIP_IMAGE)
@@ -116,7 +119,7 @@ $(CX16_MAIN_STAMP): $(CX16_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTCX16)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTCX16)" "$(CX16_MAIN_SRC)" $(KA_FLAGS) -symbolfile -o "$(CX16_MAIN_PRG)"
 	touch "$(CX16_MAIN_STAMP)"
 
-$(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(OUTCX16)/main.sym: $(CX16_MAIN_STAMP)
+$(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(OUTCX16)/main.sym: $(CX16_MAIN_STAMP)
 	@test -f "$@" || { rm -f "$(CX16_MAIN_STAMP)"; $(MAKE) "$(CX16_MAIN_STAMP)"; }
 	@test -f "$@"
 
@@ -147,5 +150,5 @@ $(CX16_ZIP_IMAGE): build
 		MORIA8.PRG CX16.AUXDATA CX16.HUFFDATA \
 		OVL.START OVL.TOWN OVL.DEATH OVL.MODAL OVL.GEN OVL.HELP \
 		OVL.UI OVL.ITEMS OVL.SPELL OVL.CHEST OVL.STORAGE OVL.TITLE \
-		MONSTER.DB.1 MONSTER.DB.2 MONSTER.DB.3 MONSTER.DB.4 \
+		MONSTER.CAT \
 		TITLE LICENSE SOURCE-OFFER

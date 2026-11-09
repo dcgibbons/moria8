@@ -13,10 +13,18 @@
 .const MAX_MONSTERS      = 32
 .const MON_MULT_ADJ      = 7    // VMS mon_mult_adj: high value slows multiplication
 .const MONSTER_ENTRY_SIZE = 12
-.const MAX_DUNGEON_CREATURES = 57 // Largest tier (tier 4)
+.const TIER_DUNGEON_CREATURES    = 57 // Largest tier (tier 4)
+.const CATALOG_DUNGEON_CREATURES = 32 // Catalog species slots: one per live monster (MAX_MONSTERS)
+#if HAL_PLATFORM_MONSTER_CATALOG
+// A level holds at most MAX_MONSTERS live monsters, so at most that many
+// species: the catalog needs no more dungeon rows (maintainer, 2026-11-05).
+.const MAX_DUNGEON_CREATURES = CATALOG_DUNGEON_CREATURES
+#else
+.const MAX_DUNGEON_CREATURES = TIER_DUNGEON_CREATURES
+#endif
 .const MAX_TOWN_CREATURES    = 8  // Town creature slots
-.const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65
-.const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57
+.const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65 (catalog: 40)
+.const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57 (catalog: 32)
 .const TOWN_CREATURE_COUNT   = 8  // All 8 umoria town creatures
 .const NUM_SOA_FIELDS        = 23 // Number of SoA arrays for tier loading
 .const EMPTY_SLOT        = $ff
@@ -63,6 +71,18 @@
 .const MSF_CONFUSE       = $20 // Bit 5: confuse (save)
 .const MSF_WOUND_SERIOUS = $40 // Bit 6: Cause Serious Wounds (8d8, save)
 .const MSF_FEAR          = $80 // Bit 7: cause fear (save)
+
+// cr_spell_chance (tools/parse_creatures.py map_spells): the upstream 1-in-N
+// cast frequency, the breath element and Hold Person, which has no MSF bit.
+.const MS_FREQ_MASK       = $0f // Bits 0-3: casts when randint(N) = 1 (VMS)
+.const MS_BREATH_SHIFT    = 4   // Bits 4-6: the breath element, with MSF_BREATH
+.const MS_BREATH_LIGHTNING = 1
+.const MS_BREATH_GAS      = 2
+.const MS_BREATH_ACID     = 3
+.const MS_BREATH_FROST    = 4
+.const MS_BREATH_FIRE     = 5
+.const MS_BREATH_ALL      = 6   // Multi-Hued: each breath picks one of the five
+.const MS_HOLD            = $80 // Bit 7: Hold Person (VMS spell 10)
 
 // ============================================================
 // Active creature buffers — Struct-of-Arrays (65 entries)
@@ -310,12 +330,12 @@ cr_atk1_sides:
 #endif
     .fill 8, 0                                               // 57-64: town
 
-// Spell chance (probability out of 100 that monster casts instead of melee)
+// Spells: 1-in-N frequency, breath element, Hold Person (MS_* above)
 cr_spell_chance:
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
-    .byte 30,  0, 40, 35, 25, 35                            // 20-25
+    .byte 3, 0, 2, 3, 4 | MS_BREATH_FIRE << MS_BREATH_SHIFT, 3   // 20-25 (24: Giant salamander)
     .fill MAX_DUNGEON_CREATURES - 26, 0                    // 26-56
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
@@ -649,6 +669,7 @@ find_monster_floor:
     clc                         // Failed
     rts
 
+#if !HAL_PLATFORM_MONSTER_CATALOG
 // pick_creature_type — Pick random creature type for current dungeon level
 // Uses the loaded dungeon roster and chooses uniformly from all creatures with
 // cr_level <= current dungeon depth. Unlike the old narrow-band picker, this
@@ -701,6 +722,7 @@ pick_creature_type:
 !pct_found:
     txa
     rts
+#endif
 
 // monster_spawn_one — Create one monster at ms_spawn_x/y
 // Input:  A = creature type index
@@ -911,6 +933,11 @@ monster_spawn_level:
     jmp monster_spawn_town
 
 !msl_dungeon:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_reset_slots
+    jsr catalog_population
+    sta msl_target
+#else
     // Base count = 2
     lda #2
     sta msl_target
@@ -940,6 +967,7 @@ monster_spawn_level:
     lda #14
     sta msl_target
 !msl_capped:
+#endif
 
     lda #0
     sta msl_idx
@@ -948,6 +976,11 @@ monster_spawn_level:
     lda msl_idx
     cmp msl_target
     bcs !msl_done+
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda zp_mon_count
+    cmp #MAX_MONSTERS - 6       // Generation leaves 6 rows for breeders and summons
+    bcs !msl_done+
+#endif
 
     // Find floor tile
     jsr find_monster_floor
@@ -971,6 +1004,14 @@ monster_spawn_level:
     jmp !msl_loop-
 
 !msl_done:
+#if HAL_PLATFORM_MONSTER_CATALOG && HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE
+    jsr tramp_catalog_place_win
+#elif HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_place_win_creature
+    // A direct call reaches it only where it is resident: from the C64's
+    // $F000 runtime it ran KERNAL bytes instead (2026-11-07).
+    .assert "catalog_place_win_creature is called directly only below $E000", catalog_place_win_creature < $E000, true
+#endif
     jmp tramp_spawn_special_room_monsters
 
 msl_target: .byte 0
@@ -1336,8 +1377,14 @@ monster_remove:
 // ============================================================
 .assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
 .assert "Monster table >256 bytes", MAX_MONSTERS * MONSTER_ENTRY_SIZE > 256, true
+#if HAL_PLATFORM_MONSTER_CATALOG
+.assert "Catalog dungeon rows are the live monster slots", CATALOG_DUNGEON_CREATURES, MAX_MONSTERS
+.assert "Max creatures", MAX_CREATURES, 40
+.assert "Town creature base", TOWN_CREATURE_BASE, 32
+#else
 .assert "Max creatures", MAX_CREATURES, 65
 .assert "Town creature base", TOWN_CREATURE_BASE, 57
+#endif
 .assert "Town creature base follows dungeon rows", TOWN_CREATURE_BASE, MAX_DUNGEON_CREATURES
 .assert "Town creature count", MAX_TOWN_CREATURES, TOWN_CREATURE_COUNT
 .assert "cr_display size", cr_color - cr_display, MAX_CREATURES
@@ -1375,6 +1422,7 @@ monster_remove:
 //   name_lo, name_hi
 // Each array is `count` bytes long.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
+#if !HAL_PLATFORM_MONSTER_CATALOG
 load_tier_to_buffer:
     sta active_dungeon_count
     sta ltb_count
@@ -1412,6 +1460,7 @@ load_tier_to_buffer:
     bne !ltb_array-
 
     rts
+#endif
 
 #if PLATFORM_SCRATCH_BUFS_IN_PAGE2
 .label ltb_count     = PLATFORM_LTB_SCRATCH_BASE   // set on every call
@@ -1460,6 +1509,7 @@ creature_get_name:
     sta cgn_src_banked
 #endif
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // Catalog: current_tier stays 0
     lda current_tier
     bne !cgn_has_tier+
     jmp !cgn_no_tier+           // No tier → use cr_name tables (no banking)
@@ -1582,8 +1632,25 @@ creature_get_name:
     :BankOutKernal()
     jmp !cgn_copy+
 #endif
+#endif
 
 !cgn_no_tier:
+#if HAL_PLATFORM_MONSTER_CATALOG && HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+    // Catalog species slots (0..MAX_MONSTERS-1): their names are in the
+    // Bank 1 name pool.
+    cpx #MAX_MONSTERS
+    bcs !cgn_not_slot+
+    lda cr_name_hi,x
+    bne !+
+    jmp !cgn_stale+
+!:  sta zp_ptr1_hi
+    lda cr_name_lo,x
+    sta zp_ptr1
+    lda #1
+    sta cgn_src_banked
+    jmp !cgn_copy+
+!cgn_not_slot:
+#endif
     // No tier loaded — cr_name tables only (can't resolve $E0xx)
     lda cr_name_hi,x
     bne !cgn_hi_ok+
@@ -1602,7 +1669,7 @@ creature_get_name:
     jmp !cgn_overlay_name+
 !cgn_reload_allowed:
 #endif
-#if !HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD
+#if !HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD || HAL_PLATFORM_MONSTER_CATALOG
     // C64 active tier names are no longer owned by $E000. A stale $E0xx
     // pointer means old state, not a recoverable gameplay owner.
     jmp !cgn_stale+

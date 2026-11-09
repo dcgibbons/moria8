@@ -1025,6 +1025,7 @@ hal_storage_title_name:
 .label hal_storage_title_name_len = * - hal_storage_title_name
     .byte 0
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
 // Tier data filenames (zero-terminated for display code; lengths exclude the
 // trailing zero per the storage-HAL data contract).
 hal_storage_tier_1_name:
@@ -1050,6 +1051,7 @@ hal_storage_tier_name_hi:
     .byte >hal_storage_tier_1_name, >hal_storage_tier_2_name, >hal_storage_tier_3_name, >hal_storage_tier_4_name
 hal_storage_tier_name_len:
     .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
+#endif
 
 // Overlay asset filenames, indexed by overlay ID - 1 (common/overlay.s).
 // IDs 1-10 are the shared classes (incl. OVL_CHEST); OVL.STORAGE (11) and
@@ -1122,7 +1124,9 @@ hal_storage_overlay_name_len:
 .assert "Save basename fits a ProDOS name element", 8 <= 15, true
 .assert "Score basename fits a ProDOS name element", 12 <= 15, true
 .assert "Marker basename fits a ProDOS name element", 9 <= 15, true
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
 .assert "Tier basename fits a ProDOS name element", hal_storage_tier_1_name_len <= 15, true
+#endif
 .assert "Longest overlay basename fits a ProDOS name element", hal_storage_overlay_storage_name_len <= 15, true
 .assert "MLI io_buffer is page aligned", <A2_MLI_IO_BUFFER, 0
 .assert "MLI pathname buffer holds a max pathname", A2_MLI_PATHNAME + 1 + A2_MLI_PATHNAME_CAPACITY <= $0300, true

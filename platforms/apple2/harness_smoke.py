@@ -27,6 +27,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+import catalog_lore  # noqa: E402  (the generated monster catalog's data)
 PO_IMAGE = ROOT / "build" / "moria8-apple2.po"
 MAME_OUTPUT_ROOT = ROOT / "build" / "apple2" / "mame"
 MAME_OUTPUT_DIRS = {
@@ -336,6 +338,12 @@ local function east_mobile()
     end
     return ok >= 3
 end
+-- A static scene: a creature that moves between the before and after views
+-- reads as a mismatched cell, and which creatures DL1 holds follows the
+-- boot-timing RNG (a 5-byte resident shift failed this, 2026-11-07). The
+-- teleports below redraw the view (the X16's scroll test clears them too).
+for i = 0, 31 do prog:write_u8(MONSTER_TABLE_ADDR + i * 12 + 2, 0xFF) end
+prog:write_u8(MON_COUNT_ADDR, 0)
 for t = 1, 10 do
     -- Pinned RNG makes every teleport land identically; re-seed per attempt
     -- so retries actually sample different destinations while the dungeon
@@ -570,7 +578,7 @@ print("SCENARIO DONE")
 
 LUA_WIZARD_SUMMON_TOWN_BODY = r"""
 -- Wizard summon in town must draw from the always-resident town roster
--- (types 57-64). Regression: the picker fell back to dungeon index 0 while
+-- (types 32-39: the catalog build keeps 32 dungeon rows). Regression: the picker fell back to dungeon index 0 while
 -- no tier was loaded, whose zeroed rows render as '@' with a '?' name.
 local mt = MONSTER_TABLE_ADDR
 local crd = CR_DISPLAY_ADDR
@@ -601,7 +609,7 @@ for i = 0, 31 do
     end
 end
 assert_line("summon_spawned", found, "no new live monster slot after summon")
-assert_line("summon_town_roster", new_type >= 57 and new_type <= 64,
+assert_line("summon_town_roster", new_type >= 32 and new_type <= 39,
             "summoned type " .. new_type .. " outside town roster")
 assert_line("summon_glyph", new_type ~= 0xff and prog:read_u8(crd + new_type) ~= 0,
             "summoned creature has zero glyph (renders '@')")
@@ -678,15 +686,17 @@ local ma = 0x0800 + my*198 + mx
 aux:write(ma, aux:read(ma) | 0x01)
 assert_line("flag_set", aux:read(ma) & 0x01 == 1, "aux byte=" .. aux:read(ma))
 
-prog:write_u8(base + 2, 56)       -- MX_TYPE = Balrog (CREATURE_BALROG)
+-- Monster catalog: the monster's species slot becomes the Balrog's.
+local btype = prog:read_u8(base + 2)
+prog:write_u8(CAT_SLOT_ID_LO_ADDR + btype, BALROG_ID_LO)
+prog:write_u8(CAT_SLOT_ID_HI_ADDR + btype, BALROG_ID_HI)
 prog:write_u8(base + 3, 1)        -- MX_HP_LO
 prog:write_u8(base + 4, 0)        -- MX_HP_HI
 prog:write_u8(base + 8, 0xff)     -- MX_STUN: never acts
-prog:write_u8(CR_LEVEL_ADDR + 56, 100) -- cr_level[Balrog] = 100 (win guard)
 -- A level-1 warrior cannot hit a Balrog's AC; boost to-hit only (a level
 -- poke desyncs the level-up thresholds against the Balrog XP award).
 prog:write_u8(PLAYER_DATA_ADDR + 40, 127)  -- PL_TOHIT
-assert_line("poke_landed", prog:read_u8(base + 2) == 56,
+assert_line("poke_landed", prog:read_u8(CAT_SLOT_ID_LO_ADDR + btype) == BALROG_ID_LO,
             "immediate readback=" .. prog:read_u8(base + 2) ..
             " hp=" .. prog:read_u8(base + 3) ..
             " stun=" .. prog:read_u8(base + 8))
@@ -708,7 +718,7 @@ end
 local find_balrog = function()
     for i = 0, 31 do
         local b = mt + i * 12
-        if prog:read_u8(b + 2) == 56 then return b end
+        if prog:read_u8(b + 2) == btype then return b end
     end
     return nil
 end
@@ -1364,6 +1374,52 @@ assert_line("exchange_swapped",
             and inv_field(31, 0) == 0xFF, "records not exchanged")
 assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256,
             "turn " .. prog:read_u8(TURN_LO_ADDR) .. " from " .. turn0)
+-- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it in
+-- the death overlay and must return to the resident caller with no OVL.ITEMS
+-- load first (2026-11-06: the BBC build queue's panic; the Apple IIe shares
+-- the path). The game goes on: a search takes its turn.
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+inv_seed(0, {42, 1, 5, 0, 0, 0, 0, 0})
+press("A")
+assert_line("aim_prompt", wait_screen("Aim which wand"), "aim prompt missing")
+press("A")
+assert_line("aim_direction", wait_screen("Direction?"), "direction prompt missing")
+press("L")
+emu.wait(0.5)
+if screen_has("-more-") then press(" ") emu.wait(0.5) end
+-- Missed, or a townsperson was in its path: either way the wand worked.
+assert_line("cloud_dissipates", wait_screen("The cloud dissipates.") or screen_has("looks confused"),
+            "no miss message: " .. rowtext(0) .. " / " .. rowtext(1))
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+local turn1 = prog:read_u8(TURN_LO_ADDR)
+press("S")
+emu.wait(1.0)
+assert_line("play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn1,
+            "no turn after the aim: " .. rowtext(0))
+-- Wearing a ring or amulet rebuilds the equipment flags (player_pflags) at
+-- once: on the compact play slot they stayed stale until the next stats
+-- rebuild (2026-11-08 review). The Ring of Resist Fire sets
+-- PFLAG_RESIST_FIRE ($01); a Ring of Protection worn over it clears it; the
+-- Amulet of the Magi sets See Invisible ($08) and Free Action ($10).
+local function wear_slot_a(id, what)
+    for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+    inv_seed(0, {id, 1, 0, 0, 0, 0, 2, 0})
+    press("W")
+    assert_line(what .. "_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
+    press("A")
+    assert_line(what .. "_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
+end
+prog:write_u8(PFLAGS_ADDR, 0)
+wear_slot_a(109, "resist_fire_ring")
+assert_line("resist_fire_flag", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+-- Two ring hands (VMS moria.inc:528, 2026-11-08): the left hand next, then
+-- a third ring replaces the left-hand one
+wear_slot_a(110, "resist_cold_ring")
+assert_line("both_resist_flags", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x03, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+wear_slot_a(23, "protection_ring")
+assert_line("left_ring_replaced", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+wear_slot_a(125, "magi_amulet")
+assert_line("free_action_flag", prog:read_u8(PFLAGS_ADDR) & 0x18 == 0x18, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 dump("after_exchange")
 print("SCENARIO DONE")
 """
@@ -1586,6 +1642,10 @@ def _balrog_symbols(body: str) -> str:
     return (body
             .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
             .replace("CR_LEVEL_ADDR", hex(_sym_addr("cr_level")))
+            .replace("CAT_SLOT_ID_LO_ADDR", hex(_sym_addr("cat_slot_id_lo")))
+            .replace("CAT_SLOT_ID_HI_ADDR", hex(_sym_addr("cat_slot_id_hi")))
+            .replace("BALROG_ID_LO", str(_catalog_const("CATALOG_BALROG_ID") & 0xFF))
+            .replace("BALROG_ID_HI", str(_catalog_const("CATALOG_BALROG_ID") >> 8))
             .replace("PLAYER_X_ADDR", hex(_sym_addr("zp_player_x")))
             .replace("PLAYER_Y_ADDR", hex(_sym_addr("zp_player_y")))
             .replace("GAME_FLAGS_ADDR", hex(_sym_addr("zp_game_flags")))
@@ -1605,6 +1665,112 @@ def balrog_victory_lua() -> str:
 
 def quaff_p3_lua() -> str:
     return _chargen_body("A") + LUA_QUAFF_P3_BODY
+
+
+def _catalog_const(name: str) -> int:
+    return catalog_lore.const(name)
+
+
+LUA_CATALOG_SPAWN_BODY = r"""
+-- The monster catalog (2026-11-05): DL1 holds VMS's population (198x66, no
+-- area scale), every live monster's species slot is loaded from the catalog
+-- (its level and its name in the main-RAM pool match the catalog's), and from
+-- DL50 one awake Evil Iggy or Balrog joins the level (VMS place_win_monster).
+local descended = false
+for i = 1, 12 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if prog:read_u8(DLVL_ADDR) == 1 then descended = true break end
+end
+assert_line("descended", descended, "zp_player_dlvl never reached 1")
+assert_line("gen_settled", wait_generation(120), "DL1 generation never settled")
+prog:write_u8(0xc002, 0)
+prog:write_u8(0xc004, 0)
+
+local LEVELS = {CAT_LEVELS}
+local NAMES = {CAT_NAMES}
+local mt = MONSTER_TABLE_ADDR
+local function slot_id(t)
+    return prog:read_u8(CAT_SLOT_ID_LO_ADDR + t) + prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) * 256
+end
+local count, types = 0, {}
+for i = 0, 31 do
+    local t = prog:read_u8(mt + i * 12 + 2)
+    if t ~= 0xff then count = count + 1 types[t] = true end
+end
+assert_line("cat_population", count >= 15, count .. " monsters (VMS 17-24 at DL1)")
+local loaded, fields, names, low, detail = true, true, true, false, ""
+for t, _ in pairs(types) do
+    if t >= 32 or prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) == 0xff then
+        loaded = false
+        detail = "type " .. t .. " has no catalog species"
+    else
+        local cid = slot_id(t)
+        if LEVELS[cid + 1] < 8 then low = true end
+        if prog:read_u8(CR_LEVEL_ADDR + t) ~= LEVELS[cid + 1] then
+            fields = false
+            detail = "slot " .. t .. " id " .. cid .. " level " .. prog:read_u8(CR_LEVEL_ADDR + t)
+        end
+        local ptr = prog:read_u8(CR_NAME_LO_ADDR + t) + prog:read_u8(CR_NAME_HI_ADDR + t) * 256
+        local want = NAMES[cid + 1]
+        for k = 1, #want do
+            if prog:read_u8(ptr + k - 1) ~= want[k] then
+                names = false
+                detail = "slot " .. t .. " id " .. cid .. " name byte " .. k
+            end
+        end
+    end
+end
+assert_line("cat_slots_loaded", loaded, detail)
+assert_line("cat_fields", fields, detail)
+assert_line("cat_names", names, detail)
+assert_line("cat_low_levels", low, "no creature below level 8 on DL1")
+
+wizard_menu_open()
+press_until("DLVL", "L")
+press("5") press("0") press("\r")
+wait_generation(120)
+prog:write_u8(0xc002, 0)
+prog:write_u8(0xc004, 0)
+assert_line("cat_dl50", prog:read_u8(DLVL_ADDR) == 50, "wizard jump missed DL50")
+local winners, awake = 0, false
+for i = 0, 31 do
+    local b = mt + i * 12
+    local t = prog:read_u8(b + 2)
+    if t < 32 then
+        local cid = slot_id(t)
+        if cid == IGGY_ID or cid == BALROG_ID then
+            winners = winners + 1
+            awake = (prog:read_u8(b + 5) & 0x01) == 1 and prog:read_u8(b + 7) == 0
+        end
+    end
+end
+assert_line("cat_win_creature", winners == 1, winners .. " win creatures on DL50")
+assert_line("cat_win_awake", awake, "the win creature is asleep or unaware")
+dump("after_catalog")
+print("SCENARIO DONE")
+"""
+
+
+def catalog_spawn_lua() -> str:
+    count = catalog_lore.const("CATALOG_COUNT")
+    levels = catalog_lore.field("cat_cr_level")
+    names = [catalog_lore.name(cid) + [0] for cid in range(count)]
+    body = (LUA_CATALOG_SPAWN_BODY
+            .replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}")
+            .replace("{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}")
+            .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
+            .replace("CAT_SLOT_ID_LO_ADDR", hex(_sym_addr("cat_slot_id_lo")))
+            .replace("CAT_SLOT_ID_HI_ADDR", hex(_sym_addr("cat_slot_id_hi")))
+            .replace("CR_LEVEL_ADDR", hex(_sym_addr("cr_level")))
+            .replace("CR_NAME_LO_ADDR", hex(_sym_addr("cr_name_lo")))
+            .replace("CR_NAME_HI_ADDR", hex(_sym_addr("cr_name_hi")))
+            .replace("DLVL_ADDR", hex(_sym_addr("zp_player_dlvl")))
+            .replace("IGGY_ID", str(catalog_lore.const("CATALOG_IGGY_ID")))
+            .replace("BALROG_ID", str(catalog_lore.const("CATALOG_BALROG_ID"))))
+    return _chargen_body("A") + body
 
 
 def _sym_addr(name: str) -> int:
@@ -1648,7 +1814,8 @@ def _inv_helpers() -> str:
 
 def weapon_exchange_lua() -> str:
     return (_chargen_body("A") + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
-            ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo")))
+            ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo"))).replace(
+            "PFLAGS_ADDR", hex(_sym_addr("player_pflags")))
 
 
 def save_load_lua() -> str:
@@ -1676,7 +1843,105 @@ def save_slot_tracking_lua() -> str:
 
 
 def scroll_delta_lua() -> str:
-    return _chargen_body("A") + LUA_SCROLL_DELTA_BODY
+    return _chargen_body("A") + (LUA_SCROLL_DELTA_BODY
+                                 .replace("MONSTER_TABLE_ADDR", hex(_sym_addr("monster_table")))
+                                 .replace("MON_COUNT_ADDR", hex(_sym_addr("zp_mon_count"))))
+
+
+LUA_ACID_BODY = r"""
+-- A monster's acid damages worn armour and recalculates AC through the items
+-- overlay (MON-015). player_recalc_equipment lives in OVL_ITEMS here: a
+-- direct call from the resident acid code ran whatever overlay was loaded
+-- (the X16 dropped the player into the town at (31, 18), M7 queue 2026-11-02).
+local descended = false
+for i = 1, 12 do
+    press("L")
+    emu.wait(1)
+    shift(".")
+    emu.wait(2)
+    if prog:read_u8(DLVL_ADDR) == 1 then descended = true break end
+end
+assert_line("descended", descended, "zp_player_dlvl never reached 1")
+local settled = false
+for i = 1, 120 do
+    emu.wait(0.5)
+    if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0
+       and not screen_has("GENERATING") then
+        settled = true break
+    end
+end
+emu.wait(1)
+assert_line("gen_settled", settled, "dlvl=" .. prog:read_u8(DLVL_ADDR))
+prog:write_u8(0xc002, 0)
+prog:write_u8(0xc004, 0)
+
+local mt = MONSTER_TABLE_ADDR
+local base = 0
+for i = 0, 31 do
+    local b = mt + i * 12
+    if prog:read_u8(b + 2) ~= 0xff then base = b break end
+end
+assert_line("monster_found", base ~= 0, "no live monster on DL:1")
+local kind = prog:read_u8(base + 2)
+local px0 = prog:read_u8(PLAYER_X_ADDR)
+local py0 = prog:read_u8(PLAYER_Y_ADDR)
+local mx, my = nil, nil
+for _, c in ipairs({{px0+1, py0}, {px0-1, py0}, {px0, py0+1}, {px0, py0-1}}) do
+    if aux:read(0x0800 + c[2]*198 + c[1]) & 0xf1 == 0 then mx, my = c[1], c[2] break end
+end
+assert_line("acid_spot", mx ~= nil, "no free square next to the player")
+local oa = 0x0800 + prog:read_u8(base + 1)*198 + prog:read_u8(base + 0)
+aux:write(oa, aux:read(oa) & 0xfe)
+prog:write_u8(base + 0, mx)
+prog:write_u8(base + 1, my)
+local ma = 0x0800 + my*198 + mx
+aux:write(ma, aux:read(ma) | 0x01)
+prog:write_u8(base + 3, 200)               -- HP: it outlasts the test
+prog:write_u8(base + 4, 0)
+prog:write_u8(base + 5, 0x01)              -- MF_AWAKE
+prog:write_u8(base + 7, 0)
+prog:write_u8(CR_ATK0_TYPE_ADDR + kind, 6) -- ATK_ACID 1d2
+prog:write_u8(CR_ATK0_DICE_ADDR + kind, 1)
+prog:write_u8(CR_ATK0_SIDES_ADDR + kind, 2)
+prog:write_u8(CR_ATK1_TYPE_ADDR + kind, 0)
+prog:write_u8(CR_SPELL_CHANCE_ADDR + kind, 0)
+prog:write_u8(CR_SPEED_ADDR + kind, 1)
+prog:write_u8(CR_LEVEL_ADDR + kind, 40)    -- its blows land
+prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
+
+local body = INV_TO_AC_ADDR + 23           -- EQUIP_BODY: the warrior's only armour
+local to_ac0 = prog:read_u8(body)
+local ac0 = prog:read_u8(PLAYER_AC_ADDR)
+for i = 1, 40 do
+    if screen_has("-more-") then press(" ") emu.wait(0.4) end
+    press("s")
+    emu.wait(0.5)
+    prog:write_u8(0xc002, 0)
+    prog:write_u8(0xc004, 0)
+    if prog:read_u8(body) ~= to_ac0 then break end
+end
+emu.wait(1)
+local drop = (to_ac0 - prog:read_u8(body)) & 0xff
+assert_line("acid_damaged", drop >= 1 and drop <= 3, "to-AC " .. to_ac0 .. " -> " .. prog:read_u8(body))
+assert_line("acid_ac_recalc", prog:read_u8(PLAYER_AC_ADDR) == (ac0 - drop) & 0xff,
+            "AC " .. ac0 .. " -> " .. prog:read_u8(PLAYER_AC_ADDR))
+local px, py = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)
+assert_line("acid_in_place", px == px0 and py == py0 and prog:read_u8(DLVL_ADDR) == 1,
+            "player at (" .. px .. ", " .. py .. ") DL " .. prog:read_u8(DLVL_ADDR) ..
+            ", was (" .. px0 .. ", " .. py0 .. ") DL 1")
+dump("after_acid")
+print("SCENARIO DONE")
+"""
+
+
+def acid_armour_lua() -> str:
+    body = _balrog_symbols(LUA_ACID_BODY)
+    for placeholder, name in (("CR_ATK0_TYPE_ADDR", "cr_atk0_type"), ("CR_ATK0_DICE_ADDR", "cr_atk0_dice"),
+                              ("CR_ATK0_SIDES_ADDR", "cr_atk0_sides"), ("CR_ATK1_TYPE_ADDR", "cr_atk1_type"),
+                              ("CR_SPELL_CHANCE_ADDR", "cr_spell_chance"), ("CR_SPEED_ADDR", "cr_speed"),
+                              ("INV_TO_AC_ADDR", "inv_to_ac"), ("PLAYER_AC_ADDR", "zp_player_ac")):
+        body = body.replace(placeholder, hex(_sym_addr(name)))
+    return _chargen_body("A") + body
 
 
 SCENARIO_LUA = {
@@ -1692,6 +1957,7 @@ SCENARIO_LUA = {
     "deep_objdet": deep_objdet_lua,
     "scroll_map": scroll_map_lua,
     "dungeon_descend": dungeon_descend_lua,
+    "catalog_spawn": catalog_spawn_lua,
     "death_flow": death_flow_lua,
     "save_load": save_load_lua,
     "mage_list": mage_list_lua,
@@ -1701,6 +1967,7 @@ SCENARIO_LUA = {
     "disk_setup_adopt": disk_setup_adopt_lua,
     "save_slot_tracking": save_slot_tracking_lua,
     "weapon_exchange": weapon_exchange_lua,
+    "acid_armour": acid_armour_lua,
 }
 
 # Scenarios that exercise a separate save disk (blank ProDOS image, volume

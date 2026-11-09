@@ -40,6 +40,7 @@ SPELL_LIST_TITLES = ("Prayer Book", "Mage Book")   # core/player_magic_select_ov
 SPELL_LEARN_TITLE, SPELL_LEARN_PROMPT = "Study", "Learn which? (a-"   # the Mage-book Study list (M5d)
 KEY_SPACE = 0x20
 KEY_RUNSTOP = 0x03
+GENOCIDE_PROMPT = "Type?"   # eff_genocide (core/player_magic_execute_overlay.s): the letter to wipe out
 
 
 class Mode(str, Enum):
@@ -51,6 +52,7 @@ class Mode(str, Enum):
     STORE = "STORE"           # store screen (ui_store.s): menu and buy prompts
     ITEM = "ITEM"             # "Wear which item (a-v)?" and its "?" item list (M3 round 13)
     SPELL = "SPELL"           # book prompt, "Pray which?" and its "?" list (core/player_magic.s, M5b)
+    GENOCIDE = "GENOCIDE"     # Genocide's "Type?": a creature letter, removed from the level (2026-11-05)
     UNKNOWN = "UNKNOWN"
 
 
@@ -165,6 +167,19 @@ class Observation:
                 "sp": self.sp, "jiffies": self.jiffies}
 
 
+def genocide_prompt(obs: Observation, abi: Abi) -> bool:
+    """Genocide's "Type?" (eff_genocide): on row 0, or on the C128 on row 1
+    under the read prompt it came from. Its key wait is eff_genocide's own
+    (the return is its ``jsr hal_input_get_key``, +10), so a "Type?" left on
+    the screen under a later prompt is not taken for it."""
+    if GENOCIDE_PROMPT not in (obs.rows[0].strip(), obs.rows[1].strip()):
+        return False
+    starts = abi.all_symbols.get("eff_genocide") or []
+    if not starts:
+        return obs.rows[0].strip() == GENOCIDE_PROMPT
+    return any(0 <= obs.ret - start < 16 for start in starts)
+
+
 def classify(obs: Observation, abi: Abi, command_ret: int,
              resident_prompts: dict[int, str] | None = None) -> tuple[Mode, str]:
     """Screen text and game state first; the call stack only as a resident-code hint.
@@ -204,6 +219,8 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.SPELL, "list"
     if obs.rows[0].strip() == SPELL_LEARN_TITLE and bottom.strip().startswith(SPELL_LEARN_PROMPT):
         return Mode.SPELL, "learn"
+    if genocide_prompt(obs, abi):
+        return Mode.GENOCIDE, "type"
     if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
     if obs.rows[0].strip() == "Inventory":
@@ -275,6 +292,7 @@ class Game:
         self.screen_bank = 0
         self.map_bank = 0
         self.last: Observation | None = None
+        self.catch_up = 0.0   # wall seconds the next press may add (undump, Port.undump_catch_up)
         self.stats = {"resumes": 0, "interrupts": 0, "false_crash_hits": 0,
                       "max_resume_wall": 0.0, "max_resume_jiffies": 0}
 
@@ -513,6 +531,17 @@ class Game:
 
     def press(self, key: int) -> Observation:
         """Feed exactly one key at the current input stop and run to the next one."""
+        if not self.catch_up:
+            return self._press(key)
+        extra, self.catch_up = self.catch_up, 0.0
+        saved = self.mon.response_timeout, self.resume_budget
+        self.mon.response_timeout, self.resume_budget = saved[0] + extra, saved[1] + extra
+        try:
+            return self._press(key)
+        finally:
+            self.mon.response_timeout, self.resume_budget = saved
+
+    def _press(self, key: int) -> Observation:
         mon = self.mon
         if self.port.key_feed == "return":
             assert self.last is not None   # stopped at a key entry
@@ -562,6 +591,7 @@ class Game:
         """Load a snapshot taken at an input stop and re-observe without resuming."""
         pc = self.mon.undump(str(path.resolve()))
         self.mon.drain_events()
+        self.catch_up = snapshot_cpu_clock(path) / 1e9 * self.port.undump_catch_up
         for bank in self.port.snapshot_banks:
             data = path.with_suffix(f".{bank}").read_bytes()
             self.mon.mem_set(0x0000, data[:0x8000], self.mon.bank(bank))

@@ -83,27 +83,21 @@ bash_command:
 
     // Tunnelable terrain? Hand off to the digging path so Shift+D on a
     // vein/wall/rubble reaches the tunnel logic instead of bash's wall miss.
+    // By range (A is a tile type, low nibble clear): walls and corners
+    // $10-$60, rubble and veins $B0-$D0, and the secret door $F0.
     cmp #TILE_WALL_H
-    beq !bash_tunnel+
-    cmp #TILE_WALL_V
-    beq !bash_tunnel+
+    bcc !bash_empty+            // floor
+    cmp #TILE_DOOR_OPEN
+    bcc !bash_tunnel+           // walls, corners
+    cmp #TILE_RUBBLE
+    bcc !bash_empty+            // open door, stairs ($80, a closed door, went above)
+    cmp #TILE_TRAP
+    bcc !bash_tunnel+           // rubble, magma, quartz
     cmp #TILE_SECRET
     beq !bash_tunnel+
-    cmp #TILE_CORNER_TL
-    beq !bash_tunnel+
-    cmp #TILE_CORNER_TR
-    beq !bash_tunnel+
-    cmp #TILE_CORNER_BL
-    beq !bash_tunnel+
-    cmp #TILE_CORNER_BR
-    beq !bash_tunnel+
-    cmp #TILE_RUBBLE
-    beq !bash_tunnel+
-    cmp #TILE_MAGMA
-    beq !bash_tunnel+
-    cmp #TILE_QUARTZ
-    beq !bash_tunnel+
+.assert "bash: tunnelable tile types are the ranges it tests", TILE_WALL_V == $20 && TILE_CORNER_TL == $30 && TILE_CORNER_TR == $40 && TILE_CORNER_BL == $50 && TILE_CORNER_BR == $60 && TILE_DOOR_OPEN == $70 && TILE_STAIRS_DN == $90 && TILE_STAIRS_UP == $A0 && TILE_RUBBLE == $B0 && TILE_MAGMA == $C0 && TILE_QUARTZ == $D0 && TILE_TRAP == $E0 && TILE_SECRET == $F0 && TILE_FLOOR == 0, true
 
+!bash_empty:
     // Empty space (floor, open door, stairs, etc.)
     ldx #HSTR_BASH_EMPTY
     jsr huff_print_msg

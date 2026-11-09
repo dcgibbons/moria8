@@ -54,7 +54,9 @@
 .const hal_platform_monster_overlay_stale_name = 1
 .const hal_platform_monster_stale_tier_reload = 0
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier to restore
 #define HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY
+#endif
 #define HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER
 #define HAL_PLATFORM_TITLE_SYSINFO_80COL
 #define HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL

@@ -49,8 +49,8 @@
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
   main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-         grid-template-areas: "ports round" "disk disk" "causes kit" "wall wall" "milestone legend"; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "ports" "round" "disk" "causes" "kit" "wall" "milestone" "legend"; } }
+         grid-template-areas: "qgrid qgrid" "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "qgrid" "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
   .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px 22px; font-size: 12px; }
   .legend-grid h3 { margin: 0 0 4px; font-size: 11px; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-weight: normal; }
   .legend-grid p { margin: 0 0 6px; color: var(--muted); }
@@ -72,6 +72,7 @@
   .box.near { background: rgba(197, 121, 0, .18); color: var(--gold); border-color: rgba(197, 121, 0, .45); }
   .box.short { background: rgba(224, 96, 60, .14); color: var(--red); border-color: rgba(224, 96, 60, .35); }
   .box.none { background: transparent; }
+  .box.playing { background: repeating-linear-gradient(45deg, #4a3c20 0 2px, var(--track) 2px 4px); color: var(--text); }
   /* Port coverage (M6): primary characters down, the seven ports across. */
   .pgrid { display: grid; grid-template-columns: 8rem repeat(7, minmax(0, 1fr)); gap: 3px; font-size: 11px; }
   .pgrid .h { color: var(--dim); text-align: center; padding-bottom: 2px; }
@@ -153,8 +154,38 @@
   section.collapsed > :not(h2) { display: none; }
   section.collapsed > h2 { margin-bottom: 0; }
   .tabs button { border-radius: 3px 3px 0 0; } .tabs button.on { color: var(--black); background: var(--gold); }
-  #qmain { grid-template-areas: "qgrid qgrid" "balrog balrog" "subs subs" "qwall qwall" "ratings features" "recent qlog"; }
-  @media (max-width: 1100px) { #qmain { grid-template-areas: "qgrid" "balrog" "subs" "qwall" "ratings" "features" "recent" "qlog"; } }
+  #qmain { grid-template-areas: "qwall qwall" "balrog balrog" "buildq buildq" "builds builds" "subs subs" "diff diff" "ratings features" "recent qlog"; }
+  @media (max-width: 1100px) { #qmain { grid-template-areas: "qwall" "balrog" "buildq" "builds" "subs" "diff" "ratings" "features" "recent" "qlog"; } }
+  /* Difficulty charts (§23.6): amber and blue are the page's own tokens,
+     validated as a pair on the panel (dataviz validate_palette, dark). */
+  .bfilter { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .bfilter button.on { color: var(--black); background: var(--gold); }
+  .btable { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+  .btable th { color: var(--dim); font-weight: normal; text-align: left; padding: 2px 6px; }
+  .btable td { padding: 2px 6px; border-top: 1px solid #2a2416; white-space: nowrap; }
+  .btable td.subj { white-space: normal; color: var(--muted); }
+  .btable tr.thin td { opacity: .55; }
+  .cov { display: inline-block; width: 64px; height: 7px; background: var(--track); vertical-align: middle; margin-left: 6px; }
+  .cov i { display: block; height: 100%; background: var(--green); }
+  .bchip { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .diff h3 { margin: 0 0 6px; font-size: 11px; color: var(--muted); font-weight: normal; }
+  .smalls { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
+  .smalls .t { display: flex; justify-content: space-between; font-size: 11px; color: var(--paper); text-transform: capitalize; }
+  .smalls .t span { color: var(--dim); text-transform: none; }
+  .diffrow { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; align-items: start; }
+  @media (max-width: 1100px) { .diffrow { grid-template-columns: 1fr; } }
+  .diff svg .grid { stroke: #2a2416; } .diff svg .base { stroke: #3a3020; }
+  .diff .hit .guide, .diff .hit .hdot { opacity: 0; } .diff .hit:hover .guide, .diff .hit:hover .hdot { opacity: 1; }
+  .diff .hit:hover .col { opacity: .82; }
+  .dmap { display: grid; grid-template-columns: 6rem repeat(6, minmax(0, 1fr)); gap: 3px; font-size: 11px; }
+  .dmap .h { color: var(--dim); text-align: center; text-transform: capitalize; }
+  .dmap .r { color: var(--muted); text-transform: capitalize; align-self: center; }
+  .dmap .c { height: 34px; border-radius: 2px; display: grid; place-items: center; line-height: 1.1; cursor: default; }
+  .dmap .c b { font-size: 13px; font-weight: normal; } .dmap .c small { font-size: 9.5px; opacity: .8; }
+  .dmap .c.none { background: transparent; }
+  .dramp { height: 8px; border-radius: 4px; margin: 6px 0 2px; background: linear-gradient(to right, #2a2416, #ffd93d); }
+  .tip { position: fixed; z-index: 30; pointer-events: none; background: var(--black); border: 1px solid var(--gold);
+         border-radius: 3px; padding: 4px 8px; font-size: 11px; color: var(--paper); white-space: pre; }
   .qgrid { display: grid; grid-template-columns: 6.5rem repeat(6, minmax(0, 1fr)); gap: 3px; font-size: 11px; min-width: 44rem; }
   .qgrid .h { color: var(--dim); text-align: center; text-transform: capitalize; padding-bottom: 2px; }
   .qgrid .r { color: var(--muted); text-transform: capitalize; align-self: center; }
@@ -166,6 +197,8 @@
   .qwon { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
   .qwon b { color: var(--green); }
   .qcell.struggling { background: rgba(224, 96, 60, .14); border-color: rgba(224, 96, 60, .45); }
+  .qcell.live { border: 2px solid var(--gold); background-color: rgba(197, 121, 0, .16); }
+  .qcell.live .now { color: var(--gold); font-weight: 700; }
   .qcell.playing { background-image: repeating-linear-gradient(45deg, rgba(255,217,61,.07) 0 3px, transparent 3px 7px); }
   .qcell .top { display: flex; justify-content: space-between; color: var(--gold); }
   .qcell .sub { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -188,23 +221,47 @@
   <span class="dim" id="updated">loading…</span>
 </header>
 <div class="nowline" id="nowline" hidden></div>
+<div class="tip" id="tip" hidden></div>
 <main id="qmain">
-  <section style="grid-area: qgrid">
-    <h2><span>M7 · the continuous queue</span><small id="qcount"></small></h2>
-    <div class="qline" id="qline"></div>
-    <div class="qwon" id="qwon"></div>
-    <div id="qgrids" class="tablewrap"></div>
-    <div class="mlegend">
-      <span><i style="background:var(--green)"></i>★ GOAL: reached the goal at least once</span>
-      <span><i style="background:rgba(224,96,60,.35)"></i>struggling: failed more than the retry cap in a row</span>
-      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
-      <span class="dim">each cell: best clvl and depth, runs and streak, last outcome</span>
-    </div>
-  </section>
   <section style="grid-area: balrog">
     <h2><span>M8 · the Balrog queue</span><small id="bcount"></small></h2>
     <div class="qline" id="bline"></div>
-    <div class="subq" id="balrog"></div>
+    <div id="balrog" class="tablewrap"></div>
+    <div class="mlegend">
+      <span><i style="background:rgba(154,210,132,.4)"></i>★ won: killed the Balrog</span>
+      <span><i style="background:rgba(197,121,0,.35);outline:2px solid var(--gold)"></i>▶ playing now</span>
+      <span><i style="background:var(--black-soft)"></i>waiting for its turn (last game shown)</span>
+      <span class="dim">each cell: best clvl and depth; where the next game starts (a save, or L1) and runs; now, or the last game's end</span>
+    </div>
+  </section>
+  <section style="grid-area: buildq">
+    <h2><span>The build queue</span><small id="cicount"></small></h2>
+    <div class="qline" id="ciline"></div>
+    <div class="tablewrap"><table class="btable" id="citable"></table></div>
+    <div class="mlegend"><span class="dim">this build's games only: the counts start again with each new build</span></div>
+    <details style="margin-top:10px"><summary class="muted">every combination on this build</summary>
+    <div class="pgrid" id="buildq"></div>
+    <div class="mlegend">
+      <span><i style="background:rgba(154,210,132,.4)"></i>reached the goal</span>
+      <span><i style="background:rgba(224,96,60,.35)"></i>died</span>
+      <span><i style="background:rgba(197,121,0,.45)"></i>ended short: budget, finding or error</span>
+      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
+      <span><i style="background:var(--black-soft)"></i>not played on this build yet</span>
+      <span class="dim">each cell: this build's last game's character level</span>
+    </div>
+    </details>
+  </section>
+  <section style="grid-area: builds" class="diff">
+    <h2><span>Builds over time</span><small id="bscount"></small></h2>
+    <div class="bfilter" id="bfilter"></div>
+    <div id="bchart"></div>
+    <div class="mlegend">
+      <span><i style="background:var(--paper)"></i>reached the build queue's goal (clvl10)</span>
+      <span><i style="background:#199e70;opacity:.6"></i>95% range (the build's colour)</span>
+      <span><i style="background:linear-gradient(#3987e5 0 3px, rgba(57,135,229,.3) 3px)"></i>a build's live span (its colour), first game to the next build's</span>
+      <span class="dim">dimmed: fewer than 10 games</span>
+    </div>
+    <div class="tablewrap"><table class="btable" id="btable"></table></div>
   </section>
   <section style="grid-area: subs">
     <h2><span>Subqueues</span><small>side sessions: make playtest-subqueue</small></h2>
@@ -213,6 +270,16 @@
   <section style="grid-area: qwall">
     <h2><span>Live runs</span><small>click one to watch it</small></h2>
     <div class="wall" id="qwall"></div>
+  </section>
+  <section style="grid-area: diff" class="diff">
+    <h2><span>Difficulty · how far games get</span><small id="dnote"></small></h2>
+    <h3>Games still going at each character level, by class <span class="dim">(gray: every class)</span></h3>
+    <div class="smalls" id="dcurves"></div>
+    <div class="diffrow">
+      <div><h3>The level each game ended at</h3><div class="tablewrap"><div id="dends" style="min-width:34rem"></div></div></div>
+      <div><h3>Median level reached, by race and class</h3><div id="dmap"></div></div>
+    </div>
+    <details style="margin-top:10px"><summary class="muted">as a table</summary><div class="tablewrap" id="dtable"></div></details>
   </section>
   <section style="grid-area: ratings">
     <h2><span>Difficulty ratings</span><small id="rnote"></small></h2>
@@ -234,6 +301,18 @@
   </section>
 </main>
 <main id="hmain" hidden>
+  <section style="grid-area: qgrid">
+    <h2><span>M7 · the continuous queue</span><small id="qcount"></small></h2>
+    <div class="qline" id="qline"></div>
+    <div class="qwon" id="qwon"></div>
+    <div id="qgrids" class="tablewrap"></div>
+    <div class="mlegend">
+      <span><i style="background:var(--green)"></i>★ GOAL: reached the goal at least once</span>
+      <span><i style="background:rgba(224,96,60,.35)"></i>struggling: failed more than the retry cap in a row</span>
+      <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
+      <span class="dim">each cell: best clvl and depth, runs and streak, last outcome</span>
+    </div>
+  </section>
   <section style="grid-area: milestone">
     <h2><span>M5 (met 2026-10-27) · every race and class on the C64</span><small id="mcount"></small></h2>
     <div class="mgrid" id="mgrid"></div>
@@ -265,6 +344,10 @@
       <span><i style="background:rgba(224,96,60,.35)"></i>✗ failed · ! error or a known defect that passed</span>
       <span class="dim">each port's latest full run; hover a cell for its detail</span>
     </div>
+  </section>
+  <section style="grid-area: archive">
+    <h2><span>Archived subqueues</span><small id="acount"></small></h2>
+    <div class="subq" id="archq"></div>
   </section>
   <section style="grid-area: round">
     <h2><span>This round</span><small id="rverdict"></small></h2>
@@ -667,8 +750,39 @@ function ago(t) {
   const s = Math.max(0, Date.now() / 1000 - t);
   return s < 90 ? `${Math.round(s)} s` : s < 5400 ? `${Math.round(s / 60)} min` : s < 172800 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86400)} d`;
 }
+function subCard(q, s) {
+  const state = s.done ? (s.cancelled ? "cancelled" : "drained") : s.cancelled ? "cancelling" : "running";
+  const groups = Object.entries(s.report || s.progress || {}).map(([k, g]) =>
+    `<div class="dim">${esc(k)}: <span class="${g.passed === false ? "bad" : g.passed ? "ok" : ""}">${g.reached}/${g.done}</span>${g.total !== g.done ? ` of ${g.total}` : ""}${g.required != null ? ` (bar ${g.required})` : ""}</div>`).join("");
+  const ab = s.ab_report, pr = ab && ab.paired;
+  const arms = ab ? Object.entries(ab.arms).map(([arm, a]) =>
+    `<div class="dim">${esc(arm)} [${esc(a.variant || "as defined")}]: ${a.reached}/${a.done} reached · median DL ${a.median_max_dlvl ?? "–"} · clvl ${a.median_clvl ?? "–"}${Object.keys(a.deaths).length ? " · died: " + esc(Object.entries(a.deaths).map(([c, n]) => `${c} ${n}`).join(", ")) : ""}</div>`).join("") +
+    `<div class="dim">paired ${pr.pairs}: only A reached ${pr.only_a_reached.length}, only B ${pr.only_b_reached.length} · A deeper ${pr.a_deeper.length}, B deeper ${pr.b_deeper.length}, same ${pr.same_depth}</div>` : "";
+  const g = s.goal;
+  // The goal as the M7 grid shows it (maintainer, 2026-11-03), for goal runs, not suites.
+  const goal = g && g.combos && !s.report && !Object.keys(s.progress || {}).some(k => !k.startsWith("deep ")) ? `
+    <div class="v">★ ${g.reached} of ${g.games} games reached the goal · ${g.combos_reached} of ${g.combos} combinations</div>
+    <div class="dim">median clvl ${g.median_clvl ?? "–"} · clvl 15+ ${g.clvl15} · clvl 20+ ${g.clvl20} · died at clvl ≤5: ${g.early}${g.loops != null ? ` · <span class="${g.loops ? "bad" : "ok"}">⟳ loops in ${g.loops} games</span>` : ""}</div>
+    <div class="qgrid"><div></div>` + q.classes.map(c => `<div class="h">${c}</div>`).join("") + q.races.map(r =>
+      `<div class="r">${r}</div>` + q.classes.map(c => {
+        const it = g.grid[`${r}-${c}`];
+        if (!it) return `<div class="qcell none"></div>`;
+        const last = it.last || {};
+        return `<div class="qcell ${it.reached ? "won" : ""}" title="${esc(`${cap(r + "-" + c)}: ${it.runs}/${it.total} run, ${it.reached} reached, best clvl ${it.best ?? "–"}`)}">
+          <div class="top"><span>${it.best != null ? `L${it.best}` : "–"}</span><span>${it.loops ? `<span class="bad">⟳${it.loops}</span> ` : ""}${it.reached ? `★ ${it.reached}` : ""}</span></div>
+          <div class="sub">${it.runs}/${it.total} run${it.last ? ` · <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span>` : ""}</div>
+          <div class="sub">${esc(last.cause || "")}</div></div>`;
+      }).join("")).join("") + `</div>` : "";
+  return `<div class="stat"><div class="k">${esc(s.name)} · ${state}${s.archive ? `<span class="dim"> · ${esc(s.archive)}</span>` : ""}</div>
+    <div class="v">${s.reached}/${s.results} reached · ${s.results}/${s.items} run</div>${goal}${s.note ? `<div class="dim">${esc(s.note)}</div>` : ""}${s.variant ? `<div class="dim">variant ${esc(s.variant)}</div>` : ""}${arms}${groups}</div>`;
+}
+
 function renderQueue() {
   const q = qdata; if (!q) return;
+  // Subqueues are the work while the main queue plays nothing: open them,
+  // unless the viewer folded them.
+  const saved = foldState(), subqSection = $("subq").closest("section");
+  if (!(q.config.platforms || []).length && !(saved && "Subqueues" in saved)) subqSection.classList.remove("collapsed");
   const b = q.service.build_state || {}, playing = b.playing || {};
   const behind = b.behind ? `<span class="warn">${b.behind} behind ${esc(b.upstream)}</span>` : "";
   const ahead = b.ahead ? `<span class="dim">${b.ahead} ahead${b.contained === false ? ", not contained" : ""}</span>` : "";
@@ -722,40 +836,115 @@ function renderQueue() {
         ` <span class="dim">${w.steps ? Number(w.steps).toLocaleString() + " steps" : ""}</span>`).join(" · ")
     : `<span class="dim">no combination has reached the goal yet</span>`;
   $("qcount").textContent = `${won} of ${total} combinations reached the goal`;
-  // The Balrog queue (§23.9): every combination past the M7 bar, for good.
+  // The Balrog queue (§23.9): every combination of balrog_platforms, from
+  // level 1 or its latest save, on the newest build, the highest save first
+  // (maintainer, 2026-11-06); "next" leaves out those playing.
   const bq = q.balrog || {items: {}, order: []}, bitems = Object.values(bq.items);
   const blive = q.live.filter(r => r.queue === "balrog");
-  $("bline").innerHTML = `goal <b>balrog</b> <span class="dim">kill the Balrog (from DL100) and win</span> · ` +
+  const bnames = [...new Set(bitems.map(it => PORT_NAMES[it.platform] || it.platform))].join(", ") || "–";
+  const bbest = Math.max(0, ...bitems.map(it => (it.best && it.best.clvl) || 0));
+  $("bline").innerHTML = `goal <b>balrog</b> <span class="dim">build to level 40, then kill the Balrog (from DL50) and win</span> · ` +
+    `on <b>${esc(bnames)}</b>, from level 1 or the latest save, newest build · ` +
     `budget <b>${Number(q.config.balrog_budget).toLocaleString()}</b> steps · ` +
-    `workers <b>${blive.length}</b>/${q.config.balrog_workers} · next: ${esc(bq.order.slice(0, 3).map(k => cap(k.split("/")[1])).join(", ") || "–")}`;
-  $("bcount").textContent = `${bitems.length} of ${total} combinations past the M7 bar · ` +
+    `workers <b>${blive.length}</b>/${q.config.balrog_workers} · next: ${esc(bq.order.filter(k => !blive.some(r => `${r.platform}/${r.character}` === k)).slice(0, 3).map(k => cap(k.split("/")[1])).join(", ") || "–")}`;
+  $("bcount").textContent = `${bitems.length} combinations · best L${bbest || "–"} · ` +
     `${bitems.reduce((n, it) => n + it.won, 0)} wins in ${bitems.reduce((n, it) => n + it.runs, 0)} runs`;
-  $("balrog").innerHTML = bitems.map(it => {
-    const best = it.best || {}, last = it.last || {};
-    const now = blive.filter(r => r.character === it.character && r.platform === it.platform)
-      .map(r => r.status && r.status.clvl != null ? `L${r.status.clvl} DL${r.status.dlvl}${r.paused ? " (paused)" : ""}` : "starting");
-    return `<div class="stat"><div class="k">${esc(cap(it.character))}${Object.keys(q.platforms).length > 1 ? ` · ${esc(PORT_NAMES[it.platform] || it.platform)}` : ""}
-        <span class="dim">· joined ${ago(it.graduated.ended)} ago</span></div>
-      <div class="v">${it.won ? `<span class="ok">★ ${it.won} won</span> · ` : ""}${it.runs} runs · best ${it.best ? `L${best.clvl} DL${best.max_dlvl}` : "–"}</div>
-      <div class="dim">${it.start ? `starts on DL${it.start.dlvl} at step ${Number(it.start.step).toLocaleString()} (M7 run, ${ago(it.start.set)} ago)` : "plays from the title (no saved start yet)"}</div>
-      ${it.last ? `<div class="dim">last: <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span> at L${last.clvl} DL${last.max_dlvl}${last.cause ? ` · ${esc(last.cause)}` : ""}</div>` : ""}
-      ${now.length ? `<div class="dim">playing now: ${esc(now.join(", "))}</div>` : ""}</div>`;
-  }).join("") || `<span class="muted">no combination has met the M7 bar yet</span>`;
-  $("subq").innerHTML = q.subqueues.map(s => {
-    const state = s.done ? (s.cancelled ? "cancelled" : "drained") : s.cancelled ? "cancelling" : "running";
-    const groups = Object.entries(s.report || s.progress || {}).map(([k, g]) =>
-      `<div class="dim">${esc(k)}: <span class="${g.passed === false ? "bad" : g.passed ? "ok" : ""}">${g.reached}/${g.done}</span>${g.total !== g.done ? ` of ${g.total}` : ""}${g.required != null ? ` (bar ${g.required})` : ""}</div>`).join("");
-    const ab = s.ab_report, pr = ab && ab.paired;
-    const arms = ab ? Object.entries(ab.arms).map(([arm, a]) =>
-      `<div class="dim">${esc(arm)} [${esc(a.variant || "as defined")}]: ${a.reached}/${a.done} reached · median DL ${a.median_max_dlvl ?? "–"} · clvl ${a.median_clvl ?? "–"}${Object.keys(a.deaths).length ? " · died: " + esc(Object.entries(a.deaths).map(([c, n]) => `${c} ${n}`).join(", ")) : ""}</div>`).join("") +
-      `<div class="dim">paired ${pr.pairs}: only A reached ${pr.only_a_reached.length}, only B ${pr.only_b_reached.length} · A deeper ${pr.a_deeper.length}, B deeper ${pr.b_deeper.length}, same ${pr.same_depth}</div>` : "";
-    return `<div class="stat"><div class="k">${esc(s.name)} · ${state}</div>
-      <div class="v">${s.reached}/${s.results} reached · ${s.results}/${s.items} run</div>${s.note ? `<div class="dim">${esc(s.note)}</div>` : ""}${s.variant ? `<div class="dim">variant ${esc(s.variant)}</div>` : ""}${arms}${groups}</div>`;
-  }).join("") || `<span class="muted">none</span>`;
+  // A race x class grid, as M7's (maintainer, 2026-11-06), per port.
+  const bports = [...new Set(bitems.map(it => it.platform))];
+  $("balrog").innerHTML = bports.map(platform => {
+    let g = (bports.length > 1 ? `<h3 class="muted" style="margin:4px 0;font-size:11px">${esc(PORT_NAMES[platform] || platform)}</h3>` : "") +
+      `<div class="qgrid"><div></div>` + q.classes.map(c => `<div class="h">${c}</div>`).join("");
+    q.races.forEach(r => {
+      g += `<div class="r">${r}</div>`;
+      q.classes.forEach(c => {
+        const it = bq.items[`${platform}/${r}-${c}`];
+        if (!it) { g += `<div class="qcell none"></div>`; return; }
+        const best = it.best || {}, last = it.last || {}, st = it.start || {};
+        const run = blive.find(x => x.character === it.character && x.platform === platform);
+        const w = (run && run.status) || {};
+        const from = it.start ? `from L${st.clvl || 25} DL${st.dlvl}` : "from L1";
+        const now = run ? `<span class="now">▶ playing L${w.clvl ?? "–"} DL${w.dlvl ?? "–"}${run.paused ? " (paused)" : ""}</span>`
+          : it.last ? `last: <span class="${OUTCOME_CLASS[last.outcome] || ""}">${esc(last.outcome)}</span> ${ago(last.ended)} ago${last.cause ? ` · ${esc(last.cause)}` : ""}` : "not played yet";
+        const cls = [it.won ? "won" : "", run ? "live" : ""].join(" ");
+        const tip = `${cap(it.character)}: ${it.runs} runs, ${it.won} won` +
+          (it.start ? `; starts on DL${st.dlvl} at step ${Number(st.step).toLocaleString()} (${st.checkpoint ? `clvl ${st.clvl} checkpoint, ${st.restores || 0} restores` : "M7 run"}, ${ago(st.set)} ago)` : "; a new character from level 1 (no save that loads in the newest build)") +
+          (it.best ? `; best clvl ${best.clvl} DL ${best.max_dlvl}` : "") +
+          (it.last ? `; last ${last.outcome} at clvl ${last.clvl} DL ${last.max_dlvl}${last.cause ? `, ${last.cause}` : ""}` : "") +
+          `; joined ${ago(it.graduated.ended)} ago`;
+        g += `<div class="qcell ${cls}" title="${esc(tip)}">
+          <div class="top"><span>${it.best ? `L${best.clvl} DL${best.max_dlvl}` : "–"}</span><span>${it.won ? `★ ${it.won}` : ""}</span></div>
+          <div class="sub">${esc(from)} · ${it.runs} run${it.runs === 1 ? "" : "s"}</div>
+          <div class="sub">${now}</div></div>`;
+      });
+    });
+    return g + `</div>`;
+  }).join("") || `<span class="muted">no combinations yet: set balrog_platforms</span>`;
+  // The build queue (§23.4): one run per port, of the branch's newest
+  // commit, cycling every race/class combination.
+  const ci = (q.build_queue || {}).platforms || {}, cports = q.config.build_platforms || [];
+  const cstate = q.service.build_queue_state || {}, cbuild = (cstate.playing || {}).commit;
+  // The build being played alone (maintainer, 2026-11-08: the counts reset
+  // with each new build), from its Builds-card entry.
+  const cid = q.service.build_queue_build || "";
+  const cur = (q.builds || []).find(b => b.build === cid) || null;
+  const onBuild = c => !!(cbuild && c && String(c).slice(0, 12) === cbuild.slice(0, 12));
+  $("ciline").innerHTML = `goal <b>${esc(q.config.build_goal)}</b> · one run per port, every combination in turn · ` +
+    `build <b>${esc(cbuild ? cbuild.slice(0, 12) : cid || "–")}</b>` +
+    (cur && cur.subject ? ` <span class="muted">“${esc(cur.subject)}”</span>` : "") +
+    (cur ? ` · playing ${esc(ago(cur.start))}` : "") +
+    (cstate.error ? ` · <span class="bad">build failed: ${esc(cstate.error.slice(-160))}</span>` : "");
+  const none = {games: 0, reached: 0, died: 0, median_clvl: null, played: 0, findings: []};
+  const det = p => (cur && cur.detail && cur.detail[p]) || none;
+  const combos = p => Object.keys((ci[p] || {}).items || {}).length || q.characters.length;
+  const ctot = cports.map(det).reduce((t, d) => ({g: t.g + d.games, r: t.r + d.reached, f: t.f + d.findings.length}), {g: 0, r: 0, f: 0});
+  $("cicount").textContent = cports.length ? `${cports.length} ports · ${ctot.g} games · ${ctot.r} reached · ` +
+    `${ctot.f} finding${ctot.f === 1 ? "" : "s"}` : "";
+  $("citable").innerHTML = cports.length ? `<tr><th>Port</th><th>Games</th><th>clvl ${esc(String(q.config.build_goal || "").replace(/\D/g, ""))}</th>` +
+    `<th>Died</th><th>Findings</th><th>Median clvl</th><th>Coverage</th><th>Now</th></tr>` + cports.map(p => {
+      const d = det(p), n = combos(p), pct = n ? Math.min(100, Math.round(100 * d.played / n)) : 0;
+      const live = q.live.find(r => r.queue === "build" && r.platform === p), w = (live && live.status) || {};
+      const ftip = d.findings.map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n");
+      return `<tr><td>${esc(PORT_NAMES[p] || p)}</td><td>${d.games}</td><td>${d.reached}</td><td>${d.died}</td>` +
+        `<td class="${d.findings.length ? "bad" : "ok"}" title="${esc(ftip)}">${d.findings.length ? `${d.findings.length} ⚠` : "0"}</td>` +
+        `<td>${d.median_clvl ?? "–"}</td>` +
+        `<td>${d.played}/${n}<span class="cov" role="img" aria-label="${pct}% of combinations played"><i style="width:${pct}%"></i></span></td>` +
+        `<td>${live ? `▸ ${esc(cap(live.character))}${w.clvl != null ? ` L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}` : `<span class="dim">–</span>`}</td></tr>`;
+    }).join("") : "";
+  // Every combination (as M6's grid): a row per combination in cycle order,
+  // a cell per port with this build's last game, or the one playing now.
+  const crows = Object.keys((ci[cports[0]] || {}).items || {}).length ? Object.keys(ci[cports[0]].items) : q.characters;
+  const CI_CLASS = {reached: "frozen", died: "short"};
+  let cgrid = `<div></div>` + cports.map(p => {
+    const d = det(p);
+    return `<div class="h">${esc(PORT_NAMES[p] || p)}<b>${d.reached} of ${d.games} reached</b></div>`;
+  }).join("");
+  crows.forEach(ch => {
+    cgrid += `<div class="r">${esc(cap(ch))}</div>`;
+    cports.forEach(p => {
+      const it = ((ci[p] || {}).items || {})[ch], last = it && it.last;
+      const live = q.live.find(r => r.queue === "build" && r.platform === p && r.character === ch);
+      let cls = "none", label = "·", tip = `${cap(ch)} on ${PORT_NAMES[p] || p}: `;
+      if (live) {
+        const w = live.status || {};
+        cls = "playing"; label = w.clvl != null ? `▸${w.clvl}` : "▸";
+        tip += `playing now${w.clvl != null ? `, L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}`;
+      } else if (last && onBuild(last.commit)) {
+        cls = CI_CLASS[last.outcome] || "near"; label = last.clvl ?? "–";
+        tip += `${last.outcome} at L${last.clvl ?? "–"} DL${last.max_dlvl ?? "–"}${last.cause ? ` (${last.cause})` : ""}, ${ago(last.ended)} ago`;
+      } else {
+        tip += "not played on this build yet" + (last ? ` (last: ${last.outcome} at L${last.clvl ?? "–"} on ${String(last.commit || "").slice(0, 7)})` : "");
+      }
+      cgrid += `<div class="box ${cls}" title="${esc(tip)}">${esc(label)}</div>`;
+    });
+  });
+  $("buildq").innerHTML = cports.length ? cgrid : `<span class="muted">no ports in build_platforms</span>`;
+  $("subq").innerHTML = q.subqueues.map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
+  $("archq").innerHTML = (q.archived || []).map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
+  $("acount").textContent = (q.archived || []).length ? `${q.archived.length} · newest first` : "";
   $("qwall").innerHTML = q.live.map(r => {
     const w = r.status || {}, ms = Object.keys(r.milestones || {});
     return `<div class="tile" data-run="${esc(r.id)}">
-      <div class="badge"><span>${esc(cap(r.character))} <b>L${w.clvl ?? "–"}</b> DL${w.dlvl ?? "–"}</span><span>${r.paused ? "paused" : r.queue === "main" ? `${Math.round((w.steps || 0) / 1000)}k` : esc(r.queue)}</span></div>
+      <div class="badge"><span>${esc(cap(r.character))} <b>L${w.clvl ?? "–"}</b> DL${w.dlvl ?? "–"}</span><span>${r.paused ? "paused" : r.queue === "main" ? `${Math.round((w.steps || 0) / 1000)}k` : esc(r.queue === "build" ? `build · ${PORT_NAMES[r.platform] || r.platform}` : r.queue)}</span></div>
       <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, (w.hp || 0) / Math.max(1, w.mhp || 1) * 100))}%"></i></div>
       <pre class="scr">${w.rows ? screenHtml(w) : ""}</pre>
       <div class="badge"><span>${esc(ms.slice(-3).join(" ") || "no milestone yet")}</span></div></div>`;
@@ -780,6 +969,8 @@ function renderQueue() {
     ${mstones.map(m => `<tr><td>${m}</td>${classes.map(c => `<td>${q.features[c].milestones[m] || "·"}</td>`).join("")}</tr>`).join("")}
     ${layers.map(l => `<tr><td class="dim">${esc(l)}</td>${classes.map(c => `<td>${(q.features[c].layers[l] || 0).toLocaleString()}</td>`).join("")}</tr>`).join("")}
     </tbody></table>` + spellCoverage(q.features) : `<span class="muted">no counted runs yet</span>`;
+  renderDifficulty(q.difficulty, q.races, q.classes);
+  renderBuilds(q);
   $("recent").innerHTML = q.recent.map(r => `<tr><td>${esc(r.queue === "main" ? cap(r.character) : `${r.queue}: ${cap(r.character)}`)} <span class="dim">${ago(r.ended)}</span></td>
     <td class="${OUTCOME_CLASS[r.outcome] || ""}">${esc(r.outcome)}</td><td>${r.clvl ?? "–"}</td><td>${r.max_dlvl ?? "–"}</td>
     <td>${(r.steps || 0).toLocaleString()}</td><td>${esc(r.cause || "")}</td></tr>`).join("");
@@ -788,6 +979,189 @@ function renderQueue() {
   $("qlog").textContent = (q.service.log || []).join("\n");
   renderUpdated();
 }
+// Difficulty charts (§23.6): the main queue's counted games this epoch.
+// Survival small multiples (one class in amber over every class in gray), the
+// level each game ended at, and a race x class map of the median level reached.
+const D_AMBER = "#c57900", D_BLUE = "#7779dc", D_GRAY = "#9a9172";
+const pct = (n, d) => d ? Math.round(n / d * 100) : 0;
+function halfGone(reach, runs) {   // the first level fewer than half the games reached
+  const i = reach.findIndex(n => n < runs / 2);
+  return i < 0 ? null : i + 1;
+}
+function survivalPanel(name, entry, all, allRuns, top) {
+  const W = 260, H = 118, L = 30, R = 10, T = 8, B = 18;
+  const X = lv => L + (lv - 1) / (top - 1) * (W - L - R), Y = f => T + (1 - f) * (H - T - B);
+  const path = (reach, runs) => reach.map((n, i) => `${i ? "L" : "M"}${X(i + 1).toFixed(1)},${Y(n / runs).toFixed(1)}`).join("");
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(cap(name))}: share of games reaching each level">`;
+  [0, 0.5, 1].forEach(f => svg += `<line class="${f ? "grid" : "base"}" x1="${L}" x2="${W - R}" y1="${Y(f)}" y2="${Y(f)}"/>` +
+    `<text x="${L - 4}" y="${Y(f) + 3}" text-anchor="end">${f * 100}%</text>`);
+  [1, 5, 10, 15, 20, 25].filter(lv => lv <= top).forEach(lv => svg += `<text x="${X(lv)}" y="${H - 5}" text-anchor="middle">${lv}</text>`);
+  svg += `<path d="${path(all, allRuns)}" fill="none" stroke="${D_GRAY}" stroke-width="2" stroke-opacity=".55" stroke-linejoin="round" stroke-linecap="round"/>`;
+  svg += `<path d="${path(entry.reach, entry.runs)}" fill="none" stroke="${D_AMBER}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const half = halfGone(entry.reach, entry.runs);
+  if (half) {   // the label sits on the side of the tick with room for it
+    const right = half <= top * 0.6;
+    svg += `<line x1="${X(half)}" x2="${X(half)}" y1="${Y(0.5) - 4}" y2="${Y(0.5) + 4}" stroke="var(--paper)" stroke-width="1"/>` +
+      `<text x="${X(half) + (right ? 5 : -5)}" y="${Y(0.5) + (right ? -5 : 12)}" text-anchor="${right ? "start" : "end"}" style="fill:var(--paper)">half gone by ${half}</text>`;
+  }
+  const endN = entry.reach[top - 1], end = endN / entry.runs;
+  svg += `<circle cx="${X(top)}" cy="${Y(end)}" r="4" fill="${D_AMBER}" stroke="var(--panel)" stroke-width="2"/>`;
+  const step = (W - L - R) / (top - 1);
+  entry.reach.forEach((n, i) => {
+    const lv = i + 1, tip = `${cap(name)} · clvl ${lv}\n${pct(n, entry.runs)}% of games (${n} of ${entry.runs})\nevery class ${pct(all[i], allRuns)}%`;
+    svg += `<g class="hit" data-tip="${esc(tip)}"><rect x="${X(lv) - step / 2}" y="${T}" width="${step}" height="${H - T - B}" fill="transparent"/>` +
+      `<line class="guide" x1="${X(lv)}" x2="${X(lv)}" y1="${T}" y2="${H - B}" stroke="var(--dim)" stroke-width="1"/>` +
+      `<circle class="hdot" cx="${X(lv)}" cy="${Y(n / entry.runs)}" r="4" fill="${D_AMBER}" stroke="var(--panel)" stroke-width="2"/></g>`;
+  });
+  return `<div><div class="t">${esc(name)} <span><b class="gold" style="font-weight:normal">${pct(endN, entry.runs)}% reach ${top}</b> · ${entry.runs.toLocaleString()} games</span></div>${svg}</svg></div>`;
+}
+function endsChart(ends, top) {
+  const W = 860, H = 220, L = 38, R = 6, T = 14, B = 20, n = top + 1;
+  const totals = ends.died.map((d, i) => d + ends.other[i]);
+  const raw = Math.max(1, ...totals), stepY = [10, 20, 50, 100, 200, 250, 500, 1000].find(s => raw / s <= 5) || 2000;
+  const yMax = Math.ceil(raw / stepY) * stepY;
+  const band = (W - L - R) / n, bw = Math.min(24, band - 4), Y = v => H - B - v / yMax * (H - T - B);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Games by the character level they ended at">`;
+  for (let v = 0; v <= yMax; v += stepY) svg += `<line class="${v ? "grid" : "base"}" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>` +
+    `<text x="${L - 4}" y="${Y(v) + 3}" text-anchor="end">${v.toLocaleString()}</text>`;
+  const top4 = (x, y, w, h) => h <= 0 ? "" : h < 4 ? `M${x},${y + h}V${y}H${x + w}V${y + h}Z` :
+    `M${x},${y + h}V${y + 4}Q${x},${y} ${x + 4},${y}H${x + w - 4}Q${x + w},${y} ${x + w},${y + 4}V${y + h}Z`;
+  totals.forEach((t, lv) => {
+    const x = L + lv * band + (band - bw) / 2, d = ends.died[lv], o = ends.other[lv];
+    const yd = Y(d), yt = Y(t), gap = d && o ? 2 : 0;
+    let marks = "";
+    if (d) marks += o ? `<rect class="col" x="${x}" y="${yd}" width="${bw}" height="${H - B - yd}" fill="${D_AMBER}"/>`
+                      : `<path class="col" d="${top4(x, yd, bw, H - B - yd)}" fill="${D_AMBER}"/>`;
+    if (o) marks += `<path class="col" d="${top4(x, yt, bw, yd - yt - gap)}" fill="${D_BLUE}"/>`;
+    const tip = `clvl ${lv}: ${t.toLocaleString()} games\n${d.toLocaleString()} died · ${o.toLocaleString()} ended otherwise` +
+      (lv === top ? " (the goal)" : "");
+    svg += `<g class="hit" data-tip="${esc(tip)}"><rect x="${L + lv * band}" y="${T}" width="${band}" height="${H - T - B}" fill="transparent"/>${marks}</g>`;
+    if (lv % 5 === 0 || lv === 1) svg += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${lv}</text>`;
+  });
+  const peak = totals.indexOf(raw);
+  svg += `<text x="${L + peak * band + band / 2 + bw / 2 + 4}" y="${Y(raw) + 9}" style="fill:var(--paper)">${raw.toLocaleString()} at clvl ${peak}</text>`;
+  return svg + `</svg><div class="mlegend"><span><i style="background:${D_AMBER}"></i>died</span>` +
+    `<span><i style="background:${D_BLUE}"></i>ended otherwise: the goal (clvl ${top}), the step budget or a finding</span></div>`;
+}
+// Builds over time (§23.4): the build queue's success rate per build, each
+// over the span it was the build being played, so a change shows as a step
+// at a band's edge. One measure, one axis; the port filter narrows the counts.
+// Each build's colour follows the build (its place in the whole history),
+// not its rank on screen: the categorical palette's dark steps, an order
+// validated for adjacent pairs (dataviz palette.md), wrapping after eight.
+const BUILD_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+const buildColor = b => BUILD_COLORS[(b.ordinal ?? 0) % BUILD_COLORS.length];
+let buildPort = (() => { try { return localStorage.getItem("buildPort") || "all"; } catch (e) { return "all"; } })();
+function wilsonJs(k, n) {
+  if (!n) return [0, 1];
+  const z = 1.96, p = k / n, d = 1 + z * z / n, mid = (p + z * z / (2 * n)) / d;
+  const half = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d;
+  return [Math.max(0, mid - half), Math.min(1, mid + half)];
+}
+function renderBuilds(q) {
+  const builds = q.builds || [], now = q.now || Date.now() / 1000;
+  const ports = [...new Set(builds.flatMap(b => Object.keys(b.ports)))].sort();
+  $("bfilter").innerHTML = ["all", ...ports].map(p => `<button data-port="${esc(p)}" class="${p === buildPort ? "on" : ""}">` +
+    `${esc(p === "all" ? "All ports" : PORT_NAMES[p] || p)}</button>`).join("");
+  $("bfilter").querySelectorAll("button").forEach(b => b.onclick = () => {
+    buildPort = b.dataset.port;
+    try { localStorage.setItem("buildPort", buildPort); } catch (e) { /* storage unavailable */ }
+    renderBuilds(q);
+  });
+  if (!builds.length) {
+    $("bchart").innerHTML = `<span class="muted">no build-queue games yet</span>`;
+    $("btable").innerHTML = ""; $("bscount").textContent = "";
+    return;
+  }
+  const rows = builds.map(b => {
+    const [games, reached] = buildPort === "all" ? [b.games, b.reached] : (b.ports[buildPort] || [0, 0]);
+    const [lo, hi] = buildPort === "all" ? [b.lo, b.hi] : wilsonJs(reached, games);
+    return {...b, games, reached, lo, hi, end: b.end || now};
+  });
+  const W = 860, H = 210, L = 38, R = 8, T = 22, B = 20;
+  const t0 = rows[0].start, t1 = now, X = t => L + (t - t0) / Math.max(1, t1 - t0) * (W - L - R);
+  const Y = f => T + (1 - f) * (H - T - B);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Build queue success rate by build over time">`;
+  rows.forEach(b => {
+    const x0 = X(b.start), x1 = X(b.end), w = Math.max(1, x1 - x0), c = buildColor(b);
+    svg += `<rect x="${x0}" y="${T}" width="${Math.max(1, w - 2)}" height="${H - T - B}" fill="${c}" fill-opacity=".2"/>` +
+      `<rect x="${x0}" y="${T}" width="${Math.max(1, w - 2)}" height="5" fill="${c}"/>`;
+    if (w > 46) svg += `<circle cx="${x0 + 7}" cy="${T - 9}" r="4" fill="${c}"/>` +
+      `<text x="${x0 + 14}" y="${T - 6}" style="fill:var(--muted)">${esc(b.commit.slice(0, 7))}</text>`;
+  });
+  [0, 0.5, 1].forEach(f => svg += `<line class="${f ? "grid" : "base"}" x1="${L}" x2="${W - R}" y1="${Y(f)}" y2="${Y(f)}"/>` +
+    `<text x="${L - 4}" y="${Y(f) + 3}" text-anchor="end">${f * 100}%</text>`);
+  const span = t1 - t0, tick = [3600, 7200, 10800, 21600, 43200, 86400].find(s => span / s <= 8) || 172800;
+  for (let t = Math.ceil(t0 / tick) * tick; t <= t1; t += tick) {
+    const d = new Date(t * 1000);
+    svg += `<text x="${X(t)}" y="${H - 6}" text-anchor="middle">${String(d.getHours()).padStart(2, "0")}:00</text>`;
+  }
+  rows.forEach(b => {
+    const x0 = X(b.start), x1 = X(b.end), thin = b.games < 10, rate = b.games ? b.reached / b.games : null;
+    const op = thin ? ' opacity=".45"' : "";
+    if (rate != null) {
+      // The measure in ink: colour is the builds' (an amber line read as the yellow build).
+      svg += `<rect x="${x0 + 1}" y="${Y(b.hi)}" width="${Math.max(1, x1 - x0 - 3)}" height="${Math.max(1, Y(b.lo) - Y(b.hi))}" fill="${buildColor(b)}" fill-opacity=".6"${op}/>` +
+        `<line x1="${x0 + 1}" x2="${Math.max(x0 + 2, x1 - 1)}" y1="${Y(rate)}" y2="${Y(rate)}" stroke="var(--paper)" stroke-width="2" stroke-linecap="round"${op}/>`;
+    }
+    const tip = `${b.commit.slice(0, 7)} · ${b.subject || "(no subject)"}\n` +
+      `live ${new Date(b.start * 1000).toLocaleString()} for ${fmtTime(b.end - b.start)}${b.end === now ? " (playing now)" : ""}\n` +
+      (b.games ? `${b.reached} of ${b.games} games reached clvl10: ${pct(b.reached, b.games)}% (range ${Math.round(b.lo * 100)}–${Math.round(b.hi * 100)}%)`
+               : "no counted games") +
+      `\nmedian clvl ${b.median_clvl ?? "–"} · findings ${b.findings}` + (buildPort === "all" ? "" : ` (all ports)`);
+    svg += `<g class="hit" data-tip="${esc(tip)}"><rect x="${x0}" y="${T}" width="${Math.max(1, x1 - x0)}" height="${H - T - B}" fill="transparent"/></g>`;
+  });
+  $("bchart").innerHTML = svg + "</svg>";
+  $("bscount").textContent = `${rows.length} builds · ${rows.reduce((n, b) => n + b.games, 0).toLocaleString()} games` +
+    (buildPort === "all" ? "" : ` on ${PORT_NAMES[buildPort] || buildPort}`);
+  $("btable").innerHTML = `<tr><th>Build</th><th>Commit</th><th>Live</th><th>Games</th><th>Reached</th><th>95% range</th><th>Median clvl</th><th>Findings</th></tr>` +
+    rows.slice().reverse().map(b => `<tr class="${b.games < 10 ? "thin" : ""}">` +
+      `<td><i class="bchip" style="background:${buildColor(b)}"></i>${esc(b.commit.slice(0, 7))}</td>` +
+      `<td class="subj">${esc(b.subject || "")}</td><td>${fmtTime(b.end - b.start)}${b.end === now ? " ▸" : ""}</td>` +
+      `<td>${b.games}</td><td>${b.games ? pct(b.reached, b.games) + "%" : "–"}</td>` +
+      `<td>${b.games ? Math.round(b.lo * 100) + "–" + Math.round(b.hi * 100) + "%" : "–"}</td>` +
+      `<td>${b.median_clvl ?? "–"}</td><td>${b.findings}</td></tr>`).join("");
+}
+function rampColor(f) {   // the page's track color to its gold, one hue light-ward
+  const a = [0x2a, 0x24, 0x16], b = [0xff, 0xd9, 0x3d];
+  return "#" + a.map((v, i) => Math.round(v + (b[i] - v) * f).toString(16).padStart(2, "0")).join("");
+}
+function diffMap(grid, races, classes, top) {
+  let html = `<div class="dmap"><div></div>${classes.map(c => `<div class="h">${esc(c)}</div>`).join("")}`;
+  races.forEach(race => {
+    html += `<div class="r">${esc(cap(race))}</div>`;
+    classes.forEach(klass => {
+      const e = grid[`${race}-${klass}`];
+      if (!e) { html += `<div class="c none"></div>`; return; }
+      const f = e.median / top, ink = f > 0.55 ? "var(--black)" : "var(--paper)";
+      const tip = `${cap(race + "-" + klass)}: ${e.runs.toLocaleString()} games\nmedian clvl ${e.median}\n` +
+        `reached clvl 10 in ${pct(e.reach10, e.runs)}% · the goal ${e.reached}×`;
+      html += `<div class="c" style="background:${rampColor(f)};color:${ink}" data-tip="${esc(tip)}"><b>${e.median}</b><small>${e.runs}</small></div>`;
+    });
+  });
+  return html + `</div><div class="dramp"></div><div class="mlegend" style="justify-content:space-between;margin-top:0">` +
+    `<span>clvl 0</span><span class="dim">each cell: median level, games below it</span><span>clvl ${top}</span></div>`;
+}
+function renderDifficulty(d, races, classes) {
+  if (!d || !d.runs) { $("dcurves").innerHTML = `<span class="muted">no counted runs yet</span>`; return; }
+  const top = d.levels, order = classes.filter(c => d.classes[c]);
+  $("dnote").textContent = `${d.runs.toLocaleString()} counted games this epoch · hover for numbers`;
+  $("dcurves").innerHTML = order.map(c => survivalPanel(c, d.classes[c], d.all, d.runs, top)).join("");
+  $("dends").innerHTML = endsChart(d.ends, top);
+  $("dmap").innerHTML = diffMap(d.grid, races, classes, top);
+  const cols = [5, 10, 15, 20, 25].filter(lv => lv <= top);
+  $("dtable").innerHTML = `<table class="ftable"><thead><tr><th>class</th><th>games</th>${cols.map(lv => `<th>clvl ${lv}</th>`).join("")}<th>half gone by</th></tr></thead><tbody>` +
+    [...order.map(c => [c, d.classes[c]]), ["every class", {runs: d.runs, reach: d.all}]].map(([c, e]) =>
+      `<tr><td class="name">${esc(c)}</td><td>${e.runs.toLocaleString()}</td>${cols.map(lv => `<td>${pct(e.reach[lv - 1], e.runs)}%</td>`).join("")}` +
+      `<td>${halfGone(e.reach, e.runs) ?? "–"}</td></tr>`).join("") + `</tbody></table>`;
+}
+document.addEventListener("mousemove", ev => {
+  const tip = $("tip"), el = ev.target.closest && ev.target.closest("[data-tip]");
+  if (!el) { tip.hidden = true; return; }
+  tip.textContent = el.dataset.tip; tip.hidden = false;
+  const x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  tip.style.left = `${x}px`; tip.style.top = `${ev.clientY + 14}px`;
+});
 function spellCoverage(features) {
   // Criterion 2 (§23.2): each class's spells and prayers to level 25, seen working (✓) or not.
   return Object.entries(features).filter(([, f]) => Object.keys(f.spells || {}).length).map(([c, f]) => {

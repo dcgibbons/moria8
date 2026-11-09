@@ -4,7 +4,7 @@
 // Kept separate so platforms may place the contiguous block in a data-only
 // bank without also moving store helper code or directly-read lookup tables.
 
-// Struct-of-arrays: seven 96-byte tables, contiguous for save/load dispatch.
+// Struct-of-arrays: seven STORE_TOTAL_SLOTS-byte tables, contiguous for save/load dispatch.
 si_item_id:     .fill STORE_TOTAL_SLOTS, $FF   // $FF = empty
 si_qty:         .fill STORE_TOTAL_SLOTS, 0
 si_p1:          .fill STORE_TOTAL_SLOTS, 0

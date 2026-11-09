@@ -279,11 +279,21 @@ def main():
     out_lines.append(f'')
 
     # String index (16-bit offsets)
+    # A port that defines HUFFMAN_INDEX_EXTERNAL places the index in a
+    # segment of its own (:HuffmanIndexSegment()), then returns to
+    # :HuffmanDataSegment() for the strings (2026-11-08).
     out_lines.append(f'// String index: 16-bit byte offsets into huff_str_data')
+    out_lines.append(f'#if HUFFMAN_INDEX_EXTERNAL')
+    out_lines.append(f':HuffmanIndexSegment()')
+    out_lines.append(f'#endif')
     out_lines.append(f'huff_str_index:')
     for i, off in enumerate(offsets):
         label_tag = f' @{labels[i]}' if i in labels else ''
         out_lines.append(f'    .word ${off:04x}  // [{i}]{label_tag} "{display_lines[i][:30]}"')
+    out_lines.append(f'huff_str_index_end:')
+    out_lines.append(f'#if HUFFMAN_INDEX_EXTERNAL')
+    out_lines.append(f':HuffmanDataSegment()')
+    out_lines.append(f'#endif')
     out_lines.append(f'')
 
     # Compressed data

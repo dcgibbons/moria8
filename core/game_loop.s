@@ -378,6 +378,15 @@ c64_test_force_detect_evil_monster:
     // A new game starts in town with no tier; this test starts on DL10.
     // Runs once per test, so the counters start from their load-time zeros.
     jsr tier_restore_after_overlay
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // A catalog level may hold no evil species (5-9 monsters on 80x48):
+    // load the Orc (catalog id 77, level 6, evil) for the scan below.
+    lda #77
+    sta cat_id_lo
+    lda #0
+    sta cat_id_hi
+    jsr catalog_slot_for_id
+#endif
     // Rows y-4..y+4, columns x-12..x+12; cells off the map (including a
     // wrapped start) are skipped.
     lda zp_player_y
@@ -820,6 +829,13 @@ c128_test_town_pass_sym:
 
     jmp main_loop
 
+// main_loop_sp — The main loop's own stack level, kept each pass. A level
+// change that abandons its caller's frames (Teleport Level, a Wizard jump)
+// restores it, not $FF: the frames below the loop stay, and the command
+// prompt keeps its stack level (2026-11-06: $FB against $F2 on the Plus/4
+// and $ED on the CX16 after Teleport Level, the queue's stack findings).
+main_loop_sp: .byte $ff
+
 #if !HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 .const DPGR_GAME_ERROR_COL = (SCREEN_COLS - 22) / 2
 .const DPGR_PROMPT_COL = (SCREEN_COLS - 19) / 2
@@ -839,6 +855,12 @@ disk_prompt_game_required:
 #endif
     bcc !ready+
 disk_prompt_game_required_error:
+    // The screen is cleared: the next main_loop pass rebuilds the view, as
+    // after asset_load_ask_for_disk. A Plus/4 look's program-media probe
+    // failed, a key brought the disk back, and the game played on under the
+    // prompt (build queue, 2026-11-06..09: 17 games to their step budgets).
+    lda #1
+    sta disk_prompt_redraw_pending
     jsr ui_clear_full_screen_safe
     jsr msg_init
     lda #COL_WHITE
@@ -939,6 +961,8 @@ c64_test_single_drive_load_return_resume_entry:
 c64_test_after_load_resume_game:
 #endif
 main_loop:
+    tsx
+    stx main_loop_sp
 #if PLAYTEST_FAULT_STACK_LEAK
     // Playtester self-test only (`make playtest-selftest`): once the first
     // turn has passed, leak one stack byte per main-loop pass so the auditor's
@@ -962,6 +986,14 @@ c128_town_move_diag_loop_top:
     jsr status_draw
 !no_levelup_magic:
 #endif
+    // A disk prompt cleared the screen since the last pass: in a turn's
+    // load, a command that took no turn, or the level-up recalc above, all
+    // after the last render. Rebuild the view before the next command (a
+    // Plus/4 playtest level-up left "Insert program disk" over the map).
+    lsr disk_prompt_redraw_pending
+    bcc !no_prompt_redraw+
+    jsr ui_view_redraw_gameplay_view
+!no_prompt_redraw:
 #if C128_TEST_TOWN_SELF_DUMP
     lda c128_town_dump_countdown
     beq !town_dump_trap+
@@ -1117,6 +1149,13 @@ c128_town_move_diag_loop_top:
     jsr huff_print_msg
     jmp !not_paralyzed+
 !paralyzed_tick:
+    // A paralyzed turn ends as any turn does (visibility, viewport, redraw,
+    // status): the monsters' turn can move the player (a Lich's Teleport To),
+    // and with the status line alone the map kept the old view and '@'
+    // until the next command's full redraw (TURN_RENDER_CONTRACT: teleport
+    // invalidates the scene at once; C64 Balrog playtest,
+    // 2026-11-07: view_mismatch on DL29).
+    jsr main_loop_snapshot_view
     jsr turn_post_action
     lda zp_game_flags
     and #$01
@@ -1131,7 +1170,6 @@ c128_town_move_diag_loop_top:
     lda #$1e
     jsr c128_town_dump_log
 #endif
-    jsr status_draw
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     jsr c128_stack_guard_check
     .byte $94
@@ -1140,7 +1178,7 @@ c128_town_move_diag_loop_top:
     lda #$1f
     jsr c128_town_dump_log
 #endif
-    jmp main_loop
+    jmp post_turn_update_visibility_after_action   // draws the status line too
 !not_paralyzed:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$11
@@ -1149,14 +1187,7 @@ c128_town_move_diag_loop_top:
     // Snapshot the pre-command player/view state once per main-loop
     // iteration so any later stationary command can safely use the shared
     // post-turn redraw helpers.
-    ldx zp_player_x
-    stx old_player_x
-    ldx zp_player_y
-    stx old_player_y
-    ldx zp_view_x
-    stx old_view_x
-    ldx zp_view_y
-    stx old_view_y
+    jsr main_loop_snapshot_view
     jsr hal_input_get_command
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_input_get_command:
@@ -1952,7 +1983,7 @@ level_change_generate_current:
 #if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda wizard_level_jump_active
     beq !lcgc_keep_stack+
-    ldx #$ff
+    ldx main_loop_sp
     txs
 !lcgc_keep_stack:
 #endif
@@ -2230,7 +2261,7 @@ spss_fields: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
 .label save_product_secondary_dam   = inv_to_dam + EQUIP_SECONDARY
 .label save_product_secondary_flags = inv_flags + EQUIP_SECONDARY
 .label save_product_secondary_ego   = inv_ego + EQUIP_SECONDARY
-.label save_product_cloak_id        = inv_item_id + EQUIP_CLOAK
+.label save_product_ring2_id        = inv_item_id + EQUIP_RING2
 #endif
 
 #if C64_TEST_SCRIPTED_EXCHANGE_PRODUCT || PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
@@ -2276,7 +2307,7 @@ xps_secondary: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
 .label exchange_product_primary_ego  = inv_ego + EQUIP_WEAPON
 .label exchange_product_secondary_id = inv_item_id + EQUIP_SECONDARY
 .label exchange_product_secondary_hit = inv_to_hit + EQUIP_SECONDARY
-.label exchange_product_cloak_id     = inv_item_id + EQUIP_CLOAK
+.label exchange_product_ring2_id     = inv_item_id + EQUIP_RING2
 #if PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT
 // Screen cells the smoke reads (no bytes): "Primary: Dagger" on row 0,
 // "Secondary: Mace" on row 1.

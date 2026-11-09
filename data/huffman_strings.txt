@@ -28,7 +28,11 @@ Sorry, what was that again?
 
 # ===== Monster magic strings (Pattern B) =====
 @MM_CAST  casts a spell.
-@MM_BREATH  breathes fire!
+@MM_BREATH_LIGHTNING  breathes lightning.
+@MM_BREATH_GAS  breathes gas.
+@MM_BREATH_ACID  breathes acid.
+@MM_BREATH_FROST  breathes frost.
+@MM_BREATH_FIRE  breathes fire.
 @MM_SUMMON  summons help!
 @MM_BLIND  blinds you!
 @MM_CONFUSE  confuses you!
@@ -275,3 +279,12 @@ Sorry, what was that again?
 
 # ===== Protection from Evil (VMS creature.inc make_attack) =====
 @MAT_REPELLED  is repelled.
+
+# ===== Enchant Armor (VMS scrolls.inc: "The enchantment fails...") =====
+@PIQ_ENCH_FAIL The enchantment fails.
+@PIQ_GAIN_STR Wow!  What bulging muscles!
+@PIQ_GAIN_INT Aren't you brilliant!
+@PIQ_GAIN_WIS You suddenly have a profound thought!
+@PIQ_GAIN_DEX You feel more limber!
+@PIQ_GAIN_CON You feel tingly for a moment.
+@PIQ_GAIN_CHR Gee, ain't you cute!

@@ -121,10 +121,7 @@ update_visibility:
     // Iterate rows vis_min_y..vis_max_y
     ldx vis_min_y
 !uv_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x          // X kept
 
 #if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda vis_max_x
@@ -156,10 +153,7 @@ update_visibility:
     // === Phase B: Room reveal ===
     // If current tile is not lit, the player cannot be in a revealable room.
     ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x          // X kept
     ldy zp_player_x
     :MapRead_ptr0_y()
     and #FLAG_LIT
@@ -272,24 +266,7 @@ light_room_x:
     sta vis_room_revealed
     stx vis_cached_room_idx
 
-    // Compute bounds
-    lda room_y,x
-    sec
-    sbc #1
-    sta vis_min_y
-    lda room_y,x
-    clc
-    adc room_h,x
-    sta vis_max_y
-
-    lda room_x,x
-    sec
-    sbc #1
-    sta vis_min_x
-    lda room_x,x
-    clc
-    adc room_w,x
-    sta vis_max_x
+    jsr vis_room_bounds_x
 
 #if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda #(FLAG_LIT | FLAG_VISITED)
@@ -300,10 +277,7 @@ light_room_x:
 
     ldx vis_min_y
 !lr_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x          // X kept
 
 #if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda vis_max_x
@@ -329,6 +303,27 @@ light_room_x:
 !lr_done:
     rts
 
+// vis_room_bounds_x — vis_min/max_x/y = room X with its walls:
+// room_x-1..room_x+room_w, room_y-1..room_y+room_h. X kept. Clobbers: A
+vis_room_bounds_x:
+    lda room_y,x
+    sec
+    sbc #1
+    sta vis_min_y
+    lda room_y,x
+    clc
+    adc room_h,x
+    sta vis_max_y
+    lda room_x,x
+    sec
+    sbc #1
+    sta vis_min_x
+    lda room_x,x
+    clc
+    adc room_w,x
+    sta vis_max_x
+    rts
+
 // reveal_room — Set FLAG_VISITED on all tiles in room X (including walls)
 // Input: X = room index
 // Iterates room_x-1..room_x+room_w, room_y-1..room_y+room_h
@@ -339,24 +334,7 @@ reveal_room:
     .byte $63
     jsr c128_stack_guard_snapshot_banking
 #endif
-    // Compute bounds
-    lda room_y,x
-    sec
-    sbc #1
-    sta vis_min_y               // Top wall row
-    lda room_y,x
-    clc
-    adc room_h,x
-    sta vis_max_y               // Bottom wall row
-
-    lda room_x,x
-    sec
-    sbc #1
-    sta vis_min_x               // Left wall col (reusing for bounds now)
-    lda room_x,x
-    clc
-    adc room_w,x
-    sta vis_max_x               // Right wall col
+    jsr vis_room_bounds_x       // Its walls included
 
 #if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda #FLAG_VISITED
@@ -367,10 +345,7 @@ reveal_room:
 
     ldx vis_min_y
 !rr_row:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
+    jsr map_row_ptr0_x          // X kept
 
 #if HAL_MEMORY_MAP_ROW_HELPER_ENABLED
     lda vis_max_x

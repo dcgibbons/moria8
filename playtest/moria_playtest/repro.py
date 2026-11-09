@@ -2,7 +2,10 @@
 
 Undumps the finding's snapshot (with the brain/auditor state saved beside it),
 feeds the recorded keys one per input stop, and checks that the same finding
-(kind and detail) occurs again.
+(kind and detail) occurs again. On a port without snapshots (MAME) the keys
+run from the title with the finding's seed: a finding there keeps every key
+since then, and the replay is deterministic (2026-11-07: a BBC game's 27,966
+steps replayed identically, and a BBC hang at step 50,640 hung again).
 """
 
 from __future__ import annotations
@@ -21,15 +24,20 @@ from .worker import Snapshot, Worker
 
 def reproduce(finding_path: Path) -> tuple[bool, str]:
     finding = json.loads(finding_path.read_text())
-    if not finding.get("snapshot"):
-        return False, "finding has no snapshot to replay from"
-    snapshot = Snapshot.load(Path(finding["snapshot"]))
     build = Build(**{k: v if k == "port" else Path(v) for k, v in finding["build"].items()})
+    if not finding.get("snapshot") and build.target.snapshots:
+        return False, "finding has no snapshot to replay from"
     worker = Worker(PLAYTEST_OUT / "repro" / finding_path.stem, build=build)
     auditor = Auditor()
-    auditor.command_sp = snapshot.brain.get("auditor_command_sp")
     try:
-        obs = worker.restore(snapshot)
+        if finding.get("snapshot"):
+            snapshot = Snapshot.load(Path(finding["snapshot"]))
+            auditor.command_sp = snapshot.brain.get("auditor_command_sp")
+            obs = worker.restore(snapshot)
+        else:
+            obs = worker.start_at_title()
+            assert worker.game is not None
+            worker.game.seed_title(int(finding["seed"]))
         game = worker.game
         assert game is not None
         keys = list(finding["keys"])

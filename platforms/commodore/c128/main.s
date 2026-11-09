@@ -25,6 +25,10 @@
 // banked_payload runtime code is forced to start above the dungeon overlay
 // footprint so overlays ($E000-$EFFF) never overlap live banked routines.
 // ============================================================
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md) replaces the tiers in
+// the product build. The unit tests (tests/*.s) do not import main.s and keep
+// the tier roster.
+#define HAL_PLATFORM_MONSTER_CATALOG
 #define C128_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RELOAD_RESYNC
@@ -134,6 +138,9 @@
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 .segmentdef C128Bank1Huffman [outPrg=OVL_OUT + "/128.huff.prg", start=$f000, min=$f000, max=$feff]
 .segmentdef C128Bank1HuffmanVector [outPrg=OVL_OUT + "/128.hvec.prg", start=$fffa, min=$fffa, max=$fffb]
+// The monster catalog's Bank 1 payloads (memory128.s, C128M-007).
+.segmentdef C128Bank1Catalog [outPrg=OVL_OUT + "/128.cat.prg", start=$7e60, min=$7e60, max=$9567]
+.segmentdef C128Bank1CatalogNames [outPrg=OVL_OUT + "/128.cnm.prg", start=$a000, min=$a000, max=$afff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 #define C128_REAL_BOOT_DIAG
@@ -1101,6 +1108,12 @@ winner_apply_retirement_bonus:
     lda player_data + WIN_PL_GOLD_2
     adc #$03
     sta player_data + WIN_PL_GOLD_2
+    bcc !win_gold_capped+           // 250,000 more stops at 16,777,215 (core/player.s GoldCapOnCarry)
+    lda #$ff
+    sta player_data + WIN_PL_GOLD_0
+    sta player_data + WIN_PL_GOLD_1
+    sta player_data + WIN_PL_GOLD_2
+!win_gold_capped:
     lda player_data + WIN_PL_XP_0
     clc
     adc #$40
@@ -1745,7 +1758,11 @@ c128_prepare_cache_loading_screen:
     lda #1
     sta zp_screen_editor_state
     jsr hal_screen_clear
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda #7                      // 12 less the four tiers and STARTUP
+#else
     lda #12
+#endif
     sta c128_load_progress_total
     lda #0
     sta c128_load_progress_count
@@ -1757,10 +1774,16 @@ c128_prepare_startup_loading_screen:
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
     jsr hal_screen_clear
-    // Total = 13 startup files + 13 cache files (4 tiers + 9 overlays).
-    // c128_cache_enabled lives in the world payload, which is not loaded
-    // yet at this point, so the count must be static.
+    // Total = 13 startup files + 13 cache files (4 tiers + 9 overlays);
+    // with the monster catalog, 15 startup files (128.cat, 128.cnm) + 8
+    // overlays (no tiers, no STARTUP). c128_cache_enabled lives in the world
+    // payload, which is not loaded yet at this point, so the count must be
+    // static.
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda #23
+#else
     lda #26
+#endif
 !total_ready:
     sta c128_load_progress_total
     lda #0
@@ -2773,6 +2796,7 @@ c128_load_resident_huffman_vector_prg:
 c128_load_resident_select_prg:
     :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
 
+
 c128_load_core_residents:
     lda #1
     sta c128_runtime_load_stage
@@ -2802,6 +2826,16 @@ c128_load_core_residents:
     bcc !resident_huffman_vector_loaded+
     jmp runtime_load_failed
 !resident_huffman_vector_loaded:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr c128_load_catalog_prg
+    bcc !catalog_loaded+
+    jmp runtime_load_failed
+!catalog_loaded:
+    jsr c128_load_catalog_names_prg
+    bcc !catalog_names_loaded+
+    jmp runtime_load_failed
+!catalog_names_loaded:
+#endif
     lda #5
     sta c128_runtime_load_stage
     jsr c128_load_resident_select_prg
@@ -3758,6 +3792,8 @@ combat_msg_monster_in_way:
     jmp combat_msg_monster_suffix
 #import "hal/storage_drive.s"
 #import "hal/storage_tier_names.s"
+#import "monster_catalog128.s"
+#import "../../../core/monster_catalog.s"
 #import "../../../core/tier_manager.s"
 #import "../common/overlay.s"
 #import "../../../core/monster_ai.s"
@@ -3996,6 +4032,10 @@ wizard_wall_walk_active:
 ego_str_holy_avenger_common:
     .text " (Holy Avenger)" ; .byte 0
 
+// The program-media probe (and its file name) rides the resident world
+// payload (C128M-008): 16-item stores filled the items payload. World loads
+// before items, and both stay resident in Bank 0.
+.segment C128ResidentWorld
 // Detect program media on the selected save drive.
 // Output: carry clear = program media present, carry set = not program media
 disk_program_media_present:
@@ -4096,6 +4136,14 @@ c128_program_read_command_status:
 !done:
     rts
 
+c128_program_play_read_filename:
+    .byte $30, $3a                              // "0:"
+    .text "128.PLAY"
+    .byte $2c, $50, $2c, $52                    // ",P,R"
+.label c128_program_play_read_filename_len = * - c128_program_play_read_filename
+
+.segment C128ResidentItems
+
 // Run a Phase 3 item effect from resident code. The caller is in OVL.ITEMS;
 // the dispatch lives in OVL.MODAL_MISC and established handlers may briefly
 // load OVL.DEATH. The return continuation remains resident throughout.
@@ -4106,6 +4154,7 @@ tramp_p3_dispatch_items:
     bcs !failed+
     pla
     jsr irs_dispatch_p3_overlay
+tramp_p3_dispatch_items_return:     // the modal handlers return here (scroll_p3_return_smoke)
     lda #OVL_ITEMS
     jsr overlay_load
     sec
@@ -4115,32 +4164,26 @@ tramp_p3_dispatch_items:
     sec
     rts
 
-c128_program_play_read_filename:
-    .byte $30, $3a                              // "0:"
-    .text "128.PLAY"
-    .byte $2c, $50, $2c, $52                    // ",P,R"
-.label c128_program_play_read_filename_len = * - c128_program_play_read_filename
-
 hal_player_recalc_pflags:
 c128_player_recalc_pflags:
     lda #0
     ldx #EQUIP_RING
+!c128_pf_ring:                  // each hand: EQUIP_RING, then EQUIP_RING2
     ldy inv_item_id,x
     cpy #ITEM_TYPE_RING_RESIST_FIRE
     bcc !c128_pf_none+
     cpy #ITEM_TYPE_RING_SLAYING
     bcs !c128_pf_none+
-    tya
-    sec
-    sbc #ITEM_TYPE_RING_RESIST_FIRE
-    tax
-    lda pf_bit_table,x
+    ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
 !c128_pf_none:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !c128_pf_ring-
     ldx #EQUIP_AMULET
     ldy inv_item_id,x
     cpy #ITEM_TYPE_AMULET_MAGI
     bne !c128_pf_store+
-    ora #PFLAG_SEE_INVIS
+    ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
 !c128_pf_store:
     sta player_pflags
     rts
@@ -4430,6 +4473,15 @@ c128_test_summary_count:
     .byte 0
 #endif
 #if C128_TEST_CACHE_SURVIVAL
+#if HAL_PLATFORM_MONSTER_CATALOG
+// The catalog's boot-loaded Bank 1 data holds the tier cache window and the
+// STARTUP slot (memory128.s, C128M-007): probe it there.
+.const C128_TEST_PROBE_TIER_ADDR  = BANK1_CATALOG_FIELDS_BASE
+.const C128_TEST_PROBE_START_ADDR = BANK1_CATALOG_NAMES_BASE
+#else
+.const C128_TEST_PROBE_TIER_ADDR  = BANK1_TIER_CACHE_BASE
+.const C128_TEST_PROBE_START_ADDR = BANK1_OVERLAY_STARTUP_BASE
+#endif
 c128_test_cache_probe_common:      .byte 0
 c128_test_cache_probe_tier:        .byte 0
 c128_test_cache_probe_ovl_start:   .byte 0
@@ -4447,16 +4499,16 @@ c128_test_snapshot_cache_probes:
     lda MMU_COMMON_HELPERS_BASE
     sta c128_test_cache_probe_common
 
-    lda #<BANK1_TIER_CACHE_BASE
+    lda #<C128_TEST_PROBE_TIER_ADDR
     sta zp_ptr1
-    lda #>BANK1_TIER_CACHE_BASE
+    lda #>C128_TEST_PROBE_TIER_ADDR
     sta zp_ptr1_hi
     jsr c128_test_read_bank1_probe_ptr1
     sta c128_test_cache_probe_tier
 
-    lda #<BANK1_OVERLAY_STARTUP_BASE
+    lda #<C128_TEST_PROBE_START_ADDR
     sta zp_ptr1
-    lda #>BANK1_OVERLAY_STARTUP_BASE
+    lda #>C128_TEST_PROBE_START_ADDR
     sta zp_ptr1_hi
     jsr c128_test_read_bank1_probe_ptr1
     sta c128_test_cache_probe_ovl_start
@@ -4494,7 +4546,11 @@ c128_test_snapshot_cache_probes:
 
 #if C128_TEST_CACHE_SURVIVAL || C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY
 c128_test_expected_tier_bits:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda #0                          // The catalog has no tiers
+#else
     lda #%00001111
+#endif
 #if C128_CACHE_TEST_SKIP_TIER
     ldx c128_cache_test_skip_tier
     beq !ctet_done+
@@ -4504,7 +4560,11 @@ c128_test_expected_tier_bits:
     rts
 
 c128_test_expected_overlay_bits:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda #%11111110                  // STARTUP (bit 0) is not cached
+#else
     lda #%11111111
+#endif
 #if C128_CACHE_TEST_SKIP_OVERLAY
     ldx c128_cache_test_skip_overlay
     beq !cteo_done+
@@ -4547,7 +4607,11 @@ c128_test_validate_tier_partial_state:
 
 c128_test_validate_overlay_partial_state:
     lda c128_cache_tiers_ready
+#if HAL_PLATFORM_MONSTER_CATALOG
+    cmp #0
+#else
     cmp #1
+#endif
     bne !ctvo_fail+
     jsr c128_test_expected_tier_bits
     cmp c128_cache_tier_bits
@@ -4625,6 +4689,12 @@ c128_test_cache_survival_town_entry:
     jmp c128_test_cache_survival_pass_sym
 
 c128_test_verify_cache_survival:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda c128_cache_tiers_ready      // No tiers: nothing may claim one
+    ora c128_cache_tier_bits
+    beq !ctcs_tier_bits_ok+
+    jmp !ctcs_fail+
+#else
     lda c128_cache_tiers_ready
     cmp #1
     beq !ctcs_tier_ok+
@@ -4634,6 +4704,7 @@ c128_test_verify_cache_survival:
     cmp #%00001111
     beq !ctcs_tier_bits_ok+
     jmp !ctcs_fail+
+#endif
 !ctcs_tier_bits_ok:
     lda c128_cache_overlays_ready
     cmp #1
@@ -4641,7 +4712,11 @@ c128_test_verify_cache_survival:
     jmp !ctcs_fail+
 !ctcs_ovl_ok:
     lda c128_cache_overlay_bits
+#if HAL_PLATFORM_MONSTER_CATALOG
+    cmp #%11111110                  // STARTUP (bit 0) is not cached
+#else
     cmp #%11111111
+#endif
     beq !ctcs_bits_ok+
     jmp !ctcs_fail+
 !ctcs_bits_ok:
@@ -4655,17 +4730,17 @@ c128_test_verify_cache_survival:
     cmp c128_test_cache_probe_common
     bne !ctcs_fail+
 
-    lda #<BANK1_TIER_CACHE_BASE
+    lda #<C128_TEST_PROBE_TIER_ADDR
     sta zp_ptr1
-    lda #>BANK1_TIER_CACHE_BASE
+    lda #>C128_TEST_PROBE_TIER_ADDR
     sta zp_ptr1_hi
     jsr c128_test_read_bank1_probe_ptr1
     cmp c128_test_cache_probe_tier
     bne !ctcs_fail+
 
-    lda #<BANK1_OVERLAY_STARTUP_BASE
+    lda #<C128_TEST_PROBE_START_ADDR
     sta zp_ptr1
-    lda #>BANK1_OVERLAY_STARTUP_BASE
+    lda #>C128_TEST_PROBE_START_ADDR
     sta zp_ptr1_hi
     jsr c128_test_read_bank1_probe_ptr1
     cmp c128_test_cache_probe_ovl_start
@@ -4810,41 +4885,6 @@ combat_add_damage_bonus:
     sta cmb_damage
     rts
 
-player_adj_m4:
-    lda #<-4
-    rts
-player_adj_m3:
-    lda #<-3
-    rts
-player_adj_m2:
-    lda #<-2
-    rts
-player_adj_m1:
-    lda #<-1
-    rts
-player_adj_0:
-    lda #0
-    rts
-player_adj_1:
-    lda #1
-    rts
-player_adj_2:
-    lda #2
-    rts
-player_adj_3:
-    lda #3
-    rts
-player_adj_4:
-    lda #4
-    rts
-player_adj_5:
-    lda #5
-    rts
-player_adj_6:
-    lda #6
-    rts
-
-
 player_str_tohit_adj:
     cmp #4
     bcc player_adj_m3
@@ -4900,57 +4940,63 @@ player_dex_tohit_adj:
     bcc player_adj_4
     bcs player_adj_5
 
-player_adj2_m4:
+// One return sled, midway so every branch above and below reaches it
+// (a second copy, player_adj_*, cost 30 bytes until 2026-11-07).
+player_adj_m4:
     lda #<-4
     rts
-player_adj2_m3:
+player_adj_m3:
     lda #<-3
     rts
-player_adj2_m2:
+player_adj_m2:
     lda #<-2
     rts
-player_adj2_m1:
+player_adj_m1:
     lda #<-1
     rts
-player_adj2_0:
+player_adj_0:
     lda #0
     rts
-player_adj2_1:
+player_adj_1:
     lda #1
     rts
-player_adj2_2:
+player_adj_2:
     lda #2
     rts
-player_adj2_3:
+player_adj_3:
     lda #3
     rts
-player_adj2_4:
+player_adj_4:
     lda #4
     rts
-player_adj2_5:
+player_adj_5:
     lda #5
     rts
+player_adj_6:
+    lda #6
+    rts
+
 
 player_dex_ac_adj:
     cmp #4
-    bcc player_adj2_m4
+    bcc player_adj_m4
     cmp #5
-    bcc player_adj2_m3
+    bcc player_adj_m3
     cmp #6
-    bcc player_adj2_m2
+    bcc player_adj_m2
     cmp #7
-    bcc player_adj2_m1
+    bcc player_adj_m1
     cmp #15
-    bcc player_adj2_0
+    bcc player_adj_0
     cmp #18
-    bcc player_adj2_1
+    bcc player_adj_1
     cmp #59
-    bcc player_adj2_2
+    bcc player_adj_2
     cmp #94
-    bcc player_adj2_3
+    bcc player_adj_3
     cmp #117
-    bcc player_adj2_4
-    bcs player_adj2_5
+    bcc player_adj_4
+    bcs player_adj_5
 
 player_con_hp_adj:
     cmp #7
@@ -4960,14 +5006,14 @@ player_con_hp_adj:
     rts
 !check17:
     cmp #17
-    bcc player_adj2_0
+    bcc player_adj_0
     cmp #18
-    bcc player_adj2_1
+    bcc player_adj_1
     cmp #94
-    bcc player_adj2_2
+    bcc player_adj_2
     cmp #117
-    bcc player_adj2_3
-    bcs player_adj2_4
+    bcc player_adj_3
+    bcs player_adj_4
 
 runtime_common_data_end:
 }
@@ -5088,10 +5134,16 @@ player_adjust_equipment_stat:
 // C128 resident Phase 3 potion dispatch. The handlers are small and every
 // dependency is resident, so quaffing must not load an overlay (the modal
 // overlay has no Bank1 cache slot; a disk fetch per potion is wrong).
-// Input: piw_item_id = potion type ID (96-100 or 126).
+// Input: piw_item_id = potion type ID (96-100, 126 or 140-145).
+#import "../../../core/eff_gain_stat.s"
+
 hal_quaff_p3_dispatch:
 c128_quaff_p3_dispatch:
     lda piw_item_id
+    cmp #ITEM_TYPE_POT_GAIN_STR
+    bcc !iqp3_not_gain+
+    jmp eff_potion_gain_stat        // potions of gain stat (140-145)
+!iqp3_not_gain:
     cmp #ITEM_TYPE_POT_HEALING
     beq !iqp3_healing+
     cmp #ITEM_TYPE_POT_RESTORATION
@@ -5125,7 +5177,7 @@ c128_quaff_p3_dispatch:
 !iqp3_resist_heat:
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc zp_eff_resist
@@ -5138,7 +5190,7 @@ c128_quaff_p3_dispatch:
 !iqp3_resist_cold:
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc eff_resist_cold_timer
@@ -5326,6 +5378,7 @@ program_end:
 .assert "C128 resident world fits below items payload", c128_resident_world_end <= c128_resident_items_start, true
 .assert "C128 resident items starts at $8C50", c128_resident_items_start == $8C50, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
+.assert "C128 program-media probe lives in the resident world payload (C128M-008)", disk_program_media_present >= c128_resident_world_start && c128_program_play_read_filename + c128_program_play_read_filename_len <= c128_resident_world_end, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
 .assert "C128 resident disk-I/O starts at $AB00", c128_resident_diskio_start == $AB00, true

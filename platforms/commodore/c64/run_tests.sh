@@ -112,6 +112,18 @@ VICE="${VICE:-x64sc}"
 # user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
 VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
 C1541="${C1541:-c1541}"
+
+# Images with the monster catalog: MONSTER.IDX's sector table for where
+# MONSTER.CAT1-4 landed on this image (tools/catalog_disk.py fix).
+c1541_catalog() {
+    "$C1541" "$@" || return
+    local img="" prev="" arg
+    for arg in "$@"; do
+        [ "$prev" = "-attach" ] && img="$arg"
+        prev="$arg"
+    done
+    [ -n "$img" ] && python3 "$REPO_ROOT/tools/catalog_disk.py" fix "$img"
+}
 TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
 FAIL=0
@@ -558,7 +570,7 @@ run_scripted_spell_cast_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -577,7 +589,7 @@ run_scripted_spell_cast_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_spell_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -585,10 +597,11 @@ run_scripted_spell_cast_smoke() {
             -write ../../../build/test/c64/moria_spell_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -715,7 +728,7 @@ run_scripted_book_overlay_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -736,7 +749,7 @@ run_scripted_book_overlay_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_book_overlay_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -744,10 +757,11 @@ run_scripted_book_overlay_smoke() {
             -write ../../../build/test/c64/moria_book_overlay_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -870,7 +884,7 @@ run_scripted_scroll_selector_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -891,7 +905,7 @@ run_scripted_scroll_selector_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_scroll_selector_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -899,10 +913,11 @@ run_scripted_scroll_selector_smoke() {
             -write ../../../build/test/c64/moria_scroll_selector_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1024,7 +1039,7 @@ run_scripted_spell_list_overlay_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -1045,7 +1060,7 @@ run_scripted_spell_list_overlay_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_spell_list_overlay_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -1053,10 +1068,11 @@ run_scripted_spell_list_overlay_smoke() {
             -write ../../../build/test/c64/moria_spell_list_overlay_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1181,7 +1197,7 @@ run_scripted_dungeon_target_spell_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -1202,7 +1218,7 @@ run_scripted_dungeon_target_spell_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_dungeon_spell_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -1210,10 +1226,11 @@ run_scripted_dungeon_target_spell_smoke() {
             -write ../../../build/test/c64/moria_dungeon_spell_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1342,7 +1359,7 @@ run_scripted_detect_evil_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -1363,7 +1380,7 @@ run_scripted_detect_evil_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_detect_evil_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -1371,10 +1388,11 @@ run_scripted_detect_evil_smoke() {
             -write ../../../build/test/c64/moria_detect_evil_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1500,7 +1518,7 @@ run_dungeon_ascent_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -1521,7 +1539,7 @@ run_dungeon_ascent_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_dungeon_ascent_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -1529,10 +1547,11 @@ run_dungeon_ascent_product_smoke() {
             -write ../../../build/test/c64/moria_dungeon_ascent_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1621,6 +1640,77 @@ run_dungeon_ascent_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+# catalog_spawn_product_smoke — The monster catalog on the product build:
+# the dungeon-ascent smoke's scripted new game, stopped where DL1's monsters
+# are placed (item_spawn_level follows monster_spawn_level); the monster
+# table, species table, levels and name pointers, and the hidden name pool
+# (RAM under I/O) are checked against the catalog. $1 = 1 with an REU (the
+# records preloaded at boot), else the drive (direct sector reads).
+run_catalog_spawn_product_smoke() {
+    local reu="${1:-0}"
+    local name="catalog_spawn_product_smoke"
+    [ "$reu" = 1 ] && name="catalog_spawn_product_reu_smoke"
+    echo -n "  $name: "
+    local scripted_d64="../../../build/test/c64/moria_dungeon_ascent_smoke.d64"
+    local main_vs="../../../build/test/c64/main.vs" sym
+    if [ ! -f "$scripted_d64" ] || ! grep -q "c64_test_dungeon_ascent_fail_input_sym" "$main_vs"; then
+        echo "FAIL (needs the dungeon_ascent_product_smoke build)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
+    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi; do
+        printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
+        if [ -z "${!sym}" ]; then
+            echo "FAIL (missing $sym in $main_vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+    local mon_file log_file check_log
+    mon_file=$(mktemp -t "test_${name}_mon.XXXXXX")
+    log_file=$(mktemp -t "test_${name}_log.XXXXXX")
+    check_log=$(mktemp -t "test_${name}_check.XXXXXX")
+    {
+        # The town's items first, then DL1's.
+        echo "until \$${item_spawn_level}"
+        echo "until \$${item_spawn_level}"
+        printf 'm %s %04x\n' "$monster_table" $(( 16#$monster_table + 32 * 12 - 1 ))
+        printf 'm %s %04x\n' "$cat_slot_id_lo" $(( 16#$cat_slot_id_lo + 63 ))
+        printf 'm %s %04x\n' "$cr_level" $(( 16#$cr_level + 31 ))
+        printf 'm %s %04x\n' "$cr_name_lo" $(( 16#$cr_name_lo + 31 ))
+        printf 'm %s %04x\n' "$cr_name_hi" $(( 16#$cr_name_hi + 31 ))
+        echo "bank ram"
+        echo "m d000 d3ff"
+        echo "quit"
+    } > "$mon_file"
+    local reu_args=()
+    [ "$reu" = 1 ] && reu_args=(-reu -reusize 512)
+    "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
+        "${reu_args[@]}" -8 "$scripted_d64" -autostart "$scripted_d64" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
+        -limitcycles 900000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+    if ! python3 ../c128/tests/check_catalog128.py "$log_file" d000 5 >"$check_log" 2>&1; then
+        echo "FAIL (catalog species check)"
+        tail -3 "$check_log" | sed 's/^/    /'
+        echo "    Log: $log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    echo "PASS ($(tail -1 "$check_log" | sed 's/^PASS: //'))"
+    rm -f -- "$mon_file" "$log_file" "$check_log"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_catalog_spawn_product_reu_smoke() {
+    run_catalog_spawn_product_smoke 1
+}
+
 run_wizard_reveal_product_smoke() {
     local name="wizard_reveal_product_smoke"
     echo -n "  $name: "
@@ -1630,7 +1720,7 @@ run_wizard_reveal_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -1651,7 +1741,7 @@ run_wizard_reveal_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_wizard_reveal_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -1659,10 +1749,11 @@ run_wizard_reveal_product_smoke() {
             -write ../../../build/test/c64/moria_wizard_reveal_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1785,7 +1876,7 @@ run_wizard_item_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -1806,7 +1897,7 @@ run_wizard_item_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_wizard_item_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -1814,10 +1905,11 @@ run_wizard_item_product_smoke() {
             -write ../../../build/test/c64/moria_wizard_item_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -2011,7 +2103,7 @@ run_exchange_product_smoke() {
         return
     fi
 
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write "$smoke_c64/boot.prg" "moria8" \
             -write "$smoke_c64/boot.prg" "boot64" \
@@ -2019,10 +2111,11 @@ run_exchange_product_smoke() {
             -write "$smoke_c64/moria8.prg" "moria64" \
             -write "$smoke_c64/64.bank" "64.bank" \
             -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.db.1" "monster.db.1" \
-            -write "$smoke_c64/monster.db.2" "monster.db.2" \
-            -write "$smoke_c64/monster.db.3" "monster.db.3" \
-            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/monster.cat1" "monster.cat1" \
+            -write "$smoke_c64/monster.cat2" "monster.cat2" \
+            -write "$smoke_c64/monster.cat3" "monster.cat3" \
+            -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2055,7 +2148,7 @@ run_exchange_product_smoke() {
             --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
             --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
             --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-            --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+            --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
             --expect-byte-symbol ".zp_turn_lo=0x01" \
             --expect-byte-symbol ".current_overlay=0x0a" \
             --expect-screen-symbol ".exchange_product_expect_row0:0:0" \
@@ -2093,7 +2186,7 @@ run_chest_open_product_smoke() {
         return
     fi
 
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write "$smoke_c64/boot.prg" "moria8" \
             -write "$smoke_c64/boot.prg" "boot64" \
@@ -2101,10 +2194,11 @@ run_chest_open_product_smoke() {
             -write "$smoke_c64/moria8.prg" "moria64" \
             -write "$smoke_c64/64.bank" "64.bank" \
             -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.db.1" "monster.db.1" \
-            -write "$smoke_c64/monster.db.2" "monster.db.2" \
-            -write "$smoke_c64/monster.db.3" "monster.db.3" \
-            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/monster.cat1" "monster.cat1" \
+            -write "$smoke_c64/monster.cat2" "monster.cat2" \
+            -write "$smoke_c64/monster.cat3" "monster.cat3" \
+            -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2173,7 +2267,7 @@ run_chest_open_product_reu_smoke() {
         return
     fi
 
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write "$smoke_out/c64/boot.prg" "moria8" \
             -write "$smoke_out/c64/boot.prg" "boot64" \
@@ -2181,10 +2275,11 @@ run_chest_open_product_reu_smoke() {
             -write "$smoke_out/c64/moria8.prg" "moria64" \
             -write "$smoke_out/c64/64.bank" "64.bank" \
             -write "$smoke_out/c64/title" "t64" \
-            -write "$smoke_out/c64/monster.db.1" "monster.db.1" \
-            -write "$smoke_out/c64/monster.db.2" "monster.db.2" \
-            -write "$smoke_out/c64/monster.db.3" "monster.db.3" \
-            -write "$smoke_out/c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_out/c64/monster.cat1" "monster.cat1" \
+            -write "$smoke_out/c64/monster.cat2" "monster.cat2" \
+            -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
+            -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_out/c64/monster.idx" "monster.idx" \
             -write "$smoke_out/c64/ovl.start" "64.start" \
             -write "$smoke_out/c64/ovl.town" "64.town" \
             -write "$smoke_out/c64/ovl.death" "64.death" \
@@ -2263,7 +2358,7 @@ run_chest_open_product_genfail_smoke() {
         return
     fi
 
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write "$smoke_out/c64/boot.prg" "moria8" \
             -write "$smoke_out/c64/boot.prg" "boot64" \
@@ -2271,10 +2366,11 @@ run_chest_open_product_genfail_smoke() {
             -write "$smoke_out/c64/moria8.prg" "moria64" \
             -write "$smoke_out/c64/64.bank" "64.bank" \
             -write "$smoke_out/c64/title" "t64" \
-            -write "$smoke_out/c64/monster.db.1" "monster.db.1" \
-            -write "$smoke_out/c64/monster.db.2" "monster.db.2" \
-            -write "$smoke_out/c64/monster.db.3" "monster.db.3" \
-            -write "$smoke_out/c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_out/c64/monster.cat1" "monster.cat1" \
+            -write "$smoke_out/c64/monster.cat2" "monster.cat2" \
+            -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
+            -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_out/c64/monster.idx" "monster.idx" \
             -write "$smoke_out/c64/ovl.start" "64.start" \
             -write "$smoke_out/c64/ovl.town" "64.town" \
             -write "$smoke_out/c64/ovl.death" "64.death" \
@@ -2349,7 +2445,7 @@ run_disk_setup_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -2370,7 +2466,7 @@ run_disk_setup_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_disk_setup_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -2378,10 +2474,11 @@ run_disk_setup_product_smoke() {
             -write ../../../build/test/c64/moria_disk_setup_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -2479,7 +2576,7 @@ run_retirement_royal_product_smoke() {
         return
     fi
 
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write "$smoke_c64/boot.prg" "moria8" \
             -write "$smoke_c64/boot.prg" "boot64" \
@@ -2487,10 +2584,11 @@ run_retirement_royal_product_smoke() {
             -write "$smoke_c64/moria8.prg" "moria64" \
             -write "$smoke_c64/64.bank" "64.bank" \
             -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.db.1" "monster.db.1" \
-            -write "$smoke_c64/monster.db.2" "monster.db.2" \
-            -write "$smoke_c64/monster.db.3" "monster.db.3" \
-            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/monster.cat1" "monster.cat1" \
+            -write "$smoke_c64/monster.cat2" "monster.cat2" \
+            -write "$smoke_c64/monster.cat3" "monster.cat3" \
+            -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2551,7 +2649,7 @@ run_game_over_product_smoke() {
         return
     fi
 
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
             -attach "$boot_d64" \
             -write "$smoke_c64/boot.prg" "moria8" \
             -write "$smoke_c64/boot.prg" "boot64" \
@@ -2559,10 +2657,11 @@ run_game_over_product_smoke() {
             -write "$smoke_c64/moria8.prg" "moria64" \
             -write "$smoke_c64/64.bank" "64.bank" \
             -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.db.1" "monster.db.1" \
-            -write "$smoke_c64/monster.db.2" "monster.db.2" \
-            -write "$smoke_c64/monster.db.3" "monster.db.3" \
-            -write "$smoke_c64/monster.db.4" "monster.db.4" \
+            -write "$smoke_c64/monster.cat1" "monster.cat1" \
+            -write "$smoke_c64/monster.cat2" "monster.cat2" \
+            -write "$smoke_c64/monster.cat3" "monster.cat3" \
+            -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2650,7 +2749,7 @@ c64_load_written_save_check() {
         return 1
     fi
     rm -f "$load_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$load_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$load_d64" \
             -attach "$load_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -2658,10 +2757,11 @@ c64_load_written_save_check() {
             -write "$load_prg" "moria64" \
             -write "$load_ovl/64.bank" "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write "$load_ovl/ovl.start" "64.start" \
             -write "$load_ovl/ovl.town" "64.town" \
             -write "$load_ovl/ovl.death" "64.death" \
@@ -2688,7 +2788,7 @@ c64_load_written_save_check() {
             --expect-byte-symbol ".save_product_secondary_dam=0x04" \
             --expect-byte-symbol ".save_product_secondary_flags=0x02" \
             --expect-byte-symbol ".save_product_secondary_ego=0x06" \
-            --expect-byte-symbol ".save_product_cloak_id=0xff" \
+            --expect-byte-symbol ".save_product_ring2_id=0xff" \
             --timeout 30 \
             --retry-timeouts 0 \
             --vice "$VICE" \
@@ -2712,7 +2812,7 @@ run_save_write_product_smoke_impl() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -2733,7 +2833,7 @@ run_save_write_product_smoke_impl() {
 
     local scripted_d64="../../../build/test/c64/${name}.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -2741,10 +2841,11 @@ run_save_write_product_smoke_impl() {
             -write "../../../build/test/c64/${name}.prg" "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -2847,7 +2948,7 @@ run_save_write_product_smoke_impl() {
             local save_seq="../../../build/test/c64/${name}_the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "$save_filename" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 tests/check_save_secondary.py "$save_seq" 0x16 >>"$build_log" 2>&1; then
+                    || ! python3 tests/check_save_secondary.py "$save_seq" 0x18 >>"$build_log" 2>&1; then
                 echo "FAIL (secondary weapon not in the written save)"
                 tail -5 "$build_log" | sed 's/^/    /'
                 FAIL=$((FAIL + 1))
@@ -2918,7 +3019,7 @@ run_save_media_fail_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -2939,7 +3040,7 @@ run_save_media_fail_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_save_media_fail_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -2947,10 +3048,11 @@ run_save_media_fail_product_smoke() {
             -write ../../../build/test/c64/moria_save_media_fail_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3048,7 +3150,7 @@ run_change_save_drive_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3069,7 +3171,7 @@ run_change_save_drive_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_change_save_drive_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3077,10 +3179,11 @@ run_change_save_drive_product_smoke() {
             -write ../../../build/test/c64/moria_change_save_drive_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3157,7 +3260,7 @@ run_disk_setup_single_drive_return_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3178,7 +3281,7 @@ run_disk_setup_single_drive_return_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_disk_setup_single_drive_return.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3186,10 +3289,11 @@ run_disk_setup_single_drive_return_product_smoke() {
             -write ../../../build/test/c64/moria_disk_setup_single_drive_return.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3272,7 +3376,7 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3293,7 +3397,7 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_disk_setup_then_load.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3301,10 +3405,11 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
             -write ../../../build/test/c64/moria_disk_setup_then_load.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3365,7 +3470,7 @@ run_load_resume_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3386,7 +3491,7 @@ run_load_resume_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_load_resume_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3394,10 +3499,11 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/moria_load_resume_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3547,7 +3653,7 @@ run_single_drive_load_return_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3568,7 +3674,7 @@ run_single_drive_load_return_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_single_drive_load_return_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3576,10 +3682,11 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/moria_single_drive_load_return_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3657,7 +3764,7 @@ run_load_then_save_new_empty_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3678,7 +3785,7 @@ run_load_then_save_new_empty_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_load_then_save_new_empty.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3686,10 +3793,11 @@ run_load_then_save_new_empty_product_smoke() {
             -write ../../../build/test/c64/moria_load_then_save_new_empty.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3799,7 +3907,7 @@ run_single_drive_save_wrong_media_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3820,7 +3928,7 @@ run_single_drive_save_wrong_media_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_single_drive_save_wrong_media_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3828,10 +3936,11 @@ run_single_drive_save_wrong_media_product_smoke() {
             -write ../../../build/test/c64/moria_single_drive_save_wrong_media_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3880,7 +3989,7 @@ run_single_drive_load_wrong_media_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3901,7 +4010,7 @@ run_single_drive_load_wrong_media_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_single_drive_load_wrong_media_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3909,10 +4018,11 @@ run_single_drive_load_wrong_media_product_smoke() {
             -write ../../../build/test/c64/moria_single_drive_load_wrong_media_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3960,7 +4070,7 @@ run_single_drive_load_corrupt_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -3981,7 +4091,7 @@ run_single_drive_load_corrupt_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_single_drive_load_corrupt_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -3989,10 +4099,11 @@ run_single_drive_load_corrupt_product_smoke() {
             -write ../../../build/test/c64/moria_single_drive_load_corrupt_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4068,7 +4179,7 @@ run_single_drive_fresh_save_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -4089,7 +4200,7 @@ run_single_drive_fresh_save_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_single_drive_fresh_save_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -4097,10 +4208,11 @@ run_single_drive_fresh_save_product_smoke() {
             -write ../../../build/test/c64/moria_single_drive_fresh_save_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4198,7 +4310,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -4220,7 +4332,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_single_drive_fresh_save_no_init_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -4228,10 +4340,11 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             -write ../../../build/test/c64/moria_single_drive_fresh_save_no_init_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4304,7 +4417,7 @@ run_load_missing_savefile_product_smoke() {
     mkdir -p ../../../build/test/c64
 
     if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.db.1 ../../build/c64/monster.db.2 ../../build/c64/monster.db.3 ../../build/c64/monster.db.4 \
+            ../../build/c64/monster.cat.stamp \
             >"$build_log" 2>&1; then
         echo "FAIL (asset build error)"
         tail -20 "$build_log"
@@ -4325,7 +4438,7 @@ run_load_missing_savefile_product_smoke() {
 
     local scripted_d64="../../../build/test/c64/moria_load_missing_save_smoke.d64"
     rm -f "$scripted_d64"
-    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write ../../../build/test/c64/boot.prg "moria8" \
             -write ../../../build/test/c64/boot.prg "boot64" \
@@ -4333,10 +4446,11 @@ run_load_missing_savefile_product_smoke() {
             -write ../../../build/test/c64/moria_load_missing_save_smoke.prg "moria64" \
             -write ../../../build/test/c64/64.bank "64.bank" \
             -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.db.1 "monster.db.1" \
-            -write ../../../build/test/c64/monster.db.2 "monster.db.2" \
-            -write ../../../build/test/c64/monster.db.3 "monster.db.3" \
-            -write ../../../build/test/c64/monster.db.4 "monster.db.4" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4480,7 +4594,7 @@ check_static_contract "wizard_cancel_text_contract" "../../../core/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "wizard_item_prompt_range_contract" "../../../core/wizard.s" \
-    "wiz_item_prompt_str:|||.text \"ITEM 0-139: \""
+    "wiz_item_prompt_str:|||.text \"ITEM 0-145: \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "../../../core/wizard.s" \
     "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
@@ -4503,6 +4617,10 @@ check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "i
 # pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
 check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
     "tramp_spawn_nest_gold:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_nest_gold"
+# Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
+# too, if anything replaced it after generation.
+check_static_contract "special_room_monsters_restore_generation_overlay_contract" "main.s" \
+    "tramp_spawn_special_room_monsters:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_special_room_monsters"
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
 check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_items.s" \
@@ -4594,11 +4712,11 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 0434" 53 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0436" 55 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 0442" 67 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 0443" 68 500000000
 run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0443" 68 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
@@ -4627,7 +4745,7 @@ run_test "identify_spell" "tests/test_identify_spell.s" "0400 0403" 4 500000000
 run_test "teleport_self" "tests/test_teleport_self.s" "0400 0401" 2 500000000
 run_test "remove_curse" "tests/test_remove_curse.s" "0400 0402" 3 500000000
 run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0408" 9 500000000
-run_test "chest_open" "tests/test_chest_open.s" "0400 040C" 13 500000000
+run_test "chest_open" "tests/test_chest_open.s" "0400 040D" 14 500000000
 run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0406" 7 500000000
 run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
 run_test "chest_loot" "tests/test_chest_loot.s" "0400 0410" 17 500000000
@@ -4677,27 +4795,27 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 043f" 64 1000000000
+run_test "item" "tests/test_item.s" "0400 0444" 69 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "potion_cures" "tests/test_potion_cures.s" "0400 040b" 12 1000000000
+run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000
 run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 19 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0414" 21 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0425" 38 1000000000
-run_test "score" "tests/test_score.s" "0400 040c" 13 500000000
+run_test "save"  "tests/test_save.s"  "0400 0426" 39 1000000000
+run_test "score" "tests/test_score.s" "0400 040e" 15 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 041c" 29 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 0424" 37 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
-run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
+run_test "ego" "tests/test_ego.s" "0400 040b" 12 500000000
 run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000
 run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
@@ -4712,7 +4830,10 @@ run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector
 run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_overlay_smoke
 run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
 run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
-run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke
+# The catalog spawn smokes reuse the dungeon-ascent build and disk.
+run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke catalog_spawn_product_smoke catalog_spawn_product_reu_smoke
+run_suite_function "catalog_spawn_product_smoke" run_catalog_spawn_product_smoke
+run_suite_function "catalog_spawn_product_reu_smoke" run_catalog_spawn_product_reu_smoke
 run_suite_function "wizard_reveal_product_smoke" run_wizard_reveal_product_smoke
 run_suite_function "wizard_item_product_smoke" run_wizard_item_product_smoke
 run_suite_function "exchange_product_smoke" run_exchange_product_smoke

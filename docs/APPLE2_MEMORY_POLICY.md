@@ -36,7 +36,7 @@ Build-artifact notes:
   satisfies the `tier_manager.s:525` assert with 216 B margin. The plan's
   2,048 B pool is reduced to 1,024 B, reclaiming 1,024 B for the window.
 
-## Implemented Layout Snapshot (2026-07-21)
+## Implemented Layout Snapshot (2026-07-21; aux re-plan 2026-11-05)
 
 This snapshot supersedes the M0 estimates and the older slot-hosted overlay
 descriptions later in this document. The historical sections remain as the
@@ -45,20 +45,28 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 
 | Range | Current owner and measured use |
 | --- | --- |
-| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7953` (28,500 B; 684 B free after the 2026-09-02 spell-engine externalization) |
+| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7A09` (502 B free with the monster catalog, 2026-11-05) |
 | main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FFD` (9,214 B including signature) |
-| main `$A000-$A3FF` | Tier-name pool (1,024 B) |
+| main `$A000-$A3FF` | Name pool (1,024 B): the monster catalog's 32 species names |
 | main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; window 5,632 B; largest payload `OVL.TOWN` (5,327 B); `OVL.DEATH` grew to 4,139 B in 2026-09 when the map-area/earthquake engines moved in beside the WoD engine |
 | main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |
 | main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
 | main `$BF00-$BFFF` | ProDOS global page |
 | aux `$0800-$3B0B` | Live 198x66 map |
-| aux `$3B0C-$59FF` | Current immutable/mutable aux data payload: Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, the screen-code char-map table, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`, doors phase 2026-09: resident always-region was full; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`); boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
-| aux `$5A00-$BFFF` | Six boot-cached overlays under cache manifest v7; page-rounded slots fill the span |
+| aux `$3B0C-$4FFF` | Current immutable/mutable aux data payload (ends `$4F6D`, 146 B to grow, 2026-11-09, with 16-item stores; capped at `$4FFF` for the monster catalog, 2026-11-05): Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`, doors phase 2026-09: resident always-region was full; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`); boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
+| aux `$5000-$66FF` | Monster catalog fields (`A2.CATALOG`, 5,859 B, boot pack) |
+| aux `$6700-$BFFF` | Cache manifest v8: UI `$6700`, SPELL `$6D00`, MODAL `$8100`, the Huffman corpus with the catalog's names, then the read-only screen-code char-map and speaker-pattern tables (moved from aux data 2026-11-09 for 16-item stores) `$8D00` (to `$A9ED`, 18 B spare), ITEMS `$AA00`. OVL.TOWN and OVL.GEN load from disk |
 
 `A2.PLAY` is not a modal swap slot in the implementation: every overlay,
 including STORAGE and TITLE, fits the `$A400-$B9FF` code window. Play is
 loaded on demand and signature-checked, then remains resident for the session.
+
+Cache manifest v8 (2026-11-05, `cache_layout.s`) replaced v7 for the monster
+catalog: OVL.TOWN left the cache (maintainer: "only the town overlay"), the
+catalog's fields took aux `$5000`, and its names follow the Huffman corpus,
+which moved from `$9900` to `$8D00`. The auxiliary language card (aux
+`$D000-$FFFF`, 16 KB) is the next source of room if this tight layout needs
+it. The v7 record follows.
 
 Cache manifest v7 is shared by boot and runtime code rather than duplicated:
 TOWN `$5A00`, UI `$6F00`, SPELL `$7900`, MODAL `$8D00`, GEN `$9900`, ITEMS
@@ -317,10 +325,9 @@ ProDOS volume `MORIA8`:
 | File | Type | Destination |
 | --- | --- | --- |
 | `MORIA8.SYSTEM` | SYS `$2000` | boot.s; relocates itself to `$0800-$09FF` scratch (its `$2000` origin is inside the resident span) |
-| `MORIA8.PAK` | BIN | boot container: 512-B header (count + 16-bit lengths) then RES, AUXDATA, OVL.TOWN, OVL.UI, OVL.ITEMS, OVL.SPELL, OVL.MODAL, OVL.GEN payloads in that order |
+| `MORIA8.PAK` | BIN | boot container: 512-B header (count + 16-bit lengths) then RES, AUXDATA, A2.CATALOG (the monster catalog's fields), OVL.UI, OVL.ITEMS, OVL.SPELL, OVL.MODAL, A2.HUFFDATA (the Huffman corpus and the catalog's names) payloads in that order |
 | `A2.PLAY` | BIN `$7C00` | play payload; loaded on demand by `a2_require_play` (signature `M8P` validated) |
-| `OVL.*` (cold set) | BIN `$A400` | left on disk: START, DEATH, HELP, STORAGE, TITLE |
-| `MONSTER.DB.1-4` | BIN `$A400` | tier files, loaded on demand into the window |
+| `OVL.*` (cold set) | BIN `$A400` | left on disk: START, TOWN, DEATH, GEN, HELP, CHEST, STORAGE, TITLE |
 | `TITLE` | BIN `$4000` | title art, on demand |
 
 Boot: ProDOS kernel → MORIA8.SYSTEM (relocates to `$0800`) → one OPEN of

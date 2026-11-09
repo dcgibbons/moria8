@@ -692,7 +692,6 @@ combat_critical_blow_weight:
 
     // --- Compute 16-bit chance ---
     // Start with weight (zero-extended to 16)
-    lda ccb_weight
     sta ccb_chance_lo
     lda #0
     sta ccb_chance_hi
@@ -817,9 +816,7 @@ combat_critical_blow_weight:
     bcs !ccb_clamp+             // Overflow → 255
     clc
     adc #5
-    bcs !ccb_clamp+
-    sta cmb_damage
-    rts
+    jmp !ccb_store_or_clamp+
 
 !ccb_tier3:
     // 3x + 10: orig + orig*2
@@ -831,9 +828,7 @@ combat_critical_blow_weight:
     bcs !ccb_clamp+
     clc
     adc #10
-    bcs !ccb_clamp+
-    sta cmb_damage
-    rts
+    jmp !ccb_store_or_clamp+
 
 !ccb_tier4:
     // 4x + 15
@@ -844,9 +839,7 @@ combat_critical_blow_weight:
     bcs !ccb_clamp+
     clc
     adc #15
-    bcs !ccb_clamp+
-    sta cmb_damage
-    rts
+    jmp !ccb_store_or_clamp+
 
 !ccb_tier5:
     // 5x + 20: orig*4 + orig
@@ -860,12 +853,11 @@ combat_critical_blow_weight:
     bcs !ccb_clamp+
     clc
     adc #20
-    bcs !ccb_clamp+
-    sta cmb_damage
-    rts
-
+!ccb_store_or_clamp:            // carry set: the damage passed 255
+    bcc !ccb_store+
 !ccb_clamp:
     lda #255
+!ccb_store:
     sta cmb_damage
     rts
 
@@ -1015,14 +1007,7 @@ combat_compute_level_threshold:
     sta zp_temp0
     lda xp_level_hi,x
     sta zp_temp1
-    ldx player_data + PL_EXPFACT
-    jsr math_mul_16x8
-    lda mul_result_0
-    sta ccl_adj_0
-    lda mul_result_1
-    sta ccl_adj_1
-    lda mul_result_2
-    sta ccl_adj_2
+    jsr ccl_mul_expfact
     lda #100
     sta ccl_divisor
     jmp ccl_div_24x8
@@ -1035,6 +1020,8 @@ combat_compute_level_threshold:
     sta zp_temp0
     lda xp_level_late_div100_hi,x
     sta zp_temp1
+// ccl_mul_expfact — ccl_adj_0..2 = zp_temp0/1 * PL_EXPFACT
+ccl_mul_expfact:
     ldx player_data + PL_EXPFACT
     jsr math_mul_16x8
     lda mul_result_0
@@ -1309,12 +1296,18 @@ combat_note_kill:
     lda zp_game_flags
     and #GAME_FLAG_WINNER
     bne !no_win+
+#if HAL_PLATFORM_MONSTER_CATALOG
+    ldx cmb_type
+    jsr catalog_slot_is_balrog
+    bne !no_win+
+#else
     lda cmb_type
     cmp #CREATURE_BALROG
     bne !no_win+
     lda cr_level + CREATURE_BALROG
     cmp #100
     bne !no_win+
+#endif
     lda zp_game_flags
     ora #GAME_FLAG_WINNER
     sta zp_game_flags

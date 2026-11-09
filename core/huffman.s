@@ -14,6 +14,15 @@
 // ============================================================
 hd_cur_byte:   .byte 0        // Current byte being read
 hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
+#if HAL_PLATFORM_MONSTER_CATALOG && !HAL_PLATFORM_CATALOG_RECORDS
+#if !HAL_PLATFORM_HUFFMAN_DATA_AUX
+.error "The monster catalog's names tree is read through the banked Huffman reads"
+#endif
+// The tree the decoder walks: the corpus's, or the catalog names' own while
+// core/monster_catalog.s decodes a creature name.
+hd_tree_left_ptr:  .word huff_tree_left
+hd_tree_right_ptr: .word huff_tree_right
+#endif
 
 // Decode output buffer. This is transient scratch, so keep it in the platform
 // scratch window rather than spending resident program bytes.
@@ -77,17 +86,29 @@ hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 }
 
 .macro HuffRead_tree_left_y() {
+#if HAL_PLATFORM_MONSTER_CATALOG && !HAL_PLATFORM_CATALOG_RECORDS
+    lda hd_tree_left_ptr
+    sta zp_ptr1
+    lda hd_tree_left_ptr + 1
+#else
     lda #<huff_tree_left
     sta zp_ptr1
     lda #>huff_tree_left
+#endif
     sta zp_ptr1_hi
     :HuffDbReadPtr1()
 }
 
 .macro HuffRead_tree_right_y() {
+#if HAL_PLATFORM_MONSTER_CATALOG && !HAL_PLATFORM_CATALOG_RECORDS
+    lda hd_tree_right_ptr
+    sta zp_ptr1
+    lda hd_tree_right_ptr + 1
+#else
     lda #<huff_tree_right
     sta zp_ptr1
     lda #>huff_tree_right
+#endif
     sta zp_ptr1_hi
     :HuffDbReadPtr1()
 }
@@ -102,6 +123,17 @@ hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 // Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
 // ============================================================
 huff_decode_string:
+#if HAL_PLATFORM_HUFFMAN_INDEX_HIDDEN
+    // The index lives where the decoder cannot read it directly (C64: RAM
+    // under I/O): the port's hal_huff_index_word reads entry X.
+    jsr hal_huff_index_word     // A = offset lo, Y = offset hi
+    clc
+    adc #<huff_str_data
+    sta zp_ptr0
+    tya
+    adc #>huff_str_data
+    sta zp_ptr0_hi
+#else
     // Look up 16-bit byte offset from index table
     // X*2 may exceed 255 for string IDs >= 128, so branch on carry
     txa
@@ -140,6 +172,7 @@ huff_decode_string:
 #endif
     adc #>huff_str_data
     sta zp_ptr0_hi
+#endif
     // Fall through
 
 // ============================================================

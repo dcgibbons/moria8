@@ -84,6 +84,7 @@ class TextMonitor:
         self.sock: socket.socket | None = None
 
     def command(self, line: str, settle: float = 0.5) -> str:
+        self.drain()   # also notices a connection VICE dropped, to open a new one
         deadline = time.monotonic() + 10
         while self.sock is None:   # VICE may still be opening its server
             try:
@@ -104,7 +105,11 @@ class TextMonitor:
         return out.decode("latin1")
 
     def drain(self) -> None:
-        """Discard the prompts VICE writes at each monitor entry (a full socket would block it)."""
+        """Discard the prompts VICE writes at each monitor entry (a full socket
+        would block it). A connection VICE dropped is closed, so the next
+        command opens a new one (2026-11-06: a C64 Balrog game's first save
+        after 1.18 million steps found it reset: the prompts of every step
+        since the last save had filled it)."""
         if self.sock is None:
             return
         self.sock.settimeout(0)
@@ -113,6 +118,8 @@ class TextMonitor:
                 pass
         except (BlockingIOError, socket.timeout):
             pass
+        except OSError:
+            self.close()
 
     def close(self) -> None:
         if self.sock is not None:

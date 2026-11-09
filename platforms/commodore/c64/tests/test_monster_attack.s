@@ -410,7 +410,7 @@ test_start:
 !t9:
     lda #0
     sta zp_eff_paralyze
-    sta player_data + PL_FLAGS  // No free action
+    sta player_pflags           // No Free Action
     lda #CLASS_WARRIOR
     sta player_data + PL_CLASS
     lda #1
@@ -434,7 +434,32 @@ test_start:
     sta tc_results + 8
     jmp !t10+
 !t9_pass:
+    // With Free Action (PFLAG_FREE_ACT, the Amulet of the Magi) the same 20
+    // attempts never paralyse: "You are unaffected." after a failed save, as
+    // VMS creature.inc's paralysis attack (MON-025)
+    lda #PFLAG_FREE_ACT
+    sta player_pflags
+    lda #20
+    sta tc_loop
+!t9_free:
+    jsr msg_init                // A fresh line: twenty "unaffected" would
+                                // outrun the pre-stuffed -more- keys
+    lda #0
+    sta zp_eff_paralyze
+    jsr mon_atk_effect_paralyze
+    lda zp_eff_paralyze
+    bne !t9_free_fail+
+    dec tc_loop
+    bne !t9_free-
+    lda #0
+    sta player_pflags
     lda #$01
+    sta tc_results + 8
+    jmp !t10+
+!t9_free_fail:
+    lda #0
+    sta player_pflags
+    lda #$00
     sta tc_results + 8
 
     // ==========================================
@@ -1166,11 +1191,13 @@ test_start:
     // Test 41: no shipped tier4 creature has a spell chance without a spell
     // (tools/parse_creatures.py map_spells: none of the upstream spells maps,
     // e.g. the Banshee and Ghost, VMS spells %X'0001002F' = teleport self and
-    // drain mana, so chance 0; monster_can_cast then never spends a turn)
+    // drain mana, so chance 0; monster_can_cast then never spends a turn).
+    // Hold Person, with no MSF bit, is cr_spell_chance's MS_HOLD.
     ldx #tier4_cr_spell_flags - tier4_cr_spell_chance - 1   // TIER_COUNT - 1
 !t41_loop:
     lda tier4_cr_spell_chance,x
     beq !t41_next+
+    bmi !t41_next+              // Hold Person
     lda tier4_cr_spell_flags,x
     beq !t41_fail+
 !t41_next:

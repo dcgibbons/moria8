@@ -6,10 +6,11 @@
 // Memory authority: docs/BBCMASTER_MEMORY_CONTRACT.md.
 //   Default (resident): $0E00-$7FFF (low helpers < $3000, resident <= $8000)
 //   BeebPlaySlot:       Bank 4 ($04) $8000-$A3FF (play payload, boot-preloaded)
-//   Tier-name pool:     Bank 4 ($04) $A400-$A7FF
+//   Name pool:          Bank 4 ($04) $A400-$A7FF (the catalog's species names)
 //   Overlay window:     Bank 4 ($04) $A800-$BFFF (6,144 B)
-//   Live 198x66 Map:    Bank 5 ($05) $8000-$B30B + cached OVL.UI ($B400-$BDFF)
-//   BeebAuxData:        Bank 6 ($06) $8000-$96FF (virt $6000-$76FF) + cached TOWN/MODAL
+//   Live 198x66 Map:    Bank 5 ($05) $8000-$B30B + cached OVL.MODAL ($B400-$BFFF)
+//   BeebAuxData:        Bank 6 ($06) $8000-$94FF (virt $6000-$74FF), the monster
+//                       catalog ($9500-$B9FF) and cached OVL.UI ($BA00-$BFFF)
 //   Hot Cache Bank 7:   Bank 7 ($07) cached SPELL/ITEMS/GEN
 //   BeebHuffData:       ANDY ($84) $8000-$8D93 (4 KB private RAM)
 //   LYNNE Shadow RAM:   ACCCON=$05 $3000-$7FFF (1KB font, 1KB gen scratch, char shadow, Mode 0)
@@ -17,6 +18,10 @@
 .cpu _65c02
 
 #define BBCMASTER
+// The VMS monster catalog (2026-11-05): fields and Huffman names in
+// sideways Bank 6 (monster_catalog_beeb.s, cache_layout.s), replacing the
+// four tier files.
+#define HAL_PLATFORM_MONSTER_CATALOG
 #define BBCMASTER_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define BBCMASTER_PRODUCT_IRQ_VECTOR_RUNTIME
@@ -42,7 +47,8 @@
 .segmentdef TitleOverlay       [outPrg=OVL_OUT + "/ovl.title",    start=$a800, min=$a800, max=$bfff]
 .segmentdef ChestOverlay       [outPrg=OVL_OUT + "/ovl.chest",    start=$a800, min=$a800, max=$bfff]
 .segmentdef BeebPlaySlot       [outPrg=OVL_OUT + "/beeb.play",    start=$8000, min=$8000, max=$a3ff]
-.segmentdef BeebAuxData        [outPrg=OVL_OUT + "/beeb.auxdata", start=$6000, min=$6000, max=$76ff]
+.segmentdef BeebAuxData        [outPrg=OVL_OUT + "/beeb.auxdata", start=$6000, min=$6000, max=$74ff]
+.segmentdef BeebCatalog        [outPrg=OVL_OUT + "/beeb.catalog", start=$9500, min=$9500, max=$b9ff]
 .segmentdef BeebHuffData       [outPrg=OVL_OUT + "/beeb.huffdata",start=$8000, min=$8000, max=$8fff]
 
 // Segment placement macros
@@ -202,6 +208,8 @@ combat_msg_monster_in_way:
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
 
+#import "monster_catalog_beeb.s"
+#import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"
@@ -941,19 +949,19 @@ hal_msg_print_indirect_aux:
 
 .segment Default
 player_adjust_equipment_stat:
+    // By the item, as core/player_adjust_equipment_stat.s: by the slot, every
+    // ring added its p1 to Strength, and the left hand (2026-11-08) would too.
     jsr player_adjust_equipment_stat_prepare
-    cpx #EQUIP_RING
-    bcc !paes_done+
-    cpx #EQUIP_AMULET
-    bne !paes_str+
     lda inv_item_id,x
-    and #1
-    eor #3
-    sbc #1
-    tax
-    jmp !paes_apply+
-!paes_str:
     ldx #0
+    cmp #ITEM_TYPE_RING_STRENGTH
+    beq !paes_apply+
+    ldx #PL_WIS_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !paes_apply+
+    ldx #PL_INT_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_MAGI
+    bne !paes_done+
 !paes_apply:
     jmp player_adjust_equipment_stat_apply
 !paes_done:
@@ -1075,7 +1083,7 @@ tramp_do_look:
 .assert "Play payload starts with 3-byte signature", beeb_play_body - beeb_play_start, 3
 
 // ============================================================
-// BeebAuxData segment — Virtual $6000-$76FF -> Bank 6 Physical $8000-$96FF
+// BeebAuxData segment — Virtual $6000-$74FF -> Bank 6 Physical $8000-$94FF
 // ============================================================
 .segment BeebAuxData
 #import "../../core/store_inventory_data.s"
@@ -1106,9 +1114,11 @@ beeb_ego_suffix_defender: .text " (Defender)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_defender), 0
 beeb_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_holy_avenger), 0
+beeb_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_slay_dragon), 0
 beeb_ego_suffix_slots_end:
 .assert "Beeb ego suffix slots are page aligned", <beeb_ego_suffix_slots, 0
-.assert "Beeb ego suffix slots are 8 x 16 bytes", beeb_ego_suffix_slots_end - beeb_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "Beeb ego suffix slots are EGO_TYPE_COUNT x 16 bytes", beeb_ego_suffix_slots_end - beeb_ego_suffix_slots, EGO_TYPE_COUNT * 16
 
 welcome_str:
     .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0
@@ -1128,7 +1138,7 @@ cmb_winner_str:
     .text "You have won! Shift+Q to claim victory." ; .byte 0
 ovl_auxdata_end:
 .print "BeebAuxData: " + (ovl_auxdata_end - $6000) + " bytes"
-.assert "BeebAuxData fits $6000-$76FF", ovl_auxdata_end <= $7700, true
+.assert "BeebAuxData fits $6000-$74FF (21 pages: the catalog follows it in Bank 6)", ovl_auxdata_end <= $6000 + BEEB_CACHE_AUX_PAGES * $100, true
 
 .segment Default
 turn_rest_disturbed: .byte 0
@@ -1172,6 +1182,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40
@@ -1359,7 +1370,13 @@ ovl_items_end:
     #import "../../core/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
 
+    #import "../../core/eff_gain_stat.s"
+
 iq_dispatch_p3_spell:
+    cmp #ITEM_TYPE_POT_GAIN_STR
+    bcc !iqp3_not_gain+
+    jmp eff_potion_gain_stat        // potions of gain stat (140-145)
+!iqp3_not_gain:
     cmp #ITEM_TYPE_POT_HEALING
     beq iqp3_healing
     cmp #ITEM_TYPE_POT_RESTORATION
@@ -1391,7 +1408,7 @@ iqp3_restoration:
 iqp3_resist_heat:
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc zp_eff_resist
@@ -1404,7 +1421,7 @@ iqp3_resist_heat:
 iqp3_resist_cold:
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc eff_resist_cold_timer
@@ -1440,7 +1457,6 @@ ovl_gen_end:
 
 // Sideways RAM cache slot fit assertions
 .assert "Beeb SWR UI slot fits payload", ovl_ui_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_UI * 256, true
-.assert "Beeb SWR TOWN slot fits payload", ovl_town_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_TOWN * 256, true
 .assert "Beeb SWR MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_MODAL * 256, true
 .assert "Beeb SWR SPELL slot fits payload", ovl_spell_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_SPELL * 256, true
 .assert "Beeb SWR ITEMS slot fits payload", ovl_items_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_ITEMS * 256, true

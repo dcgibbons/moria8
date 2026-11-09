@@ -25,6 +25,8 @@ LABELS: dict[str, str] = {
     "zp_player_hp_lo": "core/zeropage.s",
     "zp_player_mhp_lo": "core/zeropage.s",
     "zp_player_lvl": "core/zeropage.s",
+    "zp_eff_resist": "core/zeropage.s",
+    "eff_resist_cold_timer": "core/zeropage.s",
     "zp_player_dlvl": "core/zeropage.s",
     "zp_turn_lo": "core/zeropage.s",
     "zp_game_flags": "core/zeropage.s",
@@ -70,7 +72,8 @@ CONSTS: dict[str, tuple[str, int]] = {
     "PL_LIGHT_RAD": ("core/player.s", 55),
     "PL_STRUCT_SIZE": ("core/player.s", 111),
     "MAX_MONSTERS": ("core/monster.s", 32),
-    "MAX_DUNGEON_CREATURES": ("core/monster.s", 57),
+    "TIER_DUNGEON_CREATURES": ("core/monster.s", 57),      # dungeon creature rows, tier builds
+    "CATALOG_DUNGEON_CREATURES": ("core/monster.s", 32),   # ... monster-catalog builds
     "MAX_TOWN_CREATURES": ("core/monster.s", 8),
     "MONSTER_ENTRY_SIZE": ("core/monster.s", 12),
     "EMPTY_SLOT": ("core/monster.s", 0xFF),

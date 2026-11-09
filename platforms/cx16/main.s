@@ -34,6 +34,7 @@
 .segmentdef StorageOverlay     [outPrg=OVL_OUT + "/OVL.STORAGE",   start=$a000, min=$a000, max=$bfff]
 .segmentdef TitleOverlay       [outPrg=OVL_OUT + "/OVL.TITLE",     start=$a000, min=$a000, max=$bfff]
 .segmentdef ChestOverlay       [outPrg=OVL_OUT + "/OVL.CHEST",     start=$a000, min=$a000, max=$bfff]
+.segmentdef Cx16Catalog        [outPrg=OVL_OUT + "/MONSTER.CAT",   start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16AuxData        [outPrg=OVL_OUT + "/CX16.AUXDATA",  start=$6000, min=$6000, max=$7fff]
 .segmentdef Cx16HuffData       [outPrg=OVL_OUT + "/CX16.HUFFDATA", start=$8000, min=$8000, max=$9fff]
 
@@ -142,6 +143,9 @@ tramp_dig_ability:
 #import "../../core/stat_display.s"
 #import "../../core/huffman.s"
 .segment Cx16HuffData
+#if HAL_PLATFORM_MONSTER_CATALOG
+#import "../shared/catalog/catalog_names.s"    // The catalog's names, read like the corpus
+#endif
 ovl_huffdata_end:
 .segment Default
 #import "../../core/dungeon_data.s"
@@ -192,6 +196,8 @@ combat_msg_monster_in_way:
     jmp combat_msg_monster_suffix
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
+#import "monster_catalog_bank.s"
+#import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"
@@ -217,7 +223,6 @@ cmb_in_way_str:
 #import "../../core/player_items.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../core/spell_effects.s"
-#import "../../core/spell_effects_overlay.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 
 #import "../../core/store_data_defs.s"
@@ -1041,9 +1046,11 @@ cx16_ego_suffix_defender: .text " (Defender)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_defender), 0
 cx16_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_holy_avenger), 0
+cx16_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_slay_dragon), 0
 cx16_ego_suffix_slots_end:
 .assert "CX16 ego suffix slots are page aligned", <cx16_ego_suffix_slots, 0
-.assert "CX16 ego suffix slots are 8 x 16 bytes", cx16_ego_suffix_slots_end - cx16_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "CX16 ego suffix slots are EGO_TYPE_COUNT x 16 bytes", cx16_ego_suffix_slots_end - cx16_ego_suffix_slots, EGO_TYPE_COUNT * 16
 
 ovl_auxdata_end:
 .print "CX16 AuxData: " + (ovl_auxdata_end - $6000) + " bytes"
@@ -1089,6 +1096,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40
@@ -1248,6 +1256,10 @@ ovl_items_end:
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL
+// Find Traps and Destroy Traps/Doors (2026-11-08): their only callers are
+// the spell dispatch above, so they run here, not resident (as on the C64).
+#import "../../core/spell_effects_overlay.s"
+.assert "The trap effects are in OVL.SPELL with their callers", eff_find_traps >= $a000 && eff_destroy_traps_doors >= $a000, true
 
     #define SCROLL_P3_NEW_OWNER
     #define SCROLL_P3_EXISTING_OWNER

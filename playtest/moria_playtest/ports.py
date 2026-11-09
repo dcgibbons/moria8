@@ -52,6 +52,14 @@ class Port:
     color_table: str = ""     # empty: colour memory holds C64 indexes
     color_mask: int = 0x0F
     snapshots: bool = True    # the emulator can save and restore a machine mid-game
+    # A Balrog start is a saved game, not a mid-game snapshot (graduate.py):
+    # VICE's C128 snapshot leaves the VDC out, and a restore stalls minutes.
+    graduate_save: bool = False
+    # Wall seconds per 10^9 snapshot CPU cycles the first resume after an
+    # undump may take: x128's VDC raster alarm stays at the new process's
+    # clock and replays every line up to the snapshot's (VICE 3.10 has no
+    # VDC snapshot module); measured 4.8-5.2 s, 2026-11-07.
+    undump_catch_up: float = 0.0
     # MAME ports (mame.py): the machine, the disk option, RAM the bridge reads
     # by name (MORIA8_BRIDGE_ITEMS) and the driver's banks in it, the key
     # wait's read taps (kind, address, buffer label: mame_bridge.lua), the
@@ -82,7 +90,7 @@ C64 = Port(
     disk_files={
         "moria8": "boot.prg", "boot64": "boot.prg", "bootart64": "bootart64.prg",
         "moria64": "moria8.prg", "t64": "title",
-        **{f"monster.db.{tier}": f"monster.db.{tier}" for tier in range(1, 5)},
+        **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
         **{f"64.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
         "64.bank": "64.bank",
@@ -127,6 +135,11 @@ C64 = Port(
     # is visible ($01 bit 1, HIRAM, set).
     crash_entries=(0xFCE2, 0xFE66),
     rom_status="port01",
+    # A Balrog start or checkpoint is a saved game (graduate.py), not a
+    # snapshot: it goes on in any newer build whose loader takes its save
+    # version, where a snapshot only restores into the same game (maintainer,
+    # 2026-11-06: the Balrog queue on the C64, always the newest build).
+    graduate_save=True,
 )
 
 PLUS4 = Port(
@@ -134,7 +147,7 @@ PLUS4 = Port(
     disk_target="diskplus4",
     disk_files={
         "moria8": "boot4.prg", "boot4": "boot4.prg", "moria4": "moria4.prg", "t64": "title",
-        **{f"monster.db.{tier}": f"monster.db.{tier}" for tier in range(1, 5)},
+        **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
         **{f"4.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
         "4.bank": "4.bank",
@@ -179,7 +192,7 @@ C128 = Port(
     disk_files={
         "moria8": "boot128.prg", "boot128": "boot128.chain.prg", "bootart128": "bootart128.prg",
         "moria128": "moria128.prg", "t128": "title",
-        **{f"monster.db.{tier}": f"monster.db.{tier}" for tier in range(1, 5)},
+        "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg",   # the monster catalog (no tiers)
         **{f"128.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest")},
         **{f"128.{name}": f"128.{name}.prg" for name in
@@ -226,6 +239,8 @@ C128 = Port(
     key_entries=("input_get_key", "input_get_key_fast"),
     key_wait_pushes=2,   # X and Y, pushed before the wait loop where the driver stops
     snapshot_banks=("vdc",),
+    graduate_save=True,
+    undump_catch_up=8.0,
     color_bank="vdc", color_const="VDC_ATTRIB_BASE", color_table="vic_to_vdc_color",   # RGBI
 )
 

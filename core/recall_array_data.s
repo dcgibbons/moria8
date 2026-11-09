@@ -2,7 +2,7 @@
 // recall_array_data.s — Mutable monster-recall counters.
 //
 // Kept separate so a platform may place the contiguous block in data-only
-// memory while recall_clear and recall_spell_bit remain executable/readable.
+// memory while recall_spell_bit remains readable.
 
 recall_data_start:
 recall_kills:     .fill MAX_CREATURES, 0   // Times player killed this type

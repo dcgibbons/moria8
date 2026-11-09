@@ -33,7 +33,11 @@ class PrgSpec:
 PRG_SPECS = (
     PrgSpec("moria8a2.prg", 0x0A00, 0x7C00, "program_end"),
     PrgSpec("a2.play", 0x7C00, 0xA000, "a2_play_end", b"M8P"),
-    PrgSpec("a2.auxdata", 0x3B0C, 0x5A00),
+    # Aux RAM above the map (cache_layout.s): aux data, the monster
+    # catalog's fields, and the Huffman corpus with the catalog's names.
+    PrgSpec("a2.auxdata", 0x3B0C, 0x5000),
+    PrgSpec("a2.catalog", 0x5000, 0x6700, "catalog_fields_end"),
+    PrgSpec("a2.huffdata", 0x8D00, 0xAA00, "ovl_huffdata_end"),
     PrgSpec("ovl.start", 0xA400, 0xBA00, "ovl_start_end"),
     PrgSpec("ovl.town", 0xA400, 0xBA00, "ovl_town_end"),
     PrgSpec("ovl.death", 0xA400, 0xBA00, "ovl_death_end"),
@@ -46,10 +50,6 @@ PRG_SPECS = (
     PrgSpec("ovl.storage", 0xA400, 0xBA00, "ovl_storage_end"),
     PrgSpec("ovl.title", 0xA400, 0xBA00, "ovl_title_end"),
     PrgSpec("ovl.chest", 0xA400, 0xBA00, "ovl_chest_end"),
-    PrgSpec("monster.db.1", 0xA400, 0xBB00),
-    PrgSpec("monster.db.2", 0xA400, 0xBB00),
-    PrgSpec("monster.db.3", 0xA400, 0xBB00),
-    PrgSpec("monster.db.4", 0xA400, 0xBB00),
     PrgSpec("title.prg", 0x4000, 0x7C00),
 )
 

@@ -64,38 +64,10 @@ cmd_show_equipment_view:
     jsr hal_input_get_key
     jmp ui_view_return_to_gameplay_view
 
-cmd_recall_view:
-#if RECALL_VIEW_OVERLAYED
-    // Body lives in an overlay on this platform; load and tail-call it.
-    lda #RECALL_VIEW_OVL
-    jsr overlay_load
-    bcs !rv_done+
-    jsr recall_view_body
-!rv_done:
-    rts
-#endif
-#if RECALL_VIEW_OVERLAYED
-:RecallViewBodySegment()
-#endif
-recall_view_body:
-    jsr msg_clear
-    lda #0
-    sta zp_cursor_row
-    sta zp_cursor_col
-    lda #<recall_prompt_str
-    sta zp_ptr0
-    lda #>recall_prompt_str
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string           // literal call: the C128 prompt guard checks it
-    jsr input_prepare_followup_key
-    jsr hal_input_get_key
-    jsr recall_key_to_screen_code
-    bcc !recall_done+
-    jsr recall_show_matching_entry
-!recall_done:
-	    jsr hal_screen_clear
-	    jmp vp_render_status_loop
-
+// Resident, not in the recall view's overlay: Genocide (SPELL overlay) calls
+// it too, and on the ports that overlay the recall view it ran the SPELL
+// overlay's bytes at its address, a stray store into the play slot (BBC
+// playtest hangs at combat_check_levelup, 2026-11-07).
 recall_key_to_screen_code:
     cmp #$41
     bcc !recall_try_shifted+
@@ -120,6 +92,41 @@ recall_key_to_screen_code:
 !invalid:
     clc
     rts
+
+cmd_recall_view:
+#if RECALL_VIEW_OVERLAYED
+    // Body lives in an overlay on this platform; load and tail-call it.
+    lda #RECALL_VIEW_OVL
+    jsr overlay_load
+    bcs !rv_done+
+    jsr recall_view_body
+!rv_done:
+    rts
+#endif
+#if RECALL_VIEW_OVERLAYED
+:RecallViewBodySegment()
+#endif
+recall_view_body:
+#if RECALL_VIEW_OVERLAYED
+.assert "recall_key_to_screen_code stays out of the recall view's overlay (Genocide calls it from SPELL)", recall_key_to_screen_code < recall_view_body, true
+#endif
+    jsr msg_clear
+    lda #0
+    sta zp_cursor_row
+    sta zp_cursor_col
+    lda #<recall_prompt_str
+    sta zp_ptr0
+    lda #>recall_prompt_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string           // literal call: the C128 prompt guard checks it
+    jsr input_prepare_followup_key
+    jsr hal_input_get_key
+    jsr recall_key_to_screen_code
+    bcc !recall_done+
+    jsr recall_show_matching_entry
+!recall_done:
+	    jsr hal_screen_clear
+	    jmp vp_render_status_loop
 
 recall_show_matching_entry:
     lda recall_query_sc
@@ -243,6 +250,20 @@ turn_post_action_searchable_or_die:
     rts
 !dead:
     sec
+    rts
+
+// main_loop_snapshot_view — the player and view position before a command or
+// a paralyzed turn, for the post-turn redraw helpers' scroll test.
+// Clobbers: X
+main_loop_snapshot_view:
+    ldx zp_player_x
+    stx old_player_x
+    ldx zp_player_y
+    stx old_player_y
+    ldx zp_view_x
+    stx old_view_x
+    ldx zp_view_y
+    stx old_view_y
     rts
 
 post_turn_status_only_or_die:

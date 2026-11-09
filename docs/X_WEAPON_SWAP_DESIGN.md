@@ -30,7 +30,7 @@ implementing:
 | # | Maintainer decision | Where this design applies it |
 | --- | --- | --- |
 | 1 | Key is SHIFT+X (normalized `$D8`); plain `x` stays Look | §7.1 |
-| 2 | Reserve the equipment layout for the future cloak slot now, so the cloak needs no renumbering of the secondary and slot 31 never changes meaning twice. The cloak itself is not implemented here | §3: slot 31 `EQUIP_CLOAK` reserved, slot 32 `EQUIP_SECONDARY`, `TOTAL_INV_SLOTS = 33`. Cost +8 B of arrays per port compared with no reservation; the 8-array walk still works (§3.3). C128 needs a 21-byte relocation (§3.5) |
+| 2 | **Superseded 2026-11-08 (maintainer):** slot 31 is the left-hand ring (`EQUIP_RING2`), not the cloak; the cloak will take a new slot (and a save change) when it lands. Originally: reserve the equipment layout for the future cloak slot now, so the cloak needs no renumbering of the secondary and slot 31 never changes meaning twice. The cloak itself is not implemented here | §3: slot 31 `EQUIP_CLOAK` reserved, slot 32 `EQUIP_SECONDARY`, `TOTAL_INV_SLOTS = 33`. Cost +8 B of arrays per port compared with no reservation; the 8-array walk still works (§3.3). C128 needs a 21-byte relocation (§3.5) |
 | 3 | Savings: S2+ (single-block save, one load loop) only. Drop V1 (shared trampoline dispatcher) and V3 (move disarm). Use V3-alt: on C64 the exchange code goes in the Chest overlay; the Items/Help/Chest reload traffic on disk-only machines is an accepted cost | §6, §9. Every other port's Items overlay was re-checked and fits (§8) |
 | 4 | Atari: save version moves to `$16`; `$15` saves stay loadable through the existing 31-slot path | §6.2. Verified by assembly: no extra cost. Atari's loader is 5 B smaller than other ports' because its 30-slot branch compiles out |
 | 5 | The secondary is not pseudo-ID-sensed (VMS behavior) | `EQUIP_END` stays 31, so `core/turn.s` is unchanged (§5.5) |
@@ -353,7 +353,7 @@ Notes:
   from `EQUIP_WEAPON` and the AC range. Slays, brands, launcher, digging tool
   and blows are read from `EQUIP_WEAPON` at attack time. A secondary's bonuses
   therefore count for nothing, as in VMS `py_bonuses(-1)`.
-- **Reserved slot 31** is never touched. A corrupt save that puts an item
+- **Reserved slot 31** (the left-hand ring since 2026-11-08) is never touched. A corrupt save that puts an item
   there is harmless: it is outside `EQUIP_END`, not drawn (§7.2), listed by
   take-off, and recovered to the pack by `t`. No load-time guard is added
   (5 B rejected, corrupt saves only).
@@ -849,7 +849,7 @@ explicitly. Fixture: a fixed `player_data` with known base to-hit/to-dam/AC.
    (`core/turn.s`) never selects slot 32.
 9. **Corrupt secondary:** a non-weapon ID in slot 32 → carry clear, no
    change, "No weapons" literal; `item_takeoff` then moves it to the pack.
-10. **Reserved slot:** slot 31 stays `FI_EMPTY` with zero fields through 1-9;
+10. **Reserved slot** (superseded 2026-11-08: slot 31 is now the left-hand ring): slot 31 stays `FI_EMPTY` with zero fields through 1-9;
     `piw_build_visible_equip_cache` lists slot 32 last and never slot 31.
 
 ### 11.2 Unit: `w` cursed refusal (`platforms/commodore/c64/tests/test_item_ui.s`, next to `:488`/`:860`)

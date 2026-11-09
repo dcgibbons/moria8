@@ -43,7 +43,9 @@ reu_show_status:
 reu_render_progress:
     rts
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
 .label reu_fn_tier_lo = hal_storage_tier_name_lo
 .label reu_fn_tier_hi = hal_storage_tier_name_hi
+#endif
 .label reu_fn_ovl_lo = hal_storage_overlay_name_lo
 .label reu_fn_ovl_hi = hal_storage_overlay_name_hi

@@ -14,6 +14,9 @@
 // payload is loaded once per session by a2_require_play (overlay_storage.s)
 // with signature validation and disk-reload fallback.
 
+// The VMS monster catalog (2026-11-05): fields and Huffman names in aux RAM
+// (monster_catalog_a2.s, cache_layout.s), replacing the four tier files.
+#define HAL_PLATFORM_MONSTER_CATALOG
 #define APPLE2_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define APPLE2_PRODUCT_IRQ_VECTOR_RUNTIME
@@ -39,9 +42,10 @@
 .segmentdef TitleOverlay      [outPrg=OVL_OUT + "/ovl.title",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef A2PlaySlot        [outPrg=OVL_OUT + "/a2.play",     start=$7c00, min=$7c00, max=$9fff]
-.segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$59ff]
-.segmentdef A2HuffData        [outPrg=OVL_OUT + "/a2.huffdata", start=$9900, min=$9900, max=$a9ff]
-.const A2_HUFFDATA_BASE = $9900
+.segmentdef A2AuxData         [outPrg=OVL_OUT + "/a2.auxdata",  start=$3b0c, min=$3b0c, max=$4fff]
+.segmentdef A2Catalog         [outPrg=OVL_OUT + "/a2.catalog",  start=$5000, min=$5000, max=$66ff]
+.segmentdef A2HuffData        [outPrg=OVL_OUT + "/a2.huffdata", start=$8d00, min=$8d00, max=$a9ff]
+.const A2_HUFFDATA_BASE = $8d00
 
 // Huffman data placement: aux RAM at $3B0C (boot-preloaded).
 .macro HuffmanDataSegment() {
@@ -126,6 +130,7 @@ tramp_dig_ability:
 #import "../../core/zeropage.s"
 #import "hal/layout.s"
 #import "memory.s"
+#import "cache_layout.s"   // the aux spans: aux data, catalog fields, overlay cache
 #import "bank_port_consts.s"
 #import "hal/lifecycle_policy.s"
 #import "overlay.s"
@@ -168,6 +173,33 @@ press_key_str:
 #import "../../core/stat_display.s"
 #import "../../core/huffman.s"
 .segment A2HuffData
+#import "../shared/catalog/catalog_names.s"    // The catalog's names, read like the corpus
+// Read-only aux tables ride the corpus slot (boot-loaded, never evicted):
+// 16-item stores filled A2AuxData. Readers use 16-bit aux pointers.
+// Screen-code -> Apple display-code table for inputs $00-$7F (P6). Must
+// reproduce a2_map_char (screen_a2.s) exactly for that range: $00->$C0,
+// $01-$1A->$E1-$FA, $1B-$1F->$DB-$DF, $20-$5A->code|$80, $5B-$5F->$9B-$9F,
+// $60-$7F->$A0. High-half inputs stay on the branch chain. Block-read into
+// the tail of a2_ss_buf once per render_viewport (rv_char_map).
+a2_char_map_aux:
+    .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
+.assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
+
+// Speaker sound patterns for hal_sound_play (services.s): one 16-byte slot
+// per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
+// smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
+a2_sfx_patterns:
+    .byte $e0, 10, $c0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // BUMP: low double thud
+    .byte $50, 8, $90, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // HIT: high-to-low snap
+    .byte $28, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0       // MISS: quick high blip
+    .byte $a0, 6, $70, 6, $48, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // PICKUP: rising chirp
+    .byte $60, 20, $90, 20, $c0, 24, $f0, 28, 0, 0, 0, 0, 0, 0, 0, 0 // DEATH: long descent
+    .byte $80, 8, $60, 8, $40, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // LEVELUP: arpeggio up
+    .byte $58, 12, $66, 12, $58, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 // SPELL: wobble
+    .byte $d0, 16, $b0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // SPELL_FAIL: low buzz
+    .byte $c8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0      // HUNGER_WARN: single low tone
+    .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
+.assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
 ovl_huffdata_end:
 .segment Default
 #import "../../core/dungeon_data.s"
@@ -231,6 +263,8 @@ combat_msg_monster_in_way:
     jmp combat_msg_monster_suffix
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
+#import "monster_catalog_a2.s"
+#import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
 #import "../../core/monster_ai.s"
 #import "../../core/scene_dirty.s"
@@ -1075,19 +1109,19 @@ a2_play_body:
 // Apple item commands call this resident routine while the item overlay is
 // active. Keep the stat transition code in the always-loaded play payload.
 player_adjust_equipment_stat:
+    // By the item, as core/player_adjust_equipment_stat.s: by the slot, every
+    // ring added its p1 to Strength, and the left hand (2026-11-08) would too.
     jsr player_adjust_equipment_stat_prepare
-    cpx #EQUIP_RING
-    bcc !paes_done+
-    cpx #EQUIP_AMULET
-    bne !paes_str+
     lda inv_item_id,x
-    and #1
-    eor #3
-    sbc #1
-    tax
-    jmp !paes_apply+
-!paes_str:
     ldx #0
+    cmp #ITEM_TYPE_RING_STRENGTH
+    beq !paes_apply+
+    ldx #PL_WIS_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !paes_apply+
+    ldx #PL_INT_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_MAGI
+    bne !paes_done+
 !paes_apply:
     jmp player_adjust_equipment_stat_apply
 !paes_done:
@@ -1241,9 +1275,11 @@ a2_ego_suffix_defender: .text " (Defender)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_defender), 0
 a2_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_holy_avenger), 0
+a2_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_slay_dragon), 0
 a2_ego_suffix_slots_end:
 .assert "Apple ego suffix slots are page aligned", <a2_ego_suffix_slots, 0
-.assert "Apple ego suffix slots are 8 x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "Apple ego suffix slots are EGO_TYPE_COUNT x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, EGO_TYPE_COUNT * 16
 
 // Platform-externalized game_loop message strings (welcome, search toggle,
 // stairs). Staged to main RAM by a2_msg_print_indirect_aux at print time;
@@ -1265,30 +1301,6 @@ no_stairs_str:
 cmb_winner_str:
     .text "You have won! Shift+Q to claim victory." ; .byte 0
 
-// Screen-code -> Apple display-code table for inputs $00-$7F (P6). Must
-// reproduce a2_map_char (screen_a2.s) exactly for that range: $00->$C0,
-// $01-$1A->$E1-$FA, $1B-$1F->$DB-$DF, $20-$5A->code|$80, $5B-$5F->$9B-$9F,
-// $60-$7F->$A0. High-half inputs stay on the branch chain. Block-read into
-// the tail of a2_ss_buf once per render_viewport (rv_char_map).
-a2_char_map_aux:
-    .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
-.assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
-
-// Speaker sound patterns for hal_sound_play (services.s): one 16-byte slot
-// per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
-// smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
-a2_sfx_patterns:
-    .byte $e0, 10, $c0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // BUMP: low double thud
-    .byte $50, 8, $90, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // HIT: high-to-low snap
-    .byte $28, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0       // MISS: quick high blip
-    .byte $a0, 6, $70, 6, $48, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // PICKUP: rising chirp
-    .byte $60, 20, $90, 20, $c0, 24, $f0, 28, 0, 0, 0, 0, 0, 0, 0, 0 // DEATH: long descent
-    .byte $80, 8, $60, 8, $40, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // LEVELUP: arpeggio up
-    .byte $58, 12, $66, 12, $58, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 // SPELL: wobble
-    .byte $d0, 16, $b0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0    // SPELL_FAIL: low buzz
-    .byte $c8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0      // HUNGER_WARN: single low tone
-    .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
-.assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
 .segment Default
 
 // Auto-rest disturbance flag (core/turn.s, TRN-007) in resident main RAM:
@@ -1343,6 +1355,7 @@ winner_apply_retirement_bonus_overlay:
     lda player_data + PL_GOLD_2
     adc #$03
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()               // 250,000 more stops at 16,777,215
     lda player_data + PL_XP_0
     clc
     adc #$40
@@ -1548,7 +1561,17 @@ ovl_items_end:
     #import "../../core/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
 
+// Potions of gain stat run from the resident image (the SPELL cache slot is
+// full); everything they call is resident too.
+.segment Default
+#import "../../core/eff_gain_stat.s"
+.segment SpellOverlay
+
 iq_dispatch_p3_spell:
+    cmp #ITEM_TYPE_POT_GAIN_STR
+    bcc !iqp3_not_gain+
+    jmp eff_potion_gain_stat        // potions of gain stat (140-145)
+!iqp3_not_gain:
     cmp #ITEM_TYPE_POT_HEALING
     beq iqp3_healing
     cmp #ITEM_TYPE_POT_RESTORATION
@@ -1561,7 +1584,7 @@ iq_dispatch_p3_spell:
     beq iqp3_cure_critical
     cmp #ITEM_TYPE_POT_NEUTRALIZE
     beq iqp3_neutralize
-    // Fall through: caller constrains A to {96-100, 126}
+    // Fall through: caller constrains A to {96-100, 126} (140-145 above)
 
 iqp3_healing:
     jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
@@ -1582,7 +1605,7 @@ iqp3_resist_heat:
     // No message (upstream prints nothing for resist potions)
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc zp_eff_resist
@@ -1595,7 +1618,7 @@ iqp3_resist_heat:
 iqp3_resist_cold:
     lda #10
     jsr rng_range
-    clc
+    sec                             // + 1: VMS randint(10) + 10, 11-20
     adc #10
     clc
     adc eff_resist_cold_timer
@@ -1623,10 +1646,9 @@ ovl_spell_end:
 
 // Boot copies cached payloads in PAK order. These guards couple current
 // linked sizes to the shared boot/runtime aux-cache manifest.
-.assert "A2 cache TOWN slot fits payload", ovl_town_end - BANKED_DATA_BASE <= A2_AUX_CACHE_UI - A2_AUX_CACHE_TOWN, true
 .assert "A2 cache UI slot fits payload", ovl_ui_end - BANKED_DATA_BASE <= A2_AUX_CACHE_SPELL - A2_AUX_CACHE_UI, true
 .assert "A2 cache SPELL slot fits payload", ovl_spell_end - BANKED_DATA_BASE <= A2_AUX_CACHE_MODAL - A2_AUX_CACHE_SPELL, true
-.assert "A2 cache MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= A2_AUX_CACHE_GEN - A2_AUX_CACHE_MODAL, true
+.assert "A2 cache MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= A2_AUX_CACHE_HUFF - A2_AUX_CACHE_MODAL, true
 
 .segment DungeonGenOverlay
 #import "../../core/special_rooms.s"
@@ -1635,7 +1657,8 @@ ovl_spell_end:
 ovl_gen_end:
 .print "Dungeon gen overlay: " + (ovl_gen_end - $a400) + " bytes"
 .assert "Dungeon gen overlay fits", ovl_gen_end <= $ba00, true
-.assert "Huffman corpus fits the old GEN cache slot", ovl_huffdata_end - A2_HUFFDATA_BASE <= A2_AUX_CACHE_ITEMS - A2_HUFFDATA_BASE, true
+.assert "Huffman segment is linked at its cache slot", A2_HUFFDATA_BASE, A2_AUX_CACHE_HUFF
+.assert "Huffman corpus and catalog names fit their cache slot", ovl_huffdata_end <= A2_AUX_CACHE_ITEMS, true
 .assert "A2 cache ITEMS slot fits payload", ovl_items_end - BANKED_DATA_BASE <= A2_AUX_CACHE_END - A2_AUX_CACHE_ITEMS, true
 .assert "A2 cache full-window read stays in aux RAM", A2_AUX_CACHE_ITEMS + $1600 <= A2_AUX_CACHE_LIMIT, true
 

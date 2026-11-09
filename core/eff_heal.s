@@ -23,6 +23,8 @@ eff_heal:
     lda zp_player_mhp_hi
     sbc zp_player_hp_hi
     bcs eff_heal_sync               // HP <= max HP
+// eff_heal_full — HP = max HP, synced to player_data. Clobbers: A
+eff_heal_full:
     lda zp_player_mhp_lo
     sta zp_player_hp_lo
     lda zp_player_mhp_hi

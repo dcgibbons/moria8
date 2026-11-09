@@ -4,22 +4,30 @@ from pathlib import Path
 import os
 import sys
 
-SAVE_VERSION = 0x13
+# The C128 product build plays the monster catalog: its saves are version
+# $1B and older ones are refused (hal/storage_policy.s), so the fixture is
+# written in that format: 33 inventory slots, the 20-byte known-item bitset,
+# and the door-state block followed by the species table (save.s).
+SAVE_VERSION = 0x1B
 LEGACY_ROOM8_SAVE_VERSION = 0x12
+LEGACY_TOTAL_INV_SLOTS = 31
+ID_KNOWN_BYTES = 20
+MAX_DOOR_STATES = 16
+CATALOG_SLOTS = 32
 
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 96
 ITEM_ID_CAPACITY = 96
-STORE_TOTAL_SLOTS = 96
+STORE_TOTAL_SLOTS = 128
 MAX_ROOMS = 21
 LEGACY_MAX_ROOMS = 8
 MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
-RECALL_DATA_SIZE = 260
+RECALL_DATA_SIZE = 160   # 40 creature rows x 4 (core/recall_defs.s)
 MAP_SIZE = 13068
-TOTAL_INV_SLOTS = 31
+TOTAL_INV_SLOTS = 33
 
 PL_LEVEL = 19
 PL_DLEVEL = 20
@@ -45,6 +53,8 @@ def main() -> int:
         return 1
     save_version = LEGACY_ROOM8_SAVE_VERSION if legacy_room8 else SAVE_VERSION
     max_rooms = LEGACY_MAX_ROOMS if legacy_room8 else MAX_ROOMS
+    inv_slots = LEGACY_TOTAL_INV_SLOTS if legacy_room8 else TOTAL_INV_SLOTS
+    known_bytes = ITEM_ID_CAPACITY if legacy_room8 else ID_KNOWN_BYTES
 
     player = block(PL_STRUCT_SIZE)
     player[PL_LEVEL] = 1
@@ -61,9 +71,14 @@ def main() -> int:
     payload.extend(block(32))   # zp $40-$5f
     payload.extend(block(1))    # eff_fear_timer
     payload.extend(block(4))    # rng
-    for _ in range(8):
-        payload.extend(block(TOTAL_INV_SLOTS))
-    payload.extend(block(ITEM_ID_CAPACITY))
+    item_ids = block(inv_slots)
+    if not legacy_room8:
+        item_ids[31] = item_ids[32] = 0xFF   # reserved cloak and secondary: empty, as the
+                                            # legacy 31-slot loader leaves them
+    payload.extend(item_ids)
+    for _ in range(7):
+        payload.extend(block(inv_slots))
+    payload.extend(block(known_bytes))
     payload.extend(block(12))
     payload.extend(block(12))
     payload.extend(block(4))
@@ -80,6 +95,10 @@ def main() -> int:
     for _ in range(3):
         payload.extend(block(MAX_TRAPS))
     payload.extend(block(MAX_MONSTERS * MONSTER_ENTRY_SIZE))
+    if not legacy_room8:
+        payload.extend(block(1 + MAX_DOOR_STATES * 3))   # door-state table
+        payload.extend(block(CATALOG_SLOTS))              # species ids lo
+        payload.extend(block(CATALOG_SLOTS, 0xFF))        # species ids hi: all empty
     for _ in range(11):
         payload.extend(block(MAX_FLOOR_ITEMS))
     payload.extend(block(RECALL_DATA_SIZE))

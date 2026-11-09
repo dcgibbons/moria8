@@ -88,12 +88,11 @@ OVERLAY_FILES = (
     "OVL.GEN",
 )
 
-TIER_FILES = (
-    "MONSTER.DB1",
-    "MONSTER.DB2",
-    "MONSTER.DB3",
-    "MONSTER.DB4",
-)
+# The monster catalog's records (monster_catalog_a8.s): 125 data bytes per
+# DOS 2.5 sector, staged through the 4 KB $E000 window 32 sectors at a time
+# on a 130XE, so it fits five 4 KB slots.
+CATALOG_FILE = "MONSTER.CAT"
+CATALOG_MAX_SECTORS = 5 * 32
 
 LABEL_RE = re.compile(r"^\.label\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\$([0-9A-Fa-f]+)\b")
 
@@ -198,8 +197,15 @@ def validate_build(build_dir: Path) -> list[str]:
         if end_excl > BANKED_LIMIT:
             errors.append(f"ATARI.BNK end ${end_excl:04X} overlaps CPU vectors (${BANKED_LIMIT:04X})")
 
-    # Check overlays and monster tiers ($E000-$EFFF)
-    for name in OVERLAY_FILES + TIER_FILES:
+    # The monster catalog's records: within the 130XE slots that hold them
+    cat_file = build_dir / CATALOG_FILE
+    if not cat_file.exists():
+        errors.append(f"missing {CATALOG_FILE}")
+    elif -(-cat_file.stat().st_size // 125) > CATALOG_MAX_SECTORS:
+        errors.append(f"{CATALOG_FILE} needs more than {CATALOG_MAX_SECTORS} sectors")
+
+    # Check overlays ($E000-$EFFF)
+    for name in OVERLAY_FILES:
         p = build_dir / name
         if not p.exists():
             errors.append(f"missing {name}")
@@ -253,8 +259,9 @@ def run_selftest() -> int:
         write_synthetic_prg(bdir / "ATARI.BNK", 0xF000, 0x0E80)
         write_synthetic_prg(bdir / "TITLE.DAT", 0xC100, 620)
         write_synthetic_prg(bdir / "boot.prg", 0x0800, 384)
-        for name in OVERLAY_FILES + TIER_FILES:
+        for name in OVERLAY_FILES:
             write_synthetic_prg(bdir / name, 0xE000, 0x0800)
+        (bdir / CATALOG_FILE).write_bytes(bytes(139 * 125 + 49))
 
         errs = validate_build(bdir)
         if errs:

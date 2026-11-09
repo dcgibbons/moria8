@@ -40,12 +40,10 @@ home_put_col1_string:
 home_enter:
     jsr store_draw_screen       // Reuses overlay's draw (skips prices for home)
 
-    // Overwrite menu row 18 with home menu
+    // Overwrite the store menu with the home menu (the gold stays beside it)
     lda #COL_WHITE
     sta zp_text_color
-    lda #18
-    jsr hal_screen_clear_row
-    lda #18
+    lda #STORE_MENU_ROW
     ldx #<hm_menu_str
     ldy #>hm_menu_str
     jsr home_put_col1_string
@@ -107,12 +105,12 @@ home_retrieve:
     cmp #PETSCII_HM_SPACE
     beq !hr_cancel_relay+
 
-    // Convert PETSCII letter to slot index (A=0, L=11)
+    // Convert PETSCII letter to slot index (A=0, P=15)
     sec
     sbc #PETSCII_HM_A
     bcc !hr_cancel_relay+       // Below 'A'
     cmp #STORE_MAX_ITEMS
-    bcs !hr_cancel_relay+       // Above 'L'
+    bcs !hr_cancel_relay+       // Above 'P'
 
     jmp !hr_valid_slot+
 !hr_cancel_relay:
@@ -136,22 +134,8 @@ home_retrieve:
     rts                         // Empty slot
 !hr_slot_occupied:
 
-    // Check inventory room
-    jsr inv_count_items
-    cmp #MAX_INV_SLOTS
-    bcc !hr_has_room+
-
-    // Inventory full
-    lda #COL_RED
-    sta zp_text_color
-    lda #22
-    ldx #<hm_inv_full_str
-    ldy #>hm_inv_full_str
-    jsr home_put_col1_string
-    jmp hal_input_get_key           // Wait, tail call
-
-!hr_has_room:
-    // Copy item from store to inventory
+    // Copy item from store to inventory: a full pack still takes one that
+    // stacks (VMS inven_check_num, Umoria inventoryCanCarryItemCount)
     ldx hm_store_slot
     :AuxReadX(si_item_id)
     sta fi_add_id
@@ -170,7 +154,18 @@ home_retrieve:
     :LoadStoreEgoX()
     sta fi_add_ego
     jsr inv_add_item
+    bcs !hr_has_room+
 
+    // Inventory full
+    lda #COL_RED
+    sta zp_text_color
+    lda #22
+    ldx #<hm_inv_full_str
+    ldy #>hm_inv_full_str
+    jsr home_put_col1_string
+    jmp hal_input_get_key           // Wait, tail call
+
+!hr_has_room:
     // Clear store slot
     ldx hm_store_slot
     lda #FI_EMPTY

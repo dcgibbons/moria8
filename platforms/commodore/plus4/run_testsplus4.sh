@@ -60,6 +60,18 @@ if [ -z "$C1541" ]; then
     else
         C1541="/Applications/VICE/bin/c1541"
     fi
+
+# Images with the monster catalog: MONSTER.IDX's sector table for where
+# MONSTER.CAT1-4 landed on this image (tools/catalog_disk.py fix).
+c1541_catalog() {
+    "$C1541" "$@" || return
+    local img="" prev="" arg
+    for arg in "$@"; do
+        [ "$prev" = "-attach" ] && img="$arg"
+        prev="$arg"
+    done
+    [ -n "$img" ] && python3 "$REPO_ROOT/tools/catalog_disk.py" fix "$img"
+}
 fi
 
 TEST_FILTER="${TEST_FILTER:-}"
@@ -379,10 +391,7 @@ run_boot_title_smoke() {
         "$smoke_out_rel/plus4/boot4.prg" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -390,16 +399,17 @@ run_boot_title_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/boot4.prg" "moria8" \
         -write "$smoke_plus4/boot4.prg" "boot4" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -460,10 +470,7 @@ run_new_game_to_town_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -471,15 +478,16 @@ run_new_game_to_town_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -528,7 +536,7 @@ run_dungeon_entry_smoke() {
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
 
-    if ! suite_selected "$name"; then
+    if ! suite_selected "$name" && ! suite_selected catalog_spawn_plus4; then
         return
     fi
 
@@ -541,10 +549,7 @@ run_dungeon_entry_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -552,15 +557,16 @@ run_dungeon_entry_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -595,6 +601,71 @@ run_dungeon_entry_smoke() {
     else
         FAIL=$((FAIL + 1))
     fi
+    # catalog_spawn_plus4 checks this disk's DL1 monsters.
+    DUNGEON_ENTRY_BOOT_D64="$boot_d64"
+    DUNGEON_ENTRY_MAIN_VS="$main_vs"
+}
+
+# catalog_spawn_plus4 — The monster catalog on the product build: the
+# dungeon-entry smoke's disk (its scripted new game goes down to DL1),
+# stopped where DL1's monsters are placed (item_spawn_level follows
+# monster_spawn_level); the monster table, species table, levels and name
+# pointers, and the hidden name pool ($D800, RAM under the ROMs) are checked
+# against the catalog. The records come from the drive (direct sector reads).
+run_catalog_spawn_smoke() {
+    local name="catalog_spawn_plus4"
+    if ! suite_selected "$name"; then
+        return
+    fi
+    TOTAL=$((TOTAL + 1))
+    echo -n "  $name: "
+    if [ -z "${DUNGEON_ENTRY_BOOT_D64:-}" ] || [ ! -f "$DUNGEON_ENTRY_BOOT_D64" ]; then
+        echo "FAIL (needs the dungeon_entry_plus4 build)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    local main_vs="$DUNGEON_ENTRY_MAIN_VS" sym
+    local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
+    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi; do
+        printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
+        if [ -z "${!sym}" ]; then
+            echo "FAIL (missing $sym in $main_vs)"
+            FAIL=$((FAIL + 1))
+            return
+        fi
+    done
+    local mon_file="$PLUS4_TEST_OUT/$name.mon" log_file="$PLUS4_TEST_OUT/$name.log"
+    local check_log="$PLUS4_TEST_OUT/$name.check.log"
+    : > "$log_file"
+    {
+        # The town's items first, then DL1's.
+        echo "until \$${item_spawn_level}"
+        echo "until \$${item_spawn_level}"
+        printf 'm %s %04x\n' "$monster_table" $(( 16#$monster_table + 32 * 12 - 1 ))
+        printf 'm %s %04x\n' "$cat_slot_id_lo" $(( 16#$cat_slot_id_lo + 63 ))
+        printf 'm %s %04x\n' "$cr_level" $(( 16#$cr_level + 31 ))
+        printf 'm %s %04x\n' "$cr_name_lo" $(( 16#$cr_name_lo + 31 ))
+        printf 'm %s %04x\n' "$cr_name_hi" $(( 16#$cr_name_hi + 31 ))
+        echo "bank ram"
+        echo "m d800 dbff"
+        echo "quit"
+    } > "$mon_file"
+    "$VICE" -config "$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")" \
+        -default +saveres +autostart-delay-random -console -nativemonitor -warp +sound -sounddev dummy \
+        -drive8truedrive -drive8type 1541 -attach8rw -8 "$DUNGEON_ENTRY_BOOT_D64" \
+        +busdevice9 -drive9type 0 +busdevice10 -drive10type 0 \
+        -autostart "$DUNGEON_ENTRY_BOOT_D64" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
+        -limitcycles 900000000 +remotemonitor +binarymonitor > /dev/null 2>&1
+    if ! python3 ../c128/tests/check_catalog128.py "$log_file" d800 5 >"$check_log" 2>&1; then
+        echo "FAIL (catalog species check)"
+        tail -3 "$check_log" | sed 's/^/    /'
+        echo "    Log: $log_file"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    echo "PASS ($(tail -1 "$check_log" | sed 's/^PASS: //'))"
+    PASS=$((PASS + 1))
 }
 
 run_exchange_product_smoke() {
@@ -621,10 +692,7 @@ run_exchange_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_EXCHANGE_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -632,15 +700,16 @@ run_exchange_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -670,7 +739,7 @@ run_exchange_product_smoke() {
         --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
         --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-        --expect-byte-symbol ".exchange_product_cloak_id=0xff" \
+        --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
         --expect-byte-symbol ".current_overlay=0x07" \
         --expect-byte-symbol ".exchange_product_r0c0=0x50" \
@@ -710,10 +779,7 @@ run_chest_open_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -721,15 +787,16 @@ run_chest_open_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -796,10 +863,7 @@ run_balrog_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_BALROG_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -807,15 +871,16 @@ run_balrog_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -877,10 +942,7 @@ run_dungeon_ascent_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -888,15 +950,16 @@ run_dungeon_ascent_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -957,10 +1020,7 @@ run_disarm_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DISARM_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -968,15 +1028,16 @@ run_disarm_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1033,10 +1094,7 @@ run_overlay_load_smoke() {
         "$smoke_out_rel/plus4/boot4.prg" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1044,16 +1102,17 @@ run_overlay_load_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/boot4.prg" "moria8" \
         -write "$smoke_plus4/boot4.prg" "boot4" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1118,16 +1177,17 @@ run_retirement_royal_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/boot4.prg" "moria8" \
         -write "$smoke_plus4/boot4.prg" "boot4" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1182,10 +1242,7 @@ run_wand_selector_product_smoke() {
         "$smoke_out_rel/plus4/boot4.prg" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1193,16 +1250,17 @@ run_wand_selector_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/boot4.prg" "moria8" \
         -write "$smoke_plus4/boot4.prg" "boot4" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1309,10 +1367,7 @@ run_disk_setup_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1320,15 +1375,16 @@ run_disk_setup_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1397,10 +1453,7 @@ run_disk_setup_missing_save_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1408,15 +1461,16 @@ run_disk_setup_missing_save_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1462,24 +1516,22 @@ plus4_load_written_save_check() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT" \
         "$smoke_out/plus4/moria4.prg" \
         "$smoke_out/plus4/title" \
-        "$smoke_out/plus4/monster.db.1" \
-        "$smoke_out/plus4/monster.db.2" \
-        "$smoke_out/plus4/monster.db.3" \
-        "$smoke_out/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $load_name (product disk build)"
         tail -40 "$build_log"
         return 1
     fi
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1505,7 +1557,7 @@ plus4_load_written_save_check() {
         --expect-byte-symbol ".save_product_secondary_dam=0x04" \
         --expect-byte-symbol ".save_product_secondary_flags=0x02" \
         --expect-byte-symbol ".save_product_secondary_ego=0x06" \
-        --expect-byte-symbol ".save_product_cloak_id=0xff" \
+        --expect-byte-symbol ".save_product_ring2_id=0xff" \
         --timeout 20 \
         --retry-timeouts 0 \
         --vice "$VICE"; then
@@ -1542,10 +1594,7 @@ run_save_write_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1553,15 +1602,16 @@ run_save_write_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1613,7 +1663,7 @@ run_save_write_product_smoke() {
             local save_seq="$out_dir/$name.the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "the.game,s" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x08 >>"$build_log" 2>&1; then
+                    || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x0A >>"$build_log" 2>&1; then
                 echo "FAIL: $name (secondary weapon not in the written save)"
                 tail -3 "$build_log"
                 FAIL=$((FAIL + 1))
@@ -1660,10 +1710,7 @@ run_save_media_fail_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1671,15 +1718,16 @@ run_save_media_fail_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1773,10 +1821,7 @@ run_change_save_drive_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1784,15 +1829,16 @@ run_change_save_drive_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1876,10 +1922,7 @@ run_single_drive_save_return_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_RETURN_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1887,15 +1930,16 @@ run_single_drive_save_return_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1973,10 +2017,7 @@ run_single_drive_fresh_save_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1984,15 +2025,16 @@ run_single_drive_fresh_save_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2077,10 +2119,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2088,15 +2127,16 @@ run_single_drive_fresh_save_no_init_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2177,10 +2217,7 @@ run_single_drive_save_wrong_media_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2188,15 +2225,16 @@ run_single_drive_save_wrong_media_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2255,10 +2293,7 @@ run_single_drive_load_wrong_media_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2266,15 +2301,16 @@ run_single_drive_load_wrong_media_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2337,10 +2373,7 @@ run_disk_setup_single_drive_return_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2348,15 +2381,16 @@ run_disk_setup_single_drive_return_product_smoke() {
     fi
 
     rm -f "$boot_d64" "$save_d64" "$program_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2429,10 +2463,7 @@ run_load_wrong_media_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2440,15 +2471,16 @@ run_load_wrong_media_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2524,10 +2556,7 @@ run_load_resume_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2535,15 +2564,16 @@ run_load_resume_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2619,10 +2649,7 @@ run_death_hiscore_single_drive_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_DEATH_RETURN_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2630,15 +2657,16 @@ run_death_hiscore_single_drive_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2714,10 +2742,7 @@ run_single_drive_load_return_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2725,15 +2750,16 @@ run_single_drive_load_return_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2819,10 +2845,7 @@ run_load_then_save_new_empty_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2830,15 +2853,16 @@ run_load_then_save_new_empty_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2944,10 +2968,7 @@ run_single_drive_load_corrupt_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2955,15 +2976,16 @@ run_single_drive_load_corrupt_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -3045,10 +3067,7 @@ run_load_missing_savefile_product_smoke() {
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
-        "$smoke_out_rel/plus4/monster.db.1" \
-        "$smoke_out_rel/plus4/monster.db.2" \
-        "$smoke_out_rel/plus4/monster.db.3" \
-        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
         echo "FAIL: $name (product disk build)"
         tail -80 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3056,15 +3075,16 @@ run_load_missing_savefile_product_smoke() {
     fi
 
     rm -f "$boot_d64"
-    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
-        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
-        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
-        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
-        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -3127,6 +3147,7 @@ run_media_drive10_11_device_probe
 run_boot_title_smoke
 run_new_game_to_town_smoke
 run_dungeon_entry_smoke
+run_catalog_spawn_smoke
 run_exchange_product_smoke
 run_chest_open_product_smoke
 run_balrog_product_smoke
@@ -3135,6 +3156,10 @@ run_dungeon_ascent_smoke
 # pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
 check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
     "tramp_spawn_nest_gold:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold"
+# Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
+# too, if anything replaced it after generation.
+check_static_contract "special_room_monsters_restore_generation_overlay_contract" "main.s" \
+    "tramp_spawn_special_room_monsters:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_special_room_monsters"
 check_static_contract "disarm_command_external_import_contract" "main.s" \
     "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"
 run_disarm_smoke

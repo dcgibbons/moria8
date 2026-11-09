@@ -13,13 +13,18 @@
 // poisoned expiry turn does no damage). Umoria 5.7.15 (pinned 2a2a6b79)
 // src/player_quaff.cpp and src/player_magic.cpp agree on every value tested.
 //
+// Tests 13-17: the potions of gain stat (#140-145), VMS potions.inc cases
+// 1, 4, 7, 10, 17, 26 through misc.inc in_statp: +1 below 18, +1d25 below
+// 88 (18/70), +1d10 below 108 (18/90), else +1, at most 118 (18/100);
+// Constitution also adds 1 to max HP (Moria8 then heals to full).
+//
 // Results at $0400+: $01 = pass, $00 = fail per test.
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 12, $ff      // Result buffer (copied to $0400 at the end)
+tc_results: .fill 17, $ff      // Result buffer (copied to $0400 at the end)
 
 .pc = $080E "Test Code"
 
@@ -36,7 +41,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #11
+    ldx #16
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -271,6 +276,63 @@ tq_range:
     rts
 tq_r_lo: .byte 0
 tq_r_hi: .byte 0
+
+// tg_stat — Stat Y (PL_*_BASE order): base = A, current = X (and its ZP
+// mirror).
+tg_stat:
+    sta player_data + PL_STR_BASE,y
+    txa
+    sta player_data + PL_STR_CUR,y
+    sta zp_player_str,y
+    rts
+
+// tg_range — Quaff gain potion tq_item 40 times from base = current = tq_lo
+// on stat tq_hi, each time checking base in [tq_lo + 1, tq_lo + tg_max],
+// current = base and its ZP mirror = base. Output: tq_ok = 1 when all held;
+// tg_top = the highest base seen.
+tg_range:
+    lda #1
+    sta tq_ok
+    lda #0
+    sta tg_top
+    lda #40
+    sta tq_loop
+!loop:
+    ldy tq_hi
+    lda tq_lo
+    tax
+    jsr tg_stat
+    lda tq_item
+    jsr tq_quaff
+    ldy tq_hi
+    lda player_data + PL_STR_BASE,y
+    cmp tq_lo
+    beq !bad+
+    bcc !bad+
+    sec
+    sbc tq_lo
+    cmp tg_max
+    beq !in+
+    bcs !bad+
+!in:
+    lda player_data + PL_STR_BASE,y
+    cmp player_data + PL_STR_CUR,y
+    bne !bad+
+    cmp zp_player_str,y
+    bne !bad+
+    cmp tg_top
+    bcc !next+
+    sta tg_top
+    jmp !next+
+!bad:
+    lda #0
+    sta tq_ok
+!next:
+    dec tq_loop
+    bne !loop-
+    rts
+tg_max: .byte 0
+tg_top: .byte 0
 
 // tq_hp_in — carry set when 8-bit HP (hi 0) is in [tq_lo, tq_hi]
 tq_hp_in:
@@ -712,6 +774,180 @@ test_start:
     lda #$01
     sta tc_results + 11
 !t12_done:
+
+    // ==========================================
+    // Test 13: Gain Strength (#140) below 18 is +1, no roll; a drained stat
+    // keeps its drain (base 10, current 8 -> 11, 9); a turn; one message.
+    // ==========================================
+    ldy #0
+    lda #10
+    ldx #8
+    jsr tg_stat
+    lda #ITEM_TYPE_POT_GAIN_STR
+    jsr tq_quaff
+    lda #$00
+    sta tc_results + 12
+    lda tq_carry
+    beq !t13_done+
+    lda player_data + PL_STR_BASE
+    cmp #11
+    bne !t13_done+
+    lda player_data + PL_STR_CUR
+    cmp #9
+    bne !t13_done+
+    lda zp_player_str
+    cmp #9
+    bne !t13_done+
+    lda tpm_huff_calls
+    cmp #1
+    bne !t13_done+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_GAIN_STR
+    bne !t13_done+
+    lda #$01
+    sta tc_results + 12
+!t13_done:
+
+    // ==========================================
+    // Test 14: Gain Dexterity (#143) at 50 (18/32) raises 1d25: 40 quaffs
+    // land in 51-75 and one passes 60 (more than 1d10 could).
+    // ==========================================
+    lda #ITEM_TYPE_POT_GAIN_STR + 3
+    sta tq_item
+    lda #50
+    sta tq_lo
+    lda #PL_DEX_BASE - PL_STR_BASE
+    sta tq_hi
+    lda #25
+    sta tg_max
+    jsr tg_range
+    lda #$00
+    sta tc_results + 13
+    lda tq_ok
+    beq !t14_done+
+    lda tg_top
+    cmp #61
+    bcc !t14_done+
+    lda #$01
+    sta tc_results + 13
+!t14_done:
+
+    // ==========================================
+    // Test 15: Gain Wisdom (#142) at 100 (18/82) raises 1d10: 40 quaffs land
+    // in 101-110 and one passes 105.
+    // ==========================================
+    lda #ITEM_TYPE_POT_GAIN_STR + 2
+    sta tq_item
+    lda #100
+    sta tq_lo
+    lda #PL_WIS_BASE - PL_STR_BASE
+    sta tq_hi
+    lda #10
+    sta tg_max
+    jsr tg_range
+    lda #$00
+    sta tc_results + 14
+    lda tq_ok
+    beq !t15_done+
+    lda tg_top
+    cmp #106
+    bcc !t15_done+
+    lda #$01
+    sta tc_results + 14
+!t15_done:
+
+    // ==========================================
+    // Test 16: the cap is 118 (18/100). Gain Intelligence (#141) at base 117,
+    // current 118 (a bonus) -> both 118; Charisma (#145) at base 118,
+    // current 100 stays 118 / 100 and still says so.
+    // ==========================================
+    ldy #PL_INT_BASE - PL_STR_BASE
+    lda #117
+    ldx #118
+    jsr tg_stat
+    lda #ITEM_TYPE_POT_GAIN_STR + 1
+    jsr tq_quaff
+    lda #$00
+    sta tc_results + 15
+    lda player_data + PL_INT_BASE
+    cmp #118
+    bne !t16_done+
+    lda player_data + PL_INT_CUR
+    cmp #118
+    bne !t16_done+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_GAIN_INT
+    bne !t16_done+
+    ldy #PL_CHR_BASE - PL_STR_BASE
+    lda #118
+    ldx #100
+    jsr tg_stat
+    lda #ITEM_TYPE_POT_GAIN_CHR
+    jsr tq_quaff
+    lda player_data + PL_CHR_BASE
+    cmp #118
+    bne !t16_done+
+    lda player_data + PL_CHR_CUR
+    cmp #100
+    bne !t16_done+
+    lda zp_player_chr
+    cmp #100
+    bne !t16_done+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_GAIN_CHR
+    bne !t16_done+
+    lda #$01
+    sta tc_results + 15
+!t16_done:
+
+    // ==========================================
+    // Test 17: Gain Constitution (#144) adds 1 to max HP and heals to full:
+    // CON 10 -> 11, HP 50/200 -> 201/201 in ZP and player_data.
+    // ==========================================
+    ldy #PL_CON_BASE - PL_STR_BASE
+    lda #10
+    ldx #10
+    jsr tg_stat
+    lda #200
+    sta tq_lo
+    lda #0
+    sta tq_hi
+    lda #50
+    ldx #0
+    jsr tq_set_hp
+    lda #ITEM_TYPE_POT_GAIN_STR + 4
+    jsr tq_quaff
+    lda #$00
+    sta tc_results + 16
+    lda player_data + PL_CON_BASE
+    cmp #11
+    bne !t17_done+
+    lda zp_player_con
+    cmp #11
+    bne !t17_done+
+    lda zp_player_mhp_lo
+    cmp #201
+    bne !t17_done+
+    lda player_data + PL_MHP_LO
+    cmp #201
+    bne !t17_done+
+    lda zp_player_hp_lo
+    cmp #201
+    bne !t17_done+
+    lda player_data + PL_HP_LO
+    cmp #201
+    bne !t17_done+
+    lda zp_player_mhp_hi
+    ora zp_player_hp_hi
+    ora player_data + PL_MHP_HI
+    ora player_data + PL_HP_HI
+    bne !t17_done+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_GAIN_CON
+    bne !t17_done+
+    lda #$01
+    sta tc_results + 16
+!t17_done:
 
     jmp test_finish
 

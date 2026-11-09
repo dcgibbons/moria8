@@ -64,7 +64,7 @@ rv_main_buf: .fill A2_HALF_ROW, A2_SPACE
 // a2_title_stage, storage_mli.s), and the row slice is refilled from AUX
 // at the top of every row.
 .label rv_row_map_buf = a2_ss_buf
-// Staged copy of a2_char_map_aux (A2AuxData) for the current redraw (P6):
+// Staged copy of a2_char_map_aux (A2HuffData) for the current redraw (P6):
 // offsets 80-207 of a2_ss_buf, clear of the 78-byte row slice at offset 0.
 // The buffer's aliasing contract (save streams, title staging, and aux
 // string staging never run mid-render) keeps it intact between refills.

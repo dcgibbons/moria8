@@ -39,6 +39,7 @@ test_exit_trampoline:
 .const CF_UNDEAD = $02
 .const CF_EVIL   = $04
 .const CF_ANIMAL = $08
+.const CF_DRAGON = $10
 .const PL_TODMG    = 41
 .const PL_RESERVED = 107
 

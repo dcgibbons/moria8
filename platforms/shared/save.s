@@ -39,6 +39,12 @@
 .const SAVE_ROOM21_VERSION = $13
 .const LEGACY_MAX_ROOMS = 8
 #endif
+#if HAL_STORAGE_LEGACY_STORE12_MIGRATION
+// TODO(release): remove the 12-item store migration (load_read_post_known_store12).
+.const SAVE_STORE16_VERSION = hal_storage_save_store16_version
+.const LEGACY_STORE_MAX_ITEMS = 12
+.assert "12-item store saves are still loadable", SAVE_STORE16_VERSION > OLDEST_SAVE_VERSION && SAVE_STORE16_VERSION == SAVE_VERSION, true
+#endif
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -335,13 +341,11 @@ save_block_table_post_known:
     :save_block_desc(ring_shuffle, 4)
     :save_block_desc(wand_shuffle, 5)
     :save_block_desc(staff_shuffle, 5)
-    :save_block_desc(si_item_id, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_qty, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_p1, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_meta, STORE_TOTAL_SLOTS)
+    // The seven store arrays as one block: they are contiguous in stream
+    // order (store_inventory_data.s), so this matches seven per-array blocks.
+save_block_desc_stores:
+    :save_block_desc(si_item_id, 7 * STORE_TOTAL_SLOTS)
+save_block_table_post_stores:
     :save_block_desc(stairs_up_x, 7)
     :save_block_desc(room_count, 1)
     :save_block_desc(room_x, MAX_ROOMS * 6)
@@ -354,6 +358,11 @@ save_block_table_post_known_end:
 // aligned).
 save_block_table_door_state:
     :save_block_desc(door_state_count, 1 + (MAX_DOOR_STATES * 3))
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // The species in each dungeon creature slot (monster_catalog.s); every
+    // loadable save carries it (OLDEST_SAVE_VERSION = SAVE_DOOR_STATE_VERSION).
+    :save_block_desc(cat_slot_id_lo, cat_slot_id_end - cat_slot_id_lo)
+#endif
 save_block_table_door_state_end:
 
 #if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
@@ -402,6 +411,8 @@ save_block_table_floor_items_direct_end:
 
 .const SAVE_BLOCK_PRE_INVENTORY_COUNT = (save_block_table_pre_inventory_end - save_block_table_pre_inventory) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_PRE_STORES_COUNT = (save_block_desc_stores - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_POST_STORES_COUNT = (save_block_table_post_known_end - save_block_table_post_stores) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_DOOR_STATE_COUNT = (save_block_table_door_state_end - save_block_table_door_state) / SAVE_BLOCK_DESC_SIZE
 #if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 .const SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT = (save_block_table_post_known_room8_end - save_block_table_post_known_room8) / SAVE_BLOCK_DESC_SIZE
@@ -416,6 +427,8 @@ save_block_table_floor_items_direct_end:
 .assert "Inventory arrays contiguous in save stream order", inv_qty == inv_item_id + TOTAL_INV_SLOTS && inv_p1 == inv_item_id + 2 * TOTAL_INV_SLOTS && inv_to_hit == inv_item_id + 3 * TOTAL_INV_SLOTS && inv_to_dam == inv_item_id + 4 * TOTAL_INV_SLOTS && inv_to_ac == inv_item_id + 5 * TOTAL_INV_SLOTS && inv_flags == inv_item_id + 6 * TOTAL_INV_SLOTS && inv_ego == inv_item_id + 7 * TOTAL_INV_SLOTS, true
 .assert "Inventory array offsets fit the 8-bit load offset", 7 * TOTAL_INV_SLOTS < 256, true
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
+.assert "The store block is one descriptor", save_block_table_post_stores - save_block_desc_stores, SAVE_BLOCK_DESC_SIZE
+.assert "The store block covers all seven store arrays", store_inventory_data_end - si_item_id, 7 * STORE_TOTAL_SLOTS
 #if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
 .assert "C128 legacy room8 post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_room8_end - save_block_table_post_known_room8
 #endif
@@ -425,6 +438,9 @@ save_block_table_floor_items_direct_end:
 .assert "Room save arrays stay contiguous", room_type - room_x + MAX_ROOMS, MAX_ROOMS * 6
 .assert "Trap save arrays stay contiguous", trap_type - trap_count + MAX_TRAPS, 1 + (MAX_TRAPS * 3)
 .assert "Door-state save arrays stay contiguous", door_state_val - door_state_count + MAX_DOOR_STATES, 1 + (MAX_DOOR_STATES * 3)
+#if HAL_PLATFORM_MONSTER_CATALOG
+.assert "Catalog saves always carry the species table", SAVE_DOOR_STATE_VERSION, OLDEST_SAVE_VERSION
+#endif
 .assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
 .assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
 .assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
@@ -981,6 +997,8 @@ plus4_test_after_load_magic:
     // 4. Remaining resident state through monster table.
 #if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
     jsr load_read_post_known_state
+#elif HAL_STORAGE_LEGACY_STORE12_MIGRATION
+    jsr load_read_post_known_store12
 #else
     lda #<save_block_table_post_known
     sta zp_ptr1
@@ -1712,6 +1730,9 @@ load_read_door_state:
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_DOOR_STATE_COUNT
     jsr load_read_block_table
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_refetch_slots
+#endif
     lda door_state_count
     cmp #MAX_DOOR_STATES + 1
     bcc !lrds_done+
@@ -1771,6 +1792,72 @@ load_clear_room_metadata_tail:
     cpx #MAX_ROOMS
     bne !lcrmt_loop-
     rts
+#endif
+
+// ============================================================
+// load_read_post_known_store12 — The post-known blocks, from a save of either
+// store size. TODO(release): remove this migration with its C64 define.
+//
+// Saves before SAVE_STORE16_VERSION hold 12 items a store. Each array's eight
+// 12-byte store rows are read into the first 12 slots of its 16-slot rows;
+// the four new slots are empty (id FI_EMPTY, other fields 0). The arrays are
+// contiguous, so the destination simply advances 4 bytes after each row.
+// ============================================================
+#if HAL_STORAGE_LEGACY_STORE12_MIGRATION
+.const STORE12_ROWS = 7 * STORE_COUNT
+.assert "The 12-item migration reads every store of every array", STORE12_ROWS, 7 * 8
+load_read_post_known_store12:
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda load_save_version
+    cmp #SAVE_STORE16_VERSION
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
+    bcs !lrpk12_tail+               // current save: every block as written
+    lda #SAVE_BLOCK_PRE_STORES_COUNT
+    jsr load_read_block_table
+
+    lda #<si_item_id
+    sta zp_ptr0
+    lda #>si_item_id
+    sta zp_ptr0_hi
+    lda #STORE12_ROWS
+    sta zp_temp2
+!lrpk12_row:
+    lda #LEGACY_STORE_MAX_ITEMS
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block             // zp_ptr0 ends past the 12 bytes
+    lda zp_temp2
+    cmp #STORE12_ROWS - STORE_COUNT + 1
+    lda #FI_EMPTY                   // the first array is si_item_id
+    bcs !lrpk12_pad+
+    lda #0
+!lrpk12_pad:
+    ldy #STORE_MAX_ITEMS - LEGACY_STORE_MAX_ITEMS - 1
+!lrpk12_pad_loop:
+    :SaveByteWrite_ptr0_y()
+    dey
+    bpl !lrpk12_pad_loop-
+    lda zp_ptr0
+    clc
+    adc #STORE_MAX_ITEMS - LEGACY_STORE_MAX_ITEMS
+    sta zp_ptr0
+    bcc !lrpk12_next+
+    inc zp_ptr0_hi
+!lrpk12_next:
+    dec zp_temp2
+    bne !lrpk12_row-
+
+    lda #<save_block_table_post_stores
+    sta zp_ptr1
+    lda #>save_block_table_post_stores
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_STORES_COUNT
+!lrpk12_tail:
+    jmp load_read_block_table
 #endif
 
 // ============================================================
@@ -2161,7 +2248,9 @@ save_version_uses_legacy_floor_layout:
 // (aux-RAM map through the p0 thunk instead of MMU banks).
 // ============================================================
 save_write_map_banked:
-save_write_map_c128:
+// save_map_span_c128 — zp_ptr0 = MAP_BASE, save_count = MAP_SIZE (both map
+// streams start here).
+save_map_span_c128:
     lda #<MAP_BASE
     sta zp_ptr0
     lda #>MAP_BASE
@@ -2170,6 +2259,10 @@ save_write_map_c128:
     sta save_count_lo
     lda #>MAP_SIZE
     sta save_count_hi
+    rts
+
+save_write_map_c128:
+    jsr save_map_span_c128
 !swm_loop:
     lda save_count_lo
     ora save_count_hi
@@ -2183,14 +2276,7 @@ save_write_map_c128:
 
 load_read_map_banked:
 load_read_map_c128:
-    lda #<MAP_BASE
-    sta zp_ptr0
-    lda #>MAP_BASE
-    sta zp_ptr0_hi
-    lda #<MAP_SIZE
-    sta save_count_lo
-    lda #>MAP_SIZE
-    sta save_count_hi
+    jsr save_map_span_c128
 !lrm_loop:
     lda save_io_error
     bne !lrm_done+

@@ -77,6 +77,7 @@ hal_storage_title_name:
 .label hal_storage_title_name_len = * - hal_storage_title_name
     .byte 0
 
+#if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
 // Tier data filenames (<= 7 chars for Acorn DFS: "MONDB1".."MONDB4").
 hal_storage_tier_1_name:
     .byte $4d,$4f,$4e,$44,$42,$31               // "MONDB1"
@@ -101,6 +102,7 @@ hal_storage_tier_name_hi:
     .byte >hal_storage_tier_1_name, >hal_storage_tier_2_name, >hal_storage_tier_3_name, >hal_storage_tier_4_name
 hal_storage_tier_name_len:
     .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
+#endif
 
 // Overlay asset filenames (<= 7 chars for Acorn DFS: "OVLSTA".."OVLTTL").
 hal_storage_overlay_start_name:

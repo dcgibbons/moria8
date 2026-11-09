@@ -130,16 +130,6 @@ vdc_write_data:
     jsr vdc_write_reg
     rts
 
-// ============================================================
-// Vector table — matches c64/screen.s interface
-// ============================================================
-screen_vectors:
-    jmp screen_clear        // +0: clear entire screen
-    jmp screen_put_char     // +3: put char at cursor
-    jmp screen_put_string   // +6: put string at (row,col)
-    jmp screen_set_color    // +9: set current text color
-    jmp screen_clear_row    // +12: clear a single row
-
 .label hal_screen_init = screen_noop
 .label hal_screen_clear = screen_clear
 .label hal_screen_clear_row = screen_clear_row

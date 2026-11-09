@@ -48,6 +48,18 @@
 .const PL_GOLD_0    = 43   // Gold (24-bit, up to 16M)
 .const PL_GOLD_1    = 44
 .const PL_GOLD_2    = 45
+// GoldCapOnCarry — After a 24-bit addition to the gold whose last step left
+// the carry out of PL_GOLD_2: stop at 16,777,215 rather than wrap
+// (2026-11-08). VMS Moria and Umoria keep a 32-bit integer no game fills and
+// wrap it; Moria8's 24 bits a long game can fill. Preserves: X, Y. 13 bytes.
+.macro GoldCapOnCarry() {
+    bcc !gcc_done+
+    lda #$ff
+    sta player_data + PL_GOLD_0
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+!gcc_done:
+}
 .const PL_XP_0      = 46   // Experience (24-bit)
 .const PL_XP_1      = 47
 .const PL_XP_2      = 48
@@ -96,7 +108,7 @@
 // Player flags
 .const PLF_MALE     = $01
 .const PLF_SEE_INV  = $02
-.const PLF_FREE_ACT = $04
+// $04 is free: Free Action is equipment-derived (player_pflags PFLAG_FREE_ACT)
 .const PLF_SLOW_DIG = $08
 .const PLF_SEARCHING = $10
 .const PLF_RESTING  = $20
@@ -347,6 +359,7 @@ player_bake_apply_one:
     // stats upward on every save/load rebuild, while wear/takeoff apply p1
     // as raw arithmetic.
     ldx #EQUIP_RING
+!pcs_str_ring:                  // each hand: EQUIP_RING, then EQUIP_RING2
     lda inv_item_id,x
     cmp #24
     bne !pcs_no_str_ring+
@@ -355,6 +368,9 @@ player_bake_apply_one:
     adc inv_p1,x
     sta player_data + PL_STR_CUR
 !pcs_no_str_ring:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pcs_str_ring-
 
     // Amulet of Wisdom uses p1 as a signed WIS modifier; Amulet of the Magi
     // uses p1 as a signed INT modifier. Same deterministic rule as above.
@@ -380,23 +396,23 @@ player_bake_apply_one:
 player_recalc_pflags_equipment:
     lda #0
     ldx #EQUIP_RING
+!pcs_pf_ring:                   // each hand: EQUIP_RING, then EQUIP_RING2
     ldy inv_item_id,x
     cpy #ITEM_TYPE_RING_RESIST_FIRE
     bcc !pcs_pf_none+
     cpy #ITEM_TYPE_RING_SLAYING
     bcs !pcs_pf_none+
-    tya
-    sec
-    sbc #ITEM_TYPE_RING_RESIST_FIRE
-    tax
-    lda pf_bit_table,x
+    ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
 !pcs_pf_none:
-    // Amulet of the Magi also grants see-invisible
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pcs_pf_ring-
+    // Amulet of the Magi also grants see-invisible and Free Action
     ldx #EQUIP_AMULET
     ldy inv_item_id,x
     cpy #ITEM_TYPE_AMULET_MAGI
     bne !pcs_pf_store+
-    ora #PFLAG_SEE_INVIS
+    ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
 !pcs_pf_store:
     sta player_pflags
 
@@ -410,9 +426,11 @@ pf_bit_table:
 stat_work: .byte 0
 
 // Persistent equipment-granted effect flags, recomputed by player_calc_stats.
-// PFLAG_RESIST_FIRE: fire breath damage reduced (like the temp resist timer).
-// PFLAG_RESIST_COLD: reserved for cold mitigation (no cold-breath consumer yet).
+// PFLAG_RESIST_FIRE / PFLAG_RESIST_COLD: fire / frost breath damage div 3
+// (like the temp resist timers; monster_breath.s).
 // PFLAG_SPEED and PFLAG_SEE_INVIS are consumed alongside their timed effects.
+// PFLAG_FREE_ACT: Hold Person, the paralysis touch and the chest's gas trap
+// leave the player unaffected.
 player_pflags: .byte 0
 
 #if !HAL_PLATFORM_COMPACT_PLAY_SLOT
@@ -421,9 +439,10 @@ player_pflags: .byte 0
 // Clobbers: A, X
 player_apply_slaying_bonuses:
     ldx #EQUIP_RING
+!pasb_ring:                     // each hand: EQUIP_RING, then EQUIP_RING2
     lda inv_item_id,x
     cmp #ITEM_TYPE_RING_SLAYING
-    bne !pasb_done+
+    bne !pasb_next+
     lda inv_to_hit,x
     clc
     adc player_data + PL_TOHIT
@@ -432,7 +451,10 @@ player_apply_slaying_bonuses:
     clc
     adc player_data + PL_TODMG
     sta player_data + PL_TODMG
-!pasb_done:
+!pasb_next:
+    cpx #EQUIP_RING2
+    ldx #EQUIP_RING2
+    bcc !pasb_ring-
     rts
 #endif
 
@@ -602,40 +624,6 @@ stat_bonus_index:
 // Umoria combat/stat adjustment helpers. These intentionally do not use
 // stat_bonus_index because exceptional 18/xx values have distinct thresholds.
 #if !PLAYER_STAT_HELPERS_EXTERNAL
-player_adj_0:
-    lda #0
-    rts
-player_adj_m4:
-    lda #<-4
-    rts
-player_adj_m3:
-    lda #<-3
-    rts
-player_adj_m2:
-    lda #<-2
-    rts
-player_adj_m1:
-    lda #<-1
-    rts
-player_adj_1:
-    lda #1
-    rts
-player_adj_2:
-    lda #2
-    rts
-player_adj_3:
-    lda #3
-    rts
-player_adj_4:
-    lda #4
-    rts
-player_adj_5:
-    lda #5
-    rts
-player_adj_6:
-    lda #6
-    rts
-
 player_str_tohit_adj:
     cmp #4
     bcc player_adj_m3
@@ -691,57 +679,62 @@ player_dex_tohit_adj:
     bcc player_adj_4
     bcs player_adj_5
 
-player_adj2_m4:
-    lda #<-4
-    rts
-player_adj2_m3:
-    lda #<-3
-    rts
-player_adj2_m2:
-    lda #<-2
-    rts
-player_adj2_m1:
-    lda #<-1
-    rts
-player_adj2_0:
+// One return sled, midway so every branch above and below reaches it
+// (a second copy, player_adj_*, cost 30 bytes until 2026-11-07).
+player_adj_0:
     lda #0
     rts
-player_adj2_1:
+player_adj_m4:
+    lda #<-4
+    rts
+player_adj_m3:
+    lda #<-3
+    rts
+player_adj_m2:
+    lda #<-2
+    rts
+player_adj_m1:
+    lda #<-1
+    rts
+player_adj_1:
     lda #1
     rts
-player_adj2_2:
+player_adj_2:
     lda #2
     rts
-player_adj2_3:
+player_adj_3:
     lda #3
     rts
-player_adj2_4:
+player_adj_4:
     lda #4
     rts
-player_adj2_5:
+player_adj_5:
     lda #5
+    rts
+player_adj_6:
+    lda #6
     rts
 
 player_dex_ac_adj:
     cmp #4
-    bcc player_adj2_m4
+    bcc player_adj_m4
     cmp #5
-    bcc player_adj2_m3
+    bcc player_adj_m3
     cmp #6
-    bcc player_adj2_m2
+    bcc player_adj_m2
     cmp #7
-    bcc player_adj2_m1
+    bcc player_adj_m1
     cmp #15
-    bcc player_adj2_0
+    bcc player_adj_0
     cmp #18
-    bcc player_adj2_1
+    bcc player_adj_1
     cmp #59
-    bcc player_adj2_2
+    bcc player_adj_2
     cmp #94
-    bcc player_adj2_3
+    bcc player_adj_3
     cmp #117
-    bcc player_adj2_4
-    bcs player_adj2_5
+    bcc player_adj_4
+    bcs player_adj_5
 
 player_con_hp_adj:
     cmp #7
@@ -751,14 +744,14 @@ player_con_hp_adj:
     rts
 !check17:
     cmp #17
-    bcc player_adj2_0
+    bcc player_adj_0
     cmp #18
-    bcc player_adj2_1
+    bcc player_adj_1
     cmp #94
-    bcc player_adj2_2
+    bcc player_adj_2
     cmp #117
-    bcc player_adj2_3
-    bcs player_adj2_4
+    bcc player_adj_3
+    bcs player_adj_4
 #endif
 
 // player_calc_combat — Calculate combat bonuses from current stats

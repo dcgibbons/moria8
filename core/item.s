@@ -35,12 +35,13 @@
 .assert "Floor item table fits in platform floor-item page", fi_meta + MAX_FLOOR_ITEMS <= FLOOR_ITEM_BASE + 256, true
 
 .const FI_META_EGO_MASK    = $07
+.const FI_META_EGO_HI      = $80   // ego bit 3 (Slay Dragon, 2026-11-07), in the bit that was unused
 .const FI_META_FLAGS_SHIFT = 3
 .const FI_META_FLAGS_MASK  = $78
 
 // ============================================================
 // Inventory Table — TOTAL_INV_SLOTS slots: 22 carried, then equipment
-// (EQUIP_WEAPON..EQUIP_AMULET, reserved EQUIP_CLOAK, EQUIP_SECONDARY)
+// (EQUIP_WEAPON..EQUIP_AMULET, EQUIP_RING2, EQUIP_SECONDARY)
 // ============================================================
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_qty:     .fill TOTAL_INV_SLOTS, 0
@@ -134,6 +135,14 @@ floor_item_get_flags_x:
 // Output: A = ego type (0=none)
 floor_item_get_ego_x:
     lda fi_meta,x
+    and #FI_META_EGO_HI
+    beq !fge_lo+
+    lda fi_meta,x
+    and #FI_META_EGO_MASK
+    ora #$08
+    rts
+!fge_lo:
+    lda fi_meta,x
     and #FI_META_EGO_MASK
     rts
 
@@ -170,23 +179,10 @@ item_init_floor:
 // Clobbers: A, X
 item_init_inventory:
     ldx #TOTAL_INV_SLOTS - 1
-    lda #FI_EMPTY
 !iiv_loop:
-    sta inv_item_id,x
+    jsr inv_clear_slot
     dex
     bpl !iiv_loop-
-    ldx #TOTAL_INV_SLOTS - 1
-    lda #0
-!iiv_stat_loop:
-    sta inv_qty,x
-    sta inv_p1,x
-    sta inv_to_hit,x
-    sta inv_to_dam,x
-    sta inv_to_ac,x
-    sta inv_flags,x
-    sta inv_ego,x
-    dex
-    bpl !iiv_stat_loop-
     rts
 
 // floor_item_add — Add an item to the floor item table
@@ -234,7 +230,11 @@ floor_item_add:
     asl
     sta zp_temp0
     lda fi_add_ego
+    cmp #$08
+    bcc !fpa_lo+
     and #FI_META_EGO_MASK
+    ora #FI_META_EGO_HI
+!fpa_lo:
     ora zp_temp0
     sta fi_meta,x
     lda fi_add_to_hit
@@ -260,10 +260,6 @@ floor_item_add:
     inc zp_item_count
 
     sec                         // Success
-    rts
-
-!fia_full:
-    clc                         // Table full
     rts
 
 // floor_item_remove — Remove floor item at slot X
@@ -454,7 +450,7 @@ inv_consume_one:
 // Clobbers: A, X
 inv_remove_item:
     cpx #MAX_INV_SLOTS - 1
-    bcs !iri_clear_slot+
+    bcs inv_clear_slot
 !iri_shift_loop:
     lda inv_item_id + 1,x
     sta inv_item_id,x
@@ -475,7 +471,8 @@ inv_remove_item:
     inx
     cpx #MAX_INV_SLOTS - 1
     bcc !iri_shift_loop-
-!iri_clear_slot:
+// inv_clear_slot — Empty inventory slot X. Preserves: X, Y. Clobbers: A
+inv_clear_slot:
     lda #FI_EMPTY
     sta inv_item_id,x
     lda #0
@@ -488,7 +485,9 @@ inv_remove_item:
     sta inv_ego,x
     rts
 
-// inv_count_items — Count used carried slots (0-21)
+#if C64_UNIT_TEST || C128_UNIT_TEST
+// inv_count_items — Count used carried slots (0-21). No product caller; the
+// unit tests keep it (test_item.s).
 // Output: A = count
 // Clobbers: X
 inv_count_items:
@@ -503,6 +502,7 @@ inv_count_items:
 !ici_done:
     txa
     rts
+#endif
 
 #if ITEM_SPAWN_IN_GEN_OVERLAY
 // The port runs this from OVL.GEN behind a resident item_spawn_level
@@ -668,24 +668,7 @@ item_spawn_level:
 #else
     jsr pick_item_type
 #endif
-    sta fi_add_id
-
-    // Roll enchantment
-    jsr roll_enchantment
-    sta fi_add_p1
-
-    // fi_add_* stat fields and fi_add_flags set by roll_enchantment.
-
-    // Roll ego type for weapons (0=none for non-weapons)
-    lda fi_add_id
-#if HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
-    // A2/CX16: generation executes in the GEN overlay window; the ego trampoline
-    // must restore it or the item_spawn_level continuation runs OVL.ITEMS.
-    jsr tramp_roll_ego_type_gen
-#else
-    jsr tramp_roll_ego_type
-#endif
-    sta fi_add_ego
+    jsr isl_roll_item           // id, enchantment, ego
 
     // Set qty: ammo spawns in stacks, everything else = 1
     lda #1
@@ -702,10 +685,8 @@ item_spawn_level:
     sta fi_add_qty
 !isl_qty_done:
 
-    jsr floor_item_add
-    bcc !isl_ngold_skip+        // Table full — skip
+    jsr floor_item_add          // a full table skips it
 
-!isl_ngold_skip:
     inc isl_idx
     jmp !isl_ngold_loop-
 
@@ -811,19 +792,7 @@ item_spawn_level:
 #else
     jsr pick_item_type
 #endif
-    sta fi_add_id
-
-    jsr roll_enchantment
-    sta fi_add_p1
-
-    // Roll ego type for treasure room items
-    lda fi_add_id
-#if HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
-    jsr tramp_roll_ego_type_gen
-#else
-    jsr tramp_roll_ego_type
-#endif
-    sta fi_add_ego
+    jsr isl_roll_item           // id, enchantment, ego
 
     pla                         // Restore real dlvl
     sta zp_player_dlvl
@@ -831,14 +800,31 @@ item_spawn_level:
     lda #1
     sta fi_add_qty
 
-    jsr floor_item_add
-    bcc !isl_treasure_skip+
+    jsr floor_item_add          // a full table skips it
 
 !isl_treasure_skip:
     inc isl_target
     jmp !isl_treasure_loop-
 
 !isl_all_done:
+    rts
+
+// isl_roll_item — A = the item type picked: store it, roll its enchantment
+// (roll_enchantment also sets the fi_add_* stat fields and flags) and its ego
+// type (0 for non-weapons).
+isl_roll_item:
+    sta fi_add_id
+    jsr roll_enchantment
+    sta fi_add_p1
+    lda fi_add_id
+#if HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
+    // A2/CX16: generation executes in the GEN overlay window; the ego trampoline
+    // must restore it or the item_spawn_level continuation runs OVL.ITEMS.
+    jsr tramp_roll_ego_type_gen
+#else
+    jsr tramp_roll_ego_type
+#endif
+    sta fi_add_ego
     rts
 #if ITEM_SPAWN_IN_GEN_OVERLAY
 :ItemSpawnRestoreSegment()
@@ -891,6 +877,7 @@ item_pickup:
     lda player_data + PL_GOLD_2
     adc #0
     sta player_data + PL_GOLD_2
+    :GoldCapOnCarry()
 
     // Build message: "You found N gold pieces."
     lda #0
@@ -923,19 +910,8 @@ item_pickup:
 
 !ipu_not_gold:
     // --- Non-gold item pickup ---
-    // Check if inventory full
-    jsr inv_count_items
-    cmp #MAX_INV_SLOTS
-    bcc !ipu_has_room+
-
-    // Pack full
-    ldx #HSTR_UIS_PACK_FULL
-    jsr huff_print_msg
-    clc
-    rts
-
-!ipu_has_room:
-    // Copy item to inventory
+    // Copy item to inventory: a full pack still takes one that stacks (VMS
+    // inven_check_num, Umoria inventoryCanCarryItemCount)
     ldx ipu_slot
     lda fi_item_id,x
     sta fi_add_id
@@ -954,7 +930,15 @@ item_pickup:
     jsr floor_item_get_ego_x
     sta fi_add_ego
     jsr inv_add_item
-    // carry set = success (should always succeed since we checked)
+    bcs !ipu_added+
+
+    // Pack full
+    ldx #HSTR_UIS_PACK_FULL
+    jsr huff_print_msg
+    clc
+    rts
+
+!ipu_added:
 
     // Build message: "You picked up a <name>."
     lda #0
@@ -1347,7 +1331,7 @@ tunnel_spawn_gold:
 .segment DungeonGenOverlay
 #endif
 
-// Items 2-139 sorted ascending by it_min_level (ruined chest 134 excluded)
+// Items 2-145 sorted ascending by it_min_level (ruined chest 134 excluded)
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
@@ -1370,8 +1354,9 @@ pit_sorted:
     .byte 34, 35, 68, 73, 83, 93
     // Level 7 (5 items)
     .byte 71, 80, 91, 123, 130
-    // Level 8 (7 items)
+    // Level 8 (13 items)
     .byte 56, 59, 69, 75, 97, 127, 139
+    .byte 140, 141, 142, 143, 144, 145   // potions of gain stat (VMS level 25)
     // Level 9 (5 items)
     .byte 76, 104, 106, 112, 131
     // Level 10 (5 items)
@@ -1392,11 +1377,11 @@ pit_level_bounds:
     .byte 97     // level 5: +14 = 97
     .byte 103    // level 6: +6 = 103
     .byte 108    // level 7: +5 = 108
-    .byte 115    // level 8: +7 = 115
-    .byte 120    // level 9: +5 = 120
-    .byte 125    // level 10: +5 = 125
-    .byte 129    // level 11: +4 = 129
-    .byte 137    // level 12: +8 = 137
+    .byte 121    // level 8: +13 = 121
+    .byte 126    // level 9: +5 = 126
+    .byte 131    // level 10: +5 = 131
+    .byte 135    // level 11: +4 = 135
+    .byte 143    // level 12: +8 = 143
 pit_level_bounds_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -1864,7 +1849,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 140
+.assert "Item type count", ITEM_TYPE_COUNT, 146
 .assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
 .assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
 .assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT

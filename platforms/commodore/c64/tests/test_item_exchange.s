@@ -92,14 +92,24 @@ monster_attack_player:
 player_update_hunger_state:
     sec
     rts
+// The production damage entries' shape (monster_attack.s): 8-bit, or 16-bit
+// with the high byte in mad_dmg_hi (breath); acid breath's armour damage
+// finds no armour here.
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+    clc
+    rts
 mon_atk_apply_damage:
+    lda #0
+    sta mad_dmg_hi
+mon_atk_apply_damage_16:
     lda zp_player_hp_lo
     sec
     sbc zp_combat_dmg
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
     lda zp_player_hp_hi
-    sbc #0
+    sbc mad_dmg_hi
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
     bmi !mad_dead+
@@ -375,7 +385,7 @@ test_start:
     jsr item_exchange
     :EXPECT_CC()
     :EXPECT_SLOT(EQUIP_WEAPON, rec_empty)
-    :EXPECT_SLOT(EQUIP_CLOAK, rec_empty)
+    :EXPECT_SLOT(EQUIP_RING2, rec_empty)
     :EXPECT_SLOT(EQUIP_SECONDARY, rec_empty)
     :EXPECT_ROW(0, s_no_weapons)
     :END_TEST(0)
@@ -545,7 +555,7 @@ test_start:
     :SEED(EQUIP_BODY, rec_armor)
     :SEED(EQUIP_SECONDARY, rec_dagger)
     jsr item_exchange
-    :EXPECT_SLOT(EQUIP_CLOAK, rec_empty)
+    :EXPECT_SLOT(EQUIP_RING2, rec_empty)
     jsr piw_build_visible_equip_cache
     :EXPECT_A(3)
     :EXPECT_MEM(piw_visible_slots + 0, 22)

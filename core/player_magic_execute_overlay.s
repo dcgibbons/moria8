@@ -264,7 +264,7 @@ ped_s14:
     ldx #HSTR_PIQ_CLEANSED
     jmp huff_print_msg
 ped_s15:
-    jmp eff_resist_heat_cold
+    jmp pmx_add_resist_heat_cold_msg   // its two rolls there
 ped_s17:
     lda #3
     ldx #6
@@ -439,13 +439,6 @@ eff_staff_speed:
     sec
     adc #15
     jmp pmx_add_speed_msg
-
-eff_resist_heat_cold:
-    lda #10
-    jsr rng_range
-    clc
-    adc #10
-    jmp pmx_add_resist_heat_cold_msg
 
 eff_sense_invisible:
     jmp pmx_set_see_invisible_msg
