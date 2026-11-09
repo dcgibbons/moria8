@@ -339,9 +339,12 @@ STRONG_PER_DLVL = 2      # strong potions: 5 + one per this many levels of the d
 RECALL_RESERVE_RICH = 6  # Word of Recall to carry once rich: two a round trip, and a level-34 Priest
                          # with 4,000K gold recalled up every ~2,500 steps for more (2026-11-07)
 SCOUT_FROM = 20          # dungeon level from which a level is scouted with detection on arrival
-SCOUT_EVERY = 500        # ... and again every this many steps on it
+SCOUT_EVERY = 100        # ... and again every this many steps on it, or once the view has moved
+                         # half a screen: Detect Evil sees only the screen (VMS detect_evil, the panel)
 BREATH_LETHAL = 0.9      # a caster in view whose biggest spell or breath is this share of HP or more: out of its sight
 UNSEEN_BREATH_STEPS = 40 # steps a breath from out of sight is remembered as the next one's size
+UNSEEN_BREATHS = 2       # ... and the breaths it is weighed as: no sight line to step out of
+SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
 LEAVE_WALK_STEPS = 10    # stairs farther than this on a deadly level: Word of Recall first
 TELEPORT_JUMP = 10       # a move farther than this within a level: teleported, the unseen breath behind
@@ -521,6 +524,7 @@ class LevelMemory:
     clear_skip: dict[Pos, int] = field(default_factory=dict)   # blocker tile -> step it may be chosen again
     casters: dict[tuple[str, int], int] = field(default_factory=dict)   # caster kind -> step last seen or heard
     scouted_at: int | None = None     # the step Detect Evil (or Detect Monsters) was last cast here
+    scouted_view: Pos | None = None   # ... and the view's origin then (zp_view_x/y)
     deadly: Pos | None = None         # where a creature that could kill from full HP in one breath was seen
     breath: tuple[int, int] | None = None   # (step, HP lost) of the last breath taken
     breather: tuple[int, int] | None = None # (step last seen, biggest turn's burst) of the breathers seen
@@ -1365,9 +1369,14 @@ class Brain:
         if lethal:
             worst = max(lethal.values())
             who = f"the '{view.creatures[max(lethal, key=lethal.get)].glyph}'"
-        elif breath is not None and obs.step - breath[0] < UNSEEN_BREATH_STEPS and breath[1] >= BREATH_LETHAL * obs.hp:
-            # Breathed on from out of sight: as big again, from who knows where.
-            worst, who = breath[1], "a breath unseen"
+        elif breath is not None and obs.step - breath[0] < UNSEEN_BREATH_STEPS \
+                and UNSEEN_BREATHS * breath[1] >= BREATH_LETHAL * obs.hp:
+            # Breathed on from out of sight: as big again, from who knows
+            # where, and with no sight line to step out of, twice before the
+            # bot finds it or gets away. A level-37 Priest took 106 from an
+            # unseen Young Multi-Hued Dragon, explored on at 179/285, and was
+            # at 74 after the next (C64 Balrog, 2026-11-08).
+            worst, who = UNSEEN_BREATHS * breath[1], "breaths unseen"
         else:
             return None
         for potion in sorted(POTION_HEAL, key=POTION_HEAL.get, reverse=True):
@@ -1400,20 +1409,45 @@ class Brain:
 
     def scout(self, obs: Observation, view: View) -> Decision | None:
         """Deep, with nothing in view: Detect Evil (or Detect Monsters) on
-        arrival and every SCOUT_EVERY steps, as a player looks before
-        walking into the dark. Six of the first seven deaths of a level-34
-        Half-Troll Priest's copies were dragons; one breathed from a dark
-        room it never saw, at 224/245 HP (2026-11-07)."""
+        arrival, again once the view has moved half a screen, and every
+        SCOUT_EVERY steps, as a player looks before walking into the dark.
+        Detection sees only the screen (VMS detect_evil, Umoria's panel), a
+        fifth of a C64 level: "You sense no evil nearby." on arrival, then a
+        Mature Red Dragon breathed 320 from the dark 68 steps on, and a Young
+        Multi-Hued Dragon 106 and 105 at 340 (C64 Balrog, clvl 37,
+        2026-11-08). Again only with the mana for the best heal kept."""
         if obs.dlvl < SCOUT_FROM or self.level.deadly is not None or self.threats(view):
             return None
-        if self.level.scouted_at is not None and obs.step - self.level.scouted_at < SCOUT_EVERY:
-            return None
         magic = self.magic
-        spell = next((name for name in (DETECT_EVIL, DETECT_MONSTERS) if magic.can(obs, name)), None)
+        origin = self.view_origin(obs)
+        able = magic.can
+        if self.level.scouted_at is not None:
+            if not self.view_moved(obs, origin) and obs.step - self.level.scouted_at < SCOUT_EVERY:
+                return None
+            able = magic.spare
+        spell = next((name for name in (DETECT_EVIL, DETECT_MONSTERS) if able(obs, name)), None)
         if spell is None:
             return None
-        self.level.scouted_at = obs.step
+        self.level.scouted_at, self.level.scouted_view = obs.step, origin
         return Decision(*magic.pray(spell, f"scout the level: {spell}"))
+
+    @staticmethod
+    def view_origin(obs: Observation) -> Pos | None:
+        """The map square at the screen's top left (zp_view_x/y), if known."""
+        abi = obs.abi
+        if abi is None or not hasattr(abi, "zp_view_x") or not hasattr(abi, "zp_view_y"):
+            return None
+        return (obs.zp8("zp_view_x"), obs.zp8("zp_view_y"))
+
+    def view_moved(self, obs: Observation, origin: Pos | None) -> bool:
+        """The view has moved half a screen or more since the last scouting:
+        new ground on it that Detect Evil has not seen."""
+        held = self.level.scouted_view
+        if origin is None or held is None or obs.abi is None:
+            return False
+        width = getattr(obs.abi, "hal_layout_viewport_w", 38)
+        height = getattr(obs.abi, "hal_layout_viewport_h", 19)
+        return abs(origin[0] - held[0]) * 2 >= width or abs(origin[1] - held[1]) * 2 >= height
 
     def turn_burst(self, c: Creature, obs: Observation, lasting: bool = False,
                    assume: frozenset[str] = frozenset()) -> int:
@@ -4174,8 +4208,13 @@ class Brain:
         # contact is escaped at once: characters at clvl 23 on DL26 went from
         # 146 HP to dead in three turns beside a Quylthulg's Banshee (M7
         # queue, 2026-10-31), the stairs and Word of Recall too slow.
+        # Not from what is far beneath the character, unhurt: a level-37
+        # Priest prayed Portal at 285/285 beside a level-11 Nasty little Gnome
+        # that had summoned help, four times (C64 Balrog, 2026-11-08).
         summoned = ("summon_phase" in self.goal.tactics and self.level.summoned is not None
-                    and obs.step - self.level.summoned <= SUMMON_MEMORY)
+                    and obs.step - self.level.summoned <= SUMMON_MEMORY
+                    and (obs.hp < RETREAT_HP * obs.mhp
+                         or any(c.level * SUMMON_PEER_DEN >= obs.clvl * SUMMON_PEER_NUM for c in beside)))
         outmatched = summoned or any(self.dangerous(c, obs) for c in beside) or obs.step < self.heals_losing_until
         # Hit by what cannot be seen (blind, or invisible) while the heals
         # lose: the escape too, with nothing beside in view.
@@ -4354,6 +4393,13 @@ class Brain:
             return None
         if hazard or obs.dlvl == 0 or self.threats(view) or obs.step < self.search_mode_after:
             return None
+        if obs.dlvl >= SCOUT_FROM:
+            # Not where breathers live (the game ends it on each new level):
+            # every step is two of their turns, and one in the dark never
+            # comes into view to end it. A Mature Red Dragon breathed twice in
+            # one step, 320 at 288/288 (C64 Balrog, clvl 37, 2026-11-08).
+            # Deep, a player finds traps by magic, not at half speed.
+            return None
         self.search_mode_after = obs.step + SEARCH_MODE_EVERY
         return Decision(KEY_SEARCH_MODE, "search-mode", "nothing in view: search mode on")
 
@@ -4461,6 +4507,13 @@ class Brain:
             # Poison drains a point a turn; the creature beside does more: a
             # Gnome Priest prayed Neutralize Poison twice beside a Black Mamba
             # from 29 HP and died (M7 queue, 2026-10-31). Heal first.
+            cure = None
+        poisoners = knowledge.poisoner_kinds()
+        if "heal_first" in self.goal.tactics and any((c.glyph, c.level) in poisoners for c in self.adjacent):
+            # Cured after the fight: the poisoner's next hit poisons again. A
+            # level-37 Priest prayed Neutralize Poison seven times beside a
+            # Ninja, its mana gone before the dragon came (C64 Balrog,
+            # 2026-11-08).
             cure = None
         if self.poisoned and cure is not None:
             # Poison drains a 6-12 HP Mage or Priest a point a turn for 11-20

@@ -275,6 +275,16 @@ def ranged_kinds() -> frozenset[tuple[str, int]]:
 
 
 ATK_PARALYZE = 11   # core/monster.s: the paralysing touch or gaze (mon_atk_effect_paralyze)
+ATK_POISON = 14     # ... and the poisoning one
+
+
+@lru_cache(maxsize=1)
+def poisoner_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) of the shipped creatures whose blows
+    poison: curing beside one is undone by its next hit."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, a, b in zip(tables["display"], tables["level"], tables["atk0_type"], tables["atk1_type"])
+                     if ATK_POISON in (a, b))
 
 
 @lru_cache(maxsize=1)

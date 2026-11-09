@@ -1084,7 +1084,12 @@ class HealBeforeCureTest(unittest.TestCase):
         # A King Cobra (normal speed; VMS: 1d2 spit, 3d4 poison bite, against
         # AC 20 about 4 a turn) is one the heal outruns.
         self.assertIn("Cure Light Wounds", self.decide("deep", 25))
-        self.assertIn("Neutralize Poison", self.decide("deep", 50))   # not hurt: cure the poison
+        # Not hurt: the poison is cured after the fight, as the cobra's next
+        # bite poisons again (a level-37 Priest prayed Neutralize Poison seven
+        # times beside a Ninja, C64 Balrog 2026-11-08); beside a creature that
+        # does not poison, at once.
+        self.assertNotIn("Neutralize Poison", self.decide("deep", 50))
+        self.assertIn("Neutralize Poison", self.decide("deep", 50, ("p", 1)))
         self.assertIn("Neutralize Poison", self.decide("clvl10", 25))   # the frozen goals keep their order
 
     def test_no_heal_that_a_black_mamba_outruns(self) -> None:
@@ -1799,6 +1804,22 @@ class SummonPhaseTest(unittest.TestCase):
             brain.adjacent = [Creature("G", 24)]
             brain.level.summoned = obs.step
             self.assertEqual(brain.phase_due(obs), expected)
+
+    def test_not_from_a_creature_far_beneath_the_character(self) -> None:
+        """2026-11-08: a level-37 Priest prayed Portal four times at 285/285
+        beside a level-11 Nasty little Gnome that had summoned help."""
+        from moria_playtest.brain import Brain
+        from moria_playtest.goals import GOALS
+        from moria_playtest.view import Creature
+        from test_m1 import command_obs
+        brain = Brain(GOALS["deep"])
+        brain.phase = 2
+        brain.adjacent = [Creature("p", 11)]
+        full = command_obs(pos=(5, 5), dlvl=34, clvl=37, hp=285, mhp=285)
+        brain.level.summoned = full.step
+        self.assertFalse(brain.phase_due(full))
+        hurt = command_obs(pos=(5, 5), dlvl=34, clvl=37, hp=150, mhp=285)
+        self.assertTrue(brain.phase_due(hurt))                     # hurt: escaped as before
 
 
 @contextlib.contextmanager

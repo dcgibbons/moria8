@@ -1615,7 +1615,7 @@ class BreathGuardTest(unittest.TestCase):
         o = command_obs(pos=(10, 10), dlvl=31, clvl=34, hp=13, mhp=245,
                         rows={0: "the Ancient Blue Dragon breathes fire!"})
         decision = brain.decide(o, view)
-        self.assertEqual((decision.layer, decision.reason), ("phase", "a breath unseen could breathe 232: read Phase Door"))
+        self.assertEqual((decision.layer, decision.reason), ("phase", "breaths unseen could breathe 464: read Phase Door"))
         self.assertEqual(brain.level.deadly, (10, 10))                # one to leave: it could kill from full HP
         later = command_obs(pos=(10, 10), dlvl=31, clvl=34, hp=13, mhp=245)
         later.step = o.step + UNSEEN_BREATH_STEPS
@@ -1624,6 +1624,19 @@ class BreathGuardTest(unittest.TestCase):
         far = command_obs(pos=(35, 12), dlvl=31, clvl=34, hp=13, mhp=245)
         brain.decide(far, town_view((35, 12), (40, 40), dlvl=31))       # teleported 25 squares
         self.assertIsNone(brain.level.breath)
+
+    def test_an_unseen_breath_counts_twice(self) -> None:
+        """2026-11-08: a level-37 Priest took 106 from an unseen Young
+        Multi-Hued Dragon, explored on at 179/285, and was at 74 after the
+        next; with no sight line to leave, two more are as likely as one."""
+        brain = Brain(GOALS["deep"])
+        brain.phase = 2
+        view = town_view((10, 10), (40, 40), dlvl=34)                 # nothing in view
+        o = command_obs(pos=(10, 10), dlvl=34, clvl=37, hp=179, mhp=285)
+        brain.level.breath = (o.step, 106)
+        self.assertEqual(brain.breath_guard(o, view).reason, "breaths unseen could breathe 212: read Phase Door")
+        well = command_obs(pos=(10, 10), dlvl=34, clvl=37, hp=250, mhp=285)
+        self.assertIsNone(brain.breath_guard(well, view))             # 212 of 250: survivable
 
 
 class ScoutTest(unittest.TestCase):
@@ -1644,6 +1657,31 @@ class ScoutTest(unittest.TestCase):
         o = command_obs(pos=(10, 10), dlvl=31, clvl=34, hp=245, mhp=245)
         self.assertIn("Detect Evil", brain.scout(o, view).reason)
         self.assertIsNone(brain.scout(o, view))                     # not again at once
+
+    def test_new_ground_on_the_screen_is_scouted_again(self) -> None:
+        """2026-11-08: Detect Evil sees only the screen (VMS detect_evil), and
+        "You sense no evil nearby." on arrival was followed by a Mature Red
+        Dragon's 320 from the dark 68 steps on (C64 Balrog, clvl 37)."""
+        from moria_playtest.brain import SCOUT_EVERY
+        from moria_playtest.magic import DETECT_EVIL
+        brain = self.priest()
+        brain.magic.spare = lambda obs, name: name == DETECT_EVIL  # type: ignore[method-assign]
+        view = town_view((30, 20), (40, 40), dlvl=31)
+        o = command_obs(pos=(30, 20), dlvl=31, clvl=37, hp=285, mhp=285, view=(11, 10))
+        self.assertIn("Detect Evil", brain.scout(o, view).reason)
+        near = command_obs(pos=(39, 20), dlvl=31, clvl=37, hp=285, mhp=285, view=(20, 10))
+        near.step = o.step + 9
+        self.assertIsNone(brain.scout(near, view))                  # 9 of 38 columns: mostly seen
+        far = command_obs(pos=(49, 20), dlvl=31, clvl=37, hp=285, mhp=285, view=(30, 10))
+        far.step = o.step + 19
+        self.assertIn("Detect Evil", brain.scout(far, view).reason) # half the screen new
+        later = command_obs(pos=(49, 20), dlvl=31, clvl=37, hp=285, mhp=285, view=(30, 10))
+        later.step = far.step + SCOUT_EVERY
+        self.assertIn("Detect Evil", brain.scout(later, view).reason)   # and now and then
+        brain.magic.spare = lambda obs, name: False                 # type: ignore[method-assign]
+        again = command_obs(pos=(49, 20), dlvl=31, clvl=37, hp=285, mhp=285, view=(30, 10))
+        again.step = later.step + SCOUT_EVERY
+        self.assertIsNone(brain.scout(again, view))                 # not the mana for the heal
 
     def test_a_creature_that_kills_in_one_breath_sends_it_off_the_level(self) -> None:
         glyph, level = max(((k, v) for k, v in knowledge.spell_burst().items() if k[0] == "D"), key=lambda kv: kv[1])[0]
@@ -4070,6 +4108,19 @@ class SearchModeTest(unittest.TestCase):
         on = command_obs(pos=(5, 5), dlvl=1, clvl=2)                        # "Search*" shown
         on.step = 200
         self.assertNotEqual(brain.decide(on, view).layer, "search-mode")
+
+    def test_not_turned_on_where_breathers_live(self) -> None:
+        """2026-11-08: search mode is two turns a step, and a Mature Red Dragon
+        in the dark breathed twice in one, 320 at 288/288 (C64 Balrog)."""
+        from moria_playtest.brain import SCOUT_FROM
+        brain = Brain(GOALS["deep"])
+        view = town_view((5, 5), (40, 40), dlvl=SCOUT_FROM)
+        off = command_obs(pos=(5, 5), dlvl=SCOUT_FROM, clvl=37, hp=288, mhp=288,
+                          rows={21: f"bot Half-Troll              LV:37 DL:{SCOUT_FROM}"})
+        self.assertIsNone(brain.search_mode(off, view))
+        shallower = command_obs(pos=(5, 5), dlvl=SCOUT_FROM - 1, clvl=37, hp=288, mhp=288,
+                                rows={21: f"bot Half-Troll              LV:37 DL:{SCOUT_FROM - 1}"})
+        self.assertIsNotNone(brain.search_mode(shallower, town_view((5, 5), (40, 40), dlvl=SCOUT_FROM - 1)))
 
     def test_not_on_the_way_home_for_food(self) -> None:
         """M6: two turns of food a step, and Warriors on the 80-column ports'
