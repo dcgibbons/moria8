@@ -508,6 +508,25 @@ class DropJunkTest(unittest.TestCase):
                 4: " c) 10 Potion of Cure Serious Wounds", 5: " d) Holy Book of Prayers Beginners Handb"}
         self.assertEqual(brain.decide(self.item("list", pack), None).key, ord("D"))
 
+    def test_a_twin_stack_is_dropped_and_picked_up_again(self) -> None:
+        """Balrog queue, 2026-11-09: split stacks from before the stacking
+        fix filled clvl 38 Priests' packs; one joins the other when picked up."""
+        brain = Brain(GOALS["deep"])
+        brain.pack_full, brain.dropping, brain.listed = True, True, True
+        pack = {0: "Inventory", 2: " a) 255 Potion of Neutralize Poison", 3: " b) 10 Scroll of Phase Door",
+                4: " c) 31 Potion of Neutralize Poison", 5: " d) 38 Scroll of Phase Door"}
+        self.assertEqual(brain.decide(self.item("list", pack), None).key, ord("C"))   # past 255: the smaller is surplus
+        brain.pack_full, brain.dropping, brain.listed = True, True, True
+        del pack[4]
+        self.assertEqual(brain.decide(self.item("list", pack), None).key, ord("D"))   # then the twin that joins
+        view = town_view((5, 5), (40, 40), dlvl=0)
+        decision = brain.decide(command_obs(pos=(5, 5), dlvl=0, clvl=38), view)
+        from moria_playtest.brain import KEY_PICKUP
+        self.assertEqual((decision.layer, decision.key), ("drop", KEY_PICKUP))
+        brain.pack_full, brain.dropping, brain.listed = True, True, True
+        self.assertEqual(brain.decide(self.item("list", pack), None).key, KEY_RUNSTOP)   # once each
+        self.assertFalse(brain.more_junk)
+
     def test_nothing_to_spare_is_not_retried_at_once(self) -> None:
         brain = Brain(GOALS["reach_dl8"])
         brain.pack_full, brain.dropping, brain.listed = True, True, True
@@ -3180,6 +3199,39 @@ class GearTest(unittest.TestCase):
         self.assertFalse(brain.jewel_better("Ring of Resist Cold"))              # no better than the left's
         self.assertEqual(brain.resist_div(command_obs(pos=(5, 5), dlvl=30), "fire", lasting=True), 3)
 
+    def test_a_second_ring_of_one_flag_is_worth_nothing(self) -> None:
+        """A resistance is one flag: a second Ring of Resist Fire does nothing,
+        and a Ring of Resist Cold goes on the left hand in its place. Two Rings
+        of Speed add (MON-026), so the second keeps its worth."""
+        from moria_playtest.brain import MAGIC_SHOP
+        brain = Brain(GOALS["deep"])
+        rows = ["Equipment", " h) Ring:   Ring of Resist Fire", " i) Amulet: Amulet of the Magi",
+                " j) Ring:   Ring of Resist Fire"]
+        brain.jewels = brain.read_jewels(rows)
+        self.assertEqual(brain.jewels, {"Ring": 800, "Amulet": 300, "Ring2": 0})    # the twin does nothing
+        self.assertTrue(brain.jewel_better("Ring of Resist Cold"))                # replaces the left one
+        self.assertFalse(brain.jewel_better("Ring of Resist Fire"))               # a third is no better
+        o = self.store(brain, MAGIC_SHOP, [("Ring of Resist Fire", 900), ("Ring of Resist Cold", 900)], 900000)
+        self.assertEqual(brain.jewel_pick(o), ("b", "Ring of Resist Cold"))
+        rows[1], rows[3] = " h) Ring:   Ring of Speed", " j) Ring:   Ring of Speed"
+        self.assertEqual(brain.read_jewels(rows)["Ring2"], 1000)                  # Speed adds
+
+    def test_rings_of_speed_slow_what_breathes_on_the_player(self) -> None:
+        """C64 Balrog, 2026-11-10: clvl 38 Priests wearing two Rings of Speed
+        counted an Ancient White Dragon's two breaths a turn (468 of their
+        ~350 HP) and stayed on DL37; at their speed (MON-026) it acts once in
+        two turns, one breath of 234."""
+        brain = Brain(GOALS["deep"])
+        dragon = Creature("D", 38)
+        o = command_obs(pos=(5, 5), dlvl=38, clvl=38, hp=350, mhp=350)
+        self.assertEqual(brain.moves()[("D", 38)], 2.0)
+        two = brain.turn_burst(dragon, o, lasting=True)
+        brain.jewels = brain.read_jewels(["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: (none)",
+                                          " j) Ring:   Ring of Speed"])
+        self.assertEqual(brain.moves()[("D", 38)], 1.0 / 2)
+        self.assertEqual(brain.turn_burst(dragon, o, lasting=True), two // 2)
+        self.assertTrue(brain.threat_ready(o, 38) or brain.native_burst(o, 38) < two)
+
     def test_an_ego_weapon_is_valued_and_bought(self) -> None:
         """2026-11-07: "Dagger (Defender)" was looked up whole, scored 0 and
         never bought, millions of gold in hand."""
@@ -4616,6 +4668,47 @@ class SealedResupplyTest(unittest.TestCase):
         brain.food = 0
         decision = brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3), self.pocket())
         self.assertEqual((decision.layer, decision.key), ("resupply", DIRS[(1, 0)]))
+
+    def test_sealed_in_veins_it_tunnels_out_through_the_quartz(self) -> None:
+        """C64 build queue, 2026-11-10: a Scroll of Destruction walled a
+        level-4 Priest into veins on DL1, and it searched dead ends for
+        96,000 steps until it starved. Past SEALED_DIG_AFTER sealed in, it
+        tunnels through the cheaper vein (quartz) toward the stairs."""
+        from moria_playtest.brain import KEY_TUNNEL, SEALED_DIG_AFTER
+        from moria_playtest.view import View
+        cols, rows = 12, 5
+        types = [WALL] * (cols * rows)
+        for x in range(1, 4):
+            types[2 * cols + x] = 0x0                 # the pocket
+        for x in range(5, 9):
+            types[2 * cols + x] = 0x0                 # the way on
+        types[2 * cols + 8] = 0xA                     # its up staircase
+        for x in range(1, 4):
+            types[1 * cols + x] = 0x0                 # a longer way round, behind magma
+        veins = {(4, 2): 0xD, (4, 1): 0xC}
+        brain = Brain(GOALS["deep"])
+        o = command_obs(pos=(3, 2), dlvl=1, clvl=4)
+        o.step = 1000
+        view = View(cols, rows, list(types), (3, 2), 1, veins=veins)
+        self.assertTrue(brain.sealed(view))
+        self.assertIsNone(brain.dig_out(o, view))      # searching first
+        o.step = 1000 + SEALED_DIG_AFTER
+        decision = brain.dig_out(o, View(cols, rows, list(types), (3, 2), 1, veins=veins))
+        self.assertEqual((decision.layer, decision.key, brain.pending), ("dig", KEY_TUNNEL, DIRS[(1, 0)]))
+        far = brain.dig_out(o, View(cols, rows, list(types), (1, 2), 1, veins=veins))
+        self.assertEqual((far.layer, far.key), ("dig", DIRS[(1, 0)]))          # walks to the quartz
+        o.rows[0] = "You dig with your hands, making no progress.".ljust(40)
+        self.assertIsNone(brain.dig_out(o, View(cols, rows, list(types), (3, 2), 1, veins=veins)))   # no weapon
+
+    def test_the_walk_to_the_down_stairs_is_kept(self) -> None:
+        """Atari, 2026-11-09: explore's walk to an edge and resupply's walk
+        to the down stairs took turns 300 times on one DL1 square."""
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 0
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=3)
+        self.assertIsNone(brain.resupply(o, self.pocket(unexplored=True)))       # an edge to explore first
+        self.assertEqual(brain.resupply(o, self.pocket()).key, DIRS[(1, 0)])     # none left: down
+        self.assertEqual(brain.resupply(o, self.pocket(unexplored=True)).key, DIRS[(1, 0)])   # and kept
 
     def test_unexplored_space_is_explored_first(self) -> None:
         brain = Brain(GOALS["reach_dl5"])

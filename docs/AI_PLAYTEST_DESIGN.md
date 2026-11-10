@@ -3217,8 +3217,12 @@ needs the bot to record each cast and its effect (step 3).
   is the same module, run by `python3` directly so that systemd signals the
   service and not `make`).
 - `make playtest-queue-status`: the main queue and subqueues in the terminal.
-- `make playtest-queue-rebuild`: play this working tree as it stands from
-  the next run on.
+- `make playtest-queue-rebuild [RESTART_BALROG=1]`: play this working tree as
+  it stands from the next run on. With `RESTART_BALROG=1`, once the new
+  snapshot plays, the service ends every Balrog run on an older build
+  (`cancelled`: no result and no fail on its start); each combination goes
+  on from its start in the new build. Use it when a fix ends a loop the old
+  bot cannot leave; runs fall back to their last checkpoint.
 - `make playtest-queue-records-rebuild`: re-create `queue.db` from
   `runs.jsonl`.
 - `make playtest-subqueue NAME=ab1 GOAL=clvl10 CHARACTERS=human-mage,elf-mage

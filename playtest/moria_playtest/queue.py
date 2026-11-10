@@ -1488,6 +1488,23 @@ class Service:
         self.save_running()
         self.log(f"{'pause' if paused else 'resume'} {run_id}")
 
+    def restart_balrog(self) -> None:
+        """``make playtest-queue-rebuild RESTART_BALROG=1``: once the new
+        snapshot plays, every Balrog run on an older build ends (cancelled:
+        no result, no fail on its start) and its combination goes on from
+        its start in the new build. A stuck old bot otherwise played out its
+        budget, and stopping runs a few at a time by hand cost the
+        maintainer an evening (2026-11-09)."""
+        flag = self.home / "restart-balrog"
+        if not flag.exists() or (self.home / "rebuild").exists() or not self.build_id:
+            return
+        flag.unlink()
+        old = [r for r, j in self.running.items()
+               if j["queue"] == "balrog" and j["build"] != self.build_id and not j.get("cancelled")]
+        self.log(f"balrog queue: restart {len(old)} runs on older builds in {self.build_id}")
+        for run_id in old:
+            self.stop_run(run_id)
+
     def stop_run(self, run_id: str) -> None:
         """End a run now (a cancelled subqueue): its whole process group."""
         job = self.running[run_id]
@@ -1870,6 +1887,7 @@ class Service:
         self.reap(queue, subs)
         self.graduate(queue)
         self.refresh_build()
+        self.restart_balrog()
         self.refresh_ci()
         self.finish_subs(subs)
         subs = {name: sub for name, sub in subs.items() if not sub.get("done")}
@@ -1971,7 +1989,9 @@ def main(argv: list[str] | None = None) -> int:
     report = sub.add_parser("report", help="print a subqueue's report (an A/B subqueue's comparison)")
     report.add_argument("--name", required=True)
     sub.add_parser("status", help="print the main queue and subqueues")
-    sub.add_parser("rebuild", help="play this working tree as it stands from the next run on")
+    rebuild = sub.add_parser("rebuild", help="play this working tree as it stands from the next run on")
+    rebuild.add_argument("--restart-balrog", action="store_true",
+                         help="then end every Balrog run on an older build: each goes on from its start")
     args = parser.parse_args(argv)
 
     if args.command == "serve":
@@ -2001,7 +2021,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "rebuild":
         HOME.mkdir(parents=True, exist_ok=True)
         (HOME / "rebuild").touch()
-        print("the service snapshots this working tree on its next tick")
+        if args.restart_balrog:
+            (HOME / "restart-balrog").touch()
+        print("the service snapshots this working tree on its next tick"
+              + (", then restarts the Balrog runs on older builds" if args.restart_balrog else ""))
         return 0
     platforms = args.platforms.split(",")
     for platform in platforms:

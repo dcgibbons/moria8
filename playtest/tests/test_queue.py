@@ -205,6 +205,26 @@ class ScheduleTest(unittest.TestCase):
         service.schedule(q, {})
         self.assertEqual(stopped, [])
 
+    def test_a_restart_ends_the_balrog_runs_on_older_builds(self) -> None:
+        """2026-11-09: old bots stuck on full packs played out their budgets
+        while the maintainer stopped them by hand a few at a time."""
+        service = self.service(4)
+        service.build_id = "new"
+        service.running = {r: {"queue": q, "build": b} for r, q, b in
+                           (("a", "balrog", "old"), ("b", "balrog", "new"), ("c", "main", "old"), ("d", "balrog", "older"))}
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        service.restart_balrog()
+        self.assertEqual(stopped, [])                                     # not asked
+        (service.home / "restart-balrog").touch()
+        (service.home / "rebuild").touch()
+        service.restart_balrog()
+        self.assertEqual(stopped, [])                                     # the new snapshot not built yet
+        (service.home / "rebuild").unlink()
+        service.restart_balrog()
+        self.assertEqual(stopped, ["a", "d"])
+        self.assertFalse((service.home / "restart-balrog").exists())      # once
+
     def test_a_port_that_covered_its_build_waits_for_the_next(self) -> None:
         service = self.service(6)
         service.config.update(build_platforms=["c64", "atari8"], build_goal="clvl10")

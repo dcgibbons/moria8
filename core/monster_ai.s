@@ -23,6 +23,8 @@ mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
 mat_scene_dirty: .byte 0     // count of immediate non-local visible tile renders this turn (nonzero = cheap redraw path)
 mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
 mat_player_stealth: .byte 0  // Race/class threshold cached once per AI tick
+mat_fast:     .byte 0       // player speed steps this tick (MON-026): Rings of Speed worn + haste - slow, -1..3
+mat_turn_mod: .byte 0, 0, 0, 0   // this turn mod 5, 4, 3, 2: a monster at cadence s <= 0 acts when entry s + 3 is 0
 
 // ============================================================
 // monster_ai_tick — Main AI loop
@@ -37,6 +39,59 @@ monster_ai_tick:
     sta mat_scene_dirty
     jsr player_get_stealth
     sta mat_player_stealth
+
+    // Player speed (MON-026, Umoria playerChangeSpeed): each Ring of Speed
+    // worn and an active haste timer is one step, an active slow timer one
+    // back; the steps add, as VMS and Umoria add every speed bonus.
+    ldx #0
+    lda inv_item_id + EQUIP_RING
+    cmp #ITEM_TYPE_RING_SPEED
+    bne !mat_ring2+
+    inx
+!mat_ring2:
+    lda inv_item_id + EQUIP_RING2
+    cmp #ITEM_TYPE_RING_SPEED
+    bne !mat_timer+
+    inx
+!mat_timer:
+    lda zp_eff_speed
+    beq !mat_fast_done+
+    bpl !mat_hasted+
+    dex
+    dex                         // slowed: one back, after the inx
+!mat_hasted:
+    inx
+!mat_fast_done:
+    stx mat_fast
+    // The turn mod 2..5 (Umoria monsterMovementRate: a monster at speed
+    // s <= 0 acts on turns divisible by 2 - s). 256 = 1 mod 3 and mod 5, so
+    // lo + hi with its carry folded back keeps both residues.
+    lda zp_turn_lo
+    and #1
+    sta mat_turn_mod + 3
+    lda zp_turn_lo
+    and #3
+    sta mat_turn_mod + 1
+    lda zp_turn_lo
+    clc
+    adc zp_turn_hi
+    adc #0                      // the carry is 256 = 1: at most 254 + 1
+    tax
+!mat_mod5:
+    cmp #5
+    bcc !mat_mod5_done+
+    sbc #5
+    bcs !mat_mod5-              // always
+!mat_mod5_done:
+    sta mat_turn_mod
+    txa
+!mat_mod3:
+    cmp #3
+    bcc !mat_mod3_done+
+    sbc #3
+    bcs !mat_mod3-              // always
+!mat_mod3_done:
+    sta mat_turn_mod + 2
 
 !mat_loop:
     lda zp_mon_idx
@@ -92,37 +147,26 @@ monster_ai_tick:
     bcs !mat_apply_base+
     inc zp_mon_speed
 !mat_apply_base:
-    // Fold player speed into this monster's cadence (Umoria
-    // playerChangeSpeed model, applied per-tick so no stored monster state
-    // is mutated): an active haste timer or Ring of Speed (PFLAG_SPEED)
-    // slows the monster by 1; an active slow timer hastens it by 1. The
-    // 0-2 cadence clamp makes stacking haste+ring identical to either
-    // alone, so a single step per direction suffices.
-    lda zp_eff_speed
+    // Fold the player's speed steps into this monster's cadence (MON-026,
+    // Umoria playerChangeSpeed and monsterMovementRate), per tick, so no
+    // stored monster state is mutated: two moves at 2 or more (the cap),
+    // one at 1, and at s <= 0 one on turns divisible by 2 - s.
+    lda zp_mon_speed
+    sec
+    sbc mat_fast                // -3..3
+    beq !mat_pc_slow+
     bmi !mat_pc_slow+
-    bne !mat_pc_dec+
-    lda player_pflags
-    and #PFLAG_SPEED
-    beq !mat_pc_done+
-!mat_pc_dec:
-    lda zp_mon_speed
-    beq !mat_pc_done+
-    dec zp_mon_speed
-    jmp !mat_pc_done+
+    cmp #3
+    bcc !mat_not_slow+
+    lda #2                      // the double-move cap
+    bne !mat_not_slow+          // always
 !mat_pc_slow:
-    lda zp_mon_speed
-    cmp #2
-    beq !mat_pc_done+
-    inc zp_mon_speed
-!mat_pc_done:
-    lda zp_mon_speed
-    bne !mat_not_slow+
-
-    // Speed 0 = slow: act every other turn (even turns only)
-    lda zp_turn_lo
-    and #$01
-    bne !mat_next+              // Skip on odd turns
-    lda #1                      // Treat as speed 1 this turn
+    clc
+    adc #3                      // s + 3: 0..3
+    tax
+    lda mat_turn_mod,x
+    bne !mat_next+              // not this turn
+    lda #1                      // one move this turn
 
 !mat_not_slow:
     sta zp_mon_speed            // Save speed for double-move check

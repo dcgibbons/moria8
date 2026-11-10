@@ -25,6 +25,7 @@ from .game import Game, Observation
 UNKNOWN = -1
 WALL = 0x1   # TILE_WALL_H type nibble; stands in for every blocking type
 WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xB, 0xE}   # walkable_table, core/player_move.s
+VEIN_TYPES = (0xC, 0xD)   # TILE_MAGMA, TILE_QUARTZ (core/dungeon_data.s): read as WALL, but a tunnel opens them
 TYPE_DOOR_OPEN, TYPE_DOOR_CLOSED = 0x7, 0x8
 TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_RUBBLE, TYPE_TRAP, TYPE_SECRET = 0x9, 0xA, 0xB, 0xE, 0xF
 # terrain_frontier's byte masks over tile types as signed bytes (UNKNOWN is 0xFF):
@@ -79,6 +80,7 @@ class View:
     perilous: set[Pos] = field(default_factory=set)     # brain: squares a creature in view could hurt badly (danger)
     last_path: list[Pos] = field(default_factory=list)  # step_toward's whole path, for a walk kept to it
     screen: tuple[int, int, int, int] = (0, 0, 0, 0)  # map x, y, width, height on screen
+    veins: dict[Pos, int] = field(default_factory=dict)  # seen magma (0xC) and quartz (0xD): walls a tunnel opens
 
     def on_screen(self, pos: Pos) -> bool:
         """Whether the screen shows ``pos`` (an unset screen shows the whole map)."""
@@ -381,4 +383,8 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
         ys = game.mon.mem_get(abi.store_door_y, abi.STORE_COUNT, game.ram)
         stores = list(zip(xs, ys))
     screen = (*screen_to_map(game, obs, vx, vy), abi.hal_layout_viewport_w, abi.hal_layout_viewport_h)
-    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores, unknown=unknown, screen=screen)
+    visited = abi.FLAG_VISITED
+    veins = {(i % cols, i // cols): tile >> 4 for i, tile in enumerate(tiles)
+             if tile & visited and tile >> 4 in VEIN_TYPES}
+    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores, unknown=unknown, screen=screen,
+                veins=veins)
