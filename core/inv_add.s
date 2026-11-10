@@ -5,8 +5,8 @@
 
 #import "item_stack_macros.s"
 
-// inv_add_item — Add an item to the carried slots (0-21): onto an identical
-// stack of a kind that stacks (food, potions, scrolls, flasks of oil,
+// inv_add_item — Add an item to the carried slots (0-21): onto a stack of
+// the same item, p1, bonuses and ego, of a kind that stacks (food, potions, scrolls, flasks of oil,
 // wooden torches with equal turns left, spikes, ammunition: VMS
 // inven_carry) while the count fits a byte, else into the first empty slot.
 // Input: fi_add_id, fi_add_qty, fi_add_p1, fi_add_to_hit/dam/ac, flags, ego
@@ -29,9 +29,12 @@ inv_add_item:
     lda inv_to_dam,x
     cmp fi_add_to_dam
     bne !iai_next+                  // (no stacking kind carries a to-AC)
-    lda inv_flags,x
-    cmp fi_add_flags
-    bne !iai_next+
+    // Not the flags: VMS inven_carry stacks on tval and subval alone, and
+    // Umoria on whether the kind is known, the same for every item of it.
+    // Comparing them kept identified and unidentified potions of one kind
+    // in separate slots until the 22 filled (Balrog queue, 2026-11-09:
+    // clvl 38 Priests with two stacks each of Cure Serious Wounds and Phase
+    // Door could not buy Word of Recall). The stack keeps its own flags.
     lda inv_ego,x
     cmp fi_add_ego
     bne !iai_next+

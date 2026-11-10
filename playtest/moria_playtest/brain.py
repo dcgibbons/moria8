@@ -351,8 +351,10 @@ THREAT_DEPTH_FROM = 30   # character level from which a threat_depth goal goes a
 SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
 RECALL_CLIMB = 1         # Word of Recall down to a deepest level this many past ready: climb from there
+RECALL_WALK_LEVELS = 5   # levels above the deepest beyond which Word of Recall (via town) beats walking down
 BREATHS_TO_LEAVE = 2     # breaths taken on one level that make it one to leave (leave_deadly)
 RETREAT_STUCK = 3        # retreat steps that leave the bot on its square before the escapes take over
+PROMPT_MESSAGES_KEPT = 400   # characters of -more- screens' messages carried to the next command screen
 LEAVE_WALK_STEPS = 10    # stairs farther than this on a deadly level: Word of Recall first
 TELEPORT_JUMP = 10       # a move farther than this within a level: teleported, the unseen breath behind
 DEEP_HEAL_HP = 0.75      # from SCOUT_FROM deep, below this share of HP: heal (potions, prayers) before walking on
@@ -566,6 +568,7 @@ class Brain:
         self.last_xp = 0
         self.pending: int | None = None        # answer for the next direction prompt
         self.messages = ""                     # the latest screen's message lines
+        self.prompt_messages = ""              # message lines seen on prompt screens since the last command screen
         self.pending_item: int | None = None   # answer for the next item prompt
         self.waited = 0                        # first-strike waits for the current target
         self.unseen_attack = False             # attacked this turn with nothing in view
@@ -761,6 +764,12 @@ class Brain:
             self.track_missiles(messages)
         self.noted_messages, self.noted_on_prompt = messages, obs.mode != Mode.COMMAND
         if obs.mode != Mode.COMMAND:
+            # A breath shown only behind -more- counts at the next command
+            # screen: mid-fight it seldom reaches that screen, and two
+            # level-37 Priests took a Mature Red Dragon's 160 that way,
+            # unresisted and unremembered, and died to the next (C64 Balrog,
+            # 2026-11-09).
+            self.prompt_messages = (self.prompt_messages + " " + messages)[-PROMPT_MESSAGES_KEPT:]
             return self.prompt(obs)
         assert view is not None
         self.track_stats(obs)
@@ -798,8 +807,9 @@ class Brain:
             self.afraid -= 1
         attacker, self.recent_attacker = self.recent_attacker, None
         self.chased = attacker in knowledge.fast_creatures()
-        if BREATHES.search(messages) and self.last_hp is not None and self.last_hp > obs.hp and obs.dlvl:
-            element = BREATH_ELEMENT.search(messages)
+        seen_messages, self.prompt_messages = self.prompt_messages + " " + messages, ""
+        if BREATHES.search(seen_messages) and self.last_hp is not None and self.last_hp > obs.hp and obs.dlvl:
+            element = BREATH_ELEMENT.search(seen_messages)
             self.note_breath(obs, view, self.last_hp - obs.hp, element.group(1) if element else None)
         self.note_toughness(obs, attacker, messages)
         if self.last_attack is not None and self.last_attack[0] == view.pos:
@@ -4074,7 +4084,7 @@ class Brain:
                 # town trip (C64 Balrog, 2026-11-09).
                 return None
         elif not (self.food_low() and self.sealed(view)) and not self.stuck(view) and not self.lightless() \
-                and not self.hopping_out() and (
+                and not self.far_above_deepest(obs) and not self.hopping_out() and (
                 obs.dlvl < RECALL_FROM or not self.needs_resupply(obs)) and not (
                 self.draining >= DRAIN_RESTS and obs.hp < DRAIN_RECALL_HP * obs.mhp) and not (
                 self.level.summoned is not None and obs.step - self.level.summoned <= SUMMON_MEMORY
@@ -4091,6 +4101,16 @@ class Brain:
             return None
         self.picking, self.listed = RECALL, False
         return Decision(ord("R"), "recall", "read Word of Recall")
+
+    def far_above_deepest(self, obs: Observation) -> bool:
+        """Many levels above a deepest level it may go back to, with the two
+        Word of Recall reads that take it there (to town, and back down): a
+        player reads one rather than walk. Balrog runs restart from a
+        checkpoint saved on DL1, and level-38 Priests walked down from there,
+        bouncing DL3-DL4, toward DL37 (C64 Balrog, 2026-11-09)."""
+        return (obs.dlvl > 0 and self.recall >= 2 and self.max_dlvl - obs.dlvl > RECALL_WALK_LEVELS
+                and (self.depth_ready(obs, self.max_dlvl, slack=1)
+                     or self.depth_ready(obs, self.max_dlvl - RECALL_CLIMB)))
 
     def still_there(self, pos: Pos, obs: Observation) -> bool:
         """The creature at ``pos`` has stood there STILL_STEPS or more."""
@@ -4448,6 +4468,15 @@ class Brain:
                               if m and m.group(2).startswith(TORCH) and (t := LIGHT_TURNS.search(m.group(2)))),
                              reverse=True)
             extra |= {i for _, i in torches[(1 if self.lamp else self.torch_reserve()):]}
+            # One copy of each book: books do not stack, and a second
+            # Beginners Handbook held the slot a full pack needed for Word of
+            # Recall (Balrog queue, 2026-11-09: four clvl 38 Priests walked
+            # between town and DL4 for 90 minutes).
+            books: set[str] = set()
+            for i, m in enumerate(matches):
+                if m and m.group(2).startswith(("Holy Book", "Spellbook")):
+                    extra |= {i} if m.group(2).strip() in books else set()
+                    books.add(m.group(2).strip())
 
             def junk(match: re.Match[str] | None) -> bool:
                 if match is not None and matches.index(match) in extra:

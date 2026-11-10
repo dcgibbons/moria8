@@ -4795,7 +4795,7 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0444" 69 1000000000
+run_test "item" "tests/test_item.s" "0400 0445" 70 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000

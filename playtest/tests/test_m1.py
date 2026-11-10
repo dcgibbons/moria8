@@ -499,6 +499,15 @@ class DropJunkTest(unittest.TestCase):
         self.assertEqual(dropped, ["a", "b", "e"])          # arrows, the spare bow, the empty lantern
         self.assertEqual(brain.launcher, "Heavy Crossbow")  # dropping the bow kept the crossbow
 
+    def test_a_second_copy_of_a_book_is_spare(self) -> None:
+        """Balrog queue, 2026-11-09: a second Beginners Handbook filled a
+        clvl 38 Priest's pack and the Alchemist refused its Word of Recall."""
+        brain = Brain(GOALS["deep"])
+        brain.pack_full, brain.dropping, brain.listed = True, True, True
+        pack = {0: "Inventory", 2: " a) Holy Book of Prayers Beginners Handb", 3: " b) Holy Book of Prayers Words of Wisdom",
+                4: " c) 10 Potion of Cure Serious Wounds", 5: " d) Holy Book of Prayers Beginners Handb"}
+        self.assertEqual(brain.decide(self.item("list", pack), None).key, ord("D"))
+
     def test_nothing_to_spare_is_not_retried_at_once(self) -> None:
         brain = Brain(GOALS["reach_dl8"])
         brain.pack_full, brain.dropping, brain.listed = True, True, True
@@ -1725,6 +1734,21 @@ class ThreatDepthTest(unittest.TestCase):
         o = command_obs(pos=(10, 10), dlvl=38, clvl=37, hp=290, mhp=290)
         self.assertIsNotNone(brain.resupply(o, town_view((10, 10), (40, 40), dlvl=38)))   # climbs at DL38
 
+    def test_far_above_its_deepest_it_recalls_rather_than_walks(self) -> None:
+        """2026-11-09: restarted on DL1 from a checkpoint, level-38 Priests
+        walked down toward DL37, bouncing DL3-DL4."""
+        brain = self.priest()
+        brain.food, brain.max_dlvl = 20, 37
+        brain.lamp, brain.light_left, brain.oil = True, 9000, 5
+        view = town_view((10, 10), (40, 40), dlvl=4)
+        o = command_obs(pos=(10, 10), dlvl=4, clvl=38, hp=300, mhp=300)
+        self.assertEqual(brain.recall_trip(o, view).reason, "read Word of Recall")
+        brain.recall = 1                                   # the last scroll stays the way home
+        self.assertIsNone(brain.recall_trip(o, view))
+        brain.recall = 3
+        near = command_obs(pos=(10, 10), dlvl=34, clvl=38, hp=300, mhp=300)
+        self.assertIsNone(brain.recall_trip(near, town_view((10, 10), (40, 40), dlvl=34)))   # close: walk
+
     def test_only_from_level_30_and_only_for_the_balrog_goal(self) -> None:
         self.assertFalse(self.deeper(self.priest(), 27, clvl=29, mhp=230))   # the margin: DL26
         self.assertFalse(self.deeper(self.priest("deep"), 34))
@@ -1910,6 +1934,25 @@ class ResistFireTest(unittest.TestCase):
         brain.level.breath = brain.level.breather = None
         brain.note_breath(o, town_view((10, 10), (40, 40), dlvl=32), 50, "acid")   # acid: nothing resists it
         self.assertEqual(brain.level.breath[1], 50)
+
+    def test_a_breath_shown_only_behind_more_is_still_noted(self) -> None:
+        """2026-11-09: two level-37 Priests took a Mature Red Dragon's 160
+        behind -more-; the command screen after it named only the Ant Lion,
+        so the breath was never noted, resisted or remembered."""
+        brain = Brain(GOALS["deep"])
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        brain.decide(command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=276, mhp=288), view)
+        more = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=105, mhp=288,
+                           rows={0: "You hit the Giant Grey Ant Lion.  -more-", 1: "the Mature Red Dragon breathes fire."})
+        more.mode, more.stage = Mode.DISMISS, "more"
+        more.step = 1
+        brain.decide(more, view)
+        after = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=105, mhp=288,
+                            rows={0: "the Giant Grey Ant Lion hits you."})
+        after.step = 2
+        brain.decide(after, view)
+        self.assertEqual(brain.level.breath[1], 171)
+        self.assertIn(frozenset({"fire"}), brain.level.breathers)
 
     def test_an_unseen_breath_is_remembered_as_big_again(self) -> None:
         """2026-11-09: a level-37 Priest took 106 from an unseen Mature

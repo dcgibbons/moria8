@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #69-1
+    ldx #70-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -144,7 +144,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 69, $ff
+tc_results: .fill 70, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -3415,10 +3415,36 @@ test_start:
     bne !t69_fail+
     lda #$01
     sta tc_results + 68
-    jmp !tests_done+
+    jmp !t70+
 !t69_fail:
     lda #$00
     sta tc_results + 68
+
+    // Test 70: an identified item joins an unidentified stack of its kind
+    // (VMS inven_carry: tval and subval alone); the stack keeps its flags.
+!t70:
+    jsr item_init_inventory
+    lda #15                     // Ration of Food
+    jsr t59_add_one
+    lda #15
+    jsr t59_add_one_setup
+    lda #IF_IDENTIFIED
+    sta fi_add_flags
+    jsr inv_add_item
+    lda inv_qty + 0
+    cmp #2
+    bne !t70_fail+
+    lda inv_flags + 0
+    bne !t70_fail+
+    lda inv_item_id + 1
+    cmp #FI_EMPTY
+    bne !t70_fail+
+    lda #$01
+    sta tc_results + 69
+    jmp !tests_done+
+!t70_fail:
+    lda #$00
+    sta tc_results + 69
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
