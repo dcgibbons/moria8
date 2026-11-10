@@ -191,7 +191,7 @@ class DeathCauseTest(unittest.TestCase):
     """M7 queue: a Warrior slain beside a Green Naga that "spits acid" was
     recorded as killed by a pit trap."""
 
-    def cause(self, *messages: str, hp: int = 0, before: int = 2) -> str:
+    def cause(self, *messages: str, hp: int = 0, before: int = 2, status: str = "") -> str:
         """The cause for a trace of these messages, the last at `hp` and the
         others at `before`."""
         import gzip
@@ -199,9 +199,17 @@ class DeathCauseTest(unittest.TestCase):
             trace = Path(tmp) / "trace.jsonl.gz"
             with gzip.open(trace, "wt") as fh:
                 for i, msg in enumerate(messages):
-                    fh.write(json.dumps({"step": i, "mode": "COMMAND", "msg": msg, "status": "",
+                    fh.write(json.dumps({"step": i, "mode": "COMMAND", "msg": msg, "status": status,
                                          "hp": hp if i == len(messages) - 1 else before}) + "\n")
             return dashboard.death(trace)["cause"]
+
+    def test_starving_is_starvation_not_unknown(self) -> None:
+        """2026-11-10: characters starved on no-way-up levels were recorded
+        as "unknown": starving prints no message, the status shows Faint."""
+        faint = "HP:  1/40  MP:0/0  AC:9  AU:12  Faint"
+        self.assertEqual(self.cause("You found nothing.", "You have been slain.", status=faint), "starvation")
+        self.assertEqual(self.cause("the Kobold hits you. | You have been slain.", status=faint), "Kobold")
+        self.assertEqual(self.cause("You found nothing.", "You have been slain."), "unknown")
 
     def test_spits_is_not_a_pit(self) -> None:
         self.assertEqual(self.cause("the Green Naga spits acid on you.", "You have been slain."), "Green Naga")

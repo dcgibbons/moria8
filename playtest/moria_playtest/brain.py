@@ -2879,20 +2879,37 @@ class Brain:
         DL36 and town refused Word of Recall down to DL37, so level-37
         Priests walked down from DL1 and recalled up from DL16 for light, over
         and over (C64 Balrog, 2026-11-09)."""
-        return (obs.clvl >= ready_level(dlvl, self.goal.ready_margin, self.goal.ready_taper) - slack
-                or self.threat_ready(obs, dlvl))
+        level = ready_level(dlvl, self.goal.ready_margin, self.goal.ready_taper)
+        if self.goal.threat_depth and level >= MAX_CLVL:
+            # Past the margin's reach (DL37 and on for three levels over),
+            # the top level is no reason to go deeper: at clvl 40 every depth
+            # passed, and DL40's Ancient Multi-Hued Dragon breathes 693 at a
+            # ~400-HP Priest (maintainer, 2026-11-10: the level rules were
+            # "arbitrary"). What it survives decides, then the Balrog dive.
+            return self.threat_ready(obs, dlvl) or self.balrog_dive(obs)
+        return obs.clvl >= level - slack or self.threat_ready(obs, dlvl)
+
+    def balrog_dive(self, obs: Observation) -> bool:
+        """At the top level the Balrog goal goes down to it as a player does:
+        level by level, with a way out in the pack, Detect Evil on arrival
+        (``scout``) and leaving a level whose creature could kill in one
+        breath (``leave_deadly``) rather than waiting to outgrow DL40's
+        breathers, which a Priest never does (maintainer, 2026-11-10)."""
+        escape = self.recall or self.teleports or self.wands.get(TELEPORT_STAFF, 0) > 0
+        return self.goal.threat_depth and obs.clvl >= MAX_CLVL and bool(escape)
 
     def threat_ready(self, obs: Observation, dlvl: int) -> bool:
         """A human's depth past the margin (maintainer, 2026-11-08: "be like a
         real human player", replacing 2026-11-02's three levels over each
-        depth for the Balrog goal): from THREAT_DEPTH_FROM, no deeper than its
-        own level, and only where no native creature's worst turn (a fast
-        breather's two breaths, divided by the resistance it wears) is
-        BREATH_LETHAL of its full HP. A level-37 Half-Troll Priest farmed DL34
+        depth for the Balrog goal): from THREAT_DEPTH_FROM, only where no
+        native creature's worst turn (a fast breather's two breaths, divided
+        by the resistance it wears and the speed it has) is BREATH_LETHAL of
+        its full HP. Not tied to its own level since 2026-11-10 (maintainer:
+        "it seems arbitrary"). A level-37 Half-Troll Priest farmed DL34
         for 235 experience a kill (DL40's natives: 1,808); there DL37 is its
         depth (a Mature Red Dragon's 160), not DL38 (an Ancient White
         Dragon's 468) until a Ring of Resist Cold cuts that to 156."""
-        if not self.goal.threat_depth or obs.clvl < THREAT_DEPTH_FROM or dlvl > obs.clvl:
+        if not self.goal.threat_depth or obs.clvl < THREAT_DEPTH_FROM:
             return False
         return self.native_burst(obs, dlvl) < BREATH_LETHAL * obs.mhp
 

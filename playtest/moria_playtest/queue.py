@@ -82,7 +82,14 @@ CHECKPOINT_HP = 0.75
 # last start: a town visit's armour (Enchant Armor, the Black Market) kept
 # for the retries (2026-11-07).
 ARMOUR_CHECKPOINT_AC = 5
+# ... and at the same level with this much more experience: a run that ended
+# on its step budget at clvl 39 went back 2,000,000 experience to its clvl 39
+# checkpoint, and all 17 of the queue's runs were about to (2026-11-10).
+CHECKPOINT_XP = 250_000
+FINAL_CHECKPOINT_STEPS = 2_000   # in its last this many steps a run keeps one if it gained experience
 CHECKPOINTS = "checkpoints"   # in a run's directory: clvl<N>/ each
+ENCOUNTERS = "encounters"     # in the queue home: <run>-s<step>/, a snapshot each Balrog sighting
+BALROG = ("B", 100)          # its glyph and native level (knowledge.kinds_by_name)
 PARALLEL_CAP = 3         # runs at once of a combination without a success (``parallel_cap``)
 DEFAULTS: dict[str, Any] = {
     "workers": 24, "min_per_platform": 1, "platforms": ["c64"], "goal": "deep", "retry_cap": 3,
@@ -106,21 +113,26 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
-def checkpoint_wanted(clvl: int, ac: int | None, last_clvl: int | None, last_ac: int | None) -> bool:
+def checkpoint_wanted(clvl: int, ac: int | None, last_clvl: int | None, last_ac: int | None,
+                      xp: int = 0, last_xp: int | None = None) -> bool:
     """A Balrog run's level entry is a checkpoint past its latest start's
-    character level, or at it with ARMOUR_CHECKPOINT_AC more AC."""
+    character level, or at it with ARMOUR_CHECKPOINT_AC more AC or
+    CHECKPOINT_XP more experience."""
     if last_clvl is None or clvl < last_clvl:
         return False
     if clvl > last_clvl:
         return True
+    if last_xp is not None and xp >= last_xp + CHECKPOINT_XP:
+        return True
     return ac is not None and last_ac is not None and ac >= last_ac + ARMOUR_CHECKPOINT_AC
 
 
-def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None) -> str:
-    """A checkpoint's directory: ``clvl<N>`` at a new level, ``clvl<N>-ac<AC>``
-    for better armour at the same one."""
+def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None, xp: int = 0) -> str:
+    """A checkpoint's directory: ``clvl<N>`` at a new level,
+    ``clvl<N>-ac<AC>-xp<XP>`` for better armour or more experience at the
+    same one (the experience keeps each name new)."""
     if last_clvl is not None and clvl <= last_clvl and ac is not None:
-        return f"clvl{clvl:02d}-ac{ac:03d}"
+        return f"clvl{clvl:02d}-ac{ac:03d}-xp{xp:08d}"
     return f"clvl{clvl:02d}"
 
 
@@ -377,6 +389,26 @@ def start_loads(start: dict[str, Any], build_id: str, platform: str, home: Path 
 
 # -- one run ------------------------------------------------------------------------
 
+def balrog_in_view(view) -> bool:   # type: ignore[no-untyped-def]
+    """The Balrog seen or detected (view.creatures: what the screen shows)."""
+    return any((c.glyph, c.level) == BALROG for c in view.creatures.values())
+
+
+def keep_encounter(home: Path, run_id: str, snapshot: Path, info: dict[str, Any]) -> Path:
+    """A Balrog sighting's snapshot, with its brain and the facts beside it,
+    copied to ``home/encounters/<run>-s<step>/`` for fight rehearsal: each
+    visit is a fresh level (the catalog places a Balrog or Evil Iggy on
+    every level from DL50, the tiers spawn it about once in 57 from DL100),
+    so a snapshot is the only way back to the same fight (maintainer,
+    2026-11-10)."""
+    dest = home / ENCOUNTERS / f"{run_id}-s{info['step']}"
+    dest.mkdir(parents=True, exist_ok=True)
+    for side in snapshot.parent.glob(f"{snapshot.stem}.*"):
+        shutil.copy2(side, dest / side.name)
+    write_json(dest / "encounter.json", {**info, "snapshot": snapshot.name})
+    return dest
+
+
 def run_one(run_dir: Path) -> int:
     """Play one job (``job.json``) in this process, from the build snapshot
     whose code this is; write ``result.json``. Runs under tools/isolated.sh."""
@@ -391,7 +423,7 @@ def run_one(run_dir: Path) -> int:
     from .recorder import SessionLog
     from . import graduate
     from .launch import allocate_port
-    from .session import Character, Result, load_brain
+    from .session import Character, Result, load_brain, save_brain
     from .worker import Snapshot, Worker
 
     job = read_json(run_dir / "job.json")
@@ -411,10 +443,14 @@ def run_one(run_dir: Path) -> int:
             self.checkpoint_due = False               # a saved-game checkpoint at the next command
             self.checkpoint_ac: int | None = None     # the AC at the latest start or checkpoint
             self.start_ac: int | None = None          # ... at this run's start
+            self.balrog_levels: set[int] = set()     # levels the Balrog was seen on (noticed)
+            self.checkpoint_xp: int | None = None     # the experience at the latest start or checkpoint
+            self.final_checkpoint = False             # the one kept near the step budget's end (observe)
 
         def mark_start(self, obs) -> None:   # type: ignore[no-untyped-def]
             self.checkpoint_clvl = max(obs.clvl, 1)   # chargen's screen reads level 0
             self.checkpoint_ac = self.start_ac = status_ac(obs)
+            self.checkpoint_xp = obs.xp
 
         # -- Balrog checkpoints (§23.9)
 
@@ -426,23 +462,30 @@ def run_one(run_dir: Path) -> int:
             (press)."""
             super().take_snapshot(obs)
             ac = status_ac(obs)
-            if not checkpoint_wanted(obs.clvl, ac, self.checkpoint_clvl, self.checkpoint_ac):
+            if not checkpoint_wanted(obs.clvl, ac, self.checkpoint_clvl, self.checkpoint_ac,
+                                     obs.xp, self.checkpoint_xp):
                 return
             if obs.hp < CHECKPOINT_HP * obs.mhp:
                 return
+            self.keep_checkpoint(obs)
+
+        def keep_checkpoint(self, obs) -> None:   # type: ignore[no-untyped-def]
+            """This command stop's checkpoint: a saved game at the next command
+            on a ``graduate_save`` port, else the level-entry snapshot."""
+            ac = status_ac(obs)
             if port.graduate_save:
                 self.checkpoint_due = True
                 return
             if self.snapshot is None:
                 return
-            dest = run_dir / CHECKPOINTS / checkpoint_name(obs.clvl, self.checkpoint_clvl, ac)
+            dest = run_dir / CHECKPOINTS / checkpoint_name(obs.clvl, self.checkpoint_clvl, ac, obs.xp)
             dest.mkdir(parents=True, exist_ok=True)
             for side in self.snapshot.path.parent.glob(f"{self.snapshot.path.stem}.*"):
                 shutil.copy2(side, dest / side.name)
             write_json(dest / "checkpoint.json", {"clvl": obs.clvl, "step": self.result.steps, "dlvl": obs.dlvl,
-                                                  "ac": ac, "base_ac": self.start_ac,
+                                                  "ac": ac, "base_ac": self.start_ac, "xp": obs.xp,
                                                   "snapshot": self.snapshot.path.name})
-            self.checkpoint_clvl, self.checkpoint_ac = obs.clvl, ac
+            self.checkpoint_clvl, self.checkpoint_ac, self.checkpoint_xp = obs.clvl, ac, obs.xp
             self.session.event("checkpoint", seed=self.seed, step=self.result.steps, clvl=obs.clvl, dlvl=obs.dlvl)
 
         def press(self, key: int):   # type: ignore[no-untyped-def]
@@ -462,9 +505,9 @@ def run_one(run_dir: Path) -> int:
             obs = game.last
             clvl, ac = obs.clvl, status_ac(obs)
             state = {"seed": self.seed, "step": self.result.steps, "dlvl": obs.dlvl, "clvl": clvl,
-                     "ac": ac, "base_ac": self.start_ac, "auditor_command_sp": self.auditor.command_sp}
-            name = checkpoint_name(clvl, self.checkpoint_clvl, ac)
-            self.checkpoint_clvl, self.checkpoint_ac = clvl, ac   # a failed save waits for the next one
+                     "ac": ac, "base_ac": self.start_ac, "xp": obs.xp, "auditor_command_sp": self.auditor.command_sp}
+            name = checkpoint_name(clvl, self.checkpoint_clvl, ac, obs.xp)
+            self.checkpoint_clvl, self.checkpoint_ac, self.checkpoint_xp = clvl, ac, obs.xp   # a failed save waits for the next one
             try:
                 graduate.save(game, text, save_disk)
                 dest = graduate.keep(run_dir, save_disk, state, self.brain, f"{CHECKPOINTS}/{name}")
@@ -477,7 +520,38 @@ def run_one(run_dir: Path) -> int:
             obs = graduate.load(game, text)
             self.take_snapshot(obs)   # the hang-recovery replay starts after the save and load
 
+        def noticed(self, obs, view) -> None:   # type: ignore[no-untyped-def]
+            """The Balrog in view, the first time on a level: a snapshot of
+            the moment, kept for fight rehearsal (keep_encounter); the run
+            goes on as it was."""
+            if obs.dlvl in self.balrog_levels or not balrog_in_view(view):
+                return
+            self.balrog_levels.add(obs.dlvl)
+            info = {"seed": self.seed, "step": self.result.steps, "dlvl": obs.dlvl, "clvl": obs.clvl,
+                    "hp": obs.hp, "mhp": obs.mhp, "build": job.get("build"), "platform": job["platform"],
+                    "character": job["character"], "pos": list(view.pos),
+                    "balrog": [list(p) for p, c in view.creatures.items() if (c.glyph, c.level) == BALROG]}
+            self.session.event("balrog_seen", **info)
+            snapshot = self.worker.snapshot(f"balrog-{self.seed}-s{self.result.steps}-dl{obs.dlvl}",
+                                            {"seed": self.seed, "step": self.result.steps, "dlvl": obs.dlvl,
+                                             "brain": self.brain.state(),
+                                             "auditor_command_sp": self.auditor.command_sp})
+            if snapshot is None:   # a port without snapshots (MAME)
+                return
+            save_brain(self.brain, snapshot.path)
+            dest = keep_encounter(run_dir.parent.parent, run_dir.name, snapshot.path, info)
+            snapshot.delete()
+            self.session.event("encounter", seed=self.seed, step=self.result.steps, path=str(dest))
+
         def observe(self, obs) -> None:   # type: ignore[no-untyped-def]
+            if (goal.name == "balrog" and not self.final_checkpoint and obs.dlvl > 0
+                    and self.goal.step_budget - self.result.steps <= FINAL_CHECKPOINT_STEPS
+                    and self.checkpoint_xp is not None and obs.xp > self.checkpoint_xp
+                    and obs.hp >= CHECKPOINT_HP * obs.mhp):
+                # A run's last steps keep what it gained: a budget's end lost
+                # every experience point since the latest checkpoint.
+                self.final_checkpoint = True
+                self.keep_checkpoint(obs)
             found = []
             for level in CLVL_MILESTONES:
                 if obs.clvl >= level and f"clvl{level}" not in self.milestones:
@@ -884,7 +958,9 @@ class Balrog:
             base = current.get("ac")
             if base is None and (job.get("resume") or {}).get("run") == current.get("run"):
                 base = start.get("base_ac")   # a start from before 2026-11-07: the run's own AC at it
-            if base is None or start.get("ac") is None or start["ac"] < base + ARMOUR_CHECKPOINT_AC:
+            more_ac = base is not None and start.get("ac") is not None and start["ac"] >= base + ARMOUR_CHECKPOINT_AC
+            more_xp = start.get("xp", 0) >= current.get("xp", 0) + CHECKPOINT_XP
+            if not (more_ac or more_xp):
                 return False
         resume = job.get("resume") or {}
         start.update(checkpoint=True, graduate=resume.get("graduate") or resume.get("run"),
@@ -1627,15 +1703,15 @@ class Service:
         for ckpt in root.glob("clvl*"):
             state = read_json(ckpt / "checkpoint.json") or {}
             if state.get("clvl") and list(ckpt.glob("*.brain.pickle")):
-                found.append((int(state["clvl"]), state.get("ac") or 0, ckpt, state))
+                found.append((int(state["clvl"]), state.get("xp") or 0, state.get("ac") or 0, ckpt, state))
         if not found:
             return False
-        clvl, _, ckpt, state = max(found, key=lambda f: f[:2])
+        clvl, _, _, ckpt, state = max(found, key=lambda f: f[:3])
         name = f"{record['id']}-{ckpt.name}"
         dest = self.home / "balrog" / name
         start: dict[str, Any] = {"run": name, "build": job["build"], "step": state.get("step", 0),
                                  "dlvl": state.get("dlvl", 0), "clvl": clvl, "set": now()}
-        for key in ("ac", "base_ac"):
+        for key in ("ac", "base_ac", "xp"):
             if state.get(key) is not None:
                 start[key] = state[key]
         if state.get("snapshot"):

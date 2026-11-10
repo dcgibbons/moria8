@@ -212,6 +212,11 @@ def death(trace: Path) -> dict[str, Any]:
         # The poison tick (at most 4 HP) stops at 0 HP; a killing blow usually
         # leaves HP below 0 and prints no "hits you" (M7 queue).
         cause = "poison"
+    elif not found and any(word in (last.get("status") or "") for word in ("Weak", "Faint")):
+        # Starving prints no message; the tombstone says "Starvation" (core/
+        # score.s). Recorded as "unknown" until 2026-11-10: Apple IIe, BBC
+        # and CX16 build-queue characters lost on no-way-up levels.
+        cause = "starvation"
     else:
         cause = found[-1] if found else "unknown"
     status = STATUS.search(last.get("status") or "")

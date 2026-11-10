@@ -1718,10 +1718,30 @@ class ThreatDepthTest(unittest.TestCase):
         brain = self.priest()
         self.assertTrue(self.deeper(brain, 34))            # DL35: a Young Black Dragon's 128
         self.assertTrue(self.deeper(brain, 36))            # DL37: a Mature Red Dragon's 160
-        self.assertFalse(self.deeper(brain, 37))           # no deeper than its own level
+        self.assertFalse(self.deeper(brain, 37))           # DL38: an Ancient White Dragon's 468 of 290
         self.assertFalse(self.deeper(brain, 37, clvl=38))  # DL38: an Ancient White Dragon's 468 of 290
         brain.jewel_names["Ring"] = "Ring of Resist Cold"
         self.assertTrue(self.deeper(brain, 37, clvl=38))   # 156 through the ring
+
+    def test_not_tied_to_its_own_level(self) -> None:
+        """Maintainer, 2026-11-10: the own-level cap "seems arbitrary": a
+        level-35 Priest with two Rings of Speed goes to DL38 (one breath of
+        234 in two turns) as a level-39 one does."""
+        brain = self.priest()
+        brain.jewels = brain.read_jewels(["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: (none)",
+                                          " j) Ring:   Ring of Speed"])
+        self.assertTrue(self.deeper(brain, 37, clvl=35, mhp=300))
+        self.assertFalse(self.deeper(brain, 39, clvl=39, mhp=400))   # DL40: the Multi-Hued's 693
+
+    def test_at_the_top_level_it_dives_for_the_balrog_with_a_way_out(self) -> None:
+        """Maintainer, 2026-11-10: at clvl 40 the old margin passed every
+        depth blindly; now the dive needs a way out, and level by level the
+        bot detects and leaves what could kill it in one breath."""
+        brain = self.priest()
+        self.assertFalse(self.deeper(brain, 39, clvl=39, mhp=400))
+        self.assertTrue(self.deeper(brain, 45, clvl=40, mhp=420))    # Word of Recall carried
+        brain.recall = 0
+        self.assertFalse(self.deeper(brain, 45, clvl=40, mhp=420))   # no way out: not past DL40's breathers
 
     def test_resupply_and_recall_agree_with_it(self) -> None:
         """2026-11-09: resupply climbed from DL36 and town refused Word of
