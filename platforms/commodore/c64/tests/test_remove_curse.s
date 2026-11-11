@@ -58,7 +58,7 @@ test_finish:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
+// monster_ai.s is not imported: spells never run the turn tick (stubs below).
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
@@ -397,5 +397,17 @@ ui_char_display:
 count_spells_known:
     jmp spell_mask_count_ptr
 
+// Stubs for the monster AI turn.s and the scene code reference: casting
+// never runs the turn tick. Dropped to keep the test body below MAP_BASE
+// when MON-026 grew monster_ai.s (2026-11-10).
+monster_ai_tick:
+    clc
+    rts
+mat_scene_dirty: .byte 0
+
+
 test_done_break:
     brk
+test_end:
+.assert "Remove Curse test body must stay below MAP_BASE", test_end < MAP_BASE, true
+

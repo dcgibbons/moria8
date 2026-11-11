@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #67
+    ldx #69
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -182,7 +182,7 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 68, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 70, $ff      // Result buffer (copied to $0400 at end)
 t59_toward: .byte 0
 t59_left:   .byte 0
 t60_n:      .byte 0             // neighbours around the breeder (MON-016)
@@ -2794,56 +2794,16 @@ test_start:
     // every-other-turn cadence; an odd turn skips the move entirely.
     // ==========================================
 !t36:
-    jsr monster_init_table
     lda #0
-    sta zp_game_flags
-
-    ldx #15
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #20
-!t36_fill:
-    lda #TILE_FLOOR | FLAG_LIT
-    sta (zp_ptr0),y
-    iny
-    cpy #31
-    bne !t36_fill-
-
-    lda #20
-    sta ms_spawn_x
-    lda #15
-    sta ms_spawn_y
-    lda #4                      // Kobold (speed=1)
-    jsr monster_spawn_one
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda #MF_AWAKE
-    sta (zp_ptr0),y
-
-    lda #30
-    sta zp_player_x
-    lda #15
-    sta zp_player_y
-
+    sta player_pflags
     lda #10
     sta zp_eff_speed            // hasted
-    lda #1
-    sta zp_turn_lo              // odd turn
-    jsr monster_ai_tick
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_X
-    lda (zp_ptr0),y
+    lda #1                      // odd turn
+    jsr t69_kobold_turn
     cmp #20                     // skipped: still at (20,15)
     bne !t36_fail+
     lda #$01
-    sta tc_results + 35
-    jmp !t37+
+    .byte $2c
 !t36_fail:
     lda #$00
     sta tc_results + 35
@@ -2851,175 +2811,52 @@ test_start:
     // ==========================================
     // Test 37: same haste state, even turn — the monster acts once.
     // ==========================================
-!t37:
-    jsr monster_init_table
-    lda #0
-    sta zp_game_flags
-
-    ldx #15
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #20
-!t37_fill:
-    lda #TILE_FLOOR | FLAG_LIT
-    sta (zp_ptr0),y
-    iny
-    cpy #31
-    bne !t37_fill-
-
-    lda #20
-    sta ms_spawn_x
-    lda #15
-    sta ms_spawn_y
-    lda #4                      // Kobold (speed=1)
-    jsr monster_spawn_one
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda #MF_AWAKE
-    sta (zp_ptr0),y
-
-    lda #30
-    sta zp_player_x
-    lda #15
-    sta zp_player_y
-
-    lda #10
-    sta zp_eff_speed            // hasted
-    lda #2
-    sta zp_turn_lo              // even turn
-    jsr monster_ai_tick
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_X
-    lda (zp_ptr0),y
+    lda #2                      // even turn
+    jsr t69_kobold_turn
     cmp #21                     // acted once: (20,15) -> (21,15)
     bne !t37_fail+
     lda #$01
-    sta tc_results + 36
-    jmp !t38+
+    .byte $2c
 !t37_fail:
     lda #$00
     sta tc_results + 36
 
     // ==========================================
-    // Test 38: Ring of Speed (PFLAG_SPEED) has the same every-other-turn
-    // effect as an active haste timer; odd turn skips.
+    // Test 38: a Ring of Speed has the same every-other-turn effect as an
+    // active haste timer; odd turn skips.
     // ==========================================
-!t38:
-    jsr monster_init_table
     lda #0
-    sta zp_game_flags
     sta zp_eff_speed            // no timer — ring only
     lda #PFLAG_SPEED
     sta player_pflags
-
-    ldx #15
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #20
-!t38_fill:
-    lda #TILE_FLOOR | FLAG_LIT
-    sta (zp_ptr0),y
-    iny
-    cpy #31
-    bne !t38_fill-
-
-    lda #20
-    sta ms_spawn_x
-    lda #15
-    sta ms_spawn_y
-    lda #4                      // Kobold (speed=1)
-    jsr monster_spawn_one
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda #MF_AWAKE
-    sta (zp_ptr0),y
-
-    lda #30
-    sta zp_player_x
-    lda #15
-    sta zp_player_y
-
-    lda #1
-    sta zp_turn_lo              // odd turn
-    jsr monster_ai_tick
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_X
-    lda (zp_ptr0),y
+    lda #ITEM_TYPE_RING_SPEED   // the ring worn: the speed step counts rings (MON-026)
+    sta inv_item_id + EQUIP_RING
+    lda #1                      // odd turn
+    jsr t69_kobold_turn
     cmp #20                     // skipped: still at (20,15)
     bne !t38_fail+
     lda #$01
-    sta tc_results + 37
-    jmp !t39+
+    .byte $2c
 !t38_fail:
     lda #$00
     sta tc_results + 37
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
 
     // ==========================================
     // Test 39: slowed player (zp_eff_speed < 0) hastens a speed-1 monster
     // to a double move.
     // ==========================================
-!t39:
-    jsr monster_init_table
     lda #0
-    sta zp_game_flags
     sta player_pflags           // no ring
     lda #$f6                    // -10: slowed
     sta zp_eff_speed
-
-    ldx #15
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #20
-!t39_fill:
-    lda #TILE_FLOOR | FLAG_LIT
-    sta (zp_ptr0),y
-    iny
-    cpy #31
-    bne !t39_fill-
-
-    lda #20
-    sta ms_spawn_x
-    lda #15
-    sta ms_spawn_y
-    lda #4                      // Kobold (speed=1)
-    jsr monster_spawn_one
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda #MF_AWAKE
-    sta (zp_ptr0),y
-
-    lda #30
-    sta zp_player_x
-    lda #15
-    sta zp_player_y
-
-    jsr monster_ai_tick
-
-    ldx #0
-    jsr monster_get_ptr
-    ldy #MX_X
-    lda (zp_ptr0),y
+    lda #1
+    jsr t69_kobold_turn
     cmp #22                     // double move: (20,15) -> (22,15)
     bne !t39_fail+
     lda #$01
-    sta tc_results + 38
-    jmp !t40+
+    .byte $2c
 !t39_fail:
     lda #$00
     sta tc_results + 38
@@ -3923,8 +3760,101 @@ test_start:
     lda #$00
     sta tc_results + 67
 
+    // Test 69: two Rings of Speed stack (MON-026; VMS and Umoria add every
+    // speed bonus): a Kobold (speed 1) is at -1 and acts on turns divisible
+    // by 3 only (Umoria monsterMovementRate: 2 - s), the turn's high byte
+    // counted ($0100 = 256: 1 mod 3, skipped; $0102 = 258: 0 mod 3). Until
+    // 2026-11-10 the second ring did nothing: every other turn.
+    lda #ITEM_TYPE_RING_SPEED
+    sta inv_item_id + EQUIP_RING
+    sta inv_item_id + EQUIP_RING2
+    lda #0
+    sta zp_eff_speed
+    lda #1
+    sta zp_turn_hi
+    lda #0                      // 256
+    jsr t69_kobold_turn
+    cmp #20
+    bne !t69_fail+
+    lda #2                      // 258
+    jsr t69_kobold_turn
+    cmp #21
+    bne !t69_fail+
+    lda #$01
+    .byte $2c
+!t69_fail:
+    lda #$00
+    sta tc_results + 68
+    lda #0
+    sta zp_turn_hi
+
+    // Test 70: haste and two rings stack too: at -2 the Kobold acts on
+    // turns divisible by 4 (6: skipped, though divisible by 3; 8: one move).
+    lda #10
+    sta zp_eff_speed            // hasted
+    lda #6
+    jsr t69_kobold_turn
+    cmp #20
+    bne !t70_fail+
+    lda #8
+    jsr t69_kobold_turn
+    cmp #21
+    bne !t70_fail+
+    lda #$01
+    .byte $2c
+!t70_fail:
+    lda #$00
+    sta tc_results + 69
+    lda #0
+    sta zp_eff_speed
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    sta inv_item_id + EQUIP_RING2
+
 !tests_done:
     jmp test_finish
+
+// t69_kobold_turn — An awake Kobold (speed 1) at (20,15) on a lit floor
+// row, the player at (30,15), one production monster_ai_tick on turn A
+// (zp_turn_hi as set). Output: A = the Kobold's x.
+t69_kobold_turn:
+    sta zp_turn_lo
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t69_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t69_fill-
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold (speed=1)
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    rts
 
 // t67_cast — Tile A on the 8 squares around (20,15), floor under an awake
 // Kobold there that casts Teleport To (MSF_TELEPORT through production

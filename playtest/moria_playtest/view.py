@@ -25,6 +25,7 @@ from .game import Game, Observation
 UNKNOWN = -1
 WALL = 0x1   # TILE_WALL_H type nibble; stands in for every blocking type
 WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xB, 0xE}   # walkable_table, core/player_move.s
+VEIN_TYPES = (0xC, 0xD)   # TILE_MAGMA, TILE_QUARTZ (core/dungeon_data.s): read as WALL, but a tunnel opens them
 TYPE_DOOR_OPEN, TYPE_DOOR_CLOSED = 0x7, 0x8
 TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_RUBBLE, TYPE_TRAP, TYPE_SECRET = 0x9, 0xA, 0xB, 0xE, 0xF
 # terrain_frontier's byte masks over tile types as signed bytes (UNKNOWN is 0xFF):
@@ -61,6 +62,7 @@ def is_unknown_glyph(char: str) -> bool:
 class Creature:
     glyph: str
     level: int
+    name: str = field(default="", compare=False)   # the catalog's name when the view knows it (build_view)
 
 
 @dataclass
@@ -79,6 +81,7 @@ class View:
     perilous: set[Pos] = field(default_factory=set)     # brain: squares a creature in view could hurt badly (danger)
     last_path: list[Pos] = field(default_factory=list)  # step_toward's whole path, for a walk kept to it
     screen: tuple[int, int, int, int] = (0, 0, 0, 0)  # map x, y, width, height on screen
+    veins: dict[Pos, int] = field(default_factory=dict)  # seen magma (0xC) and quartz (0xD): walls a tunnel opens
 
     def on_screen(self, pos: Pos) -> bool:
         """Whether the screen shows ``pos`` (an unset screen shows the whole map)."""
@@ -349,6 +352,25 @@ def tile_type_table(flag_visited: int) -> tuple[int, ...]:
     return tuple(out)
 
 
+def catalog_slot_names(game: Game) -> dict[int, str]:
+    """Live monster slot -> its catalog name (``cat_slot_id_lo``/``_hi``, one
+    read), empty on a port without the catalog."""
+    from . import knowledge
+    catalog = knowledge.catalog_names()
+    abi = game.abi
+    lo, hi = (abi.all_symbols.get(n, [None])[0] for n in ("cat_slot_id_lo", "cat_slot_id_hi"))
+    if not catalog or lo is None or hi is None:
+        return {}
+    count = abi.MAX_MONSTERS
+    if hi == lo + count:
+        raw = game.mon.mem_get(lo, 2 * count, game.ram)
+        low, high = raw[:count], raw[count:]
+    else:
+        low, high = game.mon.mem_get(lo, count, game.ram), game.mon.mem_get(hi, count, game.ram)
+    return {slot: catalog[cid] for slot in range(count)
+            if (cid := low[slot] | high[slot] << 8) < len(catalog)}
+
+
 def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None = None) -> View:
     """``levels`` is the resident ``cr_level`` table, read once per observation."""
     abi = game.abi
@@ -357,10 +379,12 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
     types = [table[tile] for tile in tiles]
     by_pos = {}
     size = abi.MONSTER_ENTRY_SIZE
+    slots = {}
     for slot in range(abi.MAX_MONSTERS):
         rec = obs.monsters[slot * size:(slot + 1) * size]
         if rec[abi.MX_TYPE] != abi.EMPTY_SLOT:
             by_pos[(rec[abi.MX_X], rec[abi.MX_Y])] = rec[abi.MX_TYPE]
+            slots[(rec[abi.MX_X], rec[abi.MX_Y])] = slot
     creatures = {}
     unknown = {}
     vx, vy = abi.hal_layout_viewport_x, abi.hal_layout_viewport_y
@@ -375,10 +399,22 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
                 creatures[pos] = Creature(line[col], level)
             else:
                 unknown[screen_to_map(game, obs, col, row)] = line[col]
+    if creatures:
+        # The catalog's id of each live slot (core/monster_catalog.s): the
+        # creature's name, as a look shows it. An Ancient Red Dragon breathes
+        # fire alone, though drawn as the Ancient Multi-Hued's D at level 40.
+        names = catalog_slot_names(game)
+        if names:
+            creatures = {pos: Creature(c.glyph, c.level, names.get(slots.get(pos, -1), ""))
+                         for pos, c in creatures.items()}
     stores = []
     if obs.dlvl == 0:
         xs = game.mon.mem_get(abi.store_door_x, abi.STORE_COUNT, game.ram)
         ys = game.mon.mem_get(abi.store_door_y, abi.STORE_COUNT, game.ram)
         stores = list(zip(xs, ys))
     screen = (*screen_to_map(game, obs, vx, vy), abi.hal_layout_viewport_w, abi.hal_layout_viewport_h)
-    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores, unknown=unknown, screen=screen)
+    visited = abi.FLAG_VISITED
+    veins = {(i % cols, i // cols): tile >> 4 for i, tile in enumerate(tiles)
+             if tile & visited and tile >> 4 in VEIN_TYPES}
+    return View(cols, rows, types, obs.pos, obs.dlvl, creatures, stores=stores, unknown=unknown, screen=screen,
+                veins=veins)

@@ -182,7 +182,7 @@ playtest-queue-status:
 	$(PLAYTEST_PY) -m moria_playtest.queue status
 
 playtest-queue-rebuild:
-	$(PLAYTEST_PY) -m moria_playtest.queue rebuild
+	$(PLAYTEST_PY) -m moria_playtest.queue rebuild$(if $(RESTART_BALROG), --restart-balrog)
 
 # Re-creates var/moria8/queue.db from runs.jsonl (§23.10).
 playtest-queue-records-rebuild:

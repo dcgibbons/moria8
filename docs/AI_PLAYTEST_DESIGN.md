@@ -3008,7 +3008,21 @@ a win is unlikely until the bot plays much better.
   (`brain.ready_level`), so a level-25 graduate plays about DL22 and only
   level 40 goes below DL36. Until then it shared `deep`'s old taper (level 25
   on DL30): the first saved-game graduates went straight from DL28 to
-  DL30-31, and seven runs died there at level 25-26. A start plays in the
+  DL30-31, and seven runs died there at level 25-26. From level 30 a
+  character also goes deeper where no native creature's worst turn (its
+  breaths, against the resistance and speed worn) is 90% of its HP
+  (`brain.threat_ready`, maintainer 2026-11-08: "be like a real human
+  player"). Since 2026-11-10 (maintainer: the level rules seemed
+  "arbitrary") that is not capped at the character's own level, and where
+  the margin would need the top level (DL37 on) only it decides; at level
+  40 the bot dives for the Balrog with a way out in its pack
+  (`brain.balrog_dive`), detecting each level and leaving one whose
+  creature could kill in a breath, since DL40's Ancient Multi-Hued Dragon
+  (693 a breath) outclasses a 400-HP Priest for good. A dive from level 35
+  to DL49 for the experience (`DIVE_FROM_CLVL`, `DIVE_MAX_DLVL`) was tried
+  the same day and turned off: six deaths to Ancient Multi-Hued Dragons
+  breathing from beyond Detect Evil's panel in two hours, and less
+  experience an hour than DL39 (maintainer: "let's not deep-dive then"). A start plays in the
   current build, with its goals and the rest of its bot, when the game disks
   are the same and its brain loads there: every class the start's pickle
   names (`queue.pickled_classes`, from `brain.py`, `magic.py` and `view.py`)
@@ -3071,6 +3085,17 @@ a win is unlikely until the bot plays much better.
   through checkpoints counts for M8 (maintainer: "it should count"), with
   its restores in the item's `wins`. Later, once the gameplay tweaks are
   done, a final Balrog queue plays from level 1 on an ongoing basis.
+- **Balrog encounters (maintainer, 2026-11-10).** The first time a run sees
+  or detects the Balrog on a level (`balrog_in_view`: glyph `B`, native
+  level 100), it records a `balrog_seen` event and keeps a snapshot of that
+  moment with its brain in `encounters/<run>-s<step>/` (`keep_encounter`,
+  `encounter.json` beside it); the run goes on unchanged. With the tiers the
+  Balrog is about one spawn in 57 from DL100; with the monster catalog (the
+  C64's) every level from DL50 places an awake Balrog or Evil Iggy out of
+  sight (`catalog_place_win_creature`, VMS `place_win_monster`), but each on
+  a fresh level. A snapshot is the only way back to the same fight:
+  rehearsals from it (each with its own dice) are to try fight tactics, and
+  a kill still counts only in a real run. Ports without snapshots (MAME) record the event alone.
 - **The newest build, else level 1 (maintainer, 2026-11-06).** Until then a
   start played the build that saved it unless the game was byte-identical
   (`same_game_and_brain`), so as the C128 game changed every start stayed
@@ -3217,8 +3242,12 @@ needs the bot to record each cast and its effect (step 3).
   is the same module, run by `python3` directly so that systemd signals the
   service and not `make`).
 - `make playtest-queue-status`: the main queue and subqueues in the terminal.
-- `make playtest-queue-rebuild`: play this working tree as it stands from
-  the next run on.
+- `make playtest-queue-rebuild [RESTART_BALROG=1]`: play this working tree as
+  it stands from the next run on. With `RESTART_BALROG=1`, once the new
+  snapshot plays, the service ends every Balrog run on an older build
+  (`cancelled`: no result and no fail on its start); each combination goes
+  on from its start in the new build. Use it when a fix ends a loop the old
+  bot cannot leave; runs fall back to their last checkpoint.
 - `make playtest-queue-records-rebuild`: re-create `queue.db` from
   `runs.jsonl`.
 - `make playtest-subqueue NAME=ab1 GOAL=clvl10 CHARACTERS=human-mage,elf-mage

@@ -37,7 +37,7 @@ from .launch import PLAYTEST_OUT, ROOT, Build, StaleDisk, build_identity, check_
 from .ports import C64, PORTS
 from .recorder import CharacterLog, SessionLog, write_json
 from .vice import ViceError
-from .view import build_view
+from .view import View, build_view
 from .worker import Snapshot, Worker
 
 SUITES = ROOT / "playtest" / "suites"
@@ -299,6 +299,9 @@ class Character:
     def observe(self, obs: Observation) -> None:
         """Each command stop, before the goal is checked (queue.QueueCharacter)."""
 
+    def noticed(self, obs: Observation, view: View) -> None:
+        """Each command stop's view, before the brain decides (queue.QueueCharacter)."""
+
     def reached(self, obs: Observation) -> bool:
         return self.goal.reached(obs)
 
@@ -388,6 +391,7 @@ class Character:
                             else game.abi.TIER_DUNGEON_CREATURES)
                     levels = game.mon.mem_get(game.abi.cr_level, rows + game.abi.MAX_TOWN_CREATURES, game.ram)
                     view = build_view(game, obs, tiles, levels)
+                    self.noticed(obs, view)
                 decision = self.brain.decide(obs, view)
                 for event in self.brain.events:
                     self.file_finding("stall", "bot", event, obs)

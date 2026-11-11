@@ -205,6 +205,43 @@ class ScheduleTest(unittest.TestCase):
         service.schedule(q, {})
         self.assertEqual(stopped, [])
 
+    def test_a_restart_ends_the_balrog_runs_on_older_builds(self) -> None:
+        """2026-11-09: old bots stuck on full packs played out their budgets
+        while the maintainer stopped them by hand a few at a time."""
+        service = self.service(4)
+        service.build_id = "new"
+        service.running = {r: {"queue": q, "build": b} for r, q, b in
+                           (("a", "balrog", "old"), ("b", "balrog", "new"), ("c", "main", "old"), ("d", "balrog", "older"))}
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        service.restart_balrog()
+        self.assertEqual(stopped, [])                                     # not asked
+        (service.home / "restart-balrog").touch()
+        (service.home / "rebuild").touch()
+        service.restart_balrog()
+        self.assertEqual(stopped, [])                                     # the new snapshot not built yet
+        (service.home / "rebuild").unlink()
+        service.restart_balrog()
+        self.assertEqual(stopped, ["a", "d"])
+        self.assertFalse((service.home / "restart-balrog").exists())      # once
+
+    def test_a_subqueue_plays_beside_a_focus(self) -> None:
+        """2026-11-10: an A/B subqueue's 64 games were all stopped within five
+        seconds by the Balrog focus; only the main queue's runs and other
+        characters' Balrog games give their workers to it."""
+        service = self.service(4)
+        service.config.update(balrog_characters=["half-troll-priest"], platforms=["c128"])
+        service.running = {r: {"queue": q, "character": c, "platform": "c64", "paused": False, "started": 1.0}
+                           for r, q, c in (("m", "main", "elf-mage"), ("ab", "early-cures", "elf-mage"),
+                                           ("b1", "balrog", "half-troll-priest"), ("b2", "balrog", "elf-priest"),
+                                           ("bq", "build", "elf-mage"))}
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        q = queue.Queue("deep", service.home)
+        q.platform("c128")
+        service.schedule(q, {})
+        self.assertEqual(sorted(stopped), ["b2", "m"])
+
     def test_a_port_that_covered_its_build_waits_for_the_next(self) -> None:
         service = self.service(6)
         service.config.update(build_platforms=["c64", "atari8"], build_goal="clvl10")
@@ -720,15 +757,16 @@ class BalrogQueueTest(unittest.TestCase):
     # level, so a death goes on from the latest; a win through them counts)
 
     def checkpoint_run(self, service: queue.Service, run_id: str, clvl: int, step: int,
-                       snapshot: bool = False, ac: int | None = None, base_ac: int | None = None) -> None:
+                       snapshot: bool = False, ac: int | None = None, base_ac: int | None = None,
+                       xp: int = 0) -> None:
         """A Balrog run's checkpoint directory, as run_one's QueueCharacter keeps it."""
         from moria_playtest.brain import Brain
         from moria_playtest.goals import GOALS, for_character
         from moria_playtest.session import save_brain
-        name = queue.checkpoint_name(clvl, clvl if base_ac is not None else None, ac)
+        name = queue.checkpoint_name(clvl, clvl if base_ac is not None else None, ac, xp)
         ckpt = service.home / "runs" / run_id / queue.CHECKPOINTS / name
         ckpt.mkdir(parents=True)
-        state: dict = {"clvl": clvl, "step": step, "dlvl": 20, "ac": ac, "base_ac": base_ac}
+        state: dict = {"clvl": clvl, "step": step, "dlvl": 20, "ac": ac, "base_ac": base_ac, "xp": xp}
         if snapshot:
             brain_file = ckpt / "balrog-1-s1-dl20.vsf"
             brain_file.write_bytes(b"VICE")
@@ -799,7 +837,7 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertFalse(service.balrog_checkpoint(self.balrog_record("b2"), {"build": "b0", "resume": level}))
         self.checkpoint_run(service, "b3", 27, 370_000, ac=52, base_ac=40)
         self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3"), {"build": "b0", "resume": level}))
-        self.assertEqual((item["start"]["run"], item["start"]["clvl"], item["start"]["ac"]), ("b3-clvl27-ac052", 27, 52))
+        self.assertEqual((item["start"]["run"], item["start"]["clvl"], item["start"]["ac"]), ("b3-clvl27-ac052-xp00000000", 27, 52))
         self.assertTrue((Path(item["start"]["save"]) / "save.d64").exists())
         self.checkpoint_run(service, "b4", 27, 380_000, ac=55, base_ac=40)   # from the level start: below 52 + 5
         self.assertFalse(service.balrog_checkpoint(self.balrog_record("b4"), {"build": "b0", "resume": level}))
@@ -813,7 +851,11 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertFalse(wanted(26, 60, 27, 40))   # a drained level
         self.assertFalse(wanted(27, 60, None, None))   # not a Balrog run
         self.assertEqual(queue.checkpoint_name(28, 27, 40), "clvl28")
-        self.assertEqual(queue.checkpoint_name(27, 27, 45), "clvl27-ac045")
+        self.assertEqual(queue.checkpoint_name(27, 27, 45, 3_781_288), "clvl27-ac045-xp03781288")
+        # 2026-11-10: a run that ended on its step budget at clvl 39 went back
+        # 2,000,000 experience to its clvl 39 checkpoint.
+        self.assertTrue(wanted(39, 40, 39, 40, 4_100_000, 3_850_000))
+        self.assertFalse(wanted(39, 40, 39, 40, 4_099_999, 3_850_000))
 
     def test_an_old_start_without_ac_takes_its_runs_better_armour(self) -> None:
         service = self.service(4, 2)
@@ -825,7 +867,24 @@ class BalrogQueueTest(unittest.TestCase):
         item["start"] = start
         self.checkpoint_run(service, "b2", 27, 360_000, ac=50, base_ac=45)
         self.assertTrue(service.balrog_checkpoint(self.balrog_record("b2"), {"build": "b0", "resume": start}))
-        self.assertEqual(item["start"]["run"], "b2-clvl27-ac050")
+        self.assertEqual(item["start"]["run"], "b2-clvl27-ac050-xp00000000")
+
+    def test_more_experience_at_the_same_level_becomes_the_start(self) -> None:
+        """2026-11-10: a budget's end threw away 2,000,000 experience gained
+        since the clvl 39 checkpoint; a checkpoint CHECKPOINT_XP richer now
+        becomes the start, and a run keeps its richest."""
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        self.checkpoint_run(service, "b1", 39, 350_000, xp=3_500_000)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]}))
+        level = dict(item["start"])
+        self.assertEqual(level["xp"], 3_500_000)
+        self.checkpoint_run(service, "b2", 39, 360_000, ac=40, base_ac=40, xp=3_600_000)
+        self.assertFalse(service.balrog_checkpoint(self.balrog_record("b2"), {"build": "b0", "resume": level}))
+        self.checkpoint_run(service, "b3", 39, 370_000, ac=40, base_ac=40, xp=4_000_000)
+        self.checkpoint_run(service, "b3", 39, 380_000, ac=40, base_ac=40, xp=5_800_000)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3"), {"build": "b0", "resume": level}))
+        self.assertEqual((item["start"]["run"], item["start"]["xp"]), ("b3-clvl39-ac040-xp05800000", 5_800_000))
 
     def test_a_run_keeps_the_better_of_its_checkpoints(self) -> None:
         service = self.service(4, 2)
@@ -833,7 +892,7 @@ class BalrogQueueTest(unittest.TestCase):
         self.checkpoint_run(service, "b1", 27, 350_000, ac=40)
         self.checkpoint_run(service, "b1", 27, 360_000, ac=47, base_ac=40)
         self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]}))
-        self.assertEqual(item["start"]["run"], "b1-clvl27-ac047")
+        self.assertEqual(item["start"]["run"], "b1-clvl27-ac047-xp00000000")
 
     def test_a_checkpoint_is_never_stepped_back_from(self) -> None:
         """Maintainer, 2026-11-06: never step back, the highest save first
@@ -1886,9 +1945,11 @@ class TacticsTest(unittest.TestCase):
     without one; every other goal has none (the frozen suites)."""
 
     def test_the_deep_goal_has_every_tactic_and_the_others_none(self) -> None:
-        from moria_playtest.goals import GOALS, TACTICS
+        from moria_playtest.goals import DEFAULT_TACTICS, GOALS, TACTICS
         for name in ("deep", "balrog"):   # the Balrog goal plays as deep (§23.9)
-            self.assertEqual(GOALS[name].tactics, frozenset(TACTICS), name)
+            self.assertEqual(GOALS[name].tactics, DEFAULT_TACTICS, name)
+        # A tactic being measured joins the defaults once an A/B round shows it helps.
+        self.assertEqual(frozenset(TACTICS) - DEFAULT_TACTICS, {"early_cures"})
         for name, goal in GOALS.items():
             if name not in ("deep", "balrog"):
                 self.assertEqual(goal.tactics, frozenset(), name)
@@ -1959,10 +2020,10 @@ class VariantTest(unittest.TestCase):
     """§23.10: a subqueue's variant changes goal fields for its runs."""
 
     def test_tactics_are_added_removed_or_set(self) -> None:
-        from moria_playtest.goals import GOALS, TACTICS, apply_variant
+        from moria_playtest.goals import DEFAULT_TACTICS, GOALS, TACTICS, apply_variant
         deep, clvl10 = GOALS["deep"], GOALS["clvl10"]
         self.assertEqual(apply_variant(deep, "tactics=-dangerous,-summoner").tactics,
-                         frozenset(TACTICS) - {"dangerous", "summoner"})
+                         DEFAULT_TACTICS - {"dangerous", "summoner"})
         self.assertEqual(apply_variant(clvl10, "tactics=+drain").tactics, {"drain"})
         self.assertEqual(apply_variant(deep, "tactics=drain,ghost").tactics, {"drain", "ghost"})
         self.assertEqual(apply_variant(deep, "tactics=none").tactics, frozenset())
@@ -2235,3 +2296,60 @@ class GraduateSaveTest(unittest.TestCase):
         from moria_playtest import graduate
         with self.assertRaises(graduate.GraduateError):
             self.save([("S+", "Disk error")])
+
+
+class BalrogEncounterTest(unittest.TestCase):
+    """Maintainer, 2026-11-10: a snapshot at the first Balrog sighting, to
+    rehearse the fight rather than the whole level."""
+
+    def test_the_balrog_is_known_by_its_glyph_and_level(self) -> None:
+        from moria_playtest.view import Creature, View
+        view = View(4, 4, [0] * 16, (0, 0), 50, {(2, 2): Creature("B", 4)})   # a bird, not the Balrog
+        self.assertFalse(queue.balrog_in_view(view))
+        view.creatures[(3, 3)] = Creature("B", 100)
+        self.assertTrue(queue.balrog_in_view(view))
+
+    def test_an_encounter_keeps_the_snapshot_its_brain_and_the_facts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            snaps = home / "w1" / "snapshots"
+            snaps.mkdir(parents=True)
+            for ext in ("vsf", "brain.json", "brain.pickle", "vdc"):
+                (snaps / f"balrog-7-s100-dl50.{ext}").write_text(ext)
+            (snaps / "other-s1-dl1.vsf").write_text("not this one")
+            info = {"seed": 7, "step": 100, "dlvl": 50, "clvl": 40}
+            dest = queue.keep_encounter(home, "run-7", snaps / "balrog-7-s100-dl50.vsf", info)
+            self.assertEqual(dest, home / queue.ENCOUNTERS / "run-7-s100")
+            self.assertEqual(sorted(p.name for p in dest.iterdir()),
+                             ["balrog-7-s100-dl50.brain.json", "balrog-7-s100-dl50.brain.pickle",
+                              "balrog-7-s100-dl50.vdc", "balrog-7-s100-dl50.vsf", "encounter.json"])
+            self.assertEqual(json.loads((dest / "encounter.json").read_text()),
+                             {**info, "snapshot": "balrog-7-s100-dl50.vsf"})
+
+
+class CatalogNamesTest(unittest.TestCase):
+    """2026-11-10: the view names each creature by its slot's catalog id, as
+    a look does: an Ancient Red Dragon apart from an Ancient Multi-Hued."""
+
+    def test_slot_names_from_one_read(self) -> None:
+        from moria_playtest import knowledge, view
+        names = knowledge.catalog_names()
+        if not names:
+            self.skipTest("no catalog in this checkout")
+        red, multi = names.index("Ancient Red Dragon"), names.index("Ancient Multi-Hued Dragon")
+        count = 32
+        low, high = bytearray(count), bytearray(count)
+        for slot, cid in ((3, red), (7, multi), (9, 9999)):
+            low[slot], high[slot] = cid & 0xFF, cid >> 8
+        reads = []
+        def mem_get(start, length, bank):
+            reads.append((start, length))
+            return bytes(low + high)[start - 0x4000:start - 0x4000 + length]
+        game = mock.Mock(ram="ram", mon=mock.Mock(mem_get=mem_get))
+        game.abi = mock.Mock(MAX_MONSTERS=count, all_symbols={"cat_slot_id_lo": [0x4000], "cat_slot_id_hi": [0x4020]})
+        got = view.catalog_slot_names(game)
+        self.assertEqual(reads, [(0x4000, 64)])                         # one read for both tables
+        self.assertEqual((got[3], got[7]), ("Ancient Red Dragon", "Ancient Multi-Hued Dragon"))
+        self.assertNotIn(9, got)                                          # past the catalog: unnamed
+        game.abi.all_symbols = {}
+        self.assertEqual(view.catalog_slot_names(game), {})             # a port without the catalog
