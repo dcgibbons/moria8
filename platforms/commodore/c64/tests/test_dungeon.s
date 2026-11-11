@@ -51,7 +51,23 @@ test_exit_trampoline:
 #import "../../../../core/math.s"
 #import "../../../../core/tables.s"
 #import "../../../../core/item_defs.s"
+// The resistance armour roll, its suffixes and the equipment flags are not
+// exercised here (no item spawns, no equipping): out of the way above the
+// I/O hole (2026-11-11, which took the body past MAP_BASE).
+.segmentdef TestUnusedEgoArmour [start=$e100]
+#define PFLAGS_SEGMENT_CUSTOM
+.macro PflagsSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro PflagsRestoreSegment() {
+    .segment Default
+}
+// player_calc_stats ends in the flags routine, parked above: a stray call
+// stops here at a BRK (no results written) instead of running junk at $E1xx.
+#define PLAYER_RECALC_PFLAGS_EXTERNAL
 #import "../../../../core/player.s"
+hal_player_recalc_pflags:
+    brk
 #import "../../../../core/ui_messages.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -102,10 +118,6 @@ eff_kill_monster:
     rts
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
-// The resistance armour roll and its suffixes are not exercised here (no
-// item spawns): out of the way above the I/O hole (2026-11-11, which took
-// the body past MAP_BASE).
-.segmentdef TestUnusedEgoArmour [start=$e100]
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
     .segment TestUnusedEgoArmour

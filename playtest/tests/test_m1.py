@@ -1952,6 +1952,72 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertFalse(brain.jewel_better("Ring of Resist Fire"))
         self.assertTrue(brain.fire_ring_worn())
 
+    def test_lordly_rings_and_the_acid_amulet_resist(self) -> None:
+        """MON-029 (2026-11-11): the Rings of Lordly Protection resist fire,
+        acid or cold and add 5 AC; the Amulet of Resist Acid resists acid.
+        Worn, they divide their breath as the Ring of Resist Fire does;
+        redundant, a Lordly ring is worth its AC alone."""
+        brain = self.priest()
+        brain.clvl = 40
+        rows = ["Equipment", " h) Ring:   Ring of Lordly Protection (Fire)", " i) Amulet: Amulet of Resist Acid",
+                " j) Ring:   Ring of Speed"]
+        brain.jewels = brain.read_jewels(rows)
+        # Fire at the top level for the Balrog: BALROG_FIRE_RING, and the AC.
+        self.assertEqual(brain.jewels, {"Ring": 1100 + 10 * 5, "Amulet": 800, "Ring2": 1000})
+        self.assertEqual(brain.jewel_resists(), frozenset({"fire", "acid"}))
+        o = command_obs(pos=(5, 5), dlvl=45, clvl=40, hp=480, mhp=480)
+        self.assertEqual([brain.resist_div(o, e, lasting=True) for e in ("fire", "acid", "frost", "lightning")],
+                         [3, 3, 1, 1])
+        self.assertTrue(brain.fire_ring_worn())
+        # Acid resisted by the amulet: a Lordly (Acid) ring is its AC alone;
+        # a Lordly (Cold) is worth 850, short of the Speed (1000) it replaces.
+        self.assertEqual(brain.jewel_worth("Ring of Lordly Protection (Acid)", "Ring2"), 10 * 5)
+        self.assertEqual(brain.jewel_worth("Ring of Lordly Protection (Cold)", "Ring2"), 850)
+        self.assertFalse(brain.jewel_better("Ring of Lordly Protection (Cold)"))
+        # The right hand's Lordly (Fire) makes a Ring of Resist Fire on the
+        # left nothing, and the amulet's acid is no gain beside armour of Resist.
+        self.assertEqual(brain.jewel_worth("Ring of Resist Fire", "Ring2"), 0)
+        brain.worn_resists = FOUR_ELEMENTS
+        self.assertEqual(brain.jewel_worth("Amulet of Resist Acid", "Amulet"), 0)
+        # Over a plain Ring of Resist Cold, the Lordly (Cold) ring is better.
+        self.assertGreater(brain.jewel_value("Ring of Lordly Protection (Cold)"), brain.jewel_value("Ring of Resist Cold"))
+
+    def test_kills_are_read_once_from_the_message_rows(self) -> None:
+        """2026-11-11: no record said whether an Ancient Multi-Hued Dragon or
+        Evil Iggy had ever been slain. Each "You have slain the <name>." is a
+        kill for the session's events: a name wrapped across the two message
+        rows read whole, two on one screen both, a screen repeated not twice."""
+        brain = self.priest()
+        brain.note_kills("You have slain the Ancient" + " " * 14 + "Multi-Hued Dragon.")   # wrapped at the space
+        self.assertEqual(brain.kills, ["Ancient Multi-Hued Dragon"])
+        brain.kills.clear()
+        brain.note_kills("You feel better.")
+        brain.note_kills("You have slain the Ancient Multi-Hued Dragon.")
+        brain.note_kills("You have slain the Ancient Multi-Hued Dragon.")   # the same screen again
+        self.assertEqual(brain.kills, ["Ancient Multi-Hued Dragon"])
+        brain.kills.clear()
+        brain.note_kills("The Kobold hits you.")
+        brain.note_kills("You have slain the Kobold. You have slain the Evil Iggy.")
+        self.assertEqual(brain.kills, ["Kobold", "Evil Iggy"])
+
+    def test_a_crown_of_the_magi_resists_and_the_amulet_does_not(self) -> None:
+        """MON-030 (2026-11-11): a crown of the Magi resists fire, frost and
+        acid (VMS magic_treasure); the Amulet of the Magi of the same name
+        resists nothing."""
+        brain = self.priest()
+        brain.clvl = 40
+        rows = ["Equipment", " d) Head:   Golden Crown of the Magi [0,+6] (+2)",
+                " i) Amulet: Amulet of the Magi"]
+        brain.read_resists(rows)
+        self.assertEqual(brain.worn_resists, frozenset({"fire", "frost", "acid"}))
+        brain.read_resists(["Equipment", " d) Head:   Steel Helm [6,+2]", " i) Amulet: Amulet of the Magi"])
+        self.assertEqual(brain.worn_resists, frozenset())
+        # Found: worth three elements over a Steel Helm of more AC.
+        brain.armour = {"ICAT_HELM": 8}
+        brain.armour_names["ICAT_HELM"] = "Steel Helm [6,+2]"
+        self.assertEqual(brain.armour_resist_better("Silver Crown of the Magi [0,+3] (+1)"), ("ICAT_HELM", 3))
+        self.assertIsNone(brain.armour_resist_better("Silver Crown [0,+3]"))
+
     def test_at_the_top_level_a_ring_of_resist_fire_outranks_speed(self) -> None:
         """C64 Balrog, 2026-11-11: with two Rings of Speed (1000 each) the
         Magic Shop was never visited for rings, and a Ring of Resist Fire

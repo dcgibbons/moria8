@@ -140,6 +140,22 @@
 .const ATARI_DISPLAY_LIST            = $0380
 .const ATARI_CHARSET_BASE            = $0400
 .const SCREEN_RAM                    = $0800
+// The OS printer buffer PRNBUF ($03C0-$03E7: only the P: handler uses it,
+// and the game never opens P:; SIOV leaves it alone) holds low-RAM buffers
+// out of a full Default (2026-11-11, the crowns): the 8.3 file name (every
+// writer fills all 11) and the keyboard ring (input_init clears its length
+// before the IRQ runs). (xe_slot_populated stays in low resident:
+// check_memory_contract.py wants it at $0C00-$3FFF.)
+// $03E8-$03FF are XL OS variables (GINTLK at $03FA among them): never use
+// them; the file name there broke the a800xl save.
+.const A8_FN83_BASE                  = $03c0
+.const A8_KBDBUF_LEN                 = A8_FN83_BASE + 11
+.const A8_KBDBUF_BASE                = A8_KBDBUF_LEN + 1
+// Then the storage scalars, each written before it is read: xe_present and
+// xe_saved_main (xe_detect), the directory entry's sector count (its search).
+.const A8_STORAGE_VARS_BASE          = A8_KBDBUF_BASE + 8
+.assert "PRNBUF buffers follow the display list's 64 bytes", A8_FN83_BASE >= ATARI_DISPLAY_LIST + $40, true
+.assert "PRNBUF buffers end in PRNBUF, before the XL OS variables at $03E8", A8_STORAGE_VARS_BASE + 4 <= $03e8, true
 .const SCREEN_END                    = $0be7
 .const DUNGEON_GEN_SCAN_SCRATCH_BASE = SCREEN_RAM
 .const DUNGEON_GEN_SCAN_SCRATCH_LIMIT = SCREEN_RAM + $0400

@@ -61,6 +61,8 @@ it_unknown_idx:
     .byte $06               // 136: scroll 6 (pool wrap, as 96-127); 137: fixed
     .byte $00               // 138-139: fixed launcher names
     .byte $54, $76, $98     // 140-145: potions 4-9 (pool wrap, as 96-127)
+    .byte $03, $01          // 146-148: rings 3, 0, 1 (pool wrap); 149: fixed amulet
+    .byte $00, $00          // 150-152: fixed crowns
 it_unknown_idx_end:
 .assert "it_unknown_idx size", it_unknown_idx_end - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
@@ -71,12 +73,23 @@ it_unknown_idx_end:
 #endif
 
 // Shuffle tables: map category-local index → description index
-// 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
+// 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used.
+// Set at a new game and by a load, so a port short of room may place them in
+// uninitialized RAM (PLATFORM_SHUFFLES_EXTERNAL: the C64's page 3, the
+// Atari's high RAM).
+#if PLATFORM_SHUFFLES_EXTERNAL
+.label potion_shuffle = PLATFORM_SHUFFLE_BASE
+.label scroll_shuffle = potion_shuffle + 12
+.label ring_shuffle   = scroll_shuffle + 12
+.label wand_shuffle   = ring_shuffle + 4
+.label staff_shuffle  = wand_shuffle + 5
+#else
 potion_shuffle: .fill 12, 0
 scroll_shuffle: .fill 12, 0
 ring_shuffle:   .fill 4, 0
 wand_shuffle:   .fill 5, 0
 staff_shuffle:  .fill 5, 0
+#endif
 .assert "The shuffle tables are contiguous in class order", staff_shuffle - potion_shuffle, 33
 
 // iuk_flavour_x — The global flavour index of unknown item type X: carry

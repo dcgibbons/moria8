@@ -1060,6 +1060,8 @@ cx16_ego_suffix_resist_cold: .text " Cold)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_resist_cold), 0
 cx16_ego_suffix_resist_light: .text " Lightning)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_resist_light), 0
+cx16_ego_suffix_magi: .text " of the Magi" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_magi), 0
 cx16_ego_suffix_resist_prefix: .text " (Resist" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_resist_prefix), 0
 cx16_ego_suffix_slots_end:

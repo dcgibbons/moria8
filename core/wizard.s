@@ -707,7 +707,8 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-145: " ; .byte 0
+    // The range follows the catalog (docs/WIZARD.md; tools/check_wizard_doc.py)
+    .text "ITEM 0-" + toIntString(ITEM_TYPE_COUNT - 1) + ": " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
 wiz_title_str:

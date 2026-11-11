@@ -4175,30 +4175,6 @@ tramp_p3_dispatch_items_return:     // the modal handlers return here (scroll_p3
     sec
     rts
 
-hal_player_recalc_pflags:
-c128_player_recalc_pflags:
-    lda #0
-    ldx #EQUIP_RING
-!c128_pf_ring:                  // each hand: EQUIP_RING, then EQUIP_RING2
-    ldy inv_item_id,x
-    cpy #ITEM_TYPE_RING_RESIST_FIRE
-    bcc !c128_pf_none+
-    cpy #ITEM_TYPE_RING_SLAYING
-    bcs !c128_pf_none+
-    ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
-!c128_pf_none:
-    cpx #EQUIP_RING2
-    ldx #EQUIP_RING2
-    bcc !c128_pf_ring-
-    ldx #EQUIP_AMULET
-    ldy inv_item_id,x
-    cpy #ITEM_TYPE_AMULET_MAGI
-    bne !c128_pf_store+
-    ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
-!c128_pf_store:
-    :PflagsFromEgos()
-    sta player_pflags
-    rts
 
 // Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
 // resident cmd_open pre-dispatch. chest_dispatch is tail-called (A/Y =
@@ -5109,39 +5085,7 @@ combat_calc_bow_tohit:
 // Equip-stat helper for banked item commands. It must live in always-resident
 // RAM: wear/takeoff call it during gameplay while PLAY owns the $AF00 modal
 // slot, so the persist payload cannot host it.
-player_adjust_equipment_stat:
-    ldx piw_equip
-    bcs !c128_pase_add+
-    lda inv_p1,x
-    eor #$ff
-    adc #1
-    sta stat_work
-    jmp !c128_pase_item+
-!c128_pase_add:
-    lda inv_p1,x
-    sta stat_work
-!c128_pase_item:
-    lda inv_item_id,x
-    cmp #ITEM_TYPE_RING_STRENGTH
-    beq !c128_pase_str+
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !c128_pase_wis+
-    cmp #ITEM_TYPE_AMULET_MAGI
-    bne !c128_pase_done+
-    ldy #PL_INT_CUR - PL_STR_CUR
-    bne !c128_pase_apply+
-!c128_pase_str:
-    ldy #0
-    bne !c128_pase_apply+
-!c128_pase_wis:
-    ldy #PL_WIS_CUR - PL_STR_CUR
-!c128_pase_apply:
-    lda player_data + PL_STR_CUR,y
-    clc
-    adc stat_work
-    sta player_data + PL_STR_CUR,y
-!c128_pase_done:
-    rts
+#import "../../../core/player_adjust_equipment_stat.s"
 
 // C128 resident Phase 3 potion dispatch. The handlers are small and every
 // dependency is resident, so quaffing must not load an overlay (the modal
@@ -5357,9 +5301,10 @@ first_banked_function:
     #import "../../../core/player_magic_levelup.s"
     #import "../../../core/player_magic_learn_op.s"
     #import "../../../core/player_magic_tail.s"
-    #define PLAYER_RECALC_PFLAGS_EXTERNAL
+    // The equipment flags come from player.s's player_recalc_pflags_equipment
+    // in the main image (2026-11-11): the items payload's own copy went to make
+    // room for the rings of Lordly Protection; the main image is visible here.
     #import "../../../core/player_recalc_equipment.s"
-    #undef PLAYER_RECALC_PFLAGS_EXTERNAL
     #import "../../../core/player_item_commands.s"
     #import "../../../core/eff_potion_cure.s"
 

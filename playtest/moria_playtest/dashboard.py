@@ -158,6 +158,36 @@ def depth_series(events: Path) -> dict[str, list[list[int]]]:
     return series
 
 
+def kill_counts(events: Path) -> dict[str, int]:
+    """Per creature name, the run's ``kill`` events (session: "You have slain
+    the <name>.")."""
+    counts: dict[str, int] = {}
+    try:
+        lines = events.read_text().splitlines()
+    except OSError:
+        return counts
+    for line in lines:
+        if '"kill"' not in line:
+            continue
+        name = json.loads(line).get("name")
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def balrog_kills(home: Path) -> dict[str, Any]:
+    """The Balrog queue's kills over every run it kept: what falls, and
+    whether the Balrog, Evil Iggy or an Ancient Multi-Hued Dragon ever has."""
+    total: dict[str, int] = {}
+    runs = 0
+    for events in home.glob("runs/*-balrog-*/events.jsonl"):
+        counts = cached(events, kill_counts) or {}
+        runs += bool(counts)
+        for name, count in counts.items():
+            total[name] = total.get(name, 0) + count
+    return {"total": total, "runs": runs}
+
+
 def killer(trace: Path) -> str:
     try:
         with gzip.open(trace, "rt") as handle:
@@ -774,6 +804,7 @@ def queue() -> dict[str, Any]:
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
+            "balrog_kills": balrog_kills(home),
             "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "builds": runs["builds"],

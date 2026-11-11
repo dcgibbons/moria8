@@ -266,6 +266,7 @@ low_helpers_end:
 atari_item_name_decode_buf: .fill 48, 0     // core item_name_decode_buf (config.s)
 high_resident_end:
 .assert "HighResident fits before $E000", high_resident_end <= $e000, true
+.assert "HighResident ends before config.s's fixed high-RAM buffers", high_resident_end <= PLATFORM_COMBAT_MSG_BUF_BASE, true
 .segment Default
 // The status words and status_state in RuntimeBanked: the Poisoned indicator
 // (2026-11-10) left Default 36 bytes over MAP_BASE.
@@ -279,9 +280,11 @@ high_resident_end:
 #import "../../core/ui_status.s"
 .segment RuntimeBanked
 #import "../../core/ui_help_clear.s"
-#import "../../core/stat_display.s"
 #import "../../core/generation_busy.s"
 .segment Default
+// put_stat_val in Default, where the low buffers moved to PRNBUF and high
+// RAM (memory.s, config.s) left room; the $F000 runtime is full.
+#import "../../core/stat_display.s"
 #import "../../core/huffman.s"
 #import "../../core/dungeon_data.s"
 #define CMD_JAM_EXTERNAL

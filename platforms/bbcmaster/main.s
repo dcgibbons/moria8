@@ -949,21 +949,12 @@ hal_msg_print_indirect_aux:
 
 .segment Default
 player_adjust_equipment_stat:
-    // By the item, as core/player_adjust_equipment_stat.s: by the slot, every
-    // ring added its p1 to Strength, and the left hand (2026-11-08) would too.
+    // As core/player_adjust_equipment_stat.s: the stat by the item
+    // (equip_stat_index, core/player.s), p1 added or taken away.
     jsr player_adjust_equipment_stat_prepare
-    lda inv_item_id,x
-    ldx #0
-    cmp #ITEM_TYPE_RING_STRENGTH
-    beq !paes_apply+
-    ldx #PL_WIS_CUR - PL_STR_CUR
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !paes_apply+
-    ldx #PL_INT_CUR - PL_STR_CUR
-    cmp #ITEM_TYPE_AMULET_MAGI
-    bne !paes_done+
-!paes_apply:
-    jmp player_adjust_equipment_stat_apply
+    jsr equip_stat_index
+    bcc !paes_done+
+    jmp player_adjust_equipment_stat_apply   // Y = the stat
 !paes_done:
     rts
 
@@ -1128,6 +1119,8 @@ beeb_ego_suffix_resist_cold: .text " Cold)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_resist_cold), 0
 beeb_ego_suffix_resist_light: .text " Lightning)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_resist_light), 0
+beeb_ego_suffix_magi: .text " of the Magi" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_magi), 0
 beeb_ego_suffix_resist_prefix: .text " (Resist" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_resist_prefix), 0
 beeb_ego_suffix_slots_end:
@@ -1335,17 +1328,16 @@ player_adjust_equipment_stat_prepare:
     lda inv_p1,x
     bcs !paes_prepare_store+
     eor #$ff
-    clc
-    adc #1
+    adc #1                      // carry clear: -p1
 !paes_prepare_store:
     sta stat_work
     rts
 
 player_adjust_equipment_stat_apply:
-    lda player_data + PL_STR_CUR,x
+    lda player_data + PL_STR_CUR,y
     clc
     adc stat_work
-    sta player_data + PL_STR_CUR,x
+    sta player_data + PL_STR_CUR,y
     rts
 
 #import "../../core/player_item_commands.s"

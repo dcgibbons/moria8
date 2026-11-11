@@ -46,6 +46,9 @@ ATK_NORMAL    = 1
 ATK_CONFUSE   = 3
 ATK_FEAR      = 4
 ATK_ACID      = 6
+ATK_FIRE      = 5     # MON-028 (2026-11-11): fire, cold and lightning touches
+ATK_COLD      = 7
+ATK_LIGHT     = 8
 ATK_CORRODE   = 9
 ATK_PARALYZE  = 11
 ATK_POISON    = 14
@@ -53,7 +56,7 @@ ATK_AGGRAVATE = 20
 
 ATK_NAMES = {
     0: "NONE", 1: "NORMAL", 3: "CONFUSE", 4: "FEAR",
-    6: "ACID", 9: "CORRODE", 11: "PARALYZE", 14: "POISON",
+    5: "FIRE", 6: "ACID", 7: "COLD", 8: "LIGHT", 9: "CORRODE", 11: "PARALYZE", 14: "POISON",
     20: "AGGRAVATE",
 }
 
@@ -62,10 +65,10 @@ UMORIA_TO_C64_ATK = {
     2:  ATK_POISON,     # Poison STR
     3:  ATK_CONFUSE,    # Confusion
     4:  ATK_FEAR,       # Fear
-    5:  ATK_NORMAL,     # Fire → normal (no C64 handler)
+    5:  ATK_FIRE,       # Fire (fire_dam)
     6:  ATK_ACID,       # Acid
-    7:  ATK_NORMAL,     # Cold → normal (no C64 handler)
-    8:  ATK_NORMAL,     # Lightning → normal (no C64 handler)
+    7:  ATK_COLD,       # Cold (cold_dam)
+    8:  ATK_LIGHT,      # Lightning (light_dam)
     9:  ATK_CORRODE,    # Corrosion
     10: ATK_NORMAL,     # Blindness → normal (no C64 handler)
     11: ATK_PARALYZE,   # Paralysis

@@ -447,7 +447,26 @@ tramp_dig_ability:
 #import "../../../core/math.s"
 #import "../../../core/tables.s"
 #import "../../../core/item_defs.s"
+// The equipment flags ride the banked runtime behind hal_player_recalc_pflags
+// (the rings of Lordly Protection, 2026-11-11, filled Default).
+#define PFLAGS_SEGMENT_CUSTOM
+.macro PflagsSegment() {
+    .segment RuntimeBanked
+}
+.macro PflagsRestoreSegment() {
+    .segment Default
+}
+#define PLAYER_RECALC_PFLAGS_EXTERNAL
 #import "../../../core/player.s"
+// The element divisor too (breath and the element touches).
+#define ELEMENT_RESIST_SEGMENT_CUSTOM
+.macro ElementResistSegment() {
+    .segment RuntimeBanked
+}
+.macro ElementResistRestoreSegment() {
+    .segment Default
+}
+.label mm_element_divisor_entry = tramp_element_divisor
 #import "../../../core/ui_messages.s"
 #import "../../../core/ui_status.s"
 #define GENERATION_BUSY_INSTALL_EXTERNAL
@@ -777,6 +796,9 @@ entry_main:
     jsr platform_services_install64
     jsr platform_services_assert_installed
     jsr input_lock_charset_switch
+#if C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT
+    jmp c64_test_element_divisor
+#endif
 
     // Select lowercase/uppercase character set (52 letter symbols)
     // Bit 1 of $D018 selects character set: 0=uppercase+graphics, 1=lowercase+uppercase
@@ -1277,7 +1299,7 @@ tramp_level_generate:
 
 // ============================================================
 // Special rooms trampolines — SEI + bank out KERNAL, call OVL.GEN at $E000
-// (find_special_room: $F000)
+// (find_special_room: resident, no trampoline)
 // ============================================================
 tramp_assign_special_room:
     php                         // Save interrupt state (caller may be in sei context)
@@ -1335,15 +1357,12 @@ tramp_spawn_nest_gold:
 !tsng_failed:
     rts                         // no nest gold on a media error
 
-tramp_find_special_room:
-    pha                         // Save A (room type input)
-    sei
-    lda #BANK_NO_ROMS
-    sta $01
-    pla                         // Restore A
-    jsr find_special_room
-    // Carry flag preserved — lda/sta don't affect carry
-    jmp tramp_sr_epilogue
+// find_special_room only: item placement calls it with OVL.CHEST loaded
+// (the rest of special_rooms.s is in OVL.GEN, 2026-11-08). Resident since
+// 2026-11-11 (the crowns filled the $F000 runtime); it reads only resident
+// room tables, so it needs no banking.
+#import "../../../core/special_rooms_find.s"
+.label tramp_find_special_room = find_special_room
 
 tramp_sr_epilogue:
     php
@@ -1442,6 +1461,86 @@ tramp_ego_apply_damage:
     lda #BANK_NO_BASIC
     sta $01
     cli
+    rts
+
+// tramp_element_divisor — mm_element_divisor (banked at $F000): A = base,
+// X = element; mm_divisor set, X kept. Monster turns call it from resident
+// code with the KERNAL in.
+tramp_element_divisor:
+    php
+    sei
+    tay
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
+    tya
+    jsr mm_element_divisor
+    pla
+    sta $01
+    plp
+    rts
+
+#if C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT
+// c64_test_element_divisor — The product's element divisor entry
+// (tramp_element_divisor into the $F000 runtime), called as monster turns
+// call it: from resident code, the KERNAL in, interrupts on. Fire with the
+// lasting resistance and the Resist Heat timer is divided by 9; lightning,
+// with only fire resisted, by 1. X, $01 and the I flag come back as they were.
+c64_test_element_divisor:
+    cli
+    lda $01
+    sta c64_test_ed_port
+    lda #PFLAG_RESIST_FIRE
+    sta player_pflags
+    lda #3
+    sta zp_eff_resist
+    ldx #MS_BREATH_FIRE
+    lda #1
+    jsr mm_element_divisor_entry
+    php
+    pla
+    and #$04                    // I: still clear
+    bne c64_test_element_fail_sym
+    cpx #MS_BREATH_FIRE
+    bne c64_test_element_fail_sym
+    lda mm_divisor
+    cmp #9
+    bne c64_test_element_fail_sym
+    lda $01
+    cmp c64_test_ed_port
+    bne c64_test_element_fail_sym
+    ldx #MS_BREATH_LIGHTNING
+    lda #1
+    jsr mm_element_divisor_entry
+    lda mm_divisor
+    cmp #1
+    bne c64_test_element_fail_sym
+    lda #0
+    sta player_pflags
+    sta zp_eff_resist
+    jmp c64_test_element_pass_sym
+c64_test_ed_port: .byte 0
+c64_test_element_fail_sym:
+    brk
+c64_test_element_pass_sym:
+    brk
+#endif
+
+// hal_player_recalc_pflags — player_recalc_pflags_equipment (banked at
+// $F000; its tail runs player_calc_combat). Restores the caller's $01 and I
+// flag: OVL.ITEMS calls it from $E000. Clobbers: A, X, Y
+hal_player_recalc_pflags:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr player_recalc_pflags_equipment
+    pla
+    sta $01
+    plp
     rts
 
 // tramp_re_equip — roll_enchantment's equipment branch (banked at $F000).
@@ -2786,9 +2885,6 @@ catalog_init_tail_end:
 // Banked runtime payload — loadable PRG at $F000.
 // ============================================================
 .segment RuntimeBanked
-    // find_special_room only: item placement calls it with OVL.CHEST loaded
-    // (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
-    #import "../../../core/special_rooms_find.s"
     #import "../../../core/ego_items.s"
     #import "../../../core/ui_home.s"
     #import "../../../core/ui_recall.s"
@@ -3063,7 +3159,8 @@ ovl_items_end:
 
 ovl_gen_end:
 .assert "Special rooms run in OVL.GEN", assign_special_room >= $e000 && spawn_nest_gold < ovl_gen_end, true
-.assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room >= $f000, true
+.assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room < MAP_BASE, true
+.assert "The door scan ends before the page-3 shuffles (config.s)", door_scan_count < PLATFORM_SHUFFLE_BASE, true
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
 

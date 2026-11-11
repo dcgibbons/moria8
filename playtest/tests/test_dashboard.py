@@ -348,3 +348,26 @@ class BuildHistoryTest(unittest.TestCase):
         self.assertLess(aaa["lo"], 0.5)
         self.assertGreater(aaa["hi"], 0.5)
         self.assertEqual(dashboard.wilson(0, 0), (0.0, 1.0))
+
+
+class BalrogKillsTest(unittest.TestCase):
+    """The Balrog panel's kill tally (2026-11-11): whether an Ancient
+    Multi-Hued Dragon or Evil Iggy had ever fallen had no record at all."""
+
+    def test_kills_are_summed_over_the_balrog_runs_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def run(name: str, kills: list[str]) -> None:
+                path = home / "runs" / name
+                path.mkdir(parents=True)
+                lines = [json.dumps({"kind": "level_entry", "dlvl": 40})]
+                lines += [json.dumps({"kind": "kill", "name": k, "dlvl": 40}) for k in kills]
+                lines.append(json.dumps({"kind": "character_end", "killer": "Balrog"}))
+                (path / "events.jsonl").write_text("\n".join(lines) + "\n")
+            run("20261111-0100-balrog-c64-half-troll-priest-1", ["Ancient Multi-Hued Dragon", "Kobold", "Kobold"])
+            run("20261111-0200-balrog-c64-half-troll-priest-2", ["Evil Iggy"])
+            run("20261111-0300-balrog-c64-half-troll-priest-3", [])
+            run("20261111-0400-build-c64-human-mage-4", ["Balrog"])   # another queue
+            kills = dashboard.balrog_kills(home)
+            self.assertEqual(kills["total"], {"Ancient Multi-Hued Dragon": 1, "Kobold": 2, "Evil Iggy": 1})
+            self.assertEqual(kills["runs"], 2)

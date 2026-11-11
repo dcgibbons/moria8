@@ -476,6 +476,17 @@ ol_target:        .byte 0
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
+// roll_enchantment's equipment branch rides the banked runtime behind
+// tramp_re_equip (the rings of Lordly Protection, 2026-11-11, took the catalog
+// boot loads past MAP_BASE).
+#define RE_EQUIP_SEGMENT_CUSTOM
+.macro ReEquipSegment() {
+    .segment RuntimeBanked
+}
+.macro ReEquipRestoreSegment() {
+    .segment Default
+}
+.label re_equip_entry = tramp_re_equip
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay in Default; the generator
@@ -1430,6 +1441,17 @@ tramp_ego_get_ac_bonus:
     jsr plus4_bank_ram
     pla
     jsr ego_get_ac_bonus
+    pha
+    jsr plus4_bank_ram
+    pla
+    rts
+
+// tramp_re_equip — roll_enchantment's equipment branch (banked at $F000).
+// Input: zp_temp0 = item type. Output: A = p1, fi_add_* set.
+tramp_re_equip:
+    sei
+    jsr plus4_bank_ram
+    jsr re_equip
     pha
     jsr plus4_bank_ram
     pla

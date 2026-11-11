@@ -28,12 +28,14 @@ mon_atk_effect_acid:
     tax
     lda player_pflags
     and #PFLAG_RESIST_ACID
-    beq !maea_divide+
+    beq mat_div_dmg
     inx                         // + 2 for acid resistance: 3 or 4
     inx
-!maea_divide:
+// mat_div_dmg — zp_combat_dmg = zp_combat_dmg div X (X = 1: unchanged).
+// The acid and element touches' resistance. Clobbers: A, X, zp_math_*
+mat_div_dmg:
     cpx #1
-    beq !maea_done+
+    beq !mdd_done+
     lda zp_combat_dmg
     sta zp_math_a
     lda #0
@@ -41,7 +43,7 @@ mon_atk_effect_acid:
     jsr math_div_16x8           // zp_math_a = dam div X
     lda zp_math_a
     sta zp_combat_dmg
-!maea_done:
+!mdd_done:
     rts
 
 // mon_atk_acid_armour — VMS minus_ac(resist acid): C set when a worn armour
@@ -78,12 +80,14 @@ mon_atk_acid_armour:
     bpl !maea_find-
     stx mat_acid_slot
 
-    // A piece that resists acid takes it unharmed (VMS minus_ac flags test);
-    // only body armour and shields carry the resistance egos.
+    // A piece that resists acid takes it unharmed (VMS minus_ac flags test):
+    // (Resist), (Resist Acid) and the Magi (%X'01380008' has TR_RES_ACID).
     lda inv_ego,x
     cmp #EGO_RESIST
     beq !maea_resists+
     cmp #EGO_RESIST_ACID
+    beq !maea_resists+
+    cmp #EGO_MAGI
     bne !maea_ac+
 !maea_resists:
     ldx #HSTR_MAT_RESISTS

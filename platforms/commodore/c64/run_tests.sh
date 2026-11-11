@@ -1350,6 +1350,116 @@ run_scripted_dungeon_target_spell_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_scripted_element_divisor_smoke() {
+    # The product's element divisor entry (tramp_element_divisor into the
+    # $F000 runtime, MON-028): fire resisted twice is divided by 9, lightning
+    # not at all; X, $01 and the I flag survive. Unit tests link the divisor
+    # in place, so only a product image runs the trampoline.
+    local name="scripted_element_divisor_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p ../../../build/test/c64
+
+    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
+            ../../build/c64/monster.cat.stamp \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT \
+            -o ../../../build/test/c64/moria_element_divisor_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="../../../build/test/c64/moria_element_divisor_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../../../build/test/c64/boot.prg "moria8" \
+            -write ../../../build/test/c64/boot.prg "boot64" \
+            -write ../../../build/test/c64/bootart64.prg "bootart64" \
+            -write ../../../build/test/c64/moria_element_divisor_smoke.prg "moria64" \
+            -write ../../../build/test/c64/64.bank "64.bank" \
+            -write ../../../build/test/c64/title "t64" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/ovl.start "64.start" \
+            -write ../../../build/test/c64/ovl.town "64.town" \
+            -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
+            -write ../../../build/test/c64/ovl.gen "64.gen" \
+            -write ../../../build/test/c64/ovl.help "64.help" \
+            -write ../../../build/test/c64/ovl.ui "64.ui" \
+            -write ../../../build/test/c64/ovl.items "64.items" \
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="../../../build/test/c64/main.vs"
+    local pass_addr fail_addr
+    pass_addr=$(awk '/\.c64_test_element_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    fail_addr=$(awk '/\.c64_test_element_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
+        echo "FAIL (missing element divisor symbols in $main_vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file tty_log
+    mon_file=$(mktemp -t "test_${name}_mon")
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    {
+        c64_break_cmd "${fail_addr}"
+        c64_break_cmd "${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 300000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    if grep -qiE "Stop on  exec $(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    elif grep -qiE "Stop on  exec $(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
+        echo "FAIL (element divisor trampoline check failed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+    elif grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (element divisor smoke timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+    else
+        echo "FAIL (did not reach the element divisor traps)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_scripted_detect_evil_smoke() {
     local name="scripted_detect_evil_smoke"
     echo -n "  $name: "
@@ -4594,7 +4704,7 @@ check_static_contract "wizard_cancel_text_contract" "../../../core/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "wizard_item_prompt_range_contract" "../../../core/wizard.s" \
-    "wiz_item_prompt_str:|||.text \"ITEM 0-145: \""
+    "wiz_item_prompt_str:|||.text \"ITEM 0-\" + toIntString(ITEM_TYPE_COUNT - 1) + \": \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "../../../core/wizard.s" \
     "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
@@ -4638,7 +4748,7 @@ check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../../..
 check_static_contract "identify_scroll_resident_completion_contract" "../../../core/item_actions_overlay.s" \
     "irs_effect_identify:|||jmp eff_identify_scroll_resident"
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../../../core/item_desc_banked.s" \
-    "!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code"
+    "!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring_p1:"
 check_static_contract "save_split_item_stats_contract" "../../shared/save.s" \
     "save_block_table_pre_inventory:|||save_block_desc_inventory:|||:save_block_desc(inv_item_id, 8 * TOTAL_INV_SLOTS)|||save_block_table_pre_inventory_end:|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||load_read_floor_block_table:|||lda load_floor_item_count|||jsr load_read_block|||load_read_inventory_state:|||lda load_inv_slots|||sta save_count_lo|||jsr load_read_block|||adc #TOTAL_INV_SLOTS|||cmp #<(8 * TOTAL_INV_SLOTS)|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_floor_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_floor_block_table"
 check_static_contract "item_action_messages_stat_desc_contract" "../../../core/item.s" \
@@ -4721,7 +4831,7 @@ run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0445" 70 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 0430" 49 500000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 0435" 54 500000000
 run_test "monster_tier3" "tests/test_monster_tier3.s" "0400 0403" 4 20000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
@@ -4798,7 +4908,7 @@ run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 50000000
 run_test "item" "tests/test_item.s" "0400 0446" 71 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
-run_test "item_desc" "tests/test_item_desc.s" "0400 040a" 11 500000000
+run_test "item_desc" "tests/test_item_desc.s" "0400 040b" 12 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000
 run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
@@ -4807,7 +4917,7 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0415" 22 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0426" 39 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0427" 40 1000000000
 run_test "score" "tests/test_score.s" "0400 040e" 15 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 42 500000000
@@ -4815,7 +4925,7 @@ run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
-run_test "ego" "tests/test_ego.s" "0400 0412" 19 500000000
+run_test "ego" "tests/test_ego.s" "0400 0417" 24 500000000
 run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000
 run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
@@ -4830,6 +4940,7 @@ run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector
 run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_overlay_smoke
 run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
 run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
+run_suite_function "scripted_element_divisor_smoke" run_scripted_element_divisor_smoke
 # The catalog spawn smokes reuse the dungeon-ascent build and disk.
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke catalog_spawn_product_smoke catalog_spawn_product_reu_smoke
 run_suite_function "catalog_spawn_product_smoke" run_catalog_spawn_product_smoke

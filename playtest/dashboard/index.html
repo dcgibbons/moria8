@@ -226,6 +226,7 @@
   <section style="grid-area: balrog">
     <h2><span>M8 · the Balrog queue</span><small id="bcount"></small></h2>
     <div class="qline" id="bline"></div>
+    <div class="qline" id="bkills"></div>
     <div id="balrog" class="tablewrap"></div>
     <div class="mlegend">
       <span><i style="background:rgba(154,210,132,.4)"></i>★ won: killed the Balrog</span>
@@ -849,6 +850,13 @@ function renderQueue() {
     `workers <b>${blive.length}</b>/${q.config.balrog_workers} · next: ${esc(bq.order.filter(k => !blive.some(r => `${r.platform}/${r.character}` === k)).slice(0, 3).map(k => cap(k.split("/")[1])).join(", ") || "–")}`;
   $("bcount").textContent = `${bitems.length} combinations · best L${bbest || "–"} · ` +
     `${bitems.reduce((n, it) => n + it.won, 0)} wins in ${bitems.reduce((n, it) => n + it.runs, 0)} runs`;
+  // What the Balrog runs have slain (session kill events, 2026-11-11): the
+  // three that end them first, then the most slain.
+  const bk = (q.balrog_kills || {}).total || {}, big = ["Balrog", "Evil Iggy", "Ancient Multi-Hued Dragon"];
+  const btop = Object.entries(bk).filter(([n]) => !big.includes(n)).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  $("bkills").innerHTML = `slain: ` + big.map(n => `${esc(n)} <b>${bk[n] || 0}</b>`).join(" · ") +
+    (btop.length ? ` · most: ${btop.map(([n, c]) => `${esc(n)} ${c}`).join(", ")}` : "") +
+    ` <span class="dim">(${(q.balrog_kills || {}).runs || 0} runs with kills logged)</span>`;
   // A race x class grid, as M7's (maintainer, 2026-11-06), per port.
   const bports = [...new Set(bitems.map(it => it.platform))];
   $("balrog").innerHTML = bports.map(platform => {

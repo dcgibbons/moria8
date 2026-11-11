@@ -24,7 +24,8 @@
 .const EGO_RESIST_FIRE   = 11   // VMS (RF)
 .const EGO_RESIST_COLD   = 12   // VMS (RC)
 .const EGO_RESIST_LIGHT  = 13   // VMS (RL)
-.const EGO_TYPE_COUNT = 14   // weapon egos 1-8, resistance armour 9-13 (core/ego_items.s)
+.const EGO_MAGI          = 14   // VMS crowns "of the Magi" (MON-030)
+.const EGO_TYPE_COUNT = 15   // weapon egos 1-8, resistance armour 9-13, the Magi 14 (core/ego_items.s)
 .assert "Ego IDs fit the 4-bit store and floor ego fields", EGO_TYPE_COUNT <= 16, true
 .const ITEM_META_FLAGS_MASK = $0f
 // Ego bits 4-7 (bits 4-6 until Slay Dragon, 2026-11-07: bit 7 was unused,
@@ -176,7 +177,18 @@
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 146
+.const ITEM_TYPE_COUNT = 153
+// VMS Moria rings of Lordly Protection and the Amulet of Resist Acid
+// (values.inc; 2026-11-11, MON-029): resistance in the ring and amulet slots
+.const ITEM_TYPE_RING_LORDLY_FIRE = 146
+.const ITEM_TYPE_RING_LORDLY_ACID = 147
+.const ITEM_TYPE_RING_LORDLY_COLD = 148
+.const ITEM_TYPE_AMULET_RESIST_ACID = 149
+// VMS Moria crowns (values.inc; 2026-11-11, MON-030): helms that may roll
+// the Magi ego (roll_armour_ego)
+.const ITEM_TYPE_CROWN_SILVER = 150
+.const ITEM_TYPE_CROWN_GOLDEN = 151
+.const ITEM_TYPE_CROWN_JEWEL  = 152
 // VMS Moria potions of gain stat (values.inc; 2026-11-07), in PL_*_BASE order
 .const ITEM_TYPE_POT_GAIN_STR = 140
 .const ITEM_TYPE_POT_GAIN_CHR = 145
@@ -186,7 +198,11 @@
 // One bit per item type ID: set = identified/known. 20 bytes at 160 IDs.
 .const ID_KNOWN_BYTES = (ITEM_ID_CAPACITY + 7) / 8
 
+#if PLATFORM_ID_KNOWN_EXTERNAL
+.label id_known_bits = PLATFORM_ID_KNOWN_BASE   // a port's free RAM (the Atari: high RAM); item_init_identification clears it
+#else
 id_known_bits: .fill ID_KNOWN_BYTES, 0
+#endif
 
 idk_bit_mask: .byte 1, 2, 4, 8, 16, 32, 64, 128
 idk_mask:     .byte 0

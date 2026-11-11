@@ -34,7 +34,7 @@ WIN_MON_TOT = 2
 
 # What the engine implements exactly (not degraded). Implementing an ability
 # means adding it here; every creature waiting only on it becomes available.
-SUPPORTED_ATTACKS = {1, 3, 4, 6, 9, 11, 14, 20, 99}       # VMS/Umoria attack types
+SUPPORTED_ATTACKS = {1, 3, 4, 5, 6, 7, 8, 9, 11, 14, 20, 99}       # VMS/Umoria attack types
 SUPPORTED_SPELLS = (0x0000000F                              # cast frequency
                     | 0x00000040                            # teleport to
                     | 0x00000080 | 0x00000100               # cause light, serious wounds

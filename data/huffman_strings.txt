@@ -291,3 +291,8 @@ Sorry, what was that again?
 
 # ===== Acid on a piece that resists it (VMS minus_ac, 2026-11-11) =====
 @MAT_RESISTS  resists damage!
+
+# ===== Fire, cold and lightning touches (VMS make_attack 5, 7, 8; MON-028) =====
+@MAT_FIRE  burns you.
+@MAT_COLD  freezes you.
+@MAT_LIGHT  shocks you.

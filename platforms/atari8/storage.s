@@ -16,15 +16,14 @@
 sio_sector_buf:
     .fill 128, 0
 
-atari_fn_83:
-    .fill 11, $20
+.label atari_fn_83 = A8_FN83_BASE   // 11 bytes in PRNBUF (memory.s); every writer fills all 11
 
 atari_io_device:    .byte 8
-atari_dir_count_lo: .byte 0
-atari_dir_count_hi: .byte 0
-
-xe_present:         .byte 0
-xe_saved_main:      .byte 0
+// In PRNBUF (memory.s), each written before it is read.
+.label atari_dir_count_lo = A8_STORAGE_VARS_BASE
+.label atari_dir_count_hi = A8_STORAGE_VARS_BASE + 1
+.label xe_present         = A8_STORAGE_VARS_BASE + 2
+.label xe_saved_main      = A8_STORAGE_VARS_BASE + 3
 xe_slot_populated:
     .fill 16, 0
 

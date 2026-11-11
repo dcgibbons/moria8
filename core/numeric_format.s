@@ -5,8 +5,12 @@
 // by both screen output and combat message composition. Screen entry points
 // still rely on a backend-local `screen_put_char`.
 
+#if PLATFORM_NF_DIGIT_BUF_EXTERNAL
+.label nf_digit_buf = PLATFORM_NF_DIGIT_BUF_BASE   // a port's free RAM (the Atari: high RAM)
+#else
 nf_digit_buf:
     .fill 8, 0
+#endif
 nf_value_2:
     .byte 0                     // bits 16-23 of the value numeric_format_u24 converts
 

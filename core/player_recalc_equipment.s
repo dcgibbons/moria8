@@ -9,19 +9,14 @@
 // Clobbers: everything
 player_recalc_equipment:
     // Recalculate equipment-derived flags and combat values without rerolling
-    // exceptional current stats established during character creation.
-    #if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    // The persistent equipment flags (resistances, see invisible, Free
-    // Action): player_calc_stats rebuilds them too, but wearing or taking off
-    // a ring or amulet runs only this, so they went stale on the Apple IIe
-    // and BBC Master until the next stats rebuild (2026-11-08 review).
-    jsr player_recalc_pflags_equipment   // resident; this runs from OVL.ITEMS
-    #elif PLAYER_RECALC_PFLAGS_EXTERNAL
+    // exceptional current stats established during character creation: the
+    // persistent equipment flags (resistances, See Invisible, Free Action),
+    // then player_calc_combat, which the flags routine ends in.
+    #if PLAYER_RECALC_PFLAGS_EXTERNAL
     jsr hal_player_recalc_pflags
     #else
-    jsr player_recalc_pflags_equipment
+    jsr player_recalc_pflags_equipment   // resident (OVL.ITEMS calls it on the Apple IIe, BBC Master)
     #endif
-    jsr player_calc_combat
 
     // Add weapon split to-hit and to-damage bonuses
     ldx #EQUIP_WEAPON

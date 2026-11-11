@@ -185,7 +185,11 @@ a2_char_map_aux:
     .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
 .assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
 
-// Speaker sound patterns for hal_sound_play (services.s): one 16-byte slot
+ovl_huffdata_end:
+.segment Default
+// Speaker sound patterns for hal_sound_play (services.s), in main resident
+// RAM since 2026-11-11 (the element touches' messages filled the corpus
+// slot; the resident image had room): one 16-byte slot
 // per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
 // smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
 a2_sfx_patterns:
@@ -200,8 +204,6 @@ a2_sfx_patterns:
     .byte $c8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0      // HUNGER_WARN: single low tone
     .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
 .assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
-ovl_huffdata_end:
-.segment Default
 #import "../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
@@ -1109,21 +1111,12 @@ a2_play_body:
 // Apple item commands call this resident routine while the item overlay is
 // active. Keep the stat transition code in the always-loaded play payload.
 player_adjust_equipment_stat:
-    // By the item, as core/player_adjust_equipment_stat.s: by the slot, every
-    // ring added its p1 to Strength, and the left hand (2026-11-08) would too.
+    // As core/player_adjust_equipment_stat.s: the stat by the item
+    // (equip_stat_index, core/player.s), p1 added or taken away.
     jsr player_adjust_equipment_stat_prepare
-    lda inv_item_id,x
-    ldx #0
-    cmp #ITEM_TYPE_RING_STRENGTH
-    beq !paes_apply+
-    ldx #PL_WIS_CUR - PL_STR_CUR
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !paes_apply+
-    ldx #PL_INT_CUR - PL_STR_CUR
-    cmp #ITEM_TYPE_AMULET_MAGI
-    bne !paes_done+
-!paes_apply:
-    jmp player_adjust_equipment_stat_apply
+    jsr equip_stat_index
+    bcc !paes_done+
+    jmp player_adjust_equipment_stat_apply   // Y = the stat
 !paes_done:
     rts
 
@@ -1289,6 +1282,8 @@ a2_ego_suffix_resist_cold: .text " Cold)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_resist_cold), 0
 a2_ego_suffix_resist_light: .text " Lightning)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_resist_light), 0
+a2_ego_suffix_magi: .text " of the Magi" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_magi), 0
 a2_ego_suffix_resist_prefix: .text " (Resist" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_resist_prefix), 0
 a2_ego_suffix_slots_end:
@@ -1522,17 +1517,16 @@ player_adjust_equipment_stat_prepare:
     lda inv_p1,x
     bcs !paes_prepare_store+
     eor #$ff
-    clc
-    adc #1
+    adc #1                      // carry clear: -p1
 !paes_prepare_store:
     sta stat_work
     rts
 
 player_adjust_equipment_stat_apply:
-    lda player_data + PL_STR_CUR,x
+    lda player_data + PL_STR_CUR,y
     clc
     adc stat_work
-    sta player_data + PL_STR_CUR,x
+    sta player_data + PL_STR_CUR,y
     rts
 
 #import "../../core/player_item_commands.s"

@@ -7,6 +7,7 @@
 // and player death. Uses umoria formulas.
 
 #import "player_save.s"
+#import "element_resist.s"
 
 // ============================================================
 // Base to-hit by attack type (from umoria playerTestAttackHits)
@@ -17,10 +18,10 @@ mon_atk_base_tohit:
     .byte 0     // 2: unused
     .byte 10    // 3: ATK_CONFUSE
     .byte 10    // 4: ATK_FEAR
-    .byte 0     // 5: unused
+    .byte 10    // 5: ATK_FIRE (VMS test_hit(10, ...))
     .byte 0     // 6: ATK_ACID
-    .byte 0     // 7: unused
-    .byte 0     // 8: unused
+    .byte 10    // 7: ATK_COLD
+    .byte 10    // 8: ATK_LIGHT
     .byte 0     // 9: ATK_CORRODE
     .byte 0     // 10: unused
     .byte 2     // 11: ATK_PARALYZE
@@ -350,9 +351,13 @@ mon_atk_effect_dispatch:
     beq !maed_fear+
     cmp #ATK_CORRODE
     beq !maed_corrode+
+    // Fire, cold, lightning (5, 7, 8; acid 6 is taken above): full dice, no
+    // AC reduction, resisted
+    cmp #ATK_FIRE
+    bcc !maed_normal+
+    cmp #ATK_LIGHT + 1
+    bcc mon_atk_effect_element
     // Unknown type — treat as normal
-    jmp !maed_normal+
-
 !maed_normal:
     jmp mon_atk_ac_reduce
 !maed_poison:
@@ -379,6 +384,30 @@ mon_atk_effect_dispatch:
 !maed_corrode:
     // Corrode: full damage, no AC reduce. Equipment corrosion deferred.
     rts
+.assert "The element touches are 5-8 with acid between", ATK_FIRE == 5 && ATK_ACID == 6 && ATK_COLD == 7 && ATK_LIGHT == 8, true
+
+// mon_atk_effect_element — The fire, cold and lightning touches (VMS
+// creature.inc make_attack 5, 7, 8; Umoria identical; MON-028): the effect
+// message, then the full dice through fire_dam / cold_dam / light_dam: div 3
+// with the lasting resistance (ring, armour, Defender), fire and cold div 3
+// again with the Resist Heat (Cold) timer, as the breath (mm_element_divisor).
+// Pack items are not damaged (as the breath; docs/BACKLOG.md).
+// Input: zp_combat_dmg = rolled damage. Output: zp_combat_dmg (maybe divided).
+mon_atk_effect_element:
+    ldy mat_atk_type
+    ldx maee_msg - ATK_FIRE,y
+    jsr huff_decode_to_ptr2
+    jsr mon_atk_build_effect_msg
+    ldy mat_atk_type
+    ldx maee_kind - ATK_FIRE,y  // the element as a breath names it
+    lda #1
+    jsr mm_element_divisor_entry
+    ldx mm_divisor
+    jmp mat_div_dmg
+// By attack type 5-8 (6, acid, has its own handler)
+maee_msg:  .byte HSTR_MAT_FIRE, 0, HSTR_MAT_COLD, HSTR_MAT_LIGHT
+maee_kind: .byte MS_BREATH_FIRE, 0, MS_BREATH_FROST, MS_BREATH_LIGHTNING
+.assert "The element touches are attack types 5-8", ATK_FIRE == 5 && ATK_COLD == 7 && ATK_LIGHT == 8, true
 
 // mon_atk_effect_poison — Set/stack poison timer
 // Always adds randint(level) + 5 = rng_range(cr_level) + 6 to the poison

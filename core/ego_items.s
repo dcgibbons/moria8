@@ -19,29 +19,37 @@
 //   9-13 = Resistance armour (body armour and shields; VMS magic_treasure,
 //          misc.inc): Resist (fire, cold, acid, lightning; +5 AC), Resist
 //          Acid, Resist Fire, Resist Cold, Resist Lightning (2026-11-11)
+//   14 = of the Magi (crowns): See Invisible, fire, acid and cold
+//        resistance, INT +p1 (VMS magic_treasure; 2026-11-11, MON-030)
 
 // Ego IDs: core/item_defs.s (shared with player.s and monster_acid.s).
-.assert "Ego IDs fill EGO_TYPE_COUNT", EGO_RESIST_LIGHT + 1, EGO_TYPE_COUNT
+.assert "Ego IDs fill EGO_TYPE_COUNT", EGO_MAGI + 1, EGO_TYPE_COUNT
+.assert "The crowns are the last item IDs (roll_ego_type, roll_armour_ego: ID >= the Silver Crown)", ITEM_TYPE_CROWN_SILVER == ITEM_TYPE_COUNT - 3 && ITEM_TYPE_CROWN_JEWEL == ITEM_TYPE_COUNT - 1, true
 // ============================================================
 // roll_ego_type — Determine ego type for a spawned item
 // Input: A = item type ID
 // Output: A = ego type (0 = none)
 // Melee weapons (ICAT_WEAPON): chance = min(dlvl * 2, 40) out of 100.
-// Body armour and shields: resistance armour (roll_armour_ego). Digging
-// tools: roll_tool_ego_check.
+// Body armour, shields and crowns: resistance armour and the Magi
+// (roll_armour_ego). Digging tools: roll_tool_ego_check.
 // Called after roll_enchantment for the same item (fi_add_to_ac set).
 // Clobbers: A, X, Y
 // ============================================================
 roll_ego_type:
     // Check category — weapons get weapon ego, digging tools get tool ego
     tax
+    tay                         // the item, for roll_armour_ego
     lda it_category,x
     cmp #ICAT_WEAPON
     beq !ret_weapon_ego+
     cmp #ICAT_ARMOR
     beq !ret_armour_ego+
     cmp #ICAT_SHIELD
+    beq !ret_armour_ego+
+    cmp #ICAT_HELM
     bne !ret_not_armour+
+    cpx #ITEM_TYPE_CROWN_SILVER
+    bcc !ret_zero+          // helms and caps: none
 !ret_armour_ego:
     jmp roll_armour_ego
 !ret_not_armour:
@@ -91,11 +99,14 @@ roll_ego_type:
 .macro EgoArmourDataRestoreSegment() {}
 #endif
 :EgoArmourSegment()
-// roll_armour_ego — VMS magic_treasure (misc.inc) for armour and shields:
-// an item that rolled its magic bonus (positive to-AC, so not cursed) gets
-// a resistance with magik(special), special = trunc(magic chance / 6)
-// (obj_div_special), the chance min(15 + dlvl, 70) as roll_enchantment's;
-// then randint(9): 1 (R) +5 AC, 2 (RA), 3-4 (RF), 5-6 (RC), 7-9 (RL).
+// roll_armour_ego — VMS magic_treasure (misc.inc) for armour, shields and
+// crowns (Y = the item): one that rolled its magic bonus (positive to-AC, so
+// not cursed) passes magik(special), special = trunc(magic chance / 6)
+// (obj_div_special), the chance min(15 + dlvl, 70) as roll_enchantment's.
+// Armour and shields then take randint(9): 1 (R) +5 AC, 2 (RA), 3-4 (RF),
+// 5-6 (RC), 7-9 (RL). Crowns (helm subval 6-8) take randint(6) = 3: of the
+// Magi, p1 (INT) randint(3); Might, Lordliness, Beauty, Seeing and
+// Regeneration (1, 2, 4-6) are not modelled: plain crowns.
 roll_armour_ego:
     lda fi_add_to_ac
     beq !rae_none+
@@ -115,9 +126,17 @@ roll_armour_ego:
     bcs !rae_div6-          // X = trunc(chance / 6)
     stx ego_chance
     lda #100
-    jsr rng_range           // [0, 99]: randint(100) <= special
+    jsr rng_range           // [0, 99]: randint(100) <= special (keeps Y)
     cmp ego_chance
     bcs !rae_none+
+    cpy #ITEM_TYPE_CROWN_SILVER
+#if EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+    bcc !rae_armour+
+    jmp roll_crown_ego          // placed apart with the data
+!rae_armour:
+#else
+    bcs roll_crown_ego
+#endif
     lda #9
     jsr rng_range           // randint(9) - 1
     tax
@@ -137,6 +156,23 @@ roll_armour_ego:
 :EgoArmourRestoreSegment()
 
 :EgoArmourDataSegment()
+// roll_crown_ego — roll_armour_ego's crowns, past its magik(special): with
+// the data, which a port short of room places apart from the code (the
+// C128: its world payload; both stay resident).
+roll_crown_ego:
+    lda #6
+    jsr rng_range           // randint(6) - 1
+    cmp #2
+    bne !rce_none+
+    lda #3
+    jsr rng_range           // carry clear
+    adc #1
+    sta fi_add_p1           // INT +1..3
+    lda #EGO_MAGI
+    rts
+!rce_none:
+    lda #EGO_NONE
+    rts
 ego_armour_pick:
     .byte EGO_RESIST, EGO_RESIST_ACID, EGO_RESIST_FIRE, EGO_RESIST_FIRE
     .byte EGO_RESIST_COLD, EGO_RESIST_COLD, EGO_RESIST_LIGHT, EGO_RESIST_LIGHT, EGO_RESIST_LIGHT
@@ -145,6 +181,7 @@ ego_str_resist_acid:  .text " (Resist Acid)" ; .byte 0
 ego_str_resist_fire:  .text " (Resist Fire)" ; .byte 0
 ego_str_resist_cold:  .text " (Resist Cold)" ; .byte 0
 ego_str_resist_light: .text " (Resist Lightning)" ; .byte 0
+ego_str_magi:         .text " of the Magi" ; .byte 0
 :EgoArmourDataRestoreSegment()
 
 ego_chance: .byte 0
@@ -171,14 +208,14 @@ ego_suffix_lo:
     .byte <ego_str_flame, <ego_str_frost
     .byte <ego_str_defender, <ego_str_holy_avenger, <ego_str_slay_dragon
     .byte <ego_str_resist, <ego_str_resist_acid, <ego_str_resist_fire
-    .byte <ego_str_resist_cold, <ego_str_resist_light
+    .byte <ego_str_resist_cold, <ego_str_resist_light, <ego_str_magi
 ego_suffix_hi:
     .byte >ego_str_none
     .byte >ego_str_slay_animal, >ego_str_slay_evil, >ego_str_slay_undead
     .byte >ego_str_flame, >ego_str_frost
     .byte >ego_str_defender, >ego_str_holy_avenger, >ego_str_slay_dragon
     .byte >ego_str_resist, >ego_str_resist_acid, >ego_str_resist_fire
-    .byte >ego_str_resist_cold, >ego_str_resist_light
+    .byte >ego_str_resist_cold, >ego_str_resist_light, >ego_str_magi
 .assert "ego_suffix_lo has EGO_TYPE_COUNT entries", ego_suffix_hi - ego_suffix_lo, EGO_TYPE_COUNT
 
 #if !EGO_SUFFIX_STRINGS_EXTERNAL
@@ -186,19 +223,19 @@ ego_suffix_hi:
 #endif
 
 // ============================================================
-// Ego data tables (indexed by ego type 0-7)
+// Ego data tables, by the weapon slot's ego only (weapons 1-8, digging
+// tools 1-3): no entries for the armour and crown egos.
 // ============================================================
 ego_slay_mask:
     .byte 0, CF_ANIMAL, CF_EVIL, CF_UNDEAD, 0, 0, 0, CF_EVIL|CF_UNDEAD, CF_DRAGON
-    .byte 0, 0, 0, 0, 0                         // armour: no weapon effect
 ego_slay_mult:
     .byte 0, 2, 2, 3, 0, 0, 0, 2, 4
-    .byte 0, 0, 0, 0, 0
 ego_ac_bonus:
-    .byte 0, 0, 0, 0, 0, 0, 5, 3, 0
-    .byte 0, 0, 0, 0, 0                         // armour's +5 (R) is in its to-AC
-.assert "ego_slay_mask has EGO_TYPE_COUNT entries", ego_slay_mult - ego_slay_mask, EGO_TYPE_COUNT
-.assert "ego_slay_mult has EGO_TYPE_COUNT entries", ego_ac_bonus - ego_slay_mult, EGO_TYPE_COUNT
+    .byte 0, 0, 0, 0, 0, 0, 5, 3, 0             // armour's +5 (R) is in its to-AC
+ego_ac_bonus_end:
+.assert "ego_slay_mask has the weapon egos", ego_slay_mult - ego_slay_mask, EGO_RESIST
+.assert "ego_slay_mult has the weapon egos", ego_ac_bonus - ego_slay_mult, EGO_RESIST
+.assert "ego_ac_bonus has the weapon egos", ego_ac_bonus_end - ego_ac_bonus, EGO_RESIST
 
 // ============================================================
 // ego_apply_damage — Apply ego damage modifiers (slay + bonus dice)

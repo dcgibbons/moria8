@@ -226,6 +226,13 @@ JEWEL_NAME = re.compile(r"^((Ring|Amulet) of (.+?))(?: [\[(]([+-]\d+)[\])])?\s*$
 # ("    Ring:   (none)"): both ring hands, the right first (VMS moria.inc:528).
 JEWEL_LINE = re.compile(r"^\s*(?:[a-z]\) )?(Ring|Amulet):\s+(.*)$")
 FLAG_RINGS = ("Resist Fire", "Resist Cold", "See Invisible")   # one flag each (player.s pf_bit_table): a second does nothing; Speed adds (MON-026)
+# The rings and the amulet that resist an element (player.s pf_bit_table and
+# pf_lordly_table, MON-029); the Lordly rings add LORDLY_AC besides, which a
+# twin still adds.
+JEWEL_ELEMENTS = {"Resist Fire": "fire", "Resist Cold": "frost", "Resist Acid": "acid",
+                  "Lordly Protection (Fire)": "fire", "Lordly Protection (Cold)": "frost",
+                  "Lordly Protection (Acid)": "acid"}
+LORDLY_AC = 5
 JEWEL_GOLD = 20000       # gold beyond the reserve before rings and amulets are shopped for
 MELEE_KLASSES = ("warrior", "paladin", "rogue", "ranger")
 # Ego weapons (core/ego_items.s): the name's suffix, and what it is worth on
@@ -251,13 +258,19 @@ HURT_OUT_HP = 0.35       # below this share of HP with no healing potion left: W
 HURT_OUT_HP_NO_ESCAPE = 0.5   # ... with no escape at hand either: Recall takes 15-35 turns to come
 LIT_EVERY = 4            # squares walked, lightless, between light spells
 GEAR_ARMOUR = re.compile(r"^(.+?) \[(\d+)(?:,\s*([+-]\s*\d+))?")
-# Resistance armour and Defender weapons (core/ego_items.s, MON-027): the
-# elements of breath they resist (monster_cast_breath).
-EGO_RESIST = re.compile(r" \((Resist(?: Acid| Fire| Cold| Lightning)?|Defender)\)")
+# Resistance armour and Defender weapons (core/ego_items.s, MON-027) and the
+# crowns of the Magi (MON-030): the elements of breath they resist
+# (monster_cast_breath). Not the Amulet of the Magi: a crown's suffix only.
+EGO_RESIST = re.compile(r" \((Resist(?: Acid| Fire| Cold| Lightning)?|Defender)\)|(?<=Crown) of (the Magi)")
 FOUR_ELEMENTS = frozenset({"fire", "frost", "acid", "lightning"})
 EGO_ELEMENTS = {"Resist": FOUR_ELEMENTS, "Defender": FOUR_ELEMENTS, "Resist Acid": frozenset({"acid"}),
                 "Resist Fire": frozenset({"fire"}), "Resist Cold": frozenset({"frost"}),
-                "Resist Lightning": frozenset({"lightning"})}
+                "Resist Lightning": frozenset({"lightning"}), "the Magi": frozenset({"fire", "frost", "acid"})}
+
+
+def resist_egos(text: str) -> list[str]:
+    """The resistance egos (``EGO_ELEMENTS`` keys) named in ``text``."""
+    return [m.group(1) or m.group(2) for m in EGO_RESIST.finditer(text)]
 RESIST_AC = 10   # each element a found armour newly resists counts as this much AC
 GEAR_WEAPON = re.compile(r"^(.+?)(?: \(([+-]\d+),\s*([+-]\d+)\))?\s*$")
 TEMPLE = 3               # store index (entrance "4"): potions and scrolls, named since stores identify stock
@@ -750,6 +763,8 @@ class Brain:
         self.noted_messages = ""               # message rows last counted (food, light)
         self.noted_on_prompt = False           # ... and whether on a prompt screen
         self.events: list[str] = []            # bot-quality events for the session (stalls)
+        self.kills: list[str] = []             # creatures slain since the session last took them
+        self.kill_messages = ""                # the command screen's messages the kills were read from
 
     def state(self) -> dict[str, object]:
         """JSON-serializable state saved beside snapshots."""
@@ -873,6 +888,7 @@ class Brain:
         self.chased = attacker in knowledge.fast_creatures()
         seen_messages, self.prompt_messages = self.prompt_messages + " " + messages, ""
         self.seen_messages = seen_messages
+        self.note_kills(seen_messages)
         if BREATHES.search(seen_messages) and self.last_hp is not None and self.last_hp > obs.hp and obs.dlvl:
             element = BREATH_ELEMENT.search(seen_messages)
             self.note_breath(obs, view, self.last_hp - obs.hp, element.group(1) if element else None)
@@ -1122,17 +1138,18 @@ class Brain:
             match = EQUIP_LINE.match(row)
             if match is not None:
                 self.armour_names[EQUIP_SLOTS[match.group(1)]] = match.group(2).strip()
-            for ego in EGO_RESIST.findall(row) or EGO_RESIST.findall(text)[:1]:
+            for ego in resist_egos(row) or resist_egos(text)[:1]:
                 resists |= EGO_ELEMENTS[ego]
         self.worn_resists = frozenset(resists)
 
     @staticmethod
     def resists_of(name: str) -> frozenset[str]:
-        ego = EGO_RESIST.search(name)
-        return EGO_ELEMENTS[ego.group(1)] if ego else frozenset()
+        egos = resist_egos(name)
+        return EGO_ELEMENTS[egos[0]] if egos else frozenset()
 
     def armour_resist_better(self, name: str) -> tuple[str, int] | None:
-        """A body armour or shield found with a resistance (MON-027) worth
+        """A body armour, shield or crown found with a resistance (MON-027,
+        MON-030) worth
         more than what is worn in its slot: its AC and RESIST_AC for each
         element nothing else worn resists. (slot, AC) to wear it, else None.
         A level-40 Priest's 488 HP took 693 from an Ancient Multi-Hued
@@ -1142,7 +1159,7 @@ class Brain:
         if armour is None or not resists:
             return None
         kind = knowledge.item_kinds().get(EGO_RESIST.sub("", armour.group(1)))
-        if kind is None or kind.category not in ("ICAT_ARMOR", "ICAT_SHIELD"):
+        if kind is None or kind.category not in ("ICAT_ARMOR", "ICAT_SHIELD", "ICAT_HELM"):
             return None
         slot = kind.category
         ac = int(armour.group(2)) + int((armour.group(3) or "0").replace(" ", ""))
@@ -1183,7 +1200,8 @@ class Brain:
         """What a ring or amulet is worth to this character, as a player ranks
         them: Speed above all, the Magi's Free Action and See Invisible, then
         Protection by its bonus; Strength and Slaying for fighters, Wisdom for
-        Priests and Paladins (their mana). Negative (cursed): -1."""
+        Priests and Paladins (their mana); a resistance as a Ring of Resist
+        Cold, the Lordly rings' AC on top (MON-029). Negative (cursed): -1."""
         match = JEWEL_NAME.match(name.strip())
         if match is None:
             return -1
@@ -1191,11 +1209,20 @@ class Brain:
         if bonus < 0:
             return -1
         melee = self.goal.klass in MELEE_KLASSES
+        element = JEWEL_ELEMENTS.get(kind)
+        if element is not None:
+            lordly = 10 * LORDLY_AC if kind.startswith("Lordly") else 0
+            return lordly + (BALROG_FIRE_RING if element == "fire" and self.balrog_bound() else 800)
         return {"Speed": 1000, "the Magi": 300, "Protection": 10 * bonus,
                 "Strength": 15 * bonus if melee else 0, "Slaying": 60 if melee else 0,
                 "Wisdom": (20 if self.goal.klass in ("priest", "paladin") else 2) * bonus,
-                "Resist Fire": BALROG_FIRE_RING if self.balrog_bound() else 800,
-                "Resist Cold": 800, "See Invisible": 20}.get(kind, 0)
+                "See Invisible": 20}.get(kind, 0)
+
+    def jewel_resists(self, but: str = "") -> frozenset[str]:
+        """The elements the rings and amulet worn resist (``JEWEL_ELEMENTS``),
+        but the one on ``but`` (the slot a jewel would replace)."""
+        kinds = (JEWEL_NAME.match(name.strip()) for slot, name in self.jewel_names.items() if slot != but)
+        return frozenset(JEWEL_ELEMENTS[k.group(3)] for k in kinds if k and k.group(3) in JEWEL_ELEMENTS)
 
     def gain_wanted(self, name: str) -> bool:
         """A potion of gain stat for a stat short of 18/100: picked up (and
@@ -1216,8 +1243,11 @@ class Brain:
         theirs = JEWEL_NAME.match(self.jewel_names.get(other, "").strip()) if other else None
         if mine and theirs and mine.group(3) in FLAG_RINGS and theirs.group(3) == mine.group(3):
             return 0
-        if mine and {"Resist Fire": "fire", "Resist Cold": "frost"}.get(mine.group(3)) in self.worn_resists:
-            return 0   # the armour worn resists it already (MON-027)
+        element = JEWEL_ELEMENTS.get(mine.group(3)) if mine else None
+        if element is not None and (element in self.worn_resists or element in self.jewel_resists(but=slot)):
+            # the armour (MON-027) or another jewel resists it already: a
+            # Lordly ring's AC alone
+            return 10 * LORDLY_AC if mine.group(3).startswith("Lordly") else 0
         return self.jewel_value(name)
 
     def jewel_better(self, name: str) -> bool:
@@ -1355,14 +1385,14 @@ class Brain:
         explored on, and died to the next breath at 230/245 (C64 Balrog,
         2026-11-07). ``assume``: the elements whose timer is taken as running
         (a prayer or potion being weighed)."""
-        rings = {"fire": ("Resist Fire", "zp_eff_resist"), "frost": ("Resist Cold", "eff_resist_cold_timer")}
-        # Resistance armour and Defender (MON-027): lightning (light_dam) and
-        # acid (acid_dam) a third too, lasting, as the rings.
-        worn = element in self.worn_resists
-        if element not in rings:
-            return 3 if worn else 1
-        ring, timer = rings[element]
-        held = worn or any(ring in self.jewel_names.get(hand, "") for hand in ("Ring", "Ring2"))
+        timers = {"fire": "zp_eff_resist", "frost": "eff_resist_cold_timer"}
+        # Resistance armour and Defender (MON-027), the Lordly rings and the
+        # Amulet of Resist Acid (MON-029): lightning (light_dam) and acid
+        # (acid_dam) a third too, lasting, as the rings.
+        held = element in self.worn_resists or element in self.jewel_resists()
+        if element not in timers:
+            return 3 if held else 1
+        timer = timers[element]
         on = element in assume or (not lasting and obs.abi is not None and hasattr(obs.abi, timer)
                                    and obs.zp8(timer) > 0)
         return 3 ** (int(held) + int(on))
@@ -2586,6 +2616,19 @@ class Brain:
                 moved[(near[0], glyph)] = known
         self.level.identified.update(moved)
 
+    def note_kills(self, seen_messages: str) -> None:
+        """Every "You have slain the <name>." on this command screen (and the
+        -more- screens before it), for the session's kill events: which
+        creatures fall, and which never do (Ancient Multi-Hued Dragons and
+        Evil Iggy, 2026-11-11, had no record at all). A screen whose messages
+        are the last one's again (a command that cleared none) is not
+        counted twice."""
+        text = " ".join(seen_messages.split())
+        kills = SLAIN.findall(text)
+        if kills and text != self.kill_messages:
+            self.kills.extend(kills)
+        self.kill_messages = text if kills else ""
+
     def note_toughness(self, obs: Observation, attacker: str | None, messages: str) -> None:
         """A kind of creature that has cost half the bot's HP without being
         slain is tough for the next few character levels: not hunted, and
@@ -3075,8 +3118,9 @@ class Brain:
         return self.goal.threat_depth and self.clvl >= MAX_CLVL
 
     def fire_ring_worn(self) -> bool:
-        """Lasting fire resistance worn: the ring, or armour of Resist (MON-027)."""
-        return "fire" in self.worn_resists or any("Resist Fire" in self.jewel_names.get(hand, "") for hand in ("Ring", "Ring2"))
+        """Lasting fire resistance worn: a ring (MON-029: Lordly too), or
+        armour of Resist (MON-027)."""
+        return "fire" in self.worn_resists or "fire" in self.jewel_resists()
 
     def threat_ready(self, obs: Observation, dlvl: int) -> bool:
         """A human's depth past the margin (maintainer, 2026-11-08: "be like a

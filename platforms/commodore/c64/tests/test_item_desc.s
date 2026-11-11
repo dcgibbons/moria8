@@ -1,6 +1,6 @@
 // test_item_desc.s — Runtime tests for the real item description formatter
 //
-// Results at $0400-$040A: $01 = pass, $00 = fail per test (11 tests)
+// Results at $0400-$040B: $01 = pass, $00 = fail per test (12 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -10,7 +10,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_finish:
-    ldx #10
+    ldx #11
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -91,7 +91,7 @@ fi_add_ego:   .byte 0
 test_start:
     jsr screen_clear
 
-    ldx #10
+    ldx #11
     lda #$ff
 !clr:
     sta tc_results,x
@@ -500,10 +500,64 @@ test_start:
     bcc !t11_fail+
     lda #$01
     sta tc_results+10
-    jmp !tests_done+
+    jmp !t12+
 !t11_fail:
     lda #$00
     sta tc_results+10
+
+    // Test 12: a crown of the Magi (MON-030) shows its AC, then its INT
+    // bonus as VMS "(%P1)"; a plain crown (p1 0) nothing after its AC. The
+    // suffix printer is stubbed here (test_ego.s t23 checks " of the Magi").
+!t12:
+    jsr test_prepare_row0
+    lda #ITEM_TYPE_CROWN_GOLDEN
+    sta itemdesc_item_id
+    lda #0
+    sta itemdesc_qty
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    lda #2
+    sta itemdesc_p1
+    lda #3
+    sta itemdesc_to_ac
+    lda #EGO_MAGI
+    sta itemdesc_ego
+    lda #IF_IDENTIFIED
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+    lda #<expected_magi_crown_desc
+    sta zp_ptr0
+    lda #>expected_magi_crown_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
+    bcc !t12_fail+
+    lda $0400 + expected_magi_crown_desc_end - expected_magi_crown_desc - 1
+    cmp #$20
+    bne !t12_fail+
+    jsr test_prepare_row0
+    lda #ITEM_TYPE_CROWN_SILVER
+    sta itemdesc_item_id
+    lda #0
+    sta itemdesc_p1
+    sta itemdesc_ego
+    lda #1
+    sta itemdesc_to_ac
+    jsr itemdesc_put_staged
+    lda #<expected_plain_crown_desc
+    sta zp_ptr0
+    lda #>expected_plain_crown_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
+    bcc !t12_fail+
+    lda $0400 + expected_plain_crown_desc_end - expected_plain_crown_desc - 1
+    cmp #$20
+    bne !t12_fail+
+    lda #$01
+    sta tc_results+11
+    jmp !tests_done+
+!t12_fail:
+    lda #$00
+    sta tc_results+11
 
 !tests_done:
     jmp test_finish
@@ -599,6 +653,12 @@ expected_bolt_stack_desc:
     .text "6 Bolt" ; .byte 0
 expected_spent_torch_desc:
     .text "Wooden Torch (0 turns)" ; .byte 0
+expected_magi_crown_desc:
+    .text "Golden Crown [0,+3] (+2)" ; .byte 0
+expected_magi_crown_desc_end:
+expected_plain_crown_desc:
+    .text "Silver Crown [0,+1]" ; .byte 0
+expected_plain_crown_desc_end:
 expected_identify_scroll_desc:
     .text "Scroll of Identify" ; .byte 0
 expected_prayer_book_desc:
@@ -640,6 +700,8 @@ expected_item_name_lo:
     .byte <ein_132, <ein_133, <ein_134, <ein_135, <ein_136
     .byte <ein_137, <ein_138, <ein_139
     .byte <ein_140, <ein_141, <ein_142, <ein_143, <ein_144, <ein_145
+    .byte <ein_146, <ein_147, <ein_148, <ein_149
+    .byte <ein_150, <ein_151, <ein_152
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -670,6 +732,8 @@ expected_item_name_hi:
     .byte >ein_132, >ein_133, >ein_134, >ein_135, >ein_136
     .byte >ein_137, >ein_138, >ein_139
     .byte >ein_140, >ein_141, >ein_142, >ein_143, >ein_144, >ein_145
+    .byte >ein_146, >ein_147, >ein_148, >ein_149
+    .byte >ein_150, >ein_151, >ein_152
 .assert "expected_item_name_hi covers every item type", * - expected_item_name_hi, ITEM_TYPE_COUNT
 
 ein_0:  .text "Gold (small)" ; .byte 0
@@ -818,9 +882,16 @@ ein_142: .text "Potion of Gain Wisdom" ; .byte 0
 ein_143: .text "Potion of Gain Dexterity" ; .byte 0
 ein_144: .text "Potion of Gain Constitution" ; .byte 0
 ein_145: .text "Potion of Charisma" ; .byte 0
+ein_146: .text "Ring of Lordly Protection (Fire)" ; .byte 0
+ein_147: .text "Ring of Lordly Protection (Acid)" ; .byte 0
+ein_148: .text "Ring of Lordly Protection (Cold)" ; .byte 0
+ein_149: .text "Amulet of Resist Acid" ; .byte 0
+ein_150: .text "Silver Crown" ; .byte 0
+ein_151: .text "Golden Crown" ; .byte 0
+ein_152: .text "Jewel Encrusted Crown" ; .byte 0
 
 item_name_test_id: .byte 0
-tc_results: .fill 11, $ff
+tc_results: .fill 12, $ff
 tc_results_end:
 
 
@@ -832,5 +903,5 @@ screen_put_string_ay:
     jmp hal_screen_put_string
 
 item_desc_test_body_end:
-.assert "Item desc result count", tc_results_end - tc_results, 11
+.assert "Item desc result count", tc_results_end - tc_results, 12
 .assert "Item desc test stays below MAP_BASE", item_desc_test_body_end <= MAP_BASE, true

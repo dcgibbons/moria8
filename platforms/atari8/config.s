@@ -29,6 +29,33 @@
 #define PLATFORM_ITEM_NAME_BUF_LOW
 .const PLATFORM_ITEM_NAME_DECODE_BUF_BASE = $df0e
 
+// The pure scratch buffers the C64 parks in page 2 follow it in the same
+// high RAM ($DF3E-$DFBA, uninitialized, read and written with PORTB = $FE as
+// msg_history is): the element touches (2026-11-11) took Default past
+// MAP_BASE.
+#define PLATFORM_SCRATCH_BUFS_IN_PAGE2
+.const PLATFORM_COMBAT_MSG_BUF_BASE = PLATFORM_ITEM_NAME_DECODE_BUF_BASE + 48
+.const PLATFORM_CREATURE_NAME_BUF_BASE = PLATFORM_COMBAT_MSG_BUF_BASE + PLATFORM_COMBAT_MSG_BUF_SIZE
+.const PLATFORM_PM_SPELL_LIST_BASE = PLATFORM_CREATURE_NAME_BUF_BASE + 32
+.const PLATFORM_LTB_SCRATCH_BASE = PLATFORM_PM_SPELL_LIST_BASE + 9   // monster.s tier-loader counters
+.const PLATFORM_PIW_VISIBLE_SLOTS_BASE = PLATFORM_LTB_SCRATCH_BASE + 2
+.const PLATFORM_MD_QUEUE_BASE = PLATFORM_PIW_VISIBLE_SLOTS_BASE + 22   // monster_death.s queue
+.const PLATFORM_CHEST_SCRATCH_BASE = PLATFORM_MD_QUEUE_BASE + 1 + 3 * 4  // chest_loot.s scratch
+// The item flavour shuffles follow (set at a new game and by a load, saved
+// through the low sector buffer): the rings of Lordly Protection (2026-11-11).
+#define PLATFORM_SHUFFLES_EXTERNAL
+.const PLATFORM_SHUFFLE_BASE = PLATFORM_CHEST_SCRATCH_BASE + 5
+// The 8-digit number buffer last (2026-11-11, the crowns).
+#define PLATFORM_NF_DIGIT_BUF_EXTERNAL
+.const PLATFORM_NF_DIGIT_BUF_BASE = PLATFORM_SHUFFLE_BASE + 38
+// The console-key latch (input.s; mainline only, never the IRQ or SIO).
+.const A8_CONSOL_RELEASED = PLATFORM_NF_DIGIT_BUF_BASE + 8
+// The per-type "known" bits (item_defs.s): cleared at a new game, set by a
+// load, saved through the low sector buffer as the shuffles are.
+#define PLATFORM_ID_KNOWN_EXTERNAL
+.const PLATFORM_ID_KNOWN_BASE = A8_CONSOL_RELEASED + 1
+.assert "High-RAM scratch buffers stay below $E000", PLATFORM_ID_KNOWN_BASE + 20 <= $e000, true
+
 .const MACHINE_C64    = $00
 .const MACHINE_C128   = $80
 .const MACHINE_PLUS4  = $40

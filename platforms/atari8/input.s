@@ -36,9 +36,10 @@
 
 .const ATARI_KBDBUF_MAX = 8
 
-atari_kbdbuf_len: .byte 0
-atari_kbdbuf:     .fill ATARI_KBDBUF_MAX, 0
-consol_released:  .byte 1
+.label atari_kbdbuf_len = A8_KBDBUF_LEN       // PRNBUF (memory.s); input_init clears it
+.label atari_kbdbuf     = A8_KBDBUF_BASE
+.assert "The keyboard ring is the size memory.s gives it", ATARI_KBDBUF_MAX, 8
+.label consol_released = A8_CONSOL_RELEASED   // high RAM (config.s), mainline only; input_init sets it
 
 input_noop:
     rts

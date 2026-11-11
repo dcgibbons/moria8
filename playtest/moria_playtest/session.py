@@ -396,6 +396,10 @@ class Character:
                 for event in self.brain.events:
                     self.file_finding("stall", "bot", event, obs)
                 self.brain.events.clear()
+                for name in self.brain.kills:
+                    self.session.event("kill", seed=self.seed, step=self.result.steps, name=name,
+                                       dlvl=obs.dlvl, clvl=obs.clvl)
+                self.brain.kills.clear()
                 if obs.mode == Mode.COMMAND:
                     loop = self.loops.note(self.result.steps, obs.dlvl, obs.pos, decision.layer, decision.reason)
                     if loop is not None:

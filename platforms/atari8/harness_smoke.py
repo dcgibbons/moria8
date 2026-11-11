@@ -126,6 +126,8 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     save_device = syms.get("save_device", 0x0D30)
     disk_setup_done = syms.get("disk_setup_done", 0x0D31)
     busy_addr = syms.get("generation_busy_active_api", 0x0D40)
+    shuffles = syms.get("potion_shuffle", 0)
+    id_known = syms.get("id_known_bits", 0)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
 
@@ -156,6 +158,8 @@ local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
 local BUSY_ADDR = 0x{busy_addr:04X}
+local SHUFFLES_ADDR = 0x{shuffles:04X}   -- 38 bytes: potion, scroll, ring, wand, staff (high RAM)
+local ID_KNOWN_ADDR = 0x{id_known:04X}   -- 20 bytes (high RAM)
 local SCREEN_RAM = 0x{SCREEN_RAM:04X}
 local ROW18 = 0x{ROW18_ADDR:04X}
 local ROW23 = 0x{ROW23_ADDR:04X}
@@ -524,6 +528,14 @@ function run()
     assert_line("chargen_town_ready", ok)
     -- Secondary weapon (slot 32): Dagger (+3,+4) (Defender); slot 31 stays empty.
     inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
+    -- The flavour shuffles and the known bits live in high RAM under the OS
+    -- ROM (config.s): saved and loaded through the low sector buffer. A
+    -- flavoured item made known (the Ring of Lordly Protection (Fire), 146)
+    -- must come back too.
+    prog:write_u8(ID_KNOWN_ADDR + (146 >> 3), prog:read_u8(ID_KNOWN_ADDR + (146 >> 3)) | (1 << (146 & 7)))
+    local saved_state = {}
+    for i = 0, 37 do saved_state[#saved_state + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
+    for i = 0, 19 do saved_state[#saved_state + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
     send_key(0xD3) -- SHIFT+S (save & quit) -> prompts Disk Setup on first save
     assert_line("save_disk_setup_prompt", wait_screen("DISK SETUP", 80))
     send_key(0x33) -- 3) Done (default Save: D2:)
@@ -539,6 +551,8 @@ function run()
     end
     assert_line("title_after_save", screen_has("N)ew") and screen_has("L)oad"))
     inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring it back
+    for i = 0, 37 do prog:write_u8(SHUFFLES_ADDR + i, saved_state[i + 1] ~ 0x55) end
+    for i = 0, 19 do prog:write_u8(ID_KNOWN_ADDR + i, 0) end
     send_key(0x4C) -- 'L' (load game)
     assert_line("load_slots_shown", wait_screen("Select Slot 1-4", 80))
     send_key(0x31) -- Slot 1
@@ -550,6 +564,10 @@ function run()
     assert_line("save_load_secondary_restored",
         inv_field(32, 0) == 2 and inv_field(32, 3) == 3 and inv_field(32, 4) == 4
         and inv_field(32, 6) == 2 and inv_field(32, 7) == 6 and inv_field(31, 0) == 0xFF)
+    local same = SHUFFLES_ADDR ~= 0 and ID_KNOWN_ADDR ~= 0
+    for i = 0, 37 do same = same and prog:read_u8(SHUFFLES_ADDR + i) == saved_state[i + 1] end
+    for i = 0, 19 do same = same and prog:read_u8(ID_KNOWN_ADDR + i) == saved_state[39 + i] end
+    assert_line("save_load_high_ram_restored", same)
     manager.machine:exit()
 end
 """

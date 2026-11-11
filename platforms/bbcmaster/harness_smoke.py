@@ -702,6 +702,30 @@ function run()
     assert_line("left_ring_replaced", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x03 == 0x01)
     wear_slot_a(125, "magi_amulet")
     assert_line("free_action_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x18 == 0x18)
+    -- A Golden Crown of the Magi (MON-030; 151, INT +2, ego 14) through this
+    -- port's own player_adjust_equipment_stat: worn, INT +2 and fire, cold
+    -- and acid resisted ($23); taken off, INT back.
+    local PL_INT_CUR = 28
+    local int0 = prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR)
+    drain_more(4)
+    wait_frames(30)
+    inv_seed(0, {151, 1, 2, 0, 0, 3, 2, 14})
+    send_key(0x57) -- 'W' (wear)
+    assert_line("magi_crown_wear_prompt", wait_screen("Wear which item", 80))
+    send_key(0x41) -- 'A'
+    assert_line("magi_crown_worn", wait_screen("You are wearing", 80))
+    assert_line("magi_crown_int", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0 + 2)
+    assert_line("magi_crown_flags", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x23 == 0x23)
+    -- Take it off: the equipment letters count the worn slots before the head.
+    drain_more(4)
+    wait_frames(30)
+    local head_letter = 0
+    for slot = 22, 24 do if inv_field(slot, 0) ~= 0xFF then head_letter = head_letter + 1 end end
+    send_key(0x54) -- 'T' (take off)
+    assert_line("magi_crown_takeoff_prompt", wait_screen("Take off which item", 80))
+    send_key(0x41 + head_letter)
+    assert_line("magi_crown_taken_off", wait_screen("You take off", 80))
+    assert_line("magi_crown_int_restored", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0)
     manager.machine:exit()
 end
 """.replace("ANDY_MOS_BYTES", andy_mos_bytes())

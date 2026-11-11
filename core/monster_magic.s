@@ -23,6 +23,7 @@
 
 #import "los_trace.s"
 #import "player_save.s"
+#import "element_resist.s"
 
 // ============================================================
 // Scratch variables
@@ -32,7 +33,6 @@ mm_bit_count:  .byte 0         // Number of set bits (available spells)
 mm_chosen:     .byte 0         // Randomly chosen spell index
 mm_msf_count:  .byte 0         // How many of the choices are MSF bits
 mm_kind:       .byte 0         // Breath element (MS_BREATH_*)
-mm_divisor:    .byte 0         // Breath damage divisor
 
 // ============================================================
 // monster_can_cast — Check if monster wants to cast a spell
@@ -378,25 +378,12 @@ monster_cast_breath:
 
     ldx mm_kind
     lda mm_breath_div - 1,x
-    sta mm_divisor
     cpx #MS_BREATH_ACID
     beq !mcb_acid+
-    // Lightning (light_dam), frost and fire (cold_dam, fire_dam): div 3 for
-    // the lasting resistance; frost and fire div 3 again for the timer. Gas
-    // (poison_gas) has no resistance.
-    lda player_pflags
-    and mm_resist_flag - 1,x
-    beq !mcb_no_ring+
-    jsr mm_triple_divisor
-!mcb_no_ring:
-    cpx #MS_BREATH_FROST
-    bcc !mcb_divide+          // Lightning, gas: no timer
-    ldy mm_resist_timer - MS_BREATH_FROST,x
-    lda $0000,y
-    beq !mcb_divide+
-    jsr mm_triple_divisor
+    jsr mm_element_divisor_entry
     jmp !mcb_divide+
 !mcb_acid:
+    sta mm_divisor
     // VMS acid_dam: an armour piece damaged (or resisting) halves, acid
     // resistance divides by 3, both by 4: 3 x 1, 2, 3 or 4.
     jsr mon_atk_acid_armour   // C set: a piece took it (damaged or resisted)
@@ -453,23 +440,13 @@ monster_cast_breath:
     ldx zp_math_b
     jmp mm_apply_spell_damage_16
 
-// mm_triple_divisor — mm_divisor x 3 (at most 3 x 3 x 3). Clobbers: A
-mm_triple_divisor:
-    lda mm_divisor
-    asl
-    adc mm_divisor            // C clear: the divisor is under 128
-    sta mm_divisor
-    rts
 
 // By element (MS_BREATH_LIGHTNING = 1 .. MS_BREATH_FIRE = 5)
 mm_breath_msg:
     .byte HSTR_MM_BREATH_LIGHTNING, HSTR_MM_BREATH_GAS, HSTR_MM_BREATH_ACID
     .byte HSTR_MM_BREATH_FROST, HSTR_MM_BREATH_FIRE
 mm_breath_div:   .byte 4, 3, 3, 3, 3
-mm_resist_flag:  .byte PFLAG_RESIST_LIGHT, 0, 0, PFLAG_RESIST_COLD, PFLAG_RESIST_FIRE   // acid: !mcb_acid
-mm_resist_timer: .byte eff_resist_cold_timer, zp_eff_resist
 .assert "Breath tables follow the elements", MS_BREATH_LIGHTNING == 1 && MS_BREATH_GAS == 2 && MS_BREATH_ACID == 3 && MS_BREATH_FROST == 4 && MS_BREATH_FIRE == 5, true
-.assert "Resist timers are zero-page", eff_resist_cold_timer < $100 && zp_eff_resist < $100, true
 
 // mm_apply_spell_damage — A = damage; mm_apply_spell_damage_16: A = lo, X = hi
 mm_apply_spell_damage:

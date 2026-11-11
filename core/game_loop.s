@@ -2997,8 +2997,11 @@ banked_ego_put_suffix:
     // not executable/readable here. Each immutable aux slot is 16 bytes, so
     // resistance armour prints the " (Resist" slot after the last ego, then
     // its own: ")", " Acid)", " Fire)", " Cold)" or " Lightning)".
+    .assert "The aux ego suffix slots (and the Resist prefix) fit one page", (EGO_TYPE_COUNT + 1) * 16 <= 256, true
     cmp #EGO_RESIST
     bcc beps_put_slot
+    cmp #EGO_MAGI
+    bcs beps_put_slot     // " of the Magi": no prefix
     pha
     lda #EGO_TYPE_COUNT
     jsr beps_put_slot
