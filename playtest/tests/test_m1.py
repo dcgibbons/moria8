@@ -873,6 +873,34 @@ class LightTest(unittest.TestCase):
         brain.torches = 1
         self.assertNotEqual(getattr(brain.resupply(o, view), "reason", ""), "light low: no way up, path to the down stairs")
 
+    def test_a_heal_saying_you_feel_better_is_no_cure_for_poison(self) -> None:
+        """Build queue, 2026-11-10: "You feel better." is both the poison's
+        end and a 5-14 HP heal (core/player_heal_feedback.s); poisoned
+        characters drank Cure Light Wounds, took themselves for cured and
+        died holding potions."""
+        brain = Brain(GOALS["reach_dl8"])
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=10, mhp=20,
+                                 rows={0: "the White Worm mass poisons you."}), view)
+        self.assertTrue(brain.poisoned)
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=19, mhp=20, rows={0: "You feel better."}), view)
+        self.assertTrue(brain.poisoned)                                  # HP rose: a heal
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=18, mhp=20, rows={0: "You feel better."}), view)
+        self.assertFalse(brain.poisoned)                                 # HP did not: the poison's end
+
+    def test_the_status_lines_poisoned_decides_once_shown(self) -> None:
+        """2026-11-10: the game shows "Poisoned" on the status line (VMS
+        prt_poisoned); once seen, it decides, whatever the messages say."""
+        brain = Brain(GOALS["reach_dl8"])
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        shown = {0: "You feel better.", 21: "bot Half-Troll     Poisoned LV:3  DL:1"}
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=10, mhp=20, rows=shown), view)
+        self.assertTrue(brain.poisoned)                                  # shown: poisoned, a heal or not
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=9, mhp=20,
+                                 rows={0: "the White Worm mass poisons you.",
+                                       21: "bot Half-Troll     Search*  LV:3  DL:1"}), view)
+        self.assertFalse(brain.poisoned)                                 # not shown on a command screen: not
+
     def test_starving_is_not_poison(self) -> None:
         # 2026-11-04: a starving Paladin prayed Slow Poison 5,189 times.
         brain = Brain(GOALS["deep"])

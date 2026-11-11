@@ -610,6 +610,7 @@ class Brain:
         self.potions_done = False              # done at the Temple on this town visit
         self.magic_done = False                # done at the Magic Shop on this town visit
         self.poisoned = False                  # "You feel poisoned." until "You feel better." (M5f)
+        self.poison_shown = False              # the status line has shown "Poisoned" (core/ui_status.s, 2026-11-10)
         self.market_done = False               # done at the Black Market on this town visit
         self.alchemist_done = False            # done at the Alchemy shop on this town visit
         self.armoury_done = False              # done at the Armoury on this town visit
@@ -763,9 +764,22 @@ class Brain:
             self.on_item_after[self.magic.last] = obs.step + ON_ITEM_RETRY
         if "You have nothing there." in messages and self.picking is not None and not ITEM_PROMPT.search(obs.rows[0]):
             self.nothing_carried()
-        if "You feel poisoned." in messages or "poisons you." in messages:
+        if obs.mode == Mode.COMMAND and len(obs.rows) > 23:
+            # The status line's "Poisoned" (VMS prt_poisoned): once a build has
+            # shown it, its absence on a command screen is the poison's end.
+            shown = any("Poisoned" in row for row in obs.rows[21:24])
+            self.poison_shown = self.poison_shown or shown
+            if self.poison_shown:
+                self.poisoned = shown
+        if not self.poison_shown and ("You feel poisoned." in messages or "poisons you." in messages):
             self.poisoned = True
-        elif "You feel better." in messages:
+        elif not self.poison_shown and "You feel better." in messages and (self.last_hp is None or obs.hp <= self.last_hp):
+            # The poison's end, not a heal: a 5-14 HP heal says "You feel
+            # better." too (core/player_heal_feedback.s, VMS hp_player), and
+            # Cure Light Wounds cures no poison. Poisoned characters drank or
+            # prayed one, took themselves for cured, rested or walked on and
+            # died holding potions (build queue, 2026-11-10: 6 of 9 poison
+            # deaths).
             self.poisoned = False
         # An attack shown only behind -more- (while paralysed) still counts on
         # the next command screen, which may say no more than "You can move

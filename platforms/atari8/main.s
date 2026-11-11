@@ -258,6 +258,15 @@ atari_item_name_decode_buf: .fill 48, 0     // core item_name_decode_buf (config
 high_resident_end:
 .assert "HighResident fits before $E000", high_resident_end <= $e000, true
 .segment Default
+// The status words and status_state in RuntimeBanked: the Poisoned indicator
+// (2026-11-10) left Default 36 bytes over MAP_BASE.
+#define STATUS_TEXT_SEGMENT_CUSTOM
+.macro StatusTextSegment() {
+    .segment RuntimeBanked
+}
+.macro StatusTextRestoreSegment() {
+    .segment Default
+}
 #import "../../core/ui_status.s"
 .segment RuntimeBanked
 #import "../../core/ui_help_clear.s"

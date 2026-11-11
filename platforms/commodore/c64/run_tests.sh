@@ -4803,7 +4803,7 @@ run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000
 run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0414" 21 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0415" 22 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test

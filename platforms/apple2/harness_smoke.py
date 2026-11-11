@@ -1014,6 +1014,14 @@ end
 if not wizard_menu_open() then print("ASSERT died FAIL wizard menu did not reopen") end
 press("S")
 emu.wait(2)
+-- The summon is random and the Apple seeds its RNG from keypress timing, so
+-- any code change re-rolls it: a White Worm mass once sat beside the player
+-- ~90 turns before biting, past the run's limit. 1 HP and poison (which also
+-- stops regeneration) make the death certain within a turn or two whatever
+-- was summoned; the death, disk setup and score flow below are the test.
+prog:write_u8(HP_LO_ADDR, 1)
+prog:write_u8(HP_HI_ADDR, 0)
+prog:write_u8(POISON_ADDR, 100)
 local died = false
 -- disk_mode/disk_setup_done (main.vs) drive the state machine: the setup
 -- menu stays on screen during prepare's slow disk work, so pixels alone
@@ -1803,7 +1811,10 @@ def dungeon_descend_lua() -> str:
 
 
 def death_flow_lua() -> str:
-    return _chargen_body("A") + LUA_DEATH_BODY
+    return _chargen_body("A") + (LUA_DEATH_BODY
+                                 .replace("HP_LO_ADDR", hex(_sym_addr("zp_player_hp_lo")))
+                                 .replace("HP_HI_ADDR", hex(_sym_addr("zp_player_hp_hi")))
+                                 .replace("POISON_ADDR", hex(_sym_addr("zp_eff_poison"))))
 
 
 def _inv_helpers() -> str:

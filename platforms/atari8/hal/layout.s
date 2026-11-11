@@ -47,6 +47,7 @@
 .const hal_layout_wizard_footer_col = 14
 .const hal_layout_status_row21_name_col = 0
 .const hal_layout_status_row21_state_col = 19
+.const hal_layout_status_row21_poison_col = hal_layout_status_row21_state_col   // "Poisoned" shares Search*'s slot
 .const hal_layout_status_row21_lv_col = 28
 .const hal_layout_status_row21_dl_col = 34
 .const hal_layout_status_row22_st_col = 0

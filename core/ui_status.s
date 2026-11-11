@@ -10,8 +10,10 @@
 
 .const STS_ROW21_NAME_COL = hal_layout_status_row21_name_col
 .const STS_ROW21_STATE_COL = hal_layout_status_row21_state_col
+.const STS_ROW21_POISON_COL = hal_layout_status_row21_poison_col
 .const STS_ROW21_LV_COL = hal_layout_status_row21_lv_col
 .const STS_ROW21_DL_COL = hal_layout_status_row21_dl_col
+.assert "Poisoned fits before LV:", STS_ROW21_POISON_COL + 8 < STS_ROW21_LV_COL, true
 .const STS_ROW22_ST_COL = hal_layout_status_row22_st_col
 .const STS_ROW22_IN_COL = hal_layout_status_row22_in_col
 .const STS_ROW22_WI_COL = hal_layout_status_row22_wi_col
@@ -69,8 +71,7 @@ status_draw:
     bne !sd_row21_dirty+
     lda zp_player_dlvl
     cmp status_prev_dlvl
-    bne !sd_row21_dirty+
-    jmp !sd_check_row22+
+    beq !sd_check_row22+
 !sd_row21_dirty:
     lda status_dirty_rows
     ora #$01
@@ -95,8 +96,7 @@ status_draw:
     bne !sd_row22_dirty+
     lda zp_player_chr
     cmp status_prev_chr
-    bne !sd_row22_dirty+
-    jmp !sd_check_row23+
+    beq !sd_check_row23+
 !sd_row22_dirty:
     lda status_dirty_rows
     ora #$02
@@ -147,8 +147,9 @@ status_draw:
     sta status_dirty_rows
 
 !sd_check_search:
-    lda player_data + PL_FLAGS
-    and #PLF_SEARCHING
+    // Search mode and Poisoned (VMS prt_poisoned, Umoria
+    // printCharacterPoisonedState), one state byte: Poisoned is on row 21.
+    jsr status_state
     cmp status_prev_searching
     beq !sd_dirty_ready+
     .if (hal_layout_status_searching_on_row21 != 0) {
@@ -158,7 +159,7 @@ status_draw:
     }
     .if (hal_layout_status_searching_on_row23 != 0) {
         lda status_dirty_rows
-        ora #$04
+        ora #$05
         sta status_dirty_rows
     }
     jmp !sd_dirty_ready+
@@ -198,8 +199,7 @@ status_draw:
     jmp !sd_row22+
 !sd_row21_draw:
     lda #STATUS_ROW
-    sta zp_cursor_row
-    lda #STATUS_ROW
+    sta zp_cursor_row           // A is still the row
     jsr hal_screen_clear_row
 
     // Player name
@@ -227,18 +227,38 @@ status_draw:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
+    // "Poisoned" while the poison lasts (maintainer, 2026-11-10): on 40
+    // columns in Search*'s slot and ahead of it, one put for either word.
     .if (hal_layout_status_searching_on_row21 != 0) {
-        lda player_data + PL_FLAGS
-        and #PLF_SEARCHING
-        beq !sd_row21_state_done+
+        jsr status_state
+        bmi !sd_row21_poisoned+
+        beq !sd_row21_state_done+       // neither
         lda #COL_YELLOW
+        ldx #<status_searching_str
+        ldy #>status_searching_str
+        bne !sd_row21_state_put+        // always: the string is above page 0
+!sd_row21_poisoned:
+        lda #COL_RED
+        ldx #<status_poisoned_str
+        ldy #>status_poisoned_str
+!sd_row21_state_put:
         sta zp_text_color
         lda #STS_ROW21_STATE_COL
         sta zp_cursor_col
-        lda #<status_searching_str
-        ldy #>status_searching_str
+        txa
         jsr screen_put_string_ay
 !sd_row21_state_done:
+    } else {
+        lda zp_eff_poison
+        beq !sd_row21_poison_done+
+        lda #COL_RED
+        sta zp_text_color
+        lda #STS_ROW21_POISON_COL
+        sta zp_cursor_col
+        lda #<status_poisoned_str
+        ldy #>status_poisoned_str
+        jsr screen_put_string_ay
+!sd_row21_poison_done:
     }
 
     lda #STS_ROW21_LV_COL
@@ -274,8 +294,7 @@ status_draw:
     jmp !sd_row23+
 !sd_row22_draw:
     lda #STATUS_ROW + 1
-    sta zp_cursor_row
-    lda #STATUS_ROW + 1
+    sta zp_cursor_row           // A is still the row
     jsr hal_screen_clear_row
     lda #COL_STATUS
     sta zp_text_color
@@ -363,8 +382,7 @@ status_draw:
     jmp !sd_update_cache+
 !sd_row23_draw:
     lda #STATUS_ROW + 2
-    sta zp_cursor_row
-    lda #STATUS_ROW + 2
+    sta zp_cursor_row           // A is still the row
     jsr hal_screen_clear_row
     lda #COL_STATUS
     sta zp_text_color
@@ -480,11 +498,12 @@ status_draw:
     // Weak or faint
     lda #COL_RED
     sta zp_text_color
-    jmp !hunger_print+
+    bne !hunger_print+          // always: COL_RED is not 0
 !hunger_warn:
     lda #COL_YELLOW
     sta zp_text_color
-    jmp !hunger_print+
+    bne !hunger_print+          // always: COL_YELLOW is not 0
+    .assert "COL_RED and COL_YELLOW are not 0 (the hunger colour branches)", COL_RED != 0 && COL_YELLOW != 0, true
 !hunger_ok:
     lda #COL_STATUS
     sta zp_text_color
@@ -556,8 +575,7 @@ status_draw:
 
     lda zp_hunger_state
     sta status_prev_hunger
-    lda player_data + PL_FLAGS
-    and #PLF_SEARCHING
+    jsr status_state
     sta status_prev_searching
     lda #1
     sta status_cache_valid
@@ -659,6 +677,13 @@ status_mark_dirty:
 // ============================================================
 // String data (screen codes, null-terminated)
 // ============================================================
+// The status line's words and status_state: a port short of resident room
+// places them elsewhere with :StatusTextSegment() (the Atari's RuntimeBanked).
+#if !STATUS_TEXT_SEGMENT_CUSTOM
+.macro StatusTextSegment() {}
+.macro StatusTextRestoreSegment() {}
+#endif
+:StatusTextSegment()
 status_lv_str:
     .text "LV:" ; .byte $00
 status_dl_str:
@@ -687,6 +712,23 @@ status_exp_str:
     .text "EXP:" ; .byte $00
 status_searching_str:
     .text "Search*" ; .byte $00
+status_poisoned_str:
+    .text "Poisoned" ; .byte $00
+
+// status_state — A = search mode (PLF_SEARCHING), and bit 7 while the
+// poison timer runs: what rows 21 and 23 show besides the numbers. N and Z
+// follow A. Clobbers C.
+status_state:
+    lda zp_eff_poison
+    cmp #1                      // C = poisoned
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bcc !ss_done+
+    ora #$80
+!ss_done:
+    rts
+.assert "Search mode is not bit 7", PLF_SEARCHING & $80, 0
+:StatusTextRestoreSegment()
 
 // ============================================================
 // Status cache (skip redraw when visible values are unchanged)
@@ -711,5 +753,5 @@ status_prev_gold_lo:.byte 0
 status_prev_gold_hi:.byte 0
 status_prev_gold_bank:.byte 0
 status_prev_hunger: .byte 0
-status_prev_searching: .byte 0
+status_prev_searching: .byte 0   // status_state at the last redraw
 status_dirty_rows:  .byte 0
