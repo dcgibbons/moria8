@@ -83,9 +83,15 @@ TACTICS: dict[str, str] = {
     "summoner": "\"summons help!\" marks the level summoned: leave it, by Word of Recall with no stairs known",
     "ghost": "a ghost's strike marks the level summoned, as a summoner does",
     "swat_yield": "badly hurt with potions, swatting a fragile creature beside yields to drinking",
+    "early_cures": "below EARLY_LEVELS with under two Cure Light Wounds: the Temple first, and food and "
+                   "flasks only to their reserves (80-column ports' low-level characters spent all their "
+                   "gold on food and light and died holding no potion, 2026-11-10)",
     "summon_phase": "just after a summoning (summoner or ghost), anything in contact means Phase Door",
     "class_books": "Rogues and Rangers buy the Mage books their spells are in (magic.CASTER_BOOK_LEVELS)",
 }
+# Tactics the goals that take every tactic play by default; a new one joins
+# once an A/B round shows it helps (early_cures: 2026-11-10, being measured).
+DEFAULT_TACTICS = frozenset(TACTICS) - {"early_cures"}
 
 
 @dataclass(frozen=True)
@@ -158,7 +164,7 @@ GOALS: dict[str, Goal] = {
         ready_margin=3, exercise=True, level_steps=150_000,
         # §23.7, by bow skill: the Warrior's 55 rises 4 a level as the
         # Rogue's and Ranger's do; Paladin 40, Priest 35 and Mage 20 do not.
-        missile_classes=("rogue", "ranger", "warrior"), tactics=frozenset(TACTICS)),
+        missile_classes=("rogue", "ranger", "warrior"), tactics=DEFAULT_TACTICS),
     # M8 (§23.9): the Balrog queue plays every combination that has met the
     # M7 bar (queue.Balrog), from where it met it. The game sets
     # GAME_FLAG_WINNER on the kill (core/combat.s); the Balrog appears from
@@ -175,7 +181,7 @@ GOALS: dict[str, Goal] = {
         "monster catalog.",
         lambda o: bool(o.game_flags & CONSTS["GAME_FLAG_WINNER"][1]), step_budget=3_000_000, target_dlvl=100,
         want_xp=True, ready_margin=3, threat_depth=True, exercise=True,
-        missile_classes=("rogue", "ranger", "warrior"), tactics=frozenset(TACTICS)),
+        missile_classes=("rogue", "ranger", "warrior"), tactics=DEFAULT_TACTICS),
 }
 
 # Fixed qualification seeds (§7.2): 20 seeds, first character only.

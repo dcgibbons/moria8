@@ -229,6 +229,41 @@ def breath_info() -> dict[tuple[str, int], tuple[int, frozenset[str], int]]:
 
 
 @lru_cache(maxsize=1)
+def strength_by_name() -> dict[str, tuple[float, int]]:
+    """Creature name -> (average HP, AC) of that one creature: ``strength``
+    keeps the strongest drawn alike (2026-11-10: an Ancient Red Dragon took
+    the Ancient Multi-Hued's HP)."""
+    out: dict[str, tuple[float, int]] = {}
+    for names, tables in _tiers():
+        for name, num, sides, ac in zip(names, tables["hd_num"], tables["hd_sides"], tables["ac"]):
+            out[name] = (num * (sides + 1) / 2, ac)
+    return out
+
+
+@lru_cache(maxsize=1)
+def breath_by_name() -> dict[str, tuple[int, frozenset[str], int]]:
+    """Creature name -> ``breath_info`` of that one creature: an Ancient Red
+    Dragon breathes fire alone, though it shares its glyph and level (D, 40)
+    with the Ancient Multi-Hued Dragon's five elements (2026-11-10)."""
+    out: dict[str, tuple[int, frozenset[str], int]] = {}
+    for names, tables in _tiers():
+        for name, flags, chance, num, sides in zip(names, tables["spell_flags"], tables["spell_chance"],
+                                                   tables["hd_num"], tables["hd_sides"]):
+            if chance and flags & SPELL_BREATH:
+                out[name] = (breath_damage(chance, num, sides), breath_elements(chance), wound_burst(flags))
+    return out
+
+
+@lru_cache(maxsize=1)
+def catalog_names() -> list[str]:
+    """Every catalog creature's name by catalog id (``cat_slot_id``: the
+    town's first), empty without the catalog."""
+    if _catalog_dir is None:
+        return []
+    return re.findall(r"^catn_\d+:.*// (.+?)\s*$", (_catalog_dir / "catalog_names.s").read_text(), re.M)
+
+
+@lru_cache(maxsize=1)
 def spell_rate() -> dict[tuple[str, int], float]:
     """(screen glyph, creature level) -> the largest share of its turns the
     shipped casters drawn that way spend casting (``spell_chance``: 1 in N)."""

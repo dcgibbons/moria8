@@ -1767,11 +1767,13 @@ class Service:
                 self.pause(run_id, False)
         focus = config.get("balrog_characters") or ()
         if focus:
-            # Every run but the focused characters' Balrog games and the build
-            # queue's ends: their workers are the focus's.
+            # The main queue's runs and other characters' Balrog games end:
+            # their workers are the focus's. The build queue and subqueues
+            # play beside it: an A/B subqueue's 64 games were all stopped
+            # within five seconds of starting (2026-11-10).
             for run_id, job in list(self.running.items()):
-                if not job.get("cancelled") and job["queue"] != "build" \
-                        and not (job["queue"] == "balrog" and job["character"] in focus):
+                if not job.get("cancelled") and (job["queue"] == "main" or (
+                        job["queue"] == "balrog" and job["character"] not in focus)):
                     self.log(f"focus on {', '.join(focus)}: stop {run_id}")
                     self.stop_run(run_id)
             platforms, minimum = [], 0

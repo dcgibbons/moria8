@@ -182,6 +182,7 @@ WEAPON_GOLD_EARLY = 110  # kept from armour while the starting Dagger is wielded
                          # Sword after markup (60, a Mace, until M5b round 42: the Weaponsmith's random
                          # stock rarely had one that cheap, and 63 of 80 runs kept the Dagger)
 EARLY_LEVELS = 5
+EARLY_CURES = 2          # Cure Light Wounds an early character carries before food past its reserve (early_cures)
 BOOK_GOLD = {"Words of Wisdom": 110, "Chants and Blessings": 330, "Exorcism": 880,   # base price + 10% (M5b)
              "Magick I": 110, "Magick II": 440, "The Mages Guide to Power": 880}       # (M5f)
 GEAR_TRIP_GOLD = 1000    # gold at which a town trip to spend it on armour and weapons is worth it (M5a)
@@ -458,6 +459,12 @@ def roll_good(rows: list[str], race: str, klass: str) -> bool:
 
 
 MAX_CLVL = 40   # MAX_PLAYER_LEVEL (docs/FEATURE_MAP.md)
+DIVE_FROM_CLVL = MAX_CLVL   # the Balrog goal dives past one-breath killers from here (balrog_dive): from clvl 35
+                            # to DL49 (2026-11-10) died six times to Ancient Multi-Hued Dragons in two hours for
+                            # less experience an hour than DL39, and the maintainer: "let's not deep-dive then"
+DIVE_MAX_DLVL = 49    # ... down to here: the catalog's Balrog appears from DL50 (core/monster_catalog.s)
+DIVE_REST_HP = 0.8    # on a dive level no rest above this share of HP; below it a potion first (rest)
+BREATH_REACH = 20     # squares a creature's breath or spell reaches (VMS max_sight, core/monster_catalog.s)
 STORE_ITEM = re.compile(r"^\s*([a-p])\) (?:\d+ )?(\S.*?)\s+(\d+) GP")   # a stack shows its count first
 STORE_ROWS = slice(3, 19)   # 16 items a store (core/store_data_defs.s)
 STORE_GOLD_ROW = 19         # the menu and the gold share the row below them
@@ -466,6 +473,16 @@ STACK_COUNT = re.compile(r"^\s*[a-v]\) (\d+) ")
 STACKING = ("Potion of", "Scroll of", "Ration", "Slime Mold", "Flask of Oil", "Wooden Torch")   # kinds inv_add_item stacks
 PACK_COUNT = re.compile(r"^\s*[a-v]\) (\d+) ")
 CLIMB_HOPS = 6           # down-and-back hops without getting higher before Recall or exploring
+
+
+def strength_of(creature: Creature) -> tuple[float, int]:
+    """(average HP, AC) from the monster lore: a named creature's own
+    (``Creature.name``, the catalog's), else the strongest drawn alike."""
+    if creature.name:
+        own = knowledge.strength_by_name().get(creature.name)
+        if own is not None:
+            return own
+    return knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))
 
 
 def ready_level(dlvl: int, margin: int = 2, taper: tuple[int, int, int] | None = None) -> int:
@@ -554,6 +571,7 @@ class LevelMemory:
     scouted_at: int | None = None     # the step Detect Evil (or Detect Monsters) was last cast here
     scouted_view: Pos | None = None   # ... and the view's origin then (zp_view_x/y)
     deadly: Pos | None = None         # where a creature that could kill from full HP in one breath was seen
+    deadly_jump: Pos | None = None    # the deadly creature already teleported away from (leave_deadly)
     breath: tuple[int, int] | None = None   # (step, HP lost) of the last breath taken
     breaths_taken: int = 0            # breaths taken on this level (BREATHS_TO_LEAVE)
     breather: tuple[int, int] | None = None # (step last seen, biggest turn's burst) of the breathers seen
@@ -1014,7 +1032,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.read_enchantments, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.breath_guard, self.quaff, self.take_created_food, self.pray, self.invoke, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.leave_deadly, self.caution, self.look,
+        for layer in (self.check_equipment, self.read_enchantments, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.breath_guard, self.leave_deadly, self.quaff, self.take_created_food, self.pray, self.invoke, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -1278,10 +1296,13 @@ class Brain:
         return min((self.resist_div(obs, e, lasting, assume) for e in elements), default=1)
 
     def burst_now(self, key: tuple[str, int], obs: Observation, lasting: bool = False,
-                  assume: frozenset[str] = frozenset()) -> int:
+                  assume: frozenset[str] = frozenset(), name: str = "") -> int:
         """The most one spell or breath of kind ``key`` does now, its breath
-        divided by the resistance to its element (all five: the worst)."""
-        info = knowledge.breath_info().get(key)
+        divided by the resistance to its element (all five: the worst). A
+        named creature by its own breath (knowledge.breath_by_name): an
+        Ancient Red Dragon fled as an Ancient Multi-Hued, its fire breath
+        resistible (2026-11-10)."""
+        info = (knowledge.breath_by_name().get(name) if name else None) or knowledge.breath_info().get(key)
         if info is None:
             return knowledge.spell_burst().get(key, 0)
         breath, elements, other = info
@@ -1583,14 +1604,17 @@ class Brain:
         level-37 Priest at 186/296 HP fought an Ancient White Dragon whose
         234-HP breath looked survivable and was breathed on twice, 468, in
         one turn (C64 Balrog, 2026-11-08)."""
-        one = self.burst_now((c.glyph, c.level), obs, lasting, assume)
+        one = self.burst_now((c.glyph, c.level), obs, lasting, assume, c.name)
         return int(one * max(1.0, self.moves().get((c.glyph, c.level), 1.0)))
 
     def leave_deadly(self, obs: Observation, view: View) -> Decision | None:
         """A creature seen or detected that could kill from full HP with one
         breath or spell (BREATH_LETHAL of max HP): leave the level, by the
         stairs underfoot, the nearest known ones, or Word of Recall. Ancient
-        dragons breathed 200-230 at a 245-HP Priest (2026-11-07)."""
+        dragons breathed 200-230 at a 245-HP Priest (2026-11-07). Before the
+        potions and prayers (choose): a level-39 Priest detected an Ancient
+        Multi-Hued Dragon on DL49, prayed Chant for the fight and was breathed
+        on for 690 (C64 Balrog, 2026-11-10)."""
         if obs.dlvl == 0:
             return None
         for p, c in view.creatures.items():
@@ -1602,6 +1626,16 @@ class Brain:
         if here == TYPE_STAIRS_UP or (here == TYPE_STAIRS_DN and self.deeper_ok(obs)):
             return Decision(ord("<") if here == TYPE_STAIRS_UP else ord(">"), "leave",
                             "a creature here could kill in one breath: take the stairs")
+        deadly = self.level.deadly
+        if chebyshev(deadly, view.pos) <= BREATH_REACH and self.level.deadly_jump != deadly:
+            # Within its breath's reach: away at once, then Recall. Word of
+            # Recall takes 15-35 turns: a level-39 Priest detected an Ancient
+            # Multi-Hued Dragon on DL49, read it, walked two steps and was
+            # breathed on for 690 (C64 Balrog, 2026-11-10).
+            jump = self.far_escape(obs, "a creature that could kill in one breath is near")
+            if jump is not None:
+                self.level.deadly_jump = deadly
+                return jump
         stairs = view.stairs_up() | (view.stairs_down() if self.deeper_ok(obs) else set())
         far = view.path_steps(stairs, avoid_monsters=True) if stairs else None
         if not self.recalling and self.recall and obs.step >= self.blind_until \
@@ -1886,15 +1920,21 @@ class Brain:
             # Still nothing: keep playing a while instead (round 5).
             self.hops, self.resupply_after = 0, obs.step + RESTOCK_WAIT
 
+    def early_thrift(self) -> bool:
+        """``early_cures``: an early character short of Cure Light Wounds keeps
+        its gold for them, buying food and flasks only to their reserves."""
+        return "early_cures" in self.goal.tactics and self.clvl < EARLY_LEVELS and self.clw < EARLY_CURES
+
     def shopping_list(self, gold: int | None = None) -> list[str]:
         """Store items worth buying now, most important first. ``gold``, when
         the store shows it, limits flasks to throw to what the Temple's and
         the Alchemist's shortfalls leave spare."""
         wants: list[str] = []
+        thrift = self.early_thrift()
         # Early trips are shallow: eight rations, the gold for flasks and
         # potions (M5b round 49: with stores stocking five at a time, a
         # level-1 Dwarf left town with 15 rations and five flasks).
-        if self.shop_buys < FOOD_PER_VISIT and self.food < self.food_max():
+        if self.shop_buys < FOOD_PER_VISIT and self.food < (self.food_reserve() if thrift else self.food_max()):
             # A Slime Mold is a third of a ration in a whole slot: only near
             # the reserve (M4 round 57: rations only once the reserve was
             # made bought nothing when the store had none, and 8 starved).
@@ -1909,7 +1949,7 @@ class Brain:
             wants.append(TORCH)   # backup light (M4: seed 1007 played 3,400 steps in the dark)
         committed = (max(0, self.clw_reserve() - self.clw) * CLW_GOLD
                      + max(0, self.recall_reserve() - self.recall) * RECALL_GOLD)
-        early = self.clvl < EARLY_LEVELS and self.oil < OIL_RESERVE + OIL_EARLY
+        early = self.clvl < EARLY_LEVELS and self.oil < OIL_RESERVE + OIL_EARLY and not thrift
         if self.oil < OIL_RESERVE or early or (self.oil < OIL_RESERVE + OIL_THROW
                                                and gold is not None and gold >= committed + OIL_GOLD):
             # Lantern fuel, a missile fear cannot stop (M4: Poltergeist), and
@@ -2886,17 +2926,22 @@ class Brain:
             # passed, and DL40's Ancient Multi-Hued Dragon breathes 693 at a
             # ~400-HP Priest (maintainer, 2026-11-10: the level rules were
             # "arbitrary"). What it survives decides, then the Balrog dive.
-            return self.threat_ready(obs, dlvl) or self.balrog_dive(obs)
+            return self.threat_ready(obs, dlvl) or self.balrog_dive(obs, dlvl)
         return obs.clvl >= level - slack or self.threat_ready(obs, dlvl)
 
-    def balrog_dive(self, obs: Observation) -> bool:
-        """At the top level the Balrog goal goes down to it as a player does:
-        level by level, with a way out in the pack, Detect Evil on arrival
+    def balrog_dive(self, obs: Observation, dlvl: int) -> bool:
+        """Down past what could kill in one breath, as a player does: level
+        by level, with a way out in the pack, Detect Evil on arrival
         (``scout``) and leaving a level whose creature could kill in one
         breath (``leave_deadly``) rather than waiting to outgrow DL40's
-        breathers, which a Priest never does (maintainer, 2026-11-10)."""
+        breathers, which a Priest never does. At the top level for the
+        Balrog; from DIVE_FROM_CLVL to DIVE_MAX_DLVL for the experience,
+        never onto DL50, where it appears (maintainer, 2026-11-10: "let them
+        go all the way down to DL 49 before they are Clevel 40")."""
         escape = self.recall or self.teleports or self.wands.get(TELEPORT_STAFF, 0) > 0
-        return self.goal.threat_depth and obs.clvl >= MAX_CLVL and bool(escape)
+        if not (self.goal.threat_depth and escape):
+            return False
+        return obs.clvl >= MAX_CLVL or (obs.clvl >= DIVE_FROM_CLVL and dlvl <= DIVE_MAX_DLVL)
 
     def threat_ready(self, obs: Observation, dlvl: int) -> bool:
         """A human's depth past the margin (maintainer, 2026-11-08: "be like a
@@ -2929,7 +2974,7 @@ class Brain:
         return self.goal.want_xp and self.lore_strong(creature, obs)
 
     def lore_strong(self, creature: Creature, obs: Observation) -> bool:
-        hp, ac = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))
+        hp, ac = strength_of(creature)
         return (hp > STRONG_HP_BASE + STRONG_HP_PER_LEVEL * obs.clvl
                 or ac > STRONG_AC_BASE + STRONG_AC_PER_LEVEL * obs.clvl
                 or self.fight_odds(creature, obs) > FIGHT_ODDS)
@@ -3043,7 +3088,7 @@ class Brain:
         first. The M4 thresholds judge the creature by character level alone,
         so a Human or Halfling Warrior met DL5 nagas the Half-Troll's
         strength could fight (M5a: 50 of 141 deaths)."""
-        hp, ac = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))
+        hp, ac = strength_of(creature)
         if not hp:
             return 0.0
         mine = self.melee_score(*self.weapon, obs) * knowledge.hit_chance(self.melee_skill(self.weapon[0], obs), ac)
@@ -3439,7 +3484,7 @@ class Brain:
                 continue
             if (self.stationary(creature) and creature.glyph in knowledge.fragile_glyphs()) or (
                     creature.glyph in AVOID_GLYPHS
-                    and knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] <= bound):
+                    and strength_of(creature)[0] <= bound):
                 self.last_attack = (pos, creature.glyph)
                 return Decision(DIRS[(pos[0] - view.pos[0], pos[1] - view.pos[1])], "fight",
                                 f"swat the '{creature.glyph}' beside the player")
@@ -3515,7 +3560,7 @@ class Brain:
             if not (self.lore_strong(creature, obs) or self.dangerous(creature, obs) or mana_out
                     or obs.hp < RETREAT_HP * obs.mhp):
                 continue
-            hp = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] or 1.0
+            hp = strength_of(creature)[0] or 1.0
             wand = min(wands, key=lambda w: (math.ceil(hp / ATTACK_WANDS[w]), ATTACK_WANDS[w]))
             self.picking, self.listed, self.pending, self.last_aimed = wand, False, DIRS[step], wand
             self.aimed = (pos, creature.glyph)
@@ -3673,7 +3718,7 @@ class Brain:
         5-9: 9-12 deaths a round), are shot as they creep up; a worm mass
         the character beats easily is walked away from or fought (M5a
         round 1: 74 flasks at 'w')."""
-        if knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] < OIL_WORTH_HP:
+        if strength_of(creature)[0] < OIL_WORTH_HP:
             return False
         return ((creature.glyph, creature.level) not in knowledge.slow_kinds()
                 or self.fight_odds(creature, obs) >= COINS_ODDS)
@@ -3731,6 +3776,17 @@ class Brain:
         mp, mmp = self.magic.mana(obs)
         if obs.dlvl == 0 or self.threats(view) or self.unseen_attack or (obs.hp >= obs.mhp and mp >= mmp):
             return None
+        if not self.threat_ready(obs, obs.dlvl) and self.balrog_dive(obs, obs.dlvl):
+            # Dived past what could kill in one breath: no standing still.
+            # A level-39 Priest rested at 391/394 for its mana on DL49 and an
+            # Ancient Multi-Hued Dragon from beyond Detect Evil's panel
+            # breathed 690 (C64 Balrog, 2026-11-10). Heal with a potion when
+            # hurt; mana waits for a level it survives.
+            if obs.hp >= DIVE_REST_HP * obs.mhp:
+                return None
+            heal = self.heal_now(obs, f"HP {obs.hp}/{obs.mhp} below where it survives a breath")
+            if heal is not None:
+                return heal
         if self.danger(view.pos, view, obs) > REST_DANGER * max(obs.hp, 1) or any(
                 chebyshev(p, view.pos) <= BREEDER_REST and obs.step - seen < SLOW_AVOID
                 for p, seen in self.level.breeders_seen.items()):
@@ -4050,6 +4106,13 @@ class Brain:
             # on DL1 climbed up at 8 HP with 132 gold and no potion, and died
             # on the walk to the Weaponsmith (M5 regression, seed 1002).
             store, why = TEMPLE, "poisoned with no Cure Light Wounds: walk to the Temple"
+        elif early and self.early_thrift() and not self.potions_done and len(view.stores) > TEMPLE \
+                and self.gold(obs) >= CLW_GOLD:
+            # Cure Light Wounds before food and light past their reserves
+            # (early_cures): on the 80-column ports' larger maps low-level
+            # characters spent every visit's gold at the General Store and 14
+            # of 17 Apple IIe deaths held no potion (2026-11-10).
+            store, why = TEMPLE, "walk to the Temple first for Cure Light Wounds (early, none to spare)"
         elif early and self.goal.klass == "priest" and not self.armoury_done and len(view.stores) > ARMOURY \
                 and self.gold(obs) > self.gear_reserve(obs):
             # A Priest's 12 HP and weak melee: armour before anything, the
@@ -4491,6 +4554,13 @@ class Brain:
         if self.regroup:
             self.regroup = False
             return Decision(KEY_PICKUP, "drop", "pick the stack up again: it joins its twin")
+        if "No room on the floor." in obs.rows[0] + obs.rows[1]:
+            # The square is taken: not here, and not again at once. A level-39
+            # Priest tried to drop a Potion of Gain Dexterity every third step
+            # on one DL49 square (C64 Balrog, 2026-11-10).
+            self.more_junk = self.pack_full = False
+            self.drop_after = obs.step + DROP_RETRY
+            return None
         threats = self.threats(view)
         if obs.dlvl == 0:
             # Townspeople are nearly always in view: only one close stops it,
@@ -4706,7 +4776,7 @@ class Brain:
             step = self.line_to(view, pos, missile=True)
             if step is None or chebyshev(pos, view.pos) > ORB_RANGE:
                 continue
-            worth = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] >= OIL_WORTH_HP
+            worth = strength_of(creature)[0] >= OIL_WORTH_HP
             trial = self.trial_at(obs, creature, pos)
             if trial is not None:
                 self.pending = DIRS[step]
@@ -4933,7 +5003,7 @@ class Brain:
         fewest casts, the cheapest of those: Magic Missile while one or two
         do, Lightning or Frost Bolt for a bigger creature (M5f: Mages learned
         Stinking Cloud and the bolts but cast only Magic Missile)."""
-        hp = knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] or 1.0
+        hp = strength_of(creature)[0] or 1.0
         usable = [name for name in MAGE_ATTACKS if self.magic.spare(obs, name)]
         if not usable:
             return None
@@ -5239,7 +5309,7 @@ class Brain:
             # corridor 300 times (C128, 2026-11-07).
             if not (self.stationary(creature) or creature.glyph in AVOID_GLYPHS
                     or (creature.glyph, creature.level) in slow) or \
-                    knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] > bound:
+                    strength_of(creature)[0] > bound:
                 continue
             # Without it: the edge beside it counts again (no frontier square
             # is next to a hazard), as do paths past it (M4 round 73: seed
@@ -5277,7 +5347,7 @@ class Brain:
         stationary.update({p: c for p, c in creatures.items() if self.stationary(c) or c.glyph in AVOID_GLYPHS})
         for pos in sorted(stationary, key=lambda p: chebyshev(p, view.pos)):
             creature = stationary[pos]
-            if knowledge.strength().get((creature.glyph, creature.level), (0.0, 0))[0] > bound:
+            if strength_of(creature)[0] > bound:
                 continue
             if chebyshev(pos, view.pos) == 1:
                 self.last_attack = (pos, creature.glyph)

@@ -3018,7 +3018,11 @@ a win is unlikely until the bot plays much better.
   40 the bot dives for the Balrog with a way out in its pack
   (`brain.balrog_dive`), detecting each level and leaving one whose
   creature could kill in a breath, since DL40's Ancient Multi-Hued Dragon
-  (693 a breath) outclasses a 400-HP Priest for good. A start plays in the
+  (693 a breath) outclasses a 400-HP Priest for good. A dive from level 35
+  to DL49 for the experience (`DIVE_FROM_CLVL`, `DIVE_MAX_DLVL`) was tried
+  the same day and turned off: six deaths to Ancient Multi-Hued Dragons
+  breathing from beyond Detect Evil's panel in two hours, and less
+  experience an hour than DL39 (maintainer: "let's not deep-dive then"). A start plays in the
   current build, with its goals and the rest of its bot, when the game disks
   are the same and its brain loads there: every class the start's pickle
   names (`queue.pickled_classes`, from `brain.py`, `magic.py` and `view.py`)

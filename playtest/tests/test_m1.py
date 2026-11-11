@@ -527,6 +527,40 @@ class DropJunkTest(unittest.TestCase):
         self.assertEqual(brain.decide(self.item("list", pack), None).key, KEY_RUNSTOP)   # once each
         self.assertFalse(brain.more_junk)
 
+    def test_no_room_on_the_floor_stops_the_drops_for_a_while(self) -> None:
+        """C64 Balrog, 2026-11-10: a level-39 Priest tried to drop a Potion of
+        Gain Dexterity every third step on a square already holding an item."""
+        brain = Brain(GOALS["deep"])
+        brain.pack_full = brain.more_junk = True
+        view = town_view((5, 5), (40, 40), dlvl=49)
+        o = command_obs(pos=(5, 5), dlvl=49, clvl=39, rows={0: "No room on the floor."})
+        o.step = 1000
+        self.assertIsNone(brain.drop_junk(o, view))
+        self.assertEqual((brain.more_junk, brain.pack_full, brain.drop_after), (False, False, 1500))
+
+    def test_early_cures_go_to_the_temple_first_and_buy_food_only_to_the_reserve(self) -> None:
+        """2026-11-10: on the 80-column ports' larger maps, low-level
+        characters spent every visit's gold at the General Store; 14 of 17
+        Apple IIe deaths held no Cure Light Wounds."""
+        from moria_playtest.goals import apply_variant
+        plain = Brain(GOALS["clvl10"])
+        thrifty = Brain(apply_variant(GOALS["clvl10"], "tactics=+early_cures"))
+        view = town_view((5, 5), (40, 40), dlvl=0)
+        view.stores = [(10 + 3 * i, 2) for i in range(8)]                  # entrances 1-8
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=2, rows={23: "AU:60"})
+        for brain in (plain, thrifty):
+            brain.clvl, brain.clw, brain.food = 2, 0, 3
+            brain.shopped = brain.armoury_done = brain.weapons_done = False
+            brain.gold = lambda obs: 60   # type: ignore[method-assign]
+        self.assertNotIn("Temple first", getattr(plain.shop(o, view), "reason", ""))
+        self.assertIn("Temple first", thrifty.shop(o, view).reason)
+        thrifty.food = thrifty.food_reserve()
+        self.assertNotIn("Ration of Food", thrifty.shopping_list())   # at its reserve: no more food
+        plain.food = plain.food_reserve()
+        self.assertIn("Ration of Food", plain.shopping_list())        # without it: up to the maximum
+        thrifty.clw = 2
+        self.assertFalse(thrifty.early_thrift())                        # two potions: as before
+
     def test_nothing_to_spare_is_not_retried_at_once(self) -> None:
         brain = Brain(GOALS["reach_dl8"])
         brain.pack_full, brain.dropping, brain.listed = True, True, True
@@ -1716,12 +1750,12 @@ class ThreatDepthTest(unittest.TestCase):
 
     def test_as_deep_as_nothing_native_kills_in_a_turn(self) -> None:
         brain = self.priest()
-        self.assertTrue(self.deeper(brain, 34))            # DL35: a Young Black Dragon's 128
-        self.assertTrue(self.deeper(brain, 36))            # DL37: a Mature Red Dragon's 160
-        self.assertFalse(self.deeper(brain, 37))           # DL38: an Ancient White Dragon's 468 of 290
-        self.assertFalse(self.deeper(brain, 37, clvl=38))  # DL38: an Ancient White Dragon's 468 of 290
+        # Level 34, below DIVE_FROM_CLVL: the breath check alone, not the dive.
+        self.assertTrue(self.deeper(brain, 34, clvl=34))   # DL35: a Young Black Dragon's 128
+        self.assertTrue(self.deeper(brain, 36, clvl=34))   # DL37: a Mature Red Dragon's 160
+        self.assertFalse(self.deeper(brain, 37, clvl=34))  # DL38: an Ancient White Dragon's 468 of 290
         brain.jewel_names["Ring"] = "Ring of Resist Cold"
-        self.assertTrue(self.deeper(brain, 37, clvl=38))   # 156 through the ring
+        self.assertTrue(self.deeper(brain, 37, clvl=34))   # 156 through the ring
 
     def test_not_tied_to_its_own_level(self) -> None:
         """Maintainer, 2026-11-10: the own-level cap "seems arbitrary": a
@@ -1738,17 +1772,37 @@ class ThreatDepthTest(unittest.TestCase):
         depth blindly; now the dive needs a way out, and level by level the
         bot detects and leaves what could kill it in one breath."""
         brain = self.priest()
-        self.assertFalse(self.deeper(brain, 39, clvl=39, mhp=400))
         self.assertTrue(self.deeper(brain, 45, clvl=40, mhp=420))    # Word of Recall carried
+        self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=420))    # on to the Balrog's DL50
+        # Maintainer, 2026-11-10: DL40-49 before clvl 40 died six times to
+        # Ancient Multi-Hued Dragons in two hours for less experience an hour
+        # than DL39: "let's not deep-dive then".
+        self.assertFalse(self.deeper(brain, 39, clvl=39, mhp=400))   # DL40: the Multi-Hued's 693
+        self.assertFalse(self.deeper(brain, 48, clvl=39, mhp=400))
         brain.recall = 0
         self.assertFalse(self.deeper(brain, 45, clvl=40, mhp=420))   # no way out: not past DL40's breathers
+        self.assertFalse(self.deeper(brain, 39, clvl=39, mhp=400))
+
+    def test_no_rest_on_a_level_dived_past_what_it_survives(self) -> None:
+        """C64 Balrog, 2026-11-10: a level-39 Priest rested at 391/394 for
+        its mana on DL49 and an Ancient Multi-Hued Dragon from beyond Detect
+        Evil's panel breathed 690. On a dive level it walks on, and hurt it
+        drinks rather than rests."""
+        brain = self.priest()
+        view = town_view((10, 10), (40, 40), dlvl=49)
+        o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=391, mhp=394)
+        self.assertIsNone(brain.rest(o, view))                         # 391/394: walk on
+        hurt = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=200, mhp=394)
+        self.assertEqual(brain.rest(hurt, view).layer, "quaff")         # a potion, not a rest
+        safe = command_obs(pos=(10, 10), dlvl=36, clvl=40, hp=200, mhp=394)
+        self.assertEqual(brain.rest(safe, town_view((10, 10), (40, 40), dlvl=36)).layer, "rest")   # it survives DL36
 
     def test_resupply_and_recall_agree_with_it(self) -> None:
         """2026-11-09: resupply climbed from DL36 and town refused Word of
         Recall down to DL37 by the old margin: level-37 Priests walked down
         from DL1 and recalled up from DL16 for light, over and over."""
         brain = self.priest()
-        o = command_obs(pos=(10, 10), dlvl=36, clvl=37, hp=290, mhp=290)
+        o = command_obs(pos=(10, 10), dlvl=36, clvl=34, hp=290, mhp=290)   # below DIVE_FROM_CLVL
         self.assertTrue(brain.depth_ready(o, 36))
         self.assertTrue(brain.depth_ready(o, 37, slack=1))     # Word of Recall back down to DL37
         self.assertFalse(brain.depth_ready(o, 38, slack=1))    # an Ancient White Dragon's 468
@@ -1765,12 +1819,12 @@ class ThreatDepthTest(unittest.TestCase):
             brain.lamp, brain.light_left, brain.oil = True, 9000, 5
             brain.shopped = brain.potions_done = brain.magic_done = brain.alchemist_done = True
             brain.market_done = brain.weapons_done = brain.armoury_done = True
-            o = command_obs(pos=(5, 5), dlvl=0, clvl=37, hp=290, mhp=290)
+            o = command_obs(pos=(5, 5), dlvl=0, clvl=34, hp=290, mhp=290)   # below DIVE_FROM_CLVL
             decisions[deepest] = brain.recall_trip(o, town_view((5, 5), (40, 40)))
         self.assertEqual(decisions[38].reason, "read Word of Recall")   # then up a level
         self.assertIsNone(decisions[39])                                # two too deep: the stairs
         brain = self.priest()
-        o = command_obs(pos=(10, 10), dlvl=38, clvl=37, hp=290, mhp=290)
+        o = command_obs(pos=(10, 10), dlvl=38, clvl=34, hp=290, mhp=290)
         self.assertIsNotNone(brain.resupply(o, town_view((10, 10), (40, 40), dlvl=38)))   # climbs at DL38
 
     def test_far_above_its_deepest_it_recalls_rather_than_walks(self) -> None:
@@ -2058,6 +2112,59 @@ class ResistFireTest(unittest.TestCase):
         self.assertIsNone(brain.leave_deadly(o, view))                      # recall coming: no long walk
         view.stairs_up = lambda: {(12, 10)}                                 # type: ignore[method-assign]
         self.assertEqual(brain.leave_deadly(o, view).layer, "leave")        # close: the stairs
+
+    def test_an_ancient_red_is_not_taken_for_a_multi_hued(self) -> None:
+        """2026-11-10: both are D at level 40, so the lore's worst (693 of any
+        element) sent the bot from every Ancient Red Dragon; named (catalog
+        id, build_view), the Red breathes fire alone, 280."""
+        brain = Brain(GOALS["deep"])
+        brain.jewels = brain.read_jewels(["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: (none)",
+                                          " j) Ring:   Ring of Speed"])
+        o = command_obs(pos=(10, 10), dlvl=45, clvl=39, hp=400, mhp=400)
+        self.assertEqual(knowledge.breath_by_name()["Ancient Red Dragon"][1], frozenset({"fire"}))
+        unnamed, red = Creature("D", 40), Creature("D", 40, "Ancient Red Dragon")
+        multi = Creature("D", 40, "Ancient Multi-Hued Dragon")
+        self.assertEqual(red, unnamed)                                   # the name is no part of its kind
+        self.assertEqual(brain.turn_burst(unnamed, o, lasting=True), 693)
+        self.assertEqual(brain.turn_burst(multi, o, lasting=True), 693)
+        self.assertEqual(brain.turn_burst(red, o, lasting=True), 280)   # under 90% of 400: not fled
+        brain.jewel_names["Ring2"] = "Ring of Resist Fire"
+        self.assertEqual(brain.turn_burst(red, o, lasting=True), 280 // 3)
+        # The lore of its own HP too, not the Multi-Hued's (strength_of).
+        from moria_playtest.brain import strength_of
+        self.assertEqual(strength_of(unnamed), strength_of(multi))
+        self.assertLess(strength_of(red)[0], strength_of(multi)[0] / 2)
+        self.assertLess(brain.fight_odds(red, o), brain.fight_odds(multi, o))
+
+    def test_leaving_comes_before_the_prayers_for_a_fight(self) -> None:
+        """C64 Balrog, 2026-11-10: a level-39 Priest detected an Ancient
+        Multi-Hued Dragon on DL49, prayed Chant for the fight and was breathed
+        on for 690."""
+        brain = ThreatDepthTest.priest(ThreatDepthTest())
+        brain.teleports = 5
+        brain.pray = lambda obs, view: Decision(ord("p"), "pray", "a hard fight coming: pray Chant")   # type: ignore[method-assign]
+        view = town_view((10, 10), (60, 40), dlvl=49)
+        view.creatures = {(22, 10): Creature("D", 40, "Ancient Multi-Hued Dragon")}   # detected, 12 off
+        o = command_obs(pos=(10, 10), dlvl=49, clvl=39, hp=400, mhp=400)
+        decision = brain.decide(o, view)
+        self.assertEqual(decision.layer, "phase")                        # away first, not the prayer
+        self.assertIn("Teleportation", brain.picking)
+
+    def test_a_deadly_creature_within_breath_reach_is_teleported_from_first(self) -> None:
+        """C64 Balrog, 2026-11-10: a level-39 Priest detected an Ancient
+        Multi-Hued Dragon on DL49, read Word of Recall (15-35 turns), walked
+        two steps and was breathed on for 690."""
+        brain = Brain(GOALS["deep"])
+        brain.recall, brain.teleports = 3, 5
+        brain.level.deadly = (18, 10)                                       # 8 squares off
+        view = town_view((10, 10), (60, 40), dlvl=49)
+        o = command_obs(pos=(10, 10), dlvl=49, clvl=39, hp=399, mhp=399)
+        decision = brain.leave_deadly(o, view)
+        self.assertEqual((decision.layer, decision.key), ("phase", ord("R")))
+        self.assertIn("Teleportation", brain.picking)
+        self.assertEqual(brain.leave_deadly(o, view).layer, "recall")       # then Word of Recall, once away
+        brain.level.deadly, brain.level.deadly_jump = (40, 10), None        # out of breath reach: Recall at once
+        self.assertEqual(brain.leave_deadly(o, view).layer, "recall")
 
     def test_on_a_deadly_level_it_keeps_resistance_up_out_of_sight(self) -> None:
         from moria_playtest.goals import for_character

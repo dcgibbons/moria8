@@ -225,6 +225,23 @@ class ScheduleTest(unittest.TestCase):
         self.assertEqual(stopped, ["a", "d"])
         self.assertFalse((service.home / "restart-balrog").exists())      # once
 
+    def test_a_subqueue_plays_beside_a_focus(self) -> None:
+        """2026-11-10: an A/B subqueue's 64 games were all stopped within five
+        seconds by the Balrog focus; only the main queue's runs and other
+        characters' Balrog games give their workers to it."""
+        service = self.service(4)
+        service.config.update(balrog_characters=["half-troll-priest"], platforms=["c128"])
+        service.running = {r: {"queue": q, "character": c, "platform": "c64", "paused": False, "started": 1.0}
+                           for r, q, c in (("m", "main", "elf-mage"), ("ab", "early-cures", "elf-mage"),
+                                           ("b1", "balrog", "half-troll-priest"), ("b2", "balrog", "elf-priest"),
+                                           ("bq", "build", "elf-mage"))}
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        q = queue.Queue("deep", service.home)
+        q.platform("c128")
+        service.schedule(q, {})
+        self.assertEqual(sorted(stopped), ["b2", "m"])
+
     def test_a_port_that_covered_its_build_waits_for_the_next(self) -> None:
         service = self.service(6)
         service.config.update(build_platforms=["c64", "atari8"], build_goal="clvl10")
@@ -1928,9 +1945,11 @@ class TacticsTest(unittest.TestCase):
     without one; every other goal has none (the frozen suites)."""
 
     def test_the_deep_goal_has_every_tactic_and_the_others_none(self) -> None:
-        from moria_playtest.goals import GOALS, TACTICS
+        from moria_playtest.goals import DEFAULT_TACTICS, GOALS, TACTICS
         for name in ("deep", "balrog"):   # the Balrog goal plays as deep (§23.9)
-            self.assertEqual(GOALS[name].tactics, frozenset(TACTICS), name)
+            self.assertEqual(GOALS[name].tactics, DEFAULT_TACTICS, name)
+        # A tactic being measured joins the defaults once an A/B round shows it helps.
+        self.assertEqual(frozenset(TACTICS) - DEFAULT_TACTICS, {"early_cures"})
         for name, goal in GOALS.items():
             if name not in ("deep", "balrog"):
                 self.assertEqual(goal.tactics, frozenset(), name)
@@ -2001,10 +2020,10 @@ class VariantTest(unittest.TestCase):
     """§23.10: a subqueue's variant changes goal fields for its runs."""
 
     def test_tactics_are_added_removed_or_set(self) -> None:
-        from moria_playtest.goals import GOALS, TACTICS, apply_variant
+        from moria_playtest.goals import DEFAULT_TACTICS, GOALS, TACTICS, apply_variant
         deep, clvl10 = GOALS["deep"], GOALS["clvl10"]
         self.assertEqual(apply_variant(deep, "tactics=-dangerous,-summoner").tactics,
-                         frozenset(TACTICS) - {"dangerous", "summoner"})
+                         DEFAULT_TACTICS - {"dangerous", "summoner"})
         self.assertEqual(apply_variant(clvl10, "tactics=+drain").tactics, {"drain"})
         self.assertEqual(apply_variant(deep, "tactics=drain,ghost").tactics, {"drain", "ghost"})
         self.assertEqual(apply_variant(deep, "tactics=none").tactics, frozenset())
@@ -2306,3 +2325,31 @@ class BalrogEncounterTest(unittest.TestCase):
                               "balrog-7-s100-dl50.vdc", "balrog-7-s100-dl50.vsf", "encounter.json"])
             self.assertEqual(json.loads((dest / "encounter.json").read_text()),
                              {**info, "snapshot": "balrog-7-s100-dl50.vsf"})
+
+
+class CatalogNamesTest(unittest.TestCase):
+    """2026-11-10: the view names each creature by its slot's catalog id, as
+    a look does: an Ancient Red Dragon apart from an Ancient Multi-Hued."""
+
+    def test_slot_names_from_one_read(self) -> None:
+        from moria_playtest import knowledge, view
+        names = knowledge.catalog_names()
+        if not names:
+            self.skipTest("no catalog in this checkout")
+        red, multi = names.index("Ancient Red Dragon"), names.index("Ancient Multi-Hued Dragon")
+        count = 32
+        low, high = bytearray(count), bytearray(count)
+        for slot, cid in ((3, red), (7, multi), (9, 9999)):
+            low[slot], high[slot] = cid & 0xFF, cid >> 8
+        reads = []
+        def mem_get(start, length, bank):
+            reads.append((start, length))
+            return bytes(low + high)[start - 0x4000:start - 0x4000 + length]
+        game = mock.Mock(ram="ram", mon=mock.Mock(mem_get=mem_get))
+        game.abi = mock.Mock(MAX_MONSTERS=count, all_symbols={"cat_slot_id_lo": [0x4000], "cat_slot_id_hi": [0x4020]})
+        got = view.catalog_slot_names(game)
+        self.assertEqual(reads, [(0x4000, 64)])                         # one read for both tables
+        self.assertEqual((got[3], got[7]), ("Ancient Red Dragon", "Ancient Multi-Hued Dragon"))
+        self.assertNotIn(9, got)                                          # past the catalog: unnamed
+        game.abi.all_symbols = {}
+        self.assertEqual(view.catalog_slot_names(game), {})             # a port without the catalog
