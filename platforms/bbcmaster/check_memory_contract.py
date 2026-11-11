@@ -43,7 +43,7 @@ SWR_CACHE_CAPS = {
     "ovl.ui": 6 * 256,
     "ovl.modal": 12 * 256,
     "ovl.spell": 21 * 256,
-    "ovl.items": 21 * 256,
+    "ovl.items": 22 * 256,   # Bank 7's free last page (cache_layout.s, 2026-11-11)
     "ovl.gen": 21 * 256,
 }
 

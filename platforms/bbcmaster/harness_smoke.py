@@ -688,6 +688,9 @@ function run()
         send_key(0x41) -- 'A'
         assert_line(what .. "_worn", wait_screen("You are wearing", 80))
     end
+    -- The Dagger (Defender) wielded since the exchange resists fire and cold
+    -- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
+    prog:write_u8(INV_ITEM_ID_ADDR + 7 * INV_STRIDE + 22, 0)
     prog:write_u8(PLAYER_PFLAGS_ADDR, 0)
     wear_slot_a(109, "resist_fire_ring")
     assert_line("resist_fire_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x01 == 0x01)

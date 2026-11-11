@@ -288,3 +288,6 @@ Sorry, what was that again?
 @PIQ_GAIN_DEX You feel more limber!
 @PIQ_GAIN_CON You feel tingly for a moment.
 @PIQ_GAIN_CHR Gee, ain't you cute!
+
+# ===== Acid on a piece that resists it (VMS minus_ac, 2026-11-11) =====
+@MAT_RESISTS  resists damage!

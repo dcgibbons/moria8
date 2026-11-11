@@ -2994,7 +2994,16 @@ banked_ego_put_suffix:
     bcs !beps_done+
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     // The caller may live in HELP or TOWN, so OVL.ITEMS suffix pointers are
-    // not executable/readable here. Each immutable aux slot is 16 bytes.
+    // not executable/readable here. Each immutable aux slot is 16 bytes, so
+    // resistance armour prints the " (Resist" slot after the last ego, then
+    // its own: ")", " Acid)", " Fire)", " Cold)" or " Lightning)".
+    cmp #EGO_RESIST
+    bcc beps_put_slot
+    pha
+    lda #EGO_TYPE_COUNT
+    jsr beps_put_slot
+    pla
+beps_put_slot:
     asl
     asl
     asl

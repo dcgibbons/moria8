@@ -63,7 +63,6 @@ test_exit_trampoline:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
@@ -137,6 +136,9 @@ ui_help_display:
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
+// Monster spells and breath are not exercised here (resistance armour,
+// 2026-11-11, took the body past MAP_BASE).
+#import "../../../../core/monster_magic.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s

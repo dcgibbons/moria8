@@ -10,7 +10,22 @@
 .const IF_IDENTIFIED = $02
 .const IF_TRIED      = $04    // Legacy pseudo-ID bit kept for save compatibility
 .const IF_SENSED     = $08    // Umoria-style auto-sensed "magik" marker
-.const EGO_TYPE_COUNT = 9
+.const EGO_NONE          = 0
+.const EGO_SLAY_ANIMAL   = 1
+.const EGO_SLAY_EVIL     = 2
+.const EGO_SLAY_UNDEAD   = 3
+.const EGO_FLAME_TONGUE  = 4
+.const EGO_FROST_BRAND   = 5
+.const EGO_DEFENDER      = 6
+.const EGO_HOLY_AVENGER  = 7
+.const EGO_SLAY_DRAGON   = 8
+.const EGO_RESIST        = 9    // VMS (R)
+.const EGO_RESIST_ACID   = 10   // VMS (RA)
+.const EGO_RESIST_FIRE   = 11   // VMS (RF)
+.const EGO_RESIST_COLD   = 12   // VMS (RC)
+.const EGO_RESIST_LIGHT  = 13   // VMS (RL)
+.const EGO_TYPE_COUNT = 14   // weapon egos 1-8, resistance armour 9-13 (core/ego_items.s)
+.assert "Ego IDs fit the 4-bit store and floor ego fields", EGO_TYPE_COUNT <= 16, true
 .const ITEM_META_FLAGS_MASK = $0f
 // Ego bits 4-7 (bits 4-6 until Slay Dragon, 2026-11-07: bit 7 was unused,
 // so every saved store item reads as before).
@@ -153,6 +168,8 @@
 .const PFLAG_SPEED       = $04
 .const PFLAG_SEE_INVIS   = $08
 .const PFLAG_FREE_ACT    = $10   // Free Action: the Amulet of the Magi (VMS)
+.const PFLAG_RESIST_ACID = $20   // acid breath and touch (VMS acid_dam); armour, Defender
+.const PFLAG_RESIST_LIGHT = $40  // lightning breath div 3 (VMS light_dam); armour, Defender
 
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.

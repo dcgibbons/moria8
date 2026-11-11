@@ -380,22 +380,37 @@ monster_cast_breath:
     lda mm_breath_div - 1,x
     sta mm_divisor
     cpx #MS_BREATH_ACID
-    bne !mcb_not_acid+
-    jsr mon_atk_acid_armour   // C set: an armour piece was damaged
-    bcc !mcb_divide+
-    asl mm_divisor            // dam div 2
-    bcc !mcb_divide+          // Always (3 x 2)
-!mcb_not_acid:
-    bcc !mcb_divide+          // Lightning, gas: no resistance here
+    beq !mcb_acid+
+    // Lightning (light_dam), frost and fire (cold_dam, fire_dam): div 3 for
+    // the lasting resistance; frost and fire div 3 again for the timer. Gas
+    // (poison_gas) has no resistance.
     lda player_pflags
-    and mm_resist_flag - MS_BREATH_FROST,x
+    and mm_resist_flag - 1,x
     beq !mcb_no_ring+
     jsr mm_triple_divisor
 !mcb_no_ring:
+    cpx #MS_BREATH_FROST
+    bcc !mcb_divide+          // Lightning, gas: no timer
     ldy mm_resist_timer - MS_BREATH_FROST,x
     lda $0000,y
     beq !mcb_divide+
     jsr mm_triple_divisor
+    jmp !mcb_divide+
+!mcb_acid:
+    // VMS acid_dam: an armour piece damaged (or resisting) halves, acid
+    // resistance divides by 3, both by 4: 3 x 1, 2, 3 or 4.
+    jsr mon_atk_acid_armour   // C set: a piece took it (damaged or resisted)
+    bcc !mcb_acid_resist+
+    lda #3 * 2
+    sta mm_divisor
+!mcb_acid_resist:
+    lda player_pflags
+    and #PFLAG_RESIST_ACID
+    beq !mcb_divide+
+    lda mm_divisor
+    clc
+    adc #3 * 2                // 3 -> 9 (div 3), 6 -> 12 (div 4)
+    sta mm_divisor
 !mcb_divide:
     ldx zp_mon_idx
     jsr monster_get_ptr
@@ -451,7 +466,7 @@ mm_breath_msg:
     .byte HSTR_MM_BREATH_LIGHTNING, HSTR_MM_BREATH_GAS, HSTR_MM_BREATH_ACID
     .byte HSTR_MM_BREATH_FROST, HSTR_MM_BREATH_FIRE
 mm_breath_div:   .byte 4, 3, 3, 3, 3
-mm_resist_flag:  .byte PFLAG_RESIST_COLD, PFLAG_RESIST_FIRE
+mm_resist_flag:  .byte PFLAG_RESIST_LIGHT, 0, 0, PFLAG_RESIST_COLD, PFLAG_RESIST_FIRE   // acid: !mcb_acid
 mm_resist_timer: .byte eff_resist_cold_timer, zp_eff_resist
 .assert "Breath tables follow the elements", MS_BREATH_LIGHTNING == 1 && MS_BREATH_GAS == 2 && MS_BREATH_ACID == 3 && MS_BREATH_FROST == 4 && MS_BREATH_FIRE == 5, true
 .assert "Resist timers are zero-page", eff_resist_cold_timer < $100 && zp_eff_resist < $100, true

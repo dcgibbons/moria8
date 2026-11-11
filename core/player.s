@@ -393,6 +393,32 @@ player_bake_apply_one:
 !pcs_no_amulet:
 
     // Persistent effect flags from the equipped ring and amulet
+// PflagsFromEgos — A |= the flags of the egos on the weapon, body armour
+// and shield worn (contiguous slots). Weapon egos below EGO_DEFENDER and
+// digging-tool egos (1-3) give none; armour carries only resistance egos.
+// Clobbers: X, Y
+.macro PflagsFromEgos() {
+    ldx #EQUIP_WEAPON
+!pfe_slot:
+    ldy inv_ego,x
+    cpy #EGO_DEFENDER
+    bcc !pfe_next+
+    ora pf_ego_table - EGO_DEFENDER,y
+!pfe_next:
+    inx
+    cpx #EQUIP_SHIELD + 1
+    bne !pfe_slot-
+}
+.assert "Weapon, body and shield slots are contiguous", EQUIP_BODY == EQUIP_WEAPON + 1 && EQUIP_SHIELD == EQUIP_BODY + 1, true
+
+// The equipment flags: a port short of resident room places them with
+// :PflagsSegment()/:PflagsRestoreSegment() (the Atari: its always-visible
+// $F000 runtime).
+#if !PFLAGS_SEGMENT_CUSTOM
+.macro PflagsSegment() {}
+.macro PflagsRestoreSegment() {}
+#endif
+:PflagsSegment()
 player_recalc_pflags_equipment:
     lda #0
     ldx #EQUIP_RING
@@ -414,6 +440,7 @@ player_recalc_pflags_equipment:
     bne !pcs_pf_store+
     ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
 !pcs_pf_store:
+    :PflagsFromEgos()
     sta player_pflags
 
     // Update combat bonuses from stats
@@ -421,6 +448,19 @@ player_recalc_pflags_equipment:
 
 pf_bit_table:
     .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_SPEED, PFLAG_SEE_INVIS
+
+// pf_ego_table — the flags an ego item worn gives (VMS magic_treasure,
+// misc.inc), from EGO_DEFENDER: Defender (%X'07B80900': the four
+// resistances, Free Action, See Invisible), Holy Avenger (See Invisible),
+// Slay Dragon (none), then the resistance armours. Regeneration, feather
+// fall, stealth and sustain are not modelled.
+pf_ego_table:
+    .byte PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
+    .byte PFLAG_SEE_INVIS, 0
+    .byte PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT
+    .byte PFLAG_RESIST_ACID, PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_RESIST_LIGHT
+.assert "pf_ego_table runs from EGO_DEFENDER to the last ego", * - pf_ego_table, EGO_TYPE_COUNT - EGO_DEFENDER
+:PflagsRestoreSegment()
 
 // Working byte for stat modification (survives across increment/decrement calls)
 stat_work: .byte 0

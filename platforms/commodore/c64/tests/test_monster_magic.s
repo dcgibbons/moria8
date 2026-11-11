@@ -7,7 +7,7 @@
 //        spell choice, the shared player saving throw (player_save.s) and the
 //        paralysis touch save.
 //
-// Results at $0400-$0424: $01 = pass, $00 = fail per test
+// Results at $0400-$0429: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 .pc = $0801 "BASIC Stub"
@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #36
+    ldx #41
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -85,7 +85,6 @@ magic_check_new_spells:
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -106,6 +105,9 @@ store_enter:
 .segmentdef TestItemActions [start=$E000]
 .segment TestItemActions
 #import "../../../../core/item_actions_overlay.s"
+// The player's spell effects are not exercised either (resistance armour,
+// 2026-11-11, took the body past MAP_BASE again).
+#import "../../../../core/spell_effects.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s
@@ -115,7 +117,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 37, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 42, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1555,6 +1557,102 @@ test_start:
     ldy #61
     jsr tst_result_range
     sta tc_results + 36
+
+    // ==========================================
+    // Tests 38-42: lightning and acid resistance (2026-11-11; VMS moria.inc
+    // light_dam: div 3; acid_dam: div 2 for a piece that took it, div 3 for
+    // the resistance, div 4 for both; minus_ac: a piece that resists acid is
+    // not damaged but takes it). Resistance armour and Defender set the flags.
+    // ==========================================
+    // Test 38: lightning, HP 300 -> 75, resisted -> 25
+    lda #4 | MS_BREATH_LIGHTNING << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #PFLAG_RESIST_LIGHT
+    sta player_pflags
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #25
+    jsr tst_result_eq
+    sta tc_results + 37
+
+    // Test 39: acid, HP 300 -> 100, resisted, no armour worn -> 33
+    lda #4 | MS_BREATH_ACID << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #PFLAG_RESIST_ACID
+    sta player_pflags
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #33
+    jsr tst_result_eq
+    sta tc_results + 38
+
+    // Test 40: acid resisted, and the Chain mail worn damaged -> 300/12 = 25.
+    // The damage recalculates the equipment flags (player_recalc_equipment):
+    // the resistance comes from what is worn, a Defender weapon (its flags
+    // also give Free Action and See Invisible).
+    lda #EGO_DEFENDER
+    sta inv_ego + EQUIP_WEAPON
+    lda #8                      // Chain mail
+    sta inv_item_id + EQUIP_BODY
+    lda #0
+    sta inv_to_ac + EQUIP_BODY
+    sta inv_ego + EQUIP_BODY
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #25
+    jsr tst_result_eq
+    sta tc_ok
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$ff
+    jsr tst_result_eq
+    and tc_ok
+    sta tc_ok
+    lda player_pflags           // rebuilt from the Defender: all six flags
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
+    jsr tst_result_eq
+    and tc_ok
+    sta tc_results + 39
+
+    // Test 41: Chain mail (Resist Acid) takes it unharmed: to-AC stays 0,
+    // the damage still divided by 4 (its flag resists too) -> 25
+    lda #0
+    sta inv_to_ac + EQUIP_BODY
+    lda #EGO_RESIST_ACID
+    sta inv_ego + EQUIP_BODY
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #25
+    jsr tst_result_eq
+    sta tc_ok
+    lda inv_to_ac + EQUIP_BODY
+    jsr tst_result_eq
+    and tc_ok
+    sta tc_results + 40
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_BODY
+    lda #0
+    sta inv_ego + EQUIP_BODY
+    sta inv_ego + EQUIP_WEAPON
+
+    // Test 42: gas has no resistance: every flag set, HP 300 -> 100
+    lda #4 | MS_BREATH_GAS << MS_BREATH_SHIFT
+    sta cr_spell_chance + 24
+    lda #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT
+    sta player_pflags
+    lda #<300
+    ldx #>300
+    jsr tst_breath
+    cmp #100
+    jsr tst_result_eq
+    sta tc_results + 41
+    lda #0
+    sta player_pflags
+    sta zp_eff_poison
+
     pla
     sta cr_spell_chance + 24
 

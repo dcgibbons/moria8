@@ -1,9 +1,10 @@
 // test_ego.s — Runtime tests for ego item system
 //
 // Tests: roll_ego_type (non-weapon, dlvl 0, deep weapon), ego_apply_damage
-//        (slay x2, slay x3, bonus dice), ego_get_ac_bonus, pickup/drop lifecycle.
+//        (slay x2, slay x3, bonus dice), ego_get_ac_bonus, pickup/drop lifecycle,
+//        resistance armour (roll, worn flags, suffixes).
 //
-// Results at $0400-$040B: $01 = pass, $00 = fail per test (12 tests)
+// Results at $0400-$0412: $01 = pass, $00 = fail per test (19 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -17,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #11
+    ldx #18
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -63,7 +64,6 @@ test_exit_trampoline:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
@@ -84,18 +84,25 @@ test_exit_trampoline:
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+#import "../../../../core/ui_help.s"
+#import "../../../../core/ui_trampoline_stubs.s"
+// Monster spells and the store are not exercised here: out of the way above
+// the I/O hole (resistance armour, 2026-11-11, took the body into the create
+// overlay at $D000).
+.segmentdef TestUnused [start=$e000]
+.segment TestUnused
+#import "../../../../core/monster_magic.s"
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
-#import "../../../../core/ui_help.s"
-#import "../../../../core/ui_trampoline_stubs.s"
+.segment Default
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 12, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 19, $ff      // Result buffer (copied to $0400 at end)
 tc_loop:    .byte 0
 tc_count:   .byte 0
 
@@ -460,5 +467,200 @@ test_start:
 !t12_store:
     sta tc_results + 11
 
+    // ============================================================
+    // Tests 13-19: resistance armour (2026-11-11; VMS magic_treasure,
+    // misc.inc): body armour and shields that rolled a magic bonus get a
+    // resistance with magik(trunc(min(15 + dlvl, 70) / 6)), then randint(9):
+    // 1 (R) +5 AC, 2 (RA), 3-4 (RF), 5-6 (RC), 7-9 (RL).
+    // ============================================================
+    lda #50
+    sta zp_player_dlvl
+
+    // Test 13: Chain mail with no magic bonus (to-AC 0) never gets one
+    lda #0
+    sta fi_add_to_ac
+    lda #8
+    jsr t_armour_trials
+    lda tc_count
+    jsr t_store_zero
+    sta tc_results + 12
+
+    // Test 14: a cursed Small shield (to-AC -2) never gets one
+    lda #$fe
+    sta fi_add_to_ac
+    lda #9
+    jsr t_armour_trials
+    lda tc_count
+    jsr t_store_zero
+    sta tc_results + 13
+
+    // Test 15: magic Chain mail on DL50: special = 65 / 6 = 10%, so 200
+    // trials give 8-35 resistances; each one of the five, and (R) +5 AC
+    lda #3
+    sta fi_add_to_ac
+    lda #8
+    jsr t_armour_trials
+    lda t_bad
+    bne !t15_fail+
+    lda tc_count
+    cmp #8
+    bcc !t15_fail+
+    cmp #36
+    bcs !t15_fail+
+    lda #$01
+    .byte $2c
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // Test 16: magic Leather gloves (and helms, boots) never get one
+    lda #3
+    sta fi_add_to_ac
+    lda #11
+    jsr t_armour_trials
+    lda tc_count
+    jsr t_store_zero
+    sta tc_results + 15
+
+    // Test 17: the flags from what is worn: (Resist) body armour and a
+    // (Resist Acid) shield give the four resistances; a Defender adds Free
+    // Action and See Invisible; a digging tool's ego gives none
+    lda #EGO_RESIST
+    sta inv_ego + EQUIP_BODY
+    lda #EGO_RESIST_ACID
+    sta inv_ego + EQUIP_SHIELD
+    lda #2                      // a tool ego (Dwarven): no flags
+    sta inv_ego + EQUIP_WEAPON
+    jsr player_recalc_pflags_equipment
+    lda player_pflags
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT
+    bne !t17_fail+
+    lda #EGO_DEFENDER
+    sta inv_ego + EQUIP_WEAPON
+    lda #0
+    sta inv_ego + EQUIP_BODY
+    sta inv_ego + EQUIP_SHIELD
+    jsr player_recalc_pflags_equipment
+    lda player_pflags
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
+    bne !t17_fail+
+    lda #$01
+    .byte $2c
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+    lda #0
+    sta inv_ego + EQUIP_WEAPON
+    sta inv_ego + EQUIP_BODY
+    sta inv_ego + EQUIP_SHIELD
+    jsr player_recalc_pflags_equipment
+
+    // Test 18: one (Resist Lightning) body armour gives only that
+    lda #EGO_RESIST_LIGHT
+    sta inv_ego + EQUIP_BODY
+    jsr player_recalc_pflags_equipment
+    lda player_pflags
+    cmp #PFLAG_RESIST_LIGHT
+    jsr t_store_eq
+    sta tc_results + 17
+    lda #0
+    sta inv_ego + EQUIP_BODY
+    jsr player_recalc_pflags_equipment
+
+    // Test 19: the suffixes, spelled out as the weapon egos are
+    lda #EGO_RESIST_LIGHT
+    jsr ego_get_suffix_ptr
+    ldy #t19_light_end - t19_light - 1
+!t19_cmp:
+    lda (zp_ptr0),y
+    cmp t19_light,y
+    bne !t19_fail+
+    dey
+    bpl !t19_cmp-
+    lda #EGO_RESIST
+    jsr ego_get_suffix_ptr
+    ldy #t19_resist_end - t19_resist - 1
+!t19_cmp2:
+    lda (zp_ptr0),y
+    cmp t19_resist,y
+    bne !t19_fail+
+    dey
+    bpl !t19_cmp2-
+    lda #$01
+    .byte $2c
+!t19_fail:
+    lda #$00
+    sta tc_results + 18
+
     jmp test_exit_trampoline
 t12_slot: .byte 0
+t_bad:    .byte 0
+t_item:   .byte 0
+t_to_ac:  .byte 0
+t19_light:  .text " (Resist Lightning)" ; .byte 0
+t19_light_end:
+t19_resist: .text " (Resist)" ; .byte 0
+t19_resist_end:
+
+// t_armour_trials — 200 roll_ego_type calls for item A with fi_add_to_ac as
+// set (restored each time). tc_count = resistances given; t_bad set when one
+// is not a resistance ego, or (Resist) did not add 5 to-AC (the others none).
+t_armour_trials:
+    sta t_item
+    lda fi_add_to_ac
+    sta t_to_ac
+    lda #0
+    sta tc_count
+    sta tc_loop
+    sta t_bad
+!tat_loop:
+    lda t_to_ac
+    sta fi_add_to_ac
+    lda t_item
+    jsr roll_ego_type
+    cmp #EGO_NONE
+    beq !tat_none+
+    inc tc_count
+    cmp #EGO_RESIST
+    bcc !tat_bad+
+    cmp #EGO_RESIST_LIGHT + 1
+    bcs !tat_bad+
+    ldx #5
+    cmp #EGO_RESIST
+    beq !tat_ac+
+    ldx #0
+!tat_ac:
+    txa
+    clc
+    adc t_to_ac
+    cmp fi_add_to_ac
+    beq !tat_next+
+!tat_bad:
+    inc t_bad
+    jmp !tat_next+
+!tat_none:
+    lda fi_add_to_ac
+    cmp t_to_ac
+    bne !tat_bad-
+!tat_next:
+    inc tc_loop
+    lda tc_loop
+    cmp #200
+    bne !tat_loop-
+    lda t_to_ac
+    sta fi_add_to_ac
+    rts
+
+// t_store_zero — A = $01 when A is 0, else $00.
+t_store_zero:
+    cmp #0
+t_store_eq:
+    beq !tsz_yes+
+    lda #$00
+    rts
+!tsz_yes:
+    lda #$01
+    rts
+
+ego_test_body_end:
+.assert "Ego test body stays below the create overlay ($D000)", ego_test_body_end <= $d000, true

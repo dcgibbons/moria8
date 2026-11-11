@@ -97,8 +97,6 @@ trap_type: .fill 16, 0
 cr_mflags: .fill 65, 0
 cr_level: .fill 65, 0
 
-.const EGO_FLAME_TONGUE = 4
-.const EGO_DEFENDER = 6
 
 test_huff_calls: .byte 0
 test_last_huff: .byte 0

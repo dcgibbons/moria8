@@ -4721,7 +4721,7 @@ run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0445" 70 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 042d" 46 500000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 0430" 49 500000000
 run_test "monster_tier3" "tests/test_monster_tier3.s" "0400 0403" 4 20000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
@@ -4810,12 +4810,12 @@ run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0426" 39 1000000000
 run_test "score" "tests/test_score.s" "0400 040e" 15 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 0424" 37 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 42 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
-run_test "ego" "tests/test_ego.s" "0400 040b" 12 500000000
+run_test "ego" "tests/test_ego.s" "0400 0412" 19 500000000
 run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000
 run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000

@@ -553,6 +553,16 @@ ol_target:        .byte 0
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
+// roll_enchantment's equipment branch rides the banked runtime behind
+// tramp_re_equip (resistance armour, 2026-11-11, filled Default).
+#define RE_EQUIP_SEGMENT_CUSTOM
+.macro ReEquipSegment() {
+    .segment RuntimeBanked
+}
+.macro ReEquipRestoreSegment() {
+    .segment Default
+}
+.label re_equip_entry = tramp_re_equip
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay in Default; the generator
@@ -1432,6 +1442,25 @@ tramp_ego_apply_damage:
     lda #BANK_NO_BASIC
     sta $01
     cli
+    rts
+
+// tramp_re_equip — roll_enchantment's equipment branch (banked at $F000).
+// Input: zp_temp0 = item type. Output: A = p1, fi_add_* set. Restores the
+// caller's $01 and I flag: the GEN and Chest overlays call it from $E000.
+// Clobbers: A, X, Y
+tramp_re_equip:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr re_equip
+    tay
+    pla
+    sta $01
+    plp
+    tya
     rts
 
 // tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000)

@@ -250,6 +250,15 @@ low_helpers_end:
 #import "../../core/math.s"
 #import "../../core/tables.s"
 #import "../../core/item_defs.s"
+// The equipment flags ride the banked runtime (resistance armour,
+// 2026-11-11, took Default past MAP_BASE).
+#define PFLAGS_SEGMENT_CUSTOM
+.macro PflagsSegment() {
+    .segment RuntimeBanked
+}
+.macro PflagsRestoreSegment() {
+    .segment Default
+}
 #import "../../core/player.s"
 #import "../../core/ui_messages.s"
 .segment HighResident

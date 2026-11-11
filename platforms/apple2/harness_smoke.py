@@ -1417,6 +1417,9 @@ local function wear_slot_a(id, what)
     press("A")
     assert_line(what .. "_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
 end
+-- The Dagger (Defender) wielded since the exchange resists fire and cold
+-- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
+prog:write_u8(INV + 7 * INV_STRIDE + 22, 0)
 prog:write_u8(PFLAGS_ADDR, 0)
 wear_slot_a(109, "resist_fire_ring")
 assert_line("resist_fire_flag", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))

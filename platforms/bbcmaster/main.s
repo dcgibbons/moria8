@@ -1116,9 +1116,23 @@ beeb_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_holy_avenger), 0
 beeb_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
     .fill 16 - (* - beeb_ego_suffix_slay_dragon), 0
+// Resistance armour (EGO_RESIST..EGO_RESIST_LIGHT): banked_ego_put_suffix
+// prints the " (Resist" slot (index EGO_TYPE_COUNT) before each.
+beeb_ego_suffix_resist: .text ")" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_resist), 0
+beeb_ego_suffix_resist_acid: .text " Acid)" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_resist_acid), 0
+beeb_ego_suffix_resist_fire: .text " Fire)" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_resist_fire), 0
+beeb_ego_suffix_resist_cold: .text " Cold)" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_resist_cold), 0
+beeb_ego_suffix_resist_light: .text " Lightning)" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_resist_light), 0
+beeb_ego_suffix_resist_prefix: .text " (Resist" ; .byte 0
+    .fill 16 - (* - beeb_ego_suffix_resist_prefix), 0
 beeb_ego_suffix_slots_end:
 .assert "Beeb ego suffix slots are page aligned", <beeb_ego_suffix_slots, 0
-.assert "Beeb ego suffix slots are EGO_TYPE_COUNT x 16 bytes", beeb_ego_suffix_slots_end - beeb_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "Beeb ego suffix slots are EGO_TYPE_COUNT + 1 (the Resist prefix) x 16 bytes", beeb_ego_suffix_slots_end - beeb_ego_suffix_slots, (EGO_TYPE_COUNT + 1) * 16
 
 welcome_str:
     .text "Welcome to Moria! ?=help. Shift+Q=quit." ; .byte 0

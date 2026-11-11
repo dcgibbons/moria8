@@ -181,8 +181,8 @@ wrong). `item_actions` checks the bytes against `beeb.huffdata` in town.
 | **Bank 6** (`$06`) | `$9500-$B9FF` | 37p (`9,472` B) | `$9500-$B916` | **The monster catalog (`BEEB.CATALOG`)** — its fields, then its Huffman names (`9,239` B, **`233` B slack**); read through `mmu_safe_huff_read_ptr0/1`, which select Bank 6 for a pointer at `$9000` and up. Took cached `OVL.TOWN`'s pages (2026-11-05). |
 | **Bank 6** (`$06`) | `$BA00-$BFFF` | 6p (`1,536` B) | Cache Slot | **Cached `OVL.UI`** (`1,342` B used, **`194` B slack**; moved from Bank 5, 2026-11-05). |
 | **Bank 7** (`$07`) | `$8000-$94FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.SPELL`** (`5,112` B used, **`264` B slack**). |
-| **Bank 7** (`$07`) | `$9500-$A9FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,106` B used, **`270` B slack**). |
-| **Bank 7** (`$07`) | `$AA00-$BEFF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.GEN`** (`5,320` B used, **`56` B slack**; holds `item_spawn_level` since item stacking left the resident image no room) + **`$BF00-$BFFF` (`1` page = `256` B) free Bank 7 slack**. |
+| **Bank 7** (`$07`) | `$9500-$AAFF` | 22p (`5,632` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,446` B used, **`186` B slack**; 22 pages since 2026-11-11, when resistance armour took it past 21: it took Bank 7's free last page). |
+| **Bank 7** (`$07`) | `$AB00-$BFFF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.GEN`** (holds `item_spawn_level` since item stacking left the resident image no room); moved up one page 2026-11-11, so Bank 7 has no free page left. |
 
 * **Disk-Backed Cold Assets (Loaded on Demand via `OSFILE`):**
   `OVL.START` (`OVLSTA`), `OVL.TOWN` (`OVLTWN`, since the monster catalog,

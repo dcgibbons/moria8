@@ -9,7 +9,7 @@
 //        attacks the shipped rows keep, no-spell casters, the Quylthulg,
 //        and full hit dice for CD_MAX_HP creatures (monster_spawn_one).
 //
-// Results at $0400-$042d: $01 = pass, $00 = fail per test
+// Results at $0400-$0430: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -23,7 +23,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #45
+    ldx #48
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -133,7 +133,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 46, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 49, $ff      // Result buffer (copied to $0400 at end)
 tc_repels:  .byte 0             // " is repelled." summaries seen
 tc_hurt:    .byte 0             // Rounds that did damage or poisoned
 .const NA_BANSHEE = 11          // tier4.s index map: [196] DL24 Banshee
@@ -1319,6 +1319,71 @@ test_start:
     lda #$00
     sta tc_results + 45
 
+    // ==========================================
+    // Tests 47-49: acid resistance on the touch (2026-11-11; VMS moria.inc
+    // acid_dam: div 3 resisted, div 4 resisted and a piece took it; minus_ac:
+    // a piece that resists acid is not damaged). player_recalc_equipment is
+    // the counting stub here, so the flag stays as set.
+    // ==========================================
+    lda #PFLAG_RESIST_ACID
+    sta player_pflags
+
+    // Test 47: resisted, no armour worn: 9 -> 3
+    jsr acid_clear_armour
+    lda #9
+    jsr acid_hit
+    cmp #3
+    bne !t47_fail+
+    lda #$01
+    .byte $2c
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
+
+    // Test 48: resisted, and the body armour (AC 4) damaged: 9 -> 2, to-AC -1
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #9
+    jsr acid_hit
+    cmp #2
+    bne !t48_fail+
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$ff
+    bne !t48_fail+
+    lda tc_recalcs
+    cmp #1
+    bne !t48_fail+
+    lda #$01
+    .byte $2c
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
+
+    // Test 49: body armour (Resist) takes it unharmed: 9 -> 2, to-AC stays 0,
+    // no recalculation
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #EGO_RESIST
+    sta inv_ego + EQUIP_BODY
+    lda #9
+    jsr acid_hit
+    cmp #2
+    bne !t49_fail+
+    lda inv_to_ac + EQUIP_BODY
+    bne !t49_fail+
+    lda tc_recalcs
+    bne !t49_fail+
+    lda #$01
+    .byte $2c
+!t49_fail:
+    lda #$00
+    sta tc_results + 48
+    jsr acid_clear_armour
+    lda #0
+    sta player_pflags
+
 !tests_done:
     jmp test_exit_trampoline
 
@@ -1380,6 +1445,7 @@ acid_clear_armour:
     sta inv_item_id,x
     lda #0
     sta inv_to_ac,x
+    sta inv_ego,x
     inx
     cpx #EQUIP_HANDS + 1
     bne !aca_loop-

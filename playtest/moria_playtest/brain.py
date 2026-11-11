@@ -251,6 +251,14 @@ HURT_OUT_HP = 0.35       # below this share of HP with no healing potion left: W
 HURT_OUT_HP_NO_ESCAPE = 0.5   # ... with no escape at hand either: Recall takes 15-35 turns to come
 LIT_EVERY = 4            # squares walked, lightless, between light spells
 GEAR_ARMOUR = re.compile(r"^(.+?) \[(\d+)(?:,\s*([+-]\s*\d+))?")
+# Resistance armour and Defender weapons (core/ego_items.s, MON-027): the
+# elements of breath they resist (monster_cast_breath).
+EGO_RESIST = re.compile(r" \((Resist(?: Acid| Fire| Cold| Lightning)?|Defender)\)")
+FOUR_ELEMENTS = frozenset({"fire", "frost", "acid", "lightning"})
+EGO_ELEMENTS = {"Resist": FOUR_ELEMENTS, "Defender": FOUR_ELEMENTS, "Resist Acid": frozenset({"acid"}),
+                "Resist Fire": frozenset({"fire"}), "Resist Cold": frozenset({"frost"}),
+                "Resist Lightning": frozenset({"lightning"})}
+RESIST_AC = 10   # each element a found armour newly resists counts as this much AC
 GEAR_WEAPON = re.compile(r"^(.+?)(?: \(([+-]\d+),\s*([+-]\d+)\))?\s*$")
 TEMPLE = 3               # store index (entrance "4"): potions and scrolls, named since stores identify stock
 ALCHEMIST = 4            # store index (entrance "5"): VMS stocks Word of Recall 3 times in 21 there
@@ -658,6 +666,8 @@ class Brain:
         self.gold_seen = 0                     # ... and its gold
         self.jewels: dict[str, int] = {}       # "Ring"/"Ring2"/"Amulet" -> the worn one's jewel_value (0 for none)
         self.jewel_names: dict[str, str] = {}  # ... and its name
+        self.armour_names: dict[str, str] = {}  # armour slot -> the name worn (resistance armour)
+        self.worn_resists: frozenset[str] = frozenset()   # breath elements the gear worn resists
         self.resist_heat = 0                   # Potions of Resist Heat carried
         self.resist_cold = 0                   # ... and of Resist Cold
         self.strong = {CCW: 0, CSW: 0}         # stronger healing potions carried (tactic strong_potions)
@@ -1103,6 +1113,44 @@ class Brain:
             worn[EQUIP_SLOTS[match.group(1)]] = 0 if ac is None else int(ac.group(1)) + int(ac.group(2) or 0)
         return worn or None
 
+    def read_resists(self, rows: list[str]) -> None:
+        """The armour worn by slot, and every breath element the equipment
+        list's resistance armour and Defender resist (MON-027)."""
+        resists: set[str] = set()
+        for i, row in enumerate(rows):
+            text = row + (rows[i + 1] if i + 1 < len(rows) else "")   # a suffix wrapped on 40 columns
+            match = EQUIP_LINE.match(row)
+            if match is not None:
+                self.armour_names[EQUIP_SLOTS[match.group(1)]] = match.group(2).strip()
+            for ego in EGO_RESIST.findall(row) or EGO_RESIST.findall(text)[:1]:
+                resists |= EGO_ELEMENTS[ego]
+        self.worn_resists = frozenset(resists)
+
+    @staticmethod
+    def resists_of(name: str) -> frozenset[str]:
+        ego = EGO_RESIST.search(name)
+        return EGO_ELEMENTS[ego.group(1)] if ego else frozenset()
+
+    def armour_resist_better(self, name: str) -> tuple[str, int] | None:
+        """A body armour or shield found with a resistance (MON-027) worth
+        more than what is worn in its slot: its AC and RESIST_AC for each
+        element nothing else worn resists. (slot, AC) to wear it, else None.
+        A level-40 Priest's 488 HP took 693 from an Ancient Multi-Hued
+        Dragon's frost (C64 Balrog, 2026-11-11), nothing to resist it with."""
+        armour = GEAR_ARMOUR.match(name.strip())
+        resists = self.resists_of(name)
+        if armour is None or not resists:
+            return None
+        kind = knowledge.item_kinds().get(EGO_RESIST.sub("", armour.group(1)))
+        if kind is None or kind.category not in ("ICAT_ARMOR", "ICAT_SHIELD"):
+            return None
+        slot = kind.category
+        ac = int(armour.group(2)) + int((armour.group(3) or "0").replace(" ", ""))
+        others = self.worn_resists - self.resists_of(self.armour_names.get(slot, ""))
+        new = ac + RESIST_AC * len(resists - others)
+        old = self.armour.get(slot, 0) + RESIST_AC * len(self.resists_of(self.armour_names.get(slot, "")) - others)
+        return (slot, ac) if new > old else None
+
     def read_jewels(self, rows: list[str]) -> dict[str, int]:
         """The ring and amulet worn, by ``jewel_value`` (0 for "(none)")."""
         worn: dict[str, str] = {}
@@ -1168,6 +1216,8 @@ class Brain:
         theirs = JEWEL_NAME.match(self.jewel_names.get(other, "").strip()) if other else None
         if mine and theirs and mine.group(3) in FLAG_RINGS and theirs.group(3) == mine.group(3):
             return 0
+        if mine and {"Resist Fire": "fire", "Resist Cold": "frost"}.get(mine.group(3)) in self.worn_resists:
+            return 0   # the armour worn resists it already (MON-027)
         return self.jewel_value(name)
 
     def jewel_better(self, name: str) -> bool:
@@ -1306,10 +1356,13 @@ class Brain:
         2026-11-07). ``assume``: the elements whose timer is taken as running
         (a prayer or potion being weighed)."""
         rings = {"fire": ("Resist Fire", "zp_eff_resist"), "frost": ("Resist Cold", "eff_resist_cold_timer")}
+        # Resistance armour and Defender (MON-027): lightning (light_dam) and
+        # acid (acid_dam) a third too, lasting, as the rings.
+        worn = element in self.worn_resists
         if element not in rings:
-            return 1
+            return 3 if worn else 1
         ring, timer = rings[element]
-        held = any(ring in self.jewel_names.get(hand, "") for hand in ("Ring", "Ring2"))
+        held = worn or any(ring in self.jewel_names.get(hand, "") for hand in ("Ring", "Ring2"))
         on = element in assume or (not lasting and obs.abi is not None and hasattr(obs.abi, timer)
                                    and obs.zp8(timer) > 0)
         return 3 ** (int(held) + int(on))
@@ -1783,6 +1836,7 @@ class Brain:
             self.listing_equipment = False
             worn = self.read_equipment(obs.rows)
             self.jewels.update(self.read_jewels(obs.rows))
+            self.read_resists(obs.rows)
             if worn is not None:
                 self.armour.update(worn)
                 self.armour_hits = 0
@@ -2394,7 +2448,10 @@ class Brain:
                         self.jewels[change[0]] = change[1]
                         self.jewel_names[change[0]] = self.picking
                     else:
+                        old = self.resists_of(self.armour_names.get(change[0], ""))
                         self.armour[change[0]] = change[1]
+                        self.armour_names[change[0]] = self.picking
+                        self.worn_resists = (self.worn_resists - old) | self.resists_of(self.picking)
                 self.picking, self.picking_next = self.picking_next, None   # a second prompt to come, or none
                 if self.picking is not None:
                     self.listed = False
@@ -2942,6 +2999,10 @@ class Brain:
                     assert jewel is not None
                     self.gear[name] = ("jewel", (self.jewel_slot(jewel.group(2)), self.jewel_value(name)))
                     self.to_wear.append(name)
+                elif (found := self.armour_resist_better(name)) is not None:
+                    # Resistance armour: worn as a ring found is.
+                    self.gear[name] = ("armour", found)
+                    self.to_wear.append(name)
         for name in THIS_IS.findall(messages):
             # Identified: what it really is ("This is a Wand of Frost (5 charges).").
             if self.identifying is not None:
@@ -3014,7 +3075,8 @@ class Brain:
         return self.goal.threat_depth and self.clvl >= MAX_CLVL
 
     def fire_ring_worn(self) -> bool:
-        return any("Resist Fire" in self.jewel_names.get(hand, "") for hand in ("Ring", "Ring2"))
+        """Lasting fire resistance worn: the ring, or armour of Resist (MON-027)."""
+        return "fire" in self.worn_resists or any("Resist Fire" in self.jewel_names.get(hand, "") for hand in ("Ring", "Ring2"))
 
     def threat_ready(self, obs: Observation, dlvl: int) -> bool:
         """A human's depth past the margin (maintainer, 2026-11-08: "be like a
@@ -3997,7 +4059,8 @@ class Brain:
             if self.launcher is not None and name.startswith(LAUNCHERS[self.launcher][0]):
                 return True
             # A wand or staff already carried with charges is not taken twice.
-            return not self.pack_full and (self.unknown_kept(name) or self.jewel_better(name) or self.gain_wanted(name) or (
+            return not self.pack_full and (self.unknown_kept(name) or self.jewel_better(name) or self.gain_wanted(name)
+                                           or self.armour_resist_better(name) is not None or (
                 name.startswith(PICKUPS) and not self.wands.get(name.split(" (")[0], 0)))
         wanted = {p for p, (glyph, name) in self.items_seen.items()
                   if p not in self.level.collected and worth(glyph, name)
@@ -4365,7 +4428,8 @@ class Brain:
         amulet found below as soon as nothing is close (jewel_better)."""
         if not self.to_wear:
             return None
-        if obs.dlvl != 0 and not (JEWEL_NAME.match(self.to_wear[0].strip()) and not self.close_threats(obs, view)):
+        found_below = JEWEL_NAME.match(self.to_wear[0].strip()) or EGO_RESIST.search(self.to_wear[0])
+        if obs.dlvl != 0 and not (found_below and not self.close_threats(obs, view)):
             return None
         self.picking, self.listed = self.to_wear.pop(0), False
         return Decision(KEY_WEAR, "wear", f"wear the {self.picking}")

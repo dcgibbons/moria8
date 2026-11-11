@@ -4027,6 +4027,17 @@ wizard_wall_walk_active:
     lda #0
     rts
 #endif
+    // The suffix strings ride the banked runtime with the item descriptions
+    // that read them, and the resistance armour's pick table and suffixes the
+    // world payload: resistance armour (2026-11-11) filled the items payload.
+    #define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+    .macro EgoArmourDataSegment() {
+        .segment C128ResidentWorld
+    }
+    .macro EgoArmourDataRestoreSegment() {
+        .segment C128ResidentItems
+    }
+    #define EGO_SUFFIX_STRINGS_EXTERNAL   // imported in the banked runtime (below)
     #import "../../../core/ego_items.s"
     #import "../../../core/store_data.s"
 ego_str_holy_avenger_common:
@@ -4185,6 +4196,7 @@ c128_player_recalc_pflags:
     bne !c128_pf_store+
     ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
 !c128_pf_store:
+    :PflagsFromEgos()
     sta player_pflags
     rts
 
@@ -5332,6 +5344,7 @@ banked_payload:
 ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
 ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
 ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
+#import "../../../core/ego_suffix_strings.s"
 tool_ego_prefix_lo:
     .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
     .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven

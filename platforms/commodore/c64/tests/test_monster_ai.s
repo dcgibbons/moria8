@@ -85,6 +85,24 @@ status_draw:
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
+// The resistance armour roll and its suffixes are not exercised here (no
+// item spawns): out of the way above the create overlay (2026-11-11, which
+// took the body past MAP_BASE).
+.segmentdef TestUnusedEgoArmour [start=$e200]
+#define EGO_ARMOUR_SEGMENT_CUSTOM
+.macro EgoArmourSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro EgoArmourRestoreSegment() {
+    .segment Default
+}
+#define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+.macro EgoArmourDataSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro EgoArmourDataRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"

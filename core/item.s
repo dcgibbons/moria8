@@ -1592,7 +1592,7 @@ roll_enchantment:
 !re_book_far:
     jmp !re_book+
 !re_equip_far:
-    jmp !re_equip+
+    jmp re_equip_entry
 
 !re_light:
     // Torch (type 13): 67 + rng(67)  (each charge = 30 turns)
@@ -1706,7 +1706,17 @@ chest_trap_band:
     .byte (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA)
     .byte (CHEST_P1_TRAP_SUMMON | CHEST_P1_TRAP_EXPL)
 
-!re_equip:
+// re_equip — roll_enchantment's equipment branch (zp_temp0 = item type).
+// A port short of resident room places it with :ReEquipSegment()/
+// :ReEquipRestoreSegment() and enters it through its own re_equip_entry
+// (the C64: its $F000 runtime and tramp_re_equip, 2026-11-11).
+#if !RE_EQUIP_SEGMENT_CUSTOM
+.macro ReEquipSegment() {}
+.macro ReEquipRestoreSegment() {}
+.label re_equip_entry = re_equip
+#endif
+:ReEquipSegment()
+re_equip:
     // magic_chance = min(15 + dlvl, 70)
     lda zp_player_dlvl
     clc
@@ -1722,7 +1732,8 @@ chest_trap_band:
     jsr rng_range               // [0, 99]
     cmp zp_temp1
     bcc !re_enchant_roll+       // roll < chance → enchant
-    jmp !re_zero-               // roll >= chance → no magic
+    lda #0                      // roll >= chance → no magic
+    rts
 !re_enchant_roll:
 
     jsr re_roll_bonus
@@ -1843,6 +1854,7 @@ re_negate_a:
     clc
     adc #1
     rts
+:ReEquipRestoreSegment()
 
 #import "item_identification.s"
 

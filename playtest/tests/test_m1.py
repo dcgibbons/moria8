@@ -11,6 +11,7 @@ from moria_playtest.game import KEY_RUNSTOP, KEY_SPACE, Mode, Observation
 from moria_playtest.goals import GOALS, required
 from moria_playtest.screen import decode_rows
 from moria_playtest.view import DIRS, TYPE_TRAP, UNKNOWN, WALL, Creature, View
+from moria_playtest.brain import FOUR_ELEMENTS
 
 from test_game import ABI as BASE_ABI, screen_bytes
 
@@ -1911,6 +1912,45 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertTrue(decision is None or decision.layer != "recall")
         brain.recall = 0
         self.assertNotEqual(brain.resupply(deep, town_view((10, 10), (40, 40), dlvl=100)).layer, "recall")
+
+    def test_resistance_armour_is_read_counted_and_worn(self) -> None:
+        """MON-027 (2026-11-11): armour of resistance and Defender weapons
+        resist lightning and acid as the rings resist fire and frost. A
+        level-40 Priest's 488 HP took 693 from an Ancient Multi-Hued
+        Dragon's frost with nothing to resist it."""
+        brain = self.priest()
+        brain.clvl = 40
+        rows = ["Equipment", " a) Wielding: Mace (Defender) (+3,+3)", " b) Body:   Chain Mail (Resist Lightning) [32,+4]",
+                " c) Shield: Small Shield [5]", " h) Ring:   Ring of Speed", " j) Ring:   Ring of Speed"]
+        brain.read_resists(rows)
+        self.assertEqual(brain.worn_resists, frozenset({"fire", "frost", "acid", "lightning"}))
+        o = command_obs(pos=(5, 5), dlvl=45, clvl=40, hp=480, mhp=480)
+        self.assertEqual([brain.resist_div(o, e, lasting=True) for e in ("lightning", "acid", "gas", "fire")], [3, 3, 1, 3])
+        rows[1] = " a) Wielding: Mace (+3,+3)"
+        brain.read_resists(rows)
+        self.assertEqual(brain.worn_resists, frozenset({"lightning"}))
+        self.assertEqual(brain.armour_names["ICAT_ARMOR"], "Chain Mail (Resist Lightning) [32,+4]")
+        # Found: a shield of Resist Acid adds an element (10 AC's worth); a
+        # second Resist Lightning body armour of less AC adds none.
+        brain.armour = {"ICAT_ARMOR": 36, "ICAT_SHIELD": 5}
+        self.assertEqual(brain.armour_resist_better("Small Shield (Resist Acid) [5,+1]"), ("ICAT_SHIELD", 6))
+        self.assertIsNone(brain.armour_resist_better("Leather Armor (Resist Lightning) [12,+2]"))
+        self.assertIsNone(brain.armour_resist_better("Leather Gloves (Resist Acid) [1]"))   # no gloves resist
+        self.assertEqual(brain.armour_resist_better("Leather Armor (Resist) [12,+7]"), ("ICAT_ARMOR", 19))
+        # Picked up, it is worn below as soon as nothing is close.
+        picked = command_obs(pos=(5, 5), dlvl=45, clvl=40, hp=480, mhp=480)
+        msg = "You picked up a Small Shield (Resist Acid) [5,+1]."   # rows 0-1: 40 columns
+        picked.rows[0], picked.rows[1] = msg[:40], msg[40:]          # brackets as the screen decodes them
+        brain.decide(picked, town_view((5, 5), (40, 40), dlvl=45))
+        self.assertIn("Small Shield (Resist Acid) [5,+1]", brain.to_wear + [brain.picking])
+        # Armour of Resist makes the Balrog's fire a third, as the ring does:
+        # with the two Rings of Speed worn, ready (333 of 480).
+        brain.jewels = brain.read_jewels(rows)
+        brain.worn_resists = FOUR_ELEMENTS
+        self.assertTrue(brain.balrog_ready(command_obs(pos=(5, 5), dlvl=49, clvl=40, hp=480, mhp=480)))
+        # ... and a Ring of Resist Fire is no gain beside it: not bought, not shopped for.
+        self.assertFalse(brain.jewel_better("Ring of Resist Fire"))
+        self.assertTrue(brain.fire_ring_worn())
 
     def test_at_the_top_level_a_ring_of_resist_fire_outranks_speed(self) -> None:
         """C64 Balrog, 2026-11-11: with two Rings of Speed (1000 each) the
