@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 
 from . import knowledge
-from .magic import BLIND, BOOK_LEVELS, book_of, store_name, CHANT, CREATE_FOOD, ORB, PORTAL, SANCTUARY, FIRST_BOOK, PRAYER_BOOKS, CURE_LIGHT, CURE_MEDIUM, DETECT_DOORS, HEALS, REMOVE_FEAR, Magic
+from .magic import BLIND, BOOK_LEVELS, book_of, store_name, CHANT, CREATE_FOOD, ORB, PORTAL, SANCTUARY, FIRST_BOOK, PRAYER_BOOKS, CURE_LIGHT, CURE_MEDIUM, CURE_SERIOUS, CURE_CRITICAL, HEAL, DETECT_DOORS, HEALS, REMOVE_FEAR, Magic
 from .magic import DETECT_EVIL, DETECT_MONSTERS, RESIST_HEAT_COLD, MAGIC_MISSILE, PHASE_DOOR, FIND_TRAPS, CURE_POISON, TELEPORT_SELF, MAGE_ATTACKS, MAGE_BOOKS, books_for
 from .magic import BLESS, PRIEST_FIND_TRAPS, SLOW_POISON, NEUTRALIZE_POISON, LIGHT_SPELLS
 from .magic import AIMED, AT_CREATURES, ON_ITEM, CASTER_BOOK_LEVELS
@@ -113,6 +113,7 @@ LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
 SLAIN = re.compile(r"You have slain the (.+?)\.")
 HIT_NEWS = re.compile(r"hits|misses|slain|fails|dies|destroyed|resists|unaffected|unharmed|immune|shrugs")
 CASTS_A_SPELL = re.compile(r"[Tt]he (.+?) (?:casts a spell|frightens you)")
+NAMED_ACT = re.compile(r"[Tt]he (.+?) (?:casts a|frightens|confuses|blinds|summons|breathes)")   # cut at 40 columns too
 AVOID_GLYPHS = {"e"}     # Floating Eye: paralysing gaze when meleed
 RETREAT_HP = 0.60
 RETREAT_RANGE = 12       # farthest staircase worth running for; beyond, fight (round 28)
@@ -358,6 +359,7 @@ THREAT_DEPTH_FROM = 30   # character level from which a threat_depth goal goes a
 SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
 RECALL_CLIMB = 1         # Word of Recall down to a deepest level this many past ready: climb from there
+RECALL_FAR = 5           # deeper than ready by more than this: Word of Recall up, not the stairs (resupply)
 RECALL_WALK_LEVELS = 5   # levels above the deepest beyond which Word of Recall (via town) beats walking down
 BREATHS_TO_LEAVE = 2     # breaths taken on one level that make it one to leave (leave_deadly)
 RETREAT_STUCK = 3        # retreat steps that leave the bot on its square before the escapes take over
@@ -371,7 +373,8 @@ PARALYZES = re.compile(r"[Tt]he (.+?) paralyzes you")
 GRAVE_DANGER = 0.5       # the next turn's expected damage, as a share of HP, that no prayer but an escape answers
 PHASE_GOLD = 20          # gold worth an Alchemist trip for one (base 15 gp)
 TELEPORT_GOLD = 60       # ... and for a Scroll of Teleportation (base 40 gp)
-HEAL_AVERAGE = {CURE_MEDIUM: 10.0, CURE_LIGHT: 6.0}   # 4d4 and 3d3 (Umoria player_pray.cpp)
+HEAL_AVERAGE = {HEAL: 200.0, CURE_CRITICAL: 40.0, CURE_SERIOUS: 20.0,   # 200, 16d4, 8d4 (VMS; core ped_s27/23/18)
+                CURE_MEDIUM: 10.0, CURE_LIGHT: 6.0}   # 4d4 and 3d3 (Umoria player_pray.cpp)
 MAGE_HEAL_AVERAGE = {CURE_LIGHT: 10.0}                 # the Mage book's is 4d4 (Umoria player_magic.cpp)
 PRAY_HEAL_HP = 0.5       # below this share of max HP a known heal is prayed (M5b; potions below QUAFF_HP)
 SPELL_MARGIN = 0.75      # HP under this share of a caster's biggest spell in view: heal, do not hunt it (M5b)
@@ -462,7 +465,9 @@ MAX_CLVL = 40   # MAX_PLAYER_LEVEL (docs/FEATURE_MAP.md)
 DIVE_FROM_CLVL = MAX_CLVL   # the Balrog goal dives past one-breath killers from here (balrog_dive): from clvl 35
                             # to DL49 (2026-11-10) died six times to Ancient Multi-Hued Dragons in two hours for
                             # less experience an hour than DL39, and the maintainer: "let's not deep-dive then"
-DIVE_MAX_DLVL = 49    # ... down to here: the catalog's Balrog appears from DL50 (core/monster_catalog.s)
+BALROG = "Balrog"     # dived for only once its breath is survivable (balrog_ready)
+BALROG_DLVL = 50      # ... and no deeper: from here every level has it (core/monster_catalog.s CAT_WIN_LEVEL)
+BALROG_FIRE_RING = 1100   # a Ring of Resist Fire at the top level on the Balrog goal: over a Ring of Speed's 1000
 DIVE_REST_HP = 0.8    # on a dive level no rest above this share of HP; below it a potion first (rest)
 BREATH_REACH = 20     # squares a creature's breath or spell reaches (VMS max_sight, core/monster_catalog.s)
 STORE_ITEM = re.compile(r"^\s*([a-p])\) (?:\d+ )?(\S.*?)\s+(\d+) GP")   # a stack shows its count first
@@ -599,6 +604,7 @@ class Brain:
         self.pending: int | None = None        # answer for the next direction prompt
         self.messages = ""                     # the latest screen's message lines
         self.prompt_messages = ""              # message lines seen on prompt screens since the last command screen
+        self.seen_messages = ""                # this command screen's messages and the -more- screens' before it
         self.pending_item: int | None = None   # answer for the next item prompt
         self.waited = 0                        # first-strike waits for the current target
         self.unseen_attack = False             # attacked this turn with nothing in view
@@ -856,6 +862,7 @@ class Brain:
         attacker, self.recent_attacker = self.recent_attacker, None
         self.chased = attacker in knowledge.fast_creatures()
         seen_messages, self.prompt_messages = self.prompt_messages + " " + messages, ""
+        self.seen_messages = seen_messages
         if BREATHES.search(seen_messages) and self.last_hp is not None and self.last_hp > obs.hp and obs.dlvl:
             element = BREATH_ELEMENT.search(seen_messages)
             self.note_breath(obs, view, self.last_hp - obs.hp, element.group(1) if element else None)
@@ -1050,7 +1057,7 @@ class Brain:
                       self.cornered_cast, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
-                      self.recall_trip, self.chosen_blocker, self.resupply,
+                      self.recall_trip, self.chosen_blocker, self.resupply, self.dive_down,
                       self.rest, self.collect,
                       self.shop, self.scout, self.find_traps, self.identify_items, self.try_unknown, self.exercise, self.descend, self.hunt, self.explore, self.clear_way, self.dig_out, *last):
             decision = layer(obs, view)
@@ -1139,7 +1146,8 @@ class Brain:
         return {"Speed": 1000, "the Magi": 300, "Protection": 10 * bonus,
                 "Strength": 15 * bonus if melee else 0, "Slaying": 60 if melee else 0,
                 "Wisdom": (20 if self.goal.klass in ("priest", "paladin") else 2) * bonus,
-                "Resist Fire": 800, "Resist Cold": 800, "See Invisible": 20}.get(kind, 0)
+                "Resist Fire": BALROG_FIRE_RING if self.balrog_bound() else 800,
+                "Resist Cold": 800, "See Invisible": 20}.get(kind, 0)
 
     def gain_wanted(self, name: str) -> bool:
         """A potion of gain stat for a stat short of 18/100: picked up (and
@@ -1174,10 +1182,12 @@ class Brain:
         return self.jewel_worth(name, slot) > max(0, self.jewels.get(slot, 0))
 
     def jewels_wanted(self, obs: Observation) -> bool:
-        """Rich, and the ring or the amulet worn could be better."""
+        """Rich, and the ring or the amulet worn could be better: at the top
+        level for the Balrog, a Ring of Resist Fire over two Rings of Speed."""
         return (self.gold(obs) >= JEWEL_GOLD + self.gear_reserve(obs)
                 and (min(self.jewels.get("Ring", 0), self.jewels.get("Ring2", 0)) < 1000
-                     or self.jewels.get("Amulet", 0) < 300))
+                     or self.jewels.get("Amulet", 0) < 300
+                     or (self.balrog_bound() and not self.fire_ring_worn())))
 
     def jewel_pick(self, obs: Observation) -> tuple[str, str] | None:
         """At the Magic Shop or the Black Market, rich: the ring or amulet
@@ -1349,6 +1359,18 @@ class Brain:
                 # Mature Red Dragon, cast Portal, prayed Cure Medium Wounds at
                 # 137/296 and died to the next breath (C64 Balrog, 2026-11-09).
                 out += self.remembered_bursts(obs, assume=assume)
+            balrog = knowledge.kinds_by_name().get(BALROG)
+            if self.balrog_bound() and obs.dlvl >= BALROG_DLVL and balrog is not None \
+                    and self.magic.spare(obs, RESIST_HEAT_COLD):
+                # From its level on it is always there, awake (catalog_place_
+                # win_creature): kept resisted, as a player would. A ready
+                # clvl 40 Priest fought a Mature Black Dragon on DL50 down to
+                # 323/443, teleported, and an unseen breath did 332 through
+                # the ring alone (C64 Balrog, 2026-11-11). With mana to spare
+                # only: kept up at any price it held a Priest at 2-8 mana, no
+                # Detect Evil for the Ancient Multi-Hued Dragon whose gas did
+                # 693 (same day). Seen or breathing, it is resisted anyway.
+                out.append(self.turn_burst(Creature(*balrog, BALROG), obs, assume=assume))
             return out
 
         now = threats(frozenset())
@@ -1634,6 +1656,18 @@ class Brain:
         for p, c in view.creatures.items():
             if self.turn_burst(c, obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
                 self.level.deadly = p
+        kinds = knowledge.kinds_by_name()
+        for name in NAMED_ACT.findall(self.seen_messages):
+            # Unseen but named, and in reach: it just cast at the bot. A ready
+            # clvl 40 Priest on DL50 resisted an Ancient Multi-Hued Dragon's
+            # spell, explored on for gold, and its gas breath did 693 from
+            # full HP (C64 Balrog, 2026-11-11). Behind -more- too, and its
+            # other spells: another was confused by one, then its "casts a
+            # spell" came behind -more-, and it explored on (same day).
+            kind = kinds.get(name)
+            if self.level.deadly is None and kind is not None \
+                    and self.turn_burst(Creature(*kind, name), obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
+                self.level.deadly = view.pos
         if self.level.deadly is None:
             return None
         here = view.type_at(*view.pos)
@@ -2948,14 +2982,39 @@ class Brain:
         by level, with a way out in the pack, Detect Evil on arrival
         (``scout``) and leaving a level whose creature could kill in one
         breath (``leave_deadly``) rather than waiting to outgrow DL40's
-        breathers, which a Priest never does. At the top level for the
-        Balrog; from DIVE_FROM_CLVL to DIVE_MAX_DLVL for the experience,
-        never onto DL50, where it appears (maintainer, 2026-11-10: "let them
-        go all the way down to DL 49 before they are Clevel 40")."""
+        breathers, which a Priest never does. At the top level, for the
+        Balrog only, once ready for it (``balrog_ready``): not ready, a clvl
+        40 Priest farming DL49 detected an Ancient Multi-Hued Dragon, read
+        Word of Recall and was breathed on for 693 from full HP (C64 Balrog,
+        2026-11-11); it has nothing to gain there, the ring is bought.
+        Never past DL50: below, the Balrog is there all the same with worse
+        beside it, and ready clvl 40 Priests dived on to DL70 and DL100,
+        their mana spent, and died to it (2026-11-11)."""
         escape = self.recall or self.teleports or self.wands.get(TELEPORT_STAFF, 0) > 0
-        if not (self.goal.threat_depth and escape):
+        if not (self.goal.threat_depth and escape) or obs.clvl < DIVE_FROM_CLVL:
             return False
-        return obs.clvl >= MAX_CLVL or (obs.clvl >= DIVE_FROM_CLVL and dlvl <= DIVE_MAX_DLVL)
+        return dlvl <= BALROG_DLVL and self.balrog_ready(obs)
+
+    def balrog_ready(self, obs: Observation) -> bool:
+        """The Balrog's worst turn, through the resistance worn
+        (``lasting``), is short of BREATH_LETHAL of full HP: a player meets
+        it with fire resistance on. Two clvl 40 Priests with two Rings of
+        Speed and none dived to DL64 and DL53, and its fire breath did
+        ~1,000 at 405 HP, once seen and once unseen (C64 Balrog,
+        2026-11-11). Until then the top level stays as deep as it survives
+        (``threat_ready``) and buys a Ring of Resist Fire (``jewel_value``)."""
+        kind = knowledge.kinds_by_name().get(BALROG)
+        if kind is None:
+            return True
+        balrog = Creature(kind[0], kind[1], BALROG)
+        return self.turn_burst(balrog, obs, lasting=True) < BREATH_LETHAL * obs.mhp
+
+    def balrog_bound(self) -> bool:
+        """At the top level on a goal that goes on to the Balrog."""
+        return self.goal.threat_depth and self.clvl >= MAX_CLVL
+
+    def fire_ring_worn(self) -> bool:
+        return any("Resist Fire" in self.jewel_names.get(hand, "") for hand in ("Ring", "Ring2"))
 
     def threat_ready(self, obs: Observation, dlvl: int) -> bool:
         """A human's depth past the margin (maintainer, 2026-11-08: "be like a
@@ -4019,6 +4078,14 @@ class Brain:
                if not self.supplies_low() else "light low" if not self.food_low()
                else f"{self.food:.3g} food left") \
             if self.needs_resupply(obs) else f"DL{obs.dlvl} too deep for level {obs.clvl}"
+        if too_deep and self.recall and not self.recalling and obs.step >= self.blind_until \
+                and not self.depth_ready(obs, obs.dlvl - RECALL_FAR):
+            # Far too deep: home by Word of Recall, as a player would. A clvl
+            # 40 Priest restored on DL100 climbed the stairs level by level
+            # with five scrolls in the pack, 105,000 steps, and died on DL40
+            # to an Ancient Multi-Hued Dragon (C64 Balrog, 2026-11-11).
+            self.picking, self.listed = RECALL, False
+            return Decision(ord("R"), "recall", f"{why}: read Word of Recall")
         if view.type_at(*view.pos) == TYPE_STAIRS_UP:
             return Decision(ord("<"), "resupply", f"{why}: go up")
         # One staircase, kept while a way to it stands:
@@ -4948,10 +5015,18 @@ class Brain:
                     and obs.hp <= last_hp:
                 self.heals_losing_until = obs.step + HEALS_LOSING_STEPS
                 return None
-            for heal in HEALS:
-                if magic.can(obs, heal) and (MAGE_HEAL_AVERAGE if magic.mage else HEAL_AVERAGE)[heal] > hitting:
-                    self.last_heal = (obs.hp, obs.step)
-                    return Decision(*magic.pray(heal, f"HP {obs.hp}/{obs.mhp}: pray {heal}"))
+            # The smallest heal that makes up what is missing, else the
+            # biggest: a level-40 Priest at 111/443 after a resisted Balrog
+            # breath (333) prayed Cure Medium Wounds three times, Heal
+            # known and 114 mana, and the next breath killed it (C64 Balrog,
+            # 2026-11-11).
+            average = MAGE_HEAL_AVERAGE if magic.mage else HEAL_AVERAGE
+            usable = [h for h in HEALS if magic.can(obs, h) and average.get(h, 0.0) > hitting]
+            heal = min((h for h in usable if average[h] >= obs.mhp - obs.hp), key=average.get,
+                       default=usable[0] if usable else None)
+            if heal is not None:
+                self.last_heal = (obs.hp, obs.step)
+                return Decision(*magic.pray(heal, f"HP {obs.hp}/{obs.mhp}: pray {heal}"))
         return None
 
     def trial_at(self, obs: Observation, creature: Creature, pos: Pos) -> str | None:
@@ -5088,6 +5163,24 @@ class Brain:
         Kobold swung its dagger with the mana for a missile, and died (M5f
         baseline, seed 1009)."""
         return self.invoke(obs, view, cornered=True)
+
+    def dive_down(self, obs: Observation, view: View) -> Decision | None:
+        """On a level dived through for the Balrog (``balrog_dive``) and not
+        survived (``threat_ready``): straight on down, as a player does, the
+        known down stairs before gold or exploring, else Detect Doors/Stairs
+        to find them. A ready clvl 40 Priest walking down from town explored
+        DL40 and picked up gold, and an Ancient Multi-Hued Dragon's breath
+        did 520 at 477/477 (C64 Balrog, 2026-11-11)."""
+        if obs.dlvl == 0 or self.threat_ready(obs, obs.dlvl) or not self.balrog_dive(obs, obs.dlvl) \
+                or not self.deeper_ok(obs):
+            return None
+        decision = self.descend(obs, view)
+        if decision is not None:
+            return decision
+        if obs.step >= self.level.detect_after and self.magic.can(obs, DETECT_DOORS):
+            self.level.detect_after = obs.step + DETECT_EVERY
+            return Decision(*self.magic.pray(DETECT_DOORS, "diving: pray Detect Doors/Stairs for the way down"))
+        return None
 
     def descend(self, obs: Observation, view: View) -> Decision | None:
         if not self.deeper_ok(obs):
@@ -5497,6 +5590,13 @@ class Brain:
         # up undid the goal's progress (M5b round 34: a level-9 Dwarf Priest
         # climbed from DL2 93 times by the nearest stairs).
         down = view.stairs_down() if deeper_ok else set()
+        if down and view.step_toward(down, avoid_monsters=False) is None:
+            # Known, but no known way there (Detect Doors/Stairs shows them
+            # anywhere): no reason to stay. A level-5 C128 Priest stood on
+            # the up stairs of an exhausted DL1 with three such down stairs
+            # known and searched walls 308,000 steps until it starved (build
+            # queue, 2026-11-11).
+            down = set()
         if (here == TYPE_STAIRS_UP and not down) or (here == TYPE_STAIRS_DN and deeper_ok):
             return Decision(ord("<") if here == TYPE_STAIRS_UP else ord(">"), "stair-scum",
                             "level exhausted: take the stairs to a fresh level")

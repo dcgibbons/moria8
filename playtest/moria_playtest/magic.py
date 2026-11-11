@@ -38,11 +38,12 @@ BOOK_RANGE = re.compile(r"\(a-([a-v])\)")
 PACK_ROW = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*?)\s*$")
 
 CURE_LIGHT, CURE_MEDIUM = "Cure Light Wounds", "Cure Medium Wounds"
+CURE_SERIOUS, CURE_CRITICAL, HEAL = "Cure Serious Wounds", "Cure Critical Wounds", "Heal"   # Priest books 6-7
 REMOVE_FEAR, DETECT_DOORS, CREATE_FOOD = "Remove Fear", "Detect Doors/Stairs", "Create Food"
 RESIST_HEAT_COLD = "Resist Heat and Cold"   # Priest book 5: Moria8 breath is all fire (monster_cast_breath)
 DETECT_EVIL = "Detect Evil"   # Priest book 1: the evil creatures on the level (dragons among them)
 LIGHT_SPELLS = ("Call Light", "Light Area")   # a Priest's and a Mage's: light what is around
-HEALS = (CURE_MEDIUM, CURE_LIGHT)   # best first
+HEALS = (HEAL, CURE_CRITICAL, CURE_SERIOUS, CURE_MEDIUM, CURE_LIGHT)   # best first
 PORTAL, SANCTUARY = "Portal", "Sanctuary"                 # escapes (Words of Wisdom)
 BLIND, CHANT, ORB = "Blind Creature", "Chant", "Orb of Draining"   # control, Bless x2, attack
 MAGIC_MISSILE, DETECT_MONSTERS, PHASE_DOOR = "Magic Missile", "Detect Monsters", "Phase Door"   # Mage book
