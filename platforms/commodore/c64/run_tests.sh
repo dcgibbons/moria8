@@ -4743,8 +4743,10 @@ check_static_contract "levelup_magic_main_loop_contract" "../../../core/game_loo
     "main_loop:|||lsr levelup_magic_pending|||bcc !no_levelup_magic+|||jsr tramp_magic_recalc_mana|||jsr tramp_magic_check_new_spells|||jsr status_draw|||!no_levelup_magic:"
 check_static_contract "item_action_inventory_overlay_hint_contract" "../../../core/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
+check_static_contract "orb_of_draining_holy_orb_contract" "../../../core/player_magic_execute_overlay.s" \
+    "ped_s17:|||jsr math_dice|||jmp eff_ball_holy"
 check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../../../core/player_magic_execute_overlay.s" \
-    "pmx_pick_recharge_item:|||jsr hal_input_get_key|||cmp #\$3f|||lda #OVL_SPELL|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
+    "pmx_pick_recharge_item:|||jsr hal_input_get_key|||cmp #\$3f|||lda current_overlay|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
 check_static_contract "identify_scroll_resident_completion_contract" "../../../core/item_actions_overlay.s" \
     "irs_effect_identify:|||jmp eff_identify_scroll_resident"
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../../../core/item_desc_banked.s" \
@@ -4902,7 +4904,7 @@ run_test "sanctuary_prayer" "tests/test_sanctuary_prayer.s" "0400 0403" 4 500000
 run_test "neutralize_poison_prayer" "tests/test_neutralize_poison_prayer.s" "0400 0402" 3 500000000
 run_test "create_food_prayer" "tests/test_create_food_prayer.s" "0400 0402" 3 500000000
 run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 500000000
-run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
+run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0405" 6 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 0446" 71 1000000000

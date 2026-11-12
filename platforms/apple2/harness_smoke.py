@@ -1430,6 +1430,34 @@ for _ = 1, 8 do
     emu.wait(0.4)
 end
 emu.wait(2.0)
+-- A Scroll of Recharging on an empty wand, through the '?' list: the spell
+-- overlay's picker returns the slot in X, which tramp_restore_spell_overlay's
+-- OVL.SPELL reload clobbered, so another slot was recharged, named or
+-- "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
+-- (BBC build queue, 2026-11-12; the Apple IIe shares the trampoline).
+inv_seed(0, {40, 1, 0, 0, 0, 0, 0, 0})    -- Wand of Lightning, empty
+inv_seed(1, {104, 1, 0, 0, 0, 0, 0, 0})   -- Scroll of Recharging
+local turn_r = prog:read_u8(TURN_LO_ADDR)
+assert_line("recharge_read_prompt", press_until("Read which scroll", "R", 8), "read prompt missing")
+press_slow("A")
+assert_line("recharge_prompt", wait_screen("Recharge which item"), "recharge prompt missing: " .. rowtext(0))
+shift("/")                                -- '?': SHIFT and the "/  ?" key
+assert_line("recharge_list", wait_screen("Inventory"), "no list: " .. rowtext(0))
+emu.wait(0.5)
+press_slow("A")
+assert_line("recharge_glows", wait_screen("glows briefly"), "no recharge message: " .. rowtext(0) .. " / " .. rowtext(1))
+for _ = 1, 4 do if screen_has("-more-") then press_slow(" ") end emu.wait(0.3) end
+assert_line("recharge_charged", inv_field(0, 0) == 40 and inv_field(0, 2) > 0,
+            "slot a: " .. inv_field(0, 0) .. " charges " .. inv_field(0, 2))
+press_slow("S")
+emu.wait(1.0)
+assert_line("recharge_play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn_r,
+            "no turn after the recharge: " .. rowtext(0))
+for _ = 1, 8 do
+    if screen_has("-more-") then press_slow(" ") end
+    emu.wait(0.4)
+end
+emu.wait(2.0)
 -- Wearing a ring or amulet rebuilds the equipment flags (player_pflags) at
 -- once: on the compact play slot they stayed stale until the next stats
 -- rebuild (2026-11-08 review). The Ring of Resist Fire sets

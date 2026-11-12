@@ -668,6 +668,32 @@ function run()
         assert_line("wand_returns_" .. id, in_town() and prog:read_u8(TURN_ADDR) ~= turn_w
             and inv_field(0, 2) == 4)
     end
+    -- A Scroll of Recharging on an empty wand, through the '?' list: the
+    -- spell overlay's picker returns the slot in X, which the trampoline's
+    -- OVL.SPELL reload clobbered, so another slot was recharged, named or
+    -- "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
+    -- and the BRK panic hung the game (BBC build queue, 2026-11-12).
+    drain_more(4)
+    inv_seed(0, {40, 1, 0, 0, 0, 0, 0, 0})   -- Wand of Lightning, empty
+    inv_seed(1, {104, 1, 0, 0, 0, 0, 0, 0})  -- Scroll of Recharging
+    local turn_r = prog:read_u8(TURN_ADDR)
+    send_key(0x52) -- 'R' (read)
+    assert_line("recharge_read_prompt", wait_screen("Read which scroll", 80))
+    send_key(0x41) -- 'A'
+    assert_line("recharge_prompt", wait_screen("Recharge which item", 80))
+    send_key(0x3F) -- '?': the list
+    wait_frames(30)
+    send_key(0x41) -- 'A': the wand
+    local glows = wait_screen("glows briefly", 80)
+    if not glows then
+        for r = 0, 3 do print("DIAG row " .. r .. ": " .. rowtext(r)) end
+    end
+    assert_line("recharge_glows", glows)
+    drain_more(4)
+    assert_line("recharge_charged", inv_field(0, 0) == 40 and inv_field(0, 2) > 0)
+    send_key(0x53) -- 'S' (search)
+    wait_frames(60)
+    assert_line("recharge_play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn_r)
     -- A Scroll of Genocide reads its letter through recall_key_to_screen_code,
     -- which lived in the recall view's overlay: with SPELL loaded the call ran
     -- SPELL's bytes there, a stray store into the play slot that hung a later

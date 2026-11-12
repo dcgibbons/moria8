@@ -3012,7 +3012,11 @@ a win is unlikely until the bot plays much better.
   character also goes deeper where no native creature's worst turn (its
   breaths, against the resistance and speed worn) is 90% of its HP
   (`brain.threat_ready`, maintainer 2026-11-08: "be like a real human
-  player"). Since 2026-11-10 (maintainer: the level rules seemed
+  player"); without Free Action (the Amulet of the Magi) a native's melee
+  round counts on top of its breath, and four more rounds when it can
+  paralyse by Hold Person or touch (`brain.native_exchange`, maintainer
+  2026-11-12: clvl 32 Warriors were breathed on, held and bitten to death
+  on DL37, a dozen an hour). Since 2026-11-10 (maintainer: the level rules seemed
   "arbitrary") that is not capped at the character's own level, and where
   the margin would need the top level (DL37 on) only it decides; at level
   40 the bot dives for the Balrog with a way out in its pack

@@ -2020,11 +2020,13 @@ if not has_ordered_chain(magic_execute, [
     "pmx_pick_recharge_item:",
     "jsr hal_input_get_key",
     "cmp #$3f",
-    "lda #OVL_SPELL",
+    "lda current_overlay",
     "sta piw_return_overlay",
     "jmp piw_select_filtered_inv_key",
 ]):
-    print("C128 spell overlay must mark ?-opened recharge selectors as returning to OVL_SPELL")
+    # The overlay the picker runs in: OVL_DEATH on the C128, where a Scroll of
+    # Recharging's '?' list came back to OVL_SPELL and jammed (2026-11-12).
+    print("C128 ?-opened recharge selectors must return to the overlay the picker runs in (current_overlay)")
     raise SystemExit(1)
 
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):

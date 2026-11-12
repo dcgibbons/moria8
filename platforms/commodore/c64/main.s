@@ -648,6 +648,9 @@ ol_target:        .byte 0
 #import "../../../core/combat.s"
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../../core/projectile.s"
+// The ball's per-creature damage (resident: the spell overlay is full;
+// called only from eff_ball there). Orb of Draining's entry is banked.
+#import "../../../core/player_magic_ball_harm.s"
 #import "../../../core/monster_attack.s"
 #import "../../../core/turn.s"
 #import "../../../core/store_data.s"
@@ -2898,6 +2901,9 @@ catalog_init_tail_end:
     #define PM_EQ_BANKED
     #define PM_EQ_SCRATCH_EXTERNAL
     #import "../../../core/player_magic_earthquake.s"
+    // Orb of Draining's ball entry (eff_ball_holy): called from ped_s17 in
+    // the spell overlay, which stays loaded around it.
+    #import "../../../core/player_magic_ball_holy.s"
     #undef PM_EQ_SCRATCH_EXTERNAL
     #undef PM_EQ_BANKED
 
@@ -3080,11 +3086,13 @@ ovl_modal_misc_end:
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
     #define PMX_DETECT_EFFECTS_EXTERNAL
+    #define BALL_HARM_EXTERNAL
     #import "../../../core/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
+    #undef BALL_HARM_EXTERNAL
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL

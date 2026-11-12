@@ -748,6 +748,8 @@ tramp_eff_destroy_area:
 tramp_restore_spell_overlay:
     php
     pha
+    txa                         // the selector's X (the slot chosen)
+    pha
     lda #OVL_NONE
     sta piw_return_overlay
     lda #OVL_SPELL
@@ -755,6 +757,8 @@ tramp_restore_spell_overlay:
     bcc !restored+
     brk
 !restored:
+    pla
+    tax
     pla
     plp
     rts

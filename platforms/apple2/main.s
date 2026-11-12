@@ -322,6 +322,10 @@ cmb_in_way_str:
 // beside player_destroy_area.s behind tramp_eff_* overlay swaps.
 #import "../../core/item_desc_banked.s"
 #import "../../core/projectile.s"
+// The ball's per-creature damage and Orb of Draining's entry (resident: the
+// SPELL cache slot is full; called only from eff_ball in OVL.SPELL).
+#import "../../core/player_magic_ball_harm.s"
+#import "../../core/player_magic_ball_holy.s"
 #import "compat/io_kernal_consts.s"
 #import "../../core/storage_status.s"
 #import "memory_aux.s"
@@ -869,10 +873,15 @@ tramp_eff_destroy_area:
     rts
 
 // Shared epilogue for the two item-selector trampolines: restore OVL.SPELL
-// and return A/flags from the selector. The brk is fatal because the saved
+// and return A, X (the slot) and flags from the selector: overlay_load
+// clobbered X, and a Scroll of Recharging recharged, named or "ate" another
+// slot, or hit BRK when a stale ego swapped OVL.ITEMS in under the spell
+// overlay (BBC build queue, 2026-11-12). The brk is fatal because the saved
 // continuation is inside OVL.SPELL.
 tramp_restore_spell_overlay:
     php
+    pha
+    txa                         // the selector's X (the slot chosen)
     pha
     lda #OVL_NONE
     sta piw_return_overlay
@@ -881,6 +890,8 @@ tramp_restore_spell_overlay:
     bcc !restored+
     brk                         // saved continuation is inside OVL.SPELL
 !restored:
+    pla
+    tax
     pla
     plp
     rts
@@ -1552,6 +1563,7 @@ ovl_items_end:
 #define PMX_MAP_AREA_TRAMPOLINE
 #define PMX_DETECT_EFFECTS_EXTERNAL
 #define PMX_DESTROY_AREA_EXTERNAL
+#define BALL_HARM_EXTERNAL
 #import "../../core/player_magic_slow_runtime.s"
 #define PMU_TURN_FEEDBACK_ONLY
 #import "../../core/player_magic_turn_banked.s"
@@ -1561,6 +1573,7 @@ ovl_items_end:
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL
+#undef BALL_HARM_EXTERNAL
 
 
 

@@ -162,6 +162,7 @@ def depth_series(events: Path) -> dict[str, list[list[int]]]:
 
 
 KILLS_SINCE = "20261111-1500"   # runs from here on log kill events (session.py)
+MET_SINCE = "20261112-0215"     # ... and met events: a creature named or looked at
 
 
 def kill_counts(events: Path) -> dict[str, int]:
@@ -181,6 +182,16 @@ def kill_counts(events: Path) -> dict[str, int]:
             name = knowledge.creature_name(name)
             counts[name] = counts.get(name, 0) + 1
     return counts
+
+
+def met_names(events: Path) -> list[str]:
+    """The creatures a run met: its ``met`` events (session: the first time
+    the run named or looked at each)."""
+    try:
+        lines = events.read_text().splitlines()
+    except OSError:
+        return []
+    return sorted({json.loads(line).get("name") for line in lines if '"met"' in line} - {None})
 
 
 def queue_group(queue: str | None) -> str:
@@ -205,27 +216,36 @@ def death_counts(runs: Path) -> dict[str, dict[str, int]]:
 
 def monster_stats(home: Path) -> dict[str, Any]:
     """The Monsters panel: per creature, how many the bots have slain (kill
-    events, by queue group) and how many characters it has killed (run
-    records). Kills count from KILLS_SINCE, deaths from the first run."""
+    events, by queue group), how many runs met it (met events) and how many
+    characters it has killed (run records). Kills count from KILLS_SINCE,
+    meetings from MET_SINCE, deaths from the first run."""
     creatures: dict[str, dict[str, dict[str, int]]] = {}
-    runs = 0
+    def entry(name: str) -> dict[str, dict[str, int]]:
+        return creatures.setdefault(name, {"slain": {}, "met": {}, "killed": {}})
+    runs = met_runs = 0
     for events in home.glob("runs/*/events.jsonl"):
         if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
             continue
         counts = cached(events, kill_counts) or {}
-        if not counts:
+        met = (cached(events, met_names) or []) if events.parent.name[:len(MET_SINCE)] >= MET_SINCE else []
+        if not (counts or met):
             continue
-        runs += 1
+        runs += bool(counts)
+        met_runs += bool(met)
         job = cached(events.parent / "job.json", read_json) or {}
         key = queue_group(job.get("queue") or ("balrog" if "-balrog-" in events.parent.name else None))
         for name, count in counts.items():
-            slain = creatures.setdefault(name, {"slain": {}, "killed": {}})["slain"]
+            slain = entry(name)["slain"]
             slain[key] = slain.get(key, 0) + count
+        for name in met:
+            seen = entry(name)["met"]
+            seen[key] = seen.get(key, 0) + 1
     shipped = set(knowledge.creature_names())
     for name, killed in (cached(home / "runs.jsonl", death_counts) or {}).items():
         if name in shipped:   # not poison, traps, starvation or "caster's spell"
-            creatures.setdefault(name, {"slain": {}, "killed": {}})["killed"] = killed
-    return {"creatures": creatures, "runs": runs, "since": KILLS_SINCE}
+            entry(name)["killed"] = killed
+    return {"creatures": creatures, "runs": runs, "met_runs": met_runs, "since": KILLS_SINCE,
+            "met_since": MET_SINCE}
 
 
 def balrog_kills(home: Path) -> dict[str, Any]:

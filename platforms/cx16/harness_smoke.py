@@ -1204,6 +1204,27 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
     )
     tb.assert_line("exchange_one_turn", tb.read_u8(turn) == (turn0 + 1) & 0xFF,
                    f"turn={tb.read_u8(turn)} turn0={turn0}")
+    # A Scroll of Recharging on an empty wand, through the '?' list: the spell
+    # overlay's picker returns the slot in X, which tramp_restore_spell_overlay's
+    # OVL.SPELL reload clobbered, so another slot was recharged, named or
+    # "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
+    # (BBC build queue, 2026-11-12; the X16 shares the trampoline).
+    _inv_seed(tb, 0, [40, 1, 0, 0, 0, 0, 0, 0])    # Wand of Lightning, empty
+    _inv_seed(tb, 1, [104, 1, 0, 0, 0, 0, 0, 0])   # Scroll of Recharging
+    turn_r = tb.read_u8(turn)
+    tb.press("R")
+    tb.assert_line("recharge_read_prompt", tb.screen_has("Read which scroll"), f"row0={tb.rowtext(0)!r}")
+    tb.press("A")
+    tb.assert_line("recharge_prompt", tb.screen_has("Recharge which item"), f"row0={tb.rowtext(0)!r}")
+    tb.press("?")
+    tb.assert_line("recharge_list", tb.screen_has("Inventory"), f"row0={tb.rowtext(0)!r}")
+    tb.press("A")
+    tb.assert_line("recharge_glows", tb.screen_has("glows briefly"),
+                   f"row0={tb.rowtext(0)!r} row1={tb.rowtext(1)!r}")
+    tb.assert_line("recharge_charged", _inv_field(tb, 0, 0) == 40 and _inv_field(tb, 0, 2) > 0,
+                   f"slot a: {_inv_field(tb, 0, 0)} charges {_inv_field(tb, 0, 2)}")
+    tb.press("S")
+    tb.assert_line("recharge_play_goes_on", tb.read_u8(turn) != turn_r, f"turn={tb.read_u8(turn)}/{turn_r}")
     tb.dump("after_exchange")
     tb.log("SCENARIO DONE")
 

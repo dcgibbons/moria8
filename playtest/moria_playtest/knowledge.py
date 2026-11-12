@@ -119,6 +119,18 @@ def creature_names() -> tuple[str, ...]:
     return _names_longest_first()
 
 
+@lru_cache(maxsize=1)
+def _named() -> re.Pattern[str]:
+    return re.compile(r"\b[Tt]he (" + "|".join(map(re.escape, _names_longest_first())) + r")\b")
+
+
+def creatures_named(text: str) -> list[str]:
+    """The shipped creatures a screen's messages name, as "the <name>" ("the
+    Evil Iggy casts a spell.", "You miss the Kobold."), a name the message
+    row wrapped joined again. A name the 40-column row cut off is missed."""
+    return _named().findall(" ".join(text.split()))
+
+
 def creature_name(text: str) -> str:
     """The creature a kill message names. The 40-column message row cuts a
     long one off and the next message runs on ("You have slain the Metallic
@@ -365,6 +377,20 @@ def touch_paralyzers() -> frozenset[str]:
     return frozenset(name for names, tables in _tiers()
                      for name, a, b in zip(names, tables["atk0_type"], tables["atk1_type"])
                      if ATK_PARALYZE in (a, b))
+
+
+SPELL_HOLD = 0x80   # cr_spell_chance bit 7: Hold Person (MS_HOLD, monster_cast_hold, MON-025)
+
+
+@lru_cache(maxsize=1)
+def paralyzer_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, level) of the shipped creatures that can paralyse: a
+    paralysing blow (randint(level) + 3 turns) or Hold Person (randint(5) +
+    4; MON-025), both stopped by Free Action."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, a, b, chance in zip(tables["display"], tables["level"], tables["atk0_type"],
+                                                          tables["atk1_type"], tables["spell_chance"])
+                     if ATK_PARALYZE in (a, b) or chance & SPELL_HOLD)
 
 
 def casts(glyph: str, level: int) -> bool:

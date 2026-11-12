@@ -51,7 +51,11 @@ pmx_pick_recharge_item:
     cmp #$3f
     bne !pmx_no_selector_overlay_hint+
     pha
-    lda #OVL_SPELL
+    // The overlay this picker runs in, which the list must restore: OVL_SPELL
+    // on the C64, Plus/4 and Atari, but OVL_DEATH on the C128, where a
+    // Scroll of Recharging's '?' list came back to OVL_SPELL and jammed the
+    // CPU (C128 build queue, 2026-11-12).
+    lda current_overlay
     sta piw_return_overlay
     pla
 !pmx_no_selector_overlay_hint:
@@ -271,7 +275,7 @@ ped_s17:
     ldy zp_player_lvl
     jsr math_dice
     lda zp_math_a
-    jmp eff_ball
+    jmp eff_ball_holy               // a holy orb: doubled against evil (VMS fire_ball)
 ped_s18:
     lda #8
     ldx #4
