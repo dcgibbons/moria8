@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from . import knowledge
 from . import records as run_records
 from .goals import (CHARACTER_BARS, CHARACTERS, CLASS_BARS, CLASSES, GOALS, QUALIFICATION_SEEDS, RACE_KEYS,
                     for_character, required)
@@ -75,15 +76,17 @@ def read_json(path: Path) -> Any:
 
 
 def cached(path: Path, build):
-    """``build(path)``, remembered until the file changes."""
+    """``build(path)``, remembered until the file changes. Keyed by the
+    builder too: two readers of one file (runs.jsonl's records and its death
+    counts) each keep their own."""
     try:
-        key = (str(path), path.stat().st_mtime)
+        key = (str(path), build.__qualname__, path.stat().st_mtime)
     except OSError:
         return None
     if key not in _cache:
-        # One entry per file: every change used to add one, and the publisher,
-        # which runs for days, grew to 7.8 GB (2026-10-31).
-        for stale in [k for k in _cache if k[0] == key[0]]:
+        # One entry per file and builder: every change used to add one, and
+        # the publisher, which runs for days, grew to 7.8 GB (2026-10-31).
+        for stale in [k for k in _cache if k[:2] == key[:2]]:
             del _cache[stale]
         _cache[key] = build(path)
     return _cache[key]
@@ -158,9 +161,13 @@ def depth_series(events: Path) -> dict[str, list[list[int]]]:
     return series
 
 
+KILLS_SINCE = "20261111-1500"   # runs from here on log kill events (session.py)
+
+
 def kill_counts(events: Path) -> dict[str, int]:
     """Per creature name, the run's ``kill`` events (session: "You have slain
-    the <name>.")."""
+    the <name>."), names as the game prints them: the first runs logged
+    cut-off ones ("Metallic Blue Centipethe Giant Static Ant misses you")."""
     counts: dict[str, int] = {}
     try:
         lines = events.read_text().splitlines()
@@ -171,8 +178,54 @@ def kill_counts(events: Path) -> dict[str, int]:
             continue
         name = json.loads(line).get("name")
         if name:
+            name = knowledge.creature_name(name)
             counts[name] = counts.get(name, 0) + 1
     return counts
+
+
+def queue_group(queue: str | None) -> str:
+    """The Balrog queue, the build queue, or everything else (the main
+    queue and subqueues)."""
+    return queue if queue in ("balrog", "build") else "other"
+
+
+def death_counts(runs: Path) -> dict[str, dict[str, int]]:
+    """Per creature, the characters it killed, by queue group, over every
+    run the queue recorded."""
+    out: dict[str, dict[str, int]] = {}
+    for record in queue_records(runs):
+        cause = (record.get("death") or {}).get("cause")
+        if record.get("outcome") != "died" or not cause:
+            continue
+        group = out.setdefault(cause, {})
+        key = queue_group(record.get("queue"))
+        group[key] = group.get(key, 0) + 1
+    return out
+
+
+def monster_stats(home: Path) -> dict[str, Any]:
+    """The Monsters panel: per creature, how many the bots have slain (kill
+    events, by queue group) and how many characters it has killed (run
+    records). Kills count from KILLS_SINCE, deaths from the first run."""
+    creatures: dict[str, dict[str, dict[str, int]]] = {}
+    runs = 0
+    for events in home.glob("runs/*/events.jsonl"):
+        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+            continue
+        counts = cached(events, kill_counts) or {}
+        if not counts:
+            continue
+        runs += 1
+        job = cached(events.parent / "job.json", read_json) or {}
+        key = queue_group(job.get("queue") or ("balrog" if "-balrog-" in events.parent.name else None))
+        for name, count in counts.items():
+            slain = creatures.setdefault(name, {"slain": {}, "killed": {}})["slain"]
+            slain[key] = slain.get(key, 0) + count
+    shipped = set(knowledge.creature_names())
+    for name, killed in (cached(home / "runs.jsonl", death_counts) or {}).items():
+        if name in shipped:   # not poison, traps, starvation or "caster's spell"
+            creatures.setdefault(name, {"slain": {}, "killed": {}})["killed"] = killed
+    return {"creatures": creatures, "runs": runs, "since": KILLS_SINCE}
 
 
 def balrog_kills(home: Path) -> dict[str, Any]:
@@ -181,6 +234,8 @@ def balrog_kills(home: Path) -> dict[str, Any]:
     total: dict[str, int] = {}
     runs = 0
     for events in home.glob("runs/*-balrog-*/events.jsonl"):
+        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+            continue
         counts = cached(events, kill_counts) or {}
         runs += bool(counts)
         for name, count in counts.items():
@@ -805,6 +860,7 @@ def queue() -> dict[str, Any]:
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
             "balrog_kills": balrog_kills(home),
+            "monsters": monster_stats(home),
             "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "builds": runs["builds"],

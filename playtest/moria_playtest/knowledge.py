@@ -106,6 +106,40 @@ def kinds_by_name() -> dict[str, tuple[str, int]]:
 
 
 @lru_cache(maxsize=1)
+def _names_longest_first() -> tuple[str, ...]:
+    """Every creature name as the game prints it: the catalog's name table
+    ("Nasty little Gnome"; the lore tables' own spelling can differ, "Nasty
+    Little Gnome"), which holds every shipped creature."""
+    names = set(re.findall(r"^catn_\d+:.*// (.+?)\s*$", (CATALOG_DIR / "catalog_names.s").read_text(), re.M))
+    return tuple(sorted(names, key=len, reverse=True))
+
+
+def creature_names() -> tuple[str, ...]:
+    """Every shipped creature's name as the game prints it."""
+    return _names_longest_first()
+
+
+def creature_name(text: str) -> str:
+    """The creature a kill message names. The 40-column message row cuts a
+    long one off and the next message runs on ("You have slain the Metallic
+    Blue Centipethe Giant Static Ant misses you."): the shipped name the
+    text starts with, else the one name its longest cut-off start begins,
+    else the text as it is."""
+    text = " ".join(text.split(" -more-")[0].split())
+    names = _names_longest_first()
+    for name in names:
+        if text.startswith(name):
+            return name
+    for end in range(len(text), 5, -1):
+        found = [name for name in names if name.startswith(text[:end])]
+        if len(found) == 1:
+            return found[0]
+        if found:
+            break
+    return text
+
+
+@lru_cache(maxsize=1)
 def _tiers() -> list[tuple[list[str], dict[str, list[int]]]]:
     """(creature names, byte tables by label) for each shipped tier file."""
     tiers = [_catalog()] if _catalog_dir is not None else []

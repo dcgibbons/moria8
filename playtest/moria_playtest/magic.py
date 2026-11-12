@@ -46,6 +46,7 @@ LIGHT_SPELLS = ("Call Light", "Light Area")   # a Priest's and a Mage's: light w
 HEALS = (HEAL, CURE_CRITICAL, CURE_SERIOUS, CURE_MEDIUM, CURE_LIGHT)   # best first
 PORTAL, SANCTUARY = "Portal", "Sanctuary"                 # escapes (Words of Wisdom)
 BLIND, CHANT, ORB = "Blind Creature", "Chant", "Orb of Draining"   # control, Bless x2, attack
+DISPEL_EVIL, HOLY_WORD = "Dispel Evil", "Holy Word"   # Exorcisms and Dispellings: every evil creature in view; Holy Word heals 1000
 MAGIC_MISSILE, DETECT_MONSTERS, PHASE_DOOR = "Magic Missile", "Detect Monsters", "Phase Door"   # Mage book
 FIND_TRAPS, STINKING_CLOUD = "Find Hidden Traps/Doors", "Stinking Cloud"   # Beginners-Magick, level 3
 BLESS, PRIEST_FIND_TRAPS, SLOW_POISON = "Bless", "Find Traps", "Slow Poison"   # Beginners Handbook

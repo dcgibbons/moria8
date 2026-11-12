@@ -364,10 +364,45 @@ class BalrogKillsTest(unittest.TestCase):
                 lines += [json.dumps({"kind": "kill", "name": k, "dlvl": 40}) for k in kills]
                 lines.append(json.dumps({"kind": "character_end", "killer": "Balrog"}))
                 (path / "events.jsonl").write_text("\n".join(lines) + "\n")
-            run("20261111-0100-balrog-c64-half-troll-priest-1", ["Ancient Multi-Hued Dragon", "Kobold", "Kobold"])
-            run("20261111-0200-balrog-c64-half-troll-priest-2", ["Evil Iggy"])
-            run("20261111-0300-balrog-c64-half-troll-priest-3", [])
-            run("20261111-0400-build-c64-human-mage-4", ["Balrog"])   # another queue
+            run("20261111-1600-balrog-c64-half-troll-priest-1", ["Ancient Multi-Hued Dragon", "Kobold", "Kobold"])
+            run("20261111-1700-balrog-c64-half-troll-priest-2", ["Evil Iggy"])
+            run("20261111-1800-balrog-c64-half-troll-priest-3", [])
+            run("20261111-1900-build-c64-human-mage-4", ["Balrog"])   # another queue
             kills = dashboard.balrog_kills(home)
             self.assertEqual(kills["total"], {"Ancient Multi-Hued Dragon": 1, "Kobold": 2, "Evil Iggy": 1})
             self.assertEqual(kills["runs"], 2)
+
+
+class MonsterStatsTest(unittest.TestCase):
+    """The Monsters panel (2026-11-11): per creature, the bots' kills by
+    queue (kill events since KILLS_SINCE, cut-off names mended) and the
+    characters it killed (the run records)."""
+
+    def test_kills_and_deaths_by_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def run(name: str, queue: str, kills: list[str]) -> None:
+                path = home / "runs" / name
+                path.mkdir(parents=True)
+                (path / "job.json").write_text(json.dumps({"queue": queue}))
+                (path / "events.jsonl").write_text(
+                    "\n".join(json.dumps({"kind": "kill", "name": k}) for k in kills) + "\n")
+            run("20261111-1600-balrog-c64-half-troll-priest-1", "balrog",
+                ["Kobold", "Metallic Blue Centipethe Giant Static Ant misses you"])
+            run("20261111-1700-build-c64-human-mage-2", "build", ["Kobold"])
+            run("20261111-0900-build-c64-human-mage-3", "build", ["Kobold"])   # before kill logging
+            (home / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in [
+                {"queue": "balrog", "outcome": "died", "death": {"cause": "Balrog"}},
+                {"queue": "balrog", "outcome": "died", "death": {"cause": "Ancient Multi-Hued Dragon"}},
+                {"queue": "main", "outcome": "died", "death": {"cause": "Kobold"}},
+                {"queue": "early-cures", "outcome": "died", "death": {"cause": "Kobold"}},
+                {"queue": "build", "outcome": "died", "death": {"cause": "trap: pit"}},
+                {"queue": "build", "outcome": "budget"}]) + "\n")
+            stats = dashboard.monster_stats(home)
+            creatures = stats["creatures"]
+            self.assertEqual(stats["runs"], 2)
+            self.assertEqual(creatures["Kobold"], {"slain": {"balrog": 1, "build": 1}, "killed": {"other": 2}})
+            self.assertEqual(creatures["Metallic Blue Centipedes"]["slain"], {"balrog": 1})
+            self.assertEqual(creatures["Balrog"], {"slain": {}, "killed": {"balrog": 1}})
+            self.assertEqual(creatures["Ancient Multi-Hued Dragon"]["killed"], {"balrog": 1})
+            self.assertNotIn("trap: pit", creatures)   # not a creature

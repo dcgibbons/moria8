@@ -3119,9 +3119,14 @@ a win is unlikely until the bot plays much better.
   checkpoints as saved games, as the C128 does (`Port.graduate_save`), so
   they go on in any newer build whose loader takes their save version; a
   snapshot would restore only into the same game.
-- **Budget.** `balrog_budget`, 3,000,000 steps a run, counted from the
-  graduate's first step (DL30 took the first graduate 125,346); a
-  checkpoint's run counts it from the checkpoint's step.
+- **Budget.** `balrog_budget`, 20,000,000 steps a run (3,000,000 until
+  2026-11-11), counted from the graduate's first step (DL30 took the first
+  graduate 125,346); a checkpoint's run counts it from the checkpoint's
+  step. Only a safety cap now: a run ends in town when a newer build with
+  its port is waiting (`rotate_due`, `QueueCharacter.rotate`), keeping a
+  checkpoint first if it gained experience, so the next run plays the new
+  code from there. The short budget had cut runs off on their way back down
+  to the Balrog (maintainer, 2026-11-11).
 - **Records.** Its runs are recorded as `queue` and `goal` `balrog`, apart
   from the M7 counts. The milestones run on to DL100 and level 40. The
   dashboard's Queue tab has an M8 section: each graduate's runs, wins, best

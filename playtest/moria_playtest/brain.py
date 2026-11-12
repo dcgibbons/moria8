@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from . import knowledge
 from .magic import BLIND, BOOK_LEVELS, book_of, store_name, CHANT, CREATE_FOOD, ORB, PORTAL, SANCTUARY, FIRST_BOOK, PRAYER_BOOKS, CURE_LIGHT, CURE_MEDIUM, CURE_SERIOUS, CURE_CRITICAL, HEAL, DETECT_DOORS, HEALS, REMOVE_FEAR, Magic
 from .magic import DETECT_EVIL, DETECT_MONSTERS, RESIST_HEAT_COLD, MAGIC_MISSILE, PHASE_DOOR, FIND_TRAPS, CURE_POISON, TELEPORT_SELF, MAGE_ATTACKS, MAGE_BOOKS, books_for
-from .magic import BLESS, PRIEST_FIND_TRAPS, SLOW_POISON, NEUTRALIZE_POISON, LIGHT_SPELLS
+from .magic import BLESS, PRIEST_FIND_TRAPS, SLOW_POISON, NEUTRALIZE_POISON, LIGHT_SPELLS, DISPEL_EVIL, HOLY_WORD
 from .magic import AIMED, AT_CREATURES, ON_ITEM, CASTER_BOOK_LEVELS
 from .game import ITEM_PROMPT, KEY_RUNSTOP, KEY_SPACE, Game, Mode, Observation
 from .goals import CLASSES, RACE_KEYS, Goal
@@ -488,6 +488,7 @@ DIVE_FROM_CLVL = MAX_CLVL   # the Balrog goal dives past one-breath killers from
                             # less experience an hour than DL39, and the maintainer: "let's not deep-dive then"
 BALROG = "Balrog"     # dived for only once its breath is survivable (balrog_ready)
 BALROG_DLVL = 50      # ... and no deeper: from here every level has it (core/monster_catalog.s CAT_WIN_LEVEL)
+BALROG_FIGHT_TURNS = 2   # resisted turns of the Balrog's worst the HP covers to stand and fight it (balrog_fight)
 BALROG_FIRE_RING = 1100   # a Ring of Resist Fire at the top level on the Balrog goal: over a Ring of Speed's 1000
 DIVE_REST_HP = 0.8    # on a dive level no rest above this share of HP; below it a potion first (rest)
 BREATH_REACH = 20     # squares a creature's breath or spell reaches (VMS max_sight, core/monster_catalog.s)
@@ -598,6 +599,7 @@ class LevelMemory:
     scouted_view: Pos | None = None   # ... and the view's origin then (zp_view_x/y)
     deadly: Pos | None = None         # where a creature that could kill from full HP in one breath was seen
     deadly_jump: Pos | None = None    # the deadly creature already teleported away from (leave_deadly)
+    balrog_seen: int | None = None    # step the Balrog was last in view on this level (resist_fire, balrog_fight)
     breath: tuple[int, int] | None = None   # (step, HP lost) of the last breath taken
     breaths_taken: int = 0            # breaths taken on this level (BREATHS_TO_LEAVE)
     breather: tuple[int, int] | None = None # (step last seen, biggest turn's burst) of the breathers seen
@@ -1079,7 +1081,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.read_enchantments, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.breath_guard, self.leave_deadly, self.quaff, self.take_created_food, self.pray, self.invoke, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.read_enchantments, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.quaff, self.take_created_food, self.pray, self.invoke, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -1443,8 +1445,13 @@ class Brain:
                 # 137/296 and died to the next breath (C64 Balrog, 2026-11-09).
                 out += self.remembered_bursts(obs, assume=assume)
             balrog = knowledge.kinds_by_name().get(BALROG)
+            # Once it has come, at any price, and by potion too: half the
+            # breaths of 36 fatal fights hit through the armour alone (333,
+            # not 111), the prayer held back for mana 4-17 of 161 short of
+            # "spare" (C64 Balrog, 2026-11-11).
+            met = self.level.balrog_seen is not None or self.resist_heat > 0
             if self.balrog_bound() and obs.dlvl >= BALROG_DLVL and balrog is not None \
-                    and self.magic.spare(obs, RESIST_HEAT_COLD):
+                    and (self.magic.spare(obs, RESIST_HEAT_COLD) or met):
                 # From its level on it is always there, awake (catalog_place_
                 # win_creature): kept resisted, as a player would. A ready
                 # clvl 40 Priest fought a Mature Black Dragon on DL50 down to
@@ -1484,6 +1491,44 @@ class Brain:
             return None
         self.picking, self.listed = best[1], False
         return Decision(ord("Q"), "quaff", f"a breath of {best[0]} in view: drink {best[1][len('Potion of '):]}")
+
+    def balrog_fight(self, obs: Observation, view: View) -> Decision | None:
+        """The Balrog in view on its levels, both fire resistances up (the
+        armour or ring and the Resist Heat timer: its 1000 breath as 111):
+        fight it as a Priest does. Holy Word first (its evil a dispel of up
+        to 4 x level, and 1000 HP healed), then Orb of Draining in line (3d6
+        + level, doubled on the evil), then Dispel Evil (up to 3 x level).
+        Short of BALROG_FIGHT_TURNS of its resisted worst, a heal (Holy Word,
+        Heal), else the escapes decide. In 36 final fights the bot cast none
+        of the three, landed 4 blows, and died a median two decisions after
+        it came (C64 Balrog, 2026-11-11; maintainer: "yes" to a fight plan)."""
+        kind = knowledge.kinds_by_name().get(BALROG)
+        if kind is None or obs.dlvl < BALROG_DLVL or not self.balrog_bound():
+            return None
+        spots = [p for p, c in view.creatures.items() if (c.glyph, c.level) == kind]
+        if not spots:
+            return None
+        self.level.balrog_seen = obs.step
+        magic = self.magic
+        if not magic.caster(obs) or self.resist_div(obs, "fire") < 9:
+            return None   # resist_fire (just before) brings the timer up; without it, the escapes
+        burst = self.turn_burst(Creature(kind[0], kind[1], BALROG), obs)
+        if obs.hp < BALROG_FIGHT_TURNS * burst:
+            for spell in (HOLY_WORD, HEAL):
+                if magic.can(obs, spell):
+                    return Decision(*magic.pray(spell, f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn: pray {spell}"))
+            return None
+        if magic.can(obs, HOLY_WORD):
+            return Decision(*magic.pray(HOLY_WORD, "the Balrog in view, its fire resisted: pray Holy Word"))
+        pos = min(spots, key=lambda p: chebyshev(p, view.pos))
+        step = self.line_to(view, pos, missile=True)
+        if step is not None and chebyshev(pos, view.pos) <= ORB_RANGE and magic.can(obs, ORB):
+            self.pending = DIRS[step]
+            self.aimed = (pos, view.creatures[pos].glyph)
+            return Decision(*magic.pray(ORB, "the Balrog in line, its fire resisted: pray Orb of Draining"))
+        if magic.can(obs, DISPEL_EVIL):
+            return Decision(*magic.pray(DISPEL_EVIL, "the Balrog in view, its fire resisted: pray Dispel Evil"))
+        return None
 
     def remembered_bursts(self, obs: Observation, lasting: bool = False,
                           assume: frozenset[str] = frozenset()) -> list[int]:
@@ -2626,7 +2671,7 @@ class Brain:
         text = " ".join(seen_messages.split())
         kills = SLAIN.findall(text)
         if kills and text != self.kill_messages:
-            self.kills.extend(kills)
+            self.kills.extend(knowledge.creature_name(kill) for kill in kills)
         self.kill_messages = text if kills else ""
 
     def note_toughness(self, obs: Observation, attacker: str | None, messages: str) -> None:
@@ -4512,7 +4557,12 @@ class Brain:
             self.picking, self.listed = RESTORATION, False
             return Decision(ord("Q"), "quaff", "a stat drained: drink Restoration")
         gain = next((k for k, n in self.gains.items() if n), None)
-        if gain is not None and not self.close_threats(obs, view):
+        about = max(self.remembered_bursts(obs), default=0) >= RESIST_WORTH * obs.hp
+        if gain is not None and not self.close_threats(obs, view) and not about \
+                and self.level.deadly is None and self.level.balrog_seen is None:
+            # Not with a breather about, unseen after a phase: a clvl 40
+            # Priest drank Gain Intelligence with the Balrog breathing from
+            # out of sight, then took its 332 (C64 Balrog, 2026-11-11).
             # A stat for good, as a player drinks one the moment it is known.
             self.picking, self.listed = gain, False
             return Decision(ord("Q"), "quaff", f"drink {gain[len('Potion of '):]}")

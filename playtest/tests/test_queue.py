@@ -433,7 +433,7 @@ class BalrogQueueTest(unittest.TestCase):
         service.schedule(q, {})
         balrog = [j for j in service.running.values() if j["queue"] == "balrog"]
         self.assertEqual([(j["character"], j["goal"], j["step_budget"]) for j in balrog],
-                         [("elf-priest", "balrog", 3_000_000)] * 2)   # one graduate: two seeds of it
+                         [("elf-priest", "balrog", queue.DEFAULTS["balrog_budget"])] * 2)   # one graduate: two seeds of it
         self.assertEqual(len({j["seed"] for j in balrog}), 2)
         self.assertEqual(sum(not j["paused"] for j in service.running.values()), 4)
         self.assertEqual(sum(j["paused"] for j in service.running.values() if j["queue"] == "main"), 2)
@@ -800,7 +800,7 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual([s["run"] for s in item["start_history"]], ["m7"])
         self.assertTrue(service.start_balrog())
         run = next(iter(service.running.values()))
-        self.assertEqual((run["resume"]["run"], run["step_budget"]), ("b1-clvl27", 3_000_000 + 350_000))
+        self.assertEqual((run["resume"]["run"], run["step_budget"]), ("b1-clvl27", queue.DEFAULTS["balrog_budget"] + 350_000))
 
     def test_a_snapshot_port_checkpoint_is_its_level_entry_snapshot(self) -> None:
         service = self.service(4, 2)
@@ -2353,3 +2353,41 @@ class CatalogNamesTest(unittest.TestCase):
         self.assertNotIn(9, got)                                          # past the catalog: unnamed
         game.abi.all_symbols = {}
         self.assertEqual(view.catalog_slot_names(game), {})             # a port without the catalog
+
+
+class NewerBuildTest(unittest.TestCase):
+    """A Balrog run ends in town when a newer build is waiting (rotate),
+    replacing a 3,000,000-step budget that cut runs off on their way back
+    down to the Balrog (maintainer, 2026-11-11)."""
+
+    def test_a_later_build_with_the_port_is_newer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def build(name: str, built: float, platforms: list[str]) -> None:
+                (home / "builds" / name).mkdir(parents=True)
+                (home / "builds" / name / "build.json").write_text(
+                    json.dumps({"built": built, "platforms": platforms}))
+            build("old", 100.0, ["c64"])
+            build("tree", 200.0, ["c64", "c128"])
+            build("ci", 300.0, ["c128"])            # newer, but not for the C64
+            (home / "service.json").write_text(json.dumps({"build": "tree", "build_queue_build": "ci"}))
+            self.assertEqual(queue.newer_build("old", "c64", home), "tree")
+            self.assertIsNone(queue.newer_build("tree", "c64", home))     # it is the newest
+            self.assertEqual(queue.newer_build("tree", "c128", home), "ci")
+            self.assertIsNone(queue.newer_build("ci", "c128", home))
+            (home / "service.json").write_text(json.dumps({}))
+            self.assertIsNone(queue.newer_build("old", "c64", home))      # no service yet
+
+    def test_only_a_balrog_run_in_town_rotates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for name, built in (("old", 100.0), ("new", 200.0)):
+                (home / "builds" / name).mkdir(parents=True)
+                (home / "builds" / name / "build.json").write_text(json.dumps({"built": built, "platforms": ["c64"]}))
+            (home / "service.json").write_text(json.dumps({"build": "new"}))
+            poll = queue.ROTATE_POLL_STEPS
+            self.assertEqual(queue.rotate_due("balrog", 0, poll * 3, "old", "c64", home), "new")
+            self.assertIsNone(queue.rotate_due("balrog", 50, poll * 3, "old", "c64", home))     # deep: plays on
+            self.assertIsNone(queue.rotate_due("balrog", 0, poll * 3 + 1, "old", "c64", home))  # between polls
+            self.assertIsNone(queue.rotate_due("deep", 0, poll * 3, "old", "c64", home))        # not a Balrog run
+            self.assertIsNone(queue.rotate_due("balrog", 0, poll * 3, "new", "c64", home))      # already the newest

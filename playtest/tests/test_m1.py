@@ -1982,6 +1982,24 @@ class ThreatDepthTest(unittest.TestCase):
         # Over a plain Ring of Resist Cold, the Lordly (Cold) ring is better.
         self.assertGreater(brain.jewel_value("Ring of Lordly Protection (Cold)"), brain.jewel_value("Ring of Resist Cold"))
 
+    def test_a_cut_off_kill_message_names_the_creature_as_the_game_does(self) -> None:
+        """The 40-column message row cut long kill messages off and the next
+        message ran on: the first kill events read "Metallic Blue
+        Centipethe Giant Static Ant misses you" (2026-11-11). The name is the
+        catalog's, as the game prints it ("Nasty little Gnome", not the lore
+        tables' "Nasty Little Gnome")."""
+        from moria_playtest import knowledge
+        self.assertEqual(knowledge.creature_name("Metallic Blue Centipethe Giant Static Ant misses you"),
+                         "Metallic Blue Centipedes")
+        self.assertEqual(knowledge.creature_name("Nasty little G -more-the Nasty little Gnome casts a spell"),
+                         "Nasty little Gnome")
+        self.assertEqual(knowledge.creature_name("Blubbering Icky-Thing the White Harpy misses you"),
+                         "Blubbering Icky-Thing")
+        self.assertEqual(knowledge.creature_name("Giant Static Ant"), "Giant Static Ant")
+        brain = self.priest()
+        brain.note_kills("You have slain the Scruffy looking HobbiYour light is growing dim.")
+        self.assertEqual(brain.kills, ["Scruffy looking Hobbit"])
+
     def test_kills_are_read_once_from_the_message_rows(self) -> None:
         """2026-11-11: no record said whether an Ancient Multi-Hued Dragon or
         Evil Iggy had ever been slain. Each "You have slain the <name>." is a
@@ -2200,10 +2218,81 @@ class ResistFireTest(unittest.TestCase):
         low = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=443, mhp=443,
                           rows={23: "HP:443/443 MP:8/161 AC:51 AU:9999 Full"})
         self.assertIsNone(brain.resist_fire(low, view))
+        # Once it has come, at any price: half the breaths of 36 fatal fights
+        # hit through the armour alone, the prayer held back for mana 4-17
+        # (2026-11-11).
+        brain.level.balrog_seen = 5
+        self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(low, view).reason)
+        brain.magic.can = lambda obs, name: False                      # type: ignore[method-assign]
+        brain.resist_heat = 1
+        self.assertIn("drink Resist Heat", brain.resist_fire(low, view).reason)
+        brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
+        brain.resist_heat = 0
+        brain.level.balrog_seen = None
         shallower = command_obs(pos=(10, 10), dlvl=38, clvl=40, hp=443, mhp=443)
         self.assertIsNone(brain.resist_fire(shallower, town_view((10, 10), (40, 40), dlvl=38)))
         brain.clvl = 39
         self.assertIsNone(brain.resist_fire(o, view))                          # not yet for the Balrog
+
+    def test_the_balrog_is_fought_with_its_fire_resisted(self) -> None:
+        """2026-11-11 (maintainer: "yes" to a fight plan): in 36 final
+        fights the bot cast no Orb of Draining, Dispel Evil or Holy Word,
+        landed 4 blows and died a median two decisions after the Balrog
+        came. With both fire resistances up it stands and fights: Holy Word
+        first, then Orb of Draining in line, then Dispel Evil; short of two
+        resisted turns of its worst, a heal; resisted once only, not at all
+        (resist_fire and the escapes decide)."""
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer, HOLY_WORD, DISPEL_EVIL, ORB
+        brain = Brain(for_character(GOALS["balrog"], "half-troll-priest"))
+        brain.clvl = 40
+        known = {HOLY_WORD, ORB, DISPEL_EVIL, "Heal"}
+        brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name in known              # type: ignore[method-assign]
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 9   # type: ignore[method-assign]
+        kind = knowledge.kinds_by_name()["Balrog"]
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        view.creatures = {(14, 10): Creature(*kind)}
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=540, mhp=540)
+        self.assertIn(HOLY_WORD, brain.balrog_fight(o, view).reason)
+        self.assertEqual(brain.level.balrog_seen, o.step)
+        known.discard(HOLY_WORD)
+        decision = brain.balrog_fight(o, view)
+        self.assertIn(ORB, decision.reason)
+        self.assertIsNotNone(brain.pending)                            # aimed along the line
+        known.discard(ORB)
+        self.assertIn(DISPEL_EVIL, brain.balrog_fight(o, view).reason)
+        # Short of two resisted turns of its worst: a heal, not an attack.
+        burst = brain.turn_burst(Creature(*kind, "Balrog"), o)
+        hurt = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=2 * burst - 1, mhp=540)
+        self.assertIn("pray Heal", brain.balrog_fight(hurt, view).reason)
+        # Resisted once only (333 a breath): not its fight.
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 3   # type: ignore[method-assign]
+        self.assertIsNone(brain.balrog_fight(o, view))
+        # Not shallower, nor on another goal.
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 9   # type: ignore[method-assign]
+        shallow = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=540, mhp=540)
+        self.assertIsNone(brain.balrog_fight(shallow, view))
+
+    def test_no_gain_potion_with_a_breather_about(self) -> None:
+        """A clvl 40 Priest drank Gain Intelligence with the Balrog
+        breathing from out of sight, then took its 332 (C64 Balrog,
+        2026-11-11): a stat for good waits until nothing that breathes is
+        about."""
+        from moria_playtest.brain import GAIN_POTIONS
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-troll-priest"))
+        brain.clvl = 40
+        gain = next(iter(GAIN_POTIONS))
+        brain.gains = {gain: 1}
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        view.creatures = {}
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=500, mhp=540)
+        brain.level.balrog_seen = 3
+        decision = brain.quaff(o, view)
+        self.assertFalse(decision is not None and "Gain" in decision.reason)
+        brain.level.balrog_seen = None
+        self.assertIn("Gain", brain.quaff(o, view).reason)
 
     def test_a_breather_in_view_is_resisted_first(self) -> None:
         from moria_playtest.goals import for_character

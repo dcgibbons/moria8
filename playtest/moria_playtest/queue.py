@@ -87,6 +87,7 @@ ARMOUR_CHECKPOINT_AC = 5
 # checkpoint, and all 17 of the queue's runs were about to (2026-11-10).
 CHECKPOINT_XP = 250_000
 FINAL_CHECKPOINT_STEPS = 2_000   # in its last this many steps a run keeps one if it gained experience
+ROTATE_POLL_STEPS = 500   # a Balrog run looks for a newer build this often (newer_build)
 CHECKPOINTS = "checkpoints"   # in a run's directory: clvl<N>/ each
 ENCOUNTERS = "encounters"     # in the queue home: <run>-s<step>/, a snapshot each Balrog sighting
 BALROG = ("B", 100)          # its glyph and native level (knowledge.kinds_by_name)
@@ -95,7 +96,7 @@ DEFAULTS: dict[str, Any] = {
     "workers": 24, "min_per_platform": 1, "platforms": ["c64"], "goal": "deep", "retry_cap": 3,
     "start_budget": 2_000_000, "budget_factor": 3, "budget_floor": 750_000, "retention_days": 14, "fetch_every_s": 600,
     "remote": "origin", "branch": "main", "fetch_url": "", "paused": False, "epoch": "",
-    "balrog_workers": 0, "balrog_budget": 3_000_000,
+    "balrog_workers": 0, "balrog_budget": 20_000_000,
     "main_characters": [],   # non-empty: the main queue plays only these (2026-11-05: the Balrog starts it lacks)
     # The build queue (BuildQueue): one run per port, of HEAD's commit
     "build_platforms": [], "build_goal": "clvl10",
@@ -257,6 +258,26 @@ BRAIN_MODULES = ("brain.py", "magic.py", "view.py")   # the modules a saved brai
 
 def build_meta(build_id: str, home: Path = HOME) -> dict[str, Any]:
     return read_json(home / "builds" / build_id / "build.json") or {}
+
+
+def newer_build(build: str, platform: str, home: Path = HOME) -> str | None:
+    """A build made after ``build`` that has ``platform``: the service's
+    main-queue snapshot or the build queue's, as ``Service.newest_build``
+    picks a Balrog run's. None when ``build`` is the newest."""
+    service = read_json(home / "service.json") or {}
+    mine = build_meta(build, home).get("built") or 0
+    found = [(meta.get("built") or 0, b) for b in (service.get("build"), service.get("build_queue_build"))
+             if b and b != build and platform in (meta := build_meta(b, home)).get("platforms", [])]
+    later = [f for f in found if f[0] > mine]
+    return max(later)[1] if later else None
+
+
+def rotate_due(goal: str, dlvl: int, steps: int, build: str, platform: str, home: Path = HOME) -> str | None:
+    """The newer build a Balrog run in town hands over to (QueueCharacter.
+    rotate), looked for every ROTATE_POLL_STEPS; None to play on."""
+    if goal != "balrog" or dlvl != 0 or steps % ROTATE_POLL_STEPS:
+        return None
+    return newer_build(build, platform, home)
 
 
 def brain_shape(root: Path) -> dict[str, set[str]] | None:
@@ -446,6 +467,7 @@ def run_one(run_dir: Path) -> int:
             self.balrog_levels: set[int] = set()     # levels the Balrog was seen on (noticed)
             self.checkpoint_xp: int | None = None     # the experience at the latest start or checkpoint
             self.final_checkpoint = False             # the one kept near the step budget's end (observe)
+            self.rotating = False                     # in town with a newer build waiting: ending (rotate)
 
         def mark_start(self, obs) -> None:   # type: ignore[no-untyped-def]
             self.checkpoint_clvl = max(obs.clvl, 1)   # chargen's screen reads level 0
@@ -493,6 +515,8 @@ def run_one(run_dir: Path) -> int:
             if self.checkpoint_due and game is not None and game.last is not None and game.last.mode == Mode.COMMAND:
                 self.checkpoint_due = False
                 self.save_checkpoint()
+                if self.rotating:
+                    self.end_now()
             if text is not None and self.result.steps % TEXT_DRAIN_STEPS == 0:
                 text.drain()   # VICE's prompt at every stop: unread, it filled the socket between saves
             return super().press(key)
@@ -543,7 +567,30 @@ def run_one(run_dir: Path) -> int:
             snapshot.delete()
             self.session.event("encounter", seed=self.seed, step=self.result.steps, path=str(dest))
 
+        def rotate(self, obs) -> None:   # type: ignore[no-untyped-def]
+            """In town with a newer build waiting: keep a checkpoint (if
+            experience was gained since the last) and end the run, so the
+            next one plays the new code from here. Replaces ending on a short
+            step budget, which cut runs off on their way back down to the
+            Balrog (maintainer, 2026-11-11). A saved-game port ends after
+            the save (press)."""
+            newer = None if self.rotating else rotate_due(goal.name, obs.dlvl, self.result.steps,
+                                                          job["build"], job["platform"])
+            if newer is None:
+                return
+            self.rotating = True
+            self.session.event("rotate", seed=self.seed, step=self.result.steps, build=newer)
+            if self.checkpoint_xp is not None and obs.xp > self.checkpoint_xp:
+                self.keep_checkpoint(obs)
+            if not self.checkpoint_due:
+                self.end_now()
+
+        def end_now(self) -> None:
+            """The session loop ends after this step (its budget, reached)."""
+            self.goal = dataclasses.replace(self.goal, step_budget=self.result.steps)
+
         def observe(self, obs) -> None:   # type: ignore[no-untyped-def]
+            self.rotate(obs)
             if (goal.name == "balrog" and not self.final_checkpoint and obs.dlvl > 0
                     and self.goal.step_budget - self.result.steps <= FINAL_CHECKPOINT_STEPS
                     and self.checkpoint_xp is not None and obs.xp > self.checkpoint_xp
