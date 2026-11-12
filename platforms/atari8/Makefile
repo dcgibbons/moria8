@@ -19,7 +19,7 @@ OUT        = ../../build
 OUTATARI8  = $(OUT)/atari8
 OVL_OUTATARI8 = $(abspath $(OUTATARI8))
 
-KA_FLAGS   = ":OVL_OUT=$(OVL_OUTATARI8)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../..
+KA_FLAGS   = ":OVL_OUT=$(OVL_OUTATARI8)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8
 
 VERSION_FILE     = ../../version.json
 VERSION_INC_TOOL = ../../tools/make_version_include.py

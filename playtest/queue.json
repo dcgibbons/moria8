@@ -1,5 +1,5 @@
 {
- "workers": 24,
+ "workers": 28,
  "min_per_platform": 1,
  "platforms": [
   "c128"
@@ -16,8 +16,8 @@
  "fetch_url": "https://github.com/dcgibbons/moria8.git",
  "paused": false,
  "epoch": "2026-11-04-c128-catalog",
- "balrog_workers": 24,
- "balrog_budget": 3000000,
+ "balrog_workers": 17,
+ "balrog_budget": 20000000,
  "parallel_cap": 12,
  "main_characters": [
   "human-warrior",
@@ -43,5 +43,6 @@
  "balrog_characters": [
   "half-troll-priest"
  ],
- "balrog_copies": 24
+ "balrog_copies": 24,
+ "balrog_focus_workers": 8
 }
