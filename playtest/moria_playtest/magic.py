@@ -181,7 +181,7 @@ class Magic:
         self.ledger: dict[str, dict[str, object]] = {}
         self.casting: dict[str, object] | None = None   # the cast whose effect is awaited
         self.signature: tuple[int, ...] = ()   # traps, doors and stairs in view at the last command screen
-        self.refused: set[str] = set()        # refused without a turn: not again until the next level
+        self.refused: set[str] = set()        # refused without a turn: not again until the next level up or dungeon level
         self.lost_book: str | None = None     # a book found missing at a cast (the brain buys it again)
 
     @staticmethod
@@ -274,12 +274,18 @@ class Magic:
         return book_of(name)
 
     def pray(self, name: str, why: str) -> tuple[int, str, str]:
-        """Pray, or for a Mage-book caster cast, ``name``."""
-        self.wanted = name
+        """Pray, or for a Mage-book caster cast, ``name``. A new flow: the
+        game's answers from here on are to it, not to the prayer before
+        (``last``). A clvl 40 Priest's Orb of Draining killed a Sorcerer, it
+        read its books' lists after the level-up, its own ESC drew "Never
+        mind." and Orb was refused for good: no level-up would come to lift
+        it: every Balrog character since inherited it, Orb never prayed again
+        (C64 Balrog, 2026-11-10)."""
+        self.wanted, self.last = name, None
         return self.key, "pray", why
 
     def study(self) -> tuple[int, str, str]:
-        self.studying, self.study_book = True, None
+        self.studying, self.study_book, self.last = True, None, None
         return KEY_STUDY, "pray", "study the prayer books"
 
     def read_list(self) -> tuple[int, str, str]:

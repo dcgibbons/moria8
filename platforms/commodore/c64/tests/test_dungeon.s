@@ -55,6 +55,10 @@ test_exit_trampoline:
 // exercised here (no item spawns, no equipping): out of the way above the
 // I/O hole (2026-11-11, which took the body past MAP_BASE).
 .segmentdef TestUnusedEgoArmour [start=$e100]
+// No item is named here either: the item-name streams go above it
+// (2026-11-11, when the four VMS wands took the body 36 bytes past MAP_BASE).
+#define C64_TEST_NAME_STREAMS_A000
+.segmentdef TestNameStreams [start=$e300]
 #define PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {
     .segment TestUnusedEgoArmour

@@ -461,6 +461,44 @@ def breeder_kinds() -> frozenset[tuple[str, int]]:
                      if flags & CF_BREEDER)
 
 
+CF_EVIL = 0x04   # cr_mflags: evil (core/monster.s; VMS cdefense $0004): Dispel Evil hurts it
+
+
+@lru_cache(maxsize=1)
+def evil_names() -> frozenset[str]:
+    """The names of the shipped creatures that are evil."""
+    return frozenset(name for names, tables in _tiers()
+                     for name, flags in zip(names, tables["mflags"]) if flags & CF_EVIL)
+
+
+@lru_cache(maxsize=1)
+def evil_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) drawn by an evil creature (a nameless
+    view's guess)."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
+                     if flags & CF_EVIL)
+
+
+CF_UNDEAD = 0x02   # cr_mflags: undead (core/monster.s; VMS cdefense $0008): Drain Life passes it by
+
+
+@lru_cache(maxsize=1)
+def undead_names() -> frozenset[str]:
+    """The names of the shipped creatures that are undead."""
+    return frozenset(name for names, tables in _tiers()
+                     for name, flags in zip(names, tables["mflags"]) if flags & CF_UNDEAD)
+
+
+@lru_cache(maxsize=1)
+def undead_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) drawn by an undead creature (a nameless
+    view's guess)."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
+                     if flags & CF_UNDEAD)
+
+
 MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0}   # a turn's moves by speed code (core/monster_ai.s)
 
 

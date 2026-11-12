@@ -3064,8 +3064,11 @@ a win is unlikely until the bot plays much better.
 - **Checkpoints (maintainer, 2026-11-05).** Every Balrog death had thrown
   its levels away: the first 8 games all died at level 25-28, a median
   478,554 steps past their start, and the next run began at level 25 again.
-  Now a run keeps a checkpoint at each new character level, at the first
-  level entry after it with three quarters of its HP (`CHECKPOINT_HP`):
+  Now a run keeps a checkpoint at each new character level, at its next
+  arrival in town (until 2026-11-11 the first level entry after it with
+  three quarters of its HP: clvl 31 Warriors' checkpoints on DL37 and DL39
+  put every later game on the level that had killed the last, some dying
+  84 steps in; maintainer: town only):
   the level-entry snapshot, or on a `graduate_save` port its game saved
   over slot 1 (`graduate.save` follows either save's screens) and loaded
   back. When the run ends, its highest checkpoint past the combination's

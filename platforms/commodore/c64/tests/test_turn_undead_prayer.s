@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $0838 "Result Buffer"
-tc_results: .fill 3, $ff
+tc_results: .fill 5, $ff
 
 .pc = $080E "Test Code"
 
@@ -17,7 +17,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #2
+    ldx #4
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -128,6 +128,8 @@ ttup_last_spell_idx: .byte $ff
 ttup_frantic_calls: .byte 0
 ttup_unaffected_calls: .byte 0
 ttup_rng_value: .byte 0
+ttup_rng_calls: .byte 0
+ttup_rng_arg: .byte 0
 pmx_work_idx: .byte 0
 pmx_work_flag: .byte 0
 pmx_work_damage: .byte 0
@@ -153,6 +155,8 @@ test_huff_print_msg:
     rts
 
 test_rng_range:
+    sta ttup_rng_arg
+    inc ttup_rng_calls
     lda ttup_rng_value
     rts
 
@@ -231,6 +235,8 @@ test_reset_turn_undead_prayer_state:
     sta ttup_frantic_calls
     sta ttup_unaffected_calls
     sta ttup_rng_value
+    sta ttup_rng_calls
+    sta ttup_rng_arg
     sta cr_mflags + 0
     sta cr_mflags + 1
     sta cr_mflags + 2
@@ -282,8 +288,9 @@ test_start:
     :PatchJump(monster_get_ptr, test_monster_get_ptr)
 
     // Test 1: Turn Undead affects only visible undead. Low-level visible
-    // undead turn and report frantically, high-level visible undead resist and
-    // report unaffected, hidden undead and non-undead stay unchanged.
+    // undead turn and report frantically, a visible undead above clvl resists
+    // a failed 1-in-5 roll and reports unaffected, hidden undead and
+    // non-undead stay unchanged.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_turn_undead_prayer_state
     lda #CF_UNDEAD
@@ -345,9 +352,9 @@ test_start:
     sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
     lda #1
     sta cr_level + 1
-    lda #10
+    lda #51
     sta cr_level + 3
-    lda #5
+    lda #1
     sta ttup_rng_value
     jsr player_pray
     bcc !t1_fail+
@@ -488,8 +495,107 @@ test_start:
     bne !t3_fail+
     lda #$01
     sta tc_results + 2
-    jmp test_finish
+    jmp !t4+
 !t3_fail:
     lda #$00
     sta tc_results + 2
+
+    // Test 4 (VMS spells.inc turn_undead, Umoria spellTurnUndead): clvl + 1
+    // > level turns an undead without a roll (clvl 50, level 50); at level 51
+    // only randint(5) = 1 would, so a roll of 1 leaves it unaffected.
+!t4:
+    lda #50
+    ldx #1
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    cmp #50
+    bne !t4_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    bne !t4_fail+
+    lda ttup_frantic_calls
+    cmp #1
+    bne !t4_fail+
+    lda ttup_rng_calls
+    bne !t4_fail+
+    lda #51
+    ldx #1
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    bne !t4_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    cmp #7
+    bne !t4_fail+
+    lda ttup_frantic_calls
+    bne !t4_fail+
+    lda ttup_unaffected_calls
+    cmp #1
+    bne !t4_fail+
+    lda ttup_rng_calls
+    cmp #1
+    bne !t4_fail+
+    lda ttup_rng_arg
+    cmp #5
+    bne !t4_fail+
+    lda #$01
+    sta tc_results + 3
+    jmp !t5+
+!t4_fail:
+    lda #$00
+    sta tc_results + 3
+
+    // Test 5: an undead far above clvl (level 80, clvl 50) is still turned on
+    // randint(5) = 1 (rng_range(5) = 0) and unaffected on any other roll (4).
+!t5:
+    lda #80
+    ldx #0
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    cmp #50
+    bne !t5_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    bne !t5_fail+
+    lda ttup_frantic_calls
+    cmp #1
+    bne !t5_fail+
+    lda ttup_rng_arg
+    cmp #5
+    bne !t5_fail+
+    lda #80
+    ldx #4
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    bne !t5_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    cmp #7
+    bne !t5_fail+
+    lda ttup_unaffected_calls
+    cmp #1
+    bne !t5_fail+
+    lda #$01
+    sta tc_results + 4
     jmp test_finish
+!t5_fail:
+    lda #$00
+    sta tc_results + 4
+    jmp test_finish
+
+// One visible, sleeping undead in slot 0 (type 1), then the production
+// eff_turn_undead. A = the creature's level, X = the stubbed rng_range result.
+test_one_visible_undead:
+    pha
+    txa
+    pha
+    jsr test_reset_turn_undead_prayer_state
+    pla
+    sta ttup_rng_value
+    pla
+    sta cr_level + 1
+    lda #CF_UNDEAD
+    sta cr_mflags + 1
+    lda #1
+    sta test_mon_table + MX_TYPE
+    lda #7
+    sta test_mon_table + MX_SLEEP_CUR
+    lda #MF_VISIBLE
+    sta test_mon_table + MX_FLAGS
+    jmp eff_turn_undead

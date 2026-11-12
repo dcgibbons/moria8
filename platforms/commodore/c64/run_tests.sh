@@ -4890,7 +4890,7 @@ run_test "protection_from_evil_prayer" "tests/test_protection_from_evil_prayer.s
 run_test "earthquake_prayer" "tests/test_earthquake_prayer.s" "0400 0402" 3 500000000
 run_test "sense_surroundings_prayer" "tests/test_sense_surroundings_prayer.s" "0400 0402" 3 500000000
 run_test "cure_critical_wounds_prayer" "tests/test_cure_critical_wounds_prayer.s" "0400 0402" 3 500000000
-run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0402" 3 500000000
+run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0404" 5 500000000
 run_test "prayer_prayer" "tests/test_prayer_prayer.s" "0400 0402" 3 500000000
 run_test "dispel_undead_prayer" "tests/test_dispel_undead_prayer.s" "0400 0402" 3 500000000
 run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0404" 5 500000000
@@ -4907,7 +4907,7 @@ run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 04
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 0446" 71 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
-run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 040e" 15 1000000000
+run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 0411" 18 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040b" 12 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000

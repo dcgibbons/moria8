@@ -24,7 +24,10 @@
 
 // Ego IDs: core/item_defs.s (shared with player.s and monster_acid.s).
 .assert "Ego IDs fill EGO_TYPE_COUNT", EGO_MAGI + 1, EGO_TYPE_COUNT
-.assert "The crowns are the last item IDs (roll_ego_type, roll_armour_ego: ID >= the Silver Crown)", ITEM_TYPE_CROWN_SILVER == ITEM_TYPE_COUNT - 3 && ITEM_TYPE_CROWN_JEWEL == ITEM_TYPE_COUNT - 1, true
+// roll_ego_type and roll_armour_ego take an armour, shield or helm ID >= the
+// Silver Crown for a crown: the crowns are the last armour IDs, and only the
+// four wands of 2026-11-11 come after them.
+.assert "The crowns are the last armour IDs (roll_ego_type, roll_armour_ego: ID >= the Silver Crown)", ITEM_TYPE_CROWN_JEWEL == ITEM_TYPE_CROWN_SILVER + 2 && ITEM_TYPE_WAND_FIRE_BOLT == ITEM_TYPE_CROWN_JEWEL + 1 && ITEM_TYPE_WAND_ACID_BALL == ITEM_TYPE_COUNT - 1, true
 // ============================================================
 // roll_ego_type — Determine ego type for a spawned item
 // Input: A = item type ID

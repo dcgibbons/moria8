@@ -62,7 +62,8 @@ it_unknown_idx:
     .byte $00               // 138-139: fixed launcher names
     .byte $54, $76, $98     // 140-145: potions 4-9 (pool wrap, as 96-127)
     .byte $03, $01          // 146-148: rings 3, 0, 1 (pool wrap); 149: fixed amulet
-    .byte $00, $00          // 150-152: fixed crowns
+    .byte $00               // 150-151: fixed crowns
+    .byte $40, $10, $02     // 152: fixed crown; 153-156: wands 4, 0, 1, 2 (pool wrap, as 114-118)
 it_unknown_idx_end:
 .assert "it_unknown_idx size", it_unknown_idx_end - it_unknown_idx, (ITEM_TYPE_COUNT + 1) >> 1
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA

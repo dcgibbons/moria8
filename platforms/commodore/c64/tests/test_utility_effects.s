@@ -187,6 +187,7 @@ tpm_last_huff_id: .byte 0
 test_mon_slot:    .byte 0
 test_undead_slot: .byte 0
 test_expected_stat: .byte 0
+test_expected_x:    .byte 0
 test_rng_idx:     .byte 0
 pmx_work_idx:     .byte 0
 pmx_work_flag:    .byte 0
@@ -608,10 +609,20 @@ test_start:
     sta player_data + PL_HP_HI
     lda #$2c
     sta zp_player_mhp_lo
-    sta player_data + PL_MHP_LO
     lda #1
     sta zp_player_mhp_hi
+    // The player record is refreshed only at save and load: mid-game its max
+    // HP and position are stale, and Holy Word must not copy them back (C64
+    // Balrog queue, 2026-11-11: HP 652/443 after a clvl 40 Priest's Holy Word,
+    // player_sync_to_zp restoring the last save's maximum).
+    lda #$c8
+    sta player_data + PL_MHP_LO
+    lda #0
     sta player_data + PL_MHP_HI
+    lda zp_player_x
+    sta test_expected_x
+    eor #$40
+    sta player_data + PL_MAP_X
     lda #7
     sta zp_eff_poison
     lda #8
@@ -699,6 +710,20 @@ test_start:
     sta tc_results + 4
     jmp test_finish
 !t5_hp_ok:
+    lda zp_player_mhp_lo            // the live maximum, not the record's
+    cmp #$2c
+    bne !t5_live_fail+
+    lda zp_player_mhp_hi
+    cmp #1
+    bne !t5_live_fail+
+    lda zp_player_x                 // nor the record's position
+    cmp test_expected_x
+    beq !t5_live_ok+
+!t5_live_fail:
+    lda #$1d
+    sta tc_results + 4
+    jmp test_finish
+!t5_live_ok:
     lda zp_eff_poison
     beq !t5_poison_ok+
     lda #$11
@@ -732,6 +757,13 @@ test_start:
     sta tc_results + 4
     jmp test_finish
 !t5_stat_ok:
+    lda zp_player_str               // the ZP mirror the bash and throw read, restored too
+    cmp test_expected_stat
+    beq !t5_zp_stat_ok+
+    lda #$1e
+    sta tc_results + 4
+    jmp test_finish
+!t5_zp_stat_ok:
     lda eff_invuln_timer
     cmp #3
     beq !t5_invuln_ok+

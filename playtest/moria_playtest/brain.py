@@ -52,18 +52,30 @@ KEY_TUNNEL = ord("+")     # CMD_TUNNEL: then a direction (core/tunnel.s)
 RECHARGEABLE = ("Staff of Detect Monsters", "Wand of Light", "Staff of Light")
 # Wands and staffs (maintainer, 2026-11-04: "this is a big gap"): Mages out of
 # mana, out of Phase Door and in melee were the late deaths of the day. Damage
-# by the game's dice (FEATURE_MAP 8.3: bolts 4d8 and 6d8, balls 12, 48, 72).
-ATTACK_WANDS = {"Wand of Fire Balls": 72.0, "Wand of Cold Balls": 48.0, "Wand of Frost": 27.0,
-                "Wand of Lightning": 18.0, "Wand of Stinking Cloud": 12.0}
-BALL_WANDS = frozenset({"Wand of Fire Balls", "Wand of Cold Balls", "Wand of Stinking Cloud"})   # radius 2
-KEEP_ATTACK_WANDS = 3    # attack wands kept, the strongest kinds
+# by the game's numbers, VMS's (wands.inc: bolts 3d8, 4d8, 6d8; balls 24, 32,
+# 40, 48; Drain Life 50; core/scroll_effects_p3.s, core/item_actions_overlay.s).
+# The Umoria figures FEATURE_MAP quotes (72, 48, 6d8) overrated them until
+# 2026-11-11.
+ATTACK_WANDS = {"Wand of Drain Life": 50.0, "Wand of Fire Balls": 49.0, "Wand of Acid Balls": 40.0,
+                "Wand of Cold Balls": 33.0, "Wand of Fire Bolts": 27.0, "Wand of Lightning Balls": 24.0,
+                "Wand of Frost": 18.0, "Wand of Lightning": 13.5, "Wand of Stinking Cloud": 12.0}
+BALL_WANDS = frozenset({"Wand of Fire Balls", "Wand of Cold Balls", "Wand of Acid Balls",
+                        "Wand of Lightning Balls", "Wand of Stinking Cloud"})   # radius 2
+DRAIN_WAND = "Wand of Drain Life"   # nothing to the undead (VMS drain_life)
+KEEP_ATTACK_WANDS = 4    # attack wands kept, the strongest kinds (and bought, wands_wanted)
 BREEDER_MANA = 0.5       # share of a caster's mana an attack spell at a breeder leaves, for the escape
 BALL_BREEDERS = 3        # breeders within a ball's radius of the target that are worth a ball's charge
 TELEPORT_STAFF = "Staff of Teleportation"   # a long jump: outruns what Phase Door does not
 TELEPORT_CHARGES_RICH = 8   # its charges kept once rich: a level-35 Priest with none read Phase Door
                             # four times at an Ancient Blue Dragon that kept finding it (2026-11-07)
 TELEPORT_AWAY = "Wand of Teleport Away"     # sends the creature beside away
-WAND_BUYS = ("Wand of Frost", "Wand of Lightning", "Wand of Stinking Cloud")   # the best the gold allows
+SPEED_STAFF = "Staff of Speed"              # randint(30) + 15 turns hasted: twice the blows and steps
+DISPEL_STAFF = "Staff of Dispel Evil"       # up to 60 to every evil creature in view
+SLOW_WAND = "Wand of Slow Monster"          # one speed step off the creature it hits
+FIGHT_DEVICES = (SPEED_STAFF, DISPEL_STAFF, SLOW_WAND)
+RECHARGE_SCROLL = "Scroll of Recharging"    # recharge(60): charges back on an empty wand or staff
+RECHARGE_RESERVE = 2                        # carried while any fighting wand or staff is
+WAND_BUYS = tuple(sorted(ATTACK_WANDS, key=ATTACK_WANDS.get, reverse=True))   # the best first, as the gold allows
 WAND_GOLD = 600          # gold beyond the gear reserve for a Magic Shop trip for a wand or staff
 # Unidentified items by their flavours (core/item_identification.s): "Blue
 # Potion", "White Scroll" or "Scroll of Lumen", "Iron Wand", "Birch Staff".
@@ -99,6 +111,7 @@ def unknown_kind(name: str) -> str | None:
             return kind
     return None
 CHARGES = re.compile(r"\((\d+) charges?\)")
+RECHARGED = re.compile(r"The ((?:Wand|Staff) of [A-Za-z' -]+?) glows briefly\.")   # core/player_magic_execute_overlay.s
 # Any label after the name: "(5 charges)", or "(magik)" on one sensed but not
 # identified, which the stricter form missed, so found duplicates were picked
 # up again and again (2026-11-05: four Wands of Cold Balls).
@@ -253,6 +266,9 @@ ENCHANT_GOLD = 20000     # gold beyond the reserve before scrolls of it are boug
 ENCHANT_PER_VISIT = 8    # scrolls bought (and read in town) a visit
 ENCHANT_PER_VISIT_RICH = 24   # ... once rich (MARKET_GEAR_GOLD): the stores' stock is the limit
 ENCHANT_AC_PER_LEVEL = 2 # AC below this times the character level is worth enchanting
+ENCHANT_WEAPON = "Scroll of Enchant Weapon"   # Alchemist; +1 to-hit and/or to-dam on the weapon wielded
+ENCHANT_WEAPON_MAX = 10  # to-dam the scrolls are bought for up to (VMS enchant(): ever less likely past it)
+WEAPON_LINE = re.compile(r"^\s*[a-z]\) Weapon:\s+(.+?)\s*$")   # the equipment list's wielded weapon
 MARKET_GEAR_GOLD = 50000 # gold at which the Black Market is shopped for armour and weapons too
 HURT_OUT_HP = 0.35       # below this share of HP with no healing potion left: Word of Recall
 HURT_OUT_HP_NO_ESCAPE = 0.5   # ... with no escape at hand either: Recall takes 15-35 turns to come
@@ -377,6 +393,8 @@ BREATH_LETHAL = 0.9      # a caster in view whose biggest spell or breath is thi
 UNSEEN_BREATH_STEPS = 40 # steps a breath from out of sight is remembered as the next one's size
 UNSEEN_BREATHS = 2       # ... and the breaths it is weighed as: no sight line to step out of
 THREAT_DEPTH_FROM = 30   # character level from which a threat_depth goal goes as deep as it survives
+OUT_OF_DEPTH = 2         # ... counting natives this much deeper: 1 in 50 picks is out of depth by
+                         # 1 + |randnor(0,4)| (VMS alloc_monster mon_nasty, core/monster_catalog.s)
 SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
 RECALL_CLIMB = 1         # Word of Recall down to a deepest level this many past ready: climb from there
@@ -573,6 +591,7 @@ class LevelMemory:
     unseen_until: int = 0           # step before which an unseen attacker may still be there
     near_until: int = 0             # step before which a creature seen close may still follow
     groped: set[Pos] = field(default_factory=set)   # unknown squares already stepped into
+    slowed: set[tuple[str, int, str]] = field(default_factory=set)   # creatures a Wand of Slow Monster was aimed at
     felt: set[Pos] = field(default_factory=set)   # unknown squares a move into went nowhere: walls in the dark
     glyphs: dict[Pos, str] = field(default_factory=dict)   # unidentified glyphs seen, on screen or not
     retreat_path: set[Pos] = field(default_factory=set)   # tiles the current retreat crossed
@@ -710,6 +729,10 @@ class Brain:
         self.on_item_after: dict[str, int] = {}   # item spell -> step it is next exercised (ON_ITEM_RETRY)
         self.rechargeable = False              # a staff or wand bought for Recharge (RECHARGEABLE)
         self.wands: dict[str, int] = {}        # wand or staff -> charges known to be left
+        self.hasted = False                    # "You feel yourself moving faster." until "... slow down."
+        self.recharge_scrolls = 0              # Scrolls of Recharging carried
+        self.weapon_scrolls = 0                # Scrolls of Enchant Weapon carried
+        self.recharge_target: str | None = None   # the wand or staff a Scroll of Recharging was read for
         self.unknown: collections.Counter[str] = collections.Counter()   # unidentified items carried, by flavour
         self.identifying: str | None = None    # the unknown item an Identify was cast on
         self.identify_scrolls = 0              # Scrolls of Identify carried
@@ -826,6 +849,15 @@ class Brain:
         # have sent the bot from every 'p' beside it (review, 2026-11-08).
         touch = knowledge.touch_paralyzers()
         self.paralyzers.update(m.group(1) for m in PARALYZES.finditer(messages) if m.group(1) in touch)
+        if (obs.mode == Mode.COMMAND and obs.dlvl and not self.dark and obs.abi is not None
+                and hasattr(obs.abi, "zp_light_radius") and obs.zp8("zp_light_radius") == 0):
+            # Dark around the player, as a player sees it, whatever the
+            # messages showed: "Your light has gone out." went unseen, and a
+            # level-3 Apple IIe Priest with four spare torches in its pack
+            # explored DL1 by a burnt-out one, took every dark corridor mouth
+            # for a dead end and searched walls 330,000 steps, starving
+            # (build queue, 2026-11-11).
+            self.light_left, self.dark = 0, True
         if not (messages == self.noted_messages and self.noted_on_prompt):
             # Food and light news on every screen too: a third message pushes
             # earlier ones behind -more- (review). A screen repeating what a
@@ -833,6 +865,16 @@ class Brain:
             # screens are (two pickups in a row read the same).
             self.count_food(messages)
             self.track_light(messages)
+            if "You feel yourself moving faster." in messages:
+                self.hasted = True
+            if "You feel yourself slow down." in messages:
+                self.hasted = False
+            for name in RECHARGED.findall(messages):
+                self.wands[name] = max(1, self.wands.get(name, 0))   # how many: the next list shows
+            if "There is a bright flash of light." in messages and self.recharge_target is not None:
+                self.wands.pop(self.recharge_target, None)           # the recharge destroyed it
+            if RECHARGED.search(messages) or "There is a bright flash of light." in messages:
+                self.recharge_target = None
             if "Your pack is full." in messages:
                 self.pack_full = True
             if " is damaged!" in messages:
@@ -1081,7 +1123,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.read_enchantments, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.quaff, self.take_created_food, self.pray, self.invoke, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.quaff, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -1130,6 +1172,22 @@ class Brain:
             ac = re.search(r"\[(-?\d+)(?:,\s*([+-]?\d+))?\]", text)
             worn[EQUIP_SLOTS[match.group(1)]] = 0 if ac is None else int(ac.group(1)) + int(ac.group(2) or 0)
         return worn or None
+
+    def read_weapon(self, rows: list[str]) -> None:
+        """The weapon wielded as the equipment list shows it, its to-dam as
+        enchanted: counted only at purchase, a weapon's Enchant Weapon
+        scrolls never showed in what was bought next."""
+        for i, row in enumerate(rows):
+            match = WEAPON_LINE.match(row)
+            if match is None:
+                continue
+            text = match.group(1)
+            if not re.search(r"\([+-]\d+,", text) and i + 1 < len(rows) and rows[i + 1].strip().startswith("("):
+                text += " " + rows[i + 1].strip()   # the plusses wrapped on 40 columns
+            weapon = GEAR_WEAPON.match(text)
+            if weapon and not weapon.group(1).startswith(tuple(LAUNCHERS)):
+                self.weapon = (weapon.group(1), int(weapon.group(3)) if weapon.group(3) else 0)
+            return
 
     def read_resists(self, rows: list[str]) -> None:
         """The armour worn by slot, and every breath element the equipment
@@ -1324,13 +1382,38 @@ class Brain:
         return (self.ac_seen < ENCHANT_AC_PER_LEVEL * self.clvl and self.enchant_scrolls < cap
                 and gold >= ENCHANT_GOLD + GEAR_RESERVE)
 
-    def read_enchantments(self, obs: Observation, view: View) -> Decision | None:
-        """In town, read the Scrolls of Enchant Armor bought, then the armour
-        list again (``check_equipment``)."""
-        if obs.dlvl != 0 or not self.enchant_scrolls or self.close_threats(obs, view):
+    def recharge(self, obs: Observation, view: View) -> Decision | None:
+        """A fighting wand or staff run empty and a Scroll of Recharging in
+        the pack: read it on that one, nothing close, as a player keeps the
+        wands going (maintainer, 2026-11-11: warriors and their wands)."""
+        if not self.recharge_scrolls or self.close_threats(obs, view):
             return None
-        self.picking, self.listed = ENCHANT_ARMOR, False
-        return Decision(ord("R"), "gear", "read Enchant Armor")
+        empty = next((w for w in (*ATTACK_WANDS, *FIGHT_DEVICES, TELEPORT_STAFF)
+                      if w in self.wands and self.wands[w] == 0), None)
+        if empty is None:
+            return None
+        self.picking, self.picking_next, self.listed = RECHARGE_SCROLL, empty, False
+        self.recharge_target = empty
+        return Decision(ord("R"), "gear", f"the {empty} is empty: read {RECHARGE_SCROLL}")
+
+    def read_enchantments(self, obs: Observation, view: View) -> Decision | None:
+        """In town, read the Scrolls of Enchant Armor and Enchant Weapon
+        bought, then the equipment list again (``check_equipment``)."""
+        if obs.dlvl != 0 or not (self.enchant_scrolls or self.weapon_scrolls) or self.close_threats(obs, view):
+            return None
+        scroll = ENCHANT_ARMOR if self.enchant_scrolls else ENCHANT_WEAPON
+        self.picking, self.listed = scroll, False
+        return Decision(ord("R"), "gear", f"read {scroll.removeprefix('Scroll of ')}")
+
+    def weapon_enchant_wanted(self, gold: int) -> bool:
+        """Rich and the weapon's to-dam short of ENCHANT_WEAPON_MAX: Scrolls of
+        Enchant Weapon, as a player spends a fortune. A clvl 31 Gnome Warrior
+        with 1,184,000 gold fought Ancient Blue Dragons with a Two-Handed
+        Sword (+2) and died to them (C64 Balrog, 2026-11-11). Not a Mage's:
+        its weapon is not its strength."""
+        cap = ENCHANT_PER_VISIT_RICH if gold >= MARKET_GEAR_GOLD else ENCHANT_PER_VISIT
+        return (self.goal.klass != "mage" and self.weapon[1] < ENCHANT_WEAPON_MAX and self.weapon_scrolls < cap
+                and gold >= ENCHANT_GOLD + GEAR_RESERVE)
 
     def track_stats(self, obs: Observation) -> None:
         """Each stat's highest value seen; one below it is drained, and a
@@ -1910,6 +1993,7 @@ class Brain:
         if obs.mode == Mode.DISMISS and self.listing_equipment:
             self.listing_equipment = False
             worn = self.read_equipment(obs.rows)
+            self.read_weapon(obs.rows)
             self.jewels.update(self.read_jewels(obs.rows))
             self.read_resists(obs.rows)
             if worn is not None:
@@ -2156,12 +2240,16 @@ class Brain:
             wants.append(RESIST_COLD)   # frost breath since 2026-11-08 (white dragons)
         if gold is not None and self.enchant_wanted(gold):
             wants.append(ENCHANT_ARMOR)
+        if gold is not None and self.weapon_enchant_wanted(gold):
+            wants.append(ENCHANT_WEAPON)
         if self.recall < self.recall_reserve():
             wants.append(RECALL)
         if self.phase < self.phase_reserve():
             wants.append(PHASE)
         if self.teleports < self.teleport_reserve():
             wants.append(TELEPORT_SCROLL)
+        if self.recharge_scrolls < RECHARGE_RESERVE and any(w in self.wands for w in (*ATTACK_WANDS, *FIGHT_DEVICES)):
+            wants.append(RECHARGE_SCROLL)
         if self.launcher is not None and self.ammo < AMMO_RESERVE:
             wants.append(LAUNCHERS[self.launcher][0])   # 1-2 gp a shot
         if self.at_store == TEMPLE and self.book_next is not None and self.book_next not in MAGE_BOOKS:
@@ -2181,7 +2269,7 @@ class Brain:
             # A Brass Lantern too, rich, where the General Store seldom has
             # one (1 of its 25 stock choices): level-37 Priests lit torches
             # and went home for more every 4,000 steps (C64 Balrog, 2026-11-09).
-            keep = (RECALL, PHASE, TELEPORT_SCROLL, CCW, CSW, ENCHANT_ARMOR, RESIST_HEAT, RESIST_COLD,
+            keep = (RECALL, PHASE, TELEPORT_SCROLL, CCW, CSW, ENCHANT_ARMOR, ENCHANT_WEAPON, RESIST_HEAT, RESIST_COLD,
                     LANTERN) if rich else (RECALL,)
             wants = [w for w in wants if w in keep]
             if rich:
@@ -2190,7 +2278,8 @@ class Brain:
                 order = sorted(GAIN_POTIONS, key=lambda k: GAIN_POTIONS[k] not in ("CO", "ST", "DX"))
                 wants += [k for k in order if self.stat_now.get(GAIN_POTIONS[k], 0) < STAT_MAXED]
         elif self.at_store == ALCHEMIST:
-            wants = [w for w in wants if w in (RECALL, PHASE, TELEPORT_SCROLL, RESTORATION, ENCHANT_ARMOR)]
+            wants = [w for w in wants if w in (RECALL, PHASE, TELEPORT_SCROLL, RESTORATION, ENCHANT_ARMOR,
+                                               ENCHANT_WEAPON, RECHARGE_SCROLL)]
         return wants
 
     def stats(self, obs: Observation) -> tuple[int, int]:
@@ -2372,6 +2461,8 @@ class Brain:
             self.gains[kind] = max(0, self.gains.get(kind, 0) + n)
         elif item.startswith(ENCHANT_ARMOR):
             self.enchant_scrolls += n
+        elif item.startswith(ENCHANT_WEAPON):
+            self.weapon_scrolls += n
         elif item.startswith(TORCH):
             self.torches += n
         elif item.startswith(CLW):
@@ -2442,6 +2533,8 @@ class Brain:
             self.recall, self.phase, self.identify_scrolls = held(RECALL), held(PHASE), held(IDENTIFY_SCROLL)
             self.teleports = held(TELEPORT_SCROLL)
             self.enchant_scrolls = held(ENCHANT_ARMOR)
+            self.weapon_scrolls = held(ENCHANT_WEAPON)
+            self.recharge_scrolls = held(RECHARGE_SCROLL)
         if scope in ("potions", "all"):
             self.clw, self.neutralize, self.restoration = held(CLW), held(NEUTRALIZE), held(RESTORATION)
             self.resist_heat, self.resist_cold = held(RESIST_HEAT), held(RESIST_COLD)
@@ -2495,9 +2588,14 @@ class Brain:
                     self.resist_heat = max(0, self.resist_heat - 1)
                 elif self.picking == RESIST_COLD:
                     self.resist_cold = max(0, self.resist_cold - 1)
+                elif self.picking == RECHARGE_SCROLL:
+                    self.recharge_scrolls = max(0, self.recharge_scrolls - 1)
                 elif self.picking == ENCHANT_ARMOR:
                     self.enchant_scrolls = max(0, self.enchant_scrolls - 1)
                     self.equip_checked = self.equip_checked and self.enchant_scrolls > 0   # all read: the list again
+                elif self.picking == ENCHANT_WEAPON:
+                    self.weapon_scrolls = max(0, self.weapon_scrolls - 1)
+                    self.equip_checked = self.equip_checked and self.weapon_scrolls > 0    # the weapon's plusses then
                 elif self.picking in GAIN_POTIONS:
                     self.gains[self.picking] = max(0, self.gains.get(self.picking, 0) - 1)
                 elif self.picking == RESTORATION:
@@ -2588,6 +2686,8 @@ class Brain:
             self.gains.pop(self.picking, None)
         elif self.picking == ENCHANT_ARMOR:
             self.enchant_scrolls = 0
+        elif self.picking == ENCHANT_WEAPON:
+            self.weapon_scrolls = 0
         elif self.picking == RECALL:
             self.recall = 0
         elif self.picking is not None and self.picking.startswith(("Wand of", "Staff of")):
@@ -2779,6 +2879,11 @@ class Brain:
     def track(self, obs: Observation, view: View) -> None:
         self.map_scale = view.cols * view.rows / C64_MAP_AREA
         if obs.dlvl != self.last_dlvl:
+            # Refusals last until the next level-up, and a clvl 40 character
+            # has none to come: a new dungeon level tries them again (no turn
+            # passes on a refusal). A book lost and bought back in town is
+            # prayed from again on the way down.
+            self.magic.refused.clear()
             if obs.dlvl == 0 or (self.climb_from is not None and obs.dlvl < self.climb_from):
                 self.climb_hops, self.climb_from = 0, None   # higher than the hops began: real progress
             if obs.dlvl == 0 and self.last_dlvl is not None:
@@ -3180,7 +3285,11 @@ class Brain:
         Dragon's 468) until a Ring of Resist Cold cuts that to 156."""
         if not self.goal.threat_depth or obs.clvl < THREAT_DEPTH_FROM:
             return False
-        return self.native_burst(obs, dlvl) < BREATH_LETHAL * obs.mhp
+        # Natives OUT_OF_DEPTH deeper too: clvl 31 Warriors at 256-289 HP
+        # took DL37 (a Mature Red Dragon's 160), met Ancient Blue Dragons of
+        # DL39 there and died 16 times in 30 minutes (C64 Balrog, 2026-11-11;
+        # maintainer: count them).
+        return self.native_burst(obs, dlvl + OUT_OF_DEPTH) < BREATH_LETHAL * obs.mhp
 
     def native_burst(self, obs: Observation, dlvl: int) -> int:
         """The worst turn of spells or breath of any shipped creature native
@@ -3752,6 +3861,47 @@ class Brain:
             return Decision(KEY_THROW, "throw", f"{why}: throw oil at '{creature.glyph}'")
         return None
 
+    @staticmethod
+    def undead(creature: Creature) -> bool:
+        """Undead by the lore: the Wand of Drain Life does nothing to it."""
+        return (creature.name in knowledge.undead_names() if creature.name
+                else (creature.glyph, creature.level) in knowledge.undead_kinds())
+
+    def devices(self, obs: Observation, view: View) -> Decision | None:
+        """A fight's staffs and wands, as a player uses them on what is too
+        strong for blows alone: the Staff of Speed first (twice the blows,
+        the escapes too), the Staff of Dispel Evil while a strong evil
+        creature is in view, a Wand of Slow Monster once at each such
+        creature in line. Clvl 31 Warriors meleed Ancient Blue and White
+        Dragons on DL36-38 to the death, aiming a wand 22 times in a game
+        and fighting 5,787 (C64 Balrog, 2026-11-11; maintainer: "warriors
+        should be using magic items like wands and staves")."""
+        if obs.dlvl == 0:
+            return None
+        strong = [(pos, c) for pos, c in view.creatures.items()
+                  if not self.stationary(c) and (self.lore_strong(c, obs) or self.dangerous(c, obs))
+                  and chebyshev(pos, view.pos) <= FIRE_RANGE]
+        if not strong:
+            return None
+        if not self.hasted and self.wands.get(SPEED_STAFF, 0) > 0:
+            self.picking, self.listed, self.last_aimed = SPEED_STAFF, False, SPEED_STAFF
+            return Decision(KEY_USE, "device", f"'{strong[0][1].glyph}' too strong for blows: use the {SPEED_STAFF}")
+        evil = [c for _, c in strong if (c.name in knowledge.evil_names() if c.name
+                                         else (c.glyph, c.level) in knowledge.evil_kinds())]
+        if evil and self.wands.get(DISPEL_STAFF, 0) > 0:
+            self.picking, self.listed, self.last_aimed = DISPEL_STAFF, False, DISPEL_STAFF
+            return Decision(KEY_USE, "device", f"evil '{evil[0].glyph}' in view: use the {DISPEL_STAFF}")
+        if self.wands.get(SLOW_WAND, 0) > 0:
+            for pos, c in sorted(strong, key=lambda pc: chebyshev(pc[0], view.pos)):
+                step = self.line_to(view, pos, missile=True)
+                if step is None or (c.glyph, c.level, c.name) in self.level.slowed:
+                    continue
+                self.level.slowed.add((c.glyph, c.level, c.name))
+                self.picking, self.listed, self.pending, self.last_aimed = SLOW_WAND, False, DIRS[step], SLOW_WAND
+                self.aimed = (pos, c.glyph)
+                return Decision(KEY_AIM, "device", f"aim the {SLOW_WAND} at '{c.glyph}'")
+        return None
+
     def aim(self, obs: Observation, view: View) -> Decision | None:
         """An attack wand at a creature in line (maintainer, 2026-11-04):
         one too strong for melee, a dangerous one, or any while hurt, and for
@@ -3785,7 +3935,10 @@ class Brain:
                     or obs.hp < RETREAT_HP * obs.mhp):
                 continue
             hp = strength_of(creature)[0] or 1.0
-            wand = min(wands, key=lambda w: (math.ceil(hp / ATTACK_WANDS[w]), ATTACK_WANDS[w]))
+            usable = [w for w in wands if w != DRAIN_WAND or not self.undead(creature)]
+            if not usable:
+                continue
+            wand = min(usable, key=lambda w: (math.ceil(hp / ATTACK_WANDS[w]), ATTACK_WANDS[w]))
             self.picking, self.listed, self.pending, self.last_aimed = wand, False, DIRS[step], wand
             self.aimed = (pos, creature.glyph)
             return Decision(KEY_AIM, "aim", f"aim the {wand} at '{creature.glyph}'")
@@ -3836,10 +3989,16 @@ class Brain:
         return Decision(ord("R"), "try", f"try the {name}: read it to learn what it is")
 
     def wands_wanted(self) -> list[str]:
-        """At the Magic Shop: an attack wand while none has charges, the best
-        first, and a Staff of Teleportation while none has, or, rich, while
-        its charges are under TELEPORT_CHARGES_RICH."""
-        want = [] if any(self.wands.get(w, 0) for w in ATTACK_WANDS) else list(WAND_BUYS)
+        """At the Magic Shop: each attack wand and fight staff not carried
+        with charges, the best first, and a Staff of Teleportation while
+        none has, or, rich, while its charges are under TELEPORT_CHARGES_RICH."""
+        # Each kind not carried charged, the best first (maintainer,
+        # 2026-11-11: "warriors should be using magic items like wands and
+        # staves"): one Wand of Frost was half an Ancient Blue Dragon.
+        # KEEP_ATTACK_WANDS kinds charged at most: drop_junk keeps no more.
+        charged = sum(1 for w in ATTACK_WANDS if self.wands.get(w, 0))
+        want = [w for w in WAND_BUYS if not self.wands.get(w, 0)][:max(0, KEEP_ATTACK_WANDS - charged)]
+        want += [w for w in FIGHT_DEVICES if not self.wands.get(w, 0)]
         keep = TELEPORT_CHARGES_RICH if self.gold_seen >= MARKET_GEAR_GOLD else 1
         return want + ([TELEPORT_STAFF] if self.wands.get(TELEPORT_STAFF, 0) < keep else [])
 
@@ -4831,7 +4990,7 @@ class Brain:
             # level-16 Mage's pack until the General Store refused its food
             # and light, and it starved in the dark (C128, 2026-11-05).
             recharging = any(n in self.magic.known and not self.magic.confirmed(n) for n in RECHARGE_SPELLS)
-            useful = (*ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *(RECHARGEABLE if recharging else ()))
+            useful = (*ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *FIGHT_DEVICES, *(RECHARGEABLE if recharging else ()))
             keep = KEEP_PREFIXES + missiles + ((self.weapon[0],) if self.wielding_launcher else ()) + tuple(useful)
 
             matches = [PACK_ITEM.match(row) for row in obs.rows[1:]]
@@ -5764,6 +5923,18 @@ class Brain:
                                      "level exhausted: path to the nearest staircase")
                 if decision is not None:
                     return decision
+        if self.lightless():
+            # No known way in the dark: feel it, as resupply does. Too poor
+            # for town to help, resupply never walks it there: a level-3 Apple
+            # IIe Priest with 1 gold in the dark (its spare torches unlit, see
+            # decide) knew both staircases of a DL1 level, took every dark
+            # corridor mouth for a dead end and searched walls 330,000 steps,
+            # starving (build queue, 2026-11-11).
+            exits = view.stairs_down() if deeper_ok else set()
+            for stairs in (exits, view.stairs_up()):
+                step = self.dark_step(view, stairs) if stairs else None
+                if step is not None:
+                    return self.move(view, step, "stair-scum", "level exhausted, no light: feel the way to the stairs")
         if self.food_low() or self.stuck(view):
             # No way up and short of food (M4 round 39: seeds 1002, 1004, 1019,
             # 1020 searched sealed pockets until they starved): down first.

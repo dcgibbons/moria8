@@ -371,6 +371,18 @@ player_bake_apply_one:
     cpx #EQUIP_HEAD
     bcs !pcs_eq-
 
+    // The ZP stat mirrors (bash, throw, the to-hit) follow at once: a
+    // restore (Holy Word, a Potion of Restoration) left them stale until the
+    // next load, and Holy Word's player_sync_to_zp, which refreshed them, also
+    // undid the heal with the last save's HP (C64 Balrog queue, 2026-11-11).
+    ldy #STAT_COUNT - 1
+!pcs_zp:
+    lda player_data + PL_STR_CUR,y
+    sta zp_player_str,y             // absolute,y: no zp,y sta
+    dey
+    bpl !pcs_zp-
+.assert "The ZP stat mirrors follow PL_*_CUR order", zp_player_chr - zp_player_str == PL_CHR_CUR - PL_STR_CUR && STAT_COUNT == 6, true
+
     // Persistent effect flags from the equipment: the routine below, by
     // falling through, or by a jump where a port places it elsewhere.
 #if PLAYER_RECALC_PFLAGS_EXTERNAL

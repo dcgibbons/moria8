@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-152: ` (up to 3 digits)
+- Item generation: `ITEM 0-156: ` (up to 3 digits)
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,14 +40,15 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-152` (see the item catalog in
+Wizard item generation uses item IDs `0-156` (see the item catalog in
 `core/item_tables.s`; IDs `96-127` are the Phase 3 items — new potions,
 scrolls, rings, wands, staves, Mithril armor, and amulets; IDs `128-134` are
 the chests — wooden, iron, steel, and ruined; ID `135` is the Iron Spike;
 ID `136` is the Scroll of Phase Door; IDs `137-139` are the Long Bow,
 Composite Bow and Heavy Crossbow; IDs `140-145` the potions of gain stat;
 IDs `146-148` the Rings of Lordly Protection and `149` the Amulet of Resist
-Acid; IDs `150-152` the crowns).
+Acid; IDs `150-152` the crowns; IDs `153-156` the Wands of Fire Bolts, Drain
+Life, Lightning Balls and Acid Balls).
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -122,6 +123,9 @@ or `Neutralize Poison` feedback:
   (Cold) `148`; Amulet of Resist Acid `149`. Wear one and check the breath or
   touch damage of its element.
 - Crowns: Silver `150`, Golden `151`, Jewel Encrusted `152`.
+- Attack wands (VMS): Fire Bolts `153` (6d8), Drain Life `154` (50, not the
+  undead), Lightning Balls `155` (24), Acid Balls `156` (40). Aim one at a
+  creature, and at an undead one for Drain Life (no effect).
 
 ### Movement / traversal helpers
 
@@ -286,6 +290,10 @@ or `Neutralize Poison` feedback:
 | 150 | Silver Crown |
 | 151 | Golden Crown |
 | 152 | Jewel Encrusted Crown |
+| 153 | Wand of Fire Bolts |
+| 154 | Wand of Drain Life |
+| 155 | Wand of Lightning Balls |
+| 156 | Wand of Acid Balls |
 
 ## Source References
 

@@ -3834,43 +3834,6 @@ c128_resident_items_start:
 // dungeon_features.s import site; this block continues in the items payload.
 .segment C128ResidentItems
 
-// eff_find_doors rides the resident items payload (the world payload funds
-// chest search/trap discovery); other platforms keep it in spell_effects.s.
-eff_fd_row: .byte 0
-
-eff_find_doors:
-    lda #1
-    sta eff_fd_row
-!efd_row_loop:
-    lda eff_fd_row
-    cmp #MAP_ROWS - 1
-    bcs !efd_done+
-    ldx eff_fd_row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #1
-!efd_col_loop:
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_SECRET
-    bne !efd_col_next+
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_CLOSED
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-!efd_col_next:
-    iny
-    cpy #MAP_COLS - 1
-    bcc !efd_col_loop-
-    inc eff_fd_row
-    jmp !efd_row_loop-
-!efd_done:
-    lda #1
-    sta vis_room_revealed
-    rts
 .segment Default
 #import "../../../core/scene_mat_tile.s"
 #import "../../../core/scene_force.s"
@@ -4384,6 +4347,46 @@ c128_resident_world_end:
 .segment C128ResidentPlay
 #import "../../../core/turn.s"
 #import "../../../core/player_magic_state.s"
+// eff_find_doors rides the resident play payload (2026-11-11: the four VMS
+// wands filled the items payload; it was there since the world payload funds
+// chest search/trap discovery); other platforms keep it in spell_effects.s.
+// Detect Doors/Stairs runs only in play, never while the persist payload
+// holds the $AF00 window.
+eff_fd_row: .byte 0
+
+eff_find_doors:
+    lda #1
+    sta eff_fd_row
+!efd_row_loop:
+    lda eff_fd_row
+    cmp #MAP_ROWS - 1
+    bcs !efd_done+
+    ldx eff_fd_row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #1
+!efd_col_loop:
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !efd_col_next+
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK
+    ora #TILE_DOOR_CLOSED
+    ora #FLAG_VISITED
+    :MapWrite_ptr0_y()
+!efd_col_next:
+    iny
+    cpy #MAP_COLS - 1
+    bcc !efd_col_loop-
+    inc eff_fd_row
+    jmp !efd_row_loop-
+!efd_done:
+    lda #1
+    sta vis_room_revealed
+    rts
 c128_resident_play_end:
 
 .segment Default
@@ -5351,6 +5354,7 @@ program_end:
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
+.assert "Detect Doors/Stairs lives in the resident play payload", eff_find_doors >= c128_resident_play_body && eff_find_doors < c128_resident_play_end, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "Tiers 1-4 fit the Bank 1 tier cache", TIER1_SIZE + TIER2_SIZE + TIER3_SIZE + TIER4_SIZE <= BANK1_TIER_CACHE_SIZE, true
@@ -5489,6 +5493,9 @@ ovl_start_end:
 // Death overlay — score + high score display at $E000
 // ============================================================
 .segment DeathOverlay
+// The Fire Bolts and Drain Life effects (MON-031, 2026-11-11) beside the other
+// Phase 3 wand handlers the death-overlay table calls (tramp_p3_death_items).
+#import "../../../core/wand_bolt_entries.s"
     #import "../../../core/score.s"
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL

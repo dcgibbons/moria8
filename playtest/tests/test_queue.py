@@ -1,5 +1,6 @@
 import contextlib
 import dataclasses
+import functools
 import json
 import tempfile
 import unittest
@@ -492,6 +493,29 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual(len({j["seed"] for j in runs}), 3)               # each its own dice
         self.assertTrue(all(j["resume"]["run"] == item["start"]["run"] for j in runs))
 
+    def test_a_focus_share_leaves_the_rest_to_everyone_else(self) -> None:
+        """Maintainer, 2026-11-11: "half the workers for this priest
+        character, and the other half for everyone else": past its share the
+        focus's copies wait, the others take turns, one game each first, and
+        the focus stops none of their games."""
+        service = self.service(6, 5)
+        for combo in ("half-troll-priest", "elf-priest", "human-warrior"):
+            service.balrog.graduate("c64", combo, {})
+        service.config.update(balrog_characters=["half-troll-priest"], balrog_copies=24,
+                              balrog_focus_workers=2, platforms=["c128"])
+        for _ in range(5):
+            self.assertTrue(service.start_balrog())
+        playing = sorted(j["character"] for j in service.running.values() if j["queue"] == "balrog")
+        self.assertEqual(playing, ["elf-priest", "elf-priest", "half-troll-priest", "half-troll-priest",
+                                   "human-warrior"])
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        q = queue.Queue("deep", service.home)
+        q.platform("c128")
+        service.schedule(q, {})
+        self.assertEqual(stopped, [])
+        self.assertNotEqual(service.balrog.take(exclude=("half-troll-priest",))["character"], "half-troll-priest")
+
     def test_a_graduate_playing_already_is_not_taken_again(self) -> None:
         """2026-11-06: the rotation lapped a long game, and two games of one
         combination played from one start while others waited."""
@@ -709,6 +733,16 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertFalse(queue.same_brain("old", "new", service.home))   # every class: View counted
         view.write_text(view.read_text() + "class Creature:\n    glyph: str\n")   # a class it holds grew
         self.assertFalse(queue.start_loads(start, "new", "c128", service.home))
+        # 2026-11-11: Creature's defaulted ``name`` retired a level-25 start;
+        # an old Creature reads the class's default.
+        base = "class Creature:\n    glyph: str\n    level: int\n"
+        old_view = service.home / "builds" / "old" / "playtest" / "moria_playtest" / "view.py"
+        old_view.write_text(old_view.read_text() + base)
+        grown = base + '    name: str = field(default="", compare=False)\n    note: str = ""\n'
+        view.write_text("class View:\n    last_path: list = []\n" + grown)
+        self.assertTrue(queue.start_loads(start, "new", "c128", service.home))
+        view.write_text(view.read_text() + "    seen: set = field(default_factory=set)\n")
+        self.assertFalse(queue.start_loads(start, "new", "c128", service.home))   # no class default
 
     def test_balrog_platforms_join_from_level_1_and_take_no_other_port(self) -> None:
         """Maintainer, 2026-11-06: the Balrog queue on the C64, every
@@ -843,7 +877,7 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertFalse(service.balrog_checkpoint(self.balrog_record("b4"), {"build": "b0", "resume": level}))
 
     def test_a_run_checkpoints_a_new_level_or_better_armour(self) -> None:
-        wanted = queue.checkpoint_wanted
+        wanted = functools.partial(queue.checkpoint_wanted, dlvl=0)
         self.assertTrue(wanted(28, 40, 27, 40))
         self.assertTrue(wanted(27, 45, 27, 40))
         self.assertFalse(wanted(27, 44, 27, 40))
@@ -856,6 +890,12 @@ class BalrogQueueTest(unittest.TestCase):
         # 2,000,000 experience to its clvl 39 checkpoint.
         self.assertTrue(wanted(39, 40, 39, 40, 4_100_000, 3_850_000))
         self.assertFalse(wanted(39, 40, 39, 40, 4_099_999, 3_850_000))
+        # 2026-11-11: armour checkpoints on DL37 and DL39 level entries put
+        # every later game of two clvl 31 Warriors on the level that had
+        # killed the last, 84 steps in for one: in town only.
+        self.assertFalse(queue.checkpoint_wanted(28, 40, 27, 40, dlvl=37))
+        self.assertFalse(queue.checkpoint_wanted(31, 36, 31, 31, dlvl=39))
+        self.assertTrue(queue.checkpoint_wanted(31, 36, 31, 31, dlvl=0))
 
     def test_an_old_start_without_ac_takes_its_runs_better_armour(self) -> None:
         service = self.service(4, 2)
@@ -1530,13 +1570,20 @@ class WandTest(unittest.TestCase):
         self.assertEqual((decision.key, decision.layer), (KEY_USE, "phase"))
 
     def test_the_magic_shop_sells_the_wands_and_staff_wanted(self) -> None:
-        from moria_playtest.brain import TELEPORT_STAFF, WAND_BUYS
+        """2026-11-11 (maintainer: warriors "should be using magic items like
+        wands and staves"): the best attack wands not carried with charges,
+        up to the KEEP_ATTACK_WANDS kinds drop_junk keeps, and each fight
+        staff or wand; one charged wand no longer stops the rest."""
+        from moria_playtest.brain import FIGHT_DEVICES, KEEP_ATTACK_WANDS, TELEPORT_STAFF, WAND_BUYS
         brain = self.brain("human-warrior")
-        self.assertEqual(brain.wands_wanted(), [*WAND_BUYS, TELEPORT_STAFF])
+        self.assertEqual(brain.wands_wanted(), [*WAND_BUYS[:KEEP_ATTACK_WANDS], *FIGHT_DEVICES, TELEPORT_STAFF])
         brain.wands = {"Wand of Lightning": 6}
-        self.assertEqual(brain.wands_wanted(), [TELEPORT_STAFF])
-        brain.wands[TELEPORT_STAFF] = 3
-        self.assertEqual(brain.wands_wanted(), [])
+        others = [w for w in WAND_BUYS if w != "Wand of Lightning"][:KEEP_ATTACK_WANDS - 1]
+        self.assertEqual(brain.wands_wanted(), [*others, *FIGHT_DEVICES, TELEPORT_STAFF])
+        brain.wands.update({w: 3 for w in (*others, *FIGHT_DEVICES, TELEPORT_STAFF)})
+        self.assertEqual(brain.wands_wanted(), [])                       # four kinds charged: no more
+        brain.wands[others[0]] = 0                                       # run empty: one wanted again
+        self.assertEqual(brain.wands_wanted(), [WAND_BUYS[0]])
 
 
 class UnknownItemTest(unittest.TestCase):

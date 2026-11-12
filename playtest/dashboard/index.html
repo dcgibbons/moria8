@@ -49,8 +49,8 @@
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
   main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-         grid-template-areas: "qgrid qgrid" "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "qgrid" "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
+         grid-template-areas: "qgrid qgrid" "diff diff" "ratings features" "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "qgrid" "diff" "ratings" "features" "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
   .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px 22px; font-size: 12px; }
   .legend-grid h3 { margin: 0 0 4px; font-size: 11px; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-weight: normal; }
   .legend-grid p { margin: 0 0 6px; color: var(--muted); }
@@ -154,8 +154,8 @@
   section.collapsed > :not(h2) { display: none; }
   section.collapsed > h2 { margin-bottom: 0; }
   .tabs button { border-radius: 3px 3px 0 0; } .tabs button.on { color: var(--black); background: var(--gold); }
-  #qmain { grid-template-areas: "qwall qwall" "balrog balrog" "monsters monsters" "buildq buildq" "builds builds" "subs subs" "diff diff" "ratings features" "recent qlog"; }
-  @media (max-width: 1100px) { #qmain { grid-template-areas: "qwall" "balrog" "monsters" "buildq" "builds" "subs" "diff" "ratings" "features" "recent" "qlog"; } }
+  #qmain { grid-template-areas: "qwall qwall" "balrog balrog" "monsters monsters" "buildq buildq" "builds builds" "subs subs" "recent qlog"; }
+  @media (max-width: 1100px) { #qmain { grid-template-areas: "qwall" "balrog" "monsters" "buildq" "builds" "subs" "recent" "qlog"; } }
   /* Difficulty charts (§23.6): amber and blue are the page's own tokens,
      validated as a pair on the panel (dataviz validate_palette, dark). */
   .bfilter { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -277,25 +277,6 @@
     <h2><span>Live runs</span><small>click one to watch it</small></h2>
     <div class="wall" id="qwall"></div>
   </section>
-  <section style="grid-area: diff" class="diff">
-    <h2><span>Difficulty · how far games get</span><small id="dnote"></small></h2>
-    <h3>Games still going at each character level, by class <span class="dim">(gray: every class)</span></h3>
-    <div class="smalls" id="dcurves"></div>
-    <div class="diffrow">
-      <div><h3>The level each game ended at</h3><div class="tablewrap"><div id="dends" style="min-width:34rem"></div></div></div>
-      <div><h3>Median level reached, by race and class</h3><div id="dmap"></div></div>
-    </div>
-    <details style="margin-top:10px"><summary class="muted">as a table</summary><div class="tablewrap" id="dtable"></div></details>
-  </section>
-  <section style="grid-area: ratings">
-    <h2><span>Difficulty ratings</span><small id="rnote"></small></h2>
-    <div class="tablewrap"><table class="ftable"><thead><tr><th>character</th><th>runs</th><th>survival</th><th>median death clvl</th><th>early deaths</th></tr></thead>
-      <tbody id="ratings"></tbody></table></div>
-  </section>
-  <section style="grid-area: features">
-    <h2><span>Feature grid</span><small>per class, from every counted run</small></h2>
-    <div class="tablewrap" id="features"></div>
-  </section>
   <section style="grid-area: recent">
     <h2><span>Recent runs</span><small id="nruns"></small></h2>
     <div class="tablewrap"><table class="ftable"><thead><tr><th>run</th><th>outcome</th><th>clvl</th><th>DL</th><th>steps</th><th>cause</th></tr></thead>
@@ -318,6 +299,25 @@
       <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
       <span class="dim">each cell: best clvl and depth, runs and streak, last outcome</span>
     </div>
+  </section>
+  <section style="grid-area: diff" class="diff">
+    <h2><span>Difficulty · how far games get · M7 queue, to 2026-11-07</span><small id="dnote"></small></h2>
+    <h3>Games still going at each character level, by class <span class="dim">(gray: every class)</span></h3>
+    <div class="smalls" id="dcurves"></div>
+    <div class="diffrow">
+      <div><h3>The level each game ended at</h3><div class="tablewrap"><div id="dends" style="min-width:34rem"></div></div></div>
+      <div><h3>Median level reached, by race and class</h3><div id="dmap"></div></div>
+    </div>
+    <details style="margin-top:10px"><summary class="muted">as a table</summary><div class="tablewrap" id="dtable"></div></details>
+  </section>
+  <section style="grid-area: ratings">
+    <h2><span>Difficulty ratings · M7 queue, to 2026-11-07</span><small id="rnote"></small></h2>
+    <div class="tablewrap"><table class="ftable"><thead><tr><th>character</th><th>runs</th><th>survival</th><th>median death clvl</th><th>early deaths</th></tr></thead>
+      <tbody id="ratings"></tbody></table></div>
+  </section>
+  <section style="grid-area: features">
+    <h2><span>Feature grid</span><small>per class, from every counted M7 queue run, to 2026-11-07</small></h2>
+    <div class="tablewrap" id="features"></div>
   </section>
   <section style="grid-area: milestone">
     <h2><span>M5 (met 2026-10-27) · every race and class on the C64</span><small id="mcount"></small></h2>

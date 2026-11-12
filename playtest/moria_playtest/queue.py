@@ -74,10 +74,12 @@ DLVL_MILESTONES = (5, 8, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100
 RECALL_TEXT = "yanked"      # "You feel yourself yanked away!" (Word of Recall)
 COUNTED = ("reached", "died", "budget", "finding", "error")   # outcomes that move an item
 # Balrog checkpoints (§23.9, maintainer 2026-11-05): a run saves a start at
-# each new character level, at a level entry with this share of its HP.
+# each new character level, at its next arrival in town: a start in the
+# dungeon put every later game on the level that had killed the last, clvl
+# 31 Warriors on DL37 and DL39 dying as soon as 84 steps in (maintainer,
+# 2026-11-11: checkpoints in town only).
 # A combination never steps back from its highest (maintainer, 2026-11-06).
 M7_CLVL = 25             # the deep goal's level: an M7 success's start
-CHECKPOINT_HP = 0.75
 # ... and at the same level, at a level entry with this much more AC than the
 # last start: a town visit's armour (Enchant Armor, the Black Market) kept
 # for the retries (2026-11-07).
@@ -109,17 +111,21 @@ DEFAULTS: dict[str, Any] = {
     # these characters, ``balrog_copies`` games of each at once (each with
     # its own dice), and the service stops every other run but the build
     # queue's (maintainer, 2026-11-08: the build queue "ready to test each
-    # platform" beside the Balrog games).
-    "balrog_characters": [], "balrog_copies": 1,
+    # platform" beside the Balrog games). ``balrog_focus_workers`` above 0:
+    # that many of the ``balrog_workers`` play the focus, the rest every
+    # other combination, taking turns (maintainer, 2026-11-11: "half the
+    # workers for this priest character, and the other half for everyone
+    # else"), and no other character's game is stopped.
+    "balrog_characters": [], "balrog_copies": 1, "balrog_focus_workers": 0,
 }
 
 
 def checkpoint_wanted(clvl: int, ac: int | None, last_clvl: int | None, last_ac: int | None,
-                      xp: int = 0, last_xp: int | None = None) -> bool:
-    """A Balrog run's level entry is a checkpoint past its latest start's
-    character level, or at it with ARMOUR_CHECKPOINT_AC more AC or
-    CHECKPOINT_XP more experience."""
-    if last_clvl is None or clvl < last_clvl:
+                      xp: int = 0, last_xp: int | None = None, *, dlvl: int) -> bool:
+    """A Balrog run's arrival in town (``dlvl`` 0) is a checkpoint past its
+    latest start's character level, or at it with ARMOUR_CHECKPOINT_AC more
+    AC or CHECKPOINT_XP more experience."""
+    if dlvl != 0 or last_clvl is None or clvl < last_clvl:
         return False
     if clvl > last_clvl:
         return True
@@ -283,8 +289,19 @@ def rotate_due(goal: str, dlvl: int, steps: int, build: str, platform: str, home
 def brain_shape(root: Path) -> dict[str, set[str]] | None:
     """Each class in the modules a saved brain is made of, with the
     attributes its code gives an instance: annotated fields and every
-    ``self.<name> =``. None when a module is missing."""
+    ``self.<name> =``. None when a module is missing. A field with a plain
+    default is left out: an instance pickled before it was added reads the
+    class's default. Creature's ``name`` (2026-11-10) retired a level-25
+    half-orc-rogue start, whose brain holds Creatures, to level 1."""
     import ast
+
+    def defaulted(value: ast.expr | None) -> bool:
+        # ``x: T = v`` and ``field(default=v)`` leave v on the class;
+        # ``field(default_factory=f)`` leaves nothing there.
+        if value is None:
+            return False
+        return not (isinstance(value, ast.Call) and getattr(value.func, "id", None) == "field"
+                    and not any(k.arg == "default" for k in value.keywords))
     shape: dict[str, set[str]] = {}
     for name in BRAIN_MODULES:
         path = root / "playtest" / "moria_playtest" / name
@@ -295,7 +312,7 @@ def brain_shape(root: Path) -> dict[str, set[str]] | None:
                 continue
             attrs = shape.setdefault(f"{name}:{node.name}", set())
             for item in node.body:
-                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name) and not defaulted(item.value):
                     attrs.add(item.target.id)
             for sub in ast.walk(node):
                 targets = sub.targets if isinstance(sub, ast.Assign) else [sub.target] if isinstance(
@@ -477,17 +494,15 @@ def run_one(run_dir: Path) -> int:
         # -- Balrog checkpoints (§23.9)
 
         def take_snapshot(self, obs) -> None:   # type: ignore[no-untyped-def]
-            """Each level entry: past the start's character level, or at it
-            with ARMOUR_CHECKPOINT_AC more AC, with CHECKPOINT_HP of its HP, a
-            Balrog run keeps a checkpoint, the level-entry snapshot itself or,
-            on a ``graduate_save`` port, a saved game at the next command
-            (press)."""
+            """Each arrival in town: past the start's character level, or at
+            it with ARMOUR_CHECKPOINT_AC more AC or CHECKPOINT_XP more
+            experience, a Balrog run keeps a checkpoint, the level-entry
+            snapshot itself or, on a ``graduate_save`` port, a saved game at
+            the next command (press)."""
             super().take_snapshot(obs)
             ac = status_ac(obs)
             if not checkpoint_wanted(obs.clvl, ac, self.checkpoint_clvl, self.checkpoint_ac,
-                                     obs.xp, self.checkpoint_xp):
-                return
-            if obs.hp < CHECKPOINT_HP * obs.mhp:
+                                     obs.xp, self.checkpoint_xp, dlvl=obs.dlvl):
                 return
             self.keep_checkpoint(obs)
 
@@ -591,10 +606,9 @@ def run_one(run_dir: Path) -> int:
 
         def observe(self, obs) -> None:   # type: ignore[no-untyped-def]
             self.rotate(obs)
-            if (goal.name == "balrog" and not self.final_checkpoint and obs.dlvl > 0
+            if (goal.name == "balrog" and not self.final_checkpoint and obs.dlvl == 0
                     and self.goal.step_budget - self.result.steps <= FINAL_CHECKPOINT_STEPS
-                    and self.checkpoint_xp is not None and obs.xp > self.checkpoint_xp
-                    and obs.hp >= CHECKPOINT_HP * obs.mhp):
+                    and self.checkpoint_xp is not None and obs.xp > self.checkpoint_xp):
                 # A run's last steps keep what it gained: a budget's end lost
                 # every experience point since the latest checkpoint.
                 self.final_checkpoint = True
@@ -1031,19 +1045,23 @@ class Balrog:
         current["fails"] = current.get("fails", 0) + 1
         current["restores"] = current.get("restores", 0) + 1
 
-    def take(self, busy: Collection[str] = (), only: Collection[str] = ()) -> dict[str, Any] | None:
+    def take(self, busy: Collection[str] = (), only: Collection[str] = (),
+             exclude: Collection[str] = ()) -> dict[str, Any] | None:
         """The next graduate, the highest start first (``rank``), which goes
         to the back; None when there is none. One not playing already
         (``busy``) first: a long game was
         lapped by the rotation, and two games of one combination played from
         one start while others waited (2026-11-06). One whose start cannot
         go on plays a new character (Service.start_balrog). ``only``
-        (characters, focus): those alone, and None when all are busy."""
-        order = [k for k in self.state["order"] if not only or k.split("/", 1)[-1] in only]
-        if not order:
+        (characters, focus): those alone, and None when all are busy;
+        ``exclude`` (the focus, beside it): any but those."""
+        def eligible() -> list[str]:
+            return [k for k in self.state["order"] if (not only or k.split("/", 1)[-1] in only)
+                    and k.split("/", 1)[-1] not in exclude]
+        if not eligible():
             return None
         self.rank()
-        order = [k for k in self.state["order"] if not only or k.split("/", 1)[-1] in only]
+        order = eligible()
         key = next((k for k in order if k not in busy), None if only else order[0])
         if key is None:
             return None
@@ -1813,14 +1831,16 @@ class Service:
             if job["queue"] != "main" and job["paused"]:
                 self.pause(run_id, False)
         focus = config.get("balrog_characters") or ()
+        shared = int(config.get("balrog_focus_workers") or 0) > 0
         if focus:
-            # The main queue's runs and other characters' Balrog games end:
+            # The main queue's runs and other characters' Balrog games end
+            # (theirs play beside the focus when it has a share):
             # their workers are the focus's. The build queue and subqueues
             # play beside it: an A/B subqueue's 64 games were all stopped
             # within five seconds of starting (2026-11-10).
             for run_id, job in list(self.running.items()):
                 if not job.get("cancelled") and (job["queue"] == "main" or (
-                        job["queue"] == "balrog" and job["character"] not in focus)):
+                        job["queue"] == "balrog" and job["character"] not in focus and not shared)):
                     self.log(f"focus on {', '.join(focus)}: stop {run_id}")
                     self.stop_run(run_id)
             platforms, minimum = [], 0
@@ -1906,8 +1926,16 @@ class Service:
         playing = collections.Counter(f"{job['platform']}/{job['character']}" for job in self.running.values()
                                       if job["queue"] == "balrog")
         copies = max(1, int(self.config.get("balrog_copies") or 1))
-        item = self.balrog.take({k for k, n in playing.items() if n >= copies},
-                                self.config.get("balrog_characters") or ())
+        focus = tuple(self.config.get("balrog_characters") or ())
+        share = int(self.config.get("balrog_focus_workers") or 0)
+        focused = sum(1 for job in self.running.values() if job["queue"] == "balrog" and job["character"] in focus)
+        item = None
+        if not (focus and share and focused >= share):
+            item = self.balrog.take({k for k, n in playing.items() if n >= copies}, focus)
+        if item is None and focus and share:
+            # The focus has its share (or every copy plays): everyone else's
+            # turn, one game each before a second.
+            item = self.balrog.take(set(playing), exclude=focus)
         if item is None:
             return False
         build = self.newest_build(item["platform"])

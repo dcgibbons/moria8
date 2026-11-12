@@ -91,8 +91,6 @@
 :C128AuditBelowIo("mon_atk_roll_tohit", mon_atk_roll_tohit)
 :C128AuditBelowIo("mon_atk_apply_damage", mon_atk_apply_damage)
 :C128AuditBelowIo("eff_find_doors", eff_find_doors)
-:C128AuditBelowIo("for_each_adjacent", for_each_adjacent)
-:C128AuditBelowIo("eff_sleep_adjacent", eff_sleep_adjacent)
 :C128AuditBelowIo("calc_dig_ability", calc_dig_ability)
 :C128AuditBelowIo("look_flash_target", look_flash_target)
 :C128AuditBelowIo("game_over_prompt", game_over_prompt)

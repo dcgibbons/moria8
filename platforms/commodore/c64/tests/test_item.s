@@ -2557,6 +2557,7 @@ test_start:
     sta t48_expected_con
     lda #8
     sta player_data + PL_CON_CUR
+    sta zp_player_con                // the ZP mirror drained as well
 
     lda #ITEM_TYPE_POT_RESTORATION
     sta inv_item_id
@@ -2580,6 +2581,11 @@ test_start:
     beq !t48_r_ok+
     jmp !t48_fail+
 !t48_r_ok:
+    lda zp_player_con                // the ZP mirror the bash and throw read, restored at once (2026-11-11)
+    cmp t48_expected_con
+    beq !t48_rz_ok+
+    jmp !t48_fail+
+!t48_rz_ok:
 
     lda #$01
     sta tc_results + 47

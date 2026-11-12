@@ -1777,23 +1777,38 @@ class ThreatDepthTest(unittest.TestCase):
     def deeper(self, brain: Brain, dlvl: int, clvl: int = 37, mhp: int = 290) -> bool:
         return brain.deeper_ok(command_obs(pos=(10, 10), dlvl=dlvl, clvl=clvl, hp=mhp, mhp=mhp))
 
+    def test_out_of_depth_breathers_count(self) -> None:
+        """C64 Balrog, 2026-11-11: clvl 31 Warriors at 256-289 HP took DL37
+        (a Mature Red Dragon's 160 the worst native), met DL39's Ancient Blue
+        Dragons there and died 16 times in 30 minutes. With natives two levels
+        deeper counted, DL38's Ancient White Dragon (468) holds them at DL35."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        brain.recall, brain.clw = 3, 20
+        self.assertTrue(self.deeper(brain, 34, clvl=31, mhp=256))    # onto DL35
+        self.assertFalse(self.deeper(brain, 35, clvl=31, mhp=256))   # not DL36: DL38's natives
+        self.assertFalse(self.deeper(brain, 36, clvl=31, mhp=256))   # nor DL37
+
     def test_as_deep_as_nothing_native_kills_in_a_turn(self) -> None:
+        from moria_playtest.brain import OUT_OF_DEPTH as OOD
         brain = self.priest()
-        # Level 34, below DIVE_FROM_CLVL: the breath check alone, not the dive.
-        self.assertTrue(self.deeper(brain, 34, clvl=34))   # DL35: a Young Black Dragon's 128
-        self.assertTrue(self.deeper(brain, 36, clvl=34))   # DL37: a Mature Red Dragon's 160
-        self.assertFalse(self.deeper(brain, 37, clvl=34))  # DL38: an Ancient White Dragon's 468 of 290
+        # Level 34, below DIVE_FROM_CLVL: the breath check alone, not the dive,
+        # of the natives OUT_OF_DEPTH below the level gone to.
+        self.assertTrue(self.deeper(brain, 34 - OOD, clvl=34))   # DL35's: a Young Black Dragon's 128
+        self.assertTrue(self.deeper(brain, 36 - OOD, clvl=34))   # DL37's: a Mature Red Dragon's 160
+        self.assertFalse(self.deeper(brain, 37 - OOD, clvl=34))  # DL38's: an Ancient White Dragon's 468 of 290
         brain.jewel_names["Ring"] = "Ring of Resist Cold"
-        self.assertTrue(self.deeper(brain, 37, clvl=34))   # 156 through the ring
+        self.assertTrue(self.deeper(brain, 37 - OOD, clvl=34))   # 156 through the ring
 
     def test_not_tied_to_its_own_level(self) -> None:
         """Maintainer, 2026-11-10: the own-level cap "seems arbitrary": a
         level-35 Priest with two Rings of Speed goes to DL38 (one breath of
         234 in two turns) as a level-39 one does."""
+        from moria_playtest.brain import OUT_OF_DEPTH as OOD
         brain = self.priest()
         brain.jewels = brain.read_jewels(["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: (none)",
                                           " j) Ring:   Ring of Speed"])
-        self.assertTrue(self.deeper(brain, 37, clvl=35, mhp=300))
+        self.assertTrue(self.deeper(brain, 37 - OOD, clvl=35, mhp=300))   # DL38's natives
         self.assertFalse(self.deeper(brain, 39, clvl=39, mhp=400))   # DL40: the Multi-Hued's 693
 
     def test_at_the_top_level_it_dives_for_the_balrog_with_a_way_out(self) -> None:
@@ -2084,19 +2099,21 @@ class ThreatDepthTest(unittest.TestCase):
         """2026-11-09: resupply climbed from DL36 and town refused Word of
         Recall down to DL37 by the old margin: level-37 Priests walked down
         from DL1 and recalled up from DL16 for light, over and over."""
+        from moria_playtest.brain import OUT_OF_DEPTH as OOD
         brain = self.priest()
-        o = command_obs(pos=(10, 10), dlvl=36, clvl=34, hp=290, mhp=290)   # below DIVE_FROM_CLVL
-        self.assertTrue(brain.depth_ready(o, 36))
-        self.assertTrue(brain.depth_ready(o, 37, slack=1))     # Word of Recall back down to DL37
-        self.assertFalse(brain.depth_ready(o, 38, slack=1))    # an Ancient White Dragon's 468
-        view = town_view((10, 10), (40, 40), dlvl=36)
+        o = command_obs(pos=(10, 10), dlvl=36 - OOD, clvl=34, hp=290, mhp=290)   # below DIVE_FROM_CLVL
+        self.assertTrue(brain.depth_ready(o, 36 - OOD))
+        self.assertTrue(brain.depth_ready(o, 37 - OOD, slack=1))     # Word of Recall back down
+        self.assertFalse(brain.depth_ready(o, 38 - OOD, slack=1))    # DL38's Ancient White Dragon's 468
+        view = town_view((10, 10), (40, 40), dlvl=36 - OOD)
         self.assertIsNone(brain.resupply(o, view))             # no climb from a depth it survives
 
     def test_town_recalls_to_one_level_past_ready_and_climbs(self) -> None:
         """2026-11-09: level-37 Priests whose deepest was DL38 walked down
         from DL1 every town trip; one level too deep is a climb."""
+        from moria_playtest.brain import OUT_OF_DEPTH as OOD
         decisions = {}
-        for deepest in (38, 39):
+        for deepest in (38 - OOD, 39 - OOD):
             brain = self.priest()
             brain.food, brain.max_dlvl = 20, deepest
             brain.lamp, brain.light_left, brain.oil = True, 9000, 5
@@ -2104,17 +2121,18 @@ class ThreatDepthTest(unittest.TestCase):
             brain.market_done = brain.weapons_done = brain.armoury_done = True
             o = command_obs(pos=(5, 5), dlvl=0, clvl=34, hp=290, mhp=290)   # below DIVE_FROM_CLVL
             decisions[deepest] = brain.recall_trip(o, town_view((5, 5), (40, 40)))
-        self.assertEqual(decisions[38].reason, "read Word of Recall")   # then up a level
-        self.assertIsNone(decisions[39])                                # two too deep: the stairs
+        self.assertEqual(decisions[38 - OOD].reason, "read Word of Recall")   # then up a level
+        self.assertIsNone(decisions[39 - OOD])                                # two too deep: the stairs
         brain = self.priest()
-        o = command_obs(pos=(10, 10), dlvl=38, clvl=34, hp=290, mhp=290)
-        self.assertIsNotNone(brain.resupply(o, town_view((10, 10), (40, 40), dlvl=38)))   # climbs at DL38
+        o = command_obs(pos=(10, 10), dlvl=38 - OOD, clvl=34, hp=290, mhp=290)
+        self.assertIsNotNone(brain.resupply(o, town_view((10, 10), (40, 40), dlvl=38 - OOD)))   # climbs
 
     def test_far_above_its_deepest_it_recalls_rather_than_walks(self) -> None:
         """2026-11-09: restarted on DL1 from a checkpoint, level-38 Priests
         walked down toward DL37, bouncing DL3-DL4."""
+        from moria_playtest.brain import OUT_OF_DEPTH as OOD
         brain = self.priest()
-        brain.food, brain.max_dlvl = 20, 37
+        brain.food, brain.max_dlvl = 20, 37 - OOD   # as deep as it survives: DL37's natives
         brain.lamp, brain.light_left, brain.oil = True, 9000, 5
         view = town_view((10, 10), (40, 40), dlvl=4)
         o = command_obs(pos=(10, 10), dlvl=4, clvl=38, hp=300, mhp=300)
@@ -2122,8 +2140,8 @@ class ThreatDepthTest(unittest.TestCase):
         brain.recall = 1                                   # the last scroll stays the way home
         self.assertIsNone(brain.recall_trip(o, view))
         brain.recall = 3
-        near = command_obs(pos=(10, 10), dlvl=34, clvl=38, hp=300, mhp=300)
-        self.assertIsNone(brain.recall_trip(near, town_view((10, 10), (40, 40), dlvl=34)))   # close: walk
+        near = command_obs(pos=(10, 10), dlvl=34 - OOD, clvl=38, hp=300, mhp=300)
+        self.assertIsNone(brain.recall_trip(near, town_view((10, 10), (40, 40), dlvl=34 - OOD)))   # close: walk
 
     def test_only_from_level_30_and_only_for_the_balrog_goal(self) -> None:
         self.assertFalse(self.deeper(self.priest(), 27, clvl=29, mhp=230))   # the margin: DL26
@@ -4755,9 +4773,10 @@ class MageBookTest(unittest.TestCase):
         brain.dropping, brain.lamp = True, False
         o = command_obs(rows={0: "Inventory", 1: "---------", 2: "a) Wand of Fire Balls (5 charges)",
                               3: "b) Wand of Cold Balls (5 charges)", 4: "c) Wand of Frost (5 charges)",
-                              5: "d) Wand of Stinking Cloud (5 charges)", 6: "e) Wooden Torch (134 turns)"})
+                              5: "d) Wand of Stinking Cloud (5 charges)", 6: "e) Wand of Lightning (5 charges)",
+                              7: "f) Wooden Torch (134 turns)"})
         o.mode, o.stage = Mode.ITEM, "list"
-        self.assertEqual(brain.decide(o, None).reason, "drop Wand of Stinking Cloud (5 charges)")   # the three strongest stay
+        self.assertEqual(brain.decide(o, None).reason, "drop Wand of Stinking Cloud (5 charges)")   # the four strongest stay
         brain.dropping = True
         o = command_obs(rows={0: "Inventory", 1: "---------", 2: "a) Wooden Torch (23 turns)", 3: "b) Wooden Torch (134 turns)",
                               4: "c) Wooden Torch (111 turns)", 5: "d) Wooden Torch (124 turns)"})
@@ -4791,6 +4810,43 @@ class MageBookTest(unittest.TestCase):
         self.assertEqual(magic.lost_book, "Magick I")
         magic.note("Welcome to level 13.")
         self.assertTrue(magic.can(o, "Stinking Cloud"))
+
+    def test_the_bots_own_cancel_refuses_no_earlier_prayer(self) -> None:
+        """C64 Balrog, 2026-11-10: a clvl 40 Priest's Orb of Draining killed
+        a Sorcerer ("Welcome to level 40."); praying Find Traps it read
+        Exorcism's list, its own ESC drew "Never mind." and the Orb, prayed
+        before, was refused with no level-up to come: never prayed again."""
+        brain, _ = self.caster("half-troll-priest", {"Orb of Draining": ("b", 7, 9, "Chants and Blessings"),
+                                                     "Find Traps": ("e", 5, 9, "Beginners Handbook")})
+        o = command_obs(pos=(5, 5), dlvl=40, clvl=40, hp=426, mhp=426,
+                        rows={23: "HP:426/426MP:150/161AC:49 AU:16777K"})
+        magic = brain.magic
+        magic.pray("Orb of Draining", "at a Sorcerer")
+        magic.last, magic.wanted = "Orb of Draining", None             # its letter pressed: prayed
+        magic.note("You have slain the Sorcerer. Welcome to level 40.")
+        magic.pray("Find Traps", "pray Find Traps")
+        magic.current = "Exorcism"
+        magic.listed_books.add("Exorcism")
+        which = command_obs(pos=(5, 5), dlvl=40, clvl=40, rows={0: "Pray which? (a-f, ESC)"})
+        which.mode, which.stage = Mode.SPELL, "which"
+        self.assertEqual(magic.prompt(which), (0x1B, "prompt", "the prayer list is read"))
+        magic.note("Pray which? (a-f, ESC) Never mind.")
+        self.assertNotIn("Orb of Draining", magic.refused)
+        self.assertTrue(magic.can(o, "Orb of Draining"))
+        self.assertIsNone(magic.lost_book)                               # no book is missing
+
+    def test_a_refusal_ends_on_a_new_dungeon_level(self) -> None:
+        """A clvl 40 character never sees "Welcome to level" again: what was
+        refused is tried again on the next dungeon level, as the characters
+        carrying the 2026-11-10 Orb refusal in their checkpoints must."""
+        brain, _ = self.caster("half-troll-priest", {"Orb of Draining": ("b", 7, 9, "Chants and Blessings")})
+        o = command_obs(pos=(5, 5), dlvl=41, clvl=40, hp=426, mhp=426,
+                        rows={23: "HP:426/426MP:150/161AC:49 AU:16777K"})
+        brain.last_dlvl = 40
+        brain.magic.refused.add("Orb of Draining")
+        self.assertFalse(brain.magic.can(o, "Orb of Draining"))
+        brain.track(o, town_view((5, 5), (30, 30), dlvl=41))
+        self.assertTrue(brain.magic.can(o, "Orb of Draining"))
 
     def test_no_book_carried_is_not_retried(self) -> None:
         """M5d round 1: with no book, "You have nothing there." took no turn
@@ -6474,6 +6530,49 @@ class PrayerTest(unittest.TestCase):
         brain.level.felt.add((6, 5))                             # that way was a wall
         self.assertIn(brain.dark_step(view, view.stairs_up()), {(1, -1), (1, 1)})
 
+    def test_lightless_and_broke_it_feels_its_way_off_an_exhausted_level(self) -> None:
+        """Apple IIe build queue, 2026-11-11: a level-3 Priest with 1 gold
+        (town no help, so no resupply) in the dark knew both staircases of a
+        DL1 level from a lit room, took every dark corridor mouth for a dead
+        end and searched walls 330,000 steps, starving. With no light to
+        wear, the known stairs are felt for."""
+        brain = Brain(GOALS["clvl10"])
+        brain.food = 0
+        brain.dark, brain.torches, brain.lamp = True, 0, False
+        view = town_view((5, 5), (12, 5), dlvl=1, stairs_type=0xA)
+        view.types = [UNKNOWN] * (COLS * ROWS)
+        view.types[5 * COLS + 5] = 0x0                          # where the player stands
+        view.types[5 * COLS + 12] = 0xA                         # the up staircase, seen by torchlight
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=11, mhp=24, rows={23: "HP:11/24 MP:5/5 AC:8 AU:1 Faint"})
+        self.assertFalse(brain.needs_resupply(o))               # 1 gold: town cannot help
+        decision = brain.stair_scum(o, view)
+        self.assertEqual((decision.layer, decision.key), ("stair-scum", DIRS[(1, 0)]))
+        self.assertIn("no light", decision.reason)
+        brain.level.felt.add((6, 5))                             # that way was a wall
+        self.assertIn(brain.stair_scum(o, view).key, {DIRS[(1, -1)], DIRS[(1, 1)]})
+
+    def test_dark_is_seen_without_the_gone_out_message(self) -> None:
+        """Apple IIe build queue, 2026-11-11: "Your light has gone out." went
+        unseen, and a level-3 Priest with four spare torches explored DL1 by
+        a burnt-out one (light radius 0) and searched walls 330,000 steps.
+        No light around the player is dark: a spare torch is worn."""
+        self.assertIn("zp_light_radius", abimod.LABELS)          # read from every build's symbols
+        brain = Brain(GOALS["clvl10"])
+        brain.food = 20
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=24, mhp=24)
+        o.abi = abimod.Abi(labels={**ABI.labels, "zp_light_radius": 0x4B}, consts=ABI.consts, all_symbols={})
+        zp = bytearray(o.zp)
+        zp[0x4B] = 1
+        o.zp = bytes(zp)
+        brain.decide(o, view)
+        self.assertFalse(brain.dark)                             # a lit torch
+        zp[0x4B] = 0
+        o.zp = bytes(zp)
+        decision = brain.decide(o, view)
+        self.assertTrue(brain.dark)
+        self.assertEqual((decision.layer, decision.reason), ("light", "light gone out: wear a spare torch"))
+
     def test_a_move_into_the_dark_that_went_nowhere_is_a_wall(self) -> None:
         brain = Brain(GOALS["deep"])
         view = town_view((5, 5), (40, 40), dlvl=3)
@@ -6619,6 +6718,108 @@ class SpellReadinessTest(unittest.TestCase):
     def test_the_lore_knows_the_strongest_spell_by_depth(self) -> None:
         self.assertEqual(knowledge.spell_max(1), 0)
         self.assertEqual(knowledge.spell_max(2), 24)       # Novice Priest / Mage: 3d8
+
+class FightDeviceTest(unittest.TestCase):
+    """C64 Balrog, 2026-11-11: clvl 31 Warriors meleed Ancient Blue and
+    White Dragons on DL36-38 to the death, aiming a wand 22 times a game
+    (maintainer: "warriors should be using magic items like wands and
+    staves"). Speed first, then Dispel Evil while it is in view, then one
+    Slow Monster at it."""
+
+    def test_a_warrior_hastes_dispels_and_slows_a_strong_evil_creature(self) -> None:
+        from moria_playtest.brain import DISPEL_STAFF, SLOW_WAND, SPEED_STAFF
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        kind = knowledge.kinds_by_name()["Ancient Blue Dragon"]
+        dragon = Creature(*kind, "Ancient Blue Dragon")
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        view.creatures = {(14, 10): dragon}
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=31, hp=256, mhp=256)
+        self.assertIsNone(brain.devices(o, view))                        # nothing carried
+        brain.wands.update({SPEED_STAFF: 5, DISPEL_STAFF: 5, SLOW_WAND: 8})
+        decision = brain.devices(o, view)
+        self.assertEqual((decision.layer, brain.picking), ("device", SPEED_STAFF))
+        brain.hasted = True
+        decision = brain.devices(o, view)
+        self.assertEqual(brain.picking, DISPEL_STAFF)                    # evil, in view
+        brain.wands[DISPEL_STAFF] = 0
+        decision = brain.devices(o, view)
+        self.assertEqual((brain.picking, brain.pending), (SLOW_WAND, DIRS[(1, 0)]))
+        self.assertIsNone(brain.devices(o, view))                        # slowed once: blows and wands now
+        brain.decide(command_obs(pos=(10, 10), dlvl=37, clvl=31, hp=256, mhp=256,
+                                 rows={0: "You feel yourself slow down."}), view)
+        self.assertFalse(brain.hasted)
+
+    def test_an_empty_wand_is_recharged_and_the_scrolls_bought(self) -> None:
+        from moria_playtest.brain import ALCHEMIST, RECHARGE_SCROLL
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        view = town_view((10, 10), (40, 40), dlvl=20)
+        o = command_obs(pos=(10, 10), dlvl=20, clvl=31, hp=256, mhp=256)
+        brain.wands["Wand of Frost"] = 0
+        self.assertIsNone(brain.recharge(o, view))                       # no scroll
+        brain.at_store = ALCHEMIST
+        self.assertIn(RECHARGE_SCROLL, brain.shopping_list(5000))         # a fighting wand carried
+        brain.recharge_scrolls = 1
+        decision = brain.recharge(o, view)
+        self.assertEqual((decision.key, brain.picking, brain.picking_next), (ord("R"), RECHARGE_SCROLL, "Wand of Frost"))
+        brain.decide(command_obs(pos=(10, 10), dlvl=20, clvl=31, hp=256, mhp=256,
+                                 rows={0: "The Wand of Frost glows briefly."}), view)
+        self.assertGreater(brain.wands["Wand of Frost"], 0)
+        brain.wands["Wand of Frost"], brain.recharge_target = 0, "Wand of Frost"
+        brain.decide(command_obs(pos=(10, 10), dlvl=20, clvl=31, hp=256, mhp=256,
+                                 rows={0: "There is a bright flash of light."}), view)
+        self.assertNotIn("Wand of Frost", brain.wands)                   # destroyed
+
+    def test_a_rich_warrior_enchants_its_weapon(self) -> None:
+        """C64 Balrog, 2026-11-11: a clvl 31 Gnome Warrior with 1,184,000 gold
+        fought Ancient Blue Dragons with a Two-Handed Sword (+2)."""
+        from moria_playtest.brain import ALCHEMIST, ENCHANT_WEAPON, ENCHANT_WEAPON_MAX
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        brain.weapon = ("Two-Handed Sword", 2)
+        brain.at_store = ALCHEMIST
+        self.assertIn(ENCHANT_WEAPON, brain.shopping_list(1_184_000))
+        self.assertNotIn(ENCHANT_WEAPON, brain.shopping_list(500))       # not poor
+        brain.credit(ENCHANT_WEAPON, 3)
+        view = town_view((5, 5), (40, 40), dlvl=0)
+        decision = brain.read_enchantments(command_obs(pos=(5, 5), dlvl=0, clvl=31), view)
+        self.assertEqual((decision.key, brain.picking), (ord("R"), ENCHANT_WEAPON))
+        rows = ["", "Equipment", "---------", " a) Weapon: Two-Handed Sword (+4,+7)", " b) Body:   Soft Leather Armor [8]"]
+        brain.read_weapon(rows)
+        self.assertEqual(brain.weapon, ("Two-Handed Sword", 7))
+        brain.read_weapon(["", " a) Weapon: Executioner's Sword (Defender)", "            (+9,+12)"])   # wrapped
+        self.assertEqual(brain.weapon, ("Executioner's Sword (Defender)", 12))
+        self.assertFalse(brain.weapon_enchant_wanted(1_184_000))          # past ENCHANT_WEAPON_MAX
+        self.assertGreaterEqual(12, ENCHANT_WEAPON_MAX)
+        mage = Brain(for_character(GOALS["balrog"], "elf-mage"))
+        self.assertFalse(mage.weapon_enchant_wanted(1_184_000))
+
+    def test_drain_life_is_not_aimed_at_the_undead(self) -> None:
+        """VMS drain_life does nothing to the undead (cdefense $0008)."""
+        from moria_playtest.brain import DRAIN_WAND
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        brain.wands[DRAIN_WAND] = 5
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=31, hp=256, mhp=256)
+        lich = Creature(*knowledge.kinds_by_name()["Lich"], "Lich")
+        view.creatures = {(14, 10): lich}
+        self.assertTrue(brain.undead(lich) and brain.lore_strong(lich, o))   # worth a wand, but not this one
+        self.assertIsNone(brain.aim(o, view))
+        dragon = "Ancient Blue Dragon"
+        view.creatures = {(14, 10): Creature(*knowledge.kinds_by_name()[dragon], dragon)}
+        self.assertEqual((brain.aim(o, view).layer, brain.picking), ("aim", DRAIN_WAND))
+
+    def test_not_for_what_blows_beat(self) -> None:
+        from moria_playtest.brain import SPEED_STAFF
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        brain.wands[SPEED_STAFF] = 5
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        view.creatures = {(12, 10): Creature("k", 1, "Kobold")}
+        self.assertIsNone(brain.devices(command_obs(pos=(10, 10), dlvl=37, clvl=31, hp=256, mhp=256), view))
+
 
 class FightOddsTest(unittest.TestCase):
     """M5a: whether a creature is too strong depends on the character's own

@@ -1368,6 +1368,7 @@ ovl_items_end:
 #import "../../core/player_magic_turn_banked.s"
 #undef PMU_TURN_FEEDBACK_ONLY
 #import "../../core/player_magic_execute_overlay.s"
+#import "../../core/wand_bolt_entries.s"   // the Fire Bolts and Drain Life entries (OVL.SPELL)
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL

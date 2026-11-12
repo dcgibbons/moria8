@@ -5,6 +5,11 @@
 //
 // Results at $0400-$0411: $01 = pass, $00 = fail per test
 
+// The item-name streams sit above the I/O hole, out of the body's way: no
+// item is named here (2026-11-11, when player_calc_stats's ZP stat mirrors
+// took the body 8 bytes past MAP_BASE, where the test map overwrote it).
+#define C64_TEST_NAME_STREAMS_A000
+.segmentdef TestNameStreams [start=$E100]
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -1089,3 +1094,6 @@ setup_visibility_axis_test:
     lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
     sta (zp_ptr0),y
     rts
+
+tm_body_end:
+.assert "Monster test body stays below MAP_BASE", tm_body_end <= MAP_BASE, true

@@ -348,54 +348,11 @@ eff_find_doors:
     rts
 #endif
 
-// ============================================================
-// for_each_adjacent — Iterate 8 adjacent tiles, call callback
-// Sets df_target_x/df_target_y for each direction, then jumps to the
-// callback via the self-modified absolute JMP at fea_jmp_smc. The callback
-// address is stored directly in the jump operand (never via JMP (addr),
-// which hits the 6502 page-crossing bug when the pointer is at $xxFF).
-// Callbacks may clobber A, X, Y, zp_ptr0, zp_temp0-4 freely.
-// Clobbers: A, X, Y
-// ============================================================
+// adj_dir_idx — direction counter for spell_effects_overlay.s's adjacent
+// scans. for_each_adjacent and eff_sleep_adjacent, which nothing called (the
+// Sleep prayers and spells run pmx_sleep_adjacent_msg, with VMS's saving
+// throw), went on 2026-11-11 to fund the VMS wands.
 adj_dir_idx:  .byte 0       // Direction counter 0-7
-
-for_each_adjacent:
-    lda #0
-    sta adj_dir_idx
-!fea_loop:
-    lda adj_dir_idx
-    cmp #8
-    bcs !fea_done+
-    tax
-    jsr df_target_from_dir
-    jsr !fea_dispatch+
-    inc adj_dir_idx
-    jmp !fea_loop-
-!fea_done:
-    rts
-!fea_dispatch:
-fea_jmp_smc:
-    jmp $0000               // SMC callback target (set by effect entry)
-
-// ============================================================
-// eff_sleep_adjacent — Put all adjacent monsters to sleep
-// Clobbers: A, X, Y, zp_ptr0, zp_temp0-4
-// ============================================================
-eff_sleep_adjacent:
-    lda #<!esa_cb+
-    sta fea_jmp_smc+1
-    lda #>!esa_cb+
-    sta fea_jmp_smc+2
-    jmp for_each_adjacent
-!esa_cb:
-    lda df_target_x
-    ldy df_target_y
-    jsr monster_find_at
-    bcc !esa_skip+
-    lda #$ff                        // Saturated Moria-style sleep duration
-    jsr monster_apply_sleep
-!esa_skip:
-    rts
 
 // ============================================================
 // eff_bolt — Fire a bolt in a direction, damaging first monster hit
@@ -554,6 +511,14 @@ eff_directional_monster:
 // the top of this file).
 // ============================================================
 
+// Stone-to-Mud's code: a port whose only callers of it (the spell table and
+// the Phase 3 wand dispatch) share an overlay may place it there with
+// :WallToMudSegment()/:WallToMudRestoreSegment() (the Atari: OVL.SPELL).
+#if !WALL_TO_MUD_SEGMENT_CUSTOM
+.macro WallToMudSegment() {}
+.macro WallToMudRestoreSegment() {}
+#endif
+:WallToMudSegment()
 // ============================================================
 // eff_wall_to_mud — Turn a wall tile to floor in chosen direction
 // Must call get_direction_target first.
@@ -622,6 +587,7 @@ eff_wall_to_mud:
     rts
 
 ewtm_save_tile: .byte 0
+:WallToMudRestoreSegment()
 
 // ============================================================
 // eff_kill_monster — Remove a dead monster and award XP

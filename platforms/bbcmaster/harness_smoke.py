@@ -650,6 +650,24 @@ function run()
     send_key(0x53) -- 'S' (search)
     wait_frames(60)
     assert_line("play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn1)
+    -- The VMS Wands of Fire Bolts (153) and Drain Life (154), MON-031: the
+    -- death overlay's router runs them in OVL.SPELL through
+    -- irs_re_compact_call. Aimed at nothing, each takes its turn (a charge
+    -- spent) and play goes on.
+    for _, id in ipairs({153, 154}) do
+        drain_more(4)
+        inv_seed(0, {id, 1, 5, 0, 0, 0, 0, 0})
+        local turn_w = prog:read_u8(TURN_ADDR)
+        send_key(0x41) -- 'A' (aim)
+        assert_line("aim_prompt_" .. id, wait_screen("Aim which wand", 80))
+        send_key(0x41) -- 'A'
+        assert_line("aim_direction_" .. id, wait_screen("Direction?", 80))
+        send_key(0x4C) -- 'L'
+        wait_frames(60)
+        drain_more(4)
+        assert_line("wand_returns_" .. id, in_town() and prog:read_u8(TURN_ADDR) ~= turn_w
+            and inv_field(0, 2) == 4)
+    end
     -- A Scroll of Genocide reads its letter through recall_key_to_screen_code,
     -- which lived in the recall view's overlay: with SPELL loaded the call ran
     -- SPELL's bytes there, a stray store into the play slot that hung a later

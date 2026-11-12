@@ -359,6 +359,16 @@ high_resident_end:
 #import "../../core/player_items.s"
 #import "../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
+// Stone-to-Mud rides OVL.SPELL beside its only callers, the spell table and the
+// Phase 3 wand dispatch (2026-11-11: the VMS wands left Default 10 bytes past
+// $C100).
+#define WALL_TO_MUD_SEGMENT_CUSTOM
+.macro WallToMudSegment() {
+    .segment SpellOverlay
+}
+.macro WallToMudRestoreSegment() {
+    .segment Default
+}
 #import "../../core/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../core/player_magic_state.s"

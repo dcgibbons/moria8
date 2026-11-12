@@ -177,7 +177,13 @@
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 153
+.const ITEM_TYPE_COUNT = 157
+// VMS Moria attack wands (values.inc, wands.inc; 2026-11-11): Fire Bolts 6d8,
+// Drain Life 50 to the living, Lightning Balls 24, Acid Balls 40
+.const ITEM_TYPE_WAND_FIRE_BOLT      = 153
+.const ITEM_TYPE_WAND_DRAIN_LIFE     = 154
+.const ITEM_TYPE_WAND_LIGHTNING_BALL = 155
+.const ITEM_TYPE_WAND_ACID_BALL      = 156
 // VMS Moria rings of Lordly Protection and the Amulet of Resist Acid
 // (values.inc; 2026-11-11, MON-029): resistance in the ring and amulet slots
 .const ITEM_TYPE_RING_LORDLY_FIRE = 146

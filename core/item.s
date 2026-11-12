@@ -1331,7 +1331,7 @@ tunnel_spawn_gold:
 .segment DungeonGenOverlay
 #endif
 
-// Items 2-152 sorted ascending by it_min_level (ruined chest 134 excluded)
+// Items 2-156 sorted ascending by it_min_level (ruined chest 134 excluded)
 pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
@@ -1354,17 +1354,20 @@ pit_sorted:
     .byte 34, 35, 68, 73, 83, 93
     // Level 7 (5 items)
     .byte 71, 80, 91, 123, 130
-    // Level 8 (14 items)
+    // Level 8 (15 items)
     .byte 56, 59, 69, 75, 97, 127, 139
     .byte 140, 141, 142, 143, 144, 145   // potions of gain stat (VMS level 25)
     .byte 149                            // Amulet of Resist Acid (VMS level 24)
-    // Level 9 (5 items)
+    .byte 153                            // Wand of Fire Bolts (VMS level 30)
+    // Level 9 (6 items)
     .byte 76, 104, 106, 112, 131
+    .byte 155                            // Wand of Lightning Balls (VMS level 35)
     // Level 10 (5 items)
     .byte 81, 108, 118, 121, 138
-    // Level 11 (5 items)
+    // Level 11 (7 items)
     .byte 105, 117, 119, 132
     .byte 150                            // Silver Crown (VMS level 44)
+    .byte 154, 156                       // Wands of Drain Life, Acid Balls (VMS levels 50, 48)
     // Level 12 (13 items)
     .byte 57, 60, 107, 111, 113, 120, 125, 133
     .byte 146, 147, 148                  // rings of Lordly Protection (VMS level 50)
@@ -1381,11 +1384,11 @@ pit_level_bounds:
     .byte 97     // level 5: +14 = 97
     .byte 103    // level 6: +6 = 103
     .byte 108    // level 7: +5 = 108
-    .byte 122    // level 8: +14 = 122
-    .byte 127    // level 9: +5 = 127
-    .byte 132    // level 10: +5 = 132
-    .byte 137    // level 11: +5 = 137
-    .byte 150    // level 12: +13 = 150
+    .byte 123    // level 8: +15 = 123
+    .byte 129    // level 9: +6 = 129
+    .byte 134    // level 10: +5 = 134
+    .byte 141    // level 11: +7 = 141
+    .byte 154    // level 12: +13 = 154
 pit_level_bounds_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -1865,7 +1868,7 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 153
+.assert "Item type count", ITEM_TYPE_COUNT, 157
 .assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
 .assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
 .assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT

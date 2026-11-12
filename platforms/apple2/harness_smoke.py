@@ -1404,6 +1404,32 @@ press("S")
 emu.wait(1.0)
 assert_line("play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn1,
             "no turn after the aim: " .. rowtext(0))
+-- The VMS Wands of Fire Bolts (153) and Drain Life (154), MON-031: the death
+-- overlay's router runs them in OVL.SPELL through irs_re_compact_call. Aimed
+-- at nothing, each takes its turn and play goes on.
+for _, id in ipairs({153, 154}) do
+    for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+    inv_seed(0, {id, 1, 5, 0, 0, 0, 0, 0})
+    local turn_w = prog:read_u8(TURN_LO_ADDR)
+    -- Right after the previous wand's overlay swap a quick press can vanish
+    -- (2026-11-12: the Drain Life aim's 'A' was lost once): retried, held.
+    assert_line("aim_prompt_" .. id, press_until("Aim which wand", "A", 8), "aim prompt missing")
+    press_slow("A")
+    assert_line("aim_direction_" .. id, wait_screen("Direction?"), "direction prompt missing")
+    press_slow("L")
+    emu.wait(1.0)
+    for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+    assert_line("wand_returns_" .. id, in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn_w
+                and inv_field(0, 2) == 4, "wand " .. id .. ": " .. rowtext(0))
+end
+-- Settle before the next command: a bolt may have slain a townsperson (its
+-- messages behind a late -more-), and a quick press right after the wands'
+-- overlay swaps was dropped while the drive spun (2026-11-12: the ring's W).
+for _ = 1, 8 do
+    if screen_has("-more-") then press_slow(" ") end
+    emu.wait(0.4)
+end
+emu.wait(2.0)
 -- Wearing a ring or amulet rebuilds the equipment flags (player_pflags) at
 -- once: on the compact play slot they stayed stale until the next stats
 -- rebuild (2026-11-08 review). The Ring of Resist Fire sets
