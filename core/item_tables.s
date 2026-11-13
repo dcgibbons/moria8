@@ -615,7 +615,7 @@ item_get_missile:
 
 // item_get_base_ac — Get base armor class for an item type
 // Input: Y = item type ID
-// Output: A = base AC (0-28), flags from it
+// Output: A = base AC (0-28); flags do not follow A (no caller tests them)
 // Preserves: X, Y
 item_get_base_ac:
     lda it_color_ac,y
