@@ -1836,7 +1836,7 @@ c128_load_progress_suffix:
 
 
 // ============================================================
-.const TITLE_MENU_COL = (SCREEN_COLS - 35) / 2
+.label TITLE_MENU_COL = (SCREEN_COLS - (title_menu_str_end - title_menu_str)) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
 
 game_over_prompt:

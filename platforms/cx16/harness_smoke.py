@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BUILD_CX16 = ROOT / "build" / "cx16"
 
-MENU_START_COL = 22
 MENU_EXPECTED_STR = "N)ew  L)oad  D)isk Setup  A)bout"
+MENU_START_COL = (80 - len(MENU_EXPECTED_STR)) // 2   # centred (main.s title_draw_menu)
 
 
 def _load_symbols(sym_path: Path) -> dict[str, int]:
@@ -381,7 +381,7 @@ def scenario_boot_title(tb: X16Bench) -> None:
     row23_txt = tb.rowtext(23)
     tb.assert_line("menu_reached", tb.on_title(), f"row18={row18_txt!r}")
     tb.assert_line(
-        "menu_col_22",
+        "menu_centred",
         row18_txt[MENU_START_COL : MENU_START_COL + len(MENU_EXPECTED_STR)] == MENU_EXPECTED_STR,
         f"slice={row18_txt[MENU_START_COL:MENU_START_COL + len(MENU_EXPECTED_STR)]!r}",
     )

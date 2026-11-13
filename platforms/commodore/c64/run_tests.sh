@@ -3453,7 +3453,7 @@ run_disk_setup_single_drive_return_product_smoke() {
             --swap-symbol ".disk_prompt_game_required_error_shown" \
             --swap-attach8-d64 "$program_d64" \
             --attach8-at-start-d64 "$save_d64" \
-            --expect-screen-symbol ".title_menu_str:18:2" \
+            --expect-screen-symbol ".title_menu_str:18:4" \
             --screen-base 0x0400; then
         local dir_list
         if ! dir_list=$("$C1541" -attach "$save_d64" -list 2>&1); then
@@ -4272,7 +4272,7 @@ run_single_drive_load_corrupt_product_smoke() {
             --swap-attach8-d64 "$program_d64" \
             --attach8-at-start-d64 "$save_d64" \
             --pass-on-script-exhausted \
-            --expect-screen-symbol ".title_menu_str:18:2" \
+            --expect-screen-symbol ".title_menu_str:18:4" \
             --screen-base 0x0400; then
         PASS=$((PASS + 1))
     else

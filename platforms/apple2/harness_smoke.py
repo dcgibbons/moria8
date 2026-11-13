@@ -43,11 +43,10 @@ MAME_OUTPUT_DIRS = {
 }
 
 # Row 18 text-page base: $400 + (18&7)*$80 + (18>>3)*$28 = $550.
-# Menu "N)ew  L)oad  D)isk Setup" starts at column 22 (main.s title_draw_menu).
+# The menu is centred on the 80 columns (main.s title_draw_menu).
 # Even columns live in the aux half, odd columns in the main half; each half
 # row holds 40 bytes, so column c maps to half-row offset c>>1.
 ROW18_BASE = 0x550
-MENU_START_COL = 22
 
 # Expected Apple display codes for the complete title menu.
 MENU_EXPECTED = [
@@ -55,6 +54,11 @@ MENU_EXPECTED = [
     0xA0, 0xC4, 0xA9, 0xE9, 0xF3, 0xEB, 0xA0, 0xD3, 0xE5, 0xF4, 0xF5, 0xF0,
     0xA0, 0xA0, 0xC1, 0xA9, 0xE2, 0xEF, 0xF5, 0xF4,
 ]
+MENU_START_COL = (80 - len(MENU_EXPECTED)) // 2
+# The menu's first ')' in an odd (main-half) column: the boot-title wait
+# polls it, the half-row offset col>>1.
+MENU_PAREN_OFF = next((MENU_START_COL + i) >> 1 for i, b in enumerate(MENU_EXPECTED)
+                      if b == 0xA9 and (MENU_START_COL + i) % 2 == 1)
 
 LUA_BOOT_TITLE = r"""
 function run()
@@ -71,7 +75,7 @@ function run()
             local d = prog:read_u8(0x05A8 + 21)
             if d > bootprog then bootprog = d end
         end
-        if prog:read_u8(ROW18_BASE + 14) == 0xA9 then
+        if prog:read_u8(ROW18_BASE + MENU_PAREN_OFF) == 0xA9 then
             ready = true
             break
         end
@@ -268,7 +272,7 @@ LUA_CHARGEN = r"""
 -- Title -> chargen -> town. CLASS_KEY substituted by the caller.
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press_until("Choose your race", "N")
 press_until("Roll Statistics", "A")
@@ -1253,7 +1257,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then title_ok = true break end
 end
 assert_line("save_completed", title_ok, "save did not complete")
 assert_line("title_after_save", title_ok,
@@ -1295,7 +1299,7 @@ LUA_DISK_SETUP_TWO_DRIVE_BODY = r"""
 -- MORIA8.ID landed on the second disk image.
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("D")
 assert_line("ds_menu", wait_screen("Pick save drive"),
@@ -1318,7 +1322,7 @@ press("Y")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then back = true break end
 end
 assert_line("ds_done", back, "did not return to title after setup")
 dump("after_ds_two_drive")
@@ -1336,7 +1340,7 @@ for tag, img in pairs(manager.machine.images) do
 end
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("D")
 assert_line("sw_menu", wait_screen("Pick save drive"),
@@ -1387,7 +1391,7 @@ press(" ")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then back = true break end
 end
 assert_line("sw_done", back, "did not return to title after swap setup")
 dump("after_ds_swap")
@@ -1406,7 +1410,7 @@ for tag, img in pairs(manager.machine.images) do
 end
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("D")
 assert_line("ad_menu", wait_screen("Pick save drive"),
@@ -1426,7 +1430,7 @@ press("Y")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then back = true break end
 end
 assert_line("ad_commit", back, "did not return to title after adopting SAVE2")
 -- Phase 2: unreadable media on the save unit. Setup runs again (D), Done
@@ -1471,7 +1475,7 @@ press("Q")
 local home = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then home = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then home = true break end
 end
 assert_line("ad_quit", home, "did not return to title after Q")
 dump("after_ds_adopt")
@@ -1683,7 +1687,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then title_ok = true break end
 end
 assert_line("save_completed", title_ok, "save did not complete")
 print("SCENARIO DONE")
@@ -1695,7 +1699,7 @@ LUA_REBOOT_LOAD_BODY = r"""
 -- a2_require_play has loaded the play payload (cold-boot crash).
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("L")
 local DISK_MODE = 0x0a05
@@ -1773,7 +1777,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then title_ok = true break end
 end
 assert_line("st_saved", title_ok, "save to slot 2 did not complete")
 press("L")
@@ -1818,7 +1822,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then saved2 = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then saved2 = true break end
 end
 assert_line("st_resaved", saved2, "re-save to slot 2 did not complete")
 dump("after_slot_tracking")
@@ -2281,7 +2285,8 @@ SCENARIOS = ("boot_title",) + tuple(SCENARIO_LUA) + ("save_reboot_load",)
 
 def _run_mame(args, lua, flop2):
     with tempfile.NamedTemporaryFile("w", suffix=".lua", delete=False) as f:
-        f.write(lua)
+        # Every scenario finds the title by the menu's ')' (MENU_PAREN_OFF).
+        f.write(lua.replace("MENU_PAREN_OFF", str(MENU_PAREN_OFF)))
         lua_path = f.name
 
     for output_dir in MAME_OUTPUT_DIRS.values():
@@ -2368,6 +2373,7 @@ def main() -> int:
             LUA_BOOT_TITLE
             .replace("WAIT_TENTHS", str(int(args.seconds * 10)))
             .replace("MENU_START_COL", str(MENU_START_COL))
+            .replace("MENU_PAREN_OFF", str(MENU_PAREN_OFF))
             .replace("ROW18_BASE", str(ROW18_BASE))
         )
 
@@ -2493,7 +2499,7 @@ def main() -> int:
     check("boot_progress", bootprog >= 0xB1,
           f"max count digit={bootprog:#04x}")
 
-    # Menu string "N)ew  L)oad  D)isk Setup" starts at column 22; each half
+    # The menu string starts at MENU_START_COL (centred); each half
     # row holds 40 bytes at half-row offset col>>1.
     for half_name, parity in (("main", 1), ("aux", 0)):
         if half_name not in dumps:

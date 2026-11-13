@@ -107,7 +107,7 @@ $(ATARI8_CATALOG): ../../tools/catalog_disk.py monster_catalog_a8.s ../commodore
 	@mkdir -p $(OUTATARI8)
 	python3 ../../tools/catalog_disk.py atari "$@"
 
-disk: $(ATARI8_ATR)
+disk: $(ATARI8_ATR) $(ATARI8_CAR)
 
 $(ATARI8_ATR): $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atr.py
 	python3 ../../tools/make_atr.py --build-dir $(OUTATARI8) --root-dir ../.. -o $(ATARI8_ATR)

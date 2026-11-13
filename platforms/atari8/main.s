@@ -520,7 +520,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #(SCREEN_COLS - 35) / 2
+    lda #(SCREEN_COLS - (title_menu_str_end - title_menu_str)) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0

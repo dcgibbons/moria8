@@ -261,7 +261,7 @@ buildplus4: $(PLUS4_BUILD_ARTIFACTS)
 	@mkdir -p "$(OUTPLUS4)"
 	@$(MAKE) --no-print-directory cleanup-source-symbols
 
-disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(DISK128_IMAGES) $(DISKPLUS4_IMAGE)
+disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(OUT)/moria8-c64.crt $(DISK128_IMAGES) $(DISKPLUS4_IMAGE)
 
 disk64: $(DISK64_IMAGE) $(C64_ZIP_IMAGE)
 
@@ -736,7 +736,8 @@ clean:
 	rm -f ../../core/*.sym ../../core/*.vs
 	rm -f /tmp/test_*.mon
 
-# Native EasyFlash experiment: independent output directory and compile define.
+# The C64 EasyFlash cartridge (a shipping package, built by `make disk`): its own
+# output directory and compile define.
 CART64_OUT = $(abspath $(OUT)/c64-cart)
 .PHONY: cartridge64 test64-cartridge
 cartridge64: $(OUT)/moria8-c64.crt

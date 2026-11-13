@@ -382,6 +382,10 @@ end
 function run()
     local ok = wait_title()
     assert_line("boot_title_menu", ok)
+    -- Centred from its length: a hard-coded 35 left it off centre (2026-11-12).
+    local menu = "N)ew  L)oad  D)isk Setup  A)bout"
+    local start = math.floor((40 - #menu) / 2)
+    assert_line("title_menu_centred", string.sub(rowtext(18), start + 1, start + #menu) == menu)
     local portb = prog:read_u8(0xD301)
     assert_line("portb_game_ram", portb == 0xFE)
     local chbase = prog:read_u8(0x02F4)
