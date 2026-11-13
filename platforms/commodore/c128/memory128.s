@@ -187,6 +187,10 @@
 .const MMU_IRQ_SAVE_FF00     = $0c04
 .const MMU_IRQ_SAVE_D506     = $0c05
 .const MMU_COMMON_HELPERS_BASE = $0c06
+#if C128_CARTRIDGE
+.const MMU_COMMON_CART_CHUNK_MAX = 32
+.const MMU_COMMON_CART_BASE      = $0fb0
+#endif
 .const BANK1_STAGE_SOURCE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
 .const BANK1_STAGE_SOURCE_END  = $feff // copy stub stops before $ff00
 .const TIER_PRELOAD_REQUIRED = BANK1_TIER_CACHE_SIZE
@@ -507,6 +511,14 @@ init_common_mmu_helpers:
     inx
     jmp !copy_tail-
 !done:
+#if C128_CARTRIDGE
+    ldx #mmu_common_cart_blob_end - mmu_common_cart_blob - 1
+!copy_cart:
+    lda mmu_common_cart_blob,x
+    sta MMU_COMMON_CART_BASE,x
+    dex
+    bpl !copy_cart-
+#endif
     rts
 
 // mmu_save_p — Static storage for CPU status register during bank switches
@@ -856,8 +868,62 @@ mmu_common_tile_tmp:
     .byte 0
 mmu_common_huff_value:
     .byte 0
+#if C128_CARTRIDGE
+mmu_common_cart_bank:     .byte 0
+mmu_common_cart_dst_mmu:  .byte 0
+mmu_common_cart_dst_d506: .byte 0
+mmu_common_cart_len:      .byte 0
+mmu_common_cart_buf:      .fill MMU_COMMON_CART_CHUNK_MAX, 0
+#endif
 }
 mmu_common_helpers_blob_end:
+#if C128_CARTRIDGE
+mmu_common_cart_blob:
+.pseudopc MMU_COMMON_CART_BASE {
+// Copy 1..32 bytes from External Function ROM (zp_ptr0, $8000-$BFFF) through
+// bottom-common bounce buffer into Bank 0 or Bank 1 (zp_ptr1).
+// Entry: X = byte count (1..32), mmu_common_cart_{bank,dst_mmu,dst_d506} set.
+// Clobbers: A, X, Y. Preserves caller MMU_CR, $D506=$0D, interrupt state, ZP ptrs.
+mmu_common_cart_copy_chunk:
+    stx mmu_common_cart_len
+    php
+    sei
+    lda MMU_CR
+    pha
+    lda #$3a                        // Bank 0 RAM, Ext Function ROM ($8000-$BFFF), I/O
+    sta MMU_CR
+    lda mmu_common_cart_bank
+    sta $de00
+    ldy #0
+!rd:
+    lda (zp_ptr0),y
+    sta mmu_common_cart_buf,y
+    iny
+    dex
+    bne !rd-
+    lda mmu_common_cart_dst_d506
+    sta $d506
+    lda mmu_common_cart_dst_mmu
+    sta MMU_CR
+    ldx mmu_common_cart_len
+    ldy #0
+!wr:
+    lda mmu_common_cart_buf,y
+    sta (zp_ptr1),y
+    iny
+    dex
+    bne !wr-
+    lda #$0d                        // Restore 4KB bottom/top common invariant
+    sta $d506
+    pla
+    sta MMU_CR
+    plp
+    rts
+mmu_common_cart_copy_end:
+}
+mmu_common_cart_blob_end:
+.assert "Cartridge common stub fits at $0FB0-$0FFF", mmu_common_cart_blob_end - mmu_common_cart_blob <= $1000 - MMU_COMMON_CART_BASE, true
+#endif
 // The item DB shares Bank 1 with the map, so its pointer thunks are the
 // map's (identical bodies until 2026-10-25).
 .label mmu_common_db_read_ptr0  = mmu_common_map_read_ptr0

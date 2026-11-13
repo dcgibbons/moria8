@@ -123,6 +123,10 @@
 .const PLUS4_ROM_RESET_REBUILD_FLAG = $0508
 .const PLUS4_ROM_RESET_REBUILD_FLAG_2 = $0509
 
+#if PLUS4_CARTRIDGE
+#import "cartridge_contract.s"
+#endif
+
 .pc = $1001 "BASIC Stub"
 .word basic_stub_end
 .word 10
@@ -141,6 +145,9 @@ basic_stub_end:
 // before BASIC ROM is banked out.
 .const KERNAL_SETMSG = $ff90
 entry:
+#if PLUS4_CARTRIDGE
+.assert "Cartridge boot entry ABI", entry, CART_ENTRY
+#endif
     sei
     // KERNAL messages off while the ROM is still visible: with them on, every
     // LOAD printed "searching for <file>" over the game screen (2026-11-05,
@@ -150,14 +157,25 @@ entry:
     jsr plus4_bank_ram
     jmp entry_main
 
+#if !PLUS4_CARTRIDGE
 plus4_banked_fname:
     .byte $34,$2e,$42,$41,$4e,$4b  // "4.BANK"
 .label plus4_banked_fname_len = * - plus4_banked_fname
+#endif
 
 // Exit trampoline — MUST live below $A000 because it banks Plus/4
 // ROM back in. If this ran from $A000+ the CPU would start executing
 // BASIC ROM as soon as $FF3E makes ROM visible.
 exit_trampoline:
+#if PLUS4_CARTRIDGE
+.assert "Cartridge exit trampoline stays below C1LO ROM", exit_trampoline < $8000, true
+    sei
+    lda #0
+    sta CART_REG_BANK
+    sta CART_REG_C1LO_KERNAL
+    sta PLUS4_EXIT_ROM_ENABLE
+    jmp $fff6               // Hardware reset re-enters cartridge via KERNAL ROM check
+#else
     sei
     lda #$ff
     sta PLUS4_EXIT_ROM_ENABLE
@@ -183,6 +201,7 @@ exit_trampoline:
     sta PLUS4_ROM_RESET_REBUILD_FLAG
     sta PLUS4_ROM_RESET_REBUILD_FLAG_2
     jmp PLUS4_KERNAL_RESET
+#endif
 
 #import "../../../core/zeropage.s"
 #import "legal.s"
@@ -471,13 +490,28 @@ tramp_dig_ability:
 // Overlay state is platform-owned so product/test variant layout changes
 // cannot place these bytes inside later resident code.
 current_overlay: .byte 0
+#if !PLUS4_CARTRIDGE
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+#endif
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
 #import "../common/overlay.s"
 #undef OVERLAY_LOAD_PROMPT_GAME
+#if PLUS4_CARTRIDGE
+.assert "Cartridge overlay count matches shared table", CART_OVERLAY_COUNT, 10
+.assert "Startup overlay asset ABI", CART_ASSET_STARTUP - CART_ASSET_STARTUP + 1, OVL_STARTUP
+.assert "Town overlay asset ABI", CART_ASSET_TOWN - CART_ASSET_STARTUP + 1, OVL_TOWN
+.assert "Death overlay asset ABI", CART_ASSET_DEATH - CART_ASSET_STARTUP + 1, OVL_DEATH
+.assert "Dungeon gen overlay asset ABI", CART_ASSET_DUNGEON_GEN - CART_ASSET_STARTUP + 1, OVL_DUNGEON_GEN
+.assert "Help overlay asset ABI", CART_ASSET_HELP - CART_ASSET_STARTUP + 1, OVL_HELP
+.assert "UI overlay asset ABI", CART_ASSET_UI - CART_ASSET_STARTUP + 1, OVL_UI
+.assert "Items overlay asset ABI", CART_ASSET_ITEMS - CART_ASSET_STARTUP + 1, OVL_ITEMS
+.assert "Spell overlay asset ABI", CART_ASSET_SPELL - CART_ASSET_STARTUP + 1, OVL_SPELL
+.assert "Modal misc overlay asset ABI", CART_ASSET_MODAL_MISC - CART_ASSET_STARTUP + 1, OVL_MODAL_MISC
+.assert "Chest overlay asset ABI", CART_ASSET_CHEST - CART_ASSET_STARTUP + 1, OVL_CHEST
+#endif
 #import "../../../core/monster_ai.s"
 #import "../../../core/scene_dirty.s"
 #import "../../../core/scene_mat_tile.s"
@@ -2198,6 +2232,10 @@ program_end:
 // Called once at startup before any $F000 trampoline is used.
 // Clobbers: A, X, Y
 init_load_banked:
+#if PLUS4_CARTRIDGE
+    lda #CART_ASSET_RUNTIME
+    jmp cart_load_asset
+#else
     lda #plus4_banked_fname_len
     ldx #<plus4_banked_fname
     ldy #>plus4_banked_fname
@@ -2221,6 +2259,7 @@ init_load_banked:
     lda plus4_color_attr + COL_RED
     sta TED_BORDER
     jmp !load_failed-
+#endif
 
 // plus4_huff_index_install — The Huffman string index to its RAM span.
 // Exactly the index: the first page, then the rest from its end down.
@@ -2308,6 +2347,10 @@ plus4_copy_overlay_window:
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.
 plus4_require_program_media:
+#if PLUS4_CARTRIDGE
+    clc
+    rts
+#else
     // Does the drive open a file only the Program Disk holds? Its status after
     // the OPEN says, asked again with a fresh OPEN when a read loses its byte.
     // storage_file_exists asks the save drive: the program drive stands in.
@@ -2329,6 +2372,7 @@ plus4_require_program_media:
     sta current_overlay
     sec
     rts
+#endif
 
 save_append_disk_detail_plus4:
     lda #$20
@@ -2652,7 +2696,11 @@ ovl_chest_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../../core/ui_legal.s"
+#if PLUS4_CARTRIDGE
+#import "legal_stream.s"
+#else
 #import "../../shared/legal_disk_stream.s"
+#endif
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true

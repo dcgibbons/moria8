@@ -54,6 +54,8 @@
 .const PLUS4_ROM_ENABLE = $ff3e
 .const PLUS4_RAM_ENABLE = $ff3f
 
+.const TED_CURSOR_HI    = $ff0c
+.const TED_CURSOR_LO    = $ff0d
 .const TED_SND1_LO      = $ff0e
 .const TED_SND2_LO      = $ff0f
 .const TED_SND2_HI      = $ff10

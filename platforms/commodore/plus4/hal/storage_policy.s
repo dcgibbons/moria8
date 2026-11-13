@@ -1,5 +1,9 @@
 #importonce
 // Plus/4 platform-owned storage logical file numbers and secondary addresses.
+#if PLUS4_CARTRIDGE
+#define HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+#define HAL_STORAGE_ASSET_LOAD_INFALLIBLE
+#endif
 
 .const hal_storage_save_file_num = 2
 .const hal_storage_check_file_num = 3
@@ -80,7 +84,11 @@
 // save_game reads the drive's command channel after the write: CBM DOS
 // reports a write-protected or full disk only there.
 #define HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+#if !PLUS4_CARTRIDGE
 #define HAL_STORAGE_LOAD_PROGRAM_MEDIA_PROBE
+#endif
 #define HAL_STORAGE_NO_UNIT_TEST_STUBS
 
+#if !PLUS4_CARTRIDGE
 #define HAL_STORAGE_LEGAL_COMMAND_STATUS
+#endif

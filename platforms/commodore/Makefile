@@ -239,9 +239,9 @@ PLUS4_BUILD_ARTIFACTS += $(OUTPLUS4)/legalui
 C128_BUILD_ARTIFACTS += $(OUT128)/legalui
 C128_MAIN_OUTPUTS += $(OUT128)/legalui
 
-.PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
+.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 	bootart128-charset-demo \
-	test test-disk test-disk-static test-disk-debt test64 test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime clean \
+	test test-disk test-disk-static test-disk-debt test64 test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
 	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols ensure-kickass kickass create-symlinks
 
 all: build
@@ -253,15 +253,15 @@ build64: $(C64_BUILD_ARTIFACTS) cartridge64
 	@python3 ../../tools/parse_creatures.py --sync-web
 	@$(MAKE) --no-print-directory cleanup-source-symbols
 
-build128: $(C128_BUILD_ARTIFACTS)
+build128: $(C128_BUILD_ARTIFACTS) cartridge128
 	@mkdir -p "$(OUT128)"
 	@$(MAKE) --no-print-directory cleanup-source-symbols
 
-buildplus4: $(PLUS4_BUILD_ARTIFACTS)
+buildplus4: $(PLUS4_BUILD_ARTIFACTS) cartridgeplus4
 	@mkdir -p "$(OUTPLUS4)"
 	@$(MAKE) --no-print-directory cleanup-source-symbols
 
-disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(OUT)/moria8-c64.crt $(DISK128_IMAGES) $(DISKPLUS4_IMAGE)
+disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(OUT)/moria8-c64.crt $(DISK128_IMAGES) $(OUT)/moria8-c128.crt $(DISKPLUS4_IMAGE) $(OUT)/moria8-plus4.crt
 
 disk64: $(DISK64_IMAGE) $(C64_ZIP_IMAGE)
 
@@ -281,12 +281,18 @@ run64: run
 run128: $(DISK128_IMAGE)
 	$(VICE128) -drive8truedrive -drive8type 1571 +busdevice8 $(RUN_FLAGS128) $(DISK128_IMAGE)
 
+run128-cart: cartridge128
+	$(VICE128) -80col -cartcrt $(OUT)/moria8-c128.crt
+
 runplus4: $(DISKPLUS4_IMAGE)
 	$(VICEPLUS4) -drive8truedrive -drive8type 1541 $(RUN_FLAGSPLUS4) -autostart $(DISKPLUS4_IMAGE)
 
+runplus4-cart: cartridgeplus4
+	$(VICEPLUS4) -cartcrt $(OUT)/moria8-plus4.crt -sound -sounddev coreaudio
+
 bootart128-charset-demo: $(C128_CHARSET_DEMO_PRG)
 
-test: test64 test128-fast test128-fast-smoke testplus4
+test: test64 test64-cartridge test128-fast test128-fast-smoke test128-cartridge testplus4
 
 test-disk: ensure-kickass
 	python3 -u disk_test_matrix.py \
@@ -311,7 +317,7 @@ test-scripted-smoke-harness:
 test64: ensure-kickass test64-legal test-scripted-smoke-harness
 	cd c64 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests.sh
 
-test128: ensure-kickass check128-payloads test128-legal test-scripted-smoke-harness
+test128: ensure-kickass check128-payloads test128-legal test-scripted-smoke-harness test128-cartridge
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests128.sh
 
 # The bytes each payload emits, not labels beside them (docs/C128_MEMORY_CONTRACT.md).
@@ -340,7 +346,7 @@ test128-fast-smoke: ensure-kickass check128-payloads
 testplus4-build: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
 	@echo "Plus/4 build artifacts assembled; runtime smoke is make testplus4-runtime."
 
-testplus4: testplus4-runtime testplus4-legal test-scripted-smoke-harness
+testplus4: testplus4-runtime testplus4-legal test-scripted-smoke-harness testplus4-cartridge
 
 testplus4-runtime: ensure-kickass
 	cd plus4 && KICKASS="$(KICKASS_RESOLVED)" VICEPLUS4="$(VICEPLUS4)" ./run_testsplus4.sh
@@ -769,6 +775,7 @@ test64-cartridge: test64-cartridge-assets test64-cartridge-persistence
 test64-cartridge-assets: cartridge64 $(CART64_OUT)/catalog-test.prg
 	python3 c64/test_cartridge_harness.py
 	python3 ../../tools/check_easyflash.py "$(OUT)/moria8-c64.crt" "$(CART64_OUT)"
+	cartconv -c "$(OUT)/moria8-c64.crt"
 	python3 c64/test_cartridge.py --crt "$(OUT)/moria8-c64.crt" --symbols "$(CART64_OUT)/main.sym" --vice "$(VICE64)" --output "$(OUT)/test/c64-cartridge"
 	python3 c64/test_cartridge.py --crt "$(OUT)/moria8-c64.crt" --symbols "$(CART64_OUT)/main.sym" --vice "$(VICE64)" --output "$(OUT)/test/c64-cartridge-ntsc" --ntsc
 test64-cartridge-persistence: cartridge64 disk64
@@ -795,3 +802,83 @@ testplus4-legal: diskplus4 test-legal-harness
 $(CART64_OUT)/legalui: $(CART64_OUT)/.main.stamp
 	@test -f "$@" || { rm -f "$(CART64_OUT)/.main.stamp"; $(MAKE) "$(CART64_OUT)/.main.stamp"; }
 	@test -f "$@"
+
+# The Plus/4 c264 magic cart cartridge (shipping package, built by `make disk`
+# and `make buildplus4`): isolated output directory and compile define so
+# `build/plus4/` and `build/moria8-plus4.d64` stay byte-identical.
+CARTPLUS4_OUT = $(abspath $(OUT)/plus4-cart)
+cartridgeplus4: $(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin
+
+$(CARTPLUS4_OUT)/.main.stamp: $(PLUS4_SOURCES) $(VERSION_INC) | ensure-kickass
+	mkdir -p "$(CARTPLUS4_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(CARTPLUS4_OUT)" "$(PLUS4_MAIN_SRC)" $(KA_FLAGSPLUS4) -define PLUS4_CARTRIDGE -symbolfiledir "$(CARTPLUS4_OUT)" -o "$(CARTPLUS4_OUT)/moria4.prg"
+	touch "$@"
+
+$(CARTPLUS4_OUT)/.boot.stamp: plus4/cartridge_boot.s plus4/cartridge_contract.s | ensure-kickass
+	mkdir -p "$(CARTPLUS4_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":CART_OUT=$(CARTPLUS4_OUT)" plus4/cartridge_boot.s -afo -showmem -symbolfiledir "$(CARTPLUS4_OUT)" -o "$(CARTPLUS4_OUT)/boot-unused.prg"
+	touch "$@"
+
+$(CARTPLUS4_OUT)/title: $(TITLE_SRC) $(VERSION_INC) | ensure-kickass
+	mkdir -p "$(CARTPLUS4_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_4 -symbolfiledir "$(CARTPLUS4_OUT)" -o "$@"
+
+$(CARTPLUS4_OUT)/legalui: $(CARTPLUS4_OUT)/.main.stamp
+	@test -f "$@" || { rm -f "$(CARTPLUS4_OUT)/.main.stamp"; $(MAKE) "$(CARTPLUS4_OUT)/.main.stamp"; }
+	@test -f "$@"
+
+$(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin &: $(CARTPLUS4_OUT)/.main.stamp $(CARTPLUS4_OUT)/legalui $(CARTPLUS4_OUT)/.boot.stamp $(CARTPLUS4_OUT)/title ../../tools/make_plus4_magic.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+	python3 ../../tools/make_plus4_magic.py "$(CARTPLUS4_OUT)" "$(OUT)/moria8-plus4.crt"
+
+$(CARTPLUS4_OUT)/catalog-test.prg: plus4/cartridge_test_catalog.s $(CARTPLUS4_OUT)/.main.stamp
+	cp "$(CARTPLUS4_OUT)/main.sym" "$(CARTPLUS4_OUT)/cartridge_product_symbols.inc"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" plus4/cartridge_test_catalog.s -libdir "$(CARTPLUS4_OUT)" -afo -symbolfiledir "$(CARTPLUS4_OUT)" -o "$@"
+
+testplus4-cartridge: testplus4-cartridge-assets testplus4-cartridge-persistence
+
+testplus4-cartridge-assets: cartridgeplus4 $(CARTPLUS4_OUT)/catalog-test.prg
+	python3 plus4/test_cartridge.py --selftest
+	python3 ../../tools/check_plus4_magic.py "$(OUT)/moria8-plus4.crt" "$(CARTPLUS4_OUT)"
+	cartconv -c "$(OUT)/moria8-plus4.crt"
+	python3 plus4/test_cartridge.py --crt "$(OUT)/moria8-plus4.crt" --bin "$(CARTPLUS4_OUT)/moria8-plus4.bin" --symbols "$(CARTPLUS4_OUT)/main.sym" --vice "$(VICEPLUS4)" --output "$(OUT)/test/plus4-cartridge"
+	python3 plus4/test_cartridge.py --crt "$(OUT)/moria8-plus4.crt" --bin "$(CARTPLUS4_OUT)/moria8-plus4.bin" --symbols "$(CARTPLUS4_OUT)/main.sym" --vice "$(VICEPLUS4)" --output "$(OUT)/test/plus4-cartridge-ntsc" --ntsc
+
+testplus4-cartridge-persistence: cartridgeplus4 diskplus4
+	python3 plus4/test_cartridge_persistence.py --crt "$(OUT)/moria8-plus4.crt" --symbols "$(CARTPLUS4_OUT)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --disk-symbols "$(OUTPLUS4)/main.sym" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-cartridge-persistence"
+	python3 plus4/test_cartridge_persistence.py --crt "$(OUT)/moria8-plus4.crt" --symbols "$(CARTPLUS4_OUT)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --disk-symbols "$(OUTPLUS4)/main.sym" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-cartridge-persistence-ntsc" --ntsc
+
+# The C128 Magic Desk 128 cartridge (shipping package, built by `make disk`
+# and `make build128`): isolated output directory and compile define so
+# `build/c128/` and `build/moria8-c128.{d64,d71,d81}` stay byte-identical.
+CART128_OUT = $(abspath $(OUT)/c128-cart)
+cartridge128: $(OUT)/moria8-c128.crt $(CART128_OUT)/moria8-c128.bin
+
+$(CART128_OUT)/.main.stamp: $(C128_SOURCES) $(VERSION_INC) | ensure-kickass
+	mkdir -p "$(CART128_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(CART128_OUT)" "$(C128_MAIN_SRC)" $(KA_FLAGS128) -define C128_CARTRIDGE -symbolfiledir "$(CART128_OUT)" -o "$(CART128_OUT)/moria128.prg"
+	touch "$@"
+
+$(CART128_OUT)/.boot.stamp: c128/cartridge_boot.s c128/cartridge_contract.s | ensure-kickass
+	mkdir -p "$(CART128_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":CART_OUT=$(CART128_OUT)" c128/cartridge_boot.s -afo -showmem -symbolfiledir "$(CART128_OUT)" -o "$(CART128_OUT)/boot-unused.prg"
+	touch "$@"
+
+$(CART128_OUT)/title: $(TITLE_SRC) $(VERSION_INC) | ensure-kickass
+	mkdir -p "$(CART128_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_128 -symbolfiledir "$(CART128_OUT)" -o "$@"
+
+$(CART128_OUT)/legalui: $(CART128_OUT)/.main.stamp
+	@test -f "$@" || { rm -f "$(CART128_OUT)/.main.stamp"; $(MAKE) "$(CART128_OUT)/.main.stamp"; }
+	@test -f "$@"
+
+$(OUT)/moria8-c128.crt $(CART128_OUT)/moria8-c128.bin &: $(CART128_OUT)/.main.stamp $(CART128_OUT)/legalui $(CART128_OUT)/.boot.stamp $(CART128_OUT)/title ../../tools/make_c128_md128.py $(CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+	python3 -B ../../tools/make_c128_md128.py "$(CART128_OUT)" "$(OUT)/moria8-c128.crt"
+
+test128-cartridge: cartridge128 $(DISK128_IMAGE)
+	python3 -B ../../tools/check_c128_md128.py --selftest
+	python3 -B ../../tools/check_c128_md128.py "$(OUT)/moria8-c128.crt" "$(CART128_OUT)"
+	python3 -B ../../tools/check_c128_payloads.py "$(CART128_OUT)"
+	cartconv -c "$(OUT)/moria8-c128.crt"
+	python3 -B c128/test_cartridge.py --selftest
+	python3 -B c128/test_cartridge.py --crt "$(OUT)/moria8-c128.crt" --bin "$(CART128_OUT)/moria8-c128.bin" --symbols "$(CART128_OUT)/main.sym" --disk-image "$(DISK128_IMAGE)" --disk-symbols "$(OUT128)/main.sym" --vice "$(VICE128)" --c1541 "$(C1541)" --output "$(OUT)/test/c128-cartridge"
+	python3 -B c128/test_cartridge.py --crt "$(OUT)/moria8-c128.crt" --bin "$(CART128_OUT)/moria8-c128.bin" --symbols "$(CART128_OUT)/main.sym" --disk-image "$(DISK128_IMAGE)" --disk-symbols "$(OUT128)/main.sym" --vice "$(VICE128)" --c1541 "$(C1541)" --output "$(OUT)/test/c128-cartridge-ntsc" --ntsc

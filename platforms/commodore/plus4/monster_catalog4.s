@@ -24,4 +24,8 @@
 .macro CatalogKernalOut() {
 }
 
+#if PLUS4_CARTRIDGE
+#import "cartridge_catalog.s"
+#else
 #import "../common/catalog_fetch.s"
+#endif

@@ -88,10 +88,16 @@
 // Default segment opens at $0801 with BASIC Upstart stub
 // ============================================================
 .pc = $0801 "BasicUpstart"
+#if CX16_CARTRIDGE
+#import "cartridge_contract.s"
+#endif
 :BasicUpstart2(entry_bootstrap)
 
 .pc = $080d "Resident"
 entry_bootstrap:
+#if CX16_CARTRIDGE
+.assert "CART_ENTRY matches entry_bootstrap", entry_bootstrap == CART_ENTRY, true
+#endif
     jmp entry_main
 
 // ============================================================
@@ -243,6 +249,9 @@ cmb_in_way_str:
 #import "memory_bank.s"
 #import "mmu_macros.s"
 #import "save_stream.s"
+#if CX16_CARTRIDGE
+#import "cartridge_copy.s"
+#endif
 #import "storage_kernal.s"
 #import "overlay_storage.s"
 #import "services.s"
@@ -1562,7 +1571,11 @@ program_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../core/ui_legal.s"
+#if CX16_CARTRIDGE
+#import "legal_stream.s"
+#else
 #import "../shared/legal_disk_stream.s"
+#endif
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true

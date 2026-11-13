@@ -92,15 +92,26 @@ def pack(source: Path, output: Path) -> dict:
     header[0x1A] = 0  # Standard EasyFlash; no dependence on Ultimate extensions.
     header[0x20:0x20+len(b"MORIA8 EASYFLASH EXPERIMENT")] = b"MORIA8 EASYFLASH EXPERIMENT"
     image = bytearray(header)
-    # Supply both chips for all banks; empty ROMH banks are erased flash.
+    # Omit erased ($FF) 8 KB flash banks; VICE and EasyFlash hardware default
+    # unrepresented banks to $FF, matching canonical cartconv sparse CRTs.
+    erased_bank = b"\xff" * BANK_SIZE
+    chip_count = 0
     for bank in range(64):
-        for address, data in ((0x8000, roml[bank*BANK_SIZE:(bank+1)*BANK_SIZE]),
-                              (0xA000, romh_boot if bank == 0 else b"\xff" * BANK_SIZE)):
+        for address, data in ((0x8000, bytes(roml[bank*BANK_SIZE:(bank+1)*BANK_SIZE])),
+                              (0xA000, romh_boot if bank == 0 else erased_bank)):
+            if data == erased_bank:
+                continue
             image += struct.pack(">4sIHHHH", b"CHIP", BANK_SIZE + 16, 2, bank, address, BANK_SIZE)
             image += data
+            chip_count += 1
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(image)
-    manifest.update(roml_bytes_used=offset, crt_sha256=hashlib.sha256(image).hexdigest())
+    manifest.update(
+        roml_bytes_used=offset,
+        chip_count=chip_count,
+        crt_bytes=len(image),
+        crt_sha256=hashlib.sha256(image).hexdigest(),
+    )
     output.with_suffix(".json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
@@ -111,4 +122,7 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     result = pack(args.source, args.output)
-    print(f"{args.output}: {len(result['assets'])} assets, {result['roml_bytes_used']} ROML bytes")
+    print(
+        f"{args.output}: {len(result['assets'])} assets, {result['chip_count']} CHIP blocks, "
+        f"{result['roml_bytes_used']} ROML bytes, {result['crt_bytes']} CRT bytes"
+    )

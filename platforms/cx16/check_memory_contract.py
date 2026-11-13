@@ -93,12 +93,12 @@ def prg_extent(blob: bytes, spec: PrgSpec) -> tuple[int, int]:
     return start, end
 
 
-def check_artifacts() -> int:
-    main_symbols = read_symbols(MAIN_SYM)
+def check_artifacts(build_dir: Path = BUILD) -> int:
+    main_symbols = read_symbols(build_dir / "main.sym")
     checks = 0
 
     for spec in PRG_SPECS:
-        path = BUILD / spec.filename
+        path = build_dir / spec.filename
         if not path.is_file():
             raise ContractViolation(f"missing build artifact: {path}")
         _, end = prg_extent(path.read_bytes(), spec)
@@ -165,9 +165,10 @@ def selftest() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
+    parser.add_argument("--build-dir", type=Path, default=BUILD)
     args = parser.parse_args()
     try:
-        return selftest() if args.selftest else check_artifacts()
+        return selftest() if args.selftest else check_artifacts(args.build_dir)
     except (ContractViolation, OSError) as exc:
         print(f"ASSERT memory-contract FAIL {exc}")
         print("RESULT 1 asserts 1 failures")

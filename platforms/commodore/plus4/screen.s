@@ -107,6 +107,9 @@ plus4_display_resync:
     and #$03
     ora #TED_CHARSET_LOWER_UPPER
     sta TED_CHARPTR
+    lda #$ff                    // Park TED hardware cursor off-screen ($03FF >= 1000).
+    sta TED_CURSOR_HI
+    sta TED_CURSOR_LO
     rts
 
 // ============================================================

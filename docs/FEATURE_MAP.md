@@ -1805,8 +1805,9 @@ Every one of the **279 creatures** (`0..278` in `umoria: src/data_creatures.cpp:
 
 ## License and source documents
 
-All seven disk ports and the C64 EasyFlash build expose the existing license
-notice and source offer from title `A` (About) and Help `L`. Disk builds load the cold
+All seven disk ports and the cartridge builds (C64 EasyFlash, Plus/4 `c264 magic cart`,
+C128 `Magic Desk 128`, and Commander X16) expose the existing license notice and
+source offer from title `A` (About) and Help `L`. Disk builds load the cold
 `LEGALUI` modal and documents from program media; cartridges read them from ROM.
 The viewer consumes no turns and preserves gameplay state. Ownership and the
 change/verification record are in [LEGAL_VIEWER.md](LEGAL_VIEWER.md).

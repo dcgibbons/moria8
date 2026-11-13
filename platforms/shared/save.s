@@ -2249,7 +2249,6 @@ save_version_uses_legacy_floor_layout:
 // Apple II implements the same contract in platforms/apple2/save_stream.s
 // (aux-RAM map through the p0 thunk instead of MMU banks).
 // ============================================================
-save_write_map_banked:
 // save_map_span_c128 — zp_ptr0 = MAP_BASE, save_count = MAP_SIZE (both map
 // streams start here).
 save_map_span_c128:
@@ -2263,6 +2262,7 @@ save_map_span_c128:
     sta save_count_hi
     rts
 
+save_write_map_banked:
 save_write_map_c128:
     jsr save_map_span_c128
 !swm_loop:

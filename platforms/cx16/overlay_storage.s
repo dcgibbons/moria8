@@ -16,6 +16,27 @@ cx16_preload_banks:
     lda #0
     sta cx16_banks_preloaded
 
+#if CX16_CARTRIDGE
+    ldx #CART_ASSET_AUXDATA
+!cart_preload_loop:
+    txa
+    phx
+    jsr cart_load_asset
+    bcs !cart_fatal+
+    plx
+    inx
+    cpx #CART_ASSET_MONSTER_CAT + 1
+    bcc !cart_preload_loop-
+    lda #1
+    sta cx16_banks_preloaded
+    stz CX16_RAM_BANK_REG
+    stz CX16_ROM_BANK_REG
+    clc
+    rts
+!cart_fatal:
+    plx
+    bra !fatal+
+#else
     // 1. Bank 3: CX16.AUXDATA
     lda #CX16_BANK_AUXDATA
     sta CX16_RAM_BANK_REG
@@ -104,6 +125,7 @@ cx16_preload_banks:
     sta cx16_banks_preloaded
     clc
     rts
+#endif
 
 !fatal:
     lda #HAL_STATUS_ERR_WRONG_MEDIA

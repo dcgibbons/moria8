@@ -27,8 +27,12 @@ def check(crt: Path, source: Path) -> None:
         chips[bank, address] = image[offset + 16:offset + length]
         assert len(chips[bank, address]) == size
         offset += length
-    assert offset == len(image) and len(chips) == 128
-    rom = b"".join(chips[bank, 0x8000] for bank in range(64))
+    erased_bank = b"\xff" * 8192
+    assert offset == len(image)
+    assert all(data != erased_bank for data in chips.values()), "Erased $FF flash bank must not be emitted as a CHIP block"
+    assert (0, 0x8000) in chips and (0, 0xA000) in chips
+    assert {bank for bank, address in chips if address == 0xA000} == {0}
+    rom = b"".join(chips.get((bank, 0x8000), erased_bank) for bank in range(64))
     assert rom[4:9] == b"\xc3\xc2\xcd80"
     assert chips[0, 0xA000] == (source / "romh.bin").read_bytes()
     reset = int.from_bytes(chips[0, 0xA000][-4:-2], "little")
@@ -85,6 +89,9 @@ def check(crt: Path, source: Path) -> None:
         assert destination == int.from_bytes(expected[:2], "little"), asset_id
         assert rom[start:start + size] == expected[2:], asset_id
         previous_end = start + size
+    expected_roml_banks = (previous_end + 8191) // 8192
+    assert {bank for bank, address in chips if address == 0x8000} == set(range(expected_roml_banks))
+    assert len(chips) == expected_roml_banks + 1
     # Boundary rejection is checked without changing built inputs.
     with tempfile.TemporaryDirectory(dir=source, prefix="packer-test-") as temp:
         path = Path(temp) / "invalid.prg"
@@ -96,7 +103,10 @@ def check(crt: Path, source: Path) -> None:
                 pass
             else:
                 raise AssertionError("Accepted empty, wrongly linked or oversize overlay")
-    print("PASS CRT: 128 chips, reset/header, 18 exact assets, compliance texts, rejected invalid PRGs")
+    print(
+        f"PASS CRT: {len(chips)} sparse chips ({len(image)} B), reset/header, "
+        f"{len(names)} exact assets, compliance texts, rejected invalid PRGs"
+    )
 
 
 if __name__ == "__main__":

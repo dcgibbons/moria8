@@ -190,3 +190,38 @@ bounds, header/load/execution ownership, missing-file cleanup and production
 modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
 coverage. Existing banking configurations and persistent cache owners remain;
 physical display-layout changes are N/A.
+
+## Change Record — `C128_CARTRIDGE` Magic Desk 128 Port (2026-11-13)
+
+- **Scope & Isolation**: Added isolated `-define C128_CARTRIDGE` build in
+  `build/c128-cart/` producing 256 KB `Magic Desk 128` CRT v2.0 (`Hardware ID 4`)
+  image `build/moria8-c128.crt` (`platforms/commodore/c128/cartridge_{contract,boot,copy}.s`).
+  Non-cartridge C128 layout (`build/c128/`) and memory ownership remain unchanged;
+  a pre-existing `save_write_map_banked:` label-placement bug in `platforms/shared/save.s`
+  (C128-only `#if HAL_STORAGE_STREAM_CHUNKED && HAL_STORAGE_MAP_BANKED` block) was also
+  fixed so `save_game` persists the 13,068-byte Bank 1 map on both disk and cartridge.
+- **External Function ROM & MMU Banking**: Cold boot (`rom0.bin` at `$8000-$80BB`) copies
+  `boot_copier` to `$1800` (Bank 0 RAM below `$1C01`), executes C128 KERNAL init (`IOINIT`,
+  `RAMTAS`, `RESTOR`, `CINT`) under `$FF00=$00`, then sets `$D506=$05` and `$FF00=$3A`
+  (`MMU_EXT_ROM_IO`) to copy `moria128.prg` across `$DE00` banks `0..15` (`$8000-$BFFF`)
+  before jumping to `entry` (`$1C0E`). `exit_trampoline` resets `CART_REG_BANK=0` (`$DE00`)
+  and `$D506=$00` (disabling common RAM), then sets `$FF00=$00` before `jmp ($fffc)`.
+- **Bottom-Common Bounce Thunk (`memory128.s`)**: Under `#if C128_CARTRIDGE`,
+  `mmu_common_cart_copy_chunk` occupies `$0FB0-$0FF3` (`MMU_COMMON_CART_BASE`) and
+  32-byte bounce buffer/control state (`mmu_common_cart_{bank,dst_mmu,dst_d506,len,buf}`)
+  extends `mmu_common_helpers_blob` (`$0D2E-$0D51`), keeping `128.fdisk.prg` (`$0D60-$0FA6`)
+  below `$0FB0`. Under `sei`, Bank 1 Huffman/vector loads (`128.huff.prg`, `128.hvec.prg`)
+  use `CART_DEST_BANK1_TOP_OFF` (`$D506=$05`, `$FF00=$7E`) and restore `$D506=$0D` plus
+  caller `$FF00` & `P`. No `$1000-$5FFF` or `$8000+` code switches Bank 1 or `$D506`.
+- **Verification (2026-11-13)**: `make test128-cartridge` (PAL 22/22 + NTSC 22/22,
+  including real `Shift+Q`, `exit_trampoline`, zero-disk cancels, `disk_require_save_media`
+  / `disk_init_drive` / missing-save recovery, declined overwrite preservation, and
+  Drive 8/9 `.d71` save/load interchange), `check_c128_md128.py` (`--selftest` and
+  CRT/bin), `check_c128_payloads.py` (`build/c128-cart`, 27 payloads),
+  `cartconv -c build/moria8-c128.crt`, `make check-hal-boundaries`, and
+  `make check-6502-lint` (0 errors) all passed. Applicable header/load/execution
+  ownership, Bank 1 vector/Huffman isolation, common-RAM `.assert`s,
+  `exit_trampoline_end <= $4000`, overlay loading (all 10 overlays including
+  `ovl.chest`), legal ROM streaming, and `.d71` save/load interchange rows are
+  complete; physical VDC display layout changes are N/A.
+

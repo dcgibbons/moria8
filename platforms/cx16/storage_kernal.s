@@ -193,8 +193,13 @@ hal_asset_load_prg_header:
     pla
     tax
     pla
+#if CX16_CARTRIDGE
+    jmp cart_load_prg
+#else
     jmp cx16_kernal_load_banked_window
+#endif
 
+#if !CX16_CARTRIDGE
 // cx16_kernal_load_banked_window — Load PRG file into $A000 of the currently
 // selected CX16_RAM_BANK_REG ($00), preserving ZP $02-$8F across KERNAL LOAD.
 // Input: A = filename len, X = filename lo, Y = filename hi.
@@ -238,6 +243,7 @@ cx16_kernal_load_banked_window:
 cx16_load_fn_len:      .byte 0
 cx16_load_fn_lo:       .byte 0
 cx16_load_fn_hi:       .byte 0
+#endif
 cx16_load_target_bank: .byte 0
 
 hal_asset_load:
@@ -382,6 +388,7 @@ hal_storage_marker_scratch_name:
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
 
+#if !CX16_CARTRIDGE
 // Boot-preloaded data bank filenames
 cx16_auxdata_name:
     .byte $43,$58,$31,$36,$2e,$41,$55,$58,$44,$41,$54,$41 // "CX16.AUXDATA"
@@ -429,6 +436,7 @@ hal_storage_tier_name_hi:
     .byte >hal_storage_tier_1_name, >hal_storage_tier_2_name, >hal_storage_tier_3_name, >hal_storage_tier_4_name
 hal_storage_tier_name_len:
     .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
+#endif
 #endif
 
 // Overlay asset filenames (indexed by overlay ID - 1; IDs 1..12 -> Banks 9..20)

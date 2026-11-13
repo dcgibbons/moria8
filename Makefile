@@ -3,7 +3,7 @@
 	check-zp check-6502-lint check-hal-boundaries check-item-docs ensure-kickass kickass tools-ready tools-ready-apple2 \
 	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 \
 	buildapple2 diskapple2 runapple2 testapple2 testapple2-smoke testapple2-runtime testapple2-memory-contract testapple2-memory-contract-selftest \
-	buildcx16 diskcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-memory-contract testcx16-memory-contract-selftest \
+	buildcx16 diskcx16 cartridgecx16 runcx16 runcx16-cart testcx16 testcx16-smoke testcx16-runtime testcx16-cartridge testcx16-memory-contract testcx16-memory-contract-selftest \
 	buildatari8 diskatari8 cartridgeatari8 runatari8 runatari8-130xe runatari8-cart runatari8-cart-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-cartridge testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
@@ -46,11 +46,11 @@ disk:
 	$(MAKE) -C platforms/atari8 disk
 	$(MAKE) -C platforms/bbcmaster disk
 
-build64 build128 buildplus4 cartridge64 disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
+build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass:
 	$(MAKE) -C platforms/commodore $@
 
-test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime: tools-ready
+test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence: tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/commodore $@
 
 # Tool downloads (KickAssembler; AppleCommander and ProDOS for Apple images)
@@ -101,16 +101,17 @@ test-stage-c64: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/commodore test64-cartridge
 
 test-stage-c128: test-prebuild
-	$(ISOLATED) $(MAKE) -C platforms/commodore test128
+	$(ISOLATED) $(MAKE) -C platforms/commodore test128 test128-cartridge
 
 test-stage-plus4: test-prebuild
-	$(ISOLATED) $(MAKE) -C platforms/commodore testplus4
+	$(ISOLATED) $(MAKE) -C platforms/commodore testplus4 testplus4-cartridge
 
 test-stage-apple2: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/apple2 test-runtime
 
 test-stage-cx16: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/cx16 test-runtime
+	$(ISOLATED) $(MAKE) -C platforms/cx16 test-cartridge
 
 test-stage-atari8: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/atari8 test-runtime
@@ -259,16 +260,26 @@ buildcx16:
 diskcx16:
 	$(MAKE) -C platforms/cx16 disk
 
+cartridgecx16:
+	$(MAKE) -C platforms/cx16 cartridge
+
 runcx16:
 	$(MAKE) -C platforms/cx16 run
 
+runcx16-cart:
+	$(MAKE) -C platforms/cx16 run-cart
+
 testcx16: testcx16-memory-contract tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/cx16 test-runtime
+	$(ISOLATED) $(MAKE) -C platforms/cx16 test-cartridge
 
 testcx16-smoke: testcx16-runtime
 
 testcx16-runtime: tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/cx16 test-runtime
+
+testcx16-cartridge: tools-ready
+	$(ISOLATED) $(MAKE) -C platforms/cx16 test-cartridge
 
 testcx16-memory-contract:
 	$(MAKE) -C platforms/cx16 test-memory-contract
@@ -408,6 +419,6 @@ $(ARTIFACT_MANIFEST): $(RELEASE_ARTIFACTS)
 
 FORCE:
 
-.PHONY: cartridge64 test64-cartridge test64-cartridge-persistence
-test64-cartridge test64-cartridge-persistence: tools-ready
+.PHONY: cartridge64 test64-cartridge test64-cartridge-persistence cartridge128 test128-cartridge
+test64-cartridge test64-cartridge-persistence test128-cartridge: tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/commodore $@

@@ -87,6 +87,18 @@ freely read and write the Map, `Cx16AuxData`, and `Cx16HuffData`.
 * Static memory contract self-test: `make testcx16-memory-contract-selftest`
 * Static linked-symbol & PRG extent gate: `make testcx16-memory-contract`
 * Runtime TestBench suite: `make testcx16-runtime` (25 scenarios in `platforms/cx16/harness_smoke.py`)
+* Cartridge verification suite: `make testcx16-cartridge` (`tools/check_cx16_cart.py`, `platforms/cx16/test_cartridge.py`)
+
+## 5. Cartridge ROM Banks (`$C000-$FFFF`, Banks `32+`, `CX16_CARTRIDGE`)
+
+When built with `-define CX16_CARTRIDGE` into isolated `build/cx16-cart/`:
+
+* `$01` (`CX16_ROM_BANK_REG`) switches the 16 KB `$C000-$FFFF` window between KERNAL ROM (`0`) and Cartridge ROM (`32..39`, 8 × 16 KB = 128 KB NOR-flash image `build/cx16-cart/moria8-cx16.bin`, wrapped in 480-byte `.crt` header as `build/moria8-cx16.crt`).
+* Because `$C000-$FFFF` does not overlap fixed low RAM (`$0000-$9EFF`) or the `$A000-$BFFF` banked RAM window (`$00`), cartridge asset copies require **no bounce buffer**.
+* Bank `32` `$C000-$C003` carries `"CX16"`; `$C004` (`boot_cold_start` in `platforms/cx16/cartridge_boot.s`) copies a self-contained copier stub to `CART_COPY_STUB_ADDR` (`$0400-$04FF`, `FLOOR_ITEM_BASE`, unused before `entry_bootstrap`), copies `MORIA8.PRG` into `$0801..` from ROM Banks `32+`, restores `$00=0` and `$01=0` (KERNAL Bank 0), flushes `$A80A`, enables interrupts (`cli`), and jumps to `entry_bootstrap` (`$080D`).
+* Bank `32` `$C100-$C1FF` holds 20 × 8-byte descriptors (`bank`, `rom_lo`, `rom_hi`, `dest_lo`, `dest_hi`, `ram_bank`, `size_lo`, `size_hi`) for `MORIA8.PRG`, `CX16.AUXDATA` (Bank 3), `CX16.HUFFDATA` (Bank 4), `OVL.START..OVL.TITLE` (Banks 9–20), `TITLE` (Bank 21), `MONSTER.CAT` (Bank 22), `LEGALUI` (Bank 23), `LICENSE`, and `SOURCE-OFFER`.
+* Resident `platforms/cx16/cartridge_copy.s` (`cart_load_asset`, `cart_read`, `cart_load_prg`) saves and restores `$00`, `$01`, and processor status (`P`), never uses zero-page variables, and handles `$FFFF -> $C000` bank boundaries seamlessly.
+* Character saves (`"THE.GAME"`..`"THE.GAME4"`) and `HALL.OF.FAME` remain on HostFS / SD Drive 8–11 (`save_device`) and are interchangeable with `build/cx16/MORIA8.PRG`.
 
 ## License/source modal ownership (2026-11-10)
 
@@ -118,3 +130,28 @@ bounds, header/load/execution ownership, missing-file cleanup and production
 modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
 coverage. Existing banking configurations and persistent cache owners remain;
 physical display-layout changes are N/A.
+
+## Cartridge port (`CX16_CARTRIDGE`, 2026-11-13)
+
+`CX16_CARTRIDGE` builds into isolated `build/cx16-cart/`, leaving non-cartridge
+`build/cx16/` payloads byte-identical. `MORIA8.PRG` spans `$0801-$98FC`
+(leaving `$98FD-$9AFF` free below `PLATFORM_TIER_NAME_POOL_BASE` at `$9B00`);
+`LEGALUI` (`$A000-$A39E`, Bank 23) streams `LICENSE` and `SOURCE-OFFER` via
+resident `cart_read` (`cart_is_record = 2`) into `legal_input_cache` (`legal_eof`
+cleared to `$00` on open and set to `$40` on EOF). All 8
+ROM banks (`32..39`, 128 KB raw NOR-flash `moria8-cx16.bin`, 131,552-byte
+`build/moria8-cx16.crt`) are packed via `tools/make_cx16_cart.py` (`101,027` B
+used, `30,045` B free) and validated by `tools/check_cx16_cart.py` (exact asset
+IDs, RAM banks `0/3/4/9..23`, and destination addresses).
+
+Verification (2026-11-13): `make testcx16-memory-contract`, `make testcx16-cartridge`,
+and `make testcx16` passed (`check_memory_contract.py` 19 asserts x 2 build dirs,
+`check_cx16_cart.py` 20 assets, autonomous `-cart` and `-cartbin` cold-boot GIF
+verification with an empty `-fsroot`, autonomous non-testbench/non-warp `-cart`
+live 60 Hz VSYNC IRQ / `RDTIM` / `KEYHDL` / VERA PSG WAV playback & silencing +
+keyboard flow verification (`P=$32`, `snd_timer=12->0`, `wav_peak=4088`),
+interactive `CartBench` handoff (`I=0`, `$A80A=0`, `KEYHDL` chain), preloaded-bank
+Fletcher-16 across all 16 banks, `cart_read` edge cases, empty-fsroot
+missing-save `L)oad`, title/gameplay legal viewer reaching EOF (`legal_eof = $40`),
+DL1/DL16/DL50 monster catalog, and bidirectional `THE.GAME` interchange with disk
+`MORIA8.PRG`). Physical VDC/C128 layout rows: N/A.

@@ -403,6 +403,9 @@ c128_town_dump_buf:
 // Core System & UI Routines — MUST live in Safe Zone (<$C000)
 // ============================================================
 #import "memory128.s"
+#if C128_CARTRIDGE
+#import "cartridge_copy.s"
+#endif
 #import "hal/layout.s"
 #import "hal/lifecycle_policy.s"
 #import "../../../core/color.s"
@@ -933,6 +936,12 @@ exit_trampoline:
     lda #0
     sta $d418
     sei
+#if C128_CARTRIDGE
+    // Park Magic Desk 128 on bank 0 and clear top-common before hardware reset
+    // so the C128 boot vector sees the cartridge autostart header at $8000.
+    sta CART_REG_BANK
+    sta $d506
+#endif
     // Restore full ROM map before handing control back to ROM.
     lda #$00
     sta $ff00
@@ -943,6 +952,7 @@ exit_trampoline:
     // mutation. Use the hardware reset vector for deterministic return.
     // This is equivalent to a soft reboot to BASIC.
     jmp ($fffc)
+exit_trampoline_end:
 
 
 
@@ -2543,6 +2553,41 @@ runtime_banked_filename_end:
 // Repeated on failure as asset_load_retry repeats the HAL loads (a drive can
 // miss a handshake). The inputs are kept: the load clears the bank, and the
 // progress display may use the pointers.
+#if C128_CARTRIDGE
+c128_load_runtime_low_prg:
+    lda #CART_ASSET_RUNTIME_LOW
+    jmp cart_load_asset
+c128_load_runtime_input_prg:
+    lda #CART_ASSET_RUNTIME_INPUT
+    jmp cart_load_asset
+c128_load_runtime_projectile_prg:
+    lda #CART_ASSET_RUNTIME_PROJ
+    jmp cart_load_asset
+c128_load_runtime_common_prg:
+    lda #CART_ASSET_RUNTIME_COMMON
+    jmp cart_load_asset
+c128_load_resident_diskio_prg:
+    lda #CART_ASSET_DISKIO
+    jmp cart_load_asset
+c128_load_resident_world_prg:
+    lda #CART_ASSET_WORLD
+    jmp cart_load_asset
+c128_load_resident_items_prg:
+    lda #CART_ASSET_RES_ITEMS
+    jmp cart_load_asset
+c128_load_resident_item_names_prg:
+    lda #CART_ASSET_NAMES
+    jmp cart_load_asset
+c128_load_resident_huffman_prg:
+    lda #CART_ASSET_HUFF
+    jmp cart_load_asset
+c128_load_resident_huffman_vector_prg:
+    lda #CART_ASSET_HVEC
+    jmp cart_load_asset
+c128_load_resident_select_prg:
+    lda #CART_ASSET_SELECT
+    jmp cart_load_asset
+#else
 c128_load_runtime_prg:
     lda c128_runtime_load_bank
     sta crl_bank
@@ -2806,6 +2851,7 @@ c128_load_resident_huffman_vector_prg:
 
 c128_load_resident_select_prg:
     :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
+#endif
 
 
 c128_load_core_residents:
@@ -2829,6 +2875,17 @@ c128_load_core_residents:
 !resident_item_names_loaded:
     lda #4
     sta c128_runtime_load_stage
+#if C128_CARTRIDGE
+    // Install Bank 1 NMI bridge ($FFFA-$FFFB) before populating Bank 1 $F000-$FEC3
+    jsr c128_load_resident_huffman_vector_prg
+    bcc !resident_huffman_vector_loaded+
+    jmp runtime_load_failed
+!resident_huffman_vector_loaded:
+    jsr c128_load_resident_huffman_prg
+    bcc !resident_huffman_loaded+
+    jmp runtime_load_failed
+!resident_huffman_loaded:
+#else
     jsr c128_load_resident_huffman_prg
     bcc !resident_huffman_loaded+
     jmp runtime_load_failed
@@ -2837,6 +2894,7 @@ c128_load_core_residents:
     bcc !resident_huffman_vector_loaded+
     jmp runtime_load_failed
 !resident_huffman_vector_loaded:
+#endif
 #if HAL_PLATFORM_MONSTER_CATALOG
     jsr c128_load_catalog_prg
     bcc !catalog_loaded+
@@ -2856,10 +2914,20 @@ c128_load_core_residents:
     rts
 
 c128_load_resident_persist_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_PERSIST
+    jmp cart_load_asset
+#else
     :C128RuntimeLoadFile(RESIDENT_PERSIST_FILE_NUM, RESIDENT_PERSIST_FILENAME_LEN, resident_persist_filename, $af)
+#endif
 
 c128_load_resident_play_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_PLAY
+    jmp cart_load_asset
+#else
     :C128RuntimeLoadFile(RESIDENT_PLAY_FILE_NUM, RESIDENT_PLAY_FILENAME_LEN, resident_play_filename, $af)
+#endif
 
 .const C128_MODAL_UNKNOWN = 0
 .const C128_MODAL_PLAY    = 1
@@ -2889,6 +2957,11 @@ c128_preload_resident_play:
     rts
 
 c128_require_program_media:
+#if C128_CARTRIDGE
+    // Cartridge ROM always serves program assets without displacing Drive 8/9 save media.
+    clc
+    rts
+#else
     jsr disk_prompt_game
     bcs !program_fail+
     jsr c128_program_play_exists
@@ -2902,6 +2975,7 @@ c128_require_program_media:
     sta c128_media_state
     sec
     rts
+#endif
 
 c128_program_media_error_prompt:
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
@@ -3040,6 +3114,10 @@ c128_modal_require_play:
     rts
 
 c128_load_runtime_banked_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_BANKED
+    jmp cart_load_asset
+#else
     lda #RUNTIME_BANKED_FILE_NUM
     sta disk_temp
     lda #RUNTIME_BANKED_FILENAME_LEN
@@ -3053,6 +3131,7 @@ c128_load_runtime_banked_prg:
     lda #$f0
     sta zp_ptr1_hi
     jmp c128_load_runtime_prg
+#endif
 
 
 // ============================================================
@@ -4026,6 +4105,10 @@ ego_str_holy_avenger_common:
 // Detect program media on the selected save drive.
 // Output: carry clear = program media present, carry set = not program media
 disk_program_media_present:
+#if C128_CARTRIDGE
+    sec                             // Cartridge ROM holds program assets; save disk is never program media
+    rts
+#else
     lda program_device
     sta disk_temp
     lda save_device
@@ -4041,6 +4124,7 @@ disk_program_media_present:
 !not_program:
     sec
     rts
+#endif
 
 c128_program_play_exists:
     // A status read cut short before its first digit (JiffyDOS) asks the
@@ -5378,6 +5462,10 @@ program_end:
 .assert "Runtime projectile helpers stay in pre-input low page", runtime_projectile_data_start >= $0a80 && runtime_projectile_data_end <= $0b00, true
 .assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
+#if C128_CARTRIDGE
+.assert "Exit trampoline stays below $4000 BASIC ROM window", exit_trampoline_end <= $4000, true
+.assert "Runtime common ends before cartridge common chunk stub", runtime_common_data_end <= MMU_COMMON_CART_BASE, true
+#endif
 .assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num != RESIDENT_ITEM_NAMES_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
 .assert "C128 item-name logical file avoids marker and command channel", RESIDENT_ITEM_NAMES_FILE_NUM != hal_storage_marker_file_num && RESIDENT_ITEM_NAMES_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
@@ -5675,7 +5763,11 @@ c128_resident_item_names_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../../core/ui_legal.s"
+#if C128_CARTRIDGE
+#import "legal_stream.s"
+#else
 #import "../../shared/legal_disk_stream.s"
+#endif
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true

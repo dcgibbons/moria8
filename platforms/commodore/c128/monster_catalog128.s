@@ -31,6 +31,7 @@ catalog_names_filename:
     .text "128.CNM"
 catalog_names_filename_end:
 .const CATALOG_NAMES_FILENAME_LEN = catalog_names_filename_end - catalog_names_filename
+#if !C128_CARTRIDGE
 .macro C128Bank1LoadFile(filename, filename_len, dest) {
     lda #RESIDENT_HUFFMAN_FILE_NUM
     sta disk_temp
@@ -48,10 +49,21 @@ catalog_names_filename_end:
     sta c128_runtime_load_bank
     jmp c128_load_runtime_prg
 }
+#endif
 c128_load_catalog_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_CAT
+    jmp cart_load_asset
+#else
     :C128Bank1LoadFile(catalog_filename, CATALOG_FILENAME_LEN, BANK1_CATALOG_FIELDS_BASE)
+#endif
 c128_load_catalog_names_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_CNM
+    jmp cart_load_asset
+#else
     :C128Bank1LoadFile(catalog_names_filename, CATALOG_NAMES_FILENAME_LEN, BANK1_CATALOG_NAMES_BASE)
+#endif
 
 .const CATALOG_NAME_POOL_BASE = BANK1_CATALOG_POOL_BASE
 .const CATALOG_NAME_POOL_END  = BANK1_CATALOG_POOL_END
