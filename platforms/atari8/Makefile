@@ -19,7 +19,7 @@ OUT        = ../../build
 OUTATARI8  = $(OUT)/atari8
 OVL_OUTATARI8 = $(abspath $(OUTATARI8))
 
-KA_FLAGS   = ":OVL_OUT=$(OVL_OUTATARI8)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../..
+KA_FLAGS   = ":OVL_OUT=$(OVL_OUTATARI8)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8
 
 VERSION_FILE     = ../../version.json
 VERSION_INC_TOOL = ../../tools/make_version_include.py
@@ -53,6 +53,7 @@ MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -comment_directory "$(MAME_DIR)/comments" \
                  -share_directory "$(MAME_DIR)/share"
 
+ATARI8_OVL_PRGS += $(OUTATARI8)/legalui
 .PHONY: all build disk run run-130xe test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke clean kickass
 
 all: build

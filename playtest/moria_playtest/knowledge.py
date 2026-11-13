@@ -106,6 +106,52 @@ def kinds_by_name() -> dict[str, tuple[str, int]]:
 
 
 @lru_cache(maxsize=1)
+def _names_longest_first() -> tuple[str, ...]:
+    """Every creature name as the game prints it: the catalog's name table
+    ("Nasty little Gnome"; the lore tables' own spelling can differ, "Nasty
+    Little Gnome"), which holds every shipped creature."""
+    names = set(re.findall(r"^catn_\d+:.*// (.+?)\s*$", (CATALOG_DIR / "catalog_names.s").read_text(), re.M))
+    return tuple(sorted(names, key=len, reverse=True))
+
+
+def creature_names() -> tuple[str, ...]:
+    """Every shipped creature's name as the game prints it."""
+    return _names_longest_first()
+
+
+@lru_cache(maxsize=1)
+def _named() -> re.Pattern[str]:
+    return re.compile(r"\b[Tt]he (" + "|".join(map(re.escape, _names_longest_first())) + r")\b")
+
+
+def creatures_named(text: str) -> list[str]:
+    """The shipped creatures a screen's messages name, as "the <name>" ("the
+    Evil Iggy casts a spell.", "You miss the Kobold."), a name the message
+    row wrapped joined again. A name the 40-column row cut off is missed."""
+    return _named().findall(" ".join(text.split()))
+
+
+def creature_name(text: str) -> str:
+    """The creature a kill message names. The 40-column message row cuts a
+    long one off and the next message runs on ("You have slain the Metallic
+    Blue Centipethe Giant Static Ant misses you."): the shipped name the
+    text starts with, else the one name its longest cut-off start begins,
+    else the text as it is."""
+    text = " ".join(text.split(" -more-")[0].split())
+    names = _names_longest_first()
+    for name in names:
+        if text.startswith(name):
+            return name
+    for end in range(len(text), 5, -1):
+        found = [name for name in names if name.startswith(text[:end])]
+        if len(found) == 1:
+            return found[0]
+        if found:
+            break
+    return text
+
+
+@lru_cache(maxsize=1)
 def _tiers() -> list[tuple[list[str], dict[str, list[int]]]]:
     """(creature names, byte tables by label) for each shipped tier file."""
     tiers = [_catalog()] if _catalog_dir is not None else []
@@ -333,6 +379,20 @@ def touch_paralyzers() -> frozenset[str]:
                      if ATK_PARALYZE in (a, b))
 
 
+SPELL_HOLD = 0x80   # cr_spell_chance bit 7: Hold Person (MS_HOLD, monster_cast_hold, MON-025)
+
+
+@lru_cache(maxsize=1)
+def paralyzer_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, level) of the shipped creatures that can paralyse: a
+    paralysing blow (randint(level) + 3 turns) or Hold Person (randint(5) +
+    4; MON-025), both stopped by Free Action."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, a, b, chance in zip(tables["display"], tables["level"], tables["atk0_type"],
+                                                          tables["atk1_type"], tables["spell_chance"])
+                     if ATK_PARALYZE in (a, b) or chance & SPELL_HOLD)
+
+
 def casts(glyph: str, level: int) -> bool:
     return (glyph, level) in ranged_kinds()
 
@@ -425,6 +485,44 @@ def breeder_kinds() -> frozenset[tuple[str, int]]:
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
                      for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
                      if flags & CF_BREEDER)
+
+
+CF_EVIL = 0x04   # cr_mflags: evil (core/monster.s; VMS cdefense $0004): Dispel Evil hurts it
+
+
+@lru_cache(maxsize=1)
+def evil_names() -> frozenset[str]:
+    """The names of the shipped creatures that are evil."""
+    return frozenset(name for names, tables in _tiers()
+                     for name, flags in zip(names, tables["mflags"]) if flags & CF_EVIL)
+
+
+@lru_cache(maxsize=1)
+def evil_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) drawn by an evil creature (a nameless
+    view's guess)."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
+                     if flags & CF_EVIL)
+
+
+CF_UNDEAD = 0x02   # cr_mflags: undead (core/monster.s; VMS cdefense $0008): Drain Life passes it by
+
+
+@lru_cache(maxsize=1)
+def undead_names() -> frozenset[str]:
+    """The names of the shipped creatures that are undead."""
+    return frozenset(name for names, tables in _tiers()
+                     for name, flags in zip(names, tables["mflags"]) if flags & CF_UNDEAD)
+
+
+@lru_cache(maxsize=1)
+def undead_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) drawn by an undead creature (a nameless
+    view's guess)."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, flags in zip(tables["display"], tables["level"], tables["mflags"])
+                     if flags & CF_UNDEAD)
 
 
 MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0}   # a turn's moves by speed code (core/monster_ai.s)

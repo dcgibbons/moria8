@@ -81,10 +81,13 @@ test_finish:
 .segmentdef TestMonsterMagic [start=$E100]
 .segment TestMonsterMagic
 #import "../../../../core/monster_magic.s"
+// No item here rolls an ego (look test 31's gold is placed by hand): the ego
+// tables and rolls beside it (2026-11-11, when the four VMS wands took the
+// body 10 bytes past MAP_BASE).
+#import "../../../../core/ego_items.s"
 .segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/projectile.s"

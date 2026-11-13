@@ -136,7 +136,7 @@ shadow and `beeb_acccon_shadow` in platform ZP):
 | `$0700-$07FF` | 256 B | `beeb_ss_buf` | Shared 256-byte save/load stream buffer & `beeb_swr_copy_to_window` page-bounce buffer |
 | `$0800-$0DFF` | 1,536 B | Acorn MOS Sound/Envelope/Serial/CFS Workspace (`PAGE = $0E00`) | Preserved untouched for MOS `OSWORD A=7/8` and `OSBYTE` |
 | `$0E00-$2FFF` | 8,704 B | Low Always-Resident Code (`< $3000`) | Entry point (`$0E00`), `screen.s`, `dungeon_render.s`, `memory_bank.s`, `storage.s`, `save_stream.s`, `sound.s`, `input.s`, and `zp_save_buf` (174 B) |
-| `$3000-$7FFF` | 20,480 B | High Always-Resident Code (`MORIA8.RES` continuation) | Core resident modules (`program_end <= $8000`; total `$0E00-$7FFF` budget = `29,184` B) |
+| `$3000-$7FFF` | 20,480 B | High Always-Resident Code (`MORIA8.RES` continuation) | Core resident modules (`program_end` = `$7FEF`, 17 B free below `$8000`; `player_adjust_equipment_stat` moved to `OVL.ITEMS` and `tramp_do_look` moved to `BeebPlaySlot`, 2026-11-12; total `$0E00-$7FFF` budget = `29,184` B) |
 
 ### 3.2 Shadow Screen RAM `LYNNE` (`$3000-$7FFF`, 20 KB — `ACCCON = $05`)
 
@@ -181,13 +181,14 @@ wrong). `item_actions` checks the bytes against `beeb.huffdata` in town.
 | **Bank 6** (`$06`) | `$9500-$B9FF` | 37p (`9,472` B) | `$9500-$B916` | **The monster catalog (`BEEB.CATALOG`)** — its fields, then its Huffman names (`9,239` B, **`233` B slack**); read through `mmu_safe_huff_read_ptr0/1`, which select Bank 6 for a pointer at `$9000` and up. Took cached `OVL.TOWN`'s pages (2026-11-05). |
 | **Bank 6** (`$06`) | `$BA00-$BFFF` | 6p (`1,536` B) | Cache Slot | **Cached `OVL.UI`** (`1,342` B used, **`194` B slack**; moved from Bank 5, 2026-11-05). |
 | **Bank 7** (`$07`) | `$8000-$94FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.SPELL`** (`5,112` B used, **`264` B slack**). |
-| **Bank 7** (`$07`) | `$9500-$A9FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,106` B used, **`270` B slack**). |
-| **Bank 7** (`$07`) | `$AA00-$BEFF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.GEN`** (`5,320` B used, **`56` B slack**; holds `item_spawn_level` since item stacking left the resident image no room) + **`$BF00-$BFFF` (`1` page = `256` B) free Bank 7 slack**. |
+| **Bank 7** (`$07`) | `$9500-$AAFF` | 22p (`5,632` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,446` B used, **`186` B slack**; 22 pages since 2026-11-11, when resistance armour took it past 21: it took Bank 7's free last page). |
+| **Bank 7** (`$07`) | `$AB00-$BFFF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.GEN`** (holds `item_spawn_level` since item stacking left the resident image no room); moved up one page 2026-11-11, so Bank 7 has no free page left. |
 
 * **Disk-Backed Cold Assets (Loaded on Demand via `OSFILE`):**
   `OVL.START` (`OVLSTA`), `OVL.TOWN` (`OVLTWN`, since the monster catalog,
-  2026-11-05), `OVL.DEATH` (`OVLDTH`), `OVL.HELP` (`OVLHLP`),
-  `OVL.CHEST` (`OVLCHS`), `OVL.STORAGE` (`OVLSTO`), `OVL.TITLE` (`OVLTTL`),
+  2026-11-05), `OVL.DEATH` (`OVLDTH`), `OVL.HELP` (`OVLHLP`, including
+  `ui_help_title.s`), `OVL.CHEST` (`OVLCHS`), `OVL.STORAGE` (`OVLSTO`),
+  `OVL.TITLE` (`OVLTTL`), `LEGALUI` (`LEGALUI`),
   and `TITLE` (`TITLE`) load on demand (the monster tiers `MONDB1`..`MONDB4` left
   the disk for the catalog, 2026-11-05)
   from the DFS disk into `$A800-$BFFF` (or `MAP_BASE` `$8000` in Bank 5 for
@@ -226,3 +227,42 @@ via `mmu_safe_huff_read_ptr0/1` (which select Bank 6 instead for a pointer at
 | **Memory Contract Self-Test** | `make testbbcmaster-memory-contract-selftest` | Unit-tests `check_memory_contract.py` and `tools/make_ssd.py` |
 | **Static Memory Contract Gate** | `make testbbcmaster-memory-contract` | Verifies every emitted PRG extent, `< $3000` low-helper ceiling, `$8000` resident ceiling, Bank 4/5/6/7 cache slot bounds, and absence of foreign platform symbols |
 | **Runtime MAME Smoke Suite** | `make testbbcmaster-runtime` | Runs headless MAME `bbcm` (`platforms/bbcmaster/harness_smoke.py`, gated by `BBCMROMS`) across the behavioral scenario suite within the 30s timeout cap |
+
+## License/source modal ownership (2026-11-10)
+
+`LEGALUI` is an uncached modal loaded on title `A` (About) or Help `L`: Sideways Bank 4 $A800-$BFFF; no persistent cache allocation.
+Code ends before overlay base+$600; a 142-byte core-ZP snapshot starts there,
+and the disk/ROM input cache occupies base+$700..+$7FF. Both are modal
+workspace, never game-data loans or emitted PRG padding. The resident entry saves core ZP before asset loading, after any media
+handler that may itself load an overlay.
+The viewer reads existing documents through the storage HAL, closes every
+channel, retains live sound/redraw state, and restores the caller snapshot.
+Linked payload bounds and production-path modal entry/return tests enforce
+this ownership. See `docs/LEGAL_VIEWER.md` for the change and verification record.
+
+Verification (2026-11-10): `make -j7 -O test` passed, including the memory-
+contract self-tests, emitted payload/disk checks, and MAME title/Help legal-
+viewer and save/load scenarios. No ANDY, LYNNE or persistent Sideways cache
+allocation changes.
+
+Optional legal loads retain bounded asset retries, then offer Escape at the
+resident program-disk prompt. One caller snapshot survives every retry. Escape
+restores ZP after the prompt and returns with carry set; Help exits directly to
+gameplay, and Title redraws only its resident menu. Neither return reloads the
+invalidated overlay while the program disk is absent. No Storage overlay or
+unavailable play-slot verifier is called. See the Pass 3 record in
+`docs/LEGAL_VIEWER.md` for the save-disk, retry and cancel-boundary tests.
+
+Repair verification (2026-11-11): `make -j7 -O test` passed. Applicable payload
+bounds, header/load/execution ownership, missing-file cleanup and production
+modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
+coverage. Existing banking configurations and persistent cache owners remain;
+physical display-layout changes are N/A.
+
+
+Pass 3 verification (2026-11-11): `make -j7 -O test` passed. The added
+save-disk fixtures verify cold Title cancellation to its resident menu,
+Help cancellation to gameplay without a cold reload, failed/successful retry
+snapshot survival and restored core ZP at the cancel-return boundary. All
+linked bounds and the existing bank/cache owners remain enforced. See
+`docs/LEGAL_VIEWER.md` for the carry contract and physical media preconditions.

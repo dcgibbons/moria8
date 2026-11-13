@@ -82,3 +82,6 @@
 #define HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
 #define HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
 #endif
+
+// Optional legal-load cancellation returns directly to resident gameplay.
+#define HAL_PLATFORM_LEGAL_CANCEL_EXITS_HELP

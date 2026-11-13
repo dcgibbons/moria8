@@ -35,6 +35,7 @@ LABELS: dict[str, str] = {
     "zp_entropy": "core/zeropage.s",
     "zp_view_x": "core/zeropage.s",
     "zp_view_y": "core/zeropage.s",
+    "zp_light_radius": "core/zeropage.s",
     "player_data": "core/player.s",
     "monster_table": "core/monster.s",
     "cr_level": "core/monster.s",

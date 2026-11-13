@@ -81,6 +81,7 @@ A130XE_SCENARIOS = (
     "town_to_dungeon_130xe",
     "save_load_130xe",
     "catalog_spawn_130xe",
+    "help_overlay_130xe",
 )
 
 SCENARIOS = A800XL_SCENARIOS + A130XE_SCENARIOS
@@ -126,6 +127,8 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     save_device = syms.get("save_device", 0x0D30)
     disk_setup_done = syms.get("disk_setup_done", 0x0D31)
     busy_addr = syms.get("generation_busy_active_api", 0x0D40)
+    shuffles = syms.get("potion_shuffle", 0)
+    id_known = syms.get("id_known_bits", 0)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
 
@@ -156,6 +159,8 @@ local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
 local BUSY_ADDR = 0x{busy_addr:04X}
+local SHUFFLES_ADDR = 0x{shuffles:04X}   -- 38 bytes: potion, scroll, ring, wand, staff (high RAM)
+local ID_KNOWN_ADDR = 0x{id_known:04X}   -- 20 bytes (high RAM)
 local SCREEN_RAM = 0x{SCREEN_RAM:04X}
 local ROW18 = 0x{ROW18_ADDR:04X}
 local ROW23 = 0x{ROW23_ADDR:04X}
@@ -524,6 +529,14 @@ function run()
     assert_line("chargen_town_ready", ok)
     -- Secondary weapon (slot 32): Dagger (+3,+4) (Defender); slot 31 stays empty.
     inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
+    -- The flavour shuffles and the known bits live in high RAM under the OS
+    -- ROM (config.s): saved and loaded through the low sector buffer. A
+    -- flavoured item made known (the Ring of Lordly Protection (Fire), 146)
+    -- must come back too.
+    prog:write_u8(ID_KNOWN_ADDR + (146 >> 3), prog:read_u8(ID_KNOWN_ADDR + (146 >> 3)) | (1 << (146 & 7)))
+    local saved_state = {}
+    for i = 0, 37 do saved_state[#saved_state + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
+    for i = 0, 19 do saved_state[#saved_state + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
     send_key(0xD3) -- SHIFT+S (save & quit) -> prompts Disk Setup on first save
     assert_line("save_disk_setup_prompt", wait_screen("DISK SETUP", 80))
     send_key(0x33) -- 3) Done (default Save: D2:)
@@ -539,6 +552,8 @@ function run()
     end
     assert_line("title_after_save", screen_has("N)ew") and screen_has("L)oad"))
     inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring it back
+    for i = 0, 37 do prog:write_u8(SHUFFLES_ADDR + i, saved_state[i + 1] ~ 0x55) end
+    for i = 0, 19 do prog:write_u8(ID_KNOWN_ADDR + i, 0) end
     send_key(0x4C) -- 'L' (load game)
     assert_line("load_slots_shown", wait_screen("Select Slot 1-4", 80))
     send_key(0x31) -- Slot 1
@@ -550,6 +565,10 @@ function run()
     assert_line("save_load_secondary_restored",
         inv_field(32, 0) == 2 and inv_field(32, 3) == 3 and inv_field(32, 4) == 4
         and inv_field(32, 6) == 2 and inv_field(32, 7) == 6 and inv_field(31, 0) == 0xFF)
+    local same = SHUFFLES_ADDR ~= 0 and ID_KNOWN_ADDR ~= 0
+    for i = 0, 37 do same = same and prog:read_u8(SHUFFLES_ADDR + i) == saved_state[i + 1] end
+    for i = 0, 19 do same = same and prog:read_u8(ID_KNOWN_ADDR + i) == saved_state[39 + i] end
+    assert_line("save_load_high_ram_restored", same)
     manager.machine:exit()
 end
 """
@@ -580,13 +599,102 @@ function run()
     manager.machine:exit()
 end
 """
-    elif scenario == "help_overlay":
+    elif scenario in ("help_overlay", "help_overlay_130xe"):
         body = """
 function run()
+    assert_line("legal_title_ready", wait_title())
+    local game_drive = nil
+    for _, image in pairs(manager.machine.images) do
+        if image.filename == "LEGAL_GAME_IMAGE" then game_drive = image end
+        if image.filename == "LEGAL_SAVE_IMAGE" then image:unload() end
+    end
+    assert_line("legal_game_drive", game_drive ~= nil)
+    assert_line("legal_mount_save", game_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x41)
+    assert_line("legal_load_prompt", wait_screen("Insert program disk", 100))
+    send_key(0x1B)
+    assert_line("legal_load_cancel", wait_screen("N)ew", 100))
+    send_key(0x41) -- Successful retry must retain the same caller snapshot.
+    assert_line("legal_title_retry_prompt", wait_screen("Insert program disk", 100))
+    local title_saved = {}
+    for i = 0, 141 do title_saved[i] = prog:read_u8(LEGAL_SAVE_ADDR + i) end
+    assert_line("legal_restore_program", game_drive:load("LEGAL_GAME_IMAGE") == nil)
+    send_key(0x20)
+    assert_line("legal_title_entry", wait_screen("License & Source", 100))
+    local title_stable = true
+    for i = 0, 141 do
+        if i ~= 0x17 and title_saved[i] ~= prog:read_u8(LEGAL_SAVE_ADDR + i) then title_stable = false end
+    end
+    assert_line("legal_successful_retry_snapshot", title_stable)
+    send_key(0x51)
+    assert_line("legal_title_return", wait_title())
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
     send_key(0x3F) -- '?' (help)
     assert_line("help_opened", wait_screen("Command Reference", 80))
+    assert_line("help_license_hint", screen_has("L:License"))
+    send_key(0x20)
+    assert_line("help_license_entry", wait_screen("L License / Source", 80))
+    assert_line("legal_help_mount_save", game_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("legal_help_load_prompt", wait_screen("Insert program disk", 100))
+    local saved = {}
+    for i = 0, 141 do saved[i] = prog:read_u8(LEGAL_SAVE_ADDR + i) end
+    send_key(0x20) -- Retry while the program disk remains unavailable.
+    assert_line("legal_retry_prompt", wait_screen("Insert program disk", 100))
+    local stable = true
+    for i = 0, 141 do
+        if i ~= 0x17 and saved[i] ~= prog:read_u8(LEGAL_SAVE_ADDR + i) then stable = false end
+    end
+    assert_line("legal_retry_snapshot", stable)
+    local checked, restored = false, true
+    local cpu = manager.machine.devices[":maincpu"]
+    local cancel_tap = prog:install_write_tap(2, 2, "legal_cancel_zp",
+        function(offset, data, mask)
+            local pc = cpu.state["PC"].value
+            if checked or pc < LEGAL_CANCEL_START or pc >= LEGAL_CANCEL_END then return end
+            checked = true
+            -- Write taps run before the store; all other bytes are restored.
+            for i = 0, 141 do
+                if i ~= 0x17 and (i < 0x6a or i > 0x6c) then
+                    local actual = (i == 0) and data or prog:read_u8(2 + i)
+                    if actual ~= saved[i] then restored = false end
+                end
+            end
+        end)
+    send_key(0x1B)
+    for _ = 1, 100 do
+        if in_town() then break end
+        emu.wait(0.1)
+    end
+    cancel_tap:remove()
+    assert_line("legal_help_cancel_gameplay", in_town())
+    assert_line("legal_cancel_zp", checked and restored)
+    assert_line("legal_help_restore_program", game_drive:load("LEGAL_GAME_IMAGE") == nil)
+    send_key(0x3F)
+    assert_line("help_reopened", wait_screen("Command Reference", 80))
+    send_key(0x4C) -- 'L'
+    assert_line("legal_menu", wait_screen("License & Source", 100))
+    local notice_first = prog:read_u8(LEGAL_NOTICE_ADDR)
+    prog:write_u8(LEGAL_NOTICE_ADDR, 0x58) -- request a file absent from this disk
+    send_key(0x31)
+    assert_line("legal_missing", wait_screen("Document read failed", 100))
+    send_key(0x20)
+    assert_line("legal_missing_return", wait_screen("1 License", 60))
+    assert_line("legal_channel_closed", prog:read_u8(LEGAL_OPENED_ADDR) == 0)
+    prog:write_u8(LEGAL_NOTICE_ADDR, notice_first)
+    send_key(0x31)
+    assert_line("legal_notice", wait_screen("MORIA8 LICENSE NOTICE", 100))
+    send_key(0x52) -- restart
+    assert_line("legal_restart", wait_screen("MORIA8 LICENSE NOTICE", 100))
+    send_key(0x51)
+    assert_line("legal_menu_again", wait_screen("1 License", 60))
+    send_key(0x32)
+    assert_line("legal_offer", wait_screen("MORIA8 SOURCE OFFER", 100))
+    send_key(0x51)
+    assert_line("legal_menu_final", wait_screen("1 License", 60))
+    send_key(0x51)
+    assert_line("legal_help_return", wait_screen("Command Reference", 100))
     send_key(0x51) -- 'Q'
     wait_frames(40)
     assert_line("help_closed", in_town())
@@ -962,6 +1070,11 @@ end
     else:
         raise ValueError(f"Unknown scenario: {scenario}")
 
+    body = body.replace("LEGAL_SAVE_ADDR", hex(syms.get("legal_zp_save", 0)))
+    body = body.replace("LEGAL_CANCEL_START", hex(syms.get("legal_cancel_restore", 0)))
+    body = body.replace("LEGAL_CANCEL_END", hex(syms.get("legal_cancel_return", 0)))
+    body = body.replace("LEGAL_NOTICE_ADDR", hex(syms.get("legal_notice_filename", 0)))
+    body = body.replace("LEGAL_OPENED_ADDR", hex(syms.get("legal_opened", 0)))
     return header + body + "\nco = coroutine.create(run)\ncoroutine.resume(co)\n"
 
 
@@ -985,6 +1098,7 @@ def run_scenario(
         tmp_save_atr = Path(tmpdir) / "save.atr"
         build_blank_atr(tmp_save_atr)
         lua_path = Path(tmpdir) / "scenario.lua"
+        lua_code = lua_code.replace("LEGAL_GAME_IMAGE", str(tmp_atr)).replace("LEGAL_SAVE_IMAGE", str(tmp_save_atr))
         lua_path.write_text(lua_code, encoding="utf-8")
 
         cmd = [
@@ -1074,7 +1188,7 @@ def run_scenario(
 def selftest() -> int:
     assert HOST_TIMEOUT_SECONDS <= 30, "AGENTS.md Rule 8 requires timeout <= 30s"
     assert len(A800XL_SCENARIOS) == 16, f"Expected 16 a800xl scenarios, got {len(A800XL_SCENARIOS)}"
-    assert len(A130XE_SCENARIOS) == 4, f"Expected 4 a130xe scenarios, got {len(A130XE_SCENARIOS)}"
+    assert len(A130XE_SCENARIOS) == 5, f"Expected 5 a130xe scenarios, got {len(A130XE_SCENARIOS)}"
     syms = parse_symbols(SYM_PATH)
     if syms:
         assert syms.get("zp_player_x") == 0x002B, f"zp_player_x != $002B: {syms.get('zp_player_x')}"

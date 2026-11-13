@@ -9,7 +9,7 @@
 //        attacks the shipped rows keep, no-spell casters, the Quylthulg,
 //        and full hit dice for CD_MAX_HP creatures (monster_spawn_one).
 //
-// Results at $0400-$042d: $01 = pass, $00 = fail per test
+// Results at $0400-$0435: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -23,7 +23,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #45
+    ldx #53
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -133,7 +133,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 46, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 54, $ff      // Result buffer (copied to $0400 at end)
 tc_repels:  .byte 0             // " is repelled." summaries seen
 tc_hurt:    .byte 0             // Rounds that did damage or poisoned
 .const NA_BANSHEE = 11          // tier4.s index map: [196] DL24 Banshee
@@ -149,9 +149,13 @@ tc_rec:     .word 0             // na_row_check record pointer
 tc_hp_lo:   .byte 0             // mh_spawn: the spawned HP
 tc_hp_hi:   .byte 0
 
-// Effect-message spy: counts the " is repelled." summary (zp_ptr2).
+// Effect-message spy: counts the " is repelled." summary (zp_ptr2), and
+// keeps the effect text's first letter (" burns you.": 'b').
 mon_atk_build_effect_msg:
     inc tc_msgs
+    ldy #1
+    lda (zp_ptr2),y
+    sta tc_msg_letter
     ldy #0
 !mabm_cmp:
     lda (zp_ptr2),y
@@ -164,6 +168,7 @@ mon_atk_build_effect_msg:
 !mabm_other:
     rts
 tc_repelled_text: .text " is repelled." ; .byte 0
+tc_msg_letter: .byte 0
 tc_fear_start: .byte 0          // fear_attempt: timer before each attempt
 tc_saved:   .byte 0
 tc_afraid:  .byte 0
@@ -1319,6 +1324,209 @@ test_start:
     lda #$00
     sta tc_results + 45
 
+    // ==========================================
+    // Tests 47-49: acid resistance on the touch (2026-11-11; VMS moria.inc
+    // acid_dam: div 3 resisted, div 4 resisted and a piece took it; minus_ac:
+    // a piece that resists acid is not damaged). player_recalc_equipment is
+    // the counting stub here, so the flag stays as set.
+    // ==========================================
+    lda #PFLAG_RESIST_ACID
+    sta player_pflags
+
+    // Test 47: resisted, no armour worn: 9 -> 3
+    jsr acid_clear_armour
+    lda #9
+    jsr acid_hit
+    cmp #3
+    bne !t47_fail+
+    lda #$01
+    .byte $2c
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
+
+    // Test 48: resisted, and the body armour (AC 4) damaged: 9 -> 2, to-AC -1
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #9
+    jsr acid_hit
+    cmp #2
+    bne !t48_fail+
+    lda inv_to_ac + EQUIP_BODY
+    cmp #$ff
+    bne !t48_fail+
+    lda tc_recalcs
+    cmp #1
+    bne !t48_fail+
+    lda #$01
+    .byte $2c
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
+
+    // Test 49: body armour (Resist) takes it unharmed: 9 -> 2, to-AC stays 0,
+    // no recalculation
+    jsr acid_clear_armour
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #EGO_RESIST
+    sta inv_ego + EQUIP_BODY
+    lda #9
+    jsr acid_hit
+    cmp #2
+    bne !t49_fail+
+    lda inv_to_ac + EQUIP_BODY
+    bne !t49_fail+
+    lda tc_recalcs
+    bne !t49_fail+
+    lda #$01
+    .byte $2c
+!t49_fail:
+    lda #$00
+    sta tc_results + 48
+    jsr acid_clear_armour
+    lda #0
+    sta player_pflags
+
+    // ==========================================
+    // Tests 50-53: the fire, cold and lightning touches (MON-028; VMS
+    // creature.inc make_attack 5, 7, 8 -> moria.inc fire_dam, cold_dam,
+    // light_dam): full dice, div 3 for the lasting resistance, fire and
+    // cold div 3 again for the timer; through production
+    // mon_atk_effect_dispatch.
+    // ==========================================
+    // Test 50: fire 9: unresisted 9; the ring 3; ring and timer 1
+    lda #ATK_FIRE
+    ldx #0
+    jsr element_hit
+    cmp #9
+    bne !t50_fail+
+    lda tc_msg_letter           // " burns you."
+    cmp #'b'
+    bne !t50_fail+
+    lda #PFLAG_RESIST_FIRE
+    sta player_pflags
+    lda #ATK_FIRE
+    jsr element_hit
+    cmp #3
+    bne !t50_fail+
+    lda #3
+    sta zp_eff_resist
+    lda #ATK_FIRE
+    jsr element_hit
+    cmp #1
+    bne !t50_fail+
+    lda #$01
+    .byte $2c
+!t50_fail:
+    lda #$00
+    sta tc_results + 49
+    lda #0
+    sta zp_eff_resist
+    sta player_pflags
+
+    // Test 51: cold 9: the cold timer alone 3; the cold ring alone 3
+    lda #3
+    sta eff_resist_cold_timer
+    lda #ATK_COLD
+    jsr element_hit
+    cmp #3
+    bne !t51_fail+
+    lda tc_msg_letter           // " freezes you."
+    cmp #'f'
+    bne !t51_fail+
+    lda #0
+    sta eff_resist_cold_timer
+    lda #PFLAG_RESIST_COLD
+    sta player_pflags
+    lda #ATK_COLD
+    jsr element_hit
+    cmp #3
+    bne !t51_fail+
+    lda #$01
+    .byte $2c
+!t51_fail:
+    lda #$00
+    sta tc_results + 50
+    lda #0
+    sta player_pflags
+
+    // Test 52: lightning 9: unresisted 9; fire and cold resistance and
+    // timers do nothing; lightning resistance 3
+    lda #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD
+    sta player_pflags
+    lda #3
+    sta zp_eff_resist
+    sta eff_resist_cold_timer
+    lda #ATK_LIGHT
+    jsr element_hit
+    cmp #9
+    bne !t52_fail+
+    lda tc_msg_letter           // " shocks you."
+    cmp #'s'
+    bne !t52_fail+
+    lda #PFLAG_RESIST_LIGHT
+    sta player_pflags
+    lda #ATK_LIGHT
+    jsr element_hit
+    cmp #3
+    bne !t52_fail+
+    lda #$01
+    .byte $2c
+!t52_fail:
+    lda #$00
+    sta tc_results + 51
+    lda #0
+    sta player_pflags
+    sta zp_eff_resist
+    sta eff_resist_cold_timer
+
+    // Test 53: the three touch with VMS test_hit(10, ...)
+    lda mon_atk_base_tohit + ATK_FIRE
+    cmp #10
+    bne !t53_fail+
+    lda mon_atk_base_tohit + ATK_COLD
+    cmp #10
+    bne !t53_fail+
+    lda mon_atk_base_tohit + ATK_LIGHT
+    cmp #10
+    bne !t53_fail+
+    lda #$01
+    .byte $2c
+!t53_fail:
+    lda #$00
+    sta tc_results + 52
+
+    // Test 54: a crown of the Magi resists acid (VMS %X'01380008' has
+    // TR_RES_ACID): worn alone, it takes the acid unharmed, as (Resist)
+    lda #PFLAG_RESIST_ACID
+    sta player_pflags
+    jsr acid_clear_armour
+    lda #ITEM_TYPE_CROWN_GOLDEN
+    sta inv_item_id + EQUIP_HEAD
+    lda #3
+    sta inv_to_ac + EQUIP_HEAD
+    lda #EGO_MAGI
+    sta inv_ego + EQUIP_HEAD
+    lda #9
+    jsr acid_hit
+    cmp #2
+    bne !t54_fail+
+    lda inv_to_ac + EQUIP_HEAD
+    cmp #3
+    bne !t54_fail+
+    lda tc_recalcs
+    bne !t54_fail+
+    lda #$01
+    .byte $2c
+!t54_fail:
+    lda #$00
+    sta tc_results + 53
+    jsr acid_clear_armour
+    lda #0
+    sta player_pflags
+
 !tests_done:
     jmp test_exit_trampoline
 
@@ -1380,11 +1588,24 @@ acid_clear_armour:
     sta inv_item_id,x
     lda #0
     sta inv_to_ac,x
+    sta inv_ego,x
     inx
     cpx #EQUIP_HANDS + 1
     bne !aca_loop-
     lda #0
     sta tc_recalcs
+    rts
+
+// element_hit — Production mon_atk_effect_dispatch of attack type A on a
+// damage of 9 from roster row 0. Output: A = damage dealt.
+element_hit:
+    sta mat_atk_type
+    lda #9
+    sta zp_combat_dmg
+    lda #0
+    sta mat_type2
+    jsr mon_atk_effect_dispatch
+    lda zp_combat_dmg
     rts
 
 // acid_hit — Production acid effect on damage A. Output: A = damage dealt.

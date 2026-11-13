@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-139: ` (up to 3 digits)
+- Item generation: `ITEM 0-156: ` (up to 3 digits)
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,12 +40,15 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-139` (see the item catalog in
+Wizard item generation uses item IDs `0-156` (see the item catalog in
 `core/item_tables.s`; IDs `96-127` are the Phase 3 items — new potions,
 scrolls, rings, wands, staves, Mithril armor, and amulets; IDs `128-134` are
 the chests — wooden, iron, steel, and ruined; ID `135` is the Iron Spike;
 ID `136` is the Scroll of Phase Door; IDs `137-139` are the Long Bow,
-Composite Bow and Heavy Crossbow).
+Composite Bow and Heavy Crossbow; IDs `140-145` the potions of gain stat;
+IDs `146-148` the Rings of Lordly Protection and `149` the Amulet of Resist
+Acid; IDs `150-152` the crowns; IDs `153-156` the Wands of Fire Bolts, Drain
+Life, Lightning Balls and Acid Balls).
 
 Behavior:
 - Non-gold items try to go into inventory first
@@ -53,6 +56,10 @@ Behavior:
 - Gold always becomes floor gold
 - Ammunition (Arrow, Bolt, Rock) comes in a stack of 5-10 (`core/wizard.s`;
   dungeon stacks are 7d6 and store stacks 24)
+- Enchantment and ego are rolled as for a floor item at the current dungeon
+  level (`roll_enchantment`, `roll_ego_type`): a weapon ego, a resistance
+  armour or a crown of the Magi comes only by chance, likelier deeper (a
+  crown of the Magi is about 1 in 60 of the enchanted crowns made on DL50)
 
 ## Common Workflows
 
@@ -112,6 +119,13 @@ or `Neutralize Poison` feedback:
   Composite Bow `138`, Heavy Crossbow `139`; ammunition: Arrow `52`, Bolt
   `53`, Rock `54`. Wield the launcher, then `SHIFT+F` fires the first
   matching ammunition in the pack.
+- Resistance jewellery: Ring of Lordly Protection (Fire) `146`, (Acid) `147`,
+  (Cold) `148`; Amulet of Resist Acid `149`. Wear one and check the breath or
+  touch damage of its element.
+- Crowns: Silver `150`, Golden `151`, Jewel Encrusted `152`.
+- Attack wands (VMS): Fire Bolts `153` (6d8), Drain Life `154` (50, not the
+  undead), Lightning Balls `155` (24), Acid Balls `156` (40). Aim one at a
+  creature, and at an undead one for Drain Life (no effect).
 
 ### Movement / traversal helpers
 
@@ -126,20 +140,20 @@ or `Neutralize Poison` feedback:
 | 0 | Gold (small) |
 | 1 | Gold (large) |
 | 2 | Dagger |
-| 3 | Short sword |
-| 4 | Long sword |
+| 3 | Short Sword |
+| 4 | Long Sword |
 | 5 | Mace |
 | 6 | Robe |
-| 7 | Leather armor |
-| 8 | Chain mail |
-| 9 | Small shield |
-| 10 | Iron helm |
-| 11 | Leather gloves |
-| 12 | Leather boots |
-| 13 | Wooden torch |
-| 14 | Brass lantern |
-| 15 | Ration of food |
-| 16 | Slime mold |
+| 7 | Leather Armor |
+| 8 | Chain Mail |
+| 9 | Small Shield |
+| 10 | Iron Helm |
+| 11 | Leather Gloves |
+| 12 | Leather Boots |
+| 13 | Wooden Torch |
+| 14 | Brass Lantern |
+| 15 | Ration of Food |
+| 16 | Slime Mold |
 | 17 | Potion of Cure Light Wounds |
 | 18 | Potion of Speed |
 | 19 | Potion of Poison |
@@ -263,6 +277,23 @@ or `Neutralize Poison` feedback:
 | 137 | Long Bow |
 | 138 | Composite Bow |
 | 139 | Heavy Crossbow |
+| 140 | Potion of Gain Strength |
+| 141 | Potion of Gain Intelligence |
+| 142 | Potion of Gain Wisdom |
+| 143 | Potion of Gain Dexterity |
+| 144 | Potion of Gain Constitution |
+| 145 | Potion of Charisma |
+| 146 | Ring of Lordly Protection (Fire) |
+| 147 | Ring of Lordly Protection (Acid) |
+| 148 | Ring of Lordly Protection (Cold) |
+| 149 | Amulet of Resist Acid |
+| 150 | Silver Crown |
+| 151 | Golden Crown |
+| 152 | Jewel Encrusted Crown |
+| 153 | Wand of Fire Bolts |
+| 154 | Wand of Drain Life |
+| 155 | Wand of Lightning Balls |
+| 156 | Wand of Acid Balls |
 
 ## Source References
 

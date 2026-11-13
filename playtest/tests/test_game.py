@@ -8,7 +8,7 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import C64, C128, PLUS4
+from moria_playtest.ports import C64, C64_CART, C64_NOREU, C128, PLUS4, PORTS
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
 ABI = abimod.Abi(labels={"zp_player_x": 0x2B, "zp_player_y": 0x2C, "zp_player_hp_lo": 0x2D,
@@ -360,6 +360,72 @@ class EarlyCreatureTest(unittest.TestCase):
         self.assertEqual((tables["hd_num"][mouse], tables["hd_sides"][mouse], tables["ac"][mouse]), (1, 3, 4))
         self.assertTrue(tables["mflags"][mouse] & CreatureFlagTest.CF_BREEDER)        # Umoria 0x0020000A
         self.assertEqual((tables["hd_num"][snake], tables["hd_sides"][snake], tables["ac"][snake]), (3, 6, 30))
+
+
+class C64VariantTest(unittest.TestCase):
+    """Maintainer, 2026-11-12: the C64 with an REU, without one and as the
+    EasyFlash cartridge are separate build-queue platforms with their own
+    stats; the cartridge reads and writes saves on the disk in drive 8 as
+    the disk build does, and VICE needs only -cartcrt to boot it."""
+
+    def test_the_three_machines(self) -> None:
+        self.assertIn("-reu", C64.resource_args)
+        for port in (C64_NOREU, C64_CART):
+            self.assertNotIn("-reu", port.resource_args)
+            self.assertNotIn("-reusize", port.resource_args)
+            self.assertEqual(port.platform, "c64")              # the C64's sources and policies
+            self.assertIn(port.name, PORTS)
+        self.assertEqual(C64.platform, "c64")
+        self.assertEqual((C64_NOREU.out, C64_NOREU.disk, C64_NOREU.cartridge), (C64.out, C64.disk, ""))
+        self.assertEqual((C64_CART.out, C64_CART.disk, C64_CART.cartridge), ("c64-cart", C64.disk, "moria8-c64.crt"))
+        self.assertEqual(C64_CART.disk_target.split(), ["disk64", "cartridge64"])
+
+    def test_the_cartridge_boots_with_the_disk_in_drive_8(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            disk, cart = root / "moria8-c64.d64", root / "moria8-c64.crt"
+            disk.write_bytes(b"d"), cart.write_bytes(b"c")
+            launched: list[list[str]] = []
+
+            def popen(args, **kw):
+                launched.append(list(args))
+                return mock.Mock(poll=lambda: None)
+            with mock.patch.object(launch, "find_vice", return_value="x64sc"), \
+                    mock.patch.object(launch, "write_vice_config", return_value=root / "vicerc"), \
+                    mock.patch.object(launch.subprocess, "Popen", side_effect=popen), \
+                    mock.patch.object(launch, "ViceMonitor"):
+                launch.ViceProcess(0, root, disk, 6600, target=C64_CART, cartridge=cart).start(autostart=True)
+                launch.ViceProcess(1, root, disk, 6601, target=C64_NOREU).start(autostart=True)
+            ef, noreu = launched
+            self.assertEqual(ef[-4:], ["-cartcrt", str(cart), "-8", str(disk)])
+            self.assertNotIn("-autostart", ef)                       # the cartridge boots, the disk waits in drive 8
+            self.assertNotIn("-reu", ef)
+            self.assertEqual(noreu[-2:], ["-autostart", str(disk)])
+            self.assertNotIn("-reu", noreu)
+
+    def test_a_stale_cartridge_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "c64-cart"
+            out.mkdir()
+            prg = out / "moria8.prg"
+            prg.write_bytes(b"p")
+            build = launch.Build(root / "moria8-c64.d64", prg, out / "main.vs", "c64-cart")
+            (root / "moria8-c64.d64").write_bytes(b"d")
+            with self.assertRaisesRegex(launch.StaleDisk, "moria8-c64.crt is missing"):
+                launch.check_disk(build)
+            (root / "moria8-c64.crt").write_bytes(b"c")
+            launch.check_disk(build)                                 # newer than the program: fine
+
+    def test_variants_use_the_c64_save_versions(self) -> None:
+        from moria_playtest import queue
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            hal = home / "builds" / "b" / "platforms" / "commodore" / "c64" / "hal"
+            hal.mkdir(parents=True)
+            (hal / "storage_policy.s").write_text("")
+            self.assertEqual(queue.save_versions("b", "c64-cart", home), queue.save_versions("b", "c64", home))
 
 
 class DiskCheckTest(unittest.TestCase):

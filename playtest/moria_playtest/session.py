@@ -200,6 +200,7 @@ class Character:
         self.keep_worker = False   # leave the emulator running after play() (disk.py)
         self.load_retries: int | None = None   # asset_load_retries at the last level entry
         self.loops = LoopWatch()
+        self.met: set[str] = set()   # creatures this run has logged a met event for
 
     # -- snapshots and findings ------------------------------------------------
 
@@ -396,6 +397,19 @@ class Character:
                 for event in self.brain.events:
                     self.file_finding("stall", "bot", event, obs)
                 self.brain.events.clear()
+                for name in self.brain.kills:
+                    self.session.event("kill", seed=self.seed, step=self.result.steps, name=name,
+                                       dlvl=obs.dlvl, clvl=obs.clvl)
+                self.brain.kills.clear()
+                # The first time this run names or looks at each creature,
+                # for the Monsters panel's met column (an invisible Evil Iggy
+                # fought for hours left no kill and no death, 2026-11-12).
+                for name in self.brain.met:
+                    if name not in self.met:
+                        self.met.add(name)
+                        self.session.event("met", seed=self.seed, step=self.result.steps, name=name,
+                                           dlvl=obs.dlvl, clvl=obs.clvl)
+                self.brain.met.clear()
                 if obs.mode == Mode.COMMAND:
                     loop = self.loops.note(self.result.steps, obs.dlvl, obs.pos, decision.layer, decision.reason)
                     if loop is not None:

@@ -160,6 +160,11 @@ irs_re_id_tab:
     .byte ITEM_TYPE_WAND_TELEPORT_AWAY, 0, <eff_teleport_other, >eff_teleport_other
     .byte ITEM_TYPE_WAND_FIRE_BALL, 49, <eff_ball, >eff_ball
     .byte ITEM_TYPE_WAND_COLD_BALL, 33, <eff_ball, >eff_ball
+    // VMS wands.inc: Fire Bolts 6d8, Drain Life 50, Lightning Balls 24, Acid Balls 40
+    .byte ITEM_TYPE_WAND_FIRE_BOLT, 0, <eff_wand_fire_bolt, >eff_wand_fire_bolt
+    .byte ITEM_TYPE_WAND_DRAIN_LIFE, 0, <eff_wand_drain_life, >eff_wand_drain_life
+    .byte ITEM_TYPE_WAND_LIGHTNING_BALL, 24, <eff_ball, >eff_ball
+    .byte ITEM_TYPE_WAND_ACID_BALL, 40, <eff_ball, >eff_ball
     .byte ITEM_TYPE_STAFF_DISPEL_EVIL, 0, <ped_s28, >ped_s28
     .byte ITEM_TYPE_STAFF_SPEED, 0, <eff_staff_speed, >eff_staff_speed
     .byte $ff, 0, <eff_p3_nop, >eff_p3_nop
@@ -196,6 +201,10 @@ irs_re_id_tab:
     bne !irs_not_cold+
     jmp !irs_re_cold+
 !irs_not_cold:
+    cmp #ITEM_TYPE_WAND_FIRE_BOLT
+    bcc !irs_not_new_wand+
+    jmp !irs_re_new_wand+           // 153-156, the last item IDs
+!irs_not_new_wand:
     cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
     bne !irs_not_dispel+
     jmp !irs_re_dispel+
@@ -326,8 +335,47 @@ irs_re_id_tab:
 // which then runs items-overlay bytes (2026-11-06: the BBC build queue's
 // panic aiming a Wand of Stinking Cloud). The resident irs_p3_swap_exec
 // that called the router restores OVL.ITEMS.
+// VMS wands.inc: Fire Bolts 6d8, Drain Life 50, Lightning Balls 24, Acid
+// Balls 40. Drain Life (core/wand_bolt_entries.s) is beside this chain, or on
+// the compact ports in OVL.SPELL with the other handlers. Carry set, Z set
+// for Fire Bolts.
+.assert "The four VMS wands are the last item IDs, in dispatch order", ITEM_TYPE_WAND_DRAIN_LIFE == ITEM_TYPE_WAND_FIRE_BOLT + 1 && ITEM_TYPE_WAND_LIGHTNING_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 2 && ITEM_TYPE_WAND_ACID_BALL == ITEM_TYPE_COUNT - 1 && ITEM_TYPE_WAND_ACID_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 3, true
+!irs_re_new_wand:
+    beq !irs_re_fbolt+              // 153
+    cmp #ITEM_TYPE_WAND_LIGHTNING_BALL
+    bcc !irs_re_drain+              // 154
+    beq !irs_re_lball+              // 155
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    :CompactReCallArg(eff_ball, 40)          // 156: Acid Balls
+!irs_re_lball:
+    :CompactReCallArg(eff_ball, 24)
+!irs_re_drain:
+    :CompactReCall(eff_wand_drain_life)
+!irs_re_fbolt:
+    :CompactReCall(eff_wand_fire_bolt)
+#else
+    lda #40                         // 156: Acid Balls
+    .byte $2c                       // BIT abs: skips the lda #24
+!irs_re_lball:
+    lda #24
+    jsr eff_ball
+    jmp !irs_re_done+
+!irs_re_drain:
+    jsr eff_wand_drain_life
+    jmp !irs_re_done+
+!irs_re_fbolt:
+    lda #6
+    ldx #8
+    ldy #0
+    jsr eff_bolt
+#endif
 !irs_re_done:
     rts
+#if !HAL_PLATFORM_COMPACT_PLAY_SLOT
+// The Fire Bolts and Drain Life effects beside the chain that calls them (the
+// compact ports keep them in OVL.SPELL, reached through irs_re_compact_call).
+#import "wand_bolt_entries.s"
+#endif
 #endif
 
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT && SCROLL_P3_EXISTING_OWNER

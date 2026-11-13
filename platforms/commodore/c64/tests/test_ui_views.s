@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #20
+    ldx #21
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -217,7 +217,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 21, $ff
+tc_results: .fill 22, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -269,6 +269,7 @@ test_start:
     jsr test_equipment_wrap_longer
     jsr test_status_gold_24bit
     jsr test_character_gold_xp_24bit
+    jsr test_status_poisoned_row21
 
     jmp test_exit_trampoline
 
@@ -1284,6 +1285,72 @@ test_status_search_indicator_row21:
     sta tc_results + 16
     rts
 
+// Test 22: "Poisoned" while the poison timer runs (VMS prt_poisoned), in
+// Search*'s row-21 slot on 40 columns; Search* again once it ends.
+test_status_poisoned_row21:
+    jsr reset_shared_state
+    lda #0
+    sta player_data + PL_NAME
+    sta status_cache_valid
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    sta player_data + PL_HP_HI
+    sta player_data + PL_MHP_HI
+    sta zp_player_mp
+    sta zp_player_mmp
+    sta zp_player_ac
+    sta zp_hunger_state
+    lda #1
+    sta zp_player_lvl
+    sta zp_player_dlvl
+    lda #21
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #34
+    sta zp_player_mhp_lo
+    sta player_data + PL_MHP_LO
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #5
+    sta zp_eff_poison
+    jsr status_draw
+    lda #<expected_status_poisoned
+    sta zp_ptr0
+    lda #>expected_status_poisoned
+    sta zp_ptr0_hi
+    lda #21
+    ldx #19
+    sei
+    jsr assert_screen_string
+    cli
+    bcc !tsp_fail+
+    lda #0
+    sta zp_eff_poison                // the poison ends: the state changed, row 21 redraws
+    lda zp_ui_dirty
+    ora #$01
+    sta zp_ui_dirty
+    sei
+    jsr status_draw
+    cli
+    lda #<expected_status_search_after_poison
+    sta zp_ptr0
+    lda #>expected_status_search_after_poison
+    sta zp_ptr0_hi
+    lda #21
+    ldx #19
+    sei
+    jsr assert_screen_string
+    cli
+    bcc !tsp_fail+
+    lda #$01
+    .byte $2c
+!tsp_fail:
+    lda #$00
+    sta tc_results + 21
+    lda #0
+    sta player_data + PL_FLAGS
+    rts
+
 test_inventory_identify_select_view_six_items:
     jsr reset_shared_state
 
@@ -1635,6 +1702,10 @@ expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_search:
     .text "Search*" ; .byte 0
+expected_status_poisoned:
+    .text "Poisoned" ; .byte 0
+expected_status_search_after_poison:
+    .text "Search* " ; .byte 0
 expected_gold_65547:
     .text "AU:65547 " ; .byte 0
 expected_gold_99999:

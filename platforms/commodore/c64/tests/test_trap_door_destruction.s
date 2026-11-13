@@ -57,7 +57,12 @@ test_finish:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+// Monster spells and breath are not exercised here: out of the way above
+// the I/O hole (the element touches, 2026-11-11, took the body past MAP_BASE).
+.segmentdef TestUnusedMonsterMagic [start=$e100]
+.segment TestUnusedMonsterMagic
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"

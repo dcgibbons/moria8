@@ -1,3 +1,4 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
 // main.s — Commander X16 moria8 linker script + entry
 //
 // Assemble from platforms/cx16 with:
@@ -26,6 +27,9 @@
 .segmentdef TownOverlay        [outPrg=OVL_OUT + "/OVL.TOWN",      start=$a000, min=$a000, max=$bfff]
 .segmentdef DeathOverlay       [outPrg=OVL_OUT + "/OVL.DEATH",     start=$a000, min=$a000, max=$bfff]
 .segmentdef ModalMiscOverlay   [outPrg=OVL_OUT + "/OVL.MODAL",     start=$a000, min=$a000, max=$bfff]
+.const LEGAL_BASE = $a000
+.const LEGAL_LIMIT = $c000
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/LEGALUI", start=$a000, min=$a000, max=$bfff]
 .segmentdef HelpOverlay        [outPrg=OVL_OUT + "/OVL.HELP",      start=$a000, min=$a000, max=$bfff]
 .segmentdef UiOverlay          [outPrg=OVL_OUT + "/OVL.UI",        start=$a000, min=$a000, max=$bfff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/OVL.ITEMS",     start=$a000, min=$a000, max=$bfff]
@@ -292,6 +296,11 @@ title_menu_loop:
 !load_now:
     jmp title_load_game
 !not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
@@ -302,7 +311,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #28                 // Center 80-col: (80-24)/2 = 28
+    lda #(SCREEN_COLS - 35) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -456,6 +465,8 @@ overlay_load_no_kernal:
 
 run_initialize:
     jmp run_initialize_impl
+
+#import "legal.s"
 
 tramp_ui_help_display:
     lda #OVL_HELP
@@ -748,6 +759,8 @@ tramp_eff_destroy_area:
 tramp_restore_spell_overlay:
     php
     pha
+    txa                         // the selector's X (the slot chosen)
+    pha
     lda #OVL_NONE
     sta piw_return_overlay
     lda #OVL_SPELL
@@ -755,6 +768,8 @@ tramp_restore_spell_overlay:
     bcc !restored+
     brk
 !restored:
+    pla
+    tax
     pla
     plp
     rts
@@ -1048,9 +1063,25 @@ cx16_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_holy_avenger), 0
 cx16_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
     .fill 16 - (* - cx16_ego_suffix_slay_dragon), 0
+// Resistance armour (EGO_RESIST..EGO_RESIST_LIGHT): banked_ego_put_suffix
+// prints the " (Resist" slot (index EGO_TYPE_COUNT) before each.
+cx16_ego_suffix_resist: .text ")" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_resist), 0
+cx16_ego_suffix_resist_acid: .text " Acid)" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_resist_acid), 0
+cx16_ego_suffix_resist_fire: .text " Fire)" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_resist_fire), 0
+cx16_ego_suffix_resist_cold: .text " Cold)" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_resist_cold), 0
+cx16_ego_suffix_resist_light: .text " Lightning)" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_resist_light), 0
+cx16_ego_suffix_magi: .text " of the Magi" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_magi), 0
+cx16_ego_suffix_resist_prefix: .text " (Resist" ; .byte 0
+    .fill 16 - (* - cx16_ego_suffix_resist_prefix), 0
 cx16_ego_suffix_slots_end:
 .assert "CX16 ego suffix slots are page aligned", <cx16_ego_suffix_slots, 0
-.assert "CX16 ego suffix slots are EGO_TYPE_COUNT x 16 bytes", cx16_ego_suffix_slots_end - cx16_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "CX16 ego suffix slots are EGO_TYPE_COUNT + 1 (the Resist prefix) x 16 bytes", cx16_ego_suffix_slots_end - cx16_ego_suffix_slots, (EGO_TYPE_COUNT + 1) * 16
 
 ovl_auxdata_end:
 .print "CX16 AuxData: " + (ovl_auxdata_end - $6000) + " bytes"
@@ -1527,3 +1558,12 @@ program_end:
 .print "CX16 Unified Resident+Play end: $" + toHexString(program_end)
 .assert "Unified Resident+Play image fits below $9B00 tier name pool", program_end <= PLATFORM_TIER_NAME_POOL_BASE, true
 .assert "HuffData fits Bank 4 ($8000-$9FFF)", ovl_huffdata_end <= $a000, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../core/ui_legal.s"
+#import "../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

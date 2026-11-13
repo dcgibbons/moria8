@@ -110,11 +110,11 @@ screen_clear:
     inx
     bne !loop-
     // Remaining 232 bytes ($0700-$07E7)
-    ldx #232 - 1
+    ldx #232
 !last:
-    sta SCREEN_RAM + $300,x
     dex
-    bpl !last-
+    sta SCREEN_RAM + $300,x
+    bne !last-
 
     // Fill color RAM to current text color
     lda zp_text_color
@@ -125,11 +125,11 @@ screen_clear:
     sta COLOR_RAM + $200,x
     inx
     bne !col-
-    ldx #232 - 1
+    ldx #232
 !col_last:
-    sta COLOR_RAM + $300,x
     dex
-    bpl !col_last-
+    sta COLOR_RAM + $300,x
+    bne !col_last-
     // Full clear wipes status rows; force next status_draw to repaint.
     lda zp_ui_dirty
     ora #%10000001          // bit7=force status redraw, bit0=status dirty

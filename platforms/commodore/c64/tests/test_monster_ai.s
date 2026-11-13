@@ -84,7 +84,29 @@ status_draw:
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
+// Special rooms are not exercised here (generation is stubbed): beside the
+// armour roll above the create overlay (the element touches, 2026-11-11).
+.segmentdef TestUnusedEgoArmour [start=$e200]
+.segment TestUnusedEgoArmour
 #import "../../../../core/special_rooms.s"
+.segment Default
+// The resistance armour roll and its suffixes are not exercised here (no
+// item spawns): out of the way above the create overlay (2026-11-11, which
+// took the body past MAP_BASE).
+#define EGO_ARMOUR_SEGMENT_CUSTOM
+.macro EgoArmourSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro EgoArmourRestoreSegment() {
+    .segment Default
+}
+#define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+.macro EgoArmourDataSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro EgoArmourDataRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"

@@ -131,6 +131,16 @@ wizard_wall_walk_active:
 :WizardGenExecSegment()
 #endif
 // wizard_generate_item_execute — Create a usable item for Wizard mode.
+// Owner (:WizardGenExecSegment()): ModalMiscOverlay (OVL_MODAL_MISC) on C64,
+// Plus/4, Apple IIe, CX16, Atari 8-bit, and BBC Master 128; C128ResidentPlay
+// (128.play) on C128 (where ui_wizard.s runs in UiOverlay); Default in
+// non-overlay unit tests.
+// Lifetime: one wizard G (generate item) command.
+// Callers: ui_wizard_cmd_generate_item (core/ui_wizard.s, already in
+// ModalMiscOverlay or C128 UiOverlay) or resident wizard_cmd_generate_item in
+// test builds. On ports with HAL_PLATFORM_WIZARD_EGO_MODAL_TRAMP (C64, Apple IIe,
+// CX16, BBC Master), tramp_roll_ego_type_modal reloads OVL_MODAL_MISC after
+// rolling an ego in OVL.ITEMS before returning here.
 // Non-gold items prefer inventory placement so the item is immediately usable.
 // Gold and inventory-overflow cases fall back to floor placement at the
 // player's current tile.
@@ -707,7 +717,8 @@ wiz_done_str:
 wiz_fail_str:
     .text "FAIL" ; .byte 0
 wiz_item_prompt_str:
-    .text "ITEM 0-145: " ; .byte 0
+    // The range follows the catalog (docs/WIZARD.md; tools/check_wizard_doc.py)
+    .text "ITEM 0-" + toIntString(ITEM_TYPE_COUNT - 1) + ": " ; .byte 0
 wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
 wiz_title_str:

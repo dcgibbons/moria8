@@ -1,5 +1,11 @@
 #importonce
-// look_flash_target.s — transient viewport-cell flash for look/examine feedback
+// look_flash_target.s — transient viewport-cell flash for look/examine feedback.
+// Owner: Default resident on C64, Plus/4, CX16, Atari 8-bit, and BBC Master 128;
+// C128ResidentWorld (128.world) on C128; A2PlaySlot (a2.play) on Apple IIe.
+// Lifetime: one target-step or examine flash call during gameplay.
+// Callers: look_command (core/player_move.s) in ModalMiscOverlay on all seven
+// product ports (resident in unit tests); calls resident screen_flash_at without
+// touching the overlay window.
 
 // look_flash_target — Flash the looked-at target if it is inside the viewport
 // Uses the same transient screen flash primitive as bolt animation.

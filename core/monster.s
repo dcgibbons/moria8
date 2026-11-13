@@ -34,6 +34,9 @@
 .const ATK_NORMAL    = 1
 .const ATK_CONFUSE   = 3
 .const ATK_ACID      = 6
+.const ATK_FIRE      = 5     // VMS creature.inc 5: fire_dam (MON-028)
+.const ATK_COLD      = 7     // 7: cold_dam
+.const ATK_LIGHT     = 8     // 8: light_dam
 .const ATK_PARALYZE  = 11
 .const ATK_POISON    = 14
 .const ATK_FEAR      = 4

@@ -395,6 +395,9 @@ expected_item_name_lo:
     .byte <ein_132, <ein_133, <ein_134, <ein_135, <ein_136
     .byte <ein_137, <ein_138, <ein_139
     .byte <ein_140, <ein_141, <ein_142, <ein_143, <ein_144, <ein_145
+    .byte <ein_146, <ein_147, <ein_148, <ein_149
+    .byte <ein_150, <ein_151, <ein_152
+    .byte <ein_153, <ein_154, <ein_155, <ein_156
 expected_item_name_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
@@ -425,6 +428,9 @@ expected_item_name_hi:
     .byte >ein_132, >ein_133, >ein_134, >ein_135, >ein_136
     .byte >ein_137, >ein_138, >ein_139
     .byte >ein_140, >ein_141, >ein_142, >ein_143, >ein_144, >ein_145
+    .byte >ein_146, >ein_147, >ein_148, >ein_149
+    .byte >ein_150, >ein_151, >ein_152
+    .byte >ein_153, >ein_154, >ein_155, >ein_156
 .assert "expected_item_name_hi covers every item type", * - expected_item_name_hi, ITEM_TYPE_COUNT
 
 ein_0:  .text "Gold (small)" ; .byte 0
@@ -573,6 +579,17 @@ ein_142: .text "Potion of Gain Wisdom" ; .byte 0
 ein_143: .text "Potion of Gain Dexterity" ; .byte 0
 ein_144: .text "Potion of Gain Constitution" ; .byte 0
 ein_145: .text "Potion of Charisma" ; .byte 0
+ein_146: .text "Ring of Lordly Protection (Fire)" ; .byte 0
+ein_147: .text "Ring of Lordly Protection (Acid)" ; .byte 0
+ein_148: .text "Ring of Lordly Protection (Cold)" ; .byte 0
+ein_149: .text "Amulet of Resist Acid" ; .byte 0
+ein_150: .text "Silver Crown" ; .byte 0
+ein_151: .text "Golden Crown" ; .byte 0
+ein_152: .text "Jewel Encrusted Crown" ; .byte 0
+ein_153: .text "Wand of Fire Bolts" ; .byte 0
+ein_154: .text "Wand of Drain Life" ; .byte 0
+ein_155: .text "Wand of Lightning Balls" ; .byte 0
+ein_156: .text "Wand of Acid Balls" ; .byte 0
 
 assert_col: .byte 0
 assert_idx: .byte 0

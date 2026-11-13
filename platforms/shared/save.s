@@ -1634,7 +1634,10 @@ load_read_known_items:
 
 !lrki_current:
     :load_block(id_known_bits, ID_KNOWN_BYTES)
-    rts
+    // Fixed-description items are always known (item_init_identification):
+    // set them again, so an item added since the save is not left unknown.
+    ldx #0
+    beq !lrki_defaults+         // always
 
 !lrki_legacy:
     cmp #SAVE_KNOWN96_VERSION
@@ -1654,11 +1657,10 @@ load_read_known_items:
     ldx #LEGACY_ITEM_TYPE_COUNT
 
 !lrki_defaults:
-    // X = first ID beyond the loaded legacy range. Implemented IDs past it
-    // take migration defaults from it_category (fixed-description classes
-    // known, randomized-appearance classes unknown); IDs past ITEM_TYPE_COUNT
-    // stay cleared (unknown). Skip entirely when the legacy stream already
-    // covered the implemented range (V2/V3: X=96).
+    // X = first ID beyond the loaded legacy range (0 for a current save).
+    // Fixed-description classes from X on are set known (it_category);
+    // randomized-appearance classes keep what was loaded (unknown past a
+    // legacy range); IDs past ITEM_TYPE_COUNT stay cleared (unknown).
     cpx #ITEM_TYPE_COUNT
     bcs !lrki_def_done+
 !lrki_def_loop:

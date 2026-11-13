@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from . import knowledge
 from . import records as run_records
 from .goals import (CHARACTER_BARS, CHARACTERS, CLASS_BARS, CLASSES, GOALS, QUALIFICATION_SEEDS, RACE_KEYS,
                     for_character, required)
@@ -75,15 +76,17 @@ def read_json(path: Path) -> Any:
 
 
 def cached(path: Path, build):
-    """``build(path)``, remembered until the file changes."""
+    """``build(path)``, remembered until the file changes. Keyed by the
+    builder too: two readers of one file (runs.jsonl's records and its death
+    counts) each keep their own."""
     try:
-        key = (str(path), path.stat().st_mtime)
+        key = (str(path), build.__qualname__, path.stat().st_mtime)
     except OSError:
         return None
     if key not in _cache:
-        # One entry per file: every change used to add one, and the publisher,
-        # which runs for days, grew to 7.8 GB (2026-10-31).
-        for stale in [k for k in _cache if k[0] == key[0]]:
+        # One entry per file and builder: every change used to add one, and
+        # the publisher, which runs for days, grew to 7.8 GB (2026-10-31).
+        for stale in [k for k in _cache if k[:2] == key[:2]]:
             del _cache[stale]
         _cache[key] = build(path)
     return _cache[key]
@@ -156,6 +159,108 @@ def depth_series(events: Path) -> dict[str, list[list[int]]]:
         if not points or points[-1][1] != event["dlvl"]:
             points.append([event["step"], event["dlvl"]])
     return series
+
+
+KILLS_SINCE = "20261111-1500"   # runs from here on log kill events (session.py)
+MET_SINCE = "20261112-0215"     # ... and met events: a creature named or looked at
+
+
+def kill_counts(events: Path) -> dict[str, int]:
+    """Per creature name, the run's ``kill`` events (session: "You have slain
+    the <name>."), names as the game prints them: the first runs logged
+    cut-off ones ("Metallic Blue Centipethe Giant Static Ant misses you")."""
+    counts: dict[str, int] = {}
+    try:
+        lines = events.read_text().splitlines()
+    except OSError:
+        return counts
+    for line in lines:
+        if '"kill"' not in line:
+            continue
+        name = json.loads(line).get("name")
+        if name:
+            name = knowledge.creature_name(name)
+            counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def met_names(events: Path) -> list[str]:
+    """The creatures a run met: its ``met`` events (session: the first time
+    the run named or looked at each)."""
+    try:
+        lines = events.read_text().splitlines()
+    except OSError:
+        return []
+    return sorted({json.loads(line).get("name") for line in lines if '"met"' in line} - {None})
+
+
+def queue_group(queue: str | None) -> str:
+    """The Balrog queue, the build queue, or everything else (the main
+    queue and subqueues)."""
+    return queue if queue in ("balrog", "build") else "other"
+
+
+def death_counts(runs: Path) -> dict[str, dict[str, int]]:
+    """Per creature, the characters it killed, by queue group, over every
+    run the queue recorded."""
+    out: dict[str, dict[str, int]] = {}
+    for record in queue_records(runs):
+        cause = (record.get("death") or {}).get("cause")
+        if record.get("outcome") != "died" or not cause:
+            continue
+        group = out.setdefault(cause, {})
+        key = queue_group(record.get("queue"))
+        group[key] = group.get(key, 0) + 1
+    return out
+
+
+def monster_stats(home: Path) -> dict[str, Any]:
+    """The Monsters panel: per creature, how many the bots have slain (kill
+    events, by queue group), how many runs met it (met events) and how many
+    characters it has killed (run records). Kills count from KILLS_SINCE,
+    meetings from MET_SINCE, deaths from the first run."""
+    creatures: dict[str, dict[str, dict[str, int]]] = {}
+    def entry(name: str) -> dict[str, dict[str, int]]:
+        return creatures.setdefault(name, {"slain": {}, "met": {}, "killed": {}})
+    runs = met_runs = 0
+    for events in home.glob("runs/*/events.jsonl"):
+        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+            continue
+        counts = cached(events, kill_counts) or {}
+        met = (cached(events, met_names) or []) if events.parent.name[:len(MET_SINCE)] >= MET_SINCE else []
+        if not (counts or met):
+            continue
+        runs += bool(counts)
+        met_runs += bool(met)
+        job = cached(events.parent / "job.json", read_json) or {}
+        key = queue_group(job.get("queue") or ("balrog" if "-balrog-" in events.parent.name else None))
+        for name, count in counts.items():
+            slain = entry(name)["slain"]
+            slain[key] = slain.get(key, 0) + count
+        for name in met:
+            seen = entry(name)["met"]
+            seen[key] = seen.get(key, 0) + 1
+    shipped = set(knowledge.creature_names())
+    for name, killed in (cached(home / "runs.jsonl", death_counts) or {}).items():
+        if name in shipped:   # not poison, traps, starvation or "caster's spell"
+            entry(name)["killed"] = killed
+    return {"creatures": creatures, "runs": runs, "met_runs": met_runs, "since": KILLS_SINCE,
+            "met_since": MET_SINCE}
+
+
+def balrog_kills(home: Path) -> dict[str, Any]:
+    """The Balrog queue's kills over every run it kept: what falls, and
+    whether the Balrog, Evil Iggy or an Ancient Multi-Hued Dragon ever has."""
+    total: dict[str, int] = {}
+    runs = 0
+    for events in home.glob("runs/*-balrog-*/events.jsonl"):
+        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+            continue
+        counts = cached(events, kill_counts) or {}
+        runs += bool(counts)
+        for name, count in counts.items():
+            total[name] = total.get(name, 0) + count
+    return {"total": total, "runs": runs}
 
 
 def killer(trace: Path) -> str:
@@ -422,7 +527,9 @@ def ports() -> dict[str, Any]:
             latest[key] = (when, sum(c.get("outcome") == "reached" for c in chars), len(chars),
                            (summary.get("started") or "")[:10])
     cells, frozen_count = {}, {}
-    for port in PORTS:
+    # The ports, not their variants (C64 without an REU, the cartridge): they
+    # have no frozen suites of their own, and the build queue covers them.
+    for port in (name for name, p in PORTS.items() if not p.source):
         frozen_count[port] = 0
         for character in PORT_CHARACTERS:
             for goal in PORT_GOALS:
@@ -433,7 +540,7 @@ def ports() -> dict[str, Any]:
                     "bar": (frozen or {}).get("required", bar(goal, character)), "frozen": bool(frozen),
                     "frozen_on": (frozen or {}).get("frozen"),
                     "latest": result[1] if result else None, "ran": result[3] if result else None}
-    return {"ports": list(PORTS), "characters": list(PORT_CHARACTERS), "goals": list(PORT_GOALS),
+    return {"ports": list(frozen_count), "characters": list(PORT_CHARACTERS), "goals": list(PORT_GOALS),
             "cells": cells, "frozen": frozen_count, "suites": len(PORT_CHARACTERS) * len(PORT_GOALS)}
 
 
@@ -774,6 +881,8 @@ def queue() -> dict[str, Any]:
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
+            "balrog_kills": balrog_kills(home),
+            "monsters": monster_stats(home),
             "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "builds": runs["builds"],

@@ -4,6 +4,14 @@
 .const PMX_EARTHQUAKE_EXTERNAL = 1
 #define PMX_DESTROY_AREA_EXTERNAL
 .const PMX_MAP_AREA_EXTERNAL = 1
+// The C128 lifecycle policy's prompt-time overlay hint
+// (hal/lifecycle_policy.s), so Test 7 runs the recharge picker as the product
+// does; the overlay IDs as platforms/commodore/common/overlay.s numbers them.
+#define HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
+.const OVL_NONE = 0
+.const OVL_DEATH = 3
+.const OVL_UI = 6
+.const OVL_SPELL = 8
 
 .const KEY_ESC = $ae
 .const SFX_HIT = $01
@@ -144,6 +152,9 @@ test_last_spell_idx: .byte $ff
 test_progress: .byte 0
 test_rng_result: .byte 0
 test_rng_calls: .byte 0
+piw_return_overlay: .byte 0
+current_overlay: .byte 0
+test_restore_overlay: .byte $ff
 
 test_mon_table:
     .fill MAX_MONSTERS * MONSTER_ENTRY_SIZE, 0
@@ -155,6 +166,20 @@ test_mon_ptr_hi:
 
 eff_detect_evil_only:
     lda #0
+    rts
+
+test_two_choices:
+    lda #2
+    rts
+
+test_key_question:
+    lda #$3f
+    rts
+
+test_select_records_overlay:
+    lda piw_return_overlay
+    sta test_restore_overlay
+    clc
     rts
 
 walkable_table:
@@ -885,8 +910,28 @@ test_sleep_iii_hidden:
     beq !t6_fail+
     lda #6
     sta test_progress
+
+    // Test 7 (C128 build queue, 2026-11-12): the recharge picker's '?' list
+    // restores the overlay the picker runs in. A Scroll of Recharging runs it
+    // in OVL_DEATH on the C128 (the Phase 3 death-overlay table); the list
+    // came back to OVL_SPELL and jammed the CPU. The last test: the patches
+    // stay (piw_build_visible_inv_cache shares its stub with other labels).
+    :PatchJump(piw_build_visible_inv_cache, test_two_choices)
+    :PatchJump(input_get_key, test_key_question)
+    :PatchJump(piw_select_filtered_inv_key, test_select_records_overlay)
+    lda #OVL_DEATH
+    sta current_overlay
+    lda #OVL_NONE
+    sta piw_return_overlay
+    jsr pmx_pick_recharge_item
+    lda test_restore_overlay
+    cmp #OVL_DEATH
+    bne !t7_fail+
+    lda #7
+    sta test_progress
     jmp test_pass
 !t6_fail:
+!t7_fail:
     jmp test_fail
 
 // door_state purge call in spell_effects_overlay.s; no doors here.

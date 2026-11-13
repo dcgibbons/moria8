@@ -129,7 +129,7 @@ itemdesc_put_stats:
     cmp #ICAT_ARMOR
     bcc !idps_not_armor+
     cmp #ICAT_BOOTS + 1
-    bcc !idps_armor_tramp+
+    bcc !idps_armor+
 !idps_not_armor:
     cmp #ICAT_RING
     beq !idps_ring+
@@ -146,8 +146,6 @@ itemdesc_put_stats:
     rts
 !idps_amulet_tramp:
     jmp !idps_ring_p1+
-!idps_armor_tramp:
-    jmp !idps_armor+
 !idps_weapon:
     lda itemdesc_to_hit
     ora itemdesc_to_dam
@@ -165,20 +163,6 @@ itemdesc_put_stats:
     lda itemdesc_to_dam
     jsr itemdesc_put_signed
     lda #$29
-    jmp hal_screen_put_char
-!idps_armor:
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$1b                    // '[' screen code
-    jsr hal_screen_put_char
-    ldy itemdesc_item_id
-    jsr item_get_base_ac
-    jsr screen_put_decimal
-    lda #$2c
-    jsr hal_screen_put_char
-    lda itemdesc_to_ac
-    jsr itemdesc_put_signed
-    lda #$1d                    // ']' screen code
     jmp hal_screen_put_char
 !idps_ring:
     lda itemdesc_item_id
@@ -200,6 +184,21 @@ itemdesc_put_stats:
     jsr itemdesc_put_signed
     lda #$1d                    // ']' screen code
     jmp hal_screen_put_char
+!idps_armor:
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$1b                    // '[' screen code
+    jsr hal_screen_put_char
+    ldy itemdesc_item_id
+    jsr item_get_base_ac
+    jsr screen_put_decimal
+    lda #$2c
+    jsr hal_screen_put_char
+    lda itemdesc_to_ac
+    jsr itemdesc_put_signed
+    lda #$1d                    // ']' screen code
+    jsr hal_screen_put_char
+    // fall through: a crown of the Magi's INT (VMS "(%P1)"); 0 elsewhere
 !idps_ring_p1:
     lda itemdesc_p1
     bne !idps_ring_p1_has_bonus+

@@ -10,7 +10,23 @@
 .const IF_IDENTIFIED = $02
 .const IF_TRIED      = $04    // Legacy pseudo-ID bit kept for save compatibility
 .const IF_SENSED     = $08    // Umoria-style auto-sensed "magik" marker
-.const EGO_TYPE_COUNT = 9
+.const EGO_NONE          = 0
+.const EGO_SLAY_ANIMAL   = 1
+.const EGO_SLAY_EVIL     = 2
+.const EGO_SLAY_UNDEAD   = 3
+.const EGO_FLAME_TONGUE  = 4
+.const EGO_FROST_BRAND   = 5
+.const EGO_DEFENDER      = 6
+.const EGO_HOLY_AVENGER  = 7
+.const EGO_SLAY_DRAGON   = 8
+.const EGO_RESIST        = 9    // VMS (R)
+.const EGO_RESIST_ACID   = 10   // VMS (RA)
+.const EGO_RESIST_FIRE   = 11   // VMS (RF)
+.const EGO_RESIST_COLD   = 12   // VMS (RC)
+.const EGO_RESIST_LIGHT  = 13   // VMS (RL)
+.const EGO_MAGI          = 14   // VMS crowns "of the Magi" (MON-030)
+.const EGO_TYPE_COUNT = 15   // weapon egos 1-8, resistance armour 9-13, the Magi 14 (core/ego_items.s)
+.assert "Ego IDs fit the 4-bit store and floor ego fields", EGO_TYPE_COUNT <= 16, true
 .const ITEM_META_FLAGS_MASK = $0f
 // Ego bits 4-7 (bits 4-6 until Slay Dragon, 2026-11-07: bit 7 was unused,
 // so every saved store item reads as before).
@@ -153,13 +169,32 @@
 .const PFLAG_SPEED       = $04
 .const PFLAG_SEE_INVIS   = $08
 .const PFLAG_FREE_ACT    = $10   // Free Action: the Amulet of the Magi (VMS)
+.const PFLAG_RESIST_ACID = $20   // acid breath and touch (VMS acid_dam); armour, Defender
+.const PFLAG_RESIST_LIGHT = $40  // lightning breath div 3 (VMS light_dam); armour, Defender
 
 // Master Item Type Count
 // Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
 // Capacity 160 (20-byte bitset) leaves runway past the chest rows at 128-134
 // so the next catalog expansion pays no save-format bump.
 .const LEGACY_ITEM_TYPE_COUNT = 64
-.const ITEM_TYPE_COUNT = 146
+.const ITEM_TYPE_COUNT = 157
+// VMS Moria attack wands (values.inc, wands.inc; 2026-11-11): Fire Bolts 6d8,
+// Drain Life 50 to the living, Lightning Balls 24, Acid Balls 40
+.const ITEM_TYPE_WAND_FIRE_BOLT      = 153
+.const ITEM_TYPE_WAND_DRAIN_LIFE     = 154
+.const ITEM_TYPE_WAND_LIGHTNING_BALL = 155
+.const ITEM_TYPE_WAND_ACID_BALL      = 156
+// VMS Moria rings of Lordly Protection and the Amulet of Resist Acid
+// (values.inc; 2026-11-11, MON-029): resistance in the ring and amulet slots
+.const ITEM_TYPE_RING_LORDLY_FIRE = 146
+.const ITEM_TYPE_RING_LORDLY_ACID = 147
+.const ITEM_TYPE_RING_LORDLY_COLD = 148
+.const ITEM_TYPE_AMULET_RESIST_ACID = 149
+// VMS Moria crowns (values.inc; 2026-11-11, MON-030): helms that may roll
+// the Magi ego (roll_armour_ego)
+.const ITEM_TYPE_CROWN_SILVER = 150
+.const ITEM_TYPE_CROWN_GOLDEN = 151
+.const ITEM_TYPE_CROWN_JEWEL  = 152
 // VMS Moria potions of gain stat (values.inc; 2026-11-07), in PL_*_BASE order
 .const ITEM_TYPE_POT_GAIN_STR = 140
 .const ITEM_TYPE_POT_GAIN_CHR = 145
@@ -169,7 +204,11 @@
 // One bit per item type ID: set = identified/known. 20 bytes at 160 IDs.
 .const ID_KNOWN_BYTES = (ITEM_ID_CAPACITY + 7) / 8
 
+#if PLATFORM_ID_KNOWN_EXTERNAL
+.label id_known_bits = PLATFORM_ID_KNOWN_BASE   // a port's free RAM (the Atari: high RAM); item_init_identification clears it
+#else
 id_known_bits: .fill ID_KNOWN_BYTES, 0
+#endif
 
 idk_bit_mask: .byte 1, 2, 4, 8, 16, 32, 64, 128
 idk_mask:     .byte 0

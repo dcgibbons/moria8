@@ -1,6 +1,6 @@
 .PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
-	test test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime clean \
-	check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass tools-ready tools-ready-apple2 \
+	test test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime clean \
+	check-zp check-6502-lint check-hal-boundaries check-item-docs ensure-kickass kickass tools-ready tools-ready-apple2 \
 	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 \
 	buildapple2 diskapple2 runapple2 testapple2 testapple2-smoke testapple2-runtime testapple2-memory-contract testapple2-memory-contract-selftest \
 	buildcx16 diskcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-memory-contract testcx16-memory-contract-selftest \
@@ -46,11 +46,11 @@ disk:
 	$(MAKE) -C platforms/atari8 disk
 	$(MAKE) -C platforms/bbcmaster disk
 
-build64 build128 buildplus4 disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
+build64 build128 buildplus4 cartridge64 disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass:
 	$(MAKE) -C platforms/commodore $@
 
-test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime: tools-ready
+test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime: tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/commodore $@
 
 # Tool downloads (KickAssembler; AppleCommander and ProDOS for Apple images)
@@ -78,8 +78,17 @@ TEST_STAGES = test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 
 
 test: $(TEST_STAGES)
 
+# docs/WIZARD.md and docs/FEATURE_MAP.md section 8.3.1 against the item
+# catalog: an item added without its doc rows fails here (static, no emulator).
+check-item-docs:
+	python3 tools/check_wizard_doc.py --selftest
+	python3 tools/check_wizard_doc.py
+
 test-prebuild: tools-ready-apple2
+	$(MAKE) check-item-docs
+	$(MAKE) check-hal-boundaries
 	$(MAKE) build
+	$(MAKE) -C platforms/commodore disk
 	$(MAKE) -C platforms/apple2 disk
 	$(MAKE) -C platforms/cx16 test-memory-contract
 	$(MAKE) -C platforms/atari8 test-memory-contract
@@ -89,6 +98,7 @@ test-prebuild: tools-ready-apple2
 
 test-stage-c64: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/commodore test64
+	$(ISOLATED) $(MAKE) -C platforms/commodore test64-cartridge
 
 test-stage-c128: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/commodore test128
@@ -379,3 +389,7 @@ $(ARTIFACT_MANIFEST): $(RELEASE_ARTIFACTS)
 	$(GPG) --yes $(GPG_SIGN_FLAGS) --output "$@" "$<"
 
 FORCE:
+
+.PHONY: cartridge64 test64-cartridge test64-cartridge-persistence
+test64-cartridge test64-cartridge-persistence: tools-ready
+	$(ISOLATED) $(MAKE) -C platforms/commodore $@

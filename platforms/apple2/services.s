@@ -3,7 +3,7 @@
 //
 // Sound: synchronous shaped speaker patterns at $C030, one per semantic ID
 // (SFX_* IDs from core/sound.s, which this port does not import). Patterns
-// live in A2HuffData (a2_sfx_patterns): fixed 16-byte slots of
+// live in main resident RAM (a2_sfx_patterns): fixed 16-byte slots of
 // (period, toggles) pairs, period 0 = end. Period: smaller = higher pitch;
 // one toggle is one $C030 access (~5*period+12 cy). Shapes mirror the C64
 // SID intent (core/sound.s): bump = low double thud, hit = high-to-low
@@ -49,11 +49,11 @@ hal_sound_play:
     sta zp_ptr1_hi
     ldy #0                  // pattern byte index
 !segment:
-    jsr mmu_safe_map_read_ptr1  // period (preserves X, Y)
+    lda (zp_ptr1),y         // period (main RAM)
     beq !done+              // period 0 = end of pattern
     sta zp_temp4
     iny
-    jsr mmu_safe_map_read_ptr1  // toggles
+    lda (zp_ptr1),y         // toggles
     iny
     sty a2_zp_scratch       // park next pattern index
     tay                     // Y = toggles

@@ -10,6 +10,15 @@
 // raised exactly as VMS does and a drained one keeps its drain.
 // Constitution adds 1 to max HP as VMS does; VMS then adds max HP to HP,
 // which can pass the maximum, so Moria8 heals to full instead.
+//
+// Owner: Default resident on C64, Plus/4, and C128; RuntimeBanked (ATARI.BNK)
+// on Atari 8-bit; A2PlaySlot (a2.play) on Apple IIe; ItemActionsOverlay
+// (OVL.ITEMS) on CX16; SpellOverlay (OVL.SPELL) on BBC Master 128.
+// Lifetime: one potion quaff (ITEM_TYPE_POT_GAIN_STR..ITEM_TYPE_POT_GAIN_CHR).
+// Callers: Phase 3 quaff dispatch (iq_dispatch_p3 in player_item_commands.s on
+// C64/Plus/4/CX16/Atari, resident c128_quaff_p3_dispatch on C128, or
+// iq_dispatch_p3_spell in OVL.SPELL on Apple IIe and BBC Master, where the
+// items-overlay router reloads OVL.ITEMS on return). Calls only resident helpers.
 
 // eff_potion_gain_stat — Raise the stat of potion type A and say so.
 // Input: A = ITEM_TYPE_POT_GAIN_STR..ITEM_TYPE_POT_GAIN_CHR (PL_*_BASE order)

@@ -104,3 +104,6 @@
 #define HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 #define HAL_PLATFORM_PLAYER_MOVE_LOOK_SEGMENTED
 #endif
+
+// Optional legal-load cancellation returns directly to resident gameplay.
+#define HAL_PLATFORM_LEGAL_CANCEL_EXITS_HELP

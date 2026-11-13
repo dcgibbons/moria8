@@ -3012,7 +3012,11 @@ a win is unlikely until the bot plays much better.
   character also goes deeper where no native creature's worst turn (its
   breaths, against the resistance and speed worn) is 90% of its HP
   (`brain.threat_ready`, maintainer 2026-11-08: "be like a real human
-  player"). Since 2026-11-10 (maintainer: the level rules seemed
+  player"); without Free Action (the Amulet of the Magi) a native's melee
+  round counts on top of its breath, and four more rounds when it can
+  paralyse by Hold Person or touch (`brain.native_exchange`, maintainer
+  2026-11-12: clvl 32 Warriors were breathed on, held and bitten to death
+  on DL37, a dozen an hour). Since 2026-11-10 (maintainer: the level rules seemed
   "arbitrary") that is not capped at the character's own level, and where
   the margin would need the top level (DL37 on) only it decides; at level
   40 the bot dives for the Balrog with a way out in its pack
@@ -3064,8 +3068,11 @@ a win is unlikely until the bot plays much better.
 - **Checkpoints (maintainer, 2026-11-05).** Every Balrog death had thrown
   its levels away: the first 8 games all died at level 25-28, a median
   478,554 steps past their start, and the next run began at level 25 again.
-  Now a run keeps a checkpoint at each new character level, at the first
-  level entry after it with three quarters of its HP (`CHECKPOINT_HP`):
+  Now a run keeps a checkpoint at each new character level, at its next
+  arrival in town (until 2026-11-11 the first level entry after it with
+  three quarters of its HP: clvl 31 Warriors' checkpoints on DL37 and DL39
+  put every later game on the level that had killed the last, some dying
+  84 steps in; maintainer: town only):
   the level-entry snapshot, or on a `graduate_save` port its game saved
   over slot 1 (`graduate.save` follows either save's screens) and loaded
   back. When the run ends, its highest checkpoint past the combination's
@@ -3119,9 +3126,14 @@ a win is unlikely until the bot plays much better.
   checkpoints as saved games, as the C128 does (`Port.graduate_save`), so
   they go on in any newer build whose loader takes their save version; a
   snapshot would restore only into the same game.
-- **Budget.** `balrog_budget`, 3,000,000 steps a run, counted from the
-  graduate's first step (DL30 took the first graduate 125,346); a
-  checkpoint's run counts it from the checkpoint's step.
+- **Budget.** `balrog_budget`, 20,000,000 steps a run (3,000,000 until
+  2026-11-11), counted from the graduate's first step (DL30 took the first
+  graduate 125,346); a checkpoint's run counts it from the checkpoint's
+  step. Only a safety cap now: a run ends in town when a newer build with
+  its port is waiting (`rotate_due`, `QueueCharacter.rotate`), keeping a
+  checkpoint first if it gained experience, so the next run plays the new
+  code from there. The short budget had cut runs off on their way back down
+  to the Balrog (maintainer, 2026-11-11).
 - **Records.** Its runs are recorded as `queue` and `goal` `balrog`, apart
   from the M7 counts. The milestones run on to DL100 and level 40. The
   dashboard's Queue tab has an M8 section: each graduate's runs, wins, best

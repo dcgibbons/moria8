@@ -14,6 +14,11 @@ ball_prev_x:      .byte 0
 ball_prev_y:      .byte 0
 ball_flash_idx:   .byte 0
 
+#if !BALL_HARM_EXTERNAL
+#import "player_magic_ball_harm.s"
+#import "player_magic_ball_holy.s"
+#endif
+
 ball_flash_dx:
     .byte $ff, $00, $01
     .byte $ff, $00, $01
@@ -129,11 +134,7 @@ eff_ball:
 !eball_dy_pos:
     cmp #2
     bcs !eball_next+
-    ldx ball_work_idx
-    lda ball_work_damage
-    sta zp_math_a
-    lda #0
-    sta zp_math_b
+    jsr ball_target_damage          // doubled against what its harm type hurts
     jsr combat_apply_damage_16
     bcc !eball_next+
     jsr combat_kill_message

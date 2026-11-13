@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence, invalid item-ID load hardening.
 //
-// Results at $0400-$0425: $01 = pass, $00 = fail per test (38 tests)
+// Results at $0400-$0427: $01 = pass, $00 = fail per test (40 tests)
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -27,7 +27,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #38
+    ldx #39
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -85,6 +85,7 @@ mat_scene_dirty: .byte 0
 #import "../../../../core/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segmentdef TestNameStreams [start=$A000]
+.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
@@ -105,6 +106,22 @@ random_floor_in_room:
     tay
     rts
 #import "../../../../core/special_rooms.s"
+// The resistance armour and crown roll and its data are not exercised here
+// (no item spawns): out of the way with the store code past $D000.
+#define EGO_ARMOUR_SEGMENT_CUSTOM
+.macro EgoArmourSegment() {
+    .segment TestStoreOverlay
+}
+.macro EgoArmourRestoreSegment() {
+    .segment Default
+}
+#define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+.macro EgoArmourDataSegment() {
+    .segment TestStoreOverlay
+}
+.macro EgoArmourDataRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -120,7 +137,6 @@ random_floor_in_room:
 // Store code goes in a dummy overlay segment so it doesn't bloat the test body.
 // test_save.s doesn't test store code, but turn.s→tramp_store_restock_all
 // needs these symbols. Placing them past $D000 avoids overlapping MAP_BASE.
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestStoreOverlay
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
@@ -328,7 +344,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 39, $ff
+tc_results: .fill 40, $ff
 
 test_t31_ptr_lo: .byte 0
 test_t31_ptr_hi: .byte 0
@@ -667,6 +683,26 @@ ts_clear_known_bits:
 // IDs [X, Y). Output: carry set = all matched, carry clear = mismatch.
 // Clobbers: A, X
 ts_range_end: .byte 0
+// ts_fixed_known — Carry set when item X is a fixed-description item a load
+// marks known (lrki_defaults: an implemented ID outside the flavoured classes).
+// Clobbers: Y
+ts_fixed_known:
+    cpx #ITEM_TYPE_COUNT
+    bcs !tfk_no+
+    ldy it_category,x
+    cpy #ICAT_POTION
+    bcc !tfk_yes+
+    cpy #ICAT_AMULET
+    bcs !tfk_yes+
+    cpy #ICAT_BOOK
+    beq !tfk_yes+
+!tfk_no:
+    clc
+    rts
+!tfk_yes:
+    sec
+    rts
+
 ts_expect_known_range:
     sty ts_range_end
 !loop:
@@ -2277,11 +2313,16 @@ t22_fail_code:
     jsr test_stream_reset_read
     jsr load_read_known_items
 
+    // Odd IDs round-trip known; even ones unknown, but a fixed-description
+    // item is always known after a load (lrki_defaults).
     ldx #0
 !t23_check_v2_known:
     txa
     and #1
-    beq !t23_expect_clear+
+    bne !t23_expect_known+
+    jsr ts_fixed_known
+    bcc !t23_expect_clear+
+!t23_expect_known:
     jsr id_known_test
     bne !t23_v2_next+
     lda #4
@@ -3011,6 +3052,45 @@ t29_fail_code:
     lda #$00
 !t39_store:
     sta tc_results + 38
+
+    // ============================================================
+    // Test 40: a current save made before an item was added carries a
+    // clear bit for it. After the load the fixed-description items are
+    // known as in a new game (the Amulet of Resist Acid, the crowns, Leather
+    // Armour) and the flavoured ones stay unknown (the Lordly rings, a
+    // potion of gain stat). Review finding, 2026-11-11.
+    // ============================================================
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr ts_clear_known_bits
+    jsr test_stream_reset_write
+    jsr save_write_known_items
+    jsr ts_clear_known_bits
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr test_stream_reset_read
+    jsr load_read_known_items
+    ldx #ITEM_TYPE_AMULET_RESIST_ACID
+    ldy #ITEM_TYPE_CROWN_JEWEL + 1
+    jsr ts_expect_known_range
+    bcc !t40_fail+
+    ldx #7                          // Leather Armour
+    ldy #8
+    jsr ts_expect_known_range
+    bcc !t40_fail+
+    ldx #ITEM_TYPE_RING_LORDLY_FIRE
+    ldy #ITEM_TYPE_RING_LORDLY_COLD + 1
+    jsr ts_expect_unknown_range
+    bcc !t40_fail+
+    ldx #ITEM_TYPE_POT_GAIN_STR
+    ldy #ITEM_TYPE_POT_GAIN_STR + 1
+    jsr ts_expect_unknown_range
+    bcc !t40_fail+
+    lda #$01
+    .byte $2c
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
 
     jmp test_finish
 

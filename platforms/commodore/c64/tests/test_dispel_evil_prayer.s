@@ -1,5 +1,10 @@
 // test_dispel_evil_prayer.s — Focused runtime tests for the Dispel Evil prayer row
 
+// The item-name streams sit above the I/O hole, out of the body's way: no
+// item is named here (2026-11-11, when the four VMS wands took the body past
+// MAP_BASE and the map overwrote test 5's code).
+#define C64_TEST_NAME_STREAMS_A000
+.segmentdef TestNameStreams [start=$E100]
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -577,3 +582,6 @@ test_start:
     lda #$00
     sta tc_results + 4
     jmp test_finish
+
+dep_body_end:
+.assert "Dispel Evil test body stays below MAP_BASE", dep_body_end <= MAP_BASE, true

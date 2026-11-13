@@ -38,13 +38,15 @@ BOOK_RANGE = re.compile(r"\(a-([a-v])\)")
 PACK_ROW = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*?)\s*$")
 
 CURE_LIGHT, CURE_MEDIUM = "Cure Light Wounds", "Cure Medium Wounds"
+CURE_SERIOUS, CURE_CRITICAL, HEAL = "Cure Serious Wounds", "Cure Critical Wounds", "Heal"   # Priest books 6-7
 REMOVE_FEAR, DETECT_DOORS, CREATE_FOOD = "Remove Fear", "Detect Doors/Stairs", "Create Food"
 RESIST_HEAT_COLD = "Resist Heat and Cold"   # Priest book 5: Moria8 breath is all fire (monster_cast_breath)
 DETECT_EVIL = "Detect Evil"   # Priest book 1: the evil creatures on the level (dragons among them)
 LIGHT_SPELLS = ("Call Light", "Light Area")   # a Priest's and a Mage's: light what is around
-HEALS = (CURE_MEDIUM, CURE_LIGHT)   # best first
+HEALS = (HEAL, CURE_CRITICAL, CURE_SERIOUS, CURE_MEDIUM, CURE_LIGHT)   # best first
 PORTAL, SANCTUARY = "Portal", "Sanctuary"                 # escapes (Words of Wisdom)
 BLIND, CHANT, ORB = "Blind Creature", "Chant", "Orb of Draining"   # control, Bless x2, attack
+DISPEL_EVIL, HOLY_WORD = "Dispel Evil", "Holy Word"   # Exorcisms and Dispellings: every evil creature in view; Holy Word heals 1000
 MAGIC_MISSILE, DETECT_MONSTERS, PHASE_DOOR = "Magic Missile", "Detect Monsters", "Phase Door"   # Mage book
 FIND_TRAPS, STINKING_CLOUD = "Find Hidden Traps/Doors", "Stinking Cloud"   # Beginners-Magick, level 3
 BLESS, PRIEST_FIND_TRAPS, SLOW_POISON = "Bless", "Find Traps", "Slow Poison"   # Beginners Handbook
@@ -179,7 +181,7 @@ class Magic:
         self.ledger: dict[str, dict[str, object]] = {}
         self.casting: dict[str, object] | None = None   # the cast whose effect is awaited
         self.signature: tuple[int, ...] = ()   # traps, doors and stairs in view at the last command screen
-        self.refused: set[str] = set()        # refused without a turn: not again until the next level
+        self.refused: set[str] = set()        # refused without a turn: not again until the next level up or dungeon level
         self.lost_book: str | None = None     # a book found missing at a cast (the brain buys it again)
 
     @staticmethod
@@ -272,12 +274,18 @@ class Magic:
         return book_of(name)
 
     def pray(self, name: str, why: str) -> tuple[int, str, str]:
-        """Pray, or for a Mage-book caster cast, ``name``."""
-        self.wanted = name
+        """Pray, or for a Mage-book caster cast, ``name``. A new flow: the
+        game's answers from here on are to it, not to the prayer before
+        (``last``). A clvl 40 Priest's Orb of Draining killed a Sorcerer, it
+        read its books' lists after the level-up, its own ESC drew "Never
+        mind." and Orb was refused for good: no level-up would come to lift
+        it: every Balrog character since inherited it, Orb never prayed again
+        (C64 Balrog, 2026-11-10)."""
+        self.wanted, self.last = name, None
         return self.key, "pray", why
 
     def study(self) -> tuple[int, str, str]:
-        self.studying, self.study_book = True, None
+        self.studying, self.study_book, self.last = True, None, None
         return KEY_STUDY, "pray", "study the prayer books"
 
     def read_list(self) -> tuple[int, str, str]:

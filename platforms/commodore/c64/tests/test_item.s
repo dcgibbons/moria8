@@ -63,7 +63,6 @@ test_exit_trampoline:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
@@ -137,6 +136,9 @@ ui_help_display:
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
+// Monster spells and breath are not exercised here (resistance armour,
+// 2026-11-11, took the body past MAP_BASE).
+#import "../../../../core/monster_magic.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s
@@ -2555,6 +2557,7 @@ test_start:
     sta t48_expected_con
     lda #8
     sta player_data + PL_CON_CUR
+    sta zp_player_con                // the ZP mirror drained as well
 
     lda #ITEM_TYPE_POT_RESTORATION
     sta inv_item_id
@@ -2578,6 +2581,11 @@ test_start:
     beq !t48_r_ok+
     jmp !t48_fail+
 !t48_r_ok:
+    lda zp_player_con                // the ZP mirror the bash and throw read, restored at once (2026-11-11)
+    cmp t48_expected_con
+    beq !t48_rz_ok+
+    jmp !t48_fail+
+!t48_rz_ok:
 
     lda #$01
     sta tc_results + 47

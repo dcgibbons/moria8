@@ -1,3 +1,4 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
 #importonce
 #import "../../../core/zeropage.s"
 // C128 operational layout:
@@ -116,6 +117,9 @@
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
+.const LEGAL_BASE = $e000
+.const LEGAL_LIMIT = $f000
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
@@ -1419,6 +1423,8 @@ tramp_ui_exit:
     jmp tramp_ui_exit
 }
 
+#import "legal.s"
+
 tramp_ui_help_display:
     jsr tramp_ui_enter
     lda #C128_HELP_OVERLAY_ID
@@ -1830,7 +1836,7 @@ c128_load_progress_suffix:
 
 
 // ============================================================
-.const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
+.const TITLE_MENU_COL = (SCREEN_COLS - 35) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
 
 game_over_prompt:
@@ -2363,6 +2369,11 @@ title_menu_loop:                // Exported for the scripted product harness
 !not_n:
     cmp #$4c                // 'L' — load game
     beq title_load_game
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne !title_menu_loop-
     jsr c128_modal_require_persist
@@ -3834,43 +3845,6 @@ c128_resident_items_start:
 // dungeon_features.s import site; this block continues in the items payload.
 .segment C128ResidentItems
 
-// eff_find_doors rides the resident items payload (the world payload funds
-// chest search/trap discovery); other platforms keep it in spell_effects.s.
-eff_fd_row: .byte 0
-
-eff_find_doors:
-    lda #1
-    sta eff_fd_row
-!efd_row_loop:
-    lda eff_fd_row
-    cmp #MAP_ROWS - 1
-    bcs !efd_done+
-    ldx eff_fd_row
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #1
-!efd_col_loop:
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_SECRET
-    bne !efd_col_next+
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_CLOSED
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-!efd_col_next:
-    iny
-    cpy #MAP_COLS - 1
-    bcc !efd_col_loop-
-    inc eff_fd_row
-    jmp !efd_row_loop-
-!efd_done:
-    lda #1
-    sta vis_room_revealed
-    rts
 .segment Default
 #import "../../../core/scene_mat_tile.s"
 #import "../../../core/scene_force.s"
@@ -4002,11 +3976,13 @@ tool_ego_prefix_hi:
     .segment Default
 }
 #import "../../../core/chest_loot.s"
-// Monster drops (MON-014), the look flash, inventory adding (with item
-// stacking) and the acid attack's armour damage (MON-015) ride the main
-// image: the world, play and items payloads have no headroom for them.
-#import "../../../core/monster_death.s"
+// Monster drops (MON-014), inventory adding (with item stacking) and the acid
+// attack's armour damage (MON-015) ride the main image; look_flash_target
+// rides the resident world payload (C128M-010, pre-imported before game_loop.s).
+.segment C128ResidentWorld
 #import "../../../core/look_flash_target.s"
+.segment Default
+#import "../../../core/monster_death.s"
 #import "../../../core/inv_add.s"
 #define MON_ATK_ACID_EXTERNAL   // monster_attack.s (play payload) jumps here
 #import "../../../core/monster_acid.s"
@@ -4027,6 +4003,17 @@ wizard_wall_walk_active:
     lda #0
     rts
 #endif
+    // The suffix strings ride the banked runtime with the item descriptions
+    // that read them, and the resistance armour's pick table and suffixes the
+    // world payload: resistance armour (2026-11-11) filled the items payload.
+    #define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+    .macro EgoArmourDataSegment() {
+        .segment C128ResidentWorld
+    }
+    .macro EgoArmourDataRestoreSegment() {
+        .segment C128ResidentItems
+    }
+    #define EGO_SUFFIX_STRINGS_EXTERNAL   // imported in the banked runtime (below)
     #import "../../../core/ego_items.s"
     #import "../../../core/store_data.s"
 ego_str_holy_avenger_common:
@@ -4164,29 +4151,6 @@ tramp_p3_dispatch_items_return:     // the modal handlers return here (scroll_p3
     sec
     rts
 
-hal_player_recalc_pflags:
-c128_player_recalc_pflags:
-    lda #0
-    ldx #EQUIP_RING
-!c128_pf_ring:                  // each hand: EQUIP_RING, then EQUIP_RING2
-    ldy inv_item_id,x
-    cpy #ITEM_TYPE_RING_RESIST_FIRE
-    bcc !c128_pf_none+
-    cpy #ITEM_TYPE_RING_SLAYING
-    bcs !c128_pf_none+
-    ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
-!c128_pf_none:
-    cpx #EQUIP_RING2
-    ldx #EQUIP_RING2
-    bcc !c128_pf_ring-
-    ldx #EQUIP_AMULET
-    ldy inv_item_id,x
-    cpy #ITEM_TYPE_AMULET_MAGI
-    bne !c128_pf_store+
-    ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
-!c128_pf_store:
-    sta player_pflags
-    rts
 
 // Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
 // resident cmd_open pre-dispatch. chest_dispatch is tail-called (A/Y =
@@ -4388,14 +4352,56 @@ scroll_teleport_level_exec:
 // The items payload's end label is at the end of this file: the chest open
 // pre-dispatch (ChestRouteSegment) and later imports add to it past here.
 .segment C128ResidentWorld
-// The recall prompt lives in the resident world payload: RuntimeLowData was
-// full when a monster sighting began ending search mode (2026-10-25).
+// The recall prompt, look flash, and equip-stat helper ride the resident world
+// payload (C128M-010: always-resident Bank 0 RAM below $D000, freeing 61 B in
+// Default so title_art and cache_survival test variants fit below $6000).
 recall_prompt_str:
     .text "Recall which? " ; .byte 0
+#import "../../../core/player_adjust_equipment_stat.s"
 c128_resident_world_end:
 .segment C128ResidentPlay
 #import "../../../core/turn.s"
 #import "../../../core/player_magic_state.s"
+// eff_find_doors rides the resident play payload (2026-11-11: the four VMS
+// wands filled the items payload; it was there since the world payload funds
+// chest search/trap discovery); other platforms keep it in spell_effects.s.
+// Detect Doors/Stairs runs only in play, never while the persist payload
+// holds the $AF00 window.
+eff_fd_row: .byte 0
+
+eff_find_doors:
+    lda #1
+    sta eff_fd_row
+!efd_row_loop:
+    lda eff_fd_row
+    cmp #MAP_ROWS - 1
+    bcs !efd_done+
+    ldx eff_fd_row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #1
+!efd_col_loop:
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !efd_col_next+
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK
+    ora #TILE_DOOR_CLOSED
+    ora #FLAG_VISITED
+    :MapWrite_ptr0_y()
+!efd_col_next:
+    iny
+    cpy #MAP_COLS - 1
+    bcc !efd_col_loop-
+    inc eff_fd_row
+    jmp !efd_row_loop-
+!efd_done:
+    lda #1
+    sta vis_room_revealed
+    rts
 c128_resident_play_end:
 
 .segment Default
@@ -5094,43 +5100,6 @@ combat_calc_bow_tohit:
     ldx #1
     jmp combat_calc_tohit_common
 
-// Equip-stat helper for banked item commands. It must live in always-resident
-// RAM: wear/takeoff call it during gameplay while PLAY owns the $AF00 modal
-// slot, so the persist payload cannot host it.
-player_adjust_equipment_stat:
-    ldx piw_equip
-    bcs !c128_pase_add+
-    lda inv_p1,x
-    eor #$ff
-    adc #1
-    sta stat_work
-    jmp !c128_pase_item+
-!c128_pase_add:
-    lda inv_p1,x
-    sta stat_work
-!c128_pase_item:
-    lda inv_item_id,x
-    cmp #ITEM_TYPE_RING_STRENGTH
-    beq !c128_pase_str+
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !c128_pase_wis+
-    cmp #ITEM_TYPE_AMULET_MAGI
-    bne !c128_pase_done+
-    ldy #PL_INT_CUR - PL_STR_CUR
-    bne !c128_pase_apply+
-!c128_pase_str:
-    ldy #0
-    bne !c128_pase_apply+
-!c128_pase_wis:
-    ldy #PL_WIS_CUR - PL_STR_CUR
-!c128_pase_apply:
-    lda player_data + PL_STR_CUR,y
-    clc
-    adc stat_work
-    sta player_data + PL_STR_CUR,y
-!c128_pase_done:
-    rts
-
 // C128 resident Phase 3 potion dispatch. The handlers are small and every
 // dependency is resident, so quaffing must not load an overlay (the modal
 // overlay has no Bank1 cache slot; a disk fetch per potion is wrong).
@@ -5332,6 +5301,7 @@ banked_payload:
 ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
 ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
 ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
+#import "../../../core/ego_suffix_strings.s"
 tool_ego_prefix_lo:
     .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
     .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
@@ -5344,9 +5314,10 @@ first_banked_function:
     #import "../../../core/player_magic_levelup.s"
     #import "../../../core/player_magic_learn_op.s"
     #import "../../../core/player_magic_tail.s"
-    #define PLAYER_RECALC_PFLAGS_EXTERNAL
+    // The equipment flags come from player.s's player_recalc_pflags_equipment
+    // in the main image (2026-11-11): the items payload's own copy went to make
+    // room for the rings of Lordly Protection; the main image is visible here.
     #import "../../../core/player_recalc_equipment.s"
-    #undef PLAYER_RECALC_PFLAGS_EXTERNAL
     #import "../../../core/player_item_commands.s"
     #import "../../../core/eff_potion_cure.s"
 
@@ -5379,6 +5350,7 @@ program_end:
 .assert "C128 resident items starts at $8C50", c128_resident_items_start == $8C50, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
 .assert "C128 program-media probe lives in the resident world payload (C128M-008)", disk_program_media_present >= c128_resident_world_start && c128_program_play_read_filename + c128_program_play_read_filename_len <= c128_resident_world_end, true
+.assert "C128 look flash and equip-stat helper live in the resident world payload (C128M-010)", look_flash_target >= c128_resident_world_start && look_flash_target < c128_resident_world_end && player_adjust_equipment_stat >= c128_resident_world_start && player_adjust_equipment_stat < c128_resident_world_end, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
 .assert "C128 resident disk-I/O starts at $AB00", c128_resident_diskio_start == $AB00, true
@@ -5393,6 +5365,7 @@ program_end:
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
+.assert "Detect Doors/Stairs lives in the resident play payload", eff_find_doors >= c128_resident_play_body && eff_find_doors < c128_resident_play_end, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "Tiers 1-4 fit the Bank 1 tier cache", TIER1_SIZE + TIER2_SIZE + TIER3_SIZE + TIER4_SIZE <= BANK1_TIER_CACHE_SIZE, true
@@ -5531,6 +5504,9 @@ ovl_start_end:
 // Death overlay — score + high score display at $E000
 // ============================================================
 .segment DeathOverlay
+// The Fire Bolts and Drain Life effects (MON-031, 2026-11-11) beside the other
+// Phase 3 wand handlers the death-overlay table calls (tramp_p3_death_items).
+#import "../../../core/wand_bolt_entries.s"
     #import "../../../core/score.s"
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
@@ -5695,3 +5671,12 @@ c128_resident_items_end:
 c128_resident_item_names_end:
 .assert "C128 item-name payload ends inside the Bank 1 DB region", c128_resident_item_names_end <= BANK1_DB_END + 1, true
 .assert "C128 item-name payload ends before the tier cache", c128_resident_item_names_end <= BANK1_TIER_CACHE_BASE, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../../core/ui_legal.s"
+#import "../../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

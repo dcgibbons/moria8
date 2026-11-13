@@ -64,6 +64,10 @@
 .const DUNGEON_GEN_SCAN_SCRATCH_BASE = SCREEN_RAM
 .const DUNGEON_GEN_SCAN_SCRATCH_SIZE = 1024
 .const DUNGEON_GEN_SCAN_SCRATCH_END  = DUNGEON_GEN_SCAN_SCRATCH_BASE + DUNGEON_GEN_SCAN_SCRATCH_SIZE - 1
+// The optional EasyFlash boot copier uses $033C-$03FB before application
+// entry (cartridge_boot.s asserts the bounds). Generation takes this scratch
+// later; the copier is no longer live. KERNAL keyboard state at $0277-$02FF
+// must remain untouched by boot copying.
 .const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0400
 
@@ -132,6 +136,9 @@
 // Subroutines
 // ============================================================
 
+#if !C64_CARTRIDGE
+// The disk build owns this session-long BASIC exit snapshot; the cartridge
+// lifecycle stays in the game/title and has no BASIC-return caller.
 // Buffer allocated as program data — address assigned by assembler
 zp_save_buf: .fill ZP_SAVE_SIZE, 0
 
@@ -158,6 +165,7 @@ restore_zp:
     cpx #ZP_SAVE_SIZE
     bne !loop-
     rts
+#endif
 
 // C128 MMU compatibility stubs for shared code paths that are runtime-gated.
 mmu_select_bank1:
@@ -174,5 +182,7 @@ mmu_select_bank0:
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in screen scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true
+#if !C64_CARTRIDGE
 .assert "ZP save buffer doesn't overlap CREATURE_BASE", zp_save_buf + ZP_SAVE_SIZE <= CREATURE_BASE, true
+#endif
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142

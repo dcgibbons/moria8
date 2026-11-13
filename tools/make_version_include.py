@@ -8,55 +8,58 @@ import sys
 from pathlib import Path
 
 
-def load_versions(path: Path) -> tuple[str, str, str, str, str]:
+def load_versions(path: Path) -> dict[str, str]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("version.json must be a JSON object")
-    values: list[str] = []
-    for platform in ("c64", "c128", "plus4", "apple2", "cx16"):
+    versions: dict[str, str] = {}
+    for platform in ("c64", "c128", "plus4", "apple2", "cx16", "atari8", "bbcmaster"):
         value = raw.get(platform)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"version.json missing string version for {platform}")
         version = value.strip()
         if not version.lower().startswith("v"):
             version = f"v{version}"
-        values.append(version)
-    return values[0], values[1], values[2], values[3], values[4]
+        versions[platform] = version
+    return versions
 
 
-def emit_include(
-    dst: Path,
-    c64_version: str,
-    c128_version: str,
-    plus4_version: str,
-    apple2_version: str,
-    cx16_version: str,
-) -> None:
+def emit_include(dst: Path, versions: dict[str, str]) -> None:
     text = f"""// Auto-generated from version.json. Do not edit by hand.
 #if C128
-.const TITLE_VERSION_LEN = {len(c128_version)}
+.const TITLE_VERSION_LEN = {len(versions["c128"])}
 .macro EmitTitleVersion() {{
-    .text "{c128_version}"
+    .text "{versions["c128"]}"
 }}
 #elif PLUS4
-.const TITLE_VERSION_LEN = {len(plus4_version)}
+.const TITLE_VERSION_LEN = {len(versions["plus4"])}
 .macro EmitTitleVersion() {{
-    .text "{plus4_version}"
+    .text "{versions["plus4"]}"
 }}
 #elif APPLE2
-.const TITLE_VERSION_LEN = {len(apple2_version)}
+.const TITLE_VERSION_LEN = {len(versions["apple2"])}
 .macro EmitTitleVersion() {{
-    .text "{apple2_version}"
+    .text "{versions["apple2"]}"
 }}
 #elif CX16
-.const TITLE_VERSION_LEN = {len(cx16_version)}
+.const TITLE_VERSION_LEN = {len(versions["cx16"])}
 .macro EmitTitleVersion() {{
-    .text "{cx16_version}"
+    .text "{versions["cx16"]}"
+}}
+#elif ATARI8
+.const TITLE_VERSION_LEN = {len(versions["atari8"])}
+.macro EmitTitleVersion() {{
+    .text "{versions["atari8"]}"
+}}
+#elif BBCMASTER
+.const TITLE_VERSION_LEN = {len(versions["bbcmaster"])}
+.macro EmitTitleVersion() {{
+    .text "{versions["bbcmaster"]}"
 }}
 #else
-.const TITLE_VERSION_LEN = {len(c64_version)}
+.const TITLE_VERSION_LEN = {len(versions["c64"])}
 .macro EmitTitleVersion() {{
-    .text "{c64_version}"
+    .text "{versions["c64"]}"
 }}
 #endif
 """
@@ -69,8 +72,8 @@ def main() -> int:
         return 1
     version_path = Path(sys.argv[1])
     out_path = Path(sys.argv[2])
-    c64_version, c128_version, plus4_version, apple2_version, cx16_version = load_versions(version_path)
-    emit_include(out_path, c64_version, c128_version, plus4_version, apple2_version, cx16_version)
+    versions = load_versions(version_path)
+    emit_include(out_path, versions)
     return 0
 
 

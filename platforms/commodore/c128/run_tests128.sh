@@ -589,6 +589,7 @@ c128_disk_payload_args() {
     for f in runtime input proj fdisk diskio world item names huff hvec select persist play bank; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
+    C128_DISK_PAYLOAD_ARGS+=(-write "$dir/legalui" "legalui")
     # The shipping disk is the reference: a payload added there and not here
     # would be missing from every test disk.
     if [ -z "${C128_DISK_PAYLOAD_CHECKED:-}" ]; then
@@ -1608,7 +1609,8 @@ loop_mod = (core / "game_loop.s").read_text().splitlines()
 dfeat = (core / "dungeon_features.s").read_text().splitlines()
 help_mod = (core / "ui_help.s").read_text().splitlines()
 store_mod = (core / "ui_store.s").read_text().splitlines()
-loop_helpers = (core / "game_loop_helpers.s").read_text().splitlines()
+loop_helpers = ((core / "game_loop_helpers.s").read_text() + "\n"
+                + (core / "ui_help_command.s").read_text()).splitlines()
 player_magic_mod = (core / "player_magic.s").read_text().splitlines()
 spell_effects_mod = (core / "spell_effects.s").read_text().splitlines()
 ui_wizard_mod = (core / "ui_wizard.s").read_text().splitlines()
@@ -2020,11 +2022,13 @@ if not has_ordered_chain(magic_execute, [
     "pmx_pick_recharge_item:",
     "jsr hal_input_get_key",
     "cmp #$3f",
-    "lda #OVL_SPELL",
+    "lda current_overlay",
     "sta piw_return_overlay",
     "jmp piw_select_filtered_inv_key",
 ]):
-    print("C128 spell overlay must mark ?-opened recharge selectors as returning to OVL_SPELL")
+    # The overlay the picker runs in: OVL_DEATH on the C128, where a Scroll of
+    # Recharging's '?' list came back to OVL_SPELL and jammed (2026-11-12).
+    print("C128 ?-opened recharge selectors must return to the overlay the picker runs in (current_overlay)")
     raise SystemExit(1)
 
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):

@@ -234,6 +234,11 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 		$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_ITEM_NAMES) $(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) $(C128_RESIDENT_SELECT) \
 	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED) $(C128_CATALOG_PRGS)
 
+C64_BUILD_ARTIFACTS += $(OUT64)/legalui
+PLUS4_BUILD_ARTIFACTS += $(OUTPLUS4)/legalui
+C128_BUILD_ARTIFACTS += $(OUT128)/legalui
+C128_MAIN_OUTPUTS += $(OUT128)/legalui
+
 .PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
 	test test-disk test-disk-static test-disk-debt test64 test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime clean \
@@ -243,7 +248,7 @@ all: build
 
 build: build64 build128 buildplus4
 
-build64: $(C64_BUILD_ARTIFACTS)
+build64: $(C64_BUILD_ARTIFACTS) cartridge64
 	@mkdir -p "$(OUT64)"
 	@python3 ../../tools/parse_creatures.py --sync-web
 	@$(MAKE) --no-print-directory cleanup-source-symbols
@@ -299,10 +304,14 @@ test-disk-static:
 test-disk-debt:
 	python3 -u disk_test_matrix.py --list-debt --list-platform-modes
 
-test64: ensure-kickass
+.PHONY: test-scripted-smoke-harness
+test-scripted-smoke-harness:
+	python3 -B plus4/tests/test_product_scripted_smoke.py
+
+test64: ensure-kickass test64-legal test-scripted-smoke-harness
 	cd c64 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests.sh
 
-test128: ensure-kickass check128-payloads
+test128: ensure-kickass check128-payloads test128-legal test-scripted-smoke-harness
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests128.sh
 
 # The bytes each payload emits, not labels beside them (docs/C128_MEMORY_CONTRACT.md).
@@ -331,7 +340,7 @@ test128-fast-smoke: ensure-kickass check128-payloads
 testplus4-build: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
 	@echo "Plus/4 build artifacts assembled; runtime smoke is make testplus4-runtime."
 
-testplus4: testplus4-runtime
+testplus4: testplus4-runtime testplus4-legal test-scripted-smoke-harness
 
 testplus4-runtime: ensure-kickass
 	cd plus4 && KICKASS="$(KICKASS_RESOLVED)" VICEPLUS4="$(VICEPLUS4)" ./run_testsplus4.sh
@@ -536,6 +545,7 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(DISK64_IMAGE) $(LICENSE_DISK_FILE) $
 	cp -f "$(C64_OVL_SPELL)" "$(C64_DIST_DIR)/64.spell"
 	cp -f "$(C64_OVL_CHEST)" "$(C64_DIST_DIR)/64.chest"
 	cp -f "$(C64_RUNTIME_BANKED)" "$(C64_DIST_DIR)/64.bank"
+	cp -f "$(OUT64)/legalui" "$(C64_DIST_DIR)/legalui"
 	cp -f "$(LICENSE_DISK_FILE)" "$(C64_DIST_DIR)/license"
 	cp -f "$(SOURCE_OFFER_DISK_FILE)" "$(C64_DIST_DIR)/source-offer"
 	touch "$(C64_DIST_STAMP)"
@@ -573,6 +583,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 			-write "$(C64_OVL_SPELL)" "64.spell" \
 			-write "$(C64_OVL_CHEST)" "64.chest" \
 			-write "$(C64_RUNTIME_BANKED)" "64.bank" \
+			-write "$(OUT64)/legalui" "legalui" \
 			-write "$(LICENSE_DISK_FILE)" "license,s" \
 			-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
 	python3 "$(DISKART)" "$(DISK64_IMAGE)" c64
@@ -609,6 +620,7 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write "$(PLUS4_OVL_SPELL)" "4.spell" \
 		-write "$(PLUS4_OVL_CHEST)" "4.chest" \
 		-write "$(PLUS4_RUNTIME_BANKED)" "4.bank" \
+		-write "$(OUTPLUS4)/legalui" "legalui" \
 		-write "$(LICENSE_DISK_FILE)" "license,s" \
 		-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
 	python3 "$(DISKART)" "$(DISKPLUS4_IMAGE)" plus4
@@ -654,6 +666,7 @@ define C128_DISK_WRITE_FILES
 		-write "$(C128_RESIDENT_PERSIST)" "128.persist" \
 		-write "$(C128_RESIDENT_PLAY)" "128.play" \
 		-write "$(C128_RUNTIME_BANKED)" "128.bank" \
+		-write "$(OUT128)/legalui" "legalui" \
 		-write "$(LICENSE_DISK_FILE)" "license,s" \
 		-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
 endef
@@ -722,3 +735,62 @@ clean:
 	rm -f plus4/*.prg plus4/*.sym plus4/*.vs plus4/tests/*.prg plus4/tests/*.vs plus4/tests/*.sym
 	rm -f ../../core/*.sym ../../core/*.vs
 	rm -f /tmp/test_*.mon
+
+# Native EasyFlash experiment: independent output directory and compile define.
+CART64_OUT = $(abspath $(OUT)/c64-cart)
+.PHONY: cartridge64 test64-cartridge
+cartridge64: $(OUT)/moria8-c64.crt
+
+$(CART64_OUT)/.main.stamp: $(C64_SOURCES) $(VERSION_INC) | ensure-kickass
+	mkdir -p "$(CART64_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(CART64_OUT)" "$(C64_MAIN_SRC)" $(KA_FLAGS64) -define C64_CARTRIDGE -symbolfiledir "$(CART64_OUT)" -o "$(CART64_OUT)/moria8.prg"
+	touch "$@"
+
+$(CART64_OUT)/.boot.stamp: c64/cartridge_boot.s c64/cartridge_contract.s | ensure-kickass
+	mkdir -p "$(CART64_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":CART_OUT=$(CART64_OUT)" c64/cartridge_boot.s -afo -showmem -symbolfiledir "$(CART64_OUT)" -o "$(CART64_OUT)/boot-unused.prg"
+	touch "$@"
+
+$(CART64_OUT)/title: $(TITLE_SRC) $(VERSION_INC) | ensure-kickass
+	mkdir -p "$(CART64_OUT)"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_64 -symbolfiledir "$(CART64_OUT)" -o "$@"
+
+$(OUT)/moria8-c64.crt: $(CART64_OUT)/.main.stamp $(CART64_OUT)/legalui $(CART64_OUT)/.boot.stamp $(CART64_OUT)/title ../../tools/make_easyflash.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+	python3 ../../tools/make_easyflash.py "$(CART64_OUT)" "$@"
+
+$(CART64_OUT)/catalog-test.prg: c64/cartridge_test_catalog.s $(CART64_OUT)/.main.stamp
+	cp "$(CART64_OUT)/main.sym" "$(CART64_OUT)/cartridge_product_symbols.inc"
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" c64/cartridge_test_catalog.s -libdir "$(CART64_OUT)" -afo -symbolfiledir "$(CART64_OUT)" -o "$@"
+
+test64-cartridge: test64-cartridge-assets test64-cartridge-persistence
+
+.PHONY: test64-cartridge-assets test64-cartridge-persistence
+test64-cartridge-assets: cartridge64 $(CART64_OUT)/catalog-test.prg
+	python3 c64/test_cartridge_harness.py
+	python3 ../../tools/check_easyflash.py "$(OUT)/moria8-c64.crt" "$(CART64_OUT)"
+	python3 c64/test_cartridge.py --crt "$(OUT)/moria8-c64.crt" --symbols "$(CART64_OUT)/main.sym" --vice "$(VICE64)" --output "$(OUT)/test/c64-cartridge"
+	python3 c64/test_cartridge.py --crt "$(OUT)/moria8-c64.crt" --symbols "$(CART64_OUT)/main.sym" --vice "$(VICE64)" --output "$(OUT)/test/c64-cartridge-ntsc" --ntsc
+test64-cartridge-persistence: cartridge64 disk64
+	python3 c64/test_cartridge_persistence.py --crt "$(OUT)/moria8-c64.crt" --symbols "$(CART64_OUT)/main.sym" --disk-image "$(DISK64_IMAGE)" --disk-symbols "$(OUT64)/main.sym" --vice "$(VICE64)" --c1541 "$(C1541)" --output "$(OUT)/test/c64-cartridge-persistence"
+	python3 c64/test_cartridge_persistence.py --crt "$(OUT)/moria8-c64.crt" --symbols "$(CART64_OUT)/main.sym" --disk-image "$(DISK64_IMAGE)" --disk-symbols "$(OUT64)/main.sym" --vice "$(VICE64)" --c1541 "$(C1541)" --output "$(OUT)/test/c64-cartridge-persistence-ntsc" --ntsc
+
+$(OUT64)/legalui: $(C64_MAIN_PRG)
+	@test -f "$@" || $(MAKE) --no-print-directory -B "$(C64_MAIN_PRG)"
+	@test -f "$@"
+$(OUTPLUS4)/legalui: $(PLUS4_MAIN_PRG)
+	@test -f "$@" || $(MAKE) --no-print-directory -B "$(PLUS4_MAIN_PRG)"
+	@test -f "$@"
+
+.PHONY: test-legal-harness test64-legal test128-legal testplus4-legal
+test-legal-harness:
+	python3 -B test_legal_harness.py
+test64-legal: disk64 test-legal-harness
+	python3 -B test_legal.py c64 --symbols "$(OUT64)/main.sym" --disk-image "$(DISK64_IMAGE)" --program "$(C64_MAIN_PRG)" --vice "$(VICE64)" --c1541 "$(C1541)" --output "$(OUT)/test/c64-legal"
+test128-legal: disk128 test-legal-harness
+	python3 -B test_legal.py c128 --symbols "$(OUT128)/main.sym" --disk-image "$(DISK128_IMAGE)" --vice "$(VICE128)" --c1541 "$(C1541)" --output "$(OUT)/test/c128-legal"
+testplus4-legal: diskplus4 test-legal-harness
+	python3 -B test_legal.py plus4 --symbols "$(OUTPLUS4)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-legal"
+
+$(CART64_OUT)/legalui: $(CART64_OUT)/.main.stamp
+	@test -f "$@" || { rm -f "$(CART64_OUT)/.main.stamp"; $(MAKE) "$(CART64_OUT)/.main.stamp"; }
+	@test -f "$@"

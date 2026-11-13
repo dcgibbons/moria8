@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BUILD_CX16 = ROOT / "build" / "cx16"
 
-MENU_START_COL = 28
-MENU_EXPECTED_STR = "N)ew  L)oad  D)isk Setup"
+MENU_START_COL = 22
+MENU_EXPECTED_STR = "N)ew  L)oad  D)isk Setup  A)bout"
 
 
 def _load_symbols(sym_path: Path) -> dict[str, int]:
@@ -381,7 +381,7 @@ def scenario_boot_title(tb: X16Bench) -> None:
     row23_txt = tb.rowtext(23)
     tb.assert_line("menu_reached", tb.on_title(), f"row18={row18_txt!r}")
     tb.assert_line(
-        "menu_col_28",
+        "menu_col_22",
         row18_txt[MENU_START_COL : MENU_START_COL + len(MENU_EXPECTED_STR)] == MENU_EXPECTED_STR,
         f"slice={row18_txt[MENU_START_COL:MENU_START_COL + len(MENU_EXPECTED_STR)]!r}",
     )
@@ -536,12 +536,59 @@ def scenario_priest_find_traps(tb: X16Bench) -> None:
 
 
 def scenario_help_overlay(tb: X16Bench) -> None:
+    tb.press("A")
+    tb.assert_line("legal_title_entry", tb.screen_has("License & Source"), "title A did not open legal viewer")
+    tb.press("Q")
+    tb.assert_line("legal_title_return", tb.on_title(), "legal viewer did not return to title")
     tb.chargen("A")
     key_event(tb, KEYNUM_Y)     # a key-down whose key-up never arrives
     tb.shift("/")
     tb.assert_line("help_open", tb.screen_has("Command Reference"), "'?' did not open the help overlay")
     left = [tb.read_u8(tb.syms["cx16_key_down"] + i) for i in range(16)]
     tb.assert_line("lost_key_up_forgotten", not any(left), f"down={bytes(left).hex()}")
+    tb.assert_line("help_license_hint", tb.screen_has("L:License"), "Help shortcut is not visible")
+    tb.press(" ")
+    tb.assert_line("help_license_entry", tb.screen_has("L License / Source"), "Help does not list the reader")
+    before = bytes(tb.read_u8(tb.syms["player_data"] + i) for i in range(64))
+    tb.press("L")
+    tb.assert_line("legal_menu", tb.screen_has("License & Source"), "Help L did not open legal viewer")
+    notice_addr = tb.syms["legal_notice_filename"]
+    notice_first = tb.read_u8(notice_addr)
+    tb.write_u8(notice_addr, 0x58)
+    tb.press("1")
+    tb.assert_line("legal_missing", tb.screen_has("Document read failed"), "missing file did not return an error")
+    tb.press(" ")
+    tb.assert_line("legal_channel_closed", tb.read_bank_u8(23, tb.syms["legal_opened"]) == 0, "failed channel remained open")
+    tb.write_u8(notice_addr, notice_first)
+    # Inject the SD/IEC error shape which HostFS OPEN normally catches first.
+    # Keep the production CHRIN, fill loop, bank restore and error UI intact.
+    status_addr = tb.syms["legal_fill_status"]
+    status_call = bytes(tb.read_u8(status_addr + i) for i in range(3))
+    for i, byte in enumerate((0xA9, 0x42, 0xEA)):  # LDA #EOI|timeout; NOP
+        tb.write_u8(status_addr + i, byte)
+    cache = tb.syms["legal_input_cache"]
+    tb.write_bank_u8(23, cache, 0xA5)
+    tb.press("1")
+    tb.assert_line("legal_read_fault", tb.screen_has("Document read failed"), "READST $42 did not abort the page")
+    tb.assert_line("legal_zero_chunk", tb.read_u8(tb.syms["legal_chunk_count"]) == 0,
+                   "failed CHRIN was committed")
+    tb.assert_line("legal_zero_copy", tb.read_bank_u8(23, cache) == 0xA5,
+                   "empty chunk copied a garbage byte")
+    tb.press(" ")
+    for i, byte in enumerate(status_call):
+        tb.write_u8(status_addr + i, byte)
+    tb.press("1")
+    tb.assert_line("legal_notice", tb.screen_has("MORIA8 LICENSE NOTICE"), "existing LICENSE not shown")
+    tb.press("R")
+    tb.assert_line("legal_restart", tb.screen_has("MORIA8 LICENSE NOTICE"), "notice did not restart")
+    tb.press("Q")
+    tb.press("2")
+    tb.assert_line("legal_offer", tb.screen_has("MORIA8 SOURCE OFFER"), "existing source offer not shown")
+    tb.press("Q")
+    tb.press("Q")
+    tb.assert_line("legal_help_return", tb.screen_has("Command Reference"), "Help owner was not restored")
+    after = bytes(tb.read_u8(tb.syms["player_data"] + i) for i in range(64))
+    tb.assert_line("legal_player_preserved", after == before, "legal viewer changed player state")
     tb.press("Q")
     tb.assert_line("help_close", tb.in_town(), "help did not return to the town view")
     check_run_cancel_flush(tb)
@@ -1204,6 +1251,27 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
     )
     tb.assert_line("exchange_one_turn", tb.read_u8(turn) == (turn0 + 1) & 0xFF,
                    f"turn={tb.read_u8(turn)} turn0={turn0}")
+    # A Scroll of Recharging on an empty wand, through the '?' list: the spell
+    # overlay's picker returns the slot in X, which tramp_restore_spell_overlay's
+    # OVL.SPELL reload clobbered, so another slot was recharged, named or
+    # "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
+    # (BBC build queue, 2026-11-12; the X16 shares the trampoline).
+    _inv_seed(tb, 0, [40, 1, 0, 0, 0, 0, 0, 0])    # Wand of Lightning, empty
+    _inv_seed(tb, 1, [104, 1, 0, 0, 0, 0, 0, 0])   # Scroll of Recharging
+    turn_r = tb.read_u8(turn)
+    tb.press("R")
+    tb.assert_line("recharge_read_prompt", tb.screen_has("Read which scroll"), f"row0={tb.rowtext(0)!r}")
+    tb.press("A")
+    tb.assert_line("recharge_prompt", tb.screen_has("Recharge which item"), f"row0={tb.rowtext(0)!r}")
+    tb.press("?")
+    tb.assert_line("recharge_list", tb.screen_has("Inventory"), f"row0={tb.rowtext(0)!r}")
+    tb.press("A")
+    tb.assert_line("recharge_glows", tb.screen_has("glows briefly"),
+                   f"row0={tb.rowtext(0)!r} row1={tb.rowtext(1)!r}")
+    tb.assert_line("recharge_charged", _inv_field(tb, 0, 0) == 40 and _inv_field(tb, 0, 2) > 0,
+                   f"slot a: {_inv_field(tb, 0, 0)} charges {_inv_field(tb, 0, 2)}")
+    tb.press("S")
+    tb.assert_line("recharge_play_goes_on", tb.read_u8(turn) != turn_r, f"turn={tb.read_u8(turn)}/{turn_r}")
     tb.dump("after_exchange")
     tb.log("SCENARIO DONE")
 

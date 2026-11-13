@@ -46,8 +46,18 @@
 #define PLATFORM_REQUIRES_MEDIA_PROBE
 #endif
 .const PLATFORM_RESIDENT_PLAY = "Default"
+// The cassette buffer ($033C-$03FB): from $033C the Huffman decode buffer
+// and, during generation, the door scan; past both, once the boot chain stub
+// at $0340 has run, the identification shuffles (set at a new game and by a
+// load) and the catalog record buffer. main.s asserts the door scan ends
+// before them; huffman.s the decode buffer (its limit).
+#define PLATFORM_SHUFFLES_EXTERNAL
+.const PLATFORM_SHUFFLE_BASE = $037d
+#define PLATFORM_CAT_RECORD_EXTERNAL
+.const PLATFORM_CAT_RECORD_BASE = PLATFORM_SHUFFLE_BASE + 38
+.assert "Page-3 buffers end in the cassette buffer", PLATFORM_CAT_RECORD_BASE + 49 <= $03fc, true
 .const PLATFORM_HD_DECODE_BUF_BASE = $033c
-.const PLATFORM_HD_DECODE_BUF_LIMIT = $0400
+.const PLATFORM_HD_DECODE_BUF_LIMIT = PLATFORM_SHUFFLE_BASE
 
 // Machine type constants (stored in zp_machine_type)
 .const MACHINE_C64  = $00
@@ -103,6 +113,11 @@ kernal_load:
     jsr hal_asset_load
 }
 
+#if C64_CARTRIDGE
+#import "cartridge_copy.s"
+.label hal_asset_load_prg_header = cart_load_prg
+.label hal_asset_load_title = cart_load_title
+#else
 hal_asset_load_prg_header:
     php
     jsr $ffbd               // SETNAM
@@ -166,6 +181,7 @@ hal_asset_load_title:
     rts
 #endif
 
+#endif
 hal_asset_close_channel:
     lda #2
     jsr $ffc3               // CLOSE

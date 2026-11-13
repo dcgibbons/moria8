@@ -21,6 +21,7 @@
 .const MAX_MONSTERS = 32
 .const EMPTY_SLOT = $ff
 .const CF_UNDEAD = $02
+.const CF_EVIL = $04
 .const PIW_FILTER_PRAYER_BOOK = $fb
 .const PIW_FILTER_MAGE_BOOK = $fc
 

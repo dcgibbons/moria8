@@ -348,3 +348,69 @@ class BuildHistoryTest(unittest.TestCase):
         self.assertLess(aaa["lo"], 0.5)
         self.assertGreater(aaa["hi"], 0.5)
         self.assertEqual(dashboard.wilson(0, 0), (0.0, 1.0))
+
+
+class BalrogKillsTest(unittest.TestCase):
+    """The Balrog panel's kill tally (2026-11-11): whether an Ancient
+    Multi-Hued Dragon or Evil Iggy had ever fallen had no record at all."""
+
+    def test_kills_are_summed_over_the_balrog_runs_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def run(name: str, kills: list[str]) -> None:
+                path = home / "runs" / name
+                path.mkdir(parents=True)
+                lines = [json.dumps({"kind": "level_entry", "dlvl": 40})]
+                lines += [json.dumps({"kind": "kill", "name": k, "dlvl": 40}) for k in kills]
+                lines.append(json.dumps({"kind": "character_end", "killer": "Balrog"}))
+                (path / "events.jsonl").write_text("\n".join(lines) + "\n")
+            run("20261111-1600-balrog-c64-half-troll-priest-1", ["Ancient Multi-Hued Dragon", "Kobold", "Kobold"])
+            run("20261111-1700-balrog-c64-half-troll-priest-2", ["Evil Iggy"])
+            run("20261111-1800-balrog-c64-half-troll-priest-3", [])
+            run("20261111-1900-build-c64-human-mage-4", ["Balrog"])   # another queue
+            kills = dashboard.balrog_kills(home)
+            self.assertEqual(kills["total"], {"Ancient Multi-Hued Dragon": 1, "Kobold": 2, "Evil Iggy": 1})
+            self.assertEqual(kills["runs"], 2)
+
+
+class MonsterStatsTest(unittest.TestCase):
+    """The Monsters panel (2026-11-11): per creature, the bots' kills by
+    queue (kill events since KILLS_SINCE, cut-off names mended) and the
+    characters it killed (the run records)."""
+
+    def test_kills_and_deaths_by_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def run(name: str, queue: str, kills: list[str], met: tuple[str, ...] = ()) -> None:
+                path = home / "runs" / name
+                path.mkdir(parents=True)
+                (path / "job.json").write_text(json.dumps({"queue": queue}))
+                (path / "events.jsonl").write_text(
+                    "\n".join([json.dumps({"kind": "kill", "name": k}) for k in kills] +
+                              [json.dumps({"kind": "met", "name": m}) for m in met]) + "\n")
+            run("20261111-1600-balrog-c64-half-troll-priest-1", "balrog",
+                ["Kobold", "Metallic Blue Centipethe Giant Static Ant misses you"])
+            run("20261111-1700-build-c64-human-mage-2", "build", ["Kobold"])
+            run("20261111-0900-build-c64-human-mage-3", "build", ["Kobold"])   # before kill logging
+            # Met events from MET_SINCE: an Evil Iggy met and never slain.
+            run("20261112-0300-balrog-c64-half-troll-priest-4", "balrog", [], ("Evil Iggy", "Kobold"))
+            run("20261112-0400-balrog-c64-half-troll-priest-5", "balrog", ["Kobold"], ("Evil Iggy", "Kobold"))
+            run("20261112-0500-build-c64-human-mage-6", "build", [], ("Kobold",))
+            (home / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in [
+                {"queue": "balrog", "outcome": "died", "death": {"cause": "Balrog"}},
+                {"queue": "balrog", "outcome": "died", "death": {"cause": "Ancient Multi-Hued Dragon"}},
+                {"queue": "main", "outcome": "died", "death": {"cause": "Kobold"}},
+                {"queue": "early-cures", "outcome": "died", "death": {"cause": "Kobold"}},
+                {"queue": "build", "outcome": "died", "death": {"cause": "trap: pit"}},
+                {"queue": "build", "outcome": "budget"}]) + "\n")
+            stats = dashboard.monster_stats(home)
+            creatures = stats["creatures"]
+            self.assertEqual(stats["runs"], 3)
+            self.assertEqual(stats["met_runs"], 3)
+            self.assertEqual(creatures["Kobold"], {"slain": {"balrog": 2, "build": 1},
+                                                   "met": {"balrog": 2, "build": 1}, "killed": {"other": 2}})
+            self.assertEqual(creatures["Evil Iggy"], {"slain": {}, "met": {"balrog": 2}, "killed": {}})
+            self.assertEqual(creatures["Metallic Blue Centipedes"]["slain"], {"balrog": 1})
+            self.assertEqual(creatures["Balrog"], {"slain": {}, "met": {}, "killed": {"balrog": 1}})
+            self.assertEqual(creatures["Ancient Multi-Hued Dragon"]["killed"], {"balrog": 1})
+            self.assertNotIn("trap: pit", creatures)   # not a creature

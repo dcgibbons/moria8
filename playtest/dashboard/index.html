@@ -49,8 +49,8 @@
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); } .gold { color: var(--gold); }
   main { padding: 12px 16px; display: grid; gap: 12px; max-width: 120rem; margin: 0 auto;
          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-         grid-template-areas: "qgrid qgrid" "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "qgrid" "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
+         grid-template-areas: "qgrid qgrid" "diff diff" "ratings features" "ports round" "disk disk" "archive archive" "causes kit" "wall wall" "milestone legend"; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; grid-template-areas: "qgrid" "diff" "ratings" "features" "ports" "round" "disk" "archive" "causes" "kit" "wall" "milestone" "legend"; } }
   .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 12px 22px; font-size: 12px; }
   .legend-grid h3 { margin: 0 0 4px; font-size: 11px; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-weight: normal; }
   .legend-grid p { margin: 0 0 6px; color: var(--muted); }
@@ -154,8 +154,8 @@
   section.collapsed > :not(h2) { display: none; }
   section.collapsed > h2 { margin-bottom: 0; }
   .tabs button { border-radius: 3px 3px 0 0; } .tabs button.on { color: var(--black); background: var(--gold); }
-  #qmain { grid-template-areas: "qwall qwall" "balrog balrog" "buildq buildq" "builds builds" "subs subs" "diff diff" "ratings features" "recent qlog"; }
-  @media (max-width: 1100px) { #qmain { grid-template-areas: "qwall" "balrog" "buildq" "builds" "subs" "diff" "ratings" "features" "recent" "qlog"; } }
+  #qmain { grid-template-areas: "qwall qwall" "balrog balrog" "monsters monsters" "buildq buildq" "builds builds" "subs subs" "recent qlog"; }
+  @media (max-width: 1100px) { #qmain { grid-template-areas: "qwall" "balrog" "monsters" "buildq" "builds" "subs" "recent" "qlog"; } }
   /* Difficulty charts (§23.6): amber and blue are the page's own tokens,
      validated as a pair on the panel (dataviz validate_palette, dark). */
   .bfilter { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -226,6 +226,7 @@
   <section style="grid-area: balrog">
     <h2><span>M8 · the Balrog queue</span><small id="bcount"></small></h2>
     <div class="qline" id="bline"></div>
+    <div class="qline" id="bkills"></div>
     <div id="balrog" class="tablewrap"></div>
     <div class="mlegend">
       <span><i style="background:rgba(154,210,132,.4)"></i>★ won: killed the Balrog</span>
@@ -233,6 +234,11 @@
       <span><i style="background:var(--black-soft)"></i>waiting for its turn (last game shown)</span>
       <span class="dim">each cell: best clvl and depth; where the next game starts (a save, or L1) and runs; now, or the last game's end</span>
     </div>
+  </section>
+  <section style="grid-area: monsters">
+    <h2><span>Monsters</span><small id="moncount"></small></h2>
+    <div class="tablewrap"><table class="btable" id="montable"></table></div>
+    <div class="mlegend"><span class="dim">slain: the bots' kills, logged from the runs since <span id="monsince"></span>; met: the runs that named it in a message or looked at it, since <span id="metsince"></span>; killed a character: every run recorded. The Balrog, Evil Iggy and the Ancient Multi-Hued Dragon first, then the 40 that killed the most characters</span></div>
   </section>
   <section style="grid-area: buildq">
     <h2><span>The build queue</span><small id="cicount"></small></h2>
@@ -271,25 +277,6 @@
     <h2><span>Live runs</span><small>click one to watch it</small></h2>
     <div class="wall" id="qwall"></div>
   </section>
-  <section style="grid-area: diff" class="diff">
-    <h2><span>Difficulty · how far games get</span><small id="dnote"></small></h2>
-    <h3>Games still going at each character level, by class <span class="dim">(gray: every class)</span></h3>
-    <div class="smalls" id="dcurves"></div>
-    <div class="diffrow">
-      <div><h3>The level each game ended at</h3><div class="tablewrap"><div id="dends" style="min-width:34rem"></div></div></div>
-      <div><h3>Median level reached, by race and class</h3><div id="dmap"></div></div>
-    </div>
-    <details style="margin-top:10px"><summary class="muted">as a table</summary><div class="tablewrap" id="dtable"></div></details>
-  </section>
-  <section style="grid-area: ratings">
-    <h2><span>Difficulty ratings</span><small id="rnote"></small></h2>
-    <div class="tablewrap"><table class="ftable"><thead><tr><th>character</th><th>runs</th><th>survival</th><th>median death clvl</th><th>early deaths</th></tr></thead>
-      <tbody id="ratings"></tbody></table></div>
-  </section>
-  <section style="grid-area: features">
-    <h2><span>Feature grid</span><small>per class, from every counted run</small></h2>
-    <div class="tablewrap" id="features"></div>
-  </section>
   <section style="grid-area: recent">
     <h2><span>Recent runs</span><small id="nruns"></small></h2>
     <div class="tablewrap"><table class="ftable"><thead><tr><th>run</th><th>outcome</th><th>clvl</th><th>DL</th><th>steps</th><th>cause</th></tr></thead>
@@ -312,6 +299,25 @@
       <span><i style="background:repeating-linear-gradient(45deg,#4a3c20 0 2px,var(--track) 2px 4px)"></i>playing now</span>
       <span class="dim">each cell: best clvl and depth, runs and streak, last outcome</span>
     </div>
+  </section>
+  <section style="grid-area: diff" class="diff">
+    <h2><span>Difficulty · how far games get · M7 queue, to 2026-11-07</span><small id="dnote"></small></h2>
+    <h3>Games still going at each character level, by class <span class="dim">(gray: every class)</span></h3>
+    <div class="smalls" id="dcurves"></div>
+    <div class="diffrow">
+      <div><h3>The level each game ended at</h3><div class="tablewrap"><div id="dends" style="min-width:34rem"></div></div></div>
+      <div><h3>Median level reached, by race and class</h3><div id="dmap"></div></div>
+    </div>
+    <details style="margin-top:10px"><summary class="muted">as a table</summary><div class="tablewrap" id="dtable"></div></details>
+  </section>
+  <section style="grid-area: ratings">
+    <h2><span>Difficulty ratings · M7 queue, to 2026-11-07</span><small id="rnote"></small></h2>
+    <div class="tablewrap"><table class="ftable"><thead><tr><th>character</th><th>runs</th><th>survival</th><th>median death clvl</th><th>early deaths</th></tr></thead>
+      <tbody id="ratings"></tbody></table></div>
+  </section>
+  <section style="grid-area: features">
+    <h2><span>Feature grid</span><small>per class, from every counted M7 queue run, to 2026-11-07</small></h2>
+    <div class="tablewrap" id="features"></div>
   </section>
   <section style="grid-area: milestone">
     <h2><span>M5 (met 2026-10-27) · every race and class on the C64</span><small id="mcount"></small></h2>
@@ -383,7 +389,7 @@ const PALETTE = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#3
 const LEVEL_BANDS = [[1, 1, "L1"], [2, 2, "L2"], [3, 4, "L3-4"], [5, 7, "L5-7"], [8, 99, "L8+"]];
 const BAND_COLORS = ["#e0603c", "#c57900", "#ffd93d", "#9ad284", "#7779dc"];
 let current = null, data = null, mile = null, cover = null, diskData = null, watching = null;
-const PORT_NAMES = {c64: "C64", plus4: "Plus/4", c128: "C128", apple2: "Apple IIe", atari8: "Atari 8-bit",
+const PORT_NAMES = {c64: "C64", "c64-noreu": "C64 (no REU)", "c64-cart": "C64 EasyFlash", plus4: "Plus/4", c128: "C128", apple2: "Apple IIe", atari8: "Atari 8-bit",
                     bbcmaster: "BBC Master", cx16: "Commander X16"};
 const $ = id => document.getElementById(id);
 // Published (make playtest-publish): static data files, refreshed every 30 s.
@@ -849,6 +855,13 @@ function renderQueue() {
     `workers <b>${blive.length}</b>/${q.config.balrog_workers} · next: ${esc(bq.order.filter(k => !blive.some(r => `${r.platform}/${r.character}` === k)).slice(0, 3).map(k => cap(k.split("/")[1])).join(", ") || "–")}`;
   $("bcount").textContent = `${bitems.length} combinations · best L${bbest || "–"} · ` +
     `${bitems.reduce((n, it) => n + it.won, 0)} wins in ${bitems.reduce((n, it) => n + it.runs, 0)} runs`;
+  // What the Balrog runs have slain (session kill events, 2026-11-11): the
+  // three that end them first, then the most slain.
+  const bk = (q.balrog_kills || {}).total || {}, big = ["Balrog", "Evil Iggy", "Ancient Multi-Hued Dragon"];
+  const btop = Object.entries(bk).filter(([n]) => !big.includes(n)).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  $("bkills").innerHTML = `slain: ` + big.map(n => `${esc(n)} <b>${bk[n] || 0}</b>`).join(" · ") +
+    (btop.length ? ` · most: ${btop.map(([n, c]) => `${esc(n)} ${c}`).join(", ")}` : "") +
+    ` <span class="dim">(${(q.balrog_kills || {}).runs || 0} runs with kills logged)</span>`;
   // A race x class grid, as M7's (maintainer, 2026-11-06), per port.
   const bports = [...new Set(bitems.map(it => it.platform))];
   $("balrog").innerHTML = bports.map(platform => {
@@ -879,6 +892,29 @@ function renderQueue() {
     });
     return g + `</div>`;
   }).join("") || `<span class="muted">no combinations yet: set balrog_platforms</span>`;
+  // Monsters (2026-11-11): per creature, how many the bots slew (kill events,
+  // since kill logging began), how many runs met it (met events, since
+  // 2026-11-12) and how many characters it killed (every run recorded), by
+  // queue: the Balrog queue, the build queue, the rest.
+  const mon = q.monsters || {creatures: {}, runs: 0, since: ""};
+  const msum = o => Object.values(o || {}).reduce((a, b) => a + b, 0);
+  const mpinned = ["Balrog", "Evil Iggy", "Ancient Multi-Hued Dragon"], mgroups = ["balrog", "build", "other"];
+  const mrows = Object.entries(mon.creatures).map(([name, c]) => ({name, slain: c.slain || {}, met: c.met || {}, killed: c.killed || {}}));
+  const mranked = mrows.filter(r => !mpinned.includes(r.name))
+    .sort((a, b) => msum(b.killed) - msum(a.killed) || msum(b.slain) - msum(a.slain));
+  const mshow = mpinned.map(n => mrows.find(r => r.name === n) || {name: n, slain: {}, met: {}, killed: {}}).concat(mranked.slice(0, 40));
+  const mcell = (o, k) => o[k] ? o[k].toLocaleString() : `<span class="dim">0</span>`;
+  $("montable").innerHTML = `<thead><tr><th>creature</th><th>slain: Balrog queue</th><th>build queue</th><th>other</th>` +
+    `<th>met (runs): Balrog queue</th><th>build queue</th><th>other</th>` +
+    `<th>killed a character: Balrog queue</th><th>build queue</th><th>other</th></tr></thead><tbody>` +
+    mshow.map(r => `<tr${mpinned.includes(r.name) ? ' style="font-weight:600"' : ""}><td>${esc(r.name)}</td>` +
+      [r.slain, r.met, r.killed].map(o => mgroups.map(k => `<td>${mcell(o, k)}</td>`).join("")).join("") + `</tr>`).join("") +
+    `</tbody>`;
+  const ms = mon.since || "";
+  $("monsince").textContent = ms ? `${ms.slice(0, 4)}-${ms.slice(4, 6)}-${ms.slice(6, 8)} ${ms.slice(9, 11)}:${ms.slice(11, 13)}` : "–";
+  const mt = mon.met_since || "";
+  $("metsince").textContent = mt ? `${mt.slice(0, 4)}-${mt.slice(4, 6)}-${mt.slice(6, 8)} ${mt.slice(9, 11)}:${mt.slice(11, 13)}` : "–";
+  $("moncount").textContent = `${mrows.length} creatures · kills logged by ${mon.runs} runs · meetings by ${mon.met_runs || 0}`;
   // The build queue (§23.4): one run per port, of the branch's newest
   // commit, cycling every race/class combination.
   const ci = (q.build_queue || {}).platforms || {}, cports = q.config.build_platforms || [];

@@ -38,8 +38,14 @@
 .const hal_platform_overlay_force_reload = 0
 .const hal_platform_overlay_tier_cache_guard = 0
 .const hal_platform_overlay_cache_enabled = 0
+#if C64_CARTRIDGE
+#define HAL_PLATFORM_REU_DISABLED
+.const hal_platform_overlay_reu_stash_enabled = 0
+.const hal_platform_overlay_prompt_program_media = 0
+#else
 .const hal_platform_overlay_reu_stash_enabled = 1
 .const hal_platform_overlay_prompt_program_media = 1
+#endif
 .const hal_platform_overlay_cpu_port_dma_bank = 1
 .const hal_platform_overlay_window_hi_min = $e0
 .const hal_platform_overlay_window_hi_max_exclusive = $f0
@@ -96,8 +102,10 @@
 #define HAL_PLATFORM_OVERLAY_STATE_LOCAL
 #endif
 #define HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT
+#if !C64_CARTRIDGE
 #define HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
 #define HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA
+#endif
 #define HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK
 #define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME

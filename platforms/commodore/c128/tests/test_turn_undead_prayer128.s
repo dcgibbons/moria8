@@ -126,6 +126,8 @@ test_progress: .byte 0
 test_frantic_calls: .byte 0
 test_unaffected_calls: .byte 0
 test_rng_value: .byte 0
+test_rng_calls: .byte 0
+test_rng_arg: .byte 0
 pmx_work_idx: .byte 0
 pmx_work_flag: .byte 0
 pmx_work_damage: .byte 0
@@ -245,6 +247,8 @@ huff_print_msg:
     rts
 
 test_rng_range:
+    sta test_rng_arg
+    inc test_rng_calls
     lda test_rng_value
     rts
 
@@ -330,6 +334,8 @@ test_reset_turn_undead_prayer_state:
     sta test_frantic_calls
     sta test_unaffected_calls
     sta test_rng_value
+    sta test_rng_calls
+    sta test_rng_arg
     sta cr_mflags + 0
     sta cr_mflags + 1
     sta cr_mflags + 2
@@ -391,8 +397,9 @@ test_start:
     :PatchJump(rng_range, test_rng_range)
 
     // Test 1: Turn Undead affects only visible undead. Low-level visible
-    // undead turn and report frantically, high-level visible undead resist and
-    // report unaffected, hidden undead and non-undead stay unchanged.
+    // undead turn and report frantically, a visible undead above clvl resists
+    // a failed 1-in-5 roll and reports unaffected, hidden undead and
+    // non-undead stay unchanged.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_turn_undead_prayer_state
     lda #CF_UNDEAD
@@ -436,9 +443,9 @@ test_start:
     sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
     lda #1
     sta cr_level + 1
-    lda #10
+    lda #51
     sta cr_level + 3
-    lda #5
+    lda #1
     sta test_rng_value
     jsr player_pray
     bcc !t1_fail+
@@ -577,9 +584,106 @@ test_after_no_undead:
     bne !t3_fail+
     lda #3
     sta test_progress
-    jmp test_pass
+    jmp test_after_cast_failure
 !t3_fail:
     jmp test_fail
+
+    // Test 4 (VMS spells.inc turn_undead, Umoria spellTurnUndead): clvl + 1
+    // > level turns an undead without a roll (clvl 50, level 50); at level 51
+    // only randint(5) = 1 would, so a roll of 1 leaves it unaffected.
+test_after_cast_failure:
+    lda #50
+    ldx #1
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    cmp #50
+    bne !t4_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    bne !t4_fail+
+    lda test_frantic_calls
+    cmp #1
+    bne !t4_fail+
+    lda test_rng_calls
+    bne !t4_fail+
+    lda #51
+    ldx #1
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    bne !t4_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    cmp #7
+    bne !t4_fail+
+    lda test_frantic_calls
+    bne !t4_fail+
+    lda test_unaffected_calls
+    cmp #1
+    bne !t4_fail+
+    lda test_rng_calls
+    cmp #1
+    bne !t4_fail+
+    lda test_rng_arg
+    cmp #5
+    bne !t4_fail+
+    lda #4
+    sta test_progress
+    jmp test_after_boundary
+!t4_fail:
+    jmp test_fail
+
+    // Test 5: an undead far above clvl (level 80, clvl 50) is still turned on
+    // randint(5) = 1 (rng_range(5) = 0) and unaffected on any other roll (4).
+test_after_boundary:
+    lda #80
+    ldx #0
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    cmp #50
+    bne !t5_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    bne !t5_fail+
+    lda test_frantic_calls
+    cmp #1
+    bne !t5_fail+
+    lda test_rng_arg
+    cmp #5
+    bne !t5_fail+
+    lda #80
+    ldx #4
+    jsr test_one_visible_undead
+    lda test_mon_table + MX_CONFUSE
+    bne !t5_fail+
+    lda test_mon_table + MX_SLEEP_CUR
+    cmp #7
+    bne !t5_fail+
+    lda test_unaffected_calls
+    cmp #1
+    bne !t5_fail+
+    lda #5
+    sta test_progress
+    jmp test_pass
+!t5_fail:
+    jmp test_fail
+
+// One visible, sleeping undead in slot 0 (type 1), then the production
+// eff_turn_undead. A = the creature's level, X = the stubbed rng_range result.
+test_one_visible_undead:
+    pha
+    txa
+    pha
+    jsr test_reset_turn_undead_prayer_state
+    pla
+    sta test_rng_value
+    pla
+    sta cr_level + 1
+    lda #CF_UNDEAD
+    sta cr_mflags + 1
+    lda #1
+    sta test_mon_table + MX_TYPE
+    lda #7
+    sta test_mon_table + MX_SLEEP_CUR
+    lda #MF_VISIBLE
+    sta test_mon_table + MX_FLAGS
+    jmp eff_turn_undead
 
 test_fail_loop:
     jmp test_fail_loop

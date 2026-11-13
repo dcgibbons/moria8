@@ -354,66 +354,97 @@ player_bake_apply_one:
     jmp apply_modifier
 
 !pcs_equipment:
-    // Ring of Strength uses p1 as a signed STR modifier. Equipment bonuses
-    // must be exact: apply_modifier's randomized chargen steps would ratchet
-    // stats upward on every save/load rebuild, while wear/takeoff apply p1
-    // as raw arithmetic.
-    ldx #EQUIP_RING
-!pcs_str_ring:                  // each hand: EQUIP_RING, then EQUIP_RING2
-    lda inv_item_id,x
-    cmp #24
-    bne !pcs_no_str_ring+
-    lda player_data + PL_STR_CUR
-    clc
-    adc inv_p1,x
-    sta player_data + PL_STR_CUR
-!pcs_no_str_ring:
-    cpx #EQUIP_RING2
+    // The equipment's stat bonuses (equip_stat_index) use p1 as a signed
+    // modifier. Equipment bonuses must be exact: apply_modifier's randomized
+    // chargen steps would ratchet stats upward on every save/load rebuild,
+    // while wear/takeoff apply p1 as raw arithmetic.
     ldx #EQUIP_RING2
-    bcc !pcs_str_ring-
-
-    // Amulet of Wisdom uses p1 as a signed WIS modifier; Amulet of the Magi
-    // uses p1 as a signed INT modifier. Same deterministic rule as above.
-    ldx #EQUIP_AMULET
-    lda inv_item_id,x
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !pcs_amulet_wis+
-    cmp #ITEM_TYPE_AMULET_MAGI
-    bne !pcs_no_amulet+
-    lda player_data + PL_INT_CUR
+!pcs_eq:                        // the head to the left hand
+    jsr equip_stat_index
+    bcc !pcs_eq_next+
+    lda player_data + PL_STR_CUR,y
     clc
     adc inv_p1,x
-    sta player_data + PL_INT_CUR
-    jmp !pcs_no_amulet+
-!pcs_amulet_wis:
-    lda player_data + PL_WIS_CUR
-    clc
-    adc inv_p1,x
-    sta player_data + PL_WIS_CUR
-!pcs_no_amulet:
+    sta player_data + PL_STR_CUR,y
+!pcs_eq_next:
+    dex
+    cpx #EQUIP_HEAD
+    bcs !pcs_eq-
 
-    // Persistent effect flags from the equipped ring and amulet
+    // The ZP stat mirrors (bash, throw, the to-hit) follow at once: a
+    // restore (Holy Word, a Potion of Restoration) left them stale until the
+    // next load, and Holy Word's player_sync_to_zp, which refreshed them, also
+    // undid the heal with the last save's HP (C64 Balrog queue, 2026-11-11).
+    ldy #STAT_COUNT - 1
+!pcs_zp:
+    lda player_data + PL_STR_CUR,y
+    sta zp_player_str,y             // absolute,y: no zp,y sta
+    dey
+    bpl !pcs_zp-
+.assert "The ZP stat mirrors follow PL_*_CUR order", zp_player_chr - zp_player_str == PL_CHR_CUR - PL_STR_CUR && STAT_COUNT == 6, true
+
+    // Persistent effect flags from the equipment: the routine below, by
+    // falling through, or by a jump where a port places it elsewhere.
+#if PLAYER_RECALC_PFLAGS_EXTERNAL
+    jmp hal_player_recalc_pflags
+#elif PFLAGS_SEGMENT_CUSTOM
+    jmp player_recalc_pflags_equipment
+#endif
+.assert "Ring, amulet and left-hand ring slots are contiguous", EQUIP_AMULET == EQUIP_RING + 1 && EQUIP_RING2 == EQUIP_AMULET + 1, true
+.assert "The jewels' flag ranges do not overlap (player_recalc_pflags_equipment)", ITEM_TYPE_RING_SLAYING <= ITEM_TYPE_AMULET_MAGI && ITEM_TYPE_AMULET_MAGI < ITEM_TYPE_RING_LORDLY_FIRE, true
+.assert "Weapon, body, shield and head slots are contiguous", EQUIP_BODY == EQUIP_WEAPON + 1 && EQUIP_SHIELD == EQUIP_BODY + 1 && EQUIP_HEAD == EQUIP_SHIELD + 1, true
+
+// The equipment flags: a port short of resident room places them with
+// :PflagsSegment()/:PflagsRestoreSegment() (Plus/4 and Atari: their
+// always-visible $F000 RuntimeBanked; C64: $F000 RuntimeBanked behind
+// PLAYER_RECALC_PFLAGS_EXTERNAL).
+#if !PFLAGS_SEGMENT_CUSTOM
+.macro PflagsSegment() {}
+.macro PflagsRestoreSegment() {}
+#endif
+:PflagsSegment()
 player_recalc_pflags_equipment:
+    // The weapon, body armour, shield and head (contiguous): their egos.
+    // Weapon egos below EGO_DEFENDER and digging-tool egos (1-3) give none;
+    // armour carries the resistance egos, the head the Magi.
     lda #0
+    ldx #EQUIP_WEAPON
+!pfe_slot:
+    ldy inv_ego,x
+    cpy #EGO_DEFENDER
+    bcc !pfe_next+
+    ora pf_ego_table - EGO_DEFENDER,y
+!pfe_next:
+    inx
+    cpx #EQUIP_HEAD + 1
+    bne !pfe_slot-
+    // Both hands and the amulet (contiguous): the jewel itself. The flag
+    // rings (pf_bit_table), the Amulet of the Magi (See Invisible, Free
+    // Action), the rings of Lordly Protection and the Amulet of Resist Acid
+    // (pf_lordly_table; MON-029).
     ldx #EQUIP_RING
-!pcs_pf_ring:                   // each hand: EQUIP_RING, then EQUIP_RING2
+!pfj_slot:
     ldy inv_item_id,x
     cpy #ITEM_TYPE_RING_RESIST_FIRE
-    bcc !pcs_pf_none+
+    bcc !pfj_next+
     cpy #ITEM_TYPE_RING_SLAYING
-    bcs !pcs_pf_none+
+    bcs !pfj_not_flag+
     ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
-!pcs_pf_none:
-    cpx #EQUIP_RING2
-    ldx #EQUIP_RING2
-    bcc !pcs_pf_ring-
-    // Amulet of the Magi also grants see-invisible and Free Action
-    ldx #EQUIP_AMULET
-    ldy inv_item_id,x
+    bcc !pfj_next+              // always: C clear from the cpy
+!pfj_not_flag:
     cpy #ITEM_TYPE_AMULET_MAGI
-    bne !pcs_pf_store+
+    bne !pfj_not_magi+
     ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
-!pcs_pf_store:
+!pfj_not_magi:
+    cpy #ITEM_TYPE_RING_LORDLY_FIRE
+    bcc !pfj_next+
+    cpy #ITEM_TYPE_AMULET_RESIST_ACID + 1
+    bcs !pfj_next+              // FI_EMPTY ($FF) too
+    ora pf_lordly_table - ITEM_TYPE_RING_LORDLY_FIRE,y
+!pfj_next:
+    inx
+    cpx #EQUIP_RING2 + 1
+    bne !pfj_slot-
     sta player_pflags
 
     // Update combat bonuses from stats
@@ -421,6 +452,48 @@ player_recalc_pflags_equipment:
 
 pf_bit_table:
     .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_SPEED, PFLAG_SEE_INVIS
+
+// pf_ego_table — the flags an ego item worn gives (VMS magic_treasure,
+// misc.inc), from EGO_DEFENDER: Defender (%X'07B80900': the four
+// resistances, Free Action, See Invisible), Holy Avenger (See Invisible),
+// Slay Dragon (none), then the resistance armours. Regeneration, feather
+// fall, stealth and sustain are not modelled.
+pf_ego_table:
+    .byte PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
+    .byte PFLAG_SEE_INVIS, 0
+    .byte PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT
+    .byte PFLAG_RESIST_ACID, PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_RESIST_LIGHT
+    .byte PFLAG_SEE_INVIS | PFLAG_RESIST_FIRE | PFLAG_RESIST_ACID | PFLAG_RESIST_COLD   // the Magi (%X'01380008')
+.assert "pf_ego_table runs from EGO_DEFENDER to the last ego", * - pf_ego_table, EGO_TYPE_COUNT - EGO_DEFENDER
+// pf_lordly_table — by item type from 146 (VMS values.inc flags).
+pf_lordly_table:
+    .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_ACID, PFLAG_RESIST_COLD, PFLAG_RESIST_ACID
+.assert "pf_lordly_table runs to the Amulet of Resist Acid", * - pf_lordly_table, ITEM_TYPE_AMULET_RESIST_ACID - ITEM_TYPE_RING_LORDLY_FIRE + 1
+:PflagsRestoreSegment()
+
+// equip_stat_index — X = an equipment slot: carry set and Y = the stat
+// (from PL_STR_CUR) its item's p1 raises or lowers: the Ring of Strength
+// STR, the Amulet of Wisdom WIS, the Amulet and a crown of the Magi INT
+// (VMS TR_INT; MON-030); carry clear: none. Keeps X. player_calc_stats
+// and every player_adjust_equipment_stat use it.
+equip_stat_index:
+    ldy #PL_INT_CUR - PL_STR_CUR
+    lda inv_ego,x
+    cmp #EGO_MAGI
+    beq !esi_done+              // equal: carry set
+    lda inv_item_id,x
+    cmp #ITEM_TYPE_AMULET_MAGI
+    beq !esi_done+
+    ldy #PL_WIS_CUR - PL_STR_CUR
+    cmp #ITEM_TYPE_AMULET_WISDOM
+    beq !esi_done+
+    ldy #0
+    cmp #ITEM_TYPE_RING_STRENGTH
+    beq !esi_done+
+    clc
+!esi_done:
+    rts
+.assert "The stat items' slots run from the head to the left hand", EQUIP_HEAD < EQUIP_RING && EQUIP_RING < EQUIP_AMULET && EQUIP_AMULET < EQUIP_RING2, true
 
 // Working byte for stat modification (survives across increment/decrement calls)
 stat_work: .byte 0

@@ -73,7 +73,13 @@ test_finish:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+// Monster spells and breath are not exercised here: out of the way above
+// the result buffer (resistance armour, 2026-11-11, took the body past its
+// first map write).
+.segmentdef TestUnused [start=$e100]
+.segment TestUnused
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/item_tables.s"
 #import "../../../../core/special_rooms.s"

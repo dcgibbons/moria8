@@ -10,24 +10,45 @@
 // occupied body, shield, head and hands slots (VMS also has a cloak slot;
 // Moria8 has none). If its AC + to-AC is above 0 it is damaged: "Your <item>
 // is damaged!", to-AC - 1, equipment recalculated, and the damage halved.
-// No Moria8 armour resists acid, and the player has no acid resistance, so
-// those VMS branches do not exist; acid damage to pack items (VMS
-// inven_damage) is not implemented (docs/BACKLOG.md). Acid breath also calls
-// mon_atk_acid_armour (core/monster_magic.s).
-// Input: zp_combat_dmg = rolled damage. Output: zp_combat_dmg (maybe halved).
+// A piece of Resist or Resist Acid armour is not damaged but still takes it
+// ("Your <item> resists damage!"); with acid resistance (PFLAG_RESIST_ACID)
+// the damage is divided by 3, or by 4 when a piece took it too (2026-11-11).
+// Acid damage to pack items (VMS inven_damage) is not implemented
+// (docs/BACKLOG.md). Acid breath also calls mon_atk_acid_armour
+// (core/monster_magic.s).
+// Input: zp_combat_dmg = rolled damage. Output: zp_combat_dmg (maybe divided).
 // Clobbers: everything except zp_combat_dmg and the mat_* scratch
 mon_atk_effect_acid:
     ldx #HSTR_MAT_ACID
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     jsr mon_atk_acid_armour
-    bcc !maea_done+
-    lsr zp_combat_dmg           // dam div 2
-!maea_done:
+    lda #1
+    adc #0                      // VMS acid_dam: divisor 1, + 1 for a piece
+    tax
+    lda player_pflags
+    and #PFLAG_RESIST_ACID
+    beq mat_div_dmg
+    inx                         // + 2 for acid resistance: 3 or 4
+    inx
+// mat_div_dmg — zp_combat_dmg = zp_combat_dmg div X (X = 1: unchanged).
+// The acid and element touches' resistance. Clobbers: A, X, zp_math_*
+mat_div_dmg:
+    cpx #1
+    beq !mdd_done+
+    lda zp_combat_dmg
+    sta zp_math_a
+    lda #0
+    sta zp_math_b
+    jsr math_div_16x8           // zp_math_a = dam div X
+    lda zp_math_a
+    sta zp_combat_dmg
+!mdd_done:
     rts
 
 // mon_atk_acid_armour — VMS minus_ac(resist acid): C set when a worn armour
-// piece was damaged ("Your <item> is damaged!"), so acid_dam halves.
+// piece took it: resisted ("Your <item> resists damage!") or damaged ("Your
+// <item> is damaged!"), so acid_dam halves.
 // Clobbers: everything except zp_combat_dmg and the mat_* scratch
 mon_atk_acid_armour:
 
@@ -59,6 +80,23 @@ mon_atk_acid_armour:
     bpl !maea_find-
     stx mat_acid_slot
 
+    // A piece that resists acid takes it unharmed (VMS minus_ac flags test):
+    // (Resist), (Resist Acid) and the Magi (%X'01380008' has TR_RES_ACID).
+    lda inv_ego,x
+    cmp #EGO_RESIST
+    beq !maea_resists+
+    cmp #EGO_RESIST_ACID
+    beq !maea_resists+
+    cmp #EGO_MAGI
+    bne !maea_ac+
+!maea_resists:
+    ldx #HSTR_MAT_RESISTS
+    jsr maea_piece_msg
+    sec
+    rts
+!maea_ac:
+    ldx mat_acid_slot
+
     // ac + toac > 0? Base AC is 0-15; to-AC is signed. A negative to-AC
     // sum cannot overflow; a non-negative one is checked unsigned.
     ldy inv_item_id,x
@@ -78,16 +116,8 @@ mon_atk_acid_armour:
 !maea_damaged:
 
     // "Your <item> is damaged!" (VMS objdes before the to-AC drop)
-    lda #0
-    sta cmb_buf_idx
-    ldx #HSTR_MAT_YOUR
-    jsr huff_append_combat
-    ldx mat_acid_slot
-    jsr inv_slot_to_fi_add      // A = item id
-    jsr item_append_desc
     ldx #HSTR_MAT_DAMAGED
-    jsr huff_append_combat
-    jsr cmb_term_and_print
+    jsr maea_piece_msg
 
     ldx mat_acid_slot
     dec inv_to_ac,x             // > -16 here: cannot wrap
@@ -109,4 +139,19 @@ mon_atk_acid_armour:
     clc
     rts
 
+// maea_piece_msg — "Your <item at mat_acid_slot>" and huffman string X.
+maea_piece_msg:
+    stx mat_acid_msg
+    lda #0
+    sta cmb_buf_idx
+    ldx #HSTR_MAT_YOUR
+    jsr huff_append_combat
+    ldx mat_acid_slot
+    jsr inv_slot_to_fi_add      // A = item id
+    jsr item_append_desc
+    ldx mat_acid_msg
+    jsr huff_append_combat
+    jmp cmb_term_and_print
+
 mat_acid_slot: .byte 0
+mat_acid_msg:  .byte 0

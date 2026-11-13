@@ -374,6 +374,12 @@ hal_storage_open:
     jmp !lookup_dir+
 
 !chk_hall:
+    jsr atari_legal_filename
+    bcc !not_offer+
+    jmp !lookup_dir+
+!not_offer:
+    ldy atari_io_cnt
+    lda (atari_io_src),y
     cmp #'H'
     bne !chk_save+
     ldx #10
@@ -774,5 +780,50 @@ stream_write_cur_sector:
     sec
     rts
 !write_ok:
+    clc
+    rts
+
+// Canonical read-only legal files already carried by the release disk.
+// Kept in low resident RAM (< $4000) beside hal_storage_open, which calls
+// atari_legal_filename before EnterSio.
+fn_83_license: .byte 'L','I','C','E','N','S','E',' ','T','X','T'
+fn_83_offer: .byte 'S','R','C','O','F','F','E','R','T','X','T'
+
+// Match the complete canonical 8.3 name, not every L*/S* request.
+atari_legal_filename:
+    lda stream_nam_len
+    cmp #11
+    bne !no+
+    lda stream_dir
+    cmp #STREAM_DIR_READ
+    bne !no+
+    ldy #0
+!license:
+    lda (atari_io_src),y
+    cmp fn_83_license,y
+    bne !offer_start+
+    iny
+    cpy #11
+    bcc !license-
+    bcs !copy_start+
+!offer_start:
+    ldy #0
+!offer:
+    lda (atari_io_src),y
+    cmp fn_83_offer,y
+    bne !no+
+    iny
+    cpy #11
+    bcc !offer-
+!copy_start:
+    ldy #10
+!copy:
+    lda (atari_io_src),y
+    sta atari_fn_83,y
+    dey
+    bpl !copy-
+    sec
+    rts
+!no:
     clc
     rts

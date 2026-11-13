@@ -384,7 +384,7 @@ test_start:
     lda #0
     sta (zp_ptr0),y
 
-    jsr eff_sleep_adjacent
+    jsr pmx_sleep_adjacent_msg      // the Sleep prayers' production path (a level-1 creature never resists)
 
     lda #23
     ldy #12

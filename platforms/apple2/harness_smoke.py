@@ -43,16 +43,17 @@ MAME_OUTPUT_DIRS = {
 }
 
 # Row 18 text-page base: $400 + (18&7)*$80 + (18>>3)*$28 = $550.
-# Menu "N)ew  L)oad  D)isk Setup" starts at column 28 (main.s title_draw_menu).
+# Menu "N)ew  L)oad  D)isk Setup" starts at column 22 (main.s title_draw_menu).
 # Even columns live in the aux half, odd columns in the main half; each half
 # row holds 40 bytes, so column c maps to half-row offset c>>1.
 ROW18_BASE = 0x550
-MENU_START_COL = 28
+MENU_START_COL = 22
 
-# Expected Apple display codes for "N)ew  L)oad  D)isk Setup".
+# Expected Apple display codes for the complete title menu.
 MENU_EXPECTED = [
     0xCE, 0xA9, 0xE5, 0xF7, 0xA0, 0xA0, 0xCC, 0xA9, 0xEF, 0xE1, 0xE4, 0xA0,
     0xA0, 0xC4, 0xA9, 0xE9, 0xF3, 0xEB, 0xA0, 0xD3, 0xE5, 0xF4, 0xF5, 0xF0,
+    0xA0, 0xA0, 0xC1, 0xA9, 0xE2, 0xEF, 0xF5, 0xF4,
 ]
 
 LUA_BOOT_TITLE = r"""
@@ -124,6 +125,7 @@ for tag, port in pairs(manager.machine.ioport.ports) do
 end
 
 local function findkey(ch)
+    if ch == string.char(27) then return keymap["Esc"] end
     if ch == "\r" then return keymap["Return"] end
     if ch == " " then return keymap["Space"] end
     if ch == "?" then return keymap["/  ?"] end
@@ -266,7 +268,7 @@ LUA_CHARGEN = r"""
 -- Title -> chargen -> town. CLASS_KEY substituted by the caller.
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then break end
 end
 press_until("Choose your race", "N")
 press_until("Roll Statistics", "A")
@@ -519,14 +521,145 @@ dump("after_map_area")
 print("SCENARIO DONE")
 """
 
+LUA_LEGAL_INPUT_HELPER = r"""
+local legal_key_polled = false
+local legal_cpu = manager.machine.devices[":maincpu"]
+_G.harness_legal_poll_tap = prog:install_read_tap(0xc000, 0xc000, "harness_legal_poll",
+    function(offset, data, mask)
+        if (data & 0x80) ~= 0 then return end
+        local pc = legal_cpu.state["PC"].value
+        if pc >= LEGAL_KEY_WAIT_START and pc < LEGAL_KEY_WAIT_END then
+            legal_key_polled = true
+        end
+    end)
+local function legal_wait_input()
+    legal_key_polled = false
+    for i = 1, 100 do
+        if legal_key_polled then return end
+        emu.wait(0.1)
+    end
+    assert_line("legal_input_ready", false, "viewer did not reach input_get_key")
+end
+local function legal_press(ch)
+    legal_wait_input()
+    press(ch)
+end
+"""
+
 LUA_HELP_BODY = r"""
 -- Help overlay: '?' from the command loop must render the command reference
 -- and return to the town view on 'q'.
+legal_wait_input()
 shift("/")
-emu.wait(3)
+for i = 1, 100 do
+    if screen_has("Command Reference") then break end
+    emu.wait(0.1)
+end
 assert_line("help_open", screen_has("Command Reference"),
             "'?' did not open the help overlay")
-press("Q")
+assert_line("help_license_hint", screen_has("L:License"), "Help shortcut is not visible")
+legal_press(" ")
+for i = 1, 100 do
+    if screen_has("L License / Source") then break end
+    emu.wait(0.1)
+end
+assert_line("help_license_entry", screen_has("L License / Source"), "Help does not list the reader")
+assert_line("legal_help_mount_save", game_drive:load("SAVE_IMAGE") == nil, "save disk did not mount")
+legal_press("L")
+for i = 1, 100 do
+    if screen_has("Insert program disk") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_help_load_prompt", screen_has("Insert program disk"), "missing overlay did not prompt")
+local saved = {}
+for i = 0, 141 do saved[i] = prog:read_u8(LEGAL_SAVE_ADDR + i) end
+legal_press(" ")
+for i = 1, 100 do
+    if screen_has("Insert program disk") then break end
+    emu.wait(0.1)
+end
+local stable = true
+for i = 0, 141 do
+    if i ~= 0x17 and saved[i] ~= prog:read_u8(LEGAL_SAVE_ADDR + i) then stable = false end
+end
+assert_line("legal_retry_snapshot", stable, "retry replaced the caller snapshot")
+local checked, restored = false, true
+local cancel_tap = prog:install_write_tap(2, 2, "legal_cancel_zp",
+    function(offset, data, mask)
+        local pc = legal_cpu.state["PC"].value
+        if checked or pc < LEGAL_CANCEL_START or pc >= LEGAL_CANCEL_END then return end
+        checked = true
+        for i = 0, 141 do
+            if i ~= 0x17 and (i < 0x6a or i > 0x6c) then
+                local actual = (i == 0) and data or prog:read_u8(2 + i)
+                if actual ~= saved[i] then restored = false end
+            end
+        end
+    end)
+legal_press(string.char(27))
+for i = 1, 100 do
+    if in_town() then break end
+    emu.wait(0.1)
+end
+cancel_tap:remove()
+assert_line("legal_help_cancel_gameplay", in_town(), "cancel tried to reload Help")
+assert_line("legal_cancel_zp", checked and restored, "cancel did not restore caller ZP")
+assert_line("legal_help_restore_program", game_drive:load("GAME_IMAGE") == nil, "program disk did not mount")
+legal_wait_input()
+shift("/")
+for i = 1, 100 do
+    if screen_has("Command Reference") then break end
+    emu.wait(0.1)
+end
+assert_line("help_reopened", screen_has("Command Reference"), "Help did not reopen")
+legal_press("L")
+for i = 1, 100 do
+    if screen_has("License & Source") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_menu", screen_has("License & Source"), "Help L did not open legal viewer")
+local notice_first = prog:read_u8(LEGAL_NOTICE_ADDR)
+prog:write_u8(LEGAL_NOTICE_ADDR, 0x58)
+legal_press("1")
+for i = 1, 100 do
+    if screen_has("Document read failed") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_missing", screen_has("Document read failed"), "missing file did not return an error")
+legal_press(" ")
+for i = 1, 100 do
+    if screen_has("1 License") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_channel_closed", prog:read_u8(LEGAL_OPENED_ADDR) == 0, "failed channel remained open")
+prog:write_u8(LEGAL_NOTICE_ADDR, notice_first)
+legal_press("1")
+for i = 1, 100 do
+    if screen_has("MORIA8 LICENSE NOTICE") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_notice", screen_has("MORIA8 LICENSE NOTICE"), "existing LICENSE not shown")
+legal_press("R")
+for i = 1, 100 do
+    if screen_has("MORIA8 LICENSE NOTICE") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_restart", screen_has("MORIA8 LICENSE NOTICE"), "notice did not restart")
+legal_press("Q")
+legal_press("2")
+for i = 1, 100 do
+    if screen_has("MORIA8 SOURCE OFFER") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_offer", screen_has("MORIA8 SOURCE OFFER"), "existing source offer not shown")
+legal_press("Q")
+legal_press("Q")
+for i = 1, 100 do
+    if screen_has("Command Reference") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_help_return", screen_has("Command Reference"), "Help owner was not restored")
+legal_press("Q")
 emu.wait(2)
 assert_line("help_close", in_town(), "help did not return to the town view")
 dump("after_help")
@@ -1014,6 +1147,14 @@ end
 if not wizard_menu_open() then print("ASSERT died FAIL wizard menu did not reopen") end
 press("S")
 emu.wait(2)
+-- The summon is random and the Apple seeds its RNG from keypress timing, so
+-- any code change re-rolls it: a White Worm mass once sat beside the player
+-- ~90 turns before biting, past the run's limit. 1 HP and poison (which also
+-- stops regeneration) make the death certain within a turn or two whatever
+-- was summoned; the death, disk setup and score flow below are the test.
+prog:write_u8(HP_LO_ADDR, 1)
+prog:write_u8(HP_HI_ADDR, 0)
+prog:write_u8(POISON_ADDR, 100)
 local died = false
 -- disk_mode/disk_setup_done (main.vs) drive the state machine: the setup
 -- menu stays on screen during prepare's slow disk work, so pixels alone
@@ -1112,7 +1253,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 14) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
 end
 assert_line("save_completed", title_ok, "save did not complete")
 assert_line("title_after_save", title_ok,
@@ -1154,7 +1295,7 @@ LUA_DISK_SETUP_TWO_DRIVE_BODY = r"""
 -- MORIA8.ID landed on the second disk image.
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then break end
 end
 press("D")
 assert_line("ds_menu", wait_screen("Pick save drive"),
@@ -1177,7 +1318,7 @@ press("Y")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 14) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
 end
 assert_line("ds_done", back, "did not return to title after setup")
 dump("after_ds_two_drive")
@@ -1195,7 +1336,7 @@ for tag, img in pairs(manager.machine.images) do
 end
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then break end
 end
 press("D")
 assert_line("sw_menu", wait_screen("Pick save drive"),
@@ -1246,7 +1387,7 @@ press(" ")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 14) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
 end
 assert_line("sw_done", back, "did not return to title after swap setup")
 dump("after_ds_swap")
@@ -1265,7 +1406,7 @@ for tag, img in pairs(manager.machine.images) do
 end
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then break end
 end
 press("D")
 assert_line("ad_menu", wait_screen("Pick save drive"),
@@ -1285,7 +1426,7 @@ press("Y")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 14) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
 end
 assert_line("ad_commit", back, "did not return to title after adopting SAVE2")
 -- Phase 2: unreadable media on the save unit. Setup runs again (D), Done
@@ -1330,7 +1471,7 @@ press("Q")
 local home = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 14) == 0xA9 then home = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then home = true break end
 end
 assert_line("ad_quit", home, "did not return to title after Q")
 dump("after_ds_adopt")
@@ -1396,6 +1537,60 @@ press("S")
 emu.wait(1.0)
 assert_line("play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn1,
             "no turn after the aim: " .. rowtext(0))
+-- The VMS Wands of Fire Bolts (153) and Drain Life (154), MON-031: the death
+-- overlay's router runs them in OVL.SPELL through irs_re_compact_call. Aimed
+-- at nothing, each takes its turn and play goes on.
+for _, id in ipairs({153, 154}) do
+    for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+    inv_seed(0, {id, 1, 5, 0, 0, 0, 0, 0})
+    local turn_w = prog:read_u8(TURN_LO_ADDR)
+    -- Right after the previous wand's overlay swap a quick press can vanish
+    -- (2026-11-12: the Drain Life aim's 'A' was lost once): retried, held.
+    assert_line("aim_prompt_" .. id, press_until("Aim which wand", "A", 8), "aim prompt missing")
+    press_slow("A")
+    assert_line("aim_direction_" .. id, wait_screen("Direction?"), "direction prompt missing")
+    press_slow("L")
+    emu.wait(1.0)
+    for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+    assert_line("wand_returns_" .. id, in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn_w
+                and inv_field(0, 2) == 4, "wand " .. id .. ": " .. rowtext(0))
+end
+-- Settle before the next command: a bolt may have slain a townsperson (its
+-- messages behind a late -more-), and a quick press right after the wands'
+-- overlay swaps was dropped while the drive spun (2026-11-12: the ring's W).
+for _ = 1, 8 do
+    if screen_has("-more-") then press_slow(" ") end
+    emu.wait(0.4)
+end
+emu.wait(2.0)
+-- A Scroll of Recharging on an empty wand, through the '?' list: the spell
+-- overlay's picker returns the slot in X, which tramp_restore_spell_overlay's
+-- OVL.SPELL reload clobbered, so another slot was recharged, named or
+-- "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
+-- (BBC build queue, 2026-11-12; the Apple IIe shares the trampoline).
+inv_seed(0, {40, 1, 0, 0, 0, 0, 0, 0})    -- Wand of Lightning, empty
+inv_seed(1, {104, 1, 0, 0, 0, 0, 0, 0})   -- Scroll of Recharging
+local turn_r = prog:read_u8(TURN_LO_ADDR)
+assert_line("recharge_read_prompt", press_until("Read which scroll", "R", 8), "read prompt missing")
+press_slow("A")
+assert_line("recharge_prompt", wait_screen("Recharge which item"), "recharge prompt missing: " .. rowtext(0))
+shift("/")                                -- '?': SHIFT and the "/  ?" key
+assert_line("recharge_list", wait_screen("Inventory"), "no list: " .. rowtext(0))
+emu.wait(0.5)
+press_slow("A")
+assert_line("recharge_glows", wait_screen("glows briefly"), "no recharge message: " .. rowtext(0) .. " / " .. rowtext(1))
+for _ = 1, 4 do if screen_has("-more-") then press_slow(" ") end emu.wait(0.3) end
+assert_line("recharge_charged", inv_field(0, 0) == 40 and inv_field(0, 2) > 0,
+            "slot a: " .. inv_field(0, 0) .. " charges " .. inv_field(0, 2))
+press_slow("S")
+emu.wait(1.0)
+assert_line("recharge_play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn_r,
+            "no turn after the recharge: " .. rowtext(0))
+for _ = 1, 8 do
+    if screen_has("-more-") then press_slow(" ") end
+    emu.wait(0.4)
+end
+emu.wait(2.0)
 -- Wearing a ring or amulet rebuilds the equipment flags (player_pflags) at
 -- once: on the compact play slot they stayed stale until the next stats
 -- rebuild (2026-11-08 review). The Ring of Resist Fire sets
@@ -1409,6 +1604,9 @@ local function wear_slot_a(id, what)
     press("A")
     assert_line(what .. "_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
 end
+-- The Dagger (Defender) wielded since the exchange resists fire and cold
+-- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
+prog:write_u8(INV + 7 * INV_STRIDE + 22, 0)
 prog:write_u8(PFLAGS_ADDR, 0)
 wear_slot_a(109, "resist_fire_ring")
 assert_line("resist_fire_flag", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
@@ -1420,6 +1618,30 @@ wear_slot_a(23, "protection_ring")
 assert_line("left_ring_replaced", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 wear_slot_a(125, "magi_amulet")
 assert_line("free_action_flag", prog:read_u8(PFLAGS_ADDR) & 0x18 == 0x18, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+-- A Golden Crown of the Magi (MON-030; 151, INT +2, ego 14) through this
+-- port's own player_adjust_equipment_stat: worn, INT +2 and fire, cold and
+-- acid resisted ($23); taken off, INT back.
+local PL_INT_CUR = 28
+local int0 = prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR)
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+inv_seed(0, {151, 1, 2, 0, 0, 3, 2, 14})
+press("W")
+assert_line("magi_crown_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
+press("A")
+assert_line("magi_crown_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
+assert_line("magi_crown_int", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0 + 2,
+            "INT " .. prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) .. " from " .. int0)
+assert_line("magi_crown_flags", prog:read_u8(PFLAGS_ADDR) & 0x23 == 0x23, "pflags " .. prog:read_u8(PFLAGS_ADDR))
+-- Take it off: the equipment letters count the worn slots before the head.
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+local head_letter = 0
+for slot = 22, 24 do if inv_field(slot, 0) ~= 0xFF then head_letter = head_letter + 1 end end
+press("T")
+assert_line("magi_crown_takeoff_prompt", wait_screen("Take off which item"), "take-off prompt missing: " .. rowtext(0))
+press(string.char(65 + head_letter))
+assert_line("magi_crown_taken_off", wait_screen("You take off"), "no take-off message: " .. rowtext(0))
+assert_line("magi_crown_int_restored", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0,
+            "INT " .. prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) .. " from " .. int0)
 dump("after_exchange")
 print("SCENARIO DONE")
 """
@@ -1461,7 +1683,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 14) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
 end
 assert_line("save_completed", title_ok, "save did not complete")
 print("SCENARIO DONE")
@@ -1473,7 +1695,7 @@ LUA_REBOOT_LOAD_BODY = r"""
 -- a2_require_play has loaded the play payload (cold-boot crash).
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 14) == 0xA9 then break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then break end
 end
 press("L")
 local DISK_MODE = 0x0a05
@@ -1551,7 +1773,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 14) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
 end
 assert_line("st_saved", title_ok, "save to slot 2 did not complete")
 press("L")
@@ -1596,7 +1818,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 14) == 0xA9 then saved2 = true break end
+    if prog:read_u8(0x550 + 11) == 0xA9 then saved2 = true break end
 end
 assert_line("st_resaved", saved2, "re-save to slot 2 did not complete")
 dump("after_slot_tracking")
@@ -1620,7 +1842,65 @@ def priest_map_area_lua() -> str:
 
 
 def help_overlay_lua() -> str:
-    return _chargen_body("A") + LUA_HELP_BODY
+    title_check = r"""
+for i = 1, 300 do
+    emu.wait(0.1)
+    if screen_has("N)ew") then break end
+end
+local game_drive = nil
+for _, image in pairs(manager.machine.images) do
+    if image.filename == "GAME_IMAGE" then game_drive = image end
+end
+assert_line("legal_game_drive", game_drive ~= nil, "program drive not found")
+assert_line("legal_mount_save", game_drive:load("SAVE_IMAGE") == nil, "save disk did not mount")
+legal_press("A")
+for i = 1, 100 do
+    if screen_has("Insert program disk") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_load_prompt", screen_has("Insert program disk"), "optional overlay did not prompt")
+legal_press(string.char(27))
+for i = 1, 100 do
+    if screen_has("N)ew") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_load_cancel", screen_has("N)ew"), "Escape did not cancel optional overlay")
+legal_press("A")
+for i = 1, 100 do
+    if screen_has("Insert program disk") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_title_retry_prompt", screen_has("Insert program disk"), "retry prompt absent")
+local title_saved = {}
+for i = 0, 141 do title_saved[i] = prog:read_u8(LEGAL_SAVE_ADDR + i) end
+assert_line("legal_restore_program", game_drive:load("GAME_IMAGE") == nil, "program disk did not mount")
+legal_press(" ")
+for i = 1, 100 do
+    if screen_has("License & Source") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_title_entry", screen_has("License & Source"), "title A did not open legal viewer")
+local title_stable = true
+for i = 0, 141 do
+    if i ~= 0x17 and title_saved[i] ~= prog:read_u8(LEGAL_SAVE_ADDR + i) then title_stable = false end
+end
+assert_line("legal_successful_retry_snapshot", title_stable, "successful retry replaced snapshot")
+legal_press("Q")
+for i = 1, 100 do
+    emu.wait(0.2)
+    if screen_has("N)ew") then break end
+end
+assert_line("legal_title_return", screen_has("N)ew"), "legal viewer did not return to title")
+"""
+    ready = (LUA_LEGAL_INPUT_HELPER
+             .replace("LEGAL_KEY_WAIT_START", hex(_sym_addr("input_get_key")))
+             .replace("LEGAL_KEY_WAIT_END", hex(_sym_addr("igk_key"))))
+    return (LUA_HELPERS + ready + title_check.replace("LEGAL_SAVE_ADDR", hex(_sym_addr("legal_zp_save"))) + LUA_CHARGEN.replace("CLASS_KEY", "A")
+            + LUA_HELP_BODY.replace("LEGAL_NOTICE_ADDR", hex(_sym_addr("legal_notice_filename")))
+                           .replace("LEGAL_OPENED_ADDR", hex(_sym_addr("legal_opened")))
+                           .replace("LEGAL_SAVE_ADDR", hex(_sym_addr("legal_zp_save")))
+                           .replace("LEGAL_CANCEL_START", hex(_sym_addr("legal_cancel_restore")))
+                           .replace("LEGAL_CANCEL_END", hex(_sym_addr("legal_cancel_return"))))
 
 
 def wizard_flow_lua() -> str:
@@ -1803,7 +2083,10 @@ def dungeon_descend_lua() -> str:
 
 
 def death_flow_lua() -> str:
-    return _chargen_body("A") + LUA_DEATH_BODY
+    return _chargen_body("A") + (LUA_DEATH_BODY
+                                 .replace("HP_LO_ADDR", hex(_sym_addr("zp_player_hp_lo")))
+                                 .replace("HP_HI_ADDR", hex(_sym_addr("zp_player_hp_hi")))
+                                 .replace("POISON_ADDR", hex(_sym_addr("zp_eff_poison"))))
 
 
 def _inv_helpers() -> str:
@@ -1815,7 +2098,8 @@ def _inv_helpers() -> str:
 def weapon_exchange_lua() -> str:
     return (_chargen_body("A") + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
             ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo"))).replace(
-            "PFLAGS_ADDR", hex(_sym_addr("player_pflags")))
+            "PFLAGS_ADDR", hex(_sym_addr("player_pflags"))).replace(
+            "PLAYER_DATA_ADDR", hex(_sym_addr("player_data")))
 
 
 def save_load_lua() -> str:
@@ -1975,7 +2259,7 @@ SCENARIO_LUA = {
 # it as -flop2, swap loads it into flop1 from Lua.
 SAVE_DISK_SCENARIOS = ("disk_setup_two_drive", "disk_setup_swap",
                        "disk_setup_adopt", "save_load", "death_flow",
-                       "save_reboot_load", "save_slot_tracking")
+                       "save_reboot_load", "save_slot_tracking", "help_overlay")
 FLOP2_SCENARIOS = ("disk_setup_two_drive", "disk_setup_adopt",
                    "save_load", "death_flow", "save_slot_tracking")
 SAVE_IMAGE = ROOT / "build" / "apple2" / "save1.po"
@@ -2034,10 +2318,12 @@ def _run_mame(args, lua, flop2):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, env=env)
     try:
-        stdout, stderr = proc.communicate(timeout=max(300, args.seconds + 60))
+        stdout, stderr = proc.communicate(timeout=30)
     except subprocess.TimeoutExpired:
         proc.kill()
         stdout, stderr = proc.communicate()
+        evidence = "\n".join(((stdout or "") + (stderr or "")).splitlines()[-15:])
+        raise TimeoutError("Apple IIe runtime exceeded the 30-second host deadline.\n" + evidence) from None
     return (stdout or "") + (stderr or "")
 
 
@@ -2207,7 +2493,7 @@ def main() -> int:
     check("boot_progress", bootprog >= 0xB1,
           f"max count digit={bootprog:#04x}")
 
-    # Menu string "N)ew  L)oad  D)isk Setup" starts at column 28; each half
+    # Menu string "N)ew  L)oad  D)isk Setup" starts at column 22; each half
     # row holds 40 bytes at half-row offset col>>1.
     for half_name, parity in (("main", 1), ("aux", 0)):
         if half_name not in dumps:

@@ -1,7 +1,8 @@
 """Recorder (§6.8): everything a session writes under build/playtest/sessions/<id>/.
 
 - ``summary.json``: goal, mode, seeds, per-character results.
-- ``events.jsonl``: character start/end, level entry, findings, restarts, plateau.
+- ``events.jsonl``: character start/end, level entry, findings, restarts, plateau,
+  kills ("You have slain the <name>.": name, dlvl, clvl).
 - ``w<N>/<goal>/<seed>/trace.jsonl.gz``: every decision. The goal is in the
   path because regression plays the same seeds for every goal.
 - ``w<N>/snapshots/<goal>-<seed>-s<step>-dl<N>.vsf`` + ``.brain.json``: level

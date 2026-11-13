@@ -1,5 +1,6 @@
 import contextlib
 import dataclasses
+import functools
 import json
 import tempfile
 import unittest
@@ -433,7 +434,7 @@ class BalrogQueueTest(unittest.TestCase):
         service.schedule(q, {})
         balrog = [j for j in service.running.values() if j["queue"] == "balrog"]
         self.assertEqual([(j["character"], j["goal"], j["step_budget"]) for j in balrog],
-                         [("elf-priest", "balrog", 3_000_000)] * 2)   # one graduate: two seeds of it
+                         [("elf-priest", "balrog", queue.DEFAULTS["balrog_budget"])] * 2)   # one graduate: two seeds of it
         self.assertEqual(len({j["seed"] for j in balrog}), 2)
         self.assertEqual(sum(not j["paused"] for j in service.running.values()), 4)
         self.assertEqual(sum(j["paused"] for j in service.running.values() if j["queue"] == "main"), 2)
@@ -491,6 +492,29 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual(len(runs), 3)
         self.assertEqual(len({j["seed"] for j in runs}), 3)               # each its own dice
         self.assertTrue(all(j["resume"]["run"] == item["start"]["run"] for j in runs))
+
+    def test_a_focus_share_leaves_the_rest_to_everyone_else(self) -> None:
+        """Maintainer, 2026-11-11: "half the workers for this priest
+        character, and the other half for everyone else": past its share the
+        focus's copies wait, the others take turns, one game each first, and
+        the focus stops none of their games."""
+        service = self.service(6, 5)
+        for combo in ("half-troll-priest", "elf-priest", "human-warrior"):
+            service.balrog.graduate("c64", combo, {})
+        service.config.update(balrog_characters=["half-troll-priest"], balrog_copies=24,
+                              balrog_focus_workers=2, platforms=["c128"])
+        for _ in range(5):
+            self.assertTrue(service.start_balrog())
+        playing = sorted(j["character"] for j in service.running.values() if j["queue"] == "balrog")
+        self.assertEqual(playing, ["elf-priest", "elf-priest", "half-troll-priest", "half-troll-priest",
+                                   "human-warrior"])
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        q = queue.Queue("deep", service.home)
+        q.platform("c128")
+        service.schedule(q, {})
+        self.assertEqual(stopped, [])
+        self.assertNotEqual(service.balrog.take(exclude=("half-troll-priest",))["character"], "half-troll-priest")
 
     def test_a_graduate_playing_already_is_not_taken_again(self) -> None:
         """2026-11-06: the rotation lapped a long game, and two games of one
@@ -709,6 +733,16 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertFalse(queue.same_brain("old", "new", service.home))   # every class: View counted
         view.write_text(view.read_text() + "class Creature:\n    glyph: str\n")   # a class it holds grew
         self.assertFalse(queue.start_loads(start, "new", "c128", service.home))
+        # 2026-11-11: Creature's defaulted ``name`` retired a level-25 start;
+        # an old Creature reads the class's default.
+        base = "class Creature:\n    glyph: str\n    level: int\n"
+        old_view = service.home / "builds" / "old" / "playtest" / "moria_playtest" / "view.py"
+        old_view.write_text(old_view.read_text() + base)
+        grown = base + '    name: str = field(default="", compare=False)\n    note: str = ""\n'
+        view.write_text("class View:\n    last_path: list = []\n" + grown)
+        self.assertTrue(queue.start_loads(start, "new", "c128", service.home))
+        view.write_text(view.read_text() + "    seen: set = field(default_factory=set)\n")
+        self.assertFalse(queue.start_loads(start, "new", "c128", service.home))   # no class default
 
     def test_balrog_platforms_join_from_level_1_and_take_no_other_port(self) -> None:
         """Maintainer, 2026-11-06: the Balrog queue on the C64, every
@@ -800,7 +834,7 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual([s["run"] for s in item["start_history"]], ["m7"])
         self.assertTrue(service.start_balrog())
         run = next(iter(service.running.values()))
-        self.assertEqual((run["resume"]["run"], run["step_budget"]), ("b1-clvl27", 3_000_000 + 350_000))
+        self.assertEqual((run["resume"]["run"], run["step_budget"]), ("b1-clvl27", queue.DEFAULTS["balrog_budget"] + 350_000))
 
     def test_a_snapshot_port_checkpoint_is_its_level_entry_snapshot(self) -> None:
         service = self.service(4, 2)
@@ -843,7 +877,7 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertFalse(service.balrog_checkpoint(self.balrog_record("b4"), {"build": "b0", "resume": level}))
 
     def test_a_run_checkpoints_a_new_level_or_better_armour(self) -> None:
-        wanted = queue.checkpoint_wanted
+        wanted = functools.partial(queue.checkpoint_wanted, dlvl=0)
         self.assertTrue(wanted(28, 40, 27, 40))
         self.assertTrue(wanted(27, 45, 27, 40))
         self.assertFalse(wanted(27, 44, 27, 40))
@@ -856,6 +890,12 @@ class BalrogQueueTest(unittest.TestCase):
         # 2,000,000 experience to its clvl 39 checkpoint.
         self.assertTrue(wanted(39, 40, 39, 40, 4_100_000, 3_850_000))
         self.assertFalse(wanted(39, 40, 39, 40, 4_099_999, 3_850_000))
+        # 2026-11-11: armour checkpoints on DL37 and DL39 level entries put
+        # every later game of two clvl 31 Warriors on the level that had
+        # killed the last, 84 steps in for one: in town only.
+        self.assertFalse(queue.checkpoint_wanted(28, 40, 27, 40, dlvl=37))
+        self.assertFalse(queue.checkpoint_wanted(31, 36, 31, 31, dlvl=39))
+        self.assertTrue(queue.checkpoint_wanted(31, 36, 31, 31, dlvl=0))
 
     def test_an_old_start_without_ac_takes_its_runs_better_armour(self) -> None:
         service = self.service(4, 2)
@@ -1530,13 +1570,20 @@ class WandTest(unittest.TestCase):
         self.assertEqual((decision.key, decision.layer), (KEY_USE, "phase"))
 
     def test_the_magic_shop_sells_the_wands_and_staff_wanted(self) -> None:
-        from moria_playtest.brain import TELEPORT_STAFF, WAND_BUYS
+        """2026-11-11 (maintainer: warriors "should be using magic items like
+        wands and staves"): the best attack wands not carried with charges,
+        up to the KEEP_ATTACK_WANDS kinds drop_junk keeps, and each fight
+        staff or wand; one charged wand no longer stops the rest."""
+        from moria_playtest.brain import FIGHT_DEVICES, KEEP_ATTACK_WANDS, TELEPORT_STAFF, WAND_BUYS
         brain = self.brain("human-warrior")
-        self.assertEqual(brain.wands_wanted(), [*WAND_BUYS, TELEPORT_STAFF])
+        self.assertEqual(brain.wands_wanted(), [*WAND_BUYS[:KEEP_ATTACK_WANDS], *FIGHT_DEVICES, TELEPORT_STAFF])
         brain.wands = {"Wand of Lightning": 6}
-        self.assertEqual(brain.wands_wanted(), [TELEPORT_STAFF])
-        brain.wands[TELEPORT_STAFF] = 3
-        self.assertEqual(brain.wands_wanted(), [])
+        others = [w for w in WAND_BUYS if w != "Wand of Lightning"][:KEEP_ATTACK_WANDS - 1]
+        self.assertEqual(brain.wands_wanted(), [*others, *FIGHT_DEVICES, TELEPORT_STAFF])
+        brain.wands.update({w: 3 for w in (*others, *FIGHT_DEVICES, TELEPORT_STAFF)})
+        self.assertEqual(brain.wands_wanted(), [])                       # four kinds charged: no more
+        brain.wands[others[0]] = 0                                       # run empty: one wanted again
+        self.assertEqual(brain.wands_wanted(), [WAND_BUYS[0]])
 
 
 class UnknownItemTest(unittest.TestCase):
@@ -2353,3 +2400,41 @@ class CatalogNamesTest(unittest.TestCase):
         self.assertNotIn(9, got)                                          # past the catalog: unnamed
         game.abi.all_symbols = {}
         self.assertEqual(view.catalog_slot_names(game), {})             # a port without the catalog
+
+
+class NewerBuildTest(unittest.TestCase):
+    """A Balrog run ends in town when a newer build is waiting (rotate),
+    replacing a 3,000,000-step budget that cut runs off on their way back
+    down to the Balrog (maintainer, 2026-11-11)."""
+
+    def test_a_later_build_with_the_port_is_newer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def build(name: str, built: float, platforms: list[str]) -> None:
+                (home / "builds" / name).mkdir(parents=True)
+                (home / "builds" / name / "build.json").write_text(
+                    json.dumps({"built": built, "platforms": platforms}))
+            build("old", 100.0, ["c64"])
+            build("tree", 200.0, ["c64", "c128"])
+            build("ci", 300.0, ["c128"])            # newer, but not for the C64
+            (home / "service.json").write_text(json.dumps({"build": "tree", "build_queue_build": "ci"}))
+            self.assertEqual(queue.newer_build("old", "c64", home), "tree")
+            self.assertIsNone(queue.newer_build("tree", "c64", home))     # it is the newest
+            self.assertEqual(queue.newer_build("tree", "c128", home), "ci")
+            self.assertIsNone(queue.newer_build("ci", "c128", home))
+            (home / "service.json").write_text(json.dumps({}))
+            self.assertIsNone(queue.newer_build("old", "c64", home))      # no service yet
+
+    def test_only_a_balrog_run_in_town_rotates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for name, built in (("old", 100.0), ("new", 200.0)):
+                (home / "builds" / name).mkdir(parents=True)
+                (home / "builds" / name / "build.json").write_text(json.dumps({"built": built, "platforms": ["c64"]}))
+            (home / "service.json").write_text(json.dumps({"build": "new"}))
+            poll = queue.ROTATE_POLL_STEPS
+            self.assertEqual(queue.rotate_due("balrog", 0, poll * 3, "old", "c64", home), "new")
+            self.assertIsNone(queue.rotate_due("balrog", 50, poll * 3, "old", "c64", home))     # deep: plays on
+            self.assertIsNone(queue.rotate_due("balrog", 0, poll * 3 + 1, "old", "c64", home))  # between polls
+            self.assertIsNone(queue.rotate_due("deep", 0, poll * 3, "old", "c64", home))        # not a Balrog run
+            self.assertIsNone(queue.rotate_due("balrog", 0, poll * 3, "new", "c64", home))      # already the newest

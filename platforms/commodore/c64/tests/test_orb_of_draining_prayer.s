@@ -6,7 +6,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tod_results: .fill 3, $ff
+tod_results: .fill 6, $ff
 
 .pc = $080E "Test Code"
 
@@ -20,7 +20,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #2
+    ldx #5
 !copy:
     lda tod_results,x
     sta $0400,x
@@ -106,6 +106,7 @@ tod_huff_calls: .byte 0
 tod_last_huff_id: .byte 0
 tod_last_spell_idx: .byte $ff
 tod_kill_calls: .byte 0
+tod_slot: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -434,11 +435,121 @@ test_start:
     bne !t3_fail+
     lda #$01
     sta tod_results + 2
-    jmp test_finish
+    jmp !t4+
 !t3_fail:
     lda #$00
     sta tod_results + 2
+
+    // Tests 4-6 (VMS spells.inc fire_ball: a ball does double damage where
+    // its harm type meets the creature's defenses, and a holy orb's is evil;
+    // Umoria spellGetAreaAffectFlags HolyOrb CD_EVIL). Orb of Draining's
+    // entry (ped_s17 jumps to eff_ball_holy: run_tests.sh static contract):
+    // 20 at an evil creature of 50 HP leaves 10, ball_harm clear after.
+!t4:
+    lda #1
+    jsr test_one_orb_target
+    bcc !t4_fail+
+    lda #20
+    jsr eff_ball_holy
+    jsr test_target_hp
+    cmp #10
+    bne !t4_fail+
+    lda ball_harm
+    bne !t4_fail+
+    lda #$01
+    sta tod_results + 3
+    jmp !t5+
+!t4_fail:
+    lda #$00
+    sta tod_results + 3
+
+    // Test 5: the same orb at a creature that is not evil: 50 - 20 = 30.
+!t5:
+    lda #0
+    jsr test_one_orb_target
+    bcc !t5_fail+
+    lda #20
+    jsr eff_ball_holy
+    jsr test_target_hp
+    cmp #30
+    bne !t5_fail+
+    lda #$01
+    sta tod_results + 4
+    jmp !t6+
+!t5_fail:
+    lda #$00
+    sta tod_results + 4
+
+    // Test 6: any other ball (Fire Ball, eff_ball) at an evil creature does
+    // its plain damage: 50 - 20 = 30.
+!t6:
+    lda #1
+    jsr test_one_orb_target
+    bcc !t6_fail+
+    lda #20
+    jsr eff_ball
+    jsr test_target_hp
+    cmp #30
+    bne !t6_fail+
+    lda #$01
+    sta tod_results + 5
     jmp test_finish
+!t6_fail:
+    lda #$00
+    sta tod_results + 5
+    jmp test_finish
+
+// One creature of 50 HP east of the player (type 10), evil when A != 0.
+// Output: carry set when placed, tod_slot = its slot.
+test_one_orb_target:
+    pha
+    jsr test_reset_orb_of_draining_state
+    jsr tv_setup_dark_room
+    lda #23
+    sta ms_spawn_x
+    lda #12
+    sta ms_spawn_y
+    lda #10
+    jsr monster_spawn_one
+    bcc !toot_fail+
+    lda #23
+    ldy #12
+    jsr monster_find_at
+    bcc !toot_fail+
+    stx tod_slot
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #50
+    sta (zp_ptr0),y
+    iny
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_mflags,x
+    and #(~CF_EVIL) & $ff
+    sta cr_mflags,x
+    pla
+    beq !toot_plain+
+    lda cr_mflags,x
+    ora #CF_EVIL
+    sta cr_mflags,x
+!toot_plain:
+    sec
+    rts
+!toot_fail:
+    pla
+    clc
+    rts
+
+// A = the low byte of tod_slot's HP.
+test_target_hp:
+    ldx tod_slot
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    rts
 
 test_body_end:
 .assert "Test code stays below MAP_BASE (map writes during tests)", test_body_end <= MAP_BASE, true

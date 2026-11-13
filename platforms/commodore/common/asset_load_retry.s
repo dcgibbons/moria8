@@ -8,6 +8,12 @@
 // recall strings all load through here.
 // Input/output: as hal_asset_load_prg_header (A = name length, X/Y = name).
 // Clobbers: A, X, Y
+#if HAL_STORAGE_ASSET_LOAD_INFALLIBLE
+// ROM assets either copy successfully or halt on a broken directory ABI.
+.label asset_load_retry = hal_asset_load_prg_header
+.label asset_load_required = hal_asset_load_prg_header
+asset_load_retries: .byte 0
+#else
 #if HAL_STORAGE_ASSET_LOAD_TWO_ATTEMPTS
 .const ASSET_LOAD_ATTEMPTS = 2   // the OS already retries each sector
 #else
@@ -69,3 +75,4 @@ alr_name_hi:        .byte 0
 alr_left:           .byte 0
 // Repeated loads since boot (wraps); the playtest auditor reports changes.
 asset_load_retries: .byte 0
+#endif

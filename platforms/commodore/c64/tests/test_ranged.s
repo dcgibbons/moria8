@@ -62,7 +62,13 @@ test_exit_trampoline:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+// Monster spells and breath are not exercised here: out of the way above
+// $E0FF, which test 9 reads (resistance armour, 2026-11-11, took the body into
+// the create overlay at $D000).
+.segmentdef TestUnusedMonsterMagic [start=$e100]
+.segment TestUnusedMonsterMagic
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"

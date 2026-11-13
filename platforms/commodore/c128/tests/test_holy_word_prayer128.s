@@ -249,11 +249,14 @@ eff_remove_fear:
     sta eff_fear_timer
     rts
 
+// player_calc_stats as production runs it (core/player.s): the base copied to
+// the current stats, and the ZP mirrors refreshed from them (2026-11-11).
 player_calc_stats:
     ldx #0
 !pcs_loop:
     lda player_data + PL_STR_BASE,x
     sta player_data + PL_STR_CUR,x
+    sta zp_player_str,x
     inx
     cpx #6
     bcc !pcs_loop-

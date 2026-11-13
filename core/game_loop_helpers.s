@@ -5,10 +5,6 @@
 
 #import "input_ui_helpers.s"
 
-.const HELP_KEY_Q = $51
-.const HELP_KEY_SPACE = $20
-.const HELP_KEY_RETURN = $0d
-
 // ============================================================
 // Shared UI-only command flows
 // ============================================================
@@ -24,33 +20,7 @@ cmd_show_character_view:
 	    jsr hal_screen_clear
 	    jmp vp_render_status_loop
 
-cmd_show_help_view:
-    lda #0
-    sta help_page_idx
-!help_page_loop:
-    jsr tramp_ui_help_display
-!help_key_loop:
-    jsr input_prepare_modal_dismiss_key
-    jsr hal_input_get_key
-    cmp #HELP_KEY_Q
-    beq !help_done+
-    jsr input_is_modal_escape_key
-    beq !help_done+
-    cmp #HELP_KEY_SPACE
-    beq !help_advance+
-    cmp #HELP_KEY_RETURN
-    beq !help_advance+
-    jmp !help_key_loop-
-!help_advance:
-    lda help_page_idx
-    clc
-    adc #1
-    cmp help_page_count
-    bcs !help_done+
-    inc help_page_idx
-    jmp !help_page_loop-
-!help_done:
-    jmp ui_view_return_to_gameplay_view
+#import "ui_help_command.s"
 
 cmd_show_inventory_view:
     jsr tramp_ui_inv_display

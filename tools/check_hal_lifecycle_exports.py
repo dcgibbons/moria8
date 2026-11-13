@@ -357,12 +357,15 @@ def main() -> int:
         "HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL",
         "HAL_PLATFORM_EGO_AC_BONUS_LOCAL",
     )
-    ego_text = (COMMON_DIR / "ego_items.s").read_text(
-        encoding="utf-8", errors="replace"
+    ego_text = "\n".join(
+        (COMMON_DIR / fname).read_text(encoding="utf-8", errors="replace")
+        for fname in ("ego_items.s", "ego_suffix_strings.s")
     )
     for name in ego_policy_consumers:
         if name not in ego_text:
-            policy_missing.append(f"core/ego_items.s does not consume {name}")
+            policy_missing.append(
+                f"core/ego_items.s (+ ego_suffix_strings.s) does not consume {name}"
+            )
 
     spell_effects_text = (COMMON_DIR / "spell_effects.s").read_text(
         encoding="utf-8", errors="replace"

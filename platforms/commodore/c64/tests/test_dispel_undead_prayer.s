@@ -41,7 +41,23 @@ test_done_break:
 #import "../../../../core/math.s"
 #import "../../../../core/tables.s"
 #import "../../../../core/item_defs.s"
+// The equipment flags, the resistance armour roll and its suffixes are not
+// exercised here (no equipping, no item spawns): out of the way above the
+// I/O hole (2026-11-11, the Lordly rings and the element touches).
+.segmentdef TestUnusedEgoArmour [start=$e100]
+#define PFLAGS_SEGMENT_CUSTOM
+.macro PflagsSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro PflagsRestoreSegment() {
+    .segment Default
+}
+// player_calc_stats ends in the flags routine, parked above: a stray call
+// stops here at a BRK (no results written) instead of running junk at $E1xx.
+#define PLAYER_RECALC_PFLAGS_EXTERNAL
 #import "../../../../core/player.s"
+hal_player_recalc_pflags:
+    brk
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
@@ -65,6 +81,20 @@ test_done_break:
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
+#define EGO_ARMOUR_SEGMENT_CUSTOM
+.macro EgoArmourSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro EgoArmourRestoreSegment() {
+    .segment Default
+}
+#define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+.macro EgoArmourDataSegment() {
+    .segment TestUnusedEgoArmour
+}
+.macro EgoArmourDataRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"

@@ -158,11 +158,16 @@ eff_turn_undead_core:
     jsr pmu_find_visible_flagged
     bcc !etud_done+
     inc pmu_dispel_targets
-    lda #40
-    jsr rng_range
-    ldx cmb_type
+    // VMS spells.inc turn_undead (Umoria spellTurnUndead): turned when
+    // clvl + 1 > level, else on randint(5) = 1. X = the creature type
+    // (pmu_find_visible_flagged returns it).
+    lda zp_player_lvl
     cmp cr_level,x
-    bcc !etud_unaffected+
+    bcs !etud_turned+
+    lda #5
+    jsr rng_range
+    bne !etud_unaffected+
+!etud_turned:
     ldy #MX_CONFUSE
     lda zp_player_lvl
     sta (zp_ptr0),y
@@ -210,8 +215,13 @@ eff_holy_word:
     sta player_data + PL_HP_HI
     ldx #HSTR_PIQ_VERY_GOOD
     jsr huff_print_msg
+    // The stats restored (Umoria playerStatRestore) as a Potion of
+    // Restoration does: player_calc_stats, which refreshes the ZP stat
+    // mirrors too. No player_sync_to_zp: the player record is refreshed only
+    // at save and load, and copying it back undid the heal, the position,
+    // mana and food with the last save's (C64 Balrog queue, 2026-11-11: HP
+    // 652/443 after a clvl 40 Priest's Holy Word).
     jsr player_calc_stats
-    jsr player_sync_to_zp
     lda #3
     sta eff_invuln_timer
     lda #CF_EVIL

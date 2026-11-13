@@ -1,3 +1,4 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
 // main.s — Entry point for Moria8 Plus/4
 //
 // BASIC stub at $1001 with SYS entry.
@@ -18,6 +19,7 @@
 #define PLUS4_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define STORAGE_STATUS_HELPER
+#define HELP_TITLE_EXTERNAL
 .if (!cmdLineVars.containsKey("OVL_OUT")) {
     .error "OVL_OUT is required; generated files belong under build/"
 }
@@ -26,6 +28,9 @@
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
+.const LEGAL_BASE = $e000
+.const LEGAL_LIMIT = $f000
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
@@ -180,6 +185,7 @@ exit_trampoline:
     jmp PLUS4_KERNAL_RESET
 
 #import "../../../core/zeropage.s"
+#import "legal.s"
 
 plus4_kernal_call_saved_bank: .byte 0
 
@@ -399,6 +405,14 @@ tramp_dig_ability:
 #import "../../../core/math.s"
 #import "../../../core/tables.s"
 #import "../../../core/item_defs.s"
+// Equipment flags ride the always-visible $F000 banked runtime (~123 B free below $FC00).
+#define PFLAGS_SEGMENT_CUSTOM
+.macro PflagsSegment() {
+    .segment RuntimeBanked
+}
+.macro PflagsRestoreSegment() {
+    .segment Default
+}
 #import "../../../core/player.s"
 #import "../../../core/ui_messages.s"
 #import "../../../core/ui_status.s"
@@ -476,6 +490,17 @@ ol_target:        .byte 0
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
+// roll_enchantment's equipment branch rides the banked runtime behind
+// tramp_re_equip (the rings of Lordly Protection, 2026-11-11, took the catalog
+// boot loads past MAP_BASE).
+#define RE_EQUIP_SEGMENT_CUSTOM
+.macro ReEquipSegment() {
+    .segment RuntimeBanked
+}
+.macro ReEquipRestoreSegment() {
+    .segment Default
+}
+.label re_equip_entry = tramp_re_equip
 #import "../../../core/item.s"
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay in Default; the generator
@@ -1026,7 +1051,9 @@ plus4_test_single_drive_before_save:
     lda #2
     sta plus4_test_single_drive_stage
     jsr save_game
-    bcc plus4_test_single_drive_save_return_fail
+    bcs !saved+
+    jmp plus4_test_single_drive_save_return_fail
+!saved:
     lda #3
     sta plus4_test_single_drive_stage
     lda #8
@@ -1054,6 +1081,11 @@ title_menu_loop:
 !load_now:
     jmp title_load_game
 !not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
@@ -1094,7 +1126,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #7                  // Center: (40-25)/2 ~= 7
+    lda #(SCREEN_COLS - 35) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -1430,6 +1462,17 @@ tramp_ego_get_ac_bonus:
     jsr plus4_bank_ram
     pla
     jsr ego_get_ac_bonus
+    pha
+    jsr plus4_bank_ram
+    pla
+    rts
+
+// tramp_re_equip — roll_enchantment's equipment branch (banked at $F000).
+// Input: zp_temp0 = item type. Output: A = p1, fi_add_* set.
+tramp_re_equip:
+    sei
+    jsr plus4_bank_ram
+    jsr re_equip
     pha
     jsr plus4_bank_ram
     pla
@@ -2440,6 +2483,7 @@ ovl_spell_end:
 // Help overlay — dedicated help modal screen at $E000
 // ============================================================
 .segment HelpOverlay
+    #import "../../../core/ui_help_title.s"
     #import "../../../core/ui_help_data.s"
     #import "../../../core/ui_help_page2_data.s"
     #import "../../../core/ui_help.s"
@@ -2604,3 +2648,12 @@ ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true
 .assert "irq_no_blink begins with CLD", irq_no_blink_after_cld == irq_no_blink + 1, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../../core/ui_legal.s"
+#import "../../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

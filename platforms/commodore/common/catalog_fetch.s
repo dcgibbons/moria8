@@ -37,7 +37,12 @@ cat_hidden_end:
 .assert "Catalog sector table follows the index (MONSTER.IDX order)", cat_sector_track, catalog_index_end
 .assert "Catalog index fits one load window", CATALOG_IDX_SIZE <= $1000, true
 
+#if PLATFORM_CAT_RECORD_EXTERNAL
+.label cat_record = PLATFORM_CAT_RECORD_BASE   // a port's free RAM (the C64: page 3)
+.assert "The record buffer is the size config.s gives it", CATALOG_RECORD_SIZE, 49
+#else
 cat_record:   .fill CATALOG_RECORD_SIZE, 0   // The record catalog_fetch_record read
+#endif
 cfr_group:    .byte 0                       // Record sector (id / records per sector)
 cfr_offset:   .byte 0                       // Byte of the record in its sector's data
 cfr_track:    .byte 0

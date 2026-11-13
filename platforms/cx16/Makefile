@@ -45,7 +45,8 @@ VERSION_INC  = $(BUILD)/version_strings.inc
 CX16_MAIN_SRC  = main.s
 CX16_TITLE_SRC = title_data_cx16.s
 CX16_TIER_DIR  = creature_data
-CX16_SOURCES   = $(wildcard *.s hal/*.s creature_data/*.s ../../core/*.s ../../platforms/shared/*.s ../../platforms/shared/catalog/*.s ../../platforms/commodore/common/*.s)
+CX16_SOURCES   = $(wildcard *.s hal/*.s creature_data/*.s ../../core/*.s ../../platforms/shared/*.s ../../platforms/shared/catalog/*.s ../../platforms/commodore/common/*.s) \
+                 ../commodore/c128/ui_help_data_80.s
 
 CX16_MAIN_PRG  = $(OUTCX16)/MORIA8.PRG
 CX16_AUX_PRG   = $(OUTCX16)/CX16.AUXDATA
@@ -64,6 +65,7 @@ CX16_SOURCE_OFFER = $(OUTCX16)/SOURCE-OFFER
 CX16_ZIP_IMAGE = $(BUILD)/moria8-cx16.zip
 CX16_MAIN_STAMP = $(OUTCX16)/.main.stamp
 
+CX16_OVL_PRGS += $(OUTCX16)/LEGALUI
 .PHONY: all build disk run test-memory-contract test-memory-contract-selftest test-runtime clean ensure-kickass kickass
 
 all: build
@@ -151,4 +153,4 @@ $(CX16_ZIP_IMAGE): build
 		OVL.START OVL.TOWN OVL.DEATH OVL.MODAL OVL.GEN OVL.HELP \
 		OVL.UI OVL.ITEMS OVL.SPELL OVL.CHEST OVL.STORAGE OVL.TITLE \
 		MONSTER.CAT \
-		TITLE LICENSE SOURCE-OFFER
+		TITLE LICENSE SOURCE-OFFER LEGALUI

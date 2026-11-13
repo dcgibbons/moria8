@@ -3,7 +3,7 @@
 // Tests: dispatch routing, object detection reveal, mass genocide LOS filter,
 // teleport level depth change (VMS Moria scrolls.inc case 10).
 //
-// Results at $0400-$040e: $01 = pass, $00 = fail per test
+// Results at $0400-$0411: $01 = pass, $00 = fail per test
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #14
+    ldx #17
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -130,7 +130,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 15, $ff
+tc_results: .fill 18, $ff
 tc_loop_ctr: .byte 0
 tl_ok: .byte 0
 t7_slot_a: .byte 0
@@ -664,8 +664,159 @@ test_start:
     lda tl_ok
     sta tc_results + 14
 
+    // ==========================================
+    // Test 17: Wands of Lightning Balls and Acid Balls pass VMS's 24 and 40
+    // to eff_ball (wands.inc cases 19, 23)
+    // ==========================================
+    lda #0
+    sta spy_last
+    lda #ITEM_TYPE_WAND_LIGHTNING_BALL
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #24
+    bne !t17_fail+
+    lda #0
+    sta spy_last
+    lda #ITEM_TYPE_WAND_ACID_BALL
+    jsr irs_dispatch_p3_overlay
+    lda spy_last
+    cmp #40
+    bne !t17_fail+
+    lda #$01
+    .byte $2c
+!t17_fail:
+    lda #$00
+    sta tc_results + 15
+
+    // ==========================================
+    // Test 18: Wand of Fire Bolts: a 6d8 bolt (wands.inc case 4) into the
+    // creature east of the player, 200 HP down by 6-48
+    // ==========================================
+    :PatchJump(get_direction_target, tsp_direction_east)
+    jsr tsp_spawn_east
+    bcc !t18_fail+
+    lda #ITEM_TYPE_WAND_FIRE_BOLT
+    jsr irs_dispatch_p3_overlay
+    jsr tsp_hp
+    bne !t18_fail+              // high byte: still under 256
+    cpy #200 - 48
+    bcc !t18_fail+
+    cpy #200 - 6 + 1
+    bcs !t18_fail+
+    lda #$01
+    .byte $2c
+!t18_fail:
+    lda #$00
+    sta tc_results + 16
+
+    // ==========================================
+    // Test 19: Wand of Drain Life: 50 to a living creature, nothing to an
+    // undead one (spells.inc drain_life, cdefense $0008)
+    // ==========================================
+    lda #0
+    sta cr_mflags + 1
+    jsr tsp_spawn_east
+    bcc !t19_fail+
+    lda #ITEM_TYPE_WAND_DRAIN_LIFE
+    jsr irs_dispatch_p3_overlay
+    jsr tsp_hp
+    bne !t19_fail+
+    cpy #150
+    bne !t19_fail+
+    lda #CF_UNDEAD
+    sta cr_mflags + 1
+    jsr tsp_spawn_east
+    bcc !t19_fail+
+    lda #ITEM_TYPE_WAND_DRAIN_LIFE
+    jsr irs_dispatch_p3_overlay
+    jsr tsp_hp
+    bne !t19_fail+
+    cpy #200
+    bne !t19_fail+
+    lda #$01
+    .byte $2c
+!t19_fail:
+    lda #$00
+    sta tc_results + 17
+    lda #0
+    sta cr_mflags + 1
+
 !tests_done:
     jmp test_exit_trampoline
+
+// tsp_direction_east — get_direction_target's stand-in: the square east of
+// the player, carry set.
+tsp_direction_east:
+    lda zp_player_x
+    clc
+    adc #1
+    sta df_target_x
+    lda zp_player_y
+    sta df_target_y
+    sec
+    rts
+
+// tsp_spawn_east — Empty every slot, then a type-1 creature at (12, 10), east
+// of the player at (10, 10) along the lit floor test 7 laid, with 200 HP.
+// Carry set on success, the slot in tsp_slot.
+tsp_spawn_east:
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    ldx #0
+!tse_clear:
+    stx tsp_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #EMPTY_SLOT
+    sta (zp_ptr0),y
+    ldx tsp_slot
+    inx
+    cpx #MAX_MONSTERS
+    bcc !tse_clear-
+    lda #12
+    sta ms_spawn_x
+    lda #10
+    sta ms_spawn_y
+    lda #1
+    jsr monster_spawn_one
+    bcc !tse_done+
+    stx tsp_slot
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #200
+    sta (zp_ptr0),y
+    iny
+    lda #0
+    sta (zp_ptr0),y
+    sec
+!tse_done:
+    rts
+
+// tsp_hp — The test creature's HP: Y = low byte, A = high byte (Z for it).
+tsp_hp:
+    ldx tsp_slot
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    pha
+    iny
+    lda (zp_ptr0),y
+    tax
+    pla
+    tay
+    txa
+    rts
+tsp_slot: .byte 0
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
 
 // dungeon_render.s lives in TestCreateOverlay ($D000+) so the test body stays
 // below MAP_BASE; it must come after dungeon_data.s defines MAP_COLS.

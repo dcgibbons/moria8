@@ -138,6 +138,8 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local KBDBUF = 0x{kbdbuf:04X}
 local KBDBUF_LEN = 0x{kbdbuf_len:04X}
+local KEY_WAIT_START = 0x{syms.get("input_get_key", 0):04X}
+local KEY_WAIT_END = 0x{syms.get("igk_key", 0):04X}
 local CURRENT_OVL = 0x{current_ovl:04X}
 local PLAYER_X_ADDR = 0x{zp_px:04X}
 local PLAYER_Y_ADDR = 0x{zp_py:04X}
@@ -258,7 +260,23 @@ local function assert_line(name, ok)
     print("ASSERT " .. (ok and "PASS " or "FAIL ") .. name)
 end
 
+-- A heading can appear before typeahead is flushed. Observe an actual
+-- input poll only while waiting to send a key; leave no tap installed idle.
+local cpu = manager.machine.devices[":maincpu"]
 local function send_key(petscii)
+    local key_polled = false
+    local poll = prog:install_read_tap(KBDBUF_LEN, KBDBUF_LEN, "harness_key_poll",
+        function(offset, data, mask)
+            if key_polled or data ~= 0 then return end
+            local pc = cpu.state["PC"].value
+            if pc >= KEY_WAIT_START and pc < KEY_WAIT_END then key_polled = true end
+        end)
+    for _ = 1, 300 do
+        if key_polled then break end
+        emu.wait(1/60)
+    end
+    poll:remove()
+    if not key_polled then assert_line("key_wait_seen", false) end
     for _ = 1, 300 do
         if prog:read_u8(KBDBUF_LEN) == 0 then break end
         emu.wait(1/60)
@@ -524,10 +542,116 @@ end
     elif scenario == "help_overlay":
         body = """
 function run()
+    io.stdout:setvbuf("no")
+    assert_line("legal_title_ready", wait_title())
+    local game_drive = nil
+    for _, image in pairs(manager.machine.images) do
+        if image.filename == "LEGAL_GAME_IMAGE" then game_drive = image end
+        if image.filename == "LEGAL_SAVE_IMAGE" then image:unload() end
+    end
+    assert_line("legal_game_drive", game_drive ~= nil)
+    local function legal_mount(path)
+        -- DFS retains its catalogue while the drive is active. Model a
+        -- physical disk change only after the drive indicator turns off.
+        for _ = 1, 600 do
+            if (prog:read_u8(0xfe28) & 0x80) == 0 then return game_drive:load(path) end
+            emu.wait(1/60)
+        end
+        return "drive did not become idle"
+    end
+    assert_line("legal_mount_save", legal_mount("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x41)
+    local prompted = wait_screen("Insert program disk", 100)
+    assert_line("legal_load_prompt", prompted)
+    if not prompted then
+        print(string.format("DIAG legal pc=%04x romsel=%02x ovl=%02x", cpu.state["PC"].value,
+            prog:read_u8(0xf4), prog:read_u8(CURRENT_OVL)))
+        manager.machine:exit()
+        return
+    end
+    send_key(0x1B)
+    assert_line("legal_load_cancel", wait_screen("N)ew", 100))
+    send_key(0x41) -- Successful retry must retain the same caller snapshot.
+    assert_line("legal_title_retry_prompt", wait_screen("Insert program disk", 100))
+    local title_saved = {}
+    for i = 0, 141 do title_saved[i] = prog:read_u8(LEGAL_SAVE_ADDR + i) end
+    assert_line("legal_restore_program", legal_mount("LEGAL_GAME_IMAGE") == nil)
+    send_key(0x20)
+    assert_line("legal_title_entry", wait_screen("License & Source", 100))
+    local title_stable = true
+    for i = 0, 141 do
+        if i ~= 0x17 and title_saved[i] ~= prog:read_u8(LEGAL_SAVE_ADDR + i) then title_stable = false end
+    end
+    assert_line("legal_successful_retry_snapshot", title_stable)
+    send_key(0x51)
+    assert_line("legal_title_return", wait_title())
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
     send_key(0x3F) -- '?' (help)
     assert_line("help_opened", wait_screen("Command Reference", 80))
+    assert_line("help_license_hint", screen_has("L:License"))
+    send_key(0x20)
+    assert_line("help_license_entry", wait_screen("L License / Source", 80))
+    assert_line("legal_help_mount_save", legal_mount("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("legal_help_load_prompt", wait_screen("Insert program disk", 100))
+    local saved = {}
+    for i = 0, 141 do saved[i] = prog:read_u8(LEGAL_SAVE_ADDR + i) end
+    send_key(0x20) -- Retry while the program disk remains unavailable.
+    assert_line("legal_retry_prompt", wait_screen("Insert program disk", 100))
+    local stable = true
+    for i = 0, 141 do
+        if i ~= 0x17 and saved[i] ~= prog:read_u8(LEGAL_SAVE_ADDR + i) then stable = false end
+    end
+    assert_line("legal_retry_snapshot", stable)
+    local checked, restored = false, true
+    local cpu = manager.machine.devices[":maincpu"]
+    local cancel_tap = prog:install_write_tap(2, 2, "legal_cancel_zp",
+        function(offset, data, mask)
+            local pc = cpu.state["PC"].value
+            if checked or pc < LEGAL_CANCEL_START or pc >= LEGAL_CANCEL_END then return end
+            checked = true
+            -- Write taps run before the store; all other bytes are restored.
+            for i = 0, 141 do
+                if i ~= 0x17 and (i < 0x6a or i > 0x6c) then
+                    local actual = (i == 0) and data or prog:read_u8(2 + i)
+                    if actual ~= saved[i] then restored = false end
+                end
+            end
+        end)
+    send_key(0x1B)
+    for _ = 1, 100 do
+        if in_town() then break end
+        emu.wait(0.1)
+    end
+    cancel_tap:remove()
+    assert_line("legal_help_cancel_gameplay", in_town())
+    assert_line("legal_cancel_zp", checked and restored)
+    assert_line("legal_help_restore_program", legal_mount("LEGAL_GAME_IMAGE") == nil)
+    send_key(0x3F)
+    assert_line("help_reopened", wait_screen("Command Reference", 80))
+    send_key(0x4C) -- 'L'
+    assert_line("legal_menu", wait_screen("License & Source", 100))
+    local notice_first = prog:read_u8(LEGAL_NOTICE_ADDR)
+    prog:write_u8(LEGAL_NOTICE_ADDR, 0x58) -- request a file absent from this disk
+    send_key(0x31)
+    assert_line("legal_missing", wait_screen("Document read failed", 100))
+    send_key(0x20)
+    assert_line("legal_missing_return", wait_screen("1 License", 60))
+    assert_line("legal_channel_closed", prog:read_u8(LEGAL_OPENED_ADDR) == 0)
+    prog:write_u8(LEGAL_NOTICE_ADDR, notice_first)
+    send_key(0x31)
+    assert_line("legal_notice", wait_screen("MORIA8 LICENSE NOTICE", 100))
+    send_key(0x52) -- restart
+    assert_line("legal_restart", wait_screen("MORIA8 LICENSE NOTICE", 100))
+    send_key(0x51)
+    assert_line("legal_menu_again", wait_screen("1 License", 60))
+    send_key(0x32)
+    assert_line("legal_offer", wait_screen("MORIA8 SOURCE OFFER", 100))
+    send_key(0x51)
+    assert_line("legal_menu_final", wait_screen("1 License", 60))
+    send_key(0x51)
+    assert_line("legal_help_return", wait_screen("Command Reference", 100))
     send_key(0x51) -- 'Q'
     wait_frames(40)
     assert_line("help_closed", in_town())
@@ -650,6 +774,50 @@ function run()
     send_key(0x53) -- 'S' (search)
     wait_frames(60)
     assert_line("play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn1)
+    -- The VMS Wands of Fire Bolts (153) and Drain Life (154), MON-031: the
+    -- death overlay's router runs them in OVL.SPELL through
+    -- irs_re_compact_call. Aimed at nothing, each takes its turn (a charge
+    -- spent) and play goes on.
+    for _, id in ipairs({153, 154}) do
+        drain_more(4)
+        inv_seed(0, {id, 1, 5, 0, 0, 0, 0, 0})
+        local turn_w = prog:read_u8(TURN_ADDR)
+        send_key(0x41) -- 'A' (aim)
+        assert_line("aim_prompt_" .. id, wait_screen("Aim which wand", 80))
+        send_key(0x41) -- 'A'
+        assert_line("aim_direction_" .. id, wait_screen("Direction?", 80))
+        send_key(0x4C) -- 'L'
+        wait_frames(60)
+        drain_more(4)
+        assert_line("wand_returns_" .. id, in_town() and prog:read_u8(TURN_ADDR) ~= turn_w
+            and inv_field(0, 2) == 4)
+    end
+    -- A Scroll of Recharging on an empty wand, through the '?' list: the
+    -- spell overlay's picker returns the slot in X, which the trampoline's
+    -- OVL.SPELL reload clobbered, so another slot was recharged, named or
+    -- "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
+    -- and the BRK panic hung the game (BBC build queue, 2026-11-12).
+    drain_more(4)
+    inv_seed(0, {40, 1, 0, 0, 0, 0, 0, 0})   -- Wand of Lightning, empty
+    inv_seed(1, {104, 1, 0, 0, 0, 0, 0, 0})  -- Scroll of Recharging
+    local turn_r = prog:read_u8(TURN_ADDR)
+    send_key(0x52) -- 'R' (read)
+    assert_line("recharge_read_prompt", wait_screen("Read which scroll", 80))
+    send_key(0x41) -- 'A'
+    assert_line("recharge_prompt", wait_screen("Recharge which item", 80))
+    send_key(0x3F) -- '?': the list
+    wait_frames(30)
+    send_key(0x41) -- 'A': the wand
+    local glows = wait_screen("glows briefly", 80)
+    if not glows then
+        for r = 0, 3 do print("DIAG row " .. r .. ": " .. rowtext(r)) end
+    end
+    assert_line("recharge_glows", glows)
+    drain_more(4)
+    assert_line("recharge_charged", inv_field(0, 0) == 40 and inv_field(0, 2) > 0)
+    send_key(0x53) -- 'S' (search)
+    wait_frames(60)
+    assert_line("recharge_play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn_r)
     -- A Scroll of Genocide reads its letter through recall_key_to_screen_code,
     -- which lived in the recall view's overlay: with SPELL loaded the call ran
     -- SPELL's bytes there, a stray store into the play slot that hung a later
@@ -688,6 +856,9 @@ function run()
         send_key(0x41) -- 'A'
         assert_line(what .. "_worn", wait_screen("You are wearing", 80))
     end
+    -- The Dagger (Defender) wielded since the exchange resists fire and cold
+    -- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
+    prog:write_u8(INV_ITEM_ID_ADDR + 7 * INV_STRIDE + 22, 0)
     prog:write_u8(PLAYER_PFLAGS_ADDR, 0)
     wear_slot_a(109, "resist_fire_ring")
     assert_line("resist_fire_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x01 == 0x01)
@@ -699,6 +870,30 @@ function run()
     assert_line("left_ring_replaced", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x03 == 0x01)
     wear_slot_a(125, "magi_amulet")
     assert_line("free_action_flag", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x18 == 0x18)
+    -- A Golden Crown of the Magi (MON-030; 151, INT +2, ego 14) through this
+    -- port's own player_adjust_equipment_stat: worn, INT +2 and fire, cold
+    -- and acid resisted ($23); taken off, INT back.
+    local PL_INT_CUR = 28
+    local int0 = prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR)
+    drain_more(4)
+    wait_frames(30)
+    inv_seed(0, {151, 1, 2, 0, 0, 3, 2, 14})
+    send_key(0x57) -- 'W' (wear)
+    assert_line("magi_crown_wear_prompt", wait_screen("Wear which item", 80))
+    send_key(0x41) -- 'A'
+    assert_line("magi_crown_worn", wait_screen("You are wearing", 80))
+    assert_line("magi_crown_int", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0 + 2)
+    assert_line("magi_crown_flags", prog:read_u8(PLAYER_PFLAGS_ADDR) & 0x23 == 0x23)
+    -- Take it off: the equipment letters count the worn slots before the head.
+    drain_more(4)
+    wait_frames(30)
+    local head_letter = 0
+    for slot = 22, 24 do if inv_field(slot, 0) ~= 0xFF then head_letter = head_letter + 1 end end
+    send_key(0x54) -- 'T' (take off)
+    assert_line("magi_crown_takeoff_prompt", wait_screen("Take off which item", 80))
+    send_key(0x41 + head_letter)
+    assert_line("magi_crown_taken_off", wait_screen("You take off", 80))
+    assert_line("magi_crown_int_restored", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0)
     manager.machine:exit()
 end
 """.replace("ANDY_MOS_BYTES", andy_mos_bytes())
@@ -1110,6 +1305,11 @@ end
     else:
         raise ValueError(f"Unknown scenario: {scenario}")
 
+    body = body.replace("LEGAL_SAVE_ADDR", hex(syms.get("legal_zp_save", 0)))
+    body = body.replace("LEGAL_CANCEL_START", hex(syms.get("legal_cancel_restore", 0)))
+    body = body.replace("LEGAL_CANCEL_END", hex(syms.get("legal_cancel_return", 0)))
+    body = body.replace("LEGAL_NOTICE_ADDR", hex(syms.get("legal_notice_filename", 0)))
+    body = body.replace("LEGAL_OPENED_ADDR", hex(syms.get("legal_opened", 0)))
     return header + body + "\nco = coroutine.create(run)\ncoroutine.resume(co)\n"
 
 
@@ -1133,6 +1333,7 @@ def run_scenario(
         tmp_save_ssd = Path(tmpdir) / "save.ssd"
         build_blank_ssd(tmp_save_ssd)
         lua_path = Path(tmpdir) / "scenario.lua"
+        lua_code = lua_code.replace("LEGAL_GAME_IMAGE", str(tmp_ssd)).replace("LEGAL_SAVE_IMAGE", str(tmp_save_ssd))
         lua_path.write_text(lua_code, encoding="utf-8")
 
         cmd = [
@@ -1186,7 +1387,9 @@ def run_scenario(
             stdout, stderr = proc.communicate(timeout=HOST_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
             proc.kill()
-            proc.communicate()
+            stdout, stderr = proc.communicate()
+            for line in ((stdout or "") + (stderr or "")).splitlines()[-20:]:
+                print(f"[{machine}:{scenario}] DIAG timeout: {line}", file=sys.stderr)
             print(
                 f"[{machine}:{scenario}] FAIL: host timeout ({HOST_TIMEOUT_SECONDS}s)",
                 file=sys.stderr,

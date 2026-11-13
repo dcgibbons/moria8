@@ -153,6 +153,12 @@ it_category:
     .byte ICAT_WEAPON   // 139: Heavy Crossbow
     .byte ICAT_POTION, ICAT_POTION, ICAT_POTION   // 140-142: Gain Strength, Intelligence, Wisdom
     .byte ICAT_POTION, ICAT_POTION, ICAT_POTION   // 143-145: Gain Dexterity, Constitution, Charisma
+    .byte ICAT_RING, ICAT_RING, ICAT_RING         // 146-148: Lordly Protection (Fire, Acid, Cold)
+    .byte ICAT_AMULET                             // 149: Resist Acid
+    .byte ICAT_HELM     // 150: Silver Crown
+    .byte ICAT_HELM     // 151: Golden Crown
+    .byte ICAT_HELM     // 152: Jewel Encrusted Crown
+    .byte ICAT_WAND, ICAT_WAND, ICAT_WAND, ICAT_WAND   // 153-156: Fire Bolts, Drain Life, Lightning Balls, Acid Balls
 
 // Color and base armor class packed per type: high nibble = display color,
 // low nibble = base AC (<=9).
@@ -298,6 +304,17 @@ it_color_ac:
     .byte COL_BROWN << 4                        // 138: Composite Bow
     .byte COL_LGREY << 4                        // 139: Heavy Crossbow
     .fill 6, COL_WHITE << 4                     // 140-145: potions of gain stat
+    .byte COL_LRED << 4 | 5                     // 146: Lordly Protection (Fire), +5 AC (VMS)
+    .byte COL_LGREEN << 4 | 5                   // 147: Lordly Protection (Acid)
+    .byte COL_CYAN << 4 | 5                     // 148: Lordly Protection (Cold)
+    .byte COL_LGREEN << 4                       // 149: Resist Acid
+    .byte COL_WHITE << 4                        // 150: Silver Crown, AC 0 (VMS)
+    .byte COL_YELLOW << 4                       // 151: Golden Crown
+    .byte COL_LGREEN << 4                       // 152: Jewel Encrusted Crown
+    .byte COL_LRED << 4                         // 153: Fire Bolts
+    .byte COL_PURPLE << 4                       // 154: Drain Life
+    .byte COL_CYAN << 4                         // 155: Lightning Balls
+    .byte COL_LGREEN << 4                       // 156: Acid Balls
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -334,6 +351,9 @@ it_weight:
     .byte 5                                 // 136: Phase Door (scroll, 0.5 lb)
     .byte 40, 40, 200                       // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
     .fill 6, 4                              // 140-145: potions of gain stat (VMS 0.4 lb)
+    .byte 2, 2, 2, 3                        // 146-148: rings, 149: amulet (VMS)
+    .byte 20, 30, 40                        // 150-152: crowns (VMS)
+    .byte 10, 10, 10, 10                    // 153-156: wands (VMS 1 lb)
 
 // Damage dice packed per type: high nibble = dice count (<=3), low nibble =
 // dice sides (<=9). 0 = no damage dice.
@@ -364,6 +384,9 @@ it_dmg_packed:
     .byte 0                                   // 136: Phase Door
     .byte 0, 0, 0                             // 137-139: launchers 0d0
     .fill 6, 0                                // 140-145: potions
+    .fill 4, 0                                // 146-149: rings, amulet
+    .byte $11, $12, $13                       // 150-152: crowns 1d1, 1d2, 1d3 (VMS)
+    .fill 4, 0                                // 153-156: wands
 it_dmg_packed_end:
 
 #if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
@@ -401,6 +424,9 @@ it_cost_lo:
     .byte <15                               // 136: Phase Door (VMS 15 gp)
     .byte <120, <240, <300                  // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
     .byte <200, <300, <300, <300, <300, <300   // 140-145: Gain Strength 200, the others 300 (VMS)
+    .byte <1200, <1200, <1200, <300            // 146-148: Lordly Protection 1200, 149: Resist Acid 300 (VMS)
+    .byte <250, <500, <1000                    // 150-152: crowns (VMS)
+    .byte <1000, <1200, <1200, <1650           // 153-156: Fire Bolts, Drain Life, Lightning Balls, Acid Balls (VMS)
 it_cost_lo_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -415,6 +441,9 @@ it_cost_hi_extra_id:
     .byte 125, 127, 139
     .byte 24, 40, 41, 42, 75, 76, 93, 94, 95   // VMS prices (2026-10-26)
     .byte 141, 142, 143, 144, 145              // potions of gain stat at 300 (2026-11-07)
+    .byte 146, 147, 148, 149                   // Lordly Protection 1200, Resist Acid 300 (2026-11-11)
+    .byte 151, 152                             // Golden Crown 500, Jewel Encrusted Crown 1000
+    .byte 153, 154, 155, 156                   // wands: Fire Bolts 1000, Drain Life and Lightning Balls 1200, Acid Balls 1650
 it_cost_hi_extra_value:
     .byte >300, >530, >400, >400, >800, >300, >800, >350, >430, >1050
     .byte >400, >300, >500, >750, >1000, >750, >3000, >500, >1000, >500
@@ -422,6 +451,9 @@ it_cost_hi_extra_value:
     .byte >5000, >500, >300
     .byte >400, >600, >800, >400, >358, >430, >376, >304, >340
     .byte >300, >300, >300, >300, >300
+    .byte >1200, >1200, >1200, >300
+    .byte >500, >1000
+    .byte >1000, >1200, >1200, >1650
 it_cost_hi_extra_end:
 .const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
 
@@ -460,6 +492,9 @@ it_cost_hi:
     .byte >15                                     // 136: Phase Door
     .byte >120, >240, >300                        // 137-139: launchers
     .byte >200, >300, >300, >300, >300, >300      // 140-145: potions of gain stat
+    .byte >1200, >1200, >1200, >300               // 146-149: Lordly Protection, Resist Acid
+    .byte >250, >500, >1000                       // 150-152: crowns
+    .byte >1000, >1200, >1200, >1650              // 153-156: wands
 it_cost_hi_end:
 #endif
 
@@ -493,6 +528,10 @@ it_min_level:
     .byte $41                       // 136: Phase Door level 1 (VMS level 1); 137: Long Bow 4
     .byte $8a                       // 138: Composite Bow 10, 139: Heavy Crossbow 8
     .byte $88, $88, $88             // 140-145: potions of gain stat 8 (VMS level 25, as Restoration)
+    .byte $cc, $8c                  // 146-148: Lordly Protection 12 (VMS 50, as Speed); 149: Resist Acid 8 (VMS 24)
+    .byte $cb                       // 150: Silver Crown 11 (VMS 44); 151: Golden 12 (VMS 47)
+    .byte $8c                       // 152: Jewel Encrusted 12 (VMS 50); 153: Fire Bolts 8 (VMS 30, as the Heavy Crossbow)
+    .byte $9b, $0b                  // 154: Drain Life 11 (VMS 50, as Fire Balls); 155: Lightning Balls 9 (VMS 35); 156: Acid Balls 11 (VMS 48)
     // Launchers on Moria8's compressed scale (VMS depth 10 -> 3-6, 30 -> 4-8,
     // 40 -> 6-10 elsewhere in this table): VMS 10, 40 and 30.
 it_min_level_end:
@@ -676,6 +715,9 @@ it_name_lo:
     .byte <itn_132, <itn_133, <itn_134, <itn_135
     .byte <itn_136, <itn_137, <itn_138, <itn_139
     .byte <itn_140, <itn_141, <itn_142, <itn_143, <itn_144, <itn_145
+    .byte <itn_146, <itn_147, <itn_148, <itn_149
+    .byte <itn_150, <itn_151, <itn_152
+    .byte <itn_153, <itn_154, <itn_155, <itn_156
 it_name_lo_end:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
 :ResidentItemsSegment()
@@ -717,6 +759,9 @@ it_name_hi:
     .byte >itn_132, >itn_133, >itn_134, >itn_135
     .byte >itn_136, >itn_137, >itn_138, >itn_139
     .byte >itn_140, >itn_141, >itn_142, >itn_143, >itn_144, >itn_145
+    .byte >itn_146, >itn_147, >itn_148, >itn_149
+    .byte >itn_150, >itn_151, >itn_152
+    .byte >itn_153, >itn_154, >itn_155, >itn_156
 it_name_hi_end:
 #else
 it_name_hi_end:
@@ -840,9 +885,9 @@ itok_crossbow:        .text " Crossbow" ; .byte 0
 :ItemNameStreamsSegment()
 #endif
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
-// Heavyweight C64 unit tests that bank BASIC out for the whole run may park
-// the name streams in BASIC-shadow RAM to keep Main below MAP_BASE. Opt-in
-// tests must declare `.segmentdef TestNameStreams [start=$A000]`.
+// Heavyweight C64 unit tests may park the name streams in RAM they bank in
+// for the whole run (BASIC's or the KERNAL's shadow) to keep Main below
+// MAP_BASE. Opt-in tests declare `.segmentdef TestNameStreams [start=...]`.
 .segment TestNameStreams
 #endif
 itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
@@ -993,6 +1038,19 @@ itn_142: .byte ITOK_GAIN ; .byte ITOK_WISDOM ; .byte 0
 itn_143: .byte ITOK_GAIN ; .text "Dexterity" ; .byte 0
 itn_144: .byte ITOK_GAIN ; .text "Constitution" ; .byte 0
 itn_145: .text "Charisma" ; .byte 0
+// VMS Moria names (values.inc), "Ring of" and "Amulet of" by category.
+itn_146: .text "Lordly " ; .byte ITOK_PROTECTION ; .text " (Fire)" ; .byte 0
+itn_147: .text "Lordly " ; .byte ITOK_PROTECTION ; .text " (Acid)" ; .byte 0
+itn_148: .text "Lordly " ; .byte ITOK_PROTECTION ; .text " (Cold)" ; .byte 0
+itn_149: .byte ITOK_RESIST ; .text "Acid" ; .byte 0
+itn_150: .text "Silver Crown" ; .byte 0
+itn_151: .text "Golden Crown" ; .byte 0
+itn_152: .text "Jewel Encrusted Crown" ; .byte 0
+// VMS Moria wands (values.inc, wands.inc; 2026-11-11)
+itn_153: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Fire Bolts" ; .byte 0
+itn_154: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Drain Life" ; .byte 0
+itn_155: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Lightning Balls" ; .byte 0
+itn_156: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Acid Balls" ; .byte 0
 #if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
 .segment Default
 #endif

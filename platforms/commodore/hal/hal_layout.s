@@ -25,6 +25,7 @@
 //   hal_layout_inventory_identify_col
 //   hal_layout_status_row21_name_col
 //   hal_layout_status_row21_state_col
+//   hal_layout_status_row21_poison_col
 //   hal_layout_status_row21_lv_col
 //   hal_layout_status_row21_dl_col
 //   hal_layout_status_row22_st_col

@@ -31,6 +31,7 @@ class PrgSpec:
 
 
 PRG_SPECS = (
+    PrgSpec("legalui", 0xA400, 0xAA00, "legal_code_end"),
     PrgSpec("moria8a2.prg", 0x0A00, 0x7C00, "program_end"),
     PrgSpec("a2.play", 0x7C00, 0xA000, "a2_play_end", b"M8P"),
     # Aux RAM above the map (cache_layout.s): aux data, the monster

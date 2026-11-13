@@ -56,6 +56,8 @@ hal_sound_init:
 tun_dig_ability: .byte 0
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_ego:     .fill TOTAL_INV_SLOTS, 0
+fi_add_to_ac: .byte 0                  // roll_ego_type's armour branch reads it (MON-027)
+fi_add_p1: .byte 0                     // ... and a crown of the Magi writes its INT (MON-030)
 player_data: .fill PL_RESERVED, 0
 cmb_damage:  .byte 0
 cmb_type:    .byte 0

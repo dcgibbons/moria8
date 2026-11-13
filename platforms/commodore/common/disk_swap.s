@@ -171,17 +171,21 @@ disk_accept_plus4_program_device:
     rts
 !store_program_device:
 #else
-#if HAL_STORAGE_MEDIA_STATE_TRACKING
+#if HAL_STORAGE_MEDIA_STATE_TRACKING || HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
     lda #8
 #else
     lda $ba                     // KERNAL current device from the boot/load path
 #endif
     sta program_device
 #endif
+#if HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+    ldx #8                      // No boot LOAD device; first save drive is 8
+#else
     ldx #9
     cmp #9
     bne !store_save_device+
     dex
+#endif
 !store_save_device:
     stx save_device
 #if HAL_STORAGE_EXTENDED_DISK_DIAG
@@ -398,6 +402,12 @@ disk_require_save_media:
 // Swap prompts
 // ============================================================
 disk_prompt_save:
+#if HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+    // Program media never displaces the save disk. Setup/recovery owns drive
+    // initialization; save/load separately validates the configured marker.
+    clc
+    rts
+#else
     lda save_device
     sta disk_prompt_device
 #if HAL_STORAGE_MEDIA_STATE_TRACKING
@@ -470,8 +480,14 @@ c64_test_disk_setup_then_load_save_prompt_seen:
 #endif
 !dps_done:
     rts
+#endif
 
 disk_prompt_game:
+#if HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+disk_note_program_media_current:
+    clc
+    rts
+#else
     lda program_device
     sta disk_prompt_device
 #if HAL_STORAGE_MEDIA_STATE_TRACKING
@@ -507,6 +523,7 @@ disk_note_program_media_current:
 #endif
 !dpg_done:
     rts
+#endif
 
 disk_prompt:
     sta zp_ptr0

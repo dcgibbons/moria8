@@ -7,7 +7,8 @@
 // under I/O ($D000-$D7FF): the picker and the fetch reach them with every
 // ROM and I/O banked out and interrupts off, the KERNAL back for the drive.
 // Records come from the REU when one is present (catalog_reu_preload stashed
-// them at boot), else from the drive.
+// them at boot), else from the drive. The optional C64_CARTRIDGE build
+// imports cartridge_catalog.s instead: ROM records, the same hidden RAM owners.
 
 // Win-creature placement (generation only, from DL50) lives in the $F000
 // runtime: the resident image has no room for it.
@@ -82,4 +83,8 @@ c64_catalog_unmap:
     plp
     rts
 
+#if C64_CARTRIDGE
+#import "cartridge_catalog.s"
+#else
 #import "../common/catalog_fetch.s"
+#endif

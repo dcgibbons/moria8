@@ -86,6 +86,7 @@ OVERLAY_FILES = (
     "OVL.SPL",
     "OVL.CHS",
     "OVL.GEN",
+    "legalui",
 )
 
 # The monster catalog's records (monster_catalog_a8.s): 125 data bytes per

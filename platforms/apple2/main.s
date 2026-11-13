@@ -1,3 +1,5 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
+#define HELP_TITLE_EXTERNAL
 // main.s — Apple IIe moria8 linker script + entry
 //
 // Assemble from platforms/apple2 with:
@@ -33,6 +35,9 @@
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",    start=$a400, min=$a400, max=$b9ff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef ModalMiscOverlay  [outPrg=OVL_OUT + "/ovl.modal",   start=$a400, min=$a400, max=$b9ff]
+.const LEGAL_BASE = $a400
+.const LEGAL_LIMIT = $ba00
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$a400, min=$a400, max=$b9ff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",    start=$a400, min=$a400, max=$b9ff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",      start=$a400, min=$a400, max=$b9ff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items",  start=$a400, min=$a400, max=$b9ff]
@@ -185,7 +190,11 @@ a2_char_map_aux:
     .fill $80, i == 0 ? $c0 : i < $1b ? (i + $60) | $80 : i < $20 ? (i + $40) | $80 : i < $5b ? i | $80 : i < $60 ? (i + $40) | $80 : $a0
 .assert "Char map table covers $00-$7F", * - a2_char_map_aux, $80
 
-// Speaker sound patterns for hal_sound_play (services.s): one 16-byte slot
+ovl_huffdata_end:
+.segment Default
+// Speaker sound patterns for hal_sound_play (services.s), in main resident
+// RAM since 2026-11-11 (the element touches' messages filled the corpus
+// slot; the resident image had room): one 16-byte slot
 // per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
 // smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
 a2_sfx_patterns:
@@ -200,8 +209,6 @@ a2_sfx_patterns:
     .byte $c8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0      // HUNGER_WARN: single low tone
     .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
 .assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
-ovl_huffdata_end:
-.segment Default
 #import "../../core/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
@@ -320,6 +327,10 @@ cmb_in_way_str:
 // beside player_destroy_area.s behind tramp_eff_* overlay swaps.
 #import "../../core/item_desc_banked.s"
 #import "../../core/projectile.s"
+// The ball's per-creature damage and Orb of Draining's entry (resident: the
+// SPELL cache slot is full; called only from eff_ball in OVL.SPELL).
+#import "../../core/player_magic_ball_harm.s"
+#import "../../core/player_magic_ball_holy.s"
 #import "compat/io_kernal_consts.s"
 #import "../../core/storage_status.s"
 #import "memory_aux.s"
@@ -382,6 +393,17 @@ title_menu_loop:
 !load_now:
     jmp title_load_game
 !not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    bcc !legal_done+
+    // No program disk is needed to return to the resident title menu.
+    jsr hal_screen_clear
+    jsr title_draw_menu
+    jmp title_menu_loop
+!legal_done:
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
@@ -392,7 +414,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #28                 // Center 80-col: (80-24)/2 = 28
+    lda #(SCREEN_COLS - 35) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -553,6 +575,8 @@ overlay_load_no_kernal:
 
 run_initialize:
     jmp run_initialize_impl
+
+#import "legal.s"
 
 tramp_ui_help_display:
     lda #OVL_HELP
@@ -867,10 +891,15 @@ tramp_eff_destroy_area:
     rts
 
 // Shared epilogue for the two item-selector trampolines: restore OVL.SPELL
-// and return A/flags from the selector. The brk is fatal because the saved
+// and return A, X (the slot) and flags from the selector: overlay_load
+// clobbered X, and a Scroll of Recharging recharged, named or "ate" another
+// slot, or hit BRK when a stale ego swapped OVL.ITEMS in under the spell
+// overlay (BBC build queue, 2026-11-12). The brk is fatal because the saved
 // continuation is inside OVL.SPELL.
 tramp_restore_spell_overlay:
     php
+    pha
+    txa                         // the selector's X (the slot chosen)
     pha
     lda #OVL_NONE
     sta piw_return_overlay
@@ -879,6 +908,8 @@ tramp_restore_spell_overlay:
     bcc !restored+
     brk                         // saved continuation is inside OVL.SPELL
 !restored:
+    pla
+    tax
     pla
     plp
     rts
@@ -1109,21 +1140,12 @@ a2_play_body:
 // Apple item commands call this resident routine while the item overlay is
 // active. Keep the stat transition code in the always-loaded play payload.
 player_adjust_equipment_stat:
-    // By the item, as core/player_adjust_equipment_stat.s: by the slot, every
-    // ring added its p1 to Strength, and the left hand (2026-11-08) would too.
+    // As core/player_adjust_equipment_stat.s: the stat by the item
+    // (equip_stat_index, core/player.s), p1 added or taken away.
     jsr player_adjust_equipment_stat_prepare
-    lda inv_item_id,x
-    ldx #0
-    cmp #ITEM_TYPE_RING_STRENGTH
-    beq !paes_apply+
-    ldx #PL_WIS_CUR - PL_STR_CUR
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !paes_apply+
-    ldx #PL_INT_CUR - PL_STR_CUR
-    cmp #ITEM_TYPE_AMULET_MAGI
-    bne !paes_done+
-!paes_apply:
-    jmp player_adjust_equipment_stat_apply
+    jsr equip_stat_index
+    bcc !paes_done+
+    jmp player_adjust_equipment_stat_apply   // Y = the stat
 !paes_done:
     rts
 
@@ -1277,9 +1299,25 @@ a2_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_holy_avenger), 0
 a2_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
     .fill 16 - (* - a2_ego_suffix_slay_dragon), 0
+// Resistance armour (EGO_RESIST..EGO_RESIST_LIGHT): banked_ego_put_suffix
+// prints the " (Resist" slot (index EGO_TYPE_COUNT) before each.
+a2_ego_suffix_resist: .text ")" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_resist), 0
+a2_ego_suffix_resist_acid: .text " Acid)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_resist_acid), 0
+a2_ego_suffix_resist_fire: .text " Fire)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_resist_fire), 0
+a2_ego_suffix_resist_cold: .text " Cold)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_resist_cold), 0
+a2_ego_suffix_resist_light: .text " Lightning)" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_resist_light), 0
+a2_ego_suffix_magi: .text " of the Magi" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_magi), 0
+a2_ego_suffix_resist_prefix: .text " (Resist" ; .byte 0
+    .fill 16 - (* - a2_ego_suffix_resist_prefix), 0
 a2_ego_suffix_slots_end:
 .assert "Apple ego suffix slots are page aligned", <a2_ego_suffix_slots, 0
-.assert "Apple ego suffix slots are EGO_TYPE_COUNT x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, EGO_TYPE_COUNT * 16
+.assert "Apple ego suffix slots are EGO_TYPE_COUNT + 1 (the Resist prefix) x 16 bytes", a2_ego_suffix_slots_end - a2_ego_suffix_slots, (EGO_TYPE_COUNT + 1) * 16
 
 // Platform-externalized game_loop message strings (welcome, search toggle,
 // stairs). Staged to main RAM by a2_msg_print_indirect_aux at print time;
@@ -1484,6 +1522,7 @@ ovl_modal_misc_end:
 .assert "Modal misc overlay fits", ovl_modal_misc_end <= $ba00, true
 
 .segment HelpOverlay
+#import "../../core/ui_help_title.s"
 #import "../../commodore/c128/ui_help_data_80.s"
 #import "../../core/ui_help.s"
 #import "../../core/ui_identify.s"
@@ -1508,17 +1547,16 @@ player_adjust_equipment_stat_prepare:
     lda inv_p1,x
     bcs !paes_prepare_store+
     eor #$ff
-    clc
-    adc #1
+    adc #1                      // carry clear: -p1
 !paes_prepare_store:
     sta stat_work
     rts
 
 player_adjust_equipment_stat_apply:
-    lda player_data + PL_STR_CUR,x
+    lda player_data + PL_STR_CUR,y
     clc
     adc stat_work
-    sta player_data + PL_STR_CUR,x
+    sta player_data + PL_STR_CUR,y
     rts
 
 #import "../../core/player_item_commands.s"
@@ -1544,14 +1582,17 @@ ovl_items_end:
 #define PMX_MAP_AREA_TRAMPOLINE
 #define PMX_DETECT_EFFECTS_EXTERNAL
 #define PMX_DESTROY_AREA_EXTERNAL
+#define BALL_HARM_EXTERNAL
 #import "../../core/player_magic_slow_runtime.s"
 #define PMU_TURN_FEEDBACK_ONLY
 #import "../../core/player_magic_turn_banked.s"
 #undef PMU_TURN_FEEDBACK_ONLY
 #import "../../core/player_magic_execute_overlay.s"
+#import "../../core/wand_bolt_entries.s"   // the Fire Bolts and Drain Life entries (OVL.SPELL)
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL
+#undef BALL_HARM_EXTERNAL
 
 
 
@@ -1561,9 +1602,10 @@ ovl_items_end:
     #import "../../core/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
 
-// Potions of gain stat run from the resident image (the SPELL cache slot is
-// full); everything they call is resident too.
-.segment Default
+// Potions of gain stat run from the play slot (the SPELL cache slot and
+// always-resident image are full; quaff runs only during gameplay when
+// A2.PLAY is resident, and everything they call is resident too).
+.segment A2PlaySlot
 #import "../../core/eff_gain_stat.s"
 .segment SpellOverlay
 
@@ -1941,6 +1983,7 @@ tramp_ego_append_suffix:
 a2_play_end:
 .assert "Play payload fits slot", a2_play_end <= $a000, true
 .assert "Ego suffix trampoline stays in play", tramp_ego_append_suffix >= $7c00 && tramp_ego_append_suffix < a2_play_end, true
+.assert "Potions of gain stat run in play", eff_potion_gain_stat >= $7c00 && eff_potion_gain_stat < a2_play_end, true
 
 // ============================================================
 // Final boundary assertions
@@ -1949,3 +1992,12 @@ a2_play_end:
 program_end:
 .assert "Resident image fits always-region", program_end <= $7c00, true
 .assert "Ego call trampolines stay resident", tramp_roll_ego_type < $7c00 && tramp_ego_get_ac_bonus < $7c00, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../core/ui_legal.s"
+#import "../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

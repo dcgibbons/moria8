@@ -1,9 +1,14 @@
 #importonce
 // store_restock_overlay.s — Store initialization/restocking.
 //
-// Transition-only code. It is safe in a non-town overlay because callers enter
-// from resident trampolines and return to resident code, not to an active
-// TownOverlay frame.
+// Owner: ChestOverlay (OVL_CHEST) on all seven ports (C64, C128, Plus/4,
+// Apple IIe, Commander X16, Atari 8-bit, BBC Master 128).
+// Lifetime: one transition call per new game (store_init_all), town re-entry
+// (store_restock_all), or wizard jump to town.
+// Callers: resident tramp_store_init_all / tramp_store_restock_all when no
+// TownOverlay frame is on the stack; ego rolls go through
+// tramp_roll_ego_type_chest (which reloads OVL_CHEST where ego_items.s lives
+// in OVL_ITEMS) before returning to resident transition code.
 
 #import "store_meta_macros.s"
 #import "item_stack_macros.s"

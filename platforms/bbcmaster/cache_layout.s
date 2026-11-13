@@ -44,10 +44,10 @@
 
 .const BEEB_CACHE_ITEMS_BANK  = $07
 .const BEEB_CACHE_ITEMS_ADDR  = $9500
-.const BEEB_CACHE_ITEMS_PAGES = 21
+.const BEEB_CACHE_ITEMS_PAGES = 22   // Bank 7's free last page (resistance armour, 2026-11-11)
 
 .const BEEB_CACHE_GEN_BANK   = $07
-.const BEEB_CACHE_GEN_ADDR   = $aa00
+.const BEEB_CACHE_GEN_ADDR   = $ab00
 .const BEEB_CACHE_GEN_PAGES  = 21
 
 .const BEEB_SWR_BANK_UI      = BEEB_CACHE_UI_BANK
