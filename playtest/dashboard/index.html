@@ -199,6 +199,9 @@
   .qcell.struggling { background: rgba(224, 96, 60, .14); border-color: rgba(224, 96, 60, .45); }
   .qcell.live { border: 2px solid var(--gold); background-color: rgba(197, 121, 0, .16); }
   .qcell.live .now { color: var(--gold); font-weight: 700; }
+  /* Won and playing again: the win shows (maintainer, 2026-11-13: the gold
+     "live" border hid the Half-Troll Priest's two wins); "playing" stays in the text. */
+  .qcell.won.live { border-color: var(--green); background-color: rgba(154, 210, 132, .32); }
   .qcell.playing { background-image: repeating-linear-gradient(45deg, rgba(255,217,61,.07) 0 3px, transparent 3px 7px); }
   .qcell .top { display: flex; justify-content: space-between; color: var(--gold); }
   .qcell .sub { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
