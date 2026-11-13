@@ -8,7 +8,7 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import C64, C64_CART, C64_NOREU, C128, PLUS4, PORTS
+from moria_playtest.ports import ATARI8, ATARI8_CART, C64, C64_CART, C64_NOREU, C128, PLUS4, PORTS
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
 ABI = abimod.Abi(labels={"zp_player_x": 0x2B, "zp_player_y": 0x2C, "zp_player_hp_lo": 0x2D,
@@ -426,6 +426,50 @@ class C64VariantTest(unittest.TestCase):
             hal.mkdir(parents=True)
             (hal / "storage_policy.s").write_text("")
             self.assertEqual(queue.save_versions("b", "c64-cart", home), queue.save_versions("b", "c64", home))
+
+
+class Atari8CartridgeTest(unittest.TestCase):
+    """Maintainer, 2026-11-12: the Atari 8-bit MaxFlash cartridge is its own
+    build-queue platform, as the C64's EasyFlash is: MAME boots the .car
+    (-cart1) with the disk build's disk in drive 1 for saves."""
+
+    def test_the_port(self) -> None:
+        self.assertIn(ATARI8_CART.name, PORTS)
+        self.assertEqual(ATARI8_CART.platform, "atari8")
+        self.assertEqual((ATARI8_CART.out, ATARI8_CART.disk, ATARI8_CART.cartridge),
+                         ("atari8-cart", ATARI8.disk, "moria8-atari8.car"))
+        self.assertEqual(ATARI8_CART.disk_target.split(), ["diskatari8", "cartridgeatari8"])
+        self.assertEqual((ATARI8_CART.backend, ATARI8_CART.mame_machine), (ATARI8.backend, ATARI8.mame_machine))
+
+    def test_mame_boots_the_cartridge_with_the_disk_in_drive_1(self) -> None:
+        from unittest import mock
+        from moria_playtest import mame
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            disk, cart = root / "moria8-atari8.atr", root / "moria8-atari8.car"
+            launched: list[list[str]] = []
+
+            def popen(args, **kw):
+                launched.append(list(args))
+                return mock.Mock(poll=lambda: None)
+            with mock.patch.object(mame.subprocess, "Popen", side_effect=popen), \
+                    mock.patch.object(mame.MameProcess, "_open", return_value=None):
+                mame.MameProcess(0, root, disk, ATARI8_CART, cartridge=cart).start([], "")
+                mame.MameProcess(1, root, disk, ATARI8).start([], "")
+            car, plain = launched
+            at = car.index("-cart1")
+            self.assertEqual(car[at:at + 4], ["-cart1", str(cart), "-flop1", str(disk)])
+            self.assertNotIn("-cart1", plain)
+            self.assertIn("-flop1", plain)
+
+    def test_it_uses_the_atari_save_versions(self) -> None:
+        from moria_playtest import queue
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            hal = home / "builds" / "b" / "platforms" / "atari8" / "hal"
+            hal.mkdir(parents=True)
+            (hal / "storage_policy.s").write_text("")
+            self.assertEqual(queue.save_versions("b", "atari8-cart", home), queue.save_versions("b", "atari8", home))
 
 
 class DiskCheckTest(unittest.TestCase):

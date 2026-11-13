@@ -1760,6 +1760,30 @@ class BreathGuardTest(unittest.TestCase):
         well = command_obs(pos=(10, 10), dlvl=34, clvl=37, hp=250, mhp=285)
         self.assertIsNone(brain.breath_guard(well, view))             # 212 of 250: survivable
 
+    def test_an_unseen_breather_is_phased_from_once_then_healed(self) -> None:
+        """C64 Balrog, 2026-11-12: a clvl 40 Priest at 190/410 read Phase Door
+        twenty times running from an unseen Balrog ("breaths unseen could
+        breathe 666"), was found, held and burned to death. Out of sight a
+        Phase Door breaks no sight line: once a window, then a heal, then
+        nothing here (leave_deadly's stairs or Word of Recall)."""
+        from moria_playtest.brain import CSW, UNSEEN_BREATH_STEPS
+        brain = Brain(GOALS["deep"])
+        brain.phase = 20
+        view = town_view((10, 10), (40, 40), dlvl=50)                 # nothing in view
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=190, mhp=410)
+        brain.level.breath = (o.step, 333)
+        self.assertEqual(brain.breath_guard(o, view).reason, "breaths unseen could breathe 666: read Phase Door")
+        brain.level.phased = o.step
+        again = command_obs(pos=(12, 10), dlvl=50, clvl=40, hp=191, mhp=410)
+        again.step = o.step + 3
+        self.assertIsNone(brain.breath_guard(again, view))            # no second phase, nothing to heal with
+        brain.strong[CSW] = 4
+        self.assertEqual(brain.breath_guard(again, view).layer, "quaff")
+        later = command_obs(pos=(12, 10), dlvl=50, clvl=40, hp=191, mhp=410)
+        later.step = o.step + 3 + UNSEEN_BREATH_STEPS
+        brain.level.breath = (later.step, 333)                        # breathed on again, a window on
+        self.assertIn("read Phase Door", brain.breath_guard(later, view).reason)
+
 
     def test_a_named_breather_is_remembered_by_its_worst_breath(self) -> None:
         """C64 Balrog, 2026-11-12: a clvl 40 Priest at 806 took an unseen
@@ -1866,7 +1890,7 @@ class ThreatDepthTest(unittest.TestCase):
         depth blindly; now the dive needs a way out, and level by level the
         bot detects and leaves what could kill it in one breath."""
         brain = self.priest()
-        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire")   # ready (balrog_ready)
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")   # ready (balrog_ready)
         self.assertTrue(self.deeper(brain, 45, clvl=40, mhp=420))    # Word of Recall carried
         self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=420))    # on to DL50
         # Maintainer, 2026-11-10: DL40-49 before clvl 40 died six times to
@@ -1902,6 +1926,100 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=360))   # 333 is too much of 360
         self.assertFalse(self.deeper(brain, 49, clvl=39, mhp=405))   # the top level first
 
+    def test_the_balrogs_depth_waits_for_free_action(self) -> None:
+        """C64 Balrog, 2026-11-12: a clvl 40 Human Priest with Speed and
+        Resist Fire but no Free Action was held by the Balrog's Hold Person
+        and breathed on to death in three of seven fights in an hour
+        (maintainer: fix it). Onto DL50 only with Free Action worn: the
+        Amulet of the Magi or a Defender weapon."""
+        self.assertIn(knowledge.kinds_by_name()["Balrog"], knowledge.paralyzer_kinds())
+        brain = self.priest()
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of Resist Acid")
+        o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=405, mhp=405)
+        self.assertFalse(brain.free_action())
+        self.assertFalse(brain.balrog_ready(o))                     # its breath survivable (333 of 405), held
+        self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=405))
+        brain.weapon = ("Mace (Defender)", 3)
+        self.assertTrue(brain.free_action())
+        self.assertTrue(brain.balrog_ready(o))
+        self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=405))
+        brain.weapon = ("Mace", 3)
+        brain.jewel_names["Amulet"] = "Amulet of the Magi"
+        self.assertTrue(brain.balrog_ready(o))
+        # The Magi is worth more than the amulet of resistance it replaces.
+        self.assertGreater(brain.jewel_value("Amulet of the Magi"), brain.jewel_value("Amulet of Resist Acid"))
+
+    def test_no_deeper_than_the_balrogs_level_however_strong(self) -> None:
+        """C64 Balrog, 2026-11-12: a clvl 40 Half-Troll Priest at 806 HP with
+        Free Action passed every depth by its natives' breaths (the Ancient
+        Multi-Hued Dragon's 693 short of 725), walked down to DL94, recalled
+        to DL100 and met the Balrog there with 1 mana. From DL50 the Balrog
+        is on every level: the dive to DL50, once ready, and no deeper."""
+        brain = self.priest()
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
+        o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=806, mhp=806)
+        self.assertTrue(brain.threat_ready(o, 49))                    # natives only: survivable
+        self.assertFalse(brain.threat_ready(o, 50))
+        self.assertFalse(brain.threat_ready(o, 94))
+        self.assertTrue(brain.depth_ready(o, 50))                     # ready: the dive
+        for deep in (51, 60, 94, 99, 100):
+            self.assertFalse(brain.depth_ready(o, deep))
+        self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=806))     # onto DL50
+        self.assertFalse(self.deeper(brain, 50, clvl=40, mhp=806))    # not DL51
+        self.assertFalse(self.deeper(brain, 93, clvl=40, mhp=806))
+        brain.jewel_names["Amulet"] = "Amulet of Resist Acid"         # not ready: not DL50 either
+        self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=806))
+
+    def test_down_to_the_balrog_at_full_mana(self) -> None:
+        """C64 Balrog, 2026-11-12: a ready clvl 40 Priest read Word of Recall
+        in town at 76-105 of 161 mana, met the Balrog with about half, recalled
+        out to restock, and each return was a Balrog at full HP. In town it
+        rests to full first; townspeople in view cut each rest short and it
+        rests on (kept for none in view it rested once in 35 reads), but not
+        beside one, and not past TOWN_REST_STRIKES rests that gained nothing."""
+        from moria_playtest.brain import TOWN_REST_STRIKES
+        brain = self.priest()
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
+        brain.food, brain.max_dlvl, brain.clvl = 20, 50, 40
+        brain.lamp, brain.light_left, brain.oil = True, 9000, 5
+        brain.shopped = brain.potions_done = brain.magic_done = brain.alchemist_done = True
+        brain.market_done = brain.weapons_done = brain.armoury_done = True
+
+        def town(mp: int, hp: int = 405) -> Observation:
+            return command_obs(pos=(5, 5), dlvl=0, clvl=40, hp=hp, mhp=405,
+                               rows={23: f"HP:{hp}/405  MP:{mp}/161   AC:52  AU:16777K Full"})
+        view = town_view((5, 5), (40, 40))
+        decision = brain.recall_trip(town(76), view)
+        self.assertEqual((decision.key, decision.layer), (KEY_AUTOREST, "rest"))
+        self.assertIn("MP 76/161", decision.reason)
+        self.assertEqual(brain.recall_trip(town(140), view).layer, "rest")    # gaining: rest on
+        for _ in range(TOWN_REST_STRIKES - 1):
+            self.assertEqual(brain.recall_trip(town(140), view).layer, "rest")   # a turn without a point
+        self.assertEqual(brain.recall_trip(town(140), view).reason, "read Word of Recall")   # refused: go
+        full = Brain(brain.goal)
+        full.__dict__.update({k: v for k, v in brain.__dict__.items() if k != "level"})
+        self.assertEqual(full.recall_trip(town(161), view).reason, "read Word of Recall")
+        crowd = town_view((5, 5), (40, 40))
+        crowd.creatures = {(7, 5): Creature("p", 0)}                 # a townsperson in view: rest on
+        self.assertEqual(full.recall_trip(town(76), crowd).layer, "rest")
+        crowd.creatures = {(6, 5): Creature("p", 0)}                 # beside it: go
+        self.assertEqual(full.recall_trip(town(77), crowd).reason, "read Word of Recall")
+        shallow = self.priest()
+        shallow.__dict__.update({k: v for k, v in full.__dict__.items() if k != "level"})
+        shallow.max_dlvl = 40                                          # not to the Balrog's levels
+        self.assertEqual(shallow.recall_trip(town(76), view).reason, "read Word of Recall")
+
+    def test_no_find_traps_on_the_balrogs_levels(self) -> None:
+        """C64 Balrog, 2026-11-12: a clvl 40 Priest prayed Find Traps 660
+        times in an hour on DL50 and met the Balrog with 29-148 of 161."""
+        brain = self.priest()
+        brain.clvl = 40
+        brain.magic.spare = lambda obs, name: True                   # type: ignore[method-assign]
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=405, mhp=405), view))
+        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=405, mhp=405),
+                                              town_view((10, 10), (40, 40), dlvl=49)))
+
     def test_diving_for_the_balrog_it_goes_straight_down(self) -> None:
         """C64 Balrog, 2026-11-11: a ready clvl 40 Priest walking down from
         town explored DL40 and picked up gold, and an Ancient Multi-Hued
@@ -1909,7 +2027,7 @@ class ThreatDepthTest(unittest.TestCase):
         diving: the down stairs first, else Detect Doors/Stairs."""
         from moria_playtest.magic import DETECT_DOORS
         brain = self.priest()
-        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire")
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         brain.magic.caster = lambda obs: True                      # type: ignore[method-assign]
         brain.magic.can = lambda obs, name: name == DETECT_DOORS   # type: ignore[method-assign]
         o = command_obs(pos=(10, 10), dlvl=42, clvl=40, hp=477, mhp=477)
@@ -1931,7 +2049,7 @@ class ThreatDepthTest(unittest.TestCase):
         gold, and its gas breath did 693 from full HP. The Balrog's own
         spells, its breath survivable through the ring, are not a reason."""
         brain = self.priest()
-        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire")
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         view = town_view((10, 10), (40, 40), dlvl=50)
         view.creatures = {}
         o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=463, mhp=463)
@@ -1947,7 +2065,7 @@ class ThreatDepthTest(unittest.TestCase):
         brain.seen_messages = "the Ancient Multi-Hued Dragon confuses you!"
         self.assertIsNotNone(brain.leave_deadly(o, view))
         brain = self.priest()
-        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire")
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         more = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=463, mhp=463,
                            rows={0: "the Ancient Multi-Hued Dragon casts a sp", 1: "-more-"})
         more.mode = Mode.DISMISS
@@ -2012,6 +2130,7 @@ class ThreatDepthTest(unittest.TestCase):
         # with the two Rings of Speed worn, ready (333 of 480).
         brain.jewels = brain.read_jewels(rows)
         brain.worn_resists = FOUR_ELEMENTS
+        brain.weapon = ("Mace (Defender)", 3)                        # wielded: Free Action too
         self.assertTrue(brain.balrog_ready(command_obs(pos=(5, 5), dlvl=49, clvl=40, hp=480, mhp=480)))
         # ... and a Ring of Resist Fire is no gain beside it: not bought, not shopped for.
         self.assertFalse(brain.jewel_better("Ring of Resist Fire"))
@@ -2155,7 +2274,7 @@ class ThreatDepthTest(unittest.TestCase):
         Evil's panel breathed 690. On a dive level it walks on, and hurt it
         drinks rather than rests."""
         brain = self.priest()
-        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire")   # ready: diving
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")   # ready: diving
         view = town_view((10, 10), (40, 40), dlvl=49)
         o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=391, mhp=394)
         self.assertIsNone(brain.rest(o, view))                         # 391/394: walk on
@@ -2346,10 +2465,54 @@ class ScoutTest(unittest.TestCase):
         brain.at_store = ALCHEMIST
         self.assertNotIn(HEROISM, brain.shopping_list(5000))             # not stocked there (sro_alchemy_choice)
 
+class ManaReadTest(unittest.TestCase):
+    def test_mana_is_read_from_zero_page(self) -> None:
+        """C64 Balrog, 2026-11-12: on 40 columns three-digit mana pushes the
+        maximum's last digit off the status line ("MP:100/16AC:57"); read as
+        full, a clvl 40 Priest stopped resting at 100 of 161 and left town for
+        the Balrog with it again and again. The build's zero page has both."""
+        import copy
+        from moria_playtest.magic import Magic
+        o = command_obs(pos=(10, 10), dlvl=0, clvl=40, hp=408, mhp=408,
+                        rows={23: "HP:408/408MP:100/16AC:57 AU:16776KFull"})
+        self.assertEqual(Magic.mana(o), (100, 16))                    # the screen alone: "full"
+        abi = copy.copy(ABI)
+        object.__setattr__(abi, "labels", {**ABI.labels, "zp_player_mp": 0x31, "zp_player_mmp": 0x32})
+        zp = bytearray(o.zp)
+        zp[0x31], zp[0x32] = 100, 161
+        self.assertEqual(Magic.mana(dataclasses.replace(o, zp=bytes(zp), abi=abi)), (100, 161))
+
+
 class ResistFireTest(unittest.TestCase):
     """2026-11-07: Moria8 breath is all fire (monster_cast_breath), and six
     of a level-34 Priest's first seven copies died to dragon breath with
     Resist Heat and Cold known."""
+
+    def test_the_balrogs_fire_is_kept_resisted_at_any_price_only_near_it(self) -> None:
+        """C64 Balrog, 2026-11-12: kept up at any price once the Balrog had
+        been seen on the level, or whenever a Potion of Resist Heat was
+        carried, a clvl 40 Priest prayed Resist Heat and Cold 44 times
+        exploring DL50 from full mana and met the Balrog with nothing for Orb.
+        At any price only within BALROG_NEAR_STEPS of a sighting; otherwise
+        from nearly full mana (resist_upkeep), as before."""
+        from moria_playtest.brain import BALROG_NEAR_STEPS
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import RESIST_HEAT_COLD, Prayer
+        brain = Brain(for_character(GOALS["balrog"], "human-priest"))
+        brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
+        brain.magic.known[RESIST_HEAT_COLD] = Prayer("d", 6, 20, "Words of Wisdom")
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
+        brain.clvl, brain.resist_heat = 40, 2                          # potions carried
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        view.creatures = {}
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=413, mhp=413,
+                        rows={23: "HP:413/413 MP:100/161 AC:52 AU:9999 Full"})
+        o.step = 5000
+        brain.level.balrog_seen = o.step - BALROG_NEAR_STEPS             # long ago
+        self.assertIsNone(brain.resist_fire(o, view))
+        brain.level.balrog_seen = o.step - 10                           # just seen
+        self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(o, view).reason)
 
     def test_on_the_balrogs_levels_fire_is_kept_resisted(self) -> None:
         """C64 Balrog, 2026-11-11: a ready clvl 40 Priest fought a Mature
@@ -2361,7 +2524,7 @@ class ResistFireTest(unittest.TestCase):
         brain = Brain(for_character(GOALS["balrog"], "half-troll-priest"))
         brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
         brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
-        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire")
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         from moria_playtest.magic import Prayer
         brain.magic.known[RESIST_HEAT_COLD] = Prayer("d", 6, 20, "Words of Wisdom")
         brain.magic.known["Heal"] = Prayer("c", 16, 33, "Exorcisms and Dispellings")   # the mana spare keeps
@@ -2398,6 +2561,39 @@ class ResistFireTest(unittest.TestCase):
         self.assertIsNone(brain.resist_fire(shallower, town_view((10, 10), (40, 40), dlvl=38)))
         brain.clvl = 39
         self.assertIsNone(brain.resist_fire(o, view))                          # not yet for the Balrog
+
+    def test_a_resist_timer_about_to_run_out_is_renewed(self) -> None:
+        """C64 Balrog, 2026-11-12: a ready clvl 40 Priest Orbed the Balrog at
+        261/412 under the last turns of Resist Heat and Cold, took its breath
+        through the ring alone (284) and died. A timer of RESIST_TIMER_LOW
+        turns or fewer counts as none: the prayer (it adds 11-20 turns) comes
+        first, and the fight weighs the breath as the ring leaves it."""
+        import copy
+        from moria_playtest.brain import RESIST_TIMER_LOW
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import RESIST_HEAT_COLD, Prayer
+        brain = Brain(for_character(GOALS["balrog"], "human-priest"))
+        brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
+        brain.magic.known[RESIST_HEAT_COLD] = Prayer("d", 6, 20, "Words of Wisdom")
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
+        brain.clvl = 40
+        brain.level.balrog_seen = 5
+        abi = copy.copy(ABI)
+        object.__setattr__(abi, "zp_eff_resist", 0x58)
+
+        def fighting(turns: int) -> Observation:
+            o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=261, mhp=412,
+                            rows={23: "HP:261/412 MP:137/161 AC:52 AU:9999 Full"})
+            zp = bytearray(o.zp)
+            zp[0x58] = turns
+            return dataclasses.replace(o, zp=bytes(zp), abi=abi)
+        self.assertEqual(brain.resist_div(fighting(RESIST_TIMER_LOW + 1), "fire"), 9)   # ring and prayer
+        self.assertEqual(brain.resist_div(fighting(RESIST_TIMER_LOW), "fire"), 3)       # the ring alone
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        view.creatures = {}
+        self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(fighting(RESIST_TIMER_LOW), view).reason)
+        self.assertIsNone(brain.resist_fire(fighting(15), view))
 
     def test_the_balrog_is_fought_with_its_fire_resisted(self) -> None:
         """2026-11-11 (maintainer: "yes" to a fight plan): in 36 final
@@ -3864,6 +4060,26 @@ class GearTest(unittest.TestCase):
         o.rows[22] = "ST:18  IN: 6  WI:11  DX:12  CO:14  CH: 6"
         return o
 
+    def test_a_sensed_jewel_keeps_its_worth(self) -> None:
+        """C64 Balrog, 2026-11-12: the worn Amulet of the Magi showed as
+        "Amulet of the Magi (magik)" (sensed, not identified); read as a kind
+        "the Magi (magik)" it was worth 0, a clvl 40 Priest bought an Amulet of
+        Resist Acid over it, dropped the Magi as junk and met the Balrog without
+        Free Action. The label is not part of the kind."""
+        from moria_playtest.brain import MAGIC_SHOP
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "human-priest"))
+        brain.clvl = 40
+        rows = ["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: Amulet of the Magi (magik)",
+                " j) Ring:   Ring of Resist Fire"]
+        brain.jewels = brain.read_jewels(rows)
+        self.assertEqual(brain.jewels["Amulet"], brain.jewel_value("Amulet of the Magi"))
+        self.assertEqual(brain.jewel_value("Ring of Speed (magik)"), brain.jewel_value("Ring of Speed"))
+        self.assertTrue(brain.free_action())
+        shop = self.store(brain, MAGIC_SHOP, [("Amulet of Resist Acid", 2000)], 9000000)
+        self.assertIsNone(brain.jewel_pick(shop))                       # not over the Magi
+        self.assertFalse(brain.jewel_better("Amulet of Resist Acid"))
+
     def test_rich_it_buys_the_ring_and_amulet_worth_most_and_wears_them(self) -> None:
         """2026-11-07: a level-34 Priest with 4,000K gold wore no ring or
         amulet (maintainer: "max out all of its stats and equipment")."""
@@ -3874,7 +4090,7 @@ class GearTest(unittest.TestCase):
         self.assertEqual([brain.jewel_value(n) for n in ("Ring of Protection [+7]", "Ring of Strength (+3)",
                                                          "Amulet of Wisdom (+2)", "Ring of Speed",
                                                          "Ring of Strength (-2)", "Amulet of the Magi")],
-                         [70, 0, 40, 1000, -1, 300])
+                         [70, 0, 40, 1000, -1, 900])
         brain.jewels = {"Ring": 30, "Amulet": 0}
         o = self.store(brain, MAGIC_SHOP, [("Ring of Protection [+7]", 700), ("Ring of Strength (+3)", 1200),
                                            ("Amulet of Wisdom (+2)", 900), ("Wand of Light (8 charges)", 200)], 900000)
@@ -3894,7 +4110,7 @@ class GearTest(unittest.TestCase):
         right hand when free, else on the left, replacing its ring."""
         brain = Brain(GOALS["deep"])
         rows = ["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: Amulet of the Magi", "    Ring:   (none)"]
-        self.assertEqual(brain.read_jewels(rows), {"Ring": 1000, "Amulet": 300, "Ring2": 0})
+        self.assertEqual(brain.read_jewels(rows), {"Ring": 1000, "Amulet": 900, "Ring2": 0})
         self.assertEqual(brain.jewel_slot("Ring"), "Ring2")                       # the right hand is taken
         self.assertTrue(brain.jewel_better("Ring of Resist Cold"))               # the free left hand
         rows[3] = " j) Ring:   Ring of Resist Fire"
@@ -3912,7 +4128,7 @@ class GearTest(unittest.TestCase):
         rows = ["Equipment", " h) Ring:   Ring of Resist Fire", " i) Amulet: Amulet of the Magi",
                 " j) Ring:   Ring of Resist Fire"]
         brain.jewels = brain.read_jewels(rows)
-        self.assertEqual(brain.jewels, {"Ring": 800, "Amulet": 300, "Ring2": 0})    # the twin does nothing
+        self.assertEqual(brain.jewels, {"Ring": 800, "Amulet": 900, "Ring2": 0})    # the twin does nothing
         self.assertTrue(brain.jewel_better("Ring of Resist Cold"))                # replaces the left one
         self.assertFalse(brain.jewel_better("Ring of Resist Fire"))               # a third is no better
         o = self.store(brain, MAGIC_SHOP, [("Ring of Resist Fire", 900), ("Ring of Resist Cold", 900)], 900000)
@@ -4919,6 +5135,29 @@ class MageBookTest(unittest.TestCase):
                               3: "b) 3 Wooden Torch (134 turns)", 4: "c) Dagger (1d4)"})
         o.mode, o.stage = Mode.ITEM, "list"
         self.assertEqual(brain.decide(o, None).reason, "drop Dagger (1d4)")
+
+    def test_a_caster_keeps_and_collects_restore_mana(self) -> None:
+        """C64 Balrog, 2026-11-12: ready clvl 40 Priests walked past 8-17
+        Potions of Restore Mana an hour and fought the Balrog's 3,000 HP on
+        one mana bar a visit, and a half-troll Priest dropped the one it
+        bought as junk. No store sells them: a caster picks them up and keeps
+        them; a Warrior, with no mana, does neither."""
+        brain, _ = self.caster("human-priest", {})
+        brain.dropping = True
+        o = command_obs(rows={0: "Inventory", 1: "---------", 2: "a) Potion of Restore Mana",
+                              3: "b) Dagger (1d4)"})
+        o.mode, o.stage = Mode.ITEM, "list"
+        self.assertEqual(brain.decide(o, None).reason, "drop Dagger (1d4)")
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=45)
+        view.screen = (0, 0, COLS, ROWS)
+        brain.items_seen[(8, 5)] = ("!", "Potion of Restore Mana")
+        seen = command_obs(pos=(5, 5), dlvl=45, clvl=40, hp=400, mhp=400)
+        self.assertEqual(brain.collect(seen, view).layer, "collect")
+        warrior, _ = self.caster("human-warrior", {})
+        warrior.food = 5
+        warrior.items_seen[(8, 5)] = ("!", "Potion of Restore Mana")
+        self.assertIsNone(warrior.collect(seen, view))
 
     def test_a_full_pack_keeps_the_two_fullest_stacks_of_ammunition(self) -> None:
         """C64 Balrog, 2026-11-12: a clvl 33 Elf Warrior's Heavy Crossbow
@@ -7129,6 +7368,62 @@ class CharacterTest(unittest.TestCase):
         self.assertEqual(suite_path("clvl5", port="plus4"), SUITES / "clvl5-plus4.json")
         self.assertEqual(suite_path("clvl5", "human-mage", "plus4"), SUITES / "clvl5-human-mage-plus4.json")
         self.assertEqual(suite_path("clvl5", "human-mage", "c64"), SUITES / "clvl5-human-mage.json")
+
+    def test_the_winning_kill_is_logged(self) -> None:
+        """2026-11-12: the C64 Human Priest's two Balrog kills left no kill
+        event (the run ended on "You have won!" before the brain saw the
+        -more- that slew it), and the Monsters panel showed no Balrog slain."""
+        import types
+        from unittest import mock
+        from moria_playtest.session import Character
+        brain = Brain(GOALS["deep"])
+        brain.prompt_messages = "You have slain the Balrog. -more-"
+        me = types.SimpleNamespace(brain=brain, seed=7, result=types.SimpleNamespace(steps=99),
+                                   session=mock.Mock())
+        me.log_kills = lambda obs: Character.log_kills(me, obs)   # type: ignore[arg-type]
+        won = command_obs(dlvl=50, clvl=40, rows={0: "You have won! Shift+Q to claim victory."})
+        Character.reached_kills(me, won)   # type: ignore[arg-type]
+        me.session.event.assert_called_once_with("kill", seed=7, step=99, name="Balrog", dlvl=50, clvl=40)
+
+    def test_a_win_is_captured_to_the_title(self) -> None:
+        """Maintainer, 2026-11-12: capture the victory screen as a rule. The
+        winning screen, Shift+Q, then each screen to the title, as text and
+        a picture; a failure costs the win nothing."""
+        import tempfile, types
+        from pathlib import Path
+        from unittest import mock
+        from moria_playtest.session import KEY_CLAIM_VICTORY, Character
+        screens = [("You have won!", Mode.COMMAND), ("Retired", Mode.DEATH), ("High scores", Mode.DISMISS),
+                   ("N)ew  L)oad", Mode.CHARGEN)]
+        with tempfile.TemporaryDirectory() as tmp:
+            pressed: list[int] = []
+
+            class Game:
+                def press(self, key: int):   # type: ignore[no-untyped-def]
+                    pressed.append(key)
+                    text, mode = screens[len(pressed)]
+                    return types.SimpleNamespace(rows=[text], mode=mode)
+
+                def screenshot(self, path: Path) -> bool:
+                    path.write_bytes(b"png")
+                    return True
+
+            me = types.SimpleNamespace(worker=types.SimpleNamespace(workdir=Path(tmp), game=Game()), seed=7,
+                                       session=mock.Mock())
+            Character.capture_victory(me, types.SimpleNamespace(rows=["You have won!"], mode=Mode.COMMAND))  # type: ignore[arg-type]
+            out = Path(tmp) / "victory"
+            self.assertEqual(pressed, [KEY_CLAIM_VICTORY, 0x20, 0x20])
+            self.assertEqual(sorted(p.name for p in out.iterdir()),
+                             ["00.png", "00.txt", "01.png", "01.txt", "02.png", "02.txt", "03.png", "03.txt"])
+            self.assertEqual((out / "01.txt").read_text(), "Retired\n")
+            me.session.event.assert_called_once_with("victory_captured", seed=7, dir=str(out), screens=4, pictures=4)
+
+            class Broken(Game):
+                def press(self, key: int):   # type: ignore[no-untyped-def]
+                    raise RuntimeError("emulator gone")
+            me.worker.game, me.session = Broken(), mock.Mock()
+            Character.capture_victory(me, types.SimpleNamespace(rows=["You have won!"], mode=Mode.COMMAND))  # type: ignore[arg-type]
+            self.assertEqual(me.session.event.call_args.args[0], "victory_capture_failed")
 
     def test_a_faulting_key_is_kept_with_the_finding(self) -> None:
         """2026-11-07: the key whose press hung was never recorded, so no

@@ -25,6 +25,8 @@ LABELS: dict[str, str] = {
     "zp_player_hp_lo": "core/zeropage.s",
     "zp_player_mhp_lo": "core/zeropage.s",
     "zp_player_lvl": "core/zeropage.s",
+    "zp_player_mp": "core/zeropage.s",
+    "zp_player_mmp": "core/zeropage.s",
     "zp_eff_resist": "core/zeropage.s",
     "eff_resist_cold_timer": "core/zeropage.s",
     "zp_player_dlvl": "core/zeropage.s",

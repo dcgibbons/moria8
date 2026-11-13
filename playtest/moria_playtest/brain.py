@@ -235,7 +235,11 @@ EQUIP_SLOTS = {"Body": "ICAT_ARMOR", "Shield": "ICAT_SHIELD", "Head": "ICAT_HELM
 # A ring or amulet (Magic Shop, Black Market), worn or for sale: its name and
 # the bonus shown, "[+5]" for Protection, "(+2)" for Strength and Wisdom;
 # Speed, Slaying, the Magi and the resists show none.
-JEWEL_NAME = re.compile(r"^((Ring|Amulet) of (.+?))(?: [\[(]([+-]\d+)[\])])?\s*$")
+# " (magik)" after a sensed jewel not yet identified (itemdesc_put_sensed_suffix):
+# read as part of the kind it valued the Amulet of the Magi at 0, a clvl 40
+# Priest bought an Amulet of Resist Acid over it, dropped it as junk and met the
+# Balrog without Free Action (C64 Balrog, 2026-11-12).
+JEWEL_NAME = re.compile(r"^((Ring|Amulet) of (.+?))(?: [\[(]([+-]\d+)[\])])?(?: \(magik\))?\s*$")
 # The equipment list's ring and amulet rows, worn ("h) Ring: ...") or not
 # ("    Ring:   (none)"): both ring hands, the right first (VMS moria.inc:528).
 JEWEL_LINE = re.compile(r"^\s*(?:[a-z]\) )?(Ring|Amulet):\s+(.*)$")
@@ -335,6 +339,9 @@ GAIN_POTIONS = {"Potion of Gain Strength": "ST", "Potion of Gain Intelligence": 
                 "Potion of Gain Constitution": "CO", "Potion of Charisma": "CH"}
 STAT_MAXED = 28          # 18/100 as track_stats reads it (18 + 100 // 10)
 RESIST_WORTH = 0.25      # a breather whose breath, as resisted now, is this share of HP: resist first
+TOWN_REST_STRIKES = 5    # town rests before Word of Recall to the Balrog that may gain nothing (recall_trip)
+RESIST_TIMER_LOW = 3     # Resist Heat (Cold) turns left that count as none: renewed before a breath
+                         # outlasts it (the prayer adds randint(10) + 10, pmx_resist_add)
 NEUTRALIZE_RESERVE = 2   # carried from STRONG_LEVEL on the strong_potions goals
 STRONG_GOLD = {CCW: 100, CSW: 40}
 POTION_HEAL = {CLW: 8.0, CSW: 16.0, CCW: 24.0}   # 2d7, 4d7, 6d7 (VMS potions.inc cases 13-15)
@@ -520,6 +527,7 @@ DIVE_FROM_CLVL = MAX_CLVL   # the Balrog goal dives past one-breath killers from
                             # less experience an hour than DL39, and the maintainer: "let's not deep-dive then"
 BALROG = "Balrog"     # dived for only once its breath is survivable (balrog_ready)
 BALROG_DLVL = 50      # ... and no deeper: from here every level has it (core/monster_catalog.s CAT_WIN_LEVEL)
+BALROG_NEAR_STEPS = 100  # steps since the Balrog was in view that its fire is kept resisted at any price (resist_fire)
 BALROG_FIGHT_TURNS = 2   # resisted turns of the Balrog's worst the HP covers to stand and fight it (balrog_fight)
 BALROG_FIRE_RING = 1100   # a Ring of Resist Fire at the top level on the Balrog goal: over a Ring of Speed's 1000
 DIVE_REST_HP = 0.8    # on a dive level no rest above this share of HP; below it a potion first (rest)
@@ -646,6 +654,8 @@ class LevelMemory:
     exercise_after: int = 0         # step before which no spell is tried for its effect again (M7)
     summoned: int | None = None     # step a creature on this level was last heard summoning help (M7)
     phased: int | None = None       # step of the last short phase (Phase Door, scroll or spell)
+    rested: int | None = None       # HP + mana at the last town rest before Word of Recall (recall_trip)
+    rest_strikes: int = 0           # ... town rests since that gained nothing (TOWN_REST_STRIKES)
     last_threat: Pos | None = None   # where the nearest creature that could reach the player was last seen
     seen: list[int] | None = None    # tile types as last seen: the game forgets unlit floor
 
@@ -1297,7 +1307,9 @@ class Brain:
         if element is not None:
             lordly = 10 * LORDLY_AC if kind.startswith("Lordly") else 0
             return lordly + (BALROG_FIRE_RING if element == "fire" and self.balrog_bound() else 800)
-        return {"Speed": 1000, "the Magi": 300, "Protection": 10 * bonus,
+        # The Magi over an amulet of resistance (800): Free Action is the
+        # Balrog's Hold Person stopped (balrog_ready).
+        return {"Speed": 1000, "the Magi": 900, "Protection": 10 * bonus,
                 "Strength": 15 * bonus if melee else 0, "Slaying": 60 if melee else 0,
                 "Wisdom": (20 if self.goal.klass in ("priest", "paladin") else 2) * bonus,
                 "See Invisible": 20}.get(kind, 0)
@@ -1506,8 +1518,11 @@ class Brain:
         if element not in timers:
             return 3 if held else 1
         timer = timers[element]
+        # A timer about to run out is none: a clvl 40 Priest Orbed the Balrog
+        # at 261/412 under the prayer's last turns, took its breath through
+        # the ring alone (284) and died (C64 Balrog, 2026-11-12).
         on = element in assume or (not lasting and obs.abi is not None and hasattr(obs.abi, timer)
-                                   and obs.zp8(timer) > 0)
+                                   and obs.zp8(timer) > RESIST_TIMER_LOW)
         return 3 ** (int(held) + int(on))
 
     def elements_div(self, obs: Observation, elements: frozenset[str], lasting: bool = False,
@@ -1566,7 +1581,11 @@ class Brain:
             # breaths of 36 fatal fights hit through the armour alone (333,
             # not 111), the prayer held back for mana 4-17 of 161 short of
             # "spare" (C64 Balrog, 2026-11-11).
-            met = self.level.balrog_seen is not None or self.resist_heat > 0
+            # Lately, not once on the level: kept up at any price from its
+            # first sighting (or whenever a potion was carried), a clvl 40
+            # Priest prayed it 44 times exploring DL50 from full mana and met
+            # the Balrog with nothing for Orb (C64 Balrog, 2026-11-12).
+            met = self.level.balrog_seen is not None and obs.step - self.level.balrog_seen < BALROG_NEAR_STEPS
             # Unseen, only from nearly full mana: re-prayed every 10-19 turns
             # from "spare" mana it held a clvl 40 Priest at 19-23 of 161 on
             # DL50, and the Balrog found it with 22 (C64 Balrog, 2026-11-12);
@@ -1680,8 +1699,8 @@ class Brain:
         Beetle and an Umber Hulk, drank a potion and prayed there, and was
         paralysed again and beaten to death (C64 Balrog, 2026-11-07). The
         long escapes first, then Phase Door, then a step out of its reach."""
-        if obs.dlvl == 0 or not self.paralyzers or "Magi" in self.jewel_names.get("Amulet", ""):
-            return None   # Free Action (the Amulet of the Magi): no blow paralyses
+        if obs.dlvl == 0 or not self.paralyzers or self.free_action():
+            return None   # Free Action: no blow paralyses
         glyphs = knowledge.glyphs_of()
         bad = {g for name in self.paralyzers for g in glyphs.get(name, ())}
         near = [p for p, c in view.creatures.items() if c.glyph in bad and chebyshev(p, view.pos) == 1]
@@ -1833,6 +1852,13 @@ class Brain:
                 hidden.append((min(chebyshev(p, (x, y)) for p in lethal), key))
         if hidden:
             return Decision(max(hidden)[1], "retreat", f"{who} could breathe {worst}: out of its sight")
+        if not lethal and self.level.phased is not None and obs.step - self.level.phased < UNSEEN_BREATH_STEPS:
+            # Unseen, a Phase Door breaks no sight line: once a window, then
+            # a heal, then leave_deadly's stairs or Word of Recall. A clvl 40
+            # Priest at 190/410 read Phase Door twenty times running from an
+            # unseen Balrog, was found, held and burned to death (C64 Balrog,
+            # 2026-11-12).
+            return self.heal_now(obs, f"{who} could breathe {worst}")
         if self.phase and obs.step >= self.blind_until:
             self.picking, self.listed = PHASE, False
             self.level.phased = obs.step
@@ -3369,10 +3395,16 @@ class Brain:
         Speed and none dived to DL64 and DL53, and its fire breath did
         ~1,000 at 405 HP, once seen and once unseen (C64 Balrog,
         2026-11-11). Until then the top level stays as deep as it survives
-        (``threat_ready``) and buys a Ring of Resist Fire (``jewel_value``)."""
+        (``threat_ready``) and buys a Ring of Resist Fire (``jewel_value``).
+
+        And Free Action worn, against its Hold Person: a clvl 40 Priest
+        without it was held and breathed on to death in three of seven
+        fights in an hour (C64 Balrog, 2026-11-12; maintainer: fix it)."""
         kind = knowledge.kinds_by_name().get(BALROG)
         if kind is None:
             return True
+        if kind in knowledge.paralyzer_kinds() and not self.free_action():
+            return False
         balrog = Creature(kind[0], kind[1], BALROG)
         return self.turn_burst(balrog, obs, lasting=True) < BREATH_LETHAL * obs.mhp
 
@@ -3398,15 +3430,28 @@ class Brain:
         Dragon's 468) until a Ring of Resist Cold cuts that to 156."""
         if not self.goal.threat_depth or obs.clvl < THREAT_DEPTH_FROM:
             return False
+        if dlvl >= BALROG_DLVL:
+            # The Balrog is on every level from here (catalog_place_win_
+            # creature) and no native's breath says so: its levels are
+            # balrog_dive's alone. A clvl 40 Half-Troll Priest at 806 HP with
+            # Free Action passed every depth, walked to DL94, recalled to
+            # DL100 and met it with 1 mana (C64 Balrog, 2026-11-12).
+            return False
         # Natives OUT_OF_DEPTH deeper too: clvl 31 Warriors at 256-289 HP
         # took DL37 (a Mature Red Dragon's 160), met Ancient Blue Dragons of
         # DL39 there and died 16 times in 30 minutes (C64 Balrog, 2026-11-11;
         # maintainer: count them).
         return self.native_exchange(obs, dlvl + OUT_OF_DEPTH) < BREATH_LETHAL * obs.mhp
 
+    def mana_klass(self) -> bool:
+        """A class with mana: all but the Warrior (Rogues and Rangers cast
+        from the Mage's books, Paladins from the Priest's)."""
+        return self.goal.klass not in (None, "warrior")
+
     def free_action(self) -> bool:
-        """Free Action worn: the Amulet of the Magi (PFLAG_FREE_ACT)."""
-        return "Magi" in self.jewel_names.get("Amulet", "")
+        """Free Action worn (PFLAG_FREE_ACT): the Amulet of the Magi, or a
+        Defender weapon wielded (pf_ego_table, since 2026-11-11)."""
+        return "Magi" in self.jewel_names.get("Amulet", "") or self.weapon[0].endswith("(Defender)")
 
     def native_exchange(self, obs: Observation, dlvl: int) -> int:
         """The worst exchange with a creature native to ``dlvl`` or
@@ -4452,6 +4497,11 @@ class Brain:
                 return True
             if self.launcher is not None and name.startswith(LAUNCHERS[self.launcher][0]):
                 return True
+            if name.startswith(RESTORE_MANA) and self.mana_klass() and not self.pack_full:
+                # A second mana bar, found: no store sells one. Ready clvl 40
+                # Priests walked past 8-17 in an hour and fought the Balrog's
+                # 3,000 HP on one bar a visit (C64 Balrog, 2026-11-12).
+                return True
             # A wand or staff already carried with charges is not taken twice.
             return not self.pack_full and (self.unknown_kept(name) or self.jewel_better(name) or self.gain_wanted(name)
                                            or self.armour_resist_better(name) is not None or (
@@ -4762,6 +4812,25 @@ class Brain:
                 # Priests whose deepest was DL38 walked down from DL1 every
                 # town trip (C64 Balrog, 2026-11-09).
                 return None
+            mp, mmp = self.magic.mana(obs)
+            if self.balrog_bound() and self.max_dlvl >= BALROG_DLVL and (obs.hp < obs.mhp or mp < mmp) \
+                    and not self.no_food and not any(chebyshev(p, view.pos) <= 1 for p in view.creatures):
+                # Down to the Balrog at full mana, as a player goes: recall
+                # lands off the stairs, where a dive level has no rest. A clvl
+                # 40 Priest read it at 76-105 of 161, met the Balrog with half,
+                # recalled out, and each return was a Balrog at full HP (C64
+                # Balrog, 2026-11-12). Townspeople in view stop each rest
+                # after a turn or so, and it rests on: kept for none in view,
+                # it rested once in 35 reads (same day). Not beside one, and
+                # after TOWN_REST_STRIKES rests that gained nothing, Word of
+                # Recall all the same: no stall on a rest the game refuses.
+                total = obs.hp + mp
+                if self.level.rested is not None and total <= self.level.rested:
+                    self.level.rest_strikes += 1
+                self.level.rested = max(total, self.level.rested or 0)
+                if self.level.rest_strikes < TOWN_REST_STRIKES:
+                    return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp} MP {mp}/{mmp}: "
+                                                          "rest before Word of Recall to the Balrog")
         elif not (self.food_low() and self.sealed(view)) and not self.stuck(view) and not self.lightless() \
                 and not self.far_above_deepest(obs) and not self.hopping_out() and (
                 obs.dlvl < RECALL_FROM or not self.needs_resupply(obs)) and not (
@@ -5136,7 +5205,10 @@ class Brain:
             # level-16 Mage's pack until the General Store refused its food
             # and light, and it starved in the dark (C128, 2026-11-05).
             recharging = any(n in self.magic.known and not self.magic.confirmed(n) for n in RECHARGE_SPELLS)
-            useful = (*ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *FIGHT_DEVICES, *(RECHARGEABLE if recharging else ()))
+            # Restore Mana for a caster: a half-troll Priest bought one for the
+            # Balrog and dropped it as junk (C64 Balrog, 2026-11-12).
+            useful = (*ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *FIGHT_DEVICES, *(RECHARGEABLE if recharging else ()),
+                      *((RESTORE_MANA,) if self.mana_klass() else ()))
             keep = KEEP_PREFIXES + missiles + ((self.weapon[0],) if self.wielding_launcher else ()) + tuple(useful)
 
             matches = [PACK_ITEM.match(row) for row in obs.rows[1:]]
@@ -5565,6 +5637,11 @@ class Brain:
         poison gas killed one 6-9 HP Mage in five (M5f baseline)."""
         spell = next((name for name in (FIND_TRAPS, PRIEST_FIND_TRAPS) if self.magic.spare(obs, name)), None)
         if obs.dlvl == 0 or self.threats(view) or obs.step < self.level.find_traps_after or spell is None:
+            return None
+        if self.balrog_bound() and obs.dlvl >= BALROG_DLVL:
+            # Its mana is the Balrog's: a clvl 40 Priest prayed Find Traps 660
+            # times in an hour on DL50 and met it with 29-148 of 161 (C64
+            # Balrog, 2026-11-12).
             return None
         self.level.find_traps_after = obs.step + FIND_TRAPS_EVERY
         return Decision(*self.magic.pray(spell, f"pray {spell}"))

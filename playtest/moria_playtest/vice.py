@@ -17,7 +17,9 @@ import select
 import socket
 import struct
 import time
+import zlib
 from dataclasses import dataclass, field
+from pathlib import Path
 
 STX = 0x02
 API_VERSION = 0x02
@@ -40,7 +42,9 @@ CMD_KEYBOARD_FEED = 0x72
 CMD_PING = 0x81
 CMD_BANKS_AVAILABLE = 0x82
 CMD_REGISTERS_AVAILABLE = 0x83
+CMD_DISPLAY_GET = 0x84
 CMD_VICE_INFO = 0x85
+CMD_PALETTE_GET = 0x91
 CMD_EXIT = 0xAA
 CMD_QUIT = 0xBB
 CMD_RESET = 0xCC
@@ -66,6 +70,14 @@ RESPONSE_KIND = {
     CMD_REGISTERS_GET: RESP_REGISTER_INFO,
     CMD_REGISTERS_SET: RESP_REGISTER_INFO,
 }
+
+
+def write_png(path: Path, width: int, height: int, raw: bytes) -> None:
+    """An 8-bit RGB PNG from ``raw``: each row a filter byte (0) and its pixels."""
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
 class ViceError(Exception):
@@ -355,6 +367,34 @@ class ViceMonitor:
         if len(data) != length:
             raise ViceError(f"short memory read: {len(data)} of {length}")
         return data
+
+    def screenshot(self, path: str | Path, vdc: bool = False, border: int = 32) -> None:
+        """The machine's display as a PNG (Display Get and Palette Get): the
+        inner screen and ``border`` pixels of its border, as VICE shows it.
+        ``vdc``: the C128's 80-column VDC rather than the VIC-II."""
+        chip = bytes([0 if vdc else 1])   # VICE: 1 the VIC-II, 0 the VDC (x128 measured, 2026-11-12)
+        body = self.call(CMD_DISPLAY_GET, chip + b"\0").body   # format 0: 8-bit indexed
+        dw, dh, xo, yo, iw, ih = struct.unpack_from("<6H", body, 4)
+        if body[16] != 8:
+            raise ViceError(f"display get: {body[16]} bits per pixel")
+        length = struct.unpack_from("<I", body, 17)[0]
+        # The VDC's buffer comes 4 bytes short of the length it reports (x128,
+        # 856x288, 2026-11-12): padded, not read past.
+        pixels = body[21:21 + length].ljust(dw * dh, b"\0")
+        palette = self.palette(vdc)
+        x0, y0 = max(0, xo - border), max(0, yo - border)
+        x1, y1 = min(dw, xo + iw + border), min(dh, yo + ih + border)
+        rows = [b"\0" + b"".join(palette[i] for i in pixels[y * dw + x0:y * dw + x1]) for y in range(y0, y1)]
+        write_png(Path(path), x1 - x0, y1 - y0, b"".join(rows))
+
+    def palette(self, vdc: bool = False) -> list[bytes]:
+        """The display's colours as RGB triples (Palette Get)."""
+        pal = self.call(CMD_PALETTE_GET, bytes([0 if vdc else 1])).body
+        count, at, colours = struct.unpack_from("<H", pal, 0)[0], 2, []
+        for _ in range(count):
+            colours.append(bytes(pal[at + 1:at + 4]))
+            at += 1 + pal[at]
+        return colours
 
     def mem_get(self, start: int, length: int, bank: int = 0) -> bytes:
         return self.recv_mem_get(self.send_mem_get(start, length, bank), length)

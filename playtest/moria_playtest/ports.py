@@ -430,5 +430,10 @@ C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_r
 C64_CART = replace(C64, name="c64-cart", source="c64", out="c64-cart", disk_target="disk64 cartridge64",
                    disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args))
 
+# The AtariMax MaxFlash cartridge (make cartridgeatari8, build/atari8-cart):
+# booted from the .car with the disk build's disk in drive 1 for saves.
+ATARI8_CART = replace(ATARI8, name="atari8-cart", source="atari8", out="atari8-cart",
+                      disk_target="diskatari8 cartridgeatari8", cartridge="moria8-atari8.car")
+
 PORTS: dict[str, Port] = {port.name: port for port in
-                          (C64, C64_NOREU, C64_CART, PLUS4, C128, APPLE2, ATARI8, BBCMASTER, CX16)}
+                          (C64, C64_NOREU, C64_CART, PLUS4, C128, APPLE2, ATARI8, ATARI8_CART, BBCMASTER, CX16)}

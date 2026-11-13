@@ -186,6 +186,13 @@ class Magic:
 
     @staticmethod
     def mana(obs: Observation) -> tuple[int, int]:
+        """Mana and its maximum, from zero page where the build lists them:
+        on 40 columns three-digit mana pushes the maximum's last digit off
+        the status line ("MP:100/16AC:57"), read as full, and a clvl 40
+        Priest left town for the Balrog at 100 of 161 again and again (C64
+        Balrog, 2026-11-12). The status line otherwise."""
+        if obs.abi is not None and hasattr(obs.abi, "zp_player_mmp"):
+            return obs.zp8("zp_player_mp"), obs.zp8("zp_player_mmp")
         match = STATUS_MP.search(obs.rows[23])
         return (int(match.group(1)), int(match.group(2))) if match else (0, 0)
 

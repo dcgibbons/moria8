@@ -87,7 +87,7 @@ class Worker:
         port = self.build.target
         if port.backend == "mame":
             process = MameProcess(self.worker_id, self.workdir, self.disk, port,
-                                  self.hang_emulated_seconds)
+                                  self.hang_emulated_seconds, cartridge=self.cartridge)
             self.vp = process.start(rom_args(port=port), MameGame.tap_spec(self.abi, port))   # type: ignore[assignment]
             self.game = MameGame(process, self.abi, self.workdir, port=port,
                                  hang_emulated_seconds=self.hang_emulated_seconds)

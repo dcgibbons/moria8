@@ -450,6 +450,18 @@ class BalrogQueueTest(unittest.TestCase):
             balrog.graduate("c64", combo, {})
         self.assertEqual([balrog.take()["character"] for _ in range(3)], ["elf-priest", "human-priest", "elf-priest"])
 
+    def test_a_winner_is_done(self) -> None:
+        """Maintainer, 2026-11-12: the C64 Human Priest killed the Balrog twice;
+        a combination that has won is done, and its slots go to the others."""
+        balrog = self.balrog()
+        for combo in ("elf-priest", "human-priest"):
+            balrog.graduate("c64", combo, {})
+        balrog.state["items"]["c64/human-priest"]["won"] = 2
+        self.assertEqual([balrog.take()["character"] for _ in range(3)], ["elf-priest"] * 3)
+        self.assertIsNone(balrog.take(only=("human-priest",)))           # the focus done: nothing
+        balrog.state["items"]["c64/elf-priest"]["won"] = 1
+        self.assertIsNone(balrog.take())
+
     def test_the_highest_start_goes_first(self) -> None:
         """Maintainer, 2026-11-06: the highest-level save first, as the likeliest
         to go further and find something new; equal levels take turns."""

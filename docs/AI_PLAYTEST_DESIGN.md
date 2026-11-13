@@ -3012,7 +3012,7 @@ a win is unlikely until the bot plays much better.
   character also goes deeper where no native creature's worst turn (its
   breaths, against the resistance and speed worn) is 90% of its HP
   (`brain.threat_ready`, maintainer 2026-11-08: "be like a real human
-  player"); without Free Action (the Amulet of the Magi) a native's melee
+  player"); without Free Action (the Amulet of the Magi or a Defender weapon) a native's melee
   round counts on top of its breath, and four more rounds when it can
   paralyse by Hold Person or touch (`brain.native_exchange`, maintainer
   2026-11-12: clvl 32 Warriors were breathed on, held and bitten to death
@@ -3022,7 +3022,33 @@ a win is unlikely until the bot plays much better.
   40 the bot dives for the Balrog with a way out in its pack
   (`brain.balrog_dive`), detecting each level and leaving one whose
   creature could kill in a breath, since DL40's Ancient Multi-Hued Dragon
-  (693 a breath) outclasses a 400-HP Priest for good. A dive from level 35
+  (693 a breath) outclasses a 400-HP Priest for good. The Balrog's levels
+  wait for Free Action too, against its Hold Person (`brain.balrog_ready`,
+  maintainer 2026-11-12: a clvl 40 Priest without it was held and burned to
+  death in three of seven fights in an hour), and the Amulet of the Magi is
+  worth more than an amulet of resistance. One fight a visit, as a player
+  wins it: a level is new each time, so every return met a Balrog at full
+  HP; Word of Recall to its levels is read after a rest to full in town
+  (`brain.recall_trip`; the Priest read it at 76-105 of 161 mana), and no
+  Find Traps there (660 prayers an hour). From an unseen breather a Phase
+  Door breaks no sight line: once a window, then a heal, then the stairs
+  or Word of Recall (`brain.breath_guard`; the Priest read twenty running
+  and was found). A Resist Heat (Cold) timer with `RESIST_TIMER_LOW` turns
+  or fewer left counts as none, so the prayer is renewed before a breath
+  outlasts it (the Priest's first ready fight: Orb at 261/412 under the
+  prayer's last turns, then the ring alone against 284). From DL50 the
+  natives' breaths no longer decide (`threat_ready` is false there): the
+  Balrog is on every level, and a Half-Troll Priest at 806 HP with Free
+  Action passed every depth, walked to DL94, recalled to DL100 and met it
+  with 1 mana; its levels are `balrog_dive`'s, to DL50 once ready. Mana
+  is read from zero page (`zp_player_mp`, `zp_player_mmp`; `magic.mana`):
+  on 40 columns three-digit mana pushes the maximum's last digit off the
+  status line ("MP:100/16"), and the bot took 100 of 161 for full. On its
+  levels the Balrog's fire is kept resisted at any price only within
+  `BALROG_NEAR_STEPS` of a sighting, else from nearly full mana: kept up
+  from the first sighting, a Priest prayed it 44 times exploring DL50 and
+  met the Balrog with nothing for Orb. Casters pick up and keep Potions of
+  Restore Mana, which no store sells. A dive from level 35
   to DL49 for the experience (`DIVE_FROM_CLVL`, `DIVE_MAX_DLVL`) was tried
   the same day and turned off: six deaths to Ancient Multi-Hued Dragons
   breathing from beyond Detect Evil's panel in two hours, and less

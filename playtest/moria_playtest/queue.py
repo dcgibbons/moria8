@@ -1056,9 +1056,11 @@ class Balrog:
         go on plays a new character (Service.start_balrog). ``only``
         (characters, focus): those alone, and None when all are busy;
         ``exclude`` (the focus, beside it): any but those."""
+        # A combination that has won is done: its slots go to the others
+        # (maintainer, 2026-11-12, after the C64 Human Priest's two wins).
         def eligible() -> list[str]:
             return [k for k in self.state["order"] if (not only or k.split("/", 1)[-1] in only)
-                    and k.split("/", 1)[-1] not in exclude]
+                    and k.split("/", 1)[-1] not in exclude and not self.state["items"][k].get("won")]
         if not eligible():
             return None
         self.rank()
