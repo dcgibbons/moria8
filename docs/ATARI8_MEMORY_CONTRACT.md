@@ -254,9 +254,16 @@ slots/bank = 64 KB`) are assigned as follows and tracked via a 16-byte
    * Serialized save size (`ATARI_SAVE_SERIALIZED_MAX` = `6,616` B, a conservative bound; the stream is `6,412` B with the 33-slot inventory, `8 x 33 = 264` B) fits within `ATARI_SAVE_SLOT_SECTORS * 125` (`56 * 125 = 7,000` B); save version `$17` (the monster catalog's species table), oldest loadable `$17`
 2. **Static Contract Checker (`platforms/atari8/check_memory_contract.py`):**
    * `make testatari8-memory-contract` and `make testatari8-memory-contract-selftest`
-   * Verifies symbol extents from `build/atari8/main.sym`, rejects any symbol or segment overlap with `$0200-$031A` (OS Page 2 / DCB), `$C100-$CFFF` (`MAP_BASE`), or `$D000-$D7FF` (Hardware I/O), verifies `< $4000` residency of all banking/SIO/130XE/interrupt/exit/font helpers, and checks all PRG payload spans.
+   * Verifies symbol extents from `build/atari8/main.sym` (and `build/atari8-cart/main.sym` when built), rejects any symbol or segment overlap with `$0200-$031A` (OS Page 2 / DCB), `$C100-$CFFF` (`MAP_BASE`), or `$D000-$D7FF` (Hardware I/O), verifies `< $4000` residency of all banking/SIO/130XE/interrupt/exit/font helpers, and checks all PRG payload spans.
 3. **Runtime MAME Verification (`platforms/atari8/harness_smoke.py`):**
    * `make testatari8-runtime` runs headless MAME across the 16-scenario behavioral suite on `a800xl` (64 KB disk-overlay baseline) plus 5 130XE cache/SIO/legal scenarios on `a130xe` when `ATARI8ROMS` is set (and warns/skips gracefully when `ATARI8ROMS` is unset).
+
+## AtariMax 128 KB Cartridge Mode (`ATARI8_CARTRIDGE`, 2026-11-12)
+
+`make cartridgeatari8` builds the optional `-define ATARI8_CARTRIDGE` edition (`build/moria8-atari8.car`, `.car` Type `41`, `16 × 8 KB` ROM banks at `$A000-$BFFF` via `$D500-$D50F` bank select / `$D510` disable) without altering the standard `ATARI8` disk build (`build/moria8-atari8.atr`).
+- Bank 0 copies a relocatable `boot_copier` into `SCREEN_RAM` (`$0800`) and bounces `MORIA8.RES` (`$0C00–$BE02`) through `$0900-$09FF` with `$D510` disabled so writes beneath `$A000-$BFFF` hit Main RAM, then syncs `OS_GINTLK` (`$03FA`) to `TRIG3` (`$D013`).
+- Runtime `cart_read` (`platforms/atari8/cartridge_copy.s`) executes strictly below `$4000`, disables NMIs and IRQs, rejects post-boot RAM destinations inside `$A000-$BFFF`, copies overlays (`$E000-$EFFF`), `RuntimeBanked` (`$F000`), `TITLE.DAT` (`$C100`), `279 × 49` B catalog records (`cartridge_catalog.s`), and `LICENSE`/`SOURCE-OFFER` (`legal_stream.s`), then disables the cartridge (`$D510`), re-syncs `$03FA = $D013`, and restores `NMIEN`/`IRQ`.
+- Saves, loads, and high scores remain on DOS 2.5 floppy images (`D1:` default on cartridge, `D1:`–`D4:` configurable); see [ATARI8_CARTRIDGE_EXPERIMENT.md](ATARI8_CARTRIDGE_EXPERIMENT.md).
 
 ## License/source modal ownership (2026-11-10)
 

@@ -1627,6 +1627,34 @@ rate), and the full `make testplus4` gate is 40/40. Product-side hardening
 (guarding the `tramp_player_create` jump on overlay_load failure) remains
 optional future work; shipping disks always carry 4.start.
 
+### Split BBC Master `item_actions` smoke scenario (and guard C64 CRT against VICE writeback)
+
+`bbcm:item_actions` (`platforms/bbcmaster/harness_smoke.py`) has grown to 49
+assertions across 11 sub-flows (ANDY corpus check, wizard gain, quaff,
+cursed/uncursed weapon exchange, Wand of Stinking Cloud, Wands 153/154, Scroll
+of Recharging via `?`, Scroll of Genocide, Scroll of Identify, and Crown of the
+Magi wear/take-off). Standalone `make testbbcmaster` passes all 17 scenarios
+within the 30-second cap, but under `make -j7 -O test` — where all seven
+platform stages and nested Commodore VICE worker pools run concurrently — MAME
+`bbcm` hits the 30-second host wall-clock cap while still making forward
+progress (`genocide_read_prompt`, 2026-11-12).
+
+In the same parallel run, an earlier interactive VICE exit had rewritten
+`build/moria8-c64.crt` in-place in sparse EasyFlash format (15 CHIP blocks,
+updating mtime past `build/c64-cart/.main.stamp`), causing
+`tools/check_easyflash.py` (`len(chips) == 128`) to fail until the stale `.crt`
+was deleted and rebuilt.
+
+Required work:
+
+- Split `bbcm:item_actions` in `platforms/bbcmaster/harness_smoke.py` into two
+  shorter scenarios (e.g. `item_actions` and `wand_scroll_actions`) and update
+  `SCENARIOS` / `selftest()` so each finishes with margin below 30 seconds
+  under `make -j7 -O test`.
+- Guard `build/moria8-c64.crt` against interactive VICE writeback (e.g. run
+  interactive cartridge targets against a scratch copy or rebuild when the
+  `.crt` does not match `build/moria8-c64.json`).
+
 ## Rendering Performance (Px)
 
 Tracked candidates from the 2026-07-25 cross-platform render performance

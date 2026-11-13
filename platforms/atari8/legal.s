@@ -4,6 +4,17 @@
 // with RAM visible. LegalOverlay is never preloaded into extended RAM.
 // C=1: optional load cancelled; the caller must not reload a cold owner.
 // C=0: viewer completed. The overlay window is invalidated in both cases.
+#if ATARI8_CARTRIDGE
+tramp_ui_legal_display:
+    :LegalSnapshot()
+    lda #0
+    sta current_overlay
+    lda #CART_ASSET_LEGAL_UI
+    jsr cart_load_asset
+    jmp legal_viewer
+
+legal_ui_filename: .byte 'L','E','G','A','L','U','I'
+#else
 tramp_ui_legal_display:
     :LegalSnapshot()
     lda #0
@@ -43,3 +54,4 @@ legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
 .label legal_os_clrchn = hal_storage_clrchn
 
 .label legal_os_fill_cache = legal_stream_fill_bytes
+#endif

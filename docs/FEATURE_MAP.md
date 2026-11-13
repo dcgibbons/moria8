@@ -139,8 +139,14 @@ There is no cartridge save implementation. REU caching and UCI services remain
 excluded; optional Ultimate turbo bursts probe `$D031` independently of UCI,
 with exact previous-speed restoration and no effect on standard C64 hardware. See
 [`C64_CARTRIDGE_EXPERIMENT.md`](C64_CARTRIDGE_EXPERIMENT.md) for its scope,
-verification and physical hardware checklist. The following matrix describes
-the existing disk builds.
+verification and physical hardware checklist. An experimental **Atari 8-bit 128 KB
+AtariMax MaxFlash (`.car` Type 41)** cartridge edition (`make cartridgeatari8`)
+likewise boots directly from Bank 0 into `MORIA8.RES`, streams all 10 overlays,
+the 279-monster catalog, and embedded legal texts (`LICENSE`/`SOURCE-OFFER`)
+from ROM with zero floppy swaps, and shares DOS 2.5 `SAVE_VERSION = $18` save
+disks (`D1:`–`D4:`, defaulting to `D1:`) bidirectionally with the standard disk
+image; see [`ATARI8_CARTRIDGE_EXPERIMENT.md`](ATARI8_CARTRIDGE_EXPERIMENT.md). The
+following matrix describes the existing disk builds.
 
 - **C64, C128, Plus/4 (`$E000-$EFFF` 10-Overlay Set)**: Use **10 overlays** (`START`, `TOWN`, `DEATH`, `GEN`, `HELP`, `UI`, `ITEMS`, `SPELL`/`DISARM`, `MODAL`, `CHEST`) plus `$F000` `RuntimeBanked` (and on C128, 2 `$AF00-$CFFF` slot overlays `128.PLAY` and `128.PERSIST`).
 - **Atari 8-bit (`$E000-$EFFF`)**: Uses **10 overlays** (`OVL.STA`..`OVL.CHS`) plus `$F000-$FFF9` `RuntimeBanked`.

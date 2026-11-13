@@ -44,7 +44,11 @@
 .const STREAM_DIR_WRITE = 2
 
 program_device:      .byte 8
+#if ATARI8_CARTRIDGE
+save_device:         .byte 8
+#else
 save_device:         .byte 9
+#endif
 disk_prompt_device:  .byte 8
 disk_mode:           .byte 2
 disk_setup_done:     .byte 0
@@ -122,8 +126,13 @@ disk_program_media_present_on_device:
 // disk_require_program_media — Verify Program Disk (TITLE.DAT) is in program_device
 // Output: Carry clear = program media present, Carry set = absent/wrong media
 disk_require_program_media:
+#if ATARI8_CARTRIDGE
+    clc
+    rts
+#else
     lda program_device
     jmp disk_program_media_present_on_device
+#endif
 
 disk_require_save_media:
     lda disk_setup_done
@@ -374,10 +383,12 @@ hal_storage_open:
     jmp !lookup_dir+
 
 !chk_hall:
+#if !ATARI8_CARTRIDGE
     jsr atari_legal_filename
     bcc !not_offer+
     jmp !lookup_dir+
 !not_offer:
+#endif
     ldy atari_io_cnt
     lda (atari_io_src),y
     cmp #'H'
@@ -783,6 +794,7 @@ stream_write_cur_sector:
     clc
     rts
 
+#if !ATARI8_CARTRIDGE
 // Canonical read-only legal files already carried by the release disk.
 // Kept in low resident RAM (< $4000) beside hal_storage_open, which calls
 // atari_legal_filename before EnterSio.
@@ -827,3 +839,4 @@ atari_legal_filename:
 !no:
     clc
     rts
+#endif

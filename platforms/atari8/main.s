@@ -16,6 +16,9 @@
 #define ATARI8_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_REQUIRES_MEDIA_PROBE
+#if ATARI8_CARTRIDGE
+#import "cartridge_contract.s"
+#endif
 #define STORAGE_STATUS_HELPER
 #define RECALL_VIEW_OVERLAYED
 .const RECALL_VIEW_OVL = 3
@@ -162,14 +165,18 @@ entry_main:
     jsr input_init
     cli
 
+#if !ATARI8_CARTRIDGE
     // Detect 130XE extended RAM (64 KB vs 128 KB)
     jsr xe_detect
+#endif
 
     // Load RuntimeBanked payload (ATARI.BNK -> $F000-$FFF9)
     jsr init_load_banked
 
+#if !ATARI8_CARTRIDGE
     // Preload hot assets into 130XE extended RAM if present
     jsr init_xe_preload
+#endif
 
     // Install platform lifecycle services and generation busy hook
     jsr generation_busy_install
@@ -227,6 +234,9 @@ atari_install_vectors:
     sta $ffff
     sta NMIRES
     lda #$c0                // Enable VBI ($40) + DLI ($80)
+#if ATARI8_CARTRIDGE
+    sta atari_nmi_enabled
+#endif
     sta NMIEN
     lda #$c0                // Enable POKEY Break/Backspace ($80) + keyboard IRQ ($40)
     sta IRQEN
@@ -239,6 +249,9 @@ atari_install_vectors:
 exit_trampoline:
     sei
     lda #$00
+#if ATARI8_CARTRIDGE
+    sta atari_nmi_enabled
+#endif
     sta NMIEN
     sta IRQEN
     sta DMACTL
@@ -248,6 +261,9 @@ exit_trampoline:
     lda #PORTB_OS_ROM
     sta PORTB
     sta NMIRES
+#if ATARI8_CARTRIDGE
+    sta CART_BANK_SELECT       // Remap Bank 0 so cold reset re-enters cartridge
+#endif
     jmp OS_COLDSV
 
 low_helpers_end:
@@ -535,6 +551,9 @@ title_load_game:
 atari_banked_fname:
     .text "ATARI.BNK"
 .const atari_banked_fname_len = 9
+#if ATARI8_CARTRIDGE
+.assert "Runtime filename length matches cartridge reader", CART_RUNTIME_NAME_LEN == atari_banked_fname_len, true
+#endif
 
 init_load_banked:
     lda #atari_banked_fname_len
@@ -548,6 +567,7 @@ init_load_banked:
 !ok:
     rts
 
+#if !ATARI8_CARTRIDGE
 init_xe_preload:
     lda xe_present
     beq !done+
@@ -606,6 +626,10 @@ plus4_title_art_cached: .byte 0
 boot_loading_str:  .text "LOADING MORIA8..." ; .byte 0
 xe_loading_prefix: .text "MORIA8 LOADING " ; .byte 0
 xe_loading_suffix: .text " PLEASE WAIT" ; .byte 0
+#else
+plus4_title_art_cached: .byte 0
+boot_loading_str:  .text "LOADING MORIA8..." ; .byte 0
+#endif
 
 title_str:
     .text "MORIA8 ATARI XL/XE" ; .byte 0
@@ -615,6 +639,17 @@ title_show_sysinfo:
     sta zp_text_color
     lda #23
     sta zp_cursor_row
+#if ATARI8_CARTRIDGE
+    lda #8
+    sta zp_cursor_col
+    lda #<atari_sysinfo_cart_str
+    sta zp_ptr0
+    lda #>atari_sysinfo_cart_str
+    sta zp_ptr0_hi
+    jmp hal_screen_put_string
+
+atari_sysinfo_cart_str: .text "ATARI XL/XE  128KB CART" ; .byte 0
+#else
     lda xe_present
     bne !xe_str+
     lda #12
@@ -635,6 +670,7 @@ title_show_sysinfo:
 
 atari_sysinfo_xl_str: .text "ATARI 800XL  64KB" ; .byte 0
 atari_sysinfo_xe_str: .text "ATARI 130XE  128KB" ; .byte 0
+#endif
 
 tramp_reu_show_status:
     rts
@@ -1144,14 +1180,21 @@ game_over_prompt:
 program_end:
 .print "Atari 8-bit Resident Default: " + (program_end - $0c00) + " bytes at $0C00-$" + toHexString(program_end)
 .assert "Program fits below MAP_BASE ($C100)", program_end <= MAP_BASE, true
+#if ATARI8_CARTRIDGE
+.assert "Cartridge entry address matches resident entry", entry_main == CART_ENTRY, true
+.assert "Overlay order matches cartridge descriptors", OVL_STARTUP == 1 && OVL_TOWN == 2 && OVL_DEATH == 3 && OVL_DUNGEON_GEN == 4 && OVL_HELP == 5 && OVL_UI == 6 && OVL_ITEMS == 7 && OVL_SPELL == 8 && OVL_MODAL_MISC == 9 && OVL_CHEST == 10 && OVL_CHEST == CART_OVERLAY_COUNT, true
+.assert "Post-boot MAP_BASE lies outside cartridge ROM window", MAP_BASE >= CART_WINDOW_END, true
+#endif
 
 // ============================================================
 // RuntimeBanked ($F000-$FFF9)
 // ============================================================
 .segment RuntimeBanked
+#if !ATARI8_CARTRIDGE
     // Asks for the program disk when a required load keeps failing. Safe
     // here: every load that reaches it comes after ATARI.BNK is in place.
     #import "../commodore/common/asset_load_prompt.s"
+#endif
     #import "../../core/ego_items.s"
     #import "../../core/ui_home.s"
     #import "../../core/item_desc_banked.s"
@@ -1159,6 +1202,12 @@ program_end:
 // ============================================================
 // disk_prompt_save / disk_prompt_game — 1-drive swap prompts in RuntimeBanked
 // ============================================================
+#if ATARI8_CARTRIDGE
+disk_prompt_save:
+disk_prompt_game:
+    clc
+    rts
+#else
 disk_prompt_save:
     lda disk_mode
     cmp #1
@@ -1214,6 +1263,7 @@ dsm_show_swap_prompt:
     jsr hal_screen_clear
     clc
     rts
+#endif
 
 banked_code_end:
 .print "Atari 8-bit Banked runtime: " + (banked_code_end - $f000) + " bytes at $F000-$" + toHexString(banked_code_end)
@@ -1405,7 +1455,11 @@ ovl_chest_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../core/ui_legal.s"
+#if ATARI8_CARTRIDGE
+#import "legal_stream.s"
+#else
 #import "../shared/legal_disk_stream.s"
+#endif
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true

@@ -1,4 +1,8 @@
 #importonce
+#if ATARI8_CARTRIDGE
+#define HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+#define HAL_STORAGE_ASSET_LOAD_INFALLIBLE
+#endif
 // Atari 8-bit platform-owned storage logical file numbers, secondary addresses,
 // and save-format version policy.
 //

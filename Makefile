@@ -4,7 +4,7 @@
 	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 \
 	buildapple2 diskapple2 runapple2 testapple2 testapple2-smoke testapple2-runtime testapple2-memory-contract testapple2-memory-contract-selftest \
 	buildcx16 diskcx16 runcx16 testcx16 testcx16-smoke testcx16-runtime testcx16-memory-contract testcx16-memory-contract-selftest \
-	buildatari8 diskatari8 runatari8 runatari8-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-memory-contract testatari8-memory-contract-selftest \
+	buildatari8 diskatari8 cartridgeatari8 runatari8 runatari8-130xe runatari8-cart runatari8-cart-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-cartridge testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
 	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-m0-report playtest-session playtest-qualify playtest-disk \
@@ -114,6 +114,7 @@ test-stage-cx16: test-prebuild
 
 test-stage-atari8: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/atari8 test-runtime
+	$(ISOLATED) $(MAKE) -C platforms/atari8 test-cartridge
 
 test-stage-bbcmaster: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/bbcmaster test-runtime
@@ -277,22 +278,35 @@ buildatari8:
 diskatari8:
 	$(MAKE) -C platforms/atari8 disk
 
+cartridgeatari8:
+	$(MAKE) -C platforms/atari8 cartridge
+
 runatari8:
 	$(MAKE) -C platforms/atari8 run
 
 runatari8-130xe:
 	$(MAKE) -C platforms/atari8 run-130xe
 
+runatari8-cart:
+	$(MAKE) -C platforms/atari8 run-cart
+
+runatari8-cart-130xe:
+	$(MAKE) -C platforms/atari8 run-cart-130xe
+
 testatari8: testatari8-memory-contract
-	$(MAKE) -C platforms/atari8 test-runtime
+	$(ISOLATED) $(MAKE) -C platforms/atari8 test-runtime
+	$(ISOLATED) $(MAKE) -C platforms/atari8 test-cartridge
 
 testatari8-smoke: testatari8-runtime
 
 testatari8-fast-smoke: testatari8-memory-contract
-	$(MAKE) -C platforms/atari8 test-fast-smoke
+	$(ISOLATED) $(MAKE) -C platforms/atari8 test-fast-smoke
 
 testatari8-runtime:
-	$(MAKE) -C platforms/atari8 test-runtime
+	$(ISOLATED) $(MAKE) -C platforms/atari8 test-runtime
+
+testatari8-cartridge: tools-ready
+	$(ISOLATED) $(MAKE) -C platforms/atari8 test-cartridge
 
 testatari8-memory-contract:
 	$(MAKE) -C platforms/atari8 test-memory-contract

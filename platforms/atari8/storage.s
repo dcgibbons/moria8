@@ -24,6 +24,7 @@ atari_io_device:    .byte 8
 .label atari_dir_count_hi = A8_STORAGE_VARS_BASE + 1
 .label xe_present         = A8_STORAGE_VARS_BASE + 2
 .label xe_saved_main      = A8_STORAGE_VARS_BASE + 3
+#if !ATARI8_CARTRIDGE
 xe_slot_populated:
     .fill 16, 0
 
@@ -66,6 +67,7 @@ atari_ovl_ext_c1:
     .byte 'T', 'W', 'T', 'E', 'L', 'I', 'T', 'P', 'D', 'H'
 atari_ovl_ext_c2:
     .byte 'A', 'N', 'H', 'N', 'P', ' ', 'M', 'L', 'L', 'S'
+#endif
 
 // ============================================================
 // EnterSio & ExitSio — Mandatory Atari OS ROM SIOV ($E459) Wrapper
@@ -179,6 +181,7 @@ ExitSio:
     clc
     rts
 
+#if !ATARI8_CARTRIDGE
 // ============================================================
 // 130XE Extended RAM Detection & Slot Copy (< $4000)
 // ============================================================
@@ -413,6 +416,7 @@ atari_match_cache_slot:
     ldx #$ff
 !matched:
     rts
+#endif
 
 // atari_find_dir_entry — Locate atari_fn_83 in DOS 2.5 directory (Sectors 361..368)
 // Output: C=0 found (atari_io_sec_lo/hi = start sector, atari_dir_count_lo/hi = count,
@@ -502,6 +506,18 @@ atari_find_dir_entry:
 // HAL Asset Loader Contract (checked by check_hal_asset_exports.py)
 // ============================================================
 
+#if ATARI8_CARTRIDGE
+#import "cartridge_copy.s"
+.label hal_asset_load_prg_header = cart_load_prg
+.label hal_asset_load_title      = cart_load_title
+
+hal_asset_load:
+    jmp cart_load_prg
+
+hal_asset_close_channel:
+    clc
+    rts
+#else
 // hal_asset_load_prg_header — Load PRG-headed asset (overlay, tier, title, or bank)
 // Input: A = filename length, X/Y = filename pointer lo/hi
 // Output: Carry clear = success, Carry set = error
@@ -621,3 +637,4 @@ hal_asset_close_channel:
     rts
 
 .assert "130XE slot tables cover slots 0..15", xe_slot_win_hi - xe_slot_portb == 16 && xe_slot_ram_hi - xe_slot_win_hi == 16 && xe_slot_pages - xe_slot_ram_hi == 16, true
+#endif

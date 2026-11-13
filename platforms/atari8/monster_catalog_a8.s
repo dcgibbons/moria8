@@ -23,6 +23,7 @@
 
 #import "../commodore/common/catalog_records.s"
 
+#if !ATARI8_CARTRIDGE
 .const A8_CATALOG_RECORDS_PER_SECTOR = 2
 .const A8_CATALOG_SECTOR_DATA        = 125   // DOS 2.5 data bytes per sector
 .const A8_CATALOG_SECTORS            = 140   // ceil(279 / 2)
@@ -30,6 +31,7 @@
 .const A8_CATALOG_SLOT_COUNT         = 5
 .assert "Atari catalog records fit a DOS 2.5 sector", A8_CATALOG_RECORDS_PER_SECTOR * CATALOG_RECORD_SIZE <= A8_CATALOG_SECTOR_DATA, true
 .assert "Atari catalog sectors fit the 130XE slots", A8_CATALOG_SLOT_COUNT * A8_CATALOG_SLOT_SECTORS >= A8_CATALOG_SECTORS, true
+#endif
 
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
 .const CATALOG_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
@@ -51,6 +53,9 @@
 .segment RuntimeBanked
 #import "../shared/catalog/catalog_index.s"
 .segment Default
+#if ATARI8_CARTRIDGE
+#import "cartridge_catalog.s"
+#else
 .assert "Atari catalog sectors hold every record", A8_CATALOG_SECTORS * A8_CATALOG_RECORDS_PER_SECTOR >= CATALOG_COUNT, true
 
 cat_record:     .fill CATALOG_RECORD_SIZE, 0   // The record catalog_fetch_record read
@@ -338,3 +343,4 @@ a8_catalog_xe_preload:
     bcc !axp_slot-
 !axp_done:
     rts
+#endif
