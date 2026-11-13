@@ -602,10 +602,18 @@ function makeScreenBuffer() {
 
 // Draw standard Moria8 3-row status bar at rows 21-23 (matches core/ui_status.s + hal/layout.s).
 function drawStatusBar(buf, adv) {
-  // Row 21: Name (col 0, white), Race (col name+1, cyan), Search* (col 19, yellow), LV: (col 28), DL: (col 34)
+  // Row 21: Name (col 0, white), then its states, most urgent first, each while
+  // it fits before LV: (hunger: none when fed; Poisoned; Search*), LV: (col 28), DL: (col 34)
   buf.print(0, 21, adv.name, 1);
-  buf.print(adv.name.length + 1, 21, adv.race, 3);
-  if (adv.searching) buf.print(19, 21, "Search*", 7);
+  let col = adv.name.length;
+  const states = [[adv.hunger && adv.hunger !== "Full" ? adv.hunger : "", adv.hunger === "Hungry" ? 7 : 2],
+                  [adv.poisoned ? "Poisoned" : "", 2], [adv.searching ? "Search*" : "", 7]];
+  for (const [word, colour] of states) {
+    if (!word) continue;
+    if (col + 1 + word.length >= 28) break;   // none after the first that does not fit
+    buf.print(col + 1, 21, word, colour);
+    col += 1 + word.length;
+  }
   buf.print(28, 21, "LV:", 3);
   buf.print(31, 21, String(adv.clvl), 1);
   buf.print(34, 21, "DL:", 3);
@@ -619,7 +627,7 @@ function drawStatusBar(buf, adv) {
     buf.print(col + 3, 22, String(v).padStart(2, " "), 1);
   });
 
-  // Row 23: HP:0 MP:10 AC:19 AU:25 Hunger:34
+  // Row 23: HP:0 MP:11 AC:22 AU:29
   const hpCol = adv.hp >= adv.mhp ? 5 : adv.hp >= adv.mhp / 2 ? 7 : 2;
   buf.print(0, 23, "HP:", 3);
   const hpS = String(adv.hp), mhpS = String(adv.mhp);
@@ -627,19 +635,18 @@ function drawStatusBar(buf, adv) {
   buf.put(3 + hpS.length, 23, "/", 3);
   buf.print(4 + hpS.length, 23, mhpS, hpCol);
 
-  buf.print(10, 23, "MP:", 3);
+  buf.print(11, 23, "MP:", 3);
   const mpS = String(adv.mp), mmpS = String(adv.mmp);
-  buf.print(13, 23, mpS, 1);
-  buf.put(13 + mpS.length, 23, "/", 3);
-  buf.print(14 + mpS.length, 23, mmpS, 1);
+  buf.print(14, 23, mpS, 1);
+  buf.put(14 + mpS.length, 23, "/", 3);
+  buf.print(15 + mpS.length, 23, mmpS, 1);
 
-  buf.print(19, 23, "AC:", 3);
-  buf.print(22, 23, String(adv.ac), 1);
+  buf.print(22, 23, "AC:", 3);
+  buf.print(25, 23, String(adv.ac), 1);
 
-  buf.print(25, 23, "AU:", 7);
-  buf.print(28, 23, String(adv.au), 7);
-
-  buf.print(34, 23, adv.hunger || "Full", 3);
+  buf.print(29, 23, "AU:", 7);
+  const au = String(adv.au);
+  buf.print(32, 23, au.length > 7 ? String(Math.floor(adv.au / 1000)) + "K" : au, 7);
 }
 
 // Build simulated adventurer profile suited for the creature's native depth.

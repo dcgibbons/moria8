@@ -1304,8 +1304,8 @@ def scenario_save_load(tb: X16Bench) -> None:
     tb.assert_line("loaded", tb.screen_has("Welcome back to Moria8!"), "load did not resume the saved game")
     tb.assert_line(
         "stats_restored",
-        tb.screen_has("test") and tb.screen_has("Human"),
-        "status line does not show the restored character",
+        tb.screen_has("test") and tb.read_u8(0x3C) == 0,
+        "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)",
     )
     tb.assert_line(
         "invuln_cleared",
@@ -1546,8 +1546,8 @@ def _run_save_reboot_load(x16emu: Path, rom: Path | None, workdir: Path, syms: d
         tb_b.assert_line("loaded", tb_b.screen_has("Welcome back to Moria8!"), "reboot load did not resume the saved game")
         tb_b.assert_line(
             "stats_restored",
-            tb_b.screen_has("test") and tb_b.screen_has("Human"),
-            "status line does not show the restored character",
+            tb_b.screen_has("test") and tb_b.read_u8(0x3C) == 0,
+            "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)",
         )
         tb_b.assert_line("host_marker", (workdir / "THE.GAME").is_file(), "THE.GAME missing on disk")
         tb_b.dump("after_reboot_load")

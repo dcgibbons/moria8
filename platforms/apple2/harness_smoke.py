@@ -1286,8 +1286,8 @@ for i = 1, 30 do
     if screen_has("Welcome back to Moria8!") then loaded = true break end
 end
 assert_line("loaded", loaded, "load did not resume the saved game")
-assert_line("stats_restored", screen_has("test") and screen_has("Human"),
-            "status line does not show the restored character")
+assert_line("stats_restored", screen_has("test") and prog:read_u8(0x3c) == 0,
+            "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)")
 assert_line("invuln_cleared", prog:read_u8(0x6f) == 0,
             "eff_invuln_timer not cleared on load: " .. prog:read_u8(0x6f))
 dump("after_load")
@@ -1730,8 +1730,8 @@ for i = 1, 40 do
     if screen_has("Welcome back to Moria8!") then loaded = true break end
 end
 assert_line("loaded", loaded, "reboot load did not resume the saved game")
-assert_line("stats_restored", screen_has("test") and screen_has("Human"),
-            "status line does not show the restored character")
+assert_line("stats_restored", screen_has("test") and prog:read_u8(0x3c) == 0,
+            "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)")
 local sec_ok = inv_field(31, 0) == 0xFF
 local expect = {2, 1, 0, 3, 4, 0, 2, 6}
 for k = 0, 7 do
