@@ -8,7 +8,7 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import C64, C64_EF, C64_NOREU, C128, PLUS4, PORTS
+from moria_playtest.ports import C64, C64_CART, C64_NOREU, C128, PLUS4, PORTS
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
 ABI = abimod.Abi(labels={"zp_player_x": 0x2B, "zp_player_y": 0x2C, "zp_player_hp_lo": 0x2D,
@@ -370,15 +370,15 @@ class C64VariantTest(unittest.TestCase):
 
     def test_the_three_machines(self) -> None:
         self.assertIn("-reu", C64.resource_args)
-        for port in (C64_NOREU, C64_EF):
+        for port in (C64_NOREU, C64_CART):
             self.assertNotIn("-reu", port.resource_args)
             self.assertNotIn("-reusize", port.resource_args)
             self.assertEqual(port.platform, "c64")              # the C64's sources and policies
             self.assertIn(port.name, PORTS)
         self.assertEqual(C64.platform, "c64")
         self.assertEqual((C64_NOREU.out, C64_NOREU.disk, C64_NOREU.cartridge), (C64.out, C64.disk, ""))
-        self.assertEqual((C64_EF.out, C64_EF.disk, C64_EF.cartridge), ("c64-cart", C64.disk, "moria8-c64.crt"))
-        self.assertEqual(C64_EF.disk_target.split(), ["disk64", "cartridge64"])
+        self.assertEqual((C64_CART.out, C64_CART.disk, C64_CART.cartridge), ("c64-cart", C64.disk, "moria8-c64.crt"))
+        self.assertEqual(C64_CART.disk_target.split(), ["disk64", "cartridge64"])
 
     def test_the_cartridge_boots_with_the_disk_in_drive_8(self) -> None:
         from unittest import mock
@@ -395,7 +395,7 @@ class C64VariantTest(unittest.TestCase):
                     mock.patch.object(launch, "write_vice_config", return_value=root / "vicerc"), \
                     mock.patch.object(launch.subprocess, "Popen", side_effect=popen), \
                     mock.patch.object(launch, "ViceMonitor"):
-                launch.ViceProcess(0, root, disk, 6600, target=C64_EF, cartridge=cart).start(autostart=True)
+                launch.ViceProcess(0, root, disk, 6600, target=C64_CART, cartridge=cart).start(autostart=True)
                 launch.ViceProcess(1, root, disk, 6601, target=C64_NOREU).start(autostart=True)
             ef, noreu = launched
             self.assertEqual(ef[-4:], ["-cartcrt", str(cart), "-8", str(disk)])
@@ -411,7 +411,7 @@ class C64VariantTest(unittest.TestCase):
             out.mkdir()
             prg = out / "moria8.prg"
             prg.write_bytes(b"p")
-            build = launch.Build(root / "moria8-c64.d64", prg, out / "main.vs", "c64-ef")
+            build = launch.Build(root / "moria8-c64.d64", prg, out / "main.vs", "c64-cart")
             (root / "moria8-c64.d64").write_bytes(b"d")
             with self.assertRaisesRegex(launch.StaleDisk, "moria8-c64.crt is missing"):
                 launch.check_disk(build)
@@ -425,7 +425,7 @@ class C64VariantTest(unittest.TestCase):
             hal = home / "builds" / "b" / "platforms" / "commodore" / "c64" / "hal"
             hal.mkdir(parents=True)
             (hal / "storage_policy.s").write_text("")
-            self.assertEqual(queue.save_versions("b", "c64-ef", home), queue.save_versions("b", "c64", home))
+            self.assertEqual(queue.save_versions("b", "c64-cart", home), queue.save_versions("b", "c64", home))
 
 
 class DiskCheckTest(unittest.TestCase):

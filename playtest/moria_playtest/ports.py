@@ -108,7 +108,7 @@ C64 = Port(
         "64.bank": "64.bank", "legalui": "legalui",
     },
     # Pinned machine configuration (§6.1), with a 512 KB REU caching overlays
-    # and tiers; C64_NOREU and C64_EF below play the machine without one.
+    # and tiers; C64_NOREU and C64_CART below play the machine without one.
     resource_args=(
         # +saveres is required: without it VICE tries to save resources through
         # GTK on exit and aborts when no display connection is available.
@@ -427,8 +427,8 @@ def without_reu(args: tuple[str, ...]) -> tuple[str, ...]:
 C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_reu(C64.resource_args))
 # The EasyFlash cartridge (make cartridge64, build/c64-cart): booted from the
 # .crt with the disk build's disk in drive 8 for saves, no REU.
-C64_EF = replace(C64, name="c64-ef", source="c64", out="c64-cart", disk_target="disk64 cartridge64",
-                 disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args))
+C64_CART = replace(C64, name="c64-cart", source="c64", out="c64-cart", disk_target="disk64 cartridge64",
+                   disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args))
 
 PORTS: dict[str, Port] = {port.name: port for port in
-                          (C64, C64_NOREU, C64_EF, PLUS4, C128, APPLE2, ATARI8, BBCMASTER, CX16)}
+                          (C64, C64_NOREU, C64_CART, PLUS4, C128, APPLE2, ATARI8, BBCMASTER, CX16)}
