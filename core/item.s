@@ -1336,42 +1336,33 @@ pit_sorted:
     // Level 0 (5 items)
     .byte 13, 15, 61, 62, 63
     // Level 1 (24 items)
-    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64, 77, 85
-    .byte 98, 99, 103, 114, 135, 136
+    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54
+    .byte 64, 77, 85, 98, 99, 103, 114, 135, 136
     // Level 2 (19 items)
     .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
     .byte 100, 102, 126, 128
-    // Level 3 (16 items)
-    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88
-    .byte 115
-    // Level 4 (19 items)
-    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58, 67, 78, 87, 89, 95
-    .byte 96, 109, 110, 129, 137
-    // Level 5 (14 items)
-    .byte 24, 26, 32, 41, 45, 72, 79, 90, 92, 94
-    .byte 101, 116, 122, 124
-    // Level 6 (6 items)
-    .byte 34, 35, 68, 73, 83, 93
-    // Level 7 (5 items)
-    .byte 71, 80, 91, 123, 130
+    // Level 3 (15 items)
+    .byte 4, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88, 115
+    // Level 4 (17 items)
+    .byte 23, 27, 33, 40, 42, 55, 58, 67, 78, 87, 89, 95, 96, 109, 110
+    .byte 129, 137
+    // Level 5 (12 items)
+    .byte 10, 32, 41, 45, 72, 79, 90, 92, 94, 101, 116, 124
+    // Level 6 (5 items)
+    .byte 34, 35, 68, 73, 93
+    // Level 7 (7 items)
+    .byte 8, 26, 71, 80, 91, 122, 130
     // Level 8 (15 items)
-    .byte 56, 59, 69, 75, 97, 127, 139
-    .byte 140, 141, 142, 143, 144, 145   // potions of gain stat (VMS level 25)
-    .byte 149                            // Amulet of Resist Acid (VMS level 24)
-    .byte 153                            // Wand of Fire Bolts (VMS level 30)
+    .byte 24, 38, 56, 59, 69, 75, 139, 140, 141, 142, 143, 144, 145, 149, 153
     // Level 9 (6 items)
-    .byte 76, 104, 106, 112, 131
-    .byte 155                            // Wand of Lightning Balls (VMS level 35)
-    // Level 10 (5 items)
-    .byte 81, 108, 118, 121, 138
+    .byte 76, 104, 106, 112, 131, 155
+    // Level 10 (6 items)
+    .byte 83, 97, 108, 118, 121, 138
     // Level 11 (7 items)
-    .byte 105, 117, 119, 132
-    .byte 150                            // Silver Crown (VMS level 44)
-    .byte 154, 156                       // Wands of Drain Life, Acid Balls (VMS levels 50, 48)
-    // Level 12 (13 items)
-    .byte 57, 60, 107, 111, 113, 120, 125, 133
-    .byte 146, 147, 148                  // rings of Lordly Protection (VMS level 50)
-    .byte 151, 152                       // Golden, Jewel Encrusted Crown (VMS levels 47, 50)
+    .byte 105, 117, 119, 132, 150, 154, 156
+    // Level 12 (16 items)
+    .byte 57, 60, 81, 107, 111, 113, 120, 123, 125, 127, 133, 146, 147, 148, 151
+    .byte 152
 pit_sorted_end:
 
 // Cumulative item count per level (0-12)
@@ -1379,16 +1370,16 @@ pit_level_bounds:
     .byte 5      // level 0: 5 items
     .byte 29     // level 1: +24 = 29
     .byte 48     // level 2: +19 = 48
-    .byte 64     // level 3: +16 = 64
-    .byte 83     // level 4: +19 = 83
-    .byte 97     // level 5: +14 = 97
-    .byte 103    // level 6: +6 = 103
-    .byte 108    // level 7: +5 = 108
-    .byte 123    // level 8: +15 = 123
-    .byte 129    // level 9: +6 = 129
-    .byte 134    // level 10: +5 = 134
-    .byte 141    // level 11: +7 = 141
-    .byte 154    // level 12: +13 = 154
+    .byte 63     // level 3: +15 = 63
+    .byte 80     // level 4: +17 = 80
+    .byte 92     // level 5: +12 = 92
+    .byte 97     // level 6: +5 = 97
+    .byte 104    // level 7: +7 = 104
+    .byte 119    // level 8: +15 = 119
+    .byte 125    // level 9: +6 = 125
+    .byte 131    // level 10: +6 = 131
+    .byte 138    // level 11: +7 = 138
+    .byte 154    // level 12: +16 = 154
 pit_level_bounds_end:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
@@ -1396,20 +1387,49 @@ pick_item_type_overlay:
 #else
 pick_item_type:
 #endif
-    // Calculate effective level = min(dlvl + 2, PIT_MAX_LEVEL)
+    // The dungeon level on the item levels' compressed scale (about VMS / 4):
+    // eff_level = min((dlvl + 3) / 4, PIT_MAX_LEVEL). It was dlvl + 2, the two
+    // scales compared as one, and every item could drop from DL10 (maintainer,
+    // 2026-11-13: a Mithril Plate Mail on DL8; Umoria itemGetRandomObjectId
+    // takes the dungeon level on its own 0-50 scale).
     lda zp_player_dlvl
     clc
-    adc #2
+    adc #3
+    lsr
+    lsr
     cmp #PIT_MAX_LEVEL + 1
     bcc !pit_level_ok+
     lda #PIT_MAX_LEVEL
 !pit_level_ok:
     tay                          // Y = eff_level (preserved by rng_range)
 
-    // Great item check: 1/12 chance → full pool access
+    // Great item, 1 in 12: Umoria's level * MAX / randint(MAX) + 1, capped
+    // (TREASURE_CHANCE_OF_GREAT_ITEM 12), on the compressed scale; none in
+    // town (level 0). It was the whole pool.
     lda #12
     jsr rng_range                // [0, 11]
     bne !pit_no_great+
+    tya
+    beq !pit_no_great+
+    lda #PIT_MAX_LEVEL
+    jsr rng_range                // [0, 11]
+    clc
+    adc #1
+    sta zp_temp1                 // randint(12)
+    tya
+    asl
+    asl
+    sta zp_temp0                 // eff * 4
+    asl                          // C clear: eff * 8 <= 96
+    adc zp_temp0                 // eff * 12 (<= 144)
+    ldy #0
+    sec
+!pit_great_div:
+    iny                          // the quotient + 1: Y counts each subtraction tried
+    sbc zp_temp1
+    bcs !pit_great_div-
+    cpy #PIT_MAX_LEVEL + 1
+    bcc !pit_no_great+
     ldy #PIT_MAX_LEVEL
 !pit_no_great:
 

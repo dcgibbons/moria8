@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #71-1
+    ldx #72-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -146,7 +146,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 71, $ff
+tc_results: .fill 72, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -1126,7 +1126,7 @@ test_start:
     sta tc_loop_ctr
 !t22_loop:
     jsr pick_item_type
-    // Check if min_level <= 3 (dlvl=1+2)
+    // Check if min_level <= 3 (DL1 is item level 1 since 2026-11-13; it was dlvl + 2)
     tax
     jsr iml_get_for_type
     cmp #4
@@ -2175,10 +2175,12 @@ test_start:
     sta tc_results + 42
 
     // ==========================================
-    // Test 44: pick_item_type depth curve produces high-level items
+    // Test 44: pick_item_type depth curve produces high-level items. On
+    // DL20 (item level 5 since 2026-11-13, the dungeon level on the items'
+    // compressed scale); until then DL8, which counted as level 10 (test 72).
     // ==========================================
 !t44:
-    lda #8
+    lda #20
     sta zp_player_dlvl
 
     lda #0
@@ -3491,14 +3493,63 @@ test_start:
     bcs !t71_fail+              // gone from the floor
     lda #$01
     sta tc_results + 70
-    jmp !tests_done+
+    jmp !t72+
 !t71_fail:
     lda #$00
     sta tc_results + 70
 
+    // ==========================================
+    // Test 72 (maintainer, 2026-11-13: a Mithril Plate Mail on DL8): the
+    // dungeon level on the item levels' compressed scale, (dlvl + 3) / 4.
+    // On DL8 (item level 2) an item of level 7 or more comes only by the
+    // great-item roll, under 26 of 255 production picks (dlvl + 2 made it
+    // level 10, about 40%); on DL48 (level 12) the top level comes.
+    // ==========================================
+!t72:
+    lda #8
+    sta zp_player_dlvl
+    lda #7
+    jsr t72_count_deep
+    cmp #26
+    bcs !t72_fail+
+    lda #48
+    sta zp_player_dlvl
+    lda #12
+    jsr t72_count_deep
+    cmp #1
+    bcc !t72_fail+
+    lda #$01
+    sta tc_results + 71
+    jmp !tests_done+
+!t72_fail:
+    lda #$00
+    sta tc_results + 71
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+// t72_count_deep — A = how many of 255 production picks have a minimum
+// level of at least A (on entry).
+t72_count_deep:
+    sta tc_valid_ctr                // the floor
+    lda #0
+    sta t72_deep
+    lda #255
+    sta tc_loop_ctr
+!t72cd_loop:
+    jsr pick_item_type
+    tax
+    jsr iml_get_for_type
+    cmp tc_valid_ctr
+    bcc !t72cd_next+
+    inc t72_deep
+!t72cd_next:
+    dec tc_loop_ctr
+    bne !t72cd_loop-
+    lda t72_deep
+    rts
+t72_deep: .byte 0
 
 // t69_wear_ring — wear ring type A from pack slot 0 through item_wear ('A').
 t69_wear_ring:

@@ -505,25 +505,31 @@ it_cost_hi_end:
 #endif
 
 // Minimum dungeon level to appear, packed two types per byte: even type in
-// the low nibble, odd type in the high nibble (max 12).
+// the low nibble, odd type in the high nibble (max 12): Moria8's compressed
+// scale, about the VMS level / 4 (pick_item_type puts the dungeon level on it).
+// Raised to VMS / 4 on 2026-11-13 (maintainer: a Mithril Plate Mail on DL8):
+// 8 Chain Mail 7, 10 Iron Helm 5, 24 Ring of Strength 8, 26 Restore Mana 7,
+// 38 Protection from Evil 8, 81 Plate Mail 12, 83 Steel Helm 10, 97 Restoration
+// 10, 122 Mithril Chain Mail 7, 123 Mithril Plate Mail 12 (VMS Ribbed Plate,
+// 50), 127 Staff of Remove Curse 12. pit_sorted follows these (item.s).
 it_min_level:
-    .byte $00, $11, $23, $21, $24   // 0-9
-    .byte $13, $01, $02, $11, $13   // 10-19
-    .byte $21, $43, $35, $45, $11   // 20-29
-    .byte $22, $45, $66, $13, $34   // 30-39
+    .byte $00, $11, $23, $21, $27   // 0-9
+    .byte $15, $01, $02, $11, $13   // 10-19
+    .byte $21, $43, $38, $47, $11   // 20-29
+    .byte $22, $45, $66, $13, $38   // 30-39
     .byte $54, $34, $53, $23        // 40-47
     .byte $22, $13, $21, $41        // 48-55
     .byte $c8, $84, $0c             // 56-61
     .byte $00                       // 62-63: Shovel, Pick (available immediately)
     .byte $31, $42, $86             // 64-69
     .byte $73, $65, $82, $19        // 70-77
-    .byte $54, $a7                  // 78-81
-    .byte $62, $12, $43             // 82-87
+    .byte $54, $c7                  // 78-81
+    .byte $a2, $12, $43             // 82-87
     .byte $43, $75, $65, $45        // 88-95
-    .byte $84, $11, $52, $12        // 96-103
+    .byte $a4, $11, $52, $12        // 96-103
     .byte $b9, $c9, $4a, $c4        // 104-111
     .byte $c9, $31, $b5, $ba        // 112-119
-    .byte $ac, $75, $c5, $82        // 120-127
+    .byte $ac, $c7, $c5, $c2        // 120-127
     .byte $42, $97, $cb, $10        // 128-134: chest levels 2/4/7/9/11/12, ruined 0; 135: spike level 1 (high nibble)
     .byte $41                       // 136: Phase Door level 1 (VMS level 1); 137: Long Bow 4
     .byte $8a                       // 138: Composite Bow 10, 139: Heavy Crossbow 8

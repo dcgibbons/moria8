@@ -926,6 +926,17 @@ In VMS Moria 4.8 (`misc.inc:800-1500`) and Umoria 5.7.15 (`data_treasure.cpp:524
 
 ## 8.3 Complete Base Item Catalog (All VMS Moria / Umoria Templates & All 140 Moria8 Items)
 
+**Item levels and the picker (maintainer, 2026-11-13):** Moria8's item levels are a compressed
+scale, about the VMS level / 4 (0-12, a nibble each). `pick_item_type` (`core/item.s`) puts the
+dungeon level on it, `min((dlvl + 3) / 4, 12)`, and its 1-in-12 great item is Umoria's
+`level * MAX / randint(MAX) + 1` on that scale. Until then it compared the two scales as one
+(`dlvl + 2`), every item could drop from DL10 and a great item drew from the whole pool: a
+player found a Mithril Plate Mail (for VMS Ribbed Plate, level 50) on DL8. Eleven items were
+raised to their VMS level / 4: Chain Mail 7, Iron Helm 5, Ring of Strength 8, Restore Mana 7,
+Protection from Evil 8, Plate Mail 12, Steel Helm 10, Restoration 10, Mithril Chain Mail 7,
+Mithril Plate Mail 12, Staff of Remove Curse 12. Item parity with VMS (levels on its 0-50 scale,
+its armour values) is the later goal. C64 `test_item.s` 44 and 72 (`DGN-018`).
+
 ### 8.3.1 Moria8 Master Item Table (All 157 Item Templates, IDs `0..156`)
 
 Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
@@ -942,9 +953,9 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `5` | **Mace** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `50` | `45` | `2` | `Mace` (`#58`) |
 | `6` | **Robe** | `ICAT_ARMOR (3)` | `[` | L.Grey | `2` | `0d0` | `20` | `4` | `1` | `Robe` (`#102`) |
 | `7` | **Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `4` | `0d0` | `80` | `18` | `2` | `Soft Leather Armor` (`#103`) |
-| `8` | **Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `6` | `0d0` | `120` | `530` | `4` | `Chain Mail` (`#112`, AC `6` on Moria8 1-nibble scale) |
+| `8` | **Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `6` | `0d0` | `120` | `530` | `7` | `Chain Mail` (`#112`, AC `6` on Moria8 1-nibble scale) |
 | `9` | **Small Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `2` | `1d1` (a bash rolls it; `0d0` until 2026-10-25) | `50` | `30` | `2` | `Small Leather Shield` (`#126`) |
-| `10` | **Iron Helm** | `ICAT_HELM (5)` | `]` | Grey | `1` | `0d0` | `30` | `75` | `3` | `Iron Helm` (`#97`) |
+| `10` | **Iron Helm** | `ICAT_HELM (5)` | `]` | Grey | `1` | `0d0` | `30` | `75` | `5` | `Iron Helm` (`#97`) |
 | `11` | **Leather Gloves** | `ICAT_GLOVES (6)` | `]` | Brown | `1` | `0d0` | `5` | `3` | `1` | `Set of Leather Gloves` (`#124`) |
 | `12` | **Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `10` | `4` | `1` | `Pair of Soft Leather Shoes` (`#91`) |
 | `13` | **Wooden Torch** | `ICAT_LIGHT (8)` | `*` | Yellow | `0` | `0d0` | `10` | `2` | `0` | `Wooden Torch` (`#86`, `4000` turns = `inv_p1=200`) |
@@ -958,9 +969,9 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `21` | **Scroll of Identify** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `50` | `2` | `Scroll of Identify` (`#176..179`) |
 | `22` | **Scroll of Teleportation** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `40` | `3` | `Scroll of Teleport` (`#186`) |
 | `23` | **Ring of Protection** | `ICAT_RING (12)` | `=` | Yellow | `1` | `0d0` | `2` | `100` | `4` | `Ring of Protection` (`#153`, base AC `1` + `+to_ac`) |
-| `24` | **Ring of Strength** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `400` | `5` | `Ring of Strength` (`#132`) |
+| `24` | **Ring of Strength** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `400` | `8` | `Ring of Strength` (`#132`) |
 | `25` | **Cure Serious Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `40` | `3` | `Potion of Cure Serious Wounds` (`#240`) |
-| `26` | **Restore Mana Potion** | `ICAT_POTION (10)` | `!` | Blue | `0` | `0d0` | `4` | `35` | `5` | `Potion of Restore Mana` (`#266`) |
+| `26` | **Restore Mana Potion** | `ICAT_POTION (10)` | `!` | Blue | `0` | `0d0` | `4` | `35` | `7` | `Potion of Restore Mana` (`#266`) |
 | `27` | **Heroism Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `35` | `4` | `Potion of Heroism` (`#257`) |
 | `28` | **Blindness Potion** | `ICAT_POTION (10)` | `!` | Grey | `0` | `0d0` | `4` | `5` | `1` | `Potion of Blindness` (`#246`) |
 | `29` | **Confusion Potion** | `ICAT_POTION (10)` | `!` | Purple | `0` | `0d0` | `4` | `5` | `1` | `Potion of Confusion` (`#247`) |
@@ -972,7 +983,7 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `35` | **Scroll of Enchant Armor** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `125` | `6` | `Scroll of Enchant Armor` (`#175`) |
 | `36` | **Scroll of Monster Confusion** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `2` | `30` | `3` | `Scroll of Monster Confusion` (`#188`) |
 | `37` | **Scroll of Aggravate** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `2` | `5` | `1` | `Scroll of Aggravate Monster` (`#202`) |
-| `38` | **Scroll of Protect from Evil** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `2` | `100` | `4` | `Scroll of Protection from Evil` (`#209`) |
+| `38` | **Scroll of Protect from Evil** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `2` | `100` | `8` | `Scroll of Protection from Evil` (`#209`) |
 | `39` | **Wand of Light** | `ICAT_WAND (14)` | `-` | Yellow | `0` | `0d0` | `10` | `200` | `3` | `Wand of Light` (`#269`) |
 | `40` | **Wand of Lightning** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `600` | `4` | `Wand of Lightning Bolts` (`#270`) |
 | `41` | **Wand of Frost** | `ICAT_WAND (14)` | `-` | Blue | `0` | `0d0` | `10` | `800` | `5` | `Wand of Frost Bolts` (`#271`) |
@@ -1015,9 +1026,9 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `78` | **Large Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `3` | `1d2` (VMS Large Leather Shield; `0d0` until 2026-10-25) | `100` | `120` | `4` | `Large Leather/Metal Shield` (`#128`/`#131`) |
 | `79` | **Hard Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `120` | `55` | `5` | `Hard Leather Armor` (`#105`) |
 | `80` | **Scale Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `7` | `0d0` | `250` | `430` | `7` | `Metal Scale Mail` (`#111`) |
-| `81` | **Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `9` | `0d0` | `380` | `1050` | `10` | `Full Plate Armor` (`#121`) |
+| `81` | **Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `9` | `0d0` | `380` | `1050` | `12` | `Full Plate Armor` (`#121`) |
 | `82` | **Cloak** | `ICAT_ARMOR (3)` | `[` | L.Grey | `1` | `0d0` | `10` | `3` | `2` | `Cloak` (`#123`) |
-| `83` | **Steel Helm** | `ICAT_HELM (5)` | `]` | L.Grey | `2` | `0d0` | `60` | `200` | `6` | `Steel Helm` (`#98`) |
+| `83` | **Steel Helm** | `ICAT_HELM (5)` | `]` | L.Grey | `2` | `0d0` | `60` | `200` | `10` | `Steel Helm` (`#98`) |
 | `84` | **Gauntlets** | `ICAT_GLOVES (6)` | `]` | L.Grey | `1` | `0d0` | `25` | `35` | `2` | `Set of Gauntlets` (`#125`) |
 | `85` | **Soft Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `5` | `7` | `1` | `Pair of Soft Leather Boots` (`#92`) |
 | `86` | **Hard Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `2` | `0d0` | `20` | `12` | `3` | `Pair of Hard Leather Boots` (`#93`) |
@@ -1031,7 +1042,7 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `94` | **Broad Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `160` | `304` | `5` | `Broad Axe` (`#73`) |
 | `95` | **Awl-Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d8` | `160` | `340` | `4` | `Awl-Pike` (`#61`) |
 | `96` | **Healing Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `200` | `4` | `Potion of Healing` (`#242`, heals `1000` HP + cures blindness/confusion/poison) |
-| `97` | **Restoration Potion** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `0d0` | `4` | `300` | `8` | Consolidated `Restore Stat` / `Restore Life Levels` (`#227..260`) |
+| `97` | **Restoration Potion** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `0d0` | `4` | `300` | `10` | Consolidated `Restore Stat` / `Restore Life Levels` (`#227..260`) |
 | `98` | **Resist Heat Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Heat` (`#261`) |
 | `99` | **Resist Cold Potion** | `ICAT_POTION (10)` | `!` | Cyan | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Cold` (`#262`) |
 | `100` | **Cure Critical Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `100` | `2` | `Potion of Cure Critical Wounds` (`#241`) |
@@ -1056,12 +1067,12 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `119` | **Staff of Dispel Evil** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `1200` | `11` | `Staff of Dispel Evil` (`#315`) |
 | `120` | **Staff of Destruction** | `ICAT_STAFF (15)` | `/` | L.Red | `0` | `0d0` | `50` | `2500` | `12` | `Staff of *Destruction*` (`#302`) |
 | `121` | **Staff of Speed** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `1000` | `10` | `Staff of Speed` (`#309`) |
-| `122` | **Mithril Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `11` | `0d0` | `200` | `600` | `5` | High-tier Mithril Chain Mail (`AC 11`) |
-| `123` | **Mithril Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `14` | `0d0` | `320` | `1200` | `7` | High-tier Mithril Plate Mail (`AC 14`) |
+| `122` | **Mithril Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `11` | `0d0` | `200` | `600` | `7` | High-tier Mithril Chain Mail (`AC 11`) |
+| `123` | **Mithril Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `14` | `0d0` | `320` | `1200` | `12` | High-tier Mithril Plate Mail (`AC 14`) |
 | `124` | **Amulet of Wisdom** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `300` | `5` | `Amulet of Wisdom` (`#163`) |
 | `125` | **Amulet of the Magi** | `ICAT_AMULET (16)` | `"` | L.Green | `3` | `0d0` | `3` | `5000` | `12` | `Amulet of the Magi` (`#171`, base AC `3` + See Invisible + Free Action) |
 | `126` | **Neutralize Poison Potion** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `75` | `2` | `Potion of Neutralize Poison` (`#265`) |
-| `127` | **Staff of Remove Curse** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `500` | `8` | `Staff of Remove Curse` (`#312`) |
+| `127` | **Staff of Remove Curse** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `500` | `12` | `Staff of Remove Curse` (`#312`) |
 | `128` | **Small Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d3` | `250` | `20` | `2` | `Small Wooden Chest` (`#326` / `#395`) |
 | `129` | **Large Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d5` | `255` | `60` | `4` | `Large Wooden Chest` (`#327` / `#396`) |
 | `130` | **Small Iron Chest** | `ICAT_CHEST (17)` | `&` | L.Grey | `0` | `2d4` | `255` | `100` | `7` | `Small Iron Chest` (`#328` / `#397`) |
@@ -1192,8 +1203,8 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `94` | `95` | **Soft Leather Cap** | `TV_HELM (33)` | `4` | `10` | `2` | `AC 1` | Omitted | **Missing** |
 | `95` | `96` | **Hard Leather Cap** | `TV_HELM (33)` | `12` | `15` | `4` | `AC 2` | Omitted | **Missing** |
 | `96` | `97` | **Metal Cap** | `TV_HELM (33)` | `30` | `20` | `7` | `AC 3`, `1d1` | **Moria8 `#87` (`Metal Cap`)**: `AC 1`, `cost=30`, `wt=20`, `min_lvl=4` | **Implemented** |
-| `97` | `98` | **Iron Helm** | `TV_HELM (33)` | `75` | `75` | `20` | `AC 5`, `1d3` | **Moria8 `#10` (`Iron Helm`)**: `AC 1`, `cost=75`, `wt=30`, `min_lvl=3` | **Implemented** |
-| `98` | `99` | **Steel Helm** | `TV_HELM (33)` | `200` | `60` | `40` | `AC 6`, `1d3` | **Moria8 `#83` (`Steel Helm`)**: `AC 2`, `cost=200`, `wt=60`, `min_lvl=6` | **Implemented** |
+| `97` | `98` | **Iron Helm** | `TV_HELM (33)` | `75` | `75` | `20` | `AC 5`, `1d3` | **Moria8 `#10` (`Iron Helm`)**: `AC 1`, `cost=75`, `wt=30`, `min_lvl=5` | **Implemented** |
+| `98` | `99` | **Steel Helm** | `TV_HELM (33)` | `200` | `60` | `40` | `AC 6`, `1d3` | **Moria8 `#83` (`Steel Helm`)**: `AC 2`, `cost=200`, `wt=60`, `min_lvl=10` | **Implemented** |
 | `99` | `100` | **Silver Crown** | `TV_HELM (33)` | `500` (`250` VMS) | `20` | `44` | `AC 0`, `1d1` | **Moria8 `#150`**: VMS `cost=250`, `wt=20`, `min_lvl=11` (2026-11-11) | **Implemented** |
 | `100` | `101` | **Golden Crown** | `TV_HELM (33)` | `1000` (`500` VMS) | `30` | `47` | `AC 0`, `1d2` | **Moria8 `#151`**: VMS `cost=500`, `wt=30`, `min_lvl=12` (2026-11-11) | **Implemented** |
 | `101` | `102` | **Jewel-Encrusted Crown** | `TV_HELM (33)` | `2000` (`1000` VMS) | `40` | `50` | `AC 0`, `1d3` | **Moria8 `#152`**: VMS `cost=1000`, `wt=40`, `min_lvl=12` (2026-11-11) | **Implemented** |
@@ -1207,7 +1218,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `109` | `110` | **Hard Leather Ring Mail** | `TV_SOFT_ARMOR (36)` | `230` | `150` | `12` | `AC 8`, `-2` To-Hit | Omitted | **Missing** |
 | `110` | `111` | **Leather Scale Mail** | `TV_SOFT_ARMOR (36)` | `330` | `140` | `14` | `AC 11`, `-1` To-Hit | Omitted (`Scale Mail #80` covers scale armor) | **Missing** |
 | `111` | `112` | **Metal Scale Mail** | `TV_HARD_ARMOR (35)` | `430` | `250` | `24` | `AC 13`, `-2` To-Hit | **Moria8 `#80` (`Scale Mail`)**: `AC 7`, `cost=430`, `wt=250`, `min_lvl=7` | **Implemented** |
-| `112` | `113` | **Chain Mail** | `TV_HARD_ARMOR (35)` | `530` | `220` | `26` | `AC 14`, `-2` To-Hit | **Moria8 `#8` (`Chain Mail`)**: `AC 6`, `cost=530`, `wt=120`, `min_lvl=4` (plus **Moria8 `#122` `Mithril Chain Mail`**, `AC 11`, `cost=530`, `wt=200`, `min_lvl=5`) | **Implemented** |
+| `112` | `113` | **Chain Mail** | `TV_HARD_ARMOR (35)` | `530` | `220` | `26` | `AC 14`, `-2` To-Hit | **Moria8 `#8` (`Chain Mail`)**: `AC 6`, `cost=530`, `wt=120`, `min_lvl=7` (plus **Moria8 `#122` `Mithril Chain Mail`**, `AC 11`, `cost=530`, `wt=200`, `min_lvl=7`) | **Implemented** |
 | `113` | `114` | **Rusty Chain Mail** | `TV_HARD_ARMOR (35)` | `0` | `220` | `26` | `AC 14`, `-8` To-AC, `-5` To-Hit | Omitted | **Missing** |
 | `114` | `115` | **Double Chain Mail** | `TV_HARD_ARMOR (35)` | `630` | `260` | `28` | `AC 15`, `-2` To-Hit | Omitted | **Missing** |
 | `115` | `116` | **Augmented Chain Mail** | `TV_HARD_ARMOR (35)` | `675` | `270` | `30` | `AC 16`, `-2` To-Hit | Omitted | **Missing** |
@@ -1216,7 +1227,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `118` | `119` | **Laminated Armor** | `TV_HARD_ARMOR (35)` | `825` | `300` | `38` | `AC 20`, `-3` To-Hit | Omitted | **Missing** |
 | `119` | `120` | **Partial Plate Armor** | `TV_HARD_ARMOR (35)` | `900` | `320` (`260` VMS) | `42` | `AC 22`, `-3` To-Hit | Omitted | **Missing** |
 | `120` | `121` | **Metal Lamellar Armor** | `TV_HARD_ARMOR (35)` | `950` | `340` | `44` | `AC 23`, `-3` To-Hit | Omitted | **Missing** |
-| `121` | `122` | **Full Plate Armor** | `TV_HARD_ARMOR (35)` | `1050` | `380` | `48` | `AC 25`, `-3` To-Hit | **Moria8 `#81` (`Plate Mail`)**: `AC 9`, `cost=1050`, `wt=380`, `min_lvl=10` (plus **Moria8 `#123` `Mithril Plate Mail`**, `AC 14`, `cost=1050`, `wt=320`, `min_lvl=7`) | **Implemented** |
+| `121` | `122` | **Full Plate Armor** | `TV_HARD_ARMOR (35)` | `1050` | `380` | `48` | `AC 25`, `-3` To-Hit | **Moria8 `#81` (`Plate Mail`)**: `AC 9`, `cost=1050`, `wt=380`, `min_lvl=12` (plus **Moria8 `#123` `Mithril Plate Mail`**, `AC 14`, `cost=1050`, `wt=320`, `min_lvl=12`) | **Implemented** |
 | `122` | `123` | **Ribbed Plate Armor** | `TV_HARD_ARMOR (35)` | `1200` | `380` | `50` | `AC 28`, `-3` To-Hit | Represented by **Moria8 `#123` (`Mithril Plate Mail`)** (`AC 14`, `cost=1200`) | **Approximation** |
 | `123` | `124` | **Cloak** | `TV_CLOAK (32)` | `3` | `10` | `1` | `AC 1` | **Moria8 `#82` (`Cloak`)**: `AC 1`, `cost=3`, `wt=10`, `min_lvl=2` | **Implemented** |
 | `124` | `125` | **Set of Leather Gloves** | `TV_GLOVES (31)` | `3` | `5` | `1` | `AC 1` | **Moria8 `#11` (`Leather Gloves`)**: `AC 1`, `cost=3`, `wt=5`, `min_lvl=1` | **Implemented** |
@@ -1227,7 +1238,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `129` | `130` | **Small Metal Shield** | `TV_SHIELD (34)` | `50` | `65` | `10` | `AC 3`, `1d2` | Consolidated into `Small Shield #9` | **Approximation** |
 | `130` | `131` | **Medium Metal Shield** | `TV_SHIELD (34)` | `125` | `90` | `20` | `AC 4`, `1d3` | Omitted | **Missing** |
 | `131` | `132` | **Large Metal Shield** | `TV_SHIELD (34)` | `200` | `120` | `30` | `AC 5`, `1d3` | Consolidated into `Large Shield #78` | **Approximation** |
-| `132` | `133` | **Ring of Strength / Gain Strength** | `TV_RING (45)` | `400` | `2` | `30` | `TR_STR`, `+p1` STR | **Moria8 `#24` (`Ring of Strength`)**: `cost=400`, `wt=2`, `min_lvl=5`, `+p1` STR | **Implemented** |
+| `132` | `133` | **Ring of Strength / Gain Strength** | `TV_RING (45)` | `400` | `2` | `30` | `TR_STR`, `+p1` STR | **Moria8 `#24` (`Ring of Strength`)**: `cost=400`, `wt=2`, `min_lvl=8`, `+p1` STR | **Implemented** |
 | `133` | `134` | **Ring of Dexterity / Gain Dexterity** | `TV_RING (45)` | `400` | `2` | `30` | `TR_DEX`, `+p1` DEX | Omitted | **Missing** |
 | `134` | `135` | **Ring of Constitution / Gain Constitution** | `TV_RING (45)` | `400` | `2` | `30` | `TR_CON`, `+p1` CON | Omitted | **Missing** |
 | `135` | `136` | **Ring of Intelligence / Gain Intelligence** | `TV_RING (45)` | `400` (`350` VMS) | `2` | `30` | `TR_INT`, `+p1` INT | Omitted | **Missing** |
@@ -1288,7 +1299,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `206` | `206` | **Scroll of Recharging** | `TV_SCROLL1 (70)` | `200` | `5` | `40` | `recharge(60)` | **Moria8 `#104` (`Scroll of Recharging`)**: `cost=200`, `wt=5`, `min_lvl=9` | **Implemented** |
 | `207` | `207` | **Scroll of Genocide** | `TV_SCROLL1 (70)` | `750` | `5` | `35` | `genocide()` | **Moria8 `#106` (`Scroll of Genocide`)**: `cost=750`, `wt=5`, `min_lvl=9` | **Implemented** |
 | `208` | `208` | **Scroll of Darkness** | `TV_SCROLL1 (70)` | `0` | `5` | `1` | `unlight_area(char_row, char_col)` | Omitted | **Missing** |
-| `209` | `209` | **Scroll of Protection from Evil** | `TV_SCROLL1 (70)` | `100` (`50` VMS) | `5` | `30` | `protevil += randint(25) + 3 * char_lev` | **Moria8 `#38` (`Scroll of Protect from Evil`)**: `cost=100`, `wt=2`, `min_lvl=4`; adds `randint(25) + 3 * lev` (saturating at `255`); evil attackers up to the player's level are repelled (§6.5).<br>**Fixed 2026-10-31:** added `rng(25)+25` and nothing read the timer. Source: `vms-moria: source/include/scrolls.inc` case 28, `spells.inc` `protect_evil`, `creature.inc` `make_attack`; `moria8: core/item_actions_overlay.s`, `core/monster_attack.s`. | **Implemented** |
+| `209` | `209` | **Scroll of Protection from Evil** | `TV_SCROLL1 (70)` | `100` (`50` VMS) | `5` | `30` | `protevil += randint(25) + 3 * char_lev` | **Moria8 `#38` (`Scroll of Protect from Evil`)**: `cost=100`, `wt=2`, `min_lvl=8`; adds `randint(25) + 3 * lev` (saturating at `255`); evil attackers up to the player's level are repelled (§6.5).<br>**Fixed 2026-10-31:** added `rng(25)+25` and nothing read the timer. Source: `vms-moria: source/include/scrolls.inc` case 28, `spells.inc` `protect_evil`, `creature.inc` `make_attack`; `moria8: core/item_actions_overlay.s`, `core/monster_attack.s`. | **Implemented** |
 | `210` | `210` | **Scroll of Create Food** | `TV_SCROLL1 (70)` | `10` | `5` | `5` | `create_food()` | Omitted as scroll (implemented as Spell `#16` / Prayer `#13`) | **Missing** |
 | `211` | `211` | **Scroll of Dispel Undead** | `TV_SCROLL1 (70)` | `200` | `5` | `40` | `dispel_creature(CD_UNDEAD, 60)` | Omitted as scroll (implemented as Prayer `#26`) | **Missing** |
 | `212` | `212` | **Scroll of \*Enchant Weapon\*** | `TV_SCROLL2 (71)` | `500` | `5` | `50` | `+1d4` To-Hit and `+1d4` To-Dam | Consolidated into `Scroll of Enchant Weapon #34` | **Approximation** |
@@ -1344,7 +1355,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `263` | `264` | **Potion of Detect Invisible** | `TV_POTION2 (76)` | `50` | `4` | `3` | `detect_inv2(randint(12) + 12)` | Adapted as **Moria8 `#30` (`Detect Monsters Potion`)** (`cost=60`, `wt=4`, `min_lvl=2`) | **Approximation** |
 | `264` | `265` | **Potion of Slow Poison** | `TV_POTION2 (76)` | `25` | `4` | `1` | `slow_poison()` | Consolidated into `Neutralize Poison Potion #126` | **Approximation** |
 | `265` | `266` | **Potion of Neutralize Poison** | `TV_POTION2 (76)` | `75` | `4` | `5` | `cure_poison()` | **Moria8 `#126` (`Neutralize Poison Potion`)**: `cost=75`, `wt=4`, `min_lvl=2` | **Implemented** |
-| `266` | `267` | **Potion of Restore Mana** | `TV_POTION2 (76)` | `350` (`35` VMS) | `4` | `25` | Restores `cmana = mana` | **Moria8 `#26` (`Restore Mana Potion`)**: `cost=35`, `wt=4`, `min_lvl=5` | **Implemented** |
+| `266` | `267` | **Potion of Restore Mana** | `TV_POTION2 (76)` | `350` (`35` VMS) | `4` | `25` | Restores `cmana = mana` | **Moria8 `#26` (`Restore Mana Potion`)**: `cost=35`, `wt=4`, `min_lvl=7` | **Implemented** |
 | `267` | `268` | **Potion of Infra-Vision** | `TV_POTION2 (76)` | `20` | `4` | `3` | `tim_infra += 100 + randint(100)` | **Moria8 `#31` (`Infravision Potion`)**: `cost=20`, `wt=4`, `min_lvl=2` | **Implemented** |
 | `268` | `269` | **Flask of Oil** | `TV_FLASK (77)` | `3` | `10` | `1` | `p1=7500` fuel, `2d6` thrown fire | **Moria8 `#61` (`Flask of Oil`)**: `cost=3`, `wt=10`, `min_lvl=0`, `2d6` thrown | **Implemented** |
 | `269` | `270` | **Wand of Light** | `TV_WAND (65)` | `200` | `10` | `2` | `1d10+6` charges, `light_line(dir)` | **Moria8 `#39` (`Wand of Light`)**: `cost=200`, `wt=10`, `min_lvl=3` | **Implemented** |
@@ -1389,7 +1400,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `309` | `310` | **Staff of Speed** | `TV_STAFF (55)` | `1000` (`800` VMS) | `50` | `40` | `1d3+4` charges, `fast += randint(30) + 15` | **Moria8 `#121` (`Staff of Speed`)**: `cost=1000`, `wt=50`, `min_lvl=10`; `eff_staff_speed` adds `randint(30) + 15` turns (§6.5). **Fixed 2026-10-31:** it ran Haste Self (`randint(20) + lev`). Source: `vms-moria: source/include/staffs.inc` case 17; `umoria: src/staves.cpp`. | **Implemented** |
 | `310` | `311` | **Staff of Slowness** | `TV_STAFF (55)` | `0` | `50` | `40` | `1d5+6` charges, `slow += randint(30) + 15` | Omitted | **Missing** |
 | `311` | `312` | **Staff of Mass Polymorph** | `TV_STAFF (55)` | `750` | `50` | `46` | `1d5+6` charges, `mass_poly()` | Omitted | **Missing** |
-| `312` | `313` | **Staff of Remove Curse** | `TV_STAFF (55)` | `500` | `50` | `47` | `1d3+4` charges, `remove_curse()` | **Moria8 `#127` (`Staff of Remove Curse`)**: `cost=500`, `wt=50`, `min_lvl=8` | **Implemented** |
+| `312` | `313` | **Staff of Remove Curse** | `TV_STAFF (55)` | `500` | `50` | `47` | `1d3+4` charges, `remove_curse()` | **Moria8 `#127` (`Staff of Remove Curse`)**: `cost=500`, `wt=50`, `min_lvl=12` | **Implemented** |
 | `313` | `314` | **Staff of Detect Evil** | `TV_STAFF (55)` | `350` | `50` | `20` | `1d10+12` charges, `detect_evil()` | Omitted as staff (implemented as Prayer `#0`) | **Missing** |
 | `314` | `315` | **Staff of Curing** | `TV_STAFF (55)` | `1000` | `50` | `25` | `1d3+4` charges, cures blind/poison/confuse/stun | Omitted | **Missing** |
 | `315` | `316` | **Staff of Dispel Evil** | `TV_STAFF (55)` | `1200` | `50` | `49` | `1d3+4` charges, `dispel_creature(CD_EVIL, 60)` | **Moria8 `#119` (`Staff of Dispel Evil`)**: `cost=1200`, `wt=50`, `min_lvl=11` | **Implemented** |
