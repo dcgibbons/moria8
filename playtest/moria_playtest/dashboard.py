@@ -215,10 +215,12 @@ def death_counts(runs: Path) -> dict[str, dict[str, int]]:
 
 
 def monster_stats(home: Path) -> dict[str, Any]:
-    """The Monsters panel: per creature, how many the bots have slain (kill
-    events, by queue group), how many runs met it (met events) and how many
-    characters it has killed (run records). Kills count from KILLS_SINCE,
-    meetings from MET_SINCE, deaths from the first run."""
+    """The Monsters panel: per creature, how many runs slew it (kill events,
+    by queue group), how many runs met it (met events) and how many
+    characters it has killed (run records): runs alike, so slain and met
+    compare (maintainer, 2026-11-12: Evil Iggy, 69 kills in 22 runs, showed
+    more kills than the 53 runs that met him). Kills count from
+    KILLS_SINCE, meetings from MET_SINCE, deaths from the first run."""
     creatures: dict[str, dict[str, dict[str, int]]] = {}
     def entry(name: str) -> dict[str, dict[str, int]]:
         return creatures.setdefault(name, {"slain": {}, "met": {}, "killed": {}})
@@ -234,9 +236,9 @@ def monster_stats(home: Path) -> dict[str, Any]:
         met_runs += bool(met)
         job = cached(events.parent / "job.json", read_json) or {}
         key = queue_group(job.get("queue") or ("balrog" if "-balrog-" in events.parent.name else None))
-        for name, count in counts.items():
+        for name in counts:
             slain = entry(name)["slain"]
-            slain[key] = slain.get(key, 0) + count
+            slain[key] = slain.get(key, 0) + 1
         for name in met:
             seen = entry(name)["met"]
             seen[key] = seen.get(key, 0) + 1

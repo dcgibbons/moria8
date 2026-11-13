@@ -414,3 +414,23 @@ class MonsterStatsTest(unittest.TestCase):
             self.assertEqual(creatures["Balrog"], {"slain": {}, "met": {}, "killed": {"balrog": 1}})
             self.assertEqual(creatures["Ancient Multi-Hued Dragon"]["killed"], {"balrog": 1})
             self.assertNotIn("trap: pit", creatures)   # not a creature
+
+
+class MonsterStatsTest(unittest.TestCase):
+    def test_slain_and_met_count_runs(self) -> None:
+        """Maintainer, 2026-11-12: Evil Iggy showed 69 slain against 53 met
+        because slain counted kills (one run killed him 16 times: every
+        level from DL50 places one) and met counted runs. Both count runs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for run, kills, met in (("20261112-100000-balrog-c64-human-priest-1", 3, True),
+                                    ("20261112-110000-balrog-c64-human-priest-2", 1, True),
+                                    ("20261112-120000-balrog-c64-human-priest-3", 0, True)):
+                run_dir = home / "runs" / run
+                run_dir.mkdir(parents=True)
+                lines = [{"kind": "met", "name": "Evil Iggy"}] if met else []
+                lines += [{"kind": "kill", "name": "Evil Iggy"}] * kills
+                (run_dir / "events.jsonl").write_text("".join(json.dumps(l) + "\n" for l in lines))
+                (run_dir / "job.json").write_text(json.dumps({"queue": "balrog"}))
+            iggy = dashboard.monster_stats(home)["creatures"]["Evil Iggy"]
+            self.assertEqual((iggy["slain"], iggy["met"]), ({"balrog": 2}, {"balrog": 3}))
