@@ -226,7 +226,7 @@ via `mmu_safe_huff_read_ptr0/1` (which select Bank 6 instead for a pointer at
 | --- | --- | --- |
 | **Memory Contract Self-Test** | `make testbbcmaster-memory-contract-selftest` | Unit-tests `check_memory_contract.py` and `tools/make_ssd.py` |
 | **Static Memory Contract Gate** | `make testbbcmaster-memory-contract` | Verifies every emitted PRG extent, `< $3000` low-helper ceiling, `$8000` resident ceiling, Bank 4/5/6/7 cache slot bounds, and absence of foreign platform symbols |
-| **Runtime MAME Smoke Suite** | `make testbbcmaster-runtime` | Runs headless MAME `bbcm` (`platforms/bbcmaster/harness_smoke.py`, gated by `BBCMROMS`) across the behavioral scenario suite within the 30s timeout cap |
+| **Runtime MAME Smoke Suite** | `make testbbcmaster-runtime` | Runs headless MAME `bbcm` (`platforms/bbcmaster/harness_smoke.py`, gated by `BBCMROMS`) across the behavioral scenario suite within the 30s timeout cap. `boot_title` boots from the disk (about 75 emulated seconds of DFS reads); every other scenario fast-boots, putting the disk's own `MORIA8P` entries where `boot.s`'s tables put them and finishing as the loader does from a stub at `&900` (`--real-boot` boots each from the disk) |
 
 ## License/source modal ownership (2026-11-10)
 

@@ -8,8 +8,14 @@ and prints ASSERT lines. Enforces a strict 30-second host wall-clock timeout
 per scenario (AGENTS.md Rule 8) with -nothrottle -seconds_to_run 180 emulated
 time.
 
+boot_title boots from the disk (*EXEC !BOOT: boot.s streams MORIA8P, about 75
+emulated seconds of DFS reads). Every other scenario fast-boots: the entries of
+the disk's own MORIA8P go where the loader's tables put them, and a stub at
+&900 finishes as boot.s does (fast_boot_entries; --real-boot boots them all
+from the disk). MAME's bbcm has no save states to start from a booted title.
+
 Suite:
-  15 behavioral scenarios on bbcm (128 KB BBC Master 128 with Sideways RAM cache).
+  17 behavioral scenarios on bbcm (128 KB BBC Master 128 with Sideways RAM cache).
 """
 
 from __future__ import annotations
@@ -101,6 +107,46 @@ def andy_mos_bytes() -> str:
     return "{" + ",".join(str(b) for b in data[2 + 0x8800 - load:2 + 0x8830 - load]) + "}"
 
 
+LOADER_DEST = 0x0400        # boot.s relocates its loader here before streaming MORIA8P
+FAST_BOOT_STUB = 0x0900     # MOS cassette/RS423 buffers: free, below MORIA8.RES at $0E00
+
+
+def read_dfs_file(image: bytes, name: str) -> bytes:
+    """One file of an Acorn DFS image (directory $), by name."""
+    count = image[0x105] // 8
+    for i in range(count):
+        entry = image[8 + i * 8:16 + i * 8]
+        if entry[:7].decode("ascii", "replace").rstrip() != name or (entry[7] & 0x7F) != ord("$"):
+            continue
+        info = image[0x108 + i * 8:0x110 + i * 8]
+        length = info[4] | info[5] << 8 | ((info[6] >> 4) & 3) << 16
+        start = info[7] | (info[6] & 3) << 8
+        return image[start * 256:start * 256 + length]
+    raise FileNotFoundError(f"{name} not in the DFS catalogue")
+
+
+def fast_boot_entries(disk_path: Path, boot_sym_path: Path) -> list[tuple[int, int, bytes]]:
+    """What boot.s's loader puts where: MORIA8P's entries in order, each with
+    the bank and page the loader's own tables give (file_bank_table,
+    file_hi_table in the relocated block of the MORIA8 file on this disk)."""
+    image = disk_path.read_bytes()
+    boot = read_dfs_file(image, "MORIA8")
+    pak = read_dfs_file(image, "MORIA8P")
+    syms = parse_symbols(boot_sym_path)
+    block = syms["loader_src"] - syms["boot_start"]   # the relocated block's offset in MORIA8
+    count = pak[0]
+    banks = boot[block + syms["file_bank_table"] - LOADER_DEST:][:count]
+    pages = boot[block + syms["file_hi_table"] - LOADER_DEST:][:count]
+    entries, offset = [], 512
+    for i in range(count):
+        length = pak[2 + i * 2] | pak[3 + i * 2] << 8
+        entries.append((banks[i], pages[i] << 8, pak[offset:offset + length]))
+        offset += length
+    if offset != len(pak) or len(banks) != count or len(pages) != count:
+        raise ValueError(f"MORIA8P holds {len(pak)} bytes, its header {offset}")
+    return entries
+
+
 def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     kbdbuf = syms.get("beeb_kbdbuf", 0x1000)
     kbdbuf_len = syms.get("beeb_kbdbuf_len", 0x1001)
@@ -139,6 +185,7 @@ local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local KBDBUF = 0x{kbdbuf:04X}
 local KBDBUF_LEN = 0x{kbdbuf_len:04X}
 local KEY_WAIT_START = 0x{syms.get("input_get_key", 0):04X}
+local FAST_BOOT_STUB = 0x{FAST_BOOT_STUB:04X}
 local KEY_WAIT_END = 0x{syms.get("igk_key", 0):04X}
 local CURRENT_OVL = 0x{current_ovl:04X}
 local PLAYER_X_ADDR = 0x{zp_px:04X}
@@ -335,9 +382,62 @@ local function in_town()
     return walls >= 20
 end
 
+-- FAST_BOOT (run_scenario fills it): every scenario but boot_title starts
+-- from the boot loader's result, not its 75 emulated seconds of DFS reads
+-- (about 15 host seconds; help_overlay and item_actions took 26-28 of their
+-- 30 alone and timed out in the parallel gate, 2026-11-13). As boot.s: shadow
+-- Mode 7, MORIA8P's entries in their banks and MORIA8.RES at $0E00, ACCCON
+-- $01, the filing-system ROM selected, then $0E00.
+local FAST_BOOT = FAST_BOOT_TABLE
+local booted = false
+local function fast_boot()
+    -- The stub: shadow Mode 7 (VDU 22,135), then it waits at $090A on the flag
+    -- at $0920 while the payloads go in, so BASIC never runs again: run with
+    -- HIMEM at $8000 its stack took MORIA8.RES's last bytes.
+    local dfs = nil
+    for bank = 0, 15 do
+        prog:write_u8(0xFE30, bank)
+        local title = ""
+        for a = 0x8009, 0x800C do title = title .. string.char(prog:read_u8(a)) end
+        if title:sub(1, 3) == "DFS" then dfs = bank end
+    end
+    prog:write_u8(0xFE30, prog:read_u8(0xF4))
+    if dfs == nil then return false end
+    local stub = {{0xA9, 0x16, 0x20, 0xEE, 0xFF,             -- VDU 22,
+                   0xA9, 0x87, 0x20, 0xEE, 0xFF,             -- 135: shadow Mode 7, as boot.s
+                   0xAD, 0x20, 0x09, 0xF0, 0xFB,             -- $090A: wait for the flag at $0920
+                   0xA9, 0x01, 0x8D, 0x34, 0xFE,             -- ACCCON $01: shadow shown, Main RAM to the CPU
+                   0xA9, dfs, 0x85, 0xF4, 0x8D, 0x30, 0xFE,  -- the filing-system ROM, as *RUN left it
+                   0x4C, 0x00, 0x0E}}                        -- MORIA8.RES
+    for i, b in ipairs(stub) do prog:write_u8(FAST_BOOT_STUB + i - 1, b) end
+    prog:write_u8(FAST_BOOT_STUB + 0x20, 0)
+    manager.machine.natkeyboard:post("*GO 900\\r")
+    local parked = false
+    for _ = 1, 500 do
+        emu.wait(0.02)
+        local pc = cpu.state["PC"].value
+        if pc >= FAST_BOOT_STUB + 0x0A and pc < FAST_BOOT_STUB + 0x0F then parked = true break end
+    end
+    if not parked then return false end
+    for _, e in ipairs(FAST_BOOT) do
+        local f = io.open(e.path, "rb")
+        local data = f:read("a")
+        f:close()
+        if e.bank ~= 0 then prog:write_u8(0xFE30, e.bank) end
+        for i = 1, #data do prog:write_u8(e.addr + i - 1, data:byte(i)) end
+        prog:write_u8(0xFE30, prog:read_u8(0xF4))
+    end
+    prog:write_u8(FAST_BOOT_STUB + 0x20, 1)
+    return true
+end
 local function wait_title()
     emu.wait(1.0)
-    manager.machine.natkeyboard:post("*EXEC !BOOT\\r")
+    if FAST_BOOT ~= nil and not booted then
+        booted = true
+        if not fast_boot() then return false end
+    else
+        manager.machine.natkeyboard:post("*EXEC !BOOT\\r")
+    end
     for _ = 1, 1000 do
         emu.wait(0.1)
         if can_read_shadow() and screen_has("N)ew") and screen_has("L)oad") then
@@ -1162,6 +1262,10 @@ function run()
         if screen_has("OK") or screen_has("FAIL") then break end
     end
     drain_more(4)
+    -- One blow from death: the death flow is under test, not the fight; from
+    -- full HP the summoned creature took 62 emulated seconds (2026-11-13).
+    prog:write_u8(PLAYER_HP_ADDR, 1)
+    prog:write_u8(PLAYER_HP_ADDR + 1, 0)
     local slain = false
     for _ = 1, 200 do
         if screen_has("You have been slain") or screen_has("DISK SETUP") then slain = true break end
@@ -1324,9 +1428,11 @@ def run_scenario(
     sym_path: Path,
     mame_bin: str = "mame",
     machine: str = "bbcm",
+    real_boot: bool = False,
 ) -> bool:
     syms = parse_symbols(sym_path)
     lua_code = build_lua_script(scenario, syms)
+    fast = not real_boot and scenario != "boot_title"   # boot_title keeps the disk boot covered
 
     for output_dir in MAME_OUTPUT_DIRS.values():
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1338,6 +1444,15 @@ def run_scenario(
         build_blank_ssd(tmp_save_ssd)
         lua_path = Path(tmpdir) / "scenario.lua"
         lua_code = lua_code.replace("LEGAL_GAME_IMAGE", str(tmp_ssd)).replace("LEGAL_SAVE_IMAGE", str(tmp_save_ssd))
+        table = "nil"
+        if fast:
+            rows = []
+            for i, (bank, addr, data) in enumerate(fast_boot_entries(disk_path, sym_path.parent / "boot.sym")):
+                payload = Path(tmpdir) / f"boot{i}.bin"
+                payload.write_bytes(data)
+                rows.append(f'{{bank = 0x{bank:02X}, addr = 0x{addr:04X}, path = "{payload}"}}')
+            table = "{" + ", ".join(rows) + "}"
+        lua_code = lua_code.replace("FAST_BOOT_TABLE", table)
         lua_path.write_text(lua_code, encoding="utf-8")
 
         cmd = [
@@ -1458,6 +1573,8 @@ def main() -> int:
     parser.add_argument("--fast-smoke", "--fast", dest="fast_smoke", action="store_true")
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--selftest", action="store_true")
+    parser.add_argument("--real-boot", action="store_true",
+                        help="boot every scenario from the disk (slow), not boot_title alone")
     args = parser.parse_args()
 
     if args.selftest:
@@ -1479,18 +1596,18 @@ def main() -> int:
 
     if args.fast_smoke:
         for sc in FAST_SMOKE_SCENARIOS:
-            if not run_scenario(sc, args.rompath, args.disk, args.sym, args.mame, args.machine):
+            if not run_scenario(sc, args.rompath, args.disk, args.sym, args.mame, args.machine, args.real_boot):
                 return 1
         return 0
 
     if args.all:
         for sc in SCENARIOS:
-            if not run_scenario(sc, args.rompath, args.disk, args.sym, args.mame, args.machine):
+            if not run_scenario(sc, args.rompath, args.disk, args.sym, args.mame, args.machine, args.real_boot):
                 return 1
         return 0
 
     ok = run_scenario(
-        args.scenario, args.rompath, args.disk, args.sym, args.mame, args.machine
+        args.scenario, args.rompath, args.disk, args.sym, args.mame, args.machine, args.real_boot
     )
     return 0 if ok else 1
 
