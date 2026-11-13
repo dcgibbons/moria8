@@ -1698,6 +1698,15 @@ class Brain:
         return [burst // self.elements_div(obs, elements, lasting, assume)
                 for elements, (step, burst) in self.level.breathers.items() if obs.step - step < BREATHER_MEMORY]
 
+    def paralyzers_in_view(self, view: View) -> list[Pos]:
+        """Where the creatures in view whose touch has paralysed the bot are
+        (by glyph); none with Free Action."""
+        if not self.paralyzers or self.free_action():
+            return []
+        glyphs = knowledge.glyphs_of()
+        bad = {g for name in self.paralyzers for g in glyphs.get(name, ())}
+        return [p for p, c in view.creatures.items() if c.glyph in bad]
+
     def shake_paralyzer(self, obs: Observation, view: View) -> None | Decision:
         """Beside a creature whose touch has paralysed the bot (learned from
         "the X paralyzes you."): out of its reach before anything else, as a
@@ -1705,12 +1714,15 @@ class Brain:
         paralysed. A level-35 Priest woke at 67/253 beside an Iridescent
         Beetle and an Umber Hulk, drank a potion and prayed there, and was
         paralysed again and beaten to death (C64 Balrog, 2026-11-07). The
-        long escapes first, then Phase Door, then a step out of its reach."""
-        if obs.dlvl == 0 or not self.paralyzers or self.free_action():
-            return None   # Free Action: no blow paralyses
-        glyphs = knowledge.glyphs_of()
-        bad = {g for name in self.paralyzers for g in glyphs.get(name, ())}
-        near = [p for p, c in view.creatures.items() if c.glyph in bad and chebyshev(p, view.pos) == 1]
+        long escapes first, then a Wand of Teleport Away at it, then Phase
+        Door, then a step out of its reach: one that follows spends its move
+        closing in, not on a blow. A level-37 Gnome Warrior with no scroll of
+        either kept stepping from an Iridescent Beetle, two Wands of Teleport
+        Away in its pack, until a walk to the stairs stepped back beside it:
+        paralysed from 448/459 to death (C64 Balrog, 2026-11-13)."""
+        if obs.dlvl == 0:
+            return None
+        near = [p for p in self.paralyzers_in_view(view) if chebyshev(p, view.pos) == 1]
         if not near:
             return None
         why = f"beside the '{view.creatures[near[0]].glyph}' that paralyses"
@@ -1721,6 +1733,11 @@ class Brain:
         for spell in (TELEPORT_SELF, PORTAL):
             if magic.can(obs, spell):
                 return Decision(*magic.pray(spell, f"{why}: cast {spell}"))
+        mobile = [p for p in near if not self.stationary(view.creatures[p])]
+        if mobile and self.wands.get(TELEPORT_AWAY, 0) > 0 and obs.step >= self.blind_until:
+            step = (mobile[0][0] - view.pos[0], mobile[0][1] - view.pos[1])
+            self.picking, self.listed, self.pending, self.last_aimed = TELEPORT_AWAY, False, DIRS[step], TELEPORT_AWAY
+            return Decision(KEY_AIM, "phase", f"{why}: aim the {TELEPORT_AWAY} at it")
         if self.phase and obs.step >= self.blind_until:
             self.picking, self.listed = PHASE, False
             self.level.phased = obs.step
@@ -3106,6 +3123,12 @@ class Brain:
         if step is None or step == (0, 0):
             return None
         target = (view.pos[0] + step[0], view.pos[1] + step[1])
+        if target not in view.creatures and any(chebyshev(p, target) == 1 for p in self.paralyzers_in_view(view)):
+            # Not into the reach of a creature that paralyses: there it blows
+            # before the bot moves again (shake_paralyzer). A walk to the
+            # stairs stepped a level-37 Warrior back beside an Iridescent
+            # Beetle it had kept a step from (C64 Balrog, 2026-11-13).
+            return None
         if view.type_at(*target) == TYPE_TRAP:
             tries = self.level.disarm_attempts.get(target, 0)
             if tries < DISARM_TRIES:

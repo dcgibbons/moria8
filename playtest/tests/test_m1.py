@@ -3159,6 +3159,31 @@ class ParalyzerTest(unittest.TestCase):
         brain.jewel_names["Amulet"] = "Amulet of the Magi"           # Free Action: no blow paralyses
         self.assertIsNone(brain.shake_paralyzer(o, view))
 
+    def test_beside_a_paralyser_it_aims_teleport_away_and_never_steps_into_reach(self) -> None:
+        """2026-11-13: a level-37 Gnome Warrior with no Phase Door kept a step
+        from an Iridescent Beetle, two Wands of Teleport Away in its pack,
+        until a walk to the stairs stepped back beside it: paralysed from
+        448/459 to death (C64 Balrog)."""
+        from moria_playtest.brain import KEY_AIM, TELEPORT_AWAY
+        brain = Brain(GOALS["deep"])
+        name = "Iridescent Beetle"
+        glyph = sorted(knowledge.glyphs_of()[name])[0]
+        brain.paralyzers.add(name)
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        view.creatures = {(11, 10): Creature(glyph, 37)}
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=448, mhp=459)
+        brain.phase = 3
+        brain.wands[TELEPORT_AWAY] = 2
+        decision = brain.shake_paralyzer(o, view)
+        self.assertEqual((decision.key, decision.layer), (KEY_AIM, "phase"))
+        self.assertEqual(brain.pending, DIRS[(1, 0)])                 # at the beetle, before Phase Door
+        view.creatures = {(12, 10): Creature(glyph, 37)}              # a step away: kept there
+        self.assertIsNone(brain.shake_paralyzer(o, view))
+        self.assertIsNone(brain.move(view, (1, 0), "stair-scum", "path to the nearest staircase"))
+        self.assertEqual(brain.move(view, (-1, 0), "stair-scum", "path to the nearest staircase").key, DIRS[(-1, 0)])
+        brain.jewel_names["Amulet"] = "Amulet of the Magi"           # Free Action: walk where it likes
+        self.assertEqual(brain.move(view, (1, 0), "stair-scum", "path to the nearest staircase").key, DIRS[(1, 0)])
+
     def test_a_hold_person_caster_is_not_a_touch_paralyser(self) -> None:
         """Review 2026-11-08: Hold Person's "paralyzes you." comes from any
         range (monster_cast_hold); fleeing its glyph's neighbours did nothing."""
