@@ -196,7 +196,8 @@ score_death_screen:
     lda player_data + PL_LEVEL
     jsr screen_put_decimal
 
-    // Row 5: "KILLED ON DUNGEON LEVEL <depth>"
+    // Row 5: "KILLED ON DUNGEON LEVEL <depth>": the level of death (VMS
+    // death.inc "Died on Level : dun_level"), not the deepest reached
     lda #5
     sta zp_cursor_row
     lda #SDS_INFO_COL
@@ -204,7 +205,7 @@ score_death_screen:
     lda #<sds_dungeon_str
     ldy #>sds_dungeon_str
     jsr screen_put_string_ay
-    lda player_data + PL_MAX_DLVL
+    lda zp_player_dlvl
     jsr screen_put_decimal
 
     // Row 7: death source or winner retirement cause

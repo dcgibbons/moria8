@@ -8,7 +8,7 @@
 //       ($C020) which overlaps test code. Local definitions redirect
 //       hiscore_table to a safe buffer within the test body.
 //
-// Results at $0400-$040e: $01 = pass, $00 = fail per test (15 tests)
+// Results at $0400-$040f: $01 = pass, $00 = fail per test (16 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #14
+    ldx #15
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -177,12 +177,12 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 13, $ff
+tc_results: .fill 16, $ff
 tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #12
+    ldx #15
     lda #$ff
 !clr:
     sta tc_results,x
@@ -776,7 +776,39 @@ test_start:
     rol
     sta tc_results + 14
 
+    // ============================================================
+    // Test 15: the death screen names the level of death, not the deepest
+    // reached (VMS death.inc "Died on Level : dun_level"; Umoria's tomb):
+    // clvl 40 Priests died on DL43 and DL50 under "Killed on dungeon level
+    // 100" after a Balrog trip (C64 Balrog queue, 2026-11-13).
+    // ============================================================
+    .const t15_digits_at = 24       // "Killed on dungeon level " is 24 characters
+    lda #43
+    sta zp_player_dlvl
+    lda #100
+    sta player_data + PL_MAX_DLVL
+    lda #0
+    sta zp_game_flags
+    jsr score_death_screen
+    ldx #1
+!t15_cmp:
+    lda $0400 + 5 * 40 + SDS_INFO_COL + t15_digits_at,x
+    cmp t15_expect,x
+    bne !t15_fail+
+    dex
+    bpl !t15_cmp-
+    lda $0400 + 5 * 40 + SDS_INFO_COL + t15_digits_at + 2
+    cmp #$20                        // "43", not "100"
+    bne !t15_fail+
+    lda #$01
+    .byte $2c
+!t15_fail:
+    lda #$00
+    sta tc_results + 15
+
     jmp test_finish
+
+t15_expect: .byte $34, $33          // "43" as screen codes
 
 // Clear row 0 and print score_accum_0-2 at row 0, col 0.
 t24_print:

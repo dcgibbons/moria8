@@ -4921,7 +4921,7 @@ run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0427" 40 1000000000
-run_test "score" "tests/test_score.s" "0400 040e" 15 500000000
+run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 42 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
