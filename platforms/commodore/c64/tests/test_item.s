@@ -16,7 +16,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #72-1
+    ldx #74-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -146,7 +146,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 72, $ff
+tc_results: .fill 74, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -3520,14 +3520,137 @@ test_start:
     bcc !t72_fail+
     lda #$01
     sta tc_results + 71
-    jmp !tests_done+
+    jmp !t73+
 !t72_fail:
     lda #$00
     sta tc_results + 71
 
+    // ==========================================
+    // Test 73 (maintainer, 2026-11-13): base armour AC is VMS Moria 4.8's
+    // (values.inc; docs/FEATURE_MAP.md 8.3.1), the three past a nibble
+    // included; Mithril Chain Mail is 16 (maintainer's choice). Unchanged
+    // rows stay (Leather Armor 4, Small Shield 2, a sword 0).
+    // ==========================================
+!t73:
+    ldx #t73_ids_end - t73_ids - 1
+!t73_loop:
+    ldy t73_ids,x
+    jsr item_get_base_ac        // preserves X, Y
+    cmp t73_ac,x
+    bne !t73_fail+
+    dex
+    bpl !t73_loop-
+    lda #$01
+    sta tc_results + 72
+    jmp !t74+
+!t73_fail:
+    lda #$00
+    sta tc_results + 72
+
+    // ==========================================
+    // Test 74: the weapon's, a Ring of Slaying's and Defender's bonuses
+    // survive player_calc_combat (level-up) and player_calc_stats (Potion
+    // of Restoration, Holy Word): both rebuilt to-hit, to-damage and AC from
+    // stats and base armour alone, losing them until the next wield. Over
+    // the bare character: +5+3 to-hit, +7+4 to-damage, Plate Mail 25 plus
+    // Defender 5 AC. A full suit past +127 AC caps at 60, not 0.
+    // ==========================================
+!t74:
+    ldx #STAT_COUNT - 1             // all stats 10: no stat bonus anywhere
+    lda #10
+!t74_stats:
+    sta player_data + PL_STR_BASE,x
+    sta player_data + PL_STR_CUR,x
+    dex
+    bpl !t74_stats-
+    jsr item_init_inventory
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    clc
+    adc #8
+    sta t74_hit
+    lda player_data + PL_TODMG
+    clc
+    adc #11
+    sta t74_dam
+    lda player_data + PL_AC
+    clc
+    adc #30
+    sta t74_ac
+    lda #4                          // Long sword (+5,+7) of Defender
+    sta inv_item_id + EQUIP_WEAPON
+    lda #5
+    sta inv_to_hit + EQUIP_WEAPON
+    lda #7
+    sta inv_to_dam + EQUIP_WEAPON
+    lda #EGO_DEFENDER
+    sta inv_ego + EQUIP_WEAPON
+    lda #ITEM_TYPE_RING_SLAYING     // (+3,+4)
+    sta inv_item_id + EQUIP_RING
+    lda #3
+    sta inv_to_hit + EQUIP_RING
+    lda #4
+    sta inv_to_dam + EQUIP_RING
+    lda #ITEM_TYPE_PLATE_MAIL       // [25,+0]
+    sta inv_item_id + EQUIP_BODY
+    jsr player_recalc_equipment
+    jsr t74_check
+    bne !t74_fail+
+    lda #$ee                        // stale
+    sta zp_player_ac
+    jsr player_calc_combat
+    jsr t74_check
+    bne !t74_fail+
+    jsr player_calc_stats
+    jsr t74_check
+    bne !t74_fail+
+    lda #EGO_NONE
+    sta inv_ego + EQUIP_WEAPON
+    lda #ITEM_TYPE_MITHRIL_PLATE    // [28,+100] and a Large Shield [4,+100]
+    sta inv_item_id + EQUIP_BODY
+    lda #100
+    sta inv_to_ac + EQUIP_BODY
+    sta inv_to_ac + EQUIP_SHIELD
+    lda #78
+    sta inv_item_id + EQUIP_SHIELD
+    jsr player_recalc_equipment
+    lda player_data + PL_AC
+    cmp #60
+    bne !t74_fail+
+    lda #$01
+    sta tc_results + 73
+    jmp !tests_done+
+!t74_fail:
+    lda #$00
+    sta tc_results + 73
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+t73_ids: .byte 8, 10, 78, 80, 81, 83, 84, 85, 86, 87, 122, 123, 7, 9, 4
+t73_ids_end:
+t73_ac:  .byte 14, 5, 4, 13, 25, 6, 2, 2, 3, 3, 16, 28, 4, 2, 0
+.assert "t73 tables pair up", t73_ids_end - t73_ids, 15
+
+// t74_check — Z set when PL_TOHIT, PL_TODMG, PL_AC and zp_player_ac hold
+// test 74's expected values.
+t74_check:
+    lda player_data + PL_TOHIT
+    cmp t74_hit
+    bne !t74c_done+
+    lda player_data + PL_TODMG
+    cmp t74_dam
+    bne !t74c_done+
+    lda player_data + PL_AC
+    cmp t74_ac
+    bne !t74c_done+
+    cmp zp_player_ac
+!t74c_done:
+    rts
+t74_hit: .byte 0
+t74_dam: .byte 0
+t74_ac:  .byte 0
 
 // t72_count_deep — A = how many of 255 production picks have a minimum
 // level of at least A (on entry).

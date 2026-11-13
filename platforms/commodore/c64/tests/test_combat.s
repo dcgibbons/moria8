@@ -803,9 +803,9 @@ test_start:
     // ==========================================
     // Test 20: AC from DEX + multiple armor + enchantment
     // DEX 18 -> bonus 2
-    // Chain mail (type 8, base_ac=6) in EQUIP_BODY, p1=+2
-    // Iron helm (type 10, base_ac=1) in EQUIP_HEAD, p1=0
-    // AC = 2 + 6 + 2 + 1 = 11
+    // Chain mail (type 8, VMS base_ac=14) in EQUIP_BODY, p1=+2
+    // Iron helm (type 10, VMS base_ac=5) in EQUIP_HEAD, p1=0
+    // AC = 2 + 14 + 2 + 5 = 23
     // ==========================================
 !t20:
     // Clear all equipment slots
@@ -831,7 +831,7 @@ test_start:
     jsr player_calc_combat
 
     lda player_data + PL_AC
-    cmp #11
+    cmp #23
     bne !t20_fail+
     lda #$01
     sta tc_results + 19

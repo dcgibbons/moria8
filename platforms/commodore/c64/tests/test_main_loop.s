@@ -23,7 +23,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #54
+    ldx #55
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -333,7 +333,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 55, $ff
+tc_results: .fill 56, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -3064,10 +3064,59 @@ test_start:
     beq !t55_fail+
     lda #$01
     sta tc_results + 54
-    jmp test_finish
+    jmp !t56+
 !t55_fail:
     lda #0
     sta tc_results + 54
+
+    // Test 56: a loaded game gets its weapon's to-hit back and the AC the
+    // monsters and status line read (zp_player_ac) from the worn armour:
+    // neither is saved, and the load rebuilt to-hit from stats alone and
+    // left zp_player_ac at the saved value. All stats 10 (no stat bonus),
+    // a Long sword (+5,+0) and Plate Mail [25,+0] (VMS): to-hit 5, AC 25.
+!t56:
+    jsr reset_state
+    lda #55
+    sta test_case_idx
+    ldx #STAT_COUNT - 1
+    lda #10
+!t56_stats:
+    sta player_data + PL_STR_BASE,x
+    dex
+    bpl !t56_stats-
+    jsr item_init_inventory
+    lda #4                          // Long sword (+5,+0)
+    sta inv_item_id + EQUIP_WEAPON
+    lda #5
+    sta inv_to_hit + EQUIP_WEAPON
+    lda #ITEM_TYPE_PLATE_MAIL
+    sta inv_item_id + EQUIP_BODY
+    lda #$77                        // stale, as saved
+    sta player_data + PL_TOHIT
+    sta zp_player_ac
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
+    lda #1
+    sta test_key_len
+    lda #$20
+    sta test_key_script
+    jsr load_resume_game
+    lda player_data + PL_TOHIT
+    cmp #5
+    bne !t56_fail+
+    lda zp_player_ac
+    cmp #25
+    bne !t56_fail+
+    lda #$01
+    sta tc_results + 55
+    jmp test_finish
+!t56_fail:
+    lda #0
+    sta tc_results + 55
     jmp test_finish
 
 t55_probe_ok:

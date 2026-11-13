@@ -80,9 +80,11 @@ test_finish:
 .segmentdef TestMonsterMagic [start=$E100]
 .segment TestMonsterMagic
 #import "../../../../core/monster_magic.s"
+// No level is generated here either: its special rooms go up with them (the
+// VMS armour AC of 2026-11-13 took the body past MAP_BASE).
+#import "../../../../core/special_rooms.s"
 .segment Default
 #import "../../../../core/item.s"
-#import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"

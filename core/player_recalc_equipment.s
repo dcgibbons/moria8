@@ -3,37 +3,31 @@
 #import "player_adjust_equipment_stat.s"
 #endif
 // player_recalc_equipment — Recalculate AC, to-hit, to-damage from equipment
-// Called after any equip/unequip action.
-// player_calc_combat already handles DEX bonus + equipment AC (R1.6).
-// This adds weapon to-hit/to-damage and ego bonuses.
+// Called after any equip/unequip action or a change to a worn item.
+// Collects the equipment bonuses player_calc_combat adds on every recalc
+// (pcc_eq_*: the weapon's to-hit/to-damage, each Ring of Slaying's, the weapon
+// ego's AC), then recalculates the persistent equipment flags (resistances,
+// See Invisible, Free Action) and player_calc_combat, which the flags routine
+// ends in, without rerolling exceptional current stats.
 // Clobbers: everything
 player_recalc_equipment:
-    // Recalculate equipment-derived flags and combat values without rerolling
-    // exceptional current stats established during character creation: the
-    // persistent equipment flags (resistances, See Invisible, Free Action),
-    // then player_calc_combat, which the flags routine ends in.
-    #if PLAYER_RECALC_PFLAGS_EXTERNAL
-    jsr hal_player_recalc_pflags
-    #else
-    jsr player_recalc_pflags_equipment   // resident (OVL.ITEMS calls it on the Apple IIe, BBC Master)
-    #endif
-
-    // Add weapon split to-hit and to-damage bonuses
+    lda #0
+    sta pcc_eq_tohit
+    sta pcc_eq_todam
+    sta pcc_eq_ac
     ldx #EQUIP_WEAPON
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !pre_no_weapon+
+    beq !pre_rings+
     lda inv_to_hit,x
-    clc
-    adc player_data + PL_TOHIT
-    sta player_data + PL_TOHIT
+    sta pcc_eq_tohit
     lda inv_to_dam,x
-    clc
-    adc player_data + PL_TODMG
-    sta player_data + PL_TODMG
-!pre_no_weapon:
-
-    // Add Ring of Slaying to-hit and to-damage bonuses
+    sta pcc_eq_todam
+    lda inv_ego,x
+    beq !pre_rings+
+    jsr tramp_ego_get_ac_bonus  // Defender / Holy Avenger; clobbers X
+    sta pcc_eq_ac
+!pre_rings:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
     ldx #EQUIP_RING
 !pre_slay_ring:                 // each hand: EQUIP_RING, then EQUIP_RING2
@@ -42,12 +36,12 @@ player_recalc_equipment:
     bne !pre_no_slay+
     lda inv_to_hit,x
     clc
-    adc player_data + PL_TOHIT
-    sta player_data + PL_TOHIT
+    adc pcc_eq_tohit
+    sta pcc_eq_tohit
     lda inv_to_dam,x
     clc
-    adc player_data + PL_TODMG
-    sta player_data + PL_TODMG
+    adc pcc_eq_todam
+    sta pcc_eq_todam
 !pre_no_slay:
     cpx #EQUIP_RING2
     ldx #EQUIP_RING2
@@ -56,18 +50,8 @@ player_recalc_equipment:
     jsr player_apply_slaying_bonuses
 #endif
 
-    // Ego AC bonus (Defender/HA — checked in banked code at $F000)
-    ldx #EQUIP_WEAPON
-    lda inv_ego,x
-    beq !pre_no_ego_ac+
-    jsr tramp_ego_get_ac_bonus
-    beq !pre_no_ego_ac+
-    clc
-    adc player_data + PL_AC
-    sta player_data + PL_AC
-!pre_no_ego_ac:
-
-    // Sync back to ZP
-    lda player_data + PL_AC
-    sta zp_player_ac
-    rts
+    #if PLAYER_RECALC_PFLAGS_EXTERNAL
+    jmp hal_player_recalc_pflags
+    #else
+    jmp player_recalc_pflags_equipment   // resident (OVL.ITEMS calls it on the Apple IIe, BBC Master)
+    #endif

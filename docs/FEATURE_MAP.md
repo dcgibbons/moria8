@@ -934,8 +934,24 @@ dungeon level on it, `min((dlvl + 3) / 4, 12)`, and its 1-in-12 great item is Um
 player found a Mithril Plate Mail (for VMS Ribbed Plate, level 50) on DL8. Eleven items were
 raised to their VMS level / 4: Chain Mail 7, Iron Helm 5, Ring of Strength 8, Restore Mana 7,
 Protection from Evil 8, Plate Mail 12, Steel Helm 10, Restoration 10, Mithril Chain Mail 7,
-Mithril Plate Mail 12, Staff of Remove Curse 12. Item parity with VMS (levels on its 0-50 scale,
-its armour values) is the later goal. C64 `test_item.s` 44 and 72 (`DGN-018`).
+Mithril Plate Mail 12, Staff of Remove Curse 12. Item parity with VMS (levels on its 0-50
+scale) is the later goal. C64 `test_item.s` 44 and 72 (`DGN-018`).
+
+**Armour AC (maintainer, 2026-11-13):** base AC is VMS Moria 4.8's (`values.inc`). Moria8 had
+squeezed it into the low nibble of `it_color_ac` on its own scale (Chain Mail `6`, Plate Mail `9`,
+Mithril Plate Mail `14` against VMS `14`, `25`, `28`), so heavy armour gave about half its VMS
+protection. Twelve rows changed: Chain Mail `14`, Iron Helm `5`, Large Shield `4`, Scale Mail
+`13`, Plate Mail `25`, Steel Helm `6`, Gauntlets `2`, Soft Leather Boots `2`, Hard Leather Boots
+`3`, Metal Cap `3`, Mithril Chain Mail `16` (no VMS template; between Chain and Full Plate) and
+Mithril Plate Mail `28` (VMS Ribbed Plate). The three past `15` keep a nibble of `15` and
+`item_get_base_ac` (`core/item_tables.s`) supplies their values. The worn AC sum saturates
+instead of wrapping past `+127`; the `60` cap is unchanged. VMS's heavy-armour to-hit penalties
+(`-2`, `-3`) are not modelled. Found with it: `player_calc_combat` rebuilt to-hit, to-damage
+and AC from stats and base armour alone, so a level-up, a load, a Potion of Restoration or Holy
+Word dropped the weapon's, a Ring of Slaying's and Defender's bonuses until the next wield, and
+a load left the AC the monsters read at the saved value. `player_recalc_equipment` now keeps
+those bonuses in `pcc_eq_*`, `player_calc_combat` adds them every time, and the load runs the
+equipment recalc. C64 `test_item.s` 73 and 74, `test_main_loop.s` 56.
 
 ### 8.3.1 Moria8 Master Item Table (All 157 Item Templates, IDs `0..156`)
 
@@ -953,9 +969,9 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `5` | **Mace** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `50` | `45` | `2` | `Mace` (`#58`) |
 | `6` | **Robe** | `ICAT_ARMOR (3)` | `[` | L.Grey | `2` | `0d0` | `20` | `4` | `1` | `Robe` (`#102`) |
 | `7` | **Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `4` | `0d0` | `80` | `18` | `2` | `Soft Leather Armor` (`#103`) |
-| `8` | **Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `6` | `0d0` | `120` | `530` | `7` | `Chain Mail` (`#112`, AC `6` on Moria8 1-nibble scale) |
+| `8` | **Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `14` | `0d0` | `120` | `530` | `7` | `Chain Mail` (`#112`, AC `14`) |
 | `9` | **Small Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `2` | `1d1` (a bash rolls it; `0d0` until 2026-10-25) | `50` | `30` | `2` | `Small Leather Shield` (`#126`) |
-| `10` | **Iron Helm** | `ICAT_HELM (5)` | `]` | Grey | `1` | `0d0` | `30` | `75` | `5` | `Iron Helm` (`#97`) |
+| `10` | **Iron Helm** | `ICAT_HELM (5)` | `]` | Grey | `5` | `0d0` | `30` | `75` | `5` | `Iron Helm` (`#97`) |
 | `11` | **Leather Gloves** | `ICAT_GLOVES (6)` | `]` | Brown | `1` | `0d0` | `5` | `3` | `1` | `Set of Leather Gloves` (`#124`) |
 | `12` | **Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `10` | `4` | `1` | `Pair of Soft Leather Shoes` (`#91`) |
 | `13` | **Wooden Torch** | `ICAT_LIGHT (8)` | `*` | Yellow | `0` | `0d0` | `10` | `2` | `0` | `Wooden Torch` (`#86`, `4000` turns = `inv_p1=200`) |
@@ -1023,16 +1039,16 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `75` | **Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `160` | `358` | `8` | `Pike` (`#67`) |
 | `76` | **Halberd** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `190` | `430` | `9` | `Halberd` (`#65`) |
 | `77` | **Quarterstaff** | `ICAT_WEAPON (2)` | `/` | Brown | `0` | `1d9` | `40` | `20` | `1` | `Quarterstaff` (`1d9` hafted/staff weapon) |
-| `78` | **Large Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `3` | `1d2` (VMS Large Leather Shield; `0d0` until 2026-10-25) | `100` | `120` | `4` | `Large Leather/Metal Shield` (`#128`/`#131`) |
+| `78` | **Large Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `4` | `1d2` (VMS Large Leather Shield; `0d0` until 2026-10-25) | `100` | `120` | `4` | `Large Leather/Metal Shield` (`#128`/`#131`) |
 | `79` | **Hard Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `120` | `55` | `5` | `Hard Leather Armor` (`#105`) |
-| `80` | **Scale Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `7` | `0d0` | `250` | `430` | `7` | `Metal Scale Mail` (`#111`) |
-| `81` | **Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `9` | `0d0` | `380` | `1050` | `12` | `Full Plate Armor` (`#121`) |
+| `80` | **Scale Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `13` | `0d0` | `250` | `430` | `7` | `Metal Scale Mail` (`#111`) |
+| `81` | **Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `25` | `0d0` | `380` | `1050` | `12` | `Full Plate Armor` (`#121`) |
 | `82` | **Cloak** | `ICAT_ARMOR (3)` | `[` | L.Grey | `1` | `0d0` | `10` | `3` | `2` | `Cloak` (`#123`) |
-| `83` | **Steel Helm** | `ICAT_HELM (5)` | `]` | L.Grey | `2` | `0d0` | `60` | `200` | `10` | `Steel Helm` (`#98`) |
-| `84` | **Gauntlets** | `ICAT_GLOVES (6)` | `]` | L.Grey | `1` | `0d0` | `25` | `35` | `2` | `Set of Gauntlets` (`#125`) |
-| `85` | **Soft Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `5` | `7` | `1` | `Pair of Soft Leather Boots` (`#92`) |
-| `86` | **Hard Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `2` | `0d0` | `20` | `12` | `3` | `Pair of Hard Leather Boots` (`#93`) |
-| `87` | **Metal Cap** | `ICAT_HELM (5)` | `]` | Grey | `1` | `0d0` | `20` | `30` | `4` | `Metal Cap` (`#96`) |
+| `83` | **Steel Helm** | `ICAT_HELM (5)` | `]` | L.Grey | `6` | `0d0` | `60` | `200` | `10` | `Steel Helm` (`#98`) |
+| `84` | **Gauntlets** | `ICAT_GLOVES (6)` | `]` | L.Grey | `2` | `0d0` | `25` | `35` | `2` | `Set of Gauntlets` (`#125`) |
+| `85` | **Soft Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `2` | `0d0` | `5` | `7` | `1` | `Pair of Soft Leather Boots` (`#92`) |
+| `86` | **Hard Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `3` | `0d0` | `20` | `12` | `3` | `Pair of Hard Leather Boots` (`#93`) |
+| `87` | **Metal Cap** | `ICAT_HELM (5)` | `]` | Grey | `3` | `0d0` | `20` | `30` | `4` | `Metal Cap` (`#96`) |
 | `88` | **Sabre** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `50` | `50` | `3` | `Sabre` (`#48`) |
 | `89` | **Cutlass** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `110` | `85` | `4` | `Cutlass` (`#39`) |
 | `90` | **Tulwar** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `100` | `100` | `5` | `Tulwar` (`2d4` curved blade) |
@@ -1067,8 +1083,8 @@ Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44`.
 | `119` | **Staff of Dispel Evil** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `1200` | `11` | `Staff of Dispel Evil` (`#315`) |
 | `120` | **Staff of Destruction** | `ICAT_STAFF (15)` | `/` | L.Red | `0` | `0d0` | `50` | `2500` | `12` | `Staff of *Destruction*` (`#302`) |
 | `121` | **Staff of Speed** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `1000` | `10` | `Staff of Speed` (`#309`) |
-| `122` | **Mithril Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `11` | `0d0` | `200` | `600` | `7` | High-tier Mithril Chain Mail (`AC 11`) |
-| `123` | **Mithril Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `14` | `0d0` | `320` | `1200` | `12` | High-tier Mithril Plate Mail (`AC 14`) |
+| `122` | **Mithril Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `16` | `0d0` | `200` | `600` | `7` | High-tier Mithril Chain Mail (`AC 16`, the maintainer's choice, 2026-11-13: between Chain `14` and Full Plate `25`) |
+| `123` | **Mithril Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `28` | `0d0` | `320` | `1200` | `12` | High-tier Mithril Plate Mail (`AC 28`, VMS Ribbed Plate) |
 | `124` | **Amulet of Wisdom** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `300` | `5` | `Amulet of Wisdom` (`#163`) |
 | `125` | **Amulet of the Magi** | `ICAT_AMULET (16)` | `"` | L.Green | `3` | `0d0` | `3` | `5000` | `12` | `Amulet of the Magi` (`#171`, base AC `3` + See Invisible + Free Action) |
 | `126` | **Neutralize Poison Potion** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `75` | `2` | `Potion of Neutralize Poison` (`#265`) |
@@ -1198,13 +1214,13 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `89` | `90` | **Gnomish Shovel** | `TV_DIGGING (25)` | `100` | `50` | `20` | `1d2`, `p1=+1` tunnel | **Moria8 `Gnomish Shovel`** (`#62` + `ego=1`, `75` GP, `+2` dig bonus) | **Implemented** |
 | `90` | `91` | **Dwarven Shovel** | `TV_DIGGING (25)` | `250` | `120` | `40` | `1d3`, `p1=+2` tunnel | **Moria8 `Dwarven Shovel`** (`#62` + `ego=2`, `225` GP, `+4` dig bonus) | **Implemented** |
 | `91` | `92` | **Pair of Soft Leather Shoes** | `TV_BOOTS (30)` | `4` | `5` | `1` | `AC 1` | **Moria8 `#12` (`Leather Boots`)** (`AC 1`, `cost=4`, `wt=10`) / **`#85` (`Soft Leather Boots`)** (`AC 1`, `cost=4`, `wt=5`) | **Implemented** |
-| `92` | `93` | **Pair of Soft Leather Boots** | `TV_BOOTS (30)` | `7` | `20` | `4` | `AC 2`, `1d1` | **Moria8 `#85` (`Soft Leather Boots`)**: `AC 1`, `cost=7`, `wt=5`, `min_lvl=1` | **Implemented** |
-| `93` | `94` | **Pair of Hard Leather Boots** | `TV_BOOTS (30)` | `12` | `40` | `6` | `AC 3`, `1d1` | **Moria8 `#86` (`Hard Leather Boots`)**: `AC 2`, `cost=12`, `wt=20`, `min_lvl=3` | **Implemented** |
+| `92` | `93` | **Pair of Soft Leather Boots** | `TV_BOOTS (30)` | `7` | `20` | `4` | `AC 2`, `1d1` | **Moria8 `#85` (`Soft Leather Boots`)**: `AC 2`, `cost=7`, `wt=5`, `min_lvl=1` | **Implemented** |
+| `93` | `94` | **Pair of Hard Leather Boots** | `TV_BOOTS (30)` | `12` | `40` | `6` | `AC 3`, `1d1` | **Moria8 `#86` (`Hard Leather Boots`)**: `AC 3`, `cost=12`, `wt=20`, `min_lvl=3` | **Implemented** |
 | `94` | `95` | **Soft Leather Cap** | `TV_HELM (33)` | `4` | `10` | `2` | `AC 1` | Omitted | **Missing** |
 | `95` | `96` | **Hard Leather Cap** | `TV_HELM (33)` | `12` | `15` | `4` | `AC 2` | Omitted | **Missing** |
-| `96` | `97` | **Metal Cap** | `TV_HELM (33)` | `30` | `20` | `7` | `AC 3`, `1d1` | **Moria8 `#87` (`Metal Cap`)**: `AC 1`, `cost=30`, `wt=20`, `min_lvl=4` | **Implemented** |
-| `97` | `98` | **Iron Helm** | `TV_HELM (33)` | `75` | `75` | `20` | `AC 5`, `1d3` | **Moria8 `#10` (`Iron Helm`)**: `AC 1`, `cost=75`, `wt=30`, `min_lvl=5` | **Implemented** |
-| `98` | `99` | **Steel Helm** | `TV_HELM (33)` | `200` | `60` | `40` | `AC 6`, `1d3` | **Moria8 `#83` (`Steel Helm`)**: `AC 2`, `cost=200`, `wt=60`, `min_lvl=10` | **Implemented** |
+| `96` | `97` | **Metal Cap** | `TV_HELM (33)` | `30` | `20` | `7` | `AC 3`, `1d1` | **Moria8 `#87` (`Metal Cap`)**: `AC 3`, `cost=30`, `wt=20`, `min_lvl=4` | **Implemented** |
+| `97` | `98` | **Iron Helm** | `TV_HELM (33)` | `75` | `75` | `20` | `AC 5`, `1d3` | **Moria8 `#10` (`Iron Helm`)**: `AC 5`, `cost=75`, `wt=30`, `min_lvl=5` | **Implemented** |
+| `98` | `99` | **Steel Helm** | `TV_HELM (33)` | `200` | `60` | `40` | `AC 6`, `1d3` | **Moria8 `#83` (`Steel Helm`)**: `AC 6`, `cost=200`, `wt=60`, `min_lvl=10` | **Implemented** |
 | `99` | `100` | **Silver Crown** | `TV_HELM (33)` | `500` (`250` VMS) | `20` | `44` | `AC 0`, `1d1` | **Moria8 `#150`**: VMS `cost=250`, `wt=20`, `min_lvl=11` (2026-11-11) | **Implemented** |
 | `100` | `101` | **Golden Crown** | `TV_HELM (33)` | `1000` (`500` VMS) | `30` | `47` | `AC 0`, `1d2` | **Moria8 `#151`**: VMS `cost=500`, `wt=30`, `min_lvl=12` (2026-11-11) | **Implemented** |
 | `101` | `102` | **Jewel-Encrusted Crown** | `TV_HELM (33)` | `2000` (`1000` VMS) | `40` | `50` | `AC 0`, `1d3` | **Moria8 `#152`**: VMS `cost=1000`, `wt=40`, `min_lvl=12` (2026-11-11) | **Implemented** |
@@ -1217,8 +1233,8 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `108` | `109` | **Soft Leather Ring Mail** | `TV_SOFT_ARMOR (36)` | `160` | `130` | `10` | `AC 6`, `-1` To-Hit | Omitted | **Missing** |
 | `109` | `110` | **Hard Leather Ring Mail** | `TV_SOFT_ARMOR (36)` | `230` | `150` | `12` | `AC 8`, `-2` To-Hit | Omitted | **Missing** |
 | `110` | `111` | **Leather Scale Mail** | `TV_SOFT_ARMOR (36)` | `330` | `140` | `14` | `AC 11`, `-1` To-Hit | Omitted (`Scale Mail #80` covers scale armor) | **Missing** |
-| `111` | `112` | **Metal Scale Mail** | `TV_HARD_ARMOR (35)` | `430` | `250` | `24` | `AC 13`, `-2` To-Hit | **Moria8 `#80` (`Scale Mail`)**: `AC 7`, `cost=430`, `wt=250`, `min_lvl=7` | **Implemented** |
-| `112` | `113` | **Chain Mail** | `TV_HARD_ARMOR (35)` | `530` | `220` | `26` | `AC 14`, `-2` To-Hit | **Moria8 `#8` (`Chain Mail`)**: `AC 6`, `cost=530`, `wt=120`, `min_lvl=7` (plus **Moria8 `#122` `Mithril Chain Mail`**, `AC 11`, `cost=530`, `wt=200`, `min_lvl=7`) | **Implemented** |
+| `111` | `112` | **Metal Scale Mail** | `TV_HARD_ARMOR (35)` | `430` | `250` | `24` | `AC 13`, `-2` To-Hit | **Moria8 `#80` (`Scale Mail`)**: `AC 13`, `cost=430`, `wt=250`, `min_lvl=7` | **Implemented** |
+| `112` | `113` | **Chain Mail** | `TV_HARD_ARMOR (35)` | `530` | `220` | `26` | `AC 14`, `-2` To-Hit | **Moria8 `#8` (`Chain Mail`)**: `AC 14`, `cost=530`, `wt=120`, `min_lvl=7` (plus **Moria8 `#122` `Mithril Chain Mail`**, `AC 16`, `cost=530`, `wt=200`, `min_lvl=7`) | **Implemented** |
 | `113` | `114` | **Rusty Chain Mail** | `TV_HARD_ARMOR (35)` | `0` | `220` | `26` | `AC 14`, `-8` To-AC, `-5` To-Hit | Omitted | **Missing** |
 | `114` | `115` | **Double Chain Mail** | `TV_HARD_ARMOR (35)` | `630` | `260` | `28` | `AC 15`, `-2` To-Hit | Omitted | **Missing** |
 | `115` | `116` | **Augmented Chain Mail** | `TV_HARD_ARMOR (35)` | `675` | `270` | `30` | `AC 16`, `-2` To-Hit | Omitted | **Missing** |
@@ -1227,14 +1243,14 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `118` | `119` | **Laminated Armor** | `TV_HARD_ARMOR (35)` | `825` | `300` | `38` | `AC 20`, `-3` To-Hit | Omitted | **Missing** |
 | `119` | `120` | **Partial Plate Armor** | `TV_HARD_ARMOR (35)` | `900` | `320` (`260` VMS) | `42` | `AC 22`, `-3` To-Hit | Omitted | **Missing** |
 | `120` | `121` | **Metal Lamellar Armor** | `TV_HARD_ARMOR (35)` | `950` | `340` | `44` | `AC 23`, `-3` To-Hit | Omitted | **Missing** |
-| `121` | `122` | **Full Plate Armor** | `TV_HARD_ARMOR (35)` | `1050` | `380` | `48` | `AC 25`, `-3` To-Hit | **Moria8 `#81` (`Plate Mail`)**: `AC 9`, `cost=1050`, `wt=380`, `min_lvl=12` (plus **Moria8 `#123` `Mithril Plate Mail`**, `AC 14`, `cost=1050`, `wt=320`, `min_lvl=12`) | **Implemented** |
-| `122` | `123` | **Ribbed Plate Armor** | `TV_HARD_ARMOR (35)` | `1200` | `380` | `50` | `AC 28`, `-3` To-Hit | Represented by **Moria8 `#123` (`Mithril Plate Mail`)** (`AC 14`, `cost=1200`) | **Approximation** |
+| `121` | `122` | **Full Plate Armor** | `TV_HARD_ARMOR (35)` | `1050` | `380` | `48` | `AC 25`, `-3` To-Hit | **Moria8 `#81` (`Plate Mail`)**: `AC 25`, `cost=1050`, `wt=380`, `min_lvl=12` (plus **Moria8 `#123` `Mithril Plate Mail`**, `AC 28`, `cost=1050`, `wt=320`, `min_lvl=12`) | **Implemented** |
+| `122` | `123` | **Ribbed Plate Armor** | `TV_HARD_ARMOR (35)` | `1200` | `380` | `50` | `AC 28`, `-3` To-Hit | Represented by **Moria8 `#123` (`Mithril Plate Mail`)** (`AC 28`, `cost=1200`) | **Approximation** |
 | `123` | `124` | **Cloak** | `TV_CLOAK (32)` | `3` | `10` | `1` | `AC 1` | **Moria8 `#82` (`Cloak`)**: `AC 1`, `cost=3`, `wt=10`, `min_lvl=2` | **Implemented** |
 | `124` | `125` | **Set of Leather Gloves** | `TV_GLOVES (31)` | `3` | `5` | `1` | `AC 1` | **Moria8 `#11` (`Leather Gloves`)**: `AC 1`, `cost=3`, `wt=5`, `min_lvl=1` | **Implemented** |
-| `125` | `126` | **Set of Gauntlets** | `TV_GLOVES (31)` | `35` | `25` | `12` | `AC 2`, `1d1` | **Moria8 `#84` (`Gauntlets`)**: `AC 1`, `cost=35`, `wt=25`, `min_lvl=2` | **Implemented** |
+| `125` | `126` | **Set of Gauntlets** | `TV_GLOVES (31)` | `35` | `25` | `12` | `AC 2`, `1d1` | **Moria8 `#84` (`Gauntlets`)**: `AC 2`, `cost=35`, `wt=25`, `min_lvl=2` | **Implemented** |
 | `126` | `127` | **Small Leather Shield** | `TV_SHIELD (34)` | `30` | `50` | `3` | `AC 2`, `1d1` | **Moria8 `#9` (`Small Shield`)**: `AC 2`, `cost=30`, `wt=50`, `min_lvl=2` | **Implemented** |
 | `127` | `128` | **Medium Leather Shield** | `TV_SHIELD (34)` | `60` | `75` | `8` | `AC 3`, `1d2` | Omitted | **Missing** |
-| `128` | `129` | **Large Leather Shield** | `TV_SHIELD (34)` | `120` | `100` | `15` | `AC 4`, `1d2` | **Moria8 `#78` (`Large Shield`)**: `AC 3`, `cost=120`, `wt=100`, `min_lvl=4` | **Implemented** |
+| `128` | `129` | **Large Leather Shield** | `TV_SHIELD (34)` | `120` | `100` | `15` | `AC 4`, `1d2` | **Moria8 `#78` (`Large Shield`)**: `AC 4`, `cost=120`, `wt=100`, `min_lvl=4` | **Implemented** |
 | `129` | `130` | **Small Metal Shield** | `TV_SHIELD (34)` | `50` | `65` | `10` | `AC 3`, `1d2` | Consolidated into `Small Shield #9` | **Approximation** |
 | `130` | `131` | **Medium Metal Shield** | `TV_SHIELD (34)` | `125` | `90` | `20` | `AC 4`, `1d3` | Omitted | **Missing** |
 | `131` | `132` | **Large Metal Shield** | `TV_SHIELD (34)` | `200` | `120` | `30` | `AC 5`, `1d3` | Consolidated into `Large Shield #78` | **Approximation** |

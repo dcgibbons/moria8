@@ -428,7 +428,7 @@ mon_atk_effect_poison:
     bne !mep_roll+
     // Level 1: 0 + 5 + 1 = 6
     lda #6
-    jmp !mep_add+
+    bne !mep_add+               // always
 !mep_roll:
     jsr rng_range               // [0, level-1]
     clc

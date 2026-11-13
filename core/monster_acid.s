@@ -97,7 +97,7 @@ mon_atk_acid_armour:
 !maea_ac:
     ldx mat_acid_slot
 
-    // ac + toac > 0? Base AC is 0-15; to-AC is signed. A negative to-AC
+    // ac + toac > 0? Base AC is 0-28; to-AC is signed. A negative to-AC
     // sum cannot overflow; a non-negative one is checked unsigned.
     ldy inv_item_id,x
     jsr item_get_base_ac        // A = base AC (Y = item id)
@@ -105,13 +105,13 @@ mon_atk_acid_armour:
     ldy inv_to_ac,x             // Flags from to-AC; A keeps the base
     bpl !maea_nonneg+
     clc
-    adc inv_to_ac,x             // Signed sum in [-128, 14]
+    adc inv_to_ac,x             // Signed sum in [-128, 27]
     bmi !maaa_none+
     beq !maaa_none+             // No AC left to lose: full damage
     bne !maea_damaged+          // Always taken
 !maea_nonneg:
     clc
-    adc inv_to_ac,x             // Unsigned sum <= 142
+    adc inv_to_ac,x             // Unsigned sum <= 155
     beq !maaa_none+
 !maea_damaged:
 

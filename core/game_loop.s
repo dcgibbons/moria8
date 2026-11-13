@@ -904,6 +904,15 @@ c64_test_single_drive_load_return_resume_entry:
     jsr wizard_reset_session_state
     jsr player_search_clear_transient_state
 
+    // The weapon/ring/ego bonuses player_calc_combat adds (pcc_eq_*) are not
+    // saved: collect them before the tier restore, since OVL.ITEMS shares
+    // the tier's window on some ports. player_calc_stats below applies them.
+#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
+    jsr tramp_item_recalc
+#else
+    jsr player_recalc_equipment
+#endif
+
     // Reset transient tier metadata from any prior runtime state, then
     // load the correct tier for the resumed dungeon level. The save-file
     // load already owns visible status text, so suppress tier_load's transient

@@ -4825,7 +4825,7 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 0436" 55 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0437" 56 500000000
 run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
 run_test "turn" "tests/test_turn.s" "0400 0420" 33 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
@@ -4908,7 +4908,7 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0405" 6 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0447" 72 1000000000
+run_test "item" "tests/test_item.s" "0400 0449" 74 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 0411" 18 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040b" 12 500000000

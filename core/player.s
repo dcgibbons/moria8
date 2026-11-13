@@ -508,7 +508,7 @@ player_pflags: .byte 0
 
 #if !HAL_PLATFORM_COMPACT_PLAY_SLOT
 // player_apply_slaying_bonuses — Add Ring of Slaying to-hit/to-damage bonuses
-// to PL_TOHIT/PL_TODMG. Called from player_recalc_equipment.
+// to pcc_eq_tohit/pcc_eq_todam. Called from player_recalc_equipment.
 // Clobbers: A, X
 player_apply_slaying_bonuses:
     ldx #EQUIP_RING
@@ -518,12 +518,12 @@ player_apply_slaying_bonuses:
     bne !pasb_next+
     lda inv_to_hit,x
     clc
-    adc player_data + PL_TOHIT
-    sta player_data + PL_TOHIT
+    adc pcc_eq_tohit
+    sta pcc_eq_tohit
     lda inv_to_dam,x
     clc
-    adc player_data + PL_TODMG
-    sta player_data + PL_TODMG
+    adc pcc_eq_todam
+    sta pcc_eq_todam
 !pasb_next:
     cpx #EQUIP_RING2
     ldx #EQUIP_RING2
@@ -827,8 +827,11 @@ player_con_hp_adj:
     bcs player_adj_4
 #endif
 
-// player_calc_combat — Calculate combat bonuses from current stats
-// Updates: PL_TOHIT, PL_TODMG, PL_AC (dex bonus portion), PL_BLOWS
+// player_calc_combat — Calculate combat bonuses from current stats and the
+// worn equipment: stat bonuses, worn AC, plus the weapon, Ring of Slaying and
+// weapon-ego bonuses player_recalc_equipment collected (pcc_eq_*), so a
+// level-up, load or stat restore keeps them.
+// Updates: PL_TOHIT, PL_TODMG, PL_AC, zp_player_ac, PL_BLOWS
 // Preserves: nothing
 player_calc_combat:
     // STR to-hit bonus
@@ -841,11 +844,15 @@ player_calc_combat:
     jsr player_dex_tohit_adj
     clc
     adc zp_temp0
+    clc
+    adc pcc_eq_tohit
     sta player_data + PL_TOHIT
 
     // STR damage bonus
     lda player_data + PL_STR_CUR
     jsr player_str_damage_adj
+    clc
+    adc pcc_eq_todam
     sta player_data + PL_TODMG
 
     // AC = DEX bonus + equipment AC (base + split to_ac)
@@ -863,14 +870,10 @@ player_calc_combat:
     // Add base AC for this item type
     tay                         // Y = item type ID
     jsr item_get_base_ac
-    clc
-    adc pcc_ac_accum
-    sta pcc_ac_accum
+    jsr pcc_ac_add
     // Add split AC bonus (signed)
     lda inv_to_ac,x
-    clc
-    adc pcc_ac_accum
-    sta pcc_ac_accum
+    jsr pcc_ac_add
 !ac_next_slot:
     inx
     cpx #EQUIP_END             // Past last armor-relevant slot
@@ -882,11 +885,14 @@ player_calc_combat:
     cmp #61
     bcc !ac_store+
     lda #60                     // Cap at 60
-    jmp !ac_store+
+    bne !ac_store+              // always
 !ac_zero:
     lda #0
 !ac_store:
+    clc
+    adc pcc_eq_ac               // Defender / Holy Avenger, past the cap
     sta player_data + PL_AC
+    sta zp_player_ac
 
     // Blows: simplified lookup
     // Weight class based on STR (higher STR = lighter effective weight)
@@ -896,8 +902,26 @@ player_calc_combat:
 
     rts
 
+// pcc_ac_add — pcc_ac_accum += A (signed), saturating at -128 / +127: a full
+// suit of enchanted heavy armour can sum past +127.
+// Preserves: X
+pcc_ac_add:
+    clc
+    adc pcc_ac_accum
+    bvc !paa_store+
+    lda #$7f                    // overflow: C clear past +127 ($7F),
+    adc #0                      // C set past -128 ($7F + 1 = $80)
+!paa_store:
+    sta pcc_ac_accum
+    rts
+
 // Scratch for player_calc_combat
 pcc_ac_accum: .byte 0          // AC accumulator (signed during calculation)
+// Equipment bonuses player_recalc_equipment collects and player_calc_combat
+// adds on every recalc. Not saved: the load path rebuilds them.
+pcc_eq_tohit: .byte 0          // weapon + Rings of Slaying to-hit (signed)
+pcc_eq_todam: .byte 0          // weapon + Rings of Slaying to-damage (signed)
+pcc_eq_ac:    .byte 0          // weapon ego AC (Defender, Holy Avenger)
 
 // player_calc_hp — Calculate max HP based on level, class HD, CON bonus
 // Preserves: nothing

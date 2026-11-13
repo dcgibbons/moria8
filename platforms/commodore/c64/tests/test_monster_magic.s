@@ -88,7 +88,6 @@ magic_check_new_spells:
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
@@ -108,6 +107,9 @@ store_enter:
 // The player's spell effects are not exercised either (resistance armour,
 // 2026-11-11, took the body past MAP_BASE again).
 #import "../../../../core/spell_effects.s"
+// Nor is the player's melee (the VMS armour AC of 2026-11-13 took the body
+// past MAP_BASE again).
+#import "../../../../core/combat.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s

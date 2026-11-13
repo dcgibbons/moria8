@@ -161,7 +161,9 @@ it_category:
     .byte ICAT_WAND, ICAT_WAND, ICAT_WAND, ICAT_WAND   // 153-156: Fire Bolts, Drain Life, Lightning Balls, Acid Balls
 
 // Color and base armor class packed per type: high nibble = display color,
-// low nibble = base AC (<=9).
+// low nibble = base AC (VMS Moria 4.8 values). A low nibble of 15 marks the
+// three armours past a nibble (Plate 25, Mithril Chain 16, Mithril Plate 28):
+// item_get_base_ac supplies those. Read base AC only through it.
 it_color_ac:
     .byte COL_YELLOW << 4                       // 0: Gold (small)
     .byte COL_YELLOW << 4                       // 1: Gold (large)
@@ -171,9 +173,9 @@ it_color_ac:
     .byte COL_LGREY << 4                        // 5: Mace
     .byte (COL_LGREY << 4) | 2                  // 6: Robe
     .byte (COL_BROWN << 4) | 4                  // 7: Leather armor
-    .byte (COL_GREY << 4) | 6                   // 8: Chain mail
+    .byte (COL_GREY << 4) | 14                  // 8: Chain mail
     .byte (COL_LGREY << 4) | 2                  // 9: Small shield
-    .byte (COL_GREY << 4) | 1                   // 10: Iron helm
+    .byte (COL_GREY << 4) | 5                   // 10: Iron helm
     .byte (COL_BROWN << 4) | 1                  // 11: Leather gloves
     .byte (COL_BROWN << 4) | 1                  // 12: Leather boots
     .byte COL_YELLOW << 4                       // 13: Wooden torch
@@ -241,16 +243,16 @@ it_color_ac:
     .byte COL_LGREY << 4                        // 75: Pike
     .byte COL_LGREY << 4                        // 76: Halberd
     .byte COL_BROWN << 4                        // 77: Quarterstaff
-    .byte (COL_LGREY << 4) | 3                  // 78: Large Shield
+    .byte (COL_LGREY << 4) | 4                  // 78: Large Shield
     .byte (COL_BROWN << 4) | 6                  // 79: Hard Leather Armor
-    .byte (COL_GREY << 4) | 7                   // 80: Scale Mail
-    .byte (COL_LGREY << 4) | 9                  // 81: Plate Mail
+    .byte (COL_GREY << 4) | 13                  // 80: Scale Mail
+    .byte (COL_LGREY << 4) | 15                 // 81: Plate Mail
     .byte (COL_LGREY << 4) | 1                  // 82: Cloak
-    .byte (COL_LGREY << 4) | 2                  // 83: Steel Helm
-    .byte (COL_LGREY << 4) | 1                  // 84: Gauntlets
-    .byte (COL_BROWN << 4) | 1                  // 85: Soft Leather Boots
-    .byte (COL_BROWN << 4) | 2                  // 86: Hard Leather Boots
-    .byte (COL_GREY << 4) | 1                   // 87: Metal Cap
+    .byte (COL_LGREY << 4) | 6                  // 83: Steel Helm
+    .byte (COL_LGREY << 4) | 2                  // 84: Gauntlets
+    .byte (COL_BROWN << 4) | 2                  // 85: Soft Leather Boots
+    .byte (COL_BROWN << 4) | 3                  // 86: Hard Leather Boots
+    .byte (COL_GREY << 4) | 3                   // 87: Metal Cap
     .byte COL_WHITE << 4                        // 88: Sabre
     .byte COL_WHITE << 4                        // 89: Cutlass
     .byte COL_LGREY << 4                        // 90: Tulwar
@@ -285,8 +287,8 @@ it_color_ac:
     .byte COL_WHITE << 4                        // 119: Dispel Evil
     .byte COL_LRED << 4                         // 120: Destruction
     .byte COL_YELLOW << 4                       // 121: Speed
-    .byte (COL_LGREY << 4) | 11                 // 122: Mithril Chain Mail
-    .byte (COL_LGREY << 4) | 14                 // 123: Mithril Plate Mail
+    .byte (COL_LGREY << 4) | 15                 // 122: Mithril Chain Mail
+    .byte (COL_LGREY << 4) | 15                 // 123: Mithril Plate Mail
     .byte COL_YELLOW << 4                       // 124: Amulet of Wisdom
     .byte (COL_LGREEN << 4) | 3                 // 125: Amulet of the Magi
     .byte COL_GREEN << 4                        // 126: Neutralize Poison
@@ -613,11 +615,21 @@ item_get_missile:
 
 // item_get_base_ac — Get base armor class for an item type
 // Input: Y = item type ID
-// Output: A = base AC (0-9)
+// Output: A = base AC (0-28), flags from it
 // Preserves: X, Y
 item_get_base_ac:
     lda it_color_ac,y
     and #$0f
+    cmp #15                         // the three past a nibble
+    bne !igba_done+
+    lda #25                         // 81: Plate Mail
+    cpy #ITEM_TYPE_PLATE_MAIL
+    beq !igba_done+
+    lda #16                         // 122: Mithril Chain Mail
+    cpy #ITEM_TYPE_MITHRIL_CHAIN
+    beq !igba_done+
+    lda #28                         // 123: Mithril Plate Mail
+!igba_done:
     rts
 
 // Display glyph by category. Digging tools are the only category-0 types.
