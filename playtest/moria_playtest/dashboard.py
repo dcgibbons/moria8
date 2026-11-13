@@ -35,6 +35,8 @@ import re
 import subprocess
 import sys
 import time
+import zlib
+from collections import OrderedDict, deque
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -275,18 +277,63 @@ def killer(trace: Path) -> str:
     return found[-1] if found else ""
 
 
+TAIL_KEEP = 256       # trace lines kept per trace between reads (TIMELINE * 2 and fewer)
+TAIL_TRACES = 64      # traces whose read position is kept (the live runs and a few more)
+
+
+class _Tail:
+    """Where a trace's reading stopped: its gzip stream grows as the run
+    plays, so the next read decompresses only what was added."""
+
+    def __init__(self, keep: int) -> None:
+        self.offset = 0
+        self.inflate = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        self.partial = b""
+        self.lines: deque[bytes] = deque(maxlen=keep)
+
+
+_tails: OrderedDict[str, _Tail] = OrderedDict()
+
+
 def trace_tail(trace: Path, count: int) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+    """The trace's last ``count`` decisions. Read from its start, decoding
+    every line, the 26 live runs' traces (541 MB compressed, twice each) took
+    523 of a 645-second publish, the dashboard showed data 16 minutes stale
+    and the publisher held a core (2026-11-13): each trace is now read on
+    from where the last read stopped, and only the kept lines decoded."""
+    key = str(trace)
     try:
-        with gzip.open(trace, "rt") as handle:
-            for line in handle:
-                try:
-                    rows.append(json.loads(line))
-                except ValueError:
-                    break   # still being written
-                del rows[:-count]
-    except (OSError, EOFError):
-        pass
+        size = trace.stat().st_size
+    except OSError:
+        return []
+    tail = _tails.pop(key, None)
+    if tail is None or size < tail.offset or count > (tail.lines.maxlen or 0):
+        tail = _Tail(max(count, TAIL_KEEP))
+    try:
+        with trace.open("rb") as handle:
+            handle.seek(tail.offset)
+            data = handle.read()
+        tail.offset += len(data)
+        text = b""
+        while data:
+            text += tail.inflate.decompress(data)
+            if not tail.inflate.eof:
+                break
+            data = tail.inflate.unused_data   # a further gzip member
+            tail.inflate = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    except (OSError, zlib.error):
+        return []
+    *complete, tail.partial = (tail.partial + text).split(b"\n")
+    tail.lines.extend(line for line in complete if line)
+    _tails[key] = tail
+    while len(_tails) > TAIL_TRACES:
+        _tails.popitem(last=False)
+    rows: list[dict[str, Any]] = []
+    for line in list(tail.lines)[-count:]:
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            continue
     return rows
 
 

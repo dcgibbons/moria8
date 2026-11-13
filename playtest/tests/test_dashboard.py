@@ -434,3 +434,31 @@ class MonsterStatsTest(unittest.TestCase):
                 (run_dir / "job.json").write_text(json.dumps({"queue": "balrog"}))
             iggy = dashboard.monster_stats(home)["creatures"]["Evil Iggy"]
             self.assertEqual((iggy["slain"], iggy["met"]), ({"balrog": 2}, {"balrog": 3}))
+
+
+class TraceTailTest(unittest.TestCase):
+    def test_a_growing_trace_is_read_on_from_where_the_last_read_stopped(self) -> None:
+        """2026-11-13: reading the 26 live traces from their start took 523
+        of a 645-second publish; the page showed data 16 minutes stale."""
+        import gzip
+        import zlib
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "trace.jsonl.gz"
+            raw = path.open("wb")
+            pack = zlib.compressobj(6, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+            def write(lo: int, hi: int) -> None:
+                text = "".join(json.dumps({"step": i}) + "\n" for i in range(lo, hi))
+                raw.write(pack.compress(text.encode()) + pack.flush(zlib.Z_SYNC_FLUSH))
+                raw.flush()
+            write(0, 500)
+            self.assertEqual([r["step"] for r in dashboard.trace_tail(path, 3)], [497, 498, 499])
+            first = dashboard._tails[str(path)].offset
+            write(500, 1000)
+            self.assertEqual([r["step"] for r in dashboard.trace_tail(path, 2)], [998, 999])
+            self.assertGreater(dashboard._tails[str(path)].offset, first)          # read on, not again
+            raw.write(pack.flush())
+            raw.close()
+            with gzip.open(path, "rt") as whole:
+                last = [json.loads(line) for line in whole.read().splitlines()[-300:]]
+            self.assertEqual(dashboard.trace_tail(path, 300), last)               # a longer tail: read again
+            self.assertEqual(dashboard.trace_tail(path, 1), last[-1:])
