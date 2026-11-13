@@ -41,9 +41,13 @@ help_more_lines:
     .text "   Cursors move"
     .byte 0
 
-// Row 6: blank
-    .byte 2
-    .byte 0
+// Row 6: the reader is available while either Help page is open.
+#if HAL_PLATFORM_LEGAL_VIEWER
+    .byte 0, $fe
+    .text "L" ; .byte $ff ; .text " License / Source" ; .byte 0
+#else
+    .byte 2, 0
+#endif
 
 // Row 7: headers
     .byte 1

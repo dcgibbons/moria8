@@ -1,3 +1,5 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
+#define HELP_TITLE_EXTERNAL
 // main.s — Moria8 for Atari 8-Bit (64 KB 800XL/65XE + 128 KB 130XE)
 //
 // Assembled with Kick Assembler.
@@ -36,6 +38,9 @@
 .segmentdef TownOverlay        [outPrg=OVL_OUT + "/OVL.TWN", start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay       [outPrg=OVL_OUT + "/OVL.DTH", start=$e000, min=$e000, max=$efff]
 .segmentdef ModalMiscOverlay   [outPrg=OVL_OUT + "/OVL.MDL", start=$e000, min=$e000, max=$efff]
+.const LEGAL_BASE = $e000
+.const LEGAL_LIMIT = $f000
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay        [outPrg=OVL_OUT + "/OVL.HLP", start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay          [outPrg=OVL_OUT + "/OVL.UI",  start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/OVL.ITM", start=$e000, min=$e000, max=$efff]
@@ -188,7 +193,14 @@ tramp_dig_ability:
 #import "input.s"
 #import "storage.s"
 #import "save_stream.s"
+.segment RuntimeBanked
+#import "legal.s"
+.segment Default
+#import "../../core/ui_help_command.s"
 #import "monster_catalog_a8.s"
+// find_special_room only: item placement calls it with OVL.CHEST loaded
+// (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
+#import "../../core/special_rooms_find.s"
 
 // ============================================================
 // atari_install_vectors & exit_trampoline (< $4000)
@@ -239,6 +251,7 @@ exit_trampoline:
     jmp OS_COLDSV
 
 low_helpers_end:
+.assert "Help and legal controllers stay outside the overlay window", cmd_show_help_view < MAP_BASE && tramp_ui_legal_display >= $f000, true
 .assert "Low helpers stay below $4000", low_helpers_end <= $4000, true
 
 // ============================================================
@@ -419,7 +432,9 @@ run_initialize:
 #import "../shared/save.s"
 #import "hal/storage_policy.s"
 #import "../commodore/common/title_screen.s"
+#define WIZARD_PROMPT_HELPERS_EXTERNAL
 #import "../../core/wizard.s"
+#undef WIZARD_PROMPT_HELPERS_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
 #import "../../core/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
@@ -465,6 +480,17 @@ title_menu_loop:
 !load_now:
     jmp title_load_game
 !not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    bcc !legal_done+
+    // No program disk is needed to return to the resident title menu.
+    jsr hal_screen_clear
+    jsr title_draw_menu
+    jmp title_menu_loop
+!legal_done:
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
@@ -478,7 +504,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #8                  // 24-char title_menu_str centered in cols 2..37: 2 + (36-24)/2 = 8
+    lda #(SCREEN_COLS - 35) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -1100,18 +1126,7 @@ tramp_game_over_prepare:
 
 tramp_game_over:
     jsr tramp_game_over_prepare
-tramp_game_over_run:
-    jsr score_calculate
-    jsr hiscore_load
-    lda zp_game_flags
-    and #GAME_FLAG_WIZARD
-    bne !tgo_skip_hiscore+
-    jsr hiscore_insert
-    jsr hiscore_save
-!tgo_skip_hiscore:
-    lda death_source_saved
-    sta zp_death_source
-    jmp score_death_screen
+    jmp tramp_game_over_run
 
 tramp_winner_royal:
     lda #OVL_MODAL_MISC
@@ -1137,9 +1152,6 @@ program_end:
     // Asks for the program disk when a required load keeps failing. Safe
     // here: every load that reaches it comes after ATARI.BNK is in place.
     #import "../commodore/common/asset_load_prompt.s"
-    // find_special_room only: item placement calls it with OVL.CHEST loaded
-    // (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
-    #import "../../core/special_rooms_find.s"
     #import "../../core/ego_items.s"
     #import "../../core/ui_home.s"
     #import "../../core/item_desc_banked.s"
@@ -1228,9 +1240,22 @@ ovl_start_end:
 .segment DeathOverlay
     #import "../../core/score_io.s"
     #import "../../core/score.s"
+tramp_game_over_run:
+    jsr score_calculate
+    jsr hiscore_load
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    bne !tgo_skip_hiscore+
+    jsr hiscore_insert
+    jsr hiscore_save
+!tgo_skip_hiscore:
+    lda death_source_saved
+    sta zp_death_source
+    jmp score_death_screen
     #import "../../core/ui_recall.s"
     #import "../../core/player_magic_earthquake.s"
 ovl_death_end:
+.assert "Game-over tail runs in OVL.DTH", tramp_game_over_run >= $e000 && tramp_game_over_run < ovl_death_end, true
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
 
@@ -1268,8 +1293,34 @@ winner_apply_retirement_bonus_overlay:
     rts
     #import "../../core/royal.s"
     #import "../../core/ui_wizard.s"
+wizard_prompt_clear_digits:
+    lda #0
+    sta wizard_num_digits
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$20
+    jsr hal_screen_put_char
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    rts
+
+wizard_prompt_bad_value:
+    lda #<wizard_bad_value_str
+    ldy #>wizard_bad_value_str
+    jsr msg_print_ay
+    jmp wizard_prompt_clear_digits
+
+wizard_bad_value_str:
+    .text "BAD" ; .byte 0
     #import "../../core/player_destroy_area.s"
 ovl_modal_misc_end:
+.assert "Wizard prompt helpers run in OVL.MDL", wizard_prompt_clear_digits >= $e000 && wizard_bad_value_str < ovl_modal_misc_end, true
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $f000, true
 
@@ -1296,6 +1347,7 @@ ovl_spell_end:
 .assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $f000, true
 
 .segment HelpOverlay
+    #import "../../core/ui_help_title.s"
     #import "../../core/ui_help_data.s"
     #import "../../core/ui_help_page2_data.s"
     #import "../../core/ui_help.s"
@@ -1337,7 +1389,7 @@ ovl_items_end:
     #import "../../core/dungeon_gen.s"
 ovl_gen_end:
 .assert "Special rooms run in OVL.GEN", assign_special_room >= $e000 && spawn_nest_gold < ovl_gen_end, true
-.assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room >= $f000, true
+.assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room < MAP_BASE, true
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true
 
@@ -1349,3 +1401,12 @@ ovl_gen_end:
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $f000, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../core/ui_legal.s"
+#import "../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

@@ -1,3 +1,5 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
+#define HELP_TITLE_EXTERNAL
 // main.s — Acorn BBC Master 128 moria8 linker script + entry
 //
 // Assemble from platforms/bbcmaster with:
@@ -38,6 +40,9 @@
 .segmentdef TownOverlay        [outPrg=OVL_OUT + "/ovl.town",     start=$a800, min=$a800, max=$bfff]
 .segmentdef DeathOverlay       [outPrg=OVL_OUT + "/ovl.death",    start=$a800, min=$a800, max=$bfff]
 .segmentdef ModalMiscOverlay   [outPrg=OVL_OUT + "/ovl.modal",    start=$a800, min=$a800, max=$bfff]
+.const LEGAL_BASE = $a800
+.const LEGAL_LIMIT = $c000
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$a800, min=$a800, max=$bfff]
 .segmentdef HelpOverlay        [outPrg=OVL_OUT + "/ovl.help",     start=$a800, min=$a800, max=$bfff]
 .segmentdef UiOverlay          [outPrg=OVL_OUT + "/ovl.ui",       start=$a800, min=$a800, max=$bfff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items",    start=$a800, min=$a800, max=$bfff]
@@ -123,6 +128,7 @@ tsi_krev_cached: .byte 0
 #import "overlay_storage.s"
 #import "storage.s"
 #import "save_stream.s"
+#import "legal.s"
 #import "services.s"
 
 low_helpers_end:
@@ -316,6 +322,17 @@ title_menu_loop:
 !load_now:
     jmp title_load_game
 !not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    bcc !legal_done+
+    // No program disk is needed to return to the resident title menu.
+    jsr hal_screen_clear
+    jsr title_draw_menu
+    jmp title_menu_loop
+!legal_done:
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
@@ -326,7 +343,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #28                 // Center 80-col: (80-24)/2 = 28
+    lda #(SCREEN_COLS - 35) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -951,17 +968,6 @@ hal_msg_print_indirect_aux:
     sta zp_ptr0_hi
     jmp msg_print
 
-.segment Default
-player_adjust_equipment_stat:
-    // As core/player_adjust_equipment_stat.s: the stat by the item
-    // (equip_stat_index, core/player.s), p1 added or taken away.
-    jsr player_adjust_equipment_stat_prepare
-    jsr equip_stat_index
-    bcc !paes_done+
-    jmp player_adjust_equipment_stat_apply   // Y = the stat
-!paes_done:
-    rts
-
 // ============================================================
 // BeebPlaySlot segment — play payload in Sideways Bank 4 ($8000-$A3FF).
 // Signature "M8P" validated by beeb_require_play.
@@ -1066,7 +1072,6 @@ player_adjust_equipment_stat:
 #import "../../core/ui_help_clear.s"
 #import "../../core/stat_display.s"
 
-.segment Default
 tramp_do_look:
     lda #OVL_MODAL_MISC
     jsr overlay_load_no_kernal
@@ -1075,6 +1080,7 @@ tramp_do_look:
 !done:
     jmp tramp_sr_epilogue
 
+.segment Default
 .assert "Play payload starts with 3-byte signature", beeb_play_body - beeb_play_start, 3
 
 // ============================================================
@@ -1308,6 +1314,7 @@ ovl_modal_misc_end:
 .assert "Modal misc overlay fits", ovl_modal_misc_end <= $c000, true
 
 .segment HelpOverlay
+#import "../../core/ui_help_title.s"
 #import "../commodore/c128/ui_help_data_80.s"
 #import "../../core/ui_help.s"
 #import "../../core/ui_identify.s"
@@ -1327,6 +1334,16 @@ ovl_ui_end:
 #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
     #import "../../core/item_exchange.s"
+
+player_adjust_equipment_stat:
+    // As core/player_adjust_equipment_stat.s: the stat by the item
+    // (equip_stat_index, core/player.s), p1 added or taken away.
+    jsr player_adjust_equipment_stat_prepare
+    jsr equip_stat_index
+    bcc !paes_done+
+    jmp player_adjust_equipment_stat_apply   // Y = the stat
+!paes_done:
+    rts
 
 player_adjust_equipment_stat_prepare:
     lda inv_p1,x
@@ -1650,6 +1667,8 @@ beeb_play_end:
 .print "BeebPlaySlot: " + (beeb_play_end - $8000) + " bytes"
 .assert "Play payload fits slot ($8000-$A3FF)", beeb_play_end <= $a400, true
 .assert "Ego suffix trampoline stays in play", tramp_ego_append_suffix >= $8000 && tramp_ego_append_suffix < beeb_play_end, true
+.assert "Look trampoline runs in play", tramp_do_look >= $8000 && tramp_do_look < beeb_play_end, true
+.assert "Equipment stat helper runs in OVL.ITEMS", player_adjust_equipment_stat >= $a800 && player_adjust_equipment_stat < ovl_items_end, true
 
 // ============================================================
 // Final boundary assertions
@@ -1659,3 +1678,12 @@ program_end:
 .print "BBC Master Resident end: $" + toHexString(program_end)
 .assert "Resident image fits below $8000", program_end <= $8000, true
 .assert "Ego call trampolines stay resident", tramp_roll_ego_type < $8000 && tramp_ego_get_ac_bonus < $8000, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../core/ui_legal.s"
+#import "../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

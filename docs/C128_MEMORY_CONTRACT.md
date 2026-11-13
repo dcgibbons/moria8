@@ -153,3 +153,40 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-006 | Accepted | Project maintainer, 2026-10-31 | `slain_str` ("You have been slain.", 21 B, read-only, read only by Bank 0 `core/game_loop.s`) moves from `128.item` to the always-resident `128.diskio`, beside `press_key_str`, because the 33-slot inventory arrays (+16 B) would overflow `128.item` by 3 B. `128.item` keeps 18 B free; `128.diskio` 30 B (21 B in the tightest test variant) | `docs/X_WEAPON_SWAP_DESIGN.md` §3.5 and §14 answer 1; `main.s` asserts `slain_str` lies inside the disk-I/O payload; `make check128-payloads`; `make test128` | none |
 | C128M-008 | Proposed (awaiting maintainer review) | 2026-11-09 | The program-media probe (`disk_program_media_present`, `c128_program_play_exists`, `c128_ppe_tries`, `c128_program_read_command_status`, `c128_program_play_read_filename`; 201 B of Bank 0 code and data, called only from Bank 0 resident code) moves from `128.item` to `128.world`, because 16-item stores (+224 B of store arrays) overflowed `128.item` by 166 B. Both payloads are always resident in Bank 0 and `128.world` loads first (`c128_load_core_residents`), so the probe is present at least as early as before. `128.world` now ends at `$8B58` (247 B free), `128.item` at `$A7DC` (35 B free) | `main.s` asserts the probe lies inside the world payload; `make check128-payloads`; `make test128` | none |
 | C128M-009 | Proposed (awaiting maintainer review) | 2026-11-11 | `eff_find_doors` and its row counter (Detect Doors/Stairs, 66 B) move from `128.item` to the tail of `128.play`, because the four VMS wands (MON-031) overflowed `128.item` by 25 B. It runs only in play (the spell and the wizard), never while `128.persist` holds the `$AF00` window. The wands' own effects (`core/wand_bolt_entries.s`) ride the death overlay beside the other Phase 3 handlers its table calls | `main.s` asserts `eff_find_doors` lies between `c128_resident_play_body` and `c128_resident_play_end`; `make check128-payloads`; `make test128` | none |
+| C128M-010 | Proposed (awaiting maintainer review) | 2026-11-12 | `look_flash_target.s` (30 B) and `player_adjust_equipment_stat.s` (31 B) move from `Default` to the tail of `128.world` (`C128ResidentWorld`), because the legal-viewer merge pushed `Default` in `title_art_smoke` (+26 B) and `cache_survival_smoke` (+32 B) past `$6000`. `128.world` is always-resident Bank 0 RAM below `$D000` (`$6000-$8C4F`), loaded before `128.item`/`128.play`, leaving 25 B free in `128.world` and ≥29 B free below `$6000` in the tightest test variant (403 B in product) | `main.s` asserts both symbols lie inside `C128ResidentWorld`; `io_contracts.s` `C128AuditBelowIo`; `make check128-payloads`; `make test128` | none |
+
+## License/source modal ownership (2026-11-10)
+
+`LEGALUI` is an uncached modal loaded on title `A` (About) or Help `L`: Bank 0 $E000-$EFFF; existing w_* KERNAL wrappers; no Bank 1 cache slot.
+Code ends before overlay base+$600; a 142-byte core-ZP snapshot starts there,
+and the disk/ROM input cache occupies base+$700..+$7FF. Both are modal
+workspace, never game-data loans or emitted PRG padding. The resident entry saves core ZP before asset loading, after any media
+handler that may itself load an overlay.
+The viewer reads existing documents through the storage HAL, closes every
+channel, retains live sound/redraw state, and restores the caller snapshot.
+Linked payload bounds and production-path modal entry/return tests enforce
+this ownership. See `docs/LEGAL_VIEWER.md` for the change and verification record.
+
+Verification (2026-11-10): `make -j7 -O test` passed, including the 27-payload
+span check, all 139 C128 suites, and the production title/Help legal-viewer
+tests. LEGALUI links and loads at $E000 in Bank 0 and executes with $FF00=$3E;
+its workspace stays inside the existing overlay window. Physical VDC layout
+changes are N/A.
+
+Review repair: the resident entry uses the normal program-media prompt and
+required asset retry path; only successful entry calls `tramp_ui_enter`.
+DOS status is validated before data-channel selection, then the file is
+reopened because closing command channel 15 closes drive data channels.
+A lost first status byte retries a fresh OPEN up to three times; other DOS
+errors are final. Refills reject fatal READST bits before exposing cached
+bytes, retaining EOI-only final bytes. Production fault tests cover byte
+0/63/127 and status $02/$80/$42/$40.
+The low-resident chunk reader remains below $6000, enters/exits KERNAL once
+per 128 bytes, writes through ROM to Bank 0 $E700, and returns to the overlay
+under $FF00=$3E. No staged source span or Bank 1 allocation changes.
+
+Repair verification (2026-11-11): `make -j7 -O test` passed. Applicable payload
+bounds, header/load/execution ownership, missing-file cleanup and production
+modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
+coverage. Existing banking configurations and persistent cache owners remain;
+physical display-layout changes are N/A.

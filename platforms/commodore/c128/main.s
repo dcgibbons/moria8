@@ -1,3 +1,4 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
 #importonce
 #import "../../../core/zeropage.s"
 // C128 operational layout:
@@ -116,6 +117,9 @@
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
+.const LEGAL_BASE = $e000
+.const LEGAL_LIMIT = $f000
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
@@ -1419,6 +1423,8 @@ tramp_ui_exit:
     jmp tramp_ui_exit
 }
 
+#import "legal.s"
+
 tramp_ui_help_display:
     jsr tramp_ui_enter
     lda #C128_HELP_OVERLAY_ID
@@ -1830,7 +1836,7 @@ c128_load_progress_suffix:
 
 
 // ============================================================
-.const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
+.const TITLE_MENU_COL = (SCREEN_COLS - 35) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
 
 game_over_prompt:
@@ -2363,6 +2369,11 @@ title_menu_loop:                // Exported for the scripted product harness
 !not_n:
     cmp #$4c                // 'L' — load game
     beq title_load_game
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne !title_menu_loop-
     jsr c128_modal_require_persist
@@ -3965,11 +3976,13 @@ tool_ego_prefix_hi:
     .segment Default
 }
 #import "../../../core/chest_loot.s"
-// Monster drops (MON-014), the look flash, inventory adding (with item
-// stacking) and the acid attack's armour damage (MON-015) ride the main
-// image: the world, play and items payloads have no headroom for them.
-#import "../../../core/monster_death.s"
+// Monster drops (MON-014), inventory adding (with item stacking) and the acid
+// attack's armour damage (MON-015) ride the main image; look_flash_target
+// rides the resident world payload (C128M-010, pre-imported before game_loop.s).
+.segment C128ResidentWorld
 #import "../../../core/look_flash_target.s"
+.segment Default
+#import "../../../core/monster_death.s"
 #import "../../../core/inv_add.s"
 #define MON_ATK_ACID_EXTERNAL   // monster_attack.s (play payload) jumps here
 #import "../../../core/monster_acid.s"
@@ -4339,10 +4352,12 @@ scroll_teleport_level_exec:
 // The items payload's end label is at the end of this file: the chest open
 // pre-dispatch (ChestRouteSegment) and later imports add to it past here.
 .segment C128ResidentWorld
-// The recall prompt lives in the resident world payload: RuntimeLowData was
-// full when a monster sighting began ending search mode (2026-10-25).
+// The recall prompt, look flash, and equip-stat helper ride the resident world
+// payload (C128M-010: always-resident Bank 0 RAM below $D000, freeing 61 B in
+// Default so title_art and cache_survival test variants fit below $6000).
 recall_prompt_str:
     .text "Recall which? " ; .byte 0
+#import "../../../core/player_adjust_equipment_stat.s"
 c128_resident_world_end:
 .segment C128ResidentPlay
 #import "../../../core/turn.s"
@@ -5085,11 +5100,6 @@ combat_calc_bow_tohit:
     ldx #1
     jmp combat_calc_tohit_common
 
-// Equip-stat helper for banked item commands. It must live in always-resident
-// RAM: wear/takeoff call it during gameplay while PLAY owns the $AF00 modal
-// slot, so the persist payload cannot host it.
-#import "../../../core/player_adjust_equipment_stat.s"
-
 // C128 resident Phase 3 potion dispatch. The handlers are small and every
 // dependency is resident, so quaffing must not load an overlay (the modal
 // overlay has no Bank1 cache slot; a disk fetch per potion is wrong).
@@ -5340,6 +5350,7 @@ program_end:
 .assert "C128 resident items starts at $8C50", c128_resident_items_start == $8C50, true
 .assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
 .assert "C128 program-media probe lives in the resident world payload (C128M-008)", disk_program_media_present >= c128_resident_world_start && c128_program_play_read_filename + c128_program_play_read_filename_len <= c128_resident_world_end, true
+.assert "C128 look flash and equip-stat helper live in the resident world payload (C128M-010)", look_flash_target >= c128_resident_world_start && look_flash_target < c128_resident_world_end && player_adjust_equipment_stat >= c128_resident_world_start && player_adjust_equipment_stat < c128_resident_world_end, true
 .assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
 .assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
 .assert "C128 resident disk-I/O starts at $AB00", c128_resident_diskio_start == $AB00, true
@@ -5660,3 +5671,12 @@ c128_resident_items_end:
 c128_resident_item_names_end:
 .assert "C128 item-name payload ends inside the Bank 1 DB region", c128_resident_item_names_end <= BANK1_DB_END + 1, true
 .assert "C128 item-name payload ends before the tier cache", c128_resident_item_names_end <= BANK1_TIER_CACHE_BASE, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../../core/ui_legal.s"
+#import "../../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

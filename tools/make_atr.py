@@ -179,6 +179,7 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
     asset_files = [
         ("MORIA8.RES", build_dir / "MORIA8.RES"),
         ("ATARI.BNK", build_dir / "ATARI.BNK"),
+        ("LEGALUI", build_dir / "legalui"),
         ("OVL.STA", build_dir / "OVL.STA"),
         ("OVL.TWN", build_dir / "OVL.TWN"),
         ("OVL.DTH", build_dir / "OVL.DTH"),

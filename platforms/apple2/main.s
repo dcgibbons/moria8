@@ -1,3 +1,5 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
+#define HELP_TITLE_EXTERNAL
 // main.s — Apple IIe moria8 linker script + entry
 //
 // Assemble from platforms/apple2 with:
@@ -33,6 +35,9 @@
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",    start=$a400, min=$a400, max=$b9ff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death",   start=$a400, min=$a400, max=$b9ff]
 .segmentdef ModalMiscOverlay  [outPrg=OVL_OUT + "/ovl.modal",   start=$a400, min=$a400, max=$b9ff]
+.const LEGAL_BASE = $a400
+.const LEGAL_LIMIT = $ba00
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$a400, min=$a400, max=$b9ff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",    start=$a400, min=$a400, max=$b9ff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",      start=$a400, min=$a400, max=$b9ff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items",  start=$a400, min=$a400, max=$b9ff]
@@ -388,6 +393,17 @@ title_menu_loop:
 !load_now:
     jmp title_load_game
 !not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    bcc !legal_done+
+    // No program disk is needed to return to the resident title menu.
+    jsr hal_screen_clear
+    jsr title_draw_menu
+    jmp title_menu_loop
+!legal_done:
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
@@ -398,7 +414,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #28                 // Center 80-col: (80-24)/2 = 28
+    lda #(SCREEN_COLS - 35) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -559,6 +575,8 @@ overlay_load_no_kernal:
 
 run_initialize:
     jmp run_initialize_impl
+
+#import "legal.s"
 
 tramp_ui_help_display:
     lda #OVL_HELP
@@ -1504,6 +1522,7 @@ ovl_modal_misc_end:
 .assert "Modal misc overlay fits", ovl_modal_misc_end <= $ba00, true
 
 .segment HelpOverlay
+#import "../../core/ui_help_title.s"
 #import "../../commodore/c128/ui_help_data_80.s"
 #import "../../core/ui_help.s"
 #import "../../core/ui_identify.s"
@@ -1583,9 +1602,10 @@ ovl_items_end:
     #import "../../core/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
 
-// Potions of gain stat run from the resident image (the SPELL cache slot is
-// full); everything they call is resident too.
-.segment Default
+// Potions of gain stat run from the play slot (the SPELL cache slot and
+// always-resident image are full; quaff runs only during gameplay when
+// A2.PLAY is resident, and everything they call is resident too).
+.segment A2PlaySlot
 #import "../../core/eff_gain_stat.s"
 .segment SpellOverlay
 
@@ -1963,6 +1983,7 @@ tramp_ego_append_suffix:
 a2_play_end:
 .assert "Play payload fits slot", a2_play_end <= $a000, true
 .assert "Ego suffix trampoline stays in play", tramp_ego_append_suffix >= $7c00 && tramp_ego_append_suffix < a2_play_end, true
+.assert "Potions of gain stat run in play", eff_potion_gain_stat >= $7c00 && eff_potion_gain_stat < a2_play_end, true
 
 // ============================================================
 // Final boundary assertions
@@ -1971,3 +1992,12 @@ a2_play_end:
 program_end:
 .assert "Resident image fits always-region", program_end <= $7c00, true
 .assert "Ego call trampolines stay resident", tramp_roll_ego_type < $7c00 && tramp_ego_get_ac_bonus < $7c00, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../core/ui_legal.s"
+#import "../shared/legal_disk_stream.s"
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

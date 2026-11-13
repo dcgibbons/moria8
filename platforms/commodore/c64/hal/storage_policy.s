@@ -1,4 +1,8 @@
 #importonce
+#if C64_CARTRIDGE
+#define HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+#define HAL_STORAGE_ASSET_LOAD_INFALLIBLE
+#endif
 // C64 platform-owned storage logical file numbers and secondary addresses.
 
 .const hal_storage_save_file_num = 2
@@ -82,3 +86,7 @@
 // The command-status read leaves the DOS code itself in disk_status.
 #define HAL_STORAGE_COMMAND_STATUS_FROM_DOS_CODE
 #define HAL_STORAGE_UNIT_TEST_STUBS
+
+#if !C64_CARTRIDGE
+#define HAL_STORAGE_LEGAL_COMMAND_STATUS
+#endif

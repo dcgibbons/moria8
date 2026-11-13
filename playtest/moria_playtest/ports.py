@@ -93,7 +93,7 @@ C64 = Port(
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
         **{f"64.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
-        "64.bank": "64.bank",
+        "64.bank": "64.bank", "legalui": "legalui",
     },
     # Pinned machine configuration (§6.1). REU is mandatory: without it every
     # overlay switch and tier crossing reloads from the 1541.
@@ -150,7 +150,7 @@ PLUS4 = Port(
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
         **{f"4.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
-        "4.bank": "4.bank",
+        "4.bank": "4.bank", "legalui": "legalui",
     },
     # No REU: every overlay switch and tier crossing loads from the 1541, so the
     # Plus/4 plays under JiffyDOS (maintainer, 2026-10-27: "definitely use the
@@ -198,6 +198,7 @@ C128 = Port(
         **{f"128.{name}": f"128.{name}.prg" for name in
            ("input", "proj", "runtime", "fdisk", "diskio", "world", "item", "names", "huff", "hvec",
             "select", "persist", "play", "bank")},
+        "legalui": "legalui",
     },
     # The shipping .d71 on a true 1571, the REU (preload128.s caches overlays
     # and tiers in it), and the VDC's 80-column screen.

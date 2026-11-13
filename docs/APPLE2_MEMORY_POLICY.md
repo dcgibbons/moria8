@@ -45,8 +45,8 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 
 | Range | Current owner and measured use |
 | --- | --- |
-| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7A09` (502 B free with the monster catalog, 2026-11-05) |
-| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FFD` (9,214 B including signature) |
+| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7BEE` (17 B free after legal-viewer merge, 2026-11-12; `ui_help_title.s` moved to `OVL.HELP` and `eff_gain_stat.s` moved to `A2.PLAY`) |
+| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FAD` (9,134 B including signature, 82 B free; includes `eff_gain_stat.s`) |
 | main `$A000-$A3FF` | Name pool (1,024 B): the monster catalog's 32 species names |
 | main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; window 5,632 B; largest payload `OVL.TOWN` (5,327 B); `OVL.DEATH` grew to 4,139 B in 2026-09 when the map-area/earthquake engines moved in beside the WoD engine |
 | main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |
@@ -407,3 +407,41 @@ estimate here into a hard failure if exceeded.
 5. Resident/play split at `$7C00`; play slot 8,704 B.
 6. Aux layout pinned: map `$0800-$3B0B`, aux data `$3B0C-$4FFF`, hot cache
    `$5000-$BFFF`; on-demand list fixed.
+
+## License/source modal ownership (2026-11-10)
+
+`LEGALUI` is an uncached modal loaded on title `A` (About) or Help `L`: main RAM $A400-$B9FF; no auxiliary cache slot.
+Code ends before overlay base+$600; a 142-byte core-ZP snapshot starts there,
+and the disk/ROM input cache occupies base+$700..+$7FF. Both are modal
+workspace, never game-data loans or emitted PRG padding. The resident entry saves core ZP before asset loading, after any media
+handler that may itself load an overlay.
+The viewer reads existing documents through the storage HAL, closes every
+channel, retains live sound/redraw state, and restores the caller snapshot.
+Linked payload bounds and production-path modal entry/return tests enforce
+this ownership. See `docs/LEGAL_VIEWER.md` for the change and verification record.
+
+Verification (2026-11-10): `make -j7 -O test` passed, including the linked PRG
+ownership checks and the MAME title/Help legal-viewer scenario. The play slot
+and auxiliary cache remain intact; the 140 KB image format is unchanged.
+
+Optional legal loads retain bounded asset retries, then offer Escape at the
+resident program-disk prompt. One caller snapshot survives every retry. Escape
+restores ZP after the prompt and returns with carry set; Help exits directly to
+gameplay, and Title redraws only its resident menu. Neither return reloads the
+invalidated overlay while the program disk is absent. No Storage overlay or
+unavailable play-slot verifier is called. See the Pass 3 record in
+`docs/LEGAL_VIEWER.md` for the save-disk, retry and cancel-boundary tests.
+
+Repair verification (2026-11-11): `make -j7 -O test` passed. Applicable payload
+bounds, header/load/execution ownership, missing-file cleanup and production
+modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
+coverage. Existing banking configurations and persistent cache owners remain;
+physical display-layout changes are N/A.
+
+
+Pass 3 verification (2026-11-11): `make -j7 -O test` passed. The added
+save-disk fixtures verify cold Title cancellation to its resident menu,
+Help cancellation to gameplay without a cold reload, failed/successful retry
+snapshot survival and restored core ZP at the cancel-return boundary. All
+linked bounds and the existing bank/cache owners remain enforced. See
+`docs/LEGAL_VIEWER.md` for the carry contract and physical media preconditions.

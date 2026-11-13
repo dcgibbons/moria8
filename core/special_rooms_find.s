@@ -5,7 +5,7 @@
 // 8-bit the rest of special_rooms.s runs in OVL.GEN, but item_spawn_level
 // calls this after pick_item_type has loaded OVL.CHEST into the same $E000
 // window (PICKER_IN_CHEST_OVERLAY), so there it lives outside that window
-// (the C64: resident; the Plus/4 and Atari: RuntimeBanked). Elsewhere it is
+// (the C64 and Atari: resident; the Plus/4: RuntimeBanked). Elsewhere it is
 // imported with special_rooms.s.
 // Lifetime: the session. State: reads room_count and room_type (resident).
 

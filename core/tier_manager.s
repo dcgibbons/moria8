@@ -195,6 +195,7 @@ tier_init:
 #if HAL_PLATFORM_CATALOG_RECORDS
     jsr catalog_boot_load       // The level index and record places, REU or not
 #endif
+#if !HAL_PLATFORM_REU_DISABLED
     lda reu_present
     beq !ti_done+
 
@@ -224,6 +225,7 @@ tier_init:
     // across multiple calls. Stale file #2 entry would cause load_game's
     // OPEN to fail with "FILE ALREADY OPEN".
     jsr hal_asset_close_channel
+#endif
 
 !ti_done:
     rts

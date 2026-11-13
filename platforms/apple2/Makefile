@@ -73,7 +73,8 @@ VERSION_INC = $(BUILD)/version_strings.inc
 A2_MAIN_SRC  = main.s
 A2_BOOT_SRC  = boot.s
 TITLE_SRC    = ../../core/title_data.s
-A2_SOURCES   := $(shell find . ../../core ../../platforms/shared ../../platforms/commodore/common -type f -name '*.s' -print)
+A2_SOURCES   := $(shell find . ../../core ../../platforms/shared ../../platforms/commodore/common -type f -name '*.s' -print) \
+                ../commodore/c128/ui_help_data_80.s
 
 # Payloads (PRG with 2-byte header, straight from Kick)
 A2_MAIN_PRG  = $(OUTA2)/moria8a2.prg
@@ -92,6 +93,7 @@ A2_DISK_IMAGE = $(BUILD)/moria8-apple2.po
 A2_MAIN_STAMP = $(OUTA2)/.main.stamp
 MAME_OUTPUT_ROOT = $(abspath $(OUTA2)/mame)
 
+A2_OVL_PRGS += $(OUTA2)/legalui
 .PHONY: all build disk run test-memory-contract test-memory-contract-selftest test-runtime clean ensure-kickass kickass ac prodos
 
 all: build
@@ -230,6 +232,7 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	$(PRG2BIN) "$(OUTA2)/a2.auxdata" "$(OUTA2)/bin/A2.AUXDATA" --expect-addr 0x3B0C
 	$(PRG2BIN) "$(OUTA2)/a2.catalog" "$(OUTA2)/bin/A2.CATALOG" --expect-addr 0x5000
 	$(PRG2BIN) "$(OUTA2)/a2.huffdata" "$(OUTA2)/bin/A2.HUFFDATA" --expect-addr 0x8D00
+	$(PRG2BIN) "$(OUTA2)/legalui" "$(OUTA2)/bin/LEGALUI" --expect-addr 0xA400
 	$(PRG2BIN) "$(A2_TITLE_PRG)" "$(OUTA2)/bin/TITLE" --expect-addr 0x4000
 	rm -f "$@"
 	"$(AC_BIN)" -pro140 "$@" MORIA8
@@ -244,6 +247,7 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	@for f in START TOWN DEATH GEN HELP CHEST STORAGE TITLE; do \
 	  "$(AC_BIN)" -p "$@" OVL.$$f bin 0xA400 < "$(OUTA2)/bin/OVL.$$f" || exit 1; \
 	done
+	"$(AC_BIN)" -p "$@" LEGALUI bin 0xA400 < "$(OUTA2)/bin/LEGALUI"
 	"$(AC_BIN)" -p "$@" TITLE bin 0x4000 < "$(OUTA2)/bin/TITLE"
 	"$(AC_BIN)" -p "$@" LICENSE txt < "$(LICENSE_DISK_FILE)"
 	"$(AC_BIN)" -p "$@" SOURCE.OFFER txt < "$(SOURCE_OFFER_DISK_FILE)"

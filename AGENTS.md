@@ -192,7 +192,10 @@ bootstrap stub below BASIC ROM that banks RAM visible before jumping to
 
 VICE/MAME/`x16emu` escalation list (these launch an emulator and need
 unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
-or `x16emu`; `make test64`; `make testplus4`; `make testplus4-runtime`;
+or `x16emu`; `make test64`; `make test64-cartridge`;
+`make test64-cartridge-persistence`; `make test64-legal`; `make test128-legal`;
+`make testplus4-legal`; direct `test_legal.py` runs; direct `test_cartridge.py` and
+`test_cartridge_persistence.py` runs; `make testplus4`; `make testplus4-runtime`;
 `make testapple2-runtime`; `make test128-fast`; `make test128-fast-smoke`;
 `make test128`; `make test128-soak-long`; `make testcx16`; `make testcx16-runtime`;
 `make testatari8-runtime`; `make testatari8-fast-smoke`;

@@ -1,8 +1,10 @@
+#define HAL_PLATFORM_LEGAL_VIEWER
+#define HELP_TITLE_EXTERNAL
 // main.s — Entry point for Moria8 C64/C128
 //
 // BASIC stub at $0801 with SYS entry.
 // Saves BASIC ZP state, disables BASIC ROM, runs game,
-// restores state and exits cleanly to BASIC.
+// The disk build preserves BASIC state for its exit trampoline.
 
 // ============================================================
 // BASIC stub — SYS 2062 ($080E)
@@ -15,7 +17,11 @@
 // tests (tests/*.s) do not import main.s and keep the tier roster.
 #define HAL_PLATFORM_MONSTER_CATALOG
 #define HAL_PLATFORM_CATALOG_RECORDS
+#if !C64_CARTRIDGE
 #define CATALOG_REU
+#else
+#import "cartridge_contract.s"
+#endif
 #define C64_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define C64_PRODUCT_IRQ_VECTOR_RUNTIME
@@ -34,6 +40,9 @@
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef ModalMiscOverlay      [outPrg=OVL_OUT + "/ovl.modal", start=$e000, min=$e000, max=$efff]
+.const LEGAL_BASE = $e000
+.const LEGAL_LIMIT = $f000
+.segmentdef LegalOverlay [outPrg=OVL_OUT + "/legalui", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
@@ -80,7 +89,9 @@
     .segment Default
 }
 .macro WizardGenExecSegment() {
-    .segment Default
+    // wizard_generate_item_execute's only caller is ui_wizard.s in ModalMiscOverlay;
+    // parking it there frees 92 B of resident Default headroom for test variants.
+    .segment ModalMiscOverlay
 }
 .macro WizardGenExecRestoreSegment() {
     .segment Default
@@ -113,6 +124,9 @@
 // before BASIC ROM is banked out.
 .const KERNAL_SETMSG = $ff90
 entry:
+#if C64_CARTRIDGE
+.assert "Cartridge boot entry ABI", entry, CART_ENTRY
+#endif
     lda #$36                // Bank out BASIC ROM (keep KERNAL + I/O)
     sta $01
     // KERNAL messages off: with them on (a boot that leaves BASIC's direct-
@@ -123,6 +137,7 @@ entry:
     jsr KERNAL_SETMSG
     jmp entry_main          // Now code past $A000 is accessible
 
+#if !C64_CARTRIDGE
 // Exit trampoline — MUST live below $A000 because it banks BASIC
 // ROM back in. If this ran from $A000+ the CPU would start executing
 // BASIC ROM the instant we set bit 0 of $01.
@@ -154,6 +169,7 @@ exit_trampoline:
     lda #$93                // PETSCII clear screen
     jsr $ffd2               // KERNAL CHROUT
     jmp ($a002)             // BASIC warm-start (works for both SYS and chain-load)
+#endif
 
 #import "hal/storage_title_name.s"
 
@@ -225,6 +241,7 @@ c64_disk_marker_write_resident:
     rts
 
 #import "../../../core/zeropage.s"
+#import "legal.s"
 
 c64_disk_call_saved_bank: .byte 0
 ultimate_model_present: .byte 0
@@ -431,6 +448,12 @@ tramp_dig_ability:
 #import "memory.s"
 #import "hal/layout.s"
 #import "hal/lifecycle_policy.s"
+#if C64_CARTRIDGE
+// Only title information remains; ROM transport needs no REU machinery.
+reu_present: .byte 0
+reu_banks: .byte 0
+reu_size_kb: .word 0
+#else
 #define REU_STASH_OVERLAYS_EXTERNAL
 #define REU_LOAD_ALL_TIERS_EXTERNAL
 #define REU_DETECT_EXTERNAL         // boot only: the init-only tail
@@ -438,6 +461,7 @@ tramp_dig_ability:
 #undef REU_DETECT_EXTERNAL
 #undef REU_LOAD_ALL_TIERS_EXTERNAL
 #undef REU_STASH_OVERLAYS_EXTERNAL
+#endif
 #import "screen.s"
 #import "../../../core/color.s"
 #import "config.s"
@@ -553,12 +577,28 @@ hal_huff_index_word:
 // Overlay state is platform-owned so product/test variant layout changes
 // cannot place these bytes inside later resident code.
 current_overlay: .byte 0
+#if !C64_CARTRIDGE
 ovl_reu_start_lo: .fill hal_platform_overlay_count + 1, 0
 ovl_reu_start_hi: .fill hal_platform_overlay_count + 1, 0
+#endif
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
 #import "../common/overlay.s"
+#if C64_CARTRIDGE
+.assert "Cartridge overlay count ABI", hal_platform_overlay_count, CART_OVERLAY_COUNT
+.assert "Cartridge STARTUP asset ABI", CART_ASSET_STARTUP - CART_ASSET_STARTUP + 1, OVL_STARTUP
+.assert "Cartridge TOWN asset ABI", CART_ASSET_TOWN - CART_ASSET_STARTUP + 1, OVL_TOWN
+.assert "Cartridge DEATH asset ABI", CART_ASSET_DEATH - CART_ASSET_STARTUP + 1, OVL_DEATH
+.assert "Cartridge DUNGEON_GEN asset ABI", CART_ASSET_DUNGEON_GEN - CART_ASSET_STARTUP + 1, OVL_DUNGEON_GEN
+.assert "Cartridge HELP asset ABI", CART_ASSET_HELP - CART_ASSET_STARTUP + 1, OVL_HELP
+.assert "Cartridge UI asset ABI", CART_ASSET_UI - CART_ASSET_STARTUP + 1, OVL_UI
+.assert "Cartridge ITEMS asset ABI", CART_ASSET_ITEMS - CART_ASSET_STARTUP + 1, OVL_ITEMS
+.assert "Cartridge SPELL asset ABI", CART_ASSET_SPELL - CART_ASSET_STARTUP + 1, OVL_SPELL
+.assert "Cartridge MODAL_MISC asset ABI", CART_ASSET_MODAL_MISC - CART_ASSET_STARTUP + 1, OVL_MODAL_MISC
+.assert "Cartridge CHEST asset ABI", CART_ASSET_CHEST - CART_ASSET_STARTUP + 1, OVL_CHEST
+.assert "Cartridge descriptor shift ABI", CART_DESCRIPTOR_SIZE, 8
+#endif
 #undef OVERLAY_LOAD_PROMPT_GAME
 #import "../../../core/monster_ai.s"
 #import "../../../core/scene_dirty.s"
@@ -777,16 +817,22 @@ cdrs_lost: .byte 0              // nonzero: the status byte was lost (above)
 // Entry point
 // ============================================================
 entry_main:
+#if !C64_CARTRIDGE
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
+#endif
     jsr disk_reset_session_state
     jsr c64_install_ram_irq_vectors
+#if C64_CARTRIDGE
+    jsr cart_install_nmi
+#endif
 
     // BASIC ROM already banked out by bootstrap above
 
     // Load banked runtime payload to $F000 before any $F000 trampoline calls.
     jsr init_load_banked
 
+#if !C64_CARTRIDGE
     // Patch reu_show_status: RTS → JMP tramp_reu_show_status
     lda #$4c                    // JMP absolute opcode
     sta reu_show_status
@@ -795,6 +841,7 @@ entry_main:
     lda #>tramp_reu_show_status
     sta reu_show_status + 2
 
+#endif
     jsr generation_busy_install
     jsr platform_services_install64
     jsr platform_services_assert_installed
@@ -816,14 +863,27 @@ entry_main:
     sta $d020               // Border
     sta $d021               // Background
 
+#if C64_CARTRIDGE
+    jsr c64u_turbo_detect
+#else
     jsr ultimate_detect
     jsr c64u_turbo_detect
+#endif
 
 restart_entry:
     // --- Initialize subsystems ---
     jsr detect_machine
+#if C64_CARTRIDGE
+    // ROM supplies the catalog/overlays; no REU discovery or preload needed.
+    lda #0
+    sta reu_present
+    sta reu_banks
+    sta reu_size_kb
+    sta reu_size_kb + 1
+#else
     jsr reu_detect
     jsr reu_detect_extended_c64
+#endif
     jsr tier_init
     jsr hal_sound_init
     jsr rng_seed
@@ -1099,14 +1159,19 @@ title_menu_loop:
     lda disk_setup_done
     bne !load_now+
     jsr tramp_disk_setup
-    bcs title_enter_menu
+    bcs !title_menu_redraw+
 !load_now:
     jmp title_load_game
 !not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    jmp title_enter_menu
+!not_legal_title:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
-    bcs title_enter_menu
+    bcs !title_menu_redraw+
     jsr disk_prompt_game_required
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     lda #1
@@ -1115,6 +1180,7 @@ title_menu_loop:
 #if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
 c64_test_after_disk_setup_product:
 #endif
+!title_menu_redraw:
     jmp title_enter_menu
 #if C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT
 c64_test_disk_setup_single_drive_return_unexpected_return:
@@ -1127,7 +1193,7 @@ title_draw_menu:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #7                  // Center: (40-25)/2 ~= 7
+    lda #(SCREEN_COLS - 35) / 2
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -1281,6 +1347,8 @@ c64u_turbo_normal:
 !done:
     rts
 
+c64u_turbo_end:
+.assert "Turbo wrappers stay resident", c64u_turbo_end <= MAP_BASE, true
 // ============================================================
 // Dungeon gen overlay trampoline — bank KERNAL out, call $E000 overlay
 // ============================================================
@@ -1602,6 +1670,7 @@ tsi_krev_cached: .byte 0
 
 #import "../../../core/title_sysinfo_banked.s"
 
+#if !C64_CARTRIDGE
 // tramp_reu_show_status — Bank out KERNAL to call banked status display
 // Patched into reu_show_status at startup by init code.
 tramp_reu_show_status:
@@ -1616,6 +1685,7 @@ tramp_reu_show_status:
     cli
     rts
 
+#endif
 platform_main_loop_begin_c64:
 platform_vector_reassert_c64:
 platform_runtime_resync_c64:
@@ -1633,6 +1703,9 @@ platform_runtime_resync_c64:
     cli
     rts
 
+.segment HelpOverlay
+#import "../../../core/ui_help_title.s"
+.segment Default
 #import "../../../core/ui_help_clear.s"
 
 // ============================================================
@@ -2011,7 +2084,7 @@ store_overlay_preamble:
     rts
 
 tramp_store_init_all:
-    lda #OVL_MODAL_MISC
+    lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_init_all
@@ -2019,7 +2092,7 @@ tramp_store_init_all:
     jmp tramp_sr_epilogue
 
 tramp_store_restock_all:
-    lda #OVL_MODAL_MISC
+    lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !done+
     jsr store_restock_all
@@ -2252,6 +2325,10 @@ tramp_player_create:
 // Verify that the selected program disk is actually present.
 // Output: carry clear = program media present, carry set = absent/wrong media.
 c64_require_program_media:
+#if C64_CARTRIDGE
+    clc
+    rts
+#else
     lda save_device
     pha
     lda disk_prompt_device
@@ -2275,6 +2352,8 @@ c64_require_program_media:
 !crpm_ok:
     clc
     rts
+
+#endif
 
 // ============================================================
 // Death overlay trampoline — orchestrates the full game-over sequence
@@ -2403,7 +2482,9 @@ program_end:
 
 // REU preload status is startup-only and is dead before MAP_BASE takes over
 // this init tail. Keeping it here leaves runtime-bank space for run setup.
+#if !C64_CARTRIDGE
 #import "../common/reu_loading_banked.s"
+#endif
 
 #if HAL_PLATFORM_CATALOG_RECORDS
 // The monster catalog's boot loads (tier_init, once, before the title).
@@ -2412,9 +2493,11 @@ program_end:
 #endif
 
 // REU detection (restart_entry, once at boot) and its probes.
+#if !C64_CARTRIDGE
 #import "../common/reu_detect.s"
 .assert "REU detection lives in the init-only tail", reu_detect >= program_end && reu_probe_xfer >= program_end, true
 
+#endif
 // One-shot platform-services installer (called once at boot, before the map
 // exists). Lives in the init-only tail so the resident runtime image keeps
 // room for the chest routing trampolines.
@@ -2583,6 +2666,7 @@ reu_load_all_tiers:
 
 #endif
 
+#if !C64_CARTRIDGE
 reu_stash_overlays:
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
@@ -2827,10 +2911,32 @@ reu_detect_extended_c64:
 !done:
     rts
 
+#endif
+#if C64_CARTRIDGE
+// Boot-only capability probe; owner: init tail, before title/map use.
+// Standard EF occupies UCI's $DF1D. $D031 is independent of the mapper and
+// reads $FF on a stock VIC or when Ultimate register control is unavailable.
+c64u_turbo_detect:
+    lda #0
+    sta c64_hw_flags
+    lda C64U_TURBO_CONTROL
+    cmp #C64U_TURBO_DISABLED
+    beq !done+
+    lda #(C64_HW_C64U | C64_HW_TURBO_AVAIL)
+    sta c64_hw_flags
+!done:
+    rts
+c64u_turbo_detect_end:
+.assert "Cartridge turbo probe is init-only", c64u_turbo_detect >= program_end, true
+#endif
 // init_load_banked — Load banked runtime payload to $F000.
 // Called once at startup before any $F000 trampoline is used.
 // Clobbers: A, X, Y
 init_load_banked:
+#if C64_CARTRIDGE
+    lda #CART_ASSET_RUNTIME
+    jmp cart_load_asset
+#else
     lda #BANK_NO_BASIC          // $36 — KERNAL visible for LOAD
     sta $01
     cli
@@ -2867,6 +2973,7 @@ init_load_banked:
 c64_banked_fname:
     .byte $36,$34,$2e,$42,$41,$4e,$4b  // "64.BANK" in PETSCII/ASCII bytes
 .label c64_banked_fname_len = * - c64_banked_fname
+#endif
 
 // The Huffman string index's bytes, copied to RAM under I/O at boot.
 huff_index_stage:
@@ -3071,10 +3178,6 @@ winner_apply_retirement_bonus_overlay:
     #import "../../../core/royal.s"
     #import "../common/save_slot_menu.s"
     #import "../../../core/ui_wizard.s"
-    // Store init/restock is cold (new game, town re-entry); parks in this
-    // overlay to fund door-aware bash in the items overlay. Reached via the
-    // tramp_store_init_all/tramp_store_restock_all trampolines (OVL_MODAL_MISC).
-    #import "../../../core/store_restock_overlay.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
@@ -3180,7 +3283,26 @@ ovl_gen_end:
 .segment ChestOverlay
     #import "../../../core/chest.s"
     #import "../../../core/item_exchange.s"   // SHIFT+X: the Items overlay is full
+    // Store init/restock is transition-only (new game, town re-entry); moved
+    // from ModalMiscOverlay so wizard_generate_item_execute fits there (OVL_CHEST).
+    #import "../../../core/store_restock_overlay.s"
 ovl_chest_end:
+.assert "Store restock runs in OVL.CHEST", store_init_all >= $e000 && store_restock_all < ovl_chest_end, true
+.assert "Wizard item generation runs in OVL.MODAL", wizard_generate_item_execute >= $e000 && wizard_generate_item_execute < ovl_modal_misc_end, true
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true
 .assert "irq_no_blink begins with CLD", irq_no_blink_after_cld == irq_no_blink + 1, true
+
+// Cold legal modal: workspace is reserved but not emitted to disk.
+.segment LegalOverlay
+#import "../../../core/ui_legal.s"
+#if C64_CARTRIDGE
+#import "legal_stream.s"
+#else
+#import "../../shared/legal_disk_stream.s"
+.assert "Legal filenames fit BASIC snapshot staging", legal_notice_filename_len <= 16 && legal_offer_filename_len <= 16 && ZP_SAVE_SIZE >= 16, true
+#endif
+legal_code_end:
+.assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment Default

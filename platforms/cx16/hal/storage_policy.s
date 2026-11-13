@@ -46,3 +46,5 @@
 // and streamed by the platform map helpers (save_stream.s).
 #define HAL_STORAGE_MAP_BANKED
 #define HAL_STORAGE_NO_UNIT_TEST_STUBS
+
+#define HAL_STORAGE_LEGAL_BURST_READ

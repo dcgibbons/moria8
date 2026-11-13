@@ -589,6 +589,7 @@ c128_disk_payload_args() {
     for f in runtime input proj fdisk diskio world item names huff hvec select persist play bank; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
+    C128_DISK_PAYLOAD_ARGS+=(-write "$dir/legalui" "legalui")
     # The shipping disk is the reference: a payload added there and not here
     # would be missing from every test disk.
     if [ -z "${C128_DISK_PAYLOAD_CHECKED:-}" ]; then
@@ -1608,7 +1609,8 @@ loop_mod = (core / "game_loop.s").read_text().splitlines()
 dfeat = (core / "dungeon_features.s").read_text().splitlines()
 help_mod = (core / "ui_help.s").read_text().splitlines()
 store_mod = (core / "ui_store.s").read_text().splitlines()
-loop_helpers = (core / "game_loop_helpers.s").read_text().splitlines()
+loop_helpers = ((core / "game_loop_helpers.s").read_text() + "\n"
+                + (core / "ui_help_command.s").read_text()).splitlines()
 player_magic_mod = (core / "player_magic.s").read_text().splitlines()
 spell_effects_mod = (core / "spell_effects.s").read_text().splitlines()
 ui_wizard_mod = (core / "ui_wizard.s").read_text().splitlines()

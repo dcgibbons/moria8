@@ -2426,7 +2426,7 @@ run_disk_setup_single_drive_return_product_smoke() {
         --swap-attach8-d64 "$save_d64" \
         --swap2-symbol ".disk_prompt_game_required_error_shown" \
         --swap2-attach8-d64 "$program_d64" \
-        --expect-screen-symbol ".title_menu_str:18:7" \
+        --expect-screen-symbol ".title_menu_str:18:2" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --attach-delay 5.0 \
@@ -3033,7 +3033,7 @@ run_single_drive_load_corrupt_product_smoke() {
         --pass-on-script-exhausted \
         --timeout 10 \
         --retry-timeouts 0 \
-        --expect-screen-symbol ".title_menu_str:18:7" \
+        --expect-screen-symbol ".title_menu_str:18:2" \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else

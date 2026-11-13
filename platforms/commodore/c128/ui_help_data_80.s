@@ -226,6 +226,10 @@ help_more_lines:
 
     .byte 0
     .text "SPACE Continue"
+#if HAL_PLATFORM_LEGAL_VIEWER
+    .byte $fc, HELP80_COL2, $fe
+    .text "L" ; .byte $ff ; .text " License / Source"
+#endif
     .byte 0
 
     .byte 0
@@ -245,12 +249,8 @@ help_more_lines:
     .text "* Rest until healed"
     .byte 0
 
-// Renderer always reads exactly SCREEN_ROWS-2 content lines; page 2 has 22
-// lines above, so keep exactly 1 blank to pad to 23. (Help overlay is full.)
-.for (var i = 0; i < 1; i++) {
-        .byte 2
-        .byte 0
-}
+// The 25-row screen needs one more blank than the 24-row ports.
+    .byte 2, 0
 
 help_pages:
     .byte 2

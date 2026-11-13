@@ -100,6 +100,7 @@ OVERLAY_FILES = (
     "ovl.spell",
     "ovl.chest",
     "ovl.gen",
+    "legalui",
     "ovl.storage",
     "ovl.title",
 )

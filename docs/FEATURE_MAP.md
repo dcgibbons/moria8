@@ -130,6 +130,18 @@ All 7 active Moria8 ports compile the exact same shared gameplay rules from `cor
 
 Moria8 partitions cold/modal gameplay subsystems into overlays so the resident turn loop fits within 6502 address limits.
 
+The **C64 EasyFlash experiment** (`make cartridge64`, also built by `make build`) supplies the same
+10 overlays, permanent runtime, title art and full catalog from native type-32
+ROM, copying them into the existing RAM owners through the C64 asset HAL.
+The disk build remains available. Disk persistence retains its current format;
+PAL/NTSC tests exercise disk/cartridge save interchange and single-drive setup.
+There is no cartridge save implementation. REU caching and UCI services remain
+excluded; optional Ultimate turbo bursts probe `$D031` independently of UCI,
+with exact previous-speed restoration and no effect on standard C64 hardware. See
+[`C64_CARTRIDGE_EXPERIMENT.md`](C64_CARTRIDGE_EXPERIMENT.md) for its scope,
+verification and physical hardware checklist. The following matrix describes
+the existing disk builds.
+
 - **C64, C128, Plus/4 (`$E000-$EFFF` 10-Overlay Set)**: Use **10 overlays** (`START`, `TOWN`, `DEATH`, `GEN`, `HELP`, `UI`, `ITEMS`, `SPELL`/`DISARM`, `MODAL`, `CHEST`) plus `$F000` `RuntimeBanked` (and on C128, 2 `$AF00-$CFFF` slot overlays `128.PLAY` and `128.PERSIST`).
 - **Atari 8-bit (`$E000-$EFFF`)**: Uses **10 overlays** (`OVL.STA`..`OVL.CHS`) plus `$F000-$FFF9` `RuntimeBanked`.
 - **Apple IIe (`$A400-$B9FF`), Commander X16 (`$A000-$B5FF`), and BBC Master 128 (`$A800-$BFFF`)**: Use **12 overlays** (`5.5 KB`–`6 KB` window) plus a load-once Play Slot (`MORIA8.PLAY` / `MORIA8P` or unified resident on CX16).
@@ -137,7 +149,7 @@ Moria8 partitions cold/modal gameplay subsystems into overlays so the resident t
 | Slot / Subsystem | Core Modules Hosted | C64 (`$E000-$EFFF`) | C128 (`$E000-$EFFF` + `$AF00`) | Plus/4 (`$E000-$EFFF`) | Apple IIe (`$A400-$B9FF`) | CX16 (`$A000-$B5FF`) | Atari 8-bit (`$E000-$EFFF`) | BBC Master (`$A800-$BFFF` SWR 4) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **1. `StartupOverlay`** | `player_create.s`, `background_data.s`, `ui_character.s` | `64.START` (REU `$0000` or Disk) | `128.START` (**Cached Bank 1 `$A000-$AFFF`**) | `4.START` (Disk) | `OVL.START` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 9**) | `OVL.STA` (800XL Disk / **130XE Bank 0 `$4000`**) | `OVLSTA` (DFS Disk) |
-| **2. `TownOverlay`** | `store.s`, `ui_store.s`, `ui_home.s` (store init/restock, `store_restock_overlay.s`, is transition-only: modal-misc overlay on C64, chest overlay on C128, Plus/4, Atari and Apple IIe, items overlay elsewhere) | `64.TOWN` (REU `$1000` or Disk) | `128.TOWN` (**Cached Bank 1 `$B000-$BFFF`**) | `4.TOWN` (Disk) | `OVL.TOWN` (**Cached Aux `$5A00-$6F2B`**) | `MORIA8.PAK` (**RAM Bank 10**) | `OVL.TWN` (800XL Disk / **130XE Bank 0 `$5000`**) | `OVLTWN` (**Cached SWR Bank 6 `$9700-$AC17`**) |
+| **2. `TownOverlay`** | `store.s`, `ui_store.s`, `ui_home.s` (store init/restock, `store_restock_overlay.s`, is transition-only and lives in `ChestOverlay` on all seven ports) | `64.TOWN` (REU `$1000` or Disk) | `128.TOWN` (**Cached Bank 1 `$B000-$BFFF`**) | `4.TOWN` (Disk) | `OVL.TOWN` (**Cached Aux `$5A00-$6F2B`**) | `MORIA8.PAK` (**RAM Bank 10**) | `OVL.TWN` (800XL Disk / **130XE Bank 0 `$5000`**) | `OVLTWN` (**Cached SWR Bank 6 `$9700-$AC17`**) |
 | **3. `DeathOverlay` / `EndgameOverlay`** | `score.s`, `score_io.s`, `royal.s` | `64.DEATH` (REU `$2000` or Disk) | `128.DEATH` (**Cached Bank 1 `$C000-$CFFF`**) | `4.DEATH` (Disk) | `OVL.END` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 18**) | `OVL.END` (800XL Disk / **130XE Bank 0 `$7000`**) | `OVLEND` (DFS Disk) |
 | **4. `GenOverlay`** | `dungeon_gen.s`, `special_rooms.s` | `64.GEN` (REU `$3000` or Disk) | `128.GEN` (**Cached Bank 1 `$E000-$EFFF`**) | `4.GEN` (Disk) | `OVL.GEN` (**Cached Aux `$8DF4-$98C2`**) | `MORIA8.PAK` (**RAM Bank 19**) | Resident in `$F000` `RuntimeBanked` | `OVLGEN` (**Cached SWR Bank 7 `$914E-$9BFF`**) |
 | **5. `HelpOverlay`** | `ui_help.s`, `ui_character.s` | `64.HELP` (REU `$4000` or Disk) | `128.HELP` (Loaded from `.d71`/`.d81` disk on demand) | `4.HELP` (Disk) | Included in `OVL.MODAL` / `OVL.UI` | Included in `MORIA8.PAK` | Included in `OVL.MDL` / `OVL.UI` | Included in `OVLMDL` / `OVLUI` |
@@ -145,7 +157,7 @@ Moria8 partitions cold/modal gameplay subsystems into overlays so the resident t
 | **7. `ItemsOverlay`** | `items_overlay.s` (`eat`, `quaff`, `read`, `aim`, `use`, `refuel`), `spell_effects.s` | `64.ITEMS` (REU `$6000` or Disk) | `128.ITEMS` (**Cached Bank 1 `$3000-$3FFF`**) | `4.ITEMS` (Disk) | `OVL.ITEMS` (**Cached Aux `$83C7-$8DF3`**) | `MORIA8.PAK` (**RAM Bank 16**) | `OVL.ITM` (800XL Disk / **130XE Bank 2 `$4000`**) | `OVLITM` (**Cached SWR Bank 7 `$87F8-$914D`**) |
 | **8. `SpellOverlay` / `DisarmOverlay`** | `player_magic_execute_overlay.s` (`c64`/`plus4`/`a2`/`cx16`/`atari8`/`beeb`); `disarm_overlay.s` (`c128`) | `64.SPELL` (REU `$7000` or Disk) | `128.DISARM` (**Cached Bank 1 `$9D00-$9FFF`**; spells in `128.PLAY`) | `4.SPELL` (Disk) | `OVL.SPELL` (**Cached Aux `$7CEA-$83C6`**) | `MORIA8.PAK` (**RAM Bank 15**) | `OVL.SPL` (800XL Disk / **130XE Bank 1 `$7000`**) | `OVLSPL` (**Cached SWR Bank 7 `$8000-$87F7`**) |
 | **9. `ModalOverlay`** | `recall.s`, `look.s`, `save.s`, `ui_save.s` | `64.MODAL` (REU `$8000` or Disk) | `128.MODAL` (**Cached Bank 1 `$9800-$9CFF`**) | `4.MODAL` (Disk) | `OVL.MODAL` + `OVL.SAVE` (ProDOS Disk) | `MORIA8.PAK` (**RAM Banks 11, 14**) | `OVL.MDL` + `OVL.SAV` (800XL Disk / **130XE Banks 0–1**) | `OVLMDL` (**Cached SWR Bank 6 `$AC18-$B7B7`**) + `OVLSAV` |
-| **10. `ChestOverlay`** | `chest.s`, `chest_loot.s`; `store_restock_overlay.s` on C128, Plus/4, Atari and Apple IIe (moved from the full items overlay for store stacking, 2026-10-25; a cold disk load at new game and town re-entry on C128, Plus/4 and the 800XL) | `64.CHEST` (REU `$9000` or Disk) | `128.CHEST` (Loaded from `.d71`/`.d81` disk on demand) | `4.CHEST` (Disk) | `OVL.CHEST` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 17**) | `OVL.CHS` (800XL Disk / **130XE Bank 2 `$5000`**) | `OVLCHS` (DFS Disk) |
+| **10. `ChestOverlay`** | `chest.s`, `chest_loot.s`, `store_restock_overlay.s` (store init/restock on all seven ports: moved from the full items overlay for store stacking, 2026-10-25, and from C64 `ModalMiscOverlay`, 2026-11-12; a cold disk load at new game and town re-entry on uncached disk configurations) | `64.CHEST` (REU `$9000` or Disk) | `128.CHEST` (Loaded from `.d71`/`.d81` disk on demand) | `4.CHEST` (Disk) | `OVL.CHEST` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 17**) | `OVL.CHS` (800XL Disk / **130XE Bank 2 `$5000`**) | `OVLCHS` (DFS Disk) |
 | **11. `TitleOverlay`** | Title screen artwork & loader | `moria.title` (`$C000` pre-game) | `128.title` (Bank 0 `$4000` pre-game) | `p4.title` (`$C800` pre-game) | `OVL.TITLE` (ProDOS Disk) | `MORIA8.PAK` (**RAM Bank 21**) | `TITLE.DAT` (800XL Disk / **130XE Bank 3 `$4000`**) | `OVLTTL` (DFS Disk) |
 | **Play / Persist Slot** | Resident gameplay modules (`combat.s`, `turn.s`, `monster_ai.s`, `dungeon_features.s`, `player_magic.s`) | Split across `Default` + `$F000` `RuntimeBanked` | `$AF00-$CFFF`: swaps `128.PLAY` (gameplay) vs `128.PERSIST` (drive change) | Split across `Default` + `$F000` `RuntimeBanked` | `MORIA8.PLAY` loaded once at boot into Main `$7C00-$9FFF` (`A2PlaySlot`) | Unified resident in Main `$0801-$9AFF` | Split across `Default` + `$F000` `RuntimeBanked` | `MORIA8P` loaded once at boot into SWR Bank 4 `$8000-$A3FF` (`BeebPlaySlot`) |
 
@@ -1757,3 +1769,11 @@ Every one of the **279 creatures** (`0..278` in `umoria: src/data_creatures.cpp:
 | **Monster Spells & Breaths** | `18` `CSPELL` Flags | `18` `CSPELL` Flags | `8` Consolidated `MSF_*` Spell/Breath Categories (`cr_spell_flags`) | **Approximation**. Maps all 18 Umoria monster spells and dragon breaths into an 8-bit `cr_spell_flags` mask (`MSF_BREATH`, `MSF_SUMMON`, `MSF_TELEPORT`, `MSF_HEAL`, `MSF_BLIND`, `MSF_CONFUSE`, `MSF_HOLD`, `MSF_WOUND_LIGHT`) executed in `core/monster_magic.s`. |
 | **Monster Catalog** | `279` Creatures | `279` Creatures (`src/data_creatures.cpp`) | `150` Unique Creatures (`8` Town + `142` Dungeon = `193` Tier Entries across Tiers `0..4`) | **Partial (`53.8%` of 279)**. Curated via `tools/parse_creatures.py` into 5 overlapping depth tiers (`Tier 0` resident + `Tiers 1..4` banked/disk-loaded: `54`, `35`, `39`, `57` entries), including **Evil Iggy** (`dlvl 50`) and the **Balrog** (`dlvl 100`). |
 | **Cross-Port Gameplay Parity** | 1 Platform (VAX/VMS) | Cross-platform desktop C/C++ | `7` Active 8-Bit Ports (`C64`, `C128`, `Plus/4`, `Apple IIe`, `CX16`, `Atari 8-bit`, `BBC Master 128`) | **100% Gameplay Logic Parity Across All 7 Ports**. All 7 ports share the exact same `core/` gameplay, RNG, combat, magic, item, and monster tier tables; ports differ only in map/viewport geometry (`40×25` scrolling on `80×48` map for `C64`/`Plus4`/`Atari8` vs `80×24/25` on `198×66` map for `C128`/`Apple2`/`CX16`/`BBCMaster`), color hardware, sound (`Plus/4` stubbed), and RAM/disk banking. |
+
+## License and source documents
+
+All seven disk ports and the C64 EasyFlash build expose the existing license
+notice and source offer from title `A` (About) and Help `L`. Disk builds load the cold
+`LEGALUI` modal and documents from program media; cartridges read them from ROM.
+The viewer consumes no turns and preserves gameplay state. Ownership and the
+change/verification record are in [LEGAL_VIEWER.md](LEGAL_VIEWER.md).

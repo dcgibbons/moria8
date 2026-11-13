@@ -53,6 +53,7 @@ Each 8 KB RAM bank (`$A000-$BFFF`) has a dedicated, non-overlapping owner:
 | `20` | `$A000-$BFFF` | `OVL.TITLE` (`OVL_TITLE = 12`) | Preloaded at boot: title screen renderer & system info |
 | `21` | `$A000-$BFFF` | `TITLE` | Preloaded at boot: title screen artwork stream |
 | `22` | `$A000-$BFFF` | `MONSTER.CAT` (`Cx16Catalog`) | Preloaded at boot: monster catalog, 21 engine fields x 279 creatures, level counts, availability bitmap |
+| `23` | `$A000-$BFFF` | `LEGALUI` | Loaded on demand for license/source text; restores prior bank on return |
 
 Bank 22 is mapped only by `cx16_catalog_map` and `cx16_catalog_unmap`
 (`platforms/cx16/monster_catalog_bank.s`), resident code that saves the
@@ -60,7 +61,7 @@ caller's bank (an overlay in Banks 9-20) and interrupt state and restores both.
 The catalog's Huffman-coded names ride in Bank 4 after the corpus
 (`Cx16HuffData`, virtual `$8DF6-$9B29`), read like the corpus.
 `core/monster_catalog.s` copies a species' fields into resident `cr_*` rows
-and decodes its name into the `$9B00` pool. Banks 23-63 are free.
+and decodes its name into the `$9B00` pool. Bank 23 holds the temporary legal modal; Banks 24-63 are free.
 
 ## 3. Virtual-to-Banked Address Translation (`$2000-$9FFF`)
 
@@ -86,3 +87,34 @@ freely read and write the Map, `Cx16AuxData`, and `Cx16HuffData`.
 * Static memory contract self-test: `make testcx16-memory-contract-selftest`
 * Static linked-symbol & PRG extent gate: `make testcx16-memory-contract`
 * Runtime TestBench suite: `make testcx16-runtime` (25 scenarios in `platforms/cx16/harness_smoke.py`)
+
+## License/source modal ownership (2026-11-10)
+
+`LEGALUI` is an uncached modal loaded on title `A` (About) or Help `L`: temporary Bank 23 $A000-$BFFF; restores the previous RAM bank.
+Code ends before overlay base+$600; a 142-byte core-ZP snapshot starts there,
+and the disk/ROM input cache occupies base+$700..+$7FF. Both are modal
+workspace, never game-data loans or emitted PRG padding. The resident entry saves core ZP before asset loading, after any media
+handler that may itself load an overlay.
+The viewer reads existing documents through the storage HAL, closes every
+channel, retains live sound/redraw state, and restores the caller snapshot.
+Linked payload bounds and production-path modal entry/return tests enforce
+this ownership. See `docs/LEGAL_VIEWER.md` for the change and verification record.
+
+Verification (2026-11-10): `make -j7 -O test` passed, including the linked PRG
+ownership checks and the TestBench title/Help legal-viewer scenario, including
+preserved player state and return to gameplay. Bank 23 is temporary; existing
+cached banks retain their owners.
+
+Review repair: the build emits uppercase `LEGALUI` directly. The cold modal
+uses Bank 23 without invalidating the cached overlay tags in Banks 9-20.
+A low-resident reader selects Bank 0 once per 128-byte chunk, uses the idle
+row staging buffer, then restores Bank 23 before copying into its cache.
+It restores the caller ROM bank too. Fatal READST rejects the refill before
+rendering, and a zero-byte refill performs no copy. Injected $42 verifies
+the error screen, zero count and untouched Bank 23 cache.
+
+Repair verification (2026-11-11): `make -j7 -O test` passed. Applicable payload
+bounds, header/load/execution ownership, missing-file cleanup and production
+modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
+coverage. Existing banking configurations and persistent cache owners remain;
+physical display-layout changes are N/A.

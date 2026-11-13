@@ -113,6 +113,11 @@ kernal_load:
     jsr hal_asset_load
 }
 
+#if C64_CARTRIDGE
+#import "cartridge_copy.s"
+.label hal_asset_load_prg_header = cart_load_prg
+.label hal_asset_load_title = cart_load_title
+#else
 hal_asset_load_prg_header:
     php
     jsr $ffbd               // SETNAM
@@ -176,6 +181,7 @@ hal_asset_load_title:
     rts
 #endif
 
+#endif
 hal_asset_close_channel:
     lda #2
     jsr $ffc3               // CLOSE

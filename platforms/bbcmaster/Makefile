@@ -29,7 +29,8 @@ MAIN_SRC         = main.s
 BOOT_SRC         = boot.s
 TITLE_SRC        = title_data.s
 
-BEEB_SOURCES := $(shell find . ../commodore/common ../shared ../../core -type f \( -name '*.s' -o -name '*.inc' \) -print)
+BEEB_SOURCES := $(shell find . ../commodore/common ../shared ../../core -type f \( -name '*.s' -o -name '*.inc' \) -print) \
+                ../commodore/c128/ui_help_data_80.s
 
 BEEB_MAIN_PRG   = $(OUTBEEB)/moria8.res.prg
 BEEB_PLAY_PRG   = $(OUTBEEB)/beeb.play
@@ -58,6 +59,7 @@ MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -comment_directory "$(MAME_DIR)/comments" \
                  -share_directory "$(MAME_DIR)/share"
 
+BEEB_OVL_PRGS += $(OUTBEEB)/legalui
 .PHONY: all build disk run test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke clean kickass
 
 all: build
@@ -109,6 +111,7 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_p
 	  $(PRG2BIN) "$(OUTBEEB)/ovl.$$lower" "$(OUTBEEB)/bin/OVL.$$f" --expect-addr 0xA800 || exit 1; \
 	done
 	$(PRG2BIN) "$(BEEB_CAT_PRG)" "$(OUTBEEB)/bin/BEEB.CATALOG" --expect-addr 0x9500
+	$(PRG2BIN) "$(OUTBEEB)/legalui" "$(OUTBEEB)/bin/LEGALUI" --expect-addr 0xA800
 	$(PRG2BIN) "$(BEEB_TITLE_PRG)" "$(OUTBEEB)/bin/TITLE" --expect-addr 0x8000
 	python3 ../../tools/make_pak.py "$(OUTBEEB)/bin/MORIA8.PAK" \
 	  "$(OUTBEEB)/bin/MORIA8.RES" "$(OUTBEEB)/bin/BEEB.PLAY" \
@@ -132,6 +135,7 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_p
 	  "OVLSTO=$(OUTBEEB)/bin/OVL.STORAGE:FFFFA800:FFFFA800" \
 	  "OVLTTL=$(OUTBEEB)/bin/OVL.TITLE:FFFFA800:FFFFA800" \
 	  "TITLE=$(OUTBEEB)/bin/TITLE:FFFF8000:FFFF8000" \
+	  "LEGALUI=$(OUTBEEB)/bin/LEGALUI:FFFFA800:FFFFA800" \
 	  "LICENSE=$(OUTBEEB)/bin/LICENSE:FFFF0000:FFFFFFFF" \
 	  "SRCOFFR=$(OUTBEEB)/bin/SRCOFFR:FFFF0000:FFFFFFFF"
 	python3 check_memory_contract.py --disk "$(BEEB_SSD)" || { rm -f "$(BEEB_SSD)"; exit 1; }

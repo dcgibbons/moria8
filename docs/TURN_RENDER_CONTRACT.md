@@ -137,3 +137,32 @@ work16 behavior review; this ledger is their durable approval provenance.
 | A disk prompt since the last pass rebuilds the gameplay view before the next command, and the request is cleared | C64 `test_main_loop.s` t54 and C128 `test_main_loop128.s` test 38 through the real `main_loop` (both fail without the redraw) | `TEST_FILTER='main_loop' make test64`; `TEST_FILTER='main_loop128' make test128-fast`; other platforms compile the identical shared loop and prompt |
 | Search two-turn dirty aggregation with dirty/clean and clean/dirty orderings | none | `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
+
+## License/source modal repair verification (2026-11-11)
+
+`make -j7 -O test` passed. The production title/Help/legal paths execute on all
+seven renderers; Commodore fixtures cover exact-width lines, split CRLF and
+EOF at the page boundary. The PAL/NTSC cartridge Help path, both with normal
+and simulated Ultimate detection, checks dirty bits from entry and the modal
+before caller redraw consumes them, plus sound expiry during input. Normal
+Help return reaches gameplay before movement without consuming turns or RNG.
+Entry and exit use the same live-sound and dirty-OR policy. C64/Plus4
+snapshot after media prompting so a message reset cannot be rolled back by
+viewer entry; production tests seed stale message flags across that prompt.
+Injected refill errors reach the error screen without consuming cache bytes
+or hiding the error at a page prompt. Optional Apple/Atari/BBC overlay loads
+can be cancelled from the cold title before normal title/Help entry.
+These complete the applicable event-lifetime, modal re-entry and shared-render
+rows. Visibility producers/consumers, repeat and teleport rules are N/A: this
+repair changes the document renderer and its return, not those implementations.
+See `docs/LEGAL_VIEWER.md` for payload ownership and the complete change record.
+
+
+Pass 3 cancellation verification (2026-11-11): `make -j7 -O test` passed.
+On Apple/Atari/BBC, a failed optional legal load returns C=1 on Escape. Help
+then exits through the existing gameplay redraw instead of loading HELP from
+the absent program disk; Title draws a resident menu instead of loading TITLE.
+One caller snapshot survives repeated failures and successful retry; a
+write observer checks restored core ZP at the cancel boundary, preserving the
+sound/dirty exceptions. These complete the affected retry, modal-re-entry and
+shared-render rows. Other ports retain the existing compiled Help path.

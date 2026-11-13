@@ -47,11 +47,13 @@ ui_clear_full_screen_safe:
 ui_help_clear_all:
     jmp ui_clear_full_screen_safe
 
-uh_title_str: .text "Command Reference" ; .byte 0
+#if !HELP_TITLE_EXTERNAL
+#import "ui_help_title.s"
+#endif
 help_line_idx: .byte 0
 help_page_idx: .byte 0
 help_page_count: .byte 1
-#if HAL_PLATFORM_AUX_PERSISTENT_DATA && PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#if (HAL_PLATFORM_AUX_PERSISTENT_DATA || HELP_TITLE_EXTERNAL) && PLATFORM_PRODUCT_OVERLAY_RUNTIME
 // Apple II / CX16 help is reachable only through tramp_ui_help_display, which loads
 // OVL.HELP and installs help_pages before calling ui_help_display.
 help_pages_src_lo: .byte 0

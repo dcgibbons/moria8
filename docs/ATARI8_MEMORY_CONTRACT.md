@@ -79,7 +79,7 @@ Memory visibility is controlled through PIA `PORTB` (`$D301`):
      `atari_write_sio_sector`), `exit_trampoline`, interrupt (`atari_nmi_handler`,
      `atari_irq_handler`), and 130XE routines (`xe_detect`, `xe_cache_stash`,
      `xe_cache_fetch`) **must link and execute below `$4000`** (at the start of
-     `Default` in `$0C00-$1FA1`), enforced by link-time `.assert` guards and
+     `Default` in `$0C00-$220A`, `low_helpers_end = $220B`), enforced by link-time `.assert` guards and
      `platforms/atari8/check_memory_contract.py`.
    * `atari_nmi_handler` preserves `A`, `X`, and `Y` (`PHA/TXA/PHA/TYA/PHA`) and
      inspects `NMIST` (`$D40F`): if bit 5 (`$20`, physical `SYSTEM RESET` button
@@ -167,8 +167,8 @@ Memory visibility is controlled through PIA `PORTB` (`$D301`):
 | `$03E8-$03FF` | 24 B | XL OS variables | **Never touch:** `GINTLK` (`$03FA`), `BASICF` (`$03F8`) and others the OS reads (the cartridge check); the file name there broke the `a800xl` save (2026-11-11). |
 | `$0400-$07FF` | 1,024 B | `ATARI_CHARSET_BASE` (`CHBASE = $04`) | 1 KB RAM character set ordered by Moria8/C64 screen codes (`$00-$7F`), built at boot by `atari_font_init` (executing in `< $4000`) from the Atari OS ROM font (`$E000-$E3FF`). 1 KB-aligned as required by ANTIC. |
 | `$0800-$0BFF` | 1,024 B | `SCREEN_RAM` & `DUNGEON_GEN_SCAN_SCRATCH_BASE` | During OS disk boot, `boot.s` (`384` B) loads at `$0800-$097F` (`boot_entry` at `$0806` runs `SEI : CLD : LDX #$FF : TXS : LDA #$FF : STA $D301` to disable BASIC ROM at `$A000-$BFFF` while keeping OS ROM visible), activates a minimal ANTIC Mode 6 banner (`"LOADING MORIA8..."`) at `$0380` using the OS ROM font (`$E000`), stages 128-byte sectors at `$0980-$09FF` to strip the 2-byte PRG header (`$00, $0C`) and 3-byte DOS 2.5 sector trailers (`$7D..$7F`), and streams `MORIA8.RES` into `$0C00-$C0FF` (keeping `PORTB = $FF` until `atari_io_dst_hi >= $BF` so the OS ROM font never flickers, and toggling `PORTB = $FE` only for the final pages `$BF00-$C0FF`) before jumping directly to `entry_main` (never returning via `RTS`). Once `entry_main` activates the custom Display List, `$0800-$0BE7` (`1,000` B) is the 40×25 ANTIC Mode 2 screen buffer (single LMS at `$0800`), and `$0800-$0BFF` (`1,024` B) doubles as page-aligned `DUNGEON_GEN_SCAN_SCRATCH_BASE` during level generation prior to viewport redraw (matching C64). |
-| `$0C00-$1FA1` | 5,026 B | Low Resident Banking, Boot Init, Interrupt, & I/O Helpers (`< $4000`) | Guaranteed below `$4000`: `entry_main` boot init (executes `SEI : LDA #$00 : STA NMIEN : STA DMACTL` before `atari_font_init`), `atari_font_init`, `EnterSio`/`ExitSio`, `save_zp`/`restore_zp`, `sio_sector_buf` (`128` B), `hal_asset_load_prg_header`, `hal_asset_load_title`, `hal_storage_probe_media`, `atari_write_sio_sector`, `hal_storage_open`/`chrin`/`chrout`/`close`, `xe_detect`, `xe_cache_stash`/`xe_cache_fetch`, `xe_slot_populated` (`16` B), `exit_trampoline` (sets `SEI`, `NMIEN = $00`, `WARMST` `$0008 = $00`, `PORTB = $FF`, and jumps to OS coldstart `COLDSV` `$E477` so `WARMSV` never jumps through `DOSINI` `$000C` / `zp_temp4`), `atari_nmi_handler` (saves `A/X/Y`, checks `NMIST` bit 5 `SYSTEM RESET` -> `exit_trampoline`, checks both DLI bit 7 and VBI bit 6, and clears `STA NMIRES`), `atari_irq_handler`, and overlay/banked trampolines. |
-| `$1FA2-$C0FF` | 41,310 B | Resident `Default` Segment (`program_end <= $C100`) | Core gameplay, UI, item catalog, town roster, and shared save engine (`46,336` B total span in `$0C00-$C0FF`, `~365` sectors on disk). Ends strictly at or below `$C100`. Stone-to-Mud (`eff_wall_to_mud`, 44 B) lives in `OVL.SPELL` beside its only callers, the spell table and the Phase 3 wand dispatch (`:WallToMudSegment()`, 2026-11-11, when the four VMS wands left `Default` past `$C100`). |
+| `$0C00-$220A` | 5,643 B | Low Resident Banking, Boot Init, Interrupt, & I/O Helpers (`< $4000`) | Guaranteed below `$4000`: `entry_main` boot init (executes `SEI : LDA #$00 : STA NMIEN : STA DMACTL` before `atari_font_init`), `atari_font_init`, `EnterSio`/`ExitSio`, `save_zp`/`restore_zp`, `sio_sector_buf` (`128` B), `hal_asset_load_prg_header`, `hal_asset_load_title`, `hal_storage_probe_media`, `atari_write_sio_sector`, `hal_storage_open`/`chrin`/`chrout`/`close`, the legal DOS 8.3 filenames and staging helper (`fn_83_license`, `fn_83_offer`, `atari_legal_filename` in `save_stream.s`), Help controller `cmd_show_help_view` (`core/ui_help_command.s`), monster-catalog sector/130XE loader (`monster_catalog_a8.s`: `catalog_boot_load`, `catalog_fetch_record`, `a8_catalog_xe_preload`), `find_special_room` (`core/special_rooms_find.s`), `xe_detect`, `xe_cache_stash`/`xe_cache_fetch`, `xe_slot_populated` (`16` B), `exit_trampoline` (sets `SEI`, `NMIEN = $00`, `WARMST` `$0008 = $00`, `PORTB = $FF`, and jumps to OS coldstart `COLDSV` `$E477` so `WARMSV` never jumps through `DOSINI` `$000C` / `zp_temp4`), `atari_nmi_handler` (saves `A/X/Y`, checks `NMIST` bit 5 `SYSTEM RESET` -> `exit_trampoline`, checks both DLI bit 7 and VBI bit 6, and clears `STA NMIRES`), `atari_irq_handler`, and overlay/banked trampolines. |
+| `$220B-$C0FF` | 40,693 B | Resident `Default` Segment (`program_end <= $C100`) | Core gameplay, UI, item catalog, town roster, and shared save engine (`46,336` B total span in `$0C00-$C0FF`, `~365` sectors on disk). Ends strictly at or below `$C100`. Stone-to-Mud (`eff_wall_to_mud`, 44 B) lives in `OVL.SPELL` beside its only callers, the spell table and the Phase 3 wand dispatch (`:WallToMudSegment()`, 2026-11-11, when the four VMS wands left `Default` past `$C100`). |
 | `$C100-$CFFF` | 3,840 B | `MAP_BASE` (`$C100-$CFFF`) | Live 80×48 dungeon map (`15` pages = `3,840` B = `$0F00` B), ending immediately below the `$D000` hardware I/O window. `CREATURE_BASE` (`$C120-$C1FF`) aliases map scratch during save/game-over, matching C64/Plus/4. `TITLE.DAT` links at `.pc = $C100` (`platforms/atari8/title_data.s`) and copies `3` pages (`768` B) into `$C100-$C3FF`. No executable code is ever linked into `$C100-$CFFF`. |
 | `$D000-$D7FF` | 2,048 B | **Hardware I/O Hole (Forbidden to Code/Data)** | `GTIA` (`$D000-$D0FF`), `POKEY` (`$D200-$D2FF`), `PIA` (`$D300-$D3FF`), `ANTIC` (`$D400-$D4FF`). |
 | `$D800-$DBFF` | 1,024 B | `PLATFORM_TIER_NAME_POOL_BASE` | The level's monster catalog names, 32 B per species slot (asserted in `core/monster_catalog.s`), in RAM under OS ROM. |
@@ -181,8 +181,8 @@ Memory visibility is controlled through PIA `PORTB` (`$D301`):
 | `$DFBB-$DFE0` | 38 B | Item flavour shuffles (`PLATFORM_SHUFFLES_EXTERNAL`, `config.s`) | `potion_shuffle`..`staff_shuffle`: set at a new game and by a load, saved through `sio_sector_buf` (2026-11-11, the rings of Lordly Protection). |
 | `$DFE1-$DFFD` | 29 B | `nf_digit_buf`, `consol_released`, `id_known_bits` | The 8-digit number buffer (`PLATFORM_NF_DIGIT_BUF_EXTERNAL`), the console-key latch (mainline only; `input_init` sets it) and the per-type known bits (`PLATFORM_ID_KNOWN_EXTERNAL`; `item_init_identification` clears them, saved through the low sector buffer; `save_load` checks they round-trip), 2026-11-11. |
 | `$DFFE-$DFFF` | 2 B | `HighResident` Uninitialized BSS Spare | Uninitialized RAM under OS ROM (`PORTB = $FE`; `virtual` segment, never emitted to `MORIA8.RES`). |
-| `$E000-$EFFF` | 4,096 B | `BANKED_DATA_BASE` (Overlay & Tier Window) | Shared 4 KB execution/staging window for the 10 code overlays (`OVL.STA`..`OVL.GEN`) and, at 130XE boot only, the staging of `MONSTER.CAT`'s record sectors (`a8_catalog_xe_preload`), identical to C64 and Plus/4. |
-| `$F000-$FFF9` | 4,090 B | `RuntimeBanked` Segment | Load-once banked runtime (`generation_busy.s`, `run_initialize_impl`, `store_data.s`, `runtime_ui_strings.s`, `special_rooms_find.s` (`find_special_room`, which item placement calls with `OVL.CHS` loaded; the rest of `special_rooms.s` runs in `OVL.GEN` since 2026-11-08), `ego_items.s`, `ui_home.s`, `item_desc_banked.s`, `ui_help_clear.s`, `stat_display.s`, the status line's words and `status_state` (`ui_status.s` `:StatusTextSegment()`, 2026-11-10, when the Poisoned indicator left `Default` 36 bytes over), the equipment flags (`player_recalc_pflags_equipment`, `pf_bit_table`, `pf_ego_table`; `player.s` `:PflagsSegment()`, 2026-11-11, when resistance armour left `Default` 46 bytes over), `disk_prompt_save`/`disk_prompt_game`/`disk_prompt_game_required`, `eff_gain_stat.s`, and `player_magic_learn_op.s`; `ui_recall.s` lives in `DeathOverlay`, and `disk_setup_atari.s` + `save_slot_menu.s` live in `HelpOverlay` `OVL.HLP`). Any storage call from `RuntimeBanked` vectors through `< $4000` helpers in `Default` so `PORTB = $FE` is restored before `RTS`. |
+| `$E000-$EFFF` | 4,096 B | `BANKED_DATA_BASE` (Overlay & Tier Window) | Shared 4 KB execution/staging window for the 10 cached code overlays (`OVL.STA`..`OVL.GEN`), uncached `LEGALUI`, and, at 130XE boot only, the staging of `MONSTER.CAT`'s record sectors (`a8_catalog_xe_preload`), identical to C64 and Plus/4. |
+| `$F000-$FFF9` | 4,090 B | `RuntimeBanked` Segment | Load-once banked runtime (`generation_busy.s`, `run_initialize_impl`, `store_data.s`, `runtime_ui_strings.s`, `ego_items.s`, `ui_home.s`, `item_desc_banked.s`, `ui_help_clear.s` (`HELP_TITLE_EXTERNAL` puts `ui_help_title.s` in `OVL.HLP`), `legal.s` (`tramp_ui_legal_display`), the status line's words and `status_state` (`ui_status.s` `:StatusTextSegment()`, 2026-11-10, when the Poisoned indicator left `Default` 36 bytes over), the equipment flags (`player_recalc_pflags_equipment`, `pf_bit_table`, `pf_ego_table`; `player.s` `:PflagsSegment()`, 2026-11-11, when resistance armour left `Default` 46 bytes over), `disk_prompt_save`/`disk_prompt_game`/`disk_prompt_game_required`, and `eff_gain_stat.s`; `special_rooms_find.s` (`find_special_room`) and `ui_help_command.s` (`cmd_show_help_view`) live in `Default`, `ui_recall.s` and `tramp_game_over_run` live in `DeathOverlay`, wizard prompt helpers live in `ModalMiscOverlay`, and `disk_setup_atari.s` + `save_slot_menu.s` live in `HelpOverlay` `OVL.HLP`). Any storage call from `RuntimeBanked` vectors through `< $4000` helpers in `Default` so `PORTB = $FE` is restored before `RTS`. |
 | `$FFFA-$FFFF` | 6 B | Hardware CPU Vectors (`NMI`, `RESET`, `IRQ`) | Installed in RAM under OS ROM (`$FFFA` -> `atari_nmi_handler`, `$FFFC` -> `exit_trampoline` in `< $4000`, `$FFFE` -> `atari_irq_handler`) for execution while `PORTB = $FE`. |
 
 ---
@@ -256,4 +256,48 @@ slots/bank = 64 KB`) are assigned as follows and tracked via a 16-byte
    * `make testatari8-memory-contract` and `make testatari8-memory-contract-selftest`
    * Verifies symbol extents from `build/atari8/main.sym`, rejects any symbol or segment overlap with `$0200-$031A` (OS Page 2 / DCB), `$C100-$CFFF` (`MAP_BASE`), or `$D000-$D7FF` (Hardware I/O), verifies `< $4000` residency of all banking/SIO/130XE/interrupt/exit/font helpers, and checks all PRG payload spans.
 3. **Runtime MAME Verification (`platforms/atari8/harness_smoke.py`):**
-   * `make testatari8-runtime` runs headless MAME across the 15-scenario behavioral suite on `a800xl` (64 KB disk-overlay baseline) plus 3 dedicated 130XE cache/SIO coexistence scenarios on `a130xe` when `ATARI8ROMS` is set (and warns/skips gracefully when `ATARI8ROMS` is unset).
+   * `make testatari8-runtime` runs headless MAME across the 16-scenario behavioral suite on `a800xl` (64 KB disk-overlay baseline) plus 5 130XE cache/SIO/legal scenarios on `a130xe` when `ATARI8ROMS` is set (and warns/skips gracefully when `ATARI8ROMS` is unset).
+
+## License/source modal ownership (2026-11-10)
+
+`LEGALUI` is an uncached modal loaded on title `A` (About) or Help `L`: $E000-$EFFF; legal controller (`legal.s`) in RuntimeBanked, Help controller (`ui_help_command.s`) in Default, and canonical 8.3 filename constants/matcher (`atari_legal_filename`) in low-resident Default (< $4000) parsed before SIO mapping.
+Code ends before overlay base+$600; a 142-byte core-ZP snapshot starts there,
+and the disk/ROM input cache occupies base+$700..+$7FF. Both are modal
+workspace, never game-data loans or emitted PRG padding. The resident entry saves core ZP before asset loading, after any media
+handler that may itself load an overlay.
+The viewer reads existing documents through the storage HAL, closes every
+channel, retains live sound/redraw state, and restores the caller snapshot.
+Linked payload bounds and production-path modal entry/return tests enforce
+this ownership. See `docs/LEGAL_VIEWER.md` for the change and verification record.
+
+Verification (2026-11-10): `make -j7 -O test` passed, including the memory-
+contract self-tests, linked payload bounds, the a800xl title/Help legal-viewer
+scenario, and the existing a130xe cache/SIO regressions. Low SIO helpers and
+RuntimeBanked remain inside their asserted limits.
+
+Review repair: legal names use the canonical DOS 8.3 tables in RuntimeBanked;
+the low stream adapter matches the complete read-only name before SIO.
+No L*/S* prefix aliasing or duplicate legal filename strings remain.
+The 130XE runtime suite includes the Help/legal modal and missing-file path.
+
+Optional legal loads retain bounded asset retries, then offer Escape at the
+resident program-disk prompt. One caller snapshot survives every retry. Escape
+restores ZP after the prompt and returns with carry set; Help exits directly to
+gameplay, and Title redraws only its resident menu. Neither return reloads the
+invalidated overlay while the program disk is absent. No Storage overlay or
+unavailable play-slot verifier is called. See the Pass 3 record in
+`docs/LEGAL_VIEWER.md` for the save-disk, retry and cancel-boundary tests.
+
+Repair verification (2026-11-11): `make -j7 -O test` passed. Applicable payload
+bounds, header/load/execution ownership, missing-file cleanup and production
+modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
+coverage. Existing banking configurations and persistent cache owners remain;
+physical display-layout changes are N/A.
+
+
+Pass 3 verification (2026-11-11): `make -j7 -O test` passed. The added
+save-disk fixtures verify cold Title cancellation to its resident menu,
+Help cancellation to gameplay without a cold reload, failed/successful retry
+snapshot survival and restored core ZP at the cancel-return boundary. All
+linked bounds and the existing bank/cache owners remain enforced. See
+`docs/LEGAL_VIEWER.md` for the carry contract and physical media preconditions.

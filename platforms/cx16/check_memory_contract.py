@@ -31,6 +31,7 @@ class PrgSpec:
 
 
 PRG_SPECS = (
+    PrgSpec("LEGALUI", 0xA000, 0xA600, "legal_code_end"),
     PrgSpec("MORIA8.PRG", 0x0801, 0x9B00, "program_end"),
     PrgSpec("CX16.AUXDATA", 0x6000, 0x8000, "ovl_auxdata_end"),
     PrgSpec("CX16.HUFFDATA", 0x8000, 0xA000, "ovl_huffdata_end"),

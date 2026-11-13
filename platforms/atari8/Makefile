@@ -53,6 +53,7 @@ MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -comment_directory "$(MAME_DIR)/comments" \
                  -share_directory "$(MAME_DIR)/share"
 
+ATARI8_OVL_PRGS += $(OUTATARI8)/legalui
 .PHONY: all build disk run run-130xe test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke clean kickass
 
 all: build

@@ -395,8 +395,9 @@ player_bake_apply_one:
 .assert "Weapon, body, shield and head slots are contiguous", EQUIP_BODY == EQUIP_WEAPON + 1 && EQUIP_SHIELD == EQUIP_BODY + 1 && EQUIP_HEAD == EQUIP_SHIELD + 1, true
 
 // The equipment flags: a port short of resident room places them with
-// :PflagsSegment()/:PflagsRestoreSegment() (the Atari: its always-visible
-// $F000 runtime).
+// :PflagsSegment()/:PflagsRestoreSegment() (Plus/4 and Atari: their
+// always-visible $F000 RuntimeBanked; C64: $F000 RuntimeBanked behind
+// PLAYER_RECALC_PFLAGS_EXTERNAL).
 #if !PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {}
 .macro PflagsRestoreSegment() {}

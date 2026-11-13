@@ -9,7 +9,11 @@
 // Save/load status and feedback messages now live in huffman_data.s so the
 // resident runtime image does not carry duplicate raw text.
 title_menu_str:
+#if HAL_PLATFORM_LEGAL_VIEWER
+    .text "N)ew  L)oad  D)isk Setup  A)bout" ; .byte 0
+#else
     .text "N)ew  L)oad  D)isk Setup" ; .byte 0
+#endif
 
 ds_save_str:       .text "Insert save disk" ; .byte 0
 ds_game_str:       .text "Insert program disk" ; .byte 0
