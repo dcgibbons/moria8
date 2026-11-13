@@ -2856,6 +2856,27 @@ class ResistFireTest(unittest.TestCase):
         self.assertEqual(brain.level.breath[1], 171)
         self.assertIn(frozenset({"fire"}), brain.level.breathers)
 
+    def test_under_a_remembered_lethal_breath_holy_word_comes_before_potions(self) -> None:
+        """2026-11-13: a clvl 40 Priest teleported from an unseen Ancient
+        Multi-Hued Dragon at 186/879, drank Cure Serious and Cure Light (+10
+        each) waiting for Word of Recall with Holy Word known, and was
+        breathed on (C64 Balrog)."""
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import HOLY_WORD
+        from moria_playtest.brain import CSW, Decision
+        brain = Brain(for_character(GOALS["balrog"], "half-troll-priest"))
+        known = {HOLY_WORD}
+        brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name in known              # type: ignore[method-assign]
+        brain.strong[CSW], brain.clw = 9, 10
+        view = town_view((43, 16), (80, 40), dlvl=50)
+        o = command_obs(pos=(43, 16), dlvl=50, clvl=40, hp=186, mhp=879)
+        brain.note_breath(o, view, 693, "poison")
+        decision = brain.quaff(o, view)
+        self.assertIn(HOLY_WORD, decision.reason)
+        known.clear()                                                  # without it, the potions as before
+        self.assertNotIn(HOLY_WORD, (brain.quaff(o, view) or Decision(0, "", "")).reason)
+
     def test_an_unseen_breath_is_remembered_as_big_again(self) -> None:
         """2026-11-09: a level-37 Priest took 106 from an unseen Mature
         Multi-Hued Dragon, explored on at 189/295 and died to the next."""

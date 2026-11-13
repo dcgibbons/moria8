@@ -5005,6 +5005,17 @@ class Brain:
             strong = CCW
             self.picking, self.listed = strong, False
             return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp} draining: drink {strong[len('Potion of '):]} Wounds")
+        burst = max(self.remembered_bursts(obs, lasting=True), default=0)
+        if obs.dlvl and burst >= obs.hp and obs.hp < obs.mhp:
+            # A breath remembered on the level kills at this HP: the big heal
+            # prayer before any potion, as a player does. A clvl 40 Priest
+            # teleported from an unseen Ancient Multi-Hued Dragon at 186/879,
+            # waited for Word of Recall drinking Cure Serious and Cure Light
+            # (+10 each) with Holy Word known, and was breathed on (C64
+            # Balrog, 2026-11-13).
+            for spell in (HOLY_WORD, HEAL):
+                if self.magic.can(obs, spell):
+                    return Decision(*self.magic.pray(spell, f"HP {obs.hp}/{obs.mhp} under a breath of {burst}: pray {spell}"))
         if not (self.clw or strong) or (obs.hp >= QUAFF_HP * obs.mhp and not (
                 (self.under_spell(obs, view) or self.under_blow(obs, view)) and not self.magic.can(obs, CURE_LIGHT))):
             return None
