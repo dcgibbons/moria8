@@ -226,6 +226,22 @@ class ScheduleTest(unittest.TestCase):
         self.assertEqual(stopped, ["a", "d"])
         self.assertFalse((service.home / "restart-balrog").exists())      # once
 
+    def test_stop_balrog_ends_only_the_named_characters_live_runs(self) -> None:
+        """2026-11-13: a combination that had won twice played on in six slots."""
+        service = self.service(4)
+        service.running = {r: {"queue": q, "platform": "c64", "character": c, **x} for r, q, c, x in
+                           (("a", "balrog", "half-troll-priest", {}), ("b", "balrog", "dwarf-priest", {}),
+                            ("c", "main", "half-troll-priest", {}), ("d", "balrog", "half-troll-priest", {"cancelled": True}),
+                            ("e", "balrog", "half-troll-priest", {}))}
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        service.stop_balrog()
+        self.assertEqual(stopped, [])                                     # not asked
+        queue.write_json(service.home / "stop-balrog", ["c64/half-troll-priest"])
+        service.stop_balrog()
+        self.assertEqual(stopped, ["a", "e"])                             # the Balrog queue's, not yet cancelled
+        self.assertFalse((service.home / "stop-balrog").exists())         # once
+
     def test_a_subqueue_plays_beside_a_focus(self) -> None:
         """2026-11-10: an A/B subqueue's 64 games were all stopped within five
         seconds by the Balrog focus; only the main queue's runs and other

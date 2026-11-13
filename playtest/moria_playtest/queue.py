@@ -1649,6 +1649,24 @@ class Service:
         for run_id in old:
             self.stop_run(run_id)
 
+    def stop_balrog(self) -> None:
+        """``make playtest-queue-stop-balrog CHARACTERS=...``: end the named
+        characters' live Balrog runs now (cancelled: no result). The
+        maintainer freed the slots of a combination that had won twice while
+        six of its games played on (2026-11-13). Names are "character" or
+        "platform/character"."""
+        flag = self.home / "stop-balrog"
+        if not flag.exists():
+            return
+        names = set(read_json(flag) or [])
+        flag.unlink()
+        hit = [r for r, j in self.running.items()
+               if j["queue"] == "balrog" and not j.get("cancelled")
+               and ({j.get("character"), f"{j.get('platform')}/{j.get('character')}"} & names)]
+        self.log(f"balrog queue: stop {len(hit)} runs of {', '.join(sorted(names))}")
+        for run_id in hit:
+            self.stop_run(run_id)
+
     def stop_run(self, run_id: str) -> None:
         """End a run now (a cancelled subqueue): its whole process group."""
         job = self.running[run_id]
@@ -2044,6 +2062,7 @@ class Service:
         self.graduate(queue)
         self.refresh_build()
         self.restart_balrog()
+        self.stop_balrog()
         self.refresh_ci()
         self.finish_subs(subs)
         subs = {name: sub for name, sub in subs.items() if not sub.get("done")}
@@ -2145,6 +2164,8 @@ def main(argv: list[str] | None = None) -> int:
     report = sub.add_parser("report", help="print a subqueue's report (an A/B subqueue's comparison)")
     report.add_argument("--name", required=True)
     sub.add_parser("status", help="print the main queue and subqueues")
+    stop = sub.add_parser("stop-balrog", help="end these characters' live Balrog runs now")
+    stop.add_argument("--characters", required=True, help='comma-separated "character" or "platform/character"')
     rebuild = sub.add_parser("rebuild", help="play this working tree as it stands from the next run on")
     rebuild.add_argument("--restart-balrog", action="store_true",
                          help="then end every Balrog run on an older build: each goes on from its start")
@@ -2174,6 +2195,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "status":
         return status()
+    if args.command == "stop-balrog":
+        names = [c.strip() for c in args.characters.split(",") if c.strip()]
+        write_json(HOME / "stop-balrog", names)
+        print(f"the queue service ends the live Balrog runs of {', '.join(names)} on its next tick")
+        return 0
     if args.command == "rebuild":
         HOME.mkdir(parents=True, exist_ok=True)
         (HOME / "rebuild").touch()

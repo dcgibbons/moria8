@@ -7,7 +7,7 @@
 	buildatari8 diskatari8 cartridgeatari8 runatari8 runatari8-130xe runatari8-cart runatari8-cart-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-cartridge testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
-	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-m0-report playtest-session playtest-qualify playtest-disk \
+	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-stop-balrog playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-m0-report playtest-session playtest-qualify playtest-disk \
 	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
@@ -194,6 +194,10 @@ playtest-queue-status:
 
 playtest-queue-rebuild:
 	$(PLAYTEST_PY) -m moria_playtest.queue rebuild$(if $(RESTART_BALROG), --restart-balrog)
+
+# End the named characters' live Balrog runs (CHARACTERS=half-troll-priest,...).
+playtest-queue-stop-balrog:
+	$(PLAYTEST_PY) -m moria_playtest.queue stop-balrog --characters "$(CHARACTERS)"
 
 # Re-creates var/moria8/queue.db from runs.jsonl (§23.10).
 playtest-queue-records-rebuild:
