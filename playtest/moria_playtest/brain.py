@@ -289,6 +289,13 @@ EGO_ELEMENTS = {"Resist": FOUR_ELEMENTS, "Defender": FOUR_ELEMENTS, "Resist Acid
                 "Resist Lightning": frozenset({"lightning"}), "the Magi": frozenset({"fire", "frost", "acid"})}
 
 
+def status_states(obs: Observation) -> str:
+    """The status lines' words for hunger, poison and search mode: row 21 since
+    2026-11-12 (hunger left row 23, where it cut 40-column MP short), row 23
+    before."""
+    return obs.rows[21] + " " + obs.rows[23]
+
+
 def resist_egos(text: str) -> list[str]:
     """The resistance egos (``EGO_ELEMENTS`` keys) named in ``text``."""
     return [m.group(1) or m.group(2) for m in EGO_RESIST.finditer(text)]
@@ -1113,7 +1120,7 @@ class Brain:
         if "drain" not in self.goal.tactics:
             return
         # Starving costs HP too: Weak or Faint is hunger, not poison.
-        starving = any(word in obs.rows[23] for word in ("Weak", "Faint"))
+        starving = any(word in status_states(obs) for word in ("Weak", "Faint"))
         lost = self.drain_hp is not None and obs.hp < self.drain_hp and not self.attacked and not starving
         self.drain_hp = obs.hp
         if lost or self.rest_hp is not None and obs.hp < self.rest_hp and not self.attacked:
@@ -3430,6 +3437,13 @@ class Brain:
         Dragon's 468) until a Ring of Resist Cold cuts that to 156."""
         if not self.goal.threat_depth or obs.clvl < THREAT_DEPTH_FROM:
             return False
+        if not self.short_escape(obs):
+            # A breather's reach is left at once or not at all: Word of
+            # Recall takes 15-35 turns. Two clvl 36-37 Half-Orc Warriors with
+            # Free Action went to DL37 with no Phase Door or teleport, an
+            # Ancient Blue Dragon came to them, and each fought it to the
+            # last breath (C64 Balrog, 2026-11-12). The margin decides then.
+            return False
         if dlvl >= BALROG_DLVL:
             # The Balrog is on every level from here (catalog_place_win_
             # creature) and no native's breath says so: its levels are
@@ -3442,6 +3456,15 @@ class Brain:
         # DL39 there and died 16 times in 30 minutes (C64 Balrog, 2026-11-11;
         # maintainer: count them).
         return self.native_exchange(obs, dlvl + OUT_OF_DEPTH) < BREATH_LETHAL * obs.mhp
+
+    def short_escape(self, obs: Observation) -> bool:
+        """Out of a breather's reach at once: a Phase Door or Teleportation
+        scroll, a Staff of Teleportation with charges, or Phase Door,
+        Teleport Self or Portal known at the character's level."""
+        if self.phase or self.teleports or self.wands.get(TELEPORT_STAFF, 0) > 0:
+            return True
+        known = self.magic.known
+        return any(s in known and known[s].level <= obs.clvl for s in (PHASE_DOOR, TELEPORT_SELF, PORTAL))
 
     def mana_klass(self) -> bool:
         """A class with mana: all but the Warrior (Rogues and Rangers cast
@@ -4535,7 +4558,7 @@ class Brain:
             self.no_food = True
         elif "You picked up" in messages:
             self.no_food = False
-        status = obs.rows[23]
+        status = status_states(obs)
         if self.no_food or not any(word in status for word in ("Hungry", "Weak", "Faint")):
             return None
         if "Hungry" in status and any(chebyshev(p, view.pos) <= EAT_CLEAR for p in self.threats(view)):
@@ -5532,7 +5555,7 @@ class Brain:
                 self.level.lit_at is None or chebyshev(self.level.lit_at, view.pos) >= LIT_EVERY):
             self.level.lit_at = view.pos
             return Decision(*magic.pray(spell, f"no light: {spell}"))
-        hungry = any(word in obs.rows[23] for word in ("Hungry", "Weak", "Faint"))
+        hungry = any(word in status_states(obs) for word in ("Hungry", "Weak", "Faint"))
         if obs.dlvl and not near and self.food_low() and (hungry or not self.pack_full) \
                 and magic.can(obs, CREATE_FOOD):
             # Before a heal: starving drains HP back as fast as Cure Light

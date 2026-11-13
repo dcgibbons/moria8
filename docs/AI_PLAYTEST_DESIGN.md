@@ -3048,7 +3048,11 @@ a win is unlikely until the bot plays much better.
   `BALROG_NEAR_STEPS` of a sighting, else from nearly full mana: kept up
   from the first sighting, a Priest prayed it 44 times exploring DL50 and
   met the Balrog with nothing for Orb. Casters pick up and keep Potions of
-  Restore Mana, which no store sells. A dive from level 35
+  Restore Mana, which no store sells. As deep as it survives only with a
+  way out at once (`brain.short_escape`: Phase Door, Teleportation, a
+  Staff of Teleportation, or Phase Door, Teleport Self or Portal known):
+  two Half-Orc Warriors with Free Action and none went to DL37 and fought
+  Ancient Blue Dragons to the last breath. A dive from level 35
   to DL49 for the experience (`DIVE_FROM_CLVL`, `DIVE_MAX_DLVL`) was tried
   the same day and turned off: six deaths to Ancient Multi-Hued Dragons
   breathing from beyond Detect Evil's panel in two hours, and less

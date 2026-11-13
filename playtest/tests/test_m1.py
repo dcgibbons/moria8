@@ -173,6 +173,17 @@ class BrainM2Test(unittest.TestCase):
         self.assertNotEqual(brain.decide(hungry(""), view).layer, "eat")
         self.assertEqual(brain.decide(hungry("You picked up a Ration of Food."), view).layer, "eat")
 
+    def test_hunger_is_read_from_row_21(self) -> None:
+        """Maintainer, 2026-11-12: hunger moved to row 21 after the name (the
+        race left the status line), where it no longer cuts 40-column MP short;
+        row 23 is HP, MP, AC and gold only."""
+        brain = Brain(GOALS["reach_dl2"])
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        o = self.obs()
+        o.rows[21] = "bot Hungry Search*          LV:1  DL:1".ljust(40)
+        o.rows[23] = "HP:21/21   MP:0/0     AC:4   AU:277".ljust(40)
+        self.assertEqual(brain.decide(o, view).layer, "eat")
+
     def store_obs(self, stage: str, rows: dict[int, str]) -> Observation:
         o = self.obs(dlvl=0)
         o.rows = [" " * 40] * 25
@@ -1816,7 +1827,7 @@ class ThreatDepthTest(unittest.TestCase):
         from moria_playtest.brain import CSW
         from moria_playtest.goals import for_character
         brain = Brain(for_character(GOALS[goal], "half-troll-priest"))
-        brain.recall, brain.clw, brain.strong[CSW] = 3, 20, 5
+        brain.recall, brain.clw, brain.strong[CSW], brain.phase = 3, 20, 5, 5   # a deep character's stock
         brain.wants_book_trip = lambda obs: False   # type: ignore[method-assign]   # its books bought
         return brain
 
@@ -1830,10 +1841,34 @@ class ThreatDepthTest(unittest.TestCase):
         deeper counted, DL38's Ancient White Dragon (468) holds them at DL35."""
         from moria_playtest.goals import for_character
         brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
-        brain.recall, brain.clw = 3, 20
+        brain.recall, brain.clw, brain.phase = 3, 20, 5
         self.assertTrue(self.deeper(brain, 34, clvl=31, mhp=256))    # onto DL35
         self.assertFalse(self.deeper(brain, 35, clvl=31, mhp=256))   # not DL36: DL38's natives
         self.assertFalse(self.deeper(brain, 36, clvl=31, mhp=256))   # nor DL37
+
+    def test_threat_depth_wants_a_short_escape(self) -> None:
+        """C64 Balrog, 2026-11-12: two clvl 36-37 Half-Orc Warriors with Free
+        Action went to DL37 with no Phase Door or teleport (Word of Recall
+        takes 15-35 turns), met an Ancient Blue Dragon and fought it to the
+        last breath. As deep as it survives only with a way out at once."""
+        from moria_playtest.brain import TELEPORT_STAFF
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import PORTAL, Prayer
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        brain.jewel_names.update(Ring2="Ring of Speed", Amulet="Amulet of the Magi")
+        brain.recall, brain.clw = 5, 157
+        o = command_obs(pos=(10, 10), dlvl=35, clvl=37, hp=465, mhp=465)
+        self.assertFalse(brain.short_escape(o))
+        self.assertFalse(brain.threat_ready(o, 35))                    # recall alone: the margin decides
+        brain.phase = 1
+        self.assertTrue(brain.threat_ready(o, 35))
+        brain.phase, brain.wands[TELEPORT_STAFF] = 0, 3
+        self.assertTrue(brain.short_escape(o))
+        brain.wands[TELEPORT_STAFF] = 0
+        brain.magic.known[PORTAL] = Prayer("e", 15, 30)                # a Paladin's or Priest's Portal
+        self.assertTrue(brain.short_escape(o))
+        brain.magic.known[PORTAL] = Prayer("e", 15, 39)                # not yet at clvl 37
+        self.assertFalse(brain.short_escape(o))
 
     def test_melee_and_paralysis_count_without_free_action(self) -> None:
         """C64 Balrog, 2026-11-12: clvl 32 Warriors at 330 HP with a Ring of
@@ -1848,6 +1883,7 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertIn(("D", 38), knowledge.paralyzer_kinds())          # the Ancient White Dragon's Hold Person
         brain = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
         brain.jewel_names.update(Ring2="Ring of Speed")
+        brain.phase = 5
         o = command_obs(pos=(10, 10), dlvl=35, clvl=32, hp=330, mhp=330)
         self.assertEqual(brain.native_exchange(o, 38), 234 + 24 * (1 + HELD_TURNS))
         self.assertTrue(brain.threat_ready(o, 35))                    # DL37's natives: 194

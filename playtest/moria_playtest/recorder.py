@@ -115,7 +115,9 @@ class CharacterLog:
         entry = {"step": obs.step, "mode": obs.mode.value, "stage": obs.stage, "dlvl": obs.dlvl,
                  "pos": list(obs.pos), "hp": obs.hp,
                  "msg": " | ".join(r.strip() for r in obs.rows[:2] if r.strip()),
-                 "status": obs.rows[23].strip(), **decision}
+                 # Row 21 too: hunger, Poisoned and Search* are there since
+                 # 2026-11-12 (dashboard: a starvation death reads "Weak").
+                 "status": obs.rows[23].strip(), "states": obs.rows[21].strip(), **decision}
         self.trace.write(json.dumps(entry) + "\n")
         self.recent = (self.recent + [entry])[-30:]
 
