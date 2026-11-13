@@ -8,7 +8,8 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import ATARI8, ATARI8_CART, C64, C64_CART, C64_NOREU, C128, PLUS4, PORTS
+from moria_playtest.ports import (ATARI8, ATARI8_CART, C64, C64_CART, C64_NOREU, C128, C128_CART, CX16, CX16_CART,
+                                   PLUS4, PLUS4_CART, PORTS)
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
 ABI = abimod.Abi(labels={"zp_player_x": 0x2B, "zp_player_y": 0x2C, "zp_player_hp_lo": 0x2D,
@@ -426,6 +427,53 @@ class C64VariantTest(unittest.TestCase):
             hal.mkdir(parents=True)
             (hal / "storage_policy.s").write_text("")
             self.assertEqual(queue.save_versions("b", "c64-cart", home), queue.save_versions("b", "c64", home))
+
+
+class CommodoreAndX16CartridgeTest(unittest.TestCase):
+    """Maintainer, 2026-11-13: the Plus/4 and the C128 play disk and
+    cartridge, the X16 only its cartridge. The Plus/4's c264 magic cart and
+    the C128's Magic Desk 128 boot as the C64's EasyFlash; xplus4 exits
+    restoring a snapshot taken with its cartridge, so that port boots each
+    character. The X16 cartridge boots under the testbench as
+    platforms/cx16/test_cartridge.py does it."""
+
+    def test_the_ports(self) -> None:
+        for port, base, cart, target in ((PLUS4_CART, PLUS4, "moria8-plus4.crt", "diskplus4 cartridgeplus4"),
+                                         (C128_CART, C128, "moria8-c128.crt", "disk128 cartridge128")):
+            self.assertIn(port.name, PORTS)
+            self.assertEqual(port.platform, base.name)
+            self.assertEqual((port.out, port.disk, port.cartridge), (f"{base.name}-cart", base.disk, cart))
+            self.assertEqual(port.disk_target, target)
+        self.assertFalse(PLUS4_CART.snapshots)
+        self.assertIn("-reu", C128.resource_args)
+        self.assertNotIn("-reu", C128_CART.resource_args)                 # the cartridge holds the overlays
+        self.assertEqual((CX16_CART.platform, CX16_CART.backend, CX16_CART.cartridge), ("cx16", "x16", "moria8-cx16.crt"))
+        self.assertIn("cx16_preload_banks", CX16_CART.labels)
+
+    def test_x16emu_boots_a_signature_less_copy_with_an_empty_fsroot(self) -> None:
+        from unittest import mock
+        from moria_playtest import x16
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cart = root / "moria8-cx16.crt"
+            cart.write_bytes(bytes(x16.CART_SIGNATURE) + b"CX16" + bytes(16))
+            launched: list[list[str]] = []
+
+            def popen(args, **kw):
+                launched.append(list(args))
+                return mock.Mock(stdin=None, stdout=mock.Mock(fileno=lambda: 0))
+            with mock.patch.object(x16.subprocess, "Popen", side_effect=popen), \
+                    mock.patch.object(x16.os, "set_blocking"), mock.patch.object(x16.X16Process, "ready"):
+                x16.X16Process(0, root, root / "cx16-cart", CX16_CART, cartridge=cart).start_x16("x16emu", "rom.bin")
+                x16.X16Process(1, root, root / "cx16", CX16).start_x16("x16emu", "rom.bin")
+            booted, disk = launched
+            media = root / "testbench.crt"
+            self.assertEqual(booted[booted.index("-cart") + 1], str(media))
+            self.assertEqual(media.read_bytes()[x16.CART_SIGNATURE], 0)            # the ROM stops at the testbench
+            self.assertEqual(cart.read_bytes()[x16.CART_SIGNATURE], ord("C"))      # the build's own untouched
+            self.assertEqual(list((root / "fsroot").iterdir()), [])               # saves only: no program files
+            self.assertEqual(disk[disk.index("-fsroot") + 1], str(root / "cx16"))  # the disk build as before
+            self.assertNotIn("-cart", disk)
 
 
 class Atari8CartridgeTest(unittest.TestCase):

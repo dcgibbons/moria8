@@ -393,7 +393,8 @@ const LEVEL_BANDS = [[1, 1, "L1"], [2, 2, "L2"], [3, 4, "L3-4"], [5, 7, "L5-7"],
 const BAND_COLORS = ["#e0603c", "#c57900", "#ffd93d", "#9ad284", "#7779dc"];
 let current = null, data = null, mile = null, cover = null, diskData = null, watching = null;
 const PORT_NAMES = {c64: "C64", "c64-noreu": "C64 (no REU)", "c64-cart": "C64 Cartridge", "atari8-cart": "Atari 8-bit Cartridge", plus4: "Plus/4", c128: "C128", apple2: "Apple IIe", atari8: "Atari 8-bit",
-                    bbcmaster: "BBC Master", cx16: "Commander X16"};
+                    bbcmaster: "BBC Master", cx16: "Commander X16", "plus4-cart": "Plus/4 Cartridge",
+                    "c128-cart": "C128 Cartridge", "cx16-cart": "Commander X16 Cartridge"};
 const $ = id => document.getElementById(id);
 // Published (make playtest-publish): static data files, refreshed every 30 s.
 const STATIC = !!document.querySelector('meta[name="playtest-static"]');

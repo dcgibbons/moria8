@@ -435,5 +435,23 @@ C64_CART = replace(C64, name="c64-cart", source="c64", out="c64-cart", disk_targ
 ATARI8_CART = replace(ATARI8, name="atari8-cart", source="atari8", out="atari8-cart",
                       disk_target="diskatari8 cartridgeatari8", cartridge="moria8-atari8.car")
 
+# The Plus/4 c264 magic cart (make cartridgeplus4, build/plus4-cart) and the
+# C128 Magic Desk 128 (make cartridge128, build/c128-cart): booted from the
+# .crt with the disk build's disk in drive 8 for saves (maintainer,
+# 2026-11-13: the Plus/4 and the C128 play disk and cartridge).
+PLUS4_CART = replace(PLUS4, name="plus4-cart", source="plus4", out="plus4-cart",
+                     disk_target="diskplus4 cartridgeplus4", disk_files={}, cartridge="moria8-plus4.crt",
+                     snapshots=False)   # xplus4 3.10 exits restoring a snapshot taken with it attached
+C128_CART = replace(C128, name="c128-cart", source="c128", out="c128-cart", disk_target="disk128 cartridge128",
+                    disk_files={}, cartridge="moria8-c128.crt", resource_args=without_reu(C128.resource_args))
+
+# The Commander X16 cartridge (make -C platforms/cx16 cartridge,
+# build/cx16-cart): the X16's only build from 2026-11-13 (maintainer). x16emu
+# -cart with an empty -fsroot for saves; x16.py hands over to its boot.
+CX16_CART = replace(CX16, name="cx16-cart", source="cx16", out="cx16-cart", disk="cx16-cart",
+                    disk_target="buildcx16", cartridge="moria8-cx16.crt",
+                    labels={**CX16.labels, "cx16_preload_banks": "platforms/cx16/overlay_storage.s"})
+
 PORTS: dict[str, Port] = {port.name: port for port in
-                          (C64, C64_NOREU, C64_CART, PLUS4, C128, APPLE2, ATARI8, ATARI8_CART, BBCMASTER, CX16)}
+                          (C64, C64_NOREU, C64_CART, PLUS4, PLUS4_CART, C128, C128_CART, APPLE2, ATARI8,
+                           ATARI8_CART, BBCMASTER, CX16, CX16_CART)}

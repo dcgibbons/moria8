@@ -93,10 +93,13 @@ class Worker:
                                  hang_emulated_seconds=self.hang_emulated_seconds)
             return self.game
         if port.backend == "x16":
-            process = X16Process(self.worker_id, self.workdir, self.disk, port)
+            process = X16Process(self.worker_id, self.workdir, self.disk, port, cartridge=self.cartridge)
             emulator = os.environ.get("X16EMU") or port.emulator
             self.vp = process.start_x16(emulator, rom_args(port=port)[1])   # type: ignore[assignment]
             self.game = X16Game(process, self.abi, self.workdir, port=port)
+            if self.cartridge is not None:
+                boot = abimod.parse_vs(self.build.prg.parent / "cartridge_boot.sym")
+                self.game.boot_cold_start = boot["boot_cold_start"][0]
             return self.game
         self.vp = ViceProcess(self.worker_id, self.workdir, self.disk,
                               allocate_port(self.worker_id), self.emulator, self.build.target,
