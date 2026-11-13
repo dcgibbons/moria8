@@ -1269,7 +1269,7 @@ test_status_search_indicator_row21:
     lda #>expected_status_search
     sta zp_ptr0_hi
     lda #21
-    ldx #19
+    ldx #1                          // after the (empty) name: the race left row 21
     sei
     jsr assert_screen_string
     bcc !string_fail+
@@ -1285,8 +1285,11 @@ test_status_search_indicator_row21:
     sta tc_results + 16
     rts
 
-// Test 22: "Poisoned" while the poison timer runs (VMS prt_poisoned), in
-// Search*'s row-21 slot on 40 columns; Search* again once it ends.
+// Test 22: row 21's states after the name, most urgent first, each while it
+// fits before LV: (maintainer, 2026-11-12: the race left the status line and
+// hunger moved up from row 23): hunger, Poisoned (VMS prt_poisoned), Search*.
+// The poison ending redraws the row; after a 12-character name Poisoned does
+// not fit, and Search*, which would, is not shown in its place.
 test_status_poisoned_row21:
     jsr reset_shared_state
     lda #0
@@ -1299,6 +1302,7 @@ test_status_poisoned_row21:
     sta zp_player_mp
     sta zp_player_mmp
     sta zp_player_ac
+    lda #HUNGER_HUNGRY
     sta zp_hunger_state
     lda #1
     sta zp_player_lvl
@@ -1314,15 +1318,10 @@ test_status_poisoned_row21:
     lda #5
     sta zp_eff_poison
     jsr status_draw
-    lda #<expected_status_poisoned
-    sta zp_ptr0
-    lda #>expected_status_poisoned
-    sta zp_ptr0_hi
-    lda #21
-    ldx #19
-    sei
-    jsr assert_screen_string
-    cli
+    lda #<expected_status_states
+    ldx #>expected_status_states
+    ldy #1
+    jsr assert_row21_at
     bcc !tsp_fail+
     lda #0
     sta zp_eff_poison                // the poison ends: the state changed, row 21 redraws
@@ -1332,15 +1331,28 @@ test_status_poisoned_row21:
     sei
     jsr status_draw
     cli
-    lda #<expected_status_search_after_poison
-    sta zp_ptr0
-    lda #>expected_status_search_after_poison
-    sta zp_ptr0_hi
-    lda #21
-    ldx #19
+    lda #<expected_status_states_cured
+    ldx #>expected_status_states_cured
+    ldy #1
+    jsr assert_row21_at
+    bcc !tsp_fail+
+    ldx #12                          // a 12-character name, poisoned again
+!tsp_name:
+    lda test_name12,x
+    sta player_data + PL_NAME,x
+    dex
+    bpl !tsp_name-
+    lda #5
+    sta zp_eff_poison
+    lda #0
+    sta status_cache_valid           // a cold draw: the name is not cached
     sei
-    jsr assert_screen_string
+    jsr status_draw
     cli
+    lda #<expected_status_long_name
+    ldx #>expected_status_long_name
+    ldy #0
+    jsr assert_row21_at
     bcc !tsp_fail+
     lda #$01
     .byte $2c
@@ -1349,6 +1361,21 @@ test_status_poisoned_row21:
     sta tc_results + 21
     lda #0
     sta player_data + PL_FLAGS
+    sta player_data + PL_NAME
+    sta zp_eff_poison
+    sta zp_hunger_state
+    rts
+
+// A/X = expected text at row 21, column Y; C set on a match.
+assert_row21_at:
+    sta zp_ptr0
+    stx zp_ptr0_hi
+    tya
+    tax
+    lda #21
+    sei
+    jsr assert_screen_string
+    cli
     rts
 
 test_inventory_identify_select_view_six_items:
@@ -1431,8 +1458,8 @@ test_screen_put_string_clamps_to_row:
 
 // Gold is 24-bit (PL_GOLD_0-2): the status line printed the low 16 bits,
 // so 65,547 gold showed as 11 (C128 Balrog queue, 2026-11-05). Production
-// status_draw: exact up to the 40-column field's five digits, thousands with
-// a "K" beyond, and a change in the top byte alone redraws the row.
+// status_draw: exact up to the 40-column field's seven digits (hunger left the
+// row, 2026-11-12), thousands with a "K" beyond, and a change in the top byte alone redraws the row.
 test_status_gold_24bit:
     jsr reset_shared_state
     lda #0
@@ -1464,12 +1491,30 @@ test_status_gold_24bit:
     jsr assert_gold_field
     bcc !fail+
 
-    lda #$a0                    // 100,000 = $0186A0: thousands and a K
+    lda #$a0                    // 100,000 = $0186A0: exact, hunger gone from the row
     ldx #$86
     ldy #$01
     jsr set_gold_and_draw
-    lda #<expected_gold_100k
-    ldx #>expected_gold_100k
+    lda #<expected_gold_100000
+    ldx #>expected_gold_100000
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$7f                    // 9,999,999 = $98967F: the widest exact value
+    ldx #$96
+    ldy #$98
+    jsr set_gold_and_draw
+    lda #<expected_gold_9999999
+    ldx #>expected_gold_9999999
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$80                    // 10,000,000 = $989680: thousands and a K
+    ldx #$96
+    ldy #$98
+    jsr set_gold_and_draw
+    lda #<expected_gold_10000k
+    ldx #>expected_gold_10000k
     jsr assert_gold_field
     bcc !fail+
 
@@ -1702,16 +1747,24 @@ expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_search:
     .text "Search*" ; .byte 0
-expected_status_poisoned:
-    .text "Poisoned" ; .byte 0
-expected_status_search_after_poison:
-    .text "Search* " ; .byte 0
+expected_status_states:
+    .text "Hungry Poisoned Search*" ; .byte 0
+expected_status_states_cured:
+    .text "Hungry Search*  " ; .byte 0
+expected_status_long_name:
+    .text "ABCDEFGHIJKL Hungry         LV:" ; .byte 0
+test_name12:
+    .text "ABCDEFGHIJKL" ; .byte 0
 expected_gold_65547:
     .text "AU:65547 " ; .byte 0
 expected_gold_99999:
     .text "AU:99999 " ; .byte 0
-expected_gold_100k:
-    .text "AU:100K  " ; .byte 0
+expected_gold_100000:
+    .text "AU:100000 " ; .byte 0
+expected_gold_9999999:
+    .text "AU:9999999" ; .byte 0
+expected_gold_10000k:
+    .text "AU:10000K " ; .byte 0
 expected_gold_69632:
     .text "AU:69632 " ; .byte 0
 expected_char_gold_65547:
