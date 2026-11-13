@@ -115,6 +115,13 @@ def check_disk(build: Build) -> None:
     (ProDOS) must at least be newer than its program."""
     if build.disk.is_dir():   # the X16's -fsroot: the build output itself
         return
+    if build.target.cartridge:
+        # The cartridge holds the program; the disk is only for saves.
+        cart = build.disk.parent / build.target.cartridge
+        if not cart.is_file() or cart.stat().st_mtime < build.prg.stat().st_mtime:
+            raise StaleDisk(f"{cart} is missing or older than {build.prg}; "
+                            f"rebuild it with `make {build.target.disk_target}`")
+        return
     if not build.target.disk_files:
         if build.disk.stat().st_mtime < build.prg.stat().st_mtime:
             raise StaleDisk(f"{build.disk} is older than {build.prg}; "
@@ -205,6 +212,7 @@ class ViceProcess:
     args: list[str] = field(default_factory=list)
     log_path: Path | None = None
     extra_args: tuple[str, ...] = ()   # after the port's own: drives, cartridges (disk.py)
+    cartridge: Path | None = None      # the port's cartridge image: booted, the disk in drive 8
 
     def start(self, *, autostart: bool = True, connect_timeout: float = 30.0,
               response_timeout: float = 60.0) -> ViceMonitor:
@@ -213,7 +221,9 @@ class ViceProcess:
         self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in self.target.resource_args),
                      *rom_args(port=self.target), *self.extra_args,
                      "-binarymonitor", "-binarymonitoraddress", f"127.0.0.1:{self.port}"]
-        if autostart:
+        if self.cartridge is not None:
+            self.args += ["-cartcrt", str(self.cartridge), "-8", str(self.disk)]
+        elif autostart:
             self.args += ["-autostart", str(self.disk)]
         else:
             self.args += ["-8", str(self.disk)]

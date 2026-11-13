@@ -245,7 +245,7 @@ def snapshot_build(platforms: list[str], source: str = "commit", home: Path = HO
         if platform in meta.get("platforms", []):
             continue
         target = PORTS[platform].disk_target
-        made = subprocess.run(["make", "-s", target], cwd=src, capture_output=True,
+        made = subprocess.run(["make", "-s", *target.split()], cwd=src, capture_output=True,
                               text=True, timeout=1800)
         if made.returncode:
             raise RuntimeError(f"make {target} failed in build {build_id}: "
@@ -395,6 +395,7 @@ def save_versions(build_id: str, platform: str, home: Path = HOME) -> tuple[int,
     from its storage policy's first branch (the monster catalog's); None
     when the build or the constants are missing."""
     root = home / "builds" / build_id / "platforms"
+    platform = PORTS[platform].platform if platform in PORTS else platform   # a variant: its source's
     root = root / "commodore" / platform if platform in ("c64", "c128", "plus4") else root / platform
     try:
         text = (root / "hal" / "storage_policy.s").read_text()

@@ -29,7 +29,9 @@ CACHE = PLAYTEST_OUT / "cache"
 def cache_key(emulator: str, build: Build = SHIPPING) -> str:
     # A title snapshot taken under one KERNAL is not restored under another.
     roms = rom_args(port=build.target)
-    material = "|".join([sha256(build.prg), sha256(build.disk), emulator, *build.target.resource_args,
+    cart = build.disk.parent / build.target.cartridge if build.target.cartridge else None
+    material = "|".join([sha256(build.prg), sha256(build.disk), *([sha256(cart)] if cart else []),
+                         emulator, *build.target.resource_args,
                          *(sha256(Path(a)) if i % 2 else a for i, a in enumerate(roms))])
     return hashlib.sha256(material.encode()).hexdigest()[:16]
 
@@ -72,7 +74,8 @@ class Worker:
         check_disk(build)
         self.workdir, self.disk = prepare_worker(run_dir, worker_id, build.disk)
         self.abi = abimod.load(build.vs, port=build.target)
-        knowledge.use_port(build.target.name)
+        knowledge.use_port(build.target.platform)
+        self.cartridge = build.disk.parent / build.target.cartridge if build.target.cartridge else None
         self.vp: ViceProcess | MameProcess | None = None
         self.game: Game | None = None
         self.restarts = 0
@@ -97,7 +100,7 @@ class Worker:
             return self.game
         self.vp = ViceProcess(self.worker_id, self.workdir, self.disk,
                               allocate_port(self.worker_id), self.emulator, self.build.target,
-                              extra_args=self.extra_args)
+                              extra_args=self.extra_args, cartridge=self.cartridge)
         monitor = self.vp.start(autostart=autostart)
         self.game = Game(monitor, self.abi, self.workdir,
                          hang_emulated_seconds=self.hang_emulated_seconds, port=self.build.target)

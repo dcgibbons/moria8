@@ -527,7 +527,9 @@ def ports() -> dict[str, Any]:
             latest[key] = (when, sum(c.get("outcome") == "reached" for c in chars), len(chars),
                            (summary.get("started") or "")[:10])
     cells, frozen_count = {}, {}
-    for port in PORTS:
+    # The ports, not their variants (C64 without an REU, the cartridge): they
+    # have no frozen suites of their own, and the build queue covers them.
+    for port in (name for name, p in PORTS.items() if not p.source):
         frozen_count[port] = 0
         for character in PORT_CHARACTERS:
             for goal in PORT_GOALS:
@@ -538,7 +540,7 @@ def ports() -> dict[str, Any]:
                     "bar": (frozen or {}).get("required", bar(goal, character)), "frozen": bool(frozen),
                     "frozen_on": (frozen or {}).get("frozen"),
                     "latest": result[1] if result else None, "ran": result[3] if result else None}
-    return {"ports": list(PORTS), "characters": list(PORT_CHARACTERS), "goals": list(PORT_GOALS),
+    return {"ports": list(frozen_count), "characters": list(PORT_CHARACTERS), "goals": list(PORT_GOALS),
             "cells": cells, "frozen": frozen_count, "suites": len(PORT_CHARACTERS) * len(PORT_GOALS)}
 
 

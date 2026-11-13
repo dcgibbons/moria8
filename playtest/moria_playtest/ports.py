@@ -8,7 +8,7 @@ code at a KERNAL address. Ports are added in §21.3's order.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,13 @@ class Port:
     color_table: str = ""     # empty: colour memory holds C64 indexes
     color_mask: int = 0x0F
     snapshots: bool = True    # the emulator can save and restore a machine mid-game
+    # build/<cartridge>: a cartridge image the machine boots from (VICE
+    # -cartcrt), the disk attached in drive 8 as the disk build's: it reads
+    # and writes saves there the same way. Empty: the disk is autostarted.
+    cartridge: str = ""
+    # The platform whose sources, policies and save format a variant builds
+    # from (knowledge's catalog flag, queue.save_versions); "" for its own name.
+    source: str = ""
     # A Balrog start is a saved game, not a mid-game snapshot (graduate.py):
     # VICE's C128 snapshot leaves the VDC out, and a restore stalls minutes.
     graduate_save: bool = False
@@ -77,6 +84,11 @@ class Port:
     symbols: str = "main.vs"  # in build/<out>/
 
     @property
+    def platform(self) -> str:
+        """The source platform: a variant's (``source``), else its own name."""
+        return self.source or self.name
+
+    @property
     def map_scale(self) -> float:
         """The level's area against the C64's 80x48: 1 on the 40-column ports,
         3.4 on the 80-column ports' 198x66 (Umoria's own size)."""
@@ -95,8 +107,8 @@ C64 = Port(
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
         "64.bank": "64.bank", "legalui": "legalui",
     },
-    # Pinned machine configuration (§6.1). REU is mandatory: without it every
-    # overlay switch and tier crossing reloads from the 1541.
+    # Pinned machine configuration (§6.1), with a 512 KB REU caching overlays
+    # and tiers; C64_NOREU and C64_EF below play the machine without one.
     resource_args=(
         # +saveres is required: without it VICE tries to save resources through
         # GTK on exit and aborts when no display connection is available.
@@ -394,4 +406,29 @@ CX16 = Port(
     symbols="main.sym",
 )
 
-PORTS: dict[str, Port] = {port.name: port for port in (C64, PLUS4, C128, APPLE2, ATARI8, BBCMASTER, CX16)}
+def without_reu(args: tuple[str, ...]) -> tuple[str, ...]:
+    """VICE options less the REU (``-reu`` and ``-reusize`` with its size)."""
+    out: list[str] = []
+    skip = 0
+    for arg in args:
+        if skip:
+            skip -= 1
+        elif arg == "-reusize":
+            skip = 1
+        elif arg != "-reu":
+            out.append(arg)
+    return tuple(out)
+
+
+# The C64 builds as separate build-queue platforms with their own stats
+# (maintainer, 2026-11-12: bugs can differ between them, and more cartridges
+# are coming). The disk build without an REU: every overlay switch and tier
+# crossing loads from the 1541.
+C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_reu(C64.resource_args))
+# The EasyFlash cartridge (make cartridge64, build/c64-cart): booted from the
+# .crt with the disk build's disk in drive 8 for saves, no REU.
+C64_EF = replace(C64, name="c64-ef", source="c64", out="c64-cart", disk_target="disk64 cartridge64",
+                 disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args))
+
+PORTS: dict[str, Port] = {port.name: port for port in
+                          (C64, C64_NOREU, C64_EF, PLUS4, C128, APPLE2, ATARI8, BBCMASTER, CX16)}

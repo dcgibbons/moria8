@@ -389,7 +389,7 @@ const PALETTE = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#3
 const LEVEL_BANDS = [[1, 1, "L1"], [2, 2, "L2"], [3, 4, "L3-4"], [5, 7, "L5-7"], [8, 99, "L8+"]];
 const BAND_COLORS = ["#e0603c", "#c57900", "#ffd93d", "#9ad284", "#7779dc"];
 let current = null, data = null, mile = null, cover = null, diskData = null, watching = null;
-const PORT_NAMES = {c64: "C64", plus4: "Plus/4", c128: "C128", apple2: "Apple IIe", atari8: "Atari 8-bit",
+const PORT_NAMES = {c64: "C64", "c64-noreu": "C64 (no REU)", "c64-ef": "C64 EasyFlash", plus4: "Plus/4", c128: "C128", apple2: "Apple IIe", atari8: "Atari 8-bit",
                     bbcmaster: "BBC Master", cx16: "Commander X16"};
 const $ = id => document.getElementById(id);
 // Published (make playtest-publish): static data files, refreshed every 30 s.
