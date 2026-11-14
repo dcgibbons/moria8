@@ -185,7 +185,8 @@ class HelpersTest(unittest.TestCase):
         abi = abimod.Abi(labels={**ABI.labels, "input_get_command": 0x2930, "input_get_key": 0x26B2,
                                  "input_get_key_fast": 0x2975}, consts=ABI.consts, all_symbols={})
         game = Game(Mon(), abi, Path("."), port=C128)   # type: ignore[arg-type]
-        game.arm = lambda: None                                            # type: ignore[method-assign]
+        game.arm = lambda crash=True: None                                 # type: ignore[method-assign]
+        game.arm_crash = lambda: None                                      # type: ignore[method-assign]
         game.key_exits = {0x2975: 0x2977}                                  # the loops found: no re-arm
         stops: list[int] = []
         def run(wall0: float) -> Observation:
@@ -198,6 +199,51 @@ class HelpersTest(unittest.TestCase):
         game.observe = lambda stop: "title"                                # type: ignore[method-assign]
         self.assertEqual(game.boot(), "title")
         self.assertEqual((stops, resolved, game.step), ([1, 2], [True], 1))   # the loader's stop passed over
+
+    def test_a_cartridge_boots_from_reset_with_its_key_checkpoint_set(self) -> None:
+        """2026-11-13, plus4-cart: VICE runs from launch, and the cartridge
+        reached the title's key wait before the monitor had set its
+        checkpoint; the title waited for a key forever (a step-0 hang, PC
+        $DC02). boot() resets the machine once the key checkpoint is set
+        (VICE's reset runs it, so no resume follows) and arms the KERNAL crash
+        entries, which a cold boot runs through, at the title. A disk port
+        loads for emulated seconds and boots as before."""
+        from moria_playtest.game import Game
+
+        abi = abimod.Abi(labels={**ABI.labels, "input_get_command": 0x19DB, "input_get_key": 0x1933},
+                         consts=ABI.consts, all_symbols={})
+        for port, expected in (
+                (PLUS4_CART, ["cp $1933", "reset", "stop", "cp $FFF6"]),
+                (PLUS4, ["cp $1933", "cp $FFF6", "resume", "stop"])):
+            calls: list[str] = []
+            class Mon:
+                def bank(self, name: str) -> int:
+                    return 0
+                def load_register_ids(self) -> dict[str, int]:
+                    return {}
+                def checkpoint_list(self) -> list[object]:
+                    return []
+                def checkpoint_set(self, start: int, *args: object, **kwargs: object) -> int:
+                    calls.append(f"cp ${start:04X}")
+                    return len(calls)
+                def reset(self) -> None:
+                    calls.append("reset")
+                def resume(self) -> None:
+                    calls.append("resume")
+                def mem_get(self, start: int, length: int, bank: int = 0) -> bytes:
+                    return (bytes([0x20, 0x33, 0x19]) + bytes(length))[:length]
+                def registers(self) -> dict[str, int]:
+                    return {}
+
+            game = Game(Mon(), abi, Path("."), port=port)   # type: ignore[arg-type]
+            def run(wall0: float) -> Observation:
+                calls.append("stop")
+                return Observation(1, 0x1933, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+            game._run_to_input = run                                        # type: ignore[method-assign]
+            game.resolve_sites = lambda: None                              # type: ignore[method-assign]
+            game.observe = lambda stop: "title"                            # type: ignore[method-assign]
+            self.assertEqual(game.boot(), "title")
+            self.assertEqual(calls, expected, port.name)
 
     def test_c128_key_returns_through_the_routine_it_stopped_in(self) -> None:
         """The C128 scans the keyboard matrix itself (no KERNAL buffer): a key

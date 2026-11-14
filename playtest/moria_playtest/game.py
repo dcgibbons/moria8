@@ -299,8 +299,9 @@ class Game:
 
     # -- setup ------------------------------------------------------------
 
-    def arm(self) -> None:
-        """(Re-)arm checkpoints; required after connect, undump, or restart."""
+    def arm(self, crash: bool = True) -> None:
+        """(Re-)arm checkpoints; required after connect, undump, or restart.
+        ``crash=False`` leaves the KERNAL crash entries unarmed (``arm_crash``)."""
         mon = self.mon
         self.ram = mon.bank("ram")
         self.io = mon.bank("io")
@@ -311,9 +312,14 @@ class Game:
             mon.checkpoint_delete(cp.number)
         self.input_cps = {mon.checkpoint_set(addr): addr for addr in self.key_stops()}
         self.input_cp = next(iter(self.input_cps))
-        self.crash_cps = {mon.checkpoint_set(addr): addr for addr in self.port.crash_entries}
+        self.crash_cps = {}
+        if crash:
+            self.arm_crash()
         self.seed_cp = None
         self.stop_hooks = {}   # their checkpoints were deleted above
+
+    def arm_crash(self) -> None:
+        self.crash_cps = {self.mon.checkpoint_set(addr): addr for addr in self.port.crash_entries}
 
     def key_entries(self) -> tuple[int, ...]:
         return tuple(getattr(self.abi, name) for name in self.port.key_entries)
@@ -433,8 +439,18 @@ class Game:
 
     def boot(self) -> Observation:
         """From a fresh VICE process: arm, run to the title menu, resolve sites."""
-        self.arm()
-        self.mon.resume()
+        # VICE runs from launch, and a cartridge reaches the title's key wait
+        # ~5 ms of warp after the monitor is armed: on a loaded host the game
+        # passed input_get_key before its checkpoint was set and waited for a
+        # key forever (2026-11-13, plus4-cart, PC $1942 and $DC02). Booted
+        # again from reset (which runs it), the checkpoints are in place; the
+        # crash entries wait for the title, as a cold boot runs the KERNAL's
+        # reset code (the C64's $FCE2, the C128's $FF3D).
+        self.arm(crash=not self.port.cartridge)
+        if self.port.cartridge:
+            self.mon.reset()
+        else:
+            self.mon.resume()
         wall0 = time.monotonic()
         obs = self._run_to_input(wall0)
         while not self.game_loaded():
@@ -442,6 +458,8 @@ class Game:
             self.step -= 1
             self.mon.resume()
             obs = self._run_to_input(wall0)
+        if not self.crash_cps:
+            self.arm_crash()
         if self.port.key_feed == "return" and obs.pc not in self.key_exits:
             # The game is loaded now: stop in the wait loop instead (key_stops),
             # the same key wait, not a new step.

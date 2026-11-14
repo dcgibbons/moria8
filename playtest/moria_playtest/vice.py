@@ -338,8 +338,8 @@ class ViceMonitor:
     def send_resume(self) -> int:
         return self.send(CMD_EXIT)
 
-    def finish_resume(self, request_id: int) -> None:
-        self.wait(request_id, CMD_EXIT)
+    def finish_resume(self, request_id: int, command: int = CMD_EXIT) -> None:
+        self.wait(request_id, command)
         deadline = time.monotonic() + self.response_timeout
         while True:
             for index, event in enumerate(self._events):
@@ -347,6 +347,14 @@ class ViceMonitor:
                     del self._events[:index + 1]
                     return
             self._pump(deadline)
+
+    def reset(self) -> None:
+        """Hard-reset the machine (a power cycle that keeps the cartridge and
+        the checkpoints) and run it: VICE 3.10 leaves the monitor on a reset
+        (Resumed, then the next checkpoint's Stopped), so this is a resume
+        too. A resume sent after it restarted a CPU already stopped at the
+        title (x64sc, 5,000 cycles on past input_get_key)."""
+        self.finish_resume(self.send(CMD_RESET, b"\x01"), CMD_RESET)
 
     def quit(self) -> None:
         try:
