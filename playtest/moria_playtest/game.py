@@ -435,7 +435,13 @@ class Game:
         """From a fresh VICE process: arm, run to the title menu, resolve sites."""
         self.arm()
         self.mon.resume()
-        obs = self._run_to_input(time.monotonic())
+        wall0 = time.monotonic()
+        obs = self._run_to_input(wall0)
+        while not self.game_loaded():
+            # A boot loader ran over the game's addresses: not a key wait.
+            self.step -= 1
+            self.mon.resume()
+            obs = self._run_to_input(wall0)
         if self.port.key_feed == "return" and obs.pc not in self.key_exits:
             # The game is loaded now: stop in the wait loop instead (key_stops),
             # the same key wait, not a new step.
@@ -445,6 +451,17 @@ class Game:
             self.step -= 1
         self.resolve_sites()
         return self.observe(StopInfo(pc=obs.pc, registers=self.mon.registers()))
+
+    def game_loaded(self) -> bool:
+        """The game's own code is in memory: its command reader calls a key
+        routine, as ``resolve_sites`` needs. A boot loader runs over the
+        game's addresses first (the C128's bootart128, $2800-$5930), and when
+        one of its instructions starts where a key routine will be, the stop
+        there is not the title's key wait: every C128 boot of 2026-11-13's
+        d528b8f stopped in bootart128 at input_get_key_fast's $2975 and
+        failed in resolve_sites (31 runs)."""
+        code = self.mon.mem_get(self.abi.input_get_command, 64, self.ram)
+        return any(bytes([0x20, e & 0xFF, e >> 8]) in code for e in self.key_entries())
 
     def _run_to_input(self, wall0: float) -> Observation:
         mon = self.mon

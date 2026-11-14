@@ -162,6 +162,43 @@ class HelpersTest(unittest.TestCase):
         Mon.mem_get = lambda self, start, length, bank=0: bytes(length)   # not loaded: a cold boot
         self.assertEqual(Game(Mon(), abi, Path("."), port=C128).key_stops(), (0x26EC, 0x2990))   # type: ignore[arg-type]
 
+    def test_a_boot_loader_stop_at_a_key_entry_is_not_the_title(self) -> None:
+        """2026-11-13: every C128 boot of build d528b8f stopped in bootart128
+        ($2800-$5930), one of whose instructions began at input_get_key_fast's
+        $2975, and failed in resolve_sites (31 runs). boot() waits for the
+        game's own code: its command reader calling a key routine."""
+        from moria_playtest.game import Game
+
+        art = bytes.fromhex("d0f3e607c608d0eb60860 8a21f205229".replace(" ", "")) + bytes(64)
+        real = bytes.fromhex("a901854920752920 8e29".replace(" ", "")) + bytes(64)
+        class Mon:
+            loaded = False
+            resumes = 0
+            def resume(self) -> None:
+                Mon.resumes += 1
+                Mon.loaded = Mon.resumes >= 2       # the main program lands after the first stop
+            def mem_get(self, start: int, length: int, bank: int = 0) -> bytes:
+                return ((real if Mon.loaded else art) if start == 0x2930 else bytes(64))[:length]
+            def registers(self) -> dict[str, int]:
+                return {}
+
+        abi = abimod.Abi(labels={**ABI.labels, "input_get_command": 0x2930, "input_get_key": 0x26B2,
+                                 "input_get_key_fast": 0x2975}, consts=ABI.consts, all_symbols={})
+        game = Game(Mon(), abi, Path("."), port=C128)   # type: ignore[arg-type]
+        game.arm = lambda: None                                            # type: ignore[method-assign]
+        game.key_exits = {0x2975: 0x2977}                                  # the loops found: no re-arm
+        stops: list[int] = []
+        def run(wall0: float) -> Observation:
+            game.step += 1
+            stops.append(Mon.resumes)
+            return Observation(game.step, 0x2975, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+        game._run_to_input = run                                            # type: ignore[method-assign]
+        resolved: list[bool] = []
+        game.resolve_sites = lambda: resolved.append(Mon.loaded)           # type: ignore[method-assign]
+        game.observe = lambda stop: "title"                                # type: ignore[method-assign]
+        self.assertEqual(game.boot(), "title")
+        self.assertEqual((stops, resolved, game.step), ([1, 2], [True], 1))   # the loader's stop passed over
+
     def test_c128_key_returns_through_the_routine_it_stopped_in(self) -> None:
         """The C128 scans the keyboard matrix itself (no KERNAL buffer): a key
         is returned from the routine stopped in, through its own exit."""
