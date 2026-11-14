@@ -510,12 +510,6 @@ game_new_start:
     lda #$70
     jsr c128_town_dump_mark
 #endif
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardInit($85)
-#endif
-#if C128_TEST_STACK_BOTTOM_DIAG
-    :C128StackBottomCanaryInit($90)
-#endif
     // Re-seed RNG after user input for better entropy
     jsr rng_seed
 
@@ -548,9 +542,6 @@ game_new_start:
     sta eff_fear_timer
 
     jsr tramp_player_create
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($86)
-#endif
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
@@ -666,9 +657,6 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
     sta current_overlay
 #endif
     jsr tramp_store_init_all
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($87)
-#endif
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
@@ -709,9 +697,6 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
     bcc !gns_ovl_ok+
     jmp entry_main
 !gns_ovl_ok:
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($88)
-#endif
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif

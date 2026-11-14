@@ -58,33 +58,17 @@ player_create:
 #endif
     .if (hal_platform_chargen_cutpoint == 6) { rts }
     jsr create_gen_background
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($89)
-#endif
 #if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
     .if (hal_platform_chargen_cutpoint == 7) { rts }
     jsr create_init_character
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($8a)
-#endif
 #if HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC
-#if C128_TEST_FINAL_RETURN_DIAG
-    :C128FinalReturnCapture($92)
-#endif
     jsr hal_platform_runtime_resync
-#if C128_TEST_FINAL_RETURN_DIAG
-    :C128FinalReturnCapture($93)
-#endif
 #endif
     .if (hal_platform_chargen_cutpoint == 8) { jmp player_create_epilogue }
 
 player_create_epilogue:
-#if C128_TEST_FINAL_RETURN_DIAG
-    :C128FinalReturnCapture($94)
-    :C128FinalReturnCheck($95)
-#endif
     rts
 
 // ============================================================

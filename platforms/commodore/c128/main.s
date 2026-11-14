@@ -170,41 +170,8 @@
 .const C128_OVERLAY_TRANSITION_DIAG = 0
 #endif
 
-#if C128_TEST_STACK_SLOT_DIAG
-.macro C128StackSlotGuardInit(stage) {
-    lda #stage
-    jsr c128_stack_slot_guard_init
-}
 
-.macro C128StackSlotGuardCheck(stage) {
-    lda #stage
-    jsr c128_stack_slot_guard_check
-}
-#endif
 
-#if C128_TEST_STACK_BOTTOM_DIAG
-.macro C128StackBottomCanaryInit(stage) {
-    lda #stage
-    jsr c128_stack_bottom_canary_init
-}
-
-.macro C128StackBottomCanaryCheck(stage) {
-    lda #stage
-    jsr c128_stack_bottom_canary_check
-}
-#endif
-
-#if C128_TEST_FINAL_RETURN_DIAG
-.macro C128FinalReturnCapture(stage) {
-    lda #stage
-    jsr c128_final_return_capture
-}
-
-.macro C128FinalReturnCheck(stage) {
-    lda #stage
-    jsr c128_final_return_check
-}
-#endif
 
 // ============================================================
 // BASIC stub at $1C01 — SYS 7182 ($1C0E)
@@ -1000,9 +967,6 @@ tramp_player_create:
 tramp_player_create_return_site:
     lda #0
     sta c128_startup_overlay_executing
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($86)
-#endif
 #endif
 #if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_check
@@ -1367,6 +1331,11 @@ c128_test_title_art_fail_sym:
     brk
 c128_test_title_art_pass_sym:
     brk
+// The failed check and its stage, for the monitor log (the stack guard's
+// bytes until 2026-11-13: its 300 B of guard code, never called here, took
+// this build past $6000).
+c128_test_title_art_fail_code: .byte 0
+c128_test_title_art_substage:  .byte 0
 #endif
 #if C128_TEST_OVERLAY_TRANSITION_DIAG
 c128_overlay_transition_fail_sym:
@@ -1867,7 +1836,7 @@ entry_main:
     // RAM mapped and JSR $FF62 ran RAM at $C027 (a BRK into the monitor).
     lda #0
     sta KERNAL_NESTING_DEPTH
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_STATUS_SP_CANARY
     lda #0                      // the stack was just reset: no guard is open
     sta c128_stack_guard_depth
 #endif
@@ -3271,7 +3240,7 @@ kernal_hw_nmi_vec_hi: .byte 0
 // c128_stack_guard_begin/check — capture and validate stack balance around
 // high-risk KERNAL/overlay/runtime boundaries. On mismatch, preserve the
 // expected SP, actual SP, and stage tag in RAM and break immediately.
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_STATUS_SP_CANARY
 .const C128_STACK_GUARD_NEST_MAX = 8
 // Call as "jsr c128_stack_guard_begin" (or _check) followed by ".byte stage".
 // Both keep the caller's A, X, Y and flags (saved in memory, so SP is
@@ -3402,160 +3371,8 @@ c128_stack_guard_snapshot_return:
     sta c128_stack_guard_ret_hi
     rts
 
-#if C128_TEST_STACK_SLOT_DIAG
-c128_stack_slot_guard_init:
-    sta c128_stack_guard_stage
-    lda $01fa
-    sta c128_stack_slot_01fa
-    lda $01fb
-    sta c128_stack_slot_01fb
-    lda $01fc
-    sta c128_stack_slot_01fc
-    lda $01fd
-    sta c128_stack_slot_01fd
-    lda $01fe
-    sta c128_stack_slot_01fe
-    lda $01ff
-    sta c128_stack_slot_01ff
-    rts
 
-c128_stack_slot_guard_check:
-    sta c128_stack_guard_stage
-    lda $01fa
-    cmp c128_stack_slot_01fa
-    beq !slot_fb+
-    ldx #$fa
-    jmp c128_stack_slot_fail
-!slot_fb:
-    lda $01fb
-    cmp c128_stack_slot_01fb
-    beq !slot_fc+
-    ldx #$fb
-    jmp c128_stack_slot_fail
-!slot_fc:
-    lda $01fc
-    cmp c128_stack_slot_01fc
-    beq !slot_fd+
-    ldx #$fc
-    jmp c128_stack_slot_fail
-!slot_fd:
-    lda $01fd
-    cmp c128_stack_slot_01fd
-    beq !slot_fe+
-    ldx #$fd
-    jmp c128_stack_slot_fail
-!slot_fe:
-    lda $01fe
-    cmp c128_stack_slot_01fe
-    beq !slot_ff+
-    ldx #$fe
-    jmp c128_stack_slot_fail
-!slot_ff:
-    lda $01ff
-    cmp c128_stack_slot_01ff
-    beq !slot_ok+
-    ldx #$ff
-    jmp c128_stack_slot_fail
-!slot_ok:
-    rts
 
-c128_stack_slot_fail:
-    stx c128_stack_guard_substage
-    sta c128_stack_guard_fail_code
-    brk
-#endif
-
-#if C128_TEST_STACK_BOTTOM_DIAG
-c128_stack_bottom_canary_init:
-    sta c128_stack_guard_stage
-    lda #$de
-    sta $0100
-    lda #$ad
-    sta $0101
-    lda #$be
-    sta $0102
-    rts
-
-c128_stack_bottom_canary_check:
-    sta c128_stack_guard_stage
-    lda $0100
-    cmp #$de
-    beq !bottom_0101+
-    ldx #$00
-    jmp c128_stack_bottom_fail
-!bottom_0101:
-    lda $0101
-    cmp #$ad
-    beq !bottom_0102+
-    ldx #$01
-    jmp c128_stack_bottom_fail
-!bottom_0102:
-    lda $0102
-    cmp #$be
-    beq !bottom_ok+
-    ldx #$02
-    jmp c128_stack_bottom_fail
-!bottom_ok:
-    rts
-
-c128_stack_bottom_fail:
-    stx c128_stack_guard_substage
-    sta c128_stack_guard_fail_code
-    brk
-#endif
-
-#if C128_TEST_FINAL_RETURN_DIAG
-c128_final_return_capture:
-    sta c128_final_return_stage
-    tsx
-    stx c128_final_return_sp
-    lda $01
-    sta c128_final_return_port1
-    lda $ff00
-    sta c128_final_return_mmu
-    lda #<tramp_player_create_return_site
-    sta c128_final_return_expected_lo
-    lda #>tramp_player_create_return_site
-    sta c128_final_return_expected_hi
-    lda $0101,x
-    sta c128_final_return_stack_0
-    lda $0102,x
-    sta c128_final_return_stack_1
-    lda $0103,x
-    sta c128_final_return_stack_2
-    lda $0104,x
-    sta c128_final_return_stack_3
-    lda $0105,x
-    sta c128_final_return_stack_4
-    lda $0106,x
-    sta c128_final_return_stack_5
-    lda $0107,x
-    sta c128_final_return_stack_6
-    lda $0108,x
-    sta c128_final_return_stack_7
-    rts
-
-c128_final_return_check:
-    jsr c128_final_return_capture
-    lda c128_final_return_stack_0
-    cmp c128_final_return_expected_lo
-    beq !final_ret_hi+
-    ldx #0
-    jmp c128_final_return_fail
-!final_ret_hi:
-    lda c128_final_return_stack_1
-    cmp c128_final_return_expected_hi
-    beq !final_ret_ok+
-    ldx #1
-    jmp c128_final_return_fail
-!final_ret_ok:
-    rts
-
-c128_final_return_fail:
-    stx c128_final_return_fail_slot
-    sta c128_final_return_fail_actual
-    brk
-#endif
 
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -3733,42 +3550,6 @@ c128_stack_guard_ret_lo:    .byte 0
 c128_stack_guard_ret_hi:    .byte 0
 c128_stack_guard_fail_code: .byte 0
 c128_stack_guard_substage:  .byte 0
-#if C128_TEST_STACK_SLOT_DIAG
-c128_stack_slot_01fa:       .byte 0
-c128_stack_slot_01fb:       .byte 0
-c128_stack_slot_01fc:       .byte 0
-c128_stack_slot_01fd:       .byte 0
-c128_stack_slot_01fe:       .byte 0
-c128_stack_slot_01ff:       .byte 0
-#endif
-#if C128_TEST_FINAL_RETURN_DIAG
-c128_final_return_stage:       .byte 0
-c128_final_return_sp:          .byte 0
-c128_final_return_port1:       .byte 0
-c128_final_return_mmu:         .byte 0
-c128_final_return_expected_lo: .byte 0
-c128_final_return_expected_hi: .byte 0
-c128_final_return_fail_slot:   .byte 0
-c128_final_return_fail_actual: .byte 0
-c128_final_return_stack_0:     .byte 0
-c128_final_return_stack_1:     .byte 0
-c128_final_return_stack_2:     .byte 0
-c128_final_return_stack_3:     .byte 0
-c128_final_return_stack_4:     .byte 0
-c128_final_return_stack_5:     .byte 0
-c128_final_return_stack_6:     .byte 0
-c128_final_return_stack_7:     .byte 0
-.label final_return_diag_stage = c128_final_return_stage
-.label final_return_diag_sp = c128_final_return_sp
-.label final_return_diag_port1 = c128_final_return_port1
-.label final_return_diag_mmu = c128_final_return_mmu
-.label final_return_diag_expected_lo = c128_final_return_expected_lo
-.label final_return_diag_expected_hi = c128_final_return_expected_hi
-.label final_return_diag_fail_slot = c128_final_return_fail_slot
-.label final_return_diag_fail_actual = c128_final_return_fail_actual
-.label final_return_diag_stack0 = c128_final_return_stack_0
-.label final_return_diag_stack7 = c128_final_return_stack_7
-#endif
 #endif
 .assert "Program fits below map area", * <= MAP_BASE, true
 
@@ -4501,9 +4282,9 @@ c128_test_title_art_assert:
     jsr mmu_safe_map_read_ptr1
     cmp #1
     beq !check_screen+
-    sta c128_stack_guard_fail_code
+    sta c128_test_title_art_fail_code
     lda #$10
-    sta c128_stack_guard_substage
+    sta c128_test_title_art_substage
     jmp c128_test_title_art_fail_sym
 !check_screen:
     lda #1
@@ -4518,9 +4299,9 @@ c128_test_title_art_assert:
     jsr vdc_read_reg
     cmp #$2b
     beq !check_logo+
-    sta c128_stack_guard_fail_code
+    sta c128_test_title_art_fail_code
     lda #1
-    sta c128_stack_guard_substage
+    sta c128_test_title_art_substage
     jmp c128_test_title_art_fail_sym
 !check_logo:
 
@@ -4544,9 +4325,9 @@ c128_test_title_art_assert:
     cmp #(VDC_WHITE | $40)
     beq !pass+
 !block_fail:
-    sta c128_stack_guard_fail_code
+    sta c128_test_title_art_fail_code
     lda #2
-    sta c128_stack_guard_substage
+    sta c128_test_title_art_substage
     jmp c128_test_title_art_fail_sym
 
 !pass:
@@ -4588,50 +4369,31 @@ c128_test_read_bank1_probe_ptr1:
 c128_test_snapshot_cache_probes:
     lda MMU_COMMON_HELPERS_BASE
     sta c128_test_cache_probe_common
-
-    lda #<C128_TEST_PROBE_TIER_ADDR
+    // The six Bank 1 probes, in the order of the probe bytes (tier, start,
+    // town, death, gen, disarm): one loop, not six copies, so the test build
+    // fits below $6000 (2026-11-13).
+    ldx #c128_test_probe_addr_hi - c128_test_probe_addr_lo - 1
+!ctscp_probe:
+    stx c128_test_probe_idx
+    lda c128_test_probe_addr_lo,x
     sta zp_ptr1
-    lda #>C128_TEST_PROBE_TIER_ADDR
+    lda c128_test_probe_addr_hi,x
     sta zp_ptr1_hi
     jsr c128_test_read_bank1_probe_ptr1
-    sta c128_test_cache_probe_tier
-
-    lda #<C128_TEST_PROBE_START_ADDR
-    sta zp_ptr1
-    lda #>C128_TEST_PROBE_START_ADDR
-    sta zp_ptr1_hi
-    jsr c128_test_read_bank1_probe_ptr1
-    sta c128_test_cache_probe_ovl_start
-
-    lda #<BANK1_OVERLAY_TOWN_BASE
-    sta zp_ptr1
-    lda #>BANK1_OVERLAY_TOWN_BASE
-    sta zp_ptr1_hi
-    jsr c128_test_read_bank1_probe_ptr1
-    sta c128_test_cache_probe_ovl_town
-
-    lda #<BANK1_OVERLAY_DEATH_BASE
-    sta zp_ptr1
-    lda #>BANK1_OVERLAY_DEATH_BASE
-    sta zp_ptr1_hi
-    jsr c128_test_read_bank1_probe_ptr1
-    sta c128_test_cache_probe_ovl_death
-
-    lda #<BANK1_OVERLAY_DUNGEON_BASE
-    sta zp_ptr1
-    lda #>BANK1_OVERLAY_DUNGEON_BASE
-    sta zp_ptr1_hi
-    jsr c128_test_read_bank1_probe_ptr1
-    sta c128_test_cache_probe_ovl_gen
-
-    lda #<BANK1_OVERLAY_DISARM_BASE
-    sta zp_ptr1
-    lda #>BANK1_OVERLAY_DISARM_BASE
-    sta zp_ptr1_hi
-    jsr c128_test_read_bank1_probe_ptr1
-    sta c128_test_cache_probe_ovl_disarm
+    ldx c128_test_probe_idx
+    sta c128_test_cache_probe_tier,x
+    dex
+    bpl !ctscp_probe-
     clc
     rts
+c128_test_probe_idx: .byte 0
+c128_test_probe_addr_lo:
+    .byte <C128_TEST_PROBE_TIER_ADDR, <C128_TEST_PROBE_START_ADDR, <BANK1_OVERLAY_TOWN_BASE
+    .byte <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_DISARM_BASE
+c128_test_probe_addr_hi:
+    .byte >C128_TEST_PROBE_TIER_ADDR, >C128_TEST_PROBE_START_ADDR, >BANK1_OVERLAY_TOWN_BASE
+    .byte >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_DISARM_BASE
+.assert "The probe table matches the probe bytes", c128_test_probe_addr_hi - c128_test_probe_addr_lo, c128_test_cache_probe_ovl_disarm - c128_test_cache_probe_tier + 1
 #endif
 
 #if C128_TEST_CACHE_SURVIVAL || C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY
@@ -4673,9 +4435,19 @@ c128_test_expected_overlay_bits_hi:
 #endif
     rts
 
+// The tier and overlay partial-state checks differ only in the tiers-ready
+// flag expected: one body, entered with it in A.
 c128_test_validate_tier_partial_state:
-    lda c128_cache_tiers_ready
-    cmp #1
+    lda #1
+    bne c128_test_validate_partial_state      // always
+c128_test_validate_overlay_partial_state:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda #0
+#else
+    lda #1
+#endif
+c128_test_validate_partial_state:
+    cmp c128_cache_tiers_ready
     bne !ctv_fail+
     jsr c128_test_expected_tier_bits
     cmp c128_cache_tier_bits
@@ -4692,32 +4464,6 @@ c128_test_validate_tier_partial_state:
     clc
     rts
 !ctv_fail:
-    sec
-    rts
-
-c128_test_validate_overlay_partial_state:
-    lda c128_cache_tiers_ready
-#if HAL_PLATFORM_MONSTER_CATALOG
-    cmp #0
-#else
-    cmp #1
-#endif
-    bne !ctvo_fail+
-    jsr c128_test_expected_tier_bits
-    cmp c128_cache_tier_bits
-    bne !ctvo_fail+
-    lda c128_cache_overlays_ready
-    cmp #1
-    bne !ctvo_fail+
-    jsr c128_test_expected_overlay_bits
-    cmp c128_cache_overlay_bits
-    bne !ctvo_fail+
-    jsr c128_test_expected_overlay_bits_hi
-    cmp c128_cache_overlay_bits_hi
-    bne !ctvo_fail+
-    clc
-    rts
-!ctvo_fail:
     sec
     rts
 #endif

@@ -379,19 +379,7 @@ ExitKernal_sub:
 #endif
     sei                     // Atomic: KERNAL calls (like LOAD) often re-enable IRQs
     
-#if C128_TEST_STACK_SLOT_DIAG
-    // Diagnostic invariant check: ensure stack hasn't underflowed
-    // A stray PLA or missing PHA will make SP too high.
-    tsx
-    cpx #$f0
-    bcc !ex_stack_ok+       // SP < $F0 (Safe)
-    jmp c128_stack_leak_trap
-!ex_stack_ok:
-#endif
 
-#if C128_TEST_STACK_BOTTOM_DIAG
-    :C128StackBottomCanaryCheck($91)
-#endif
 
     dec KERNAL_NESTING_DEPTH
     bne !ex_nest+           // Still nested — don't restore yet
@@ -434,14 +422,6 @@ ExitKernal_sub:
     lda #MMU_ALL_RAM
     sta MMU_CR
 }
-
-// ============================================================
-// Diagnostics — Traps for fatal invariant failures
-// ============================================================
-c128_stack_leak_trap:
-    lda #COL_RED
-    sta $d020
-    jmp *               // Clear JAM for stack leak (SP >= $F0 in ExitKernal)
 
 #if C128_TEST_STACK_LOW_WATER
 c128_stack_low_water_check:
