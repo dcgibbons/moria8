@@ -1217,17 +1217,26 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(brain.drop_prompt(listing).key, ord("C"))   # 100 lb of potions before 46 of scrolls
         self.assertEqual((brain.clw, brain.too_heavy, brain.pack_full, brain.potions_done), (0, False, False, False))
         brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
-        del pack[4]
         deep = command_obs(pos=(7, 9), dlvl=12, clvl=40, rows=pack)
         deep.stage = "list"
-        self.assertEqual(brain.drop_prompt(deep).key, ord("B"))     # in the dungeon: not collected again
-        self.assertIn((7, 9), brain.level.collected)
+        self.assertEqual(brain.drop_prompt(deep).key, KEY_RUNSTOP)   # below town: a missed pickup, no supply lost
+        # The clvl 37 Gnome Rogue's own pack: 254 Wooden Torches, 254 lb alone,
+        # with its torch count saying none (2026-11-14).
+        gnome = {0: "Inventory", 2: " a) Spellbook Beginners-Magick", 3: " b) 254 Wooden Torch (134 turns)",
+                 4: " c) Spellbook Magick II", 5: " d) Spellbook Magick I", 6: " e) Heavy Crossbow (+5,+5)",
+                 7: " f) 164 Bolt", 8: " g) 33 Bolt", 9: " h) 22 Potion of Cure Serious Wounds",
+                 10: " i) 4 Potion of Cure Critical Wounds", 11: " j) Wand of Teleport Away (magik)",
+                 12: " k) 11 Scroll of Phase Door", 13: " l) 3 Scroll of Teleportation",
+                 14: " m) Wand of Slow Monster (4 charges)", 15: " n) Staff of Teleportation (7 charges)"}
+        brain = Brain(GOALS["deep"])
+        brain.credit("Heavy Crossbow (+5,+5)", 1)
+        brain.torches = 0
         brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
-        brain.teleports, brain.phase = 0, 2                       # nothing past its limit: no supply goes
-        few = command_obs(pos=(7, 9), dlvl=12, clvl=40, rows={0: "Inventory", 2: " a) 6 Ration of Food",
-                                                                3: " b) 2 Scroll of Phase Door"})
-        few.stage = "list"
-        self.assertEqual(brain.drop_prompt(few).key, KEY_RUNSTOP)
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=37, rows=gnome)
+        listing.stage = "list"
+        decision = brain.drop_prompt(listing)
+        self.assertEqual(decision.key, ord("B"), decision.reason)
+        self.assertEqual((brain.torches, brain.phase), (0, 11))      # counted from what stays
 
     def test_a_full_pack_refusing_recall_drops_in_town_and_tries_again(self) -> None:
         """2026-11-06: a level-19 Paladin's Word of Recall was refused for a

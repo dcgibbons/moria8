@@ -4643,22 +4643,31 @@ class Brain:
         return Decision(DIRS[step], "collect", f"walk to the '{self.items_seen[self.collect_to][0]}' "
                                                f"at {self.collect_to}")
 
+    def carry_limit(self, name: str) -> tuple[int, int] | None:
+        """(carried, limit) for a supply the bot keeps a reserve of: it stops
+        picking one up at CARRY_TIMES its reserve, at least CARRY_LEAST; None
+        for anything else, food included (``food_max``)."""
+        held = [(CLW, self.clw, self.clw_reserve()), (NEUTRALIZE, self.neutralize, NEUTRALIZE_RESERVE),
+                (PHASE, self.phase, self.phase_reserve()), (TELEPORT_SCROLL, self.teleports, self.teleport_reserve()),
+                (RECALL, self.recall, self.recall_reserve()), (IDENTIFY_SCROLL, self.identify_scrolls, 1),
+                (RESTORE_MANA, self.restore_mana, RESTORE_MANA_RESERVE),
+                (RESIST_HEAT, self.resist_heat, RESIST_RESERVE), (RESIST_COLD, self.resist_cold, RESIST_RESERVE),
+                (HEROISM, self.heroism, HEROISM_RESERVE), (TORCH, self.torches, self.torch_reserve()),
+                *((kind, count, self.strong_reserve()) for kind, count in self.strong.items())]
+        for prefix, count, reserve in held:
+            if name.startswith(prefix):
+                return count, max(CARRY_TIMES * reserve, CARRY_LEAST)
+        return None
+
     def carried_enough(self, name: str) -> bool:
         """Enough of a supply already: CARRY_TIMES its reserve, at least
         CARRY_LEAST, as a player stops picking them up. A clvl 37 Rogue walked
         to every one it saw: 185 Cure Light Wounds, 255 Restore Mana and 159
         Neutralize Poison against reserves of 5, 3 and 2 (C64 Balrog,
         2026-11-13; VMS slows a pack over its weight limit)."""
-        held = [(CLW, self.clw, self.clw_reserve()), (NEUTRALIZE, self.neutralize, NEUTRALIZE_RESERVE),
-                (PHASE, self.phase, self.phase_reserve()), (TELEPORT_SCROLL, self.teleports, self.teleport_reserve()),
-                (RECALL, self.recall, self.recall_reserve()), (IDENTIFY_SCROLL, self.identify_scrolls, 1),
-                (RESTORE_MANA, self.restore_mana, RESTORE_MANA_RESERVE),
-                (RESIST_HEAT, self.resist_heat, RESIST_RESERVE), (RESIST_COLD, self.resist_cold, RESIST_RESERVE),
-                (HEROISM, self.heroism, HEROISM_RESERVE),
-                *((kind, count, self.strong_reserve()) for kind, count in self.strong.items())]
-        for prefix, count, reserve in held:
-            if name.startswith(prefix):
-                return count >= max(CARRY_TIMES * reserve, CARRY_LEAST)
+        held = self.carry_limit(name)
+        if held is not None:
+            return held[0] >= held[1]
         if name.startswith(FOODS):
             return self.food >= self.food_max()
         return False
@@ -5482,30 +5491,34 @@ class Brain:
                         self.shopped = False
                         self.reopen_refused()
                     return Decision(ord(match.group(1).upper()), "prompt", f"drop {match.group(2).strip()}")
-            if self.too_heavy:
-                # Over the weight limit with nothing spare: the heaviest stack
-                # of a supply carried past its pickup limit (carried_enough),
-                # whole, as the game drops one; the store refills the
-                # reserve. Stacks hoarded before the limit outweighed it, every
-                # store refused even food, and a clvl 40 Half-Orc Rogue (228
-                # Scrolls of Teleportation, 200 Cure Serious and ~250 Cure
-                # Light Wounds at STR 18's 234 lb) and a clvl 37 Gnome Rogue
-                # starved between town and DL1 with 6.3M gold, six times in
-                # two hours (C64 Balrog, 2026-11-14).
+            if self.too_heavy and obs.dlvl == 0:
+                # A store refused for the weight limit with nothing spare: the
+                # heaviest stack of a supply past its pickup limit
+                # (carry_limit), by the listing's count, whole, as the game
+                # drops one; the stores refill the reserve. Stacks hoarded
+                # before the limit outweighed it, every store refused even
+                # food, and a clvl 40 Half-Orc Rogue (228 Scrolls of
+                # Teleportation, 200 Cure Serious, ~250 Cure Light Wounds at
+                # STR 18's 234 lb) and a clvl 37 Gnome Rogue (254 Wooden
+                # Torches, 254 lb, its count saying none) starved between town
+                # and DL1 with 6.3M gold, seven times in five hours (C64
+                # Balrog, 2026-11-14). In town only: a pickup refused below is
+                # no supply lost, and the stack there may be its only light.
                 surplus = [((stack_weight(m.group(2), counts[i]), counts[i]), i) for i, m in enumerate(matches)
-                           if m and m.group(2).startswith(STACKING) and not m.group(2).startswith(FOODS)
-                           and self.carried_enough(m.group(2).strip())]
+                           if m and m.group(2).startswith(STACKING)
+                           and (held := self.carry_limit(m.group(2).strip())) is not None and counts[i] >= held[1]]
                 if surplus:
-                    heavy = matches[max(surplus)[1]]
+                    shed = max(surplus)[1]
+                    heavy = matches[shed]
                     assert heavy is not None
-                    name, count = heavy.group(2).strip(), counts[max(surplus)[1]]
-                    self.credit(name, -count)
+                    name, count = heavy.group(2).strip(), counts[shed]
+                    rest = [row for i, row in enumerate(obs.rows[1:]) if i != shed]
+                    self.sync_counts(rest, "all")
+                    self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
+                                       for row in rest if (m := PACK_ITEM.match(row)) and m.group(2).startswith(TORCH))
                     self.too_heavy = self.dropping = self.pack_full = False
-                    if obs.dlvl == 0:
-                        self.shopped = False
-                        self.reopen_refused()
-                    else:
-                        self.level.collected.add(obs.pos)   # not picked up again
+                    self.shopped = False
+                    self.reopen_refused()
                     return Decision(ord(heavy.group(1).upper()), "prompt", f"drop {count} {name}: too heavy to buy")
             # Nothing else spare: an unknown flavour goes before the food and
             # light a refused purchase was for (2026-11-05: a level-15 Mage with
