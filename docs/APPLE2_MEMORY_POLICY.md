@@ -46,7 +46,7 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 | Range | Current owner and measured use |
 | --- | --- |
 | main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7BEE` (17 B free after legal-viewer merge, 2026-11-12; `ui_help_title.s` moved to `OVL.HELP` and `eff_gain_stat.s` moved to `A2.PLAY`) |
-| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FAD` (9,134 B including signature, 82 B free; includes `eff_gain_stat.s`) |
+| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FBE` (9,150 B including signature, 66 B free; includes `eff_gain_stat.s` and `tramp_inv_add_carried`, the floor pickup's way to the weight limit's `inv_add_carried` copy in `OVL.ITEMS`; the store's and home's copy is in `OVL.TOWN`, 2026-11-13) |
 | main `$A000-$A3FF` | Name pool (1,024 B): the monster catalog's 32 species names |
 | main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; window 5,632 B; largest payload `OVL.TOWN` (5,327 B); `OVL.DEATH` grew to 4,139 B in 2026-09 when the map-area/earthquake engines moved in beside the WoD engine |
 | main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |

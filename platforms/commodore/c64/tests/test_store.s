@@ -170,6 +170,9 @@ test_start:
     // Set player CHR to 18 for predictable pricing
     lda #18
     sta player_data + PL_CHR_CUR
+    // ... and STR 18 to carry what it buys: the zeroed fixture's STR 0 has a
+    // weight limit of 0 (VMS weight_limit, inv_add_carried) and refuses all.
+    sta player_data + PL_STR_CUR
 
     // ============================================================
     // Test 1: store_init_all populates some slots

@@ -2128,7 +2128,11 @@ cmd_autorest:
 
 cmd_pickup:
     jsr msg_clear
+#if HAL_PLATFORM_ITEM_PICKUP_OVERLAY
+    jsr tramp_item_pickup
+#else
     jsr item_pickup
+#endif
     jmp command_result_main_or_status_only
 
 cmd_drop:

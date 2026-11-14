@@ -1357,6 +1357,10 @@ test_start:
     sta tv_snapshot_lo
     lda $0746
     sta tv_snapshot_hi
+    // Strength to carry it: the zeroed fixture's STR 0 has a weight limit
+    // of 0 (VMS weight_limit, inv_add_carried) and refuses the potion.
+    lda #10
+    sta player_data + PL_STR_CUR
     jsr item_pickup
     bcs !t24_pickup_ok+
     jmp !t24_fail+

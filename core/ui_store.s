@@ -380,7 +380,7 @@ sbuy_execute:
     sta fi_add_flags
     :LoadStoreEgoX()
     sta fi_add_ego
-    jsr inv_add_item
+    jsr inv_add_carried             // the weight limit, then a slot
     bcs !sb_has_room+
     jmp sbuy_full
 !sb_has_room:
@@ -423,7 +423,11 @@ sbuy_no_gold:
     ldx #MSG_NO_AFFORD
     jmp store_clear_show_msg_wait
 
-sbuy_full:
+sbuy_full:                          // X = inv_add_carried's refusal
+    cpx #HSTR_UIS_TOO_HEAVY
+    bne !sbf_full+
+    jmp store_show_huff_wait        // VMS store2.inc: inven_check_weight
+!sbf_full:
     ldx #MSG_PACK_FULL
     jmp store_clear_show_msg_wait
 
@@ -1445,6 +1449,13 @@ hg_do_accept:
 // hg_show_insult_msg — Display random insult, wait for key
 // Clobbers: everything
 hg_show_insult_msg:
+    lda #HSTR_INSULT_COUNT
+    jsr rng_range
+    tax
+// store_show_huff_wait — Huffman string X in red on row 23, wait for a key
+store_show_huff_wait:
+    txa
+    pha
     jsr store_clear_msg_area
     lda #COL_RED
     sta zp_text_color
@@ -1452,8 +1463,7 @@ hg_show_insult_msg:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    lda #HSTR_INSULT_COUNT
-    jsr rng_range
+    pla
     tax
     jsr huff_decode_string
     jsr hal_screen_put_string

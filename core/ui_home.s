@@ -153,15 +153,23 @@ home_retrieve:
     sta fi_add_flags
     :LoadStoreEgoX()
     sta fi_add_ego
-    jsr inv_add_item
+    jsr inv_add_carried             // the weight limit, then a slot
     bcs !hr_has_room+
 
-    // Inventory full
+    // Inventory full, or too heavy (X = the refusal)
     lda #COL_RED
     sta zp_text_color
-    lda #22
+    cpx #HSTR_UIS_TOO_HEAVY
+    bne !hr_full+
+    jsr huff_decode_string          // "You can't carry that much weight."
+    ldx zp_ptr0
+    ldy zp_ptr0_hi
+    bne !hr_refusal+                // always: the buffer is not in page zero
+!hr_full:
     ldx #<hm_inv_full_str
     ldy #>hm_inv_full_str
+!hr_refusal:
+    lda #22
     jsr home_put_col1_string
     jmp hal_input_get_key           // Wait, tail call
 

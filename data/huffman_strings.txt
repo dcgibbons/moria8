@@ -193,6 +193,7 @@ Sorry, what was that again?
 # ===== Store UI strings (OPT-3.3 overlay compression) =====
 # NOTE: ~ at end of line = trailing space (stripped by encoder before encoding)
 @UIS_PACK_FULL Your pack is full.
+@UIS_TOO_HEAVY You can't carry that much weight.
 
 # ===== Tunnel strings (R2.5) =====
 @TUN_DIG_GRANITE You dig in the granite wall.

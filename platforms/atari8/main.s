@@ -364,6 +364,14 @@ high_resident_end:
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
+// item_pickup runs from OVL.ITM behind tramp_item_pickup: the weight limit
+// (inv_add_carried) left Default no room for it.
+.macro ItemPickupSegment() {
+    .segment ItemActionsOverlay
+}
+.macro ItemPickupRestoreSegment() {
+    .segment Default
+}
 #import "../../core/item.s"
 #import "../../core/chest_summons.s"
 .macro ChestLootSegment() {
@@ -917,6 +925,14 @@ tramp_item_refuel:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_item_pickup:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr item_pickup
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_item_exchange:
     lda #OVL_ITEMS
     jsr overlay_load_no_kernal
@@ -1431,6 +1447,7 @@ ovl_ui_end:
     #import "../../core/disarm_helpers.s"
     #import "../../core/tunnel.s"
 ovl_items_end:
+.assert "item_pickup runs in OVL.ITM", item_pickup >= $e000 && item_pickup < ovl_items_end, true
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $f000, true
 

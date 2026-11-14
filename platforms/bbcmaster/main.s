@@ -1168,6 +1168,8 @@ turn_rest_disturbed: .byte 0
 #import "../../core/ui_store.s"
 #import "../../core/ui_home.s"
 #import "../../core/ui_home_text.s"
+inv_add_carried:                    // the store's and home's (HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL)
+    :InvAddCarriedBody()
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $a800) + " bytes"
 .assert "Town overlay fits window", ovl_town_end <= $c000, true
@@ -1334,6 +1336,22 @@ ovl_ui_end:
 #define SCROLL_P3_ROUTER_ENABLED
     #import "../../core/item_actions_overlay.s"
     #import "../../core/item_exchange.s"
+inv_add_carried_items:              // the floor pickup's, through tramp_inv_add_carried
+    :InvAddCarriedBody()
+.segment BeebPlaySlot
+// tramp_inv_add_carried — the resident floor pickup's way to inv_add_carried
+// (ovl.items); the play slot holds it, the resident image being full. An
+// overlay that will not load refuses the item, which stays on the floor.
+tramp_inv_add_carried:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !tiac_fail+
+    jmp inv_add_carried_items
+!tiac_fail:
+    ldx #HSTR_UIS_PACK_FULL
+    clc
+    rts
+.segment ItemActionsOverlay
 
 player_adjust_equipment_stat:
     // As core/player_adjust_equipment_stat.s: the stat by the item

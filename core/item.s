@@ -837,6 +837,11 @@ isl_roll_item:
 // item_pickup — Pick up item at player's position
 // Output: carry set = turn consumed, carry clear = no action
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
+#if HAL_PLATFORM_ITEM_PICKUP_OVERLAY
+// The port runs this from its items overlay behind a resident
+// tramp_item_pickup (Atari 8-bit: Default resident headroom).
+:ItemPickupSegment()
+#endif
 item_pickup:
     // Find item at player position
     lda zp_player_x
@@ -929,12 +934,13 @@ item_pickup:
     sta fi_add_flags                // Preserve floor item flags (IF_CURSED etc.)
     jsr floor_item_get_ego_x
     sta fi_add_ego
-    jsr inv_add_item
+#if HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL
+    jsr tramp_inv_add_carried       // the weight limit, then a slot (VMS carry)
+#else
+    jsr inv_add_carried             // the weight limit, then a slot (VMS carry)
+#endif
     bcs !ipu_added+
-
-    // Pack full
-    ldx #HSTR_UIS_PACK_FULL
-    jsr huff_print_msg
+    jsr huff_print_msg              // X = the refusal: too heavy or the pack full
     clc
     rts
 
@@ -965,6 +971,9 @@ item_pickup:
 
     sec
     rts
+#if HAL_PLATFORM_ITEM_PICKUP_OVERLAY
+:ItemPickupRestoreSegment()
+#endif
 
 // item_drop — Drop a carried item to the floor (prompted)
 // Prompts "Drop which item (a-v)?", waits for keypress.

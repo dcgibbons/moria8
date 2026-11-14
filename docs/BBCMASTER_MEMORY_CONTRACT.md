@@ -136,7 +136,7 @@ shadow and `beeb_acccon_shadow` in platform ZP):
 | `$0700-$07FF` | 256 B | `beeb_ss_buf` | Shared 256-byte save/load stream buffer & `beeb_swr_copy_to_window` page-bounce buffer |
 | `$0800-$0DFF` | 1,536 B | Acorn MOS Sound/Envelope/Serial/CFS Workspace (`PAGE = $0E00`) | Preserved untouched for MOS `OSWORD A=7/8` and `OSBYTE` |
 | `$0E00-$2FFF` | 8,704 B | Low Always-Resident Code (`< $3000`) | Entry point (`$0E00`), `screen.s`, `dungeon_render.s`, `memory_bank.s`, `storage.s`, `save_stream.s`, `sound.s`, `input.s`, and `zp_save_buf` (174 B) |
-| `$3000-$7FFF` | 20,480 B | High Always-Resident Code (`MORIA8.RES` continuation) | Core resident modules (`program_end` = `$7FEF`, 17 B free below `$8000`; `player_adjust_equipment_stat` moved to `OVL.ITEMS` and `tramp_do_look` moved to `BeebPlaySlot`, 2026-11-12; total `$0E00-$7FFF` budget = `29,184` B) |
+| `$3000-$7FFF` | 20,480 B | High Always-Resident Code (`MORIA8.RES` continuation) | Core resident modules (`program_end` = `$7FEF`, 17 B free below `$8000`; `player_adjust_equipment_stat` moved to `OVL.ITEMS` and `tramp_do_look` moved to `BeebPlaySlot`, 2026-11-12; the weight limit's `inv_add_carried` is copied into `OVL.TOWN` (store, home) and `OVL.ITEMS` (floor pickup, through `tramp_inv_add_carried` in `BeebPlaySlot`), not resident, 2026-11-13; total `$0E00-$7FFF` budget = `29,184` B) |
 
 ### 3.2 Shadow Screen RAM `LYNNE` (`$3000-$7FFF`, 20 KB — `ACCCON = $05`)
 
@@ -172,7 +172,7 @@ wrong). `item_actions` checks the bytes against `beeb.huffdata` in town.
 
 | Bank | Physical Range | Pages / Size | Virtual / Link Address | Owner & Headroom |
 | ---: | --- | ---: | --- | --- |
-| **Bank 4** (`$04`) | `$8000-$A3FF` | 36p (`9,216` B) | `$8000-$A3FF` | **`BeebPlaySlot` (`BEEB.PLAY`)** — Preloaded at boot; permanently resident in Bank 4 (`~8,500` B used, **`~700` B slack**). |
+| **Bank 4** (`$04`) | `$8000-$A3FF` | 36p (`9,216` B) | `$8000-$A3FF` | **`BeebPlaySlot` (`BEEB.PLAY`)** — Preloaded at boot; permanently resident in Bank 4 (`9,172` B used, **`44` B slack**, 2026-11-13). |
 | **Bank 4** (`$04`) | `$A400-$A7FF` | 4p (`1,024` B) | `$A400-$A7FF` | **`PLATFORM_TIER_NAME_POOL_BASE`** — The monster catalog's 32 species names (32 B each, 2026-11-05). |
 | **Bank 4** (`$04`) | `$A800-$BFFF` | 24p (`6,144` B) | `$A800-$BFFF` | **Active Overlay & Monster Tier Window (`BANKED_DATA_BASE = $A800`, `BANKED_DATA_END = $BFFF`)** — All 12 overlays (`<= 5,337` B) and 4 tiers (`<= 2,062` B) link at `$A800` (**`807` B slack** over largest overlay). |
 | **Bank 5** (`$05`) | `$8000-$B30B` | 52p (`13,068` B) | `$8000-$B30B` | **Live 198×66 Dungeon Map (`MAP_BASE = $8000`, `MAP_END = $B30B`)** — Direct 1:1 addressing inside Bank 5 (`$B30C-$B3FF` = `244` B map guard). |
