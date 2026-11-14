@@ -167,6 +167,14 @@ def load_brain(snapshot: Path, goal: Goal) -> Brain:
         for name, value in vars(new).items():
             if name not in vars(obj):
                 setattr(obj, name, value)
+            elif isinstance(value, dict) and isinstance(getattr(obj, name), dict):
+                # A key newer code starts a count with, as a new attribute:
+                # brain.strong gained Potion of Healing, and every resume of
+                # two Balrog characters ended in a KeyError at the Black
+                # Market, 400 runs each (2026-11-13).
+                saved = getattr(obj, name)
+                for key, default in value.items():
+                    saved.setdefault(key, default)
     return brain
 
 

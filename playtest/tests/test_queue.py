@@ -1035,6 +1035,23 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual((loaded.restock_wait, loaded.magic.known, loaded.level.bumped),
                          (Brain(GOALS["deep"]).restock_wait, {}, {}))
 
+    def test_a_saved_brain_gains_the_keys_newer_code_adds_to_its_counts(self) -> None:
+        """C64 Balrog, 2026-11-13: the Potion of Healing counter (brain.strong)
+        was new; a Gnome Rogue's and an Elf Mage's saved brains had strong
+        without it, and every resume ended in KeyError('Potion of Healing') at
+        the Black Market, 400 runs each in two hours."""
+        from moria_playtest.brain import CCW, HEALING, Brain
+        from moria_playtest.goals import GOALS, for_character
+        from moria_playtest.session import load_brain, save_brain
+        with tempfile.TemporaryDirectory() as tmp:
+            snap = Path(tmp) / "s.vsf"
+            brain = Brain(for_character(GOALS["balrog"], "gnome-rogue"))
+            del brain.strong[HEALING]                                     # as the older bot saved it
+            brain.strong[CCW] = 7
+            self.assertTrue(save_brain(brain, snap))
+            loaded = load_brain(snap, for_character(GOALS["balrog"], "gnome-rogue"))
+        self.assertEqual((loaded.strong[CCW], loaded.strong[HEALING]), (7, 0))
+
     def test_a_game_without_a_level_for_level_steps_ends(self) -> None:
         from moria_playtest.goals import GOALS
         from moria_playtest.session import LevelWatch
