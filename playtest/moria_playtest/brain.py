@@ -83,8 +83,10 @@ WAND_GOLD = 600          # gold beyond the gear reserve for a Magic Shop trip fo
 # scrolls, and found potions and scrolls, were never used).
 UNKNOWN_SCROLL_WORDS = frozenset({"Lumen", "Veritas", "Dura", "Libera", "Acuta", "Ferox", "Tutela"})
 # The game refusing an item for the pack: no slot, or VMS's weight limit
-# (2026-11-13). Either way something not needed is dropped.
-PACK_REFUSALS = ("Your pack is full.", "You can't carry that much weight.")
+# (2026-11-13). Either way something not needed is dropped; over the weight
+# limit a surplus stack too (Brain.drop_prompt).
+TOO_HEAVY = "You can't carry that much weight."
+PACK_REFUSALS = ("Your pack is full.", TOO_HEAVY)
 PICKED_ITEM = re.compile(r"You picked up (?:an? )?(.+?)\.(?: |$)")
 THIS_IS = re.compile(r"This is (?:an? )?(.+?)\.(?: |$)")
 CASTER_REST_MANA = 0.25  # below this share of mana a caster rests even with a creature lately close
@@ -103,6 +105,16 @@ CARRY_LEAST = 5          # ... and at least this many (Brain.carried_enough)
 TRY_HP = 0.9             # unknown potions and scrolls are tried at this share of max HP or more
 IDENTIFY = "Identify"    # the Mage and Ranger spell (Magick I; magic.ON_ITEM)
 IDENTIFY_SCROLL = "Scroll of Identify"
+
+
+def stack_weight(name: str, count: int) -> int:
+    """A carried stack's weight in tenths of a pound, from the shipped item
+    tables, which name "Cure Light Wounds" where the pack shows "Potion of
+    Cure Light Wounds"; 0 for a name they do not hold."""
+    kinds = knowledge.item_kinds()
+    base = name.split(" (")[0].strip()
+    kind = kinds.get(base) or kinds.get(base.split(" of ", 1)[-1])
+    return count * kind.weight if kind is not None else 0
 
 
 def unknown_kind(name: str) -> str | None:
@@ -818,6 +830,7 @@ class Brain:
         self.chant_until = 0                   # step until which Chant is counted on
         self.search_mode_after = 0             # step before which search mode is not turned on again
         self.pack_full = False                 # the game said "Your pack is full."
+        self.too_heavy = False                 # ... or "You can't carry that much weight." (TOO_HEAVY)
         self.refused_at: str | None = None     # the store whose sale the full pack refused
         self.dropping = False                  # a drop prompt is open for junk
         self.drop_after = 0                    # step before which no junk is looked for again
@@ -935,6 +948,7 @@ class Brain:
                 self.recharge_target = None
             if any(refusal in messages for refusal in PACK_REFUSALS):
                 self.pack_full = True
+                self.too_heavy = self.too_heavy or TOO_HEAVY in messages
             if " is damaged!" in messages:
                 # Acid takes one from a worn piece's to-AC (VMS minus_ac): the
                 # armour counted at purchase stayed, and level-26+ characters
@@ -2225,6 +2239,7 @@ class Brain:
         if obs.stage == "message":
             if any(refusal in row for row in obs.rows for refusal in PACK_REFUSALS):
                 self.pack_full = True          # drop something, then shop again (drop_prompt)
+                self.too_heavy = self.too_heavy or any(TOO_HEAVY in row for row in obs.rows)
                 self.refused_at = self.at_store
             if self.bought is not None:
                 self.credit(self.bought, -1)   # the counted purchase did not happen
@@ -5467,6 +5482,31 @@ class Brain:
                         self.shopped = False
                         self.reopen_refused()
                     return Decision(ord(match.group(1).upper()), "prompt", f"drop {match.group(2).strip()}")
+            if self.too_heavy:
+                # Over the weight limit with nothing spare: the heaviest stack
+                # of a supply carried past its pickup limit (carried_enough),
+                # whole, as the game drops one; the store refills the
+                # reserve. Stacks hoarded before the limit outweighed it, every
+                # store refused even food, and a clvl 40 Half-Orc Rogue (228
+                # Scrolls of Teleportation, 200 Cure Serious and ~250 Cure
+                # Light Wounds at STR 18's 234 lb) and a clvl 37 Gnome Rogue
+                # starved between town and DL1 with 6.3M gold, six times in
+                # two hours (C64 Balrog, 2026-11-14).
+                surplus = [((stack_weight(m.group(2), counts[i]), counts[i]), i) for i, m in enumerate(matches)
+                           if m and m.group(2).startswith(STACKING) and not m.group(2).startswith(FOODS)
+                           and self.carried_enough(m.group(2).strip())]
+                if surplus:
+                    heavy = matches[max(surplus)[1]]
+                    assert heavy is not None
+                    name, count = heavy.group(2).strip(), counts[max(surplus)[1]]
+                    self.credit(name, -count)
+                    self.too_heavy = self.dropping = self.pack_full = False
+                    if obs.dlvl == 0:
+                        self.shopped = False
+                        self.reopen_refused()
+                    else:
+                        self.level.collected.add(obs.pos)   # not picked up again
+                    return Decision(ord(heavy.group(1).upper()), "prompt", f"drop {count} {name}: too heavy to buy")
             # Nothing else spare: an unknown flavour goes before the food and
             # light a refused purchase was for (2026-11-05: a level-15 Mage with
             # 5,136 gold and a full pack had every purchase refused, 150,000
@@ -5479,7 +5519,7 @@ class Brain:
                 if obs.dlvl == 0:
                     self.reopen_refused()
                 return Decision(ord(spare.group(1).upper()), "prompt", f"drop {spare.group(2).strip()}: nothing else to spare")
-        self.dropping = self.pack_full = self.more_junk = False
+        self.dropping = self.pack_full = self.more_junk = self.too_heavy = False
         self.drop_after = obs.step + DROP_RETRY   # nothing to spare: not again for a while
         # What the full pack held, for the trace: a full pack refused food and
         # light in many games (2026-11-05), and only the listing tells why.

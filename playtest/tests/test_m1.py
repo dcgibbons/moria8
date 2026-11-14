@@ -1185,6 +1185,50 @@ class UnstuckTest(unittest.TestCase):
         self.assertTrue(brain.pack_full and brain.alchemist_done)
         self.assertEqual(brain.refused_at, ALCHEMIST)
 
+    def test_too_heavy_to_buy_drops_the_heaviest_surplus_stack(self) -> None:
+        """C64 Balrog, 2026-11-14: stacks hoarded before the weight limit
+        outweighed it (a clvl 40 Half-Orc Rogue: 228 Scrolls of Teleportation,
+        200 Cure Serious and ~250 Cure Light Wounds at STR 18's 234 lb); every
+        store refused even food, nothing in the pack was junk, and two Rogues
+        starved between town and DL1 six times. The heaviest supply carried
+        past its pickup limit goes, whole, and the refusing store opens
+        again; a full pack of slots alone drops no supply."""
+        from moria_playtest.brain import TEMPLE
+        pack = {0: "Inventory", 2: " a) 6 Ration of Food", 3: " b) 228 Scroll of Teleportation",
+                4: " c) 250 Potion of Cure Light Wounds", 5: " d) 20 Scroll of Phase Door",
+                6: " e) 3 Scroll of Word of Recall"}
+        for message, dropped in (("You can't carry that much weight.", ord("C")), ("Your pack is full.", KEY_RUNSTOP)):
+            brain = Brain(GOALS["deep"])
+            brain.at_store, brain.potions_done = TEMPLE, False
+            refused = command_obs(pos=(5, 5), dlvl=0, clvl=40, rows={23: f" {message}"})
+            refused.stage = "message"
+            brain.store(refused)
+            self.assertTrue(brain.pack_full and brain.potions_done)
+            brain.dropping, brain.listed = True, True
+            listing = command_obs(pos=(5, 5), dlvl=0, clvl=40, rows=pack)
+            listing.stage = "list"
+            self.assertEqual(brain.drop_prompt(listing).key, dropped, message)
+        self.assertEqual(brain.clw, 250)                         # the pack-full brain kept them
+        brain = Brain(GOALS["deep"])
+        brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
+        brain.refused_at, brain.potions_done = TEMPLE, True
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=40, rows=pack)
+        listing.stage = "list"
+        self.assertEqual(brain.drop_prompt(listing).key, ord("C"))   # 100 lb of potions before 46 of scrolls
+        self.assertEqual((brain.clw, brain.too_heavy, brain.pack_full, brain.potions_done), (0, False, False, False))
+        brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
+        del pack[4]
+        deep = command_obs(pos=(7, 9), dlvl=12, clvl=40, rows=pack)
+        deep.stage = "list"
+        self.assertEqual(brain.drop_prompt(deep).key, ord("B"))     # in the dungeon: not collected again
+        self.assertIn((7, 9), brain.level.collected)
+        brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
+        brain.teleports, brain.phase = 0, 2                       # nothing past its limit: no supply goes
+        few = command_obs(pos=(7, 9), dlvl=12, clvl=40, rows={0: "Inventory", 2: " a) 6 Ration of Food",
+                                                                3: " b) 2 Scroll of Phase Door"})
+        few.stage = "list"
+        self.assertEqual(brain.drop_prompt(few).key, KEY_RUNSTOP)
+
     def test_a_full_pack_refusing_recall_drops_in_town_and_tries_again(self) -> None:
         """2026-11-06: a level-19 Paladin's Word of Recall was refused for a
         full pack 170 times: with townspeople in view nothing was dropped in
