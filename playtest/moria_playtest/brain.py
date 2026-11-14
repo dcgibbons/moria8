@@ -5594,6 +5594,30 @@ class Brain:
                     self.shopped = False
                     self.reopen_refused()
                     return Decision(ord(heavy.group(1).upper()), "prompt", f"drop {count} {name}: too heavy to buy")
+            if obs.dlvl == 0 and self.refused_at is not None and self.recall < self.recall_reserve():
+                # A full pack of keepers refused Word of Recall: the stack
+                # furthest past its pickup limit (carry_limit) makes the room.
+                # A clvl 39 Half-Elf Paladin's 22 slots held 255 Cure Light
+                # Wounds, 40 Phase Door and its books and devices, the Alchemist
+                # refused every scroll, and it walked down from town a level at
+                # a time, exploring each, for hours (C64 Balrog, 2026-11-14;
+                # maintainer: "word of recall seems important").
+                past = [(counts[i] / held[1], i) for i, m in enumerate(matches)
+                        if m and m.group(2).startswith(STACKING)
+                        and (held := self.carry_limit(m.group(2).strip())) is not None and counts[i] > held[1]]
+                if past:
+                    shed = max(past)[1]
+                    full = matches[shed]
+                    assert full is not None
+                    name, count = full.group(2).strip(), counts[shed]
+                    rest = [row for i, row in enumerate(obs.rows[1:]) if i != shed]
+                    self.sync_counts(rest, "all")
+                    self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
+                                       for row in rest if (m := PACK_ITEM.match(row)) and m.group(2).startswith(TORCH))
+                    self.dropping = self.pack_full = False
+                    self.shopped = False
+                    self.reopen_refused()
+                    return Decision(ord(full.group(1).upper()), "prompt", f"drop {count} {name}: room for Word of Recall")
             # Nothing else spare: an unknown flavour goes before the food and
             # light a refused purchase was for (2026-11-05: a level-15 Mage with
             # 5,136 gold and a full pack had every purchase refused, 150,000

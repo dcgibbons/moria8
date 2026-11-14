@@ -1238,6 +1238,56 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(decision.key, ord("B"), decision.reason)
         self.assertEqual((brain.torches, brain.phase), (0, 11))      # counted from what stays
 
+    def test_a_full_pack_of_keepers_makes_room_for_word_of_recall(self) -> None:
+        """C64 Balrog, 2026-11-14: a clvl 39 Half-Elf Paladin's 22 slots held
+        nothing the bot called junk, the Alchemist refused Word of Recall,
+        and it walked down from town a level at a time for hours (maintainer:
+        "word of recall seems important"). Short of Word of Recall in town,
+        the stack furthest past its pickup limit goes; with Recall enough,
+        a full pack still drops only junk."""
+        from moria_playtest.brain import ALCHEMIST
+        pack = {0: "Inventory", 2: " a) Holy Book of Prayers Beginners Handb", 3: " b) 255 Potion of Cure Light Wounds",
+                4: " c) Wand of Teleport Away (magik)", 5: " d) Holy Book of Prayers Words of Wisdom",
+                6: " e) Holy Book of Prayers Chants and Bles", 7: " f) Holy Book of Prayers Exorcism",
+                8: " g) Staff of Speed (3 charges)", 9: " h) 6 Ration of Food", 10: " i) 29 Slime Mold",
+                11: " j) 4 Wooden Torch (134 turns)", 12: " k) 24 Potion of Cure Critical Wounds",
+                13: " l) 13 Potion of Cure Serious Wounds", 14: " m) 5 Potion of Neutralize Poison",
+                15: " n) 8 Potion of Heroism", 16: " o) 40 Scroll of Phase Door", 17: " p) Wand of Slow Monster (4 charges)",
+                18: " q) 6 Potion of Restore Mana", 19: " r) 8 Potion of Resist Cold", 20: " s) 8 Potion of Resist Heat",
+                21: " t) 9 Potion of Healing", 22: " u) Staff of Teleportation (magik)", 23: " v) 10 Flask of Oil (250 turns)"}
+        from moria_playtest.goals import for_character
+        paladin = for_character(GOALS["balrog"], "half-elf-paladin")
+        for short, dropped in ((True, ord("B")), (False, KEY_RUNSTOP)):
+            brain = Brain(paladin)
+            brain.clvl = 39
+            held = dict(pack)
+            if not short:   # its reserve in the slot the oil held: the listing is what counts
+                held[23] = f" v) {brain.recall_reserve()} Scroll of Word of Recall"
+            brain.at_store, brain.alchemist_done = ALCHEMIST, False
+            refused = command_obs(pos=(5, 5), dlvl=0, clvl=39, rows={23: " Your pack is full."})
+            refused.stage = "message"
+            brain.store(refused)
+            brain.dropping, brain.listed = True, True
+            listing = command_obs(pos=(5, 5), dlvl=0, clvl=39, rows=held)
+            listing.stage = "list"
+            decision = brain.drop_prompt(listing)
+            self.assertEqual(decision.key, dropped, decision.reason)
+        brain = Brain(paladin)
+        brain.clvl, brain.recall = 39, 0
+        brain.at_store, brain.alchemist_done = ALCHEMIST, False
+        refused = command_obs(pos=(5, 5), dlvl=0, clvl=39, rows={23: " Your pack is full."})
+        refused.stage = "message"
+        brain.store(refused)
+        brain.dropping, brain.listed = True, True
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=39, rows=pack)
+        listing.stage = "list"
+        brain.drop_prompt(listing)
+        self.assertEqual((brain.clw, brain.phase, brain.alchemist_done), (0, 40, False))   # the Alchemist again
+        brain.dropping, brain.listed = True, True
+        deep = command_obs(pos=(5, 5), dlvl=12, clvl=39, rows=pack)
+        deep.stage = "list"
+        self.assertEqual(brain.drop_prompt(deep).key, KEY_RUNSTOP)  # below town: nothing to buy it from
+
     def test_a_full_pack_refusing_recall_drops_in_town_and_tries_again(self) -> None:
         """2026-11-06: a level-19 Paladin's Word of Recall was refused for a
         full pack 170 times: with townspeople in view nothing was dropped in
