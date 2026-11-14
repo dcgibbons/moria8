@@ -87,7 +87,7 @@ royal_crown_2: .text "                 #                  " ; .byte 0
 royal_crown_3: .text "           ,,,  $$$  ,,,            " ; .byte 0
 royal_crown_4: .text "        ,,=$   $$$$$   $=,,         " ; .byte 0
 royal_crown_5: .text "       $$      $$$$$      $$        " ; .byte 0
-royal_crown_6: .text "        *#######*#######*           " ; .byte 0
+royal_crown_6: .text "         *#######*#######*          " ; .byte 0
 royal_vvv:     .text "          Veni, Vidi, Vici!         " ; .byte 0
 royal_hail:    .text "      I came, I saw, I conquered!   " ; .byte 0
 royal_title:   .text "          All Hail the Mighty       " ; .byte 0

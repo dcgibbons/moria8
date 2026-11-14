@@ -122,6 +122,21 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(obs({}, hp=-3).hp, -3)
 
 
+class RoyalCrownTest(unittest.TestCase):
+    def test_every_row_of_the_winners_crown_shares_one_center(self) -> None:
+        """Maintainer, 2026-11-14: the victory crown's bottom row
+        (*#######*#######*) sat a column left of the rest. Every row of
+        core/royal.s's crown is centered on the same column, as VMS
+        death.inc's crown is, and keeps the rows' common width."""
+        import re
+        text = (launch.ROOT / "core" / "royal.s").read_text()
+        rows = re.findall(r'^royal_crown_\d+: \.text "([^"]*)"', text, re.M)
+        self.assertEqual(len(rows), 7)
+        self.assertEqual({len(row) for row in rows}, {len(rows[0])})
+        centers = {(len(row) - len(row.lstrip()) + len(row.rstrip()) - 1) / 2 for row in rows}
+        self.assertEqual(centers, {17.0}, rows)
+
+
 class HelpersTest(unittest.TestCase):
     def test_derive_rng_is_deterministic_and_nonzero(self) -> None:
         self.assertEqual(derive_rng(5, 0), derive_rng(5, 0))
