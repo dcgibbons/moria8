@@ -227,7 +227,7 @@ player_pray:
 !pp_success:
     jsr tramp_spell_execute_selected
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jsr c64_test_detect_evil_assert_detected
+c64_test_detect_check_point:        // the runner checks an evil monster is detected here
 #endif
     jsr pm_finish_success_common
 #if C128_TEST_SCRIPTED_PRAYER

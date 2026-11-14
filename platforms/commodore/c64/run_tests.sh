@@ -1306,11 +1306,25 @@ run_scripted_dungeon_target_spell_smoke() {
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
 
+    # The seed (a level-50 Mage) is monitor writes at c64_test_seed_point,
+    # assembled into dungeon_spell_seed.mon: no seed code in the image.
+    local seed_addr seed_file="../../../build/test/c64/dungeon_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c64_test_seed_point" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing c64_test_seed_point or $seed_file)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
     {
+        c64_break_cmd "${seed_addr}"          # breakpoint 1
         for addr in "${fail_addrs[@]}"; do
             c64_break_cmd "${addr}"
         done
         c64_break_cmd "${pass_addr}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
         echo "g"
         echo "quit"
     } > "$mon_file"
@@ -1578,12 +1592,43 @@ run_scripted_detect_evil_smoke() {
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
 
+    # The seed is monitor writes at c64_test_seed_point (detect_evil_seed.mon),
+    # and the detection checks are the runner's: the monster table and the
+    # creature flags dumped at c64_test_detect_check_point (after the first
+    # successful prayer) and at the pass, read by tools/c64_detect_evil_check.py.
+    local seed_addr check_addr seed_file="../../../build/test/c64/detect_evil_seed.mon"
+    local table_addr mflags_addr table_end mflags_end
+    seed_addr=$(awk '$3 == ".c64_test_seed_point" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    check_addr=$(awk '$3 == ".c64_test_detect_check_point" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    table_addr=$(awk '$3 == ".monster_table" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    mflags_addr=$(awk '$3 == ".cr_mflags" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${seed_addr:-}" ] || [ -z "${check_addr:-}" ] || [ -z "${table_addr:-}" ] \
+            || [ -z "${mflags_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing detect-evil probe symbols or $seed_file)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    table_end=$(printf '%04X' $((16#$table_addr + 32 * 12 - 1)))
+    mflags_end=$(printf '%04X' $((16#$mflags_addr + 255)))
     {
+        c64_break_cmd "${seed_addr}"          # breakpoint 1
+        c64_break_cmd "${check_addr}"         # breakpoint 2
         for addr in "${fail_addrs[@]}"; do
             c64_break_cmd "${addr}"
         done
         c64_break_cmd "${pass_addr}"
         echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
+        echo "bank ram"
+        echo "m \$${table_addr} \$${table_end}"
+        echo "m \$${mflags_addr} \$${mflags_end}"
+        echo "delete 2"
+        echo "g"
+        echo "m \$${table_addr} \$${table_end}"
+        echo "m \$${mflags_addr} \$${mflags_end}"
         echo "quit"
     } > "$mon_file"
 
@@ -1599,6 +1644,14 @@ run_scripted_detect_evil_smoke() {
     fi
 
     if [ "$pass_hit" -eq 1 ]; then
+        local detect_fail
+        if ! detect_fail=$(python3 "$REPO_ROOT/tools/c64_detect_evil_check.py" "$main_vs" "$tty_log"); then
+            echo "FAIL (scripted detect evil: $detect_fail)"
+            echo "    Log: $tty_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
         echo "PASS"
         PASS=$((PASS + 1))
         TOTAL=$((TOTAL + 1))

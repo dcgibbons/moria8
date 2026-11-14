@@ -700,6 +700,19 @@ ol_target:        .byte 0
 #import "../common/disk_swap.s"
 #import "../common/title_screen.s"
 #import "../../../core/wizard.s"
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+// One VICE monitor command a line, for a scripted smoke's seed file (an
+// outBin segment, "ascii" encoding): the runner plays it at a breakpoint, so
+// the setup costs the product image nothing.
+.macro C64TestMonPoke(addr, value) {
+    .text "> $" + toHexString(addr) + " $" + toHexString(value)
+    .byte $0a
+}
+.macro C64TestMonFill(first, last, value) {
+    .text "f $" + toHexString(first) + " $" + toHexString(last) + " $" + toHexString(value)
+    .byte $0a
+}
+#endif
 #define DISARM_COMMAND_EXTERNAL
 #import "../../../core/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL

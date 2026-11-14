@@ -218,54 +218,46 @@ c64_test_seed_scripted_spell_state:
     rts
 #endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
-c64_test_seed_scripted_spell_state:
-    lda #0
-    sta c64_test_spell_success_count
-    sta c64_test_spell_return_pending
-    sta c64_test_spell_return_count
-    lda #CLASS_MAGE
-    sta player_data + PL_CLASS
-    lda #SPELL_MAGE
-    sta player_data + PL_SPELL_TYPE
-    lda #50
-    sta zp_player_lvl
-    sta player_data + PL_LEVEL
-    lda #18
-    sta player_data + PL_INT_CUR
-    // A level-50 mage's hit points, so the scripted rests among monsters
-    // cannot end the game before the script does.
-    // Zero page only: nothing in this test reloads it from player_data.
-    lda #<500
-    sta zp_player_hp_lo
-    sta zp_player_mhp_lo
-    lda #>500
-    sta zp_player_hp_hi
-    sta zp_player_mhp_hi
-    lda #200                // one Magic Missile per active monster type
-    sta zp_player_mp
-    sta player_data + PL_MANA
-    sta zp_player_mmp
-    sta player_data + PL_MAX_MANA
-    lda #1
-    sta player_data + PL_SPELLS_LEARNT_0
-    lda #0
-    sta player_data + PL_SPELLS_LEARNT_1
-    sta player_data + PL_SPELLS_LEARNT_2
-    sta player_data + PL_SPELLS_LEARNT_3
-    sta player_data + PL_SPELLS_WORKED_0
-    sta player_data + PL_SPELLS_WORKED_1
-    sta player_data + PL_SPELLS_WORKED_2
-    sta player_data + PL_SPELLS_WORKED_3
-    sta player_data + PL_NEW_SPELLS     // forgotten: player_init zeroed it
-    lda #99
-    ldx #31
-!c64_test_dungeon_spell_order_clear:
-    sta player_data + PL_SPELL_ORDER,x
-    dex
-    bpl !c64_test_dungeon_spell_order_clear-
-    lda #0
-    sta player_data + PL_SPELL_ORDER
-    rts
+// The seed is VICE monitor writes, not 6502 code: the runner breaks at
+// c64_test_seed_point and plays build/test/c64/dungeon_spell_seed.mon
+// (run_scripted_dungeon_target_spell_smoke), so the hook costs the product
+// image nothing (2026-11-13: 104 B of seed code took it past MAP_BASE).
+// A level-50 Mage, Magic Missile learnt and first in the order, 200 mana
+// (one Missile per active monster type), and a level-50 mage's 500 HP so the
+// scripted rests among monsters cannot end the game before the script does
+// (zero page only: nothing in this test reloads it from player_data).
+.segmentdef C64TestDungeonSpellSeed [outBin=OVL_OUT + "/dungeon_spell_seed.mon"]
+.segment C64TestDungeonSpellSeed
+.encoding "ascii"
+:C64TestMonPoke(c64_test_spell_success_count, 0)
+:C64TestMonPoke(c64_test_spell_return_pending, 0)
+:C64TestMonPoke(c64_test_spell_return_count, 0)
+:C64TestMonPoke(player_data + PL_CLASS, CLASS_MAGE)
+:C64TestMonPoke(player_data + PL_SPELL_TYPE, SPELL_MAGE)
+:C64TestMonPoke(zp_player_lvl, 50)
+:C64TestMonPoke(player_data + PL_LEVEL, 50)
+:C64TestMonPoke(player_data + PL_INT_CUR, 18)
+:C64TestMonPoke(zp_player_hp_lo, <500)
+:C64TestMonPoke(zp_player_mhp_lo, <500)
+:C64TestMonPoke(zp_player_hp_hi, >500)
+:C64TestMonPoke(zp_player_mhp_hi, >500)
+:C64TestMonPoke(zp_player_mp, 200)
+:C64TestMonPoke(player_data + PL_MANA, 200)
+:C64TestMonPoke(zp_player_mmp, 200)
+:C64TestMonPoke(player_data + PL_MAX_MANA, 200)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_0, 1)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_1, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_2, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_3, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_0, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_1, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_2, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_3, 0)
+:C64TestMonPoke(player_data + PL_NEW_SPELLS, 0)     // forgotten: player_init zeroed it
+:C64TestMonFill(player_data + PL_SPELL_ORDER, player_data + PL_SPELL_ORDER + 31, 99)
+:C64TestMonPoke(player_data + PL_SPELL_ORDER, 0)
+.encoding "screencode_mixed"
+.segment Default
 
 c64_test_force_spell_target_monster:
     lda zp_player_dlvl
@@ -362,15 +354,29 @@ c64_test_spell_target_type: .byte 0
 c64_test_spell_path_offset: .byte 0
 #endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-c64_test_seed_scripted_spell_state:
-    lda #0
-    sta c64_test_spell_success_count
-    sta c64_test_spell_return_pending
-    sta c64_test_spell_return_count
-    lda #20                 // mana for prayers retried after a fizzle
-    sta zp_player_mp
-    sta player_data + PL_MANA
-    rts
+// The seed is VICE monitor writes (build/test/c64/detect_evil_seed.mon,
+// played at c64_test_seed_point by run_scripted_detect_evil_smoke), and the
+// detection checks are the runner's, from monster-table dumps at
+// c64_test_detect_check_point and at the pass trap: no 6502 code for either
+// (2026-11-13: they took the product image past MAP_BASE).
+.segmentdef C64TestDetectEvilSeed [outBin=OVL_OUT + "/detect_evil_seed.mon"]
+.segment C64TestDetectEvilSeed
+.encoding "ascii"
+:C64TestMonPoke(c64_test_spell_success_count, 0)
+:C64TestMonPoke(c64_test_spell_return_pending, 0)
+:C64TestMonPoke(c64_test_spell_return_count, 0)
+:C64TestMonPoke(zp_player_mp, 20)           // mana for prayers retried after a fizzle
+:C64TestMonPoke(player_data + PL_MANA, 20)
+.encoding "screencode_mixed"
+.segment Default
+// What the runner's detection check reads (labels only: no bytes).
+.label c64_test_k_monster_entry_size = MONSTER_ENTRY_SIZE
+.label c64_test_k_max_monsters = MAX_MONSTERS
+.label c64_test_k_mx_type = MX_TYPE
+.label c64_test_k_mx_flags = MX_FLAGS
+.label c64_test_k_empty_slot = EMPTY_SLOT
+.label c64_test_k_cf_evil = CF_EVIL
+.label c64_test_k_mf_detected = MF_DETECTED
 
 c64_test_force_detect_evil_monster:
     // Five evil monsters on free floor near the player, wherever the level
@@ -474,20 +480,6 @@ c64_test_detect_try_cell:
 
 // After every successful prayer: no evil monster marked fails the test here,
 // so the countdown (armed only by a success) runs after a detection.
-c64_test_detect_evil_assert_detected:
-    jsr c64_test_detect_evil_any_detected
-    bcs !ctderd_seen+
-    jmp c64_test_spell_fail_validate_sym
-!ctderd_seen:
-    rts
-
-c64_test_detect_evil_assert_cleared:
-    jsr c64_test_detect_evil_any_detected
-    bcc !ctdeac_clear_ok+
-    jmp c64_test_spell_fail_validate_sym
-!ctdeac_clear_ok:
-    rts
-
 // Every main-loop pass: the test checks detection marks, not monster AI.
 // Awake, a DL10 monster killed the level-1 priest during the scripted rests.
 // Empty slots too: monster_spawn_one sets the sleep byte of a new monster.
@@ -502,33 +494,6 @@ c64_test_detect_evil_keep_asleep:
     bpl !ctdeka_loop-
     rts
 
-c64_test_detect_evil_any_detected:
-    ldx #0
-!ctdead_loop:
-    cpx #MAX_MONSTERS
-    bcs !ctdead_none+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !ctdead_next+
-    tay
-    lda cr_mflags,y
-    and #CF_EVIL
-    beq !ctdead_next+
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    and #MF_DETECTED
-    bne !ctdead_found+
-!ctdead_next:
-    inx
-    jmp !ctdead_loop-
-!ctdead_found:
-    sec
-    rts
-!ctdead_none:
-    clc
-    rts
 
 c64_test_detect_row: .byte 0
 c64_test_detect_col: .byte 0
@@ -612,11 +577,8 @@ game_new_start:
 #if C64_TEST_SCRIPTED_SCROLL_SELECTOR
     jsr c64_test_seed_scroll_selector_state
 #endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jsr c64_test_seed_scripted_spell_state
-#endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jsr c64_test_seed_scripted_spell_state
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_seed_point:                // the runner writes the seed here (*_seed.mon)
 #endif
 
     // --- Starting equipment ---
@@ -1084,8 +1046,7 @@ c128_town_move_diag_loop_top:
     lda c64_test_spell_return_count
     cmp #20
     bcc !c64_test_detect_return_done+
-    jsr c64_test_detect_evil_assert_cleared
-    jmp c64_test_spell_pass_sym
+    jmp c64_test_spell_pass_sym     // the runner checks the marks are cleared here
 !c64_test_detect_return_done:
 #endif
 
