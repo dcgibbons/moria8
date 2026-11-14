@@ -569,6 +569,10 @@ BALROG = "Balrog"     # dived for only once its breath is survivable (balrog_rea
 BALROG_DLVL = 50      # ... and no deeper: from here every level has it (core/monster_catalog.s CAT_WIN_LEVEL)
 BALROG_NEAR_STEPS = 100  # steps since the Balrog was in view that its fire is kept resisted at any price (resist_fire)
 BALROG_FIGHT_TURNS = 2   # resisted turns of the Balrog's worst the HP covers to stand and fight it (balrog_fight)
+BALROG_HP = 3000      # 75d40 at its maximum (CR_MAX_HP; docs/FEATURE_MAP.md): what balrog_damage must cover
+BALROG_HEAT_POTIONS = 2   # Resist Heat carried to dive: with the ring its 1,000 breath is 111 (resist_fire)
+BALROG_SHOT_HITS = 0.5    # share of the launcher's shots counted as landing on its AC 125 (balrog_damage)
+BALROG_AMMO = 255     # shots carried once Balrog-bound, one stack (51 lb of bolts): AMMO_RESERVE before
 BALROG_FIRE_RING = 1100   # a Ring of Resist Fire at the top level on the Balrog goal: over a Ring of Speed's 1000
 DIVE_REST_HP = 0.8    # on a dive level no rest above this share of HP; below it a potion first (rest)
 BREATH_REACH = 20     # squares a creature's breath or spell reaches (VMS max_sight, core/monster_catalog.s)
@@ -1690,14 +1694,24 @@ class Brain:
         kind = knowledge.kinds_by_name().get(BALROG)
         if kind is None or obs.dlvl < BALROG_DLVL or not self.balrog_bound():
             return None
+        balrog = Creature(kind[0], kind[1], BALROG)
         spots = [p for p, c in view.creatures.items() if (c.glyph, c.level) == kind]
         if not spots:
+            seen = self.level.balrog_seen
+            burst = self.turn_burst(balrog, obs)
+            if seen is not None and obs.step - seen <= BALROG_NEAR_STEPS and obs.hp <= burst:
+                # Out of sight, one more turn of it kills: away before any
+                # heal. A clvl 40 Half-Orc Rogue at 112/445, the Balrog just
+                # gone from view, cast Cure Light Wounds twice (+11 each)
+                # with a Staff of Teleportation in its pack, and its next
+                # breath killed it (C64 Balrog, 2026-11-14).
+                return self.balrog_escape(obs, f"HP {obs.hp}/{obs.mhp}, the Balrog near, its turn {burst}")
             return None
         self.level.balrog_seen = obs.step
         magic = self.magic
-        if not magic.caster(obs) or self.resist_div(obs, "fire") < 9:
+        if self.resist_div(obs, "fire") < 9:
             return None   # resist_fire (just before) brings the timer up; without it, the escapes
-        burst = self.turn_burst(Creature(kind[0], kind[1], BALROG), obs)
+        burst = self.turn_burst(balrog, obs)
         if obs.hp < BALROG_FIGHT_TURNS * burst:
             for spell in (HOLY_WORD, HEAL):
                 if magic.can(obs, spell):
@@ -1714,17 +1728,44 @@ class Brain:
                 return Decision(*magic.pray(spell, f"the Balrog in view, its fire resisted: pray {spell}"))
         if any(magic.can(obs, spell) for spell in (ORB, DISPEL_EVIL, HOLY_WORD)):
             return None   # mana for a prayer, the Balrog out of line: close in, wands
+        # No prayer for it, or none castable: the attack wands, the strongest
+        # charged, as the Orb is aimed; a Rogue learns no attack spell, and
+        # its wands and bolts are what balrog_damage counted. Out of line,
+        # the launcher (shoot) and the closing in come after.
+        wands = [w for w in ATTACK_WANDS if self.wands.get(w, 0) > 0]
+        if wands and step is not None and chebyshev(pos, view.pos) <= FIRE_RANGE:
+            wand = max(wands, key=ATTACK_WANDS.get)
+            self.picking, self.listed, self.pending, self.last_aimed = wand, False, DIRS[step], wand
+            self.aimed = (pos, view.creatures[pos].glyph)
+            return Decision(KEY_AIM, "aim", f"the Balrog in line, its fire resisted: aim the {wand} at it")
+        prays = any(spell in magic.known for spell in (ORB, DISPEL_EVIL, HOLY_WORD))
+        if wands or (not prays and self.launcher is not None and self.ammo > 0):
+            return None
         # Out of mana: another bar if carried, else Word of Recall while the
         # HP holds, and the wands and escapes until it comes (maintainer,
         # 2026-11-12: "out of mana is ok if they don't have any gain mana
         # potions"). A clvl 40 Priest with 5 Words of Recall spent its mana,
         # fought on at 500-650 of 780 and died (C64 Balrog, 2026-11-12).
-        if self.restore_mana:
+        if self.restore_mana and prays:
             self.picking, self.listed = RESTORE_MANA, False
             return Decision(ord("Q"), "quaff", "out of mana with the Balrog: drink Restore Mana")
         if not self.recalling and self.recall and obs.step >= self.blind_until:
             self.picking, self.listed = RECALL, False
             return Decision(ord("R"), "recall", "out of mana with the Balrog: read Word of Recall")
+        return None
+
+    def balrog_escape(self, obs: Observation, why: str) -> Decision | None:
+        """Away from the Balrog: the long jumps, a teleport spell, else Word
+        of Recall (15-35 turns, the wait spent healing and escaping)."""
+        far = self.far_escape(obs, why)
+        if far is not None:
+            return far
+        for spell in (TELEPORT_SELF, PORTAL):
+            if self.magic.can(obs, spell):
+                return Decision(*self.magic.pray(spell, f"{why}: cast {spell}"))
+        if not self.recalling and self.recall and obs.step >= self.blind_until:
+            self.picking, self.listed = RECALL, False
+            return Decision(ord("R"), "recall", f"{why}: read Word of Recall")
         return None
 
     def remembered_bursts(self, obs: Observation, lasting: bool = False,
@@ -2442,7 +2483,7 @@ class Brain:
             wants.append(TELEPORT_SCROLL)
         if self.recharge_scrolls < RECHARGE_RESERVE and any(w in self.wands for w in (*ATTACK_WANDS, *FIGHT_DEVICES)):
             wants.append(RECHARGE_SCROLL)
-        if self.launcher is not None and self.ammo < AMMO_RESERVE:
+        if self.launcher is not None and self.ammo < self.ammo_reserve():
             wants.append(LAUNCHERS[self.launcher][0])   # 1-2 gp a shot
         if self.at_store == TEMPLE and self.book_next is not None and self.book_next not in MAGE_BOOKS:
             wants.insert(0, store_name(self.book_next))   # a caster's prayers first (maintainer, 2026-10-25)
@@ -2738,6 +2779,10 @@ class Brain:
             self.enchant_scrolls = held(ENCHANT_ARMOR)
             self.weapon_scrolls = held(ENCHANT_WEAPON)
             self.recharge_scrolls = held(RECHARGE_SCROLL)
+        if scope == "all" and self.launcher is not None:
+            # A clvl 37 Gnome Rogue's count said none with 197 Bolts carried
+            # (C64 Balrog, 2026-11-14): balrog_damage counts them.
+            self.ammo = held(LAUNCHERS[self.launcher][0])
         if scope in ("potions", "all"):
             self.clw, self.neutralize, self.restoration = held(CLW), held(NEUTRALIZE), held(RESTORATION)
             self.resist_heat, self.resist_cold = held(RESIST_HEAT), held(RESIST_COLD)
@@ -3491,8 +3536,37 @@ class Brain:
             return True
         if kind in knowledge.paralyzer_kinds() and not self.free_action():
             return False
+        # Both fire resistances, the ring's and Resist Heat's, as a Priest
+        # goes down, and enough to kill it with (balrog_damage). Three clvl
+        # 40 Rogues with the ring alone, no Resist Heat and two attack wands
+        # took its breath at 333 twice a turn and died within minutes of
+        # each dive, one healing with a 15-HP spell (C64 Balrog, 2026-11-14).
+        if self.resist_heat < BALROG_HEAT_POTIONS or self.balrog_damage(obs) < BALROG_HP:
+            return False
         balrog = Creature(kind[0], kind[1], BALROG)
         return self.turn_burst(balrog, obs, lasting=True) < BREATH_LETHAL * obs.mhp
+
+    def balrog_damage(self, obs: Observation) -> float:
+        """What one fight can do to the Balrog, counted as a player counts it
+        before going down: Orb of Draining's full bars ((3d6 + level) doubled
+        on the evil, once more for each Restore Mana), each attack wand's
+        charges at its average, and BALROG_SHOT_HITS of the launcher's
+        shots. A Rogue learns no attack spell (core/spell_class_data.s:
+        rogue_spell_level 99 for each): its wands and bolts are its Orb."""
+        total = 0.0
+        orb = self.magic.known.get(ORB)
+        if orb is not None and orb.level <= obs.clvl and orb.mana > 0:
+            total += (self.magic.mana(obs)[1] // orb.mana) * 2 * (10.5 + obs.clvl) * (1 + self.restore_mana)
+        total += sum(self.wands.get(wand, 0) * damage for wand, damage in ATTACK_WANDS.items())
+        if self.launcher is not None:
+            ammo, mult, _ = LAUNCHERS[self.launcher]
+            total += self.ammo * mult * AMMO_AVERAGE[ammo] * BALROG_SHOT_HITS
+        return total
+
+    def ammo_reserve(self) -> int:
+        """Shots to carry: AMMO_RESERVE, and a stack once Balrog-bound, where
+        they are part of what it is killed with (balrog_damage)."""
+        return BALROG_AMMO if self.balrog_bound() else AMMO_RESERVE
 
     def balrog_bound(self) -> bool:
         """At the top level on a goal that goes on to the Balrog."""
@@ -4314,7 +4388,7 @@ class Brain:
             if launcher is not None and price <= budget and value(launcher) > (
                     value(self.launcher) if self.launcher else 0) and (best is None or value(launcher) > best[0]):
                 best = (value(launcher), letter, name)
-            elif (self.launcher is not None and self.ammo < AMMO_RESERVE and price <= gold
+            elif (self.launcher is not None and self.ammo < self.ammo_reserve() and price <= gold
                   and name.startswith(LAUNCHERS[self.launcher][0])):
                 ammo_row = (letter, name)
         if best is not None:

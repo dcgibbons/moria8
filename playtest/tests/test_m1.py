@@ -1908,6 +1908,10 @@ class ThreatDepthTest(unittest.TestCase):
         from moria_playtest.goals import for_character
         brain = Brain(for_character(GOALS[goal], "half-troll-priest"))
         brain.recall, brain.clw, brain.strong[CSW], brain.phase = 3, 20, 5, 5   # a deep character's stock
+        # What balrog_ready counts besides the ring and Free Action: Resist
+        # Heat, and 3,000 of damage (60 Drain Life charges at 50; test
+        # observations carry no mana for the Orb's bars).
+        brain.resist_heat, brain.wands["Wand of Drain Life"] = 4, 60
         brain.wants_book_trip = lambda obs: False   # type: ignore[method-assign]   # its books bought
         return brain
 
@@ -2064,6 +2068,54 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertTrue(brain.balrog_ready(o))
         # The Magi is worth more than the amulet of resistance it replaces.
         self.assertGreater(brain.jewel_value("Amulet of the Magi"), brain.jewel_value("Amulet of Resist Acid"))
+
+    def test_the_balrogs_depth_waits_for_resist_heat_and_the_damage_to_kill_it(self) -> None:
+        """C64 Balrog, 2026-11-14: three clvl 40 Rogues went down with the
+        ring's fire resistance alone, no Resist Heat and two attack wands;
+        its breath did 333 twice a turn and each died within minutes of its
+        dive. Ready takes both fire resistances, as a Priest goes, and what
+        kills its 3,000 HP: Orb bars (Restore Mana each once more), wand
+        charges, and half the launcher's shots. A Rogue has no attack spell."""
+        from moria_playtest.brain import BALROG_HP
+        from moria_playtest.magic import ORB, Prayer
+        brain = self.priest()
+        brain.clvl = 40
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
+        o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=445, mhp=445)
+        self.assertTrue(brain.balrog_ready(o))
+        brain.resist_heat = 1
+        self.assertFalse(brain.balrog_ready(o))                      # one potion: not both resistances for long
+        brain.resist_heat = 4
+        # The Half-Orc Rogue's kit: two weak wands, its bolts uncounted.
+        del brain.wands["Wand of Drain Life"]
+        brain.wands.update({"Wand of Lightning Balls": 8, "Wand of Cold Balls": 6})
+        self.assertLess(brain.balrog_damage(o), BALROG_HP)
+        self.assertFalse(brain.balrog_ready(o))
+        brain.credit("Heavy Crossbow (+5,+5)", 1)
+        brain.ammo = 255                                             # a stack: 255 x 12 x half
+        self.assertEqual(brain.balrog_damage(o), 8 * 24.0 + 6 * 33.0 + 255 * 12 * 0.5)
+        self.assertFalse(brain.balrog_ready(o))                      # 1,920: still short
+        brain.wands["Wand of Drain Life"] = 22
+        self.assertTrue(brain.balrog_ready(o))                       # 3,020
+        # A Priest's Orb: 161 mana is 23 casts of (10.5 + 40) x 2, twice
+        # over with a Restore Mana.
+        priest = self.priest()
+        del priest.wands["Wand of Drain Life"]
+        priest.magic.known[ORB] = Prayer("e", 7, 25)
+        full = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=445, mhp=445, rows={23: "HP:445/445 MP:161/161 AC:60"})
+        self.assertEqual(priest.balrog_damage(full), 23 * 101.0)
+        priest.restore_mana = 1
+        self.assertEqual(priest.balrog_damage(full), 2 * 23 * 101.0)
+        self.assertEqual((brain.ammo_reserve(), Brain(GOALS["deep"]).ammo_reserve()), (255, 20))
+
+    def test_the_drop_listing_counts_the_launchers_ammunition(self) -> None:
+        """C64 Balrog, 2026-11-14: a clvl 37 Gnome Rogue's count said no
+        Bolts with 197 in its pack; balrog_damage counts them."""
+        brain = Brain(GOALS["deep"])
+        brain.credit("Heavy Crossbow (+5,+5)", 1)
+        brain.ammo = 0
+        brain.sync_counts([" f) 164 Bolt", " g) 33 Bolt", " h) 11 Arrow"], "all")
+        self.assertEqual(brain.ammo, 197)
 
     def test_no_deeper_than_the_balrogs_level_however_strong(self) -> None:
         """C64 Balrog, 2026-11-12: a clvl 40 Half-Troll Priest at 806 HP with
@@ -2731,6 +2783,55 @@ class ResistFireTest(unittest.TestCase):
         self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(fighting(RESIST_TIMER_LOW), view).reason)
         self.assertIsNone(brain.resist_fire(fighting(15), view))
 
+    def test_a_rogue_fights_the_balrog_with_its_wands(self) -> None:
+        """C64 Balrog, 2026-11-14: a Rogue has no attack spell, and the fight
+        plan was prayers only: the strongest charged attack wand, aimed at
+        it in line, both fire resistances up; out of line or out of charges
+        with bolts left, the launcher's layer comes after."""
+        from moria_playtest.brain import KEY_AIM
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-rogue"))
+        brain.clvl = 40
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 9   # type: ignore[method-assign]
+        brain.wands.update({"Wand of Lightning Balls": 8, "Wand of Drain Life": 5, "Wand of Cold Balls": 0})
+        kind = knowledge.kinds_by_name()["Balrog"]
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        view.creatures = {(14, 10): Creature(*kind)}
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=445, mhp=445)
+        decision = brain.balrog_fight(o, view)
+        self.assertEqual((decision.key, brain.picking), (KEY_AIM, "Wand of Drain Life"), decision.reason)
+        self.assertIsNotNone(brain.pending)
+        brain.wands = {}
+        brain.credit("Heavy Crossbow (+5,+5)", 1)
+        brain.ammo, brain.restore_mana, brain.recall = 100, 255, 3
+        self.assertIsNone(brain.balrog_fight(o, view))             # the bolts (shoot), not Restore Mana or a recall
+
+    def test_one_more_turn_of_an_unseen_balrog_kills_away_first(self) -> None:
+        """C64 Balrog, 2026-11-14: a clvl 40 Half-Orc Rogue at 112/445, the
+        Balrog just gone from view, cast Cure Light Wounds twice (+11
+        each) with a Staff of Teleportation in its pack, and the next breath
+        killed it. With the Balrog seen in BALROG_NEAR_STEPS and its turn
+        enough to kill: the long escape, else Word of Recall."""
+        from moria_playtest.brain import KEY_USE, TELEPORT_STAFF, RECALL
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-rogue"))
+        brain.clvl = 40
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=112, mhp=445)
+        brain.level.balrog_seen = o.step - 3
+        brain.wands[TELEPORT_STAFF], brain.recall = 2, 3
+        decision = brain.balrog_fight(o, view)
+        self.assertEqual((decision.key, brain.picking), (KEY_USE, TELEPORT_STAFF), decision.reason)
+        brain.wands[TELEPORT_STAFF], brain.teleports = 0, 0
+        self.assertEqual(brain.balrog_fight(o, view).layer, "recall")
+        self.assertEqual(brain.picking, RECALL)
+        healthy = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=445, mhp=445)
+        self.assertEqual(brain.balrog_fight(healthy, view).layer, "recall")   # unresisted, 2,000 a turn
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 9   # type: ignore[method-assign]
+        self.assertIsNone(brain.balrog_fight(healthy, view))        # both resisted, 222: no flight
+        brain.level.balrog_seen = None
+        self.assertIsNone(brain.balrog_fight(o, view))              # not seen on this level
+
     def test_the_balrog_is_fought_with_its_fire_resisted(self) -> None:
         """2026-11-11 (maintainer: "yes" to a fight plan): in 36 final
         fights the bot cast no Orb of Draining, Dispel Evil or Holy Word,
@@ -2745,8 +2846,9 @@ class ResistFireTest(unittest.TestCase):
         brain = Brain(for_character(GOALS["balrog"], "half-troll-priest"))
         brain.clvl = 40
         known = {HOLY_WORD, ORB, DISPEL_EVIL, "Heal"}
+        brain.magic.known.update({name: Prayer("a", 7, 25) for name in known})   # learned
         brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
-        brain.magic.can = lambda obs, name: name in known              # type: ignore[method-assign]
+        brain.magic.can = lambda obs, name: name in known              # type: ignore[method-assign]   # castable now
         brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 9   # type: ignore[method-assign]
         kind = knowledge.kinds_by_name()["Balrog"]
         view = town_view((10, 10), (40, 40), dlvl=50)
