@@ -82,6 +82,9 @@ WAND_GOLD = 600          # gold beyond the gear reserve for a Magic Shop trip fo
 # Tried when safe or identified (maintainer, 2026-11-04: identify spells and
 # scrolls, and found potions and scrolls, were never used).
 UNKNOWN_SCROLL_WORDS = frozenset({"Lumen", "Veritas", "Dura", "Libera", "Acuta", "Ferox", "Tutela"})
+# The game refusing an item for the pack: no slot, or VMS's weight limit
+# (2026-11-13). Either way something not needed is dropped.
+PACK_REFUSALS = ("Your pack is full.", "You can't carry that much weight.")
 PICKED_ITEM = re.compile(r"You picked up (?:an? )?(.+?)\.(?: |$)")
 THIS_IS = re.compile(r"This is (?:an? )?(.+?)\.(?: |$)")
 CASTER_REST_MANA = 0.25  # below this share of mana a caster rests even with a creature lately close
@@ -90,10 +93,13 @@ DARK_HOPS = 10           # down-and-back hops a lightless character tries for a 
 # kept kind: spare torches (a slot each by fuel), lanterns and other classes'
 # books filled packs until the stores refused even food (2026-11-05: refusals
 # 1 per 100,000 steps before, hundreds after).
-PICKUPS = ("Potion of Cure", "Potion of Neutralize", "Scroll of Phase Door", "Scroll of Teleportation",
+PICKUPS = ("Potion of Cure", "Potion of Healing", "Potion of Neutralize", "Potion of Resist Heat", "Potion of Resist Cold",
+           "Potion of Heroism", "Scroll of Phase Door", "Scroll of Teleportation",
            "Scroll of Word of Rec", "Scroll of Identify",
            "Wand of Fire Balls", "Wand of Cold Balls", "Wand of Frost", "Wand of Lightning",
            "Wand of Stinking Cloud", "Wand of Teleport Away", "Staff of Teleportation")
+CARRY_TIMES = 2          # a found supply is picked up until twice its reserve is carried ...
+CARRY_LEAST = 5          # ... and at least this many (Brain.carried_enough)
 TRY_HP = 0.9             # unknown potions and scrolls are tried at this share of max HP or more
 IDENTIFY = "Identify"    # the Mage and Ranger spell (Magick I; magic.ON_ITEM)
 IDENTIFY_SCROLL = "Scroll of Identify"
@@ -118,7 +124,11 @@ RECHARGED = re.compile(r"The ((?:Wand|Staff) of [A-Za-z' -]+?) glows briefly\.")
 PICKED_WAND = re.compile(r"You picked up (?:an? )?((?:Wand|Staff) of [A-Za-z' -]+?)(?: \((?:(\d+) charges?|[^)]*)\))?\.")
 RECHARGE_SPELLS = ("Recharge Item I", "Recharge Item II")
 RECHARGEABLE_GOLD = 300  # the dearest of them with the shop's markup
+# The potions bought for the deep levels are kept too: a clvl 39 Warrior
+# dropped Potions of Resist Cold as junk four times on DL37 and died to an
+# Ancient White Dragon's frost (C64 Balrog, 2026-11-13).
 KEEP_PREFIXES = ("Ration", "Slime Mold", "Flask of Oil", "Wooden Torch", "Brass Lantern", "Potion of Cure", "Potion of Neutralize",
+                 "Potion of Healing", "Potion of Resist Heat", "Potion of Resist Cold", "Potion of Heroism",
                  "Scroll of Word of Rec", "Scroll of Phase Door", "Scroll of Teleportation", "Holy Book", "Spellbook")
 DROP_RETRY = 500         # steps before looking for junk again after finding none
 KEY_RETURN = 0x0D
@@ -326,6 +336,7 @@ CLW_RESERVE = 5          # potions to carry for a fight gone wrong (M4; 3 until 
 # with 136 HP drank five Cure Light Wounds beside three creatures and died
 # holding 17,000 gold. Best first; VMS prices.
 CCW, CSW = "Potion of Cure Critical", "Potion of Cure Serious"
+HEALING = "Potion of Healing"   # 1000 HP (VMS potions.inc), the non-caster's Heal: dungeon and Black Market
 NEUTRALIZE = "Potion of Neutralize"   # Neutralize Poison (Temple, 75 gp VMS): a cure without mana
 RESIST_HEAT = "Potion of Resist Heat"   # fire resistance for 10-19 turns (fire breath, monster_cast_breath)
 RESIST_COLD = "Potion of Resist Cold"   # ... and cold, against frost breath
@@ -351,7 +362,16 @@ RESIST_TIMER_LOW = 3     # Resist Heat (Cold) turns left that count as none: ren
                          # outlasts it (the prayer adds randint(10) + 10, pmx_resist_add)
 NEUTRALIZE_RESERVE = 2   # carried from STRONG_LEVEL on the strong_potions goals
 STRONG_GOLD = {CCW: 100, CSW: 40}
-POTION_HEAL = {CLW: 8.0, CSW: 16.0, CCW: 24.0}   # 2d7, 4d7, 6d7 (VMS potions.inc cases 13-15)
+POTION_HEAL = {CLW: 8.0, CSW: 16.0, CCW: 24.0, HEALING: 1000.0}   # 2d7, 4d7, 6d7, 1000 (VMS potions.inc 13-16)
+
+
+def drink_name(potion: str) -> str:
+    """A healing potion as the bot's reasons name it: "Cure Serious Wounds", "Healing"."""
+    return potion[len("Potion of "):] + ("" if potion == HEALING else " Wounds")
+
+
+HEALING_MISSING = 100   # HP short of max before a Potion of Healing, not Cure Critical, is worth drinking
+HEALING_RESERVE = 10    # Potions of Healing bought at the Black Market, rich
 GHOST_GLYPH = "G"        # ghosts pass through walls (VMS Moria)
 PHASE_AGAIN = 30         # steps after a short phase in which contact again calls for a far teleport
 SUMMON_MEMORY = 50       # steps a summoning heard still sends the deep goal home with no stairs known
@@ -428,6 +448,7 @@ RECALL_CLIMB = 1         # Word of Recall down to a deepest level this many past
 RECALL_FAR = 5           # deeper than ready by more than this: Word of Recall up, not the stairs (resupply)
 RECALL_WALK_LEVELS = 5   # levels above the deepest beyond which Word of Recall (via town) beats walking down
 BREATHS_TO_LEAVE = 2     # breaths taken on one level that make it one to leave (leave_deadly)
+CAUGHT_TO_LEAVE = 2      # "caught again" teleports on one level that make it one to leave (leave_deadly)
 RETREAT_STUCK = 3        # retreat steps that leave the bot on its square before the escapes take over
 PROMPT_MESSAGES_KEPT = 400   # characters of -more- screens' messages carried to the next command screen
 LEAVE_WALK_STEPS = 10    # stairs farther than this on a deadly level: Word of Recall first
@@ -651,6 +672,7 @@ class LevelMemory:
     balrog_seen: int | None = None    # step the Balrog was last in view on this level (resist_fire, balrog_fight)
     breath: tuple[int, int] | None = None   # (step, HP lost) of the last breath taken
     breaths_taken: int = 0            # breaths taken on this level (BREATHS_TO_LEAVE)
+    caught: int = 0                   # Teleport Selfs cast after a phase landed back in contact (CAUGHT_TO_LEAVE)
     breather: tuple[int, int] | None = None # (step last seen, biggest turn's burst) of the breathers seen
     # Each burst by the elements that divide it (none: a spell or an unknown
     # breath, unresisted) -> (step last seen, biggest turn's worth): one
@@ -739,7 +761,7 @@ class Brain:
         self.restore_mana = 0                  # Potions of Restore Mana carried
         self.heroic_until = 0                  # step before which the last Heroism still holds
         self.resist_cold = 0                   # ... and of Resist Cold
-        self.strong = {CCW: 0, CSW: 0}         # stronger healing potions carried (tactic strong_potions)
+        self.strong = {CCW: 0, CSW: 0, HEALING: 0}   # stronger healing potions carried (tactic strong_potions)
         self.phase = 0                         # Phase Door scrolls carried
         self.teleports = 0                     # Scrolls of Teleportation carried
         self.neutralize = 0                    # Neutralize Poison potions carried
@@ -911,7 +933,7 @@ class Brain:
                 self.wands.pop(self.recharge_target, None)           # the recharge destroyed it
             if RECHARGED.search(messages) or "There is a bright flash of light." in messages:
                 self.recharge_target = None
-            if "Your pack is full." in messages:
+            if any(refusal in messages for refusal in PACK_REFUSALS):
                 self.pack_full = True
             if " is damaged!" in messages:
                 # Acid takes one from a worn piece's to-AC (VMS minus_ac): the
@@ -1858,10 +1880,12 @@ class Brain:
         else:
             return None
         for potion in sorted(POTION_HEAL, key=POTION_HEAL.get, reverse=True):
-            held = self.clw if potion == CLW else self.strong.get(potion, 0)
-            if held and obs.hp + POTION_HEAL[potion] > worst / BREATH_LETHAL and obs.hp + POTION_HEAL[potion] <= obs.mhp:
+            if not self.potion_ready(potion, obs):
+                continue
+            if obs.hp + min(POTION_HEAL[potion], obs.mhp - obs.hp) > worst / BREATH_LETHAL \
+                    and (potion == HEALING or obs.hp + POTION_HEAL[potion] <= obs.mhp):
                 self.picking, self.listed = potion, False
-                return Decision(ord("Q"), "quaff", f"{who} could breathe {worst}: drink {potion[len('Potion of '):]} Wounds")
+                return Decision(ord("Q"), "quaff", f"{who} could breathe {worst}: drink {drink_name(potion)}")
         magic = self.magic
         far = self.far_escape(obs, f"{who} could breathe {worst}")
         if far is not None:
@@ -2016,6 +2040,17 @@ class Brain:
             if jump is not None:
                 self.level.deadly_jump = deadly
                 return jump
+        beside = [p for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1 and not self.stationary(c)]
+        if beside and self.phase and obs.step >= self.blind_until \
+                and (self.level.phased is None or obs.step - self.level.phased > PHASE_AGAIN):
+            # In its reach with no long escape: out of contact first, then
+            # Recall or the stairs. A clvl 38 Warrior with 3 Phase Doors read
+            # Word of Recall beside an Ancient Blue Dragon, fought on while it
+            # counted down, and died to its blows and 140 lightning breaths
+            # (C64 Balrog, 2026-11-13).
+            self.picking, self.listed = PHASE, False
+            self.level.phased = obs.step
+            return Decision(ord("R"), "phase", "a creature that could kill in one breath is beside: read Phase Door")
         stairs = view.stairs_up() | (view.stairs_down() if self.deeper_ok(obs) else set())
         far = view.path_steps(stairs, avoid_monsters=True) if stairs else None
         if not self.recalling and self.recall and obs.step >= self.blind_until \
@@ -2188,7 +2223,7 @@ class Brain:
         if obs.stage == "haggle":
             return self.offer(obs)
         if obs.stage == "message":
-            if any("Your pack is full." in row for row in obs.rows):
+            if any(refusal in row for row in obs.rows for refusal in PACK_REFUSALS):
                 self.pack_full = True          # drop something, then shop again (drop_prompt)
                 self.refused_at = self.at_store
             if self.bought is not None:
@@ -2411,9 +2446,11 @@ class Brain:
             # A Brass Lantern too, rich, where the General Store seldom has
             # one (1 of its 25 stock choices): level-37 Priests lit torches
             # and went home for more every 4,000 steps (C64 Balrog, 2026-11-09).
-            keep = (RECALL, PHASE, TELEPORT_SCROLL, CCW, CSW, ENCHANT_ARMOR, ENCHANT_WEAPON, RESIST_HEAT, RESIST_COLD,
+            keep = (RECALL, PHASE, TELEPORT_SCROLL, HEALING, CCW, CSW, ENCHANT_ARMOR, ENCHANT_WEAPON, RESIST_HEAT, RESIST_COLD,
                     HEROISM, RESTORE_MANA, LANTERN) if rich else (RECALL,)
             wants = [w for w in wants if w in keep]
+            if rich and "strong_potions" in self.goal.tactics and self.strong[HEALING] < HEALING_RESERVE:
+                wants.insert(0, HEALING)   # the big heal first: the Temple never has it
             if rich:
                 # Every stat short of 18/100, Constitution and the fighting
                 # stats first (GAIN_POTIONS order otherwise).
@@ -2719,7 +2756,11 @@ class Brain:
                 # with no spare left, and the bot went dark far from town).
                 self.picked_light = max(fuelled)[0] * LIGHT_CHARGE_TURNS
                 if self.picking == TORCH:
-                    self.torches = sum(t >= SPARE_TORCH_CHARGES for t, _ in fuelled)
+                    # The spares by count, the one taken less: a stack is one
+                    # line, and a clvl 37 Rogue counted 255 torches as 1 and
+                    # bought five more a visit (C64 Balrog, 2026-11-13).
+                    self.torches = max(0, sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
+                                              for t, row in fuelled if t >= SPARE_TORCH_CHARGES) - 1)
         for row in rows:   # a full pack lists a-v down to row 22 (M4: item u was missed)
             match = PACK_ITEM.match(row)
             # Unknown flavours carry their article in the name ("a Blue Potion"):
@@ -4486,14 +4527,24 @@ class Brain:
             # breath (2026-11-08).
             return None
         potion = next((k for k in sorted(POTION_HEAL, key=POTION_HEAL.get, reverse=True)
-                       if (self.clw if k == CLW else self.strong.get(k))), None)
+                       if self.potion_ready(k, obs)), None)
         if potion is not None and obs.step >= self.blind_until:
             self.picking, self.listed = potion, False
-            return Decision(ord("Q"), "quaff", f"{why}: drink {potion[len('Potion of '):]} Wounds")
+            return Decision(ord("Q"), "quaff", f"{why}: drink {drink_name(potion)}")
         heal = next((spell for spell in HEALS if self.magic.can(obs, spell)), None)
         if heal is not None:
             return Decision(*self.magic.pray(heal, f"{why}: pray {heal}"))
         return None
+
+    def potion_ready(self, potion: str, obs: Observation) -> bool:
+        """A healing potion carried and worth drinking now: Healing only when
+        HEALING_MISSING HP or more are gone, as a player keeps it for the big
+        hurt. Warriors at clvl 36-39 walked past Potions of Healing on DL37
+        and died to Ancient Dragons' breaths holding Cure Light Wounds that
+        heal 8 (C64 Balrog, 2026-11-13)."""
+        if potion == HEALING and obs.mhp - obs.hp < HEALING_MISSING:
+            return False
+        return bool(self.clw if potion == CLW else self.strong.get(potion, 0))
 
     @staticmethod
     def step_away(view: View, pos: Pos) -> int | None:
@@ -4539,7 +4590,11 @@ class Brain:
             return None
         keep_off = view.hazards | self.hazards(view)
         def worth(glyph: str, name: str) -> bool:
-            if glyph == COIN_GLYPH or name.startswith(FOODS):
+            if glyph == COIN_GLYPH:
+                return True
+            if self.carried_enough(name):
+                return False
+            if name.startswith(FOODS):
                 return True
             if self.launcher is not None and name.startswith(LAUNCHERS[self.launcher][0]):
                 return True
@@ -4572,6 +4627,26 @@ class Brain:
             return None
         return Decision(DIRS[step], "collect", f"walk to the '{self.items_seen[self.collect_to][0]}' "
                                                f"at {self.collect_to}")
+
+    def carried_enough(self, name: str) -> bool:
+        """Enough of a supply already: CARRY_TIMES its reserve, at least
+        CARRY_LEAST, as a player stops picking them up. A clvl 37 Rogue walked
+        to every one it saw: 185 Cure Light Wounds, 255 Restore Mana and 159
+        Neutralize Poison against reserves of 5, 3 and 2 (C64 Balrog,
+        2026-11-13; VMS slows a pack over its weight limit)."""
+        held = [(CLW, self.clw, self.clw_reserve()), (NEUTRALIZE, self.neutralize, NEUTRALIZE_RESERVE),
+                (PHASE, self.phase, self.phase_reserve()), (TELEPORT_SCROLL, self.teleports, self.teleport_reserve()),
+                (RECALL, self.recall, self.recall_reserve()), (IDENTIFY_SCROLL, self.identify_scrolls, 1),
+                (RESTORE_MANA, self.restore_mana, RESTORE_MANA_RESERVE),
+                (RESIST_HEAT, self.resist_heat, RESIST_RESERVE), (RESIST_COLD, self.resist_cold, RESIST_RESERVE),
+                (HEROISM, self.heroism, HEROISM_RESERVE),
+                *((kind, count, self.strong_reserve()) for kind, count in self.strong.items())]
+        for prefix, count, reserve in held:
+            if name.startswith(prefix):
+                return count >= max(CARRY_TIMES * reserve, CARRY_LEAST)
+        if name.startswith(FOODS):
+            return self.food >= self.food_max()
+        return False
 
     def eat(self, obs: Observation, view: View) -> Decision | None:
         """Eat when hungry. Eating with no food takes no game time, so retrying
@@ -4972,7 +5047,7 @@ class Brain:
         A known Cure Light Wounds is prayed before the potion even one blow
         from death: drinking first at low levels (the prayer can fail) cost
         Gnome and Elf Priests 5 of 40 on reach_dl8 (M5f round 7 A/B)."""
-        strong = next((k for k in self.strong if self.strong[k]), None)
+        strong = next((k for k in self.strong if self.potion_ready(k, obs)), None)
         if self.restoration and self.restore_due and not self.close_threats(obs, view):
             self.picking, self.listed = RESTORATION, False
             return Decision(ord("Q"), "quaff", "a stat drained: drink Restoration")
@@ -5036,9 +5111,11 @@ class Brain:
         danger = self.danger(view.pos, view, obs)
         if danger == 0 and not (self.poisoned or self.draining):
             return None
-        order = [strong, CLW] if strong is not None and (not self.clw or obs.mhp - obs.hp > STRONG_DEFICIT) \
-            else [CLW, *sorted((k for k in self.strong if self.strong[k]), key=POTION_HEAL.get)]
-        potion = next((k for k in order if k is not None and (self.clw if k == CLW else self.strong.get(k))
+        # Weakest that answers first, then the rest by strength: Healing when
+        # none of the cures outruns the danger.
+        order = ([strong, CLW] if strong is not None and (not self.clw or obs.mhp - obs.hp > STRONG_DEFICIT)
+                 else [CLW]) + sorted((k for k in self.strong if self.potion_ready(k, obs)), key=POTION_HEAL.get)
+        potion = next((k for k in order if k is not None and self.potion_ready(k, obs)
                        and danger < obs.hp + POTION_HEAL[k] and POTION_HEAL[k] >= danger / 3), None)
         if potion is None and obs.hp < RETREAT_HP * obs.mhp and not self.can_phase(obs) \
                 and any(not self.stationary(c) for c in self.adjacent):
@@ -5048,16 +5125,21 @@ class Brain:
             # then fought to the death holding five Cure Light Wounds (C128,
             # 2026-11-04: 23 of 25 such deaths). Not when no potion outlasts it.
             potion = next((k for k in sorted(POTION_HEAL, key=POTION_HEAL.get, reverse=True)
-                           if (self.clw if k == CLW else self.strong.get(k))
-                           and danger < obs.hp + POTION_HEAL[k]), None)
+                           if self.potion_ready(k, obs) and danger < obs.hp + POTION_HEAL[k]), None)
         if potion is None:
             return None
         self.picking, self.listed = potion, False
-        return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}: drink {potion[len('Potion of '):]} Wounds")
+        return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}: drink {drink_name(potion)}")
 
     def restock_short(self) -> bool:
-        """Short enough of strong potions or Phase Door for a town trip (M7)."""
-        return self.strong_wanted() and (not any(self.strong.values()) or not self.phase)
+        """Short enough of strong potions or Phase Door for a town trip (M7),
+        or deep with no long escape left: no Scroll of Teleportation, no
+        charged Staff of Teleportation, no Teleport Self. A clvl 39 Warrior
+        read its last scroll on DL37 and met the Ancient White Dragon again
+        with none (C64 Balrog, 2026-11-13)."""
+        no_escape = (self.teleport_reserve() > 0 and not self.teleports
+                     and self.wands.get(TELEPORT_STAFF, 0) <= 0 and TELEPORT_SELF not in self.magic.known)
+        return (self.strong_wanted() and (not any(self.strong.values()) or not self.phase)) or no_escape
 
     def strong_wanted(self) -> bool:
         """Fewer than ``strong_reserve`` stronger potions from STRONG_LEVEL (M7)."""
@@ -5116,6 +5198,14 @@ class Brain:
             # Mage cast it 30 times in a Vorpal Bunny swarm on DL17, each jump
             # among more of them, and died with Teleport Self known (C128,
             # 2026-11-05). Far, then the stairs.
+            # Found again and again: leave the level (leave_deadly reads Word
+            # of Recall, the teleports covering its wait). A clvl 37 Elf Mage
+            # teleported 12 times in 250 steps from an Ancient White Dragon on
+            # DL37 that found it each time, spent 146 mana, read Recall at
+            # 55 HP and was breathed on waiting (C64 Balrog, 2026-11-13).
+            self.level.caught += 1
+            if self.level.caught >= CAUGHT_TO_LEAVE and self.level.deadly is None:
+                self.level.deadly = view.pos
             return Decision(*magic.pray(TELEPORT_SELF, f"HP {obs.hp}/{obs.mhp}, caught again: cast Teleport Self"))
         if self.phase:
             if obs.step < self.blind_until:

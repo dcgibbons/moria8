@@ -62,6 +62,7 @@ STORE_STAGES = (
     ("buy_which", "Buy which item?"),
     ("message", "You cannot afford that."),
     ("message", "Your pack is full."),
+    ("message", "You can't carry that much weight."),   # VMS weight limit (2026-11-13)
     ("message", "Get out of my store!"),
     ("haggle", "Your offer?"),
     ("haggle", "Take it? (Y/N)"),

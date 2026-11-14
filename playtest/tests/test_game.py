@@ -88,6 +88,7 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.mode(obs({**menu, 20: " Buy which item? (a-l)"})), (Mode.STORE, "buy_which"))
         self.assertEqual(self.mode(obs({**menu, 21: " Price: 3 gp. Buy? (Y/N)"})), (Mode.STORE, "buy_confirm"))
         self.assertEqual(self.mode(obs({**menu, 22: " Your pack is full."})), (Mode.STORE, "message"))
+        self.assertEqual(self.mode(obs({**menu, 23: " You can't carry that much weight."})), (Mode.STORE, "message"))
         self.assertEqual(self.mode(obs({**menu, 21: " Your offer? (Q=cancel)"})), (Mode.STORE, "haggle"))
 
     def test_chargen_stages(self) -> None:

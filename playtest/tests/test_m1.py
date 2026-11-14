@@ -763,6 +763,16 @@ class LightTest(unittest.TestCase):
         self.assertEqual(brain.pick_item(spent).reason, "item to pick not listed: cancel")
         self.assertEqual(brain.torches, 0)
 
+    def test_a_stack_of_torches_counts_every_torch(self) -> None:
+        """C64 Balrog, 2026-11-13: a clvl 37 Rogue's 255 torches were one
+        line of the list, counted as one, and it bought five a visit."""
+        brain = Brain(GOALS["reach_dl2"])
+        brain.torches, brain.picking, brain.listed = 1, "Wooden Torch", True
+        o = command_obs(rows={0: "Wear which item? (a-b)", 2: " a) 255 Wooden Torch (134 turns)",
+                              3: " b) Wooden Torch (0 turns)"})
+        self.assertEqual(brain.pick_item(o).key, ord("A"))
+        self.assertEqual(brain.torches, 254)                            # the one taken less
+
     def test_a_read_with_no_scroll_carried_zeroes_the_scrolls(self) -> None:
         """2026-11-07: with no scroll at all the read says "You have nothing
         there." and shows no list; a level-28 Rogue's count kept a Word of
@@ -1157,6 +1167,23 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(brain.stair_scum(o, view).layer, "search")
         brain.level.since_progress = STUCK_STEPS
         self.assertEqual(brain.stair_scum(o, view).key, ord(">"))
+
+    def test_the_weight_limit_refusing_drops_as_a_full_pack_does(self) -> None:
+        """2026-11-13: VMS's weight limit refuses a pickup or a purchase with
+        "You can't carry that much weight.": the bot drops what it does not
+        need, and the store stays done for the visit until it has."""
+        from moria_playtest.brain import ALCHEMIST
+        brain = Brain(GOALS["deep"])
+        view = town_view((5, 5), (40, 40), dlvl=0)
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=5, rows={0: "You can't carry that much weight."})
+        self.assertEqual(brain.decide(o, view).key, ord("D"))
+        brain = Brain(GOALS["deep"])
+        brain.at_store, brain.alchemist_done = ALCHEMIST, False
+        refused = command_obs(pos=(5, 5), dlvl=0, clvl=19, rows={23: " You can't carry that much weight."})
+        refused.stage = "message"
+        brain.store(refused)
+        self.assertTrue(brain.pack_full and brain.alchemist_done)
+        self.assertEqual(brain.refused_at, ALCHEMIST)
 
     def test_a_full_pack_refusing_recall_drops_in_town_and_tries_again(self) -> None:
         """2026-11-06: a level-19 Paladin's Word of Recall was refused for a
@@ -2110,6 +2137,26 @@ class ThreatDepthTest(unittest.TestCase):
                             rows={0: "You resist the effects of the spell."})
         brain.decide(after, view)
         self.assertEqual(brain.level.deadly, (10, 10))
+
+    def test_beside_a_one_breath_killer_with_no_long_escape_it_phases_before_recall(self) -> None:
+        """C64 Balrog, 2026-11-13: a clvl 38 Warrior with 3 Phase Doors and
+        no Teleportation read Word of Recall beside an Ancient Blue Dragon,
+        fought on while it counted down, and died to its blows and breaths."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-troll-warrior"))
+        brain.phase, brain.teleports, brain.recall = 3, 0, 5
+        kind = knowledge.kinds_by_name()["Ancient Blue Dragon"]
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        view.creatures = {(11, 10): Creature(*kind, "Ancient Blue Dragon")}
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=38, hp=313, mhp=494)
+        brain.level.deadly = (11, 10)                                  # the level is one to leave
+        decision = brain.leave_deadly(o, view)
+        self.assertEqual((decision.layer, decision.key), ("phase", ord("R")))
+        self.assertIsNotNone(brain.level.phased)
+        decision = brain.leave_deadly(o, view)                         # phased just now: Recall next
+        self.assertEqual(decision.layer, "recall")
+        brain.level.phased, brain.phase = None, 0                      # none to read: Recall as before
+        self.assertEqual(brain.leave_deadly(o, view).layer, "recall")
 
     def test_far_too_deep_it_reads_word_of_recall(self) -> None:
         """C64 Balrog, 2026-11-11: a clvl 40 Priest restored on DL100 from a
@@ -4142,6 +4189,47 @@ class GearTest(unittest.TestCase):
         o.rows[22] = "ST:18  IN: 6  WI:11  DX:12  CO:14  CH: 6"
         return o
 
+    def test_a_warrior_drinks_healing_under_a_lethal_breath(self) -> None:
+        """C64 Balrog, 2026-11-13: a clvl 39 Half-Orc Warrior at 172/406
+        beside an Ancient White Dragon (234 breath) held 55 Cure Light Wounds
+        and no stronger cure, fought on and was breathed to death; it had
+        walked past a Potion of Healing a dozen times. Healing lifts it over
+        the breath; with only cures that heal 8-24 nothing does."""
+        from moria_playtest.brain import CCW, HEALING
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        brain.clw, brain.strong[CCW] = 55, 3
+        brain.jewels = brain.read_jewels(["Equipment", " h) Ring:   Ring of Speed", " i) Amulet: (none)"])   # one breath a turn
+        view = town_view((17, 10), (80, 40), dlvl=37)
+        view.creatures = {(18, 10): Creature("D", 38, "Ancient White Dragon")}
+        o = command_obs(pos=(17, 10), dlvl=37, clvl=39, hp=172, mhp=406)
+        before = brain.breath_guard(o, view)
+        self.assertNotIn("drink", before.reason if before else "")          # no cure answers 234
+        brain.strong[HEALING] = 2
+        self.assertTrue(brain.breath_guard(o, view).reason.endswith("drink Healing"))
+        self.assertEqual(brain.picking, HEALING)
+        scratched = command_obs(pos=(17, 10), dlvl=37, clvl=39, hp=380, mhp=406)
+        self.assertNotEqual(brain.heal_now(scratched, "hurt").reason, "hurt: drink Healing")   # 26 short: Cure Critical
+
+    def test_potions_of_healing_are_picked_up_and_bought_rich(self) -> None:
+        """C64 Balrog, 2026-11-13: "You see a Potion of Healing." a dozen
+        times in a clvl 39 Warrior's last hours on DL37, never picked up; the
+        Black Market sells them and it held 10 million gold."""
+        from moria_playtest.brain import BLACK_MARKET, HEALING, HEALING_RESERVE
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=37)
+        view.screen = (0, 0, COLS, ROWS)
+        brain.items_seen[(8, 5)] = ("!", HEALING)
+        seen = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=406, mhp=406)
+        self.assertEqual(brain.collect(seen, view).layer, "collect")
+        self.store(brain, BLACK_MARKET, [(HEALING, 1500)], 10000000)
+        brain.clvl = 39
+        self.assertEqual(brain.shopping_list(10000000)[0], HEALING)
+        brain.strong[HEALING] = HEALING_RESERVE
+        self.assertNotIn(HEALING, brain.shopping_list(10000000))
+
     def test_a_sensed_jewel_keeps_its_worth(self) -> None:
         """C64 Balrog, 2026-11-12: the worn Amulet of the Magi showed as
         "Amulet of the Magi (magik)" (sensed, not identified); read as a kind
@@ -4967,6 +5055,33 @@ class MageBookTest(unittest.TestCase):
         self.assertEqual(brain.phase_door(hurt(110), view).reason, "HP 35/110, caught again: cast Teleport Self")
         self.assertEqual(brain.phase_door(hurt(200), view).reason, "HP 35/110, no way out: cast Phase Door")   # a new fight
 
+    def test_caught_again_twice_on_a_level_it_leaves(self) -> None:
+        """C64 Balrog, 2026-11-13: a clvl 37 Elf Mage teleported 12 times in
+        250 steps from an Ancient White Dragon (234, under the one-breath
+        line) that found it each time, read Word of Recall only at 55 HP
+        and was breathed on waiting. The second catch makes the level one to
+        leave: Word of Recall, the teleports covering its wait."""
+        brain, _ = self.caster("elf-mage", {"Phase Door": ("c", 3, 2, "Beginners-Magick"),
+                                            "Teleport Self": ("e", 7, 6, "Magick I")}, mp=140)
+        brain.magic.listed_books = {"Beginners-Magick", "Magick I"}
+        brain.recall = 3
+        view = town_view((5, 5), (30, 30), dlvl=37)
+        dragon = Creature("D", 38, "Ancient White Dragon")
+        view.creatures, brain.adjacent = {(6, 5): dragon}, [dragon]
+        def near(step):
+            o = command_obs(pos=(5, 5), dlvl=37, clvl=37, hp=100, mhp=347,
+                            rows={0: "the Ancient White Dragon hits you.", 23: "HP:100/347  MP:140/149 AC:60 AU:32"})
+            o.step = step
+            return o
+        brain.level.phased = 100
+        self.assertIn("caught again", brain.phase_door(near(110), view).reason)
+        self.assertIsNone(brain.level.deadly)                           # once: teleport, stay
+        brain.level.phased = 200
+        self.assertIn("caught again", brain.phase_door(near(210), view).reason)
+        self.assertIsNotNone(brain.level.deadly)                        # twice: a level to leave
+        away = town_view((20, 20), (30, 30), dlvl=37)                   # teleported, nothing in view
+        self.assertEqual(brain.leave_deadly(near(215), away).layer, "recall")
+
     def test_heals_losing_to_unseen_attackers_give_way_to_the_escape(self) -> None:
         # 2026-11-05: a blinded level-24 Mage prayed Cure Light Wounds 13 times
         # among a Magic User's summons, nothing in view, HP 36-48 throughout.
@@ -5241,6 +5356,26 @@ class MageBookTest(unittest.TestCase):
         warrior.items_seen[(8, 5)] = ("!", "Potion of Restore Mana")
         self.assertIsNone(warrior.collect(seen, view))
 
+    def test_found_supplies_are_picked_up_only_to_twice_the_reserve(self) -> None:
+        """C64 Balrog, 2026-11-13: a clvl 37 Rogue walked to every one it saw
+        and carried 185 Cure Light Wounds, 255 Restore Mana and 159
+        Neutralize Poison against reserves of 5, 3 and 2."""
+        brain, _ = self.caster("human-priest", {})
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=45)
+        view.screen = (0, 0, COLS, ROWS)
+        seen = command_obs(pos=(5, 5), dlvl=45, clvl=40, hp=400, mhp=400)
+        for name, attr, full in (("Potion of Cure Light Wounds", "clw", 185), ("Potion of Restore Mana", "restore_mana", 255),
+                                 ("Potion of Neutralize Poison", "neutralize", 159)):
+            brain.items_seen.clear()
+            brain.level.collected.clear()
+            brain.items_seen[(8, 5)] = ("!", name)
+            setattr(brain, attr, 1)
+            self.assertEqual(brain.collect(seen, view).layer, "collect", name)   # short: fetch it
+            brain.collect_to = None
+            setattr(brain, attr, full)
+            self.assertIsNone(brain.collect(seen, view), name)                   # plenty: walk past
+
     def test_a_full_pack_keeps_the_two_fullest_stacks_of_ammunition(self) -> None:
         """C64 Balrog, 2026-11-12: a clvl 33 Elf Warrior's Heavy Crossbow
         bolts sat in nine stacks (each enchantment and each "magik" one apart),
@@ -5258,6 +5393,48 @@ class MageBookTest(unittest.TestCase):
         o = command_obs(rows={k: v for k, v in rows.items() if k != 4})
         o.mode, o.stage = Mode.ITEM, "list"
         self.assertNotIn("drop Bolt", brain.decide(o, None).reason)          # two stacks: both kept
+
+    def test_the_deep_potions_are_kept_and_picked_up(self) -> None:
+        """C64 Balrog, 2026-11-13: a clvl 39 Warrior dropped Potions of Resist
+        Cold as junk four times on DL37, walked past 29 on the floor, and died
+        to an Ancient White Dragon's frost: resisted, a third of 234."""
+        from moria_playtest.brain import HEALING, HEROISM, RESIST_COLD, RESIST_HEAT, RESIST_RESERVE
+        brain, _ = self.caster("half-orc-warrior", {})
+        brain.dropping = True
+        rows = {0: "Inventory", 1: "---------", 2: "a) 2 Potion of Resist Cold", 3: "b) 3 Potion of Resist Heat",
+                4: "c) Potion of Healing", 5: "d) 2 Potion of Heroism", 6: "e) Iron Shot"}
+        o = command_obs(rows=rows)
+        o.mode, o.stage = Mode.ITEM, "list"
+        self.assertEqual(brain.decide(o, None).reason, "drop Iron Shot")      # the junk, not the potions
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=37)
+        view.screen = (0, 0, COLS, ROWS)
+        seen = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=406, mhp=406)
+        for name, attr in ((RESIST_COLD, "resist_cold"), (RESIST_HEAT, "resist_heat"), (HEROISM, "heroism")):
+            brain.items_seen.clear()
+            brain.level.collected.clear()
+            brain.collect_to = None
+            brain.items_seen[(8, 5)] = ("!", name)
+            setattr(brain, attr, 0)
+            self.assertEqual(brain.collect(seen, view).layer, "collect", name)
+            brain.collect_to = None
+            setattr(brain, attr, 2 * RESIST_RESERVE)
+            self.assertIsNone(brain.collect(seen, view), name)                 # plenty: walk past
+        self.assertTrue(HEALING.startswith("Potion of Healing"))
+
+    def test_deep_with_no_long_escape_it_goes_to_town_for_one(self) -> None:
+        """C64 Balrog, 2026-11-13: a clvl 39 Warrior read its last Scroll of
+        Teleportation on DL37 and met the Ancient White Dragon again with none."""
+        from moria_playtest.brain import CCW, TELEPORT_STAFF
+        brain, _ = self.caster("half-orc-warrior", {})
+        brain.clvl, brain.max_dlvl = 39, 37
+        brain.strong[CCW], brain.phase = 30, 10                              # strong potions and Phase Door enough
+        brain.teleports = 3
+        self.assertFalse(brain.restock_short())
+        brain.teleports = 0
+        self.assertTrue(brain.restock_short())                               # no long escape left
+        brain.wands[TELEPORT_STAFF] = 4
+        self.assertFalse(brain.restock_short())                              # the staff will do
 
     def test_a_full_pack_drops_a_device_it_ran_dry_whatever_its_name_shows(self) -> None:
         """C64 Balrog, 2026-11-12: a clvl 32 Gnome Warrior's pack held 14
