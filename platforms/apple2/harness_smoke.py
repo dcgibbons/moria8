@@ -922,7 +922,16 @@ assert_line("balrog_killed", dead,
             " mx=" .. mx .. " my=" .. my ..
             " tile=" .. aux:read(ma) ..
             " dlvl=" .. prog:read_u8(DLVL_ADDR))
-assert_line("winner_flag", prog:read_u8(GAME_FLAGS_ADDR) & 0x04 == 0x04,
+-- The kill's treasure drop is generated in OVL.GEN, loaded from disk, and
+-- ProDOS borrows $3A-$4E (zp_game_flags among them) until a2_mli_end restores
+-- them: read the flag once the command has finished, not mid-load (a drop
+-- read $60 there; the flag was back to $04 once the load ended, 2026-11-13).
+local won = false
+for i = 1, 40 do
+    if prog:read_u8(GAME_FLAGS_ADDR) & 0x04 == 0x04 then won = true break end
+    emu.wait(0.25)
+end
+assert_line("winner_flag", won,
             "GAME_FLAG_WINNER not set after Balrog kill")
 
 -- Post-kill message prompts: the -more- marker is not always visible on A2,
