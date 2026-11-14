@@ -376,6 +376,11 @@ run_test_in() {
     if [ -z "$bootstrap_addr" ]; then
         bootstrap_addr=$(awk '$3 == ".test_start" { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file")
     fi
+    # Entry points of code the test links but parks out of reach (the I/O
+    # hole, or above MAP_BASE and unloaded): running one runs I/O or KERNAL
+    # bytes, so each gets a breakpoint that fails the test (tools/parked_tripwire.py).
+    local parked
+    parked=$(python3 "$REPO_ROOT/tools/parked_tripwire.py" "$prg_file" "$sym_file")
     rm -f "$sym_file"
     if [[ "$bootstrap_addr" =~ ^[0-9A-Fa-f]{1,4}$ ]]; then
         bootstrap_addr=$(printf '%04X' "$((16#$bootstrap_addr))")
@@ -395,6 +400,9 @@ run_test_in() {
         echo "g"
         echo "delete 1"
         echo "break exec \$${end_addr}"
+        while read -r parked_addr _; do
+            [ -n "$parked_addr" ] && echo "break exec ${parked_addr}"
+        done <<< "$parked"
         echo "g"
         echo "m ${result_range}"
         echo "quit"
@@ -425,7 +433,18 @@ run_test_in() {
     local pass_count
     pass_count=$(echo "$result" | grep -o " 01" | wc -l | tr -d ' ')
 
-    if [ "$pass_count" -ge "$expected_count" ]; then
+    # A stop at a parked entry point: name it and fail, whatever the results.
+    local stop_addr parked_hit=""
+    # A hit reads "#2 (Stop on  exec ee7f)"; "BREAK: 2  C:$ee7f" only sets one.
+    stop_addr=$(grep -a -oE '\(Stop on +exec [0-9a-fA-F]{4}\)' "$tty_log" | tail -1 | grep -oE '[0-9a-fA-F]{4}')
+    if [ -n "$stop_addr" ] && [ -n "$parked" ]; then
+        parked_hit=$(awk -v a="\$$(echo "$stop_addr" | tr 'a-f' 'A-F')" '$1 == a { print $2 " at " $1 }' <<< "$parked")
+    fi
+
+    if [ -n "$parked_hit" ]; then
+        echo "FAIL (ran parked code: $parked_hit)"
+        FAIL=$((FAIL + 1))
+    elif [ "$pass_count" -ge "$expected_count" ]; then
         echo "PASS ($pass_count/$expected_count tests)"
         PASS=$((PASS + 1))
     else
@@ -4908,7 +4927,9 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0405" 6 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0449" 74 1000000000
+run_test "item" "tests/test_item.s" "0400 0449" 37 1000000000
+run_test "item2" "tests/test_item2.s" "0400 0449" 37 1000000000
+run_test "item_weight" "tests/test_item_weight.s" "0400 0404" 5 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 0411" 18 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040b" 12 500000000
@@ -4923,7 +4944,8 @@ run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0427" 40 1000000000
 run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 42 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
+run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000

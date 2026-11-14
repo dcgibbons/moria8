@@ -61,7 +61,17 @@ test_finish:
 #import "../../common/overlay.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+// Adding to the pack (inv_add.s) is not exercised here: parked out of
+// reach, the runner's tripwire (tools/parked_tripwire.py) failing the
+// suite if it is ever called (the VMS weight limit, 2026-11-13, took
+// the body past MAP_BASE).
+#define INV_ADD_EXTERNAL
 #import "../../../../core/item.s"
+#undef INV_ADD_EXTERNAL
+.segmentdef TestParkedInvAdd [start=$f000]
+.segment TestParkedInvAdd
+#import "../../../../core/inv_add.s"
+.segment Default
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"

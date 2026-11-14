@@ -98,18 +98,18 @@ store_enter:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
 
-// The item actions (an overlay in the product) are not exercised here: out of
-// the way above the I/O hole, as player_create is (the enchantment rules of
-// 2026-11-06 took the body past MAP_BASE).
+// The suite is split in two (tests 1-22 here, 23-42 in
+// test_monster_magic2.s, which defines MONSTER_MAGIC_PART2) so that combat.s
+// is loaded: its spell-message builder (mon_atk_build_effect_msg) is
+// exercised, and parked above the I/O hole it ran KERNAL ROM bytes from test
+// 5 on (2026-11-13). The item actions (an overlay in the product) and the
+// player's spell effects stay parked; the runner's tripwire
+// (tools/parked_tripwire.py) fails the suite if either is ever called.
+#import "../../../../core/combat.s"
 .segmentdef TestItemActions [start=$E000]
 .segment TestItemActions
 #import "../../../../core/item_actions_overlay.s"
-// The player's spell effects are not exercised either (resistance armour,
-// 2026-11-11, took the body past MAP_BASE again).
 #import "../../../../core/spell_effects.s"
-// Nor is the player's melee (the VMS armour AC of 2026-11-13 took the body
-// past MAP_BASE again).
-#import "../../../../core/combat.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s
@@ -177,6 +177,7 @@ test_start:
     lda #10
     sta zp_player_y
 
+#if !MONSTER_MAGIC_PART2
     // ==========================================
     // Test 1: monster_can_cast returns clear for spell_chance=0
     // Type 0 (White Harpy) has cr_spell_chance = 0
@@ -1061,7 +1062,10 @@ test_start:
     jsr tst_result_eq
     sta tc_results + 21
     jsr tst_unpatch_save
+    jmp !tests_done+
+#endif
 
+#if MONSTER_MAGIC_PART2
     // ==========================================
     // Test 23: player_save_value = race save + class save + adjustment,
     // clamped at 0 (core/tables.s values; MON-011).
@@ -1657,6 +1661,7 @@ test_start:
 
     pla
     sta cr_spell_chance + 24
+#endif
 
 !tests_done:
     jmp test_exit_trampoline

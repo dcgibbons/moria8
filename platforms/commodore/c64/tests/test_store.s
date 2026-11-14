@@ -60,23 +60,30 @@ test_exit_trampoline:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+#import "../dungeon_render.s"
+#import "../../../../core/scene_mat_tile.s"
+// Monster spells, the player's magic, missiles, sight lines, movement and
+// melee are not exercised by the stores: parked out of reach, the runner's
+// tripwire (tools/parked_tripwire.py) failing the suite if any is called.
+// Loaded, they took the body past the I/O hole at $D000 (2026-11-13).
+.segmentdef TestParkedStore [start=$e000]
+.segment TestParkedStore
+#import "../../../../core/monster_magic.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
-#import "../../../../core/scene_mat_tile.s"
+.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -2405,3 +2412,6 @@ count_spells_known:
 player_disarm_get_effective_chance:
     lda #0
     rts
+
+store_test_body_end:
+.assert "Store test stays below MAP_BASE", store_test_body_end <= MAP_BASE, true

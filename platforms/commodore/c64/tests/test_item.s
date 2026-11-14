@@ -3,7 +3,9 @@
 // Tests: floor items, inventory, pickup, drop (prompted), equip, remove, eat,
 //        player_recalc_equipment, combat weapon damage.
 //
-// Results at $0400-$042e: $01 = pass, $00 = fail per test
+// Results at $0400-$0449: $01 = pass, $00 = fail per test. Split in two so
+// that every module it exercises fits below MAP_BASE: tests 1-37 here, 38-74
+// in test_item2.s (which defines ITEM_TESTS_PART2 and imports this file).
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
@@ -221,6 +223,7 @@ test_start:
     lda #$20
     sta $0277
 
+#if !ITEM_TESTS_PART2
     // ==========================================
     // Test 1: item_init_floor clears all slots
     // ==========================================
@@ -1870,6 +1873,11 @@ test_start:
     lda #$00
     sta tc_results + 36
 
+!t38:
+    jmp !tests_done+
+#endif
+
+#if ITEM_TESTS_PART2
     // ==========================================
     // Test 38: pick_item_type returns new types (25+) on deep levels
     // ==========================================
@@ -3624,6 +3632,7 @@ test_start:
     lda #$00
     sta tc_results + 73
 
+#endif
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline

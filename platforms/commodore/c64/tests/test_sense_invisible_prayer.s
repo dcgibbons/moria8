@@ -76,7 +76,17 @@ hal_player_recalc_pflags:
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+// Adding to the pack (inv_add.s) is not exercised here: parked out of
+// reach, the runner's tripwire (tools/parked_tripwire.py) failing the
+// suite if it is ever called (the VMS weight limit, 2026-11-13, took
+// the body past MAP_BASE).
+#define INV_ADD_EXTERNAL
 #import "../../../../core/item.s"
+#undef INV_ADD_EXTERNAL
+.segmentdef TestParkedInvAdd [start=$f000]
+.segment TestParkedInvAdd
+#import "../../../../core/inv_add.s"
+.segment Default
 // Special rooms run in level generation only, never here: parked in the $D000
 // test overlay (the second ring hand, 2026-11-08, left the code 15 bytes over).
 .segment TestCreateOverlay
