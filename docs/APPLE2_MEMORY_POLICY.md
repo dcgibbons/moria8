@@ -45,17 +45,24 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 
 | Range | Current owner and measured use |
 | --- | --- |
-| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7BEE` (17 B free after legal-viewer merge, 2026-11-12; `ui_help_title.s` moved to `OVL.HELP` and `eff_gain_stat.s` moved to `A2.PLAY`) |
-| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FBE` (9,150 B including signature, 66 B free; includes `eff_gain_stat.s` and `tramp_inv_add_carried`, the floor pickup's way to the weight limit's `inv_add_carried` copy in `OVL.ITEMS`; the store's and home's copy is in `OVL.TOWN`, 2026-11-13) |
+| main `$0200-$028D` | `zp_save_buf` (`142 B`, relocated out of `Default`; asserted `<= $028F` before `A2_MLI_PATHNAME` at `$0290`) |
+| main `$0290-$02CF` | `A2_MLI_PATHNAME` (`64 B`) |
+| main `$02E0-$02F3` | `A2_LC_BOUNCE` (`16 B`) + `A2_LC_SAVED_X` / arg registers (`4 B`) for ZP-free `ALTZP=1` Aux LC bounce |
+| main `$0301-$033A` | Relocated uninitialized/boot-zeroed resident scratch (`58 B`, strictly `> $0300` and `< $033C` door scan; cleared by `a2_reset_session_state`) |
+| main `$033C-$037B` | `DUNGEON_GEN_DOOR_SCAN_BASE` / `PLATFORM_HD_DECODE_BUF_BASE` (`64 B`) |
+| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7BA9` (**29,098 / 29,184 B, 86 B free** after Phase 4 `370`-item / `55`-ego / `18`-trap / Cloak / Save V2 integration, 2026-11-15; see Phase 4 section below) |
+| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FF9` (**9,210 / 9,216 B, 6 B free** including signature; includes `tramp_inv_add_carried` to `OVL.ITEMS`, 2026-11-15) |
 | main `$A000-$A3FF` | Name pool (1,024 B): the monster catalog's 32 species names |
-| main `$A400-$B9FF` | All 11 code overlays, mutually exclusive; window 5,632 B; largest payload `OVL.TOWN` (5,327 B); `OVL.DEATH` grew to 4,139 B in 2026-09 when the map-area/earthquake engines moved in beside the WoD engine |
+| main `$A400-$B9FF` | All 13 code overlays, mutually exclusive (`OVL.START` 4,145 B, `OVL.TOWN` 4,038 B, `OVL.DEATH` 4,946 B, `OVL.MODAL` 3,028 B, `OVL.GEN` 5,554 B, `OVL.HELP` 3,453 B, `OVL.UI` 1,368 B, `OVL.ITEMS` 5,597 B, `OVL.SPELL` 5,100 B, `OVL.CHEST` 4,805 B, `OVL.HOME` 3,965 B, `OVL.STORAGE` 5,181 B, `OVL.TITLE` 892 B); window 5,632 B |
 | main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |
 | main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
 | main `$BF00-$BFFF` | ProDOS global page |
+| aux `$0200-$03FF` | Relocated persistent tables (`512 B`): `id_known_bits[47]` + `potion_shuffle..staff_shuffle` (`174 B`) + `si_meta_hi[128]` + `fi_meta_hi[42]` (`391 / 512 B` used, `121 B` free) |
 | aux `$0800-$3B0B` | Live 198x66 map |
-| aux `$3B0C-$4FFF` | Current immutable/mutable aux data payload (ends `$4F6D`, 146 B to grow, 2026-11-09, with 16-item stores; capped at `$4FFF` for the monster catalog, 2026-11-05): Huffman data, item-name streams, store inventory, recall arrays, class-spell tables, spell names, ego suffix slots, externalized message strings, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`, doors phase 2026-09: resident always-region was full; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`); boundary raised from `$56FF` for the 128-row catalog (Phase 3, 2026-08-01) |
-| aux `$5000-$66FF` | Monster catalog fields (`A2.CATALOG`, 5,859 B, boot pack) |
-| aux `$6700-$BFFF` | Cache manifest v8: UI `$6700`, SPELL `$6D00`, MODAL `$8100`, the Huffman corpus with the catalog's names, then the read-only screen-code char-map table (moved from aux data 2026-11-09 for 16-item stores) `$8D00` (to `$A976`, 137 B spare; the speaker-pattern table moved to main resident RAM 2026-11-11, when the element touches' messages filled the slot), ITEMS `$AA00`. OVL.TOWN and OVL.GEN load from disk |
+| aux `$3B0C-$4FFF` | Current immutable/mutable aux data payload (ends `$4F0B`, `5,120 / 5,364 B`, **244 B free**, 2026-11-15; `recall[279]` moved to Aux LC Bank 1 `$D000-$D45B`): store inventory, class-spell tables, spell names, externalized message strings, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`) |
+| aux `$5000-$66FF` | Monster catalog fields (`A2.CATALOG`, 5,859 B, **29 B free**, boot pack) |
+| aux `$6700-$BFFF` | Cache manifest v8: UI `$6700` (`1,368 / 1,536 B`, `168 B` free), SPELL `$6D00` (`5,100 / 5,120 B`, **20 B free**), MODAL `$8100` (`3,028 / 3,072 B`, **44 B free**), the Huffman corpus with the catalog's names + read-only screen-code char-map table `$8D00` (`$8D00-$A990`, `7,313 / 7,424 B`, **111 B free**), ITEMS `$AA00` (`5,597 / 5,632 B`, **35 B free**). Cold overlays (`OVL.START`, `OVL.TOWN`, `OVL.DEATH`, `OVL.GEN`, `OVL.HELP`, `OVL.CHEST`, `OVL.HOME`, `OVL.STORAGE`, `OVL.TITLE`) load on demand from `MORIA8.PAK` |
+| aux LC `$D000-$FFF9` | Auxiliary Language Card (`16,378 B`, **8,689 B used / 7,689 B free**, accessed via `SEI` + ZP-free `ALTZP=1` bounce at `$02E0-$02F3` with port-owned Aux interrupt vectors at `$FFFA-$FFFF`): Aux LC Bank 1 `$D000-$D45B` holds `recall[279]` (`1,116 B`), and Aux LC High RAM `$E000-$FD94` holds preloaded `'ITM2'` `ITEM.CAT` (`7,573 B`, zero runtime disk I/O for item lookups) |
 
 `A2.PLAY` is not a modal swap slot in the implementation: every overlay,
 including STORAGE and TITLE, fits the `$A400-$B9FF` code window. Play is
@@ -128,7 +135,16 @@ Slot arithmetic: play payload 8,430 ≤ 8,704 (274 B slack). Modal payloads
 must also fit the slot: OVL.STORAGE est. ~4,100 (save.s 2,558 + slot menu
 519 + stream shims ~400 + disk-setup UI ~636) ✓; OVL.TITLE est. ~2,000 ✓.
 
-### Aux RAM (ALTZP stays off)
+### Aux RAM (ALTZP off by default; verified SEI ZP-free bounce path in Phase 1)
+
+> **UPDATED (2026-11-14 Phase 1):** The legacy `"ALTZP stays off"` blanket
+> restriction is lifted **only** for the verified data-only bounce helper
+> `a2_aux_lc_bounce_xfer` (`platforms/apple2/memory_aux.s`; `SEI`, zero
+> ZP/stack accesses while `$C009` `ALTZP=1` is asserted, `abs,x` bounce via
+> Main `$02E0-$02EF`, port-owned Aux vectors at Aux `$FFFA-$FFFF`, and exact
+> restore of `$C008` + saved Main LC bank/mode before `PLP`). See the Phase 1
+> section below for MAME `apple2ee` verification findings. Aux `$0200-$03FF`
+> (`512 B`, `a2_aux_scratch_base..end`) is also claimed as reserved aux scratch.
 
 | Range | Size | Owner |
 | --- | ---: | --- |
@@ -445,3 +461,233 @@ Help cancellation to gameplay without a cold reload, failed/successful retry
 snapshot survival and restored core ZP at the cancel-return boundary. All
 linked bounds and the existing bank/cache owners remain enforced. See
 `docs/LEGAL_VIEWER.md` for the carry contract and physical media preconditions.
+
+## Phase 1 Memory Unlocks & Aux LC Spike (2026-11-14)
+
+Port-local memory reclaim and ProDOS container consolidation with zero `core/`
+edits.
+
+### 1. Reclaimed Address Windows
+
+- **Main `$0200-$028D` (`142 B`):** `zp_save_buf` relocated out of `Default`
+  via `.label zp_save_buf = $0200` (`platforms/apple2/memory.s`), asserted
+  `zp_save_buf + ZP_SAVE_SIZE <= A2_MLI_PATHNAME` (`$0290`).
+- **Main `$02E0-$02F3` (`20 B`):** `A2_LC_BOUNCE` (`16 B`, `$02E0-$02EF`) and
+  transfer arg/restore state (`$02F0-$02F3`), asserted `>= A2_MLI_PATHNAME + 65`
+  and `<= $02FF`.
+- **Main `$0301-$033A` (`58 B`):** 20 relocated uninitialized/boot-zeroed
+  resident scratch variables (`a2_probe_buf`, `a2_program_volume`,
+  `a2_save_volume`, `a2_last_status`, `a2_media_status`, `a2_name_*`,
+  `a2_asset_verify`, `a2_asset_dest`, `a2_diag_*` aliased by
+  `hal_storage_diag_*`, `sfa_save_*`, `igk_key`, `input_kbdbuf_shadow`),
+  asserted strictly `> $0300` and `< DUNGEON_GEN_DOOR_SCAN_BASE` (`$033C`)
+  and cleared on boot/session reset by `a2_reset_session_state`.
+- **Aux `$0200-$03FF` (`512 B`):** `a2_aux_scratch_base = $0200` through
+  `a2_aux_scratch_end = $03FF`, asserted above Aux ZP/stack and strictly below
+  the Aux 80-column text page (`$0400`).
+
+### 2. Packed `MORIA8.PAK` Container (`MLI_SET_MARK = $CE`)
+
+- **`tools/make_pak.py`:** `512 B` header stores count at byte 0 (`<= 42` so
+  all metadata fits the 256-byte read prefix), 16-bit LE lengths at bytes `2..`,
+  and 24-bit LE byte offsets from start of file at bytes `128..`.
+- **19 entries (`103,920 B`, 204 blocks):** Entries `0..7` remain sequential
+  at boot (`boot.s` checks count `>= PAK_COUNT` and loads only the first 8:
+  `MORIA8.RES`, `A2.AUXDATA`, `A2.CATALOG`, `OVL.UI`, `OVL.ITEMS`, `OVL.SPELL`,
+  `OVL.MODAL`, `A2.HUFFDATA`). Entries `8..18` fold the 11 formerly standalone
+  sapling files (`A2.PLAY`, `OVL.START`, `OVL.TOWN`, `OVL.DEATH`, `OVL.GEN`,
+  `OVL.HELP`, `OVL.CHEST`, `OVL.STORAGE`, `OVL.TITLE`, `LEGALUI`, `TITLE`).
+- **Runtime resolution (`platforms/apple2/storage_mli.s`):** `a2_pak_resolve`
+  maps normalized overlay/`A2.PLAY`/`LEGALUI` names to entry IDs and load
+  addresses; `a2_pak_open_seek` opens `"MORIA8.PAK"`, reads the 256-byte
+  header prefix into `a2_ss_buf`, seeks via `A2_MLI_SET_MARK ($CE)`, and reads
+  `a2_pak_len`. `hal_asset_load_title` streams `A2_PAK_ENTRY_TITLE` directly
+  from `MORIA8.PAK`. `hal_storage_probe_media` probes `"MORIA8.PAK"`.
+  `hal_storage_marker_init` moved into `StorageOverlay` (`disk_setup_a2.s` is
+  its sole caller), and `a2_map_error` / `a2_map_media_error` share a compact
+  lookup table.
+- **Release compliance (`AGENTS.md` Rule 7):** `LICENSE` (`344 B`) and
+  `SOURCE.OFFER` (`499 B`) stay standalone ProDOS `TXT` files on
+  `build/moria8-apple2.po`. Volume utilization improved from 266/280 (**14**
+  free) to **249/280 blocks used (`31` blocks / `15,872 B` free)**.
+
+### 3. Aux Language Card (`$D000-$FFF9`) Policy & MAME `apple2ee` Spike
+
+- **Policy amendment:** The legacy `"ALTZP stays off"` prohibition is lifted
+  strictly for `a2_aux_lc_bounce_xfer` (`platforms/apple2/memory_aux.s`):
+  1. `hal_platform_init_early` calls `a2_aux_lc_init_vectors` to populate
+     port-owned Aux interrupt vectors at Aux `$FFFA-$FFFF` (`NMI` ->
+     `a2_aux_nmi_rti`, `RESET` -> `a2_aux_reset_stub`, `IRQ/BRK` ->
+     `a2_aux_nmi_rti`). Data is restricted to `$D000-$FFF9` (`A2_LC_MAX_DATA_END`).
+  2. `a2_aux_lc_bounce_xfer` stays in resident `< $7C00`, wraps transfer in
+     `PHP; SEI`, captures Main `$C011` (`RDBNK2`) and `$C012` (`RDLCRAM`)
+     before asserting `$C009` (`ALTZP=1`), performs **zero** ZP (`$00-$FF`) or
+     stack (`$0100-$01FF`) references while `ALTZP=1`, selects Read-RAM WP
+     (`$C080`/`$C088`) for reads or two consecutive `$C083`/`$C08B` reads for
+     writes, copies 1..16 bytes via Main `$02E0-$02EF` using `abs,x`, clears LC
+     write-enable (`bit $C080`), asserts `$C008` (`ALTZP=0`), and restores the
+     exact saved Main LC switch before `PLP`.
+- **MAME `apple2ee` hardware spike finding (`harness_smoke.py` `aux_lc_spike`):**
+  - Reading `A2_LC_SWITCH_BASE,x` (`$C080,x`) overwrites `A` with open-bus
+    garbage; the initial run proved `tax` must run *before* the first `$C080,x`
+    read with a clean bypass for reads vs. two `$C083`/`$C08B` reads for writes.
+  - Passing spike (`17/17` assertions) proved on MAME `apple2ee`: boot
+    Aux `$FFFA-$FFFF` vector initialization and preservation; Aux LC Bank 1 vs.
+    Bank 2 `$D000` non-aliasing; shared upper `$E000` and near-vector
+    `$FFE9-$FFF8` read/write integrity; 512/512 Aux ZP/Stack guard bytes
+    untouched; 256/256 Main ZP, live Main Stack, `SP`, and `$C011/$C012/$C016`
+    (`RDALTZP=0`) preserved; and clean ProDOS `MORIA8.PAK` `MLI_SET_MARK ($CE)`
+    loads (`A2.PLAY`, `OVL.START`, `OVL.TOWN`) into Town immediately afterward.
+
+### 4. Behavioral Change Protocol Record (Phase 1)
+
+```text
+Problem and success criteria: Relieve tight Apple IIe Main resident (< $7C00) and ProDOS 140 KB floppy block budgets, claim Aux $0200-$03FF, and prove safe ALTZP=1 Aux LC ($D000-$FFF9) access under MAME apple2ee without touching core/. Success = Default <= $7BFF with positive margin, >= 28 free .po blocks with LICENSE/SOURCE.OFFER standalone, Aux LC MAME spike PASS, and all Apple II contract/runtime suites PASS.
+State being changed: Placement of zp_save_buf ($0200-$028D) and 20 resident scratch bytes ($0301-$033A); Aux $0200-$03FF window bounds; Aux LC vector/data protocol via $02E0-$02F3 bounce; MORIA8.PAK entry count (8 -> 19) and cold BIN packing.
+Search scope and terms: rg across platforms/apple2/, core/, platforms/commodore/, tools/ for zp_save_buf, DUNGEON_GEN_DOOR_SCAN_BASE, PLATFORM_HD_DECODE_BUF_BASE, hal_asset_load, hal_storage_marker_init, hal_storage_program_probe_name, A2.PLAY, legal_ui_filename, a2_ss_buf, and moved scratch symbol names.
+Relevant readers/writers found and known exclusions: Main $0200-$028F only read/written by save_zp/restore_zp (a2_mli_begin/end) and legal.s; $0301-$033A owned solely by Apple II storage/screen/input drivers and cleared in a2_reset_session_state (strictly < $033C DUNGEON_GEN_DOOR_SCAN_BASE / PLATFORM_HD_DECODE_BUF_BASE); $02E0-$02F3 owned solely by a2_aux_lc_*; Aux $FFFA-$FFFF owned solely by a2_aux_lc_init_vectors; save_device..disk_setup_done ($0A03-$0A06) deliberately kept at fixed Default addresses for harness compatibility.
+Initialization, reset and persistence points: a2_reset_session_state clears $0301-$033A on boot and session restart; hal_platform_init_early calls a2_aux_lc_init_vectors once at boot; Aux $0200-$03FF reserved unallocated; save file format unchanged.
+Affected production sequence through the changed transition: MORIA8.SYSTEM boot reads PAK entries 0..7 sequentially (header count >= 8) -> Default enters hal_platform_init_early (installs Aux vectors) -> a2_reset_session_state zeros $0301-$033A -> Title/legal/chargen/town/storage load TITLE/LEGALUI/A2.PLAY/OVL.* via a2_pak_resolve + a2_pak_open_seek (MLI_SET_MARK $CE) inside a2_mli_begin/end (zp_save_buf at $0200).
+Contract decision or selected upstream oracle with source locations: Apple IIe TRM §3.3.1 (MLI ZP $3A-$4E), TRM §5.2.2.2 (/RAM disconnect), Sather Understanding the Apple IIe Ch. 5 ($C008/$C009 ALTZP + $C080-$C08B LC double-read write-enable semantics), ProDOS MLI SET_MARK ($CE), AGENTS.md Rule 7 (standalone LICENSE & SOURCE.OFFER).
+Intentional Moria8 deviations: None to gameplay; hal_asset_load drops standalone raw-file fallback for uncached assets because all code/title assets live inside MORIA8.PAK (only LICENSE/SOURCE.OFFER/saves/marker/scores are standalone ProDOS files).
+Input/intermediate widths, signedness, carry, range and overflow policy: make_pak.py enforces MAX_ENTRIES = 42 so 256-byte prefix (2 + 42*2 = 86; 128 + 42*3 = 254 < 256) never overflows 256-byte a2_ss_buf, and entries <= 65,535 B; a2_pak_open_seek bounds-checks entry_id < 42 and < a2_ss_buf[0] and zero-length guard; a2_aux_lc_bounce_xfer handles count 1..16 (bounce 16 B) and masks bank to $00/$08.
+RNG reduction and bias, if applicable: N/A (no RNG logic modified; verified zero core/ RNG edits).
+Affected platforms, overlays, banks and owners: platforms/apple2/, tools/make_pak.py, and tools/check_hal_asset_exports.py (Apple IIe PAK contract checks) only. Core/, shared platforms/, and all other ports untouched.
+Required production-path tests: platforms/apple2/check_memory_contract.py (--selftest + full contract), make diskapple2 (MORIA8.PAK 19 entries + LICENSE/SOURCE.OFFER standalone + 31 free blocks), tools/check_hal_storage_exports.py, test_prayer_regression.py, and MAME apple2ee suite make testapple2-runtime including aux_lc_spike.
+Known behavior explicitly out of scope: Moving runtime code/data (e.g., tier blobs, strings, or overlays) into Aux LC $D000-$FFF9 or Aux $0200-$03FF (deferred to later phases).
+Unresolved uncertainty and risk: MAME apple2ee spike verifies the ALTZP=1 bounce mechanism in emulation; real enhanced Apple IIe silicon shares identical Sather LC/ALTZP hardware rules, with risk explicitly isolated to future phases that enable Aux LC payloads. No Aux LC payload writes happen during gameplay yet.
+```
+
+### 5. Verification Rows (Phase 1)
+
+| Contract / Domain Check | Status | Evidence (2026-11-14) |
+| --- | --- | --- |
+| Main `$0A00-$7BFF` always-resident ceiling (`< $7C00`) | PASS | `check_memory_contract.py`: `moria8a2.prg` `$0A00-$7BD4` (`29,141 / 29,184 B`, **43 B free**) |
+| Main `$0200-$028F`, `$02E0-$02F3`, `$0301-$033B`, Aux `$0200-$03FF` bounds | PASS | `memory.s` KickAss `.assert`s (`424/424`), `check_memory_contract.py --selftest` (`11/11`), `check_memory_contract.py` (`21/21`) |
+| `MORIA8.PAK` 19-entry boot (0..7) + `MLI_SET_MARK ($CE)` cold loads (8..18) + standalone `LICENSE`/`SOURCE.OFFER` | PASS | `make diskapple2` (`103,920 B` PAK, `249/280` blocks, **31 free**); `make testapple2-runtime` exercises boot, title art, legal modal, chargen, overlays, save/load, and disk setup |
+| `ALTZP=1` Aux LC `$D000-$FFF9` (`SEI`, ZP-free, stack-free, Aux vectors `$FFFA-$FFFF`, Bank 1/2 isolation, Main restore) | PASS | MAME `apple2ee` `aux_lc_spike` (`17/17` asserts PASS, incl. post-spike `MORIA8.PAK` `MLI_SET_MARK` Town load) |
+| Exported HAL storage labels & contract boundaries | PASS | `PYTHONDONTWRITEBYTECODE=1 make check-hal-boundaries` PASS (19/19 checks exit 0, incl. `tools/check_hal_storage_exports.py` `98 labels x 7 platforms` and `tools/check_hal_asset_exports.py` with `check_apple2_pak_loader()`) |
+| Physical display-layout / `core/` parity | N/A | Zero `core/` or display-geometry changes |
+
+## Phase 2 Cold Code Eviction & `OVL.HOME` (2026-11-14)
+
+Port-local cold-code eviction and `HOME_OVERLAY_SEPARATE` adoption inside `platforms/apple2/` (zero `core/` edits).
+
+### 1. Standardized Overlay IDs & Dedicated `OVL.HOME`
+
+- **Enabled `#define HOME_OVERLAY_SEPARATE`** in `platforms/apple2/main.s`:
+  - `OVL.TOWN` retains `store.s`, `ui_store.s`, and `inv_add_carried: { :InvAddCarriedBody() }` (`4,442 / 5,632 B`, **1,190 B free**, up from `265 B`).
+  - `HomeOverlay` (`ovl.home`, `$A400-$A91B`, `1,308 / 5,632 B`, **4,324 B free**) owns `core/ui_home.s` (including its scoped `home_inv_add_carried: { :InvAddCarriedBody() }` under `HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL`) and `core/ui_home_text.s`.
+  - Resident `tramp_store_enter` dispatches `#STORE_HOME` (`zp_store_idx == 7`) to `OVL_HOME` (`home_enter`) and townsfolk stores to `OVL_TOWN` (`store_enter`) via `tramp_ovl_dispatch`.
+- **Standardized overlay indices (`13` overlay classes, `hal_platform_overlay_count = 13`):**
+  - Because `HAL_PLATFORM_MAP_GET_TILE_USES_SUBROUTINE` gates entries `11..13` in `common/overlay.s`, `platforms/apple2/main.s` explicitly defines `OVL_HOME = 11`, `OVL_STORAGE = 12`, and `OVL_TITLE = 13`.
+  - `platforms/apple2/overlay_storage.s` (`a2_ovl_cache_lo/hi`, asserted `== hal_platform_overlay_count`) marks `OVL_CHEST`, `OVL_HOME`, `OVL_STORAGE`, and `OVL_TITLE` as cold on-demand (`$00`).
+  - `platforms/apple2/storage_mli.s` adds `hal_storage_overlay_home_name` (`"OVL.HOME"`), inserts PAK entry `15` for `OVL.HOME` between `OVL.CHEST` (`14`) and `OVL.STORAGE` (`16`) / `OVL.TITLE` (`17`), and shifts `A2_PAK_ENTRY_LEGALUI = 18` and `A2_PAK_ENTRY_TITLE = 19`.
+  - `MORIA8.PAK` grows from `19` to `20/42` entries (`104,317 B`); `build/moria8-apple2.po` uses `250/280` blocks (**30 blocks = 15,360 B free**, standalone `LICENSE` and `SOURCE.OFFER` preserved).
+
+### 2. Cold Code Eviction (`Default` & `A2PlaySlot` Relief)
+
+- **`save_stream.s` map/mode helpers -> `StorageOverlay` (`+194 B` in `Default`):**
+  - `a2_save_block_mode` / `hal_storage_save_block_mode`, `save_write_map_c128`, and `load_read_map_c128` (`194 B`) are called solely from `platforms/shared/save.s` (which already resides in `StorageOverlay`) and moved into `.segment StorageOverlay`. `ovl.storage` moves from `347 B` free to **153 B free** (`$A400-$B966`).
+- **Cold spell/potion handlers -> `DeathOverlay` behind `tramp_death_call_restore_spell`:**
+  - Enabled `#define EFF_FIND_DOORS_EXTERNAL` (`58 B`) and `#define EFF_DESTROY_TRAPS_DOORS_EXTERNAL` (`170 B`) around `core/spell_effects.s` / `core/spell_effects_overlay.s` and moved `eff_find_doors_impl` (with `eff_fd_row` in `DeathOverlay`) and `eff_destroy_traps_doors_impl` into `DeathOverlay`.
+  - Relocated `#import "../../core/eff_gain_stat.s"` (`102 B`) out of `A2PlaySlot` into `DeathOverlay` (routed from `SpellOverlay` `iq_dispatch_p3_spell` via resident `tramp_eff_potion_gain_stat`, updated assert `eff_potion_gain_stat >= $a400 && eff_potion_gain_stat < ovl_death_end`).
+  - Factored `tramp_eff_earthquake`, `tramp_eff_map_area`, `tramp_eff_destroy_area`, `eff_destroy_traps_doors`, `eff_find_doors`, and `tramp_eff_potion_gain_stat` through shared resident `tramp_death_call_restore_spell` (`X/Y` target in `OVL.DEATH`, `A` preserved on stack across `overlay_load`, returning via `tramp_restore_spell_overlay`). `ovl.death` moves from `1,653 B` free to **1,322 B free** (`$A400-$B4D5`).
+- **`run_initialize_impl` & trampoline factoring (`Default` `43 -> 290 B` free, `A2PlaySlot` `66 -> 334 B` free):**
+  - Switched `:PlayerRunInitializeSegment()` from `A2PlaySlot` to `Default` (`166 B` moved to keep `run_initialize` resident without disk/overlay dependency) and replaced the 3-byte `jmp run_initialize_impl` stub with `.label run_initialize = run_initialize_impl`.
+  - Extracted `tramp_ovl_dispatch` (`A/Y` target, `X` overlay ID) for single-call no-arg overlay trampolines (`OVL_DUNGEON_GEN`, `OVL_UI`, `OVL_SPELL`, `OVL_MODAL_MISC`, `OVL_CHEST`, `OVL_STARTUP`, `OVL_STORAGE`, `tramp_store_enter`).
+
+### 3. Behavioral Change Protocol Record (Phase 2)
+
+```text
+Problem and success criteria: Apple IIe Default (< $7C00) had 43 B free, A2PlaySlot (< $A000) had 66 B free, and ovl.town had 265 B free. Phase 2 target: adopt HOME_OVERLAY_SEPARATE (ovl.home, OVL_HOME = 11, OVL_STORAGE = 12, OVL_TITLE = 13), relieve BOTH Default and A2PlaySlot to >= 250+ B free without touching core/ or shared files, update check_memory_contract.py, and keep moria8-apple2.po within 280 ProDOS blocks with LICENSE/SOURCE.OFFER intact.
+State being changed: Placement of ui_home.s + ui_home_text.s (TownOverlay -> HomeOverlay); PAK entries 15..19 and overlay IDs 11..13; placement of a2_save_block_mode / save_write_map_c128 / load_read_map_c128 (Default -> StorageOverlay); placement of eff_find_doors_impl + eff_destroy_traps_doors_impl (Default -> DeathOverlay) and eff_gain_stat.s (A2PlaySlot -> DeathOverlay); placement of run_initialize_impl (A2PlaySlot -> Default); trampoline factoring via tramp_death_call_restore_spell and tramp_ovl_dispatch.
+Search scope and terms: rg across core/, platforms/shared/, platforms/apple2/, and tools/ for OVL_, hal_platform_overlay_count, a2_ovl_cache, A2_PAK_ENTRY, tramp_store_enter, store_enter, home_enter, STORE_HOME, eff_find_doors, eff_destroy_traps_doors, eff_potion_gain_stat, iq_dispatch_p3_spell, run_initialize, a2_save_block_mode, save_write_map, load_read_map.
+Relevant readers/writers found and known exclusions: try_store_entry (core/game_loop.s) sets zp_store_idx and calls tramp_store_enter; ui_home.s is self-contained under HOME_OVERLAY_SEPARATE with scoped home_inv_add_carried; save block/map helpers are called solely by shared/save.s inside StorageOverlay; eff_find_doors and eff_destroy_traps_doors are called solely from SpellOverlay (wizard.s direct jmp is compiled out under HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE); eff_potion_gain_stat is called solely by iq_dispatch_p3_spell in SpellOverlay (player_item_commands.s direct call is compiled out under HAL_PLATFORM_COMPACT_PLAY_SLOT); run_initialize is called solely from game_loop.s. Aux LC $D000-$FFF9 was checked and intentionally excluded from code placement because ALTZP=1 swaps ZP and Stack.
+Initialization, reset and persistence points: a2_ovl_cache_lo/hi and a2_overlay_pak_id tables validated at assembly time against hal_platform_overlay_count (13); eff_fd_row and egs_old live inside DeathOverlay (initialized on entry, transient per load); save format and ZP/low-scratch/Aux-data allocations are unchanged.
+Affected production sequence through the changed transition: Step onto Home door -> check_player_on_store_door returns STORE_HOME (7) -> tramp_store_enter loads OVL.HOME from MORIA8.PAK entry 15 and jumps to home_enter; Cast/pray/quaff gain-stat from SpellOverlay -> resident stub enters tramp_death_call_restore_spell (preserves A across overlay_load #OVL_DEATH) -> executes in DeathOverlay -> tramp_restore_spell_overlay reloads OVL_SPELL from Aux cache -> returns cleanly to caller; Save/load -> StorageOverlay directly invokes colocated a2_save_block_mode / save_write_map_c128 / load_read_map_c128.
+Contract decision or selected upstream oracle with source locations: core/ui_home.s and platforms/commodore/common/overlay.s Phase 2 Wave 1 contract (HOME_OVERLAY_SEPARATE, OVL_HOME=11..OVL_TITLE=13); Apple IIe window $A400-$B9FF overlay mutual exclusion and Aux cache $5A00-$BFFF slots in platforms/apple2/cache_layout.s; AGENTS.md Rule 7 standalone ProDOS LICENSE/SOURCE.OFFER.
+Intentional Moria8 deviations: Because HAL_PLATFORM_MAP_GET_TILE_USES_SUBROUTINE suppresses OVL_HOME/OVL_STORAGE/OVL_TITLE inside common/overlay.s, Apple IIe defines 11..13 explicitly in platforms/apple2/main.s and inserts OVL.HOME at MORIA8.PAK index 15 (shifting LEGALUI/TITLE to 18/19).
+Input/intermediate widths, signedness, carry, range and overflow policy: hal_platform_overlay_count == 13 asserted against hal_storage_overlay_name_len, a2_ovl_cache_lo/hi, and a2_overlay_pak_id; all 20 PAK entries remain <= 42 max; tramp_death_call_restore_spell preserves A across overlay_load via stack (single byte push/pop on balanced load-fail path) and returns flags via tramp_restore_spell_overlay PLP; tramp_ovl_dispatch preserves target A/X/Y/P via indirected JMP $0000 after overlay_load.
+RNG reduction and bias, if applicable: N/A (zero RNG code modified; eff_gain_stat.s still calls resident rng_range verbatim).
+Affected platforms, overlays, banks and owners: platforms/apple2/ only (main.s, save_stream.s, storage_mli.s, overlay_storage.s, hal/lifecycle_policy.s, check_memory_contract.py, Makefile) and docs/APPLE2_MEMORY_POLICY.md. Zero core/, platforms/shared/, or other port changes.
+Required production-path tests: platforms/apple2/check_memory_contract.py (--selftest + full 22-assert contract), make -C platforms/apple2 build disk (20-entry PAK, 250/280 .po blocks with LICENSE/SOURCE.OFFER), make check-hal-boundaries check-6502-lint, and MAME apple2ee runtime suite make -C platforms/apple2 test-runtime.
+Known behavior explicitly out of scope: Aux LC $D000-$FFF9 payload relocation and Aux $0200-$03FF data migration (deferred beyond Phase 2).
+Unresolved uncertainty and risk: MAME apple2ee runtime suite tests boot, title, legal, chargen, overlays, wizard reveal, save/load, and disk setup; interactive Home deposit/retrieve and gain-stat potion paths are verified by assembly layout, contract assertions, and shared core/ui_home.s Wave 1 parity.
+```
+
+### 4. Verification Rows (Phase 2)
+
+| Contract / Domain Check | Status | Evidence (2026-11-14) |
+| --- | --- | --- |
+| Main `$0A00-$7BFF` always-resident ceiling (`< $7C00`) & `A2PlaySlot` (`$7C00-$9FFF`) headroom | PASS | `check_memory_contract.py` + `report_memory_budgets.py`: `moria8a2.prg` `$0A00-$7ADD` (`28,894 / 29,184 B`, **290 B free**); `a2.play` `$7C00-$9EB1` (`8,882 / 9,216 B`, **334 B free**) |
+| All 13 overlays (`$A400-$B9FF`), `OVL.HOME`, Aux cache slots, ZP/scratch bounds | PASS | `check_memory_contract.py --selftest` (`11/11`) + `check_memory_contract.py` (`22/22` asserts, incl. `ovl.home $A400-$A91B` `1,308 B`, `ovl.town $A400-$B559` `4,442 B`, `ovl.death $A400-$B4D5` `4,310 B`, `ovl.storage $A400-$B966` `5,479 B`) |
+| `MORIA8.PAK` 20-entry container & ProDOS `.po` capacity + `LICENSE`/`SOURCE.OFFER` | PASS | `make -C platforms/apple2 disk`: `MORIA8.PAK` `20/42` entries (`104,317 B`); `build/moria8-apple2.po` `250/280` blocks used (**30 free / 15,360 B**), standalone `LICENSE` (`344 B`) & `SOURCE.OFFER` (`499 B`) intact |
+| HAL boundaries & 6502 lint | PASS | `PYTHONDONTWRITEBYTECODE=1 make check-hal-boundaries check-6502-lint` PASS (`0` HAL violations; `386` files, `0` errors, `0` warnings in `platforms/apple2/`) |
+| MAME `apple2ee` runtime suite (`make -C platforms/apple2 test-runtime`) | PASS | `26/26` MAME `apple2ee` scenarios PASS (`boot_title`, `priest_pray`, `priest_map_area`, `help_overlay` `28/28`, `wizard_flow`, `wizard_summon_town`, `scroll_rune`, `balrog_victory`, `quaff_p3`, `scroll_objdet`, `deep_objdet`, `scroll_map`, `dungeon_descend`, `catalog_spawn`, `death_flow`, `save_load`, `mage_list`, `scroll_delta`, `disk_setup_two_drive`, `disk_setup_swap`, `disk_setup_adopt`, `save_slot_tracking`, `weapon_exchange`, `acid_armour`, `aux_lc_spike`, `save_reboot_load`) after updating `platforms/apple2/harness_smoke.py:559,615` to wait for both `"Command Reference"` and `"L:License"` |
+| Physical display-layout / `core/` parity | N/A | Zero `core/`, `platforms/shared/`, or display-geometry edits |
+
+## Phase 3 Declarative Trampolines & Identify Spell Restore (2026-11-14)
+
+Port wiring for `build/trampolines/apple2_trampolines.inc` (`tools/trampoline_manifest.py` `APPLE2_ENTRIES`) and `ovl_spell_restore` fix for Mage Spell #20 (`Identify`) `OVL_SPELL` eviction.
+
+### 1. Generated Trampolines & `Identify` Fix Summary
+
+- **`platforms/apple2/Makefile`:** Added `TRAMPOLINES_INC = $(BUILD)/trampolines/apple2_trampolines.inc` rule invoking `python3 -B "$(GEN_TRAMPOLINES_TOOL)" --port apple2 --output "$@"` (depending on `tools/gen_trampolines.py` and `tools/trampoline_manifest.py`) and added `$(TRAMPOLINES_INC)` as a prerequisite of `$(A2_MAIN_STAMP)`.
+- **`platforms/apple2/main.s`:** Replaced all `66` generated `tramp_*` definitions (`kind != "custom"` in `APPLE2_ENTRIES`) with `#import "../../build/trampolines/apple2_trampolines.inc"` in `.segment Default` (strictly `< $7C00`, keeping `A2PlaySlot` unchanged). Preserved all `16` `custom` trampolines (`15` in `platforms/apple2/main.s` — `tramp_dig_ability` in `A2PlaySlot`, `tramp_ovl_dispatch`, `tramp_death_call_restore_spell`, `tramp_store_enter`, `tramp_game_over_run`, `tramp_do_look`, `tramp_inv_add_carried`, `tramp_items_dispatch`, `tramp_items_jmp`, `tramp_spell_call_items`, `!restore_overlay` tail block `tramp_ui_view_restore_spell_overlay`..`tramp_combat_apply_levelup_modal`, and `tramp_ego_append_suffix` — plus `tramp_ui_legal_display` in `platforms/apple2/legal.s`) and all non-`tramp_*` helpers and shared fallthroughs intact.
+- **Mage Spell #20 (`Identify`) `OVL_SPELL` restore fix:** `tramp_spell_execute_selected` in `build/trampolines/apple2_trampolines.inc` is generated as `ovl_spell_restore` (`lda #OVL_SPELL / jsr overlay_load / bcs !done+ / jsr spell_execute_selected / !done: jmp tramp_restore_spell_overlay`), restoring `OVL_SPELL` in `$A400-$B9FF` when `eff_identify_prompt` invokes `show_inv_and_select` (`OVL_UI`) with `+0 B` in `OVL.SPELL` (`cache.ovl.spell` remains `5,100 / 5,120 B`, **20 B free**).
+- **Before / After Memory Headroom (Phase 2 -> Phase 3 Wave 1+2):**
+  - `Default` (`moria8a2.prg` / `MORIA8.RES`, `< $7C00`): `$0A00-$7ADD` (`28,894 B`, **290 B free**) -> `$0A00-$7ACB` (`28,876 / 29,184 B`, **308 B free**, **+18 B headroom** combined with Wave 1's `-18 B` removal of the `$0102,x`/`$0104,x` stack probe in `core/player_items.s`; note `apple2_trampolines.inc` currently still retains the safe idempotent `piw_return_overlay` stores in `tramp_select_filtered_inv*` / `tramp_restore_spell_overlay`).
+  - `A2PlaySlot` (`a2.play`, `< $A000`): `$7C00-$9EB1` (`8,882 / 9,216 B`, **334 B free**) -> **unchanged** (`$7C00-$9EB1`, **334 B free**).
+  - `cache.ovl.spell` / `ovl.spell` (Aux cache `$6D00-$80FF`, `5,120 B` cap): `5,100 B` (**20 B free**) -> **unchanged** (`5,100 B`, **20 B free** in cache; `532 B` free vs `$BA00`).
+  - `cache.ovl.items` / `ovl.items` (Aux cache `$AA00-$BFFF`, `5,632 B` cap): `5,582 B` (**50 B free**) -> `5,587 / 5,632 B` (**45 B free**, `+5 B` from Wave 1 `core/player_item_select.s` `#OVL_ITEMS` store under `PLAYER_ITEM_SELECT_EXTERNAL`).
+
+### 2. Behavioral Change Protocol Record (Phase 3)
+
+```text
+Problem and success criteria: Replace hand-maintained generated tramp_* stubs in platforms/apple2/main.s with build/trampolines/apple2_trampolines.inc generated from tools/trampoline_manifest.py (APPLE2_ENTRIES), fix Mage Spell #20 (Identify) OVL_SPELL eviction when eff_identify_prompt invokes show_inv_and_select (OVL_UI) via ovl_spell_restore on tramp_spell_execute_selected, and wire build/trampolines/apple2_trampolines.inc into platforms/apple2/Makefile within all Apple IIe memory/cache budgets. Success = all Apple IIe build, disk, memory-contract (22 + 11 selftest), trampoline/overlay checks, and 26/26 MAME apple2ee runtime scenarios PASS.
+State being changed: platforms/apple2/Makefile adds TRAMPOLINES_INC rule/prerequisite for $(A2_MAIN_STAMP); platforms/apple2/main.s removes 66 generated tramp_* stubs and imports build/trampolines/apple2_trampolines.inc in Default (< $7C00); tramp_spell_execute_selected adopts ovl_spell_restore (jsr spell_execute_selected -> jmp tramp_restore_spell_overlay). Default footprint changes from $0A00-$7ADD (28,894 B, 290 B free) to $0A00-$7ACB (28,876 B, 308 B free); OVL.ITEMS moves from 5,582 B (50 B free) to 5,587 B (45 B free) from Wave 1 core/player_item_select.s; A2PlaySlot (8,882 B, 334 B free) and OVL.SPELL (5,100 B, 20 B free in cache.ovl.spell) are unchanged.
+Search scope and terms: rg -n "piw_return_overlay" across core/ and platforms/apple2/; APPLE2_ENTRIES in tools/trampoline_manifest.py; platforms/apple2/main.s; platforms/apple2/legal.s; core/player_items.s; core/player_item_select.s; core/player_magic.s; core/player_magic_execute_overlay.s; core/spell_effects.s.
+Relevant readers/writers found and known exclusions: show_inv_and_select (core/player_items.s) unconditionally reads X = piw_return_overlay and clears piw_return_overlay = #OVL_NONE; piw_select_filtered_inv_key (core/player_item_select.s) sets piw_return_overlay = #OVL_ITEMS under PLAYER_ITEM_SELECT_EXTERNAL before calling show_inv_and_select; apple2_trampolines.inc retains safe idempotent piw_return_overlay stores in tramp_select_filtered_inv, tramp_select_filtered_inv_key_spell, and tramp_restore_spell_overlay (tools/ is outside this task's file ownership). tramp_spell_execute_selected is called solely by player_cast_spell and player_pray (OVL_SPELL) -> spell_execute_selected (OVL_SPELL). Exclusions: 16 custom trampolines (15 in main.s + tramp_ui_legal_display in legal.s) and non-tramp_* helpers/fallthroughs (eff_destroy_traps_doors, eff_find_doors, chest_dispatch, etc.) stay hand-authored; core/, tools/, and other ports untouched.
+Initialization, reset and persistence points: Unchanged; piw_return_overlay is initialized/cleared inside show_inv_and_select and session reset, and Aux cache slots (overlay_storage.s) and save file layout are unchanged.
+Affected production sequence through the changed transition: Build: make -C platforms/apple2 updates build/trampolines/apple2_trampolines.inc before KickAss assembles main.s into Default. Runtime (Identify spell): player_cast_spell (OVL_SPELL) -> tramp_spell_execute_selected (Default) loads OVL_SPELL and JSRs spell_execute_selected -> eff_identify_prompt (Default) -> show_inv_and_select (OVL_UI, evicting OVL_SPELL at $A400-$B9FF) -> returns to tramp_spell_execute_selected -> jmp tramp_restore_spell_overlay reloads OVL_SPELL from Aux cache $6D00-$80FF with preserved A/X/P and returns safely to player_cast_spell.
+Contract decision or selected upstream oracle with source locations: Single mutually-exclusive $A400-$B9FF overlay window and Aux cache slot discipline in docs/APPLE2_MEMORY_POLICY.md / platforms/apple2/overlay_storage.s; Phase 3 manifest and caller-restore invariant in tools/trampoline_manifest.py (APPLE2_ENTRIES) and tools/check_overlay_calls.py.
+Intentional Moria8 deviations: None to gameplay; ovl_spell_restore keeps the OVL_SPELL restoration inside resident Default ($0A00-$7ACB) so Mage Spell #20 ?-selector eviction of OVL_SPELL adds 0 B to tight cache.ovl.spell (20 B free).
+Input/intermediate widths, signedness, carry, range and overflow policy: tramp_spell_execute_selected branches on overlay_load carry fail (bcs !done+) before JSR; normal return enters tramp_restore_spell_overlay which preserves A/X/P across overlay_load #OVL_SPELL via stack (pha/txa/pha/php/plp). Default stays strictly < $7C00 (308 B free) and all 13 overlays fit $A400-$B9FF and their Aux cache slots.
+RNG reduction and bias, if applicable: N/A (zero RNG code changed; zero core/ edits in Wave 2).
+Affected platforms, overlays, banks and owners: platforms/apple2/Makefile, platforms/apple2/main.s (Default < $7C00), and docs/APPLE2_MEMORY_POLICY.md only. A2PlaySlot, Aux RAM segments, and all 13 overlay binaries are unchanged by Wave 2 (OVL.ITEMS +5 B and Default -18 B stack probe come from Wave 1 core/ edits).
+Required production-path tests: make -C platforms/apple2 build disk test-memory-contract test-memory-contract-selftest; python3 -B tools/gen_trampolines.py --port apple2 --output build/trampolines/apple2_trampolines.inc --check; strict validate_manifest_and_sources(..., strict_migrated=True) for apple2; python3 -B tools/check_overlay_calls.py --port apple2 --check-sym; python3 -B tools/report_memory_budgets.py --port apple2; ./tools/isolated.sh make testapple2-runtime (26/26 MAME apple2ee scenarios).
+Known behavior explicitly out of scope: Stripping the now-redundant piw_return_overlay stores in tools/gen_trampolines.py (Wave 1 ownership) and relocating runtime payloads into Aux LC $D000-$FFF9 or Aux $0200-$03FF.
+Unresolved uncertainty and risk: cache.ovl.spell has 20 B free (5,100 / 5,120 B) and cache.ovl.items / ovl.items has 45 B free (5,587 / 5,632 B), both enforced by check_memory_contract.py. The 26/26 MAME apple2ee suite verifies cast, pray, inventory/recharge item-selection, help/legal, save/load, and overlay switching end-to-end; interactive Mage Spell #20 Identify ?-selector invocation is verified by static cross-overlay call/symbol checks (check_overlay_calls.py --check-sym) and inspection of the generated ovl_spell_restore path rather than a dedicated new Identify scenario.
+```
+
+### 3. Verification Rows (Phase 3)
+
+| Contract / Domain Check | Status | Evidence (2026-11-14) |
+| --- | --- | --- |
+| Main `$0A00-$7BFF` always-resident ceiling (`< $7C00`) & `A2PlaySlot` (`$7C00-$9FFF`) headroom | PASS | `check_memory_contract.py` + `report_memory_budgets.py --port apple2`: `MORIA8.RES` / `Default` `$0A00-$7ACB` (`28,876 / 29,184 B`, **308 B free**); `A2.PLAY` / `A2PlaySlot` `$7C00-$9EB1` (`8,882 / 9,216 B`, **334 B free**) |
+| Tight Aux cache & overlay headroom (`cache.ovl.spell`, `cache.ovl.items` / `ovl.items`, 13 overlays `$A400-$B9FF`) | PASS | `check_memory_contract.py` (`22` asserts, `0` failures) + `check_memory_contract.py --selftest` (`11` asserts, `0` failures) + `report_memory_budgets.py`: `ovl.spell` / `cache.ovl.spell` `5,100 / 5,120 B` (**20 B free**; `532 B` vs `$BA00`), `ovl.items` / `cache.ovl.items` `$A400-$B9D2` `5,587 / 5,632 B` (**45 B free**) |
+| Declarative trampoline manifest & cross-overlay call verification (`apple2`) | PASS | `tools/gen_trampolines.py --port apple2 --output build/trampolines/apple2_trampolines.inc --check` PASS (`unchanged`); strict `validate_manifest_and_sources(..., strict_migrated=True)` for `apple2`: `(82, 66, 16)`, `0` errors; `tools/check_overlay_calls.py --port apple2 --check-sym`: PASS (`0` cross-overlay violations) |
+| `MORIA8.PAK` 20-entry container & ProDOS `.po` capacity + `LICENSE`/`SOURCE.OFFER` | PASS | `make -C platforms/apple2 disk`: `MORIA8.PAK` `20/42` entries (`104,304 B`); `build/moria8-apple2.po` `250/280` blocks used (**30 free / 15,360 B**), standalone `LICENSE` (`344 B`) & `SOURCE.OFFER` (`499 B`) intact |
+| MAME `apple2ee` runtime suite (`./tools/isolated.sh make testapple2-runtime`) | PASS | `26/26` MAME `apple2ee` scenarios PASS (`0` failures across `boot_title`, `priest_pray`, `priest_map_area`, `help_overlay`, `wizard_flow`, `wizard_summon_town`, `scroll_rune`, `balrog_victory`, `quaff_p3`, `scroll_objdet`, `deep_objdet`, `scroll_map`, `dungeon_descend`, `catalog_spawn`, `death_flow`, `save_load`, `mage_list`, `scroll_delta`, `disk_setup_two_drive`, `disk_setup_swap`, `disk_setup_adopt`, `save_slot_tracking`, `weapon_exchange`, `acid_armour`, `aux_lc_spike`, `save_reboot_load`) |
+| Physical display-layout / `core/` parity | N/A | Zero `core/` or display-geometry edits in Apple IIe Wave 2 |
+
+## Phase 4 Item Catalog (`ITEM.CAT`), Aux LC Preload, & Save Format V2 (2026-11-15)
+
+### 1. Summary of Phase 4 Memory & Media Layout
+
+- **Aux Language Card (`$D000-$FFF9`, `16,378 B`) Production Adoption:** Preloads standalone ProDOS `'ITM2'` `ITEM.CAT` (`7,573 B`) at boot into Aux LC High RAM `$E000-$FD94` and places `recall[279]` (`1,116 B`) in Aux LC Bank 1 `$D000-$D45B` (`8,689 / 16,378 B` used, **7,689 B free**), accessed through the `SEI`, ZP-free `ALTZP=1` bounce at `$02E0-$02F3` (`platforms/apple2/memory_aux_lc.s`) with port-owned Aux interrupt vectors (`$FFFA-$FFFF`).
+- **Aux Low (`$0200-$03FF`, `512 B`) & `A2AuxData` (`$3B0C-$4FFF`):** Places `id_known_bits[47]`, `potion_shuffle..staff_shuffle` (`174 B`), `si_meta_hi[128]`, and `fi_meta_hi[42]` in Aux `$0200-$0386` (`391 B` used, `121 B` free), and retires legacy resident/aux item-name streams in favor of `ITEM.CAT`, leaving `A2AuxData` at `$3B0C-$4F0B` (`5,120 / 5,364 B`, **244 B free**).
+- **Main Resident & Overlays:** `Default` (`moria8a2.prg`) spans `$0A00-$7BA9` (`29,098 / 29,184 B`, **86 B free** `< $7C00`); `A2PlaySlot` (`a2.play`) spans `$7C00-$9FF9` (`9,210 / 9,216 B`, **6 B free** `< $A000`); all 13 overlays fit `$A400-$B9FF` (`5,632 B`) and their Aux cache slots (`ovl.items` `5,597 / 5,632 B`, **35 B free**; `ovl.gen` `5,554 / 5,632 B`, **78 B free**; `ovl.storage` `5,181 / 5,632 B`, **451 B free**; `ovl.spell` `5,100 / 5,120 B`, **20 B free** in cache; `ovl.modal` `3,028 / 3,072 B`, **44 B free** in cache).
+- **Shipping `140 KB` ProDOS `.po` (`build/moria8-apple2.po`):** `MORIA8.PAK` (`20/42` entries, `110,794 B`) + standalone `ITEM.CAT` (`7,573 B`) + `LICENSE` (`344 B`) + `SOURCE.OFFER` (`499 B`) = **`279 / 280` blocks used (`1` block = `512 B` free)**.
+
+### 2. Verification Rows (Phase 4)
+
+| Contract / Domain Check | Status | Evidence (2026-11-15) |
+| --- | --- | --- |
+| Main `$0A00-$7BFF` (`< $7C00`) & `A2PlaySlot` (`$7C00-$9FFF`) bounds | PASS | `check_memory_contract.py` + `report_memory_budgets.py --port apple2`: `Default` `$0A00-$7BAA` (`29,098 / 29,184 B`, **86 B free**); `A2PlaySlot` `$7C00-$9FFA` (`9,210 / 9,216 B`, **6 B free**) |
+| Aux RAM (`$0200-$03FF`, `$3B0C-$BFFF`) & Aux LC (`$D000-$FFF9`) ownership | PASS | `A2AuxData` `5,120 / 5,364 B` (**244 B free**), `A2Catalog` `5,859 / 5,888 B` (**29 B free**), `A2HuffData` `7,313 / 7,424 B` (**111 B free**), `cache.ovl.spell` **20 B free**, `cache.ovl.items` **35 B free**, `cache.ovl.modal` **44 B free**, Aux LC `8,689 / 16,378 B` (**7,689 B free**) |
+| ProDOS `.po` capacity (`279/280` blocks) + `ITEM.CAT` + `LICENSE`/`SOURCE.OFFER` | PASS | `report_memory_budgets.py --port apple2` (`0` overflows): `MORIA8.PAK` `20/42` entries (`110,794 B`), `ITEM.CAT` (`7,573 B`), `.po` `279/280` blocks (`1` free) |
+| Save Format V2 (`SAVE_VERSION = $20`, `17,161 B`) & playtest/contract gates | PASS | `make check-hal-boundaries`, `make check-item-docs`, `tools/report_memory_budgets.py --selftest`, and `playtest` unit suite (`780/780` PASS) |
+
+

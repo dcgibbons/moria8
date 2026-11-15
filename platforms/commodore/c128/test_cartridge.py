@@ -378,30 +378,34 @@ class Experiment:
         assert screen_bytes(text) in scr, f"Missing on 80-col VDC: {text!r}"
 
     def call_overlay_load(self, ovl_id: int) -> None:
-        # Call overlay_load(A=ovl_id) via free Bank 0 scratch at $5E00 (< $6000).
-        assert self.sym["program_end"] <= 0x5E00
+        # Call overlay_load(A=ovl_id) via free Bank 0 scratch between program_end and $AF00.
+        scratch = self.sym["program_end"]
+        result = scratch + 0x10
+        assert result < 0xAF00, f"No scratch headroom below $AF00: program_end=${scratch:04x}"
         code = [
             0xA9, ovl_id,
             0x20, self.sym["overlay_load"] & 255, self.sym["overlay_load"] >> 8,
-            0x08, 0x68, 0x8D, 0xF0, 0x5E,
+            0x08, 0x68, 0x8D, result & 255, result >> 8,
         ]
-        end = 0x5E00 + len(code)
+        end = scratch + len(code)
         code += [0x4C, end & 255, end >> 8]
-        self.write(0x5E00, bytes(code))
-        self.until(end, start=0x5E00)
-        assert (self.memory(0x5EF0, 1)[0] & 1) == 0, f"overlay_load({ovl_id}) set carry"
+        self.write(scratch, bytes(code))
+        self.until(end, start=scratch)
+        assert (self.memory(result, 1)[0] & 1) == 0, f"overlay_load({ovl_id}) set carry"
 
     def call_carry_fn(self, addr: int) -> bool:
-        assert self.sym["program_end"] <= 0x5E00
+        scratch = self.sym["program_end"]
+        result = scratch + 0x10
+        assert result < 0xAF00, f"No scratch headroom below $AF00: program_end=${scratch:04x}"
         code = [
             0x20, addr & 255, addr >> 8,
-            0x08, 0x68, 0x8D, 0xF0, 0x5E,
+            0x08, 0x68, 0x8D, result & 255, result >> 8,
         ]
-        end = 0x5E00 + len(code)
+        end = scratch + len(code)
         code += [0x4C, end & 255, end >> 8]
-        self.write(0x5E00, bytes(code))
-        self.until(end, start=0x5E00)
-        return bool(self.memory(0x5EF0, 1)[0] & 1)
+        self.write(scratch, bytes(code))
+        self.until(end, start=scratch)
+        return bool(self.memory(result, 1)[0] & 1)
 
     def check(self, message: str) -> None:
         self.count += 1
@@ -456,6 +460,7 @@ def snapshot(exp: Experiment) -> dict[str, bytes]:
     data = {
         "player": exp.memory(exp.sym["player_data"], player["PL_STRUCT_SIZE"]),
         "map": exp.memory(map_base, 13068, "ram01"),
+        "recall": exp.memory(0x7400, 1116, "ram01"),
     }
     for name in (
         "inv_item_id",
@@ -556,19 +561,17 @@ def run_cartridge_boot_and_assets(args: argparse.Namespace) -> int:
         exp.until(exp.sym["c128_preload_resident_play"])
         for filename, addr, bank in (
             ("128.bank.prg", 0xF000, "ram"),
-            ("128.world.prg", 0x6000, "ram"),
-            ("128.item.prg", 0x8C50, "ram"),
-            ("128.names.prg", 0x7400, "ram01"),
             ("128.cat.prg", 0x7E60, "ram01"),
             ("128.cnm.prg", 0xA000, "ram01"),
         ):
             payload = (cart_dir / filename).read_bytes()[2:]
             assert exp.memory(addr, len(payload), bank) == payload, filename
+        assert exp.memory(0x7400, 1116, "ram01") == b"\x00" * 1116
         huff = (cart_dir / "128.huff.prg").read_bytes()[2:]
         hvec = (cart_dir / "128.hvec.prg").read_bytes()[2:]
         assert exp.memory(0xF000, len(huff), "ram01") == huff
         assert exp.memory(0xFFFA, len(hvec), "ram01") == hvec
-        exp.check("Bank 0 residents and Bank 1 279-creature catalog/Huffman/vector match PRGs")
+        exp.check("Bank 0 resident image, banked runtime, Bank 1 recall BSS, and 279-creature catalog/Huffman/vector match")
 
         exp.until(exp.sym["title_menu_loop"])
         assert exp.memory(exp.sym["program_device"], 2) == b"\x08\x08"
@@ -604,13 +607,13 @@ def run_cartridge_boot_and_assets(args: argparse.Namespace) -> int:
         exp.until(exp.sym["title_menu_loop"])
         exp.check("Title A legal viewer paged LICENSE and SOURCE-OFFER from ROM")
 
-        # Verify all 10 overlays (including cold ovl.chest) through overlay_load
+        # Verify all 12 overlays (including cold ovl.chest, ovl.home, and ovl.storage) through overlay_load
         ovl_consts = catalog_disk.consts(ROOT / "platforms/commodore/common/overlay.s")
         for symbol, name in make_c128_md128.OVERLAYS:
             exp.call_overlay_load(ovl_consts["OVL_" + symbol])
             expected = (cart_dir / f"ovl.{name}").read_bytes()[2:]
             assert exp.memory(0xE000, len(expected)) == expected, name
-        exp.check("all 10 overlays including cold ovl.chest load cleanly via overlay_load")
+        exp.check("all 12 overlays including cold ovl.chest, ovl.home, and ovl.storage load cleanly via overlay_load")
         return exp.count
     finally:
         exp.close()
@@ -656,12 +659,14 @@ def run_md128_gameplay_and_reset(args: argparse.Namespace) -> int:
         assert exp.memory(exp.sym["zp_mon_count"], 1)[0] > 0, "No dungeon monsters spawned"
         exp.check("ovl.gen generated dungeon level 1 and spawned monsters from Bank 1 catalog")
 
-        # Load cold ovl.chest through overlay_load during active dungeon state
+        # Load cold ovl.chest, ovl.home, and ovl.storage through overlay_load during active dungeon state
         paused_at = exp.until(exp.sym["hal_input_get_key"], alternatives=(exp.sym["input_get_key_fast"],))
-        chest_code = (cart_dir / "ovl.chest").read_bytes()[2:]
-        exp.call_overlay_load(catalog_disk.consts(ROOT / "platforms/commodore/common/overlay.s")["OVL_CHEST"])
-        assert exp.memory(0xE000, len(chest_code)) == chest_code
-        exp.check("cold ovl.chest loaded identically via overlay_load from MD128 ROM")
+        ovl_consts = catalog_disk.consts(ROOT / "platforms/commodore/common/overlay.s")
+        for ovl_name, ovl_sym in (("ovl.chest", "OVL_CHEST"), ("ovl.home", "OVL_HOME"), ("ovl.storage", "OVL_STORAGE")):
+            ovl_code = (cart_dir / ovl_name).read_bytes()[2:]
+            exp.call_overlay_load(ovl_consts[ovl_sym])
+            assert exp.memory(0xE000, len(ovl_code)) == ovl_code
+        exp.check("cold ovl.chest, ovl.home, and ovl.storage loaded identically via overlay_load from MD128 ROM")
 
         # Resume the paused key-wait frame, then test real Shift+Q quit -> game_over_prompt -> title
         exp.cmd(f"r pc={paused_at:04x}")

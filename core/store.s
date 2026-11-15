@@ -1,6 +1,16 @@
 #importonce
 // store.s — Store restocking, price calculation, gold ops
 //
+// Module ownership:
+//   owner: TownOverlay across all 7 ports (product builds); unit tests
+//     (test_store/main fixtures) link store.s and store_data.s in main RAM.
+//   lifetime: transient overlay during TownOverlay visits (except persistent
+//     store_hot_data.s / store_inventory_data.s which stay resident).
+//   callers: ui_store.s; store_restock_overlay.s shares scratch layout. When
+//     HOME_OVERLAY_SEPARATE is enabled, HomeOverlay uses :StoreFindEmptySlotBody
+//     from ui_home_text.s directly and never calls into store.s.
+//   .assert: protected by each port's TownOverlay window end .assert.
+//
 // 8 town stores/buildings with persistent inventory (SoA layout, 12 slots each).
 // Restocking on town re-entry. Buy/sell price adjusted by CHR stat.
 //
@@ -11,6 +21,10 @@
 
 // Product builds keep store text in TownOverlay. Unit tests keep fixture text
 // in store_data.s so tests can import store_data without overlay ownership.
+
+#define UI_HOME_TEXT_MACROS_ONLY
+#import "ui_home_text.s"
+#undef UI_HOME_TEXT_MACROS_ONLY
 
 // ============================================================
 // Scratch variables
@@ -54,49 +68,40 @@ hg_digit_cnt:  .byte 0     // Digit count for number input
 // ============================================================
 
 // load_item_base_cost — Load item base cost to zp_temp0/1
-// Input: A = item type ID
-// Output: zp_temp0/1 = base cost, sb_item_type = item ID
+// Input: A = paged item slot_lo (sb_item_ego supplies ITEM_PAGE_BIT)
+// Output: zp_temp0/1 = base cost, sb_item_type = slot_lo, item_cur_page set
 // Clobbers: A, X
 load_item_base_cost:
     sta sb_item_type
-    tax
-    lda it_cost_lo,x
+    lda sb_item_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx sb_item_type
+    jsr item_get_cost_x
+    lda icat_cost_lo
     sta zp_temp0
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
-    lda #0
-    sta zp_temp1
-    txa
-    ldy #IT_COST_HI_EXTRA_COUNT - 1
-!libc_hi_loop:
-    cmp it_cost_hi_extra_id,y
-    beq !libc_hi_found+
-    dey
-    bpl !libc_hi_loop-
-    rts
-!libc_hi_found:
-    lda it_cost_hi_extra_value,y
+    lda icat_cost_hi
     sta zp_temp1
     rts
-#else
-    lda it_cost_hi,x
-    sta zp_temp1
-    rts
-#endif
 
 // apply_tool_ego_multiplier — Multiply base cost by ego factor for digging tools (R14)
-// Input: zp_temp0/1 = base cost, sb_item_type and sb_item_ego set
+// Input: zp_temp0/1 = base cost, sb_item_type and sb_item_ego set, item_cur_page set
 // Output: zp_temp0/1 updated
 // ego=0: ×1, ego=1: ×5, ego=2: ×15
 // Clobbers: A, X
 apply_tool_ego_multiplier:
     lda sb_item_ego
+    and #EGO_ID_MASK
     beq !atem_done+             // ego=0, no change
-    ldx sb_item_type
-    lda it_category,x
+    pha
+    lda sb_item_type
+    jsr item_get_category_a
     cmp #ICAT_DIGGING
-    bne !atem_done+             // Not a digging tool
-    // Multiply base cost by factor
-    lda sb_item_ego
+    beq !atem_is_tool+
+    pla
+    rts
+!atem_is_tool:
+    pla
     cmp #2
     beq !atem_x15+
     // ego=1: multiply by 5
@@ -271,11 +276,13 @@ calc_buy_min_price:
 // Other: no bonus
 // Clobbers: A, X
 price_add_p1_bonus:
-    // Look up category
-    ldx sb_item_type
-    lda it_category,x
+    // Look up category (item_cur_page already set by load_item_base_cost)
+    lda sb_item_type
+    jsr item_get_category_a
 
-    // Equipment range: WEAPON(2) through BOOTS(7)
+    // Equipment range: WEAPON(2) through BOOTS(7), plus CLOAK(19)
+    cmp #ICAT_CLOAK
+    beq !pap_equip+
     cmp #ICAT_WEAPON
     bcc !pap_check_ring+
     cmp #ICAT_BOOTS + 1
@@ -410,27 +417,7 @@ gold_add_price:
 // Output: carry set + X = absolute slot index, carry clear = full
 // Clobbers: A, X
 store_find_empty_slot:
-    ldx zp_store_idx
-    lda store_base_idx,x
-    tax                         // X = base slot
-    lda #0
-    sta sd_save_x               // Counter 0-11
-!sfes_loop:
-    lda sd_save_x
-    cmp #STORE_MAX_ITEMS
-    bcs !sfes_full+
-    :AuxReadX(si_item_id)
-    cmp #FI_EMPTY
-    beq !sfes_found+
-    inx
-    inc sd_save_x
-    jmp !sfes_loop-
-!sfes_found:
-    sec
-    rts
-!sfes_full:
-    clc
-    rts
+    :StoreFindEmptySlotBody(sd_save_x)
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 // ============================================================

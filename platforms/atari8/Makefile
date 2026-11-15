@@ -24,10 +24,13 @@ OVL_OUTATARI8_CART = $(abspath $(OUTATARI8_CART))
 KA_FLAGS   = ":OVL_OUT=$(OVL_OUTATARI8)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8
 KA_CART_FLAGS = ":OVL_OUT=$(OVL_OUTATARI8_CART)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8_CART)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8 -define ATARI8_CARTRIDGE
 
-VERSION_FILE     = ../../version.json
-VERSION_INC_TOOL = ../../tools/make_version_include.py
-VERSION_INC      = $(OUT)/version_strings.inc
-MAIN_SRC         = main.s
+VERSION_FILE         = ../../version.json
+VERSION_INC_TOOL     = ../../tools/make_version_include.py
+VERSION_INC          = $(OUT)/version_strings.inc
+TRAMPOLINES_INC_TOOL = ../../tools/gen_trampolines.py
+TRAMPOLINE_MANIFEST  = ../../tools/trampoline_manifest.py
+TRAMPOLINES_INC      = $(OUT)/trampolines/atari8_trampolines.inc
+MAIN_SRC             = main.s
 BOOT_SRC         = boot.s
 TITLE_SRC        = title_data.s
 
@@ -37,8 +40,9 @@ ATARI8_MAIN_PRG   = $(OUTATARI8)/MORIA8.RES
 ATARI8_BOOT_PRG   = $(OUTATARI8)/boot.prg
 ATARI8_TITLE_PRG  = $(OUTATARI8)/TITLE.DAT
 ATARI8_CATALOG    = $(OUTATARI8)/MONSTER.CAT
+ATARI8_ITEM_CAT   = $(OUTATARI8)/ITEM.CAT
 ATARI8_BANK_PRG   = $(OUTATARI8)/ATARI.BNK
-ATARI8_OVL_PRGS   = $(OUTATARI8)/OVL.STA $(OUTATARI8)/OVL.TWN $(OUTATARI8)/OVL.DTH $(OUTATARI8)/OVL.MDL $(OUTATARI8)/OVL.HLP $(OUTATARI8)/OVL.UI $(OUTATARI8)/OVL.ITM $(OUTATARI8)/OVL.SPL $(OUTATARI8)/OVL.CHS $(OUTATARI8)/OVL.GEN
+ATARI8_OVL_PRGS   = $(OUTATARI8)/OVL.STA $(OUTATARI8)/OVL.TWN $(OUTATARI8)/OVL.DTH $(OUTATARI8)/OVL.MDL $(OUTATARI8)/OVL.HLP $(OUTATARI8)/OVL.UI $(OUTATARI8)/OVL.ITM $(OUTATARI8)/OVL.SPL $(OUTATARI8)/OVL.CHS $(OUTATARI8)/OVL.GEN $(OUTATARI8)/OVL.HOM $(OUTATARI8)/OVL.STO $(OUTATARI8)/OVL.TTL
 ATARI8_MAIN_STAMP = $(OUTATARI8)/.main.stamp
 ATARI8_ATR        = $(OUT)/moria8-atari8.atr
 ATARI8_SAVE_ATR   = $(OUTATARI8)/save-disk.atr
@@ -47,7 +51,7 @@ ATARI8_CART_MAIN_PRG  = $(OUTATARI8_CART)/MORIA8.RES
 ATARI8_CART_STAMP     = $(OUTATARI8_CART)/.cart.stamp
 ATARI8_CART_BOOT_BIN  = $(OUTATARI8_CART)/bank0.bin
 ATARI8_CART_TITLE_PRG = $(OUTATARI8_CART)/TITLE.DAT
-ATARI8_CART_OVL_PRGS  = $(OUTATARI8_CART)/OVL.STA $(OUTATARI8_CART)/OVL.TWN $(OUTATARI8_CART)/OVL.DTH $(OUTATARI8_CART)/OVL.MDL $(OUTATARI8_CART)/OVL.HLP $(OUTATARI8_CART)/OVL.UI $(OUTATARI8_CART)/OVL.ITM $(OUTATARI8_CART)/OVL.SPL $(OUTATARI8_CART)/OVL.CHS $(OUTATARI8_CART)/OVL.GEN $(OUTATARI8_CART)/legalui
+ATARI8_CART_OVL_PRGS  = $(OUTATARI8_CART)/OVL.STA $(OUTATARI8_CART)/OVL.TWN $(OUTATARI8_CART)/OVL.DTH $(OUTATARI8_CART)/OVL.MDL $(OUTATARI8_CART)/OVL.HLP $(OUTATARI8_CART)/OVL.UI $(OUTATARI8_CART)/OVL.ITM $(OUTATARI8_CART)/OVL.SPL $(OUTATARI8_CART)/OVL.CHS $(OUTATARI8_CART)/OVL.GEN $(OUTATARI8_CART)/OVL.HOM $(OUTATARI8_CART)/OVL.STO $(OUTATARI8_CART)/OVL.TTL $(OUTATARI8_CART)/legalui
 ATARI8_CART_SYMS_INC  = $(OUTATARI8_CART)/cartridge_product_symbols.inc
 ATARI8_CAT_TEST_PRG   = $(OUTATARI8_CART)/catalog-test.prg
 ATARI8_CAR            = $(OUT)/moria8-atari8.car
@@ -70,7 +74,7 @@ ATARI8_OVL_PRGS += $(OUTATARI8)/legalui
 
 all: build
 
-build: $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) $(ATARI8_CAR) $(ATARI8_CAT_TEST_PRG)
+build: $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) $(ATARI8_ITEM_CAT) $(ATARI8_CAR) $(ATARI8_CAT_TEST_PRG)
 
 kickass: $(KICKASS_JAR)
 $(KICKASS_JAR):
@@ -84,7 +88,11 @@ $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
 	@mkdir -p $(OUT)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
-$(ATARI8_MAIN_STAMP): $(ATARI8_SOURCES) $(VERSION_INC) $(KICKASS_JAR)
+$(TRAMPOLINES_INC): $(TRAMPOLINES_INC_TOOL) $(TRAMPOLINE_MANIFEST)
+	@mkdir -p $(dir $@)
+	python3 -B "$(TRAMPOLINES_INC_TOOL)" --port atari8 --output "$@"
+
+$(ATARI8_MAIN_STAMP): $(ATARI8_SOURCES) $(VERSION_INC) $(TRAMPOLINES_INC) $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8)
 	$(KA) $(KA_FLAGS) $(MAIN_SRC) -o $(ATARI8_MAIN_PRG)
 	@touch $(ATARI8_MAIN_STAMP)
@@ -107,12 +115,16 @@ $(ATARI8_CATALOG): ../../tools/catalog_disk.py monster_catalog_a8.s ../commodore
 	@mkdir -p $(OUTATARI8)
 	python3 ../../tools/catalog_disk.py atari "$@"
 
+$(ATARI8_ITEM_CAT): ../../tools/catalog_disk.py item_catalog_a8.s $(wildcard ../shared/item_catalog/*.s)
+	@mkdir -p $(OUTATARI8)
+	python3 -B ../../tools/catalog_disk.py item-atari "$@"
+
 disk: $(ATARI8_ATR) $(ATARI8_CAR)
 
-$(ATARI8_ATR): $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atr.py
+$(ATARI8_ATR): $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) $(ATARI8_ITEM_CAT) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atr.py
 	python3 ../../tools/make_atr.py --build-dir $(OUTATARI8) --root-dir ../.. -o $(ATARI8_ATR)
 
-$(ATARI8_CART_STAMP): $(ATARI8_SOURCES) $(VERSION_INC) $(KICKASS_JAR)
+$(ATARI8_CART_STAMP): $(ATARI8_SOURCES) $(VERSION_INC) $(TRAMPOLINES_INC) $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8_CART)
 	$(KA) $(KA_CART_FLAGS) $(MAIN_SRC) -o $(ATARI8_CART_MAIN_PRG)
 	cp "$(OUTATARI8_CART)/main.sym" "$(ATARI8_CART_SYMS_INC)"
@@ -136,7 +148,7 @@ $(ATARI8_CAT_TEST_PRG): $(ATARI8_CART_SYMS_INC) cartridge_test_catalog.s cartrid
 
 cartridge: $(ATARI8_CAR)
 
-$(ATARI8_CAR): $(ATARI8_CART_STAMP) $(ATARI8_CART_BOOT_BIN) $(ATARI8_CART_TITLE_PRG) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atari8_car.py ../../tools/check_atari8_car.py ../../tools/catalog_disk.py $(wildcard ../shared/catalog/*.s)
+$(ATARI8_CAR): $(ATARI8_CART_STAMP) $(ATARI8_CART_BOOT_BIN) $(ATARI8_CART_TITLE_PRG) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atari8_car.py ../../tools/check_atari8_car.py ../../tools/catalog_disk.py $(wildcard ../shared/catalog/*.s) $(wildcard ../shared/item_catalog/*.s)
 	python3 ../../tools/make_atari8_car.py $(OUTATARI8_CART) $(ATARI8_CAR)
 	python3 ../../tools/check_atari8_car.py $(ATARI8_CAR) $(OUTATARI8_CART)
 

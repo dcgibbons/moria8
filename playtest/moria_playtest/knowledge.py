@@ -7,6 +7,7 @@ memory. The brain uses it the way a player uses experience: to tell whether
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -556,10 +557,30 @@ def outpaced_glyphs() -> frozenset[str]:
     return frozenset(glyph for glyph, outpaced in by_glyph.items() if all(outpaced))
 
 
-ITEM_TABLES = ROOT / "core/item_tables.s"
-ITEM_NAME = re.compile(r"^itn_(\d+):(.*)$", re.M)
-ITEM_TOKEN = re.compile(r'^(itok_\w+):\s*\.text "([^"]*)"', re.M)
-ITEM_CATEGORY = re.compile(r"^\s*\.byte (ICAT_\w+)\s*// (\d+):", re.M)
+ITEM_CATALOG_SPEC = ROOT / "platforms/shared/item_catalog/item_catalog_spec.json"
+ICAT_NAMES = {
+    0: "ICAT_DIGGING",
+    1: "ICAT_GOLD",
+    2: "ICAT_WEAPON",
+    3: "ICAT_ARMOR",
+    4: "ICAT_SHIELD",
+    5: "ICAT_HELM",
+    6: "ICAT_GLOVES",
+    7: "ICAT_BOOTS",
+    8: "ICAT_LIGHT",
+    9: "ICAT_FOOD",
+    10: "ICAT_POTION",
+    11: "ICAT_SCROLL",
+    12: "ICAT_RING",
+    13: "ICAT_BOOK",
+    14: "ICAT_WAND",
+    15: "ICAT_STAFF",
+    16: "ICAT_AMULET",
+    17: "ICAT_CHEST",
+    18: "ICAT_SPIKE",
+    19: "ICAT_CLOAK",
+    20: "ICAT_JUNK",
+}
 
 
 def _table_bytes(text: str, label: str) -> list[int]:
@@ -579,9 +600,6 @@ def _table_bytes(text: str, label: str) -> list[int]:
     return values
 
 
-MISSILE_IDS = (*range(49, 55), *range(137, 140))   # launchers, ammunition (IT_MISSILE_BASE, IT_MISSILE2_BASE, core/item_tables.s): one blow in melee
-
-
 @dataclass(frozen=True)
 class ItemKind:
     id: int
@@ -590,27 +608,33 @@ class ItemKind:
     dice: int
     sides: int
     weight: int       # tenths of a pound
+    missile_type: int = 0
 
     @property
     def melee(self) -> bool:
-        return self.category == "ICAT_WEAPON" and self.id not in MISSILE_IDS and self.dice > 0
+        return self.category == "ICAT_WEAPON" and self.missile_type == 0 and self.dice > 0
 
 
 @lru_cache(maxsize=1)
 def item_kinds() -> dict[str, ItemKind]:
-    """Item name -> kind, from the shipped item tables: what a player knows
-    of weapon dice and weights from the manual."""
-    text = ITEM_TABLES.read_text()
-    tokens = {label.upper(): words for label, words in ITEM_TOKEN.findall(text)}
-
-    def expand(stream: str) -> str:   # .text parts and .byte ITOK_* tokens, in order
-        return "".join(m.group(1) if m.group(1) is not None else tokens.get(m.group(2), "")
-                       for m in re.finditer(r'\.text "([^"]*)"|\.byte (ITOK_\w+)', stream))
-    names = {int(i): expand(stream) for i, stream in ITEM_NAME.findall(text)}
-    categories = {int(i): cat for cat, i in ITEM_CATEGORY.findall(text)}
-    weights, dice = _table_bytes(text, "it_weight"), _table_bytes(text, "it_dmg_packed")
-    return {name: ItemKind(i, name, categories.get(i, ""), dice[i] >> 4, dice[i] & 0x0F, weights[i])
-            for i, name in names.items() if i < len(weights) and i < len(dice)}
+    """Item name -> kind, from the shipped item catalog spec: what a player
+    knows of weapon dice, missile types, and weights from the manual."""
+    spec = json.loads(ITEM_CATALOG_SPEC.read_text())
+    kinds: dict[str, ItemKind] = {}
+    for item in spec["items"]:
+        kinds.setdefault(
+            item["name"],
+            ItemKind(
+                item["id"],
+                item["name"],
+                ICAT_NAMES.get(item["cat"], ""),
+                item["dice"],
+                item["sides"],
+                item["weight"],
+                item["missile_type"],
+            ),
+        )
+    return kinds
 
 
 def blows(strength: int, dexterity: int, weight: int) -> int:

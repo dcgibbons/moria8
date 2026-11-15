@@ -60,11 +60,12 @@ def check(crt: Path, source: Path) -> None:
     names = {contract["CART_ASSET_RESIDENT"]: "moria8.prg",
              contract["CART_ASSET_RUNTIME"]: "64.bank",
              contract["CART_ASSET_INDEX"]: None,
-             contract["CART_ASSET_TITLE"]: "title",
+             contract["CART_ASSET_TITLE_ART"]: "title",
              contract["CART_ASSET_CATALOG"]: None,
              contract["CART_ASSET_LEGAL_UI"]: "legalui",
              contract["CART_ASSET_LEGAL_NOTICE"]: None,
-             contract["CART_ASSET_LEGAL_OFFER"]: None}
+             contract["CART_ASSET_LEGAL_OFFER"]: None,
+             contract["CART_ASSET_ITEM_CATALOG"]: None}
     names.update({contract["CART_ASSET_" + symbol]: f"ovl.{name}"
                   for symbol, name in make_easyflash.OVERLAYS})
     previous_end = 8192
@@ -80,6 +81,8 @@ def check(crt: Path, source: Path) -> None:
             expected = b"\x00\xce" + bytes(arrays["cat_level_raw"] + arrays["cat_level_playable"] + arrays["cat_available"])
         elif asset_id == contract["CART_ASSET_CATALOG"]:
             expected = b"\0\0" + b"".join(catalog_disk.records())
+        elif asset_id == contract["CART_ASSET_ITEM_CATALOG"]:
+            expected = b"\0\0" + catalog_disk.item_catalog_bytes()
         elif asset_id in (contract["CART_ASSET_LEGAL_NOTICE"], contract["CART_ASSET_LEGAL_OFFER"]):
             name = "LICENSE" if asset_id == contract["CART_ASSET_LEGAL_NOTICE"] else "SOURCE-OFFER"
             doc = (make_easyflash.ROOT / "data" / name).read_bytes()

@@ -95,16 +95,7 @@ beeb_probe_drive_ready:
     ldx #<hal_storage_marker_read_name
     ldy #>hal_storage_marker_read_name
     jsr beeb_set_pathname
-    jsr beeb_zero_os_ctrl
-    lda #<BEEB_OS_PATH_BASE
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #>BEEB_OS_PATH_BASE
-    sta BEEB_OS_CTRL_BASE + 1
-    jsr EnterMos
-    lda #$05
-    jsr beeb_call_osfile
-    jsr ExitMos
-    rts
+    jmp beeb_mos_osfile_path_05
 
 // disk_program_media_present — Check if Program Disk (TITLE) is in save_device
 // Output: Carry clear = program disk present, Carry set = not program disk
@@ -130,242 +121,26 @@ hal_storage_init_selected_drive:
     lda disk_prompt_device
     jmp beeb_probe_drive_ready
 
-// disk_require_save_media — Verify Save Disk is configured, not Program Disk,
-// and carries valid MORIAID ("M8SAVE").
+// Resident trampolines into StorageOverlay ($A800-$BFFF) preserving caller overlay.
 disk_require_save_media:
-    lda disk_setup_done
-    bne !drsm_chk+
-    sec
-    rts
-!drsm_chk:
-    jsr disk_program_media_present
-    bcs !not_prog_disk+
-    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
-    sta stream_last_status
-    lda #3
-    sta disk_status
-    sec
-    rts
-!not_prog_disk:
-    jsr disk_marker_present
-    bcs !missing_marker+
-    lda #HAL_STORAGE_STATUS_OK
-    sta stream_last_status
-    lda #0
-    sta disk_status
-    clc
-    rts
-!missing_marker:
-    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
-    sta stream_last_status
-    lda #2
-    sta disk_status
-    sec
-    rts
+    lda #<disk_require_save_media_ovl
+    ldy #>disk_require_save_media_ovl
+    bra !bsc_call+
 
-// disk_marker_present — Verify MORIAID exists and starts with "M8SAVE" on save_device
-// Output: Carry clear = valid marker found, Carry set = invalid/missing
-disk_marker_present:
-    lda save_device
-    sta beeb_io_device
-    lda #hal_storage_marker_read_name_len
-    ldx #<hal_storage_marker_read_name
-    ldy #>hal_storage_marker_read_name
-    jsr beeb_set_pathname
-    jsr beeb_dfs_file_exists
-    bcs !absent+
-
-    jsr EnterMos
-    lda #$40
-    jsr beeb_call_osfind
-    bcs !fail_mos+
-    cmp #$00
-    beq !fail_mos+
-    sta beeb_dfs_handle
-
-    jsr beeb_zero_os_ctrl
-    lda beeb_dfs_handle
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #<beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 1
-    lda #>beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 2
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 3
-    sta BEEB_OS_CTRL_BASE + 4
-    lda #hal_storage_marker_magic_len
-    sta BEEB_OS_CTRL_BASE + 5
-    lda #$04
-    jsr beeb_call_osgbpb
-    php
-    ldy beeb_dfs_handle
-    jsr beeb_call_osfind_close
-    plp
-    jsr ExitMos
-    bcs !absent+
-
-    ldx #0
-!chk_magic:
-    lda beeb_ss_buf,x
-    cmp hal_storage_marker_magic,x
-    bne !absent+
-    inx
-    cpx #hal_storage_marker_magic_len
-    bcc !chk_magic-
-    clc
-    rts
-
-!fail_mos:
-    jsr ExitMos
-!absent:
-    sec
-    rts
-
-// disk_marker_init — Initialize Save Disk on save_device with MORIAID ("M8SAVE").
-// Refuses to touch any disk containing TITLE (Program Disk).
-// If the disk has an uninitialized 0-sector catalogue (raw zeroed .ssd), writes
-// an 800-sector empty DFS catalogue to Track 0 Sector 0 & 1 via OSWORD $7F first.
 disk_marker_init:
-    lda save_device
-    jsr disk_program_media_present_on_device
-    bcc !init_fail+         // Refuse to overwrite Program Disk!
+    lda #<disk_marker_init_ovl
+    ldy #>disk_marker_init_ovl
+    bra !bsc_call+
 
-    jsr beeb_write_marker_file
-    bcc !init_ok+
-
-    // Fallback for raw all-zero .ssd images: initialize 800-sector DFS catalogue
-    // on Track 0 Sector 0 & Sector 1 via OSWORD $7F and retry writing MORIAID.
-    jsr beeb_format_empty_catalogue
-    bcs !init_fail+
-    jsr beeb_write_marker_file
-    bcs !init_fail+
-
-!init_ok:
-    lda #HAL_STORAGE_STATUS_OK
-    sta stream_last_status
-    lda #0
-    sta disk_status
-    clc
-    rts
-
-!init_fail:
-    lda #HAL_STORAGE_STATUS_UNKNOWN
-    sta stream_last_status
-    sec
-    rts
-
-beeb_write_marker_file:
-    lda save_device
-    sta beeb_io_device
-    lda #hal_storage_marker_write_name_len
-    ldx #<hal_storage_marker_write_name
-    ldy #>hal_storage_marker_write_name
-    jsr beeb_set_pathname
-
-    // Copy "M8SAVE" into low-RAM beeb_ss_buf
-    ldx #hal_storage_marker_magic_len - 1
-!cp_m:
-    lda hal_storage_marker_magic,x
-    sta beeb_ss_buf,x
-    dex
-    bpl !cp_m-
-
-    jsr beeb_zero_os_ctrl
-    lda #<BEEB_OS_PATH_BASE
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #>BEEB_OS_PATH_BASE
-    sta BEEB_OS_CTRL_BASE + 1
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 4
-    sta BEEB_OS_CTRL_BASE + 5
-    sta BEEB_OS_CTRL_BASE + 8
-    sta BEEB_OS_CTRL_BASE + 9
-    lda #<beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 10
-    lda #>beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 11
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 12
-    sta BEEB_OS_CTRL_BASE + 13
-    lda #<(beeb_ss_buf + hal_storage_marker_magic_len)
-    sta BEEB_OS_CTRL_BASE + 14
-    lda #>(beeb_ss_buf + hal_storage_marker_magic_len)
-    sta BEEB_OS_CTRL_BASE + 15
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 16
-    sta BEEB_OS_CTRL_BASE + 17
-
-    jsr EnterMos
-    lda #$00                // OSFILE A=$00: Save block of memory
-    jsr beeb_call_osfile
-    jsr ExitMos
-    rts
-
-// beeb_format_empty_catalogue — Write 800-sector empty DFS catalogue to Track 0
-// Sector 0 & Sector 1 on save_device via OSWORD $7F ($53 write sector).
-beeb_format_empty_catalogue:
-    ldx #0
-    lda #0
-!clr_buf:
-    sta beeb_ss_buf,x
-    inx
-    bne !clr_buf-
-
-    // Write Track 0 Sector 0 (all zeroes)
-    lda #0
-    jsr beeb_write_track0_sector
-    bcs !fmt_fail+
-
-    // Write Track 0 Sector 1 (sec1[6] = $03, sec1[7] = $20 -> 800 sectors)
-    lda #$03
-    sta beeb_ss_buf + 6
-    lda #$20
-    sta beeb_ss_buf + 7
-    lda #1
-    jsr beeb_write_track0_sector
-!fmt_fail:
-    rts
-
-beeb_write_track0_sector:
-    pha
-    jsr beeb_zero_os_ctrl
-    lda save_device
-    sec
-    sbc #8
-    and #$03
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #<beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 1
-    lda #>beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 2
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 3
-    sta BEEB_OS_CTRL_BASE + 4
-    lda #3
-    sta BEEB_OS_CTRL_BASE + 5
-    lda #$53                // 8271/1770 write single sector
-    sta BEEB_OS_CTRL_BASE + 6
-    lda #0                  // Track 0
-    sta BEEB_OS_CTRL_BASE + 7
-    pla
-    sta BEEB_OS_CTRL_BASE + 8 // Sector 0 or 1
-    lda #$21                // 1 sector of 256 bytes
-    sta BEEB_OS_CTRL_BASE + 9
-    jsr EnterMos
-    jsr beeb_call_osword7f
-    jsr ExitMos
-    bcs !err+
-    lda BEEB_OS_CTRL_BASE + 10
-    bne !err+
-    clc
-    rts
-!err:
-    sec
-    rts
+disk_marker_present:
+    lda #<disk_marker_present_ovl
+    ldy #>disk_marker_present_ovl
+!bsc_call:
+    ldx #OVL_STORAGE
+    jmp ovl_swap_dispatch_x
 
 disk_read_command_status:
-    lda #0
-    sta disk_command_status
+    stz disk_command_status
     clc
     rts
 
@@ -400,17 +175,13 @@ hal_storage_open:
     beq !not_already_open+
     jsr hal_storage_close
 !not_already_open:
-    lda #0
-    sta stream_open
-    sta stream_dir
-    sta stream_buf_idx
-    sta stream_buf_cnt
-    sta stream_eof
-    sta stream_err
-    sta stream_off0
-    sta stream_off1
-    sta stream_off2
-    sta disk_error_readst
+    .assert "stream_open..stream_off2 contiguous (10 B)", stream_off2 - stream_open, 9
+    ldx #9
+!clr_stream_state:
+    stz stream_open,x
+    dex
+    bpl !clr_stream_state-
+    stz disk_error_readst
     lda #HAL_STORAGE_STATUS_OK
     sta stream_last_status
 
@@ -473,9 +244,8 @@ hal_storage_open:
     ldy stream_handle
     jsr beeb_call_osfind_close
     jsr ExitMos
-    lda #0
-    sta stream_open
-    sta stream_dir
+    stz stream_open
+    stz stream_dir
 !open_not_found:
     lda #HAL_STORAGE_STATUS_NOT_FOUND
     sta stream_last_status
@@ -519,8 +289,7 @@ hal_storage_open:
     jsr ExitMos
     lda #STREAM_DIR_WRITE
     sta stream_dir
-    lda #0
-    sta stream_buf_idx
+    stz stream_buf_idx
     lda #1
     sta stream_open
     clc
@@ -628,19 +397,15 @@ hal_storage_chrin:
     plx
     rts
 
-// beeb_stream_refill — Read up to 128 bytes (half-sector aligned) into beeb_ss_buf at stream_off0..2
-beeb_stream_refill:
-    jsr beeb_zero_os_ctrl
+// beeb_stream_osgbpb — Execute OSGBPB at stream_off0..2 via beeb_ss_buf
+// Input: A = OSGBPB op ($01 write, $03 read), X = byte count (1..128)
+// Output: Carry clear = success (stream_off0..2 updated), Carry set = MOS error
+beeb_stream_osgbpb:
+    sta bso_op+1
+    phx
     lda stream_handle
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #<beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 1
-    lda #>beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 2
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 3
-    sta BEEB_OS_CTRL_BASE + 4
-    lda #128                // Request 128 bytes (never crosses a 256-byte sector boundary)
+    jsr beeb_prep_ss_osgbpb
+    pla
     sta BEEB_OS_CTRL_BASE + 5
     lda stream_off0
     sta BEEB_OS_CTRL_BASE + 9
@@ -650,10 +415,11 @@ beeb_stream_refill:
     sta BEEB_OS_CTRL_BASE + 11
 
     jsr EnterMos
-    lda #$03                // OSGBPB A=$03: Read bytes at specified offset
+bso_op:
+    lda #$00
     jsr beeb_call_osgbpb
     jsr ExitMos
-    bcs !refill_err+
+    bcs !bso_done+
 
     // Save updated file offset returned in BEEB_OS_CTRL_BASE + 9..11
     lda BEEB_OS_CTRL_BASE + 9
@@ -662,6 +428,16 @@ beeb_stream_refill:
     sta stream_off1
     lda BEEB_OS_CTRL_BASE + 11
     sta stream_off2
+    clc
+!bso_done:
+    rts
+
+// beeb_stream_refill — Read up to 128 bytes (half-sector aligned) into beeb_ss_buf at stream_off0..2
+beeb_stream_refill:
+    lda #$03                // OSGBPB A=$03: Read bytes at specified offset
+    ldx #128                // Request 128 bytes (never crosses a 256-byte sector boundary)
+    jsr beeb_stream_osgbpb
+    bcs !refill_err+
 
     // Transferred = 128 - residual (BEEB_OS_CTRL_BASE + 5)
     lda #128
@@ -669,8 +445,7 @@ beeb_stream_refill:
     sbc BEEB_OS_CTRL_BASE + 5
     beq !at_eof+
     sta stream_buf_cnt
-    lda #0
-    sta stream_buf_idx
+    stz stream_buf_idx
     lda BEEB_OS_CTRL_BASE + 5
     beq !refill_ok+
     lda #1
@@ -717,43 +492,15 @@ hal_storage_chrout:
 
 // beeb_stream_flush — Write stream_buf_idx bytes (1..128) from beeb_ss_buf at stream_off0..2
 beeb_stream_flush:
-    lda stream_buf_idx
+    ldx stream_buf_idx
     beq !flush_ok+
-    jsr beeb_zero_os_ctrl
-    lda stream_handle
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #<beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 1
-    lda #>beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 2
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 3
-    sta BEEB_OS_CTRL_BASE + 4
-    lda stream_buf_idx
-    sta BEEB_OS_CTRL_BASE + 5
-    lda stream_off0
-    sta BEEB_OS_CTRL_BASE + 9
-    lda stream_off1
-    sta BEEB_OS_CTRL_BASE + 10
-    lda stream_off2
-    sta BEEB_OS_CTRL_BASE + 11
-
-    jsr EnterMos
     lda #$01                // OSGBPB A=$01: Write bytes at specified offset
-    jsr beeb_call_osgbpb
-    jsr ExitMos
+    jsr beeb_stream_osgbpb
     bcs !flush_err+
     lda BEEB_OS_CTRL_BASE + 5
     bne !flush_err+         // Residual != 0 -> short write
 
-    lda BEEB_OS_CTRL_BASE + 9
-    sta stream_off0
-    lda BEEB_OS_CTRL_BASE + 10
-    sta stream_off1
-    lda BEEB_OS_CTRL_BASE + 11
-    sta stream_off2
-    lda #0
-    sta stream_buf_idx
+    stz stream_buf_idx
 !flush_ok:
     clc
     rts
@@ -763,8 +510,7 @@ beeb_stream_flush:
     sta stream_err
     lda #HAL_STORAGE_STATUS_UNKNOWN
     sta stream_last_status
-    lda #0
-    sta stream_buf_idx
+    stz stream_buf_idx
     sec
     rts
 
@@ -788,9 +534,8 @@ hal_storage_close:
     ldy stream_handle
     jsr beeb_call_osfind_close
     jsr ExitMos
-    lda #0
-    sta stream_open
-    sta stream_dir
+    stz stream_open
+    stz stream_dir
     lda stream_err
     beq !closed_ok+
     sec

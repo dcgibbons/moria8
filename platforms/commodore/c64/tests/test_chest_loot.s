@@ -38,6 +38,8 @@ test_finish:
 
 .pc = $0840 "Main"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -52,14 +54,13 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #define CHEST_ROUTING_ENABLED
 #import "../../../../core/dungeon_features.s"
@@ -71,18 +72,24 @@ test_finish:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
 // Monster spells and breath are not exercised here: out of the way above
 // the result buffer (resistance armour, 2026-11-11, took the body past its
 // first map write).
-.segmentdef TestUnused [start=$e100]
 .segment TestUnused
 #import "../../../../core/monster_magic.s"
 .segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/item_tables.s"
+.segment TestUnused
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -94,13 +101,17 @@ test_finish:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestUnused
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment Default
 #import "../../../../core/combat.s"
+.segment TestUnused
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/item_actions_overlay.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 .macro ChestSummonsSegment() {

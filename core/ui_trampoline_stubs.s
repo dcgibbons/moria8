@@ -125,27 +125,19 @@ roll_tool_ego_check:
 #if C64_TEST_FULL_ITEMDESC_STUB
 // banked_ego_put_suffix — Write ego suffix to screen (no banking in tests)
 banked_ego_put_suffix:
-    cmp #0
+    and #EGO_ID_MASK
     beq !beps_done+
     cmp #EGO_TYPE_COUNT
     bcs !beps_done+
-    jsr ego_get_suffix_ptr
-    ldy #0
-!beps_loop:
-    lda (zp_ptr0),y
-    beq !beps_done+
-    sty beps_save_y2
-    jsr hal_screen_put_char
-    ldy beps_save_y2
-    iny
-    jmp !beps_loop-
+    jsr item_cat_decode_ego
+    jmp hal_screen_put_string
 !beps_done:
     rts
-beps_save_y2: .byte 0
 
 // put_tool_ego_prefix — Print ego prefix for digging tools
 // Input: A = ego (1 or 2), X = item type ID (62 or 63)
 put_tool_ego_prefix:
+    and #EGO_ID_MASK
     cpx #62
     beq !ptep_valid_tool+
     cpx #63
@@ -190,12 +182,14 @@ put_inv_name_with_ego:
     lda inv_item_id,x
     sta pinwe_id
     stx pinwe_sl
-    tax
-    lda it_category,x
+    jsr item_get_category_inv_x
     cmp #ICAT_DIGGING
+    bne !pinwe_not_tool+
+    lda item_cur_page
     bne !pinwe_not_tool+
     ldx pinwe_sl
     lda inv_ego,x
+    and #EGO_ID_MASK
     beq !pinwe_not_tool+
     cmp #EGO_TYPE_COUNT
     bcs !pinwe_not_tool+
@@ -212,6 +206,7 @@ put_inv_name_with_ego:
     jsr hal_screen_put_string
     ldx pinwe_sl
     lda inv_ego,x
+    and #EGO_ID_MASK
     cmp #EGO_TYPE_COUNT
     bcc !pinwe_valid_ego+
     lda #0
@@ -237,10 +232,14 @@ pinwe_id: .byte 0
 pinwe_sl: .byte 0
 
 itemdesc_put_store_slot:
+    :AuxReadX(si_meta_hi)
+    pha
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     :AuxReadX(si_item_id)
     jsr item_get_name_ptr
     jsr hal_screen_put_string
-    :LoadStoreEgoX()
+    pla
     jmp banked_ego_put_suffix
 #endif
 #else

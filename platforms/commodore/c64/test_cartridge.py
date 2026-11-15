@@ -225,18 +225,20 @@ class Experiment:
         target.write_bytes(address.to_bytes(2, "little") + bytes(data))
         self.cmd(f'load "{target}" 0')
 
+    def _guard(self, address):
+        if 0xA000 <= address < 0xC000:
+            return " if (@cpu:$0001 & $03) != $03"
+        if address >= 0xE000:
+            return " if (@cpu:$0001 & $02) == $00"
+        return ""
+
     def until(self, address, start=None, alternatives=()):
         commands = ["del"]
-        for forbidden in getattr(self, "forbidden", ()):
-            commands.append(f"break ${forbidden:04x}")
         # RAM breakpoints must exclude execution from BASIC/KERNAL ROM.
+        for forbidden in getattr(self, "forbidden", ()):
+            commands.append(f"break ${forbidden:04x}{self._guard(forbidden)}")
         for target in (address, *alternatives):
-            guard = ""
-            if 0xA000 <= target < 0xC000:
-                guard = " if (@cpu:$0001 & $03) != $03"
-            elif target >= 0xE000:
-                guard = " if (@cpu:$0001 & $02) == $00"
-            commands.append(f"break ${target:04x}{guard}")
+            commands.append(f"break ${target:04x}{self._guard(target)}")
         self.batch(commands)
         response = self.cmd("g" if start is None else f"g ${start:04x}")
         for target in (address, *alternatives):
@@ -351,7 +353,7 @@ def run(args):
                 assert cycles < 24 * len(expected) + 8000, (asset["name"], cycles)
                 if round_no == 0 and symbol == "STARTUP":
                     print(f"INFO startup overlay: {len(expected)} bytes, {cycles} emulated cycles", flush=True)
-        exp.check("all ten overlays match through production dispatch in both banking/IRQ states")
+        exp.check("all thirteen overlays match through production dispatch in both banking/IRQ states")
         records = catalog_disk.records()
         record_size = catalog_disk.layout()["CATALOG_RECORD_SIZE"]
         catalog_offset = manifest["assets"][make_easyflash.CONTRACT["CART_ASSET_CATALOG"]]["rom_offset"]

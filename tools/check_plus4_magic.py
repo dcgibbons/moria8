@@ -90,6 +90,10 @@ def check(crt: Path, source: Path) -> None:
         "ovl_reu_start_hi",
         "hal_asset_close_channel",
         "asset_load_ask_for_disk",
+        "plus4_item_cat_boot_load",
+        "item_cat_idx_data",
+        "item_cat_sec_buf",
+        "icr_sec_idx",
     ):
         assert dead not in symbols, f"Dead disk-only symbol present: {dead}"
 
@@ -102,11 +106,12 @@ def check(crt: Path, source: Path) -> None:
         contract["CART_ASSET_RESIDENT"]: "moria4.prg",
         contract["CART_ASSET_RUNTIME"]: "4.bank",
         contract["CART_ASSET_INDEX"]: None,
-        contract["CART_ASSET_TITLE"]: "title",
+        contract["CART_ASSET_TITLE_ART"]: "title",
         contract["CART_ASSET_CATALOG"]: None,
         contract["CART_ASSET_LEGAL_UI"]: "legalui",
         contract["CART_ASSET_LEGAL_NOTICE"]: None,
         contract["CART_ASSET_LEGAL_OFFER"]: None,
+        contract["CART_ASSET_ITEM_CATALOG"]: None,
     }
     names.update({
         contract["CART_ASSET_" + symbol]: f"ovl.{name}"
@@ -141,6 +146,8 @@ def check(crt: Path, source: Path) -> None:
             )
         elif asset_id == contract["CART_ASSET_CATALOG"]:
             expected = b"\0\0" + b"".join(catalog_disk.records())
+        elif asset_id == contract["CART_ASSET_ITEM_CATALOG"]:
+            expected = b"\0\0" + catalog_disk.item_catalog_bytes()
         elif asset_id in (contract["CART_ASSET_LEGAL_NOTICE"], contract["CART_ASSET_LEGAL_OFFER"]):
             doc_name = "LICENSE" if asset_id == contract["CART_ASSET_LEGAL_NOTICE"] else "SOURCE-OFFER"
             doc = (make_plus4_magic.ROOT / "data" / doc_name).read_bytes()
@@ -150,7 +157,7 @@ def check(crt: Path, source: Path) -> None:
 
         expected_dest = (
             make_plus4_magic.MAP_BASE
-            if asset_id == contract["CART_ASSET_TITLE"]
+            if asset_id == contract["CART_ASSET_TITLE_ART"]
             else int.from_bytes(expected[:2], "little")
         )
         assert destination == expected_dest, asset_id
@@ -163,7 +170,7 @@ def check(crt: Path, source: Path) -> None:
         previous_end = start + size
 
     selftest()
-    print(f"PASS CRT: {bank_count} chips, autostart/header, 18 exact assets, compliance texts, raw .bin & manifest")
+    print(f"PASS CRT: {bank_count} chips, autostart/header, {len(names)} exact assets, compliance texts, raw .bin & manifest")
 
 
 if __name__ == "__main__":

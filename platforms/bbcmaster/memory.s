@@ -15,18 +15,19 @@
 //   $0700-$07FF  beeb_ss_buf (256 B stream & SWR bounce buffer)
 //   $0800-$0DFF  untouched MOS sound/serial/Econet/NMI/DFS workspace
 //   $0E00-$2FFF  Low Always-Resident code (< $3000: ACCCON/ROMSEL switchers,
-//                Mode 0 LYNNE renderer, storage/stream wrappers, zp_save_buf)
+//                Mode 0 LYNNE renderer, storage/stream wrappers)
 //   $3000-$7FFF  High Always-Resident continuation (program_end <= $8000)
 //
 // Shadow Screen RAM LYNNE ($3000-$7FFF, 20 KB, ACCCON = $05):
 //   $3000-$33FF  beeb_font_table (1 KB C64-screen-code-ordered RAM font)
 //   $3400-$37FF  DUNGEON_GEN_SCAN_SCRATCH_BASE (1 KB generation scratch)
 //   $3800-$3F7F  beeb_char_shadow (80x24 = 1,920 B character shadow)
-//   $3F80-$43FF  reserved guard (1,152 B)
+//   $3F80-$43FF  BeebLynneAux (1,152 B persistent aux data: recall counters)
 //   $4400-$7FFF  80x24 Mode 0 bitmap (15,360 B, CRTC R12=$08, R13=$80)
 //
 // Private 4 KB RAM ANDY ($8000-$8FFF, ROMSEL = $84):
-//   $8000-$8D93  BeebHuffData (3,476 B Huffman trees, dictionary, & stream)
+//   $8000-$8EDF  BeebHuffData (Huffman trees, dictionary, & stream < $8F00)
+//   $8F00-$8FAD  zp_save_buf (174 B ZP save across MOS/DFS calls; $8FAE-$8FFF free)
 //
 // Sideways RAM Banks 4-7 ($8000-$BFFF, 4 x 16 KB = 64 KB):
 //   Bank 4 (ROMSEL=$04): BeebPlaySlot ($8000-$A3FF), tier-name pool ($A400-$A7FF),
@@ -106,14 +107,15 @@
 .const BEEB_PLAY_SLOT_END  = $a3ff
 .const BEEB_PLAY_SLOT_SIZE = BEEB_PLAY_SLOT_END - BEEB_PLAY_SLOT_BASE + 1
 
-// BeebAuxData virtual ($6000-$76FF) -> Bank 6 physical ($8000-$96FF)
+// BeebAuxData virtual ($6000-$72FF) -> Bank 6 physical ($8000-$92FF)
 .const BEEB_AUXDATA_VIRT_BASE = $6000
-.const BEEB_AUXDATA_VIRT_END  = $76ff
+.const BEEB_AUXDATA_VIRT_END  = $72ff
 .const BEEB_AUXDATA_PHYS_BASE = $8000
 .const BEEB_AUXDATA_PHYS_OFFSET = $20
 
-// BeebHuffData in 4 KB ANDY ($8000-$8FFF)
-.const BEEB_HUFFDATA_BASE = $8000
+// BeebHuffData + zp_save_buf in 4 KB ANDY ($8000-$8FFF)
+.const BEEB_HUFFDATA_BASE  = $8000
+.const BEEB_ZP_SAVE_BASE   = $8f00
 .const BEEB_HUFFDATA_LIMIT = $9000
 
 // LYNNE Shadow RAM layout ($3000-$7FFF when ACCCON = $05)
@@ -126,8 +128,13 @@
 .const BEEB_CHAR_SHADOW_END  = $3f7f
 .const BEEB_BITMAP_BASE      = $4400 // 80x24 Mode 0 bitmap in LYNNE ($4400-$7FFF, 15,360 B)
 .const BEEB_BITMAP_END       = $7fff
+.const BEEB_LYNNE_AUX_BASE   = $3f80 // 1,152 B persistent LYNNE aux scratch ($3F80-$43FF)
+.const BEEB_LYNNE_AUX_LIMIT  = BEEB_BITMAP_BASE
+.const BEEB_LYNNE_AUX_END    = BEEB_LYNNE_AUX_LIMIT - 1
 .const SCREEN_RAM            = BEEB_CHAR_SHADOW_BASE
 .const COLOR_RAM             = BEEB_CHAR_SHADOW_BASE
+
+.assert "LYNNE aux scratch follows char shadow below Mode 0 bitmap", BEEB_LYNNE_AUX_BASE > BEEB_CHAR_SHADOW_END && BEEB_LYNNE_AUX_LIMIT <= BEEB_BITMAP_BASE, true
 
 .const DUNGEON_GEN_DOOR_SCAN_BASE  = hal_layout_dungeon_door_scan_base
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = hal_layout_dungeon_door_scan_limit
@@ -190,11 +197,17 @@
 .macro ExitKernal() { plp }
 
 // ============================================================
-// Low-RAM ZP Save/Restore (< $3000)
+// Low-RAM ZP Save/Restore (< $3000) -> ANDY ($8F00-$8FAD)
 // ============================================================
-zp_save_buf: .fill ZP_SAVE_SIZE, 0
+.label zp_save_buf = BEEB_ZP_SAVE_BASE
+.assert "zp_save_buf fits top of 4 KB ANDY ($8F00-$8FFF)", zp_save_buf + ZP_SAVE_SIZE <= BEEB_HUFFDATA_LIMIT, true
 
 save_zp:
+    php
+    sei
+    lda #ROMSEL_ANDY
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
     ldx #0
 !loop:
     lda zp_temp0,x
@@ -202,9 +215,14 @@ save_zp:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
-    rts
+    bra !zp_exit+
 
 restore_zp:
+    php
+    sei
+    lda #ROMSEL_ANDY
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
     ldx #0
 !loop:
     lda zp_save_buf,x
@@ -212,6 +230,11 @@ restore_zp:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
+!zp_exit:
+    lda #ROMSEL_BANK4
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
+    plp
     rts
 
 mmu_select_bank1:

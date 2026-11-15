@@ -1,7 +1,6 @@
 #importonce
 #import "../shared/legal_entry.s"
-.const CX16_BANK_LEGAL = 23
-.assert "Legal bank follows catalog and fits RAM", CX16_BANK_LEGAL > CX16_BANK_CATALOG && CX16_BANK_LEGAL < 64, true
+.assert "Legal bank follows catalog and stays below warm pool", CX16_BANK_LEGAL > CX16_BANK_CATALOG && CX16_BANK_LEGAL < CX16_BANK_WARM_BASE && CX16_BANK_WARM_END < CX16_BANK_COUNT, true
 // Resident entry; Bank 23 is temporary for one modal, never boot-preloaded.
 tramp_ui_legal_display:
     lda CX16_RAM_BANK_REG

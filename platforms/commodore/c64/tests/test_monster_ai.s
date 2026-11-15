@@ -36,8 +36,12 @@ test_finish:
 
 .pc = * "Test Body"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
+#define REU_DETECT_EXTERNAL              // not exercised here; frees room below MAP_BASE
+#define ITEM_ACTIONS_OVERLAY_EXTERNAL   // player item commands never run here
 #import "../../common/reu.s"
 #import "../screen.s"
 #import "../../../../core/color.s"
@@ -55,13 +59,12 @@ test_finish:
 status_draw:
     rts
 #import "../../../../core/ui_help_clear.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 // stat_display.s: its callers (status line, character sheet, creation) never
 // run here, and the second ring hand (2026-11-08) left the body 7 bytes over.
 #import "../../../../core/stat_display.s"
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -77,45 +80,49 @@ status_draw:
     .segment Default
 }
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
-// Special rooms are not exercised here (generation is stubbed): beside the
-// armour roll above the create overlay (the element touches, 2026-11-11).
-.segmentdef TestUnusedEgoArmour [start=$e200]
-.segment TestUnusedEgoArmour
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/special_rooms.s"
-.segment Default
 // The resistance armour roll and its suffixes are not exercised here (no
-// item spawns): out of the way above the create overlay (2026-11-11, which
-// took the body past MAP_BASE).
+// item spawns): parked in the $D000 I/O hole so no symbol shares an address
+// with KERNAL ROM.
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
-    .segment TestUnusedEgoArmour
+    .segment TestCreateOverlay
 }
 .macro EgoArmourRestoreSegment() {
     .segment Default
 }
 #define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
 .macro EgoArmourDataSegment() {
-    .segment TestUnusedEgoArmour
+    .segment TestCreateOverlay
 }
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
+.segment TestCreateOverlay
 #import "../../../../core/player_items.s"
+.segment Default
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestUnusedEgoArmour
+#import "../../../../core/item_actions_overlay.s"
+.segment Default
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"

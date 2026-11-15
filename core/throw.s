@@ -71,11 +71,18 @@ throw_item:
     ldx #10
     jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
 
-    // Load weight
+    // Load weight via ITEM.CAT (clamped to 255 for 8-bit throw division)
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx tw_item_id
-    lda it_weight,x
+    jsr item_get_weight_x
+    ldy icat_weight_hi
+    beq !tw_wt_8+
+    lda #255
+!tw_wt_8:
+    tax                         // X = divisor (weight), Z=1 if weight == 0
     beq !tw_max_range+          // Weight 0 → max range
-    tax                         // X = divisor (weight)
     jsr math_div_16x8           // zp_math_a = quotient lo
 
     // Clamp to [1, 10]
@@ -162,8 +169,11 @@ tw_miss_darkness:
     jsr tw_msg_item_prefix
 
     // Check if potion → shatter message
-    ldx tw_item_id
-    lda it_category,x
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda tw_item_id
+    jsr item_get_category_a
     cmp #ICAT_POTION
     bne !tw_flies+
     ldx #HSTR_TW_SHATTERS
@@ -185,8 +195,11 @@ tw_consume_item:
 
     // Place on floor? Potions always shatter (no floor item); anything else
     // lands when randint(10) > 1 (VMS drop_throw)
-    ldx tw_item_id
-    lda it_category,x
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda tw_item_id
+    jsr item_get_category_a
     cmp #ICAT_POTION
     beq !tw_done+
     lda #10
@@ -250,8 +263,11 @@ tw_drop_saved:
 // Output: cmb_damage
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0
 tw_roll_damage:
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx tw_item_id
-    lda it_dmg_packed,x
+    jsr item_get_dmg_packed_x
     bne !tw_has_dice+
     // No dice (0d0) — use 1d1 minimum
     lda #1

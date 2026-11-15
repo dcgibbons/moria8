@@ -22,7 +22,7 @@ CRT_MAGIC = b"CX16 CARTRIDGE\r\n"
 CRT_VERSION = b"01.00           "
 CRT_BANK_NONE = 0
 CRT_BANK_ROM = 1
-EXPECTED_ASSET_COUNT = 20
+EXPECTED_ASSET_COUNT = 22
 
 EXPECTED_ASSET_LAYOUT: dict[str, tuple[int, int | None, int]] = {
     "MORIA8.PRG": (0, 0, 0x0801),
@@ -38,13 +38,15 @@ EXPECTED_ASSET_LAYOUT: dict[str, tuple[int, int | None, int]] = {
     "OVL.SPELL": (10, 16, 0xA000),
     "OVL.MODAL": (11, 17, 0xA000),
     "OVL.CHEST": (12, 18, 0xA000),
-    "OVL.STORAGE": (13, 19, 0xA000),
-    "OVL.TITLE": (14, 20, 0xA000),
-    "TITLE": (15, 21, 0xA000),
-    "MONSTER.CAT": (16, 22, 0xA000),
-    "LEGALUI": (17, 23, 0xA000),
-    "LICENSE": (18, None, 0x0000),
-    "SOURCE-OFFER": (19, None, 0x0000),
+    "OVL.HOME": (13, 19, 0xA000),
+    "OVL.STORAGE": (14, 20, 0xA000),
+    "OVL.TITLE": (15, 21, 0xA000),
+    "TITLE": (16, 22, 0xA000),
+    "MONSTER.CAT": (17, 23, 0xA000),
+    "ITEM.CAT": (18, 6, 0xA000),
+    "LEGALUI": (19, 24, 0xA000),
+    "LICENSE": (20, None, 0x0000),
+    "SOURCE-OFFER": (21, None, 0x0000),
 }
 
 

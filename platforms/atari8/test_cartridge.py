@@ -134,6 +134,7 @@ def _lua_common_header(
     busy_addr = syms.get("generation_busy_active_api", 0)
     shuffles = syms.get("potion_shuffle", 0)
     id_known = syms.get("id_known_bits", 0)
+    recall_data = syms.get("recall_data_start", 0)
     sio_sector_buf = syms.get("sio_sector_buf", 0)
     exit_sio = syms.get("ExitSio", 0)
 
@@ -207,6 +208,7 @@ local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
 local BUSY_ADDR = 0x{busy_addr:04X}
 local SHUFFLES_ADDR = 0x{shuffles:04X}
 local ID_KNOWN_ADDR = 0x{id_known:04X}
+local RECALL_ADDR = 0x{recall_data:04X}
 local SCREEN_RAM = 0x{SCREEN_RAM:04X}
 local ROW23 = 0x{ROW23_ADDR:04X}
 {sio_sync_lua}
@@ -455,6 +457,26 @@ function run()
     end
     assert_line("town_moved", prog:read_u8(PLAYER_X_ADDR) ~= tx0 or prog:read_u8(PLAYER_Y_ADDR) ~= ty0)
 
+    -- Step onto Home door (51, 16) to exercise OVL.HOM from MaxFlash CAR ROM.
+    local hx, hy = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)
+    for i = 0, 31 do
+        local base = MONSTER_TABLE_ADDR + i * 12
+        if prog:read_u8(base + 2) ~= 0xFF and prog:read_u8(base + 0) == 51 and prog:read_u8(base + 1) == 16 then
+            prog:write_u8(base + 2, 0xFF)
+            local ma = 0xC100 + 16 * 80 + 51
+            prog:write_u8(ma, prog:read_u8(ma) & 0xFE)
+        end
+    end
+    prog:write_u8(PLAYER_X_ADDR, 51)
+    prog:write_u8(PLAYER_Y_ADDR, 17)
+    send_key(0x4B) -- 'K' north onto Home door (51, 16)
+    assert_line("cart_home_overlay_open", wait_screen("Home", 80))
+    send_key(0x51) -- 'Q' exit Home back to Town
+    wait_frames(40)
+    assert_line("cart_home_overlay_closed", in_town() and not screen_has("Home"))
+    prog:write_u8(PLAYER_X_ADDR, hx)
+    prog:write_u8(PLAYER_Y_ADDR, hy)
+
     -- Descend to DL1 (exercises OVL.GEN + ROM catalog_fetch_record) and check all spawned monster records.
     assert_line("dlvl_1_reached", descend_to_dl1() and prog:read_u8(DLVL_ADDR) == 1)
     local mt = MONSTER_TABLE_ADDR
@@ -615,23 +637,37 @@ end
 
 function run()
     assert_line("subA_chargen_town_ready", start_new_game("A"))
-    inv_seed(32, {{2, 1, 0, 3, 4, 0, 2, 6}}) -- Dagger (+3,+4) (Defender)
+    inv_seed(32, {{82, 1, 0, 0, 0, 1, 0, 0}}) -- Cloak (EQUIP_CLOAK = 32)
+    inv_seed(33, {{2, 1, 0, 3, 4, 0, 2, 6}})  -- Dagger (+3,+4) (Defender) (EQUIP_SECONDARY = 33)
     prog:write_u8(ID_KNOWN_ADDR + (146 >> 3), prog:read_u8(ID_KNOWN_ADDR + (146 >> 3)) | (1 << (146 & 7)))
+    prog:write_u8(ID_KNOWN_ADDR + (286 >> 3), prog:read_u8(ID_KNOWN_ADDR + (286 >> 3)) | (1 << (286 & 7)))
+    if RECALL_ADDR ~= 0 then
+        prog:write_u8(RECALL_ADDR + 5, 0x5A)
+        prog:write_u8(RECALL_ADDR + 1110, 0xA5)
+    end
     local shuf = {{}}
-    for i = 0, 37 do shuf[#shuf + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
+    for i = 0, 173 do shuf[#shuf + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
     local known = {{}}
-    for i = 0, 19 do known[#known + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
+    for i = 0, 46 do known[#known + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
+    local cloak = {{}}
+    for k = 0, 7 do cloak[#cloak + 1] = inv_field(32, k) end
     local sec = {{}}
-    for k = 0, 7 do sec[#sec + 1] = inv_field(32, k) end
+    for k = 0, 7 do sec[#sec + 1] = inv_field(33, k) end
+    local rec = {{
+        RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 5) or 0,
+        RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 1110) or 0,
+    }}
     write_state({{
         px = prog:read_u8(PLAYER_X_ADDR),
         py = prog:read_u8(PLAYER_Y_ADDR),
         lvl = prog:read_u8(PLAYER_LVL_ADDR),
         hp_lo = prog:read_u8(PLAYER_HP_LO_ADDR),
         hp_hi = prog:read_u8(PLAYER_HP_HI_ADDR),
+        cloak = cloak,
         sec = sec,
         shuf = shuf,
         known = known,
+        rec = rec,
     }})
 
     send_key(0xD3) -- Shift+S -> Disk Setup
@@ -648,7 +684,7 @@ function run()
         if screen_has("N)ew") and screen_has("L)oad") then break end
     end
     assert_line("subA_title_after_disk_save", screen_has("N)ew") and screen_has("L)oad"))
-    assert_line("subA_flushed_save_sectors", flush_save_atr() >= 50)
+    assert_line("subA_flushed_save_sectors", flush_save_atr() >= 55)
     manager.machine:exit()
 end
 """
@@ -656,9 +692,11 @@ end
     elif scenario == "interchange_cart_load_and_save":
         assert state_in_path is not None and state_out_path is not None
         in_state = json.loads(state_in_path.read_text(encoding="utf-8"))
+        cloak_lua = "{" + ",".join(map(str, in_state["cloak"])) + "}"
         sec_lua = "{" + ",".join(map(str, in_state["sec"])) + "}"
         shuf_lua = "{" + ",".join(map(str, in_state["shuf"])) + "}"
         known_lua = "{" + ",".join(map(str, in_state["known"])) + "}"
+        rec_lua = "{" + ",".join(map(str, in_state["rec"])) + "}"
         out_path_lua = str(state_out_path).replace("\\", "\\\\")
         body = f"""
 local EXPECT_PX = {in_state["px"]}
@@ -666,9 +704,11 @@ local EXPECT_PY = {in_state["py"]}
 local EXPECT_LVL = {in_state["lvl"]}
 local EXPECT_HP_LO = {in_state["hp_lo"]}
 local EXPECT_HP_HI = {in_state["hp_hi"]}
+local EXPECT_CLOAK = {cloak_lua}
 local EXPECT_SEC = {sec_lua}
 local EXPECT_SHUF = {shuf_lua}
 local EXPECT_KNOWN = {known_lua}
+local EXPECT_REC = {rec_lua}
 
 local function write_state(tbl)
     local parts = {{}}
@@ -724,33 +764,46 @@ function run()
         and prog:read_u8(PLAYER_HP_LO_ADDR) == EXPECT_HP_LO
         and prog:read_u8(PLAYER_HP_HI_ADDR) == EXPECT_HP_HI)
 
-    local ok_restored = true
+    local ok_restored = INV_STRIDE == 34 and RECALL_ADDR ~= 0
     for k = 1, 8 do
-        if inv_field(32, k - 1) ~= EXPECT_SEC[k] then ok_restored = false end
+        if inv_field(32, k - 1) ~= EXPECT_CLOAK[k] then ok_restored = false end
+        if inv_field(33, k - 1) ~= EXPECT_SEC[k] then ok_restored = false end
     end
-    for i = 1, 38 do
+    for i = 1, 174 do
         if prog:read_u8(SHUFFLES_ADDR + i - 1) ~= EXPECT_SHUF[i] then ok_restored = false end
     end
-    for i = 1, 20 do
+    for i = 1, 47 do
         if prog:read_u8(ID_KNOWN_ADDR + i - 1) ~= EXPECT_KNOWN[i] then ok_restored = false end
+    end
+    if RECALL_ADDR == 0 or prog:read_u8(RECALL_ADDR + 5) ~= EXPECT_REC[1] or prog:read_u8(RECALL_ADDR + 1110) ~= EXPECT_REC[2] then
+        ok_restored = false
     end
     assert_line("subB_state_matches_subA", ok_restored)
     assert_line("subB_trig3_gintlk_clean_after_load",
         prog:read_u8(0xD013) == 0 and prog:read_u8(0x03FA) == 0)
 
-    -- Mutate slot 32 + known bit 147, save with Overwrite cancel 'N' first, then confirm 'Y'.
-    inv_seed(32, {{5, 1, 0, 1, 2, 0, 2, 0}}) -- Mace (+1,+2)
+    -- Mutate slot 33 + known bits 147/305 + recall, save with Overwrite cancel 'N' first, then confirm 'Y'.
+    inv_seed(33, {{5, 1, 0, 1, 2, 0, 2, 0}}) -- Mace (+1,+2)
     prog:write_u8(ID_KNOWN_ADDR + (147 >> 3), prog:read_u8(ID_KNOWN_ADDR + (147 >> 3)) | (1 << (147 & 7)))
-    local shuf2, known2, sec2 = {{}}, {{}}, {{}}
-    for i = 0, 37 do shuf2[#shuf2 + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
-    for i = 0, 19 do known2[#known2 + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
-    for k = 0, 7 do sec2[#sec2 + 1] = inv_field(32, k) end
+    prog:write_u8(ID_KNOWN_ADDR + (305 >> 3), prog:read_u8(ID_KNOWN_ADDR + (305 >> 3)) | (1 << (305 & 7)))
+    if RECALL_ADDR ~= 0 then prog:write_u8(RECALL_ADDR + 5, 0x3C) end
+    local shuf2, known2, cloak2, sec2 = {{}}, {{}}, {{}}, {{}}
+    for i = 0, 173 do shuf2[#shuf2 + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
+    for i = 0, 46 do known2[#known2 + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
+    for k = 0, 7 do cloak2[#cloak2 + 1] = inv_field(32, k) end
+    for k = 0, 7 do sec2[#sec2 + 1] = inv_field(33, k) end
+    local rec2 = {{
+        RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 5) or 0,
+        RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 1110) or 0,
+    }}
     write_state({{
         px = prog:read_u8(PLAYER_X_ADDR),
         py = prog:read_u8(PLAYER_Y_ADDR),
+        cloak = cloak2,
         sec = sec2,
         shuf = shuf2,
         known = known2,
+        rec = rec2,
     }})
 
     send_key(0xD3) -- Shift+S -> Select Slot 1-4
@@ -782,7 +835,7 @@ function run()
     assert_line("subB_zero_swap_prompts", not saw_insert_prompt)
     assert_line("subB_trig3_gintlk_clean_after_save",
         prog:read_u8(0xD013) == 0 and prog:read_u8(0x03FA) == 0)
-    assert_line("subB_flushed_save_sectors", flush_save_atr() >= 50)
+    assert_line("subB_flushed_save_sectors", flush_save_atr() >= 55)
     manager.machine:exit()
 end
 """
@@ -790,15 +843,19 @@ end
     elif scenario == "interchange_disk_reload":
         assert state_in_path is not None
         in_state = json.loads(state_in_path.read_text(encoding="utf-8"))
+        cloak_lua = "{" + ",".join(map(str, in_state["cloak"])) + "}"
         sec_lua = "{" + ",".join(map(str, in_state["sec"])) + "}"
         shuf_lua = "{" + ",".join(map(str, in_state["shuf"])) + "}"
         known_lua = "{" + ",".join(map(str, in_state["known"])) + "}"
+        rec_lua = "{" + ",".join(map(str, in_state["rec"])) + "}"
         body = f"""
 local EXPECT_PX = {in_state["px"]}
 local EXPECT_PY = {in_state["py"]}
+local EXPECT_CLOAK = {cloak_lua}
 local EXPECT_SEC = {sec_lua}
 local EXPECT_SHUF = {shuf_lua}
 local EXPECT_KNOWN = {known_lua}
+local EXPECT_REC = {rec_lua}
 
 function run()
     assert_line("subC_disk_title", wait_title())
@@ -817,15 +874,19 @@ function run()
     assert_line("subC_disk_loaded_cart_save",
         prog:read_u8(PLAYER_X_ADDR) == EXPECT_PX and prog:read_u8(PLAYER_Y_ADDR) == EXPECT_PY)
 
-    local ok_restored = true
+    local ok_restored = INV_STRIDE == 34 and RECALL_ADDR ~= 0
     for k = 1, 8 do
-        if inv_field(32, k - 1) ~= EXPECT_SEC[k] then ok_restored = false end
+        if inv_field(32, k - 1) ~= EXPECT_CLOAK[k] then ok_restored = false end
+        if inv_field(33, k - 1) ~= EXPECT_SEC[k] then ok_restored = false end
     end
-    for i = 1, 38 do
+    for i = 1, 174 do
         if prog:read_u8(SHUFFLES_ADDR + i - 1) ~= EXPECT_SHUF[i] then ok_restored = false end
     end
-    for i = 1, 20 do
+    for i = 1, 47 do
         if prog:read_u8(ID_KNOWN_ADDR + i - 1) ~= EXPECT_KNOWN[i] then ok_restored = false end
+    end
+    if RECALL_ADDR == 0 or prog:read_u8(RECALL_ADDR + 5) ~= EXPECT_REC[1] or prog:read_u8(RECALL_ADDR + 1110) ~= EXPECT_REC[2] then
+        ok_restored = false
     end
     assert_line("subC_state_matches_subB", ok_restored)
     manager.machine:exit()
@@ -1089,7 +1150,7 @@ def selftest() -> int:
         st_a = tmp / "a.json"
         st_b = tmp / "b.json"
         st_a.write_text(
-            json.dumps({"px": 10, "py": 12, "lvl": 1, "hp_lo": 20, "hp_hi": 0, "sec": [1] * 8, "shuf": [2] * 38, "known": [3] * 20}),
+            json.dumps({"px": 10, "py": 12, "lvl": 1, "hp_lo": 20, "hp_hi": 0, "cloak": [82] + [0] * 7, "sec": [1] * 8, "shuf": [2] * 174, "known": [3] * 47, "rec": [4, 5]}),
             encoding="utf-8",
         )
         sync_atr = tmp / "save.atr"

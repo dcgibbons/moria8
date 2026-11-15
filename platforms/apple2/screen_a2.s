@@ -375,9 +375,7 @@ screen_flash_at:
     ldx sfa_save_col
     jmp a2_write_cell
 
-sfa_save_row:   .byte 0
-sfa_save_col:   .byte 0
-sfa_save_char:  .byte 0
+// sfa_save_row/col/char live in claimed low scratch ($0336-$0338, memory.s).
 
 // ============================================================
 // Compile-time validation

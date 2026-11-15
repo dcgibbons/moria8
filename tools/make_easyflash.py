@@ -21,7 +21,8 @@ ROM_SIZE = 64 * BANK_SIZE
 OVERLAYS = (("STARTUP", "start"), ("TOWN", "town"), ("DEATH", "death"),
             ("DUNGEON_GEN", "gen"), ("HELP", "help"), ("UI", "ui"),
             ("ITEMS", "items"), ("SPELL", "spell"), ("MODAL_MISC", "modal"),
-            ("CHEST", "chest"))
+            ("CHEST", "chest"), ("HOME", "home"), ("STORAGE", "storage"),
+            ("TITLE", "title"))
 
 
 def index_bytes():
@@ -51,11 +52,12 @@ def pack(source: Path, output: Path) -> dict:
         CONTRACT["CART_ASSET_RESIDENT"]: ("resident", *prg(source / "moria8.prg", 0x0801, 0xCE00)),
         CONTRACT["CART_ASSET_RUNTIME"]: ("runtime", *prg(source / "64.bank", 0xF000, 0xFFFA)),
         CONTRACT["CART_ASSET_INDEX"]: ("index", 0xCE00, index_bytes()),
-        CONTRACT["CART_ASSET_TITLE"]: ("title", *prg(source / "title", 0xC000, 0xCF00)),
+        CONTRACT["CART_ASSET_TITLE_ART"]: ("title", *prg(source / "title", 0xC000, 0xCF00)),
         CONTRACT["CART_ASSET_CATALOG"]: ("catalog", 0, b"".join(catalog_disk.records())),
         CONTRACT["CART_ASSET_LEGAL_UI"]: ("legalui", *prg(source / "legalui", 0xE000, 0xE600)),
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: ("license", 0, (ROOT / "data/LICENSE").read_bytes()),
         CONTRACT["CART_ASSET_LEGAL_OFFER"]: ("source-offer", 0, (ROOT / "data/SOURCE-OFFER").read_bytes()),
+        CONTRACT["CART_ASSET_ITEM_CATALOG"]: ("item-catalog", 0, catalog_disk.item_catalog_bytes()),
     }
     inputs.update({CONTRACT["CART_ASSET_" + symbol]:
                    (f"ovl.{name}", *prg(source / f"ovl.{name}", 0xE000, 0xF000))

@@ -1,6 +1,15 @@
 #importonce
 // title_screen.s — Title screen loader and renderer
 //
+// Module ownership:
+//   owner: StartupOverlay on C64/Plus4/C128 (or TitleOverlay `OVL_TITLE` when
+//     evicted in Wave 2), Startup/Resident on Atari 8-bit, TitleOverlay on
+//     Apple II / CX16 / BBC Master.
+//   lifetime: transient startup/title overlay; MAP_BASE art buffer is recycled
+//     upon dungeon_generate.
+//   callers: boot title flow and return-to-title paths.
+//   .assert: protected by importing overlay/segment end .assert.
+//
 // Loads title art from disk into MAP_BASE,
 // renders to screen RAM, then returns. MAP_BASE region is naturally
 // recycled when dungeon_generate is called.

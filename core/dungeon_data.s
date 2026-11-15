@@ -79,13 +79,25 @@
 // Door-state side table capacity (locked/stuck/broken doors only; plain
 // doors have no entry). Upstream stores this on the door treasure item.
 .const MAX_DOOR_STATES = 16
-.const TRAP_OPEN_PIT    = 0   // 2d6 damage
-.const TRAP_ARROW       = 1   // 1d8 damage
-.const TRAP_POISON_GAS  = 2   // Set poison timer
-.const TRAP_TELEPORT    = 3   // Random teleport
-.const TRAP_POISON_DART = 4   // 1d4 damage + 50% CON loss
-.const TRAP_ROCKFALL    = 5   // 2d6 damage
-.const TRAP_TYPE_COUNT  = 6
+.const TRAP_OPEN_PIT      = 0   // 2d6 damage
+.const TRAP_ARROW         = 1   // 1d8 damage
+.const TRAP_POISON_GAS    = 2   // Set poison timer (11..20)
+.const TRAP_TELEPORT      = 3   // Random teleport
+.const TRAP_POISON_DART   = 4   // 1d4 damage + 50% CON loss
+.const TRAP_ROCKFALL      = 5   // 2d6 damage + tile becomes rubble
+.const TRAP_COVERED_PIT   = 6   // 2d6 damage + converts to TRAP_OPEN_PIT
+.const TRAP_STR_DART      = 7   // 1d4 damage + 1 STR loss
+.const TRAP_TRAP_DOOR     = 8   // 2d8 damage + fall 1 dungeon level
+.const TRAP_CORRODE       = 9   // 4d6 damage + corrodes worn armour
+.const TRAP_FIRE          = 10  // 4d6 fire damage (Resist Fire applies)
+.const TRAP_ACID          = 11  // 4d6 acid damage (armour + Resist Acid apply)
+.const TRAP_SLEEP_GAS     = 12  // Paralyze 5..8 turns (unless Free Action)
+.const TRAP_BLIND_GAS     = 13  // Blind 26..75 turns
+.const TRAP_CONFUSE_GAS   = 14  // Confuse 16..30 turns
+.const TRAP_HIDDEN_OBJECT = 15  // Reveal buried floor item drop
+.const TRAP_SUMMON        = 16  // Remove rune + summon 3..5 monsters
+.const TRAP_AGGRAVATE     = 17  // Shriek + wake all monsters on level
+.const TRAP_TYPE_COUNT    = 18
 
 // ============================================================
 // Pre-computed row address table

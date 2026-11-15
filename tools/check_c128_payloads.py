@@ -15,7 +15,7 @@ The bytes a payload emits, not a label beside them: on 2026-10-26 the names
 payload ran into the tier cache and 128.item over 128.select while asserts on
 end labels passed (docs/C128_MEMORY_CONTRACT.md).
 
-Usage: check_c128_payloads.py [build/c128]
+Usage: check_c128_payloads.py [--both | build/c128]
 """
 
 from __future__ import annotations
@@ -95,6 +95,20 @@ def check(build: Path, segs: dict[str, tuple[str, int, int]], mem: dict[str, int
             if a in spans and b in spans and overlaps(spans[a], spans[b]):
                 errors.append(f"{a} ${spans[a][0]:04X}-${spans[a][1]:04X} and {b} "
                               f"${spans[b][0]:04X}-${spans[b][1]:04X}: payloads overlap")
+    main_prg = build / "moria128.prg"
+    if main_prg.exists():
+        main_span = prg_span(main_prg)
+        if main_span[0] != 0x1C01:
+            errors.append(f"Default: moria128.prg loads at ${main_span[0]:04X}, expected $1C01")
+        if main_span[1] > 0xAEFF:
+            errors.append(f"Default: moria128.prg ends at ${main_span[1]:04X}, past Bank 0 resident max $AEFF")
+        for other in resident:
+            if other != "RuntimeLowData" and overlaps((0x1C01, 0xAEFF), (segs[other][1], segs[other][2])):
+                errors.append(f"Default $1C01-$AEFF and {other} "
+                              f"${segs[other][1]:04X}-${segs[other][2]:04X}: segment windows overlap")
+            if other in spans and overlaps(main_span, spans[other]):
+                errors.append(f"Default ${main_span[0]:04X}-${main_span[1]:04X} and {other} "
+                              f"${spans[other][0]:04X}-${spans[other][1]:04X}: payloads overlap")
     names = spans.get("C128ResidentItemNames")
     if names:
         if names[0] < mem["BANK1_DB_BASE"] or names[1] > mem["BANK1_DB_END"]:
@@ -106,13 +120,23 @@ def check(build: Path, segs: dict[str, tuple[str, int, int]], mem: dict[str, int
     return errors
 
 
-def main(argv: list[str]) -> int:
-    build = Path(argv[1]) if len(argv) > 1 else ROOT / "build" / "c128"
-    errors = check(build, segments(), consts())
+def check_one(build: Path, segs: dict[str, tuple[str, int, int]], mem: dict[str, int]) -> bool:
+    errors = check(build, segs, mem)
     for error in errors:
-        print(f"check_c128_payloads: {error}")
-    print("check_c128_payloads:", "FAIL" if errors else f"PASS ({len(segments())} payloads)")
-    return 1 if errors else 0
+        print(f"check_c128_payloads ({build.name}): {error}")
+    print(f"check_c128_payloads ({build.name}):", "FAIL" if errors else f"PASS ({len(segs)} payloads)")
+    return not errors
+
+
+def main(argv: list[str]) -> int:
+    segs = segments()
+    mem = consts()
+    if len(argv) == 2 and argv[1] == "--both":
+        targets = [ROOT / "build" / "c128", ROOT / "build" / "c128-cart"]
+        ok = all([check_one(target, segs, mem) for target in targets])
+        return 0 if ok else 1
+    build = Path(argv[1]) if len(argv) > 1 else ROOT / "build" / "c128"
+    return 0 if check_one(build, segs, mem) else 1
 
 
 if __name__ == "__main__":

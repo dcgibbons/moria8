@@ -1,11 +1,29 @@
 #importonce
 // ui_home.s — Player Home UI (deposit/retrieve items)
 //
-// Runs at $F000 (banked code area, $01=$35).
-// Called directly from store_enter in town overlay ($E000).
+// Module ownership:
+//   owner:
+//     !HOME_OVERLAY_SEPARATE: RuntimeBanked on C64/C128 ($F000), TownOverlay on
+//       Plus4/Atari8/Apple2/CX16/BBC Master.
+//     HOME_OVERLAY_SEPARATE: self-contained HomeOverlay (`ovl.home`) with no
+//       calls or data reads into TownOverlay (store.s / ui_store.s).
+//   lifetime:
+//     !HOME_OVERLAY_SEPARATE: persistent in RuntimeBanked or transient in TownOverlay.
+//     HOME_OVERLAY_SEPARATE: transient overlay; loaded on Home entry, released on exit.
+//   callers:
+//     !HOME_OVERLAY_SEPARATE: store_enter (`core/ui_store.s`) on #STORE_HOME.
+//     HOME_OVERLAY_SEPARATE: port `tramp_store_enter` (via `game_loop.s:try_store_entry`)
+//       dispatches #STORE_HOME directly into `OVL_HOME` (`home_enter`) and
+//       restores the caller's bank/overlay on return.
+//   .assert: protected by each port's RuntimeBanked/TownOverlay/HomeOverlay end .assert.
+//
 // No pricing — items are stored for free.
 
+#import "input_ui_helpers.s"
 #import "store_meta_macros.s"
+#define UI_HOME_TEXT_MACROS_ONLY
+#import "ui_home_text.s"
+#undef UI_HOME_TEXT_MACROS_ONLY
 
 // ============================================================
 // PETSCII key constants (duplicated from ui_store.s — overlay segment not visible here)
@@ -32,12 +50,84 @@ home_put_col1_string:
     sty zp_ptr0_hi
     jmp hal_screen_put_string
 
+#if HOME_OVERLAY_SEPARATE
+.const HOME_GOLD_COL = 21
+
+#if HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL
+home_inv_add_carried:
+{
+    :InvAddCarriedBody()
+}
+#endif
+
+// Self-contained Home screen renderer when HomeOverlay is separate from TownOverlay.
+home_draw_screen:
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+
+    // Row 0: Home title (white); row 1 remains blank (Home has no shopkeeper).
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #0
+    ldx #<hm_title_str
+    ldy #>hm_title_str
+    jsr home_put_col1_string
+
+    // Row 2: Separator
+    lda #COL_DGREY
+    sta zp_text_color
+    lda #2
+    jsr home_draw_separator_at_a
+
+    // Rows 3-18: Item list (no prices)
+    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, 0, 0)
+
+    // Row 19: Home menu, then the gold to its right
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #STORE_MENU_ROW
+    ldx #<hm_menu_str
+    ldy #>hm_menu_str
+    jsr home_put_col1_string
+
+    lda #COL_YELLOW
+    sta zp_text_color
+    lda #STORE_MENU_ROW
+    sta zp_cursor_row
+    lda #HOME_GOLD_COL
+    sta zp_cursor_col
+    lda #<hm_gold_str
+    ldy #>hm_gold_str
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jsr hal_screen_put_string
+
+    :StorePutGoldValueBody()
+
+home_draw_separator_at_a:
+    sta zp_cursor_row
+    :StoreDrawSeparatorBody()
+
+home_put_letter:
+    :StorePutLetterBody(hm_save_x)
+
+home_clear_msg_area:
+    :StoreClearMsgAreaBody()
+
+home_find_empty_slot:
+    :StoreFindEmptySlotBody(hm_save_x)
+#endif
+
 // ============================================================
 // home_enter — Main home mode loop
 // Input: zp_store_idx = STORE_HOME (7)
 // Clobbers: everything
 // ============================================================
 home_enter:
+#if HOME_OVERLAY_SEPARATE
+    jsr home_draw_screen
+#else
     jsr store_draw_screen       // Reuses overlay's draw (skips prices for home)
 
     // Overwrite the store menu with the home menu (the gold stays beside it)
@@ -47,6 +137,7 @@ home_enter:
     ldx #<hm_menu_str
     ldy #>hm_menu_str
     jsr home_put_col1_string
+#endif
 
 !he_loop:
     jsr hal_input_get_key
@@ -86,7 +177,11 @@ home_enter:
 // ============================================================
 home_retrieve:
     // Prompt on row 20
+#if HOME_OVERLAY_SEPARATE
+    jsr home_clear_msg_area
+#else
     jsr store_clear_msg_area
+#endif
     lda #COL_WHITE
     sta zp_text_color
     lda #20
@@ -151,9 +246,13 @@ home_retrieve:
     sta fi_add_to_ac
     :LoadStoreFlagsX()
     sta fi_add_flags
-    :LoadStoreEgoX()
+    :LoadStoreMetaHiX()
     sta fi_add_ego
+#if HOME_OVERLAY_SEPARATE && HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL
+    jsr home_inv_add_carried        // the weight limit, then a slot
+#else
     jsr inv_add_carried             // the weight limit, then a slot
+#endif
     bcs !hr_has_room+
 
     // Inventory full, or too heavy (X = the refusal)
@@ -185,6 +284,7 @@ home_retrieve:
     :AuxWriteX(si_to_dam)
     :AuxWriteX(si_to_ac)
     :AuxWriteX(si_meta)
+    :AuxWriteX(si_meta_hi)
 
     // Success message
     lda #COL_LGREEN
@@ -303,7 +403,11 @@ home_deposit:
 !hd_slot_occupied:
 
     // Find empty home slot
+#if HOME_OVERLAY_SEPARATE
+    jsr home_find_empty_slot
+#else
     jsr store_find_empty_slot
+#endif
     bcs !hd_has_slot+
 
     // Home full

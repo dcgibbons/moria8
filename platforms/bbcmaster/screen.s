@@ -164,6 +164,22 @@ beeb_font_init:
     dex
     bpl !patch_punct-
 
+    // Clear persistent LYNNE aux scratch ($3F80-$43FF, 1,152 B) once at boot
+    // (never inside screen_clear, which clears the display in-game).
+    .assert "LYNNE aux clear matches $480 bytes", BEEB_LYNNE_AUX_BASE + $0480, BEEB_LYNNE_AUX_LIMIT
+    ldx #$7f
+!clr_lynne_tail:
+    stz BEEB_LYNNE_AUX_BASE,x
+    dex
+    bpl !clr_lynne_tail-
+    ldx #0
+!clr_lynne_pages:
+    .for (var p = BEEB_LYNNE_AUX_BASE + $80; p < BEEB_LYNNE_AUX_LIMIT; p += $100) {
+        stz p,x
+    }
+    inx
+    bne !clr_lynne_pages-
+
     lda #ROMSEL_BANK4
     sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
@@ -178,21 +194,6 @@ beeb_font_init:
 .const BEEB_ANDY_MOS_LEN  = $30
 beeb_andy_mos_keep: .fill BEEB_ANDY_MOS_LEN, 0
 
-// beeb_andy_on / beeb_andy_off — ANDY at $8000-$8FFF, then the MOS's
-// ROMSEL back. Preserve A, X, Y.
-beeb_andy_on:
-    pha
-    lda #ROMSEL_ANDY
-    sta SHEILA_ROMSEL
-    pla
-    rts
-beeb_andy_off:
-    pha
-    lda zp_mos_romsel_shadow
-    sta SHEILA_ROMSEL
-    pla
-    rts
-
 // ============================================================
 // screen_init — Disable MOS VDU cursor, silence WRCHV, and program
 // Video ULA & 6845 CRTC for 80x24 Mode 0 in LYNNE
@@ -203,17 +204,23 @@ screen_init:
     // corpus boot loaded there, so those strings decoded wrong (2026-11-06:
     // "Identify which item" came out empty). Keep the corpus bytes across
     // the MOS calls; WRCHV is silenced after them, so no later VDU call
-    // reaches ANDY.
+    // reaches ANDY. Sync $00F4 with SHEILA_ROMSEL while saving/restoring ANDY.
     php
-    sei                     // a MOS IRQ restores ROMSEL from its shadow
+    sei
+    lda zp_mos_romsel_shadow
+    pha
+    lda #ROMSEL_ANDY
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
     ldx #BEEB_ANDY_MOS_LEN - 1
 !andy_keep:
-    jsr beeb_andy_on
     lda BEEB_ANDY_MOS_BASE,x
-    jsr beeb_andy_off
     sta beeb_andy_mos_keep,x
     dex
     bpl !andy_keep-
+    pla
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
     plp
 
     // Switch MOS VDU driver to Shadow Mode 0 (VDU 22, 128) BEFORE silencing WRCHV.
@@ -240,14 +247,20 @@ screen_init:
 
     php
     sei
+    lda zp_mos_romsel_shadow
+    pha
+    lda #ROMSEL_ANDY
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
     ldx #BEEB_ANDY_MOS_LEN - 1
 !andy_back:
     lda beeb_andy_mos_keep,x
-    jsr beeb_andy_on
     sta BEEB_ANDY_MOS_BASE,x
-    jsr beeb_andy_off
     dex
     bpl !andy_back-
+    pla
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
     plp
 
     // Redirect WRCHV ($020E-$020F) to beeb_wrch_noop so no stray OSWRCH call

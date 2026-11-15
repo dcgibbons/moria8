@@ -39,6 +39,24 @@ inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
 inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
 inv_ego:     .fill TOTAL_INV_SLOTS, 0   // the equipment flags read worn egos (MON-027)
 it_color_ac: .fill 62, 0
+icat_flags_0:  .byte 0
+icat_flags_1:  .byte 0
+icat_flags_2:  .byte 0
+icat_flags_3:  .byte 0
+icat_p1_lo:    .byte 0
+icat_weight_lo: .byte 0
+icat_weight_hi: .byte 0
+icat_dmg_packed: .byte 0
+icat_missile_type: .byte 0
+item_cat_select_id:
+item_cat_get_effects:
+item_cat_get_weight:
+item_cat_get_dmg_packed:
+item_cat_get_missile_type:
+item_cat_get_ego:
+item_get_category_inv_x:
+    lda #0
+    rts
 item_get_base_ac:
     lda it_color_ac,y
     and #$0f

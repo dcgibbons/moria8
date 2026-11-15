@@ -33,6 +33,8 @@ test_exit_trampoline:
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -46,58 +48,79 @@ test_exit_trampoline:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/ui_status.s"
+.segment Default
+#import "../../../../core/ui_help_clear.s"
+.segment Default
+#import "../../../../core/ui_character.s"
+.segment Default
+#import "../../../../core/stat_display.s"
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment Default
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/ui_inventory.s"
 #import "../../../../core/ui_equipment.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment Default
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/monster_attack.s"
+.segment Default
 #import "../../../../core/turn.s"
+
+.segment TestCreateOverlay
 #import "../../../../core/ui_help.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 #import "../../../../core/player_adjust_equipment_stat.s"
 // Monster spells and the store are not exercised here: out of the way above
 // the I/O hole (resistance armour, 2026-11-11, took the body into the create
 // overlay at $D000).
-.segmentdef TestUnused [start=$e000]
-.segment TestUnused
-#import "../../../../core/monster_magic.s"
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
 .segment Default
+#import "../../../../core/monster_magic.s"
+.segment Default
+store_init_all:
+    rts
+store_restock_all:
+    rts
+store_enter:
+    rts
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -515,18 +538,49 @@ test_start:
     lda #$00
     sta tc_results + 14
 
-    // Test 16: magic Leather gloves (and helms, boots) never get one
-    lda #3
+    // Test 16: Leather gloves never roll body/shield resistance egos: plain
+    // gloves get none, magic gloves roll only Free Action or Slaying
+    lda #0
     sta fi_add_to_ac
     lda #11
     jsr t_armour_trials
     lda tc_count
-    jsr t_store_zero
+    bne !t16_fail+
+    lda #3
+    sta fi_add_to_ac
+    lda #0
+    sta tc_count
+    sta tc_loop
+!t16_loop:
+    lda #11
+    jsr roll_ego_type
+    beq !t16_next+
+    inc tc_count
+    cmp #EGO_FREE_ACTION
+    bcc !t16_fail+
+    cmp #EGO_SLAYING + 1
+    bcs !t16_fail+
+!t16_next:
+    inc tc_loop
+    lda tc_loop
+    cmp #200
+    bne !t16_loop-
+    lda tc_count
+    cmp #8
+    bcc !t16_fail+
+    cmp #36
+    bcs !t16_fail+
+    lda #$01
+    .byte $2c
+!t16_fail:
+    lda #$00
     sta tc_results + 15
 
     // Test 17: the flags from what is worn: (Resist) body armour and a
     // (Resist Acid) shield give the four resistances; a Defender adds Free
-    // Action and See Invisible; a digging tool's ego gives none
+    // Action, See Invisible and Feather Falling; a digging tool's ego gives none
+    lda #63                     // Pick (ICAT_DIGGING): inv_ego is a tool prefix
+    sta inv_item_id + EQUIP_WEAPON
     lda #EGO_RESIST
     sta inv_ego + EQUIP_BODY
     lda #EGO_RESIST_ACID
@@ -537,6 +591,8 @@ test_start:
     lda player_pflags
     cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT
     bne !t17_fail+
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_WEAPON
     lda #EGO_DEFENDER
     sta inv_ego + EQUIP_WEAPON
     lda #0
@@ -544,13 +600,15 @@ test_start:
     sta inv_ego + EQUIP_SHIELD
     jsr player_recalc_pflags_equipment
     lda player_pflags
-    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS | PFLAG_FFALL
     bne !t17_fail+
     lda #$01
     .byte $2c
 !t17_fail:
     lda #$00
     sta tc_results + 16
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_WEAPON
     lda #0
     sta inv_ego + EQUIP_WEAPON
     sta inv_ego + EQUIP_BODY
@@ -631,11 +689,11 @@ test_start:
     sta inv_item_id + EQUIP_AMULET
     jsr player_recalc_pflags_equipment
 
-    // Test 21: the crowns of the Magi (MON-030; VMS magic_treasure): on DL50
-    // a magic Silver Crown takes magik(10) then randint(6) = 3, so 250
-    // trials give some (deterministic seed), each the Magi with INT p1 1-3;
-    // a magic Iron Helm never; an unenchanted crown never. Reseeded, so the
-    // count does not hang on the tests before it.
+    // Test 21: crown vs regular-helm egos (VMS magic_treasure): on DL50 a
+    // magic Silver Crown picks from the 6 crown egos (Magi, Might..Regen;
+    // Magi/Might..Seeing p1 1-3, Regen p1 0), rolling Magi at least once;
+    // a magic Iron Helm rolls only helm egos (Intelligence/Wisdom/Infra-Vision,
+    // never crown egos); an unenchanted crown never rolls an ego.
     lda #$42
     sta zp_rng_0
     lda #$13
@@ -657,9 +715,18 @@ test_start:
     jsr roll_ego_type
     cmp #EGO_NONE
     beq !t21_none+
-    inc tc_count
+    cmp #EGO_REGENERATION
+    beq !t21_none+              // Regen leaves fi_add_p1 = 0
     cmp #EGO_MAGI
-    bne !t21_bad+
+    bne !t21_chk_crown_range+
+    inc tc_count
+    jmp !t21_chk_p1+
+!t21_chk_crown_range:
+    cmp #EGO_MIGHT
+    bcc !t21_bad+
+    cmp #EGO_SEEING + 1
+    bcs !t21_bad+
+!t21_chk_p1:
     lda fi_add_p1
     beq !t21_bad+
     cmp #4
@@ -668,7 +735,7 @@ test_start:
     inc t_bad
     jmp !t21_next+
 !t21_none:
-    lda fi_add_p1               // a plain crown keeps p1 0
+    lda fi_add_p1               // a plain or Regen crown keeps p1 0
     bne !t21_bad-
 !t21_next:
     inc tc_loop
@@ -683,10 +750,25 @@ test_start:
     bcs !t21_fail+
     lda #3
     sta fi_add_to_ac
-    lda #10                     // Iron Helm
-    jsr t_armour_trials
+    lda #0
+    sta tc_count
+    sta tc_loop
+!t21_helm_loop:
+    lda #10                     // Iron Helm: helm egos 25..27 only
+    jsr roll_ego_type
+    beq !t21_helm_next+
+    inc tc_count
+    cmp #EGO_INTELLIGENCE
+    bcc !t21_fail+
+    cmp #EGO_INFRA_VISION + 1
+    bcs !t21_fail+
+!t21_helm_next:
+    inc tc_loop
+    lda tc_loop
+    cmp #200
+    bne !t21_helm_loop-
     lda tc_count
-    bne !t21_fail+
+    beq !t21_fail+
     lda #0
     sta fi_add_to_ac
     lda #ITEM_TYPE_CROWN_JEWEL

@@ -11,8 +11,11 @@
 // inven_carry) while the count fits a byte, else into the first empty slot.
 // Input: fi_add_id, fi_add_qty, fi_add_p1, fi_add_to_hit/dam/ac, flags, ego
 // Output: carry set = success (X = slot), carry clear = full
-// Clobbers: A, X
+// Preserves: Y. Clobbers: A, X
 inv_add_item:
+    lda fi_add_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx fi_add_id
     :ItemStacksX(iai_new)
     ldx #MAX_INV_SLOTS - 1
@@ -29,12 +32,7 @@ inv_add_item:
     lda inv_to_dam,x
     cmp fi_add_to_dam
     bne !iai_next+                  // (no stacking kind carries a to-AC)
-    // Not the flags: VMS inven_carry stacks on tval and subval alone, and
-    // Umoria on whether the kind is known, the same for every item of it.
-    // Comparing them kept identified and unidentified potions of one kind
-    // in separate slots until the 22 filled (Balrog queue, 2026-11-09:
-    // clvl 38 Priests with two stacks each of Cure Serious Wounds and Phase
-    // Door could not buy Word of Recall). The stack keeps its own flags.
+    // Includes ITEM_PAGE_BIT so Page 1 slot_lo never merges onto Page 0 slot_lo.
     lda inv_ego,x
     cmp fi_add_ego
     bne !iai_next+
@@ -43,8 +41,7 @@ inv_add_item:
     adc fi_add_qty
     bcs !iai_next+                  // a full stack: start another
     sta inv_qty,x
-    sec                             // success
-    rts
+    jmp !iai_weight_ok+
 !iai_next:
     dex
     bpl !iai_match-
@@ -60,50 +57,32 @@ iai_new:
     jmp !iai_scan-
 !iai_found:
     jsr fi_add_to_inv_slot          // flags too (preserves IF_CURSED etc.)
-    sec
+!iai_weight_ok:
+    stx iai_slot_tmp
+    jsr inven_add_fi_add_weight     // preserves Y; uses fi_add_id/ego/qty
+    ldx iai_slot_tmp
+    sec                             // success
     rts
 !iai_full:
     clc
     rts
 
+iai_slot_tmp: .byte 0
+
 // inv_add_carried — inv_add_item for an item newly carried (picked up,
-// bought, taken from the home), refused as VMS inven_check_weight when every
-// item carried and worn (VMS inven_weight counts both) and it would weigh
-// more than weight_limit: STR x 130 + body weight, at most 3000, in 1/10 lb
-// (VMS misc.inc; moria.inc carry and store2.inc purchase: "You can't carry
-// that much weight.").
+// bought, taken from the home), refused as VMS inven_check_weight when
+// inven_weight + item_weight > weight_limit: STR x 130 + body weight, at
+// most 3000, in 1/10 lb (VMS misc.inc; moria.inc carry and store2.inc
+// purchase: "You can't carry that much weight.").
 // Input: as inv_add_item
 // Output: carry set = added (X = slot); carry clear: X = the refusal's message
 // Clobbers: A, X, Y, zp_math_*
 // A port short of resident room (HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL)
-// expands the body in the overlays that call it instead (the Apple IIe:
-// OVL.TOWN for the store and home, OVL.ITEMS for the floor pickup).
+// expands the body in the overlays that call it instead (Apple IIe / BBC:
+// OVL.TOWN, OVL.HOME, OVL.ITEMS).
 .macro InvAddCarriedBody() {
-    ldx fi_add_id
-    lda it_weight,x
-    ldx fi_add_qty
-    jsr math_multiply               // A = lo, zp_math_b = hi
-    sta iac_lo
-    lda zp_math_b
-    sta iac_hi
-    ldy #TOTAL_INV_SLOTS - 1
-!iac_sum:
-    ldx inv_item_id,y
-    cpx #FI_EMPTY
-    beq !iac_next+
-    lda it_weight,x
-    ldx inv_qty,y
-    jsr math_multiply               // preserves Y
-    clc
-    adc iac_lo
-    sta iac_lo
-    lda zp_math_b
-    adc iac_hi
-    sta iac_hi
-    bcs !iac_heavy+                 // past 6,553 lb: over any limit
-!iac_next:
-    dey
-    bpl !iac_sum-
+    jsr inven_calc_fi_add_weight    // iac_lo/hi = inven_weight + item*qty; CS = overflow
+    bcs !iac_heavy+
     lda player_data + PL_STR_CUR    // 3-118 (18/100), as VMS cstr
     ldx #130
     jsr math_multiply
@@ -133,11 +112,9 @@ iai_new:
     ldx #HSTR_UIS_TOO_HEAVY
     clc
 !iac_done:
-    rts
-iac_lo: .byte 0
-iac_hi: .byte 0
 }
 #if !HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL
 inv_add_carried:
     :InvAddCarriedBody()
+    rts
 #endif

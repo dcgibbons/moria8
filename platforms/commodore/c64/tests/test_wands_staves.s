@@ -25,6 +25,8 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -38,29 +40,39 @@ test_exit_trampoline:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestUnused
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
+.segment TestUnused
 #import "../../../../core/ui_help.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
@@ -76,12 +88,20 @@ test_exit_trampoline:
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+.segment TestUnused
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/store_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/store.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/ui_store.s"
+.segment Default
 
 // Strings referenced by imported modules checking main.s
 press_key_str:
@@ -90,6 +110,8 @@ press_key_str:
 // Test result buffer
 tc_results: .fill 32, $ff
 tc_loop_ctr: .byte 0
+tws_wand_count: .byte 0
+tws_staff_count: .byte 0
 
 // Captured eff_bolt arguments for Test 8.
 tws_bolt_calls: .byte 0
@@ -134,40 +156,32 @@ test_start:
     // ==========================================
     // Run loop 256 times (enough to find both)
     lda #0
-    sta zp_temp0                // Wand count
-    sta zp_temp1                // Staff count
+    sta tws_wand_count          // pick_item_type uses zp_temp0-3 as scratch
+    sta tws_staff_count
     sta tc_loop_ctr             // Loop counter
 
 !t1_loop:
     lda #10                     // Deep enough dlvl to allow all items
     sta zp_player_dlvl
-    jsr pick_item_type          // Returns type in A. Clobbers X, Y!
-    sta zp_temp2
-
-    // Check wand (39-42)
-    cmp #39
-    bcc !t1_not_wand+
-    cmp #43
-    bcs !t1_not_wand+
-    inc zp_temp0
+    jsr pick_item_type          // Returns slot in A (page in item_cur_page). Clobbers X, Y!
+    jsr item_get_category_a     // Paged catalog: wands/staves are found by category
+    cmp #ICAT_WAND
+    bne !t1_not_wand+
+    inc tws_wand_count
+    jmp !t1_next+
 !t1_not_wand:
-
-    // Check staff (43-46)
-    lda zp_temp2
-    cmp #43
-    bcc !t1_not_staff+
-    cmp #47
-    bcs !t1_not_staff+
-    inc zp_temp1
-!t1_not_staff:
+    cmp #ICAT_STAFF
+    bne !t1_next+
+    inc tws_staff_count
+!t1_next:
 
     inc tc_loop_ctr
     bne !t1_loop-               // Loop 256 times
 
     // Verify we found some
-    lda zp_temp0
+    lda tws_wand_count
     beq !t1_fail+
-    lda zp_temp1
+    lda tws_staff_count
     beq !t1_fail+
 
     lda #$01

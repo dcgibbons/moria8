@@ -436,7 +436,12 @@ three suites pass 20/20 again (session `20261021-141656`).
   - The client takes such a dump only when a resume has run longer than the
     1 s poll interval.
   - The first poll records the clock. A later poll raises a `hang` once more
-    than 300 emulated seconds pass with no input stop.
+    than 300 emulated seconds pass with no input stop (`Port.boot_emulated_seconds`
+    raises this ceiling during `Game.boot()` only—`600 s` on `C64`, whose 512 KB
+    REU cold preload streams the monster catalog, 13 overlays, and `ITEM.CAT`
+    over stock 1541 IEC in ~380 emulated s after Phase 4, and `0.0` on
+    `C64_NOREU`, `C64_CART`, and other ports—then restores the `300 s` turn
+    limit at the title menu).
   - The longest measured legitimate span is a stair descent: about 3 emulated
     seconds and 0.16 s wall. 300 emulated s is about 10 s wall at the
     measured ~29× warp, so the limit trips well inside the 60 s wall budget.

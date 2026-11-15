@@ -472,10 +472,19 @@ player_get_infra_range:
     ldx zp_math_a
     lda race_properties + 1,x
     ldx zp_eff_infra
-    beq !pgir_done+
+    beq !pgir_equip+
     clc
     adc #1
+!pgir_equip:
+    tay
+    lda player_pflags2
+    and #PFLAG2_INFRA
+    beq !pgir_done+
+    iny
+    iny
 !pgir_done:
+    tya
+    rts
     rts
 
 #endif

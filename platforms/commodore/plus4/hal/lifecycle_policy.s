@@ -9,9 +9,12 @@
 .const hal_platform_string_bank_load_invalidates_tier = 1
 .const hal_platform_character_sheet_begin_enabled = 0
 .const hal_platform_character_background_resync = 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+.const hal_platform_player_magic_helpers_external = 1
+#else
 .const hal_platform_player_magic_helpers_external = 0
+#endif
 .const hal_platform_item_action_key_restores_bank = 0
-.const hal_platform_ego_holy_avenger_string_external = 0
 .const hal_platform_ego_ac_bonus_external = 0
 .const hal_platform_chargen_runtime_resync = 0
 .const hal_platform_chargen_cutpoint = -1
@@ -34,8 +37,12 @@
 .const hal_platform_game_loop_save_return_view = 0
 .const hal_platform_game_loop_run_stop_reset_input = 0
 .const hal_platform_game_loop_scroll_delta_render = 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+.const hal_platform_game_loop_item_actions_trampolined = 1
+#else
 .const hal_platform_game_loop_item_actions_trampolined = 0
-.const hal_platform_overlay_count = 10
+#endif
+.const hal_platform_overlay_count = 13
 .const hal_platform_overlay_state_external = 0
 .const hal_platform_overlay_force_reload = 0
 .const hal_platform_overlay_tier_cache_guard = 0
@@ -97,4 +104,7 @@
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
 #define HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
+#define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
+#define HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
+#define HAL_PLATFORM_ITEM_PICKUP_OVERLAY
 #endif

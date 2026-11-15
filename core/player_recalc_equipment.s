@@ -24,6 +24,7 @@ player_recalc_equipment:
     lda inv_to_dam,x
     sta pcc_eq_todam
     lda inv_ego,x
+    and #EGO_ID_MASK
     beq !pre_rings+
     jsr tramp_ego_get_ac_bonus  // Defender / Holy Avenger; clobbers X
     sta pcc_eq_ac
@@ -31,9 +32,20 @@ player_recalc_equipment:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
     ldx #EQUIP_RING
 !pre_slay_ring:                 // each hand: EQUIP_RING, then EQUIP_RING2
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    bne !pre_slay_p1+
     lda inv_item_id,x
     cmp #ITEM_TYPE_RING_SLAYING
+    beq !pre_add_slay+
     bne !pre_no_slay+
+!pre_slay_p1:
+    lda inv_item_id,x
+    cmp #327 - ITEM_PAGE_SIZE
+    beq !pre_add_slay+
+    cmp #328 - ITEM_PAGE_SIZE
+    bne !pre_no_slay+
+!pre_add_slay:
     lda inv_to_hit,x
     clc
     adc pcc_eq_tohit
@@ -44,8 +56,30 @@ player_recalc_equipment:
     sta pcc_eq_todam
 !pre_no_slay:
     cpx #EQUIP_RING2
+    beq !pre_slay_gloves+
     ldx #EQUIP_RING2
-    bcc !pre_slay_ring-
+    bne !pre_slay_ring-
+!pre_slay_gloves:
+    ldx #EQUIP_HANDS
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pre_done_slay+
+    lda inv_ego,x
+    and #EGO_ID_MASK
+    cmp #EGO_SLAYING
+    beq !pre_add_g+
+    cmp #EGO_ENVELOPING
+    bne !pre_done_slay+
+!pre_add_g:
+    lda inv_to_hit,x
+    clc
+    adc pcc_eq_tohit
+    sta pcc_eq_tohit
+    lda inv_to_dam,x
+    clc
+    adc pcc_eq_todam
+    sta pcc_eq_todam
+!pre_done_slay:
 #else
     jsr player_apply_slaying_bonuses
 #endif

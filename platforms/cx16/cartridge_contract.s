@@ -44,13 +44,15 @@
 .const CART_ASSET_OVL_SPELL    = 10
 .const CART_ASSET_OVL_MODAL    = 11
 .const CART_ASSET_OVL_CHEST    = 12
-.const CART_ASSET_OVL_STORAGE  = 13
-.const CART_ASSET_OVL_TITLE    = 14
-.const CART_ASSET_TITLE        = 15
-.const CART_ASSET_MONSTER_CAT  = 16
-.const CART_ASSET_LEGALUI      = 17
-.const CART_ASSET_LICENSE      = 18
-.const CART_ASSET_SOURCE_OFFER = 19
-.const CART_ASSET_COUNT        = 20
+.const CART_ASSET_OVL_HOME     = 13
+.const CART_ASSET_OVL_STORAGE  = 14
+.const CART_ASSET_OVL_TITLE    = 15
+.const CART_ASSET_TITLE        = 16
+.const CART_ASSET_MONSTER_CAT  = 17
+.const CART_ASSET_ITEM_CAT     = 18
+.const CART_ASSET_LEGALUI      = 19
+.const CART_ASSET_LICENSE      = 20
+.const CART_ASSET_SOURCE_OFFER = 21
+.const CART_ASSET_COUNT        = 22
 
 .assert "Cartridge directory fits in Bank 32 $C100-$C1FF", CART_DIRECTORY + (CART_ASSET_COUNT * CART_DESCRIPTOR_SIZE) <= $c200, true

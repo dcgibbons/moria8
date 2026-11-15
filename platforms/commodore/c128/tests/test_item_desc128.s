@@ -1,10 +1,24 @@
 #importonce
-// test_item_desc128.s — C128 VDC coverage for real item descriptions
+// test_item_desc128.s — C128 VDC coverage for real 370-item & 55-ego descriptions
 
 #import "../../../../core/zeropage.s"
-#import "../screen_vdc.s"
 #import "../../../../core/color.s"
 #import "mmu_macros.s"
+
+.pc = $0801 "BASIC Stub"
+:BasicUpstart2(test_start)
+
+.pc = $1300 "Bootstrap"
+test_start:
+    sei
+    lda #$3e
+    sta $ff00
+    jmp test_main
+.assert "test_start stays below C128 BASIC ROM", test_start < $4000, true
+
+.pc = $2100 "Test Code"
+
+#import "../screen_vdc.s"
 
 // config128.s is not imported by tests; the unit test links all data into one
 // RAM bank, so the map/db thunks are direct accesses here.
@@ -38,25 +52,9 @@ mmu_safe_db_write_ptr1:
 #import "../../../../core/rng.s"
 #import "../../../../core/math.s"
 #import "../../../../core/item_defs.s"
-.const HD_DECODE_BUF_SIZE = 64
-hd_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
 
-
-#import "../../../../core/item_tables.s"
-#import "../../../../core/item_identification.s"
-
-.pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
-
-.pc = $5000 "Test Code"
-
-banked_ego_put_suffix:
-    rts
-
-put_tool_ego_prefix:
-    rts
-
-inv_item_id: .fill TOTAL_INV_SLOTS, 0
+inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
+inv_qty:     .fill TOTAL_INV_SLOTS, 0
 inv_p1:      .fill TOTAL_INV_SLOTS, 0
 inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
@@ -70,17 +68,39 @@ si_to_hit:  .byte 0
 si_to_dam:  .byte 0
 si_to_ac:   .byte 0
 si_meta:    .byte 0
+si_meta_hi: .byte 0
+fi_item_id: .byte FI_EMPTY
+fi_meta_hi: .byte 0
 fi_add_flags: .byte 0
 fi_add_ego:   .byte 0
 
+#import "../../../../core/item_tables.s"
+#import "../../../../core/item_identification.s"
+
+banked_ego_put_suffix:
+    and #EGO_ID_MASK
+    beq !beps_done+
+    cmp #EGO_TYPE_COUNT
+    bcs !beps_done+
+    jsr item_cat_decode_ego
+    jmp hal_screen_put_string
+!beps_done:
+    rts
+
+put_tool_ego_prefix:
+    rts
+
 #import "../../../../core/item_desc_banked.s"
 
-test_start:
+test_main:
     sei
     cld
     ldx #$ff
     txs
+    lda #$3e
+    sta $ff00
 
+    jsr item_refresh_fixed_known
     lda #COL_WHITE
     sta zp_text_color
     jsr screen_clear
@@ -89,6 +109,8 @@ test_start:
     jsr test_prepare_row0
     lda #2
     sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
     lda #0
     sta itemdesc_p1
     sta itemdesc_to_ac
@@ -115,6 +137,8 @@ test_start:
     jsr test_prepare_row0
     lda #7
     sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
     lda #0
     sta itemdesc_p1
     sta itemdesc_to_hit
@@ -140,6 +164,8 @@ test_start:
     jsr test_prepare_row0
     lda #2
     sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
     lda #0
     sta itemdesc_p1
     sta itemdesc_to_ac
@@ -169,10 +195,14 @@ test_start:
 
     // Test 4: known scrolls use Umoria-style category names.
     jsr test_prepare_row0
+    lda #0
+    sta item_cur_page
     ldx #21
     jsr id_known_set
     lda #21
     sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
     lda #0
     sta itemdesc_p1
     sta itemdesc_to_hit
@@ -196,6 +226,8 @@ test_start:
     jsr test_prepare_row0
     lda #48
     sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
     lda #0
     sta itemdesc_p1
     sta itemdesc_to_hit
@@ -219,6 +251,8 @@ test_start:
     jsr test_prepare_row0
     lda #ITEM_TYPE_AMULET_WISDOM
     sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
     lda #3
     sta itemdesc_p1
     lda #0
@@ -240,7 +274,88 @@ test_start:
     jmp test_fail
 !amulet_ok:
 
-    // Test 7: every known base item name decodes exactly.
+    // Test 7: EQUIP_CLOAK (slot 32) formats Cloak [1,+2] via itemdesc_put_inv_slot.
+    jsr test_prepare_row0
+    lda #82
+    sta inv_item_id + EQUIP_CLOAK
+    lda #1
+    sta inv_qty + EQUIP_CLOAK
+    lda #2
+    sta inv_to_ac + EQUIP_CLOAK
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_CLOAK
+    lda #0
+    sta inv_ego + EQUIP_CLOAK
+    ldx #EQUIP_CLOAK
+    jsr itemdesc_put_inv_slot
+
+    lda #<expected_cloak_vdc
+    sta zp_ptr0
+    lda #>expected_cloak_vdc
+    sta zp_ptr0_hi
+    lda #0
+    jsr assert_row0_from_col
+    bcs !cloak_ok+
+    jmp test_fail
+!cloak_ok:
+
+    // Test 8: ego #55 (" of Slay Animal") & Page-1 item #369 ("Staff of Darkness").
+    jsr test_prepare_row0
+    lda #52
+    sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
+    lda #0
+    sta itemdesc_p1
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    lda #55
+    sta itemdesc_ego
+    lda #IF_IDENTIFIED
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+
+    lda #<expected_ego55_vdc
+    sta zp_ptr0
+    lda #>expected_ego55_vdc
+    sta zp_ptr0_hi
+    lda #0
+    jsr assert_row0_from_col
+    bcs !ego55_ok+
+    jmp test_fail
+!ego55_ok:
+
+    jsr test_prepare_row0
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx #(369 - ITEM_PAGE_SIZE)
+    jsr id_known_set
+    lda #(369 - ITEM_PAGE_SIZE)
+    sta itemdesc_item_id
+    lda #1
+    sta itemdesc_qty
+    lda #0
+    sta itemdesc_p1
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    sta itemdesc_flags
+    lda #ITEM_PAGE_BIT
+    sta itemdesc_ego
+    jsr itemdesc_put_staged
+
+    lda #<expected_item369_vdc
+    sta zp_ptr0
+    lda #>expected_item369_vdc
+    sta zp_ptr0_hi
+    lda #0
+    jsr assert_row0_from_col
+    bcs !item369_ok+
+    jmp test_fail
+!item369_ok:
+
+    // Test 9: every known base item name 0..369 across Pages 0 and 1 decodes exactly.
     jsr test_all_known_item_names
     bcs !names_ok+
     jmp test_fail
@@ -300,27 +415,59 @@ read_row0_col:
 
 test_all_known_item_names:
     lda #0
+    sta item_cur_page
     sta item_name_test_id
-!next_item:
+!next_p0:
+    lda #0
+    sta item_cur_page
     ldx item_name_test_id
     jsr id_known_set
-    txa
+    lda #0
+    sta item_cur_page
+    lda item_name_test_id
     jsr item_get_name_ptr
     lda zp_ptr0
     sta zp_ptr1
     lda zp_ptr0_hi
     sta zp_ptr1_hi
     ldx item_name_test_id
-    lda expected_item_name_lo,x
+    lda expected_item_name_p0_lo,x
     sta zp_ptr0
-    lda expected_item_name_hi,x
+    lda expected_item_name_p0_hi,x
     sta zp_ptr0_hi
     jsr assert_string_ptrs_equal
     bcc !fail+
     inc item_name_test_id
     lda item_name_test_id
-    cmp #ITEM_TYPE_COUNT
-    bcc !next_item-
+    cmp #ITEM_PAGE_SIZE
+    bcc !next_p0-
+
+    lda #0
+    sta item_name_test_id
+!next_p1:
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx item_name_test_id
+    jsr id_known_set
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda item_name_test_id
+    jsr item_get_name_ptr
+    lda zp_ptr0
+    sta zp_ptr1
+    lda zp_ptr0_hi
+    sta zp_ptr1_hi
+    ldx item_name_test_id
+    lda expected_item_name_p1_lo,x
+    sta zp_ptr0
+    lda expected_item_name_p1_hi,x
+    sta zp_ptr0_hi
+    jsr assert_string_ptrs_equal
+    bcc !fail+
+    inc item_name_test_id
+    lda item_name_test_id
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcc !next_p1-
     sec
     rts
 !fail:
@@ -336,7 +483,7 @@ assert_string_ptrs_equal:
     cmp #0
     beq !ok+
     iny
-    cpy #HD_DECODE_BUF_SIZE
+    cpy #ITEM_NAME_DECODE_BUF_SIZE
     bcc !loop-
 !fail:
     clc
@@ -364,8 +511,14 @@ expected_prayer_book_vdc:
     .byte $48, $0f, $0c, $19, $20, $42, $0f, $0f, $0b, $20, $0f, $06, $20, $50, $12, $01, $19, $05, $12, $13, $20, $42, $05, $07, $09, $0e, $0e, $05, $12, $13, $20, $48, $01, $0e, $04, $02, $0f, $0f, $0b, 0
 expected_amulet_vdc:
     .byte $41, $0d, $15, $0c, $05, $14, $20, $0f, $06, $20, $57, $09, $13, $04, $0f, $0d, $20, $28, $2b, $33, $29, 0
+expected_cloak_vdc:
+    .byte $43, $0c, $0f, $01, $0b, $20, $1b, $31, $2c, $2b, $32, $1d, 0
+expected_ego55_vdc:
+    .byte $41, $12, $12, $0f, $17, $20, $0f, $06, $20, $53, $0c, $01, $19, $20, $41, $0e, $09, $0d, $01, $0c, 0
+expected_item369_vdc:
+    .byte $53, $14, $01, $06, $06, $20, $0f, $06, $20, $44, $01, $12, $0b, $0e, $05, $13, $13, 0
 
-expected_item_name_lo:
+expected_item_name_p0_lo:
     .byte <ein_0, <ein_1, <ein_2, <ein_3, <ein_4, <ein_5, <ein_6, <ein_7
     .byte <ein_8, <ein_9, <ein_10, <ein_11, <ein_12, <ein_13, <ein_14, <ein_15
     .byte <ein_16, <ein_17, <ein_18, <ein_19, <ein_20, <ein_21, <ein_22, <ein_23
@@ -374,31 +527,31 @@ expected_item_name_lo:
     .byte <ein_40, <ein_41, <ein_42, <ein_43, <ein_44, <ein_45, <ein_46, <ein_47
     .byte <ein_48, <ein_49, <ein_50, <ein_51, <ein_52, <ein_53, <ein_54, <ein_55
     .byte <ein_56, <ein_57, <ein_58, <ein_59, <ein_60, <ein_61, <ein_62, <ein_63
-    .byte <ein_64, <ein_65
-    .byte <ein_66, <ein_67, <ein_68, <ein_69
-    .byte <ein_70, <ein_71, <ein_72, <ein_73
-    .byte <ein_74, <ein_75, <ein_76, <ein_77
-    .byte <ein_78, <ein_79
-    .byte <ein_80, <ein_81
-    .byte <ein_82, <ein_83, <ein_84, <ein_85, <ein_86, <ein_87
-    .byte <ein_88, <ein_89, <ein_90, <ein_91
-    .byte <ein_92, <ein_93, <ein_94, <ein_95
-    .byte <ein_96, <ein_97, <ein_98, <ein_99
-    .byte <ein_100, <ein_101, <ein_102, <ein_103
-    .byte <ein_104, <ein_105, <ein_106, <ein_107
-    .byte <ein_108, <ein_109, <ein_110, <ein_111
-    .byte <ein_112, <ein_113, <ein_114, <ein_115
-    .byte <ein_116, <ein_117, <ein_118, <ein_119
-    .byte <ein_120, <ein_121, <ein_122, <ein_123
-    .byte <ein_124, <ein_125, <ein_126, <ein_127
-    .byte <ein_128, <ein_129, <ein_130, <ein_131
-    .byte <ein_132, <ein_133, <ein_134, <ein_135, <ein_136
-    .byte <ein_137, <ein_138, <ein_139
-    .byte <ein_140, <ein_141, <ein_142, <ein_143, <ein_144, <ein_145
-    .byte <ein_146, <ein_147, <ein_148, <ein_149
-    .byte <ein_150, <ein_151, <ein_152
-    .byte <ein_153, <ein_154, <ein_155, <ein_156
-expected_item_name_hi:
+    .byte <ein_64, <ein_65, <ein_66, <ein_67, <ein_68, <ein_69, <ein_70, <ein_71
+    .byte <ein_72, <ein_73, <ein_74, <ein_75, <ein_76, <ein_77, <ein_78, <ein_79
+    .byte <ein_80, <ein_81, <ein_82, <ein_83, <ein_84, <ein_85, <ein_86, <ein_87
+    .byte <ein_88, <ein_89, <ein_90, <ein_91, <ein_92, <ein_93, <ein_94, <ein_95
+    .byte <ein_96, <ein_97, <ein_98, <ein_99, <ein_100, <ein_101, <ein_102, <ein_103
+    .byte <ein_104, <ein_105, <ein_106, <ein_107, <ein_108, <ein_109, <ein_110, <ein_111
+    .byte <ein_112, <ein_113, <ein_114, <ein_115, <ein_116, <ein_117, <ein_118, <ein_119
+    .byte <ein_120, <ein_121, <ein_122, <ein_123, <ein_124, <ein_125, <ein_126, <ein_127
+    .byte <ein_128, <ein_129, <ein_130, <ein_131, <ein_132, <ein_133, <ein_134, <ein_135
+    .byte <ein_136, <ein_137, <ein_138, <ein_139, <ein_140, <ein_141, <ein_142, <ein_143
+    .byte <ein_144, <ein_145, <ein_146, <ein_147, <ein_148, <ein_149, <ein_150, <ein_151
+    .byte <ein_152, <ein_153, <ein_154, <ein_155, <ein_156, <ein_157, <ein_158, <ein_159
+    .byte <ein_160, <ein_161, <ein_162, <ein_163, <ein_164, <ein_165, <ein_166, <ein_167
+    .byte <ein_168, <ein_169, <ein_170, <ein_171, <ein_172, <ein_173, <ein_174, <ein_175
+    .byte <ein_176, <ein_177, <ein_178, <ein_179, <ein_180, <ein_181, <ein_182, <ein_183
+    .byte <ein_184, <ein_185, <ein_186, <ein_187, <ein_188, <ein_189, <ein_190, <ein_191
+    .byte <ein_192, <ein_193, <ein_194, <ein_195, <ein_196, <ein_197, <ein_198, <ein_199
+    .byte <ein_200, <ein_201, <ein_202, <ein_203, <ein_204, <ein_205, <ein_206, <ein_207
+    .byte <ein_208, <ein_209, <ein_210, <ein_211, <ein_212, <ein_213, <ein_214, <ein_215
+    .byte <ein_216, <ein_217, <ein_218, <ein_219, <ein_220, <ein_221, <ein_222, <ein_223
+    .byte <ein_224, <ein_225, <ein_226, <ein_227, <ein_228, <ein_229, <ein_230, <ein_231
+    .byte <ein_232, <ein_233, <ein_234, <ein_235, <ein_236, <ein_237, <ein_238, <ein_239
+    .byte <ein_240, <ein_241, <ein_242, <ein_243, <ein_244, <ein_245, <ein_246, <ein_247
+    .byte <ein_248, <ein_249, <ein_250, <ein_251, <ein_252, <ein_253, <ein_254
+expected_item_name_p0_hi:
     .byte >ein_0, >ein_1, >ein_2, >ein_3, >ein_4, >ein_5, >ein_6, >ein_7
     .byte >ein_8, >ein_9, >ein_10, >ein_11, >ein_12, >ein_13, >ein_14, >ein_15
     .byte >ein_16, >ein_17, >ein_18, >ein_19, >ein_20, >ein_21, >ein_22, >ein_23
@@ -407,42 +560,76 @@ expected_item_name_hi:
     .byte >ein_40, >ein_41, >ein_42, >ein_43, >ein_44, >ein_45, >ein_46, >ein_47
     .byte >ein_48, >ein_49, >ein_50, >ein_51, >ein_52, >ein_53, >ein_54, >ein_55
     .byte >ein_56, >ein_57, >ein_58, >ein_59, >ein_60, >ein_61, >ein_62, >ein_63
-    .byte >ein_64, >ein_65
-    .byte >ein_66, >ein_67, >ein_68, >ein_69
-    .byte >ein_70, >ein_71, >ein_72, >ein_73
-    .byte >ein_74, >ein_75, >ein_76, >ein_77
-    .byte >ein_78, >ein_79
-    .byte >ein_80, >ein_81
-    .byte >ein_82, >ein_83, >ein_84, >ein_85, >ein_86, >ein_87
-    .byte >ein_88, >ein_89, >ein_90, >ein_91
-    .byte >ein_92, >ein_93, >ein_94, >ein_95
-    .byte >ein_96, >ein_97, >ein_98, >ein_99
-    .byte >ein_100, >ein_101, >ein_102, >ein_103
-    .byte >ein_104, >ein_105, >ein_106, >ein_107
-    .byte >ein_108, >ein_109, >ein_110, >ein_111
-    .byte >ein_112, >ein_113, >ein_114, >ein_115
-    .byte >ein_116, >ein_117, >ein_118, >ein_119
-    .byte >ein_120, >ein_121, >ein_122, >ein_123
-    .byte >ein_124, >ein_125, >ein_126, >ein_127
-    .byte >ein_128, >ein_129, >ein_130, >ein_131
-    .byte >ein_132, >ein_133, >ein_134, >ein_135, >ein_136
-    .byte >ein_137, >ein_138, >ein_139
-    .byte >ein_140, >ein_141, >ein_142, >ein_143, >ein_144, >ein_145
-    .byte >ein_146, >ein_147, >ein_148, >ein_149
-    .byte >ein_150, >ein_151, >ein_152
-    .byte >ein_153, >ein_154, >ein_155, >ein_156
-.assert "expected_item_name_hi covers every item type", * - expected_item_name_hi, ITEM_TYPE_COUNT
+    .byte >ein_64, >ein_65, >ein_66, >ein_67, >ein_68, >ein_69, >ein_70, >ein_71
+    .byte >ein_72, >ein_73, >ein_74, >ein_75, >ein_76, >ein_77, >ein_78, >ein_79
+    .byte >ein_80, >ein_81, >ein_82, >ein_83, >ein_84, >ein_85, >ein_86, >ein_87
+    .byte >ein_88, >ein_89, >ein_90, >ein_91, >ein_92, >ein_93, >ein_94, >ein_95
+    .byte >ein_96, >ein_97, >ein_98, >ein_99, >ein_100, >ein_101, >ein_102, >ein_103
+    .byte >ein_104, >ein_105, >ein_106, >ein_107, >ein_108, >ein_109, >ein_110, >ein_111
+    .byte >ein_112, >ein_113, >ein_114, >ein_115, >ein_116, >ein_117, >ein_118, >ein_119
+    .byte >ein_120, >ein_121, >ein_122, >ein_123, >ein_124, >ein_125, >ein_126, >ein_127
+    .byte >ein_128, >ein_129, >ein_130, >ein_131, >ein_132, >ein_133, >ein_134, >ein_135
+    .byte >ein_136, >ein_137, >ein_138, >ein_139, >ein_140, >ein_141, >ein_142, >ein_143
+    .byte >ein_144, >ein_145, >ein_146, >ein_147, >ein_148, >ein_149, >ein_150, >ein_151
+    .byte >ein_152, >ein_153, >ein_154, >ein_155, >ein_156, >ein_157, >ein_158, >ein_159
+    .byte >ein_160, >ein_161, >ein_162, >ein_163, >ein_164, >ein_165, >ein_166, >ein_167
+    .byte >ein_168, >ein_169, >ein_170, >ein_171, >ein_172, >ein_173, >ein_174, >ein_175
+    .byte >ein_176, >ein_177, >ein_178, >ein_179, >ein_180, >ein_181, >ein_182, >ein_183
+    .byte >ein_184, >ein_185, >ein_186, >ein_187, >ein_188, >ein_189, >ein_190, >ein_191
+    .byte >ein_192, >ein_193, >ein_194, >ein_195, >ein_196, >ein_197, >ein_198, >ein_199
+    .byte >ein_200, >ein_201, >ein_202, >ein_203, >ein_204, >ein_205, >ein_206, >ein_207
+    .byte >ein_208, >ein_209, >ein_210, >ein_211, >ein_212, >ein_213, >ein_214, >ein_215
+    .byte >ein_216, >ein_217, >ein_218, >ein_219, >ein_220, >ein_221, >ein_222, >ein_223
+    .byte >ein_224, >ein_225, >ein_226, >ein_227, >ein_228, >ein_229, >ein_230, >ein_231
+    .byte >ein_232, >ein_233, >ein_234, >ein_235, >ein_236, >ein_237, >ein_238, >ein_239
+    .byte >ein_240, >ein_241, >ein_242, >ein_243, >ein_244, >ein_245, >ein_246, >ein_247
+    .byte >ein_248, >ein_249, >ein_250, >ein_251, >ein_252, >ein_253, >ein_254
+.assert "expected_item_name_p0_hi covers Page 0", * - expected_item_name_p0_hi, ITEM_PAGE_SIZE
 
-ein_0:  .text "Gold (small)" ; .byte 0
-ein_1:  .text "Gold (large)" ; .byte 0
-ein_2:  .text "Dagger" ; .byte 0
-ein_3:  .text "Short Sword" ; .byte 0
-ein_4:  .text "Long Sword" ; .byte 0
-ein_5:  .text "Mace" ; .byte 0
-ein_6:  .text "Robe" ; .byte 0
-ein_7:  .text "Leather Armor" ; .byte 0
-ein_8:  .text "Chain Mail" ; .byte 0
-ein_9:  .text "Small Shield" ; .byte 0
+expected_item_name_p1_lo:
+    .byte <ein_255, <ein_256, <ein_257, <ein_258, <ein_259, <ein_260, <ein_261, <ein_262
+    .byte <ein_263, <ein_264, <ein_265, <ein_266, <ein_267, <ein_268, <ein_269, <ein_270
+    .byte <ein_271, <ein_272, <ein_273, <ein_274, <ein_275, <ein_276, <ein_277, <ein_278
+    .byte <ein_279, <ein_280, <ein_281, <ein_282, <ein_283, <ein_284, <ein_285, <ein_286
+    .byte <ein_287, <ein_288, <ein_289, <ein_290, <ein_291, <ein_292, <ein_293, <ein_294
+    .byte <ein_295, <ein_296, <ein_297, <ein_298, <ein_299, <ein_300, <ein_301, <ein_302
+    .byte <ein_303, <ein_304, <ein_305, <ein_306, <ein_307, <ein_308, <ein_309, <ein_310
+    .byte <ein_311, <ein_312, <ein_313, <ein_314, <ein_315, <ein_316, <ein_317, <ein_318
+    .byte <ein_319, <ein_320, <ein_321, <ein_322, <ein_323, <ein_324, <ein_325, <ein_326
+    .byte <ein_327, <ein_328, <ein_329, <ein_330, <ein_331, <ein_332, <ein_333, <ein_334
+    .byte <ein_335, <ein_336, <ein_337, <ein_338, <ein_339, <ein_340, <ein_341, <ein_342
+    .byte <ein_343, <ein_344, <ein_345, <ein_346, <ein_347, <ein_348, <ein_349, <ein_350
+    .byte <ein_351, <ein_352, <ein_353, <ein_354, <ein_355, <ein_356, <ein_357, <ein_358
+    .byte <ein_359, <ein_360, <ein_361, <ein_362, <ein_363, <ein_364, <ein_365, <ein_366
+    .byte <ein_367, <ein_368, <ein_369
+expected_item_name_p1_hi:
+    .byte >ein_255, >ein_256, >ein_257, >ein_258, >ein_259, >ein_260, >ein_261, >ein_262
+    .byte >ein_263, >ein_264, >ein_265, >ein_266, >ein_267, >ein_268, >ein_269, >ein_270
+    .byte >ein_271, >ein_272, >ein_273, >ein_274, >ein_275, >ein_276, >ein_277, >ein_278
+    .byte >ein_279, >ein_280, >ein_281, >ein_282, >ein_283, >ein_284, >ein_285, >ein_286
+    .byte >ein_287, >ein_288, >ein_289, >ein_290, >ein_291, >ein_292, >ein_293, >ein_294
+    .byte >ein_295, >ein_296, >ein_297, >ein_298, >ein_299, >ein_300, >ein_301, >ein_302
+    .byte >ein_303, >ein_304, >ein_305, >ein_306, >ein_307, >ein_308, >ein_309, >ein_310
+    .byte >ein_311, >ein_312, >ein_313, >ein_314, >ein_315, >ein_316, >ein_317, >ein_318
+    .byte >ein_319, >ein_320, >ein_321, >ein_322, >ein_323, >ein_324, >ein_325, >ein_326
+    .byte >ein_327, >ein_328, >ein_329, >ein_330, >ein_331, >ein_332, >ein_333, >ein_334
+    .byte >ein_335, >ein_336, >ein_337, >ein_338, >ein_339, >ein_340, >ein_341, >ein_342
+    .byte >ein_343, >ein_344, >ein_345, >ein_346, >ein_347, >ein_348, >ein_349, >ein_350
+    .byte >ein_351, >ein_352, >ein_353, >ein_354, >ein_355, >ein_356, >ein_357, >ein_358
+    .byte >ein_359, >ein_360, >ein_361, >ein_362, >ein_363, >ein_364, >ein_365, >ein_366
+    .byte >ein_367, >ein_368, >ein_369
+.assert "expected_item_name_p1_hi covers Page 1", * - expected_item_name_p1_hi, ITEM_TYPE_COUNT - ITEM_PAGE_SIZE
+
+ein_0: .text "Gold (small)" ; .byte 0
+ein_1: .text "Gold (large)" ; .byte 0
+ein_2: .text "Dagger" ; .byte 0
+ein_3: .text "Short Sword" ; .byte 0
+ein_4: .text "Long Sword" ; .byte 0
+ein_5: .text "Mace" ; .byte 0
+ein_6: .text "Robe" ; .byte 0
+ein_7: .text "Leather Armor" ; .byte 0
+ein_8: .text "Chain Mail" ; .byte 0
+ein_9: .text "Small Shield" ; .byte 0
 ein_10: .text "Iron Helm" ; .byte 0
 ein_11: .text "Leather Gloves" ; .byte 0
 ein_12: .text "Leather Boots" ; .byte 0
@@ -590,12 +777,224 @@ ein_153: .text "Wand of Fire Bolts" ; .byte 0
 ein_154: .text "Wand of Drain Life" ; .byte 0
 ein_155: .text "Wand of Lightning Balls" ; .byte 0
 ein_156: .text "Wand of Acid Balls" ; .byte 0
+ein_157: .text "Gnomish Shovel" ; .byte 0
+ein_158: .text "Orcish Pick" ; .byte 0
+ein_159: .text "Dwarven Shovel" ; .byte 0
+ein_160: .text "Dwarven Pick" ; .byte 0
+ein_161: .text "Soft Leather Cap" ; .byte 0
+ein_162: .text "Hard Leather Cap" ; .byte 0
+ein_163: .text "Medium Leather Shield" ; .byte 0
+ein_164: .text "Small Metal Shield" ; .byte 0
+ein_165: .text "Medium Metal Shield" ; .byte 0
+ein_166: .text "Large Metal Shield" ; .byte 0
+ein_167: .text "Filthy Rags" ; .byte 0
+ein_168: .text "Woven Cord Armor" ; .byte 0
+ein_169: .text "Hard Studded Leather" ; .byte 0
+ein_170: .text "Soft Leather Ring Mail" ; .byte 0
+ein_171: .text "Hard Leather Ring Mail" ; .byte 0
+ein_172: .text "Leather Scale Mail" ; .byte 0
+ein_173: .text "Rusty Chain Mail" ; .byte 0
+ein_174: .text "Double Chain Mail" ; .byte 0
+ein_175: .text "Augmented Chain Mail" ; .byte 0
+ein_176: .text "Bar Chain Mail" ; .byte 0
+ein_177: .text "Metal Brigandine Armor" ; .byte 0
+ein_178: .text "Laminated Armor" ; .byte 0
+ein_179: .text "Partial Plate Armor" ; .byte 0
+ein_180: .text "Metal Lamellar Armor" ; .byte 0
+ein_181: .text "Ribbed Plate Armor" ; .byte 0
+ein_182: .text "Broken Dagger" ; .byte 0
+ein_183: .text "Broken Sword" ; .byte 0
+ein_184: .text "Wooden Club" ; .byte 0
+ein_185: .text "Dagger (Misericorde)" ; .byte 0
+ein_186: .text "Dagger (Bodkin)" ; .byte 0
+ein_187: .text "Foil" ; .byte 0
+ein_188: .text "Iron Shot" ; .byte 0
+ein_189: .text "Cat-o'-Nine-Tails" ; .byte 0
+ein_190: .text "Javelin" ; .byte 0
+ein_191: .text "Thrusting Sword (Bilbo)" ; .byte 0
+ein_192: .text "Thrusting Sword (Baselard)" ; .byte 0
+ein_193: .text "Backsword" ; .byte 0
+ein_194: .text "Lance" ; .byte 0
+ein_195: .text "Beaked Axe" ; .byte 0
+ein_196: .text "Mace (Lead-Filled)" ; .byte 0
+ein_197: .text "Fauchard" ; .byte 0
+ein_198: .text "Ball and Chain" ; .byte 0
+ein_199: .text "Glaive" ; .byte 0
+ein_200: .text "Battle Axe (Balestarius)" ; .byte 0
+ein_201: .text "Two-Handed Sword (Espadon)" ; .byte 0
+ein_202: .text "Executioner's Sword" ; .byte 0
+ein_203: .text "Two-Handed Great Flail" ; .byte 0
+ein_204: .text "Two-Handed Sword (No-Dachi)" ; .byte 0
+ein_205: .text "Two-Handed Sword (Flamberge)" ; .byte 0
+ein_206: .text "Two-Handed Sword (Zweihander)" ; .byte 0
+ein_207: .text "Amulet of Teleportation" ; .byte 0
+ein_208: .text "Amulet of Slow Digestion" ; .byte 0
+ein_209: .text "Amulet of Searching" ; .byte 0
+ein_210: .text "Amulet of Adornment" ; .byte 0
+ein_211: .text "Amulet of Adornment" ; .byte 0
+ein_212: .text "Amulet of Charisma" ; .byte 0
+ein_213: .text "Amulet of DOOM" ; .byte 0
+ein_214: .text "Copper" ; .byte 0
+ein_215: .text "Copper" ; .byte 0
+ein_216: .text "Copper" ; .byte 0
+ein_217: .text "Silver" ; .byte 0
+ein_218: .text "Silver" ; .byte 0
+ein_219: .text "Silver" ; .byte 0
+ein_220: .text "Garnets" ; .byte 0
+ein_221: .text "Garnets" ; .byte 0
+ein_222: .text "Gold" ; .byte 0
+ein_223: .text "Gold" ; .byte 0
+ein_224: .text "Gold" ; .byte 0
+ein_225: .text "Opals" ; .byte 0
+ein_226: .text "Sapphires" ; .byte 0
+ein_227: .text "Gold" ; .byte 0
+ein_228: .text "Rubies" ; .byte 0
+ein_229: .text "Diamonds" ; .byte 0
+ein_230: .text "Emeralds" ; .byte 0
+ein_231: .text "Mithril" ; .byte 0
+ein_232: .text "Empty Bottle" ; .byte 0
+ein_233: .text "Shards of Pottery" ; .byte 0
+ein_234: .text "Broken Set of Teeth" ; .byte 0
+ein_235: .text "Large Broken Bone" ; .byte 0
+ein_236: .text "Broken Stick" ; .byte 0
+ein_237: .text "Rat Skeleton" ; .byte 0
+ein_238: .text "Giant Centipede Skeleton" ; .byte 0
+ein_239: .text "Human Skeleton" ; .byte 0
+ein_240: .text "Dwarf Skeleton" ; .byte 0
+ein_241: .text "Elf Skeleton" ; .byte 0
+ein_242: .text "Gnome Skeleton" ; .byte 0
+ein_243: .text "Hard Biscuit" ; .byte 0
+ein_244: .text "Pint of Fine Ale" ; .byte 0
+ein_245: .text "Strip of Beef Jerky" ; .byte 0
+ein_246: .text "Pint of Fine Wine" ; .byte 0
+ein_247: .text "Pint of Fine Grade Mush" ; .byte 0
+ein_248: .text "Mushroom of First-Aid" ; .byte 0
+ein_249: .text "Piece of Elvish Waybread" ; .byte 0
+ein_250: .text "Mushroom of Cure Confusion" ; .byte 0
+ein_251: .text "Mushroom of Poison" ; .byte 0
+ein_252: .text "Mushroom of Confusion" ; .byte 0
+ein_253: .text "Mushroom of Weakness" ; .byte 0
+ein_254: .text "Mushroom of Minor Cures" ; .byte 0
+ein_255: .text "Mushroom of Cure Poison" ; .byte 0
+ein_256: .text "Mushroom of Blindness" ; .byte 0
+ein_257: .text "Mushroom of Paranoia" ; .byte 0
+ein_258: .text "Mushroom of Light Cures" ; .byte 0
+ein_259: .text "Mushroom of Cure Blindness" ; .byte 0
+ein_260: .text "Mushroom of Cure Paranoia" ; .byte 0
+ein_261: .text "Mushroom of Hallucination" ; .byte 0
+ein_262: .text "Hairy Mold of Poison" ; .byte 0
+ein_263: .text "Mushroom of Unhealth" ; .byte 0
+ein_264: .text "Hairy Mold of Cure Serious Wounds" ; .byte 0
+ein_265: .text "Hairy Mold of Hallucinations" ; .byte 0
+ein_266: .text "Hairy Mold of Cure Poison" ; .byte 0
+ein_267: .text "Mushroom of Restore Constitution" ; .byte 0
+ein_268: .text "Hairy Mold of Unhealth" ; .byte 0
+ein_269: .text "Mushroom of Restoring" ; .byte 0
+ein_270: .text "Potion of Sleep" ; .byte 0
+ein_271: .text "Clear Potion of Water" ; .byte 0
+ein_272: .text "Potion of Salt Water" ; .byte 0
+ein_273: .text "Light Brown Potion of Apple Juice" ; .byte 0
+ein_274: .text "Icky Green Potion of Slime Mold Juice" ; .byte 0
+ein_275: .text "Potion of Slowness" ; .byte 0
+ein_276: .text "Potion of Boldness" ; .byte 0
+ein_277: .text "Potion of Slow Poison" ; .byte 0
+ein_278: .text "Potion of Weakness" ; .byte 0
+ein_279: .text "Potion of Detect Invisible" ; .byte 0
+ein_280: .text "Potion of Super Heroism" ; .byte 0
+ein_281: .text "Potion of Lose Memories" ; .byte 0
+ein_282: .text "Potion of Lose Intelligence" ; .byte 0
+ein_283: .text "Potion of Lose Wisdom" ; .byte 0
+ein_284: .text "Potion of Ugliness" ; .byte 0
+ein_285: .text "Potion of Invulnerability" ; .byte 0
+ein_286: .text "Potion of Restore Strength" ; .byte 0
+ein_287: .text "Potion of Restore Intelligence" ; .byte 0
+ein_288: .text "Potion of Restore Wisdom" ; .byte 0
+ein_289: .text "Potion of Restore Charisma" ; .byte 0
+ein_290: .text "Potion of Restore Dexterity" ; .byte 0
+ein_291: .text "Potion of Restore Constitution" ; .byte 0
+ein_292: .text "Potion of Restore Life Levels" ; .byte 0
+ein_293: .text "Potion of Learning" ; .byte 0
+ein_294: .text "Potion of Gain Experience" ; .byte 0
+ein_295: .text "Scroll of Treasure Detection" ; .byte 0
+ein_296: .text "Scroll of Summon Monster" ; .byte 0
+ein_297: .text "Scroll of Darkness" ; .byte 0
+ein_298: .text "Scroll of Blessing" ; .byte 0
+ein_299: .text "Scroll of Detect Invisible" ; .byte 0
+ein_300: .text "Scroll of Create Food" ; .byte 0
+ein_301: .text "Scroll of Sleep Monster" ; .byte 0
+ein_302: .text "Scroll of Trap Detection" ; .byte 0
+ein_303: .text "Scroll of Door/Stair Location" ; .byte 0
+ein_304: .text "Scroll of Trap Creation" ; .byte 0
+ein_305: .text "Scroll of Holy Chant" ; .byte 0
+ein_306: .text "Scroll of Trap/Door Destruction" ; .byte 0
+ein_307: .text "Scroll of Door Creation" ; .byte 0
+ein_308: .text "Scroll of Enchant Weapon To-Hit" ; .byte 0
+ein_309: .text "Scroll of Enchant Weapon To-Dam" ; .byte 0
+ein_310: .text "Scroll of Summon Undead" ; .byte 0
+ein_311: .text "Scroll of Holy Prayer" ; .byte 0
+ein_312: .text "Scroll of Dispel Undead" ; .byte 0
+ein_313: .text "Scroll of Curse Weapon" ; .byte 0
+ein_314: .text "Scroll of Curse Armor" ; .byte 0
+ein_315: .text "Scroll of *Enchant Weapon*" ; .byte 0
+ein_316: .text "Scroll of *Enchant Armor*" ; .byte 0
+ein_317: .text "Ring of Teleportation" ; .byte 0
+ein_318: .text "Ring of Weakness" ; .byte 0
+ein_319: .text "Ring of Aggravate Monster" ; .byte 0
+ein_320: .text "Ring of Adornment" ; .byte 0
+ein_321: .text "Ring of Adornment" ; .byte 0
+ein_322: .text "Ring of Feather Falling" ; .byte 0
+ein_323: .text "Ring of Searching" ; .byte 0
+ein_324: .text "Ring of Slow Digestion" ; .byte 0
+ein_325: .text "Ring of Sustain Charisma" ; .byte 0
+ein_326: .text "Ring of Stupidity" ; .byte 0
+ein_327: .text "Ring of Increase Damage" ; .byte 0
+ein_328: .text "Ring of Increase To-Hit" ; .byte 0
+ein_329: .text "Ring of Gain Intelligence" ; .byte 0
+ein_330: .text "Ring of Gain Dexterity" ; .byte 0
+ein_331: .text "Ring of Gain Constitution" ; .byte 0
+ein_332: .text "Ring of Sustain Intelligence" ; .byte 0
+ein_333: .text "Ring of Sustain Wisdom" ; .byte 0
+ein_334: .text "Ring of Sustain Strength" ; .byte 0
+ein_335: .text "Ring of Sustain Constitution" ; .byte 0
+ein_336: .text "Ring of Sustain Dexterity" ; .byte 0
+ein_337: .text "Ring of WOE" ; .byte 0
+ein_338: .text "Wand of Heal Monster" ; .byte 0
+ein_339: .text "Wand of Haste Monster" ; .byte 0
+ein_340: .text "Wand of Clone Monster" ; .byte 0
+ein_341: .text "Wand of Magic Missile" ; .byte 0
+ein_342: .text "Wand of Wonder" ; .byte 0
+ein_343: .text "Wand of Confuse Monster" ; .byte 0
+ein_344: .text "Wand of Sleep Monster" ; .byte 0
+ein_345: .text "Wand of Trap/Door Destruction" ; .byte 0
+ein_346: .text "Wand of Polymorph" ; .byte 0
+ein_347: .text "Wand of Disarming" ; .byte 0
+ein_348: .text "Wand of Wall Building" ; .byte 0
+ein_349: .text "Staff of Treasure Location" ; .byte 0
+ein_350: .text "Staff of Object Location" ; .byte 0
+ein_351: .text "Staff of Detect Invisible" ; .byte 0
+ein_352: .text "Staff of Summoning" ; .byte 0
+ein_353: .text "Staff of Haste Monsters" ; .byte 0
+ein_354: .text "Staff of Door/Stair Location" ; .byte 0
+ein_355: .text "Staff of Trap Location" ; .byte 0
+ein_356: .text "Staff of Sleep Monsters" ; .byte 0
+ein_357: .text "Staff of Slow Monsters" ; .byte 0
+ein_358: .text "Staff of Detect Evil" ; .byte 0
+ein_359: .text "Staff of Starlite" ; .byte 0
+ein_360: .text "Staff of Curing" ; .byte 0
+ein_361: .text "Staff of Slowness" ; .byte 0
+ein_362: .text "Staff of Earthquakes" ; .byte 0
+ein_363: .text "Staff of Mass Polymorph" ; .byte 0
+ein_364: .text "Staff of Darkness" ; .byte 0
+ein_365: .text "Piece of Elvish Waybread" ; .byte 0
+ein_366: .text "Scroll of Trap Detection" ; .byte 0
+ein_367: .text "Scroll of Door/Stair Location" ; .byte 0
+ein_368: .text "Staff of Summoning" ; .byte 0
+ein_369: .text "Staff of Darkness" ; .byte 0
 
 assert_col: .byte 0
 assert_idx: .byte 0
 assert_expected: .byte 0
 item_name_test_id: .byte 0
-inv_qty: .fill TOTAL_INV_SLOTS, 0
 
 // As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
 // = pointer

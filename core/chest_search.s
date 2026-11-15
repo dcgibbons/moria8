@@ -59,8 +59,7 @@ chest_mark_found_all:
     lda fi_item_id,x
     cmp #FI_EMPTY
     beq !cmfa_next+
-    tay
-    lda it_category,y
+    jsr item_get_category_floor_x
     cmp #ICAT_CHEST
     bne !cmfa_next+
     lda fi_p1,x

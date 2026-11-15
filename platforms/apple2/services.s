@@ -49,11 +49,11 @@ hal_sound_play:
     sta zp_ptr1_hi
     ldy #0                  // pattern byte index
 !segment:
-    lda (zp_ptr1),y         // period (main RAM)
+    jsr A2_ZP_THUNK_READ_P1 // period (aux RAM via A2AuxData)
     beq !done+              // period 0 = end of pattern
     sta zp_temp4
     iny
-    lda (zp_ptr1),y         // toggles
+    jsr A2_ZP_THUNK_READ_P1 // toggles
     iny
     sty a2_zp_scratch       // park next pattern index
     tay                     // Y = toggles
@@ -126,6 +126,7 @@ hal_platform_init_early:
     sta A2_INTC3ROM         // internal C3 firmware for AUXMOVE
     jsr a2_ramdisk_disconnect
     jsr a2_install_zp_thunks
+    jsr a2_aux_lc_init_vectors
     clc
     rts
 

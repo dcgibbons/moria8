@@ -46,6 +46,7 @@ test_finish:
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -59,34 +60,50 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
+.segment Default
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/input_contract.s"
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment Default
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+// item_cat_data takes the $E100 window (item_cat_kernal_helper.s); the
+// modules parked there before now link in Default.
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment Default
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
@@ -100,9 +117,13 @@ render_single_tile:
 render_local_area:
     rts
 #import "../../../../core/dungeon_los.s"
+.segment TestCreateOverlay
 #import "../../../../core/player_move.s"
+.segment Default
+.segment Default
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/turn_render_state.s"
 eff_fear_timer: .byte 0
 monster_attack_player:

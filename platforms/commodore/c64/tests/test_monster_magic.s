@@ -44,6 +44,7 @@ magic_recalc_mana:
 magic_check_new_spells:
     rts
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -59,27 +60,32 @@ magic_check_new_spells:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
+status_draw:
+status_mark_dirty:
+    rts
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -99,17 +105,13 @@ store_enter:
 #import "../../../../core/ui_trampoline_stubs.s"
 
 // The suite is split in two (tests 1-22 here, 23-42 in
-// test_monster_magic2.s, which defines MONSTER_MAGIC_PART2) so that combat.s
-// is loaded: its spell-message builder (mon_atk_build_effect_msg) is
-// exercised, and parked above the I/O hole it ran KERNAL ROM bytes from test
-// 5 on (2026-11-13). The item actions (an overlay in the product) and the
-// player's spell effects stay parked; the runner's tripwire
-// (tools/parked_tripwire.py) fails the suite if either is ever called.
+// test_monster_magic2.s, which defines MONSTER_MAGIC_PART2) so that combat.s,
+// spell_effects.s (eff_teleport_apply_target), and turn.s (eff_fear_timer) are
+// loaded; player_items.s and item_actions_overlay.s stay parked.
 #import "../../../../core/combat.s"
-.segmentdef TestItemActions [start=$E000]
-.segment TestItemActions
-#import "../../../../core/item_actions_overlay.s"
 #import "../../../../core/spell_effects.s"
+.segment TestCreateOverlay
+#import "../../../../core/item_actions_overlay.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s
@@ -1616,8 +1618,8 @@ test_start:
     jsr tst_result_eq
     and tc_ok
     sta tc_ok
-    lda player_pflags           // rebuilt from the Defender: all six flags
-    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
+    lda player_pflags           // rebuilt from the Defender: all seven flags
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS | PFLAG_FFALL
     jsr tst_result_eq
     and tc_ok
     sta tc_results + 39

@@ -258,31 +258,16 @@ save_write_map_banked:
 !swm_full_page:
     ldx #0                          // 0 = 256 bytes
 !swm_stage:
-    stx cx16_zp_scratch
-    // Map the active 8 KB map bank (Bank 1 or Bank 2) once for this page
-    lda zp_ptr0_hi
-    lsr
-    lsr
-    lsr
-    lsr
-    lsr
-    sta CX16_RAM_BANK_REG
-    lda zp_ptr0_hi
-    and #$1f
-    ora #$a0
-    sta zp_ptr1_hi
-    lda zp_ptr0
+    phx
+    lda #<CX16_ROW_STAGE_BASE
     sta zp_ptr1
+    lda #>CX16_ROW_STAGE_BASE
+    sta zp_ptr1_hi
     ldy #0
-!swm_copy_from_bank:
-    lda (zp_ptr1),y
-    sta CX16_ROW_STAGE_BASE,y
-    iny
-    dex
-    bne !swm_copy_from_bank-
+    jsr mmu_safe_map_read_block
     // Switch to KERNAL RAM Bank 0 once and stream the staged page
     stz CX16_RAM_BANK_REG
-    ldx cx16_zp_scratch
+    plx
     ldy #0
 !swm_stream_page:
     lda CX16_ROW_STAGE_BASE,y

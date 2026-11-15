@@ -18,6 +18,11 @@
 // $0200-$03CF block at different times (same dual-use pattern as C64).
 .const PLATFORM_HD_DECODE_BUF_BASE = $033c
 .const PLATFORM_HD_DECODE_BUF_LIMIT = $0400
+// Place 48-byte item_name_decode_buf in unused page-3 scratch after door-scan.
+#define PLATFORM_ITEM_NAME_BUF_LOW
+.const PLATFORM_ITEM_NAME_DECODE_BUF_BASE = $0380
+.assert "item_name_decode_buf clears hd_decode_buf and door-scan scratch", PLATFORM_ITEM_NAME_DECODE_BUF_BASE >= $037d, true
+.assert "item_name_decode_buf fits below ProDOS Page-3 vectors ($03D0)", PLATFORM_ITEM_NAME_DECODE_BUF_BASE + 48 <= $03d0, true
 
 // Machine type constants (stored in zp_machine_type; core never branches on
 // this byte — it is platform/test diagnostic only).

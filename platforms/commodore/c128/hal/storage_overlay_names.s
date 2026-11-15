@@ -46,10 +46,18 @@ hal_storage_overlay_chest_name:
     .byte $31,$32,$38,$2e,$43,$48,$45,$53,$54   // "128.CHEST"
 .label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
     .byte 0
+hal_storage_overlay_home_name:
+    .byte $31,$32,$38,$2e,$48,$4f,$4d,$45      // "128.HOME"
+.label hal_storage_overlay_home_name_len = * - hal_storage_overlay_home_name
+    .byte 0
+hal_storage_overlay_storage_name:
+    .byte $31,$32,$38,$2e,$53,$54,$4f,$52,$41,$47,$45 // "128.STORAGE"
+.label hal_storage_overlay_storage_name_len = * - hal_storage_overlay_storage_name
+    .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_disarm_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_disarm_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_home_name, <hal_storage_overlay_storage_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_disarm_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_disarm_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_home_name, >hal_storage_overlay_storage_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_disarm_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_disarm_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_home_name_len, hal_storage_overlay_storage_name_len

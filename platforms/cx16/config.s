@@ -24,6 +24,7 @@
 .const CX16_KERNAL_REV    = $ff80
 .const CX16_KERNAL_MEMTOP = $ff99
 
+#if !CX16_DETECT_MACHINE_EXTERNAL
 detect_machine:
     lda #MACHINE_CX16
     sta zp_machine_type
@@ -36,6 +37,7 @@ detect_machine:
     jsr CX16_KERNAL_MEMTOP
     sta tsi_ram_banks_cached
     rts
+#endif
 
 .macro AssetLoad() {
     jsr hal_asset_load

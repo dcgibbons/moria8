@@ -247,7 +247,7 @@ cart_load_prg:
     ldy #6
 !cmp:
     lda $ffff,y
-    cmp cart_name_legalui,y
+    cmp legal_ui_filename,y
     bne !not_found+
     dey
     bpl !cmp-
@@ -256,8 +256,6 @@ cart_load_prg:
 !not_found:
     sec
     rts
-
-cart_name_legalui: .byte 'L','E','G','A','L','U','I'
 
 cart_asset_id:   .byte 0
 cart_offset_lo:  .byte 0

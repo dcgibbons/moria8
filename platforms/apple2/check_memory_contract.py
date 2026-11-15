@@ -42,15 +42,16 @@ PRG_SPECS = (
     PrgSpec("ovl.start", 0xA400, 0xBA00, "ovl_start_end"),
     PrgSpec("ovl.town", 0xA400, 0xBA00, "ovl_town_end"),
     PrgSpec("ovl.death", 0xA400, 0xBA00, "ovl_death_end"),
-    PrgSpec("ovl.modal", 0xA400, 0xBA00, "ovl_modal_misc_end"),
+    PrgSpec("ovl.modal", 0xA400, 0xB000, "ovl_modal_misc_end"),
     PrgSpec("ovl.help", 0xA400, 0xBA00, "ovl_help_end"),
-    PrgSpec("ovl.ui", 0xA400, 0xBA00, "ovl_ui_end"),
+    PrgSpec("ovl.ui", 0xA400, 0xAA00, "ovl_ui_end"),
     PrgSpec("ovl.items", 0xA400, 0xBA00, "ovl_items_end"),
-    PrgSpec("ovl.spell", 0xA400, 0xBA00, "ovl_spell_end"),
+    PrgSpec("ovl.spell", 0xA400, 0xB800, "ovl_spell_end"),
     PrgSpec("ovl.gen", 0xA400, 0xBA00, "ovl_gen_end"),
     PrgSpec("ovl.storage", 0xA400, 0xBA00, "ovl_storage_end"),
     PrgSpec("ovl.title", 0xA400, 0xBA00, "ovl_title_end"),
     PrgSpec("ovl.chest", 0xA400, 0xBA00, "ovl_chest_end"),
+    PrgSpec("ovl.home", 0xA400, 0xBA00, "ovl_home_end"),
     PrgSpec("title.prg", 0x4000, 0x7C00),
 )
 
@@ -112,11 +113,7 @@ def check_artifacts() -> int:
         print(f"ASSERT {spec.filename} PASS ${spec.start:04X}-${end - 1:04X}")
         checks += 1
 
-    if require_symbol(main_symbols, "a2_play_start") != 0x7C00:
-        raise ContractViolation("a2_play_start is not $7C00")
-    zp_save_buf = require_symbol(main_symbols, "zp_save_buf")
-    if not 0x0A00 <= zp_save_buf < 0x7C00:
-        raise ContractViolation(f"zp_save_buf outside resident RAM: ${zp_save_buf:04X}")
+    check_low_memory_claims(main_symbols)
     print("ASSERT main-symbol-owners PASS")
     checks += 1
 
@@ -138,13 +135,122 @@ def check_artifacts() -> int:
     print(f"ASSERT {boot_path.name} PASS $2000-${boot_end - 1:04X}")
     checks += 1
 
+    item_cat_path = BUILD / "bin" / "ITEM.CAT"
+    if item_cat_path.is_file():
+        item_cat = item_cat_path.read_bytes()
+        item_cat_end = 0xE000 + len(item_cat)
+        if not item_cat.startswith(b"ITM2") or item_cat_end > 0xFFFA:
+            raise ContractViolation(
+                f"ITEM.CAT invalid or exceeds Aux LC $E000-$FFF9: "
+                f"len={len(item_cat)}, end=${item_cat_end:04X}"
+            )
+        print(f"ASSERT ITEM.CAT PASS $E000-${item_cat_end - 1:04X}")
+        checks += 1
+
     print(f"RESULT {checks} asserts 0 failures")
     return 0
+
+
+LOW_SCRATCH_SYMBOLS = (
+    "a2_probe_buf",
+    "a2_program_volume",
+    "a2_save_volume",
+    "a2_last_status",
+    "a2_media_status",
+    "a2_name_write",
+    "a2_name_replace",
+    "a2_name_scratch",
+    "a2_name_drive",
+    "a2_asset_verify",
+    "a2_asset_dest",
+    "hal_storage_diag_code",
+    "hal_storage_diag_phase",
+    "hal_storage_diag_readst",
+    "hal_storage_diag_device",
+    "sfa_save_row",
+    "sfa_save_col",
+    "sfa_save_char",
+    "igk_key",
+    "input_kbdbuf_shadow",
+)
+
+
+def check_low_memory_claims(symbols: dict[str, int]) -> None:
+    if require_symbol(symbols, "a2_play_start") != 0x7C00:
+        raise ContractViolation("a2_play_start is not $7C00")
+    zp_save_buf = require_symbol(symbols, "zp_save_buf")
+    if zp_save_buf != 0x0200 or zp_save_buf + 142 > 0x0290:
+        raise ContractViolation(
+            f"zp_save_buf out of Main $0200-$028F bounds: ${zp_save_buf:04X}"
+        )
+    for name in LOW_SCRATCH_SYMBOLS:
+        addr = require_symbol(symbols, name)
+        if not 0x0300 < addr < 0x033C:
+            raise ContractViolation(
+                f"{name} out of Main $0301-$033B scratch bounds: ${addr:04X}"
+            )
+    aux_base = require_symbol(symbols, "a2_aux_scratch_base")
+    aux_end = require_symbol(symbols, "a2_aux_scratch_end")
+    if aux_base != 0x0200 or aux_end != 0x03FF:
+        raise ContractViolation(
+            f"Aux scratch window unexpected: ${aux_base:04X}-${aux_end:04X}"
+        )
+    decode_buf = require_symbol(symbols, "item_name_decode_buf")
+    if decode_buf < 0x037D or decode_buf + 48 > 0x03D0:
+        raise ContractViolation(
+            f"item_name_decode_buf out of Page-3 $037D-$03CF bounds: ${decode_buf:04X}"
+        )
+    for name in (
+        "hal_item_cat_read_byte",
+        "hal_recall_read_byte",
+        "hal_recall_write_byte",
+        "a2_aux_lc_bounce_xfer",
+    ):
+        addr = require_symbol(symbols, name)
+        if not 0x0A00 <= addr < 0x7C00:
+            raise ContractViolation(
+                f"{name} must stay in resident Default ($0A00-$7BFF): ${addr:04X}"
+            )
 
 
 def selftest() -> int:
     valid = PrgSpec("fixture.prg", 0x2000, 0x2100, signature=b"M8")
     prg_extent(bytes((0x00, 0x20)) + b"M8payload", valid)
+
+    valid_symbols = {
+        "a2_play_start": 0x7C00,
+        "zp_save_buf": 0x0200,
+        "a2_aux_scratch_base": 0x0200,
+        "a2_aux_scratch_end": 0x03FF,
+        "item_name_decode_buf": 0x0380,
+        "hal_item_cat_read_byte": 0x6000,
+        "hal_recall_read_byte": 0x6020,
+        "hal_recall_write_byte": 0x6040,
+        "a2_aux_lc_bounce_xfer": 0x6060,
+    }
+    for idx, name in enumerate(LOW_SCRATCH_SYMBOLS):
+        valid_symbols[name] = 0x0301 + idx
+    check_low_memory_claims(valid_symbols)
+
+    bad_symbol_cases = (
+        {"zp_save_buf": 0x0A00},
+        {"zp_save_buf": 0x0204},
+        {"igk_key": 0x0300},
+        {"igk_key": 0x033C},
+        {"a2_aux_scratch_end": 0x03FE},
+        {"item_name_decode_buf": 0x037C},
+        {"item_name_decode_buf": 0x03A1},
+        {"hal_item_cat_read_byte": 0x7C00},
+        {"hal_recall_read_byte": 0x0900},
+    )
+    for patch in bad_symbol_cases:
+        sample = dict(valid_symbols)
+        sample.update(patch)
+        try:
+            check_low_memory_claims(sample)
+        except ContractViolation:
+            continue
+        raise AssertionError(f"negative symbol fixture passed: {patch}")
 
     bad_fixtures = (
         (b"\x00", valid),
@@ -159,7 +265,7 @@ def selftest() -> int:
             continue
         raise AssertionError("negative fixture unexpectedly passed")
 
-    print("RESULT 5 asserts 0 failures")
+    print("RESULT 11 asserts 0 failures")
     return 0
 
 

@@ -19,8 +19,8 @@ item_exchange:
     lda inv_item_id + EQUIP_SECONDARY   // corrupt-save guard: the secondary
     cmp #FI_EMPTY                       // may hold only a weapon or nothing
     beq !ix_sec_ok+
-    tax
-    lda it_category,x
+    ldx #EQUIP_SECONDARY
+    jsr item_get_category_inv_x
     tax
     lda equip_slot_for_cat,x            // weapons and digging tools map here
     cmp #EQUIP_WEAPON

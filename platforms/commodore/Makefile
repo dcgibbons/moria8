@@ -102,6 +102,11 @@ C64_BOOTART_TOOL   = ../../tools/ppm_to_c64_bootart.py
 LOGO_TOOL = ../../tools/make_logo.py
 VERSION_INC_TOOL = ../../tools/make_version_include.py
 VERSION_INC = $(OUT)/version_strings.inc
+GEN_TRAMPOLINES_TOOL = ../../tools/gen_trampolines.py
+TRAMPOLINE_MANIFEST = ../../tools/trampoline_manifest.py
+C64_TRAMPOLINES_INC = $(OUT)/trampolines/c64_trampolines.inc
+PLUS4_TRAMPOLINES_INC = $(OUT)/trampolines/plus4_trampolines.inc
+C128_TRAMPOLINES_INC = $(OUT)/trampolines/c128_trampolines.inc
 C128_BOOTART_PNG   = ../../artwork/moria8_C128loadingart_tile_native.png
 C128_BOOTART_PPM   = $(OUT128)/bootart128.ppm
 C128_BOOTART_TOOL  = ../../tools/ppm_to_c128_bootart.py
@@ -138,6 +143,7 @@ C64_OVL_ITEMS      = $(OUT64)/ovl.items
 C64_OVL_SPELL      = $(OUT64)/ovl.spell
 C64_OVL_CHEST      = $(OUT64)/ovl.chest
 C64_RUNTIME_BANKED = $(OUT64)/64.bank
+C64_ITEM_CATALOG_SOURCES = ../shared/item_catalog/item_cat_data.s ../shared/item_catalog/item_cat_layout.s
 
 # ── Plus/4 artifacts ──────────────────────────────────────
 PLUS4_MAIN_PRG       = $(OUTPLUS4)/moria4.prg
@@ -145,6 +151,7 @@ PLUS4_BOOT_PRG       = $(OUTPLUS4)/boot4.prg
 PLUS4_TITLE_PRG      = $(OUTPLUS4)/title
 PLUS4_TIER_PRGS      = $(OUTPLUS4)/monster.db.1 $(OUTPLUS4)/monster.db.2 $(OUTPLUS4)/monster.db.3 $(OUTPLUS4)/monster.db.4
 PLUS4_CATALOG_STAMP  = $(OUTPLUS4)/monster.cat.stamp
+PLUS4_ITEM_CATALOG_SOURCES = $(wildcard ../shared/item_catalog/*.s) common/item_catalog_records.s
 PLUS4_OVL_START      = $(OUTPLUS4)/ovl.start
 PLUS4_OVL_TOWN       = $(OUTPLUS4)/ovl.town
 PLUS4_OVL_DEATH      = $(OUTPLUS4)/ovl.death
@@ -177,19 +184,33 @@ C128_RUNTIME_INPUT = $(OUT128)/128.input.prg
 C128_RUNTIME_PROJECTILE = $(OUT128)/128.proj.prg
 C128_RUNTIME_LOW   = $(OUT128)/128.runtime.prg
 C128_RUNTIME_COMMON = $(OUT128)/128.fdisk.prg
-C128_RUNTIME_DISKIO = $(OUT128)/128.diskio.prg
-C128_RESIDENT_WORLD = $(OUT128)/128.world.prg
-C128_RESIDENT_ITEMS = $(OUT128)/128.item.prg
-C128_RESIDENT_ITEM_NAMES = $(OUT128)/128.names.prg
+C128_ITEM_CAT_SOURCES = ../shared/item_catalog/item_catalog_spec.json ../../tools/build_item_catalog.py
+C128_ITEM_CAT_STAMP   = $(OUT128)/.item_catalog.stamp
+C128_ITEM_CAT_FILE    = $(OUT128)/item.cat
+C128_ITEM_IDX_FILE    = $(OUT128)/item.idx
 C128_RESIDENT_HUFFMAN = $(OUT128)/128.huff.prg
 C128_RESIDENT_HUFFMAN_VECTOR = $(OUT128)/128.hvec.prg
 # The monster catalog's Bank 1 fields and names (memory128.s, C128M-007); the
 # C128 product build has no tier files.
 C128_CATALOG_PRGS = $(OUT128)/128.cat.prg $(OUT128)/128.cnm.prg
-C128_RESIDENT_SELECT = $(OUT128)/128.select.prg
 C128_RESIDENT_PERSIST = $(OUT128)/128.persist.prg
 C128_RESIDENT_PLAY = $(OUT128)/128.play.prg
 C128_RUNTIME_BANKED = $(OUT128)/128.bank.prg
+
+# Optional Wave 2+ per-platform overlay extensions (`<port>/overlays.mk`)
+C64_EXTRA_OVERLAYS        ?=
+C64_EXTRA_OVERLAY_PAIRS   ?=
+C64_EXTRA_DISK_WRITES     ?=
+PLUS4_EXTRA_OVERLAYS      ?=
+PLUS4_EXTRA_OVERLAY_PAIRS ?=
+PLUS4_EXTRA_DISK_WRITES   ?=
+C128_EXTRA_OVERLAYS       ?=
+C128_EXTRA_OVERLAY_PAIRS  ?=
+C128_EXTRA_DISK_WRITES    ?=
+
+-include c64/overlays.mk
+-include plus4/overlays.mk
+-include c128/overlays.mk
 C128_MAIN_STAMP   = $(OUT128)/.main.stamp
 C128_BOOTSECT_PRG  = $(OUT128)/bootsect128.prg
 C128_CHARSET_DEMO_PRG = $(OUT128)/vdc_charset_poster_demo.prg
@@ -226,18 +247,18 @@ PLUS4_BUILD_ARTIFACTS  = $(PLUS4_MAIN_PRG) $(PLUS4_BOOT_PRG) $(PLUS4_TITLE_PRG) 
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_BOOTART_DIAG_PRG) \
 	$(C128_TITLE_PRG) $(C128_CATALOG_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_MODAL_MISC) \
-		$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) $(C128_OVL_CHEST) $(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) $(C128_RUNTIME_DISKIO) \
-		$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_ITEM_NAMES) $(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) $(C128_RESIDENT_SELECT) $(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
+		$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) $(C128_OVL_CHEST) $(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) \
+		$(C128_ITEM_CAT_FILE) $(C128_ITEM_IDX_FILE) $(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) $(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_MODAL_MISC) \
 	$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) $(C128_OVL_CHEST) \
-		$(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) $(C128_RUNTIME_DISKIO) \
-		$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_ITEM_NAMES) $(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) $(C128_RESIDENT_SELECT) \
+		$(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) \
+		$(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) \
 	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED) $(C128_CATALOG_PRGS)
 
-C64_BUILD_ARTIFACTS += $(OUT64)/legalui
-PLUS4_BUILD_ARTIFACTS += $(OUTPLUS4)/legalui
-C128_BUILD_ARTIFACTS += $(OUT128)/legalui
-C128_MAIN_OUTPUTS += $(OUT128)/legalui
+C64_BUILD_ARTIFACTS += $(OUT64)/legalui $(C64_EXTRA_OVERLAYS)
+PLUS4_BUILD_ARTIFACTS += $(OUTPLUS4)/legalui $(PLUS4_EXTRA_OVERLAYS)
+C128_BUILD_ARTIFACTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
+C128_MAIN_OUTPUTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
 
 .PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 	bootart128-charset-demo \
@@ -378,12 +399,25 @@ check-hal-boundaries:
 	cd ../.. && python3 tools/check_hal_manifests.py
 	cd ../.. && python3 tools/check_hal_contract_docs.py
 	cd ../.. && python3 tools/check_plus4_hal_independence.py
+	cd ../.. && python3 -B tools/gen_trampolines.py --selftest
+	cd ../.. && python3 -B tools/gen_trampolines.py --check
+	cd ../.. && python3 -B tools/check_overlay_calls.py --selftest
+	cd ../.. && python3 -B tools/check_overlay_calls.py
 
 # ── C64 build rules ───────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
-$(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT64)
+$(C64_TRAMPOLINES_INC): $(GEN_TRAMPOLINES_TOOL) $(TRAMPOLINE_MANIFEST) | $(OUT)
+	python3 -B "$(GEN_TRAMPOLINES_TOOL)" --port c64 --output "$@"
+
+$(PLUS4_TRAMPOLINES_INC): $(GEN_TRAMPOLINES_TOOL) $(TRAMPOLINE_MANIFEST) | $(OUT)
+	python3 -B "$(GEN_TRAMPOLINES_TOOL)" --port plus4 --output "$@"
+
+$(C128_TRAMPOLINES_INC): $(GEN_TRAMPOLINES_TOOL) $(TRAMPOLINE_MANIFEST) | $(OUT)
+	python3 -B "$(GEN_TRAMPOLINES_TOOL)" --port c128 --output "$@"
+
+$(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) $(C64_TRAMPOLINES_INC) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUT64)" "$(C64_MAIN_SRC)" $(KA_FLAGS64) -symbolfiledir "$(OVL_OUT64)" -o "$(C64_MAIN_PRG)"
 
 $(C64_OVL_START): $(C64_MAIN_PRG)
@@ -397,6 +431,9 @@ $(C64_OVL_ITEMS): $(C64_MAIN_PRG)
 $(C64_OVL_SPELL): $(C64_MAIN_PRG)
 $(C64_OVL_CHEST): $(C64_MAIN_PRG)
 $(C64_RUNTIME_BANKED): $(C64_MAIN_PRG)
+ifneq ($(strip $(C64_EXTRA_OVERLAYS)),)
+$(C64_EXTRA_OVERLAYS): $(C64_MAIN_PRG)
+endif
 
 $(C64_BOOT_PRG): $(C64_SOURCES) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_BOOT_SRC)" -symbolfiledir "$(OVL_OUT64)" -o "$(C64_BOOT_PRG)"
@@ -411,12 +448,14 @@ $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
 $(C64_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_64 -symbolfiledir "$(OVL_OUT64)" -o "$(C64_TITLE_PRG)"
 
-$(C64_CATALOG_STAMP): $(CATALOG_SOURCES) $(CATALOG_DISK) | $(OUT64)
-	python3 "$(CATALOG_DISK)" records "$(OUT64)" $(C64_CATALOG_IDX_LOAD)
+$(C64_CATALOG_STAMP): $(CATALOG_SOURCES) $(C64_ITEM_CATALOG_SOURCES) $(CATALOG_DISK) | $(OUT64)
+	python3 -B "$(CATALOG_DISK)" records "$(OUT64)" $(C64_CATALOG_IDX_LOAD)
+	python3 -B "$(CATALOG_DISK)" item-records "$(OUT64)" 0xe000 $(C64_CATALOG_IDX_LOAD)
 	touch "$@"
 
-$(PLUS4_CATALOG_STAMP): $(CATALOG_SOURCES) $(CATALOG_DISK) | $(OUTPLUS4)
+$(PLUS4_CATALOG_STAMP): $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(CATALOG_DISK) | $(OUTPLUS4)
 	python3 "$(CATALOG_DISK)" records "$(OUTPLUS4)" $(PLUS4_CATALOG_IDX_LOAD)
+	python3 "$(CATALOG_DISK)" item-records "$(OUTPLUS4)" 0xe000 $(PLUS4_CATALOG_IDX_LOAD)
 	touch "$@"
 
 $(OUT64)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUT64)
@@ -432,7 +471,7 @@ $(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ens
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUT64)" -o "$@"
 
 # ── Plus/4 build rules ────────────────────────────────────
-$(PLUS4_MAIN_PRG): $(PLUS4_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTPLUS4)
+$(PLUS4_MAIN_PRG): $(PLUS4_SOURCES) $(VERSION_INC) $(PLUS4_TRAMPOLINES_INC) | ensure-kickass $(OUTPLUS4)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTPLUS4)" "$(PLUS4_MAIN_SRC)" $(KA_FLAGSPLUS4) -symbolfiledir "$(OVL_OUTPLUS4)" -o "$(PLUS4_MAIN_PRG)"
 
 $(PLUS4_OVL_START): $(PLUS4_MAIN_PRG)
@@ -446,6 +485,9 @@ $(PLUS4_OVL_ITEMS): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_SPELL): $(PLUS4_MAIN_PRG)
 $(PLUS4_OVL_CHEST): $(PLUS4_MAIN_PRG)
 $(PLUS4_RUNTIME_BANKED): $(PLUS4_MAIN_PRG)
+ifneq ($(strip $(PLUS4_EXTRA_OVERLAYS)),)
+$(PLUS4_EXTRA_OVERLAYS): $(PLUS4_MAIN_PRG)
+endif
 
 $(PLUS4_BOOT_PRG): $(PLUS4_SOURCES) | ensure-kickass $(OUTPLUS4)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(PLUS4_BOOT_SRC)" $(KA_FLAGSPLUS4) -symbolfiledir "$(OVL_OUTPLUS4)" -o "$(PLUS4_BOOT_PRG)"
@@ -466,12 +508,20 @@ $(OUTPLUS4)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | 
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C64_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUTPLUS4)" -o "$@"
 
 # ── C128 build rules ──────────────────────────────────────
-$(C128_MAIN_STAMP): $(C128_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT128)
+$(C128_MAIN_STAMP): $(C128_SOURCES) $(VERSION_INC) $(C128_TRAMPOLINES_INC) | ensure-kickass $(OUT128)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUT128)" "$(C128_MAIN_SRC)" $(KA_FLAGS128) -symbolfiledir "$(OVL_OUT128)" -o "$(C128_MAIN_PRG)"
 	touch "$(C128_MAIN_STAMP)"
 
 $(C128_MAIN_OUTPUTS): $(C128_MAIN_STAMP)
 	@test -f "$@" || { rm -f "$(C128_MAIN_STAMP)"; $(MAKE) "$(C128_MAIN_STAMP)"; }
+	@test -f "$@"
+
+$(C128_ITEM_CAT_STAMP): $(C128_ITEM_CAT_SOURCES) $(CATALOG_DISK) Makefile | $(OUT128)
+	python3 -B "$(CATALOG_DISK)" item-records "$(OUT128)" 0x7400 0x0600
+	touch "$@"
+
+$(C128_ITEM_CAT_FILE) $(C128_ITEM_IDX_FILE): $(C128_ITEM_CAT_STAMP)
+	@test -f "$@" || { rm -f "$(C128_ITEM_CAT_STAMP)"; $(MAKE) "$(C128_ITEM_CAT_STAMP)"; }
 	@test -f "$@"
 
 $(C128_BOOT_PRG): $(C128_SOURCES) | ensure-kickass $(OUT128)
@@ -540,6 +590,8 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(DISK64_IMAGE) $(LICENSE_DISK_FILE) $
 	cp -f "$(OUT64)/monster.cat3" "$(C64_DIST_DIR)/monster.cat3"
 	cp -f "$(OUT64)/monster.cat4" "$(C64_DIST_DIR)/monster.cat4"
 	cp -f "$(OUT64)/monster.idx" "$(C64_DIST_DIR)/monster.idx"
+	cp -f "$(OUT64)/item.cat" "$(C64_DIST_DIR)/item.cat"
+	cp -f "$(OUT64)/item.idx" "$(C64_DIST_DIR)/item.idx"
 	cp -f "$(C64_OVL_START)" "$(C64_DIST_DIR)/64.start"
 	cp -f "$(C64_OVL_TOWN)" "$(C64_DIST_DIR)/64.town"
 	cp -f "$(C64_OVL_DEATH)" "$(C64_DIST_DIR)/64.death"
@@ -550,6 +602,9 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(DISK64_IMAGE) $(LICENSE_DISK_FILE) $
 	cp -f "$(C64_OVL_ITEMS)" "$(C64_DIST_DIR)/64.items"
 	cp -f "$(C64_OVL_SPELL)" "$(C64_DIST_DIR)/64.spell"
 	cp -f "$(C64_OVL_CHEST)" "$(C64_DIST_DIR)/64.chest"
+ifneq ($(strip $(C64_EXTRA_OVERLAY_PAIRS)),)
+	@for pair in $(C64_EXTRA_OVERLAY_PAIRS); do cp -f "$${pair%%:*}" "$(C64_DIST_DIR)/$${pair#*:}"; done
+endif
 	cp -f "$(C64_RUNTIME_BANKED)" "$(C64_DIST_DIR)/64.bank"
 	cp -f "$(OUT64)/legalui" "$(C64_DIST_DIR)/legalui"
 	cp -f "$(LICENSE_DISK_FILE)" "$(C64_DIST_DIR)/license"
@@ -578,6 +633,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 		-write "$(OUT64)/monster.cat2" "monster.cat2" \
 		-write "$(OUT64)/monster.cat3" "monster.cat3" \
 		-write "$(OUT64)/monster.cat4" "monster.cat4" \
+		-write "$(OUT64)/item.cat" "item.cat" \
 		-write "$(C64_OVL_START)" "64.start" \
 		-write "$(C64_OVL_TOWN)" "64.town" \
 		-write "$(C64_OVL_DEATH)" "64.death" \
@@ -588,6 +644,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 			-write "$(C64_OVL_ITEMS)" "64.items" \
 			-write "$(C64_OVL_SPELL)" "64.spell" \
 			-write "$(C64_OVL_CHEST)" "64.chest" \
+			$(foreach pair,$(C64_EXTRA_OVERLAY_PAIRS),-write "$(firstword $(subst :, ,$(pair)))" "$(word 2,$(subst :, ,$(pair)))") $(C64_EXTRA_DISK_WRITES) \
 			-write "$(C64_RUNTIME_BANKED)" "64.bank" \
 			-write "$(OUT64)/legalui" "legalui" \
 			-write "$(LICENSE_DISK_FILE)" "license,s" \
@@ -595,6 +652,8 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 	python3 "$(DISKART)" "$(DISK64_IMAGE)" c64
 	python3 "$(CATALOG_DISK)" index "$(DISK64_IMAGE)" "$(OUT64)/monster.idx" $(C64_CATALOG_IDX_LOAD)
 	$(C1541) -attach "$(DISK64_IMAGE)" -write "$(OUT64)/monster.idx" "monster.idx" >/dev/null
+	python3 -B "$(CATALOG_DISK)" item-index "$(DISK64_IMAGE)" "$(OUT64)/item.idx" $(C64_CATALOG_IDX_LOAD)
+	$(C1541) -attach "$(DISK64_IMAGE)" -write "$(OUT64)/item.idx" "item.idx" >/dev/null
 	@mkdir -p "$(OUT64)"
 	cp -f "$(DISK64_IMAGE)" "$(OUT64)/moria8-c64.d64"
 
@@ -615,6 +674,7 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write "$(OUTPLUS4)/monster.cat2" "monster.cat2" \
 		-write "$(OUTPLUS4)/monster.cat3" "monster.cat3" \
 		-write "$(OUTPLUS4)/monster.cat4" "monster.cat4" \
+		-write "$(OUTPLUS4)/item.cat" "item.cat" \
 		-write "$(PLUS4_OVL_START)" "4.start" \
 		-write "$(PLUS4_OVL_TOWN)" "4.town" \
 		-write "$(PLUS4_OVL_DEATH)" "4.death" \
@@ -625,6 +685,7 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write "$(PLUS4_OVL_ITEMS)" "4.items" \
 		-write "$(PLUS4_OVL_SPELL)" "4.spell" \
 		-write "$(PLUS4_OVL_CHEST)" "4.chest" \
+		$(foreach pair,$(PLUS4_EXTRA_OVERLAY_PAIRS),-write "$(firstword $(subst :, ,$(pair)))" "$(word 2,$(subst :, ,$(pair)))") $(PLUS4_EXTRA_DISK_WRITES) \
 		-write "$(PLUS4_RUNTIME_BANKED)" "4.bank" \
 		-write "$(OUTPLUS4)/legalui" "legalui" \
 		-write "$(LICENSE_DISK_FILE)" "license,s" \
@@ -632,6 +693,8 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 	python3 "$(DISKART)" "$(DISKPLUS4_IMAGE)" plus4
 	python3 "$(CATALOG_DISK)" index "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/monster.idx" $(PLUS4_CATALOG_IDX_LOAD)
 	$(C1541) -attach "$(DISKPLUS4_IMAGE)" -write "$(OUTPLUS4)/monster.idx" "monster.idx" >/dev/null
+	python3 "$(CATALOG_DISK)" item-index "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/item.idx" $(PLUS4_CATALOG_IDX_LOAD)
+	$(C1541) -attach "$(DISKPLUS4_IMAGE)" -write "$(OUTPLUS4)/item.idx" "item.idx" >/dev/null
 	@mkdir -p "$(OUTPLUS4)"
 	cp -f "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/moria8-plus4.d64"
 
@@ -648,6 +711,7 @@ define C128_DISK_WRITE_FILES
 		-write "$(C128_TITLE_PRG)" "t128" \
 		-write "$(OUT128)/128.cat.prg" "128.cat" \
 		-write "$(OUT128)/128.cnm.prg" "128.cnm" \
+		-write "$(C128_ITEM_CAT_FILE)" "item.cat" \
 		-write "$(C128_OVL_START)" "128.start" \
 		-write "$(C128_OVL_TOWN)" "128.town" \
 		-write "$(C128_OVL_DEATH)" "128.death" \
@@ -658,17 +722,14 @@ define C128_DISK_WRITE_FILES
 		-write "$(C128_OVL_ITEMS)" "128.items" \
 		-write "$(C128_OVL_DISARM)" "128.disarm" \
 		-write "$(C128_OVL_CHEST)" "128.chest" \
+		$(foreach pair,$(C128_EXTRA_OVERLAY_PAIRS),-write "$(firstword $(subst :, ,$(pair)))" "$(word 2,$(subst :, ,$(pair)))") $(C128_EXTRA_DISK_WRITES) \
 		-write "$(C128_RUNTIME_INPUT)" "128.input" \
 		-write "$(C128_RUNTIME_PROJECTILE)" "128.proj" \
 		-write "$(C128_RUNTIME_LOW)" "128.runtime" \
 		-write "$(C128_RUNTIME_COMMON)" "128.fdisk" \
-		-write "$(C128_RUNTIME_DISKIO)" "128.diskio" \
-		-write "$(C128_RESIDENT_WORLD)" "128.world" \
-		-write "$(C128_RESIDENT_ITEMS)" "128.item" \
-		-write "$(C128_RESIDENT_ITEM_NAMES)" "128.names" \
+		-write "$(C128_ITEM_IDX_FILE)" "item.idx" \
 		-write "$(C128_RESIDENT_HUFFMAN)" "128.huff" \
 		-write "$(C128_RESIDENT_HUFFMAN_VECTOR)" "128.hvec" \
-		-write "$(C128_RESIDENT_SELECT)" "128.select" \
 		-write "$(C128_RESIDENT_PERSIST)" "128.persist" \
 		-write "$(C128_RESIDENT_PLAY)" "128.play" \
 		-write "$(C128_RUNTIME_BANKED)" "128.bank" \
@@ -685,18 +746,19 @@ define BUILD_C128_DISK_IMAGE
 $(C128_DISK_WRITE_FILES)
 	python3 "$(PATCH_D64)" "$@" 1 0 "$(C128_BOOTSECT_PRG)" 0x0b00
 	python3 "$(DISKART)" "$@" c128
+	python3 -B c128/fix_c128_item_idx.py "$@"
 	@mkdir -p "$(OUT128)"
 	cp -f "$@" "$(OUT128)/$(notdir $@)"
 	cp -f "$@" "$(OUT128)/moria128.$(1)"
 endef
 
-$(DISK128_D64_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+$(DISK128_D64_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) c128/fix_c128_item_idx.py $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	$(call BUILD_C128_DISK_IMAGE,d64)
 
-$(DISK128_D71_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+$(DISK128_D71_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) c128/fix_c128_item_idx.py $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	$(call BUILD_C128_DISK_IMAGE,d71)
 
-$(DISK128_D81_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+$(DISK128_D81_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) c128/fix_c128_item_idx.py $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	$(call BUILD_C128_DISK_IMAGE,d81)
 
 kickass: ensure-kickass
@@ -748,7 +810,7 @@ CART64_OUT = $(abspath $(OUT)/c64-cart)
 .PHONY: cartridge64 test64-cartridge
 cartridge64: $(OUT)/moria8-c64.crt
 
-$(CART64_OUT)/.main.stamp: $(C64_SOURCES) $(VERSION_INC) | ensure-kickass
+$(CART64_OUT)/.main.stamp: $(C64_SOURCES) $(VERSION_INC) $(C64_TRAMPOLINES_INC) | ensure-kickass
 	mkdir -p "$(CART64_OUT)"
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(CART64_OUT)" "$(C64_MAIN_SRC)" $(KA_FLAGS64) -define C64_CARTRIDGE -symbolfiledir "$(CART64_OUT)" -o "$(CART64_OUT)/moria8.prg"
 	touch "$@"
@@ -762,8 +824,8 @@ $(CART64_OUT)/title: $(TITLE_SRC) $(VERSION_INC) | ensure-kickass
 	mkdir -p "$(CART64_OUT)"
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_64 -symbolfiledir "$(CART64_OUT)" -o "$@"
 
-$(OUT)/moria8-c64.crt: $(CART64_OUT)/.main.stamp $(CART64_OUT)/legalui $(CART64_OUT)/.boot.stamp $(CART64_OUT)/title ../../tools/make_easyflash.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
-	python3 ../../tools/make_easyflash.py "$(CART64_OUT)" "$@"
+$(OUT)/moria8-c64.crt: $(CART64_OUT)/.main.stamp $(CART64_OUT)/legalui $(CART64_OUT)/.boot.stamp $(CART64_OUT)/title ../../tools/make_easyflash.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(C64_ITEM_CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+	python3 -B ../../tools/make_easyflash.py "$(CART64_OUT)" "$@"
 
 $(CART64_OUT)/catalog-test.prg: c64/cartridge_test_catalog.s $(CART64_OUT)/.main.stamp
 	cp "$(CART64_OUT)/main.sym" "$(CART64_OUT)/cartridge_product_symbols.inc"
@@ -809,7 +871,7 @@ $(CART64_OUT)/legalui: $(CART64_OUT)/.main.stamp
 CARTPLUS4_OUT = $(abspath $(OUT)/plus4-cart)
 cartridgeplus4: $(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin
 
-$(CARTPLUS4_OUT)/.main.stamp: $(PLUS4_SOURCES) $(VERSION_INC) | ensure-kickass
+$(CARTPLUS4_OUT)/.main.stamp: $(PLUS4_SOURCES) $(VERSION_INC) $(PLUS4_TRAMPOLINES_INC) | ensure-kickass
 	mkdir -p "$(CARTPLUS4_OUT)"
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(CARTPLUS4_OUT)" "$(PLUS4_MAIN_SRC)" $(KA_FLAGSPLUS4) -define PLUS4_CARTRIDGE -symbolfiledir "$(CARTPLUS4_OUT)" -o "$(CARTPLUS4_OUT)/moria4.prg"
 	touch "$@"
@@ -827,8 +889,8 @@ $(CARTPLUS4_OUT)/legalui: $(CARTPLUS4_OUT)/.main.stamp
 	@test -f "$@" || { rm -f "$(CARTPLUS4_OUT)/.main.stamp"; $(MAKE) "$(CARTPLUS4_OUT)/.main.stamp"; }
 	@test -f "$@"
 
-$(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin &: $(CARTPLUS4_OUT)/.main.stamp $(CARTPLUS4_OUT)/legalui $(CARTPLUS4_OUT)/.boot.stamp $(CARTPLUS4_OUT)/title ../../tools/make_plus4_magic.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
-	python3 ../../tools/make_plus4_magic.py "$(CARTPLUS4_OUT)" "$(OUT)/moria8-plus4.crt"
+$(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin &: $(CARTPLUS4_OUT)/.main.stamp $(CARTPLUS4_OUT)/legalui $(CARTPLUS4_OUT)/.boot.stamp $(CARTPLUS4_OUT)/title ../../tools/make_plus4_magic.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+	python3 -B ../../tools/make_plus4_magic.py "$(CARTPLUS4_OUT)" "$(OUT)/moria8-plus4.crt"
 
 $(CARTPLUS4_OUT)/catalog-test.prg: plus4/cartridge_test_catalog.s $(CARTPLUS4_OUT)/.main.stamp
 	cp "$(CARTPLUS4_OUT)/main.sym" "$(CARTPLUS4_OUT)/cartridge_product_symbols.inc"
@@ -837,15 +899,15 @@ $(CARTPLUS4_OUT)/catalog-test.prg: plus4/cartridge_test_catalog.s $(CARTPLUS4_OU
 testplus4-cartridge: testplus4-cartridge-assets testplus4-cartridge-persistence
 
 testplus4-cartridge-assets: cartridgeplus4 $(CARTPLUS4_OUT)/catalog-test.prg
-	python3 plus4/test_cartridge.py --selftest
-	python3 ../../tools/check_plus4_magic.py "$(OUT)/moria8-plus4.crt" "$(CARTPLUS4_OUT)"
+	python3 -B plus4/test_cartridge.py --selftest
+	python3 -B ../../tools/check_plus4_magic.py "$(OUT)/moria8-plus4.crt" "$(CARTPLUS4_OUT)"
 	cartconv -c "$(OUT)/moria8-plus4.crt"
-	python3 plus4/test_cartridge.py --crt "$(OUT)/moria8-plus4.crt" --bin "$(CARTPLUS4_OUT)/moria8-plus4.bin" --symbols "$(CARTPLUS4_OUT)/main.sym" --vice "$(VICEPLUS4)" --output "$(OUT)/test/plus4-cartridge"
-	python3 plus4/test_cartridge.py --crt "$(OUT)/moria8-plus4.crt" --bin "$(CARTPLUS4_OUT)/moria8-plus4.bin" --symbols "$(CARTPLUS4_OUT)/main.sym" --vice "$(VICEPLUS4)" --output "$(OUT)/test/plus4-cartridge-ntsc" --ntsc
+	python3 -B plus4/test_cartridge.py --crt "$(OUT)/moria8-plus4.crt" --bin "$(CARTPLUS4_OUT)/moria8-plus4.bin" --symbols "$(CARTPLUS4_OUT)/main.sym" --vice "$(VICEPLUS4)" --output "$(OUT)/test/plus4-cartridge"
+	python3 -B plus4/test_cartridge.py --crt "$(OUT)/moria8-plus4.crt" --bin "$(CARTPLUS4_OUT)/moria8-plus4.bin" --symbols "$(CARTPLUS4_OUT)/main.sym" --vice "$(VICEPLUS4)" --output "$(OUT)/test/plus4-cartridge-ntsc" --ntsc
 
 testplus4-cartridge-persistence: cartridgeplus4 diskplus4
-	python3 plus4/test_cartridge_persistence.py --crt "$(OUT)/moria8-plus4.crt" --symbols "$(CARTPLUS4_OUT)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --disk-symbols "$(OUTPLUS4)/main.sym" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-cartridge-persistence"
-	python3 plus4/test_cartridge_persistence.py --crt "$(OUT)/moria8-plus4.crt" --symbols "$(CARTPLUS4_OUT)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --disk-symbols "$(OUTPLUS4)/main.sym" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-cartridge-persistence-ntsc" --ntsc
+	python3 -B plus4/test_cartridge_persistence.py --crt "$(OUT)/moria8-plus4.crt" --symbols "$(CARTPLUS4_OUT)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --disk-symbols "$(OUTPLUS4)/main.sym" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-cartridge-persistence"
+	python3 -B plus4/test_cartridge_persistence.py --crt "$(OUT)/moria8-plus4.crt" --symbols "$(CARTPLUS4_OUT)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --disk-symbols "$(OUTPLUS4)/main.sym" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-cartridge-persistence-ntsc" --ntsc
 
 # The C128 Magic Desk 128 cartridge (shipping package, built by `make disk`
 # and `make build128`): isolated output directory and compile define so
@@ -853,7 +915,7 @@ testplus4-cartridge-persistence: cartridgeplus4 diskplus4
 CART128_OUT = $(abspath $(OUT)/c128-cart)
 cartridge128: $(OUT)/moria8-c128.crt $(CART128_OUT)/moria8-c128.bin
 
-$(CART128_OUT)/.main.stamp: $(C128_SOURCES) $(VERSION_INC) | ensure-kickass
+$(CART128_OUT)/.main.stamp: $(C128_SOURCES) $(VERSION_INC) $(C128_TRAMPOLINES_INC) | ensure-kickass
 	mkdir -p "$(CART128_OUT)"
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(CART128_OUT)" "$(C128_MAIN_SRC)" $(KA_FLAGS128) -define C128_CARTRIDGE -symbolfiledir "$(CART128_OUT)" -o "$(CART128_OUT)/moria128.prg"
 	touch "$@"
@@ -871,7 +933,7 @@ $(CART128_OUT)/legalui: $(CART128_OUT)/.main.stamp
 	@test -f "$@" || { rm -f "$(CART128_OUT)/.main.stamp"; $(MAKE) "$(CART128_OUT)/.main.stamp"; }
 	@test -f "$@"
 
-$(OUT)/moria8-c128.crt $(CART128_OUT)/moria8-c128.bin &: $(CART128_OUT)/.main.stamp $(CART128_OUT)/legalui $(CART128_OUT)/.boot.stamp $(CART128_OUT)/title ../../tools/make_c128_md128.py $(CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+$(OUT)/moria8-c128.crt $(CART128_OUT)/moria8-c128.bin &: $(CART128_OUT)/.main.stamp $(CART128_OUT)/legalui $(CART128_OUT)/.boot.stamp $(CART128_OUT)/title ../../tools/make_c128_md128.py $(CATALOG_SOURCES) $(C128_ITEM_CAT_SOURCES) $(CATALOG_DISK) $(LICENSE_FILE) $(SOURCE_OFFER)
 	python3 -B ../../tools/make_c128_md128.py "$(CART128_OUT)" "$(OUT)/moria8-c128.crt"
 
 test128-cartridge: cartridge128 $(DISK128_IMAGE)

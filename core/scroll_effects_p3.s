@@ -9,6 +9,24 @@
 #if SCROLL_P3_EXISTING_OWNER || SCROLL_P3_NEW_OWNER
 irs_dispatch_p3_overlay:
 #if SCROLL_P3_EXISTING_OWNER
+    bit piw_ego
+    bvc !irs_p0+
+    cmp #ITEM_TYPE_STAFF_EARTHQUAKES - ITEM_PAGE_SIZE
+    bne !irs_p1_exec+
+    lda #0
+    sta pm_spell_idx                // clear Map Area alias (C128)
+#if HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE || HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP || HAL_PLATFORM_ITEM_PICKUP_OVERLAY
+    jmp tramp_eff_earthquake
+#else
+    jmp eff_earthquake
+#endif
+!irs_p1_exec:
+#if HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
+    jmp tramp_eff_item_p1
+#else
+    jmp eff_item_p1_exec
+#endif
+!irs_p0:
     // Wand of Stinking Cloud is a legacy ID (42), not a Phase 3 row. It still
     // uses the existing-owner path, but must bypass the 101-based scroll table.
     cmp #42
@@ -339,7 +357,7 @@ irs_re_id_tab:
 // Balls 40. Drain Life (core/wand_bolt_entries.s) is beside this chain, or on
 // the compact ports in OVL.SPELL with the other handlers. Carry set, Z set
 // for Fire Bolts.
-.assert "The four VMS wands are the last item IDs, in dispatch order", ITEM_TYPE_WAND_DRAIN_LIFE == ITEM_TYPE_WAND_FIRE_BOLT + 1 && ITEM_TYPE_WAND_LIGHTNING_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 2 && ITEM_TYPE_WAND_ACID_BALL == ITEM_TYPE_COUNT - 1 && ITEM_TYPE_WAND_ACID_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 3, true
+.assert "The four VMS wands are the last Phase 3 Page 0 IDs, in dispatch order", ITEM_TYPE_WAND_DRAIN_LIFE == ITEM_TYPE_WAND_FIRE_BOLT + 1 && ITEM_TYPE_WAND_LIGHTNING_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 2 && ITEM_TYPE_WAND_ACID_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 3, true
 !irs_re_new_wand:
     beq !irs_re_fbolt+              // 153
     cmp #ITEM_TYPE_WAND_LIGHTNING_BALL
@@ -553,4 +571,7 @@ irs_mg_idx:  .byte 0
 irs_p3_map_msg: .text "You feel your map grow clearer." ; .byte 0
 irs_p3_od_msg:  .text "You sense treasure nearby." ; .byte 0
 irs_p3_mg_msg:  .text "There is a bright flash of light." ; .byte 0
+#if SCROLL_P3_EXISTING_OWNER && !HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
+#import "eff_item_p1.s"
+#endif
 #endif

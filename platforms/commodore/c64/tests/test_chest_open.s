@@ -36,8 +36,9 @@ test_finish:
 // Modules the chest tests never execute load above the result buffer, so the
 // test body stays below MAP_BASE ($C000): map writes during tests (the chest
 // explosion at (12,18) is $C5AC) must not corrupt test code or data.
-.segmentdef TestUnusedOverlay [start=$E100, max=$FFF9]
 
+.segmentdef TestUnusedOverlay [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -51,20 +52,22 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
-.segment TestUnusedOverlay
 #import "../../../../core/ui_character.s"
 .segment Default
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #define CHEST_ROUTING_ENABLED
 #import "../../../../core/dungeon_features.s"
@@ -76,23 +79,31 @@ test_finish:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-.segment TestUnusedOverlay
 #import "../../../../core/monster_ai.s"
 .segment Default
 #import "../../../../core/recall.s"
 .segment TestUnusedOverlay
 #import "../../../../core/monster_magic.s"
 .segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/item_tables.s"
 .segment TestUnusedOverlay
 #import "../../../../core/special_rooms.s"
 .segment Default
+.segment TestUnusedOverlay
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
+.segment TestUnusedOverlay
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
@@ -101,13 +112,21 @@ test_finish:
 .segment TestUnusedOverlay
 #import "../../../../core/player_magic_feedback.s"
 .segment Default
+.segment TestUnusedOverlay
 #import "../dungeon_render.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/dungeon_los.s"
+.segment Default
 #import "../../../../core/player_move.s"
+.segment TestUnusedOverlay
 #import "../../../../core/combat.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+.segment Default
 .segment TestUnusedOverlay
 #import "../../../../core/item_actions_overlay.s"
 .segment Default

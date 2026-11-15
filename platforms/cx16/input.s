@@ -177,7 +177,9 @@ cx16_key_event:
 
 // cx16_input_install_key_events — Chain cx16_key_event onto keyhdl, once:
 // restarts (jmp entry_main) run hal_platform_init_early again, and chaining
-// the hook onto itself would loop in the IRQ.
+// the hook onto itself would loop in the IRQ. Lives in TitleOverlay (called
+// from cx16_cold_boot_init after bank preload).
+.segment TitleOverlay
 cx16_input_install_key_events:
     // keyhdl hands on key numbers from R43; before, raw PS/2 scancodes, so
     // a ROM known to be older gets no hook (and the wait only drains, as it
@@ -213,6 +215,8 @@ cx16_input_install_key_events:
     plp
 !installed:
     rts
+
+.segment Default
 
 cx16_key_down:      .fill CX16_KEY_DOWN_BYTES, 0    // one bit per keynum 0-127
 cx16_keyhdl_next:   .word 0
@@ -264,19 +268,34 @@ input_get_command:
     rts
 
 petscii_to_command:
+    php
+    sei
+    sta cx16_zp_scratch
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_BANK_AUXDATA
+    sta CX16_RAM_BANK_REG
+    lda cx16_zp_scratch
     ldx #0
 !loop:
-    cmp key_map_petscii,x
+    cmp (key_map_petscii & $1fff) | $a000,x
     beq !found+
     inx
     cpx #key_map_count
     bcc !loop-
     lda #CMD_NONE
-    rts
+    bra !done+
 !found:
-    lda key_map_cmd,x
+    lda (key_map_cmd & $1fff) | $a000,x
+!done:
+    sta cx16_zp_scratch
+    pla
+    sta CX16_RAM_BANK_REG
+    plp
+    lda cx16_zp_scratch
     rts
 
+.segment Cx16AuxData
 key_map_petscii:
     :EmitBasePetsciiKeyMap()
     .byte $73   // s — search (lowercase fallback)
@@ -290,3 +309,5 @@ key_map_cmd:
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii
 .assert "Key map tables same size", key_map_count, key_map_end - key_map_cmd
+.assert "Key map tables live in Bank 3 AuxData", key_map_petscii >= CX16_AUXDATA_VIRT_BASE && key_map_end <= CX16_AUXDATA_VIRT_END + 1, true
+.segment Default

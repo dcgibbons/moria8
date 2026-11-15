@@ -108,6 +108,17 @@ class StaleDisk(RuntimeError):
     """The disk image was not written from the program and symbols beside it."""
 
 
+def _disk_file_matches(name: str, actual: bytes | None, expected: bytes) -> bool:
+    if actual == expected:
+        return True
+    # C128's item.idx is emitted with a zeroed sector table in build/c128/item.idx
+    # and patched in-place per image geometry (.d64/.d71/.d81) by fix_c128_item_idx.py.
+    if (name == "item.idx" and actual is not None and len(actual) == len(expected) >= 5
+            and actual[:5] == expected[:5] and not any(expected[5:]) and any(actual[5:])):
+        return True
+    return False
+
+
 def check_disk(build: Build) -> None:
     """Every program file on the disk must equal the build output it is written
     from: ``make test`` rebuilds the program and symbols without the disk, and a
@@ -129,7 +140,7 @@ def check_disk(build: Build) -> None:
         return
     files = d64_files(build.disk.read_bytes())
     stale = sorted(name for name, out in build.target.disk_files.items()
-                   if files.get(name) != (build.prg.parent / out).read_bytes())
+                   if not _disk_file_matches(name, files.get(name), (build.prg.parent / out).read_bytes()))
     if stale:
         raise StaleDisk(f"{build.disk} does not match {build.prg.parent} ({', '.join(stale)}); "
                         f"rebuild it with `make {build.target.disk_target}`")

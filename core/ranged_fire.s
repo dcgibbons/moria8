@@ -46,7 +46,11 @@ ranged_fire:
     bne !rf_have_weapon+
     jmp rf_msg_no_weapon
 !rf_have_weapon:
-    tax                         // X = weapon type
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda inv_item_id,x
+    tax                         // X = weapon slot_lo
     jsr item_get_missile
     bne !rf_is_ranged+
     jmp rf_msg_no_weapon
@@ -77,9 +81,12 @@ ranged_fire:
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !rf_ammo_next+
-    sta rf_ammo_id              // Save item type temporarily
+    sta rf_ammo_id              // Save item slot_lo temporarily
     stx rf_ammo_slot            // Save loop counter
-    tax                         // X = item type
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx rf_ammo_id              // X = item slot_lo
     jsr item_get_missile        // A = missile value
     and #$7f                    // Strip high bit
     cmp rf_ammo_type
@@ -239,8 +246,15 @@ proj_hit_setup:
 // proj_crit_and_damage — The critical blow by tw_item_id's weight (VMS
 // critical_blow), then cmb_damage to cmb_slot: carry set when it dies.
 proj_crit_and_damage:
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx tw_item_id
-    lda it_weight,x
+    jsr item_get_weight_x
+    ldy icat_weight_hi
+    beq !pcd_wt_ok+
+    lda #255
+!pcd_wt_ok:
     jsr combat_critical_blow_weight
     ldx cmb_slot
     lda cmb_damage
@@ -275,8 +289,11 @@ rf_calc_tohit:
 // Output: cmb_damage
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0
 rf_roll_damage:
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx tw_item_id
-    lda it_dmg_packed,x
+    jsr item_get_dmg_packed_x
     pha
     and #$0f
     tax                         // X = sides
@@ -312,6 +329,11 @@ rf_roll_damage:
     lda zp_math_a
 !rf_dmg_ok:
     sta cmb_damage
+    lda tw_save_ego
+    and #EGO_ID_MASK
+    beq !rf_ego_done+
+    jsr tramp_ego_apply_damage
+!rf_ego_done:
     rts
 
 rf_msg_no_weapon:
@@ -334,8 +356,8 @@ rf_msg_ammo_prefix:
     lda #<(cmb_the_str + 1)         // Skip leading space: "THE " not " THE "
     ldy #>(cmb_the_str + 1)
     jsr combat_append_str
-    lda #0
-    sta fi_add_ego              // Ammo has no ego
+    lda tw_save_ego
+    sta fi_add_ego
     lda rf_ammo_id
     jmp item_append_name              // tail call
 

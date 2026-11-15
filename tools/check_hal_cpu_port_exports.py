@@ -21,13 +21,15 @@ COMMON_CPU_PORT_USERS = {
     "chest_loot.s": ROOT / "core/chest_loot.s",
     "disk_swap.s": ROOT / "platforms/commodore/common/disk_swap.s",
     "disk_setup_banked.s": ROOT / "platforms/commodore/common/disk_setup_banked.s",
-    "item_actions_overlay.s": ROOT / "core/item_actions_overlay.s",
     "monster.s": ROOT / "core/monster.s",
     "overlay.s": ROOT / "platforms/commodore/common/overlay.s",
-    "player_items.s": ROOT / "core/player_items.s",
     "reu.s": ROOT / "platforms/commodore/common/reu.s",
     "save.s": ROOT / "platforms/shared/save.s",
     "tier_manager.s": ROOT / "core/tier_manager.s",
+}
+FORBIDDEN_CPU_PORT_USERS = {
+    "item_actions_overlay.s": ROOT / "core/item_actions_overlay.s",
+    "player_items.s": ROOT / "core/player_items.s",
 }
 
 
@@ -53,6 +55,13 @@ def main() -> int:
             errors.append(f"{name}: common CPU-port user still contains {match.group(0)}")
         if "hal_memory_cpu_port" not in common_text:
             errors.append(f"{name}: common CPU-port user does not consume hal_memory_cpu_port")
+
+    for name, path in FORBIDDEN_CPU_PORT_USERS.items():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in RAW_CPU_PORT_RE.finditer(text):
+            errors.append(f"{name}: common file must not reference {match.group(0)}")
+        if "hal_memory_cpu_port" in text:
+            errors.append(f"{name}: common file must not consume hal_memory_cpu_port")
 
     if errors:
         print("HAL CPU-port export check failed:")

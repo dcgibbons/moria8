@@ -65,16 +65,18 @@ hal_storage_score_scratch_name:
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45 // "HALL.OF.FAME"
 .label hal_storage_score_scratch_name_len = * - hal_storage_score_scratch_name
 
-// Program-media probe file on the game disk ("TITLE", 5 chars).
+// Title-art and program-media probe asset name ("TITLE", 5 chars).
 hal_storage_program_probe_name:
-    .byte $54, $49, $54, $4c, $45               // "TITLE"
-.label hal_storage_program_probe_name_len = * - hal_storage_program_probe_name
-    .byte 0
-
-// Title-art asset name ("TITLE", 5 chars).
 hal_storage_title_name:
     .byte $54, $49, $54, $4c, $45               // "TITLE"
 .label hal_storage_title_name_len = * - hal_storage_title_name
+.label hal_storage_program_probe_name_len = hal_storage_title_name_len
+    .byte 0
+
+// Item catalog asset name ("ITEMCAT", 7 chars).
+hal_storage_item_cat_name:
+    .byte $49, $54, $45, $4d, $43, $41, $54     // "ITEMCAT"
+.label hal_storage_item_cat_name_len = * - hal_storage_item_cat_name
     .byte 0
 
 #if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
@@ -147,6 +149,10 @@ hal_storage_overlay_chest_name:
     .byte $4f,$56,$4c,$43,$48,$53               // "OVLCHS"
 .label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
     .byte 0
+hal_storage_overlay_home_name:
+    .byte $4f,$56,$4c,$48,$4f,$4d               // "OVLHOM"
+.label hal_storage_overlay_home_name_len = * - hal_storage_overlay_home_name
+    .byte 0
 hal_storage_overlay_storage_name:
     .byte $4f,$56,$4c,$53,$54,$4f               // "OVLSTO"
 .label hal_storage_overlay_storage_name_len = * - hal_storage_overlay_storage_name
@@ -157,11 +163,11 @@ hal_storage_overlay_title_name:
     .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_home_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_home_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_home_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
 
 .const BEEB_OVERLAY_TABLE_COUNT = * - hal_storage_overlay_name_len
 .assert "Overlay table matches hal_platform_overlay_count", BEEB_OVERLAY_TABLE_COUNT, hal_platform_overlay_count

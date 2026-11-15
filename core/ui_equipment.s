@@ -54,6 +54,8 @@ ui_equip_display_common:
 #endif
 
     // Iterate equipment slots
+    lda #2
+    sta ueq_cur_row
     lda #0
     sta ueq_slot               // maps visible rows to equipment slots
     sta ueq_visible            // Visible ordinal for non-empty selection rows
@@ -61,16 +63,17 @@ ui_equip_display_common:
 !ueq_loop:
     lda ueq_slot
     cmp #VISIBLE_EQUIP_SLOTS
+    bcc !ueq_slot_ok+
+    jmp !ueq_done+
+!ueq_slot_ok:
+    lda ueq_cur_row
+    cmp #(SCREEN_ROWS - 1)
     bcc !ueq_cont+
     jmp !ueq_done+
 !ueq_cont:
 
-    // Row = slot * stride + 2, with a continuation row on 40-column layouts.
-#if HAL_LAYOUT_EQUIPMENT_WRAP
-    asl
-#endif
-    clc
-    adc #2
+    // Dynamic row tracking avoids blank lines and keeps Row 24 footer safe on 40-col.
+    lda ueq_cur_row
     sta zp_cursor_row
 #if HAL_LAYOUT_EQUIPMENT_WRAP
     lda #0
@@ -143,6 +146,10 @@ ui_equip_display_common:
     jsr screen_put_string_ay
 
 !ueq_next:
+    lda zp_cursor_row
+    clc
+    adc #1
+    sta ueq_cur_row
     inc ueq_slot
     jmp !ueq_loop-
 
@@ -170,6 +177,7 @@ ui_equip_display_common:
     :UiEquipmentScratchSegment()
 #endif
 ueq_slot:      .byte 0
+ueq_cur_row:   .byte 0
 ueq_equip_idx: .byte 0
 ueq_visible:   .byte 0
 ueq_footer_lo: .byte 0
@@ -196,15 +204,16 @@ ueq_lbl_feet:   .text "Feet:   " ; .byte 0
 ueq_lbl_light:  .text "Light:  " ; .byte 0
 ueq_lbl_ring:   .text "Ring:   " ; .byte 0
 ueq_lbl_amulet: .text "Amulet: " ; .byte 0
+ueq_lbl_cloak:  .text "Cloak:  " ; .byte 0
 ueq_lbl_second: .text "Second: " ; .byte 0
 
 ueq_label_ptrs_lo:
     .byte <ueq_lbl_weapon, <ueq_lbl_body, <ueq_lbl_shield, <ueq_lbl_head
     .byte <ueq_lbl_hands, <ueq_lbl_feet, <ueq_lbl_light, <ueq_lbl_ring
-    .byte <ueq_lbl_amulet, <ueq_lbl_ring, <ueq_lbl_second   // the left hand is a ring too
+    .byte <ueq_lbl_amulet, <ueq_lbl_ring, <ueq_lbl_cloak, <ueq_lbl_second   // the left hand is a ring too
 
 ueq_label_ptrs_hi:
     .byte >ueq_lbl_weapon, >ueq_lbl_body, >ueq_lbl_shield, >ueq_lbl_head
     .byte >ueq_lbl_hands, >ueq_lbl_feet, >ueq_lbl_light, >ueq_lbl_ring
-    .byte >ueq_lbl_amulet, >ueq_lbl_ring, >ueq_lbl_second
+    .byte >ueq_lbl_amulet, >ueq_lbl_ring, >ueq_lbl_cloak, >ueq_lbl_second
 .assert "Equipment label table covers visible slots", ueq_label_ptrs_hi - ueq_label_ptrs_lo, VISIBLE_EQUIP_SLOTS

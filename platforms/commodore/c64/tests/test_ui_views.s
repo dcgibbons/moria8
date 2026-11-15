@@ -111,6 +111,12 @@ magic_recalc_mana:
 magic_check_new_spells:
     rts
 
+combat_check_levelup:
+    rts
+
+eff_heal_sync:
+    rts
+
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
@@ -138,7 +144,9 @@ magic_check_new_spells:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/asset_load_retry.s"   // tier_load_disk's loader
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
@@ -588,7 +596,7 @@ test_inventory_invalid_ego_view:
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
-    lda #$40
+    lda #EGO_TYPE_COUNT
     sta inv_ego + 0
 
     jsr ui_inv_display

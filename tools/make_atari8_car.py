@@ -34,6 +34,9 @@ OVERLAYS = (
     ("SPELL", "SPL"),
     ("MODAL_MISC", "MDL"),
     ("CHEST", "CHS"),
+    ("HOME", "HOM"),
+    ("STORAGE", "STO"),
+    ("TITLE_OVL", "TTL"),
 )
 
 
@@ -85,6 +88,11 @@ def pack(source: Path, output: Path) -> dict:
             0,
             b"".join(catalog_disk.records()),
         ),
+        CONTRACT["CART_ASSET_ITEM_CATALOG"]: (
+            "item_catalog",
+            0,
+            catalog_disk.item_atari_bytes(),
+        ),
         CONTRACT["CART_ASSET_LEGAL_UI"]: (
             "legalui",
             *prg(source / "legalui", 0xE000, 0xE600),
@@ -120,6 +128,8 @@ def pack(source: Path, output: Path) -> dict:
         raise ValueError("Asset directory exceeds ROM bank zero")
     if len(inputs[CONTRACT["CART_ASSET_CATALOG"]][2]) > 0x6000:
         raise ValueError("Catalog offsets exceed the reader's 16-bit source range")
+    if len(inputs[CONTRACT["CART_ASSET_ITEM_CATALOG"]][2]) > 0x6000:
+        raise ValueError("Item catalog offsets exceed the reader's 16-bit source range")
 
     manifest = {
         "format": "AtariMax-128KB",

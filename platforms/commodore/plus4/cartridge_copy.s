@@ -244,8 +244,49 @@ cart_index_char:
     jmp cart_load_asset
 
 cart_load_title:
-    lda #CART_ASSET_TITLE
+    lda #CART_ASSET_TITLE_ART
     jmp cart_load_asset
+
+// hal_item_cat_cart_read_byte — Read one byte from CART_ASSET_ITEM_CATALOG.
+// Input: item_cat_off_lo/hi (16-bit byte offset). Output: A = byte (N/Z updated).
+// Preserves: X, caller zero-page, IRQ flag; restores CART_REG_BANK=0 & $FF3F.
+hal_item_cat_cart_read_byte:
+    stx icr_cart_save_x
+    php
+    sei
+    lda #0
+    sta CART_REG_BANK
+    sta CART_REG_C1LO_KERNAL
+    sta PLUS4_ROM_ENABLE
+    ldx #CART_ASSET_ITEM_CATALOG * CART_DESCRIPTOR_SIZE
+    lda CART_DIRECTORY,x
+    sta cart_bank
+    lda CART_DIRECTORY + 1,x
+    clc
+    adc item_cat_off_lo
+    sta icr_cart_lda + 1
+    lda CART_DIRECTORY + 2,x
+    adc item_cat_off_hi
+!icr_norm:
+    cmp #>CART_ROM_WINDOW_END
+    bcc !icr_ready+
+    sbc #(CART_ROM_WINDOW_END - CART_ROM_WINDOW_BASE) / $100
+    inc cart_bank
+    bne !icr_norm-
+!icr_ready:
+    sta icr_cart_lda + 2
+    lda cart_bank
+    sta CART_REG_BANK
+icr_cart_lda:
+    ldy $8000
+    lda #0
+    sta CART_REG_BANK
+    sta CART_REG_BASIC_KERNAL
+    sta PLUS4_RAM_ENABLE
+    plp
+    ldx icr_cart_save_x
+    tya
+    rts
 
 cart_invalid_asset:
     sei
@@ -264,5 +305,6 @@ cart_chunk:     .byte 0
 cart_offset:    .word 0
 cart_is_record: .byte 0
 cart_name_len:  .byte 0
+icr_cart_save_x: .byte 0
 cart_reader_end:
 .assert "Cartridge reader stays visible beneath C1LO ROM", cart_reader_end <= CART_ROM_WINDOW_BASE, true

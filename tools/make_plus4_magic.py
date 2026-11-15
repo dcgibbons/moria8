@@ -33,6 +33,9 @@ OVERLAYS = (
     ("SPELL", "spell"),
     ("MODAL_MISC", "modal"),
     ("CHEST", "chest"),
+    ("HOME", "home"),
+    ("STORAGE", "storage"),
+    ("TITLE", "title"),
 )
 
 
@@ -81,11 +84,12 @@ def pack(source: Path, output: Path) -> dict:
         CONTRACT["CART_ASSET_RESIDENT"]: ("resident", *prg(source / "moria4.prg", 0x1001, CATALOG_IDX_LOAD)),
         CONTRACT["CART_ASSET_RUNTIME"]: ("runtime", *prg(source / "4.bank", 0xF000, 0xFC00)),
         CONTRACT["CART_ASSET_INDEX"]: ("index", CATALOG_IDX_LOAD, index_bytes()),
-        CONTRACT["CART_ASSET_TITLE"]: ("title", MAP_BASE, title_data),
+        CONTRACT["CART_ASSET_TITLE_ART"]: ("title", MAP_BASE, title_data),
         CONTRACT["CART_ASSET_CATALOG"]: ("catalog", 0, b"".join(catalog_disk.records())),
         CONTRACT["CART_ASSET_LEGAL_UI"]: ("legalui", *prg(source / "legalui", 0xE000, 0xE600)),
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: ("license", 0, (ROOT / "data/LICENSE").read_bytes()),
         CONTRACT["CART_ASSET_LEGAL_OFFER"]: ("source-offer", 0, (ROOT / "data/SOURCE-OFFER").read_bytes()),
+        CONTRACT["CART_ASSET_ITEM_CATALOG"]: ("item.cat", 0, catalog_disk.item_catalog_bytes()),
     }
     inputs.update({
         CONTRACT["CART_ASSET_" + symbol]:
@@ -103,6 +107,8 @@ def pack(source: Path, output: Path) -> dict:
         raise ValueError("Asset directory exceeds ROM bank zero")
     if len(inputs[CONTRACT["CART_ASSET_CATALOG"]][2]) > 0x4000:
         raise ValueError("Catalog offsets exceed the reader's 16 KB source-address range")
+    if len(inputs[CONTRACT["CART_ASSET_ITEM_CATALOG"]][2]) > 0x4000:
+        raise ValueError("Item catalog offsets exceed the reader's 16 KB source-address range")
 
     manifest: dict = {
         "format": "c264 magic cart",

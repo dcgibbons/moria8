@@ -18,10 +18,7 @@
 .segment C128Bank1CatalogNames
 #import "../../shared/catalog/catalog_names.s"
 .assert "Catalog names fit their Bank1 span", catalog_names_end <= BANK1_CATALOG_NAMES_END + 1, true
-.segment C128ResidentWorld
-
-// Boot loads (main.s c128_load_core_residents, after this world payload has
-// loaded): the main image has no room for them.
+.segment Default
 // The monster catalog's fields and names, into their Bank 1 spans.
 catalog_filename:
     .text "128.CAT"

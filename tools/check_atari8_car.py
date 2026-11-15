@@ -78,6 +78,7 @@ def check(car: Path, source: Path) -> None:
         contract["CART_ASSET_RUNTIME"]: "ATARI.BNK",
         contract["CART_ASSET_TITLE"]: "TITLE.DAT",
         contract["CART_ASSET_CATALOG"]: None,
+        contract["CART_ASSET_ITEM_CATALOG"]: None,
         contract["CART_ASSET_LEGAL_UI"]: "legalui",
         contract["CART_ASSET_LEGAL_NOTICE"]: None,
         contract["CART_ASSET_LEGAL_OFFER"]: None,
@@ -115,6 +116,8 @@ def check(car: Path, source: Path) -> None:
 
         if asset_id == contract["CART_ASSET_CATALOG"]:
             expected = b"\0\0" + b"".join(catalog_disk.records())
+        elif asset_id == contract["CART_ASSET_ITEM_CATALOG"]:
+            expected = b"\0\0" + catalog_disk.item_atari_bytes()
         elif asset_id in (contract["CART_ASSET_LEGAL_NOTICE"], contract["CART_ASSET_LEGAL_OFFER"]):
             doc_name = "LICENSE" if asset_id == contract["CART_ASSET_LEGAL_NOTICE"] else "SOURCE-OFFER"
             doc = (make_atari8_car.ROOT / "data" / doc_name).read_bytes()

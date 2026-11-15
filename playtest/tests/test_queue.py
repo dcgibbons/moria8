@@ -129,6 +129,34 @@ class QueueOrderTest(unittest.TestCase):
         self.assertEqual(best["deepest"], "clvl10 dl10")
 
 
+class VictoryKeptTest(unittest.TestCase):
+    def test_a_wins_crown_screen_is_kept_in_victories(self) -> None:
+        """Maintainer, 2026-11-14: the wins were looked for in var/moria8/
+        victories, which held only the first two, copied by hand; every
+        capture stayed in its run's worker directory. A won run's crown
+        screen ("really the one i want captured") is kept there as
+        <date>-<platform>-<character>.png; nothing for a run that did not
+        win or has no capture."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            run_dir = home / "runs" / "20261114-120510-balrog-c64-half-elf-paladin-450219427"
+            victory = run_dir / "w10" / "victory"
+            victory.mkdir(parents=True)
+            for n, text in enumerate(("You have won! Shift+Q to claim victory.", "          Veni, Vidi, Vici!",
+                                      "   * Total Winner *", "")):
+                (victory / f"{n:02d}.txt").write_text(text + "\n")
+                (victory / f"{n:02d}.png").write_bytes(bytes([n]) * 8)
+            record = {"outcome": "reached", "platform": "c64", "character": "half-elf-paladin"}
+            kept = queue.keep_victory(run_dir, home, record)
+            self.assertIsNotNone(kept)
+            assert kept is not None
+            self.assertEqual(kept.parent, home / "victories")
+            self.assertTrue(kept.name.endswith("-c64-half-elf-paladin.png"))
+            self.assertEqual(kept.read_bytes(), bytes([1]) * 8)            # the crown, not Total Winner
+            self.assertIsNone(queue.keep_victory(run_dir, home, {**record, "outcome": "died"}))
+            self.assertIsNone(queue.keep_victory(home / "runs" / "none", home, record))
+
+
 class ScheduleTest(unittest.TestCase):
     """§23.5: subqueues borrow workers; the main queue keeps its minimum,
     pausing its newest runs rather than losing them."""

@@ -763,15 +763,8 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
 #endif
 
 #if C128_TEST_SCRIPTED_INPUT
-#if C128_TEST_CACHE_SURVIVAL
-    jmp c128_test_cache_survival_town_entry
-#else
 c128_test_town_pass_sym:
     brk
-#endif
-
-#elif C128_TEST_CACHE_SURVIVAL
-    jmp c128_test_cache_survival_town_entry
 #endif
 
     jmp main_loop
@@ -866,6 +859,9 @@ c64_test_single_drive_load_return_resume_entry:
     // fallback message here just like overlay restore and generation do.
     jsr tier_invalidate_state
     jsr tier_restore_after_overlay
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_refetch_slots
+#endif
 
     // Recalculate derived stats from loaded base values
     jsr player_calc_stats
@@ -2800,7 +2796,10 @@ calc_dig_ability:
     rts
 
 !cda_has_weapon:
-    lda it_category,x
+    stx zp_temp0                // Save weapon slot_lo
+    ldx #EQUIP_WEAPON
+    jsr item_get_category_inv_x // Sets item_cur_page, A = it_category
+    ldx zp_temp0                // X = weapon slot_lo
     cmp #ICAT_DIGGING
     beq !cda_dig_tool+
 
@@ -2822,13 +2821,29 @@ calc_dig_ability:
     rts
 
 !cda_dig_tool:
-    // Digging tool: ability = (STR >> 2) + dig_base_table[type-62] + (ego * 12)
+    // Digging tool: ability = (STR >> 2) + base_bonus + (ego * 12)
     lda zp_player_str
     lsr
     lsr                         // STR >> 2
     sta tun_dig_ability
 
-    // Add base bonus from table
+    lda item_cur_page
+    bne !cda_done-              // All digging tools are Page 0 (#62,#63,#157..160)
+    cpx #157
+    bcc !cda_legacy_tool+
+    cpx #161
+    bcs !cda_done-
+    lda dig_base_ext - 157,x
+    clc
+    adc tun_dig_ability
+    bcc !cda_ext_ok+
+    lda #$FF
+!cda_ext_ok:
+    sta tun_dig_ability
+    rts
+
+!cda_legacy_tool:
+    // Add base bonus from table (#62 Shovel, #63 Pick)
     txa
     sec
     sbc #62                     // Index into dig_base_table (0=Shovel, 1=Pick)
@@ -2840,6 +2855,7 @@ calc_dig_ability:
 
     // Add ego bonus: ego * 12
     lda inv_ego + EQUIP_WEAPON
+    and #EGO_ID_MASK
     beq !cda_done-              // ego=0, no bonus
     // Multiply ego (1 or 2) by 12
     // ego * 12 = ego * 8 + ego * 4
@@ -2860,6 +2876,8 @@ calc_dig_ability:
 
 dig_base_table:
     .byte 6, 20                 // Shovel base=6, Pick base=20
+dig_base_ext:
+    .byte 18, 32, 30, 44        // #157 Gnomish S, #158 Orcish P, #159 Dwarven S, #160 Dwarven P
 
 // ============================================================
 // roll_tool_ego_check — Handle ego roll for digging tools
@@ -2903,6 +2921,7 @@ roll_tool_ego_check:
 // ============================================================
 put_tool_ego_prefix:
     // Compute index = (type - 62) * 2 + (ego - 1)
+    and #EGO_ID_MASK
     sec
     sbc #1                      // ego - 1 (0 or 1)
     sta ptep_temp
@@ -2942,60 +2961,16 @@ tool_ego_prefix_hi:
 #endif
 
 // ============================================================
-// banked_ego_put_suffix — Write ego suffix to screen
-// Input: A = ego type (0 = no ego)
+// banked_ego_put_suffix — Write ego suffix to screen via ITEM.CAT
+// Input: A = ego byte (page_bit | ego_id; 0 = no ego)
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 banked_ego_put_suffix:
-    cmp #0
+    and #EGO_ID_MASK
     beq !beps_done+
     cmp #EGO_TYPE_COUNT
     bcs !beps_done+
-#if HAL_PLATFORM_AUX_PERSISTENT_DATA
-    // The caller may live in HELP or TOWN, so OVL.ITEMS suffix pointers are
-    // not executable/readable here. Each immutable aux slot is 16 bytes, so
-    // resistance armour prints the " (Resist" slot after the last ego, then
-    // its own: ")", " Acid)", " Fire)", " Cold)" or " Lightning)".
-    .assert "The aux ego suffix slots (and the Resist prefix) fit one page", (EGO_TYPE_COUNT + 1) * 16 <= 256, true
-    cmp #EGO_RESIST
-    bcc beps_put_slot
-    cmp #EGO_MAGI
-    bcs beps_put_slot     // " of the Magi": no prefix
-    pha
-    lda #EGO_TYPE_COUNT
-    jsr beps_put_slot
-    pla
-beps_put_slot:
-    asl
-    asl
-    asl
-    asl
-    sta zp_ptr0
-    lda #>hal_ego_suffix_slots
-    sta zp_ptr0_hi
-    ldx #0
-!beps_loop:
-    txa
-    tay
-    jsr mmu_safe_map_read_ptr0
-    beq !beps_done+
-    jsr hal_screen_put_char
-    inx
-    bne !beps_loop-
-#else
-    jsr ego_get_suffix_ptr
-    ldy #0
-!beps_loop:
-    lda (zp_ptr0),y
-    beq !beps_done+
-    sty beps_save_y
-    jsr hal_screen_put_char
-    ldy beps_save_y
-    iny
-    jmp !beps_loop-
-#endif
+    jsr item_cat_decode_ego     // zp_ptr0/hi -> decoded ego suffix in item_name_decode_buf
+    jmp hal_screen_put_string
 !beps_done:
     rts
-#if !HAL_PLATFORM_AUX_PERSISTENT_DATA
-beps_save_y: .byte 0
-#endif

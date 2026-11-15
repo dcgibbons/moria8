@@ -92,6 +92,9 @@ wizard_reset_session_state:
 wizard_level_jump_active:
     .byte 0
 
+scroll_teleport_level_exec:
+    rts
+
 wizard_wall_walk_active:
     lda #0
     rts
@@ -249,8 +252,10 @@ tramp_dig_ability:
 
 tun_dig_ability: .byte 0
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
+#define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
 #import "../../common/reu.s"
 #import "../screen.s"
 #import "../../../../core/color.s"
@@ -262,16 +267,20 @@ tun_dig_ability: .byte 0
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
+// ui_status.s and stat_display.s never run here; status_draw is patched by
+// install_jump_patch (3-byte JMP slot) and status_mark_dirty is a no-op.
+status_draw:
+    nop
+    nop
+    rts
+status_mark_dirty:
+    rts
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-// Modules this test never executes load above the overlay, so the test
-// body stays below TestCreateOverlay ($D000).
-.segmentdef TestUnusedOverlay [start=$E100, max=$FFF9]
+// Modules this test never executes sit in the $D000 I/O hole so they neither
+// push Default past MAP_BASE ($C000) nor overlap Test Bodies ($E700+).
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -282,9 +291,14 @@ dg_idx: .byte 0
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
+// monster_ai.s never runs here (turn_post_action is patched to
+// test_turn_post_action); game_loop.s reads mat_scene_dirty and turn.s
+// references monster_ai_tick.
+mat_scene_dirty: .byte 0
+monster_ai_tick:
+    jmp test_finish
 #import "../../../../core/recall.s"
-.segment TestUnusedOverlay
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
 .segment Default
 .macro ChestSummonsSegment() {
@@ -293,7 +307,13 @@ dg_idx: .byte 0
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+// Test 56 calls load_resume_game -> player_recalc_pflags_equipment on a
+// Long sword and Plate Mail at STR 10 (no heavy-weapon penalty, no flags).
+hal_item_cat_read_byte:
+    lda #0
+    rts
 #import "../../../../core/chest_summons.s"
 .macro ChestLootSegment() {
 }
@@ -304,14 +324,30 @@ random_floor_in_room:
     lda #0
     tay
     rts
-.segment TestUnusedOverlay
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
 .segment Default
+#define EGO_ARMOUR_SEGMENT_CUSTOM
+.macro EgoArmourSegment() {
+    .segment TestCreateOverlay
+}
+.macro EgoArmourRestoreSegment() {
+    .segment Default
+}
+#define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+.macro EgoArmourDataSegment() {
+    .segment TestCreateOverlay
+}
+.macro EgoArmourDataRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"

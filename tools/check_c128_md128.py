@@ -53,8 +53,17 @@ def check(crt: Path, source: Path) -> None:
     contract = make_c128_md128.CONTRACT
     syms = parse_symbols(source / "main.sym")
     assert syms["entry"] == contract["CART_ENTRY"]
-    assert syms["program_end"] <= 0x6000, f"program_end=${syms['program_end']:04x} > $6000"
-    assert syms["cart_reader_end"] <= 0x6000
+    assert syms["program_end"] <= 0xAF00, f"program_end=${syms['program_end']:04x} > $AF00"
+    assert syms["cart_read"] < 0x8000, f"cart_read=${syms['cart_read']:04x} >= $8000"
+    assert syms["hal_item_cat_cart_read_byte"] < 0x8000, (
+        f"hal_item_cat_cart_read_byte=${syms['hal_item_cat_cart_read_byte']:04x} >= $8000"
+    )
+    assert syms["cart_desc_buf"] + contract["CART_DESCRIPTOR_SIZE"] <= 0x8000
+    assert syms["cart_reader_end"] <= 0x8000, f"cart_reader_end=${syms['cart_reader_end']:04x} > $8000"
+    moria_prg = (source / "moria128.prg").read_bytes()
+    assert 0x1C01 + len(moria_prg) - 2 == syms["program_end"], (
+        f"moria128.prg ends at ${0x1C01 + len(moria_prg) - 2:04x}, expected program_end=${syms['program_end']:04x}"
+    )
     assert syms["mmu_common_helpers_blob_end"] - syms["mmu_common_helpers_blob"] <= 0x1FF
     helpers_base = catalog_disk.consts(
         catalog_disk.ROOT / "platforms/commodore/c128/memory128.s"
@@ -68,7 +77,16 @@ def check(crt: Path, source: Path) -> None:
     assert syms["runtime_common_data_end"] <= syms["mmu_common_cart_copy_chunk"]
     assert syms["mmu_common_cart_copy_end"] <= 0x1000
 
-    for dead in ("c128_load_runtime_prg", "legal_notice_filename", "legal_offer_filename"):
+    for dead in (
+        "c128_load_runtime_prg",
+        "c128_load_resident_item_names_prg",
+        "c128_load_resident_diskio_prg",
+        "c128_load_resident_world_prg",
+        "c128_load_resident_items_prg",
+        "c128_load_resident_select_prg",
+        "legal_notice_filename",
+        "legal_offer_filename",
+    ):
         assert dead not in syms, f"Dead disk symbol still emitted: {dead}"
 
     overlay_consts = catalog_disk.consts(catalog_disk.ROOT / "platforms/commodore/common/overlay.s")

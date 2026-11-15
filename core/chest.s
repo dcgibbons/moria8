@@ -188,6 +188,9 @@ chest_trigger_traps:
     beq !ctt_no_str+
     ldx #HSTR_CHEST_NEEDLE
     jsr huff_print_msg
+    lda player_sust_mask
+    and #SUST_STR
+    bne !ctt_str_immune+
     lda player_data + PL_STR_CUR
     cmp #4
     bcc !ctt_str_immune+

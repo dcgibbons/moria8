@@ -19,8 +19,27 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import check_memory_contract  # noqa: E402
+
+ROOT = HERE.parents[1]
 BUILD_CX16 = ROOT / "build" / "cx16"
+BANK_CONSTS = check_memory_contract.parse_bank_constants(
+    (HERE / "memory.s").read_text(encoding="utf-8"),
+    catalog_enabled=True,
+)
+CX16_BANK_ITEM_CAT = BANK_CONSTS["CX16_BANK_ITEM_CAT"]
+CX16_BANK_EXT_BASE = BANK_CONSTS["CX16_BANK_EXT_BASE"]
+CX16_BANK_CATALOG = BANK_CONSTS["CX16_BANK_CATALOG"]
+CX16_BANK_LEGAL = BANK_CONSTS["CX16_BANK_LEGAL"]
+CX16_BANK_WARM_BASE = BANK_CONSTS["CX16_BANK_WARM_BASE"]
+
+SAVE_VERSION = 0x20
+TOTAL_INV_SLOTS = 34
+EQUIP_CLOAK = 32
+EQUIP_SECONDARY = 33
 
 MENU_EXPECTED_STR = "N)ew  L)oad  D)isk Setup  A)bout"
 MENU_START_COL = (80 - len(MENU_EXPECTED_STR)) // 2   # centred (main.s title_draw_menu)
@@ -558,7 +577,7 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     tb.press("1")
     tb.assert_line("legal_missing", tb.screen_has("Document read failed"), "missing file did not return an error")
     tb.press(" ")
-    tb.assert_line("legal_channel_closed", tb.read_bank_u8(23, tb.syms["legal_opened"]) == 0, "failed channel remained open")
+    tb.assert_line("legal_channel_closed", tb.read_bank_u8(CX16_BANK_LEGAL, tb.syms["legal_opened"]) == 0, "failed channel remained open")
     tb.write_u8(notice_addr, notice_first)
     # Inject the SD/IEC error shape which HostFS OPEN normally catches first.
     # Keep the production CHRIN, fill loop, bank restore and error UI intact.
@@ -567,12 +586,12 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     for i, byte in enumerate((0xA9, 0x42, 0xEA)):  # LDA #EOI|timeout; NOP
         tb.write_u8(status_addr + i, byte)
     cache = tb.syms["legal_input_cache"]
-    tb.write_bank_u8(23, cache, 0xA5)
+    tb.write_bank_u8(CX16_BANK_LEGAL, cache, 0xA5)
     tb.press("1")
     tb.assert_line("legal_read_fault", tb.screen_has("Document read failed"), "READST $42 did not abort the page")
     tb.assert_line("legal_zero_chunk", tb.read_u8(tb.syms["legal_chunk_count"]) == 0,
                    "failed CHRIN was committed")
-    tb.assert_line("legal_zero_copy", tb.read_bank_u8(23, cache) == 0xA5,
+    tb.assert_line("legal_zero_copy", tb.read_bank_u8(CX16_BANK_LEGAL, cache) == 0xA5,
                    "empty chunk copied a garbage byte")
     tb.press(" ")
     for i, byte in enumerate(status_call):
@@ -621,6 +640,42 @@ def scenario_wizard_flow(tb: X16Bench) -> None:
         "gain level printed garbage instead of the level-up message",
     )
     tb.assert_line("gain_level_lv", tb.screen_has("LV:2"), "status line did not advance to LV:2")
+    # Exercise OVL.HOME (STORE_HOME = 7) and OVL.TOWN (General Store = 0) via tramp_store_enter.
+    for store_idx, expect_text, label, roundtrip_home in (
+        (7, "D)ep R)et Q)uit", "home_overlay", True),
+        (0, "General Store", "town_store", False),
+    ):
+        sx = tb.read_u8(tb.syms["store_door_x"] + store_idx)
+        sy = tb.read_u8(tb.syms["store_door_y"] + store_idx)
+        step = next(
+            ((nx, ny, key) for nx, ny, key in (
+                (sx - 1, sy, "L"),
+                (sx + 1, sy, "H"),
+                (sx, sy - 1, "J"),
+                (sx, sy + 1, "K"),
+            ) if (tb.map_read(nx, ny) & 0xF1) == 0),
+            None,
+        )
+        tb.assert_line(f"{label}_approach", step is not None, f"no free tile beside ({sx},{sy})")
+        if step is not None:
+            tb.write_u8(tb.syms["zp_player_x"], step[0])
+            tb.write_u8(tb.syms["zp_player_y"], step[1])
+            tb.press(step[2])
+            tb.drain_more()
+            tb.assert_line(f"{label}_entered", tb.screen_has(expect_text), f"missing {expect_text!r}")
+            if roundtrip_home:
+                row3_empty = tb.rowtext(3).strip()
+                tb.press("D")
+                tb.press("A")
+                tb.drain_more()
+                tb.assert_line("home_deposit", "a) " in tb.rowtext(3), f"deposited item missing from Home: {tb.rowtext(3)!r}")
+                tb.press("R")
+                tb.press("A")
+                tb.drain_more()
+                tb.assert_line("home_retrieve", tb.rowtext(3).strip() == row3_empty, f"retrieved item stayed in Home: {tb.rowtext(3)!r}")
+            tb.press("Q")
+            tb.drain_more()
+            tb.assert_line(f"{label}_exited", tb.in_town(), f"did not return to town from {label}")
     tb.dump("after_wizard")
     tb.log("SCENARIO DONE")
 
@@ -1205,7 +1260,7 @@ def _finish_save_to_title(tb: X16Bench) -> bool:
 
 
 # Inventory fields of one slot (id, qty, p1, to_hit, to_dam, to_ac, flags,
-# ego); the arrays are contiguous with a stride of TOTAL_INV_SLOTS (33).
+# ego); the arrays are contiguous with a stride of TOTAL_INV_SLOTS (34).
 def _inv_seed(tb: X16Bench, slot: int, fields: list[int]) -> None:
     base = tb.syms["inv_item_id"]
     stride = tb.syms["inv_qty"] - base
@@ -1218,24 +1273,76 @@ def _inv_field(tb: X16Bench, slot: int, k: int) -> int:
     return tb.read_u8(base + k * (tb.syms["inv_qty"] - base) + slot)
 
 
+def scenario_mage_identify_selector(tb: X16Bench) -> None:
+    tb.chargen("B")
+    pd = tb.syms["player_data"]
+    tb.write_u8(pd + 19, 40)                          # PL_LEVEL
+    tb.write_u8(pd + 28, 25)                          # PL_INT_CUR
+    tb.write_u8(pd + 37, 50)                          # PL_MANA
+    tb.write_u8(pd + 38, 50)                          # PL_MAX_MANA
+    tb.write_u8(pd + 63, tb.read_u8(pd + 63) | 0x10)  # PL_SPELLS_LEARNT_2 |= spell 20 (Identify)
+    tb.write_u8(0x31, 50)                             # zp_player_mp
+    tb.write_u8(0x32, 50)                             # zp_player_mmp
+    tb.write_u8(0x33, 40)                             # zp_player_lvl
+    tb.write_u8(0x37, 25)                             # zp_player_int
+
+    empty_slots = [i for i in range(22) if _inv_field(tb, i, 0) == 0xFF]
+    tb.assert_line("identify_slots_ready", len(empty_slots) >= 2, "need 2 empty inventory slots")
+    book_slot, wand_slot = empty_slots[0], empty_slots[1]
+    book_idx = sum(1 for i in range(book_slot) if _inv_field(tb, i, 0) in (47, 55, 56, 57))
+    _inv_seed(tb, book_slot, [56, 1, 0, 0, 0, 0, 0x02, 0])   # Magick II (Mage book 3)
+    _inv_seed(tb, wand_slot, [40, 1, 0, 0, 0, 0, 0x00, 0])   # unidentified Wand of Lightning
+    wand_idx = sum(1 for i in range(wand_slot) if _inv_field(tb, i, 0) != 0xFF)
+
+    book_key = chr(ord("A") + book_idx)
+    wand_key = chr(ord("A") + wand_idx)
+    cast_ok = False
+    for _ in range(4):
+        tb.press("M")
+        tb.press(book_key)
+        tb.press("A")
+        if tb.screen_has("Identify which item"):
+            tb.shift("/")
+            tb.assert_line(
+                "identify_selector_open",
+                tb.screen_has("Inventory") and tb.screen_has("Identify which item"),
+                "'?' selector from Identify did not render inventory overlay",
+            )
+            tb.press(wand_key)
+            tb.assert_line("identify_message", tb.screen_has("This is"), "Identify did not print result")
+            tb.drain_more()
+            cast_ok = True
+            break
+        tb.drain_more()
+    tb.assert_line("identify_cast_ok", cast_ok, "Identify spell never succeeded")
+    tb.assert_line("identify_town_restored", tb.in_town(), "did not return to town after Identify '?'")
+    tb.assert_line("identify_flag_set", (_inv_field(tb, wand_slot, 6) & 0x02) != 0, "target item flag not identified")
+    tb.log("SCENARIO DONE")
+
+
 # SHIFT+X (VMS `x`, moria.inc switch_weapon): a cursed primary is refused
 # with no turn; uncursed, the swap takes one turn, moves all 8 fields and
 # reports both slots.
 def scenario_weapon_exchange(tb: X16Bench) -> None:
     tb.chargen("A")
+    tb.assert_line(
+        "inv_stride_34",
+        tb.syms["inv_qty"] - tb.syms["inv_item_id"] == TOTAL_INV_SLOTS,
+        f"stride={tb.syms['inv_qty'] - tb.syms['inv_item_id']} != {TOTAL_INV_SLOTS}",
+    )
     turn = tb.syms["zp_turn_lo"]
-    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 3, 0])   # Mace (+1,+0), cursed
-    _inv_seed(tb, 32, [2, 1, 0, 3, 4, 0, 2, 6])   # Dagger (+3,+4) (Defender)
+    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 3, 0])                 # Mace (+1,+0), cursed
+    _inv_seed(tb, EQUIP_SECONDARY, [2, 1, 0, 3, 4, 0, 2, 6])    # Dagger (+3,+4) (Defender)
     turn0 = tb.read_u8(turn)
     tb.shift("X")
     tb.assert_line(
         "exchange_cursed_refused",
         tb.screen_has("You cannot remove it, it is cursed!")
-        and _inv_field(tb, 22, 0) == 5 and _inv_field(tb, 32, 0) == 2
+        and _inv_field(tb, 22, 0) == 5 and _inv_field(tb, EQUIP_SECONDARY, 0) == 2
         and tb.read_u8(turn) == turn0,
-        f"primary={_inv_field(tb, 22, 0)} secondary={_inv_field(tb, 32, 0)} turn={tb.read_u8(turn)}/{turn0}",
+        f"primary={_inv_field(tb, 22, 0)} secondary={_inv_field(tb, EQUIP_SECONDARY, 0)} turn={tb.read_u8(turn)}/{turn0}",
     )
-    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 2, 0])   # the curse lifted
+    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 2, 0])                 # the curse lifted
     tb.shift("X")
     tb.assert_line(
         "exchange_report",
@@ -1245,8 +1352,8 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
     tb.assert_line(
         "exchange_swapped",
         _inv_field(tb, 22, 0) == 2 and _inv_field(tb, 22, 3) == 3 and _inv_field(tb, 22, 7) == 6
-        and _inv_field(tb, 32, 0) == 5 and _inv_field(tb, 32, 3) == 1 and _inv_field(tb, 32, 6) == 2
-        and _inv_field(tb, 31, 0) == 0xFF,
+        and _inv_field(tb, EQUIP_SECONDARY, 0) == 5 and _inv_field(tb, EQUIP_SECONDARY, 3) == 1
+        and _inv_field(tb, EQUIP_SECONDARY, 6) == 2 and _inv_field(tb, EQUIP_CLOAK, 0) == 0xFF,
         "records not exchanged",
     )
     tb.assert_line("exchange_one_turn", tb.read_u8(turn) == (turn0 + 1) & 0xFF,
@@ -1278,19 +1385,36 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
 
 def scenario_save_load(tb: X16Bench) -> None:
     tb.chargen("A")
-    _inv_seed(tb, 32, [2, 1, 0, 3, 4, 0, 2, 6])   # secondary: Dagger (+3,+4) (Defender)
+    cloak_rec = [82, 1, 0, 0, 0, 2, 0x02, 0]                    # Cloak [1,+2] in EQUIP_CLOAK
+    sec_rec = [2, 1, 0, 3, 4, 0, 2, 6]                          # Dagger (+3,+4) (Defender) in EQUIP_SECONDARY
+    recall_sample = [0x12, 0x34, 0x56, 0x78]
+    recall_aux = 0xA000 + (tb.syms["recall_data_start"] & 0x1FFF) + 278 * 4
+    _inv_seed(tb, EQUIP_CLOAK, cloak_rec)
+    _inv_seed(tb, EQUIP_SECONDARY, sec_rec)
+    for i, val in enumerate(recall_sample):
+        tb.write_bank_u8(3, recall_aux + i, val)
     tb.shift("S")
     tb.assert_line("save_slot_prompt", tb.screen_has("Select Slot 1-4"), "save slot prompt did not appear")
     tb.press("1")
     title_ok = _finish_save_to_title(tb)
     tb.assert_line("save_completed", title_ok, "save did not complete")
     tb.assert_line("title_after_save", title_ok, "did not return to title after save-and-quit")
+    save_path = tb.workdir / "THE.GAME"
     tb.assert_line(
         "host_marker",
-        (tb.workdir / "THE.GAME").is_file(),
+        save_path.is_file(),
         "THE.GAME not written to HostFS working directory",
     )
-    _inv_seed(tb, 32, [0xFF, 0, 0, 0, 0, 0, 0, 0])   # only the load can bring it back
+    save_hdr = save_path.read_bytes()[:8] if save_path.is_file() else b""
+    tb.assert_line(
+        "save_v2_header",
+        save_hdr == b"MORIA01" + bytes([SAVE_VERSION]),
+        f"header={save_hdr!r}",
+    )
+    _inv_seed(tb, EQUIP_CLOAK, [0xFF, 0, 0, 0, 0, 0, 0, 0])
+    _inv_seed(tb, EQUIP_SECONDARY, [0xFF, 0, 0, 0, 0, 0, 0, 0])   # only the load can bring them back
+    for i in range(4):
+        tb.write_bank_u8(3, recall_aux + i, 0)
     tb.press("L")
     tb.assert_line("load_slots", tb.screen_has("Save Slots:"), "load did not show the slot list")
     tb.assert_line(
@@ -1313,9 +1437,20 @@ def scenario_save_load(tb: X16Bench) -> None:
         f"eff_invuln_timer not cleared on load: {tb.read_u8(0x6F)}",
     )
     tb.assert_line(
+        "cloak_restored",
+        [_inv_field(tb, EQUIP_CLOAK, k) for k in range(8)] == cloak_rec,
+        f"slot32={[_inv_field(tb, EQUIP_CLOAK, k) for k in range(8)]}",
+    )
+    tb.assert_line(
         "secondary_restored",
-        [_inv_field(tb, 32, k) for k in range(8)] == [2, 1, 0, 3, 4, 0, 2, 6] and _inv_field(tb, 31, 0) == 0xFF,
-        f"slot32={[_inv_field(tb, 32, k) for k in range(8)]} slot31_id={_inv_field(tb, 31, 0)}",
+        [_inv_field(tb, EQUIP_SECONDARY, k) for k in range(8)] == sec_rec,
+        f"slot33={[_inv_field(tb, EQUIP_SECONDARY, k) for k in range(8)]}",
+    )
+    got_recall = [tb.read_bank_u8(3, recall_aux + i) for i in range(4)]
+    tb.assert_line(
+        "recall_restored",
+        got_recall == recall_sample,
+        f"recall[278]={got_recall}",
     )
     tb.dump("after_load")
     tb.log("SCENARIO DONE")
@@ -1478,8 +1613,181 @@ def scenario_disk_setup(tb: X16Bench) -> None:
     tb.log("SCENARIO DONE")
 
 
+def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
+    """Exercise $00-preserving banked byte/block/copy helpers and Bank 3 key map."""
+    stub_base = 0x0400
+    scratch = 0x0500
+    ovl_bank = 9  # OVL_START active in $A000-$BFFF while helpers run
+
+    def run_stub(code: list[int]) -> None:
+        for idx, op in enumerate(code):
+            tb.write_u8(stub_base + idx, op)
+        tb.run_addr(stub_base)
+
+    def jsr(sym: str) -> list[int]:
+        addr = tb.syms[sym]
+        return [0x20, addr & 0xFF, addr >> 8]
+
+    zp_t0 = tb.syms["zp_temp0"]
+    zp_t1 = tb.syms["zp_temp1"]
+    zp_p0 = tb.syms["zp_ptr0"]
+    zp_p0_hi = tb.syms["zp_ptr0_hi"]
+    zp_p1 = tb.syms["zp_ptr1"]
+    zp_p1_hi = tb.syms["zp_ptr1_hi"]
+
+    tb.write_u8(0x0000, ovl_bank)
+    ovl_ref = tb.read_u8(0xA000)
+
+    # 1. Single-byte write/read to Bank 5 (reserved MONSTER.CAT ext bank) and Bank 63
+    tb.write_u8(zp_p0, 0x13)
+    tb.write_u8(zp_p0_hi, 0xA0)
+    run_stub(
+        [0xA9, 0x5A, 0xA2, 0x05, 0xA0, 0x04]
+        + jsr("cx16_bank_write_byte")
+        + [0x8D, scratch & 0xFF, scratch >> 8]
+        + [0xA9, 0xC3, 0xA2, 63, 0xA0, 0x07]
+        + jsr("cx16_bank_write_byte")
+        + [0x60]
+    )
+    tb.assert_line("wb_bank_kept", tb.read_u8(0x0000) == ovl_bank, "bank reg clobbered after write_byte")
+    tb.assert_line("wb_ovl_intact", tb.read_u8(0xA000) == ovl_ref, "overlay window disturbed")
+    tb.assert_line("wb_a_kept", tb.read_u8(scratch) == 0x5A, "write_byte did not preserve A")
+    tb.assert_line(
+        "wb_values",
+        tb.read_bank_u8(5, 0xA017) == 0x5A and tb.read_bank_u8(63, 0xA01A) == 0xC3,
+        f"b5={tb.read_bank_u8(5, 0xA017):02X} b63={tb.read_bank_u8(63, 0xA01A):02X}",
+    )
+
+    run_stub(
+        [0xA9, 0x05, 0xA0, 0x04]
+        + jsr("cx16_bank_read_byte")
+        + [0x8D, (scratch + 1) & 0xFF, (scratch + 1) >> 8]
+        + [0xA9, 63, 0xA0, 0x07]
+        + jsr("cx16_bank_read_byte")
+        + [0x8D, (scratch + 2) & 0xFF, (scratch + 2) >> 8]
+        + [0x60]
+    )
+    tb.assert_line("rb_bank_kept", tb.read_u8(0x0000) == ovl_bank, "bank reg clobbered after read_byte")
+    tb.assert_line(
+        "rb_values",
+        tb.read_u8(scratch + 1) == 0x5A and tb.read_u8(scratch + 2) == 0xC3,
+        f"r5={tb.read_u8(scratch + 1):02X} r63={tb.read_u8(scratch + 2):02X}",
+    )
+
+    # 2. Block write/read to Bank CX16_BANK_EXT_BASE (Bank 7, 16 B at offset $08)
+    ext_bank = CX16_BANK_EXT_BASE
+    for i in range(16):
+        tb.write_u8(scratch + 0x10 + i, 0xB0 + i)
+        tb.write_u8(scratch + 0x30 + i, 0x00)
+    tb.write_u8(zp_p0, 0x20)
+    tb.write_u8(zp_p0_hi, 0xA1)
+    tb.write_u8(zp_p1, 0x08)
+    tb.write_u8(zp_p1_hi, 0x05)
+    run_stub([0xA9, ext_bank, 0xA0, 0x08, 0xA2, 0x10] + jsr("cx16_bank_write_block") + [0x60])
+    tb.assert_line("wblk_bank_kept", tb.read_u8(0x0000) == ovl_bank, "bank reg clobbered after write_block")
+    tb.assert_line(
+        "wblk_match",
+        all(tb.read_bank_u8(ext_bank, 0xA128 + i) == 0xB0 + i for i in range(16)),
+        f"Bank {ext_bank} write_block bytes mismatch",
+    )
+
+    tb.write_u8(zp_p1, 0x28)
+    tb.write_u8(zp_p1_hi, 0x05)
+    run_stub([0xA9, ext_bank, 0xA0, 0x08, 0xA2, 0x10] + jsr("cx16_bank_read_block") + [0x60])
+    tb.assert_line("rblk_bank_kept", tb.read_u8(0x0000) == ovl_bank, "bank reg clobbered after read_block")
+    tb.assert_line(
+        "rblk_match",
+        all(tb.read_u8(scratch + 0x30 + i) == 0xB0 + i for i in range(16)),
+        f"Bank {ext_bank} read_block bytes mismatch",
+    )
+
+    # 3. Multi-page unaligned cross-bank bounce copy: Bank 7 $A213 -> warm Bank $B107 (300 B)
+    warm_dst_bank = CX16_BANK_WARM_BASE
+    copy_len = 300
+    src_base = 0xA213
+    dst_base = 0xB107
+    pattern = [(i * 7 + 13) & 0xFF for i in range(copy_len)]
+    for i, val in enumerate(pattern):
+        tb.write_bank_u8(ext_bank, src_base + i, val)
+        tb.write_bank_u8(warm_dst_bank, dst_base + i, 0x00)
+    tb.write_bank_u8(warm_dst_bank, dst_base - 1, 0xEE)
+    tb.write_bank_u8(warm_dst_bank, dst_base + copy_len, 0xEE)
+
+    tb.write_u8(zp_t0, ext_bank)
+    tb.write_u8(zp_t1, warm_dst_bank)
+    tb.write_u8(zp_p0, src_base & 0xFF)
+    tb.write_u8(zp_p0_hi, src_base >> 8)
+    tb.write_u8(zp_p1, dst_base & 0xFF)
+    tb.write_u8(zp_p1_hi, dst_base >> 8)
+    run_stub(
+        [0xA9, copy_len & 0xFF, 0xA2, copy_len >> 8]
+        + jsr("cx16_bank_copy")
+        + [0x60]
+    )
+    tb.assert_line("bcopy_bank_kept", tb.read_u8(0x0000) == ovl_bank, "bank reg clobbered after bank_copy")
+    tb.assert_line(
+        "bcopy_sentinels",
+        tb.read_bank_u8(warm_dst_bank, dst_base - 1) == 0xEE and tb.read_bank_u8(warm_dst_bank, dst_base + copy_len) == 0xEE,
+        "bank_copy wrote out of bounds",
+    )
+    tb.assert_line(
+        "bcopy_payload",
+        all(tb.read_bank_u8(warm_dst_bank, dst_base + i) == pattern[i] for i in range(copy_len)),
+        "bank_copy 300-byte cross-bank payload mismatch",
+    )
+    tb.assert_line(
+        "bcopy_ptr_advance",
+        tb.read_u8(zp_p0_hi) == (src_base >> 8) + 2 and tb.read_u8(zp_p1_hi) == (dst_base >> 8) + 2,
+        f"p0_hi={tb.read_u8(zp_p0_hi):02X} p1_hi={tb.read_u8(zp_p1_hi):02X}",
+    )
+
+    # 4. Bank 3 key map lookup while Bank 9 overlay is active
+    key_count = tb.syms["key_map_count"]
+    key_map_cmd_addr = tb.syms["key_map_end"] - key_count
+    aux_cmd_base = 0xA000 + (key_map_cmd_addr & 0x1FFF)
+    exp_s = tb.read_bank_u8(3, aux_cmd_base + key_count - 2)
+    exp_v = tb.read_bank_u8(3, aux_cmd_base + key_count - 1)
+    run_stub(
+        [0xA9, 0x73] + jsr("petscii_to_command") + [0x8D, (scratch + 4) & 0xFF, (scratch + 4) >> 8]
+        + [0xA9, 0x56] + jsr("petscii_to_command") + [0x8D, (scratch + 5) & 0xFF, (scratch + 5) >> 8]
+        + [0xA9, 0xFF] + jsr("petscii_to_command") + [0x8D, (scratch + 6) & 0xFF, (scratch + 6) >> 8]
+        + [0x60]
+    )
+    tb.assert_line("keymap_bank_kept", tb.read_u8(0x0000) == ovl_bank, "bank reg clobbered after petscii_to_command")
+    tb.assert_line(
+        "keymap_lookup",
+        tb.read_u8(scratch + 4) == exp_s
+        and tb.read_u8(scratch + 5) == exp_v
+        and tb.read_u8(scratch + 6) == 0,
+        f"got s={tb.read_u8(scratch + 4)} V={tb.read_u8(scratch + 5)} none={tb.read_u8(scratch + 6)}",
+    )
+
+    # 5. Bank 6 ITEM.CAT magic/count and hal_item_cat_read_byte $00/X preservation
+    itm_magic = bytes(tb.read_bank_u8(CX16_BANK_ITEM_CAT, 0xA000 + i) for i in range(4))
+    itm_count = tb.read_bank_u8(CX16_BANK_ITEM_CAT, 0xA006) | (tb.read_bank_u8(CX16_BANK_ITEM_CAT, 0xA007) << 8)
+    tb.assert_line("item_cat_bank6_magic", itm_magic == b"ITM2" and itm_count == 370, f"magic={itm_magic!r} count={itm_count}")
+    off_lo = tb.syms["item_cat_off_lo"]
+    off_hi = tb.syms["item_cat_off_hi"]
+    tb.write_u8(off_lo, 0x06)
+    tb.write_u8(off_hi, 0x00)
+    run_stub(
+        [0xA2, 0x5A]
+        + jsr("hal_item_cat_read_byte")
+        + [0x8D, (scratch + 7) & 0xFF, (scratch + 7) >> 8]
+        + [0x8E, (scratch + 8) & 0xFF, (scratch + 8) >> 8]
+        + [0x60]
+    )
+    tb.assert_line(
+        "item_cat_reader_bank_kept",
+        tb.read_u8(0x0000) == ovl_bank and tb.read_u8(scratch + 7) == (370 & 0xFF) and tb.read_u8(scratch + 8) == 0x5A,
+        f"bank={tb.read_u8(0x0000)} val={tb.read_u8(scratch + 7):02X} x={tb.read_u8(scratch + 8):02X}",
+    )
+    tb.log("SCENARIO DONE")
+
+
 SCENARIO_FUNCS = {
     "boot_title": scenario_boot_title,
+    "bank_bounce_helpers": scenario_bank_bounce_helpers,
     "priest_pray": scenario_priest_pray,
     "priest_map_area": scenario_priest_map_area,
     "priest_find_traps": scenario_priest_find_traps,
@@ -1500,6 +1808,7 @@ SCENARIO_FUNCS = {
     "save_load": scenario_save_load,
     "weapon_exchange": scenario_weapon_exchange,
     "mage_list": scenario_mage_list,
+    "mage_identify_selector": scenario_mage_identify_selector,
     "scroll_delta": scenario_scroll_delta,
     "save_slot_tracking": scenario_save_slot_tracking,
     "disk_setup": scenario_disk_setup,

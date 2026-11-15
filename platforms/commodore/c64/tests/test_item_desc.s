@@ -83,6 +83,9 @@ si_to_hit:  .byte 0
 si_to_dam:  .byte 0
 si_to_ac:   .byte 0
 si_meta:    .byte 0
+si_meta_hi: .byte 0
+fi_item_id: .byte FI_EMPTY
+fi_meta_hi: .byte 0
 fi_add_flags: .byte 0
 fi_add_ego:   .byte 0
 
@@ -390,59 +393,95 @@ test_start:
 !t10:
     jsr item_init_identification
 
-    // Part A: approved wrap indexes for appended randomized-class rows.
+    // Part A: approved flavour indexes for appended randomized-class rows.
+    lda #0
+    sta item_cur_page
     ldx #0
 !t10a_loop:
     stx t10_cursor
     lda t10_wrap_ids,x
-    tax
-    jsr iuk_index_for_type
+    jsr item_get_unknown_idx_a
     ldx t10_cursor
     cmp t10_wrap_idx,x
-    bne !t10_fail+
+    beq !t10a_match+
+    jmp !t10_fail+
+!t10a_match:
     inx
-    cpx #27
+    cpx #28
     bcc !t10a_loop-
 
-    // Part B: every randomized-class type resolves inside its pool.
+    // Part B: every randomized-class type resolves inside its pool (or $FF if fixed-flavour)
+    // across Page 0 and Page 1.
+    lda #0
+    sta item_cur_page
+    lda #ITEM_PAGE_SIZE
+    jsr !t10b_scan_page+
+    bcs !t10b_p1+
+    jmp !t10_fail+
+!t10b_p1:
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    jsr !t10b_scan_page+
+    bcs !t10c_part+
+    jmp !t10_fail+
+
+!t10b_scan_page:
+    sta t10_page_limit
     ldx #0
 !t10b_loop:
     stx t10_cursor
-    ldy it_category,x
-    cpy #ICAT_POTION
-    beq !t10b_pool12+
-    cpy #ICAT_SCROLL
-    beq !t10b_pool12+
-    cpy #ICAT_RING
-    beq !t10b_pool4+
-    cpy #ICAT_WAND
-    beq !t10b_pool5+
-    cpy #ICAT_STAFF
-    beq !t10b_pool5+
+    txa
+    jsr item_get_category_a
+    cmp #ICAT_POTION
+    beq !t10b_potion+
+    cmp #ICAT_SCROLL
+    beq !t10b_scroll+
+    cmp #ICAT_RING
+    beq !t10b_ring+
+    cmp #ICAT_WAND
+    beq !t10b_wand+
+    cmp #ICAT_STAFF
+    beq !t10b_staff+
     jmp !t10b_next+
-!t10b_pool12:
-    lda #12
+!t10b_potion:
+    lda #FLAVOUR_POTION_COUNT
     bne !t10b_check+
-!t10b_pool4:
-    lda #4
+!t10b_scroll:
+    lda #FLAVOUR_SCROLL_COUNT
     bne !t10b_check+
-!t10b_pool5:
-    lda #5
+!t10b_ring:
+    lda #FLAVOUR_RING_COUNT
+    bne !t10b_check+
+!t10b_wand:
+    lda #FLAVOUR_WAND_COUNT
+    bne !t10b_check+
+!t10b_staff:
+    lda #FLAVOUR_STAFF_COUNT
 !t10b_check:
     sta t10_pool_max
-    ldx t10_cursor
-    jsr iuk_index_for_type
+    lda t10_cursor
+    jsr item_get_unknown_idx_a
+    cmp #$ff
+    beq !t10b_next+
     cmp t10_pool_max
-    bcs !t10_fail+
+    bcc !t10b_next+
+    clc
+    rts
 !t10b_next:
     ldx t10_cursor
     inx
-    cpx #ITEM_TYPE_COUNT
+    cpx t10_page_limit
     bcc !t10b_loop-
+    sec
+    rts
 
-    // Part C: distinct class-local indexes (96 -> 10, 98 -> 0) produce
+!t10c_part:
+    // Part C: distinct class-local indexes (96 -> 10, 98 -> 12) produce
     // distinct unknown appearances; index-0-only tables would collapse them.
     // Unknown names decode into one shared buffer, so compare contents.
+    lda #0
+    sta item_cur_page
     lda #96
     jsr item_get_name_ptr
     ldy #0
@@ -563,6 +602,7 @@ test_start:
     jmp test_finish
 
 t10_cursor:  .byte 0
+t10_page_limit: .byte 0
 t10_pool_max: .byte 0
 t10_name_buf: .fill 32, 0
 t10_wrap_ids:
@@ -570,9 +610,9 @@ t10_wrap_ids:
     .byte 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119
     .byte 120, 121, 126, 127
 t10_wrap_idx:
-    .byte 10, 11, 0, 1, 2, 10, 11, 0, 1, 2, 3, 4
-    .byte 5, 2, 3, 0, 1, 2, 4, 0, 1, 2, 3, 4
-    .byte 0, 1, 3, 2
+    .byte 10, 11, 12, 13, 14, 10, 11, 12, 13, 14, 15, 16
+    .byte 17, 2, 3, 4, 5, 6, 4, 5, 6, 7, 8, 4
+    .byte 5, 6, 15, 7
 
 test_prepare_row0:
     jsr screen_clear
@@ -600,6 +640,7 @@ assert_row0_prefix:
 
 test_all_known_item_names:
     lda #0
+    sta item_cur_page
     sta item_name_test_id
 !next_item:
     ldx item_name_test_id
@@ -619,7 +660,7 @@ test_all_known_item_names:
     bcc !fail+
     inc item_name_test_id
     lda item_name_test_id
-    cmp #ITEM_TYPE_COUNT
+    cmp #157
     bcc !next_item-
     sec
     rts
@@ -736,7 +777,7 @@ expected_item_name_hi:
     .byte >ein_146, >ein_147, >ein_148, >ein_149
     .byte >ein_150, >ein_151, >ein_152
     .byte >ein_153, >ein_154, >ein_155, >ein_156
-.assert "expected_item_name_hi covers every item type", * - expected_item_name_hi, ITEM_TYPE_COUNT
+.assert "expected_item_name_hi covers legacy item types", * - expected_item_name_hi, 157
 
 ein_0:  .text "Gold (small)" ; .byte 0
 ein_1:  .text "Gold (large)" ; .byte 0

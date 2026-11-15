@@ -452,21 +452,26 @@ class Game:
         else:
             self.mon.resume()
         wall0 = time.monotonic()
-        obs = self._run_to_input(wall0)
-        while not self.game_loaded():
-            # A boot loader ran over the game's addresses: not a key wait.
-            self.step -= 1
-            self.mon.resume()
+        saved_hang = self.hang_emulated_seconds
+        self.hang_emulated_seconds = max(saved_hang, self.port.boot_emulated_seconds)
+        try:
             obs = self._run_to_input(wall0)
-        if not self.crash_cps:
-            self.arm_crash()
-        if self.port.key_feed == "return" and obs.pc not in self.key_exits:
-            # The game is loaded now: stop in the wait loop instead (key_stops),
-            # the same key wait, not a new step.
-            self.arm()
-            self.mon.resume()
-            obs = self._run_to_input(time.monotonic())
-            self.step -= 1
+            while not self.game_loaded():
+                # A boot loader ran over the game's addresses: not a key wait.
+                self.step -= 1
+                self.mon.resume()
+                obs = self._run_to_input(wall0)
+            if not self.crash_cps:
+                self.arm_crash()
+            if self.port.key_feed == "return" and obs.pc not in self.key_exits:
+                # The game is loaded now: stop in the wait loop instead (key_stops),
+                # the same key wait, not a new step.
+                self.arm()
+                self.mon.resume()
+                obs = self._run_to_input(time.monotonic())
+                self.step -= 1
+        finally:
+            self.hang_emulated_seconds = saved_hang
         self.resolve_sites()
         return self.observe(StopInfo(pc=obs.pc, registers=self.mon.registers()))
 

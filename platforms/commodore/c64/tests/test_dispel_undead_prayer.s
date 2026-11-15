@@ -30,6 +30,8 @@ test_done_break:
 
 .pc = $0840 "Main"
 
+.segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -44,7 +46,6 @@ test_done_break:
 // The equipment flags, the resistance armour roll and its suffixes are not
 // exercised here (no equipping, no item spawns): out of the way above the
 // I/O hole (2026-11-11, the Lordly rings and the element touches).
-.segmentdef TestUnusedEgoArmour [start=$e100]
 #define PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {
     .segment TestUnusedEgoArmour
@@ -61,36 +62,49 @@ hal_player_recalc_pflags:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/ui_character.s"
+.segment Default
+.segment TestUnusedEgoArmour
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/monster_magic.s"
+.segment Default
 // Adding to the pack (inv_add.s) is not exercised here: parked out of
 // reach, the runner's tripwire (tools/parked_tripwire.py) failing the
 // suite if it is ever called (the VMS weight limit, 2026-11-13, took
 // the body past MAP_BASE).
 #define INV_ADD_EXTERNAL
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #undef INV_ADD_EXTERNAL
-.segmentdef TestParkedInvAdd [start=$f000]
-.segment TestParkedInvAdd
+
+.segment TestUnusedEgoArmour
 #import "../../../../core/inv_add.s"
 .segment Default
+.segment TestUnusedEgoArmour
 #import "../../../../core/special_rooms.s"
+.segment Default
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
     .segment TestUnusedEgoArmour
@@ -105,10 +119,14 @@ hal_player_recalc_pflags:
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
+.segment TestUnusedEgoArmour
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/spell_data.s"
@@ -123,13 +141,19 @@ hal_player_recalc_pflags:
 tramp_eff_destroy_area:
     rts
 
+.segment TestUnusedEgoArmour
 #import "../dungeon_render.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment Default
 #import "../../../../core/combat.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:

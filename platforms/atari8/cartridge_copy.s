@@ -90,9 +90,13 @@ cart_read:
     sta cart_count + 1
 
     lda cart_is_record
-    beq !check_nonzero_len+
+    bne !not_plain+
+    jmp !check_nonzero_len+
+!not_plain:
     cmp #2
     beq !legal+
+    cmp #3
+    beq !item_cat+
 
     // cart_is_record == 1: 49-byte catalog record within CART_ASSET_CATALOG
     lda cart_offset
@@ -143,6 +147,31 @@ cart_read:
     sta cart_count
     lda #1
     sta cart_count + 1
+    jmp !check_nonzero_len+
+
+!item_cat:
+    // Page-aligned 256-byte (or tail) slice into icat_cache_buf (< $4000).
+    lda cart_offset
+    bne !legal_bad-
+    lda cart_offset + 1
+    cmp cart_count + 1
+    beq !icat_tail+
+    bcs !legal_bad-
+    lda #0
+    sta cart_count
+    lda #1
+    sta cart_count + 1
+    bne !icat_set_dest+
+!icat_tail:
+    lda cart_count
+    beq !legal_bad-
+    lda #0
+    sta cart_count + 1
+!icat_set_dest:
+    lda #<icat_cache_buf
+    sta cart_destination + 1
+    lda #>icat_cache_buf
+    sta cart_destination + 2
 
 !check_nonzero_len:
     lda cart_count

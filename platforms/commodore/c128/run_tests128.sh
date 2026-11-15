@@ -59,6 +59,7 @@ if [ "$kickass_status" -ne 0 ]; then
     exit 1
 fi
 KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
+python3 -B ../../../tools/gen_trampolines.py --port c128 --output ../../../build/trampolines/c128_trampolines.inc || exit 1
 if [ -n "${VICE128:-}" ]; then
     VICE="$VICE128"
 elif command -v x128 >/dev/null 2>&1; then
@@ -126,7 +127,6 @@ SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=0
 SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=0
 SAVE_WRITE_PRODUCT_BOOT_ASSETS_BUILT=0
-CACHE_SURVIVAL_BOOT_ASSETS_BUILT=0
 LOAD_RESUME_BOOT_ASSETS_BUILT=0
 REAL_BOOT_DIAG_ASSETS_BUILT=0
 TITLE_ART_BOOT_ASSETS_BUILT=0
@@ -583,10 +583,15 @@ c128_disk_payload_args() {
     for f in cat cnm; do            # the monster catalog (no tier files)
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
-    for f in town start death gen modal help ui items disarm chest; do
+    C128_DISK_PAYLOAD_ARGS+=(-write "$dir/item.cat" "item.cat")
+    for f in town start death gen modal help ui items disarm chest home storage; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/ovl.$f" "128.$f")
     done
-    for f in runtime input proj fdisk diskio world item names huff hvec select persist play bank; do
+    for f in runtime input proj fdisk; do
+        C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
+    done
+    C128_DISK_PAYLOAD_ARGS+=(-write "$dir/item.idx" "item.idx")
+    for f in huff hvec persist play bank; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
     C128_DISK_PAYLOAD_ARGS+=(-write "$dir/legalui" "legalui")
@@ -594,8 +599,11 @@ c128_disk_payload_args() {
     # would be missing from every test disk.
     if [ -z "${C128_DISK_PAYLOAD_CHECKED:-}" ]; then
         local want have
-        want=$(awk '/^define C128_DISK_WRITE_FILES/ { p = 1; next } /^endef/ { p = 0 }
-            p && /-write/ { split($0, q, "\""); if (take && q[4] !~ /,s$/) print q[4]; if (q[4] == "moria128") take = 1 }' ../Makefile | sort)
+        want=$( (
+            awk '/^define C128_DISK_WRITE_FILES/ { p = 1; next } /^endef/ { p = 0 }
+                p && /-write/ { split($0, q, "\""); if (take && q[4] !~ /,s$/ && q[4] !~ /^\$\(/) print q[4]; if (q[4] == "moria128") take = 1 }' ../Makefile
+            awk -F= '/^C128_EXTRA_OVERLAY_PAIRS/ { for (i = 1; i <= split($2, pairs, /[[:space:]]+/); i++) if (split(pairs[i], kv, ":") == 2 && kv[2] !~ /,s$/) print kv[2] }' overlays.mk
+        ) | sort)
         have=$(for ((f = 2; f < ${#C128_DISK_PAYLOAD_ARGS[@]}; f += 3)); do echo "${C128_DISK_PAYLOAD_ARGS[f]}"; done | sort)
         if [ "$want" != "$have" ]; then
             echo "c128_disk_payload_args: payloads differ from ../Makefile C128_DISK_WRITE_FILES" >&2
@@ -800,8 +808,8 @@ suite_matches_filter() {
 }
 
 # Python smokes resolve these symbols only in their own overlay:
-# uds_show_insert_prompt in OVL_HELP (5), royal_screen resident (OVL_NONE, 0).
-C128_OVERLAY_COND_ARGS=(--overlay-cond ".uds_show_insert_prompt=5" --overlay-cond ".royal_screen=0")
+# royal_screen resident (OVL_NONE, 0); uds_show_insert_prompt resides in 128.persist.
+C128_OVERLAY_COND_ARGS=(--overlay-cond ".royal_screen=0")
 
 # c128_exit_png: the screen VICE saves when it exits (-exitscreenshot) for the
 # running suite; run_named_suite names it when the suite fails, since a log
@@ -1221,6 +1229,8 @@ from pathlib import Path
 import re
 sym = Path("../../../build/test/c128/main.vs").read_text().splitlines()
 main_text = Path("main.s").read_text()
+trampolines_text = Path("../../../build/trampolines/c128_trampolines.inc").read_text()
+trampoline_sources = main_text + "\n" + trampolines_text
 contract_source = Path("io_contracts.s").read_text().splitlines()
 labels = {}
 for line in sym:
@@ -1242,6 +1252,8 @@ contract_patterns = {
     "ui_overlay": re.compile(r':C128AuditUiOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "dungeon_overlay": re.compile(r':C128AuditDungeonOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "chest_overlay": re.compile(r':C128AuditChestOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "home_overlay": re.compile(r':C128AuditHomeOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "storage_overlay": re.compile(r':C128AuditStorageOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "banked_window": re.compile(r':C128AuditBanked\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
 }
 
@@ -1279,6 +1291,8 @@ required_labels = [
     "ovl_ui_end",
     "ovl_gen_end",
     "ovl_chest_end",
+    "ovl_home_end",
+    "ovl_storage_end",
 ]
 
 below_io_data = [
@@ -1320,12 +1334,9 @@ for runtime_name, expected_load in (
     ("128.input.prg", 0x0B00),
     ("128.proj.prg", 0x0A80),
     ("128.fdisk.prg", 0x0D60),
-    ("128.world.prg", 0x6000),
-    ("128.item.prg", 0x8C50),
-    ("128.names.prg", 0x7400),
+    ("item.idx", 0x0600),
     ("128.huff.prg", 0xF000),
     ("128.hvec.prg", 0xFFFA),
-    ("128.select.prg", 0xA800),
     ("128.persist.prg", 0xAF00),
     ("128.play.prg", 0xAF00),
     ("128.bank.prg", 0xF000),
@@ -1353,6 +1364,8 @@ overlay_limits = {
     "ui_overlay": labels.get("ovl_ui_end"),
     "dungeon_overlay": labels.get("ovl_gen_end"),
     "chest_overlay": labels.get("ovl_chest_end"),
+    "home_overlay": labels.get("ovl_home_end"),
+    "storage_overlay": labels.get("ovl_storage_end"),
 }
 
 for kind, _display, symbol, arg in contracts:
@@ -1407,7 +1420,10 @@ for label in (
     "tramp_ui_equip_display",
     "tramp_ui_recall",
 ):
-    if f"{label}:\n    jsr init_copy_banked" in main_text:
+    if f"{label}:" not in trampoline_sources:
+        print(f"{label}: missing UI trampoline definition")
+        raise SystemExit(1)
+    if f"{label}:\n    jsr init_copy_banked" in trampoline_sources:
         print(f"{label}: stale per-entry init_copy_banked reload reintroduced")
         raise SystemExit(1)
 
@@ -1883,14 +1899,50 @@ if not has_ordered_chain(item_actions_mod, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
     "#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
-    "sta iagk_key",
+    "jmp hal_platform_item_action_restore_bank",
+    "#else",
+    "rts",
+]):
+    print("C128 item overlay key reads must restore overlay banking via hal_platform_item_action_restore_bank")
+    raise SystemExit(1)
+
+if not has_ordered_chain(main_text.splitlines(), [
+    "hal_platform_item_action_restore_bank:",
+    "pha",
     "lda #MMU_ALL_RAM",
     "sta hal_memory_mmu_config_register",
     "lda #BANK_NO_ROMS",
     "sta hal_memory_cpu_port",
-    "lda iagk_key",
+    "pla",
+    "rts",
 ]):
-    print("C128 item overlay key reads must restore overlay banking after input_get_key")
+    print("C128 main.s must define hal_platform_item_action_restore_bank preserving A and banking")
+    raise SystemExit(1)
+
+if not has_ordered_chain(items, [
+    "show_inv_and_select:",
+    "ldx piw_return_overlay",
+    "jsr overlay_load",
+    "jsr hal_overlay_post_reload",
+], window=35):
+    print("core/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
+    raise SystemExit(1)
+
+if any("$0102,x" in ln or "$0104,x" in ln for ln in items):
+    print("core/player_items.s must not hardcode $0102,x/$0104,x stack probing")
+    raise SystemExit(1)
+
+if not has_ordered_chain(main_text.splitlines(), [
+    "hal_overlay_post_reload:",
+    "jsr hal_platform_runtime_resync",
+    "lda #MMU_ALL_RAM",
+    "sta hal_memory_mmu_config_register",
+    "sei",
+    "lda #BANK_NO_KERNAL",
+    "sta hal_memory_cpu_port",
+    "rts",
+]):
+    print("C128 main.s must define hal_overlay_post_reload")
     raise SystemExit(1)
 
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
@@ -1970,18 +2022,56 @@ def section_after(label: str, lines: list[str]) -> list[str]:
         out.append(s)
     return out
 
+player_items = (core / "player_items.s").read_text().splitlines()
+
 if not has_ordered_chain(items, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
     "#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
-    "sta iagk_key",
+    "jmp hal_platform_item_action_restore_bank",
+    "#else",
+    "rts",
+]):
+    print("C128 item overlay key reads must restore overlay banking via hal_platform_item_action_restore_bank")
+    raise SystemExit(1)
+
+if not has_ordered_chain(c128_main, [
+    "hal_platform_item_action_restore_bank:",
+    "pha",
     "lda #MMU_ALL_RAM",
     "sta hal_memory_mmu_config_register",
     "lda #BANK_NO_ROMS",
     "sta hal_memory_cpu_port",
-    "lda iagk_key",
+    "pla",
+    "rts",
 ]):
-    print("C128 item overlay key reads must restore overlay banking after input_get_key")
+    print("C128 main.s must define hal_platform_item_action_restore_bank preserving A and banking")
+    raise SystemExit(1)
+
+if not has_ordered_chain(player_items, [
+    "show_inv_and_select:",
+    "ldx piw_return_overlay",
+    "jsr overlay_load",
+    "jsr hal_overlay_post_reload",
+], window=35):
+    print("core/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
+    raise SystemExit(1)
+
+if any("$0102,x" in ln or "$0104,x" in ln for ln in player_items):
+    print("core/player_items.s must not hardcode $0102,x/$0104,x stack probing")
+    raise SystemExit(1)
+
+if not has_ordered_chain(c128_main, [
+    "hal_overlay_post_reload:",
+    "jsr hal_platform_runtime_resync",
+    "lda #MMU_ALL_RAM",
+    "sta hal_memory_mmu_config_register",
+    "sei",
+    "lda #BANK_NO_KERNAL",
+    "sta hal_memory_cpu_port",
+    "rts",
+]):
+    print("C128 main.s must define hal_overlay_post_reload")
     raise SystemExit(1)
 
 if not has_ordered_chain(items, [
@@ -2375,7 +2465,7 @@ run_vic40_blanked_boot_smoke() {
             -attach "$probe_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$probe_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1 || ! python3 -B fix_c128_item_idx.py "$probe_d64" >>"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
         echo "FAIL (vic40 probe d64 creation failed)"
         tail -20 "$(test128_tmp_file "test128_${name}_c1541.log")" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2487,7 +2577,7 @@ build_real_boot_diag_assets() {
             -attach "$diag_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$diag_d64" >>"$build_log" 2>&1; then
         echo "FAIL (real-boot diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2544,7 +2634,7 @@ build_overlay_transition_diag_assets() {
             -attach "$diag_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$diag_d64" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2593,7 +2683,7 @@ build_title_art_boot_assets() {
             -attach "$title_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$title_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$title_d64" >>"$build_log" 2>&1; then
         echo "FAIL (title-art disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2793,7 +2883,7 @@ build_save_write_product_assets() {
             -attach "$save_write_d64" \
             -write ../../../build/test/c128/boot128.prg "boot128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$save_write_d64" >>"$build_log" 2>&1; then
         echo "FAIL (save-write product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2883,7 +2973,7 @@ build_save_media_fail_product_assets() {
             -attach "$fail_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$fail_d64" >>"$build_log" 2>&1; then
         echo "FAIL (save-media-fail product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2973,7 +3063,7 @@ build_overlay_partial_failure_boot_assets() {
             -attach "$partial_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$partial_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$partial_d64" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-partial disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3020,7 +3110,7 @@ build_death_overlay_boot_assets() {
             -attach "$death_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$death_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$death_d64" >>"$build_log" 2>&1; then
         echo "FAIL (death-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3067,7 +3157,7 @@ build_overlay_state_boot_assets() {
             -attach "$state_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$state_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$state_d64" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-state disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3106,17 +3196,15 @@ c128_patch_scripted_boot_d71() {
         -delete "128.items" \
         -delete "128.disarm" \
         -delete "128.chest" \
+        -delete "128.home" \
+        -delete "128.storage" \
         -delete "128.runtime" \
         -delete "128.input" \
         -delete "128.proj" \
         -delete "128.fdisk" \
-        -delete "128.diskio" \
-        -delete "128.world" \
-        -delete "128.item" \
-        -delete "128.names" \
+        -delete "item.idx" \
         -delete "128.huff" \
         -delete "128.hvec" \
-        -delete "128.select" \
         -delete "128.persist" \
         -delete "128.play" \
         -delete "128.bank" \
@@ -3131,20 +3219,19 @@ c128_patch_scripted_boot_d71() {
         -write ../../../build/test/c128/ovl.items "128.items" \
         -write ../../../build/test/c128/ovl.disarm "128.disarm" \
         -write ../../../build/test/c128/ovl.chest "128.chest" \
+        -write ../../../build/test/c128/ovl.home "128.home" \
+        -write ../../../build/test/c128/ovl.storage "128.storage" \
         -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
         -write ../../../build/test/c128/128.input.prg "128.input" \
         -write ../../../build/test/c128/128.proj.prg "128.proj" \
         -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-        -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-        -write ../../../build/test/c128/128.world.prg "128.world" \
-        -write ../../../build/test/c128/128.item.prg "128.item" \
-        -write ../../../build/test/c128/128.names.prg "128.names" \
+        -write ../../../build/test/c128/item.idx "item.idx" \
         -write ../../../build/test/c128/128.huff.prg "128.huff" \
         -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-        -write ../../../build/test/c128/128.select.prg "128.select" \
         -write ../../../build/test/c128/128.persist.prg "128.persist" \
         -write ../../../build/test/c128/128.play.prg "128.play" \
-        -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1
+        -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1 \
+        && python3 -B fix_c128_item_idx.py "$target_d71" >>"$build_log" 2>&1
 }
 
 build_scripted_input_boot_assets() {
@@ -3397,56 +3484,6 @@ build_scripted_prayer_boot_assets() {
     return 0
 }
 
-build_cache_survival_boot_assets() {
-    local target_dir="${1:-../../../build/test/c128}"
-    if [ "$target_dir" = "../../../build/test/c128" ] && [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "cache_survival"; then
-        return
-    fi
-
-    build_boot_assets "$target_dir" || return 1
-
-    c128_disk_payload_files "../../../build/test/c128"
-    if [ "$target_dir" = "../../../build/test/c128" ] && c128_active_variant_is "cache_survival" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_cache_survival.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
-        CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
-        return 0
-    fi
-
-    local build_log
-    build_log="$(test128_tmp_file "test128_boot_cache_survival_build_$(basename "$target_dir").log")"
-    local cache_main="$target_dir/moria128.prg"
-    local cache_d64="$target_dir/moria128_cache_survival.d64"
-
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_CACHE_SURVIVAL ":OVL_OUT=$target_dir" -o "$cache_main" >"$build_log" 2>&1; then
-        echo "FAIL (cache-survival main assembly failed for $target_dir)"
-        tail -20 "$build_log" | sed 's/^/    /'
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return 1
-    fi
-
-    c128_disk_payload_args "$target_dir"
-    if ! "$C1541" -format "moria128,m8" d64 "$cache_d64" \
-            -attach "$cache_d64" \
-            -write "$target_dir/boot128.prg" "moria8.128" \
-            -write "$cache_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
-        echo "FAIL (cache-survival disk build failed for $target_dir)"
-        tail -20 "$build_log" | sed 's/^/    /'
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return 1
-    fi
-
-    if [ "$target_dir" = "../../../build/test/c128" ]; then
-        BOOT_ASSETS_BUILT=0 # Force refresh
-        CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
-        c128_set_active_variant "cache_survival"
-    fi
-    return 0
-}
-
 build_load_resume_boot_assets() {
     # Base first, even when the disk is built: a variant built since then left
     # its main.vs (the key-feed addresses) and payloads in the shared output.
@@ -3482,7 +3519,7 @@ build_load_resume_boot_assets() {
             -attach "$loadresume_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$loadresume_d64" >>"$build_log" 2>&1; then
         echo "FAIL (load-resume disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3586,7 +3623,7 @@ run_parallel_unit_tests() {
         "main_loop128 tests/test_main_loop128.s 500000000"
         "msg_prompt128 tests/test_msg_prompt128.s 120000000"
         "vdc_attr128 tests/test_vdc_attr128.s 20000000"
-        "item_desc128 tests/test_item_desc128.s 20000000"
+        "item_desc128 tests/test_item_desc128.s 80000000"
         "speed_equipment128 tests/test_speed_equipment128.s 20000000"
         "vdc_scroll_delta128 tests/test_vdc_scroll_delta128.s 30000000"
         "status_coherence128 tests/test_status_coherence128.s 20000000"
@@ -4057,7 +4094,7 @@ run_boot_d64_smoke() {
             -attach "$scripted_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$scripted_d64" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4448,7 +4485,7 @@ run_boot_title_save_write_product_smoke() {
         return
     fi
 
-    # The written save carries the 33-slot inventory, written through
+    # The written save carries the 34-slot Save V2 inventory, written through
     # c128_save_stream_chunk, with the seeded secondary weapon
     # (save_product_seed_secondary).
     local save_seq check_log
@@ -4456,7 +4493,7 @@ run_boot_title_save_write_product_smoke() {
     check_log="$(test128_tmp_file "test128_${name}_check.log")"
     rm -f "$save_seq"
     if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
-            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x1B >>"$check_log" 2>&1; then
+            || ! python3 -B tests/check_save_secondary128.py "$save_seq" 0x20 >>"$check_log" 2>&1; then
         echo "FAIL (secondary weapon not in the written save)"
         tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4513,7 +4550,7 @@ run_retirement_royal_smoke() {
             -attach "$boot_d64" \
             -write "$smoke_c128/boot128.prg" "boot128" \
             -write "$smoke_c128/moria128.prg" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
         echo "FAIL (retirement product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4685,7 +4722,7 @@ run_boot_title_change_save_drive_smoke() {
             -attach "$boot_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
         echo "FAIL (change-save-drive product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4777,7 +4814,7 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
             -attach "$wrong_media_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$wrong_media_d64" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive save wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4850,7 +4887,7 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
             -attach "$wrong_media_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$wrong_media_d64" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4930,7 +4967,7 @@ run_boot_title_single_drive_load_corrupt_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load corrupt product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5025,7 +5062,7 @@ run_boot_title_single_drive_load_return_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5112,7 +5149,7 @@ run_boot_title_load_then_save_new_empty_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
         echo "FAIL (load-then-save-new-empty product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5213,7 +5250,7 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
         echo "FAIL (disk-setup single-drive return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5290,7 +5327,7 @@ run_boot_title_single_drive_fresh_save_smoke() {
             -attach "$fresh_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$fresh_d64" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5381,7 +5418,7 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
             -attach "$fresh_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$fresh_d64" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save no-init product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -6246,7 +6283,7 @@ run_exchange_product_smoke128() {
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
         --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
-        --expect-byte-symbol ".current_overlay=0x07" \
+        --expect-byte-symbol ".current_overlay=0x0c" \
         --timeout 30 \
         --retry-timeouts 0 \
         --vice "$VICE"; then
@@ -6909,56 +6946,122 @@ run_cache_survival_smoke() {
     local name="cache_survival_smoke"
     echo -n "  $name: "
 
-    build_cache_survival_boot_assets || return
+    build_boot_assets || return
 
     local main_vs="../../../build/test/c128/main.vs"
-    local c128_test_cache_survival_pass c128_test_cache_survival_fail
-    c128_test_cache_survival_pass=$(awk '/\.c128_test_cache_survival_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    c128_test_cache_survival_fail=$(awk '/\.c128_test_cache_survival_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${c128_test_cache_survival_pass:-}" ] || [ -z "${c128_test_cache_survival_fail:-}" ]; then
-        echo "FAIL (missing cache-survival pass/fail symbols in ../../../build/test/c128/main.vs)"
+    local title_enter sheet_begin main_loop_addr cache_start cache_hi mmu_common
+    local ovl_name_len df_found_addr cur_ovl_addr disk_load_addr load_fail_addr
+    local tramp_pick_addr common_end_addr cache_failed_addr
+    title_enter=$(awk '/\.title_enter_menu$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    sheet_begin=$(awk '/\.hal_platform_character_sheet_begin$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    main_loop_addr=$(awk '/\.main_loop$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cache_start=$(awk '/\.c128_cache_enabled$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cache_hi=$(awk '/\.c128_cache_overlay_bits_hi$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    mmu_common=$(awk '/\.mmu_common_irq$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    ovl_name_len=$(awk '/\.hal_storage_overlay_name_len$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    df_found_addr=$(awk '/\.df_found$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cur_ovl_addr=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    disk_load_addr=$(awk '/\.overlay_load_disk$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    load_fail_addr=$(awk '/\.runtime_load_failed$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    tramp_pick_addr=$(awk '/\.tramp_door_pick_roll$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    common_end_addr=$(awk '/\.runtime_common_data_end$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cache_failed_addr=$(awk '/\.c128_cache_failed$/ { split($2,a,":"); print tolower(a[2]); exit }' "$main_vs")
+    if [ -z "${title_enter:-}" ] || [ -z "${sheet_begin:-}" ] || [ -z "${main_loop_addr:-}" ] || \
+       [ -z "${cache_start:-}" ] || [ -z "${cache_hi:-}" ] || [ -z "${mmu_common:-}" ] || \
+       [ -z "${ovl_name_len:-}" ] || [ -z "${df_found_addr:-}" ] || [ -z "${cur_ovl_addr:-}" ] || \
+       [ -z "${disk_load_addr:-}" ] || [ -z "${load_fail_addr:-}" ] || \
+       [ -z "${tramp_pick_addr:-}" ] || [ -z "${common_end_addr:-}" ] || \
+       [ -z "${cache_failed_addr:-}" ]; then
+        echo "FAIL (missing cache-survival monitor symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_cache_survival.d64"
-    local mon_file
+    local stub_dec stub_base stub_ret disarm_len_addr mmu_common_end
+    local tramp_dec tramp_lo tramp_hi
+    stub_dec=$((16#$common_end_addr))
+    if [ $((stub_dec + 4)) -gt $((16#1000)) ]; then
+        echo "FAIL (runtime_common_data_end=$common_end_addr leaves <4 bytes below \$1000)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    stub_base=$(printf '%04x' "$stub_dec")
+    stub_ret=$(printf '%04x' $((stub_dec + 3)))
+    disarm_len_addr=$(printf '%04x' $((16#$ovl_name_len + 7)))
+    mmu_common_end=$(printf '%04x' $((16#$mmu_common + 7)))
+    tramp_dec=$((16#$tramp_pick_addr))
+    tramp_lo=$(printf '%02x' $((tramp_dec & 255)))
+    tramp_hi=$(printf '%02x' $(((tramp_dec >> 8) & 255)))
+
+    local abs_d71
+    abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
+    local mon_file log_file check_log
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
-    local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
+    check_log="$(test128_tmp_file "test128_${name}_check.log")"
     : > "$log_file"
 
     {
-        echo "break \$${c128_test_cache_survival_fail}"
-        echo "until \$${c128_test_cache_survival_pass}"
+        echo "bank ram01"
+        echo "> fe02 08"
+        echo "bank cpu"
+        echo "break \$${title_enter}"
         echo "g"
-        echo "quit"     # at the next stop: a stop after the last command waited forever
+        echo "del"
+        echo "m ${mmu_common} ${mmu_common_end}"
+        echo "bank ram01"
+        echo "m 7e60 7e67"
+        echo "m a000 a007"
+        echo "m b000 b007"
+        echo "m c000 c007"
+        echo "m e000 e007"
+        echo "m 9d00 9d07"
+        echo "bank cpu"
+        c128_key_feed_cmds $'NA\rABOT\rB'
+        echo "break \$${sheet_begin}"
+        echo "g"
+        echo "del"
+        c128_key_feed_cmds $' '
+        echo "break \$${sheet_begin}"
+        echo "break \$${main_loop_addr}"
+        echo "g"
+        echo "del"
+        echo "m ${cache_start} ${cache_hi}"
+        echo "m ${mmu_common} ${mmu_common_end}"
+        echo "bank ram01"
+        echo "m 7e60 7e67"
+        echo "m a000 a007"
+        echo "m b000 b007"
+        echo "m c000 c007"
+        echo "m e000 e007"
+        echo "m 9d00 9d07"
+        echo "bank cpu"
+        echo "> ${disarm_len_addr} 00"
+        echo "> ${df_found_addr} 7f"
+        echo "> ${stub_base} 20 ${tramp_lo} ${tramp_hi} ea"
+        echo "break \$${disk_load_addr}"
+        echo "break \$${load_fail_addr}"
+        echo "break \$${stub_ret}"
+        echo "r pc=${stub_base}"
+        echo "g"
+        echo "r"
+        echo "m ${cur_ovl_addr} ${cur_ovl_addr}"
+        echo "m ${cache_failed_addr} ${cache_failed_addr}"
+        echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if boot_log_has_stop_at "$log_file" "$c128_test_cache_survival_fail"; then
-        boot_log_report_failure "cache survival validation failed after summary-to-town flow" "$log_file" "c128_test_cache_survival_fail" "$c128_test_cache_survival_fail" "$vice_rc"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! boot_log_has_stop_at "$log_file" "$c128_test_cache_survival_pass"; then
-        boot_log_report_failure "did not reach cache-survival pass trap" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        boot_log_report_failure "jam during cache-survival flow" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
+    if ! python3 -B "$REPO_ROOT/tools/c128_cache_survival_check.py" "$main_vs" "$log_file" >"$check_log" 2>&1; then
+        echo "FAIL ($(head -n 1 "$check_log"))"
+        echo "    vice_rc=$vice_rc log=$log_file"
+        tail -20 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return

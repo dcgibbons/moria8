@@ -26,6 +26,8 @@ test_finish:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -43,27 +45,32 @@ test_finish:
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 // dungeon_gen removed for MAP_BASE headroom
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
+.segment TestUnused
 #import "../../../../core/player_items.s"
+.segment Default
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"

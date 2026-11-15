@@ -30,33 +30,11 @@
 .const hal_storage_disk_setup_marker_write_status_required = 1
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
-#if HAL_PLATFORM_MONSTER_CATALOG
-// $09: the monster catalog: the species table in the door-state block and 40
-// creature rows (a 160-byte recall block). Older saves name tier creatures,
-// so $09 is the oldest the loader takes and the legacy feature versions are
-// pinned at it (the 31-slot inventory version just below it, so its loader
-// compiles out).
-// $0A: 16-item stores (the store block grew); older saves are refused.
-.const hal_storage_save_v1_version = $0A
-.const hal_storage_save_known96_version = $0A
-.const hal_storage_save_inv31_version = $09
-.const hal_storage_save_known_bits_version = $0A
-.const hal_storage_save_baked_stats_version = $0A
-.const hal_storage_save_known160_version = $0A
-.const hal_storage_save_door_state_version = $0A
-.const hal_storage_save_inv33_version = $0A
-.const hal_storage_save_version = $0A
-#else
-.const hal_storage_save_v1_version = $01
-.const hal_storage_save_known96_version = $02
-.const hal_storage_save_inv31_version = $03
-.const hal_storage_save_known_bits_version = $04
-.const hal_storage_save_baked_stats_version = $04
-.const hal_storage_save_known160_version = $06
-.const hal_storage_save_door_state_version = $07
-.const hal_storage_save_inv33_version = $08
-.const hal_storage_save_version = $09
-#endif
+// $20 (Save Format V2): expanded 370-item catalog, 34 inventory slots (with
+// Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and 279-species
+// persistent monster recall. Older V1..V19 saves are no longer accepted.
+.const hal_storage_save_v1_version = $20
+.const hal_storage_save_version = $20
 
 #define HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 #define HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED
@@ -77,6 +55,7 @@
 #define HAL_STORAGE_STREAM_STATUS_HELPERS
 #define HAL_STORAGE_APPEND_DISK_DETAIL
 #define HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
+#define HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
 #define HAL_STORAGE_CLOSE_SAVE_FILE_BEFORE_LOAD
 #define HAL_STORAGE_READST_AFTER_LOAD_OPEN
 #define HAL_STORAGE_RETURN_LOCAL_STATUS

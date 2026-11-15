@@ -36,6 +36,8 @@ test_finish:
 
 .pc = * "Test Body"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -52,41 +54,56 @@ test_finish:
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
+.segment TestUnused
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
+.segment Default
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment TestUnused
 #import "../../../../core/projectile.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/ui_inventory.s"
 #import "../../../../core/ui_equipment.s"
+.segment TestUnused
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment TestUnused
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -133,7 +150,9 @@ player_death_check:
     rts
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
+.segment TestUnused
 #import "../../../../core/ui_store.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 #import "../../../../core/runtime_ui_strings.s"
 #import "../../common/compat/io_kernal_consts.s"

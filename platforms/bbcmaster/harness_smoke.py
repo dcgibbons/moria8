@@ -50,7 +50,7 @@ MAME_OUTPUT_DIRS = {
 }
 
 HOST_TIMEOUT_SECONDS = 30
-EMULATED_SECONDS_LIMIT = 180
+EMULATED_SECONDS_LIMIT = 240
 
 SCREEN_COLS = 80
 SCREEN_ROWS = 24
@@ -162,18 +162,15 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     zp_turn = syms.get("zp_turn_lo", 0x0040)
     player_data = syms.get("player_data", 0x2400)
     inv_item_id = syms.get("inv_item_id", 0x2500)
-    inv_qty = syms.get("inv_qty", 0x2521)
+    inv_qty = syms.get("inv_qty", 0x2522)
     monster_table = syms.get("monster_table", 0x2600)
-    mon_count = syms["zp_mon_count"]
-    recall_query_sc = syms["recall_query_sc"]
+    mon_count = syms.get("zp_mon_count", 0)
+    recall_query_sc = syms.get("recall_query_sc", 0)
     cr_level = syms.get("cr_level", 0x2700)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
     save_device = syms.get("save_device", 0x0E20)
     disk_setup_done = syms.get("disk_setup_done", 0x0E21)
-    disk_status = syms.get("disk_status", 0x1D6E)
-    disk_phase = syms.get("disk_error_phase", 0x1D6F)
-    mos_err = syms.get("beeb_last_mos_error", 0x22AC)
     busy_addr = syms.get("generation_busy_active_api", 0x0E30)
     acccon_shadow = syms.get("beeb_acccon_shadow", 0x009D)
     acid_syms = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
@@ -200,16 +197,13 @@ local CURRENT_TIER_ADDR = 0x{current_tier:04X}
 local PLAYER_DATA_ADDR = 0x{player_data:04X}
 local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
-local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (33)
+local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (34)
 local MONSTER_TABLE_ADDR = 0x{monster_table:04X}
 local MON_COUNT_ADDR = 0x{mon_count:04X}
 local RECALL_QUERY_SC_ADDR = 0x{recall_query_sc:04X}
 local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
-local DISK_STATUS_ADDR = 0x{disk_status:04X}
-local DISK_PHASE_ADDR = 0x{disk_phase:04X}
-local MOS_ERR_ADDR = 0x{mos_err:04X}
 local BUSY_ADDR = 0x{busy_addr:04X}
 local ACCCON_SHADOW_ADDR = 0x{acccon_shadow:04X}
 local CHAR_SHADOW = 0x{CHAR_SHADOW_BASE:04X}
@@ -253,6 +247,12 @@ local function read_shadow_u8(addr)
     local v = prog:read_u8(addr)
     restore_acccon()
     return v
+end
+
+local function write_shadow_u8(addr, val)
+    prog:write_u8(0xFE34, 0x05)
+    prog:write_u8(addr, val)
+    restore_acccon()
 end
 
 local function read_map_u8(x, y)
@@ -318,7 +318,7 @@ local function send_key(petscii)
             local pc = cpu.state["PC"].value
             if pc >= KEY_WAIT_START and pc < KEY_WAIT_END then key_polled = true end
         end)
-    for _ = 1, 300 do
+    for _ = 1, 1200 do                  -- 20 s: a cold DFS overlay/ITEMCAT burst can run that long
         if key_polled then break end
         emu.wait(1/60)
     end
@@ -337,8 +337,13 @@ local function send_key(petscii)
     wait_frames(10)
 end
 
+-- ITEMCAT page misses and cold overlay loads stream from the floppy at roughly
+-- 0.3-0.5 emulated seconds per 256-byte DFS read, so a modal that names items
+-- or swaps a cold overlay can take several seconds; every screen wait gets this
+-- slack factor over its nominal limit (the 30 s host cap is unchanged).
+local DFS_SLACK = 3
 local function wait_screen(txt, max_tenths)
-    for _ = 1, (max_tenths or 60) do
+    for _ = 1, (max_tenths or 60) * DFS_SLACK do
         if screen_has(txt) then return true end
         emu.wait(0.1)
     end
@@ -509,10 +514,15 @@ local function descend_to_dl1()
         wait_frames(20)
         drain_more(2)
         send_key(0x3E) -- '>'
-        for _ = 1, 80 do
+        for step = 1, 240 do
             wait_frames(10)
-            if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0 and screen_has("You descend") then
+            local dlvl = prog:read_u8(DLVL_ADDR)
+            local busy = prog:read_u8(BUSY_ADDR)
+            if dlvl == 1 and busy == 0 and screen_has("You descend") then
                 return true
+            end
+            if step >= 4 and dlvl == 0 and busy == 0 then
+                break
             end
         end
     end
@@ -558,8 +568,11 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
-    -- Secondary weapon (slot 32): Dagger (+3,+4) (Defender); slot 31 stays empty.
-    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
+    -- Cloak (slot 32), Secondary weapon (slot 33), Page 1 item (slot 21), and LYNNE recall[278].
+    inv_seed(21, {114, 1, 5, 0, 0, 0, 2, 64}) -- Staff of Darkness (369 = 255 + 114, ITEM_PAGE_BIT)
+    inv_seed(32, {82, 1, 0, 0, 0, 2, 2, 0})   -- Cloak (+2) (EQUIP_CLOAK)
+    inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})    -- Dagger (+3,+4) (Defender) (EQUIP_SECONDARY)
+    write_shadow_u8(0x43D8, 0x5A)             -- BeebLynneAux $3F80 + 278 * 4 (recall[278] byte 0)
     send_key(0xD3) -- SHIFT+S (save & quit) -> prompts Disk Setup on first save
     assert_line("save_disk_setup_prompt", wait_screen("DISK SETUP", 80))
     send_key(0x32) -- 2) Pick save drive
@@ -578,7 +591,10 @@ function run()
         if screen_has("N)ew") and screen_has("L)oad") then break end
     end
     assert_line("title_after_save", screen_has("N)ew") and screen_has("L)oad"))
-    inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring it back
+    inv_seed(21, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring them back
+    inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0})
+    inv_seed(33, {0xFF, 0, 0, 0, 0, 0, 0, 0})
+    write_shadow_u8(0x43D8, 0x00)
     send_key(0x4C) -- 'L' (load game)
     assert_line("load_slots_shown", wait_screen("Select Slot 1-4", 80))
     send_key(0x31) -- Slot 1
@@ -588,8 +604,11 @@ function run()
     end
     assert_line("save_load_resumed", prog:read_u8(PLAYER_X_ADDR) > 0)
     assert_line("save_load_secondary_restored",
-        inv_field(32, 0) == 2 and inv_field(32, 3) == 3 and inv_field(32, 4) == 4
-        and inv_field(32, 6) == 2 and inv_field(32, 7) == 6 and inv_field(31, 0) == 0xFF)
+        inv_field(21, 0) == 114 and inv_field(21, 2) == 5 and inv_field(21, 7) == 64
+        and inv_field(32, 0) == 82 and inv_field(32, 5) == 2 and inv_field(32, 6) == 2
+        and inv_field(33, 0) == 2 and inv_field(33, 3) == 3 and inv_field(33, 4) == 4
+        and inv_field(33, 6) == 2 and inv_field(33, 7) == 6 and inv_field(31, 0) == 0xFF)
+    assert_line("save_load_recall_restored", read_shadow_u8(0x43D8) == 0x5A)
     manager.machine:exit()
 end
 """
@@ -836,22 +855,23 @@ function run()
     drain_more(4)
     wait_frames(60)                          -- the quaff's own turn ends first
     inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
-    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+    inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender) (EQUIP_SECONDARY)
     local turn0 = prog:read_u8(TURN_ADDR)
     send_key(0xD8)
     assert_line("exchange_cursed_refused",
         wait_screen("You cannot remove it, it is cursed!", 60)
-        and inv_field(22, 0) == 5 and inv_field(32, 0) == 2
+        and inv_field(22, 0) == 5 and inv_field(33, 0) == 2
         and prog:read_u8(TURN_ADDR) == turn0)
     prog:write_u8(INV_ITEM_ID_ADDR + 6 * INV_STRIDE + 22, 2) -- lift the curse
     send_key(0xD8)
     assert_line("exchange_report",
-        wait_screen("Primary: Dagger (Defender) (+3,+4)", 60)
-        and screen_has("Secondary: Mace (+1,+0)"))
+        wait_screen("Secondary: Mace (+1,+0)", 60)
+        and screen_has("Primary: Dagger (Defender) (+3,+4)"))
+    wait_frames(20)
     assert_line("exchange_swapped",
         inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
-        and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
-        and inv_field(31, 0) == 0xFF)
+        and inv_field(33, 0) == 5 and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+        and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF)
     assert_line("exchange_one_turn", prog:read_u8(TURN_ADDR) == (turn0 + 1) % 256)
     -- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it
     -- in the death overlay and must return to the resident caller with no
@@ -1220,19 +1240,40 @@ function run()
     prog:write_u8(CR_SPEED_ADDR + kind, 1)
     prog:write_u8(CR_LEVEL_ADDR + kind, 40)     -- its blows land
     prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
+    local function wait_turn_idle()
+        local polled = false
+        local tap = prog:install_read_tap(KBDBUF_LEN, KBDBUF_LEN, "acid_idle_poll",
+            function(offset, data, mask)
+                if polled or data ~= 0 then return end
+                local pc = cpu.state["PC"].value
+                if pc >= KEY_WAIT_START and pc < KEY_WAIT_END then polled = true end
+            end)
+        for _ = 1, 1200 do
+            if polled then break end
+            emu.wait(1/60)
+        end
+        tap:remove()
+    end
     local body = INV_TO_AC_ADDR + 23            -- EQUIP_BODY: the warrior's only armour
     local to_ac0 = prog:read_u8(body)
     local ac0 = prog:read_u8(ZP_PLAYER_AC_ADDR)
     for _ = 1, 40 do
-        drain_more(4)
         send_key(0x53)                          -- 's' search (PETSCII): a turn passes
-        wait_frames(20)
+        wait_turn_idle()
+        for _ = 1, 6 do
+            if not screen_has("-more-") then break end
+            send_key(0x20)
+            wait_turn_idle()
+        end
         if prog:read_u8(body) ~= to_ac0 then break end
     end
-    drain_more(4)
     local drop = (to_ac0 - prog:read_u8(body)) & 0xFF
+    local ac1 = prog:read_u8(ZP_PLAYER_AC_ADDR)
+    if ac1 ~= ((ac0 - drop) & 0xFF) then
+        print("DIAG acid: ac0=" .. ac0 .. " ac1=" .. ac1 .. " to_ac0=" .. to_ac0 .. " to_ac1=" .. prog:read_u8(body) .. " drop=" .. drop)
+    end
     assert_line("acid_damaged", drop >= 1 and drop <= 3)
-    assert_line("acid_ac_recalc", prog:read_u8(ZP_PLAYER_AC_ADDR) == ((ac0 - drop) & 0xFF))
+    assert_line("acid_ac_recalc", ac1 == ((ac0 - drop) & 0xFF))
     assert_line("acid_in_place", prog:read_u8(PLAYER_X_ADDR) == px0 and prog:read_u8(PLAYER_Y_ADDR) == py0
                 and prog:read_u8(DLVL_ADDR) == 1)
     manager.machine:exit()
@@ -1418,6 +1459,7 @@ end
     body = body.replace("LEGAL_CANCEL_END", hex(syms.get("legal_cancel_return", 0)))
     body = body.replace("LEGAL_NOTICE_ADDR", hex(syms.get("legal_notice_filename", 0)))
     body = body.replace("LEGAL_OPENED_ADDR", hex(syms.get("legal_opened", 0)))
+    body = body.replace("\n    manager.machine:exit()\nend\n", '\n    print("SCENARIO_DONE")\n    manager.machine:exit()\nend\n', 1)
     return header + body + "\nco = coroutine.create(run)\ncoroutine.resume(co)\n"
 
 
@@ -1518,6 +1560,7 @@ def run_scenario(
         out = (stdout or "") + (stderr or "")
         passes = 0
         fails = 0
+        completed = False
         for line in out.splitlines():
             if line.startswith("DIAG "):
                 print(f"[{machine}:{scenario}] {line}", file=sys.stderr)
@@ -1526,13 +1569,20 @@ def run_scenario(
             elif line.startswith("ASSERT FAIL "):
                 fails += 1
                 print(f"[{machine}:{scenario}] {line}", file=sys.stderr)
+            elif line.strip() == "SCENARIO_DONE":
+                completed = True
 
-        if fails > 0 or passes == 0:
+        if fails > 0 or passes == 0 or not completed:
             for line in out.splitlines():
                 if line.startswith("DIAG "):
                     print(f"[{machine}:{scenario}] {line}", file=sys.stderr)
             if passes == 0 and out.strip():
                 print(out.strip(), file=sys.stderr)
+            if not completed and fails == 0:
+                print(
+                    f"[{machine}:{scenario}] FAIL: scenario did not reach SCENARIO_DONE (emulated time limit {EMULATED_SECONDS_LIMIT}s)",
+                    file=sys.stderr,
+                )
             print(
                 f"[{machine}:{scenario}] FAIL (passes={passes}, fails={fails})",
                 file=sys.stderr,
@@ -1555,7 +1605,7 @@ def selftest() -> int:
         assert "beeb_kbdbuf_len" in syms, "beeb_kbdbuf_len missing from main.sym"
     for sc in SCENARIOS:
         lua = build_lua_script(sc, syms)
-        assert "assert_line(" in lua and "coroutine.resume" in lua
+        assert "assert_line(" in lua and "coroutine.resume" in lua and "SCENARIO_DONE" in lua
         assert "PLAYER_X_ADDR = 0x002B" in lua
         assert "DLVL_ADDR = 0x0034" in lua
     print("BBC Master 128 harness_smoke.py self-test: PASS")

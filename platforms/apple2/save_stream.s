@@ -486,7 +486,9 @@ hal_storage_readst:
 // Map blocks do not flow through here: they stream via save_write_map_c128
 // and load_read_map_c128 below (HAL_STORAGE_MAP_BANKED).
 // Clobbers: A
+// Callers: platforms/shared/save.s only (runs exclusively inside StorageOverlay).
 // ============================================================
+.segment StorageOverlay
 a2_save_block_mode:
 hal_storage_save_block_mode:
     lda #0
@@ -495,26 +497,19 @@ hal_storage_save_block_mode:
     // All seven store arrays form one contiguous aux-only block.
     lda zp_ptr0_hi
     cmp #>si_item_id
-    bcc !try_recall+
+    bcc !done+
     bne !store_check_end+
     lda zp_ptr0
     cmp #<si_item_id
-    bcc !try_recall+
+    bcc !done+
 !store_check_end:
     lda zp_ptr0_hi
     cmp #>store_inventory_data_end
     bcc !aux+
-    bne !try_recall+
+    bne !done+
     lda zp_ptr0
     cmp #<store_inventory_data_end
-    bcc !aux+
-!try_recall:
-    lda zp_ptr0_hi
-    cmp #>recall_data_start
-    bne !done+
-    lda zp_ptr0
-    cmp #<recall_data_start
-    bne !done+
+    bcs !done+
 !aux:
     lda #$80
     sta a2_save_aux_mode_flag
@@ -604,3 +599,4 @@ load_read_map_banked:
     jmp !lrm_loop-
 !lrm_done:
     rts
+.segment Default

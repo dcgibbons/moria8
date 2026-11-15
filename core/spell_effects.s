@@ -154,9 +154,12 @@ eff_identify_prompt:
     bcc !eip_cancel+
     stx eff_target_slot
 
-    // Identify that item type
+    // Identify that item type (preserve X -> page bit before id_known_set_y).
     tay
     pha
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     jsr id_known_set_y
 
     // Set IF_IDENTIFIED on the item instance

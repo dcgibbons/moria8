@@ -25,7 +25,7 @@ test_start:
 .const HSTR_SAVE_WELCOME = 0
 .const HSTR_EFF_PARALYZE_END = 0   // game_loop.s paralysis expiry (TRN-011)
 .const HSTR_QUIT_CONFIRM = 0       // game_loop.s quit prompt (huff_print_msg is a stub here)
-.const EGO_TYPE_COUNT = 8
+.const EGO_TYPE_COUNT = 56
 .const IF_IDENTIFIED = $02
 .const IF_SENSED = $08
 .const SFX_PICKUP = 0
@@ -379,6 +379,7 @@ door_jam_command:
 do_search:
     rts
 
+tramp_item_pickup:
 item_pickup:
     rts
 
@@ -473,6 +474,7 @@ rng_range:
     lda #0
     rts
 
+item_cat_decode_ego:
 ego_get_suffix_ptr:
     lda #0
     tay
@@ -708,10 +710,14 @@ ovl_ready_mask:
 .const SPELL_MAGE = 1
 .const OVL_DUNGEON_GEN = 4
 .const FI_EMPTY = $ff
-.const TOTAL_INV_SLOTS = 33
+.const ITEM_PAGE_BIT = $40
+.const EGO_ID_MASK = $3f
+.const TOTAL_INV_SLOTS = 34
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY = 23
 .const EQUIP_LIGHT = 28
+.const EQUIP_CLOAK = 32
+.const EQUIP_SECONDARY = 33
 .const ICAT_DIGGING = 0
 .const INPUT_ROW = 24
 .const FLAG_LIT = $08
@@ -740,7 +746,20 @@ map_row_lo: .fill TEST_MAP_ROWS, <($8000 + i * TEST_MAP_COLS)
 map_row_hi: .fill TEST_MAP_ROWS, >($8000 + i * TEST_MAP_COLS)
 player_data: .fill 80, 0
 player_move_relocated: .byte 0
+item_cur_page: .byte 0
 it_category: .fill 256, 0
+item_get_category_inv_x:
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldy inv_item_id,x
+    cpy #FI_EMPTY
+    beq !igci_empty+
+    lda it_category,y
+    rts
+!igci_empty:
+    lda #$ff
+    rts
 inv_item_id: .fill TOTAL_INV_SLOTS, 0
 inv_ego: .fill TOTAL_INV_SLOTS, 0
 inv_qty: .fill TOTAL_INV_SLOTS, 0

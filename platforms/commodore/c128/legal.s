@@ -96,5 +96,5 @@ legal_fill_status:
     rts
 legal_chunk_count: .byte 0
 legal_chunk_status: .byte 0
-.assert "Legal burst reader stays visible under KERNAL", legal_os_fill_cache < $6000, true
+.assert "Legal burst reader stays below $8000 ExtROM/KERNAL window", legal_os_fill_cache < $8000, true
 #endif

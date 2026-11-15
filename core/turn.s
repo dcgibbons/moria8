@@ -311,6 +311,11 @@ turn_tick_effects:
     // Extra regen: skip turn check, always regen
     lda zp_eff_regen
     bne !do_mana_regen+
+#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE
+    lda player_pflags2
+    and #PFLAG2_REGEN
+    bne !do_mana_regen+
+#endif
 
     // Normal rate: every 2 turns
     lda zp_turn_lo
@@ -331,6 +336,19 @@ turn_tick_hunger:
     lda zp_hunger_state
     pha
 
+#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE
+    lda player_pflags2
+    and #PFLAG2_SLOW_DIGEST
+    beq !tth_dec+
+    lda zp_turn_lo
+    and #$01
+    beq !tth_dec+
+    lda zp_player_food
+    ora zp_player_food_hi
+    beq !starving+              // Starving still damages at food 0
+    bne !tth_update+            // Skip food decrement every other turn
+!tth_dec:
+#endif
     // Decrement 16-bit food counter
     lda zp_player_food
     bne !no_borrow+
@@ -340,6 +358,7 @@ turn_tick_hunger:
 !no_borrow:
     dec zp_player_food
 
+!tth_update:
     jsr player_update_hunger_state
     pla
     jmp turn_maybe_play_hunger_alert
@@ -411,6 +430,18 @@ turn_tick_regen:
     rol mul_result_1
     rol mul_result_2
 !ttr_not_resting:
+#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE
+    lda zp_eff_regen
+    bne !ttr_regen_double+
+    lda player_pflags2
+    and #PFLAG2_REGEN
+    beq !ttr_no_regen_double+
+!ttr_regen_double:
+    asl mul_result_0
+    rol mul_result_1
+    rol mul_result_2
+!ttr_no_regen_double:
+#endif
 
     // fraction += mul_result + REGEN_HPBASE; whole HP go to eff_heal
     lda mul_result_0
@@ -476,6 +507,19 @@ turn_post_action:
     bne !no_hi+
     inc zp_turn_hi
 !no_hi:
+
+#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE
+    lda player_pflags2
+    and #PFLAG2_TELEPORT
+    beq !no_rand_tele+
+    lda #100
+    jsr rng_range
+    bne !no_rand_tele+
+    jsr eff_teleport_self
+    lda #1
+    sta turn_scene_dirty
+!no_rand_tele:
+#endif
 
     // Mark status bar as dirty so it redraws
     jmp status_mark_dirty
@@ -657,12 +701,17 @@ pid_item_enchanted:
     lda inv_flags,x
     and #IF_IDENTIFIED | IF_SENSED | IF_CURSED
     bne !pid_no+
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    bne !pid_chk_ego+
     lda inv_item_id,x
     cmp #13
     beq !pid_no+               // Wooden torch fuel is not pseudo-ID-worthy
     cmp #14
     beq !pid_no+               // Brass lantern fuel is not pseudo-ID-worthy
+!pid_chk_ego:
     lda inv_ego,x
+    and #EGO_ID_MASK
     bne !pid_yes+
     lda inv_to_hit,x
     bne !pid_check_positive_stat+

@@ -26,6 +26,8 @@ OVERLAYS = (
     ("SPELL", "disarm"),
     ("MODAL_MISC", "modal"),
     ("CHEST", "chest"),
+    ("HOME", "home"),
+    ("STORAGE", "storage"),
 )
 
 
@@ -45,21 +47,17 @@ def build_inputs(source: Path) -> dict[int, tuple[str, str, int, bytes, int]]:
     d_b1_top = CONTRACT["CART_DEST_BANK1_TOP_OFF"]
 
     inputs: dict[int, tuple[str, str, int, bytes, int]] = {
-        CONTRACT["CART_ASSET_RESIDENT"]: ("resident", "moria128.prg", *prg(source / "moria128.prg", 0x1C01, 0x6000), d_b0),
+        CONTRACT["CART_ASSET_RESIDENT"]: ("resident", "moria128.prg", *prg(source / "moria128.prg", 0x1C01, 0xAF00), d_b0),
         CONTRACT["CART_ASSET_RUNTIME_LOW"]: ("runtime_low", "128.runtime.prg", *prg(source / "128.runtime.prg", 0x1000, 0x4000), d_b0),
         CONTRACT["CART_ASSET_RUNTIME_INPUT"]: ("runtime_input", "128.input.prg", *prg(source / "128.input.prg", 0x0B00, 0x0C00), d_b0),
         CONTRACT["CART_ASSET_RUNTIME_PROJ"]: ("runtime_proj", "128.proj.prg", *prg(source / "128.proj.prg", 0x0A80, 0x0B00), d_b0),
         CONTRACT["CART_ASSET_RUNTIME_COMMON"]: ("runtime_common", "128.fdisk.prg", *prg(source / "128.fdisk.prg", 0x0D60, 0x0FB0), d_b0),
-        CONTRACT["CART_ASSET_DISKIO"]: ("diskio", "128.diskio.prg", *prg(source / "128.diskio.prg", 0xAB00, 0xAF00), d_b0),
         CONTRACT["CART_ASSET_BANKED"]: ("banked", "128.bank.prg", *prg(source / "128.bank.prg", 0xF000, 0xFF00), d_b0),
-        CONTRACT["CART_ASSET_WORLD"]: ("world", "128.world.prg", *prg(source / "128.world.prg", 0x6000, 0x8C50), d_b0),
-        CONTRACT["CART_ASSET_RES_ITEMS"]: ("res_items", "128.item.prg", *prg(source / "128.item.prg", 0x8C50, 0xA800), d_b0),
-        CONTRACT["CART_ASSET_NAMES"]: ("names", "128.names.prg", *prg(source / "128.names.prg", 0x7400, 0x7A60), d_b1),
+        CONTRACT["CART_ASSET_ITEM_CATALOG"]: ("item_cat", "ITEM.CAT", 0, catalog_disk.item_catalog_bytes(), d_b0),
         CONTRACT["CART_ASSET_HVEC"]: ("hvec", "128.hvec.prg", *prg(source / "128.hvec.prg", 0xFFFA, 0xFFFC), d_b1_top),
         CONTRACT["CART_ASSET_HUFF"]: ("huff", "128.huff.prg", *prg(source / "128.huff.prg", 0xF000, 0xFF00), d_b1_top),
         CONTRACT["CART_ASSET_CAT"]: ("cat", "128.cat.prg", *prg(source / "128.cat.prg", 0x7E60, 0x9568), d_b1),
         CONTRACT["CART_ASSET_CNM"]: ("cnm", "128.cnm.prg", *prg(source / "128.cnm.prg", 0xA000, 0xB000), d_b1),
-        CONTRACT["CART_ASSET_SELECT"]: ("select", "128.select.prg", *prg(source / "128.select.prg", 0xA800, 0xAB00), d_b0),
         CONTRACT["CART_ASSET_PERSIST"]: ("persist", "128.persist.prg", *prg(source / "128.persist.prg", 0xAF00, 0xD000), d_b0),
         CONTRACT["CART_ASSET_PLAY"]: ("play", "128.play.prg", *prg(source / "128.play.prg", 0xAF00, 0xD000), d_b0),
         CONTRACT["CART_ASSET_TITLE"]: ("title", "title", *prg(source / "title", 0x4000, 0x4300), d_b1),

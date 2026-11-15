@@ -14,22 +14,22 @@
 #import "memory.s"
 
 // ============================================================
-// Sideways RAM Cache Lookup Tables (index = overlay ID - 1: 0..11)
+// Sideways RAM Cache Lookup Tables (index = overlay ID - 1: 0..12)
 // Order: START(0), TOWN(1), DEATH(2), GEN(3), HELP(4), UI(5),
-//        ITEMS(6), SPELL(7), MODAL(8), CHEST(9), STORAGE(10), TITLE(11)
+//        ITEMS(6), SPELL(7), MODAL(8), CHEST(9), HOME(10), STORAGE(11), TITLE(12)
 // (check_memory_contract.py --disk reads this Order list; keep its form.)
 // ============================================================
 beeb_ovl_cache_bank:
     .byte $00, $00, $00, BEEB_SWR_BANK_GEN, $00, BEEB_SWR_BANK_UI
-    .byte BEEB_SWR_BANK_ITEMS, BEEB_SWR_BANK_SPELL, BEEB_SWR_BANK_MODAL, $00, $00, $00
+    .byte BEEB_SWR_BANK_ITEMS, BEEB_SWR_BANK_SPELL, BEEB_SWR_BANK_MODAL, $00, $00, $00, $00
 
 beeb_ovl_cache_hi:
     .byte $00, $00, $00, >BEEB_SWR_ADDR_GEN, $00, >BEEB_SWR_ADDR_UI
-    .byte >BEEB_SWR_ADDR_ITEMS, >BEEB_SWR_ADDR_SPELL, >BEEB_SWR_ADDR_MODAL, $00, $00, $00
+    .byte >BEEB_SWR_ADDR_ITEMS, >BEEB_SWR_ADDR_SPELL, >BEEB_SWR_ADDR_MODAL, $00, $00, $00, $00
 
 beeb_ovl_cache_pages:
     .byte $00, $00, $00, BEEB_SWR_PAGES_GEN, $00, BEEB_SWR_PAGES_UI
-    .byte BEEB_SWR_PAGES_ITEMS, BEEB_SWR_PAGES_SPELL, BEEB_SWR_PAGES_MODAL, $00, $00, $00
+    .byte BEEB_SWR_PAGES_ITEMS, BEEB_SWR_PAGES_SPELL, BEEB_SWR_PAGES_MODAL, $00, $00, $00, $00
 
 // ============================================================
 // beeb_overlay_try_cache — Sideways RAM cache front end for overlays.
@@ -59,6 +59,10 @@ beeb_overlay_try_cache:
     rts
 
 !found:
+    cpx #3                  // GEN(3) may reuse DUNGEON_GEN_SCAN_SCRATCH_BASE ($3400-$37FF)
+    bne !not_gen+
+    jsr beeb_icat_inv_lynne
+!not_gen:
     lda beeb_ovl_cache_bank,x
     bne !cached+
     sec
@@ -84,6 +88,8 @@ beeb_overlay_try_cache:
 // Preloaded at boot by MORIA8P; panics if corrupted.
 // ============================================================
 beeb_require_play:
+    php
+    sei
     lda #ROMSEL_BANK4
     sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
@@ -96,8 +102,10 @@ beeb_require_play:
     lda BEEB_PLAY_SLOT_BASE + 2
     cmp #$50                // 'P'
     bne !fatal+
+    plp
     clc
     rts
 !fatal:
+    plp
     lda #HAL_STATUS_ERR_WRONG_MEDIA
     jmp hal_platform_panic

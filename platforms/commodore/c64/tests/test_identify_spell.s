@@ -37,6 +37,8 @@ test_done_break:
 
 .const PIW_FILTER_MAGE_BOOK = $fc
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -50,25 +52,31 @@ test_done_break:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestUnused
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
@@ -81,7 +89,9 @@ test_done_break:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestUnused
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"

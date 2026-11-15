@@ -123,7 +123,11 @@ monster_attack_player:
 !map_done:
     // Track attack in recall
     ldx mat_type2
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr recall_inc_attacks_slot
+#else
     :AuxIncX(recall_attacks)
+#endif
 
     // Build and print summary message
     lda mat_any_hit
@@ -159,7 +163,11 @@ monster_attack_player:
 
 !map_player_dead:
     ldx mat_type2
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr recall_inc_deaths_slot
+#else
     :AuxIncX(recall_deaths)
+#endif
     stx zp_death_source
     jmp player_death_check
 

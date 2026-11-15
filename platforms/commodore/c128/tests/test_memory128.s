@@ -20,6 +20,13 @@ test_start:
     cld
     ldx #$ff
     txs
+    lda $0314
+    sta kernal_irq_vec_lo
+    lda $0315
+    sta kernal_irq_vec_hi
+    lda #0
+    sta KERNAL_NESTING_DEPTH
+    sta c128_kernal_irq_tail_runtime_owned
     jsr init_common_mmu_helpers   // as boot does: common-RAM MMU helpers at $0C00
     // Test 2 runs with CLI to check IRQ-state bookkeeping, not to take IRQs:
     // silence the boot's interrupt sources. Stop the CIA timers too: this
@@ -319,7 +326,479 @@ test_fail:
     beq !ptr1_common_ok+
     jmp test_fail
 !ptr1_common_ok:
+    jmp test5_b1_d000_spike
+
+// ============================================================
+// Test 5: C128M-002 Spike — Bank 1 $D000-$DFFF via SEI + $7F common bounce
+// Proves common-RAM-bounced reads/writes into Bank 1 $D000-$DFFF under
+// MMU_RAM_BANK1_NOIO ($7F) preserve VIC $D020, VDC VRAM/regs, CIA1/2 timers,
+// IRQ state + real CIA1 IRQ servicing, and EnterKernal/ExitKernal transitions.
+// ============================================================
+.const SPIKE_MMU_RAM_BANK1_NOIO = $7f
+.const SPIKE_MMU_ALL_RAM_NOIO   = $3f
+.const SPIKE_COMMON_BASE        = $0f00
+.const SPIKE_VDC_ADDR           = $d600
+.const SPIKE_VDC_DATA           = $d601
+.const SPIKE_TBL_LEN            = 12
+
+test5_b1_d000_spike:
+    sei
+    lda #CPU_PORT_DDR_DEFAULT
+    sta $00
+    lda #BANK_NO_BASIC
+    sta $01
+    lda #$0d
+    sta $d506
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+
+    // Install common-RAM spike routines at $0F00 (< $0FB0 cartridge slot)
+    ldx #0
+!copy_spike:
+    lda spike_common_blob,x
+    sta SPIKE_COMMON_BASE,x
+    inx
+    cpx #spike_common_blob_end - spike_common_blob
+    bne !copy_spike-
+
+    // Install Top Common hardware vectors ($FFFA/$FFFE) as in production
+    lda #<mmu_common_nmi
+    sta $fffa
+    lda #>mmu_common_nmi
+    sta $fffb
+    lda #<spike_common_irq_stub
+    sta $fffe
+    lda #>spike_common_irq_stub
+    sta $ffff
+
+    // 5A. Establish live I/O baselines under MMU_ALL_RAM ($3E)
+    lda #$03
+    sta $d020
+    lda $d020
+    and #$0f
+    cmp #$03
+    beq !vic_init_ok+
+    jmp test_fail
+!vic_init_ok:
+
+    // VDC VRAM sentinel $5D at $07FF (safe scratch byte past 80x25 screen)
+    lda #$07
+    ldy #$ff
+    ldx #18
+    jsr spike_vdc_write
+    tya
+    ldx #19
+    jsr spike_vdc_write
+    lda #$5d
+    ldx #31
+    jsr spike_vdc_write
+    jsr spike_vdc_read_07ff
+    cmp #$5d
+    beq !vdc_init_ok+
+    jmp test_fail
+!vdc_init_ok:
+
+    // CIA1 & CIA2 stopped Timer A latches
+    lda #$34
+    sta $dc04
+    lda #$12
+    sta $dc05
+    lda #$78
+    sta $dd04
+    lda #$56
+    sta $dd05
+    lda $dc04
+    cmp #$34
+    bne !cia_init_fail+
+    lda $dc05
+    cmp #$12
+    bne !cia_init_fail+
+    lda $dd04
+    cmp #$78
+    bne !cia_init_fail+
+    lda $dd05
+    cmp #$56
+    beq !cia_init_ok+
+!cia_init_fail:
+    jmp test_fail
+!cia_init_ok:
+
+    // 5B. Write distinct Bank 0 RAM sentinel $12 at $D020 via $3F bounce
+    lda #<$d020
+    sta zp_ptr0
+    lda #>$d020
+    sta zp_ptr0_hi
+    ldy #0
+    lda #$12
+    jsr spike_b0_d000_write
+
+    // 5C. Write 12 test sentinels across Bank 1 $D000-$DFFF via $7F bounce
+    // First test explicit CLI and SEI preservation on $D000 and $D500
+    lda #<$d000
+    sta zp_ptr0
+    lda #>$d000
+    sta zp_ptr0_hi
+    ldy #0
+    lda #$5a
+    cli
+    jsr spike_b1_d000_write
+    php
+    pla
+    and #$04
+    beq !cli_wr_ok+
+    jmp test_fail
+!cli_wr_ok:
+    sei
+    lda MMU_CR
+    cmp #MMU_ALL_RAM
+    beq !cli_mmu_ok+
+    jmp test_fail
+!cli_mmu_ok:
+
+    // Write remaining table entries with mixed CLI/SEI
+    ldx #0
+!wr_tbl:
+    lda spike_addr_lo,x
+    sta zp_ptr0
+    lda spike_addr_hi,x
+    sta zp_ptr0_hi
+    lda spike_expected_val,x
+    ldy #0
+    cli
+    jsr spike_b1_d000_write
+    php
+    sei
+    pla
+    and #$04
+    beq !wr_cli_ok+
+    jmp test_fail
+!wr_cli_ok:
+    lda MMU_CR
+    cmp #MMU_ALL_RAM
+    beq !wr_mmu_ok+
+    jmp test_fail
+!wr_mmu_ok:
+    lda $d506
+    cmp #$0d
+    beq !wr_d506_ok+
+    jmp test_fail
+!wr_d506_ok:
+    inx
+    cpx #SPIKE_TBL_LEN
+    bne !wr_tbl-
+
+    // Explicit SEI read test on $D500
+    lda #<$d500
+    sta zp_ptr0
+    lda #>$d500
+    sta zp_ptr0_hi
+    ldy #0
+    sei
+    jsr spike_b1_d000_read
+    cmp #$3c
+    beq !sei_rd_val_ok+
+    jmp test_fail
+!sei_rd_val_ok:
+    php
+    pla
+    and #$04
+    bne !sei_rd_i_ok+
+    jmp test_fail
+!sei_rd_i_ok:
+
+    // 5D. Verify all I/O, Bank 0 RAM, VDC, CIA, and Bank 1 RAM $D000-$DFFF
+    jsr spike_verify_all_state
+
+    // Additional post-$7F VDC write/read proof at $07FE
+    lda #$07
+    ldx #18
+    jsr spike_vdc_write
+    lda #$fe
+    ldx #19
+    jsr spike_vdc_write
+    lda #$6c
+    ldx #31
+    jsr spike_vdc_write
+    lda #$07
+    ldx #18
+    jsr spike_vdc_write
+    lda #$fe
+    ldx #19
+    jsr spike_vdc_write
+    ldx #31
+    jsr spike_vdc_read
+    cmp #$6c
+    beq !vdc_post_ok+
+    jmp test_fail
+!vdc_post_ok:
+
+    // 5E. Trigger a real CIA1 Timer A IRQ after $7F bounces and confirm clean RTI
+    sei
+    lda #0
+    sta spike_irq_count
+    lda #$7f
+    sta $dc0d
+    lda $dc0d                   // Clear any pending CIA1 flags
+    lda #$40
+    sta $dc04
+    lda #$00
+    sta $dc05
+    lda #$81
+    sta $dc0d                   // Enable CIA1 Timer A IRQ
+    lda #$19
+    sta $dc0e                   // Start one-shot with forced latch load
+    cli
+    ldx #0
+    ldy #0
+!wait_irq:
+    lda spike_irq_count
+    bne !irq_fired+
+    inx
+    bne !wait_irq-
+    iny
+    bne !wait_irq-
+    sei
+    jmp test_fail
+!irq_fired:
+    sei
+    lda #$7f
+    sta $dc0d
+    lda #0
+    sta $dc0e
+    lda $dc0d
+    // Restore CIA1 baseline latch values since Timer A latch was reused
+    lda #$34
+    sta $dc04
+    lda #$12
+    sta $dc05
+    jsr spike_verify_all_state
+
+    // 5F. Verify EnterKernal / ExitKernal, Bank 1 map select, and Huffman read
+    // keep Bank 1 $D000-$DFFF and Top Common $F000 untouched.
+    lda #0
+    sta KERNAL_NESTING_DEPTH
+    :EnterKernal()
+    lda #2
+    ldx #8
+    ldy #1
+    jsr $ffba                   // Safe SETLFS under KERNAL ROM
+    :ExitKernal()
+
+    lda KERNAL_NESTING_DEPTH
+    beq !ek_depth_ok+
+    jmp test_fail
+!ek_depth_ok:
+    lda MMU_CR
+    cmp #MMU_ALL_RAM
+    beq !ek_mmu_ok+
+    jmp test_fail
+!ek_mmu_ok:
+    lda $d506
+    cmp #$0d
+    beq !ek_d506_ok+
+    jmp test_fail
+!ek_d506_ok:
+
+    // Re-check Huffman read ($F000 Bank 1 = $5A, Bank 0 = $A5)
+    lda #<$f000
+    sta zp_ptr0
+    lda #>$f000
+    sta zp_ptr0_hi
+    ldy #0
+    jsr mmu_common_huff_read_ptr0
+    cmp #$5a
+    beq !huff_still_ok+
+    jmp test_fail
+!huff_still_ok:
+    lda $f000
+    cmp #$a5
+    beq !top_still_ok+
+    jmp test_fail
+!top_still_ok:
+    jsr spike_verify_all_state
+
     jmp test_pass
+
+// Helper: verify VIC $D020, Bank 0 RAM $D020, VDC $07FF, CIA1/2 latches,
+// and all 12 Bank 1 $D000-$DFFF bytes.
+spike_verify_all_state:
+    lda $d020
+    and #$0f
+    cmp #$03
+    beq !chk_b0_ram+
+    jmp test_fail
+!chk_b0_ram:
+    lda #<$d020
+    sta zp_ptr0
+    lda #>$d020
+    sta zp_ptr0_hi
+    ldy #0
+    jsr spike_b0_d000_read
+    cmp #$12
+    beq !chk_vdc+
+    jmp test_fail
+!chk_vdc:
+    jsr spike_vdc_read_07ff
+    cmp #$5d
+    beq !chk_cia+
+    jmp test_fail
+!chk_cia:
+    lda $dc04
+    cmp #$34
+    bne !cia_chk_fail+
+    lda $dc05
+    cmp #$12
+    bne !cia_chk_fail+
+    lda $dd04
+    cmp #$78
+    bne !cia_chk_fail+
+    lda $dd05
+    cmp #$56
+    beq !chk_b1_tbl+
+!cia_chk_fail:
+    jmp test_fail
+!chk_b1_tbl:
+    ldx #0
+!rd_tbl:
+    lda spike_addr_lo,x
+    sta zp_ptr0
+    lda spike_addr_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+    cli
+    jsr spike_b1_d000_read
+    php
+    sei
+    cmp spike_expected_val,x
+    beq !rd_val_ok+
+    pla
+    jmp test_fail
+!rd_val_ok:
+    pla
+    and #$04
+    beq !rd_cli_ok+
+    jmp test_fail
+!rd_cli_ok:
+    lda MMU_CR
+    cmp #MMU_ALL_RAM
+    beq !rd_mmu_ok+
+    jmp test_fail
+!rd_mmu_ok:
+    lda $d506
+    cmp #$0d
+    beq !rd_d506_ok+
+    jmp test_fail
+!rd_d506_ok:
+    inx
+    cpx #SPIKE_TBL_LEN
+    bne !rd_tbl-
+    rts
+
+spike_vdc_wait:
+    bit SPIKE_VDC_ADDR
+    bpl spike_vdc_wait
+    rts
+
+spike_vdc_write:
+    pha
+    jsr spike_vdc_wait
+    stx SPIKE_VDC_ADDR
+    jsr spike_vdc_wait
+    pla
+    sta SPIKE_VDC_DATA
+    rts
+
+spike_vdc_read:
+    jsr spike_vdc_wait
+    stx SPIKE_VDC_ADDR
+    jsr spike_vdc_wait
+    lda SPIKE_VDC_DATA
+    rts
+
+spike_vdc_read_07ff:
+    lda #$07
+    ldx #18
+    jsr spike_vdc_write
+    lda #$ff
+    ldx #19
+    jsr spike_vdc_write
+    ldx #31
+    jmp spike_vdc_read
+
+spike_addr_lo:
+    .byte <$d000, <$d020, <$d500, <$d600, <$d601, <$d800
+    .byte <$dc04, <$dc05, <$dd04, <$dd05, <$de00, <$dfff
+spike_addr_hi:
+    .byte >$d000, >$d020, >$d500, >$d600, >$d601, >$d800
+    .byte >$dc04, >$dc05, >$dd04, >$dd05, >$de00, >$dfff
+spike_expected_val:
+    .byte $5a, $a5, $3c, $91, $82, $f7
+    .byte $aa, $bb, $cc, $dd, $6e, $4b
+
+spike_common_blob:
+.pseudopc SPIKE_COMMON_BASE {
+spike_b1_d000_read:
+    php
+    sei
+    lda #SPIKE_MMU_RAM_BANK1_NOIO
+    sta MMU_CR
+    lda (zp_ptr0),y
+    sta spike_tmp_val
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    plp
+    lda spike_tmp_val
+    rts
+
+spike_b1_d000_write:
+    sta spike_tmp_val
+    php
+    sei
+    lda #SPIKE_MMU_RAM_BANK1_NOIO
+    sta MMU_CR
+    lda spike_tmp_val
+    sta (zp_ptr0),y
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    plp
+    rts
+
+spike_b0_d000_read:
+    php
+    sei
+    lda #SPIKE_MMU_ALL_RAM_NOIO
+    sta MMU_CR
+    lda (zp_ptr0),y
+    sta spike_tmp_val
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    plp
+    lda spike_tmp_val
+    rts
+
+spike_b0_d000_write:
+    sta spike_tmp_val
+    php
+    sei
+    lda #SPIKE_MMU_ALL_RAM_NOIO
+    sta MMU_CR
+    lda spike_tmp_val
+    sta (zp_ptr0),y
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    plp
+    rts
+
+spike_common_irq_stub:
+    cld
+    inc spike_irq_count
+    jmp mmu_common_irq
+
+spike_tmp_val:   .byte 0
+spike_irq_count: .byte 0
+}
+spike_common_blob_end:
+.assert "Spike common stub fits below $0FB0", spike_common_blob_end - spike_common_blob <= $0fb0 - SPIKE_COMMON_BASE, true
 
 test_pass:
     jmp test_pass

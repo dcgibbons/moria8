@@ -30,6 +30,9 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestNameStreams [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestUnusedMonsterMagic [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -45,45 +48,57 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment Default
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segmentdef TestNameStreams [start=$A000]
+.segment Default
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment Default
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
 // Monster spells and breath are not exercised here: out of the way above
 // the result buffer (resistance armour, 2026-11-11, took the body past MAP_BASE).
-.segmentdef TestUnusedMonsterMagic [start=$e100]
-.segment TestUnusedMonsterMagic
+.segment Default
 #import "../../../../core/monster_magic.s"
 .segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment Default
 #import "../../../../core/projectile.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+.segment Default
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/bash.s"
 #import "../../../../core/turn_render_state.s"
 // This stub lives in the $D000 test overlay so Main stays below MAP_BASE.
@@ -146,8 +161,12 @@ player_death_check:
     sta zp_game_flags
     rts
 #import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+store_init_all:
+    rts
+store_restock_all:
+    rts
+store_enter:
+    rts
 #import "../../../../core/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s

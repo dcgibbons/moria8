@@ -19,6 +19,7 @@ PLUS4_DIR="${PLUS4_DIR:-$REPO_ROOT/platforms/commodore/plus4}"
 cd "$PLUS4_DIR"
 PLUS4_TEST_OUT="${PLUS4_TEST_OUT:-../../../build/test/plus4}"
 mkdir -p "$PLUS4_TEST_OUT"
+PLUS4_TEST_OUT="$(cd "$PLUS4_TEST_OUT" && pwd)"
 # Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
 # gets its own directory, and runs older than six hours are cleared here, so
 # leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
@@ -26,6 +27,7 @@ mkdir -p ../../../build/test/plus4/tmp
 find ../../../build/test/plus4/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
 TMPDIR=$(cd ../../../build/test/plus4/tmp && mktemp -d "$(pwd)/run.XXXXXX")
 export TMPDIR
+export PYTHONDONTWRITEBYTECODE=1
 cleanup() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
     rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
@@ -40,6 +42,7 @@ case "$KICKASS" in
 esac
 
 make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" ensure-kickass || exit 1
+python3 -B ../../../tools/gen_trampolines.py --port plus4 --output ../../../build/trampolines/plus4_trampolines.inc || exit 1
 
 if [ -n "${VICEPLUS4:-}" ]; then
     VICE="$VICEPLUS4"
@@ -70,7 +73,10 @@ c1541_catalog() {
         [ "$prev" = "-attach" ] && img="$arg"
         prev="$arg"
     done
-    [ -n "$img" ] && python3 "$REPO_ROOT/tools/catalog_disk.py" fix "$img"
+    if [ -n "$img" ]; then
+        python3 -B "$REPO_ROOT/tools/catalog_disk.py" fix "$img" && \
+        python3 -B "$REPO_ROOT/tools/catalog_disk.py" item-fix "$img"
+    fi
 }
 fi
 
@@ -196,7 +202,7 @@ run_test() {
     fi
 
     TOTAL=$((TOTAL + 1))
-    java -jar "$KICKASS" "$source" -libdir "$REPO_ROOT/platforms/commodore/c64" -define PLUS4 -vicesymbols -o "$prg" >/dev/null || {
+    java -jar "$KICKASS" "$source" -libdir "$REPO_ROOT/platforms/commodore/c64" -define PLUS4 -symbolfiledir "$PLUS4_TEST_OUT" -vicesymbols -o "$prg" >/dev/null || {
         echo "FAIL: $name (assembly)"
         FAIL=$((FAIL + 1))
         return
@@ -279,18 +285,29 @@ def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> 
             return True
     return False
 
+if any("$0102,x" in line or "$0104,x" in line for line in player_items):
+    print("core/player_items.s must not probe raw 6502 return addresses ($0102,x / $0104,x)")
+    raise SystemExit(1)
+
 if not has_ordered_chain(player_items, [
     "show_inv_and_select:",
-    "$0102,x",
-    "$0104,x",
+    "ldx piw_return_overlay",
     "lda #OVL_NONE",
+    "sta piw_return_overlay",
     "jsr overlay_load",
     "brk",
-    "#if HAL_PLATFORM_ITEM_PROMPT_RELOAD_PLUS4_BANK_RAM",
+    "#if !HAL_PLATFORM_AUX_PERSISTENT_DATA",
+    "jsr hal_overlay_post_reload",
+], window=40):
+    print("core/player_items.s inventory selector must return to outer overlays and call hal_overlay_post_reload after reloading the caller overlay")
+    raise SystemExit(1)
+
+if not has_ordered_chain(main, [
+    "hal_overlay_post_reload:",
     "jsr plus4_install_ram_irq_vectors",
-    "jsr plus4_bank_ram",
-], window=80):
-    print("Plus/4 inventory selector must detect outer overlay continuations and restore RAM-visible overlay execution after reloading the caller overlay")
+    "plus4_bank_ram",
+], window=6):
+    print("Plus/4 hal_overlay_post_reload must install RAM IRQ vectors and bank RAM visible")
     raise SystemExit(1)
 
 if not has_ordered_chain(item_actions_overlay, [
@@ -410,6 +427,8 @@ run_boot_title_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -419,6 +438,9 @@ run_boot_title_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -488,6 +510,8 @@ run_new_game_to_town_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -497,6 +521,9 @@ run_new_game_to_town_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -567,6 +594,8 @@ run_dungeon_entry_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -576,6 +605,9 @@ run_dungeon_entry_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -710,6 +742,8 @@ run_exchange_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -719,6 +753,9 @@ run_exchange_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -797,6 +834,8 @@ run_chest_open_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -806,6 +845,9 @@ run_chest_open_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -881,6 +923,8 @@ run_balrog_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -890,6 +934,9 @@ run_balrog_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -960,6 +1007,8 @@ run_dungeon_ascent_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -969,6 +1018,9 @@ run_dungeon_ascent_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1038,6 +1090,8 @@ run_disarm_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1047,6 +1101,9 @@ run_disarm_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1113,6 +1170,8 @@ run_overlay_load_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1123,6 +1182,9 @@ run_overlay_load_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1188,6 +1250,8 @@ run_retirement_royal_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1198,6 +1262,9 @@ run_retirement_royal_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1261,6 +1328,8 @@ run_wand_selector_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1270,6 +1339,9 @@ run_wand_selector_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1385,6 +1457,8 @@ run_disk_setup_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1394,6 +1468,9 @@ run_disk_setup_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1471,6 +1548,8 @@ run_disk_setup_missing_save_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1480,6 +1559,9 @@ run_disk_setup_missing_save_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1532,6 +1614,8 @@ plus4_load_written_save_check() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1541,6 +1625,9 @@ plus4_load_written_save_check() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $load_name (product disk image)"
         return 1
@@ -1612,6 +1699,8 @@ run_save_write_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1621,6 +1710,9 @@ run_save_write_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1658,12 +1750,12 @@ run_save_write_product_smoke() {
         --retry-timeouts 0 \
         --vice "$VICE"; then
         if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"THE.GAME".*SEQ'; then
-            # The written save carries the 33-slot inventory with the seeded
+            # The written save carries the 34-slot Save V2 inventory with the seeded
             # secondary weapon (save_product_seed_secondary); load it back.
             local save_seq="$out_dir/$name.the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "the.game,s" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x0A >>"$build_log" 2>&1; then
+                    || ! python3 -B tests/check_save_secondary_plus4.py "$save_seq" 0x20 >>"$build_log" 2>&1; then
                 echo "FAIL: $name (secondary weapon not in the written save)"
                 tail -3 "$build_log"
                 FAIL=$((FAIL + 1))
@@ -1728,6 +1820,8 @@ run_save_media_fail_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1737,6 +1831,9 @@ run_save_media_fail_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1839,6 +1936,8 @@ run_change_save_drive_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1848,6 +1947,9 @@ run_change_save_drive_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1940,6 +2042,8 @@ run_single_drive_save_return_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1949,6 +2053,9 @@ run_single_drive_save_return_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2035,6 +2142,8 @@ run_single_drive_fresh_save_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2044,6 +2153,9 @@ run_single_drive_fresh_save_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2137,6 +2249,8 @@ run_single_drive_fresh_save_no_init_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2146,6 +2260,9 @@ run_single_drive_fresh_save_no_init_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >>"$build_log" 2>&1; then
         echo "FAIL: $name (product disk fixture)"
         tail -40 "$build_log"
@@ -2235,6 +2352,8 @@ run_single_drive_save_wrong_media_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2244,6 +2363,9 @@ run_single_drive_save_wrong_media_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2311,6 +2433,8 @@ run_single_drive_load_wrong_media_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2320,6 +2444,9 @@ run_single_drive_load_wrong_media_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2391,6 +2518,8 @@ run_disk_setup_single_drive_return_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2400,6 +2529,9 @@ run_disk_setup_single_drive_return_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2481,6 +2613,8 @@ run_load_wrong_media_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2490,6 +2624,9 @@ run_load_wrong_media_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2574,6 +2711,8 @@ run_load_resume_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2583,6 +2722,9 @@ run_load_resume_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2667,6 +2809,8 @@ run_death_hiscore_single_drive_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2676,6 +2820,9 @@ run_death_hiscore_single_drive_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2760,6 +2907,8 @@ run_single_drive_load_return_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2769,6 +2918,9 @@ run_single_drive_load_return_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2863,6 +3015,8 @@ run_load_then_save_new_empty_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2872,6 +3026,9 @@ run_load_then_save_new_empty_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2986,6 +3143,8 @@ run_single_drive_load_corrupt_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -2995,6 +3154,9 @@ run_single_drive_load_corrupt_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -3085,6 +3247,8 @@ run_load_missing_savefile_product_smoke() {
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -3094,6 +3258,9 @@ run_load_missing_savefile_product_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -3154,11 +3321,11 @@ run_balrog_product_smoke
 run_dungeon_ascent_smoke
 # Nest gold calls random_floor_in_room in the dungeon-generation overlay after
 # pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
-check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
+check_static_contract "nest_gold_restores_generation_overlay_contract" "../../../build/trampolines/plus4_trampolines.inc" \
     "tramp_spawn_nest_gold:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold"
 # Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
 # too, if anything replaced it after generation.
-check_static_contract "special_room_monsters_restore_generation_overlay_contract" "main.s" \
+check_static_contract "special_room_monsters_restore_generation_overlay_contract" "../../../build/trampolines/plus4_trampolines.inc" \
     "tramp_spawn_special_room_monsters:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_special_room_monsters"
 check_static_contract "disarm_command_external_import_contract" "main.s" \
     "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"

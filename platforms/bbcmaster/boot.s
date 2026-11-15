@@ -14,8 +14,8 @@
 //   5: BEEB.CATALOG  -> Sideways Bank 6 ($06) $9500 (the monster catalog)
 //   6: OVL.MODAL     -> Sideways Bank 5 ($05) $B400
 //   7: OVL.SPELL     -> Sideways Bank 7 ($07) $8000
-//   8: OVL.ITEMS     -> Sideways Bank 7 ($07) $9500
-//   9: OVL.GEN       -> Sideways Bank 7 ($07) $AA00
+//   8: OVL.ITEMS     -> Sideways Bank 7 ($07) $9600
+//   9: OVL.GEN       -> Sideways Bank 7 ($07) $B000
 // OVL.TOWN loads from DFS: the monster catalog took its pages (2026-11-05).
 
 .cpu _65c02
@@ -230,9 +230,11 @@ loader:
     jsr MOS_OSFIND
 
     // Restore filing-system ROMSEL in $00F4 so hal_platform_init_early can save it
+    sei
     lda mos_romsel
     sta ZP_MOS_ROMSEL
     sta SHEILA_ROMSEL
+    cli
 
     // Jump to resident entry_bootstrap at $0E00
     jmp $0e00
@@ -298,9 +300,9 @@ pak_name:
 //   4: OVL.UI        ($06, $BA00)
 //   5: BEEB.CATALOG  ($06, $9500)
 //   6: OVL.MODAL     ($05, $B400)
-//   8: OVL.SPELL     ($07, $8000)
-//   9: OVL.ITEMS     ($07, $9500)
-//  10: OVL.GEN       ($07, $AA00)
+//   7: OVL.SPELL     ($07, $8000)
+//   8: OVL.ITEMS     ($07, $9600)
+//   9: OVL.GEN       ($07, $B000)
 file_bank_table:
     .byte $00
     .byte $04

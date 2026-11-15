@@ -1,22 +1,16 @@
 #importonce
 // disk_setup_runtime128.s — C128 FEAT-DISK coordinator and title/save entry
-// points loaded into the dedicated disk-I/O runtime below ROM-shadowed regions
-// so title-time disk setup is callable regardless of the current C128 banking state.
+// points in Bank 0 Default resident RAM (< $AF00, safely clear of $AF00-$CFFF
+// persist/play overlays and ROM-shadowed regions during KERNAL calls).
 
 tramp_disk_setup_ui_action:
     jmp ui_disk_setup_dispatch
 
 tramp_disk_setup:
+    jsr c128_modal_require_persist
     lda #0
     sta disk_ui_value
     jsr tramp_ui_enter
-    lda #C128_HELP_OVERLAY_ID
-    jsr overlay_load
-    bcc !tds_run+
-    jsr tramp_ui_exit
-    sec
-    rts
-!tds_run:
     jsr disk_setup_run
     php
     jsr tramp_ui_exit
@@ -24,14 +18,8 @@ tramp_disk_setup:
     rts
 
 tramp_disk_prepare_selected:
+    jsr c128_modal_require_persist
     jsr tramp_ui_enter
-    lda #C128_HELP_OVERLAY_ID
-    jsr overlay_load
-    bcc !tdps_run+
-    jsr tramp_ui_exit
-    sec
-    rts
-!tdps_run:
     jsr disk_setup_prepare_selected
     php
     jsr tramp_ui_exit
@@ -46,7 +34,7 @@ title_require_disk_setup:
     clc
     rts
 
-.segment C128ResidentItems
+.segment Default
 title_draw_save_disk_indicator:
     lda #STATUS_ROW
     jsr hal_screen_clear_row
@@ -71,5 +59,5 @@ title_draw_save_disk_indicator:
     sta zp_text_color
     rts
 
-.segment C128ResidentDiskIo
+.segment Default
     #import "disk_setup_banked.s"

@@ -105,9 +105,9 @@ loader:
     bcc !hdr_ok+
     jmp boot_error
 !hdr_ok:
-    lda HDR                 // entry-count sanity check
+    lda HDR                 // entry-count sanity check (>= boot prefix count)
     cmp #PAK_COUNT
-    beq !count_ok+
+    bcs !count_ok+
     lda #$f1                // pak/header mismatch
     jmp boot_error
 !count_ok:

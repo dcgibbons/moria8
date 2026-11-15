@@ -25,7 +25,7 @@
 //   fi_y[42]        map Y
 //   fi_qty[42]      quantity / gold amount lo
 //   fi_p1[42]       p1 for non-gold, gold amount hi for gold
-//   fi_meta[42]     packed flags+ego: bits 0-2 ego, bits 3-6 IF_* flags
+//   fi_meta[42]     IF_* flags (bits 0-3)
 .label fi_item_id = FLOOR_ITEM_BASE + 0
 .label fi_x       = fi_item_id + MAX_FLOOR_ITEMS
 .label fi_y       = fi_x + MAX_FLOOR_ITEMS
@@ -34,14 +34,9 @@
 .label fi_meta    = fi_p1 + MAX_FLOOR_ITEMS
 .assert "Floor item table fits in platform floor-item page", fi_meta + MAX_FLOOR_ITEMS <= FLOOR_ITEM_BASE + 256, true
 
-.const FI_META_EGO_MASK    = $07
-.const FI_META_EGO_HI      = $80   // ego bit 3 (Slay Dragon, 2026-11-07), in the bit that was unused
-.const FI_META_FLAGS_SHIFT = 3
-.const FI_META_FLAGS_MASK  = $78
-
 // ============================================================
 // Inventory Table — TOTAL_INV_SLOTS slots: 22 carried, then equipment
-// (EQUIP_WEAPON..EQUIP_AMULET, EQUIP_RING2, EQUIP_SECONDARY)
+// (EQUIP_WEAPON..EQUIP_RING2, EQUIP_CLOAK, EQUIP_SECONDARY)
 // ============================================================
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_qty:     .fill TOTAL_INV_SLOTS, 0
@@ -50,33 +45,38 @@ inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
 inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
 inv_flags:   .fill TOTAL_INV_SLOTS, 0
-inv_ego:     .fill TOTAL_INV_SLOTS, 0
+inv_ego:     .fill TOTAL_INV_SLOTS, 0     // bit 6 = ITEM_PAGE_BIT, bits 0-5 = ego ID
 
-// Split stat sidecars for floor slots. The packed floor table intentionally
-// stays inside its fixed 256-byte page.
+// Split stat & page+ego sidecars for floor slots. The packed floor table
+// intentionally stays inside its fixed 256-byte page; fi_meta_hi MUST sit outside it.
 fi_to_hit:   .fill MAX_FLOOR_ITEMS, 0
 fi_to_dam:   .fill MAX_FLOOR_ITEMS, 0
 fi_to_ac:    .fill MAX_FLOOR_ITEMS, 0
+fi_meta_hi:  .fill MAX_FLOOR_ITEMS, 0   // bit 6 = ITEM_PAGE_BIT, bits 0-5 = ego ID
 
 glyph_x:      .fill MAX_GLYPHS, 0
 glyph_y:      .fill MAX_GLYPHS, 0
 glyph_active: .fill MAX_GLYPHS, 0
 
 // ============================================================
-// Scratch variables
+// Scratch & running state variables
 // ============================================================
 fi_add_x:   .byte 0       // Position for floor_item_add
 fi_add_y:   .byte 0
-fi_add_id:  .byte 0       // Item type ID
+fi_add_id:  .byte 0       // Paged item slot_lo (0..254)
 fi_add_qty: .byte 0       // Quantity / gold amount
 fi_add_qty_hi: .byte 0    // Gold qty high byte (auto-reset after add)
 fi_add_p1:  .byte 0       // Charges/fuel/type-specific p1
 fi_add_to_hit: .byte 0    // Split item to-hit
 fi_add_to_dam: .byte 0    // Split item to-damage
 fi_add_to_ac:  .byte 0    // Split item to-AC
-fi_add_ego: .byte 0       // Ego type (0=none)
+fi_add_ego: .byte 0       // Packed (ITEM_PAGE_BIT | ego_id)
 isl_target: .byte 0       // item_spawn_level loop target
 isl_idx:    .byte 0       // item_spawn_level loop counter
+inven_weight_lo: .byte 0  // Running 16-bit inventory+equipment weight (0.1 lb)
+inven_weight_hi: .byte 0
+iac_lo:     .byte 0       // Weight-check candidate total lo (InvAddCarriedBody)
+iac_hi:     .byte 0       // Weight-check candidate total hi
 
 // ============================================================
 // Subroutines
@@ -98,11 +98,15 @@ fi_add_clear_plain_meta:
     rts
 
 // floor_item_get_qty_hi_x — Get 16-bit gold high byte for floor slot X
-// Output: A = qty_hi for gold items, 0 for non-gold
+// Output: A = qty_hi for Page-0 gold items (#0/#1), 0 for non-gold
 floor_item_get_qty_hi_x:
+    lda fi_meta_hi,x
+    and #ITEM_PAGE_BIT
+    bne !fi_qty_zero+
     lda fi_item_id,x
     cmp #2
     bcc !fi_get_qty_hi_gold+
+!fi_qty_zero:
     lda #0
     rts
 !fi_get_qty_hi_gold:
@@ -110,8 +114,11 @@ floor_item_get_qty_hi_x:
     rts
 
 // floor_item_get_p1_x — Get p1/charges for non-gold floor slot X
-// Output: A = p1 for non-gold, 0 for gold
+// Output: A = p1 for non-gold, 0 for Page-0 gold (#0/#1)
 floor_item_get_p1_x:
+    lda fi_meta_hi,x
+    and #ITEM_PAGE_BIT
+    bne !fi_get_p1_ok+
     lda fi_item_id,x
     cmp #2
     bcs !fi_get_p1_ok+
@@ -122,28 +129,16 @@ floor_item_get_p1_x:
     rts
 
 // floor_item_get_flags_x — Unpack IF_* flags from floor slot X
-// Output: A = flags
+// Output: A = flags (0..$0F)
 floor_item_get_flags_x:
     lda fi_meta,x
-    and #FI_META_FLAGS_MASK
-    lsr
-    lsr
-    lsr
+    and #ITEM_META_FLAGS_MASK
     rts
 
-// floor_item_get_ego_x — Unpack ego type from floor slot X
-// Output: A = ego type (0=none)
+// floor_item_get_ego_x — Read packed (ITEM_PAGE_BIT | ego_id) from floor slot X
+// Output: A = packed page+ego byte
 floor_item_get_ego_x:
-    lda fi_meta,x
-    and #FI_META_EGO_HI
-    beq !fge_lo+
-    lda fi_meta,x
-    and #FI_META_EGO_MASK
-    ora #$08
-    rts
-!fge_lo:
-    lda fi_meta,x
-    and #FI_META_EGO_MASK
+    lda fi_meta_hi,x
     rts
 
 // item_init_floor — Clear all floor item slots
@@ -171,11 +166,12 @@ item_init_floor:
     sta fi_to_hit,x
     sta fi_to_dam,x
     sta fi_to_ac,x
+    sta fi_meta_hi,x
     dex
     bpl !iif_stat_loop-
     jmp glyph_clear_all
 
-// item_init_inventory — Clear all inventory/equipment slots
+// item_init_inventory — Clear all inventory/equipment slots and reset weight
 // Clobbers: A, X
 item_init_inventory:
     ldx #TOTAL_INV_SLOTS - 1
@@ -183,6 +179,9 @@ item_init_inventory:
     jsr inv_clear_slot
     dex
     bpl !iiv_loop-
+    lda #0
+    sta inven_weight_lo
+    sta inven_weight_hi
     rts
 
 // floor_item_add — Add an item to the floor item table
@@ -212,9 +211,13 @@ floor_item_add:
     sta fi_y,x
     lda fi_add_qty
     sta fi_qty,x
+    lda fi_add_ego
+    and #ITEM_PAGE_BIT
+    bne !fia_non_gold+
     lda fi_add_id
     cmp #2
     bcc !fia_gold_hi+
+!fia_non_gold:
     lda fi_add_p1
     sta fi_p1,x
     jmp !fia_store_meta+
@@ -222,21 +225,11 @@ floor_item_add:
     lda fi_add_qty_hi
     sta fi_p1,x
 !fia_store_meta:
-    // Pack fi_add_flags + fi_add_ego into the floor meta byte (formerly
-    // floor_item_pack_add_meta, inlined at its only call site)
     lda fi_add_flags
-    asl
-    asl
-    asl
-    sta zp_temp0
-    lda fi_add_ego
-    cmp #$08
-    bcc !fpa_lo+
-    and #FI_META_EGO_MASK
-    ora #FI_META_EGO_HI
-!fpa_lo:
-    ora zp_temp0
+    and #ITEM_META_FLAGS_MASK
     sta fi_meta,x
+    lda fi_add_ego
+    sta fi_meta_hi,x
     lda fi_add_to_hit
     sta fi_to_hit,x
     lda fi_add_to_dam
@@ -283,6 +276,7 @@ floor_item_remove:
     sta fi_to_hit,x
     sta fi_to_dam,x
     sta fi_to_ac,x
+    sta fi_meta_hi,x
 
     // Decrement count
     dec zp_item_count
@@ -361,8 +355,7 @@ chest_find_at_df_target:
     ldy df_target_y
     jsr floor_item_find_at
     bcc !cfdt_done+             // No floor item — carry already clear
-    ldy fi_item_id,x
-    lda it_category,y
+    jsr item_get_category_floor_x
     cmp #ICAT_CHEST
     beq !cfdt_done+             // CMP equal sets carry
     clc
@@ -436,19 +429,25 @@ glyph_remove:
 
 // inv_consume_one — Use one item of inventory slot X: a stack shrinks by one;
 // the last one (or a zero-quantity record from an older save) frees the slot.
-// Clobbers: A, X
+// Preserves: X, Y. Clobbers: A (calls inv_remove_item which preserves Y)
 inv_consume_one:
     lda inv_qty,x
     cmp #2
     bcc inv_remove_item
+    jsr inven_sub_one_slot_x
     dec inv_qty,x
     rts
 
 // inv_remove_item — Remove item from inventory slot X
 // Carried slots compact after removal; equipment clears in place.
 // Input: X = slot index (0..TOTAL_INV_SLOTS-1)
-// Clobbers: A, X
+// Preserves: Y. Clobbers: A, X
 inv_remove_item:
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !iri_skip_wt+
+    jsr inven_sub_slot_x
+!iri_skip_wt:
     cpx #MAX_INV_SLOTS - 1
     bcs inv_clear_slot
 !iri_shift_loop:
@@ -483,6 +482,170 @@ inv_clear_slot:
     sta inv_to_ac,x
     sta inv_flags,x
     sta inv_ego,x
+    rts
+
+// ============================================================
+// Running 16-bit Inventory Weight Helpers (in 0.1 lb units)
+// ZP-free BSS arithmetic; safe for overlays and inventory callers.
+// ============================================================
+
+iw_qty:     .byte 0
+iw_mc_lo:   .byte 0
+iw_mc_hi:   .byte 0
+iw_mc_2:    .byte 0
+iw_res_0:   .byte 0
+iw_res_1:   .byte 0
+iw_res_2:   .byte 0
+iw_save_x:  .byte 0
+
+// inven_mul_item_qty — Multiply 16-bit weight of (item_cur_page, A) by iw_qty.
+// Output: iw_res_0/1/2 = 24-bit weight; carry set if iw_res_2 != 0 (>= 65536).
+// Preserves: X, Y. Clobbers: A.
+inven_mul_item_qty:
+    stx iw_save_x
+    tax
+    jsr item_get_weight_x           // sets icat_weight_lo/hi; preserves X, Y
+    lda #0
+    sta iw_res_0
+    sta iw_res_1
+    sta iw_res_2
+    sta iw_mc_2
+    lda icat_weight_lo
+    sta iw_mc_lo
+    lda icat_weight_hi
+    sta iw_mc_hi
+    ldx #8
+!im_loop:
+    lsr iw_qty
+    bcc !im_skip+
+    clc
+    lda iw_res_0
+    adc iw_mc_lo
+    sta iw_res_0
+    lda iw_res_1
+    adc iw_mc_hi
+    sta iw_res_1
+    lda iw_res_2
+    adc iw_mc_2
+    sta iw_res_2
+!im_skip:
+    asl iw_mc_lo
+    rol iw_mc_hi
+    rol iw_mc_2
+    dex
+    bne !im_loop-
+    ldx iw_save_x
+    lda iw_res_2
+    beq !im_fit+
+    sec
+    rts
+!im_fit:
+    clc
+    rts
+
+// inven_calc_fi_add_weight — Candidate total weight = inven_weight + fi_add_qty * wt(fi_add).
+// Output: iac_lo/hi updated; carry set on 16-bit overflow.
+// Preserves: X, Y. Clobbers: A.
+inven_calc_fi_add_weight:
+    lda fi_add_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda fi_add_qty
+    sta iw_qty
+    lda fi_add_id
+    jsr inven_mul_item_qty
+    bcs !icw_ov+
+    lda iw_res_0
+    clc
+    adc inven_weight_lo
+    sta iac_lo
+    lda iw_res_1
+    adc inven_weight_hi
+    sta iac_hi
+!icw_ov:
+    rts
+
+// inven_add_fi_add_weight — Add fi_add_qty * wt(fi_add) to inven_weight_lo/hi (saturating at $FFFF).
+// Preserves: X, Y. Clobbers: A.
+inven_add_fi_add_weight:
+    jsr inven_calc_fi_add_weight
+    bcs !iaw_sat+
+    lda iac_lo
+    sta inven_weight_lo
+    lda iac_hi
+    sta inven_weight_hi
+    rts
+!iaw_sat:
+    lda #$ff
+    sta inven_weight_lo
+    sta inven_weight_hi
+    rts
+
+// inven_sub_one_slot_x / inven_sub_slot_x — Subtract 1 or inv_qty[X] item weight from inven_weight_lo/hi.
+// Preserves: X, Y. Clobbers: A.
+inven_sub_one_slot_x:
+    lda #1
+    bne !isw_set_qty+
+inven_sub_slot_x:
+    lda inv_qty,x
+!isw_set_qty:
+    sta iw_qty
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda inv_item_id,x
+    jsr inven_mul_item_qty
+    bcs !isw_zero+
+    lda inven_weight_lo
+    sec
+    sbc iw_res_0
+    sta inven_weight_lo
+    lda inven_weight_hi
+    sbc iw_res_1
+    sta inven_weight_hi
+    bcs !isw_done+
+!isw_zero:
+    lda #0
+    sta inven_weight_lo
+    sta inven_weight_hi
+!isw_done:
+    rts
+
+// inven_recalc_weight — Recompute inven_weight_lo/hi cleanly from all TOTAL_INV_SLOTS.
+// Clobbers: A, X, Y.
+inven_recalc_weight:
+    lda #0
+    sta inven_weight_lo
+    sta inven_weight_hi
+    ldx #TOTAL_INV_SLOTS - 1
+!irw_loop:
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !irw_next+
+    lda inv_qty,x
+    beq !irw_next+
+    sta iw_qty
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda inv_item_id,x
+    jsr inven_mul_item_qty
+    bcs !irw_sat+
+    lda inven_weight_lo
+    clc
+    adc iw_res_0
+    sta inven_weight_lo
+    lda inven_weight_hi
+    adc iw_res_1
+    sta inven_weight_hi
+    bcc !irw_next+
+!irw_sat:
+    lda #$ff
+    sta inven_weight_lo
+    sta inven_weight_hi
+!irw_next:
+    dex
+    bpl !irw_loop-
     rts
 
 #if C64_UNIT_TEST || C128_UNIT_TEST
@@ -673,6 +836,9 @@ item_spawn_level:
     // Set qty: ammo spawns in stacks, everything else = 1
     lda #1
     sta fi_add_qty
+    lda fi_add_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx fi_add_id
     jsr item_get_missile
     bpl !isl_qty_done+          // Bit 7 clear = not ammo
@@ -814,8 +980,12 @@ item_spawn_level:
 // type (0 for non-weapons).
 isl_roll_item:
     sta fi_add_id
+    lda item_cur_page
+    sta isl_page
     jsr roll_enchantment
     sta fi_add_p1
+    lda isl_page
+    sta item_cur_page
     lda fi_add_id
 #if HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
     // A2/CX16: generation executes in the GEN overlay window; the ego trampoline
@@ -824,8 +994,10 @@ isl_roll_item:
 #else
     jsr tramp_roll_ego_type
 #endif
+    ora isl_page
     sta fi_add_ego
     rts
+isl_page: .byte 0
 #if ITEM_SPAWN_IN_GEN_OVERLAY
 :ItemSpawnRestoreSegment()
 #endif
@@ -860,9 +1032,7 @@ item_pickup:
     stx ipu_slot
 
     // Check if it's gold
-    lda fi_item_id,x
-    tax
-    lda it_category,x
+    jsr item_get_category_floor_x
     cmp #ICAT_GOLD
     bne !ipu_not_gold+
 
@@ -1126,17 +1296,22 @@ fi_add_to_inv_slot:
 
 item_append_name:
     sta fi_add_id
+    lda fi_add_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda fi_add_id
     jsr item_get_name_ptr           // zp_ptr0 = name string
     lda zp_ptr0
     ldy zp_ptr0_hi
     jsr combat_append_str
-    // Append ego suffix if present (reads fi_add_ego set by caller)
+    // Append ego suffix if present (reads fi_add_ego set by caller, masked to 6 bits)
     lda fi_add_ego
+    and #EGO_ID_MASK
     jmp tramp_ego_append_suffix
 
 // item_append_desc — Append item name plus identified stat suffixes to
 // combat_msg_buf. Uses fi_add_* staging fields for the selected instance.
-// Input: A = item type ID
+// Input: A = item type ID (slot_lo), fi_add_ego holds (page_bit | ego_id)
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
 item_append_desc:
     jsr item_append_name
@@ -1145,10 +1320,15 @@ item_append_desc:
     bne !iad_identified+
     rts
 !iad_identified:
-    ldx fi_add_id
-    lda it_category,x
+    lda fi_add_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda fi_add_id
+    jsr item_get_category_a
     cmp #ICAT_WEAPON
     beq !iad_weapon+
+    cmp #ICAT_CLOAK
+    beq !iad_armor+
     cmp #ICAT_ARMOR
     bcc !iad_done+
     cmp #ICAT_BOOTS + 1
@@ -1204,14 +1384,23 @@ item_append_desc:
     lda fi_add_to_ac
     jsr item_append_signed_combat
     lda #$1d                    // ']' screen code
-    jmp combat_append_char
+    jsr combat_append_char
+    jmp !iad_ring_p1+           // Crown of the Magi INT; 0 elsewhere
 !iad_ring:
+    bit item_cur_page
+    bvs !iad_ring_p1_chk+
     lda fi_add_id
     cmp #23
     beq !iad_ring_ac+
     cmp #24
     beq !iad_ring_p1+
-    rts
+!iad_ring_p1_chk:
+    lda fi_add_to_ac
+    bne !iad_ring_ac+
+    lda fi_add_to_hit
+    ora fi_add_to_dam
+    bne !iad_weapon-
+    jmp !iad_ring_p1+
 !iad_ring_ac:
     lda fi_add_to_ac
     bne !iad_ring_ac_has_bonus+
@@ -1224,7 +1413,8 @@ item_append_desc:
     lda fi_add_to_ac
     jsr item_append_signed_combat
     lda #$1d                    // ']' screen code
-    jmp combat_append_char
+    jsr combat_append_char
+    // fall through to show Ring of WOE p1 if non-zero
 !iad_ring_p1:
     lda fi_add_p1
     bne !iad_ring_p1_has_bonus+
@@ -1327,80 +1517,91 @@ tunnel_spawn_gold:
 // 50% flat pick from level-appropriate pool.
 // 50% best-of-3 random picks (highest index wins), then re-roll
 //      within the winner's depth tier for uniform intra-tier distribution.
-// 1-in-12 "great item" chance sets effective level to max (full pool).
-// Output: A = item type ID (2-ITEM_TYPE_COUNT-2; ruined chest excluded)
-// Clobbers: A, X, Y
-// Uses: zp_temp0 (pool_size), zp_temp1 (best_idx), zp_temp2 (tier_lo)
-//       zp_temp4 used internally by rng_range
+// 1-in-12 "great item" chance sets effective level up toward max.
+// Output: A = slot_lo (0..254), item_cur_page ($00 or $40)
+// Clobbers: A, X, Y, zp_temp0..zp_temp4
 // ============================================================
 .const PIT_MAX_LEVEL = 12
+.const PIT_SPAWNABLE_COUNT = 349
+pit_best_lo: .byte 0
+pit_best_hi: .byte 0
+pit_tmp:     .byte 0
+
 #if PICKER_IN_CHEST_OVERLAY
 .segment ChestOverlay
 #elif PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .segment DungeonGenOverlay
 #endif
 
-// Items 2-156 sorted ascending by it_min_level (ruined chest 134 excluded)
-pit_sorted:
-    // Level 0 (5 items)
-    .byte 13, 15, 61, 62, 63
-    // Level 1 (24 items)
-    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54
-    .byte 64, 77, 85, 98, 99, 103, 114, 135, 136
-    // Level 2 (19 items)
-    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84
-    .byte 100, 102, 126, 128
-    // Level 3 (15 items)
-    .byte 4, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88, 115
-    // Level 4 (17 items)
-    .byte 23, 27, 33, 40, 42, 55, 58, 67, 78, 87, 89, 95, 96, 109, 110
-    .byte 129, 137
-    // Level 5 (12 items)
-    .byte 10, 32, 41, 45, 72, 79, 90, 92, 94, 101, 116, 124
-    // Level 6 (5 items)
-    .byte 34, 35, 68, 73, 93
-    // Level 7 (7 items)
-    .byte 8, 26, 71, 80, 91, 122, 130
-    // Level 8 (15 items)
-    .byte 24, 38, 56, 59, 69, 75, 139, 140, 141, 142, 143, 144, 145, 149, 153
-    // Level 9 (6 items)
-    .byte 76, 104, 106, 112, 131, 155
-    // Level 10 (6 items)
-    .byte 83, 97, 108, 118, 121, 138
-    // Level 11 (7 items)
-    .byte 105, 117, 119, 132, 150, 154, 156
-    // Level 12 (16 items)
-    .byte 57, 60, 81, 107, 111, 113, 120, 123, 125, 127, 133, 146, 147, 148, 151
-    .byte 152
-pit_sorted_end:
+// 349 spawnable items (0..369 excluding gold #0/#1/#214..#231 and Ruined Chest #134),
+// sorted ascending by min_lvl_m8 (0..12).
+pit_sorted_lo:
+    // Level 0 (25 items)
+    .byte 13, 15, 61, 62, 63, 167, 182, 183, 184, 185, 232, 233, 234, 235, 236, 243
+    .byte 244, 245, 246, 15, 16, 17, 18, 19, 40
+    // Level 1 (55 items)
+    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64
+    .byte 77, 85, 98, 99, 103, 114, 135, 136, 161, 162, 186, 187, 188, 189, 190, 191
+    .byte 237, 238, 239, 240, 241, 242, 247, 20, 21, 22, 23, 24, 25, 41, 42, 43
+    .byte 44, 83, 84, 85, 86, 87, 88
+    // Level 2 (50 items)
+    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84, 100
+    .byte 102, 126, 128, 163, 168, 169, 192, 193, 248, 249, 250, 251, 252, 253, 254, 0
+    .byte 45, 46, 47, 48, 62, 63, 64, 65, 66, 67, 68, 69, 70, 89, 94, 95
+    .byte 96, 109
+    // Level 3 (39 items)
+    .byte 4, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88, 115, 164
+    .byte 170, 171, 194, 1, 2, 3, 4, 5, 26, 49, 50, 51, 52, 53, 54, 90
+    .byte 97, 98, 99, 100, 101, 102, 111
+    // Level 4 (31 items)
+    .byte 23, 27, 33, 40, 42, 55, 58, 67, 78, 87, 89, 95, 96, 109, 110, 129
+    .byte 137, 172, 195, 196, 207, 208, 209, 210, 211, 6, 7, 8, 9, 55, 112
+    // Level 5 (30 items)
+    .byte 10, 32, 41, 45, 72, 79, 90, 92, 94, 101, 116, 124, 157, 158, 165, 197
+    .byte 198, 199, 212, 10, 11, 12, 71, 72, 73, 91, 92, 103, 104, 110
+    // Level 6 (6 items)
+    .byte 34, 35, 68, 73, 93, 56
+    // Level 7 (15 items)
+    .byte 8, 26, 71, 80, 91, 122, 130, 173, 174, 13, 27, 28, 29, 93, 105
+    // Level 8 (22 items)
+    .byte 24, 38, 56, 59, 69, 75, 139, 140, 141, 142, 143, 144, 145, 149, 153, 166
+    .byte 175, 200, 14, 74, 75, 76
+    // Level 9 (9 items)
+    .byte 76, 104, 106, 112, 131, 155, 176, 177, 201
+    // Level 10 (20 items)
+    .byte 83, 97, 108, 118, 121, 138, 159, 178, 202, 30, 31, 32, 33, 34, 35, 36
+    .byte 37, 57, 106, 107
+    // Level 11 (14 items)
+    .byte 105, 117, 119, 132, 150, 154, 156, 179, 180, 77, 78, 79, 80, 81
+    // Level 12 (33 items)
+    .byte 57, 60, 81, 107, 111, 113, 120, 123, 125, 127, 133, 146, 147, 148, 151, 152
+    .byte 160, 181, 203, 204, 205, 206, 213, 38, 39, 58, 59, 60, 61, 82, 108, 113
+    .byte 114
+pit_sorted_lo_end:
 
-// Cumulative item count per level (0-12)
-pit_level_bounds:
-    .byte 5      // level 0: 5 items
-    .byte 29     // level 1: +24 = 29
-    .byte 48     // level 2: +19 = 48
-    .byte 63     // level 3: +15 = 63
-    .byte 80     // level 4: +17 = 80
-    .byte 92     // level 5: +12 = 92
-    .byte 97     // level 6: +5 = 97
-    .byte 104    // level 7: +7 = 104
-    .byte 119    // level 8: +15 = 119
-    .byte 125    // level 9: +6 = 125
-    .byte 131    // level 10: +6 = 131
-    .byte 138    // level 11: +7 = 138
-    .byte 154    // level 12: +16 = 154
-pit_level_bounds_end:
+// Packed page bits (1 bit per sorted index: 1 = Page 1 [255..369], 0 = Page 0)
+pit_sorted_hi_bits:
+    .byte $00, $00, $f8, $01, $00, $00, $00, $00, $ff, $ff, $00, $00, $00, $80, $ff, $ff
+    .byte $03, $00, $e0, $ff, $ff, $01, $00, $00, $fc, $00, $00, $f8, $3f, $08, $e0, $07
+    .byte $00, $e0, $01, $00, $f8, $3f, $80, $0f, $00, $00, $f8, $1f
+pit_sorted_hi_bits_end:
+
+// Cumulative 16-bit item count per compressed depth tier (0..12)
+pit_level_bounds_lo:
+    .byte 25, 80, 130, 169, 200, 230, 236, 251, 17, 26, 46, 60, 93
+pit_level_bounds_lo_end:
+pit_level_bounds_hi:
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1
+pit_level_bounds_hi_end:
+pit_bit_masks:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 pick_item_type_overlay:
 #else
 pick_item_type:
 #endif
-    // The dungeon level on the item levels' compressed scale (about VMS / 4):
-    // eff_level = min((dlvl + 3) / 4, PIT_MAX_LEVEL). It was dlvl + 2, the two
-    // scales compared as one, and every item could drop from DL10 (maintainer,
-    // 2026-11-13: a Mithril Plate Mail on DL8; Umoria itemGetRandomObjectId
-    // takes the dungeon level on its own 0-50 scale).
+    // Compressed level: eff_level = min((dlvl + 3) / 4, PIT_MAX_LEVEL).
     lda zp_player_dlvl
     clc
     adc #3
@@ -1412,9 +1613,7 @@ pick_item_type:
 !pit_level_ok:
     tay                          // Y = eff_level (preserved by rng_range)
 
-    // Great item, 1 in 12: Umoria's level * MAX / randint(MAX) + 1, capped
-    // (TREASURE_CHANCE_OF_GREAT_ITEM 12), on the compressed scale; none in
-    // town (level 0). It was the whole pool.
+    // Great item, 1 in 12 (none at town level 0)
     lda #12
     jsr rng_range                // [0, 11]
     bne !pit_no_great+
@@ -1434,7 +1633,7 @@ pick_item_type:
     ldy #0
     sec
 !pit_great_div:
-    iny                          // the quotient + 1: Y counts each subtraction tried
+    iny                          // quotient + 1
     sbc zp_temp1
     bcs !pit_great_div-
     cpy #PIT_MAX_LEVEL + 1
@@ -1442,64 +1641,111 @@ pick_item_type:
     ldy #PIT_MAX_LEVEL
 !pit_no_great:
 
-    // pool_size = pit_level_bounds[eff_level]
-    lda pit_level_bounds,y
-    sta zp_temp0                 // zp_temp0 = pool_size
+    // 16-bit pool_size = pit_level_bounds[eff_level] -> zp_temp0/1
+    lda pit_level_bounds_lo,y
+    sta zp_temp0
+    lda pit_level_bounds_hi,y
+    sta zp_temp1
 
     // 50/50 coin flip: flat pick vs best-of-3
     lda #2
-    jsr rng_range                // [0, 1]
+    jsr rng_range
     bne !pit_best_of_3+
 
-    // --- Flat pick: uniform random from pool ---
-    lda zp_temp0
-    jsr rng_range                // [0, pool_size-1]
+    jsr rng_range_word           // [0, pool_size-1] in zp_temp2/3
+
 !pit_return_idx:
-    tax
-    lda pit_sorted,x
+    // Decode 16-bit index (zp_temp2=lo, zp_temp3=hi) into (item_cur_page, A=slot_lo)
+    lda zp_temp2
+    and #$07
+    tay
+    lda zp_temp2
+    sta pit_tmp
+    lda zp_temp3
+    lsr
+    ror pit_tmp
+    lsr
+    ror pit_tmp
+    lsr
+    ror pit_tmp
+    ldx pit_tmp
+    lda pit_sorted_hi_bits,x
+    and pit_bit_masks,y
+    beq !pit_page0+
+    lda #ITEM_PAGE_BIT
+    bne !pit_set_page+
+!pit_page0:
+    lda #0
+!pit_set_page:
+    sta item_cur_page
+    ldx zp_temp2
+    lda zp_temp3
+    bne !pit_hi_slice+
+    lda pit_sorted_lo,x
+    rts
+!pit_hi_slice:
+    lda pit_sorted_lo + 256,x
     rts
 
 !pit_best_of_3:
-    // Pick 3 random indices, keep the highest (biases toward deeper items)
-    lda zp_temp0
-    jsr rng_range
-    sta zp_temp1                 // zp_temp1 = best_idx
+    jsr rng_range_word
+    lda zp_temp2
+    sta pit_best_lo
+    lda zp_temp3
+    sta pit_best_hi
 
-    lda zp_temp0
-    jsr rng_range
-    cmp zp_temp1
-    bcc !pit_skip1+
-    sta zp_temp1
-!pit_skip1:
-    lda zp_temp0
-    jsr rng_range
-    cmp zp_temp1
-    bcc !pit_skip2+
-    sta zp_temp1
-!pit_skip2:
+    ldy #2
+!pit_bo3_loop:
+    sty pit_tmp
+    jsr rng_range_word
+    lda pit_best_lo
+    cmp zp_temp2
+    lda pit_best_hi
+    sbc zp_temp3
+    bcs !pit_bo3_keep+
+    lda zp_temp2
+    sta pit_best_lo
+    lda zp_temp3
+    sta pit_best_hi
+!pit_bo3_keep:
+    ldy pit_tmp
+    dey
+    bne !pit_bo3_loop-
 
-    // Look up the winning item's depth tier
-    ldx zp_temp1
-    lda pit_sorted,x             // A = item_id
-    tax
-    jsr iml_get_for_type         // A = found_level
-    beq !pit_reroll_l0+          // Level 0: special case (no lower bound)
-
-    // Re-roll uniformly within found_level's tier
-    tax                          // X = found_level
-    lda pit_level_bounds-1,x     // lo = level_bounds[found_level - 1]
-    sta zp_temp2                 // zp_temp2 = tier_lo
-    lda pit_level_bounds,x       // hi = level_bounds[found_level]
+    // Find winner's depth tier X (0..PIT_MAX_LEVEL) where pit_best < bounds[X]
+    ldx #0
+!pit_find_tier:
+    lda pit_best_lo
+    cmp pit_level_bounds_lo,x
+    lda pit_best_hi
+    sbc pit_level_bounds_hi,x
+    bcc !pit_found_tier+
+    inx
+    cpx #PIT_MAX_LEVEL
+    bcc !pit_find_tier-
+!pit_found_tier:
+    txa
+    beq !pit_reroll_l0+
+    stx pit_tmp
+    lda pit_level_bounds_lo,x
     sec
-    sbc zp_temp2                 // A = range = hi - lo
-    jsr rng_range                // [0, range-1]
+    sbc pit_level_bounds_lo - 1,x   // Every tier span <= 55 < 256
+    jsr rng_range
+    ldx pit_tmp
     clc
-    adc zp_temp2                 // [lo, hi-1]
+    adc pit_level_bounds_lo - 1,x
+    sta zp_temp2
+    lda pit_level_bounds_hi - 1,x
+    adc #0
+    sta zp_temp3
     jmp !pit_return_idx-
 
 !pit_reroll_l0:
-    lda pit_level_bounds         // level_bounds[0] = count at level 0
-    jsr rng_range                // [0, count-1]
+    lda pit_level_bounds_lo
+    jsr rng_range
+    sta zp_temp2
+    lda #0
+    sta zp_temp3
     jmp !pit_return_idx-
 
 #if HAL_PLATFORM_PICK_ITEM_RESIDENT_ITEMS_SEGMENT
@@ -1577,9 +1823,13 @@ re_bonus_hit: .byte 0
 re_bonus_dam: .byte 0
 re_bonus_ac:  .byte 0
 re_bonus_p1:  .byte 0
+re_page:      .byte 0
+re_cat:       .byte 0
 
 roll_enchantment:
-    sta zp_temp0                // Save item type
+    sta zp_temp0                // Save slot_lo
+    lda item_cur_page
+    sta re_page
     lda #0
     sta fi_add_flags            // Default: not cursed
     sta fi_add_to_hit
@@ -1590,15 +1840,20 @@ roll_enchantment:
     sta re_bonus_ac
     sta re_bonus_p1
 
-    // Check category — only equipment gets enchantment
-    ldx zp_temp0
-    lda it_category,x
+    // Check category — lights/wands/staves/chests/tools/equipment
+    lda zp_temp0
+    jsr item_get_category_a
+    sta re_cat
+
+    // Special case: digging tools (ICAT_DIGGING = 0) take catalog p1
+    cmp #ICAT_DIGGING
+    beq !re_digging+
 
     // Special case: lights get charges, not enchantment
     cmp #ICAT_LIGHT
     beq !re_light+
 
-    // Special case: books get random spell index
+    // Special case: books get p1=0
     cmp #ICAT_BOOK
     beq !re_book_far+
 
@@ -1606,32 +1861,48 @@ roll_enchantment:
     cmp #ICAT_WAND
     beq !re_wand+
     cmp #ICAT_STAFF
-    beq !re_staff+
+    beq !re_staff_far+
 
     // Special case: chests get source level + trap state
     cmp #ICAT_CHEST
-    beq !re_chest+
+    beq !re_chest_far+
 
-    // Equipment categories: WEAPON(2) through BOOTS(7), RING(12), AMULET(16)
+    // Equipment categories: WEAPON(2)..BOOTS(7), RING(12), AMULET(16), CLOAK(19)
     cmp #ICAT_WEAPON
-    bcc !re_zero+               // NONE(0) or GOLD(1) → no enchant
+    bcc !re_zero+
     cmp #ICAT_LIGHT
-    bcc !re_equip_far+          // WEAPON..BOOTS (2-7) → enchant
+    bcc !re_equip_load+         // WEAPON..BOOTS (2-7) -> enchant
     cmp #ICAT_RING
-    beq !re_equip_far+          // RING(12) → enchant
+    beq !re_equip_load+         // RING(12) -> enchant
     cmp #ICAT_AMULET
-    beq !re_equip_far+          // AMULET(16) → enchant
-    // FOOD, POTION, SCROLL → no enchant
+    beq !re_equip_load+         // AMULET(16) -> enchant
+    cmp #ICAT_CLOAK
+    beq !re_equip_load+         // CLOAK(19) -> enchant
 !re_zero:
     lda #0
     rts
+!re_digging:
+    lda zp_temp0
+    jsr item_cat_select_id
+    jsr item_cat_get_effects
+    lda icat_p1_lo
+    rts
 !re_book_far:
     jmp !re_book+
-!re_equip_far:
+!re_staff_far:
+    jmp !re_staff+
+!re_chest_far:
+    jmp !re_chest+
+!re_equip_load:
+    // Load ITEM.CAT flags/p1 while resident/KERNAL-safe before re_equip_entry ($F000).
+    lda zp_temp0
+    jsr item_cat_select_id
+    jsr item_cat_get_effects
     jmp re_equip_entry
 
 !re_light:
-    // Torch (type 13): 67 + rng(67)  (each charge = 30 turns)
+    bit re_page
+    bvs !re_zero-
     lda zp_temp0
     cmp #13
     bne !re_lantern+
@@ -1642,7 +1913,6 @@ roll_enchantment:
     rts
 
 !re_lantern:
-    // Lantern (type 14): 125 + rng(125)  (each charge = 30 turns)
     lda zp_temp0
     cmp #14
     bne !re_flask_oil+
@@ -1653,14 +1923,16 @@ roll_enchantment:
     rts
 
 !re_flask_oil:
-    // Flask of oil (type 61): always 250 (full flask)
     lda #LANTERN_MAX_CHARGES
     rts
 
 !re_wand:
+    bit re_page
+    bvs !re_wand_std+
     lda zp_temp0
     cmp #39                         // Wand of Light: [10,15]
     beq !re_wand_light+
+!re_wand_std:
     lda #4                          // Others: [5,8]
     jsr rng_range
     clc
@@ -1674,11 +1946,14 @@ roll_enchantment:
     rts
 
 !re_staff:
+    bit re_page
+    bvs !re_staff_std+
     lda zp_temp0
     cmp #43                         // Staff of Light: [10,15]
     beq !re_staff_light+
     cmp #45                         // Staff of Teleportation: [3,5]
     beq !re_staff_tele+
+!re_staff_std:
     lda #6                          // Others: [3,8]
     jsr rng_range
     clc
@@ -1698,17 +1973,10 @@ roll_enchantment:
     rts
 
 !re_book:
-    // Books: p1=0 (spell range determined by book type)
     lda #0
     rts
 
 !re_chest:
-    // Chests (docs/CHEST_DESIGN.md): to_hit = source level (lock/disarm
-    // difficulty, XP award); p1 = trap flags from the VMS trap-init roll
-    // randint(depth)+4 — Moria8 form rng_range(dlvl)+5, giving 5..dlvl+4,
-    // so the unlocked/lock-only bands (1-2) and lose-STR-only band (3-4)
-    // never occur. Runs here because the shared prologue already zeroed
-    // p1/to_hit for non-equipment categories.
     lda zp_temp0
     sec
     sbc #ITEM_TYPE_CHEST_SMALL_WOOD
@@ -1717,8 +1985,6 @@ roll_enchantment:
     sta fi_add_to_hit
     lda zp_player_dlvl
     jsr rng_range
-    // VMS roll = rng_range(dlvl)+5; the band index is roll-5, i.e. the raw
-    // rng result. Clamp to the 18+ band (idx 13).
     cmp #14
     bcc !re_chest_idx+
     lda #13
@@ -1731,9 +1997,6 @@ roll_enchantment:
 chest_source_level:
     .byte 7, 15, 25, 35, 45, 50, 0  // IDs 128-133; ruined (134) = 0
 
-// VMS trap-init bands for rolls 5..18+ (docs/CHEST_DESIGN.md):
-// 5-6 poison, 7-9 paralysis, 10-11 explosion, 12-14 summoning,
-// 15-17 STR+poison+paralysis, 18+ summoning+explosion; all locked.
 chest_trap_band:
     .byte CHEST_P1_TRAP_POISON, CHEST_P1_TRAP_POISON
     .byte CHEST_P1_TRAP_PARA, CHEST_P1_TRAP_PARA, CHEST_P1_TRAP_PARA
@@ -1742,10 +2005,8 @@ chest_trap_band:
     .byte (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA)
     .byte (CHEST_P1_TRAP_SUMMON | CHEST_P1_TRAP_EXPL)
 
-// re_equip — roll_enchantment's equipment branch (zp_temp0 = item type).
-// A port short of resident room places it with :ReEquipSegment()/
-// :ReEquipRestoreSegment() and enters it through its own re_equip_entry
-// (the C64: its $F000 runtime and tramp_re_equip, 2026-11-11).
+// re_equip — roll_enchantment's equipment branch (re_page, zp_temp0, re_cat,
+// and icat_flags_0..3 / icat_p1_lo preloaded). NEVER calls ITEM.CAT I/O!
 #if !RE_EQUIP_SEGMENT_CUSTOM
 .macro ReEquipSegment() {}
 .macro ReEquipRestoreSegment() {}
@@ -1753,6 +2014,13 @@ chest_trap_band:
 #endif
 :ReEquipSegment()
 re_equip:
+    // Honor intrinsic catalog curse bit (ITR3_CURSED) even if enchantment roll skips.
+    lda icat_flags_3
+    and #ITR3_CURSED
+    beq !re_chk_chance+
+    lda #IF_CURSED
+    sta fi_add_flags
+!re_chk_chance:
     // magic_chance = min(15 + dlvl, 70)
     lda zp_player_dlvl
     clc
@@ -1761,17 +2029,32 @@ re_equip:
     bcc !re_chance_ok+
     lda #70
 !re_chance_ok:
-    sta zp_temp1                // zp_temp1 = magic_chance
+    sta zp_temp1
 
-    // if rng(100) >= magic_chance: no enchantment
     lda #100
-    jsr rng_range               // [0, 99]
+    jsr rng_range
     cmp zp_temp1
-    bcc !re_enchant_roll+       // roll < chance → enchant
-    lda #0                      // roll >= chance → no magic
+    bcc !re_enchant_roll+
+    // Unenchanted roll: if intrinsically cursed with catalog p1/AC (Weakness/Stupidity/WOE/DOOM),
+    // still apply catalog base penalty so item matches its negative description.
+    lda fi_add_flags
+    and #IF_CURSED
+    beq !re_no_magic+
+    lda re_page
+    beq !re_cursed_base_p1+
+    lda zp_temp0
+    cmp #337 - ITEM_PAGE_SIZE       // Ring of WOE carries -3 AC
+    bne !re_cursed_base_p1+
+    lda #$fd
+    sta fi_add_to_ac
+!re_cursed_base_p1:
+    lda icat_p1_lo
     rts
-!re_enchant_roll:
+!re_no_magic:
+    lda #0
+    rts
 
+!re_enchant_roll:
     jsr re_roll_bonus
     sta re_bonus_hit
     jsr re_roll_bonus
@@ -1781,11 +2064,15 @@ re_equip:
     jsr re_roll_bonus
     sta re_bonus_p1
 
-    // 1-in-13 chance of cursed
+    // 1-in-13 chance of cursed, OR intrinsically cursed in ITEM.CAT
+    lda icat_flags_3
+    and #ITR3_CURSED
+    bne !re_apply_curse+
     lda #13
     jsr rng_range
     bne !re_not_cursed+
 
+!re_apply_curse:
     lda #IF_CURSED
     sta fi_add_flags
     lda re_bonus_hit
@@ -1802,26 +2089,24 @@ re_equip:
     sta re_bonus_p1
 
 !re_not_cursed:
-    ldx zp_temp0
-    lda it_category,x
+    lda re_cat
     cmp #ICAT_WEAPON
     beq !re_weapon+
     cmp #ICAT_RING
     beq !re_ring+
     cmp #ICAT_AMULET
-    beq !re_amulet+
+    beq !re_amulet_far+
+    cmp #ICAT_CLOAK
+    beq !re_armor+
     cmp #ICAT_ARMOR
-    beq !re_armor+
-    cmp #ICAT_SHIELD
-    beq !re_armor+
-    cmp #ICAT_HELM
-    beq !re_armor+
-    cmp #ICAT_GLOVES
-    beq !re_armor+
-    cmp #ICAT_BOOTS
-    beq !re_armor+
+    bcc !re_ret_zero+
+    cmp #ICAT_BOOTS + 1
+    bcc !re_armor+
+!re_ret_zero:
     lda #0
     rts
+!re_amulet_far:
+    jmp !re_amulet+
 
 !re_weapon:
     lda re_bonus_hit
@@ -1838,51 +2123,78 @@ re_equip:
     rts
 
 !re_ring:
+    bit re_page
+    bvs !re_ring_p1+
     lda zp_temp0
     cmp #23                         // Ring of Protection
-    beq !re_ring_protection+
-    cmp #24                         // Ring of Strength
-    beq !re_ring_strength+
-    cmp #ITEM_TYPE_RING_SLAYING
-    beq !re_ring_slaying+
-    lda #0
+    beq !re_ring_ac+
+    cmp #146
+    bcc !re_not_lordly+
+    cmp #149                        // Rings of Lordly Protection (146-148)
+    bcc !re_ring_ac+
+!re_not_lordly:
+    cmp #ITEM_TYPE_RING_SLAYING     // Ring of Slaying (113)
+    beq !re_weapon-
+    cmp #ITEM_TYPE_RING_SPEED       // Ring of Speed (111): +1 (or -1 if cursed)
+    bne !re_ring_misc+
+    lda fi_add_flags
+    and #IF_CURSED
+    bne !re_speed_neg+
+    lda #1
     rts
-!re_ring_protection:
-    lda re_bonus_ac
-    sta fi_add_to_ac
-    lda #0
+!re_speed_neg:
+    lda #$ff
     rts
-!re_ring_strength:
-    lda re_bonus_p1
-    rts
-!re_ring_slaying:
-    lda re_bonus_hit
-    sta fi_add_to_hit
+!re_ring_p1:
+    lda zp_temp0
+    cmp #327 - ITEM_PAGE_SIZE       // Ring of Increase Damage
+    bne !+
     lda re_bonus_dam
     sta fi_add_to_dam
     lda #0
     rts
-
-!re_amulet:
-    // Amulet of Wisdom / Amulet of the Magi: p1 is the stat bonus
+!:  cmp #328 - ITEM_PAGE_SIZE       // Ring of Increase To-Hit
+    bne !+
+    lda re_bonus_hit
+    sta fi_add_to_hit
+    lda #0
+    rts
+!:  cmp #337 - ITEM_PAGE_SIZE       // Ring of WOE: negative AC + stat penalty
+    bne !re_ring_misc+
+    lda re_bonus_ac
+    sta fi_add_to_ac
     lda re_bonus_p1
+    rts
+!re_ring_ac:
+    lda re_bonus_ac
+    sta fi_add_to_ac
+    lda #0
+    rts
+!re_ring_misc:
+    // Sustain rings encode stat ID in ITEM.CAT p1; inv_p1 stays 0 so no (+N) prints.
+    lda icat_flags_2
+    and #ITR2_SUST_STAT
+    bne !re_ret_zero2+
+!re_amulet:
+    // Rings & amulets with STR..CHR/SEARCH flags take p1 bonus/penalty
+    lda icat_flags_0
+    and #(ITR0_STR | ITR0_DEX | ITR0_CON | ITR0_INT | ITR0_WIS | ITR0_CHR | ITR0_SEARCH)
+    beq !re_ret_zero2+
+    lda re_bonus_p1
+    rts
+!re_ret_zero2:
+    lda #0
     rts
 
 re_roll_bonus:
-    // bonus = rng(1 + dlvl/5) + 1
     lda zp_player_dlvl
     lsr
-    lsr                         // dlvl/4 (close enough to dlvl/5)
-    // Actually: dlvl/5. Use divide: dlvl * 205/1024 ≈ dlvl/5
-    // Simpler: use lookup or just lsr twice + adjust
-    // For simplicity and correctness: divide by 5 via subtraction
-    // But let's use dlvl/4 as a reasonable approximation since
-    // the difference is minor (max bonus off by 1 at dlvl 20)
+    lsr
     clc
-    adc #1                      // range = 1 + dlvl/4
-    jsr rng_range               // [0, dlvl/4]
+    adc #1
+    jsr rng_range
     clc
-    adc #1                      // [1, 1+dlvl/4]
+    adc #1
     rts
 
 re_negate_a:
@@ -1897,25 +2209,13 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 157
-.assert "it_category size", it_color_ac - it_category, ITEM_TYPE_COUNT
-.assert "it_color_ac size", it_weight - it_color_ac, ITEM_TYPE_COUNT
-.assert "it_weight size", it_dmg_packed - it_weight, ITEM_TYPE_COUNT
-.assert "it_dmg_packed size", it_dmg_packed_end - it_dmg_packed, ITEM_TYPE_COUNT
-.assert "it_cost_lo size", it_cost_lo_end - it_cost_lo, ITEM_TYPE_COUNT
-#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
-.assert "it_cost_hi size", it_cost_hi_end - it_cost_hi, ITEM_TYPE_COUNT
-#endif
-.assert "it_min_level size", it_min_level_end - it_min_level, (ITEM_TYPE_COUNT + 1) >> 1
-.assert "it_name_lo size", it_name_lo_end - it_name_lo, ITEM_TYPE_COUNT
-#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
-.assert "it_name_hi size", it_name_hi_end - it_name_hi, ITEM_TYPE_COUNT
-#endif
-.assert "pit_sorted size (excludes ruined chest)", pit_sorted_end - pit_sorted, ITEM_TYPE_COUNT - 3
-.assert "pit_level_bounds size", pit_level_bounds_end - pit_level_bounds, PIT_MAX_LEVEL + 1
+.assert "Item type count", ITEM_TYPE_COUNT, 370
+.assert "pit_sorted_lo size (excludes gold and ruined chest)", pit_sorted_lo_end - pit_sorted_lo, PIT_SPAWNABLE_COUNT
+.assert "pit_sorted_hi_bits size", pit_sorted_hi_bits_end - pit_sorted_hi_bits, (PIT_SPAWNABLE_COUNT + 7) >> 3
+.assert "pit_level_bounds_lo size", pit_level_bounds_lo_end - pit_level_bounds_lo, PIT_MAX_LEVEL + 1
+.assert "pit_level_bounds_hi size", pit_level_bounds_hi_end - pit_level_bounds_hi, PIT_MAX_LEVEL + 1
 .assert "pick_item_type entry stays resident", pick_item_type < $e000, true
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .assert "pick_item_type overlay impl lives in the $E000 overlay window", pick_item_type_overlay >= BANKED_DATA_BASE && pick_item_type_overlay <= BANKED_DATA_END, true
 #endif
-// Hardcoded assertion removed for cross-platform compatibility
-.assert "Inventory total slots", TOTAL_INV_SLOTS, 33
+.assert "Inventory total slots", TOTAL_INV_SLOTS, 34

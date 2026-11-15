@@ -326,6 +326,70 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(budgets, [(60.0 + 400.0, 60.0 + 400.0), (60.0, 60.0)])
         self.assertEqual(C64.undump_catch_up, 0.0)
 
+    def test_c64_reu_cold_boot_uses_boot_emulated_seconds_then_restores_turn_limit(self) -> None:
+        """The C64's 512 KB REU cold boot preloads the monster catalog, 13
+        overlays and ITEM.CAT over stock 1541 IEC (~380 s emulated after
+        Phase 4): boot() uses Port.boot_emulated_seconds (600 s) across its
+        _run_to_input stops and restores the 300 s turn limit before the title."""
+        from moria_playtest.game import Game
+
+        self.assertEqual(C64.boot_emulated_seconds, 600.0)
+        self.assertEqual(C64_NOREU.boot_emulated_seconds, 0.0)
+        self.assertEqual(C64_CART.boot_emulated_seconds, 0.0)
+        self.assertEqual(PLUS4.boot_emulated_seconds, 0.0)
+        self.assertEqual(C128.boot_emulated_seconds, 0.0)
+
+        abi = abimod.Abi(labels={**ABI.labels, "input_get_command": 0x19DB, "input_get_key": 0x1933},
+                         consts=ABI.consts, all_symbols={})
+
+        class Mon:
+            def bank(self, name: str) -> int:
+                return 0
+            def load_register_ids(self) -> dict[str, int]:
+                return {}
+            def checkpoint_list(self) -> list[object]:
+                return []
+            def checkpoint_set(self, start: int, *args: object, **kwargs: object) -> int:
+                return 1
+            def resume(self) -> None:
+                pass
+            def mem_get(self, start: int, length: int, bank: int = 0) -> bytes:
+                return (bytes([0x20, 0x33, 0x19]) + bytes(length))[:length]
+            def registers(self) -> dict[str, int]:
+                return {}
+
+        seen: list[float] = []
+        game = Game(Mon(), abi, Path("."), port=C64)   # type: ignore[arg-type]
+        def run(wall0: float) -> Observation:
+            seen.append(game.hang_emulated_seconds)
+            return Observation(1, 0x1933, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+        game._run_to_input = run                                        # type: ignore[method-assign]
+        game.resolve_sites = lambda: seen.append(game.hang_emulated_seconds)   # type: ignore[method-assign]
+        game.observe = lambda stop: "title"                            # type: ignore[method-assign]
+        self.assertEqual(game.boot(), "title")
+        self.assertEqual(seen, [600.0, 300.0])
+        self.assertEqual(game.hang_emulated_seconds, 300.0)
+
+        def fail(wall0: float) -> Observation:
+            seen.append(game.hang_emulated_seconds)
+            raise RuntimeError("boom")
+        game._run_to_input = fail                                       # type: ignore[method-assign]
+        with self.assertRaises(RuntimeError):
+            game.boot()
+        self.assertEqual(game.hang_emulated_seconds, 300.0)
+
+        custom = Game(Mon(), abi, Path("."), port=C64, hang_emulated_seconds=900.0)   # type: ignore[arg-type]
+        custom_seen: list[float] = []
+        def run_custom(wall0: float) -> Observation:
+            custom_seen.append(custom.hang_emulated_seconds)
+            return Observation(1, 0x1933, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+        custom._run_to_input = run_custom                               # type: ignore[method-assign]
+        custom.resolve_sites = lambda: None                            # type: ignore[method-assign]
+        custom.observe = lambda stop: "title"                          # type: ignore[method-assign]
+        self.assertEqual(custom.boot(), "title")
+        self.assertEqual(custom_seen, [900.0])
+        self.assertEqual(custom.hang_emulated_seconds, 900.0)
+
     def test_snapshot_cpu_clock(self) -> None:
         module = b"MAINCPU" + bytes(9) + bytes([1, 4]) + struct.pack("<I", 125) + struct.pack("<Q", 286899223)
         with tempfile.TemporaryDirectory() as tmp:

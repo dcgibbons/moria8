@@ -556,7 +556,7 @@ LUA_HELP_BODY = r"""
 legal_wait_input()
 shift("/")
 for i = 1, 100 do
-    if screen_has("Command Reference") then break end
+    if screen_has("Command Reference") and screen_has("L:License") then break end
     emu.wait(0.1)
 end
 assert_line("help_open", screen_has("Command Reference"),
@@ -612,7 +612,7 @@ assert_line("legal_help_restore_program", game_drive:load("GAME_IMAGE") == nil, 
 legal_wait_input()
 shift("/")
 for i = 1, 100 do
-    if screen_has("Command Reference") then break end
+    if screen_has("Command Reference") and screen_has("L:License") then break end
     emu.wait(0.1)
 end
 assert_line("help_reopened", screen_has("Command Reference"), "Help did not reopen")
@@ -1066,7 +1066,9 @@ press("r")
 emu.wait(1)
 assert_line("read_prompt", screen_has("Read which scroll"), "read prompt did not open")
 press("a")
-emu.wait(3)
+-- The scroll router loads the cold OVL.DEATH from disk; reads taken while the
+-- CPU is mid-load (or inside an aux-read thunk) see the wrong bank.
+assert_line("rune_idle", wait_idle(20), "game did not return to the key wait")
 assert_line("no_balrog", not screen_has("Balrog"), "Balrog appeared after rune scroll")
 assert_line("rune_msg", screen_has("strange rune"), "rune effect message missing")
 assert_line("rune_glyph", prog:read_u8(GLYPHADDR) == 1,
@@ -1490,9 +1492,30 @@ assert_line("ad_quit", home, "did not return to title after Q")
 dump("after_ds_adopt")
 print("SCENARIO DONE")
 """
+LUA_IDLE_HELPERS = r"""
+-- wait_idle(max_s): true once the CPU has sat in the key-wait loop
+-- (input_entropy_tick .. hal_input_get_key, plus hal_sound_update) for eight
+-- consecutive 50 ms samples. Cold overlay loads (cold OVL.DEATH from disk, ~2.5 s)
+-- and aux-read thunks make fixed sleeps and bank-dependent reads racy.
+local idle_cpu = manager.machine.devices[":maincpu"]
+local function wait_idle(max_s)
+    local streak = 0
+    for _ = 1, math.floor(max_s / 0.05) do
+        emu.wait(0.05)
+        local pc = idle_cpu.state["PC"].value
+        if (pc >= IDLE_LO and pc < IDLE_HI) or (pc >= SND_LO and pc <= SND_LO + 1) then
+            streak = streak + 1
+        else
+            streak = 0
+        end
+        if streak >= 8 then return true end
+    end
+    return false
+end
+"""
 # inv_seed(slot, fields) / inv_field(slot, k): the 8 inventory fields of one
 # slot (id, qty, p1, to_hit, to_dam, to_ac, flags, ego). The arrays are
-# contiguous with a stride of TOTAL_INV_SLOTS (33); main RAM, as the CPU
+# contiguous with a stride of TOTAL_INV_SLOTS (34); main RAM, as the CPU
 # sees it between commands.
 LUA_INV_HELPERS = r"""
 local INV = INV_ITEM_ID_ADDR
@@ -1510,22 +1533,23 @@ LUA_WEAPON_EXCHANGE_BODY = r"""
 -- with no turn; uncursed, the swap takes one turn, moves all 8 fields and
 -- reports both slots.
 inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
-inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
 local turn0 = prog:read_u8(TURN_LO_ADDR)
 shift("X")
 local refused = wait_screen("You cannot remove it, it is cursed!", 20)
 assert_line("exchange_cursed_refused", refused and inv_field(22, 0) == 5
-            and inv_field(32, 0) == 2 and prog:read_u8(TURN_LO_ADDR) == turn0,
+            and inv_field(33, 0) == 2 and prog:read_u8(TURN_LO_ADDR) == turn0,
             "refusal message, records or turn wrong")
 prog:write_u8(INV + 6 * INV_STRIDE + 22, 2) -- lift the curse
 shift("X")
 local reported = wait_screen("Primary: Dagger (Defender) (+3,+4)", 20)
+wait_idle(20)
 assert_line("exchange_report", reported and screen_has("Secondary: Mace (+1,+0)"),
             "report lines missing: " .. rowtext(0) .. " / " .. rowtext(1))
 assert_line("exchange_swapped",
             inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
-            and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
-            and inv_field(31, 0) == 0xFF, "records not exchanged")
+            and inv_field(33, 0) == 5 and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+            and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF, "records not exchanged")
 assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256,
             "turn " .. prog:read_u8(TURN_LO_ADDR) .. " from " .. turn0)
 -- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it in
@@ -1533,6 +1557,7 @@ assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256
 -- load first (2026-11-06: the BBC build queue's panic; the Apple IIe shares
 -- the path). The game goes on: a search takes its turn.
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+assert_line("aim_idle", wait_idle(20), "game busy before the aim")
 inv_seed(0, {42, 1, 5, 0, 0, 0, 0, 0})
 press("A")
 assert_line("aim_prompt", wait_screen("Aim which wand"), "aim prompt missing")
@@ -1611,11 +1636,17 @@ emu.wait(2.0)
 -- Amulet of the Magi sets See Invisible ($08) and Free Action ($10).
 local function wear_slot_a(id, what)
     for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+    -- The previous turn (and any cold overlay load) must be over: a W typed
+    -- while the game is busy is overwritten by the next key (the one-key
+    -- latch), and the stray 'A' then runs the Aim command ("nothing there").
+    assert_line(what .. "_idle", wait_idle(20), "game busy before the wear")
     inv_seed(0, {id, 1, 0, 0, 0, 0, 2, 0})
     press("W")
     assert_line(what .. "_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
+    assert_line(what .. "_prompt_idle", wait_idle(20), "game busy at the wear prompt")
     press("A")
     assert_line(what .. "_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
+    assert_line(what .. "_done_idle", wait_idle(20), "game busy after the wear")
 end
 -- The Dagger (Defender) wielded since the exchange resists fire and cold
 -- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
@@ -1637,16 +1668,20 @@ assert_line("free_action_flag", prog:read_u8(PFLAGS_ADDR) & 0x18 == 0x18, "pflag
 local PL_INT_CUR = 28
 local int0 = prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR)
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+assert_line("magi_crown_idle", wait_idle(20), "game busy before the crown")
 inv_seed(0, {151, 1, 2, 0, 0, 3, 2, 14})
 press("W")
 assert_line("magi_crown_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
+assert_line("magi_crown_prompt_idle", wait_idle(20), "game busy at the wear prompt")
 press("A")
 assert_line("magi_crown_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
+assert_line("magi_crown_done_idle", wait_idle(20), "game busy after the wear")
 assert_line("magi_crown_int", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0 + 2,
             "INT " .. prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) .. " from " .. int0)
 assert_line("magi_crown_flags", prog:read_u8(PFLAGS_ADDR) & 0x23 == 0x23, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 -- Take it off: the equipment letters count the worn slots before the head.
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+assert_line("magi_crown_off_idle", wait_idle(20), "game busy before the take-off")
 local head_letter = 0
 for slot = 22, 24 do if inv_field(slot, 0) ~= 0xFF then head_letter = head_letter + 1 end end
 press("T")
@@ -1662,8 +1697,8 @@ print("SCENARIO DONE")
 LUA_REBOOT_SAVE_BODY = r"""
 -- Session A of save_reboot_load: chargen, then save slot 1 to the SAVE1
 -- volume in drive 2 (same setup flow as save_load). The secondary weapon
--- slot (32) holds a Dagger (+3,+4) (Defender); slot 31 stays empty.
-inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
+-- slot (33) holds a Dagger (+3,+4) (Defender); slot 32 (cloak) & 31 stay empty.
+inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})
 local s = keymap["Left Shift"]
 local f = findkey("S")
 s:set_value(1) emu.wait(0.02)
@@ -1741,12 +1776,12 @@ end
 assert_line("loaded", loaded, "reboot load did not resume the saved game")
 assert_line("stats_restored", screen_has("test") and prog:read_u8(0x3c) == 0,
             "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)")
-local sec_ok = inv_field(31, 0) == 0xFF
+local sec_ok = inv_field(31, 0) == 0xFF and inv_field(32, 0) == 0xFF
 local expect = {2, 1, 0, 3, 4, 0, 2, 6}
 for k = 0, 7 do
-    if inv_field(32, k) ~= expect[k + 1] then sec_ok = false end
+    if inv_field(33, k) ~= expect[k + 1] then sec_ok = false end
 end
-assert_line("secondary_restored", sec_ok, "slot 32/31 not restored from the save")
+assert_line("secondary_restored", sec_ok, "slot 33/32/31 not restored from the save")
 dump("after_load")
 print("SCENARIO DONE")
 """
@@ -1907,7 +1942,7 @@ assert_line("legal_title_return", screen_has("N)ew"), "legal viewer did not retu
 """
     ready = (LUA_LEGAL_INPUT_HELPER
              .replace("LEGAL_KEY_WAIT_START", hex(_sym_addr("input_get_key")))
-             .replace("LEGAL_KEY_WAIT_END", hex(_sym_addr("igk_key"))))
+             .replace("LEGAL_KEY_WAIT_END", hex(_sym_addr("input_wait_release"))))
     return (LUA_HELPERS + ready + title_check.replace("LEGAL_SAVE_ADDR", hex(_sym_addr("legal_zp_save"))) + LUA_CHARGEN.replace("CLASS_KEY", "A")
             + LUA_HELP_BODY.replace("LEGAL_NOTICE_ADDR", hex(_sym_addr("legal_notice_filename")))
                            .replace("LEGAL_OPENED_ADDR", hex(_sym_addr("legal_opened")))
@@ -2086,9 +2121,16 @@ def scroll_map_lua() -> str:
     return _chargen_body("A") + LUA_SCROLL_MAP_BODY
 
 
+def _idle_helpers() -> str:
+    return (LUA_IDLE_HELPERS
+            .replace("IDLE_LO", hex(_sym_addr("input_entropy_tick")))
+            .replace("IDLE_HI", hex(_sym_addr("hal_input_get_key") + 0x10))
+            .replace("SND_LO", hex(_sym_addr("hal_sound_update"))))
+
+
 def scroll_rune_lua() -> str:
     body = LUA_SCROLL_RUNE_BODY.replace("GLYPHADDR", hex(_sym_addr("glyph_active")))
-    return _chargen_body("A") + body
+    return _chargen_body("A") + _idle_helpers() + body
 
 
 def dungeon_descend_lua() -> str:
@@ -2109,7 +2151,7 @@ def _inv_helpers() -> str:
 
 
 def weapon_exchange_lua() -> str:
-    return (_chargen_body("A") + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
+    return (_chargen_body("A") + _idle_helpers() + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
             ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo"))).replace(
             "PFLAGS_ADDR", hex(_sym_addr("player_pflags"))).replace(
             "PLAYER_DATA_ADDR", hex(_sym_addr("player_data")))
@@ -2137,6 +2179,219 @@ def disk_setup_adopt_lua() -> str:
 
 def save_slot_tracking_lua() -> str:
     return _chargen_body("A") + LUA_SLOT_TRACKING_BODY
+
+
+def aux_lc_spike_lua() -> str:
+    """Build MAME apple2ee ALTZP=1 Aux LC ($D000-$FFF9) + PAK post-check script."""
+    igk_call = _sym_addr("igk_sound_call")
+    snd_upd = _sym_addr("input_sound_update")
+    xfer = _sym_addr("a2_aux_lc_bounce_xfer")
+    nmi_rti = _sym_addr("a2_aux_nmi_rti")
+    rst_stub = _sym_addr("a2_aux_reset_stub")
+    bounce = 0x02E0
+    arg_bank = 0x02F1
+    arg_dir = 0x02F3
+    drv_base = 0x7D00
+    out_base = 0x8400
+
+    code = bytearray()
+
+    def w16(v: int) -> None:
+        code.extend((v & 0xFF, (v >> 8) & 0xFF))
+
+    def lda(imm: int) -> None:
+        code.extend((0xA9, imm & 0xFF))
+
+    def lda_abs(addr: int) -> None:
+        code.append(0xAD)
+        w16(addr)
+
+    def sta_abs(addr: int) -> None:
+        code.append(0x8D)
+        w16(addr)
+
+    def snap_zp_stk(zp_page: int, stk_page: int) -> None:
+        code.extend((0xA2, 0x00))  # ldx #0
+        code.extend((0xBD, 0x00, 0x00))
+        code.extend((0x9D, 0x00, zp_page))
+        code.extend((0xBD, 0x00, 0x01))
+        code.extend((0x9D, 0x00, stk_page))
+        code.extend((0xE8, 0xD0, 0xF1))  # inx; bne -15
+
+    def fill_xor(seed: int) -> None:
+        code.extend((0xA2, 0x0F, 0x8A, 0x49, seed, 0x9D, bounce & 0xFF, bounce >> 8, 0xCA, 0x10, 0xF7))
+
+    def zero_bounce(count: int) -> None:
+        code.extend((0xA2, count - 1, 0xA9, 0x00, 0x9D, bounce & 0xFF, bounce >> 8, 0xCA, 0x10, 0xFA))
+
+    def copy_bounce(dst: int, count: int) -> None:
+        code.extend((0xA2, count - 1, 0xBD, bounce & 0xFF, bounce >> 8, 0x9D, dst & 0xFF, dst >> 8, 0xCA, 0x10, 0xF7))
+
+    def call_xfer(bank: int, direction: int, count: int, addr: int) -> None:
+        lda(bank)
+        sta_abs(arg_bank)
+        lda(direction)
+        sta_abs(arg_dir)
+        lda(count)
+        code.extend((0xA2, addr & 0xFF, 0xA0, (addr >> 8) & 0xFF, 0x20))
+        w16(xfer)
+
+    # Restore original jsr target immediately so driver executes once.
+    lda(snd_upd & 0xFF)
+    sta_abs(igk_call + 1)
+    lda(snd_upd >> 8)
+    sta_abs(igk_call + 2)
+
+    lda_abs(0xC011); sta_abs(out_base + 0x60)
+    lda_abs(0xC012); sta_abs(out_base + 0x61)
+    lda_abs(0xC016); sta_abs(out_base + 0x62)
+    code.append(0xBA)  # tsx
+    code.extend((0x8E, 0x63, out_base >> 8))  # stx out_base+0x63
+    snap_zp_stk(0x80, 0x81)
+
+    zero_bounce(6)
+    call_xfer(0x00, 0x00, 6, 0xFFFA)
+    copy_bounce(out_base + 0x00, 6)
+
+    fill_xor(0xB1); call_xfer(0x08, 0x01, 16, 0xD000)  # Aux LC Bank 1 $D000
+    fill_xor(0xD2); call_xfer(0x00, 0x01, 16, 0xD000)  # Aux LC Bank 2 $D000
+    fill_xor(0xE5); call_xfer(0x00, 0x01, 16, 0xE000)  # Aux LC $E000
+    fill_xor(0xF9); call_xfer(0x00, 0x01, 16, 0xFFE9)  # Aux LC $FFE9-$FFF8
+
+    zero_bounce(16); call_xfer(0x08, 0x00, 16, 0xD000); copy_bounce(out_base + 0x10, 16)
+    zero_bounce(16); call_xfer(0x00, 0x00, 16, 0xD000); copy_bounce(out_base + 0x20, 16)
+    zero_bounce(16); call_xfer(0x08, 0x00, 16, 0xE000); copy_bounce(out_base + 0x30, 16)
+    zero_bounce(16); call_xfer(0x00, 0x00, 16, 0xFFE9); copy_bounce(out_base + 0x40, 16)
+    zero_bounce(6);  call_xfer(0x00, 0x00, 6,  0xFFFA); copy_bounce(out_base + 0x50, 6)
+
+    code.append(0xBA)  # tsx
+    code.extend((0x8E, 0x64, out_base >> 8))  # stx out_base+0x64
+    lda_abs(0xC011); sta_abs(out_base + 0x65)
+    lda_abs(0xC012); sta_abs(out_base + 0x66)
+    lda_abs(0xC016); sta_abs(out_base + 0x67)
+    snap_zp_stk(0x82, 0x83)
+
+    lda(0xA5)
+    sta_abs(out_base + 0xFF)
+    code.append(0x4C)
+    w16(snd_upd)
+
+    assert len(code) <= 0x280, f"aux_lc_spike driver too large: {len(code)}"
+    bytes_lua = ", ".join(f"0x{b:02X}" for b in code)
+    vec_expected = (
+        nmi_rti & 0xFF, nmi_rti >> 8,
+        rst_stub & 0xFF, rst_stub >> 8,
+        nmi_rti & 0xFF, nmi_rti >> 8,
+    )
+    vec_lua = ", ".join(f"0x{b:02X}" for b in vec_expected)
+
+    body = f"""
+for i = 1, 300 do
+    emu.wait(0.1)
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
+end
+assert_line("lc_title_ready", prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9,
+            "title menu did not appear")
+
+-- Fill Aux ZP ($0000-$00FF) and Aux Stack ($0100-$01FF) with deterministic guards.
+local aux_guard = {{}}
+for a = 0x0000, 0x01FF do
+    local g = ((a * 37) ~ 0x5A) & 0xFF
+    aux_guard[a] = g
+    aux:write(a, g)
+end
+
+for a = 0x{out_base:04X}, 0x{out_base + 0xFF:04X} do
+    prog:write_u8(a, 0x00)
+end
+local drv = {{{bytes_lua}}}
+for i, b in ipairs(drv) do
+    prog:write_u8(0x{drv_base:04X} + i - 1, b)
+end
+assert_line("lc_pre_altzp_off", (prog:read_u8(0xC016) & 0x80) == 0,
+            "RDALTZP unexpectedly active at title")
+prog:write_u8(0x{igk_call + 1:04X}, 0x{drv_base & 0xFF:02X})
+prog:write_u8(0x{igk_call + 2:04X}, 0x{drv_base >> 8:02X})
+
+local done = false
+for i = 1, 80 do
+    emu.wait(0.05)
+    if prog:read_u8(0x{out_base + 0xFF:04X}) == 0xA5 then done = true break end
+end
+assert_line("lc_driver_ran", done, "6502 Aux LC driver did not complete")
+
+local function hex_slice(base, n)
+    local s = ""
+    for i = 0, n - 1 do s = s .. string.format("%02X", prog:read_u8(base + i)) end
+    return s
+end
+
+local vec_exp = {{{vec_lua}}}
+local vec_init_ok, vec_post_ok = true, true
+for i = 1, 6 do
+    if prog:read_u8(0x{out_base:04X} + i - 1) ~= vec_exp[i] then vec_init_ok = false end
+    if prog:read_u8(0x{out_base + 0x50:04X} + i - 1) ~= vec_exp[i] then vec_post_ok = false end
+end
+assert_line("lc_aux_vectors_boot", vec_init_ok,
+            "got " .. hex_slice(0x{out_base:04X}, 6) .. " exp " .. string.format("%02X%02X%02X%02X%02X%02X", table.unpack(vec_exp)))
+assert_line("lc_aux_vectors_post", vec_post_ok, "got " .. hex_slice(0x{out_base + 0x50:04X}, 6))
+
+local b1_ok, b2_ok, e0_ok, top_ok = true, true, true, true
+for i = 0, 15 do
+    if prog:read_u8(0x{out_base + 0x10:04X} + i) ~= (0xB1 ~ i) then b1_ok = false end
+    if prog:read_u8(0x{out_base + 0x20:04X} + i) ~= (0xD2 ~ i) then b2_ok = false end
+    if prog:read_u8(0x{out_base + 0x30:04X} + i) ~= (0xE5 ~ i) then e0_ok = false end
+    if prog:read_u8(0x{out_base + 0x40:04X} + i) ~= (0xF9 ~ i) then top_ok = false end
+end
+assert_line("lc_bank1_d000_non_alias", b1_ok, "got " .. hex_slice(0x{out_base + 0x10:04X}, 16))
+assert_line("lc_bank2_d000_non_alias", b2_ok, "got " .. hex_slice(0x{out_base + 0x20:04X}, 16))
+assert_line("lc_e000_shared_upper", e0_ok, "got " .. hex_slice(0x{out_base + 0x30:04X}, 16))
+assert_line("lc_ffe9_fff8_near_vec", top_ok, "got " .. hex_slice(0x{out_base + 0x40:04X}, 16))
+
+local aux_zp_bad, aux_stk_bad = 0, 0
+for a = 0x0000, 0x00FF do
+    if aux:read(a) ~= aux_guard[a] then aux_zp_bad = aux_zp_bad + 1 end
+end
+for a = 0x0100, 0x01FF do
+    if aux:read(a) ~= aux_guard[a] then aux_stk_bad = aux_stk_bad + 1 end
+end
+assert_line("lc_aux_zp_untouched", aux_zp_bad == 0, aux_zp_bad .. " Aux ZP bytes changed")
+assert_line("lc_aux_stack_untouched", aux_stk_bad == 0, aux_stk_bad .. " Aux Stack bytes changed")
+
+local main_zp_bad = 0
+for i = 0, 255 do
+    if prog:read_u8(0x8000 + i) ~= prog:read_u8(0x8200 + i) then main_zp_bad = main_zp_bad + 1 end
+end
+assert_line("lc_main_zp_preserved", main_zp_bad == 0, main_zp_bad .. " Main ZP bytes changed")
+
+local sp_pre = prog:read_u8(0x{out_base + 0x63:04X})
+local sp_post = prog:read_u8(0x{out_base + 0x64:04X})
+assert_line("lc_main_sp_preserved", sp_pre == sp_post,
+            string.format("SP pre=%02X post=%02X", sp_pre, sp_post))
+local main_stk_bad = 0
+for i = 0, 255 do
+    if (i > sp_pre or i < sp_pre - 2) and prog:read_u8(0x8100 + i) ~= prog:read_u8(0x8300 + i) then
+        main_stk_bad = main_stk_bad + 1
+    end
+end
+assert_line("lc_main_stack_preserved", main_stk_bad == 0, main_stk_bad .. " Main Stack bytes changed")
+
+local bnk_pre = prog:read_u8(0x{out_base + 0x60:04X}) & 0x80
+local ram_pre = prog:read_u8(0x{out_base + 0x61:04X}) & 0x80
+local bnk_post = prog:read_u8(0x{out_base + 0x65:04X}) & 0x80
+local ram_post = prog:read_u8(0x{out_base + 0x66:04X}) & 0x80
+local alt_post = prog:read_u8(0x{out_base + 0x67:04X}) & 0x80
+assert_line("lc_main_state_restored", bnk_pre == bnk_post and ram_pre == ram_post and alt_post == 0,
+            string.format("C011=%02X->%02X C012=%02X->%02X C016=%02X",
+                          bnk_pre, bnk_post, ram_pre, ram_post, alt_post))
+"""
+    return (
+        LUA_HELPERS
+        + body
+        + LUA_CHARGEN.replace("CLASS_KEY", "A")
+        + 'assert_line("post_aux_lc_mli_town", in_town(), "MORIA8.PAK load to town failed after Aux LC spike")\n'
+        + 'print("SCENARIO DONE")\n'
+    )
 
 
 def scroll_delta_lua() -> str:
@@ -2265,6 +2520,7 @@ SCENARIO_LUA = {
     "save_slot_tracking": save_slot_tracking_lua,
     "weapon_exchange": weapon_exchange_lua,
     "acid_armour": acid_armour_lua,
+    "aux_lc_spike": aux_lc_spike_lua,
 }
 
 # Scenarios that exercise a separate save disk (blank ProDOS image, volume

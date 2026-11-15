@@ -56,12 +56,23 @@ itemdesc_put_store_slot:
 // Uses itemdesc_* fields. Callable from $F000 banked code and $E000 overlays.
 itemdesc_put_staged:
     jsr itemdesc_put_qty_prefix
+    lda itemdesc_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     lda itemdesc_item_id
-    tax
-    lda it_category,x
+    jsr item_get_category_a
     cmp #ICAT_DIGGING
     bne !idps_not_tool+
+    bit item_cur_page
+    bvs !idps_not_tool+
+    lda itemdesc_item_id
+    cmp #62
+    beq !idps_legacy_tool+
+    cmp #63
+    bne !idps_not_tool+
+!idps_legacy_tool:
     lda itemdesc_ego
+    and #EGO_ID_MASK
     beq !idps_not_tool+
     cmp #EGO_TYPE_COUNT
     bcs !idps_not_tool+
@@ -77,6 +88,7 @@ itemdesc_put_staged:
     jsr item_get_name_ptr
     jsr hal_screen_put_string
     lda itemdesc_ego
+    and #EGO_ID_MASK
     cmp #EGO_TYPE_COUNT
     bcc !idps_valid_ego+
     lda #0
@@ -112,24 +124,30 @@ itemdesc_put_stats:
     // A light's fuel shows whether identified or not (VMS "with %P5 turns
     // of light", Umoria itemDescription): a burnt-out torch looked like a
     // fresh one until 2026-10-26.
-    ldx itemdesc_item_id
-    lda it_category,x
+    lda itemdesc_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda itemdesc_item_id
+    jsr item_get_category_a
     cmp #ICAT_LIGHT
     bne !idps_not_light+
     jmp !idps_turns+
 !idps_not_light:
+    tay
     lda itemdesc_flags
     and #IF_IDENTIFIED
     bne !idps_identified+
     rts
 !idps_identified:
-    lda it_category,x
+    tya
     cmp #ICAT_WEAPON
     beq !idps_weapon+
+    cmp #ICAT_CLOAK
+    beq !idps_armor_tramp+
     cmp #ICAT_ARMOR
     bcc !idps_not_armor+
     cmp #ICAT_BOOTS + 1
-    bcc !idps_armor+
+    bcc !idps_armor_tramp+
 !idps_not_armor:
     cmp #ICAT_RING
     beq !idps_ring+
@@ -144,6 +162,8 @@ itemdesc_put_stats:
     jmp !idps_charges+
 !idps_not_staff:
     rts
+!idps_armor_tramp:
+    jmp !idps_armor+
 !idps_amulet_tramp:
     jmp !idps_ring_p1+
 !idps_weapon:
@@ -165,12 +185,21 @@ itemdesc_put_stats:
     lda #$29
     jmp hal_screen_put_char
 !idps_ring:
+    bit item_cur_page
+    bvs !idps_ring_p1_chk+
     lda itemdesc_item_id
     cmp #23
     beq !idps_ring_ac+
     cmp #24
-    beq !idps_ring_p1+
-    rts
+    beq !idps_ring_p1_tramp+
+!idps_ring_p1_chk:
+    lda itemdesc_to_ac
+    bne !idps_ring_ac+
+    lda itemdesc_to_hit
+    ora itemdesc_to_dam
+    bne !idps_weapon-
+!idps_ring_p1_tramp:
+    jmp !idps_ring_p1+
 !idps_ring_ac:
     lda itemdesc_to_ac
     bne !idps_ring_ac_has_bonus+
@@ -183,7 +212,8 @@ itemdesc_put_stats:
     lda itemdesc_to_ac
     jsr itemdesc_put_signed
     lda #$1d                    // ']' screen code
-    jmp hal_screen_put_char
+    jsr hal_screen_put_char
+    jmp !idps_ring_p1+          // Ring of WOE carries both AC and stat penalty; 0 on others
 !idps_armor:
     lda #$20
     jsr hal_screen_put_char

@@ -264,7 +264,7 @@ cart_index_char:
     jmp cart_load_asset
 
 cart_load_title:
-    lda #CART_ASSET_TITLE
+    lda #CART_ASSET_TITLE_ART
     jmp cart_load_asset
 
 cart_invalid_asset:
@@ -287,6 +287,54 @@ cart_nmi:
 !ordinary:
     pla
     jmp (cart_original_nmi)
+
+#if ITEM_CATALOG_CART
+// hal_item_cat_cart_read_byte — Read one byte from EasyFlash CART_ASSET_ITEM_CATALOG.
+// Input: item_cat_off_lo/hi. Output: A = byte. Clobbers: A, Y (preserves X and ZP).
+hal_item_cat_cart_read_byte:
+    php
+    sei
+    lda #1
+    sta cart_copy_active
+    lda $01
+    pha
+    lda #$37                // ROML reads need HIRAM; KERNAL NMI vector is active
+    sta $01
+    lda #0
+    sta $de00
+    lda #$06                // 8 KB ROML visible at $8000-$9FFF
+    sta $de02
+    .const CART_ICAT_OFF = CART_ASSET_ITEM_CATALOG * CART_DESCRIPTOR_SIZE
+    lda CART_DIRECTORY + CART_ICAT_OFF
+    sta cart_bank
+    lda CART_DIRECTORY + CART_ICAT_OFF + 1
+    clc
+    adc item_cat_off_lo
+    sta !hicc_read+ + 1
+    lda CART_DIRECTORY + CART_ICAT_OFF + 2
+    adc item_cat_off_hi
+!hicc_norm:
+    cmp #$a0
+    bcc !hicc_bank+
+    sbc #$20                // C=1 from CMP
+    inc cart_bank
+    bne !hicc_norm-
+!hicc_bank:
+    sta !hicc_read+ + 2
+    lda cart_bank
+    sta $de00
+!hicc_read:
+    ldy $ffff
+    lda #$04                // Disable cartridge before restoring caller
+    sta $de02
+    pla
+    sta $01
+    lda #0
+    sta cart_copy_active
+    plp
+    tya
+    rts
+#endif
 
 cart_original_nmi: .word 0
 cart_read_error: .byte 0

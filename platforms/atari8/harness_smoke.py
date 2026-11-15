@@ -129,6 +129,7 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     busy_addr = syms.get("generation_busy_active_api", 0x0D40)
     shuffles = syms.get("potion_shuffle", 0)
     id_known = syms.get("id_known_bits", 0)
+    recall_data = syms.get("recall_data_start", 0)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
 
@@ -152,15 +153,16 @@ local GAME_FLAGS_ADDR = 0x{zp_gflags:04X}
 local PLAYER_DATA_ADDR = 0x{player_data:04X}
 local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
-local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (33)
+local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (34)
 local TURN_LO_ADDR = 0x{turn_lo:04X}
 local MONSTER_TABLE_ADDR = 0x{monster_table:04X}
 local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
 local BUSY_ADDR = 0x{busy_addr:04X}
-local SHUFFLES_ADDR = 0x{shuffles:04X}   -- 38 bytes: potion, scroll, ring, wand, staff (high RAM)
-local ID_KNOWN_ADDR = 0x{id_known:04X}   -- 20 bytes (high RAM)
+local SHUFFLES_ADDR = 0x{shuffles:04X}   -- 174 bytes: potion, scroll, ring, wand, staff (Default RAM)
+local ID_KNOWN_ADDR = 0x{id_known:04X}   -- 47 bytes (Default RAM)
+local RECALL_ADDR = 0x{recall_data:04X}   -- 1116 bytes: 4 * 279 species (Default RAM)
 local SCREEN_RAM = 0x{SCREEN_RAM:04X}
 local ROW18 = 0x{ROW18_ADDR:04X}
 local ROW23 = 0x{ROW23_ADDR:04X}
@@ -412,16 +414,16 @@ function run()
     local xe = prog:read_u8(XE_PRESENT)
     assert_line("xe_detect_{machine}", xe == {expected_xe})
     if {expected_xe} == 1 then
-        -- All 16 slots (0..9 overlays, 10..13 and 15 the monster catalog's
-        -- records, 14 TITLE.DAT) must have bit 7 set
+        -- All 19 slots (0..9 and 16..18 overlays, 10..13 and 15 the monster
+        -- catalog's records, 14 TITLE.DAT) must have bit 7 set
         local all_slots_hot = true
-        for slot = 0, 15 do
+        for slot = 0, 18 do
             if (prog:read_u8(XE_SLOT_POP + slot) & 0x80) == 0 then
                 all_slots_hot = false
                 break
             end
         end
-        assert_line("xe_all_16_slots_preloaded", all_slots_hot)
+        assert_line("xe_all_19_slots_preloaded", all_slots_hot)
     end
     manager.machine:exit()
 end
@@ -521,6 +523,23 @@ function run()
     local ok = start_new_game("A")
     assert_line("town_130xe_ready", ok)
     assert_line("xe_active", prog:read_u8(XE_PRESENT) == 1)
+    for i = 0, 31 do
+        local base = MONSTER_TABLE_ADDR + i * 12
+        if prog:read_u8(base + 2) ~= 0xFF and prog:read_u8(base + 0) == 51 and prog:read_u8(base + 1) == 16 then
+            prog:write_u8(base + 2, 0xFF)
+            local ma = 0xC100 + 16 * 80 + 51
+            prog:write_u8(ma, prog:read_u8(ma) & 0xFE)
+        end
+    end
+    prog:write_u8(PLAYER_X_ADDR, 51)
+    prog:write_u8(PLAYER_Y_ADDR, 17)
+    prog:write_u8(PLAYER_DATA_ADDR + 49, 51)
+    prog:write_u8(PLAYER_DATA_ADDR + 50, 17)
+    send_key(0x4B) -- 'K' north onto Home door (51, 16)
+    assert_line("home_overlay_130xe_open", wait_screen("Home", 80))
+    send_key(0x51) -- 'Q' exit Home back to Town
+    wait_frames(40)
+    assert_line("home_overlay_130xe_closed", in_town() and not screen_has("Home"))
     local dl1 = descend_to_dl1()
     assert_line("dungeon_130xe_dl1", dl1)
     manager.machine:exit()
@@ -531,16 +550,24 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
-    -- Secondary weapon (slot 32): Dagger (+3,+4) (Defender); slot 31 stays empty.
-    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
-    -- The flavour shuffles and the known bits live in high RAM under the OS
-    -- ROM (config.s): saved and loaded through the low sector buffer. A
-    -- flavoured item made known (the Ring of Lordly Protection (Fire), 146)
-    -- must come back too.
+    -- Cloak (slot 32) and Secondary weapon (slot 33); ring2 slot 31 stays empty.
+    inv_seed(32, {82, 1, 0, 0, 0, 1, 0, 0})
+    inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})
+    -- Flavour shuffles (174 B), known bits (47 B), and persistent recall[279]
+    -- (1,116 B) live in Default RAM (< $C100) and serialize in Save V2 ($20).
+    -- Mark both Page 0 (146) and Page 1 (286) known bits, plus recall head/tail.
     prog:write_u8(ID_KNOWN_ADDR + (146 >> 3), prog:read_u8(ID_KNOWN_ADDR + (146 >> 3)) | (1 << (146 & 7)))
-    local saved_state = {}
-    for i = 0, 37 do saved_state[#saved_state + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
-    for i = 0, 19 do saved_state[#saved_state + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
+    prog:write_u8(ID_KNOWN_ADDR + (286 >> 3), prog:read_u8(ID_KNOWN_ADDR + (286 >> 3)) | (1 << (286 & 7)))
+    if RECALL_ADDR ~= 0 then
+        prog:write_u8(RECALL_ADDR + 0, 0x5A)
+        prog:write_u8(RECALL_ADDR + 1110, 0xA5)
+    end
+    local saved_shuf = {}
+    local saved_known = {}
+    for i = 0, 173 do saved_shuf[#saved_shuf + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
+    for i = 0, 46 do saved_known[#saved_known + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
+    local saved_rec0 = RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 0) or 0
+    local saved_rec1 = RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 1110) or 0
     send_key(0xD3) -- SHIFT+S (save & quit) -> prompts Disk Setup on first save
     assert_line("save_disk_setup_prompt", wait_screen("DISK SETUP", 80))
     send_key(0x33) -- 3) Done (default Save: D2:)
@@ -555,9 +582,14 @@ function run()
         if screen_has("N)ew") and screen_has("L)oad") then break end
     end
     assert_line("title_after_save", screen_has("N)ew") and screen_has("L)oad"))
-    inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring it back
-    for i = 0, 37 do prog:write_u8(SHUFFLES_ADDR + i, saved_state[i + 1] ~ 0x55) end
-    for i = 0, 19 do prog:write_u8(ID_KNOWN_ADDR + i, 0) end
+    inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring them back
+    inv_seed(33, {0xFF, 0, 0, 0, 0, 0, 0, 0})
+    for i = 0, 173 do prog:write_u8(SHUFFLES_ADDR + i, saved_shuf[i + 1] ~ 0x55) end
+    for i = 0, 46 do prog:write_u8(ID_KNOWN_ADDR + i, 0) end
+    if RECALL_ADDR ~= 0 then
+        prog:write_u8(RECALL_ADDR + 0, 0)
+        prog:write_u8(RECALL_ADDR + 1110, 0)
+    end
     send_key(0x4C) -- 'L' (load game)
     assert_line("load_slots_shown", wait_screen("Select Slot 1-4", 80))
     send_key(0x31) -- Slot 1
@@ -567,12 +599,19 @@ function run()
     end
     assert_line("save_load_resumed", prog:read_u8(PLAYER_X_ADDR) > 0)
     assert_line("save_load_secondary_restored",
-        inv_field(32, 0) == 2 and inv_field(32, 3) == 3 and inv_field(32, 4) == 4
-        and inv_field(32, 6) == 2 and inv_field(32, 7) == 6 and inv_field(31, 0) == 0xFF)
+        INV_STRIDE == 34
+        and inv_field(33, 0) == 2 and inv_field(33, 3) == 3 and inv_field(33, 4) == 4
+        and inv_field(33, 6) == 2 and inv_field(33, 7) == 6
+        and inv_field(32, 0) == 82 and inv_field(32, 5) == 1
+        and inv_field(31, 0) == 0xFF)
     local same = SHUFFLES_ADDR ~= 0 and ID_KNOWN_ADDR ~= 0
-    for i = 0, 37 do same = same and prog:read_u8(SHUFFLES_ADDR + i) == saved_state[i + 1] end
-    for i = 0, 19 do same = same and prog:read_u8(ID_KNOWN_ADDR + i) == saved_state[39 + i] end
+    for i = 0, 173 do same = same and prog:read_u8(SHUFFLES_ADDR + i) == saved_shuf[i + 1] end
+    for i = 0, 46 do same = same and prog:read_u8(ID_KNOWN_ADDR + i) == saved_known[i + 1] end
     assert_line("save_load_high_ram_restored", same)
+    assert_line("save_load_recall_restored",
+        RECALL_ADDR ~= 0
+        and prog:read_u8(RECALL_ADDR + 0) == saved_rec0
+        and prog:read_u8(RECALL_ADDR + 1110) == saved_rec1)
     manager.machine:exit()
 end
 """
@@ -776,6 +815,23 @@ function run()
     send_key(0x4E) -- 'N'
     wait_frames(40)
     assert_line("shift_declined", in_town() and not screen_has("Do you really want to quit?"))
+    for i = 0, 31 do
+        local base = MONSTER_TABLE_ADDR + i * 12
+        if prog:read_u8(base + 2) ~= 0xFF and prog:read_u8(base + 0) == 51 and prog:read_u8(base + 1) == 16 then
+            prog:write_u8(base + 2, 0xFF)
+            local ma = 0xC100 + 16 * 80 + 51
+            prog:write_u8(ma, prog:read_u8(ma) & 0xFE)
+        end
+    end
+    prog:write_u8(PLAYER_X_ADDR, 51)
+    prog:write_u8(PLAYER_Y_ADDR, 17)
+    prog:write_u8(PLAYER_DATA_ADDR + 49, 51)
+    prog:write_u8(PLAYER_DATA_ADDR + 50, 17)
+    send_key(0x4B) -- 'K' north onto Home door (51, 16)
+    assert_line("home_overlay_open", wait_screen("Home", 80))
+    send_key(0x51) -- 'Q' exit Home back to Town
+    wait_frames(40)
+    assert_line("home_overlay_closed", in_town() and not screen_has("Home"))
     manager.machine:exit()
 end
 """
@@ -801,22 +857,28 @@ function run()
     drain_more(4)
     wait_frames(60)                          -- the quaff's own turn ends first
     inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
-    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+    inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
     local turn0 = prog:read_u8(TURN_LO_ADDR)
     send_key(0xD8)
     assert_line("exchange_cursed_refused",
         wait_screen("You cannot remove it, it is cursed!", 60)
-        and inv_field(22, 0) == 5 and inv_field(32, 0) == 2
+        and inv_field(22, 0) == 5 and inv_field(33, 0) == 2
         and prog:read_u8(TURN_LO_ADDR) == turn0)
     prog:write_u8(INV_ITEM_ID_ADDR + 6 * INV_STRIDE + 22, 2) -- lift the curse
     send_key(0xD8)
+    -- Each report line decodes its item name from ITEM.CAT on the 800XL's disk
+    -- (~0.1 s per sector), so the second line and the turn's end come later.
     assert_line("exchange_report",
         wait_screen("Primary: Dagger (Defender) (+3,+4)", 60)
-        and screen_has("Secondary: Mace (+1,+0)"))
+        and wait_screen("Secondary: Mace (+1,+0)", 60))
     assert_line("exchange_swapped",
         inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
-        and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
-        and inv_field(31, 0) == 0xFF)
+        and inv_field(33, 0) == 5 and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+        and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF)
+    for _ = 1, 60 do
+        if prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256 then break end
+        emu.wait(0.1)
+    end
     assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256)
     manager.machine:exit()
 end
@@ -1006,7 +1068,7 @@ function run()
     send_key(0x31)
     send_key(0x30)
     send_key(0x0D)
-    for _ = 1, 150 do
+    for _ = 1, 400 do   -- DL10 loads OVL.GEN, OVL.CHS (floor items) and more at ~3 s each
         emu.wait(0.1)
         if prog:read_u8(DLVL_ADDR) == 10 and prog:read_u8(BUSY_ADDR) == 0 and not screen_has("GENERATING") then break end
     end

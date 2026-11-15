@@ -327,7 +327,10 @@ bash_monster:
     ldx inv_item_id + EQUIP_SHIELD
     cpx #FI_EMPTY
     beq !bash_have_dice+
-    lda it_dmg_packed,x
+    lda inv_ego + EQUIP_SHIELD
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    jsr item_get_dmg_packed_x
     beq !bash_have_dice+
     pha
     and #$0f

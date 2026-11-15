@@ -52,9 +52,11 @@ def main() -> int:
     item_lower = item_text.lower()
     if "$ff00" in item_lower:
         errors.append("item_actions_overlay.s: common item actions still contain $ff00")
-    if "hal_memory_mmu_config_register" not in item_text:
+    if "mmu_all_ram" in item_lower:
+        errors.append("item_actions_overlay.s: common item actions must not reference MMU_ALL_RAM")
+    if "hal_memory_mmu_config_register" in item_text:
         errors.append(
-            "item_actions_overlay.s: common item actions do not consume "
+            "item_actions_overlay.s: common item actions must not reference "
             "hal_memory_mmu_config_register"
         )
 
@@ -62,9 +64,11 @@ def main() -> int:
     player_items_lower = player_items_text.lower()
     if "$ff00" in player_items_lower:
         errors.append("player_items.s: common player items still contain $ff00")
-    if "hal_memory_mmu_config_register" not in player_items_text:
+    if "mmu_all_ram" in player_items_lower:
+        errors.append("player_items.s: common player items must not reference MMU_ALL_RAM")
+    if "hal_memory_mmu_config_register" in player_items_text:
         errors.append(
-            "player_items.s: common player items do not consume "
+            "player_items.s: common player items must not reference "
             "hal_memory_mmu_config_register"
         )
 

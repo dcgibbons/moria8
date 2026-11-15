@@ -48,8 +48,9 @@ legal_offer_filename: .byte 'S','O','U','R','C','E','-','O','F','F','E','R',',',
 legal_filename_lo: .byte <legal_notice_filename, <legal_offer_filename
 legal_filename_hi: .byte >legal_notice_filename, >legal_offer_filename
 legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
-// KERNAL OPEN cannot read E000 while ROM is mapped. Preserve only the
-// BASIC-exit snapshot bytes used by this filename; no read past its length.
+// KERNAL OPEN cannot read E000 while ROM is mapped, nor $D700 hidden RAM while
+// $01=$36 exposes I/O. Preserve only the BASIC-buffer bytes used by this
+// filename in LegalOverlay; no read past its length.
 legal_os_setnam:
     sta legal_saved_length
     stx zp_ptr0
@@ -57,15 +58,15 @@ legal_os_setnam:
     tay
     dey
 !stage:
-    lda zp_save_buf,y
+    lda PLATFORM_LEGAL_NAME_STAGE_BASE,y
     sta legal_saved_filename,y
     lda (zp_ptr0),y
-    sta zp_save_buf,y
+    sta PLATFORM_LEGAL_NAME_STAGE_BASE,y
     dey
     bpl !stage-
     lda legal_saved_length
-    ldx #<zp_save_buf
-    ldy #>zp_save_buf
+    ldx #<PLATFORM_LEGAL_NAME_STAGE_BASE
+    ldy #>PLATFORM_LEGAL_NAME_STAGE_BASE
     jmp hal_storage_setnam
 legal_os_close:
     jsr hal_storage_close
@@ -73,7 +74,7 @@ legal_os_close:
     dey
 !restore:
     lda legal_saved_filename,y
-    sta zp_save_buf,y
+    sta PLATFORM_LEGAL_NAME_STAGE_BASE,y
     dey
     bpl !restore-
     rts

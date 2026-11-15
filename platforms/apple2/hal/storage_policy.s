@@ -21,33 +21,11 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
-#if HAL_PLATFORM_MONSTER_CATALOG
-// $17: the monster catalog: the species table in the door-state block and 40
-// creature rows (a 160-byte recall block). Older saves name tier creatures,
-// so $17 is the oldest the loader takes and the legacy feature versions are
-// pinned at it (the 31-slot inventory version just below it, so its loader
-// compiles out).
-// $18: 16-item stores (the store block grew); older saves are refused.
-.const hal_storage_save_v1_version = $18
-.const hal_storage_save_known96_version = $18
-.const hal_storage_save_inv31_version = $17
-.const hal_storage_save_known_bits_version = $18
-.const hal_storage_save_baked_stats_version = $18
-.const hal_storage_save_known160_version = $18
-.const hal_storage_save_door_state_version = $18
-.const hal_storage_save_inv33_version = $18
-.const hal_storage_save_version = $18
-#else
-.const hal_storage_save_v1_version = $0f
-.const hal_storage_save_known96_version = $10
-.const hal_storage_save_inv31_version = $11
-.const hal_storage_save_known_bits_version = $12
-.const hal_storage_save_baked_stats_version = $12
-.const hal_storage_save_known160_version = $14
-.const hal_storage_save_door_state_version = $15
-.const hal_storage_save_inv33_version = $16
-.const hal_storage_save_version = $17
-#endif
+// $20 (Save Format V2): expanded 370-item catalog, 34 inventory slots (with
+// Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and 279-species
+// persistent monster recall. Older V1..V19 saves are no longer accepted.
+.const hal_storage_save_v1_version = $20
+.const hal_storage_save_version = $20
 
 // Apple II disk_mode values (platform-owned; no shared code interprets the
 // value). 2 = separate save volume on another unit (two-drive), 3 = separate
@@ -90,4 +68,5 @@
 // The map lives in aux RAM: excluded from the generic save-block table and
 // streamed by the platform map helpers (save_stream.s) like C128's Bank 1.
 #define HAL_STORAGE_MAP_BANKED
+#define HAL_STORAGE_RECALL_CUSTOM
 #define HAL_STORAGE_NO_UNIT_TEST_STUBS

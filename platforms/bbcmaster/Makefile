@@ -25,6 +25,7 @@ PRG2BIN     = python3 ../../tools/prg_to_bin.py
 VERSION_FILE     = ../../version.json
 VERSION_INC_TOOL = ../../tools/make_version_include.py
 VERSION_INC      = $(OUT)/version_strings.inc
+TRAMPOLINES_INC  = $(OUT)/trampolines/bbcmaster_trampolines.inc
 MAIN_SRC         = main.s
 BOOT_SRC         = boot.s
 TITLE_SRC        = title_data.s
@@ -39,7 +40,7 @@ BEEB_HUFF_PRG   = $(OUTBEEB)/beeb.huffdata
 BEEB_CAT_PRG    = $(OUTBEEB)/beeb.catalog
 BEEB_OVL_PRGS   = $(OUTBEEB)/ovl.start $(OUTBEEB)/ovl.town $(OUTBEEB)/ovl.death $(OUTBEEB)/ovl.modal \
                   $(OUTBEEB)/ovl.gen $(OUTBEEB)/ovl.help $(OUTBEEB)/ovl.ui $(OUTBEEB)/ovl.items \
-                  $(OUTBEEB)/ovl.spell $(OUTBEEB)/ovl.chest $(OUTBEEB)/ovl.storage $(OUTBEEB)/ovl.title
+                  $(OUTBEEB)/ovl.spell $(OUTBEEB)/ovl.chest $(OUTBEEB)/ovl.home $(OUTBEEB)/ovl.storage $(OUTBEEB)/ovl.title
 BEEB_TITLE_PRG  = $(OUTBEEB)/title.prg
 BEEB_BOOT_PRG   = $(OUTBEEB)/boot.prg
 BEEB_MAIN_STAMP = $(OUTBEEB)/.main.stamp
@@ -78,7 +79,11 @@ $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
 	@mkdir -p $(OUT)
 	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
-$(BEEB_MAIN_STAMP): $(BEEB_SOURCES) $(VERSION_INC) $(KICKASS_JAR)
+$(TRAMPOLINES_INC): ../../tools/gen_trampolines.py ../../tools/trampoline_manifest.py
+	@mkdir -p $(dir $@)
+	python3 -B ../../tools/gen_trampolines.py --port bbcmaster --output "$@"
+
+$(BEEB_MAIN_STAMP): $(BEEB_SOURCES) $(VERSION_INC) $(TRAMPOLINES_INC) $(KICKASS_JAR)
 	@mkdir -p $(OUTBEEB)
 	$(KA) $(KA_FLAGS) $(MAIN_SRC) -o $(BEEB_MAIN_PRG)
 	@touch $(BEEB_MAIN_STAMP)
@@ -99,20 +104,21 @@ $(OUTBEEB)/boot.sym: $(BEEB_BOOT_PRG)
 
 disk: $(BEEB_SSD)
 
-$(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_pak.py ../../tools/make_ssd.py
+$(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../platforms/shared/item_catalog/item_cat_data.s ../../tools/catalog_disk.py ../../tools/make_pak.py ../../tools/make_ssd.py
 	@mkdir -p "$(OUTBEEB)/bin"
 	$(PRG2BIN) "$(BEEB_BOOT_PRG)" "$(OUTBEEB)/bin/MORIA8" --expect-addr 0x1900
 	$(PRG2BIN) "$(BEEB_MAIN_PRG)" "$(OUTBEEB)/bin/MORIA8.RES" --expect-addr 0x0E00
 	$(PRG2BIN) "$(BEEB_PLAY_PRG)" "$(OUTBEEB)/bin/BEEB.PLAY" --expect-addr 0x8000
 	$(PRG2BIN) "$(BEEB_HUFF_PRG)" "$(OUTBEEB)/bin/BEEB.HUFFDATA" --expect-addr 0x8000
 	$(PRG2BIN) "$(BEEB_AUX_PRG)" "$(OUTBEEB)/bin/BEEB.AUXDATA" --expect-addr 0x6000
-	@for f in START TOWN DEATH MODAL GEN HELP UI ITEMS SPELL CHEST STORAGE TITLE; do \
+	@for f in START TOWN DEATH MODAL GEN HELP UI ITEMS SPELL CHEST HOME STORAGE TITLE; do \
 	  lower=$$(echo $$f | tr 'A-Z' 'a-z'); \
 	  $(PRG2BIN) "$(OUTBEEB)/ovl.$$lower" "$(OUTBEEB)/bin/OVL.$$f" --expect-addr 0xA800 || exit 1; \
 	done
 	$(PRG2BIN) "$(BEEB_CAT_PRG)" "$(OUTBEEB)/bin/BEEB.CATALOG" --expect-addr 0x9500
 	$(PRG2BIN) "$(OUTBEEB)/legalui" "$(OUTBEEB)/bin/LEGALUI" --expect-addr 0xA800
 	$(PRG2BIN) "$(BEEB_TITLE_PRG)" "$(OUTBEEB)/bin/TITLE" --expect-addr 0x8000
+	python3 -B ../../tools/catalog_disk.py item-raw "$(OUTBEEB)/bin"
 	python3 ../../tools/make_pak.py "$(OUTBEEB)/bin/MORIA8.PAK" \
 	  "$(OUTBEEB)/bin/MORIA8.RES" "$(OUTBEEB)/bin/BEEB.PLAY" \
 	  "$(OUTBEEB)/bin/BEEB.HUFFDATA" "$(OUTBEEB)/bin/BEEB.AUXDATA" \
@@ -132,9 +138,11 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_p
 	  "OVLDTH=$(OUTBEEB)/bin/OVL.DEATH:FFFFA800:FFFFA800" \
 	  "OVLHLP=$(OUTBEEB)/bin/OVL.HELP:FFFFA800:FFFFA800" \
 	  "OVLCHS=$(OUTBEEB)/bin/OVL.CHEST:FFFFA800:FFFFA800" \
+	  "OVLHOM=$(OUTBEEB)/bin/OVL.HOME:FFFFA800:FFFFA800" \
 	  "OVLSTO=$(OUTBEEB)/bin/OVL.STORAGE:FFFFA800:FFFFA800" \
 	  "OVLTTL=$(OUTBEEB)/bin/OVL.TITLE:FFFFA800:FFFFA800" \
 	  "TITLE=$(OUTBEEB)/bin/TITLE:FFFF8000:FFFF8000" \
+	  "ITEMCAT=$(OUTBEEB)/bin/ITEM.CAT:FFFF0000:FFFFFFFF" \
 	  "LEGALUI=$(OUTBEEB)/bin/LEGALUI:FFFFA800:FFFFA800" \
 	  "LICENSE=$(OUTBEEB)/bin/LICENSE:FFFF0000:FFFFFFFF" \
 	  "SRCOFFR=$(OUTBEEB)/bin/SRCOFFR:FFFF0000:FFFFFFFF"

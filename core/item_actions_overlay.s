@@ -1,10 +1,17 @@
 #importonce
 // item_actions_overlay.s — low-frequency item command handlers
 //
-// These command handlers are overlay-owned in product builds to keep the
-// resident/default image below the C64 map boundary and the C128 staged source
-// below the overlay window. Unit tests still import them directly through
-// player_items.s unless the platform build defines ITEM_ACTIONS_OVERLAY_EXTERNAL.
+// Placement & ownership:
+// - Placed in ItemActionsOverlay (OVL_ITEMS) across all 7 product builds to
+//   keep resident/default images within memory limits. Unit tests still import
+//   it directly through player_items.s unless ITEM_ACTIONS_OVERLAY_EXTERNAL is
+//   defined.
+//
+// Lifetime & cross-overlay callers:
+// - Invoked from resident game_loop via platform trampolines; calls resident
+//   hal_input_get_key, optional hal_platform_item_action_restore_bank, and
+//   piw_select_filtered_inv_key. Under HAL_PLATFORM_ITEM_ACTIONS_RESTORE_BEFORE_RETURN,
+//   sets piw_return_overlay = #OVL_ITEMS before '?' inventory selection.
 
 #import "player_item_select.s"
 
@@ -27,17 +34,9 @@ eff_item_overlay_dispatch:
 item_action_get_key:
     jsr hal_input_get_key
 #if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK
-    sta iagk_key
-    lda #MMU_ALL_RAM
-    sta hal_memory_mmu_config_register
-    lda #BANK_NO_ROMS
-    sta hal_memory_cpu_port
-    lda iagk_key
-#endif
+    jmp hal_platform_item_action_restore_bank
+#else
     rts
-
-#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK
-iagk_key: .byte 0
 #endif
 
 item_action_select_filtered_inv:
@@ -59,6 +58,19 @@ item_action_select_filtered_inv:
 #endif
     jmp piw_select_filtered_inv_key
 
+// ia_store_piw — Save selected slot X, slot_lo A, and Page 1 flag into piw_*.
+// Output: A = piw_item_id; piw_slot, piw_item_id, piw_ego, item_cur_page set.
+ia_store_piw:
+    stx piw_slot
+    sta piw_item_id
+    tay
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta piw_ego
+    sta item_cur_page
+    tya
+    rts
+
 // ============================================================
 // item_read_scroll — Read a scroll from inventory
 // Prompts "READ WHICH SCROLL (A-V)?", waits for keypress.
@@ -78,21 +90,32 @@ item_read_scroll:
     bcs !irs_in_range+
     rts
 !irs_in_range:
-    stx piw_slot
-    sta piw_item_id
-    ldx piw_item_id
+    jsr ia_store_piw
+    tax
     jsr id_known_set
 
     ldx piw_slot
-    jsr inv_consume_one             // one scroll from the stack
-
+    jsr inv_consume_one             // one scroll from the stack (clobbers item_cur_page)
+    lda piw_ego
+    sta item_cur_page
     lda piw_item_id
+    bit piw_ego
+    bvs !irs_effect_p3_or_generic+
+
     cmp #20
     bcc !irs_dispatch_generic+
+    cmp #23
+    bcc !irs_sub20+                 // 20..22 -> table indices 0..2
+    cmp #32
+    bcc !irs_effect_generic+        // 23..31 unused as scrolls
     cmp #39
     bcs !irs_dispatch_generic+
+    sbc #28                         // C=0 (bcc didn't trigger), so 32..38 -> 3..9
+    bne !irs_table_jump+
+!irs_sub20:
     sec
     sbc #20
+!irs_table_jump:
     tax
     lda irs_dispatch_lo,x
     sta zp_ptr1
@@ -106,22 +129,30 @@ item_read_scroll:
     bcc !irs_effect_generic+
     cmp #ITEM_TYPE_SCR_DESTRUCTION + 1
     bcs !irs_effect_generic+
+!irs_effect_p3_or_generic:
 #if SCROLL_P3_ROUTER_ENABLED
+#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
+    jsr irs_effect_p3_swap
+    lsr piw_recalc_pending
+    bcc !irs_p3_done+
+    jsr player_recalc_equipment
+!irs_p3_done:
+    sec
+    rts
+#else
     jmp irs_effect_p3_swap
+#endif
 #endif
 !irs_effect_generic:
     jmp irs_effect_generic
 
+// Compact scroll table covering Page 0 scroll IDs 20..22 (0..2) and 32..38 (3..9).
 irs_dispatch_lo:
     .byte <irs_effect_light, <irs_effect_identify, <irs_effect_teleport
-    .byte <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic
-    .byte <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic
     .byte <irs_effect_wor, <irs_effect_remove_curse, <irs_effect_enchant_weapon, <irs_effect_enchant_armor
     .byte <irs_effect_mon_confuse, <irs_effect_aggravate, <irs_effect_protect
 irs_dispatch_hi:
     .byte >irs_effect_light, >irs_effect_identify, >irs_effect_teleport
-    .byte >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic
-    .byte >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic
     .byte >irs_effect_wor, >irs_effect_remove_curse, >irs_effect_enchant_weapon, >irs_effect_enchant_armor
     .byte >irs_effect_mon_confuse, >irs_effect_aggravate, >irs_effect_protect
 
@@ -166,7 +197,6 @@ irs_effect_enchant_weapon:
     jmp hpm_sec_rts
 
 !irs_ew_has:
-    ldx #EQUIP_WEAPON
     lda inv_flags,x
     and #IF_CURSED
     beq !irs_ew_not_cursed+
@@ -188,8 +218,7 @@ irs_effect_enchant_weapon:
     bmi !irs_ew_inc+
     cmp #5
     bcc !irs_ew_inc+
-    ldx #HSTR_PIQ_NOTHING
-    jmp hpm_sec_rts
+    jmp irs_effect_generic
 
 !irs_ew_inc:
     inc inv_to_hit + EQUIP_WEAPON
@@ -236,8 +265,8 @@ irs_effect_enchant_armor:
     beq !irs_ea_next+
     stx piw_slot
 !irs_ea_next:
-    inx
-    cpx #EQUIP_FEET + 1
+    jsr irs_ea_next_slot
+    cpx #EQUIP_CLOAK + 1
     bcc !irs_ea_scan-
     tya
     bne !irs_ea_worn+
@@ -258,8 +287,8 @@ irs_effect_enchant_armor:
     beq !irs_ea_picked+
     dec zp_temp0
 !irs_ea_pnext:
-    inx
-    bne !irs_ea_pick-               // always: k is under the count
+    jsr irs_ea_next_slot
+    bne !irs_ea_pick-               // always: X in 24..27 or 32, k < count
 !irs_ea_picked:
     stx piw_slot
 !irs_ea_roll:
@@ -285,14 +314,23 @@ irs_effect_enchant_armor:
     ldx #HSTR_PIQ_ENCH_FAIL
     jmp hpm_sec_rts
 !irs_ea_inc:
-    ldx piw_slot
-    inc inv_to_ac,x
+    inc inv_to_ac,x                 // X is still piw_slot from above
     lda inv_flags,x
     and #~IF_CURSED & $ff
     sta inv_flags,x
     jsr player_recalc_equipment
     ldx #HSTR_PIQ_ARM_GLOW
     jmp hpm_sec_rts
+
+// Advance worn armor slot across EQUIP_BODY..EQUIP_FEET, then EQUIP_CLOAK.
+irs_ea_next_slot:
+    cpx #EQUIP_FEET
+    beq !iens_cloak+
+    inx
+    rts
+!iens_cloak:
+    ldx #EQUIP_CLOAK
+    rts
 
 // VMS enchant() chances out of 1000 for a bonus of +1..+9 and +10 and above.
 irs_ea_chance_lo: .byte <40, <100, <200, <400, <600, <700, <800, <900, <950, <995
@@ -337,7 +375,9 @@ irs_effect_p3_swap:
 #if HAL_PLATFORM_STAFF_SPEED_TRAMPOLINED
     // Staff of Speed has a dedicated resident return path because its effect
     // lives in the death overlay; other Phase 3 effects use the generic modal
-    // dispatcher.
+    // dispatcher. Guard Page 1 IDs so they never alias ITEM_TYPE_STAFF_SPEED.
+    bit piw_ego
+    bvs !irsp3_generic+
     cmp #ITEM_TYPE_STAFF_SPEED
     beq !irsp3_staff_speed+
     bne !irsp3_generic+
@@ -383,9 +423,7 @@ item_aim_wand:
     bcs !iaw_in_range+
     rts
 !iaw_in_range:
-    stx piw_slot
-    sta piw_item_id
-    ldx piw_slot
+    jsr ia_store_piw
     lda inv_p1,x
     bne !iaw_has_charges+
 
@@ -394,6 +432,8 @@ item_aim_wand:
 
 !iaw_has_charges:
     jsr ia_spend_charge_identify
+    bit piw_ego
+    bvs !iaw_p3+
 
     cmp #39
     beq !iaw_light+
@@ -402,23 +442,16 @@ item_aim_wand:
     cmp #41
     beq !iaw_frost+
     cmp #42
-    beq !iaw_cloud+
+    beq !iaw_p3+
     cmp #ITEM_TYPE_WAND_SLOW
     bcc !iaw_not_p3+
+!iaw_p3:
 #if SCROLL_P3_ROUTER_ENABLED
     jmp irs_effect_p3_swap    // unmatched IDs are no-ops inside the router
 #endif
 !iaw_not_p3:
     sec
     rts
-!iaw_cloud:
-    lda #42
-#if SCROLL_P3_ROUTER_ENABLED
-    jmp irs_effect_p3_swap
-#else
-    sec
-    rts
-#endif
 
 !iaw_light:
     jmp eff_light_and_report
@@ -445,9 +478,7 @@ item_use_staff:
     bcs !ius_in_range+
     rts
 !ius_in_range:
-    stx piw_slot
-    sta piw_item_id
-    ldx piw_slot
+    jsr ia_store_piw
     lda inv_p1,x
     bne !ius_has_charges+
 
@@ -456,6 +487,8 @@ item_use_staff:
 
 !ius_has_charges:
     jsr ia_spend_charge_identify
+    bit piw_ego
+    bvs !ius_p3+
 
     cmp #43
     beq !ius_light+
@@ -467,6 +500,7 @@ item_use_staff:
     beq !ius_clw+
     cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
     bcc !ius_not_p3+
+!ius_p3:
 #if SCROLL_P3_ROUTER_ENABLED
     jmp irs_effect_p3_swap    // unmatched IDs are no-ops inside the router
 #endif
@@ -483,9 +517,7 @@ item_use_staff:
     jmp hpm_sec_rts
 
 !ius_teleport:
-    jsr eff_teleport_self
-    ldx #HSTR_PIQ_TELEPORT
-    jmp hpm_sec_rts
+    jmp irs_effect_teleport
 
 !ius_clw:
     lda #1
@@ -502,10 +534,14 @@ item_use_staff:
 // ============================================================
 item_refuel:
     ldx #EQUIP_LIGHT
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    bne !ir_not_lamp+
     lda inv_item_id,x
     cmp #14
     beq !ir_has_lamp+
 
+!ir_not_lamp:
     ldx #HSTR_PIR_NOT_LAMP
     jmp hpm_clc_rts
 
@@ -516,9 +552,13 @@ item_refuel:
     bcs !ir_no_oil+
     lda inv_item_id,x
     cmp #ITEM_FLASK_OIL
+    bne !ir_next+
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
     beq !ir_found_oil+
+!ir_next:
     inx
-    jmp !ir_scan-
+    bne !ir_scan-
 
 !ir_no_oil:
     ldx #HSTR_PIR_NO_OIL

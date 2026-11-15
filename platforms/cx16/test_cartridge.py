@@ -36,6 +36,7 @@ PROGRAM_ARTIFACTS = {
     "CX16.AUXDATA",
     "CX16.HUFFDATA",
     "MONSTER.CAT",
+    "ITEM.CAT",
     "TITLE",
     "LEGALUI",
     "LICENSE",
@@ -50,6 +51,7 @@ PROGRAM_ARTIFACTS = {
     "OVL.HELP",
     "OVL.DEATH",
     "OVL.MODAL",
+    "OVL.HOME",
     "OVL.STORAGE",
     "OVL.TITLE",
 }
@@ -419,8 +421,8 @@ def check_preloaded_banks_fidelity(tb: harness_smoke.X16Bench) -> None:
     manifest = json.loads(CART_MANIFEST.read_text(encoding="utf-8"))
     for asset in manifest["assets"]:
         ram_bank = asset["ram_bank"]
-        if ram_bank is None or asset["id"] in (0, 17):
-            # MORIA8.PRG checked at boot; LEGALUI is loaded on demand into Bank 23
+        if ram_bank is None or asset["name"] in ("MORIA8.PRG", "LEGALUI"):
+            # MORIA8.PRG checked at boot; LEGALUI is loaded on demand into CX16_BANK_LEGAL
             continue
         payload = (CART_BUILD_DIR / asset["name"]).read_bytes()[2:]
         dest = int(asset["dest_addr"].lstrip("$"), 16)
@@ -456,31 +458,33 @@ def check_cart_read_edge_cases(tb: harness_smoke.X16Bench) -> None:
         tb.run_addr(0x0700)
         return tb.read_u8(0x0778), tb.read_u8(0x0779) & 0x01
 
+    manifest = json.loads(CART_MANIFEST.read_text(encoding="utf-8"))
+    license_aid = next(a["id"] for a in manifest["assets"] if a["name"] == "LICENSE")
     license_bytes = (DATA_DIR / "LICENSE").read_bytes()
     sentinel = 0xA5
     for i in range(16):
         tb.write_u8(0x0780 + i, sentinel)
 
     # 1. Zero-length read writes nothing and returns A=0, C=0
-    a, c = call_cart_read(18, 0, 0x0780, 0, 0)
+    a, c = call_cart_read(license_aid, 0, 0x0780, 0, 0)
     tb.assert_line("cart_read_zero_len", a == 0 and c == 0, f"A={a} C={c}")
     tb.assert_line("cart_read_zero_nowrite", tb.read_u8(0x0780) == sentinel, "zero-length read wrote buffer")
 
     # 2. Out-of-bounds raw read returns A=0, C=1 and writes nothing
-    a, c = call_cart_read(18, len(license_bytes), 0x0780, 8, 0)
+    a, c = call_cart_read(license_aid, len(license_bytes), 0x0780, 8, 0)
     tb.assert_line("cart_read_oob_raw", a == 0 and c == 1, f"A={a} C={c}")
     tb.assert_line("cart_read_oob_nowrite", tb.read_u8(0x0780) == sentinel, "oob read wrote buffer")
 
     # 3. Legal chunk (is_record=2) clamps near EOF and preserves trailing sentinel
     tail = 9
-    a, c = call_cart_read(18, len(license_bytes) - tail, 0x0780, 128, 2)
+    a, c = call_cart_read(license_aid, len(license_bytes) - tail, 0x0780, 128, 2)
     tb.assert_line("cart_read_legal_clamp", a == tail and c == 0, f"A={a} C={c}")
     got_tail = bytes(tb.read_u8(0x0780 + i) for i in range(tail))
     tb.assert_line("cart_read_legal_tail_bytes", got_tail == license_bytes[-tail:], f"got={got_tail!r}")
     tb.assert_line("cart_read_legal_sentinel", tb.read_u8(0x0780 + tail) == sentinel, "clamped read overwrote sentinel")
 
     # 4. Legal chunk at exact EOF returns A=0, C=1
-    a, c = call_cart_read(18, len(license_bytes), 0x0780, 128, 2)
+    a, c = call_cart_read(license_aid, len(license_bytes), 0x0780, 128, 2)
     tb.assert_line("cart_read_legal_eof", a == 0 and c == 1, f"A={a} C={c}")
 
 
@@ -500,7 +504,7 @@ def _read_legal_doc_to_eof(tb: harness_smoke.X16Bench, doc_label: str) -> None:
         f"{doc_label} did not reach EOF footer",
     )
     if "legal_eof" in tb.syms:
-        eof_val = tb.read_bank_u8(23, tb.syms["legal_eof"])
+        eof_val = tb.read_bank_u8(harness_smoke.CX16_BANK_LEGAL, tb.syms["legal_eof"])
         tb.assert_line(
             f"legal_{doc_label}_eof_flag",
             eof_val == 0x40,
@@ -865,6 +869,8 @@ def run_cartridge_suite(x16emu: Path, rom: Path | None) -> int:
         assert_fsroot_program_free(save_fsroot)
         sav_files = [p.name for p in save_fsroot.iterdir() if p.name.upper().startswith("THE.GAME")]
         tb.assert_line("cart_saved_file", len(sav_files) >= 1, f"no THE.GAME created in {save_fsroot}")
+        sav_hdr = (save_fsroot / sav_files[0]).read_bytes()[:8]
+        tb.assert_line("cart_save_v2", sav_hdr == b"MORIA01\x20", f"save header={sav_hdr!r}")
     finally:
         tb.close()
 
@@ -876,7 +882,7 @@ def run_cartridge_suite(x16emu: Path, rom: Path | None) -> int:
         name_bytes = bytes(tb_reload.read_u8(cart_syms["player_data"] + i) for i in range(4))
         tb_reload.assert_line("cart_reload_name", name_bytes == b"\x14\x05\x13\x14", f"reloaded name={name_bytes!r}")
         tb_reload.assert_line("cart_descend_dl1", harness_smoke._descend_to_dl1(tb_reload), "did not reach DL1")
-        # Run DL16/DL50 monster catalog verification using Bank 22 + Bank 4
+        # Run DL16/DL50 monster catalog verification using CX16_BANK_CATALOG + Bank 4
         tb_reload.wizard_menu_open()
         tb_reload.press_until("DLVL", "L")
         tb_reload.press("1")
@@ -889,7 +895,11 @@ def run_cartridge_suite(x16emu: Path, rom: Path | None) -> int:
         live = [t for t in live if t != 0xFF]
         tb_reload.assert_line("cart_cat_population", len(live) >= 15, f"DL16 live={len(live)}")
         loaded = all(t < 32 and tb_reload.read_u8(cart_syms["cat_slot_id_hi"] + t) != 0xFF for t in live)
-        tb_reload.assert_line("cart_cat_slots", loaded, "Bank 22 catalog slot missing")
+        tb_reload.assert_line(
+            "cart_cat_slots",
+            loaded,
+            f"Bank {harness_smoke.CX16_BANK_CATALOG} catalog slot missing",
+        )
         tb_reload.wizard_menu_open()
         tb_reload.press_until("DLVL", "L")
         tb_reload.press("5")
@@ -991,7 +1001,7 @@ def run_selftest() -> int:
         assert_fsroot_program_free(selftest_dir)
         (selftest_dir / "THE.GAME").write_bytes(b"save")
         assert_fsroot_program_free(selftest_dir)
-        for leak_name in ("LEGALUI", "MORIA8.PRG"):
+        for leak_name in ("LEGALUI", "MORIA8.PRG", "ITEM.CAT"):
             leak_path = selftest_dir / leak_name
             leak_path.write_bytes(b"leak")
             raised = False

@@ -1,4 +1,16 @@
 // save_slot_menu.s — transient save-slot selector UI
+//
+// Module ownership:
+//   owner: ModalMiscOverlay on C64/Plus4/C128 (or StorageOverlay when moved),
+//     HelpOverlay on Atari 8-bit, StorageOverlay on Apple II / CX16 / BBC Master.
+//   lifetime: transient modal overlay during slot selection.
+//   callers: `save_select_slot_prompt` trampoline (from `game_loop.s`, title
+//     load, and `save.s:save_game`), which restores caller overlay on exit.
+//   cross-module contract: reads resident `save_magic`, calls resident
+//     `save_version_supported` and `save_restore_channels`, and updates active
+//     slot filename buffers (+ resident `save_active_*_name_len` bytes when
+//     SAVE_IN_STORAGE_OVERLAY is enabled, or save.s immediate operands when not).
+//   .assert: protected by importing overlay's segment end .assert.
 
 save_slot_scan_idx: .byte 0
 save_slot_default_idx: .byte 0
@@ -122,17 +134,25 @@ save_slot_apply_name:
     lda #$57                // "W"
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_SUFFIX_OFF + 3
     lda #hal_storage_save_read_name_len + 1
+#if SAVE_IN_STORAGE_OVERLAY
+    sta save_active_read_name_len
+#else
     sta load_open_read_len + 1
     sta save_file_exists_read_len + 1
+#endif
     sta save_slot_read_name_len + 1
     lda #hal_storage_save_write_name_len + 1
-#if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
+#if SAVE_IN_STORAGE_OVERLAY
+    sta save_active_write_name_len
+#elif HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     sta save_confirm_write_len + 1
 #else
     sta save_open_write_len + 1
 #endif
     lda #hal_storage_save_probe_name_len + 1
-#if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
+#if SAVE_IN_STORAGE_OVERLAY
+    sta save_active_probe_name_len
+#elif HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     sta save_confirm_probe_len + 1
 #endif
     rts
@@ -150,17 +170,25 @@ save_slot_apply_name:
     lda #$57                // "W"
     sta hal_storage_save_write_name + SAVE_SLOT_WRITE_DIGIT_OFF + 3
     lda #hal_storage_save_read_name_len
+#if SAVE_IN_STORAGE_OVERLAY
+    sta save_active_read_name_len
+#else
     sta load_open_read_len + 1
     sta save_file_exists_read_len + 1
+#endif
     sta save_slot_read_name_len + 1
     lda #hal_storage_save_write_name_len
-#if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
+#if SAVE_IN_STORAGE_OVERLAY
+    sta save_active_write_name_len
+#elif HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     sta save_confirm_write_len + 1
 #else
     sta save_open_write_len + 1
 #endif
     lda #hal_storage_save_probe_name_len
-#if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
+#if SAVE_IN_STORAGE_OVERLAY
+    sta save_active_probe_name_len
+#elif HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     sta save_confirm_probe_len + 1
 #endif
     rts

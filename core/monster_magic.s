@@ -166,6 +166,10 @@ monster_pick_spell:
 !mps_dispatch:
     // X = handler: the bit position (0-7), or MM_SPELL_HOLD
     // Track spell in recall
+#if HAL_PLATFORM_MONSTER_CATALOG
+    ldy zp_mon_type
+    jsr recall_or_spell_slot
+#else
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldy zp_mon_type
     :AuxReadY(recall_spells)
@@ -176,6 +180,7 @@ monster_pick_spell:
     ldy zp_mon_type
     ora recall_spells,y
     :AuxWriteY(recall_spells)
+#endif
 #endif
     // Dispatch through the handler table (RTS jump: push address - 1)
     lda mm_spell_hi,x
@@ -460,7 +465,11 @@ mm_apply_spell_damage_16:
     jmp hal_sound_play
 !masd_dead:
     ldx zp_mon_type
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr recall_inc_deaths_slot
+#else
     :AuxIncX(recall_deaths)
+#endif
     stx zp_death_source
     jmp player_death_check
 

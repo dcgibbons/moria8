@@ -25,6 +25,7 @@ test_exit_trampoline:
 .encoding "screencode_mixed"
 .const T53_STORE = 0        // the General Store (test 53)
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -38,13 +39,16 @@ test_exit_trampoline:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/ui_status.s"
+.segment Default
+#import "../../../../core/ui_help_clear.s"
+.segment Default
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -53,37 +57,45 @@ test_exit_trampoline:
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment Default
 #import "../../../../core/special_rooms.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment Default
 #import "../dungeon_render.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 // Monster spells, the player's magic, missiles, sight lines, movement and
 // melee are not exercised by the stores: parked out of reach, the runner's
 // tripwire (tools/parked_tripwire.py) failing the suite if any is called.
 // Loaded, they took the body past the I/O hole at $D000 (2026-11-13).
-.segmentdef TestParkedStore [start=$e000]
-.segment TestParkedStore
+// item_cat_data now owns the $E100 window (item_cat_kernal_helper.s), so
+// monster_ai and combat are link stubs below and the rest share $D000.
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/projectile.s"
+#import "../../../../core/dungeon_los.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
-#import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
-.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -128,11 +140,36 @@ player_death_check:
     ora #$01
     sta zp_game_flags
     rts
+// Link stubs for monster_ai.s and combat.s, which the stores never reach.
+combat_append_str:
+combat_msg_monster_in_way:
+combat_append_decimal_16:
+cmb_term_and_print:
+combat_append_char:
+combat_append_decimal:
+combat_check_levelup:
+combat_apply_damage_16:
+combat_kill_message:
+combat_award_xp:
+combat_note_kill:
+player_attack_monster:
+mon_atk_build_effect_msg:
+    rts
+combat_msg_buf: .fill 42, 0
+mat_scene_dirty: .byte 0
+cmb_slot: .byte 0
+projectile_msg_suffix: .byte 0
+cmb_buf_idx: .byte 0
+cmb_type: .byte 0
+cmb_damage: .byte 0
+cmb_period: .byte 0
 #import "../../../../core/store_data.s"
 #import "../../../../core/store_restock_overlay.s"
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_help.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -248,11 +285,13 @@ test_start:
     lda #1
     sta zp_store_idx
     jsr store_pick_item
-    // Returned A should be an armor-category item (not gold!)
+    // Returned (item_cur_page, A) should be an armor-category item (not gold!)
+    bit item_cur_page
+    bvs !t4_id_ok+
     cmp #2                      // Must be >= 2 (skip gold types 0-1)
     bcc !t4_fail+
-    tax
-    lda it_category,x
+!t4_id_ok:
+    jsr item_get_category_a
     // Must match one of armory categories: ARMOR, SHIELD, HELM, GLOVES, BOOTS, CLOAK
     cmp #ICAT_ARMOR
     beq !t4_pass+
@@ -263,6 +302,8 @@ test_start:
     cmp #ICAT_GLOVES
     beq !t4_pass+
     cmp #ICAT_BOOTS
+    beq !t4_pass+
+    cmp #ICAT_CLOAK
     beq !t4_pass+
 !t4_fail:
     lda #$00
@@ -1243,8 +1284,10 @@ test_start:
     sta si_to_dam,x
     lda #0
     sta si_to_ac,x
-    lda #(IF_IDENTIFIED | (3 << ITEM_META_EGO_SHIFT))
+    lda #IF_IDENTIFIED
     sta si_meta,x
+    lda #3
+    sta si_meta_hi,x
     lda #<script_buy_yes
     ldy #>script_buy_yes
     jsr set_test_input_script
@@ -1311,9 +1354,9 @@ test_start:
     and #ITEM_META_FLAGS_MASK
     cmp #IF_IDENTIFIED
     bne !t39_fail+
-    lda si_meta,x
-    and #ITEM_META_EGO_MASK
-    cmp #(4 << ITEM_META_EGO_SHIFT)
+    lda si_meta_hi,x
+    and #EGO_ID_MASK
+    cmp #4
     bne !t39_fail+
     lda inv_item_id + 0
     cmp #FI_EMPTY
@@ -1469,82 +1512,65 @@ test_start:
 
     // ============================================================
     // Test 43: generation/store eligibility — pit tables contain only
-    // implemented IDs in exact min-level buckets, pick_item_type emits only
-    // implemented IDs, and store fallbacks/picks sell in their own store.
+    // implemented non-gold/non-ruined-chest IDs, level bounds are strictly
+    // increasing to PIT_SPAWNABLE_COUNT, pick_item_type emits only valid IDs,
+    // and store fallbacks/picks sell in their own store.
     // ============================================================
-    // Part A: pit_sorted entries are implemented IDs in ascending min-level
-    // order, level bounds are strictly increasing, and the final bound
-    // covers the whole table.
+    // Part A: pit_sorted entries are valid non-gold, non-ruined-chest IDs.
     lda #0
-    sta t43_prev_level
-    ldx #0
+    sta t43_idx_lo
+    sta t43_idx_hi
 !t43a_loop:
-    stx t43_cursor
-    lda pit_sorted,x
-    cmp #2
+    lda t43_idx_lo
+    cmp #<PIT_SPAWNABLE_COUNT
+    lda t43_idx_hi
+    sbc #>PIT_SPAWNABLE_COUNT
+    bcs !t43a_ok+
+    jsr t43_read_pit_cur
+    jsr t43_check_cur_valid
     bcc !t43a_bad+
-    cmp #ITEM_TYPE_COUNT
-    bcs !t43a_bad+
-    tax
-    jsr iml_get_for_type
-    cmp t43_prev_level
-    bcc !t43a_bad+
-    sta t43_prev_level
-    ldx t43_cursor
-    inx
-    cpx #(pit_sorted_end - pit_sorted)
-    bcc !t43a_loop-
-    jmp !t43a_ok+
+    bit item_cur_page
+    bvs !t43a_chk_cat+
+    cmp #ITEM_TYPE_CHEST_RUINED
+    beq !t43a_bad+
+!t43a_chk_cat:
+    jsr item_get_category_a
+    cmp #ICAT_GOLD
+    beq !t43a_bad+
+    inc t43_idx_lo
+    bne !t43a_loop-
+    inc t43_idx_hi
+    bne !t43a_loop-
 !t43a_bad:
     jmp !t43_fail+
 !t43a_ok:
 
-    lda pit_level_bounds
+    // Part B: 16-bit pit_level_bounds are non-zero, strictly ascending, and
+    // end at PIT_SPAWNABLE_COUNT.
+    lda pit_level_bounds_lo
+    ora pit_level_bounds_hi
     bne !t43b_start+
     jmp !t43_fail+
 !t43b_start:
     ldx #1
 !t43b_loop:
-    lda pit_level_bounds,x
-    cmp pit_level_bounds - 1,x
-    beq !t43b_bad+
-    bcc !t43b_bad+
+    lda pit_level_bounds_lo - 1,x
+    cmp pit_level_bounds_lo,x
+    lda pit_level_bounds_hi - 1,x
+    sbc pit_level_bounds_hi,x
+    bcs !t43b_bad+
     inx
-    cpx #(pit_level_bounds_end - pit_level_bounds)
+    cpx #(PIT_MAX_LEVEL + 1)
     bcc !t43b_loop-
-    lda pit_level_bounds + (pit_level_bounds_end - pit_level_bounds) - 1
-    cmp #(pit_sorted_end - pit_sorted)
+    lda pit_level_bounds_lo + PIT_MAX_LEVEL
+    cmp #<PIT_SPAWNABLE_COUNT
     bne !t43b_bad+
-    jmp !t43b_ok+
+    lda pit_level_bounds_hi + PIT_MAX_LEVEL
+    cmp #>PIT_SPAWNABLE_COUNT
+    beq !t43b_ok+
 !t43b_bad:
     jmp !t43_fail+
 !t43b_ok:
-
-    // Part B: each entry's bucket level equals its min level.
-    lda #0
-    sta t43_cursor
-    sta t43_bucket
-!t43e_next:
-    ldx t43_cursor
-    cpx #(pit_sorted_end - pit_sorted)
-    bcs !t43e_done+
-    txa
-    ldy t43_bucket
-    cmp pit_level_bounds,y
-    bcc !t43e_in_bucket+
-    inc t43_bucket
-    jmp !t43e_next-
-!t43e_in_bucket:
-    lda pit_sorted,x
-    tax
-    jsr iml_get_for_type
-    cmp t43_bucket
-    beq !t43e_ok+
-    jmp !t43_fail+
-!t43e_ok:
-    inc t43_cursor
-    jmp !t43e_next-
-!t43e_done:
 
     // Part C: production pick_item_type emits only implemented IDs at
     // shallow and deep dungeon levels.
@@ -1562,20 +1588,23 @@ test_start:
 !t43c_ok:
 
     // Part D: every store fallback is implemented and sold by its store.
+    lda #0
+    sta item_cur_page
     ldx #0
 !t43c_loop:
     stx zp_store_idx
     stx t43_cursor
     lda store_fallback,x
     cmp #2
-    bcc !t43_fail+
-    cmp #ITEM_TYPE_COUNT
-    bcs !t43_fail+
-    tax
-    lda it_category,x
+    bcc !t43_fail_j+
+    cmp #ITEM_PAGE_SIZE
+    bcs !t43_fail_j+
+    jsr item_get_category_a
     jsr check_store_category
-    bcc !t43_fail+
-
+    bcs !t43c_next+
+!t43_fail_j:
+    jmp !t43_fail+
+!t43c_next:
     ldx t43_cursor
     inx
     cpx #8
@@ -1590,61 +1619,94 @@ test_start:
     stx zp_store_idx
     stx t43_cursor
     jsr store_pick_item
-    cmp #2
-    bcc !t43_fail+
-    cmp #ITEM_TYPE_COUNT
-    bcs !t43_fail+
+    jsr t43_check_cur_valid
+    bcc !t43_fail_j-
     ldx t43_cursor
     cpx #3
     beq !t43d_next+         // Temple: VMS list
     cpx #4
     beq !t43d_next+         // Alchemy shop: VMS list
-    tax
-    lda it_category,x
+    jsr item_get_category_a
     jsr check_store_category
-    bcc !t43_fail+
+    bcc !t43_fail_j-
 !t43d_next:
-
     ldx t43_cursor
     inx
     cpx #8
     bcc !t43d_loop-
 
-    // Part F: picker completeness — every implemented ID 2..(COUNT-1)
-    // appears exactly once in pit_sorted; the ruined chest (134) never
-    // appears. The Iron Spike (135) is a real picker entry and is checked
-    // by the same loop.
-    ldx #19
+    // Part F: picker completeness — every non-gold ID in 2..(ITEM_TYPE_COUNT-1)
+    // appears exactly once in pit_sorted; gold items and the ruined chest (134)
+    // never appear.
+    ldx #ID_KNOWN_BYTES - 1
     lda #0
 !t43f_clear:
     sta t43_seen,x
     dex
     bpl !t43f_clear-
-    ldx #0
+    lda #0
+    sta t43_idx_lo
+    sta t43_idx_hi
 !t43f_mark:
-    stx t43_cursor
-    lda pit_sorted,x
-    tax
+    lda t43_idx_lo
+    cmp #<PIT_SPAWNABLE_COUNT
+    lda t43_idx_hi
+    sbc #>PIT_SPAWNABLE_COUNT
+    bcs !t43f_check_pages+
+    jsr t43_read_pit_cur
     jsr t43_mark_seen
-    bcs !t43_fail+
-    ldx t43_cursor
-    inx
-    cpx #(pit_sorted_end - pit_sorted)
-    bcc !t43f_mark-
-    ldx #2
-!t43f_check:
-    cpx #ITEM_TYPE_CHEST_RUINED
-    beq !t43f_skip+         // Ruined chest never generates (by identity)
-    jsr t43_test_seen
-    bcc !t43_fail+
+    bcs !t43_fail_j-
+    inc t43_idx_lo
+    bne !t43f_mark-
+    inc t43_idx_hi
+    bne !t43f_mark-
 
-!t43f_skip:
-    inx
-    cpx #ITEM_TYPE_COUNT
-    bcc !t43f_check-
-    ldx #ITEM_TYPE_CHEST_RUINED
+!t43f_check_pages:
+    lda #0
+    sta item_cur_page
+    ldx #2
+!t43f_p0_loop:
+    cpx #ITEM_TYPE_CHEST_RUINED
+    beq !t43f_p0_absent+    // Ruined chest never generates
+    txa
+    jsr item_get_category_a
+    cmp #ICAT_GOLD
+    beq !t43f_p0_absent+
+    txa
     jsr t43_test_seen
-    bcs !t43_fail+          // Ruined chest must never appear
+    bcs !t43f_p0_next+
+    jmp !t43_fail+
+!t43f_p0_absent:
+    txa
+    jsr t43_test_seen
+    bcc !t43f_p0_next+
+    jmp !t43_fail+
+!t43f_p0_next:
+    inx
+    cpx #ITEM_PAGE_SIZE
+    bcc !t43f_p0_loop-
+
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx #0
+!t43f_p1_loop:
+    txa
+    jsr item_get_category_a
+    cmp #ICAT_GOLD
+    beq !t43f_p1_absent+
+    txa
+    jsr t43_test_seen
+    bcs !t43f_p1_next+
+    jmp !t43_fail+
+!t43f_p1_absent:
+    txa
+    jsr t43_test_seen
+    bcc !t43f_p1_next+
+    jmp !t43_fail+
+!t43f_p1_next:
+    inx
+    cpx #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcc !t43f_p1_loop-
 
     lda #$01
     jmp !t43_store+
@@ -1716,8 +1778,7 @@ test_start:
     sta t44_left
 !t46_loop:
     jsr store_pick_item
-    tax
-    lda it_category,x
+    jsr item_get_category_a
     cmp #ICAT_FOOD
     bne !t46_next+
     inc t44_food
@@ -2216,21 +2277,36 @@ t44_id:   .byte 0
 t44_left: .byte 0
 t44_food: .byte 0
 
-t43_bit_addr:               // X = ID -> Y = byte index, t43_mask = bit; preserves X
-    txa
-    pha
+t43_bit_addr:               // (item_cur_page, A) -> Y = byte index (0..46), t43_mask = bit
+    stx t43_tmp_x
+    sta t43_id_lo
+    lda #0
+    sta t43_id_hi
+    bit item_cur_page
+    bvc !t43ba_p0+
+    clc
+    lda t43_id_lo
+    adc #ITEM_PAGE_SIZE
+    sta t43_id_lo
+    bcc !t43ba_p0+
+    inc t43_id_hi
+!t43ba_p0:
+    lda t43_id_lo
     and #7
     tay
     lda idk_bit_mask,y
     sta t43_mask
-    pla
-    lsr
-    lsr
-    lsr
-    tay
+    lsr t43_id_hi
+    ror t43_id_lo
+    lsr t43_id_hi
+    ror t43_id_lo
+    lsr t43_id_hi
+    ror t43_id_lo
+    ldy t43_id_lo
+    ldx t43_tmp_x
     rts
 
-t43_mark_seen:              // X = ID; carry set = duplicate (else marks, carry clear)
+t43_mark_seen:              // (item_cur_page, A) -> carry set = duplicate
     jsr t43_bit_addr
     lda t43_seen,y
     and t43_mask
@@ -2244,7 +2320,7 @@ t43_mark_seen:              // X = ID; carry set = duplicate (else marks, carry 
     sec
     rts
 
-t43_test_seen:              // X = ID; carry set = present
+t43_test_seen:              // (item_cur_page, A) -> carry set = present
     jsr t43_bit_addr
     lda t43_seen,y
     and t43_mask
@@ -2255,15 +2331,74 @@ t43_test_seen:              // X = ID; carry set = present
     clc
     rts
 
+// Check (item_cur_page, A) is a valid spawned item ID (P0: 2..254, P1: 0..114).
+// Preserves A; clobbers nothing.
+t43_check_cur_valid:
+    bit item_cur_page
+    bvs !t43cv_p1+
+    cmp #2
+    bcc !t43cv_bad+
+    cmp #ITEM_PAGE_SIZE
+    bcs !t43cv_bad+
+    sec
+    rts
+!t43cv_p1:
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcs !t43cv_bad+
+    sec
+    rts
+!t43cv_bad:
+    clc
+    rts
+
+// Read 16-bit pit_sorted[t43_idx_lo/hi] -> (item_cur_page, A).
+t43_read_pit_cur:
+    stx t43_tmp_x
+    sty t43_tmp_y
+    lda t43_idx_lo
+    and #7
+    tay
+    lda idk_bit_mask,y
+    sta t43_mask
+    lda t43_idx_lo
+    sta t43_id_lo
+    lda t43_idx_hi
+    sta t43_id_hi
+    lsr t43_id_hi
+    ror t43_id_lo
+    lsr t43_id_hi
+    ror t43_id_lo
+    lsr t43_id_hi
+    ror t43_id_lo
+    ldy t43_id_lo
+    lda pit_sorted_hi_bits,y
+    and t43_mask
+    beq !p0+
+    lda #ITEM_PAGE_BIT
+    bne !setp+
+!p0:
+    lda #0
+!setp:
+    sta item_cur_page
+    ldx t43_idx_lo
+    lda t43_idx_hi
+    bne !hi+
+    lda pit_sorted_lo,x
+    jmp !done+
+!hi:
+    lda pit_sorted_lo + 256,x
+!done:
+    ldx t43_tmp_x
+    ldy t43_tmp_y
+    rts
+
 t43_pick_check:
     lda #64
     sta t43_count
 !t43pc_loop:
     jsr pick_item_type
-    cmp #2
+    jsr t43_check_cur_valid
     bcc !t43pc_fail+
-    cmp #ITEM_TYPE_COUNT
-    bcs !t43pc_fail+
     dec t43_count
     bne !t43pc_loop-
     sec
@@ -2277,7 +2412,13 @@ t43_bucket:     .byte 0
 t43_count:      .byte 0
 t43_prev_level: .byte 0
 t43_mask:       .byte 0
-t43_seen:       .fill 20, 0
+t43_idx_lo:     .byte 0
+t43_idx_hi:     .byte 0
+t43_id_lo:      .byte 0
+t43_id_hi:      .byte 0
+t43_tmp_x:      .byte 0
+t43_tmp_y:      .byte 0
+t43_seen:       .fill ID_KNOWN_BYTES, 0
 
 reset_haggle_fixture:
     jsr screen_clear

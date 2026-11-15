@@ -32,12 +32,28 @@ from .vice import CMD_MEM_GET, StopInfo
 from .worker import Worker
 
 D64_SIZE = 174848
+SAVE_VERSION = 0x20
+TOTAL_INV_SLOTS = 34
+ITEM_PAGE_SIZE = 255
+ITEM_PAGE_BIT = 0x40
+EGO_ID_MASK = 0x3F
 MARKER = "moria8.id"   # what Disk Setup's initialize writes (and the only thing)
 # The disk load a trip up to town makes: the generation overlay (64.GEN, 4.GEN);
 # the C128 caches that in Bank 1 and loads only the cold chest overlay, for
 # the store restock, from disk.
 TOWN_LOAD = {"c64": ".gen", "plus4": ".gen", "c128": ".chest"}
 ATTEMPTS = 3   # asset_load_retry's attempts on the Commodore ports
+
+
+def decode_paged_item(slot_lo: int, ego: int) -> tuple[int | None, int]:
+    """Decode a Save Format V2 9-bit Base-255 item ID and 6-bit ego ID.
+
+    Returns ``(logical_id, ego_id)``, or ``(None, 0)`` when empty (``0xFF``).
+    """
+    if slot_lo == 0xFF:
+        return None, 0
+    logical_id = slot_lo + (ITEM_PAGE_SIZE if (ego & ITEM_PAGE_BIT) else 0)
+    return logical_id, ego & EGO_ID_MASK
 KERNAL_ST = 0x90   # the KERNAL's I/O status byte (C64, C128, Plus/4)
 # Each port's drive-status reader, the READST it calls after the first byte,
 # where that byte is then (an offset on the stack: C64, pushed under READST's

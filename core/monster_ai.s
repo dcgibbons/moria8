@@ -41,18 +41,37 @@ monster_ai_tick:
     sta mat_player_stealth
 
     // Player speed (MON-026, Umoria playerChangeSpeed): each Ring of Speed
-    // worn and an active haste timer is one step, an active slow timer one
-    // back; the steps add, as VMS and Umoria add every speed bonus.
+    // worn, Boots of Speed/Slowness, and active haste/slow timer add cleanly.
     ldx #0
+    lda inv_ego + EQUIP_RING
+    and #ITEM_PAGE_BIT
+    bne !mat_ring2+
     lda inv_item_id + EQUIP_RING
     cmp #ITEM_TYPE_RING_SPEED
     bne !mat_ring2+
     inx
 !mat_ring2:
+    lda inv_ego + EQUIP_RING2
+    and #ITEM_PAGE_BIT
+    bne !mat_boots+
     lda inv_item_id + EQUIP_RING2
     cmp #ITEM_TYPE_RING_SPEED
-    bne !mat_timer+
+    bne !mat_boots+
     inx
+!mat_boots:
+    lda inv_item_id + EQUIP_FEET
+    cmp #FI_EMPTY
+    beq !mat_timer+
+    lda inv_ego + EQUIP_FEET
+    and #EGO_ID_MASK
+    cmp #EGO_SPEED
+    bne !mat_boots_slow+
+    inx
+    bne !mat_timer+
+!mat_boots_slow:
+    cmp #EGO_SLOWNESS
+    bne !mat_timer+
+    dex
 !mat_timer:
     lda zp_eff_speed
     beq !mat_fast_done+
@@ -536,6 +555,10 @@ mat_mark_tile_dirty_if_nonlocal:
 monster_wake_check:
     jsr monster_in_awareness
     bcc !mwc_too_far+
+
+    lda player_pflags2
+    and #PFLAG2_AGGRAVATE
+    bne !mwc_wake+
 
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y

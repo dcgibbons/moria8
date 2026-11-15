@@ -190,6 +190,9 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
         ("OVL.SPL", build_dir / "OVL.SPL"),
         ("OVL.CHS", build_dir / "OVL.CHS"),
         ("OVL.GEN", build_dir / "OVL.GEN"),
+        ("OVL.HOM", build_dir / "OVL.HOM"),
+        ("OVL.STO", build_dir / "OVL.STO"),
+        ("OVL.TTL", build_dir / "OVL.TTL"),
         ("TITLE.DAT", build_dir / "TITLE.DAT"),
     ]
     for dos_name, path in asset_files:
@@ -197,6 +200,9 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
     # The monster catalog's records, contiguous: the game reads record n at
     # the file's first sector + n / 2 (platforms/atari8/monster_catalog_a8.s).
     builder.add_file("MONSTER.CAT", (build_dir / "MONSTER.CAT").read_bytes(), contiguous=True)
+    # The Phase 4 'ITM2' item/ego/flavour catalog, contiguous for direct 125-B
+    # DOS 2.5 sector reads (platforms/atari8/item_catalog_a8.s).
+    builder.add_file("ITEM.CAT", (build_dir / "ITEM.CAT").read_bytes(), contiguous=True)
 
     out_atr.parent.mkdir(parents=True, exist_ok=True)
     out_atr.write_bytes(builder.to_bytes())
@@ -220,7 +226,7 @@ def run_selftest() -> int:
         builder.add_file("MORIA8.RES", b"\x00\x0c" + bytes(range(256)) * 175)
         builder.add_preallocated_empty_slot("HISCORE.DAT", 2)
         for slot in range(4):
-            builder.add_preallocated_empty_slot(f"SAVE{slot}.SAV", 56)
+            builder.add_preallocated_empty_slot(f"SAVE{slot}.SAV", 68)
 
         atr_bytes = builder.to_bytes()
         if len(atr_bytes) != ATR_IMAGE_SIZE:
@@ -249,8 +255,8 @@ def run_selftest() -> int:
                 print(f"FAIL: missing {key} in directory", file=sys.stderr)
                 return 1
             file_idx, _flags, count, start_sec = dir_names[key]
-            if count != 56:
-                print(f"FAIL: {key} count={count}, expected 56", file=sys.stderr)
+            if count != 68:
+                print(f"FAIL: {key} count={count}, expected 68", file=sys.stderr)
                 return 1
             if start_sec + count - 1 > MAX_FILE_SECTOR:
                 print(f"FAIL: {key} crosses sector 1023", file=sys.stderr)

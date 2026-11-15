@@ -31,6 +31,8 @@
 .const A8_CATALOG_SLOT_COUNT         = 5
 .assert "Atari catalog records fit a DOS 2.5 sector", A8_CATALOG_RECORDS_PER_SECTOR * CATALOG_RECORD_SIZE <= A8_CATALOG_SECTOR_DATA, true
 .assert "Atari catalog sectors fit the 130XE slots", A8_CATALOG_SLOT_COUNT * A8_CATALOG_SLOT_SECTORS >= A8_CATALOG_SECTORS, true
+.assert "130XE full catalog slots hold 32 sectors (16 pages)", XE_SLOT10_PAGES == 16 && XE_SLOT11_PAGES == 16 && XE_SLOT12_PAGES == 16 && XE_SLOT13_PAGES == 16, true
+.assert "130XE tail catalog slot fits remaining sectors within $E000-$EFFF", XE_SLOT15_PAGES <= 16 && (XE_SLOT10_PAGES + XE_SLOT11_PAGES + XE_SLOT12_PAGES + XE_SLOT13_PAGES + XE_SLOT15_PAGES) * 2 >= A8_CATALOG_SECTORS, true
 #endif
 
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE

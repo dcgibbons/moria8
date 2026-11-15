@@ -140,12 +140,15 @@ beeb_platform_vector_reassert:
     rts
 
 beeb_platform_runtime_resync:
+    php
+    sei
     lda #ROMSEL_BANK4
     sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda #ACCCON_NORMAL
     sta beeb_acccon_shadow
     sta SHEILA_ACCCON
+    plp
     clc
     rts
 

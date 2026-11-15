@@ -31,6 +31,7 @@ test_finish:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -44,43 +45,59 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment Default
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/ui_inventory.s"
 #import "../../../../core/ui_equipment.s"
 #import "../../../../core/ui_help.s"
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment Default
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/spell_effects.s"
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
@@ -88,11 +105,12 @@ test_finish:
 #define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../../../core/ui_trampoline_stubs.s"
 
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
-.segment TestStoreOverlay
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+// Store modules are never executed here; item_cat_data takes the $E100 window
+// (item_cat_kernal_helper.s), so only the store inventory arrays that
+// ui_trampoline_stubs.s references are linked (data, parked).
+.segment Default
+#import "../../../../core/store_data_defs.s"
+#import "../../../../core/store_inventory_data.s"
 .segment Default
 
 .segmentdef TestPromptData [start=$bd00, min=$bd00, max=$bfff]

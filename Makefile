@@ -1,6 +1,6 @@
 .PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	test test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime clean \
-	check-zp check-6502-lint check-hal-boundaries check-item-docs ensure-kickass kickass tools-ready tools-ready-apple2 \
+	check-zp check-6502-lint check-hal-boundaries check-item-docs report-budgets ensure-kickass kickass tools-ready tools-ready-apple2 \
 	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 \
 	buildapple2 diskapple2 runapple2 testapple2 testapple2-smoke testapple2-runtime testapple2-memory-contract testapple2-memory-contract-selftest \
 	buildcx16 diskcx16 cartridgecx16 runcx16 runcx16-cart testcx16 testcx16-smoke testcx16-runtime testcx16-cartridge testcx16-memory-contract testcx16-memory-contract-selftest \
@@ -84,10 +84,14 @@ check-item-docs:
 	python3 tools/check_wizard_doc.py --selftest
 	python3 tools/check_wizard_doc.py
 
+report-budgets:
+	python3 tools/report_memory_budgets.py
+
 test-prebuild: tools-ready-apple2
 	$(MAKE) check-item-docs
 	$(MAKE) check-hal-boundaries
 	$(MAKE) build
+	python3 -B tools/check_overlay_calls.py --check-sym
 	$(MAKE) -C platforms/commodore disk
 	$(MAKE) -C platforms/apple2 disk
 	$(MAKE) -C platforms/cx16 test-memory-contract

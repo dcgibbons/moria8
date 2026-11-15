@@ -43,10 +43,16 @@ ui_recall_display:
     sta zp_cursor_col
     lda #$1b                    // '[' screen code
     jsr hal_screen_put_char
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_color
+    sta zp_text_color
+    lda recall_view_display
+#else
     ldx recall_found_type
     lda cr_color,x
     sta zp_text_color
     lda cr_display,x
+#endif
     jsr hal_screen_put_char
     lda #COL_WHITE
     sta zp_text_color
@@ -67,8 +73,12 @@ ui_recall_display:
     lda #<rcl_s_lv
     ldy #>rcl_s_lv
     jsr rcl_label
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_level
+#else
     ldx recall_found_type
     lda cr_level,x
+#endif
     jsr screen_put_decimal
 
     lda #10
@@ -76,8 +86,12 @@ ui_recall_display:
     lda #<rcl_s_ac
     ldy #>rcl_s_ac
     jsr rcl_label
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_ac
+#else
     ldx recall_found_type
     lda cr_ac,x
+#endif
     jsr screen_put_decimal
 
     lda #18
@@ -85,6 +99,13 @@ ui_recall_display:
     lda #<rcl_s_hp
     ldy #>rcl_s_hp
     jsr rcl_label
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_hd_num
+    jsr screen_put_decimal
+    lda #$44                    // PETSCII 'D' — portable across C64/C128 backends
+    jsr hal_screen_put_char
+    lda recall_view_hd_sides
+#else
     ldx recall_found_type
     lda cr_hd_num,x
     jsr screen_put_decimal
@@ -92,6 +113,7 @@ ui_recall_display:
     jsr hal_screen_put_char
     ldx recall_found_type
     lda cr_hd_sides,x
+#endif
     jsr screen_put_decimal
 
     // --- Attacks (row 6): "ATK: TYP NdM  TYP NdM" ---
@@ -106,6 +128,16 @@ ui_recall_display:
     sta rcl_any_atk
 
     // Print attack 0 if the slot actually carries damage.
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_atk0_type
+    beq !rcl_atk1+
+    sta rcl_atk_type
+    lda recall_view_atk0_dice
+    beq !rcl_atk1+
+    sta rcl_dice
+    lda recall_view_atk0_sides
+    beq !rcl_atk1+
+#else
     ldx recall_found_type
     lda cr_atk0_type,x
     beq !rcl_atk1+
@@ -115,6 +147,7 @@ ui_recall_display:
     sta rcl_dice
     lda cr_atk0_sides,x
     beq !rcl_atk1+
+#endif
     sta rcl_sides
     lda rcl_atk_type
     jsr rcl_print_atk
@@ -122,6 +155,16 @@ ui_recall_display:
 
 !rcl_atk1:
     // Print attack 1 only if it is real and non-zero.
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_atk1_type
+    beq !rcl_no_atk+
+    sta rcl_atk_type
+    lda recall_view_atk1_dice
+    beq !rcl_no_atk+
+    sta rcl_dice
+    lda recall_view_atk1_sides
+    beq !rcl_no_atk+
+#else
     ldx recall_found_type
     lda cr_atk1_type,x
     beq !rcl_no_atk+
@@ -131,6 +174,7 @@ ui_recall_display:
     sta rcl_dice
     lda cr_atk1_sides,x
     beq !rcl_no_atk+
+#endif
     sta rcl_sides
 
     lda rcl_any_atk
@@ -160,8 +204,12 @@ ui_recall_display:
     lda #<rcl_s_spl
     ldy #>rcl_s_spl
     jsr rcl_label
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_spells
+#else
     ldx recall_found_type
     :AuxReadX(recall_spells)
+#endif
     bne !rcl_has_spl+
     lda #<rcl_s_none
     ldy #>rcl_s_none
@@ -180,8 +228,12 @@ ui_recall_display:
     lda #<rcl_s_kill
     ldy #>rcl_s_kill
     jsr rcl_label
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_kills
+#else
     ldx recall_found_type
     :AuxReadX(recall_kills)
+#endif
     jsr screen_put_decimal
 
     lda #16
@@ -189,8 +241,12 @@ ui_recall_display:
     lda #<rcl_s_died
     ldy #>rcl_s_died
     jsr rcl_label
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda recall_view_deaths
+#else
     ldx recall_found_type
     :AuxReadX(recall_deaths)
+#endif
     jsr screen_put_decimal
 
     // --- Press any key (row 16) ---

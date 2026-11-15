@@ -72,7 +72,7 @@ csc_bit:
     rts
 
 // check_store_category — Test if item category matches store
-// Input: A = ICAT value (0-18), zp_store_idx = store index
+// Input: A = ICAT value (0-20), zp_store_idx = store index
 // Output: carry set = category sold here, carry clear = not
 // Clobbers: A, X
 check_store_category:
@@ -90,9 +90,11 @@ check_store_category:
 !csc_hi:
     cmp #ICAT_SPIKE
     beq !csc_spike+
+    cmp #ICAT_CLOAK
+    beq !csc_cloak+
     cmp #ICAT_AMULET
     beq !csc_amulet+
-    bcs !csc_no+            // Categories above AMULET (e.g. chest) buy nowhere;
+    bcs !csc_no+            // Categories > AMULET (CHEST=17, JUNK=20) buy nowhere;
                             // also keeps the 8-entry bit_mask_table in bounds.
     sec
     sbc #8
@@ -100,6 +102,14 @@ check_store_category:
     jsr csc_bit
     :AuxReadX(store_cat_mask_hi)
     and zp_temp0
+    beq !csc_no+
+    sec
+    rts
+
+!csc_cloak:
+    ldx zp_store_idx
+    :AuxReadX(store_cat_mask_x)
+    and #$08                // Bit 3 (ICAT 19 = ICAT_CLOAK)
     beq !csc_no+
     sec
     rts

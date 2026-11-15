@@ -29,6 +29,8 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnusedMonsterMagic [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -46,54 +48,71 @@ test_exit_trampoline:
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
+.segment TestUnusedMonsterMagic
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
+.segment Default
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnusedMonsterMagic
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
 // Monster spells and breath are not exercised here: out of the way above
 // $E0FF, which test 9 reads (resistance armour, 2026-11-11, took the body into
 // the create overlay at $D000).
-.segmentdef TestUnusedMonsterMagic [start=$e100]
 .segment TestUnusedMonsterMagic
 #import "../../../../core/monster_magic.s"
 .segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
+.segment TestCreateOverlay
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/ui_inventory.s"
 #import "../../../../core/ui_equipment.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+.segment TestUnusedMonsterMagic
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/ranged_fire.s"
 #import "../../../../core/throw.s"
+.segment TestUnusedMonsterMagic
 #import "../../../../core/monster_attack.s"
+.segment Default
 #import "../../../../core/turn.s"
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+// ui_store.s (haggling UI) is never run here; store.s needs only this entry.
+hg_div_mul_result_24x8:
+    brk
+.segment TestUnusedMonsterMagic
+.segment Default
 #import "../../../../core/ui_help.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 
@@ -269,6 +288,7 @@ test_start:
     sta inv_qty,x
     lda #0
     sta player_data + PL_TODMG
+    jsr player_recalc_pflags_equipment  // wield_* is a recalc-time cache
 
     lda #10
     sta tr_save
@@ -583,6 +603,7 @@ test_start:
     ldx #EQUIP_WEAPON
     lda #139                    // Heavy Crossbow
     sta inv_item_id,x
+    jsr player_recalc_pflags_equipment  // wield_* is a recalc-time cache
     lda #10
     sta tr_save
 !t16_loop:

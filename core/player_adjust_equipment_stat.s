@@ -14,16 +14,28 @@ player_adjust_equipment_stat:
     ldx piw_equip
 #endif
     lda inv_p1,x
+    beq !paes_done+
     bcs !paes_store+
     eor #$ff
     adc #1                      // carry clear: -p1
 !paes_store:
     sta stat_work
-    jsr equip_stat_index
-    bcc !paes_done+
+    jsr equip_stat_mask_x       // A = 6-bit mask (bit 0=STR..5=CHR), preserves X
+    beq !paes_done+
+    ldy #0
+!paes_bit:
+    lsr
+    bcc !paes_skip+
+    pha
     lda player_data + PL_STR_CUR,y
     clc
     adc stat_work
     sta player_data + PL_STR_CUR,y
+    pla
+!paes_skip:
+    beq !paes_done+
+    iny
+    cpy #STAT_COUNT
+    bcc !paes_bit-
 !paes_done:
     rts

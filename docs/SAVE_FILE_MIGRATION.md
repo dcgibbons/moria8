@@ -1,5 +1,8 @@
 # Save File Migration Plan
 
+> [!NOTE]
+> **Phase 0 Status (Superseded for V2):** Incremental V1..V19 compatibility is retained only until Phase 4 (`Save Format V2`) lands. See [`docs/SAVE_FORMAT_V2_PLAN.md`](SAVE_FORMAT_V2_PLAN.md) for the single V2 format bump (`370` items, `55` egos, Cloak slot, `18` traps, `recall[279]`), clean `LOAD_RESULT_UNSUPPORTED` rejection of pre-V2 saves, per-port fixed save-slot budgets, and removal of V1..V19 migration branches (`platforms/shared/save.s`).
+
 ## Bottom Line
 
 With the current save format, adding items can break old saves. The main

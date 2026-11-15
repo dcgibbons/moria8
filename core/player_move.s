@@ -512,8 +512,7 @@ dl_suffix_id: .byte 0
 // dl_describe_floor_item — Describe a floor item on look; chests get their
 // state suffix. X = floor slot. Tail-calls dl_print_item_you_see.
 dl_describe_floor_item:
-    ldy fi_item_id,x
-    lda it_category,y
+    jsr item_get_category_floor_x
     cmp #ICAT_CHEST
     beq !ddfi_chest+
     lda #0

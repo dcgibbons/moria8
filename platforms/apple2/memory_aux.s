@@ -16,11 +16,26 @@
 // CLC = aux->main.
 
 // Soft switches
-.const A2_RAMRD_OFF   = $c002
-.const A2_RAMRD_ON    = $c003
-.const A2_RAMWRT_OFF  = $c004
-.const A2_RAMWRT_ON   = $c005
-.const A2_INTC3ROM    = $c00a   // internal C3 ROM ON ($c00b = slot 3 ROM;
+.const A2_RAMRD_OFF        = $c002
+.const A2_RAMRD_ON         = $c003
+.const A2_RAMWRT_OFF       = $c004
+.const A2_RAMWRT_ON        = $c005
+.const A2_ALTZP_OFF        = $c008   // Main ZP + Main Stack + Main LC ($D000-$FFFF)
+.const A2_ALTZP_ON         = $c009   // Aux ZP + Aux Stack + Aux LC ($D000-$FFFF)
+.const A2_INTC3ROM         = $c00a   // internal C3 ROM ON ($c00b = slot 3 ROM;
+.const A2_RDBNK2           = $c011   // bit 7 = 1 if LC Bank 2 ($D000-$DFFF)
+.const A2_RDLCRAM          = $c012   // bit 7 = 1 if LC RAM read enabled
+.const A2_RDALTZP          = $c016   // bit 7 = 1 if ALTZP=1
+.const A2_LC_SWITCH_BASE   = $c080   // +$00/$02/$03 Bank2, +$08/$0A/$0B Bank1
+.const A2_LC_RO_BANK2      = $c080   // Bank 2, Read RAM, Write Protect
+.const A2_LC_ROM_BANK2     = $c082   // Bank 2, Read ROM, Write Protect
+
+.const A2_LC_BANK2         = $00
+.const A2_LC_BANK1         = $08
+.const A2_LC_DIR_READ      = $00
+.const A2_LC_DIR_WRITE     = $01
+.const A2_LC_VECTOR_BASE   = $fffa
+.const A2_LC_MAX_DATA_END  = $fff9   // $FFFA-$FFFF reserved for Aux vectors
                                 // mapping verified against ProDOS driver
                                 // bytes and the IIe boot ROM sequence)
 .const A2_AUXMOVE     = $c311
@@ -314,4 +329,169 @@ hal_memory_read_byte:
 hal_memory_write_byte:
     sta (zp_ptr0),y
     clc
+    rts
+
+// ============================================================
+// HAL Item Catalog & Persistent Recall readers/writers (Aux LC)
+//   hal_item_cat_read_byte : Aux LC High $E000+item_cat_off_lo/hi -> A
+//   hal_recall_read_byte   : Aux LC Bank 1 $D000+recall_off_lo/hi -> A
+//   hal_recall_write_byte  : A -> Aux LC Bank 1 $D000+recall_off_lo/hi
+// Preserves X and caller ZP; clobbers A, Y.
+// ============================================================
+hal_item_cat_read_byte:
+    stx A2_LC_CALLER_X
+    lda #A2_LC_BANK2                // $E000-$FFF9 is shared across Bank 1 & 2
+    sta A2_LC_ARG_BANK
+    lda #A2_LC_DIR_READ
+    sta A2_LC_ARG_DIR
+    ldx item_cat_off_lo
+    clc
+    lda item_cat_off_hi
+    adc #>A2_LC_ITEM_CAT_BASE
+    tay
+    lda #1
+    jsr a2_aux_lc_bounce_xfer
+    ldx A2_LC_CALLER_X
+    lda A2_LC_BOUNCE
+    rts
+
+hal_recall_read_byte:
+    lda #A2_LC_DIR_READ
+a2_recall_lc_common:
+    stx A2_LC_CALLER_X
+    sta A2_LC_ARG_DIR
+    lda #A2_LC_BANK1
+    sta A2_LC_ARG_BANK
+    ldx recall_off_lo
+    clc
+    lda recall_off_hi
+    adc #>A2_LC_RECALL_BASE
+    tay
+    lda #1
+    jsr a2_aux_lc_bounce_xfer
+    ldx A2_LC_CALLER_X
+    lda A2_LC_BOUNCE
+    rts
+
+hal_recall_write_byte:
+    sta A2_LC_BOUNCE
+    lda #A2_LC_DIR_WRITE
+    bne a2_recall_lc_common
+
+// ============================================================
+// Aux Language Card ($D000-$FFF9) ZP-free ALTZP=1 helpers & vectors
+//
+// ProDOS lives in Main LC Bank 2 ($D000-$FFFF) and Main ZP/Stack ($00-$1FF).
+// While $C009 (ALTZP=1) is asserted, all code here stays strictly SEI,
+// performs ZERO zero-page ($00-$FF) and ZERO stack ($0100-$01FF) accesses
+// (no JSR/RTS/PHA/PLA/PHP/PLP), bounces data through Main $02E0-$02EF via
+// abs,x, and restores $C008 + the saved Main LC bank/read state before PLP.
+// ============================================================
+
+a2_aux_nmi_rti:
+    rti
+
+a2_aux_reset_stub:
+    sta A2_ALTZP_OFF
+    bit A2_LC_ROM_BANK2
+    jmp ($fffc)
+
+a2_aux_lc_vectors:
+    .word a2_aux_nmi_rti            // Aux $FFFA-$FFFB (NMI)
+    .word a2_aux_reset_stub         // Aux $FFFC-$FFFD (RESET)
+    .word a2_aux_nmi_rti            // Aux $FFFE-$FFFF (IRQ/BRK)
+
+// a2_aux_lc_init_vectors — Populate port-owned Aux $FFFA-$FFFF vectors at boot.
+// Clobbers: A, X, Y.
+a2_aux_lc_init_vectors:
+    ldx #5
+!cp:
+    lda a2_aux_lc_vectors,x
+    sta A2_LC_BOUNCE,x
+    dex
+    bpl !cp-
+    lda #A2_LC_BANK2
+    sta A2_LC_ARG_BANK
+    lda #A2_LC_DIR_WRITE
+    sta A2_LC_ARG_DIR
+    lda #6
+    ldx #<A2_LC_VECTOR_BASE
+    ldy #>A2_LC_VECTOR_BASE
+    // Fall through into a2_aux_lc_bounce_xfer
+
+// a2_aux_lc_bounce_xfer — Transfer 1..16 bytes between Main A2_LC_BOUNCE ($02E0)
+// and Aux LC ($D000-$FFFF).
+// Input: A = count (1..16), X/Y = Aux LC address (lo/hi),
+//        A2_LC_ARG_BANK ($02F1: $00=Bank2, $08=Bank1),
+//        A2_LC_ARG_DIR ($02F3: $00=read to bounce, nonzero=write from bounce).
+// Clobbers: A, X.
+a2_aux_lc_bounce_xfer:
+    php
+    sei
+    stx a2_lc_rd_src + 1
+    sty a2_lc_rd_src + 2
+    stx a2_lc_wr_dst + 1
+    sty a2_lc_wr_dst + 2
+    sec
+    sbc #1
+    sta A2_LC_ARG_COUNT_M1
+
+    // Capture Main LC state before ALTZP=1 hides Main $C011/$C012 semantics.
+    ldx #0
+    lda A2_RDLCRAM
+    bmi !main_ram+
+    ldx #$02                        // read ROM
+!main_ram:
+    lda A2_RDBNK2
+    bmi !main_bnk2+
+    txa
+    ora #$08                        // Bank 1
+    tax
+!main_bnk2:
+    stx A2_LC_SAVED_X
+
+    // ---- Critical ZP-free / stack-free ALTZP=1 section ----
+    sta A2_ALTZP_ON
+    lda A2_LC_ARG_BANK
+    and #$08                        // restrict to Bank 2 ($00) or Bank 1 ($08)
+    ldx A2_LC_ARG_DIR
+    beq !rd_sw+
+    ora #$03                        // $C083 (B2 RW) or $C08B (B1 RW)
+    tax
+    lda A2_LC_SWITCH_BASE,x         // 1st read: pre-write
+    lda A2_LC_SWITCH_BASE,x         // 2nd read: Aux LC Read+Write enable
+    sec
+    bcs !sw_done+                   // always taken
+!rd_sw:
+    tax
+    lda A2_LC_SWITCH_BASE,x         // Read-RAM WP ($C080 Bank 2 / $C088 Bank 1)
+!sw_done:
+
+    ldx A2_LC_ARG_COUNT_M1
+    lda A2_LC_ARG_DIR
+    bne !do_write+
+
+!do_read:
+a2_lc_rd_src:
+    lda $ffff,x
+    sta A2_LC_BOUNCE,x
+    dex
+    bpl !do_read-
+    bmi !exit_altzp+                // X=$FF guaranteed (N=1)
+
+!do_write:
+    lda A2_LC_BOUNCE,x
+a2_lc_wr_dst:
+    sta $ffff,x
+    dex
+    bpl !do_write-
+
+!exit_altzp:
+    bit A2_LC_RO_BANK2              // clear LC write-enable before switching back
+    sta A2_ALTZP_OFF
+    // ---- End critical ALTZP=1 section ----
+
+    ldx A2_LC_SAVED_X
+    lda A2_LC_SWITCH_BASE,x         // restore saved Main LC bank + ROM/RAM + WP
+    plp
     rts

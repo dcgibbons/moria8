@@ -40,13 +40,15 @@ ASSETS: list[tuple[int, str, str, int | None, int, int]] = [
     (10, "OVL.SPELL", "build", 0xA000, 16, 0xA000),
     (11, "OVL.MODAL", "build", 0xA000, 17, 0xA000),
     (12, "OVL.CHEST", "build", 0xA000, 18, 0xA000),
-    (13, "OVL.STORAGE", "build", 0xA000, 19, 0xA000),
-    (14, "OVL.TITLE", "build", 0xA000, 20, 0xA000),
-    (15, "TITLE", "build", 0xA000, 21, 0xA000),
-    (16, "MONSTER.CAT", "build", 0xA000, 22, 0xA000),
-    (17, "LEGALUI", "build", 0xA000, 23, 0xA000),
-    (18, "LICENSE", "data", None, CART_RAM_BANK_NONE, 0x0000),
-    (19, "SOURCE-OFFER", "data", None, CART_RAM_BANK_NONE, 0x0000),
+    (13, "OVL.HOME", "build", 0xA000, 19, 0xA000),
+    (14, "OVL.STORAGE", "build", 0xA000, 20, 0xA000),
+    (15, "OVL.TITLE", "build", 0xA000, 21, 0xA000),
+    (16, "TITLE", "build", 0xA000, 22, 0xA000),
+    (17, "MONSTER.CAT", "build", 0xA000, 23, 0xA000),
+    (18, "ITEM.CAT", "build", 0xA000, 6, 0xA000),
+    (19, "LEGALUI", "build", 0xA000, 24, 0xA000),
+    (20, "LICENSE", "data", None, CART_RAM_BANK_NONE, 0x0000),
+    (21, "SOURCE-OFFER", "data", None, CART_RAM_BANK_NONE, 0x0000),
 ]
 
 

@@ -1,13 +1,14 @@
 #importonce
 #import "cartridge_contract.s"
 
-// Magic Desk 128 ROM reader (Default RAM < $6000, Bank 0).
+// Magic Desk 128 ROM reader (Default RAM < $8000, Bank 0).
 // Descriptor table at Bank 0 $8100 (CART_DIRECTORY) holds 8-byte entries:
 //   [0] bank (0..15), [1..2] source ($8000-$BFFF), [3..4] dest, [5..6] length, [7] dest_flags
 // All ROM reads and Bank 0 / Bank 1 / $F000-$FFFB RAM writes bounce through
 // bottom-common mmu_common_cart_copy_chunk ($0C06+) so caller/destination code
 // in $8000-$FFFF or Bank 1 never disappears mid-transfer.
 
+cart_reader_start:
 cart_load_asset:
     ldx #0
     stx cart_offset
@@ -39,7 +40,7 @@ cart_read:
     asl
     tax
 
-    // Fetch 8-byte descriptor from Bank 0 $8100 under $FF00 = $3A (Default < $6000 stays visible)
+    // Fetch 8-byte descriptor from Bank 0 $8100 under $FF00 = $3A (Default < $8000 stays visible)
     php
     sei
     lda MMU_CR
@@ -278,8 +279,60 @@ cart_invalid_asset:
     sta $d020
     jmp cart_invalid_asset
 
+// hal_item_cat_cart_read_byte — Read one byte from CART_ASSET_ITEM_CATALOG.
+// Input: item_cat_off_lo/hi (Default RAM, may be >= $8000).
+// Output: A = byte. Clobbers: A, Y. Preserves: X, zp_ptr0/hi, MMU_CR, P(I).
+hal_item_cat_cart_read_byte:
+    // Read 16-bit byte offset BEFORE MMU_EXT_ROM_IO shadows $8000-$BFFF
+    lda item_cat_off_lo
+    sta cart_icat_off_lo
+    lda item_cat_off_hi
+    sta cart_icat_off_hi
+
+    php
+    sei
+    lda MMU_CR
+    pha
+    lda #MMU_EXT_ROM_IO
+    sta MMU_CR
+    lda #0
+    sta CART_REG_BANK
+    lda CART_DIRECTORY + CART_ASSET_ITEM_CATALOG * CART_DESCRIPTOR_SIZE + 0
+    sta cart_icat_bank
+    lda CART_DIRECTORY + CART_ASSET_ITEM_CATALOG * CART_DESCRIPTOR_SIZE + 1
+    clc
+    adc cart_icat_off_lo
+    sta cart_icat_ptr + 1
+    lda CART_DIRECTORY + CART_ASSET_ITEM_CATALOG * CART_DESCRIPTOR_SIZE + 2
+    and #$3f
+    adc cart_icat_off_hi
+!norm:
+    cmp #$40
+    bcc !bank_ok+
+    sbc #$40                        // C=1 from cmp; advance 16 KB ROM bank
+    inc cart_icat_bank
+    bcs !norm-                      // C stays 1 across inc
+!bank_ok:
+    ora #$80
+    sta cart_icat_ptr + 2
+    lda cart_icat_bank
+    sta CART_REG_BANK
+cart_icat_ptr:
+    lda $ffff
+    tay
+    lda #0
+    sta CART_REG_BANK
+    pla
+    sta MMU_CR
+    plp
+    tya
+    rts
+
 cart_desc_buf:   .fill CART_DESCRIPTOR_SIZE, 0
 cart_bank:       .byte 0
+cart_icat_bank:  .byte 0
+cart_icat_off_lo: .byte 0
+cart_icat_off_hi: .byte 0
 cart_count:      .word 0
 cart_offset:     .word 0
 cart_chunk_tmp:  .byte 0
@@ -287,4 +340,6 @@ cart_read_error: .byte 0
 cart_is_legal:   .byte 0
 cart_name_len:   .byte 0
 cart_reader_end:
-.assert "Cartridge reader stays in Bank 0 Default below $6000", cart_reader_end <= $6000, true
+.assert "Cartridge reader code stays below $8000 (MMU $3A Ext Function ROM)", cart_read < $8000, true
+.assert "Cartridge descriptor buffer stays below $8000 (MMU $3A Ext Function ROM)", cart_desc_buf + CART_DESCRIPTOR_SIZE <= $8000, true
+.assert "Cartridge reader module stays in Bank 0 Default below $8000", cart_reader_end <= $8000, true

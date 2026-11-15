@@ -30,6 +30,7 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -45,11 +46,12 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -58,6 +60,7 @@ test_exit_trampoline:
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"
@@ -65,24 +68,32 @@ test_exit_trampoline:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -132,14 +143,16 @@ ui_help_display:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
 
-// Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
-.segment TestStoreOverlay
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+// Store modules are never executed here; item_cat_data takes the $E100 window
+// (item_cat_kernal_helper.s); only the store inventory arrays that
+// ui_trampoline_stubs.s references are linked.
+.segment TestCreateOverlay
+#import "../../../../core/store_data_defs.s"
+#import "../../../../core/store_inventory_data.s"
+.segment Default
 // Monster spells and breath are not exercised here (resistance armour,
 // 2026-11-11, took the body past MAP_BASE).
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
 .segment Default
 
@@ -1102,10 +1115,8 @@ test_start:
     sta tc_loop_ctr             // Use static RAM for counter (zp_temp0 clobbered by pick_item_type)
 !t21_loop:
     jsr pick_item_type
-    cmp #2
+    jsr test_check_spawned_item_valid
     bcc !t21_fail+
-    cmp #ITEM_TYPE_COUNT
-    bcs !t21_fail+
     dec tc_loop_ctr
     bne !t21_loop-
 
@@ -1129,9 +1140,8 @@ test_start:
     sta tc_loop_ctr
 !t22_loop:
     jsr pick_item_type
-    // Check if min_level <= 3 (DL1 is item level 1 since 2026-11-13; it was dlvl + 2)
-    tax
-    jsr iml_get_for_type
+    // Check if min_level bucket <= 3 (DL1 is bucket 1)
+    jsr test_pit_bucket_for_cur
     cmp #4
     bcs !t22_over+
     inc tc_valid_ctr
@@ -1330,25 +1340,33 @@ test_start:
     // ==========================================
 !t28:
     // Set type 17 (CLW) as unknown
+    lda #0
+    sta item_cur_page
     ldx #17
     jsr id_known_clear
 
     lda #17
     jsr item_get_name_ptr
-    // zp_ptr0 should NOT point to itn_17
-    lda zp_ptr0
-    cmp #<itn_17
+    // zp_ptr0 should NOT decode to "Potion of Cure Light Wounds"
+    ldy #0
+!t28_cmp:
+    lda (zp_ptr0),y
+    cmp t28_known_cure_name,y
     bne !t28_pass+
-    lda zp_ptr0_hi
-    cmp #>itn_17
-    bne !t28_pass+
-    // Both match — that means we got the real name (fail)
+    cmp #0
+    beq !t28_fail+
+    iny
+    bne !t28_cmp-
+!t28_fail:
     lda #$00
     sta tc_results + 27
     jmp !t29+
 !t28_pass:
     lda #$01
     sta tc_results + 27
+    jmp !t29+
+t28_known_cure_name:
+    .text "Potion of Cure Light Wounds" ; .byte 0
 
     // ==========================================
     // Test 29: item_init_identification sets known/unknown correctly
@@ -1359,22 +1377,27 @@ test_start:
     // Check type 2 (dagger) is known
     ldx #2
     jsr id_known_test
-    beq !t29_fail+
-
+    bne !t29_c1+
+    jmp !t29_fail+
+!t29_c1:
     // Check type 17 (CLW potion) is unknown
     ldx #17
     jsr id_known_test
-    bne !t29_fail+
-
+    beq !t29_c2+
+    jmp !t29_fail+
+!t29_c2:
     // Check type 23 (Protection ring) is unknown
     ldx #23
     jsr id_known_test
-    bne !t29_fail+
-
+    beq !t29_c3+
+    jmp !t29_fail+
+!t29_c3:
     // Appended fixed equipment defaults known; future capacity remains unknown.
     ldx #64
     jsr id_known_test
-    beq !t29_fail+
+    bne !t29_c4+
+    jmp !t29_fail+
+!t29_c4:
     ldx #65
     jsr id_known_test
     beq !t29_fail+
@@ -1385,13 +1408,19 @@ test_start:
     jsr id_known_test
     beq !t29_fail+
     .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
-        ldx #ITEM_TYPE_COUNT
+        lda #ITEM_PAGE_BIT
+        sta item_cur_page
+        ldx #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
         jsr id_known_test
         bne !t29_fail+
+        lda #0
+        sta item_cur_page
     }
 
     // If an appended fixed item is forced unknown by bad state, it still
     // resolves through fixed item data instead of a shuffled class table.
+    lda #0
+    sta item_cur_page
     ldx #ITEM_TYPE_MITHRIL_CHAIN
     jsr id_known_clear
     lda #ITEM_TYPE_MITHRIL_CHAIN
@@ -1410,15 +1439,15 @@ test_start:
     iny
     bne !t29_cmp_appended-
 !t29_check_color:
+    lda #0
+    sta item_cur_page
     lda #ITEM_TYPE_MITHRIL_CHAIN
     jsr item_get_floor_color
     sta t29_expected_color
-    ldx #ITEM_TYPE_MITHRIL_CHAIN
-    lda it_color_ac,x
-    lsr
-    lsr
-    lsr
-    lsr
+    lda #0
+    sta item_cur_page
+    lda #ITEM_TYPE_MITHRIL_CHAIN
+    jsr item_get_color_a
     cmp t29_expected_color
     bne !t29_fail+
 
@@ -1477,7 +1506,7 @@ test_start:
     jsr floor_item_add
 
     // Set IF_CURSED flag on floor item
-    lda #IF_CURSED << FI_META_FLAGS_SHIFT
+    lda #IF_CURSED
     sta fi_meta                     // Slot 0
 
     // Stuff keyboard buffer for -more-
@@ -2197,8 +2226,7 @@ test_start:
     sta tc_loop_ctr
 !t44_loop:
     jsr pick_item_type
-    tax
-    jsr iml_get_for_type
+    jsr test_pit_bucket_for_cur
     cmp #3
     bcc !t44_under+
     inc tc_valid_ctr
@@ -3486,7 +3514,7 @@ test_start:
     lda #2
     sta fi_add_qty
     jsr floor_item_add          // two identified potions underfoot
-    lda #IF_IDENTIFIED << FI_META_FLAGS_SHIFT
+    lda #IF_IDENTIFIED
     sta fi_meta                 // floor slot 0
     jsr item_pickup
     bcc !t71_fail+
@@ -3671,8 +3699,7 @@ t72_count_deep:
     sta tc_loop_ctr
 !t72cd_loop:
     jsr pick_item_type
-    tax
-    jsr iml_get_for_type
+    jsr test_pit_bucket_for_cur
     cmp tc_valid_ctr
     bcc !t72cd_next+
     inc t72_deep
@@ -3835,6 +3862,99 @@ count_spells_known:
 player_disarm_get_effective_chance:
     lda #0
     rts
+
+test_check_spawned_item_valid:
+    bit item_cur_page
+    bvs !p1+
+    cmp #2
+    bcc !bad+
+    cmp #ITEM_PAGE_SIZE
+    bcs !bad+
+    sec
+    rts
+!p1:
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcs !bad+
+    sec
+    rts
+!bad:
+    clc
+    rts
+
+// Return pit_sorted compressed depth bucket (0..PIT_MAX_LEVEL) in A for
+// (item_cur_page, A). Preserves nothing.
+test_pit_bucket_for_cur:
+    sta pit_bkt_target_lo
+    lda item_cur_page
+    and #ITEM_PAGE_BIT
+    sta pit_bkt_target_hi
+    lda #0
+    sta pit_bkt_idx_lo
+    sta pit_bkt_idx_hi
+    sta pit_bkt_byte
+    lda #$01
+    sta pit_bkt_mask
+!scan:
+    lda pit_bkt_idx_lo
+    cmp #<PIT_SPAWNABLE_COUNT
+    lda pit_bkt_idx_hi
+    sbc #>PIT_SPAWNABLE_COUNT
+    bcs !not_found+
+    ldx pit_bkt_idx_lo
+    lda pit_bkt_idx_hi
+    bne !hi_slice+
+    lda pit_sorted_lo,x
+    jmp !chk_lo+
+!hi_slice:
+    lda pit_sorted_lo + 256,x
+!chk_lo:
+    cmp pit_bkt_target_lo
+    bne !next+
+    ldy pit_bkt_byte
+    lda pit_sorted_hi_bits,y
+    and pit_bkt_mask
+    beq !entry_p0+
+    lda pit_bkt_target_hi
+    bne !found+
+    beq !next+
+!entry_p0:
+    lda pit_bkt_target_hi
+    beq !found+
+!next:
+    inc pit_bkt_idx_lo
+    bne !no_hi+
+    inc pit_bkt_idx_hi
+!no_hi:
+    asl pit_bkt_mask
+    bne !scan-
+    lda #$01
+    sta pit_bkt_mask
+    inc pit_bkt_byte
+    bne !scan-
+!not_found:
+    lda #$ff
+    rts
+!found:
+    ldx #0
+!bkt_loop:
+    lda pit_bkt_idx_lo
+    cmp pit_level_bounds_lo,x
+    lda pit_bkt_idx_hi
+    sbc pit_level_bounds_hi,x
+    bcc !got+
+    inx
+    cpx #PIT_MAX_LEVEL + 1
+    bcc !bkt_loop-
+    ldx #PIT_MAX_LEVEL
+!got:
+    txa
+    rts
+pit_bkt_target_lo: .byte 0
+pit_bkt_target_hi: .byte 0
+pit_bkt_idx_lo:    .byte 0
+pit_bkt_idx_hi:    .byte 0
+pit_bkt_byte:      .byte 0
+pit_bkt_mask:      .byte 0
 
 item_test_body_end:
 

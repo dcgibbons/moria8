@@ -32,6 +32,8 @@ test_done_break:
 
 .pc = $0840 "Main"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -47,42 +49,66 @@ test_done_break:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/ui_character.s"
+.segment Default
+.segment TestUnused
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestUnused
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestUnused
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
+.segment TestCreateOverlay
 #import "../../../../core/player_move.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/monster_attack.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:

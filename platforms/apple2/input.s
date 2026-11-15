@@ -120,6 +120,7 @@ a2_input_script:
     pha
 !igk_poll:
     jsr input_entropy_tick
+igk_sound_call:
     jsr input_sound_update
     lda A2_KBD
     bpl !igk_poll-          // Bit 7 clear = no latched key
@@ -135,8 +136,7 @@ a2_input_script:
     clc
     rts
 
-igk_key: .byte 0
-input_kbdbuf_shadow: .byte 0
+// igk_key and input_kbdbuf_shadow live in claimed low scratch ($0339-$033A, memory.s).
 
 // input_wait_release — Discard any latched keypress and wait until no key is
 // physically held. Used before one-shot "press any key" prompts so a prior
@@ -293,21 +293,38 @@ input_get_command:
 // petscii_to_command — Convert normalized PETSCII key code to command ID
 // Input:  A = normalized PETSCII code
 // Output: A = command ID
+// Clobbers: zp_ptr1, zp_ptr1_hi, a2_zp_scratch
 // Preserves: X, Y
 petscii_to_command:
-    // Check the key mapping table
-    ldx #0
+    sta a2_zp_scratch
+    tya
+    pha
+    lda #<key_map_petscii
+    sta zp_ptr1
+    lda #>key_map_petscii
+    sta zp_ptr1_hi
+    ldy #0
 !loop:
-    cmp key_map_petscii,x
+    jsr A2_ZP_THUNK_READ_P1
+    cmp a2_zp_scratch
     beq !found+
-    inx
-    cpx #key_map_count
+    iny
+    cpy #key_map_count
     bcc !loop-
-    // Not found
+    pla
+    tay
     lda #CMD_NONE
     rts
 !found:
-    lda key_map_cmd,x
+    tya
+    clc
+    adc #key_map_count
+    tay
+    jsr A2_ZP_THUNK_READ_P1
+    sta a2_zp_scratch
+    pla
+    tay
+    lda a2_zp_scratch
     rts
 
 // ============================================================
@@ -316,8 +333,9 @@ petscii_to_command:
 // translation above emits exactly the codes the shared base map consumes.
 // ESC is deliberately absent here — it is a modal-escape/run-cancel key
 // (hal_input_modal_escape_primary), not a gameplay command.
+// Stored in A2AuxData to keep Default under $7C00.
 // ============================================================
-
+.segment A2AuxData
 key_map_petscii:
     :EmitBasePetsciiKeyMap()
 
@@ -327,3 +345,6 @@ key_map_cmd:
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii
 .assert "Key map tables same size", key_map_count, key_map_end - key_map_cmd
+.assert "Key map fits single Y index in aux", key_map_end - key_map_petscii <= 255, true
+.assert "Key map command table follows petscii contiguously", key_map_cmd, key_map_petscii + key_map_count
+.segment Default

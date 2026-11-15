@@ -1,5 +1,6 @@
 #importonce
 #if HAL_PLATFORM_MONSTER_CATALOG
+#import "recall_defs.s"
 // monster_catalog.s — The VMS Moria monster catalog in far memory
 // (prototype, docs/MONSTER_CATALOG_DESIGN.md; HAL_PLATFORM_MONSTER_CATALOG).
 //
@@ -58,6 +59,12 @@ cat_id_hi:  .byte 0
 cat_slot:   .byte 0
 cat_tmp:    .byte 0
 cat_level:  .byte 0
+cat_rcl_id_lo:  .byte 0
+cat_rcl_id_hi:  .byte 0
+cat_rcl_rem_lo: .byte 0
+cat_rcl_rem_hi: .byte 0
+cat_rcl_field:  .byte 0
+cat_rcl_out:    .byte 0
 
 // catalog_reset_slots — Empty every species slot (a new level).
 // Clobbers: A, X
@@ -97,15 +104,6 @@ cat_slot_mapped:
     stx cat_slot
     bcc !csm_done+
     jsr cat_fetch
-    :CatalogUnmap()
-    // A new species in the slot: forget the old one's recall.
-    lda #0
-    ldx cat_slot
-    :AuxWriteX(recall_kills)
-    :AuxWriteX(recall_deaths)
-    :AuxWriteX(recall_attacks)
-    :AuxWriteX(recall_spells)
-    jmp !csm_restore+
 !csm_done:
     :CatalogUnmap()
 !csm_restore:
@@ -124,6 +122,23 @@ cat_slot_mapped:
     pla
     sta zp_temp0
     lda cat_slot
+    rts
+
+cat_restore_zp_keep_c:
+    pla
+    sta zp_ptr1_hi
+    pla
+    sta zp_ptr1
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
+    pla
+    sta zp_temp2
+    pla
+    sta zp_temp1
+    pla
+    sta zp_temp0
     rts
 
 // cat_save_zp — Push the zero page the catalog routines use beyond the
@@ -556,6 +571,214 @@ catalog_population:
 }
     rts
 .assert "Catalog area scale is a fraction", CAT_AREA_SCALE > 0 && CAT_AREA_SCALE <= 256, true
+.assert "Recall count matches catalog creature count", RECALL_COUNT, CATALOG_COUNT
+
+// catalog_recall_match_and_fill — Find next encountered species (0..CATALOG_COUNT-1)
+// whose display char matches recall_query_sc, populate recall_view_* and
+// creature_name_buf without modifying active level slots.
+// Output: C = 1 found (recall_view_* & creature_name_buf populated), C = 0 none.
+// Clobbers: everything except preserved caller ZP (zp_temp0-2, zp_ptr0, zp_ptr1)
+crl_field_idx:
+    .byte 0, 1, 4, 5, 6, 7, 12, 13, 14, 15, 16, 17
+
+catalog_recall_match_and_fill:
+    jsr cat_save_zp
+    lda recall_query_sc
+    cmp recall_last_sc
+    bne !crl_start_zero+
+    clc
+    lda recall_last_cat_lo
+    adc #1
+    sta cat_rcl_id_lo
+    lda recall_last_cat_hi
+    adc #0
+    sta cat_rcl_id_hi
+    cmp #>CATALOG_COUNT
+    bcc !crl_start_ok+
+    bne !crl_start_zero+
+    lda cat_rcl_id_lo
+    cmp #<CATALOG_COUNT
+    bcc !crl_start_ok+
+!crl_start_zero:
+    lda #0
+    sta cat_rcl_id_lo
+    sta cat_rcl_id_hi
+!crl_start_ok:
+    lda #<CATALOG_COUNT
+    sta cat_rcl_rem_lo
+    lda #>CATALOG_COUNT
+    sta cat_rcl_rem_hi
+!crl_loop:
+    lda cat_rcl_id_lo
+    sta recall_cat_id_lo
+    lda cat_rcl_id_hi
+    sta recall_cat_id_hi
+    jsr recall_load_view_counters
+    bne !crl_check_disp+
+    jmp !crl_next+
+!crl_check_disp:
+    lda cat_rcl_id_lo
+    sta cat_id_lo
+    lda cat_rcl_id_hi
+    sta cat_id_hi
+#if HAL_PLATFORM_CATALOG_RECORDS
+    jsr catalog_fetch_record
+    lda cat_record + 2
+    cmp recall_query_sc
+    beq !crl_rec_hit+
+    jmp !crl_next+
+!crl_rec_hit:
+    ldx #0
+!crl_rec_fields:
+    ldy crl_field_idx,x
+    lda cat_record + 2,y
+    sta recall_view_display,x
+    inx
+    cpx #12
+    bcc !crl_rec_fields-
+    ldy #$ff
+!crl_rec_name:
+    iny
+    cpy #31
+    bcs !crl_rec_name_nul+
+    lda cat_record + CATALOG_RECORD_NAME,y
+    sta creature_name_buf,y
+    bne !crl_rec_name-
+    beq !crl_found+
+!crl_rec_name_nul:
+    lda #0
+    sta creature_name_buf,y
+    beq !crl_found+
+#else
+    :CatalogMap()
+    clc
+    lda #<catalog_fields
+    adc cat_id_lo
+    sta zp_ptr0
+    lda #>catalog_fields
+    adc cat_id_hi
+    sta zp_ptr0_hi
+    ldy #0
+    :CatalogFieldRead()
+    cmp recall_query_sc
+    beq !crl_fld_hit+
+    :CatalogUnmap()
+    jmp !crl_next+
+!crl_fld_hit:
+    lda #0
+    sta cat_rcl_field
+    sta cat_rcl_out
+!crl_fld_loop:
+    ldx cat_rcl_out
+    lda cat_rcl_field
+    cmp crl_field_idx,x
+    bne !crl_fld_skip+
+    ldy #0
+    :CatalogFieldRead()
+    ldx cat_rcl_out
+    sta recall_view_display,x
+    inc cat_rcl_out
+    lda cat_rcl_out
+    cmp #12
+    bcs !crl_fld_name+
+!crl_fld_skip:
+    clc
+    lda zp_ptr0
+    adc #<CATALOG_COUNT
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #>CATALOG_COUNT
+    sta zp_ptr0_hi
+    inc cat_rcl_field
+    bne !crl_fld_loop-
+!crl_fld_name:
+    clc
+    lda #<cat_name_lo
+    adc cat_id_lo
+    sta zp_ptr1
+    lda #>cat_name_lo
+    adc cat_id_hi
+    sta zp_ptr1_hi
+    ldy #0
+    :HuffDbReadPtr1()
+    pha
+    clc
+    lda zp_ptr1
+    adc #<CATALOG_COUNT
+    sta zp_ptr1
+    lda zp_ptr1_hi
+    adc #>CATALOG_COUNT
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
+    ldx #3
+!crl_ntree:
+    lda cat_names_tree,x
+    sta hd_tree_left_ptr,x
+    dex
+    bpl !crl_ntree-
+    jsr huff_decode_from_ptr
+    ldx #3
+!crl_ctree:
+    lda cat_corpus_tree,x
+    sta hd_tree_left_ptr,x
+    dex
+    bpl !crl_ctree-
+    :CatalogUnmap()
+    ldy #$ff
+!crl_cpname:
+    iny
+    cpy #31
+    bcs !crl_cpname_nul+
+    lda hd_decode_buf,y
+    sta creature_name_buf,y
+    bne !crl_cpname-
+    beq !crl_found+
+!crl_cpname_nul:
+    lda #0
+    sta creature_name_buf,y
+#endif
+!crl_found:
+    lda cat_rcl_id_lo
+    sta recall_last_cat_lo
+    sta recall_last_idx
+    lda cat_rcl_id_hi
+    sta recall_last_cat_hi
+    lda recall_query_sc
+    sta recall_last_sc
+    sec
+    jmp cat_restore_zp_keep_c
+!crl_next:
+    inc cat_rcl_id_lo
+    bne !+
+    inc cat_rcl_id_hi
+!:  lda cat_rcl_id_hi
+    cmp #>CATALOG_COUNT
+    bcc !crl_id_ok+
+    bne !crl_id_wrap+
+    lda cat_rcl_id_lo
+    cmp #<CATALOG_COUNT
+    bcc !crl_id_ok+
+!crl_id_wrap:
+    lda #0
+    sta cat_rcl_id_lo
+    sta cat_rcl_id_hi
+!crl_id_ok:
+    lda cat_rcl_rem_lo
+    bne !+
+    dec cat_rcl_rem_hi
+!:  dec cat_rcl_rem_lo
+    lda cat_rcl_rem_lo
+    ora cat_rcl_rem_hi
+    beq !crl_miss+
+    jmp !crl_loop-
+!crl_miss:
+    lda #0
+    sta recall_last_sc
+    clc
+    jmp cat_restore_zp_keep_c
 
 // catalog_place_win_creature — From VMS win_mon_appear on, until the game is
 // won, an awake Evil Iggy or Balrog lands beyond sight of the player (VMS

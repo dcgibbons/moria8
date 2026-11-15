@@ -101,6 +101,8 @@ if [ "$kickass_status" -ne 0 ]; then
     exit 1
 fi
 KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
+mkdir -p ../../../build/trampolines
+python3 -B ../../../tools/gen_trampolines.py --port c64 --output ../../../build/trampolines/c64_trampolines.inc || exit 1
 DEBUG_FEAT_DISK_TRACE="${DEBUG_FEAT_DISK_TRACE:-0}"
 if [ "$DEBUG_FEAT_DISK_TRACE" = "1" ]; then
     KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE)
@@ -122,7 +124,7 @@ c1541_catalog() {
         [ "$prev" = "-attach" ] && img="$arg"
         prev="$arg"
     done
-    [ -n "$img" ] && python3 "$REPO_ROOT/tools/catalog_disk.py" fix "$img"
+    [ -n "$img" ] && python3 -B "$REPO_ROOT/tools/catalog_disk.py" fix "$img" && python3 -B "$REPO_ROOT/tools/catalog_disk.py" item-fix "$img"
 }
 TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
@@ -200,6 +202,36 @@ for needle in needles:
     if idx < 0:
         raise SystemExit(1)
     pos = idx + len(needle)
+PY
+    then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+check_static_absence_contract() {
+    local name="$1"
+    local file="$2"
+    local pattern="$3"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    echo -n "  $name: "
+    if python3 -B - "$file" "$pattern" <<'PY'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text()
+needles = [part.strip() for part in sys.argv[2].split("|||") if part.strip()]
+for needle in needles:
+    if needle in text:
+        raise SystemExit(1)
 PY
     then
         echo "PASS"
@@ -621,6 +653,8 @@ run_scripted_spell_cast_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -630,7 +664,10 @@ run_scripted_spell_cast_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -781,6 +818,8 @@ run_scripted_book_overlay_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -790,7 +829,10 @@ run_scripted_book_overlay_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -937,6 +979,8 @@ run_scripted_scroll_selector_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -946,7 +990,10 @@ run_scripted_scroll_selector_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1092,6 +1139,8 @@ run_scripted_spell_list_overlay_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1101,7 +1150,10 @@ run_scripted_spell_list_overlay_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1250,6 +1302,8 @@ run_scripted_dungeon_target_spell_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1259,7 +1313,10 @@ run_scripted_dungeon_target_spell_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1430,6 +1487,8 @@ run_scripted_element_divisor_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1439,7 +1498,10 @@ run_scripted_element_divisor_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1536,6 +1598,8 @@ run_scripted_detect_evil_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1545,7 +1609,10 @@ run_scripted_detect_evil_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1734,6 +1801,8 @@ run_dungeon_ascent_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1743,7 +1812,10 @@ run_dungeon_ascent_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1936,6 +2008,8 @@ run_wizard_reveal_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -1945,7 +2019,10 @@ run_wizard_reveal_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2092,6 +2169,8 @@ run_wizard_item_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -2101,7 +2180,10 @@ run_wizard_item_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2298,6 +2380,8 @@ run_exchange_product_smoke() {
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
+            -write "$smoke_c64/item.cat" "item.cat" \
+            -write "$smoke_c64/item.idx" "item.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2307,7 +2391,10 @@ run_exchange_product_smoke() {
             -write "$smoke_c64/ovl.ui" "64.ui" \
             -write "$smoke_c64/ovl.items" "64.items" \
             -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_c64/ovl.chest" "64.chest" \
+            -write "$smoke_c64/ovl.home" "64.home" \
+            -write "$smoke_c64/ovl.storage" "64.storage" \
+            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2381,6 +2468,8 @@ run_chest_open_product_smoke() {
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
+            -write "$smoke_c64/item.cat" "item.cat" \
+            -write "$smoke_c64/item.idx" "item.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2390,7 +2479,10 @@ run_chest_open_product_smoke() {
             -write "$smoke_c64/ovl.ui" "64.ui" \
             -write "$smoke_c64/ovl.items" "64.items" \
             -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_c64/ovl.chest" "64.chest" \
+            -write "$smoke_c64/ovl.home" "64.home" \
+            -write "$smoke_c64/ovl.storage" "64.storage" \
+            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2462,6 +2554,8 @@ run_chest_open_product_reu_smoke() {
             -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
             -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
             -write "$smoke_out/c64/monster.idx" "monster.idx" \
+            -write "$smoke_out/c64/item.cat" "item.cat" \
+            -write "$smoke_out/c64/item.idx" "item.idx" \
             -write "$smoke_out/c64/ovl.start" "64.start" \
             -write "$smoke_out/c64/ovl.town" "64.town" \
             -write "$smoke_out/c64/ovl.death" "64.death" \
@@ -2471,7 +2565,10 @@ run_chest_open_product_reu_smoke() {
             -write "$smoke_out/c64/ovl.ui" "64.ui" \
             -write "$smoke_out/c64/ovl.items" "64.items" \
             -write "$smoke_out/c64/ovl.spell" "64.spell" \
-            -write "$smoke_out/c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_out/c64/ovl.chest" "64.chest" \
+            -write "$smoke_out/c64/ovl.home" "64.home" \
+            -write "$smoke_out/c64/ovl.storage" "64.storage" \
+            -write "$smoke_out/c64/ovl.title" "64.title" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2553,6 +2650,8 @@ run_chest_open_product_genfail_smoke() {
             -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
             -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
             -write "$smoke_out/c64/monster.idx" "monster.idx" \
+            -write "$smoke_out/c64/item.cat" "item.cat" \
+            -write "$smoke_out/c64/item.idx" "item.idx" \
             -write "$smoke_out/c64/ovl.start" "64.start" \
             -write "$smoke_out/c64/ovl.town" "64.town" \
             -write "$smoke_out/c64/ovl.death" "64.death" \
@@ -2562,7 +2661,10 @@ run_chest_open_product_genfail_smoke() {
             -write "$smoke_out/c64/ovl.ui" "64.ui" \
             -write "$smoke_out/c64/ovl.items" "64.items" \
             -write "$smoke_out/c64/ovl.spell" "64.spell" \
-            -write "$smoke_out/c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_out/c64/ovl.chest" "64.chest" \
+            -write "$smoke_out/c64/ovl.home" "64.home" \
+            -write "$smoke_out/c64/ovl.storage" "64.storage" \
+            -write "$smoke_out/c64/ovl.title" "64.title" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2661,6 +2763,8 @@ run_disk_setup_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -2670,7 +2774,10 @@ run_disk_setup_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2771,6 +2878,8 @@ run_retirement_royal_product_smoke() {
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
+            -write "$smoke_c64/item.cat" "item.cat" \
+            -write "$smoke_c64/item.idx" "item.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2780,7 +2889,10 @@ run_retirement_royal_product_smoke() {
             -write "$smoke_c64/ovl.ui" "64.ui" \
             -write "$smoke_c64/ovl.items" "64.items" \
             -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_c64/ovl.chest" "64.chest" \
+            -write "$smoke_c64/ovl.home" "64.home" \
+            -write "$smoke_c64/ovl.storage" "64.storage" \
+            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2844,6 +2956,8 @@ run_game_over_product_smoke() {
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
+            -write "$smoke_c64/item.cat" "item.cat" \
+            -write "$smoke_c64/item.idx" "item.idx" \
             -write "$smoke_c64/ovl.start" "64.start" \
             -write "$smoke_c64/ovl.town" "64.town" \
             -write "$smoke_c64/ovl.death" "64.death" \
@@ -2853,7 +2967,10 @@ run_game_over_product_smoke() {
             -write "$smoke_c64/ovl.ui" "64.ui" \
             -write "$smoke_c64/ovl.items" "64.items" \
             -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" >"$build_log" 2>&1; then
+            -write "$smoke_c64/ovl.chest" "64.chest" \
+            -write "$smoke_c64/ovl.home" "64.home" \
+            -write "$smoke_c64/ovl.storage" "64.storage" \
+            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
         echo "FAIL (product disk image)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -2914,7 +3031,7 @@ run_slot2_save_product_smoke() {
 
 # c64_load_written_save_check <name> <save_d64>: boot the slot-2 load build
 # against a product-written save and check the secondary weapon came back
-# through the 33-slot loader (load_read_inventory_state).
+# through the 34-slot Save V2 loader.
 c64_load_written_save_check() {
     local name="$1" save_d64="$2"
     local build_log
@@ -2944,6 +3061,8 @@ c64_load_written_save_check() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write "$load_ovl/ovl.start" "64.start" \
             -write "$load_ovl/ovl.town" "64.town" \
             -write "$load_ovl/ovl.death" "64.death" \
@@ -2953,7 +3072,10 @@ c64_load_written_save_check() {
             -write "$load_ovl/ovl.ui" "64.ui" \
             -write "$load_ovl/ovl.items" "64.items" \
             -write "$load_ovl/ovl.spell" "64.spell" \
-            -write "$load_ovl/ovl.chest" "64.chest" >>"$build_log" 2>&1; then
+            -write "$load_ovl/ovl.chest" "64.chest" \
+            -write "$load_ovl/ovl.home" "64.home" \
+            -write "$load_ovl/ovl.storage" "64.storage" \
+            -write "$load_ovl/ovl.title" "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (load disk build error)"
         tail -20 "$build_log"
         return 1
@@ -3028,6 +3150,8 @@ run_save_write_product_smoke_impl() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3037,7 +3161,10 @@ run_save_write_product_smoke_impl() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3124,13 +3251,13 @@ run_save_write_product_smoke_impl() {
             return
         fi
         if echo "$dir_list" | grep -qi "$expected_save_re"; then
-            # The written save carries the 33-slot inventory with the seeded
-            # secondary weapon (save_product_seed_secondary); slot 2's save is
-            # then loaded back by the product loader.
+            # The written save carries the 34-slot Save V2 inventory with the
+            # seeded secondary weapon (save_product_seed_secondary); slot 2's
+            # save is then loaded back by the product loader.
             local save_seq="../../../build/test/c64/${name}_the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "$save_filename" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 tests/check_save_secondary.py "$save_seq" 0x18 >>"$build_log" 2>&1; then
+                    || ! python3 -B tests/check_save_secondary.py "$save_seq" 0x20 >>"$build_log" 2>&1; then
                 echo "FAIL (secondary weapon not in the written save)"
                 tail -5 "$build_log" | sed 's/^/    /'
                 FAIL=$((FAIL + 1))
@@ -3235,6 +3362,8 @@ run_save_media_fail_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3244,7 +3373,10 @@ run_save_media_fail_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3366,6 +3498,8 @@ run_change_save_drive_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3375,7 +3509,10 @@ run_change_save_drive_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3476,6 +3613,8 @@ run_disk_setup_single_drive_return_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3485,7 +3624,10 @@ run_disk_setup_single_drive_return_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3592,6 +3734,8 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3601,7 +3745,10 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3686,6 +3833,8 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3695,7 +3844,10 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3869,6 +4021,8 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3878,7 +4032,10 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3980,6 +4137,8 @@ run_load_then_save_new_empty_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -3989,7 +4148,10 @@ run_load_then_save_new_empty_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4049,11 +4211,6 @@ run_load_then_save_new_empty_product_smoke() {
             --swap-attach8-d64 "$new_save_d64" \
             --swap2-symbol ".disk_prompt_game_required_error_shown" \
             --swap2-attach8-d64 "$swap_program_d64" \
-            --swap3-symbol ".uds_show_insert_prompt" \
-            --overlay-cond ".uds_show_insert_prompt=5" \
-            --swap3-attach8-d64 "$new_save_d64" \
-            --swap4-symbol ".disk_prompt_game_required_error_shown" \
-            --swap4-attach8-d64 "$swap_program_d64" \
             --pass-symbol ".c64_test_load_then_save_new_empty_done" \
             --fail-symbol ".c64_test_load_then_save_new_empty_fail" \
             --limitcycles 900000000 \
@@ -4124,6 +4281,8 @@ run_single_drive_save_wrong_media_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4133,7 +4292,10 @@ run_single_drive_save_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4206,6 +4368,8 @@ run_single_drive_load_wrong_media_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4215,7 +4379,10 @@ run_single_drive_load_wrong_media_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4287,6 +4454,8 @@ run_single_drive_load_corrupt_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4296,7 +4465,10 @@ run_single_drive_load_corrupt_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4396,6 +4568,8 @@ run_single_drive_fresh_save_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4405,7 +4579,10 @@ run_single_drive_fresh_save_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4528,6 +4705,8 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4537,7 +4716,10 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4634,6 +4816,8 @@ run_load_missing_savefile_product_smoke() {
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
             -write ../../../build/test/c64/ovl.start "64.start" \
             -write ../../../build/test/c64/ovl.town "64.town" \
             -write ../../../build/test/c64/ovl.death "64.death" \
@@ -4643,7 +4827,10 @@ run_load_missing_savefile_product_smoke() {
             -write ../../../build/test/c64/ovl.ui "64.ui" \
             -write ../../../build/test/c64/ovl.items "64.items" \
             -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" >>"$build_log" 2>&1; then
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4798,18 +4985,22 @@ check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "i
     "input_wait_release:|||lda #BANK_NO_BASIC|||sta \$01|||jsr c64_install_ram_irq_vectors|||jsr input_lock_charset_switch|||cli|||!iwr_drain:"
 # Nest gold calls random_floor_in_room in the dungeon-generation overlay after
 # pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
-check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
+check_static_contract "nest_gold_restores_generation_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
     "tramp_spawn_nest_gold:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_nest_gold"
 # Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
 # too, if anything replaced it after generation.
-check_static_contract "special_room_monsters_restore_generation_overlay_contract" "main.s" \
+check_static_contract "special_room_monsters_restore_generation_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
     "tramp_spawn_special_room_monsters:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_special_room_monsters"
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
 check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../../../core/player_items.s" \
-    "show_inv_and_select:|||lda piw_return_overlay|||bne !sias_have_return_overlay+|||tsx|||lda \$0102,x|||cmp #hal_platform_overlay_window_hi_min|||!sias_check_outer_return:|||lda \$0104,x|||!sias_return_overlay:|||lda current_overlay|||cmp #OVL_ITEMS|||!sias_store_return_overlay:|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
+    "show_inv_and_select:|||jsr ui_view_restore_modal_overlay|||ldx piw_return_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||!sias_overlay_loaded:|||jsr hal_overlay_post_reload"
+check_static_absence_contract "inventory_overlay_no_stack_probe_contract" "../../../core/player_items.s" \
+    "\$0102,x|||\$0104,x"
+check_static_contract "c64_hal_overlay_post_reload_contract" "main.s" \
+    "hal_overlay_post_reload:|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port|||rts"
 check_static_contract "levelup_magic_deferred_contract" "../../../core/combat.s" \
     "combat_apply_levelup:|||#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE|||lda #1|||sta levelup_magic_pending|||#else|||jsr magic_recalc_mana|||jmp msg_build_levelup"
 check_static_contract "levelup_magic_main_loop_contract" "../../../core/game_loop.s" \
@@ -4825,7 +5016,7 @@ check_static_contract "identify_scroll_resident_completion_contract" "../../../c
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../../../core/item_desc_banked.s" \
     "!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring_p1:"
 check_static_contract "save_split_item_stats_contract" "../../shared/save.s" \
-    "save_block_table_pre_inventory:|||save_block_desc_inventory:|||:save_block_desc(inv_item_id, 8 * TOTAL_INV_SLOTS)|||save_block_table_pre_inventory_end:|||:save_block_desc(si_p1, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||load_read_floor_block_table:|||lda load_floor_item_count|||jsr load_read_block|||load_read_inventory_state:|||lda load_inv_slots|||sta save_count_lo|||jsr load_read_block|||adc #TOTAL_INV_SLOTS|||cmp #<(8 * TOTAL_INV_SLOTS)|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_floor_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_floor_block_table"
+    "save_block_table_pre_inventory:|||save_block_desc_inventory:|||:save_block_desc(inv_item_id, 8 * TOTAL_INV_SLOTS)|||save_block_table_pre_inventory_end:|||:save_block_desc(si_item_id, 8 * STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_meta_hi, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||jsr floor_item_get_qty_hi_x|||jsr floor_item_get_p1_x|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_block_table|||jmp save_sanitize_floor_ids"
 check_static_contract "item_action_messages_stat_desc_contract" "../../../core/item.s" \
     "Build message: \"You picked up a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||Build message: \"You drop a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||item_append_desc:|||jsr item_append_name|||and #IF_IDENTIFIED"
 check_static_contract "equip_action_messages_stat_desc_contract" "../../../core/player_item_commands.s" \
@@ -4841,7 +5032,7 @@ check_static_contract "overcast_faint_more_contract" "../../../core/player_magic
 check_static_contract "paralysis_final_tick_message_contract" "../../../core/game_loop.s" \
     "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
-    "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
+    "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_exchange:"
 check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
     "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr loot_generate_pending|||jsr hal_platform_runtime_resync"
 check_static_contract "monster_drops_before_turn_contract" "../../../core/game_loop_helpers.s" \
@@ -4854,18 +5045,20 @@ check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../c
     "!clpo_qty_done:|||jsr floor_item_add|||bcc !clpo_object_done+|||inc zp_dirty_count|||!clpo_object_done:|||jsr floor_item_add|||bcc !clpo_gold_done+|||inc zp_dirty_count|||!clpo_gold_done:"
 check_static_contract "chest_search_vms_discovery_only_contract" "../../../core/chest_search.s" \
     "and #CHEST_P1_TRAP_FOUND|||bne !csr_found+|||ldx #HSTR_CHEST_FOUND_TRAP|||jsr huff_print_msg|||!csr_found:"
-check_static_contract "spell_execute_dedicated_overlay_contract" "main.s" \
+check_static_contract "spell_execute_dedicated_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
     "tramp_spell_execute_selected:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||jmp tramp_sr_epilogue"
 check_static_contract "priest_sense_surroundings_dispatch_contract" "../../../core/player_magic_execute_overlay.s" \
     "ped_tbl_lo:|||.byte <(ped_s20-1), <(PMX_EARTHQUAKE_TARGET-1), <(ped_s22-1), <(ped_s23-1)|||ped_tbl_hi:|||.byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s22-1), >(ped_s23-1)|||ped_s22:|||jmp PMX_MAP_AREA_TARGET"
-check_static_contract "wizard_reveal_uses_spell_overlay_contract" "main.s" \
+check_static_contract "wizard_reveal_uses_spell_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
     "tramp_reveal_floorplan:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr eff_reveal_floorplan|||jmp tramp_sr_epilogue"
 check_static_contract "c64_game_over_returns_to_title_contract" "main.s" \
     "game_over_prompt:|||lda #OVL_DEATH|||jsr overlay_load|||bcc !overlay_ok+|||jmp title_enter_menu|||!overlay_ok:|||sei|||dec \$01|||jmp game_restart_overlay"
 check_static_contract "title_screen_clear_ownership_contract" "../common/title_screen.s" \
     "title_clear_full_screen:|||jsr hal_screen_clear_row|||cmp #SCREEN_ROWS|||title_clear_below_menu:|||lda #TITLE_CLEAR_FIRST_ROW|||sta title_clear_row|||jsr hal_screen_clear_row|||cmp #TITLE_CLEAR_AFTER_LAST_ROW|||title_load_and_draw:|||jsr title_clear_full_screen|||jsr title_render_data|||title_fallback_render:|||jsr title_clear_full_screen"
+check_static_contract "c64_title_enter_menu_calls_trampoline_contract" "main.s" \
+    "title_enter_menu:|||jsr tramp_title_draw_screen|||jsr msg_init|||jsr title_show_sysinfo|||jsr title_draw_menu"
 check_static_contract "c64_title_reentry_uses_owned_clear_contract" "main.s" \
-    "title_enter_menu:|||jsr title_clear_full_screen|||jsr title_load_and_draw|||jsr title_clear_below_menu|||jsr msg_init|||jsr title_show_sysinfo|||jsr title_draw_menu"
+    "c64_title_draw_entry:|||jsr title_clear_full_screen|||jsr title_load_and_draw|||jmp title_clear_below_menu"
 check_static_contract "modal_restore_uses_safe_full_clear_contract" "../../../core/ui_restore.s" \
     "ui_view_redraw_gameplay_view:|||jsr ui_reset_message_state|||#if HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY|||jsr tier_restore_after_overlay|||#endif|||jsr ui_clear_full_screen_safe|||jsr viewport_update|||jsr render_viewport|||jmp status_draw"
 check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
@@ -4884,17 +5077,17 @@ check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
     ".label hal_storage_save_media_status = disk_save_media_status"
 check_static_contract "c64_storage_diag_export_contract" "hal/storage.s" \
     ".label hal_storage_diag_code = disk_status|||.label hal_storage_diag_device = save_device"
-check_static_contract "c64_save_stream_banks_kernal_contract" "../../shared/save.s" \
-    "!save_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||jsr save_select_output_name_c64"
-check_static_contract "c64_load_stream_banks_kernal_contract" "../../shared/save.s" \
-    "!load_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||ldx #HSTR_SAVE_LOADING"
+check_static_contract "c64_save_stream_overlay_safe_io_contract" "hal/storage.s" \
+    ".label hal_storage_chkout = c64_disk_chkout|||.label hal_storage_chrin = c64_disk_chrin|||.label hal_storage_chrout = c64_disk_chrout|||.label hal_storage_clrchn = c64_disk_clrchn|||.label hal_storage_readst = c64_disk_readst|||.label hal_storage_load = c64_disk_load"
+check_static_contract "c64_save_trampoline_overlay_contract" "main.s" \
+    "save_game:|||lda #OVL_STORAGE|||jsr overlay_load_no_kernal|||jsr save_game_impl|||load_game:|||lda #OVL_STORAGE|||jsr overlay_load_no_kernal|||jsr load_game_impl"
 run_vice_resource_contract
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
 run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
-run_test "memory" "tests/test_memory.s" "0400 0402" 3
+run_test "memory" "tests/test_memory.s" "0400 0406" 7
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040e" 15
 run_test "main_loop" "tests/test_main_loop.s" "0400 0437" 56 500000000

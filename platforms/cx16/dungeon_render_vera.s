@@ -9,7 +9,6 @@
 .const VIEW_SCROLL_MARGIN_Y = 4
 
 .label rv_row_map_buf = CX16_ROW_STAGE_BASE
-rv_row_has_glyph: .byte 0
 
 // ============================================================
 // viewport_update — Recenter viewport on player with scroll deadband
@@ -78,10 +77,44 @@ viewport_update:
 !vy_done:
     rts
 
-// ============================================================
-// render_viewport — Draw the 78x18 viewport to VERA VRAM
-// ============================================================
 render_viewport:
+    ldx CX16_RAM_BANK_REG
+    phx
+    ldx #CX16_BANK_MODAL
+    stx CX16_RAM_BANK_REG
+    jsr ovl_render_viewport
+    plx
+    stx CX16_RAM_BANK_REG
+    rts
+
+scene_render_mat_tile:
+    inc mat_scene_dirty
+render_single_tile:
+    ldx CX16_RAM_BANK_REG
+    phx
+    ldx #CX16_BANK_MODAL
+    stx CX16_RAM_BANK_REG
+    jsr ovl_render_single_tile
+    plx
+    stx CX16_RAM_BANK_REG
+    rts
+
+render_local_area:
+    ldx CX16_RAM_BANK_REG
+    phx
+    ldx #CX16_BANK_MODAL
+    stx CX16_RAM_BANK_REG
+    jsr ovl_render_local_area
+    plx
+    stx CX16_RAM_BANK_REG
+    rts
+
+.segment ModalMiscOverlay
+
+// ============================================================
+// ovl_render_viewport — Draw the 78x18 viewport to VERA VRAM
+// ============================================================
+ovl_render_viewport:
     lda zp_player_x
     sec
     sbc zp_view_x
@@ -373,15 +406,13 @@ rv_apply_player_override:
     rts
 
 // ============================================================
-// scene_render_mat_tile / render_single_tile
+// ovl_render_single_tile
 // Input: zp_temp0 = map_x, zp_temp1 = map_y
 // Preserves: zp_temp0, zp_temp1, zp_ptr0
 // ============================================================
 !rst_clip_out:
     rts
-scene_render_mat_tile:
-    inc mat_scene_dirty
-render_single_tile:
+ovl_render_single_tile:
     lda zp_temp1
     sec
     sbc zp_view_y
@@ -606,15 +637,17 @@ rst_apply_player_override:
     sta zp_ptr0
     rts
 
+.segment Default
 // ============================================================
-// Saved positions & render_local_area
+// Saved positions & ovl_render_local_area
 // ============================================================
 old_view_x:    .byte 0
 old_view_y:    .byte 0
 old_player_x:  .byte 0
 old_player_y:  .byte 0
 
-render_local_area:
+.segment ModalMiscOverlay
+ovl_render_local_area:
     lda old_player_x
     cmp zp_player_x
     bcc !rla_ox+
@@ -717,7 +750,7 @@ render_local_area:
     sta zp_temp0
     lda rla_cur_y
     sta zp_temp1
-    jsr render_single_tile
+    jsr ovl_render_single_tile
 
     lda rla_cur_x
     cmp rla_max_x
@@ -734,6 +767,7 @@ render_local_area:
 !rla_done:
     rts
 
+rv_row_has_glyph: .byte 0
 rv_row_map_y:  .byte 0
 rv_row_dy:     .byte 0
 rv_player_vx:  .byte 0
@@ -749,6 +783,8 @@ rla_min_y:     .byte 0
 rla_max_y:     .byte 0
 rla_cur_x:     .byte 0
 rla_cur_y:     .byte 0
+
+.segment Default
 
 .assert "Viewport width", VIEWPORT_W, 78
 .assert "Viewport height", VIEWPORT_H, 18

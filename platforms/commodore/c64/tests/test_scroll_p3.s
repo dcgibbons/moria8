@@ -27,6 +27,9 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestNameStreams [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -43,26 +46,36 @@ test_exit_trampoline:
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_help.s"
 #import "../../../../core/ui_trampoline_stubs.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
+.segment Default
 #import "../../../../core/monster_magic.s"
+.segment TestCreateOverlay
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/special_rooms.s"
+.segment TestCreateOverlay
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
@@ -75,17 +88,29 @@ test_exit_trampoline:
 #import "../../../../core/los_trace.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+.segment TestUnused
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/monster_attack.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/store_data.s"
+.segment TestUnused
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
+.segment Default
 
 // Stubs for spell-overlay-only handlers the scroll dispatch calls.
 spy_last: .byte 0
 eff_recharge_item:
     sta spy_last
+    rts
+eff_earthquake:
+    rts
+chest_mark_found_all:
     rts
 eff_glyph_of_warding:
     lda #ITEM_TYPE_SCR_RUNE_PROTECTION

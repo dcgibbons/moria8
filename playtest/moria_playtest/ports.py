@@ -67,6 +67,12 @@ class Port:
     # clock and replays every line up to the snapshot's (VICE 3.10 has no
     # VDC snapshot module); measured 4.8-5.2 s, 2026-11-07.
     undump_catch_up: float = 0.0
+    # Emulated seconds a cold boot may run before the hang check trips (0.0:
+    # Game.hang_emulated_seconds): the C64's 512 KB REU preload streams the
+    # monster catalog, 13 overlays and ITEM.CAT over stock 1541 IEC (~380 s
+    # emulated after Phase 4; 2026-11-15), while every gameplay step keeps the
+    # 300 s turn limit.
+    boot_emulated_seconds: float = 0.0
     # MAME ports (mame.py): the machine, the disk option, RAM the bridge reads
     # by name (MORIA8_BRIDGE_ITEMS) and the driver's banks in it, the key
     # wait's read taps (kind, address, buffer label: mame_bridge.lua), the
@@ -103,8 +109,9 @@ C64 = Port(
         "moria8": "boot.prg", "boot64": "boot.prg", "bootart64": "bootart64.prg",
         "moria64": "moria8.prg", "t64": "title",
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
+        "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"64.{name}": f"ovl.{name}" for name in
-           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
+           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest", "home", "storage", "title")},
         "64.bank": "64.bank", "legalui": "legalui",
     },
     # Pinned machine configuration (§6.1), with a 512 KB REU caching overlays
@@ -152,6 +159,7 @@ C64 = Port(
     # version, where a snapshot only restores into the same game (maintainer,
     # 2026-11-06: the Balrog queue on the C64, always the newest build).
     graduate_save=True,
+    boot_emulated_seconds=600.0,
 )
 
 PLUS4 = Port(
@@ -160,8 +168,9 @@ PLUS4 = Port(
     disk_files={
         "moria8": "boot4.prg", "boot4": "boot4.prg", "moria4": "moria4.prg", "t64": "title",
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
+        "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"4.{name}": f"ovl.{name}" for name in
-           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
+           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest", "home", "storage", "title")},
         "4.bank": "4.bank", "legalui": "legalui",
     },
     # No REU: every overlay switch and tier crossing loads from the 1541, so the
@@ -205,11 +214,11 @@ C128 = Port(
         "moria8": "boot128.prg", "boot128": "boot128.chain.prg", "bootart128": "bootart128.prg",
         "moria128": "moria128.prg", "t128": "title",
         "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg",   # the monster catalog (no tiers)
+        "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"128.{name}": f"ovl.{name}" for name in
-           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest")},
+           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest", "home", "storage")},
         **{f"128.{name}": f"128.{name}.prg" for name in
-           ("input", "proj", "runtime", "fdisk", "diskio", "world", "item", "names", "huff", "hvec",
-            "select", "persist", "play", "bank")},
+           ("input", "proj", "runtime", "fdisk", "huff", "hvec", "persist", "play", "bank")},
         "legalui": "legalui",
     },
     # The shipping .d71 on a true 1571, the REU (preload128.s caches overlays
@@ -424,11 +433,13 @@ def without_reu(args: tuple[str, ...]) -> tuple[str, ...]:
 # (maintainer, 2026-11-12: bugs can differ between them, and more cartridges
 # are coming). The disk build without an REU: every overlay switch and tier
 # crossing loads from the 1541.
-C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_reu(C64.resource_args))
+C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_reu(C64.resource_args),
+                    boot_emulated_seconds=0.0)
 # The EasyFlash cartridge (make cartridge64, build/c64-cart): booted from the
 # .crt with the disk build's disk in drive 8 for saves, no REU.
 C64_CART = replace(C64, name="c64-cart", source="c64", out="c64-cart", disk_target="disk64 cartridge64",
-                   disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args))
+                   disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args),
+                   boot_emulated_seconds=0.0)
 
 # The AtariMax MaxFlash cartridge (make cartridgeatari8, build/atari8-cart):
 # booted from the .car with the disk build's disk in drive 1 for saves.

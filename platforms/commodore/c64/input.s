@@ -665,7 +665,6 @@ c64_test_input_script:
     .byte $20              // SPACE = acknowledge load save-disk prompt
     .byte $31              // 1 = load from save slot 1
     .byte $20              // SPACE = acknowledge save save-disk prompt
-    .byte $20              // SPACE = acknowledge program-disk prompt for setup UI
     .byte $20              // SPACE = acknowledge fresh save-disk insert prompt
     .byte $59              // Y = initialize fresh save disk
     .byte $20              // SPACE = acknowledge insert-program-disk prompt

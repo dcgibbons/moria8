@@ -36,6 +36,9 @@ test_exit_trampoline:
 .const T38_TRAP_X = 10        // test 38's rockfall trap, at (10, 10)
 .const T38_TRAP_Y = T38_TRAP_X
 
+.segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestNameStreams [start=$E300, min=$E300, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -54,14 +57,12 @@ test_exit_trampoline:
 // The resistance armour roll, its suffixes and the equipment flags are not
 // exercised here (no item spawns, no equipping): out of the way above the
 // I/O hole (2026-11-11, which took the body past MAP_BASE).
-.segmentdef TestUnusedEgoArmour [start=$e100]
 // No item is named here either: the item-name streams go above it
 // (2026-11-11, when the four VMS wands took the body 36 bytes past MAP_BASE).
 #define C64_TEST_NAME_STREAMS_A000
-.segmentdef TestNameStreams [start=$e300]
 #define PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {
-    .segment TestUnusedEgoArmour
+    .segment Default
 }
 .macro PflagsRestoreSegment() {
     .segment Default
@@ -73,23 +74,25 @@ test_exit_trampoline:
 hal_player_recalc_pflags:
     brk
 #import "../../../../core/ui_messages.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/store_door_lookup.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #define DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/dungeon_gen.s"
 #undef DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 // Recall stubs — minimal footprint to keep test below MAP_BASE ($C000).
 // Full recall.s adds 267 bytes; stubs save ~260 bytes.
 // Safe: dungeon tests never exercise recall code paths.
@@ -120,25 +123,41 @@ spell_mask_count_ptr:
 // block movement; the unseen-collision case uses fear, which forbids attacks).
 eff_kill_monster:
     rts
+mon_atk_acid_armour:
+    clc
+    rts
+mm_divisor:
+    .byte 0
+mm_element_divisor_entry:
+    sta mm_divisor
+    rts
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment TestCreateOverlay
+.segment Default
 #import "../../../../core/special_rooms.s"
+.segment TestCreateOverlay
+.segment Default
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
-    .segment TestUnusedEgoArmour
+    .segment Default
 }
 .macro EgoArmourRestoreSegment() {
     .segment Default
 }
 #define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
 .macro EgoArmourDataSegment() {
-    .segment TestUnusedEgoArmour
+    .segment Default
 }
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/player_run.s"
@@ -150,7 +169,9 @@ tramp_dig_ability:
     sta tun_dig_ability
     rts
 #import "../../../../core/tunnel.s"
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:

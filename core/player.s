@@ -354,21 +354,37 @@ player_bake_apply_one:
     jmp apply_modifier
 
 !pcs_equipment:
-    // The equipment's stat bonuses (equip_stat_index) use p1 as a signed
+    // The equipment's stat bonuses (equip_stat_mask_x) use p1 as a signed
     // modifier. Equipment bonuses must be exact: apply_modifier's randomized
     // chargen steps would ratchet stats upward on every save/load rebuild,
     // while wear/takeoff apply p1 as raw arithmetic.
-    ldx #EQUIP_RING2
-!pcs_eq:                        // the head to the left hand
-    jsr equip_stat_index
-    bcc !pcs_eq_next+
+    ldx #EQUIP_CLOAK
+!pcs_eq:                        // the weapon slot through the cloak
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pcs_eq_next+
+    lda inv_p1,x
+    beq !pcs_eq_next+
+    jsr equip_stat_mask_x       // A = 6-bit PL_STR..PL_CHR mask, preserves X
+    beq !pcs_eq_next+
+    ldy #0
+!pcs_eq_bit:
+    lsr
+    bcc !pcs_eq_skip+
+    pha
     lda player_data + PL_STR_CUR,y
     clc
     adc inv_p1,x
     sta player_data + PL_STR_CUR,y
+    pla
+!pcs_eq_skip:
+    beq !pcs_eq_next+
+    iny
+    cpy #STAT_COUNT
+    bcc !pcs_eq_bit-
 !pcs_eq_next:
     dex
-    cpx #EQUIP_HEAD
+    cpx #EQUIP_WEAPON
     bcs !pcs_eq-
 
     // The ZP stat mirrors (bash, throw, the to-hit) follow at once: a
@@ -404,94 +420,250 @@ player_bake_apply_one:
 #endif
 :PflagsSegment()
 player_recalc_pflags_equipment:
-    // The weapon, body armour, shield and head (contiguous): their egos.
-    // Weapon egos below EGO_DEFENDER and digging-tool egos (1-3) give none;
-    // armour carries the resistance egos, the head the Magi.
     lda #0
+    sta pfe_f0
+    sta pfe_f1
+    sta pfe_f2
+    sta pfe_f3
+    sta player_sust_mask
+    ldx #7
+!pfe_zero_wield:
+    sta wield_weight_lo,x
+    dex
+    bpl !pfe_zero_wield-
+
     ldx #EQUIP_WEAPON
 !pfe_slot:
-    ldy inv_ego,x
-    cpy #EGO_DEFENDER
-    bcc !pfe_next+
-    ora pf_ego_table - EGO_DEFENDER,y
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pfe_chk_ego+
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda inv_item_id,x
+    jsr item_cat_select_id
+    jsr item_cat_get_effects
+    jsr !pfe_merge_flags+
+    lda icat_flags_2
+    and #ITR2_SUST_STAT
+    beq !pfe_not_item_sust+
+    ldy icat_p1_lo
+    cpy #7
+    bcc !pfe_sust_ok+
+    ldy #0
+!pfe_sust_ok:
+    lda sust_p1_to_mask,y
+    ora player_sust_mask
+    sta player_sust_mask
+!pfe_not_item_sust:
+    cpx #EQUIP_WEAPON
+    bne !pfe_chk_ego+
+    // Cache hot wielded weapon stats so combat/turn never touch ITEM.CAT
+    jsr item_cat_get_weight         // A=lo, Y=hi
+    sta wield_weight_lo
+    sty wield_weight_hi
+    jsr item_cat_get_dmg_packed
+    sta wield_dmg_packed
+    jsr item_get_category_inv_x     // preserves X
+    cmp #ICAT_WEAPON
+    bne !pfe_wield_flags+
+    jsr item_cat_get_missile_type
+    sta wield_missile_type
+!pfe_wield_flags:
+    ldy #3
+!pfe_wf_loop:
+    lda icat_flags_0,y
+    sta wield_flags_0,y
+    dey
+    bpl !pfe_wf_loop-
+!pfe_chk_ego:
+    lda inv_ego,x
+    and #EGO_ID_MASK
+    beq !pfe_next+
+    // Digging tools store prefix IDs (1..4) in inv_ego, not weapon ego IDs.
+    tay
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pfe_load_ego+
+    jsr item_get_category_inv_x
+    cmp #ICAT_DIGGING
+    beq !pfe_next+
+!pfe_load_ego:
+    tya
+    jsr item_cat_get_ego
+    lda inv_ego,x
+    and #EGO_ID_MASK
+    cmp #EGO_SLOWNESS
+    bne !pfe_ego_ok+
+    lda icat_flags_1
+    and #($ff ^ ITR1_SPEED)
+    sta icat_flags_1
+!pfe_ego_ok:
+    jsr !pfe_merge_flags+
+    lda icat_flags_2
+    and #ITR2_SUST_STAT
+    beq !pfe_ego_wield+
+    lda icat_flags_0
+    and #ITR0_STR
+    beq !pfe_ego_wield+
+    lda #SUST_STR
+    ora player_sust_mask
+    sta player_sust_mask
+!pfe_ego_wield:
+    cpx #EQUIP_WEAPON
+    bne !pfe_next+
+    ldy #3
+!pfe_we_loop:
+    lda wield_flags_0,y
+    ora icat_flags_0,y
+    sta wield_flags_0,y
+    dey
+    bpl !pfe_we_loop-
 !pfe_next:
     inx
-    cpx #EQUIP_HEAD + 1
-    bne !pfe_slot-
-    // Both hands and the amulet (contiguous): the jewel itself. The flag
-    // rings (pf_bit_table), the Amulet of the Magi (See Invisible, Free
-    // Action), the rings of Lordly Protection and the Amulet of Resist Acid
-    // (pf_lordly_table; MON-029).
-    ldx #EQUIP_RING
-!pfj_slot:
-    ldy inv_item_id,x
-    cpy #ITEM_TYPE_RING_RESIST_FIRE
-    bcc !pfj_next+
-    cpy #ITEM_TYPE_RING_SLAYING
-    bcs !pfj_not_flag+
-    ora pf_bit_table - ITEM_TYPE_RING_RESIST_FIRE,y
-    bcc !pfj_next+              // always: C clear from the cpy
-!pfj_not_flag:
-    cpy #ITEM_TYPE_AMULET_MAGI
-    bne !pfj_not_magi+
-    ora #PFLAG_SEE_INVIS | PFLAG_FREE_ACT
-!pfj_not_magi:
-    cpy #ITEM_TYPE_RING_LORDLY_FIRE
-    bcc !pfj_next+
-    cpy #ITEM_TYPE_AMULET_RESIST_ACID + 1
-    bcs !pfj_next+              // FI_EMPTY ($FF) too
-    ora pf_lordly_table - ITEM_TYPE_RING_LORDLY_FIRE,y
-!pfj_next:
-    inx
-    cpx #EQUIP_RING2 + 1
-    bne !pfj_slot-
+    cpx #EQUIP_END
+    beq !pfe_slots_done+
+    jmp !pfe_slot-
+!pfe_slots_done:
+
+    lda #0
     sta player_pflags
+    sta player_pflags2
+    ldx #14
+!pfe_map_loop:
+    ldy pfe_src_off,x
+    lda pfe_f0,y
+    and pfe_src_mask,x
+    beq !pfe_map_next+
+    cpx #8
+    bcs !pfe_map_pf2+
+    lda player_pflags
+    ora pfe_dst_mask,x
+    sta player_pflags
+    bne !pfe_map_next+              // always non-zero
+!pfe_map_pf2:
+    lda player_pflags2
+    ora pfe_dst_mask,x
+    sta player_pflags2
+!pfe_map_next:
+    dex
+    bpl !pfe_map_loop-
 
     // Update combat bonuses from stats
     jmp player_calc_combat
 
-pf_bit_table:
-    .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_SPEED, PFLAG_SEE_INVIS
+!pfe_merge_flags:
+    ldy #3
+!pmf_loop:
+    lda pfe_f0,y
+    ora icat_flags_0,y
+    sta pfe_f0,y
+    dey
+    bpl !pmf_loop-
+    rts
 
-// pf_ego_table — the flags an ego item worn gives (VMS magic_treasure,
-// misc.inc), from EGO_DEFENDER: Defender (%X'07B80900': the four
-// resistances, Free Action, See Invisible), Holy Avenger (See Invisible),
-// Slay Dragon (none), then the resistance armours. Regeneration, feather
-// fall, stealth and sustain are not modelled.
-pf_ego_table:
-    .byte PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
-    .byte PFLAG_SEE_INVIS, 0
-    .byte PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT
-    .byte PFLAG_RESIST_ACID, PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_RESIST_LIGHT
-    .byte PFLAG_SEE_INVIS | PFLAG_RESIST_FIRE | PFLAG_RESIST_ACID | PFLAG_RESIST_COLD   // the Magi (%X'01380008')
-.assert "pf_ego_table runs from EGO_DEFENDER to the last ego", * - pf_ego_table, EGO_TYPE_COUNT - EGO_DEFENDER
-// pf_lordly_table — by item type from 146 (VMS values.inc flags).
-pf_lordly_table:
-    .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_ACID, PFLAG_RESIST_COLD, PFLAG_RESIST_ACID
-.assert "pf_lordly_table runs to the Amulet of Resist Acid", * - pf_lordly_table, ITEM_TYPE_AMULET_RESIST_ACID - ITEM_TYPE_RING_LORDLY_FIRE + 1
+pfe_f0: .byte 0
+pfe_f1: .byte 0
+pfe_f2: .byte 0
+pfe_f3: .byte 0
+sust_p1_to_mask:
+    .byte SUST_ALL, SUST_STR, SUST_INT, SUST_WIS, SUST_CON, SUST_DEX, SUST_CHR
+.assert "sust_p1_to_mask covers 0..6", * - sust_p1_to_mask, 7
+
+pfe_src_off:
+    .byte 2, 2, 1, 3, 2, 2, 3, 3
+    .byte 0, 1, 1, 1, 1, 0, 3
+pfe_src_mask:
+    .byte ITR2_RES_FIRE, ITR2_RES_COLD, ITR1_SPEED, ITR3_SEE_INVIS
+    .byte ITR2_FREE_ACT, ITR2_RES_ACID, ITR3_RES_LIGHT, ITR3_FFALL
+    .byte ITR0_SLOW_DIGEST, ITR1_REGEN, ITR1_STEALTH, ITR1_AGGRAVATE
+    .byte ITR1_TELEPORT, ITR0_SEARCH, ITR3_INFRA
+pfe_dst_mask:
+    .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_SPEED, PFLAG_SEE_INVIS
+    .byte PFLAG_FREE_ACT, PFLAG_RESIST_ACID, PFLAG_RESIST_LIGHT, PFLAG_FFALL
+    .byte PFLAG2_SLOW_DIGEST, PFLAG2_REGEN, PFLAG2_STEALTH, PFLAG2_AGGRAVATE
+    .byte PFLAG2_TELEPORT, PFLAG2_SEARCH, PFLAG2_INFRA
+.assert "pfe flag maps have 15 aligned entries", * - pfe_dst_mask, 15
 :PflagsRestoreSegment()
 
-// equip_stat_index — X = an equipment slot: carry set and Y = the stat
-// (from PL_STR_CUR) its item's p1 raises or lowers: the Ring of Strength
-// STR, the Amulet of Wisdom WIS, the Amulet and a crown of the Magi INT
-// (VMS TR_INT; MON-030); carry clear: none. Keeps X. player_calc_stats
-// and every player_adjust_equipment_stat use it.
-equip_stat_index:
-    ldy #PL_INT_CUR - PL_STR_CUR
+// equip_stat_mask_x — X = equipment slot: A = 6-bit stat mask (bit 0=STR, 1=INT,
+// 2=WIS, 3=DEX, 4=CON, 5=CHR; 0 if none), Z reflects A. Preserves X.
+equip_stat_mask_x:
     lda inv_ego,x
-    cmp #EGO_MAGI
-    beq !esi_done+              // equal: carry set
+    and #EGO_ID_MASK
+    beq !esm_item+
+    ldy #esm_ego_ids_end - esm_ego_ids - 1
+!esm_ego_loop:
+    cmp esm_ego_ids,y
+    beq !esm_ego_hit+
+    dey
+    bpl !esm_ego_loop-
+!esm_item:
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    bne !esm_page1+
     lda inv_item_id,x
-    cmp #ITEM_TYPE_AMULET_MAGI
-    beq !esi_done+
-    ldy #PL_WIS_CUR - PL_STR_CUR
-    cmp #ITEM_TYPE_AMULET_WISDOM
-    beq !esi_done+
-    ldy #0
-    cmp #ITEM_TYPE_RING_STRENGTH
-    beq !esi_done+
+    ldy #esm_p0_ids_end - esm_p0_ids - 1
+!esm_p0_loop:
+    cmp esm_p0_ids,y
+    beq !esm_p0_hit+
+    dey
+    bpl !esm_p0_loop-
+!esm_zero:
+    lda #0
+    rts
+!esm_page1:
+    lda inv_item_id,x
+    ldy #esm_p1_ids_end - esm_p1_ids - 1
+!esm_p1_loop:
+    cmp esm_p1_ids,y
+    beq !esm_p1_hit+
+    dey
+    bpl !esm_p1_loop-
+    bmi !esm_zero-
+!esm_ego_hit:
+    lda esm_ego_masks,y
+    rts
+!esm_p0_hit:
+    lda esm_p0_masks,y
+    rts
+!esm_p1_hit:
+    lda esm_p1_masks,y
+    rts
+
+esm_ego_ids:
+    .byte EGO_HOLY_AVENGER, EGO_MAGI, EGO_CLUMSINESS, EGO_WEAKNESS
+    .byte EGO_INTELLIGENCE, EGO_WISDOM, EGO_MIGHT, EGO_LORDLINESS
+    .byte EGO_BEAUTY, EGO_STUPIDITY, EGO_DULLNESS, EGO_UGLINESS
+esm_ego_ids_end:
+esm_ego_masks:
+    .byte $01, $02, $08, $01, $02, $04, $19, $24, $20, $02, $04, $20
+esm_p0_ids:
+    .byte ITEM_TYPE_RING_STRENGTH, ITEM_TYPE_AMULET_WISDOM, ITEM_TYPE_AMULET_MAGI, 212, 213
+esm_p0_ids_end:
+esm_p0_masks:
+    .byte $01, $04, $02, $20, $3f
+esm_p1_ids:
+    .byte 318 - ITEM_PAGE_SIZE, 326 - ITEM_PAGE_SIZE, 329 - ITEM_PAGE_SIZE
+    .byte 330 - ITEM_PAGE_SIZE, 331 - ITEM_PAGE_SIZE
+esm_p1_ids_end:
+esm_p1_masks:
+    .byte $01, $02, $02, $08, $10
+
+// equip_stat_index — X = equipment slot: carry set and Y = primary stat (0..5)
+// for its p1 modifier; carry clear if none. Preserves X.
+equip_stat_index:
+    jsr equip_stat_mask_x
+    beq !esi_none+
+    ldy #$ff
+!esi_bit:
+    iny
+    lsr
+    bcc !esi_bit-
+    sec
+    rts
+!esi_none:
     clc
-!esi_done:
     rts
 .assert "The stat items' slots run from the head to the left hand", EQUIP_HEAD < EQUIP_RING && EQUIP_RING < EQUIP_AMULET && EQUIP_AMULET < EQUIP_RING2, true
 
@@ -499,23 +671,40 @@ equip_stat_index:
 stat_work: .byte 0
 
 // Persistent equipment-granted effect flags, recomputed by player_calc_stats.
-// PFLAG_RESIST_FIRE / PFLAG_RESIST_COLD: fire / frost breath damage div 3
-// (like the temp resist timers; monster_breath.s).
-// PFLAG_SPEED and PFLAG_SEE_INVIS are consumed alongside their timed effects.
-// PFLAG_FREE_ACT: Hold Person, the paralysis touch and the chest's gas trap
-// leave the player unaffected.
-player_pflags: .byte 0
+player_pflags:      .byte 0
+player_pflags2:     .byte 0
+player_sust_mask:   .byte 0
+wield_weight_lo:    .byte 0
+wield_weight_hi:    .byte 0
+wield_dmg_packed:   .byte 0
+wield_missile_type: .byte 0
+wield_flags_0:      .byte 0
+wield_flags_1:      .byte 0
+wield_flags_2:      .byte 0
+wield_flags_3:      .byte 0
+.assert "wield_* fields are contiguous", wield_flags_3 - wield_weight_lo, 7
 
 #if !HAL_PLATFORM_COMPACT_PLAY_SLOT
-// player_apply_slaying_bonuses — Add Ring of Slaying to-hit/to-damage bonuses
-// to pcc_eq_tohit/pcc_eq_todam. Called from player_recalc_equipment.
+// player_apply_slaying_bonuses — Add Ring of Slaying / Damage / To-Hit and
+// Slaying/Enveloping glove bonuses to pcc_eq_tohit/pcc_eq_todam.
 // Clobbers: A, X
 player_apply_slaying_bonuses:
     ldx #EQUIP_RING
-!pasb_ring:                     // each hand: EQUIP_RING, then EQUIP_RING2
+!pasb_ring:
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    bne !pasb_p1+
     lda inv_item_id,x
     cmp #ITEM_TYPE_RING_SLAYING
+    beq !pasb_add+
     bne !pasb_next+
+!pasb_p1:
+    lda inv_item_id,x
+    cmp #327 - ITEM_PAGE_SIZE       // Ring of Increase Damage
+    beq !pasb_add+
+    cmp #328 - ITEM_PAGE_SIZE       // Ring of Increase To-Hit
+    bne !pasb_next+
+!pasb_add:
     lda inv_to_hit,x
     clc
     adc pcc_eq_tohit
@@ -526,8 +715,30 @@ player_apply_slaying_bonuses:
     sta pcc_eq_todam
 !pasb_next:
     cpx #EQUIP_RING2
+    beq !pasb_gloves+
     ldx #EQUIP_RING2
-    bcc !pasb_ring-
+    bne !pasb_ring-
+!pasb_gloves:
+    ldx #EQUIP_HANDS
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pasb_done+
+    lda inv_ego,x
+    and #EGO_ID_MASK
+    cmp #EGO_SLAYING
+    beq !pasb_add_g+
+    cmp #EGO_ENVELOPING
+    bne !pasb_done+
+!pasb_add_g:
+    lda inv_to_hit,x
+    clc
+    adc pcc_eq_tohit
+    sta pcc_eq_tohit
+    lda inv_to_dam,x
+    clc
+    adc pcc_eq_todam
+    sta pcc_eq_todam
+!pasb_done:
     rts
 #endif
 
@@ -867,8 +1078,11 @@ player_calc_combat:
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !ac_next_slot+
-    // Add base AC for this item type
-    tay                         // Y = item type ID
+    // Add base AC for this item type (page-aware via inv_ego,x)
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldy inv_item_id,x           // Y = slot_lo
     jsr item_get_base_ac
     jsr pcc_ac_add
     // Add split AC bonus (signed)
@@ -1064,7 +1278,22 @@ player_search_get_base_chance:
 player_search_get_fos:
     ldx #9                      // Class fos offset
     ldy #6                      // Race fos offset
-    jmp player_get_race_class_property
+    jsr player_get_race_class_property
+    tay
+    lda player_pflags2
+    and #PFLAG2_SEARCH
+    beq !psgf_done+
+    tya
+    cmp #3
+    bcc !psgf_clamp+
+    sbc #2
+    rts
+!psgf_clamp:
+    lda #1
+    rts
+!psgf_done:
+    tya
+    rts
 
 // player_get_stealth — Race/class-derived stealth used by monster waking.
 // Output: A = stealth threshold in 0..9 for the shipped property tables.
@@ -1073,10 +1302,23 @@ player_get_stealth:
     ldx #7                      // Class stealth offset
     ldy #5                      // Race stealth offset
     jsr player_get_race_class_property
-    bmi !pgs_min+
-    rts
-!pgs_min:
+    bpl !pgs_pos+
     lda #0
+!pgs_pos:
+    pha
+    lda player_pflags2
+    and #PFLAG2_STEALTH
+    beq !pgs_done+
+    pla
+    clc
+    adc #3
+    cmp #10
+    bcc !pgs_ret+
+    lda #9
+!pgs_ret:
+    rts
+!pgs_done:
+    pla
     rts
 
 // Sum one class and race property without duplicating table-stride logic.

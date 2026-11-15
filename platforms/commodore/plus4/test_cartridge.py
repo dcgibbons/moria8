@@ -448,7 +448,7 @@ def run(args: argparse.Namespace) -> int:
                 assert cycles < 28 * len(expected) + 12000, (asset["name"], cycles)
                 if round_no == 0 and symbol == "STARTUP":
                     print(f"INFO startup overlay: {len(expected)} bytes, {cycles} emulated cycles", flush=True)
-        exp.check("all ten overlays match through production dispatch in both IRQ states")
+        exp.check("all thirteen overlays match through production dispatch in both IRQ states")
         records = catalog_disk.records()
         record_size = catalog_disk.layout()["CATALOG_RECORD_SIZE"]
         catalog_offset = manifest["assets"][make_plus4_magic.CONTRACT["CART_ASSET_CATALOG"]]["rom_offset"]
@@ -477,6 +477,40 @@ def run(args: argparse.Namespace) -> int:
         exp.call(exp.sym["cart_read"], legal_id, carry=True)
         assert exp.memory(cache, 256) == bytes([0xA5]) * 256
         exp.check("legal ROM read rejects the descriptor boundary without touching its cache")
+        item_cat = catalog_disk.item_catalog_bytes()
+        item_asset = next(
+            asset for asset in manifest["assets"]
+            if asset["id"] == make_plus4_magic.CONTRACT["CART_ASSET_ITEM_CATALOG"]
+        )
+        assert item_asset["size"] == len(item_cat)
+        wrapper = 0xCE80
+        byte_out = 0xCFF4
+        x_out = 0xCFF5
+        read_fn = exp.sym["hal_item_cat_cart_read_byte"]
+        exp.write(
+            wrapper,
+            bytes([
+                0xA2, 0x5A,
+                0x20, read_fn & 0xFF, read_fn >> 8,
+                0x8D, byte_out & 0xFF, byte_out >> 8,
+                0x8E, x_out & 0xFF, x_out >> 8,
+                0x18,
+                0x60,
+            ]),
+        )
+        cross = make_plus4_magic.CONTRACT["CART_ROM_WINDOW_BASE"] + make_plus4_magic.BANK_SIZE - item_asset["source"]
+        offsets = [0, 1, 2, 3, len(item_cat) - 2, len(item_cat) - 1]
+        if 0 < cross < len(item_cat):
+            offsets.extend([max(0, cross - 2), max(0, cross - 1), cross, min(len(item_cat) - 1, cross + 1)])
+        for off in dict.fromkeys(offsets):
+            exp.write(exp.sym["item_cat_off_lo"], off.to_bytes(2, "little"))
+            exp.call(wrapper, irq_masked=True)
+            got = exp.memory(byte_out, 1)
+            assert got == item_cat[off:off + 1], (
+                f"hal_item_cat_cart_read_byte mismatch at {off}: got {got!r}, expected {item_cat[off:off + 1]!r}"
+            )
+            assert exp.memory(x_out, 1) == b"\x5A", "hal_item_cat_cart_read_byte clobbered X"
+        exp.check("item catalog cart reader reads header, bank boundary, and EOF cleanly")
         assert exp.memory(0x0200, 0x59) == page2
         exp.check("diagnostic calls preserve all product-owned page-2 scratch")
         return exp.count
@@ -681,7 +715,7 @@ def selftest() -> None:
     assert contract["CART_REG_C1LO_KERNAL"] == 0xFDD2
     assert contract["CART_REG_BASIC_KERNAL"] == 0xFDD0
     assert contract["CART_REG_BANK"] == 0xFDFE
-    assert contract["CART_ASSET_COUNT"] == 18
+    assert contract["CART_ASSET_COUNT"] == 22
     with tempfile.TemporaryDirectory(prefix="plus4-harness-selftest-") as tmp:
         sym_path = Path(tmp) / "test.sym"
         sym_path.write_text(".label entry=$100e\n.label title_menu_loop=$c300\n")

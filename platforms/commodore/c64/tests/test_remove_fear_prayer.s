@@ -25,6 +25,7 @@ test_done_break:
 
 .const PIW_FILTER_MAGE_BOOK = $fc
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -49,21 +50,28 @@ test_done_break:
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
+.segment TestUnused
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
+.segment TestUnused
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
@@ -71,8 +79,10 @@ test_done_break:
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment TestUnused
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
 #import "../../../../core/ui_trampoline_stubs.s"

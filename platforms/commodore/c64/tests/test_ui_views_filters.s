@@ -48,6 +48,20 @@ si_to_hit:  .fill STORE_TOTAL_SLOTS, 0
 si_to_dam:  .fill STORE_TOTAL_SLOTS, 0
 si_to_ac:   .fill STORE_TOTAL_SLOTS, 0
 si_meta:    .fill STORE_TOTAL_SLOTS, 0
+si_meta_hi: .fill STORE_TOTAL_SLOTS, 0
+vis_room_revealed: .byte 0
+md_count:   .byte 0
+md_x:       .fill 4, 0
+md_y:       .fill 4, 0
+md_flags:   .fill 4, 0
+mon_atk_acid_armour:
+    clc
+    rts
+mm_divisor:
+    .byte 0
+mm_element_divisor_entry:
+    sta mm_divisor
+    rts
 help_pages: .byte 0, 0
 .const MX_CONFUSE = 9
 
@@ -114,6 +128,12 @@ magic_recalc_mana:
 magic_check_new_spells:
     rts
 
+combat_check_levelup:
+    rts
+
+eff_heal_sync:
+    rts
+
 player_death_check:
     rts
 
@@ -142,6 +162,7 @@ player_death_check:
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_gen.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/item.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/player_items.s"
@@ -480,7 +501,7 @@ test_filtered_equipment_view:
     sta zp_ptr0
     lda #>expected_filtered_eq_light
     sta zp_ptr0_hi
-    lda #14
+    lda #8
     ldx #1
     jsr assert_screen_string
     bcc !fail+

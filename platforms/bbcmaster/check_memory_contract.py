@@ -12,15 +12,18 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+BEEB_SRC_DIR = Path(__file__).resolve().parent
 DEFAULT_BUILD_DIR = ROOT / "build" / "bbcmaster"
-STORAGE_SRC = Path(__file__).resolve().parent / "hal" / "storage.s"
-OVERLAY_STORAGE_SRC = Path(__file__).resolve().parent / "overlay_storage.s"
-MAIN_SRC = Path(__file__).resolve().parent / "main.s"
+STORAGE_SRC = BEEB_SRC_DIR / "hal" / "storage.s"
+OVERLAY_STORAGE_SRC = BEEB_SRC_DIR / "overlay_storage.s"
+MAIN_SRC = BEEB_SRC_DIR / "main.s"
 
 MOS_WORKSPACE_BASE = 0x0800
 MOS_WORKSPACE_END = 0x0DFF
 LOW_RESIDENT_START = 0x0E00
 LOW_HELPERS_LIMIT = 0x3000
+LYNNE_AUX_BASE = 0x3F80
+LYNNE_AUX_LIMIT = 0x4400
 RESIDENT_LIMIT = 0x8000
 
 PLAY_SLOT_BASE = 0x8000
@@ -33,8 +36,10 @@ MOS_ROM_BASE = 0xC000
 MOS_ROM_END = 0xFDFF
 
 AUXDATA_VIRT_BASE = 0x6000
-AUXDATA_VIRT_LIMIT = 0x7500   # 21 pages: the monster catalog follows in Bank 6
+AUXDATA_VIRT_LIMIT = 0x7300   # 19 pages: ITEMCAT Slots 0..1 ($9300-$94FF) & monster catalog follow in Bank 6
 HUFFDATA_BASE = 0x8000
+ZP_SAVE_BASE = 0x8F00
+ZP_SAVE_SIZE = 174
 HUFFDATA_LIMIT = 0x9000
 CATALOG_BASE = 0x9500         # the monster catalog's fields and names, Bank 6
 CATALOG_LIMIT = 0xBA00        # cached OVL.UI follows
@@ -43,17 +48,18 @@ SWR_CACHE_CAPS = {
     "ovl.ui": 6 * 256,
     "ovl.modal": 12 * 256,
     "ovl.spell": 21 * 256,
-    "ovl.items": 22 * 256,   # Bank 7's free last page (cache_layout.s, 2026-11-11)
-    "ovl.gen": 21 * 256,
+    "ovl.items": 23 * 256,
+    "ovl.gen": 16 * 256,      # $BC00-$BFFF holds ITEMCAT Slots 2..5 (4 pages)
 }
 
 REQUIRED_LOW_SYMBOLS = (
     "entry_bootstrap",
     "save_zp",
     "restore_zp",
-    "zp_save_buf",
     "EnterMos",
     "ExitMos",
+    "hal_memory_restore_runtime",
+    "beeb_platform_runtime_resync",
     "mmu_safe_huff_read_ptr0",
     "mmu_safe_huff_read_ptr1",
     "mmu_safe_map_read_ptr0",
@@ -76,9 +82,15 @@ REQUIRED_LOW_SYMBOLS = (
     "beeb_call_osfile",
     "beeb_call_osfind",
     "beeb_call_osgbpb",
+    "beeb_mos_osfile_path_05",
+    "beeb_mos_osfile_a",
+    "beeb_mos_osword7f",
     "beeb_dfs_load_to_bank",
     "hal_asset_load_prg_header",
     "hal_asset_load_title",
+    "hal_item_cat_read_byte",
+    "hal_recall_read_byte",
+    "hal_recall_write_byte",
     "hal_storage_probe_media",
     "hal_storage_open",
     "hal_storage_chrin",
@@ -99,6 +111,7 @@ OVERLAY_FILES = (
     "ovl.items",
     "ovl.spell",
     "ovl.chest",
+    "ovl.home",
     "ovl.gen",
     "legalui",
     "ovl.storage",
@@ -126,7 +139,251 @@ def prg_span(prg_path: Path) -> tuple[int, int]:
     return start, end_excl
 
 
-def validate_build(build_dir: Path) -> list[str]:
+def strip_asm_comments(text: str) -> str:
+    """Remove // line comments, /* ... */ block comments, and "..." strings while keeping line breaks."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    in_block = False
+    in_line = False
+    in_str = False
+    while i < n:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if in_block:
+            if ch == "*" and nxt == "/":
+                in_block = False
+                i += 2
+                continue
+            out.append("\n" if ch == "\n" else " ")
+            i += 1
+        elif in_line:
+            if ch == "\n":
+                in_line = False
+                out.append("\n")
+            i += 1
+        elif in_str:
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == '"':
+                in_str = False
+            elif ch == "\n":
+                in_str = False
+                out.append("\n")
+            i += 1
+        else:
+            if ch == "/" and nxt == "*":
+                in_block = True
+                i += 2
+            elif ch == "/" and nxt == "/":
+                in_line = True
+                i += 2
+            elif ch == '"':
+                in_str = True
+                out.append(" ")
+                i += 1
+            else:
+                out.append(ch)
+                i += 1
+    return "".join(out)
+
+
+ROMSEL_STORE_RE = re.compile(r"^(st[axyz])\s+SHEILA_ROMSEL(?:\s|$)", re.IGNORECASE)
+ROMSEL_SHADOW_NAMES = ("zp_mos_romsel_shadow", "ZP_MOS_ROMSEL")
+SHADOW_STORE_RE = re.compile(
+    r"^(st[axyz])\s+(?:zp_mos_romsel_shadow|ZP_MOS_ROMSEL)(?:\s|$)", re.IGNORECASE
+)
+LABEL_DEF_RE = re.compile(r"^(![A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*)\s*:")
+COND_BRANCH_OPS = {"bcc", "bcs", "beq", "bne", "bmi", "bpl", "bvc", "bvs"}
+UNCOND_END_OPS = {"rts", "rti", "brk", "jmp", "bra"}
+LOW_MOS_CALLER_FILES = {
+    "boot.s",
+    "memory_bank.s",
+    "storage.s",
+    "save_stream.s",
+    "sound.s",
+    "services.s",
+    "screen.s",
+    "input.s",
+    "overlay_storage.s",
+    "legal.s",
+}
+DIRECT_MOS_CALL_RE = re.compile(
+    r"^(?:jsr|jmp|bra)\s+(EnterMos|ExitMos|beeb_call_os\w+|beeb_mos_open_read)(?:\s|$)",
+    re.IGNORECASE,
+)
+
+
+def validate_low_mos_callers(src_dir: Path = BEEB_SRC_DIR) -> list[str]:
+    """Ensure only < $3000 low-resident modules call EnterMos/ExitMos/beeb_call_os* directly."""
+    errors: list[str] = []
+    for path in sorted(src_dir.rglob("*.s")):
+        rel = path.relative_to(src_dir) if path.is_relative_to(src_dir) else Path(path.name)
+        if str(rel) in LOW_MOS_CALLER_FILES:
+            continue
+        cleaned = strip_asm_comments(path.read_text(encoding="utf-8", errors="replace"))
+        for line_no, line in enumerate(cleaned.splitlines(), start=1):
+            for raw_part in line.split(";"):
+                part = raw_part.strip()
+                while True:
+                    m_lbl = LABEL_DEF_RE.match(part)
+                    if not m_lbl:
+                        break
+                    part = part[m_lbl.end():].strip()
+                m_call = DIRECT_MOS_CALL_RE.match(part)
+                if m_call:
+                    errors.append(
+                        f"{rel}:{line_no}: '{part}' calls {m_call.group(1)} outside < $3000 low-resident modules"
+                    )
+    return errors
+
+
+def validate_romsel_sync(src_dir: Path = BEEB_SRC_DIR) -> list[str]:
+    """Verify every SHEILA_ROMSEL store in bbcmaster assembly syncs $00F4 under SEI."""
+    errors: list[str] = []
+    files = sorted(src_dir.rglob("*.s"))
+    parsed_files: list[tuple[Path, list[dict]]] = []
+    jsr_targets: set[str] = set()
+
+    for path in files:
+        cleaned = strip_asm_comments(path.read_text(encoding="utf-8", errors="replace"))
+        stmts: list[dict] = []
+        for line_no, line in enumerate(cleaned.splitlines(), start=1):
+            for raw_part in line.split(";"):
+                part = raw_part.strip().lstrip("{").rstrip("}").strip()
+                if not part:
+                    continue
+                labels_here: list[str] = []
+                while True:
+                    m = LABEL_DEF_RE.match(part)
+                    if not m:
+                        break
+                    labels_here.append(m.group(1))
+                    part = part[m.end():].strip()
+                if not part and not labels_here:
+                    continue
+                op = ""
+                operand = ""
+                if part and not part.startswith((".", "#")):
+                    tokens = part.split(None, 1)
+                    op = tokens[0].lower()
+                    operand = tokens[1].strip() if len(tokens) > 1 else ""
+                    if op == "jsr" and operand:
+                        jsr_targets.add(operand.split()[0])
+                stmts.append({
+                    "line": line_no,
+                    "labels": labels_here,
+                    "text": part,
+                    "op": op,
+                    "operand": operand,
+                })
+        parsed_files.append((path, stmts))
+
+    for path, stmts in parsed_files:
+        n = len(stmts)
+        if n == 0:
+            continue
+        named_labels: dict[str, int] = {}
+        local_positions: dict[str, list[int]] = {}
+        for idx, st in enumerate(stmts):
+            for lbl in st["labels"]:
+                if lbl.startswith("!"):
+                    local_positions.setdefault(lbl[1:], []).append(idx)
+                else:
+                    named_labels[lbl] = idx
+
+        def resolve_target(src_idx: int, expr: str) -> int | None:
+            tok = expr.split(",")[0].split()[0]
+            if tok.startswith("!") and tok.endswith("+"):
+                name = tok[1:-1]
+                for pos in local_positions.get(name, ()):
+                    if pos > src_idx:
+                        return pos
+                return None
+            if tok.startswith("!") and tok.endswith("-"):
+                name = tok[1:-1]
+                for pos in reversed(local_positions.get(name, ())):
+                    if pos <= src_idx:
+                        return pos
+                return None
+            return named_labels.get(tok)
+
+        preds: list[list[int]] = [[] for _ in range(n)]
+        for idx, st in enumerate(stmts):
+            op = st["op"]
+            if op in COND_BRANCH_OPS:
+                tgt = resolve_target(idx, st["operand"])
+                if tgt is not None:
+                    preds[tgt].append(idx)
+                if idx + 1 < n:
+                    preds[idx + 1].append(idx)
+            elif op in ("bra", "jmp"):
+                tgt = resolve_target(idx, st["operand"])
+                if tgt is not None:
+                    preds[tgt].append(idx)
+            elif op in ("rts", "rti", "brk"):
+                pass
+            else:
+                if idx + 1 < n:
+                    preds[idx + 1].append(idx)
+
+        def is_entry_node(idx: int) -> bool:
+            if not preds[idx]:
+                return True
+            return any(not lbl.startswith("!") and lbl in jsr_targets for lbl in stmts[idx]["labels"])
+
+        in_masked = [not is_entry_node(i) for i in range(n)]
+        out_masked = [not is_entry_node(i) for i in range(n)]
+        changed = True
+        while changed:
+            changed = False
+            for idx, st in enumerate(stmts):
+                new_in = False if is_entry_node(idx) else all(out_masked[p] for p in preds[idx])
+                op = st["op"]
+                if op == "sei":
+                    new_out = True
+                elif op in ("cli", "plp"):
+                    new_out = False
+                else:
+                    new_out = new_in
+                if new_in != in_masked[idx] or new_out != out_masked[idx]:
+                    in_masked[idx] = new_in
+                    out_masked[idx] = new_out
+                    changed = True
+
+        rel = path.relative_to(src_dir) if path.is_relative_to(src_dir) else path
+        prev_inst_idx: int | None = None
+        for idx, st in enumerate(stmts):
+            if st["labels"]:
+                prev_inst_idx = None
+            text = st["text"]
+            m_romsel = ROMSEL_STORE_RE.match(text) if text else None
+            if m_romsel:
+                op = m_romsel.group(1).lower()
+                if not in_masked[idx]:
+                    errors.append(
+                        f"{rel}:{st['line']}: '{text}' writes SHEILA_ROMSEL outside an SEI critical section"
+                    )
+                prev_text = stmts[prev_inst_idx]["text"] if prev_inst_idx is not None else ""
+                m_shadow = SHADOW_STORE_RE.match(prev_text)
+                if not m_shadow or m_shadow.group(1).lower() != op:
+                    errors.append(
+                        f"{rel}:{st['line']}: '{text}' is not immediately preceded by matching '{op} zp_mos_romsel_shadow'"
+                    )
+            if st["op"]:
+                if st["op"] in UNCOND_END_OPS or st["op"] in COND_BRANCH_OPS:
+                    prev_inst_idx = None
+                else:
+                    prev_inst_idx = idx
+            elif text:
+                # Directives break adjacency between stores
+                prev_inst_idx = None
+
+    return errors
+
+
+def validate_build(build_dir: Path, src_dir: Path | None = BEEB_SRC_DIR) -> list[str]:
     errors: list[str] = []
     sym_path = build_dir / "main.sym"
     if not sym_path.exists():
@@ -154,6 +411,39 @@ def validate_build(build_dir: Path) -> list[str]:
         prog_end = symbols["program_end"]
         if not (LOW_RESIDENT_START <= prog_end <= RESIDENT_LIMIT):
             errors.append(f"program_end at ${prog_end:04X} exceeds $8000 Main RAM limit")
+
+    # Check zp_save_buf placement in 4 KB ANDY ($8F00-$8FFF) and zero overlap with BeebHuffData
+    if "zp_save_buf" not in symbols:
+        errors.append("missing symbol zp_save_buf")
+    else:
+        zp_buf = symbols["zp_save_buf"]
+        if zp_buf < ZP_SAVE_BASE or zp_buf + ZP_SAVE_SIZE > HUFFDATA_LIMIT:
+            errors.append(
+                f"zp_save_buf at ${zp_buf:04X}..${zp_buf + ZP_SAVE_SIZE - 1:04X} violates ANDY ${ZP_SAVE_BASE:04X}..${HUFFDATA_LIMIT - 1:04X}"
+            )
+        if "ovl_huffdata_end" not in symbols:
+            errors.append("missing symbol ovl_huffdata_end")
+        elif symbols["ovl_huffdata_end"] > zp_buf:
+            errors.append(
+                f"ovl_huffdata_end at ${symbols['ovl_huffdata_end']:04X} overlaps ANDY zp_save_buf (${zp_buf:04X})"
+            )
+
+    # Check LYNNE aux range ($3F80-$43FF) below Mode 0 bitmap ($4400)
+    for req_sym in ("recall_data_start", "recall_data_end", "beeb_lynne_aux_end"):
+        if req_sym not in symbols:
+            errors.append(f"missing LYNNE aux symbol {req_sym}")
+    if all(s in symbols for s in ("recall_data_start", "recall_data_end", "beeb_lynne_aux_end")):
+        r_start = symbols["recall_data_start"]
+        r_end = symbols["recall_data_end"]
+        l_end = symbols["beeb_lynne_aux_end"]
+        if not (LYNNE_AUX_BASE <= r_start <= r_end <= l_end <= LYNNE_AUX_LIMIT):
+            errors.append(
+                f"LYNNE aux span ${r_start:04X}..${l_end:04X} violates ${LYNNE_AUX_BASE:04X}..${LYNNE_AUX_LIMIT - 1:04X}"
+            )
+        if r_end - r_start != 1116:
+            errors.append(
+                f"recall_data span ${r_start:04X}..${r_end:04X} is {r_end - r_start} B, expected 1116 B (279 * 4)"
+            )
 
     # Check symbol overlap with protected windows ($0800-$0DFF MOS workspace, $A400-$A7FF tier pool, $C000-$FDFF MOS ROM)
     allowed_tier_pool = {"PLATFORM_TIER_NAME_POOL_BASE", "PLATFORM_TIER_NAME_POOL_END", "tier_name_pool"}
@@ -224,16 +514,21 @@ def validate_build(build_dir: Path) -> list[str]:
         if end_excl > CATALOG_LIMIT:
             errors.append(f"beeb.catalog end ${end_excl:04X} exceeds ${CATALOG_LIMIT:04X}")
 
-    # Check beeb.huffdata ($8000-$8FFF in 4 KB ANDY)
+    # Check beeb.huffdata ($8000-$8FFF in 4 KB ANDY, below zp_save_buf)
     huff_prg = build_dir / "beeb.huffdata"
     if not huff_prg.exists():
         errors.append("missing beeb.huffdata")
     else:
         start, end_excl = prg_span(huff_prg)
+        huff_limit = symbols.get("zp_save_buf", ZP_SAVE_BASE)
         if start != HUFFDATA_BASE:
             errors.append(f"beeb.huffdata load address ${start:04X} != ${HUFFDATA_BASE:04X}")
         if end_excl > HUFFDATA_LIMIT:
             errors.append(f"beeb.huffdata end ${end_excl:04X} exceeds 4 KB ANDY limit (${HUFFDATA_LIMIT:04X})")
+        elif end_excl > huff_limit:
+            errors.append(
+                f"beeb.huffdata end ${end_excl:04X} overlaps ANDY zp_save_buf (${huff_limit:04X})"
+            )
 
     # Check overlays ($A800-$BFFF) and Sideways RAM cache caps
     sizes: dict[str, int] = {}
@@ -267,13 +562,13 @@ def validate_build(build_dir: Path) -> list[str]:
 
     bank6_items = ("beeb.auxdata", "beeb.catalog", "ovl.ui")
     if all(k in sizes for k in bank6_items):
-        bank6_pages = sum((sizes[k] + 255) // 256 for k in bank6_items)
+        bank6_pages = 2 + sum((sizes[k] + 255) // 256 for k in bank6_items)  # +2 pages ITEMCAT Slots 0..1 ($9300-$94FF)
         if bank6_pages > 64:
             errors.append(f"Sideways Bank 6 aggregate pages ({bank6_pages}) exceed 64-page (16 KB) bank limit")
 
     bank7_items = ("ovl.spell", "ovl.items", "ovl.gen")
     if all(k in sizes for k in bank7_items):
-        bank7_pages = sum((sizes[k] + 255) // 256 for k in bank7_items)
+        bank7_pages = 4 + sum((sizes[k] + 255) // 256 for k in bank7_items)  # +4 pages ITEMCAT Slots 2..5 ($BC00-$BFFF)
         if bank7_pages > 64:
             errors.append(f"Sideways Bank 7 aggregate pages ({bank7_pages}) exceed 64-page (16 KB) bank limit")
 
@@ -294,6 +589,10 @@ def validate_build(build_dir: Path) -> list[str]:
         if start != 0x1900 or (end_excl - start) > 512:
             errors.append(f"boot.prg span ${start:04X}-${end_excl:04X} must start at $1900 and fit <= 512 B")
 
+    if src_dir is not None:
+        errors.extend(validate_romsel_sync(src_dir))
+        errors.extend(validate_low_mos_callers(src_dir))
+
     return errors
 
 
@@ -304,7 +603,7 @@ def loader_disk_names(storage: Path = STORAGE_SRC,
     pack does not preload into Sideways RAM (beeb_ovl_cache_bank $00). Names
     come from the .byte data of the loader's own table in hal/storage.s."""
     names = {}
-    for match in re.finditer(r"^hal_storage_(tier_\d|overlay_\w+?)_name:\s*\n\s*\.byte\s+([^/\n]+)",
+    for match in re.finditer(r"^hal_storage_(tier_\d|overlay_\w+?|item_cat)_name:\s*\n\s*\.byte\s+([^/\n]+)",
                              storage.read_text(), re.M):
         names[match.group(1)] = "".join(chr(int(b, 16)) for b in re.findall(r"\$([0-9a-fA-F]{2})", match.group(2)))
     text = overlay_storage.read_text()
@@ -326,11 +625,17 @@ def loader_disk_names(storage: Path = STORAGE_SRC,
             raise ValueError(f"hal/storage.s has no filename for overlay {cls.upper()}")
         if is_cached:
             del names[key]
-    if "#define HAL_PLATFORM_MONSTER_CATALOG" in MAIN_SRC.read_text():
+    main_text = MAIN_SRC.read_text()
+    if "#define HAL_PLATFORM_MONSTER_CATALOG" in main_text:
         # The tier filenames compile out (#if !HAL_PLATFORM_MONSTER_CATALOG).
         names = {k: v for k, v in names.items() if not k.startswith("tier_")}
     elif sum(k.startswith("tier_") for k in names) != 4:
         raise ValueError("hal/storage.s: expected the four monster tier filenames")
+    if "#define HAL_PLATFORM_ITEM_CAT_CUSTOM" in main_text:
+        if "item_cat" not in names:
+            raise ValueError("hal/storage.s has no filename for ITEMCAT")
+    else:
+        names.pop("item_cat", None)
     return names
 
 
@@ -363,13 +668,20 @@ def run_selftest() -> int:
             f".label {name}=${LOW_RESIDENT_START + i * 0x10:04x}"
             for i, name in enumerate(REQUIRED_LOW_SYMBOLS)
         ]
-        sym_lines.append(".label program_end=$7b00")
+        sym_lines.extend([
+            ".label program_end=$7b00",
+            f".label ovl_huffdata_end=$8d94",
+            f".label zp_save_buf=${ZP_SAVE_BASE:04x}",
+            f".label recall_data_start=${LYNNE_AUX_BASE:04x}",
+            f".label recall_data_end=${LYNNE_AUX_BASE + 1116:04x}",
+            f".label beeb_lynne_aux_end=${LYNNE_AUX_BASE + 1116:04x}",
+        ])
         base_sym_text = "\n".join(sym_lines) + "\n"
         (bdir / "main.sym").write_text(base_sym_text, encoding="utf-8")
 
         write_synthetic_prg(bdir / "moria8.res.prg", LOW_RESIDENT_START, 0x6D00)
         write_synthetic_prg(bdir / "beeb.play", PLAY_SLOT_BASE, 0x2000, prefix=b"M8P")
-        write_synthetic_prg(bdir / "beeb.auxdata", AUXDATA_VIRT_BASE, 0x1500)
+        write_synthetic_prg(bdir / "beeb.auxdata", AUXDATA_VIRT_BASE, 0x1300)
         write_synthetic_prg(bdir / "beeb.huffdata", HUFFDATA_BASE, 0x0D94)
         write_synthetic_prg(bdir / "beeb.catalog", CATALOG_BASE, 0x2417)
         write_synthetic_prg(bdir / "title.prg", 0x8000, 620)
@@ -377,16 +689,17 @@ def run_selftest() -> int:
         for name in OVERLAY_FILES:
             write_synthetic_prg(bdir / name, OVERLAY_BASE, 0x0400)
 
-        errs = validate_build(bdir)
+        errs = validate_build(bdir, src_dir=BEEB_SRC_DIR)
         if errs:
             print(f"FAIL: valid synthetic build rejected: {errs}", file=sys.stderr)
             return 1
 
         # Negative test 1: low helper at or above $3000 must fail
         (bdir / "main.sym").write_text(
-            base_sym_text.replace("EnterMos=$0e40", "EnterMos=$3000"), encoding="utf-8"
+            re.sub(r"\.label EnterMos=\$[0-9a-f]+", ".label EnterMos=$3000", base_sym_text),
+            encoding="utf-8",
         )
-        if not validate_build(bdir):
+        if not validate_build(bdir, src_dir=None):
             print("FAIL: failed to catch EnterMos >= $3000", file=sys.stderr)
             return 1
 
@@ -394,7 +707,7 @@ def run_selftest() -> int:
         (bdir / "main.sym").write_text(
             base_sym_text.replace("program_end=$7b00", "program_end=$8001"), encoding="utf-8"
         )
-        if not validate_build(bdir):
+        if not validate_build(bdir, src_dir=None):
             print("FAIL: failed to catch program_end > $8000", file=sys.stderr)
             return 1
 
@@ -402,7 +715,7 @@ def run_selftest() -> int:
         (bdir / "main.sym").write_text(
             base_sym_text + ".label bad_mos_sym=$0900\n", encoding="utf-8"
         )
-        if not validate_build(bdir):
+        if not validate_build(bdir, src_dir=None):
             print("FAIL: failed to catch symbol in $0800-$0DFF", file=sys.stderr)
             return 1
 
@@ -410,22 +723,100 @@ def run_selftest() -> int:
         (bdir / "main.sym").write_text(
             base_sym_text + ".label bad_tier_sym=$a500\n", encoding="utf-8"
         )
-        if not validate_build(bdir):
+        if not validate_build(bdir, src_dir=None):
             print("FAIL: failed to catch symbol in $A400-$A7FF", file=sys.stderr)
             return 1
 
         # Negative test 5: beeb.huffdata exceeding 4 KB ANDY ($9000) must fail
         (bdir / "main.sym").write_text(base_sym_text, encoding="utf-8")
         write_synthetic_prg(bdir / "beeb.huffdata", HUFFDATA_BASE, 0x1001)
-        if not validate_build(bdir):
+        if not validate_build(bdir, src_dir=None):
             print("FAIL: failed to catch beeb.huffdata > $9000", file=sys.stderr)
+            return 1
+
+        # Negative test 6: beeb.huffdata overlapping zp_save_buf ($8F00) must fail
+        write_synthetic_prg(bdir / "beeb.huffdata", HUFFDATA_BASE, 0x0F01)
+        if not validate_build(bdir, src_dir=None):
+            print("FAIL: failed to catch beeb.huffdata overlapping zp_save_buf ($8F00)", file=sys.stderr)
+            return 1
+        write_synthetic_prg(bdir / "beeb.huffdata", HUFFDATA_BASE, 0x0D94)
+
+        # Negative test 7: zp_save_buf + ZP_SAVE_SIZE exceeding $9000 must fail
+        (bdir / "main.sym").write_text(
+            base_sym_text.replace("zp_save_buf=$8f00", "zp_save_buf=$8f80"), encoding="utf-8"
+        )
+        if not validate_build(bdir, src_dir=None):
+            print("FAIL: failed to catch zp_save_buf exceeding $9000", file=sys.stderr)
+            return 1
+
+        # Negative test 8: ovl_huffdata_end overlapping zp_save_buf must fail
+        (bdir / "main.sym").write_text(
+            base_sym_text.replace("ovl_huffdata_end=$8d94", "ovl_huffdata_end=$8f01"), encoding="utf-8"
+        )
+        if not validate_build(bdir, src_dir=None):
+            print("FAIL: failed to catch ovl_huffdata_end > zp_save_buf", file=sys.stderr)
+            return 1
+
+        # Negative test 9: LYNNE aux exceeding $4400 Mode 0 bitmap must fail
+        (bdir / "main.sym").write_text(
+            base_sym_text.replace(
+                f"beeb_lynne_aux_end=${LYNNE_AUX_BASE + 1116:04x}",
+                "beeb_lynne_aux_end=$4401",
+            ),
+            encoding="utf-8",
+        )
+        if not validate_build(bdir, src_dir=None):
+            print("FAIL: failed to catch LYNNE aux >= $4400", file=sys.stderr)
+            return 1
+
+        # Negative tests 10-11: static SHEILA_ROMSEL sync and SEI audit
+        bad_src = bdir / "src"
+        bad_src.mkdir()
+        (bad_src / "good.s").write_text(
+            "ok_fn:\n    php\n    sei\n    lda #ROMSEL_BANK4\n    sta zp_mos_romsel_shadow\n    sta SHEILA_ROMSEL\n    plp\n    rts\n",
+            encoding="utf-8",
+        )
+        if validate_romsel_sync(bad_src):
+            print("FAIL: valid ROMSEL switch rejected", file=sys.stderr)
+            return 1
+        (bad_src / "no_shadow.s").write_text(
+            "bad_shadow:\n    sei\n    lda #ROMSEL_BANK5\n    sta SHEILA_ROMSEL\n    cli\n    rts\n",
+            encoding="utf-8",
+        )
+        if not validate_romsel_sync(bad_src):
+            print("FAIL: failed to catch SHEILA_ROMSEL write missing zp_mos_romsel_shadow sync", file=sys.stderr)
+            return 1
+        (bad_src / "no_shadow.s").unlink()
+        (bad_src / "no_sei.s").write_text(
+            "bad_sei:\n    lda #ROMSEL_BANK4\n    sta zp_mos_romsel_shadow\n    sta SHEILA_ROMSEL\n    rts\n",
+            encoding="utf-8",
+        )
+        if not validate_romsel_sync(bad_src):
+            print("FAIL: failed to catch SHEILA_ROMSEL write outside SEI", file=sys.stderr)
+            return 1
+        (bad_src / "no_sei.s").write_text(
+            "bad_after_plp:\n    php\n    sei\n    plp\n    lda #ROMSEL_BANK4\n    sta zp_mos_romsel_shadow\n    sta SHEILA_ROMSEL\n    rts\n",
+            encoding="utf-8",
+        )
+        if not validate_romsel_sync(bad_src):
+            print("FAIL: failed to catch SHEILA_ROMSEL write after plp", file=sys.stderr)
+            return 1
+        (bad_src / "disk_setup_beeb.s").write_text(
+            "bad_ovl_mos:\n    jsr EnterMos\n    rts\n",
+            encoding="utf-8",
+        )
+        if not validate_low_mos_callers(bad_src):
+            print("FAIL: failed to catch EnterMos call outside < $3000 modules", file=sys.stderr)
             return 1
 
         # The disk: every file the loader takes from DFS is on it.
         sys.path.insert(0, str(ROOT / "tools"))
         from make_ssd import DfsFileSpec, build_ssd_image
         wanted = loader_disk_names()
-        if wanted.get("overlay_town") != "OVLTWN" or any(k.startswith("tier_") for k in wanted):
+        if (wanted.get("overlay_town") != "OVLTWN"
+                or wanted.get("overlay_home") != "OVLHOM"
+                or wanted.get("item_cat") != "ITEMCAT"
+                or any(k.startswith("tier_") for k in wanted)):
             print(f"FAIL: loader names misread: {wanted}", file=sys.stderr)
             return 1
         def spec(n: str, d: str = "$", lk: bool = False) -> DfsFileSpec:

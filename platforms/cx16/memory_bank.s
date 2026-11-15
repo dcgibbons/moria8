@@ -269,3 +269,149 @@ hal_memory_write_byte:
     sta (zp_ptr0),y
     clc
     rts
+
+// ============================================================
+// Extended Multi-Bank Helpers (Banks 0..63, fixed Low RAM < $9B00)
+//
+// Saves/restores active CX16_RAM_BANK_REG ($00) under php; sei ... plp so any
+// $A000-$BFFF overlay caller can read, write, and cross-bank bounce-copy
+// Banks 5-8 and Banks 24-63 with zero new zero-page allocations.
+// ============================================================
+
+// cx16_bank_read_byte — Read byte from bank A at (zp_ptr0),y -> A.
+// Input:  A = bank (0..63), zp_ptr0 = base ($A000-$BFFF), Y = offset.
+// Output: A = byte read (N/Z reflect A). Preserves X, Y, C, V, $00.
+cx16_bank_read_byte:
+    php
+    sei
+    sta cx16_zp_scratch
+    lda CX16_RAM_BANK_REG
+    pha
+    lda cx16_zp_scratch
+    sta CX16_RAM_BANK_REG
+    lda (zp_ptr0),y
+    sta cx16_zp_scratch
+    pla
+    sta CX16_RAM_BANK_REG
+    plp
+    lda cx16_zp_scratch
+    rts
+
+// cx16_bank_write_byte — Write byte A to bank X at (zp_ptr0),y.
+// Input:  A = value, X = bank (0..63), zp_ptr0 = base ($A000-$BFFF), Y = offset.
+// Preserves: A, X, Y, flags, $00.
+cx16_bank_write_byte:
+    php
+    sei
+    sta cx16_zp_scratch
+    lda CX16_RAM_BANK_REG
+    pha
+    stx CX16_RAM_BANK_REG
+    lda cx16_zp_scratch
+    sta (zp_ptr0),y
+    pla
+    sta CX16_RAM_BANK_REG
+    lda cx16_zp_scratch
+    plp
+    rts
+
+// cx16_bank_read_block — Copy X bytes (0 = 256) from bank A (zp_ptr0),y to fixed
+// Low RAM (zp_ptr1),y. Advances Y by count; clobbers A, X; preserves $00.
+cx16_bank_read_block:
+    php
+    sei
+    sta cx16_zp_scratch
+    lda CX16_RAM_BANK_REG
+    pha
+    lda cx16_zp_scratch
+    sta CX16_RAM_BANK_REG
+!read_loop:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    dex
+    bne !read_loop-
+    pla
+    sta CX16_RAM_BANK_REG
+    plp
+    rts
+
+// cx16_bank_write_block — Copy X bytes (0 = 256) from fixed Low RAM (zp_ptr1),y
+// to bank A (zp_ptr0),y. Advances Y by count; clobbers A, X; preserves $00.
+cx16_bank_write_block:
+    php
+    sei
+    sta cx16_zp_scratch
+    lda CX16_RAM_BANK_REG
+    pha
+    lda cx16_zp_scratch
+    sta CX16_RAM_BANK_REG
+!write_loop:
+    lda (zp_ptr1),y
+    sta (zp_ptr0),y
+    iny
+    dex
+    bne !write_loop-
+    pla
+    sta CX16_RAM_BANK_REG
+    plp
+    rts
+
+// cx16_bank_copy — Copy 16-bit byte count (A = lo, X = hi) from
+// (zp_temp0, zp_ptr0) to (zp_temp1, zp_ptr1) across any $A000-$BFFF banks via
+// fixed Low-RAM bounce CX16_ROW_STAGE_BASE ($0700-$07FF). Masks IRQs only per
+// 256-byte chunk, restoring $00 and processor flags after each chunk.
+// Advances zp_ptr0_hi / zp_ptr1_hi by chunk count; zeroes zp_temp2/zp_temp3.
+cx16_bank_copy:
+    sta zp_temp2
+    stx zp_temp3
+!chunk_loop:
+    ldx zp_temp3
+    bne !full_page+
+    ldx zp_temp2
+    beq !done+
+    stz zp_temp2
+    bra !do_chunk+
+!full_page:
+    dec zp_temp3
+    ldx #0
+!do_chunk:
+    php
+    sei
+    lda CX16_RAM_BANK_REG
+    pha
+    phx
+    lda zp_temp0
+    sta CX16_RAM_BANK_REG
+    ldy #0
+!read_chunk:
+    lda (zp_ptr0),y
+    sta CX16_ROW_STAGE_BASE,y
+    iny
+    dex
+    bne !read_chunk-
+    plx
+    lda zp_temp1
+    sta CX16_RAM_BANK_REG
+    ldy #0
+!write_chunk:
+    lda CX16_ROW_STAGE_BASE,y
+    sta (zp_ptr1),y
+    iny
+    dex
+    bne !write_chunk-
+    pla
+    sta CX16_RAM_BANK_REG
+    plp
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    bra !chunk_loop-
+!done:
+    clc
+    rts
+
+cx16_bank_helpers_end:
+
+.assert "Extended banked helpers stay in fixed Low RAM below $9B00", cx16_bank_read_byte >= CX16_RESIDENT_BASE && cx16_bank_helpers_end <= CX16_RESIDENT_LIMIT, true
+.assert "Bank bounce buffer is exact 256-byte Low-RAM page below resident code", CX16_ROW_STAGE_END - CX16_ROW_STAGE_BASE + 1 == 256 && CX16_ROW_STAGE_END < CX16_RESIDENT_BASE, true
+.assert "Bank helper ZP reuse stays inside $02-$0C safe scratch", zp_temp0 >= $02 && zp_temp3 <= $0c && zp_ptr0 >= $02 && zp_ptr1_hi <= $0c, true

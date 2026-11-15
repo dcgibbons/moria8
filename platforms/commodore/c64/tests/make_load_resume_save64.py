@@ -4,28 +4,29 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-# The product build plays the monster catalog: its saves are version $18 (the
-# $17 ones still load, older ones are refused: hal/storage_policy.s), so the fixture is written in
-# that format: 33 inventory slots, the 20-byte known-item bitset, the
-# door-state block followed by the species table, and 40 creature rows of
-# recall (save.s, as the C128 fixture).
-SAVE_VERSION = 0x18
-ID_KNOWN_BYTES = 20
+# The product build uses Save V2 ($20) and the full Phase 4 item/monster
+# catalogs: 34 inventory slots (22 carried + 12 equipment including cloak and
+# secondary), 47-byte known-item bitset, 174-byte flavour shuffles, 8 store
+# arrays, door-state + species tables, 11 floor-item arrays, and 279 creature
+# rows of recall (1116 bytes, hal/storage_policy.s, platforms/shared/save.s).
+SAVE_VERSION = 0x20
+ID_KNOWN_BYTES = 47
 MAX_DOOR_STATES = 16
 CATALOG_SLOTS = 32
 
 PL_STRUCT_SIZE = 111
-ITEM_TYPE_COUNT = 96
-ITEM_ID_CAPACITY = 96
+ITEM_TYPE_COUNT = 370
+ITEM_ID_CAPACITY = 376
+FLAVOUR_COUNT = 174
 STORE_TOTAL_SLOTS = 128
 MAX_ROOMS = 8
 MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
-RECALL_DATA_SIZE = 160   # 40 creature rows x 4 (core/recall_defs.s)
+RECALL_DATA_SIZE = 1116  # 279 creature rows x 4 (core/recall_defs.s)
 MAP_SIZE = 3840
-TOTAL_INV_SLOTS = 33
+TOTAL_INV_SLOTS = 34
 
 PL_LEVEL = 19
 PL_DLEVEL = 20
@@ -63,17 +64,13 @@ def main() -> int:
     payload.extend(block(1))    # eff_fear_timer
     payload.extend(block(4))    # rng
     item_ids = block(TOTAL_INV_SLOTS)
-    item_ids[31] = item_ids[32] = 0xFF   # reserved cloak and secondary: empty
+    item_ids[31] = item_ids[32] = item_ids[33] = 0xFF   # ring2, cloak, secondary: empty
     payload.extend(item_ids)
     for _ in range(7):
         payload.extend(block(TOTAL_INV_SLOTS))
     payload.extend(block(ID_KNOWN_BYTES))
-    payload.extend(block(12))  # potion_shuffle
-    payload.extend(block(12))  # scroll_shuffle
-    payload.extend(block(4))   # ring_shuffle
-    payload.extend(block(5))   # wand_shuffle
-    payload.extend(block(5))   # staff_shuffle
-    for _ in range(7):
+    payload.extend(block(FLAVOUR_COUNT))  # potion..staff shuffles
+    for _ in range(8):
         payload.extend(block(STORE_TOTAL_SLOTS))
     payload.extend(block(6))  # stairs
     payload.extend(block(1))  # level_entry_dir

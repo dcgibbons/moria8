@@ -78,7 +78,7 @@
 //   - overlay cache HELP:      $2000-$2FFF
 //   - overlay cache ITEMS:     $3000-$3FFF
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
-//   - DB/data region:          $7400-$7A5F
+//   - DB/data region:          $7400-$7A5F ($7400-$785B = recall[279] BSS)
 //   - tier cache window:       $7A60-$9567
 //   - title-art cache:         $9568-$97FF
 //   - small overlay cache MODAL:$9800-$9CFF
@@ -114,7 +114,12 @@
 .const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
-.const BANK1_DB_END     = $7a5f   // the names payload ends with its streams at $79e6, 121 bytes to grow; the catalog has the rest
+.const BANK1_DB_END     = $7a5f   // $7400-$785B (1,116 B) = recall[279] BSS; $785C-$78E9 (142 B) = zp_save_buf; $78EA-$7A5F = 374 B free
+.const BANK1_RECALL_BASE = BANK1_DB_BASE
+.const BANK1_RECALL_SIZE = 1116   // 279 * 4 bytes (must match RECALL_DATA_SIZE)
+.const BANK1_RECALL_END  = BANK1_RECALL_BASE + BANK1_RECALL_SIZE - 1
+.const BANK1_ZP_SAVE_BASE = BANK1_RECALL_END + 1
+.const BANK1_ZP_SAVE_END  = BANK1_ZP_SAVE_BASE + 142 - 1
 // The tier cache took the DB region's last page when tiers gained the
 // cr_treasure SoA field (MON-014): tiers 1-4 needed 5520 bytes. Five DL 1
 // creatures added to tier 1 (2026-10-25) needed 5733: the cache's end moved
@@ -227,13 +232,10 @@
 .const DUNGEON_GEN_DOOR_SCAN_END  = DUNGEON_GEN_DOOR_SCAN_BASE + DUNGEON_GEN_DOOR_SCAN_SIZE - 1
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0800
 
-// ZP save buffer — stores $02–$8F during game, restored on exit.
-// Keep this as owned program data (not a fixed low-RAM page), because
-// native C128 KERNAL/BASIC workspace usage differs from C64.
+// ZP save buffer — stores $02–$8F in Bank 1 ($785C-$78E9) during game, restored on exit.
 .const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
-
-zp_save_buf:
-    .fill ZP_SAVE_SIZE, 0
+.label zp_save_buf      = BANK1_ZP_SAVE_BASE
+zp_save_orig_ptr:       .word 0
 
 // KERNAL ZP save buffer — used during EnterKernal/ExitKernal calls
 // to protect game state from KERNAL clobbering.
@@ -547,26 +549,75 @@ restore_kernal_zp:
     bne !loop-
     rts
 
-// save_zp — Copy $02–$8F to zp_save_buf (original BASIC state)
+// save_zp — Copy $02–$8F to Bank 1 BANK1_ZP_SAVE_BASE (original BASIC state)
 save_zp:
+    lda zp_ptr1
+    sta zp_save_orig_ptr
+    lda zp_ptr1_hi
+    sta zp_save_orig_ptr + 1
+    lda #<BANK1_ZP_SAVE_BASE
+    sta zp_ptr1
+    lda #>BANK1_ZP_SAVE_BASE
+    sta zp_ptr1_hi
     ldx #0
 !loop:
     lda zp_temp0,x
-    sta zp_save_buf,x
+    cpx #(zp_ptr1 - zp_temp0)
+    bne !chk_hi+
+    lda zp_save_orig_ptr
+!chk_hi:
+    cpx #(zp_ptr1_hi - zp_temp0)
+    bne !write+
+    lda zp_save_orig_ptr + 1
+!write:
+    ldy #0
+    jsr mmu_common_db_write_ptr1
+    inc zp_ptr1
+    bne !next+
+    inc zp_ptr1_hi
+!next:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
+    lda zp_save_orig_ptr
+    sta zp_ptr1
+    lda zp_save_orig_ptr + 1
+    sta zp_ptr1_hi
     rts
 
-// restore_zp — Copy zp_save_buf back to $02–$8F (original BASIC state)
+// restore_zp — Copy Bank 1 BANK1_ZP_SAVE_BASE back to $02–$8F (original BASIC state)
 restore_zp:
+    lda #<BANK1_ZP_SAVE_BASE
+    sta zp_ptr0
+    lda #>BANK1_ZP_SAVE_BASE
+    sta zp_ptr0_hi
     ldx #0
 !loop:
-    lda zp_save_buf,x
+    ldy #0
+    jsr mmu_common_db_read_ptr0
+    cpx #(zp_ptr0 - zp_temp0)
+    bne !chk_hi+
+    sta zp_save_orig_ptr
+    jmp !next+
+!chk_hi:
+    cpx #(zp_ptr0_hi - zp_temp0)
+    bne !store+
+    sta zp_save_orig_ptr + 1
+    jmp !next+
+!store:
     sta zp_temp0,x
+!next:
+    inc zp_ptr0
+    bne !inc_ok+
+    inc zp_ptr0_hi
+!inc_ok:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
+    lda zp_save_orig_ptr
+    sta zp_ptr0
+    lda zp_save_orig_ptr + 1
+    sta zp_ptr0_hi
     rts
 
 // c128_vdc_reassert_mode — Defensive VDC mode restore
@@ -934,6 +985,12 @@ mmu_common_cart_blob_end:
 :AssertRegionBefore("Items overlay cache ends before map region", BANK1_OVERLAY_ITEMS_END, MAP_BASE)
 :AssertRegionBefore("Reserved future map span ends before Bank1 DB region", BANK1_MAP_RESERVED_END, BANK1_DB_BASE)
 :AssertRegionBefore("Bank1 DB ends before tier cache window", BANK1_DB_END, BANK1_TIER_CACHE_BASE)
+.assert "Bank1 recall starts at Bank1 DB base", BANK1_RECALL_BASE, BANK1_DB_BASE
+.assert "Bank1 recall fits inside Bank1 DB region", BANK1_RECALL_END <= BANK1_DB_END, true
+.assert "Bank1 ZP save follows Bank1 recall", BANK1_ZP_SAVE_BASE, BANK1_RECALL_END + 1
+.assert "Bank1 ZP save size matches ZP_SAVE_SIZE", BANK1_ZP_SAVE_END - BANK1_ZP_SAVE_BASE + 1, ZP_SAVE_SIZE
+.assert "Bank1 ZP save fits inside Bank1 DB region", BANK1_ZP_SAVE_END <= BANK1_DB_END, true
+:AssertRegionBefore("Bank1 recall ends before tier cache window", BANK1_RECALL_END, BANK1_TIER_CACHE_BASE)
 :AssertRegionBefore("Tier cache ends before reserved gap 0", BANK1_TIER_CACHE_END, BANK1_RESERVED_GAP0_BASE)
 :AssertRegionBefore("Reserved gap 0 ends before STARTUP overlay slot", BANK1_RESERVED_GAP0_END, BANK1_OVERLAY_STARTUP_BASE)
 .assert "Title cache marker starts inside reserved gap 0", BANK1_TITLE_CACHE_MARKER_BASE >= BANK1_RESERVED_GAP0_BASE && BANK1_TITLE_CACHE_MARKER_BASE <= BANK1_RESERVED_GAP0_END, true

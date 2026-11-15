@@ -16,10 +16,15 @@
 // (tests/*.s) do not import main.s and keep the tier roster.
 #define HAL_PLATFORM_MONSTER_CATALOG
 #define HAL_PLATFORM_CATALOG_RECORDS
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
+#define HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
+#define HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
 #define PLUS4_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define STORAGE_STATUS_HELPER
 #define HELP_TITLE_EXTERNAL
+#define HOME_OVERLAY_SEPARATE
+#define SAVE_IN_STORAGE_OVERLAY
 .if (!cmdLineVars.containsKey("OVL_OUT")) {
     .error "OVL_OUT is required; generated files belong under build/"
 }
@@ -37,9 +42,14 @@
 .segmentdef SpellOverlay      [outPrg=OVL_OUT + "/ovl.spell", start=$e000, min=$e000, max=$efff]
 .segmentdef ChestOverlay      [outPrg=OVL_OUT + "/ovl.chest", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
+.segmentdef HomeOverlay       [outPrg=OVL_OUT + "/ovl.home",    start=$e000, min=$e000, max=$efff]
+.segmentdef StorageOverlay    [outPrg=OVL_OUT + "/ovl.storage", start=$e000, min=$e000, max=$efff]
+.segmentdef TitleOverlay      [outPrg=OVL_OUT + "/ovl.title",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg=OVL_OUT + "/4.bank",    start=$f000, min=$f000, max=$fbff]
 // Assembled for free RAM above the catalog index, stored in the init-only tail.
 .segmentdef Plus4HuffIndex    [start=$dd00, max=$deff]   // memory.s HUFF_INDEX_HIDDEN_BASE/END
+// Virtual high BSS in $DF00-$DFFF (zeroed at boot in entry_main; never emitted to PRG).
+.segmentdef Plus4HighBss      [start=$df00, max=$dfff, virtual] // memory.s PLUS4_HIGH_BSS_BASE/END
 
 #import "../common/save_slot_policy.s"
 
@@ -54,9 +64,10 @@
     .segment Plus4HuffIndex
 }
 
-// Cast/pray cores stay resident on this platform.
+// Cast/pray cores live in OVL_TITLE; shared pm_* helpers stay resident
+// because OVL_UI (player_gain_spell_impl) and OVL_MODAL_MISC call them directly.
 .macro PlayerCastSegment() {
-    .segment Default
+    .segment TitleOverlay
 }
 .macro PlayerCastRestoreResidentSegment() {
     .segment Default
@@ -206,7 +217,7 @@ exit_trampoline:
 #import "../../../core/zeropage.s"
 #import "legal.s"
 
-plus4_kernal_call_saved_bank: .byte 0
+plus4_kernal_call_saved_x: .byte 0
 
 plus4_kernal_call:
     pha
@@ -247,6 +258,7 @@ plus4_kernal_call:
     jsr $ffff
     php
     pha
+    stx plus4_kernal_call_saved_x
     tsx
     lda $0102,x
     ora #$04                    // Return to all-RAM game code with IRQs disabled.
@@ -254,6 +266,7 @@ plus4_kernal_call:
     sei
     jsr plus4_bank_ram
     jsr plus4_display_resync
+    ldx plus4_kernal_call_saved_x
     pla
     plp
     rts
@@ -312,8 +325,11 @@ plus4_kernal_load:
     jsr plus4_kernal_call
     .word $ffd5
     rts
+plus4_kernal_wrappers_end:
+.assert "Plus/4 KERNAL wrappers stay below $8000", plus4_kernal_wrappers_end <= $8000, true
 
 #import "hal/storage.s"
+.assert "Plus/4 storage filenames and overlay table stay below $8000", hal_storage_overlay_table_end <= $8000, true
 
 plus4_storage_marker_present:
     lda #$81                    // DISK_ERR_MARKER_OPEN
@@ -401,9 +417,6 @@ plus4_storage_marker_present:
     clc
     rts
 
-// tramp_dig_ability — pinned low for common tunnel code.
-tramp_dig_ability:
-    jmp calc_dig_ability
 
 // All .text directives produce screen codes (not PETSCII) since
 // all output uses direct screen RAM writes at $0400+.
@@ -484,6 +497,16 @@ tramp_dig_ability:
 #if HAL_PLATFORM_MONSTER_CATALOG
 #import "monster_catalog4.s"
 #import "../../../core/monster_catalog.s"
+.const PLUS4_CATALOG_HIDDEN_TAIL_BASE = cat_hidden_end
+.const PLUS4_CATALOG_HIDDEN_TAIL_FREE = CATALOG_HIDDEN_END + 1 - cat_hidden_end
+.assert "Catalog hidden span starts at CATALOG_HIDDEN_BASE", cat_level_raw, CATALOG_HIDDEN_BASE
+.assert "Catalog hidden unused tail matches remaining bytes in $DC00-$DCFF", PLUS4_CATALOG_HIDDEN_TAIL_FREE == $100 - CATALOG_IDX_SIZE && cat_hidden_end <= HUFF_INDEX_HIDDEN_BASE, true
+#if PLUS4_CARTRIDGE
+.assert "Cartridge catalog hidden unused tail is 139 bytes ($DC75-$DCFF)", PLUS4_CATALOG_HIDDEN_TAIL_FREE, 139
+#else
+.assert "Disk catalog hidden unused tail is 27 bytes ($DCE5-$DCFF)", PLUS4_CATALOG_HIDDEN_TAIL_FREE, 27
+#endif
+.print "Catalog hidden tail free: " + PLUS4_CATALOG_HIDDEN_TAIL_FREE + " bytes at $" + toHexString(PLUS4_CATALOG_HIDDEN_TAIL_BASE) + "-$" + toHexString(CATALOG_HIDDEN_END)
 #endif
 #import "../../../core/tier_manager.s"
 
@@ -491,16 +514,17 @@ tramp_dig_ability:
 // cannot place these bytes inside later resident code.
 current_overlay: .byte 0
 #if !PLUS4_CARTRIDGE
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_lo: .fill hal_platform_overlay_count + 1, 0
+ovl_reu_start_hi: .fill hal_platform_overlay_count + 1, 0
 #endif
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
 #import "../common/overlay.s"
 #undef OVERLAY_LOAD_PROMPT_GAME
+.assert "Shared overlay count matches OVL_TITLE", hal_platform_overlay_count, OVL_TITLE
 #if PLUS4_CARTRIDGE
-.assert "Cartridge overlay count matches shared table", CART_OVERLAY_COUNT, 10
+.assert "Cartridge overlay count matches shared table", CART_OVERLAY_COUNT, 13
 .assert "Startup overlay asset ABI", CART_ASSET_STARTUP - CART_ASSET_STARTUP + 1, OVL_STARTUP
 .assert "Town overlay asset ABI", CART_ASSET_TOWN - CART_ASSET_STARTUP + 1, OVL_TOWN
 .assert "Death overlay asset ABI", CART_ASSET_DEATH - CART_ASSET_STARTUP + 1, OVL_DEATH
@@ -511,12 +535,31 @@ ol_target:        .byte 0
 .assert "Spell overlay asset ABI", CART_ASSET_SPELL - CART_ASSET_STARTUP + 1, OVL_SPELL
 .assert "Modal misc overlay asset ABI", CART_ASSET_MODAL_MISC - CART_ASSET_STARTUP + 1, OVL_MODAL_MISC
 .assert "Chest overlay asset ABI", CART_ASSET_CHEST - CART_ASSET_STARTUP + 1, OVL_CHEST
+.assert "Home overlay asset ABI", CART_ASSET_HOME - CART_ASSET_STARTUP + 1, OVL_HOME
+.assert "Storage overlay asset ABI", CART_ASSET_STORAGE - CART_ASSET_STARTUP + 1, OVL_STORAGE
+.assert "Title overlay asset ABI", CART_ASSET_TITLE - CART_ASSET_STARTUP + 1, OVL_TITLE
 #endif
 #import "../../../core/monster_ai.s"
 #import "../../../core/scene_dirty.s"
 #import "../../../core/scene_mat_tile.s"
 #import "../../../core/scene_force.s"
 #import "../../../core/recall.s"
+#if !PLUS4_CARTRIDGE
+// Disk item catalog 254-byte sector cache lives in Plus4HighBss ($DF00-$DFFD)
+// under $FF3F so Default stays below MAP_BASE ($C800); zeroed at boot by
+// plus4_high_bss_init. item_catalog_records.s asserts size == 254.
+#define ITEM_CAT_BUF_EXTERNAL
+.const ITEM_CAT_BUF_BASE = PLUS4_HIGH_BSS_BASE
+.segment Plus4HighBss
+plus4_high_bss_start:
+    .fill 254, 0
+plus4_high_bss_end:
+.segment Default
+.const PLUS4_HIGH_BSS_TAIL_FREE = PLUS4_HIGH_BSS_END + 1 - plus4_high_bss_end
+.assert "Plus4HighBss starts at PLUS4_HIGH_BSS_BASE ($DF00)", plus4_high_bss_start == PLUS4_HIGH_BSS_BASE && PLUS4_HIGH_BSS_BASE == $df00 && PLUS4_HIGH_BSS_END == $dfff, true
+.assert "Plus4HighBss fits in $DF00-$DFFF", plus4_high_bss_end <= PLUS4_HIGH_BSS_END + 1, true
+.print "Plus4HighBss: " + (plus4_high_bss_end - plus4_high_bss_start) + " bytes used, " + PLUS4_HIGH_BSS_TAIL_FREE + " bytes free at $" + toHexString(plus4_high_bss_end) + "-$" + toHexString(PLUS4_HIGH_BSS_END)
+#endif
 #import "../../../core/monster_magic.s"
 .macro ChestSummonsSegment() {
     .segment Default
@@ -534,8 +577,21 @@ ol_target:        .byte 0
 .macro ReEquipRestoreSegment() {
     .segment Default
 }
+.macro ItemPickupSegment() {
+    .segment ItemActionsOverlay
+}
+.macro ItemPickupRestoreSegment() {
+    .segment Default
+}
 .label re_equip_entry = tramp_re_equip
 #import "../../../core/item.s"
+#if PLUS4_CARTRIDGE
+#define ITEM_CATALOG_CART
+#endif
+#import "../common/item_catalog_records.s"
+#if !PLUS4_CARTRIDGE
+.assert "Plus4HighBss item catalog buffer matches ITMCAT_SECTOR_PAYLOAD", plus4_high_bss_end - plus4_high_bss_start, ITMCAT_SECTOR_PAYLOAD
+#endif
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay in Default; the generator
 // parks in the CHEST overlay with the picker it uses.
@@ -554,8 +610,13 @@ ol_target:        .byte 0
     .segment Default
 }
 #import "../../../core/chest_loot.s"
+#define PLAYER_RECALC_EQUIPMENT_EXTERNAL
+#define PLAYER_ITEM_COMMANDS_EXTERNAL
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #import "../../../core/player_items.s"
+#import "../../../core/player_recalc_equipment.s"
+#undef PLAYER_ITEM_COMMANDS_EXTERNAL
+#undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
 #import "../../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/spell_effects.s"
@@ -609,10 +670,18 @@ run_initialize:
 #import "../../../core/store_data.s"
 #import "../../../core/runtime_ui_strings.s"
 #import "../common/compat/io_kernal_consts.s"
+#define SAVE_STATE_SEGMENT_CUSTOM
+.macro SaveStateResidentSegment() { .segment Default }
+.macro SaveStateRestoreSegment() { .segment StorageOverlay }
+#define SAVE_PROBE_SEGMENT_CUSTOM
+.macro SaveProbeResidentSegment() { .segment Default }
+.macro SaveProbeRestoreSegment() { .segment StorageOverlay }
+.segment StorageOverlay
 #import "../../shared/save.s"
+#import "../common/save_slot_menu.s"
+.segment Default
 #import "hal/storage_policy.s"
 #import "../common/disk_swap.s"
-#import "../common/title_screen.s"
 #import "../../../core/wizard.s"
 #define DISARM_COMMAND_EXTERNAL
 #import "../../../core/game_loop.s"
@@ -781,6 +850,7 @@ entry_main:
     // Load banked runtime payload to $F000 before any $F000 trampoline calls.
     jsr init_load_banked
     jsr plus4_huff_index_install    // before any message
+    jsr plus4_high_bss_init         // zero-init $DF00-$DFFF before any recall/gameplay access
 
     jsr generation_busy_install
     jsr plus4_platform_services_install
@@ -801,7 +871,11 @@ restart_entry:
     sta reu_banks
     sta reu_size_kb
     sta reu_size_kb + 1
+    sta plus4_caller_ovl_restore
     jsr tier_init
+#if !PLUS4_CARTRIDGE
+    jsr plus4_item_cat_boot_load
+#endif
     jsr hal_sound_init
     jsr rng_seed
 
@@ -823,13 +897,13 @@ plus4_test_single_drive_fresh_save_after_restart:
 
     // Title is a full-screen view; clear before KERNAL LOAD starts printing
     // "SEARCHING...", then title_load_and_draw clears again after the load.
-    jsr title_clear_full_screen
+    jsr tramp_title_clear_full_screen
 
     // Load and display title (clears screen internally after KERNAL LOAD)
-    jsr title_load_and_draw
+    jsr tramp_title_load_and_draw
 
     // The title art stream owns the art, not the rows below the menu.
-    jsr title_clear_below_menu
+    jsr tramp_title_clear_below_menu
 
     // Title re-entry must rebuild message/title UI state from scratch after
     // any failed load attempt, not just branch back into the old loop.
@@ -927,7 +1001,7 @@ plus4_test_save_media_fail_unexpected_return:
     sta disk_mode
     lda #1
     sta disk_setup_done
-    lda #OVL_HELP
+    lda #OVL_STORAGE
     jsr overlay_load
     bcs plus4_test_change_save_drive_unexpected_return
 plus4_test_change_save_drive_wait_for_harness:
@@ -949,6 +1023,11 @@ plus4_test_change_save_drive_unexpected_return:
     lda #1
     sta disk_mode
     sta disk_setup_done
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcc !sd_lr_ok+
+    brk
+!sd_lr_ok:
 #if PLUS4_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 plus4_test_single_drive_load_return_wait_for_harness:
     jmp plus4_test_single_drive_load_return_wait_for_harness
@@ -972,6 +1051,11 @@ plus4_test_load_then_save_new_empty_fail:
     sta disk_mode
     lda #1
     sta disk_setup_done
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcc !sd_lc_ok+
+    brk
+!sd_lc_ok:
 plus4_test_single_drive_load_corrupt_wait_for_harness:
     jmp plus4_test_single_drive_load_corrupt_wait_for_harness
 plus4_test_single_drive_load_corrupt_before_load:
@@ -984,6 +1068,11 @@ plus4_test_single_drive_load_corrupt_before_load:
     lda #1
     sta disk_mode
     sta disk_setup_done
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcc !sd_lwm_ok+
+    brk
+!sd_lwm_ok:
 plus4_test_single_drive_load_wrong_media_wait_for_harness:
     jmp plus4_test_single_drive_load_wrong_media_wait_for_harness
 plus4_test_single_drive_load_wrong_media_before_load:
@@ -996,6 +1085,11 @@ plus4_test_single_drive_load_wrong_media_before_load:
     lda #1
     sta disk_mode
     sta disk_setup_done
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcc !sd_swm_ok+
+    brk
+!sd_swm_ok:
 plus4_test_single_drive_save_wrong_media_wait_for_harness:
     jmp plus4_test_single_drive_save_wrong_media_wait_for_harness
 plus4_test_single_drive_save_wrong_media_before_save:
@@ -1012,7 +1106,7 @@ plus4_test_single_drive_save_wrong_media_unexpected_return:
     sta disk_mode
     lda #2
     sta disk_setup_done
-    lda #OVL_HELP
+    lda #OVL_STORAGE
     jsr overlay_load
     bcs plus4_test_single_drive_fresh_save_unexpected_return
 plus4_test_single_drive_fresh_save_wait_for_harness:
@@ -1068,6 +1162,11 @@ plus4_test_death_return_after_score:
     sta disk_mode
     lda #2
     sta disk_setup_done
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcc !sd_sr_ok+
+    jmp plus4_test_single_drive_save_return_fail
+!sd_sr_ok:
 plus4_test_single_drive_wait_for_harness:
     jmp plus4_test_single_drive_wait_for_harness
 plus4_test_single_drive_before_save:
@@ -1138,9 +1237,9 @@ plus4_title_redraw_cached:
 !cached:
     lda #COL_LGREY
     sta zp_text_color
-    jsr title_clear_full_screen
-    jsr title_render_data
-    jsr title_clear_below_menu
+    jsr tramp_title_clear_full_screen
+    jsr tramp_title_render_data
+    jsr tramp_title_clear_below_menu
     jsr msg_init
     jsr title_show_sysinfo
     jsr title_draw_menu
@@ -1332,6 +1431,15 @@ kernal_load_safe:
     rts
 
 // ============================================================
+#if !PLUS4_CARTRIDGE
+// plus4_catalog_cache_invalidate — Invalidate any non-generation disk catalog
+// LRU cache in PLUS4_CATALOG_LRU_CACHE_BASE..END ($0400-$07FF) on ovl.gen entry
+// before DUNGEON_GEN_SCAN_SCRATCH_BASE..END may reuse it. Preserves A/X/Y/flags.
+plus4_catalog_cache_invalidate:
+    rts
+#endif
+
+// ============================================================
 // Dungeon gen overlay trampoline — bank KERNAL out, call $E000 overlay
 // ============================================================
 // KERNAL must be off ($34) while executing overlay code at $E000.
@@ -1342,67 +1450,17 @@ kernal_load_safe:
 //     instead of cli, so IRQs remain disabled throughout dungeon generation
 tramp_level_generate:
     sei
+#if !PLUS4_CARTRIDGE
+    jsr plus4_catalog_cache_invalidate
+#endif
     jsr plus4_bank_ram
     jsr level_generate          // executes from DungeonGenOverlay at $E000
     jsr plus4_bank_ram
     rts
 
 // ============================================================
-// Special rooms trampolines — SEI + bank in RAM, call OVL.GEN at $E000
-// (find_special_room: $F000)
+// Special rooms trampolines — SEI + bank in RAM, call $F000 / OVL.MODAL
 // ============================================================
-tramp_assign_special_room:
-    php                         // Save interrupt state (caller may be in sei context)
-    sei
-    jsr plus4_bank_ram
-    jsr assign_special_room
-    jsr plus4_bank_ram
-    plp                         // Restore interrupt state (no cli — would re-enable IRQs with $01=$34)
-    rts
-
-tramp_vault_seal_entrance:
-    php                         // Save interrupt state (caller may be in sei context)
-    sei
-    jsr plus4_bank_ram
-    jsr vault_seal_entrance
-    jsr plus4_bank_ram
-    plp                         // Restore interrupt state
-    rts
-
-tramp_spawn_special_room_monsters:
-    // In OVL.GEN: monster_spawn_level runs right after generation, but load
-    // it back if anything since has replaced it (2026-11-08)
-    lda current_overlay
-    cmp #OVL_DUNGEON_GEN
-    beq !tssrm_loaded+
-    ldx #OVL_DUNGEON_GEN - 1
-    jsr overlay_load_disk       // asks for the program disk until it loads
-    lda #OVL_DUNGEON_GEN
-    sta current_overlay
-!tssrm_loaded:
-    sei
-    jsr plus4_bank_ram
-    jsr spawn_special_room_monsters
-    jmp tramp_sr_epilogue
-
-tramp_spawn_nest_gold:
-    // pick_item_type leaves the chest overlay (PICKER_IN_CHEST_OVERLAY) in the
-    // $E000 window, and spawn_nest_gold calls random_floor_in_room in the
-    // dungeon-generation overlay: load it back first, as the Apple IIe and CX16
-    // trampolines do (M5b round 33: nest gold placed off the map corrupted code)
-    lda current_overlay
-    cmp #OVL_DUNGEON_GEN
-    beq !tsng_loaded+
-    ldx #OVL_DUNGEON_GEN - 1
-    jsr overlay_load_disk       // asks for the program disk until it loads
-    lda #OVL_DUNGEON_GEN
-    sta current_overlay
-!tsng_loaded:
-    sei
-    jsr plus4_bank_ram
-    jsr spawn_nest_gold
-    jmp tramp_sr_epilogue
-
 tramp_find_special_room:
     pha                         // Save A (room type input)
     sei
@@ -1412,8 +1470,134 @@ tramp_find_special_room:
     // Carry flag preserved — lda/sta don't affect carry
     jmp tramp_sr_epilogue
 
-tramp_sr_epilogue:
-    jmp plus4_platform_runtime_resync
+plus4_caller_ovl_restore:
+    .byte 0
+
+// Shared caller-overlay dispatch for OVL_ITEMS / OVL_TITLE commands whose
+// nested overlay trampolines (? selectors, extended effects, spell execution)
+// must restore the invoking overlay before returning.
+// Input: A/Y = target routine, X = caller overlay ID (OVL_*)
+// Output: Carry preserved from routine (Carry clear if overlay load fails)
+plus4_ovl_caller_dispatch:
+    sta plus4_ovl_caller_jmp+1
+    sty plus4_ovl_caller_jmp+2
+    stx plus4_caller_ovl_restore
+    txa
+    jsr overlay_load_no_kernal
+    bcs !tocd_fail+
+plus4_ovl_caller_jmp:
+    jsr $0000
+    php
+    lda #0
+    sta plus4_caller_ovl_restore
+    jsr plus4_platform_runtime_resync
+    plp
+    rts
+!tocd_fail:
+    lda #0
+    sta plus4_caller_ovl_restore
+    jsr plus4_platform_runtime_resync
+    clc
+    rts
+
+plus4_ovl_caller_epilogue:
+    lda plus4_caller_ovl_restore
+    beq !toce_done+
+    jsr overlay_load_no_kernal
+    bcs !toce_fatal+
+!toce_done:
+    jmp tramp_sr_epilogue
+!toce_fatal:
+    jmp entry_main
+
+tramp_item_wear:
+    lda #<item_wear
+    ldy #>item_wear
+    ldx #OVL_ITEMS
+    jmp plus4_ovl_caller_dispatch
+
+tramp_item_takeoff:
+    lda #<item_takeoff
+    ldy #>item_takeoff
+    ldx #OVL_ITEMS
+    jmp plus4_ovl_caller_dispatch
+
+tramp_item_eat:
+    lda #<item_eat
+    ldy #>item_eat
+    ldx #OVL_ITEMS
+    jmp plus4_ovl_caller_dispatch
+
+tramp_item_quaff:
+    lda #<item_quaff
+    ldy #>item_quaff
+    ldx #OVL_ITEMS
+    jmp plus4_ovl_caller_dispatch
+
+tramp_player_cast_spell:
+    lda #<player_cast_spell
+    ldy #>player_cast_spell
+    ldx #OVL_TITLE
+    jmp plus4_ovl_caller_dispatch
+
+tramp_player_pray:
+    lda #<player_pray
+    ldy #>player_pray
+    ldx #OVL_TITLE
+    jmp plus4_ovl_caller_dispatch
+
+tramp_ui_inv_select_display:
+    lda piw_return_overlay
+    bne !tuisd_have_ret+
+    lda plus4_caller_ovl_restore
+    sta piw_return_overlay
+!tuisd_have_ret:
+    lda #OVL_HELP
+    jsr overlay_load_no_kernal
+    bcs !tuisd_done+
+    jsr ui_inv_select_display
+!tuisd_done:
+    jmp tramp_sr_epilogue
+
+tramp_ui_equip_select_display:
+    lda #OVL_HELP
+    jsr overlay_load_no_kernal
+    bcs !tuesd_done+
+    jsr ui_equip_select_display
+!tuesd_done:
+    jmp plus4_ovl_caller_epilogue
+
+tramp_spell_list_display:
+    lda #OVL_UI
+    jsr overlay_load_no_kernal
+    bcs !tsld_done+
+    jsr spell_list_display
+!tsld_done:
+    jmp plus4_ovl_caller_epilogue
+
+tramp_spell_execute_selected:
+    lda #OVL_SPELL
+    jsr overlay_load_no_kernal
+    bcs !tses_done+
+    jsr spell_execute_selected
+!tses_done:
+    jmp plus4_ovl_caller_epilogue
+
+tramp_eff_ext_eat:
+    lda #OVL_DEATH
+    jsr overlay_load_no_kernal
+    bcs !teee_done+
+    jsr eff_ext_eat_piw
+!teee_done:
+    jmp plus4_ovl_caller_epilogue
+
+tramp_eff_ext_quaff:
+    lda #OVL_DEATH
+    jsr overlay_load_no_kernal
+    bcs !teeq_done+
+    jsr eff_ext_quaff_piw
+!teeq_done:
+    jmp plus4_ovl_caller_epilogue
 
 // calc_spell_failure lives in OVL.MODAL on this platform; carry is the
 // result, so the resync runs under php/plp.
@@ -1424,37 +1608,33 @@ tramp_calc_spell_failure:
     jsr calc_spell_failure
 !done:
     php
+    lda plus4_caller_ovl_restore
+    beq !tcsf_resync+
+    jsr overlay_load_no_kernal
+    bcs !tcsf_fatal+
+!tcsf_resync:
     jsr plus4_platform_runtime_resync
     plp
     rts
+!tcsf_fatal:
+    pla
+    jmp entry_main
 
 // ============================================================
 // Ego item trampolines — SEI + bank out KERNAL, call $F000+
 // ============================================================
-tramp_roll_ego_type:
-    pha                         // Save A (item type input)
-    sei
-    jsr plus4_bank_ram
-    pla                         // Restore A
-    jsr roll_ego_type
-    pha                         // Save result
-    jsr plus4_bank_ram
-    pla                         // Restore result
-    rts
 
-// tramp_ego_append_suffix — Append ego suffix to combat_msg_buf
-// Input: A = ego type
-// Copies suffix string from $F000 region to combat_msg_buf while banked out.
-// Clobbers: A, X, Y, zp_ptr0, zp_ptr1
+// tramp_ego_append_suffix — Decode ego suffix 1..55 via ITEM.CAT and append
+// to combat_msg_buf. Runs in Default without banking RAM over KERNAL so
+// IEC/cart item catalog reads execute safely.
+// Input: A = ego type (0..EGO_COUNT)
+// Clobbers: A, X, Y, zp_ptr0
 tramp_ego_append_suffix:
     cmp #0
     beq !teas_done+             // No ego → nothing to append
-    pha
-    sei
-    jsr plus4_bank_ram
-    pla
-    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000)
-    // Copy string to combat_msg_buf (while banked out so we can read $F000)
+    cmp #EGO_TYPE_COUNT
+    bcs !teas_done+
+    jsr item_cat_decode_ego     // zp_ptr0 = decoded suffix in item_name_decode_buf
     ldx cmb_buf_idx
     ldy #0
 !teas_loop:
@@ -1468,7 +1648,6 @@ tramp_ego_append_suffix:
     jmp !teas_loop-
 !teas_end:
     stx cmb_buf_idx
-    jsr plus4_bank_ram
 !teas_done:
     rts
 
@@ -1486,20 +1665,6 @@ tramp_ego_apply_damage:
     jsr plus4_bank_ram
     rts
 
-// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000)
-// Input: A = ego type (1-7)
-// Output: A = AC bonus (0 if none)
-// Clobbers: X
-tramp_ego_get_ac_bonus:
-    pha
-    sei
-    jsr plus4_bank_ram
-    pla
-    jsr ego_get_ac_bonus
-    pha
-    jsr plus4_bank_ram
-    pla
-    rts
 
 // tramp_re_equip — roll_enchantment's equipment branch (banked at $F000).
 // Input: zp_temp0 = item type. Output: A = p1, fi_add_* set.
@@ -1524,10 +1689,6 @@ title_show_sysinfo:
     rts
 tsi_krev_cached: .byte 0
 
-// tramp_reu_show_status — Bank out KERNAL to call banked status display
-// Patched into reu_show_status at startup by init code.
-tramp_reu_show_status:
-    rts
 
 plus4_platform_main_loop_begin:
 plus4_platform_vector_reassert:
@@ -1567,15 +1728,16 @@ plus4_platform_services_install:
 overlay_load_no_kernal:
     jsr overlay_load
     bcs !done+
+hal_overlay_post_reload:
     sei
     jsr plus4_install_ram_irq_vectors
-    jsr plus4_bank_ram
+    jmp plus4_bank_ram
 !done:
     rts
 
 #if !BYPASS_SLOT_PROMPT
 save_prepare_slot_prompt:
-    lda #OVL_MODAL_MISC
+    lda #OVL_STORAGE
     jmp overlay_load_no_kernal
 
 save_select_slot_prompt:
@@ -1585,88 +1747,39 @@ save_select_slot_prompt:
     jmp plus4_platform_runtime_resync
 #endif
 
+save_game:
+    lda #OVL_STORAGE
+    jsr overlay_load_no_kernal
+    bcs !sg_fail+
+    sei
+    jsr plus4_bank_ram
+    jsr save_game_impl
+    php
+    jsr plus4_platform_runtime_resync
+    plp
+    rts
+!sg_fail:
+    jsr plus4_platform_runtime_resync
+    clc
+    rts
+
+load_game:
+    lda #OVL_STORAGE
+    jsr overlay_load_no_kernal
+    bcs !lg_fail+
+    sei
+    jsr plus4_bank_ram
+    jsr load_game_impl
+    php
+    jsr plus4_platform_runtime_resync
+    plp
+    rts
+!lg_fail:
+    jsr plus4_platform_runtime_resync
+    clc
+    rts
+
 #import "look_trampoline.s"
-
-tramp_ui_help_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcc !loaded+
-    jmp tramp_sr_epilogue
-!loaded:
-    lda #<help_pages
-    sta help_pages_src_lo
-    lda #>help_pages
-    sta help_pages_src_hi
-    jsr ui_help_display
-    jmp tramp_sr_epilogue
-
-tramp_ui_char_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_char_display
-!done:
-    jmp tramp_sr_epilogue
-
-// item_init_identification parks in OVL.DEATH on this platform (funds the
-// resident door-state machinery); called once per new game.
-tramp_item_init_identification:
-    lda #OVL_DEATH
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_init_identification
-!done:
-    jmp tramp_sr_epilogue
-
-// Level-up magic helpers live in OVL.MODAL on this platform (funds the
-// resident door-state table); combat.s level-up routes here.
-tramp_magic_recalc_mana:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr magic_recalc_mana
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_magic_check_new_spells:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr magic_check_new_spells
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_ui_inv_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_display
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_ui_inv_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_inv_select_display
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_ui_equip_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_equip_display
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_ui_equip_select_display:
-    lda #OVL_HELP
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_equip_select_display
-!done:
-    jmp tramp_sr_epilogue
 
 tramp_ui_recall:
     lda #OVL_DEATH
@@ -1675,94 +1788,6 @@ tramp_ui_recall:
     sei
     jsr plus4_bank_ram
     jsr ui_recall_display
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_gain_spell:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_gain_spell
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_read_scroll:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_read_scroll
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_aim_wand:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_aim_wand
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_use_staff:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_use_staff
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_refuel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_refuel
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_item_exchange:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr item_exchange
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_ranged_fire:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ranged_fire
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_throw_item:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr throw_item
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_bash_command:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr bash_command
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_disarm_command:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr disarm_command
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_cmd_jam:
-    lda #OVL_CHEST
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr door_jam_command
 !done:
     jmp tramp_sr_epilogue
 
@@ -1783,18 +1808,10 @@ tramp_door_pick_roll:
     clc
     rts
 
-// Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open is called from the
-// resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch is
-// tail-called (A/Y = handler) from bash_command/disarm_command inside the
+// Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open (generated) is called
+// from the resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch
+// is tail-called (A/Y = handler) from bash_command/disarm_command inside the
 // items overlay; their caller trampolines run the epilogue.
-tramp_chest_open:
-    lda #OVL_CHEST
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr chest_open_command
-!done:
-    jmp tramp_sr_epilogue
-
 chest_dispatch:
     sta chest_disp_jmp+1
     sty chest_disp_jmp+2
@@ -1806,56 +1823,6 @@ chest_disp_jmp:
 !done:
     rts
 
-tramp_player_tunnel:
-    lda #OVL_ITEMS
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr player_tunnel
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_spell_list_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr spell_list_display
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_spell_execute_selected:
-    lda #OVL_SPELL
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr spell_execute_selected
-!done:
-    jmp tramp_sr_epilogue
-
-// Word of Destruction: run the engine from the modal-misc overlay, then
-// restore the spell overlay so the caller (mage dispatch or scroll/staff
-// router, both in OVL_SPELL) returns into live code. First Plus/4 instance
-// of the restore-caller-overlay shape (irs_p3_swap_exec restores OVL_ITEMS).
-tramp_eff_destroy_area:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr da_devastate
-    lda #OVL_SPELL
-    jsr overlay_load_no_kernal
-    bcs !fatal+
-!done:
-    rts
-!fatal:
-    // Spell overlay could not be restored; the return address is dead.
-    jmp entry_main
-
-tramp_reveal_floorplan:
-    lda #OVL_SPELL
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr eff_reveal_floorplan
-!done:
-    jmp tramp_sr_epilogue
-
 tramp_ui_identify:
     lda #OVL_UI
     jsr overlay_load_no_kernal
@@ -1866,16 +1833,8 @@ tramp_ui_identify:
 !done:
     jmp tramp_sr_epilogue
 
-tramp_ui_wizard_display:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr ui_wizard_display
-!done:
-    jmp tramp_sr_epilogue
-
 tramp_disk_setup:
-    lda #OVL_HELP
+    lda #OVL_STORAGE
     jsr overlay_load
     bcs !tds_done+
     sei
@@ -1887,7 +1846,7 @@ tramp_disk_setup:
     rts
 
 tramp_disk_prepare_selected:
-    lda #OVL_HELP
+    lda #OVL_STORAGE
     jsr overlay_load
     bcs !tdps_done+
     sei
@@ -1910,26 +1869,32 @@ store_overlay_preamble:
     jsr plus4_bank_ram
     rts
 
-tramp_store_init_all:
-    lda #OVL_CHEST
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_init_all
-!done:
-    jmp tramp_sr_epilogue
-
-tramp_store_restock_all:
-    lda #OVL_CHEST
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr store_restock_all
-!done:
-    jmp tramp_sr_epilogue
-
 tramp_store_enter:
+    lda zp_store_idx
+    cmp #STORE_HOME
+    beq !tse_home+
     jsr store_overlay_preamble
     jsr store_enter
     jmp tramp_sr_epilogue
+!tse_home:
+    lda #OVL_HOME
+    jsr overlay_load_no_kernal
+    bcs !tse_done+
+    sei
+    jsr plus4_bank_ram
+    jsr home_enter
+!tse_done:
+    jmp tramp_sr_epilogue
+
+title_overlay_preamble:
+    lda #OVL_TITLE
+    jsr overlay_load
+    bcs !top_fail+
+    sei
+    jsr plus4_bank_ram
+    clc
+!top_fail:
+    rts
 
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 test_expect_screen_string:
@@ -2115,38 +2080,13 @@ tramp_player_create:
 // Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
 // Pre-resolves creature name before overlay overwrites tier data.
 tramp_game_over_disk_setup:
-    jsr tramp_game_over_prepare // Disk Setup loads OVL_HELP into $E000.
+    jsr tramp_game_over_prepare // Disk Setup loads OVL_STORAGE into $E000.
     jsr tramp_game_over_stash
     jsr tramp_disk_setup
     bcs !done+
     jsr tramp_game_over_restore_stash
     clc
 !done:
-    rts
-
-tramp_game_over_disk_setup_failed:
-    jmp disk_prompt_game
-
-tramp_game_over_prepare:
-    lda death_source_saved
-    sta zp_death_source
-
-    // 1. Resolve death source text while tier data still at $E000
-    lda zp_game_flags
-    and #GAME_FLAG_WINNER
-    bne !tgo_load_overlay+
-    lda zp_death_source
-    cmp #DEATH_ALIVE
-    beq !tgo_load_overlay+
-    cmp #DEATH_CHEST_NEEDLE         // Special sources ($F7-$FF) don't need name
-    bcs !tgo_load_overlay+
-    tax
-    jsr creature_get_name       // Copies name to creature_name_buf in main RAM
-
-!tgo_load_overlay:
-    // 2. Load death overlay (replaces tier data at $E000)
-    lda #OVL_DEATH
-    jsr overlay_load
     rts
 
 tramp_game_over:
@@ -2201,6 +2141,9 @@ tramp_winner_royal:
     jsr plus4_bank_ram
     rts
 
+// Generated resident trampolines (tools/gen_trampolines.py -> build/trampolines/)
+#import "../../../build/trampolines/plus4_trampolines.inc"
+
 // ============================================================
 // game_over_prompt — return to title/menu after save, quit, or death.
 // Shown at all exit points (save+quit, voluntary quit, death).
@@ -2226,6 +2169,25 @@ program_end:
 #import "../common/catalog_boot.s"
 .assert "Catalog boot loads follow the resident image", catalog_boot_load >= program_end, true
 .assert "Catalog boot loads end below the map (restart runs them again)", catalog_boot_end <= MAP_BASE, true
+#if !PLUS4_CARTRIDGE
+plus4_item_cat_boot_load:
+    lda #picbl_idx_name_end - picbl_idx_name
+    ldx #<picbl_idx_name
+    ldy #>picbl_idx_name
+    jsr asset_load_required     // PRG at CATALOG_IDX_LOAD ($D600)
+    ldx #ITMCAT_IDX_BODY_SIZE - 1
+!picbl_copy:
+    lda CATALOG_IDX_LOAD,x
+    sta item_cat_idx_data,x
+    dex
+    bpl !picbl_copy-
+    rts
+picbl_idx_name: .text "ITEM.IDX"
+picbl_idx_name_end:
+plus4_item_cat_boot_end:
+.assert "Item catalog index fits in one page boot buffer", ITMCAT_IDX_BODY_SIZE <= $100, true
+.assert "Item catalog boot loads end below the map (restart runs them again)", plus4_item_cat_boot_end <= MAP_BASE, true
+#endif
 #endif
 
 // init_load_banked — Load banked runtime payload to $F000.
@@ -2284,7 +2246,25 @@ huff_index_stage_end:
 .assert "The Huffman index is past one page (plus4_huff_index_install)", huff_index_stage_end - huff_index_stage > $100, true
 .assert "The Huffman index's stage is the index", huff_index_stage_end - huff_index_stage, huff_str_index_end - huff_str_index
 .assert "The Huffman index starts its RAM span", huff_str_index == HUFF_INDEX_HIDDEN_BASE && HUFF_INDEX_HIDDEN_BASE == $dd00 && HUFF_INDEX_HIDDEN_END == $deff, true
+.const PLUS4_HUFF_INDEX_TAIL_BASE = huff_str_index_end
+.const PLUS4_HUFF_INDEX_TAIL_FREE = HUFF_INDEX_HIDDEN_END + 1 - huff_str_index_end
+.assert "Huffman index unused tail matches remaining bytes in $DD00-$DEFF", PLUS4_HUFF_INDEX_TAIL_FREE == $200 - (huff_str_index_end - huff_str_index) && PLUS4_HUFF_INDEX_TAIL_BASE <= PLUS4_HIGH_BSS_BASE, true
+.assert "Huffman index unused tail is 16 bytes ($DEF0-$DEFF)", PLUS4_HUFF_INDEX_TAIL_FREE, 16
+.print "Huffman index tail free: " + PLUS4_HUFF_INDEX_TAIL_FREE + " bytes at $" + toHexString(PLUS4_HUFF_INDEX_TAIL_BASE) + "-$" + toHexString(HUFF_INDEX_HIDDEN_END)
 .assert "The Huffman index install lives in the init-only tail", plus4_huff_index_install >= program_end, true
+
+// plus4_high_bss_init — Zero-initialize $DF00-$DFFF high BSS page at boot.
+// Clobbers: A, X
+plus4_high_bss_init:
+    lda #0
+    tax
+!phbi_loop:
+    sta PLUS4_HIGH_BSS_BASE,x
+    inx
+    bne !phbi_loop-
+    rts
+.assert "Plus/4 high BSS zero-init fits one page", PLUS4_HIGH_BSS_SIZE, 256
+.assert "Plus/4 high BSS zero-init lives in the init-only tail", plus4_high_bss_init >= program_end, true
 
 #if HAL_PLATFORM_CATALOG_RECORDS
 // MONSTER.IDX loads past the init-only tail at boot (catalog_boot_load).
@@ -2300,7 +2280,6 @@ catalog_init_tail_end:
     // (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
     #import "../../../core/special_rooms_find.s"
     #import "../../../core/ego_items.s"
-    #import "../../../core/ui_home.s"
     #import "../../../core/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
 
@@ -2422,7 +2401,6 @@ banked_code_end:
 .segment TownOverlay
     #import "../../../core/store.s"
     #import "../../../core/ui_store.s"
-    #import "../../../core/ui_home_text.s"
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $e000) + " bytes at $E000-$" + toHexString(ovl_town_end)
 .assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $F000, true
@@ -2452,6 +2430,7 @@ ovl_start_end:
     #import "../../../core/score_io.s"
     #import "../../../core/score.s"
     #import "../../../core/ui_recall.s"
+    #import "../../../core/eff_item_extended.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
@@ -2492,7 +2471,6 @@ winner_apply_retirement_bonus_overlay:
     sta player_data + PL_XP_2
     rts
     #import "../../../core/royal.s"
-    #import "../common/save_slot_menu.s"
     #import "../../../core/ui_wizard.s"
     // Word of Destruction devastation engine: both callers live in the
     // spell overlay; resident tramp_eff_destroy_area restores OVL_SPELL.
@@ -2533,7 +2511,6 @@ ovl_spell_end:
     #import "../../../core/ui_help.s"
     #import "../../../core/ui_inventory.s"
     #import "../../../core/ui_equipment.s"
-    #import "../../../core/ui_disk_setup.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
@@ -2556,14 +2533,13 @@ ovl_ui_end:
 // ============================================================
 .segment ItemActionsOverlay
     #define SCROLL_P3_ROUTER_ENABLED
+    #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
     #import "../../../core/item_actions_overlay.s"
     #import "../../../core/item_exchange.s"
     #import "../../../core/ranged_fire.s"
     #import "../../../core/throw.s"
-    #import "../../../core/bash.s"
-    #import "../../../core/disarm.s"
-    #import "../../../core/disarm_helpers.s"
-    #import "../../../core/tunnel.s"
+    #import "../../../core/player_item_commands.s"
+    #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $F000, true
@@ -2692,6 +2668,39 @@ ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true
 .assert "irq_no_blink begins with CLD", irq_no_blink_after_cld == irq_no_blink + 1, true
+
+// ============================================================
+// Home overlay — Home inventory deposit/withdraw at $E000
+// ============================================================
+.segment HomeOverlay
+    #import "../../../core/ui_home_text.s"
+    #import "../../../core/ui_home.s"
+    #import "../../../core/eff_item_p1.s"
+ovl_home_end:
+.print "Home overlay: " + (ovl_home_end - $e000) + " bytes at $E000-$" + toHexString(ovl_home_end)
+.assert "Home overlay fits in $E000-$EFFF", ovl_home_end <= $F000, true
+
+// ============================================================
+// Storage overlay — save/load engine + disk setup UI at $E000
+// ============================================================
+.segment StorageOverlay
+    #import "../../../core/ui_disk_setup.s"
+ovl_storage_end:
+.print "Storage overlay: " + (ovl_storage_end - $e000) + " bytes at $E000-$" + toHexString(ovl_storage_end)
+.assert "Storage overlay fits in $E000-$EFFF", ovl_storage_end <= $F000, true
+
+// ============================================================
+// Title overlay — title art loader + renderer at $E000
+// ============================================================
+.segment TitleOverlay
+    #import "../common/title_screen.s"
+    #import "../../../core/bash.s"
+    #import "../../../core/disarm.s"
+    #import "../../../core/disarm_helpers.s"
+    #import "../../../core/tunnel.s"
+ovl_title_end:
+.print "Title overlay: " + (ovl_title_end - $e000) + " bytes at $E000-$" + toHexString(ovl_title_end)
+.assert "Title overlay fits in $E000-$EFFF", ovl_title_end <= $F000, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

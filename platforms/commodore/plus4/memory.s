@@ -23,9 +23,17 @@
 .const CREATURE_END     = $c8ff
 .const PLATFORM_TIER_NAME_POOL_BASE = $d800
 .const PLATFORM_TIER_NAME_POOL_END  = $dfff
-// The monster catalog splits that hidden span (core/monster_catalog.s,
-// common/catalog_fetch.s; maintainer, 2026-11-05): 32 species names of 32
-// bytes, then the level index and record-sector table MONSTER.IDX fills at boot.
+// The monster catalog splits the $D800-$DFFF hidden span (core/monster_catalog.s,
+// common/catalog_fetch.s; maintainer, 2026-11-05):
+//   $D800-$DBFF (1,024 B): CATALOG_NAME_POOL — 32 active species names x 32 B
+//   $DC00-$DCFF   (256 B): CATALOG_HIDDEN — level index & record-sector table
+//                          (229 B used on disk -> 27 B tail $DCE5-$DCFF free;
+//                           117 B used on cart -> 139 B tail $DC75-$DCFF free)
+//   $DD00-$DEFF   (512 B): HUFF_INDEX_HIDDEN — Huffman string index
+//                          (496 B used -> 16 B tail $DEF0-$DEFF free)
+//   $DF00-$DFFF   (256 B): PLUS4_HIGH_BSS — high BSS under $FF3F (disk 254 B
+//                          item.cat sector buffer at $DF00-$DFFD -> 2 B free;
+//                          recall[279] lives in Default RAM)
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
 .const CATALOG_NAME_POOL_END  = $dbff
 .const CATALOG_HIDDEN_BASE    = CATALOG_NAME_POOL_END + 1
@@ -35,19 +43,34 @@
 // visible in play. Two pages leave the index room to grow.
 .const HUFF_INDEX_HIDDEN_BASE = CATALOG_HIDDEN_END + 1
 .const HUFF_INDEX_HIDDEN_END  = $deff
+// High BSS above the Huffman index ($DF00-$DFFF, 256 B): visible in play under
+// $FF3F with zero banking cost and preserved across KERNAL ROM calls ($FF3E
+// maps ROM on reads only; plus4_kernal_call restores $FF3F before returning).
+.const PLUS4_HIGH_BSS_BASE    = HUFF_INDEX_HIDDEN_END + 1
+.const PLUS4_HIGH_BSS_END     = $dfff
+.const PLUS4_HIGH_BSS_SIZE    = PLUS4_HIGH_BSS_END - PLUS4_HIGH_BSS_BASE + 1
 // MONSTER.IDX's boot buffer: the map's last page, unused until the first
 // level, past the init-only tail; the $E000 window holds the title's overlay.
 .const CATALOG_IDX_LOAD       = $d600
 .assert "MONSTER.IDX's boot buffer is in the map", CATALOG_IDX_LOAD >= MAP_BASE && CATALOG_IDX_LOAD + $ff <= MAP_END, true
 .assert "Catalog hidden span, then the Huffman index, lie in the old tier name pool", HUFF_INDEX_HIDDEN_BASE == CATALOG_HIDDEN_END + 1 && HUFF_INDEX_HIDDEN_END <= PLATFORM_TIER_NAME_POOL_END, true
+.assert "Catalog hidden, Huffman index, and high BSS partition $D800-$DFFF", PLUS4_HIGH_BSS_BASE == HUFF_INDEX_HIDDEN_END + 1 && PLUS4_HIGH_BSS_END == PLATFORM_TIER_NAME_POOL_END, true
+.assert "Plus/4 high BSS claims $DF00-$DFFF", PLUS4_HIGH_BSS_BASE == $df00 && PLUS4_HIGH_BSS_END == $dfff && PLUS4_HIGH_BSS_SIZE == 256, true
 .const BANKED_DATA_BASE = $e000
 .const BANKED_DATA_END  = $ffff
 .const BANK1_DB_BASE    = $e000
 .const SCREEN_RAM       = $0c00
 .const COLOR_RAM        = $0800
+// $0400-$07FF (1,024 B): idle outside ovl.gen (boot/cart loaders finish before
+// entry_main; exit_trampoline touches it only at RESET). Owned by
+// DUNGEON_GEN_SCAN_SCRATCH during ovl.gen and reserved outside ovl.gen for a
+// non-generation disk catalog LRU cache (invalidated on ovl.gen entry).
 .const DUNGEON_GEN_SCAN_SCRATCH_BASE = $0400
 .const DUNGEON_GEN_SCAN_SCRATCH_SIZE = 1024
 .const DUNGEON_GEN_SCAN_SCRATCH_END  = DUNGEON_GEN_SCAN_SCRATCH_BASE + DUNGEON_GEN_SCAN_SCRATCH_SIZE - 1
+.const PLUS4_CATALOG_LRU_CACHE_BASE  = DUNGEON_GEN_SCAN_SCRATCH_BASE
+.const PLUS4_CATALOG_LRU_CACHE_SIZE  = DUNGEON_GEN_SCAN_SCRATCH_SIZE
+.const PLUS4_CATALOG_LRU_CACHE_END   = DUNGEON_GEN_SCAN_SCRATCH_END
 .const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0400
 
@@ -141,4 +164,7 @@ mmu_select_bank0:
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in low scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
+.assert "Catalog LRU cache window is page-aligned", <PLUS4_CATALOG_LRU_CACHE_BASE, 0
+.assert "Catalog LRU cache aliases 1 KB dungeon-gen scan scratch", PLUS4_CATALOG_LRU_CACHE_BASE == DUNGEON_GEN_SCAN_SCRATCH_BASE && PLUS4_CATALOG_LRU_CACHE_END == DUNGEON_GEN_SCAN_SCRATCH_END && PLUS4_CATALOG_LRU_CACHE_SIZE == 1024, true
+.assert "Catalog LRU cache sits cleanly below color RAM and above cassette door scan", PLUS4_CATALOG_LRU_CACHE_BASE >= DUNGEON_GEN_DOOR_SCAN_LIMIT && PLUS4_CATALOG_LRU_CACHE_END < COLOR_RAM, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true

@@ -24,73 +24,46 @@
 //   $0700-$074D (78 B): rv_row_map_buf (current row's map slice from Bank 5)
 //   $0750-$079F (80 B): rv_row_scr_buf (staged 80-col screen codes for row)
 
-rv_row_has_glyph: .byte 0
-
 // ============================================================
 // viewport_update — Recenter viewport on player with scroll deadband
 // ============================================================
+vu_scroll_margin: .byte VIEW_SCROLL_MARGIN_X, VIEW_SCROLL_MARGIN_Y
+vu_far_span:      .byte VIEWPORT_W - 1 - VIEW_SCROLL_MARGIN_X, VIEWPORT_H - 1 - VIEW_SCROLL_MARGIN_Y
+vu_max_view:      .byte MAP_COLS - VIEWPORT_W, MAP_ROWS - VIEWPORT_H
+
 viewport_update:
-    lda zp_view_x
+    ldx #0
+    jsr vu_update_axis
+    ldx #1
+vu_update_axis:
+    lda zp_view_x,x
     clc
-    adc #VIEW_SCROLL_MARGIN_X
-    cmp zp_player_x
-    bcc !vx_check_right+
-    beq !vx_check_right+
-    lda zp_player_x
+    adc vu_scroll_margin,x
+    cmp zp_player_x,x
+    bcc !vu_check_far+
+    beq !vu_check_far+
+    lda zp_player_x,x
     sec
-    sbc #VIEW_SCROLL_MARGIN_X
-    bcs !vx_store_left+
+    sbc vu_scroll_margin,x
+    bcs !vu_store+
     lda #0
-!vx_store_left:
-    sta zp_view_x
-    jmp !vy_update+
-
-!vx_check_right:
-    lda zp_view_x
-    clc
-    adc #VIEWPORT_W - 1 - VIEW_SCROLL_MARGIN_X
-    cmp zp_player_x
-    bcs !vy_update+
-    lda zp_player_x
-    sec
-    sbc #VIEWPORT_W - 1 - VIEW_SCROLL_MARGIN_X
-    cmp #MAP_COLS - VIEWPORT_W
-    bcc !vx_store_right+
-    lda #MAP_COLS - VIEWPORT_W
-!vx_store_right:
-    sta zp_view_x
-
-!vy_update:
-    lda zp_view_y
-    clc
-    adc #VIEW_SCROLL_MARGIN_Y
-    cmp zp_player_y
-    bcc !vy_check_bottom+
-    beq !vy_check_bottom+
-    lda zp_player_y
-    sec
-    sbc #VIEW_SCROLL_MARGIN_Y
-    bcs !vy_store_top+
-    lda #0
-!vy_store_top:
-    sta zp_view_y
+!vu_store:
+    sta zp_view_x,x
     rts
-
-!vy_check_bottom:
-    lda zp_view_y
+!vu_check_far:
+    lda zp_view_x,x
     clc
-    adc #VIEWPORT_H - 1 - VIEW_SCROLL_MARGIN_Y
-    cmp zp_player_y
-    bcs !vy_done+
-    lda zp_player_y
+    adc vu_far_span,x
+    cmp zp_player_x,x
+    bcs !vu_done+
+    lda zp_player_x,x
     sec
-    sbc #VIEWPORT_H - 1 - VIEW_SCROLL_MARGIN_Y
-    cmp #MAP_ROWS - VIEWPORT_H
-    bcc !vy_store_bottom+
-    lda #MAP_ROWS - VIEWPORT_H
-!vy_store_bottom:
-    sta zp_view_y
-!vy_done:
+    sbc vu_far_span,x
+    cmp vu_max_view,x
+    bcc !vu_store-
+    lda vu_max_view,x
+    bne !vu_store-
+!vu_done:
     rts
 
 // ============================================================
@@ -114,19 +87,7 @@ render_viewport:
     lda zp_view_y
     clc
     adc zp_render_y
-    sta rv_row_map_y
     tax
-
-    // Pre-compute |dy| = abs(map_y - player_y)
-    txa
-    sec
-    sbc zp_player_y
-    bcs !rv_row_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!rv_row_dy_pos:
-    sta rv_row_dy
 
     // Block-read 78-byte map row slice from Bank 5 into rv_row_map_buf
     lda map_row_lo,x
@@ -144,208 +105,55 @@ render_viewport:
     ldx #VIEWPORT_W
     jsr mmu_safe_map_read_block
 
-    lda glyph_active
-    ora glyph_active+1
-    ora glyph_active+2
-    ora glyph_active+3
-    sta rv_row_has_glyph
-
-    lda #0
-    sta rv_player_row
-    lda rv_row_map_y
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    sta zp_temp1
+    ldx #0
     cmp zp_player_y
     bne !rv_player_row_done+
-    inc rv_player_row
+    inx
 !rv_player_row_done:
+    stx rv_player_row
 
-    lda #0
-    sta zp_render_x
+    stz zp_render_x
 
 !col_loop:
     ldy zp_render_x
     lda rv_row_map_buf,y
     sta zp_tile_tmp
+    and #(FLAG_VISITED | FLAG_OCCUPIED)
+    beq !draw_blank+
 
-    and #FLAG_VISITED
-    bne !rv_visited+
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    sta zp_temp0
+    jsr dr_eval_tile_char
+    bra !rv_player_chk+
 
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rv_detect_blank+
+!draw_blank:
     lda #SC_SPACE
-    sta zp_temp0
-    jmp !rv_live_monster+
-!rv_detect_blank:
-    jmp !draw_blank+
-!rv_visited:
+    sta zp_temp3
 
-    lda zp_tile_tmp
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-
-    // Wall types 1-6 without FLAG_LIT = corridor rock -> '#'
-    cpx #7
-    bcs !rv_normal+
-    cpx #1
-    bcc !rv_normal+
-    lda zp_tile_tmp
-    and #FLAG_LIT
-    bne !rv_normal+
-    lda #$23                // '#'
-    sta zp_temp0
-    bne !rv_tile_set+
-!rv_normal:
-    lda tile_screen_codes,x
-    sta zp_temp0
-!rv_tile_set:
-
-    // Store door number override (town only, open door tiles only)
-    lda zp_player_dlvl
-    bne !rv_no_store+
-    cpx #7
-    bne !rv_no_store+
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    sta rv_col_tmp
-    ldx #0
-!rv_store_chk:
-    lda store_door_x,x
-    cmp rv_col_tmp
-    bne !rv_store_nxt+
-    lda store_door_y,x
-    cmp rv_row_map_y
-    bne !rv_store_nxt+
-    txa
-    clc
-    adc #$31                // '1'-'8'
-    sta zp_temp0
-    bne !rv_no_store+
-!rv_store_nxt:
-    inx
-    cpx #STORE_COUNT
-    bne !rv_store_chk-
-!rv_no_store:
-
-    // --- Visibility gate: remembered vs currently visible ---
-    lda zp_tile_tmp
-    and #FLAG_LIT
-    bne !rv_vis_ok+
-
-    lda rv_row_dy
-    cmp zp_light_radius
-    beq !rv_check_dx+
-    bcc !rv_check_dx+
-    jmp !rv_dimmed+
-
-!rv_check_dx:
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    sec
-    sbc zp_player_x
-    bcs !rv_dx_pos+
-    eor #$ff
-    clc
-    adc #1
-!rv_dx_pos:
-    cmp rv_row_dy
-    bcs !rv_use_dx+
-    lda rv_row_dy
-!rv_use_dx:
-    cmp zp_light_radius
-    beq !rv_vis_ok+
-    bcc !rv_vis_ok+
-
-!rv_dimmed:
-    // Monochrome LOS differentiation: remembered floor '.' ($2E) outside
-    // light radius renders as space ' ' ($20); structural walls/doors/stairs
-    // remain visible.
-    lda zp_temp0
-    cmp #$2e
-    bne !rv_no_glyph+
-    lda #SC_SPACE
-    sta zp_temp0
-    jmp !rv_no_glyph+
-
-!rv_vis_ok:
-    lda zp_tile_tmp
-    and #FLAG_HAS_ITEM
-    beq !rv_no_item+
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    ldy rv_row_map_y
-    jsr floor_item_find_at
-    bcc !rv_no_item+
-    lda fi_item_id,x
-    tax
-    jsr item_get_display_char
-    sta zp_temp0
-!rv_no_item:
-    lda rv_row_has_glyph
-    beq !rv_no_glyph+
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    ldy rv_row_map_y
-    jsr glyph_find_at
-    bcc !rv_no_glyph+
-    lda #SC_GLYPH
-    sta zp_temp0
-!rv_no_glyph:
-
-!rv_live_monster:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rv_no_monster+
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    ldy rv_row_map_y
-    jsr monster_find_at
-    bcc !rv_no_monster+
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    and #(MF_VISIBLE | MF_DETECTED)
-    beq !rv_no_monster+
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_display,x
-    sta zp_temp0
-
-!rv_no_monster:
-rv_apply_player_override:
+!rv_player_chk:
     lda rv_player_row
     beq !write_tile+
     lda zp_render_x
     cmp rv_player_vx
     bne !write_tile+
     lda #SC_PLAYER
-    sta zp_temp0
-    jmp !write_tile+
-
-!draw_blank:
-    lda #SC_SPACE
-    sta zp_temp0
-    jmp rv_apply_player_override
+    sta zp_temp3
 
 !write_tile:
     ldy zp_render_x
-    lda zp_temp0
+    lda zp_temp3
     sta rv_row_scr_buf + VIEWPORT_X,y
 
     inc zp_render_x
     lda zp_render_x
     cmp #VIEWPORT_W
-    beq !col_done+
-    jmp !col_loop-
-!col_done:
+    bne !col_loop-
 
     lda zp_render_y
     clc
@@ -359,8 +167,148 @@ rv_apply_player_override:
     beq !done+
     jmp !row_loop-
 !done:
-    lda #0
-    sta vis_room_revealed
+    stz vis_room_revealed
+    rts
+
+// ============================================================
+// dr_eval_tile_char — Compute screen char for map tile (zp_temp0, zp_temp1)
+// Input:  zp_tile_tmp = map byte, zp_temp0 = map_x, zp_temp1 = map_y
+// Output: zp_temp3 = display screen code (handles unvisited detected monsters,
+//         wall '#', store doors '1'..'8', monochrome LOS dim, items/glyphs, monsters)
+// ============================================================
+dr_eval_tile_char:
+    lda #SC_SPACE
+    sta zp_temp3
+    lda zp_tile_tmp
+    and #FLAG_VISITED
+    bne !detc_visited+
+    jmp !detc_monster+
+!detc_visited:
+
+    lda zp_tile_tmp
+    lsr
+    lsr
+    lsr
+    lsr
+    tax
+
+    // Wall types 1-6 without FLAG_LIT = corridor rock -> '#'
+    cpx #7
+    bcs !detc_normal+
+    cpx #1
+    bcc !detc_normal+
+    lda zp_tile_tmp
+    and #FLAG_LIT
+    bne !detc_normal+
+    lda #$23                // '#'
+    sta zp_temp3
+    bne !detc_tile_set+
+!detc_normal:
+    lda tile_screen_codes,x
+    sta zp_temp3
+!detc_tile_set:
+
+    // Store door number override (town only, open door tiles only)
+    lda zp_player_dlvl
+    bne !detc_no_store+
+    cpx #7
+    bne !detc_no_store+
+    ldx #0
+!detc_store_chk:
+    lda store_door_x,x
+    cmp zp_temp0
+    bne !detc_store_nxt+
+    lda store_door_y,x
+    cmp zp_temp1
+    bne !detc_store_nxt+
+    txa
+    clc
+    adc #$31                // '1'-'8'
+    sta zp_temp3
+    bne !detc_no_store+
+!detc_store_nxt:
+    inx
+    cpx #STORE_COUNT
+    bne !detc_store_chk-
+!detc_no_store:
+
+    // --- Visibility gate: remembered vs currently visible ---
+    lda zp_tile_tmp
+    and #FLAG_LIT
+    bne !detc_vis_ok+
+
+    lda zp_temp0
+    sec
+    sbc zp_player_x
+    bcs !detc_dx_pos+
+    eor #$ff
+    inc
+!detc_dx_pos:
+    sta rst_dim_tmp
+
+    lda zp_temp1
+    sec
+    sbc zp_player_y
+    bcs !detc_dy_pos+
+    eor #$ff
+    inc
+!detc_dy_pos:
+    cmp rst_dim_tmp
+    bcs !detc_use_dy+
+    lda rst_dim_tmp
+!detc_use_dy:
+    cmp zp_light_radius
+    beq !detc_vis_ok+
+    bcc !detc_vis_ok+
+
+    // Monochrome LOS differentiation: remembered floor '.' ($2E) outside
+    // light radius renders as space ' ' ($20); structural walls/doors/stairs stay.
+    lda zp_temp3
+    cmp #$2e
+    bne !detc_monster+
+    lda #SC_SPACE
+    sta zp_temp3
+    bne !detc_monster+
+
+!detc_vis_ok:
+    lda zp_tile_tmp
+    and #FLAG_HAS_ITEM
+    beq !detc_no_item+
+    ldy zp_temp1
+    lda zp_temp0
+    jsr floor_item_find_at
+    bcc !detc_no_item+
+    lda fi_item_id,x
+    tax
+    jsr item_get_display_char
+    sta zp_temp3
+!detc_no_item:
+    ldy zp_temp1
+    lda zp_temp0
+    jsr glyph_find_at
+    bcc !detc_monster+
+    lda #SC_GLYPH
+    sta zp_temp3
+
+!detc_monster:
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !detc_done+
+    ldy zp_temp1
+    lda zp_temp0
+    jsr monster_find_at
+    bcc !detc_done+
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    beq !detc_done+
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_display,x
+    sta zp_temp3
+!detc_done:
     rts
 
 // ============================================================
@@ -400,141 +348,8 @@ render_single_tile:
     jsr mmu_safe_map_read_ptr0
     sta zp_tile_tmp
 
-    and #FLAG_VISITED
-    bne !rst_visited+
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    bne !rst_detect_occ+
-    jmp !rst_blank+
-!rst_detect_occ:
-    lda #SC_SPACE
-    sta zp_temp3
-    jmp !rst_monster+
-!rst_visited:
+    jsr dr_eval_tile_char
 
-    lda zp_tile_tmp
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-
-    cpx #7
-    bcs !rst_normal+
-    cpx #1
-    bcc !rst_normal+
-    lda zp_tile_tmp
-    and #FLAG_LIT
-    bne !rst_normal+
-    lda #$23
-    sta zp_temp3
-    bne !rst_tile_set+
-!rst_normal:
-    lda tile_screen_codes,x
-    sta zp_temp3
-!rst_tile_set:
-
-    lda zp_player_dlvl
-    bne !rst_no_store+
-    cpx #7
-    bne !rst_no_store+
-    ldx #0
-!rst_store_chk:
-    lda store_door_x,x
-    cmp zp_temp0
-    bne !rst_store_nxt+
-    lda store_door_y,x
-    cmp zp_temp1
-    bne !rst_store_nxt+
-    txa
-    clc
-    adc #$31
-    sta zp_temp3
-    bne !rst_no_store+
-!rst_store_nxt:
-    inx
-    cpx #STORE_COUNT
-    bne !rst_store_chk-
-!rst_no_store:
-
-    lda zp_tile_tmp
-    and #FLAG_LIT
-    bne !rst_vis_ok+
-
-    lda zp_temp0
-    sec
-    sbc zp_player_x
-    bcs !rst_dx_pos+
-    eor #$ff
-    clc
-    adc #1
-!rst_dx_pos:
-    sta rst_dim_tmp
-
-    lda zp_temp1
-    sec
-    sbc zp_player_y
-    bcs !rst_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!rst_dy_pos:
-    cmp rst_dim_tmp
-    bcs !rst_use_dy+
-    lda rst_dim_tmp
-!rst_use_dy:
-    cmp zp_light_radius
-    beq !rst_vis_ok+
-    bcc !rst_vis_ok+
-
-    // Monochrome LOS differentiation: remembered floor '.' -> ' '
-    lda zp_temp3
-    cmp #$2e
-    bne !rst_monster+
-    lda #SC_SPACE
-    sta zp_temp3
-    jmp !rst_monster+
-
-!rst_vis_ok:
-    lda zp_tile_tmp
-    and #FLAG_HAS_ITEM
-    beq !rst_no_item+
-    ldy zp_temp1
-    lda zp_temp0
-    jsr floor_item_find_at
-    bcc !rst_no_item+
-    lda fi_item_id,x
-    tax
-    jsr item_get_display_char
-    sta zp_temp3
-!rst_no_item:
-    ldy zp_temp1
-    lda zp_temp0
-    jsr glyph_find_at
-    bcc !rst_monster+
-    lda #SC_GLYPH
-    sta zp_temp3
-
-!rst_monster:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq !rst_no_monster+
-    ldy zp_temp1
-    lda zp_temp0
-    jsr monster_find_at
-    bcc !rst_no_monster+
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    and #(MF_VISIBLE | MF_DETECTED)
-    beq !rst_no_monster+
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_display,x
-    sta zp_temp3
-
-!rst_no_monster:
 rst_apply_player_override:
     lda zp_temp0
     cmp zp_player_x
@@ -544,15 +359,6 @@ rst_apply_player_override:
     bne !rst_write+
     lda #SC_PLAYER
     sta zp_temp3
-    jmp !rst_write+
-
-!rst_blank:
-    lda #SC_SPACE
-    sta zp_temp3
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    beq rst_apply_player_override
-    bne !rst_monster-
 
 !rst_write:
     lda zp_temp3
@@ -574,98 +380,14 @@ old_view_y:    .byte 0
 old_player_x:  .byte 0
 old_player_y:  .byte 0
 
+rla_view_span: .byte VIEWPORT_W - 1, VIEWPORT_H - 1
+rla_map_limit: .byte MAP_COLS, MAP_ROWS
+
 render_local_area:
-    lda old_player_x
-    cmp zp_player_x
-    bcc !rla_ox+
-    lda zp_player_x
-!rla_ox:
-    sec
-    sbc zp_light_radius
-    bcs !rla_mx1+
-    lda #0
-    beq !rla_mx2+
-!rla_mx1:
-    sec
-    sbc #1
-    bcs !rla_mx2+
-    lda #0
-!rla_mx2:
-    cmp zp_view_x
-    bcs !rla_mx3+
-    lda zp_view_x
-!rla_mx3:
-    sta rla_min_x
-
-    lda old_player_x
-    cmp zp_player_x
-    bcs !rla_ox2+
-    lda zp_player_x
-!rla_ox2:
-    clc
-    adc zp_light_radius
-    clc
-    adc #1
-    sta rla_max_x
-    lda zp_view_x
-    clc
-    adc #VIEWPORT_W - 1
-    cmp rla_max_x
-    bcs !rla_mx4+
-    sta rla_max_x
-!rla_mx4:
-    lda rla_max_x
-    cmp #MAP_COLS
-    bcc !rla_mx5+
-    lda #MAP_COLS - 1
-    sta rla_max_x
-!rla_mx5:
-
-    lda old_player_y
-    cmp zp_player_y
-    bcc !rla_oy+
-    lda zp_player_y
-!rla_oy:
-    sec
-    sbc zp_light_radius
-    bcs !rla_my1+
-    lda #0
-    beq !rla_my2+
-!rla_my1:
-    sec
-    sbc #1
-    bcs !rla_my2+
-    lda #0
-!rla_my2:
-    cmp zp_view_y
-    bcs !rla_my3+
-    lda zp_view_y
-!rla_my3:
-    sta rla_min_y
-
-    lda old_player_y
-    cmp zp_player_y
-    bcs !rla_oy2+
-    lda zp_player_y
-!rla_oy2:
-    clc
-    adc zp_light_radius
-    clc
-    adc #1
-    sta rla_max_y
-    lda zp_view_y
-    clc
-    adc #VIEWPORT_H - 1
-    cmp rla_max_y
-    bcs !rla_my4+
-    sta rla_max_y
-!rla_my4:
-    lda rla_max_y
-    cmp #MAP_ROWS
-    bcc !rla_my5+
-    lda #MAP_ROWS - 1
-    sta rla_max_y
-!rla_my5:
+    ldx #0
+    jsr rla_calc_axis
+    ldx #1
+    jsr rla_calc_axis
 
     lda rla_min_y
     sta rla_cur_y
@@ -694,19 +416,69 @@ render_local_area:
 !rla_done:
     rts
 
-rv_row_map_y:  .byte 0
-rv_row_dy:     .byte 0
+rla_calc_axis:
+    lda old_player_x,x
+    cmp zp_player_x,x
+    bcc !rla_min_ok+
+    lda zp_player_x,x
+!rla_min_ok:
+    sec
+    sbc zp_light_radius
+    bcs !rla_m1+
+    lda #0
+    beq !rla_m2+
+!rla_m1:
+    sec
+    sbc #1
+    bcs !rla_m2+
+    lda #0
+!rla_m2:
+    cmp zp_view_x,x
+    bcs !rla_m3+
+    lda zp_view_x,x
+!rla_m3:
+    sta rla_min,x
+
+    lda old_player_x,x
+    cmp zp_player_x,x
+    bcs !rla_max_ok+
+    lda zp_player_x,x
+!rla_max_ok:
+    clc
+    adc zp_light_radius
+    clc
+    adc #1
+    sta rla_max,x
+    lda zp_view_x,x
+    clc
+    adc rla_view_span,x
+    cmp rla_max,x
+    bcs !rla_m4+
+    sta rla_max,x
+!rla_m4:
+    lda rla_max,x
+    cmp rla_map_limit,x
+    bcc !rla_m5+
+    lda rla_map_limit,x
+    dec
+    sta rla_max,x
+!rla_m5:
+    rts
+
 rv_player_vx:  .byte 0
 rv_player_row: .byte 0
-rv_col_tmp:    .byte 0
 rst_col_tmp:   .byte 0
 rst_dim_tmp:   .byte 0
+rla_min:
 rla_min_x:     .byte 0
-rla_max_x:     .byte 0
 rla_min_y:     .byte 0
+rla_max:
+rla_max_x:     .byte 0
 rla_max_y:     .byte 0
 rla_cur_x:     .byte 0
 rla_cur_y:     .byte 0
+
+.assert "Contiguous ZP pairs for axis helpers", zp_view_y == zp_view_x + 1 && zp_player_y == zp_player_x + 1 && old_player_y == old_player_x + 1, true
 
 .assert "Viewport width", VIEWPORT_W, 78
 .assert "Viewport height", VIEWPORT_H, 18

@@ -24,8 +24,8 @@ item_wear:
     jsr inv_slot_to_fi_add
 
     // The filtered picker already excludes non-equippable categories and oil.
-    ldx piw_item_id
-    lda it_category,x
+    ldx piw_slot
+    jsr item_get_category_inv_x
     tax
     lda equip_slot_for_cat,x
     cmp #EQUIP_RING             // VMS moria.inc:528: the right hand when free,
@@ -58,9 +58,12 @@ item_wear:
     ldx piw_equip
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !iw_no_swap+
+    bne !+
+    jmp !iw_no_swap+
+!:
 
     // Remove the old item's direct current-stat adjustment before the swap.
+    clc
     jsr player_adjust_equipment_stat
 
     // Swap: copy old equipped item to the source carried slot
@@ -100,8 +103,11 @@ item_wear:
     bcs !iw_stack_off+
     jmp piw_pack_full           // no room on the floor either: nothing changes
 !iw_stack_off:
+    ldx piw_equip
     clc
     jsr player_adjust_equipment_stat
+    ldx piw_equip
+    jsr inv_remove_item         // Drop old worn item from equip & weight
 !iw_stack_one:
     ldx piw_slot
     dec inv_qty,x
@@ -111,9 +117,10 @@ item_wear:
     bne !iw_write_equip+        // always
 
 !iw_no_swap:
-    // Clear the source carried slot
+    // Clear the source carried slot; restore the single worn item's weight.
     ldx piw_slot
     jsr inv_remove_item
+    jsr inven_add_fi_add_weight
 
 !iw_write_equip:
     // Write saved carried item data to equipment slot
@@ -303,10 +310,9 @@ item_eat:
     cmp #FI_EMPTY
     beq !ie_next+
 
-    // Check category: look up it_category[item_type]
-    sta piw_item_id             // Save item type
-    tax
-    lda it_category,x
+    // Check category via page-aware inventory helper (preserves X)
+    sta piw_item_id             // Save slot_lo
+    jsr item_get_category_inv_x
     cmp #ICAT_FOOD
     beq !ie_found+
 
@@ -319,15 +325,31 @@ item_eat:
     jmp piw_msg_no_turn
 
 !ie_found:
-    // piw_slot = inventory slot, piw_item_id = item type
-    // Determine food value
+    // piw_slot = inventory slot, piw_item_id = slot_lo, item_cur_page = $00 or $40
+    lda item_cur_page
+    sta piw_ego                 // Save page bit across inv_consume_one
+    bne !ie_check_p1_food+
     lda piw_item_id
     cmp #ITEM_RATION
     beq !ie_ration+
-    // Default to slime mold value
+    cmp #ITEM_TYPE_ELVISH_WAYBREAD_L
+    beq !ie_waybread+
+    bne !ie_slime+
+!ie_check_p1_food:
+    lda piw_item_id
+    cmp #ITEM_TYPE_ELVISH_WAYBREAD_H - ITEM_PAGE_SIZE
+    beq !ie_waybread+
+!ie_slime:
+    // Default to slime mold food value
     lda #FOOD_SLIME_VALUE_LO
     sta zp_temp0
     lda #FOOD_SLIME_VALUE_HI
+    sta zp_temp1
+    jmp !ie_add_food+
+!ie_waybread:
+    lda #FOOD_MAX_LO
+    sta zp_temp0
+    lda #FOOD_MAX_HI
     sta zp_temp1
     jmp !ie_add_food+
 !ie_ration:
@@ -381,16 +403,19 @@ item_eat:
     ldx #HSTR_PIW_EAT
     jsr huff_append_combat
 
-    lda #0
-    sta fi_add_ego              // Food has no ego
+    lda piw_ego
+    sta fi_add_ego              // Preserve page bit (food has ego 0)
     lda piw_item_id
     jsr item_append_name
 
-    // Check if slime mold for different flavor text
+    // Check if slime mold for different flavor text (Page 0 only)
+    lda piw_ego
+    bne !ie_delicious+
     lda piw_item_id
     cmp #ITEM_SLIME_MOLD
     beq !ie_yuck+
 
+!ie_delicious:
     ldx #HSTR_PIW_DELICIOUS
     jmp !ie_end_msg+
 !ie_yuck:
@@ -400,6 +425,19 @@ item_eat:
 
     jsr cmb_term_and_print
 
+    // Extended mushroom / Elvish Waybread effects (Page 1 or Page 0 >= 248)
+    lda piw_ego
+    bne !ie_ext_effect+
+    lda piw_item_id
+    cmp #248
+    bcc !ie_done+
+!ie_ext_effect:
+#if HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+    jsr tramp_eff_ext_eat
+#else
+    jsr eff_ext_eat_piw
+#endif
+!ie_done:
     sec                         // Turn consumed
     rts
 
@@ -421,6 +459,8 @@ item_eat:
 // Input: X = item type ID. Clobbers: A, Y (X preserved via id_known_set).
 // ============================================================
 piq_quaff_identify:
+    bit item_cur_page
+    bvs !pqi_ident+             // All Page 1 potions identify unconditionally on quaff
     txa
     cmp #17                 // Cure Light Wounds
     beq !pqi_heal+
@@ -457,6 +497,10 @@ item_quaff:
 !iq_in_range:
     stx piw_slot
     sta piw_item_id
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta piw_ego
+    sta item_cur_page
     // The prompt has been answered; clear it so an effect that prints nothing
     // (e.g. a heal at full HP) doesn't leave it lingering like a -more- prompt.
     jsr msg_clear
@@ -473,11 +517,16 @@ item_quaff:
     jsr id_known_set
 #endif
 
-    // Use one potion from the stack
+    // Use one potion from the stack (clobbers item_cur_page via weight helper)
     ldx piw_slot
     jsr inv_consume_one
 
-    // Apply effect based on item type.
+    // Page 1 potions (#270-#294) route through extended potion handler
+    lda piw_ego
+    sta item_cur_page
+    bne !iq_page1+
+
+    // Apply Page 0 effect based on item type.
     lda piw_item_id
     cmp #17
     bcc !iq_dispatch_generic+
@@ -491,7 +540,15 @@ item_quaff:
     lda iq_dispatch_hi,x
     sta zp_ptr1_hi
     jmp (zp_ptr1)
-// Reached from item_quaff with A = potion type ID (96-100, 126, or other).
+!iq_page1:
+#if HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+    jsr tramp_eff_ext_quaff
+#else
+    jsr eff_ext_quaff_piw
+#endif
+    sec
+    rts
+// Reached from item_quaff with A = Page 0 potion type ID (96-100, 126, or other).
 !iq_dispatch_generic:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT || HAL_PLATFORM_COMPACT_PLAY_SLOT
     cmp #ITEM_TYPE_POT_GAIN_STR
@@ -512,13 +569,9 @@ item_quaff:
     // Phase 3 potion handlers live in the spell overlay (items
     // overlay is full). Loading it here would evict this items-overlay
     // continuation, so the swap runs through the resident trampoline.
-    lda piw_item_id
-    sta hal_tsci_arg
     lda #<iq_dispatch_p3_spell
-    sta tsci_target+1
-    lda #>iq_dispatch_p3_spell
-    sta tsci_target+2
-    jsr tramp_spell_call_items
+    ldy #>iq_dispatch_p3_spell
+    jsr piw_call_spell_a_y
     sec
     rts
 #endif
@@ -813,3 +866,17 @@ iq_msg_turn:
     jsr huff_print_msg
     sec
     rts
+
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+piw_call_spell_a_y:
+    sta tsci_target+1
+    sty tsci_target+2
+    lda piw_ego
+    sta item_cur_page
+    lda piw_item_id
+    sta hal_tsci_arg
+    jmp tramp_spell_call_items
+#endif
+#if !HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+    #import "eff_item_extended.s"
+#endif

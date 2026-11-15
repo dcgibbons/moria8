@@ -34,6 +34,8 @@ test_finish:
 
 .pc = * "Test Body"
 
+.segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -49,7 +51,6 @@ test_finish:
 // exercised here (tier loading only): out of the way above the I/O hole
 // (2026-11-11, the Lordly rings and the element touches ran the body past
 // $D000).
-.segmentdef TestUnusedEgoArmour [start=$e100]
 #define PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {
     .segment TestUnusedEgoArmour
@@ -67,24 +68,33 @@ hal_player_recalc_pflags:
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
+.segment Default
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/monster_magic.s"
+.segment Default
+// Tier loading never reads an item record: with the catalog out, a stray
+// read stops at this BRK instead of returning data.
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/special_rooms.s"
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
@@ -105,22 +115,30 @@ hal_player_recalc_pflags:
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
+.segment TestCreateOverlay
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/ui_inventory.s"
 #import "../../../../core/ui_equipment.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
 #import "../../../../core/store_data.s"
 #import "../../../../core/store.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/ui_store.s"
+.segment Default
 #import "../../../../core/ui_help.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 

@@ -26,11 +26,21 @@ test_exit_trampoline:
 .const STATUS_ROW = 21
 .const COL_WHITE = $01
 .const hal_storage_cmd_channel = 15
+.const hal_platform_overlay_count = 13
+#define HAL_PLATFORM_OVERLAY_STATE_LOCAL
+#define HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT
+.const hal_storage_marker_file_num = 6
+.const hal_storage_marker_sec_read = 2
+.const hal_storage_marker_sec_write = 2
+.const hal_storage_program_file_num = 7
+.const hal_storage_marker_magic_len = 6
 .const hal_storage_disk_setup_supports_other_drive = 1
 .const hal_storage_disk_setup_detail_dos_drive = 0
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
+
+#import "../hal/storage_title_name.s"
 
 .const KERNAL_SETNAM = kernal_setnam
 .const KERNAL_SETLFS = kernal_setlfs
@@ -92,9 +102,12 @@ zp_save_cursor_row:  .byte 0
 zp_save_text_color:  .byte 0
 
 screen_put_string:
+.label hal_screen_put_string = screen_put_string
 screen_put_char:
 screen_clear_row:
 screen_put_decimal_rj2:
+ui_clear_full_screen_safe:
+msg_init:
 input_get_key:
 .label hal_input_get_key = input_get_key
 .label hal_input_get_text_char = input_get_key
@@ -114,6 +127,7 @@ kernal_load:
     sta load_seen_bank
     clc
     rts
+.label hal_asset_load_prg_header = kernal_load
 
 kernal_setnam:
 kernal_setlfs:
@@ -155,6 +169,25 @@ c64_disk_marker_init:
 c64_disk_marker_present:
     sec
     rts
+.label hal_storage_marker_present = c64_disk_marker_present
+hal_storage_init_selected_drive:
+hal_storage_marker_write_resident:
+hal_storage_probe_media:
+    clc
+    rts
+hal_storage_read_command_status:
+    rts
+.label hal_storage_command_status = disk_save_media_status
+hal_storage_marker_magic:
+    .byte $4d, $4f, $52, $49, $41, $38
+hal_storage_marker_scratch_name:
+    .byte $53, $30, $3a, $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+.label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
+hal_storage_marker_write_name:
+    .byte $40, $30, $3a, $4d, $4f, $52, $49, $41, $38, $2e, $49, $44, $2c, $53, $2c, $57
+.label hal_storage_marker_write_name_len = * - hal_storage_marker_write_name
+.label hal_storage_marker_read_name = hal_storage_marker_write_name + 1
+.label hal_storage_marker_read_name_len = hal_storage_marker_write_name_len - 1
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
@@ -164,6 +197,9 @@ c64_disk_marker_present:
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
+
+#import "../../common/overlay.s"
+#import "../../common/disk_swap.s"
 
 ui_disk_setup_dispatch:
     lda $01
@@ -193,9 +229,6 @@ ui_disk_setup_dispatch:
 !store:
     sta disk_ui_result
     rts
-
-#import "../../common/overlay.s"
-#import "../../common/disk_swap.s"
 
 banked_payload:
 .pseudopc $F000 {

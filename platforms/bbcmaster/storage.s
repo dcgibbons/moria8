@@ -48,7 +48,22 @@ beeb_name_drive:        .byte 0
 // (services.s) unwinds S to beeb_mos_saved_sp and returns from the wrapper
 // with Carry set and A = fault code.
 
+beeb_close_icat_in_mos:
+    ldy beeb_icat_handle
+    beq !bci_ret+
+    pha
+    phx
+    phy
+    stz beeb_icat_handle
+    jsr beeb_call_osfind_close
+    ply
+    plx
+    pla
+!bci_ret:
+    rts
+
 beeb_call_osfile:
+    jsr beeb_close_icat_in_mos
     tsx
     stx beeb_mos_saved_sp
     ldx #1
@@ -56,12 +71,11 @@ beeb_call_osfile:
     ldx #<BEEB_OS_CTRL_BASE
     ldy #>BEEB_OS_CTRL_BASE
     jsr MOS_OSFILE
-    ldx #0
-    stx beeb_mos_active
-    clc
-    rts
+    bra !mos_done+
 
 beeb_call_osfind:
+    jsr beeb_close_icat_in_mos
+beeb_call_osfind_keep_icat:
     tsx
     stx beeb_mos_saved_sp
     ldx #1
@@ -69,10 +83,7 @@ beeb_call_osfind:
     ldx #<BEEB_OS_PATH_BASE
     ldy #>BEEB_OS_PATH_BASE
     jsr MOS_OSFIND
-    ldx #0
-    stx beeb_mos_active
-    clc
-    rts
+    bra !mos_done+
 
 beeb_call_osfind_close:
     tsx
@@ -81,10 +92,7 @@ beeb_call_osfind_close:
     stx beeb_mos_active
     lda #$00
     jsr MOS_OSFIND
-    ldx #0
-    stx beeb_mos_active
-    clc
-    rts
+    bra !mos_done+
 
 beeb_call_osgbpb:
     tsx
@@ -94,12 +102,10 @@ beeb_call_osgbpb:
     ldx #<BEEB_OS_CTRL_BASE
     ldy #>BEEB_OS_CTRL_BASE
     jsr MOS_OSGBPB
-    ldx #0
-    stx beeb_mos_active
-    clc
-    rts
+    bra !mos_done+
 
 beeb_call_osword7f:
+    jsr beeb_close_icat_in_mos
     tsx
     stx beeb_mos_saved_sp
     ldx #1
@@ -108,14 +114,38 @@ beeb_call_osword7f:
     ldx #<BEEB_OS_CTRL_BASE
     ldy #>BEEB_OS_CTRL_BASE
     jsr MOS_OSWORD
+!mos_done:
     ldx #0
     stx beeb_mos_active
     clc
     rts
 
+// beeb_mos_osword7f — Safe resident (< $3000) EnterMos..ExitMos wrapper for
+// StorageOverlay ($A800-$BFFF) Track 0 formatting so Bank 4 is restored before rts.
+beeb_mos_osword7f:
+    jsr EnterMos
+    jsr beeb_call_osword7f
+    jmp ExitMos
+
 // ============================================================
 // beeb_zero_os_ctrl — Clear 18-byte control block at BEEB_OS_CTRL_BASE
 // ============================================================
+// beeb_mos_open_read — Enter MOS and open BEEB_OS_PATH_BASE for input.
+// Output: Carry clear = handle in A (>0, MOS still active); Carry set = closed/ExitMos done.
+beeb_mos_open_read:
+    jsr EnterMos
+    lda #$40                // Open for input (read-only)
+    jsr beeb_call_osfind_keep_icat
+    bcs !bmor_fail+
+    cmp #$00
+    beq !bmor_fail+
+    clc
+    rts
+!bmor_fail:
+    jsr ExitMos
+    sec
+    rts
+
 beeb_zero_os_ctrl:
     ldx #17
     lda #0
@@ -123,6 +153,21 @@ beeb_zero_os_ctrl:
     sta BEEB_OS_CTRL_BASE,x
     dex
     bpl !zloop-
+    rts
+
+// beeb_prep_ss_osgbpb — Zero OS control block and target beeb_ss_buf with handle A.
+beeb_prep_ss_osgbpb:
+    pha
+    jsr beeb_zero_os_ctrl
+    pla
+    sta BEEB_OS_CTRL_BASE + 0
+    lda #<beeb_ss_buf
+    sta BEEB_OS_CTRL_BASE + 1
+    lda #>beeb_ss_buf
+    sta BEEB_OS_CTRL_BASE + 2
+    lda #$ff
+    sta BEEB_OS_CTRL_BASE + 3
+    sta BEEB_OS_CTRL_BASE + 4
     rts
 
 // ============================================================
@@ -135,11 +180,12 @@ beeb_set_pathname:
     sta beeb_io_cnt
     stx beeb_io_src
     sty beeb_io_src_hi
+    ldx #3
     lda #0
-    sta beeb_name_write
-    sta beeb_name_replace
-    sta beeb_name_scratch
-    sta beeb_name_drive
+!clr_flags:
+    sta beeb_name_write,x
+    dex
+    bpl !clr_flags-
 
     // Prefix ":d." where d = '0' + ((beeb_io_device - 8) & 3)
     lda #$3a                // ':'
@@ -155,6 +201,7 @@ beeb_set_pathname:
 
     ldy #0
 !prefix_loop:
+    sty beeb_io_pages       // Stash start/rollback index
     cpy beeb_io_cnt
     bcc !prefix_body+
     jmp !parse_done+
@@ -166,57 +213,44 @@ beeb_set_pathname:
     sta beeb_name_replace
     sta beeb_name_write
     iny
-    jmp !prefix_loop-
+    bne !prefix_loop-
 !not_at:
+    ldx #0
     cmp #'S'
-    bne !not_s+
+    bne !chk_drive0+
+    inx
     iny
     cpy beeb_io_cnt
-    bcs !rewind_y+
+    bcs !check_base+
     lda (beeb_io_src),y
-    cmp #'0'
-    bne !rewind_y+
-    iny
-    cpy beeb_io_cnt
-    bcs !rewind_y2+
-    lda (beeb_io_src),y
-    cmp #':'
-    bne !rewind_y2+
-    lda #1
-    sta beeb_name_scratch
-    sta beeb_name_drive
-    iny
-    jmp !prefix_loop-
-!rewind_y2:
-    dey
-!rewind_y:
-    dey
-    jmp !check_base+
-!not_s:
+!chk_drive0:
     cmp #'0'
     bne !check_base+
     iny
     cpy beeb_io_cnt
-    bcs !rewind_y-
+    bcs !check_base+
     lda (beeb_io_src),y
     cmp #':'
-    bne !rewind_y-
+    bne !check_base+
     lda #1
     sta beeb_name_drive
+    cpx #0
+    beq !prefix_next+
+    sta beeb_name_scratch
+!prefix_next:
     iny
-    jmp !prefix_loop-
+    bne !prefix_loop-
 
 !check_base:
-    // Check for trailing ",S,W" suffix
-    sty beeb_io_pages       // Stash start offset of base filename
+    // Roll back Y if drive prefix matched only partially, then check trailing ",W"
     ldy beeb_io_cnt
-    beq !map_name+
+    cpy #2
+    bcc !map_name+
     dey
     lda (beeb_io_src),y
     cmp #'W'
     bne !map_name+
     dey
-    bmi !map_name+
     lda (beeb_io_src),y
     cmp #','
     bne !map_name+
@@ -226,76 +260,50 @@ beeb_set_pathname:
 !map_name:
     ldy beeb_io_pages
     cpy beeb_io_cnt
-    bcc !map_body+
-    jmp !parse_done+
-!map_body:
+    bcs !parse_done+
     lda (beeb_io_src),y
 
     // Map Commodore mutable filenames to 7-char Acorn DFS names:
     //   "MORIA8.ID"    -> "MORIAID"
     //   "HALL.OF.FAME" -> "HISCORE"
     //   "THE.GAME[2-4]"-> "SAVE0".."SAVE3"
+    cmp #'H'
+    bne !chk_mor+
+    ldy #8
+    jsr !copy_mapped+
+    bra !terminate_x+
+
+!chk_mor:
     cmp #'M'
-    bne !chk_hall+
+    bne !chk_save+
     iny
     cpy beeb_io_cnt
-    bcs !copy_raw_m+
+    bcs !copy_raw+
     lda (beeb_io_src),y
     cmp #'O'
-    bne !copy_raw_m+
+    bne !copy_raw+
     iny
     cpy beeb_io_cnt
-    bcs !copy_raw_m2+
+    bcs !copy_raw+
     lda (beeb_io_src),y
-    dey
-    dey
     cmp #'R'
     bne !copy_raw+
-    ldx #0
-!cp_moriaid:
-    lda beeb_fn_moriaid,x
-    sta BEEB_OS_PATH_BASE + 3,x
-    inx
-    cpx #7
-    bcc !cp_moriaid-
-    jmp !terminate_x+
-!copy_raw_m2:
-    dey
-!copy_raw_m:
-    dey
-    jmp !copy_raw+
-
-!chk_hall:
-    cmp #'H'
-    bne !chk_save+
-    ldx #0
-!cp_hiscore:
-    lda beeb_fn_hiscore,x
-    sta BEEB_OS_PATH_BASE + 3,x
-    inx
-    cpx #7
-    bcc !cp_hiscore-
-    jmp !terminate_x+
+    ldy #0
+    jsr !copy_mapped+
+    bra !terminate_x+
 
 !chk_save:
     cmp #'T'
     bne !copy_raw+
     iny
     cpy beeb_io_cnt
-    bcs !copy_raw_t+
+    bcs !copy_raw+
     lda (beeb_io_src),y
-    dey
     cmp #'H'
     bne !copy_raw+
-    // Copy "SAVE0" and adjust digit if "THE.GAME2".."THE.GAME4"
-    ldx #0
-!cp_save:
-    lda beeb_fn_save0,x
-    sta BEEB_OS_PATH_BASE + 3,x
-    inx
-    cpx #5
-    bcc !cp_save-
-    tya
+    ldy #16
+    jsr !copy_mapped+
+    lda beeb_io_pages
     clc
     adc #8
     tay
@@ -309,12 +317,10 @@ beeb_set_pathname:
     sec
     sbc #1                  // '2' -> '1', '3' -> '2', '4' -> '3'
     sta BEEB_OS_PATH_BASE + 3 + 4
-    ldx #5
-    jmp !terminate_x+
-!copy_raw_t:
-    dey
+    bra !terminate_x+
 
 !copy_raw:
+    ldy beeb_io_pages
     ldx #0
 !raw_loop:
     cpy beeb_io_cnt
@@ -335,30 +341,32 @@ beeb_set_pathname:
     rts
 
 !parse_done:
-    lda #$0d
-    sta BEEB_OS_PATH_BASE + 3
+    ldx #0
+    beq !terminate_x-
+
+!copy_mapped:
+    ldx #0
+!cm_loop:
+    lda beeb_fn_table,y
+    beq !cm_done+
+    sta BEEB_OS_PATH_BASE + 3,x
+    inx
+    iny
+    bne !cm_loop-
+!cm_done:
     rts
 
-beeb_fn_moriaid: .text "MORIAID"
-beeb_fn_hiscore: .text "HISCORE"
-beeb_fn_save0:   .text "SAVE0"
+beeb_fn_table:
+    .text "MORIAID" ; .byte 0
+    .text "HISCORE" ; .byte 0
+    .text "SAVE0"   ; .byte 0
 
 // ============================================================
 // beeb_dfs_file_exists — Check if BEEB_OS_PATH_BASE exists via OSFILE A=$05
 // Output: Carry clear = file exists, Carry set = not found / DFS fault
 // ============================================================
 beeb_dfs_file_exists:
-    jsr beeb_zero_os_ctrl
-    lda #<BEEB_OS_PATH_BASE
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #>BEEB_OS_PATH_BASE
-    sta BEEB_OS_CTRL_BASE + 1
-    jsr EnterMos
-    lda #$05
-    jsr beeb_call_osfile
-    pha
-    jsr ExitMos
-    pla
+    jsr beeb_mos_osfile_path_05
     bcs !no+
     cmp #1
     bne !no+
@@ -367,6 +375,23 @@ beeb_dfs_file_exists:
 !no:
     sec
     rts
+
+// beeb_mos_osfile_path_05 / beeb_mos_osfile_a — Safe resident (< $3000) OSFILE
+// wrappers so callers in StorageOverlay ($A800-$BFFF) never unmap Bank 4 across
+// EnterMos/ExitMos or BRKV unwind.
+beeb_mos_osfile_path_05:
+    jsr beeb_zero_os_ctrl
+    lda #<BEEB_OS_PATH_BASE
+    sta BEEB_OS_CTRL_BASE + 0
+    lda #>BEEB_OS_PATH_BASE
+    sta BEEB_OS_CTRL_BASE + 1
+    lda #$05
+beeb_mos_osfile_a:
+    pha
+    jsr EnterMos
+    pla
+    jsr beeb_call_osfile
+    jmp ExitMos
 
 // ============================================================
 // HAL Asset Loader Contract (checked by check_hal_asset_exports.py)
@@ -454,27 +479,13 @@ beeb_dfs_load_to_bank:
     lda beeb_load_target_hi
     sta beeb_io_dst_hi
 
-    jsr EnterMos
-    lda #$40                // Open for input (read-only)
-    jsr beeb_call_osfind
-    bcs !open_fail+
-    cmp #$00
-    beq !open_fail+
+    jsr beeb_mos_open_read
+    bcs !open_done_err+
     sta beeb_dfs_handle
 
 !chunk_loop:
-    jsr beeb_zero_os_ctrl
     lda beeb_dfs_handle
-    sta BEEB_OS_CTRL_BASE + 0
-    lda #<beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 1
-    lda #>beeb_ss_buf
-    sta BEEB_OS_CTRL_BASE + 2
-    lda #$ff
-    sta BEEB_OS_CTRL_BASE + 3
-    sta BEEB_OS_CTRL_BASE + 4
-    lda #$00
-    sta BEEB_OS_CTRL_BASE + 5
+    jsr beeb_prep_ss_osgbpb
     lda #$01                // Request 256 ($0100) bytes
     sta BEEB_OS_CTRL_BASE + 6
 
@@ -525,7 +536,7 @@ beeb_dfs_load_to_bank:
 !read_err:
     ldy beeb_dfs_handle
     jsr beeb_call_osfind_close
-!open_fail:
     jsr ExitMos
+!open_done_err:
     sec
     rts

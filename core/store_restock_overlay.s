@@ -70,7 +70,7 @@ srr_retry:     .byte 0
 srr_store_idx: .byte 0
 srr_count:     .byte 0
 srr_tmp0:      .byte 0
-srr_key:       .fill 6, 0
+srr_key:       .fill 7, 0
 srr_one:       .byte 0              // sro_sell_one: one of a stack at a time
 
 // store_init_all — Empty all store slots and restock
@@ -166,16 +166,17 @@ sro_stock:
     ldy srr_save_x                  // first empty slot
     bmi !sst_done+                  // none: the store is full
     sty srr_abs_slot
-    jsr store_pick_item
+    jsr store_pick_item         // A = slot_lo, item_cur_page set
     tax
-    jsr id_known_set                // VMS store_carry: identify(), so stock shows its name
+    jsr id_known_set            // VMS store_carry: identify(), preserves X & page
     txa
     ldy srr_abs_slot
     :AuxWriteY(si_item_id)
-    jsr sro_stock_qty
+    jsr sro_stock_qty           // preserves X
     ldy srr_abs_slot
     :AuxWriteY(si_qty)
-    lda it_category,x
+    txa
+    jsr item_get_category_a     // uses item_cur_page
     jsr sro_set_p1
     ldy srr_abs_slot
     jsr sro_merge_slot
@@ -233,8 +234,10 @@ sro_sell_off:
 // Input: Y = slot, zp_store_idx. Clobbers: A, X, Y, srr_save_x, srr_key,
 // srr_tmp0
 sro_merge_slot:
-    .var sro_merge_fields = List().add(si_item_id, si_p1, si_to_hit, si_to_dam, si_meta, si_qty)
+    .var sro_merge_fields = List().add(si_item_id, si_p1, si_to_hit, si_to_dam, si_meta, si_meta_hi, si_qty)
     sty srr_save_x
+    :LoadStorePageY()
+    sta item_cur_page
     :AuxReadY(si_item_id)
     tax
     :ItemStacksX(smg_single)
@@ -328,6 +331,8 @@ sro_count:
 // as the town overlay has no room for the roll (M5d playtest, 2026-10-26).
 // Input: X = item id. Output: A = count. Clobbers: Y. Preserves: X.
 sro_stock_qty:
+    lda item_cur_page
+    bne !ssq_one+
     txa
     ldy #sro_stack_qty - sro_stack_id
 !ssq_loop:
@@ -337,6 +342,9 @@ sro_stock_qty:
     bne !ssq_loop-
 !ssq_found:                         // Y = 0: not listed, one
     lda sro_stack_qty,y
+    rts
+!ssq_one:
+    lda #1
     rts
 sro_stack_id:
     .byte 15, ITEM_TYPE_WOODEN_TORCH, ITEM_TYPE_FLASK_OF_OIL   // Ration of Food, torch, flask
@@ -356,6 +364,8 @@ sro_stack_qty:
 // Input: A = category, srr_abs_slot = target slot
 // Clobbers: A, X, Y
 sro_set_p1:
+    cmp #ICAT_CLOAK
+    beq !sro_enchant+
     cmp #ICAT_WEAPON
     bcc !sro_default+
     cmp #ICAT_BOOTS + 1
@@ -404,27 +414,58 @@ sro_set_p1:
     lda srr_count
     cmp #ICAT_WEAPON
     bne !sro_enchant_armor+
+!sro_slaying:
     lda srr_tmp0
     :AuxWriteY(si_to_hit)
     lda srr_tmp0
     :AuxWriteY(si_to_dam)
     rts
+!sro_enchant_armor:
+    lda srr_tmp0
+    :AuxWriteY(si_to_ac)
+    rts
 
 !sro_ring:
     jsr sro_bonus_base
+    lda item_cur_page
+    bne !sro_ring_p1+
     :AuxReadY(si_item_id)
     cmp #23
-    beq !sro_enchant_armor+         // Ring of Protection: AC bonus
+    beq !sro_enchant_armor-         // Ring of Protection: AC bonus
+    cmp #113                        // Ring of Slaying: +to_hit, +to_dam
+    beq !sro_slaying-
     cmp #24
+    beq !sro_ring_strength+
+    cmp #ITEM_TYPE_RING_SPEED
+    beq !sro_ring_strength+
+    cmp #212                        // Amulet of Charisma
     beq !sro_ring_strength+
     sec
     sbc #ITEM_TYPE_AMULET_WISDOM
     cmp #2
     bcc !sro_ring_strength+
     rts
-!sro_enchant_armor:
+!sro_ring_p1:
+    :AuxReadY(si_item_id)
+    cmp #(327 - ITEM_PAGE_SIZE)     // Ring of Increase Damage
+    beq !sro_ring_dam+
+    cmp #(328 - ITEM_PAGE_SIZE)     // Ring of Increase To-Hit
+    beq !sro_ring_hit+
+    cmp #(323 - ITEM_PAGE_SIZE)     // Ring of Searching
+    beq !sro_ring_strength+
+    cmp #(329 - ITEM_PAGE_SIZE)     // Gain Int/Dex/Con (329..331)
+    bcc !sro_ring_done+
+    cmp #(331 - ITEM_PAGE_SIZE + 1)
+    bcc !sro_ring_strength+
+!sro_ring_done:
+    rts
+!sro_ring_hit:
     lda srr_tmp0
-    :AuxWriteY(si_to_ac)
+    :AuxWriteY(si_to_hit)
+    rts
+!sro_ring_dam:
+    lda srr_tmp0
+    :AuxWriteY(si_to_dam)
     rts
 !sro_ring_strength:
     lda srr_tmp0
@@ -441,10 +482,13 @@ sro_bonus_base:
     jmp sro_store_p1
 
 !sro_light:
+    lda item_cur_page
+    bne !sro_light_lantern+
     ldy srr_abs_slot
     :AuxReadY(si_item_id)
     cmp #13
     beq !sro_light_torch+
+!sro_light_lantern:
     lda #LANTERN_MAX_CHARGES
     jmp sro_store_p1
 !sro_light_torch:
@@ -472,6 +516,8 @@ store_pick_item:
     jsr rng_range                   // VMS store_choice; preserves Y, carry clear
     adc sro_choice_base,y
     tax
+    lda #0
+    sta item_cur_page               // All store choice entries are Page 0 (< 255)
     lda sro_choices,x
     rts
 !spi_category:
@@ -479,14 +525,21 @@ store_pick_item:
     sta srr_count                   // free here: sro_count recounts each pass
 
 !spi_loop:
-    lda #ITEM_TYPE_COUNT - 2
-    jsr rng_range
+    lda #<(ITEM_TYPE_COUNT - 2)
+    sta zp_temp0
+    lda #>(ITEM_TYPE_COUNT - 2)
+    sta zp_temp1
+    jsr rng_range_word              // zp_temp2/3 in 0..ITEM_TYPE_COUNT-3
+    lda zp_temp2
     clc
     adc #2
-
+    ldy zp_temp3
+    bcc !spi_no_carry+
+    iny
+!spi_no_carry:
+    jsr item_unpack_id_ay           // A = slot_lo, item_cur_page set
     pha
-    tax
-    lda it_category,x
+    jsr item_get_category_a         // uses item_cur_page
     jsr check_store_category
     bcc !spi_reject+
 
@@ -498,6 +551,8 @@ store_pick_item:
     dec srr_count
     bne !spi_loop-
 
+    lda #0
+    sta item_cur_page
     ldx zp_store_idx
     lda store_fallback,x
     rts

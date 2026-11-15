@@ -52,37 +52,49 @@ mat_div_dmg:
 // Clobbers: everything except zp_combat_dmg and the mat_* scratch
 mon_atk_acid_armour:
 
-    // Count the occupied armour slots
+    // Count the occupied armour slots (body, shield, head, hands, cloak)
     ldy #0
-    ldx #EQUIP_BODY
+    ldx #4
 !maea_count:
+    lda maea_slots,x
+    stx mat_acid_slot
+    tax
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !maea_count_next+
     iny
 !maea_count_next:
-    inx
-    cpx #EQUIP_HANDS + 1
-    bne !maea_count-
+    ldx mat_acid_slot
+    dex
+    bpl !maea_count-
     tya
     beq !maaa_none+             // Nothing worn: full damage
 
     // randint(count): the chosen occupied slot, 0-based
     jsr rng_range               // A = [0, count-1]; preserves Y
     tay
-    ldx #EQUIP_BODY - 1
+    ldx #5
 !maea_find:
-    inx
+    dex
+    stx mat_acid_slot
+    lda maea_slots,x
+    tax
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !maea_find-
+    beq !maea_find_next+
     dey
-    bpl !maea_find-
+    bpl !maea_find_next+
+    bmi !maea_found+
+!maea_find_next:
+    ldx mat_acid_slot
+    bne !maea_find-
+!maea_found:
     stx mat_acid_slot
 
     // A piece that resists acid takes it unharmed (VMS minus_ac flags test):
     // (Resist), (Resist Acid) and the Magi (%X'01380008' has TR_RES_ACID).
     lda inv_ego,x
+    and #EGO_ID_MASK
     cmp #EGO_RESIST
     beq !maea_resists+
     cmp #EGO_RESIST_ACID
@@ -99,6 +111,9 @@ mon_atk_acid_armour:
 
     // ac + toac > 0? Base AC is 0-28; to-AC is signed. A negative to-AC
     // sum cannot overflow; a non-negative one is checked unsigned.
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldy inv_item_id,x
     jsr item_get_base_ac        // A = base AC (Y = item id)
     ldx mat_acid_slot
@@ -155,3 +170,4 @@ maea_piece_msg:
 
 mat_acid_slot: .byte 0
 mat_acid_msg:  .byte 0
+maea_slots:    .byte EQUIP_BODY, EQUIP_SHIELD, EQUIP_HEAD, EQUIP_HANDS, EQUIP_CLOAK

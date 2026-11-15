@@ -1,7 +1,7 @@
 #importonce
 
 // C128 Magic Desk 128 LegalOverlay-only ROM stream ($E000-$E5FF).
-// Calls cart_read in Bank 0 Default (< $6000), which bounces 256-byte chunks
+// Calls cart_read in Bank 0 Default (< $8000), which bounces 256-byte chunks
 // from Bank 0..15 ROM into Bank 0 legal_input_cache ($E700) via bottom-common RAM.
 
 legal_stream_open:

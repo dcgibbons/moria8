@@ -27,6 +27,7 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -42,11 +43,12 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -55,6 +57,7 @@ test_exit_trampoline:
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"
@@ -62,19 +65,27 @@ test_exit_trampoline:
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
+.segment TestCreateOverlay
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
@@ -83,15 +94,16 @@ test_exit_trampoline:
 #import "../../../../core/throw.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
-// Store modules move to the dummy segment so the test body stays below
-// MAP_BASE ($C000); map writes during tests must not corrupt test code.
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
-.segment TestStoreOverlay
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+// Store modules are never executed here; item_cat_data takes the $E100 window
+// (item_cat_kernal_helper.s), so only the store inventory arrays that
+// ui_trampoline_stubs.s references are linked (data, parked).
+.segment TestCreateOverlay
+#import "../../../../core/store_data_defs.s"
+#import "../../../../core/store_inventory_data.s"
+.segment Default
 .segment Default
 #import "../../../../core/ui_help.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -180,8 +192,12 @@ test_start:
     // Test 3: Range — weightless item (gold, weight=0)
     // Weight 0 → max range = 10
     // ==========================================
+    lda #0
+    sta item_cur_page
     ldx #0                      // Type 0 (gold), weight = 0
-    lda it_weight,x
+    jsr item_get_weight_x
+    lda icat_weight_lo
+    ora icat_weight_hi
     cmp #0
     bne !t3_fail+
     // If weight is 0, range should be 10
@@ -200,8 +216,10 @@ test_start:
     // ==========================================
     // Test 4: Potion detection — type 17 (Cure Light Wounds) = ICAT_POTION
     // ==========================================
-    ldx #17
-    lda it_category,x
+    lda #0
+    sta item_cur_page
+    lda #17
+    jsr item_get_category_a
     cmp #ICAT_POTION
     beq !t4_pass+
     lda #$00

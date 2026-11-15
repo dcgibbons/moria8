@@ -143,6 +143,27 @@ def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None, xp: int = 
     return f"clvl{clvl:02d}"
 
 
+def keep_victory(run_dir: Path, home: Path, record: dict[str, Any]) -> Path | None:
+    """A won run's crown screen ("Veni, Vidi, Vici!", core/royal.s:
+    session.capture_victory, in the worker's victory directory) kept in
+    ``home``/victories as <date>-<platform>-<character>.png, where the wins
+    are looked for: the captures stayed in each run's directory, and the
+    folder held only the first two, copied by hand (maintainer, 2026-11-14:
+    the crown is "really the one i want captured"). None when there is none
+    to keep."""
+    if record.get("outcome") != "reached":
+        return None
+    for text in sorted(run_dir.glob("w*/victory/*.txt")):
+        picture = text.with_suffix(".png")
+        if "Veni, Vidi, Vici!" in text.read_text(errors="replace") and picture.exists():
+            stamp = time.strftime("%Y%m%d-%H%M", time.localtime(picture.stat().st_mtime))
+            kept = home / "victories" / f"{stamp}-{record.get('platform')}-{record.get('character')}.png"
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(picture, kept)
+            return kept
+    return None
+
+
 def now() -> float:
     return round(time.time(), 1)
 
@@ -1577,6 +1598,12 @@ class Service:
                 self.log(f"queue.db insert failed for {run_id}: {exc}")
             self.log(f"end {run_id}: {record['outcome']} clvl {record.get('clvl')} "
                      f"max DL {record.get('max_dlvl')} steps {record.get('steps')}")
+            try:
+                kept = keep_victory(run_dir, self.home, record)
+                if kept is not None:
+                    self.log(f"victory screen kept: {kept.name}")
+            except OSError as exc:   # the win stands without its picture
+                self.log(f"victory screen not kept for {run_id}: {exc}")
             if job["queue"] == "main":
                 if job["goal"] == queue.goal and job.get("epoch", "") == queue.epoch:
                     queue.finish(record, self.config["retry_cap"], parallel=bool(job.get("parallel")))
