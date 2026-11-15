@@ -406,7 +406,8 @@ class BuildQueueTest(unittest.TestCase):
         service.reap(q, {})
         self.assertEqual(json.dumps(q.state, sort_keys=True), before)
         self.assertEqual(queue.BuildQueue(self.home).platform("c64")["items"][combo]["reached"], 1)
-        self.assertEqual(queue.Balrog(self.home).state["items"], {})
+        # It reached the bar: its combination joins the Balrog queue (maintainer, 2026-11-15).
+        self.assertEqual(list(queue.Balrog(self.home).state["items"]), [f"c64/{combo}"])
 
 
 class SubqueueReportTest(unittest.TestCase):
@@ -474,6 +475,7 @@ class BalrogQueueTest(unittest.TestCase):
         service.schedule(q, {})
         self.assertEqual(len(service.running), 4)
         self.assertFalse(any(j["queue"] == "balrog" for j in service.running.values()))   # no graduates
+        service.config["balrog_copies"] = 2
         service.balrog.graduate("c64", "elf-priest", {"run": "r"})
         service.schedule(q, {})
         balrog = [j for j in service.running.values() if j["queue"] == "balrog"]
@@ -800,9 +802,12 @@ class BalrogQueueTest(unittest.TestCase):
         view.write_text(view.read_text() + "    seen: set = field(default_factory=set)\n")
         self.assertFalse(queue.start_loads(start, "new", "c128", service.home))   # no class default
 
-    def test_balrog_platforms_join_from_level_1_and_take_no_other_port(self) -> None:
-        """Maintainer, 2026-11-06: the Balrog queue on the C64, every
-        combination from level 1; the C128's M7 successes do not join."""
+    def test_build_queue_runs_at_the_bar_fill_the_balrog_queue(self) -> None:
+        """Maintainer, 2026-11-15: the Balrog queue is filled by the build
+        queue, each platform/race/class joining as one of its runs reaches
+        clvl 10 (unless it is in already), from level 1; on
+        ``balrog_platforms`` alone. Nothing joins until then, and the C128's
+        M7 successes stay out as before."""
         service = self.service(4, 2)
         service.config["balrog_platforms"] = ["c64"]
         q = queue.Queue("deep", service.home)
@@ -810,15 +815,38 @@ class BalrogQueueTest(unittest.TestCase):
         entry["items"]["elf-priest"]["success"] = {"run": "m7"}
         service.graduate(q)
         items = service.balrog.state["items"]
-        self.assertEqual(sorted(items), sorted(f"c64/{c}" for c in queue.combos("c64")))
-        service.graduate(q)   # joined once
-        self.assertEqual(len(service.balrog.state["order"]), len(queue.combos("c64")))
+        self.assertEqual(items, {})                                       # not every combination at once
+        reached = {"id": "b1", "queue": "build", "platform": "c64", "character": "elf-priest",
+                   "outcome": "reached", "clvl": 10, "build": "b0"}
+        service.build_graduate({**reached, "outcome": "died", "id": "b0"})
+        self.assertEqual(items, {})                                       # short of the bar
+        service.build_graduate(reached)
+        self.assertEqual(list(items), ["c64/elf-priest"])
+        self.assertTrue(items["c64/elf-priest"]["graduated"]["level1"])
+        service.build_graduate({**reached, "id": "b2"})                   # in already
+        service.build_graduate({**reached, "id": "b3", "platform": "c128"})   # not a Balrog platform
+        self.assertEqual(service.balrog.state["order"], ["c64/elf-priest"])
         service.balrog_start({**self.success_run(service), "platform": "c128"})
         self.assertNotIn("c128/elf-priest", items)
         self.assertTrue(service.start_balrog())
         job = next(iter(service.running.values()))
-        self.assertEqual((job["platform"], job["build"]), ("c64", "b0"))
+        self.assertEqual((job["platform"], job["character"], job["build"]), ("c64", "elf-priest", "b0"))
         self.assertNotIn("resume", job)
+
+    def test_balrog_copies_hold_with_every_combination_playing(self) -> None:
+        # 2026-11-15: the first build-queue graduate took all eight Balrog
+        # workers at balrog_copies 1; its 20M-step runs kept every later one out.
+        service = self.service(8, 8)
+        service.config["balrog_copies"] = 1
+        q = queue.Queue("deep", service.home)
+        service.balrog.graduate("c64", "human-paladin", {"run": "r", "level1": True})
+        service.schedule(q, {})
+        balrog = [j["character"] for j in service.running.values() if j["queue"] == "balrog"]
+        self.assertEqual(balrog, ["human-paladin"])
+        service.balrog.graduate("c64", "elf-priest", {"run": "r2", "level1": True})
+        service.schedule(q, {})
+        balrog = sorted(j["character"] for j in service.running.values() if j["queue"] == "balrog")
+        self.assertEqual(balrog, ["elf-priest", "human-paladin"])
 
     def test_an_m7_success_leads_a_chain_still_below_its_level(self) -> None:
         balrog = self.balrog()

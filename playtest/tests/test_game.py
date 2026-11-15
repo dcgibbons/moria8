@@ -8,8 +8,8 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import (ATARI8, ATARI8_CART, C64, C64_CART, C64_NOREU, C128, C128_CART, CX16, CX16_CART,
-                                   PLUS4, PLUS4_CART, PORTS)
+from moria_playtest.ports import (APPLE2, ATARI8, ATARI8_CART, BBCMASTER, C64, C64_CART, C64_NOREU, C128, C128_CART,
+                                   CX16, CX16_CART, PLUS4, PLUS4_CART, PORTS)
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
 ABI = abimod.Abi(labels={"zp_player_x": 0x2B, "zp_player_y": 0x2C, "zp_player_hp_lo": 0x2D,
@@ -434,6 +434,28 @@ class AbiTableTest(unittest.TestCase):
     @unittest.skipUnless(abimod.C64_VS.exists(), "C64 build symbols not present")
     def test_table_matches_build_and_sources(self) -> None:
         self.assertEqual(abimod.check(), [])
+
+    def test_the_key_wait_window_ends_past_input_get_key(self) -> None:
+        # 708f3df moved the Apple's igk_key, the window's end, from the byte
+        # after input_get_key to $0339: every Apple IIe run's boot an error.
+        for port in (APPLE2, ATARI8, BBCMASTER):
+            with self.subTest(port=port.name):
+                source = abimod.ROOT / port.labels["input_get_key"]
+                self.assertEqual(port.labels.get(port.key_wait_end), port.labels["input_get_key"])
+                lines = source.read_text(encoding="utf-8").splitlines()
+                start = lines.index("input_get_key:")
+                end = next((n for n, line in enumerate(lines) if line.split(":", 1)[0] == port.key_wait_end
+                            and ":" in line), None)
+                self.assertIsNotNone(end, f"{port.key_wait_end}: not a label in {source.name}")
+                self.assertGreater(end, start)
+
+    def test_a_window_ending_before_it_begins_is_refused(self) -> None:
+        from moria_playtest import mame
+        abi = abimod.Abi({"input_get_key": 0x1000, "input_wait_release": 0x1020}, {}, {})
+        self.assertEqual(mame.MameGame.tap_spec(abi, APPLE2), "latch,C000,1000,101F")
+        abi = abimod.Abi({"input_get_key": 0x1000, "input_wait_release": 0x0339}, {}, {})
+        with self.assertRaises(ValueError):
+            mame.MameGame.tap_spec(abi, APPLE2)
 
 
 def d64_image(files: dict[str, bytes]) -> bytes:

@@ -1068,7 +1068,7 @@ class Balrog:
         current["restores"] = current.get("restores", 0) + 1
 
     def take(self, busy: Collection[str] = (), only: Collection[str] = (),
-             exclude: Collection[str] = ()) -> dict[str, Any] | None:
+             exclude: Collection[str] = (), full: Collection[str] = ()) -> dict[str, Any] | None:
         """The next graduate, the highest start first (``rank``), which goes
         to the back; None when there is none. One not playing already
         (``busy``) first: a long game was
@@ -1076,7 +1076,10 @@ class Balrog:
         one start while others waited (2026-11-06). One whose start cannot
         go on plays a new character (Service.start_balrog). ``only``
         (characters, focus): those alone, and None when all are busy;
-        ``exclude`` (the focus, beside it): any but those."""
+        ``exclude`` (the focus, beside it): any but those. ``full``: those
+        playing ``balrog_copies`` games already, which play no more: the first
+        graduate took all eight workers at balrog_copies 1, and its 20M-step
+        runs kept them from every later one (2026-11-15)."""
         # A combination that has won is done: its slots go to the others
         # (maintainer, 2026-11-12, after the C64 Human Priest's two wins).
         def eligible() -> list[str]:
@@ -1086,7 +1089,9 @@ class Balrog:
             return None
         self.rank()
         order = eligible()
-        key = next((k for k in order if k not in busy), None if only else order[0])
+        key = next((k for k in order if k not in busy), None)
+        if key is None and not only:
+            key = next((k for k in order if k not in full), None)
         if key is None:
             return None
         self.state["order"].remove(key)
@@ -1614,6 +1619,7 @@ class Service:
             if job["queue"] == "build":
                 self.buildq.finish(record)
                 self.buildq.save()
+                self.build_graduate(record)
                 continue
             if job["queue"] == "balrog":
                 if not self.balrog_checkpoint(record, job):
@@ -1843,12 +1849,9 @@ class Service:
         return not ports or platform in ports
 
     def graduate(self, queue: Queue) -> None:
-        """Every combination with an M7 success joins the Balrog queue; with
-        ``balrog_platforms``, every combination of those ports, and only them."""
-        for platform in self.config.get("balrog_platforms") or []:
-            if self.balrog.join(platform):
-                self.balrog.save()
-                self.log(f"balrog queue: every combination on {platform} joins, from level 1")
+        """Every combination with an M7 success joins the Balrog queue (on
+        ``balrog_platforms`` alone, when set); the build queue's clvl 10
+        runs join theirs as they reach it (``build_graduate``)."""
         if queue.goal != "deep":
             return
         for platform, entry in queue.state["platforms"].items():
@@ -1859,6 +1862,20 @@ class Service:
                                                                               "epoch": queue.epoch}):
                     self.balrog.save()
                     self.log(f"balrog queue: {combo} on {platform} joins (M7 run {item['success']['run']})")
+
+    def build_graduate(self, record: dict[str, Any]) -> None:
+        """A build-queue run that reached its goal (clvl 10): its combination
+        joins the Balrog queue from level 1, on ``balrog_platforms`` when set,
+        unless it is in already (maintainer, 2026-11-15: the Balrog queue is
+        filled by the build queue as each platform/race/class reaches the
+        level 10 bar, not every combination at once)."""
+        platform, combo = record.get("platform"), record.get("character")
+        if record.get("outcome") != "reached" or not platform or not combo or not self.balrog_takes(platform):
+            return
+        if self.balrog.graduate(platform, combo, {"run": record.get("id"), "ended": now(), "level1": True,
+                                                  "build": record.get("build")}):
+            self.balrog.save()
+            self.log(f"balrog queue: {combo} on {platform} joins, from level 1 (build-queue run {record.get('id')})")
 
     # -- scheduling
 
@@ -1978,12 +1995,13 @@ class Service:
         share = int(self.config.get("balrog_focus_workers") or 0)
         focused = sum(1 for job in self.running.values() if job["queue"] == "balrog" and job["character"] in focus)
         item = None
+        full = {k for k, n in playing.items() if n >= copies}
         if not (focus and share and focused >= share):
-            item = self.balrog.take({k for k, n in playing.items() if n >= copies}, focus)
+            item = self.balrog.take(full, focus, full=full)
         if item is None and focus and share:
             # The focus has its share (or every copy plays): everyone else's
             # turn, one game each before a second.
-            item = self.balrog.take(set(playing), exclude=focus)
+            item = self.balrog.take(set(playing), exclude=focus, full=full)
         if item is None:
             return False
         build = self.newest_build(item["platform"])

@@ -284,7 +284,7 @@ APPLE2 = Port(
     },
     labels={"input_get_key": "platforms/apple2/input.s",
             "input_get_command": "platforms/apple2/input.s",
-            "igk_key": "platforms/apple2/input.s"},
+            "input_wait_release": "platforms/apple2/input.s"},
     kernal={},
     cycles_per_second=1020484,
     crash_entries=(),   # a 65C02 has no JAM and the game owns the machine: hangs only
@@ -299,7 +299,10 @@ APPLE2 = Port(
     # input_get_key polls the keyboard latch, after pushing X and Y.
     key_taps=(("latch", 0xC000, ""),),
     key_wait_pushes=2,
-    key_wait_end="igk_key",   # input_wait_release follows and drains the latch too
+    # input_wait_release follows and drains the latch too. (igk_key, the
+    # byte after the routine until 708f3df moved it to $0339, ended the
+    # window before it began: no key wait seen, every run's boot an error.)
+    key_wait_end="input_wait_release",
     screen_decoder="apple2_80",
     key_map="apple2",
 )
