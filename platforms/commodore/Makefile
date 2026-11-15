@@ -403,6 +403,8 @@ check-hal-boundaries:
 	cd ../.. && python3 -B tools/gen_trampolines.py --check
 	cd ../.. && python3 -B tools/check_overlay_calls.py --selftest
 	cd ../.. && python3 -B tools/check_overlay_calls.py
+	cd ../.. && python3 -B tools/check_overlay_fallthrough.py --selftest
+	cd ../.. && python3 -B tools/check_overlay_fallthrough.py
 
 # ── C64 build rules ───────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)

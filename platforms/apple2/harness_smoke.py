@@ -1223,6 +1223,24 @@ assert_line("name_dm", screen_has("Detect Monsters"),
 assert_line("name_pd", screen_has("Phase Door"), "Phase Door missing")
 assert_line("no_priest_names", not screen_has("Protect"),
             "priest name leaked into mage list")
+-- The book prompt's '?' list from a second book: the list's overlay must
+-- give way to the caller's again (2026-11-15: the Atari's cast came back
+-- into OVL_HELP's bytes). A level 1 Mage knows no Magick I spell.
+press("\27")
+assert_line("book2_idle", wait_idle(20), "game busy after the list")
+local free = nil
+for slot = 0, 21 do if inv_field(slot, 0) == 0xFF then free = slot break end end
+inv_seed(free, {55, 1, 0, 0, 0, 0, 2, 0})   -- Spellbook Magick I, known
+press_slow("M")
+assert_line("cast_book2_prompt", wait_screen("Spell book (a-b)?"), "no two-book prompt: " .. rowtext(0))
+shift("/")
+assert_line("cast_book_list", wait_screen("Magick I"), "no book list")
+press_slow("B")
+assert_line("cast_book2_refused", wait_screen("You don't know that spell."), "no refusal: " .. rowtext(0))
+local turn_c = prog:read_u8(TURN_LO_ADDR)
+press_slow("S")
+emu.wait(1.0)
+assert_line("cast_book2_play_goes_on", wait_idle(20) and prog:read_u8(TURN_LO_ADDR) ~= turn_c, "no turn")
 dump("mage_list")
 print("SCENARIO DONE")
 """
@@ -2213,7 +2231,8 @@ def save_load_lua() -> str:
 
 
 def mage_list_lua() -> str:
-    return _chargen_body("B") + LUA_MAGE_LIST_BODY
+    return (_chargen_body("B") + _idle_helpers() + _inv_helpers() + LUA_MAGE_LIST_BODY
+            ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo")))
 
 
 def disk_setup_two_drive_lua() -> str:

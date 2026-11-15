@@ -1089,6 +1089,26 @@ function run()
     send_key(0x3F) -- '?'
     assert_line("mage_book_title", wait_screen("Mage Book", 80))
     assert_line("mage_spell_mm", wait_screen("Magic Missile", 20))
+    -- The book prompt's '?' list from a second book: the list's overlay
+    -- must give way to the caller's again (2026-11-15: the Atari's cast came
+    -- back into OVL_HELP's bytes). A level 1 Mage knows no Magick I spell.
+    send_key(0x1B)
+    wait_frames(60)
+    drain_more(4)
+    local free = nil
+    for slot = 0, 21 do if inv_field(slot, 0) == 0xFF then free = slot break end end
+    inv_seed(free, {55, 1, 0, 0, 0, 0, 2, 0})   -- Spellbook Magick I, known
+    send_key(0x4D) -- 'M' (cast)
+    assert_line("cast_book2_prompt", wait_screen("Spell book (a-b)?", 80))
+    send_key(0x3F) -- '?': the book list
+    assert_line("cast_book_list", wait_screen("Magick I", 200))
+    send_key(0x42) -- 'B'
+    assert_line("cast_book2_refused", wait_screen("You don't know that spell.", 200))
+    drain_more(4)
+    local turn_c = prog:read_u8(TURN_ADDR)
+    send_key(0x53) -- 'S' (search)
+    wait_frames(60)
+    assert_line("cast_book2_play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn_c)
     manager.machine:exit()
 end
 """

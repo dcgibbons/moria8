@@ -138,6 +138,16 @@ reinforcement learning a non-goal. The learning loop lives in development
 - **Make targets** (Part I only):
   - `playtest-check`: static. Unit tests plus the symbol/offset check.
   - `playtest-smoke`: launches VICE, ≤ 30 s.
+  - `playtest-gate [TARGETS=a,b] [GATE_WORKERS=n]`: before a product commit
+    (AGENTS.md; added 2026-11-15 after unit and harness suites passed a build
+    whose first store buy crashed the BBC and Apple IIe). On every port and
+    cartridge whose ROMs are set, the bot plays a Human Warrior, Elf Mage and
+    Dwarf Priest from fixed seeds for 3,000 steps each (`gate.py`, as the build
+    queue plays a run), and a scripted tour (`tour.py`) buys from the
+    Weaponsmith, casts from a second book through the `?` list, deposits and
+    retrieves at the Home, and drops and picks up. A game finding, a run error
+    or a failed tour step fails it; deaths and the bot's own findings do not.
+    About 10 minutes at 12 workers.
   - `playtest-session GOAL=<name> [SEEDS=…] [WORKERS=n]`: launches VICE,
     unbounded.
   - `playtest-dashboard`: serves the static page.

@@ -7,7 +7,7 @@
 	buildatari8 diskatari8 cartridgeatari8 runatari8 runatari8-130xe runatari8-cart runatari8-cart-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-cartridge testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
-	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-stop-balrog playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-m0-report playtest-session playtest-qualify playtest-disk \
+	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-stop-balrog playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-gate playtest-m0-report playtest-session playtest-qualify playtest-disk \
 	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
@@ -156,6 +156,14 @@ playtest-check: build64 buildplus4 build128 buildapple2 buildatari8 buildbbcmast
 
 playtest-smoke: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.smoke
+
+# The bot on every port and cartridge from fixed seeds, before a product
+# commit: a game finding or a run error fails it (moria_playtest/gate.py).
+# Each run isolates itself, as the queue's do. Minutes, not seconds.
+playtest-gate: disk64 cartridge64 diskplus4 cartridgeplus4 disk128 cartridge128 diskapple2 diskatari8 \
+		cartridgeatari8 diskbbcmaster buildcx16
+	$(PLAYTEST_PY) -m moria_playtest.gate $(if $(GATE_WORKERS),--workers $(GATE_WORKERS)) \
+		$(if $(TARGETS),--targets $(TARGETS))
 
 playtest-m0-report: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.m0

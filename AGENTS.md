@@ -67,7 +67,8 @@ If the quote does not name the action, stop and ask.
    not try a sandboxed run first. See Memory And Verification Details for the
    full escalation list. Exception: AI playtest *sessions* and measurement
    runs (`make playtest-session`, `make playtest-qualify`, `make
-   playtest-regress`, `make playtest-m0-report`, `make playtest-disk`) and the opt-in full C128
+   playtest-regress`, `make playtest-m0-report`, `make playtest-disk`), the
+   pre-commit bot gate (`make playtest-gate`, minutes), and the opt-in full C128
    generation soak (`make test128-soak-long`) are long-running operational
    jobs, not runtime verification. They have no overall time limit and run until their goal is
    reached. Every emulator command and resume inside a session has a
@@ -200,7 +201,7 @@ or `x16emu`; `make test64`; `make test64-cartridge`;
 `make test128`; `make test128-soak-long`; `make testcx16`; `make testcx16-runtime`;
 `make testatari8-runtime`; `make testatari8-fast-smoke`;
 `make testbbcmaster-runtime`; `make testbbcmaster-fast-smoke`;
-`make playtest-smoke`; `make playtest-session`; `make playtest-repro`;
+`make playtest-smoke`; `make playtest-gate`; `make playtest-session`; `make playtest-repro`;
 `make playtest-m0-report`; `make playtest-qualify`; `make playtest-regress`;
 `make playtest-disk`; `make playtest-selftest`; direct `harness128.py`, `harness128_batch.py`,
 `harnessplus4.py`, or `harness_smoke.py` runs; and filtered runtime harness
@@ -259,6 +260,10 @@ Operational rules:
   obviously connect to the change, read the failing test and harness
   before running anything. Never burn gate cycles on repeated blind
   reruns: two identical failures means stop and analyze, not rerun.
+- Before committing a product-code change (`core/`, `platforms/`), run
+  `make playtest-gate` after the verification gate: the bot plays every port
+  and cartridge from fixed seeds, and a game finding fails it. Unit and
+  harness suites passed builds whose first store buy crashed two ports.
 - Define success as: the user's failing command passes, or `make test` passes
   if no command was given. Loop until verified. Stop and ask the user when a
   gate action is needed, infrastructure is broken, or the 30-second timeout cap
