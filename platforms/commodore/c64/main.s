@@ -1000,6 +1000,9 @@ entry_main:
 #if C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT
     jmp c64_test_element_divisor
 #endif
+#if C64_TEST_SCRIPTED_EGO_DAMAGE_PRODUCT
+    jmp c64_test_ego_damage
+#endif
 
     // Select lowercase/uppercase character set (52 letter symbols)
     // Bit 1 of $D018 selects character set: 0=uppercase+graphics, 1=lowercase+uppercase
@@ -1593,19 +1596,26 @@ tramp_ego_append_suffix:
 
 // ============================================================
 // tramp_ego_apply_damage — Apply ego slay/bonus damage (banked at $F000)
-// Input: A = ego type (1-7), cmb_damage and cmb_type set
+// Input: A = ego type (1-55), cmb_damage and cmb_type set
 // Output: cmb_damage updated
+// Restores the caller's $01 and I flag: OVL.ITEMS calls it from $E000 for
+// ego ammunition (rf_roll_damage). It set BANK_NO_BASIC, the KERNAL over
+// the overlay, which ran ROM bytes from there and jammed the C64 with its
+// CPU port's direction cleared (build queue, 2026-11-15).
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp3, zp_temp4
 tramp_ego_apply_damage:
-    pha
+    php
     sei
+    tay
+    lda $01
+    pha
     lda #BANK_NO_ROMS
     sta $01
-    pla
+    tya
     jsr ego_apply_damage
-    lda #BANK_NO_BASIC
+    pla
     sta $01
-    cli
+    plp
     rts
 
 // tramp_element_divisor — mm_element_divisor (banked at $F000): A = base,
@@ -1669,6 +1679,57 @@ c64_test_ed_port: .byte 0
 c64_test_element_fail_sym:
     brk
 c64_test_element_pass_sym:
+    brk
+#endif
+
+#if C64_TEST_SCRIPTED_EGO_DAMAGE_PRODUCT
+// c64_test_ego_damage — The product's ego damage entry (tramp_ego_apply_damage
+// into the $F000 runtime), called as OVL.ITEMS's rf_roll_damage calls it for
+// ego ammunition: from $E000, the KERNAL out, interrupts on and off. $01 and
+// the I flag come back as they were; a slay that does not apply leaves the
+// damage, while Slay Evil ammo triples damage against CF_EVIL (VMS tot_dam).
+c64_test_ego_damage:
+    cli
+    lda #BANK_NO_KERNAL
+    sta $01
+    lda #0
+    sta cmb_type                    // monster slot 0: no evil flag set below
+    sta cr_mflags
+    lda #12
+    sta cmb_damage
+    lda #EGO_AMMO_SLAY_EVIL
+    jsr tramp_ego_apply_damage
+    php
+    pla
+    and #$04                        // I: still clear
+    bne c64_test_ego_fail_sym
+    lda $01
+    cmp #BANK_NO_KERNAL
+    bne c64_test_ego_fail_sym
+    lda cmb_damage
+    cmp #12
+    bne c64_test_ego_fail_sym
+    sei
+    lda #CF_EVIL
+    sta cr_mflags
+    lda #EGO_AMMO_SLAY_EVIL
+    jsr tramp_ego_apply_damage
+    php
+    pla
+    and #$04                        // I: still set
+    beq c64_test_ego_fail_sym
+    lda $01
+    cmp #BANK_NO_KERNAL
+    bne c64_test_ego_fail_sym
+    lda cmb_damage
+    cmp #36                         // 12 * 3
+    bne c64_test_ego_fail_sym
+    lda #BANK_NO_BASIC
+    sta $01
+    jmp c64_test_ego_pass_sym
+c64_test_ego_fail_sym:
+    brk
+c64_test_ego_pass_sym:
     brk
 #endif
 

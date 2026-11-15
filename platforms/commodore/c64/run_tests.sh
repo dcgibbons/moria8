@@ -1555,6 +1555,122 @@ run_scripted_element_divisor_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_scripted_ego_damage_smoke() {
+    # The product's ego damage entry (tramp_ego_apply_damage into the $F000
+    # runtime), called from $E000 as OVL.ITEMS calls it for ego ammunition:
+    # $01 and the I flag survive. It set BANK_NO_BASIC, the KERNAL over the
+    # overlay, and the build queue's shots with ego arrows jammed the C64
+    # (2026-11-15). Unit tests link ego_apply_damage in place.
+    local name="scripted_ego_damage_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p ../../../build/test/c64
+
+    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
+            ../../build/c64/monster.cat.stamp \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_EGO_DAMAGE_PRODUCT \
+            -o ../../../build/test/c64/moria_ego_damage_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="../../../build/test/c64/moria_ego_damage_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../../../build/test/c64/boot.prg "moria8" \
+            -write ../../../build/test/c64/boot.prg "boot64" \
+            -write ../../../build/test/c64/bootart64.prg "bootart64" \
+            -write ../../../build/test/c64/moria_ego_damage_smoke.prg "moria64" \
+            -write ../../../build/test/c64/64.bank "64.bank" \
+            -write ../../../build/test/c64/title "t64" \
+            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
+            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
+            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
+            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.idx "monster.idx" \
+            -write ../../../build/test/c64/item.cat "item.cat" \
+            -write ../../../build/test/c64/item.idx "item.idx" \
+            -write ../../../build/test/c64/ovl.start "64.start" \
+            -write ../../../build/test/c64/ovl.town "64.town" \
+            -write ../../../build/test/c64/ovl.death "64.death" \
+            -write ../../../build/test/c64/ovl.modal "64.modal" \
+            -write ../../../build/test/c64/ovl.gen "64.gen" \
+            -write ../../../build/test/c64/ovl.help "64.help" \
+            -write ../../../build/test/c64/ovl.ui "64.ui" \
+            -write ../../../build/test/c64/ovl.items "64.items" \
+            -write ../../../build/test/c64/ovl.spell "64.spell" \
+            -write ../../../build/test/c64/ovl.chest "64.chest" \
+            -write ../../../build/test/c64/ovl.home "64.home" \
+            -write ../../../build/test/c64/ovl.storage "64.storage" \
+            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="../../../build/test/c64/main.vs"
+    local pass_addr fail_addr
+    pass_addr=$(awk '/\.c64_test_ego_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    fail_addr=$(awk '/\.c64_test_ego_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
+        echo "FAIL (missing ego damage symbols in $main_vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file tty_log
+    mon_file=$(mktemp -t "test_${name}_mon")
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    {
+        c64_break_cmd "${fail_addr}"
+        c64_break_cmd "${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 300000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    if grep -qiE "Stop on  exec $(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    elif grep -qiE "Stop on  exec $(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
+        echo "FAIL (ego damage trampoline check failed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+    elif grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (ego damage smoke timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+    else
+        echo "FAIL (did not reach the ego damage traps)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_scripted_detect_evil_smoke() {
     local name="scripted_detect_evil_smoke"
     echo -n "  $name: "
@@ -5212,6 +5328,7 @@ run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_o
 run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
 run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
 run_suite_function "scripted_element_divisor_smoke" run_scripted_element_divisor_smoke
+run_suite_function "scripted_ego_damage_smoke" run_scripted_ego_damage_smoke
 # The catalog spawn smokes reuse the dungeon-ascent build and disk.
 run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke catalog_spawn_product_smoke catalog_spawn_product_reu_smoke
 run_suite_function "catalog_spawn_product_smoke" run_catalog_spawn_product_smoke
