@@ -2889,6 +2889,35 @@ class ResistFireTest(unittest.TestCase):
         self.assertIn(RESIST_HEAT_COLD, brain.resist_fire(fighting(RESIST_TIMER_LOW), view).reason)
         self.assertIsNone(brain.resist_fire(fighting(15), view))
 
+    def test_no_rest_that_outlasts_a_running_fire_resistance(self) -> None:
+        """C64 Balrog, 2026-11-15: a clvl 40 Human Paladin on DL50 prayed
+        Resist Heat and Cold, rested back to full mana, which outlasted the
+        prayer's 10-19 turns, and prayed again, 35 decisions over. With fire
+        resisted for now, HP full and mana at the upkeep share, no rest; with
+        the timer out, or mana lower, the rest as before."""
+        from moria_playtest.brain import KEY_AUTOREST
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "human-paladin"))
+        brain.clvl = 40
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        view.creatures = {}
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=445, mhp=445,
+                        rows={23: "HP:445/445 MP:148/161 AC:60  AU:16777K"})
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 3 if lasting else 9   # type: ignore[method-assign]
+        self.assertIsNone(brain.rest(o, view))                              # the timer runs: no rest
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 3   # type: ignore[method-assign]
+        decision = brain.rest(o, view)
+        self.assertEqual((decision.key, decision.layer), (KEY_AUTOREST, "rest"))   # run out: rest
+
+    def test_the_drop_listing_counts_the_flasks_of_oil(self) -> None:
+        """C64 Balrog, 2026-11-15: a lantern is refueled only while the
+        count says flasks are carried; a clvl 40 Human Paladin with flasks in
+        its pack put on a spare torch when its lantern went out on DL50."""
+        brain = Brain(GOALS["deep"])
+        brain.oil = 0
+        brain.sync_counts([" a) Brass Lantern (2 turns)", " b) 7 Flask of Oil (250 turns)", " c) 3 Wooden Torch (134 turns)"], "all")
+        self.assertEqual(brain.oil, 7)
+
     def test_a_rogue_fights_the_balrog_with_its_wands(self) -> None:
         """C64 Balrog, 2026-11-14: a Rogue has no attack spell, and the fight
         plan was prayers only: the strongest charged attack wand, aimed at

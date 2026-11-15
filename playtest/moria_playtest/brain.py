@@ -2789,6 +2789,13 @@ class Brain:
             # A clvl 37 Gnome Rogue's count said none with 197 Bolts carried
             # (C64 Balrog, 2026-11-14): balrog_damage counts them.
             self.ammo = held(LAUNCHERS[self.launcher][0])
+        if scope == "all":
+            # Flasks too: the lantern is refueled only while the count says
+            # some are carried. A clvl 40 Human Paladin with a lantern and
+            # flasks in its last save put on a spare torch when the lantern
+            # went out on DL50, then went home for light (C64 Balrog,
+            # 2026-11-15).
+            self.oil = held(OIL)
         if scope in ("potions", "all"):
             self.clw, self.neutralize, self.restoration = held(CLW), held(NEUTRALIZE), held(RESTORATION)
             self.resist_heat, self.resist_cold = held(RESIST_HEAT), held(RESIST_COLD)
@@ -4550,6 +4557,14 @@ class Brain:
         the next Kobold and died throwing oil (M5f round 2)."""
         mp, mmp = self.magic.mana(obs)
         if obs.dlvl == 0 or self.threats(view) or self.unseen_attack or (obs.hp >= obs.mhp and mp >= mmp):
+            return None
+        if obs.hp >= obs.mhp and mmp and mp >= RESIST_UPKEEP_MANA * mmp \
+                and self.resist_div(obs, "fire") > self.resist_div(obs, "fire", lasting=True):
+            # Fire resisted for the next few turns, HP full and mana at the
+            # upkeep share: a rest for the prayer's cost outlasts its 10-19
+            # turns. A clvl 40 Human Paladin on DL50 prayed Resist Heat and
+            # Cold, rested back to full, prayed again, 35 decisions over,
+            # until its light went out (C64 Balrog, 2026-11-15).
             return None
         here = view.type_at(*view.pos)
         on_stairs = here == TYPE_STAIRS_UP or (here == TYPE_STAIRS_DN and self.deeper_ok(obs))
