@@ -3304,8 +3304,22 @@ class Brain:
         restock = ("restock" in self.goal.tactics and self.restock_short()
                    and obs.step >= self.restock_trip_after
                    and self.gold(obs) >= STRONG_RESERVE * STRONG_GOLD[CSW])
+        # Gear, a book and the restock are worth a trip only when Word of
+        # Recall brings the character back down (recall_returns), or when
+        # town is a short walk: a clvl 40 Human Paladin whose deepest level
+        # was DL93 recalled home from DL21-28 for armour every 5,000 steps,
+        # nothing to buy at the gold cap, and walked down from town again, for
+        # hours (C64 Balrog, 2026-11-14).
+        optional = self.wants_gear(obs) or self.wants_book_trip(obs) or restock
         return ((low and obs.step >= self.resupply_after) or self.wants_recall(obs)
-                or self.wants_gear(obs) or self.wants_book_trip(obs) or restock)
+                or (optional and (obs.dlvl <= RECALL_WALK_LEVELS or self.recall_returns(obs))))
+
+    def recall_returns(self, obs: Observation) -> bool:
+        """Word of Recall read in town comes back down: the deepest level it
+        returns to is one the character may go to (or one level past it, a
+        climb), as the town's recall decides; else it walks down, and a town
+        trip costs every level back."""
+        return self.depth_ready(obs, self.max_dlvl, slack=1) or self.depth_ready(obs, self.max_dlvl - RECALL_CLIMB)
 
     def book_levels(self) -> tuple[int, ...] | None:
         """The level of each book's first spell for this class, if it buys books."""
@@ -5038,8 +5052,7 @@ class Brain:
             if not ready or self.max_dlvl < RECALL_FROM or self.supplies_low() or self.recall < 2:
                 # The last scroll is the way home, not the way down (M5a).
                 return None
-            if not self.depth_ready(obs, self.max_dlvl, slack=1) \
-                    and not self.depth_ready(obs, self.max_dlvl - RECALL_CLIMB):
+            if not self.recall_returns(obs):
                 # Recall goes back to the deepest level: not when that is too
                 # deep to stay (resupply's too_deep), or the bot climbs, recalls
                 # up and recalls down again. A level-25 Balrog graduate went

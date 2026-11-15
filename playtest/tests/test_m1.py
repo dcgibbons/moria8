@@ -1337,6 +1337,31 @@ class UnstuckTest(unittest.TestCase):
         brain.track(at(1, step + 100), view)
         self.assertEqual(brain.recall_wait, RESTOCK_WAIT)
 
+    def test_no_trip_for_gear_when_recall_cannot_bring_it_back(self) -> None:
+        """C64 Balrog, 2026-11-14: a clvl 40 Human Paladin whose deepest
+        level was DL93 (Word of Recall's return, past anything it may go to)
+        recalled home from DL21-28 for armour every 5,000 steps at the gold
+        cap and walked down from town again, for hours. Gear, books and the
+        restock wait while Recall cannot bring it back; a short walk from
+        town, or a deepest level it may go to, and they go as before; food,
+        light and Word of Recall itself go whatever the depth."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "human-paladin"))
+        brain.clvl, brain.max_dlvl, brain.recall = 40, 93, 3
+        brain.gear_trip_after, brain.gear_trip_gold = 0, 1000
+        rich = {23: "HP:445/445 MP:161/161 AC:59  AU:16777K"}
+        deep = command_obs(pos=(10, 10), dlvl=21, clvl=40, hp=445, mhp=445, rows=rich)
+        self.assertTrue(brain.wants_gear(deep))
+        self.assertFalse(brain.recall_returns(deep))
+        self.assertFalse(brain.needs_resupply(deep))                     # not a Recall home for armour
+        near = command_obs(pos=(10, 10), dlvl=3, clvl=40, hp=445, mhp=445, rows=rich)
+        self.assertTrue(brain.needs_resupply(near))                      # town a short walk away
+        brain.max_dlvl = 37
+        self.assertTrue(brain.recall_returns(deep))
+        self.assertTrue(brain.needs_resupply(deep))                      # Recall brings it back: as before
+        brain.max_dlvl, brain.recall = 93, 0
+        self.assertTrue(brain.needs_resupply(deep))                      # no Recall at all: the trip for it
+
     def test_book_trips_back_off_while_the_book_is_not_found(self) -> None:
         """C64 Balrog, 2026-11-14: a clvl 36 Elf Ranger after The Mages Guide
         to Power had its next book trip set 1,500 steps from arriving in
