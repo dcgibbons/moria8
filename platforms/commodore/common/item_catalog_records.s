@@ -199,6 +199,8 @@ hal_item_cat_read_byte:
     lda #$0d
     jsr hal_storage_chrout
     jsr hal_storage_clrchn
+    jsr icr_drive_ok            // a refused U1: no CHKIN to a channel the drive lacks
+    bcs !icr_cmd_failed+
     ldx #15
     jsr hal_storage_chkout
     lda #icr_bp - icr_u1
@@ -224,6 +226,10 @@ hal_item_cat_read_byte:
     bcs !icr_by_name+
     jmp !icr_loaded+
 
+!icr_cmd_failed:
+    jsr icr_close_buf
+    lda #15
+    jsr hal_storage_close
 !icr_by_name:
     lda #icr_name_end - icr_name
     ldx #<icr_name
@@ -315,6 +321,7 @@ icr_read_sector_buf:
     stx icr_idx
     cpx icr_cache_len
     bne !irsb_loop-
+icr_close_buf:
     jsr hal_storage_clrchn
     lda #ICR_LFN
     jmp hal_storage_close
@@ -367,6 +374,26 @@ icr_from_reu:
     sta REU_COMMAND
     rts
 #endif
+
+// icr_drive_ok — After a command on the command channel (LFN 15, open): the
+// first digit of the drive's status, carry clear for "0x", set for an error
+// (the next command resets the message, so the rest is left unread). A
+// buffer channel the drive refused ("70, NO CHANNEL") got a CHKIN anyway,
+// and the KERNAL's talk turnaround waits for a talker that never comes: the
+// Plus/4 hung buying in a store (playtest gate, 2026-11-15, once in about
+// 2,200 sector reads). Not for catalog_fetch.s: its U1 and B-P go in one
+// command string, which the drive answers with a syntax error, its record id
+// checked instead.
+// Clobbers: A, X, Y
+icr_drive_ok:
+    ldx #15
+    jsr hal_storage_chkin
+    jsr hal_storage_chrin
+    pha
+    jsr hal_storage_clrchn
+    pla
+    cmp #$31                    // '0': OK; '1'-'9': an error
+    rts
 
 icr_put_text:
     sta icr_idx
