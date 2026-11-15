@@ -328,13 +328,14 @@ pm_select_book:
     sec
     sbc pm_spell_type
 #if HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
-    ldy pm_mode
-    beq !pm_select_no_ui_return_hint+
+    // The caller's overlay, which a '?' list must restore: OVL_UI for a
+    // spell gained, OVL_SPELL on the Atari for a cast or prayer (2026-11-15:
+    // with only the gain declared, 708f3df's end of the stack probe left the
+    // cast's '?' book list returning into OVL_HELP's bytes).
     pha
-    lda #OVL_UI
+    lda current_overlay
     sta piw_return_overlay
     pla
-!pm_select_no_ui_return_hint:
 #endif
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_select_filtered_inv
