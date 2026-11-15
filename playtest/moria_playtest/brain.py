@@ -141,7 +141,10 @@ RECHARGEABLE_GOLD = 300  # the dearest of them with the shop's markup
 # Ancient White Dragon's frost (C64 Balrog, 2026-11-13).
 KEEP_PREFIXES = ("Ration", "Slime Mold", "Flask of Oil", "Wooden Torch", "Brass Lantern", "Potion of Cure", "Potion of Neutralize",
                  "Potion of Healing", "Potion of Resist Heat", "Potion of Resist Cold", "Potion of Heroism",
-                 "Scroll of Word of Rec", "Scroll of Phase Door", "Scroll of Teleportation", "Holy Book", "Spellbook")
+                 "Scroll of Word of Rec", "Scroll of Phase Door", "Scroll of Teleportation", "Holy Book", "Spellbook",
+                 # The full item list (708f3df): kept when found, as a player keeps them
+                 "Potion of Super Heroism", "Potion of Invulnerability", "Scroll of Protect from Evil",
+                 "Potion of Restore", "Mushroom of Restoring")
 DROP_RETRY = 500         # steps before looking for junk again after finding none
 KEY_RETURN = 0x0D
 LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
@@ -363,6 +366,23 @@ HEROISM = "Potion of Heroism"   # +10 max and current HP for 25-49 turns (iq_eff
 HEROISM_HP = 10          # ... the HP it adds
 HEROISM_TURNS = 25       # ... the fewest turns it lasts
 HEROISM_RESERVE = 4      # carried from SCOUT_FROM deep, as the resistance potions
+# The full VMS item list (708f3df, 2026-11-15): what it added that a player
+# carries for the deep game and the Balrog. Only the Black Market stocks them
+# (store_pick_item: the other stores' choices are the first 255 items).
+SUPER_HEROISM = "Potion of Super Heroism"       # #280: to-hit, +10 max HP, 30 healed, fear gone (eetm_shero)
+INVULNERABILITY = "Potion of Invulnerability"   # #285: no damage at all, breath too, 11-20 turns (eff_invuln_timer)
+PROTECT_SCROLL = "Scroll of Protect from Evil"  # #38: an evil creature's blows repelled at or below the level
+PROTECT_EVIL = "Protection from Evil"           # ... the Priest's prayer (Chants and Blessings)
+EXTRA_ITEMS = (SUPER_HEROISM, INVULNERABILITY, PROTECT_SCROLL)   # counted in Brain.extra
+INVULN_TURNS = 14        # 10 + randint(10) turns: the shortest, less the turn the potion takes (balrog_damage)
+INVULN_RESERVE = 3       # carried Balrog-bound, bought rich
+INVULN_MAX = 30          # ... and no more for a fighter's blows (invuln_reserve): 120 lb of potions
+SUPER_HEROISM_RESERVE = 2   # carried from SCOUT_FROM deep, bought rich: drunk as the Balrog comes
+PROTECT_RESERVE = 2      # scrolls carried from SCOUT_FROM deep without the prayer, bought rich
+PROTECT_TURNS = 3        # turns a level it lasts at the least (randint(25) + 3 x level, VMS protect_evil)
+PROTECT_DLVL = 10        # from here an evil creature close is worth it (protect_evil)
+INVULNERABLE = "You feel invulnerable."
+PROTECTED = "You feel protected."
 RESTORE_MANA = "Potion of Restore Mana"   # all the mana back (iq_effect_restore_mana); found, or the Black Market's
 RESTORE_MANA_RESERVE = 3   # carried for the Balrog, bought rich
 # The potions of gain stat (VMS potions.inc; Moria8 since 2026-11-07) and the
@@ -779,6 +799,9 @@ class Brain:
         self.worn_resists: frozenset[str] = frozenset()   # breath elements the gear worn resists
         self.resist_heat = 0                   # Potions of Resist Heat carried
         self.heroism = 0                       # Potions of Heroism carried
+        self.extra = {kind: 0 for kind in EXTRA_ITEMS}   # Super Heroism, Invulnerability, Protect from Evil carried
+        self.invulnerable_until = 0            # step before which the last Invulnerability still holds
+        self.protect_until = 0                 # ... and Protection from Evil
         self.restore_mana = 0                  # Potions of Restore Mana carried
         self.heroic_until = 0                  # step before which the last Heroism still holds
         self.resist_cold = 0                   # ... and of Resist Cold
@@ -1019,6 +1042,10 @@ class Brain:
             self.level.heard_burst = True
         if HEROIC in seen_messages:
             self.heroic_until = obs.step + HEROISM_TURNS
+        if INVULNERABLE in seen_messages:
+            self.invulnerable_until = obs.step + INVULN_TURNS
+        if PROTECTED in seen_messages:
+            self.protect_until = obs.step + PROTECT_TURNS * max(obs.clvl, 1)
         self.met.extend(knowledge.creatures_named(seen_messages))
         if BREATHES.search(seen_messages) and self.last_hp is not None and self.last_hp > obs.hp and obs.dlvl:
             element = BREATH_ELEMENT.search(seen_messages)
@@ -1210,7 +1237,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.quaff, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -1362,8 +1389,11 @@ class Brain:
             return lordly + (BALROG_FIRE_RING if element == "fire" and self.balrog_bound() else 800)
         # The Magi over an amulet of resistance (800): Free Action is the
         # Balrog's Hold Person stopped (balrog_ready).
+        # Increase Damage adds to every blow, Increase To-Hit 3 skill a point
+        # (the full item list, 708f3df; core/player_recalc_equipment.s).
         return {"Speed": 1000, "the Magi": 900, "Protection": 10 * bonus,
                 "Strength": 15 * bonus if melee else 0, "Slaying": 60 if melee else 0,
+                "Increase Damage": 25 * bonus if melee else 0, "Increase To-Hit": 8 * bonus if melee else 0,
                 "Wisdom": (20 if self.goal.klass in ("priest", "paladin") else 2) * bonus,
                 "See Invisible": 20}.get(kind, 0)
 
@@ -1718,13 +1748,30 @@ class Brain:
         if self.resist_div(obs, "fire") < 9:
             return None   # resist_fire (just before) brings the timer up; without it, the escapes
         burst = self.turn_burst(balrog, obs)
-        if obs.hp < BALROG_FIGHT_TURNS * burst:
+        invulnerable = obs.step < self.invulnerable_until
+        if obs.hp < BALROG_FIGHT_TURNS * burst and not invulnerable:
             for spell in (HOLY_WORD, HEAL):
                 if magic.can(obs, spell):
                     return Decision(*magic.pray(spell, f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn: pray {spell}"))
+            if self.extra[INVULNERABILITY]:
+                self.picking, self.listed = INVULNERABILITY, False
+                return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn: drink Invulnerability")
             return None
         pos = min(spots, key=lambda p: chebyshev(p, view.pos))
         step = self.line_to(view, pos, missile=True)
+        adjacent = chebyshev(pos, view.pos) == 1
+        blows = self.balrog_melee(obs) > 0
+        # At hand (beside it, or in line for the Orb or a wand): its turns
+        # that cannot hurt first, then Super Heroism, as a player drinks them
+        # when the fight starts. Counted in balrog_damage, kept for it.
+        if adjacent or (step is not None and chebyshev(pos, view.pos) <= ORB_RANGE):
+            if self.extra[INVULNERABILITY] and not invulnerable:
+                self.picking, self.listed = INVULNERABILITY, False
+                return Decision(ord("Q"), "quaff", "the Balrog at hand: drink Invulnerability")
+            if self.extra[SUPER_HEROISM] and obs.step >= self.heroic_until:
+                self.picking, self.listed = SUPER_HEROISM, False
+                self.heroic_until = obs.step + HEROISM_TURNS
+                return Decision(ord("Q"), "quaff", "the Balrog at hand: drink Super Heroism")
         if step is not None and chebyshev(pos, view.pos) <= ORB_RANGE and magic.can(obs, ORB):
             self.pending = DIRS[step]
             self.aimed = (pos, view.creatures[pos].glyph)
@@ -1745,8 +1792,17 @@ class Brain:
             self.aimed = (pos, view.creatures[pos].glyph)
             return Decision(KEY_AIM, "aim", f"the Balrog in line, its fire resisted: aim the {wand} at it")
         prays = any(spell in magic.known for spell in (ORB, DISPEL_EVIL, HOLY_WORD))
+        if blows and adjacent:
+            # A fighter's blows, which balrog_damage counted: a night of
+            # Warriors and Rogues read Word of Recall once their wands were
+            # spent, and none ever struck it (C64 Balrog, 2026-11-15).
+            self.last_attack = (pos, view.creatures[pos].glyph)
+            return Decision(DIRS[(pos[0] - view.pos[0], pos[1] - view.pos[1])], "fight",
+                            "the Balrog beside, its fire resisted: attack it")
         if wands or (not prays and self.launcher is not None and self.ammo > 0):
             return None
+        if blows and not prays:
+            return None   # close in for the blows, not a recall
         # Out of mana: another bar if carried, else Word of Recall while the
         # HP holds, and the wands and escapes until it comes (maintainer,
         # 2026-11-12: "out of mana is ok if they don't have any gain mana
@@ -1758,6 +1814,28 @@ class Brain:
         if not self.recalling and self.recall and obs.step >= self.blind_until:
             self.picking, self.listed = RECALL, False
             return Decision(ord("R"), "recall", "out of mana with the Balrog: read Word of Recall")
+        return None
+
+    def protect_evil(self, obs: Observation, view: View) -> Decision | None:
+        """An evil creature close that strikes, at or below the character's
+        level: Protection from Evil, its blows repelled with no roll (VMS
+        creature.inc make_attack; core/monster_attack.s), the prayer when
+        known and the mana spares it, else a scroll carried. Most of what
+        kills on the way to level 40 is evil. Not the Balrog: its level is
+        100. Not hurt or fleeing: the escape comes first."""
+        if obs.dlvl < PROTECT_DLVL or obs.step < self.protect_until or obs.hp < RETREAT_HP * obs.mhp \
+                or self.level.retreat_to is not None:
+            return None
+        evil, strikes = knowledge.evil_kinds(), knowledge.attacks()
+        if not any(chebyshev(p, view.pos) <= 3 and (c.glyph, c.level) in evil and (c.glyph, c.level) in strikes
+                   and c.level <= obs.clvl for p, c in view.creatures.items()):
+            return None
+        why = "an evil creature close, its blows repelled at this level"
+        if PROTECT_EVIL in self.magic.known and self.magic.spare(obs, PROTECT_EVIL):
+            return Decision(*self.magic.pray(PROTECT_EVIL, f"{why}: pray {PROTECT_EVIL}"))
+        if self.extra[PROTECT_SCROLL] and obs.step >= self.blind_until:
+            self.picking, self.listed = PROTECT_SCROLL, False
+            return Decision(ord("R"), "protect", f"{why}: read Protect from Evil")
         return None
 
     def balrog_escape(self, obs: Observation, why: str) -> Decision | None:
@@ -2337,7 +2415,7 @@ class Brain:
                 return Decision(ord("B"), "shop", f"buy {pick[1]}")
         elif obs.stage == "menu" and not done:
             gold = re.search(r"Gold: (\d+)", obs.rows[STORE_GOLD_ROW])
-            for want in self.shopping_list(int(gold.group(1)) if gold else None):
+            for want in self.shopping_list(int(gold.group(1)) if gold else None, obs):
                 for row in obs.rows[STORE_ROWS]:
                     match = STORE_ITEM.match(row)
                     if match and match.group(2).startswith(want) and \
@@ -2358,7 +2436,7 @@ class Brain:
         there is more gold than at the last visit that bought nothing."""
         here, self.at_store = self.at_store, GENERAL_STORE
         try:
-            wanted = any(w.startswith((*FOODS, LANTERN, OIL, TORCH)) for w in self.shopping_list(self.gold(obs)))
+            wanted = any(w.startswith((*FOODS, LANTERN, OIL, TORCH)) for w in self.shopping_list(self.gold(obs), obs))
         finally:
             self.at_store = here
         return wanted and self.gold(obs) > self.general_gold
@@ -2421,7 +2499,7 @@ class Brain:
         its gold for them, buying food and flasks only to their reserves."""
         return "early_cures" in self.goal.tactics and self.clvl < EARLY_LEVELS and self.clw < EARLY_CURES
 
-    def shopping_list(self, gold: int | None = None) -> list[str]:
+    def shopping_list(self, gold: int | None = None, obs: Observation | None = None) -> list[str]:
         """Store items worth buying now, most important first. ``gold``, when
         the store shows it, limits flasks to throw to what the Temple's and
         the Alchemist's shortfalls leave spare."""
@@ -2477,6 +2555,13 @@ class Brain:
             wants.append(HEROISM)       # the 10 HP a one-breath killer's breath can lack (the Temple's)
         if self.balrog_bound() and self.goal.klass in ("priest", "mage") and self.restore_mana < RESTORE_MANA_RESERVE:
             wants.append(RESTORE_MANA)  # a second mana bar for the Balrog (the Black Market's, rich)
+        if self.balrog_bound() and self.extra[INVULNERABILITY] < self.invuln_reserve(obs):
+            wants.append(INVULNERABILITY)   # turns the Balrog cannot hurt (the Black Market's, rich)
+        if self.max_dlvl >= SCOUT_FROM and self.extra[SUPER_HEROISM] < SUPER_HEROISM_RESERVE:
+            wants.append(SUPER_HEROISM)
+        if self.max_dlvl >= SCOUT_FROM and PROTECT_EVIL not in self.magic.known \
+                and self.extra[PROTECT_SCROLL] < PROTECT_RESERVE:
+            wants.append(PROTECT_SCROLL)
         if gold is not None and self.enchant_wanted(gold):
             wants.append(ENCHANT_ARMOR)
         if gold is not None and self.weapon_enchant_wanted(gold):
@@ -2509,7 +2594,7 @@ class Brain:
             # one (1 of its 25 stock choices): level-37 Priests lit torches
             # and went home for more every 4,000 steps (C64 Balrog, 2026-11-09).
             keep = (RECALL, PHASE, TELEPORT_SCROLL, HEALING, CCW, CSW, ENCHANT_ARMOR, ENCHANT_WEAPON, RESIST_HEAT, RESIST_COLD,
-                    HEROISM, RESTORE_MANA, LANTERN) if rich else (RECALL,)
+                    HEROISM, RESTORE_MANA, LANTERN, *EXTRA_ITEMS) if rich else (RECALL,)
             wants = [w for w in wants if w in keep]
             if rich and "strong_potions" in self.goal.tactics and self.strong[HEALING] < HEALING_RESERVE:
                 wants.insert(0, HEALING)   # the big heal first: the Temple never has it
@@ -2521,6 +2606,8 @@ class Brain:
         elif self.at_store == ALCHEMIST:
             wants = [w for w in wants if w in (RECALL, PHASE, TELEPORT_SCROLL, RESTORATION, ENCHANT_ARMOR,
                                                ENCHANT_WEAPON, RECHARGE_SCROLL)]
+        else:
+            wants = [w for w in wants if w not in EXTRA_ITEMS]   # the Black Market's alone
         return wants
 
     def stats(self, obs: Observation) -> tuple[int, int]:
@@ -2724,6 +2811,9 @@ class Brain:
             self.resist_heat = max(0, self.resist_heat + n)
         elif item.startswith(RESIST_COLD):
             self.resist_cold = max(0, self.resist_cold + n)
+        elif item.startswith(EXTRA_ITEMS):
+            kind = next(k for k in EXTRA_ITEMS if item.startswith(k))
+            self.extra[kind] = max(0, self.extra[kind] + n)
         elif item.startswith(HEROISM):
             self.heroism = max(0, self.heroism + n)
         elif item.startswith(RESTORE_MANA):
@@ -2785,6 +2875,7 @@ class Brain:
             self.enchant_scrolls = held(ENCHANT_ARMOR)
             self.weapon_scrolls = held(ENCHANT_WEAPON)
             self.recharge_scrolls = held(RECHARGE_SCROLL)
+            self.extra[PROTECT_SCROLL] = held(PROTECT_SCROLL)
         if scope == "all" and self.launcher is not None:
             # A clvl 37 Gnome Rogue's count said none with 197 Bolts carried
             # (C64 Balrog, 2026-11-14): balrog_damage counts them.
@@ -2800,6 +2891,7 @@ class Brain:
             self.clw, self.neutralize, self.restoration = held(CLW), held(NEUTRALIZE), held(RESTORATION)
             self.resist_heat, self.resist_cold = held(RESIST_HEAT), held(RESIST_COLD)
             self.heroism = held(HEROISM)
+            self.extra.update({kind: held(kind) for kind in (SUPER_HEROISM, INVULNERABILITY)})
             self.restore_mana = held(RESTORE_MANA)
             self.gains = {k: held(k) for k in GAIN_POTIONS if held(k)}
             for kind in self.strong:
@@ -2855,6 +2947,8 @@ class Brain:
                     self.resist_heat = max(0, self.resist_heat - 1)
                 elif self.picking == RESIST_COLD:
                     self.resist_cold = max(0, self.resist_cold - 1)
+                elif self.picking in self.extra:
+                    self.extra[self.picking] = max(0, self.extra[self.picking] - 1)
                 elif self.picking == HEROISM:
                     self.heroism = max(0, self.heroism - 1)
                 elif self.picking == RESTORE_MANA:
@@ -2924,8 +3018,10 @@ class Brain:
         kind = self.picking_kind()
         if kind == "scrolls":
             self.recall = self.phase = self.teleports = self.identify_scrolls = self.enchant_scrolls = 0
+            self.extra[PROTECT_SCROLL] = 0
         elif kind == "potions":
             self.clw = self.neutralize = self.restoration = self.resist_heat = self.resist_cold = self.heroism = self.restore_mana = 0
+            self.extra.update({SUPER_HEROISM: 0, INVULNERABILITY: 0})
             self.gains = {}
             for name in self.strong:
                 self.strong[name] = 0
@@ -2953,6 +3049,8 @@ class Brain:
             self.resist_cold = 0
         elif self.picking == HEROISM:
             self.heroism = 0
+        elif self.picking in self.extra:
+            self.extra[self.picking] = 0
         elif self.picking == RESTORE_MANA:
             self.restore_mana = 0
         elif self.picking == RESTORATION:
@@ -3591,16 +3689,93 @@ class Brain:
         on the evil, once more for each Restore Mana), each attack wand's
         charges at its average, and BALROG_SHOT_HITS of the launcher's
         shots. A Rogue learns no attack spell (core/spell_class_data.s:
-        rogue_spell_level 99 for each): its wands and bolts are its Orb."""
-        total = 0.0
+        rogue_spell_level 99 for each): its wands and bolts are its Orb.
+
+        A fighter's blows too, in the turns the fight leaves after those
+        (``balrog_turns``): counted at nothing, no Warrior or Rogue was ever
+        ready, and in a night no character past level 40 went down to it
+        (C64 Balrog, 2026-11-15)."""
+        total, actions = 0.0, 0
         orb = self.magic.known.get(ORB)
         if orb is not None and orb.level <= obs.clvl and orb.mana > 0:
-            total += (self.magic.mana(obs)[1] // orb.mana) * 2 * (10.5 + obs.clvl) * (1 + self.restore_mana)
-        total += sum(self.wands.get(wand, 0) * damage for wand, damage in ATTACK_WANDS.items())
+            casts = (self.magic.mana(obs)[1] // orb.mana) * (1 + self.restore_mana)
+            total += casts * 2 * (10.5 + obs.clvl)
+            actions += casts
+        charges = {wand: self.wands.get(wand, 0) for wand in ATTACK_WANDS}
+        total += sum(n * ATTACK_WANDS[wand] for wand, n in charges.items())
+        actions += sum(charges.values())
         if self.launcher is not None:
             ammo, mult, _ = LAUNCHERS[self.launcher]
             total += self.ammo * mult * AMMO_AVERAGE[ammo] * BALROG_SHOT_HITS
+            actions += self.ammo
+        blows = self.balrog_melee(obs)
+        if blows > 0:
+            total += blows * max(0.0, self.balrog_turns(obs) - actions)
         return total
+
+    def invuln_reserve(self, obs: Observation | None = None) -> int:
+        """Potions of Invulnerability to carry: INVULN_RESERVE, and for a
+        fighter as many as its blows need to finish the Balrog
+        (``balrog_damage``): at 230 a turn against its 11 a turn, a clvl 40
+        Warrior's 650 HP and healing last three turns, each potion 14."""
+        if self.goal.klass not in MELEE_KLASSES or obs is None:
+            return INVULN_RESERVE
+        blows = self.balrog_melee(obs)
+        short = BALROG_HP - self.balrog_damage(obs)
+        if blows <= 0 or short <= 0:
+            return min(self.extra[INVULNERABILITY], INVULN_MAX) if short <= 0 else INVULN_RESERVE
+        return min(INVULN_MAX, max(INVULN_RESERVE, self.extra[INVULNERABILITY] + math.ceil(short / (blows * INVULN_TURNS))))
+
+    def jewel_bonus(self, kind: str) -> int:
+        """The bonus of the rings worn of ``kind`` ("Increase Damage"), both hands."""
+        bonus = 0
+        for name in self.jewel_names.values():
+            match = JEWEL_NAME.match(name.strip())
+            if match and match.group(3) == kind:
+                bonus += int(match.group(4) or 0)
+        return bonus
+
+    def balrog_melee(self, obs: Observation) -> float:
+        """A fighter's expected melee damage a turn on the Balrog: blows and
+        dice with the rings' damage on each blow, times the chance to hit its
+        AC (``knowledge.hit_chance``; a to-hit point is 3 skill). Nothing for
+        a Priest or a Mage, whose fight is prayers and spells (balrog_fight)."""
+        if self.goal.klass not in MELEE_KLASSES:
+            return 0.0
+        name, to_dam = self.weapon
+        own = knowledge.strength_by_name().get(BALROG)
+        if own is None:
+            return 0.0
+        score = self.melee_score(name, to_dam + self.jewel_bonus("Increase Damage"), obs)
+        skill = self.melee_skill(name, obs) + 3 * self.jewel_bonus("Increase To-Hit")
+        return score * knowledge.hit_chance(skill, own[1])
+
+    def balrog_turn_damage(self, obs: Observation) -> float:
+        """The Balrog's expected damage a turn of the bot's, fire resisted as
+        worn and carried (``burst_now``, lasting): its moves a turn, each a
+        breath or spell at its casting rate (``knowledge.spell_rate``), else
+        its blows' dice (``knowledge.attacks``). The worst turn
+        (``turn_burst``) decides when to stand; this one how long."""
+        kind = knowledge.kinds_by_name().get(BALROG)
+        if kind is None:
+            return 0.0
+        rate = knowledge.spell_rate().get(kind, 0.0)
+        spell = self.burst_now(kind, obs, True, frozenset(), BALROG)
+        blows = sum(dice * (sides + 1) / 2 for _, dice, sides in knowledge.attacks().get(kind, ()))
+        return max(1.0, self.moves().get(kind, 1.0)) * (rate * spell + (1 - rate) * blows)
+
+    def balrog_turns(self, obs: Observation) -> float:
+        """Turns a fight with the Balrog lasts at its expected damage
+        (``balrog_turn_damage``): the HP and every healing potion carried
+        (a turn each to drink), and INVULN_TURNS for each Potion of
+        Invulnerability, which it cannot hurt."""
+        each = self.balrog_turn_damage(obs)
+        if each <= 0:
+            return 0.0
+        potions = {CLW: self.clw, **self.strong}
+        healed = sum(n * min(POTION_HEAL[k], obs.mhp) for k, n in potions.items())
+        drinks = sum(potions.values())
+        return max(0.0, (obs.mhp + healed) / each - drinks) + self.extra[INVULNERABILITY] * INVULN_TURNS
 
     def ammo_reserve(self) -> int:
         """Shots to carry: AMMO_RESERVE, and a stack once Balrog-bound, where
@@ -4774,6 +4949,9 @@ class Brain:
                 (RESTORE_MANA, self.restore_mana, RESTORE_MANA_RESERVE),
                 (RESIST_HEAT, self.resist_heat, RESIST_RESERVE), (RESIST_COLD, self.resist_cold, RESIST_RESERVE),
                 (HEROISM, self.heroism, HEROISM_RESERVE), (TORCH, self.torches, self.torch_reserve()),
+                (SUPER_HEROISM, self.extra[SUPER_HEROISM], SUPER_HEROISM_RESERVE),
+                (INVULNERABILITY, self.extra[INVULNERABILITY], INVULN_RESERVE),
+                (PROTECT_SCROLL, self.extra[PROTECT_SCROLL], PROTECT_RESERVE),
                 *((kind, count, self.strong_reserve()) for kind, count in self.strong.items())]
         for prefix, count, reserve in held:
             if name.startswith(prefix):

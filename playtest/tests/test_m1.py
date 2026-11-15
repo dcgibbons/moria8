@@ -2941,6 +2941,152 @@ class ResistFireTest(unittest.TestCase):
         brain.ammo, brain.restore_mana, brain.recall = 100, 255, 3
         self.assertIsNone(brain.balrog_fight(o, view))             # the bolts (shoot), not Restore Mana or a recall
 
+    def priest(self) -> Brain:
+        from moria_playtest.brain import CSW
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-troll-priest"))
+        brain.recall, brain.clw, brain.strong[CSW], brain.phase = 3, 20, 5, 5   # a deep character's stock
+        brain.resist_heat, brain.wands["Wand of Drain Life"] = 4, 60
+        brain.wants_book_trip = lambda obs: False   # type: ignore[method-assign]
+        return brain
+
+    def warrior(self) -> Brain:
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        brain.clvl = 40
+        brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 9   # type: ignore[method-assign]
+        brain.weapon = ("Executioner's Sword", 10)
+        brain.last_stats = (28, 18)   # 18/100 STR, 18 DEX
+        return brain
+
+    def test_a_fighters_blows_count_toward_the_balrog_in_the_turns_it_can_stand(self) -> None:
+        """C64 Balrog, 2026-11-15: balrog_damage counted wands, the Orb and
+        bolts, never a blow; no Warrior or Rogue was ever ready, and none past
+        level 40 went down in a night. The blows count in the turns the HP,
+        the healing and each Potion of Invulnerability last against its
+        expected damage a turn, after the device turns. A Priest's count does
+        not change."""
+        from moria_playtest.brain import INVULNERABILITY, INVULN_TURNS
+        brain = self.warrior()
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=650, mhp=650)
+        blows = brain.balrog_melee(o)
+        self.assertGreater(blows, 0)
+        turns = brain.balrog_turns(o)
+        self.assertAlmostEqual(brain.balrog_damage(o), blows * turns)
+        brain.extra[INVULNERABILITY] = 3
+        self.assertAlmostEqual(brain.balrog_turns(o), turns + 3 * INVULN_TURNS)
+        self.assertAlmostEqual(brain.balrog_damage(o), blows * (turns + 3 * INVULN_TURNS))
+        brain.wands["Wand of Drain Life"] = 10          # ten device turns before the blows
+        self.assertAlmostEqual(brain.balrog_damage(o), 10 * 50 + blows * (turns + 3 * INVULN_TURNS - 10))
+        priest = self.priest()
+        priest.extra[INVULNERABILITY] = 3
+        self.assertEqual(priest.balrog_damage(o), 60 * 50.0)   # prayers and wands, as before
+
+    def test_a_fighter_buys_invulnerability_for_what_its_blows_lack(self) -> None:
+        """The Black Market's Potions of Invulnerability (708f3df: the full
+        item list), bought rich and Balrog-bound: three, and for a fighter
+        as many as its blows need to finish the 3,000, at most INVULN_MAX.
+        The other stores never stock them."""
+        from moria_playtest.brain import (BALROG_HP, BLACK_MARKET, ALCHEMIST, INVULNERABILITY, INVULN_MAX,
+                                          INVULN_RESERVE, MARKET_GEAR_GOLD)
+        brain = self.warrior()
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=650, mhp=650)
+        need = brain.invuln_reserve(o)
+        self.assertGreater(need, INVULN_RESERVE)
+        self.assertLessEqual(need, INVULN_MAX)
+        brain.at_store = BLACK_MARKET
+        self.assertIn(INVULNERABILITY, brain.shopping_list(MARKET_GEAR_GOLD, o))
+        brain.at_store = ALCHEMIST
+        self.assertNotIn(INVULNERABILITY, brain.shopping_list(MARKET_GEAR_GOLD, o))
+        brain.at_store = BLACK_MARKET
+        brain.extra[INVULNERABILITY] = INVULN_MAX
+        self.assertNotIn(INVULNERABILITY, brain.shopping_list(MARKET_GEAR_GOLD, o))
+        if brain.balrog_damage(o) < BALROG_HP:
+            self.assertEqual(brain.invuln_reserve(o), INVULN_MAX)
+        self.assertEqual(self.priest().invuln_reserve(o), INVULN_RESERVE)
+
+    def test_a_fighter_drinks_invulnerability_then_strikes_the_balrog(self) -> None:
+        """C64 Balrog, 2026-11-15: a Warrior out of wands and bolts read Word
+        of Recall at the Balrog and never struck it. At hand: Invulnerability
+        first, then Super Heroism, then its blows; not beside it, the close
+        in, not a recall."""
+        from moria_playtest.brain import INVULNERABILITY, SUPER_HEROISM, INVULNERABLE
+        brain = self.warrior()
+        brain.extra.update({INVULNERABILITY: 2, SUPER_HEROISM: 1})
+        brain.recall = 3
+        kind = knowledge.kinds_by_name()["Balrog"]
+        view = town_view((10, 10), (40, 40), dlvl=50)
+        view.creatures = {(11, 10): Creature(*kind)}
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=650, mhp=650)
+        decision = brain.balrog_fight(o, view)
+        self.assertEqual((decision.key, brain.picking), (ord("Q"), INVULNERABILITY), decision.reason)
+        brain.invulnerable_until = o.step + 14                         # "You feel invulnerable."
+        decision = brain.balrog_fight(o, view)
+        self.assertEqual((decision.key, brain.picking), (ord("Q"), SUPER_HEROISM), decision.reason)
+        decision = brain.balrog_fight(o, view)
+        self.assertEqual(decision.layer, "fight", decision.reason)
+        self.assertEqual(decision.key, DIRS[(1, 0)])
+        view.creatures = {(14, 10): Creature(*kind)}
+        brain.extra[INVULNERABILITY] = 0
+        brain.heroic_until = o.step + 25
+        self.assertIsNone(brain.balrog_fight(o, view))                 # close in: no Word of Recall
+        self.assertEqual(INVULNERABLE, "You feel invulnerable.")   # core/eff_item_extended.s ee_msg_invuln
+
+    def test_rings_of_increase_damage_and_to_hit_are_worth_wearing_for_a_fighter(self) -> None:
+        """708f3df's full item list: Rings of Increase Damage and To-Hit
+        (core/player_recalc_equipment.s) were worth nothing to the bot and
+        never worn. A fighter values them by the bonus; a Mage does not."""
+        warrior = self.warrior()
+        self.assertGreater(warrior.jewel_value("Ring of Increase Damage (+6)"), warrior.jewel_value("Ring of Strength (+2)"))
+        self.assertGreater(warrior.jewel_value("Ring of Increase To-Hit (+6)"), 0)
+        from moria_playtest.goals import for_character
+        mage = Brain(for_character(GOALS["balrog"], "human-mage"))
+        self.assertEqual(mage.jewel_value("Ring of Increase Damage (+6)"), 0)
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=650, mhp=650)
+        bare = warrior.balrog_melee(o)
+        warrior.jewel_names["Ring"] = "Ring of Increase Damage (+6)"
+        self.assertGreater(warrior.balrog_melee(o), bare)              # its blows' damage up
+
+    def test_protection_from_evil_before_an_evil_creature_it_repels(self) -> None:
+        """708f3df's full item list: the Priest's Protection from Evil was
+        never prayed, its scroll never read. Close to an evil creature that
+        strikes, at or below the character's level: the prayer, else the
+        scroll; above its level the creature is not repelled."""
+        from moria_playtest.brain import PROTECT_EVIL, PROTECT_SCROLL
+        from moria_playtest.magic import Prayer
+        evil = sorted(k for k in knowledge.evil_kinds() if k in knowledge.attacks() and 20 <= k[1] <= 30)[0]
+        priest = self.priest()
+        priest.magic.known[PROTECT_EVIL] = Prayer("d", 15, 15)
+        priest.magic.listed = True
+        view = town_view((10, 10), (40, 40), dlvl=30)
+        view.creatures = {(12, 10): Creature(*evil)}
+        rows = {23: "HP:400/400 MP:150/150 AC:60"}
+        o = command_obs(pos=(10, 10), dlvl=30, clvl=35, hp=400, mhp=400, rows=rows)
+        decision = priest.protect_evil(o, view)
+        self.assertIsNotNone(decision)
+        self.assertIn(PROTECT_EVIL, decision.reason)
+        priest.protect_until = o.step + 105                            # "You feel protected."
+        self.assertIsNone(priest.protect_evil(o, view))
+        low = command_obs(pos=(10, 10), dlvl=30, clvl=evil[1] - 1, hp=400, mhp=400, rows=rows)
+        priest.protect_until = 0
+        self.assertIsNone(priest.protect_evil(low, view))              # above its level: not repelled
+        warrior = self.warrior()
+        warrior.extra[PROTECT_SCROLL] = 2
+        decision = warrior.protect_evil(o, view)
+        self.assertEqual((decision.key, warrior.picking), (ord("R"), PROTECT_SCROLL), decision.reason)
+
+    def test_the_full_item_lists_potions_and_scroll_are_counted_and_kept(self) -> None:
+        """Counted from the listings and kept from the junk drop: a Potion of
+        Invulnerability found deep was junk before (KEEP_PREFIXES)."""
+        from moria_playtest.brain import INVULNERABILITY, SUPER_HEROISM, PROTECT_SCROLL, KEEP_PREFIXES
+        brain = self.warrior()
+        brain.sync_counts([" c) 3 Potion of Invulnerability", " d) Potion of Super Heroism",
+                           " e) 2 Scroll of Protect from Evil", " f) 4 Potion of Heroism"], "all")
+        self.assertEqual((brain.extra[INVULNERABILITY], brain.extra[SUPER_HEROISM], brain.extra[PROTECT_SCROLL],
+                          brain.heroism), (3, 1, 2, 4))
+        for name in (INVULNERABILITY, SUPER_HEROISM, PROTECT_SCROLL, "Potion of Restore Life Levels"):
+            self.assertTrue(name.startswith(KEEP_PREFIXES), name)
+
     def test_one_more_turn_of_an_unseen_balrog_kills_away_first(self) -> None:
         """C64 Balrog, 2026-11-14: a clvl 40 Half-Orc Rogue at 112/445, the
         Balrog just gone from view, cast Cure Light Wounds twice (+11
