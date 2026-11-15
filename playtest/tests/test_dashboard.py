@@ -436,6 +436,46 @@ class MonsterStatsTest(unittest.TestCase):
             self.assertEqual((iggy["slain"], iggy["met"]), ({"balrog": 2}, {"balrog": 3}))
 
 
+class StatsSinceTest(unittest.TestCase):
+    """A fresh start (maintainer, 2026-11-15: "archive all the stats on the
+    main queue page ... especially the monsters grid"): config "stats_since"
+    leaves the earlier runs out of the page's counts, on disk as they were."""
+
+    def test_the_monsters_balrog_kills_and_run_counts_start_over(self) -> None:
+        from moria_playtest import records as run_records
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def run(name: str, queue: str, kills: list[str], met: tuple[str, ...] = ()) -> None:
+                path = home / "runs" / name
+                path.mkdir(parents=True)
+                (path / "job.json").write_text(json.dumps({"queue": queue}))
+                (path / "events.jsonl").write_text(
+                    "\n".join([json.dumps({"kind": "kill", "name": k}) for k in kills] +
+                              [json.dumps({"kind": "met", "name": m}) for m in met]) + "\n")
+            old, new = "20261114-100000-balrog-c64-human-priest-1", "20261115-130000-balrog-c64-human-priest-2"
+            run(old, "balrog", ["Kobold", "Evil Iggy"], ("Kobold", "Evil Iggy"))
+            run(new, "balrog", ["Kobold"], ("Kobold",))
+            records = [{"id": old, "queue": "balrog", "outcome": "died", "death": {"cause": "Evil Iggy"}},
+                       {"id": "20261114-110000-build-c64-human-mage-3", "queue": "build", "outcome": "reached",
+                        "platform": "c64", "build": "a", "character": "human-mage"},
+                       {"id": new, "queue": "balrog", "outcome": "died", "death": {"cause": "Kobold"}}]
+            (home / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+            since = "20261115-120000"
+            creatures = dashboard.monster_stats(home, since)["creatures"]
+            self.assertEqual(creatures["Kobold"], {"slain": {"balrog": 1}, "met": {"balrog": 1},
+                                                   "killed": {"balrog": 1}})
+            self.assertNotIn("Evil Iggy", creatures)
+            self.assertEqual(dashboard.balrog_kills(home, since), {"total": {"Kobold": 1}, "runs": 1})
+            whole = dashboard.monster_stats(home)["creatures"]   # no cut-off: every run, as before
+            self.assertEqual(whole["Evil Iggy"]["killed"], {"balrog": 1})
+            runs = dashboard.queue_runs(home, "deep", ("reached", "died"), since=since)
+            self.assertEqual((runs["runs"], runs["builds"], [r["id"] for r in runs["recent"]]), (1, [], [new]))
+            run_records.import_jsonl(home / "runs.jsonl", home, rebuild=True)   # the service's database
+            runs = dashboard.queue_runs(home, "deep", ("reached", "died"), since=since)
+            self.assertEqual((runs["runs"], runs["builds"], [r["id"] for r in runs["recent"]]), (1, [], [new]))
+            self.assertEqual(dashboard.queue_runs(home, "deep", ("reached", "died"))["runs"], 3)
+
+
 class TraceTailTest(unittest.TestCase):
     def test_a_growing_trace_is_read_on_from_where_the_last_read_stopped(self) -> None:
         """2026-11-13: reading the 26 live traces from their start took 523

@@ -202,36 +202,44 @@ def queue_group(queue: str | None) -> str:
     return queue if queue in ("balrog", "build") else "other"
 
 
-def death_counts(runs: Path) -> dict[str, dict[str, int]]:
-    """Per creature, the characters it killed, by queue group, over every
-    run the queue recorded."""
+def deaths(runs: Path) -> list[tuple[str, str, str]]:
+    """Each death the queue recorded: (run id, cause, queue group)."""
+    return [(record.get("id") or "", cause, queue_group(record.get("queue"))) for record in queue_records(runs)
+            if record.get("outcome") == "died" and (cause := (record.get("death") or {}).get("cause"))]
+
+
+def death_counts(runs: Path, since: str = "") -> dict[str, dict[str, int]]:
+    """Per creature, the characters it killed, by queue group, over the runs
+    the queue recorded from ``since`` (a run id prefix) on."""
     out: dict[str, dict[str, int]] = {}
-    for record in queue_records(runs):
-        cause = (record.get("death") or {}).get("cause")
-        if record.get("outcome") != "died" or not cause:
+    for run_id, cause, key in cached(runs, deaths) or []:
+        if run_id[:len(since)] < since:
             continue
         group = out.setdefault(cause, {})
-        key = queue_group(record.get("queue"))
         group[key] = group.get(key, 0) + 1
     return out
 
 
-def monster_stats(home: Path) -> dict[str, Any]:
+def monster_stats(home: Path, since: str = "") -> dict[str, Any]:
     """The Monsters panel: per creature, how many runs slew it (kill events,
     by queue group), how many runs met it (met events) and how many
     characters it has killed (run records): runs alike, so slain and met
     compare (maintainer, 2026-11-12: Evil Iggy, 69 kills in 22 runs, showed
     more kills than the 53 runs that met him). Kills count from
-    KILLS_SINCE, meetings from MET_SINCE, deaths from the first run."""
+    KILLS_SINCE, meetings from MET_SINCE, deaths from the first run, all
+    from ``since`` (config "stats_since") when later: a fresh start, the
+    runs before it kept (maintainer, 2026-11-15, after 708f3df's 370 items:
+    "archive all the stats ... especially the monsters grid")."""
+    kills_since, met_since = max(KILLS_SINCE, since), max(MET_SINCE, since)
     creatures: dict[str, dict[str, dict[str, int]]] = {}
     def entry(name: str) -> dict[str, dict[str, int]]:
         return creatures.setdefault(name, {"slain": {}, "met": {}, "killed": {}})
     runs = met_runs = 0
     for events in home.glob("runs/*/events.jsonl"):
-        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+        if events.parent.name[:len(kills_since)] < kills_since:
             continue
         counts = cached(events, kill_counts) or {}
-        met = (cached(events, met_names) or []) if events.parent.name[:len(MET_SINCE)] >= MET_SINCE else []
+        met = (cached(events, met_names) or []) if events.parent.name[:len(met_since)] >= met_since else []
         if not (counts or met):
             continue
         runs += bool(counts)
@@ -245,20 +253,22 @@ def monster_stats(home: Path) -> dict[str, Any]:
             seen = entry(name)["met"]
             seen[key] = seen.get(key, 0) + 1
     shipped = set(knowledge.creature_names())
-    for name, killed in (cached(home / "runs.jsonl", death_counts) or {}).items():
+    for name, killed in death_counts(home / "runs.jsonl", since).items():
         if name in shipped:   # not poison, traps, starvation or "caster's spell"
             entry(name)["killed"] = killed
-    return {"creatures": creatures, "runs": runs, "met_runs": met_runs, "since": KILLS_SINCE,
-            "met_since": MET_SINCE}
+    return {"creatures": creatures, "runs": runs, "met_runs": met_runs, "since": kills_since,
+            "met_since": met_since}
 
 
-def balrog_kills(home: Path) -> dict[str, Any]:
-    """The Balrog queue's kills over every run it kept: what falls, and
-    whether the Balrog, Evil Iggy or an Ancient Multi-Hued Dragon ever has."""
+def balrog_kills(home: Path, since: str = "") -> dict[str, Any]:
+    """The Balrog queue's kills over every run it kept from ``since`` on:
+    what falls, and whether the Balrog, Evil Iggy or an Ancient Multi-Hued
+    Dragon ever has."""
     total: dict[str, int] = {}
     runs = 0
+    cut = max(KILLS_SINCE, since)
     for events in home.glob("runs/*-balrog-*/events.jsonl"):
-        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+        if events.parent.name[:len(cut)] < cut:
             continue
         counts = cached(events, kill_counts) or {}
         runs += bool(counts)
@@ -651,15 +661,18 @@ def queue_records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "") -> dict[str, Any]:
+def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "", since: str = "") -> dict[str, Any]:
     """The run records' part of /api/queue: ratings and feature counts over
     the main queue's counted runs on ``goal``, the number of runs and the
     newest 30. From queue.db, the derived counts remembered until a row is
     written (the database file's mtime lags its WAL); from runs.jsonl before
-    the service has made the database."""
+    the service has made the database. Runs before ``since`` (config
+    "stats_since", a run id prefix) are left out."""
+    def fresh(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [r for r in records if (r.get("id") or "")[:len(since)] >= since] if since else records
     db = run_records.open_ro(home)
     if db is None:
-        records = cached(home / "runs.jsonl", queue_records) or []
+        records = fresh(cached(home / "runs.jsonl", queue_records) or [])
         main = [r for r in records if r.get("queue") == "main" and r.get("goal") == goal and r["outcome"] in counted
                 and r.get("epoch", "") == epoch]
         return {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
@@ -668,16 +681,18 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
     with closing(db):
         # Every insert takes a new rowid, so the count and the last rowid change with each.
         version = db.execute("SELECT count(*), max(rowid) FROM runs").fetchone()
-        key = (f"{run_records.path(home)}:{goal}:{epoch}", version)
+        key = (f"{run_records.path(home)}:{goal}:{epoch}:{since}", version)
         if key not in _cache:
             for stale in [k for k in _cache if k[0] == key[0]]:
                 del _cache[stale]
             main = run_records.records(db, f"queue = 'main' AND goal = ? AND outcome IN "
                                            f"({', '.join('?' * len(counted))})", (goal, *counted))
-            main = [r for r in main if r.get("epoch", "") == epoch]   # the current epoch's runs only
+            main = fresh([r for r in main if r.get("epoch", "") == epoch])   # the current epoch's runs only
             _cache[key] = {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
-                           "builds": build_history(run_records.records(db, "queue = 'build'"), counted)}
-        return {**_cache[key], "runs": version[0], "recent": run_records.records(db, newest=30)}
+                           "builds": build_history(run_records.records(db, "queue = 'build' AND id >= ?", (since,)),
+                                                   counted),
+                           "runs": db.execute("SELECT count(*) FROM runs WHERE id >= ?", (since,)).fetchone()[0]}
+        return {**_cache[key], "recent": fresh(run_records.records(db, newest=30))}
 
 
 BUILD_HISTORY = 40      # builds the Builds card shows, newest last
@@ -900,7 +915,8 @@ def queue() -> dict[str, Any]:
     service = read_json(home / "service.json") or {}
     state = read_json(q.state_path(home, config["goal"], config.get("epoch", ""))) or {}
     running = read_json(home / "running.json") or {}
-    runs = queue_runs(home, config["goal"], q.COUNTED, config.get("epoch", ""))
+    since = config.get("stats_since", "")
+    runs = queue_runs(home, config["goal"], q.COUNTED, config.get("epoch", ""), since)
     def summary(path: Path) -> dict[str, Any]:
         sub = cached(path, read_json) or {}
         return ({k: sub.get(k) for k in ("name", "created", "finished", "build", "note", "done", "cancelled",
@@ -931,8 +947,8 @@ def queue() -> dict[str, Any]:
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
-            "balrog_kills": balrog_kills(home),
-            "monsters": monster_stats(home),
+            "balrog_kills": balrog_kills(home, since),
+            "monsters": monster_stats(home, since),
             "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "builds": runs["builds"],

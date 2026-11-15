@@ -117,6 +117,10 @@ DEFAULTS: dict[str, Any] = {
     # workers for this priest character, and the other half for everyone
     # else"), and no other character's game is stopped.
     "balrog_characters": [], "balrog_copies": 1, "balrog_focus_workers": 0,
+    # The dashboard's statistics (monsters, Balrog kills, build history, run
+    # counts) count runs from this run id prefix on ("YYYYMMDD-HHMMSS"); the
+    # earlier runs stay on disk (maintainer, 2026-11-15: a fresh start).
+    "stats_since": "",
 }
 
 
