@@ -1337,6 +1337,37 @@ class UnstuckTest(unittest.TestCase):
         brain.track(at(1, step + 100), view)
         self.assertEqual(brain.recall_wait, RESTOCK_WAIT)
 
+    def test_book_trips_back_off_while_the_book_is_not_found(self) -> None:
+        """C64 Balrog, 2026-11-14: a clvl 36 Elf Ranger after The Mages Guide
+        to Power had its next book trip set 1,500 steps from arriving in
+        town, already run out when it left; it walked down to DL4-5 and
+        climbed back for the book for hours. Leaving town without it, the
+        next trip waits GEAR_TRIP_WAIT, then twice as long each time up to
+        the cap the gear and restock trips use, and back once it is bought."""
+        from moria_playtest.brain import GEAR_TRIP_WAIT, RESTOCK_BACKOFF_MAX
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "elf-ranger"))
+        brain.books_owned = {"Beginners-Magick", "Magick I", "Magick II"}
+        view = town_view((5, 5), (40, 40), dlvl=0)
+
+        def at(dlvl: int, step: int):
+            o = command_obs(pos=(5, 5), dlvl=dlvl, clvl=36)
+            o.step = step
+            return o
+        self.assertIsNotNone(brain.book_wanted(at(1, 0)))
+        step, waits = 1000, []
+        for _ in range(6):
+            brain.track(at(0, step), view)
+            step += 4000                                        # a long visit: past RESTOCK_WAIT
+            brain.track(at(1, step), view)                      # left without the book
+            waits.append(brain.book_trip_after - step)
+        self.assertEqual(waits, [GEAR_TRIP_WAIT * 2 ** n for n in range(5)] + [RESTOCK_BACKOFF_MAX * GEAR_TRIP_WAIT])
+        self.assertFalse(brain.wants_book_trip(at(4, step + 1500)))   # not straight back up from DL4
+        brain.books_owned.add("The Mages Guide to Power")
+        brain.track(at(0, step + 50), view)
+        brain.track(at(1, step + 100), view)
+        self.assertEqual(brain.book_wait, GEAR_TRIP_WAIT)
+
     def test_explore_ping_pong_drops_that_frontier(self) -> None:
         # M5b round 46, seed 1015: 5,000 steps between two corridor squares.
         brain = Brain(GOALS["reach_dl2"])

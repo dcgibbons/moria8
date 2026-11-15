@@ -238,7 +238,7 @@ AMMO_MAX_GOLD = 10       # most paid a shot: a Human Warrior paid 407 of 473 sta
 FIRE_RANGE = 8           # farthest in-line creature fired at
 LAUNCHER_KEEP = 20       # gold kept back from the first launcher (later ones: the gear reserve)
 STARTING_ARMOUR = {"ICAT_ARMOR": 4}           # Leather Armor [4,+0]; AC worn per armour slot
-ARMOUR_SLOTS = ("ICAT_ARMOR", "ICAT_SHIELD", "ICAT_HELM", "ICAT_GLOVES", "ICAT_BOOTS")
+ARMOUR_SLOTS = ("ICAT_ARMOR", "ICAT_SHIELD", "ICAT_HELM", "ICAT_GLOVES", "ICAT_BOOTS", "ICAT_CLOAK")
 STAT = re.compile(r"\b(ST|DX):\s*(\d+)(?:/(\d+|\*\*))?")
 STATS = re.compile(r"\b(ST|IN|WI|DX|CO|CH):\s*(\d+)(?:/(\d+|\*\*))?")   # all six, for drain
 
@@ -251,9 +251,9 @@ def stat_value(base: str, extra: str) -> int:
     return int(base) + (int(extra) // 10 if extra else 0)
 # The equipment list ('E'): a worn armour slot, its name and [AC,+to-AC]
 # (wrapped onto the next line on 40 columns).
-EQUIP_LINE = re.compile(r"^\s*[a-z]\) (Body|Shield|Head|Hands|Feet):\s+(.*)$")
+EQUIP_LINE = re.compile(r"^\s*[a-z]\) (Body|Shield|Head|Hands|Feet|Cloak):\s+(.*)$")
 EQUIP_SLOTS = {"Body": "ICAT_ARMOR", "Shield": "ICAT_SHIELD", "Head": "ICAT_HELM",
-               "Hands": "ICAT_GLOVES", "Feet": "ICAT_BOOTS"}
+               "Hands": "ICAT_GLOVES", "Feet": "ICAT_BOOTS", "Cloak": "ICAT_CLOAK"}
 # A ring or amulet (Magic Shop, Black Market), worn or for sale: its name and
 # the bonus shown, "[+5]" for Protection, "(+2)" for Strength and Wisdom;
 # Speed, Slaying, the Magi and the resists show none.
@@ -305,6 +305,11 @@ GEAR_ARMOUR = re.compile(r"^(.+?) \[(\d+)(?:,\s*([+-]\s*\d+))?")
 # crowns of the Magi (MON-030): the elements of breath they resist
 # (monster_cast_breath). Not the Amulet of the Magi: a crown's suffix only.
 EGO_RESIST = re.compile(r" \((Resist(?: Acid| Fire| Cold| Lightning)?|Defender)\)|(?<=Crown) of (the Magi)")
+EGO_ARMOUR = re.compile(
+    r" \((Resist(?: Acid| Fire| Cold| Lightning)?|Defender)\)"
+    r"| of (?:the Magi|Free Action|Slaying|Slow Descent|Speed|Stealth|Intelligence|Wisdom"
+    r"|Infra-Vision|Might|Lordliness|Beauty|Seeing|Regeneration|Protection)$"
+)
 FOUR_ELEMENTS = frozenset({"fire", "frost", "acid", "lightning"})
 EGO_ELEMENTS = {"Resist": FOUR_ELEMENTS, "Defender": FOUR_ELEMENTS, "Resist Acid": frozenset({"acid"}),
                 "Resist Fire": frozenset({"fire"}), "Resist Cold": frozenset({"frost"}),
@@ -829,6 +834,7 @@ class Brain:
         self.gear_wait = GEAR_TRIP_WAIT        # gear_trip_after's wait, doubled by each visit that bought no gear
         self.gear_bought = False               # armour or a weapon bought on this town visit
         self.book_trip_after = 0               # ... for a prayer book alone
+        self.book_wait = GEAR_TRIP_WAIT        # ... doubled by each visit that left without the book
         self.books_owned = {books_for(goal.klass)[0]} if self.book_levels() is not None else set()
         self.book_next: str | None = None      # the book wanted at the Temple this visit
         self.chant_until = 0                   # step until which Chant is counted on
@@ -2633,7 +2639,7 @@ class Brain:
                 continue
             letter, name, price = match.group(1), match.group(2), int(match.group(3))
             armour = GEAR_ARMOUR.match(name) if self.at_store in (ARMOURY, BLACK_MARKET) else None
-            kind = knowledge.item_kinds().get(armour.group(1)) if armour else None
+            kind = knowledge.item_kinds().get(EGO_ARMOUR.sub("", armour.group(1))) if armour else None
             if kind is not None and kind.category in ARMOUR_SLOTS:
                 ac = int(armour.group(2)) + int((armour.group(3) or "0").replace(" ", ""))
                 gain, change = ac - worn.get(kind.category, 0), ("armour", (kind.category, ac))
@@ -3181,6 +3187,18 @@ class Brain:
                 else:
                     self.recall_trip_after = obs.step + self.recall_wait
                     self.recall_wait = min(2 * self.recall_wait, RECALL_WAIT_MAX)
+                # Leaving town still without the book wanted: the stores
+                # seldom stock the later ones, so the next trip for it waits
+                # twice as long each time, as the gear and restock trips do.
+                # Its wait was set on arrival alone: a clvl 36 Elf Ranger after
+                # The Mages Guide to Power left town with it already run out,
+                # walked down to DL4-5 and climbed back for it, hours of DL1-5
+                # (C64 Balrog, 2026-11-14).
+                if self.book_wanted(obs) is not None:
+                    self.book_trip_after = obs.step + self.book_wait
+                    self.book_wait = min(2 * self.book_wait, RESTOCK_BACKOFF_MAX * GEAR_TRIP_WAIT)
+                else:
+                    self.book_wait = GEAR_TRIP_WAIT
                 # Leaving town still short of strong potions or Phase Door:
                 # the stores seldom stock them, so wait twice as long before
                 # the next try. A level-25 Half-Troll on the Balrog goal
