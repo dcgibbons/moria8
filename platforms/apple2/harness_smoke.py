@@ -1690,6 +1690,54 @@ press(string.char(65 + head_letter))
 assert_line("magi_crown_taken_off", wait_screen("You take off"), "no take-off message: " .. rowtext(0))
 assert_line("magi_crown_int_restored", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0,
             "INT " .. prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) .. " from " .. int0)
+-- A store buy: the town overlay's copy of the weight-limit body
+-- (inv_add_carried) had no rts and ran past OVL.TOWN's end into stale bytes
+-- (2026-11-15: every BBC build-queue run's first buy panicked; the Apple IIe
+-- shares the body). BRKs past the overlay's end in the window make a run-on
+-- stop there. The Weaponsmith's door is (39, 6).
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+assert_line("buy_idle", wait_idle(20), "game busy before the store")
+local function pack_count()
+    local n = 0
+    for slot = 0, 21 do if inv_field(slot, 0) ~= 0xFF then n = n + 1 end end
+    return n
+end
+for slot = 0, 21 do inv_seed(slot, {0xFF, 0, 0, 0, 0, 0, 0, 0}) end
+prog:write_u8(PLAYER_DATA_ADDR + 43, 0x50)   -- PL_GOLD: 50,000
+prog:write_u8(PLAYER_DATA_ADDR + 44, 0xC3)
+prog:write_u8(PLAYER_DATA_ADDR + 45, 0x00)
+prog:write_u8(PLAYER_X_ADDR, 39)
+prog:write_u8(PLAYER_Y_ADDR, 7)
+press_slow("K")
+assert_line("store_entered", wait_screen("B)uy", 40), "no store: " .. rowtext(0))
+assert_line("store_idle", wait_idle(20), "store busy")
+for a = OVL_TOWN_END_ADDR, 0xB9FF do prog:write_u8(a, 0x00) end
+press_slow("B")
+assert_line("buy_prompt", wait_screen("Buy which item"), "buy prompt missing: " .. rowtext(20))
+press_slow("A")
+assert_line("buy_asks", wait_screen("Your offer?"), "no offer prompt")
+local ask = nil
+for r = 0, 23 do
+    local n = rowtext(r):match("Asks (%d+) gp")
+    if n then ask = n end
+end
+assert_line("buy_ask_read", ask ~= nil, "no asking price")
+for i = 1, #(ask or "") do press_slow(ask:sub(i, i)) end
+press_slow("\r")
+local bought = false
+for _ = 1, 40 do
+    emu.wait(0.5)
+    if pack_count() == 1 and screen_has("B)uy") and screen_has("Gold: " .. (50000 - tonumber(ask or 0))) then
+        bought = true break
+    end
+end
+assert_line("buy_carried", bought, string.format("pc %04X pack %d", idle_cpu.state["PC"].value, pack_count()))
+press_slow("Q")
+assert_line("buy_left_store", wait_idle(20) and in_town(), "not back in town")
+local turn_b = prog:read_u8(TURN_LO_ADDR)
+press_slow("S")
+emu.wait(1.0)
+assert_line("buy_play_goes_on", wait_idle(20) and prog:read_u8(TURN_LO_ADDR) ~= turn_b, "no turn")
 dump("after_exchange")
 print("SCENARIO DONE")
 """
@@ -2154,7 +2202,10 @@ def weapon_exchange_lua() -> str:
     return (_chargen_body("A") + _idle_helpers() + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
             ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo"))).replace(
             "PFLAGS_ADDR", hex(_sym_addr("player_pflags"))).replace(
-            "PLAYER_DATA_ADDR", hex(_sym_addr("player_data")))
+            "PLAYER_DATA_ADDR", hex(_sym_addr("player_data"))).replace(
+            "PLAYER_X_ADDR", hex(_sym_addr("zp_player_x"))).replace(
+            "PLAYER_Y_ADDR", hex(_sym_addr("zp_player_y"))).replace(
+            "OVL_TOWN_END_ADDR", hex(_sym_addr("ovl_town_end")))
 
 
 def save_load_lua() -> str:

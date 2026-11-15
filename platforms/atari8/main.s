@@ -1175,7 +1175,6 @@ banked_code_end:
     #import "../../core/ui_store.s"
 inv_add_carried:
     :InvAddCarriedBody()
-    rts
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $e000) + " bytes at $E000-$" + toHexString(ovl_town_end)
 .assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $f000, true
@@ -1334,7 +1333,6 @@ ovl_ui_end:
     #import "../../core/tunnel.s"
 inv_add_carried_items:
     :InvAddCarriedBody()
-    rts
 ovl_items_end:
 .assert "item_pickup runs in OVL.ITM", item_pickup >= $e000 && item_pickup < ovl_items_end, true
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)

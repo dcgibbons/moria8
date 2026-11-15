@@ -175,7 +175,7 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     acccon_shadow = syms.get("beeb_acccon_shadow", 0x009D)
     acid_syms = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cr_atk0_type", "cr_atk0_dice", "cr_atk0_sides", "cr_atk1_type", "cr_spell_chance", "cr_speed",
-        "inv_to_ac", "zp_player_ac", "player_pflags"))
+        "inv_to_ac", "zp_player_ac", "player_pflags", "ovl_town_end"))
 
     header = f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
@@ -966,6 +966,62 @@ function run()
     local identify = wait_screen("Identify which item", 80)
     assert_line("identify_prompt", identify)
     send_key(0x1B) -- ESC: no item
+    -- A store buy: the town overlay's copy of the weight-limit body
+    -- (inv_add_carried) had no rts and ran past the overlay's end into stale
+    -- bytes, a BRK in the stat labels: every BBC build-queue run's first buy
+    -- panicked with "P43" (2026-11-15). The Weaponsmith's door is (39, 6).
+    -- (OVL.HOME's and OVL.ITEMS's copies lacked it too; the items one ran
+    -- into player_adjust_equipment_stat, which returns at once for a pack
+    -- slot.)
+    drain_more(4)
+    wait_frames(30)
+    local function pack_count()
+        local n = 0
+        for slot = 0, 21 do if inv_field(slot, 0) ~= 0xFF then n = n + 1 end end
+        return n
+    end
+    for slot = 0, 21 do inv_seed(slot, {0xFF, 0, 0, 0, 0, 0, 0, 0}) end
+    prog:write_u8(PLAYER_DATA_ADDR + 43, 0x50)   -- PL_GOLD: 50,000
+    prog:write_u8(PLAYER_DATA_ADDR + 44, 0xC3)
+    prog:write_u8(PLAYER_DATA_ADDR + 45, 0x00)
+    prog:write_u8(PLAYER_X_ADDR, 39)
+    prog:write_u8(PLAYER_Y_ADDR, 7)
+    send_key(0x4B) -- 'K': north, onto the door
+    assert_line("store_entered", wait_screen("B)uy", 200))
+    -- BRKs past the town overlay's end in the Bank 4 window: a body that
+    -- runs past it panics there, not on whatever stale bytes are left.
+    assert_line("store_window_banked", can_read_shadow())
+    for a = OVL_TOWN_END_ADDR, 0xBFFF do prog:write_u8(a, 0x00) end
+    send_key(0x42) -- 'B'
+    assert_line("buy_prompt", wait_screen("Buy which item", 80))
+    send_key(0x41) -- 'A'
+    assert_line("buy_asks", wait_screen("Your offer?", 80))
+    local ask = nil
+    for r = 0, 23 do
+        local n = rowtext(r):match("Asks (%d+) gp")
+        if n then ask = n end
+    end
+    assert_line("buy_ask_read", ask ~= nil)
+    for i = 1, #(ask or "") do send_key(ask:byte(i)) end
+    send_key(0x0D)
+    local bought = false
+    for _ = 1, 100 * DFS_SLACK do
+        if pack_count() == 1 and screen_has("B)uy") and screen_has("Gold: " .. (50000 - tonumber(ask or 0))) then
+            bought = true break
+        end
+        emu.wait(0.1)
+    end
+    if not bought then
+        print(string.format("DIAG pc %04X romsel %02X", cpu.state["PC"].value, prog:read_u8(0x00F4)))
+    end
+    assert_line("buy_carried", bought)
+    send_key(0x51) -- 'Q': leave the store
+    local turn_b = prog:read_u8(TURN_ADDR)
+    wait_frames(60)
+    drain_more(4)
+    send_key(0x53) -- 'S' (search)
+    wait_frames(60)
+    assert_line("buy_play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn_b)
     -- Last, as the wears reorder the pack: wearing a ring or amulet rebuilds the equipment flags (player_pflags)
     -- at once: on the compact play slot they stayed stale until the next
     -- stats rebuild (2026-11-08 review). Resist Fire sets $01, a Ring of

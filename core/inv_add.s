@@ -112,9 +112,10 @@ iai_slot_tmp: .byte 0
     ldx #HSTR_UIS_TOO_HEAVY
     clc
 !iac_done:
+    rts                             // the body's own: copies without one ran past their
+                                    // overlay's end (BBC store buy, 2026-11-15)
 }
 #if !HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL
 inv_add_carried:
     :InvAddCarriedBody()
-    rts
 #endif
