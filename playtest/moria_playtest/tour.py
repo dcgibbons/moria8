@@ -7,7 +7,10 @@ real prompts. A step whose screen is not the one expected, or a hang, fails.
 - a cast from a second book through the book prompt's ``?`` list (the Atari's
   came back into OVL_HELP's bytes and hung);
 - a Home deposit and retrieval;
-- a drop and a pick-up.
+- a drop and a pick-up;
+- an ego arrow shot from a bow into a townsperson (2026-11-15: the C64's
+  tramp_ego_apply_damage, called from OVL.ITEMS for ego ammunition, banked
+  the KERNAL in over the overlay and jammed the machine).
 
 Usage: ``python -m moria_playtest.tour TARGET OUT_DIR`` writes ``OUT_DIR/tour.json``.
 """
@@ -15,6 +18,7 @@ Usage: ``python -m moria_playtest.tour TARGET OUT_DIR`` writes ``OUT_DIR/tour.js
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Callable
@@ -22,6 +26,8 @@ from typing import Callable
 from .game import KEY_RETURN, KEY_SPACE, GameFault, Mode, Observation
 from .launch import Build
 from .ports import PORTS
+from .nav import read_map
+from .view import DIRS
 from .worker import Worker
 
 KEY_ESC = 0x1B
@@ -33,6 +39,14 @@ MAGICK_I = 55                      # docs/WIZARD.md: Spellbook Magick I
 INV_FIELDS = ("inv_item_id", "inv_qty", "inv_p1", "inv_to_hit", "inv_to_dam", "inv_to_ac", "inv_flags", "inv_ego")
 PACK_SLOTS = 22
 IF_KNOWN = 0x02
+SHORT_BOW, ARROW, EGO_ARROW_SLAY_EVIL = 49, 52, 44   # item_catalog_spec.json; core/item_defs.s EGO_AMMO_SLAY_EVIL
+EQUIP_WEAPON = 22                  # core/item_defs.s
+KEY_FIRE = 0xC6                    # SHIFT+F: the wielded launcher at the first matching ammunition
+SHOT_RANGE = 2                     # squares to the townsperson
+STREET = (39, 8)                   # the street between the store rows (core/dungeon_data.s store_pos_y 2 and 12)
+SHOTS = 20                         # tries for one hit: a seed of misses runs long (BBC, 2026-11-15)
+SHOT_TOHIT = 20                    # on the bow and the arrows
+MX_X, MX_Y, MX_TYPE, MX_HP_LO, MX_HP_HI, MX_SLEEP = 0, 1, 2, 3, 4, 7   # core/monster.s
 
 
 class TourFailed(Exception):
@@ -195,12 +209,71 @@ class Tour:
         self.press(ord("S"))
         self.at_command("a search, and play goes on")
 
+    def ego_shot(self) -> None:
+        """A Short Bow wielded, ten Arrows of Slay Evil, and a townsperson
+        put SHOT_RANGE open squares away in a straight line, asleep and with
+        200 HP: shots until one hits (``rf_roll_damage``, the ego's
+        trampoline), and play goes on."""
+        abi = self.abi
+        # Worn through the Wear prompt, so the game's equip-time weapon cache
+        # has it, +20 to-hit on it and the arrows (3 skill a point): seeded
+        # in the weapon slot, a level 1 Mage's ten shots all missed on the
+        # BBC (2026-11-15).
+        bow = self.pack().index(0xFF)
+        self.seed_slot(bow, (SHORT_BOW, 1, 0, SHOT_TOHIT, 0, 0, IF_KNOWN, 0))
+        self.press(ord("W"))
+        self.expect("the wear prompt", lambda: "Wear which item" in self.text())
+        self.press(ord("?"))   # its letters count the wearable items alone
+        letter = next((m.group(1) for row in self.obs.rows if (m := re.search(r"\b([a-v])\) .*Short Bow", row))), None)
+        self.expect("the bow in the wear list", lambda: letter is not None)
+        self.press(ord(letter.upper()))   # type: ignore[union-attr]
+        self.settle()
+        self.expect("the bow wielded", lambda: self.peek(self.sym("inv_item_id") + EQUIP_WEAPON, 1)[0] == SHORT_BOW)
+        slot = self.pack().index(0xFF)
+        self.seed_slot(slot, (ARROW, 10, 0, SHOT_TOHIT, 0, 0, IF_KNOWN, EGO_ARROW_SLAY_EVIL))
+        cols = abi.hal_layout_map_cols
+        px, py = STREET   # out in the street: the Home's step left it on the doorway
+        self.poke(self.sym("zp_player_x"), bytes([px]))
+        self.poke(self.sym("zp_player_y"), bytes([py]))
+        tiles = read_map(self.game)
+        street = tiles[py * cols + px] >> 4
+        line = next(((dx, dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                     if all(tiles[(py + dy * n) * cols + px + dx * n] >> 4 == street
+                            for n in range(1, SHOT_RANGE + 1))), None)
+        self.expect("a straight street to shoot along", lambda: line is not None)
+        target = (px + line[0] * SHOT_RANGE, py + line[1] * SHOT_RANGE)   # type: ignore[index]
+        table, size = self.sym("monster_table"), abi.MONSTER_ENTRY_SIZE
+        records = self.peek(table, size * abi.MAX_MONSTERS)
+        # The townsperson with the least armour: the BBC's Mean-Looking
+        # Mercenary (AC 20) took ten misses running from a level 1 Mage.
+        ac = self.peek(self.sym("cr_ac"), 256)
+        present = [i for i in range(abi.MAX_MONSTERS) if records[i * size + MX_TYPE] != 0xFF]
+        town = min(present, key=lambda i: ac[records[i * size + MX_TYPE]], default=None)
+        self.expect("a townsperson to shoot at", lambda: town is not None)
+        record = table + town * size   # type: ignore[operator]
+        hit = False
+        for _ in range(SHOTS):
+            self.poke(record + MX_X, bytes(target))
+            self.poke(record + MX_HP_LO, bytes([200, 0]))
+            self.poke(record + MX_SLEEP, b"\xff")
+            self.press(KEY_FIRE)
+            self.expect("the fire prompt asks a direction", lambda: self.obs.mode == Mode.DIRECTION)
+            self.press(DIRS[line])   # type: ignore[index]
+            self.settle()
+            self.expect("play goes on after the shot", lambda: self.obs.mode == Mode.COMMAND)
+            hp = self.peek(record + MX_HP_LO, 2)
+            if hp[0] | hp[1] << 8 < 200:
+                hit = True
+                break
+        self.expect("an ego arrow hit the townsperson", lambda: hit)
+
     def run(self) -> None:
         self.chargen()
         self.store_buy()
         self.second_book()
         self.home()
         self.drop_pickup()
+        self.ego_shot()
 
 
 def tour(target: str, out: Path) -> dict[str, object]:

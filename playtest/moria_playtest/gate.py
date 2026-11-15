@@ -26,7 +26,9 @@ from typing import Any
 from .launch import PLAYTEST_OUT, ROOT
 from .ports import PORTS, Port
 
-GATE_CHARACTERS = (("human-warrior", 1001), ("elf-mage", 1002), ("dwarf-priest", 1003))   # casters: the books
+# Casters for the books; a Ranger for the launcher and its ammunition (2026-11-15:
+# the C64's ego arrows jammed it, and no gate character ever shot).
+GATE_CHARACTERS = (("human-warrior", 1001), ("elf-mage", 1002), ("dwarf-priest", 1003), ("half-elf-ranger", 1005))
 GATE_STEPS = 3000      # past chargen, the first shopping and into the dungeon on every port
 GATE_GOAL = "clvl10"
 RUN_WALL_SECONDS = 1800.0   # a run's own emulator timeouts end a stuck one long before this
