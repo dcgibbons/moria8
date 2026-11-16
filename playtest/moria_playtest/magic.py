@@ -53,6 +53,12 @@ BLESS, PRIEST_FIND_TRAPS, SLOW_POISON = "Bless", "Find Traps", "Slow Poison"   #
 NEUTRALIZE_POISON = "Neutralize Poison"                                         # Chants and Blessings
 LIGHTNING_BOLT, CURE_POISON, SLEEP_I = "Lightning Bolt", "Cure Poison", "Sleep I"   # Magick I, level 5
 TELEPORT_SELF, FROST_BOLT = "Teleport Self", "Frost Bolt"   # Magick I, level 7
+# From this deep, the mana for a known long escape (Teleport Self, Portal) is
+# kept as the heal's is (Magic.spare): a clvl 36 Ranger cast Magic Missile at
+# an Ancient White Dragon down to 4 of 103 mana, survived a breath at 65 HP
+# with Teleport Self known but unaffordable, and died to the next (C64 Balrog,
+# 2026-11-16).
+ESCAPE_MANA_DLVL = 20
 FIRE_BOLT, FROST_BALL, FIRE_BALL = "Fire Bolt", "Frost Ball", "Fire Ball"   # Magick II 15; Guide to Power 19, 29
 # A Mage's attacks and their average damage (core/spell_effects.s; docs/
 # FEATURE_MAP.md §7.2): bolts 2d6, 3d8, 4d8 and 6d8; balls 9, 33 and 49.
@@ -268,11 +274,16 @@ class Magic:
     def spare(self, obs: Observation, name: str) -> bool:
         """``name`` can be prayed and still leave the mana for the best heal
         known: a level-1 Priest's Bless spent the 2 mana its only heal
-        needed (M5b round 16)."""
+        needed (M5b round 16). From ESCAPE_MANA_DLVL down, the long escape's
+        too (Teleport Self or Portal, the cheaper known)."""
         if not self.can(obs, name):
             return False
         heal = next((self.known[h].mana for h in HEALS if h in self.known and self.known[h].level <= obs.clvl), 0)
-        return self.mana(obs)[0] - self.known[name].mana >= heal
+        escape = 0
+        if obs.dlvl >= ESCAPE_MANA_DLVL and name not in (TELEPORT_SELF, PORTAL):
+            escape = min((self.known[e].mana for e in (TELEPORT_SELF, PORTAL)
+                          if e in self.known and self.known[e].level <= obs.clvl), default=0)
+        return self.mana(obs)[0] - self.known[name].mana >= heal + escape
 
     def book_of(self, name: str) -> str | None:
         """The book of this caster's kind that a pack line names."""

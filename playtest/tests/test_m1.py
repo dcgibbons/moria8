@@ -1514,6 +1514,51 @@ class SealedTest(unittest.TestCase):
         self.assertEqual(decisions[22].reason, "read Word of Recall")   # level 25 may stay on DL22
         self.assertIsNone(decisions[28])                                # not on DL28: the stairs instead
 
+    def test_identify_failing_running_is_rested_from(self) -> None:
+        """C64 Balrog, 2026-11-16: a clvl 29 Elf Rogue (Identify 95% to fail)
+        cast it at a Chromium Wand 750 times on DL1 between rests, 264,000
+        steps. After IDENTIFY_FAIL_STREAK failures no cast for
+        IDENTIFY_FAIL_WAIT steps."""
+        from moria_playtest.brain import IDENTIFY, IDENTIFY_FAIL_STREAK, IDENTIFY_FAIL_WAIT
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer
+        brain = Brain(for_character(GOALS["balrog"], "elf-rogue"))
+        brain.magic.known[IDENTIFY] = Prayer("b", 7, 23, "Magick II")
+        brain.unknown["Chromium Wand"] = 1
+        view = town_view((5, 5), (9, 9), dlvl=1)
+        view.creatures = {}
+
+        def obs(step: int):
+            o = command_obs(pos=(5, 5), dlvl=1, clvl=29, hp=210, mhp=210,
+                            rows={23: "HP:210/210  MP:26/26  AC:40  AU:100"})
+            o.step = step
+            return o
+        self.assertEqual(brain.identify_items(obs(100), view).reason, "identify the Chromium Wand")
+        for n in range(IDENTIFY_FAIL_STREAK):
+            brain.identify_failed(obs(100 + n))
+        self.assertIsNone(brain.identify_items(obs(110), view))                       # resting from it
+        self.assertIsNotNone(brain.identify_items(obs(104 + IDENTIFY_FAIL_WAIT), view))   # then again
+
+    def test_deep_the_long_escapes_mana_is_kept(self) -> None:
+        """C64 Balrog, 2026-11-16: a clvl 36 Ranger cast Magic Missile at an
+        Ancient White Dragon down to 4 of 103 mana, survived a breath at 65
+        HP with Teleport Self known but unaffordable, and died to the next.
+        Deep, an attack leaves the escape's mana as well as the heal's."""
+        from moria_playtest.magic import (CURE_LIGHT, ESCAPE_MANA_DLVL, MAGIC_MISSILE, TELEPORT_SELF, Magic,
+                                          Prayer)
+        magic = Magic("ranger")
+        magic.known[MAGIC_MISSILE] = Prayer("a", 1, 3, "Beginners-Magick")
+        magic.known[CURE_LIGHT] = Prayer("d", 4, 11, "Beginners-Magick")
+        magic.known[TELEPORT_SELF] = Prayer("g", 10, 23, "Magick I")
+
+        def obs(dlvl: int, mp: int):
+            return command_obs(pos=(5, 5), dlvl=dlvl, clvl=36, hp=329, mhp=329,
+                               rows={23: f"HP:329/329  MP:{mp}/103  AC:60  AU:100"})
+        self.assertTrue(magic.spare(obs(5, 6), MAGIC_MISSILE))                  # shallow: the heal only
+        self.assertFalse(magic.spare(obs(ESCAPE_MANA_DLVL, 6), MAGIC_MISSILE))  # deep: the teleport too
+        self.assertTrue(magic.spare(obs(ESCAPE_MANA_DLVL, 15), MAGIC_MISSILE))
+        self.assertTrue(magic.can(obs(ESCAPE_MANA_DLVL, 14), TELEPORT_SELF))    # kept for this
+
     def test_short_of_strong_potions_and_rich_it_goes_to_dl1_for_a_restock(self) -> None:
         """C64 Balrog, 2026-11-16: a clvl 36 Ranger with 3,610,346 gold found
         no strong potions at the Temple or the Black Market, recalled to DL37

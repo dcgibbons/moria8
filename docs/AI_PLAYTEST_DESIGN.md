@@ -3380,6 +3380,17 @@ found none, recalled to DL37 with two Cure Light Wounds, and died to a Young
 Multi-Hued Dragon's breaths while it waited for Word of Recall. Food and light
 have their own hops (`RESTOCK_HOPS`), which use the stairs both ways.
 
+From `ESCAPE_MANA_DLVL` (20) down, a spell is cast only if it leaves the
+mana for the best known heal and for the cheaper of Teleport Self and Portal
+(`Magic.spare`). A clvl 36 Ranger had cast Magic Missile at an Ancient White
+Dragon down to 4 of 103 mana; it survived a breath at 65 HP with Teleport
+Self known but unaffordable, and died to the next (2026-11-16).
+
+After `IDENTIFY_FAIL_STREAK` (5) failed Identify casts running, none for
+`IDENTIFY_FAIL_WAIT` (20,000) steps; a Scroll of Identify still serves. A
+clvl 29 Elf Rogue, with Identify at 95% to fail, cast it at one wand 750
+times on DL1 between rests for the mana: 264,000 steps (2026-11-16).
+
 A **variant** changes goal fields for a subqueue's runs: `field=value` terms
 separated by commas, semicolons or spaces, a bare word after a term being
 another value of it. `tactics` takes `-name` (remove), `+name` (add), bare

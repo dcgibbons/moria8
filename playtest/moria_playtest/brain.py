@@ -416,6 +416,12 @@ HEALING_RESERVE = 10    # Potions of Healing bought at the Black Market, rich
 # Light Wounds and died to a Young Multi-Hued Dragon's breaths waiting for
 # Word of Recall (C64 Balrog, 2026-11-16). At most this many a visit.
 RESTOCK_SCUMS = 3
+# Identify cast at an unknown wand fails this many times running: no more
+# casts for IDENTIFY_FAIL_WAIT steps (a Scroll of Identify still serves). A
+# clvl 29 Elf Rogue (Identify 95% to fail) cast it 750 times on DL1 between
+# rests for the mana, 264,000 steps (C64 Balrog, 2026-11-16).
+IDENTIFY_FAIL_STREAK = 5
+IDENTIFY_FAIL_WAIT = 20_000
 GHOST_GLYPH = "G"        # ghosts pass through walls (VMS Moria)
 PHASE_AGAIN = 30         # steps after a short phase in which contact again calls for a far teleport
 SUMMON_MEMORY = 50       # steps a summoning heard still sends the deep goal home with no stairs known
@@ -763,6 +769,8 @@ class Brain:
         self.poison_shown = False              # the status line has shown "Poisoned" (core/ui_status.s, 2026-11-10)
         self.market_done = False               # done at the Black Market on this town visit
         self.restock_scums = 0                 # trips to DL1 and back for a restock (RESTOCK_SCUMS)
+        self.identify_fails = 0                # Identify casts failed running (IDENTIFY_FAIL_STREAK)
+        self.identify_after = 0                # no Identify cast before this step
         self.restock_scumming = False          # on one: Word of Recall straight back to town
         self.alchemist_done = False            # done at the Alchemy shop on this town visit
         self.armoury_done = False              # done at the Armoury on this town visit
@@ -918,6 +926,8 @@ class Brain:
                 self.chant_until = 0           # not chanted: pray it again
             elif self.magic.last == BLIND:
                 self.level.blind_until = 0
+            elif self.magic.last == IDENTIFY:
+                self.identify_failed(obs)
         self.magic.note(messages)
         if self.magic.lost_book is not None:
             self.books_owned.discard(self.magic.lost_book)
@@ -4539,6 +4549,12 @@ class Brain:
         kind = unknown_kind(name)
         return kind in ("potion", "scroll") or (kind in ("wand", "staff") and self.can_identify())
 
+    def identify_failed(self, obs: Observation) -> None:
+        """An Identify cast failed: IDENTIFY_FAIL_STREAK running, a rest from it."""
+        self.identify_fails += 1
+        if self.identify_fails >= IDENTIFY_FAIL_STREAK:
+            self.identify_fails, self.identify_after = 0, obs.step + IDENTIFY_FAIL_WAIT
+
     def identify_items(self, obs: Observation, view: View) -> Decision | None:
         """An unknown wand or staff, identified with the Identify spell or a
         Scroll of Identify when nothing threatens (maintainer, 2026-11-04):
@@ -4546,7 +4562,7 @@ class Brain:
         target = next((n for n, c in self.unknown.items() if c > 0 and unknown_kind(n) in ("wand", "staff")), None)
         if target is None or self.threats(view) or obs.step < self.blind_until:
             return None
-        if self.magic.can(obs, IDENTIFY):
+        if self.magic.can(obs, IDENTIFY) and obs.step >= self.identify_after:
             self.picking, self.listed, self.identifying = target, False, target
             return Decision(*self.magic.pray(IDENTIFY, f"identify the {target}"))
         if self.identify_scrolls > 0:
