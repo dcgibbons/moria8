@@ -1836,8 +1836,10 @@ test_start:
     // ============================================================
     // Test 48: the Temple and Alchemy shop stock from VMS store_choice
     // (values.inc, inventory_init) mapped to Moria8 items: 200 picks each
-    // stay in the mapped set, and Word of Recall (2 of 23 Temple, 3 of 21
-    // Alchemy entries) turns up.
+    // stay in the mapped set, and Word of Recall (2 of 23 Temple, 3 of 23
+    // Alchemy entries) turns up. Phase Door is two of the Alchemy shop's
+    // entries, as VMS's two of 26: with one it was stocked about half as
+    // often (2026-11-16).
     // ============================================================
     lda #$01
     sta tc_results + 47
@@ -1849,6 +1851,21 @@ test_start:
     ldx #<t48_alchemy_set
     ldy #>t48_alchemy_set
     jsr t48_check_store
+    ldx #SRO_ALCHEMY_CHOICES - 1
+    ldy #0
+!t48_pd:
+    lda sro_alchemy_choice,x
+    cmp #ITEM_TYPE_SCR_PHASE_DOOR
+    bne !t48_pd_next+
+    iny
+!t48_pd_next:
+    dex
+    bpl !t48_pd-
+    cpy #2
+    beq !t48_pd_ok+
+    lda #$00
+    sta tc_results + 47
+!t48_pd_ok:
 
     // ============================================================
     // Test 49: the CHR markup's product needs 24 bits. Mithril Chain Mail
