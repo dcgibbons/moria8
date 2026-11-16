@@ -57,8 +57,8 @@ from pathlib import Path
 from typing import Any
 
 from . import records
-from .goals import (CHARACTERS, GOALS, QUALIFICATION_SEEDS, apply_variant, for_character, for_port, parse_variant,
-                    required)
+from .goals import (CHARACTERS, DEFAULT_TACTICS, GOALS, QUALIFICATION_SEEDS, apply_variant, for_character, for_port,
+                    parse_variant, required)
 from .launch import ROOT
 from .ports import PORTS
 
@@ -105,6 +105,10 @@ ROTATE_POLL_STEPS = 500   # a Balrog run looks for a newer build this often (new
 # with 25 C64 graduates for 18 slots, 20M-step games (about 40 hours) and two
 # deaths in 2.5 hours, seven waited on (2026-11-15).
 BALROG_SLICE_S = 3 * 3600
+# The build queue's runs play the default tactics, as the Balrog queue's do
+# (maintainer, 2026-11-16): its goal (clvl10, the pre-commit gate's too)
+# has none, so its success rates measured a bot the Balrog queue never plays.
+BUILD_VARIANT = "tactics=" + " ".join(sorted(DEFAULT_TACTICS))
 YIELD = "yield"           # in a run's directory: hand the slot over in town (yield_due)
 CHECKPOINTS = "checkpoints"   # in a run's directory: clvl<N>/ each
 ENCOUNTERS = "encounters"     # in the queue home: <run>-s<step>/, a snapshot each Balrog sighting
@@ -2132,7 +2136,7 @@ class Service:
         self.buildq.save()
         seed = random.SystemRandom().randrange(1, 2**31)
         budget = for_port(GOALS[goal], PORTS[platform]).step_budget
-        self.start(self.new_job("build", platform, combo, goal, seed, budget, self.ci_build))
+        self.start(self.new_job("build", platform, combo, goal, seed, budget, self.ci_build, variant=BUILD_VARIANT))
 
     def start_main(self, queue: Queue, platform: str) -> str:
         assert self.build_id is not None

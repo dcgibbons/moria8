@@ -208,6 +208,11 @@ class ScheduleTest(unittest.TestCase):
         build = [j for j in service.running.values() if j["queue"] == "build"]
         self.assertEqual(sorted(j["platform"] for j in build), ["apple2", "atari8", "c64"])
         self.assertTrue(all(j["build"] == "head1" and j["goal"] == "clvl10" for j in build))
+        # 2026-11-16: the default tactics, as the Balrog queue plays them; the
+        # clvl10 goal itself (the pre-commit gate's) has none.
+        from moria_playtest.goals import DEFAULT_TACTICS, GOALS, apply_variant
+        self.assertTrue(all(apply_variant(GOALS["clvl10"], j["variant"]).tactics == DEFAULT_TACTICS for j in build))
+        self.assertEqual(GOALS["clvl10"].tactics, frozenset())
         self.assertEqual({j["character"] for j in build}, {queue.combos("c64")[0]})
         by_port = {j["platform"]: j["step_budget"] for j in build}
         self.assertEqual(by_port["c64"], 100_000)

@@ -3275,15 +3275,22 @@ playing starts one: the next combination not yet played on this build, or
 again one whose run on it did not count (stale, abandoned); a port that has
 played every combination on the build waits for the next
 (`BuildQueue.pending`). Its workers come out of the total, as the
-Balrog queue's do. The MAME and Plus/4 ports need their ROMs in the
+Balrog queue's do. Its runs play the default tactics, as the Balrog
+queue's do (`BUILD_VARIANT`, maintainer 2026-11-16). The `clvl10` goal itself
+has none, because the pre-commit gate plays it, so until then the build
+queue's success rates measured a bot that the Balrog queue never plays. The MAME and Plus/4 ports need their ROMs in the
 service's environment (a drop-in beside `x16.conf`: `A2ROMS`,
 `ATARI8ROMS`, `BBCMROMS`, and JiffyDOS for the Plus/4 and so the C64). The
 dashboard's Build queue panel shows the build being played alone (the
 maintainer, 2026-11-08: the counts reset with each build): a row per port
-with its games, goals reached, deaths, findings, median level, coverage of
+with its games, goals reached, deaths, findings, bot notes, median level, coverage of
 the 31 combinations and the game playing now, and below it, collapsed, a
 grid like M6's "every port plays" with this build's last game per
-combination and port; the
+combination and port. Findings there are game faults alone. The bot's own
+notes (`dashboard.BOT_NOTES`: a stall it gets out of by stair-scumming, a
+square entered too often, a prompt it did not know) are counted in their
+own column, because about 40% of runs had shown a stall note as a finding
+(maintainer 2026-11-16: "they're noise"). The
 Builds over time card below it (`dashboard.build_history`, maintainer
 2026-11-06) draws each build's live span (its first game to the next build's)
 as a band labelled with the short hash, the share of its counted games that

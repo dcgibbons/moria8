@@ -340,7 +340,9 @@ class BuildHistoryTest(unittest.TestCase):
         # The build-queue panel's counts by port, this build's alone (2026-11-08)
         self.assertEqual(aaa["detail"]["bbcmaster"], {"games": 1, "reached": 0, "died": 1, "median_clvl": 4, "played": 1,
                                                       "findings": [{"id": "aaa-110", "character": "human-warrior",
-                                                                    "text": "hang: y"}]})
+                                                                    "text": "hang: y"}],
+                                                      "notes": [{"id": "aaa-110", "character": "human-warrior",
+                                                                 "text": "stall: x"}]})
         self.assertEqual((aaa["detail"]["c64"]["games"], aaa["detail"]["c64"]["reached"]), (1, 1))   # abandoned not counted
         self.assertEqual(builds[1]["detail"]["c64"]["games"], 1)
         self.assertEqual(aaa["ports"], {"c64": [1, 1], "bbcmaster": [1, 0]})
@@ -348,6 +350,21 @@ class BuildHistoryTest(unittest.TestCase):
         self.assertLess(aaa["lo"], 0.5)
         self.assertGreater(aaa["hi"], 0.5)
         self.assertEqual(dashboard.wilson(0, 0), (0.0, 1.0))
+
+    def test_the_bots_notes_are_not_findings(self) -> None:
+        """Maintainer, 2026-11-16: stall notes counted as findings in about 40%
+        of build-queue runs ("they're noise"). Bot notes (stall, loop, an
+        unknown prompt) count apart; a game fault is still a finding."""
+        from unittest import mock
+        records = [{"queue": "build", "build": "aaa", "commit": "aaaa", "started": 100 + n, "platform": "c64",
+                    "outcome": "reached", "clvl": 10, "id": f"r{n}", "character": "human-warrior", "findings": f}
+                   for n, f in enumerate((["loop: square (1, 2) entered 100 times"], ["unknown_prompt: Direction?"],
+                                          ["stall: no new map"], ["hang: no key wait"], []))]
+        with mock.patch.object(dashboard, "commit_subject", lambda c: ""):
+            build = dashboard.build_history(records, ("reached",))[0]
+        self.assertEqual((build["findings"], build["notes"]), (1, 3))
+        self.assertEqual([f["text"] for f in build["detail"]["c64"]["findings"]], ["hang: no key wait"])
+        self.assertEqual(len(build["detail"]["c64"]["notes"]), 3)
 
 
 class BalrogKillsTest(unittest.TestCase):

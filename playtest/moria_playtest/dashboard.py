@@ -696,7 +696,12 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "",
 
 
 BUILD_HISTORY = 40      # builds the Builds card shows, newest last
-NOISE_FINDINGS = ("stall:", "load_retry:")   # findings that are no defect (watch.py does the same)
+# The bot's own notes (the auditor's class "bot"): a stall it recovers from
+# by stair-scumming, a square entered too often, a prompt it did not know.
+# Shown apart from the findings (maintainer, 2026-11-16: about 40% of runs
+# showed a stall note as a finding, "they're noise").
+BOT_NOTES = ("stall:", "loop:", "unknown_prompt:")
+NOISE_FINDINGS = BOT_NOTES + ("load_retry:",)   # findings that are no defect (watch.py does the same)
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -752,10 +757,13 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
         detail: dict[str, dict[str, Any]] = {}
         for r in runs:
             d = detail.setdefault(r.get("platform") or "?", {"games": 0, "reached": 0, "died": 0, "levels": [],
-                                                             "played": set(), "findings": []})
+                                                             "played": set(), "findings": [], "notes": []})
             found = [f for f in r.get("findings") or [] if not f.startswith(NOISE_FINDINGS)]
             if found:
                 d["findings"].append({"id": r.get("id"), "character": r.get("character"), "text": found[0]})
+            notes = [f for f in r.get("findings") or [] if f.startswith(BOT_NOTES)]
+            if notes:
+                d["notes"].append({"id": r.get("id"), "character": r.get("character"), "text": notes[0]})
             if r.get("outcome") not in counted:
                 continue
             d["games"] += 1
@@ -777,6 +785,7 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
                     "median_clvl": levels[len(levels) // 2] if levels else None,
                     "findings": sum(any(not f.startswith(NOISE_FINDINGS) for f in r.get("findings") or [])
                                     for r in runs),
+                    "notes": sum(any(f.startswith(BOT_NOTES) for f in r.get("findings") or []) for r in runs),
                     "ports": ports, "detail": detail})
     return out
 

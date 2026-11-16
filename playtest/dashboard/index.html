@@ -933,19 +933,20 @@ function renderQueue() {
     (cur && cur.subject ? ` <span class="muted">“${esc(cur.subject)}”</span>` : "") +
     (cur ? ` · playing ${esc(ago(cur.start))}` : "") +
     (cstate.error ? ` · <span class="bad">build failed: ${esc(cstate.error.slice(-160))}</span>` : "");
-  const none = {games: 0, reached: 0, died: 0, median_clvl: null, played: 0, findings: []};
+  const none = {games: 0, reached: 0, died: 0, median_clvl: null, played: 0, findings: [], notes: []};
   const det = p => (cur && cur.detail && cur.detail[p]) || none;
   const combos = p => Object.keys((ci[p] || {}).items || {}).length || q.characters.length;
   const ctot = cports.map(det).reduce((t, d) => ({g: t.g + d.games, r: t.r + d.reached, f: t.f + d.findings.length}), {g: 0, r: 0, f: 0});
   $("cicount").textContent = cports.length ? `${cports.length} ports · ${ctot.g} games · ${ctot.r} reached · ` +
     `${ctot.f} finding${ctot.f === 1 ? "" : "s"}` : "";
   $("citable").innerHTML = cports.length ? `<tr><th>Port</th><th>Games</th><th>clvl ${esc(String(q.config.build_goal || "").replace(/\D/g, ""))}</th>` +
-    `<th>Died</th><th>Findings</th><th>Median clvl</th><th>Coverage</th><th>Now</th></tr>` + cports.map(p => {
+    `<th>Died</th><th>Findings</th><th>Bot notes</th><th>Median clvl</th><th>Coverage</th><th>Now</th></tr>` + cports.map(p => {
       const d = det(p), n = combos(p), pct = n ? Math.min(100, Math.round(100 * d.played / n)) : 0;
       const live = q.live.find(r => r.queue === "build" && r.platform === p), w = (live && live.status) || {};
       const ftip = d.findings.map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n");
       return `<tr><td>${esc(PORT_NAMES[p] || p)}</td><td>${d.games}</td><td>${d.reached}</td><td>${d.died}</td>` +
         `<td class="${d.findings.length ? "bad" : "ok"}" title="${esc(ftip)}">${d.findings.length ? `${d.findings.length} ⚠` : "0"}</td>` +
+        `<td class="dim" title="${esc((d.notes || []).map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n"))}">${(d.notes || []).length}</td>` +
         `<td>${d.median_clvl ?? "–"}</td>` +
         `<td>${d.played}/${n}<span class="cov" role="img" aria-label="${pct}% of combinations played"><i style="width:${pct}%"></i></span></td>` +
         `<td>${live ? `▸ ${esc(cap(live.character))}${w.clvl != null ? ` L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}` : `<span class="dim">–</span>`}</td></tr>`;
@@ -1154,13 +1155,13 @@ function renderBuilds(q) {
   $("bchart").innerHTML = svg + "</svg>";
   $("bscount").textContent = `${rows.length} builds · ${rows.reduce((n, b) => n + b.games, 0).toLocaleString()} games` +
     (buildPort === "all" ? "" : ` on ${PORT_NAMES[buildPort] || buildPort}`);
-  $("btable").innerHTML = `<tr><th>Build</th><th>Commit</th><th>Live</th><th>Games</th><th>Reached</th><th>95% range</th><th>Median clvl</th><th>Findings</th></tr>` +
+  $("btable").innerHTML = `<tr><th>Build</th><th>Commit</th><th>Live</th><th>Games</th><th>Reached</th><th>95% range</th><th>Median clvl</th><th>Findings</th><th>Bot notes</th></tr>` +
     rows.slice().reverse().map(b => `<tr class="${b.games < 10 ? "thin" : ""}">` +
       `<td><i class="bchip" style="background:${buildColor(b)}"></i>${esc(b.commit.slice(0, 7))}</td>` +
       `<td class="subj">${esc(b.subject || "")}</td><td>${fmtTime(b.end - b.start)}${b.end === now ? " ▸" : ""}</td>` +
       `<td>${b.games}</td><td>${b.games ? pct(b.reached, b.games) + "%" : "–"}</td>` +
       `<td>${b.games ? Math.round(b.lo * 100) + "–" + Math.round(b.hi * 100) + "%" : "–"}</td>` +
-      `<td>${b.median_clvl ?? "–"}</td><td>${b.findings}</td></tr>`).join("");
+      `<td>${b.median_clvl ?? "–"}</td><td>${b.findings}</td><td class="dim">${b.notes ?? 0}</td></tr>`).join("");
 }
 function rampColor(f) {   // the page's track color to its gold, one hue light-ward
   const a = [0x2a, 0x24, 0x16], b = [0xff, 0xd9, 0x3d];

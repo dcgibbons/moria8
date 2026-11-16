@@ -60,6 +60,15 @@ MAP_ROWS = 66
 MAP_BASE_ADDR = 0x8000
 MAP_SWR_BANK = 0x05
 
+
+def core_const(file: str, name: str) -> int:
+    """A ``.const NAME = value`` from core/<file>."""
+    match = re.search(rf"^\.const {name}\s*=\s*(\$?[0-9A-Fa-f]+)", (ROOT / "core" / file).read_text(), re.M)
+    if match is None:
+        raise KeyError(name)
+    text = match.group(1)
+    return int(text[1:], 16) if text.startswith("$") else int(text)
+
 FAST_SMOKE_SCENARIOS = (
     "boot_title",
     "chargen_town",
@@ -214,6 +223,13 @@ local MAP_BANK = 0x{MAP_SWR_BANK:02X}
 {acid_syms}
 {cat_ids}
 local BALROG_ID = {catalog_lore.const("CATALOG_BALROG_ID")}
+local RACE_PROPS_ADDR = 0x{syms.get("race_properties", 0):04X}
+local CLASS_PROPS_ADDR = 0x{syms.get("class_properties", 0):04X}
+local PL_RACE = {core_const("player.s", "PL_RACE")}
+local PL_CLASS = {core_const("player.s", "PL_CLASS")}
+local PL_MHP_LO = {core_const("player.s", "PL_MHP_LO")}
+local RACE_PROP_SIZE = {core_const("tables.s", "RACE_PROP_SIZE")}
+local CLASS_PROP_SIZE = {core_const("tables.s", "CLASS_PROP_SIZE")}
 local IGGY_ID = {catalog_lore.const("CATALOG_IGGY_ID")}
 
 local function wait_frames(n)
@@ -617,6 +633,18 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
+    -- A level-1 character's max HP is its race's and class's hit dice
+    -- (player_calc_hp). 2026-11-16: every BBC character since 708f3df had
+    -- 135: the OVL.UI swap behind player_con_hp_adj reloaded the start
+    -- overlay, and beeb_overlay_try_cache left its name pointer's low byte
+    -- ($87) in the zp_temp0 player_calc_hp kept the hit dice in.
+    local race = prog:read_u8(PLAYER_DATA_ADDR + PL_RACE)
+    local class = prog:read_u8(PLAYER_DATA_ADDR + PL_CLASS)
+    local hit_dice = prog:read_u8(RACE_PROPS_ADDR + race * RACE_PROP_SIZE)
+        + prog:read_u8(CLASS_PROPS_ADDR + class * CLASS_PROP_SIZE)
+    local mhp = prog:read_u8(PLAYER_DATA_ADDR + PL_MHP_LO) + 256 * prog:read_u8(PLAYER_DATA_ADDR + PL_MHP_LO + 1)
+    print(string.format("chargen max HP %d, hit dice %d", mhp, hit_dice))
+    assert_line("chargen_max_hp_is_hit_dice", mhp == hit_dice)
     local x0 = prog:read_u8(PLAYER_X_ADDR)
     local y0 = prog:read_u8(PLAYER_Y_ADDR)
     for _, k in ipairs({0x4C, 0x48, 0x4A, 0x4B}) do

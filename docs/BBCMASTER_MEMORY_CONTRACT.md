@@ -477,3 +477,72 @@ Unresolved uncertainty and risk:
   - **Bank 7 (`64/64p`):** `cache.ovl.spell` (`21p` `$8000-$94FF`, `5,270 / 5,376 B`, **`106 B` free**), `cache.ovl.items` (`23p` `$9500-$ABFF`, `5,721 / 5,888 B`, **`167 B` free**), `cache.ovl.gen` (`16p` `$AC00-$BBFF`, `3,922 / 4,096 B`, **`174 B` free**), and `BEEB_ICAT_CACHE` (`4p` `$BC00-$BFFF`, `1,024 B` 4-sector LRU cache for `ITEMCAT`).
 - **Shipping `.ssd` (`build/moria8-bbcmaster.ssd`):** `16 / 31` DFS catalog entries (adds `ITEMCAT` `7,573 B`), `467 / 800` sectors used (**`333` free**). Save Disk slots use `68` sectors (`17,408 B` capacity) for the `17,161 B` V2 save stream (`SAVE_VERSION = $20`).
 
+
+## Overlay Cache Leaves `zp_temp0`/`zp_temp1` to the Caller (2026-11-16)
+
+### Change Record
+
+```text
+Problem and success criteria:
+  Every BBC Master character since 708f3df started with 135 max HP (other ports:
+  race + class hit dice, median 14) and gained about 100 a level. Phase 0-4
+  moved player_con_hp_adj and the four STR/DEX adjusters into OVL.UI behind the
+  items_swap_dispatch_a trampoline (main.s). When OVL.UI is not loaded, that
+  trampoline reloads OVL.UI and then the caller's overlay through
+  overlay_load -> hal_asset_load_prg_header -> beeb_overlay_try_cache, which
+  kept the filename pointer in zp_temp0/zp_temp1. player_calc_hp
+  (core/player.s) keeps the combined hit dice in zp_temp0 across
+  jsr player_con_hp_adj: at character creation the start overlay's name
+  pointer ($1B87) left $87 = 135. Success: a new character's max HP equals its
+  race and class hit dice (chargen_town), and no overlay load changes
+  zp_temp0/zp_temp1.
+State being changed:
+  - beeb_overlay_try_cache (overlay_storage.s, LowHelpers) compares the name
+    pointer through self-modified immediates btc_name_lo/btc_name_hi instead
+    of zp_temp0/zp_temp1. Clobbers: A, X, Y, zp_ptr0, zp_ptr1 (unchanged
+    otherwise).
+Search scope and terms:
+  platforms/bbcmaster/*.s for zp_temp0/zp_temp1, overlay_load,
+  hal_asset_load_prg_header, beeb_overlay_try_cache, beeb_dfs_load_to_bank,
+  items_swap_dispatch_a; core/player.s player_calc_hp.
+Relevant readers/writers found and known exclusions:
+  - The DFS miss path (beeb_dfs_load_to_bank) does not touch zp_temp0/1.
+  - hal_memory_copy (memory_bank.s) takes its length in zp_temp0/1 by
+    contract and is not on the overlay path.
+  - Fixing the loader covers every trampoline that swaps overlays, not only
+    items_swap_dispatch_a.
+Initialization, reset and persistence points:
+  - N/A: the compare operands are written on each call before use.
+Affected production sequence through the changed transition:
+  - player_calc_hp -> player_con_hp_adj (resident) -> items_swap_dispatch_a
+    -> overlay_load(OVL_UI) -> try_cache -> bbcm_player_con_hp_adj ->
+    overlay_load(caller's) -> return with zp_temp0 intact.
+Contract decision or selected upstream oracle with source locations:
+  - Max HP: core/player.s player_calc_hp (race HD + class HD at level 1).
+Intentional Moria8 deviations:
+  - N/A (restores the shared formula on the BBC Master).
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  - N/A (8-bit pointer compare, as before).
+RNG reduction and bias, if applicable:
+  - N/A.
+Affected platforms, overlays, banks and owners:
+  - Acorn BBC Master 128 only: LowHelpers grows 2 B (low_helpers_end $2355,
+    program_end $7FDE, 34 B free below $8000).
+Required production-path tests:
+  - make testbbcmaster (chargen_town asserts chargen_max_hp_is_hit_dice; it
+    failed before the fix).
+Known behavior explicitly out of scope:
+  - The BBC hal_platform_panic hang (PC $233D) on the same 4457e20 run is
+    diagnosed separately.
+Unresolved uncertainty and risk:
+  - BBC build-queue results since 708f3df were played at about ten times the
+    intended HP and do not reflect BBC balance.
+```
+
+### Verification Coverage
+
+| Contract Row / Check | Enforcement & Evidence | Status |
+| --- | --- | --- |
+| LowHelpers (`< $3000`) & Default (`<= $8000`) ceilings | `make testbbcmaster` memory-contract gate (`low_helpers_end = $2355`, `program_end = $7FDE`) | Verified |
+| New character max HP = race + class hit dice | `chargen_town` `chargen_max_hp_is_hit_dice` (FAIL before, PASS after) | Verified |
+| Live MAME `bbcm` behaviour | `make testbbcmaster` (all 17 scenarios pass with the queue paused; `item_actions` timed out at load 38 on 32 cores and passed alone on a quiet machine) | Verified |
