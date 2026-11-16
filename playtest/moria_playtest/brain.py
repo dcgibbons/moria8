@@ -301,6 +301,9 @@ ENCHANT_PER_VISIT_RICH = 24   # ... once rich (MARKET_GEAR_GOLD): the stores' st
 ENCHANT_AC_PER_LEVEL = 2 # AC below this times the character level is worth enchanting
 ENCHANT_WEAPON = "Scroll of Enchant Weapon"   # Alchemist; +1 to-hit and/or to-dam on the weapon wielded
 ENCHANT_WEAPON_MAX = 10  # to-dam the scrolls are bought for up to (VMS enchant(): ever less likely past it)
+# Phase 5 (VMS stock): the Alchemist's two scrolls. Bought for to-dam, so not
+# the To-Hit one, which the name prefix also matched (2026-11-16).
+ENCHANT_TO_HIT = ENCHANT_WEAPON + " To-Hit"
 WEAPON_LINE = re.compile(r"^\s*[a-z]\) Weapon:\s+(.+?)\s*$")   # the equipment list's wielded weapon
 MARKET_GEAR_GOLD = 50000 # gold at which the Black Market is shopped for armour and weapons too
 HURT_OUT_HP = 0.35       # below this share of HP with no healing potion left: Word of Recall
@@ -395,6 +398,13 @@ RESTORE_MANA_RESERVE = 3   # carried for the Balrog, bought rich
 GAIN_POTIONS = {"Potion of Gain Strength": "ST", "Potion of Gain Intelligence": "IN",
                 "Potion of Gain Wisdom": "WI", "Potion of Gain Dexterity": "DX",
                 "Potion of Gain Constitution": "CO", "Potion of Charisma": "CH"}
+# Phase 5 (VMS stock): a Restore potion a stat, five at the Alchemist and
+# Wisdom at the Temple. Moria8's Potion of Restoration (every stat) is now
+# the Black Market's alone, so a drained character fixed nothing until rich
+# (2026-11-16).
+RESTORE_POTIONS = {"Potion of Restore Strength": "ST", "Potion of Restore Intelligence": "IN",
+                   "Potion of Restore Wisdom": "WI", "Potion of Restore Dexterity": "DX",
+                   "Potion of Restore Constitution": "CO", "Potion of Restore Charisma": "CH"}
 STAT_MAXED = 28          # 18/100 as track_stats reads it (18 + 100 // 10)
 RESIST_WORTH = 0.25      # a breather whose breath, as resisted now, is this share of HP: resist first
 TOWN_REST_STRIKES = 5    # town rests before Word of Recall to the Balrog that may gain nothing (recall_trip)
@@ -809,6 +819,8 @@ class Brain:
         self.stat_max: dict[str, int] | None = None   # each stat's highest value seen; None: never read
         self.restoration = 0                   # Potions of Restoration carried
         self.gains: dict[str, int] = {}        # potions of gain stat carried, by name
+        self.restores: dict[str, int] = {}     # Restore <stat> potions carried, by name
+        self.drained: set[str] = set()         # stats read below their highest (track_stats)
         self.stat_now: dict[str, int] = {}     # each stat as the status lines last read it
         self.restore_due = False               # a stat is drained: buy and drink Restoration
         self.enchant_scrolls = 0               # Scrolls of Enchant Armor carried (read in town)
@@ -1095,7 +1107,7 @@ class Brain:
         # Half-Elf Ranger walked away from worms and straight back on the path
         # to the stairs until the colony bred around it (M5 regression, seed 1006).
         slow = {p for p, c in view.creatures.items()
-                if (c.glyph, c.level) in knowledge.slow_kinds() and not self.coins_worth_it(c, obs)}
+                if self.slow(c) and not self.coins_worth_it(c, obs)}
         self.level.slow_seen.update(dict.fromkeys(slow, obs.step))
         for pos in [p for p in self.level.slow_seen if p not in view.creatures and chebyshev(p, view.pos) <= 1]:
             del self.level.slow_seen[pos]   # beside it and nothing there: gone
@@ -1602,7 +1614,8 @@ class Brain:
             self.stat_max = dict(found)
             self.restore_due = obs.clvl >= RESTORE_UNSEEN
             return
-        if any(found[k] < self.stat_max.get(k, 0) for k in found):
+        self.drained = {k for k in found if found[k] < self.stat_max.get(k, 0)}
+        if self.drained:
             self.restore_due = True
         for k, v in found.items():
             self.stat_max[k] = max(self.stat_max.get(k, 0), v)
@@ -2464,6 +2477,7 @@ class Brain:
                 for row in obs.rows[STORE_ROWS]:
                     match = STORE_ITEM.match(row)
                     if match and match.group(2).startswith(want) and \
+                            not (want == ENCHANT_WEAPON and match.group(2).startswith(ENCHANT_TO_HIT)) and \
                             (gold is None or int(match.group(3)) <= int(gold.group(1))) and \
                             not (want in AMMO_AVERAGE and int(match.group(3)) > AMMO_MAX_GOLD) and \
                             not (want.startswith(("Wand of", "Staff of")) and want not in RECHARGEABLE
@@ -2591,6 +2605,8 @@ class Brain:
         if "strong_potions" in self.goal.tactics and self.clvl >= STRONG_LEVEL and self.neutralize < NEUTRALIZE_RESERVE:
             wants.append(NEUTRALIZE)
         if self.restore_due and not self.restoration:
+            wants += [name for name, stat in RESTORE_POTIONS.items()
+                      if stat in self.drained and not self.restores.get(name)]
             wants.append(RESTORATION)
         if self.max_dlvl >= SCOUT_FROM and self.resist_heat < RESIST_RESERVE:
             wants.append(RESIST_HEAT)
@@ -2650,7 +2666,7 @@ class Brain:
                 wants += [k for k in order if self.stat_now.get(GAIN_POTIONS[k], 0) < STAT_MAXED]
         elif self.at_store == ALCHEMIST:
             wants = [w for w in wants if w in (RECALL, PHASE, TELEPORT_SCROLL, RESTORATION, ENCHANT_ARMOR,
-                                               ENCHANT_WEAPON, RECHARGE_SCROLL)]
+                                               ENCHANT_WEAPON, RECHARGE_SCROLL, *RESTORE_POTIONS)]
         else:
             wants = [w for w in wants if w not in EXTRA_ITEMS]   # the Black Market's alone
         return wants
@@ -2829,6 +2845,9 @@ class Brain:
             self.oil += n
         elif item.startswith(RESTORATION):
             self.restoration += n
+        elif item.startswith(tuple(RESTORE_POTIONS)):
+            kind = next(k for k in RESTORE_POTIONS if item.startswith(k))
+            self.restores[kind] = max(0, self.restores.get(kind, 0) + n)
         elif item.startswith(tuple(GAIN_POTIONS)):
             kind = next(k for k in GAIN_POTIONS if item.startswith(k))
             self.gains[kind] = max(0, self.gains.get(kind, 0) + n)
@@ -2939,6 +2958,7 @@ class Brain:
             self.extra.update({kind: held(kind) for kind in (SUPER_HEROISM, INVULNERABILITY)})
             self.restore_mana = held(RESTORE_MANA)
             self.gains = {k: held(k) for k in GAIN_POTIONS if held(k)}
+            self.restores = {k: held(k) for k in RESTORE_POTIONS if held(k)}
             for kind in self.strong:
                 self.strong[kind] = held(kind)
 
@@ -3011,6 +3031,13 @@ class Brain:
                 elif self.picking == RESTORATION:
                     self.restoration = max(0, self.restoration - 1)
                     self.restore_due, self.stat_max = False, {}   # the stats as they now read are the baseline
+                elif self.picking in RESTORE_POTIONS:
+                    self.restores[self.picking] = max(0, self.restores.get(self.picking, 0) - 1)
+                    stat = RESTORE_POTIONS[self.picking]
+                    self.drained.discard(stat)
+                    if self.stat_max is not None:
+                        self.stat_max.pop(stat, None)   # read again as it now is
+                    self.restore_due = bool(self.drained)
                 elif self.picking == RECALL:
                     self.recall = max(0, self.recall - 1)
                     self.recalling = True
@@ -3068,6 +3095,7 @@ class Brain:
             self.clw = self.neutralize = self.restoration = self.resist_heat = self.resist_cold = self.heroism = self.restore_mana = 0
             self.extra.update({SUPER_HEROISM: 0, INVULNERABILITY: 0})
             self.gains = {}
+            self.restores = {}
             for name in self.strong:
                 self.strong[name] = 0
         self.forget_picking()
@@ -3102,6 +3130,8 @@ class Brain:
             self.restoration = 0
         elif self.picking in GAIN_POTIONS:
             self.gains.pop(self.picking, None)
+        elif self.picking in RESTORE_POTIONS:
+            self.restores.pop(self.picking, None)
         elif self.picking == ENCHANT_ARMOR:
             self.enchant_scrolls = 0
         elif self.picking == ENCHANT_WEAPON:
@@ -3388,18 +3418,20 @@ class Brain:
             self.events.append(f"no new map or XP for {STALL_STEPS} steps on DL{obs.dlvl}; "
                                "stair-scumming")
 
-    def move(self, view: View, step: tuple[int, int] | None, layer: str, reason: str) -> Decision | None:
+    def move(self, view: View, step: tuple[int, int] | None, layer: str, reason: str,
+             past: Pos | None = None) -> Decision | None:
         """Turn a path step into a key; doors on the path are opened or bashed
-        first, and known traps disarmed first (round 23)."""
+        first, and known traps disarmed first (round 23). ``past``: the
+        blocker clear_way goes to kill, whose reach is not refused."""
         if step is None or step == (0, 0):
             return None
-        target = (view.pos[0] + step[0], view.pos[1] + step[1])
-        if target not in view.creatures and any(chebyshev(p, target) == 1 for p in self.paralyzers_in_view(view)):
+        if self.into_paralyzer(view, step, past):
             # Not into the reach of a creature that paralyses: there it blows
             # before the bot moves again (shake_paralyzer). A walk to the
             # stairs stepped a level-37 Warrior back beside an Iridescent
             # Beetle it had kept a step from (C64 Balrog, 2026-11-13).
             return None
+        target = (view.pos[0] + step[0], view.pos[1] + step[1])
         if view.type_at(*target) == TYPE_TRAP:
             tries = self.level.disarm_attempts.get(target, 0)
             if tries < DISARM_TRIES:
@@ -3417,6 +3449,13 @@ class Brain:
                 return Decision(ord("O"), layer, f"{reason}: open door")
             return Decision(KEY_BASH, layer, f"{reason}: bash stuck door")
         return Decision(DIRS[step], layer, reason)
+
+    def into_paralyzer(self, view: View, step: tuple[int, int], past: Pos | None = None) -> bool:
+        """``step`` lands beside a creature whose touch has paralysed the bot
+        (other than ``past``), which ``move`` refuses."""
+        target = (view.pos[0] + step[0], view.pos[1] + step[1])
+        return target not in view.creatures and any(
+            chebyshev(p, target) == 1 for p in self.paralyzers_in_view(view) if p != past)
 
     def deeper_ok(self, obs: Observation) -> bool:
         """The goal wants more depth and the character is ready for it. With
@@ -4109,7 +4148,7 @@ class Brain:
         level rather than meet it (M4 rounds 71-74: nagas, normal speed with
         20% random moves, killed 8-10 of ~20 reach_dl10 characters that died,
         fought to the end; walking away alone sent explore back to them)."""
-        return (creature.glyph in knowledge.outpaced_glyphs() and creature.glyph not in knowledge.slow_glyphs()
+        return (self.outpaced(creature) and not self.slow(creature, by_glyph=True)
                 and not knowledge.casts(creature.glyph, creature.level) and self.lore_strong(creature, obs))
 
     def dangerous(self, creature: Creature, obs: Observation) -> bool:
@@ -4124,9 +4163,9 @@ class Brain:
             and self.fight_odds(creature, obs) > 1.0)
 
     def engageable(self, creature: Creature, obs: Observation) -> bool:
-        return (creature.glyph not in AVOID_GLYPHS and not self.stationary(creature)
+        return (not self.avoided(creature) and not self.stationary(creature)
                 and creature.glyph not in self.tough_glyphs(obs) and not self.too_strong(creature, obs)
-                and (creature.glyph not in knowledge.slow_glyphs() or self.coins_worth_it(creature, obs))
+                and (not self.slow(creature, by_glyph=True) or self.coins_worth_it(creature, obs))
                 and creature.level <= obs.clvl + 2
                 and (creature.glyph, creature.level) not in knowledge.breeder_kinds())   # never hunted: they multiply
 
@@ -4142,8 +4181,51 @@ class Brain:
     @staticmethod
     def stationary(creature: Creature) -> bool:
         """Never moves (jellies, molds, …; §14.3 round 9): walk around it,
-        never fight it. It only hurts a player who stands next to it."""
+        never fight it. It only hurts a player who stands next to it. Named
+        (the catalog's view), by its own kind: by glyph, no eye stood still
+        once the Disenchanter Eye wandered (Phase 5), and a Floating Eye
+        walled a Plus/4 Paladin in until it starved (build queue, 2026-11-16)."""
+        if creature.name:
+            return creature.name in knowledge.stationary_names()
         return creature.glyph in knowledge.stationary_glyphs()
+
+    # Lore by kind: a creature the view names (the catalog ports) by its own
+    # kind, else by what its glyph (and level) can be. In the Phase 5 catalog
+    # a glyph's creatures differ more (the Disenchanter Eye wanders, not every
+    # ',' is fragile), so the glyph-wide rules stopped holding (2026-11-16).
+
+    @staticmethod
+    def slow(creature: Creature, by_glyph: bool = False) -> bool:
+        """Slower than the player: walked away from. Nameless, by kind, or by
+        glyph (every creature drawn so) when ``by_glyph``."""
+        if creature.name:
+            return creature.name in knowledge.slow_names()
+        if by_glyph:
+            return creature.glyph in knowledge.slow_glyphs()
+        return (creature.glyph, creature.level) in knowledge.slow_kinds()
+
+    @staticmethod
+    def outpaced(creature: Creature) -> bool:
+        """A walking player outpaces it."""
+        if creature.name:
+            return creature.name in knowledge.outpaced_names()
+        return creature.glyph in knowledge.outpaced_glyphs()
+
+    @staticmethod
+    def fragile(creature: Creature) -> bool:
+        """At most 4 hit points: one blow."""
+        if creature.name:
+            return creature.name in knowledge.fragile_names()
+        return creature.glyph in knowledge.fragile_glyphs()
+
+    @staticmethod
+    def avoided(creature: Creature) -> bool:
+        """Never meleed in passing: an eye whose gaze paralyses (the Floating
+        Eye). Nameless, any 'e', as before; of the Phase 5 eyes only the
+        Floating Eye paralyses (molds that paralyse stay walked around)."""
+        if creature.name:
+            return creature.glyph in AVOID_GLYPHS and creature.name in knowledge.touch_paralyzers()
+        return creature.glyph in AVOID_GLYPHS
 
     # -- layers ---------------------------------------------------------------------
 
@@ -4352,13 +4434,12 @@ class Brain:
         # Gnome Warrior, too afraid to strike, stood beside a Green Mold and a
         # Yellow Worm mass searching until the mold killed it (C128 Balrog
         # queue, 2026-11-05). Out of its reach is away from it for good.
-        still = {p for p in close if view.creatures[p].glyph in knowledge.stationary_glyphs()}
+        still = {p for p in close if Brain.stationary(view.creatures[p])}
         moving = close - still
         # By kind, not glyph: an Iron Golem is slow and a Ghoul drawn the
         # same is not, so a level-25 Halfling fought a golem it could not
         # hurt to the death, no stairs known (M8, 2026-11-02).
-        if not close or (not known_slow and any((view.creatures[p].glyph, view.creatures[p].level)
-                                                not in knowledge.slow_kinds() for p in moving)):
+        if not close or (not known_slow and any(not Brain.slow(view.creatures[p]) for p in moving)):
             return None
         here = min(chebyshev(p, view.pos) for p in close)
         here_moving = min((chebyshev(p, view.pos) for p in moving), default=99)
@@ -4436,8 +4517,8 @@ class Brain:
         for pos, creature in sorted(view.creatures.items()):
             if chebyshev(pos, view.pos) != 1:
                 continue
-            if (self.stationary(creature) and creature.glyph in knowledge.fragile_glyphs()) or (
-                    creature.glyph in AVOID_GLYPHS
+            if (self.stationary(creature) and self.fragile(creature)) or (
+                    self.avoided(creature)
                     and strength_of(creature)[0] <= bound):
                 self.last_attack = (pos, creature.glyph)
                 return Decision(DIRS[(pos[0] - view.pos[0], pos[1] - view.pos[1])], "fight",
@@ -4730,7 +4811,7 @@ class Brain:
         round 1: 74 flasks at 'w')."""
         if strength_of(creature)[0] < OIL_WORTH_HP:
             return False
-        return ((creature.glyph, creature.level) not in knowledge.slow_kinds()
+        return (not self.slow(creature)
                 or self.fight_odds(creature, obs) >= COINS_ODDS)
 
     def fight(self, obs: Observation, view: View) -> Decision | None:
@@ -4741,14 +4822,14 @@ class Brain:
             # cannot melee.
             return None
         adjacent = sorted((c.level, p) for p, c in view.creatures.items()
-                          if chebyshev(p, view.pos) == 1 and c.glyph not in AVOID_GLYPHS
+                          if chebyshev(p, view.pos) == 1 and not self.avoided(c)
                           and not self.stationary(c))
         if not adjacent:
             return None
         kinds = knowledge.kinds_by_name()
         named_slow = {kinds[name] for name in knowledge.slow_names() if name in kinds and name in self.messages}
         if not self.out_of_food() and all(
-                ((view.creatures[p].glyph, view.creatures[p].level) in knowledge.slow_kinds()
+                (self.slow(view.creatures[p])
                  and not self.coins_worth_it(view.creatures[p], obs))
                 or (view.creatures[p].glyph, view.creatures[p].level) in named_slow for _, p in adjacent):
             # Creeping coins: each poison touch stacks more poison, and they
@@ -5439,6 +5520,10 @@ class Brain:
         if self.restoration and self.restore_due and not self.close_threats(obs, view):
             self.picking, self.listed = RESTORATION, False
             return Decision(ord("Q"), "quaff", "a stat drained: drink Restoration")
+        restore = next((k for k, stat in RESTORE_POTIONS.items() if stat in self.drained and self.restores.get(k)), None)
+        if restore is not None and not self.close_threats(obs, view):
+            self.picking, self.listed = restore, False
+            return Decision(ord("Q"), "quaff", f"{RESTORE_POTIONS[restore]} drained: drink {restore}")
         gain = next((k for k, n in self.gains.items() if n), None)
         about = max(self.remembered_bursts(obs), default=0) >= RESIST_WORTH * obs.hp
         if gain is not None and not self.close_threats(obs, view) and not about \
@@ -5483,7 +5568,7 @@ class Brain:
                 (self.under_spell(obs, view) or self.under_blow(obs, view)) and not self.magic.can(obs, CURE_LIGHT))):
             return None
         beside = {p for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1 and not self.stationary(c)}
-        if beside and all((view.creatures[p].glyph, view.creatures[p].level) in knowledge.slow_kinds() for p in beside):
+        if beside and all(self.slow(view.creatures[p]) for p in beside):
             away = self.walk_away(view, beside)
             if away is not None:
                 return Decision(away.key, "retreat", "hurt beside slow creatures: step away before drinking")
@@ -6404,7 +6489,7 @@ class Brain:
         if step is not None and step != (0, 0):
             target = (view.pos[0] + step[0], view.pos[1] + step[1])
             slow = {p for p, c in view.creatures.items()
-                    if (c.glyph, c.level) in knowledge.slow_kinds() and not self.coins_worth_it(c, obs)}
+                    if self.slow(c) and not self.coins_worth_it(c, obs)}
             slow |= {p for p, seen in self.level.slow_seen.items() if obs.step - seen < SLOW_MEMORY}
             if any(chebyshev(target, p) <= 1 for p in slow):
                 # Back beside the slow creature just walked away from: the
@@ -6493,7 +6578,15 @@ class Brain:
         known = {**self.level.stationary, **view.creatures}
         committed = self.level.clear_target if self.level.clear_target in known else None
         self.level.clear_target = committed
-        if committed is None and view.step_toward(exits(), avoid_monsters=True) is not None:
+
+        def way_out() -> bool:
+            # A way ``move`` takes: one whose first step is beside a creature
+            # that paralysed the bot is refused there, and a level-4 Paladin
+            # behind a Floating Eye with every layer's step refused searched
+            # one square 13,000 steps and starved (build queue, 2026-11-16).
+            step = view.step_toward(exits(), avoid_monsters=True)
+            return step is not None and (step == (0, 0) or not self.into_paralyzer(view, step))
+        if committed is None and way_out():
             return None
         # Measured from where the fight will be: from the player, each step
         # toward a committed blocker brought a mover into range and the next
@@ -6506,12 +6599,11 @@ class Brain:
         # A slow one only matters beside a paralysing gaze (below); else it
         # is fought or outwalked: worm masses wandering near a ',' turned
         # characters back from it 100 times in 400-1,200 steps (2026-11-06).
-        slow = knowledge.slow_kinds()
-        gaze = (known[committed].glyph in AVOID_GLYPHS if committed is not None
-                else any(c.glyph in AVOID_GLYPHS for c in view.creatures.values()))
+        gaze = (self.avoided(known[committed]) if committed is not None
+                else any(self.avoided(c) for c in view.creatures.values()))
         if any(chebyshev(p, calm_from) <= CLEAR_WAY_CALM and not self.stationary(c)
-               and c.glyph not in AVOID_GLYPHS and not self.still_there(p, obs)
-               and (gaze or (c.glyph, c.level) not in slow) for p, c in view.creatures.items()):
+               and not self.avoided(c) and not self.still_there(p, obs)
+               and (gaze or not self.slow(c)) for p, c in view.creatures.items()):
             # Not while something else is coming: paralysed beside an eye,
             # the bot was eaten by the Creeping Coins it had walked away from
             # (M4 round 78, seed 1040). One asleep is not coming: a giant on
@@ -6549,11 +6641,11 @@ class Brain:
             # moves close (CLEAR_WAY_CALM above): go on past the rule.
             step = (view.step_toward(beside, avoid_monsters=True)
                     or view.step_toward(beside, avoid_monsters=False))
-            decision = self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it")
+            decision = self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it",
+                                 past=committed if self.stationary(creature) else None)
             if decision is not None:
                 return decision
             self.level.clear_target = None
-        slow = knowledge.slow_kinds()
         for pos in sorted(creatures, key=lambda p: chebyshev(p, view.pos)):
             creature = creatures[pos]
             if obs.step < self.level.clear_skip.get(pos, 0):
@@ -6561,8 +6653,8 @@ class Brain:
             # A slow one in the way too: walked away from and back to, a
             # level-22 Warrior went 26 squares west and 28 east along one DL2
             # corridor 300 times (C128, 2026-11-07).
-            if not (self.stationary(creature) or creature.glyph in AVOID_GLYPHS
-                    or (creature.glyph, creature.level) in slow) or \
+            if not (self.stationary(creature) or self.avoided(creature)
+                    or self.slow(creature)) or \
                     strength_of(creature)[0] > bound:
                 continue
             # Without it: the edge beside it counts again (no frontier square
@@ -6572,7 +6664,7 @@ class Brain:
             view.creatures = {p: c for p, c in creatures.items() if p != pos}
             view.hazards = hazards - {pos}
             try:
-                cut = view.step_toward(exits(), avoid_monsters=True) is not None
+                cut = way_out()
                 step = None if not cut or chebyshev(pos, view.pos) == 1 else view.step_toward(
                     self.beside(view, pos), avoid_monsters=True)
             finally:
@@ -6587,7 +6679,8 @@ class Brain:
                 self.last_attack = (pos, creature.glyph)
                 return Decision(DIRS[(pos[0] - view.pos[0], pos[1] - view.pos[1])], "fight",
                                 f"the '{creature.glyph}' blocks the only way on: attack it")
-            decision = self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it")
+            decision = self.move(view, step, "fight", f"the '{creature.glyph}' blocks the only way on: approach it",
+                                 past=pos if self.stationary(creature) else None)
             if decision is not None:
                 self.level.clear_target = pos
             return decision
@@ -6598,7 +6691,7 @@ class Brain:
         if not self.sealed(view):
             return None
         stationary = dict(self.level.stationary)
-        stationary.update({p: c for p, c in creatures.items() if self.stationary(c) or c.glyph in AVOID_GLYPHS})
+        stationary.update({p: c for p, c in creatures.items() if self.stationary(c) or self.avoided(c)})
         for pos in sorted(stationary, key=lambda p: chebyshev(p, view.pos)):
             creature = stationary[pos]
             if strength_of(creature)[0] > bound:

@@ -2569,6 +2569,8 @@ class CatalogNamesTest(unittest.TestCase):
 
     def test_slot_names_from_one_read(self) -> None:
         from moria_playtest import knowledge, view
+        knowledge.use_port("c64")                               # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
         names = knowledge.catalog_names()
         if not names:
             self.skipTest("no catalog in this checkout")
@@ -2582,13 +2584,29 @@ class CatalogNamesTest(unittest.TestCase):
             reads.append((start, length))
             return bytes(low + high)[start - 0x4000:start - 0x4000 + length]
         game = mock.Mock(ram="ram", mon=mock.Mock(mem_get=mem_get))
-        game.abi = mock.Mock(MAX_MONSTERS=count, all_symbols={"cat_slot_id_lo": [0x4000], "cat_slot_id_hi": [0x4020]})
+        game.abi = mock.Mock(CATALOG_DUNGEON_CREATURES=count, MAX_TOWN_CREATURES=8,
+                             all_symbols={"cat_slot_id_lo": [0x4000], "cat_slot_id_hi": [0x4020]})
         got = view.catalog_slot_names(game)
         self.assertEqual(reads, [(0x4000, 64)])                         # one read for both tables
         self.assertEqual((got[3], got[7]), ("Ancient Red Dragon", "Ancient Multi-Hued Dragon"))
         self.assertNotIn(9, got)                                          # past the catalog: unnamed
+        # Town creature types follow the dungeon's: catalog id = type - base
+        # (core/recall.s recall_slot_to_cat_id). Unnamed, the town's 'p' took
+        # a dungeon type's name, "Grey Mushroom patch", which never moves, and
+        # the squares it walked walled a Plus/4 Paladin off the stairs.
+        self.assertEqual((got[count], got[count + 7]), (names[0], names[7]))
         game.abi.all_symbols = {}
         self.assertEqual(view.catalog_slot_names(game), {})             # a port without the catalog
+
+    def test_a_creature_is_named_by_its_type_not_its_live_slot(self) -> None:
+        """The species table is indexed by creature type (``MX_TYPE``), as
+        cat_fetch fills it: build_view looked it up by live monster slot
+        (2026-11-10 to 2026-11-16), so most names were another type's."""
+        from moria_playtest import view
+        by_pos = {(5, 5): 3, (6, 6): 40}                                  # position -> MX_TYPE
+        names = {0: "Floating Eye", 3: "Kobold", 40: "Blubbering Idiot"}
+        self.assertEqual(view.creature_names(by_pos, names),
+                         {(5, 5): "Kobold", (6, 6): "Blubbering Idiot"})
 
 
 class NewerBuildTest(unittest.TestCase):

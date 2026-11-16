@@ -3400,6 +3400,52 @@ Clear Icky-Things killed 5 of the first 30 who died on 38b16b4. A Plus/4 Mage
 hit one, then stepped elsewhere each turn ("attacked unseen: keep moving")
 from 16 HP to death.
 
+`move` refuses a step beside a creature that has paralysed the bot
+(`into_paralyzer`). `clear_way` counts a way out as open only when `move`
+would take its first step. When the blocker it goes to kill never moves, it
+may step beside that blocker (`past`). Before this, a level-4 Plus/4 Paladin
+was in a dead-end DL1 corridor whose only way out passed beside a Floating
+Eye. `clear_way` saw a path, every layer's step was refused, and the bot
+searched one square for 13,000 steps until it starved (build queue,
+2026-11-16).
+
+`Brain.stationary` judges a creature the view names by its own kind
+(`knowledge.stationary_names`), and an unnamed one by glyph as before.
+Phase 5 follows VMS, where the Disenchanter Eye wanders 20% of the time
+(cmove `0x09`; Umoria made it `0x01`). By glyph, no 'e' counted as still
+any more, so `clear_way` never took on that Paladin's Floating Eye.
+
+The view names a creature by its type (`MX_TYPE`, `view.creature_names`).
+The species table (`cat_slot_id_lo`/`_hi`) is indexed by type, and town
+types follow the dungeon's as catalog ids from 0 (core/recall.s
+`recall_slot_to_cat_id`). From 2026-11-10 the view looked names up by live
+monster slot, so most names belonged to another type. Once stillness went
+by name, a town 'p' named "Grey Mushroom patch" turned the squares it walked
+into still hazards and walled the replayed Paladin off the stairs.
+
+**Phase 5 lore and item audit (2026-11-16).**
+- *Lore by kind.* A creature the view names is judged by its own kind:
+  `Brain.slow`, `outpaced`, `fragile` and `avoided`, through
+  `knowledge.fragile_names` and `outpaced_names`. A nameless creature is
+  still judged by its glyph, or its glyph and level. In the catalog no ','
+  counts as fragile by glyph (the Black Mushroom patch is not), and every
+  'e' was avoided, though only the Floating Eye's gaze paralyses.
+  `avoided` stays an eye rule: molds that paralyse are walked around, as
+  before.
+- *Weapon enchanting.* VMS stock gives the Alchemist Enchant Weapon To-Hit
+  and To-Dam, where Moria8 had one Scroll of Enchant Weapon. The bot buys
+  for to-dam, so it skips the To-Hit scroll (`ENCHANT_TO_HIT`) that the
+  name prefix also matched.
+- *Drained stats.* A drained stat (`Brain.drained`) is bought and drunk back
+  with that stat's Restore potion (`RESTORE_POTIONS`): five at the
+  Alchemist, Wisdom at the Temple. The Potion of Restoration, every stat at
+  once, is now the Black Market's alone.
+- *Black Market only.* Scrolls of Teleportation and Potions of Resist Heat
+  and Resist Cold left the Alchemist's stock and come from the Black Market
+  when rich, as before.
+- *Names.* Every creature and item name the bot uses is in the Phase 5
+  catalogs.
+
 A **variant** changes goal fields for a subqueue's runs: `field=value` terms
 separated by commas, semicolons or spaces, a bare word after a term being
 another value of it. `tactics` takes `-name` (remove), `+name` (add), bare

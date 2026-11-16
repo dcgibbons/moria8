@@ -434,6 +434,17 @@ def stationary_glyphs() -> frozenset[str]:
 
 
 @lru_cache(maxsize=1)
+def stationary_names() -> frozenset[str]:
+    """Creature names that never move. Not every creature of a glyph: since
+    Phase 5 (VMS parity) the Disenchanter Eye wanders 20% of the time while
+    every other 'e' stays put."""
+    still: dict[str, bool] = {}
+    for name, _, _, flags in _creatures():
+        still[name] = still.get(name, True) and bool(flags & CF_ATTACK_ONLY)
+    return frozenset(name for name, s in still.items() if s)
+
+
+@lru_cache(maxsize=1)
 def glyphs_of() -> dict[str, frozenset[str]]:
     """Creature name -> the screen glyphs it is drawn with."""
     glyphs: dict[str, set[str]] = {}
@@ -467,6 +478,18 @@ def fragile_glyphs() -> frozenset[str]:
         for code, dice, sides in zip(tables["display"], tables["hd_num"], tables["hd_sides"]):
             by_glyph.setdefault(screen_code_to_char(code), []).append(dice * sides <= 4)
     return frozenset(glyph for glyph, weak in by_glyph.items() if all(weak))
+
+
+@lru_cache(maxsize=1)
+def fragile_names() -> frozenset[str]:
+    """Creatures, by name, with at most 4 hit points (``fragile_glyphs`` for
+    one the view names): in the Phase 5 catalog not every ',' is that weak,
+    and by glyph no patch was."""
+    weak: dict[str, bool] = {}
+    for names, tables in _tiers():
+        for name, dice, sides in zip(names, tables["hd_num"], tables["hd_sides"]):
+            weak[name] = weak.get(name, True) and dice * sides <= 4
+    return frozenset(name for name, w in weak.items() if w)
 
 
 @lru_cache(maxsize=1)
@@ -580,6 +603,19 @@ def outpaced_glyphs() -> frozenset[str]:
                 not flags & CF_ATTACK_ONLY and (
                     base == SPEED_SLOW or (base == SPEED_NORMAL and bool(speed & RANDOM_MASK))))
     return frozenset(glyph for glyph, outpaced in by_glyph.items() if all(outpaced))
+
+
+@lru_cache(maxsize=1)
+def outpaced_names() -> frozenset[str]:
+    """Creatures, by name, a walking player outpaces (``outpaced_glyphs`` for
+    one the view names)."""
+    out: dict[str, bool] = {}
+    for names, tables in _tiers():
+        for name, speed, flags in zip(names, tables["speed"], tables["mflags"]):
+            base = speed & SPEED_MASK
+            out[name] = out.get(name, True) and not flags & CF_ATTACK_ONLY and (
+                base == SPEED_SLOW or (base == SPEED_NORMAL and bool(speed & RANDOM_MASK)))
+    return frozenset(name for name, o in out.items() if o)
 
 
 ITEM_CATALOG_SPEC = ROOT / "platforms/shared/item_catalog/item_catalog_spec.json"

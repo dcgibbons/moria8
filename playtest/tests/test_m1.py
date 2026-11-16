@@ -10,7 +10,7 @@ from moria_playtest.brain import (GEAR_TRIP_GOLD, GEAR_TRIP_WAIT, HUNT_HP, KEY_B
 from moria_playtest.game import KEY_RUNSTOP, KEY_SPACE, Mode, Observation
 from moria_playtest.goals import GOALS, required
 from moria_playtest.screen import decode_rows
-from moria_playtest.view import DIRS, TYPE_TRAP, UNKNOWN, WALL, Creature, View
+from moria_playtest.view import DIRS, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, WALL, Creature, View
 from moria_playtest.brain import FOUR_ELEMENTS
 
 from test_game import ABI as BASE_ABI, screen_bytes
@@ -191,6 +191,47 @@ class BrainM2Test(unittest.TestCase):
             o.rows[row] = text.ljust(40)
         o.mode, o.stage = Mode.STORE, stage
         return o
+
+    def test_weapon_enchanting_buys_to_dam_not_to_hit(self) -> None:
+        """Phase 5 (VMS stock): the Alchemist sells Enchant Weapon To-Hit and
+        To-Dam, where Moria8 had one Scroll of Enchant Weapon. Bought by name
+        prefix for the weapon's to-dam, the To-Hit scroll was taken too and
+        left to-dam where it was."""
+        from moria_playtest.brain import ALCHEMIST
+        from moria_playtest.goals import for_character
+        def warrior() -> Brain:
+            brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+            brain.weapon = ("Two-Handed Sword", 2)
+            brain.at_store, brain.recall, brain.phase = ALCHEMIST, 9, 9
+            return brain
+        hit = {3: " a) Scroll of Enchant Weapon To-Hit   125 GP", 19: " B)uy  S)ell  Q)uit    Gold: 1184000"}
+        self.assertEqual(warrior().decide(self.store_obs("menu", hit), None).key, ord("Q"))
+        dam = {**hit, 4: " b) Scroll of Enchant Weapon To-Dam   125 GP"}
+        brain = warrior()
+        decision = brain.decide(self.store_obs("menu", dam), None)
+        self.assertEqual((decision.key, brain.store_letter), (ord("B"), "b"))
+
+    def test_a_drained_stat_buys_and_drinks_its_restore_potion(self) -> None:
+        """Phase 5 (VMS stock): a Restore potion a stat at the Alchemist (and
+        Wisdom at the Temple); Restoration, every stat, is the Black Market's
+        alone now, so a drained character never fixed it until rich."""
+        from moria_playtest.brain import ALCHEMIST
+        brain = Brain(GOALS["clvl10"])
+        o = self.obs(dlvl=0)
+        o.rows[22] = "ST:17  IN:11  WI:12  DX:13  CO:15  CH:17".ljust(40)
+        brain.track_stats(o)
+        o.rows[22] = "ST:17  IN:11  WI:12  DX:13  CO:12  CH:17".ljust(40)   # Constitution drained
+        brain.track_stats(o)
+        self.assertEqual(brain.drained, {"CO"})
+        brain.at_store = ALCHEMIST
+        stock = {3: " a) Potion of Restore Strength       300 GP",
+                 4: " b) Potion of Restore Constitution   300 GP", 19: " B)uy  S)ell  Q)uit    Gold: 5000"}
+        decision = brain.decide(self.store_obs("menu", stock), None)
+        self.assertEqual((decision.key, brain.store_letter), (ord("B"), "b"))   # that stat's, not Strength's
+        brain.credit("Potion of Restore Constitution", 1)
+        view = town_view((5, 5), (40, 40), dlvl=0)
+        decision = brain.quaff(command_obs(pos=(5, 5), dlvl=0, hp=21, mhp=21), view)
+        self.assertEqual((decision.key, brain.picking), (ord("Q"), "Potion of Restore Constitution"))
 
     def test_store_buys_food_then_leaves(self) -> None:
         brain = Brain(GOALS["reach_dl2"])
@@ -6822,6 +6863,72 @@ class StationaryMemoryTest(unittest.TestCase):
         view.creatures = {(8, 5): Creature("e", 1), (5, 5): Creature("$", 4)}
         decision = brain.decide(command_obs(pos=(7, 5), dlvl=2, clvl=3, hp=40, mhp=40), view)
         self.assertEqual((decision.layer, decision.key), ("fight", DIRS[(1, 0)]))
+
+    def test_a_paralysing_eye_beside_the_only_way_out_is_killed(self) -> None:
+        """Build queue, 2026-11-16: a level-4 Plus/4 Paladin in a dead-end
+        DL1 corridor whose only way out passed beside a Floating Eye that had
+        paralysed it. Every path stepped beside the eye and ``move`` refused
+        each such step, so clear_way saw a way out while no layer could take
+        it: it searched one square 13,000 steps and starved."""
+        brain = Brain(GOALS["clvl10"])
+        brain.food, brain.clvl = 3, 4
+        brain.paralyzers = {"Floating Eye"}
+        room = {(x, y) for x in range(2, 13) for y in range(1, 6)}
+        open_ = room | {(5, 6), (5, 7)}                         # the corridor south of the room, a dead end
+        walls = [(x, y) for x in range(COLS) for y in range(ROWS) if (x, y) not in open_]
+        view = town_view((5, 7), (11, 2), walls=walls, dlvl=1, stairs_type=TYPE_STAIRS_UP)
+        view.creatures = {(6, 5): Creature("e", 1)}             # beside (5, 6), the only way out
+        o = command_obs(pos=(5, 7), dlvl=1, clvl=4, hp=40, mhp=40)
+        decision = brain.decide(o, view)
+        self.assertEqual((decision.layer, decision.key), ("fight", DIRS[(0, -1)]))   # to it, to kill it
+        view.pos = (5, 6)
+        decision = brain.decide(command_obs(pos=(5, 6), dlvl=1, clvl=4, hp=40, mhp=40), view)
+        self.assertEqual((decision.layer, decision.key), ("fight", DIRS[(1, -1)]))   # and strike it
+        brain.paralyzers = set()
+        view.pos = (5, 7)
+        fresh = Brain(GOALS["clvl10"])
+        fresh.food, fresh.clvl = 3, 4
+        self.assertNotEqual(fresh.decide(o, view).layer, "fallback")               # control: never paralysed
+
+    def test_a_floating_eye_never_moves_though_a_disenchanter_eye_wanders(self) -> None:
+        """Phase 5 (VMS parity): the Disenchanter Eye moves at random 20% of
+        the time (VMS cmove 0x09), so not every 'e' stands still, and by
+        glyph no eye was stationary: clear_way never took on the Floating
+        Eye that walled a Plus/4 Paladin in until it starved (build queue,
+        2026-11-16). A creature the view names is judged by its own kind."""
+        from moria_playtest import knowledge
+        knowledge.use_port("plus4")                             # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
+        brain = Brain(GOALS["clvl10"])
+        self.assertTrue(brain.stationary(Creature("e", 1, "Floating Eye")))
+        self.assertFalse(brain.stationary(Creature("e", 5, "Disenchanter Eye")))
+        self.assertFalse(brain.stationary(Creature("e", 1)))  # unnamed: by glyph, as before
+        self.assertTrue(brain.stationary(Creature("m", 1)))   # every mold is still
+
+    def test_named_creatures_are_judged_by_their_own_kind(self) -> None:
+        """Phase 5 (2026-11-16): a glyph's creatures differ more in the
+        catalog. By glyph no ',' was fragile (the Black Mushroom patch is
+        not) and every 'e' was avoided, though only the Floating Eye's gaze
+        paralyses. A creature the view names is judged by its own kind."""
+        from moria_playtest import knowledge
+        knowledge.use_port("plus4")                             # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
+        kinds = knowledge.kinds_by_name()
+
+        def named(name: str) -> Creature:
+            return Creature(*kinds[name], name)
+        self.assertTrue(Brain.fragile(named("Grey Mushroom patch")))
+        self.assertFalse(Brain.fragile(named("Black Mushroom patch")))
+        self.assertFalse(Brain.fragile(Creature(",", 1)))              # nameless: by glyph, as before
+        self.assertTrue(Brain.avoided(named("Floating Eye")))
+        self.assertFalse(Brain.avoided(named("Disenchanter Eye")))
+        self.assertFalse(Brain.avoided(named("Violet Mold")))           # walked around, as before
+        self.assertTrue(Brain.avoided(Creature("e", 5)))                # nameless: any eye, as before
+        self.assertTrue(Brain.slow(named("Creeping Copper Coins")))
+        self.assertTrue(Brain.slow(named("Disenchanter Eye")))
+        self.assertFalse(Brain.slow(named("Floating Eye")))             # never moves: not "slow"
+        self.assertTrue(Brain.outpaced(named("Blue Worm mass")))
+        self.assertFalse(Brain.outpaced(named("Giant House Fly")))
 
     def test_explore_never_steps_back_beside_coins(self) -> None:
         """M4 round 78: seed 1026 alternated walking away from Creeping Coins
