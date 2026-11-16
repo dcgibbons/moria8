@@ -359,12 +359,13 @@ class BuildHistoryTest(unittest.TestCase):
         records = [{"queue": "build", "build": "aaa", "commit": "aaaa", "started": 100 + n, "platform": "c64",
                     "outcome": "reached", "clvl": 10, "id": f"r{n}", "character": "human-warrior", "findings": f}
                    for n, f in enumerate((["loop: square (1, 2) entered 100 times"], ["unknown_prompt: Direction?"],
-                                          ["stall: no new map"], ["hang: no key wait"], []))]
+                                          ["stall: no new map"], ["hang: no key wait"], [],
+                                          ["no_level: no new character level in 60000 steps"]))]
         with mock.patch.object(dashboard, "commit_subject", lambda c: ""):
             build = dashboard.build_history(records, ("reached",))[0]
-        self.assertEqual((build["findings"], build["notes"]), (1, 3))
+        self.assertEqual((build["findings"], build["notes"]), (1, 4))
         self.assertEqual([f["text"] for f in build["detail"]["c64"]["findings"]], ["hang: no key wait"])
-        self.assertEqual(len(build["detail"]["c64"]["notes"]), 3)
+        self.assertEqual(len(build["detail"]["c64"]["notes"]), 4)
 
 
 class BalrogKillsTest(unittest.TestCase):

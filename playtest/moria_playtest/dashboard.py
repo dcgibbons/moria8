@@ -696,11 +696,13 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "",
 
 
 BUILD_HISTORY = 40      # builds the Builds card shows, newest last
-# The bot's own notes (the auditor's class "bot"): a stall it recovers from
-# by stair-scumming, a square entered too often, a prompt it did not know.
-# Shown apart from the findings (maintainer, 2026-11-16: about 40% of runs
-# showed a stall note as a finding, "they're noise").
-BOT_NOTES = ("stall:", "loop:", "unknown_prompt:")
+# The bot's own notes (every finding of class "bot": session.file_finding
+# and the auditor): a stall it recovers from by stair-scumming, a square
+# entered too often, a prompt it did not know, no new character level for
+# the goal's level_steps (no_level). Shown apart from the findings
+# (maintainer, 2026-11-16: about 40% of runs showed a stall note as a
+# finding, "they're noise"; no_level too: "things like we ran out of steps").
+BOT_NOTES = ("stall:", "loop:", "unknown_prompt:", "no_level:")
 NOISE_FINDINGS = BOT_NOTES + ("load_retry:",)   # findings that are no defect (watch.py does the same)
 
 
