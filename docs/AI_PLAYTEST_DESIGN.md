@@ -3370,6 +3370,16 @@ as they were frozen:
 | `swat_yield` | badly hurt with potions, swatting a fragile creature beside yields to drinking |
 | `summon_phase` | just after a summoning (`summoner` or `ghost`), anything in contact means Phase Door |
 
+With `strong_potions`, a character that is still short of them once the
+Temple and the Black Market are shopped, rich (`MARKET_GEAR_GOLD`) and holding
+three or more Word of Recall, takes the stairs to DL1 and reads Word of Recall
+straight back. The stores restock on each return to town (VMS `store_maint`).
+It does this up to `RESTOCK_SCUMS` (3) times a visit, then goes on as before
+(`Brain.recall_trip`, 2026-11-16). A clvl 36 Ranger with 3,610,346 gold had
+found none, recalled to DL37 with two Cure Light Wounds, and died to a Young
+Multi-Hued Dragon's breaths while it waited for Word of Recall. Food and light
+have their own hops (`RESTOCK_HOPS`), which use the stairs both ways.
+
 A **variant** changes goal fields for a subqueue's runs: `field=value` terms
 separated by commas, semicolons or spaces, a bare word after a term being
 another value of it. `tactics` takes `-name` (remove), `+name` (add), bare

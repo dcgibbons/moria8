@@ -409,6 +409,13 @@ def drink_name(potion: str) -> str:
 
 HEALING_MISSING = 100   # HP short of max before a Potion of Healing, not Cure Critical, is worth drinking
 HEALING_RESERVE = 10    # Potions of Healing bought at the Black Market, rich
+# Rich and still short of strong potions once the Temple and Black Market are
+# shopped: down the stairs to DL1 and Word of Recall straight back, as a player
+# does, since the stores restock on each return to town (VMS store_maint). A
+# clvl 36 Ranger with 3,610,346 gold found none, recalled to DL37 with two Cure
+# Light Wounds and died to a Young Multi-Hued Dragon's breaths waiting for
+# Word of Recall (C64 Balrog, 2026-11-16). At most this many a visit.
+RESTOCK_SCUMS = 3
 GHOST_GLYPH = "G"        # ghosts pass through walls (VMS Moria)
 PHASE_AGAIN = 30         # steps after a short phase in which contact again calls for a far teleport
 SUMMON_MEMORY = 50       # steps a summoning heard still sends the deep goal home with no stairs known
@@ -755,6 +762,8 @@ class Brain:
         self.poisoned = False                  # "You feel poisoned." until "You feel better." (M5f)
         self.poison_shown = False              # the status line has shown "Poisoned" (core/ui_status.s, 2026-11-10)
         self.market_done = False               # done at the Black Market on this town visit
+        self.restock_scums = 0                 # trips to DL1 and back for a restock (RESTOCK_SCUMS)
+        self.restock_scumming = False          # on one: Word of Recall straight back to town
         self.alchemist_done = False            # done at the Alchemy shop on this town visit
         self.armoury_done = False              # done at the Armoury on this town visit
         self.weapons_done = False              # done at the Weaponsmith on this town visit
@@ -3323,6 +3332,8 @@ class Brain:
                 self.restock_trip_after = obs.step + GEAR_TRIP_WAIT   # the Temple and Alchemist too
                 self.book_trip_after = obs.step + RESTOCK_WAIT     # the Temple may have none
             self.shopped, self.shop_buys, self.potions_done, self.market_done = False, 0, False, False
+            if obs.dlvl == 0:
+                self.restock_scumming = False   # back in town: the stores have restocked
             self.magic_done = False
             self.armoury_done = self.weapons_done = self.alchemist_done = False
             self.recalling = False
@@ -5230,6 +5241,9 @@ class Brain:
             if obs.dlvl == 0 or not (self.stuck(view) or self.hopping_out()) or obs.step < self.recall_look_after:
                 return None
             self.recall_look_after = obs.step + STUCK_STEPS
+        if self.restock_scumming and obs.dlvl > 0 and obs.step >= self.blind_until:
+            self.picking, self.listed = RECALL, False
+            return Decision(ord("R"), "recall", "back to town for the stores' restock: read Word of Recall")
         if obs.dlvl == 0:
             spare = self.gold(obs) > self.gear_reserve(obs)
             # The Temple only when it was worth a visit, as the Black Market:
@@ -5245,6 +5259,16 @@ class Brain:
             if not ready or self.max_dlvl < RECALL_FROM or self.supplies_low() or self.recall < 2:
                 # The last scroll is the way home, not the way down (M5a).
                 return None
+            if (self.strong_wanted() and self.gold(obs) >= MARKET_GEAR_GOLD and self.recall >= 3
+                    and (self.restock_scumming or self.restock_scums < RESTOCK_SCUMS)):
+                down = self.descend(obs, view)
+                if down is not None:
+                    if not self.restock_scumming:   # a trip begun, not each step to the stairs
+                        self.restock_scums += 1
+                    self.restock_scumming = True
+                    return Decision(down.key, "restock", f"short of strong potions with "
+                                                         f"{self.gold(obs)} gold: {down.reason} for a restock")
+            self.restock_scums = 0
             if not self.recall_returns(obs):
                 # Recall goes back to the deepest level: not when that is too
                 # deep to stay (resupply's too_deep), or the bot climbs, recalls

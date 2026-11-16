@@ -1514,6 +1514,51 @@ class SealedTest(unittest.TestCase):
         self.assertEqual(decisions[22].reason, "read Word of Recall")   # level 25 may stay on DL22
         self.assertIsNone(decisions[28])                                # not on DL28: the stairs instead
 
+    def test_short_of_strong_potions_and_rich_it_goes_to_dl1_for_a_restock(self) -> None:
+        """C64 Balrog, 2026-11-16: a clvl 36 Ranger with 3,610,346 gold found
+        no strong potions at the Temple or the Black Market, recalled to DL37
+        with two Cure Light Wounds and died to a Young Multi-Hued Dragon's
+        breaths. The stores restock on each return to town: the stairs to
+        DL1 and Word of Recall straight back, up to RESTOCK_SCUMS times."""
+        from moria_playtest.brain import RESTOCK_SCUMS
+        from moria_playtest.goals import for_character
+
+        def shopped(brain):
+            brain.shopped = brain.potions_done = brain.magic_done = brain.alchemist_done = True
+            brain.market_done = brain.weapons_done = brain.armoury_done = True
+
+        def town(gold=3_610_346):
+            return command_obs(pos=(5, 5), dlvl=0, clvl=36, hp=329, mhp=329,
+                               rows={23: f"HP:329/329  MP:0/0   AC:60  AU:{gold}"})
+
+        brain = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        brain.food, brain.recall, brain.max_dlvl, brain.clvl = 20, 5, 37, 36
+        brain.lamp, brain.light_left, brain.oil = True, 9000, 5
+        on_stairs = town_view((5, 5), (5, 5))
+        self.assertTrue(brain.strong_wanted())
+        for trip in range(1, RESTOCK_SCUMS + 1):
+            shopped(brain)
+            decision = brain.recall_trip(town(), on_stairs)
+            self.assertEqual((decision.layer, decision.key), ("restock", ord(">")))
+            self.assertEqual(brain.restock_scums, trip)
+            dl1 = command_obs(pos=(5, 5), dlvl=1, clvl=36, hp=329, mhp=329)
+            dl1_view = town_view((5, 5), (9, 9), dlvl=1)
+            brain.track(dl1, dl1_view)                                  # down on DL1
+            self.assertEqual(brain.recall_trip(dl1, dl1_view).reason,
+                             "back to town for the stores' restock: read Word of Recall")
+            brain.track(town(), on_stairs)                              # yanked back: restocked
+            self.assertFalse(brain.restock_scumming)
+        shopped(brain)
+        decision = brain.recall_trip(town(), on_stairs)
+        self.assertNotEqual(decision and decision.layer, "restock")   # tries spent: on as before
+        self.assertEqual(brain.restock_scums, 0)
+        poor = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        poor.food, poor.recall, poor.max_dlvl, poor.clvl = 20, 5, 37, 36
+        poor.lamp, poor.light_left, poor.oil = True, 9000, 5
+        shopped(poor)
+        decision = poor.recall_trip(town(gold=1000), on_stairs)
+        self.assertNotEqual(decision and decision.layer, "restock")   # not rich: no trip
+
     def test_the_deep_goal_does_not_dive_past_its_level(self) -> None:
         """Maintainer, 2026-11-02: character level is the goal, not depth.
         Three levels over each depth, no taper: level 25 plays to DL22."""
@@ -2258,6 +2303,8 @@ class ThreatDepthTest(unittest.TestCase):
         brain.lamp, brain.light_left, brain.oil = True, 9000, 5
         brain.shopped = brain.potions_done = brain.magic_done = brain.alchemist_done = True
         brain.market_done = brain.weapons_done = brain.armoury_done = True
+        from moria_playtest.brain import CCW
+        brain.strong[CCW] = brain.strong_reserve()   # stocked, as a ready character is (no restock trip)
 
         def town(mp: int, hp: int = 405) -> Observation:
             return command_obs(pos=(5, 5), dlvl=0, clvl=40, hp=hp, mhp=405,
