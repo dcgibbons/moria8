@@ -3391,6 +3391,15 @@ After `IDENTIFY_FAIL_STREAK` (5) failed Identify casts running, none for
 clvl 29 Elf Rogue, with Identify at 95% to fail, cast it at one wand 750
 times on DL1 between rests for the mana: 264,000 steps (2026-11-16).
 
+A move that leaves the character in place with "You hit/miss the <name>"
+has found an invisible creature. If the lore says the character beats it
+(`fight_odds` under 1), that square is struck again for `UNSEEN_FOE_STEPS`
+(4) after each blow (`Brain.unseen_foe_attack`); otherwise the square is kept
+off as before (`note_bump`). Phase 5 made the Clear creatures invisible, and
+Clear Icky-Things killed 5 of the first 30 who died on 38b16b4. A Plus/4 Mage
+hit one, then stepped elsewhere each turn ("attacked unseen: keep moving")
+from 16 HP to death.
+
 A **variant** changes goal fields for a subqueue's runs: `field=value` terms
 separated by commas, semicolons or spaces, a bare word after a term being
 another value of it. `tactics` takes `-name` (remove), `+name` (add), bare

@@ -157,6 +157,9 @@ RETREAT_HP = 0.60
 RETREAT_RANGE = 12       # farthest staircase worth running for; beyond, fight (round 28)
 TRAP_HP = 0.50           # below this share of HP a known trap is impassable (round 20)
 BUMP_STEPS = 10          # steps a tile stays blocked after a move into it went nowhere
+UNSEEN_FOE_STEPS = 4     # steps an invisible creature found by a blow is struck at where it was
+# A blow at nothing seen: "You hit the Clear Icky-Thing (1/2)."
+UNSEEN_BLOW = re.compile(r"You (?:hit|miss) the ([A-Z][\w' -]*?)(?: \(|[.!])")
 LOOP_BLOCK_DOUBLINGS = 10   # an oscillation's tile, blocked again, twice as long each time: up to 10,240 steps
 UNSEEN_STEPS = 20        # steps an attack from something unseen keeps the bot from resting (M4)
 OSCILLATION_STEPS = 6    # command stops alternating between two squares before one is blocked (M4)
@@ -672,6 +675,7 @@ def chebyshev(a: Pos, b: Pos) -> int:
 
 @dataclass
 class LevelMemory:
+    unseen_foe: tuple[Pos, str, int] | None = None   # an invisible creature's square, name and step found
     detect_after: int = 0   # step before which Detect Doors/Stairs is not prayed again (M5b)
     blind_until: int = 0    # step before which Blind Creature is not prayed again (M5b)
     door_attempts: dict[Pos, int] = field(default_factory=dict)
@@ -1238,10 +1242,32 @@ class Brain:
         """A move that left the player in place found something unseen on the
         tile (an invisible creature): keep off it for a while (round 17)."""
         if self.last_move is not None and self.last_move[0] == view.pos:
+            blow = UNSEEN_BLOW.search(self.messages)
+            kind = knowledge.kinds_by_name().get(blow.group(1)) if blow else None
+            if kind is not None and self.last_move[1] not in view.creatures \
+                    and self.fight_odds(Creature(*kind), obs) < 1:
+                # An invisible creature the character beats, found by a blow:
+                # struck where it is, not walked away from. Phase 5's invisible
+                # Clear Icky-Things killed low-level characters that stepped
+                # off after each blow (build queue, 2026-11-16).
+                self.level.unseen_foe = (self.last_move[1], blow.group(1), obs.step)
+                self.last_move = None
+                return
             self.level.bumped[self.last_move[1]] = obs.step + BUMP_STEPS
             if view.type_at(*self.last_move[1]) == UNKNOWN:
                 self.level.felt.add(self.last_move[1])   # a wall in the dark: the game shows none
         self.last_move = None
+
+    def unseen_foe_attack(self, obs: Observation, view: View) -> Decision | None:
+        """Strike again where a blow found an invisible creature (note_bump),
+        for UNSEEN_FOE_STEPS after the last blow there."""
+        foe = self.level.unseen_foe
+        if foe is None or obs.step - foe[2] > UNSEEN_FOE_STEPS or chebyshev(foe[0], view.pos) != 1 \
+                or foe[0] in view.creatures:
+            return None
+        step = (foe[0][0] - view.pos[0], foe[0][1] - view.pos[1])
+        self.last_move = (view.pos, foe[0])
+        return Decision(DIRS[step], "fight", f"strike the unseen {foe[1]} where the blow found it")
 
     def choose(self, obs: Observation, view: View) -> Decision:
         # Short of food, a staircase hop to a fresh level comes before searching
@@ -1257,7 +1283,7 @@ class Brain:
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
         for layer in (self.check_equipment, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
-                      self.cornered_cast, self.fight, self.leave_caster, self.eat,
+                      self.cornered_cast, self.unseen_foe_attack, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
                       self.recall_trip, self.chosen_blocker, self.resupply, self.dive_down,

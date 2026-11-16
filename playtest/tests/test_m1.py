@@ -1514,6 +1514,40 @@ class SealedTest(unittest.TestCase):
         self.assertEqual(decisions[22].reason, "read Word of Recall")   # level 25 may stay on DL22
         self.assertIsNone(decisions[28])                                # not on DL28: the stairs instead
 
+    def test_an_invisible_creature_found_by_a_blow_is_struck_again(self) -> None:
+        """Build queue, 2026-11-16 (Phase 5: Clear creatures invisible): a
+        Plus/4 Human Mage hit an unseen Clear Icky-Thing (1/2) moving into
+        it, then "attacked unseen: keep moving" stepped elsewhere each turn
+        from 16 HP to death. A blow that finds a creature the character beats
+        is followed by more at that square; one it does not is kept off."""
+        from moria_playtest import knowledge
+        from moria_playtest.brain import UNSEEN_FOE_STEPS
+        knowledge.use_port("c64")                               # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
+        brain = Brain(GOALS["clvl10"])
+        brain.food, brain.clvl = 3, 3
+        view = town_view((5, 5), (9, 9), dlvl=1)
+        view.creatures = {}
+
+        def obs(step: int, msg: str = ""):
+            o = command_obs(pos=(5, 5), dlvl=1, clvl=3, hp=16, mhp=20, rows={0: msg})
+            o.step = step
+            return o
+        brain.last_move = ((5, 5), (6, 5))
+        brain.messages = "You hit the Clear Icky-Thing (1/2)."
+        brain.note_bump(obs(100), view)
+        decision = brain.unseen_foe_attack(obs(101), view)
+        self.assertEqual((decision.layer, decision.key), ("fight", DIRS[(1, 0)]))
+        self.assertNotIn((6, 5), brain.level.bumped)
+        self.assertIsNone(brain.unseen_foe_attack(obs(101 + UNSEEN_FOE_STEPS), view))   # gone a while: on
+        strong = Brain(GOALS["clvl10"])
+        strong.food, strong.clvl = 3, 3
+        strong.last_move = ((5, 5), (6, 5))
+        strong.messages = "You miss the Ancient White Dragon."
+        strong.note_bump(obs(100), view)
+        self.assertIsNone(strong.level.unseen_foe)                                    # not one to stand at
+        self.assertIn((6, 5), strong.level.bumped)
+
     def test_identify_failing_running_is_rested_from(self) -> None:
         """C64 Balrog, 2026-11-16: a clvl 29 Elf Rogue (Identify 95% to fail)
         cast it at a Chromium Wand 750 times on DL1 between rests, 264,000
