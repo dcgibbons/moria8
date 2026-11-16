@@ -134,6 +134,10 @@ player_attack_monster:
     beq !pam_no_confuse+
     lda #0
     sta zp_confuse_melee            // Clear — one-time use
+    ldx cmb_type
+    lda cr_cdefense,x
+    and #CD_NO_SLEEP
+    bne !pam_no_confuse+
     // Set monster's confusion timer
     ldy #MX_CONFUSE
     lda (zp_ptr0),y

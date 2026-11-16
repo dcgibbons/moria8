@@ -41,7 +41,11 @@ player_cast_spell:
     clc
     rts
 !pm_can_cast:
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_require_class_level
+#else
     jsr pm_require_class_level
+#endif
     bcs !pm_level_ok+
 #if C128_TEST_SCRIPTED_SPELL
     jmp c128_test_spell_fail_level_sym
@@ -65,7 +69,11 @@ player_cast_spell:
     jsr pm_setup_active_tables
     jsr pm_select_book
     bcc !pm_cancel+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_build_known_list
+#else
     jsr pm_build_known_list_from_book
+#endif
     lda pm_spell_count
     bne !pm_have_spells+
     ldx #HSTR_PM_NOT_KNOWN
@@ -87,7 +95,11 @@ player_cast_spell:
 !pm_have_spells:
     jsr pm_prompt_visible_spell_choice
     bcc !pm_cancel+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_validate_spell
+#else
     jsr pm_validate_selected_spell
+#endif
     bcs !pm_ready+
 #if C128_TEST_SCRIPTED_SPELL
     jmp c128_test_spell_fail_validate_sym
@@ -110,7 +122,11 @@ player_cast_spell:
     jsr calc_spell_failure
 #endif
     bcc !pm_success+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_handle_fail_roll
+#else
     jsr pm_handle_fail_roll
+#endif
 #if C128_TEST_SCRIPTED_SPELL_CANCEL
     jmp c128_test_spell_fail_roll_sym
 #endif
@@ -170,7 +186,11 @@ player_pray:
     clc
     rts
 !pp_can_pray:
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_require_class_level
+#else
     jsr pm_require_class_level
+#endif
     bcs !pp_level_ok+
 #if C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_level_sym
@@ -188,7 +208,11 @@ player_pray:
     jsr pm_setup_active_tables
     jsr pm_select_book
     bcc !pp_cancel+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_build_known_list
+#else
     jsr pm_build_known_list_from_book
+#endif
     lda pm_spell_count
     bne !pp_have_prayers+
     ldx #HSTR_PM_NOT_KNOWN
@@ -204,7 +228,11 @@ player_pray:
 !pp_have_prayers:
     jsr pm_prompt_visible_spell_choice
     bcc !pp_cancel+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_validate_spell
+#else
     jsr pm_validate_selected_spell
+#endif
     bcs !pp_ready+
 #if C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_validate_sym
@@ -221,7 +249,11 @@ player_pray:
     jsr calc_spell_failure
 #endif
     bcc !pp_success+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_handle_fail_roll
+#else
     jsr pm_handle_fail_roll
+#endif
     sec
     rts
 !pp_success:
@@ -300,26 +332,13 @@ pm_setup_active_tables:
     sta pm_name_hi_hi
     rts
 
-pm_require_class_level:
-    ldx player_data + PL_CLASS
-    :AuxReadX(class_spell_min_level)
-    cmp zp_player_lvl
-    beq !pm_rcl_ready+
-    bcc !pm_rcl_ready+
-    ldx #HSTR_PM_NO_EXP
-    jsr huff_print_msg
-    clc
-    rts
-!pm_rcl_ready:
-    sec
-    rts
+#if !PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#import "player_magic_cast_cold.s"
+#endif
 
-pm_handle_fail_roll:
-    ldx #HSTR_PM_FAIL
-    jsr huff_print_msg
-    lda #SFX_SPELL_FAIL
-    jsr hal_sound_play
-    jmp pm_consume_mana
+#if !PLAYER_MAGIC_BROWSE_EXTERNAL
+#import "player_magic_browse_cold.s"
+#endif
 
 pm_select_book:
 !pm_select_retry:
@@ -373,99 +392,6 @@ pm_select_book:
     sta pm_book_mask_hi
     jsr msg_clear
     sec
-    rts
-
-pm_build_known_list_from_book:
-    lda #0
-    sta pm_spell_count
-    ldx #0
-!pm_bk_loop:
-    cpx #SPELL_CATALOG_COUNT
-    bcs !pm_bk_done+
-
-    lda pm_lvl_tbl_lo
-    sta zp_ptr0
-    lda pm_lvl_tbl_hi
-    sta zp_ptr0_hi
-    txa
-    tay
-    :SpellTblRead_ptr0_y()
-    cmp #99
-    beq !pm_bk_next+
-
-    lda pm_book_mask_lo
-    sta zp_ptr0
-    lda pm_book_mask_hi
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcc !pm_bk_next+
-
-    lda #<player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0
-    lda #>player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcc !pm_bk_next+
-
-    ldy pm_spell_count
-    txa
-    sta pm_spell_list,y
-    inc pm_spell_count
-!pm_bk_next:
-    inx
-    jmp !pm_bk_loop-
-!pm_bk_done:
-    rts
-
-pm_build_learnable_list_from_book:
-    lda #0
-    sta pm_spell_count
-    ldx #0
-!pm_bl_loop:
-    cpx #SPELL_CATALOG_COUNT
-    bcs !pm_bl_done+
-
-    lda pm_lvl_tbl_lo
-    sta zp_ptr0
-    lda pm_lvl_tbl_hi
-    sta zp_ptr0_hi
-    txa
-    tay
-    :SpellTblRead_ptr0_y()
-    cmp #99
-    beq !pm_bl_next+
-    cmp zp_player_lvl
-    beq !pm_bl_check_book+
-    bcc !pm_bl_check_book+
-    jmp !pm_bl_next+
-
-!pm_bl_check_book:
-    lda pm_book_mask_lo
-    sta zp_ptr0
-    lda pm_book_mask_hi
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcc !pm_bl_next+
-
-    lda #<player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0
-    lda #>player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcs !pm_bl_next+
-
-    ldy pm_spell_count
-    txa
-    sta pm_spell_list,y
-    inc pm_spell_count
-!pm_bl_next:
-    inx
-    jmp !pm_bl_loop-
-!pm_bl_done:
     rts
 
 pm_prompt_visible_spell_choice:
@@ -545,32 +471,6 @@ pm_pick_visible_spell:
     rts
 !pm_pick_fail:
     clc
-    rts
-
-pm_validate_selected_spell:
-    lda pm_mana_tbl_lo
-    sta zp_ptr0
-    lda pm_mana_tbl_hi
-    sta zp_ptr0_hi
-    ldy pm_spell_idx
-    :SpellTblRead_ptr0_y()
-    sta pm_cost_tmp
-
-    lda pm_lvl_tbl_lo
-    sta zp_ptr0
-    lda pm_lvl_tbl_hi
-    sta zp_ptr0_hi
-    ldy pm_spell_idx
-    :SpellTblRead_ptr0_y()
-    cmp zp_player_lvl
-    beq !pm_valid_done+
-    bcc !pm_valid_done+
-    ldx #HSTR_PM_NO_EXP
-    jsr huff_print_msg
-    clc
-    rts
-!pm_valid_done:
-    sec
     rts
 
 pm_consume_mana:

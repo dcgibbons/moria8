@@ -616,6 +616,7 @@ test5_b1_d000_spike:
     jmp test_fail
 !top_still_ok:
     jsr spike_verify_all_state
+    jsr test_production_b1_noio_and_catalog_ext
 
     jmp test_pass
 
@@ -799,6 +800,215 @@ spike_irq_count: .byte 0
 }
 spike_common_blob_end:
 .assert "Spike common stub fits below $0FB0", spike_common_blob_end - spike_common_blob <= $0fb0 - SPIKE_COMMON_BASE, true
+
+cat_id_lo: .byte 0
+cat_id_hi: .byte 0
+#import "../catalog_ext_fetch128.s"
+
+.const TEST_CEX_CASE_COUNT = 5
+test_cex_ids_lo:
+    .byte <0, <1, <255, <256, <278
+test_cex_ids_hi:
+    .byte >0, >1, >255, >256, >278
+test_cex_seeds:
+    .byte $11, $37, $7e, $a4, $e9
+test_cex_idx:
+    .byte 0
+
+// Test 12: Production mmu_common_b1_noio_read/write_ptr0 + catalog_fetch_ext
+// across Bank 1 $D000-$D8B7 and msg_history $DCB8-$DF37, preserving VIC/VDC/CIA
+// I/O registers, X, zp_ptr0, MMU_CR, $D506, and caller CLI/SEI state.
+test_production_b1_noio_and_catalog_ext:
+    lda #0
+    sta test_cex_idx
+!seed_case:
+    ldx test_cex_idx
+    lda test_cex_ids_hi,x
+    sta zp_ptr0_hi
+    lda test_cex_ids_lo,x
+    asl
+    rol zp_ptr0_hi
+    asl
+    rol zp_ptr0_hi
+    asl
+    rol zp_ptr0_hi
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    clc
+    adc #>BANK1_CATALOG_EXT_BASE
+    sta zp_ptr0_hi
+
+    ldy #0
+!seed_byte:
+    tya
+    asl
+    clc
+    adc test_cex_seeds,x
+    eor #$5c
+    jsr mmu_common_b1_noio_write_ptr0
+    iny
+    cpy #CATALOG_EXT_RECORD_SIZE
+    bcc !seed_byte-
+
+    inc test_cex_idx
+    lda test_cex_idx
+    cmp #TEST_CEX_CASE_COUNT
+    bcc !seed_case-
+
+    // Verify all 5 boundary records via production catalog_fetch_ext under CLI & SEI
+    lda #0
+    sta test_cex_idx
+!verify_case:
+    ldx test_cex_idx
+    lda test_cex_ids_lo,x
+    sta cat_id_lo
+    lda test_cex_ids_hi,x
+    sta cat_id_hi
+
+    lda #$fe
+    sta zp_ptr0
+    lda #$ca
+    sta zp_ptr0_hi
+    ldx #$5a
+
+    lda test_cex_idx
+    and #$01
+    bne !call_sei+
+    cli
+    jsr catalog_fetch_ext
+    php
+    sei
+    pla
+    and #$04
+    beq !irq_mode_ok+
+    jmp test_fail
+!call_sei:
+    sei
+    jsr catalog_fetch_ext
+    php
+    pla
+    and #$04
+    bne !irq_mode_ok+
+    jmp test_fail
+!irq_mode_ok:
+    cpx #$5a
+    beq !x_preserved+
+    jmp test_fail
+!x_preserved:
+    lda zp_ptr0
+    cmp #$fe
+    bne !ptr_fail+
+    lda zp_ptr0_hi
+    cmp #$ca
+    beq !ptr_preserved+
+!ptr_fail:
+    jmp test_fail
+!ptr_preserved:
+    lda MMU_CR
+    cmp #MMU_ALL_RAM
+    beq !mmu_preserved+
+    jmp test_fail
+!mmu_preserved:
+    lda $d506
+    cmp #$0d
+    beq !d506_preserved+
+    jmp test_fail
+!d506_preserved:
+    ldx test_cex_idx
+    ldy #0
+!chk_ext_byte:
+    tya
+    asl
+    clc
+    adc test_cex_seeds,x
+    eor #$5c
+    cmp cat_ext_record,y
+    beq !ext_byte_ok+
+    jmp test_fail
+!ext_byte_ok:
+    iny
+    cpy #CATALOG_EXT_RECORD_SIZE
+    bcc !chk_ext_byte-
+
+    inc test_cex_idx
+    lda test_cex_idx
+    cmp #TEST_CEX_CASE_COUNT
+    bcs !verify_done+
+    jmp !verify_case-
+!verify_done:
+
+    // Verify Bank 1 msg_history ($DCB8..$DF37) writes/reads via map thunks without CIA corruption
+    lda #<BANK1_MSG_HISTORY_BASE
+    sta zp_ptr1
+    lda #>BANK1_MSG_HISTORY_BASE
+    sta zp_ptr1_hi
+    ldy #0
+    lda #$73
+    jsr mmu_common_map_write_ptr1
+    lda #<BANK1_MSG_HISTORY_END
+    sta zp_ptr1
+    lda #>BANK1_MSG_HISTORY_END
+    sta zp_ptr1_hi
+    lda #$37
+    jsr mmu_common_map_write_ptr1
+
+    lda #<BANK1_MSG_HISTORY_BASE
+    sta zp_ptr0
+    lda #>BANK1_MSG_HISTORY_BASE
+    sta zp_ptr0_hi
+    jsr mmu_common_map_read_ptr0
+    cmp #$73
+    beq !mh_lo_ok+
+    jmp test_fail
+!mh_lo_ok:
+    lda #<BANK1_MSG_HISTORY_END
+    sta zp_ptr0
+    lda #>BANK1_MSG_HISTORY_END
+    sta zp_ptr0_hi
+    jsr mmu_common_map_read_ptr0
+    cmp #$37
+    beq !mh_hi_ok+
+    jmp test_fail
+!mh_hi_ok:
+
+    // Confirm VIC $D020, Bank 0 RAM $D020, VDC $07FF, and CIA1/2 latches stayed intact
+    lda $d020
+    and #$0f
+    cmp #$03
+    beq !io_vic_ok+
+    jmp test_fail
+!io_vic_ok:
+    lda #<$d020
+    sta zp_ptr0
+    lda #>$d020
+    sta zp_ptr0_hi
+    ldy #0
+    jsr spike_b0_d000_read
+    cmp #$12
+    beq !io_b0_ok+
+    jmp test_fail
+!io_b0_ok:
+    jsr spike_vdc_read_07ff
+    cmp #$5d
+    beq !io_vdc_ok+
+    jmp test_fail
+!io_vdc_ok:
+    lda $dc04
+    cmp #$34
+    bne !io_cia_fail+
+    lda $dc05
+    cmp #$12
+    bne !io_cia_fail+
+    lda $dd04
+    cmp #$78
+    bne !io_cia_fail+
+    lda $dd05
+    cmp #$56
+    beq !io_all_ok+
+!io_cia_fail:
+    jmp test_fail
+!io_all_ok:
+    rts
 
 test_pass:
     jmp test_pass

@@ -56,6 +56,10 @@
                                 // Use to access Bank 1 data regions. boot128 stages the
                                 // program into Bank 1 for the copy-to-Bank-0 step, then
                                 // scrubs the staged source pages during that copy.
+.const MMU_RAM_BANK1_NOIO = $7F // Bank 1, all RAM, I/O hidden ($D000-$DFFF = Bank 1 RAM)
+                                // Bits 7-6=01(Bank1), 5-4=11(RAM), 3-2=11(RAM), 1=1(RAM), 0=1(RAM)
+                                // Used only inside SEI-guarded common-RAM helpers ($D506=$0D
+                                // keeps 4KB bottom/top common RAM and CPU vectors intact).
 .const MMU_ALL_RAM      = $3E   // Bank 0, all RAM, I/O visible
                                 // Bits 7-6=00(Bank0), 5-4=11(RAM), 3-2=11(RAM), 1=1(RAM), 0=0(I/O)
                                 // Hides Screen Editor ROM ($C000-$CFFF) AND KERNAL ROM
@@ -86,7 +90,7 @@
 //   - overlay cache STARTUP:   $A000-$AFFF
 //   - overlay cache TOWN:      $B000-$BFFF
 //   - overlay cache DEATH:     $C000-$CFFF
-//   - reserved I/O-visible gap:$D000-$DFFF
+//   - Bank 1 high data ($7F):  $D000-$DFFF ($D000-$D8B7 = 128.CEX, $D8B8-$DCB7 = store inv reserve, $DCB8-$DF37 = msg_history)
 //   - overlay cache DUNGEON:   $E000-$EFFF
 //   - top common RAM:          $F000-$FEFF (shared with Bank 0; not cache-safe)
 //   - Bank 1 NMI vector bridge:$FFFA-$FFFB (visible only with top common off)
@@ -157,6 +161,8 @@
 .const BANK1_OVERLAY_DEATH_END    = $cfff
 .const BANK1_RESERVED_IO_BASE     = $d000
 .const BANK1_RESERVED_IO_END      = $dfff
+.const BANK1_HIGH_DATA_BASE       = BANK1_RESERVED_IO_BASE
+.const BANK1_HIGH_DATA_END        = BANK1_RESERVED_IO_END
 .const BANK1_OVERLAY_DUNGEON_BASE = $e000
 .const BANK1_OVERLAY_DUNGEON_END  = $efff
 .const BANK1_RESERVED_TOP_BASE    = $f000
@@ -169,12 +175,15 @@
 .const BANK1_HUFFMAN_NMI_VECTOR_BASE = $fffa
 .const BANK1_HUFFMAN_NMI_VECTOR_END  = $fffb
 #if HAL_PLATFORM_MONSTER_CATALOG
-// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md, C128M-007) takes the
-// tier cache window and the STARTUP overlay slot, which is no longer cached
-// (New Game loads OVL_STARTUP from disk):
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md, C128M-002 / C128M-007)
+// takes the tier cache window, the STARTUP overlay slot (New Game loads
+// OVL_STARTUP from disk), and the Bank 1 $D000-$D8B7 no-I/O data window:
 //   $7A60-$7E5F  name pool, 32 species slots x 32 B, written at species fetch
 //   $7E60-$9567  128.CAT: the catalog's 21 fields x 279 creatures, at boot
 //   $A000-$AFFF  128.CNM: the catalog's Huffman-coded names, at boot
+//   $D000-$D8B7  128.CEX: Phase 5 279 x 8 B extended rows, at boot ($7F read)
+//   $D8B8-$DCB7  reserved 1,024 B store-inventory window inside $D000-$DFFF
+//   $DCB8-$DF37  msg_history (8 x 80 = 640 B BSS via MSG_HISTORY_IN_AUX)
 .const BANK1_CATALOG_POOL_BASE   = BANK1_TIER_CACHE_BASE
 .const BANK1_CATALOG_POOL_END    = BANK1_CATALOG_POOL_BASE + 32 * 32 - 1
 .const BANK1_CATALOG_FIELDS_BASE = BANK1_CATALOG_POOL_END + 1
@@ -182,6 +191,15 @@
 .const BANK1_CATALOG_NAMES_BASE  = BANK1_OVERLAY_STARTUP_BASE
 .const BANK1_CATALOG_NAMES_END   = BANK1_OVERLAY_STARTUP_END
 #endif
+.const BANK1_CATALOG_EXT_BASE        = $d000
+.const BANK1_CATALOG_EXT_SIZE        = 279 * 8
+.const BANK1_CATALOG_EXT_END         = $d8b7
+.const BANK1_STORE_INV_RESERVED_BASE = $d8b8
+.const BANK1_STORE_INV_RESERVED_SIZE = 1024
+.const BANK1_STORE_INV_RESERVED_END  = $dcb7
+.const BANK1_MSG_HISTORY_BASE        = $dcb8
+.const BANK1_MSG_HISTORY_SIZE        = 8 * 80
+.const BANK1_MSG_HISTORY_END         = $df37
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
 
@@ -873,7 +891,7 @@ mmu_common_select_bank1:
     sei
     pla
     sta mmu_common_save_p
-    lda #MMU_RAM_BANK1
+    lda #MMU_RAM_BANK1_NOIO
     sta MMU_CR
     rts
 
@@ -944,6 +962,8 @@ mmu_common_cart_copy_chunk:
     iny
     dex
     bne !wr-
+    lda #$3e                        // Re-enable $D000-$DFFF I/O before writing $D506
+    sta MMU_CR
     lda #$0d                        // Restore 4KB bottom/top common invariant
     sta $d506
     pla
@@ -955,12 +975,17 @@ mmu_common_cart_copy_end:
 mmu_common_cart_blob_end:
 .assert "Cartridge common stub fits at $0FB0-$0FFF", mmu_common_cart_blob_end - mmu_common_cart_blob <= $1000 - MMU_COMMON_CART_BASE, true
 #endif
-// The item DB shares Bank 1 with the map, so its pointer thunks are the
-// map's (identical bodies until 2026-10-25).
+// The item DB and Bank 1 $D000-$DFFF extended catalog share SEI-guarded
+// $7F Bank 1 pointer thunks in bottom common RAM ($D506=$0D preserves 4KB
+// bottom/top common RAM and CPU vectors).
 .label mmu_common_db_read_ptr0  = mmu_common_map_read_ptr0
 .label mmu_common_db_write_ptr0 = mmu_common_map_write_ptr0
 .label mmu_common_db_read_ptr1  = mmu_common_map_read_ptr1
 .label mmu_common_db_write_ptr1 = mmu_common_map_write_ptr1
+.label mmu_common_b1_noio_read_ptr0  = mmu_common_map_read_ptr0
+.label mmu_common_b1_noio_write_ptr0 = mmu_common_map_write_ptr0
+.label mmu_common_b1_noio_read_ptr1  = mmu_common_map_read_ptr1
+.label mmu_common_b1_noio_write_ptr1 = mmu_common_map_write_ptr1
 
 
 // ============================================================
@@ -1024,3 +1049,11 @@ mmu_common_cart_blob_end:
 .assert "Overlay cache avoids $D000-$DFFF", BANK1_OVERLAY_DEATH_END < BANK1_RESERVED_IO_BASE, true
 .assert "DUNGEON overlay slot starts after $DFFF", BANK1_OVERLAY_DUNGEON_BASE > BANK1_RESERVED_IO_END, true
 .assert "Overlay cache fits in named owned Bank1 span", OVERLAY_CACHE_DISARM_END <= BANK1_CACHE_OWNED_END, true
+:AssertRegionBefore("DEATH overlay cache ends before Bank1 extended catalog", BANK1_OVERLAY_DEATH_END, BANK1_CATALOG_EXT_BASE)
+.assert "Bank1 extended catalog starts page-aligned at $D000", BANK1_CATALOG_EXT_BASE, $d000
+.assert "Bank1 extended catalog ends at $D8B7", BANK1_CATALOG_EXT_END == BANK1_CATALOG_EXT_BASE + BANK1_CATALOG_EXT_SIZE - 1 && BANK1_CATALOG_EXT_END == $d8b7, true
+:AssertRegionBefore("Bank1 extended catalog ends before store-inv reserve", BANK1_CATALOG_EXT_END, BANK1_STORE_INV_RESERVED_BASE)
+.assert "Bank1 store-inv reserve ends at $DCB7 inside $D000-$DFFF", BANK1_STORE_INV_RESERVED_BASE == BANK1_CATALOG_EXT_END + 1 && BANK1_STORE_INV_RESERVED_END == BANK1_STORE_INV_RESERVED_BASE + BANK1_STORE_INV_RESERVED_SIZE - 1 && BANK1_STORE_INV_RESERVED_END == $dcb7 && BANK1_STORE_INV_RESERVED_END <= BANK1_HIGH_DATA_END, true
+:AssertRegionBefore("Bank1 store-inv reserve ends before Bank1 msg_history", BANK1_STORE_INV_RESERVED_END, BANK1_MSG_HISTORY_BASE)
+.assert "Bank1 msg_history ends at $DF37 inside $D000-$DFFF", BANK1_MSG_HISTORY_BASE == BANK1_STORE_INV_RESERVED_END + 1 && BANK1_MSG_HISTORY_END == BANK1_MSG_HISTORY_BASE + BANK1_MSG_HISTORY_SIZE - 1 && BANK1_MSG_HISTORY_END == $df37 && BANK1_MSG_HISTORY_END <= BANK1_HIGH_DATA_END, true
+:AssertRegionBefore("Bank1 high data window ends before DUNGEON overlay cache", BANK1_HIGH_DATA_END, BANK1_OVERLAY_DUNGEON_BASE)

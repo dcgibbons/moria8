@@ -879,28 +879,12 @@ ep1_pick_undead_type:
     jmp pick_creature_type
 
 ep1_dispel_undead:
-    lda #60
-    sta ep1_arg                     // max damage roll 1..60
-    lda #CF_UNDEAD
-    sta ep1_tmp                     // mflag mask
-    bne ep1_hurt_visible_flagged
-
-// Starlite (#359): light room + 2d8 damage to all visible monsters
-ep1_starlite:
-    jsr eff_light_room
-    lda #0
-    sta ep1_arg                     // 0 -> 2d8 dice mode
-    lda #$ff                        // all creatures
-    sta ep1_tmp
-
-// Damage visible monsters matching cr_mflags & ep1_tmp != 0 (or any if ep1_tmp==$ff)
-ep1_hurt_visible_flagged:
     lda #0
     sta ep1_idx
 !ep1_hvf_loop:
     ldx ep1_idx
     cpx #MAX_MONSTERS
-    bcs !ep1_hvf_done+
+    bcs !ep1_hvf_ret+
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
@@ -908,31 +892,20 @@ ep1_hurt_visible_flagged:
     beq !ep1_hvf_next+
     sta cmb_type
     tay
-    lda ep1_tmp
-    cmp #$ff
-    beq !ep1_hvf_vis+
-    and cr_mflags,y
+    lda cr_mflags,y
+    and #CF_UNDEAD
     beq !ep1_hvf_next+
-!ep1_hvf_vis:
     ldy #MX_FLAGS
     lda (zp_ptr0),y
     and #MF_VISIBLE
     beq !ep1_hvf_next+
-    lda ep1_arg
-    bne !ep1_hvf_rng+
-    lda #2
-    ldx #8
-    ldy #0
-    jsr math_dice
-    jmp !ep1_hvf_apply+
-!ep1_hvf_rng:
+    lda #60
     jsr rng_range
     clc
     adc #1
     sta zp_math_a
     lda #0
     sta zp_math_b
-!ep1_hvf_apply:
     ldx ep1_idx
     stx cmb_slot
     jsr combat_apply_damage_16
@@ -947,13 +920,14 @@ ep1_hurt_visible_flagged:
 !ep1_hvf_next:
     inc ep1_idx
     bne !ep1_hvf_loop-
-!ep1_hvf_done:
-    ldx #HSTR_PIQ_LIGHT
-    lda ep1_arg
-    bne !ep1_hvf_ret+               // dispel already printed monster hit/dissolve msgs
-    jsr huff_print_msg
 !ep1_hvf_ret:
     rts
+
+// Starlite (#359): light room + 2d8 light damage to CD_LIGHT monsters
+ep1_starlite:
+    jsr eff_light_room
+    ldx #HSTR_PIQ_LIGHT
+    jmp huff_print_msg
 
 // ============================================================
 // Monster Sleep / Haste / Slow / Evil Detect / Slowness / Mass Poly
@@ -1010,12 +984,21 @@ ep1_sleep_all:
 
 ep1_sleep_slot:
     stx ep1_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tay
+    lda cr_cdefense,y
+    and #CD_NO_SLEEP
+    bne !ep1_ss_immune+
     lda #20
     jsr rng_range
     clc
     adc #10
     ldx ep1_slot
     jmp monster_apply_sleep
+!ep1_ss_immune:
+    rts
 
 ep1_staff_haste:
     lda #1
@@ -1261,6 +1244,12 @@ ep1_wand_confuse:
     jsr eff_directional_monster
     bcc !ep1_wcf_done+
     jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tay
+    lda cr_cdefense,y
+    and #CD_NO_SLEEP
+    bne !ep1_wcf_immune+
     ldy #MX_FLAGS
     lda (zp_ptr0),y
     ora #MF_CONFUSED
@@ -1272,6 +1261,9 @@ ep1_wand_confuse:
     ldy #MX_CONFUSE
     sta (zp_ptr0),y
     ldx #HSTR_PIW_WAND_CLOUD
+    jmp huff_print_msg
+!ep1_wcf_immune:
+    ldx #HSTR_PIQ_NOTHING
     jmp huff_print_msg
 !ep1_wcf_done:
     rts

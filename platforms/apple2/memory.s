@@ -118,7 +118,14 @@
 .const A2_LC_ARG_COUNT_M1 = $02f2   // chunk byte count - 1 (0..15)
 .const A2_LC_ARG_DIR      = $02f3   // 0 = read Aux LC -> bounce, nonzero = write
 .const A2_LC_CALLER_X     = $02f4   // preserved caller X across LC HAL calls
+.const A2_LC_BANK2        = $00
+.const A2_LC_BANK1        = $08
+.const A2_LC_DIR_READ     = $00
+.const A2_LC_DIR_WRITE    = $01
 .const A2_LC_RECALL_BASE  = $d000   // Aux LC Bank 1: persistent recall[279] ($D000-$D45B)
+.const A2_LC_CATEXT_BASE  = $d000   // Aux LC Bank 2: preloaded A2.CATEXT ($D000-$D8B7)
+.const A2_CATEXT_RECORD_SIZE = 8
+.const A2_CATEXT_SIZE     = 279 * A2_CATEXT_RECORD_SIZE
 .const A2_LC_ITEM_CAT_BASE = $e000  // Aux LC High RAM: preloaded ITEM.CAT ($E000-$FD94)
 
 // Claimed Main $0301-$033B resident scratch (strictly > $0300, strictly < $033C).

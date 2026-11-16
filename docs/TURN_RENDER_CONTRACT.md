@@ -41,8 +41,9 @@ lifetime must therefore be traced separately.
 | `turn_action_redraw_pending` (`zp_dirty_count`) | pending action-owned redraw latch | map/monster mutation helpers | folded into `turn_scene_dirty`, then cleared by `turn_post_action` |
 | `vis_room_revealed` | visibility/full-viewport signal | LOS, room lighting, blindness changes | consumed by viewport redraw path |
 | `disk_prompt_redraw_pending` | persistent full-screen redraw request | `asset_load_ask_for_disk` (a failed required load's "Insert program disk" screen) | tested and cleared (`lsr`) at the top of each `main_loop` pass, after the level-up recalc and before the command is read, by `ui_view_redraw_gameplay_view`: the prompt can come after the pass's render (level-up recalc, a command that took no turn) |
-| `MF_VISIBLE` | current ordinary monster sight | production visibility update | renderer and ordinary targeting authority |
+| `MF_VISIBLE` | current ordinary monster sight (`CD_INVISIBLE` `$80` gated by `PFLAG_SEE_INVIS \| zp_eff_see_inv \| zp_eff_invis`) | production visibility update (`muvo_apply_visible`) | renderer, search-mode disturbance, and ordinary targeting authority |
 | `MF_DETECTED` | magical detection knowledge | timed Detect Monsters or immediate Detect Evil until its post-redraw clear | renderer, free-look, and monster dirty tracking; not ordinary targeting |
+| `mat_force_new_dirty` | per-move destination redraw override | `monster_try_step` when an unseen/phasing mover breaks a glyph, eats a `MF_VISIBLE \| MF_DETECTED` monster (`CM2_EATS_OTHER`), or picks up a floor item (`CM2_PICKS_UP`) | consumed and cleared by `mat_mark_move_dirty` / `mat_mark_tile_dirty_if_nonlocal` on the destination tile |
 
 Do not combine events merely because both trigger drawing. Their reset boundary
 and persistence class must match. A stale pulse cannot control a new command,
@@ -114,6 +115,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | TRN-009 | Accepted | Project maintainer, 2026-10-22 | HP regeneration follows pinned VMS Moria `regenhp` (`moria.inc`, constants `player$regen_*` in `constants.inc`) in Umoria's 16.16 fixed point (`game_run.cpp` `playerRegenerateHitPoints`, `config.cpp` `PLAYER_REGEN_*`; identical at the pinned revision): each consumed turn, unless poisoned or at max HP, HP.fraction += max HP x rate + 1442, where rate is 197 full or hungry, 98 weak, 33 faint, 0 starving (food counter 0, Moria8's starvation-damage condition), doubled while auto-resting (`auto_rest_active`, VMS `rest > 0`; the base is not doubled); reaching max HP clears the fraction. `turn_tick_regen` runs first in `turn_post_action`, so the rate uses the turn's starting hunger, poison and rest state as upstream does. The fraction is `zp_regen_frac` (high byte, ZP `$42`, saved with the game) plus resident `regen_frac_lo` (cleared on new game and load, not saved). Whole HP are added through `eff_heal` (`core/eff_heal.s`). Deviations: the low fraction byte is not saved (a load loses under 1/256 HP); `zp_eff_regen` no longer affects HP regeneration (VMS x1.5; no Moria8 item or spell sets that timer); Umoria's search-mode doubling is not applied (VMS doubles only for rest). Old saves reuse `$42` (the former countdown) as the fraction high byte: under 1 HP once. Max HP must stay at or below 42,410 (24-bit product; at most 255 whole HP per turn). | explicit maintainer direction 2026-10-22 ("fix the overflow ... the formula would be ideal") after `docs/AI_PLAYTEST_DESIGN.md` §14.5; pinned VMS/Umoria sources; C64 `test_effects.s` 1-5, 32-38 (hand-computed from the upstream constants), `test_turn.s` t1 (order) and t2, `test_main_loop.s` t47 (real auto-rest flag) | CON-indexed `regen_rate` countdown (1 HP per 8-50 turns), which read past its 16-entry table for CON 18/01 and above |
 | TRN-010 | Accepted | Project maintainer, 2026-10-22 | Poison damage follows pinned VMS Moria (`moria.inc` poisoned tick; Umoria `playerUpdatePoisonedState` identical): each turn the poison timer stays above 0, the player takes damage by `con_adj` (`player_con_hp_adj`, VMS `con_adj`): -4: 4 HP; -3 and -2: 3; -1: 2; 0 (CON 7-16): 1; 1-3 (CON 17 to 18/75 and 18/76-18/98): 1 HP on turns where `turn mod 2 = 0`; 4 (18/99+): 1 HP when `turn mod 3 = 0`, using the 16-bit turn counter before `turn_post_action` advances it. The expiry turn does no damage. Table `poison_damage` lives in `core/turn_data.s` (Apple IIe: resident main RAM, imported before the play slot). | explicit maintainer direction 2026-10-22 ("yes align the poison") after the M4 baseline found poison deaths (`docs/AI_PLAYTEST_DESIGN.md` §15); pinned VMS/Umoria sources; C64 `test_effects.s` 39-46 (production `turn_tick_effects` and `player_con_hp_adj`; mutation-checked), `test_turn.s` t9 | 1 HP every poisoned turn at any CON |
 | TRN-011 | Accepted | Project maintainer, 2026-10-22 | The last paralyzed turn follows pinned VMS Moria (`moria.inc`: the turn's counter update runs `paralysis := paralysis - 1`, then "Accept a command?" when `paralysis < 1`, then creatures move) and Umoria `playDungeon` (`playerUpdateParalysis`, then `executeInputCommands`, then `updateMonsters`): when the main loop finds `zp_eff_paralyze` = 1, it clears it, prints the paralysis-end message and reads a command; the command's own `turn_post_action` then runs the timers and the monsters. Paralysis above 1 still spends whole turns (`turn_post_action`, which counts it down). Before, the expiring turn ran `turn_post_action`, so monsters acted between expiry and the player's first command, and a paralyzing attacker (White Mushroom patch) could re-paralyze the player forever. | explicit maintainer direction 2026-10-22 ("yes") after the M4 baseline (`docs/AI_PLAYTEST_DESIGN.md` §15.2: 8 of 32 deaths); pinned VMS/Umoria sources; C64 `test_main_loop.s` t48 (real main-loop paralysis dispatch; fails on the old order) | expiring paralysis as a monster turn |
+| TRN-012 | Accepted | Project maintainer, 2026-11-16 (Phase 5 `CD_INVISIBLE` & `CM2_*` redraw rules) | (1) `muvo_apply_visible` (`core/monster.s`) clears `MF_VISIBLE` on `CD_INVISIBLE ($80)` creatures unless `(player_pflags & PFLAG_SEE_INVIS) \| zp_eff_see_inv \| zp_eff_invis` is nonzero; a creature newly gaining `MF_VISIBLE` turns off search mode (`player_search_mode_off`), whereas an unseen `CD_INVISIBLE` mover neither sets `MF_VISIBLE` nor triggers search-off until it attacks or becomes visible (`MF_DETECTED` continues to render under Detect Monsters per TRN-001). (2) `CM2_PHASE ($20)` creatures traverse interior walls/veins/rubble/doors without mutating tile or `door_state` bytes; when a visible or detected phasing creature steps into or out of a non-local viewport wall/door tile, `mat_mark_move_dirty` (`scene_render_mat_tile`) redraws both the vacated wall/door glyph and the newly occupied tile immediately. (3) When an unseen mover (`MF_VISIBLE == 0 && MF_DETECTED == 0`) mutates its destination tile by breaking a glyph, eating a `MF_VISIBLE \| MF_DETECTED` creature (`CM2_EATS_OTHER $40`), or removing a floor item (`CM2_PICKS_UP $80`), `monster_try_step` sets `mat_force_new_dirty` so `mat_mark_tile_dirty_if_nonlocal` still redraws the destination tile to erase the stale glyph, monster, or item glyph. | pinned VMS `creature.inc` (`update_mon`, `make_move`); C64 `test_monster_ai2.s` through production `monster_update_visibility_all` and `monster_ai_tick`; `make playtest-gate` | unconditional `MF_VISIBLE` in LOS; non-local redraw gated solely on mover `MF_VISIBLE \| MF_DETECTED` |
 
 ## Executable Enforcement
 
@@ -135,6 +137,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | The last paralyzed turn reads a command before monsters act (TRN-011) | C64 `test_main_loop.s` t48 through the real `main_loop` paralysis branch | `TEST_FILTER='main_loop' make test64`; other platforms compile the identical shared loop |
 | SHIFT+X weapon exchange (`cmd_exchange`, status-only tail): a swap consumes one turn (two in search mode, TRN-002), a refusal none | C64 `test_main_loop.s` t51-t53 and C128 `test_main_loop128.s` tests 35-37 (real key map and dispatch, stub trampoline); product smokes on all 7 ports check the turn counter | `TEST_FILTER='main_loop' make test64`; `TEST_FILTER='main_loop128\|exchange_product_smoke128' make test128` |
 | A disk prompt since the last pass rebuilds the gameplay view before the next command, and the request is cleared | C64 `test_main_loop.s` t54 and C128 `test_main_loop128.s` test 38 through the real `main_loop` (both fail without the redraw) | `TEST_FILTER='main_loop' make test64`; `TEST_FILTER='main_loop128' make test128-fast`; other platforms compile the identical shared loop and prompt |
+| `CD_INVISIBLE` visibility/search-off gate, `CM2_PHASE` wall/door non-mutation & non-local wall redraw, and `mat_force_new_dirty` redraw on unseen eat/pickup/glyph-break (TRN-012) | C64 `test_monster_ai2.s` through production `monster_update_visibility_all` and `monster_ai_tick` | `TEST_FILTER='monster_ai2' make test64`; all 7 ports compile the identical shared visibility/dirty producers |
 | Search two-turn dirty aggregation with dirty/clean and clean/dirty orderings | none | `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
 
@@ -166,3 +169,61 @@ One caller snapshot survives repeated failures and successful retry; a
 write observer checks restored core ZP at the cancel boundary, preserving the
 sound/dirty exceptions. These complete the affected retry, modal-re-entry and
 shared-render rows. Other ports retain the existing compiled Help path.
+
+## Phase 5 `CD_INVISIBLE` Visibility & `CM2_*` Non-Local Redraw Verification (2026-11-16)
+
+```text
+Problem and success criteria:
+  Keep terrain/monster glyph state converged across local and non-local redraws
+  when Phase 5 introduces invisible monsters (CD_INVISIBLE $80), wall/door-phasing
+  monsters (CM2_PHASE $20), monster-eating monsters (CM2_EATS_OTHER $40), and
+  item-pickup monsters (CM2_PICKS_UP $80).
+State being changed:
+  - core/monster.s::muvo_apply_visible: gates MF_VISIBLE and search-off disturbance
+    on !(cr_cdefense & CD_INVISIBLE) || PFLAG_SEE_INVIS || zp_eff_see_inv || zp_eff_invis.
+  - core/monster_ai.s: adds mat_force_new_dirty (cleared at start of monster_process_one
+    and after mat_mark_tile_dirty_if_nonlocal), raised when monster_try_step breaks a
+    glyph, eats a visible/detected monster, or removes a floor item; preserves old
+    wall/door terrain bytes across CM2_PHASE moves while letting mat_mark_move_dirty
+    restore vacated non-local wall/door glyphs via scene_render_mat_tile.
+  - core/monster_attack_effects.s (mae_steal) & core/monster_magic.s (MSF2_BLINK,
+    MSF2_TELE_SELF, MSF2_SUMMON_UNDEAD) & core/spell_effects.s (CD_LIGHT, CD_STONE):
+    increment zp_dirty_count on monster teleport/spawn/kill mutations.
+Search scope and terms:
+  rg across core/ and platforms/ for MF_VISIBLE, MF_DETECTED, mat_mark_move_dirty,
+  mat_mark_tile_dirty_if_nonlocal, scene_render_mat_tile, zp_dirty_count, vis_room_revealed.
+Relevant readers/writers found and known exclusions:
+  All 7 platform renderers consume MF_VISIBLE | MF_DETECTED and FLAG_OCCUPIED /
+  FLAG_HAS_ITEM identically through shared scene_render_mat_tile and viewport
+  redraw paths; mat_mark_move_dirty preserves mat_force_new_dirty across the
+  old-tile check via pha/pla so only the destination tile receives the override.
+Initialization, reset and persistence points:
+  mat_force_new_dirty is cleared per-monster in monster_process_one and at exit of
+  mat_mark_tile_dirty_if_nonlocal (transient scratch, not saved).
+Affected production sequence through the changed transition:
+  turn_post_action -> monster_ai_tick -> monster_process_one -> monster_try_step
+  -> mat_mark_move_dirty -> mat_mark_tile_dirty_if_nonlocal -> scene_render_mat_tile
+  -> mat_scene_dirty promoted into turn_scene_dirty -> main_loop monster_update_visibility_all
+  and local/full viewport render.
+Contract decision or selected upstream oracle with source locations:
+  TRN-001, MON-001, MON-034, MON-035, and TRN-012 above; pinned VMS creature.inc
+  update_mon and make_move.
+Intentional Moria8 deviations:
+  None to visibility or redraw convergence.
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  8-bit flag masks ($80 CD_INVISIBLE, $08 MF_VISIBLE, $10 MF_DETECTED) and boolean/count
+  scratch mat_force_new_dirty.
+RNG reduction and bias, if applicable:
+  N/A for visibility and dirty-tile tracking.
+Affected platforms, overlays, banks and owners:
+  Shared core/monster.s (Default resident on all 7 ports) and core/monster_ai.s.
+Required production-path tests:
+  C64 test_monster_ai2.s (invisible sight, see-invis equipment/timers, Detect Monsters
+  MF_DETECTED, CM2_PHASE wall preservation & redraw, CM2_EATS_OTHER & CM2_PICKS_UP
+  mat_force_new_dirty) plus 7-port + 5-cartridge make playtest-gate.
+Known behavior explicitly out of scope:
+  Detected-only free-look unit test (TRN-001).
+Unresolved uncertainty and risk:
+  None.
+```
+

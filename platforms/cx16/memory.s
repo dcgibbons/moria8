@@ -22,8 +22,9 @@
 //   Banks 1-2:   198x66 live map (virtual $2000-$530B)
 //   Bank 3:      Cx16AuxData (virtual $6000-$7FFF)
 //   Bank 4:      Cx16HuffData (virtual $8000-$9FFF)
-//   Bank 5:      Reserved for Phase 5 MONSTER.CAT extension fields (reclaimed from MONSTER.DB.1)
-//   Banks 6-8:   Reserved for extended catalog / warm slots (reclaimed from MONSTER.DB.2..4)
+//   Bank 5:      MONSTER.EXT extended monster catalog ($A000-$A8B7, 279 x 8 B)
+//   Bank 6:      ITEM.CAT item/ego/flavor catalog ($A000-$BD94)
+//   Banks 7-8:   Reserved for extended catalog / warm slots (reclaimed from MONSTER.DB.3..4)
 //   Banks 9-21:  13 code overlays (OVL_STARTUP..OVL_TITLE = IDs 1..13)
 //   Bank 22:     TITLE art stream
 //   Bank 23:     MONSTER.CAT monster catalog fields + level index (names in Bank 4)

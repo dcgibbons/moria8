@@ -9,9 +9,11 @@
 
 .label cart_catalog_count = CATALOG_COUNT
 
-cat_record: .fill CATALOG_RECORD_SIZE, 0
-.assert "Atari catalog copy buffer stays below $4000", cat_record + CATALOG_RECORD_SIZE <= $4000, true
-.assert "Atari catalog offsets fit 16 bits", CATALOG_COUNT * CATALOG_RECORD_SIZE <= $6000, true
+cat_record: .byte $ff, $ff                     // Cold sentinel != 0..278
+            .fill A8_CATALOG_RECORD_SIZE - 2, 0
+.label cat_ext_record = cat_record + CATALOG_RECORD_SIZE
+.assert "Atari catalog copy buffer stays below $4000", cat_record + A8_CATALOG_RECORD_SIZE <= $4000, true
+.assert "Atari catalog offsets fit 16 bits", CATALOG_COUNT * A8_CATALOG_RECORD_SIZE <= $6000, true
 .assert "Atari catalog IDs have at most one high bit", CATALOG_COUNT <= 512, true
 .assert "Multiply scratch is contiguous", zp_math_tmp1 - zp_math_a, 3
 
@@ -20,7 +22,7 @@ catalog_boot_load:
     clc
     rts
 
-// catalog_fetch_record — Read creature cat_id_lo/hi's 49-byte record from
+// catalog_fetch_record — Read creature cat_id_lo/hi's 57-byte record from
 // CART_ASSET_CATALOG into cat_record, preserving caller zp_math_a..zp_math_tmp1.
 // Clobbers: A, X, Y
 catalog_fetch_record:
@@ -42,14 +44,14 @@ catalog_fetch_record:
     bpl !save_math-
 
     lda cat_id_lo
-    ldx #CATALOG_RECORD_SIZE
+    ldx #A8_CATALOG_RECORD_SIZE
     jsr math_multiply
     sta cart_offset
     lda zp_math_b
     ldx cat_id_hi
     beq !high_ready+
     clc
-    adc #CATALOG_RECORD_SIZE
+    adc #A8_CATALOG_RECORD_SIZE
 !high_ready:
     sta cart_offset + 1
 

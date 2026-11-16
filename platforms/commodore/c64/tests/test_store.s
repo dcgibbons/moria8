@@ -39,13 +39,9 @@ test_exit_trampoline:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-.segment TestCreateOverlay
 #import "../../../../core/ui_status.s"
-.segment Default
 #import "../../../../core/ui_help_clear.s"
-.segment Default
 #import "../../../../core/stat_display.s"
-.segment Default
 .segment TestCreateOverlay
 player_create:
     brk
@@ -67,19 +63,15 @@ player_create:
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
 #import "item_cat_resident_helper.s"
-.segment Default
 #import "../../../../core/special_rooms.s"
-.segment Default
-.segment TestCreateOverlay
 #import "../../../../core/ego_items.s"
-.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
-.segment Default
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
-#import "../../../../core/scene_mat_tile.s"
 .segment Default
+#import "../../../../core/scene_mat_tile.s"
 // Monster spells, the player's magic, missiles, sight lines, movement and
 // melee are not exercised by the stores: parked out of reach, the runner's
 // tripwire (tools/parked_tripwire.py) failing the suite if any is called.
@@ -87,15 +79,27 @@ player_create:
 // item_cat_data now owns the $E100 window (item_cat_kernal_helper.s), so
 // monster_ai and combat are link stubs below and the rest share $D000.
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/los_trace.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 #import "../../../../core/projectile.s"
 #import "../../../../core/dungeon_los.s"
-.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
+player_cast_spell:
+player_pray:
+pm_consume_mana:
+pm_pick_visible_spell:
+pm_select_book:
+pm_setup_active_tables:
+magic_recalc_mana:
+magic_check_new_spells:
+    brk
 #import "../../../../core/player_move.s"
+.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -168,7 +172,11 @@ cmb_period: .byte 0
 #import "../../../../core/store.s"
 #import "../../../../core/ui_store.s"
 .segment TestCreateOverlay
-#import "../../../../core/ui_help.s"
+ui_help_show_paged:
+ui_help_display:
+help_draw_line:
+help_draw_hborder:
+    brk
 .segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
@@ -1796,8 +1804,9 @@ test_start:
     sta tc_results + 45
 
     // ============================================================
-    // Test 47: stocking identifies the item kind, as VMS store_carry calls
-    // identify() (desc.inc: object_ident := true), so the store shows names.
+    // Test 47: stocking identifies the item kind on both catalog pages, as
+    // VMS store_carry calls identify() (desc.inc: object_ident := true), and
+    // records ITEM_PAGE_BIT in si_meta_hi for Page-1 store choices.
     // ============================================================
     ldx #ID_KNOWN_BYTES - 1
     lda #0
@@ -1805,13 +1814,20 @@ test_start:
     sta id_known_bits,x
     dex
     bpl !t47_clr_known-
-    ldx #STORE_MAX_ITEMS - 1
+    sta t44_food                // OR of stocked item_cur_page bits
+    ldx #STORE_MAX_ITEMS * 5 - 1
     lda #FI_EMPTY
 !t47_clr_store:
     sta si_item_id,x
     dex
     bpl !t47_clr_store-
     lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+    lda #3
+    sta zp_store_idx
+    jsr store_restock_one
+    lda #4
     sta zp_store_idx
     jsr store_restock_one
     lda #$01
@@ -1821,6 +1837,10 @@ test_start:
     ldx si_item_id,y
     cpx #FI_EMPTY
     beq !t47_next+
+    :LoadStorePageY()
+    sta item_cur_page
+    ora t44_food
+    sta t44_food
     sty t44_left
     jsr id_known_test
     ldy t44_left
@@ -1830,27 +1850,52 @@ test_start:
     sta tc_results + 46
 !t47_next:
     iny
-    cpy #STORE_MAX_ITEMS
+    cpy #STORE_MAX_ITEMS * 5
     bcc !t47_loop-
+    lda t44_food
+    cmp #ITEM_PAGE_BIT
+    beq !t47_done+
+    lda #$00
+    sta tc_results + 46
+!t47_done:
 
     // ============================================================
-    // Test 48: the Temple and Alchemy shop stock from VMS store_choice
-    // (values.inc, inventory_init) mapped to Moria8 items: 200 picks each
-    // stay in the mapped set, and Word of Recall (2 of 23 Temple, 3 of 23
-    // Alchemy entries) turns up. Phase Door is two of the Alchemy shop's
-    // entries, as VMS's two of 26: with one it was stocked about half as
-    // often (2026-11-16).
+    // Test 48: General Store, Temple, and Alchemy shop stock from full 26-entry
+    // Phase 4 VMS store_choice tables (values.inc, inventory_init) across
+    // Page 0 and Page 1: 200 picks each stay in the store's exact (page, id)
+    // set, General Store picks Page-0 Cloak (#82), Temple/Alchemy pick both
+    // Page-0 Word of Recall (#32) and Page-1 choices, and Phase Door is two of
+    // the Alchemy shop's 26 entries (values.inc:1679, inventory_init 61).
     // ============================================================
     lda #$01
     sta tc_results + 47
+    lda #0
+    ldx #<t48_general_set
+    ldy #>t48_general_set
+    jsr t48_check_store
+    lda t48_p1_seen
+    beq !t48_gen_ok+
+    lda #$00
+    sta tc_results + 47
+!t48_gen_ok:
     lda #3
     ldx #<t48_temple_set
     ldy #>t48_temple_set
     jsr t48_check_store
+    lda t48_p1_seen
+    bne !t48_tem_ok+
+    lda #$00
+    sta tc_results + 47
+!t48_tem_ok:
     lda #4
     ldx #<t48_alchemy_set
     ldy #>t48_alchemy_set
     jsr t48_check_store
+    lda t48_p1_seen
+    bne !t48_alc_ok+
+    lda #$00
+    sta tc_results + 47
+!t48_alc_ok:
     ldx #SRO_ALCHEMY_CHOICES - 1
     ldy #0
 !t48_pd:
@@ -2114,13 +2159,21 @@ test_start:
     sta tc_results + 53
 
     // ============================================================
-    // Test 55: store counts (VMS values.inc store templates; ammunition
-    // VMS 7d6 averaged at Umoria's 24-item store cap, M5d 2026-10-26):
-    // Arrow, Bolt and Rock 24, Ration of Food 5, Phase Door 2, Dagger 1,
-    // and X preserved
+    // Test 55: store counts across Page 0 and Page 1 (VMS values.inc store
+    // templates; ammunition VMS 7d6 averaged at Umoria's 24-item store cap,
+    // M5d 2026-10-26): Arrow/Bolt/Rock/Iron Shot 24, Ration/Hard Biscuit/
+    // Beef Jerky 5, Fine Ale 3, Phase Door/Page-1 Boldness/Slow Poison/
+    // Treasure Detection/Blessing/Detect Invisible 2, Fine Wine/Cloak/Dagger/
+    // Page-1 Restore/Enchant Weapon To-Hit & To-Dam 1, and X preserved.
     // ============================================================
     ldy #0
 !t55_loop:
+    lda #0
+    cpy #t55_p1_ids - t55_ids
+    bcc !t55_set_page+
+    lda #ITEM_PAGE_BIT
+!t55_set_page:
+    sta item_cur_page
     ldx t55_ids,y
     sty t28_slot
     jsr sro_stock_qty
@@ -2174,8 +2227,28 @@ t56_ids: .byte 24, 40, 41, 42, 75, 76, 93, 94, 95
 t56_lo:  .byte <400, <600, <800, <400, <358, <430, <376, <304, <340
 t56_hi:  .byte >400, >600, >800, >400, >358, >430, >376, >304, >340
 
-t55_ids: .byte 52, 53, 54, 15, 136, 2
-t55_qty: .byte 24, 24, 24, 5, 2, 1
+t55_ids:
+    .byte 52, 53, 54, ITEM_TYPE_AMMO_IRON_SHOT
+    .byte 15, ITEM_TYPE_HARD_BISCUIT, ITEM_TYPE_BEEF_JERKY, ITEM_TYPE_FINE_ALE
+    .byte ITEM_TYPE_FINE_WINE, 136, ITEM_TYPE_CLOAK, 2
+t55_p1_ids:
+    .byte ITEM_TYPE_POT_BOLDNESS - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_SLOW_POISON - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_TREASURE_DETECT - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_BLESSING - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_DETECT_INVIS - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_STR - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_WIS - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_LIFE - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_ENCH_WEAP_HIT - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_ENCH_WEAP_DAM - ITEM_PAGE_SIZE
+    .byte 15
+t55_qty:
+    .byte 24, 24, 24, 24
+    .byte 5, 5, 5, 3
+    .byte 1, 2, 1, 1
+    .byte 2, 2, 2, 2, 2
+    .byte 1, 1, 1, 1, 1, 1
 
 // t50_put — Store slot X = item A, Y of them, 7 turns of fuel, no bonuses,
 // identified.
@@ -2193,33 +2266,48 @@ t50_put:
     sta si_meta,x
     rts
 
-// t48_check_store — A = store, X/Y = 0-terminated set of allowed item IDs.
-// Clears tc_results+47 unless 200 picks are all in the set and include Word
-// of Recall (item 32).
+// t48_check_store — A = store, X/Y = allowed set:
+//   <Page-0 slot_lo bytes (first byte is required sentinel)>, $FF,
+//   <Page-1 slot_lo bytes>, 0.
+// Clears tc_results+47 unless 200 picks are all in the store's (page, id) set
+// and include the first Page-0 sentinel item. Sets t48_p1_seen to the number
+// of Page-1 picks observed.
 t48_check_store:
     sta zp_store_idx
     stx zp_ptr1
     sty zp_ptr1_hi
     lda #0
     sta t48_recall
+    sta t48_p1_seen
     lda #200
     sta t44_left
 !t48_pick:
     jsr store_pick_item
-    cmp #32
-    bne !t48_scan+
-    inc t48_recall
-!t48_scan:
+    sta t44_id
     ldy #0
-!t48_member:
-    cmp (zp_ptr1),y
-    beq !t48_next+
-    pha
+    lda item_cur_page
+    beq !t48_p0_pick+
+    cmp #ITEM_PAGE_BIT
+    bne !t48_fail+
+    inc t48_p1_seen
+!t48_skip_p0:
     lda (zp_ptr1),y
-    tax
-    pla
-    cpx #0
+    iny
+    cmp #$FF
+    bne !t48_skip_p0-
+    beq !t48_member+
+!t48_p0_pick:
+    lda t44_id
+    cmp (zp_ptr1),y
+    bne !t48_member+
+    inc t48_recall
+!t48_member:
+    lda (zp_ptr1),y
     beq !t48_fail+
+    cmp #$FF
+    beq !t48_fail+
+    cmp t44_id
+    beq !t48_next+
     iny
     bne !t48_member-
 !t48_next:
@@ -2233,15 +2321,35 @@ t48_check_store:
 !t48_done:
     rts
 
-t48_recall: .byte 0
-// Temple: Prayer books 1-4, Remove Curse, Restoration, Cure Light/Serious/
-// Critical Wounds, Heroism, Word of Recall, Neutralize Poison, Morningstar,
-// Mace, War Hammer.
-t48_temple_set:  .byte 48, 58, 59, 60, 33, 97, 17, 25, 100, 27, 32, 126, 73, 5, 72, 0
-// Alchemy: Enchant Weapon/Armor, Identify, Light, Magic Mapping, Object
-// Detection, Recharging, Restoration, Word of Recall, Neutralize Poison,
-// Phase Door (VMS store_choice; added 2026-10-25).
-t48_alchemy_set: .byte 34, 35, 21, 20, 102, 103, 104, 97, 32, 126, ITEM_TYPE_SCR_PHASE_DOOR, 0
+t48_recall:  .byte 0
+t48_p1_seen: .byte 0
+// General Store (all Page 0; Cloak #82 required sentinel first):
+t48_general_set:
+    .byte ITEM_TYPE_CLOAK, 15, ITEM_TYPE_HARD_BISCUIT, ITEM_TYPE_BEEF_JERKY
+    .byte ITEM_TYPE_FINE_ALE, ITEM_TYPE_FINE_WINE, 61, 13, 14, 135, 62, 63
+    .byte $FF, 0
+// Temple (Page 0 with Word of Recall #32 first, then $FF, then Page 1):
+t48_temple_set:
+    .byte 32, 48, 58, 59, 60, 33, 17, 25, 100, 27, 126, 73, 5, 72, $FF
+    .byte ITEM_TYPE_SCR_BLESSING - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_BOLDNESS - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_WIS - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_LIFE - ITEM_PAGE_SIZE
+    .byte 0
+// Alchemy (Page 0 with Word of Recall #32 first, then $FF, then Page 1):
+t48_alchemy_set:
+    .byte 32, 35, 21, 20, ITEM_TYPE_SCR_PHASE_DOOR, 102, 103, 104, $FF
+    .byte ITEM_TYPE_SCR_ENCH_WEAP_HIT - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_ENCH_WEAP_DAM - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_TREASURE_DETECT - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_SCR_DETECT_INVIS - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_STR - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_INT - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_DEX - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_CON - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_RESTORE_CHR - ITEM_PAGE_SIZE
+    .byte ITEM_TYPE_POT_SLOW_POISON - ITEM_PAGE_SIZE
+    .byte 0
 
 // t44_fill_store0 — A = item id for slots 0..X-1 of store 0, rest empty.
 t44_fill_store0:
@@ -2498,6 +2606,7 @@ reset_haggle_fixture:
     sta si_to_dam,x
     sta si_to_ac,x
     sta si_meta,x
+    sta si_meta_hi,x
     dex
     bpl !clr_store_rest-
 

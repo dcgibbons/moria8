@@ -30,10 +30,6 @@
 .const A2_LC_RO_BANK2      = $c080   // Bank 2, Read RAM, Write Protect
 .const A2_LC_ROM_BANK2     = $c082   // Bank 2, Read ROM, Write Protect
 
-.const A2_LC_BANK2         = $00
-.const A2_LC_BANK1         = $08
-.const A2_LC_DIR_READ      = $00
-.const A2_LC_DIR_WRITE     = $01
 .const A2_LC_VECTOR_BASE   = $fffa
 .const A2_LC_MAX_DATA_END  = $fff9   // $FFFA-$FFFF reserved for Aux vectors
                                 // mapping verified against ProDOS driver

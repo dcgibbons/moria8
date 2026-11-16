@@ -426,12 +426,14 @@ run_boot_title_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -503,18 +505,19 @@ run_new_game_to_town_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -587,18 +590,19 @@ run_dungeon_entry_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -658,7 +662,8 @@ run_catalog_spawn_smoke() {
     fi
     local main_vs="$DUNGEON_ENTRY_MAIN_VS" sym
     local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
-    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi; do
+    local cat_id_lo cat_id_hi catalog_fetch_ext cat_ext_record
+    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi cat_id_lo cat_id_hi catalog_fetch_ext cat_ext_record; do
         printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
         if [ -z "${!sym}" ]; then
             echo "FAIL (missing $sym in $main_vs)"
@@ -668,6 +673,9 @@ run_catalog_spawn_smoke() {
     done
     local mon_file="$PLUS4_TEST_OUT/$name.mon" log_file="$PLUS4_TEST_OUT/$name.log"
     local check_log="$PLUS4_TEST_OUT/$name.check.log"
+    local ext_dump="$PLUS4_TEST_OUT/$name.ext.bin"
+    local cfe_lo="${catalog_fetch_ext:2:2}" cfe_hi="${catalog_fetch_ext:0:2}"
+    rm -f "$ext_dump"
     : > "$log_file"
     {
         # The town's items first, then DL1's.
@@ -680,19 +688,57 @@ run_catalog_spawn_smoke() {
         printf 'm %s %04x\n' "$cr_name_hi" $(( 16#$cr_name_hi + 31 ))
         echo "bank ram"
         echo "m d800 dbff"
+        echo "bank cpu"
+        # Exercise disk catalog_fetch_ext across sector & 9-bit ID boundaries (0, 30, 31, 255, 256, 278),
+        # copying each 8-byte cat_ext_record slice to $C7A0 + k*8 in unused resident headroom (< $C800).
+        printf 'f c7e0 c7e5 20 %s %s 4c e3 c7\n' "$cfe_lo" "$cfe_hi"
+        local idx=0 cid cid_lo cid_hi dst_addr
+        for cid in 0 30 31 255 256 278; do
+            cid_lo=$(printf '%02x' $(( cid & 255 )))
+            cid_hi=$(printf '%02x' $(( cid >> 8 )))
+            dst_addr=$(printf '%04x' $(( 0xc7a0 + idx * 8 )))
+            printf 'f %s %s %s\n' "$cat_id_lo" "$cat_id_lo" "$cid_lo"
+            printf 'f %s %s %s\n' "$cat_id_hi" "$cat_id_hi" "$cid_hi"
+            echo "r pc=c7e0"
+            echo "until \$c7e3"
+            printf 't %s %04x %s\n' "$cat_ext_record" $(( 16#$cat_ext_record + 7 )) "$dst_addr"
+            idx=$(( idx + 1 ))
+        done
+        echo "bsave \"$ext_dump\" 0 c7a0 c7cf"
         echo "quit"
     } > "$mon_file"
-    "$VICE" -config "$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")" \
+    "$VICE" -config "$(python3 -B "$REPO_ROOT/tools/vice_config.py" "$VICE")" \
         -default +saveres +autostart-delay-random -console -nativemonitor -warp +sound -sounddev dummy \
         -drive8truedrive -drive8type 1541 -attach8rw -8 "$DUNGEON_ENTRY_BOOT_D64" \
         +busdevice9 -drive9type 0 +busdevice10 -drive10type 0 \
         -autostart "$DUNGEON_ENTRY_BOOT_D64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 900000000 +remotemonitor +binarymonitor > /dev/null 2>&1
-    if ! python3 ../c128/tests/check_catalog128.py "$log_file" d800 5 >"$check_log" 2>&1; then
+    if ! python3 -B ../c128/tests/check_catalog128.py "$log_file" d800 5 >"$check_log" 2>&1; then
         echo "FAIL (catalog species check)"
         tail -3 "$check_log" | sed 's/^/    /'
         echo "    Log: $log_file"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    if ! python3 -B - "$REPO_ROOT" "$ext_dump" <<'PY' >>"$check_log" 2>&1
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "tools"))
+import catalog_disk  # noqa: E402
+
+dump = Path(sys.argv[2]).read_bytes()
+recs = catalog_disk.ext_records()
+ids = (0, 30, 31, 255, 256, 278)
+expected = b"".join(recs[i] for i in ids)
+if dump != expected:
+    raise SystemExit(f"MONSTER.EXT disk fetch mismatch: got {dump.hex()} want {expected.hex()}")
+PY
+    then
+        echo "FAIL (MONSTER.EXT disk fetch check)"
+        tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         return
     fi
@@ -735,18 +781,19 @@ run_exchange_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -827,18 +874,19 @@ run_chest_open_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -916,18 +964,19 @@ run_balrog_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1000,18 +1049,19 @@ run_dungeon_ascent_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1083,18 +1133,19 @@ run_disarm_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1169,6 +1220,7 @@ run_overlay_load_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
@@ -1249,6 +1301,7 @@ run_retirement_royal_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
@@ -1327,12 +1380,14 @@ run_wand_selector_product_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1450,18 +1505,19 @@ run_disk_setup_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1541,18 +1597,19 @@ run_disk_setup_missing_save_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1607,18 +1664,19 @@ plus4_load_written_save_check() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1692,18 +1750,19 @@ run_save_write_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1755,7 +1814,7 @@ run_save_write_product_smoke() {
             local save_seq="$out_dir/$name.the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "the.game,s" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 -B tests/check_save_secondary_plus4.py "$save_seq" 0x20 >>"$build_log" 2>&1; then
+                    || ! python3 -B tests/check_save_secondary_plus4.py "$save_seq" 0x21 >>"$build_log" 2>&1; then
                 echo "FAIL: $name (secondary weapon not in the written save)"
                 tail -3 "$build_log"
                 FAIL=$((FAIL + 1))
@@ -1813,18 +1872,19 @@ run_save_media_fail_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -1929,18 +1989,19 @@ run_change_save_drive_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2035,18 +2096,19 @@ run_single_drive_save_return_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2135,18 +2197,19 @@ run_single_drive_fresh_save_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2242,18 +2305,19 @@ run_single_drive_fresh_save_no_init_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2345,18 +2409,19 @@ run_single_drive_save_wrong_media_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2426,18 +2491,19 @@ run_single_drive_load_wrong_media_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2511,18 +2577,19 @@ run_disk_setup_single_drive_return_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2606,18 +2673,19 @@ run_load_wrong_media_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2704,18 +2772,19 @@ run_load_resume_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2802,18 +2871,19 @@ run_death_hiscore_single_drive_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -2900,18 +2970,19 @@ run_single_drive_load_return_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -3008,18 +3079,19 @@ run_load_then_save_new_empty_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -3136,18 +3208,19 @@ run_single_drive_load_corrupt_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -3240,18 +3313,19 @@ run_load_missing_savefile_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
         -write "$smoke_plus4/item.cat" "item.cat" \
         -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
@@ -3320,9 +3394,10 @@ run_chest_open_product_smoke
 run_balrog_product_smoke
 run_dungeon_ascent_smoke
 # Nest gold calls random_floor_in_room in the dungeon-generation overlay after
-# pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
-check_static_contract "nest_gold_restores_generation_overlay_contract" "../../../build/trampolines/plus4_trampolines.inc" \
-    "tramp_spawn_nest_gold:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold"
+# item_spawn_level_gen has loaded the chest overlay (M5b round 33 code
+# corruption), then restores the caller's overlay before returning.
+check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
+    "tramp_spawn_nest_gold:|||lda #RT_NEST|||jsr find_special_room|||lda current_overlay|||pha|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold|||pla|||jsr overlay_load_disk|||sta current_overlay"
 # Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
 # too, if anything replaced it after generation.
 check_static_contract "special_room_monsters_restore_generation_overlay_contract" "../../../build/trampolines/plus4_trampolines.inc" \

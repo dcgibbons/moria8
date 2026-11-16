@@ -11,6 +11,7 @@ import struct
 import sys
 import tempfile
 
+import build_catalog
 import catalog_disk
 import make_plus4_magic
 
@@ -78,6 +79,8 @@ def check(crt: Path, source: Path) -> None:
     assert symbols["cart_reader_start"] >= 0x1001
     assert symbols["cart_reader_end"] <= 0x8000
     assert symbols["cat_record"] + 49 <= 0x8000
+    assert symbols["cat_ext_record"] + 8 <= 0x8000
+    assert "catalog_fetch_ext" in symbols
     assert symbols["exit_trampoline"] < 0x8000
     assert symbols["program_end"] <= 0xC800
     assert symbols["banked_code_end"] <= 0xFC00
@@ -94,6 +97,8 @@ def check(crt: Path, source: Path) -> None:
         "item_cat_idx_data",
         "item_cat_sec_buf",
         "icr_sec_idx",
+        "cfr_ext_name",
+        "cat_ext_sector_track",
     ):
         assert dead not in symbols, f"Dead disk-only symbol present: {dead}"
 
@@ -112,6 +117,7 @@ def check(crt: Path, source: Path) -> None:
         contract["CART_ASSET_LEGAL_NOTICE"]: None,
         contract["CART_ASSET_LEGAL_OFFER"]: None,
         contract["CART_ASSET_ITEM_CATALOG"]: None,
+        contract["CART_ASSET_CATALOG_EXT"]: None,
     }
     names.update({
         contract["CART_ASSET_" + symbol]: f"ovl.{name}"
@@ -140,14 +146,20 @@ def check(crt: Path, source: Path) -> None:
 
         if asset_id == contract["CART_ASSET_INDEX"]:
             arrays = catalog_disk.byte_arrays((catalog_disk.CATALOG / "catalog_index.s").read_text())
+            bitmap = arrays["cat_available"] if "cat_available" in arrays else arrays["cat_undead"]
             expected = (
                 make_plus4_magic.CATALOG_IDX_LOAD.to_bytes(2, "little")
-                + bytes(arrays["cat_level_raw"] + arrays["cat_level_playable"] + arrays["cat_available"])
+                + bytes(arrays["cat_level_raw"] + arrays["cat_level_playable"] + bitmap)
             )
         elif asset_id == contract["CART_ASSET_CATALOG"]:
             expected = b"\0\0" + b"".join(catalog_disk.records())
         elif asset_id == contract["CART_ASSET_ITEM_CATALOG"]:
             expected = b"\0\0" + catalog_disk.item_catalog_bytes()
+        elif asset_id == contract["CART_ASSET_CATALOG_EXT"]:
+            ext_rows = b"".join(catalog_disk.ext_records())
+            assert len(ext_rows) == 2232
+            assert ext_rows == build_catalog.ext_row_major_bytes(build_catalog.load_spec()["creatures"])
+            expected = b"\0\0" + ext_rows
         elif asset_id in (contract["CART_ASSET_LEGAL_NOTICE"], contract["CART_ASSET_LEGAL_OFFER"]):
             doc_name = "LICENSE" if asset_id == contract["CART_ASSET_LEGAL_NOTICE"] else "SOURCE-OFFER"
             doc = (make_plus4_magic.ROOT / "data" / doc_name).read_bytes()

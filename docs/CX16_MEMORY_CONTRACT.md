@@ -38,38 +38,41 @@ Each 8 KB RAM bank (`$A000-$BFFF`) has a dedicated, non-overlapping owner:
 | `2` | `$4000-$530B` | Live Map High Half (4,876 B) | Remaining 4,876 B of the 198×66 dungeon map (`MAP_END = $530B`) |
 | `3` | `$6000-$7FFF` | `CX16.AUXDATA` (`Cx16AuxData`) | Preloaded at boot: item name streams, `it_unknown_idx`, `key_map_petscii`/`key_map_cmd`, store inventory/runtime, recall arrays, spell tables/names, ego suffix slots |
 | `4` | `$8000-$9FFF` | `CX16.HUFFDATA` (`Cx16HuffData`) | Preloaded at boot: Huffman tree and compressed string corpus, then the monster catalog's Huffman-coded names |
-| `5` | `$A000-$BFFF` | Reserved (`CX16_BANK_CATALOG_EXT = 5`) | Reclaimed from obsolete `MONSTER.DB.1` while `HAL_PLATFORM_MONSTER_CATALOG` is set; reserved for Phase 5 `MONSTER.CAT` extension fields |
+| `5` | `$A000-$BFFF` | `MONSTER.EXT` (`CX16_BANK_CATALOG_EXT = 5`) | Preloaded at boot: Phase 5 extended monster catalog (`279 × 8 B = 2,232 / 8,192 B`, `$A000-$A8B7`, `5,960 B` free), read via `$00`-preserving `catalog_fetch_ext` (`platforms/cx16/monster_catalog_bank.s`) |
 | `6` | `$A000-$BFFF` | `ITEM.CAT` (`CX16_BANK_ITEM_CAT = 6`) | Preloaded at boot: `'ITM2'` item/ego/flavor catalog (`7,573 / 8,192 B`, `$A000-$BD94`, `619 B` free), read via Low-RAM `$00`-preserving helpers (`platforms/cx16/item_cat_bank.s`) |
-| `7-8` | `$A000-$BFFF` | Reserved (`CX16_BANK_EXT_BASE..END = 7..8`) | Reclaimed from obsolete `MONSTER.DB.3..4`; reserved for extended catalog / warm slots |
-| `9` | `$A000-$BFFF` | `OVL.START` (`OVL_STARTUP = 1`) | Preloaded at boot: character creation & item ID init |
+| `7-8` | `$A000-$BFFF` | Reserved (`CX16_BANK_EXT_BASE..END = 7..8`) | Reclaimed from obsolete `MONSTER.DB.3..4`; free extended HiRAM banks (`16 KB`) |
+| `9` | `$A000-$BFFF` | `OVL.START` (`OVL_STARTUP = 1`) | Preloaded at boot: character creation, `player_chargen_cold.s`, & item ID init |
 | `10` | `$A000-$BFFF` | `OVL.TOWN` (`OVL_TOWN = 2`) | Preloaded at boot: town stores UI (`store.s`, `ui_store.s`; Home moved to `OVL.HOME` under `HOME_OVERLAY_SEPARATE`) |
 | `11` | `$A000-$BFFF` | `OVL.DEATH` (`OVL_DEATH = 3`) | Preloaded at boot: death/retirement/score & heavy area spells |
 | `12` | `$A000-$BFFF` | `OVL.GEN` (`OVL_DUNGEON_GEN = 4`) | Preloaded at boot: town & dungeon generator, special rooms, `item_spawn_level_gen` |
-| `13` | `$A000-$BFFF` | `OVL.HELP` (`OVL_HELP = 5`) | Preloaded at boot: 80-col help, inventory, and equipment screens |
-| `14` | `$A000-$BFFF` | `OVL.UI` (`OVL_UI = 6`) | Preloaded at boot: character sheet & symbol identify UI |
-| `15` | `$A000-$BFFF` | `OVL.ITEMS` (`OVL_ITEMS = 7`) | Preloaded at boot: item actions, `item_pickup`, wear/takeoff/eat/quaff, bash/disarm/tunnel |
-| `16` | `$A000-$BFFF` | `OVL.SPELL` (`OVL_SPELL = 8`) | Preloaded at boot: spell/prayer selection, execution, `eff_wall_to_mud`, level-up; Find Traps and Destroy Traps/Doors (`core/spell_effects_overlay.s`), whose only callers are its dispatch tables |
-| `17` | `$A000-$BFFF` | `OVL.MODAL` (`OVL_MODAL_MISC = 9`) | Preloaded at boot: monster recall, wizard UI, royal screen, look, `re_equip`, `run_initialize_impl` |
-| `18` | `$A000-$BFFF` | `OVL.CHEST` (`OVL_CHEST = 10`) | Preloaded at boot: chest open/disarm/bash, door jam/pick, store restock |
+| `13` | `$A000-$BFFF` | `OVL.HELP` (`OVL_HELP = 5`) | Preloaded at boot: 80-col help, inventory/equipment, `door_open_close_cold.s`, `item_drop_cold.s`, & `mae_cold_body` (zero-HP cold melee attack effects) |
+| `14` | `$A000-$BFFF` | `OVL.UI` (`OVL_UI = 6`) | Preloaded at boot: character sheet, `player_bg_draw_cold.s`, & symbol identify UI |
+| `15` | `$A000-$BFFF` | `OVL.ITEMS` (`OVL_ITEMS = 7`) | Preloaded at boot: item actions, `item_pickup`, wear/takeoff/eat/quaff, bash/disarm/tunnel (`7,200 / 8,192 B`, `992 B` free) |
+| `16` | `$A000-$BFFF` | `OVL.SPELL` (`OVL_SPELL = 8`) | Preloaded at boot: spell/prayer selection, execution, `eff_wall_to_mud`, level-up; Find Traps and Destroy Traps/Doors (`core/spell_effects_overlay.s`) |
+| `17` | `$A000-$BFFF` | `OVL.MODAL` (`OVL_MODAL_MISC = 9`) | Preloaded at boot: 15-field `/` monster recall (`ui_recall.s` + 80-col tables), wizard UI, royal screen, look, `re_equip`, `run_initialize_impl` |
+| `18` | `$A000-$BFFF` | `OVL.CHEST` (`OVL_CHEST = 10`) | Preloaded at boot: chest open/disarm/bash, `trap_trigger_cold.s`, door jam/pick, store restock |
 | `19` | `$A000-$BFFF` | `OVL.HOME` (`OVL_HOME = 11`) | Preloaded at boot: player Home UI (`core/ui_home.s`, `core/ui_home_text.s`) |
 | `20` | `$A000-$BFFF` | `OVL.STORAGE` (`OVL_STORAGE = 12`) | Preloaded at boot: shared save/load engine, `title_load_game_ovl`, & slot menu |
-| `21` | `$A000-$BFFF` | `OVL.TITLE` (`OVL_TITLE = 13`) | Preloaded at boot: title screen renderer, menu loop, cold boot init, & system info |
+| `21` | `$A000-$BFFF` | `OVL.TITLE` (`OVL_TITLE = 13`) | Preloaded at boot: title screen renderer, menu loop, cold boot init, `starting_kit_cold.s`, & system info |
 | `22` | `$A000-$BFFF` | `TITLE` | Preloaded at boot: title screen artwork stream |
-| `23` | `$A000-$BFFF` | `MONSTER.CAT` (`Cx16Catalog`) | Preloaded at boot: monster catalog, 21 engine fields x 279 creatures, level counts, availability bitmap |
+| `23` | `$A000-$BFFF` | `MONSTER.CAT` (`Cx16Catalog`) | Preloaded at boot: monster catalog, 21 core engine fields x 279 creatures, level counts, `cat_available` (`279/279` playable), & `cat_undead[35]` (`5,976 / 8,192 B`, `2,216 B` free) |
 | `24` | `$A000-$BFFF` | `LEGALUI` (`CX16_BANK_LEGAL = 24`) | Loaded on demand for license/source text; restores prior bank on return |
 | `25-63` | `$A000-$BFFF` | Reserved (`CX16_BANK_WARM_BASE..END = 25..63`) | Free warm/extended HiRAM pool (39 banks = 312 KB; `CX16_BANK_COUNT = 64`) |
 
-Bank 23 (`CX16_BANK_CATALOG`) is mapped only by `cx16_catalog_map` and `cx16_catalog_unmap`
+Bank 23 (`CX16_BANK_CATALOG`, formerly Bank 22 before Phase 2 `OVL.HOME` insertion)
+is mapped only by `cx16_catalog_map` and `cx16_catalog_unmap`
 (`platforms/cx16/monster_catalog_bank.s`), resident code that saves the
-caller's bank (an overlay in Banks 9-21) and interrupt state and restores both.
+caller's bank (an overlay in Banks 9-21) and interrupt state and restores both,
+while Bank 5 (`CX16_BANK_CATALOG_EXT`) holds the 8 extended Phase 5 fields per
+creature (`MONSTER.EXT`, `2,232 B` at `$A000-$A8B7`, `5,960 B` free), read into
+`cat_ext_record[0..7]` by `$00`-preserving `catalog_fetch_ext`.
 The catalog's Huffman-coded names ride in Bank 4 after the corpus
-(`Cx16HuffData`, virtual `$8DF6-$9B29`), read like the corpus.
-`core/monster_catalog.s` copies a species' fields into resident `cr_*` rows
+(`Cx16HuffData`, virtual `$8DF6-$9C10`), read like the corpus.
+`core/monster_catalog.s` copies a species' 29 fields into resident `cr_*` rows
 and decodes its name into the `$9B00` pool. Bank 6 (`CX16_BANK_ITEM_CAT`) holds
 the preloaded `'ITM2'` `ITEM.CAT` (`7,573 B` at `$A000-$BD94`, `619 B` free).
-Bank 5 (`CX16_BANK_CATALOG_EXT`), Banks 7-8 (`CX16_BANK_EXT_BASE..END`), and
-Banks 25-63 (`CX16_BANK_WARM_BASE..END`) are formally partitioned in
-`platforms/cx16/memory.s` (`0..63`, 22 used / 42 free = 336 KB free)
+Banks 7-8 (`CX16_BANK_EXT_BASE..END`) and Banks 25-63 (`CX16_BANK_WARM_BASE..END`)
+are formally partitioned in `platforms/cx16/memory.s` (`0..63`, **23 used / 41 free = 328 KB free**)
 and verified without collision at assemble time and by `check_memory_contract.py`.
 
 ## 3. Virtual-to-Banked Address Translation (`$2000-$9FFF`)
@@ -115,7 +118,7 @@ When built with `-define CX16_CARTRIDGE` into isolated `build/cx16-cart/`:
 * `$01` (`CX16_ROM_BANK_REG`) switches the 16 KB `$C000-$FFFF` window between KERNAL ROM (`0`) and Cartridge ROM (`32..39`, 8 × 16 KB = 128 KB NOR-flash image `build/cx16-cart/moria8-cx16.bin`, wrapped in 480-byte `.crt` header as `build/moria8-cx16.crt`).
 * Because `$C000-$FFFF` does not overlap fixed low RAM (`$0000-$9EFF`) or the `$A000-$BFFF` banked RAM window (`$00`), cartridge asset copies require **no bounce buffer**.
 * Bank `32` `$C000-$C003` carries `"CX16"`; `$C004` (`boot_cold_start` in `platforms/cx16/cartridge_boot.s`) copies a self-contained copier stub to `CART_COPY_STUB_ADDR` (`$0400-$04FF`, `FLOOR_ITEM_BASE`, unused before `entry_bootstrap`), copies `MORIA8.PRG` into `$0801..` from ROM Banks `32+`, restores `$00=0` and `$01=0` (KERNAL Bank 0), flushes `$A80A`, enables interrupts (`cli`), and jumps to `entry_bootstrap` (`$080D`).
-* Bank `32` `$C100-$C1FF` holds 22 × 8-byte descriptors (`bank`, `rom_lo`, `rom_hi`, `dest_lo`, `dest_hi`, `ram_bank`, `size_lo`, `size_hi`) for `MORIA8.PRG`, `CX16.AUXDATA` (Bank 3), `CX16.HUFFDATA` (Bank 4), `ITEM.CAT` (Bank 6), `OVL.START..OVL.TITLE` (Banks 9–21, including `OVL.HOME` at Bank 19), `TITLE` (Bank 22), `MONSTER.CAT` (Bank 23), `LEGALUI` (Bank 24), `LICENSE`, and `SOURCE-OFFER`.
+* Bank `32` `$C100-$C1FF` holds 23 × 8-byte descriptors (`bank`, `rom_lo`, `rom_hi`, `dest_lo`, `dest_hi`, `ram_bank`, `size_lo`, `size_hi`) for `MORIA8.PRG`, `CX16.AUXDATA` (Bank 3), `CX16.HUFFDATA` (Bank 4), `MONSTER.EXT` (Bank 5), `ITEM.CAT` (Bank 6), `OVL.START..OVL.TITLE` (Banks 9–21, including `OVL.HOME` at Bank 19), `TITLE` (Bank 22), `MONSTER.CAT` (Bank 23), `LEGALUI` (Bank 24), `LICENSE`, and `SOURCE-OFFER`.
 * Resident `platforms/cx16/cartridge_copy.s` (`cart_load_asset`, `cart_read`, `cart_load_prg`) saves and restores `$00`, `$01`, and processor status (`P`), never uses zero-page variables, and handles `$FFFF -> $C000` bank boundaries seamlessly.
 * Character saves (`"THE.GAME"`..`"THE.GAME4"`) and `HALL.OF.FAME` remain on HostFS / SD Drive 8–11 (`save_device`) and are interchangeable with `build/cx16/MORIA8.PRG`.
 
@@ -264,4 +267,42 @@ Verification (2026-11-14):
 - **HiRAM Bank 6 (`CX16_BANK_ITEM_CAT = 6`):** Preloads `'ITM2'` `ITEM.CAT` (`7,573 / 8,192 B`, `$A000-$BD94`, **`619 B` free**) at boot on both disk (`cx16_preload_banks`) and cartridge (`CART_ASSET_ITEM_CAT`, 22nd descriptor in Bank 32 `$C100-$C1FF`). `22/64` HiRAM banks are used and **`42/64` (`336 KB`)** remain free (`Bank 5` `CX16_BANK_CATALOG_EXT`, `Banks 7-8`, `Banks 25-63`).
 - **Low RAM & Bank 3 `CX16.AUXDATA`:** Disk `MORIA8.PRG` spans `$0801-$9346` (`35,654 / 37,631 B`, **`1,977 B` free** `< $9B00`); Cart `MORIA8.PRG` spans `$0801-$9344` (`35,652 / 37,631 B`, **`1,979 B` free** `< $9B00`, **`1,595 B` free** `<= $9980` `CartLiveHelperLimit`). Bank 3 `CX16.AUXDATA` (`$6000-$76E1`, `5,858 / 8,192 B`, **`2,334 B` free**) hosts `recall[279]` (`1,116 B`), `si_meta_hi[128]`, `id_known_bits[47]`, and `potion_shuffle..staff_shuffle` (`174 B`).
 - **Overlays & Shipping Media:** All 13 overlays fit `$A000-$BFFF` (`OVL.ITEMS` `6,338 B` / `1,854 B` free, `OVL.SPELL` `5,965 B` / `2,227 B` free, `OVL.CHEST` `5,358 B` / `2,834 B` free, `OVL.HOME` `5,258 B` / `2,934 B` free, `OVL.START` `4,117 B`, `OVL.TOWN` `3,926 B`, `OVL.GEN` `3,718 B`, `OVL.DEATH` `3,354 B`, `OVL.STORAGE` `3,186 B`, `OVL.MODAL` `2,772 B`, `OVL.UI` `2,542 B`, `OVL.HELP` `2,273 B`, `OVL.TITLE` `630 B`). `build/moria8-cx16.crt` packs `22` assets (`116,097 B` payload, `116,609 / 131,072 B` used, **`14,463 B` free**); `build/moria8-cx16.zip` packages `22` files (`116,150 B` uncompressed).
+
+## Phase 5 Split `MONSTER.CAT` (Bank 23) + `MONSTER.EXT` (Bank 5) & Cold Evictions (2026-11-16)
+
+### 1. Summary of Phase 5 Memory & Bank Layout
+
+- **Split Monster Catalog Across Bank 23 (`MONSTER.CAT`) + Bank 5 (`MONSTER.EXT`):**
+  - **HiRAM Bank 23 (`CX16_BANK_CATALOG = 23`, shifted from legacy Bank 22 in Phase 2):** Preloads `MONSTER.CAT` (`$A000-$B758`, `5,976 / 8,192 B`, **`2,216 B` free**): the `21` core SoA engine fields × `279` creatures (`catalog_fields.s`), plus `catalog_index.s` (`cat_level_raw[41]`, `cat_level_playable[41]`, `cat_available` with `279/279` playable, and Phase 5's `cat_undead[35]` undead summon bitmap).
+  - **HiRAM Bank 5 (`CX16_BANK_CATALOG_EXT = 5`):** Preloads `MONSTER.EXT` (`$A000-$A8B8`, `2,232 / 8,192 B`, **`5,960 B` free**): `279 × 8 B` contiguous row-major extended species records (`cat_atk2_*`, `cat_atk3_*`, `cat_spell_flags2`, `cat_cdefense`) on both disk (`cx16_preload_banks`) and 128 KB cartridge (`CART_ASSET_CATALOG_EXT`, 23rd descriptor in Bank 32 `$C100-$C1FF`).
+  - `catalog_fetch_ext` (`platforms/cx16/monster_catalog_bank.s`, asserted `<= $9980` in fixed Low RAM) maps Bank 5 under `php; sei`, copies `8 B` from `$A000 + id * 8` into `cat_ext_record[0..7]`, and restores `CX16_RAM_BANK_REG` (`$00`), flags, and all ZP slots. **`23 / 64` HiRAM banks are used and `41 / 64` (`328 KB`) remain free** (`Banks 7–8` and `Banks 25–63`).
+- **Wave 5.2 Cold Evictions Preserving `LOW_RAM_MIN_FREE = 1500`:**
+  - Evicts cold routines out of unified Low RAM `Default` (`MORIA8.PRG`): `PLAYER_CHARGEN_EXTERNAL` (`player_chargen_cold.s` -> `OVL.START`), `UI_CHAR_BG_EXTERNAL` (`player_bg_draw_cold.s` -> `OVL.UI`), `TRAP_TRIGGER_EXTERNAL` (`trap_trigger_cold.s` -> `OVL.CHEST`), `STARTING_KIT_EXTERNAL` (`starting_kit_cold.s` -> `OVL.TITLE`), `DOOR_OPEN_CLOSE_EXTERNAL` + `ITEM_DROP_EXTERNAL` + `mae_cold_body` (`-> OVL.HELP`), and 80-col `ui_recall.s` tables (`0 B` in `Default`, inside `OVL.MODAL`).
+  - Measured Low RAM (`42f8f7e7`): Disk `MORIA8.PRG` `$0801-$9368` (`35,687 / 37,631 B`, **`1,944 B` free** `< $9B00`); Cart `MORIA8.PRG` `$0801-$934C` (`35,659 / 37,631 B`, **`1,972 B` free** `< $9B00`, **`1,588 B` free** `<= $9980` `CartLiveHelperLimit` — comfortably above `LOW_RAM_MIN_FREE = 1500`!).
+  - Overlays & Media: Tightest `$A000-$BFFF` overlay is `OVL.ITEMS` (`7,200 / 8,192 B`, **`992 B` free**); `.zip` packages `23` files (`121,055 B` uncompressed, `LICENSE` & `SOURCE-OFFER` included); `.crt` packs `23` assets (`121,486 / 131,072 B` used, **`9,586 B` free**).
+
+### 2. Change Record (`docs/BEHAVIOR_CHANGE_PROTOCOL.md`)
+
+```text
+Problem and success criteria: Wire Phase 5's 29-field cr_* buffers (+320 B), 279/279 playable catalog, cat_undead[35], 2,232 B MONSTER.EXT, 15-field '/' recall, 4-attack loop, 19 ADESC_* verbs, 24 ATK_* effects, 5 MSF2_* spells, and CD_*/CM2_* behaviors on Commander X16 disk (.zip) and 128 KB cartridge (.crt) while keeping LOW_RAM_MIN_FREE = 1500 (< $9B00 and <= $9980 cart live-test ceiling) intact.
+State being changed: platforms/cx16/{main.s,memory.s,monster_catalog_bank.s,storage_kernal.s,cartridge_contract.s,Makefile,check_memory_contract.py} & tools/{make_cx16_cart.py,check_cx16_cart.py} — preload MONSTER.EXT into Bank 5 (CX16_BANK_CATALOG_EXT), add $00-preserving catalog_fetch_ext <= $9980, add cat_undead[35] to Bank 23 MONSTER.CAT, evict Wave 5.2 cold modules + mae_cold_body into HiRAM overlays, and register 23rd cartridge asset.
+Search scope and terms: rg across platforms/cx16/, core/, and tools/ for CX16_BANK_CATALOG_EXT, catalog_fetch_ext, cat_ext_record, LOW_RAM_MIN_FREE, UI_CHAR_BG_EXTERNAL, TRAP_TRIGGER_EXTERNAL, STARTING_KIT_EXTERNAL, mae_cold_body.
+Relevant readers/writers found and known exclusions: catalog_fetch_ext saves/restores $00 under php; sei using self-modified absolute address $A000 + id * 8 (zero ZP touched) so overlay callers in Banks 9..21 never lose their mapped bank; cat_ext_record and catalog_fetch_ext_end are asserted <= $9980 for cartridge_test_live.s compatibility.
+Initialization, reset and persistence points: cx16_preload_banks loads MONSTER.EXT into Bank 5 at boot alongside Bank 23 MONSTER.CAT; Save Format V2 (SAVE_VERSION = $20, 17,161 B) unchanged.
+Affected production sequence through the changed transition: entry_main -> cx16_preload_banks (loads Bank 5 MONSTER.EXT & Bank 23 MONSTER.CAT) -> gameplay cat_fetch / catalog_recall_match_and_fill -> catalog_fetch_ext (maps Bank 5, copies 8 B -> cat_ext_record, restores caller $00) -> '/' recall dispatches OVL.MODAL -> ui_recall_display.
+Contract decision or selected upstream oracle with source locations: Commander X16 64-bank HiRAM partition (platforms/cx16/memory.s, check_memory_contract.py) and VMS Moria 4.8 279-creature catalog.
+Intentional Moria8 deviations: None to VMS gameplay; splitting core 21 fields + index in Bank 23 (5,976 B) and 8 extended fields in Bank 5 (2,232 B) keeps every segment inside a single 8 KB $A000-$BFFF bank without cross-bank straddling.
+Input/intermediate widths, signedness, carry, range and overflow policy: 9-bit catalog ID (0..278) * 8 = 0..2224 ORed with $A000 ($A000..$A8B7 <= $BFFF); 23 * 8 = 184 B <= 256 B cartridge directory ($C100-$C1FF).
+RNG reduction and bias, if applicable: N/A for CX16 bank layout and cold evictions.
+Affected platforms, overlays, banks and owners: Commander X16 Disk MORIA8.PRG ($0801-$9368, 1,944 B free < $9B00), Cart MORIA8.PRG ($0801-$934C, 1,972 B free < $9B00, 1,588 B <= $9980), Bank 5 MONSTER.EXT (2,232 B), Bank 23 MONSTER.CAT (5,976 B), 23/64 HiRAM banks used (41 free = 328 KB), .crt (9,586 B free).
+Required production-path tests: make testcx16-memory-contract, tools/report_memory_budgets.py --port cx16, make testcx16, make testcx16-cartridge, and make playtest-gate.
+Known behavior explicitly out of scope: Banks 7-8 and 25-63 remain free reserve (328 KB).
+Unresolved uncertainty and risk: moria8-cx16.crt has 9,586 B free out of 128 KB; enforced fail-closed by make_cx16_cart.py and check_cx16_cart.py.
+```
+
+Verification (2026-11-16):
+
+* `make testcx16-memory-contract` & `--selftest`: PASS (`23/64` banks used / `41` free, `low_ram_free = 1,944 B` disk / `1,972 B` cart `>= 1,500 B`, `23` `.crt` assets verified).
+* `make testcx16` & `make testcx16-cartridge` + `make playtest-gate`: PASS (`0` findings).
+
 

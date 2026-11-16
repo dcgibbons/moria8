@@ -61,9 +61,18 @@ player_create:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
+.segment TestCreateOverlay
+mat_scene_dirty: .byte 0
+monster_ai_tick:
+    brk
+.segment Default
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/los_trace.s"
+.segment TestCreateOverlay
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
 hal_item_cat_read_byte:
@@ -86,7 +95,15 @@ hal_item_cat_read_byte:
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
+#import "../../../../core/element_resist.s"
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
+.segment Default
 #import "../../../../core/turn.s"
 
 store_init_all:

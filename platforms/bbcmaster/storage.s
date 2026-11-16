@@ -49,17 +49,22 @@ beeb_name_drive:        .byte 0
 // with Carry set and A = fault code.
 
 beeb_close_icat_in_mos:
-    ldy beeb_icat_handle
-    beq !bci_ret+
     pha
     phx
     phy
+    ldy beeb_icat_handle
+    beq !bci_mext+
     stz beeb_icat_handle
     jsr beeb_call_osfind_close
+!bci_mext:
+    ldy beeb_mext_handle
+    beq !bci_ret+
+    stz beeb_mext_handle
+    jsr beeb_call_osfind_close
+!bci_ret:
     ply
     plx
     pla
-!bci_ret:
     rts
 
 beeb_call_osfile:

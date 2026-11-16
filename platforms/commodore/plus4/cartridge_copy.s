@@ -60,11 +60,23 @@ cart_read:
     beq !copy+
     cmp #2
     beq !legal+
+    cmp #3
+    beq !cat_ext+
     lda #<cat_record
     sta cart_destination + 1
     lda #>cat_record
     sta cart_destination + 2
     lda #CATALOG_RECORD_SIZE
+    sta cart_count
+    lda #0
+    sta cart_count + 1
+    beq !copy+
+!cat_ext:
+    lda #<cat_ext_record
+    sta cart_destination + 1
+    lda #>cat_ext_record
+    sta cart_destination + 2
+    lda #8
     sta cart_count
     lda #0
     sta cart_count + 1

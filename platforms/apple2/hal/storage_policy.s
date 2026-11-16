@@ -24,8 +24,8 @@
 // $20 (Save Format V2): expanded 370-item catalog, 34 inventory slots (with
 // Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and 279-species
 // persistent monster recall. Older V1..V19 saves are no longer accepted.
-.const hal_storage_save_v1_version = $20
-.const hal_storage_save_version = $20
+.const hal_storage_save_v1_version = $21
+.const hal_storage_save_version = $21
 
 // Apple II disk_mode values (platform-owned; no shared code interprets the
 // value). 2 = separate save volume on another unit (two-drive), 3 = separate

@@ -26,26 +26,6 @@ recall_tmp:         .byte 0
 recall_tmp2:        .byte 0
 recall_tmp3:        .byte 0
 
-// Resident recall view snapshot populated by catalog_recall_match_and_fill
-// so OVL_UI (ui_recall_display) needs no cross-bank catalog/recall calls.
-recall_view_display:    .byte 0
-recall_view_color:      .byte 0
-recall_view_level:      .byte 0
-recall_view_hd_num:     .byte 0
-recall_view_hd_sides:   .byte 0
-recall_view_ac:         .byte 0
-recall_view_atk0_type:  .byte 0
-recall_view_atk0_dice:  .byte 0
-recall_view_atk0_sides: .byte 0
-recall_view_atk1_type:  .byte 0
-recall_view_atk1_dice:  .byte 0
-recall_view_atk1_sides: .byte 0
-recall_view_kills:      .byte 0
-recall_view_deaths:     .byte 0
-recall_view_attacks:    .byte 0
-recall_view_spells:     .byte 0
-.assert "Recall view record fields are contiguous", recall_view_atk1_sides - recall_view_display, 11
-
 #if !HAL_PLATFORM_RECALL_CUSTOM
 // Default RAM/aux-segment accessors over recall_data_start + recall_off_lo/hi.
 // hal_recall_read_byte — Input: recall_off_lo/hi. Output: A. Clobbers: A, Y (preserves X, ZP).

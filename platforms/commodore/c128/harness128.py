@@ -15,6 +15,7 @@ if str(TESTS_DIR) not in sys.path:
 
 from vice_connector import VICEConnector, allocate_free_port, extract_test_symbols, run_test_case
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from huff_encoder import ascii_to_screencode  # noqa: E402
 from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
@@ -277,6 +278,64 @@ def run_monitor_test(args: argparse.Namespace) -> int:
     return result.exit_code
 
 
+def check_vdc_screen_log(
+    log_path: Path,
+    *,
+    stop_addr: str,
+    expectations: list[str],
+    cols: int = 80,
+) -> int:
+    """Verify expected screencode_mixed strings in a VICE `bank vdc` dump at `stop_addr`.
+
+    Each expectation has the form `row:col:text` (e.g. `0:14:Mage Book`).
+    """
+    stop_pc = int(stop_addr.strip().lstrip("$"), 16)
+    stop_re = re.compile(r"\(Stop on\s+exec\s+([0-9a-fA-F]{4})\)")
+    dump_re = re.compile(r"^>[A-Za-z0-9]+:([0-9a-fA-F]{4})((?:\s+[0-9a-fA-F]{2})+)")
+
+    mem: dict[int, int] | None = None
+    in_target_stop = False
+    for raw in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        hit = stop_re.search(line)
+        if hit:
+            if int(hit.group(1), 16) == stop_pc:
+                in_target_stop = True
+                mem = {}
+            else:
+                in_target_stop = False
+            continue
+        if not in_target_stop or mem is None:
+            continue
+        dump = dump_re.match(line)
+        if dump:
+            base = int(dump.group(1), 16)
+            values = re.findall(r"\b([0-9a-fA-F]{2})\b", dump.group(2))[:16]
+            for i, value in enumerate(values):
+                mem[base + i] = int(value, 16)
+
+    if not mem:
+        print(f"FAIL: no VDC dump captured at stop ${stop_pc:04X}")
+        return 1
+
+    for spec in expectations:
+        parts = spec.split(":", 2)
+        if len(parts) != 3:
+            raise ValueError(f"invalid --expect-screen-str {spec!r}; expected row:col:text")
+        row, col, text = int(parts[0]), int(parts[1]), parts[2]
+        base = row * cols + col
+        expected = [ascii_to_screencode(ch) for ch in text]
+        actual = [mem.get(base + i) for i in range(len(expected))]
+        if actual != expected:
+            print(
+                f"FAIL: VDC mismatch at row {row} col {col} for {text!r}: "
+                f"expected {[f'{b:02X}' for b in expected]}, "
+                f"got {[f'{b:02X}' if b is not None else '??' for b in actual]}"
+            )
+            return 1
+    return 0
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="C128 Python monitor harness (Gate C.1/C.2 slice)")
     parser.add_argument("--name")
@@ -285,6 +344,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot", help="Restore the given prepared .vsf snapshot via monitor-side `undump` before running the test")
     parser.add_argument("--ensure-snapshot", action="store_true", help="Create --snapshot first if it does not exist")
     parser.add_argument("--prepare-snapshot", help="Create a prepared .vsf snapshot and exit")
+    parser.add_argument("--check-vdc-log", help="Verify expected VDC screen strings from a VICE monitor log and exit")
+    parser.add_argument("--at-stop", help="Hex stop address in --check-vdc-log whose VDC dump is checked")
+    parser.add_argument("--expect-screen-str", action="append", default=[], help="Expected row:col:text in screencode_mixed")
     parser.add_argument("--vice", default="x128")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0, help="VICE monitor port; 0 = auto when launching, 6510 with --attach-only")
@@ -303,6 +365,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_arg_parser()
     args = parser.parse_args()
+
+    if args.check_vdc_log:
+        if not args.at_stop or not args.expect_screen_str:
+            parser.error("--check-vdc-log requires --at-stop and at least one --expect-screen-str")
+        return check_vdc_screen_log(
+            Path(args.check_vdc_log),
+            stop_addr=args.at_stop,
+            expectations=args.expect_screen_str,
+        )
 
     if args.prepare_snapshot:
         create_ready_snapshot(args, Path(args.prepare_snapshot).resolve())

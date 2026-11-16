@@ -10,9 +10,10 @@ Layout (see platforms/apple2/boot.s):
   entry payloads concatenated in the same order
 
 Usage: make_pak.py OUT.PAK ENTRY [ENTRY ...]
-Boot entries 0..7 must match platforms/apple2/boot.s file_table:
-MORIA8.RES, A2.AUXDATA, A2.CATALOG, OVL.UI, OVL.ITEMS, OVL.SPELL, OVL.MODAL,
-A2.HUFFDATA. Additional cold entries (8+) are read via MLI_SET_MARK ($CE).
+Boot entries 0..5 must match platforms/apple2/boot.s file_table:
+MORIA8.RES, OVL.UI, OVL.ITEMS, OVL.SPELL, OVL.MODAL, A2.HUFFDATA.
+Additional entries (6+: A2.PLAY, cold OVL.*, LEGALUI, TITLE, PackBits
+A2.AUXDATA/A2.CATALOG/A2.CATEXT, ITEM.CAT) are read via MLI_SET_MARK ($CE).
 """
 
 import sys

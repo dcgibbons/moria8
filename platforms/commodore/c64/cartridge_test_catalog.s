@@ -29,7 +29,9 @@ test_start:
     txa
     ora #$a0
     cmp zp_math_a,x
-    bne test_fail
+    beq !cm_ok+
+    jmp test_fail
+!cm_ok:
     dex
     bpl !check_math-
     lda #0
@@ -59,9 +61,59 @@ out2:
     sta out1 + 1
     sta out2 + 1
     inc out2 + 1
-    bcc !id+
+    bcc !ext_check+
     inc out1 + 2
     inc out2 + 2
+!ext_check:
+    ldx #3
+!seed_math_ext:
+    txa
+    ora #$50
+    sta zp_math_a,x
+    dex
+    bpl !seed_math_ext-
+    jsr catalog_fetch_ext
+    ldx #3
+!check_math_ext:
+    txa
+    ora #$50
+    cmp zp_math_a,x
+    bne test_fail
+    dex
+    bpl !check_math_ext-
+    lda $01
+    cmp #$34
+    bne test_fail
+    lda #0
+    sta sum1
+    sta sum2
+    ldx #0
+!ext_byte:
+    clc
+    lda sum1
+    adc cat_ext_record,x
+    sta sum1
+    clc
+    adc sum2
+    sta sum2
+    inx
+    cpx #8
+    bne !ext_byte-
+    lda sum1
+ext_out1:
+    sta $cb00
+    lda sum2
+ext_out2:
+    sta $cb01
+    clc
+    lda ext_out1 + 1
+    adc #2
+    sta ext_out1 + 1
+    sta ext_out2 + 1
+    inc ext_out2 + 1
+    bcc !id+
+    inc ext_out1 + 2
+    inc ext_out2 + 2
 !id:
     inc record_id
     bne !check+
@@ -69,10 +121,14 @@ out2:
 !check:
     lda record_id + 1
     cmp #>cart_catalog_count
-    bne !record-
+    beq !check_lo+
+    jmp !record-
+!check_lo:
     lda record_id
     cmp #<cart_catalog_count
-    bne !record-
+    beq !done_all+
+    jmp !record-
+!done_all:
     lda #$36
     sta $01
 test_pass:

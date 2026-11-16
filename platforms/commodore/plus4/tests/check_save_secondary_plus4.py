@@ -16,7 +16,7 @@ def main() -> int:
         print(f"Usage: {sys.argv[0]} <save.seq> [version]", file=sys.stderr)
         return 2
     path = Path(sys.argv[1])
-    version = int(sys.argv[2], 0) if len(sys.argv) == 3 else 0x20
+    version = int(sys.argv[2], 0) if len(sys.argv) == 3 else 0x21
     data = path.read_bytes()
     if len(data) < INV_OFFSET + 8 * SLOTS:
         print(f"FAIL: save too short ({len(data)} bytes)", file=sys.stderr)

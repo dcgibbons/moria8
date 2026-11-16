@@ -253,6 +253,7 @@ tramp_dig_ability:
 tun_dig_ability: .byte 0
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+#define PLAYER_CHARGEN_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -281,6 +282,7 @@ status_mark_dirty:
 .segment TestCreateOverlay
 player_create:
     brk
+#import "../../../../core/player_chargen_cold.s"
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -299,7 +301,11 @@ monster_ai_tick:
     jmp test_finish
 #import "../../../../core/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 .macro ChestSummonsSegment() {
     .segment Default
@@ -357,7 +363,15 @@ random_floor_in_room:
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/scene_force.s"
 #import "../../../../core/scene_dirty.s"
-#import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
+monster_attack_player:
+mon_atk_acid_armour:
+mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+player_death_check:
+    brk
+mad_dmg_hi: .byte 0
+.segment Default
 #import "../../../../core/turn.s"
 #import "../../../../core/generation_busy.s"
 .macro ChestRouteSegment() {

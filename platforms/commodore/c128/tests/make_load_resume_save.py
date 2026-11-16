@@ -9,7 +9,7 @@ import sys
 # EQUIP_SECONDARY = 33), 47-byte known-item bitset, 174-byte flavour shuffles,
 # 8 store arrays (including si_meta_hi), 11 floor-item blocks (including
 # fi_meta_hi), and 279 creature rows of persistent recall (1,116 B).
-SAVE_VERSION = 0x20
+SAVE_VERSION = 0x21
 LEGACY_ROOM8_SAVE_VERSION = 0x12
 LEGACY_TOTAL_INV_SLOTS = 31
 ID_KNOWN_BYTES = 47

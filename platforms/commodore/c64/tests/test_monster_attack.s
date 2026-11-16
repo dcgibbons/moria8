@@ -36,6 +36,10 @@ test_exit_trampoline:
 .encoding "screencode_mixed"
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -56,6 +60,10 @@ test_exit_trampoline:
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
 #import "chest_summons_stubs.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+.segment Default
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
@@ -71,12 +79,18 @@ combat_append_str:
 combat_append_monster_name:
 cmb_term_and_print:
 combat_msg_monster_in_way:
+combat_compute_level_threshold:
+ccl_div_24x8:
 inv_remove_item:
 inv_consume_one:
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:
     rts
+ccl_adj_0:   .byte 0
+ccl_adj_1:   .byte 0
+ccl_adj_2:   .byte 0
+ccl_divisor: .byte 0
 player_get_infra_range:
     lda #0
     rts
@@ -128,11 +142,11 @@ item_get_base_ac:
     lda it_color_ac,y
     and #$0f
     rts
-inv_to_ac:
-    .fill TOTAL_INV_SLOTS, 0
 inv_to_hit:
     .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:
+    .fill TOTAL_INV_SLOTS, 0
+inv_to_ac:
     .fill TOTAL_INV_SLOTS, 0
 inv_flags:
     .fill TOTAL_INV_SLOTS, 0

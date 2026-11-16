@@ -78,7 +78,9 @@ player_create:
 .segment Default
 #import "../../../../core/recall.s"
 .segment TestUnused
-#import "../../../../core/monster_magic.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"

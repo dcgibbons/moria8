@@ -37,6 +37,7 @@ test_finish:
 .pc = * "Test Body"
 
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestUnusedUI [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -51,10 +52,12 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestUnusedUI
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
+.segment TestUnusedUI
 #import "../../../../core/ui_character.s"
-.segment TestUnused
 #import "../../../../core/stat_display.s"
 .segment Default
 .segment TestCreateOverlay
@@ -190,6 +193,9 @@ hiscore_save:
     rts
 
 #import "../../../../core/score.s"
+#import "../../../../core/ui_recall.s"
+
+recall_found_type: .byte 0
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -819,6 +825,8 @@ test_start:
     lda $0400 + 5 * 40 + SDS_INFO_COL + t15_digits_at + 2
     cmp #$20                        // "43", not "100"
     bne !t15_fail+
+    jsr test_recall_279_suite
+    bcc !t15_fail+
     lda #$01
     .byte $2c
 !t15_fail:
@@ -828,6 +836,390 @@ test_start:
     jmp test_finish
 
 t15_expect: .byte $34, $33          // "43" as screen codes
+
+// ============================================================
+// Phase 5 279-species Monster Recall UI suite (ui_recall_display):
+//   R1: 4 attacks (atk0..atk3) with packed verb bits + 40-col Row 7 wrap
+//   R2: 0-dice status/theft tags (GLD/ITM/PAR/CHG/DIS/SHR) vs 0d0 ATK_NORMAL
+//   R3: Extended spell_flags2 ($1f vs CM2_*) and MS_HOLD ($80) spell recall
+//   R4: Hurt vulnerabilities, Traits (INVIS/PHASE/NO-SLP/UNDEAD/EVIL), K:/D:
+// ============================================================
+tc_recall_sub: .fill 4, $ff
+
+trcl_reset_slot0:
+    lda #0
+    sta recall_found_type
+    sta cr_mflags
+    sta cr_atk0_type
+    sta cr_atk0_dice
+    sta cr_atk0_sides
+    sta cr_atk1_type
+    sta cr_atk1_dice
+    sta cr_atk1_sides
+    sta cr_atk2_type
+    sta cr_atk2_dice
+    sta cr_atk2_sides
+    sta cr_atk3_type
+    sta cr_atk3_dice
+    sta cr_atk3_sides
+    sta cr_spell_chance
+    sta cr_spell_flags
+    sta cr_spell_flags2
+    sta cr_cdefense
+    sta recall_kills
+    sta recall_deaths
+    sta recall_attacks
+    sta recall_spells
+    lda #COL_RED
+    sta cr_color
+    lda #$42                        // 'B'
+    sta cr_display
+    lda #50
+    sta cr_level
+    lda #80
+    sta cr_ac
+    lda #30
+    sta cr_hd_num
+    lda #10
+    sta cr_hd_sides
+    ldx #0
+!nm:
+    lda trcl_name,x
+    sta creature_name_buf,x
+    beq !nm_done+
+    inx
+    bne !nm-
+!nm_done:
+    rts
+
+// trcl_assert_at — Input: A = row, X = col, zp_ptr0 = expected C-string.
+// Returns C=1 on match, C=0 on mismatch.
+trcl_assert_at:
+    tay
+    clc
+    txa
+    adc screen_row_lo,y
+    sta zp_ptr1
+    lda screen_row_hi,y
+    adc #0
+    sta zp_ptr1_hi
+    ldy #0
+!cmp_loop:
+    lda (zp_ptr0),y
+    beq !match+
+    cmp (zp_ptr1),y
+    bne !mismatch+
+    iny
+    bne !cmp_loop-
+!match:
+    sec
+    rts
+!mismatch:
+    clc
+    rts
+
+test_recall_279_suite:
+    // --- R1: 4 attacks + packed verb bits + 40-col wrap to Row 7 Col 7 ---
+    jsr trcl_reset_slot0
+    lda #ATK_FIRE | $80
+    sta cr_atk0_type
+    lda #3
+    sta cr_atk0_dice
+    lda #12 | $30
+    sta cr_atk0_sides
+
+    lda #ATK_LOSE_STR | $80
+    sta cr_atk1_type
+    lda #2
+    sta cr_atk1_dice
+    lda #6 | $50
+    sta cr_atk1_sides
+
+    lda #ATK_ACID
+    sta cr_atk2_type
+    lda #1
+    sta cr_atk2_dice
+    lda #10 | $90
+    sta cr_atk2_sides
+
+    lda #ATK_LIGHT | $80
+    sta cr_atk3_type
+    lda #4
+    sta cr_atk3_dice
+    lda #8 | $f0
+    sta cr_atk3_sides
+
+    jsr ui_recall_display
+
+    lda #<trcl_exp_r1_row6
+    sta zp_ptr0
+    lda #>trcl_exp_r1_row6
+    sta zp_ptr0_hi
+    lda #6
+    ldx #7
+    jsr trcl_assert_at
+    bcc !r1_fail+
+
+    lda #<trcl_exp_r1_row7
+    sta zp_ptr0
+    lda #>trcl_exp_r1_row7
+    sta zp_ptr0_hi
+    lda #7
+    ldx #7
+    jsr trcl_assert_at
+    bcc !r1_fail+
+    lda #1
+    sta tc_recall_sub + 0
+    bne !r2_start+
+!r1_fail:
+    lda #0
+    sta tc_recall_sub + 0
+    clc
+    rts
+
+!r2_start:
+    // --- R2: 0-dice status/theft attacks vs 0d0 ATK_NORMAL suppression ---
+    jsr trcl_reset_slot0
+    lda #ATK_STEAL_GOLD | $80
+    sta cr_atk0_type
+    lda #$40                        // 0 sides + packed verb nibble 4
+    sta cr_atk0_sides
+    lda #ATK_STEAL_ITEM
+    sta cr_atk1_type
+    lda #ATK_PARALYZE | $80
+    sta cr_atk2_type
+    lda #$20
+    sta cr_atk2_sides
+    lda #ATK_EAT_CHARGES
+    sta cr_atk3_type
+    jsr ui_recall_display
+
+    lda #<trcl_exp_r2_status4
+    sta zp_ptr0
+    lda #>trcl_exp_r2_status4
+    sta zp_ptr0_hi
+    lda #6
+    ldx #7
+    jsr trcl_assert_at
+    bcc !r2_fail+
+
+    // Slot 0 = 0d0 ATK_NORMAL (suppressed), Slots 1..2 = 0d0 DIS + SHR
+    jsr trcl_reset_slot0
+    lda #ATK_NORMAL | $80
+    sta cr_atk0_type
+    lda #$30
+    sta cr_atk0_sides
+    lda #ATK_DISENCHANT
+    sta cr_atk1_type
+    lda #ATK_AGGRAVATE
+    sta cr_atk2_type
+    jsr ui_recall_display
+
+    lda #<trcl_exp_r2_dis_shr
+    sta zp_ptr0
+    lda #>trcl_exp_r2_dis_shr
+    sta zp_ptr0_hi
+    lda #6
+    ldx #7
+    jsr trcl_assert_at
+    bcc !r2_fail+
+
+    // Only 0d0 ATK_NORMAL across slots -> "None"
+    jsr trcl_reset_slot0
+    lda #ATK_NORMAL | $80
+    sta cr_atk0_type
+    sta cr_atk2_type
+    lda #$50
+    sta cr_atk0_sides
+    sta cr_atk2_sides
+    jsr ui_recall_display
+
+    lda #<trcl_exp_none
+    sta zp_ptr0
+    lda #>trcl_exp_none
+    sta zp_ptr0_hi
+    lda #6
+    ldx #7
+    jsr trcl_assert_at
+    bcc !r2_fail+
+    lda #1
+    sta tc_recall_sub + 1
+    bne !r3_start+
+!r2_fail:
+    lda #0
+    sta tc_recall_sub + 1
+    clc
+    rts
+
+!r3_start:
+    // --- R3: Extended caster recall (cr_spell_flags2 & $1f, MS_HOLD $80) ---
+    jsr trcl_reset_slot0
+    lda #MSF2_BLINK
+    sta cr_spell_flags2
+    lda #4
+    sta cr_spell_chance
+    jsr ui_recall_display
+
+    lda #<trcl_exp_spl_yes
+    sta zp_ptr0
+    lda #>trcl_exp_spl_yes
+    sta zp_ptr0_hi
+    lda #8
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r3_fail+
+
+    // Movement-only CM2_* bits in cr_spell_flags2 ($E0) must NOT show Spl: Yes
+    jsr trcl_reset_slot0
+    lda #CM2_PHASE | CM2_EATS_OTHER | CM2_PICKS_UP
+    sta cr_spell_flags2
+    lda #4
+    sta cr_spell_chance
+    jsr ui_recall_display
+
+    lda #<trcl_exp_spl_none
+    sta zp_ptr0
+    lda #>trcl_exp_spl_none
+    sta zp_ptr0_hi
+    lda #8
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r3_fail+
+
+    // MS_HOLD ($80) with non-zero frequency -> Spl: Yes; with freq 0 -> Spl: None
+    jsr trcl_reset_slot0
+    lda #MS_HOLD | 6
+    sta cr_spell_chance
+    jsr ui_recall_display
+
+    lda #<trcl_exp_spl_yes
+    sta zp_ptr0
+    lda #>trcl_exp_spl_yes
+    sta zp_ptr0_hi
+    lda #8
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r3_fail+
+
+    jsr trcl_reset_slot0
+    lda #MS_HOLD
+    sta cr_spell_chance
+    jsr ui_recall_display
+
+    lda #<trcl_exp_spl_none
+    sta zp_ptr0
+    lda #>trcl_exp_spl_none
+    sta zp_ptr0_hi
+    lda #8
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r3_fail+
+    lda #1
+    sta tc_recall_sub + 2
+    bne !r4_start+
+!r3_fail:
+    lda #0
+    sta tc_recall_sub + 2
+    clc
+    rts
+
+!r4_start:
+    // --- R4: Hurt vulnerabilities + Traits + shifted K:/D: row 14 ---
+    jsr trcl_reset_slot0
+    lda #$ff                        // All 6 CD_* hurts + CD_NO_SLEEP + CD_INVISIBLE
+    sta cr_cdefense
+    lda #CM2_PHASE
+    sta cr_spell_flags2
+    lda #CF_UNDEAD | CF_EVIL
+    sta cr_mflags
+    lda #9
+    sta recall_kills
+    lda #2
+    sta recall_deaths
+    jsr ui_recall_display
+
+    lda #<trcl_exp_hurt_all
+    sta zp_ptr0
+    lda #>trcl_exp_hurt_all
+    sta zp_ptr0_hi
+    lda #10
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r4_fail+
+
+    lda #<trcl_exp_traits_all
+    sta zp_ptr0
+    lda #>trcl_exp_traits_all
+    sta zp_ptr0_hi
+    lda #12
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r4_fail+
+
+    lda #<trcl_exp_kills
+    sta zp_ptr0
+    lda #>trcl_exp_kills
+    sta zp_ptr0_hi
+    lda #14
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r4_fail+
+
+    lda #<trcl_exp_deaths
+    sta zp_ptr0
+    lda #>trcl_exp_deaths
+    sta zp_ptr0_hi
+    lda #14
+    ldx #16
+    jsr trcl_assert_at
+    bcc !r4_fail+
+
+    // Empty cdefense / mflags / phase -> Hurt: None & Traits: None
+    jsr trcl_reset_slot0
+    jsr ui_recall_display
+
+    lda #<trcl_exp_hurt_none
+    sta zp_ptr0
+    lda #>trcl_exp_hurt_none
+    sta zp_ptr0_hi
+    lda #10
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r4_fail+
+
+    lda #<trcl_exp_traits_none
+    sta zp_ptr0
+    lda #>trcl_exp_traits_none
+    sta zp_ptr0_hi
+    lda #12
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r4_fail+
+
+    lda #1
+    sta tc_recall_sub + 3
+    sec
+    rts
+!r4_fail:
+    lda #0
+    sta tc_recall_sub + 3
+    clc
+    rts
+
+trcl_name:           .text "BALROG" ; .byte 0
+trcl_exp_r1_row6:    .text "FIR 3D12  STR 2D6  ACD 1D10 " ; .byte 0
+trcl_exp_r1_row7:    .text "LTG 4D8 " ; .byte 0
+trcl_exp_r2_status4: .text "GLD  ITM  PAR  CHG " ; .byte 0
+trcl_exp_r2_dis_shr: .text "DIS  SHR " ; .byte 0
+trcl_exp_none:       .text "None " ; .byte 0
+trcl_exp_spl_yes:    .text "Spl: Yes " ; .byte 0
+trcl_exp_spl_none:   .text "Spl: None " ; .byte 0
+trcl_exp_hurt_all:   .text "Hurt: FIR CLD ACD PSN LIT STN " ; .byte 0
+trcl_exp_hurt_none:  .text "Hurt: None " ; .byte 0
+trcl_exp_traits_all: .text "Traits: INVIS PHASE NO-SLP UNDEAD EVIL" ; .byte 0
+trcl_exp_traits_none:.text "Traits: None " ; .byte 0
+trcl_exp_kills:      .text "K: 9 " ; .byte 0
+trcl_exp_deaths:     .text "D: 2 " ; .byte 0
 
 // Clear row 0 and print score_accum_0-2 at row 0, col 0.
 t24_print:
@@ -871,5 +1263,6 @@ t13_expect: .text "65547" ; .byte 0
 t14_expect: .text "16777215" ; .byte 0
 
 test_body_end:
+.assert "Score test body stays below hiscore buffer", test_body_end <= TEST_HISCORE_BUF, true
 .assert "Score test body stays below overlay boundary", test_body_end < $d000, true
 .assert "Hiscore test buffer stays below overlay boundary", TEST_HISCORE_BUF + (HISCORE_ENTRY_SIZE * HISCORE_MAX_ENTRIES) <= $d000, true

@@ -72,6 +72,11 @@ monster_ai_tick:
     rts
 mat_scene_dirty: .byte 0
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -160,6 +165,11 @@ random_floor_in_room:
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
 .segment Default
 #import "../../../../core/store_data.s"
 // Store code goes in a dummy overlay segment so it doesn't bloat the test body.
@@ -188,8 +198,8 @@ random_floor_in_room:
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
-.const hal_storage_save_v1_version = $20
-.const hal_storage_save_version = $20
+.const hal_storage_save_v1_version = $21
+.const hal_storage_save_version = $21
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs

@@ -71,7 +71,10 @@ player_create:
 .segment Default
 #import "../../../../core/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/los_trace.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
@@ -115,7 +118,13 @@ tramp_eff_destroy_area:
 #import "../../../../core/scene_mat_tile.s"
 .segment Default
 .segment TestCreateOverlay
-#import "../../../../core/monster_attack.s"
+#import "../../../../core/element_resist.s"
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
 .segment Default
 .segment TestUnused
 #import "../../../../core/turn.s"

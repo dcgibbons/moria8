@@ -84,7 +84,7 @@
 // Render rows 3-18 of store/home inventory items.
 // Macro parameters keep store (TownOverlay) and home (HomeOverlay) self-contained
 // without sharing overlay subroutines when HOME_OVERLAY_SEPARATE is enabled.
-.macro StoreDrawSlotListBody(abs_slot_var, row_var, counter_var, put_letter_fn, with_price, price_hook_fn) {
+.macro StoreDrawSlotListBody(abs_slot_var, row_var, counter_var, put_letter_fn, put_slot_fn, with_price, price_hook_fn) {
     lda #COL_LGREY
     sta zp_text_color
 
@@ -128,7 +128,7 @@
     lda #COL_LGREY
     sta zp_text_color
     ldx abs_slot_var
-    jsr itemdesc_put_store_slot
+    jsr put_slot_fn
 
     .if (with_price != 0) {
         jsr price_hook_fn

@@ -42,6 +42,11 @@ test_finish:
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 .segmentdef TestMonsterMagic [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -93,11 +98,13 @@ player_create:
 #import "../../../../core/los_trace.s"
 #import "../../../../core/player_save.s"
 #import "../../../../core/element_resist.s"
-#import "../../../../core/monster_magic.s"
 .segment TestCreateOverlay
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment TestUnused
 // No item here rolls an ego (look test 31's gold is placed by hand): the ego
-// tables and rolls beside it (2026-11-11, when the four VMS wands took the
-// body 10 bytes past MAP_BASE).
+// tables and rolls sit in TestUnused so TestCreateOverlay stays <= $DFFF.
 #import "../../../../core/ego_items.s"
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
@@ -130,6 +137,11 @@ player_create:
 #import "../../../../core/combat.s"
 .segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
 .segment Default
 #import "../../../../core/monster_attack.s"
 magic_recalc_mana:

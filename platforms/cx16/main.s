@@ -26,6 +26,15 @@
 #define HELP_TITLE_EXTERNAL
 #define PFLAGS_SEGMENT_CUSTOM
 #define PLAYER_RECALC_PFLAGS_EXTERNAL
+#define PLAYER_CHARGEN_EXTERNAL
+#define UI_CHAR_BG_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define STARTING_KIT_EXTERNAL
+#define DOOR_OPEN_CLOSE_EXTERNAL
+#define ITEM_DROP_EXTERNAL
+#define CALC_DIG_EXTERNAL
+#define CALC_DIG_CO_LOCATED
+#define STORE_CHECK_CAT_DUPLICATED
 #define TURN_REST_DISTURBED_EXTERNAL
 #define LEVELUP_MAGIC_PENDING_EXTERNAL
 #define PLATFORM_NF_DIGIT_BUF_EXTERNAL
@@ -412,6 +421,40 @@ tramp_item_pickup:
     clc
     rts
 
+tramp_trap_trigger:
+    phx
+    lda #OVL_ITEMS
+    jsr overlay_load
+    plx
+    bcs !ttt_done+
+    jmp trap_trigger
+!ttt_done:
+    rts
+
+tramp_door_pick_roll:
+    lda current_overlay
+    pha
+    lda #OVL_CHEST
+    jsr overlay_load
+    bcs !load_failed+
+    jsr door_pick_roll
+    bra !restore_caller+
+!load_failed:
+    clc
+!restore_caller:
+    pla
+    beq !no_caller_ovl+
+    php
+    jsr overlay_load
+    bcc !restored+
+    brk
+!restored:
+    plp
+    rts
+!no_caller_ovl:
+    sta current_overlay
+    rts
+
 #import "legal.s"
 #import "../../build/trampolines/cx16_trampolines.inc"
 
@@ -602,6 +645,8 @@ ovl_home_end:
 .segment StartupOverlay
 #import "../../core/background_data.s"
 #import "../../core/player_create.s"
+#import "../../core/player_chargen_cold.s"
+#import "../../core/starting_kit_cold.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $a000) + " bytes"
 .assert "Startup overlay fits 8KB bank", ovl_start_end <= $c000, true
@@ -741,12 +786,15 @@ ovl_modal_misc_end:
 #import "../../core/ui_help.s"
 #import "../../core/ui_inventory.s"
 #import "../../core/ui_equipment.s"
+#import "../../core/door_open_close_cold.s"
+#import "../../core/item_drop_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $a000) + " bytes"
 .assert "Help overlay fits 8KB bank", ovl_help_end <= $c000, true
 
 .segment UiOverlay
 #import "../../core/ui_character.s"
+#import "../../core/player_bg_draw_cold.s"
 #import "../../core/ui_identify.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a000) + " bytes"
@@ -763,7 +811,9 @@ ovl_ui_end:
 #import "../../core/bash.s"
 #import "../../core/disarm.s"
 #import "../../core/disarm_helpers.s"
+#import "../../core/trap_trigger_cold.s"
 #import "../../core/tunnel.s"
+#import "../../core/calc_dig_cold.s"
 ovl_items_end:
 .print "Item actions overlay: " + (ovl_items_end - $a000) + " bytes"
 .assert "Item actions overlay fits 8KB bank", ovl_items_end <= $c000, true
@@ -1163,7 +1213,7 @@ program_end:
 .assert "Unified Resident+Play image fits below $9B00 tier name pool", program_end <= PLATFORM_TIER_NAME_POOL_BASE, true
 .assert "HuffData fits Bank 4 ($8000-$9FFF)", ovl_huffdata_end <= $a000, true
 .assert "Home overlay owns home_enter separately from TownOverlay", home_enter >= $a000 && home_enter < ovl_home_end && store_enter >= $a000 && store_enter < ovl_town_end, true
-.assert "Evicted Low-RAM trampolines stay resident while targets live in HiRAM", re_equip_entry < PLATFORM_TIER_NAME_POOL_BASE && re_equip >= $a000 && re_equip < ovl_modal_misc_end && run_initialize < PLATFORM_TIER_NAME_POOL_BASE && run_initialize_impl >= $a000 && run_initialize_impl < ovl_modal_misc_end && item_spawn_level < PLATFORM_TIER_NAME_POOL_BASE && item_spawn_level_gen >= $a000 && item_spawn_level_gen < ovl_gen_end && tramp_item_pickup < PLATFORM_TIER_NAME_POOL_BASE && item_pickup >= $a000 && item_pickup < ovl_items_end && eff_wall_to_mud >= $a000 && eff_wall_to_mud < ovl_spell_end && title_enter_menu < PLATFORM_TIER_NAME_POOL_BASE && title_enter_menu_ovl >= $a000 && title_enter_menu_ovl < ovl_title_end && cx16_cold_boot_init >= $a000 && cx16_cold_boot_init < ovl_title_end, true
+.assert "Evicted Low-RAM trampolines stay resident while targets live in HiRAM", re_equip_entry < PLATFORM_TIER_NAME_POOL_BASE && re_equip >= $a000 && re_equip < ovl_modal_misc_end && run_initialize < PLATFORM_TIER_NAME_POOL_BASE && run_initialize_impl >= $a000 && run_initialize_impl < ovl_modal_misc_end && item_spawn_level < PLATFORM_TIER_NAME_POOL_BASE && item_spawn_level_gen >= $a000 && item_spawn_level_gen < ovl_gen_end && tramp_item_pickup < PLATFORM_TIER_NAME_POOL_BASE && item_pickup >= $a000 && item_pickup < ovl_items_end && eff_wall_to_mud >= $a000 && eff_wall_to_mud < ovl_spell_end && title_enter_menu < PLATFORM_TIER_NAME_POOL_BASE && title_enter_menu_ovl >= $a000 && title_enter_menu_ovl < ovl_title_end && cx16_cold_boot_init >= $a000 && cx16_cold_boot_init < ovl_title_end && player_init >= $a000 && player_init < ovl_start_end && player_bake_creation_stats >= $a000 && player_bake_creation_stats < ovl_start_end && tramp_door_try_open < PLATFORM_TIER_NAME_POOL_BASE && tramp_door_try_close < PLATFORM_TIER_NAME_POOL_BASE && tramp_door_pick_roll < PLATFORM_TIER_NAME_POOL_BASE && door_try_open >= $a000 && door_try_open < ovl_help_end && door_try_close >= $a000 && door_try_close < ovl_help_end && tramp_item_drop < PLATFORM_TIER_NAME_POOL_BASE && item_drop >= $a000 && item_drop < ovl_help_end, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

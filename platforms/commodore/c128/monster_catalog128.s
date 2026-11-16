@@ -29,6 +29,10 @@ catalog_names_filename:
 catalog_names_filename_end:
 .const CATALOG_NAMES_FILENAME_LEN = catalog_names_filename_end - catalog_names_filename
 #if !C128_CARTRIDGE
+catalog_ext_filename:
+    .text "128.CEX"
+catalog_ext_filename_end:
+.const CATALOG_EXT_FILENAME_LEN = catalog_ext_filename_end - catalog_ext_filename
 .macro C128Bank1LoadFile(filename, filename_len, dest) {
     lda #RESIDENT_HUFFMAN_FILE_NUM
     sta disk_temp
@@ -61,6 +65,15 @@ c128_load_catalog_names_prg:
 #else
     :C128Bank1LoadFile(catalog_names_filename, CATALOG_NAMES_FILENAME_LEN, BANK1_CATALOG_NAMES_BASE)
 #endif
+c128_load_catalog_ext_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_CEX
+    jmp cart_load_asset
+#else
+    :C128Bank1LoadFile(catalog_ext_filename, CATALOG_EXT_FILENAME_LEN, BANK1_CATALOG_EXT_BASE)
+#endif
+
+#import "catalog_ext_fetch128.s"
 
 .const CATALOG_NAME_POOL_BASE = BANK1_CATALOG_POOL_BASE
 .const CATALOG_NAME_POOL_END  = BANK1_CATALOG_POOL_END

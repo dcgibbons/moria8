@@ -76,7 +76,11 @@ player_create:
 .segment Default
 #import "../../../../core/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"

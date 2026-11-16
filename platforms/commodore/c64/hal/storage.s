@@ -107,12 +107,10 @@ hal_storage_init_selected_drive:
 .label hal_storage_marker_write_name = c64_marker_name_low
 .label hal_storage_marker_write_name_len = c64_marker_name_low_len
 
-.segment RuntimeBanked
 hal_storage_marker_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
-.segment Default
 
 // Platform-owned save-record filenames. PETSCII bytes for KERNAL SETNAM.
 hal_storage_save_write_name:

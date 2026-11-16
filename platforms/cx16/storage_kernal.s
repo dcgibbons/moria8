@@ -408,10 +408,14 @@ cx16_item_cat_name:
     .byte 0
 
 #if HAL_PLATFORM_MONSTER_CATALOG
-// Monster catalog filename (Bank 22)
+// Monster catalog filename (Bank 23) and extended catalog filename (Bank 5)
 cx16_catalog_name:
     .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$43,$41,$54 // "MONSTER.CAT"
 .label cx16_catalog_name_len = * - cx16_catalog_name
+
+cx16_catalog_ext_name:
+    .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$45,$58,$54 // "MONSTER.EXT"
+.label cx16_catalog_ext_name_len = * - cx16_catalog_ext_name
 #else
 // Tier data filenames
 hal_storage_tier_1_name:

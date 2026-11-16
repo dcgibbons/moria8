@@ -95,7 +95,12 @@ hal_item_cat_read_byte:
 #import "../../../../core/scene_mat_tile.s"
 .segment Default
 .segment TestCreateOverlay
-#import "../../../../core/monster_attack.s"
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
 #import "../../../../core/turn.s"
 .segment Default
 #import "../../../../core/ui_trampoline_stubs.s"

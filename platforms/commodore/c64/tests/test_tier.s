@@ -67,6 +67,7 @@ hal_player_recalc_pflags:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_character.s"
 .segment TestUnusedEgoArmour
 #import "../../../../core/stat_display.s"

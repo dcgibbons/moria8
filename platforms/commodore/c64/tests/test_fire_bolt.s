@@ -65,12 +65,16 @@ player_create:
 #import "../../../../core/recall.s"
 // Monster spells and breath are not exercised here: out of the way above
 // the result buffer (resistance armour, 2026-11-11, took the body past MAP_BASE).
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
 hal_item_cat_read_byte:
     brk
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 .segment TestUnusedMonsterMagic

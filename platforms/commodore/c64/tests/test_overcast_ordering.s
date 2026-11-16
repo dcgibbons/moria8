@@ -12,6 +12,7 @@
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -25,6 +26,7 @@ test_finish:
 .pc = $0830 "Main"
 
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestUnusedUI [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -39,10 +41,12 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestUnusedUI
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
+.segment Default
 .segment TestCreateOverlay
 player_create:
     brk
@@ -86,7 +90,9 @@ player_create:
 #import "../dungeon_render.s"
 .segment Default
 #import "../../../../core/dungeon_los.s"
+.segment TestUnusedUI
 #import "../../../../core/player_move.s"
+.segment Default
 .segment TestUnused
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"

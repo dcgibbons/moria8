@@ -47,9 +47,7 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 .segment TestUnusedMonsterMagic
 #import "../../../../core/ui_status.s"
-.segment Default
 #import "../../../../core/ui_help_clear.s"
-.segment TestUnusedMonsterMagic
 #import "../../../../core/stat_display.s"
 .segment Default
 .segment TestCreateOverlay
@@ -66,13 +64,19 @@ player_create:
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestUnusedMonsterMagic
-#import "../../../../core/monster_ai.s"
+mat_scene_dirty: .byte 0
+monster_ai_tick:
+    brk
 .segment Default
 #import "../../../../core/recall.s"
 // Monster spells and breath are not exercised here: out of the way above
 // the result buffer (resistance armour, 2026-11-11, took the body past MAP_BASE).
 .segment TestUnusedMonsterMagic
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/los_trace.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 #import "../../../../core/item.s"
 .segment TestCreateOverlay
@@ -81,7 +85,9 @@ player_create:
 .segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
@@ -99,7 +105,12 @@ player_create:
 #import "../../../../core/scene_mat_tile.s"
 .segment Default
 .segment TestCreateOverlay
-#import "../../../../core/monster_attack.s"
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
 #import "../../../../core/turn.s"
 .segment Default
 #import "../../../../core/ui_trampoline_stubs.s"

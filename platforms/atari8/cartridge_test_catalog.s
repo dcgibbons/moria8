@@ -1,6 +1,7 @@
 // Diagnostic driver only: executes the linked Atari cartridge catalog reader
 // across all 279 creature IDs while cart ROM is initially disabled, verifying
-// zp_math_a preservation and dual 16-bit record checksums in $C800..$CA2D.
+// zp_math_a preservation, cold/warm catalog_fetch_ext + cat_ext_record[0..7],
+// and dual 16-bit 57-byte record checksums in $C800..$CA2D.
 // Owner: platforms/atari8/ cartridge test infrastructure (never linked into ROM).
 // Lifetime: single verification pass from title_menu_loop.
 // Callers: platforms/atari8/test_cartridge.py Lua runner.
@@ -11,6 +12,8 @@
 .const NMIEN = $d40e
 .const PORTB = $d301
 .const PORTB_GAME_RAM = $fe
+.assert "Atari cartridge record size symbol is 57 B", a8_catalog_record_size == 57, true
+.assert "cat_ext_record aliases cat_record + 49", cat_ext_record == cat_record + CATALOG_RECORD_SIZE, true
 
 .pc = $c400
 test_start:
@@ -21,6 +24,22 @@ test_start:
     lda #PORTB_GAME_RAM
     sta PORTB
     sta CART_DISABLE
+
+    // Cold-sentinel test: invalidate cat_record[0..1] to $FFFF and verify
+    // catalog_fetch_ext on creature 0 misses cleanly and loads creature 0.
+    lda #$ff
+    sta cat_record
+    sta cat_record + 1
+    lda #0
+    sta cat_id_lo
+    sta cat_id_hi
+    jsr catalog_fetch_ext
+    lda cat_record
+    ora cat_record + 1
+    beq !cold_ok+
+    jmp test_fail
+!cold_ok:
+
     lda #0
     sta record_id
     sta record_id + 1
@@ -45,6 +64,12 @@ test_start:
     bne test_fail
     dex
     bpl !check_math-
+
+    // Verify warm catalog_fetch_ext fast-path preserves cat_ext_record[0..7]
+    // without touching zp_math_a (if it missed, seeded zp_math_a still survives,
+    // so poison CART_DIRECTORY read not needed: check IDs + checksums below).
+    jsr catalog_fetch_ext
+
     lda #0
     sta sum1
     sta sum2
@@ -58,7 +83,7 @@ test_start:
     adc sum2
     sta sum2
     inx
-    cpx #CATALOG_RECORD_SIZE
+    cpx #a8_catalog_record_size
     bne !byte-
     lda sum1
 out1:
@@ -82,10 +107,12 @@ out2:
 !check:
     lda record_id + 1
     cmp #>cart_catalog_count
-    bne !record-
+    bne !next_rec+
     lda record_id
     cmp #<cart_catalog_count
-    bne !record-
+    beq test_pass
+!next_rec:
+    jmp !record-
 test_pass:
     lda #1
     sta $c7f0

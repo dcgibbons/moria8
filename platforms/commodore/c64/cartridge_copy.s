@@ -78,15 +78,25 @@ cart_read:
     beq !copy+
     cmp #2
     beq !legal+
+    cmp #3
+    beq !ext_record+
     lda #<cat_record
     sta cart_destination + 1
     lda #>cat_record
     sta cart_destination + 2
     lda #CATALOG_RECORD_SIZE
+!record_tail:
     sta cart_count
     lda #0
     sta cart_count + 1
     beq !copy+
+!ext_record:
+    lda #<cat_ext_record
+    sta cart_destination + 1
+    lda #>cat_ext_record
+    sta cart_destination + 2
+    lda #CART_CATALOG_EXT_RECORD_SIZE
+    bne !record_tail-
 !legal:
     // ROM documents are page-padded, but each request must still fit its
     // descriptor. A missing terminator cannot read the following asset.

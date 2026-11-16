@@ -64,6 +64,7 @@ CX16_OVL_PRGS  = $(OUTCX16)/OVL.START $(OUTCX16)/OVL.TOWN $(OUTCX16)/OVL.DEATH $
 # The monster catalog (Banks 22-23) replaced the tiers on this port; the tier
 # rules below remain for builds without HAL_PLATFORM_MONSTER_CATALOG.
 CX16_CATALOG_PRGS = $(OUTCX16)/MONSTER.CAT
+CX16_MONSTER_EXT_PRG = $(OUTCX16)/MONSTER.EXT
 CX16_ITEM_CAT_PRG = $(OUTCX16)/ITEM.CAT
 CX16_TIER_PRGS = $(OUTCX16)/MONSTER.DB.1 $(OUTCX16)/MONSTER.DB.2 $(OUTCX16)/MONSTER.DB.3 $(OUTCX16)/MONSTER.DB.4
 CX16_TITLE_PRG = $(OUTCX16)/TITLE
@@ -81,6 +82,7 @@ CX16_CART_BOOT_BIN = $(CARTCX16_OUT)/bootrom.bin
 CX16_CART_STAMP    = $(CARTCX16_OUT)/.main.stamp
 CX16_CART_BOOT_STAMP = $(CARTCX16_OUT)/.boot.stamp
 CX16_CART_TITLE_PRG = $(CARTCX16_OUT)/TITLE
+CX16_CART_MONSTER_EXT_PRG = $(CARTCX16_OUT)/MONSTER.EXT
 CX16_CART_ITEM_CAT_PRG = $(CARTCX16_OUT)/ITEM.CAT
 CX16_CART_LIVE_TEST_PRG = $(CARTCX16_OUT)/cartridge_test_live.prg
 CX16_CART_OVL_NAMES = CX16.AUXDATA CX16.HUFFDATA MONSTER.CAT LEGALUI \
@@ -94,7 +96,7 @@ CX16_OVL_PRGS += $(OUTCX16)/LEGALUI
 
 all: build
 
-build: $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_ITEM_CAT_PRG) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER) $(CX16_CART_IMAGE) $(CX16_CART_BIN) $(CX16_CART_MANIFEST)
+build: $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_MONSTER_EXT_PRG) $(CX16_ITEM_CAT_PRG) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER) $(CX16_CART_IMAGE) $(CX16_CART_BIN) $(CX16_CART_MANIFEST)
 	@mkdir -p "$(OUTCX16)"
 
 disk: $(CX16_ZIP_IMAGE) $(CX16_CART_IMAGE) $(CX16_CART_BIN) $(CX16_CART_MANIFEST)
@@ -185,19 +187,25 @@ $(CX16_LICENSE): $(LICENSE_FILE) | $(OUTCX16)
 $(CX16_SOURCE_OFFER): $(SOURCE_OFFER) | $(OUTCX16)
 	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
 
+$(CX16_MONSTER_EXT_PRG): ../../platforms/shared/catalog/monster_catalog_spec.json ../../tools/build_catalog.py | $(OUTCX16)
+	python3 -B ../../tools/build_catalog.py ext-rows --prg-addr 0xa000 --out "$@"
+
+$(CX16_CART_MONSTER_EXT_PRG): ../../platforms/shared/catalog/monster_catalog_spec.json ../../tools/build_catalog.py | $(CARTCX16_OUT)
+	python3 -B ../../tools/build_catalog.py ext-rows --prg-addr 0xa000 --out "$@"
+
 $(CX16_ITEM_CAT_PRG): ../../platforms/shared/item_catalog/item_cat_data.s ../../platforms/shared/item_catalog/item_cat_layout.s ../../tools/catalog_disk.py | $(OUTCX16)
 	python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0, '../../tools'); import catalog_disk; p = Path('$@'); p.write_bytes(b'\x00\xa0' + catalog_disk.item_catalog_bytes())"
 
 $(CX16_CART_ITEM_CAT_PRG): ../../platforms/shared/item_catalog/item_cat_data.s ../../platforms/shared/item_catalog/item_cat_layout.s ../../tools/catalog_disk.py | $(CARTCX16_OUT)
 	python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0, '../../tools'); import catalog_disk; p = Path('$@'); p.write_bytes(b'\x00\xa0' + catalog_disk.item_catalog_bytes())"
 
-$(CX16_ZIP_IMAGE): $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_ITEM_CAT_PRG) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER)
+$(CX16_ZIP_IMAGE): $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_MONSTER_EXT_PRG) $(CX16_ITEM_CAT_PRG) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER)
 	rm -f "$@"
 	cd "$(OUTCX16)" && zip -q "$(abspath $(CX16_ZIP_IMAGE))" \
 		MORIA8.PRG CX16.AUXDATA CX16.HUFFDATA \
 		OVL.START OVL.TOWN OVL.DEATH OVL.MODAL OVL.GEN OVL.HELP \
 		OVL.UI OVL.ITEMS OVL.SPELL OVL.CHEST OVL.HOME OVL.STORAGE OVL.TITLE \
-		MONSTER.CAT ITEM.CAT \
+		MONSTER.CAT MONSTER.EXT ITEM.CAT \
 		TITLE LICENSE SOURCE-OFFER LEGALUI
 
 $(CARTCX16_OUT):
@@ -219,7 +227,7 @@ $(CX16_CART_LIVE_TEST_PRG): cartridge_test_live.s $(CARTCX16_OUT)/main.sym | ens
 	cp "$(CARTCX16_OUT)/main.sym" "$(CARTCX16_OUT)/cartridge_product_symbols.inc"
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" cartridge_test_live.s -libdir "$(CARTCX16_OUT)" -symbolfiledir "$(CARTCX16_OUT)" -symbolfile -o "$@"
 
-$(CX16_CART_IMAGE) $(CX16_CART_BIN) $(CX16_CART_MANIFEST) &: $(CX16_CART_PRGS) $(CARTCX16_OUT)/main.sym $(CX16_CART_BOOT_BIN) $(CARTCX16_OUT)/cartridge_boot.sym $(CX16_CART_TITLE_PRG) $(CX16_CART_ITEM_CAT_PRG) $(LICENSE_FILE) $(SOURCE_OFFER) $(VERSION_FILE) ../../tools/make_cx16_cart.py
+$(CX16_CART_IMAGE) $(CX16_CART_BIN) $(CX16_CART_MANIFEST) &: $(CX16_CART_PRGS) $(CARTCX16_OUT)/main.sym $(CX16_CART_BOOT_BIN) $(CARTCX16_OUT)/cartridge_boot.sym $(CX16_CART_TITLE_PRG) $(CX16_CART_MONSTER_EXT_PRG) $(CX16_CART_ITEM_CAT_PRG) $(LICENSE_FILE) $(SOURCE_OFFER) $(VERSION_FILE) ../../tools/make_cx16_cart.py
 	python3 -B ../../tools/make_cx16_cart.py \
 		--build-dir "$(CARTCX16_OUT)" \
 		--data-dir ../../data \

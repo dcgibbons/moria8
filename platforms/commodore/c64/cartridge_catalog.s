@@ -67,3 +67,37 @@ catalog_fetch_record:
     sta cart_is_record
     lda #CART_ASSET_CATALOG
     jmp cart_read
+
+.const CATALOG_EXT_RECORD_SIZE = CART_CATALOG_EXT_RECORD_SIZE
+cat_ext_record: .fill CATALOG_EXT_RECORD_SIZE, 0
+.assert "Extended catalog copy buffer stays below cartridge ROM", cat_ext_record + CATALOG_EXT_RECORD_SIZE <= $8000, true
+.assert "Extended catalog record is 8 bytes (3 shifts)", CATALOG_EXT_RECORD_SIZE, 8
+.assert "Extended catalog source-offset addition fits 16 bits", CATALOG_COUNT * CATALOG_EXT_RECORD_SIZE <= $6000, true
+
+// catalog_fetch_ext — Read creature cat_id_lo/hi's 8-byte extended record into cat_ext_record.
+// Preserves X, Y, caller $01/I, and all ZP.
+catalog_fetch_ext:
+    lda cat_id_hi
+    cmp #>CATALOG_COUNT
+    bcc !ext_valid+
+    bne !ext_invalid+
+    lda cat_id_lo
+    cmp #<CATALOG_COUNT
+    bcc !ext_valid+
+!ext_invalid:
+    jmp cart_invalid_asset
+!ext_valid:
+    lda cat_id_hi
+    sta cart_offset + 1
+    lda cat_id_lo
+    asl
+    rol cart_offset + 1
+    asl
+    rol cart_offset + 1
+    asl
+    rol cart_offset + 1
+    sta cart_offset
+    lda #3
+    sta cart_is_record
+    lda #CART_ASSET_CATALOG_EXT
+    jmp cart_read

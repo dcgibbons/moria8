@@ -45,6 +45,7 @@ def build_inputs(source: Path) -> dict[int, tuple[str, str, int, bytes, int]]:
     d_b0 = CONTRACT["CART_DEST_BANK0"]
     d_b1 = CONTRACT["CART_DEST_BANK1"]
     d_b1_top = CONTRACT["CART_DEST_BANK1_TOP_OFF"]
+    d_b1_noio = CONTRACT["CART_DEST_BANK1_NOIO"]
 
     inputs: dict[int, tuple[str, str, int, bytes, int]] = {
         CONTRACT["CART_ASSET_RESIDENT"]: ("resident", "moria128.prg", *prg(source / "moria128.prg", 0x1C01, 0xAF00), d_b0),
@@ -64,6 +65,7 @@ def build_inputs(source: Path) -> dict[int, tuple[str, str, int, bytes, int]]:
         CONTRACT["CART_ASSET_LEGAL_UI"]: ("legalui", "legalui", *prg(source / "legalui", 0xE000, 0xE600), d_b0),
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: ("license", "LICENSE", 0, (ROOT / "data/LICENSE").read_bytes(), d_b0),
         CONTRACT["CART_ASSET_LEGAL_OFFER"]: ("source-offer", "SOURCE-OFFER", 0, (ROOT / "data/SOURCE-OFFER").read_bytes(), d_b0),
+        CONTRACT["CART_ASSET_CEX"]: ("cex", "128.cex.prg", *prg(source / "128.cex.prg", 0xD000, 0xD8B8), d_b1_noio),
     }
     inputs.update({
         CONTRACT["CART_ASSET_" + symbol]: (f"ovl.{name}", f"ovl.{name}", *prg(source / f"ovl.{name}", 0xE000, 0xF000), d_b0)

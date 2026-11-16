@@ -9,7 +9,7 @@ import sys
 # that format: 33 inventory slots, the 20-byte known-item bitset, the
 # door-state block followed by the species table, and 40 creature rows of
 # recall (save.s, as the C128 fixture).
-SAVE_VERSION = 0x20
+SAVE_VERSION = 0x21
 ID_KNOWN_BYTES = 47
 MAX_DOOR_STATES = 16
 CATALOG_SLOTS = 32

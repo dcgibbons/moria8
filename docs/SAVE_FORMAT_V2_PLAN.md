@@ -4,6 +4,13 @@
 
 ---
 
+**Phase 5 bump (`2026-11-16`, maintainer: "with this big change, let's kill
+savefile compatibility again"):** every port's `hal_storage_save_version` and
+`hal_storage_save_v1_version` are `$21`. The stream layout below is unchanged,
+but `$20` saves made before the full VMS monster catalog are refused, and every
+Balrog-queue checkpoint fails `start_loads()` and plays again from level 1, as
+§1 describes for the `$20` cutover.
+
 ## 1. Single Save Format V2 Bump Policy
 
 All seven Moria8 ports switch in **one atomic Phase 4 bump** to Save Format V2:

@@ -1,9 +1,15 @@
 # Monster Catalog Design: the Whole Catalog, Picked as VMS Picks
 
 Status: implemented on the Commander X16 and C128 (2026-11-02), the C64
-and Plus/4 (2026-11-05) and the Apple IIe, BBC Master and Atari 8-bit
-(2026-11-05): every port. It replaces the depth-tier monster model. The maintainer's decisions
-are at the end.
+and Plus/4 (2026-11-05), and the Apple IIe, BBC Master and Atari 8-bit
+(2026-11-05); **Phase 5 full parity completed (2026-11-16)** across all **7 ports
+and 5 cartridges** (`29` SoA fields, **`279 / 279` playable species** with `0`
+degraded and `0` omitted, `cat_undead[35]`, all `4` attack slots, `19` `ADESC_*`
+verbs, `24` `ATK_*` effects, `5` `MSF2_*` spells, `CD_*` vulnerabilities/immunities,
+`CD_INVISIBLE`, `CM2_PHASE`/`CM2_EATS_OTHER`/`CM2_PICKS_UP`, and `15`-field `/`
+recall). It replaces the depth-tier monster model. Historical milestone records
+remain below; see **Phase 5 Completion (2026-11-16)** at the end for the final
+implemented layout.
 
 ## Why
 
@@ -111,7 +117,13 @@ table and the name block never shift. Which creatures spawn (maintainer,
 | 21-30 | 48 of 49 |
 | 31-40 | 47 of 50 |
 | 41-100 | 2 of 2 (Evil Iggy, the Balrog) |
-| **All** | **269 of 279** (113 with degraded abilities; 2026-11-08, after every breath element and Hold Person; the White Dragon Bat, Giant Black Dragon Fly and Blue Dragon Bat joined) |
+| **All (2026-11-08 milestone)** | **269 of 279** (113 with degraded abilities; superseded in Phase 5 below) |
+| **All (2026-11-16 Phase 5)** | **279 of 279 (`100%` playable, `0` degraded, `0` omitted across all 7 ports + 5 cartridges)** |
+
+> **Phase 5 Update (2026-11-16):** Every previously omitted or degraded creature
+> listed in the historical 2026-11-02 note below now plays at full VMS Moria 4.8
+> fidelity across all 7 ports and 5 cartridges (`cat_available` has all 279 bits
+> set; see **Phase 5 Completion** at the end of this document).
 
 Kept, degraded (in today's game with most abilities missing; maintainer,
 2026-11-02: "keep all"): Blubbering Icky-Thing, Poltergeist, Radiation Eye,
@@ -785,3 +797,56 @@ Decisions (maintainer, 2026-11-05):
     sector found at boot, each record's id checked, the sector chain walked
     if not, then the disk prompt; the 130XE preloads every record at boot;
     the 800XL's mid-play reads may flash the screen; save versions `$17`.
+
+## Phase 5 Completion: 29 SoA Fields, 279/279 Playable Species, & Extended Catalog (2026-11-16)
+
+Phase 5 (`docs/MEMORY_REDESIGN_PLAN.md` §4.3, §5, §6) completes Principle 2 across
+all **7 shipping ports and 5 native cartridges** (`279 / 279` playable creatures,
+`0` degraded, `0` omitted):
+
+1. **29 Resident SoA Fields (`40` Active Slots: `32` Dungeon + `8` Town):**
+   In addition to the 21 core catalog SoA fields (`cr_display`..`cr_treasure`)
+   plus `cr_name_lo/hi`, `core/monster.s` adds **8 Phase 5 extended SoA arrays**
+   (`CATALOG_EXT_FIELDS = 8`, `+320 B` resident):
+   - `cr_atk2_type`, `cr_atk2_dice`, `cr_atk2_sides` (attack slot 2, with 5-bit `ADESC_*` verb packed across `sides[7:4]:type[7]`)
+   - `cr_atk3_type`, `cr_atk3_dice`, `cr_atk3_sides` (attack slot 3)
+   - `cr_spell_flags2`: `MSF2_BLINK ($01)`, `MSF2_TELE_SELF ($02)`, `MSF2_SUMMON_UNDEAD ($04)`, `MSF2_SLOW ($08)`, `MSF2_DRAIN_MANA ($10)`, `CM2_PHASE ($20)`, `CM2_EATS_OTHER ($40)`, `CM2_PICKS_UP ($80)`
+   - `cr_cdefense`: `CD_FROST ($01)`, `CD_FIRE ($02)`, `CD_POISON ($04)`, `CD_ACID ($08)`, `CD_LIGHT ($10)`, `CD_STONE ($20)`, `CD_NO_SLEEP ($40)`, `CD_INVISIBLE ($80)`
+2. **Extended Catalog Index (`catalog_index.s`, `152 B`):**
+   Adds `cat_undead[35]` (`279`-bit undead bitmap immediately following
+   `cat_level_playable[41]`, asserted in `core/monster_catalog.s`) so
+   `monster_cast_summon_undead` (`MSF2_SUMMON_UNDEAD`) selects any undead species
+   across `0..278` without fetching non-matching catalog records. `cat_available`
+   marks **all `279 / 279` species playable**.
+3. **Per-Port Extended Catalog Storage (`catalog_fetch_ext -> cat_ext_record[8]`):**
+   - **C64 & Plus/4:** `MONSTER.CAT1-4` stays `49 B/record` (`56` sectors), paired
+     with **`MONSTER.EXT`** (`9` CBM DOS sectors, `31 × 8 B` records/sector +
+     `2 B` header; `cat_ext_sector_track/number[9]` appended to `MONSTER.IDX`),
+     preloaded to REU Bank 1 `$2000` when REU is present on C64, streamed via
+     `U1` sector read on 1541, and read from `CART_ASSET_CATALOG_EXT` (`2,232 B`)
+     on C64 EasyFlash and Plus/4 256 KB `.crt`.
+   - **C128:** `128.cex` (`2,232 B` = `279 × 8 B`) preloaded at boot into Bank 1
+     `$D000-$D8B7` (`128.CEX` on disk / `CART_ASSET_CEX` on MD128 `.crt`) and
+     read via `< $4000` `SEI` + `$7F` (`mmu_common_b1_noio_read_ptr0`, `C128M-014`).
+   - **Apple IIe:** PackBits `A2.CATEXT.PB` (`1,228 -> 2,232 B` in `MORIA8.PAK`)
+     unpacked at cold boot by `TitleOverlay:a2_boot_preload_aux_lc` into **Aux LC
+     Bank 2 `$D000-$D8B7`** and read via `SEI`, ZP-free `a2_aux_lc_bounce_xfer`.
+   - **Commander X16:** `MONSTER.CAT` (`21` core fields + `catalog_index.s`) in
+     **HiRAM Bank 23** (`5,976 B`) + **`MONSTER.EXT`** (`2,232 B`) in **HiRAM
+     Bank 5** (`CX16_BANK_CATALOG_EXT`, `$A000-$A8B7`), preloaded on `.zip` & `.crt`.
+   - **Atari 8-bit:** Widens `MONSTER.CAT` in place from `49 B` to **`57 B/record`**
+     (`49 B` base + `8 B` Phase 5 ext, still `2` records per `125 B` DOS 2.5
+     sector = **`140` `.atr` sectors**), preloaded into 130XE Slots `10..13, 15`
+     and stored as `279 × 57 = 15,903 B` in `CART_ASSET_CATALOG` on `.car`.
+   - **BBC Master 128:** **`MONEXT`** (`2,232 B` = `9` DFS sectors) streamed
+     `8 B/species` on demand via `< $3000` `OSGBPB A=$03` (`catalog_fetch_ext` in
+     `platforms/bbcmaster/memory_bank.s`).
+4. **Full `/` Monster Recall (`core/ui_recall.s`, `15` Displayed Fields):**
+   `catalog_recall_match_and_fill` snapshots both the 15 base fields and the 8
+   extended fields (`recall_view_atk2_*`, `recall_view_atk3_*`,
+   `recall_view_spell_flags2`, `recall_view_cdefense`) plus `recall[279]` counters
+   into resident `recall_view_*`, and `ui_recall_display` renders glyph, color,
+   name, `LV`, `AC`, `HP`, up to `4` typed/dice attacks (`HIT`, `STR`..`CHG`),
+   `Spl`, `Hurt` (`FIR CLD ACD PSN LIT STN`), `Traits` (`INVIS PHASE NO-SLP UNDEAD EVIL`),
+   and `K`/`D` counts across all 7 ports + 5 cartridges.
+

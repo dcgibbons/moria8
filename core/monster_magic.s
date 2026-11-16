@@ -13,13 +13,21 @@
 // ============================================================
 // Spell constants (MSF_* flags defined in monster.s)
 // ============================================================
-.const MAX_CAST_RANGE = 8
-.const MM_SPELL_COUNT = 8      // Total spell types (one per cr_spell_flags bit)
-.const MM_EFF_BLIND   = 0      // mm_effect_* table rows
-.const MM_EFF_CONFUSE = 1
-.const MM_EFF_FEAR    = 2
-.const MM_EFF_HOLD    = 3
-.const MM_SPELL_HOLD  = MM_SPELL_COUNT   // Hold Person's handler, after the MSF bits
+.const MAX_CAST_RANGE   = 8
+.const MM_SPELL_COUNT   = 8      // Total MSF_* spell bits (handlers 0..7)
+#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
+.const MM_SPELL2_COUNT  = 5      // Extended MSF2_* spell bits (handlers 8..12)
+#else
+.const MM_SPELL2_COUNT  = 0      // Legacy C64 unit tests park monster_magic in 4 KB TestCreateOverlay
+#endif
+.const MSF2_SPELL_MASK  = $1f
+.const MM_EFF_BLIND     = 0      // mm_effect_* table rows
+.const MM_EFF_CONFUSE   = 1
+.const MM_EFF_FEAR      = 2
+.const MM_EFF_HOLD      = 3
+.const MM_RECALL_HOLD   = MM_SPELL_COUNT      // 8: recall_spell_bit[8] == 1
+.const MM_SPELL_HOLD    = MM_SPELL_COUNT + MM_SPELL2_COUNT
+.const MM_HANDLER_COUNT = MM_SPELL_HOLD + 1
 
 #import "los_trace.s"
 #import "player_save.s"
@@ -28,11 +36,12 @@
 // ============================================================
 // Scratch variables
 // ============================================================
-mm_flags:      .byte 0         // Available spell flags for current monster
+mm_flags:      .byte 0         // Available MSF spell flags for current monster
+mm_flags2:     .byte 0         // Available MSF2 spell flags (& $1f)
 mm_bit_count:  .byte 0         // Number of set bits (available spells)
-mm_chosen:     .byte 0         // Randomly chosen spell index
-mm_msf_count:  .byte 0         // How many of the choices are MSF bits
-mm_kind:       .byte 0         // Breath element (MS_BREATH_*)
+mm_chosen:     .byte 0         // Randomly chosen spell index / handler scratch
+mm_msf_count:  .byte 0         // How many of the choices are MSF + MSF2 bits
+mm_kind:       .byte 0         // Breath element (MS_BREATH_*) / temp scratch
 
 // ============================================================
 // monster_can_cast — Check if monster wants to cast a spell
@@ -46,10 +55,15 @@ monster_can_cast:
     lda cr_spell_chance,x
     and #MS_FREQ_MASK
     beq !mcc_no+
-!mcc_has_chance:
-
-    // Save the 1-in-N frequency for later roll
+    // Save the 1-in-N frequency; also require >= 1 spell in MSF, MSF2[4:0], or MS_HOLD
     sta mm_flags              // Reuse as temp for N
+    lda cr_spell_flags2,x
+    and #MSF2_SPELL_MASK
+    ora cr_spell_flags,x
+    bne !mcc_has_chance+
+    lda cr_spell_chance,x
+    bpl !mcc_no+
+!mcc_has_chance:
 
     jsr monster_distance_to_player
     sta zp_los_step
@@ -81,36 +95,40 @@ monster_can_cast:
     clc                       // No cast
     rts
 
+// mm_count_bits_a — Add set-bit count of A into mm_bit_count. Clobbers: A
+mm_count_bits_a:
+!mcba_loop:
+    beq !mcba_done+
+    lsr
+    bcc !mcba_loop-
+    inc mm_bit_count
+    bne !mcba_loop-           // Always (<= 13)
+!mcba_done:
+    rts
+
 // ============================================================
 // monster_pick_spell — Select and execute a random spell
 // Input:  zp_mon_type, zp_mon_idx = monster index
 // Clobbers: everything
 // ============================================================
 monster_pick_spell:
-    // Load spell flags for this creature type
+    // Load and count spell flags (MSF + MSF2[4:0]) for this creature type
+    lda #0
+    sta mm_bit_count
     ldx zp_mon_type
     lda cr_spell_flags,x
     sta mm_flags
-
-    // Count set bits
-    lda #0
-    sta mm_bit_count
-    lda mm_flags
-    ldx #MM_SPELL_COUNT
-!mps_count:
-    lsr                       // Shift bit into carry
-    bcc !mps_no_bit+
-    inc mm_bit_count
-!mps_no_bit:
-    dex
-    bne !mps_count-
+    jsr mm_count_bits_a
+    lda cr_spell_flags2,x
+    and #MSF2_SPELL_MASK
+    sta mm_flags2
+    jsr mm_count_bits_a
 
     // VMS lists every spell bit as a choice: Hold Person is one more after
-    // the MSF bits, and a Multi-Hued dragon's five breaths are five (its
-    // MSF_BREATH and four more).
+    // the MSF/MSF2 bits, and a Multi-Hued dragon's five breaths are five
+    // (its MSF_BREATH and four more).
     lda mm_bit_count
     sta mm_msf_count
-    ldx zp_mon_type
     lda cr_spell_chance,x
     asl                       // C = Hold Person; the element in bits 5-7
     bcc !mps_no_hold+
@@ -131,7 +149,7 @@ monster_pick_spell:
     sta mm_chosen
     cmp mm_msf_count
     bcc !mps_msf+
-    // Past the MSF bits: the first is Hold Person if the caster has it,
+    // Past the MSF+MSF2 bits: the first is Hold Person if the caster has it,
     // the others (or all of them without it) more breaths.
     bne !mps_breath+          // Not the first past them (Z from the cmp)
     ldy zp_mon_type
@@ -144,28 +162,31 @@ monster_pick_spell:
     bne !mps_dispatch+        // Always
 !mps_msf:
 
-    // Walk bits again to find the Nth set bit
-    lda mm_flags
-    ldx #0                    // Bit position counter
+    // Walk 13 bits across (mm_flags2:mm_flags) -> handler 0..12
+    ldx #0                    // Handler index
     ldy #0                    // Set bit counter
 !mps_find:
-    lsr                       // Shift bit 0 into carry
+    lsr mm_flags2
+    ror mm_flags
     bcc !mps_skip+
-    // This bit is set — is it the one we want?
     cpy mm_chosen
     beq !mps_dispatch+
     iny
 !mps_skip:
     inx
-    cpx #MM_SPELL_COUNT
+    cpx #MM_SPELL_HOLD
     bcc !mps_find-
 
 !mps_done:
     rts
 
 !mps_dispatch:
-    // X = handler: the bit position (0-7), or MM_SPELL_HOLD
-    // Track spell in recall
+    // X = handler (0..13); clamp recall bit lookup to <= 8 (recall_spell_bit[8] == 1)
+    stx mm_chosen
+    cpx #MM_RECALL_HOLD
+    bcc !mps_recall_ok+
+    ldx #MM_RECALL_HOLD
+!mps_recall_ok:
 #if HAL_PLATFORM_MONSTER_CATALOG
     ldy zp_mon_type
     jsr recall_or_spell_slot
@@ -183,21 +204,31 @@ monster_pick_spell:
 #endif
 #endif
     // Dispatch through the handler table (RTS jump: push address - 1)
+    ldx mm_chosen
     lda mm_spell_hi,x
     pha
     lda mm_spell_lo,x
     pha
     rts
 
-// Handlers in cr_spell_flags bit order (MSF_* in monster.s)
+// Handlers in cr_spell_flags bit order (0..7), cr_spell_flags2[4:0] (8..12), and Hold Person
+#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
+.var mm_spell_handlers = List().add(monster_cast_wound_light, monster_cast_breath,
+    monster_cast_summon, monster_cast_teleport, monster_cast_blind,
+    monster_cast_confuse, monster_cast_wound_serious, monster_cast_fear,
+    monster_cast_blink, monster_cast_tele_self, monster_cast_summon_undead,
+    monster_cast_slow, monster_cast_drain_mana,
+    monster_cast_hold)
+#else
 .var mm_spell_handlers = List().add(monster_cast_wound_light, monster_cast_breath,
     monster_cast_summon, monster_cast_teleport, monster_cast_blind,
     monster_cast_confuse, monster_cast_wound_serious, monster_cast_fear,
     monster_cast_hold)
+#endif
 mm_spell_lo:
-    .fill MM_SPELL_COUNT + 1, <(mm_spell_handlers.get(i) - 1)
+    .fill MM_HANDLER_COUNT, <(mm_spell_handlers.get(i) - 1)
 mm_spell_hi:
-    .fill MM_SPELL_COUNT + 1, >(mm_spell_handlers.get(i) - 1)
+    .fill MM_HANDLER_COUNT, >(mm_spell_handlers.get(i) - 1)
 
 // ============================================================
 // mm_print_spell_msg — Print "THE <name> <suffix>"
@@ -266,6 +297,7 @@ monster_cast_hold:
     lda player_pflags
     and #PFLAG_FREE_ACT
     beq !mch_held+
+mm_unaffected_cast:
     jsr mm_print_cast_msg
     ldx #HSTR_CHEST_UNAFFECTED  // VMS "You are unaffected..." (MON-025)
     jmp huff_print_msg
@@ -286,6 +318,36 @@ monster_cast_confuse:
     sta $0000,y
 !done:
     rts
+
+#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
+// MSF2_SLOW ($08): VMS spell 16 — Free Action + wis save, else slow player
+monster_cast_slow:
+    lda player_pflags
+    and #PFLAG_FREE_ACT
+    bne mm_unaffected_cast
+    jsr mm_print_cast_msg
+    jsr mm_spell_save
+    bcc mm_print_resist
+    lda zp_eff_speed
+    bmi !mcsl_ext+
+    lda #5
+    jsr rng_range
+    adc #4                      // C clear: VMS randint(5) + 3 = 4..8
+    bne !mcsl_apply+
+!mcsl_ext:
+    lda #2                      // Extend active slow by 2
+!mcsl_apply:
+    sta mm_kind
+    lda zp_eff_speed
+    sec
+    sbc mm_kind
+    bvc !mcsl_store+
+    lda #$80                    // Clamp at -128
+!mcsl_store:
+    sta zp_eff_speed
+    ldx #HSTR_EFF_HASTE_END
+    jmp huff_print_msg
+#endif
 
 // Heroism makes the player immune, as for the fear touch (monster_attack.s).
 monster_cast_fear:
@@ -474,69 +536,109 @@ mm_apply_spell_damage_16:
     jmp player_death_check
 
 // ============================================================
-// Spell handler 3: monster_cast_summon
-// Summon a random monster adjacent to the caster
+// Spell handlers 3 & 11: monster_cast_summon / monster_cast_summon_undead
+// Summon an adjacent monster (or undead from cat_undead[35], VMS spell 15).
 // ============================================================
 monster_cast_summon:
-    // Print "THE <name> SUMMONS HELP!"
+#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
+    lda #0
+    .byte $2c                   // BIT abs: skip lda #1
+monster_cast_summon_undead:
+    lda #1
+    sta mm_chosen
+#endif
     ldx #HSTR_MM_SUMMON
     jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
-
-    // Try to find a walkable adjacent tile
-    lda #8
-    jsr rng_range             // Random direction [0, 7]
-    tax
-    lda zp_mon_x
-    clc
-    adc dir_dx,x
-    sta ms_spawn_x
-    lda zp_mon_y
-    clc
-    adc dir_dy,x
-    sta ms_spawn_y
-
-    // Check if tile is walkable and unoccupied
-    ldx ms_spawn_y
-    jsr map_row_ptr0_x
-    ldy ms_spawn_x
-    :MapRead_ptr0_y()
-    sta zp_mon_scratch2       // Save tile byte
-
-    // Check walkable
-    and #TILE_TYPE_MASK
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-    lda walkable_table,x
-    beq !mcs_fail+            // Not walkable
-
-    // Check not occupied
-    lda zp_mon_scratch2
-    and #FLAG_OCCUPIED
-    bne !mcs_fail+
-
-    // Spawn a depth-appropriate dungeon creature using the shared selector.
     lda zp_player_dlvl
-    beq !mcs_fail+
+    beq !mcs_done+
+    jsr find_adjacent_empty_mon // → ms_spawn_x/y
+    bcc !mcs_done+
+#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
+    lda mm_chosen
+    bne !mcsu_undead+
+#endif
     jsr tier_check_transition
     jsr pick_creature_type
+#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
+    jmp !mcs_spawn+
+!mcsu_undead:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    lda #35
+    jsr rng_range
+    tax
+    :CatalogMap()
+!mcsu_byte:
+    lda cat_undead,x
+    bne !mcsu_found_byte+
+    inx
+    cpx #35
+    bcc !mcsu_byte-
+    ldx #0
+    beq !mcsu_byte-
+!mcsu_found_byte:
+    ldy #0
+!mcsu_scan_bits:
+    lsr
+    bcs !mcsu_got_id+
+    iny
+    bne !mcsu_scan_bits-
+!mcsu_got_id:
+    lda #0
+    sta cat_id_hi
+    txa
+    asl
+    asl
+    asl
+    rol cat_id_hi
+    sty mm_kind
+    ora mm_kind
+    sta cat_id_lo
+    :CatalogUnmap()
+    jsr catalog_slot_for_id
+#else
+    jsr tier_check_transition
+    lda #0
+    sta mm_bit_count
+    tay
+!mcsu_cnt_loop:
+    cpy active_dungeon_count
+    bcs !mcsu_cnt_done+
+    lda cr_mflags,y
+    and #CF_UNDEAD
+    beq !mcsu_cnt_next+
+    inc mm_bit_count
+!mcsu_cnt_next:
+    iny
+    bne !mcsu_cnt_loop-
+!mcsu_cnt_done:
+    lda mm_bit_count
+    beq !mcs_done+
+    jsr rng_range
+    sta mm_kind
+    ldy #0
+!mcsu_pick_loop:
+    lda cr_mflags,y
+    and #CF_UNDEAD
+    beq !mcsu_pick_next+
+    lda mm_kind
+    beq !mcsu_got_slot+
+    dec mm_kind
+!mcsu_pick_next:
+    iny
+    bne !mcsu_pick_loop-
+!mcsu_got_slot:
+    tya
+#endif
+#endif
+!mcs_spawn:
     jsr monster_spawn_one
-    // Ignore failure (table could be full)
-
-!mcs_fail:
+    inc zp_dirty_count
+!mcs_done:
     rts
 
 // ============================================================
 // Spell handler 4: monster_cast_teleport — Teleport To (VMS spell 7)
-// "THE <name> casts a spell.", then the player lands on a free floor square
-// next to the caster (VMS spells.inc teleport_to; Umoria
-// spellTeleportPlayerTo). Upstream tries squares within 1 of the caster and
-// widens the ring after 10 misses; Moria8 tries the 8 neighbours
-// (find_adjacent_empty, never the player's own square) and leaves the
-// player in place when all are blocked.
 // ============================================================
 monster_cast_teleport:
     jsr mm_print_cast_msg
@@ -548,5 +650,127 @@ monster_cast_teleport:
 !mct_done:
     rts
 
+#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
+// ============================================================
+// Extended MSF2_* spell handlers (VMS creature.inc cast_spell 5, 6, 16, 17)
+// ============================================================
 
-// Strings migrated to Huffman compression (HSTR_MM_* in huffman_data.s)
+// MSF2_BLINK ($01) & MSF2_TELE_SELF ($02): self-teleport ~10 or long-range
+monster_cast_blink:
+    lda #10
+    .byte $2c                   // BIT abs: skip lda #60
+monster_cast_tele_self:
+    lda #60                     // Long-range across floor; >0 rejects own tile
+    sta mm_kind
+    lda #8
+    sta mm_bit_count
+    lda zp_player_x
+    sta mm_flags
+    lda zp_player_y
+    sta mm_flags2
+    lda zp_mon_x
+    sta zp_player_x
+    lda zp_mon_y
+    sta zp_player_y
+!mcts_try:
+    lda mm_kind
+    jsr find_random_floor_near
+    bcc !mcts_restore+
+    lda df_target_x
+    cmp mm_flags
+    bne !mcts_apply+
+    lda df_target_y
+    cmp mm_flags2
+    bne !mcts_apply+
+    dec mm_bit_count
+    bne !mcts_try-
+    beq !mcts_restore+
+!mcts_apply:
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+    jsr eff_move_caster_to_target
+#else
+    ldx zp_mon_y
+    ldy zp_mon_x
+    jsr mm_toggle_occ_xy
+    ldx df_target_y
+    stx zp_mon_y
+    ldy df_target_x
+    sty zp_mon_x
+    jsr mm_toggle_occ_xy
+    ldx zp_mon_idx
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda zp_mon_x
+    sta (zp_ptr0),y
+    iny                         // MX_Y
+    lda zp_mon_y
+    sta (zp_ptr0),y
+    inc zp_dirty_count
+#endif
+!mcts_restore:
+    lda mm_flags
+    sta zp_player_x
+    lda mm_flags2
+    sta zp_player_y
+    rts
+
+#if !HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+mm_toggle_occ_xy:
+    jsr map_row_ptr0_x
+    :MapRead_ptr0_y()
+    eor #FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+    rts
+#endif
+
+// MSF2_DRAIN_MANA ($10): VMS spell 17 — drain randint(lev)/2 + 1 MP, heal 6*r1 HP
+monster_cast_drain_mana:
+    lda zp_player_mp
+    beq !mcdm_done+
+    sta mm_flags2               // Save current player MP
+    ldx zp_mon_type
+    lda cr_level,x
+    jsr rng_range               // 0..lev-1 (rng_range(0) -> 0)
+    lsr                         // C = r & 1; A = r >> 1
+    adc #1                      // (r >> 1) + (r & 1) + 1 == floor((r + 1) / 2) + 1
+    cmp mm_flags2
+    bcc !mcdm_sub+
+    lda mm_flags2               // Clamp drained amount to current MP
+!mcdm_sub:
+    sta mm_kind                 // r1 drained
+    lda mm_flags2
+    sec
+    sbc mm_kind
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    // Heal monster by 6 * r1 (16-bit, clamped at $7fff)
+    lda mm_kind
+    ldx #6
+    jsr math_multiply
+    ldx zp_mon_idx
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    clc
+    adc zp_math_a
+    sta (zp_ptr0),y
+    iny                         // MX_HP_HI
+    lda (zp_ptr0),y
+    adc zp_math_b
+    bpl !mcdm_hp_ok+
+    lda #$7f
+!mcdm_hp_ok:
+    sta (zp_ptr0),y
+    lda #<mm_drain_mana_suffix
+    sta zp_ptr2
+    lda #>mm_drain_mana_suffix
+    sta zp_ptr2_hi
+    jmp mm_print_spell_msg
+!mcdm_done:
+    rts
+
+.encoding "screencode_mixed"
+mm_drain_mana_suffix:
+    .text " drains mana!"
+    .byte 0
+#endif

@@ -38,6 +38,10 @@ test_finish:
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 .segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL              // not exercised here; frees room below MAP_BASE
@@ -121,6 +125,10 @@ hal_item_cat_read_byte:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 .segment TestUnusedEgoArmour
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
 #import "../../../../core/item_actions_overlay.s"
 .segment Default
 #import "../dungeon_render.s"

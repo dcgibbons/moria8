@@ -68,10 +68,13 @@ player_create:
 #import "../../../../core/monster_ai.s"
 .segment Default
 #import "../../../../core/recall.s"
-// Monster spells and breath are not exercised here: out of the way above
-// the result buffer (resistance armour, 2026-11-11, took the body past MAP_BASE).
-.segment Default
-#import "../../../../core/monster_magic.s"
+// Monster spells and breath are not exercised here: stubbed in the $D000 test
+// overlay so accidental execution hits BRK / parked_tripwire.
+#import "../../../../core/element_resist.s"
+.segment TestCreateOverlay
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"

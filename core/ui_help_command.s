@@ -5,10 +5,30 @@
 // C128ResidentPlay (128.play) on C128; A2PlaySlot (a2.play) on Apple IIe;
 // BeebPlaySlot (beeb.play) on BBC Master 128.
 // Lifetime: one gameplay Help (?) modal session, entered from main_loop.
+#if !HELP_CMD_KEYS_DEFINED
+#define HELP_CMD_KEYS_DEFINED
 .const HELP_KEY_Q = $51
 .const HELP_KEY_SPACE = $20
 .const HELP_KEY_RETURN = $0d
+#endif
 
+#if HELP_CMD_BODY_EXTERNAL
+cmd_show_help_view:
+    lda #0
+    sta help_page_idx
+!help_outer_loop:
+    jsr tramp_help_cmd_body
+#if HAL_PLATFORM_LEGAL_VIEWER
+    bcc !help_done+
+    jsr tramp_ui_legal_display
+#if HAL_PLATFORM_LEGAL_CANCEL_EXITS_HELP
+    bcs !help_done+             // The program disk can still be unavailable.
+#endif
+    jmp !help_outer_loop-
+#endif
+!help_done:
+    jmp ui_view_return_to_gameplay_view
+#else
 cmd_show_help_view:
     lda #0
     sta help_page_idx
@@ -46,3 +66,4 @@ cmd_show_help_view:
     jmp !help_page_loop-
 !help_done:
     jmp ui_view_return_to_gameplay_view
+#endif

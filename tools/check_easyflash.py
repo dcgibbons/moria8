@@ -65,7 +65,8 @@ def check(crt: Path, source: Path) -> None:
              contract["CART_ASSET_LEGAL_UI"]: "legalui",
              contract["CART_ASSET_LEGAL_NOTICE"]: None,
              contract["CART_ASSET_LEGAL_OFFER"]: None,
-             contract["CART_ASSET_ITEM_CATALOG"]: None}
+             contract["CART_ASSET_ITEM_CATALOG"]: None,
+             contract["CART_ASSET_CATALOG_EXT"]: None}
     names.update({contract["CART_ASSET_" + symbol]: f"ovl.{name}"
                   for symbol, name in make_easyflash.OVERLAYS})
     previous_end = 8192
@@ -78,9 +79,12 @@ def check(crt: Path, source: Path) -> None:
             assert address == 0x8000, "Boot copier requires an aligned resident source"
         if asset_id == contract["CART_ASSET_INDEX"]:
             arrays = catalog_disk.byte_arrays((catalog_disk.CATALOG / "catalog_index.s").read_text())
-            expected = b"\x00\xce" + bytes(arrays["cat_level_raw"] + arrays["cat_level_playable"] + arrays["cat_available"])
+            bitmap = arrays["cat_available"] if "cat_available" in arrays else arrays["cat_undead"]
+            expected = b"\x00\xce" + bytes(arrays["cat_level_raw"] + arrays["cat_level_playable"] + bitmap)
         elif asset_id == contract["CART_ASSET_CATALOG"]:
             expected = b"\0\0" + b"".join(catalog_disk.records())
+        elif asset_id == contract["CART_ASSET_CATALOG_EXT"]:
+            expected = b"\0\0" + b"".join(catalog_disk.ext_records())
         elif asset_id == contract["CART_ASSET_ITEM_CATALOG"]:
             expected = b"\0\0" + catalog_disk.item_catalog_bytes()
         elif asset_id in (contract["CART_ASSET_LEGAL_NOTICE"], contract["CART_ASSET_LEGAL_OFFER"]):

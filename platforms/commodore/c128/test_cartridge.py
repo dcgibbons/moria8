@@ -407,6 +407,20 @@ class Experiment:
         self.until(end, start=scratch)
         return bool(self.memory(result, 1)[0] & 1)
 
+    def call_catalog_fetch_ext(self, creature_id: int) -> bytes:
+        scratch = self.sym["program_end"]
+        assert scratch + 0x20 < 0xAF00, f"No scratch headroom below $AF00: program_end=${scratch:04x}"
+        self.write(self.sym["cat_id_lo"], bytes([creature_id & 0xFF]))
+        self.write(self.sym["cat_id_hi"], bytes([(creature_id >> 8) & 0xFF]))
+        self.write(self.sym["cat_ext_record"], b"\xa5" * 8)
+        fn = self.sym["catalog_fetch_ext"]
+        code = [0x20, fn & 255, fn >> 8]
+        end = scratch + len(code)
+        code += [0x4C, end & 255, end >> 8]
+        self.write(scratch, bytes(code))
+        self.until(end, start=scratch)
+        return self.memory(self.sym["cat_ext_record"], 8)
+
     def check(self, message: str) -> None:
         self.count += 1
         self.event("check", message=message)
@@ -563,17 +577,27 @@ def run_cartridge_boot_and_assets(args: argparse.Namespace) -> int:
             ("128.bank.prg", 0xF000, "ram"),
             ("128.cat.prg", 0x7E60, "ram01"),
             ("128.cnm.prg", 0xA000, "ram01"),
+            ("128.cex.prg", 0xD000, "ram01"),
         ):
             payload = (cart_dir / filename).read_bytes()[2:]
             assert exp.memory(addr, len(payload), bank) == payload, filename
+        cex_payload = (cart_dir / "128.cex.prg").read_bytes()[2:]
+        assert len(cex_payload) == 279 * 8
         assert exp.memory(0x7400, 1116, "ram01") == b"\x00" * 1116
         huff = (cart_dir / "128.huff.prg").read_bytes()[2:]
         hvec = (cart_dir / "128.hvec.prg").read_bytes()[2:]
         assert exp.memory(0xF000, len(huff), "ram01") == huff
         assert exp.memory(0xFFFA, len(hvec), "ram01") == hvec
-        exp.check("Bank 0 resident image, banked runtime, Bank 1 recall BSS, and 279-creature catalog/Huffman/vector match")
+        exp.check("Bank 0 resident image, banked runtime, Bank 1 recall BSS, and 279-creature catalog+cex/Huffman/vector match")
 
         exp.until(exp.sym["title_menu_loop"])
+        paused_title = exp.until(exp.sym["hal_input_get_key"], alternatives=(exp.sym["input_get_key_fast"],))
+        for cid in (0, 1, 100, 255, 256, 278):
+            got_ext = exp.call_catalog_fetch_ext(cid)
+            want_ext = cex_payload[cid * 8 : (cid + 1) * 8]
+            assert got_ext == want_ext, f"cart catalog_fetch_ext({cid}): {got_ext!r} != {want_ext!r}"
+        exp.cmd(f"r pc={paused_title:04x}")
+        exp.check("production catalog_fetch_ext read Bank 1 $D000-$D8B7 128.cex records via $7F helper")
         assert exp.memory(exp.sym["program_device"], 2) == b"\x08\x08"
         assert exp.memory(exp.sym["disk_mode"], 1) == b"\x00"
         assert exp.memory(exp.sym["disk_setup_done"], 1) == b"\x00"
@@ -789,12 +813,18 @@ def run_persistence_and_interchange(args: argparse.Namespace) -> int:
     finally:
         exp.close()
 
-    # Verify disk edition loads the cartridge-written .d71 save identically
+    # Verify disk edition loads 128.cex into Bank 1 $D000-$D8B7 and loads cartridge-written .d71 save identically
+    disk_cex = (args.disk_symbols.parent / "128.cex.prg").read_bytes()[2:]
     exp2 = Experiment(args, name="disk-load-crt-save", drive9=save_disk, disk_build=True)
     try:
+        assert exp2.memory(0xD000, len(disk_cex), "ram01") == disk_cex
         setup_disk(exp2, disk_build=True, drive=9)
         load_character(exp2, expected)
-        exp2.check("disk edition loaded cartridge-written .d71 save identically")
+        paused_disk = exp2.until(exp2.sym["hal_input_get_key"], alternatives=(exp2.sym["input_get_key_fast"],))
+        for cid in (0, 100, 278):
+            assert exp2.call_catalog_fetch_ext(cid) == disk_cex[cid * 8 : (cid + 1) * 8]
+        exp2.cmd(f"r pc={paused_disk:04x}")
+        exp2.check("disk edition loaded 128.cex to Bank 1 $D000, verified catalog_fetch_ext, and loaded cartridge .d71 save")
         count += exp2.count
     finally:
         exp2.close()

@@ -68,6 +68,7 @@ icr_end_lo:         .byte 0
 icr_end_hi:         .byte 0
 icr_track:          .byte 0
 icr_sector:         .byte 0
+icr_bp_off:         .byte 0
 icr_save_x:         .byte 0
 icr_idx:            .byte 0
 icr_skip_lo:        .byte 0
@@ -186,30 +187,9 @@ hal_item_cat_read_byte:
     jsr hal_storage_setlfs
     jsr hal_storage_open
 
-    ldx #15
-    jsr hal_storage_chkout
-    lda #0
-    jsr icr_put_text
-    lda icr_track
-    jsr icr_put_num
-    lda #$20
-    jsr hal_storage_chrout
-    lda icr_sector
-    jsr icr_put_num
-    lda #$0d
-    jsr hal_storage_chrout
-    jsr hal_storage_clrchn
-    jsr icr_drive_ok            // a refused U1: no CHKIN to a channel the drive lacks
-    bcs !icr_cmd_failed+
-    ldx #15
-    jsr hal_storage_chkout
-    lda #icr_bp - icr_u1
-    jsr icr_put_text
     lda #2
-    jsr icr_put_num
-    lda #$0d
-    jsr hal_storage_chrout
-    jsr hal_storage_clrchn
+    jsr icr_send_u1_bp
+    bcs !icr_cmd_failed+
 
     ldx #ICR_LFN
     jsr hal_storage_chkin
@@ -375,15 +355,54 @@ icr_from_reu:
     rts
 #endif
 
+.const ICR_BP_OFFSET = 8
+
+// icr_send_u1_bp — Shared direct-sector seek helper for item_catalog_records.s
+// and catalog_fetch.s (#367 #7):
+//   1) Send "U1 5 0 <icr_track> <icr_sector>\r" on channel 15, CLRCHN
+//   2) Check drive status via icr_drive_ok; if C=1, abort BEFORE CHKIN 5
+//      so a refused "#" buffer ("70, NO CHANNEL") can never hang serial talk
+//   3) Send "B-P 5 <A>\r" on channel 15, CLRCHN, return C=0.
+// Input: A = buffer byte offset (2..255), icr_track, icr_sector
+// Output: C = 0 on OK, C = 1 on drive error
+// Clobbers: A, X, Y, zp_temp0, zp_temp1, zp_temp3, nf_value_2
+icr_send_u1_bp:
+    sta icr_bp_off
+    ldx #15
+    jsr hal_storage_chkout
+    lda #0
+    jsr icr_put_text
+    lda icr_track
+    jsr icr_put_num
+    lda #$20
+    jsr hal_storage_chrout
+    lda icr_sector
+    jsr icr_put_num
+    lda #$0d
+    jsr hal_storage_chrout
+    jsr hal_storage_clrchn
+    jsr icr_drive_ok
+    bcs !isub_done+
+    ldx #15
+    jsr hal_storage_chkout
+    lda #ICR_BP_OFFSET
+    jsr icr_put_text
+    lda icr_bp_off
+    jsr icr_put_num
+    lda #$0d
+    jsr hal_storage_chrout
+    jsr hal_storage_clrchn
+    clc
+!isub_done:
+    rts
+
 // icr_drive_ok — After a command on the command channel (LFN 15, open): the
 // first digit of the drive's status, carry clear for "0x", set for an error
 // (the next command resets the message, so the rest is left unread). A
 // buffer channel the drive refused ("70, NO CHANNEL") got a CHKIN anyway,
 // and the KERNAL's talk turnaround waits for a talker that never comes: the
 // Plus/4 hung buying in a store (playtest gate, 2026-11-15, once in about
-// 2,200 sector reads). Not for catalog_fetch.s: its U1 and B-P go in one
-// command string, which the drive answers with a syntax error, its record id
-// checked instead.
+// 2,200 sector reads). Shared with catalog_fetch.s via icr_send_u1_bp.
 // Clobbers: A, X, Y
 icr_drive_ok:
     ldx #15
@@ -423,6 +442,7 @@ icr_put_num:
 
 icr_u1:   .text "U1 5 0 " ; .byte 0
 icr_bp:   .text "B-P 5 " ; .byte 0
+.assert "icr_bp offset matches ICR_BP_OFFSET", icr_bp - icr_u1, ICR_BP_OFFSET
 icr_hash: .text "#"
 icr_name: .text "ITEM.CAT"
 icr_name_end:

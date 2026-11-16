@@ -125,44 +125,13 @@ player_data:
 player_background:
     .fill 160, 0
 
-// Character sheet strings (main RAM — referenced by $F000 banked code)
-char_sex_label:
-    .text "Sex: " ; .byte 0
-char_sex_male:
-    .text "Male" ; .byte 0
-char_sex_female:
-    .text "Female" ; .byte 0
-char_sc_label:
-    .text "  SC: " ; .byte 0
-
 // ============================================================
 // Subroutines
 // ============================================================
 
-// player_init — Zero out player struct
-// Preserves: nothing
-player_init:
-    lda #0
-    ldx #PL_STRUCT_SIZE - 1
-!loop:
-    sta player_data,x
-    dex
-    bpl !loop-
-    lda #99
-    ldx #31
-!spell_order_loop:
-    sta player_data + PL_SPELL_ORDER,x
-    dex
-    bpl !spell_order_loop-
-    // Clear player_background (160 bytes = 2 x 80)
-    lda #0
-    ldx #79
-!bg_loop:
-    sta player_background,x
-    sta player_background + 80,x
-    dex
-    bpl !bg_loop-
-    rts
+#if !PLAYER_CHARGEN_EXTERNAL
+#import "player_chargen_cold.s"
+#endif
 
 // player_sync_to_zp — Copy hot fields from struct to ZP
 // Called after loading a save or modifying the struct directly.
@@ -269,89 +238,6 @@ player_calc_stats:
     iny
     cpy #STAT_COUNT
     bne !stat_loop-
-    jmp !pcs_equipment+
-
-// player_bake_creation_stats — Character-creation entry: fold race/class
-// modifiers into base stats with the upstream randomized exceptional
-// stepping, making the roll permanent. The only randomizing stat path.
-player_bake_creation_stats:
-    lda #1
-    sta stat_bake_mode
-    jmp player_bake_stat_modifiers
-
-// player_bake_stat_modifiers — Fold race/class modifiers into base stats and
-// mirror the result into current stats, making the roll permanent.
-// stat_bake_mode nonzero (character creation): upstream randomized stepping
-// for the 18+ band — the only place stats may randomize.
-// stat_bake_mode zero (legacy-save migration): exact signed arithmetic, so
-// pre-baked saves convert deterministically.
-// Preserves: nothing
-stat_bake_mode: .byte 0
-
-player_bake_stat_modifiers:
-    // Precompute race*6 into zp_temp0 (safe across math_dice)
-    lda player_data + PL_RACE
-    asl
-    sta zp_temp0
-    asl
-    clc
-    adc zp_temp0
-    sta zp_temp0            // zp_temp0 = race * 6
-
-    // Precompute class*6 into zp_temp2 (safe across math_dice)
-    lda player_data + PL_CLASS
-    asl
-    sta zp_temp2
-    asl
-    clc
-    adc zp_temp2
-    sta zp_temp2            // zp_temp2 = class * 6
-
-    ldy #0                  // Stat index
-!bake_loop:
-    sty zp_temp1            // Save stat index (safe across math_dice)
-
-    // Start with base stat
-    lda player_data + PL_STR_BASE,y
-    sta stat_work
-
-    // Apply race modifier
-    lda zp_temp0            // race*6
-    clc
-    adc zp_temp1            // + stat_index
-    tax
-    lda race_stat_adj,x
-    jsr player_bake_apply_one
-
-    // Apply class modifier
-    lda zp_temp2            // class*6
-    clc
-    adc zp_temp1            // + stat_index
-    tax
-    lda class_stat_adj,x
-    jsr player_bake_apply_one
-
-    // Bake result into base and current
-    ldy zp_temp1
-    lda stat_work
-    sta player_data + PL_STR_BASE,y
-    sta player_data + PL_STR_CUR,y
-
-    iny
-    cpy #STAT_COUNT
-    bne !bake_loop-
-    rts
-
-// player_bake_apply_one — Apply modifier A to stat_work per stat_bake_mode.
-player_bake_apply_one:
-    ldx stat_bake_mode
-    bne !pbao_roll+
-    clc
-    adc stat_work
-    sta stat_work
-    rts
-!pbao_roll:
-    jmp apply_modifier
 
 !pcs_equipment:
     // The equipment's stat bonuses (equip_stat_mask_x) use p1 as a signed
@@ -401,7 +287,7 @@ player_bake_apply_one:
 
     // Persistent effect flags from the equipment: the routine below, by
     // falling through, or by a jump where a port places it elsewhere.
-#if PLAYER_RECALC_PFLAGS_EXTERNAL
+#if PLAYER_RECALC_PFLAGS_EXTERNAL || PLAYER_PFLAGS_EXTERNAL
     jmp hal_player_recalc_pflags
 #elif PFLAGS_SEGMENT_CUSTOM
     jmp player_recalc_pflags_equipment
@@ -410,181 +296,20 @@ player_bake_apply_one:
 .assert "The jewels' flag ranges do not overlap (player_recalc_pflags_equipment)", ITEM_TYPE_RING_SLAYING <= ITEM_TYPE_AMULET_MAGI && ITEM_TYPE_AMULET_MAGI < ITEM_TYPE_RING_LORDLY_FIRE, true
 .assert "Weapon, body, shield and head slots are contiguous", EQUIP_BODY == EQUIP_WEAPON + 1 && EQUIP_SHIELD == EQUIP_BODY + 1 && EQUIP_HEAD == EQUIP_SHIELD + 1, true
 
+#if !PLAYER_PFLAGS_EXTERNAL
 // The equipment flags: a port short of resident room places them with
 // :PflagsSegment()/:PflagsRestoreSegment() (Plus/4 and Atari: their
 // always-visible $F000 RuntimeBanked; C64: $F000 RuntimeBanked behind
-// PLAYER_RECALC_PFLAGS_EXTERNAL).
+// PLAYER_RECALC_PFLAGS_EXTERNAL), or imports player_pflags_cold.s into
+// an overlay under PLAYER_PFLAGS_EXTERNAL.
 #if !PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {}
 .macro PflagsRestoreSegment() {}
 #endif
 :PflagsSegment()
-player_recalc_pflags_equipment:
-    lda #0
-    sta pfe_f0
-    sta pfe_f1
-    sta pfe_f2
-    sta pfe_f3
-    sta player_sust_mask
-    ldx #7
-!pfe_zero_wield:
-    sta wield_weight_lo,x
-    dex
-    bpl !pfe_zero_wield-
-
-    ldx #EQUIP_WEAPON
-!pfe_slot:
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !pfe_chk_ego+
-    lda inv_ego,x
-    and #ITEM_PAGE_BIT
-    sta item_cur_page
-    lda inv_item_id,x
-    jsr item_cat_select_id
-    jsr item_cat_get_effects
-    jsr !pfe_merge_flags+
-    lda icat_flags_2
-    and #ITR2_SUST_STAT
-    beq !pfe_not_item_sust+
-    ldy icat_p1_lo
-    cpy #7
-    bcc !pfe_sust_ok+
-    ldy #0
-!pfe_sust_ok:
-    lda sust_p1_to_mask,y
-    ora player_sust_mask
-    sta player_sust_mask
-!pfe_not_item_sust:
-    cpx #EQUIP_WEAPON
-    bne !pfe_chk_ego+
-    // Cache hot wielded weapon stats so combat/turn never touch ITEM.CAT
-    jsr item_cat_get_weight         // A=lo, Y=hi
-    sta wield_weight_lo
-    sty wield_weight_hi
-    jsr item_cat_get_dmg_packed
-    sta wield_dmg_packed
-    jsr item_get_category_inv_x     // preserves X
-    cmp #ICAT_WEAPON
-    bne !pfe_wield_flags+
-    jsr item_cat_get_missile_type
-    sta wield_missile_type
-!pfe_wield_flags:
-    ldy #3
-!pfe_wf_loop:
-    lda icat_flags_0,y
-    sta wield_flags_0,y
-    dey
-    bpl !pfe_wf_loop-
-!pfe_chk_ego:
-    lda inv_ego,x
-    and #EGO_ID_MASK
-    beq !pfe_next+
-    // Digging tools store prefix IDs (1..4) in inv_ego, not weapon ego IDs.
-    tay
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !pfe_load_ego+
-    jsr item_get_category_inv_x
-    cmp #ICAT_DIGGING
-    beq !pfe_next+
-!pfe_load_ego:
-    tya
-    jsr item_cat_get_ego
-    lda inv_ego,x
-    and #EGO_ID_MASK
-    cmp #EGO_SLOWNESS
-    bne !pfe_ego_ok+
-    lda icat_flags_1
-    and #($ff ^ ITR1_SPEED)
-    sta icat_flags_1
-!pfe_ego_ok:
-    jsr !pfe_merge_flags+
-    lda icat_flags_2
-    and #ITR2_SUST_STAT
-    beq !pfe_ego_wield+
-    lda icat_flags_0
-    and #ITR0_STR
-    beq !pfe_ego_wield+
-    lda #SUST_STR
-    ora player_sust_mask
-    sta player_sust_mask
-!pfe_ego_wield:
-    cpx #EQUIP_WEAPON
-    bne !pfe_next+
-    ldy #3
-!pfe_we_loop:
-    lda wield_flags_0,y
-    ora icat_flags_0,y
-    sta wield_flags_0,y
-    dey
-    bpl !pfe_we_loop-
-!pfe_next:
-    inx
-    cpx #EQUIP_END
-    beq !pfe_slots_done+
-    jmp !pfe_slot-
-!pfe_slots_done:
-
-    lda #0
-    sta player_pflags
-    sta player_pflags2
-    ldx #14
-!pfe_map_loop:
-    ldy pfe_src_off,x
-    lda pfe_f0,y
-    and pfe_src_mask,x
-    beq !pfe_map_next+
-    cpx #8
-    bcs !pfe_map_pf2+
-    lda player_pflags
-    ora pfe_dst_mask,x
-    sta player_pflags
-    bne !pfe_map_next+              // always non-zero
-!pfe_map_pf2:
-    lda player_pflags2
-    ora pfe_dst_mask,x
-    sta player_pflags2
-!pfe_map_next:
-    dex
-    bpl !pfe_map_loop-
-
-    // Update combat bonuses from stats
-    jmp player_calc_combat
-
-!pfe_merge_flags:
-    ldy #3
-!pmf_loop:
-    lda pfe_f0,y
-    ora icat_flags_0,y
-    sta pfe_f0,y
-    dey
-    bpl !pmf_loop-
-    rts
-
-pfe_f0: .byte 0
-pfe_f1: .byte 0
-pfe_f2: .byte 0
-pfe_f3: .byte 0
-sust_p1_to_mask:
-    .byte SUST_ALL, SUST_STR, SUST_INT, SUST_WIS, SUST_CON, SUST_DEX, SUST_CHR
-.assert "sust_p1_to_mask covers 0..6", * - sust_p1_to_mask, 7
-
-pfe_src_off:
-    .byte 2, 2, 1, 3, 2, 2, 3, 3
-    .byte 0, 1, 1, 1, 1, 0, 3
-pfe_src_mask:
-    .byte ITR2_RES_FIRE, ITR2_RES_COLD, ITR1_SPEED, ITR3_SEE_INVIS
-    .byte ITR2_FREE_ACT, ITR2_RES_ACID, ITR3_RES_LIGHT, ITR3_FFALL
-    .byte ITR0_SLOW_DIGEST, ITR1_REGEN, ITR1_STEALTH, ITR1_AGGRAVATE
-    .byte ITR1_TELEPORT, ITR0_SEARCH, ITR3_INFRA
-pfe_dst_mask:
-    .byte PFLAG_RESIST_FIRE, PFLAG_RESIST_COLD, PFLAG_SPEED, PFLAG_SEE_INVIS
-    .byte PFLAG_FREE_ACT, PFLAG_RESIST_ACID, PFLAG_RESIST_LIGHT, PFLAG_FFALL
-    .byte PFLAG2_SLOW_DIGEST, PFLAG2_REGEN, PFLAG2_STEALTH, PFLAG2_AGGRAVATE
-    .byte PFLAG2_TELEPORT, PFLAG2_SEARCH, PFLAG2_INFRA
-.assert "pfe flag maps have 15 aligned entries", * - pfe_dst_mask, 15
+#import "player_pflags_cold.s"
 :PflagsRestoreSegment()
+#endif
 
 // equip_stat_mask_x — X = equipment slot: A = 6-bit stat mask (bit 0=STR, 1=INT,
 // 2=WIS, 3=DEX, 4=CON, 5=CHR; 0 if none), Z reflects A. Preserves X.
@@ -741,98 +466,6 @@ player_apply_slaying_bonuses:
 !pasb_done:
     rts
 #endif
-
-// apply_modifier — Apply a signed modifier to stat_work using increment/decrement
-// Each +1 or -1 is applied individually via incrementStat/decrementStat (umoria).
-// Input: A = signed modifier (-128 to +127)
-//        stat_work = current stat value
-// Output: stat_work = modified stat
-// Clobbers: X, zp_temp3, zp_temp4, zp_math*
-// Note: Uses am_count instead of X for loop counter because
-//       increment_stat/decrement_stat clobber X via math_dice.
-apply_modifier:
-    cmp #0
-    beq !done+
-    bpl !positive+
-    // Negative modifier: negate to get count
-    eor #$ff
-    clc
-    adc #1
-    sta am_count
-!dec_loop:
-    lda stat_work
-    jsr decrement_stat
-    sta stat_work
-    dec am_count
-    bne !dec_loop-
-    rts
-!positive:
-    sta am_count
-!inc_loop:
-    lda stat_work
-    jsr increment_stat
-    sta stat_work
-    dec am_count
-    bne !inc_loop-
-!done:
-    rts
-
-am_count: .byte 0  // Loop counter for apply_modifier (safe from X clobber)
-
-// increment_stat — Increment a stat using umoria's randomized step logic
-// Input: A = current stat value (3-118)
-// Output: A = new stat value
-// Clobbers: zp_temp3, zp_temp4, zp_math* (via math_dice)
-increment_stat:
-    cmp #18
-    bcs !above_17+
-    // stat < 18: simple +1
-    clc
-    adc #1
-    rts
-!above_17:
-    cmp #88
-    bcs !above_87+
-    // stat 18-87: add rng(15)+5 = add 6-20
-    pha
-    lda #1
-    ldx #15
-    ldy #5
-    jsr math_dice           // 1d15+5 = 6..20
-    pla
-    clc
-    adc zp_math_a
-    cmp #119
-    bcc !inc_ok+
-    lda #118                // Cap at 118 (18/100)
-!inc_ok:
-    rts
-!above_87:
-    cmp #108
-    bcs !above_107+
-    // stat 88-107: add rng(6)+2 = add 3-8
-    pha
-    lda #1
-    ldx #6
-    ldy #2
-    jsr math_dice           // 1d6+2 = 3..8
-    pla
-    clc
-    adc zp_math_a
-    cmp #119
-    bcc !inc_ok2+
-    lda #118
-!inc_ok2:
-    rts
-!above_107:
-    // stat > 107: +1
-    clc
-    adc #1
-    cmp #119
-    bcc !inc_ok3+
-    lda #118
-!inc_ok3:
-    rts
 
 // decrement_stat — Decrement a stat using umoria's randomized step logic
 // Input: A = current stat value (3-118)
@@ -1386,92 +1019,11 @@ player_search_divide_by_10:
 
 player_search_work: .byte 0
 
-// ============================================================
-// ui_char_draw_background — Draw sex, social class, background on char sheet
-// Called from ui_char_display in OVL.UI on C64 and C128.
-// Main RAM so no banking issues.
-// Renders rows 12-16 of the character sheet.
-// Preserves: nothing
-// ============================================================
-.const UDBG_COL = hal_layout_character_background_col
-
-ui_char_draw_background:
-#if HAL_PLATFORM_CHARACTER_BACKGROUND_RESYNC
-    jsr hal_platform_runtime_resync
+// ui_char_draw_background (HAL_PLATFORM_CHARACTER_BACKGROUND_RESYNC) lives in
+// player_bg_draw_cold.s so tight ports can host it in UiOverlay via UI_CHAR_BG_EXTERNAL.
+#if !UI_CHAR_BG_EXTERNAL
+#import "player_bg_draw_cold.s"
 #endif
-    // --- Sex / Social Class (row 12) ---
-    lda #12
-    sta zp_cursor_row
-    lda #UDBG_COL
-    sta zp_cursor_col
-    lda #COL_LGREY
-    sta zp_text_color
-    lda #<char_sex_label
-    ldy #>char_sex_label
-    jsr screen_put_string_ay
-
-    lda #COL_WHITE
-    sta zp_text_color
-    lda player_data + PL_FLAGS
-    and #PLF_MALE
-    beq !udb_female+
-    lda #<char_sex_male
-    sta zp_ptr0
-    lda #>char_sex_male
-    sta zp_ptr0_hi
-    jmp !udb_print_sex+
-!udb_female:
-    lda #<char_sex_female
-    sta zp_ptr0
-    lda #>char_sex_female
-    sta zp_ptr0_hi
-!udb_print_sex:
-    jsr hal_screen_put_string
-
-    lda #COL_LGREY
-    sta zp_text_color
-    lda #<char_sc_label
-    ldy #>char_sc_label
-    jsr screen_put_string_ay
-    lda #COL_WHITE
-    sta zp_text_color
-    lda player_data + PL_SOCIAL_CLASS
-    jsr screen_put_decimal
-
-    // --- Background text (rows 13-16) ---
-    lda #COL_LGREY
-    sta zp_text_color
-    ldx #0
-!udb_line_loop:
-    txa
-    pha
-    clc
-    adc #13
-    sta zp_cursor_row
-    lda #UDBG_COL
-    sta zp_cursor_col
-    pla
-    tax
-    pha
-    lda udb_line_lo,x
-    sta zp_ptr0
-    lda udb_line_hi,x
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    pla
-    tax
-    inx
-    cpx #4
-    bcc !udb_line_loop-
-    rts
-
-// Background line pointer lookup table
-udb_line_lo:
-    .byte <player_background, <(player_background + 40)
-    .byte <(player_background + 80), <(player_background + 120)
-udb_line_hi:
-    .byte >player_background, >(player_background + 40)
-    .byte >(player_background + 80), >(player_background + 120)
 
 // ============================================================
 // Compile-time validation

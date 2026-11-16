@@ -41,7 +41,9 @@ item_exchange:
     and #IF_CURSED
     beq !ix_swap+
     ldx #HSTR_PIW_CURSED                // "You cannot remove it, it is cursed!"
-    jmp piw_msg_no_turn
+    jsr huff_print_msg
+    clc
+    rts
 !ix_swap:
     ldx #0
 !ix_loop:                               // all 8 arrays, stride TOTAL_INV_SLOTS

@@ -136,8 +136,7 @@ disk_marker_present:
     lda #<disk_marker_present_ovl
     ldy #>disk_marker_present_ovl
 !bsc_call:
-    ldx #OVL_STORAGE
-    jmp ovl_swap_dispatch_x
+    jmp storage_swap_dispatch
 
 disk_read_command_status:
     stz disk_command_status

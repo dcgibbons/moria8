@@ -28,6 +28,7 @@ test_exit_trampoline:
 .encoding "screencode_mixed"
 
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -64,9 +65,13 @@ test_exit_trampoline:
 #import "../../../../core/monster_ai.s"
 .segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 .segment TestUnused
 #import "../../../../core/ego_items.s"
 .segment Default

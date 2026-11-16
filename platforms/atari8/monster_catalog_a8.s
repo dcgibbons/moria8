@@ -21,7 +21,11 @@
 // and the copy loop must lie below $4000. The level index alone lives in
 // the $F000 runtime.
 
+#import "memory.s"
 #import "../commodore/common/catalog_records.s"
+
+.assert "Atari extended catalog record adds 8 Phase 5 bytes to 49-byte base", A8_CATALOG_RECORD_SIZE == CATALOG_RECORD_SIZE + A8_CATALOG_EXT_SIZE, true
+.label a8_catalog_record_size = A8_CATALOG_RECORD_SIZE
 
 #if !ATARI8_CARTRIDGE
 .const A8_CATALOG_RECORDS_PER_SECTOR = 2
@@ -29,7 +33,7 @@
 .const A8_CATALOG_SECTORS            = 140   // ceil(279 / 2)
 .const A8_CATALOG_SLOT_SECTORS       = 32    // 4 KB slot / 128-byte sectors
 .const A8_CATALOG_SLOT_COUNT         = 5
-.assert "Atari catalog records fit a DOS 2.5 sector", A8_CATALOG_RECORDS_PER_SECTOR * CATALOG_RECORD_SIZE <= A8_CATALOG_SECTOR_DATA, true
+.assert "Atari catalog records fit a DOS 2.5 sector", A8_CATALOG_RECORDS_PER_SECTOR * A8_CATALOG_RECORD_SIZE <= A8_CATALOG_SECTOR_DATA, true
 .assert "Atari catalog sectors fit the 130XE slots", A8_CATALOG_SLOT_COUNT * A8_CATALOG_SLOT_SECTORS >= A8_CATALOG_SECTORS, true
 .assert "130XE full catalog slots hold 32 sectors (16 pages)", XE_SLOT10_PAGES == 16 && XE_SLOT11_PAGES == 16 && XE_SLOT12_PAGES == 16 && XE_SLOT13_PAGES == 16, true
 .assert "130XE tail catalog slot fits remaining sectors within $E000-$EFFF", XE_SLOT15_PAGES <= 16 && (XE_SLOT10_PAGES + XE_SLOT11_PAGES + XE_SLOT12_PAGES + XE_SLOT13_PAGES + XE_SLOT15_PAGES) * 2 >= A8_CATALOG_SECTORS, true
@@ -55,16 +59,33 @@
 .segment RuntimeBanked
 #import "../shared/catalog/catalog_index.s"
 .segment Default
+// catalog_fetch_ext — Ensure cat_ext_record[0..7] holds creature cat_id_lo/hi's
+// 8 extended Phase 5 bytes. Fast-paths when cat_record already holds cat_id
+// ($FFFF cold-boot sentinel prevents false hit on creature 0).
+// Clobbers: A, X, Y (on miss)
+catalog_fetch_ext:
+    lda cat_record
+    cmp cat_id_lo
+    bne !cfe_miss+
+    lda cat_record + 1
+    cmp cat_id_hi
+    bne !cfe_miss+
+    rts
+!cfe_miss:
+    jmp catalog_fetch_record
+
 #if ATARI8_CARTRIDGE
 #import "cartridge_catalog.s"
 #else
 .assert "Atari catalog sectors hold every record", A8_CATALOG_SECTORS * A8_CATALOG_RECORDS_PER_SECTOR >= CATALOG_COUNT, true
 
-cat_record:     .fill CATALOG_RECORD_SIZE, 0   // The record catalog_fetch_record read
+cat_record:     .byte $ff, $ff                 // Cold sentinel != 0..278
+                .fill A8_CATALOG_RECORD_SIZE - 2, 0
+.label cat_ext_record = cat_record + CATALOG_RECORD_SIZE
 cat_start_lo:   .byte 0                        // MONSTER.CAT's first sector (0: not found)
 cat_start_hi:   .byte 0
 a8_cat_sec:     .byte 0                        // Record sector: id / 2
-a8_cat_off:     .byte 0                        // Record in its sector: 0 or 49
+a8_cat_off:     .byte 0                        // Record in its sector: 0 or 57
 a8_cat_left:    .byte 0                        // Sectors still to walk or stage
 a8_cat_slot:    .byte 0                        // Preload: the catalog slot (0..4)
 a8_cat_xe_slots:
@@ -149,7 +170,7 @@ catalog_fetch_record:
     sta a8_cat_sec
     lda #0
     bcc !cfr_even+
-    lda #CATALOG_RECORD_SIZE
+    lda #A8_CATALOG_RECORD_SIZE
 !cfr_even:
     sta a8_cat_off
     lda xe_present
@@ -243,7 +264,7 @@ a8_cat_take:
     sta cat_record,y
     inx
     iny
-    cpy #CATALOG_RECORD_SIZE
+    cpy #A8_CATALOG_RECORD_SIZE
     bne !act_copy-
                                 // fall through
 // a8_cat_check — Z = 1 when cat_record is creature cat_id's record.
@@ -280,7 +301,7 @@ a8_cat_xe_copy:
     sta NMIEN
     lda xe_slot_portb,x
     sta PORTB
-    ldy #CATALOG_RECORD_SIZE - 1
+    ldy #A8_CATALOG_RECORD_SIZE - 1
 !axc_copy:
     lda (atari_io_src),y
     sta cat_record,y

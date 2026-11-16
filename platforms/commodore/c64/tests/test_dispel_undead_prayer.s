@@ -86,7 +86,11 @@ player_create:
 .segment Default
 #import "../../../../core/recall.s"
 .segment TestUnusedEgoArmour
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 // Adding to the pack (inv_add.s) is not exercised here: parked out of
 // reach, the runner's tripwire (tools/parked_tripwire.py) failing the
@@ -151,7 +155,13 @@ tramp_eff_destroy_area:
 #import "../../../../core/combat.s"
 .segment TestUnusedEgoArmour
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+monster_attack_player:
+mon_atk_acid_armour:
+mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+player_death_check:
+    brk
+mad_dmg_hi: .byte 0
 #import "../../../../core/turn.s"
 .segment Default
 #import "../../../../core/ui_trampoline_stubs.s"

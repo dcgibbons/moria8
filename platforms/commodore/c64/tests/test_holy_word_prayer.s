@@ -11,6 +11,7 @@ thw_results: .fill 2, $ff
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -47,8 +48,10 @@ test_done_break:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestUnused
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
+.segment Default
 .segment TestCreateOverlay
 player_create:
     brk

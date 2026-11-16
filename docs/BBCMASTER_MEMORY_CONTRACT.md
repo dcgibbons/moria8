@@ -142,8 +142,8 @@ shadow and `beeb_acccon_shadow` in platform ZP):
 | `$0681-$06FF` | 127 B | MOS Control Blocks (`OSFILE` 18 B, `OSGBPB` 13 B, `OSWORD` 8 B, `OSARGS` 4 B) & Platform State | Unbanked low-RAM parameter blocks |
 | `$0700-$07FF` | 256 B | `beeb_ss_buf` | Shared 256-byte save/load stream buffer & `beeb_swr_copy_to_window` page-bounce buffer |
 | `$0800-$0DFF` | 1,536 B | Acorn MOS Sound/Envelope/Serial/CFS Workspace (`PAGE = $0E00`) | Preserved untouched for MOS `OSWORD A=7/8` and `OSBYTE` |
-| `$0E00-$2FFF` | 8,704 B | Low Always-Resident Code (`< $3000`) | Entry point (`$0E00`), `screen.s`, `dungeon_render.s`, `memory_bank.s`, `storage.s`, `save_stream.s`, `sound.s`, `input.s`, and `item_cat_beeb.s` (`low_helpers_end` = `$2353`, `5,459` B used, **`3,245` B free** below `$3000`; `zp_save_buf` relocated to `ANDY` `$8F00-$8FAD`) |
-| `$3000-$7FFF` | 20,480 B | High Always-Resident Code (`MORIA8.RES` continuation) | Core resident modules & generated resident trampolines (`build/trampolines/bbcmaster_trampolines.inc`, `program_end` = `$7FDC`, **`36` B free** below `$8000`; total `$0E00-$7FFF` budget = `29,184` B, `29,148` B used) |
+| `$0E00-$2FFF` | 8,704 B | Low Always-Resident Code (`< $3000`) | Entry point (`$0E00`), `screen.s`, `dungeon_render.s`, `memory_bank.s` (including `catalog_fetch_ext` + `cat_ext_record[8]` for `MONEXT`), `overlay_storage.s`, `storage.s`, `save_stream.s`, `sound.s`, `input.s`, and `item_cat_beeb.s` (`low_helpers_end` = `$23F1`, `5,617` B used, **`3,087` B free** below `$3000`; `zp_save_buf` relocated to `ANDY` `$8F00-$8FAD`) |
+| `$3000-$7FFF` | 20,480 B | High Always-Resident Code (`MORIA8.RES` continuation) | Core resident modules & generated resident trampolines (`build/trampolines/bbcmaster_trampolines.inc`, `program_end` = `$7F5F`, **`161` B free** below `$8000` after Phase 5 + `48c7904`; total `$0E00-$7FFF` budget = `29,184` B, `29,023` B used) |
 
 ### 3.2 Shadow Screen RAM `LYNNE` (`$3000-$7FFF`, 20 KB — `ACCCON = $05`)
 
@@ -183,18 +183,18 @@ wrong). `item_actions` checks the bytes against `beeb.huffdata` in town.
 
 | Bank | Physical Range | Pages / Size | Virtual / Link Address | Owner & Headroom |
 | ---: | --- | ---: | --- | --- |
-| **Bank 4** (`$04`) | `$8000-$A3FF` | 36p (`9,216` B) | `$8000-$A3FF` | **`BeebPlaySlot` (`BEEB.PLAY`)** — Preloaded at boot; permanently resident in Bank 4 (`9,210` B used, **`6` B slack**, 2026-11-15 Phase 4). |
+| **Bank 4** (`$04`) | `$8000-$A3FF` | 36p (`9,216` B) | `$8000-$A3FF` | **`BeebPlaySlot` (`BEEB.PLAY`)** — Preloaded at boot; permanently resident in Bank 4 (`9,035` B used at `$8000-$A34B`, **`181` B slack**, 2026-11-16 Phase 5; hosts play-phase `look_flash_target.s`, `player_heal_feedback.s`, and `projectile.s` at `$9000-$A3FF` above `ANDY`). |
 | **Bank 4** (`$04`) | `$A400-$A7FF` | 4p (`1,024` B) | `$A400-$A7FF` | **`PLATFORM_TIER_NAME_POOL_BASE`** — The monster catalog's 32 species names (32 B each, 2026-11-05). |
-| **Bank 4** (`$04`) | `$A800-$BFFF` | 24p (`6,144` B) | `$A800-$BFFF` | **Active Overlay & Monster Tier Window (`BANKED_DATA_BASE = $A800`, `BANKED_DATA_END = $BFFF`)** — All 13 overlays (`<= 5,721` B, incl. `OVL.HOME` `5,315` B) link at `$A800` (**`423` B slack** over largest overlay `OVL.ITEMS`). |
+| **Bank 4** (`$04`) | `$A800-$BFFF` | 24p (`6,144` B) | `$A800-$BFFF` | **Active Overlay & Monster Tier Window (`BANKED_DATA_BASE = $A800`, `BANKED_DATA_END = $BFFF`)** — All 13 overlays (`<= 5,857` B, incl. `OVL.HOME` `5,426` B and `OVL.DEATH` `5,264` B with `ui_recall.s`) link at `$A800` (**`287` B slack** over largest overlay `OVL.ITEMS`). |
 | **Bank 5** (`$05`) | `$8000-$B30B` | 52p (`13,068` B) | `$8000-$B30B` | **Live 198×66 Dungeon Map (`MAP_BASE = $8000`, `MAP_END = $B30B`)** — Direct 1:1 addressing inside Bank 5 (`$B30C-$B3FF` = `244` B map guard). |
-| **Bank 5** (`$05`) | `$B400-$BFFF` | 12p (`3,072` B) | Cache Slot | **Cached `OVL.MODAL`** (`2,429` B used, **`643` B slack**, 2026-11-15 Phase 4). |
+| **Bank 5** (`$05`) | `$B400-$BFFF` | 12p (`3,072` B) | Cache Slot | **Cached `OVL.MODAL`** (`2,453` B used, **`619` B slack**, 2026-11-16 Phase 5; `ui_recall.s` relocated to `OVL.DEATH`). |
 | **Bank 6** (`$06`) | `$8000-$92FF` | 19p (`4,864` B) | `$6000-$72FF` | **`BeebAuxData` (`BEEB.AUXDATA`)** — Preloaded at boot: `msg_history`, store inventory/runtime (`si_meta_hi[128]`), `id_known_bits[47]`, `potion_shuffle..staff_shuffle` (`174` B), spell tables/names, and Bank 6 strings (`4,824` B used, **`40` B free slack**; item-name streams replaced by `'ITM2'` `ITEMCAT`, 2026-11-15 Phase 4). |
 | **Bank 6** (`$06`) | `$9300-$94FF` | 2p (`512` B) | Cache Slot | **`BEEB_ICAT_B6`** — Preloaded `'ITM2'` `ITEMCAT` header/directory pages (`512` B, 2026-11-15 Phase 4). |
 | **Bank 6** (`$06`) | `$9500-$B9FF` | 37p (`9,472` B) | `$9500-$B916` | **The monster catalog (`BEEB.CATALOG`)** — its fields, then its Huffman names (`9,239` B, **`233` B slack**); read through `mmu_safe_huff_read_ptr0/1`, which select Bank 6 for a pointer at `$9000` and up. |
-| **Bank 6** (`$06`) | `$BA00-$BFFF` | 6p (`1,536` B) | Cache Slot | **Cached `OVL.UI`** (`1,467` B used, **`69` B slack**). |
-| **Bank 7** (`$07`) | `$8000-$94FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.SPELL`** (`5,270` B used, **`106` B slack**). |
-| **Bank 7** (`$07`) | `$9500-$ABFF` | 23p (`5,888` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,721` B used, **`167` B slack**; expanded from 22p to 23p in Phase 4, 2026-11-15). |
-| **Bank 7** (`$07`) | `$AC00-$BBFF` | 16p (`4,096` B) | Cache Slot | **Cached `OVL.GEN`** (`3,922` B used, **`174` B slack**; resized from 21p to 16p in Phase 4, 2026-11-15). |
+| **Bank 6** (`$06`) | `$BA00-$BFFF` | 6p (`1,536` B) | Cache Slot | **Cached `OVL.UI`** (`1,515` B used, **`21` B slack**). |
+| **Bank 7** (`$07`) | `$8000-$94FF` | 21p (`5,376` B) | Cache Slot | **Cached `OVL.SPELL`** (`5,336` B used, **`40` B slack**). |
+| **Bank 7** (`$07`) | `$9500-$ABFF` | 23p (`5,888` B) | Cache Slot | **Cached `OVL.ITEMS`** (`5,857` B used, **`31` B slack**; expanded from 22p to 23p in Phase 4, 2026-11-15). |
+| **Bank 7** (`$07`) | `$AC00-$BBFF` | 16p (`4,096` B) | Cache Slot | **Cached `OVL.GEN`** (`4,050` B used, **`46` B slack**; resized from 21p to 16p in Phase 4, 2026-11-15). |
 | **Bank 7** (`$07`) | `$BC00-$BFFF` | 4p (`1,024` B) | Cache Slot | **`BEEB_ICAT_CACHE`** — 4-page (`1,024` B) LRU sector cache in SWR Bank 7 for `'ITM2'` `ITEMCAT` (`item_cat_beeb.s`, 2026-11-15 Phase 4). |
 
 * **Disk-Backed Cold Assets (Loaded on Demand via `OSFILE`):**
@@ -546,3 +546,91 @@ Unresolved uncertainty and risk:
 | LowHelpers (`< $3000`) & Default (`<= $8000`) ceilings | `make testbbcmaster` memory-contract gate (`low_helpers_end = $2355`, `program_end = $7FDE`) | Verified |
 | New character max HP = race + class hit dice | `chargen_town` `chargen_max_hp_is_hit_dice` (FAIL before, PASS after) | Verified |
 | Live MAME `bbcm` behaviour | `make testbbcmaster` (all 17 scenarios pass with the queue paused; `item_actions` timed out at load 38 on 32 cores and passed alone on a quiet machine) | Verified |
+
+## Phase 5 `MONEXT` DFS Streaming, `BeebPlaySlot` Relocations, & Full 279-Species Catalog (2026-11-16)
+
+### 1. Summary of Phase 5 Memory & DFS Layout
+
+- **DFS `MONEXT` (`2,232 B`, `9` DFS Sectors) On-Demand `8 B/species` Streamer (`< $3000`):**
+  - Because Sideways RAM Banks 4–7 are `256/256` pages allocated (`0` free pages), the `279 × 8 B` Phase 5 extended species rows (`bin/MON.EXT` -> DFS `MONEXT`, `2,232 B`) live on the program `.ssd` and stream `8 B/species` on demand via `catalog_fetch_ext` in `platforms/bbcmaster/memory_bank.s` (`< $3000` `LowHelpers`).
+  - `catalog_fetch_ext` enters MOS (`EnterMos`, saving `$02-$AF` to `ANDY` `$8F00`), opens `MONEXT` once into persistent handle `beeb_mext_handle` (`beeb_open_prog_asset`), seeks and reads `8 B` at file offset `id * 8` directly into `< $3000` `cat_ext_record[0..7]` via `OSGBPB A=$03`, and exits via `ExitMos` (`ROMSEL = $04`, `restore_zp`). `beeb_close_icat_in_mos` closes `beeb_mext_handle` automatically alongside `beeb_icat_handle` before any `OSFILE`/`OSFIND`/`OSWORD $7F` stream or disk-swap prompt so open DFS handles stay strictly `<= 3` of `5`. If `MONEXT` is missing because the Save Disk is inserted, `catalog_fetch_ext` prompts for the Program Disk via `asset_load_ask_for_disk` and retries cleanly.
+- **`ui_recall.s` in `DeathOverlay` & Play-Phase Relocations to `BeebPlaySlot`:**
+  - `core/ui_recall.s` (including 80-col read-only recall labels/tags, `0 B` in `Default`) moves from `ModalMiscOverlay` (`cache.ovl.modal` in Bank 5 `$B400-$BFFF`, `2,453 / 3,072 B`, **`619 B` free**) into cold `DeathOverlay` (`ovl.death` `$A800-$BC90`, `5,264 / 6,144 B`, **`880 B` free**).
+  - Play-only helpers `core/look_flash_target.s`, `core/player_heal_feedback.s`, and `core/projectile.s` move from `Default` (`< $8000`) to the upper region of `BeebPlaySlot` (`$9000-$A34B < $A400` in Bank 4, above `ANDY`'s `$8000-$8FFF` Huffman window so Huffman decodes inside `projectile.s` never unmap `projectile.s`'s own instructions!), combined with Wave 5.2 cold evictions (`player_chargen_cold.s` -> `ovl.start`, `trap_trigger_cold.s`/`trap_damage_cold.s` -> `ovl.chest`, `door_open_close_cold.s`/`item_drop_cold.s`/`ui_help_cmd_cold.s`/`mae_cold_body` -> `ovl.help`, `starting_kit_cold.s` -> `ovl.title`, `player_bg_draw_cold.s` -> `ovl.ui`, `load_resume_reset_cold.s` -> `ovl.storage`) and `48c7904`'s `zp_temp0/1`-preserving `beeb_overlay_try_cache`.
+  - Measured headroom (`42f8f7e7`): `LowHelpers` `$0E00-$23F1` (`5,617 / 8,704 B`, **`3,087 B` free** `< $3000`); `Default` (`moria8.res`) `$0E00-$7F5F` (`29,023 / 29,184 B`, **`161 B` free** `< $8000`); `BeebPlaySlot` (`beeb.play`) `$8000-$A34B` (`9,035 / 9,216 B`, **`181 B` free** `< $A400`); SWR hot caches: `cache.ovl.ui` `21 B` free, `cache.ovl.items` `31 B` free, `BeebAuxData` `40 B` free, `cache.ovl.spell` `40 B` free, `cache.ovl.gen` `46 B` free, `BeebCatalog` `233 B` free, `cache.ovl.modal` `619 B` free; `.ssd` (`build/moria8-bbcmaster.ssd`): `17 / 31` DFS entries, `488 / 800` sectors used (**`312` sectors free**).
+
+### 2. Change Record (`BEHAVIOR_CHANGE_PROTOCOL.md`)
+
+```text
+Problem and success criteria:
+  Fit Phase 5's widened 29-field cr_* buffers (+320 B), cat_undead[35], 2,232 B
+  extended species table MONEXT, 15-field '/' recall UI, 4-attack loop, 19 ADESC_*
+  verbs, 24 ATK_* effects, 5 MSF2_* spells, and CD_*/CM2_* behaviors into BBC Master
+  128 Main RAM (< $3000 LowHelpers, <= $8000 Default), Bank 4 BeebPlaySlot (< $A400),
+  256/256-page SWR Banks 4-7, and 31-entry 800-sector DFS .ssd while preserving
+  upstream 48c7904's zp_temp0/zp_temp1 overlay-cache invariant.
+State being changed:
+  - platforms/bbcmaster/memory_bank.s (< $3000): catalog_fetch_ext, cat_ext_record[8],
+    and persistent beeb_mext_handle streaming 8 B at id * 8 from DFS MONEXT via
+    OSGBPB A=$03 (closed automatically in beeb_close_icat_in_mos).
+  - platforms/bbcmaster/main.s: ui_recall.s moved to DeathOverlay; look_flash_target.s,
+    player_heal_feedback.s, and projectile.s placed at end of BeebPlaySlot ($9000-$A34B);
+    Wave 5.2 cold evictions + mae_cold_body in HelpOverlay.
+  - platforms/bbcmaster/{Makefile,hal/storage.s,check_memory_contract.py} & tools/make_ssd.py:
+    build and package MONEXT (17/31 DFS entries) and assert < $3000 / <= $8000 / <= $A400 bounds.
+Search scope and terms:
+  rg across platforms/bbcmaster/, core/, and tools/ for catalog_fetch_ext, MONEXT,
+  beeb_icat_handle, beeb_close_icat_in_mos, ui_recall, projectile, look_flash_target,
+  player_heal_feedback, zp_temp0, ROMSEL_ANDY.
+Relevant readers/writers found and known exclusions:
+  - projectile.s calls huff_print_msg / projectile_msg_suffix, which map ANDY
+    ($8000-$8FFF, ROMSEL = $84) via mmu_safe_huff_read_ptr0/1 while keeping Bank 4
+    $9000-$BFFF mapped; placing look_flash_target.s, player_heal_feedback.s, and
+    projectile.s at the tail of BeebPlaySlot (> $9000) keeps their code mapped
+    throughout ANDY reads.
+  - cat_ext_record[8] is asserted <= $3000 so OSGBPB A=$03 writes directly to
+    unbanked low Main RAM without touching LYNNE or Sideways RAM.
+  - beeb_overlay_try_cache (overlay_storage.s) preserves 48c7904's self-modified
+    btc_name_lo/hi compare (never touching zp_temp0/zp_temp1).
+Initialization, reset and persistence points:
+  - beeb_mext_handle initializes to 0, opens lazily on first catalog_fetch_ext,
+    and resets to 0 in beeb_close_icat_in_mos and session reset. Save V2 unchanged.
+Affected production sequence through the changed transition:
+  - Level spawn / summon / '/' recall -> cat_fetch or catalog_recall_match_and_fill
+    -> catalog_fetch_ext (< $3000): EnterMos -> OSGBPB A=$03 (8 B from MONEXT at
+    id * 8 -> cat_ext_record) -> ExitMos (ROMSEL=$04, ZP $02-$AF restored).
+Contract decision or selected upstream oracle with source locations:
+  - Acorn MOS 3.20 / DFS 2.24 5-handle limit, BRKV unwind, ZP $02-$AF save/restore,
+    and ROMSEL/ANDY $84 visibility rules in Sections 1-3 above.
+Intentional Moria8 deviations:
+  - None to VMS gameplay; MONEXT streams 8 B per newly encountered species on a
+    level (<= 32 species/level, cached in resident cr_* arrays once fetched).
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  - 9-bit catalog ID (0..278) shifted left 3 bits into 32-bit OSGBPB file pointer
+    BEEB_OS_CTRL_BASE+9..12 (0..2224); residual byte count BEEB_OS_CTRL_BASE+5
+    verified == 0 alongside Carry == 0.
+RNG reduction and bias, if applicable:
+  - N/A for BBC Master storage/placement.
+Affected platforms, overlays, banks and owners:
+  - BBC Master 128 LowHelpers ($23F1, 3,087 B free), Default ($7F5F, 161 B free),
+    BeebPlaySlot ($A34B, 181 B free), DeathOverlay ($BC90, 880 B free),
+    cache.ovl.modal (619 B free), DFS MONEXT (2,232 B, 17/31 .ssd entries).
+Required production-path tests:
+  - make testbbcmaster-memory-contract, tools/report_memory_budgets.py --port bbcmaster,
+    make testbbcmaster-runtime, and make playtest-gate.
+Known behavior explicitly out of scope:
+  - Caching MONEXT in SWR Banks 4-7 (0 free pages).
+Unresolved uncertainty and risk:
+  - SWR hot caches cache.ovl.ui (21 B free), cache.ovl.items (31 B free),
+    BeebAuxData (40 B free), cache.ovl.spell (40 B free), and cache.ovl.gen
+    (46 B free) are tight (< 64 B) and enforced fail-closed at build time.
+```
+
+### 3. Verification Coverage (Phase 5, 2026-11-16)
+
+| Contract Row / Check | Enforcement & Evidence | Status |
+| --- | --- | --- |
+| `LowHelpers < $3000`, `Default <= $8000`, `BeebPlaySlot <= $A400`, & `projectile.s >= $9000` | `check_memory_contract.py` + `report_memory_budgets.py --port bbcmaster` (`low_helpers_end = $23F1`, `program_end = $7F5F` [`161 B` free], `beeb_play_end = $A34B` [`181 B` free]) | Verified |
+| `MONEXT` (`2,232 B`), `17/31` DFS `.ssd` entries (`312` sectors free), `LICENSE` & `SRCOFFR` | `make diskbbcmaster`, `check_memory_contract.py --disk` | Verified |
+| `zp_temp0`/`zp_temp1` preservation (`48c7904`) + live MAME `bbcm` & `playtest-gate` | `make testbbcmaster` + `make playtest-gate` (`bbcmaster` seed + tour, `0` findings) | Verified |
+

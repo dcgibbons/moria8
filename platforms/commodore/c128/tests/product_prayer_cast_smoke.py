@@ -97,7 +97,9 @@ def run_direct_effect_probe(
             retry_delay=0.1,
         )
 
+        connector.send_command("bank ram01")
         connector.fill_memory(msg_history, msg_history + MSG_HIST_BYTES - 1, 0x20)
+        connector.send_command("bank cpu")
         connector.poke(pm_spell_type, SPELL_PRIEST)
 
         if prayer == "bless":
@@ -220,7 +222,9 @@ def build_priest_patch_commands(
     snapshot_path: Path,
 ) -> list[str]:
     commands = [
+        "bank ram01",
         f"f {msg_history:04X} {msg_history + MSG_HIST_BYTES - 1:04X} 20",
+        "bank cpu",
         f"> {zp_msg_flags:04X} 00",
         f"> {zp_eff_bless:04X} 00",
         f"> {player_data + PL_CLASS:04X} {CLASS_PRIEST:02X}",
@@ -276,7 +280,9 @@ def patch_priest_runtime_state(
     zp_eff_bless: int,
     zp_msg_flags: int,
 ) -> None:
+    connector.send_command("bank ram01")
     connector.fill_memory(msg_history, msg_history + MSG_HIST_BYTES - 1, 0x20)
+    connector.send_command("bank cpu")
     connector.poke(zp_msg_flags, 0x00)
     connector.poke(zp_eff_bless, 0x00)
     connector.poke(player_data + PL_CLASS, CLASS_PRIEST)
@@ -376,7 +382,7 @@ def run_snapshot_probe(
     stage_addr: int,
     stage_timeout: float,
     description: str,
-    dump_addrs: list[tuple[int, int]] | None = None,
+    dump_addrs: list[tuple[int, int] | tuple[int, int, str]] | None = None,
 ) -> tuple[bool, str, list[str]]:
     monitor_port = allocate_free_port()
     process = subprocess.Popen(
@@ -414,8 +420,15 @@ def run_snapshot_probe(
         if not ok:
             return False, detail, []
         dumps: list[str] = []
-        for start_addr, end_addr in dump_addrs or []:
-            dumps.append(connector.send_command(f"m {start_addr:04X} {end_addr:04X}"))
+        for entry in dump_addrs or []:
+            if len(entry) == 3:
+                start_addr, end_addr, bank = entry
+                connector.send_command(f"bank {bank}")
+                dumps.append(connector.send_command(f"m {start_addr:04X} {end_addr:04X}"))
+                connector.send_command("bank cpu")
+            else:
+                start_addr, end_addr = entry
+                dumps.append(connector.send_command(f"m {start_addr:04X} {end_addr:04X}"))
         return True, "", dumps
     finally:
         connector.close()
@@ -609,7 +622,7 @@ def run_from_snapshot(args: argparse.Namespace, resolved: dict[str, int], snapsh
         description="prayer path never returned to gameplay after spell_execute_selected",
         dump_addrs=[
             (resolved["zp_eff_bless"], resolved["zp_eff_bless"]),
-            (resolved["msg_history"], resolved["msg_history"] + MSG_HIST_BYTES - 1),
+            (resolved["msg_history"], resolved["msg_history"] + MSG_HIST_BYTES - 1, "ram01"),
             (resolved["bless_msg"], resolved["bless_msg"] + len("You feel righteous!")),
         ],
     )

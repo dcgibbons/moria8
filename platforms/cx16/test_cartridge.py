@@ -36,6 +36,7 @@ PROGRAM_ARTIFACTS = {
     "CX16.AUXDATA",
     "CX16.HUFFDATA",
     "MONSTER.CAT",
+    "MONSTER.EXT",
     "ITEM.CAT",
     "TITLE",
     "LEGALUI",
@@ -870,7 +871,7 @@ def run_cartridge_suite(x16emu: Path, rom: Path | None) -> int:
         sav_files = [p.name for p in save_fsroot.iterdir() if p.name.upper().startswith("THE.GAME")]
         tb.assert_line("cart_saved_file", len(sav_files) >= 1, f"no THE.GAME created in {save_fsroot}")
         sav_hdr = (save_fsroot / sav_files[0]).read_bytes()[:8]
-        tb.assert_line("cart_save_v2", sav_hdr == b"MORIA01\x20", f"save header={sav_hdr!r}")
+        tb.assert_line("cart_save_v2", sav_hdr == b"MORIA01\x21", f"save header={sav_hdr!r}")
     finally:
         tb.close()
 
@@ -900,6 +901,28 @@ def run_cartridge_suite(x16emu: Path, rom: Path | None) -> int:
             loaded,
             f"Bank {harness_smoke.CX16_BANK_CATALOG} catalog slot missing",
         )
+        # Verify Bank 5 MONSTER.EXT preload & catalog_fetch_ext on cartridge
+        ext_payload = (CART_BUILD_DIR / "MONSTER.EXT").read_bytes()[2:]
+        fetch_addr = cart_syms["catalog_fetch_ext"]
+        stub_cfe = [0x20, fetch_addr & 0xFF, fetch_addr >> 8, 0x60]
+        for idx_s, op in enumerate(stub_cfe):
+            tb_reload.write_u8(0x0700 + idx_s, op)
+        saved_bank_reg = tb_reload.read_u8(0x0000)
+        tb_reload.write_u8(0x0000, 9)
+        cart_ext_ok = True
+        cart_ext_detail = ""
+        for cid in (0, 77, 255, 256, 278):
+            tb_reload.write_u8(cart_syms["cat_id_lo"], cid & 0xFF)
+            tb_reload.write_u8(cart_syms["cat_id_hi"], cid >> 8)
+            tb_reload.run_addr(0x0700)
+            got_rec = bytes(tb_reload.read_u8(cart_syms["cat_ext_record"] + k) for k in range(8))
+            want_rec = ext_payload[cid * 8 : (cid + 1) * 8]
+            if got_rec != want_rec or tb_reload.read_u8(0x0000) != 9 or tb_reload.read_u8(0x0001) != 0:
+                cart_ext_ok = False
+                cart_ext_detail = f"cid={cid} got={got_rec.hex()} want={want_rec.hex()} $00={tb_reload.read_u8(0x0000)} $01={tb_reload.read_u8(0x0001)}"
+                break
+        tb_reload.write_u8(0x0000, saved_bank_reg)
+        tb_reload.assert_line("cart_catalog_fetch_ext", cart_ext_ok, cart_ext_detail)
         tb_reload.wizard_menu_open()
         tb_reload.press_until("DLVL", "L")
         tb_reload.press("5")
@@ -1001,7 +1024,7 @@ def run_selftest() -> int:
         assert_fsroot_program_free(selftest_dir)
         (selftest_dir / "THE.GAME").write_bytes(b"save")
         assert_fsroot_program_free(selftest_dir)
-        for leak_name in ("LEGALUI", "MORIA8.PRG", "ITEM.CAT"):
+        for leak_name in ("LEGALUI", "MORIA8.PRG", "ITEM.CAT", "MONSTER.EXT"):
             leak_path = selftest_dir / leak_name
             leak_path.write_bytes(b"leak")
             raised = False

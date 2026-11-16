@@ -89,6 +89,8 @@ REQUIRED_LOW_SYMBOLS = (
     "hal_asset_load_prg_header",
     "hal_asset_load_title",
     "hal_item_cat_read_byte",
+    "catalog_fetch_ext",
+    "cat_ext_record",
     "hal_recall_read_byte",
     "hal_recall_write_byte",
     "hal_storage_probe_media",
@@ -399,6 +401,10 @@ def validate_build(build_dir: Path, src_dir: Path | None = BEEB_SRC_DIR) -> list
         limit = LOW_HELPERS_LIMIT if sym == "low_helpers_end" else LOW_HELPERS_LIMIT - 1
         if not (LOW_RESIDENT_START <= addr <= limit):
             errors.append(f"{sym} at ${addr:04X} violates < $3000 low-RAM contract")
+    if "cat_ext_record" in symbols and symbols["cat_ext_record"] + 8 > LOW_HELPERS_LIMIT:
+        errors.append(
+            f"cat_ext_record (8 B) at ${symbols['cat_ext_record']:04X}..${symbols['cat_ext_record'] + 7:04X} exceeds < $3000 low-RAM limit"
+        )
 
     if symbols.get("entry_bootstrap") != LOW_RESIDENT_START:
         errors.append(
@@ -411,6 +417,45 @@ def validate_build(build_dir: Path, src_dir: Path | None = BEEB_SRC_DIR) -> list
         prog_end = symbols["program_end"]
         if not (LOW_RESIDENT_START <= prog_end <= RESIDENT_LIMIT):
             errors.append(f"program_end at ${prog_end:04X} exceeds $8000 Main RAM limit")
+
+    for res_sym in ("recall_view_display", "recall_view_cdefense"):
+        if res_sym not in symbols:
+            errors.append(f"missing resident recall symbol {res_sym}")
+        elif not (LOW_RESIDENT_START <= symbols[res_sym] < RESIDENT_LIMIT):
+            errors.append(
+                f"{res_sym} at ${symbols[res_sym]:04X} must stay in Main RAM ($0E00-$7FFF)"
+            )
+
+    # Check Monster Recall UI + tables placement in uncached ovl.death (not Default / ovl.modal)
+    death_prg = build_dir / "ovl.death"
+    if "ovl_death_end" not in symbols:
+        errors.append("missing symbol ovl_death_end")
+    for ovl_sym in ("ui_recall_display", "recall_view_body", "rcl_strs"):
+        if ovl_sym not in symbols:
+            errors.append(f"missing ovl.death recall symbol {ovl_sym}")
+        elif "ovl_death_end" in symbols and not (
+            OVERLAY_BASE <= symbols[ovl_sym] < symbols["ovl_death_end"] <= OVERLAY_LIMIT
+        ):
+            errors.append(
+                f"{ovl_sym} at ${symbols[ovl_sym]:04X} outside ovl.death (${OVERLAY_BASE:04X}-${symbols['ovl_death_end']:04X})"
+            )
+    if death_prg.exists():
+        death_blob = death_prg.read_bytes()[2:]
+        for entry_sym, callee_sym in (
+            ("ui_recall_display", "rcl_white"),
+            ("recall_view_body", "msg_clear"),
+        ):
+            if entry_sym in symbols and callee_sym in symbols:
+                entry_off = symbols[entry_sym] - OVERLAY_BASE
+                callee_addr = symbols[callee_sym]
+                exp_jsr = bytes((0x20, callee_addr & 0xFF, callee_addr >> 8))
+                if (
+                    not (0 <= entry_off <= len(death_blob) - 3)
+                    or death_blob[entry_off : entry_off + 3] != exp_jsr
+                ):
+                    errors.append(
+                        f"{entry_sym} (${symbols[entry_sym]:04X}) not physically emitted in ovl.death"
+                    )
 
     # Check zp_save_buf placement in 4 KB ANDY ($8F00-$8FFF) and zero overlap with BeebHuffData
     if "zp_save_buf" not in symbols:
@@ -603,7 +648,7 @@ def loader_disk_names(storage: Path = STORAGE_SRC,
     pack does not preload into Sideways RAM (beeb_ovl_cache_bank $00). Names
     come from the .byte data of the loader's own table in hal/storage.s."""
     names = {}
-    for match in re.finditer(r"^hal_storage_(tier_\d|overlay_\w+?|item_cat)_name:\s*\n\s*\.byte\s+([^/\n]+)",
+    for match in re.finditer(r"^hal_storage_(tier_\d|overlay_\w+?|item_cat|mon_ext)_name:\s*\n\s*\.byte\s+([^/\n]+)",
                              storage.read_text(), re.M):
         names[match.group(1)] = "".join(chr(int(b, 16)) for b in re.findall(r"\$([0-9a-fA-F]{2})", match.group(2)))
     text = overlay_storage.read_text()
@@ -629,8 +674,12 @@ def loader_disk_names(storage: Path = STORAGE_SRC,
     if "#define HAL_PLATFORM_MONSTER_CATALOG" in main_text:
         # The tier filenames compile out (#if !HAL_PLATFORM_MONSTER_CATALOG).
         names = {k: v for k, v in names.items() if not k.startswith("tier_")}
+        if "mon_ext" not in names:
+            raise ValueError("hal/storage.s has no filename for MONEXT")
     elif sum(k.startswith("tier_") for k in names) != 4:
         raise ValueError("hal/storage.s: expected the four monster tier filenames")
+    else:
+        names.pop("mon_ext", None)
     if "#define HAL_PLATFORM_ITEM_CAT_CUSTOM" in main_text:
         if "item_cat" not in names:
             raise ValueError("hal/storage.s has no filename for ITEMCAT")
@@ -639,21 +688,42 @@ def loader_disk_names(storage: Path = STORAGE_SRC,
     return names
 
 
+MONEXT_EXPECTED_BYTES = 279 * 8
+
+
+def ssd_catalog_lengths(ssd: bytes) -> dict[str, int]:
+    """Name -> byte length for files in the default ($) directory of an Acorn
+    DFS single-sided image's catalogue."""
+    out: dict[str, int] = {}
+    for i in range(ssd[0x105] // 8):
+        if ssd[15 + i * 8] & 0x7F != ord("$"):   # bit 7: locked
+            continue
+        name = ssd[8 + i * 8:15 + i * 8].decode("latin-1").rstrip()
+        info = ssd[0x108 + i * 8:0x110 + i * 8]
+        length = info[4] | (info[5] << 8) | (((info[6] >> 4) & 3) << 16)
+        out[name] = length
+    return out
+
+
 def ssd_catalog(ssd: bytes) -> set[str]:
     """Names in the default ($) directory of an Acorn DFS single-sided
     image's catalogue, the one the loader reads."""
-    return {ssd[8 + i * 8:15 + i * 8].decode("latin-1").rstrip()
-            for i in range(ssd[0x105] // 8)
-            if ssd[15 + i * 8] & 0x7F == ord("$")}   # bit 7: locked
+    return set(ssd_catalog_lengths(ssd))
 
 
 def validate_disk(ssd: bytes, wanted: dict[str, str]) -> list[str]:
     """Every file the loader reads from DFS by name (loader_disk_names: the
     monster tiers and the overlays the boot pack does not preload) is on the
     disk, in the default directory."""
-    catalog = ssd_catalog(ssd)
-    return [f"{what} loads {name} from the disk, which does not have it"
-            for what, name in sorted(wanted.items()) if name not in catalog]
+    lengths = ssd_catalog_lengths(ssd)
+    errors = [f"{what} loads {name} from the disk, which does not have it"
+              for what, name in sorted(wanted.items()) if name not in lengths]
+    mon_ext_name = wanted.get("mon_ext")
+    if mon_ext_name and mon_ext_name in lengths and lengths[mon_ext_name] != MONEXT_EXPECTED_BYTES:
+        errors.append(
+            f"mon_ext ({mon_ext_name}) has length {lengths[mon_ext_name]} B on disk, expected {MONEXT_EXPECTED_BYTES} B (279 * 8)"
+        )
+    return errors
 
 
 def write_synthetic_prg(path: Path, start: int, length: int, prefix: bytes = b"") -> None:
@@ -670,6 +740,12 @@ def run_selftest() -> int:
         ]
         sym_lines.extend([
             ".label program_end=$7b00",
+            ".label recall_view_display=$6100",
+            ".label recall_view_cdefense=$6112",
+            ".label ovl_death_end=$ac00",
+            ".label ui_recall_display=$a900",
+            ".label recall_view_body=$a920",
+            ".label rcl_strs=$a980",
             f".label ovl_huffdata_end=$8d94",
             f".label zp_save_buf=${ZP_SAVE_BASE:04x}",
             f".label recall_data_start=${LYNNE_AUX_BASE:04x}",
@@ -694,7 +770,14 @@ def run_selftest() -> int:
             print(f"FAIL: valid synthetic build rejected: {errs}", file=sys.stderr)
             return 1
 
-        # Negative test 1: low helper at or above $3000 must fail
+        # Negative test 1b: cat_ext_record straddling $3000 must fail
+        (bdir / "main.sym").write_text(
+            re.sub(r"\.label cat_ext_record=\$[0-9a-f]+", ".label cat_ext_record=$2ff9", base_sym_text),
+            encoding="utf-8",
+        )
+        if not validate_build(bdir, src_dir=None):
+            print("FAIL: failed to catch cat_ext_record + 8 > $3000", file=sys.stderr)
+            return 1
         (bdir / "main.sym").write_text(
             re.sub(r"\.label EnterMos=\$[0-9a-f]+", ".label EnterMos=$3000", base_sym_text),
             encoding="utf-8",
@@ -769,6 +852,22 @@ def run_selftest() -> int:
             print("FAIL: failed to catch LYNNE aux >= $4400", file=sys.stderr)
             return 1
 
+        # Negative test 9b: recall_view_display outside Main RAM or ui_recall_display/rcl_strs outside ovl.death must fail
+        (bdir / "main.sym").write_text(
+            base_sym_text.replace("recall_view_display=$6100", "recall_view_display=$a800"),
+            encoding="utf-8",
+        )
+        if not validate_build(bdir, src_dir=None):
+            print("FAIL: failed to catch recall_view_display >= $8000", file=sys.stderr)
+            return 1
+        (bdir / "main.sym").write_text(
+            base_sym_text.replace("rcl_strs=$a980", "rcl_strs=$6000"),
+            encoding="utf-8",
+        )
+        if not validate_build(bdir, src_dir=None):
+            print("FAIL: failed to catch rcl_strs outside ovl.death", file=sys.stderr)
+            return 1
+
         # Negative tests 10-11: static SHEILA_ROMSEL sync and SEI audit
         bad_src = bdir / "src"
         bad_src.mkdir()
@@ -816,11 +915,13 @@ def run_selftest() -> int:
         if (wanted.get("overlay_town") != "OVLTWN"
                 or wanted.get("overlay_home") != "OVLHOM"
                 or wanted.get("item_cat") != "ITEMCAT"
+                or wanted.get("mon_ext") != "MONEXT"
                 or any(k.startswith("tier_") for k in wanted)):
             print(f"FAIL: loader names misread: {wanted}", file=sys.stderr)
             return 1
-        def spec(n: str, d: str = "$", lk: bool = False) -> DfsFileSpec:
-            return DfsFileSpec(name=n, directory=d, locked=lk, load_addr=0, exec_addr=0, data=b"x")
+        def spec(n: str, d: str = "$", lk: bool = False, size: int | None = None) -> DfsFileSpec:
+            nbytes = size if size is not None else (MONEXT_EXPECTED_BYTES if n == "MONEXT" else 1)
+            return DfsFileSpec(name=n, directory=d, locked=lk, load_addr=0, exec_addr=0, data=b"x" * nbytes)
 
         full = build_ssd_image([spec(n, lk=(n == "OVLTWN")) for n in wanted.values()])
         if validate_disk(full, wanted):
@@ -829,6 +930,14 @@ def run_selftest() -> int:
         short = build_ssd_image([spec(n) for n in wanted.values() if n != "OVLTWN"])
         if not validate_disk(short, wanted):
             print("FAIL: failed to catch OVLTWN missing from the disk", file=sys.stderr)
+            return 1
+        no_monext = build_ssd_image([spec(n) for n in wanted.values() if n != "MONEXT"])
+        if not validate_disk(no_monext, wanted):
+            print("FAIL: failed to catch MONEXT missing from the disk", file=sys.stderr)
+            return 1
+        bad_monext = build_ssd_image([spec(n, size=100 if n == "MONEXT" else None) for n in wanted.values()])
+        if not validate_disk(bad_monext, wanted):
+            print("FAIL: failed to catch MONEXT wrong byte size on the disk", file=sys.stderr)
             return 1
         elsewhere = build_ssd_image([spec(n, "A" if n == "OVLTWN" else "$") for n in wanted.values()])
         if not validate_disk(elsewhere, wanted):

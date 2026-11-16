@@ -45,6 +45,11 @@ magic_check_new_spells:
     rts
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -112,6 +117,11 @@ store_enter:
 #import "../../../../core/spell_effects.s"
 .segment TestCreateOverlay
 #import "../../../../core/item_actions_overlay.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s

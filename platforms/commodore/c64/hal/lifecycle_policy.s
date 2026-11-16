@@ -31,7 +31,12 @@
 .const hal_platform_game_loop_save_return_view = 0
 .const hal_platform_game_loop_run_stop_reset_input = 0
 .const hal_platform_game_loop_scroll_delta_render = 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+.const hal_platform_game_loop_item_actions_trampolined = 1
+#define HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
+#else
 .const hal_platform_game_loop_item_actions_trampolined = 0
+#endif
 .const hal_platform_overlay_count = 13
 .const hal_platform_overlay_state_external = 0
 .const hal_platform_overlay_force_reload = 0

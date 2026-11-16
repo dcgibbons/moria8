@@ -27,7 +27,7 @@
 // common/catalog_fetch.s; maintainer, 2026-11-05):
 //   $D800-$DBFF (1,024 B): CATALOG_NAME_POOL — 32 active species names x 32 B
 //   $DC00-$DCFF   (256 B): CATALOG_HIDDEN — level index & record-sector table
-//                          (229 B used on disk -> 27 B tail $DCE5-$DCFF free;
+//                          (247 B used on disk -> 9 B tail $DCF7-$DCFF free;
 //                           117 B used on cart -> 139 B tail $DC75-$DCFF free)
 //   $DD00-$DEFF   (512 B): HUFF_INDEX_HIDDEN — Huffman string index
 //                          (496 B used -> 16 B tail $DEF0-$DEFF free)

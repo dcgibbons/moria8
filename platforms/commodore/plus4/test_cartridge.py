@@ -464,6 +464,20 @@ def run(args: argparse.Namespace) -> int:
             assert cycles < 4000, (record_id, cycles)
             assert exp.memory(exp.sym["cat_record"], record_size) == records[record_id]
         exp.check("catalog records match source, including 8-bit ID and bank boundaries")
+        ext_records = catalog_disk.ext_records()
+        ext_size = catalog_disk.EXT_RECORD_SIZE
+        ext_offset = manifest["assets"][make_plus4_magic.CONTRACT["CART_ASSET_CATALOG_EXT"]]["rom_offset"]
+        ext_crossing_ids = [
+            i for i in range(len(ext_records))
+            if (ext_offset + i * ext_size) % make_plus4_magic.BANK_SIZE + ext_size
+            > make_plus4_magic.BANK_SIZE
+        ]
+        for record_id in sorted({0, 1, 255, 256, len(ext_records) - 1, *ext_crossing_ids}):
+            exp.write(exp.sym["cat_id_lo"], record_id.to_bytes(2, "little"))
+            cycles = exp.call(exp.sym["catalog_fetch_ext"], irq_masked=True)
+            assert cycles < 4000, (record_id, cycles)
+            assert exp.memory(exp.sym["cat_ext_record"], ext_size) == ext_records[record_id]
+        exp.check("extended catalog records match source, including 8-bit ID and bank boundaries")
         exp.call(exp.sym["cart_load_title"], irq_masked=True)
         title = (args.symbols.parent / "title").read_bytes()[2:]
         assert exp.memory(make_plus4_magic.MAP_BASE, len(title)) == title
@@ -558,7 +572,12 @@ def run_catalog(args: argparse.Namespace) -> int:
                 sum((len(record) - i) * b for i, b in enumerate(record)) & 255,
             ))
         assert exp.memory(0xC800, len(expected)) == expected
-        exp.check(f"all {len(catalog_disk.records())} catalog records match source checksums and preserve math scratch")
+        expected_ext = b"".join(catalog_disk.ext_records())
+        assert len(expected_ext) == 279 * 8
+        assert exp.memory(0xCB00, len(expected_ext)) == expected_ext
+        exp.check(
+            f"all {len(catalog_disk.records())} catalog + extended records match source and preserve math scratch"
+        )
         return exp.count
     finally:
         exp.close()
@@ -715,7 +734,8 @@ def selftest() -> None:
     assert contract["CART_REG_C1LO_KERNAL"] == 0xFDD2
     assert contract["CART_REG_BASIC_KERNAL"] == 0xFDD0
     assert contract["CART_REG_BANK"] == 0xFDFE
-    assert contract["CART_ASSET_COUNT"] == 22
+    assert contract["CART_ASSET_CATALOG_EXT"] == 22
+    assert contract["CART_ASSET_COUNT"] == 23
     with tempfile.TemporaryDirectory(prefix="plus4-harness-selftest-") as tmp:
         sym_path = Path(tmp) / "test.sym"
         sym_path.write_text(".label entry=$100e\n.label title_menu_loop=$c300\n")

@@ -366,6 +366,17 @@ def run(args):
             assert cycles < 2000, (record_id, cycles)
             assert exp.memory(exp.sym["cat_record"], record_size) == records[record_id]
         exp.check("catalog records match source, including 8 KB and 8-bit ID boundaries")
+        ext_records = catalog_disk.ext_records()
+        ext_size = catalog_disk.EXT_RECORD_SIZE
+        ext_offset = manifest["assets"][make_easyflash.CONTRACT["CART_ASSET_CATALOG_EXT"]]["rom_offset"]
+        ext_crossing_ids = [i for i in range(len(ext_records))
+                            if (ext_offset + i * ext_size) % make_easyflash.BANK_SIZE + ext_size > make_easyflash.BANK_SIZE]
+        for record_id in sorted({0, 1, 255, 256, len(ext_records)-1, *ext_crossing_ids}):
+            exp.write(exp.sym["cat_id_lo"], record_id.to_bytes(2, "little"))
+            cycles = exp.call(exp.sym["catalog_fetch_ext"], port=0x34)
+            assert cycles < 2000, (record_id, cycles)
+            assert exp.memory(exp.sym["cat_ext_record"], ext_size) == ext_records[record_id]
+        exp.check("extended catalog records match source across 8-bit and asset boundaries")
         exp.call(exp.sym["cart_load_title"], port=0x36)
         title = (args.symbols.parent / "title").read_bytes()[2:]
         assert exp.memory(0xC000, len(title)) == title
@@ -440,7 +451,12 @@ def run_catalog(args):
             expected.extend((sum(record) & 255,
                 sum((len(record)-i) * b for i, b in enumerate(record)) & 255))
         assert exp.memory(0xC800, len(expected)) == expected
-        exp.check(f"all {len(catalog_disk.records())} catalog records match source checksums and preserve math scratch")
+        expected_ext = bytearray()
+        for ext_rec in catalog_disk.ext_records():
+            expected_ext.extend((sum(ext_rec) & 255,
+                sum((len(ext_rec)-i) * b for i, b in enumerate(ext_rec)) & 255))
+        assert exp.memory(0xCB00, len(expected_ext)) == expected_ext
+        exp.check(f"all {len(catalog_disk.records())} base and extended catalog records match source checksums and preserve math scratch")
         return exp.count
     finally:
         exp.close()

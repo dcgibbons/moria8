@@ -572,72 +572,11 @@ game_new_start:
 c64_test_seed_point:                // the runner writes the seed here (*_seed.mon)
 #endif
 
-    // --- Starting equipment ---
-    // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020
-    // turns), and four more in carried slot 2: VMS player_init / Umoria
-    // class_base_provisions give every class 5 torches and 5 rations (one of
-    // each until 2026-10-25, found by the M5b playtest).
-    lda #13
-    sta inv_item_id + EQUIP_LIGHT
-    sta inv_item_id + 2
-    lda #1
-    sta inv_qty + EQUIP_LIGHT
-    lda #134
-    sta inv_p1 + EQUIP_LIGHT
-    sta inv_p1 + 2
-    lda #0
-    sta inv_flags + EQUIP_LIGHT
-    sta inv_flags + 2
-    lda #4
-    sta inv_qty + 2
-    lda #1
-    sta zp_light_radius
-    sta player_data + PL_LIGHT_RAD
-
-    // Five rations of food (type 15) in carried slot 0
-    lda #15
-    sta inv_item_id
-    lda #5
-    sta inv_qty
-    lda #0
-    sta inv_p1
-    sta inv_flags
-
-    // Dagger (type 2) in EQUIP_WEAPON
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
-    lda #1
-    sta inv_qty + EQUIP_WEAPON
-    lda #0
-    sta inv_p1 + EQUIP_WEAPON
-    sta inv_flags + EQUIP_WEAPON
-
-    // Leather armor (type 7) in EQUIP_BODY
-    lda #7
-    sta inv_item_id + EQUIP_BODY
-    lda #1
-    sta inv_qty + EQUIP_BODY
-    lda #0
-    sta inv_p1 + EQUIP_BODY
-    sta inv_flags + EQUIP_BODY
-
-    // Starting spellbook for casters (carried slot 1)
-    lda player_data + PL_SPELL_TYPE
-    beq !no_book+
-    cmp #SPELL_MAGE
-    bne !priest_book+
-    lda #47                 // Beginner's Spellbook
-    jmp !store_book+
-!priest_book:
-    lda #48                 // Holy Prayer Book
-!store_book:
-    sta inv_item_id + 1     // Carried slot 1
-    lda #1
-    sta inv_qty + 1
-    lda #0
-    sta inv_p1 + 1
-    sta inv_flags + 1
-!no_book:
+#if STARTING_KIT_EXTERNAL
+    jsr tramp_init_starting_kit
+#else
+#import "starting_kit_cold.s"
+#endif
 
     // Recalculate combat stats with equipped items
 #if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
@@ -841,17 +780,27 @@ load_resume_game:
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_resume_entry:
 #endif
-    jsr wizard_reset_session_state
-    jsr player_search_clear_transient_state
+    // Clear transient session state first while OVL_STORAGE is still resident
+    // from load_game (0 extra disk loads on StorageOverlay ports).
+#if LOAD_RESUME_RESET_EXTERNAL
+    jsr tramp_load_resume_reset
+#else
+#import "load_resume_reset_cold.s"
+#endif
 
     // The weapon/ring/ego bonuses player_calc_combat adds (pcc_eq_*) are not
-    // saved: collect them before the tier restore, since OVL.ITEMS shares
-    // the tier's window on some ports. player_calc_stats below applies them.
+    // saved: collect them before player_calc_stats and tier restore, since
+    // OVL.ITEMS shares the tier's window on some ports.
 #if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
     jsr tramp_item_recalc
 #else
     jsr player_recalc_equipment
 #endif
+
+    // Recalculate derived stats from loaded base values + pcc_eq_*
+    jsr player_calc_stats
+    jsr player_calc_hp
+    jsr hal_screen_clear
 
     // Reset transient tier metadata from any prior runtime state, then
     // load the correct tier for the resumed dungeon level. The save-file
@@ -863,34 +812,7 @@ c64_test_single_drive_load_return_resume_entry:
     jsr catalog_refetch_slots
 #endif
 
-    // Recalculate derived stats from loaded base values
-    jsr player_calc_stats
-    jsr player_calc_hp
-
-    // Stop any running
-    lda #$ff
-    sta zp_run_dir
-    lda #0
-    sta auto_rest_active
-    sta regen_frac_lo           // not saved (zp_regen_frac, the high byte, is)
-    sta md_count                // no drop staged before the load
-#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-    sta levelup_magic_pending   // none owed by the game played before the load
-#endif
-
-    // Re-init SID
-    jsr hal_sound_init
-
-
-    // Viewport coords are transient and not restored from saves. Seed a
-    // neutral origin before the first post-load deadband update so stale
-    // title/UI state cannot leave the renderer starting from $FF rows/cols.
-    lda #0
-    sta zp_view_x
-    sta zp_view_y
-
-    // Clear screen and render the loaded level
-	    jsr hal_screen_clear
+    // Render the loaded level onto the cleared screen
 	    jsr update_visibility
 	    jsr viewport_update
 	    jsr render_viewport
@@ -2012,14 +1934,22 @@ chest_open_route:
     bcc !cor_door+
     jmp tramp_chest_open
 !cor_door:
+#if DOOR_OPEN_CLOSE_EXTERNAL
+    jmp tramp_door_try_open
+#else
     jmp door_try_open
+#endif
 :ChestRouteRestoreSegment()
 
 cmd_close:
     jsr msg_clear
     jsr get_direction_target
     bcc !close_no_turn+
+#if DOOR_OPEN_CLOSE_EXTERNAL
+    jsr tramp_door_try_close
+#else
     jsr door_try_close
+#endif
     bcc !close_no_turn+
     // Door closed — consume turn and re-render
     jmp post_turn_update_visibility_or_die
@@ -2079,7 +2009,11 @@ cmd_pickup:
 
 cmd_drop:
     jsr msg_clear
+#if ITEM_DROP_EXTERNAL
+    jsr tramp_item_drop
+#else
     jsr item_drop
+#endif
     jmp command_result_main_or_redraw_full
 
 cmd_inventory:
@@ -2778,106 +2712,9 @@ c128_test_force_melee_y: .byte 0
 :ResidentPlaySegment()
 #endif
 
-// ============================================================
-// calc_dig_ability — Calculate digging ability (STR + tool/weapon bonus)
-// New formula for R14: (STR>>2) + base_bonus + (ego*12) for digging tools
-// Output: tun_dig_ability set
-// Clobbers: A, X
-// ============================================================
-calc_dig_ability:
-    // Check equipped weapon
-    ldx inv_item_id + EQUIP_WEAPON
-    cpx #$FF
-    bne !cda_has_weapon+
-
-    // Bare hands: ability = 0
-    lda #0
-    sta tun_dig_ability
-    rts
-
-!cda_has_weapon:
-    stx zp_temp0                // Save weapon slot_lo
-    ldx #EQUIP_WEAPON
-    jsr item_get_category_inv_x // Sets item_cur_page, A = it_category
-    ldx zp_temp0                // X = weapon slot_lo
-    cmp #ICAT_DIGGING
-    beq !cda_dig_tool+
-
-    // Regular weapon: ability = (STR >> 2) + max(0, PL_TODMG >> 1)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
-    lda player_data + PL_TODMG
-    bmi !cda_done+              // Negative TODMG → skip (leave ability = STR>>2)
-    lsr                         // TODMG >> 1
-    clc
-    adc tun_dig_ability
-    bcc !cda_ok+
-    lda #$FF                    // Cap at 255
-!cda_ok:
-    sta tun_dig_ability
-!cda_done:
-    rts
-
-!cda_dig_tool:
-    // Digging tool: ability = (STR >> 2) + base_bonus + (ego * 12)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
-
-    lda item_cur_page
-    bne !cda_done-              // All digging tools are Page 0 (#62,#63,#157..160)
-    cpx #157
-    bcc !cda_legacy_tool+
-    cpx #161
-    bcs !cda_done-
-    lda dig_base_ext - 157,x
-    clc
-    adc tun_dig_ability
-    bcc !cda_ext_ok+
-    lda #$FF
-!cda_ext_ok:
-    sta tun_dig_ability
-    rts
-
-!cda_legacy_tool:
-    // Add base bonus from table (#62 Shovel, #63 Pick)
-    txa
-    sec
-    sbc #62                     // Index into dig_base_table (0=Shovel, 1=Pick)
-    tax
-    lda dig_base_table,x
-    clc
-    adc tun_dig_ability
-    sta tun_dig_ability
-
-    // Add ego bonus: ego * 12
-    lda inv_ego + EQUIP_WEAPON
-    and #EGO_ID_MASK
-    beq !cda_done-              // ego=0, no bonus
-    // Multiply ego (1 or 2) by 12
-    // ego * 12 = ego * 8 + ego * 4
-    sta zp_temp2                // save ego
-    asl                         // *2
-    asl                         // *4
-    sta zp_temp3                // ego*4
-    asl                         // *8
-    clc
-    adc zp_temp3                // *8 + *4 = *12
-    clc
-    adc tun_dig_ability
-    bcc !cda_ego_ok+
-    lda #$FF                    // Cap at 255
-!cda_ego_ok:
-    sta tun_dig_ability
-    rts
-
-dig_base_table:
-    .byte 6, 20                 // Shovel base=6, Pick base=20
-dig_base_ext:
-    .byte 18, 32, 30, 44        // #157 Gnomish S, #158 Orcish P, #159 Dwarven S, #160 Dwarven P
+#if !CALC_DIG_EXTERNAL
+#import "calc_dig_cold.s"
+#endif
 
 // ============================================================
 // roll_tool_ego_check — Handle ego roll for digging tools

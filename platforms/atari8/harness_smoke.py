@@ -26,6 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import catalog_disk  # noqa: E402
 import catalog_lore  # noqa: E402  (the generated monster catalog's data)
 sys.path.insert(0, str(ROOT / "tools"))
 from make_atr import build_blank_atr  # noqa: E402
@@ -131,7 +132,7 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     id_known = syms.get("id_known_bits", 0)
     recall_data = syms.get("recall_data_start", 0)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
-        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
+        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi", "cat_record", "cat_ext_record"))
 
     header = f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
@@ -368,7 +369,7 @@ local function descend_to_dl1()
         wait_frames(20)
         drain_more(2)
         send_key(0x3E) -- '>'
-        for _ = 1, 60 do
+        for _ = 1, 120 do
             wait_frames(10)
             if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0 and not screen_has("GENERATING") then
                 return true
@@ -414,16 +415,17 @@ function run()
     local xe = prog:read_u8(XE_PRESENT)
     assert_line("xe_detect_{machine}", xe == {expected_xe})
     if {expected_xe} == 1 then
-        -- All 19 slots (0..9 and 16..18 overlays, 10..13 and 15 the monster
-        -- catalog's records, 14 TITLE.DAT) must have bit 7 set
+        -- All 18 cached slots (0..9 and 16..17 gameplay overlays, 10..13 and 15
+        -- the monster catalog's records, 14 TITLE.DAT; cold OVL.TTL is uncached)
+        -- must have bit 7 set
         local all_slots_hot = true
-        for slot = 0, 18 do
+        for slot = 0, 17 do
             if (prog:read_u8(XE_SLOT_POP + slot) & 0x80) == 0 then
                 all_slots_hot = false
                 break
             end
         end
-        assert_line("xe_all_19_slots_preloaded", all_slots_hot)
+        assert_line("xe_all_18_slots_preloaded", all_slots_hot)
     end
     manager.machine:exit()
 end
@@ -437,9 +439,11 @@ end
         count = catalog_lore.const("CATALOG_COUNT")
         levels = catalog_lore.field("cat_cr_level")
         names = [catalog_lore.name(cid) + [0] for cid in range(count)]
+        ext_recs = [list(r) for r in catalog_disk.ext_records()]
         body = """
 local LEVELS = {CAT_LEVELS}
 local NAMES = {CAT_NAMES}
+local EXT_RECS = {CAT_EXT_RECS}
 local function slot_id(t)
     return prog:read_u8(CAT_SLOT_ID_LO_ADDR + t) + prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) * 256
 end
@@ -513,10 +517,24 @@ function run()
     print("DIAG DL50 win creatures: " .. winners .. " ids:" .. seen)
     assert_line("cat_win_creature", winners == 1)
     assert_line("cat_win_awake", awake)
+    local last_cid = prog:read_u8(CAT_RECORD_ADDR) + prog:read_u8(CAT_RECORD_ADDR + 1) * 256
+    local ext_ok = (CAT_EXT_RECORD_ADDR == CAT_RECORD_ADDR + 49) and (last_cid >= 0 and last_cid < #EXT_RECS)
+    if ext_ok then
+        local want_ext = EXT_RECS[last_cid + 1]
+        for k = 1, 8 do
+            if prog:read_u8(CAT_EXT_RECORD_ADDR + k - 1) ~= want_ext[k] then
+                ext_ok = false
+                print("DIAG cat_ext_record mismatch at byte " .. k .. " for cid " .. last_cid)
+                break
+            end
+        end
+    end
+    assert_line("cat_ext_record_57b", ext_ok)
     manager.machine:exit()
 end
 """.replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}").replace(
-            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}")
+            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}").replace(
+            "{CAT_EXT_RECS}", "{" + ",".join("{" + ",".join(map(str, r)) + "}" for r in ext_recs) + "}")
     elif scenario == "town_to_dungeon_130xe":
         body = """
 function run()

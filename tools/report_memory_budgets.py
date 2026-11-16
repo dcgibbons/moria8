@@ -204,6 +204,9 @@ def measure_segment(
             sym_end = syms["msg_history"] + 320
             if variant == "cart" and "zp_save_buf" not in syms and sym_end is not None:
                 note = "$D700-$DEFF hidden RAM ($DF00-$DFFF REU reserved; msg_history 320B active, zp_save_buf omitted on cart)"
+    elif spec.measure == "c128_bank1_high":
+        if spec.end_sym and spec.end_sym in syms and base_addr <= syms[spec.end_sym] <= ceil_addr:
+            sym_end = syms[spec.end_sym] + spec.sym_plus_bytes
     elif spec.end_sym and spec.end_sym in syms:
         sym_end = syms[spec.end_sym] + spec.sym_plus_bytes
     elif spec.name == "Plus4HighBss" and variant == "cart":
@@ -213,10 +216,14 @@ def measure_segment(
     prg_load: int | None = None
     prg_end: int | None = None
     prg_payload: int | None = None
+    raw_size: int | None = None
     if spec.prg_file:
         prg_path = build_dir / spec.prg_file
         if prg_path.is_file():
-            prg_load, prg_end, prg_payload = read_prg_span(prg_path)
+            if spec.measure == "raw_bin":
+                raw_size = prg_path.stat().st_size
+            else:
+                prg_load, prg_end, prg_payload = read_prg_span(prg_path)
 
     end_addr: int | None = None
     used_bytes: int | None = None
@@ -225,6 +232,20 @@ def measure_segment(
         end_addr = sym_end
         if end_addr is not None:
             used_bytes = max(0, end_addr - base_addr)
+    elif spec.measure == "c128_bank1_high":
+        if sym_end is not None:
+            end_addr = sym_end
+            used_bytes = max(0, end_addr - base_addr)
+            if prg_end is not None and prg_end > 0xD8B8:
+                end_addr = max(end_addr, prg_end)
+                used_bytes = max(0, end_addr - base_addr)
+        elif prg_end is not None:
+            end_addr = prg_end
+            used_bytes = max(0, end_addr - base_addr)
+    elif spec.measure == "raw_bin":
+        if raw_size is not None:
+            used_bytes = raw_size
+            end_addr = base_addr + raw_size
     elif spec.measure == "prg":
         end_addr = prg_end
         if end_addr is not None:
@@ -430,6 +451,17 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
             ),
             SegmentSpec("128.cat (Bank1)", "aux", 0x7E60, 0x9568, prg_file="128.cat.prg", measure="prg", note="Bank 1 catalog fields"),
             SegmentSpec("128.cnm (Bank1)", "aux", 0xA000, 0xB000, prg_file="128.cnm.prg", measure="prg", note="Bank 1 catalog names"),
+            SegmentSpec(
+                "Bank1High / 128.cex (Bank1)",
+                "aux",
+                0xD000,
+                0xE000,
+                end_sym="msg_history_end",
+                prg_file="128.cex.prg",
+                measure="c128_bank1_high",
+                optional=True,
+                note="Bank 1 $D000-$DFFF ($7F NOIO): 128.cex $D000-$D8B7 (2,232B) + store_inv reserve $D8B8-$DCB7 (1,024B) + msg_history $DCB8-$DF37 (640B)",
+            ),
             SegmentSpec("128.huff (Bank1)", "aux", 0xF000, 0xFF00, prg_file="128.huff.prg", measure="prg", note="Bank 1 Huffman corpus"),
             SegmentSpec("legalui", "overlay", 0xE000, 0xE600, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
             SegmentSpec("cache.ovl.disarm (Bank1)", "cache", 0xE000, 0xE300, prg_file="ovl.disarm", end_sym="ovl_disarm_end", note="Bank 1 cache cap (3 pages = 768 B)"),
@@ -494,6 +526,16 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
         SegmentSpec("A2AuxData", "aux", 0x3B0C, 0x5000, prg_file="a2.auxdata", measure="prg", note="Aux RAM $3B0C-$4FFF"),
         SegmentSpec("A2Catalog", "aux", 0x5000, 0x6700, end_sym="catalog_fields_end", prg_file="a2.catalog", note="Aux RAM catalog fields"),
         SegmentSpec("A2HuffData", "aux", 0x8D00, 0xAA00, end_sym="ovl_huffdata_end", prg_file="a2.huffdata", note="Aux cache HUFF+names <= $AA00"),
+        SegmentSpec(
+            "A2.CATEXT (Aux LC B2)",
+            "aux",
+            0xD000,
+            0xE000,
+            prg_file="bin/A2.CATEXT",
+            measure="raw_bin",
+            optional=True,
+            note="Aux LC Bank 2 $D000-$D8B7 extended monster catalog (2,232 B; PackBits A2.CATEXT.PB)",
+        ),
         SegmentSpec("BANKED_DATA_END guard", "aux", 0xBA00, 0xBB00, end_sym="BANKED_DATA_END", prg_file=None, measure="sym", optional=True, note="256 B data/tier tail ($BA00-$BAFF); excluded from code cap"),
         SegmentSpec("cache.ovl.ui (Aux)", "cache", 0x0000, 0x0600, prg_file="ovl.ui", measure="cache_prg", note="Aux cache $6700-$6CFF (6 pages)"),
         SegmentSpec("cache.ovl.spell (Aux)", "cache", 0x0000, 0x1400, prg_file="ovl.spell", measure="cache_prg", note="Aux cache $6D00-$80FF (20 pages)"),
@@ -547,6 +589,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
         s.extend([
             SegmentSpec("CX16.AUXDATA (Bank 3)", "aux", 0x6000, 0x8000, end_sym="ovl_auxdata_end", prg_file="CX16.AUXDATA", note="8 KB Bank 3 ($6000-$7FFF)"),
             SegmentSpec("CX16.HUFFDATA (Bank 4)", "aux", 0x8000, 0xA000, end_sym="ovl_huffdata_end", prg_file="CX16.HUFFDATA", note="8 KB Bank 4 ($8000-$9FFF)"),
+            SegmentSpec("MONSTER.EXT (Bank 5)", "aux", 0xA000, 0xC000, prg_file="MONSTER.EXT", measure="prg", optional=True, note="8 KB Bank 5 ($A000-$BFFF; Phase 5 extended monster catalog)"),
             SegmentSpec("ITEM.CAT (Bank 6)", "aux", 0xA000, 0xC000, prg_file="ITEM.CAT", measure="prg", optional=True, note="8 KB Bank 6 ($A000-$BFFF; 'ITM2' catalog)"),
             SegmentSpec("TITLE (Bank 22)", "aux", 0xA000, 0xC000, prg_file="TITLE", measure="prg", note="8 KB Bank 22 ($A000-$BFFF)"),
             SegmentSpec("MONSTER.CAT (Bank 23)", "aux", 0xA000, 0xC000, end_sym="catalog_bank_end", prg_file="MONSTER.CAT", note="8 KB Bank 23 ($A000-$BFFF)"),
@@ -611,6 +654,16 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
         SegmentSpec("BeebLynneAux", "aux", 0x3F80, 0x4400, end_sym="beeb_lynne_aux_end", measure="sym", note="LYNNE $3F80-$43FF (recall[279] 1,116 B <= $4400 bitmap)"),
         SegmentSpec("BeebAuxData (Bank 6)", "aux", 0x6000, 0x7300, end_sym="ovl_auxdata_end", prg_file="beeb.auxdata", note="SWR Bank 6 $8000-$92FF (19 pages; virtual $6000-$72FF; $9300-$94FF = 2p ITEMCAT)"),
         SegmentSpec("BeebCatalog (Bank 6)", "aux", 0x9500, 0xBA00, end_sym="beeb_catalog_end", prg_file="beeb.catalog", note="SWR Bank 6 catalog (37 pages; $9500-$B9FF)"),
+        SegmentSpec(
+            "MONEXT (DFS)",
+            "aux",
+            0x0000,
+            9 * 256,
+            prg_file="bin/MON.EXT",
+            measure="raw_bin",
+            optional=True,
+            note="DFS MONEXT (279 x 8 B = 2,232 B in 9 sectors; streamed 8 B/species via < $3000 OSGBPB A=3)",
+        ),
         SegmentSpec("cache.ovl.modal (Bank 5)", "cache", 0x0000, 12 * 256, prg_file="ovl.modal", measure="cache_prg", note="SWR Bank 5 $B400-$BFFF (12 pages)"),
         SegmentSpec("cache.ovl.ui (Bank 6)", "cache", 0x0000, 6 * 256, prg_file="ovl.ui", measure="cache_prg", note="SWR Bank 6 $BA00-$BFFF (6 pages)"),
         SegmentSpec("cache.ovl.spell (Bank 7)", "cache", 0x0000, 21 * 256, prg_file="ovl.spell", measure="cache_prg", note="SWR Bank 7 $8000-$94FF (21 pages)"),
@@ -748,15 +801,29 @@ def collect_bank_summaries(port: str, variant: str, build_dir: Path, syms: dict[
                     free_units=max(0, 32 - md128_used),
                     note=f"MD128 {md128_used}/32 dir slots (C128M-011)",
                 ))
+        cex_path = build_dir / "128.cex.prg"
+        b1_msg_end = syms.get("msg_history_end")
+        if (b1_msg_end is not None and 0xD000 < b1_msg_end <= 0xE000) or cex_path.is_file():
+            b1_used = (b1_msg_end - 0xD000) if (b1_msg_end is not None and 0xD000 < b1_msg_end <= 0xE000) else 3896
+            b1_free = max(0, 4096 - b1_used)
+            b1_note = (
+                f"Bank 1 $D000-$DFFF ($7F NOIO): 128.cex $D000-$D8B7 (2,232 B) + "
+                f"store_inv reserve $D8B8-$DCB7 (1,024 B) + msg_history $DCB8-${0xD000 + b1_used - 1:04X} (640 B); "
+                f"${0xD000 + b1_used:04X}-$DFFF free ({b1_free} B)"
+            )
+        else:
+            b1_used = 0
+            b1_free = 4096
+            b1_note = "Bank 1 $D000-$DFFF (4 KB) C128M-002 spike-verified"
         out.append(BankSummary(
             port=port,
             variant=variant,
             name="Bank 1 High RAM ($D000-$DFFF)",
-            used_units=0,
+            used_units=b1_used,
             total_units=4096,
             unit_label="bytes",
-            free_units=4096,
-            note="Bank 1 $D000-$DFFF (4 KB) C128M-002 spike-verified",
+            free_units=b1_free,
+            note=b1_note,
         ))
     elif port == "apple2":
         pak_path = (build_dir / "bin" / "MORIA8.PAK") if (build_dir / "bin" / "MORIA8.PAK").is_file() else (build_dir / "MORIA8.PAK")
@@ -818,7 +885,18 @@ def collect_bank_summaries(port: str, variant: str, build_dir: Path, syms: dict[
             ))
         if "a2_aux_scratch_base" in syms or pak_path.is_file() or po_path.is_file():
             item_cat_bin = build_dir / "bin" / "ITEM.CAT"
-            if item_cat_bin.is_file():
+            catext_bin = build_dir / "bin" / "A2.CATEXT"
+            if item_cat_bin.is_file() and catext_bin.is_file():
+                icat_sz = item_cat_bin.stat().st_size
+                cext_sz = catext_bin.stat().st_size
+                lc_used = 1116 + cext_sz + icat_sz
+                lc_free = max(0, 16378 - lc_used)
+                lc_note = (
+                    f"Aux LC Bank 1 & Bank 2 ($D000-$FFF9, ~16 KB): Bank 1 $D000-$D45B recall[279] (1,116 B) + "
+                    f"Bank 2 $D000-${0xD000 + cext_sz - 1:04X} A2.CATEXT ({cext_sz:,} B) + "
+                    f"High RAM $E000-${0xE000 + icat_sz - 1:04X} ITEM.CAT ({icat_sz:,} B)"
+                )
+            elif item_cat_bin.is_file():
                 icat_sz = item_cat_bin.stat().st_size
                 lc_used = 1116 + icat_sz
                 lc_free = max(0, 16378 - lc_used)
@@ -841,14 +919,20 @@ def collect_bank_summaries(port: str, variant: str, build_dir: Path, syms: dict[
                 note=lc_note,
             ))
     elif port == "cx16":
-        # platforms/cx16/memory.s allocates Banks 0-4, Bank 6 (ITEM.CAT), and Banks 9-24
-        # (13 overlays incl. Bank 19 OVL.HOME, Bank 22 TITLE, Bank 23 MONSTER.CAT, Bank 24 LEGALUI):
-        # 22 allocated banks out of 64; Bank 5 + Banks 7-8 + Banks 25-63 (42 banks = 336 KB) are free.
+        # platforms/cx16/memory.s allocates Banks 0-4, Bank 5 (MONSTER.EXT), Bank 6 (ITEM.CAT),
+        # and Banks 9-24 (13 overlays incl. Bank 19 OVL.HOME, Bank 22 TITLE, Bank 23 MONSTER.CAT, Bank 24 LEGALUI):
+        # 23 allocated banks out of 64; Banks 7-8 + Banks 25-63 (41 banks = 328 KB) are free.
         has_item_cat = (build_dir / "ITEM.CAT").is_file()
-        used_banks = 22 if has_item_cat else 21
+        has_mon_ext = (build_dir / "MONSTER.EXT").is_file()
+        used_banks = 21 + int(has_item_cat) + int(has_mon_ext)
         total_banks = 64
         free_banks = total_banks - used_banks
-        if has_item_cat:
+        if has_item_cat and has_mon_ext:
+            cx16_note = (
+                f"Banks 0-6 (MONSTER.EXT Bank 5, ITEM.CAT Bank 6) & 9-24 (OVL.HOME Bank 19, OVL.STORAGE..LEGALUI Banks 20-24); "
+                f"free: Banks 7-8 and Banks 25-63 ({free_banks * 8} KB free)"
+            )
+        elif has_item_cat:
             cx16_note = (
                 f"Banks 0-4, 6 (ITEM.CAT), & 9-24 (OVL.HOME Bank 19, OVL.STORAGE..LEGALUI Banks 20-24); "
                 f"free: CX16_BANK_CATALOG_EXT (Bank 5), Banks 7-8, and Banks 25-63 ({free_banks * 8} KB free)"
@@ -2616,6 +2700,57 @@ class _BudgetSelfTests(unittest.TestCase):
             self.assertFalse(segs["bbcmaster"]["cache.ovl.items (Bank 7)"]["overflow"])
             self.assertEqual(segs["bbcmaster"]["cache.ovl.gen (Bank 7)"]["ceil_addr"], 0x1000)
             self.assertEqual(segs["bbcmaster"]["cache.ovl.gen (Bank 7)"]["free_bytes"], 174)
+
+    def test_phase5_port_budgets_and_bank_summaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bdir = root / "build"
+            tdir = bdir / "test"
+
+            c128 = bdir / "c128"
+            c128.mkdir(parents=True)
+            (c128 / "main.sym").write_text(".label program_end=$ae7e\n.label msg_history=$dcb8\n.label msg_history_end=$df38\n")
+            (c128 / "128.cex.prg").write_bytes(_make_prg(0xD000, 2232))
+
+            a2 = bdir / "apple2"
+            (a2 / "bin").mkdir(parents=True)
+            (a2 / "main.sym").write_text(".label program_end=$7bde\n.label a2_aux_scratch_base=$0200\n.label a2_aux_scratch_end=$03ff\n")
+            (a2 / "bin" / "ITEM.CAT").write_bytes(b"\x00" * 7573)
+            (a2 / "bin" / "A2.CATEXT").write_bytes(b"\x00" * 2232)
+
+            cx16 = bdir / "cx16"
+            cx16.mkdir(parents=True)
+            (cx16 / "main.sym").write_text(".label program_end=$9368\n")
+            (cx16 / "ITEM.CAT").write_bytes(_make_prg(0xA000, 7573))
+            (cx16 / "MONSTER.EXT").write_bytes(_make_prg(0xA000, 2232))
+
+            beeb = bdir / "bbcmaster"
+            (beeb / "bin").mkdir(parents=True)
+            (beeb / "main.sym").write_text(".label program_end=$7f5f\n.label beeb_lynne_aux_end=$43dc\n")
+            (beeb / "bin" / "MON.EXT").write_bytes(b"\x00" * 2232)
+
+            rep = collect_report(bdir, tdir)
+            segs = {p["build_subdir"]: {s["name"]: s for s in p["segments"]} for p in rep["ports"]}
+            banks_by_port = {p["build_subdir"]: {b["name"]: b for b in p["banks"]} for p in rep["ports"]}
+
+            self.assertEqual(segs["c128"]["Bank1High / 128.cex (Bank1)"]["used_bytes"], 3896)
+            self.assertEqual(segs["c128"]["Bank1High / 128.cex (Bank1)"]["free_bytes"], 200)
+            self.assertEqual(banks_by_port["c128"]["Bank 1 High RAM ($D000-$DFFF)"]["used_units"], 3896)
+            self.assertEqual(banks_by_port["c128"]["Bank 1 High RAM ($D000-$DFFF)"]["free_units"], 200)
+
+            self.assertEqual(segs["apple2"]["A2.CATEXT (Aux LC B2)"]["used_bytes"], 2232)
+            self.assertEqual(segs["apple2"]["A2.CATEXT (Aux LC B2)"]["free_bytes"], 1864)
+            self.assertEqual(banks_by_port["apple2"]["Aux Language Card ($D000-$FFF9)"]["used_units"], 10921)
+            self.assertEqual(banks_by_port["apple2"]["Aux Language Card ($D000-$FFF9)"]["free_units"], 5457)
+
+            self.assertEqual(segs["cx16"]["MONSTER.EXT (Bank 5)"]["used_bytes"], 2232)
+            self.assertEqual(segs["cx16"]["MONSTER.EXT (Bank 5)"]["free_bytes"], 5960)
+            self.assertEqual(banks_by_port["cx16"]["HiRAM Banks ($A000-$BFFF)"]["used_units"], 23)
+            self.assertEqual(banks_by_port["cx16"]["HiRAM Banks ($A000-$BFFF)"]["free_units"], 41)
+            self.assertIn("328 KB free", banks_by_port["cx16"]["HiRAM Banks ($A000-$BFFF)"]["note"])
+
+            self.assertEqual(segs["bbcmaster"]["MONEXT (DFS)"]["used_bytes"], 2232)
+            self.assertEqual(segs["bbcmaster"]["MONEXT (DFS)"]["free_bytes"], 72)
 
 
 def run_selftest() -> int:

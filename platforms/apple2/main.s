@@ -6,6 +6,19 @@
 #define RECALL_ARRAY_DATA_EXTERNAL
 #define HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
 #define HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+#define PLAYER_CHARGEN_EXTERNAL
+#define UI_CHAR_BG_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define TRAP_DAMAGE_EXTERNAL
+#define DOOR_OPEN_CLOSE_EXTERNAL
+#define ITEM_DROP_EXTERNAL
+#define HELP_CMD_BODY_EXTERNAL
+#define ITEMDESC_STORE_SLOT_DUPLICATED
+#define STARTING_KIT_EXTERNAL
+#define STORE_CHECK_CAT_DUPLICATED
+#define LOAD_RESUME_RESET_EXTERNAL
+#define ITEM_REFRESH_KNOWN_EXTERNAL
+#define ITEM_REFRESH_KNOWN_CO_LOCATED
 // main.s — Apple IIe moria8 linker script + entry
 //
 // Assemble from platforms/apple2 with:
@@ -630,6 +643,55 @@ chest_disp_jmp:
 !done:
     rts
 
+// tramp_trap_trigger — Load OVL.CHEST and reload X = df_disarm_trap_idx
+// before jumping to trap_trigger (overlay_load clobbers X).
+tramp_trap_trigger:
+    lda #OVL_CHEST
+    jsr overlay_load
+    bcs !done+
+    ldx df_disarm_trap_idx
+    jmp trap_trigger
+!done:
+    rts
+
+// tramp_load_resume_reset — Execute load_resume_reset in OVL.STORAGE (already
+// resident at $A400 after title_load_game_ovl) and clear current_overlay so
+// subsequent tramp_item_recalc does not reload cold OVL.STORAGE from Disk II.
+tramp_load_resume_reset:
+    lda #OVL_STORAGE
+    jsr overlay_load
+    bcs !tlrr_done+
+    jsr load_resume_reset
+    lda #OVL_NONE
+    sta current_overlay
+!tlrr_done:
+    rts
+
+// tramp_door_pick_roll — Load OVL.CHEST for door_pick_roll and restore caller
+// overlay (e.g. OVL_HELP from door_try_open) while preserving result carry C.
+tramp_door_pick_roll:
+    lda current_overlay
+    pha
+    lda #OVL_CHEST
+    jsr overlay_load
+    bcs !tdpr_fail+
+    jsr door_pick_roll
+    pla                     // A = caller overlay; leaves C from door_pick_roll intact
+    php                     // push flags (including C) across overlay restore
+    beq !tdpr_done+
+    cmp #OVL_CHEST
+    beq !tdpr_done+
+    jsr overlay_load
+    bcc !tdpr_done+
+    brk                     // caller continuation is inside overlay window
+!tdpr_done:
+    plp
+    rts
+!tdpr_fail:
+    pla
+    clc
+    rts
+
 // Call an OVL.DEATH routine from OVL.SPELL, preserving A across the overlay
 // swap and restoring OVL.SPELL before returning.
 // Input: X/Y = target routine address in OVL.DEATH; A = target argument.
@@ -829,7 +891,7 @@ player_adjust_equipment_stat:
     .segment Default
 }
 .macro ItemInitIdentSegment() {
-    .segment StartupOverlay
+    .segment StorageOverlay
 }
 .macro ItemInitIdentRestoreSegment() {
     .segment Default
@@ -840,16 +902,8 @@ player_adjust_equipment_stat:
 .macro WizardGenExecSegment() {
     .segment ModalMiscOverlay
 }
-// The recall-view (monster memory) command body lives in ModalMiscOverlay
-// on this platform; the play-slot stub loads the overlay and tail-calls.
-#define RECALL_VIEW_OVERLAYED
-.const RECALL_VIEW_OVL = OVL_MODAL_MISC
-.macro RecallViewBodySegment() {
-    .segment ModalMiscOverlay
-}
-.macro RecallViewBodyRestoreSegment() {
-    .segment A2PlaySlot
-}
+// The recall-view (monster memory) prompt body stays in A2PlaySlot
+// ($7C00-$9FFF) while ui_recall_display + tables live in DeathOverlay.
 .macro ChestRouteSegment() {
     // Resident, not the play slot: the slot is full, and the open pre-dispatch
     // is reachable from every phase anyway.
@@ -950,8 +1004,11 @@ cmb_winner_str:
 turn_rest_disturbed: .byte 0
 
 // The acid attack's armour damage (MON-015), resident for the same reason
-// (MON_ATK_ACID_EXTERNAL).
+// (MON_ATK_ACID_EXTERNAL). tramp_item_recalc saves/restores current_overlay
+// directly so monster_acid.s stays within 8-bit branch span.
+#undef TRAP_TRIGGER_EXTERNAL
 #import "../../core/monster_acid.s"
+#define TRAP_TRIGGER_EXTERNAL
 
 // ============================================================
 // Overlay segment blocks (C64 composition, adjusted)
@@ -975,6 +1032,8 @@ ovl_home_end:
 
 .segment StartupOverlay
 #import "../../core/background_data.s"
+ovl_start_chargen_mark:
+#import "../../core/player_chargen_cold.s"
 #import "../../core/player_create.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $a400) + " bytes"
@@ -1220,14 +1279,15 @@ eff_destroy_traps_doors_impl:
 
 !edtd_scan_done:
     rts
+#import "../../core/ui_recall.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $a400) + " bytes"
 .assert "High-score I/O counter is owned by death overlay", hiscore_io_count_lo >= $a400 && hiscore_io_count_hi < ovl_death_end, true
 .assert "High-score I/O does not alias storage counter", hiscore_io_count_lo != save_count_lo && hiscore_io_count_hi != save_count_hi, true
+.assert "Monster recall UI lives in death overlay", ui_recall_display >= $a400 && ui_recall_display < ovl_death_end && rcl_strs >= $a400 && rcl_strs < ovl_death_end, true
 .assert "Death overlay fits", ovl_death_end <= $ba00, true
 
 .segment ModalMiscOverlay
-#import "../../core/ui_recall.s"
 #import "../../core/ui_wizard.s"
 
 // Wizard prompt helpers ride the modal overlay (their remaining callers are
@@ -1267,13 +1327,21 @@ ovl_modal_misc_end:
 #import "../../core/ui_help_title.s"
 #import "../../commodore/c128/ui_help_data_80.s"
 #import "../../core/ui_help.s"
+ovl_help_cmd_mark:
+#import "../../core/ui_help_cmd_cold.s"
 #import "../../core/ui_identify.s"
+ovl_help_door_mark:
+#import "../../core/door_open_close_cold.s"
+ovl_help_drop_mark:
+#import "../../core/item_drop_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $a400) + " bytes"
 .assert "Help overlay fits", ovl_help_end <= $ba00, true
 
 .segment UiOverlay
 #import "../../core/ui_character.s"
+ovl_ui_bg_mark:
+#import "../../core/player_bg_draw_cold.s"
 #import "../../core/ui_inventory.s"
 #import "../../core/ui_equipment.s"
 ovl_ui_end:
@@ -1533,6 +1601,10 @@ disk_prompt_game_impl:
 #import "../../shared/save.s"
 #import "save_slot_menu.s"
 #import "disk_setup_a2.s"
+ovl_storage_refresh_mark:
+#import "../../core/item_refresh_known_cold.s"
+ovl_storage_resume_mark:
+#import "../../core/load_resume_reset_cold.s"
 ovl_storage_end:
 .print "Storage overlay: " + (ovl_storage_end - $a400) + " bytes"
 .assert "Storage overlay fits", ovl_storage_end <= $ba00, true
@@ -1555,19 +1627,26 @@ title_str:
 
 #import "title_screen.s"
 #import "../../core/title_sysinfo_banked.s"
+ovl_title_restock_mark:
+#import "../../core/store_restock_overlay.s"
+ovl_title_kit_mark:
+#import "../../core/starting_kit_cold.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $a400) + " bytes"
 .assert "Title overlay fits", ovl_title_end <= $ba00, true
 
-// Chest overlay — chest open/disarm/bash handlers plus store init/restock
-// (transition-only code, safe in a non-town overlay; the ITEMS window is
-// full). Cold MLI load, like DEATH/HELP/STORAGE (docs/CHEST_DESIGN.md).
+// Chest overlay — chest open/disarm/bash handlers plus floor/chest trap
+// trigger and damage engines (100% intra-overlay with disarm.s and chest.s).
+// Cold MLI load, like DEATH/HELP/STORAGE (docs/CHEST_DESIGN.md).
 .segment ChestOverlay
 #import "../../core/chest.s"
-#import "../../core/store_restock_overlay.s"
 #import "../../core/eff_item_extended.s"
 #import "../../core/disarm.s"
 #import "../../core/disarm_helpers.s"
+ovl_chest_trap_mark:
+#import "../../core/trap_trigger_cold.s"
+ovl_chest_trap_dmg_mark:
+#import "../../core/trap_damage_cold.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $a400) + " bytes"
 .assert "Chest overlay fits", ovl_chest_end <= $ba00, true
@@ -1590,6 +1669,28 @@ tramp_items_jmp:
                             // 6502 page-crossing bug reads the high byte
                             // from $xx00 when the pointer is at $xxFF)
 !done:
+    rts
+
+// tramp_item_recalc — Load OVL.ITEMS for player_recalc_equipment and restore
+// caller current_overlay (needed when trap_do_corrode / trap_do_acid in
+// ChestOverlay invoke mon_atk_acid_armour).
+tramp_item_recalc:
+    lda current_overlay
+    pha
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !tir_fail+
+    jsr player_recalc_equipment
+    pla
+    beq !tir_done+
+    cmp #OVL_ITEMS
+    beq !tir_done+
+    jsr overlay_load
+    bcc !tir_done+
+    brk
+!tir_fail:
+    pla
+!tir_done:
     rts
 
 // tramp_spell_call_items — Call an OVL.SPELL routine from a caller in another
@@ -1703,4 +1804,8 @@ program_end:
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
+.segment A2AuxData
+a2_auxdata_end:
+.assert "A2AuxData fits below catalog", a2_auxdata_end <= A2_AUX_DATA_LIMIT, true
 .segment Default
+.assert "Wave 5.2 cold evictions land in exact target overlays", tramp_trap_trigger < $7c00 && tramp_door_pick_roll < $7c00 && tramp_load_resume_reset < $7c00 && trap_trigger == ovl_chest_trap_mark && trap_apply_damage == ovl_chest_trap_dmg_mark && ovl_chest_trap_dmg_mark < ovl_chest_end && store_init_all >= ovl_title_restock_mark && store_init_all < ovl_title_kit_mark && init_starting_kit == ovl_title_kit_mark && ovl_title_kit_mark < ovl_title_end && help_cmd_body == ovl_help_cmd_mark && door_try_open >= ovl_help_door_mark && door_try_open < ovl_help_drop_mark && item_drop == ovl_help_drop_mark && ovl_help_drop_mark < ovl_help_end && player_init == ovl_start_chargen_mark && ovl_start_chargen_mark < ovl_start_end && ui_char_draw_background >= ovl_ui_bg_mark && ui_char_draw_background < ovl_ui_end && item_refresh_fixed_known == ovl_storage_refresh_mark && load_resume_reset == ovl_storage_resume_mark && ovl_storage_resume_mark < ovl_storage_end, true

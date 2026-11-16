@@ -16,6 +16,7 @@
 .const CART_DEST_BANK0         = $00 // $FF00=$3E (Bank 0 RAM + I/O), $D506=$0D
 .const CART_DEST_BANK1         = $01 // $FF00=$7E (Bank 1 RAM + I/O), $D506=$0D
 .const CART_DEST_BANK1_TOP_OFF = $02 // $FF00=$7E, $D506=$05 under SEI ($F000-$FFFF Bank 1)
+.const CART_DEST_BANK1_NOIO    = $03 // $FF00=$7F (Bank 1 RAM, I/O hidden), $D506=$0D under SEI ($D000-$DFFF Bank 1)
 
 .const CART_ASSET_RESIDENT       = 0  // moria128.prg -> $1c01..<$af00 (Bank 0)
 .const CART_ASSET_RUNTIME_LOW    = 1  // 128.runtime.prg -> $1000 (Bank 0)
@@ -51,7 +52,8 @@
 .const CART_ASSET_LEGAL_UI       = 26 // legalui -> $e000 (Bank 0)
 .const CART_ASSET_LEGAL_NOTICE   = 27 // LICENSE -> page stream to $e700 (Bank 0)
 .const CART_ASSET_LEGAL_OFFER    = 28 // SOURCE-OFFER -> page stream to $e700 (Bank 0)
-.const CART_ASSET_COUNT          = 29
+.const CART_ASSET_CEX            = 29 // 128.cex.prg -> $d000 (Bank 1 via $7F)
+.const CART_ASSET_COUNT          = 30
 
 .assert "Cartridge directory fits in Bank 0 page $8100-$81FF", CART_ASSET_COUNT * CART_DESCRIPTOR_SIZE <= $0100, true
 .assert "Cartridge overlays stay contiguous", CART_ASSET_STORAGE - CART_ASSET_STARTUP + 1, CART_OVERLAY_COUNT

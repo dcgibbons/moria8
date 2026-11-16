@@ -15,7 +15,7 @@ the disk's own MORIA8P go where the loader's tables put them, and a stub at
 from the disk). MAME's bbcm has no save states to start from a booted title.
 
 Suite:
-  17 behavioral scenarios on bbcm (128 KB BBC Master 128 with Sideways RAM cache).
+  18 behavioral scenarios on bbcm (128 KB BBC Master 128 with Sideways RAM cache).
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import build_catalog  # noqa: E402
 import catalog_lore  # noqa: E402  (the generated monster catalog's data)
 sys.path.insert(0, str(ROOT / "tools"))
 from make_ssd import build_blank_ssd  # noqa: E402
@@ -82,6 +83,7 @@ SCENARIOS = (
     "help_overlay",
     "ui_modals",
     "item_actions",
+    "equip_flags",
     "mage_list",
     "priest_pray",
     "priest_map_area",
@@ -177,14 +179,18 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     recall_query_sc = syms.get("recall_query_sc", 0)
     cr_level = syms.get("cr_level", 0x2700)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
-        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
+        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi",
+        "cat_id_lo", "cat_id_hi", "cat_ext_record", "beeb_mext_handle",
+        "catalog_fetch_ext", "input_entropy_tick"))
     save_device = syms.get("save_device", 0x0E20)
     disk_setup_done = syms.get("disk_setup_done", 0x0E21)
     busy_addr = syms.get("generation_busy_active_api", 0x0E30)
     acccon_shadow = syms.get("beeb_acccon_shadow", 0x009D)
     acid_syms = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cr_atk0_type", "cr_atk0_dice", "cr_atk0_sides", "cr_atk1_type", "cr_spell_chance", "cr_speed",
-        "inv_to_ac", "zp_player_ac", "player_pflags", "ovl_town_end"))
+        "inv_to_ac", "zp_player_ac", "player_pflags", "ovl_town_end", "auto_rest_active",
+        "trap_count", "trap_x", "trap_y", "trap_type",
+        "door_state_count", "door_state_x", "door_state_y", "door_state_val"))
 
     header = f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
@@ -313,10 +319,22 @@ local function rowtext(r)
 end
 
 local function screen_has(txt)
+    if not can_read_shadow() then return false end
+    prog:write_u8(0xFE34, 0x05)
+    local found = false
     for r = 0, 23 do
-        if string.find(rowtext(r), txt, 1, true) then return true end
+        local base = CHAR_SHADOW + r * 80
+        local chars = {{}}
+        for c = 0, 79 do
+            chars[c + 1] = sc_to_ascii(prog:read_u8(base + c))
+        end
+        if string.find(table.concat(chars), txt, 1, true) then
+            found = true
+            break
+        end
     end
-    return false
+    restore_acccon()
+    return found
 end
 
 local function assert_line(name, ok)
@@ -687,6 +705,53 @@ function run()
     local t1 = prog:read_u8(TURN_ADDR) | (prog:read_u8(TURN_ADDR + 1) << 8)
     print("auto-rest turns: " .. ((t1 - t0) & 0xFFFF))
     assert_line("auto_rest_keeps_resting", ((t1 - t0) & 0xFFFF) >= 3)
+    -- Wave 5.2 cold evictions: S4 ('?' drop in OVL_HELP), S3 (locked door pick
+    -- swapping OVL_HELP -> OVL_CHEST -> OVL_HELP), and S2a+S2b (acid trap at X=1
+    -- preserving X across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
+    prog:write_u8(AUTO_REST_ACTIVE_ADDR, 0)
+    prog:write_u8(PLAYER_HP_ADDR, 60)
+    wait_frames(10)
+    local px, py = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)
+    if px >= MAP_COLS - 2 then px = px - 2; prog:write_u8(PLAYER_X_ADDR, px) end
+    write_map_u8(px, py, 0x00)
+    send_key(0x44) -- 'D' (drop)
+    assert_line("drop_prompt", wait_screen("Drop which item", 80))
+    send_key(0x3F) -- '?' inventory list
+    assert_line("drop_inv_list", wait_screen("Inventory", 80))
+    send_key(0x41) -- 'A'
+    assert_line("drop_completed", wait_screen("You drop", 80))
+    wait_frames(20)
+    drain_more(2)
+    write_map_u8(px + 1, py, 0x80) -- TILE_DOOR_CLOSED
+    prog:write_u8(DOOR_STATE_COUNT_ADDR, 1)
+    prog:write_u8(DOOR_STATE_X_ADDR, px + 1)
+    prog:write_u8(DOOR_STATE_Y_ADDR, py)
+    prog:write_u8(DOOR_STATE_VAL_ADDR, 20)
+    local turn_d = prog:read_u8(TURN_ADDR)
+    send_key(0x4F) -- 'O' (open door)
+    assert_line("door_open_dir", wait_screen("Direction?", 80))
+    send_key(0x4C) -- 'L' (east)
+    wait_screen("-more-", 120)
+    drain_more(2)
+    assert_line("door_pick_returned", wait_screen("lock.", 80) and prog:read_u8(TURN_ADDR) ~= turn_d)
+    prog:write_u8(DOOR_STATE_COUNT_ADDR, 0)
+    write_map_u8(px + 1, py, 0x00) -- bare TILE_FLOOR
+    prog:write_u8(TRAP_COUNT_ADDR, 2)
+    prog:write_u8(TRAP_X_ADDR + 0, 0)
+    prog:write_u8(TRAP_Y_ADDR + 0, 0)
+    prog:write_u8(TRAP_TYPE_ADDR + 0, 0)
+    prog:write_u8(TRAP_X_ADDR + 1, px + 1)
+    prog:write_u8(TRAP_Y_ADDR + 1, py)
+    prog:write_u8(TRAP_TYPE_ADDR + 1, 11) -- TRAP_ACID at index X=1
+    send_key(0x4C) -- 'L': step onto acid trap
+    wait_frames(40)
+    drain_more(4)
+    assert_line("acid_trap_triggered", prog:read_u8(PLAYER_X_ADDR) == px + 1
+        and (read_map_u8(px + 1, py) & 0xF0) == 0xE0)
+    local turn_t = prog:read_u8(TURN_ADDR)
+    send_key(0x53) -- 'S' (search): play continues cleanly after trap
+    wait_frames(40)
+    assert_line("acid_trap_play_continues", prog:read_u8(TURN_ADDR) ~= turn_t)
     manager.machine:exit()
 end
 """
@@ -916,7 +981,13 @@ function run()
     wait_frames(30)
     drain_more(1)                            -- "Direction? -more-"
     -- Missed, or a townsperson was in its path: either way the wand worked.
-    local cloud = wait_screen("The cloud dissipates.", 80) or screen_has("looks confused")
+    local cloud = false
+    for _ = 1, 80 * DFS_SLACK do
+        if screen_has("The cloud dissipates.") or screen_has("looks confused") then
+            cloud = true break
+        end
+        emu.wait(0.1)
+    end
     if not cloud then
         for r = 0, 3 do print("DIAG row " .. r .. ": " .. rowtext(r)) end
     end
@@ -1050,7 +1121,15 @@ function run()
     send_key(0x53) -- 'S' (search)
     wait_frames(60)
     assert_line("buy_play_goes_on", in_town() and prog:read_u8(TURN_ADDR) ~= turn_b)
-    -- Last, as the wears reorder the pack: wearing a ring or amulet rebuilds the equipment flags (player_pflags)
+    manager.machine:exit()
+end
+""".replace("ANDY_MOS_BYTES", andy_mos_bytes())
+    elif scenario == "equip_flags":
+        body = """
+function run()
+    local ok = start_new_game("A")
+    assert_line("chargen_town_ready", ok)
+    -- Wearing a ring or amulet rebuilds the equipment flags (player_pflags)
     -- at once: on the compact play slot they stayed stale until the next
     -- stats rebuild (2026-11-08 review). Resist Fire sets $01, a Ring of
     -- Protection worn over it clears it, the Amulet of the Magi sets See
@@ -1064,8 +1143,6 @@ function run()
         send_key(0x41) -- 'A'
         assert_line(what .. "_worn", wait_screen("You are wearing", 80))
     end
-    -- The Dagger (Defender) wielded since the exchange resists fire and cold
-    -- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
     prog:write_u8(INV_ITEM_ID_ADDR + 7 * INV_STRIDE + 22, 0)
     prog:write_u8(PLAYER_PFLAGS_ADDR, 0)
     wear_slot_a(109, "resist_fire_ring")
@@ -1104,7 +1181,7 @@ function run()
     assert_line("magi_crown_int_restored", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0)
     manager.machine:exit()
 end
-""".replace("ANDY_MOS_BYTES", andy_mos_bytes())
+"""
     elif scenario == "mage_list":
         body = """
 function run()
@@ -1472,11 +1549,88 @@ end
         count = catalog_lore.const("CATALOG_COUNT")
         levels = catalog_lore.field("cat_cr_level")
         names = [catalog_lore.name(cid) + [0] for cid in range(count)]
+        ext_raw = build_catalog.ext_row_major_bytes(
+            build_catalog.load_spec(build_catalog.DEFAULT_SPEC_PATH)["creatures"]
+        )
+        ext_rows = [list(ext_raw[cid * 8 : cid * 8 + 8]) for cid in range(count)]
         body = """
 local LEVELS = {CAT_LEVELS}
 local NAMES = {CAT_NAMES}
+local EXT_ROWS = {CAT_EXT_ROWS}
 local function slot_id(t)
     return prog:read_u8(CAT_SLOT_ID_LO_ADDR + t) + prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) * 256
+end
+local function install_fetch_ext_hook()
+    local cfe_lo = CATALOG_FETCH_EXT_ADDR & 0xFF
+    local cfe_hi = (CATALOG_FETCH_EXT_ADDR >> 8) & 0xFF
+    local iet_lo = INPUT_ENTROPY_TICK_ADDR & 0xFF
+    local iet_hi = (INPUT_ENTROPY_TICK_ADDR >> 8) & 0xFF
+    local hook = {
+        0xAD, 0x60, 0x09,             -- lda $0960
+        0xF0, 0x0A,                   -- beq !pass+ (+10 -> $094F)
+        0xDA, 0x5A,                   -- phx : phy
+        0x20, cfe_lo, cfe_hi,         -- jsr catalog_fetch_ext
+        0x9C, 0x60, 0x09,             -- stz $0960
+        0x7A, 0xFA,                   -- ply : plx
+        0x4C, iet_lo, iet_hi          -- !pass: jmp input_entropy_tick
+    }
+    prog:write_u8(0x0960, 0)
+    for i, b in ipairs(hook) do prog:write_u8(0x0940 + i - 1, b) end
+    local patched = false
+    local tap = prog:install_read_tap(KBDBUF_LEN, KBDBUF_LEN, "patch_cfe",
+        function(offset, data, mask)
+            if patched or data ~= 0 then return end
+            local pc = cpu.state["PC"].value
+            if pc >= KEY_WAIT_START + 5 and pc < KEY_WAIT_END then
+                prog:write_u8(KEY_WAIT_START + 3, 0x40)
+                prog:write_u8(KEY_WAIT_START + 4, 0x09)
+                patched = true
+            end
+        end)
+    for _ = 1, 300 do
+        if patched then break end
+        emu.wait(1/60)
+    end
+    tap:remove()
+    return patched
+end
+local function remove_fetch_ext_hook()
+    local restored = false
+    local tap = prog:install_read_tap(KBDBUF_LEN, KBDBUF_LEN, "unpatch_cfe",
+        function(offset, data, mask)
+            if restored or data ~= 0 then return end
+            local pc = cpu.state["PC"].value
+            if pc >= KEY_WAIT_START + 5 and pc < KEY_WAIT_END then
+                prog:write_u8(KEY_WAIT_START + 3, INPUT_ENTROPY_TICK_ADDR & 0xFF)
+                prog:write_u8(KEY_WAIT_START + 4, (INPUT_ENTROPY_TICK_ADDR >> 8) & 0xFF)
+                restored = true
+            end
+        end)
+    for _ = 1, 300 do
+        if restored then break end
+        emu.wait(1/60)
+    end
+    tap:remove()
+end
+local function call_fetch_ext(cid)
+    for k = 0, 7 do prog:write_u8(CAT_EXT_RECORD_ADDR + k, 0xA5) end
+    prog:write_u8(CAT_ID_LO_ADDR, cid & 0xFF)
+    prog:write_u8(CAT_ID_HI_ADDR, (cid >> 8) & 0xFF)
+    prog:write_u8(0x0960, 1)
+    for _ = 1, 600 do
+        if prog:read_u8(0x0960) == 0 then break end
+        emu.wait(1/60)
+    end
+    if prog:read_u8(0x0960) ~= 0 then return false end
+    local want = EXT_ROWS[cid + 1]
+    for k = 1, 8 do
+        if prog:read_u8(CAT_EXT_RECORD_ADDR + k - 1) ~= want[k] then
+            print(string.format("DIAG monext cid=%d byte %d got=%02X want=%02X", cid, k - 1,
+                prog:read_u8(CAT_EXT_RECORD_ADDR + k - 1), want[k]))
+            return false
+        end
+    end
+    return prog:read_u8(0x00F4) == 0x04 and prog:read_u8(ACCCON_SHADOW_ADDR) == 0x01
 end
 function run()
     local ok = start_new_game("A")
@@ -1524,7 +1678,7 @@ function run()
     -- Settled: DL50, generation not busy and its screen gone, three checks
     -- in a row (the level number changes before generation starts).
     local settled = 0
-    for _ = 1, 200 do
+    for _ = 1, 200 * DFS_SLACK do
         wait_frames(10)
         drain_more(2)
         if prog:read_u8(DLVL_ADDR) == 50 and prog:read_u8(BUSY_ADDR) == 0 and not screen_has("GENERATING") then
@@ -1551,10 +1705,36 @@ function run()
     print("DIAG DL50 win creatures: " .. winners .. " ids:" .. seen)
     assert_line("cat_win_creature", winners == 1)
     assert_line("cat_win_awake", awake)
+    -- Verify live DFS MONEXT + catalog_fetch_ext (< $3000) across boundary species
+    -- (0, 31, 32, 256, IGGY_ID, BALROG_ID) and handle close/reopen across LICENSE stream open.
+    assert_line("monext_hook_installed", install_fetch_ext_hook())
+    local ext_ok = true
+    for _, cid in ipairs({0, 31, 32, 256, IGGY_ID, BALROG_ID}) do
+        if not call_fetch_ext(cid) then ext_ok = false break end
+    end
+    assert_line("monext_boundary_fetches", ext_ok and prog:read_u8(BEEB_MEXT_HANDLE_ADDR) ~= 0)
+    remove_fetch_ext_hook()
+    send_key(0x3F) -- '?' (Help)
+    assert_line("monext_help_open", wait_screen("Command Reference", 80))
+    send_key(0x4C) -- 'L' (Legal)
+    assert_line("monext_legal_open", wait_screen("License & Source", 100))
+    send_key(0x31) -- '1' (License stream open -> closes beeb_mext_handle via beeb_close_icat_in_mos)
+    assert_line("monext_license_open", wait_screen("MORIA8 LICENSE NOTICE", 100))
+    assert_line("monext_handle_closed_on_stream", prog:read_u8(BEEB_MEXT_HANDLE_ADDR) == 0)
+    send_key(0x51) -- 'Q'
+    wait_screen("1 License", 60)
+    send_key(0x51) -- 'Q'
+    wait_screen("Command Reference", 80)
+    send_key(0x51) -- 'Q'
+    wait_frames(30)
+    assert_line("monext_hook_reinstalled", install_fetch_ext_hook())
+    assert_line("monext_reopened_after_stream", call_fetch_ext(BALROG_ID) and prog:read_u8(BEEB_MEXT_HANDLE_ADDR) ~= 0)
+    remove_fetch_ext_hook()
     manager.machine:exit()
 end
 """.replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}").replace(
-            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}")
+            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}").replace(
+            "{CAT_EXT_ROWS}", "{" + ",".join("{" + ",".join(map(str, r)) + "}" for r in ext_rows) + "}")
     else:
         raise ValueError(f"Unknown scenario: {scenario}")
 
@@ -1699,7 +1879,7 @@ def run_scenario(
 
 def selftest() -> int:
     assert HOST_TIMEOUT_SECONDS <= 30, "AGENTS.md Rule 8 requires timeout <= 30s"
-    assert len(SCENARIOS) == 17, f"Expected 17 bbcm scenarios, got {len(SCENARIOS)}"
+    assert len(SCENARIOS) == 18, f"Expected 18 bbcm scenarios, got {len(SCENARIOS)}"
     syms = parse_symbols(SYM_PATH)
     if syms:
         assert syms.get("zp_player_x") == 0x002B, f"zp_player_x != $002B: {syms.get('zp_player_x')}"
@@ -1707,6 +1887,20 @@ def selftest() -> int:
         assert syms.get("zp_player_dlvl") == 0x0034, f"zp_player_dlvl != $0034: {syms.get('zp_player_dlvl')}"
         assert "beeb_kbdbuf" in syms, "beeb_kbdbuf missing from main.sym"
         assert "beeb_kbdbuf_len" in syms, "beeb_kbdbuf_len missing from main.sym"
+        assert "catalog_fetch_ext" in syms and syms["catalog_fetch_ext"] < 0x3000, (
+            f"catalog_fetch_ext missing or >= $3000: {syms.get('catalog_fetch_ext')}"
+        )
+        assert "cat_ext_record" in syms and syms["cat_ext_record"] + 8 <= 0x3000, (
+            f"cat_ext_record missing or straddles $3000: {syms.get('cat_ext_record')}"
+        )
+    if SSD_IMAGE.is_file():
+        expected_monext = build_catalog.ext_row_major_bytes(
+            build_catalog.load_spec(build_catalog.DEFAULT_SPEC_PATH)["creatures"]
+        )
+        actual_monext = read_dfs_file(SSD_IMAGE.read_bytes(), "MONEXT")
+        assert actual_monext == expected_monext, (
+            f"MONEXT on {SSD_IMAGE.name} mismatch: {len(actual_monext)} B vs {len(expected_monext)} B"
+        )
     for sc in SCENARIOS:
         lua = build_lua_script(sc, syms)
         assert "assert_line(" in lua and "coroutine.resume" in lua and "SCENARIO_DONE" in lua

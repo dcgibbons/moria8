@@ -117,6 +117,23 @@ def check(build: Path, segs: dict[str, tuple[str, int, int]], mem: dict[str, int
         if names[1] >= mem["BANK1_TIER_CACHE_BASE"]:
             errors.append(f"128.names ends at ${names[1]:04X}, inside the tier cache "
                           f"(${mem['BANK1_TIER_CACHE_BASE']:04X})")
+    cex_prg = build / "128.cex.prg"
+    if not cex_prg.exists():
+        errors.append(f"C128Bank1CatalogExt: {cex_prg} not built")
+    else:
+        cex_span = prg_span(cex_prg)
+        if cex_span[0] != mem["BANK1_CATALOG_EXT_BASE"]:
+            errors.append(f"C128Bank1CatalogExt: 128.cex.prg loads at ${cex_span[0]:04X}, "
+                          f"expected ${mem['BANK1_CATALOG_EXT_BASE']:04X}")
+        if cex_span[1] != mem["BANK1_CATALOG_EXT_END"]:
+            errors.append(f"C128Bank1CatalogExt: 128.cex.prg ends at ${cex_span[1]:04X}, "
+                          f"expected ${mem['BANK1_CATALOG_EXT_END']:04X}")
+        if cex_span[0] <= mem["BANK1_OVERLAY_DEATH_END"]:
+            errors.append(f"C128Bank1CatalogExt ${cex_span[0]:04X}-${cex_span[1]:04X} overlaps "
+                          f"Bank 1 DEATH cache end ${mem['BANK1_OVERLAY_DEATH_END']:04X}")
+        if cex_span[1] >= mem["BANK1_STORE_INV_RESERVED_BASE"] or cex_span[1] >= mem["BANK1_OVERLAY_DUNGEON_BASE"]:
+            errors.append(f"C128Bank1CatalogExt ${cex_span[0]:04X}-${cex_span[1]:04X} overruns "
+                          f"into ${mem['BANK1_STORE_INV_RESERVED_BASE']:04X}")
     return errors
 
 

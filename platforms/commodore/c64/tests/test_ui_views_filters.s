@@ -28,13 +28,16 @@ combat_msg_buf:  .fill 42, 0
 .const CF_EVIL    = $04
 .const CF_ANIMAL  = $08
 .const CF_DRAGON  = $10
+.const CD_FROST   = $01
+.const CD_FIRE    = $02
 .const STORE_TOTAL_SLOTS = 96
 .const MAX_CREATURES = 65
 .label cmb_period = $00
 cmb_type:   .byte 0
 cmb_damage: .byte 0
 eff_fear_timer: .byte 0
-cr_mflags:  .fill 65, 0
+cr_mflags:   .fill 65, 0
+cr_cdefense: .fill 65, 0
 current_tier: .byte 0
 tier_loaded:  .byte 0
 creature_name_buf: .fill 40, 0

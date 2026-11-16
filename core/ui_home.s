@@ -81,7 +81,11 @@ home_draw_screen:
     jsr home_draw_separator_at_a
 
     // Rows 3-18: Item list (no prices)
-    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, 0, 0)
+#if ITEMDESC_STORE_SLOT_DUPLICATED
+    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, itemdesc_put_store_slot_home, 0, 0)
+#else
+    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, itemdesc_put_store_slot, 0, 0)
+#endif
 
     // Row 19: Home menu, then the gold to its right
     lda #COL_WHITE
@@ -117,6 +121,12 @@ home_clear_msg_area:
 
 home_find_empty_slot:
     :StoreFindEmptySlotBody(hm_save_x)
+
+#if ITEMDESC_STORE_SLOT_DUPLICATED
+#import "itemdesc_store_slot_macro.s"
+itemdesc_put_store_slot_home:
+    :ItemdescPutStoreSlotBody()
+#endif
 #endif
 
 // ============================================================

@@ -164,7 +164,11 @@ store_draw_screen:
     jsr draw_separator_at_a
 
     // Rows 3-18: Item list
-    :StoreDrawSlotListBody(sb_abs_slot, sd_row, sd_save_x, store_put_letter, 1, store_draw_slot_price)
+#if ITEMDESC_STORE_SLOT_DUPLICATED
+    :StoreDrawSlotListBody(sb_abs_slot, sd_row, sd_save_x, store_put_letter, itemdesc_put_store_slot_town, 1, store_draw_slot_price)
+#else
+    :StoreDrawSlotListBody(sb_abs_slot, sd_row, sd_save_x, store_put_letter, itemdesc_put_store_slot, 1, store_draw_slot_price)
+#endif
 
     // Row 19: Menu, then the gold to its right
     ldx #MSG_MENU
@@ -435,7 +439,11 @@ store_sell:
     // Check if store buys this category
     ldx sd_save_x
     jsr item_get_category_inv_x
+#if STORE_CHECK_CAT_DUPLICATED
+    jsr check_store_category_town
+#else
     jsr check_store_category
+#endif
     bcs !ssl_buyable+
 
     // Store doesn't buy it — grey
@@ -503,7 +511,11 @@ store_sell:
     // Check if store buys this category
     ldx ss_inv_slot
     jsr item_get_category_inv_x
+#if STORE_CHECK_CAT_DUPLICATED
+    jsr check_store_category_town
+#else
     jsr check_store_category
+#endif
     bcs !ssell_cat_ok+
 
     // Store doesn't buy it
@@ -1590,3 +1602,15 @@ msg_tbl_hi:
 // Clobbers: A, X, Y (hal_screen_put_char)
 store_put_letter:
     :StorePutLetterBody(sd_save_x)
+
+#if STORE_CHECK_CAT_DUPLICATED
+#import "store_check_category_macro.s"
+check_store_category_town:
+    :CheckStoreCategoryBody()
+#endif
+
+#if ITEMDESC_STORE_SLOT_DUPLICATED
+#import "itemdesc_store_slot_macro.s"
+itemdesc_put_store_slot_town:
+    :ItemdescPutStoreSlotBody()
+#endif

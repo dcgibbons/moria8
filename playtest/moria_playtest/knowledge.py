@@ -38,6 +38,9 @@ SPEED_SLOW = 0
 SPEED_NORMAL = 1
 SPEED_MASK = 0x03         # cr_speed bits 3-5 hold random-move flags (MON-013)
 RANDOM_MASK = 0x38
+ATK_TYPE_MASK = 0x7F      # cr_atk*_type bit 7 holds ADESC verb bit 0 (core/monster_attack.s)
+ATK_SIDES_MASK = 0x0F     # cr_atk*_sides bits 4-7 hold ADESC verb bits 1-4
+ATK_BLANK = 99            # core/monster.s: blank / repelled attack slot
 
 
 def use_port(name: str) -> None:
@@ -61,20 +64,30 @@ def uses_catalog() -> bool:
 
 def _catalog() -> tuple[list[str], dict[str, list[int]]]:
     """(names, byte tables by field) of the catalog's playable dungeon
-    creatures (platforms/shared/catalog: fields, index and names)."""
+    creatures (platforms/shared/catalog: fields, ext fields, index and names)."""
     assert _catalog_dir is not None
     data = _catalog_dir
-    bank = (data / "catalog_fields.s").read_text() + (data / "catalog_index.s").read_text()
+    bank = (
+        (data / "catalog_fields.s").read_text()
+        + (data / "catalog_ext_fields.s").read_text()
+        + (data / "catalog_index.s").read_text()
+    )
     town = int(re.search(r"^\.const CATALOG_TOWN_COUNT = (\d+)", bank, re.M).group(1))
     names = re.findall(r"^catn_\d+:.*// (.+?)\s*$", (data / "catalog_names.s").read_text(), re.M)
     def values(label: str) -> list[int]:   # the .byte lines after the label
         body = re.search(rf"^{label}:[^\n]*\n((?:[ \t]*\.byte[^\n]*\n)+)", bank, re.M).group(1)
         return [int(v, 16) for v in re.findall(r"\$([0-9a-fA-F]{2})", body)]
 
-    bitmap = values("cat_available")
-    keep = [i for i in range(town, len(names)) if bitmap[i // 8] >> (i % 8) & 1]
-    tables = {label: [v for i, v in enumerate(values(f"cat_cr_{label}")) if i in keep]
+    keep = range(town, len(names))
+    tables = {label: [values(f"cat_cr_{label}")[i] for i in keep]
               for label in re.findall(r"^cat_cr_(\w+):$", bank, re.M)}
+    for label in ("atk2_type", "atk2_dice", "atk2_sides",
+                  "atk3_type", "atk3_dice", "atk3_sides",
+                  "spell_flags2", "cdefense"):
+        tables[label] = [values(f"cat_{label}")[i] for i in keep]
+    for slot in range(4):
+        tables[f"atk{slot}_type"] = [v & ATK_TYPE_MASK for v in tables[f"atk{slot}_type"]]
+        tables[f"atk{slot}_sides"] = [v & ATK_SIDES_MASK for v in tables[f"atk{slot}_sides"]]
     return [names[i] for i in keep], tables
 
 
@@ -197,10 +210,16 @@ def attacks() -> dict[tuple[str, int], tuple[tuple[int, int, int], ...]]:
 
     out: dict[tuple[str, int], tuple[tuple[int, int, int], ...]] = {}
     for _, tables in _tiers():
-        for code, level, *atk in zip(tables["display"], tables["level"],
-                                     tables["atk0_type"], tables["atk0_dice"], tables["atk0_sides"],
-                                     tables["atk1_type"], tables["atk1_dice"], tables["atk1_sides"]):
-            blows = tuple((atk[i], atk[i + 1], atk[i + 2]) for i in (0, 3) if atk[i] and atk[i + 1])
+        zeros = [0] * len(tables["display"])
+        for code, level, *atk in zip(
+            tables["display"], tables["level"],
+            tables["atk0_type"], tables["atk0_dice"], tables["atk0_sides"],
+            tables["atk1_type"], tables["atk1_dice"], tables["atk1_sides"],
+            tables.get("atk2_type", zeros), tables.get("atk2_dice", zeros), tables.get("atk2_sides", zeros),
+            tables.get("atk3_type", zeros), tables.get("atk3_dice", zeros), tables.get("atk3_sides", zeros),
+        ):
+            blows = tuple((atk[i], atk[i + 1], atk[i + 2]) for i in (0, 3, 6, 9)
+                          if atk[i] and atk[i] != ATK_BLANK and atk[i + 1])
             key = (screen_code_to_char(code), level)
             if average(blows) > average(out.get(key, ())):
                 out[key] = blows
@@ -360,13 +379,19 @@ ATK_PARALYZE = 11   # core/monster.s: the paralysing touch or gaze (mon_atk_effe
 ATK_POISON = 14     # ... and the poisoning one
 
 
+def _attack_types(tables: dict[str, list[int]]) -> zip[tuple[int, int, int, int]]:
+    zeros = [0] * len(tables["atk0_type"])
+    return zip(tables["atk0_type"], tables["atk1_type"],
+               tables.get("atk2_type", zeros), tables.get("atk3_type", zeros))
+
+
 @lru_cache(maxsize=1)
 def poisoner_kinds() -> frozenset[tuple[str, int]]:
     """(screen glyph, creature level) of the shipped creatures whose blows
     poison: curing beside one is undone by its next hit."""
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
-                     for code, level, a, b in zip(tables["display"], tables["level"], tables["atk0_type"], tables["atk1_type"])
-                     if ATK_POISON in (a, b))
+                     for code, level, blows in zip(tables["display"], tables["level"], _attack_types(tables))
+                     if ATK_POISON in blows)
 
 
 @lru_cache(maxsize=1)
@@ -376,8 +401,8 @@ def touch_paralyzers() -> frozenset[str]:
     A Hold Person caster's "paralyzes you." reads the same, from any range
     (monster_cast_hold), so walking out of its reach does nothing."""
     return frozenset(name for names, tables in _tiers()
-                     for name, a, b in zip(names, tables["atk0_type"], tables["atk1_type"])
-                     if ATK_PARALYZE in (a, b))
+                     for name, blows in zip(names, _attack_types(tables))
+                     if ATK_PARALYZE in blows)
 
 
 SPELL_HOLD = 0x80   # cr_spell_chance bit 7: Hold Person (MS_HOLD, monster_cast_hold, MON-025)
@@ -389,9 +414,9 @@ def paralyzer_kinds() -> frozenset[tuple[str, int]]:
     paralysing blow (randint(level) + 3 turns) or Hold Person (randint(5) +
     4; MON-025), both stopped by Free Action."""
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
-                     for code, level, a, b, chance in zip(tables["display"], tables["level"], tables["atk0_type"],
-                                                          tables["atk1_type"], tables["spell_chance"])
-                     if ATK_PARALYZE in (a, b) or chance & SPELL_HOLD)
+                     for code, level, blows, chance in zip(tables["display"], tables["level"],
+                                                           _attack_types(tables), tables["spell_chance"])
+                     if ATK_PARALYZE in blows or chance & SPELL_HOLD)
 
 
 def casts(glyph: str, level: int) -> bool:
@@ -593,7 +618,7 @@ def _table_bytes(text: str, label: str) -> list[int]:
             break
         if code.startswith(".byte"):
             values += [int(v[1:], 16) if v.startswith("$") else int(v)
-                       for v in re.findall(r"\$[0-9a-fA-F]+|\b\d+\b", code[5:])]
+                       for v in re.findall(r"\$[0-9a-fA-F]+|-?\b\d+\b", code[5:])]
         elif code.startswith(".fill"):
             count, value = (int(v) for v in re.findall(r"\d+", code))
             values += [value] * count

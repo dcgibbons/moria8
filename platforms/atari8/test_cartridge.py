@@ -92,7 +92,9 @@ def sc_to_ascii(b: int) -> str:
 
 def expected_catalog_checksums() -> list[tuple[int, int]]:
     out: list[tuple[int, int]] = []
-    for rec in catalog_disk.records():
+    for base, ext in zip(catalog_disk.records(phase5=False), catalog_disk.ext_records()):
+        rec = base + ext
+        assert len(rec) == 57
         s1 = 0
         s2 = 0
         for b in rec:

@@ -82,15 +82,13 @@ eff_reveal_floorplan:
 
 pmu_create_food:
     lda zp_player_x
+    sta fi_add_x
     ldy zp_player_y
+    sty fi_add_y
     jsr floor_item_find_at
     bcc !ecf_free+
     jsr floor_item_remove
 !ecf_free:
-    lda zp_player_x
-    sta fi_add_x
-    lda zp_player_y
-    sta fi_add_y
     lda #15
     sta fi_add_id
     jsr fi_add_clear_plain_meta
@@ -207,12 +205,7 @@ eff_destroy_area:
 eff_holy_word:
     jsr eff_remove_fear
     jsr eff_cure_poison
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
+    jsr eff_heal_full
     ldx #HSTR_PIQ_VERY_GOOD
     jsr huff_print_msg
     // The stats restored (Umoria playerStatRestore) as a Potion of
@@ -241,8 +234,7 @@ eff_glyph_of_warding:
     jsr floor_item_find_at
     bcc !egow_free+
     ldx #HSTR_PMU_GLYPH_BLOCK
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 !egow_free:
     lda zp_player_x
     ldy zp_player_y

@@ -46,9 +46,10 @@ ASSETS: list[tuple[int, str, str, int | None, int, int]] = [
     (16, "TITLE", "build", 0xA000, 22, 0xA000),
     (17, "MONSTER.CAT", "build", 0xA000, 23, 0xA000),
     (18, "ITEM.CAT", "build", 0xA000, 6, 0xA000),
-    (19, "LEGALUI", "build", 0xA000, 24, 0xA000),
-    (20, "LICENSE", "data", None, CART_RAM_BANK_NONE, 0x0000),
-    (21, "SOURCE-OFFER", "data", None, CART_RAM_BANK_NONE, 0x0000),
+    (19, "MONSTER.EXT", "build", 0xA000, 5, 0xA000),
+    (20, "LEGALUI", "build", 0xA000, 24, 0xA000),
+    (21, "LICENSE", "data", None, CART_RAM_BANK_NONE, 0x0000),
+    (22, "SOURCE-OFFER", "data", None, CART_RAM_BANK_NONE, 0x0000),
 ]
 
 

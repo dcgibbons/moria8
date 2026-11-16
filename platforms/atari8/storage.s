@@ -26,73 +26,73 @@ atari_io_device:    .byte 8
 .label xe_saved_main      = A8_STORAGE_VARS_BASE + 3
 #if !ATARI8_CARTRIDGE
 xe_slot_populated:
-    .fill 19, 0
+    .fill 18, 0
 
 // ============================================================
-// 130XE Page-Packed Bank Allocation & Slot Geometry (Slots 0..18)
+// 130XE Page-Packed Bank Allocation & Slot Geometry (Slots 0..17)
 // ============================================================
 // Slots 0..9:   OVL.STA, OVL.TWN, OVL.DTH, OVL.GEN, OVL.HLP,
 //               OVL.UI,  OVL.ITM, OVL.SPL, OVL.MDL, OVL.CHS  (page-ceil @ $E000)
 // Slots 10..13, 15: MONSTER.CAT sector groups, staged at $E000
 //               (monster_catalog_a8.s: 4x32 + 1x12 = 140 sectors @ 128 B = 70 pages)
 // Slot 14:      TITLE.DAT                                     (3 pages @ $C100)
-// Slots 16..18: OVL.HOM, OVL.STO, OVL.TTL                     (page-ceil @ $E000)
-.const XE_SLOT0_PAGES  = 16   // OVL.STA (4,024 B)
-.const XE_SLOT1_PAGES  = 15   // OVL.TWN (3,723 B)
+// Slots 16..17: OVL.HOM, OVL.STO                              (page-ceil @ $E000)
+// Cold OVL.TTL (overlay 13) is uncached ($FF) on 130XE so 100% of gameplay
+// overlays, MONSTER.CAT, and TITLE.DAT stay RAM-cached within 256/256 pages.
+.const XE_SLOT0_PAGES  = 16   // OVL.STA
+.const XE_SLOT1_PAGES  = 15   // OVL.TWN
 .const XE_SLOT2_PAGES  = 14   // OVL.DTH
-.const XE_SLOT3_PAGES  = 15   // OVL.GEN (3,838 B)
-.const XE_SLOT4_PAGES  = 9    // OVL.HLP (2,193 B)
-.const XE_SLOT5_PAGES  = 16   // OVL.UI  (4,040 B)
-.const XE_SLOT6_PAGES  = 16   // OVL.ITM (3,980 B)
-.const XE_SLOT7_PAGES  = 15   // OVL.SPL (3,729 B)
-.const XE_SLOT8_PAGES  = 14   // OVL.MDL (3,550 B)
-.const XE_SLOT9_PAGES  = 13   // OVL.CHS
+.const XE_SLOT3_PAGES  = 15   // OVL.GEN
+.const XE_SLOT4_PAGES  = 15   // OVL.HLP
+.const XE_SLOT5_PAGES  = 16   // OVL.UI
+.const XE_SLOT6_PAGES  = 15   // OVL.ITM
+.const XE_SLOT7_PAGES  = 15   // OVL.SPL
+.const XE_SLOT8_PAGES  = 14   // OVL.MDL
+.const XE_SLOT9_PAGES  = 16   // OVL.CHS
 .const XE_SLOT10_PAGES = 16   // MONSTER.CAT sectors 0..31   (4,096 B)
 .const XE_SLOT11_PAGES = 16   // MONSTER.CAT sectors 32..63  (4,096 B)
 .const XE_SLOT12_PAGES = 16   // MONSTER.CAT sectors 64..95  (4,096 B)
 .const XE_SLOT13_PAGES = 16   // MONSTER.CAT sectors 96..127 (4,096 B)
 .const XE_SLOT14_PAGES = 3    // TITLE.DAT (621 B)
 .const XE_SLOT15_PAGES = 6    // MONSTER.CAT sectors 128..139 (1,536 B)
-.const XE_SLOT16_PAGES = 15   // OVL.HOM (3,659 B)
-.const XE_SLOT17_PAGES = 13   // OVL.STO (3,152 B)
-.const XE_SLOT18_PAGES = 12   // OVL.TTL (2,978 B)
+.const XE_SLOT16_PAGES = 16   // OVL.HOM
+.const XE_SLOT17_PAGES = 16   // OVL.STO
 
-// Bank 0 ($E2, $4000-$7FFF): Slots 0, 5, 6, 10 (64/64 pages)
+// Bank 0 ($E2, $4000-$7FFF): Slots 0, 5, 9, 10 (64/64 pages)
 .const XE_SLOT0_WIN_HI     = XE_WIN_BASE_HI
 .const XE_SLOT5_WIN_HI     = XE_SLOT0_WIN_HI + XE_SLOT0_PAGES
-.const XE_SLOT6_WIN_HI     = XE_SLOT5_WIN_HI + XE_SLOT5_PAGES
-.const XE_SLOT10_WIN_HI    = XE_SLOT6_WIN_HI + XE_SLOT6_PAGES
+.const XE_SLOT9_WIN_HI     = XE_SLOT5_WIN_HI + XE_SLOT5_PAGES
+.const XE_SLOT10_WIN_HI    = XE_SLOT9_WIN_HI + XE_SLOT9_PAGES
 .const XE_BANK0_FREE_HI    = XE_SLOT10_WIN_HI + XE_SLOT10_PAGES
 .const XE_BANK0_USED_PAGES = XE_BANK0_FREE_HI - XE_WIN_BASE_HI
 .const XE_BANK0_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK0_FREE_HI
 
-// Bank 1 ($E6, $4000-$7FFF): Slots 11, 12, 13, 17, 14 (64/64 pages)
+// Bank 1 ($E6, $4000-$7FFF): Slots 11, 12, 13, 16 (64/64 pages)
 .const XE_SLOT11_WIN_HI    = XE_WIN_BASE_HI
 .const XE_SLOT12_WIN_HI    = XE_SLOT11_WIN_HI + XE_SLOT11_PAGES
 .const XE_SLOT13_WIN_HI    = XE_SLOT12_WIN_HI + XE_SLOT12_PAGES
-.const XE_SLOT17_WIN_HI    = XE_SLOT13_WIN_HI + XE_SLOT13_PAGES
-.const XE_SLOT14_WIN_HI    = XE_SLOT17_WIN_HI + XE_SLOT17_PAGES
-.const XE_BANK1_FREE_HI    = XE_SLOT14_WIN_HI + XE_SLOT14_PAGES
+.const XE_SLOT16_WIN_HI    = XE_SLOT13_WIN_HI + XE_SLOT13_PAGES
+.const XE_BANK1_FREE_HI    = XE_SLOT16_WIN_HI + XE_SLOT16_PAGES
 .const XE_BANK1_USED_PAGES = XE_BANK1_FREE_HI - XE_WIN_BASE_HI
 .const XE_BANK1_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK1_FREE_HI
 
-// Bank 2 ($EA, $4000-$7FFF): Slots 1, 3, 7, 9, 15 (64/64 pages)
+// Bank 2 ($EA, $4000-$7FFF): Slots 1, 3, 7, 17, 14 (64/64 pages)
 .const XE_SLOT1_WIN_HI     = XE_WIN_BASE_HI
 .const XE_SLOT3_WIN_HI     = XE_SLOT1_WIN_HI + XE_SLOT1_PAGES
 .const XE_SLOT7_WIN_HI     = XE_SLOT3_WIN_HI + XE_SLOT3_PAGES
-.const XE_SLOT9_WIN_HI     = XE_SLOT7_WIN_HI + XE_SLOT7_PAGES
-.const XE_SLOT15_WIN_HI    = XE_SLOT9_WIN_HI + XE_SLOT9_PAGES
-.const XE_BANK2_FREE_HI    = XE_SLOT15_WIN_HI + XE_SLOT15_PAGES
+.const XE_SLOT17_WIN_HI    = XE_SLOT7_WIN_HI + XE_SLOT7_PAGES
+.const XE_SLOT14_WIN_HI    = XE_SLOT17_WIN_HI + XE_SLOT17_PAGES
+.const XE_BANK2_FREE_HI    = XE_SLOT14_WIN_HI + XE_SLOT14_PAGES
 .const XE_BANK2_USED_PAGES = XE_BANK2_FREE_HI - XE_WIN_BASE_HI
 .const XE_BANK2_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK2_FREE_HI
 
-// Bank 3 ($EE, $4000-$7FFF): Slots 2, 4, 8, 16, 18 (64/64 pages)
+// Bank 3 ($EE, $4000-$7FFF): Slots 2, 4, 6, 8, 15 (64/64 pages)
 .const XE_SLOT2_WIN_HI     = XE_WIN_BASE_HI
 .const XE_SLOT4_WIN_HI     = XE_SLOT2_WIN_HI + XE_SLOT2_PAGES
-.const XE_SLOT8_WIN_HI     = XE_SLOT4_WIN_HI + XE_SLOT4_PAGES
-.const XE_SLOT16_WIN_HI    = XE_SLOT8_WIN_HI + XE_SLOT8_PAGES
-.const XE_SLOT18_WIN_HI    = XE_SLOT16_WIN_HI + XE_SLOT16_PAGES
-.const XE_BANK3_FREE_HI    = XE_SLOT18_WIN_HI + XE_SLOT18_PAGES
+.const XE_SLOT6_WIN_HI     = XE_SLOT4_WIN_HI + XE_SLOT4_PAGES
+.const XE_SLOT8_WIN_HI     = XE_SLOT6_WIN_HI + XE_SLOT6_PAGES
+.const XE_SLOT15_WIN_HI    = XE_SLOT8_WIN_HI + XE_SLOT8_PAGES
+.const XE_BANK3_FREE_HI    = XE_SLOT15_WIN_HI + XE_SLOT15_PAGES
 .const XE_BANK3_USED_PAGES = XE_BANK3_FREE_HI - XE_WIN_BASE_HI
 .const XE_BANK3_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK3_FREE_HI
 
@@ -101,17 +101,17 @@ xe_slot_populated:
 
 xe_slot_portb:
     .byte PORTB_XE_BANK0, PORTB_XE_BANK2, PORTB_XE_BANK3, PORTB_XE_BANK2
-    .byte PORTB_XE_BANK3, PORTB_XE_BANK0, PORTB_XE_BANK0, PORTB_XE_BANK2
-    .byte PORTB_XE_BANK3, PORTB_XE_BANK2, PORTB_XE_BANK0, PORTB_XE_BANK1
-    .byte PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK2
-    .byte PORTB_XE_BANK3, PORTB_XE_BANK1, PORTB_XE_BANK3
+    .byte PORTB_XE_BANK3, PORTB_XE_BANK0, PORTB_XE_BANK3, PORTB_XE_BANK2
+    .byte PORTB_XE_BANK3, PORTB_XE_BANK0, PORTB_XE_BANK0, PORTB_XE_BANK1
+    .byte PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK2, PORTB_XE_BANK3
+    .byte PORTB_XE_BANK1, PORTB_XE_BANK2
 
 xe_slot_win_hi:
     .byte XE_SLOT0_WIN_HI,  XE_SLOT1_WIN_HI,  XE_SLOT2_WIN_HI,  XE_SLOT3_WIN_HI
     .byte XE_SLOT4_WIN_HI,  XE_SLOT5_WIN_HI,  XE_SLOT6_WIN_HI,  XE_SLOT7_WIN_HI
     .byte XE_SLOT8_WIN_HI,  XE_SLOT9_WIN_HI,  XE_SLOT10_WIN_HI, XE_SLOT11_WIN_HI
     .byte XE_SLOT12_WIN_HI, XE_SLOT13_WIN_HI, XE_SLOT14_WIN_HI, XE_SLOT15_WIN_HI
-    .byte XE_SLOT16_WIN_HI, XE_SLOT17_WIN_HI, XE_SLOT18_WIN_HI
+    .byte XE_SLOT16_WIN_HI, XE_SLOT17_WIN_HI
 
 xe_slot_ram_hi:
     .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE
@@ -120,14 +120,14 @@ xe_slot_ram_hi:
     .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE
     .byte >MAP_BASE
     .byte >BANKED_DATA_BASE
-    .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE
+    .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE
 
 xe_slot_pages:
     .byte XE_SLOT0_PAGES,  XE_SLOT1_PAGES,  XE_SLOT2_PAGES,  XE_SLOT3_PAGES
     .byte XE_SLOT4_PAGES,  XE_SLOT5_PAGES,  XE_SLOT6_PAGES,  XE_SLOT7_PAGES
     .byte XE_SLOT8_PAGES,  XE_SLOT9_PAGES,  XE_SLOT10_PAGES, XE_SLOT11_PAGES
     .byte XE_SLOT12_PAGES, XE_SLOT13_PAGES, XE_SLOT14_PAGES, XE_SLOT15_PAGES
-    .byte XE_SLOT16_PAGES, XE_SLOT17_PAGES, XE_SLOT18_PAGES
+    .byte XE_SLOT16_PAGES, XE_SLOT17_PAGES
 
 // 3-char overlay extension lookup table for OVL.* (overlays 0..12)
 atari_ovl_ext_c0:
@@ -137,7 +137,7 @@ atari_ovl_ext_c1:
 atari_ovl_ext_c2:
     .byte 'A', 'N', 'H', 'N', 'P', ' ', 'M', 'L', 'L', 'S', 'M', 'O', 'L'
 atari_ovl_xe_slot:
-    .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 17, 18
+    .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 17, $ff
 #endif
 
 // ============================================================
@@ -263,7 +263,7 @@ xe_detect:
     sta NMIEN
     sta xe_present
 
-    ldx #18
+    ldx #17
 !clr_slots:
     sta xe_slot_populated,x
     dex
@@ -324,9 +324,9 @@ xe_detect:
 xe_bank_table:
     .byte PORTB_XE_BANK0, PORTB_XE_BANK1, PORTB_XE_BANK2, PORTB_XE_BANK3
 
-// xe_cache_stash — Copy slot X (0..18) from Main/High RAM to 130XE bank
+// xe_cache_stash — Copy slot X (0..17) from Main/High RAM to 130XE bank
 xe_cache_stash:
-    cpx #19
+    cpx #18
     bcs !done+
     lda xe_slot_ram_hi,x
     sta atari_io_src_hi
@@ -588,7 +588,7 @@ hal_asset_load_prg_header:
     jsr atari_format_83
     jsr atari_match_cache_slot
     stx atari_io_slot
-    cpx #19
+    cpx #18
     bcs !disk_load+
     cpx #15
     beq !disk_load+
@@ -660,7 +660,7 @@ hal_asset_load_prg_header:
     lda xe_present
     beq !load_ok+
     ldx atari_io_slot
-    cpx #19
+    cpx #18
     bcs !load_ok+
     cpx #15
     beq !load_ok+
@@ -687,7 +687,7 @@ hal_asset_close_channel:
     clc
     rts
 
-.assert "130XE slot tables cover slots 0..18", xe_slot_win_hi - xe_slot_portb == 19 && xe_slot_ram_hi - xe_slot_win_hi == 19 && xe_slot_pages - xe_slot_ram_hi == 19, true
+.assert "130XE slot tables cover slots 0..17", xe_slot_win_hi - xe_slot_portb == 18 && xe_slot_ram_hi - xe_slot_win_hi == 18 && xe_slot_pages - xe_slot_ram_hi == 18, true
 .assert "130XE Bank 0 stays within $4000-$7FFF", XE_BANK0_FREE_HI <= XE_WIN_LIMIT_HI, true
 .assert "130XE Bank 1 stays within $4000-$7FFF", XE_BANK1_FREE_HI <= XE_WIN_LIMIT_HI, true
 .assert "130XE Bank 2 stays within $4000-$7FFF", XE_BANK2_FREE_HI <= XE_WIN_LIMIT_HI, true

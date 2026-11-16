@@ -204,6 +204,10 @@
 .const DOS25_LINK_HI                 = 126
 .const DOS25_LINK_LO                 = 127
 
+// Atari 57-byte MONSTER.CAT record contract (49B base + 8B Phase 5 extended)
+.const A8_CATALOG_EXT_SIZE           = 8
+.const A8_CATALOG_RECORD_SIZE        = 57
+
 // ============================================================
 // Link-Time Boundary Assertions
 // ============================================================

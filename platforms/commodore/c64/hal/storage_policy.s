@@ -31,8 +31,8 @@
 // $20 (Save Format V2): expanded 370-item catalog, 34 inventory slots (with
 // Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and 279-species
 // persistent monster recall. Older V1..V19 saves are no longer accepted.
-.const hal_storage_save_v1_version = $20
-.const hal_storage_save_version = $20
+.const hal_storage_save_v1_version = $21
+.const hal_storage_save_version = $21
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
@@ -43,6 +43,9 @@
 #define HAL_STORAGE_MARKER_INIT_SKIP_SCRATCH
 // The program-media probe asks the drive (storage_file_exists): no CHKIN.
 #define HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE
+#if C64_PRODUCT_OVERLAY_RUNTIME
+#define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
+#endif
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
 #define HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY

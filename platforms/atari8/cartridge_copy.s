@@ -98,10 +98,10 @@ cart_read:
     cmp #3
     beq !item_cat+
 
-    // cart_is_record == 1: 49-byte catalog record within CART_ASSET_CATALOG
+    // cart_is_record == 1: 57-byte catalog record within CART_ASSET_CATALOG
     lda cart_offset
     clc
-    adc #CATALOG_RECORD_SIZE
+    adc #A8_CATALOG_RECORD_SIZE
     sta cart_tmp
     lda cart_offset + 1
     adc #0
@@ -117,7 +117,7 @@ cart_read:
     sta cart_destination + 1
     lda #>cat_record
     sta cart_destination + 2
-    lda #CATALOG_RECORD_SIZE
+    lda #A8_CATALOG_RECORD_SIZE
     sta cart_count
     lda #0
     sta cart_count + 1

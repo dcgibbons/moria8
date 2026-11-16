@@ -47,7 +47,9 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_character.s"
+.segment Default
 .segment TestUnusedMonsterMagic
 #import "../../../../core/stat_display.s"
 .segment Default

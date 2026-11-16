@@ -86,8 +86,11 @@ def check(crt: Path, source: Path) -> None:
         "c128_load_resident_select_prg",
         "legal_notice_filename",
         "legal_offer_filename",
+        "catalog_ext_filename",
     ):
         assert dead not in syms, f"Dead disk symbol still emitted: {dead}"
+    assert "catalog_fetch_ext" in syms and syms["catalog_fetch_ext"] < syms["program_end"]
+    assert "cat_ext_record" in syms and syms["cat_ext_record"] + 8 <= syms["program_end"]
 
     overlay_consts = catalog_disk.consts(catalog_disk.ROOT / "platforms/commodore/common/overlay.s")
     assert len(make_c128_md128.OVERLAYS) == contract["CART_OVERLAY_COUNT"]
@@ -100,6 +103,9 @@ def check(crt: Path, source: Path) -> None:
     assert manifest["crt_type"] == 4
     assert manifest["rom_size"] == make_c128_md128.ROM_SIZE
     assert len(manifest["assets"]) == contract["CART_ASSET_COUNT"]
+    cex_entry = manifest["assets"][contract["CART_ASSET_CEX"]]
+    assert cex_entry["name"] == "cex" and cex_entry["destination"] == 0xD000
+    assert cex_entry["size"] == 279 * 8 and cex_entry["flags"] == contract["CART_DEST_BANK1_NOIO"]
 
     prev_end = make_c128_md128.BANK_SIZE
     for asset_id, (name, fname, dest, expected_data, expected_flags) in sorted(inputs.items()):

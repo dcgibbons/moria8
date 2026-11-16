@@ -39,6 +39,9 @@ test_exit_trampoline:
 .segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestNameStreams [start=$E300, min=$E300, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+#define PLAYER_CHARGEN_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -134,6 +137,11 @@ mm_element_divisor_entry:
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
 #import "item_cat_resident_helper.s"
+.segment TestUnusedEgoArmour
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
+.segment Default
 .segment TestCreateOverlay
 .segment Default
 #import "../../../../core/special_rooms.s"

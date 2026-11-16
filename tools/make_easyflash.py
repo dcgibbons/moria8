@@ -58,6 +58,7 @@ def pack(source: Path, output: Path) -> dict:
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: ("license", 0, (ROOT / "data/LICENSE").read_bytes()),
         CONTRACT["CART_ASSET_LEGAL_OFFER"]: ("source-offer", 0, (ROOT / "data/SOURCE-OFFER").read_bytes()),
         CONTRACT["CART_ASSET_ITEM_CATALOG"]: ("item-catalog", 0, catalog_disk.item_catalog_bytes()),
+        CONTRACT["CART_ASSET_CATALOG_EXT"]: ("catalog-ext", 0, b"".join(catalog_disk.ext_records())),
     }
     inputs.update({CONTRACT["CART_ASSET_" + symbol]:
                    (f"ovl.{name}", *prg(source / f"ovl.{name}", 0xE000, 0xF000))
@@ -73,6 +74,8 @@ def pack(source: Path, output: Path) -> dict:
         raise ValueError("Asset directory exceeds ROM bank zero")
     if len(inputs[CONTRACT["CART_ASSET_CATALOG"]][2]) > 0x6000:
         raise ValueError("Catalog offsets exceed the reader's source-address range")
+    if len(inputs[CONTRACT["CART_ASSET_CATALOG_EXT"]][2]) > 0x6000:
+        raise ValueError("Extended catalog offsets exceed the reader's source-address range")
     manifest = {"format": "EasyFlash", "crt_type": 32, "subtype": 0,
                 "flash_writes": False, "assets": []}
     offset = BANK_SIZE

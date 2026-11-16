@@ -9,7 +9,7 @@ import sys
 # secondary), 47-byte known-item bitset, 174-byte flavour shuffles, 8 store
 # arrays, door-state + species tables, 11 floor-item arrays, and 279 creature
 # rows of recall (1116 bytes, hal/storage_policy.s, platforms/shared/save.s).
-SAVE_VERSION = 0x20
+SAVE_VERSION = 0x21
 ID_KNOWN_BYTES = 47
 MAX_DOOR_STATES = 16
 CATALOG_SLOTS = 32

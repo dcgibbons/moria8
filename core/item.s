@@ -667,339 +667,17 @@ inv_count_items:
     rts
 #endif
 
+#if !ITEM_SPAWN_EXTERNAL
 #if ITEM_SPAWN_IN_GEN_OVERLAY
 // The port runs this from OVL.GEN behind a resident item_spawn_level
 // trampoline (BBC Master: resident image headroom); the picker is then
 // called directly in the loaded overlay.
 :ItemSpawnSegment()
 #endif
-// ============================================================
-// item_spawn_level — Spawn gold and items on the dungeon floor
-// Called after monster_spawn_level at each level transition.
-// Phase 1: Gold (2 + rng(3) + dlvl/2, cap 16)
-// Phase 2: Non-gold items (1 + rng(2) + dlvl/3, cap 8)
-// Phase 3: Treasure room (dlvl >= 3, one room gets extra items)
-// Town = 0 items.
-// Clobbers: everything
-// ============================================================
-isl_ngold_target: .byte 0      // Non-gold item count target
-isl_treasure_dlvl: .byte 0     // Effective dlvl for treasure room enchant
-
-#if ITEM_SPAWN_IN_GEN_OVERLAY
-item_spawn_level_gen:
-#else
-item_spawn_level:
-#endif
-    jsr item_init_floor
-
-    // Town = no items
-    lda zp_player_dlvl
-    bne !isl_dungeon+
-    rts
-
-!isl_dungeon:
-    // ---- Phase 1: Gold ----
-    // Base count = 2
-    lda #2
-    sta isl_target
-
-    // + rng(3) → [0, 2]
-    lda #3
-    jsr rng_range
-    clc
-    adc isl_target
-    sta isl_target
-
-    // + dlvl / 2
-    lda zp_player_dlvl
-    lsr                         // A = dlvl / 2
-    clc
-    adc isl_target
-    sta isl_target
-
-    // Cap at 16
-    cmp #17
-    bcc !isl_gold_capped+
-    lda #16
-    sta isl_target
-!isl_gold_capped:
-
-    lda #0
-    sta isl_idx
-
-!isl_gold_loop:
-    lda isl_idx
-    cmp isl_target
-    bcs !isl_gold_done+
-
-    // Find a random floor tile
-    jsr find_random_floor
-    bcc !isl_gold_done+
-
-    // Set up floor item add
-    lda df_target_x
-    sta fi_add_x
-    lda df_target_y
-    sta fi_add_y
-
-    // Gold type: rng(2) → ID 0 or 1
-    lda #2
-    jsr rng_range
-    sta fi_add_id
-    jsr fi_add_clear_plain_meta
-
-    // Gold qty: rng_range_word(dlvl * 10) + 5 (16-bit)
-    lda zp_player_dlvl
-    ldx #10
-    jsr math_multiply           // zp_math_a=lo, zp_math_b=hi
-    lda zp_math_a
-    sta zp_temp0
-    lda zp_math_b
-    sta zp_temp1                // N = dlvl * 10
-    jsr rng_range_word          // result in zp_temp2/3
-    // Add 5 to 16-bit result
-    lda zp_temp2
-    clc
-    adc #5
-    sta fi_add_qty
-    lda zp_temp3
-    adc #0
-    sta fi_add_qty_hi
-
-    jsr floor_item_add
-    // Ignore failure (table full)
-
-    inc isl_idx
-    jmp !isl_gold_loop-
-
-!isl_gold_done:
-
-    // ---- Phase 2: Non-gold items ----
-    // Count: 1 + rng(2) + dlvl/3, cap 8
-    lda #1
-    sta isl_ngold_target
-
-    lda #2
-    jsr rng_range               // [0, 1]
-    clc
-    adc isl_ngold_target
-    sta isl_ngold_target
-
-    // + dlvl / 3 (approximate: dlvl * 85 / 256 ≈ dlvl/3)
-    // Simple approach: subtract 3 repeatedly
-    lda zp_player_dlvl
-    ldx #0
-!isl_div3:
-    cmp #3
-    bcc !isl_div3_done+
-    sec
-    sbc #3
-    inx
-    jmp !isl_div3-
-!isl_div3_done:
-    txa
-    clc
-    adc isl_ngold_target
-    sta isl_ngold_target
-
-    // Cap at 8
-    cmp #9
-    bcc !isl_ngold_capped+
-    lda #8
-    sta isl_ngold_target
-!isl_ngold_capped:
-
-    lda #0
-    sta isl_idx
-
-!isl_ngold_loop:
-    lda isl_idx
-    cmp isl_ngold_target
-    bcs !isl_ngold_done+
-
-    // Find a random floor tile
-    jsr find_random_floor
-    bcc !isl_ngold_done+
-    lda df_target_x
-    sta fi_add_x
-    lda df_target_y
-    sta fi_add_y
-
-    // Pick item type
-#if ITEM_SPAWN_IN_GEN_OVERLAY
-    jsr pick_item_type_overlay
-#else
-    jsr pick_item_type
-#endif
-    jsr isl_roll_item           // id, enchantment, ego
-
-    // Set qty: ammo spawns in stacks, everything else = 1
-    lda #1
-    sta fi_add_qty
-    lda fi_add_ego
-    and #ITEM_PAGE_BIT
-    sta item_cur_page
-    ldx fi_add_id
-    jsr item_get_missile
-    bpl !isl_qty_done+          // Bit 7 clear = not ammo
-    // Ammo: qty = 7d6 → [7, 42] (VMS magic_treasure, misc.inc)
-    lda #7
-    ldx #6
-    ldy #0
-    jsr math_dice
-    lda zp_math_a
-    sta fi_add_qty
-!isl_qty_done:
-
-    jsr floor_item_add          // a full table skips it
-
-    inc isl_idx
-    jmp !isl_ngold_loop-
-
-!isl_ngold_done:
-
-    // ---- Phase 3: Treasure room ----
-    // Only on dlvl >= 3
-    lda zp_player_dlvl
-    cmp #3
-    bcs !isl_has_treasure+
-    jmp !isl_all_done+
-!isl_has_treasure:
-
-    // Check for vault room → enhanced treasure
-    lda #RT_VAULT
-    jsr tramp_find_special_room
-    bcc !isl_no_vault+
-
-    // Vault: use vault room, dlvl+8, 4-8 items
-    stx isl_idx
-    lda zp_player_dlvl
-    clc
-    adc #8                      // dlvl+8
-    sta isl_treasure_dlvl
-    lda #5
-    jsr rng_range               // [0, 4]
-    clc
-    adc #4                      // [4, 8]
-    sta isl_ngold_target
-    jmp !isl_treasure_setup_done+
-
-!isl_no_vault:
-    // Spawn nest gold if applicable (no-op if no nest)
-    jsr tramp_spawn_nest_gold
-
-    // Normal treasure room (pick random room)
-    lda room_count
-    bne !isl_has_rooms+
-    jmp !isl_all_done+
-!isl_has_rooms:
-    jsr rng_range               // [0, room_count-1]
-    sta isl_idx                 // Reuse as room index
-
-    // Effective dlvl for treasure = dlvl + 5
-    lda zp_player_dlvl
-    clc
-    adc #5
-    sta isl_treasure_dlvl
-
-    // Extra items: 2 + rng(3)
-    lda #3
-    jsr rng_range               // [0, 2]
-    clc
-    adc #2                      // [2, 4]
-    sta isl_ngold_target        // Reuse as treasure count
-
-!isl_treasure_setup_done:
-    lda #0
-    sta isl_target              // Reuse as treasure loop counter
-
-!isl_treasure_loop:
-    lda isl_target
-    cmp isl_ngold_target
-    bcs !isl_all_done+
-
-    // Random position within room bounds
-    // x = room_x[idx] + rng(room_w[idx])
-    ldx isl_idx
-    lda room_w,x
-    jsr rng_range
-    ldx isl_idx
-    clc
-    adc room_x,x
-    sta fi_add_x
-
-    // y = room_y[idx] + rng(room_h[idx])
-    ldx isl_idx
-    lda room_h,x
-    jsr rng_range
-    ldx isl_idx
-    clc
-    adc room_y,x
-    sta fi_add_y
-
-    // Verify it's a floor tile
-    ldy fi_add_y
-    jsr map_row_ptr0_y
-    ldy fi_add_x
-    :MapRead_ptr0_y()
-    and #$f0                    // TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !isl_treasure_skip+
-
-    // Pick item with boosted dlvl
-    // Temporarily boost dlvl for pick + enchant
-    lda zp_player_dlvl
-    pha                         // Save real dlvl
-    lda isl_treasure_dlvl
-    sta zp_player_dlvl
-
-#if ITEM_SPAWN_IN_GEN_OVERLAY
-    jsr pick_item_type_overlay
-#else
-    jsr pick_item_type
-#endif
-    jsr isl_roll_item           // id, enchantment, ego
-
-    pla                         // Restore real dlvl
-    sta zp_player_dlvl
-
-    lda #1
-    sta fi_add_qty
-
-    jsr floor_item_add          // a full table skips it
-
-!isl_treasure_skip:
-    inc isl_target
-    jmp !isl_treasure_loop-
-
-!isl_all_done:
-    rts
-
-// isl_roll_item — A = the item type picked: store it, roll its enchantment
-// (roll_enchantment also sets the fi_add_* stat fields and flags) and its ego
-// type (0 for non-weapons).
-isl_roll_item:
-    sta fi_add_id
-    lda item_cur_page
-    sta isl_page
-    jsr roll_enchantment
-    sta fi_add_p1
-    lda isl_page
-    sta item_cur_page
-    lda fi_add_id
-#if HAL_PLATFORM_CHEST_LOOT_EGO_GEN_TRAMP
-    // A2/CX16: generation executes in the GEN overlay window; the ego trampoline
-    // must restore it or the item_spawn_level continuation runs OVL.ITEMS.
-    jsr tramp_roll_ego_type_gen
-#else
-    jsr tramp_roll_ego_type
-#endif
-    ora isl_page
-    sta fi_add_ego
-    rts
-isl_page: .byte 0
+#import "item_spawn_cold.s"
 #if ITEM_SPAWN_IN_GEN_OVERLAY
 :ItemSpawnRestoreSegment()
+#endif
 #endif
 
 // ============================================================
@@ -1145,11 +823,10 @@ item_pickup:
 :ItemPickupRestoreSegment()
 #endif
 
-// item_drop — Drop a carried item to the floor (prompted)
-// Prompts "Drop which item (a-v)?", waits for keypress.
-// Output: carry set = turn consumed, carry clear = no action
-// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
-item_drop:
+// ItemDropBody — Shared implementation of item_drop (expanded inline here when
+// !ITEM_DROP_EXTERNAL, or inside core/item_drop_cold.s when overlay-hosted).
+// Ends with rts so overlay expansions never fall through.
+.macro ItemDropBody() {
     // Print prompt
     lda #$ff
     ldx #HSTR_IDR_PROMPT
@@ -1163,10 +840,17 @@ item_drop:
 
     // Wait for keypress
     jsr hal_input_get_key
+#if ITEM_DROP_EXTERNAL && HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK
+    jsr hal_platform_item_action_restore_bank
+#endif
 
     // '?' shows inventory (all items) and re-prompts
     cmp #$3f
     bne !idr_direct_pick+
+#if ITEM_DROP_EXTERNAL && PLATFORM_PRODUCT_OVERLAY_RUNTIME
+    lda current_overlay
+    sta piw_return_overlay
+#endif
     lda #$ff                    // Filter: show all items with real slot letters
     jsr show_inv_and_select
 
@@ -1246,6 +930,11 @@ item_drop:
 
     sec
     rts
+}
+
+#if !ITEM_DROP_EXTERNAL
+#import "item_drop_cold.s"
+#endif
 
 // item_append_name — Append item type name to combat_msg_buf
 // Input: A = item type ID
@@ -1511,301 +1200,8 @@ tunnel_spawn_gold:
     jmp floor_item_add
     // Ignore failure (table full)
 
-// ============================================================
-// pick_item_type — Select a random non-gold item type for floor spawning
-// Uses umoria-faithful depth-bucketed 50/50 flat/best-of-3 algorithm.
-// 50% flat pick from level-appropriate pool.
-// 50% best-of-3 random picks (highest index wins), then re-roll
-//      within the winner's depth tier for uniform intra-tier distribution.
-// 1-in-12 "great item" chance sets effective level up toward max.
-// Output: A = slot_lo (0..254), item_cur_page ($00 or $40)
-// Clobbers: A, X, Y, zp_temp0..zp_temp4
-// ============================================================
-.const PIT_MAX_LEVEL = 12
-.const PIT_SPAWNABLE_COUNT = 349
-pit_best_lo: .byte 0
-pit_best_hi: .byte 0
-pit_tmp:     .byte 0
-
-#if PICKER_IN_CHEST_OVERLAY
-.segment ChestOverlay
-#elif PLATFORM_PRODUCT_OVERLAY_RUNTIME
-.segment DungeonGenOverlay
-#endif
-
-// 349 spawnable items (0..369 excluding gold #0/#1/#214..#231 and Ruined Chest #134),
-// sorted ascending by min_lvl_m8 (0..12).
-pit_sorted_lo:
-    // Level 0 (25 items)
-    .byte 13, 15, 61, 62, 63, 167, 182, 183, 184, 185, 232, 233, 234, 235, 236, 243
-    .byte 244, 245, 246, 15, 16, 17, 18, 19, 40
-    // Level 1 (55 items)
-    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54, 64
-    .byte 77, 85, 98, 99, 103, 114, 135, 136, 161, 162, 186, 187, 188, 189, 190, 191
-    .byte 237, 238, 239, 240, 241, 242, 247, 20, 21, 22, 23, 24, 25, 41, 42, 43
-    .byte 44, 83, 84, 85, 86, 87, 88
-    // Level 2 (50 items)
-    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53, 66, 74, 82, 84, 100
-    .byte 102, 126, 128, 163, 168, 169, 192, 193, 248, 249, 250, 251, 252, 253, 254, 0
-    .byte 45, 46, 47, 48, 62, 63, 64, 65, 66, 67, 68, 69, 70, 89, 94, 95
-    .byte 96, 109
-    // Level 3 (39 items)
-    .byte 4, 18, 22, 25, 36, 39, 43, 44, 46, 50, 65, 70, 86, 88, 115, 164
-    .byte 170, 171, 194, 1, 2, 3, 4, 5, 26, 49, 50, 51, 52, 53, 54, 90
-    .byte 97, 98, 99, 100, 101, 102, 111
-    // Level 4 (31 items)
-    .byte 23, 27, 33, 40, 42, 55, 58, 67, 78, 87, 89, 95, 96, 109, 110, 129
-    .byte 137, 172, 195, 196, 207, 208, 209, 210, 211, 6, 7, 8, 9, 55, 112
-    // Level 5 (30 items)
-    .byte 10, 32, 41, 45, 72, 79, 90, 92, 94, 101, 116, 124, 157, 158, 165, 197
-    .byte 198, 199, 212, 10, 11, 12, 71, 72, 73, 91, 92, 103, 104, 110
-    // Level 6 (6 items)
-    .byte 34, 35, 68, 73, 93, 56
-    // Level 7 (15 items)
-    .byte 8, 26, 71, 80, 91, 122, 130, 173, 174, 13, 27, 28, 29, 93, 105
-    // Level 8 (22 items)
-    .byte 24, 38, 56, 59, 69, 75, 139, 140, 141, 142, 143, 144, 145, 149, 153, 166
-    .byte 175, 200, 14, 74, 75, 76
-    // Level 9 (9 items)
-    .byte 76, 104, 106, 112, 131, 155, 176, 177, 201
-    // Level 10 (20 items)
-    .byte 83, 97, 108, 118, 121, 138, 159, 178, 202, 30, 31, 32, 33, 34, 35, 36
-    .byte 37, 57, 106, 107
-    // Level 11 (14 items)
-    .byte 105, 117, 119, 132, 150, 154, 156, 179, 180, 77, 78, 79, 80, 81
-    // Level 12 (33 items)
-    .byte 57, 60, 81, 107, 111, 113, 120, 123, 125, 127, 133, 146, 147, 148, 151, 152
-    .byte 160, 181, 203, 204, 205, 206, 213, 38, 39, 58, 59, 60, 61, 82, 108, 113
-    .byte 114
-pit_sorted_lo_end:
-
-// Packed page bits (1 bit per sorted index: 1 = Page 1 [255..369], 0 = Page 0)
-pit_sorted_hi_bits:
-    .byte $00, $00, $f8, $01, $00, $00, $00, $00, $ff, $ff, $00, $00, $00, $80, $ff, $ff
-    .byte $03, $00, $e0, $ff, $ff, $01, $00, $00, $fc, $00, $00, $f8, $3f, $08, $e0, $07
-    .byte $00, $e0, $01, $00, $f8, $3f, $80, $0f, $00, $00, $f8, $1f
-pit_sorted_hi_bits_end:
-
-// Cumulative 16-bit item count per compressed depth tier (0..12)
-pit_level_bounds_lo:
-    .byte 25, 80, 130, 169, 200, 230, 236, 251, 17, 26, 46, 60, 93
-pit_level_bounds_lo_end:
-pit_level_bounds_hi:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1
-pit_level_bounds_hi_end:
-pit_bit_masks:
-    .byte $01, $02, $04, $08, $10, $20, $40, $80
-
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
-pick_item_type_overlay:
-#else
-pick_item_type:
-#endif
-    // Compressed level: eff_level = min((dlvl + 3) / 4, PIT_MAX_LEVEL).
-    lda zp_player_dlvl
-    clc
-    adc #3
-    lsr
-    lsr
-    cmp #PIT_MAX_LEVEL + 1
-    bcc !pit_level_ok+
-    lda #PIT_MAX_LEVEL
-!pit_level_ok:
-    tay                          // Y = eff_level (preserved by rng_range)
-
-    // Great item, 1 in 12 (none at town level 0)
-    lda #12
-    jsr rng_range                // [0, 11]
-    bne !pit_no_great+
-    tya
-    beq !pit_no_great+
-    lda #PIT_MAX_LEVEL
-    jsr rng_range                // [0, 11]
-    clc
-    adc #1
-    sta zp_temp1                 // randint(12)
-    tya
-    asl
-    asl
-    sta zp_temp0                 // eff * 4
-    asl                          // C clear: eff * 8 <= 96
-    adc zp_temp0                 // eff * 12 (<= 144)
-    ldy #0
-    sec
-!pit_great_div:
-    iny                          // quotient + 1
-    sbc zp_temp1
-    bcs !pit_great_div-
-    cpy #PIT_MAX_LEVEL + 1
-    bcc !pit_no_great+
-    ldy #PIT_MAX_LEVEL
-!pit_no_great:
-
-    // 16-bit pool_size = pit_level_bounds[eff_level] -> zp_temp0/1
-    lda pit_level_bounds_lo,y
-    sta zp_temp0
-    lda pit_level_bounds_hi,y
-    sta zp_temp1
-
-    // 50/50 coin flip: flat pick vs best-of-3
-    lda #2
-    jsr rng_range
-    bne !pit_best_of_3+
-
-    jsr rng_range_word           // [0, pool_size-1] in zp_temp2/3
-
-!pit_return_idx:
-    // Decode 16-bit index (zp_temp2=lo, zp_temp3=hi) into (item_cur_page, A=slot_lo)
-    lda zp_temp2
-    and #$07
-    tay
-    lda zp_temp2
-    sta pit_tmp
-    lda zp_temp3
-    lsr
-    ror pit_tmp
-    lsr
-    ror pit_tmp
-    lsr
-    ror pit_tmp
-    ldx pit_tmp
-    lda pit_sorted_hi_bits,x
-    and pit_bit_masks,y
-    beq !pit_page0+
-    lda #ITEM_PAGE_BIT
-    bne !pit_set_page+
-!pit_page0:
-    lda #0
-!pit_set_page:
-    sta item_cur_page
-    ldx zp_temp2
-    lda zp_temp3
-    bne !pit_hi_slice+
-    lda pit_sorted_lo,x
-    rts
-!pit_hi_slice:
-    lda pit_sorted_lo + 256,x
-    rts
-
-!pit_best_of_3:
-    jsr rng_range_word
-    lda zp_temp2
-    sta pit_best_lo
-    lda zp_temp3
-    sta pit_best_hi
-
-    ldy #2
-!pit_bo3_loop:
-    sty pit_tmp
-    jsr rng_range_word
-    lda pit_best_lo
-    cmp zp_temp2
-    lda pit_best_hi
-    sbc zp_temp3
-    bcs !pit_bo3_keep+
-    lda zp_temp2
-    sta pit_best_lo
-    lda zp_temp3
-    sta pit_best_hi
-!pit_bo3_keep:
-    ldy pit_tmp
-    dey
-    bne !pit_bo3_loop-
-
-    // Find winner's depth tier X (0..PIT_MAX_LEVEL) where pit_best < bounds[X]
-    ldx #0
-!pit_find_tier:
-    lda pit_best_lo
-    cmp pit_level_bounds_lo,x
-    lda pit_best_hi
-    sbc pit_level_bounds_hi,x
-    bcc !pit_found_tier+
-    inx
-    cpx #PIT_MAX_LEVEL
-    bcc !pit_find_tier-
-!pit_found_tier:
-    txa
-    beq !pit_reroll_l0+
-    stx pit_tmp
-    lda pit_level_bounds_lo,x
-    sec
-    sbc pit_level_bounds_lo - 1,x   // Every tier span <= 55 < 256
-    jsr rng_range
-    ldx pit_tmp
-    clc
-    adc pit_level_bounds_lo - 1,x
-    sta zp_temp2
-    lda pit_level_bounds_hi - 1,x
-    adc #0
-    sta zp_temp3
-    jmp !pit_return_idx-
-
-!pit_reroll_l0:
-    lda pit_level_bounds_lo
-    jsr rng_range
-    sta zp_temp2
-    lda #0
-    sta zp_temp3
-    jmp !pit_return_idx-
-
-#if HAL_PLATFORM_PICK_ITEM_RESIDENT_ITEMS_SEGMENT
-:ResidentItemsSegment()
-#elif HAL_PLATFORM_PICK_ITEM_IN_GEN_OVERLAY
-.segment Default
-#endif
-
-#if HAL_PLATFORM_PICK_ITEM_PLUS4_BANK_RAM
-pick_item_type:
-    lda current_overlay
-#if PICKER_IN_CHEST_OVERLAY
-    cmp #OVL_CHEST
-#else
-    cmp #OVL_DUNGEON_GEN
-#endif
-    beq !pit_overlay_loaded+
-
-#if PICKER_IN_CHEST_OVERLAY
-    ldx #OVL_CHEST - 1
-#else
-    ldx #OVL_DUNGEON_GEN - 1
-#endif
-    jsr overlay_load_disk        // asks for the program disk until it loads
-#if PICKER_IN_CHEST_OVERLAY
-    lda #OVL_CHEST
-#else
-    lda #OVL_DUNGEON_GEN
-#endif
-    sta current_overlay
-
-!pit_overlay_loaded:
-    sei
-    jsr plus4_bank_ram
-    jsr pick_item_type_overlay
-    pha
-    jsr plus4_bank_ram
-    cli
-    pla
-    rts
-#elif PLATFORM_PRODUCT_OVERLAY_RUNTIME
-pick_item_type:
-#if PICKER_IN_CHEST_OVERLAY
-    lda #OVL_CHEST
-#else
-    lda #OVL_DUNGEON_GEN
-#endif
-    jsr overlay_load
-    bcc !pit_overlay_loaded+
-    lda #2                      // Fallback to first non-gold type on media error.
-    rts
-!pit_overlay_loaded:
-    sei
-    :BankOutKernal()
-    jsr pick_item_type_overlay
-    pha
-    :BankInKernal()
-    cli
-    pla
-    rts
+#if !PICK_ITEM_TYPE_EXTERNAL
+#import "pick_item_type_cold.s"
 #endif
 
 // ============================================================
@@ -2210,12 +1606,4 @@ re_negate_a:
 // Compile-time validation
 // ============================================================
 .assert "Item type count", ITEM_TYPE_COUNT, 370
-.assert "pit_sorted_lo size (excludes gold and ruined chest)", pit_sorted_lo_end - pit_sorted_lo, PIT_SPAWNABLE_COUNT
-.assert "pit_sorted_hi_bits size", pit_sorted_hi_bits_end - pit_sorted_hi_bits, (PIT_SPAWNABLE_COUNT + 7) >> 3
-.assert "pit_level_bounds_lo size", pit_level_bounds_lo_end - pit_level_bounds_lo, PIT_MAX_LEVEL + 1
-.assert "pit_level_bounds_hi size", pit_level_bounds_hi_end - pit_level_bounds_hi, PIT_MAX_LEVEL + 1
-.assert "pick_item_type entry stays resident", pick_item_type < $e000, true
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
-.assert "pick_item_type overlay impl lives in the $E000 overlay window", pick_item_type_overlay >= BANKED_DATA_BASE && pick_item_type_overlay <= BANKED_DATA_END, true
-#endif
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 34

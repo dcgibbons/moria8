@@ -19,6 +19,7 @@ BANK_CONST_RE = re.compile(
     r"^\s*\.const\s+(CX16_BANK_[A-Z0-9_]+)\s*=\s*(\$[0-9a-fA-F]+|\d+)"
 )
 LOW_RAM_CEILING = 0x9B00
+LOW_RAM_CART_LIVE_CEILING = 0x9980
 LOW_RAM_MIN_FREE = 1500
 AUXDATA_CEILING = 0x8000
 AUXDATA_MAX_USED_END = 0x7800
@@ -57,6 +58,7 @@ PRG_SPECS = (
     PrgSpec("OVL.TITLE", 0xA000, 0xC000, "ovl_title_end"),
     PrgSpec("OVL.CHEST", 0xA000, 0xC000, "ovl_chest_end"),
     PrgSpec("MONSTER.CAT", 0xA000, 0xC000, "catalog_bank_end"),
+    PrgSpec("MONSTER.EXT", 0xA000, 0xA8B8, min_payload=2232),
     PrgSpec("ITEM.CAT", 0xA000, 0xC000, signature=b"ITM2"),
     PrgSpec("TITLE", 0xA000, 0xC000, min_payload=256),
 )
@@ -135,7 +137,7 @@ def check_artifacts(build_dir: Path = BUILD) -> int:
     used_banks, free_banks = check_bank_allocations(bank_consts, build_dir)
     print(
         f"ASSERT bank-allocations PASS {used_banks}/{bank_consts['CX16_BANK_COUNT']} "
-        f"used ({free_banks} free: Bank 5, Banks 7-8 & "
+        f"used ({free_banks} free: Banks 7-8 & "
         f"{bank_consts['CX16_BANK_WARM_BASE']}-{bank_consts['CX16_BANK_WARM_END']})"
     )
     checks += 1
@@ -239,7 +241,7 @@ def check_bank_allocations(
         ("map", consts["CX16_BANK_MAP_LO"], consts["CX16_BANK_MAP_HI"], True),
         ("auxdata", consts["CX16_BANK_AUXDATA"], consts["CX16_BANK_AUXDATA"], True),
         ("huffdata", consts["CX16_BANK_HUFFDATA"], consts["CX16_BANK_HUFFDATA"], True),
-        ("catalog_ext", consts["CX16_BANK_CATALOG_EXT"], consts["CX16_BANK_CATALOG_EXT"], False),
+        ("catalog_ext", consts["CX16_BANK_CATALOG_EXT"], consts["CX16_BANK_CATALOG_EXT"], True),
         ("item_cat", consts["CX16_BANK_ITEM_CAT"], consts["CX16_BANK_ITEM_CAT"], True),
         ("ext_pool", consts["CX16_BANK_EXT_BASE"], consts["CX16_BANK_EXT_END"], False),
         ("overlays", consts["CX16_BANK_OVERLAY_BASE"], consts["CX16_BANK_OVERLAY_END"], True),
@@ -341,6 +343,17 @@ def check_low_ram_bounds(main_symbols: dict[str, int]) -> int:
         raise ContractViolation(
             f"hal_item_cat_read_byte ${hicr:04X} outside fixed Low RAM [$080D..${program_end:04X})"
         )
+    cat_ext_rec = require_symbol(main_symbols, "cat_ext_record")
+    cat_fetch_ext = require_symbol(main_symbols, "catalog_fetch_ext")
+    if not (0x080D <= cat_ext_rec < cat_fetch_ext < program_end <= LOW_RAM_CART_LIVE_CEILING):
+        raise ContractViolation(
+            f"cat_ext_record ${cat_ext_rec:04X} / catalog_fetch_ext ${cat_fetch_ext:04X} "
+            f"outside Low-RAM [$080D..${LOW_RAM_CART_LIVE_CEILING:04X}]"
+        )
+    if cat_ext_rec + 8 > cat_fetch_ext:
+        raise ContractViolation(
+            f"cat_ext_record ${cat_ext_rec:04X} shorter than 8 B before ${cat_fetch_ext:04X}"
+        )
     recall_start = require_symbol(main_symbols, "recall_data_start")
     recall_end = require_symbol(main_symbols, "recall_data_end")
     if not (0x6000 <= recall_start < recall_end <= ovl_auxdata_end <= AUXDATA_CEILING):
@@ -399,7 +412,7 @@ def selftest() -> int:
         "CX16_BANK_WARM_END": 63,
         "CX16_BANK_COUNT": 64,
     }
-    assert check_bank_allocations(good_consts) == (22, 42)
+    assert check_bank_allocations(good_consts) == (23, 41)
     checks += 1
 
     bad_bank_mutations = (
@@ -443,7 +456,9 @@ def selftest() -> int:
         "cx16_bank_write_block": 0x664B,
         "cx16_bank_copy": 0x6665,
         "cx16_bank_helpers_end": 0x66AA,
-        "program_end": 0x9410,
+        "cat_ext_record": 0x3800,
+        "catalog_fetch_ext": 0x3808,
+        "program_end": 0x9120,
         "hal_item_cat_read_byte": 0x0900,
         "key_map_petscii": 0x6000,
         "key_map_cmd": 0x6046,
@@ -451,13 +466,15 @@ def selftest() -> int:
         "recall_data_end": 0x655C,
         "ovl_auxdata_end": 0x7500,
     }
-    assert check_low_ram_bounds(good_syms) == 0x9B00 - 0x9410
+    assert check_low_ram_bounds(good_syms) == 0x9B00 - 0x9120
     checks += 1
 
     bad_sym_mutations = (
         {"program_end": 0x9525},               # < 1500 B headroom
         {"cx16_bank_helpers_end": 0x9B05},     # helper outside Low RAM
         {"hal_item_cat_read_byte": 0x9C00},    # reader outside Low RAM
+        {"catalog_fetch_ext": 0x9A00},         # ext fetcher above $9980 ceiling
+        {"cat_ext_record": 0x3804},            # < 8 B before catalog_fetch_ext
         {"key_map_petscii": 0x0C80},           # key map stuck in Low RAM
         {"recall_data_start": 0x0900},         # recall stuck in Low RAM
     )

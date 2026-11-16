@@ -30,13 +30,14 @@ BANK_CONSTS = check_memory_contract.parse_bank_constants(
     (HERE / "memory.s").read_text(encoding="utf-8"),
     catalog_enabled=True,
 )
+CX16_BANK_CATALOG_EXT = BANK_CONSTS["CX16_BANK_CATALOG_EXT"]
 CX16_BANK_ITEM_CAT = BANK_CONSTS["CX16_BANK_ITEM_CAT"]
 CX16_BANK_EXT_BASE = BANK_CONSTS["CX16_BANK_EXT_BASE"]
 CX16_BANK_CATALOG = BANK_CONSTS["CX16_BANK_CATALOG"]
 CX16_BANK_LEGAL = BANK_CONSTS["CX16_BANK_LEGAL"]
 CX16_BANK_WARM_BASE = BANK_CONSTS["CX16_BANK_WARM_BASE"]
 
-SAVE_VERSION = 0x20
+SAVE_VERSION = 0x21
 TOTAL_INV_SLOTS = 34
 EQUIP_CLOAK = 32
 EQUIP_SECONDARY = 33
@@ -611,6 +612,88 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     tb.press("Q")
     tb.assert_line("help_close", tb.in_town(), "help did not return to the town view")
     check_run_cancel_flush(tb)
+
+    # Exercise evicted OVL.HELP item_drop ('d' -> '?' selector -> 'a') and door_try_open/close
+    # (including tramp_door_pick_roll -> OVL.CHEST -> OVL.HELP restoration).
+    slot0_before = tb.read_u8(tb.syms["inv_item_id"])
+    tb.press("D")
+    tb.assert_line("drop_prompt", tb.screen_has("Drop which item"), "'d' did not open drop prompt")
+    tb.shift("/")
+    tb.assert_line("drop_selector", tb.screen_has("Inventory"), "'?' from drop did not open inventory")
+    tb.press("A")
+    tb.drain_more()
+    tb.assert_line(
+        "drop_done",
+        tb.screen_has("You drop") and tb.read_u8(tb.syms["inv_item_id"]) == 0xFF,
+        f"slot0={tb.read_u8(tb.syms['inv_item_id']):#04x}",
+    )
+    tb.assert_line(
+        "drop_ovl_help",
+        tb.read_u8(tb.syms["current_overlay"]) == 5,
+        f"current_overlay={tb.read_u8(tb.syms['current_overlay'])}",
+    )
+    tb.press("G")
+    tb.drain_more()
+    tb.assert_line(
+        "drop_reclaimed",
+        tb.read_u8(tb.syms["inv_item_id"]) == slot0_before,
+        f"slot0={tb.read_u8(tb.syms['inv_item_id']):#04x} expected={slot0_before:#04x}",
+    )
+
+    px, py = tb.read_u8(tb.syms["zp_player_x"]), tb.read_u8(tb.syms["zp_player_y"])
+    adj = next(
+        ((nx, ny, dk) for nx, ny, dk in (
+            (px + 1, py, "L"),
+            (px - 1, py, "H"),
+            (px, py + 1, "J"),
+            (px, py - 1, "K"),
+        ) if (tb.map_read(nx, ny) & 0xF1) == 0),
+        None,
+    )
+    tb.assert_line("door_adj_tile", adj is not None, "no free adjacent tile for locked-door check")
+    if adj is not None:
+        dx, dy, dkey = adj
+        orig_tile = tb.map_read(dx, dy)
+        zp_lvl = tb.syms["zp_player_lvl"]
+        zp_dex = tb.syms["zp_player_dex"]
+        pl_dex_cur = tb.syms["player_data"] + 30  # PL_DEX_CUR (read by chest_disarm_dex_adj)
+        saved_lvl = tb.read_u8(zp_lvl)
+        saved_dex = tb.read_u8(zp_dex)
+        saved_pl_dex = tb.read_u8(pl_dex_cur)
+        tb.write_u8(zp_lvl, 40)
+        tb.write_u8(zp_dex, 118)
+        tb.write_u8(pl_dex_cur, 118)
+        tb.map_write(dx, dy, 0x80)  # TILE_DOOR_CLOSED
+        tb.write_u8(tb.syms["door_state_x"], dx)
+        tb.write_u8(tb.syms["door_state_y"], dy)
+        tb.write_u8(tb.syms["door_state_val"], 1)  # locked (difficulty 1; disarm=127 -> 100% pick)
+        tb.write_u8(tb.syms["door_state_count"], 1)
+        tb.press("O")
+        tb.press(dkey)
+        tb.drain_more()
+        tb.assert_line(
+            "locked_door_picked_open",
+            (tb.map_read(dx, dy) & 0xF0) == 0x70 and tb.read_u8(tb.syms["door_state_count"]) == 0,
+            f"tile={tb.map_read(dx, dy):#04x} count={tb.read_u8(tb.syms['door_state_count'])}",
+        )
+        tb.assert_line(
+            "door_pick_restored_ovl_help",
+            tb.read_u8(tb.syms["current_overlay"]) == 5,
+            f"current_overlay={tb.read_u8(tb.syms['current_overlay'])} after tramp_door_pick_roll",
+        )
+        tb.press("C")
+        tb.press(dkey)
+        tb.drain_more()
+        tb.assert_line(
+            "door_closed_again",
+            (tb.map_read(dx, dy) & 0xF0) == 0x80 and tb.read_u8(tb.syms["current_overlay"]) == 5,
+            f"tile={tb.map_read(dx, dy):#04x} ovl={tb.read_u8(tb.syms['current_overlay'])}",
+        )
+        tb.map_write(dx, dy, orig_tile)
+        tb.write_u8(zp_lvl, saved_lvl)
+        tb.write_u8(zp_dex, saved_dex)
+        tb.write_u8(pl_dex_cur, saved_pl_dex)
+
     tb.dump("after_help")
     tb.log("SCENARIO DONE")
 
@@ -761,6 +844,24 @@ def _catalog_bytes(filename: str, label: str) -> list[int]:
     if not found:
         raise KeyError(label)
     return out
+
+
+def _catalog_ext_rows() -> list[list[int]]:
+    """Return 279 x 8 B row-major Phase 5 extended catalog rows from catalog_ext_fields.s."""
+    cols = [
+        _catalog_bytes("catalog_ext_fields.s", lbl)
+        for lbl in (
+            "cat_atk2_type",
+            "cat_atk2_dice",
+            "cat_atk2_sides",
+            "cat_atk3_type",
+            "cat_atk3_dice",
+            "cat_atk3_sides",
+            "cat_spell_flags2",
+            "cat_cdefense",
+        )
+    ]
+    return [[col[i] for col in cols] for i in range(279)]
 
 
 def _clear_monsters(tb: X16Bench) -> None:
@@ -1638,11 +1739,12 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
     tb.write_u8(0x0000, ovl_bank)
     ovl_ref = tb.read_u8(0xA000)
 
-    # 1. Single-byte write/read to Bank 5 (reserved MONSTER.CAT ext bank) and Bank 63
+    # 1. Single-byte write/read to Bank CX16_BANK_EXT_BASE (Bank 7) and Bank 63
+    ext_bank = CX16_BANK_EXT_BASE
     tb.write_u8(zp_p0, 0x13)
     tb.write_u8(zp_p0_hi, 0xA0)
     run_stub(
-        [0xA9, 0x5A, 0xA2, 0x05, 0xA0, 0x04]
+        [0xA9, 0x5A, 0xA2, ext_bank, 0xA0, 0x04]
         + jsr("cx16_bank_write_byte")
         + [0x8D, scratch & 0xFF, scratch >> 8]
         + [0xA9, 0xC3, 0xA2, 63, 0xA0, 0x07]
@@ -1654,12 +1756,12 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
     tb.assert_line("wb_a_kept", tb.read_u8(scratch) == 0x5A, "write_byte did not preserve A")
     tb.assert_line(
         "wb_values",
-        tb.read_bank_u8(5, 0xA017) == 0x5A and tb.read_bank_u8(63, 0xA01A) == 0xC3,
-        f"b5={tb.read_bank_u8(5, 0xA017):02X} b63={tb.read_bank_u8(63, 0xA01A):02X}",
+        tb.read_bank_u8(ext_bank, 0xA017) == 0x5A and tb.read_bank_u8(63, 0xA01A) == 0xC3,
+        f"b{ext_bank}={tb.read_bank_u8(ext_bank, 0xA017):02X} b63={tb.read_bank_u8(63, 0xA01A):02X}",
     )
 
     run_stub(
-        [0xA9, 0x05, 0xA0, 0x04]
+        [0xA9, ext_bank, 0xA0, 0x04]
         + jsr("cx16_bank_read_byte")
         + [0x8D, (scratch + 1) & 0xFF, (scratch + 1) >> 8]
         + [0xA9, 63, 0xA0, 0x07]
@@ -1671,11 +1773,10 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
     tb.assert_line(
         "rb_values",
         tb.read_u8(scratch + 1) == 0x5A and tb.read_u8(scratch + 2) == 0xC3,
-        f"r5={tb.read_u8(scratch + 1):02X} r63={tb.read_u8(scratch + 2):02X}",
+        f"r{ext_bank}={tb.read_u8(scratch + 1):02X} r63={tb.read_u8(scratch + 2):02X}",
     )
 
     # 2. Block write/read to Bank CX16_BANK_EXT_BASE (Bank 7, 16 B at offset $08)
-    ext_bank = CX16_BANK_EXT_BASE
     for i in range(16):
         tb.write_u8(scratch + 0x10 + i, 0xB0 + i)
         tb.write_u8(scratch + 0x30 + i, 0x00)
@@ -1782,6 +1883,66 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
         tb.read_u8(0x0000) == ovl_bank and tb.read_u8(scratch + 7) == (370 & 0xFF) and tb.read_u8(scratch + 8) == 0x5A,
         f"bank={tb.read_u8(0x0000)} val={tb.read_u8(scratch + 7):02X} x={tb.read_u8(scratch + 8):02X}",
     )
+
+    # 6. Bank 5 MONSTER.EXT preload & catalog_fetch_ext -> cat_ext_record[0..7]
+    exp_rows = _catalog_ext_rows()
+    ext_prg = (BUILD_CX16 / "MONSTER.EXT").read_bytes()
+    tb.assert_line(
+        "monster_ext_prg_oracle",
+        ext_prg == b"\x00\xa0" + bytes(b for row in exp_rows for b in row),
+        f"len={len(ext_prg)}",
+    )
+    sample_ids = (0, 1, 77, 128, 255, 256, 278)
+    bank5_ok = True
+    bank5_detail = ""
+    for cid in sample_ids:
+        got_b5 = [tb.read_bank_u8(CX16_BANK_CATALOG_EXT, 0xA000 + cid * 8 + k) for k in range(8)]
+        if got_b5 != exp_rows[cid]:
+            bank5_ok = False
+            bank5_detail = f"cid={cid} bank5={got_b5} != {exp_rows[cid]}"
+            break
+    tb.assert_line("monster_ext_bank5_preloaded", bank5_ok, bank5_detail)
+
+    cat_id_lo = tb.syms["cat_id_lo"]
+    cat_id_hi = tb.syms["cat_id_hi"]
+    cat_ext_rec = tb.syms["cat_ext_record"]
+    tb.write_u8(zp_p0, 0xAA)
+    tb.write_u8(zp_p0_hi, 0xBB)
+    tb.write_u8(zp_t0, 0xCC)
+    fetch_ok = True
+    fetch_detail = ""
+    for idx_i, cid in enumerate(sample_ids):
+        carry_in = idx_i & 1
+        tb.write_u8(cat_id_lo, cid & 0xFF)
+        tb.write_u8(cat_id_hi, cid >> 8)
+        run_stub(
+            ([0x38] if carry_in else [0x18])
+            + [0xA0, 0x69]
+            + jsr("catalog_fetch_ext")
+            + [0x08, 0x68, 0x8D, (scratch + 9) & 0xFF, (scratch + 9) >> 8]
+            + [0x8C, (scratch + 10) & 0xFF, (scratch + 10) >> 8]
+            + [0x60]
+        )
+        got_rec = [tb.read_u8(cat_ext_rec + k) for k in range(8)]
+        got_c = tb.read_u8(scratch + 9) & 0x01
+        got_y = tb.read_u8(scratch + 10)
+        if (
+            got_rec != exp_rows[cid]
+            or tb.read_u8(0x0000) != ovl_bank
+            or tb.read_u8(0xA000) != ovl_ref
+            or got_c != carry_in
+            or got_y != 0x69
+            or tb.read_u8(zp_p0) != 0xAA
+            or tb.read_u8(zp_p0_hi) != 0xBB
+            or tb.read_u8(zp_t0) != 0xCC
+        ):
+            fetch_ok = False
+            fetch_detail = (
+                f"cid={cid} rec={got_rec} exp={exp_rows[cid]} "
+                f"bank={tb.read_u8(0x0000)} c={got_c}/{carry_in} y={got_y:02X}"
+            )
+            break
+    tb.assert_line("catalog_fetch_ext_rows", fetch_ok, fetch_detail)
     tb.log("SCENARIO DONE")
 
 

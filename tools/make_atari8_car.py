@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import struct
 
+import build_catalog as bc
 import catalog_disk
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -70,10 +71,17 @@ def pack(source: Path, output: Path) -> dict:
         raise ValueError(f"Unexpected Bank 0 Atari cartridge trailer flags: {boot[-6:].hex()}")
     rom[:BANK_SIZE] = boot
 
+    res_dest, res_raw = prg(source / "MORIA8.RES", CONTRACT["CART_ENTRY"], 0xC100, allow_cart_window=True)
+    res_packbits = bc.packbits_encode(res_raw)
+    assert bc.packbits_decode(res_packbits) == res_raw, "MORIA8.RES PackBits roundtrip mismatch"
+    cat_recs_57 = [r + e for r, e in zip(catalog_disk.records(phase5=False), catalog_disk.ext_records())]
+    assert len(cat_recs_57) == 279 and all(len(r) == 57 for r in cat_recs_57)
+
     inputs = {
         CONTRACT["CART_ASSET_RESIDENT"]: (
             "resident",
-            *prg(source / "MORIA8.RES", CONTRACT["CART_ENTRY"], 0xC100, allow_cart_window=True),
+            res_dest,
+            res_packbits,
         ),
         CONTRACT["CART_ASSET_RUNTIME"]: (
             "runtime",
@@ -86,7 +94,7 @@ def pack(source: Path, output: Path) -> dict:
         CONTRACT["CART_ASSET_CATALOG"]: (
             "catalog",
             0,
-            b"".join(catalog_disk.records()),
+            b"".join(cat_recs_57),
         ),
         CONTRACT["CART_ASSET_ITEM_CATALOG"]: (
             "item_catalog",

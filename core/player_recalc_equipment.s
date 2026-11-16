@@ -84,7 +84,7 @@ player_recalc_equipment:
     jsr player_apply_slaying_bonuses
 #endif
 
-    #if PLAYER_RECALC_PFLAGS_EXTERNAL
+    #if PLAYER_RECALC_PFLAGS_EXTERNAL || PLAYER_PFLAGS_EXTERNAL
     jmp hal_player_recalc_pflags
     #else
     jmp player_recalc_pflags_equipment   // resident (OVL.ITEMS calls it on the Apple IIe, BBC Master)

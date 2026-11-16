@@ -652,18 +652,29 @@ hal_storage_command_status:
 
 // ============================================================
 // MORIA8.PAK random-access resolver & loader (MLI_SET_MARK = $CE)
-// Entries 0..7 are sequential boot payloads; entries 8..19 are cold assets
-// packed into MORIA8.PAK (A2.PLAY, OVL.START..TITLE, LEGALUI, TITLE).
+// Entries 0..5 are sequential boot payloads; entries 6..21 are cold/preload
+// assets packed into MORIA8.PAK (A2.PLAY, OVL.START..TITLE, LEGALUI, TITLE,
+// PackBits A2.AUXDATA/A2.CATALOG/A2.CATEXT, and ITEM.CAT).
 // ============================================================
 
-.const A2_PAK_ENTRY_PLAY    = 8
-.const A2_PAK_ENTRY_LEGALUI = 18
-.const A2_PAK_ENTRY_TITLE   = 19
-.const A2_OVL_LOAD_ADDR     = $a400
+.const A2_PAK_ENTRY_PLAY     = 6
+.const A2_PAK_ENTRY_LEGALUI  = 16
+.const A2_PAK_ENTRY_TITLE    = 17
+.const A2_PAK_ENTRY_AUXDATA  = 18
+.const A2_PAK_ENTRY_CATALOG  = 19
+.const A2_PAK_ENTRY_CATEXT   = 20
+.const A2_PAK_ENTRY_ITEM_CAT = 21
+.const A2_PRELOAD_SEQ_COUNT  = 4
+.assert "Preload PAK entries #18..#21 are contiguous",
+    A2_PAK_ENTRY_CATALOG == A2_PAK_ENTRY_AUXDATA + 1
+    && A2_PAK_ENTRY_CATEXT == A2_PAK_ENTRY_AUXDATA + 2
+    && A2_PAK_ENTRY_ITEM_CAT == A2_PAK_ENTRY_AUXDATA + 3, true
+.const A2_OVL_LOAD_ADDR      = $a400
+.const A2_CATEXT_STAGE       = $9000
 
 // Parallel to hal_storage_overlay_name_lo/hi/len (0..12 -> MORIA8.PAK indices).
 a2_overlay_pak_id:
-    .byte 9, 10, 11, 12, 13, 3, 4, 5, 6, 14, 15, 16, 17
+    .byte 7, 8, 9, 10, 11, 1, 2, 3, 4, 12, 13, 14, 15
 .assert "PAK id table matches hal_platform_overlay_count", * - a2_overlay_pak_id, hal_platform_overlay_count
 
 // Compare A2_MLI_PATHNAME against string at (a2_nc_ptr) of length a2_nc_len.
@@ -1007,11 +1018,14 @@ hal_asset_load_title:
     jmp a2_map_error
 
 // ============================================================
-// a2_boot_preload_aux_lc — Cold boot preload (runs in TitleOverlay):
+// a2_boot_preload_aux_lc — Cold boot preload (runs in TitleOverlay, 0 B Default):
 //   1. Zeroes persistent recall[RECALL_DATA_SIZE] in Aux LC Bank 1 ($D000-$D45B).
-//   2. Reads standalone ITEM.CAT into A2_PLAY_SLOT_BASE ($7C00-$9D94), verifies
-//      byte count and 'ITM2' magic, and copies to Aux LC High ($E000-$FD94).
-// Uses A2_PLAY_SLOT_BASE before a2_require_play has ever loaded A2.PLAY.
+//   2. PackBits-unpacks A2.AUXDATA (#18) -> Aux $3B0C and A2.CATALOG (#19) -> Aux $5000.
+//   3. PackBits-unpacks A2.CATEXT (#20) -> Main $7C00, then copies 2,232 B to
+//      Aux LC Bank 2 ($D000-$D8B7).
+//   4. Reads ITEM.CAT (#21) into $7C00, verifies 'ITM2' magic + size, and copies
+//      to Aux LC High ($E000-$FD94).
+// Stages through free A2_PLAY_SLOT_BASE ($7C00-$9FFF) before A2.PLAY loads.
 // ============================================================
 a2_boot_preload_aux_lc:
     // 1. Zero Aux LC Bank 1 recall[279] ($D000-$D45B).
@@ -1035,76 +1049,90 @@ a2_boot_preload_aux_lc:
     sta zp_temp1
 !zero_loop:
     jsr !calc_chunk+
-    beq !load_item_cat+
+    beq !preload_auxdata+
     ldx zp_ptr1
     ldy zp_ptr1_hi
     jsr a2_aux_lc_bounce_xfer
     jsr !advance_dst+
     jmp !zero_loop-
 
-!preload_mli_fail:
-    jsr a2_mli_end
-!preload_bad:
-    lda #$ee
-    jmp hal_platform_panic
+!preload_auxdata:
+    // Open MORIA8.PAK once at #18 and stream #18..#21 sequentially on the kept-open ref.
+    jsr a2_preload_open_pak
 
-!load_item_cat:
-    lda #a2_item_cat_name_len
-    ldx #<a2_item_cat_name
-    ldy #>a2_item_cat_name
-    jsr a2_mli_set_pathname
-    jsr a2_clear_diag
-    jsr a2_mli_begin
-    lda #HAL_STORAGE_PHASE_OPEN
-    sta hal_storage_diag_phase
-    jsr a2i_open
-    bcs !preload_mli_fail-
-    lda a2_open_ref
-    sta a2_rw_ref
+    // 2a. A2.AUXDATA (PackBits) -> Aux $3B0C..a2_auxdata_end
+    ldx #<A2_PLAY_SLOT_BASE
+    ldy #>A2_PLAY_SLOT_BASE
+    jsr a2_preload_read_next
+    lda #<A2_AUX_DATA_BASE
+    ldx #>A2_AUX_DATA_BASE
+    jsr a2_preload_unpack_to_aux
+    lda #<a2_auxdata_end
+    ldx #>a2_auxdata_end
+    jsr a2_preload_check_ptr1
+
+    // 2b. A2.CATALOG (PackBits) -> Aux $5000..catalog_fields_end
+    ldx #<A2_PLAY_SLOT_BASE
+    ldy #>A2_PLAY_SLOT_BASE
+    jsr a2_preload_read_next
+    lda #<A2_AUX_CATALOG
+    ldx #>A2_AUX_CATALOG
+    jsr a2_preload_unpack_to_aux
+    lda #<catalog_fields_end
+    ldx #>catalog_fields_end
+    jsr a2_preload_check_ptr1
+
+    // 3. A2.CATEXT (PackBits staged at $9000 -> Main $7C00 -> Aux LC Bank 2 $D000)
+    ldx #<A2_CATEXT_STAGE
+    ldy #>A2_CATEXT_STAGE
+    jsr a2_preload_read_next
+    lda #<A2_CATEXT_STAGE
+    sta zp_ptr0
+    lda #>A2_CATEXT_STAGE
+    sta zp_ptr0_hi
     lda #<A2_PLAY_SLOT_BASE
-    sta a2_rw_buf
+    sta zp_ptr1
     lda #>A2_PLAY_SLOT_BASE
-    sta a2_rw_buf + 1
-    lda #<ITMCAT_TOTAL_SIZE
-    sta a2_rw_req
-    lda #>ITMCAT_TOTAL_SIZE
-    sta a2_rw_req + 1
-    lda #HAL_STORAGE_PHASE_READ
-    sta hal_storage_diag_phase
-    jsr a2i_read
-    php
-    jsr a2i_close_open_ref
-    plp
-    bcs !preload_mli_fail-
-    jsr a2_mli_end
+    sta zp_ptr1_hi
+    jsr a2_packbits_unpack
+    lda #<(A2_PLAY_SLOT_BASE + A2_CATEXT_SIZE)
+    ldx #>(A2_PLAY_SLOT_BASE + A2_CATEXT_SIZE)
+    jsr a2_preload_check_ptr1
+    lda #<A2_LC_CATEXT_BASE
+    sta zp_ptr1
+    lda #>A2_LC_CATEXT_BASE
+    sta zp_ptr1_hi
+    lda #<A2_CATEXT_SIZE
+    sta zp_temp0
+    lda #>A2_CATEXT_SIZE
+    sta zp_temp1
+    jsr a2_preload_copy_play_to_lc_b2
+
+    // 4. ITEM.CAT (raw MORIA8.PAK entry #21 -> $7C00 -> Aux LC High $E000; closes PAK ref)
+    ldx #<A2_PLAY_SLOT_BASE
+    ldy #>A2_PLAY_SLOT_BASE
+    jsr a2_preload_read_next
     lda a2_rw_trans
     cmp #<ITMCAT_TOTAL_SIZE
-    bne !preload_bad-
+    bne !icat_bad+
     lda a2_rw_trans + 1
     cmp #>ITMCAT_TOTAL_SIZE
-    bne !preload_bad-
+    bne !icat_bad+
     lda A2_PLAY_SLOT_BASE
     cmp #$49                        // 'I'
-    bne !preload_bad-
+    bne !icat_bad+
     lda A2_PLAY_SLOT_BASE + 1
     cmp #$54                        // 'T'
-    bne !preload_bad-
+    bne !icat_bad+
     lda A2_PLAY_SLOT_BASE + 2
     cmp #$4d                        // 'M'
-    bne !preload_bad-
+    bne !icat_bad+
     lda A2_PLAY_SLOT_BASE + 3
     cmp #$32                        // '2'
-    bne !preload_bad-
-
-    // 3. Copy ITEM.CAT ($7C00..) -> Aux LC High ($E000..$FD94).
-    lda #A2_LC_BANK2
-    sta A2_LC_ARG_BANK
-    lda #A2_LC_DIR_WRITE
-    sta A2_LC_ARG_DIR
-    lda #<A2_PLAY_SLOT_BASE
-    sta zp_ptr0
-    lda #>A2_PLAY_SLOT_BASE
-    sta zp_ptr0_hi
+    beq !icat_ok+
+!icat_bad:
+    jmp a2_preload_close_bad
+!icat_ok:
     lda #<A2_LC_ITEM_CAT_BASE
     sta zp_ptr1
     lda #>A2_LC_ITEM_CAT_BASE
@@ -1113,6 +1141,192 @@ a2_boot_preload_aux_lc:
     sta zp_temp0
     lda #>ITMCAT_TOTAL_SIZE
     sta zp_temp1
+    jsr a2_preload_copy_play_to_lc_b2
+    lda #0                          // keep A2.PLAY signature clear until loaded
+    sta A2_PLAY_SLOT_BASE
+    clc
+    rts
+
+// Open MORIA8.PAK once at A2_PAK_ENTRY_AUXDATA (#18) and cache the 4 sequential
+// 16-bit entry lengths (#18..#21) in TitleOverlay so subsequent reads need no
+// MLI_OPEN / directory scan / SET_MARK cycles.
+a2_preload_open_pak:
+    lda #0
+    sta a2_preload_seq_idx
+    sta a2_preload_pak_open
+    jsr a2_clear_diag
+    jsr a2_mli_begin
+    lda #A2_PAK_ENTRY_AUXDATA
+    jsr a2_pak_open_seek
+    bcc !open_ok+
+    jmp a2_preload_mli_fail
+!open_ok:
+    lda #1
+    sta a2_preload_pak_open
+    lda a2_ss_buf
+    cmp #(A2_PAK_ENTRY_ITEM_CAT + 1)
+    bcs !cnt_ok+
+    jmp a2_preload_close_fail
+!cnt_ok:
+    ldx #(A2_PRELOAD_SEQ_COUNT * 2 - 1)
+!copy_pak_lens:
+    lda a2_ss_buf + 2 + (A2_PAK_ENTRY_AUXDATA * 2),x
+    sta a2_preload_pak_lens,x
+    dex
+    bpl !copy_pak_lens-
+    jsr a2_mli_end
+    rts
+
+// Read the next sequential MORIA8.PAK preload entry into Main RAM at X/Y
+// (asserted <= $A000 end); closes a2_open_ref after the 4th entry (#21).
+a2_preload_read_next:
+    stx a2_asset_dest
+    sty a2_asset_dest + 1
+    ldx a2_preload_seq_idx
+    lda a2_preload_pak_lens,x
+    sta a2_pak_len
+    lda a2_preload_pak_lens + 1,x
+    sta a2_pak_len + 1
+    ora a2_pak_len
+    beq a2_preload_close_bad
+    inx
+    inx
+    stx a2_preload_seq_idx
+    clc
+    lda a2_asset_dest
+    adc a2_pak_len
+    lda a2_asset_dest + 1
+    adc a2_pak_len + 1
+    bcs a2_preload_close_bad
+    cmp #>(A2_PLAY_SLOT_END + 1)
+    bcc !preload_len_ok+
+    bne a2_preload_close_bad
+    lda a2_asset_dest
+    clc
+    adc a2_pak_len
+    bne a2_preload_close_bad
+!preload_len_ok:
+    jsr a2_clear_diag
+    jsr a2_mli_begin
+    lda a2_open_ref
+    sta a2_rw_ref
+    lda a2_pak_len
+    sta a2_rw_req
+    lda a2_pak_len + 1
+    sta a2_rw_req + 1
+    lda a2_asset_dest
+    sta a2_rw_buf
+    lda a2_asset_dest + 1
+    sta a2_rw_buf + 1
+    lda #HAL_STORAGE_PHASE_READ
+    sta hal_storage_diag_phase
+    jsr a2i_read
+    bcs a2_preload_close_fail
+    lda a2_preload_seq_idx
+    cmp #(A2_PRELOAD_SEQ_COUNT * 2)
+    bcc !keep_pak_open+
+    lda #0
+    sta a2_preload_pak_open
+    jsr a2i_close_open_ref
+    bcs a2_preload_mli_fail
+!keep_pak_open:
+    jsr a2_mli_end
+    lda a2_rw_trans
+    cmp a2_pak_len
+    bne a2_preload_close_bad
+    lda a2_rw_trans + 1
+    cmp a2_pak_len + 1
+    bne a2_preload_close_bad
+    rts
+
+a2_preload_close_bad:
+    lda a2_preload_pak_open
+    beq a2_preload_bad
+    jsr a2_mli_begin
+a2_preload_close_fail:
+    lda #0
+    sta a2_preload_pak_open
+    jsr a2i_close_open_ref
+a2_preload_mli_fail:
+    jsr a2_mli_end
+a2_preload_bad:
+    lda #$ee
+    jmp hal_platform_panic
+
+a2_preload_pak_lens: .fill A2_PRELOAD_SEQ_COUNT * 2, 0
+a2_preload_seq_idx:  .byte 0
+a2_preload_pak_open: .byte 0
+
+a2_preload_check_ptr1:
+    cmp zp_ptr1
+    bne a2_preload_close_bad
+    cpx zp_ptr1_hi
+    bne a2_preload_close_bad
+    rts
+
+a2_preload_unpack_to_aux:
+    sta zp_ptr1
+    stx zp_ptr1_hi
+    lda #<A2_PLAY_SLOT_BASE
+    sta zp_ptr0
+    lda #>A2_PLAY_SLOT_BASE
+    sta zp_ptr0_hi
+    sta A2_RAMWRT_ON
+    jsr a2_packbits_unpack
+    sta A2_RAMWRT_OFF
+    rts
+
+// a2_packbits_unpack — Unpack PackBits stream ($80 EOF) from Main (zp_ptr0)
+// to (zp_ptr1) (Main RAM when RAMWRT=0, Aux RAM when RAMWRT=1; $00-$1FF stays Main).
+a2_packbits_unpack:
+    ldy #0
+!pb_pkt:
+    jsr !pb_get_src+
+    cmp #$80
+    beq !pb_done+                   // $80 = EOF
+    bcs !pb_run+                    // $81..$FF = repeat (257 - n) times
+    tax                             // $00..$7F = copy (X + 1) literal bytes
+!pb_lit:
+    jsr !pb_get_src+
+    jsr !pb_put_dst+
+    dex
+    bpl !pb_lit-
+    bmi !pb_pkt-
+!pb_run:
+    eor #$ff
+    adc #1                          // C=1 on entry -> A = (255 - n) + 2 = 257 - n
+    tax
+    jsr !pb_get_src+
+!pb_fill:
+    jsr !pb_put_dst+
+    dex
+    bne !pb_fill-
+    beq !pb_pkt-
+!pb_get_src:
+    lda (zp_ptr0),y
+    inc zp_ptr0
+    bne !pb_done+
+    inc zp_ptr0_hi
+!pb_done:
+    rts
+!pb_put_dst:
+    sta (zp_ptr1),y
+    inc zp_ptr1
+    bne !pb_put_rts+
+    inc zp_ptr1_hi
+!pb_put_rts:
+    rts
+
+// Copy zp_temp1:zp_temp0 bytes from A2_PLAY_SLOT_BASE ($7C00) to Aux LC Bank 2 / High (zp_ptr1).
+a2_preload_copy_play_to_lc_b2:
+    lda #A2_LC_BANK2
+    sta A2_LC_ARG_BANK
+    lda #A2_LC_DIR_WRITE
+    sta A2_LC_ARG_DIR
+    lda #<A2_PLAY_SLOT_BASE
+    sta zp_ptr0
+    lda #>A2_PLAY_SLOT_BASE
+    sta zp_ptr0_hi
 !copy_loop:
     jsr !calc_chunk+
     beq !copy_done+
@@ -1137,9 +1351,6 @@ a2_boot_preload_aux_lc:
     jsr !advance_dst+
     jmp !copy_loop-
 !copy_done:
-    lda #0                          // keep A2.PLAY signature clear until loaded
-    sta A2_PLAY_SLOT_BASE
-    clc
     rts
 
 // Output: A = a2_tc = min(16, zp_temp1:zp_temp0), Z=1 iff remaining == 0.
@@ -1173,10 +1384,6 @@ a2_boot_preload_aux_lc:
     dec zp_temp1
 !rem_nc:
     rts
-
-a2_item_cat_name:
-    .byte $49,$54,$45,$4d,$2e,$43,$41,$54   // "ITEM.CAT"
-.label a2_item_cat_name_len = * - a2_item_cat_name
 
 a2_tc:            .byte 0
 .segment Default

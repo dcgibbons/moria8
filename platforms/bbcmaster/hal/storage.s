@@ -79,6 +79,12 @@ hal_storage_item_cat_name:
 .label hal_storage_item_cat_name_len = * - hal_storage_item_cat_name
     .byte 0
 
+// Extended monster catalog asset name ("MONEXT", 6 chars).
+hal_storage_mon_ext_name:
+    .byte $4d, $4f, $4e, $45, $58, $54          // "MONEXT"
+.label hal_storage_mon_ext_name_len = * - hal_storage_mon_ext_name
+    .byte 0
+
 #if !HAL_PLATFORM_MONSTER_CATALOG    // The catalog has no tier files
 // Tier data filenames (<= 7 chars for Acorn DFS: "MONDB1".."MONDB4").
 hal_storage_tier_1_name:

@@ -10,41 +10,9 @@
 // docs/CHEST_DESIGN.md step-8 notes). Lifetime: one cast. Callers: the spell
 // dispatch tables only; nothing outside the spell overlay may call these.
 
-// ============================================================
-// eff_find_traps — Reveal all hidden traps in LOS range
-// Instantly reveals all traps (no probability).
-// Clobbers: A, X, Y, zp_ptr0
-// ============================================================
-eff_find_traps:
-    ldx #0
-!eft_loop:
-    cpx trap_count
-    bcs !eft_done+
-
-    // Reveal trap on map
-    ldy trap_y,x
-    jsr map_row_ptr0_y
-    ldy trap_x,x
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_TRAP
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-
-    inx
-    jmp !eft_loop-
-
-!eft_done:
-#if CHEST_ROUTING_ENABLED
-    // Chest branch (docs/CHEST_DESIGN.md): upstream Find Traps also reveals
-    // chest traps — mark found on every armed floor chest.
-    jsr chest_mark_found_all
+#if !EFF_FIND_TRAPS_EXTERNAL
+#import "eff_find_traps_cold.s"
 #endif
-
-    // Don't remove traps from table — just reveal them
-    lda #1
-    sta vis_room_revealed
-    rts
 
 #if EFF_DESTROY_TRAPS_DOORS_EXTERNAL
 // Apple IIe: body lives in the spell overlay segment in main.s.
@@ -55,73 +23,51 @@ eff_find_traps:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_destroy_traps_doors:
-    // First pass: modify map tiles
-    lda #0
-    sta adj_dir_idx
+    // First pass: modify 8 adjacent map tiles
+    ldx #7
+    stx adj_dir_idx
 !edtd_tile_loop:
-    lda adj_dir_idx
-    cmp #8
-    bcs !edtd_tiles_done+
-    tax
+    ldx adj_dir_idx
     jsr df_target_from_dir
-    jsr !edtd_tile_cb+
-    inc adj_dir_idx
-    jmp !edtd_tile_loop-
-!edtd_tiles_done:
-    // Second pass: remove adjacent traps from the trap table. Do this from the
-    // table itself so hidden adjacent traps are destroyed too.
-    jsr !edtd_remove_adjacent_traps+
-    lda #1
-    sta vis_room_revealed
-    rts
-
-!edtd_tile_cb:
-    // Read map tile
     jsr df_target_row_ptr
     :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
     sta zp_temp0
-
-    // Check for trap
+    and #TILE_TYPE_MASK
     cmp #TILE_TRAP
     bne !edtd_check_door+
-    // Remove trap — set to floor
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_FLOOR
-    :MapWrite_ptr0_y()
-    rts
+    lda zp_temp0
+    and #TILE_FLAG_MASK             // TILE_FLOOR == $00
+    jmp !edtd_write_tile+
 
 !edtd_check_door:
-    // Check for closed door or secret door
-    lda zp_temp0
     cmp #TILE_DOOR_CLOSED
     beq !edtd_open_door+
     cmp #TILE_SECRET
     bne !edtd_tile_done+
-
 !edtd_open_door:
-    // Open the door; any locked/stuck state clears with the lock
-    :MapRead_ptr0_y()
+    lda zp_temp0
     and #TILE_FLAG_MASK
-    ora #TILE_DOOR_OPEN
-    ora #FLAG_VISITED
+    ora #(TILE_DOOR_OPEN | FLAG_VISITED)
     :MapWrite_ptr0_y()
     lda df_target_x
     ldy df_target_y
     jsr door_state_clear_at
+    jmp !edtd_tile_done+
+!edtd_write_tile:
+    :MapWrite_ptr0_y()
 !edtd_tile_done:
-    rts
+    dec adj_dir_idx
+    bpl !edtd_tile_loop-
 
-!edtd_remove_adjacent_traps:
+    // Second pass: remove adjacent traps from the trap table (incl. hidden)
     ldx #0
 !edtd_scan:
     cpx trap_count
     bcs !edtd_scan_done+
-
     lda trap_x,x
     sec
     sbc zp_player_x
+    sta zp_temp0
     clc
     adc #1
     cmp #3
@@ -129,18 +75,15 @@ eff_destroy_traps_doors:
     lda trap_y,x
     sec
     sbc zp_player_y
+    tay
     clc
     adc #1
     cmp #3
     bcs !edtd_scan_next+
-    lda trap_x,x
-    cmp zp_player_x
-    bne !edtd_remove+
-    lda trap_y,x
-    cmp zp_player_y
+    tya
+    ora zp_temp0
     beq !edtd_scan_next+
 
-!edtd_remove:
     dec trap_count
     ldy trap_count
     lda trap_x,y
@@ -149,12 +92,13 @@ eff_destroy_traps_doors:
     sta trap_y,x
     lda trap_type,y
     sta trap_type,x
-    jmp !edtd_scan-             // Re-check this index (swapped entry)
+    jmp !edtd_scan-                 // Re-check this index (swapped entry)
 
 !edtd_scan_next:
     inx
-    jmp !edtd_scan-
-
+    bne !edtd_scan-
 !edtd_scan_done:
+    lda #1
+    sta vis_room_revealed
     rts
 #endif

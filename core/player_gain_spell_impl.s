@@ -27,7 +27,11 @@ item_gain_spell:
     jsr pm_select_book
     bcc !igs_cancel+
 
+#if PLAYER_MAGIC_BROWSE_TRAMPOLINED
+    jsr tramp_pm_build_learnable
+#else
     jsr pm_build_learnable_list_from_book
+#endif
     lda pm_spell_count
     bne !igs_have_choices+
     ldx #HSTR_IGS_NO_NEW

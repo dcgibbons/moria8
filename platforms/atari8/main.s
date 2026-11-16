@@ -21,6 +21,20 @@
 #define PLATFORM_REQUIRES_MEDIA_PROBE
 #define HOME_OVERLAY_SEPARATE
 #define SAVE_IN_STORAGE_OVERLAY
+#define HELP_CMD_BODY_EXTERNAL
+#define DOOR_OPEN_CLOSE_EXTERNAL
+#define ITEM_DROP_EXTERNAL
+#define ITEM_REFRESH_KNOWN_EXTERNAL
+#define EFF_IDENTIFY_PROMPT_EXTERNAL
+#define EFF_DETECT_EVIL_EXTERNAL
+#define PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#define PLAYER_MAGIC_BROWSE_EXTERNAL
+#define PLAYER_MAGIC_BROWSE_TRAMPOLINED
+#define STARTING_KIT_EXTERNAL
+#define LOAD_RESUME_RESET_EXTERNAL
+#define CALC_DIG_EXTERNAL
+#define CALC_DIG_CO_LOCATED
+#define STORE_CHECK_CAT_DUPLICATED
 #if ATARI8_CARTRIDGE
 #import "cartridge_contract.s"
 #endif
@@ -74,7 +88,7 @@
     .segment Default
 }
 .macro PlayerCastSegment() {
-    .segment SpellOverlay
+    .segment StorageOverlay
 }
 .macro PlayerCastRestoreResidentSegment() {
     .segment Default
@@ -420,7 +434,12 @@ high_resident_end:
 .segment RuntimeBanked
 #import "../../core/eff_gain_stat.s"
 .segment Default
+#define PLAYER_RECALC_EQUIPMENT_EXTERNAL
+#define PLAYER_ITEM_COMMANDS_EXTERNAL
 #import "../../core/player_items.s"
+#import "../../core/player_recalc_equipment.s"
+#undef PLAYER_ITEM_COMMANDS_EXTERNAL
+#undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
 #import "../../core/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 // Stone-to-Mud rides OVL.SPELL beside its only callers, the spell table and the
@@ -628,7 +647,8 @@ init_xe_preload:
     // Preload the monster catalog's records (130XE slots 10..13 and 15)
     jsr a8_catalog_xe_preload
 
-    // Preload all 13 phase overlays (populates 130XE slots 0..9, 16..18;
+    // Preload all 12 cached gameplay overlays (OVL_STARTUP..OVL_STORAGE,
+    // populates 130XE slots 0..9, 16..17; cold OVL.TTL is uncached;
     // TITLE.DAT populates slot 14 on title draw)
     ldx #1
 !ovl_loop:
@@ -638,7 +658,7 @@ init_xe_preload:
     jsr overlay_load
     ldx xe_preload_idx
     inx
-    cpx #hal_platform_overlay_count + 1
+    cpx #hal_platform_overlay_count
     bcc !ovl_loop-
 
     lda #OVL_NONE
@@ -663,7 +683,7 @@ xe_show_progress:
     jsr screen_put_decimal
     lda #$2f
     jsr hal_screen_put_char
-    lda #A8_CATALOG_SLOT_COUNT + hal_platform_overlay_count
+    lda #A8_CATALOG_SLOT_COUNT + hal_platform_overlay_count - 1
     jsr screen_put_decimal
     lda #<xe_loading_suffix
     sta zp_ptr0
@@ -828,6 +848,12 @@ a8_disp_chs:
 a8_disp_spl:
     ldx #OVL_SPELL
     bne a8_ovl_sr_common
+a8_disp_hom:
+    ldx #OVL_HOME
+    bne a8_ovl_sr_common
+a8_disp_sto:
+    ldx #OVL_STORAGE
+    bne a8_ovl_sr_common
 a8_disp_ttl:
     ldx #OVL_TITLE
 a8_ovl_sr_common:
@@ -858,6 +884,15 @@ a8_swap_chs:
     bne a8_ovl_swap_restore
 a8_swap_ui:
     ldx #OVL_UI
+    bne a8_ovl_swap_restore
+a8_swap_hlp:
+    ldx #OVL_HELP
+    bne a8_ovl_swap_restore
+a8_swap_spl:
+    ldx #OVL_SPELL
+    bne a8_ovl_swap_restore
+a8_swap_sto:
+    ldx #OVL_STORAGE
     bne a8_ovl_swap_restore
 a8_swap_ttl:
     ldx #OVL_TITLE
@@ -918,6 +953,30 @@ tramp_ego_append_suffix:
 !teas_done:
     rts
 
+tramp_roll_ego_type:
+    sta !tret_call+ + 1
+    lda #<!tret_call+
+    ldy #>!tret_call+
+    ldx #OVL_STORAGE
+    bne a8_ovl_swap_restore
+!tret_call:
+    lda #$00
+    jmp roll_ego_type
+
+tramp_help_cmd_body:
+    lda #OVL_HELP
+    jsr overlay_load_no_kernal
+    bcc !thcb_loaded+
+    clc
+    jmp tramp_sr_epilogue
+!thcb_loaded:
+    lda #<help_pages
+    sta help_pages_src_lo
+    lda #>help_pages
+    sta help_pages_src_hi
+    jsr help_cmd_body
+    jmp tramp_sr_epilogue
+
 tramp_eff_ext_eat:
     lda #<eff_ext_eat_piw
     ldy #>eff_ext_eat_piw
@@ -937,20 +996,27 @@ tramp_eff_ext_quaff:
     jsr $ffff
 !teeg_fail:
     pla
-    cmp #OVL_ITEMS
-    beq !teeg_restore+
-    cmp #OVL_SPELL
-    beq !teeg_restore+
-    rts
-!teeg_restore:
+    beq !teeg_done+
     jmp overlay_load_no_kernal
+!teeg_done:
+    rts
 
 tramp_door_pick_roll:
+    lda current_overlay
+    pha
     lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !load_failed+
-    jmp door_pick_roll
+    jsr door_pick_roll
+    pla
+    beq !tdpr_done+
+    php
+    jsr overlay_load_no_kernal
+    plp
+!tdpr_done:
+    rts
 !load_failed:
+    pla
     clc
     rts
 
@@ -1094,7 +1160,23 @@ program_end:
     // here: every load that reaches it comes after ATARI.BNK is in place.
     #import "../commodore/common/asset_load_prompt.s"
 #endif
+    #define EGO_ARMOUR_SEGMENT_CUSTOM
+    .macro EgoArmourSegment() {
+        .segment StorageOverlay
+    }
+    .macro EgoArmourRestoreSegment() {
+        .segment RuntimeBanked
+    }
+    #define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+    .macro EgoArmourDataSegment() {
+        .segment StorageOverlay
+    }
+    .macro EgoArmourDataRestoreSegment() {
+        .segment RuntimeBanked
+    }
     #import "../../core/ego_items.s"
+    #undef EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+    #undef EGO_ARMOUR_SEGMENT_CUSTOM
     #import "../../core/item_desc_banked.s"
 
 // ============================================================
@@ -1204,6 +1286,8 @@ tramp_game_over_run:
     #import "../../core/ui_recall.s"
     #import "../../core/player_magic_earthquake.s"
     #import "../../core/item_exchange.s"
+    #import "../../core/item_drop_cold.s"
+    #import "../../core/load_resume_reset_cold.s"
 ovl_death_end:
 .assert "Game-over tail runs in OVL.DTH", tramp_game_over_run >= $e000 && tramp_game_over_run < ovl_death_end, true
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
@@ -1291,6 +1375,8 @@ ovl_modal_misc_end:
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
     #import "../../core/spell_effects_overlay.s"
+    #import "../../core/eff_identify_prompt_cold.s"
+    #import "../../core/eff_detect_evil_cold.s"
     #define SCROLL_P3_EXISTING_OWNER
     #define SCROLL_P3_NEW_OWNER
     #import "../../core/scroll_effects_p3.s"
@@ -1305,8 +1391,13 @@ ovl_spell_end:
     #import "../../core/ui_help_data.s"
     #import "../../core/ui_help_page2_data.s"
     #import "../../core/ui_help.s"
+    #import "../../core/ui_help_cmd_cold.s"
     #import "../../core/ui_inventory.s"
     #import "../../core/ui_equipment.s"
+    #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
+    #import "../../core/player_item_commands.s"
+    #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
+    #import "../../core/player_magic_browse_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
@@ -1328,8 +1419,7 @@ ovl_ui_end:
     #import "../../core/ranged_fire.s"
     #import "../../core/throw.s"
     #import "../../core/bash.s"
-    #import "../../core/disarm.s"
-    #import "../../core/disarm_helpers.s"
+    #import "../../core/calc_dig_cold.s"
     #import "../../core/tunnel.s"
 inv_add_carried_items:
     :InvAddCarriedBody()
@@ -1349,6 +1439,8 @@ ovl_gen_end:
 
 .segment ChestOverlay
     #import "../../core/chest.s"
+    #import "../../core/disarm.s"
+    #import "../../core/disarm_helpers.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $f000, true
@@ -1357,6 +1449,7 @@ ovl_chest_end:
     #import "../../core/ui_home_text.s"
     #import "../../core/ui_home.s"
     #import "../../core/eff_item_p1.s"
+    #import "../../core/door_open_close_cold.s"
 ovl_home_end:
 .assert "Home overlay runs home_enter in $E000-$EFFF", home_enter >= $e000 && home_enter < ovl_home_end && home_draw_screen >= $e000 && home_draw_screen < ovl_home_end, true
 .print "Home overlay: " + (ovl_home_end - $e000) + " bytes at $E000-$" + toHexString(ovl_home_end)
@@ -1365,6 +1458,8 @@ ovl_home_end:
 .segment StorageOverlay
     #import "../commodore/common/save_slot_menu.s"
     #import "disk_setup_atari.s"
+    #import "../../core/item_refresh_known_cold.s"
+    #import "../../core/player_magic_cast_cold.s"
 ovl_storage_end:
 .assert "Storage overlay hosts save/load, slot menu, and disk setup", save_game_impl >= $e000 && save_game_impl < ovl_storage_end && load_game_impl >= $e000 && load_game_impl < ovl_storage_end && save_select_slot_prompt_impl >= $e000 && save_select_slot_prompt_impl < ovl_storage_end && disk_setup_menu >= $e000 && disk_setup_menu < ovl_storage_end, true
 .print "Storage overlay: " + (ovl_storage_end - $e000) + " bytes at $E000-$" + toHexString(ovl_storage_end)
@@ -1377,6 +1472,7 @@ title_str:
     #import "../../core/eff_item_extended.s"
     #import "../../core/store_restock_overlay.s"
     #import "../../core/player_magic_map.s"
+    #import "../../core/starting_kit_cold.s"
 title_show_sysinfo:
     lda #COL_DGREY
     sta zp_text_color
@@ -1449,6 +1545,5 @@ legal_code_end:
 .assert "130XE Slot 9 covers OVL.CHS", (ovl_chest_end - $e000) <= XE_SLOT9_PAGES * 256, true
 .assert "130XE Slot 16 covers OVL.HOM", (ovl_home_end - $e000) <= XE_SLOT16_PAGES * 256, true
 .assert "130XE Slot 17 covers OVL.STO", (ovl_storage_end - $e000) <= XE_SLOT17_PAGES * 256, true
-.assert "130XE Slot 18 covers OVL.TTL", (ovl_title_end - $e000) <= XE_SLOT18_PAGES * 256, true
 .print "Atari 130XE extended RAM: " + XE_TOTAL_USED_PAGES + "/" + XE_TOTAL_PAGES + " pages used, " + XE_TOTAL_FREE_PAGES + " free (" + (XE_TOTAL_FREE_PAGES * 256) + " B at Bank 3 $" + toHexString(XE_BANK3_FREE_HI) + "00-$7FFF)"
 #endif

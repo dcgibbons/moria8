@@ -579,8 +579,11 @@ c128_set_active_variant() {
 # sets C128_DISK_PAYLOAD_ARGS.
 c128_disk_payload_args() {
     local dir="$1" f
+    if [ ! -f "$dir/128.cex.prg" ]; then
+        python3 -B ../../../tools/build_catalog.py ext-rows --prg-addr 0xd000 --out "$dir/128.cex.prg" >/dev/null
+    fi
     C128_DISK_PAYLOAD_ARGS=(-write "$dir/title" "t128")
-    for f in cat cnm; do            # the monster catalog (no tier files)
+    for f in cat cnm cex; do        # the monster catalog (no tier files)
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
     C128_DISK_PAYLOAD_ARGS+=(-write "$dir/item.cat" "item.cat")
@@ -1250,6 +1253,7 @@ contract_patterns = {
     "death_overlay": re.compile(r':C128AuditDeathOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "help_overlay": re.compile(r':C128AuditHelpOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "ui_overlay": re.compile(r':C128AuditUiOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "items_overlay": re.compile(r':C128AuditItemsOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "dungeon_overlay": re.compile(r':C128AuditDungeonOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "chest_overlay": re.compile(r':C128AuditChestOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "home_overlay": re.compile(r':C128AuditHomeOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
@@ -1289,6 +1293,7 @@ required_labels = [
     "ovl_death_end",
     "ovl_help_end",
     "ovl_ui_end",
+    "ovl_items_end",
     "ovl_gen_end",
     "ovl_chest_end",
     "ovl_home_end",
@@ -1316,11 +1321,11 @@ for name in below_io_data:
     if labels[name] >= 0xD000:
         bad.append((name, labels[name], "below_io_hole"))
 
-if "msg_history" not in labels or "msg_hist_idx" not in labels:
-    missing.append("msg_history/msg_hist_idx")
+if "msg_history" not in labels or "msg_history_end" not in labels or "msg_hist_idx" not in labels:
+    missing.append("msg_history/msg_history_end/msg_hist_idx")
 else:
-    if labels["msg_hist_idx"] - labels["msg_history"] != (8 * 80):
-        bad.append(("msg_history_span", labels["msg_hist_idx"] - labels["msg_history"], "width"))
+    if labels["msg_history_end"] - labels["msg_history"] != (8 * 80):
+        bad.append(("msg_history_span", labels["msg_history_end"] - labels["msg_history"], "width"))
 
 for name in ("help_title_str", "help_lines"):
     if name not in labels:
@@ -1362,6 +1367,7 @@ overlay_limits = {
     "death_overlay": labels.get("ovl_death_end"),
     "help_overlay": labels.get("ovl_help_end"),
     "ui_overlay": labels.get("ovl_ui_end"),
+    "items_overlay": labels.get("ovl_items_end"),
     "dungeon_overlay": labels.get("ovl_gen_end"),
     "chest_overlay": labels.get("ovl_chest_end"),
     "home_overlay": labels.get("ovl_home_end"),
@@ -1617,7 +1623,8 @@ core = root.parent.parent / "core"
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 main_text = (root / "c128" / "main.s").read_text()
 items = (core / "player_items.s").read_text().splitlines()
-item_mod = (core / "item.s").read_text().splitlines()
+item_mod = ((core / "item.s").read_text() + "\n"
+            + (core / "item_drop_cold.s").read_text()).splitlines()
 item_cmd_mod = (core / "player_item_commands.s").read_text().splitlines()
 item_actions_mod = (core / "item_actions_overlay.s").read_text().splitlines()
 throw_mod = (core / "throw.s").read_text().splitlines()
@@ -1626,9 +1633,11 @@ dfeat = (core / "dungeon_features.s").read_text().splitlines()
 help_mod = (core / "ui_help.s").read_text().splitlines()
 store_mod = (core / "ui_store.s").read_text().splitlines()
 loop_helpers = ((core / "game_loop_helpers.s").read_text() + "\n"
-                + (core / "ui_help_command.s").read_text()).splitlines()
+                + (core / "ui_help_command.s").read_text() + "\n"
+                + (core / "ui_help_cmd_cold.s").read_text()).splitlines()
 player_magic_mod = (core / "player_magic.s").read_text().splitlines()
-spell_effects_mod = (core / "spell_effects.s").read_text().splitlines()
+spell_effects_mod = ((core / "spell_effects.s").read_text() + "\n"
+                     + (core / "eff_identify_prompt_cold.s").read_text()).splitlines()
 ui_wizard_mod = (core / "ui_wizard.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
@@ -3288,7 +3297,7 @@ build_scripted_spell_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
         return 0
@@ -3329,7 +3338,7 @@ build_scripted_spell_cancel_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell_cancel" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
         return 0
@@ -3370,7 +3379,7 @@ build_scripted_book_overlay_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_book_overlay" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
@@ -3411,7 +3420,7 @@ build_scripted_spell_list_overlay_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell_list_overlay" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
@@ -4493,7 +4502,7 @@ run_boot_title_save_write_product_smoke() {
     check_log="$(test128_tmp_file "test128_${name}_check.log")"
     rm -f "$save_seq"
     if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
-            || ! python3 -B tests/check_save_secondary128.py "$save_seq" 0x20 >>"$check_log" 2>&1; then
+            || ! python3 -B tests/check_save_secondary128.py "$save_seq" 0x21 >>"$check_log" 2>&1; then
         echo "FAIL (secondary weapon not in the written save)"
         tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -6069,8 +6078,10 @@ run_scripted_spell_cast_smoke() {
         fi
         spell_fail_addrs+=("$addr")
     done
-    if [ -z "${c128_test_spell_pass:-}" ]; then
-        echo "FAIL (missing scripted spell pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${c128_test_spell_pass:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted spell pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6086,10 +6097,15 @@ run_scripted_spell_cast_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${spell_fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${c128_test_spell_pass}"
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
         echo "quit"
     } > "$mon_file"
 
@@ -6318,8 +6334,10 @@ run_scripted_book_overlay_smoke() {
         fi
         fail_addrs+=("$addr")
     done
-    if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted book overlay pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted book overlay pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6335,10 +6353,17 @@ run_scripted_book_overlay_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${pass_addr}"
+        echo "break \$${pass_addr}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
+        echo "bank vdc"
+        echo "m \$0000 \$07cf"
         echo "quit"
     } > "$mon_file"
 
@@ -6356,6 +6381,16 @@ run_scripted_book_overlay_smoke() {
     if [ "$pass_hit" -eq 1 ]; then
         if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
             boot_log_report_failure "jam during scripted book overlay flow" "$log_file" "c128_test_book_overlay_pass" "$pass_addr" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        local vdc_check_out
+        if ! vdc_check_out=$(python3 -B harness128.py --check-vdc-log "$log_file" --at-stop "$pass_addr" \
+                --expect-screen-str "0:35:Inventory" \
+                --expect-screen-str "2:4:Spellbook Beginners-Magick"); then
+            boot_log_report_failure "scripted book overlay VDC content mismatch" "$log_file" "c128_test_book_overlay_pass" "$pass_addr" "$vice_rc"
+            echo "    ${vdc_check_out}"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6412,8 +6447,10 @@ run_scripted_spell_list_overlay_smoke() {
         fi
         fail_addrs+=("$addr")
     done
-    if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted spell list overlay pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted spell list overlay pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6429,10 +6466,17 @@ run_scripted_spell_list_overlay_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${pass_addr}"
+        echo "break \$${pass_addr}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
+        echo "bank vdc"
+        echo "m \$0000 \$07cf"
         echo "quit"
     } > "$mon_file"
 
@@ -6450,6 +6494,17 @@ run_scripted_spell_list_overlay_smoke() {
     if [ "$pass_hit" -eq 1 ]; then
         if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
             boot_log_report_failure "jam during scripted spell list overlay flow" "$log_file" "c128_test_spell_list_overlay_pass" "$pass_addr" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        local vdc_check_out
+        if ! vdc_check_out=$(python3 -B harness128.py --check-vdc-log "$log_file" --at-stop "$pass_addr" \
+                --expect-screen-str "0:14:Mage Book" \
+                --expect-screen-str "2:4:Magic Missile" \
+                --expect-screen-str "24:5:Cast which? (a-a, esc)"); then
+            boot_log_report_failure "scripted spell list overlay VDC content mismatch" "$log_file" "c128_test_spell_list_overlay_pass" "$pass_addr" "$vice_rc"
+            echo "    ${vdc_check_out}"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6511,8 +6566,10 @@ run_scripted_spell_list_cancel_smoke() {
         fi
         spell_fail_addrs+=("$addr")
     done
-    if [ -z "${c128_test_spell_pass:-}" ]; then
-        echo "FAIL (missing scripted spell cancel pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${c128_test_spell_pass:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted spell cancel pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6528,10 +6585,15 @@ run_scripted_spell_list_cancel_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${spell_fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${c128_test_spell_pass}"
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
         echo "quit"
     } > "$mon_file"
 

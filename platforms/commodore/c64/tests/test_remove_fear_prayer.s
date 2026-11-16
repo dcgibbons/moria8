@@ -41,8 +41,10 @@ test_done_break:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestUnused
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
+.segment Default
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"

@@ -27,5 +27,7 @@
 .const CART_OVERLAY_COUNT = 13
 .const CART_ASSET_LEGAL_OFFER = 20
 .const CART_ASSET_ITEM_CATALOG = 21
-.const CART_ASSET_COUNT = 22
+.const CART_ASSET_CATALOG_EXT = 22
+.const CART_ASSET_COUNT = 23
+.const CART_CATALOG_EXT_RECORD_SIZE = 8
 .assert "Directory index fits the byte reader", CART_ASSET_COUNT <= 32, true

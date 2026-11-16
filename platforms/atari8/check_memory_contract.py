@@ -77,6 +77,10 @@ REQUIRED_LOW_SYMBOLS = (
     "hal_storage_chrout",
     "hal_storage_close",
     "hal_item_cat_read_byte",
+    "catalog_fetch_record",
+    "catalog_fetch_ext",
+    "cat_record",
+    "cat_ext_record",
     "low_helpers_end",
 )
 
@@ -105,7 +109,7 @@ CATALOG_MAX_SECTORS = 5 * 32
 ITEM_CATALOG_FILE = "ITEM.CAT"
 ITEM_CATALOG_MAX_BYTES = 7800
 
-XE_SLOT_COUNT = 19
+XE_SLOT_COUNT = 18
 XE_WIN_BASE_HI = 0x40
 XE_WIN_LIMIT_HI = 0x80
 XE_BANK_PORTB_TO_ID = {
@@ -127,7 +131,6 @@ XE_OVERLAY_SLOT_FILES = {
     9: "OVL.CHS",
     16: "OVL.HOM",
     17: "OVL.STO",
-    18: "OVL.TTL",
 }
 XE_CATALOG_FULL_SLOTS = (10, 11, 12, 13)
 XE_CATALOG_TAIL_SLOT = 15
@@ -292,6 +295,18 @@ def validate_build(build_dir: Path) -> list[str]:
         if not (LOW_RESIDENT_START <= addr <= limit):
             errors.append(f"{sym} at ${addr:04X} violates < $4000 low-RAM contract")
 
+    if "cat_record" in symbols and "cat_ext_record" in symbols:
+        if symbols["cat_ext_record"] != symbols["cat_record"] + 49:
+            errors.append(
+                f"cat_ext_record at ${symbols['cat_ext_record']:04X} != cat_record + 49 (${symbols['cat_record'] + 49:04X})"
+            )
+        if symbols["cat_record"] + 57 > LOW_HELPERS_LIMIT:
+            errors.append(
+                f"cat_record + 57 (${symbols['cat_record'] + 57:04X}) crosses $4000 low-RAM limit"
+            )
+    if symbols.get("a8_catalog_record_size", 57) != 57:
+        errors.append(f"a8_catalog_record_size={symbols.get('a8_catalog_record_size')} != 57")
+
     if "program_end" not in symbols:
         errors.append("missing symbol program_end")
     else:
@@ -362,15 +377,18 @@ def validate_build(build_dir: Path) -> list[str]:
         if end_excl > BANKED_LIMIT:
             errors.append(f"ATARI.BNK end ${end_excl:04X} overlaps CPU vectors (${BANKED_LIMIT:04X})")
 
-    # The monster catalog's records: within the 130XE slots that hold them
+    # The monster catalog's records: 57B records (2 per 125B DOS 2.5 sector = 140 sectors)
     cat_file = build_dir / CATALOG_FILE
     cat_sectors: int | None = None
     if not cat_file.exists():
         errors.append(f"missing {CATALOG_FILE}")
     else:
-        cat_sectors = -(-cat_file.stat().st_size // 125)
+        cat_size = cat_file.stat().st_size
+        cat_sectors = -(-cat_size // 125)
         if cat_sectors > CATALOG_MAX_SECTORS:
             errors.append(f"{CATALOG_FILE} needs more than {CATALOG_MAX_SECTORS} sectors")
+        elif cat_size != 139 * 125 + 57:
+            errors.append(f"{CATALOG_FILE} size {cat_size} B != expected 17,432 B (140 DOS 2.5 sectors @ 57 B/rec)")
 
     # Packed 'ITM2' item catalog streamed from disk / MaxFlash cartridge by LowHelpers.
     icat_file = build_dir / ITEM_CATALOG_FILE
@@ -457,12 +475,15 @@ def run_selftest() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         bdir = Path(tmp)
         sym_addrs = {name: 0x0C00 + i * 0x20 for i, name in enumerate(REQUIRED_LOW_SYMBOLS)}
-        table_base = 0x0C00 + len(REQUIRED_LOW_SYMBOLS) * 0x20
+        sym_addrs["cat_record"] = 0x1200
+        sym_addrs["cat_ext_record"] = 0x1200 + 49
+        table_base = 0x1300
         sym_addrs["xe_slot_portb"] = table_base
         sym_addrs["xe_slot_win_hi"] = table_base + XE_SLOT_COUNT
         sym_addrs["xe_slot_ram_hi"] = table_base + 2 * XE_SLOT_COUNT
         sym_addrs["xe_slot_pages"] = table_base + 3 * XE_SLOT_COUNT
         sym_lines = [f".label {name}=${addr:04x}" for name, addr in sym_addrs.items()]
+        sym_lines.append(".label a8_catalog_record_size=$39")
         sym_lines.append(".label program_end=$bd00")
         sym_lines.append(".label banked_code_end=$fe80")
         for sym, addr in REQUIRED_HIGH_RESIDENT_SYMBOLS.items():
@@ -472,21 +493,21 @@ def run_selftest() -> int:
         (bdir / "main.sym").write_text(base_sym_text, encoding="utf-8")
 
         base_portb = [
-            0xE2, 0xE2, 0xEA, 0xEE,
-            0xEA, 0xE2, 0xE2, 0xEA,
-            0xEE, 0xEA, 0xE6, 0xE6,
-            0xE6, 0xE6, 0xEA, 0xEA,
-            0xEA, 0xEE, 0xEA,
+            0xE2, 0xEA, 0xEE, 0xEA,
+            0xEE, 0xE2, 0xEE, 0xEA,
+            0xEE, 0xE2, 0xE2, 0xE6,
+            0xE6, 0xE6, 0xEA, 0xEE,
+            0xE6, 0xEA,
         ]
         base_win_hi = [
-            0x40, 0x50, 0x59, 0x4E,
-            0x50, 0x60, 0x70, 0x40,
-            0x40, 0x65, 0x40, 0x50,
-            0x60, 0x70, 0x77, 0x71,
-            0x7A, 0x5D, 0x7E,
+            0x40, 0x40, 0x40, 0x4F,
+            0x4E, 0x50, 0x5D, 0x5E,
+            0x6C, 0x60, 0x70, 0x40,
+            0x50, 0x60, 0x7D, 0x7A,
+            0x70, 0x6D,
         ]
-        base_ram_hi = [0xE0] * 14 + [0xC1, 0xE0, 0xE0, 0xE0, 0xE0]
-        base_pages = [16, 16, 12, 15, 9, 16, 16, 16, 14, 12, 16, 16, 16, 16, 3, 6, 4, 14, 2]
+        base_ram_hi = [0xE0] * 14 + [0xC1, 0xE0, 0xE0, 0xE0]
+        base_pages = [16, 15, 14, 15, 15, 16, 15, 15, 14, 16, 16, 16, 16, 16, 3, 6, 16, 16]
 
         res_path = bdir / "MORIA8.RES"
         write_synthetic_prg(res_path, 0x0C00, 0xB100)
@@ -498,8 +519,9 @@ def run_selftest() -> int:
         write_synthetic_prg(bdir / "boot.prg", 0x0800, 384)
         for slot, fname in XE_OVERLAY_SLOT_FILES.items():
             write_synthetic_prg(bdir / fname, 0xE000, base_pages[slot] * 256 - 2)
+        write_synthetic_prg(bdir / "OVL.TTL", 0xE000, 0x0BCD)
         write_synthetic_prg(bdir / "legalui", 0xE000, 0x03DD)
-        (bdir / CATALOG_FILE).write_bytes(bytes(139 * 125 + 49))
+        (bdir / CATALOG_FILE).write_bytes(bytes(139 * 125 + 57))
         (bdir / ITEM_CATALOG_FILE).write_bytes(b"ITM2" + struct.pack("<H", 7573) + bytes(7573 - 6))
 
         errs = validate_build(bdir)
@@ -549,7 +571,7 @@ def run_selftest() -> int:
 
         # Negative test 7: 130XE slot overlap within the same bank must fail
         bad_win = list(base_win_hi)
-        bad_win[3] = 0x45  # overlaps slot 8 ($40..$4D) in Bank 3
+        bad_win[4] = 0x45  # overlaps slot 2 ($40..$4D) in Bank 3
         patch_synthetic_xe_tables(res_path, sym_addrs["xe_slot_portb"], base_portb, bad_win, base_ram_hi, base_pages)
         if not validate_build(bdir):
             print("FAIL: failed to catch 130XE bank overlap", file=sys.stderr)
@@ -585,7 +607,7 @@ def run_selftest() -> int:
         if not validate_build(bdir):
             print("FAIL: failed to catch MONSTER.CAT tail exceeding xe_slot_pages[15]", file=sys.stderr)
             return 1
-        (bdir / CATALOG_FILE).write_bytes(bytes(139 * 125 + 49))
+        (bdir / CATALOG_FILE).write_bytes(bytes(139 * 125 + 57))
 
         # Negative test 12: TITLE.DAT exceeding xe_slot_pages[14] must fail
         bad_pages = list(base_pages)

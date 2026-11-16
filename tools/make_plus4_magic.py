@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import struct
 
+import build_catalog
 import catalog_disk
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -90,6 +91,11 @@ def pack(source: Path, output: Path) -> dict:
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: ("license", 0, (ROOT / "data/LICENSE").read_bytes()),
         CONTRACT["CART_ASSET_LEGAL_OFFER"]: ("source-offer", 0, (ROOT / "data/SOURCE-OFFER").read_bytes()),
         CONTRACT["CART_ASSET_ITEM_CATALOG"]: ("item.cat", 0, catalog_disk.item_catalog_bytes()),
+        CONTRACT["CART_ASSET_CATALOG_EXT"]: (
+            "monster.ext",
+            0,
+            build_catalog.ext_row_major_bytes(build_catalog.load_spec()["creatures"]),
+        ),
     }
     inputs.update({
         CONTRACT["CART_ASSET_" + symbol]:
@@ -109,6 +115,8 @@ def pack(source: Path, output: Path) -> dict:
         raise ValueError("Catalog offsets exceed the reader's 16 KB source-address range")
     if len(inputs[CONTRACT["CART_ASSET_ITEM_CATALOG"]][2]) > 0x4000:
         raise ValueError("Item catalog offsets exceed the reader's 16 KB source-address range")
+    if len(inputs[CONTRACT["CART_ASSET_CATALOG_EXT"]][2]) > 0x4000:
+        raise ValueError("Extended catalog offsets exceed the reader's 16 KB source-address range")
 
     manifest: dict = {
         "format": "c264 magic cart",

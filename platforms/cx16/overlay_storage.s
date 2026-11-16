@@ -25,7 +25,7 @@ cx16_preload_banks:
     bcs !cart_fatal+
     plx
     inx
-    cpx #CART_ASSET_ITEM_CAT + 1
+    cpx #CART_ASSET_MONSTER_EXT + 1
     bcc !cart_preload_loop-
     lda #1
     sta cx16_banks_preloaded
@@ -62,6 +62,15 @@ cx16_preload_banks:
     lda #cx16_catalog_name_len
     ldx #<cx16_catalog_name
     ldy #>cx16_catalog_name
+    jsr cx16_kernal_load_banked_window
+    bcs !fatal+
+
+    // 3b. Bank 5: extended monster catalog (MONSTER.EXT, 279 x 8 B at $A000-$A8B7)
+    lda #CX16_BANK_CATALOG_EXT
+    sta CX16_RAM_BANK_REG
+    lda #cx16_catalog_ext_name_len
+    ldx #<cx16_catalog_ext_name
+    ldy #>cx16_catalog_ext_name
     jsr cx16_kernal_load_banked_window
     bcs !fatal+
 #else

@@ -65,7 +65,9 @@ OUTA2        = $(BUILD)/apple2
 OVL_OUTA2    = $(abspath $(OUTA2))
 
 KA_FLAGS     = -showmem -vicesymbols -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -define APPLE2 -afo
-PRG2BIN      = python3 ../../tools/prg_to_bin.py
+PRG2BIN      = python3 -B ../../tools/prg_to_bin.py
+BUILD_CATALOG_TOOL = ../../tools/build_catalog.py
+MONSTER_SPEC = ../shared/catalog/monster_catalog_spec.json
 VERSION_FILE = ../../version.json
 VERSION_INC_TOOL = ../../tools/make_version_include.py
 VERSION_INC = $(BUILD)/version_strings.inc
@@ -125,10 +127,10 @@ run: $(A2_DISK_IMAGE)
 		-flop1 "$(A2_DISK_IMAGE)"
 
 test-memory-contract: build $(OUTA2)/main.sym $(OUTA2)/boot.sym
-	python3 check_memory_contract.py
+	python3 -B check_memory_contract.py
 
 test-memory-contract-selftest:
-	python3 check_memory_contract.py --selftest
+	python3 -B check_memory_contract.py --selftest
 
 # Runtime MAME suite (harness_smoke.py; one scenario per invocation). Runs only
 # when A2ROMS points at a MAME ROM directory; otherwise warns and skips so the
@@ -138,9 +140,9 @@ ifeq ($(strip $(A2ROMS)),)
 	@echo "WARNING: A2ROMS is not set - skipping the Apple IIe runtime harness (MAME scenarios)."
 	@echo "         Set A2ROMS to the ROM directory (containing apple2ee.zip) and rerun to include them."
 else
-	@failed=""; for s in $$(python3 -c "import sys; sys.path.insert(0,'.'); import harness_smoke as h; print(' '.join(h.SCENARIOS))"); do \
+	@failed=""; for s in $$(python3 -B -c "import sys; sys.path.insert(0,'.'); import harness_smoke as h; print(' '.join(h.SCENARIOS))"); do \
 		echo "=== apple2 scenario: $$s ==="; \
-		python3 harness_smoke.py "$$s" || failed="$$failed $$s"; \
+		python3 -B harness_smoke.py "$$s" || failed="$$failed $$s"; \
 	done; \
 	if [ -n "$$failed" ]; then echo "FAILED apple2 scenarios:$$failed"; exit 1; fi
 endif
@@ -191,7 +193,7 @@ ensure-prodos:
 
 # ── Assembly ──────────────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
-	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
+	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(TRAMPOLINES_INC): $(GEN_TRAMPOLINES_TOOL) $(TRAMPOLINE_MANIFEST) | $(BUILD)
 	python3 -B "$(GEN_TRAMPOLINES_TOOL)" --port apple2 --output "$@"
@@ -227,7 +229,7 @@ $(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUTA2)
 $(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUTA2)
 	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
 
-$(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_CAT_PRG) $(A2_OVL_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) ../../tools/catalog_disk.py ../shared/item_catalog/item_cat_layout.s ../shared/item_catalog/item_cat_data.s
+$(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX_PRG) $(A2_CAT_PRG) $(A2_OVL_PRGS) $(A2_TITLE_PRG) $(A2_BOOT_PRG) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) ../../tools/catalog_disk.py ../../tools/make_pak.py $(BUILD_CATALOG_TOOL) $(MONSTER_SPEC) ../shared/item_catalog/item_cat_layout.s ../shared/item_catalog/item_cat_data.s
 	@mkdir -p "$(OUTA2)/bin"
 	python3 -B ../../tools/catalog_disk.py item-raw "$(OUTA2)/bin"
 	$(PRG2BIN) "$(A2_BOOT_PRG)" "$(OUTA2)/bin/MORIA8.SYSTEM" --expect-addr 0x2000
@@ -242,20 +244,24 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	$(PRG2BIN) "$(OUTA2)/a2.huffdata" "$(OUTA2)/bin/A2.HUFFDATA" --expect-addr 0x8D00
 	$(PRG2BIN) "$(OUTA2)/legalui" "$(OUTA2)/bin/LEGALUI" --expect-addr 0xA400
 	$(PRG2BIN) "$(A2_TITLE_PRG)" "$(OUTA2)/bin/TITLE" --expect-addr 0x4000
+	python3 -B "$(BUILD_CATALOG_TOOL)" packbits --in "$(OUTA2)/bin/A2.AUXDATA" --out "$(OUTA2)/bin/A2.AUXDATA.PB"
+	python3 -B "$(BUILD_CATALOG_TOOL)" packbits --in "$(OUTA2)/bin/A2.CATALOG" --out "$(OUTA2)/bin/A2.CATALOG.PB"
+	python3 -B "$(BUILD_CATALOG_TOOL)" ext-rows --out "$(OUTA2)/bin/A2.CATEXT"
+	python3 -B "$(BUILD_CATALOG_TOOL)" ext-rows --packbits --out "$(OUTA2)/bin/A2.CATEXT.PB"
 	rm -f "$@"
 	"$(AC_BIN)" -pro140 "$@" MORIA8
 	"$(AC_BIN)" -p "$@" PRODOS sys 0x2000 < "$(PRODOS)"
 	"$(AC_BIN)" -p "$@" MORIA8.SYSTEM sys 0x2000 < "$(OUTA2)/bin/MORIA8.SYSTEM"
-	python3 ../../tools/make_pak.py "$(OUTA2)/bin/MORIA8.PAK" \
-	  "$(OUTA2)/bin/MORIA8.RES" "$(OUTA2)/bin/A2.AUXDATA" \
-	  "$(OUTA2)/bin/A2.CATALOG" "$(OUTA2)/bin/OVL.UI" "$(OUTA2)/bin/OVL.ITEMS" \
+	python3 -B ../../tools/make_pak.py "$(OUTA2)/bin/MORIA8.PAK" \
+	  "$(OUTA2)/bin/MORIA8.RES" "$(OUTA2)/bin/OVL.UI" "$(OUTA2)/bin/OVL.ITEMS" \
 	  "$(OUTA2)/bin/OVL.SPELL" "$(OUTA2)/bin/OVL.MODAL" "$(OUTA2)/bin/A2.HUFFDATA" \
 	  "$(OUTA2)/bin/A2.PLAY" "$(OUTA2)/bin/OVL.START" "$(OUTA2)/bin/OVL.TOWN" \
 	  "$(OUTA2)/bin/OVL.DEATH" "$(OUTA2)/bin/OVL.GEN" "$(OUTA2)/bin/OVL.HELP" \
 	  "$(OUTA2)/bin/OVL.CHEST" "$(OUTA2)/bin/OVL.HOME" "$(OUTA2)/bin/OVL.STORAGE" \
-	  "$(OUTA2)/bin/OVL.TITLE" "$(OUTA2)/bin/LEGALUI" "$(OUTA2)/bin/TITLE"
+	  "$(OUTA2)/bin/OVL.TITLE" "$(OUTA2)/bin/LEGALUI" "$(OUTA2)/bin/TITLE" \
+	  "$(OUTA2)/bin/A2.AUXDATA.PB" "$(OUTA2)/bin/A2.CATALOG.PB" \
+	  "$(OUTA2)/bin/A2.CATEXT.PB" "$(OUTA2)/bin/ITEM.CAT"
 	"$(AC_BIN)" -p "$@" MORIA8.PAK bin 0x0000 < "$(OUTA2)/bin/MORIA8.PAK"
-	"$(AC_BIN)" -p "$@" ITEM.CAT bin 0x0000 < "$(OUTA2)/bin/ITEM.CAT"
 	"$(AC_BIN)" -p "$@" LICENSE txt < "$(LICENSE_DISK_FILE)"
 	"$(AC_BIN)" -p "$@" SOURCE.OFFER txt < "$(SOURCE_OFFER_DISK_FILE)"
 	dd if="$(BOOTBLOCKS)" of="$@" bs=512 count=2 conv=notrunc

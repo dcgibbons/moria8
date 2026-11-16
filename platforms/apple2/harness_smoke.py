@@ -26,8 +26,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import build_catalog  # noqa: E402
 import catalog_lore  # noqa: E402  (the generated monster catalog's data)
 PO_IMAGE = ROOT / "build" / "moria8-apple2.po"
 MAME_OUTPUT_ROOT = ROOT / "build" / "apple2" / "mame"
@@ -2252,17 +2255,27 @@ def save_slot_tracking_lua() -> str:
 
 
 def aux_lc_spike_lua() -> str:
-    """Build MAME apple2ee ALTZP=1 Aux LC ($D000-$FFF9) + PAK post-check script."""
+    """Build MAME apple2ee ALTZP=1 Aux LC ($D000-$FFF9) + A2.CATEXT + PAK post-check script."""
     igk_call = _sym_addr("igk_sound_call")
     snd_upd = _sym_addr("input_sound_update")
     xfer = _sym_addr("a2_aux_lc_bounce_xfer")
+    fetch_ext = _sym_addr("catalog_fetch_ext")
+    cat_id_lo_addr = _sym_addr("cat_id_lo")
+    cat_id_hi_addr = _sym_addr("cat_id_hi")
+    cat_ext_rec_addr = _sym_addr("cat_ext_record")
     nmi_rti = _sym_addr("a2_aux_nmi_rti")
     rst_stub = _sym_addr("a2_aux_reset_stub")
     bounce = 0x02E0
     arg_bank = 0x02F1
     arg_dir = 0x02F3
-    drv_base = 0x7D00
+    drv_base = 0x7C80
     out_base = 0x8400
+    ext_out_base = 0x8500
+    save_lc_base = 0x8600
+    sample_ids = (0, 32, 136, 256, 278)
+    catext_raw = build_catalog.ext_row_major_bytes(
+        build_catalog.load_spec()["creatures"]
+    )
 
     code = bytearray()
 
@@ -2278,6 +2291,10 @@ def aux_lc_spike_lua() -> str:
 
     def sta_abs(addr: int) -> None:
         code.append(0x8D)
+        w16(addr)
+
+    def jsr_abs(addr: int) -> None:
+        code.append(0x20)
         w16(addr)
 
     def snap_zp_stk(zp_page: int, stk_page: int) -> None:
@@ -2296,6 +2313,12 @@ def aux_lc_spike_lua() -> str:
 
     def copy_bounce(dst: int, count: int) -> None:
         code.extend((0xA2, count - 1, 0xBD, bounce & 0xFF, bounce >> 8, 0x9D, dst & 0xFF, dst >> 8, 0xCA, 0x10, 0xF7))
+
+    def load_bounce(src: int, count: int) -> None:
+        code.extend((0xA2, count - 1, 0xBD, src & 0xFF, src >> 8, 0x9D, bounce & 0xFF, bounce >> 8, 0xCA, 0x10, 0xF7))
+
+    def copy_mem(src: int, dst: int, count: int) -> None:
+        code.extend((0xA2, count - 1, 0xBD, src & 0xFF, src >> 8, 0x9D, dst & 0xFF, dst >> 8, 0xCA, 0x10, 0xF7))
 
     def call_xfer(bank: int, direction: int, count: int, addr: int) -> None:
         lda(bank)
@@ -2323,6 +2346,21 @@ def aux_lc_spike_lua() -> str:
     call_xfer(0x00, 0x00, 6, 0xFFFA)
     copy_bounce(out_base + 0x00, 6)
 
+    # 1. Verify boot-preloaded Aux LC Bank 2 $D000-$D8B7 (A2.CATEXT) and
+    #    production catalog_fetch_ext -> cat_ext_record[0..7] (ZP-free under guard!).
+    zero_bounce(16); call_xfer(0x00, 0x00, 16, 0xD000); copy_bounce(ext_out_base + 0x00, 16)
+    zero_bounce(8);  call_xfer(0x00, 0x00, 8,  0xD8B0); copy_bounce(ext_out_base + 0x10, 8)
+    for idx, cid in enumerate(sample_ids):
+        lda(cid & 0xFF); sta_abs(cat_id_lo_addr)
+        lda(cid >> 8);   sta_abs(cat_id_hi_addr)
+        jsr_abs(fetch_ext)
+        copy_mem(cat_ext_rec_addr, ext_out_base + 0x20 + idx * 8, 8)
+
+    # Save preloaded 16 B at Bank 1 $D000, Bank 2 $D000, and High $E000 before spike writes.
+    call_xfer(0x08, 0x00, 16, 0xD000); copy_bounce(save_lc_base + 0x00, 16)
+    call_xfer(0x00, 0x00, 16, 0xD000); copy_bounce(save_lc_base + 0x10, 16)
+    call_xfer(0x00, 0x00, 16, 0xE000); copy_bounce(save_lc_base + 0x20, 16)
+
     fill_xor(0xB1); call_xfer(0x08, 0x01, 16, 0xD000)  # Aux LC Bank 1 $D000
     fill_xor(0xD2); call_xfer(0x00, 0x01, 16, 0xD000)  # Aux LC Bank 2 $D000
     fill_xor(0xE5); call_xfer(0x00, 0x01, 16, 0xE000)  # Aux LC $E000
@@ -2333,6 +2371,11 @@ def aux_lc_spike_lua() -> str:
     zero_bounce(16); call_xfer(0x08, 0x00, 16, 0xE000); copy_bounce(out_base + 0x30, 16)
     zero_bounce(16); call_xfer(0x00, 0x00, 16, 0xFFE9); copy_bounce(out_base + 0x40, 16)
     zero_bounce(6);  call_xfer(0x00, 0x00, 6,  0xFFFA); copy_bounce(out_base + 0x50, 6)
+
+    # Restore preloaded 16 B at Bank 1 $D000, Bank 2 $D000, and High $E000.
+    load_bounce(save_lc_base + 0x00, 16); call_xfer(0x08, 0x01, 16, 0xD000)
+    load_bounce(save_lc_base + 0x10, 16); call_xfer(0x00, 0x01, 16, 0xD000)
+    load_bounce(save_lc_base + 0x20, 16); call_xfer(0x00, 0x01, 16, 0xE000)
 
     code.append(0xBA)  # tsx
     code.extend((0x8E, 0x64, out_base >> 8))  # stx out_base+0x64
@@ -2346,7 +2389,7 @@ def aux_lc_spike_lua() -> str:
     code.append(0x4C)
     w16(snd_upd)
 
-    assert len(code) <= 0x280, f"aux_lc_spike driver too large: {len(code)}"
+    assert drv_base + len(code) <= 0x8000, f"aux_lc_spike driver too large: {len(code)}"
     bytes_lua = ", ".join(f"0x{b:02X}" for b in code)
     vec_expected = (
         nmi_rti & 0xFF, nmi_rti >> 8,
@@ -2354,6 +2397,10 @@ def aux_lc_spike_lua() -> str:
         nmi_rti & 0xFF, nmi_rti >> 8,
     )
     vec_lua = ", ".join(f"0x{b:02X}" for b in vec_expected)
+    catext_head_lua = ", ".join(f"0x{b:02X}" for b in catext_raw[:16])
+    catext_tail_lua = ", ".join(f"0x{b:02X}" for b in catext_raw[278 * 8 : 279 * 8])
+    fetch_samples_bytes = b"".join(catext_raw[cid * 8 : (cid + 1) * 8] for cid in sample_ids)
+    fetch_samples_lua = ", ".join(f"0x{b:02X}" for b in fetch_samples_bytes)
 
     body = f"""
 for i = 1, 300 do
@@ -2371,7 +2418,7 @@ for a = 0x0000, 0x01FF do
     aux:write(a, g)
 end
 
-for a = 0x{out_base:04X}, 0x{out_base + 0xFF:04X} do
+for a = 0x{out_base:04X}, 0x{ext_out_base + 0xFF:04X} do
     prog:write_u8(a, 0x00)
 end
 local drv = {{{bytes_lua}}}
@@ -2405,6 +2452,23 @@ end
 assert_line("lc_aux_vectors_boot", vec_init_ok,
             "got " .. hex_slice(0x{out_base:04X}, 6) .. " exp " .. string.format("%02X%02X%02X%02X%02X%02X", table.unpack(vec_exp)))
 assert_line("lc_aux_vectors_post", vec_post_ok, "got " .. hex_slice(0x{out_base + 0x50:04X}, 6))
+
+local catext_head_exp = {{{catext_head_lua}}}
+local catext_tail_exp = {{{catext_tail_lua}}}
+local fetch_exp = {{{fetch_samples_lua}}}
+local catext_head_ok, catext_tail_ok, fetch_ext_ok = true, true, true
+for i = 1, 16 do
+    if prog:read_u8(0x{ext_out_base:04X} + i - 1) ~= catext_head_exp[i] then catext_head_ok = false end
+end
+for i = 1, 8 do
+    if prog:read_u8(0x{ext_out_base + 0x10:04X} + i - 1) ~= catext_tail_exp[i] then catext_tail_ok = false end
+end
+for i = 1, 40 do
+    if prog:read_u8(0x{ext_out_base + 0x20:04X} + i - 1) ~= fetch_exp[i] then fetch_ext_ok = false end
+end
+assert_line("lc_catext_bank2_d000_head", catext_head_ok, "got " .. hex_slice(0x{ext_out_base:04X}, 16))
+assert_line("lc_catext_bank2_d8b0_balrog", catext_tail_ok, "got " .. hex_slice(0x{ext_out_base + 0x10:04X}, 8))
+assert_line("lc_catalog_fetch_ext_samples", fetch_ext_ok, "got " .. hex_slice(0x{ext_out_base + 0x20:04X}, 40))
 
 local b1_ok, b2_ok, e0_ok, top_ok = true, true, true, true
 for i = 0, 15 do
@@ -2440,7 +2504,10 @@ assert_line("lc_main_sp_preserved", sp_pre == sp_post,
             string.format("SP pre=%02X post=%02X", sp_pre, sp_post))
 local main_stk_bad = 0
 for i = 0, 255 do
-    if (i > sp_pre or i < sp_pre - 2) and prog:read_u8(0x8100 + i) ~= prog:read_u8(0x8300 + i) then
+    -- jsr catalog_fetch_ext (2 B) -> php (1 B) -> jsr a2_aux_lc_bounce_xfer (2 B)
+    -- uses scratch stack slots [sp_pre - 4 .. sp_pre]; active caller stack (i > sp_pre)
+    -- and deeper unused stack (i < sp_pre - 4) must remain untouched.
+    if (i > sp_pre or i < sp_pre - 4) and prog:read_u8(0x8100 + i) ~= prog:read_u8(0x8300 + i) then
         main_stk_bad = main_stk_bad + 1
     end
 end

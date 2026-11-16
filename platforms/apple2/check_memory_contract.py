@@ -9,8 +9,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+import build_catalog  # noqa: E402
+
 BUILD = ROOT / "build" / "apple2"
 MAIN_SYM = BUILD / "main.sym"
 BOOT_SYM = BUILD / "boot.sym"
@@ -36,7 +40,7 @@ PRG_SPECS = (
     PrgSpec("a2.play", 0x7C00, 0xA000, "a2_play_end", b"M8P"),
     # Aux RAM above the map (cache_layout.s): aux data, the monster
     # catalog's fields, and the Huffman corpus with the catalog's names.
-    PrgSpec("a2.auxdata", 0x3B0C, 0x5000),
+    PrgSpec("a2.auxdata", 0x3B0C, 0x5000, "a2_auxdata_end"),
     PrgSpec("a2.catalog", 0x5000, 0x6700, "catalog_fields_end"),
     PrgSpec("a2.huffdata", 0x8D00, 0xAA00, "ovl_huffdata_end"),
     PrgSpec("ovl.start", 0xA400, 0xBA00, "ovl_start_end"),
@@ -114,6 +118,34 @@ def check_artifacts() -> int:
         checks += 1
 
     check_low_memory_claims(main_symbols)
+    storage_blob = (BUILD / "ovl.storage").read_bytes()[2:]
+    lrr_addr = require_symbol(main_symbols, "load_resume_reset")
+    wiz_rst = require_symbol(main_symbols, "wizard_reset_session_state")
+    lrr_off = lrr_addr - 0xA400
+    exp_jsr = bytes((0x20, wiz_rst & 0xFF, wiz_rst >> 8))
+    if not (0 <= lrr_off <= len(storage_blob) - 3) or storage_blob[lrr_off : lrr_off + 3] != exp_jsr:
+        raise ContractViolation(
+            f"load_resume_reset (${lrr_addr:04X}) not physically emitted in ovl.storage"
+        )
+    death_blob = (BUILD / "ovl.death").read_bytes()[2:]
+    urd_addr = require_symbol(main_symbols, "ui_recall_display")
+    rw_addr = require_symbol(main_symbols, "rcl_white")
+    rstrs_addr = require_symbol(main_symbols, "rcl_strs")
+    urd_off = urd_addr - 0xA400
+    exp_urd_jsr = bytes((0x20, rw_addr & 0xFF, rw_addr >> 8))
+    if (
+        not (0 <= urd_off <= len(death_blob) - 3)
+        or death_blob[urd_off : urd_off + 3] != exp_urd_jsr
+        or not (0xA400 <= rstrs_addr < 0xA400 + len(death_blob))
+    ):
+        raise ContractViolation(
+            f"ui_recall_display (${urd_addr:04X}) / rcl_strs (${rstrs_addr:04X}) not physically emitted in ovl.death"
+        )
+    rvb_addr = require_symbol(main_symbols, "recall_view_body")
+    if not 0x7C00 <= rvb_addr < 0xA000:
+        raise ContractViolation(
+            f"recall_view_body (${rvb_addr:04X}) must stay in A2PlaySlot ($7C00-$9FFF)"
+        )
     print("ASSERT main-symbol-owners PASS")
     checks += 1
 
@@ -145,6 +177,47 @@ def check_artifacts() -> int:
                 f"len={len(item_cat)}, end=${item_cat_end:04X}"
             )
         print(f"ASSERT ITEM.CAT PASS $E000-${item_cat_end - 1:04X}")
+        checks += 1
+
+    catext_path = BUILD / "bin" / "A2.CATEXT"
+    if catext_path.is_file():
+        catext = catext_path.read_bytes()
+        expected_catext = build_catalog.ext_row_major_bytes(
+            build_catalog.load_spec()["creatures"]
+        )
+        catext_end = 0xD000 + len(catext)
+        if len(catext) != 2232 or catext != expected_catext or catext_end > 0xE000:
+            raise ContractViolation(
+                f"A2.CATEXT invalid or exceeds Aux LC Bank 2 $D000-$DFFF: "
+                f"len={len(catext)}, end=${catext_end:04X}"
+            )
+        print(f"ASSERT A2.CATEXT PASS $D000-${catext_end - 1:04X}")
+        checks += 1
+
+    for raw_name in ("A2.AUXDATA", "A2.CATALOG", "A2.CATEXT"):
+        raw_p = BUILD / "bin" / raw_name
+        pb_p = BUILD / "bin" / f"{raw_name}.PB"
+        if raw_p.is_file() and pb_p.is_file():
+            raw_bytes = raw_p.read_bytes()
+            pb_bytes = pb_p.read_bytes()
+            decoded = build_catalog.packbits_decode(pb_bytes)
+            if decoded != raw_bytes or len(pb_bytes) > 0x2400:
+                raise ContractViolation(
+                    f"{raw_name}.PB PackBits round-trip or staging size failed: "
+                    f"pb={len(pb_bytes)}, raw={len(raw_bytes)}"
+                )
+            print(f"ASSERT {raw_name}.PB PASS {len(pb_bytes)}->{len(raw_bytes)}B")
+            checks += 1
+
+    pak_path = BUILD / "bin" / "MORIA8.PAK"
+    if pak_path.is_file():
+        pak = pak_path.read_bytes()
+        if len(pak) < 512 or pak[0] != 22 or len(pak) > 131072:
+            raise ContractViolation(
+                f"MORIA8.PAK invalid count or exceeds sapling ceiling: "
+                f"entries={pak[0] if pak else -1}, bytes={len(pak)}"
+            )
+        print(f"ASSERT MORIA8.PAK PASS {pak[0]} entries {len(pak)}B")
         checks += 1
 
     print(f"RESULT {checks} asserts 0 failures")
@@ -205,12 +278,18 @@ def check_low_memory_claims(symbols: dict[str, int]) -> None:
         "hal_recall_read_byte",
         "hal_recall_write_byte",
         "a2_aux_lc_bounce_xfer",
+        "catalog_fetch_ext",
+        "cat_ext_record",
+        "recall_view_display",
+        "recall_view_cdefense",
     ):
         addr = require_symbol(symbols, name)
         if not 0x0A00 <= addr < 0x7C00:
             raise ContractViolation(
                 f"{name} must stay in resident Default ($0A00-$7BFF): ${addr:04X}"
             )
+    if require_symbol(symbols, "cat_ext_record") + 8 > 0x7C00:
+        raise ContractViolation("cat_ext_record[0..7] overflows resident Default ($7C00)")
 
 
 def selftest() -> int:
@@ -227,6 +306,10 @@ def selftest() -> int:
         "hal_recall_read_byte": 0x6020,
         "hal_recall_write_byte": 0x6040,
         "a2_aux_lc_bounce_xfer": 0x6060,
+        "catalog_fetch_ext": 0x6080,
+        "cat_ext_record": 0x60A0,
+        "recall_view_display": 0x6140,
+        "recall_view_cdefense": 0x6152,
     }
     for idx, name in enumerate(LOW_SCRATCH_SYMBOLS):
         valid_symbols[name] = 0x0301 + idx
@@ -242,6 +325,10 @@ def selftest() -> int:
         {"item_name_decode_buf": 0x03A1},
         {"hal_item_cat_read_byte": 0x7C00},
         {"hal_recall_read_byte": 0x0900},
+        {"catalog_fetch_ext": 0xA400},
+        {"cat_ext_record": 0x7BF9},
+        {"recall_view_display": 0xA400},
+        {"recall_view_cdefense": 0x7C00},
     )
     for patch in bad_symbol_cases:
         sample = dict(valid_symbols)

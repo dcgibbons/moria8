@@ -9,6 +9,7 @@ import struct
 import sys
 import tempfile
 
+import build_catalog as bc
 import catalog_disk
 import make_atari8_car
 
@@ -55,7 +56,10 @@ def check(car: Path, source: Path) -> None:
     assert symbols["cart_read"] < 0x4000
     assert symbols["cart_load_prg"] < 0x4000
     assert symbols["catalog_fetch_record"] < 0x4000
-    assert symbols["cat_record"] + 49 <= 0x4000
+    assert symbols["catalog_fetch_ext"] < 0x4000
+    assert symbols.get("a8_catalog_record_size") == 57
+    assert symbols["cat_ext_record"] == symbols["cat_record"] + 49
+    assert symbols["cat_record"] + 57 <= 0x4000
     assert symbols["low_helpers_end"] <= 0x4000
     assert symbols["program_end"] <= 0xC100
     assert symbols["banked_code_end"] <= 0xFFFA
@@ -114,8 +118,16 @@ def check(car: Path, source: Path) -> None:
                 f"Post-boot asset overlaps cartridge window: {asset_id} ${destination:04x}+${size:x}"
             )
 
+        if asset_id == contract["CART_ASSET_RESIDENT"]:
+            raw_res = (source / name).read_bytes()
+            assert destination == int.from_bytes(raw_res[:2], "little"), asset_id
+            assert bc.packbits_decode(rom[start:start + size]) == raw_res[2:], "Resident PackBits payload mismatch"
+            previous_end = start + size
+            continue
         if asset_id == contract["CART_ASSET_CATALOG"]:
-            expected = b"\0\0" + b"".join(catalog_disk.records())
+            expected = b"\0\0" + b"".join(
+                r + e for r, e in zip(catalog_disk.records(phase5=False), catalog_disk.ext_records())
+            )
         elif asset_id == contract["CART_ASSET_ITEM_CATALOG"]:
             expected = b"\0\0" + catalog_disk.item_atari_bytes()
         elif asset_id in (contract["CART_ASSET_LEGAL_NOTICE"], contract["CART_ASSET_LEGAL_OFFER"]):

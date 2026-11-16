@@ -5,6 +5,7 @@
 // $E000 overlays as long as callers have KERNAL banked out.
 
 #import "store_meta_macros.s"
+#import "itemdesc_store_slot_macro.s"
 
 // itemdesc_put_inv_slot — Print inventory/equipment item description.
 // Input: X = inventory/equipment slot index.
@@ -29,27 +30,13 @@ itemdesc_put_inv_slot:
     sta itemdesc_ego
     jmp itemdesc_put_staged
 
+#if !ITEMDESC_STORE_SLOT_DUPLICATED
 // itemdesc_put_store_slot — Print store/home item description.
 // Input: X = absolute store/home slot index.
 // Clobbers: A, X, Y, zp_ptr0
 itemdesc_put_store_slot:
-    :AuxReadX(si_item_id)
-    sta itemdesc_item_id
-    lda #1
-    sta itemdesc_qty
-    :AuxReadX(si_p1)
-    sta itemdesc_p1
-    :AuxReadX(si_to_hit)
-    sta itemdesc_to_hit
-    :AuxReadX(si_to_dam)
-    sta itemdesc_to_dam
-    :AuxReadX(si_to_ac)
-    sta itemdesc_to_ac
-    :LoadStoreFlagsX()
-    sta itemdesc_flags
-    :LoadStoreEgoX()
-    sta itemdesc_ego
-    jmp itemdesc_put_staged
+    :ItemdescPutStoreSlotBody()
+#endif
 
 
 // itemdesc_put_staged — Print staged item name, ego, sensed marker, and stats.

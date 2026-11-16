@@ -9,6 +9,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_catalog as bc
+
 
 SECTOR_SIZE = 128
 DATA_BYTES_PER_SECTOR = 125
@@ -173,11 +176,20 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
     builder.add_file("LICENSE.TXT", convert_lf_to_atascii((root_dir / "data" / "LICENSE").read_bytes()))
     builder.add_file("SRCOFFER.TXT", convert_lf_to_atascii((root_dir / "data" / "SOURCE-OFFER").read_bytes()))
 
-    # Resident, RuntimeBanked, Overlays, Title Art and the monster catalog
-    # (Program disk never carries MORIA8.ID or save slots; saves require a
-    # separate Save Disk initialized via Disk Setup.)
+    # Resident (PackBits-compressed MORIA8.PKB stored under DOS 2.5 name
+    # MORIA8.RES, while raw build/atari8/MORIA8.RES stays uncompressed on host
+    # for check_memory_contract.py), RuntimeBanked, Overlays, Title Art and
+    # the monster/item catalogs.
+    res_raw = (build_dir / "MORIA8.RES").read_bytes()
+    if len(res_raw) < 3:
+        raise ValueError("MORIA8.RES PRG too short")
+    pkb_path = build_dir / "MORIA8.PKB"
+    res_pkb = pkb_path.read_bytes() if pkb_path.is_file() else (res_raw[:2] + bc.packbits_encode(res_raw[2:]))
+    if res_pkb[:2] != res_raw[:2] or bc.packbits_decode(res_pkb[2:]) != res_raw[2:]:
+        raise ValueError("MORIA8.PKB PackBits roundtrip mismatch against MORIA8.RES")
+    builder.add_file("MORIA8.RES", res_pkb)
+
     asset_files = [
-        ("MORIA8.RES", build_dir / "MORIA8.RES"),
         ("ATARI.BNK", build_dir / "ATARI.BNK"),
         ("LEGALUI", build_dir / "legalui"),
         ("OVL.STA", build_dir / "OVL.STA"),

@@ -37,6 +37,7 @@ TITLE_SRC        = title_data.s
 ATARI8_SOURCES := $(shell find . ../commodore/common ../shared ../../core -type f \( -name '*.s' -o -name '*.inc' \) -print)
 
 ATARI8_MAIN_PRG   = $(OUTATARI8)/MORIA8.RES
+ATARI8_MAIN_PKB   = $(OUTATARI8)/MORIA8.PKB
 ATARI8_BOOT_PRG   = $(OUTATARI8)/boot.prg
 ATARI8_TITLE_PRG  = $(OUTATARI8)/TITLE.DAT
 ATARI8_CATALOG    = $(OUTATARI8)/MONSTER.CAT
@@ -86,7 +87,7 @@ $(KICKASS_JAR):
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
 	@mkdir -p $(OUT)
-	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
+	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(TRAMPOLINES_INC): $(TRAMPOLINES_INC_TOOL) $(TRAMPOLINE_MANIFEST)
 	@mkdir -p $(dir $@)
@@ -109,11 +110,11 @@ $(ATARI8_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8)
 	$(KA) $(KA_FLAGS) $(TITLE_SRC) -o $(ATARI8_TITLE_PRG)
 
-# The monster catalog's records (monster_catalog_a8.s), from the committed
-# catalog sources.
-$(ATARI8_CATALOG): ../../tools/catalog_disk.py monster_catalog_a8.s ../commodore/common/catalog_records.s $(wildcard ../shared/catalog/*.s)
+# The monster catalog's 57-byte records (monster_catalog_a8.s + build_catalog_a8.py),
+# combining 49B base records + 8B Phase 5 extended records (2/sector = 140 sectors).
+$(ATARI8_CATALOG): build_catalog_a8.py ../../tools/catalog_disk.py monster_catalog_a8.s ../commodore/common/catalog_records.s $(wildcard ../shared/catalog/*.s)
 	@mkdir -p $(OUTATARI8)
-	python3 ../../tools/catalog_disk.py atari "$@"
+	python3 -B build_catalog_a8.py "$@"
 
 $(ATARI8_ITEM_CAT): ../../tools/catalog_disk.py item_catalog_a8.s $(wildcard ../shared/item_catalog/*.s)
 	@mkdir -p $(OUTATARI8)
@@ -121,8 +122,14 @@ $(ATARI8_ITEM_CAT): ../../tools/catalog_disk.py item_catalog_a8.s $(wildcard ../
 
 disk: $(ATARI8_ATR) $(ATARI8_CAR)
 
-$(ATARI8_ATR): $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) $(ATARI8_ITEM_CAT) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atr.py
-	python3 ../../tools/make_atr.py --build-dir $(OUTATARI8) --root-dir ../.. -o $(ATARI8_ATR)
+$(ATARI8_MAIN_PKB): $(ATARI8_MAIN_PRG) ../../tools/build_catalog.py
+	head -c 2 "$(ATARI8_MAIN_PRG)" > "$@"
+	python3 -B ../../tools/build_catalog.py packbits --strip-prg --in "$(ATARI8_MAIN_PRG)" --out "$@.body"
+	cat "$@.body" >> "$@"
+	rm -f "$@.body"
+
+$(ATARI8_ATR): $(ATARI8_MAIN_PRG) $(ATARI8_MAIN_PKB) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) $(ATARI8_ITEM_CAT) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atr.py ../../tools/build_catalog.py
+	python3 -B ../../tools/make_atr.py --build-dir $(OUTATARI8) --root-dir ../.. -o $(ATARI8_ATR)
 
 $(ATARI8_CART_STAMP): $(ATARI8_SOURCES) $(VERSION_INC) $(TRAMPOLINES_INC) $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8_CART)
@@ -148,38 +155,39 @@ $(ATARI8_CAT_TEST_PRG): $(ATARI8_CART_SYMS_INC) cartridge_test_catalog.s cartrid
 
 cartridge: $(ATARI8_CAR)
 
-$(ATARI8_CAR): $(ATARI8_CART_STAMP) $(ATARI8_CART_BOOT_BIN) $(ATARI8_CART_TITLE_PRG) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atari8_car.py ../../tools/check_atari8_car.py ../../tools/catalog_disk.py $(wildcard ../shared/catalog/*.s) $(wildcard ../shared/item_catalog/*.s)
-	python3 ../../tools/make_atari8_car.py $(OUTATARI8_CART) $(ATARI8_CAR)
-	python3 ../../tools/check_atari8_car.py $(ATARI8_CAR) $(OUTATARI8_CART)
+$(ATARI8_CAR): $(ATARI8_CART_STAMP) $(ATARI8_CART_BOOT_BIN) $(ATARI8_CART_TITLE_PRG) ../../data/LICENSE ../../data/SOURCE-OFFER ../../tools/make_atari8_car.py ../../tools/check_atari8_car.py ../../tools/catalog_disk.py ../../tools/build_catalog.py $(wildcard ../shared/catalog/*.s) $(wildcard ../shared/item_catalog/*.s)
+	python3 -B ../../tools/make_atari8_car.py $(OUTATARI8_CART) $(ATARI8_CAR)
+	python3 -B ../../tools/check_atari8_car.py $(ATARI8_CAR) $(OUTATARI8_CART)
 
 test-memory-contract-selftest:
-	python3 ../../tools/make_atr.py --selftest
-	python3 check_memory_contract.py --selftest
-	python3 harness_smoke.py --selftest
-	python3 ../../tools/check_atari8_car.py --selftest
-	python3 test_cartridge.py --selftest
+	python3 -B build_catalog_a8.py --selftest
+	python3 -B ../../tools/make_atr.py --selftest
+	python3 -B check_memory_contract.py --selftest
+	python3 -B harness_smoke.py --selftest
+	python3 -B ../../tools/check_atari8_car.py --selftest
+	python3 -B test_cartridge.py --selftest
 
 test-memory-contract: build test-memory-contract-selftest
-	python3 check_memory_contract.py --build-dir $(OUTATARI8)
-	python3 ../../tools/check_atari8_car.py $(ATARI8_CAR) $(OUTATARI8_CART)
+	python3 -B check_memory_contract.py --build-dir $(OUTATARI8)
+	python3 -B ../../tools/check_atari8_car.py $(ATARI8_CAR) $(OUTATARI8_CART)
 
 test-runtime: disk
 	@if [ -n "$(ATARI8ROMS)" ]; then \
-		python3 harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --all; \
+		python3 -B harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --all; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME runtime smoke suite"; \
 	fi
 
 test-fast-smoke: disk
 	@if [ -n "$(ATARI8ROMS)" ]; then \
-		python3 harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --fast-smoke; \
+		python3 -B harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --fast-smoke; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME fast smoke suite"; \
 	fi
 
 test-cartridge: cartridge disk $(ATARI8_CAT_TEST_PRG)
 	@if [ -n "$(ATARI8ROMS)" ]; then \
-		python3 test_cartridge.py --rompath "$(ATARI8ROMS)" --car "$(ATARI8_CAR)" --sym "$(OUTATARI8_CART)/main.sym" --catalog-test "$(ATARI8_CAT_TEST_PRG)" --disk "$(ATARI8_ATR)" --disk-sym "$(OUTATARI8)/main.sym" --mame "$(MAME)"; \
+		python3 -B test_cartridge.py --rompath "$(ATARI8ROMS)" --car "$(ATARI8_CAR)" --sym "$(OUTATARI8_CART)/main.sym" --catalog-test "$(ATARI8_CAT_TEST_PRG)" --disk "$(ATARI8_ATR)" --disk-sym "$(OUTATARI8)/main.sym" --mame "$(MAME)"; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME cartridge suite"; \
 	fi
@@ -192,7 +200,7 @@ run: disk
 		exit 1; \
 	fi
 	@mkdir -p "$(MAME_DIR)/cfg" "$(MAME_DIR)/nvram" "$(MAME_DIR)/inp" "$(MAME_DIR)/sta" "$(MAME_DIR)/snap" "$(MAME_DIR)/diff" "$(MAME_DIR)/comments" "$(MAME_DIR)/share"
-	@test -f "$(ATARI8_SAVE_ATR)" || python3 ../../tools/make_atr.py --blank-disk -o "$(ATARI8_SAVE_ATR)"
+	@test -f "$(ATARI8_SAVE_ATR)" || python3 -B ../../tools/make_atr.py --blank-disk -o "$(ATARI8_SAVE_ATR)"
 	$(MAME) $(ATARI8_MACHINE) -rompath "$(ATARI8ROMS)" \
 		-flop1 "$(abspath $(ATARI8_ATR))" \
 		-flop2 "$(abspath $(ATARI8_SAVE_ATR))" \
@@ -208,7 +216,7 @@ run-cart: cartridge
 		exit 1; \
 	fi
 	@mkdir -p "$(MAME_DIR)/cfg" "$(MAME_DIR)/nvram" "$(MAME_DIR)/inp" "$(MAME_DIR)/sta" "$(MAME_DIR)/snap" "$(MAME_DIR)/diff" "$(MAME_DIR)/comments" "$(MAME_DIR)/share"
-	@test -f "$(ATARI8_SAVE_ATR)" || python3 ../../tools/make_atr.py --blank-disk -o "$(ATARI8_SAVE_ATR)"
+	@test -f "$(ATARI8_SAVE_ATR)" || python3 -B ../../tools/make_atr.py --blank-disk -o "$(ATARI8_SAVE_ATR)"
 	$(MAME) $(ATARI8_MACHINE) -rompath "$(ATARI8ROMS)" \
 		-cart1 "$(abspath $(ATARI8_CAR))" \
 		-flop1 "$(abspath $(ATARI8_SAVE_ATR))" \

@@ -109,6 +109,7 @@ C64 = Port(
         "moria8": "boot.prg", "boot64": "boot.prg", "bootart64": "bootart64.prg",
         "moria64": "moria8.prg", "t64": "title",
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
+        "monster.ext": "monster.ext",
         "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"64.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest", "home", "storage", "title")},
@@ -168,6 +169,7 @@ PLUS4 = Port(
     disk_files={
         "moria8": "boot4.prg", "boot4": "boot4.prg", "moria4": "moria4.prg", "t64": "title",
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
+        "monster.ext": "monster.ext",
         "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"4.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest", "home", "storage", "title")},
@@ -213,7 +215,7 @@ C128 = Port(
     disk_files={
         "moria8": "boot128.prg", "boot128": "boot128.chain.prg", "bootart128": "bootart128.prg",
         "moria128": "moria128.prg", "t128": "title",
-        "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg",   # the monster catalog (no tiers)
+        "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg", "128.cex": "128.cex.prg",   # the monster catalog (no tiers)
         "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"128.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest", "home", "storage")},

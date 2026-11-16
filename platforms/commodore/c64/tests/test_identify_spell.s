@@ -78,7 +78,9 @@ player_create:
 #import "../../../../core/monster_magic.s"
 .segment Default
 #import "../../../../core/item.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/projectile.s"
@@ -97,7 +99,9 @@ player_create:
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:

@@ -34,6 +34,10 @@ test_exit_trampoline:
 
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -79,6 +83,10 @@ player_create:
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 .segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
 #import "../dungeon_render.s"
 .segment Default
 #import "../../../../core/dungeon_los.s"

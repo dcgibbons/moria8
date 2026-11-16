@@ -190,8 +190,9 @@ C128_ITEM_CAT_FILE    = $(OUT128)/item.cat
 C128_ITEM_IDX_FILE    = $(OUT128)/item.idx
 C128_RESIDENT_HUFFMAN = $(OUT128)/128.huff.prg
 C128_RESIDENT_HUFFMAN_VECTOR = $(OUT128)/128.hvec.prg
-# The monster catalog's Bank 1 fields and names (memory128.s, C128M-007); the
-# C128 product build has no tier files.
+# The monster catalog's Bank 1 fields, names, and extended rows (memory128.s,
+# C128M-002 / C128M-007); the C128 product build has no tier files.
+C128_CATALOG_EXT_PRG = $(OUT128)/128.cex.prg
 C128_CATALOG_PRGS = $(OUT128)/128.cat.prg $(OUT128)/128.cnm.prg
 C128_RESIDENT_PERSIST = $(OUT128)/128.persist.prg
 C128_RESIDENT_PLAY = $(OUT128)/128.play.prg
@@ -246,7 +247,7 @@ PLUS4_BUILD_ARTIFACTS  = $(PLUS4_MAIN_PRG) $(PLUS4_BOOT_PRG) $(PLUS4_TITLE_PRG) 
 	$(PLUS4_RUNTIME_BANKED)
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_BOOTART_DIAG_PRG) \
-	$(C128_TITLE_PRG) $(C128_CATALOG_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_MODAL_MISC) \
+	$(C128_TITLE_PRG) $(C128_CATALOG_PRGS) $(C128_CATALOG_EXT_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_MODAL_MISC) \
 		$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) $(C128_OVL_CHEST) $(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) \
 		$(C128_ITEM_CAT_FILE) $(C128_ITEM_IDX_FILE) $(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) $(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_MODAL_MISC) \
@@ -450,14 +451,14 @@ $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
 $(C64_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(TITLE_SRC)" -define TITLE_PLATFORM_64 -symbolfiledir "$(OVL_OUT64)" -o "$(C64_TITLE_PRG)"
 
-$(C64_CATALOG_STAMP): $(CATALOG_SOURCES) $(C64_ITEM_CATALOG_SOURCES) $(CATALOG_DISK) | $(OUT64)
-	python3 -B "$(CATALOG_DISK)" records "$(OUT64)" $(C64_CATALOG_IDX_LOAD)
+$(C64_CATALOG_STAMP): $(CATALOG_SOURCES) $(C64_ITEM_CATALOG_SOURCES) $(CATALOG_DISK) Makefile | $(OUT64)
+	python3 -B "$(CATALOG_DISK)" records "$(OUT64)" $(C64_CATALOG_IDX_LOAD) --ext
 	python3 -B "$(CATALOG_DISK)" item-records "$(OUT64)" 0xe000 $(C64_CATALOG_IDX_LOAD)
 	touch "$@"
 
-$(PLUS4_CATALOG_STAMP): $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(CATALOG_DISK) | $(OUTPLUS4)
-	python3 "$(CATALOG_DISK)" records "$(OUTPLUS4)" $(PLUS4_CATALOG_IDX_LOAD)
-	python3 "$(CATALOG_DISK)" item-records "$(OUTPLUS4)" 0xe000 $(PLUS4_CATALOG_IDX_LOAD)
+$(PLUS4_CATALOG_STAMP): $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(CATALOG_DISK) Makefile | $(OUTPLUS4)
+	python3 -B "$(CATALOG_DISK)" records "$(OUTPLUS4)" $(PLUS4_CATALOG_IDX_LOAD) --ext
+	python3 -B "$(CATALOG_DISK)" item-records "$(OUTPLUS4)" 0xe000 $(PLUS4_CATALOG_IDX_LOAD)
 	touch "$@"
 
 $(OUT64)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUT64)
@@ -526,6 +527,9 @@ $(C128_ITEM_CAT_FILE) $(C128_ITEM_IDX_FILE): $(C128_ITEM_CAT_STAMP)
 	@test -f "$@" || { rm -f "$(C128_ITEM_CAT_STAMP)"; $(MAKE) "$(C128_ITEM_CAT_STAMP)"; }
 	@test -f "$@"
 
+$(C128_CATALOG_EXT_PRG): ../shared/catalog/monster_catalog_spec.json ../../tools/build_catalog.py | $(OUT128)
+	python3 -B ../../tools/build_catalog.py ext-rows --prg-addr 0xd000 --out "$@"
+
 $(C128_BOOT_PRG): $(C128_SOURCES) | ensure-kickass $(OUT128)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(C128_BOOT_SRC)" -symbolfiledir "$(OVL_OUT128)" -o "$(C128_BOOT_PRG)"
 
@@ -591,6 +595,7 @@ $(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(DISK64_IMAGE) $(LICENSE_DISK_FILE) $
 	cp -f "$(OUT64)/monster.cat2" "$(C64_DIST_DIR)/monster.cat2"
 	cp -f "$(OUT64)/monster.cat3" "$(C64_DIST_DIR)/monster.cat3"
 	cp -f "$(OUT64)/monster.cat4" "$(C64_DIST_DIR)/monster.cat4"
+	cp -f "$(OUT64)/monster.ext" "$(C64_DIST_DIR)/monster.ext"
 	cp -f "$(OUT64)/monster.idx" "$(C64_DIST_DIR)/monster.idx"
 	cp -f "$(OUT64)/item.cat" "$(C64_DIST_DIR)/item.cat"
 	cp -f "$(OUT64)/item.idx" "$(C64_DIST_DIR)/item.idx"
@@ -635,6 +640,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 		-write "$(OUT64)/monster.cat2" "monster.cat2" \
 		-write "$(OUT64)/monster.cat3" "monster.cat3" \
 		-write "$(OUT64)/monster.cat4" "monster.cat4" \
+		-write "$(OUT64)/monster.ext" "monster.ext" \
 		-write "$(OUT64)/item.cat" "item.cat" \
 		-write "$(C64_OVL_START)" "64.start" \
 		-write "$(C64_OVL_TOWN)" "64.town" \
@@ -652,7 +658,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DIS
 			-write "$(LICENSE_DISK_FILE)" "license,s" \
 			-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
 	python3 "$(DISKART)" "$(DISK64_IMAGE)" c64
-	python3 "$(CATALOG_DISK)" index "$(DISK64_IMAGE)" "$(OUT64)/monster.idx" $(C64_CATALOG_IDX_LOAD)
+	python3 -B "$(CATALOG_DISK)" index "$(DISK64_IMAGE)" "$(OUT64)/monster.idx" $(C64_CATALOG_IDX_LOAD) --ext
 	$(C1541) -attach "$(DISK64_IMAGE)" -write "$(OUT64)/monster.idx" "monster.idx" >/dev/null
 	python3 -B "$(CATALOG_DISK)" item-index "$(DISK64_IMAGE)" "$(OUT64)/item.idx" $(C64_CATALOG_IDX_LOAD)
 	$(C1541) -attach "$(DISK64_IMAGE)" -write "$(OUT64)/item.idx" "item.idx" >/dev/null
@@ -676,6 +682,7 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write "$(OUTPLUS4)/monster.cat2" "monster.cat2" \
 		-write "$(OUTPLUS4)/monster.cat3" "monster.cat3" \
 		-write "$(OUTPLUS4)/monster.cat4" "monster.cat4" \
+		-write "$(OUTPLUS4)/monster.ext" "monster.ext" \
 		-write "$(OUTPLUS4)/item.cat" "item.cat" \
 		-write "$(PLUS4_OVL_START)" "4.start" \
 		-write "$(PLUS4_OVL_TOWN)" "4.town" \
@@ -692,10 +699,10 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write "$(OUTPLUS4)/legalui" "legalui" \
 		-write "$(LICENSE_DISK_FILE)" "license,s" \
 		-write "$(SOURCE_OFFER_DISK_FILE)" "source-offer,s"
-	python3 "$(DISKART)" "$(DISKPLUS4_IMAGE)" plus4
-	python3 "$(CATALOG_DISK)" index "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/monster.idx" $(PLUS4_CATALOG_IDX_LOAD)
+	python3 -B "$(DISKART)" "$(DISKPLUS4_IMAGE)" plus4
+	python3 -B "$(CATALOG_DISK)" index "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/monster.idx" $(PLUS4_CATALOG_IDX_LOAD) --ext
 	$(C1541) -attach "$(DISKPLUS4_IMAGE)" -write "$(OUTPLUS4)/monster.idx" "monster.idx" >/dev/null
-	python3 "$(CATALOG_DISK)" item-index "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/item.idx" $(PLUS4_CATALOG_IDX_LOAD)
+	python3 -B "$(CATALOG_DISK)" item-index "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/item.idx" $(PLUS4_CATALOG_IDX_LOAD)
 	$(C1541) -attach "$(DISKPLUS4_IMAGE)" -write "$(OUTPLUS4)/item.idx" "item.idx" >/dev/null
 	@mkdir -p "$(OUTPLUS4)"
 	cp -f "$(DISKPLUS4_IMAGE)" "$(OUTPLUS4)/moria8-plus4.d64"
@@ -713,6 +720,7 @@ define C128_DISK_WRITE_FILES
 		-write "$(C128_TITLE_PRG)" "t128" \
 		-write "$(OUT128)/128.cat.prg" "128.cat" \
 		-write "$(OUT128)/128.cnm.prg" "128.cnm" \
+		-write "$(C128_CATALOG_EXT_PRG)" "128.cex" \
 		-write "$(C128_ITEM_CAT_FILE)" "item.cat" \
 		-write "$(C128_OVL_START)" "128.start" \
 		-write "$(C128_OVL_TOWN)" "128.town" \
@@ -891,7 +899,7 @@ $(CARTPLUS4_OUT)/legalui: $(CARTPLUS4_OUT)/.main.stamp
 	@test -f "$@" || { rm -f "$(CARTPLUS4_OUT)/.main.stamp"; $(MAKE) "$(CARTPLUS4_OUT)/.main.stamp"; }
 	@test -f "$@"
 
-$(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin &: $(CARTPLUS4_OUT)/.main.stamp $(CARTPLUS4_OUT)/legalui $(CARTPLUS4_OUT)/.boot.stamp $(CARTPLUS4_OUT)/title ../../tools/make_plus4_magic.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+$(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin &: $(CARTPLUS4_OUT)/.main.stamp $(CARTPLUS4_OUT)/legalui $(CARTPLUS4_OUT)/.boot.stamp $(CARTPLUS4_OUT)/title ../../tools/make_plus4_magic.py ../../tools/build_catalog.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
 	python3 -B ../../tools/make_plus4_magic.py "$(CARTPLUS4_OUT)" "$(OUT)/moria8-plus4.crt"
 
 $(CARTPLUS4_OUT)/catalog-test.prg: plus4/cartridge_test_catalog.s $(CARTPLUS4_OUT)/.main.stamp
@@ -935,7 +943,11 @@ $(CART128_OUT)/legalui: $(CART128_OUT)/.main.stamp
 	@test -f "$@" || { rm -f "$(CART128_OUT)/.main.stamp"; $(MAKE) "$(CART128_OUT)/.main.stamp"; }
 	@test -f "$@"
 
-$(OUT)/moria8-c128.crt $(CART128_OUT)/moria8-c128.bin &: $(CART128_OUT)/.main.stamp $(CART128_OUT)/legalui $(CART128_OUT)/.boot.stamp $(CART128_OUT)/title ../../tools/make_c128_md128.py $(CATALOG_SOURCES) $(C128_ITEM_CAT_SOURCES) $(CATALOG_DISK) $(LICENSE_FILE) $(SOURCE_OFFER)
+$(CART128_OUT)/128.cex.prg: ../shared/catalog/monster_catalog_spec.json ../../tools/build_catalog.py | $(OUT)
+	mkdir -p "$(CART128_OUT)"
+	python3 -B ../../tools/build_catalog.py ext-rows --prg-addr 0xd000 --out "$@"
+
+$(OUT)/moria8-c128.crt $(CART128_OUT)/moria8-c128.bin &: $(CART128_OUT)/.main.stamp $(CART128_OUT)/legalui $(CART128_OUT)/128.cex.prg $(CART128_OUT)/.boot.stamp $(CART128_OUT)/title ../../tools/make_c128_md128.py $(CATALOG_SOURCES) $(C128_ITEM_CAT_SOURCES) $(CATALOG_DISK) $(LICENSE_FILE) $(SOURCE_OFFER)
 	python3 -B ../../tools/make_c128_md128.py "$(CART128_OUT)" "$(OUT)/moria8-c128.crt"
 
 test128-cartridge: cartridge128 $(DISK128_IMAGE)

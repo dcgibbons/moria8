@@ -25,6 +25,24 @@
 #define HELP_TITLE_EXTERNAL
 #define HOME_OVERLAY_SEPARATE
 #define SAVE_IN_STORAGE_OVERLAY
+// Wave 5.2 cold evictions: keep Default (< $C800) and 4.bank (< $FC00) roomy
+// for Phase 5 full monster parity while leaving Plus4HighBss ($DF00) untouched.
+#define PLAYER_PFLAGS_EXTERNAL
+#define UI_CHAR_BG_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define DOOR_OPEN_CLOSE_EXTERNAL
+#define DOOR_PICK_CO_LOCATED
+#define CALC_DIG_EXTERNAL
+#define CALC_DIG_CO_LOCATED
+#define ITEM_SPAWN_EXTERNAL
+#define ITEM_DROP_EXTERNAL
+#define HELP_CMD_BODY_EXTERNAL
+#define STARTING_KIT_EXTERNAL
+#define LOAD_RESUME_RESET_EXTERNAL
+#define PLAYER_MAGIC_BROWSE_EXTERNAL
+#define PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#define STORE_CHECK_CAT_DUPLICATED
+#define ITEMDESC_STORE_SLOT_DUPLICATED
 .if (!cmdLineVars.containsKey("OVL_OUT")) {
     .error "OVL_OUT is required; generated files belong under build/"
 }
@@ -437,14 +455,8 @@ plus4_storage_marker_present:
 #import "../../../core/math.s"
 #import "../../../core/tables.s"
 #import "../../../core/item_defs.s"
-// Equipment flags ride the always-visible $F000 banked runtime (~123 B free below $FC00).
-#define PFLAGS_SEGMENT_CUSTOM
-.macro PflagsSegment() {
-    .segment RuntimeBanked
-}
-.macro PflagsRestoreSegment() {
-    .segment Default
-}
+// Equipment effect flags park in ModalMiscOverlay ($E000) behind
+// hal_player_recalc_pflags, which saves and restores current_overlay.
 #import "../../../core/player.s"
 #import "../../../core/ui_messages.s"
 #import "../../../core/ui_status.s"
@@ -504,7 +516,7 @@ plus4_storage_marker_present:
 #if PLUS4_CARTRIDGE
 .assert "Cartridge catalog hidden unused tail is 139 bytes ($DC75-$DCFF)", PLUS4_CATALOG_HIDDEN_TAIL_FREE, 139
 #else
-.assert "Disk catalog hidden unused tail is 27 bytes ($DCE5-$DCFF)", PLUS4_CATALOG_HIDDEN_TAIL_FREE, 27
+.assert "Disk catalog hidden unused tail is 9 bytes ($DCF7-$DCFF)", PLUS4_CATALOG_HIDDEN_TAIL_FREE, 9
 #endif
 .print "Catalog hidden tail free: " + PLUS4_CATALOG_HIDDEN_TAIL_FREE + " bytes at $" + toHexString(PLUS4_CATALOG_HIDDEN_TAIL_BASE) + "-$" + toHexString(CATALOG_HIDDEN_END)
 #endif
@@ -645,7 +657,7 @@ plus4_high_bss_end:
 #define PLAYER_LOOK_EXTERNAL
 #import "../../../core/player_move.s"
 .macro PlayerRunInitializeSegment() {
-    .segment RuntimeBanked
+    .segment ModalMiscOverlay
 }
 .macro PlayerRunRestoreResidentSegment() {
     .segment Default
@@ -655,11 +667,9 @@ plus4_high_bss_end:
 #import "../../../core/player_run.s"
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 
-// Initialization runs once when running begins. Runtime RAM remains visible
-// during gameplay, so the resident entry can jump directly to the banked body.
 run_initialize:
-    jmp run_initialize_impl
-.assert "Plus/4 runner initialization implementation stays banked", run_initialize_impl >= $F000 && run_initialize_impl < $FC00, true
+    jmp tramp_run_initialize
+.assert "Plus/4 runner initialization implementation lives in OVL_MODAL_MISC", run_initialize_impl >= $E000 && run_initialize_impl < $F000, true
 .assert "Plus/4 runner initialization entry stays resident", run_initialize < MAP_BASE, true
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../../core/combat.s"
@@ -1546,6 +1556,136 @@ tramp_player_pray:
     ldx #OVL_TITLE
     jmp plus4_ovl_caller_dispatch
 
+tramp_door_try_open:
+    lda #<door_try_open
+    ldy #>door_try_open
+    ldx #OVL_CHEST
+    jmp plus4_ovl_caller_dispatch
+
+tramp_door_try_close:
+    lda #<door_try_close
+    ldy #>door_try_close
+    ldx #OVL_CHEST
+    jmp plus4_ovl_caller_dispatch
+
+tramp_item_drop:
+    lda #<item_drop
+    ldy #>item_drop
+    ldx #OVL_HELP
+    jmp plus4_ovl_caller_dispatch
+
+tramp_help_cmd_body:
+    lda #<plus4_help_cmd_body
+    ldy #>plus4_help_cmd_body
+    ldx #OVL_HELP
+    jmp plus4_ovl_caller_dispatch
+
+tramp_trap_trigger:
+    lda #OVL_TITLE
+    jsr overlay_load_no_kernal
+    bcs !ttt_done+
+    ldx df_disarm_trap_idx
+    jsr trap_trigger
+!ttt_done:
+    jmp tramp_sr_epilogue
+
+// item_spawn_level — Resident entry for level floor-item generation.
+// Town (dlvl == 0) clears the floor table without touching disk; dungeon
+// levels run item_spawn_level_gen co-located with pick_item_type_overlay in
+// OVL_CHEST.
+item_spawn_level:
+    jsr item_init_floor
+    lda zp_player_dlvl
+    beq !isl_town_done+
+    lda current_overlay
+    cmp #OVL_CHEST
+    beq !isl_loaded+
+    ldx #OVL_CHEST - 1
+    jsr overlay_load_disk
+    lda #OVL_CHEST
+    sta current_overlay
+!isl_loaded:
+    sei
+    jsr plus4_bank_ram
+    jsr item_spawn_level_gen
+    jmp tramp_sr_epilogue
+!isl_town_done:
+    rts
+
+// tramp_spawn_nest_gold — Called from item_spawn_level_gen (OVL_CHEST).
+// Probes find_special_room(RT_NEST) in $F000 first so non-nest levels avoid
+// loading OVL_DUNGEON_GEN, and restores the caller overlay before returning.
+tramp_spawn_nest_gold:
+    sei
+    jsr plus4_bank_ram
+    lda #RT_NEST
+    jsr find_special_room
+    bcc !sng_done+
+    lda current_overlay
+    pha
+    cmp #OVL_DUNGEON_GEN
+    beq !sng_loaded+
+    ldx #OVL_DUNGEON_GEN - 1
+    jsr overlay_load_disk
+    lda #OVL_DUNGEON_GEN
+    sta current_overlay
+!sng_loaded:
+#if !PLUS4_CARTRIDGE
+    jsr plus4_catalog_cache_invalidate
+#endif
+    sei
+    jsr plus4_bank_ram
+    jsr spawn_nest_gold
+    pla
+    beq !sng_done+
+    cmp #OVL_DUNGEON_GEN
+    beq !sng_done+
+    pha
+    tax
+    dex
+    jsr overlay_load_disk
+    pla
+    sta current_overlay
+!sng_done:
+    jmp tramp_sr_epilogue
+
+// hal_player_recalc_pflags — Runs player_recalc_pflags_equipment in
+// OVL_MODAL_MISC while preserving current_overlay for overlay callers.
+hal_player_recalc_pflags:
+    lda current_overlay
+    pha
+    cmp #OVL_MODAL_MISC
+    beq !hprp_loaded+
+    lda #OVL_MODAL_MISC
+    jsr overlay_load_no_kernal
+    bcs !hprp_fail+
+!hprp_loaded:
+    sei
+    jsr plus4_bank_ram
+    jsr player_recalc_pflags_equipment
+    pla
+    beq !hprp_done+
+    cmp #OVL_MODAL_MISC
+    beq !hprp_done+
+    jsr overlay_load_no_kernal
+    bcs !hprp_fatal+
+!hprp_done:
+    jmp plus4_platform_runtime_resync
+!hprp_fail:
+    pla
+    jmp plus4_platform_runtime_resync
+!hprp_fatal:
+    jmp entry_main
+
+tramp_load_resume_reset:
+    lda #OVL_STORAGE
+    jsr overlay_load_no_kernal
+    bcs !tlrr_done+
+    jsr load_resume_reset
+    jsr overlay_invalidate
+!tlrr_done:
+    jmp tramp_sr_epilogue
+
 tramp_ui_inv_select_display:
     lda piw_return_overlay
     bne !tuisd_have_ret+
@@ -1792,21 +1932,41 @@ tramp_ui_recall:
     jmp tramp_sr_epilogue
 
 // door_pick_roll lives in the chest overlay with chest_disarm_skill; carry
-// (picked) propagates through the resync. A failed overlay load reads as an
-// ordinary pick miss (turn still consumed by the caller).
+// (picked) propagates through the resync, and current_overlay is preserved
+// for any non-CHEST overlay caller.
+plus4_tdpr_p: .byte 0
 tramp_door_pick_roll:
+    lda current_overlay
+    pha
+    cmp #OVL_CHEST
+    beq !tdpr_loaded+
     lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !load_failed+
+!tdpr_loaded:
     jsr door_pick_roll
     php
+    pla
+    sta plus4_tdpr_p
+    pla
+    beq !tdpr_resync+
+    cmp #OVL_CHEST
+    beq !tdpr_resync+
+    jsr overlay_load_no_kernal
+    bcs !tdpr_fatal+
+!tdpr_resync:
     jsr plus4_platform_runtime_resync
+    lda plus4_tdpr_p
+    pha
     plp
     rts
 !load_failed:
+    pla
     jsr plus4_platform_runtime_resync
     clc
     rts
+!tdpr_fatal:
+    jmp entry_main
 
 // Chest routing (docs/CHEST_DESIGN.md). tramp_chest_open (generated) is called
 // from the resident cmd_open pre-dispatch and owns the epilogue. chest_dispatch
@@ -2385,8 +2545,6 @@ save_append_disk_detail_plus4:
     lda disk_error_phase
     jmp screen_put_hex
 
-    #import "../../../core/player_magic_learn_op.s"
-
 banked_code_end:
 
 .print "Banked runtime: " + (banked_code_end - $f000) + " bytes at $F000-$" + toHexString(banked_code_end)
@@ -2475,6 +2633,7 @@ winner_apply_retirement_bonus_overlay:
     // Word of Destruction devastation engine: both callers live in the
     // spell overlay; resident tramp_eff_destroy_area restores OVL_SPELL.
     #import "../../../core/player_destroy_area.s"
+    #import "../../../core/player_pflags_cold.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
@@ -2511,6 +2670,18 @@ ovl_spell_end:
     #import "../../../core/ui_help.s"
     #import "../../../core/ui_inventory.s"
     #import "../../../core/ui_equipment.s"
+plus4_help_cmd_body:
+    lda #<help_pages
+    sta help_pages_src_lo
+    lda #>help_pages
+    sta help_pages_src_hi
+    #import "../../../core/ui_help_cmd_cold.s"
+    #import "../../../core/item_drop_cold.s"
+    #import "../../../core/starting_kit_cold.s"
+    // Store init/restock: transition-only (new game, town re-entry), moved
+    // from ovl.chest so item_spawn_cold.s and door_open_close_cold.s co-locate
+    // with pick_item_type_overlay and door_pick_roll in ovl.chest.
+    #import "../../../core/store_restock_overlay.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
@@ -2519,11 +2690,12 @@ ovl_help_end:
 // UI overlay — low-frequency modal UI and symbol identify screens
 // ============================================================
 .segment UiOverlay
-    #import "../../../core/ui_character.s"
     #import "../../../core/ui_identify.s"
     #import "../../../core/spell_names.s"
     #import "../../../core/player_magic_select_overlay.s"
     #import "../../../core/player_gain_spell_impl.s"
+    #import "../../../core/player_magic_browse_cold.s"
+    #import "../../../core/player_magic_learn_op.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true
@@ -2564,9 +2736,8 @@ ovl_gen_end:
 // ============================================================
 .segment ChestOverlay
     #import "../../../core/chest.s"
-    // Store init/restock: transition-only (new game, town re-entry), moved
-    // from the full items overlay for store stacking (2026-10-25).
-    #import "../../../core/store_restock_overlay.s"
+    #import "../../../core/item_spawn_cold.s"
+    #import "../../../core/door_open_close_cold.s"
 #if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT
 // balrog_product_setup — Deterministic Balrog-kill fixture for scripted
 // product smokes: a one-HP, permanently stunned Balrog east of the player on
@@ -2685,6 +2856,7 @@ ovl_home_end:
 // ============================================================
 .segment StorageOverlay
     #import "../../../core/ui_disk_setup.s"
+    #import "../../../core/load_resume_reset_cold.s"
 ovl_storage_end:
 .print "Storage overlay: " + (ovl_storage_end - $e000) + " bytes at $E000-$" + toHexString(ovl_storage_end)
 .assert "Storage overlay fits in $E000-$EFFF", ovl_storage_end <= $F000, true
@@ -2694,13 +2866,19 @@ ovl_storage_end:
 // ============================================================
 .segment TitleOverlay
     #import "../common/title_screen.s"
+    #import "../../../core/ui_character.s"
+    #import "../../../core/player_bg_draw_cold.s"
     #import "../../../core/bash.s"
     #import "../../../core/disarm.s"
     #import "../../../core/disarm_helpers.s"
     #import "../../../core/tunnel.s"
+    #import "../../../core/trap_trigger_cold.s"
+    #import "../../../core/calc_dig_cold.s"
+    #import "../../../core/player_magic_cast_cold.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $e000) + " bytes at $E000-$" + toHexString(ovl_title_end)
 .assert "Title overlay fits in $E000-$EFFF", ovl_title_end <= $F000, true
+.assert "Wave 5.2 Plus/4 evicted trampolines stay resident while cold bodies live in $E000 overlays", hal_player_recalc_pflags < MAP_BASE && player_recalc_pflags_equipment >= $e000 && player_recalc_pflags_equipment < ovl_modal_misc_end && tramp_load_resume_reset < MAP_BASE && load_resume_reset >= $e000 && load_resume_reset < ovl_storage_end && tramp_trap_trigger < MAP_BASE && trap_trigger >= $e000 && trap_trigger < ovl_title_end && calc_dig_ability >= $e000 && calc_dig_ability < ovl_title_end && item_spawn_level < MAP_BASE && item_spawn_level_gen >= $e000 && item_spawn_level_gen < ovl_chest_end && tramp_door_try_open < MAP_BASE && door_try_open >= $e000 && door_try_open < ovl_chest_end && tramp_item_drop < MAP_BASE && item_drop >= $e000 && item_drop < ovl_help_end && tramp_help_cmd_body < MAP_BASE && plus4_help_cmd_body >= $e000 && plus4_help_cmd_body < ovl_help_end, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

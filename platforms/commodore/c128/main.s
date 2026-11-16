@@ -43,6 +43,23 @@
 #define PICKER_IN_CHEST_OVERLAY
 #define PLAYER_RECALC_PFLAGS_EXTERNAL
 #define PFLAGS_SEGMENT_CUSTOM
+#define PLACE_SECRETS_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define ITEM_SPAWN_PICKER_SEPARATE
+#define DOOR_OPEN_CLOSE_EXTERNAL
+#define ITEM_DROP_EXTERNAL
+#define HELP_CMD_BODY_EXTERNAL
+#define EFF_FIND_TRAPS_EXTERNAL
+#define EFF_DESTROY_TRAPS_DOORS_EXTERNAL
+#define CALC_DIG_EXTERNAL
+#define CALC_DIG_CO_LOCATED
+#define STARTING_KIT_EXTERNAL
+#define LOAD_RESUME_RESET_EXTERNAL
+#define ITEMDESC_STORE_SLOT_DUPLICATED
+#define PLAYER_MAGIC_BROWSE_EXTERNAL
+#define PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#define PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+#define MSG_HISTORY_IN_AUX
 #import "../common/save_slot_policy.s"
 
 .macro PflagsSegment() {
@@ -151,6 +168,13 @@ banked_payload:
 // The monster catalog's Bank 1 payloads (memory128.s, C128M-007).
 .segmentdef C128Bank1Catalog [outPrg=OVL_OUT + "/128.cat.prg", start=$7e60, min=$7e60, max=$9567]
 .segmentdef C128Bank1CatalogNames [outPrg=OVL_OUT + "/128.cnm.prg", start=$a000, min=$a000, max=$afff]
+.segmentdef C128Bank1MsgHistory [start=$dcb8, virtual]
+.macro MsgHistorySegment() {
+    .segment C128Bank1MsgHistory
+}
+.macro MsgHistoryRestoreSegment() {
+    .segment Default
+}
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 #define C128_REAL_BOOT_DIAG
@@ -1121,113 +1145,18 @@ tramp_store_enter:
 !tse_fail:
     jmp entry_main
 
-#if C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
-test_expect_screen_string:
-    sta test_expect_row
-    stx test_expect_col
-    lda test_expect_row
-    sta zp_cursor_row
-    lda test_expect_col
-    sta zp_cursor_col
-    jsr screen_set_cursor
-    lda zp_screen_hi
-    ldy zp_screen_lo
-    jsr vdc_set_update_addr
-    ldy #0
-!tes_loop:
-    lda (zp_ptr0),y
-    beq !tes_ok+
-    stx test_expect_save_x
-    ldx #31
-    jsr vdc_read_reg
-    cmp (zp_ptr0),y
-    bne !tes_fail+
-    ldx test_expect_save_x
-    iny
-    bne !tes_loop-
-!tes_fail:
-    clc
-    rts
-!tes_ok:
-    sec
-    rts
-
-test_expect_row: .byte 0
-test_expect_col: .byte 0
-test_expect_save_x: .byte 0
-
-.encoding "screencode_mixed"
-test_inventory_title_str: .text "Inventory" ; .byte 0
-test_beginner_book_str:   .text "Spellbook Beginners-Magick" ; .byte 0
-test_mage_book_title_str: .text "Mage Book" ; .byte 0
-test_magic_missile_str:   .text "Magic Missile" ; .byte 0
-// The cast list shows learned spells only (as Umoria); a new mage knows one.
-test_cast_one_spell_str:  .text "Cast which? (a-a, esc)" ; .byte 0
-
-#if C128_TEST_SCRIPTED_BOOK_OVERLAY
-test_assert_book_overlay:
-    lda #<test_inventory_title_str
-    sta zp_ptr0
-    lda #>test_inventory_title_str
-    sta zp_ptr0_hi
-    lda #0
-    ldx #35
-    jsr test_expect_screen_string
-    bcc !book_fail+
-
-    lda #<test_beginner_book_str
-    sta zp_ptr0
-    lda #>test_beginner_book_str
-    sta zp_ptr0_hi
-    lda #2
-    ldx #4
-    jsr test_expect_screen_string
-    bcc !book_fail+
-
-    jmp c128_test_book_overlay_pass_sym
-!book_fail:
-    jmp c128_test_book_overlay_fail_sym
-#endif
-
-#if C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
-test_assert_spell_list_overlay:
-    lda #<test_mage_book_title_str
-    sta zp_ptr0
-    lda #>test_mage_book_title_str
-    sta zp_ptr0_hi
-    lda #0
-    ldx #14
-    jsr test_expect_screen_string
-    bcc !list_fail+
-
-    lda #<test_magic_missile_str
-    sta zp_ptr0
-    lda #>test_magic_missile_str
-    sta zp_ptr0_hi
-    lda #2
-    ldx #4
-    jsr test_expect_screen_string
-    bcc !list_fail+
-
-    lda #<test_cast_one_spell_str
-    sta zp_ptr0
-    lda #>test_cast_one_spell_str
-    sta zp_ptr0_hi
-    lda #24
-    ldx #5
-    jsr test_expect_screen_string
-    bcc !list_fail+
-
-    jmp c128_test_spell_list_overlay_pass_sym
-!list_fail:
-    jmp c128_test_spell_list_overlay_fail_sym
-#endif
-#endif
-
 #if C128_TEST_SCRIPTED_INPUT
 c128_test_town_fail_sym:
     brk
 #elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+// Monitor seed stop (< $4000 so no ROM executes this address during autostart):
+// run_tests128.sh plays c128_spell_seed.mon here instead of carrying ~115 B of
+// seeding code in Bank 0 Default.
+c128_test_seed_scripted_spell_state:
+    rts
+.assert "scripted spell seed stop is below every ROM", c128_test_seed_scripted_spell_state < $4000, true
+#endif
 c128_test_spell_fail_no_cast_sym:
     brk
 c128_test_spell_fail_level_sym:
@@ -1257,14 +1186,20 @@ c128_test_spell_cancel_pass_sym:
 #if C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
 c128_test_book_overlay_fail_sym:
     brk
+// VDC screen string checks run in harness128.py from a monitor VDC dump at this
+// stop (< $4000), saving ~195 B of in-image VDC reader + expected strings.
+test_assert_book_overlay:
 c128_test_book_overlay_pass_sym:
     brk
+.assert "book overlay pass stop is below every ROM", c128_test_book_overlay_pass_sym < $4000, true
 #endif
 #if C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_spell_list_overlay_fail_sym:
     brk
+test_assert_spell_list_overlay:
 c128_test_spell_list_overlay_pass_sym:
     brk
+.assert "spell list overlay pass stop is below every ROM", c128_test_spell_list_overlay_pass_sym < $4000, true
 #endif
 #if C128_TEST_SCRIPTED_SCROLL_SELECTOR
 c128_test_scroll_selector_fail_sym:
@@ -1389,6 +1324,21 @@ tramp_ui_help_display:
 !done:
     jmp tramp_ui_exit
 
+tramp_help_cmd_body:
+    jsr tramp_ui_enter
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcs !fail+
+    lda #<help_pages
+    sta help_pages_src_lo
+    lda #>help_pages
+    sta help_pages_src_hi
+    jsr help_cmd_body
+    jmp tramp_ui_exit
+!fail:
+    clc
+    jmp tramp_ui_exit
+
 tramp_ui_ui_overlay_patch_target:
     sta !ui_target+ + 1
     stx !ui_target+ + 2
@@ -1486,15 +1436,119 @@ c128_storage_cmd_run:
 
 c128_target_ovl: .byte 0
 
+c128_help_cmd_dispatch:
+    sta !hcmd_target+ + 1
+    stx !hcmd_target+ + 2
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcs !hcmd_fail+
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+!hcmd_target:
+    jsr door_try_open
+    pla
+    sta $01
+    ldy #0
+    sty piw_return_overlay
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    rts
+!hcmd_fail:
+    lda #0
+    sta piw_return_overlay
+    clc
+    rts
+
+c128_town_magic_dispatch:
+    sta !tm_target+ + 1
+    stx !tm_target+ + 2
+    lda #2
+    jsr overlay_load
+    bcs !tm_fail+
+    jsr c128_restore_runtime_guards
+    sei
+    :BankOutKernal()
+!tm_target:
+    jsr pm_require_class_level
+    lda #MMU_ALL_RAM
+    sta $ff00
+    rts
+!tm_fail:
+    clc
+    rts
+
+tramp_door_pick_roll:
+    php
+    pla
+    and #$04
+    sta c128_storage_arg_a
+    lda $01
+    pha
+    lda current_overlay
+    pha
+    lda #C128_DISARM_OVERLAY_ID
+    jsr overlay_load
+    bcs !dpr_load_fail+
+    jsr c128_restore_runtime_guards
+    sei
+    :BankOutKernal()
+    jsr door_pick_roll
+    jmp !dpr_restore+
+!dpr_load_fail:
+    clc
+!dpr_restore:
+    ror c128_storage_ret_a
+    pla
+    cmp #C128_HELP_OVERLAY_ID
+    bne !dpr_ovl_done+
+    jsr overlay_load
+!dpr_ovl_done:
+    jsr c128_restore_runtime_guards
+    sei
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    lda c128_storage_arg_a
+    bne !dpr_keep_sei+
+    cli
+!dpr_keep_sei:
+    asl c128_storage_ret_a
+    rts
+
 hal_player_recalc_pflags:
     ldx #<player_recalc_pflags_equipment
     ldy #>player_recalc_pflags_equipment
     jmp c128_call_help_preserve_ovl
 
+item_spawn_level:
+    ldx #<item_spawn_level_gen
+    ldy #>item_spawn_level_gen
+    jmp c128_call_help_preserve_ovl
+
+eff_destroy_traps_doors:
+    ldx #<eff_destroy_traps_doors_ovl
+    ldy #>eff_destroy_traps_doors_ovl
+    jmp c128_call_gen_preserve_ovl
+
+tramp_pick_item_type_spawn:
+    ldx #<pick_item_type_overlay
+    ldy #>pick_item_type_overlay
+    jmp c128_call_chest_preserve_ovl
+
 re_equip_entry:
     ldx #<re_equip
     ldy #>re_equip
     jmp c128_call_storage_preserve_ovl
+
+c128_call_chest_preserve_ovl:
+    pha
+    lda #C128_CHEST_OVERLAY_ID
+    bne c128_call_ovl_preserve_common
 
 c128_call_gen_preserve_ovl:
     pha
@@ -1687,12 +1741,12 @@ c128_prepare_startup_loading_screen:
     jsr c128_restore_vdc_rom_font
     jsr hal_screen_clear
     // Total = 9 startup files + 13 cache files (4 tiers + 9 overlays);
-    // with the monster catalog, 11 startup files (128.cat, 128.cnm) + 8
-    // overlays (no tiers, no STARTUP). c128_cache_enabled lives in Default
+    // with the monster catalog, 12 startup files (128.cat, 128.cnm, 128.cex)
+    // + 8 overlays (no tiers, no STARTUP). c128_cache_enabled lives in Default
     // RAM (moria128.prg, C128M-011), and keeping the count static avoids coupling
     // preload initialization to later state.
 #if HAL_PLATFORM_MONSTER_CATALOG
-    lda #19
+    lda #20
 #else
     lda #22
 #endif
@@ -2718,6 +2772,10 @@ c128_load_core_residents:
     bcc !catalog_names_loaded+
     jmp runtime_load_failed
 !catalog_names_loaded:
+    jsr c128_load_catalog_ext_prg
+    bcc !catalog_ext_loaded+
+    jmp runtime_load_failed
+!catalog_ext_loaded:
 #endif
     rts
 
@@ -3363,6 +3421,9 @@ c128_stack_guard_substage:  .byte 0
 #import "../../../core/player.s"
 #undef PLAYER_STAT_HELPERS_EXTERNAL
 #import "../../../core/ui_messages.s"
+.segment C128Bank1MsgHistory
+msg_history_end:
+.segment Default
 #define STATUS_TEXT_SEGMENT_CUSTOM
 .macro StatusTextSegment() {
     .segment RuntimeBankedCode
@@ -3652,7 +3713,8 @@ tool_ego_prefix_hi:
 #import "../../../core/chest_loot.s"
 // look_flash_target (C128M-010) stays in Bank 0 Default (< $AF00).
 #import "../../../core/look_flash_target.s"
-#define MON_ATK_ACID_EXTERNAL   // monster_attack.s (play payload) jumps to RuntimeBankedCode
+#define MON_ATK_ACID_EXTERNAL   // monster_attack.s (play payload) calls Default mon_atk_acid
+#import "../../../core/monster_acid.s"
 
 // wizard_wall_walk_active rides the main image (freed by the corpus move);
 // the play payload has no headroom for the chest summon hooks. Scripted/diag
@@ -3668,6 +3730,32 @@ wizard_wall_walk_active:
 !inactive:
     lda #0
     rts
+
+wizard_prompt_clear_digits:
+    lda #0
+    sta wizard_num_digits
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$20
+    jsr hal_screen_put_char
+    lda #5
+    sta zp_cursor_row
+    lda wizard_prompt_input_col
+    sta zp_cursor_col
+    rts
+
+wizard_prompt_bad_value:
+    lda #<wizard_bad_value_str
+    ldy #>wizard_bad_value_str
+    jsr msg_print_ay
+    jmp wizard_prompt_clear_digits
+
+wizard_bad_value_str:
+    .text "BAD" ; .byte 0
 #endif
     // Armour/crown/cursed-armour ego tables and sub-rollers ride StorageOverlay
     // (loaded by tramp_roll_ego_type while roll_ego_type stays in Default).
@@ -3984,54 +4072,54 @@ c128_copy_item_idx_data:
     rts
 #endif
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
-c128_test_seed_scripted_spell_state:
-    lda #0
-    sta c128_test_spell_success_count
-    sta c128_test_spell_return_pending
-    sta c128_test_spell_return_count
-    lda #CLASS_MAGE
-    sta player_data + PL_CLASS
-    lda #SPELL_MAGE
-    sta player_data + PL_SPELL_TYPE
-    lda #50
-    sta zp_player_lvl
-    sta player_data + PL_LEVEL
-    lda #18
-    sta player_data + PL_INT_CUR
-    lda #20
-    sta zp_player_mp
-    sta player_data + PL_MANA
-    sta zp_player_mmp
-    sta player_data + PL_MAX_MANA
-    lda #1
-    sta player_data + PL_SPELLS_LEARNT_0
-    lda #0
-    sta player_data + PL_SPELLS_LEARNT_1
-    sta player_data + PL_SPELLS_LEARNT_2
-    sta player_data + PL_SPELLS_LEARNT_3
-    sta player_data + PL_SPELLS_WORKED_0
-    sta player_data + PL_SPELLS_WORKED_1
-    sta player_data + PL_SPELLS_WORKED_2
-    sta player_data + PL_SPELLS_WORKED_3
-    sta player_data + PL_SPELLS_FORGOTTEN_0
-    sta player_data + PL_SPELLS_FORGOTTEN_1
-    sta player_data + PL_SPELLS_FORGOTTEN_2
-    sta player_data + PL_SPELLS_FORGOTTEN_3
+// Monitor seed file (outBin, zero bytes in Default): played by run_tests128.sh
+// when execution stops at c128_test_seed_scripted_spell_state (< $4000).
+.macro C128TestMonPoke(addr, value) {
+    .text "> $" + toHexString(addr) + " $" + toHexString(value)
+    .byte $0a
+}
+.macro C128TestMonFill(first, last, value) {
+    .text "f $" + toHexString(first) + " $" + toHexString(last) + " $" + toHexString(value)
+    .byte $0a
+}
+.segmentdef C128TestSpellSeed [outBin=OVL_OUT + "/c128_spell_seed.mon"]
+.segment C128TestSpellSeed
+.encoding "ascii"
+.text "bank ram00" ; .byte $0a
+:C128TestMonPoke(c128_test_spell_success_count, 0)
+:C128TestMonPoke(c128_test_spell_return_pending, 0)
+:C128TestMonPoke(c128_test_spell_return_count, 0)
+:C128TestMonPoke(player_data + PL_CLASS, CLASS_MAGE)
+:C128TestMonPoke(player_data + PL_SPELL_TYPE, SPELL_MAGE)
+:C128TestMonPoke(zp_player_lvl, 50)
+:C128TestMonPoke(player_data + PL_LEVEL, 50)
+:C128TestMonPoke(player_data + PL_INT_CUR, 18)
+:C128TestMonPoke(zp_player_mp, 20)
+:C128TestMonPoke(player_data + PL_MANA, 20)
+:C128TestMonPoke(zp_player_mmp, 20)
+:C128TestMonPoke(player_data + PL_MAX_MANA, 20)
+:C128TestMonPoke(player_data + PL_SPELLS_LEARNT_0, 1)
+:C128TestMonPoke(player_data + PL_SPELLS_LEARNT_1, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_LEARNT_2, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_LEARNT_3, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_WORKED_0, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_WORKED_1, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_WORKED_2, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_WORKED_3, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_FORGOTTEN_0, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_FORGOTTEN_1, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_FORGOTTEN_2, 0)
+:C128TestMonPoke(player_data + PL_SPELLS_FORGOTTEN_3, 0)
 #if C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
-    lda #1
+:C128TestMonPoke(player_data + PL_NEW_SPELLS, 1)
 #else
-    lda #0
+:C128TestMonPoke(player_data + PL_NEW_SPELLS, 0)
 #endif
-    sta player_data + PL_NEW_SPELLS
-    lda #99
-    ldx #31
-!c128_test_spell_order_clear:
-    sta player_data + PL_SPELL_ORDER,x
-    dex
-    bpl !c128_test_spell_order_clear-
-    lda #0
-    sta player_data + PL_SPELL_ORDER
-    rts
+:C128TestMonFill(player_data + PL_SPELL_ORDER, player_data + PL_SPELL_ORDER + 31, 99)
+:C128TestMonPoke(player_data + PL_SPELL_ORDER, 0)
+.text "bank cpu" ; .byte $0a
+.encoding "screencode_mixed"
+.segment Default
 #endif
 
 // C128 resident UI transition helpers and selector strings (< $AF00).
@@ -4060,7 +4148,6 @@ uinv_sep_str:
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
-// Potion heal/cure effects go to the banked runtime with the quaff code.
 #define EFF_POTION_CURE_EXTERNAL
 #import "../../../core/player_items.s"
 #undef PLAYER_ITEM_COMMANDS_EXTERNAL
@@ -4741,7 +4828,6 @@ first_banked_function:
     #import "../../../core/player_recalc_equipment.s"
     #import "../../../core/monster_magic.s"
     #import "../../../core/monster_death.s"
-    #import "../../../core/monster_acid.s"
     #import "../../../core/inv_add.s"
     #import "../../../core/eff_potion_cure.s"
 combat_calc_melee_total_tohit_bonus:
@@ -4994,7 +5080,7 @@ program_end:
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_ind_pfx < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
-.assert "Message history buffer matches configured width", (msg_hist_idx - msg_history) == MSG_HIST_BYTES, true
+.assert "Message history buffer matches configured width", (msg_history_end - msg_history) == MSG_HIST_BYTES && msg_history == BANK1_MSG_HISTORY_BASE && msg_history_end - 1 == BANK1_MSG_HISTORY_END, true
 .assert "VDC attribute mode keeps alternate charset enabled", VDC_ATTR_MODE == $80, true
 
 
@@ -5010,6 +5096,7 @@ program_end:
     #import "../../../core/store.s"
     #import "../../../core/ui_store.s"
     #import "../../../core/title_sysinfo_banked.s"
+    #import "../../../core/player_magic_cast_cold.s"
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $e000) + " bytes at $E000-$" + toHexString(ovl_town_end)
 .assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $f000, true
@@ -5041,6 +5128,7 @@ ovl_start_end:
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
+    #import "../../../core/eff_find_traps_cold.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
@@ -5081,6 +5169,12 @@ ovl_modal_misc_end:
     .segment RuntimeLowData
 c128_ui_scratch_end:
     .segment HelpOverlay
+    #import "../../../core/ui_help_cmd_cold.s"
+    #import "../../../core/door_open_close_cold.s"
+    #import "../../../core/item_drop_cold.s"
+    #import "../../../core/item_spawn_cold.s"
+    #import "../../../core/load_resume_reset_cold.s"
+    #import "../common/title_screen.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
@@ -5098,37 +5192,12 @@ ovl_help_end:
 ui_wizard_display:
     rts
 #else
-wizard_prompt_clear_digits:
-    lda #0
-    sta wizard_num_digits
-    lda #5
-    sta zp_cursor_row
-    lda wizard_prompt_input_col
-    sta zp_cursor_col
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
-    lda #5
-    sta zp_cursor_row
-    lda wizard_prompt_input_col
-    sta zp_cursor_col
-    rts
-
-wizard_prompt_bad_value:
-    lda #<wizard_bad_value_str
-    ldy #>wizard_bad_value_str
-    jsr msg_print_ay
-    jmp wizard_prompt_clear_digits
-
-wizard_bad_value_str:
-    .text "BAD" ; .byte 0
     #import "../../../core/ui_wizard.s"
 #endif
     #import "../../../core/spell_names.s"
     #import "../../../core/player_magic_select_overlay.s"
+    #import "../../../core/player_magic_browse_cold.s"
     #import "../../../core/player_gain_spell.s"
-    #import "../common/title_screen.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
@@ -5146,6 +5215,7 @@ ovl_ui_end:
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
     #import "../../../core/ranged_fire.s"
+    #import "../../../core/calc_dig_cold.s"
     #import "../../../core/tunnel.s"
     #import "../../../core/throw.s"
     #import "../../../core/bash.s"
@@ -5193,6 +5263,7 @@ ovl_chest_end:
     #import "../../../core/ui_home_text.s"
     #import "../../../core/ui_home.s"
     #import "../../../core/eff_item_p1.s"
+    #import "../../../core/starting_kit_cold.s"
 winner_apply_retirement_bonus_storage:
     .const WIN_PL_LEVEL = 19
     .const WIN_PL_GOLD_0 = 43
@@ -5327,6 +5398,7 @@ ovl_storage_end:
     #import "../../../core/dungeon_gen.s"
     #undef DUNGEON_TUNNEL_HELPERS_EXTERNAL
     #import "../../../core/special_rooms.s"
+    #import "eff_destroy_traps_doors128.s"
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true

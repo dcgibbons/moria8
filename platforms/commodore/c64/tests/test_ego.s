@@ -100,7 +100,15 @@ player_create:
 #import "../../../../core/scene_mat_tile.s"
 .segment Default
 .segment TestCreateOverlay
-#import "../../../../core/monster_attack.s"
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_attack_player:
+mon_atk_acid_armour:
+mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+player_death_check:
+    brk
+mad_dmg_hi: .byte 0
 .segment Default
 #import "../../../../core/turn.s"
 
@@ -109,11 +117,12 @@ player_create:
 .segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 #import "../../../../core/player_adjust_equipment_stat.s"
-// Monster spells and the store are not exercised here: out of the way above
-// the I/O hole (resistance armour, 2026-11-11, took the body into the create
-// overlay at $D000).
-.segment Default
-#import "../../../../core/monster_magic.s"
+// Monster spells and the store are not exercised here: stubbed in the $D000
+// test overlay so accidental execution hits BRK / parked_tripwire.
+.segment TestCreateOverlay
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 store_init_all:
     rts

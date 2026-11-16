@@ -46,7 +46,10 @@
 .assert "Catalog names fit a pool entry", CATALOG_NAME_MAX < CAT_NAME_SIZE, true
 .assert "Catalog town ids end on an availability byte", CATALOG_TOWN_COUNT & 7, 0
 .assert "Catalog playable counts follow the raw counts", cat_level_playable, cat_level_raw + CAT_LEVELS
+.assert "Catalog undead bitmap follows playable counts", cat_undead, cat_level_playable + CAT_LEVELS
+.assert "Catalog undead bitmap spans 35 bytes", catalog_index_end - cat_undead, floor((CATALOG_COUNT + 7) / 8)
 .assert "Catalog fields are the engine's tier fields", CATALOG_SOA_FIELDS, NUM_SOA_FIELDS - 2
+.assert "Catalog extended fields count", CATALOG_EXT_FIELDS, 8
 .assert "Catalog ids fit 9 bits", CATALOG_COUNT <= 512, true
 
 // Species table: the catalog id in each slot; id hi $FF = empty. Saved as
@@ -266,6 +269,8 @@ cat_fetch:
     // The whole record at once: the drive reads by sector, not by field.
     :CatalogUnmap()
     jsr catalog_fetch_record
+    jsr catalog_fetch_ext
+    jsr cat_store_ext_slot
     :CatalogMap()
     ldx #0
 !cf_field:
@@ -361,6 +366,10 @@ cat_fetch:
     :CatalogPoolWrite()
     lda hd_decode_buf,y
     bne !cf_name-
+    :CatalogUnmap()
+    jsr catalog_fetch_ext
+    jsr cat_store_ext_slot
+    :CatalogMap()
     rts
 .assert "hd_tree_right_ptr follows hd_tree_left_ptr", hd_tree_right_ptr, hd_tree_left_ptr + 2
 
@@ -368,6 +377,30 @@ cat_fetch:
 cat_names_tree:  .word catn_tree_left, catn_tree_right
 cat_corpus_tree: .word huff_tree_left, huff_tree_right
 #endif
+
+// cat_store_ext_slot — Copy cat_ext_record[0..7] into slot cat_slot of
+// contiguous cr_atk2_type..cr_cdefense.
+// Clobbers: A, X, Y, zp_ptr1
+cat_store_ext_slot:
+    lda #<cr_atk2_type
+    sta zp_ptr1
+    lda #>cr_atk2_type
+    sta zp_ptr1_hi
+    ldy cat_slot
+    ldx #0
+!cses_loop:
+    lda cat_ext_record,x
+    sta (zp_ptr1),y
+    lda zp_ptr1
+    clc
+    adc #MAX_CREATURES
+    sta zp_ptr1
+    bcc !+
+    inc zp_ptr1_hi
+!:  inx
+    cpx #CATALOG_EXT_FIELDS
+    bcc !cses_loop-
+    rts
 
 // cat_pool_entry — zp_ptr1 = slot cat_slot's name pool entry,
 // CATALOG_NAME_POOL_BASE + slot * 32, and cr_name_lo/hi point there.
@@ -442,7 +475,6 @@ cat_pick_id:
     // misc.inc alloc_monster lacks + m_level[0]).
     tay
     dey
-    ldx #0
     jsr cat_sum_levels          // zp_temp0/1 = raw count of levels 1..T-1
     lda cat_tmp
     cmp #1
@@ -459,64 +491,27 @@ cat_pick_id:
     lda zp_temp1
     adc #0
     sta cat_id_hi
-    // Playable? (id / 8 is at most 34; the bit is recall_spell_bit[id & 7])
-    lsr
-    lda cat_id_lo
-    ror
-    lsr
-    lsr
-    tax
-    lda cat_id_lo
-    and #7
-    tay
-    lda cat_available,x
-    and recall_spell_bit,y
-    beq !cpi_normal+
     rts
 !cpi_normal:
-    // The r-th playable creature of levels 1..L, walking ids up from the town.
-    ldx #CAT_LEVELS             // The playable counts
+    // Uniform over levels 1..L (all 279 catalog species are playable in Phase 5).
     ldy cat_level
-    jsr cat_sum_levels
-    jsr rng_range_word          // zp_temp2/3 = r
-    lda #CATALOG_TOWN_COUNT
+    jsr cat_sum_levels          // zp_temp0/1 = raw count of levels 1..L
+    jsr rng_range_word          // zp_temp2/3 = r in [0, count - 1]
+    lda zp_temp2
+    clc
+    adc #CATALOG_TOWN_COUNT
     sta cat_id_lo
-    lda #0
+    lda zp_temp3
+    adc #0
     sta cat_id_hi
-    lda #1
-    sta cat_tmp                 // Availability bit of cat_id
-    ldx #CATALOG_TOWN_COUNT / 8
-!cpi_walk:
-    lda cat_available,x
-    and cat_tmp
-    beq !cpi_next+
-    lda zp_temp2
-    ora zp_temp3
-    beq !cpi_done+
-    lda zp_temp2
-    bne !cpi_dec_lo+
-    dec zp_temp3
-!cpi_dec_lo:
-    dec zp_temp2
-!cpi_next:
-    inc cat_id_lo
-    bne !cpi_id_ok+
-    inc cat_id_hi
-!cpi_id_ok:
-    asl cat_tmp
-    bcc !cpi_walk-
-    rol cat_tmp                 // Bit 0 of the next byte
-    inx
-    bne !cpi_walk-
-!cpi_done:
     rts
 
-// cat_sum_levels — zp_temp0/1 = sum of cat_level_raw[X+1 .. X+Y].
+// cat_sum_levels — zp_temp0/1 = sum of cat_level_raw[1 .. Y].
 // Clobbers: A, X, Y
 cat_sum_levels:
-    lda #0
-    sta zp_temp0
-    sta zp_temp1
+    ldx #0
+    stx zp_temp0
+    stx zp_temp1
     cpy #0
     beq !csl_done+
 !csl_loop:
@@ -579,7 +574,9 @@ catalog_population:
 // Output: C = 1 found (recall_view_* & creature_name_buf populated), C = 0 none.
 // Clobbers: everything except preserved caller ZP (zp_temp0-2, zp_ptr0, zp_ptr1)
 crl_field_idx:
-    .byte 0, 1, 4, 5, 6, 7, 12, 13, 14, 15, 16, 17
+    .byte 0, 1, 3, 4, 5, 6, 7, 12, 13, 14, 15, 16, 17, 18, 19
+crl_field_idx_end:
+.assert "Recall view field table matches view struct", crl_field_idx_end - crl_field_idx, recall_view_spell_flags - recall_view_display + 1
 
 catalog_recall_match_and_fill:
     jsr cat_save_zp
@@ -634,7 +631,7 @@ catalog_recall_match_and_fill:
     lda cat_record + 2,y
     sta recall_view_display,x
     inx
-    cpx #12
+    cpx #15
     bcc !crl_rec_fields-
     ldy #$ff
 !crl_rec_name:
@@ -679,7 +676,7 @@ catalog_recall_match_and_fill:
     sta recall_view_display,x
     inc cat_rcl_out
     lda cat_rcl_out
-    cmp #12
+    cmp #15
     bcs !crl_fld_name+
 !crl_fld_skip:
     clc
@@ -741,6 +738,13 @@ catalog_recall_match_and_fill:
     sta creature_name_buf,y
 #endif
 !crl_found:
+    jsr catalog_fetch_ext
+    ldx #CATALOG_EXT_FIELDS - 1
+!crl_ext_copy:
+    lda cat_ext_record,x
+    sta recall_view_atk2_type,x
+    dex
+    bpl !crl_ext_copy-
     lda cat_rcl_id_lo
     sta recall_last_cat_lo
     sta recall_last_idx

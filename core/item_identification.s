@@ -101,7 +101,11 @@ item_init_identification:
     dex
     bpl !iid_clear-
 
+#if ITEM_REFRESH_KNOWN_EXTERNAL && !ITEM_REFRESH_KNOWN_CO_LOCATED
+    jsr tramp_item_refresh_fixed_known
+#else
     jsr item_refresh_fixed_known
+#endif
 
     ldx #4                          // 5 flavour classes (staff..potion)
 !iid_cls_loop:
@@ -169,51 +173,9 @@ iid_rand_y:  .byte 0
 :ItemInitIdentRestoreSegment()
 #endif
 
-// ============================================================
-// item_refresh_fixed_known — Ensure all fixed-description & fixed-flavour
-// items across Pages 0 and 1 are marked known in id_known_bits.
-// Preserves: item_cur_page. Clobbers: A, X, Y.
-// ============================================================
-item_refresh_fixed_known:
-    lda item_cur_page
-    pha
-    lda #0
-    sta item_cur_page
-    ldy #ITEM_PAGE_SIZE
-    jsr !irfk_scan_page+
-    lda #ITEM_PAGE_BIT
-    sta item_cur_page
-    ldy #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
-    jsr !irfk_scan_page+
-    pla
-    sta item_cur_page
-    rts
-
-!irfk_scan_page:
-    sty irfk_limit
-    ldx #0
-!irfk_loop:
-    txa
-    jsr item_get_category_a
-    cmp #ICAT_POTION
-    bcc !irfk_set+
-    cmp #ICAT_AMULET
-    bcs !irfk_set+                  // AMULET, CHEST, CLOAK, JUNK, and fixed classes
-    cmp #ICAT_BOOK
-    beq !irfk_set+
-    txa
-    jsr item_get_unknown_idx_a
-    cmp #$ff                        // Fixed-flavour items (#271/#273/#274)
-    bne !irfk_next+
-!irfk_set:
-    jsr id_known_set
-!irfk_next:
-    inx
-    cpx irfk_limit
-    bcc !irfk_loop-
-    rts
-
-irfk_limit: .byte 0
+#if !ITEM_REFRESH_KNOWN_EXTERNAL
+#import "item_refresh_known_cold.s"
+#endif
 
 // ============================================================
 // item_get_name_ptr — Decode known or shuffled unid name for (item_cur_page, A)

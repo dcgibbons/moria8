@@ -432,75 +432,80 @@ ego_apply_damage:
     bne !ead_apply_mult+
 !ead_to_bonus:
     jmp !ead_check_bonus+
-!ead_ret:
-    rts
 
 !ead_ammo_check:
     ldx cmb_type
     cmp #EGO_AMMO_FIRE
-    beq !ead_bonus_roll+
+    beq !ead_elem_fire+
     cmp #EGO_AMMO_SLAY_EVIL
     beq !ead_ammo_evil+
     cmp #EGO_DRAGON_SLAYING
     beq !ead_ammo_dragon+
     cmp #EGO_AMMO_SLAY_ANIMAL
-    bne !ead_ret-
+    bne !ead_done+
     lda cr_mflags,x
     and #CF_ANIMAL
-    beq !ead_ret-
+    beq !ead_done+
     lda #2
     bne !ead_apply_mult+
 !ead_ammo_evil:
     lda cr_mflags,x
     and #CF_EVIL
-    beq !ead_ret-
+    beq !ead_done+
     lda #3
     bne !ead_apply_mult+
 !ead_ammo_dragon:
     lda cr_mflags,x
     and #CF_DRAGON
-    beq !ead_ret-
-    // x5 = x4 + x1
-    lda cmb_damage
-    asl
-    bcs !ead_mult_cap+
-    asl
-    bcs !ead_mult_cap+
-    clc
-    adc cmb_damage
-    bcc !ead_mult_ok+
-    bcs !ead_mult_cap+
+    beq !ead_done+
+    lda #5
 
 !ead_apply_mult:
-    cmp #3
-    beq !ead_mult3+
-    lsr
     tay
-    lda cmb_damage
-!ead_double:
-    asl
-    bcs !ead_mult_cap+
-    dey
-    bne !ead_double-
-    beq !ead_mult_ok+
-!ead_mult3:
-    lda cmb_damage
-    asl
-    bcs !ead_mult_cap+
+    lda #0
+!ead_mult_loop:
     clc
     adc cmb_damage
-    bcc !ead_mult_ok+
+    bcs !ead_mult_cap+
+    dey
+    bne !ead_mult_loop-
+    beq !ead_mult_ok+
 !ead_mult_cap:
     lda #255
 !ead_mult_ok:
     sta cmb_damage
 
 !ead_check_bonus:
+#if (PLACE_SECRETS_EXTERNAL || PLACE_SECRETS_EMITTED) && !C64_TEST_FULL_ITEMDESC_STUB
+    ldx cmb_type
+    lda ead_ego_type
+    cmp #EGO_FLAME_TONGUE
+    beq !ead_elem_fire+
+    cmp #EGO_FROST_BRAND
+    bne !ead_done+
+    lda #CD_FROST
+    .byte $2c                       // BIT abs: skip lda #CD_FIRE
+!ead_elem_fire:
+    lda #CD_FIRE
+    and cr_cdefense,x
+    beq !ead_bonus_roll+
+    // VMS moria.inc tot_dam: trunc(tdam * 1.5) against CD_FIRE / CD_FROST
+    lda cmb_damage
+    lsr
+    clc
+    adc cmb_damage
+    bcc !ead_elem_ok+
+    lda #255
+!ead_elem_ok:
+    sta cmb_damage
+#else
     lda ead_ego_type
     cmp #EGO_FLAME_TONGUE
     beq !ead_bonus_roll+
     cmp #EGO_FROST_BRAND
     bne !ead_done+
+!ead_elem_fire:
+#endif
 !ead_bonus_roll:
     lda #2
     ldx #4

@@ -31,6 +31,8 @@ test_exit_trampoline:
 .encoding "screencode_mixed"
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+#define TRAP_TRIGGER_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -61,6 +63,9 @@ player_create:
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
 #import "chest_summons_stubs.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+.segment Default
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"

@@ -458,17 +458,11 @@ beeb_icat_load_page:
     jsr EnterMos
     lda beeb_icat_handle
     bne !hilp_have_h+
-    lda program_device
-    sta beeb_io_device
     lda #hal_storage_item_cat_name_len
     ldx #<hal_storage_item_cat_name
     ldy #>hal_storage_item_cat_name
-    jsr beeb_set_pathname
-    lda #$40
-    jsr beeb_call_osfind_keep_icat
+    jsr beeb_open_prog_asset
     bcs !hilp_fail_mos+
-    cmp #$00
-    beq !hilp_fail_mos+
     sta beeb_icat_handle
 !hilp_have_h:
     jsr beeb_prep_ss_osgbpb
@@ -548,3 +542,85 @@ beeb_icat_slot_hi:
 beeb_icat_req_page:  .byte 0
 beeb_icat_req_slot:  .byte 0
 beeb_icat_handle:    .byte 0
+
+beeb_open_prog_asset:
+    pha
+    lda program_device
+    sta beeb_io_device
+    pla
+    jsr beeb_set_pathname
+    lda #$40
+    jsr beeb_call_osfind_keep_icat
+    bcs !bopa_fail+
+    cmp #$00
+    bne !bopa_ok+
+    sec
+!bopa_fail:
+    rts
+!bopa_ok:
+    clc
+    rts
+
+// ============================================================
+// MONEXT DFS On-Demand 8-Byte Extended Species Fetch (< $3000)
+// ============================================================
+// Reads creature cat_id_lo/hi's 8 extended Phase 5 bytes (offset id * 8) from
+// DFS MONEXT into cat_ext_record[0..7] via OSGBPB A=3. Reuses a persistent DFS
+// handle (beeb_mext_handle) that beeb_close_icat_in_mos closes automatically
+// before any OSFILE/OSFIND/OSWORD7F stream or disk-swap call (keeping open DFS
+// handles <= 3 of 5). Preserves all ZP ($02-$AF) and ROMSEL/ACCCON invariants.
+catalog_fetch_ext:
+    jsr EnterMos
+    lda beeb_mext_handle
+    bne !cfe_have_h+
+    lda #hal_storage_mon_ext_name_len
+    ldx #<hal_storage_mon_ext_name
+    ldy #>hal_storage_mon_ext_name
+    jsr beeb_open_prog_asset
+    bcs !cfe_fail_mos+
+    sta beeb_mext_handle
+!cfe_have_h:
+    jsr beeb_prep_ss_osgbpb
+    lda #<cat_ext_record
+    sta BEEB_OS_CTRL_BASE + 1
+    lda #>cat_ext_record
+    sta BEEB_OS_CTRL_BASE + 2
+    lda #8
+    sta BEEB_OS_CTRL_BASE + 5
+    lda cat_id_hi
+    sta BEEB_OS_CTRL_BASE + 10
+    ldx #3
+    lda cat_id_lo
+!cfe_shl:
+    asl
+    rol BEEB_OS_CTRL_BASE + 10
+    dex
+    bne !cfe_shl-
+    sta BEEB_OS_CTRL_BASE + 9
+    lda #$03
+    jsr beeb_call_osgbpb
+    bcs !cfe_fail_mos+
+    lda BEEB_OS_CTRL_BASE + 5
+    bne !cfe_fail_mos+
+    jmp ExitMos
+!cfe_fail_mos:
+    jsr beeb_close_icat_in_mos
+    jsr ExitMos
+    jsr save_zp
+    lda #hal_storage_mon_ext_name_len
+    sta alr_len
+    stz alr_left
+    lda #<hal_storage_mon_ext_name
+    sta alr_name_lo
+    lda #>hal_storage_mon_ext_name
+    sta alr_name_hi
+    jsr asset_load_ask_for_disk
+    lda #1
+    sta vis_room_revealed
+    stz status_cache_valid
+    jsr restore_zp
+    jmp catalog_fetch_ext
+
+cat_ext_record:   .fill 8, 0
+beeb_mext_handle: .byte 0
+.assert "cat_ext_record (8 B) stays below $3000", cat_ext_record + 8 <= $3000, true

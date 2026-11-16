@@ -118,6 +118,9 @@ C1541="${C1541:-c1541}"
 # Images with the monster catalog: MONSTER.IDX's sector table for where
 # MONSTER.CAT1-4 landed on this image (tools/catalog_disk.py fix).
 c1541_catalog() {
+    if [ -d "$C64_BUILD_OUT" ]; then
+        cp -p "$C64_BUILD_OUT"/monster.* "$C64_BUILD_OUT"/item.* "$C64_TEST_OUT"/ 2>/dev/null || true
+    fi
     "$C1541" "$@" || return
     local img="" prev="" arg
     for arg in "$@"; do
@@ -652,6 +655,7 @@ run_scripted_spell_cast_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -817,6 +821,7 @@ run_scripted_book_overlay_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -978,6 +983,7 @@ run_scripted_scroll_selector_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -1138,6 +1144,7 @@ run_scripted_spell_list_overlay_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -1301,6 +1308,7 @@ run_scripted_dungeon_target_spell_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -1486,6 +1494,7 @@ run_scripted_element_divisor_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -1510,10 +1519,19 @@ run_scripted_element_divisor_smoke() {
     fi
 
     local main_vs="../../../build/test/c64/main.vs"
-    local pass_addr fail_addr
-    pass_addr=$(awk '/\.c64_test_element_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    fail_addr=$(awk '/\.c64_test_element_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
+    local call_addr after_addr pflags_addr eff_resist_addr divisor_addr
+    local k_resist_fire k_breath_fire k_breath_lightning
+    call_addr=$(awk '$3 == ".c64_test_element_call_sym" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    after_addr=$(awk '$3 == ".c64_test_element_after_sym" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    pflags_addr=$(awk '$3 == ".player_pflags" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    eff_resist_addr=$(awk '$3 == ".zp_eff_resist" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    divisor_addr=$(awk '$3 == ".mm_divisor" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    k_resist_fire=$(awk '$3 == ".c64_test_k_pflag_resist_fire" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    k_breath_fire=$(awk '$3 == ".c64_test_k_ms_breath_fire" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    k_breath_lightning=$(awk '$3 == ".c64_test_k_ms_breath_lightning" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${call_addr:-}" ] || [ -z "${after_addr:-}" ] || [ -z "${pflags_addr:-}" ] \
+            || [ -z "${eff_resist_addr:-}" ] || [ -z "${divisor_addr:-}" ] \
+            || [ -z "${k_resist_fire:-}" ] || [ -z "${k_breath_fire:-}" ] || [ -z "${k_breath_lightning:-}" ]; then
         echo "FAIL (missing element divisor symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -1524,9 +1542,30 @@ run_scripted_element_divisor_smoke() {
     mon_file=$(mktemp -t "test_${name}_mon")
     tty_log=$(mktemp -t "test_${name}_ttylog")
     {
-        c64_break_cmd "${fail_addr}"
-        c64_break_cmd "${pass_addr}"
+        c64_break_cmd "${call_addr}"          # breakpoint 1: entry after cli
+        c64_break_cmd "${after_addr}"         # breakpoint 2: post-trampoline return
         echo "g"
+        # Stop 0 at call_addr: capture entry CPU regs ($01, I=0), poke fire resist x2, call with fire breath
+        echo "bank cpu"
+        echo "r"
+        echo "> \$${pflags_addr} \$${k_resist_fire}"
+        echo "> \$${eff_resist_addr} \$03"
+        echo "r a=01"
+        echo "r x=${k_breath_fire}"
+        echo "delete 1"
+        echo "g"
+        # Stop 1 at after_addr: capture post-fire regs + mm_divisor, then re-invoke for lightning breath
+        echo "r"
+        echo "m \$${divisor_addr} \$${divisor_addr}"
+        echo "r a=01"
+        echo "r x=${k_breath_lightning}"
+        echo "r pc=${call_addr}"
+        echo "g"
+        # Stop 2 at after_addr: capture post-lightning regs + mm_divisor, restore state, quit
+        echo "r"
+        echo "m \$${divisor_addr} \$${divisor_addr}"
+        echo "> \$${pflags_addr} \$00"
+        echo "> \$${eff_resist_addr} \$00"
         echo "quit"
     } > "$mon_file"
 
@@ -1536,19 +1575,103 @@ run_scripted_element_divisor_smoke() {
         -limitcycles 300000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
-    if grep -qiE "Stop on  exec $(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
+    local check_err
+    if check_err=$(python3 -B - "$tty_log" "$call_addr" "$after_addr" "$divisor_addr" "$k_breath_fire" "$k_breath_lightning" <<'PY'
+import re
+import sys
+
+tty_path, call_hex, after_hex, div_hex, fire_hex, light_hex = sys.argv[1:7]
+call_pc = int(call_hex, 16)
+after_pc = int(after_hex, 16)
+div_addr = int(div_hex, 16)
+fire_x = int(fire_hex, 16) & 0xFF
+light_x = int(light_hex, 16) & 0xFF
+
+text = open(tty_path, errors="replace").read()
+if "cycle limit reached" in text.lower():
+    print("element divisor smoke timed out")
+    raise SystemExit(1)
+
+stop_re = re.compile(r"\(Stop on +exec ([0-9a-fA-F]{4})\)")
+# VICE 'r' output line:  .;xxxx aa xx yy sp 00 01 11100001 ... (NV-BDIZC bits)
+reg_re = re.compile(
+    r"^\.;([0-9a-fA-F]{4})\s+([0-9a-fA-F]{2})\s+([0-9a-fA-F]{2})\s+"
+    r"([0-9a-fA-F]{2})\s+([0-9a-fA-F]{2})\s+([0-9a-fA-F]{2})\s+"
+    r"([0-9a-fA-F]{2})\s+([01]{8})"
+)
+dump_re = re.compile(r"^>[A-Za-z0-9]+:([0-9a-fA-F]{4})((?:\s+[0-9a-fA-F]{2})+)")
+
+stops = []
+cur = None
+started = False
+for raw in text.splitlines():
+    line = raw.strip()
+    if "Monitor playback command: g" in line:
+        started = True
+        continue
+    if not started:
+        continue
+    m_stop = stop_re.search(line)
+    if m_stop:
+        cur = {"pc": int(m_stop.group(1), 16), "reg": None, "mem": {}}
+        stops.append(cur)
+        continue
+    if cur is None:
+        continue
+    m_reg = reg_re.match(line)
+    if m_reg and cur["reg"] is None:
+        cur["reg"] = {
+            "x": int(m_reg.group(3), 16),
+            "p01": int(m_reg.group(7), 16),
+            "flags": m_reg.group(8),
+        }
+        continue
+    m_dump = dump_re.match(line)
+    if m_dump:
+        base = int(m_dump.group(1), 16)
+        vals = re.findall(r"\b([0-9a-fA-F]{2})\b", m_dump.group(2))[:16]
+        for idx, val in enumerate(vals):
+            cur["mem"][base + idx] = int(val, 16)
+
+if len(stops) != 3 or [s["pc"] for s in stops] != [call_pc, after_pc, after_pc]:
+    print(f"expected stops [{call_pc:04X}, {after_pc:04X}, {after_pc:04X}], got {[hex(s['pc']) for s in stops]}")
+    raise SystemExit(1)
+
+entry = stops[0]["reg"]
+if entry is None:
+    print("missing register dump at entry stop")
+    raise SystemExit(1)
+if entry["flags"][5] != "0":
+    print(f"entry I flag not clear: {entry['flags']}")
+    raise SystemExit(1)
+
+for label, stop, exp_x, exp_div in (
+    ("fire", stops[1], fire_x, 9),
+    ("lightning", stops[2], light_x, 1),
+):
+    reg = stop["reg"]
+    if reg is None:
+        print(f"missing register dump after {label} call")
+        raise SystemExit(1)
+    if reg["flags"][5] != "0":
+        print(f"{label}: I flag not preserved clear ({reg['flags']})")
+        raise SystemExit(1)
+    if reg["x"] != exp_x:
+        print(f"{label}: X={reg['x']:02X}, expected {exp_x:02X}")
+        raise SystemExit(1)
+    if reg["p01"] != entry["p01"]:
+        print(f"{label}: $01={reg['p01']:02X}, expected entry {entry['p01']:02X}")
+        raise SystemExit(1)
+    got_div = stop["mem"].get(div_addr)
+    if got_div != exp_div:
+        print(f"{label}: mm_divisor={got_div}, expected {exp_div}")
+        raise SystemExit(1)
+PY
+    ); then
         echo "PASS"
         PASS=$((PASS + 1))
-    elif grep -qiE "Stop on  exec $(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')" "$tty_log"; then
-        echo "FAIL (element divisor trampoline check failed)"
-        echo "    Log: $tty_log"
-        FAIL=$((FAIL + 1))
-    elif grep -qi "cycle limit reached" "$tty_log"; then
-        echo "FAIL (element divisor smoke timed out)"
-        echo "    Log: $tty_log"
-        FAIL=$((FAIL + 1))
     else
-        echo "FAIL (did not reach the element divisor traps)"
+        echo "FAIL (${check_err:-element divisor trampoline check failed})"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
     fi
@@ -1602,6 +1725,7 @@ run_scripted_ego_damage_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -1713,6 +1837,7 @@ run_scripted_detect_evil_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -1916,6 +2041,7 @@ run_dungeon_ascent_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -2030,7 +2156,8 @@ run_catalog_spawn_product_smoke() {
         return
     fi
     local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
-    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi; do
+    local catalog_fetch_ext cat_id_lo cat_ext_record
+    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi catalog_fetch_ext cat_id_lo cat_ext_record; do
         printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
         if [ -z "${!sym}" ]; then
             echo "FAIL (missing $sym in $main_vs)"
@@ -2039,10 +2166,14 @@ run_catalog_spawn_product_smoke() {
             return
         fi
     done
-    local mon_file log_file check_log
+    local mon_file log_file check_log ext_id
     mon_file=$(mktemp -t "test_${name}_mon.XXXXXX")
     log_file=$(mktemp -t "test_${name}_log.XXXXXX")
     check_log=$(mktemp -t "test_${name}_check.XXXXXX")
+    local cfe_lo=$(( 16#$catalog_fetch_ext & 0xff ))
+    local cfe_hi=$(( (16#$catalog_fetch_ext >> 8) & 0xff ))
+    local cer_end
+    cer_end=$(printf '%04x' $(( 16#$cat_ext_record + 7 )))
     {
         # The town's items first, then DL1's.
         echo "until \$${item_spawn_level}"
@@ -2054,6 +2185,15 @@ run_catalog_spawn_product_smoke() {
         printf 'm %s %04x\n' "$cr_name_hi" $(( 16#$cr_name_hi + 31 ))
         echo "bank ram"
         echo "m d000 d3ff"
+        echo "bank cpu"
+        printf '> 033c 20 %02x %02x ea\n' "$cfe_lo" "$cfe_hi"
+        for ext_id in 0 31 255 256 278; do
+            rm -f "$TMPDIR/ext_${name}_${ext_id}.bin"
+            printf '> %s %02x %02x\n' "$cat_id_lo" $(( ext_id & 0xff )) $(( ext_id >> 8 ))
+            echo "r pc=033c"
+            echo "until \$033f"
+            echo "bsave \"$TMPDIR/ext_${name}_${ext_id}.bin\" 0 \$${cat_ext_record} \$${cer_end}"
+        done
         echo "quit"
     } > "$mon_file"
     local reu_args=()
@@ -2071,6 +2211,25 @@ run_catalog_spawn_product_smoke() {
         TOTAL=$((TOTAL + 1))
         return
     fi
+    if ! python3 -B - "$REPO_ROOT" "$TMPDIR" "$name" >>"$check_log" 2>&1 <<'PY'
+import sys
+from pathlib import Path
+repo, tmpdir, name = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+sys.path.insert(0, str(repo / "tools"))
+import catalog_disk
+ext = catalog_disk.ext_records()
+for idx in (0, 31, 255, 256, 278):
+    raw = (tmpdir / f"ext_{name}_{idx}.bin").read_bytes()
+    assert raw == ext[idx], (idx, raw.hex(), ext[idx].hex())
+PY
+    then
+        echo "FAIL (extended catalog MONSTER.EXT check)"
+        tail -5 "$check_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    rm -f "$TMPDIR"/ext_"${name}"_*.bin
     echo "PASS ($(tail -1 "$check_log" | sed 's/^PASS: //'))"
     rm -f -- "$mon_file" "$log_file" "$check_log"
     PASS=$((PASS + 1))
@@ -2123,6 +2282,7 @@ run_wizard_reveal_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -2284,6 +2444,7 @@ run_wizard_item_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -2495,6 +2656,7 @@ run_exchange_product_smoke() {
             -write "$smoke_c64/monster.cat2" "monster.cat2" \
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.ext" "monster.ext" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/item.cat" "item.cat" \
             -write "$smoke_c64/item.idx" "item.idx" \
@@ -2583,6 +2745,7 @@ run_chest_open_product_smoke() {
             -write "$smoke_c64/monster.cat2" "monster.cat2" \
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.ext" "monster.ext" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/item.cat" "item.cat" \
             -write "$smoke_c64/item.idx" "item.idx" \
@@ -2669,6 +2832,7 @@ run_chest_open_product_reu_smoke() {
             -write "$smoke_out/c64/monster.cat2" "monster.cat2" \
             -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
             -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_out/c64/monster.ext" "monster.ext" \
             -write "$smoke_out/c64/monster.idx" "monster.idx" \
             -write "$smoke_out/c64/item.cat" "item.cat" \
             -write "$smoke_out/c64/item.idx" "item.idx" \
@@ -2704,6 +2868,7 @@ run_chest_open_product_reu_smoke() {
             --until-pass \
             --main-vs "$main_vs" \
             --boot-d64 "$boot_d64" \
+            --autostart-only-drive8 \
             --vice-extra-arg=-reu \
             --vice-extra-arg=-reusize \
             --vice-extra-arg=512 \
@@ -2765,6 +2930,7 @@ run_chest_open_product_genfail_smoke() {
             -write "$smoke_out/c64/monster.cat2" "monster.cat2" \
             -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
             -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_out/c64/monster.ext" "monster.ext" \
             -write "$smoke_out/c64/monster.idx" "monster.idx" \
             -write "$smoke_out/c64/item.cat" "item.cat" \
             -write "$smoke_out/c64/item.idx" "item.idx" \
@@ -2878,6 +3044,7 @@ run_disk_setup_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -2993,6 +3160,7 @@ run_retirement_royal_product_smoke() {
             -write "$smoke_c64/monster.cat2" "monster.cat2" \
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.ext" "monster.ext" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/item.cat" "item.cat" \
             -write "$smoke_c64/item.idx" "item.idx" \
@@ -3071,6 +3239,7 @@ run_game_over_product_smoke() {
             -write "$smoke_c64/monster.cat2" "monster.cat2" \
             -write "$smoke_c64/monster.cat3" "monster.cat3" \
             -write "$smoke_c64/monster.cat4" "monster.cat4" \
+            -write "$smoke_c64/monster.ext" "monster.ext" \
             -write "$smoke_c64/monster.idx" "monster.idx" \
             -write "$smoke_c64/item.cat" "item.cat" \
             -write "$smoke_c64/item.idx" "item.idx" \
@@ -3176,6 +3345,7 @@ c64_load_written_save_check() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -3265,6 +3435,7 @@ run_save_write_product_smoke_impl() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -3373,7 +3544,7 @@ run_save_write_product_smoke_impl() {
             local save_seq="../../../build/test/c64/${name}_the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "$save_filename" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 -B tests/check_save_secondary.py "$save_seq" 0x20 >>"$build_log" 2>&1; then
+                    || ! python3 -B tests/check_save_secondary.py "$save_seq" 0x21 >>"$build_log" 2>&1; then
                 echo "FAIL (secondary weapon not in the written save)"
                 tail -5 "$build_log" | sed 's/^/    /'
                 FAIL=$((FAIL + 1))
@@ -3477,6 +3648,7 @@ run_save_media_fail_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -3613,6 +3785,7 @@ run_change_save_drive_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -3728,6 +3901,7 @@ run_disk_setup_single_drive_return_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -3849,6 +4023,7 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -3948,6 +4123,7 @@ run_load_resume_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4136,6 +4312,7 @@ run_single_drive_load_return_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4252,6 +4429,7 @@ run_load_then_save_new_empty_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4396,6 +4574,7 @@ run_single_drive_save_wrong_media_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4483,6 +4662,7 @@ run_single_drive_load_wrong_media_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4569,6 +4749,7 @@ run_single_drive_load_corrupt_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4683,6 +4864,7 @@ run_single_drive_fresh_save_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4820,6 +5002,7 @@ run_single_drive_fresh_save_no_init_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -4931,6 +5114,7 @@ run_load_missing_savefile_product_smoke() {
             -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
             -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
             -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
+            -write ../../../build/test/c64/monster.ext "monster.ext" \
             -write ../../../build/test/c64/monster.idx "monster.idx" \
             -write ../../../build/test/c64/item.cat "item.cat" \
             -write ../../../build/test/c64/item.idx "item.idx" \
@@ -5100,9 +5284,9 @@ check_static_contract "c64_charset_switch_locked_before_irq_input_contract" "inp
 check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "input.s" \
     "input_wait_release:|||lda #BANK_NO_BASIC|||sta \$01|||jsr c64_install_ram_irq_vectors|||jsr input_lock_charset_switch|||cli|||!iwr_drain:"
 # Nest gold calls random_floor_in_room in the dungeon-generation overlay after
-# pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
-check_static_contract "nest_gold_restores_generation_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
-    "tramp_spawn_nest_gold:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_nest_gold"
+# item_spawn_level has loaded OVL_CHEST, then restores the caller overlay.
+check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
+    "tramp_spawn_nest_gold:|||lda current_overlay|||pha|||lda #OVL_DUNGEON_GEN|||jsr overlay_load_no_kernal|||jsr spawn_nest_gold|||pla|||jsr overlay_load_no_kernal"
 # Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
 # too, if anything replaced it after generation.
 check_static_contract "special_room_monsters_restore_generation_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
@@ -5182,7 +5366,7 @@ check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
 check_static_contract "c64_modal_ego_restores_io_contract" "main.s" \
-    "tramp_roll_ego_type_modal:|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||pla|||rts"
+    "tramp_roll_ego_type_modal:|||lda \$01|||pha|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pla|||sta \$01|||plp|||tya|||rts"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
@@ -5213,9 +5397,11 @@ run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0443" 68 500000000
 run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0445" 70 500000000
+run_test "monster_ai2" "tests/test_monster_ai2.s" "0400 040f" 16 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 0435" 54 500000000
+run_test "monster_attack2" "tests/test_monster_attack2.s" "0400 041a" 27 500000000
 run_test "monster_tier3" "tests/test_monster_tier3.s" "0400 0403" 4 20000000
 run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
 run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
@@ -5308,6 +5494,7 @@ run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
 run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
+run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 0413" 20 50000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0417" 24 500000000

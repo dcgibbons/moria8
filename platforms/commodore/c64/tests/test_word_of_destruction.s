@@ -67,7 +67,11 @@ player_create:
 // monster_ai.s is not imported: spells never run the turn tick (stubs below).
 #import "../../../../core/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/los_trace.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
@@ -94,7 +98,14 @@ player_create:
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
+.segment Default
 #import "../../../../core/turn.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 

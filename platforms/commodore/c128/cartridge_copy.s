@@ -106,6 +106,10 @@ cart_read:
     ldy #MMU_RAM_BANK1
     cpx #CART_DEST_BANK1
     beq !flags_set+
+    ldy #MMU_RAM_BANK1_NOIO
+    cpx #CART_DEST_BANK1_NOIO
+    beq !flags_set+
+    ldy #MMU_RAM_BANK1
     lda #$05                        // CART_DEST_BANK1_TOP_OFF: expose physical Bank 1 $F000-$FFFB
 !flags_set:
     sta mmu_common_cart_dst_d506

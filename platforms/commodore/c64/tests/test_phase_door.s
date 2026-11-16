@@ -75,8 +75,10 @@ player_create:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-.segment Default
-#import "../../../../core/monster_ai.s"
+.segment TestCreateOverlay
+mat_scene_dirty: .byte 0
+monster_ai_tick:
+    brk
 .segment Default
 #import "../../../../core/recall.s"
 // Monster spells are not exercised here (no monster turn runs): out of the
@@ -86,10 +88,14 @@ player_create:
 #import "../../../../core/los_trace.s"
 #import "../../../../core/player_save.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 // No level is generated here either: its special rooms go up with them (the
 // VMS armour AC of 2026-11-13 took the body past MAP_BASE).
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
 .segment Default
 // item_cat_data takes the $E100 window (item_cat_kernal_helper.s); the
@@ -112,9 +118,8 @@ player_create:
 #import "../../../../core/player_magic_feedback.s"
 .segment Default
 #import "../dungeon_render.s"
-.segment Default
-.segment TestCreateOverlay
 #import "../../../../core/dungeon_los.s"
+.segment TestCreateOverlay
 #import "../../../../core/player_move.s"
 .segment Default
 #import "../../../../core/combat.s"
@@ -122,7 +127,12 @@ player_create:
 #import "../../../../core/scene_mat_tile.s"
 .segment Default
 .segment TestCreateOverlay
-#import "../../../../core/monster_attack.s"
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
 #import "../../../../core/turn.s"
 .segment Default
 #import "../../../../core/item_actions_overlay.s"

@@ -70,7 +70,9 @@ player_create:
 .segment Default
 #import "../../../../core/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 #import "../../../../core/item.s"
 .segment TestCreateOverlay

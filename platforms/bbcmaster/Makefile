@@ -20,7 +20,7 @@ OUTBEEB     = $(OUT)/bbcmaster
 OVL_OUTBEEB = $(abspath $(OUTBEEB))
 
 KA_FLAGS    = ":OVL_OUT=$(OVL_OUTBEEB)" -showmem -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTBEEB)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define BBCMASTER
-PRG2BIN     = python3 ../../tools/prg_to_bin.py
+PRG2BIN     = python3 -B ../../tools/prg_to_bin.py
 
 VERSION_FILE     = ../../version.json
 VERSION_INC_TOOL = ../../tools/make_version_include.py
@@ -77,7 +77,7 @@ $(KICKASS_JAR):
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
 	@mkdir -p $(OUT)
-	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
+	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(TRAMPOLINES_INC): ../../tools/gen_trampolines.py ../../tools/trampoline_manifest.py
 	@mkdir -p $(dir $@)
@@ -104,7 +104,7 @@ $(OUTBEEB)/boot.sym: $(BEEB_BOOT_PRG)
 
 disk: $(BEEB_SSD)
 
-$(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../platforms/shared/item_catalog/item_cat_data.s ../../tools/catalog_disk.py ../../tools/make_pak.py ../../tools/make_ssd.py
+$(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../platforms/shared/item_catalog/item_cat_data.s ../../platforms/shared/catalog/monster_catalog_spec.json ../../tools/catalog_disk.py ../../tools/build_catalog.py ../../tools/make_pak.py ../../tools/make_ssd.py
 	@mkdir -p "$(OUTBEEB)/bin"
 	$(PRG2BIN) "$(BEEB_BOOT_PRG)" "$(OUTBEEB)/bin/MORIA8" --expect-addr 0x1900
 	$(PRG2BIN) "$(BEEB_MAIN_PRG)" "$(OUTBEEB)/bin/MORIA8.RES" --expect-addr 0x0E00
@@ -119,7 +119,8 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../platforms/sh
 	$(PRG2BIN) "$(OUTBEEB)/legalui" "$(OUTBEEB)/bin/LEGALUI" --expect-addr 0xA800
 	$(PRG2BIN) "$(BEEB_TITLE_PRG)" "$(OUTBEEB)/bin/TITLE" --expect-addr 0x8000
 	python3 -B ../../tools/catalog_disk.py item-raw "$(OUTBEEB)/bin"
-	python3 ../../tools/make_pak.py "$(OUTBEEB)/bin/MORIA8.PAK" \
+	python3 -B ../../tools/build_catalog.py ext-rows --out "$(OUTBEEB)/bin/MON.EXT"
+	python3 -B ../../tools/make_pak.py "$(OUTBEEB)/bin/MORIA8.PAK" \
 	  "$(OUTBEEB)/bin/MORIA8.RES" "$(OUTBEEB)/bin/BEEB.PLAY" \
 	  "$(OUTBEEB)/bin/BEEB.HUFFDATA" "$(OUTBEEB)/bin/BEEB.AUXDATA" \
 	  "$(OUTBEEB)/bin/OVL.UI" "$(OUTBEEB)/bin/BEEB.CATALOG" \
@@ -129,43 +130,44 @@ $(BEEB_SSD): build ../../data/LICENSE ../../data/SOURCE-OFFER ../../platforms/sh
 	printf '*RUN MORIA8\r' > "$(OUTBEEB)/bin/!BOOT"
 	LC_ALL=C tr '\012' '\015' < ../../data/LICENSE > "$(OUTBEEB)/bin/LICENSE"
 	LC_ALL=C tr '\012' '\015' < ../../data/SOURCE-OFFER > "$(OUTBEEB)/bin/SRCOFFR"
-	python3 ../../tools/make_ssd.py --title MORIA8 --opt 3 "$(BEEB_SSD)" \
+	python3 -B ../../tools/make_ssd.py --title MORIA8 --opt 3 "$(BEEB_SSD)" \
 	  "!BOOT=$(OUTBEEB)/bin/!BOOT:FFFF0000:FFFFFFFF" \
 	  "MORIA8=$(OUTBEEB)/bin/MORIA8:FFFF1900:FFFF1900" \
-	  "MORIA8P=$(OUTBEEB)/bin/MORIA8.PAK:00000000:00000000" \
+	  "ITEMCAT=$(OUTBEEB)/bin/ITEM.CAT:FFFF0000:FFFFFFFF" \
+	  "MONEXT=$(OUTBEEB)/bin/MON.EXT:FFFF0000:FFFFFFFF" \
+	  "TITLE=$(OUTBEEB)/bin/TITLE:FFFF8000:FFFF8000" \
+	  "OVLTTL=$(OUTBEEB)/bin/OVL.TITLE:FFFFA800:FFFFA800" \
 	  "OVLSTA=$(OUTBEEB)/bin/OVL.START:FFFFA800:FFFFA800" \
 	  "OVLTWN=$(OUTBEEB)/bin/OVL.TOWN:FFFFA800:FFFFA800" \
 	  "OVLDTH=$(OUTBEEB)/bin/OVL.DEATH:FFFFA800:FFFFA800" \
-	  "OVLHLP=$(OUTBEEB)/bin/OVL.HELP:FFFFA800:FFFFA800" \
 	  "OVLCHS=$(OUTBEEB)/bin/OVL.CHEST:FFFFA800:FFFFA800" \
-	  "OVLHOM=$(OUTBEEB)/bin/OVL.HOME:FFFFA800:FFFFA800" \
+	  "OVLHLP=$(OUTBEEB)/bin/OVL.HELP:FFFFA800:FFFFA800" \
 	  "OVLSTO=$(OUTBEEB)/bin/OVL.STORAGE:FFFFA800:FFFFA800" \
-	  "OVLTTL=$(OUTBEEB)/bin/OVL.TITLE:FFFFA800:FFFFA800" \
-	  "TITLE=$(OUTBEEB)/bin/TITLE:FFFF8000:FFFF8000" \
-	  "ITEMCAT=$(OUTBEEB)/bin/ITEM.CAT:FFFF0000:FFFFFFFF" \
+	  "OVLHOM=$(OUTBEEB)/bin/OVL.HOME:FFFFA800:FFFFA800" \
 	  "LEGALUI=$(OUTBEEB)/bin/LEGALUI:FFFFA800:FFFFA800" \
+	  "MORIA8P=$(OUTBEEB)/bin/MORIA8.PAK:00000000:00000000" \
 	  "LICENSE=$(OUTBEEB)/bin/LICENSE:FFFF0000:FFFFFFFF" \
 	  "SRCOFFR=$(OUTBEEB)/bin/SRCOFFR:FFFF0000:FFFFFFFF"
-	python3 check_memory_contract.py --disk "$(BEEB_SSD)" || { rm -f "$(BEEB_SSD)"; exit 1; }
+	python3 -B check_memory_contract.py --disk "$(BEEB_SSD)" || { rm -f "$(BEEB_SSD)"; exit 1; }
 
 test-memory-contract-selftest:
-	python3 ../../tools/make_ssd.py --selftest
-	python3 check_memory_contract.py --selftest
-	python3 harness_smoke.py --selftest
+	python3 -B ../../tools/make_ssd.py --selftest
+	python3 -B check_memory_contract.py --selftest
+	python3 -B harness_smoke.py --selftest
 
 test-memory-contract: build test-memory-contract-selftest
-	python3 check_memory_contract.py --build-dir $(OUTBEEB)
+	python3 -B check_memory_contract.py --build-dir $(OUTBEEB)
 
 test-runtime: disk
 	@if [ -n "$(BBCMROMS)" ]; then \
-		python3 harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --all; \
+		python3 -B harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --all; \
 	else \
 		echo "WARNING: BBCMROMS not set; skipping BBC Master 128 MAME runtime smoke suite"; \
 	fi
 
 test-fast-smoke: disk
 	@if [ -n "$(BBCMROMS)" ]; then \
-		python3 harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --fast-smoke; \
+		python3 -B harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --fast-smoke; \
 	else \
 		echo "WARNING: BBCMROMS not set; skipping BBC Master 128 MAME fast smoke suite"; \
 	fi
@@ -178,7 +180,7 @@ run: disk
 		exit 1; \
 	fi
 	@mkdir -p "$(MAME_DIR)/cfg" "$(MAME_DIR)/nvram" "$(MAME_DIR)/inp" "$(MAME_DIR)/sta" "$(MAME_DIR)/snap" "$(MAME_DIR)/diff" "$(MAME_DIR)/comments" "$(MAME_DIR)/share"
-	@test -f "$(BEEB_SAVE_SSD)" || python3 ../../tools/make_ssd.py --blank-disk "$(BEEB_SAVE_SSD)"
+	@test -f "$(BEEB_SAVE_SSD)" || python3 -B ../../tools/make_ssd.py --blank-disk "$(BEEB_SAVE_SSD)"
 	$(MAME) $(BEEB_MACHINE) -rompath "$(BBCMROMS)" \
 		-flop1 "$(abspath $(BEEB_SSD))" \
 		-flop2 "$(abspath $(BEEB_SAVE_SSD))" \

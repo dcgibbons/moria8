@@ -30,7 +30,7 @@
 .const hal_platform_game_loop_save_return_view = 0
 .const hal_platform_game_loop_run_stop_reset_input = 0
 .const hal_platform_game_loop_scroll_delta_render = 0
-.const hal_platform_game_loop_item_actions_trampolined = 0
+.const hal_platform_game_loop_item_actions_trampolined = 1
 .const hal_platform_overlay_count = 13
 .const hal_platform_overlay_state_external = 0
 .const hal_platform_overlay_force_reload = 0
@@ -65,6 +65,7 @@
 #define HAL_PLATFORM_MONSTER_VISIBILITY_SCRATCH_RESIDENT
 #define HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME
 #define HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN
+#define HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
 #define HAL_PLATFORM_SPELL_EXECUTE_DEDICATED_OVERLAY
 #define HAL_PLATFORM_ITEM_PICKUP_OVERLAY
 #define HAL_PLATFORM_OVERLAY_STATE_LOCAL

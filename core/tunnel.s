@@ -219,7 +219,11 @@ player_tunnel_resolved_target:
 // ============================================================
 !tun_rubble:
     // Calculate digging ability
+#if CALC_DIG_CO_LOCATED
+    jsr calc_dig_ability
+#else
     jsr tramp_dig_ability
+#endif
 
     // Bare-hands check: ability=0 means no tool
     lda tun_dig_ability
@@ -273,7 +277,11 @@ player_tunnel_resolved_target:
     stx zp_temp1                // Save fail message ID
 
     // Calculate digging ability
+#if CALC_DIG_CO_LOCATED
+    jsr calc_dig_ability
+#else
     jsr tramp_dig_ability
+#endif
 
     // Bare-hands check: ability=0 means no tool (R14)
     lda tun_dig_ability
