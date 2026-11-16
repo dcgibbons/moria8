@@ -3013,7 +3013,21 @@ a win is unlikely until the bot plays much better.
   start goes first (maintainer: the highest-level save is likeliest to go
   further and find something new; `Balrog.rank`): a combination already
   playing is passed over while another can start, and equal levels take
-  turns.
+  turns. Since 2026-11-15 the combination waiting longest since its last
+  counted game (or since it joined) goes first, the highest start among
+  equals (`Balrog.waiting_since`). With 25 C64 graduates for 18 slots,
+  highest-first had kept seven from ever playing, because the top starts
+  took each slot back the moment they ended. A 20M-step game lasts about 40
+  hours, and only two games died in 2.5 hours, so a slot can also be
+  handed over (`Service.balrog_yield`). Once a combination has waited
+  `BALROG_SLICE_S` (3 hours), the longest-playing run is asked to yield,
+  one per waiting combination. It does so at its next town visit
+  (`yield_due`, a `yield` file in its run directory) as it would for a
+  newer build: it keeps a checkpoint, unless it is in danger
+  (`checkpoint_safe`), and ends. Until 2026-11-15 no Balrog run ever
+  rotated. A worker's `HOME` is its build snapshot's (`ROOT`), which has no
+  `service.json`, so `rotate_due` never found a newer build. A worker now
+  looks in the queue home its run directory is in (`run_home`).
 - **Goal.** `balrog` (`goals.py`): the game's winner flag, which the Balrog's
   death sets (`core/combat.s`). It plays as `deep`, with every tactic, down to
   where the Balrog appears: DL100 with the tiers, DL50 with the monster
@@ -3135,7 +3149,15 @@ a win is unlikely until the bot plays much better.
   success becomes the chain's base instead of replacing it. Each start
   records `restores`, the chain's runs that ended before it, and a win
   through checkpoints counts for M8 (maintainer: "it should count"), with
-  its restores in the item's `wins`. Later, once the gameplay tweaks are
+  its restores in the item's `wins`. Since 2026-11-15 a checkpoint waits for
+  a character out of danger (`checkpoint_safe`: not poisoned, at least half
+  its HP): on a `graduate_save` port it is saved at the first such command
+  still in town, else it waits for the next arrival. The C64 Human
+  Warrior's clvl 10 checkpoint was taken as it arrived in town poisoned, and
+  all 1,722 of its restores died 14 steps in. A start whose restores die
+  `DOOMED_DEATHS` (10) times in a row, each within `DOOMED_STEPS` (200)
+  steps of it, is retired like a save that does not load (`Balrog.doomed`,
+  `start_balrog`): the combination plays from level 1. Later, once the gameplay tweaks are
   done, a final Balrog queue plays from level 1 on an ongoing basis.
 - **Balrog encounters (maintainer, 2026-11-10).** The first time a run sees
   or detects the Balrog on a level (`balrog_in_view`: glyph `B`, native

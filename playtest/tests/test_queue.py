@@ -3,6 +3,7 @@ import dataclasses
 import functools
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -1035,6 +1036,88 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual((item["start"]["fails"], item["start"]["restores"]), (5, 1 + 5))
         balrog.fell_short(self.balrog_record("w", "reached"), {"resume": item["start"]})   # a win: not a fail
         self.assertEqual(item["start"]["fails"], 5)
+
+    def test_the_longest_waiting_character_plays_next(self) -> None:
+        """Maintainer, 2026-11-15: 25 C64 graduates for 18 slots, and
+        highest-first kept seven from ever playing; the one waiting longest
+        since its last game plays next, the highest start among equals."""
+        balrog = self.balrog()
+        for combo in ("human-paladin", "half-elf-warrior", "dwarf-warrior", "half-orc-rogue"):
+            balrog.graduate("c64", combo, {})
+        items = balrog.state["items"]
+        items["c64/human-paladin"].update(start={"run": "p", "clvl": 36, "checkpoint": True}, last={"ended": 300.0})
+        items["c64/half-elf-warrior"].update(start={"run": "w", "clvl": 33, "checkpoint": True}, last={"ended": 200.0})
+        items["c64/dwarf-warrior"]["graduated"] = {"ended": 100.0}      # joined, never played
+        items["c64/half-orc-rogue"]["graduated"] = {"ended": 100.0}
+        self.assertEqual(balrog.take()["character"], "dwarf-warrior")   # ties: the order among equals
+        self.assertEqual(balrog.take({"c64/dwarf-warrior"})["character"], "half-orc-rogue")
+        busy = {"c64/dwarf-warrior", "c64/half-orc-rogue"}
+        self.assertEqual(balrog.take(busy)["character"], "half-elf-warrior")   # waiting since 200, not the clvl 36
+        items["c64/half-elf-warrior"]["last"] = {"ended": 300.0}
+        self.assertEqual(balrog.take(busy)["character"], "human-paladin")      # equal waits: the higher start
+
+    def test_a_long_game_yields_in_town_to_one_waiting_long(self) -> None:
+        """2026-11-15: 25 C64 graduates for 18 slots, 20M-step games and two
+        deaths in 2.5 hours: seven waited on. Past BALROG_SLICE_S waiting,
+        the longest-playing run is asked to yield at its next town visit."""
+        service = self.service(4, 2)
+        balrog = service.balrog
+        for combo in ("human-paladin", "human-priest", "dwarf-warrior"):
+            balrog.graduate("c64", combo, {})
+        t = time.time()
+        balrog.state["items"]["c64/dwarf-warrior"]["graduated"] = {"ended": t - 600}
+        service.running = {
+            "old": {"queue": "balrog", "platform": "c64", "character": "human-paladin", "started": t - 5 * 3600},
+            "new": {"queue": "balrog", "platform": "c64", "character": "human-priest", "started": t - 4 * 3600}}
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # not waiting long yet
+        balrog.state["items"]["c64/dwarf-warrior"]["graduated"] = {"ended": t - queue.BALROG_SLICE_S - 60}
+        service.balrog_yield()
+        self.assertTrue((service.home / "runs" / "old" / queue.YIELD).exists())    # the longest playing
+        self.assertFalse((service.home / "runs" / "new" / queue.YIELD).exists())   # one per waiting
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "new" / queue.YIELD).exists())   # already asked
+        run = service.home / "runs" / "old"
+        self.assertEqual(queue.yield_due(run, "balrog", 0, 1000), queue.YIELD)
+        self.assertIsNone(queue.yield_due(run, "balrog", 12, 1000))               # in town only
+        self.assertIsNone(queue.yield_due(run, "balrog", 0, 1001))                # at the poll steps
+        self.assertIsNone(queue.yield_due(service.home / "runs" / "new", "balrog", 0, 1000))
+
+    def test_a_checkpoint_waits_for_a_character_out_of_danger(self) -> None:
+        """2026-11-15: the C64 Human Warrior's clvl 10 checkpoint was taken on
+        its arrival in town poisoned, and all 1,722 of its restores died 14
+        steps in."""
+        self.assertTrue(queue.checkpoint_safe(64, 64, False))
+        self.assertTrue(queue.checkpoint_safe(32, 64, False))
+        self.assertFalse(queue.checkpoint_safe(31, 64, False))
+        self.assertFalse(queue.checkpoint_safe(64, 64, True))   # poisoned, whatever the HP
+
+    def test_a_start_whose_restores_die_at_once_plays_from_level_1(self) -> None:
+        """2026-11-15: 1,722 restores of one start died 14 steps in; a start
+        that dies within DOOMED_STEPS DOOMED_DEATHS times in a row is retired,
+        as a save that does not load is."""
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        start = item["start"]
+        start["step"] = 24_101
+        for n in range(queue.DOOMED_DEATHS - 1):
+            service.balrog.fell_short(self.balrog_record(f"q{n}", steps=24_115), {"resume": start})
+        service.balrog.fell_short(self.balrog_record("long", steps=24_101 + queue.DOOMED_STEPS), {"resume": start})
+        self.assertEqual(start["quick_deaths"], 0)                       # a death further in: the count starts again
+        for n in range(queue.DOOMED_DEATHS - 1):
+            service.balrog.fell_short(self.balrog_record(f"r{n}", steps=24_115), {"resume": start})
+        self.assertFalse(service.balrog.doomed(start))
+        self.assertTrue(service.start_balrog())                          # one short: from the start
+        job = next(j for j in service.running.values() if j["queue"] == "balrog")
+        self.assertEqual(job["resume"]["run"], start["run"])
+        service.running.clear()
+        service.balrog.fell_short(self.balrog_record("last", steps=24_115), {"resume": start})
+        self.assertTrue(service.balrog.doomed(start))
+        self.assertTrue(service.start_balrog())
+        job = next(j for j in service.running.values() if j["queue"] == "balrog")
+        self.assertNotIn("resume", job)                                  # a new character
+        self.assertIsNone(item["start"])
+        self.assertEqual(item["retired_starts"][0]["run"], start["run"])
 
     def test_a_win_through_checkpoints_counts(self) -> None:
         balrog = self.balrog()
@@ -2525,6 +2608,16 @@ class NewerBuildTest(unittest.TestCase):
             self.assertIsNone(queue.newer_build("ci", "c128", home))
             (home / "service.json").write_text(json.dumps({}))
             self.assertIsNone(queue.newer_build("old", "c64", home))      # no service yet
+
+    def test_a_run_looks_for_newer_builds_in_its_own_queue_home(self) -> None:
+        """2026-11-15: a worker's HOME is its build snapshot's, with no
+        service.json, so no Balrog run ever rotated: the queue home is the
+        one the run's directory is in."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            run = home / "runs" / "20261115-175034-balrog-c64-human-ranger-1"
+            run.mkdir(parents=True)
+            self.assertEqual(queue.run_home(run), home.resolve())
 
     def test_only_a_balrog_run_in_town_rotates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

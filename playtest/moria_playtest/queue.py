@@ -88,8 +88,24 @@ ARMOUR_CHECKPOINT_AC = 5
 # on its step budget at clvl 39 went back 2,000,000 experience to its clvl 39
 # checkpoint, and all 17 of the queue's runs were about to (2026-11-10).
 CHECKPOINT_XP = 250_000
+# A checkpoint waits for a character out of danger: not poisoned, at least
+# half its HP. The C64 Human Warrior's clvl 10 checkpoint was taken on its
+# arrival in town poisoned, short of the Temple, and all 1,722 of its
+# restores died 14 steps in (2026-11-15).
+CHECKPOINT_HP_FRACTION = 0.5
+# A start whose restores die this many times in a row, each within
+# DOOMED_STEPS of it, cannot go on: the combination plays from level 1, as
+# for a save that does not load (start_balrog).
+DOOMED_DEATHS = 10
+DOOMED_STEPS = 200
 FINAL_CHECKPOINT_STEPS = 2_000   # in its last this many steps a run keeps one if it gained experience
 ROTATE_POLL_STEPS = 500   # a Balrog run looks for a newer build this often (newer_build)
+# A combination waiting this long for a slot has the longest-playing Balrog
+# run yield at its next town visit, as for a newer build (Service.balrog_yield):
+# with 25 C64 graduates for 18 slots, 20M-step games (about 40 hours) and two
+# deaths in 2.5 hours, seven waited on (2026-11-15).
+BALROG_SLICE_S = 3 * 3600
+YIELD = "yield"           # in a run's directory: hand the slot over in town (yield_due)
 CHECKPOINTS = "checkpoints"   # in a run's directory: clvl<N>/ each
 ENCOUNTERS = "encounters"     # in the queue home: <run>-s<step>/, a snapshot each Balrog sighting
 BALROG = ("B", 100)          # its glyph and native level (knowledge.kinds_by_name)
@@ -136,6 +152,12 @@ def checkpoint_wanted(clvl: int, ac: int | None, last_clvl: int | None, last_ac:
     if last_xp is not None and xp >= last_xp + CHECKPOINT_XP:
         return True
     return ac is not None and last_ac is not None and ac >= last_ac + ARMOUR_CHECKPOINT_AC
+
+
+def checkpoint_safe(hp: int, mhp: int, poisoned: bool) -> bool:
+    """A character a checkpoint may keep: not poisoned, at least
+    CHECKPOINT_HP_FRACTION of its HP."""
+    return not poisoned and hp >= mhp * CHECKPOINT_HP_FRACTION
 
 
 def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None, xp: int = 0) -> str:
@@ -311,6 +333,15 @@ def rotate_due(goal: str, dlvl: int, steps: int, build: str, platform: str, home
     return newer_build(build, platform, home)
 
 
+def yield_due(run_dir: Path, goal: str, dlvl: int, steps: int) -> str | None:
+    """"yield" when the service asked a Balrog run in town to hand its slot
+    over (Service.balrog_yield), looked for every ROTATE_POLL_STEPS; None to
+    play on."""
+    if goal != "balrog" or dlvl != 0 or steps % ROTATE_POLL_STEPS:
+        return None
+    return YIELD if (run_dir / YIELD).exists() else None
+
+
 def brain_shape(root: Path) -> dict[str, set[str]] | None:
     """Each class in the modules a saved brain is made of, with the
     attributes its code gives an instance: annotated fields and every
@@ -473,6 +504,14 @@ def keep_encounter(home: Path, run_id: str, snapshot: Path, info: dict[str, Any]
     return dest
 
 
+def run_home(run_dir: Path) -> Path:
+    """The queue home a run's directory (``<home>/runs/<id>``) is in. A
+    worker's ``HOME`` is its build snapshot's (``ROOT``, where no
+    ``service.json`` is), so rotate_due never found a newer build and no
+    Balrog run rotated, from 2026-11-11 to 2026-11-15."""
+    return run_dir.resolve().parent.parent
+
+
 def run_one(run_dir: Path) -> int:
     """Play one job (``job.json``) in this process, from the build snapshot
     whose code this is; write ``result.json``. Runs under tools/isolated.sh."""
@@ -511,6 +550,7 @@ def run_one(run_dir: Path) -> int:
             self.checkpoint_xp: int | None = None     # the experience at the latest start or checkpoint
             self.final_checkpoint = False             # the one kept near the step budget's end (observe)
             self.rotating = False                     # in town with a newer build waiting: ending (rotate)
+            self.checkpoint_waiting = False           # one wanted in town, waiting out danger (checkpoint_safe)
 
         def mark_start(self, obs) -> None:   # type: ignore[no-untyped-def]
             self.checkpoint_clvl = max(obs.clvl, 1)   # chargen's screen reads level 0
@@ -524,11 +564,16 @@ def run_one(run_dir: Path) -> int:
             it with ARMOUR_CHECKPOINT_AC more AC or CHECKPOINT_XP more
             experience, a Balrog run keeps a checkpoint, the level-entry
             snapshot itself or, on a ``graduate_save`` port, a saved game at
-            the next command (press)."""
+            the next command (press). A character in danger
+            (checkpoint_safe) is kept on a ``graduate_save`` port once safe
+            in town, else at the next arrival."""
             super().take_snapshot(obs)
             ac = status_ac(obs)
             if not checkpoint_wanted(obs.clvl, ac, self.checkpoint_clvl, self.checkpoint_ac,
                                      obs.xp, self.checkpoint_xp, dlvl=obs.dlvl):
+                return
+            if not checkpoint_safe(obs.hp, obs.mhp, self.brain.poisoned):
+                self.checkpoint_waiting = port.graduate_save
                 return
             self.keep_checkpoint(obs)
 
@@ -553,6 +598,13 @@ def run_one(run_dir: Path) -> int:
 
         def press(self, key: int):   # type: ignore[no-untyped-def]
             game = self.worker.game
+            last = game.last if game is not None else None
+            if self.checkpoint_waiting and last is not None and last.mode == Mode.COMMAND:
+                if last.dlvl != 0:
+                    self.checkpoint_waiting = False   # left town in danger: the next arrival
+                elif checkpoint_safe(last.hp, last.mhp, self.brain.poisoned):
+                    self.checkpoint_waiting = False
+                    self.keep_checkpoint(last)
             if self.checkpoint_due and game is not None and game.last is not None and game.last.mode == Mode.COMMAND:
                 self.checkpoint_due = False
                 self.save_checkpoint()
@@ -615,10 +667,12 @@ def run_one(run_dir: Path) -> int:
             step budget, which cut runs off on their way back down to the
             Balrog (maintainer, 2026-11-11). A saved-game port ends after
             the save (press)."""
-            newer = None if self.rotating else rotate_due(goal.name, obs.dlvl, self.result.steps,
-                                                          job["build"], job["platform"])
-            if newer is None:
-                return
+            newer = None if self.rotating else (
+                rotate_due(goal.name, obs.dlvl, self.result.steps, job["build"], job["platform"],
+                           run_home(run_dir))
+                or yield_due(run_dir, goal.name, obs.dlvl, self.result.steps))
+            if newer is None or not checkpoint_safe(obs.hp, obs.mhp, self.brain.poisoned):
+                return   # in danger: the next poll (checkpoint_safe)
             self.rotating = True
             self.session.event("rotate", seed=self.seed, step=self.result.steps, build=newer)
             if self.checkpoint_xp is not None and obs.xp > self.checkpoint_xp:
@@ -1070,10 +1124,18 @@ class Balrog:
             return
         current["fails"] = current.get("fails", 0) + 1
         current["restores"] = current.get("restores", 0) + 1
+        quick = record["outcome"] == "died" and record.get("steps", 0) - current.get("step", 0) < DOOMED_STEPS
+        current["quick_deaths"] = current.get("quick_deaths", 0) + 1 if quick else 0
+
+    @staticmethod
+    def doomed(start: dict[str, Any]) -> bool:
+        """A start whose last DOOMED_DEATHS restores each died within
+        DOOMED_STEPS of it (fell_short)."""
+        return start.get("quick_deaths", 0) >= DOOMED_DEATHS
 
     def take(self, busy: Collection[str] = (), only: Collection[str] = (),
              exclude: Collection[str] = (), full: Collection[str] = ()) -> dict[str, Any] | None:
-        """The next graduate, the highest start first (``rank``), which goes
+        """The next graduate, the longest waiting first (``rank``), which goes
         to the back; None when there is none. One not playing already
         (``busy``) first: a long game was
         lapped by the rotation, and two games of one combination played from
@@ -1109,11 +1171,17 @@ class Balrog:
         start = self.state["items"][key].get("start") or {}
         return int(start.get("clvl") or (M7_CLVL if start else 1))
 
+    def waiting_since(self, key: str) -> float:
+        """When a combination's last counted game ended, else when it joined."""
+        item = self.state["items"][key]
+        return float((item.get("last") or {}).get("ended") or (item.get("graduated") or {}).get("ended") or 0)
+
     def rank(self) -> None:
-        """Highest start first (maintainer, 2026-11-06: the highest-level save
-        is likeliest to go further and find something new), the rotation
-        order among equals."""
-        self.state["order"].sort(key=lambda k: -self.start_level(k))
+        """Longest waiting since its last game first, the highest start among
+        equals (maintainer, 2026-11-15: 25 C64 graduates for 18 slots, and
+        highest-first, 2026-11-06, kept seven from ever playing: the top
+        starts took each slot back the moment they ended)."""
+        self.state["order"].sort(key=lambda k: (self.waiting_since(k), -self.start_level(k)))
 
     def ready(self) -> bool:
         return bool(self.state["order"])
@@ -1704,6 +1772,28 @@ class Service:
         for run_id in hit:
             self.stop_run(run_id)
 
+    def balrog_yield(self) -> None:
+        """One Balrog run per combination waiting over BALROG_SLICE_S for a
+        slot, the longest playing first, yields at its next town visit
+        (yield_due): it keeps a checkpoint and ends, as for a newer build,
+        and the longest waiting plays next (Balrog.rank)."""
+        if not self.balrog.ready():
+            return
+        t = time.time()
+        balrog = {r: j for r, j in self.running.items() if j["queue"] == "balrog" and not j.get("cancelled")}
+        playing = {f"{j['platform']}/{j['character']}" for j in balrog.values()}
+        waiting = [k for k in self.balrog.state["order"] if k not in playing
+                   and not self.balrog.state["items"][k].get("won")
+                   and t - self.balrog.waiting_since(k) > BALROG_SLICE_S]
+        flagged = [r for r in balrog if (self.home / "runs" / r / YIELD).exists()]
+        due = sorted((j["started"], r) for r, j in balrog.items()
+                     if r not in flagged and t - j["started"] > BALROG_SLICE_S)
+        for _, run_id in due[:max(0, len(waiting) - len(flagged))]:
+            (self.home / "runs" / run_id).mkdir(parents=True, exist_ok=True)
+            (self.home / "runs" / run_id / YIELD).touch()
+            self.log(f"balrog queue: {run_id} yields in town ({len(waiting)} waiting over "
+                     f"{BALROG_SLICE_S // 3600} hours)")
+
     def stop_run(self, run_id: str) -> None:
         """End a run now (a cancelled subqueue): its whole process group."""
         job = self.running[run_id]
@@ -2017,6 +2107,11 @@ class Service:
                      f"{start.get('build')}) does not load in {build}: a new character from level 1")
             self.balrog.retire_start(item)
             start = None
+        if start and self.balrog.doomed(start):
+            self.log(f"balrog queue: {item['character']}'s start (run {start.get('run')}) died within "
+                     f"{DOOMED_STEPS} steps {start['quick_deaths']} times in a row: a new character from level 1")
+            self.balrog.retire_start(item)
+            start = None
         seed = random.SystemRandom().randrange(1, 2**31)
         budget = int(self.config["balrog_budget"])
         if start and start.get("checkpoint"):
@@ -2112,6 +2207,7 @@ class Service:
         self.refresh_build()
         self.restart_balrog()
         self.stop_balrog()
+        self.balrog_yield()
         self.refresh_ci()
         self.finish_subs(subs)
         subs = {name: sub for name, sub in subs.items() if not sub.get("done")}
