@@ -3442,7 +3442,9 @@ into still hazards and walled the replayed Paladin off the stairs.
 - *Drained stats.* A drained stat (`Brain.drained`) is bought and drunk back
   with that stat's Restore potion (`RESTORE_POTIONS`): five at the
   Alchemist, Wisdom at the Temple. The Potion of Restoration, every stat at
-  once, is now the Black Market's alone.
+  once, was the Black Market's alone, and the bot no longer looks for it:
+  it left the catalog with the renumbering (b268b63), as did the Staff of
+  Detect Monsters that `RECHARGEABLE` listed.
 - *Black Market only.* Scrolls of Teleportation and Potions of Resist Heat
   and Resist Cold left the Alchemist's stock and come from the Black Market
   when rich, as before.

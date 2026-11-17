@@ -49,7 +49,7 @@ KEY_TUNNEL = ord("+")     # CMD_TUNNEL: then a direction (core/tunnel.s)
 # Something Recharge can work on, the cheapest first (Magic Shop, VMS prices):
 # Mages and Rangers cast Recharge Item I 156,000 times with nothing to
 # recharge, so M7 criterion 2 never saw it work (C128, 2026-11-04).
-RECHARGEABLE = ("Staff of Detect Monsters", "Wand of Light", "Staff of Light")
+RECHARGEABLE = ("Wand of Light", "Staff of Light")   # the Staff of Detect Monsters left the catalog (b268b63)
 # Wands and staffs (maintainer, 2026-11-04: "this is a big gap"): Mages out of
 # mana, out of Phase Door and in melee were the late deaths of the day. Damage
 # by the game's numbers, VMS's (wands.inc: bolts 3d8, 4d8, 6d8; balls 24, 32,
@@ -290,7 +290,6 @@ EGO_WEAPON = re.compile(r"^(.+?) \((Holy Avenger|Defender|Slay Animal|Slay Evil|
 EGO_FACTOR = {"Holy Avenger": 1.6, "Slay Evil": 1.5, "Slay Dragon": 1.4, "Slay Undead": 1.15, "Slay Animal": 1.15}
 EGO_FLAT = {"Flame": 5.0, "Frost": 5.0, "Defender": 2.0}
 ARMOUR_HITS_TRIP = 5     # "is damaged!" messages (to-AC -1 each) that are a reason to go and replace armour
-RESTORATION = "Potion of Restoration"   # restores every drained stat (Alchemist, Temple; 300 gp)
 RESTORE_GOLD = 400
 RESTORE_UNSEEN = 15      # a character first seen at this level or higher may be drained already: drink one
 RECALL_WAIT_MAX = 3000   # longest wait before another town trip for Word of Recall
@@ -399,9 +398,9 @@ GAIN_POTIONS = {"Potion of Gain Strength": "ST", "Potion of Gain Intelligence": 
                 "Potion of Gain Wisdom": "WI", "Potion of Gain Dexterity": "DX",
                 "Potion of Gain Constitution": "CO", "Potion of Charisma": "CH"}
 # Phase 5 (VMS stock): a Restore potion a stat, five at the Alchemist and
-# Wisdom at the Temple. Moria8's Potion of Restoration (every stat) is now
-# the Black Market's alone, so a drained character fixed nothing until rich
-# (2026-11-16).
+# Wisdom at the Temple. Moria8's Potion of Restoration (every stat) was the
+# Black Market's alone, so a drained character fixed nothing until rich
+# (2026-11-16), and left the catalog with the renumbering (b268b63).
 RESTORE_POTIONS = {"Potion of Restore Strength": "ST", "Potion of Restore Intelligence": "IN",
                    "Potion of Restore Wisdom": "WI", "Potion of Restore Dexterity": "DX",
                    "Potion of Restore Constitution": "CO", "Potion of Restore Charisma": "CH"}
@@ -817,7 +816,6 @@ class Brain:
         self.listing_equipment = False         # the 'E' list is up: read it (prompt)
         self.armour_hits = 0                   # "is damaged!" messages since the armour was last read
         self.stat_max: dict[str, int] | None = None   # each stat's highest value seen; None: never read
-        self.restoration = 0                   # Potions of Restoration carried
         self.gains: dict[str, int] = {}        # potions of gain stat carried, by name
         self.restores: dict[str, int] = {}     # Restore <stat> potions carried, by name
         self.drained: set[str] = set()         # stats read below their highest (track_stats)
@@ -1585,6 +1583,12 @@ class Brain:
         self.picking, self.listed = scroll, False
         return Decision(ord("R"), "gear", f"read {scroll.removeprefix('Scroll of ')}")
 
+    def restores_wanted(self) -> list[str]:
+        """The Restore potion of each drained stat not carried. The Potion of
+        Restoration (every stat at once) left the catalog with the
+        renumbering (b268b63); VMS sells a potion a stat."""
+        return [name for name, stat in RESTORE_POTIONS.items() if stat in self.drained and not self.restores.get(name)]
+
     def weapon_enchant_wanted(self, gold: int) -> bool:
         """Rich and the weapon's to-dam short of ENCHANT_WEAPON_MAX: Scrolls of
         Enchant Weapon, as a player spends a fortune. A clvl 31 Gnome Warrior
@@ -1596,8 +1600,8 @@ class Brain:
                 and gold >= ENCHANT_GOLD + GEAR_RESERVE)
 
     def track_stats(self, obs: Observation) -> None:
-        """Each stat's highest value seen; one below it is drained, and a
-        Potion of Restoration puts it back (the status line shows no drain:
+        """Each stat's highest value seen; one below it is drained, and that
+        stat's Restore potion puts it back (the status line shows no drain:
         a level-29 Priest played at CON 3, 68 HP, 2026-11-06)."""
         ac = STATUS_AC.search(obs.rows[23]) or STATUS_AC.search(obs.rows[21])
         if ac:
@@ -2604,10 +2608,7 @@ class Brain:
             wants += [CCW, CSW]   # the best the Temple has and the gold allows
         if "strong_potions" in self.goal.tactics and self.clvl >= STRONG_LEVEL and self.neutralize < NEUTRALIZE_RESERVE:
             wants.append(NEUTRALIZE)
-        if self.restore_due and not self.restoration:
-            wants += [name for name, stat in RESTORE_POTIONS.items()
-                      if stat in self.drained and not self.restores.get(name)]
-            wants.append(RESTORATION)
+        wants += self.restores_wanted()
         if self.max_dlvl >= SCOUT_FROM and self.resist_heat < RESIST_RESERVE:
             wants.append(RESIST_HEAT)
         if self.max_dlvl >= SCOUT_FROM and self.resist_cold < RESIST_RESERVE:
@@ -2665,7 +2666,7 @@ class Brain:
                 order = sorted(GAIN_POTIONS, key=lambda k: GAIN_POTIONS[k] not in ("CO", "ST", "DX"))
                 wants += [k for k in order if self.stat_now.get(GAIN_POTIONS[k], 0) < STAT_MAXED]
         elif self.at_store == ALCHEMIST:
-            wants = [w for w in wants if w in (RECALL, PHASE, TELEPORT_SCROLL, RESTORATION, ENCHANT_ARMOR,
+            wants = [w for w in wants if w in (RECALL, PHASE, TELEPORT_SCROLL, ENCHANT_ARMOR,
                                                ENCHANT_WEAPON, RECHARGE_SCROLL, *RESTORE_POTIONS)]
         else:
             wants = [w for w in wants if w not in EXTRA_ITEMS]   # the Black Market's alone
@@ -2843,8 +2844,6 @@ class Brain:
             self.lamp_packed = n > 0
         elif item.startswith(OIL):
             self.oil += n
-        elif item.startswith(RESTORATION):
-            self.restoration += n
         elif item.startswith(tuple(RESTORE_POTIONS)):
             kind = next(k for k in RESTORE_POTIONS if item.startswith(k))
             self.restores[kind] = max(0, self.restores.get(kind, 0) + n)
@@ -2952,7 +2951,7 @@ class Brain:
             # 2026-11-15).
             self.oil = held(OIL)
         if scope in ("potions", "all"):
-            self.clw, self.neutralize, self.restoration = held(CLW), held(NEUTRALIZE), held(RESTORATION)
+            self.clw, self.neutralize = held(CLW), held(NEUTRALIZE)
             self.resist_heat, self.resist_cold = held(RESIST_HEAT), held(RESIST_COLD)
             self.heroism = held(HEROISM)
             self.extra.update({kind: held(kind) for kind in (SUPER_HEROISM, INVULNERABILITY)})
@@ -3028,9 +3027,6 @@ class Brain:
                     self.equip_checked = self.equip_checked and self.weapon_scrolls > 0    # the weapon's plusses then
                 elif self.picking in GAIN_POTIONS:
                     self.gains[self.picking] = max(0, self.gains.get(self.picking, 0) - 1)
-                elif self.picking == RESTORATION:
-                    self.restoration = max(0, self.restoration - 1)
-                    self.restore_due, self.stat_max = False, {}   # the stats as they now read are the baseline
                 elif self.picking in RESTORE_POTIONS:
                     self.restores[self.picking] = max(0, self.restores.get(self.picking, 0) - 1)
                     stat = RESTORE_POTIONS[self.picking]
@@ -3092,7 +3088,7 @@ class Brain:
             self.recall = self.phase = self.teleports = self.identify_scrolls = self.enchant_scrolls = 0
             self.extra[PROTECT_SCROLL] = 0
         elif kind == "potions":
-            self.clw = self.neutralize = self.restoration = self.resist_heat = self.resist_cold = self.heroism = self.restore_mana = 0
+            self.clw = self.neutralize = self.resist_heat = self.resist_cold = self.heroism = self.restore_mana = 0
             self.extra.update({SUPER_HEROISM: 0, INVULNERABILITY: 0})
             self.gains = {}
             self.restores = {}
@@ -3126,8 +3122,6 @@ class Brain:
             self.extra[self.picking] = 0
         elif self.picking == RESTORE_MANA:
             self.restore_mana = 0
-        elif self.picking == RESTORATION:
-            self.restoration = 0
         elif self.picking in GAIN_POTIONS:
             self.gains.pop(self.picking, None)
         elif self.picking in RESTORE_POTIONS:
@@ -5323,9 +5317,9 @@ class Brain:
             store, why = MAGIC_SHOP, "walk to the Magic Shop for something to recharge"
         elif not self.potions_done and len(view.stores) > TEMPLE and self.temple_worth_it(obs):
             store, why = TEMPLE, "walk to the Temple for Cure Light Wounds and Word of Recall"
-        elif not self.alchemist_done and len(view.stores) > ALCHEMIST and self.restore_due \
-                and not self.restoration and self.gold(obs) >= RESTORE_GOLD:
-            store, why = ALCHEMIST, "walk to the Alchemy shop for Restoration (a stat drained)"
+        elif not self.alchemist_done and len(view.stores) > ALCHEMIST and self.restores_wanted() \
+                and self.gold(obs) >= RESTORE_GOLD:
+            store, why = ALCHEMIST, "walk to the Alchemy shop for a Restore potion (a stat drained)"
         elif not self.alchemist_done and len(view.stores) > ALCHEMIST and self.enchant_wanted(self.gold(obs)):
             store, why = ALCHEMIST, "walk to the Alchemy shop for Enchant Armor"
         elif not self.alchemist_done and len(view.stores) > ALCHEMIST and self.phase < self.phase_reserve() \
@@ -5523,9 +5517,6 @@ class Brain:
         from death: drinking first at low levels (the prayer can fail) cost
         Gnome and Elf Priests 5 of 40 on reach_dl8 (M5f round 7 A/B)."""
         strong = next((k for k in self.strong if self.potion_ready(k, obs)), None)
-        if self.restoration and self.restore_due and not self.close_threats(obs, view):
-            self.picking, self.listed = RESTORATION, False
-            return Decision(ord("Q"), "quaff", "a stat drained: drink Restoration")
         restore = next((k for k, stat in RESTORE_POTIONS.items() if stat in self.drained and self.restores.get(k)), None)
         if restore is not None and not self.close_threats(obs, view):
             self.picking, self.listed = restore, False

@@ -1876,8 +1876,8 @@ class WornOutTest(unittest.TestCase):
         brain.armour_hits, brain.gear_trip_after = ARMOUR_HITS_TRIP, 10**9
         self.assertTrue(brain.wants_gear(o))                         # worn out: go and replace it
 
-    def test_a_drained_stat_buys_and_drinks_restoration(self) -> None:
-        from moria_playtest.brain import ALCHEMIST, RESTORATION
+    def test_a_drained_stat_buys_and_drinks_its_restore(self) -> None:
+        from moria_playtest.brain import ALCHEMIST
         brain = Brain(GOALS["deep"])
         stats = "ST:16  IN:10  WI:17  DX:12  CO:{co}  CH:11"
         o = command_obs(pos=(5, 5), dlvl=20, clvl=10, rows={22: stats.format(co=15)})
@@ -1886,10 +1886,11 @@ class WornOutTest(unittest.TestCase):
         brain.track_stats(command_obs(pos=(5, 5), dlvl=20, clvl=10, rows={22: stats.format(co=12)}))
         self.assertTrue(brain.restore_due)                           # CON 15 to 12: drained
         brain.at_store = ALCHEMIST
-        self.assertIn(RESTORATION, brain.shopping_list(5000))
-        brain.credit(RESTORATION, 1)
+        self.assertIn("Potion of Restore Constitution", brain.shopping_list(5000))
+        self.assertNotIn("Potion of Restoration", brain.shopping_list(5000))   # gone with b268b63
+        brain.credit("Potion of Restore Constitution", 1)
         view = town_view((5, 5), (40, 40), dlvl=20)
-        self.assertEqual(brain.quaff(o, view).reason, "a stat drained: drink Restoration")
+        self.assertEqual(brain.quaff(o, view).reason, "CO drained: drink Potion of Restore Constitution")
         old = Brain(GOALS["deep"])
         old.track_stats(command_obs(pos=(5, 5), dlvl=20, clvl=29, rows={22: stats.format(co=3)}))
         self.assertTrue(old.restore_due)                             # met high with no history: one, to be sure
@@ -5793,7 +5794,7 @@ class MageBookTest(unittest.TestCase):
         brain.on_item_after["Recharge Item I"] = 10**9
         self.assertTrue(brain.recharge_wanted())
         self.assertEqual(brain.shopping_list()[:len(RECHARGEABLE)], list(RECHARGEABLE))
-        brain.credit("Staff of Detect Monsters (5 charges)", 1)
+        brain.credit("Wand of Light (5 charges)", 1)
         self.assertFalse(brain.recharge_wanted())
         self.assertNotIn("Recharge Item I", brain.on_item_after)          # tried again at once
         self.assertFalse(set(RECHARGEABLE) & set(brain.shopping_list()))
