@@ -1736,15 +1736,29 @@ for a = OVL_TOWN_END_ADDR, 0xB9FF do prog:write_u8(a, 0x00) end
 press_slow("B")
 assert_line("buy_prompt", wait_screen("Buy which item"), "buy prompt missing: " .. rowtext(20))
 press_slow("A")
-assert_line("buy_asks", wait_screen("Your offer?"), "no offer prompt")
+-- The first item depends on the seed, which a build's disk timing moves: a
+-- dear one is haggled over ("Your offer?"), a cheap one sold at its price
+-- ("Buy? (Y/N)"). A 2 gp Iron Shot failed this step when it asked only for
+-- an offer (2026-11-16).
+local offer, fixed = false, false
+for _ = 1, 40 do
+    emu.wait(0.5)
+    if screen_has("Your offer?") then offer = true break end
+    if screen_has("Buy? (Y/N)") then fixed = true break end
+end
+assert_line("buy_asks", offer or fixed, "no offer or price prompt")
 local ask = nil
 for r = 0, 23 do
-    local n = rowtext(r):match("Asks (%d+) gp")
+    local n = rowtext(r):match("Asks (%d+) gp") or rowtext(r):match("Price: (%d+) gp")
     if n then ask = n end
 end
 assert_line("buy_ask_read", ask ~= nil, "no asking price")
-for i = 1, #(ask or "") do press_slow(ask:sub(i, i)) end
-press_slow("\r")
+if offer then
+    for i = 1, #(ask or "") do press_slow(ask:sub(i, i)) end
+    press_slow("\r")
+else
+    press_slow("Y")
+end
 local bought = false
 for _ = 1, 40 do
     emu.wait(0.5)

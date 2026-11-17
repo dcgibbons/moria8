@@ -1094,15 +1094,28 @@ function run()
     send_key(0x42) -- 'B'
     assert_line("buy_prompt", wait_screen("Buy which item", 80))
     send_key(0x41) -- 'A'
-    assert_line("buy_asks", wait_screen("Your offer?", 80))
+    -- The first item depends on the seed: a dear one is haggled over ("Your
+    -- offer?"), a cheap one sold at its price ("Buy? (Y/N)"); the Apple IIe's
+    -- 2 gp Iron Shot failed the offer-only step (2026-11-16).
+    local offer, fixed = false, false
+    for _ = 1, 80 * DFS_SLACK do
+        if screen_has("Your offer?") then offer = true break end
+        if screen_has("Buy? (Y/N)") then fixed = true break end
+        emu.wait(0.1)
+    end
+    assert_line("buy_asks", offer or fixed)
     local ask = nil
     for r = 0, 23 do
-        local n = rowtext(r):match("Asks (%d+) gp")
+        local n = rowtext(r):match("Asks (%d+) gp") or rowtext(r):match("Price: (%d+) gp")
         if n then ask = n end
     end
     assert_line("buy_ask_read", ask ~= nil)
-    for i = 1, #(ask or "") do send_key(ask:byte(i)) end
-    send_key(0x0D)
+    if offer then
+        for i = 1, #(ask or "") do send_key(ask:byte(i)) end
+        send_key(0x0D)
+    else
+        send_key(0x59) -- 'Y'
+    end
     local bought = false
     for _ = 1, 100 * DFS_SLACK do
         if pack_count() == 1 and screen_has("B)uy") and screen_has("Gold: " .. (50000 - tonumber(ask or 0))) then
