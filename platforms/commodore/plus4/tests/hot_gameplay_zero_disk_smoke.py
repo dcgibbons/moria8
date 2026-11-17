@@ -16,7 +16,7 @@ and runs the live main_loop command sequence:
   4) Locked door open ('O' -> door_pick_roll + player_disarm_get_effective_chance)
   5) Stepping onto a floor trap (TRAP_ARROW -> resident $F000 trap_trigger)
   6) Stepping onto and picking up ('G') a non-gold floor item (item_pickup +
-     $0600-$07FF ITEM_PICKUP_CACHE)
+     $0600-$07AF ITEM_PICKUP_CACHE)
 Fails immediately if any disk/KERNAL/overlay/catalog routine executes even once,
 and verifies every gameplay state transition in RAM at completion.
 """

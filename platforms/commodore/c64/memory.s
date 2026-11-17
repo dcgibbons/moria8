@@ -77,6 +77,7 @@
 .const ITEM_PICKUP_CACHE_BASE      = C64_HIDDEN_FREE_BASE
 .const ITEM_PICKUP_CACHE_SIZE      = C64_HIDDEN_AUX_END - ITEM_PICKUP_CACHE_BASE + 1
 .label c64_hidden_aux_end          = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE
+.const ITEM_PICKUP_CACHE_MIN_SIZE  = 464
 .assert "C64 item pickup cache fits in $DD2A-$DEFF hidden DRAM (< $DF00)", ITEM_PICKUP_CACHE_BASE == $dd2a && ITEM_PICKUP_CACHE_SIZE == 470 && c64_hidden_aux_end <= C64_HIDDEN_RAM_RESERVE_BASE, true
 #endif
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)

@@ -10,7 +10,7 @@
 //     ItemPickupCachePrewarmSegment (e.g. RuntimeBanked on ports whose banked
 //     RAM stays visible across KERNAL wrappers). Backing storage lives in
 //     port-supplied ITEM_PICKUP_CACHE_BASE..+SIZE-1 (470 B hidden RAM on C64,
-//     512 B low RAM on Plus/4). Excluded (0 B) on C128, cartridge builds, and
+//     432 B low RAM $0600-$07AF on Plus/4). Excluded (0 B) on C128, cartridge builds, and
 //     non-Commodore ports.
 //   lifetime: Active level and session read-through cache; invalidated via
 //     item_pickup_cache_invalidate before generation scratch reuse and reset +
@@ -35,7 +35,9 @@
 .const IPC_POOL_END = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE
 
 .assert "Item pickup cache sits above page 1", ITEM_PICKUP_CACHE_BASE >= $0200, true
-.assert "Item pickup cache size >= 464 bytes", ITEM_PICKUP_CACHE_SIZE >= 464, true
+// Each port names its floor (C64 464 B; Plus/4 432 B, all it has between its
+// KERNAL workspaces): a smaller pool falls back to ITEM.CAT reads sooner.
+.assert "Item pickup cache size meets the port's minimum", ITEM_PICKUP_CACHE_SIZE >= ITEM_PICKUP_CACHE_MIN_SIZE, true
 .assert "Item pickup cache fits within non-wrapping 16-bit span", IPC_POOL_END <= $ff00, true
 .assert "item_name_decode_buf does not overlap item pickup cache", (item_name_decode_buf + ITEM_NAME_DECODE_BUF_SIZE <= ITEM_PICKUP_CACHE_BASE) || (item_name_decode_buf >= IPC_POOL_END), true
 
