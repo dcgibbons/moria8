@@ -163,7 +163,7 @@ playtest-smoke: disk64
 playtest-gate: disk64 cartridge64 diskplus4 cartridgeplus4 disk128 cartridge128 diskapple2 diskatari8 \
 		cartridgeatari8 diskbbcmaster buildcx16
 	$(PLAYTEST_PY) -m moria_playtest.gate $(if $(GATE_WORKERS),--workers $(GATE_WORKERS)) \
-		$(if $(TARGETS),--targets $(TARGETS))
+		$(if $(TARGETS),--targets $(TARGETS)) $(if $(GATE_ALLOW_SKIP),--allow-skip)
 
 playtest-m0-report: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.m0

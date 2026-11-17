@@ -147,7 +147,10 @@ reinforcement learning a non-goal. The learning loop lives in development
     Weaponsmith, casts from a second book through the `?` list, deposits and
     retrieves at the Home, and drops and picks up. A game finding, a run error
     or a failed tour step fails it; deaths and the bot's own findings do not.
-    About 10 minutes at 12 workers.
+    A target skipped because its ROMs are not set fails it too, unless
+    `GATE_ALLOW_SKIP=1`: without the Plus/4's JiffyDOS ROMs it reported "55
+    passed, 0 failed" over a build whose every Plus/4 disk game hung at its
+    first store (2026-11-16). About 10 minutes at 12 workers.
   - `playtest-session GOAL=<name> [SEEDS=…] [WORKERS=n]`: launches VICE,
     unbounded.
   - `playtest-dashboard`: serves the static page.

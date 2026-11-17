@@ -65,6 +65,14 @@ def verdict(run_dir: Path) -> tuple[bool, str]:
     return True, line
 
 
+def exit_code(failed: list[str], skipped: dict[str, str], allow_skip: bool) -> int:
+    """Failed runs fail the gate, and so does a target skipped for its ROMs
+    unless the caller allows it: a gate without the Plus/4's JiffyDOS ROMs
+    reported "55 passed, 0 failed" over a build whose every Plus/4 disk game
+    hung at its first store (2026-11-16)."""
+    return 1 if failed or (skipped and not allow_skip) else 0
+
+
 def git(*args: str) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
 
@@ -73,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="playtest-gate")
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--targets", default="", help="comma-separated (default: every port and cartridge)")
+    parser.add_argument("--allow-skip", action="store_true",
+                        help="pass although targets whose ROMs are not set were skipped")
     args = parser.parse_args(argv)
     targets = [t for t in args.targets.split(",") if t] or list(PORTS)
     out = PLAYTEST_OUT / "gate" / time.strftime("%Y%m%d-%H%M%S")
@@ -129,7 +139,10 @@ def main(argv: list[str] | None = None) -> int:
           f"{len(skipped)} targets skipped")
     if failed:
         print("replay a failure: make playtest-repro FINDING=<the finding's path>")
-    return 1 if failed else 0
+    if skipped and not args.allow_skip:
+        print("playtest gate: FAILED, targets skipped: set their ROM variables, narrow TARGETS, "
+              "or GATE_ALLOW_SKIP=1 to pass without them")
+    return exit_code(failed, skipped, args.allow_skip)
 
 
 if __name__ == "__main__":

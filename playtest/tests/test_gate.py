@@ -64,6 +64,15 @@ class GateVerdictTest(unittest.TestCase):
             (tour / "tour.json").unlink()
             self.assertFalse(gate.verdict(tour)[0])   # no result: the tour died
 
+    def test_a_skipped_target_fails_the_gate_unless_allowed(self) -> None:
+        """2026-11-16: "55 passed, 0 failed" without the Plus/4's ROMs, over a
+        build whose every Plus/4 disk game hung at its first store."""
+        skipped = {"plus4": "skipped: PLAYTEST_PLUS4_KERNAL not set"}
+        self.assertEqual(gate.exit_code([], {}, False), 0)
+        self.assertEqual(gate.exit_code([], skipped, False), 1)
+        self.assertEqual(gate.exit_code([], skipped, True), 0)
+        self.assertEqual(gate.exit_code(["c64-tour"], skipped, True), 1)   # a failure fails all the same
+
     def test_a_port_without_its_roms_is_skipped(self) -> None:
         from unittest import mock
         with mock.patch.dict(gate.os.environ, {}, clear=True):
