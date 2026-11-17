@@ -64,7 +64,7 @@ def run_vice(args: argparse.Namespace) -> int:
         "-config",
         vice_config(args.vice),
         "-default",
-        "+saveres",
+        "+saveres", "-VDC16KB",
         "+autostart-delay-random",
         "-console",
         "-nativemonitor",

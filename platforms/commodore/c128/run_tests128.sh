@@ -890,7 +890,10 @@ root = Path(sys.argv[1])
 bad = []
 
 def check_tokens(label: str, values: list[str]) -> None:
-    missing = [flag for flag in ("-config", "-default", "+saveres", "+autostart-delay-random") if flag not in values]
+    # -VDC16KB: a stock C128's 16 KB VDC. VICE defaults to 64 KB (a C128DCR's)
+    # and -default resets a config file's VDC64KB, so the flag must be on the
+    # command line (maintainer, 2026-11-16: disk harness on 16 KB by default).
+    missing = [flag for flag in ("-config", "-default", "+saveres", "-VDC16KB", "+autostart-delay-random") if flag not in values]
     if "-config" in values:
         config_index = values.index("-config")
         if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
@@ -928,7 +931,7 @@ for runner in (root / "run_tests128.sh", root / "run_test_internal_worker.sh"):
         stripped = line.strip()
         if not stripped.startswith('"$VICE" '):
             continue
-        missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres", "+autostart-delay-random") if flag not in line]
+        missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres", "-VDC16KB", "+autostart-delay-random") if flag not in line]
         if missing:
             bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
 
@@ -2508,7 +2511,7 @@ run_vic40_blanked_boot_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -3908,7 +3911,7 @@ run_test() {
     # -initbreak ready: the C128 powers up on its Z80, and monitor commands
     # run before the 8502 takes over set the Z80's PC, so the test never runs.
     # Every C128 launch whose monitor commands set the PC passes it.
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4135,7 +4138,7 @@ run_boot_d64_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4190,7 +4193,7 @@ run_boot_title_newgame_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4248,7 +4251,7 @@ run_new_key_stability_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4307,7 +4310,7 @@ run_title_art_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4453,7 +4456,7 @@ run_boot_title_save_write_product_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
         -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
@@ -4658,7 +4661,7 @@ run_boot_title_save_media_fail_product_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
         -drive9type 1541 -attach9ro -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
@@ -4848,7 +4851,7 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4921,7 +4924,7 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5515,7 +5518,7 @@ run_boot_title_load_resume_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
@@ -5572,7 +5575,7 @@ run_boot_title_idle_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5598,7 +5601,7 @@ run_boot_title_idle_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5624,7 +5627,7 @@ run_boot_title_idle_smoke() {
         echo "g"
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" \
         -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
@@ -5682,7 +5685,7 @@ run_boot_tier_transition_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5738,7 +5741,7 @@ run_town_overlay_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5823,7 +5826,7 @@ run_scroll_p3_return_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5891,7 +5894,7 @@ run_town_overlay_female_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5955,7 +5958,7 @@ run_town_overlay_state_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6018,7 +6021,7 @@ run_scripted_summary_to_town_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6109,7 +6112,7 @@ run_scripted_spell_cast_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6367,7 +6370,7 @@ run_scripted_book_overlay_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6480,7 +6483,7 @@ run_scripted_spell_list_overlay_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6597,7 +6600,7 @@ run_scripted_spell_list_cancel_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6697,7 +6700,7 @@ run_scripted_prayer_cast_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6817,7 +6820,7 @@ run_real_input_town_move_diag() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6895,7 +6898,7 @@ run_real_boot_crash_harness() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 520000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6967,7 +6970,7 @@ run_overlay_data_transition_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7114,7 +7117,7 @@ run_cache_survival_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7315,7 +7318,7 @@ PY
         return
     fi
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7467,7 +7470,7 @@ run_dungeon_attack_stability_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 620000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7524,7 +7527,7 @@ run_death_overlay_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 240000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7580,7 +7583,7 @@ run_restart_to_title_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7650,7 +7653,7 @@ run_catalog_spawn_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7711,7 +7714,7 @@ run_overlay_partial_failure_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7739,7 +7742,7 @@ run_overlay_partial_failure_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7798,7 +7801,7 @@ run_boot_diag_copy() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1

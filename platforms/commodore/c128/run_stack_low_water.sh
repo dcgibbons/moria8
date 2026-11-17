@@ -75,5 +75,5 @@ fi
 abs_d64="$(cd "$out_dir" && pwd)/moria128_stacklow.d64"
 echo "Launching: $abs_d64"
 echo "Diagnostic symbols: $(cd "$out_dir" && pwd)/moria128_stacklow.vs"
-"$VICE" -80col -drive8truedrive -drive8type 1541 +iecdevice8 \
+"$VICE" -80col -VDC16KB -drive8truedrive -drive8type 1541 +iecdevice8 \
     -sound -sounddev coreaudio -autostart "$abs_d64"

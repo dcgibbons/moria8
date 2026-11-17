@@ -58,7 +58,7 @@ printf 'g\n' > "$mon_file"
 abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_selfdump.d64"
 
 set +e
-"$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+"$VICE" -console -nativemonitor -warp -80col -VDC16KB -autostart "$abs_d64" \
     -keybuf $'NAA\rA\rA LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA>' -keybuf-delay 6 \
     -moncommands "$mon_file" -limitcycles 900000000 \
     -exitscreenshot "$screenshot_file" +sound -sounddev dummy \

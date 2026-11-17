@@ -81,5 +81,5 @@ fi
 abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_chargen_cut.d64"
 echo "CUTPOINT=$cutpoint SKIP_OVERLAY=$skip_overlay SKIP_SUMMARY=$skip_summary SKIP_CALL=$skip_call SKIP_GUARDS=$skip_guards"
 echo "Launching: $abs_d64"
-exec "$VICE" -80col -drive8truedrive -drive8type 1541 +iecdevice8 \
+exec "$VICE" -80col -VDC16KB -drive8truedrive -drive8type 1541 +iecdevice8 \
     -sound -sounddev coreaudio -autostart "$abs_d64"

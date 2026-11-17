@@ -224,9 +224,10 @@ C128 = Port(
         "legalui": "legalui",
     },
     # The shipping .d71 on a true 1571, the REU (preload128.s caches overlays
-    # and tiers in it), and the VDC's 80-column screen.
+    # and tiers in it), and the VDC's 80-column screen, on a stock C128's 16 KB
+    # VDC: VICE's default is a C128DCR's 64 KB (maintainer, 2026-11-16).
     resource_args=(
-        "-default", "-config", "VICE_CONFIG", "+saveres",
+        "-default", "-config", "VICE_CONFIG", "+saveres", "-VDC16KB",
         "-console", "+sound", "-sounddev", "dummy",
         "-warp", "-pal", "-seed", "1", "-80col",
         "-reu", "-reusize", "512",

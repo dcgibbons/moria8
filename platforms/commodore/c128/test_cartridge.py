@@ -95,6 +95,7 @@ def build_vice_command(
         vice_config(vice),
         "-default",
         "+saveres",
+        "-VDC16KB",   # a stock C128's VDC; VICE defaults to 64 KB (maintainer, 2026-11-16)
         "+autostart-delay-random",
         "-console",
         "-nativemonitor",
@@ -848,6 +849,7 @@ def run_persistence_and_interchange(args: argparse.Namespace) -> int:
 def run_selftest() -> None:
     cmd_crt = build_vice_command("x128", 6510, crt=Path("build/moria8-c128.crt"))
     assert "-80col" in cmd_crt and "-cartcrt" in cmd_crt and "-pal" in cmd_crt
+    assert cmd_crt.index("-VDC16KB") > cmd_crt.index("-default")   # -default would reset it
     cmd_bin = build_vice_command(
         "x128", 6510, ntsc=True, raw_bin=Path("build/c128-cart/moria8-c128.bin"), drive8=Path("save.d71")
     )

@@ -2580,6 +2580,19 @@ class BalrogEncounterTest(unittest.TestCase):
                              {**info, "snapshot": "balrog-7-s100-dl50.vsf"})
 
 
+class VdcSizeTest(unittest.TestCase):
+    """2026-11-16: VICE's C128 defaults to a 64 KB VDC (a C128DCR's), so no
+    run played the 16 KB layout of a stock C128 (C128M-015). Disk and
+    cartridge builds both play on 16 KB (maintainer)."""
+
+    def test_the_c128_plays_a_16kb_vdc(self) -> None:
+        from moria_playtest.ports import PORTS
+        for name in ("c128", "c128-cart"):
+            args = PORTS[name].resource_args
+            self.assertIn("-VDC16KB", args, name)
+            self.assertGreater(args.index("-VDC16KB"), args.index("-default"), name)   # -default resets it
+
+
 class CatalogNamesTest(unittest.TestCase):
     """2026-11-10: the view names each creature by its slot's catalog id, as
     a look does: an Ancient Red Dragon apart from an Ancient Multi-Hued."""
