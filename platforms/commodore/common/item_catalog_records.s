@@ -363,6 +363,11 @@ icr_from_reu:
 //   2) Check drive status via icr_drive_ok; if C=1, abort BEFORE CHKIN 5
 //      so a refused "#" buffer ("70, NO CHANNEL") can never hang serial talk
 //   3) Send "B-P 5 <A>\r" on channel 15, CLRCHN, return C=0.
+// A CHKOUT 15 that fails returns C=1 at once: its output went to the screen.
+// Unchecked, a Plus/4 disk game printed "B-P 5" and a sector offset onto the
+// map, read the buffer from the wrong place and named a Gold (large) "Gold
+// (larelar" (build queue and playtest gate, 2026-11-17); the caller falls
+// back to the by-name read.
 // Input: A = buffer byte offset (2..255), icr_track, icr_sector
 // Output: C = 0 on OK, C = 1 on drive error
 // Clobbers: A, X, Y, zp_temp0, zp_temp1, zp_temp3, nf_value_2
@@ -370,6 +375,7 @@ icr_send_u1_bp:
     sta icr_bp_off
     ldx #15
     jsr hal_storage_chkout
+    bcs !isub_failed+
     lda #0
     jsr icr_put_text
     lda icr_track
@@ -385,6 +391,7 @@ icr_send_u1_bp:
     bcs !isub_done+
     ldx #15
     jsr hal_storage_chkout
+    bcs !isub_failed+
     lda #ICR_BP_OFFSET
     jsr icr_put_text
     lda icr_bp_off
@@ -394,6 +401,10 @@ icr_send_u1_bp:
     jsr hal_storage_clrchn
     clc
 !isub_done:
+    rts
+!isub_failed:
+    jsr hal_storage_clrchn
+    sec
     rts
 
 // icr_drive_ok — After a command on the command channel (LFN 15, open): the
