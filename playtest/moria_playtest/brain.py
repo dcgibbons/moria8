@@ -769,6 +769,7 @@ class Brain:
         self.prompt_messages = ""              # message lines seen on prompt screens since the last command screen
         self.seen_messages = ""                # this command screen's messages and the -more- screens' before it
         self.pending_item: int | None = None   # answer for the next item prompt
+        self.eat_listing = False               # a meal's food list is wanted (eat_prompt)
         self.waited = 0                        # first-strike waits for the current target
         self.unseen_attack = False             # attacked this turn with nothing in view
         self.attacked = False                  # attacked this turn (any message naming an attack)
@@ -906,6 +907,7 @@ class Brain:
         self.last_attack: tuple[Pos, str] | None = None   # (tile, glyph) the last fight aimed at
         self.items_seen: dict[Pos, tuple[str, str]] = {}   # identified items on screen: (glyph, name)
         self.recent_attacker: str | None = None   # attacker named since the last command screen
+        self.recent_blow = False                  # and a blow among its attacks (knowledge.blow)
         self.last_hp: int | None = None        # HP on the previous command screen
         self.rest_hp: int | None = None        # HP when the last decision was to rest (tactic drain)
         self.draining = 0                      # rests in a row that lost HP with nothing attacking
@@ -979,6 +981,7 @@ class Brain:
         # again." (M4 round 51: seeds 1006, 1007 rested beside a White
         # Mushroom patch until it killed them).
         self.recent_attacker = knowledge.attacker(messages) or self.recent_attacker
+        self.recent_blow = self.recent_blow or knowledge.blow(messages)
         # On every screen: a paralysis shows only behind -more-, and a level-36
         # Priest learned nothing from three of them and meleed the Iridescent
         # Beetle until it died (C64 Balrog, 2026-11-08). By touch only: Hold
@@ -1037,6 +1040,7 @@ class Brain:
         if obs.dlvl and "You create food." in messages:
             self.created_food = view.pos
         self.pending = self.pending_item = self.picking = None   # their prompts are past
+        self.eat_listing = False
         self.magic.watch_cast(obs, (len(view.tiles_of(TYPE_TRAP)),
                                     len(view.tiles_of(TYPE_DOOR_CLOSED) | view.tiles_of(TYPE_DOOR_OPEN)),
                                     len(view.stairs_up() | view.stairs_down())))
@@ -1067,6 +1071,7 @@ class Brain:
         if self.afraid and not fear_news:
             self.afraid -= 1
         attacker, self.recent_attacker = self.recent_attacker, None
+        blow, self.recent_blow = self.recent_blow, False
         self.chased = attacker in knowledge.fast_creatures()
         seen_messages, self.prompt_messages = self.prompt_messages + " " + messages, ""
         self.seen_messages = seen_messages
@@ -1165,10 +1170,15 @@ class Brain:
         # Unseen: nothing in view, or a named attacker drawn unlike anything in
         # view (M4 round 89: seed 1028 auto-rested under a hidden Novice
         # Priest's wound spells because a Floating Eye was in view).
+        # A blow from a kind never drawn (knowledge.invisible_names) comes
+        # from beside the player: only a creature there can be it. A White
+        # Icky-Thing across the room hid the invisible Clear Icky-Things
+        # touching a clvl 2 Ranger, which searched in place from 23 HP to
+        # death (build queue, Phase 5, 2026-11-17).
         drawn = knowledge.glyphs_of().get(attacker, frozenset()) if attacker is not None else None
-        self.unseen_attack = self.attacked and (
-            not view.creatures
-            or (drawn is not None and not drawn & {c.glyph for c in view.creatures.values()}))
+        beside = blow and attacker in knowledge.invisible_names()
+        able = {c.glyph for p, c in view.creatures.items() if not beside or chebyshev(p, view.pos) <= 1}
+        self.unseen_attack = self.attacked and (not able or (drawn is not None and not drawn & able))
         if self.unseen_attack:
             self.level.unseen_until = obs.step + UNSEEN_STEPS
         near = [p for p in view.creatures if chebyshev(p, view.pos) <= 2] + [
@@ -2395,6 +2405,8 @@ class Brain:
         if obs.mode == Mode.DIRECTION and self.pending is not None:
             key, self.pending = self.pending, None
             return Decision(key, "prompt", "direction for the pending action")
+        if self.eat_listing and obs.mode == Mode.ITEM:
+            return self.eat_prompt(obs)
         if self.pending_item is not None and "which" in obs.rows[0]:
             key, self.pending_item = self.pending_item, None
             return Decision(key, "prompt", "first matching item")
@@ -2912,13 +2924,13 @@ class Brain:
         drop of junk, or the book prompt's list (M5e: every junk drop was
         filed as an unknown prompt)."""
         return self.picking is not None or self.pending_item is not None or self.dropping \
-            or self.magic.listing_books
+            or self.eat_listing or self.magic.listing_books
 
     def sync_counts(self, rows: list[str], scope: str) -> None:
         """Counts kept from messages drift (a scroll burnt, a potion
-        shattered); a listing is the truth. ``scope`` is what the listing
-        holds, by the command that showed it: "scrolls" (read), "potions"
-        (quaff) or "all" (drop). A level-27 Priest walked for supplies and
+        shattered, a ration stolen); a listing is the truth. ``scope`` is
+        what the listing holds, by the command that showed it: "scrolls"
+        (read), "potions" (quaff), "food" (eat) or "all" (drop). A level-27 Priest walked for supplies and
         stood in the dark 2.4 million steps with two Words of Recall its
         count said it lacked (C64 Balrog, 2026-11-06)."""
         listed: list[tuple[str, int]] = []
@@ -2943,6 +2955,8 @@ class Brain:
             # A clvl 37 Gnome Rogue's count said none with 197 Bolts carried
             # (C64 Balrog, 2026-11-14): balrog_damage counts them.
             self.ammo = held(LAUNCHERS[self.launcher][0])
+        if scope in ("food", "all"):
+            self.food = held(FOODS[0]) + SLIME * held(FOODS[1])
         if scope == "all":
             # Flasks too: the lantern is refueled only while the count says
             # some are carried. A clvl 40 Human Paladin with a lantern and
@@ -5122,8 +5136,24 @@ class Brain:
             # stopped to eat with a Rattlesnake two squares behind it and
             # died three turns later).
             return None
-        self.pending_item = ord("A")
+        self.eat_listing, self.listed = True, False
         return Decision(KEY_EAT, "eat", "hungry: eat the first food item")
+
+    def eat_prompt(self, obs: Observation) -> Decision:
+        """The eat prompt: list the food, count it (sync_counts), eat the
+        first. A ration a thief's touch takes goes with no message, and the
+        count kept from messages ran 7 over: a C128 Human Warrior starved on
+        DL1 with gold, never sent home by a count still above its reserve
+        (build queue, Phase 5, 2026-11-17)."""
+        if obs.stage == "list":
+            self.eat_listing = False
+            self.sync_counts(obs.rows[1:], "food")
+            return Decision(ord("A"), "prompt", "eat the first food")
+        if not self.listed and ITEM_PROMPT.search(obs.rows[0]):
+            self.listed = True
+            return Decision(ord("?"), "prompt", "list the food")
+        self.eat_listing = False
+        return Decision(ord("A"), "prompt", "first matching item")
 
     def light(self, obs: Observation, view: View) -> Decision | None:
         """Wear a bought lantern; refuel it before it burns out; replace a

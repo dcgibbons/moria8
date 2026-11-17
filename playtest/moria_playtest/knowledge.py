@@ -722,6 +722,26 @@ def attacker(messages: str) -> str | None:
     return match.group(1) if match else None
 
 
+CD_INVISIBLE = 0x80   # cdefense bit 7: VMS CM_INVISIBLE (core/monster.s)
+
+
+@lru_cache(maxsize=1)
+def invisible_names() -> frozenset[str]:
+    """Creatures the game never draws (a player learns them from their touch
+    and the monster recall): the catalog's CD_INVISIBLE kinds."""
+    if _catalog_dir is None:
+        return frozenset()
+    names, tables = _catalog()
+    return frozenset(n for n, d in zip(names, tables["cdefense"]) if d & CD_INVISIBLE)
+
+
+def blow(messages: str) -> bool:
+    """An attack message is a blow (hits, bites, touches you), dealt from
+    beside the player, not a spell or a breath from across the room."""
+    return any(not m.group(0).endswith(("casts a spell", "breathes"))
+               for m in _attack_pattern().finditer(messages))
+
+
 GAME_TABLES = ROOT / "core/tables.s"
 STAT_NAMES = ("STR", "INT", "WIS", "DEX", "CON", "CHR")   # stat table order
 

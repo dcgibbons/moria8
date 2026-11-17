@@ -505,6 +505,44 @@ class ArrivalClimbTest(unittest.TestCase):
         self.assertIsNone(brain.resupply(command_obs(pos=(5, 5), dlvl=2, clvl=4, hp=30, mhp=30), on_stairs))
 
 
+class FoodCountTest(unittest.TestCase):
+    """Build queue, Phase 5 (2026-11-17): starvation went from 0.3 to 2.4
+    deaths a hundred runs, most on DL1-3 with gold. A C128 Human Warrior
+    bought 67 rations and ate 60, and the game said "You have no food." with
+    its count at 7: a thief's touch takes a ration with no message, as the
+    Glutton's does, and the count kept from messages never fell below the
+    reserve that sends it home. The food lists are the truth."""
+
+    def test_each_meal_lists_the_food_and_corrects_the_count(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food = 7
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        hungry = command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=60, mhp=60,
+                             rows={21: "bot Hungry Search*          LV:8  DL:2".ljust(40)})
+        self.assertEqual(brain.decide(hungry, view).layer, "eat")
+        prompt = DropJunkTest.item("which", {0: "Eat which food (a-a)?"})
+        self.assertEqual(brain.decide(prompt, None).key, ord("?"))
+        listed = DropJunkTest.item("list", {0: "Inventory", 2: " a) 2 Ration of Food"})
+        self.assertEqual(brain.decide(listed, None).key, ord("A"))   # the first food, as before
+        self.assertEqual(brain.food, 2)
+        brain.count_food("You eat the Ration of Food. Delicious!")
+        self.assertEqual(brain.food, 1)
+
+    def test_a_slime_mold_in_the_list_counts_a_third(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food = 9
+        brain.sync_counts([" a) Ration of Food", " b) 3 Slime Mold"], "food")
+        self.assertAlmostEqual(brain.food, 2)
+
+    def test_the_whole_pack_list_corrects_the_food_count(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food = 12
+        brain.sync_counts([" a) 4 Ration of Food", " b) Dagger (1d4)"], "all")
+        self.assertEqual(brain.food, 4)
+        brain.sync_counts([" a) Dagger (1d4)"], "all")
+        self.assertEqual(brain.food, 0)
+
+
 class DropJunkTest(unittest.TestCase):
     """M5b round 29: worn-out gear filled the pack; every purchase failed and
     two Dwarf Priests hopped between town and DL1 for 4,000 steps."""
@@ -4413,6 +4451,31 @@ class UnseenCasterTest(unittest.TestCase):
         decision = brain.decide(o, view)
         self.assertTrue(brain.unseen_attack)
         self.assertNotEqual(decision.layer, "rest")
+
+
+    def test_a_touch_with_nothing_like_it_beside_the_player_is_unseen(self) -> None:
+        """Build queue, Phase 5 (2026-11-17): Clear Icky-Things went from 0.3
+        to 3.1 deaths a hundred runs. A clvl 2 Human Ranger searched in place
+        while invisible ones touched it from 23 HP to 0: a White Icky-Thing
+        across the room is drawn 'i' too, and the touch was taken for its.
+        A blow comes from beside the player: only a creature there is it."""
+        from moria_playtest import knowledge
+        knowledge.use_port("c64")                               # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
+        brain = Brain(GOALS["clvl10"])
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        view.creatures = {(14, 9): Creature("i", 1)}           # a White Icky-Thing, far off
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=2, hp=15, mhp=23, rows={0: "the Clear Icky-Thing touches you."})
+        brain.decide(o, view)
+        self.assertTrue(brain.unseen_attack)
+        beside = town_view((5, 5), (40, 40), dlvl=1)
+        beside.creatures = {(6, 5): Creature("i", 1)}          # one beside it: that is the one
+        brain = Brain(GOALS["clvl10"])
+        brain.food = 5
+        brain.decide(command_obs(pos=(5, 5), dlvl=1, clvl=2, hp=15, mhp=23,
+                                 rows={0: "the Clear Icky-Thing touches you."}), beside)
+        self.assertFalse(brain.unseen_attack)
 
 
 class UnseenSearchTest(unittest.TestCase):
