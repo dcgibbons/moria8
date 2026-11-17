@@ -5562,7 +5562,7 @@ run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
 run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 0413" 20 50000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
-run_test "render" "tests/test_render.s" "0400 0417" 24 500000000
+run_test "render" "tests/test_render.s" "0400 0418" 25 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
 run_test "ego" "tests/test_ego.s" "0400 0417" 24 500000000
 run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000

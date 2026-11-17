@@ -123,6 +123,7 @@ eff_detect_timer: .byte 0
 test_expect_char: .byte 0
 
 fi_item_id: .fill MAX_FLOOR_ITEMS, FI_EMPTY
+fi_meta_hi: .fill MAX_FLOOR_ITEMS, 0   // the floor items' page (floor_item_page_x)
 it_display: .fill 2, 0
 item_get_display_char:
     lda it_display,x
@@ -153,6 +154,7 @@ player_get_infra_range:
 player_search_mode_off:
     rts
 
+#import "../../../../core/floor_item_page.s"
 #import "../dungeon_render.s"
 
 test_plus4_irq_hidden_rom:

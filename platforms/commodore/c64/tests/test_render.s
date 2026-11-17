@@ -36,7 +36,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #23
+    ldx #24
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -154,15 +154,26 @@ test_glyph_y:       .byte 0
 .label glyph_active = test_glyph_active
 test_expect_char:   .byte 0
 test_expect_color:  .byte 0
-tc_results:         .fill 24, $ff
+tc_results:         .fill 25, $ff
 test_infra_x:       .byte 0
 test_infra_y:       .byte 0
 vis_cached_room_idx:.byte 0
 
 fi_item_id: .fill 1, 0
+fi_meta_hi: .fill 1, 0
+test_item_page:     .byte 0     // the floor item's page bit (fi_meta_hi)
+item_cur_page:      .byte 0
+.const ITEM_PAGE_BIT = $40
 it_display: .fill 2, 0
+it_display_p1: .fill 2, 0       // the Page 1 item with the same slot
+// Page-aware, as core/item_tables.s item_get_display_char is.
 item_get_display_char:
+    bit item_cur_page
+    bvs !p1+
     lda it_display,x
+    rts
+!p1:
+    lda it_display_p1,x
     rts
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0
@@ -183,6 +194,8 @@ floor_item_find_at:
     bne !miss+
     lda test_item_type
     sta fi_item_id
+    lda test_item_page
+    sta fi_meta_hi
     ldx #0
     sec
     rts
@@ -299,6 +312,7 @@ monster_is_infra_visible_at:
     clc
     rts
 
+#import "../../../../core/floor_item_page.s"
 #import "../dungeon_render.s"
 
 test_start:
@@ -307,7 +321,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #23
+    ldx #24
     lda #$ff
 !clr:
     sta tc_results,x
@@ -338,7 +352,55 @@ test_start:
     jsr test_detect_evil_unvisited_shows_monster
     jsr test_horizontal_move_repairs_stale_monster
     jsr test_vertical_move_repairs_stale_monster
+    jsr test_item_drawn_on_its_own_page
     jmp test_exit_trampoline
+
+// Test 25: a floor item is drawn on its own page, whatever page the last item
+// code left in item_cur_page, and that page is handed back (maintainer's C64
+// cartridge, 2026-11-17: chests drew as '@' and ')' after chest loot).
+test_item_drawn_on_its_own_page:
+    jsr setup_scene
+    lda #1
+    sta test_item_active
+    lda #21
+    sta test_item_x
+    lda #20
+    sta test_item_y
+    lda #1
+    sta test_item_type
+    lda #0
+    sta test_item_page          // a Page 0 item (a chest)
+    lda #$7e                    // '~' on Page 0
+    sta it_display + 1
+    lda #$29                    // ')' for the Page 1 item of the same slot
+    sta it_display_p1 + 1
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page           // stale: the last item code's Page 1
+    ldx #21
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #21
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #$7e
+    sta test_expect_char
+    lda test_item_color
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda item_cur_page
+    cmp #ITEM_PAGE_BIT          // the caller's page back
+    bne !fail+
+    lda #$01
+    sta tc_results + 24
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 24
+    rts
 
 setup_scene:
     lda #0

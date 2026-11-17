@@ -90,6 +90,7 @@ test_glyph_y:       .byte 0
 test_expect_char:   .byte 0
 
 fi_item_id: .fill MAX_FLOOR_ITEMS, FI_EMPTY
+fi_meta_hi: .fill MAX_FLOOR_ITEMS, 0   // the floor items' page (floor_item_page_x)
 it_display: .fill 2, 0
 item_get_display_char:
     lda it_display,x
@@ -165,6 +166,7 @@ glyph_find_at:
     clc
     rts
 
+#import "../../../../core/floor_item_page.s"
 #import "../dungeon_render.s"
 #import "../../../../core/player_magic_detect_evil_effect.s"
 

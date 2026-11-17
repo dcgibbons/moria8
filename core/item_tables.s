@@ -72,6 +72,8 @@ item_get_category_floor_x:
     lda #ICAT_NONE
     rts
 
+#import "floor_item_page.s"
+
 // item_get_category_a — Read it_category for paged (item_cur_page, A)
 // Input: A = slot_lo (0..254), item_cur_page ($00 or $40)
 // Output: A = ICAT_* (N/Z set from A)

@@ -278,9 +278,10 @@ dr_eval_tile_char:
     lda zp_temp0
     jsr floor_item_find_at
     bcc !detc_no_item+
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
+    jsr floor_item_page_restore
     sta zp_temp3
 !detc_no_item:
     ldy zp_temp1

@@ -387,9 +387,10 @@ render_viewport:
     jsr floor_item_find_at      // A = map_x, Y = map_y
     bcc !rv_no_item+
     // X = slot — look up item display glyph (color dropped: colorless)
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
+    jsr floor_item_page_restore
     sta zp_temp0
 !rv_no_item:
     lda rv_row_has_glyph
@@ -653,9 +654,10 @@ render_single_tile:
     lda zp_temp0                // A = map_x
     jsr floor_item_find_at
     bcc !rst_no_item+
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
+    jsr floor_item_page_restore
     sta zp_temp3
 !rst_no_item:
     ldy zp_temp1                // Y = map_y

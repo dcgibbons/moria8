@@ -311,12 +311,13 @@ ovl_render_viewport:
     ldy rv_row_map_y
     jsr floor_item_find_at
     bcc !rv_no_item+
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp0
     txa
     jsr item_get_floor_color
+    jsr floor_item_page_restore
     sta zp_temp1
 !rv_no_item:
     lda rv_row_has_glyph
@@ -552,12 +553,13 @@ ovl_render_single_tile:
     lda zp_temp0
     jsr floor_item_find_at
     bcc !rst_no_item+
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp3
     txa
     jsr item_get_floor_color
+    jsr floor_item_page_restore
     sta rst_color_tmp
 !rst_no_item:
     ldy zp_temp1

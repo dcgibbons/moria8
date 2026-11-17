@@ -381,12 +381,13 @@ rv_render_row:
     sec
     sbc #$01
     tax                             // X = slot index
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp0
     txa
     jsr item_get_floor_color        // A = VIC color (identification-aware)
+    jsr floor_item_page_restore
     tax
     lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp1
@@ -1152,12 +1153,13 @@ render_single_tile:
     jsr floor_item_find_at
     bcc !rst_no_item+
     // X = slot — look up item type
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp3
     txa                             // A = item type ID
     jsr item_get_floor_color        // A = VIC color (identification-aware)
+    jsr floor_item_page_restore
     tax
     lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp4
