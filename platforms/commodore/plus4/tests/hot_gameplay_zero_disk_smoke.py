@@ -23,6 +23,7 @@ and verifies every gameplay state transition in RAM at completion.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -33,6 +34,7 @@ REPO_ROOT = SCRIPT_DIR.parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 sys.path.insert(0, str(SCRIPT_DIR))
 
+from item_ids import FI_EMPTY, ITEM_PAGE_BIT, ITEM_PAGE_SIZE  # noqa: E402
 from vice_config import vice_config  # noqa: E402
 from vice_connector import (  # noqa: E402
     VICEConnector,
@@ -52,8 +54,14 @@ MAP_BASE = 0xC800
 MAP_COLS = 80
 MAX_FLOOR_ITEMS = 42
 MAX_INV_SLOTS = 22
-ITEM_PAGE_BIT = 0x40
-FI_EMPTY = 0xFF
+ICAT_GOLD = 1
+GOLD_ITEM_IDS = frozenset(
+    int(it["id"])
+    for it in json.loads(
+        (REPO_ROOT / "platforms/shared/item_catalog/item_catalog_spec.json").read_text(encoding="utf-8")
+    )["items"]
+    if it["cat"] == ICAT_GOLD
+)
 
 TILE_FLOOR = 0x00
 TILE_WALL_H = 0x10
@@ -138,7 +146,8 @@ def stage_dl1_fixture(connector: VICEConnector, symbols: dict[str, str]) -> tupl
         if item_id == FI_EMPTY:
             continue
         is_page1 = (fi_meta_his[idx] & ITEM_PAGE_BIT) != 0
-        if is_page1 or item_id >= 2:
+        logical_id = item_id + (ITEM_PAGE_SIZE if is_page1 else 0)
+        if logical_id not in GOLD_ITEM_IDS:
             target_slot = idx
             break
 

@@ -705,9 +705,9 @@ pid_item_enchanted:
     and #ITEM_PAGE_BIT
     bne !pid_chk_ego+
     lda inv_item_id,x
-    cmp #13
+    cmp #ITEM_SLOT_WOODEN_TORCH
     beq !pid_no+               // Wooden torch fuel is not pseudo-ID-worthy
-    cmp #14
+    cmp #ITEM_SLOT_BRASS_LANTERN
     beq !pid_no+               // Brass lantern fuel is not pseudo-ID-worthy
 !pid_chk_ego:
     lda inv_ego,x

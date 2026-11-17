@@ -192,6 +192,7 @@ setup_scene:
     sta eff_detect_timer
     sta eff_detect_evil_mode
     sta test_mon_flags
+    lda #FI_EMPTY
     sta fi_item_id
     lda #COL_WHITE
     sta zp_text_color

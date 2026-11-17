@@ -16,9 +16,9 @@
     beq stacks
     bit item_cur_page
     bvs !isx_check_missile+         // Oil flasks and torches are Page 0 only
-    cpx #ITEM_TYPE_FLASK_OF_OIL
+    cpx #ITEM_SLOT_FLASK_OF_OIL
     beq stacks
-    cpx #ITEM_TYPE_WOODEN_TORCH
+    cpx #ITEM_SLOT_WOODEN_TORCH
     beq stacks                      // turns left must match too
 !isx_check_missile:
     jsr item_get_missile            // bit 7 = ammunition; preserves X

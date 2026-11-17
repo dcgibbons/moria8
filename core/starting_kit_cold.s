@@ -1,4 +1,6 @@
 #importonce
+#import "../platforms/shared/item_catalog/item_ids.s"
+.assert "Starting provisions and books live on Page 0", ITEM_PAGE_WOODEN_TORCH == 0 && ITEM_PAGE_RATION_OF_FOOD == 0 && ITEM_PAGE_LEATHER_ARMOR == 0 && ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK == 0 && ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK == 0, true
 // starting_kit_cold.s — New-game base provisions and starting equipment (S5)
 //
 // Module ownership:
@@ -17,7 +19,7 @@ init_starting_kit:
     // turns), and four more in carried slot 2: VMS player_init / Umoria
     // class_base_provisions give every class 5 torches and 5 rations (one of
     // each until 2026-10-25, found by the M5b playtest).
-    lda #13
+    lda #ITEM_SLOT_WOODEN_TORCH
     sta inv_item_id + EQUIP_LIGHT
     sta inv_item_id + 2
     lda #1
@@ -34,8 +36,8 @@ init_starting_kit:
     sta zp_light_radius
     sta player_data + PL_LIGHT_RAD
 
-    // Five rations of food (type 15) in carried slot 0
-    lda #15
+    // Five rations of food in carried slot 0
+    lda #ITEM_SLOT_RATION_OF_FOOD
     sta inv_item_id
     lda #5
     sta inv_qty
@@ -43,17 +45,21 @@ init_starting_kit:
     sta inv_p1
     sta inv_flags
 
-    // Dagger (type 2) in EQUIP_WEAPON
-    lda #2
+    // Dagger in EQUIP_WEAPON
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #0
     sta inv_p1 + EQUIP_WEAPON
     sta inv_flags + EQUIP_WEAPON
 
-    // Leather armor (type 7) in EQUIP_BODY
-    lda #7
+    // Leather armor in EQUIP_BODY
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
@@ -66,10 +72,10 @@ init_starting_kit:
     beq !no_book+
     cmp #SPELL_MAGE
     bne !priest_book+
-    lda #47                 // Beginner's Spellbook
+    lda #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
     jmp !store_book+
 !priest_book:
-    lda #48                 // Holy Prayer Book
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
 !store_book:
     sta inv_item_id + 1     // Carried slot 1
     lda #1

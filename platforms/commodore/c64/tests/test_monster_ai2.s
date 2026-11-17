@@ -28,7 +28,7 @@ test_finish:
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 #define MONSTER_AI_PRODUCTION_REST_STATE
 
-.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$FFF9]
 .segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
 #define PLAYER_CHARGEN_EXTERNAL
 #define TRAP_TRIGGER_EXTERNAL
@@ -1254,7 +1254,7 @@ test_start:
     sta fi_add_x
     lda #10
     sta fi_add_y
-    lda #17                     // Cure Light Wounds Potion (ICAT_POTION)
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Cure Light Wounds Potion (ICAT_POTION)
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -1304,7 +1304,7 @@ test_start:
     sta fi_add_x
     lda #10
     sta fi_add_y
-    lda #0                      // Gold (small), ICAT_GOLD
+    lda #ITEM_SLOT_GOLD_SMALL                      // Gold (small), ICAT_GOLD
     sta fi_add_id
     lda #25
     sta fi_add_qty
@@ -1354,7 +1354,7 @@ test_start:
     sta fi_add_x
     lda #10
     sta fi_add_y
-    lda #17                     // Potion
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -1399,7 +1399,7 @@ test_start:
     sta fi_add_x
     lda #10
     sta fi_add_y
-    lda #17                     // Potion ('!' = $21)
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion ('!' = $21)
     sta fi_add_id
     lda #1
     sta fi_add_qty

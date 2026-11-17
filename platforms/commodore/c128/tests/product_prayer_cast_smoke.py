@@ -11,6 +11,11 @@ from pathlib import Path
 
 from vice_connector import VICEConnector, allocate_free_port, parse_vs_symbols
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from item_ids import (  # noqa: E402
+    FI_EMPTY,
+    ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK,
+    ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK,
+)
 from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
 
@@ -35,8 +40,8 @@ PL_SPELL_ORDER = 74
 
 CLASS_PRIEST = 2
 SPELL_PRIEST = 2
-FI_EMPTY = 0xFF
-PRIEST_BOOK_ITEM_ID = 48
+PRIEST_BOOK_SLOT = ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
+PRIEST_BOOK_PAGE = ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
 
 MEM_LINE_RE = re.compile(r"^[^:]+:([0-9A-Fa-f]{4})\s+((?:[0-9A-Fa-f]{2}\s+)+)")
 
@@ -210,6 +215,7 @@ def build_priest_patch_commands(
     inv_qty: int,
     inv_p1: int,
     inv_flags: int,
+    inv_ego: int,
     msg_history: int,
     zp_player_lvl: int,
     zp_player_wis: int,
@@ -252,10 +258,12 @@ def build_priest_patch_commands(
         f"> {inv_qty + 0:04X} 00",
         f"> {inv_p1 + 0:04X} 00",
         f"> {inv_flags + 0:04X} 00",
-        f"> {inv_item_id + 1:04X} {PRIEST_BOOK_ITEM_ID:02X}",
+        f"> {inv_ego + 0:04X} 00",
+        f"> {inv_item_id + 1:04X} {PRIEST_BOOK_SLOT:02X}",
         f"> {inv_qty + 1:04X} 01",
         f"> {inv_p1 + 1:04X} 00",
         f"> {inv_flags + 1:04X} 00",
+        f"> {inv_ego + 1:04X} {PRIEST_BOOK_PAGE:02X}",
         f'dump "{snapshot_path.resolve()}"',
         "quit",
     ]
@@ -270,6 +278,7 @@ def patch_priest_runtime_state(
     inv_qty: int,
     inv_p1: int,
     inv_flags: int,
+    inv_ego: int,
     msg_history: int,
     zp_player_lvl: int,
     zp_player_wis: int,
@@ -310,10 +319,12 @@ def patch_priest_runtime_state(
     connector.poke(inv_qty + 0, 0x00)
     connector.poke(inv_p1 + 0, 0x00)
     connector.poke(inv_flags + 0, 0x00)
-    connector.poke(inv_item_id + 1, PRIEST_BOOK_ITEM_ID)
+    connector.poke(inv_ego + 0, 0x00)
+    connector.poke(inv_item_id + 1, PRIEST_BOOK_SLOT)
     connector.poke(inv_qty + 1, 0x01)
     connector.poke(inv_p1 + 1, 0x00)
     connector.poke(inv_flags + 1, 0x00)
+    connector.poke(inv_ego + 1, PRIEST_BOOK_PAGE)
 
 
 def build_vice_command(
@@ -482,6 +493,7 @@ def main() -> int:
                 "inv_qty": ".inv_qty",
                 "inv_p1": ".inv_p1",
                 "inv_flags": ".inv_flags",
+                "inv_ego": ".inv_ego",
                 "msg_history": ".msg_history",
                 "zp_player_lvl": ".zp_player_lvl",
                 "zp_player_wis": ".zp_player_wis",
@@ -549,6 +561,7 @@ def main() -> int:
                 inv_qty=resolved["inv_qty"],
                 inv_p1=resolved["inv_p1"],
                 inv_flags=resolved["inv_flags"],
+                inv_ego=resolved["inv_ego"],
                 msg_history=resolved["msg_history"],
                 zp_player_lvl=resolved["zp_player_lvl"],
                 zp_player_wis=resolved["zp_player_wis"],

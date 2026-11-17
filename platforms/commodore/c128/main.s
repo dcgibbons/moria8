@@ -3651,8 +3651,8 @@ run_input_armed:   .byte 0
 auto_rest_active:  .byte 0
 ptep_temp: .byte 0
 tool_ego_prefix_hi:
-    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
     .macro ChestSummonsSegment() {
     .segment RuntimeBankedCode
 }
@@ -4756,8 +4756,8 @@ ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
 ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
 #import "../../../core/ego_suffix_strings.s"
 tool_ego_prefix_lo:
-    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
     .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
 first_banked_function:
     #import "../../../core/item_desc_banked.s"
     #import "../../../core/player_magic_display.s"
@@ -5269,23 +5269,17 @@ ovl_home_end:
 hal_quaff_p3_dispatch:
 c128_quaff_p3_dispatch:
     lda piw_item_id
-    cmp #ITEM_TYPE_POT_GAIN_STR
-    bcc !iqp3_not_gain+
-    jmp eff_potion_gain_stat        // potions of gain stat (140-145)
-!iqp3_not_gain:
-    cmp #ITEM_TYPE_POT_HEALING
+    cmp #ITEM_SLOT_POTION_OF_HEALING
     beq !iqp3_healing+
-    cmp #ITEM_TYPE_POT_RESTORATION
-    beq !iqp3_restoration+
-    cmp #ITEM_TYPE_POT_RESIST_HEAT
-    beq !iqp3_resist_heat+
-    cmp #ITEM_TYPE_POT_RESIST_COLD
-    beq !iqp3_resist_cold+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    cmp #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     beq !iqp3_cure_critical+
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    cmp #ITEM_SLOT_POTION_OF_RESIST_HEAT
+    beq !iqp3_resist_heat+
+    cmp #ITEM_SLOT_POTION_OF_RESIST_COLD
+    beq !iqp3_resist_cold+
+    cmp #ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
     beq !iqp3_neutralize+
-    rts
+    jmp eff_potion_gain_stat        // 6 gain-stat potions (unmatched -> rts)
 
 !iqp3_healing:
     jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
@@ -5295,12 +5289,6 @@ c128_quaff_p3_dispatch:
     ldx #7
     ldy #6
     jmp eff_potion_heal_cure
-
-!iqp3_restoration:
-    jsr player_calc_stats
-    ldx #HSTR_PIQ_RESTORED
-    jsr huff_print_msg
-    rts
 
 !iqp3_resist_heat:
     lda #10

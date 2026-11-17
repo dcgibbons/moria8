@@ -2603,13 +2603,19 @@ PY
         return
     fi
 
-    # Chest 128 ($80) and the appended-range boundaries (96=$60, 127=$7f)
+    # Small wooden chest and the Healing potion / Staff of Remove Curse grants
     # must all land in inventory through the production grant path (starting
     # gear occupies the leading slots: rations, the book, the spare torches).
-    local inv_lc
+    local inv_lc wiz_chest_hex wiz_pot_hex wiz_staff_hex
     inv_lc=$(echo "$inv_addr" | tr '[:upper:]' '[:lower:]')
-    if ! grep -qiE "^>C:${inv_lc}.*80.*60[[:space:]]+7f" "$tty_log"; then
-        echo "FAIL (item IDs 128/96/127 not granted into inventory)"
+    read -r wiz_chest_hex wiz_pot_hex wiz_staff_hex < <(
+        PYTHONPATH="$REPO_ROOT/tools" python3 -B -c '
+import item_ids as I
+print(f"{I.ITEM_SLOT_SMALL_WOODEN_CHEST:02x} {I.ITEM_SLOT_POTION_OF_HEALING:02x} {I.ITEM_SLOT_STAFF_OF_REMOVE_CURSE:02x}")
+'
+    )
+    if ! grep -qiE "^>C:${inv_lc}.*${wiz_chest_hex}.*${wiz_pot_hex}[[:space:]]+${wiz_staff_hex}" "$tty_log"; then
+        echo "FAIL (wizard smoke items ${wiz_chest_hex}/${wiz_pot_hex}/${wiz_staff_hex} not granted into inventory)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -2680,6 +2686,15 @@ run_exchange_product_smoke() {
         return
     fi
 
+    local exch_mace_slot exch_dagger_slot exch_dagger_ego
+    read -r exch_mace_slot exch_dagger_slot exch_dagger_ego < <(
+        PYTHONPATH="$REPO_ROOT/tools" python3 -B -c '
+import item_ids as I
+EGO_DEFENDER = 6
+print(f"0x{I.ITEM_SLOT_MACE:02x} 0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.ITEM_PAGE_DAGGER:02x}")
+'
+    )
+
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
             --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
@@ -2690,10 +2705,10 @@ run_exchange_product_smoke() {
             --boot-d64 "$boot_d64" \
             --expect-byte-symbol ".exchange_product_presses=0x02" \
             --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
-            --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
-            --expect-byte-symbol ".exchange_product_primary_id=0x02" \
-            --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
-            --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+            --expect-byte-symbol ".exchange_product_refused_primary=${exch_mace_slot}" \
+            --expect-byte-symbol ".exchange_product_primary_id=${exch_dagger_slot}" \
+            --expect-byte-symbol ".exchange_product_primary_ego=${exch_dagger_ego}" \
+            --expect-byte-symbol ".exchange_product_secondary_id=${exch_mace_slot}" \
             --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
             --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
             --expect-byte-symbol ".zp_turn_lo=0x01" \
@@ -2769,6 +2784,9 @@ run_chest_open_product_smoke() {
         return
     fi
 
+    local chest_lw_slot
+    chest_lw_slot=$(PYTHONPATH="$REPO_ROOT/tools" python3 -B -c 'import item_ids as I; print(f"0x{I.ITEM_SLOT_LARGE_WOODEN_CHEST:02x}")')
+
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
             --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
@@ -2785,7 +2803,7 @@ run_chest_open_product_smoke() {
             --expect-byte-symbol ".chest_loot_pending=0x00" \
             --expect-byte-symbol ".chest_pending_summons=0x00" \
             --expect-byte-symbol ".current_overlay=0x0a" \
-            --expect-byte-symbol ".fi_item_id=0x81" \
+            --expect-byte-symbol ".fi_item_id=${chest_lw_slot}" \
             --expect-byte-symbol ".fi_p1=0x80" \
             --expect-byte-symbol ".zp_player_dlvl=0x01" \
             --timeout 30 \
@@ -2856,6 +2874,9 @@ run_chest_open_product_reu_smoke() {
         return
     fi
 
+    local chest_lw_slot
+    chest_lw_slot=$(PYTHONPATH="$REPO_ROOT/tools" python3 -B -c 'import item_ids as I; print(f"0x{I.ITEM_SLOT_LARGE_WOODEN_CHEST:02x}")')
+
     # Same scripted chest open, but with a 512K REU attached: overlays stash
     # into the REU at boot and the deferred GEN fetch (and CHEST load) come
     # from REU DMA rather than disk. reu_overlays_stashed=1 proves the boot
@@ -2881,7 +2902,7 @@ run_chest_open_product_reu_smoke() {
             --expect-byte-symbol ".chest_loot_pending=0x00" \
             --expect-byte-symbol ".chest_pending_summons=0x00" \
             --expect-byte-symbol ".current_overlay=0x0a" \
-            --expect-byte-symbol ".fi_item_id=0x81" \
+            --expect-byte-symbol ".fi_item_id=${chest_lw_slot}" \
             --expect-byte-symbol ".fi_p1=0x80" \
             --expect-byte-symbol ".zp_player_dlvl=0x01" \
             --timeout 30 \
@@ -2972,6 +2993,9 @@ run_chest_open_product_genfail_smoke() {
     # 2 (overlay entered, generator never ran), no loot placed, latch cleared,
     # current_overlay=NONE after the failed load, and the game reaches the
     # script-exhaustion trap (still responsive).
+    local chest_lw_slot
+    chest_lw_slot=$(PYTHONPATH="$REPO_ROOT/tools" python3 -B -c 'import item_ids as I; print(f"0x{I.ITEM_SLOT_LARGE_WOODEN_CHEST:02x}")')
+
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
             --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
@@ -2988,7 +3012,7 @@ run_chest_open_product_genfail_smoke() {
             --expect-byte-symbol ".chest_loot_pending=0x00" \
             --expect-byte-symbol ".chest_pending_summons=0x00" \
             --expect-byte-symbol ".current_overlay=0x00" \
-            --expect-byte-symbol ".fi_item_id=0x81" \
+            --expect-byte-symbol ".fi_item_id=${chest_lw_slot}" \
             --expect-byte-symbol ".fi_p1=0x80" \
             --expect-byte-symbol ".zp_player_dlvl=0x01" \
             --timeout 30 \
@@ -3366,6 +3390,14 @@ c64_load_written_save_check() {
         tail -20 "$build_log"
         return 1
     fi
+    local save_sec_id save_sec_ego
+    read -r save_sec_id save_sec_ego < <(
+        PYTHONPATH="$REPO_ROOT/tools" python3 -B -c '
+import item_ids as I
+EGO_DEFENDER = 6
+print(f"0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.ITEM_PAGE_DAGGER:02x}")
+'
+    )
     if ! python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "${name}_load" \
             --pass-symbol ".c64_test_after_load_resume_game" \
@@ -3373,11 +3405,11 @@ c64_load_written_save_check() {
             --main-vs "$load_ovl/main.vs" \
             --boot-d64 "$load_d64" \
             --save-d64 "$save_d64" \
-            --expect-byte-symbol ".save_product_secondary_id=0x02" \
+            --expect-byte-symbol ".save_product_secondary_id=${save_sec_id}" \
             --expect-byte-symbol ".save_product_secondary_hit=0x03" \
             --expect-byte-symbol ".save_product_secondary_dam=0x04" \
             --expect-byte-symbol ".save_product_secondary_flags=0x02" \
-            --expect-byte-symbol ".save_product_secondary_ego=0x06" \
+            --expect-byte-symbol ".save_product_secondary_ego=${save_sec_ego}" \
             --expect-byte-symbol ".save_product_ring2_id=0xff" \
             --timeout 30 \
             --retry-timeouts 0 \
@@ -3544,7 +3576,7 @@ run_save_write_product_smoke_impl() {
             local save_seq="../../../build/test/c64/${name}_the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "$save_filename" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 -B tests/check_save_secondary.py "$save_seq" 0x21 >>"$build_log" 2>&1; then
+                    || ! python3 -B tests/check_save_secondary.py "$save_seq" 0x22 >>"$build_log" 2>&1; then
                 echo "FAIL (secondary weapon not in the written save)"
                 tail -5 "$build_log" | sed 's/^/    /'
                 FAIL=$((FAIL + 1))
@@ -5512,11 +5544,13 @@ run_test "item_weight" "tests/test_item_weight.s" "0400 0404" 5 1000000000
 run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
 run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 0411" 18 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 040b" 12 500000000
+run_test "item_catalog_vms" "tests/test_item_catalog_vms.s" "0400 0404" 5 1000000000
+run_test "item_effects_vms" "tests/test_item_effects_vms.s" "0400 0404" 5 1000000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000
 run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
 run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0415" 22 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0417" 24 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test

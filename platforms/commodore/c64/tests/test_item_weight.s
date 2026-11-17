@@ -338,13 +338,13 @@ tx_row_hi: .byte >SCREEN_RAM, >(SCREEN_RAM + 40)
 
 // Records: id, qty, p1, to_hit, to_dam, to_ac, flags, ego
 rec_empty:      .byte FI_EMPTY, 0, 0, 0, 0, 0, 0, 0
-rec_swords20:   .byte 4, 20, 0, 0, 0, 0, 0, 0     // Long swords, 5.0 lb x 20 = 1000
-rec_swords59:   .byte 4, 59, 0, 0, 0, 0, 0, 0     // 5.0 lb x 59 = 2950
-rec_armor2:     .byte 7, 2, 0, 0, 0, 0, 0, 0      // 8.0 lb x 2 = 160
-rec_chain:      .byte 8, 1, 0, 0, 0, 0, 0, 0      // Chain mail, 12.0 lb
-rec_robe:       .byte 6, 1, 0, 0, 0, 0, 0, 0      // 2.0 lb
-rec_potions12:  .byte 17, 12, 0, 0, 0, 0, 0, 0    // 0.4 lb x 12 = 4.8 lb
-rec_potion:     .byte 17, 1, 0, 0, 0, 0, 0, 0
+rec_swords20:   .byte ITEM_SLOT_LONG_SWORD, 20, 0, 0, 0, 0, 0, ITEM_PAGE_LONG_SWORD // Long swords, 5.0 lb x 20 = 1000
+rec_swords59:   .byte ITEM_SLOT_LONG_SWORD, 59, 0, 0, 0, 0, 0, ITEM_PAGE_LONG_SWORD // 5.0 lb x 59 = 2950
+rec_armor2:     .byte ITEM_SLOT_LEATHER_ARMOR, 2, 0, 0, 0, 0, 0, ITEM_PAGE_LEATHER_ARMOR // 8.0 lb x 2 = 160
+rec_chain:      .byte ITEM_SLOT_CHAIN_MAIL, 1, 0, 0, 0, 0, 0, ITEM_PAGE_CHAIN_MAIL // Chain mail, 12.0 lb
+rec_robe:       .byte ITEM_SLOT_ROBE, 1, 0, 0, 0, 0, 0, ITEM_PAGE_ROBE // 2.0 lb
+rec_potions12:  .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, 12, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS // 0.4 lb x 12 = 4.8 lb
+rec_potion:     .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
 
 // Messages, as the player reads them
 s_too_heavy: .text "You can't carry that much weight." ; .byte 0
@@ -388,7 +388,7 @@ test_start:
     // nothing moves.
     // ==========================================================
     jsr tw_seed_1280
-    lda #10                             // Soft leather armor, 3.0 lb
+    lda #ITEM_SLOT_IRON_HELM                             // Soft leather armor, 3.0 lb
     ldx #1
     jsr tw_add
     :EXPECT_CC()
@@ -404,7 +404,7 @@ test_start:
     // 130.0 lb and goes to the first empty slot.
     // ==========================================================
     jsr tw_seed_1280
-    lda #6                              // Robe, 2.0 lb
+    lda #ITEM_SLOT_ROBE                              // Robe, 2.0 lb
     ldx #1
     jsr tw_add
     :EXPECT_CS()
@@ -432,14 +432,14 @@ test_start:
     lda #12
     sta zp_player_y
     sta fi_add_y
-    lda #10
+    lda #ITEM_SLOT_IRON_HELM
     ldx #1
     jsr tw_fields
     jsr floor_item_add
     :KEYS($20)
     jsr item_pickup
     :EXPECT_CC()
-    :EXPECT_MEM(fi_item_id, 10)
+    :EXPECT_MEM(fi_item_id, ITEM_SLOT_IRON_HELM)
     :EXPECT_SLOT(2, rec_empty)
     :EXPECT_ROW(0, s_too_heavy)
     :END_TEST(2)
@@ -452,7 +452,7 @@ test_start:
     lda #118
     sta player_data + PL_STR_CUR
     :SEED(0, rec_swords59)
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     ldx #13
     jsr tw_add
     :EXPECT_CC()
@@ -460,7 +460,7 @@ test_start:
     beq !ok+
     jsr tx_fail
 !ok:
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     ldx #12
     jsr tw_add
     :EXPECT_CS()
@@ -476,13 +476,17 @@ test_start:
     :SEED(0, rec_potion)
     ldx #MAX_INV_SLOTS - 1              // slots 1-21: a dagger each
 !fill:
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego,x
+    }
     lda #1
     sta inv_qty,x
     dex
     bne !fill-
-    lda #6                              // a robe: no slot
+    lda #ITEM_SLOT_ROBE                              // a robe: no slot
     ldx #1
     jsr tw_add
     :EXPECT_CC()
@@ -490,7 +494,7 @@ test_start:
     beq !ok+
     jsr tx_fail
 !ok:
-    lda #17                             // a potion: onto slot 0's
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                             // a potion: onto slot 0's
     ldx #1
     jsr tw_add
     :EXPECT_CS()

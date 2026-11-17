@@ -3,13 +3,13 @@
 // Binary 'ITM2' ITEM.CAT layout constants (segmentless).
 
 .const ITMCAT_SIZE_CAP = 7800
-.const ITMCAT_TOTAL_SIZE = 7573
+.const ITMCAT_TOTAL_SIZE = 7478
 .const ITMCAT_HDR_SIZE = 32
 
 // 'ITM2' 32-byte header field offsets
 .const ITMCAT_HDR_MAGIC = 0           // 4 bytes: 'ITM2'
 .const ITMCAT_HDR_TOTAL_SIZE = 4      // 2 bytes: total byte size
-.const ITMCAT_HDR_ITEM_COUNT = 6      // 2 bytes: item count (370)
+.const ITMCAT_HDR_ITEM_COUNT = 6      // 2 bytes: item count (361)
 .const ITMCAT_HDR_EGO_COUNT = 8       // 1 byte: ego count (55)
 .const ITMCAT_HDR_FLAV_COUNT = 9      // 1 byte: flavour count (174)
 .const ITMCAT_HDR_TOK_COUNT = 10      // 1 byte: non-recursive $80+ token count
@@ -30,7 +30,7 @@
 .const ITMCAT_HDR_OFF_CANON = 28      // 2 bytes
 .const ITMCAT_HDR_OFF_STREAM = 30     // 2 bytes
 
-// Cold item record layout (4 bytes per item ID 0..369)
+// Cold item record layout (4 bytes per item ID 0..360)
 .const ITMCAT_REC_SIZE = 4
 .const ITMCAT_REC_COST_DEPTH = 0      // bits 0..6 = cost_idx, bit 7 = is_depth_variant
 .const ITMCAT_REC_WD_AMMO = 1         // bits 0..6 = wd_idx, bit 7 = is_ammo ($80)
@@ -53,28 +53,28 @@
 .const ITMCAT_EFFECT_SIZE = 2         // flags_idx, bonus_idx
 .const ITMCAT_EGO_SIZE = 3            // effect_idx, uint16 cost_delta
 .const ITMCAT_STR_BASE_ITEM = 0
-.const ITMCAT_STR_BASE_EGO = 370
-.const ITMCAT_STR_BASE_FLAV = 425
-.const ITMCAT_STR_BASE_TOK = 599
+.const ITMCAT_STR_BASE_EGO = 361
+.const ITMCAT_STR_BASE_FLAV = 416
+.const ITMCAT_STR_BASE_TOK = 590
 .const ITMCAT_TOK_MIN = $80
 .const ITMCAT_MAX_STR_LEN = 41
 .const ITMCAT_STR_STRIDE = 8
-.const ITMCAT_TOK_COUNT = 111
+.const ITMCAT_TOK_COUNT = 118
 .const ITMCAT_BLK_COUNT = 89
 .const ITMCAT_CANON_MAX_LEN = 12
-.const ITMCAT_CANON_NUM_SYMS = 170
+.const ITMCAT_CANON_NUM_SYMS = 176
 
 // Exact byte offsets within ITEM.CAT for this build
 .const ITMCAT_OFF_RECORDS = 32
-.const ITMCAT_OFF_COSTS = 1512
-.const ITMCAT_OFF_WEIGHTS = 1680
-.const ITMCAT_OFF_DMGS = 1764
-.const ITMCAT_OFF_WDS = 1812
-.const ITMCAT_OFF_FLAGS = 2042
-.const ITMCAT_OFF_BONUSES = 2370
-.const ITMCAT_OFF_EFFECTS = 2615
-.const ITMCAT_OFF_EGOS = 2949
-.const ITMCAT_OFF_BLK_INDEX = 3114
-.const ITMCAT_OFF_CANON_COUNTS = 3292
-.const ITMCAT_OFF_CANON_SYMS = 3305
-.const ITMCAT_OFF_STREAM = 3475
+.const ITMCAT_OFF_COSTS = 1476
+.const ITMCAT_OFF_WEIGHTS = 1644
+.const ITMCAT_OFF_DMGS = 1726
+.const ITMCAT_OFF_WDS = 1774
+.const ITMCAT_OFF_FLAGS = 1996
+.const ITMCAT_OFF_BONUSES = 2324
+.const ITMCAT_OFF_EFFECTS = 2559
+.const ITMCAT_OFF_EGOS = 2887
+.const ITMCAT_OFF_BLK_INDEX = 3052
+.const ITMCAT_OFF_CANON_COUNTS = 3230
+.const ITMCAT_OFF_CANON_SYMS = 3243
+.const ITMCAT_OFF_STREAM = 3419

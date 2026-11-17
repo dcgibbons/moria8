@@ -23,56 +23,65 @@ sro_choices:
 // Fine Ale, Fine Wine), Flask of Oil x2, Wooden Torch x3, Brass Lantern,
 // Iron Spike x2, Shovel, Pick, Cloak: 26 entries (all Page 0).
 sro_general_choice:
-    .byte 15, 15, 15, 15, 15, 15, 15, 15    // Ration of Food x8
-    .byte ITEM_TYPE_HARD_BISCUIT, ITEM_TYPE_HARD_BISCUIT, ITEM_TYPE_HARD_BISCUIT
-    .byte ITEM_TYPE_BEEF_JERKY, ITEM_TYPE_BEEF_JERKY
-    .byte ITEM_TYPE_FINE_ALE, ITEM_TYPE_FINE_WINE
-    .byte 61, 61, 13, 13, 13, 14            // Flask of Oil x2, Wooden Torch x3, Brass Lantern
-    .byte 135, 135, 62, 63, ITEM_TYPE_CLOAK // Iron Spike x2, Shovel, Pick, Cloak
+    .byte ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_RATION_OF_FOOD
+    .byte ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_RATION_OF_FOOD
+    .byte ITEM_SLOT_HARD_BISCUIT, ITEM_SLOT_HARD_BISCUIT, ITEM_SLOT_HARD_BISCUIT
+    .byte ITEM_SLOT_STRIP_OF_BEEF_JERKY, ITEM_SLOT_STRIP_OF_BEEF_JERKY
+    .byte ITEM_SLOT_PINT_OF_FINE_ALE, ITEM_SLOT_PINT_OF_FINE_WINE
+    .byte ITEM_SLOT_FLASK_OF_OIL, ITEM_SLOT_FLASK_OF_OIL
+    .byte ITEM_SLOT_WOODEN_TORCH, ITEM_SLOT_WOODEN_TORCH, ITEM_SLOT_WOODEN_TORCH, ITEM_SLOT_BRASS_LANTERN
+    .byte ITEM_SLOT_IRON_SPIKE, ITEM_SLOT_IRON_SPIKE, ITEM_SLOT_SHOVEL, ITEM_SLOT_PICK, ITEM_SLOT_CLOAK
 .const SRO_GENERAL_CHOICES = * - sro_general_choice
 // Temple: Prayer books 1-4 (Words of Wisdom x2), Remove Curse x2, Blessing,
 // Cure Light x3, Serious x3, Critical x2, Heroism, Boldness, Word of Recall x2,
 // Restore Wisdom, Restore Life Levels, Neutralize Poison, Morningstar, Mace,
-// War Hammer: 26 entries (22 Page 0, 4 Page 1).
+// War Hammer: 26 entries (23 Page 0, 3 Page 1).
 sro_temple_choice:
-    .byte 48, 58, 59, 60, 58                // Prayer books 1-4, Words of Wisdom x2
-    .byte 33, 33                            // Remove Curse x2
-    .byte 17, 17, 17, 25, 25, 25, 100, 100  // Cure Light x3, Serious x3, Critical x2
-    .byte 27, 32, 32, 126                   // Heroism, Word of Recall x2, Neutralize Poison
-    .byte 73, 5, 72                         // Morningstar, Mace, War Hammer
+    .byte ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
+    .byte ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM
+    .byte ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS
+    .byte ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_EXORCISM
+    .byte ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM
+    .byte ITEM_SLOT_SCROLL_OF_REMOVE_CURSE, ITEM_SLOT_SCROLL_OF_REMOVE_CURSE
+    .byte ITEM_SLOT_SCROLL_OF_BLESSING
+    .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
+    .byte ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS, ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS, ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
+    .byte ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
+    .byte ITEM_SLOT_POTION_OF_HEROISM, ITEM_SLOT_POTION_OF_BOLDNESS
+    .byte ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL, ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL
+    .byte ITEM_SLOT_POTION_OF_RESTORE_WISDOM, ITEM_SLOT_POTION_OF_RESTORE_LIFE_LEVELS
+    .byte ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
 sro_choices_p1_start:
-    .byte ITEM_TYPE_SCR_BLESSING - ITEM_PAGE_SIZE      // Scroll of Blessing
-    .byte ITEM_TYPE_POT_BOLDNESS - ITEM_PAGE_SIZE      // Potion of Boldness
-    .byte ITEM_TYPE_POT_RESTORE_WIS - ITEM_PAGE_SIZE   // Potion of Restore Wisdom
-    .byte ITEM_TYPE_POT_RESTORE_LIFE - ITEM_PAGE_SIZE  // Potion of Restore Life Levels
+    .byte ITEM_SLOT_MORNINGSTAR, ITEM_SLOT_MACE, ITEM_SLOT_WAR_HAMMER
+sro_choices_p1_end:
 .const SRO_TEMPLE_CHOICES = * - sro_temple_choice
 // Alchemy shop (values.inc:1679): Enchant Weapon To-Hit, Enchant Weapon To-Dam,
 // Enchant Armor, Identify x2, Light x2, Phase Door x2, Magic Mapping x2,
 // Treasure Detection x2, Object Detection x2, Detect Invisible, Recharging,
-// Restore Str/Int/Dex/Con/Chr, Word of Recall x3, Slow Poison: 26 entries
-// (11 Page 1, 15 Page 0).
+// Restore Str/Int/Dex/Con/Chr, Word of Recall x3, Slow Poison: 26 entries (all Page 0).
 sro_alchemy_choice:
-    .byte ITEM_TYPE_SCR_ENCH_WEAP_HIT - ITEM_PAGE_SIZE // Enchant Weapon To-Hit
-    .byte ITEM_TYPE_SCR_ENCH_WEAP_DAM - ITEM_PAGE_SIZE // Enchant Weapon To-Dam
-    .byte ITEM_TYPE_SCR_TREASURE_DETECT - ITEM_PAGE_SIZE, ITEM_TYPE_SCR_TREASURE_DETECT - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_DETECT_INVIS - ITEM_PAGE_SIZE  // Detect Invisible
-    .byte ITEM_TYPE_POT_RESTORE_STR - ITEM_PAGE_SIZE   // Restore Strength
-    .byte ITEM_TYPE_POT_RESTORE_INT - ITEM_PAGE_SIZE   // Restore Intelligence
-    .byte ITEM_TYPE_POT_RESTORE_DEX - ITEM_PAGE_SIZE   // Restore Dexterity
-    .byte ITEM_TYPE_POT_RESTORE_CON - ITEM_PAGE_SIZE   // Restore Constitution
-    .byte ITEM_TYPE_POT_RESTORE_CHR - ITEM_PAGE_SIZE   // Restore Charisma
-    .byte ITEM_TYPE_POT_SLOW_POISON - ITEM_PAGE_SIZE   // Slow Poison
-sro_choices_p1_end:
-    .byte 35                                // Enchant Armor
-    .byte 21, 21, 20, 20                    // Identify x2, Light x2
-    .byte ITEM_TYPE_SCR_PHASE_DOOR, ITEM_TYPE_SCR_PHASE_DOOR // Phase Door x2
-    .byte 102, 102, 103, 103, 104           // Magic Mapping x2, Object Detection x2, Recharging
-    .byte 32, 32, 32                        // Word of Recall x3
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_DAM
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_ARMOR
+    .byte ITEM_SLOT_SCROLL_OF_IDENTIFY, ITEM_SLOT_SCROLL_OF_IDENTIFY, ITEM_SLOT_SCROLL_OF_LIGHT, ITEM_SLOT_SCROLL_OF_LIGHT
+    .byte ITEM_SLOT_SCROLL_OF_PHASE_DOOR, ITEM_SLOT_SCROLL_OF_PHASE_DOOR
+    .byte ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING, ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING
+    .byte ITEM_SLOT_SCROLL_OF_TREASURE_DETECTION, ITEM_SLOT_SCROLL_OF_TREASURE_DETECTION
+    .byte ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION, ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION
+    .byte ITEM_SLOT_SCROLL_OF_DETECT_INVISIBLE, ITEM_SLOT_SCROLL_OF_RECHARGING
+    .byte ITEM_SLOT_POTION_OF_RESTORE_STRENGTH
+    .byte ITEM_SLOT_POTION_OF_RESTORE_INTELLIGENCE
+    .byte ITEM_SLOT_POTION_OF_RESTORE_DEXTERITY
+    .byte ITEM_SLOT_POTION_OF_RESTORE_CONSTITUTION
+    .byte ITEM_SLOT_POTION_OF_RESTORE_CHARISMA
+    .byte ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL, ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL, ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL
+    .byte ITEM_SLOT_POTION_OF_SLOW_POISON
 .const SRO_ALCHEMY_CHOICES = * - sro_alchemy_choice
 .assert "General Store choices", SRO_GENERAL_CHOICES, 26
 .assert "Temple choices", SRO_TEMPLE_CHOICES, 26
 .assert "Alchemy choices", SRO_ALCHEMY_CHOICES, 26
 .assert "Store choice table indexes in one page", * - sro_choices <= 256, true
+.assert "General, Alchemy, and non-weapon Temple choices live on Page 0 while Temple hafted weapons live on Page 1", ITEM_PAGE_RATION_OF_FOOD == 0 && ITEM_PAGE_PINT_OF_FINE_WINE == 0 && ITEM_PAGE_FLASK_OF_OIL == 0 && ITEM_PAGE_BRASS_LANTERN == 0 && ITEM_PAGE_IRON_SPIKE == 0 && ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0 && ITEM_PAGE_CLOAK == 0 && ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_EXORCISM == 0 && ITEM_PAGE_POTION_OF_INFRAVISION == 0 && ITEM_PAGE_SCROLL_OF_STAR_DESTRUCTION == 0 && ITEM_PAGE_MORNINGSTAR == ITEM_PAGE_BIT && ITEM_PAGE_MACE == ITEM_PAGE_BIT && ITEM_PAGE_WAR_HAMMER == ITEM_PAGE_BIT, true
 
 // Per store 0-4: number of choices (0 = pick by category) and table offset.
 .const SRO_CHOICE_STORES = 5
@@ -85,7 +94,12 @@ sro_choice_base:
 // Fallback items per store (used when rejection sampling fails; the entries
 // of stores with a choice table are unused)
 store_fallback:
-    .byte 15, 7, 2, 20, 17, 23, 2, 15  // food, leather, dagger, scroll, CLW potion, ring, dagger(BM), food(Home)
+    .byte ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_LEATHER_ARMOR, ITEM_SLOT_DAGGER, ITEM_SLOT_SCROLL_OF_LIGHT
+    .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, ITEM_SLOT_RING_OF_PROTECTION, ITEM_SLOT_DAGGER, ITEM_SLOT_RATION_OF_FOOD
+store_fallback_page:
+    .byte ITEM_PAGE_RATION_OF_FOOD, ITEM_PAGE_LEATHER_ARMOR, ITEM_PAGE_DAGGER, ITEM_PAGE_SCROLL_OF_LIGHT
+    .byte ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS, ITEM_PAGE_RING_OF_PROTECTION, ITEM_PAGE_DAGGER, ITEM_PAGE_RATION_OF_FOOD
+.assert "store_fallback_page matches store_fallback", (* - store_fallback_page == store_fallback_page - store_fallback) && (store_fallback_page - store_fallback == STORE_COUNT), true
 
 srr_abs_slot:  .byte 0
 srr_save_x:    .byte 0
@@ -369,36 +383,24 @@ sro_stock_qty:
     lda sro_stack_qty,y
     rts
 !ssq_p1:
-    ldy #sro_stack_p1_end - sro_stack_p1_id
-!ssq_p1_loop:
-    cmp sro_stack_p1_id - 1,y
-    beq !ssq_p1_two+
-    dey
-    bne !ssq_p1_loop-
-    beq !ssq_found-                 // Y = 0: not listed, one
-!ssq_p1_two:
-    lda #2
+    lda #1
     rts
 sro_stack_id:
-    .byte 15, ITEM_TYPE_HARD_BISCUIT, ITEM_TYPE_BEEF_JERKY          // Ration, biscuit, jerky
-    .byte ITEM_TYPE_WOODEN_TORCH, ITEM_TYPE_FLASK_OF_OIL            // torch, flask
-    .byte ITEM_TYPE_FINE_ALE, 32, 20                                // Fine Ale, Word of Recall, Light
-    .byte 17, 21, 27                                                // Cure Light Wounds, Identify, Heroism
-    .byte ITEM_TYPE_SCR_MAGIC_MAPPING, ITEM_TYPE_SCR_OBJECT_DETECT, 136   // ..., Phase Door
-    .byte 52, 53, 54, ITEM_TYPE_AMMO_IRON_SHOT                      // Arrow, Bolt, Rock, Iron Shot
+    .byte ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_HARD_BISCUIT, ITEM_SLOT_STRIP_OF_BEEF_JERKY
+    .byte ITEM_SLOT_WOODEN_TORCH, ITEM_SLOT_FLASK_OF_OIL
+    .byte ITEM_SLOT_PINT_OF_FINE_ALE, ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL, ITEM_SLOT_SCROLL_OF_LIGHT
+    .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, ITEM_SLOT_SCROLL_OF_IDENTIFY, ITEM_SLOT_POTION_OF_HEROISM
+    .byte ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING, ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION, ITEM_SLOT_SCROLL_OF_PHASE_DOOR
+    .byte ITEM_SLOT_POTION_OF_BOLDNESS, ITEM_SLOT_POTION_OF_SLOW_POISON
+    .byte ITEM_SLOT_SCROLL_OF_TREASURE_DETECTION, ITEM_SLOT_SCROLL_OF_BLESSING, ITEM_SLOT_SCROLL_OF_DETECT_INVISIBLE
+    .byte ITEM_SLOT_ARROW, ITEM_SLOT_BOLT, ITEM_SLOT_ROCK, ITEM_SLOT_IRON_SHOT
 sro_stack_qty:
     .byte 1                         // not listed
     .byte 5, 5, 5, 5, 5
-    .byte 3, 3, 3, 2, 2, 2, 2, 2, 2
+    .byte 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
     .byte 24, 24, 24, 24
 .assert "sro_stack tables pair up", sro_stack_qty - sro_stack_id + 1, * - sro_stack_qty
-sro_stack_p1_id:
-    .byte ITEM_TYPE_POT_BOLDNESS - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_SLOW_POISON - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_TREASURE_DETECT - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_BLESSING - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_DETECT_INVIS - ITEM_PAGE_SIZE
-sro_stack_p1_end:
+.assert "All sro_stack_id entries live on Page 0", ITEM_PAGE_RATION_OF_FOOD == 0 && ITEM_PAGE_HARD_BISCUIT == 0 && ITEM_PAGE_STRIP_OF_BEEF_JERKY == 0 && ITEM_PAGE_WOODEN_TORCH == 0 && ITEM_PAGE_FLASK_OF_OIL == 0 && ITEM_PAGE_PINT_OF_FINE_ALE == 0 && ITEM_PAGE_POTION_OF_INFRAVISION == 0 && ITEM_PAGE_SCROLL_OF_STAR_DESTRUCTION == 0 && ITEM_PAGE_IRON_SHOT == 0, true
 .assert "Stocked ammunition fits a store stack", 24 <= STORE_STACK_MAX, true
 
 // sro_set_p1 — Set p1 and flags for newly stocked item
@@ -467,36 +469,28 @@ sro_set_p1:
     rts
 
 !sro_ring:
+    .assert "All rings and amulets in sro_set_p1 live on Page 1 with Strength..Searching and Wisdom..Charisma contiguous", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_RING_OF_GAIN_DEXTERITY == ITEM_RING_OF_STRENGTH + 1 && ITEM_RING_OF_GAIN_CONSTITUTION == ITEM_RING_OF_STRENGTH + 2 && ITEM_RING_OF_GAIN_INTELLIGENCE == ITEM_RING_OF_STRENGTH + 3 && ITEM_RING_OF_SPEED == ITEM_RING_OF_STRENGTH + 4 && ITEM_RING_OF_SEARCHING == ITEM_RING_OF_STRENGTH + 5 && ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT && ITEM_AMULET_OF_CHARISMA == ITEM_AMULET_OF_WISDOM + 1 && ITEM_PAGE_AMULET_OF_THE_MAGI == ITEM_PAGE_BIT, true
     jsr sro_bonus_base
     lda item_cur_page
-    bne !sro_ring_p1+
+    beq !sro_ring_done+
     :AuxReadY(si_item_id)
-    cmp #23
+    cmp #ITEM_SLOT_RING_OF_PROTECTION
     beq !sro_enchant_armor-         // Ring of Protection: AC bonus
-    cmp #113                        // Ring of Slaying: +to_hit, +to_dam
+    cmp #ITEM_SLOT_RING_OF_SLAYING
     beq !sro_slaying-
-    cmp #24
-    beq !sro_ring_strength+
-    cmp #ITEM_TYPE_RING_SPEED
-    beq !sro_ring_strength+
-    cmp #212                        // Amulet of Charisma
-    beq !sro_ring_strength+
-    sec
-    sbc #ITEM_TYPE_AMULET_WISDOM
-    cmp #2
-    bcc !sro_ring_strength+
-    rts
-!sro_ring_p1:
-    :AuxReadY(si_item_id)
-    cmp #(327 - ITEM_PAGE_SIZE)     // Ring of Increase Damage
+    cmp #ITEM_SLOT_RING_OF_INCREASE_DAMAGE
     beq !sro_ring_dam+
-    cmp #(328 - ITEM_PAGE_SIZE)     // Ring of Increase To-Hit
+    cmp #ITEM_SLOT_RING_OF_INCREASE_TO_HIT
     beq !sro_ring_hit+
-    cmp #(323 - ITEM_PAGE_SIZE)     // Ring of Searching
+    cmp #ITEM_SLOT_AMULET_OF_THE_MAGI
     beq !sro_ring_strength+
-    cmp #(329 - ITEM_PAGE_SIZE)     // Gain Int/Dex/Con (329..331)
+    cmp #ITEM_SLOT_RING_OF_STRENGTH
     bcc !sro_ring_done+
-    cmp #(331 - ITEM_PAGE_SIZE + 1)
+    cmp #ITEM_SLOT_RING_OF_SEARCHING + 1
+    bcc !sro_ring_strength+
+    sec
+    sbc #ITEM_SLOT_AMULET_OF_WISDOM
+    cmp #2
     bcc !sro_ring_strength+
 !sro_ring_done:
     rts
@@ -527,7 +521,7 @@ sro_bonus_base:
     bne !sro_light_lantern+
     ldy srr_abs_slot
     :AuxReadY(si_item_id)
-    cmp #13
+    cmp #ITEM_SLOT_WOODEN_TORCH
     beq !sro_light_torch+
 !sro_light_lantern:
     lda #LANTERN_MAX_CHARGES
@@ -572,14 +566,15 @@ store_pick_item:
     sta srr_count                   // free here: sro_count recounts each pass
 
 !spi_loop:
-    lda #<(ITEM_TYPE_COUNT - 2)
+    .assert "All 20 gold types occupy 0..19", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_MITHRIL == 19, true
+    lda #<(ITEM_TYPE_COUNT - (ITEM_GOLD_MITHRIL + 1))
     sta zp_temp0
-    lda #>(ITEM_TYPE_COUNT - 2)
+    lda #>(ITEM_TYPE_COUNT - (ITEM_GOLD_MITHRIL + 1))
     sta zp_temp1
-    jsr rng_range_word              // zp_temp2/3 in 0..ITEM_TYPE_COUNT-3
+    jsr rng_range_word              // zp_temp2/3 in 0..ITEM_TYPE_COUNT-(ITEM_GOLD_MITHRIL+2)
     lda zp_temp2
     clc
-    adc #2
+    adc #(ITEM_GOLD_MITHRIL + 1)
     ldy zp_temp3
     bcc !spi_no_carry+
     iny
@@ -602,9 +597,9 @@ store_pick_item:
     dec srr_count
     bne !spi_loop-
 
-    lda #0
-    sta item_cur_page
     ldx zp_store_idx
+    lda store_fallback_page,x
+    sta item_cur_page
     lda store_fallback,x
     rts
 

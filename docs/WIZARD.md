@@ -29,7 +29,7 @@ Commands:
 - `Q` - cancel / exit menu
 
 Prompts:
-- Item generation: `ITEM 0-369: ` (up to 3 digits)
+- Item generation: `ITEM 0-360: ` (up to 3 digits)
 - Level jump: `DLVL 0-99: `
 
 Feedback:
@@ -40,26 +40,25 @@ Feedback:
 
 ## Generate Item
 
-Wizard item generation uses item IDs `0-369` (defined in
+Wizard item generation uses item IDs `0-360` (defined in
 `platforms/shared/item_catalog/item_catalog_spec.json` and generated into
-`item_hot_tables.s` / `ITEM.CAT`; `core/item_tables.s` still stops at `0-156`
-until runtime wiring completes). IDs `96-127` are the Phase 3 items — new
-potions, scrolls, rings, wands, staves, Mithril armor, and amulets; IDs
-`128-134` are the chests — wooden, iron, steel, and ruined; ID `135` is the
-Iron Spike; ID `136` is the Scroll of Phase Door; IDs `137-139` are the Long
-Bow, Composite Bow and Heavy Crossbow; IDs `140-145` the potions of gain stat;
-IDs `146-148` the Rings of Lordly Protection and `149` the Amulet of Resist
-Acid; IDs `150-152` the crowns; IDs `153-156` the Wands of Fire Bolts, Drain
-Life, Lightning Balls and Acid Balls; and IDs `157-369` append the remaining
-VMS Moria 4.8 dungeon & store templates using Base-255 Paged 9-bit IDs (Page 0
-`= 0-254`, Page 1 `= 255-369` via `slot_lo = id - 255`, `$FF` empty on both
-pages).
+`item_ids.s`, `item_hot_tables.s`, and `ITEM.CAT`) organized in contiguous VMS
+Moria 4.8 category and `object_list` order under Base-255 Paged 9-bit IDs:
+- **Page 0 (`0-254`, `item_cur_page = $00`):** Gold (`0-19`), Food (`20-49`),
+  Potions (`50-94`), Scrolls (`95-136`), Wands (`137-160`), Staves (`161-185`),
+  Books (`186-193`: Mage `186-189`, Priest `190-193`), Light & Oil (`194-196`),
+  Iron Spike (`197`), Digging Tools (`198-203`), Chests (`204-210`), Cloak (`211`),
+  Body Armor (`212-233`), Ranged Launchers & Ammo (`234-243`), Helms & Crowns
+  (`244-251`), and Boots (`252-254`).
+- **Page 1 (`255-360`, `item_cur_page = $40`, `slot_lo = id - 255`):** Gloves
+  (`255-256`), Shields (`257-262`), Melee Weapons (`263-308`), Rings (`309-339`),
+  Amulets (`340-349`), and Junk (`350-360`). `$FF` is empty on both pages.
 
 Behavior:
 - Non-gold items try to go into inventory first
 - If inventory is full, they fall back to the floor at the player tile
 - Gold always becomes floor gold
-- Ammunition (Arrow, Bolt, Rock) comes in a stack of 5-10 (`core/wizard.s`;
+- Ammunition (Arrow, Bolt, Rock, Iron Shot) comes in a stack of 5-10 (`core/wizard.s`;
   dungeon stacks are 7d6 and store stacks 24)
 - Enchantment and ego are rolled as for a floor item at the current dungeon
   level (`roll_enchantment`, `roll_ego_type`): a weapon ego, a resistance
@@ -70,14 +69,14 @@ Behavior:
 
 ### Spawn specific books
 
-- Spellbook Beginners-Magick: `Ctrl+W`, `G`, `47`
-- Holy Book of Prayers Beginners Handbook: `Ctrl+W`, `G`, `48`
-- Spellbook Magick I: `Ctrl+W`, `G`, `55`
-- Spellbook Magick II: `Ctrl+W`, `G`, `56`
-- Spellbook The Mages Guide to Power: `Ctrl+W`, `G`, `57`
-- Holy Book of Prayers Words of Wisdom: `Ctrl+W`, `G`, `58`
-- Holy Book of Prayers Chants and Blessings: `Ctrl+W`, `G`, `59`
-- Holy Book of Prayers Exorcism: `Ctrl+W`, `G`, `60`
+- Spellbook Beginners-Magick: `Ctrl+W`, `G`, `186`
+- Spellbook Magick I: `Ctrl+W`, `G`, `187`
+- Spellbook Magick II: `Ctrl+W`, `G`, `188`
+- Spellbook The Mages Guide to Power: `Ctrl+W`, `G`, `189`
+- Holy Book of Prayers Beginners Handbook: `Ctrl+W`, `G`, `190`
+- Holy Book of Prayers Words of Wisdom: `Ctrl+W`, `G`, `191`
+- Holy Book of Prayers Chants and Blessings: `Ctrl+W`, `G`, `192`
+- Holy Book of Prayers Exorcism: `Ctrl+W`, `G`, `193`
 
 ### Jump to a dungeon level
 
@@ -104,7 +103,7 @@ This:
 Wizard Mode does not have a direct command to set poison. To test `Cure Poison`
 or `Neutralize Poison` feedback:
 
-1. Generate a poison potion: `Ctrl+W`, `G`, `19`
+1. Generate a poison potion: `Ctrl+W`, `G`, `71`
 2. Quaff the generated potion with `q`
 3. Cast `Cure Poison` or pray `Neutralize Poison`
 4. Expected result: poison clears and `You feel better.` is printed
@@ -112,24 +111,21 @@ or `Neutralize Poison` feedback:
 
 ### Generate common test items
 
-- Potion of Cure Light Wounds: `17`
-- Potion of Cure Serious Wounds: `25`
-- Potion of Restore Mana: `26`
-- Wand of Lightning: `40`
-- Wand of Frost: `41`
-- Staff of Detect Monsters: `44`
-- Staff of Cure Light Wounds: `46`
-- Flask of Oil: `61`
-- Launchers: Short Bow `49`, Light Crossbow `50`, Sling `51`, Long Bow `137`,
-  Composite Bow `138`, Heavy Crossbow `139`; ammunition: Arrow `52`, Bolt
-  `53`, Rock `54`. Wield the launcher, then `SHIFT+F` fires the first
+- Potion of Cure Light Wounds: `62`
+- Potion of Cure Serious Wounds: `63`
+- Potion of Restore Mana: `93`
+- Wand of Lightning: `138`
+- Wand of Frost: `139`
+- Staff of Detect Invisible: `176`
+- Staff of Cure Light Wounds: `175`
+- Flask of Oil: `196`
+- Launchers: Short Bow `234`, Long Bow `235`, Composite Bow `236`, Light Crossbow `237`, Heavy Crossbow `238`, Sling `239`; ammunition: Arrow `240`, Bolt `241`, Rock `242`, Iron Shot `243`. Wield the launcher, then `SHIFT+F` fires the first
   matching ammunition in the pack.
-- Resistance jewellery: Ring of Lordly Protection (Fire) `146`, (Acid) `147`,
-  (Cold) `148`; Amulet of Resist Acid `149`. Wear one and check the breath or
+- Resistance jewellery: Ring of Lordly Protection (Fire) `323`, (Acid) `324`, (Cold) `325`; Amulet of Resist Acid `347`. Wear one and check the breath or
   touch damage of its element.
-- Crowns: Silver `150`, Golden `151`, Jewel Encrusted `152`.
-- Attack wands (VMS): Fire Bolts `153` (6d8), Drain Life `154` (50, not the
-  undead), Lightning Balls `155` (24), Acid Balls `156` (40). Aim one at a
+- Crowns: Silver `249`, Golden `250`, Jewel Encrusted `251`.
+- Attack wands (VMS): Fire Bolts `140` (6d8), Drain Life `148` (50, not the
+  undead), Lightning Balls `155` (24), Acid Balls `159` (40). Aim one at a
   creature, and at an undead one for Drain Life (no effect).
 
 ### Movement / traversal helpers
@@ -144,378 +140,369 @@ or `Neutralize Poison` feedback:
 |---:|---|
 | 0 | Gold (small) |
 | 1 | Gold (large) |
-| 2 | Dagger |
-| 3 | Short Sword |
-| 4 | Long Sword |
-| 5 | Mace |
-| 6 | Robe |
-| 7 | Leather Armor |
-| 8 | Chain Mail |
-| 9 | Small Shield |
-| 10 | Iron Helm |
-| 11 | Leather Gloves |
-| 12 | Leather Boots |
-| 13 | Wooden Torch |
-| 14 | Brass Lantern |
-| 15 | Ration of Food |
-| 16 | Slime Mold |
-| 17 | Potion of Cure Light Wounds |
-| 18 | Potion of Speed |
-| 19 | Potion of Poison |
-| 20 | Scroll of Light |
-| 21 | Scroll of Identify |
-| 22 | Scroll of Teleportation |
-| 23 | Ring of Protection |
-| 24 | Ring of Strength |
-| 25 | Potion of Cure Serious Wounds |
-| 26 | Potion of Restore Mana |
-| 27 | Potion of Heroism |
-| 28 | Potion of Blindness |
-| 29 | Potion of Confusion |
-| 30 | Potion of Detect Monsters |
-| 31 | Potion of Infravision |
-| 32 | Scroll of Word of Recall |
-| 33 | Scroll of Remove Curse |
-| 34 | Scroll of Enchant Weapon |
-| 35 | Scroll of Enchant Armor |
-| 36 | Scroll of Monster Confusion |
-| 37 | Scroll of Aggravate |
-| 38 | Scroll of Protect from Evil |
-| 39 | Wand of Light |
-| 40 | Wand of Lightning |
-| 41 | Wand of Frost |
-| 42 | Wand of Stinking Cloud |
-| 43 | Staff of Light |
-| 44 | Staff of Detect Monsters |
-| 45 | Staff of Teleportation |
-| 46 | Staff of Cure Light Wounds |
-| 47 | Spellbook Beginners-Magick |
-| 48 | Holy Book of Prayers Beginners Handbook |
-| 49 | Short Bow |
-| 50 | Light Crossbow |
-| 51 | Sling |
-| 52 | Arrow |
-| 53 | Bolt |
-| 54 | Rock |
-| 55 | Spellbook Magick I |
-| 56 | Spellbook Magick II |
-| 57 | Spellbook The Mages Guide to Power |
-| 58 | Holy Book of Prayers Words of Wisdom |
-| 59 | Holy Book of Prayers Chants and Blessings |
-| 60 | Holy Book of Prayers Exorcism |
-| 61 | Flask of Oil |
-| 62 | Shovel |
-| 63 | Pick |
-| 64 | Main Gauche |
-| 65 | Studded Leather Armor |
-| 66 | Rapier |
-| 67 | Broad Sword |
-| 68 | Bastard Sword |
-| 69 | Two-Handed Sword |
-| 70 | Scimitar |
-| 71 | Battle Axe |
-| 72 | War Hammer |
-| 73 | Morningstar |
-| 74 | Spear |
-| 75 | Pike |
-| 76 | Halberd |
-| 77 | Quarterstaff |
-| 78 | Large Shield |
-| 79 | Hard Leather Armor |
-| 80 | Scale Mail |
-| 81 | Plate Mail |
-| 82 | Cloak |
-| 83 | Steel Helm |
-| 84 | Gauntlets |
-| 85 | Soft Leather Boots |
-| 86 | Hard Leather Boots |
-| 87 | Metal Cap |
-| 88 | Sabre |
-| 89 | Cutlass |
-| 90 | Tulwar |
-| 91 | Katana |
-| 92 | Flail |
-| 93 | Lucerne Hammer |
-| 94 | Broad Axe |
-| 95 | Awl-Pike |
-| 96 | Potion of Healing |
-| 97 | Potion of Restoration |
-| 98 | Potion of Resist Heat |
-| 99 | Potion of Resist Cold |
-| 100 | Potion of Cure Critical Wounds |
-| 101 | Scroll of Teleport Level |
-| 102 | Scroll of Magic Mapping |
-| 103 | Scroll of Object Detection |
-| 104 | Scroll of Recharging |
-| 105 | Scroll of Rune of Protection |
-| 106 | Scroll of Genocide |
-| 107 | Scroll of Mass Genocide |
-| 108 | Scroll of *Destruction* |
-| 109 | Ring of Resist Fire |
-| 110 | Ring of Resist Cold |
-| 111 | Ring of Speed |
-| 112 | Ring of See Invisible |
-| 113 | Ring of Slaying |
-| 114 | Wand of Slow Monster |
-| 115 | Wand of Stone-to-Mud |
-| 116 | Wand of Teleport Away |
-| 117 | Wand of Fire Balls |
-| 118 | Wand of Cold Balls |
-| 119 | Staff of Dispel Evil |
-| 120 | Staff of Destruction |
-| 121 | Staff of Speed |
-| 122 | Mithril Chain Mail |
-| 123 | Mithril Plate Mail |
-| 124 | Amulet of Wisdom |
-| 125 | Amulet of the Magi |
-| 126 | Potion of Neutralize Poison |
-| 127 | Staff of Remove Curse |
-| 128 | Small Wooden Chest |
-| 129 | Large Wooden Chest |
-| 130 | Small Iron Chest |
-| 131 | Large Iron Chest |
-| 132 | Small Steel Chest |
-| 133 | Large Steel Chest |
-| 134 | Ruined Chest |
-| 135 | Iron Spike |
-| 136 | Scroll of Phase Door |
-| 137 | Long Bow |
-| 138 | Composite Bow |
-| 139 | Heavy Crossbow |
-| 140 | Potion of Gain Strength |
-| 141 | Potion of Gain Intelligence |
-| 142 | Potion of Gain Wisdom |
-| 143 | Potion of Gain Dexterity |
-| 144 | Potion of Gain Constitution |
-| 145 | Potion of Charisma |
-| 146 | Ring of Lordly Protection (Fire) |
-| 147 | Ring of Lordly Protection (Acid) |
-| 148 | Ring of Lordly Protection (Cold) |
-| 149 | Amulet of Resist Acid |
-| 150 | Silver Crown |
-| 151 | Golden Crown |
-| 152 | Jewel Encrusted Crown |
-| 153 | Wand of Fire Bolts |
-| 154 | Wand of Drain Life |
+| 2 | Copper |
+| 3 | Copper |
+| 4 | Copper |
+| 5 | Silver |
+| 6 | Silver |
+| 7 | Silver |
+| 8 | Garnets |
+| 9 | Garnets |
+| 10 | Gold |
+| 11 | Gold |
+| 12 | Gold |
+| 13 | Opals |
+| 14 | Sapphires |
+| 15 | Gold |
+| 16 | Rubies |
+| 17 | Diamonds |
+| 18 | Emeralds |
+| 19 | Mithril |
+| 20 | Mushroom of Poison |
+| 21 | Mushroom of Blindness |
+| 22 | Mushroom of Paranoia |
+| 23 | Mushroom of Confusion |
+| 24 | Mushroom of Hallucination |
+| 25 | Mushroom of Cure Poison |
+| 26 | Mushroom of Cure Blindness |
+| 27 | Mushroom of Cure Paranoia |
+| 28 | Mushroom of Cure Confusion |
+| 29 | Mushroom of Weakness |
+| 30 | Mushroom of Unhealth |
+| 31 | Mushroom of Restore Constitution |
+| 32 | Mushroom of First-Aid |
+| 33 | Mushroom of Minor Cures |
+| 34 | Mushroom of Light Cures |
+| 35 | Mushroom of Restoring |
+| 36 | Hairy Mold of Poison |
+| 37 | Hairy Mold of Hallucinations |
+| 38 | Hairy Mold of Cure Poison |
+| 39 | Hairy Mold of Unhealth |
+| 40 | Hairy Mold of Cure Serious Wounds |
+| 41 | Ration of Food |
+| 42 | Slime Mold |
+| 43 | Piece of Elvish Waybread |
+| 44 | Piece of Elvish Waybread |
+| 45 | Pint of Fine Grade Mush |
+| 46 | Hard Biscuit |
+| 47 | Strip of Beef Jerky |
+| 48 | Pint of Fine Ale |
+| 49 | Pint of Fine Wine |
+| 50 | Potion of Gain Strength |
+| 51 | Potion of Weakness |
+| 52 | Potion of Restore Strength |
+| 53 | Potion of Gain Intelligence |
+| 54 | Potion of Lose Intelligence |
+| 55 | Potion of Restore Intelligence |
+| 56 | Potion of Gain Wisdom |
+| 57 | Potion of Lose Wisdom |
+| 58 | Potion of Restore Wisdom |
+| 59 | Potion of Charisma |
+| 60 | Potion of Ugliness |
+| 61 | Potion of Restore Charisma |
+| 62 | Potion of Cure Light Wounds |
+| 63 | Potion of Cure Serious Wounds |
+| 64 | Potion of Cure Critical Wounds |
+| 65 | Potion of Healing |
+| 66 | Potion of Gain Constitution |
+| 67 | Potion of Gain Experience |
+| 68 | Potion of Sleep |
+| 69 | Potion of Blindness |
+| 70 | Potion of Confusion |
+| 71 | Potion of Poison |
+| 72 | Potion of Speed |
+| 73 | Potion of Slowness |
+| 74 | Icky Green Potion of Slime Mold Juice |
+| 75 | Light Brown Potion of Apple Juice |
+| 76 | Clear Potion of Water |
+| 77 | Potion of Gain Dexterity |
+| 78 | Potion of Restore Dexterity |
+| 79 | Potion of Restore Constitution |
+| 80 | Potion of Learning |
+| 81 | Potion of Lose Memories |
+| 82 | Potion of Salt Water |
+| 83 | Potion of Invulnerability |
+| 84 | Potion of Heroism |
+| 85 | Potion of Super Heroism |
+| 86 | Potion of Boldness |
+| 87 | Potion of Restore Life Levels |
+| 88 | Potion of Resist Heat |
+| 89 | Potion of Resist Cold |
+| 90 | Potion of Detect Invisible |
+| 91 | Potion of Slow Poison |
+| 92 | Potion of Neutralize Poison |
+| 93 | Potion of Restore Mana |
+| 94 | Potion of Infravision |
+| 95 | Scroll of Enchant Weapon To-Hit |
+| 96 | Scroll of Enchant Weapon To-Dam |
+| 97 | Scroll of Enchant Armor |
+| 98 | Scroll of Identify |
+| 99 | Scroll of Remove Curse |
+| 100 | Scroll of Light |
+| 101 | Scroll of Summon Monster |
+| 102 | Scroll of Phase Door |
+| 103 | Scroll of Teleportation |
+| 104 | Scroll of Teleport Level |
+| 105 | Scroll of Monster Confusion |
+| 106 | Scroll of Magic Mapping |
+| 107 | Scroll of Sleep Monster |
+| 108 | Scroll of Rune of Protection |
+| 109 | Scroll of Treasure Detection |
+| 110 | Scroll of Object Detection |
+| 111 | Scroll of Trap Detection |
+| 112 | Scroll of Trap Detection |
+| 113 | Scroll of Door/Stair Location |
+| 114 | Scroll of Door/Stair Location |
+| 115 | Scroll of Mass Genocide |
+| 116 | Scroll of Detect Invisible |
+| 117 | Scroll of Aggravate |
+| 118 | Scroll of Trap Creation |
+| 119 | Scroll of Trap/Door Destruction |
+| 120 | Scroll of Door Creation |
+| 121 | Scroll of Recharging |
+| 122 | Scroll of Genocide |
+| 123 | Scroll of Darkness |
+| 124 | Scroll of Protect from Evil |
+| 125 | Scroll of Create Food |
+| 126 | Scroll of Dispel Undead |
+| 127 | Scroll of *Enchant Weapon* |
+| 128 | Scroll of Curse Weapon |
+| 129 | Scroll of *Enchant Armor* |
+| 130 | Scroll of Curse Armor |
+| 131 | Scroll of Summon Undead |
+| 132 | Scroll of Blessing |
+| 133 | Scroll of Holy Chant |
+| 134 | Scroll of Holy Prayer |
+| 135 | Scroll of Word of Recall |
+| 136 | Scroll of *Destruction* |
+| 137 | Wand of Light |
+| 138 | Wand of Lightning |
+| 139 | Wand of Frost |
+| 140 | Wand of Fire Bolts |
+| 141 | Wand of Stone-to-Mud |
+| 142 | Wand of Polymorph |
+| 143 | Wand of Heal Monster |
+| 144 | Wand of Haste Monster |
+| 145 | Wand of Slow Monster |
+| 146 | Wand of Confuse Monster |
+| 147 | Wand of Sleep Monster |
+| 148 | Wand of Drain Life |
+| 149 | Wand of Trap/Door Destruction |
+| 150 | Wand of Magic Missile |
+| 151 | Wand of Wall Building |
+| 152 | Wand of Clone Monster |
+| 153 | Wand of Teleport Away |
+| 154 | Wand of Disarming |
 | 155 | Wand of Lightning Balls |
-| 156 | Wand of Acid Balls |
-| 157 | Gnomish Shovel |
-| 158 | Orcish Pick |
-| 159 | Dwarven Shovel |
-| 160 | Dwarven Pick |
-| 161 | Soft Leather Cap |
-| 162 | Hard Leather Cap |
-| 163 | Medium Leather Shield |
-| 164 | Small Metal Shield |
-| 165 | Medium Metal Shield |
-| 166 | Large Metal Shield |
-| 167 | Filthy Rags |
-| 168 | Woven Cord Armor |
-| 169 | Hard Studded Leather |
-| 170 | Soft Leather Ring Mail |
-| 171 | Hard Leather Ring Mail |
-| 172 | Leather Scale Mail |
-| 173 | Rusty Chain Mail |
-| 174 | Double Chain Mail |
-| 175 | Augmented Chain Mail |
-| 176 | Bar Chain Mail |
-| 177 | Metal Brigandine Armor |
-| 178 | Laminated Armor |
-| 179 | Partial Plate Armor |
-| 180 | Metal Lamellar Armor |
-| 181 | Ribbed Plate Armor |
-| 182 | Broken Dagger |
-| 183 | Broken Sword |
-| 184 | Wooden Club |
-| 185 | Dagger (Misericorde) |
-| 186 | Dagger (Bodkin) |
-| 187 | Foil |
-| 188 | Iron Shot |
-| 189 | Cat-o'-Nine-Tails |
-| 190 | Javelin |
-| 191 | Thrusting Sword (Bilbo) |
-| 192 | Thrusting Sword (Baselard) |
-| 193 | Backsword |
-| 194 | Lance |
-| 195 | Beaked Axe |
-| 196 | Mace (Lead-Filled) |
-| 197 | Fauchard |
-| 198 | Ball and Chain |
-| 199 | Glaive |
-| 200 | Battle Axe (Balestarius) |
-| 201 | Two-Handed Sword (Espadon) |
-| 202 | Executioner's Sword |
-| 203 | Two-Handed Great Flail |
-| 204 | Two-Handed Sword (No-Dachi) |
-| 205 | Two-Handed Sword (Flamberge) |
-| 206 | Two-Handed Sword (Zweihander) |
-| 207 | Amulet of Teleportation |
-| 208 | Amulet of Slow Digestion |
-| 209 | Amulet of Searching |
-| 210 | Amulet of Adornment |
-| 211 | Amulet of Adornment |
-| 212 | Amulet of Charisma |
-| 213 | Amulet of DOOM |
-| 214 | Copper |
-| 215 | Copper |
-| 216 | Copper |
-| 217 | Silver |
-| 218 | Silver |
-| 219 | Silver |
-| 220 | Garnets |
-| 221 | Garnets |
-| 222 | Gold |
-| 223 | Gold |
-| 224 | Gold |
-| 225 | Opals |
-| 226 | Sapphires |
-| 227 | Gold |
-| 228 | Rubies |
-| 229 | Diamonds |
-| 230 | Emeralds |
-| 231 | Mithril |
-| 232 | Empty Bottle |
-| 233 | Shards of Pottery |
-| 234 | Broken Set of Teeth |
-| 235 | Large Broken Bone |
-| 236 | Broken Stick |
-| 237 | Rat Skeleton |
-| 238 | Giant Centipede Skeleton |
-| 239 | Human Skeleton |
-| 240 | Dwarf Skeleton |
-| 241 | Elf Skeleton |
-| 242 | Gnome Skeleton |
-| 243 | Hard Biscuit |
-| 244 | Pint of Fine Ale |
-| 245 | Strip of Beef Jerky |
-| 246 | Pint of Fine Wine |
-| 247 | Pint of Fine Grade Mush |
-| 248 | Mushroom of First-Aid |
-| 249 | Piece of Elvish Waybread |
-| 250 | Mushroom of Cure Confusion |
-| 251 | Mushroom of Poison |
-| 252 | Mushroom of Confusion |
-| 253 | Mushroom of Weakness |
-| 254 | Mushroom of Minor Cures |
-| 255 | Mushroom of Cure Poison |
-| 256 | Mushroom of Blindness |
-| 257 | Mushroom of Paranoia |
-| 258 | Mushroom of Light Cures |
-| 259 | Mushroom of Cure Blindness |
-| 260 | Mushroom of Cure Paranoia |
-| 261 | Mushroom of Hallucination |
-| 262 | Hairy Mold of Poison |
-| 263 | Mushroom of Unhealth |
-| 264 | Hairy Mold of Cure Serious Wounds |
-| 265 | Hairy Mold of Hallucinations |
-| 266 | Hairy Mold of Cure Poison |
-| 267 | Mushroom of Restore Constitution |
-| 268 | Hairy Mold of Unhealth |
-| 269 | Mushroom of Restoring |
-| 270 | Potion of Sleep |
-| 271 | Clear Potion of Water |
-| 272 | Potion of Salt Water |
-| 273 | Light Brown Potion of Apple Juice |
-| 274 | Icky Green Potion of Slime Mold Juice |
-| 275 | Potion of Slowness |
-| 276 | Potion of Boldness |
-| 277 | Potion of Slow Poison |
-| 278 | Potion of Weakness |
-| 279 | Potion of Detect Invisible |
-| 280 | Potion of Super Heroism |
-| 281 | Potion of Lose Memories |
-| 282 | Potion of Lose Intelligence |
-| 283 | Potion of Lose Wisdom |
-| 284 | Potion of Ugliness |
-| 285 | Potion of Invulnerability |
-| 286 | Potion of Restore Strength |
-| 287 | Potion of Restore Intelligence |
-| 288 | Potion of Restore Wisdom |
-| 289 | Potion of Restore Charisma |
-| 290 | Potion of Restore Dexterity |
-| 291 | Potion of Restore Constitution |
-| 292 | Potion of Restore Life Levels |
-| 293 | Potion of Learning |
-| 294 | Potion of Gain Experience |
-| 295 | Scroll of Treasure Detection |
-| 296 | Scroll of Summon Monster |
-| 297 | Scroll of Darkness |
-| 298 | Scroll of Blessing |
-| 299 | Scroll of Detect Invisible |
-| 300 | Scroll of Create Food |
-| 301 | Scroll of Sleep Monster |
-| 302 | Scroll of Trap Detection |
-| 303 | Scroll of Door/Stair Location |
-| 304 | Scroll of Trap Creation |
-| 305 | Scroll of Holy Chant |
-| 306 | Scroll of Trap/Door Destruction |
-| 307 | Scroll of Door Creation |
-| 308 | Scroll of Enchant Weapon To-Hit |
-| 309 | Scroll of Enchant Weapon To-Dam |
-| 310 | Scroll of Summon Undead |
-| 311 | Scroll of Holy Prayer |
-| 312 | Scroll of Dispel Undead |
-| 313 | Scroll of Curse Weapon |
-| 314 | Scroll of Curse Armor |
-| 315 | Scroll of *Enchant Weapon* |
-| 316 | Scroll of *Enchant Armor* |
-| 317 | Ring of Teleportation |
-| 318 | Ring of Weakness |
-| 319 | Ring of Aggravate Monster |
+| 156 | Wand of Cold Balls |
+| 157 | Wand of Fire Balls |
+| 158 | Wand of Stinking Cloud |
+| 159 | Wand of Acid Balls |
+| 160 | Wand of Wonder |
+| 161 | Staff of Light |
+| 162 | Staff of Door/Stair Location |
+| 163 | Staff of Trap Location |
+| 164 | Staff of Treasure Location |
+| 165 | Staff of Object Location |
+| 166 | Staff of Teleportation |
+| 167 | Staff of Earthquakes |
+| 168 | Staff of Summoning |
+| 169 | Staff of Summoning |
+| 170 | Staff of Destruction |
+| 171 | Staff of Starlite |
+| 172 | Staff of Haste Monsters |
+| 173 | Staff of Slow Monsters |
+| 174 | Staff of Sleep Monsters |
+| 175 | Staff of Cure Light Wounds |
+| 176 | Staff of Detect Invisible |
+| 177 | Staff of Speed |
+| 178 | Staff of Slowness |
+| 179 | Staff of Mass Polymorph |
+| 180 | Staff of Remove Curse |
+| 181 | Staff of Detect Evil |
+| 182 | Staff of Curing |
+| 183 | Staff of Dispel Evil |
+| 184 | Staff of Darkness |
+| 185 | Staff of Darkness |
+| 186 | Spellbook Beginners-Magick |
+| 187 | Spellbook Magick I |
+| 188 | Spellbook Magick II |
+| 189 | Spellbook The Mages Guide to Power |
+| 190 | Holy Book of Prayers Beginners Handbook |
+| 191 | Holy Book of Prayers Words of Wisdom |
+| 192 | Holy Book of Prayers Chants and Blessings |
+| 193 | Holy Book of Prayers Exorcism |
+| 194 | Brass Lantern |
+| 195 | Wooden Torch |
+| 196 | Flask of Oil |
+| 197 | Iron Spike |
+| 198 | Pick |
+| 199 | Shovel |
+| 200 | Orcish Pick |
+| 201 | Dwarven Pick |
+| 202 | Gnomish Shovel |
+| 203 | Dwarven Shovel |
+| 204 | Small Wooden Chest |
+| 205 | Large Wooden Chest |
+| 206 | Small Iron Chest |
+| 207 | Large Iron Chest |
+| 208 | Small Steel Chest |
+| 209 | Large Steel Chest |
+| 210 | Ruined Chest |
+| 211 | Cloak |
+| 212 | Robe |
+| 213 | Leather Armor |
+| 214 | Studded Leather Armor |
+| 215 | Hard Leather Armor |
+| 216 | Hard Studded Leather |
+| 217 | Woven Cord Armor |
+| 218 | Soft Leather Ring Mail |
+| 219 | Hard Leather Ring Mail |
+| 220 | Leather Scale Mail |
+| 221 | Filthy Rags |
+| 222 | Scale Mail |
+| 223 | Chain Mail |
+| 224 | Rusty Chain Mail |
+| 225 | Double Chain Mail |
+| 226 | Augmented Chain Mail |
+| 227 | Bar Chain Mail |
+| 228 | Metal Brigandine Armor |
+| 229 | Laminated Armor |
+| 230 | Partial Plate Armor |
+| 231 | Metal Lamellar Armor |
+| 232 | Plate Mail |
+| 233 | Ribbed Plate Armor |
+| 234 | Short Bow |
+| 235 | Long Bow |
+| 236 | Composite Bow |
+| 237 | Light Crossbow |
+| 238 | Heavy Crossbow |
+| 239 | Sling |
+| 240 | Arrow |
+| 241 | Bolt |
+| 242 | Rock |
+| 243 | Iron Shot |
+| 244 | Soft Leather Cap |
+| 245 | Hard Leather Cap |
+| 246 | Metal Cap |
+| 247 | Iron Helm |
+| 248 | Steel Helm |
+| 249 | Silver Crown |
+| 250 | Golden Crown |
+| 251 | Jewel Encrusted Crown |
+| 252 | Leather Boots |
+| 253 | Soft Leather Boots |
+| 254 | Hard Leather Boots |
+| 255 | Leather Gloves |
+| 256 | Gauntlets |
+| 257 | Small Shield |
+| 258 | Medium Leather Shield |
+| 259 | Large Shield |
+| 260 | Small Metal Shield |
+| 261 | Medium Metal Shield |
+| 262 | Large Metal Shield |
+| 263 | Main Gauche |
+| 264 | Dagger (Misericorde) |
+| 265 | Dagger |
+| 266 | Dagger (Bodkin) |
+| 267 | Broken Dagger |
+| 268 | Backsword |
+| 269 | Bastard Sword |
+| 270 | Thrusting Sword (Bilbo) |
+| 271 | Thrusting Sword (Baselard) |
+| 272 | Broad Sword |
+| 273 | Two-Handed Sword |
+| 274 | Cutlass |
+| 275 | Two-Handed Sword (Espadon) |
+| 276 | Executioner's Sword |
+| 277 | Two-Handed Sword (Flamberge) |
+| 278 | Foil |
+| 279 | Katana |
+| 280 | Long Sword |
+| 281 | Two-Handed Sword (No-Dachi) |
+| 282 | Rapier |
+| 283 | Sabre |
+| 284 | Short Sword |
+| 285 | Two-Handed Sword (Zweihander) |
+| 286 | Broken Sword |
+| 287 | Battle Axe (Balestarius) |
+| 288 | Ball and Chain |
+| 289 | Battle Axe |
+| 290 | Broad Axe |
+| 291 | Cat-o'-Nine-Tails |
+| 292 | Wooden Club |
+| 293 | Flail |
+| 294 | Two-Handed Great Flail |
+| 295 | Morningstar |
+| 296 | Mace |
+| 297 | War Hammer |
+| 298 | Mace (Lead-Filled) |
+| 299 | Awl-Pike |
+| 300 | Beaked Axe |
+| 301 | Fauchard |
+| 302 | Glaive |
+| 303 | Halberd |
+| 304 | Lucerne Hammer |
+| 305 | Pike |
+| 306 | Spear |
+| 307 | Lance |
+| 308 | Javelin |
+| 309 | Ring of Strength |
+| 310 | Ring of Gain Dexterity |
+| 311 | Ring of Gain Constitution |
+| 312 | Ring of Gain Intelligence |
+| 313 | Ring of Speed |
+| 314 | Ring of Searching |
+| 315 | Ring of Teleportation |
+| 316 | Ring of Slow Digestion |
+| 317 | Ring of Resist Fire |
+| 318 | Ring of Resist Cold |
+| 319 | Ring of Feather Falling |
 | 320 | Ring of Adornment |
 | 321 | Ring of Adornment |
-| 322 | Ring of Feather Falling |
-| 323 | Ring of Searching |
-| 324 | Ring of Slow Digestion |
-| 325 | Ring of Sustain Charisma |
-| 326 | Ring of Stupidity |
-| 327 | Ring of Increase Damage |
-| 328 | Ring of Increase To-Hit |
-| 329 | Ring of Gain Intelligence |
-| 330 | Ring of Gain Dexterity |
-| 331 | Ring of Gain Constitution |
-| 332 | Ring of Sustain Intelligence |
-| 333 | Ring of Sustain Wisdom |
-| 334 | Ring of Sustain Strength |
-| 335 | Ring of Sustain Constitution |
-| 336 | Ring of Sustain Dexterity |
-| 337 | Ring of WOE |
-| 338 | Wand of Heal Monster |
-| 339 | Wand of Haste Monster |
-| 340 | Wand of Clone Monster |
-| 341 | Wand of Magic Missile |
-| 342 | Wand of Wonder |
-| 343 | Wand of Confuse Monster |
-| 344 | Wand of Sleep Monster |
-| 345 | Wand of Trap/Door Destruction |
-| 346 | Wand of Polymorph |
-| 347 | Wand of Disarming |
-| 348 | Wand of Wall Building |
-| 349 | Staff of Treasure Location |
-| 350 | Staff of Object Location |
-| 351 | Staff of Detect Invisible |
-| 352 | Staff of Summoning |
-| 353 | Staff of Haste Monsters |
-| 354 | Staff of Door/Stair Location |
-| 355 | Staff of Trap Location |
-| 356 | Staff of Sleep Monsters |
-| 357 | Staff of Slow Monsters |
-| 358 | Staff of Detect Evil |
-| 359 | Staff of Starlite |
-| 360 | Staff of Curing |
-| 361 | Staff of Slowness |
-| 362 | Staff of Earthquakes |
-| 363 | Staff of Mass Polymorph |
-| 364 | Staff of Darkness |
-| 365 | Piece of Elvish Waybread |
-| 366 | Scroll of Trap Detection |
-| 367 | Scroll of Door/Stair Location |
-| 368 | Staff of Summoning |
-| 369 | Staff of Darkness |
+| 322 | Ring of Weakness |
+| 323 | Ring of Lordly Protection (Fire) |
+| 324 | Ring of Lordly Protection (Acid) |
+| 325 | Ring of Lordly Protection (Cold) |
+| 326 | Ring of WOE |
+| 327 | Ring of Stupidity |
+| 328 | Ring of Increase Damage |
+| 329 | Ring of Increase To-Hit |
+| 330 | Ring of Protection |
+| 331 | Ring of Aggravate Monster |
+| 332 | Ring of See Invisible |
+| 333 | Ring of Sustain Strength |
+| 334 | Ring of Sustain Intelligence |
+| 335 | Ring of Sustain Wisdom |
+| 336 | Ring of Sustain Constitution |
+| 337 | Ring of Sustain Dexterity |
+| 338 | Ring of Sustain Charisma |
+| 339 | Ring of Slaying |
+| 340 | Amulet of Adornment |
+| 341 | Amulet of Adornment |
+| 342 | Amulet of Wisdom |
+| 343 | Amulet of Charisma |
+| 344 | Amulet of Searching |
+| 345 | Amulet of Teleportation |
+| 346 | Amulet of Slow Digestion |
+| 347 | Amulet of Resist Acid |
+| 348 | Amulet of the Magi |
+| 349 | Amulet of DOOM |
+| 350 | Rat Skeleton |
+| 351 | Giant Centipede Skeleton |
+| 352 | Empty Bottle |
+| 353 | Shards of Pottery |
+| 354 | Human Skeleton |
+| 355 | Dwarf Skeleton |
+| 356 | Elf Skeleton |
+| 357 | Gnome Skeleton |
+| 358 | Broken Set of Teeth |
+| 359 | Large Broken Bone |
+| 360 | Broken Stick |
 
 ## Source References
 
 - Wizard command dispatch: `core/wizard.s`
 - Wizard UI menu: `core/ui_wizard.s`
-- Item IDs (core runtime): `core/item_tables.s`
-- Item catalog (full `0-369` spec & generated tables): `platforms/shared/item_catalog/item_catalog_spec.json`, `platforms/shared/item_catalog/item_hot_tables.s`
+- Symbolic Item IDs: `platforms/shared/item_catalog/item_ids.s`, `tools/item_ids.py`, `core/item_defs.s`
+- Item catalog (full `0-360` VMS spec & generated tables): `platforms/shared/item_catalog/item_catalog_spec.json`, `platforms/shared/item_catalog/item_hot_tables.s`

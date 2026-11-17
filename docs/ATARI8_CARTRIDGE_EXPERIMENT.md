@@ -4,7 +4,7 @@
 
 `build/moria8-atari8.car` packages Moria8 for the **Atari 800XL / 65XE / 130XE** as a read-only **128 KB AtariMax MaxFlash cartridge** (`.car` Type `41`, 16 × 8 KB banks, raw ROM `build/atari8-cart/moria8-atari8.bin`, manifest `build/atari8-cart/moria8-atari8.json`).
 
-- **No flash saves**: Save files, loads, and high scores remain on DOS 2.5 floppy images (`D1:`–`D4:`, HAL devices `8..11`), sharing `SAVE_VERSION = $18` bidirectionally with `build/moria8-atari8.atr`.
+- **No flash saves**: Save files, loads, and high scores remain on DOS 2.5 floppy images (`D1:`–`D4:`, HAL devices `8..11`), sharing `SAVE_VERSION = $22` bidirectionally with `build/moria8-atari8.atr`.
 - **Zero disk-build impact**: Assembling without `-define ATARI8_CARTRIDGE` produces the byte-identical `build/moria8-atari8.atr` release image.
 - **No external release promotion**: `make disk` / `RELEASE_ARTIFACTS` remain untouched until explicitly requested; `make build` / `make cartridgeatari8` builds the `.car`, raw `.bin`, and `.json` manifest.
 - **Standalone legal viewing (Rule 7)**: `data/LICENSE` and `data/SOURCE-OFFER` are embedded in cartridge ROM and served through Title `A` (`About`) and Help `L` with zero floppies attached.

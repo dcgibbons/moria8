@@ -103,7 +103,7 @@ item_pickup_cache_get_weight_x:
     rts
 
 // item_pickup_cache_decode_entry_at_dst — Cached item_cat_decode_entry_at_dst
-// keyed by immutable 16-bit icat_str_id (0..369 item, 370..424 ego, 425..598 flavour).
+// keyed by immutable 16-bit icat_str_id (0..360 item, 361..415 ego, 416..589 flavour).
 // Output: zp_ptr0/hi -> item_name_decode_buf (NUL-terminated). Preserves: X.
 item_pickup_cache_decode_entry_at_dst:
     ldy item_name_dst_idx
@@ -338,8 +338,9 @@ ipc_check_non_gold_ay:
     and #ITEM_PAGE_BIT
     sta item_cur_page
     bne !ipcc_ok+
+    .assert "All 20 gold types occupy Page 0 0..19", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_MITHRIL == 19 && ITEM_PAGE_GOLD_MITHRIL == 0, true
     lda ipc_warm_id
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     rts
 !ipcc_ok:
     sec

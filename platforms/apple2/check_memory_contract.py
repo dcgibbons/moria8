@@ -14,6 +14,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import build_catalog  # noqa: E402
+import check_item_catalog_ports  # noqa: E402
 
 BUILD = ROOT / "build" / "apple2"
 MAIN_SYM = BUILD / "main.sym"
@@ -219,6 +220,12 @@ def check_artifacts() -> int:
             )
         print(f"ASSERT MORIA8.PAK PASS {pak[0]} entries {len(pak)}B")
         checks += 1
+
+    cat_errs = check_item_catalog_ports.verify_port("apple2")
+    if cat_errs:
+        raise ContractViolation("item catalog 0..360 check failed: " + "; ".join(cat_errs[:4]))
+    print("ASSERT item-catalog-0..360 PASS 361 items")
+    checks += 1
 
     print(f"RESULT {checks} asserts 0 failures")
     return 0

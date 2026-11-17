@@ -10,6 +10,7 @@
 #import "generation_busy_api.s"
 #import "platform_services_api.s"
 #import "input_ui_helpers.s"
+#import "../platforms/shared/item_catalog/item_ids.s"
 
 // MsgPrintStr — Print a NUL-terminated message string through zp_ptr0.
 // On Apple II the string may live in AUX (platform-externalized strings);
@@ -41,8 +42,12 @@ c128_test_seed_scroll_selector_state:
     lda #0
     sta c128_test_scroll_selector_return_pending
     sta c128_test_scroll_selector_return_count
-    lda #34                 // Enchant Weapon scroll
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
     sta inv_item_id + 2
+    .if (ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT != 0) {
+        lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+        sta inv_ego + 2
+    }
     lda #1
     sta inv_qty + 2
     lda #0
@@ -162,8 +167,12 @@ c64_test_seed_scroll_selector_state:
     sta c64_test_scroll_selector_return_count
     // Carried slot 3: the starting kit holds slots 0-2 (rations, book,
     // torches).
-    lda #34                 // Enchant Weapon scroll
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
     sta inv_item_id + 3
+    .if (ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT != 0) {
+        lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+        sta inv_ego + 3
+    }
     lda #1
     sta inv_qty + 3
     lda #0
@@ -2150,7 +2159,7 @@ save_product_seed_secondary:
     iny
     bcc !spss_loop-
     rts
-spss_fields: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+spss_fields: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED, ITEM_PAGE_DAGGER | EGO_DEFENDER
 #endif
 #if C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
 // Inventory cells the load smokes read after a resume (no bytes).
@@ -2199,8 +2208,8 @@ exchange_product_presses:         .byte 0
 exchange_product_refused_turns:   .byte $ff
 exchange_product_refused_primary: .byte $ff
 // id, qty, p1, to_hit, to_dam, to_ac, flags, ego
-xps_primary:   .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, 0
-xps_secondary: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+xps_primary:   .byte ITEM_SLOT_MACE, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, ITEM_PAGE_MACE
+xps_secondary: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED, ITEM_PAGE_DAGGER | EGO_DEFENDER
 .label exchange_product_primary_id   = inv_item_id + EQUIP_WEAPON
 .label exchange_product_primary_ego  = inv_ego + EQUIP_WEAPON
 .label exchange_product_secondary_id = inv_item_id + EQUIP_SECONDARY
@@ -2761,19 +2770,20 @@ roll_tool_ego_check:
 
 // ============================================================
 // put_tool_ego_prefix — Print ego prefix for digging tools
-// Input: A = ego (1 or 2), X = item type ID (62 or 63)
+// Input: A = ego (1 or 2), X = ITEM_SLOT_PICK or ITEM_SLOT_SHOVEL
 // Output: prefix string printed to screen (e.g., "Gnomish ")
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 put_tool_ego_prefix:
-    // Compute index = (type - 62) * 2 + (ego - 1)
+    .assert "Pick precedes Shovel on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0, true
+    // Compute index = (type - ITEM_SLOT_PICK) * 2 + (ego - 1)
     and #EGO_ID_MASK
     sec
     sbc #1                      // ego - 1 (0 or 1)
     sta ptep_temp
     txa
     sec
-    sbc #62                     // type - 62 (0=Shovel, 1=Pick)
+    sbc #ITEM_SLOT_PICK         // type - Pick (0=Pick, 1=Shovel)
     asl                         // * 2
     clc
     adc ptep_temp               // + (ego - 1) → index 0-3
@@ -2793,17 +2803,17 @@ ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
 ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
 
 // Prefix lookup table — indexed 0-3
-// Index: (type-62)*2 + (ego-1)
-//   0 = Shovel ego=1 → Gnomish
-//   1 = Shovel ego=2 → Dwarven
-//   2 = Pick ego=1   → Orcish
-//   3 = Pick ego=2   → Dwarven
+// Index: (type - ITEM_SLOT_PICK)*2 + (ego-1)
+//   0 = Pick ego=1   → Orcish
+//   1 = Pick ego=2   → Dwarven
+//   2 = Shovel ego=1 → Gnomish
+//   3 = Shovel ego=2 → Dwarven
 tool_ego_prefix_lo:
-    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
     .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
 tool_ego_prefix_hi:
-    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
 #endif
 
 // ============================================================

@@ -390,12 +390,13 @@ test_reset_recharge_state:
     rts
 
 test_seed_wand:
-    lda #39
+    lda #ITEM_SLOT_WAND_OF_LIGHT
     sta inv_item_id
     lda #1
     sta inv_qty
     lda #0
     sta inv_to_ac
+    lda #ITEM_PAGE_WAND_OF_LIGHT
     sta inv_ego
     lda #$fe
     sta inv_to_hit
@@ -449,7 +450,7 @@ test_start:
     cmp #17
     bne !t1_fail+
     lda inv_item_id
-    cmp #39
+    cmp #ITEM_SLOT_WAND_OF_LIGHT
     bne !t1_fail+
     lda inv_p1
     cmp #5
@@ -466,6 +467,7 @@ test_start:
     cmp #IF_IDENTIFIED
     bne !t1_fail+
     lda inv_ego
+    cmp #ITEM_PAGE_WAND_OF_LIGHT
     bne !t1_fail+
     lda test_success_msg_calls
     cmp #1
@@ -548,7 +550,7 @@ test_after_none:
     cmp #HSTR_PM_FAIL
     bne !t3_fail+
     lda inv_item_id
-    cmp #39
+    cmp #ITEM_SLOT_WAND_OF_LIGHT
     bne !t3_fail+
     lda inv_p1
     cmp #1

@@ -150,7 +150,7 @@ test_pmu_create_food:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     sta fi_add_id
     lda #0
     sta fi_add_qty_hi
@@ -300,7 +300,7 @@ test_seed_underfoot_item:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -388,7 +388,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t1_fail+
     lda fi_item_id,x
-    cmp #15
+    cmp #ITEM_SLOT_RATION_OF_FOOD
     bne !t1_fail+
     lda vis_room_revealed
     cmp #1

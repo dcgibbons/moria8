@@ -487,7 +487,7 @@ test_start:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -529,7 +529,7 @@ test_start:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -553,7 +553,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t4_fail+
     lda fi_item_id,x
-    cmp #15
+    cmp #ITEM_SLOT_RATION_OF_FOOD
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
@@ -916,7 +916,7 @@ test_start:
     sta fi_add_x
     lda #11
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty

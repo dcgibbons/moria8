@@ -1,10 +1,10 @@
 #importonce
-// eff_item_p1.s — Page 1 Scroll, Wand, and Staff effect dispatcher & handlers
+// eff_item_p1.s — Extended Scroll, Wand, and Staff effect dispatcher & handlers
 //
 // Imported into HomeOverlay on ports that define HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
 // (reached via tramp_eff_item_p1 from scroll_effects_p3.s), or directly into
 // scroll_effects_p3.s otherwise. Calls ONLY resident core helpers so overlay
-// swaps never evict the running handler (Staff of Earthquakes #362 is routed
+// swaps never evict the running handler (Staff of Earthquakes is routed
 // before entering eff_item_p1_exec inside scroll_effects_p3.s).
 //
 // Zero new ZP variables, zero new Huffman strings.
@@ -17,79 +17,80 @@ ep1_x:    .byte 0
 ep1_y:    .byte 0
 ep1_tmp:  .byte 0
 
-// eff_item_p1_exec — Entry point reading piw_item_id (slot_lo on Page 1).
+// eff_item_p1_exec — Entry point reading piw_item_id (slot_lo on Page 0: 95..185).
 // Preserves no registers; sets vis_room_revealed/zp_dirty_count as needed.
 eff_item_p1_exec:
     lda piw_item_id
 
-// ep1_run_slot — Dispatch Page 1 scroll/wand/staff slot_lo in A.
-// Covers 40..61 (#295..316 -> idx 0..21) and 83..114 (#338..369 -> idx 22..53).
+// ep1_run_slot — Dispatch Page 0 scroll/wand/staff slot_lo in A (52 handlers).
+.assert "All eff_item_p1 scrolls, wands, and staves live on Page 0", ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT == 0 && ITEM_PAGE_STAFF_OF_DARKNESS_L5 == 0, true
 ep1_run_slot:
-    cmp #40
-    bcc !ep1_ret+
-    cmp #62
-    bcc !ep1_grp1+
-    cmp #83
-    bcc !ep1_ret+
-    cmp #115
-    bcs !ep1_ret+
-    sec
-    sbc #83 - 22                    // 83..114 -> 22..53
-    bpl !ep1_jump+                  // always < 54
-!ep1_grp1:
-    sec
-    sbc #40                         // 40..61 -> 0..21
+    ldx #51
+!ep1_scan:
+    cmp ep1_slot_ids,x
+    beq !ep1_jump+
+    dex
+    bpl !ep1_scan-
+    rts
 !ep1_jump:
-    tax
     lda ep1_tbl_lo,x
     sta zp_ptr1
     lda ep1_tbl_hi,x
     sta zp_ptr1_hi
     jmp (zp_ptr1)
-!ep1_ret:
-ep1_ret:
-    rts
 
+ep1_slot_ids:
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT, ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_DAM, ITEM_SLOT_SCROLL_OF_SUMMON_MONSTER
+    .byte ITEM_SLOT_SCROLL_OF_SLEEP_MONSTER, ITEM_SLOT_SCROLL_OF_TREASURE_DETECTION, ITEM_SLOT_SCROLL_OF_TRAP_DETECTION_L5
+    .byte ITEM_SLOT_SCROLL_OF_TRAP_DETECTION_L12, ITEM_SLOT_SCROLL_OF_DOOR_STAIR_LOCATION_L5, ITEM_SLOT_SCROLL_OF_DOOR_STAIR_LOCATION_L15
+    .byte ITEM_SLOT_SCROLL_OF_DETECT_INVISIBLE, ITEM_SLOT_SCROLL_OF_TRAP_CREATION, ITEM_SLOT_SCROLL_OF_TRAP_DOOR_DESTRUCTION
+    .byte ITEM_SLOT_SCROLL_OF_DOOR_CREATION, ITEM_SLOT_SCROLL_OF_DARKNESS, ITEM_SLOT_SCROLL_OF_CREATE_FOOD
+    .byte ITEM_SLOT_SCROLL_OF_DISPEL_UNDEAD, ITEM_SLOT_SCROLL_OF_STAR_ENCHANT_WEAPON, ITEM_SLOT_SCROLL_OF_CURSE_WEAPON
+    .byte ITEM_SLOT_SCROLL_OF_STAR_ENCHANT_ARMOR, ITEM_SLOT_SCROLL_OF_CURSE_ARMOR, ITEM_SLOT_SCROLL_OF_SUMMON_UNDEAD
+    .byte ITEM_SLOT_SCROLL_OF_BLESSING, ITEM_SLOT_SCROLL_OF_HOLY_CHANT, ITEM_SLOT_SCROLL_OF_HOLY_PRAYER
+    .byte ITEM_SLOT_WAND_OF_POLYMORPH, ITEM_SLOT_WAND_OF_HEAL_MONSTER, ITEM_SLOT_WAND_OF_HASTE_MONSTER
+    .byte ITEM_SLOT_WAND_OF_CONFUSE_MONSTER, ITEM_SLOT_WAND_OF_SLEEP_MONSTER, ITEM_SLOT_WAND_OF_TRAP_DOOR_DESTRUCTION
+    .byte ITEM_SLOT_WAND_OF_MAGIC_MISSILE, ITEM_SLOT_WAND_OF_WALL_BUILDING, ITEM_SLOT_WAND_OF_CLONE_MONSTER
+    .byte ITEM_SLOT_WAND_OF_DISARMING, ITEM_SLOT_WAND_OF_WONDER, ITEM_SLOT_STAFF_OF_DOOR_STAIR_LOCATION
+    .byte ITEM_SLOT_STAFF_OF_TRAP_LOCATION, ITEM_SLOT_STAFF_OF_TREASURE_LOCATION, ITEM_SLOT_STAFF_OF_OBJECT_LOCATION
+    .byte ITEM_SLOT_STAFF_OF_SUMMONING_L10, ITEM_SLOT_STAFF_OF_SUMMONING_L50, ITEM_SLOT_STAFF_OF_STARLITE
+    .byte ITEM_SLOT_STAFF_OF_HASTE_MONSTERS, ITEM_SLOT_STAFF_OF_SLOW_MONSTERS, ITEM_SLOT_STAFF_OF_SLEEP_MONSTERS
+    .byte ITEM_SLOT_STAFF_OF_DETECT_INVISIBLE, ITEM_SLOT_STAFF_OF_SLOWNESS, ITEM_SLOT_STAFF_OF_MASS_POLYMORPH
+    .byte ITEM_SLOT_STAFF_OF_DETECT_EVIL, ITEM_SLOT_STAFF_OF_CURING, ITEM_SLOT_STAFF_OF_DARKNESS_L50
+    .byte ITEM_SLOT_STAFF_OF_DARKNESS_L5
 ep1_tbl_lo:
-    // 40..61: Scrolls #295..316
-    .byte <ep1_detect_treasure, <ep1_summon_one, <ep1_darkness, <ep1_blessing
-    .byte <ep1_detect_invis, <ep1_create_food, <ep1_sleep_adj, <ep1_find_traps
-    .byte <ep1_find_doors_stairs, <ep1_create_traps, <ep1_holy_chant, <ep1_destroy_td_area
-    .byte <ep1_create_doors, <ep1_ench_wpn_hit, <ep1_ench_wpn_dam, <ep1_summon_undead
-    .byte <ep1_holy_prayer, <ep1_dispel_undead, <ep1_curse_weapon, <ep1_curse_armor
-    .byte <ep1_ench_wpn_star, <ep1_ench_arm_star
-    // 83..114: Wands #338..348, Staves #349..364, Food #365 (nop), Dup #366..369
-    .byte <ep1_wand_heal, <ep1_wand_haste, <ep1_wand_clone, <ep1_wand_missile
-    .byte <ep1_wand_wonder, <ep1_wand_confuse, <ep1_wand_sleep, <ep1_wand_td_destr
-    .byte <ep1_wand_polymorph, <ep1_wand_disarm, <ep1_wand_wall
-    .byte <ep1_detect_treasure, <ep1_detect_objects, <ep1_detect_invis, <ep1_summon_many
-    .byte <ep1_staff_haste, <ep1_find_doors_stairs, <ep1_find_traps, <ep1_sleep_all
-    .byte <ep1_staff_slow, <ep1_detect_evil, <ep1_starlite, <ep1_curing
-    .byte <ep1_slowness, <ep1_ret, <ep1_mass_polymorph, <ep1_darkness
-    .byte <ep1_ret, <ep1_find_traps, <ep1_find_doors_stairs, <ep1_summon_many
-    .byte <ep1_darkness
-
+    .byte <ep1_ench_wpn_hit, <ep1_ench_wpn_dam, <ep1_summon_one, <ep1_sleep_adj
+    .byte <ep1_detect_treasure, <ep1_find_traps, <ep1_find_traps, <ep1_find_doors_stairs
+    .byte <ep1_find_doors_stairs, <ep1_detect_invis, <ep1_create_traps, <ep1_destroy_td_area
+    .byte <ep1_create_doors, <ep1_darkness, <ep1_create_food, <ep1_dispel_undead
+    .byte <ep1_ench_wpn_star, <ep1_curse_weapon, <ep1_ench_arm_star, <ep1_curse_armor
+    .byte <ep1_summon_undead, <ep1_blessing, <ep1_holy_chant, <ep1_holy_prayer
+    .byte <ep1_wand_polymorph, <ep1_wand_heal, <ep1_wand_haste, <ep1_wand_confuse
+    .byte <ep1_wand_sleep, <ep1_wand_td_destr, <ep1_wand_missile, <ep1_wand_wall
+    .byte <ep1_wand_clone, <ep1_wand_disarm, <ep1_wand_wonder, <ep1_find_doors_stairs
+    .byte <ep1_find_traps, <ep1_detect_treasure, <ep1_detect_objects, <ep1_summon_many
+    .byte <ep1_summon_many, <ep1_starlite, <ep1_staff_haste, <ep1_staff_slow
+    .byte <ep1_sleep_all, <ep1_detect_invis, <ep1_slowness, <ep1_mass_polymorph
+    .byte <ep1_detect_evil, <ep1_curing, <ep1_darkness, <ep1_darkness
 ep1_tbl_hi:
-    // 40..61: Scrolls #295..316
-    .byte >ep1_detect_treasure, >ep1_summon_one, >ep1_darkness, >ep1_blessing
-    .byte >ep1_detect_invis, >ep1_create_food, >ep1_sleep_adj, >ep1_find_traps
-    .byte >ep1_find_doors_stairs, >ep1_create_traps, >ep1_holy_chant, >ep1_destroy_td_area
-    .byte >ep1_create_doors, >ep1_ench_wpn_hit, >ep1_ench_wpn_dam, >ep1_summon_undead
-    .byte >ep1_holy_prayer, >ep1_dispel_undead, >ep1_curse_weapon, >ep1_curse_armor
-    .byte >ep1_ench_wpn_star, >ep1_ench_arm_star
-    // 83..114: Wands #338..348, Staves #349..364, Food #365 (nop), Dup #366..369
-    .byte >ep1_wand_heal, >ep1_wand_haste, >ep1_wand_clone, >ep1_wand_missile
-    .byte >ep1_wand_wonder, >ep1_wand_confuse, >ep1_wand_sleep, >ep1_wand_td_destr
-    .byte >ep1_wand_polymorph, >ep1_wand_disarm, >ep1_wand_wall
-    .byte >ep1_detect_treasure, >ep1_detect_objects, >ep1_detect_invis, >ep1_summon_many
-    .byte >ep1_staff_haste, >ep1_find_doors_stairs, >ep1_find_traps, >ep1_sleep_all
-    .byte >ep1_staff_slow, >ep1_detect_evil, >ep1_starlite, >ep1_curing
-    .byte >ep1_slowness, >ep1_ret, >ep1_mass_polymorph, >ep1_darkness
-    .byte >ep1_ret, >ep1_find_traps, >ep1_find_doors_stairs, >ep1_summon_many
-    .byte >ep1_darkness
+    .byte >ep1_ench_wpn_hit, >ep1_ench_wpn_dam, >ep1_summon_one, >ep1_sleep_adj
+    .byte >ep1_detect_treasure, >ep1_find_traps, >ep1_find_traps, >ep1_find_doors_stairs
+    .byte >ep1_find_doors_stairs, >ep1_detect_invis, >ep1_create_traps, >ep1_destroy_td_area
+    .byte >ep1_create_doors, >ep1_darkness, >ep1_create_food, >ep1_dispel_undead
+    .byte >ep1_ench_wpn_star, >ep1_curse_weapon, >ep1_ench_arm_star, >ep1_curse_armor
+    .byte >ep1_summon_undead, >ep1_blessing, >ep1_holy_chant, >ep1_holy_prayer
+    .byte >ep1_wand_polymorph, >ep1_wand_heal, >ep1_wand_haste, >ep1_wand_confuse
+    .byte >ep1_wand_sleep, >ep1_wand_td_destr, >ep1_wand_missile, >ep1_wand_wall
+    .byte >ep1_wand_clone, >ep1_wand_disarm, >ep1_wand_wonder, >ep1_find_doors_stairs
+    .byte >ep1_find_traps, >ep1_detect_treasure, >ep1_detect_objects, >ep1_summon_many
+    .byte >ep1_summon_many, >ep1_starlite, >ep1_staff_haste, >ep1_staff_slow
+    .byte >ep1_sleep_all, >ep1_detect_invis, >ep1_slowness, >ep1_mass_polymorph
+    .byte >ep1_detect_evil, >ep1_curing, >ep1_darkness, >ep1_darkness
+.assert "ep1_slot_ids/lo/hi have 52 entries each", (ep1_tbl_lo - ep1_slot_ids == 52) && (ep1_tbl_hi - ep1_tbl_lo == 52) && (* - ep1_tbl_hi == 52), true
 
 // ============================================================
-// Detection: Treasure (#295/#349) & Objects (#350)
+// Detection: Treasure (Scroll of Treasure Detection, Staff of Treasure
+// Location) & Objects (Staff of Object Location)
 // ============================================================
 ep1_detect_treasure:
     lda #1
@@ -130,7 +131,7 @@ ep1_detect_objects:
     jmp huff_print_msg
 
 // ============================================================
-// Detect Invisible (#299/#351) & Create Food (#300)
+// Detect Invisible (Scroll/Staff of Detect Invisible) & Create Food (Scroll)
 // ============================================================
 ep1_detect_invis:
     lda #24
@@ -157,7 +158,7 @@ ep1_create_food:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #15                         // Ration of Food (Page 0)
+    lda #ITEM_SLOT_RATION_OF_FOOD   // Ration of Food (Page 0)
     sta fi_add_id
     jsr fi_add_clear_plain_meta
     lda #1
@@ -172,7 +173,7 @@ ep1_create_food:
     rts
 
 // ============================================================
-// Blessing (#298), Holy Chant (#305), Holy Prayer (#311)
+// Scrolls of Blessing, Holy Chant, and Holy Prayer
 // ============================================================
 ep1_blessing:
     lda #6
@@ -217,7 +218,7 @@ ep1_add_bless:
     rts
 
 // ============================================================
-// Darkness (#297/#364/#369)
+// Darkness (Scroll of Darkness, Staff of Darkness L5/L50)
 // ============================================================
 ep1_darkness:
     // Clear room light if in a room, otherwise 3x3 around player
@@ -320,7 +321,8 @@ ep1_darkness:
     rts
 
 // ============================================================
-// Trap & Door/Stair Detection (#302/#355/#366 & #303/#354/#367)
+// Trap Detection (Scroll L5/L12, Staff of Trap Location) & Door/Stair
+// Location (Scroll L5/L15, Staff of Door/Stair Location)
 // ============================================================
 ep1_find_traps:
     lda #0
@@ -395,7 +397,7 @@ ep1_find_doors_stairs:
     jmp huff_print_msg
 
 // ============================================================
-// Trap Creation (#304), Door Creation (#307), Trap/Door Destruction (#306/#345)
+// Trap Creation, Door Creation, Trap/Door Destruction (Scroll and Wand)
 // ============================================================
 ep1_create_traps:
     lda #0
@@ -581,7 +583,8 @@ ep1_disarm_tile:
     rts
 
 // ============================================================
-// Weapon & Armor Enchantment / Curses (#308/#309/#313/#314/#315/#316)
+// Weapon & Armor Enchantment / Curses (Enchant Weapon To-Hit/To-Dam,
+// *Enchant Weapon*, *Enchant Armor*, Curse Weapon, Curse Armor scrolls)
 // ============================================================
 ep1_ench_wpn_hit:
     lda #1
@@ -639,6 +642,14 @@ ep1_ench_wpn_star:
     sta piw_recalc_pending
 #else
     jsr player_recalc_equipment
+#endif
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+    lda #8
+    sta c64_test_scroll_selector_return_pending
+#endif
+#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
+    lda #8
+    sta c128_test_scroll_selector_return_pending
 #endif
     ldx #HSTR_PIQ_WPN_GLOW
     jmp huff_print_msg
@@ -805,7 +816,8 @@ ep1_pick_armor_cursed_or_rand:
     rts
 
 // ============================================================
-// Summoning (#296, #310, #352/#368) & Dispel Undead (#312)
+// Summoning (Scroll of Summon Monster/Undead, Staff of Summoning L10/L50)
+// & Dispel Undead (Scroll)
 // ============================================================
 ep1_summon_one:
     lda #1
@@ -923,7 +935,7 @@ ep1_dispel_undead:
 !ep1_hvf_ret:
     rts
 
-// Starlite (#359): light room + 2d8 light damage to CD_LIGHT monsters
+// Staff of Starlite: light room + 2d8 light damage to CD_LIGHT monsters
 ep1_starlite:
     jsr eff_light_room
     ldx #HSTR_PIQ_LIGHT
@@ -1143,7 +1155,7 @@ ep1_mass_polymorph:
     rts
 
 // ============================================================
-// Page 1 Wands (#338..#348)
+// Wands (Wand of Polymorph .. Wand of Wonder in ep1_slot_ids)
 // ============================================================
 ep1_wand_missile:
     lda #2
@@ -1382,7 +1394,12 @@ ep1_wand_wall:
     rts
 
 ep1_wonder_slots:
-    .byte 83, 84, 85, 86, 88, 89, 90, 91, 92, 93
+    .byte ITEM_SLOT_WAND_OF_HEAL_MONSTER, ITEM_SLOT_WAND_OF_HASTE_MONSTER
+    .byte ITEM_SLOT_WAND_OF_CLONE_MONSTER, ITEM_SLOT_WAND_OF_MAGIC_MISSILE
+    .byte ITEM_SLOT_WAND_OF_CONFUSE_MONSTER, ITEM_SLOT_WAND_OF_SLEEP_MONSTER
+    .byte ITEM_SLOT_WAND_OF_TRAP_DOOR_DESTRUCTION, ITEM_SLOT_WAND_OF_POLYMORPH
+    .byte ITEM_SLOT_WAND_OF_DISARMING, ITEM_SLOT_WAND_OF_WALL_BUILDING
+.assert "ep1_wonder_slots has 10 Page-0 wand entries", (* - ep1_wonder_slots == 10) && ITEM_PAGE_WAND_OF_HEAL_MONSTER == 0 && ITEM_PAGE_WAND_OF_WALL_BUILDING == 0, true
 
 ep1_wand_wonder:
     lda #13

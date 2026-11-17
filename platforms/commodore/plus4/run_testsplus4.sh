@@ -382,6 +382,26 @@ PY
     fi
 }
 
+run_plus4_item_catalog_contract() {
+    local name="plus4_item_catalog_contract"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    local check_out
+    if make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" buildplus4 >/dev/null && \
+        check_out=$(python3 -B "$REPO_ROOT/tools/check_item_catalog_ports.py" --port plus4 --if-built c64 2>&1); then
+        echo "PASS: $name"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL: $name"
+        echo "${check_out:-buildplus4 failed}" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_boot_title_smoke() {
     local name="boot_title_plus4"
     local out_dir="$PLUS4_TEST_OUT"
@@ -809,6 +829,9 @@ run_exchange_product_smoke() {
         return
     fi
 
+    local mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex
+    read -r mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex < <(python3 -B -c 'import sys; sys.path.insert(0, "'"$REPO_ROOT"'/tools"); from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER, ITEM_SLOT_MACE; print(f"0x{ITEM_SLOT_MACE:02x} 0x{ITEM_SLOT_DAGGER:02x} 0x{ITEM_PAGE_DAGGER | 6:02x} 0x{FI_EMPTY:02x}")')
+
     if python3 -u tests/product_scripted_smoke.py \
         --name "$name" \
         --pass-symbol ".plus4_test_script_exhausted_wait" \
@@ -818,12 +841,12 @@ run_exchange_product_smoke() {
         --boot-d64 "$boot_d64" \
         --expect-byte-symbol ".exchange_product_presses=0x02" \
         --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
-        --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
-        --expect-byte-symbol ".exchange_product_primary_id=0x02" \
-        --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
-        --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+        --expect-byte-symbol ".exchange_product_refused_primary=${mace_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_id=${dagger_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_ego=${dagger_def_ego_hex}" \
+        --expect-byte-symbol ".exchange_product_secondary_id=${mace_slot_hex}" \
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-        --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
+        --expect-byte-symbol ".exchange_product_ring2_id=${empty_hex}" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
         --expect-byte-symbol ".current_overlay=0x07" \
         --expect-byte-symbol ".exchange_product_r0c0=0x50" \
@@ -902,6 +925,9 @@ run_chest_open_product_smoke() {
         return
     fi
 
+    local chest_slot_hex
+    chest_slot_hex="$(python3 -B -c 'import sys; sys.path.insert(0, "'"$REPO_ROOT"'/tools"); from item_ids import ITEM_SLOT_LARGE_WOODEN_CHEST as s; print(f"0x{s:02x}")')"
+
     if python3 -u tests/product_scripted_smoke.py \
         --name "$name" \
         --pass-symbol ".plus4_test_script_exhausted_wait" \
@@ -917,7 +943,7 @@ run_chest_open_product_smoke() {
         --expect-byte-symbol ".chest_loot_pending=0x00" \
         --expect-byte-symbol ".chest_pending_summons=0x00" \
         --expect-byte-symbol ".current_overlay=0x0a" \
-        --expect-byte-symbol ".fi_item_id=0x81" \
+        --expect-byte-symbol ".fi_item_id=${chest_slot_hex}" \
         --expect-byte-symbol ".fi_p1=0x80" \
         --expect-byte-symbol ".zp_player_dlvl=0x01" \
         --timeout 30 \
@@ -1690,6 +1716,9 @@ plus4_load_written_save_check() {
         echo "FAIL: $load_name (product disk image)"
         return 1
     fi
+    local dagger_slot_hex dagger_def_ego_hex empty_hex
+    read -r dagger_slot_hex dagger_def_ego_hex empty_hex < <(python3 -B -c 'import sys; sys.path.insert(0, "'"$REPO_ROOT"'/tools"); from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER; print(f"0x{ITEM_SLOT_DAGGER:02x} 0x{ITEM_PAGE_DAGGER | 6:02x} 0x{FI_EMPTY:02x}")')
+
     if ! python3 -u tests/product_scripted_smoke.py \
         --name "$load_name" \
         --pass-symbol ".main_loop" \
@@ -1697,12 +1726,12 @@ plus4_load_written_save_check() {
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
         --enable-drive9-bus \
-        --expect-byte-symbol ".save_product_secondary_id=0x02" \
+        --expect-byte-symbol ".save_product_secondary_id=${dagger_slot_hex}" \
         --expect-byte-symbol ".save_product_secondary_hit=0x03" \
         --expect-byte-symbol ".save_product_secondary_dam=0x04" \
         --expect-byte-symbol ".save_product_secondary_flags=0x02" \
-        --expect-byte-symbol ".save_product_secondary_ego=0x06" \
-        --expect-byte-symbol ".save_product_ring2_id=0xff" \
+        --expect-byte-symbol ".save_product_secondary_ego=${dagger_def_ego_hex}" \
+        --expect-byte-symbol ".save_product_ring2_id=${empty_hex}" \
         --timeout 20 \
         --retry-timeouts 0 \
         --vice "$VICE"; then
@@ -1814,7 +1843,7 @@ run_save_write_product_smoke() {
             local save_seq="$out_dir/$name.the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "the.game,s" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 -B tests/check_save_secondary_plus4.py "$save_seq" 0x21 >>"$build_log" 2>&1; then
+                    || ! python3 -B tests/check_save_secondary_plus4.py "$save_seq" 0x22 >>"$build_log" 2>&1; then
                 echo "FAIL: $name (secondary weapon not in the written save)"
                 tail -3 "$build_log"
                 FAIL=$((FAIL + 1))
@@ -3451,10 +3480,12 @@ run_hot_gameplay_zero_disk_smoke() {
 
 run_plus4_static_contracts
 run_plus4_visibility_layout_contract
+run_plus4_item_catalog_contract
 run_vice_resource_contract_plus4
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_test "renderplus4" "tests/test_renderplus4.s"
 run_test "visibility_renderplus4" "tests/test_visibility_renderplus4.s"
+run_test "item_catalog_plus4" "tests/test_item_catalog_plus4.s"
 run_test "dungeon_soakplus4" "tests/test_dungeon_soakplus4.s"
 run_test "look_trampolineplus4" "tests/test_look_trampolineplus4.s"
 run_media_drive8_attach_read_write

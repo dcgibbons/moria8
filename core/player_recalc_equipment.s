@@ -30,20 +30,18 @@ player_recalc_equipment:
     sta pcc_eq_ac
 !pre_rings:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    .assert "Combat-bonus rings live on Page 1", ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_INCREASE_DAMAGE == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_INCREASE_TO_HIT == ITEM_PAGE_BIT, true
     ldx #EQUIP_RING
 !pre_slay_ring:                 // each hand: EQUIP_RING, then EQUIP_RING2
     lda inv_ego,x
     and #ITEM_PAGE_BIT
-    bne !pre_slay_p1+
+    beq !pre_no_slay+
     lda inv_item_id,x
-    cmp #ITEM_TYPE_RING_SLAYING
+    cmp #ITEM_SLOT_RING_OF_SLAYING
     beq !pre_add_slay+
-    bne !pre_no_slay+
-!pre_slay_p1:
-    lda inv_item_id,x
-    cmp #327 - ITEM_PAGE_SIZE
+    cmp #ITEM_SLOT_RING_OF_INCREASE_DAMAGE
     beq !pre_add_slay+
-    cmp #328 - ITEM_PAGE_SIZE
+    cmp #ITEM_SLOT_RING_OF_INCREASE_TO_HIT
     bne !pre_no_slay+
 !pre_add_slay:
     lda inv_to_hit,x

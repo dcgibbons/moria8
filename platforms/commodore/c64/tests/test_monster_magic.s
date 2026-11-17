@@ -1458,7 +1458,7 @@ test_start:
     inx
     cpx #EQUIP_HANDS + 1
     bne !t34_clear-
-    lda #8                      // Chain mail
+    lda #ITEM_SLOT_CHAIN_MAIL                      // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #<300
     ldx #>300
@@ -1612,7 +1612,7 @@ test_start:
     // also give Free Action and See Invisible).
     lda #EGO_DEFENDER
     sta inv_ego + EQUIP_WEAPON
-    lda #8                      // Chain mail
+    lda #ITEM_SLOT_CHAIN_MAIL                      // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #0
     sta inv_to_ac + EQUIP_BODY

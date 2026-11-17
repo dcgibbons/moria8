@@ -430,8 +430,12 @@ test_start:
     sta zp_player_str
 
     // Equip Small Shield (type 9, weight=50) in shield slot
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
 
     // Set player level (needed for combat)
     lda #1
@@ -759,8 +763,12 @@ test_start:
 
     lda #18
     sta zp_player_str
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     lda #50
     sta zp_player_lvl
     sta player_data + PL_LEVEL

@@ -87,8 +87,10 @@ test_main:
     jsr player_calc_stats
 
     // Equipping the ring must enable permanent speed.
-    lda #ITEM_TYPE_RING_SPEED
+    lda #ITEM_SLOT_RING_OF_SPEED
     sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_SPEED
+    sta inv_ego + EQUIP_RING
     jsr player_recalc_equipment
     lda player_pflags
     and #PFLAG_SPEED
@@ -97,18 +99,20 @@ test_main:
     // Removing the ring through the same production recalculation must clear it.
     lda #FI_EMPTY
     sta inv_item_id + EQUIP_RING
+    lda #0
+    sta inv_ego + EQUIP_RING
     jsr player_recalc_equipment
     lda player_pflags
     and #PFLAG_SPEED
     bne test_fail
 
-    // Equipping Cloak (#82, base AC 1) [+2] of Speed in EQUIP_CLOAK (slot 32)
+    // Equipping Cloak (base AC 1) [+2] of Speed in EQUIP_CLOAK (slot 32)
     // must apply both AC (1 + 2 = 3) and ego passive flags.
-    lda #82
+    lda #ITEM_SLOT_CLOAK
     sta inv_item_id + EQUIP_CLOAK
     lda #2
     sta inv_to_ac + EQUIP_CLOAK
-    lda #EGO_SPEED
+    lda #(ITEM_PAGE_CLOAK | EGO_SPEED)
     sta inv_ego + EQUIP_CLOAK
     jsr player_recalc_equipment
     lda player_pflags

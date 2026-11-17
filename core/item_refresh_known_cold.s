@@ -45,7 +45,7 @@ item_refresh_fixed_known:
     beq !irfk_set+
     txa
     jsr item_get_unknown_idx_a
-    cmp #$ff                        // Fixed-flavour items (#271/#273/#274)
+    cmp #$ff                        // Fixed-flavour items (Water, Apple Juice, Slime Mold Juice)
     bne !irfk_next+
 !irfk_set:
     jsr id_known_set

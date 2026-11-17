@@ -46,7 +46,7 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 .const SAVE_VERSION    = hal_storage_save_version
-.assert "Save Format V2 version is $21", SAVE_VERSION, $21
+.assert "Save Format V2 version is $22", SAVE_VERSION, $22
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -1563,7 +1563,7 @@ save_sanitize_store_ids:
 // save_write_known_items / load_read_known_items
 //
 // V2 serializes the packed 47-byte `id_known_bits` bitset (`ID_KNOWN_BYTES`)
-// covering all 370 catalog IDs (`0..369`). Fixed-description categories are
+// covering all 361 catalog IDs (`0..360`). Fixed-description categories are
 // defensively refreshed after load via `item_refresh_fixed_known`.
 // ============================================================
 save_write_known_items:
@@ -1863,11 +1863,12 @@ load_read_floor_items:
     bcs !lrfi_p1_start+
     jsr load_read_byte
     pha
+    .assert "All 20 gold types occupy Page 0 0..19", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_MITHRIL == 19 && ITEM_PAGE_GOLD_MITHRIL == 0, true
     lda fi_meta_hi,x
     and #ITEM_PAGE_BIT
-    bne !lrfi_qty_hi_skip+          // Page 1 items never match gold IDs 0/1
+    bne !lrfi_qty_hi_skip+          // Page 1 items never match gold IDs 0..19
     lda fi_item_id,x
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     bcs !lrfi_qty_hi_skip+
     pla
     sta fi_p1,x
@@ -1889,7 +1890,7 @@ load_read_floor_items:
     and #ITEM_PAGE_BIT
     bne !lrfi_p1_store+             // Page 1 items always keep loaded p1
     lda fi_item_id,x
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     bcc !lrfi_p1_skip+
 !lrfi_p1_store:
     pla
@@ -1974,7 +1975,7 @@ load_read_recall_custom:
 #endif
 
 // ============================================================
-// save_version_supported — Accept only SAVE_VERSION ($21); reject all
+// save_version_supported — Accept only SAVE_VERSION ($22); reject all
 // older and future save versions with carry clear (LOAD_RESULT_UNSUPPORTED).
 // Input: A = save version byte
 // Output: carry set = supported, carry clear = unsupported

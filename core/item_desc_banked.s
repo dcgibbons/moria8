@@ -50,12 +50,13 @@ itemdesc_put_staged:
     jsr item_get_category_a
     cmp #ICAT_DIGGING
     bne !idps_not_tool+
+    .assert "Pick and Shovel live on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0, true
     bit item_cur_page
     bvs !idps_not_tool+
     lda itemdesc_item_id
-    cmp #62
+    cmp #ITEM_SLOT_PICK
     beq !idps_legacy_tool+
-    cmp #63
+    cmp #ITEM_SLOT_SHOVEL
     bne !idps_not_tool+
 !idps_legacy_tool:
     lda itemdesc_ego
@@ -172,24 +173,19 @@ itemdesc_put_stats:
     lda #$29
     jmp hal_screen_put_char
 !idps_ring:
+    .assert "All rings live on Page 1", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT, true
     bit item_cur_page
-    bvs !idps_ring_p1_chk+
-    lda itemdesc_item_id
-    cmp #23
-    beq !idps_ring_ac+
-    cmp #24
-    beq !idps_ring_p1_tramp+
-!idps_ring_p1_chk:
+    bvc !idps_ring_done+
     lda itemdesc_to_ac
     bne !idps_ring_ac+
     lda itemdesc_to_hit
     ora itemdesc_to_dam
     bne !idps_weapon-
-!idps_ring_p1_tramp:
     jmp !idps_ring_p1+
 !idps_ring_ac:
     lda itemdesc_to_ac
     bne !idps_ring_ac_has_bonus+
+!idps_ring_done:
     rts
 !idps_ring_ac_has_bonus:
     lda #$20

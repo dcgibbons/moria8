@@ -781,7 +781,7 @@ tem_saved_val:
     sta zp_player_lvl
     sta player_data + PL_LEVEL
     lda #0
-    sta inv_item_id + 0
+    sta inv_item_id + 0             // raw-id-ok: shared zero-init non-book slot fill
     sta tpm_huff_calls
     sta tpm_last_huff_id
     jsr player_cast_spell
@@ -808,7 +808,7 @@ tem_saved_val:
     sta zp_player_lvl
     sta player_data + PL_LEVEL
     lda #0
-    sta inv_item_id + 0
+    sta inv_item_id + 0             // raw-id-ok: shared zero-init non-book slot fill
     sta tpm_huff_calls
     sta tpm_last_huff_id
     jsr player_cast_spell
@@ -1215,12 +1215,12 @@ tem_saved_val:
     :PatchJump(cmb_term_and_print, test_cmb_term_and_print_capture)
     jsr item_init_inventory
 
-    lda #0
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
     sta tpm_msg_seen
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_clear
 
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -1231,7 +1231,7 @@ tem_saved_val:
 
     jsr eff_identify_prompt
 
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     beq !t49_fail+
     lda inv_flags + 1
@@ -1279,12 +1279,12 @@ tem_saved_val:
     :PatchJump(input_get_key, test_input_get_key_b)
     jsr item_init_inventory
 
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_clear
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_clear
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -1292,7 +1292,7 @@ tem_saved_val:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 4
     lda #1
     sta inv_qty + 4
@@ -1302,10 +1302,10 @@ tem_saved_val:
 
     jsr eff_identify_prompt
 
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_test
     bne !t50_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     beq !t50_fail+
     lda inv_flags + 4

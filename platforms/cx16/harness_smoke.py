@@ -11,6 +11,7 @@ igk_char + RUN input_get_key_testbench_resume.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import signal
@@ -25,6 +26,47 @@ if str(HERE) not in sys.path:
 import check_memory_contract  # noqa: E402
 
 ROOT = HERE.parents[1]
+if str(ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools"))
+from item_ids import (  # noqa: E402
+    ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK,
+    ITEM_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS,
+    ITEM_PAGE_BIT,
+    ITEM_PAGE_CLOAK,
+    ITEM_PAGE_DAGGER,
+    ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS,
+    ITEM_PAGE_MACE,
+    ITEM_PAGE_POTION_OF_CHARISMA,
+    ITEM_PAGE_POTION_OF_CURE_CRITICAL_WOUNDS,
+    ITEM_PAGE_POTION_OF_GAIN_DEXTERITY,
+    ITEM_PAGE_POTION_OF_NEUTRALIZE_POISON,
+    ITEM_PAGE_SCROLL_OF_RECHARGING,
+    ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK,
+    ITEM_PAGE_SPELLBOOK_MAGICK_I,
+    ITEM_PAGE_SPELLBOOK_MAGICK_II,
+    ITEM_PAGE_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER,
+    ITEM_PAGE_WAND_OF_LIGHTNING,
+    ITEM_POTION_OF_GAIN_DEXTERITY,
+    ITEM_SCROLL_OF_MAGIC_MAPPING,
+    ITEM_SCROLL_OF_OBJECT_DETECTION,
+    ITEM_SCROLL_OF_RUNE_OF_PROTECTION,
+    ITEM_SCROLL_OF_TELEPORT_LEVEL,
+    ITEM_SLOT_CLOAK,
+    ITEM_SLOT_DAGGER,
+    ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS,
+    ITEM_SLOT_MACE,
+    ITEM_SLOT_POTION_OF_CHARISMA,
+    ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS,
+    ITEM_SLOT_POTION_OF_GAIN_DEXTERITY,
+    ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON,
+    ITEM_SLOT_SCROLL_OF_RECHARGING,
+    ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK,
+    ITEM_SLOT_SPELLBOOK_MAGICK_I,
+    ITEM_SLOT_SPELLBOOK_MAGICK_II,
+    ITEM_SLOT_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER,
+    ITEM_SLOT_WAND_OF_LIGHTNING,
+    ITEM_TYPE_COUNT,
+)
 BUILD_CX16 = ROOT / "build" / "cx16"
 BANK_CONSTS = check_memory_contract.parse_bank_constants(
     (HERE / "memory.s").read_text(encoding="utf-8"),
@@ -37,7 +79,7 @@ CX16_BANK_CATALOG = BANK_CONSTS["CX16_BANK_CATALOG"]
 CX16_BANK_LEGAL = BANK_CONSTS["CX16_BANK_LEGAL"]
 CX16_BANK_WARM_BASE = BANK_CONSTS["CX16_BANK_WARM_BASE"]
 
-SAVE_VERSION = 0x21
+SAVE_VERSION = 0x22
 TOTAL_INV_SLOTS = 34
 EQUIP_CLOAK = 32
 EQUIP_SECONDARY = 33
@@ -217,6 +259,11 @@ class X16Bench:
         else:
             code = ord(ch)
         self.inject_petscii(code)
+
+    def press_int(self, n: int) -> None:
+        for ch in str(n):
+            self.press(ch)
+        self.press("\r")
 
     def shift(self, ch: str) -> None:
         if ch == ".":
@@ -484,10 +531,12 @@ def scenario_priest_map_area(tb: X16Bench) -> None:
     tb.write_u8(0x31, 50)
     tb.write_u8(pd + 63, tb.read_u8(pd + 63) | 0x40)
     gave_book = False
+    inv_stride = inv_qty - inv_id
     for i in range(31):
         if tb.read_u8(inv_id + i) == 0xFF:
-            tb.write_u8(inv_id + i, 59)
+            tb.write_u8(inv_id + i, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
             tb.write_u8(inv_qty + i, 1)
+            tb.write_u8(inv_id + 7 * inv_stride + i, ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
             gave_book = True
             break
     tb.assert_line("book_granted", gave_book, "no empty inventory slot for the book")
@@ -702,9 +751,7 @@ def scenario_wizard_flow(tb: X16Bench) -> None:
     tb.chargen("A")
     tb.assert_line("wizard_menu", tb.wizard_menu_open(), "wizard menu did not open")
     tb.press_until("ITEM", "G")
-    tb.press("4")
-    tb.press("8")
-    tb.press("\r")
+    tb.press_int(ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK)
     tb.assert_line("wizard_gain", tb.screen_has("OK"), "item generation did not report OK")
     tb.press("I")
     tb.assert_line("inventory_open", tb.screen_has("Inventory"), "inventory screen did not render")
@@ -1030,16 +1077,62 @@ def scenario_balrog_victory(tb: X16Bench) -> None:
 
 def scenario_quaff_p3(tb: X16Bench) -> None:
     tb.chargen("A")
+    pd = tb.syms["player_data"]
+    hp_lo = tb.syms["zp_player_hp_lo"]
+    poison = tb.syms["zp_eff_poison"]
+    tb.write_u8(pd + 24, 14)   # PL_DEX_BASE
+    tb.write_u8(pd + 30, 14)   # PL_DEX_CUR
+    tb.write_u8(pd + 26, 13)   # PL_CHR_BASE
+    tb.write_u8(pd + 32, 13)   # PL_CHR_CUR
     tb.assert_line("wizard_menu", tb.wizard_menu_open(), "wizard menu did not open")
     tb.press_until("ITEM", "G")
-    tb.press("9")
-    tb.press("7")
-    tb.press("\r")
+    tb.press_int(ITEM_POTION_OF_GAIN_DEXTERITY)
     tb.assert_line("wizard_gain", tb.screen_has("OK"), "item generation did not report OK")
     tb.press("q")
     tb.assert_line("quaff_prompt", tb.screen_has("Quaff which potion"), "quaff prompt did not open")
     tb.press("a")
-    tb.assert_line("quaff_msg", tb.screen_has("strength return"), "quaff effect message missing")
+    tb.assert_line(
+        "quaff_gain_dex",
+        tb.screen_has("more limber!") and tb.read_u8(pd + 30) == 15,
+        f"Gain Dexterity failed: dex={tb.read_u8(pd + 30)}",
+    )
+    tb.drain_more()
+
+    _inv_seed(tb, 0, [ITEM_SLOT_POTION_OF_CHARISMA, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CHARISMA])
+    tb.press("q")
+    tb.assert_line("quaff_chr_prompt", tb.screen_has("Quaff which potion"), "charisma quaff prompt missing")
+    tb.press("a")
+    tb.assert_line(
+        "quaff_gain_chr",
+        tb.screen_has("ain't you cute!") and tb.read_u8(pd + 32) == 14,
+        f"Charisma potion failed: chr={tb.read_u8(pd + 32)}",
+    )
+    tb.drain_more()
+
+    tb.write_u8(hp_lo, 1)
+    tb.write_u8(pd + 33, 1)
+    tb.write_u8(poison, 5)
+    _inv_seed(tb, 0, [ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_CRITICAL_WOUNDS])
+    tb.press("q")
+    tb.assert_line("quaff_ccw_prompt", tb.screen_has("Quaff which potion"), "ccw quaff prompt missing")
+    tb.press("a")
+    tb.assert_line(
+        "quaff_ccw",
+        tb.read_u8(hp_lo) > 1 and tb.read_u8(poison) == 0,
+        f"Cure Critical Wounds failed: hp={tb.read_u8(hp_lo)} poison={tb.read_u8(poison)}",
+    )
+    tb.drain_more()
+
+    tb.write_u8(poison, 5)
+    _inv_seed(tb, 0, [ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_NEUTRALIZE_POISON])
+    tb.press("q")
+    tb.assert_line("quaff_neut_prompt", tb.screen_has("Quaff which potion"), "neutralize quaff prompt missing")
+    tb.press("a")
+    tb.assert_line(
+        "quaff_neutralize",
+        tb.screen_has("You feel better.") and tb.read_u8(poison) == 0,
+        f"Neutralize Poison failed: poison={tb.read_u8(poison)}",
+    )
     tb.log("SCENARIO DONE")
 
 
@@ -1047,10 +1140,7 @@ def scenario_scroll_objdet(tb: X16Bench) -> None:
     tb.chargen("A")
     tb.assert_line("wizard_menu", tb.wizard_menu_open(), "wizard menu did not open")
     tb.press_until("ITEM", "G")
-    tb.press("1")
-    tb.press("0")
-    tb.press("3")
-    tb.press("\r")
+    tb.press_int(ITEM_SCROLL_OF_OBJECT_DETECTION)
     tb.assert_line("wizard_gain", tb.screen_has("OK"), "item generation did not report OK")
     tb.press("r")
     tb.assert_line("read_prompt", tb.screen_has("Read which scroll"), "read prompt did not open")
@@ -1070,10 +1160,7 @@ def scenario_scroll_map(tb: X16Bench) -> None:
     tb.chargen("A")
     tb.assert_line("wizard_menu", tb.wizard_menu_open(), "wizard menu did not open")
     tb.press_until("ITEM", "G")
-    tb.press("1")
-    tb.press("0")
-    tb.press("2")
-    tb.press("\r")
+    tb.press_int(ITEM_SCROLL_OF_MAGIC_MAPPING)
     tb.assert_line("wizard_gain", tb.screen_has("OK"), "item generation did not report OK")
     tb.press("r")
     tb.assert_line("read_prompt", tb.screen_has("Read which scroll"), "read prompt did not open")
@@ -1087,10 +1174,7 @@ def scenario_scroll_rune(tb: X16Bench) -> None:
     tb.chargen("A")
     tb.assert_line("wizard_menu", tb.wizard_menu_open(), "wizard menu did not open")
     tb.press_until("ITEM", "G")
-    tb.press("1")
-    tb.press("0")
-    tb.press("5")
-    tb.press("\r")
+    tb.press_int(ITEM_SCROLL_OF_RUNE_OF_PROTECTION)
     tb.assert_line("wizard_gain", tb.screen_has("OK"), "item generation did not report OK")
     tb.press("r")
     tb.assert_line("read_prompt", tb.screen_has("Read which scroll"), "read prompt did not open")
@@ -1114,10 +1198,7 @@ def scenario_scroll_teleport_level(tb: X16Bench) -> None:
     tb.chargen("A")
     tb.assert_line("wizard_menu", tb.wizard_menu_open(), "wizard menu did not open")
     tb.press_until("ITEM", "G")
-    tb.press("1")
-    tb.press("0")
-    tb.press("1")
-    tb.press("\r")
+    tb.press_int(ITEM_SCROLL_OF_TELEPORT_LEVEL)
     tb.assert_line("wizard_gain", tb.screen_has("OK"), "item generation did not report OK")
     sp_addr = tb.syms["main_loop_sp"]
     tb.press("L")                    # a main-loop pass at the command level
@@ -1271,10 +1352,7 @@ def scenario_deep_objdet(tb: X16Bench) -> None:
     tb.drain_more()
     tb.wizard_menu_open()
     tb.press_until("ITEM", "G")
-    tb.press("1")
-    tb.press("0")
-    tb.press("3")
-    tb.press("\r")
+    tb.press_int(ITEM_SCROLL_OF_OBJECT_DETECTION)
     tb.drain_more()
     tb.press("r")
     tb.press("a")
@@ -1390,9 +1468,19 @@ def scenario_mage_identify_selector(tb: X16Bench) -> None:
     empty_slots = [i for i in range(22) if _inv_field(tb, i, 0) == 0xFF]
     tb.assert_line("identify_slots_ready", len(empty_slots) >= 2, "need 2 empty inventory slots")
     book_slot, wand_slot = empty_slots[0], empty_slots[1]
-    book_idx = sum(1 for i in range(book_slot) if _inv_field(tb, i, 0) in (47, 55, 56, 57))
-    _inv_seed(tb, book_slot, [56, 1, 0, 0, 0, 0, 0x02, 0])   # Magick II (Mage book 3)
-    _inv_seed(tb, wand_slot, [40, 1, 0, 0, 0, 0, 0x00, 0])   # unidentified Wand of Lightning
+    mage_books = {
+        (ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK, ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK),
+        (ITEM_SLOT_SPELLBOOK_MAGICK_I, ITEM_PAGE_SPELLBOOK_MAGICK_I),
+        (ITEM_SLOT_SPELLBOOK_MAGICK_II, ITEM_PAGE_SPELLBOOK_MAGICK_II),
+        (ITEM_SLOT_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER, ITEM_PAGE_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER),
+    }
+    book_idx = sum(
+        1
+        for i in range(book_slot)
+        if (_inv_field(tb, i, 0), _inv_field(tb, i, 7) & ITEM_PAGE_BIT) in mage_books
+    )
+    _inv_seed(tb, book_slot, [ITEM_SLOT_SPELLBOOK_MAGICK_II, 1, 0, 0, 0, 0, 0x02, ITEM_PAGE_SPELLBOOK_MAGICK_II])
+    _inv_seed(tb, wand_slot, [ITEM_SLOT_WAND_OF_LIGHTNING, 1, 0, 0, 0, 0, 0x00, ITEM_PAGE_WAND_OF_LIGHTNING])
     wand_idx = sum(1 for i in range(wand_slot) if _inv_field(tb, i, 0) != 0xFF)
 
     book_key = chr(ord("A") + book_idx)
@@ -1432,18 +1520,21 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
         f"stride={tb.syms['inv_qty'] - tb.syms['inv_item_id']} != {TOTAL_INV_SLOTS}",
     )
     turn = tb.syms["zp_turn_lo"]
-    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 3, 0])                 # Mace (+1,+0), cursed
-    _inv_seed(tb, EQUIP_SECONDARY, [2, 1, 0, 3, 4, 0, 2, 6])    # Dagger (+3,+4) (Defender)
+    _inv_seed(tb, 22, [ITEM_SLOT_MACE, 1, 0, 1, 0, 0, 3, ITEM_PAGE_MACE])
+    _inv_seed(tb, EQUIP_SECONDARY, [ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6])
     turn0 = tb.read_u8(turn)
     tb.shift("X")
     tb.assert_line(
         "exchange_cursed_refused",
         tb.screen_has("You cannot remove it, it is cursed!")
-        and _inv_field(tb, 22, 0) == 5 and _inv_field(tb, EQUIP_SECONDARY, 0) == 2
+        and _inv_field(tb, 22, 0) == ITEM_SLOT_MACE
+        and (_inv_field(tb, 22, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_MACE
+        and _inv_field(tb, EQUIP_SECONDARY, 0) == ITEM_SLOT_DAGGER
+        and (_inv_field(tb, EQUIP_SECONDARY, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_DAGGER
         and tb.read_u8(turn) == turn0,
         f"primary={_inv_field(tb, 22, 0)} secondary={_inv_field(tb, EQUIP_SECONDARY, 0)} turn={tb.read_u8(turn)}/{turn0}",
     )
-    _inv_seed(tb, 22, [5, 1, 0, 1, 0, 0, 2, 0])                 # the curse lifted
+    _inv_seed(tb, 22, [ITEM_SLOT_MACE, 1, 0, 1, 0, 0, 2, ITEM_PAGE_MACE])
     tb.shift("X")
     tb.assert_line(
         "exchange_report",
@@ -1452,9 +1543,14 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
     )
     tb.assert_line(
         "exchange_swapped",
-        _inv_field(tb, 22, 0) == 2 and _inv_field(tb, 22, 3) == 3 and _inv_field(tb, 22, 7) == 6
-        and _inv_field(tb, EQUIP_SECONDARY, 0) == 5 and _inv_field(tb, EQUIP_SECONDARY, 3) == 1
-        and _inv_field(tb, EQUIP_SECONDARY, 6) == 2 and _inv_field(tb, EQUIP_CLOAK, 0) == 0xFF,
+        _inv_field(tb, 22, 0) == ITEM_SLOT_DAGGER
+        and _inv_field(tb, 22, 3) == 3
+        and _inv_field(tb, 22, 7) == (ITEM_PAGE_DAGGER | 6)
+        and _inv_field(tb, EQUIP_SECONDARY, 0) == ITEM_SLOT_MACE
+        and _inv_field(tb, EQUIP_SECONDARY, 3) == 1
+        and _inv_field(tb, EQUIP_SECONDARY, 6) == 2
+        and _inv_field(tb, EQUIP_SECONDARY, 7) == ITEM_PAGE_MACE
+        and _inv_field(tb, EQUIP_CLOAK, 0) == 0xFF,
         "records not exchanged",
     )
     tb.assert_line("exchange_one_turn", tb.read_u8(turn) == (turn0 + 1) & 0xFF,
@@ -1464,8 +1560,8 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
     # OVL.SPELL reload clobbered, so another slot was recharged, named or
     # "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
     # (BBC build queue, 2026-11-12; the X16 shares the trampoline).
-    _inv_seed(tb, 0, [40, 1, 0, 0, 0, 0, 0, 0])    # Wand of Lightning, empty
-    _inv_seed(tb, 1, [104, 1, 0, 0, 0, 0, 0, 0])   # Scroll of Recharging
+    _inv_seed(tb, 0, [ITEM_SLOT_WAND_OF_LIGHTNING, 1, 0, 0, 0, 0, 0, ITEM_PAGE_WAND_OF_LIGHTNING])
+    _inv_seed(tb, 1, [ITEM_SLOT_SCROLL_OF_RECHARGING, 1, 0, 0, 0, 0, 0, ITEM_PAGE_SCROLL_OF_RECHARGING])
     turn_r = tb.read_u8(turn)
     tb.press("R")
     tb.assert_line("recharge_read_prompt", tb.screen_has("Read which scroll"), f"row0={tb.rowtext(0)!r}")
@@ -1476,8 +1572,13 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
     tb.press("A")
     tb.assert_line("recharge_glows", tb.screen_has("glows briefly"),
                    f"row0={tb.rowtext(0)!r} row1={tb.rowtext(1)!r}")
-    tb.assert_line("recharge_charged", _inv_field(tb, 0, 0) == 40 and _inv_field(tb, 0, 2) > 0,
-                   f"slot a: {_inv_field(tb, 0, 0)} charges {_inv_field(tb, 0, 2)}")
+    tb.assert_line(
+        "recharge_charged",
+        _inv_field(tb, 0, 0) == ITEM_SLOT_WAND_OF_LIGHTNING
+        and (_inv_field(tb, 0, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_WAND_OF_LIGHTNING
+        and _inv_field(tb, 0, 2) > 0,
+        f"slot a: {_inv_field(tb, 0, 0)} charges {_inv_field(tb, 0, 2)}",
+    )
     tb.press("S")
     tb.assert_line("recharge_play_goes_on", tb.read_u8(turn) != turn_r, f"turn={tb.read_u8(turn)}/{turn_r}")
     tb.dump("after_exchange")
@@ -1486,8 +1587,8 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
 
 def scenario_save_load(tb: X16Bench) -> None:
     tb.chargen("A")
-    cloak_rec = [82, 1, 0, 0, 0, 2, 0x02, 0]                    # Cloak [1,+2] in EQUIP_CLOAK
-    sec_rec = [2, 1, 0, 3, 4, 0, 2, 6]                          # Dagger (+3,+4) (Defender) in EQUIP_SECONDARY
+    cloak_rec = [ITEM_SLOT_CLOAK, 1, 0, 0, 0, 2, 0x02, ITEM_PAGE_CLOAK]
+    sec_rec = [ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6]
     recall_sample = [0x12, 0x34, 0x56, 0x78]
     recall_aux = 0xA000 + (tb.syms["recall_data_start"] & 0x1FFF) + 278 * 4
     _inv_seed(tb, EQUIP_CLOAK, cloak_rec)
@@ -1866,7 +1967,7 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
     # 5. Bank 6 ITEM.CAT magic/count and hal_item_cat_read_byte $00/X preservation
     itm_magic = bytes(tb.read_bank_u8(CX16_BANK_ITEM_CAT, 0xA000 + i) for i in range(4))
     itm_count = tb.read_bank_u8(CX16_BANK_ITEM_CAT, 0xA006) | (tb.read_bank_u8(CX16_BANK_ITEM_CAT, 0xA007) << 8)
-    tb.assert_line("item_cat_bank6_magic", itm_magic == b"ITM2" and itm_count == 370, f"magic={itm_magic!r} count={itm_count}")
+    tb.assert_line("item_cat_bank6_magic", itm_magic == b"ITM2" and itm_count == ITEM_TYPE_COUNT, f"magic={itm_magic!r} count={itm_count}")
     off_lo = tb.syms["item_cat_off_lo"]
     off_hi = tb.syms["item_cat_off_hi"]
     tb.write_u8(off_lo, 0x06)
@@ -1880,7 +1981,7 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
     )
     tb.assert_line(
         "item_cat_reader_bank_kept",
-        tb.read_u8(0x0000) == ovl_bank and tb.read_u8(scratch + 7) == (370 & 0xFF) and tb.read_u8(scratch + 8) == 0x5A,
+        tb.read_u8(0x0000) == ovl_bank and tb.read_u8(scratch + 7) == (ITEM_TYPE_COUNT & 0xFF) and tb.read_u8(scratch + 8) == 0x5A,
         f"bank={tb.read_u8(0x0000)} val={tb.read_u8(scratch + 7):02X} x={tb.read_u8(scratch + 8):02X}",
     )
 
@@ -1943,6 +2044,43 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
             )
             break
     tb.assert_line("catalog_fetch_ext_rows", fetch_ok, fetch_detail)
+
+    # 7. Live 65C02 0..360 item_get_category_a + item_get_base_ac sweep across Pages 0 & 1
+    spec_items = json.loads((ROOT / "platforms/shared/item_catalog/item_catalog_spec.json").read_text(encoding="utf-8"))["items"]
+    exp_cat_sum = sum(it["cat"] for it in spec_items) & 0xFFFF
+    exp_ac_sum = sum(it["base_ac"] for it in spec_items) & 0xFFFF
+    icp_addr = tb.syms["item_cur_page"]
+    sum_base = scratch + 0x40
+    for k in range(4):
+        tb.write_u8(sum_base + k, 0x00)
+    for page_val, page_cnt in ((0x00, 255), (ITEM_PAGE_BIT, ITEM_TYPE_COUNT - 255)):
+        body_loop = (
+            [0x98]
+            + jsr("item_get_category_a")
+            + [0x18, 0x6D, (sum_base + 0) & 0xFF, (sum_base + 0) >> 8]
+            + [0x8D, (sum_base + 0) & 0xFF, (sum_base + 0) >> 8]
+            + [0xAD, (sum_base + 1) & 0xFF, (sum_base + 1) >> 8, 0x69, 0x00]
+            + [0x8D, (sum_base + 1) & 0xFF, (sum_base + 1) >> 8]
+            + jsr("item_get_base_ac")
+            + [0x18, 0x6D, (sum_base + 2) & 0xFF, (sum_base + 2) >> 8]
+            + [0x8D, (sum_base + 2) & 0xFF, (sum_base + 2) >> 8]
+            + [0xAD, (sum_base + 3) & 0xFF, (sum_base + 3) >> 8, 0x69, 0x00]
+            + [0x8D, (sum_base + 3) & 0xFF, (sum_base + 3) >> 8]
+            + [0xC8, 0xC0, page_cnt]
+        )
+        rel_back = (-(len(body_loop) + 2)) & 0xFF
+        run_stub(
+            [0xA9, page_val, 0x8D, icp_addr & 0xFF, icp_addr >> 8, 0xA0, 0x00]
+            + body_loop
+            + [0xD0, rel_back, 0x60]
+        )
+    got_cat_sum = tb.read_u8(sum_base + 0) | (tb.read_u8(sum_base + 1) << 8)
+    got_ac_sum = tb.read_u8(sum_base + 2) | (tb.read_u8(sum_base + 3) << 8)
+    tb.assert_line(
+        "item_cat_props_0_360",
+        got_cat_sum == exp_cat_sum and got_ac_sum == exp_ac_sum and tb.read_u8(0x0000) == ovl_bank,
+        f"cat_sum={got_cat_sum} (exp {exp_cat_sum}) ac_sum={got_ac_sum} (exp {exp_ac_sum}) bank={tb.read_u8(0x0000)}",
+    )
     tb.log("SCENARIO DONE")
 
 

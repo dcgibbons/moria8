@@ -207,9 +207,9 @@ test_start:
     // Test 3: Range — weightless item (gold, weight=0)
     // Weight 0 → max range = 10
     // ==========================================
-    lda #0
+    lda #ITEM_PAGE_GOLD_SMALL
     sta item_cur_page
-    ldx #0                      // Type 0 (gold), weight = 0
+    ldx #ITEM_SLOT_GOLD_SMALL                      // Type 0 (gold), weight = 0
     jsr item_get_weight_x
     lda icat_weight_lo
     ora icat_weight_hi
@@ -231,9 +231,9 @@ test_start:
     // ==========================================
     // Test 4: Potion detection — type 17 (Cure Light Wounds) = ICAT_POTION
     // ==========================================
-    lda #0
+    lda #ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
     sta item_cur_page
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr item_get_category_a
     cmp #ICAT_POTION
     beq !t4_pass+
@@ -249,13 +249,16 @@ test_start:
     // Test 5: Item consumption — qty 3 → 2 after throw
     // ==========================================
     ldx #5                      // Use slot 5
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta inv_item_id,x
     lda #3
     sta inv_qty,x
     lda #0
     sta inv_p1,x
     sta inv_flags,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+    }
     sta inv_ego,x
 
     // Simulate throw consumption
@@ -265,7 +268,7 @@ test_start:
     cmp #2
     bne !t5_fail+
     lda inv_item_id,x
-    cmp #2                      // Still a dagger
+    cmp #ITEM_SLOT_DAGGER                      // Still a dagger
     bne !t5_fail+
     lda #$01
     sta tc_results+4
@@ -311,15 +314,19 @@ test_start:
     // Slot 1 is empty; visible list must be 0, 2, 5.
     // ==========================================
     jsr item_init_inventory
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta inv_item_id+0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego+0
+    }
     lda #1
     sta inv_qty+0
-    lda #17                     // Potion
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion
     sta inv_item_id+2
     lda #1
     sta inv_qty+2
-    lda #15                     // Food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Food
     sta inv_item_id+5
     lda #1
     sta inv_qty+5
@@ -355,7 +362,7 @@ test_start:
     bcc !t8_fail+
     cpx #2
     bne !t8_fail+
-    cmp #17
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     bne !t8_fail+
     lda #$01
     sta tc_results+7
@@ -406,7 +413,7 @@ test_start:
     sta inv_flags+0
     sta inv_ego+0
     sta tw_slot
-    lda #47                     // Beginner's Spellbook
+    lda #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK                     // Beginner's Spellbook
     sta inv_item_id+0
     sta tw_item_id
     lda #20
@@ -426,7 +433,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t10_fail+
     lda fi_item_id,x
-    cmp #47
+    cmp #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
     bne !t10_fail+
     lda #$01
     sta tc_results+9
@@ -467,10 +474,10 @@ test_start:
     lda #IF_IDENTIFIED
     sta inv_flags+0
     sta tw_save_flags
-    lda #EGO_FLAME_TONGUE
+    lda #(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
     sta inv_ego+0
     sta tw_save_ego
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta inv_item_id+0
     sta tw_item_id
     lda #1
@@ -490,7 +497,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t11_fail+
     lda fi_item_id,x
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t11_fail+
     lda fi_to_hit,x
     cmp #$fe
@@ -504,7 +511,7 @@ test_start:
     and #IF_IDENTIFIED
     beq !t11_fail+
     jsr floor_item_get_ego_x
-    cmp #EGO_FLAME_TONGUE
+    cmp #(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
     bne !t11_fail+
     lda #$01
     sta tc_results+10
@@ -536,13 +543,13 @@ test_start:
     sta zp_player_x
     lda #15
     sta zp_player_y
-    lda #51 - IT_MISSILE_BASE   // Sling
+    lda #ITEM_SLOT_SLING - IT_MISSILE_BASE   // Sling
     sta rf_launcher
     jsr t12_shot
     lda tw_last_x
     cmp #25
     bne !t12_fail+
-    lda #49 - IT_MISSILE_BASE   // Short Bow
+    lda #ITEM_SLOT_SHORT_BOW - IT_MISSILE_BASE   // Short Bow
     sta rf_launcher
     jsr t12_shot
     lda tw_last_x
@@ -607,7 +614,7 @@ test_start:
     sta zp_player_str
     lda #10
     sta player_data + PL_TODMG
-    lda #ITEM_FLASK_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     sta tw_item_id
     lda #0
     sta tw_save_to_dam
@@ -719,7 +726,7 @@ test_start:
     sta tt_count
 !t16_potion:
     jsr t13_stock_arrow
-    lda #17                     // Potion of Cure Light Wounds
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion of Cure Light Wounds
     sta tw_item_id
     jsr tw_consume_item
     lda #20
@@ -752,7 +759,7 @@ test_start:
 t13_stock_arrow:
     jsr item_init_floor
     jsr item_init_inventory
-    lda #52                     // Arrow
+    lda #ITEM_SLOT_ARROW                     // Arrow
     sta inv_item_id
     sta rf_ammo_id
     lda #1
@@ -773,7 +780,7 @@ t13_stock_arrow:
 t12_shot:
     jsr item_init_floor
     jsr item_init_inventory
-    lda #52                     // Arrow
+    lda #ITEM_SLOT_ARROW                     // Arrow
     sta inv_item_id
     sta rf_ammo_id
     lda #1

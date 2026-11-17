@@ -254,7 +254,7 @@ test_reset_identify_state:
     sta tid_last_huff_id
     lda #$ff
     sta tid_last_spell_idx
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_clear
     ldx #41
     lda #0
@@ -309,7 +309,7 @@ test_start:
     sta tid_key_script + 0
     lda #0
     sta tid_key_script + 1
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -333,7 +333,7 @@ test_start:
     bne !t1_fail_pre+
     lda tid_huff_calls
     bne !t1_fail_pre+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     beq !t1_fail_pre+
     lda inv_flags + 1
@@ -402,7 +402,7 @@ test_start:
     sta tid_key_script + 0
     lda #0
     sta tid_key_script + 1
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -423,7 +423,7 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PIQ_NOTHING
     bne !t2_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t2_fail+
     lda inv_flags + 1
@@ -464,7 +464,7 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PIW_NOTHING
     bne !t3_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t3_fail+
     lda zp_player_mp
@@ -488,7 +488,7 @@ test_start:
 !t4:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
     jsr test_reset_identify_state
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -505,7 +505,7 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PM_FAIL
     bne !t4_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t4_fail+
     lda inv_flags + 1

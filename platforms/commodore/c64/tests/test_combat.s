@@ -199,7 +199,11 @@ test_start:
 
     // Default to an equipped dagger so generic melee to-hit tests do not
     // include the bare-hand penalty unless a test explicitly clears weapon.
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
 
     // ==========================================
@@ -623,7 +627,7 @@ test_start:
     // ==========================================
 !t13:
     // Equip weapon type 8 (Two-Handed Sword, weight=120)
-    lda #8
+    lda #ITEM_SLOT_CHAIN_MAIL
     jsr tc_equip_weapon
     lda #0
     sta inv_ego + EQUIP_WEAPON
@@ -670,7 +674,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #18
     sta player_data + PL_DEX_CUR
-    lda #4                      // Long Sword (weight=50)
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_LONG_SWORD                      // Long Sword (weight=50)
     jsr tc_equip_weapon
 
     jsr combat_calc_blows
@@ -696,7 +704,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #18
     sta player_data + PL_DEX_CUR
-    lda #2                      // Dagger (weight=12)
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (weight=12)
     jsr tc_equip_weapon
 
     jsr combat_calc_blows
@@ -723,7 +735,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #12
     sta player_data + PL_DEX_CUR
-    lda #4                      // Long Sword (weight=50)
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_LONG_SWORD                      // Long Sword (weight=50)
     jsr tc_equip_weapon
 
     jsr combat_calc_blows
@@ -750,7 +766,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #15
     sta player_data + PL_DEX_CUR
-    lda #3                      // Short Sword (weight=30)
+    .if (ITEM_PAGE_SHORT_SWORD != 0) {
+        lda #ITEM_PAGE_SHORT_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_SHORT_SWORD                      // Short Sword (weight=30)
     jsr tc_equip_weapon
 
     jsr combat_calc_blows
@@ -815,7 +835,7 @@ test_start:
 
     lda #12
     sta player_data + PL_DEX_CUR
-    lda #7                      // Leather armor
+    lda #ITEM_SLOT_LEATHER_ARMOR                      // Leather armor
     sta inv_item_id + EQUIP_BODY
     lda #0
     sta inv_to_ac + EQUIP_BODY
@@ -851,11 +871,11 @@ test_start:
 
     lda #18
     sta player_data + PL_DEX_CUR
-    lda #8                      // Chain mail
+    lda #ITEM_SLOT_CHAIN_MAIL                      // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #2                      // +2 enchantment
     sta inv_to_ac + EQUIP_BODY
-    lda #10                     // Iron helm
+    lda #ITEM_SLOT_IRON_HELM                     // Iron helm
     sta inv_item_id + EQUIP_HEAD
     lda #0
     sta inv_to_ac + EQUIP_HEAD
@@ -1240,7 +1260,11 @@ test_start:
     sta player_data + PL_TOHIT
     lda #10
     sta player_data + PL_TODMG
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
 
     // Place a floor tile with an occupied monster at (20,15).
@@ -1299,7 +1323,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #54
     sta player_data + PL_DEX_CUR
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
 
     jsr combat_calc_blows
@@ -1327,7 +1355,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #118
     sta player_data + PL_DEX_CUR
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
 
     jsr combat_calc_blows
@@ -1350,7 +1382,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #118
     sta player_data + PL_DEX_CUR
-    lda #49                     // Short Bow
+    .if (ITEM_PAGE_DAGGER != ITEM_PAGE_SHORT_BOW) {
+        lda #ITEM_PAGE_SHORT_BOW
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_SHORT_BOW                     // Short Bow
     jsr tc_equip_weapon
 
     jsr combat_calc_blows
@@ -1370,10 +1406,17 @@ test_start:
     // Dagger + rogue level 3 + PL_TOHIT 0 -> chance 12 + 0 + 9 = 21.
     // ==========================================
 !t34:
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
-    lda #0
+    lda #ITEM_PAGE_DAGGER
     sta inv_ego + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+    }
     sta player_data + PL_TOHIT
     lda #255
     sta zp_combat_tohit
@@ -1447,7 +1490,11 @@ test_start:
     sta player_data + PL_LEVEL
     lda #2
     sta player_data + PL_TOHIT
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
     lda #1
     sta cmb_target_light_valid
@@ -1482,7 +1529,11 @@ test_start:
     sta player_data + PL_LEVEL
     lda #0
     sta player_data + PL_TOHIT
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
     lda #1
     sta zp_eff_bless
@@ -1519,7 +1570,11 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #0
     sta player_data + PL_TOHIT
-    lda #8
+    .if (ITEM_PAGE_DAGGER != ITEM_PAGE_CHAIN_MAIL) {
+        lda #ITEM_PAGE_CHAIN_MAIL
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_CHAIN_MAIL
     jsr tc_equip_weapon
 
     jsr combat_calc_tohit
@@ -1607,7 +1662,11 @@ test_start:
     sta player_data + PL_TOHIT
     lda #10
     sta player_data + PL_TODMG
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
     jsr tc_equip_weapon
 
     // Occupied floor tile at (20,15) with a one-hit-kill Balrog in slot 0.

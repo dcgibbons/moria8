@@ -88,7 +88,7 @@ Every feature, mechanic, and catalog entry in this document is assigned one of f
 | **Per-Tile Memory** | 8-byte Pascal record `cave_type` (`cptr`, `tptr`, `fval`, `fopen`, `fm`, `pl`, `tl`, `oct`) | 4-byte struct `Tile_t` (`cptr`, `tptr`, `fval`, bitflags `lr`/`fm`/`pl`/`tl`) | **1 byte per tile** (`bits 0-3`: tile type `0..9`; `bit 4`: `TILE_SEEN`; `bit 5`: `TILE_LIT`; `bit 6`: `TILE_TEMP_LIT`; `bit 7`: `TILE_HAS_MONSTER`) |
 | **Monster Catalog** | **279** creatures (`MAX_CREATURES=279` in `values.inc`) | **279** creatures (`MON_MAX_CREATURES=279` in `data_creatures.cpp`) | **279 / 279** VMS creatures (`0` omitted, `0` degraded; `29` SoA fields = `21` core + `8` extended = **`57 B/record`**, `40` active slots = `32` dungeon species + `8` resident town; `core/monster_catalog.s`, `docs/MONSTER_CATALOG_DESIGN.md`, Phase 5 `2026-11-16`):<br>• **C64 & Plus/4**: `MONSTER.CAT1-4` (`49 B/rec`, `56` sectors) + **`MONSTER.EXT`** (`8 B/rec`, `9` sectors; preloaded into REU Bank 1 `$2000` on C64 REU, or streamed from EasyFlash / Magic Desk `.crt` `CART_ASSET_CATALOG_EXT`), with `MONSTER.IDX` in hidden RAM.<br>• **C128**: preloaded into Bank 1 (`128.cat` `$7E60`, `128.cnm` `$A000`, and **`128.cex`** `2,232 B` at Bank 1 `$D000-$D8B7` via `< $4000` `SEI` + `$7F NOIO`, `C128M-014`; also on `MD128` `.crt`).<br>• **Commander X16**: split across HiRAM **Bank 23** (`CX16_BANK_CATALOG`, `21` core fields + index) and **Bank 5** (`CX16_BANK_CATALOG_EXT`, `MONSTER.EXT` `2,232 B`), Huffman names in Bank 4 (`.zip` & `.crt`).<br>• **Apple IIe**: PackBits `A2.CATALOG.PB` (`-> Aux $5000`) and `A2.CATEXT.PB` (`-> Aux LC Bank 2 $D000-$D8B7`, `2,232 B`, unpacked at boot by `TitleOverlay:a2_boot_preload_aux_lc`), Huffman names in Aux `$8D00`.<br>• **BBC Master 128**: core fields + Huffman names in Sideways Bank 6 (`$9500`); **`MONEXT`** (`2,232 B` = `9` DFS sectors) streamed `8 B/species` via `< $3000` `OSGBPB A=$03`.<br>• **Atari 8-bit**: unified **`57 B/record` `MONSTER.CAT`** (`2` records per `125 B` DOS 2.5 sector = `140` `.atr` sectors; preloaded into `130XE` Slots `10..13, 15`; `CART_ASSET_CATALOG` `15,903 B` on AtariMax `.car`). |
 | **Active Monsters / Level** | Up to **100** (`MAX_MALLOC=101`, `m_list[1..100]`) | Up to **125** (`MON_MAX_ALLOCATIONS=125`) | Up to **32** (`MAX_MONSTERS=32`, `32 x 12 = 384 B` in `monster_table` across `40` active species templates: `32` dungeon + `8` resident town) |
-| **Item Catalog** | **343** dungeon templates (`MAX_DUNGEON_OBJ=343`) + **27** store-only (`344..370`) + traps/doors/rubble/gold (`MAX_OBJECTS=414`) | **343** dungeon + **27** store (`343..369`) + traps/doors/rubble/gold + **25** spellbooks (`game_objects[0..419]`, 420 entries) | **370** item templates (`0..369` in `'ITM2'` `ITEM.CAT` + `platforms/shared/item_catalog/item_hot_tables.s`), covering all 20 item categories (`ICAT_DIGGING`..`ICAT_MISC`, including `ICAT_CLOAK = 19`) under Base-255 Paged 9-bit IDs (`0..254` on Page 0, `255..369` on Page 1 via `ITEM_PAGE_BIT = $40`) |
+| **Item Catalog** | **343** dungeon templates (`MAX_DUNGEON_OBJ=343`) + **27** store-only (`344..370`) + traps/doors/rubble/gold (`MAX_OBJECTS=414`) | **343** dungeon + **27** store (`343..369`) + traps/doors/rubble/gold + **25** spellbooks (`game_objects[0..419]`, 420 entries) | **361** VMS item templates (`0..360` in `'ITM2'` `ITEM.CAT` + `platforms/shared/item_catalog/item_hot_tables.s` + `item_ids.s`), grouped contiguously by VMS category across all 21 item categories (`ICAT_DIGGING`..`ICAT_JUNK`, including `ICAT_CLOAK = 19`) under Base-255 Paged 9-bit IDs (`0..254` on Page 0, `255..360` on Page 1 via `ITEM_PAGE_BIT = $40`) |
 | **Active Floor Items** | Up to **174** (`MAX_TALLOC=175`, `t_list[1..174]`) | Up to **175** (`LEVEL_MAX_OBJECTS=175`) | Up to **42** (`MAX_FLOOR_ITEMS=42`, 6 bytes/entry = `252` B at `FLOOR_ITEM_BASE` + sidecars `fi_to_hit/dam/ac` and `fi_meta_hi[42]`) + **4** Glyphs of Warding (`MAX_GLYPHS=4`) |
 | **Player Inventory + Equip** | **22** pack slots + **12** equipment slots (`INVEN_MAX=35`) | **22** pack slots (`a`-`v`) + **12** equipment slots (`w`-`34`) | **22** pack slots (`MAX_INV_SLOTS=22`, `a`-`v`) + **12** equipment slots (`MAX_EQUIP_SLOTS=12`, slots `22..33`: Weapon/Digger, Body, Shield, Head, Hands, Feet, Light, Ring (right hand), Amulet, Ring (left hand, `31`), Cloak (`32`, `EQUIP_CLOAK`), Secondary weapon (`33`, `EQUIP_SECONDARY`); `TOTAL_INV_SLOTS=34`, `2026-11-15`) |
 | **Town Buildings** | **6** stores (24 slots each; 18 owners = 3 per store) | **6** stores (24 slots each; 18 owners = 3 per store) | **8** buildings (16 slots each = `128` slots total): **6** standard stores + **Black Market** (`6`) + **Player Home** (`7`) |
@@ -143,7 +143,7 @@ verification and physical hardware checklist. An experimental **Atari 8-bit 128 
 AtariMax MaxFlash (`.car` Type 41)** cartridge edition (`make cartridgeatari8`)
 likewise boots directly from Bank 0 into `MORIA8.RES`, streams all 10 overlays,
 the 279-monster catalog, and embedded legal texts (`LICENSE`/`SOURCE-OFFER`)
-from ROM with zero floppy swaps, and shares DOS 2.5 `SAVE_VERSION = $21` save
+from ROM with zero floppy swaps, and shares DOS 2.5 `SAVE_VERSION = $22` save
 disks (`D1:`–`D4:`, defaulting to `D1:`) bidirectionally with the standard disk
 image; see [`ATARI8_CARTRIDGE_EXPERIMENT.md`](ATARI8_CARTRIDGE_EXPERIMENT.md). The
 following matrix describes the existing disk builds.
@@ -429,7 +429,7 @@ Activating Wizard Mode sets `GAME_FLAG_WIZARD` (`zp_game_flags` bit 0), displays
 | **Heal / Cure All (`^A` / `H`)** | `^A`: removes curses, cures poison/blind/confuse/fear, restores stats, heals HP | `^A`: cures all ailments, restores stats, heals HP & mana | **`H`) Heal Full**: restores HP to `MHP`, MP to `MMP`, Food to `FOOD_MAX`, and clears poison/blind/confuse/paralyze/fear/slow | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
 | **Wizard Light / Reveal Map (`^L` / `R`)** | `^L`: `wizard_light` toggles full-level illumination | `^L`: `wizardLight()` lights or unlights entire level | **`R`) Reveal Map**: calls `tramp_reveal_floorplan` (`eff_reveal_floorplan`), illuminating and marking all tiles, doors, stairs, items, and monsters on the level | **`Implemented`** | `moria8: core/wizard.s, core/spell_effects.s` |
 | **Teleport / Jump to Dungeon Level (`^T` / `W`)** | `^T`: phase-door teleport; `^F` / `change_character`: jump to any dungeon depth `0..50` | `^T` teleport; `:w` / `wizardJumpLevel` jumps to any depth `0..100` | **`T` / `D` / `U` / Level Jump**: teleports player or jumps directly to target dungeon depth (`0` Town .. `50` Balrog lair), triggering level generation and monster tier swap | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
-| **Create / Spawn Any Item (`^C` / `I`)** | `create_object`: interactive form to set `tval`, `subval`, `p1`, `tohit`, `todam`, `toac`, `flags` | `wizardCreateObjects()`: interactive item creator | **`I` / `G`) Generate Item**: lets player pick any of the **370 item templates (`0..369`)**, rolls enchantment and ego type (`tramp_roll_ego_type_modal`), identifies it, and adds it to inventory or floor | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
+| **Create / Spawn Any Item (`^C` / `I`)** | `create_object`: interactive form to set `tval`, `subval`, `p1`, `tohit`, `todam`, `toac`, `flags` | `wizardCreateObjects()`: interactive item creator | **`I` / `G`) Generate Item**: lets player pick any of the **361 item templates (`0..360`)**, rolls enchantment and ego type (`tramp_roll_ego_type_modal`), identifies it, and adds it to inventory or floor | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
 | **Gain Experience / Level Up (`L`)** | `change_character` (`^E`): edit experience, level, gold, stats, mana | `wizardChangeCharacter()` | **`L`) Level Up / `+XP` / `+Gold` / `+Stats`**: grants level-up, maxes stats, or adds gold/XP | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
 | **Summon / Slay Monsters (`^D` / `K`)** | `^D`: slay all adjacent/nearby monsters (`td_destroy2`); `^S`: summon monster by ID | `^D` slay monsters; `^S` summon monster | **`K`) Kill Monsters / Spawn Monster / Toggle Invulnerability (`eff_invuln_timer`)**: slays active monsters or toggles wizard god-mode invulnerability | **`Implemented`** | `moria8: core/wizard.s, core/ui_wizard.s` |
 
@@ -470,7 +470,7 @@ Activating Wizard Mode sets `GAME_FLAG_WIZARD` (`zp_game_flags` bit 0), displays
 | **Door State Generation (`place_door`)** | Roll `randint(3)`: `1..2` closed door (`'`), `3` open door (`'`). For closed doors, `randint(12)`: `1..2` locked (`p1 = randint(10)+10` in `11..20`), `3` stuck (`p1 = -(randint(10)+10)` in `-11..-20`), `4..12` plain (`p1 = 0`) | Exact same probabilities (`2/12` locked `11..20`, `1/12` stuck `-11..-20`, `9/12` plain `0`) | **Exact upstream distribution** in `place_secrets` (`core/dungeon_features.s:264-340`): converts `1..3` closed doors to Secret Doors (`TILE_SECRET`), then rolls `rng_range(120)` on every remaining closed door:<br>- `[0..19]` (`20/120 = 2/12`): **Locked** with difficulty `11..20` (`door_state_val = 11 + roll/2`)<br>- `[60..69]` (`10/120 = 1/12`): **Stuck** with magnitude `11..20` (`door_state_val = $80 | (roll - 49)`)<br>- Otherwise (`90/120 = 9/12`): **Plain** (`0`) | **`Implemented`** | `vms-moria: source/include/generate.inc`<br>`umoria: src/dungeon_generate.cpp`<br>`moria8: core/dungeon_features.s:264-340` |
 | **Opening & Picking Locked Doors (`o`)** | Plain door opens (`'`); Locked door (`p1 > 0`) rolls `disarm - p1 > randint(100)`, awards `+1 XP` on unlock; Stuck door (`p1 < 0`) prints *"The door appears to be stuck."* | Identical | **Exact match** in `door_try_open` & `door_pick_roll` (`core/dungeon_features.s:865-961, 1280-1327`):<br>- Refuses if confused (*"You are too confused to pick the lock."*)<br>- Locked (`val > 0`): rolls `1..100 < disarm_skill - lock_diff`; on success awards **+1 XP**, clears state, and opens door in the same turn<br>- Stuck (`val < 0`): prints *"The door appears to be stuck."* | **`Implemented`** | `moria8: core/dungeon_features.s:865-961, 1280-1327` |
 | **Closing & Broken Doors (`c`)** | Open door closes (`+`); if broken (`p1 != 0` on open door), prints *"The door appears to be broken."*; if monster in doorway, prints *"The <monster> is in your way!"* (consumes turn) | Identical | **Exact match** in `door_try_close` (`core/dungeon_features.s:967-1045`):<br>- Broken door (`door_state_get == 1` on `TILE_DOOR_OPEN`): prints *"The door appears to be broken."* (consumes turn)<br>- Live monster on tile: prints *"The <monster> is in your way!"* (consumes turn) | **`Implemented`** | `moria8: core/dungeon_features.s:967-1045` |
-| **Jamming Doors with Iron Spikes (`j` / `CTRL+D`)** | Requires closed door + Iron Spike (`TV_SPIKE`); sets `p1 = -abs(p1) - 20` (stuck magnitude `+20` per spike) and consumes 1 spike | Identical (`dungeonJamDoor`) | **Exact match** in `door_jam_command` (`core/dungeon_features.s:1148-1277`):<br>- Requires closed unoccupied door + `ITEM_TYPE_IRON_SPIKE` (`ID 135`) in carried pack<br>- Adds `+20` to `|door_state|` (capped at `127`), sets sign bit `$80` (converting locked/plain to stuck), and consumes 1 spike (`inv_consume_one`) | **`Implemented`** | `moria8: core/dungeon_features.s:1148-1277` |
+| **Jamming Doors with Iron Spikes (`j` / `CTRL+D`)** | Requires closed door + Iron Spike (`TV_SPIKE`); sets `p1 = -abs(p1) - 20` (stuck magnitude `+20` per spike) and consumes 1 spike | Identical (`dungeonJamDoor`) | **Exact match** in `door_jam_command` (`core/dungeon_features.s:1148-1277`):<br>- Requires closed unoccupied door + `ITEM_IRON_SPIKE` in carried pack<br>- Adds `+20` to `|door_state|` (capped at `127`), sets sign bit `$80` (converting locked/plain to stuck), and consumes 1 spike (`inv_consume_one`) | **`Implemented`** | `moria8: core/dungeon_features.s:1148-1277` |
 | **Bashing Doors (`B` / `CTRL+B`)** | `bash`: `chance = STR_index + weight/2`; succeeds if `randint(chance*(20+|p1|)) < 10*(chance-|p1|)`; `50%` chance to break door (`p1 = 1 - randint(2)`); steps into doorway; on failure ("The door holds firm.") paralysis is set to `2` (`moria.inc:3445-3457`) | `playerBashClosedDoor`: same formula; on failure, `randint(150) > DEX` paralyses `1 + randint(2)` turns ("You are off-balance.") | **Exact formula** in `bash_door` (`core/bash.s:117-240`):<br>- `chance = zp_player_str + 75` (`75` = typical `weight/2`)<br>- Succeeds iff `rng_range_word(chance * (20 + |s|)) < 10 * (chance - |s|)`<br>- `50%` chance (`rng_range(2) == 0`) to mark door **broken** (`door_state = 1`), steps player into doorway, and runs passive search<br>- On failure, calls `bash_off_balance_door`: Umoria's `randint(150) > DEX` for `1 + randint(2)` turns (until 2026-10-25 `1..2` turns, rolled one lower) | **`Implemented`** | `umoria: src/player.cpp`<br>`moria8: core/bash.s:117-240` |
 | **Tunneling / Digging (`T` / `+`)** | Requires digging tool or weapon (`tunnel` p1 * 20 + STR + weapon weight); compares against Granite (`randint(1200)+80`), Magma (`randint(600)+10`), Quartz (`randint(400)+10`), Rubble (`randint(180)`). Drops gold/item if vein had treasure | Identical (`playerTunnel`) | `player_tunnel` (`core/tunnel.s:18-346`):<br>- Confused: `75%` chance random direction<br>- Requires digging tool (`calc_dig_ability`: Shovel/Pick base + `ego` multiplier + `STR`); bare hands print *"You have no tool to dig with."*<br>- Resistance rolls (scaled 1/5th to 8-bit): **Granite/Secret/Closed Door** `rng(240)+16` (`16..255`), **Magma** `rng(120)+5` (`5..124`), **Quartz** `rng(80)+3` (`3..82`), **Rubble** `rng(40)` (`0..39`)<br>- If `FLAG_HAS_ITEM` set on Magma/Quartz vein, spawns gold via `tunnel_spawn_gold` | **`Implemented`** (8-bit scaled resistances) | `umoria: src/player.cpp`<br>`moria8: core/tunnel.s:1-346` |
 
@@ -851,8 +851,8 @@ Every divine prayer (`0..30`) is present in VMS Moria 4.8 (`magic_spell` in `val
 | --- | --- | --- | --- | --- | --- | --- |
 | **Inventory & Equipment Slot Layout** | `inven_max = 35` (1-based):<br>• `1..22`: carried pack (`a`-`v`)<br>• `23`: Wielded weapon<br>• `24..33`: other equipment (`32`: Outer cloak)<br>• `34`: Secondary weapon (swapped by `x`)<br>• `35`: scratch slot (`constants.inc:79`, `variables.inc:166`, `moria.inc:328-344`). | `INVEN_ARRAY_SIZE = 34` (0-based): `0..21` pack, `22` wield ... `33` auxiliary. | `TOTAL_INV_SLOTS = 33` (`core/item_defs.s:24-50`):<br>• `0..21` (`MAX_INV_SLOTS = 22` pack slots, `a`-`v`)<br>• `22` (`EQUIP_WEAPON`): Wielded weapon or digging tool<br>• `23` (`EQUIP_BODY`): Body armor (includes Cloak `#82`)<br>• `24` (`EQUIP_SHIELD`): Shield<br>• `25` (`EQUIP_HEAD`): Headgear<br>• `26` (`EQUIP_HANDS`): Gloves/Gauntlets<br>• `27` (`EQUIP_FEET`): Footwear<br>• `28` (`EQUIP_LIGHT`): Light source<br>• `29` (`EQUIP_RING`): Ring, the right hand<br>• `30` (`EQUIP_AMULET`): Amulet<br>• `31` (`EQUIP_RING2`): Ring, the left hand (2026-11-08; VMS `inventory[29]`/`[30]`, `moria.inc:528`: a ring goes on the right hand when free, else on the left, replacing its ring; both show as `Ring:` on the equipment screen). Slot `31` was reserved for a cloak slot until then; the cloak will take a new slot (Wave 4.1 catalog in `platforms/shared/item_catalog/` moves `#82 Cloak` to `ICAT_CLOAK (19)` ahead of Wave 4.2/4.3 slot wiring).<br>• `32` (`EQUIP_SECONDARY`): Secondary weapon (SHIFT+X).<br>AC and pseudo-ID cover `22..31` (`EQUIP_END = 32`). Both rings' resistances, See Invisible, Speed, Strength and Slaying count; two Rings of Speed give one level of speed (`PFLAG_SPEED`; VMS adds each ring's `+1`). Each slot stores `inv_item_id`, `inv_qty`, `inv_p1`, `inv_to_hit`, `inv_to_dam`, `inv_to_ac`, `inv_flags`, `inv_ego` (`8 × 33 = 264` B, saved as one block; 31-slot and 30-slot saves still load). | Identical across all 7 ports. | **Approximation** | `vms-moria: source/include/constants.inc:79`, `variables.inc:166`, `moria.inc:328-344`; `umoria: src/config.h`; `moria8: core/item_defs.s:24-50`, `core/item.s:41-53`, `platforms/shared/save.s` `load_read_inventory_state` |
 | **Floor Item Capacity & Representation** | Linked/indexed `t_list[1..MAX_TALLOC=225]` referenced by `cave[y,x].tptr` (`1` item per floor tile). | `t_list[MAX_TALLOC=175]`, `1` item per floor tile (`cave[y][x].tptr`). | `MAX_FLOOR_ITEMS = 42` (`FLOOR_ITEM_BASE`, `6` bytes per item = `252` B + `fi_to_hit`, `fi_to_dam`, `fi_to_ac` sidecar arrays, `1` item per floor tile) + `MAX_GLYPHS = 4` (`core/item_defs.s:45-68`, `core/item.s:68-115`). | Identical across all 7 ports. | **Approximation** | `vms-moria: source/include/constants.inc:48`; `umoria: src/config.h`; `moria8: core/item_defs.s:45-68`, `core/item.s:68-115` |
-| **Weight & Encumbrance Speed Penalty** | None: VMS refuses an item over the weight limit (`inven_check_weight`, previous section's Carrying Capacity row) and never slows the player for weight | `playerStrength` (`player.cpp:759-775`): over `playerCarryingLoadLimit`, speed drops by `pack weight / (limit + 1)` ("Your pack is so heavy that it slows you down."); nothing is refused for weight | VMS's refusal (`inv_add_carried`, 2026-11-13; maintainer: "the VMS approach on encumberance for now"); no speed penalty. `it_weight` (`core/item_tables.s`, one per item type) holds weights in `1/10 lb` units (`0..255`); Wave 4.1 `ITEM.CAT` (`'ITM2'`) stores lossless `16`-bit weights (`weights` table, fixing `Plate Mail` `380`, `Mithril Plate Mail` `320`, and `157..369`) | Umoria's slowdown is not implemented (maintainer: VMS for now) | **`Implemented`** (VMS) | `vms-moria: source/include/misc.inc:2589-2611`; `umoria: src/player.cpp:759-775`, `src/inventory.cpp:245-257`; `moria8: core/inv_add.s`, `core/item_tables.s` |
-| **Unidentified Flavors & Identification (`item_identified`)** | Randomized per-game flavor tables (`magic_init` in `misc.inc`):<br>• `67` potion colors (`colors`)<br>• `25` mushroom/mold adjectives (`mushrooms`)<br>• `25` staff woods (`woods`)<br>• `25` wand metals (`metals`)<br>• `32` ring stones (`rocks`)<br>• `15` amulet materials (`amulets`)<br>• Generated gibberish scroll titles (`syllables`).<br>Identified per item type via `object_ident[1..max_objects]` and per instance via `ident` flags (`ID_KNOWN2`, `ID_TRIED`, `ID_DAMD`). | Identical randomized flavor tables (`data_Recall.cpp` / `treasure.cpp`). | Deterministic flavor tables + per-type and per-slot identification (`core/item_identification.s`, `core/item_defs.s:89-99`):<br>• `item_identified` bit array (`17` bytes = `136` bits, 1 bit per item type ID `0..135`)<br>• Per-slot `IF_IDENTIFIED ($02)` and `IF_CURSED ($01)` flags in `inv_flags` / `fi_flags`<br>• Flavor tables in `core/item_identification.s` assign distinct colors, woods, metals, stones, and scroll titles to unidentified Potions (`ICAT_POTION`), Scrolls (`ICAT_SCROLL`), Rings (`ICAT_RING`), Wands (`ICAT_WAND`), Staves (`ICAT_STAFF`), and Amulets (`ICAT_AMULET`)<br>• Quaffing/reading/using or casting `Identify` (`#20` / Scroll `#21`) sets `item_identified` and reveals `+to_hit`, `+to_dam`, `+to_ac`, charges, and ego suffixes.<br>**Fixed 2026-11-05:** the flavour names carried their own article ("a Blue Potion", "an Iron Wand", "a Scroll of Lumen") where identified names carry none ("Potion of Cure Light Wounds"), so the look and pick-up messages read "You see a a Blue Potion."; the articles are gone ("Blue Potion", "Iron Wand", "Scroll of Lumen", "Cloudy Potion", "Silver Ring"). Wave 4.1 catalog (`platforms/shared/item_catalog/`) prepares `ITEM_TYPE_COUNT = 370` (`47`-B / `376`-bit `id_known_bits` budget) and `FLAVOUR_COUNT = 174` across 5 randomized classes (`46` potions, `49` scrolls, `30` rings, `24` wands, `25` staves — preserving Moria8 `0..11`/`0..11`/`0..3`/`0..4`/`0..4` indices; `flavour_colors[174]` in `item_hot_tables.s`, `flavour_names` in `ITEM.CAT`), with fixed-flavor potions (`#271`, `#273`, `#274`) at `it_unknown_idx = $FF` and `#320`/`#321` sharing `Ring of Adornment` slot `17`. | Identical across all 7 ports (`ItemNameStreams` in Bank 1 on C128, Aux RAM on Apple IIe, Bank 3 on CX16, Bank 6 on BBC Master). | **Implemented** | `vms-moria: source/include/values.inc:1890-1985`, `source/desc.inc`; `umoria: src/treasure.cpp`, `src/identification.cpp`; `moria8: core/item_identification.s`, `core/item_defs.s:89-99` |
+| **Weight & Encumbrance Speed Penalty** | None: VMS refuses an item over the weight limit (`inven_check_weight`, previous section's Carrying Capacity row) and never slows the player for weight | `playerStrength` (`player.cpp:759-775`): over `playerCarryingLoadLimit`, speed drops by `pack weight / (limit + 1)` ("Your pack is so heavy that it slows you down."); nothing is refused for weight | VMS's refusal (`inv_add_carried`, 2026-11-13; maintainer: "the VMS approach on encumberance for now"); no speed penalty. `it_weight` (`core/item_tables.s`, one per item type) holds weights in `1/10 lb` units (`0..255`); Wave 4.1 `ITEM.CAT` (`'ITM2'`) stores lossless `16`-bit weights (`weights` table, fixing weights above `255` such as `Plate Mail` `380`) | Umoria's slowdown is not implemented (maintainer: VMS for now) | **`Implemented`** (VMS) | `vms-moria: source/include/misc.inc:2589-2611`; `umoria: src/player.cpp:759-775`, `src/inventory.cpp:245-257`; `moria8: core/inv_add.s`, `core/item_tables.s` |
+| **Unidentified Flavors & Identification (`item_identified`)** | Randomized per-game flavor tables (`magic_init` in `misc.inc`):<br>• `67` potion colors (`colors`)<br>• `25` mushroom/mold adjectives (`mushrooms`)<br>• `25` staff woods (`woods`)<br>• `25` wand metals (`metals`)<br>• `32` ring stones (`rocks`)<br>• `15` amulet materials (`amulets`)<br>• Generated gibberish scroll titles (`syllables`).<br>Identified per item type via `object_ident[1..max_objects]` and per instance via `ident` flags (`ID_KNOWN2`, `ID_TRIED`, `ID_DAMD`). | Identical randomized flavor tables (`data_Recall.cpp` / `treasure.cpp`). | Deterministic flavor tables + per-type and per-slot identification (`core/item_identification.s`, `core/item_defs.s:89-99`):<br>• `id_known_bits` bit array (`47` bytes = `376` bits, 1 bit per logical item ID `0..360`)<br>• Per-slot `IF_IDENTIFIED ($02)` and `IF_CURSED ($01)` flags in `inv_flags` / `fi_flags`<br>• Flavor tables in `core/item_identification.s` assign distinct colors, woods, metals, stones, and scroll titles to unidentified Potions (`ICAT_POTION`), Scrolls (`ICAT_SCROLL`), Rings (`ICAT_RING`), Wands (`ICAT_WAND`), Staves (`ICAT_STAFF`), and Amulets (`ICAT_AMULET`)<br>• Quaffing/reading/using or casting `Identify` (spell / `Scroll of Identify`) sets `id_known_bits` and reveals `+to_hit`, `+to_dam`, `+to_ac`, charges, and ego suffixes.<br>**Fixed 2026-11-05:** the flavour names carried their own article ("a Blue Potion", "an Iron Wand", "a Scroll of Lumen") where identified names carry none ("Potion of Cure Light Wounds"), so the look and pick-up messages read "You see a a Blue Potion."; the articles are gone ("Blue Potion", "Iron Wand", "Scroll of Lumen", "Cloudy Potion", "Silver Ring"). Wave 4.1 catalog (`platforms/shared/item_catalog/`) prepares `ITEM_TYPE_COUNT = 361` (`47`-B / `376`-bit `id_known_bits` budget, `ITEM_ID_CAPACITY = 376`) and `FLAVOUR_COUNT = 174` across 5 randomized classes (`46` potions, `49` scrolls, `30` rings, `24` wands, `25` staves — preserving Moria8 `0..11`/`0..11`/`0..3`/`0..4`/`0..4` indices; `flavour_colors[174]` in `item_hot_tables.s`, `flavour_names` in `ITEM.CAT`), with fixed-flavor potions (`Clear Potion of Water`, `Light Brown Potion of Apple Juice`, `Icky Green Potion of Slime Mold Juice`) at `it_unknown_idx = $FF` and both `Ring of Adornment` templates sharing ring flavour slot `17`. | Identical across all 7 ports (`ItemNameStreams` in Bank 1 on C128, Aux RAM on Apple IIe, Bank 3 on CX16, Bank 6 on BBC Master). | **Implemented** | `vms-moria: source/include/values.inc:1890-1985`, `source/desc.inc`; `umoria: src/treasure.cpp`, `src/identification.cpp`; `moria8: core/item_identification.s`, `core/item_defs.s:89-99` |
 | **Inscription (`{`)** | `inscribe_object` (`{`): attaches a 12-character player note to an item. | Identical (`{` command). | Omitted (not in `core/`). | None. | **Missing** | `vms-moria: source/moria2.inc`; `umoria: src/dungeon.cpp` |
 
 ---
@@ -926,7 +926,7 @@ Wave 4.1 catalog (`platforms/shared/item_catalog/`) expands the data tables to `
 
 ---
 
-## 8.3 Complete Base Item Catalog (All VMS Moria / Umoria Templates & All 140 Moria8 Items)
+## 8.3 Complete Base Item Catalog (All VMS Moria / Umoria Templates & All 361 Moria8 Items)
 
 **Item levels and the picker (maintainer, 2026-11-13):** Moria8's item levels are a compressed
 scale, about the VMS level / 4 (0-12, a nibble each). `pick_item_type` (`core/item.s`) puts the
@@ -955,388 +955,385 @@ a load left the AC the monsters read at the saved value. `player_recalc_equipmen
 those bonuses in `pcc_eq_*`, `player_calc_combat` adds them every time, and the load runs the
 equipment recalc. C64 `test_item.s` 73 and 74, `test_main_loop.s` 56.
 
-### 8.3.1 Moria8 Master Item Table (All 370 Item Templates, IDs `0..369`)
+**361-item VMS catalog:** the two notes above predate it. Mithril Chain Mail, Mithril Plate
+Mail, and the Potion of Restoration they name were Moria8-only items and are gone; VMS's Ribbed
+Plate Armor and the `Potion of Restore <Stat>` / `Restore Life Levels` templates stand in their
+place (8.3.1).
 
-Source: `core/item_tables.s:13-660`, `core/item_defs.s:1-44` (active `0..156`); `platforms/shared/item_catalog/item_catalog_spec.json`, `item_hot_tables.s`, `item_cat_layout.s`, `item_cat_data.s` (Wave 4.1 full `0..369` catalog + `ITEM.CAT` `'ITM2'`).
+### 8.3.1 Moria8 Master Item Table (All 361 Item Templates, IDs `0..360`)
 
-**Base costs (fixed 2026-10-26, M5b playtest):** every item that maps one-to-one onto an upstream template (`Implemented` in 8.3.2) carries the VMS `object_list` cost (VMS `values.inc`; Umoria `data_treasure.cpp` agrees except Restore Mana `350`, Chants and Blessings `400` and Staff of Teleportation `800`). Moria8 had its own scale: a Potion of Cure Light Wounds cost `50` (VMS `15`), a Flask of Oil `10` (`3`), the Beginners Handbook `100` (`25`), Words of Wisdom `300` (`100`), Chain Mail `80` (`530`) and a Long Sword `60` (`300`). **Fixed 2026-10-26 (after the byte recovery freed town-overlay room):** the nine that needed a sparse high byte (`it_cost_hi_extra`) now carry the VMS price too: Ring of Strength (`#24`, `400`; was `120`), Wand of Lightning (`#40`, `600`; `200`), Wand of Frost (`#41`, `800`; `250`), Wand of Stinking Cloud (`#42`, `400`; `150`), Pike (`#75`, `358`; `100`), Halberd (`#76`, `430`; `150`), Lucerne Hammer (`#93`, `376`; `110`), Broad Axe (`#94`, `304`; `100`), Awl-Pike (`#95`, `340`; `80`). The worthless upstream items (Poison, Blindness and Confusion potions, Aggravate Monster scroll; VMS `0`) stay at `5`: the stores refuse an item priced `0`. Adapted items (`Approximation` in 8.3.2) keep their Moria8 costs.
+Source: `platforms/shared/item_catalog/item_catalog_spec.json`, `item_ids.s`, `item_hot_tables.s`, `item_cat_layout.s`, `item_cat_data.s`, and `core/item_defs.s` (`ITEM_TYPE_COUNT = 361`, `'ITM2'` `ITEM.CAT`).
 
-**Wave 4.1 VMS 4.8 Catalog Expansion (`0..369`, `platforms/shared/item_catalog/`):** IDs `0..156` preserve all existing Moria8 templates in-place (with `#82 Cloak` recategorized from `ICAT_ARMOR (3)` to `ICAT_CLOAK (19)` and `#121 Staff of Speed` cost set to `1000`), and IDs `157..369` append all `213` remaining VMS Moria 4.8 dungeon & store templates under Base-255 Paged 9-bit IDs (Page 0 = `0..254`, Page 1 = `255..369` via `slot_lo = id - 255`, `$FF` empty on both pages). Hot tables (`item_hot_tables.s`) pack `(color<<4) | min(base_ac, 15)` plus an 11-entry `it_ac_extra_*` lookup for Page 0 armors with `base_ac >= 15`; cold attributes, `16`-bit weights/costs, `32`-bit flags, and Huffman-compressed names pack into `'ITM2'` `ITEM.CAT` (`<= 7,800 B` cap).
+**Base costs (fixed 2026-10-26, M5b playtest):** every item that maps one-to-one onto an upstream template (`Implemented` in 8.3.2) carries the VMS `object_list` cost (VMS `values.inc`; Umoria `data_treasure.cpp` agrees except Restore Mana `350`, Chants and Blessings `400` and Staff of Teleportation `800`). Moria8 had its own scale: a Potion of Cure Light Wounds cost `50` (VMS `15`), a Flask of Oil `10` (`3`), the Beginners Handbook `100` (`25`), Words of Wisdom `300` (`100`), Chain Mail `80` (`530`) and a Long Sword `60` (`300`). The worthless upstream items (Poison, Blindness and Confusion potions, Aggravate Monster scroll; VMS `0`) stay at `5`: the stores refuse an item priced `0`. Adapted items (`Approximation` in 8.3.2) keep their Moria8 costs.
+
+**VMS Moria 4.8 Contiguous Category Ordering (`0..360`, `platforms/shared/item_catalog/`):** Retiring the 9 Moria8-only custom items leaves the **361** canonical VMS Moria 4.8 item templates (plus structural `#0` `Gold (small)`, `#1` `Gold (large)`, and `#210` `Ruined Chest`) grouped contiguously by category and ascending VMS `object_list` / `gold_list` order under Base-255 Paged 9-bit IDs: **Page 0 (`0..254`, `255` items)** holds Gold (`0..19`), Food (`20..49`), Potions (`50..94`), Scrolls (`95..136`), Wands (`137..160`), Staves (`161..185`), Books (`186..193`), Light & Oil (`194..196`), Spike (`197`), Digging (`198..203`), Chests (`204..210`), Cloak (`211`), Body Armor (`212..233`), Ranged Launchers & Ammo (`234..243`), Helms & Crowns (`244..251`), and Boots (`252..254`); **Page 1 (`255..360`, `106` items via `slot_lo = id - 255`, `$FF` empty on both pages)** holds Gloves (`255..256`), Shields (`257..262`), Melee Weapons (`263..308`), Rings (`309..339`), Amulets (`340..349`), and Junk (`350..360`). Hot tables (`item_hot_tables.s`) pack `(color<<4) | min(base_ac, 15)` plus a 9-entry `it_ac_extra_*` lookup (`225..233`) for Page-0 armors with `base_ac >= 15`; cold attributes, `16`-bit weights/costs, `32`-bit flags, and Huffman-compressed names pack into `'ITM2'` `ITEM.CAT` (`7,478 B`, `<= 7,800 B` cap).
 
 | M8 ID | Item Name | Category (`it_category`) | Glyph | Color | Base AC | Damage Dice | Weight (`0.1 lb`) | Base Cost (`GP`) | Min Depth (`0..12`) | VMS Moria / Umoria Origin |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `0` | **Gold (small)** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `0` | `0` | `TV_GOLD` (`copper` / `silver` `399..404`) |
 | `1` | **Gold (large)** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `0` | `0` | `TV_GOLD` (`gold` / `gems` / `mithril` `405..416`) |
-| `2` | **Dagger** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `12` | `10` | `1` | `Dagger (Stiletto)` (`#30`) |
-| `3` | **Short Sword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `30` | `48` | `1` | `Small Sword` (`#49`) |
-| `4` | **Long Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d8` | `50` | `300` | `3` | `Longsword` (`#45`, `1d10` in orig) |
-| `5` | **Mace** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `50` | `45` | `2` | `Mace` (`#58`) |
-| `6` | **Robe** | `ICAT_ARMOR (3)` | `[` | L.Grey | `2` | `0d0` | `20` | `4` | `1` | `Robe` (`#102`) |
-| `7` | **Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `4` | `0d0` | `80` | `18` | `2` | `Soft Leather Armor` (`#103`) |
-| `8` | **Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `14` | `0d0` | `120` | `530` | `7` | `Chain Mail` (`#112`, AC `14`) |
-| `9` | **Small Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `2` | `1d1` (a bash rolls it; `0d0` until 2026-10-25) | `50` | `30` | `2` | `Small Leather Shield` (`#126`) |
-| `10` | **Iron Helm** | `ICAT_HELM (5)` | `]` | Grey | `5` | `0d0` | `30` | `75` | `5` | `Iron Helm` (`#97`) |
-| `11` | **Leather Gloves** | `ICAT_GLOVES (6)` | `]` | Brown | `1` | `0d0` | `5` | `3` | `1` | `Set of Leather Gloves` (`#124`) |
-| `12` | **Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `10` | `4` | `1` | `Pair of Soft Leather Shoes` (`#91`) |
-| `13` | **Wooden Torch** | `ICAT_LIGHT (8)` | `*` | Yellow | `0` | `0d0` | `10` | `2` | `0` | `Wooden Torch` (`#86`, `4000` turns = `inv_p1=200`) |
-| `14` | **Brass Lantern** | `ICAT_LIGHT (8)` | `*` | Orange | `0` | `0d0` | `30` | `35` | `2` | `Brass Lantern` (`#85`, `5000` turns = `inv_p1=250`) |
-| `15` | **Ration of Food** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `10` | `3` | `0` | `Ration of Food` (`#21..23`) |
-| `16` | **Slime Mold** | `ICAT_FOOD (9)` | `,` | Green | `0` | `0d0` | `5` | `2` | `1` | `Slime Mold` (`#24`) |
-| `17` | **Cure Light Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `15` | `1` | `Potion of Cure Light Wounds` (`#237..239`) |
-| `18` | **Speed Potion** | `ICAT_POTION (10)` | `!` | L.Green | `0` | `0d0` | `4` | `75` | `3` | `Potion of Haste Self` (`#249`) |
-| `19` | **Poison Potion** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `5` | `1` | `Potion of Poison` (`#248`) |
-| `20` | **Scroll of Light** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `15` | `1` | `Scroll of Light` (`#181..183`) |
-| `21` | **Scroll of Identify** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `50` | `2` | `Scroll of Identify` (`#176..179`) |
-| `22` | **Scroll of Teleportation** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `40` | `3` | `Scroll of Teleport` (`#186`) |
-| `23` | **Ring of Protection** | `ICAT_RING (12)` | `=` | Yellow | `1` | `0d0` | `2` | `100` | `4` | `Ring of Protection` (`#153`, base AC `1` + `+to_ac`) |
-| `24` | **Ring of Strength** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `400` | `8` | `Ring of Strength` (`#132`) |
-| `25` | **Cure Serious Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `40` | `3` | `Potion of Cure Serious Wounds` (`#240`) |
-| `26` | **Restore Mana Potion** | `ICAT_POTION (10)` | `!` | Blue | `0` | `0d0` | `4` | `35` | `7` | `Potion of Restore Mana` (`#266`) |
-| `27` | **Heroism Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `35` | `4` | `Potion of Heroism` (`#257`) |
-| `28` | **Blindness Potion** | `ICAT_POTION (10)` | `!` | Grey | `0` | `0d0` | `4` | `5` | `1` | `Potion of Blindness` (`#246`) |
-| `29` | **Confusion Potion** | `ICAT_POTION (10)` | `!` | Purple | `0` | `0d0` | `4` | `5` | `1` | `Potion of Confusion` (`#247`) |
-| `30` | **Detect Monsters Potion** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `0d0` | `4` | `60` | `2` | `Potion of Detect Invisible` (`#263`) / Moria8 adaptation |
-| `31` | **Infravision Potion** | `ICAT_POTION (10)` | `!` | Orange | `0` | `0d0` | `4` | `20` | `2` | `Potion of Infra-Vision` (`#267`) |
-| `32` | **Scroll of Word of Recall** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `150` | `5` | `Scroll of Word-of-Recall` (`#220`) |
-| `33` | **Scroll of Remove Curse** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `100` | `4` | `Scroll of Remove Curse` (`#180`) |
-| `34` | **Scroll of Enchant Weapon** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `125` | `6` | `Scroll of Enchant Weapon To-Hit/Dam` (`#173/#174`) |
-| `35` | **Scroll of Enchant Armor** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `125` | `6` | `Scroll of Enchant Armor` (`#175`) |
-| `36` | **Scroll of Monster Confusion** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `2` | `30` | `3` | `Scroll of Monster Confusion` (`#188`) |
-| `37` | **Scroll of Aggravate** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `2` | `5` | `1` | `Scroll of Aggravate Monster` (`#202`) |
-| `38` | **Scroll of Protect from Evil** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `2` | `100` | `8` | `Scroll of Protection from Evil` (`#209`) |
-| `39` | **Wand of Light** | `ICAT_WAND (14)` | `-` | Yellow | `0` | `0d0` | `10` | `200` | `3` | `Wand of Light` (`#269`) |
-| `40` | **Wand of Lightning** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `600` | `4` | `Wand of Lightning Bolts` (`#270`) |
-| `41` | **Wand of Frost** | `ICAT_WAND (14)` | `-` | Blue | `0` | `0d0` | `10` | `800` | `5` | `Wand of Frost Bolts` (`#271`) |
-| `42` | **Wand of Stinking Cloud** | `ICAT_WAND (14)` | `-` | Green | `0` | `0d0` | `10` | `400` | `4` | `Wand of Stinking Cloud` (`#290`) |
-| `43` | **Staff of Light** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `250` | `3` | `Staff of Light` (`#293`) |
-| `44` | **Staff of Detect Monsters** | `ICAT_STAFF (15)` | `/` | L.Green | `0` | `0d0` | `50` | `100` | `3` | `Staff of Detect Invisible` (`#308`) |
-| `45` | **Staff of Teleportation** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `400` | `5` | `Staff of Teleportation` (`#298`) |
-| `46` | **Staff of Cure Light Wounds** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `200` | `3` | `Staff of Cure Light Wounds` (`#307`) |
-| `47` | **[Beginners-Magick]** | `ICAT_BOOK (13)` | `?` | Purple | `0` | `0d0` | `30` | `25` | `2` | `[Beginners-Magick]` (Mage Book 1, `#318` / `#395`) |
-| `48` | **[Beginners Handbook]** | `ICAT_BOOK (13)` | `?` | Yellow | `0` | `0d0` | `30` | `25` | `2` | `[Beginners Handbook]` (Priest Book 1, `#322` / `#407`) |
-| `49` | **Short Bow** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `30` | `50` | `2` | `Short Bow` (`#74`, fires Arrows `#52`) |
-| `50` | **Light Crossbow** | `ICAT_WEAPON (2)` | `}` | L.Grey | `0` | `0d0` | `50` | `140` | `3` | `Light Crossbow` (`#77`, fires Bolts `#53`) |
-| `51` | **Sling** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `5` | `5` | `1` | `Sling` (`#79`, fires Rocks `#54`) |
-| `52` | **Arrow** | `ICAT_WEAPON (2)` | `{` | Brown | `0` | `1d4` | `2` | `1` | `1` | `Arrow` (`#80`) |
-| `53` | **Bolt** | `ICAT_WEAPON (2)` | `{` | L.Grey | `0` | `1d5` | `2` | `2` | `2` | `Bolt` (`#81`) |
-| `54` | **Rock** | `ICAT_WEAPON (2)` | `{` | Grey | `0` | `1d2` | `4` | `1` | `1` | `Rounded Pebble` (`#82`) |
-| `55` | **[Magick I]** | `ICAT_BOOK (13)` | `?` | Purple | `0` | `0d0` | `30` | `100` | `4` | `[Magick I]` (Mage Book 2, `#319` / `#396`) |
-| `56` | **[Magick II]** | `ICAT_BOOK (13)` | `?` | Blue | `0` | `0d0` | `30` | `400` | `8` | `[Magick II]` (Mage Book 3, `#320` / `#397`) |
-| `57` | **[The Mages' Guide to Power]** | `ICAT_BOOK (13)` | `?` | L.Red | `0` | `0d0` | `30` | `800` | `12` | `[The Mages' Guide to Power]` (Mage Book 4, `#321` / `#398`) |
-| `58` | **[Words of Wisdom]** | `ICAT_BOOK (13)` | `?` | Yellow | `0` | `0d0` | `30` | `100` | `4` | `[Words of Wisdom]` (Priest Book 2, `#323` / `#408`) |
-| `59` | **[Chants and Blessings]** | `ICAT_BOOK (13)` | `?` | Cyan | `0` | `0d0` | `30` | `300` | `8` | `[Chants and Blessings]` (Priest Book 3, `#324` / `#409`) |
-| `60` | **[Exorcisms and Dispellings]** | `ICAT_BOOK (13)` | `?` | White | `0` | `0d0` | `30` | `800` | `12` | `[Exorcisms and Dispellings]` (Priest Book 4, `#325` / `#410`) |
-| `61` | **Flask of Oil** | `ICAT_LIGHT (8)` | `!` | Orange | `0` | `2d6` | `10` | `3` | `0` | `Flask of Oil` (`#268`, refuels Lantern or `2d6` thrown fire) |
-| `62` | **Shovel** | `ICAT_DIGGING (0)` | `\` | Brown | `0` | `1d2` | `60` | `15` | `0` | `Shovel` (`#350`; can roll `Gnomish` or `Dwarven` ego prefix) |
-| `63` | **Pick** | `ICAT_DIGGING (0)` | `\` | L.Grey | `0` | `1d3` | `50` | `50` | `0` | `Pick` (`#349`; can roll `Gnomish` or `Dwarven` ego prefix) |
-| `64` | **Main Gauche** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d5` | `30` | `25` | `1` | `Dagger (Main Gauche)` (`#28`) |
-| `65` | **Studded Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `5` | `0d0` | `90` | `35` | `3` | `Soft Studded Leather` (`#104`) |
-| `66` | **Rapier** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `40` | `42` | `2` | `Rapier` (`#47`) |
-| `67` | **Broad Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `2d5` | `75` | `255` | `4` | `Broadsword` (`#37`) |
-| `68` | **Bastard Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `3d4` | `140` | `350` | `6` | `Bastard Sword` (`#34`) |
-| `69` | **Two-Handed Sword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d6` | `200` | `180` | `8` | `Two-Handed Sword (Claymore)` (`#38`) |
-| `70` | **Scimitar** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d8` | `40` | `50` | `3` | `Backsword` / `Scimitar` (`#33`) |
-| `71` | **Battle Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `170` | `120` | `7` | `Battle Axe (European)` (`#72`) |
-| `72` | **War Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d3` | `120` | `90` | `5` | `War Hammer` (`#59`) |
-| `73` | **Morningstar** | `ICAT_WEAPON (2)` | `/` | White | `0` | `2d6` | `150` | `100` | `6` | `Morningstar` (`#57`) |
-| `74` | **Spear** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `50` | `36` | `2` | `Spear` (`#68`) |
-| `75` | **Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `160` | `358` | `8` | `Pike` (`#67`) |
-| `76` | **Halberd** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `190` | `430` | `9` | `Halberd` (`#65`) |
-| `77` | **Quarterstaff** | `ICAT_WEAPON (2)` | `/` | Brown | `0` | `1d9` | `40` | `20` | `1` | `Quarterstaff` (`1d9` hafted/staff weapon) |
-| `78` | **Large Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `4` | `1d2` (VMS Large Leather Shield; `0d0` until 2026-10-25) | `100` | `120` | `4` | `Large Leather/Metal Shield` (`#128`/`#131`) |
-| `79` | **Hard Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `120` | `55` | `5` | `Hard Leather Armor` (`#105`) |
-| `80` | **Scale Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `13` | `0d0` | `250` | `430` | `7` | `Metal Scale Mail` (`#111`) |
-| `81` | **Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `25` | `0d0` | `380` | `1050` | `12` | `Full Plate Armor` (`#121`) |
-| `82` | **Cloak** | `ICAT_CLOAK (19)` | `[` | L.Grey | `1` | `0d0` | `10` | `3` | `2` | `Cloak` (`#123`; recategorized to `ICAT_CLOAK` in Wave 4.1 catalog) |
-| `83` | **Steel Helm** | `ICAT_HELM (5)` | `]` | L.Grey | `6` | `0d0` | `60` | `200` | `10` | `Steel Helm` (`#98`) |
-| `84` | **Gauntlets** | `ICAT_GLOVES (6)` | `]` | L.Grey | `2` | `0d0` | `25` | `35` | `2` | `Set of Gauntlets` (`#125`) |
-| `85` | **Soft Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `2` | `0d0` | `5` | `7` | `1` | `Pair of Soft Leather Boots` (`#92`) |
-| `86` | **Hard Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `3` | `0d0` | `20` | `12` | `3` | `Pair of Hard Leather Boots` (`#93`) |
-| `87` | **Metal Cap** | `ICAT_HELM (5)` | `]` | Grey | `3` | `0d0` | `20` | `30` | `4` | `Metal Cap` (`#96`) |
-| `88` | **Sabre** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `50` | `50` | `3` | `Sabre` (`#48`) |
-| `89` | **Cutlass** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `110` | `85` | `4` | `Cutlass` (`#39`) |
-| `90` | **Tulwar** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `100` | `100` | `5` | `Tulwar` (`2d4` curved blade) |
-| `91` | **Katana** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `120` | `400` | `7` | `Katana` (`#44`) |
-| `92` | **Flail** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `150` | `120` | `5` | `Flail` (`#55`) |
-| `93` | **Lucerne Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `120` | `376` | `6` | `Lucerne Hammer` (`#66`) |
-| `94` | **Broad Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `160` | `304` | `5` | `Broad Axe` (`#73`) |
-| `95` | **Awl-Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d8` | `160` | `340` | `4` | `Awl-Pike` (`#61`) |
-| `96` | **Healing Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `200` | `4` | `Potion of Healing` (`#242`, heals `1000` HP + cures blindness/confusion/poison) |
-| `97` | **Restoration Potion** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `0d0` | `4` | `300` | `10` | Consolidated `Restore Stat` / `Restore Life Levels` (`#227..260`) |
-| `98` | **Resist Heat Potion** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Heat` (`#261`) |
-| `99` | **Resist Cold Potion** | `ICAT_POTION (10)` | `!` | Cyan | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Cold` (`#262`) |
-| `100` | **Cure Critical Wounds Potion** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `100` | `2` | `Potion of Cure Critical Wounds` (`#241`) |
-| `101` | **Scroll of Teleport Level** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `50` | `5` | `Scroll of Teleport Level` (`#187`) |
-| `102` | **Scroll of Magic Mapping** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `40` | `2` | `Scroll of Magic Mapping` (`#189`) |
-| `103` | **Scroll of Object Detection** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `15` | `1` | `Scroll of Object Detection` (`#193`) |
-| `104` | **Scroll of Recharging** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `200` | `9` | `Scroll of Recharging` (`#206`) |
-| `105` | **Scroll of Rune of Protection** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `500` | `11` | `Scroll of Rune of Protection` (`#191`) |
-| `106` | **Scroll of Genocide** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `750` | `9` | `Scroll of Genocide` (`#207`) |
-| `107` | **Scroll of Mass Genocide** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `1000` | `12` | `Scroll of Mass Genocide` (`#200`) |
-| `108` | **Scroll of \*Destruction\*** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `750` | `10` | `Scroll of *Destruction*` (`#221`) |
-| `109` | **Ring of Resist Fire** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `250` | `4` | `Ring of Resist Fire` (`#140`) |
-| `110` | **Ring of Resist Cold** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `250` | `4` | `Ring of Resist Cold` (`#141`) |
-| `111` | **Ring of Speed** | `ICAT_RING (12)` | `=` | Yellow | `0` | `0d0` | `2` | `3000` | `12` | `Ring of Speed` (`#136`) |
-| `112` | **Ring of See Invisible** | `ICAT_RING (12)` | `=` | L.Green | `0` | `0d0` | `2` | `500` | `9` | `Ring of See Invisible` (`#155`) |
-| `113` | **Ring of Slaying** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `1000` | `12` | `Ring of Slaying` (`#162`) |
-| `114` | **Wand of Slow Monster** | `ICAT_WAND (14)` | `-` | Grey | `0` | `0d0` | `10` | `500` | `1` | `Wand of Slow Monster` (`#277`) |
-| `115` | **Wand of Stone-to-Mud** | `ICAT_WAND (14)` | `-` | Brown | `0` | `0d0` | `10` | `300` | `3` | `Wand of Stone-to-Mud` (`#273`) |
-| `116` | **Wand of Teleport Away** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `350` | `5` | `Wand of Teleport Away` (`#285`) |
-| `117` | **Wand of Fire Balls** | `ICAT_WAND (14)` | `-` | L.Red | `0` | `0d0` | `10` | `1800` | `11` | `Wand of Fire Balls` (`#289`) |
-| `118` | **Wand of Cold Balls** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `1500` | `10` | `Wand of Cold Balls` (`#288`) |
-| `119` | **Staff of Dispel Evil** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `1200` | `11` | `Staff of Dispel Evil` (`#315`) |
-| `120` | **Staff of Destruction** | `ICAT_STAFF (15)` | `/` | L.Red | `0` | `0d0` | `50` | `2500` | `12` | `Staff of *Destruction*` (`#302`) |
-| `121` | **Staff of Speed** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `1000` | `10` | `Staff of Speed` (`#309`) |
-| `122` | **Mithril Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `16` | `0d0` | `200` | `600` | `7` | High-tier Mithril Chain Mail (`AC 16`, the maintainer's choice, 2026-11-13: between Chain `14` and Full Plate `25`) |
-| `123` | **Mithril Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `28` | `0d0` | `320` | `1200` | `12` | High-tier Mithril Plate Mail (`AC 28`, VMS Ribbed Plate) |
-| `124` | **Amulet of Wisdom** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `300` | `5` | `Amulet of Wisdom` (`#163`) |
-| `125` | **Amulet of the Magi** | `ICAT_AMULET (16)` | `"` | L.Green | `3` | `0d0` | `3` | `5000` | `12` | `Amulet of the Magi` (`#171`, base AC `3` + See Invisible + Free Action) |
-| `126` | **Neutralize Poison Potion** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `75` | `2` | `Potion of Neutralize Poison` (`#265`) |
-| `127` | **Staff of Remove Curse** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `500` | `12` | `Staff of Remove Curse` (`#312`) |
-| `128` | **Small Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d3` | `250` | `20` | `2` | `Small Wooden Chest` (`#326` / `#395`) |
-| `129` | **Large Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d5` | `255` | `60` | `4` | `Large Wooden Chest` (`#327` / `#396`) |
-| `130` | **Small Iron Chest** | `ICAT_CHEST (17)` | `&` | L.Grey | `0` | `2d4` | `255` | `100` | `7` | `Small Iron Chest` (`#328` / `#397`) |
-| `131` | **Large Iron Chest** | `ICAT_CHEST (17)` | `&` | L.Grey | `0` | `2d6` | `255` | `150` | `9` | `Large Iron Chest` (`#329` / `#398`) |
-| `132` | **Small Steel Chest** | `ICAT_CHEST (17)` | `&` | White | `0` | `2d4` | `255` | `200` | `11` | `Small Steel Chest` (`#330` / `#399`) |
-| `133` | **Large Steel Chest** | `ICAT_CHEST (17)` | `&` | White | `0` | `2d6` | `255` | `250` | `12` | `Large Steel Chest` (`#331` / `#400`) |
-| `134` | **Ruined Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `0d0` | `250` | `0` | `0` | `ruined chest` (`#418`) |
-| `135` | **Iron Spike** | `ICAT_SPIKE (18)` | `\` | White | `0` | `1d1` | `10` | `1` | `1` | `Iron Spike` (`#84`) |
-| `136` | **Scroll of Phase Door** | `ICAT_SCROLL` | `?` | Cyan | `0` | `0d0` | `5` | `15` | `1` | `Phase Door` (VMS `teleport(10)`; added 2026-10-25) |
-| `137` | **Long Bow** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `40` | `120` | `4` | `Long Bow` (`#75`, fires Arrows `#52`; added 2026-10-26) |
-| `138` | **Composite Bow** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `40` | `240` | `10` | `Composite Bow` (`#76`, fires Arrows `#52`; added 2026-10-26) |
-| `139` | **Heavy Crossbow** | `ICAT_WEAPON (2)` | `}` | Light grey | `0` | `0d0` | `200` | `300` | `8` | `Heavy Crossbow` (`#78`, fires Bolts `#53`; added 2026-10-26) |
-| `140` | **Potion of Gain Strength** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `200` | `8` | `Potion of Gain Strength` (VMS `inc_stat`, raises STR; added 2026-11-07) |
-| `141` | **Potion of Gain Intelligence** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Intelligence` (VMS `inc_stat`, raises INT; added 2026-11-07) |
-| `142` | **Potion of Gain Wisdom** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Wisdom` (VMS `inc_stat`, raises WIS; added 2026-11-07) |
-| `143` | **Potion of Gain Dexterity** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Dexterity` (VMS `inc_stat`, raises DEX; added 2026-11-07) |
-| `144` | **Potion of Gain Constitution** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Constitution` (VMS `inc_stat`, raises CON; added 2026-11-07) |
-| `145` | **Potion of Charisma** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Charisma` (VMS `inc_stat`, raises CHR; added 2026-11-07) |
-| `146` | **Ring of Lordly Protection (Fire)** | `ICAT_RING (12)` | `=` | L.Red | `5` | `0d0` | `2` | `1200` | `12` | `Ring of Lordly Protection (FIRE)` (`#147`, fire resistance + `5` AC; added 2026-11-11, MON-029) |
-| `147` | **Ring of Lordly Protection (Acid)** | `ICAT_RING (12)` | `=` | L.Green | `5` | `0d0` | `2` | `1200` | `12` | `Ring of Lordly Protection (ACID)` (`#148`, acid resistance + `5` AC; added 2026-11-11, MON-029) |
-| `148` | **Ring of Lordly Protection (Cold)** | `ICAT_RING (12)` | `=` | Cyan | `5` | `0d0` | `2` | `1200` | `12` | `Ring of Lordly Protection (COLD)` (`#149`, cold resistance + `5` AC; added 2026-11-11, MON-029) |
-| `149` | **Amulet of Resist Acid** | `ICAT_AMULET (16)` | `"` | L.Green | `0` | `0d0` | `3` | `300` | `8` | `Amulet of Resist Acid` (`#171`, acid resistance; added 2026-11-11, MON-029) |
-| `150` | **Silver Crown** | `ICAT_HELM (5)` | `]` | White | `0` | `1d1` | `20` | `250` | `11` | `Silver Crown` (`#100`; the Magi ego, 2026-11-11, MON-030) |
-| `151` | **Golden Crown** | `ICAT_HELM (5)` | `]` | Yellow | `0` | `1d2` | `30` | `500` | `12` | `Golden Crown` (`#101`; the Magi ego, 2026-11-11, MON-030) |
-| `152` | **Jewel Encrusted Crown** | `ICAT_HELM (5)` | `]` | L.Green | `0` | `1d3` | `40` | `1000` | `12` | `Jewel Encrusted Crown` (`#102`; the Magi ego, 2026-11-11, MON-030) |
-| `153` | **Wand of Fire Bolts** | `ICAT_WAND (14)` | `-` | L.Red | `0` | `0d0` | `10` | `1000` | `8` | `Wand of Fire Bolts` (`#273`, VMS `6d8` bolt; added 2026-11-11) |
-| `154` | **Wand of Drain Life** | `ICAT_WAND (14)` | `-` | Purple | `0` | `0d0` | `10` | `1200` | `11` | `Wand of Drain Life` (`#281`, VMS `50` to a creature that is not undead; added 2026-11-11) |
+| `2` | **Copper** | `ICAT_GOLD (1)` | `$` | Orange | `0` | `0d0` | `0` | `3` | `1` | `gold_list:1` (VMS lv `1`, P0) |
+| `3` | **Copper** | `ICAT_GOLD (1)` | `$` | Orange | `0` | `0d0` | `0` | `4` | `1` | `gold_list:2` (VMS lv `1`, P0) |
+| `4` | **Copper** | `ICAT_GOLD (1)` | `$` | Orange | `0` | `0d0` | `0` | `5` | `1` | `gold_list:3` (VMS lv `1`, P0) |
+| `5` | **Silver** | `ICAT_GOLD (1)` | `$` | L.Grey | `0` | `0d0` | `0` | `6` | `1` | `gold_list:4` (VMS lv `1`, P0) |
+| `6` | **Silver** | `ICAT_GOLD (1)` | `$` | L.Grey | `0` | `0d0` | `0` | `7` | `1` | `gold_list:5` (VMS lv `1`, P0) |
+| `7` | **Silver** | `ICAT_GOLD (1)` | `$` | L.Grey | `0` | `0d0` | `0` | `8` | `1` | `gold_list:6` (VMS lv `1`, P0) |
+| `8` | **Garnets** | `ICAT_GOLD (1)` | `$` | Red | `0` | `0d0` | `0` | `9` | `1` | `gold_list:7` (VMS lv `1`, P0) |
+| `9` | **Garnets** | `ICAT_GOLD (1)` | `$` | Red | `0` | `0d0` | `0` | `10` | `1` | `gold_list:8` (VMS lv `1`, P0) |
+| `10` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `12` | `1` | `gold_list:9` (VMS lv `1`, P0) |
+| `11` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `14` | `1` | `gold_list:10` (VMS lv `1`, P0) |
+| `12` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `16` | `1` | `gold_list:11` (VMS lv `1`, P0) |
+| `13` | **Opals** | `ICAT_GOLD (1)` | `$` | Cyan | `0` | `0d0` | `0` | `18` | `1` | `gold_list:12` (VMS lv `1`, P0) |
+| `14` | **Sapphires** | `ICAT_GOLD (1)` | `$` | Blue | `0` | `0d0` | `0` | `20` | `1` | `gold_list:13` (VMS lv `1`, P0) |
+| `15` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `24` | `1` | `gold_list:14` (VMS lv `1`, P0) |
+| `16` | **Rubies** | `ICAT_GOLD (1)` | `$` | L.Red | `0` | `0d0` | `0` | `28` | `1` | `gold_list:15` (VMS lv `1`, P0) |
+| `17` | **Diamonds** | `ICAT_GOLD (1)` | `$` | White | `0` | `0d0` | `0` | `32` | `1` | `gold_list:16` (VMS lv `1`, P0) |
+| `18` | **Emeralds** | `ICAT_GOLD (1)` | `$` | Green | `0` | `0d0` | `0` | `40` | `1` | `gold_list:17` (VMS lv `1`, P0) |
+| `19` | **Mithril** | `ICAT_GOLD (1)` | `$` | L.Blue | `0` | `0d0` | `0` | `80` | `1` | `gold_list:18` (VMS lv `1`, P0) |
+| `20` | **Mushroom of Poison** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `2` | `object_list:1` (VMS lv `7`, P0) |
+| `21` | **Mushroom of Blindness** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `3` | `object_list:2` (VMS lv `9`) |
+| `22` | **Mushroom of Paranoia** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `3` | `object_list:3` (VMS lv `9`) |
+| `23` | **Mushroom of Confusion** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `2` | `object_list:4` (VMS lv `7`, P0) |
+| `24` | **Mushroom of Hallucination** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `4` | `object_list:5` (VMS lv `13`) |
+| `25` | **Mushroom of Cure Poison** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `60` | `2` | `object_list:6` (VMS lv `8`) |
+| `26` | **Mushroom of Cure Blindness** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `50` | `3` | `object_list:7` (VMS lv `10`) |
+| `27` | **Mushroom of Cure Paranoia** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `25` | `3` | `object_list:8` (VMS lv `12`) |
+| `28` | **Mushroom of Cure Confusion** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `50` | `2` | `object_list:9` (VMS lv `6`, P0) |
+| `29` | **Mushroom of Weakness** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `2` | `object_list:10` (VMS lv `7`, P0) |
+| `30` | **Mushroom of Unhealth** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `10d10` | `1` | `50` | `4` | `object_list:11` (VMS lv `15`) |
+| `31` | **Mushroom of Restore Constitution** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `350` | `5` | `object_list:12` (VMS lv `20`) |
+| `32` | **Mushroom of First-Aid** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `5` | `2` | `object_list:13` (VMS lv `6`, P0) |
+| `33` | **Mushroom of Minor Cures** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `20` | `2` | `object_list:14` (VMS lv `7`, P0) |
+| `34` | **Mushroom of Light Cures** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `30` | `3` | `object_list:15` (VMS lv `10`) |
+| `35` | **Mushroom of Restoring** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `1000` | `8` | `object_list:16` (VMS lv `30`) |
+| `36` | **Hairy Mold of Poison** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `1` | `0` | `4` | `object_list:17` (VMS lv `15`) |
+| `37` | **Hairy Mold of Hallucinations** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `1` | `0` | `5` | `object_list:18` (VMS lv `18`) |
+| `38` | **Hairy Mold of Cure Poison** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `1` | `75` | `5` | `object_list:19` (VMS lv `19`) |
+| `39` | **Hairy Mold of Unhealth** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `6d8` | `1` | `25` | `7` | `object_list:20` (VMS lv `28`) |
+| `40` | **Hairy Mold of Cure Serious Wounds** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `2` | `75` | `4` | `object_list:21` (VMS lv `16`) |
+| `41` | **Ration of Food** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `10` | `3` | `0` | `Ration of Food` (`#21..23`) |
+| `42` | **Slime Mold** | `ICAT_FOOD (9)` | `,` | Green | `0` | `0d0` | `5` | `2` | `1` | `Slime Mold` (`#24`) |
+| `43` | **Piece of Elvish Waybread** | `ICAT_FOOD (9)` | `,` | Yellow | `0` | `0d0` | `3` | `10` | `2` | `object_list:26` (VMS lv `6`, P0) |
+| `44` | **Piece of Elvish Waybread** | `ICAT_FOOD (9)` | `,` | Yellow | `0` | `0d0` | `3` | `10` | `5` | `object_list:28` (VMS lv `20`) |
+| `45` | **Pint of Fine Grade Mush** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `1d1` | `1` | `0` | `1` | `mush:1` (VMS lv `1`, P0) |
+| `46` | **Hard Biscuit** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `2` | `1` | `0` | `inventory_init:2` (VMS lv `0`, P0) |
+| `47` | **Strip of Beef Jerky** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `2` | `2` | `0` | `inventory_init:3` (VMS lv `0`, P0) |
+| `48` | **Pint of Fine Ale** | `ICAT_FOOD (9)` | `,` | Orange | `0` | `0d0` | `10` | `1` | `0` | `inventory_init:4` (VMS lv `0`, P0) |
+| `49` | **Pint of Fine Wine** | `ICAT_FOOD (9)` | `,` | Orange | `0` | `0d0` | `10` | `2` | `0` | `inventory_init:5` (VMS lv `0`, P0) |
+| `50` | **Potion of Gain Strength** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `200` | `8` | `Potion of Gain Strength` (VMS `inc_stat`, raises STR; added 2026-11-07) |
+| `51` | **Potion of Weakness** | `ICAT_POTION (10)` | `!` | Orange | `0` | `1d1` | `4` | `0` | `1` | `object_list:223` (VMS lv `3`) |
+| `52` | **Potion of Restore Strength** | `ICAT_POTION (10)` | `!` | Orange | `0` | `1d1` | `4` | `300` | `10` | `object_list:224` (VMS lv `40`) |
+| `53` | **Potion of Gain Intelligence** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Intelligence` (VMS `inc_stat`, raises INT; added 2026-11-07) |
+| `54` | **Potion of Lose Intelligence** | `ICAT_POTION (10)` | `!` | Red | `0` | `1d1` | `4` | `0` | `7` | `object_list:226` (VMS lv `25`) |
+| `55` | **Potion of Restore Intelligence** | `ICAT_POTION (10)` | `!` | Cyan | `0` | `1d1` | `4` | `300` | `10` | `object_list:227` (VMS lv `40`) |
+| `56` | **Potion of Gain Wisdom** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Wisdom` (VMS `inc_stat`, raises WIS; added 2026-11-07) |
+| `57` | **Potion of Lose Wisdom** | `ICAT_POTION (10)` | `!` | Blue | `0` | `1d1` | `4` | `0` | `7` | `object_list:229` (VMS lv `25`) |
+| `58` | **Potion of Restore Wisdom** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `300` | `10` | `object_list:230` (VMS lv `40`) |
+| `59` | **Potion of Charisma** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Charisma` (VMS `inc_stat`, raises CHR; added 2026-11-07) |
+| `60` | **Potion of Ugliness** | `ICAT_POTION (10)` | `!` | Red | `0` | `1d1` | `4` | `0` | `7` | `object_list:232` (VMS lv `25`) |
+| `61` | **Potion of Restore Charisma** | `ICAT_POTION (10)` | `!` | L.Grey | `0` | `1d1` | `4` | `300` | `10` | `object_list:233` (VMS lv `40`) |
+| `62` | **Potion of Cure Light Wounds** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `15` | `1` | `Potion of Cure Light Wounds` (`#237..239`) |
+| `63` | **Potion of Cure Serious Wounds** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `40` | `3` | `Potion of Cure Serious Wounds` (`#240`) |
+| `64` | **Potion of Cure Critical Wounds** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `100` | `2` | `Potion of Cure Critical Wounds` (`#241`) |
+| `65` | **Potion of Healing** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `200` | `4` | `Potion of Healing` (`#242`, heals `1000` HP + cures blindness/confusion/poison) |
+| `66` | **Potion of Gain Constitution** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Constitution` (VMS `inc_stat`, raises CON; added 2026-11-07) |
+| `67` | **Potion of Gain Experience** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `1d1` | `4` | `2500` | `12` | `object_list:241` (VMS lv `50`) |
+| `68` | **Potion of Sleep** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `0` | `0` | `object_list:242` (VMS lv `0`) |
+| `69` | **Potion of Blindness** | `ICAT_POTION (10)` | `!` | Grey | `0` | `0d0` | `4` | `5` | `1` | `Potion of Blindness` (`#246`) |
+| `70` | **Potion of Confusion** | `ICAT_POTION (10)` | `!` | Purple | `0` | `0d0` | `4` | `5` | `1` | `Potion of Confusion` (`#247`) |
+| `71` | **Potion of Poison** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `5` | `1` | `Potion of Poison` (`#248`) |
+| `72` | **Potion of Speed** | `ICAT_POTION (10)` | `!` | L.Green | `0` | `0d0` | `4` | `75` | `3` | `Potion of Haste Self` (`#249`) |
+| `73` | **Potion of Slowness** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `0` | `1` | `object_list:247` (VMS lv `1`) |
+| `74` | **Icky Green Potion of Slime Mold Juice** | `ICAT_POTION (10)` | `!` | L.Green | `0` | `1d1` | `4` | `2` | `0` | `object_list:248` (VMS lv `0`) |
+| `75` | **Light Brown Potion of Apple Juice** | `ICAT_POTION (10)` | `!` | Brown | `0` | `1d1` | `4` | `1` | `0` | `object_list:249` (VMS lv `0`) |
+| `76` | **Clear Potion of Water** | `ICAT_POTION (10)` | `!` | White | `0` | `1d1` | `4` | `0` | `0` | `object_list:250` (VMS lv `0`) |
+| `77` | **Potion of Gain Dexterity** | `ICAT_POTION (10)` | `!` | White | `0` | `0d0` | `4` | `300` | `8` | `Potion of Gain Dexterity` (VMS `inc_stat`, raises DEX; added 2026-11-07) |
+| `78` | **Potion of Restore Dexterity** | `ICAT_POTION (10)` | `!` | Grey | `0` | `1d1` | `4` | `300` | `10` | `object_list:252` (VMS lv `40`) |
+| `79` | **Potion of Restore Constitution** | `ICAT_POTION (10)` | `!` | Grey | `0` | `1d1` | `4` | `300` | `10` | `object_list:253` (VMS lv `40`) |
+| `80` | **Potion of Learning** | `ICAT_POTION (10)` | `!` | L.Grey | `0` | `1d1` | `4` | `200` | `12` | `object_list:254` (VMS lv `45`) |
+| `81` | **Potion of Lose Memories** | `ICAT_POTION (10)` | `!` | Purple | `0` | `1d1` | `4` | `0` | `3` | `object_list:255` (VMS lv `10`) |
+| `82` | **Potion of Salt Water** | `ICAT_POTION (10)` | `!` | L.Blue | `0` | `1d1` | `4` | `0` | `0` | `object_list:256` (VMS lv `0`) |
+| `83` | **Potion of Invulnerability** | `ICAT_POTION (10)` | `!` | L.Green | `0` | `1d1` | `4` | `250` | `10` | `object_list:257` (VMS lv `40`) |
+| `84` | **Potion of Heroism** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `35` | `4` | `Potion of Heroism` (`#257`) |
+| `85` | **Potion of Super Heroism** | `ICAT_POTION (10)` | `!` | Purple | `0` | `1d1` | `4` | `100` | `1` | `object_list:259` (VMS lv `3`) |
+| `86` | **Potion of Boldness** | `ICAT_POTION (10)` | `!` | Blue | `0` | `1d1` | `4` | `10` | `1` | `object_list:260` (VMS lv `1`) |
+| `87` | **Potion of Restore Life Levels** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `1d1` | `4` | `400` | `10` | `object_list:261` (VMS lv `40`) |
+| `88` | **Potion of Resist Heat** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Heat` (`#261`) |
+| `89` | **Potion of Resist Cold** | `ICAT_POTION (10)` | `!` | Cyan | `0` | `0d0` | `4` | `30` | `1` | `Potion of Resist Cold` (`#262`) |
+| `90` | **Potion of Detect Invisible** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `50` | `1` | `object_list:264` (VMS lv `3`) |
+| `91` | **Potion of Slow Poison** | `ICAT_POTION (10)` | `!` | Purple | `0` | `1d1` | `4` | `25` | `1` | `object_list:265` (VMS lv `1`) |
+| `92` | **Potion of Neutralize Poison** | `ICAT_POTION (10)` | `!` | Green | `0` | `0d0` | `4` | `75` | `2` | `Potion of Neutralize Poison` (`#265`) |
+| `93` | **Potion of Restore Mana** | `ICAT_POTION (10)` | `!` | Blue | `0` | `0d0` | `4` | `35` | `7` | `Potion of Restore Mana` (`#266`) |
+| `94` | **Potion of Infravision** | `ICAT_POTION (10)` | `!` | Orange | `0` | `0d0` | `4` | `20` | `2` | `Potion of Infra-Vision` (`#267`) |
+| `95` | **Scroll of Enchant Weapon To-Hit** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `125` | `3` | `object_list:174` (VMS lv `12`) |
+| `96` | **Scroll of Enchant Weapon To-Dam** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `125` | `3` | `object_list:175` (VMS lv `12`) |
+| `97` | **Scroll of Enchant Armor** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `125` | `6` | `Scroll of Enchant Armor` (`#175`) |
+| `98` | **Scroll of Identify** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `50` | `2` | `Scroll of Identify` (`#176..179`) |
+| `99` | **Scroll of Remove Curse** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `100` | `4` | `Scroll of Remove Curse` (`#180`) |
+| `100` | **Scroll of Light** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `2` | `15` | `1` | `Scroll of Light` (`#181..183`) |
+| `101` | **Scroll of Summon Monster** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `0` | `1` | `object_list:184` (VMS lv `1`) |
+| `102` | **Scroll of Phase Door** | `ICAT_SCROLL` | `?` | Cyan | `0` | `0d0` | `5` | `15` | `1` | `Phase Door` (VMS `teleport(10)`; added 2026-10-25) |
+| `103` | **Scroll of Teleportation** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `2` | `40` | `3` | `Scroll of Teleport` (`#186`) |
+| `104` | **Scroll of Teleport Level** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `50` | `5` | `Scroll of Teleport Level` (`#187`) |
+| `105` | **Scroll of Monster Confusion** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `2` | `30` | `3` | `Scroll of Monster Confusion` (`#188`) |
+| `106` | **Scroll of Magic Mapping** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `40` | `2` | `Scroll of Magic Mapping` (`#189`) |
+| `107` | **Scroll of Sleep Monster** | `ICAT_SCROLL (11)` | `?` | Orange | `0` | `0d0` | `5` | `35` | `2` | `object_list:190` (VMS lv `5`) |
+| `108` | **Scroll of Rune of Protection** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `500` | `11` | `Scroll of Rune of Protection` (`#191`) |
+| `109` | **Scroll of Treasure Detection** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `15` | `0` | `object_list:192` (VMS lv `0`) |
+| `110` | **Scroll of Object Detection** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `15` | `1` | `Scroll of Object Detection` (`#193`) |
+| `111` | **Scroll of Trap Detection** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `35` | `2` | `object_list:194` (VMS lv `5`) |
+| `112` | **Scroll of Trap Detection** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `35` | `3` | `object_list:196` (VMS lv `12`) |
+| `113` | **Scroll of Door/Stair Location** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `5` | `35` | `2` | `object_list:197` (VMS lv `5`) |
+| `114` | **Scroll of Door/Stair Location** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `5` | `35` | `4` | `object_list:199` (VMS lv `15`) |
+| `115` | **Scroll of Mass Genocide** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `1000` | `12` | `Scroll of Mass Genocide` (`#200`) |
+| `116` | **Scroll of Detect Invisible** | `ICAT_SCROLL (11)` | `?` | Brown | `0` | `0d0` | `5` | `15` | `1` | `object_list:201` (VMS lv `1`) |
+| `117` | **Scroll of Aggravate** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `2` | `5` | `1` | `Scroll of Aggravate Monster` (`#202`) |
+| `118` | **Scroll of Trap Creation** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `0` | `3` | `object_list:203` (VMS lv `12`) |
+| `119` | **Scroll of Trap/Door Destruction** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `50` | `3` | `object_list:204` (VMS lv `12`) |
+| `120` | **Scroll of Door Creation** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `100` | `3` | `object_list:205` (VMS lv `12`) |
+| `121` | **Scroll of Recharging** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `200` | `9` | `Scroll of Recharging` (`#206`) |
+| `122` | **Scroll of Genocide** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `750` | `9` | `Scroll of Genocide` (`#207`) |
+| `123` | **Scroll of Darkness** | `ICAT_SCROLL (11)` | `?` | Orange | `0` | `0d0` | `5` | `0` | `1` | `object_list:208` (VMS lv `1`) |
+| `124` | **Scroll of Protect from Evil** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `2` | `100` | `8` | `Scroll of Protection from Evil` (`#209`) |
+| `125` | **Scroll of Create Food** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `10` | `2` | `object_list:210` (VMS lv `5`) |
+| `126` | **Scroll of Dispel Undead** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `200` | `10` | `object_list:211` (VMS lv `40`) |
+| `127` | **Scroll of *Enchant Weapon*** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `5` | `500` | `12` | `object_list:212` (VMS lv `50`) |
+| `128` | **Scroll of Curse Weapon** | `ICAT_SCROLL (11)` | `?` | Brown | `0` | `0d0` | `5` | `0` | `12` | `object_list:213` (VMS lv `50`) |
+| `129` | **Scroll of *Enchant Armor*** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `500` | `12` | `object_list:214` (VMS lv `50`) |
+| `130` | **Scroll of Curse Armor** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `0` | `12` | `object_list:215` (VMS lv `50`) |
+| `131` | **Scroll of Summon Undead** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `0` | `4` | `object_list:216` (VMS lv `15`) |
+| `132` | **Scroll of Blessing** | `ICAT_SCROLL (11)` | `?` | Orange | `0` | `0d0` | `5` | `15` | `1` | `object_list:217` (VMS lv `1`) |
+| `133` | **Scroll of Holy Chant** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `40` | `3` | `object_list:218` (VMS lv `12`) |
+| `134` | **Scroll of Holy Prayer** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `80` | `6` | `object_list:219` (VMS lv `24`) |
+| `135` | **Scroll of Word of Recall** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `2` | `150` | `5` | `Scroll of Word-of-Recall` (`#220`) |
+| `136` | **Scroll of *Destruction*** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `750` | `10` | `Scroll of *Destruction*` (`#221`) |
+| `137` | **Wand of Light** | `ICAT_WAND (14)` | `-` | Yellow | `0` | `0d0` | `10` | `200` | `3` | `Wand of Light` (`#269`) |
+| `138` | **Wand of Lightning** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `600` | `4` | `Wand of Lightning Bolts` (`#270`) |
+| `139` | **Wand of Frost** | `ICAT_WAND (14)` | `-` | Blue | `0` | `0d0` | `10` | `800` | `5` | `Wand of Frost Bolts` (`#271`) |
+| `140` | **Wand of Fire Bolts** | `ICAT_WAND (14)` | `-` | L.Red | `0` | `0d0` | `10` | `1000` | `8` | `Wand of Fire Bolts` (`#273`, VMS `6d8` bolt; added 2026-11-11) |
+| `141` | **Wand of Stone-to-Mud** | `ICAT_WAND (14)` | `-` | Brown | `0` | `0d0` | `10` | `300` | `3` | `Wand of Stone-to-Mud` (`#273`) |
+| `142` | **Wand of Polymorph** | `ICAT_WAND (14)` | `-` | Grey | `0` | `1d1` | `10` | `400` | `5` | `object_list:275` (VMS lv `20`) |
+| `143` | **Wand of Heal Monster** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `0` | `1` | `object_list:276` (VMS lv `2`) |
+| `144` | **Wand of Haste Monster** | `ICAT_WAND (14)` | `-` | Grey | `0` | `1d1` | `10` | `0` | `1` | `object_list:277` (VMS lv `2`) |
+| `145` | **Wand of Slow Monster** | `ICAT_WAND (14)` | `-` | Grey | `0` | `0d0` | `10` | `500` | `1` | `Wand of Slow Monster` (`#277`) |
+| `146` | **Wand of Confuse Monster** | `ICAT_WAND (14)` | `-` | Brown | `0` | `1d1` | `10` | `400` | `1` | `object_list:279` (VMS lv `2`) |
+| `147` | **Wand of Sleep Monster** | `ICAT_WAND (14)` | `-` | White | `0` | `1d1` | `10` | `500` | `2` | `object_list:280` (VMS lv `7`) |
+| `148` | **Wand of Drain Life** | `ICAT_WAND (14)` | `-` | Purple | `0` | `0d0` | `10` | `1200` | `11` | `Wand of Drain Life` (`#281`, VMS `50` to a creature that is not undead; added 2026-11-11) |
+| `149` | **Wand of Trap/Door Destruction** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `100` | `3` | `object_list:282` (VMS lv `12`) |
+| `150` | **Wand of Magic Missile** | `ICAT_WAND (14)` | `-` | Brown | `0` | `1d1` | `10` | `200` | `1` | `object_list:283` (VMS lv `2`) |
+| `151` | **Wand of Wall Building** | `ICAT_WAND (14)` | `-` | Grey | `0` | `1d1` | `10` | `400` | `7` | `object_list:284` (VMS lv `25`) |
+| `152` | **Wand of Clone Monster** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `0` | `1` | `object_list:285` (VMS lv `2`) |
+| `153` | **Wand of Teleport Away** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `350` | `5` | `Wand of Teleport Away` (`#285`) |
+| `154` | **Wand of Disarming** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `700` | `5` | `object_list:287` (VMS lv `20`) |
 | `155` | **Wand of Lightning Balls** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `1200` | `9` | `Wand of Lightning Balls` (`#288`, VMS `24` ball; added 2026-11-11) |
-| `156` | **Wand of Acid Balls** | `ICAT_WAND (14)` | `-` | L.Green | `0` | `0d0` | `10` | `1650` | `11` | `Wand of Acid Balls` (`#292`, VMS `40` ball; added 2026-11-11) |
-| `157` | **Gnomish Shovel** | `ICAT_DIGGING (0)` | `\` | Cyan | `0` | `1d2` | `50` | `100` | `5` | `object_list:90` (VMS lv `20`, P0) |
-| `158` | **Orcish Pick** | `ICAT_DIGGING (0)` | `\` | D.Grey | `0` | `1d3` | `180` | `500` | `5` | `object_list:88` (VMS lv `20`, P0) |
-| `159` | **Dwarven Shovel** | `ICAT_DIGGING (0)` | `\` | White | `0` | `1d3` | `120` | `250` | `10` | `object_list:91` (VMS lv `40`, P0) |
-| `160` | **Dwarven Pick** | `ICAT_DIGGING (0)` | `\` | White | `0` | `1d4` | `200` | `1200` | `12` | `object_list:89` (VMS lv `50`, P0) |
-| `161` | **Soft Leather Cap** | `ICAT_HELM (5)` | `]` | Brown | `1` | `0d0` | `10` | `4` | `1` | `object_list:95` (VMS lv `2`, P0) |
-| `162` | **Hard Leather Cap** | `ICAT_HELM (5)` | `]` | Brown | `2` | `0d0` | `15` | `12` | `1` | `object_list:96` (VMS lv `4`, P0) |
-| `163` | **Medium Leather Shield** | `ICAT_SHIELD (4)` | `)` | Brown | `3` | `1d2` | `75` | `60` | `2` | `object_list:128` (VMS lv `8`, P0) |
-| `164` | **Small Metal Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `3` | `1d2` | `65` | `50` | `3` | `object_list:130` (VMS lv `10`, P0) |
-| `165` | **Medium Metal Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `4` | `1d3` | `90` | `125` | `5` | `object_list:131` (VMS lv `20`, P0) |
-| `166` | **Large Metal Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `5` | `1d3` | `120` | `200` | `8` | `object_list:132` (VMS lv `30`, P0) |
-| `167` | **Filthy Rags** | `ICAT_ARMOR (3)` | `[` | Grey | `1` | `0d0` | `20` | `0` | `0` | `object_list:335` (VMS lv `0`, P0) |
-| `168` | **Woven Cord Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `150` | `45` | `2` | `object_list:108` (VMS lv `7`, P0) |
-| `169` | **Hard Studded Leather** | `ICAT_ARMOR (3)` | `[` | Brown | `7` | `1d2` | `110` | `100` | `2` | `object_list:107` (VMS lv `7`, P0) |
-| `170` | **Soft Leather Ring Mail** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `1d2` | `130` | `160` | `3` | `object_list:109` (VMS lv `10`, P0) |
-| `171` | **Hard Leather Ring Mail** | `ICAT_ARMOR (3)` | `[` | Brown | `8` | `1d3` | `150` | `230` | `3` | `object_list:110` (VMS lv `12`, P0) |
-| `172` | **Leather Scale Mail** | `ICAT_ARMOR (3)` | `[` | Brown | `11` | `1d1` | `140` | `330` | `4` | `object_list:111` (VMS lv `14`, P0) |
-| `173` | **Rusty Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `14` | `1d4` | `200` | `0` | `7` | `object_list:114` (VMS lv `26`, P0) |
-| `174` | **Double Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `15` | `1d4` | `260` | `630` | `7` | `object_list:115` (VMS lv `28`, P0) |
-| `175` | **Augmented Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `16` | `1d4` | `270` | `675` | `8` | `object_list:116` (VMS lv `30`, P0) |
-| `176` | **Bar Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `18` | `1d4` | `280` | `720` | `9` | `object_list:117` (VMS lv `34`, P0) |
-| `177` | **Metal Brigandine Armor** | `ICAT_ARMOR (3)` | `[` | L.Grey | `19` | `1d4` | `290` | `775` | `9` | `object_list:118` (VMS lv `36`, P0) |
-| `178` | **Laminated Armor** | `ICAT_ARMOR (3)` | `[` | L.Grey | `20` | `1d4` | `300` | `825` | `10` | `object_list:119` (VMS lv `38`, P0) |
-| `179` | **Partial Plate Armor** | `ICAT_ARMOR (3)` | `[` | White | `22` | `1d6` | `260` | `900` | `11` | `object_list:120` (VMS lv `42`, P0) |
-| `180` | **Metal Lamellar Armor** | `ICAT_ARMOR (3)` | `[` | White | `23` | `1d6` | `340` | `950` | `11` | `object_list:121` (VMS lv `44`, P0) |
-| `181` | **Ribbed Plate Armor** | `ICAT_ARMOR (3)` | `[` | White | `28` | `2d4` | `380` | `1200` | `12` | `object_list:123` (VMS lv `50`, P0) |
-| `182` | **Broken Dagger** | `ICAT_WEAPON (2)` | `/` | Grey | `0` | `1d1` | `15` | `0` | `0` | `object_list:33` (VMS lv `0`, P0) |
-| `183` | **Broken Sword** | `ICAT_WEAPON (2)` | `/` | Grey | `0` | `1d1` | `75` | `0` | `0` | `object_list:52` (VMS lv `0`, P0) |
-| `184` | **Wooden Club** | `ICAT_WEAPON (2)` | `/` | Brown | `0` | `1d3` | `100` | `1` | `0` | `object_list:58` (VMS lv `0`, P0) |
-| `185` | **Dagger (Misericorde)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `15` | `10` | `0` | `object_list:30` (VMS lv `0`, P0) |
-| `186` | **Dagger (Bodkin)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `20` | `10` | `1` | `object_list:32` (VMS lv `1`, P0) |
-| `187` | **Foil** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d5` | `30` | `35` | `1` | `object_list:44` (VMS lv `2`, P0) |
-| `188` | **Iron Shot** | `ICAT_WEAPON (2)` | `{` | D.Grey | `0` | `1d3` | `5` | `2` | `1` | `object_list:84` (VMS lv `3`, P0) |
-| `189` | **Cat-o'-Nine-Tails** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `40` | `14` | `1` | `object_list:57` (VMS lv `3`, P0) |
-| `190` | **Javelin** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `30` | `18` | `1` | `object_list:74` (VMS lv `4`, P0) |
-| `191` | **Thrusting Sword (Bilbo)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `80` | `60` | `1` | `object_list:36` (VMS lv `4`, P0) |
-| `192` | **Thrusting Sword (Baselard)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d7` | `100` | `80` | `2` | `object_list:37` (VMS lv `5`, P0) |
-| `193` | **Backsword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d9` | `95` | `60` | `2` | `object_list:34` (VMS lv `7`, P0) |
-| `194` | **Lance** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d8` | `300` | `230` | `3` | `object_list:73` (VMS lv `10`, P0) |
-| `195` | **Beaked Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `180` | `408` | `4` | `object_list:66` (VMS lv `15`, P0) |
-| `196` | **Mace (Lead-Filled)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `180` | `502` | `4` | `object_list:64` (VMS lv `15`, P0) |
-| `197` | **Fauchard** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d10` | `170` | `376` | `5` | `object_list:67` (VMS lv `17`, P0) |
-| `198` | **Ball and Chain** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `150` | `200` | `5` | `object_list:54` (VMS lv `20`, P0) |
-| `199` | **Glaive** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `190` | `363` | `5` | `object_list:68` (VMS lv `20`, P0) |
-| `200` | **Battle Axe (Balestarius)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d8` | `180` | `500` | `8` | `object_list:53` (VMS lv `30`, P0) |
-| `201` | **Two-Handed Sword (Espadon)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `3d6` | `180` | `655` | `9` | `object_list:41` (VMS lv `35`, P0) |
-| `202` | **Executioner's Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d5` | `260` | `850` | `10` | `object_list:42` (VMS lv `40`, P0) |
-| `203` | **Two-Handed Great Flail** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d6` | `280` | `590` | `12` | `object_list:60` (VMS lv `45`, P0) |
-| `204` | **Two-Handed Sword (No-Dachi)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d4` | `200` | `675` | `12` | `object_list:47` (VMS lv `45`, P0) |
-| `205` | **Two-Handed Sword (Flamberge)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d5` | `240` | `1000` | `12` | `object_list:43` (VMS lv `45`, P0) |
-| `206` | **Two-Handed Sword (Zweihander)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d6` | `280` | `1000` | `12` | `object_list:51` (VMS lv `50`, P0) |
-| `207` | **Amulet of Teleportation** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `0` | `4` | `object_list:169` (VMS lv `14`, P0) |
-| `208` | **Amulet of Slow Digestion** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `200` | `4` | `object_list:170` (VMS lv `14`, P0) |
-| `209` | **Amulet of Searching** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `250` | `4` | `object_list:168` (VMS lv `14`, P0) |
-| `210` | **Amulet of Adornment** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `20` | `4` | `object_list:164` (VMS lv `16`, P0) |
-| `211` | **Amulet of Adornment** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `30` | `4` | `object_list:165` (VMS lv `16`, P0) |
-| `212` | **Amulet of Charisma** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `250` | `5` | `object_list:167` (VMS lv `20`, P0) |
-| `213` | **Amulet of DOOM** | `ICAT_AMULET (16)` | `"` | Red | `0` | `0d0` | `3` | `0` | `12` | `object_list:173` (VMS lv `50`, P0) |
-| `214` | **Copper** | `ICAT_GOLD (1)` | `$` | Orange | `0` | `0d0` | `0` | `3` | `1` | `gold_list:1` (VMS lv `1`, P0) |
-| `215` | **Copper** | `ICAT_GOLD (1)` | `$` | Orange | `0` | `0d0` | `0` | `4` | `1` | `gold_list:2` (VMS lv `1`, P0) |
-| `216` | **Copper** | `ICAT_GOLD (1)` | `$` | Orange | `0` | `0d0` | `0` | `5` | `1` | `gold_list:3` (VMS lv `1`, P0) |
-| `217` | **Silver** | `ICAT_GOLD (1)` | `$` | L.Grey | `0` | `0d0` | `0` | `6` | `1` | `gold_list:4` (VMS lv `1`, P0) |
-| `218` | **Silver** | `ICAT_GOLD (1)` | `$` | L.Grey | `0` | `0d0` | `0` | `7` | `1` | `gold_list:5` (VMS lv `1`, P0) |
-| `219` | **Silver** | `ICAT_GOLD (1)` | `$` | L.Grey | `0` | `0d0` | `0` | `8` | `1` | `gold_list:6` (VMS lv `1`, P0) |
-| `220` | **Garnets** | `ICAT_GOLD (1)` | `$` | Red | `0` | `0d0` | `0` | `9` | `1` | `gold_list:7` (VMS lv `1`, P0) |
-| `221` | **Garnets** | `ICAT_GOLD (1)` | `$` | Red | `0` | `0d0` | `0` | `10` | `1` | `gold_list:8` (VMS lv `1`, P0) |
-| `222` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `12` | `1` | `gold_list:9` (VMS lv `1`, P0) |
-| `223` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `14` | `1` | `gold_list:10` (VMS lv `1`, P0) |
-| `224` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `16` | `1` | `gold_list:11` (VMS lv `1`, P0) |
-| `225` | **Opals** | `ICAT_GOLD (1)` | `$` | Cyan | `0` | `0d0` | `0` | `18` | `1` | `gold_list:12` (VMS lv `1`, P0) |
-| `226` | **Sapphires** | `ICAT_GOLD (1)` | `$` | Blue | `0` | `0d0` | `0` | `20` | `1` | `gold_list:13` (VMS lv `1`, P0) |
-| `227` | **Gold** | `ICAT_GOLD (1)` | `$` | Yellow | `0` | `0d0` | `0` | `24` | `1` | `gold_list:14` (VMS lv `1`, P0) |
-| `228` | **Rubies** | `ICAT_GOLD (1)` | `$` | L.Red | `0` | `0d0` | `0` | `28` | `1` | `gold_list:15` (VMS lv `1`, P0) |
-| `229` | **Diamonds** | `ICAT_GOLD (1)` | `$` | White | `0` | `0d0` | `0` | `32` | `1` | `gold_list:16` (VMS lv `1`, P0) |
-| `230` | **Emeralds** | `ICAT_GOLD (1)` | `$` | Green | `0` | `0d0` | `0` | `40` | `1` | `gold_list:17` (VMS lv `1`, P0) |
-| `231` | **Mithril** | `ICAT_GOLD (1)` | `$` | L.Blue | `0` | `0d0` | `0` | `80` | `1` | `gold_list:18` (VMS lv `1`, P0) |
-| `232` | **Empty Bottle** | `ICAT_MISC (20)` | `~` | L.Green | `0` | `1d1` | `2` | `0` | `0` | `object_list:336` (VMS lv `0`, P0) |
-| `233` | **Shards of Pottery** | `ICAT_MISC (20)` | `~` | Orange | `0` | `1d1` | `5` | `0` | `0` | `object_list:337` (VMS lv `0`, P0) |
-| `234` | **Broken Set of Teeth** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `3` | `0` | `0` | `object_list:342` (VMS lv `0`, P0) |
-| `235` | **Large Broken Bone** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `2` | `0` | `0` | `object_list:343` (VMS lv `0`, P0) |
-| `236` | **Broken Stick** | `ICAT_MISC (20)` | `~` | Brown | `0` | `1d1` | `3` | `0` | `0` | `object_list:344` (VMS lv `0`, P0) |
-| `237` | **Rat Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `10` | `0` | `1` | `object_list:333` (VMS lv `1`, P0) |
-| `238` | **Giant Centipede Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `25` | `0` | `1` | `object_list:334` (VMS lv `1`, P0) |
-| `239` | **Human Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `50` | `0` | `1` | `object_list:338` (VMS lv `1`, P0) |
-| `240` | **Dwarf Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `60` | `0` | `1` | `object_list:339` (VMS lv `1`, P0) |
-| `241` | **Elf Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `40` | `0` | `1` | `object_list:340` (VMS lv `1`, P0) |
-| `242` | **Gnome Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `25` | `0` | `1` | `object_list:341` (VMS lv `1`, P0) |
-| `243` | **Hard Biscuit** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `2` | `1` | `0` | `inventory_init:2` (VMS lv `0`, P0) |
-| `244` | **Pint of Fine Ale** | `ICAT_FOOD (9)` | `,` | Orange | `0` | `0d0` | `10` | `1` | `0` | `inventory_init:4` (VMS lv `0`, P0) |
-| `245` | **Strip of Beef Jerky** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `2` | `2` | `0` | `inventory_init:3` (VMS lv `0`, P0) |
-| `246` | **Pint of Fine Wine** | `ICAT_FOOD (9)` | `,` | Orange | `0` | `0d0` | `10` | `2` | `0` | `inventory_init:5` (VMS lv `0`, P0) |
-| `247` | **Pint of Fine Grade Mush** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `1d1` | `1` | `0` | `1` | `mush:1` (VMS lv `1`, P0) |
-| `248` | **Mushroom of First-Aid** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `5` | `2` | `object_list:13` (VMS lv `6`, P0) |
-| `249` | **Piece of Elvish Waybread** | `ICAT_FOOD (9)` | `,` | Yellow | `0` | `0d0` | `3` | `10` | `2` | `object_list:26` (VMS lv `6`, P0) |
-| `250` | **Mushroom of Cure Confusion** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `50` | `2` | `object_list:9` (VMS lv `6`, P0) |
-| `251` | **Mushroom of Poison** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `2` | `object_list:1` (VMS lv `7`, P0) |
-| `252` | **Mushroom of Confusion** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `2` | `object_list:4` (VMS lv `7`, P0) |
-| `253` | **Mushroom of Weakness** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `2` | `object_list:10` (VMS lv `7`, P0) |
-| `254` | **Mushroom of Minor Cures** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `20` | `2` | `object_list:14` (VMS lv `7`, P0) |
-| `255` | **Mushroom of Cure Poison** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `60` | `2` | `object_list:6` (VMS lv `8`, P1 slot 0) |
-| `256` | **Mushroom of Blindness** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `3` | `object_list:2` (VMS lv `9`, P1 slot 1) |
-| `257` | **Mushroom of Paranoia** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `3` | `object_list:3` (VMS lv `9`, P1 slot 2) |
-| `258` | **Mushroom of Light Cures** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `30` | `3` | `object_list:15` (VMS lv `10`, P1 slot 3) |
-| `259` | **Mushroom of Cure Blindness** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `50` | `3` | `object_list:7` (VMS lv `10`, P1 slot 4) |
-| `260` | **Mushroom of Cure Paranoia** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `25` | `3` | `object_list:8` (VMS lv `12`, P1 slot 5) |
-| `261` | **Mushroom of Hallucination** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `0` | `4` | `object_list:5` (VMS lv `13`, P1 slot 6) |
-| `262` | **Hairy Mold of Poison** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `1` | `0` | `4` | `object_list:17` (VMS lv `15`, P1 slot 7) |
-| `263` | **Mushroom of Unhealth** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `10d10` | `1` | `50` | `4` | `object_list:11` (VMS lv `15`, P1 slot 8) |
-| `264` | **Hairy Mold of Cure Serious Wounds** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `2` | `75` | `4` | `object_list:21` (VMS lv `16`, P1 slot 9) |
-| `265` | **Hairy Mold of Hallucinations** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `1` | `0` | `5` | `object_list:18` (VMS lv `18`, P1 slot 10) |
-| `266` | **Hairy Mold of Cure Poison** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `0d0` | `1` | `75` | `5` | `object_list:19` (VMS lv `19`, P1 slot 11) |
-| `267` | **Mushroom of Restore Constitution** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `350` | `5` | `object_list:12` (VMS lv `20`, P1 slot 12) |
-| `268` | **Hairy Mold of Unhealth** | `ICAT_FOOD (9)` | `,` | L.Green | `0` | `6d8` | `1` | `25` | `7` | `object_list:20` (VMS lv `28`, P1 slot 13) |
-| `269` | **Mushroom of Restoring** | `ICAT_FOOD (9)` | `,` | Brown | `0` | `0d0` | `1` | `1000` | `8` | `object_list:16` (VMS lv `30`, P1 slot 14) |
-| `270` | **Potion of Sleep** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `0` | `0` | `object_list:242` (VMS lv `0`, P1 slot 15) |
-| `271` | **Clear Potion of Water** | `ICAT_POTION (10)` | `!` | White | `0` | `1d1` | `4` | `0` | `0` | `object_list:250` (VMS lv `0`, P1 slot 16) |
-| `272` | **Potion of Salt Water** | `ICAT_POTION (10)` | `!` | L.Blue | `0` | `1d1` | `4` | `0` | `0` | `object_list:256` (VMS lv `0`, P1 slot 17) |
-| `273` | **Light Brown Potion of Apple Juice** | `ICAT_POTION (10)` | `!` | Brown | `0` | `1d1` | `4` | `1` | `0` | `object_list:249` (VMS lv `0`, P1 slot 18) |
-| `274` | **Icky Green Potion of Slime Mold Juice** | `ICAT_POTION (10)` | `!` | L.Green | `0` | `1d1` | `4` | `2` | `0` | `object_list:248` (VMS lv `0`, P1 slot 19) |
-| `275` | **Potion of Slowness** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `0` | `1` | `object_list:247` (VMS lv `1`, P1 slot 20) |
-| `276` | **Potion of Boldness** | `ICAT_POTION (10)` | `!` | Blue | `0` | `1d1` | `4` | `10` | `1` | `object_list:260` (VMS lv `1`, P1 slot 21) |
-| `277` | **Potion of Slow Poison** | `ICAT_POTION (10)` | `!` | Purple | `0` | `1d1` | `4` | `25` | `1` | `object_list:265` (VMS lv `1`, P1 slot 22) |
-| `278` | **Potion of Weakness** | `ICAT_POTION (10)` | `!` | Orange | `0` | `1d1` | `4` | `0` | `1` | `object_list:223` (VMS lv `3`, P1 slot 23) |
-| `279` | **Potion of Detect Invisible** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `50` | `1` | `object_list:264` (VMS lv `3`, P1 slot 24) |
-| `280` | **Potion of Super Heroism** | `ICAT_POTION (10)` | `!` | Purple | `0` | `1d1` | `4` | `100` | `1` | `object_list:259` (VMS lv `3`, P1 slot 25) |
-| `281` | **Potion of Lose Memories** | `ICAT_POTION (10)` | `!` | Purple | `0` | `1d1` | `4` | `0` | `3` | `object_list:255` (VMS lv `10`, P1 slot 26) |
-| `282` | **Potion of Lose Intelligence** | `ICAT_POTION (10)` | `!` | Red | `0` | `1d1` | `4` | `0` | `7` | `object_list:226` (VMS lv `25`, P1 slot 27) |
-| `283` | **Potion of Lose Wisdom** | `ICAT_POTION (10)` | `!` | Blue | `0` | `1d1` | `4` | `0` | `7` | `object_list:229` (VMS lv `25`, P1 slot 28) |
-| `284` | **Potion of Ugliness** | `ICAT_POTION (10)` | `!` | Red | `0` | `1d1` | `4` | `0` | `7` | `object_list:232` (VMS lv `25`, P1 slot 29) |
-| `285` | **Potion of Invulnerability** | `ICAT_POTION (10)` | `!` | L.Green | `0` | `1d1` | `4` | `250` | `10` | `object_list:257` (VMS lv `40`, P1 slot 30) |
-| `286` | **Potion of Restore Strength** | `ICAT_POTION (10)` | `!` | Orange | `0` | `1d1` | `4` | `300` | `10` | `object_list:224` (VMS lv `40`, P1 slot 31) |
-| `287` | **Potion of Restore Intelligence** | `ICAT_POTION (10)` | `!` | Cyan | `0` | `1d1` | `4` | `300` | `10` | `object_list:227` (VMS lv `40`, P1 slot 32) |
-| `288` | **Potion of Restore Wisdom** | `ICAT_POTION (10)` | `!` | Green | `0` | `1d1` | `4` | `300` | `10` | `object_list:230` (VMS lv `40`, P1 slot 33) |
-| `289` | **Potion of Restore Charisma** | `ICAT_POTION (10)` | `!` | L.Grey | `0` | `1d1` | `4` | `300` | `10` | `object_list:233` (VMS lv `40`, P1 slot 34) |
-| `290` | **Potion of Restore Dexterity** | `ICAT_POTION (10)` | `!` | Grey | `0` | `1d1` | `4` | `300` | `10` | `object_list:252` (VMS lv `40`, P1 slot 35) |
-| `291` | **Potion of Restore Constitution** | `ICAT_POTION (10)` | `!` | Grey | `0` | `1d1` | `4` | `300` | `10` | `object_list:253` (VMS lv `40`, P1 slot 36) |
-| `292` | **Potion of Restore Life Levels** | `ICAT_POTION (10)` | `!` | L.Red | `0` | `1d1` | `4` | `400` | `10` | `object_list:261` (VMS lv `40`, P1 slot 37) |
-| `293` | **Potion of Learning** | `ICAT_POTION (10)` | `!` | L.Grey | `0` | `1d1` | `4` | `200` | `12` | `object_list:254` (VMS lv `45`, P1 slot 38) |
-| `294` | **Potion of Gain Experience** | `ICAT_POTION (10)` | `!` | Yellow | `0` | `1d1` | `4` | `2500` | `12` | `object_list:241` (VMS lv `50`, P1 slot 39) |
-| `295` | **Scroll of Treasure Detection** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `15` | `0` | `object_list:192` (VMS lv `0`, P1 slot 40) |
-| `296` | **Scroll of Summon Monster** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `0` | `1` | `object_list:184` (VMS lv `1`, P1 slot 41) |
-| `297` | **Scroll of Darkness** | `ICAT_SCROLL (11)` | `?` | Orange | `0` | `0d0` | `5` | `0` | `1` | `object_list:208` (VMS lv `1`, P1 slot 42) |
-| `298` | **Scroll of Blessing** | `ICAT_SCROLL (11)` | `?` | Orange | `0` | `0d0` | `5` | `15` | `1` | `object_list:217` (VMS lv `1`, P1 slot 43) |
-| `299` | **Scroll of Detect Invisible** | `ICAT_SCROLL (11)` | `?` | Brown | `0` | `0d0` | `5` | `15` | `1` | `object_list:201` (VMS lv `1`, P1 slot 44) |
-| `300` | **Scroll of Create Food** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `10` | `2` | `object_list:210` (VMS lv `5`, P1 slot 45) |
-| `301` | **Scroll of Sleep Monster** | `ICAT_SCROLL (11)` | `?` | Orange | `0` | `0d0` | `5` | `35` | `2` | `object_list:190` (VMS lv `5`, P1 slot 46) |
-| `302` | **Scroll of Trap Detection** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `35` | `2` | `object_list:194` (VMS lv `5`, P1 slot 47) |
-| `303` | **Scroll of Door/Stair Location** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `5` | `35` | `2` | `object_list:197` (VMS lv `5`, P1 slot 48) |
-| `304` | **Scroll of Trap Creation** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `0` | `3` | `object_list:203` (VMS lv `12`, P1 slot 49) |
-| `305` | **Scroll of Holy Chant** | `ICAT_SCROLL (11)` | `?` | L.Red | `0` | `0d0` | `5` | `40` | `3` | `object_list:218` (VMS lv `12`, P1 slot 50) |
-| `306` | **Scroll of Trap/Door Destruction** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `50` | `3` | `object_list:204` (VMS lv `12`, P1 slot 51) |
-| `307` | **Scroll of Door Creation** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `100` | `3` | `object_list:205` (VMS lv `12`, P1 slot 52) |
-| `308` | **Scroll of Enchant Weapon To-Hit** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `125` | `3` | `object_list:174` (VMS lv `12`, P1 slot 53) |
-| `309` | **Scroll of Enchant Weapon To-Dam** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `125` | `3` | `object_list:175` (VMS lv `12`, P1 slot 54) |
-| `310` | **Scroll of Summon Undead** | `ICAT_SCROLL (11)` | `?` | L.Green | `0` | `0d0` | `5` | `0` | `4` | `object_list:216` (VMS lv `15`, P1 slot 55) |
-| `311` | **Scroll of Holy Prayer** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `80` | `6` | `object_list:219` (VMS lv `24`, P1 slot 56) |
-| `312` | **Scroll of Dispel Undead** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `200` | `10` | `object_list:211` (VMS lv `40`, P1 slot 57) |
-| `313` | **Scroll of Curse Weapon** | `ICAT_SCROLL (11)` | `?` | Brown | `0` | `0d0` | `5` | `0` | `12` | `object_list:213` (VMS lv `50`, P1 slot 58) |
-| `314` | **Scroll of Curse Armor** | `ICAT_SCROLL (11)` | `?` | Cyan | `0` | `0d0` | `5` | `0` | `12` | `object_list:215` (VMS lv `50`, P1 slot 59) |
-| `315` | **Scroll of *Enchant Weapon*** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `5` | `500` | `12` | `object_list:212` (VMS lv `50`, P1 slot 60) |
-| `316` | **Scroll of *Enchant Armor*** | `ICAT_SCROLL (11)` | `?` | Yellow | `0` | `0d0` | `5` | `500` | `12` | `object_list:214` (VMS lv `50`, P1 slot 61) |
-| `317` | **Ring of Teleportation** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `2` | `object_list:139` (VMS lv `7`, P1 slot 62) |
-| `318` | **Ring of Weakness** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `2` | `object_list:146` (VMS lv `7`, P1 slot 63) |
-| `319` | **Ring of Aggravate Monster** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `2` | `object_list:155` (VMS lv `7`, P1 slot 64) |
+| `156` | **Wand of Cold Balls** | `ICAT_WAND (14)` | `-` | Cyan | `0` | `0d0` | `10` | `1500` | `10` | `Wand of Cold Balls` (`#288`) |
+| `157` | **Wand of Fire Balls** | `ICAT_WAND (14)` | `-` | L.Red | `0` | `0d0` | `10` | `1800` | `11` | `Wand of Fire Balls` (`#289`) |
+| `158` | **Wand of Stinking Cloud** | `ICAT_WAND (14)` | `-` | Green | `0` | `0d0` | `10` | `400` | `4` | `Wand of Stinking Cloud` (`#290`) |
+| `159` | **Wand of Acid Balls** | `ICAT_WAND (14)` | `-` | L.Green | `0` | `0d0` | `10` | `1650` | `11` | `Wand of Acid Balls` (`#292`, VMS `40` ball; added 2026-11-11) |
+| `160` | **Wand of Wonder** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `250` | `1` | `object_list:293` (VMS lv `2`) |
+| `161` | **Staff of Light** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `250` | `3` | `Staff of Light` (`#293`) |
+| `162` | **Staff of Door/Stair Location** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `1d2` | `50` | `350` | `3` | `object_list:295` (VMS lv `10`) |
+| `163` | **Staff of Trap Location** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `350` | `3` | `object_list:296` (VMS lv `10`) |
+| `164` | **Staff of Treasure Location** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `200` | `2` | `object_list:297` (VMS lv `5`) |
+| `165` | **Staff of Object Location** | `ICAT_STAFF (15)` | `/` | Red | `0` | `1d2` | `50` | `200` | `2` | `object_list:298` (VMS lv `5`) |
+| `166` | **Staff of Teleportation** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `400` | `5` | `Staff of Teleportation` (`#298`) |
+| `167` | **Staff of Earthquakes** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `350` | `10` | `object_list:300` (VMS lv `40`) |
+| `168` | **Staff of Summoning** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `3` | `object_list:301` (VMS lv `10`) |
+| `169` | **Staff of Summoning** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `12` | `object_list:302` (VMS lv `50`) |
+| `170` | **Staff of Destruction** | `ICAT_STAFF (15)` | `/` | L.Red | `0` | `0d0` | `50` | `2500` | `12` | `Staff of *Destruction*` (`#302`) |
+| `171` | **Staff of Starlite** | `ICAT_STAFF (15)` | `/` | Green | `0` | `1d2` | `50` | `800` | `5` | `object_list:304` (VMS lv `20`) |
+| `172` | **Staff of Haste Monsters** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `3` | `object_list:305` (VMS lv `10`) |
+| `173` | **Staff of Slow Monsters** | `ICAT_STAFF (15)` | `/` | L.Grey | `0` | `1d2` | `50` | `800` | `3` | `object_list:306` (VMS lv `10`) |
+| `174` | **Staff of Sleep Monsters** | `ICAT_STAFF (15)` | `/` | D.Grey | `0` | `1d2` | `50` | `700` | `3` | `object_list:307` (VMS lv `10`) |
+| `175` | **Staff of Cure Light Wounds** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `200` | `3` | `Staff of Cure Light Wounds` (`#307`) |
+| `176` | **Staff of Detect Invisible** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `200` | `2` | `object_list:309` (VMS lv `5`) |
+| `177` | **Staff of Speed** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `0d0` | `50` | `1000` | `10` | `Staff of Speed` (`#309`) |
+| `178` | **Staff of Slowness** | `ICAT_STAFF (15)` | `/` | L.Green | `0` | `1d2` | `50` | `0` | `10` | `object_list:311` (VMS lv `40`) |
+| `179` | **Staff of Mass Polymorph** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `750` | `12` | `object_list:312` (VMS lv `46`) |
+| `180` | **Staff of Remove Curse** | `ICAT_STAFF (15)` | `/` | Cyan | `0` | `0d0` | `50` | `500` | `12` | `Staff of Remove Curse` (`#312`) |
+| `181` | **Staff of Detect Evil** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `350` | `5` | `object_list:314` (VMS lv `20`) |
+| `182` | **Staff of Curing** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `1000` | `7` | `object_list:315` (VMS lv `25`) |
+| `183` | **Staff of Dispel Evil** | `ICAT_STAFF (15)` | `/` | White | `0` | `0d0` | `50` | `1200` | `11` | `Staff of Dispel Evil` (`#315`) |
+| `184` | **Staff of Darkness** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `12` | `object_list:317` (VMS lv `50`) |
+| `185` | **Staff of Darkness** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `2` | `object_list:318` (VMS lv `5`) |
+| `186` | **Spellbook Beginners-Magick** | `ICAT_BOOK (13)` | `?` | Purple | `0` | `0d0` | `30` | `25` | `2` | `[Beginners-Magick]` (Mage Book 1, `#318` / `#395`) |
+| `187` | **Spellbook Magick I** | `ICAT_BOOK (13)` | `?` | Purple | `0` | `0d0` | `30` | `100` | `4` | `[Magick I]` (Mage Book 2, `#319` / `#396`) |
+| `188` | **Spellbook Magick II** | `ICAT_BOOK (13)` | `?` | Blue | `0` | `0d0` | `30` | `400` | `8` | `[Magick II]` (Mage Book 3, `#320` / `#397`) |
+| `189` | **Spellbook The Mages Guide to Power** | `ICAT_BOOK (13)` | `?` | L.Red | `0` | `0d0` | `30` | `800` | `12` | `[The Mages' Guide to Power]` (Mage Book 4, `#321` / `#398`) |
+| `190` | **Holy Book of Prayers Beginners Handbook** | `ICAT_BOOK (13)` | `?` | Yellow | `0` | `0d0` | `30` | `25` | `2` | `[Beginners Handbook]` (Priest Book 1, `#322` / `#407`) |
+| `191` | **Holy Book of Prayers Words of Wisdom** | `ICAT_BOOK (13)` | `?` | Yellow | `0` | `0d0` | `30` | `100` | `4` | `[Words of Wisdom]` (Priest Book 2, `#323` / `#408`) |
+| `192` | **Holy Book of Prayers Chants and Blessings** | `ICAT_BOOK (13)` | `?` | Cyan | `0` | `0d0` | `30` | `300` | `8` | `[Chants and Blessings]` (Priest Book 3, `#324` / `#409`) |
+| `193` | **Holy Book of Prayers Exorcism** | `ICAT_BOOK (13)` | `?` | White | `0` | `0d0` | `30` | `800` | `12` | `[Exorcisms and Dispellings]` (Priest Book 4, `#325` / `#410`) |
+| `194` | **Brass Lantern** | `ICAT_LIGHT (8)` | `*` | Orange | `0` | `0d0` | `30` | `35` | `2` | `Brass Lantern` (`#85`, `5000` turns = `inv_p1=250`) |
+| `195` | **Wooden Torch** | `ICAT_LIGHT (8)` | `*` | Yellow | `0` | `0d0` | `10` | `2` | `0` | `Wooden Torch` (`#86`, `4000` turns = `inv_p1=200`) |
+| `196` | **Flask of Oil** | `ICAT_LIGHT (8)` | `!` | Orange | `0` | `2d6` | `10` | `3` | `0` | `Flask of Oil` (`#268`, refuels Lantern or `2d6` thrown fire) |
+| `197` | **Iron Spike** | `ICAT_SPIKE (18)` | `\` | White | `0` | `1d1` | `10` | `1` | `1` | `Iron Spike` (`#84`) |
+| `198` | **Pick** | `ICAT_DIGGING (0)` | `\` | L.Grey | `0` | `1d3` | `50` | `50` | `0` | `Pick` (`#349`; can roll `Gnomish` or `Dwarven` ego prefix) |
+| `199` | **Shovel** | `ICAT_DIGGING (0)` | `\` | Brown | `0` | `1d2` | `60` | `15` | `0` | `Shovel` (`#350`; can roll `Gnomish` or `Dwarven` ego prefix) |
+| `200` | **Orcish Pick** | `ICAT_DIGGING (0)` | `\` | D.Grey | `0` | `1d3` | `180` | `500` | `5` | `object_list:88` (VMS lv `20`, P0) |
+| `201` | **Dwarven Pick** | `ICAT_DIGGING (0)` | `\` | White | `0` | `1d4` | `200` | `1200` | `12` | `object_list:89` (VMS lv `50`, P0) |
+| `202` | **Gnomish Shovel** | `ICAT_DIGGING (0)` | `\` | Cyan | `0` | `1d2` | `50` | `100` | `5` | `object_list:90` (VMS lv `20`, P0) |
+| `203` | **Dwarven Shovel** | `ICAT_DIGGING (0)` | `\` | White | `0` | `1d3` | `120` | `250` | `10` | `object_list:91` (VMS lv `40`, P0) |
+| `204` | **Small Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d3` | `250` | `20` | `2` | `Small Wooden Chest` (`#326` / `#395`) |
+| `205` | **Large Wooden Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `2d5` | `255` | `60` | `4` | `Large Wooden Chest` (`#327` / `#396`) |
+| `206` | **Small Iron Chest** | `ICAT_CHEST (17)` | `&` | L.Grey | `0` | `2d4` | `255` | `100` | `7` | `Small Iron Chest` (`#328` / `#397`) |
+| `207` | **Large Iron Chest** | `ICAT_CHEST (17)` | `&` | L.Grey | `0` | `2d6` | `255` | `150` | `9` | `Large Iron Chest` (`#329` / `#398`) |
+| `208` | **Small Steel Chest** | `ICAT_CHEST (17)` | `&` | White | `0` | `2d4` | `255` | `200` | `11` | `Small Steel Chest` (`#330` / `#399`) |
+| `209` | **Large Steel Chest** | `ICAT_CHEST (17)` | `&` | White | `0` | `2d6` | `255` | `250` | `12` | `Large Steel Chest` (`#331` / `#400`) |
+| `210` | **Ruined Chest** | `ICAT_CHEST (17)` | `&` | Brown | `0` | `0d0` | `250` | `0` | `0` | `ruined chest` (`#418`) |
+| `211` | **Cloak** | `ICAT_CLOAK (19)` | `[` | L.Grey | `1` | `0d0` | `10` | `3` | `2` | `Cloak` (`#123`; recategorized to `ICAT_CLOAK` in Wave 4.1 catalog) |
+| `212` | **Robe** | `ICAT_ARMOR (3)` | `[` | L.Grey | `2` | `0d0` | `20` | `4` | `1` | `Robe` (`#102`) |
+| `213` | **Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `4` | `0d0` | `80` | `18` | `2` | `Soft Leather Armor` (`#103`) |
+| `214` | **Studded Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `5` | `0d0` | `90` | `35` | `3` | `Soft Studded Leather` (`#104`) |
+| `215` | **Hard Leather Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `120` | `55` | `5` | `Hard Leather Armor` (`#105`) |
+| `216` | **Hard Studded Leather** | `ICAT_ARMOR (3)` | `[` | Brown | `7` | `1d2` | `110` | `100` | `2` | `object_list:107` (VMS lv `7`, P0) |
+| `217` | **Woven Cord Armor** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `0d0` | `150` | `45` | `2` | `object_list:108` (VMS lv `7`, P0) |
+| `218` | **Soft Leather Ring Mail** | `ICAT_ARMOR (3)` | `[` | Brown | `6` | `1d2` | `130` | `160` | `3` | `object_list:109` (VMS lv `10`, P0) |
+| `219` | **Hard Leather Ring Mail** | `ICAT_ARMOR (3)` | `[` | Brown | `8` | `1d3` | `150` | `230` | `3` | `object_list:110` (VMS lv `12`, P0) |
+| `220` | **Leather Scale Mail** | `ICAT_ARMOR (3)` | `[` | Brown | `11` | `1d1` | `140` | `330` | `4` | `object_list:111` (VMS lv `14`, P0) |
+| `221` | **Filthy Rags** | `ICAT_ARMOR (3)` | `[` | Grey | `1` | `0d0` | `20` | `0` | `0` | `object_list:335` (VMS lv `0`, P0) |
+| `222` | **Scale Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `13` | `0d0` | `250` | `430` | `7` | `Metal Scale Mail` (`#111`) |
+| `223` | **Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `14` | `0d0` | `120` | `530` | `7` | `Chain Mail` (`#112`, AC `14`) |
+| `224` | **Rusty Chain Mail** | `ICAT_ARMOR (3)` | `[` | Grey | `14` | `1d4` | `200` | `0` | `7` | `object_list:114` (VMS lv `26`, P0) |
+| `225` | **Double Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `15` | `1d4` | `260` | `630` | `7` | `object_list:115` (VMS lv `28`, P0) |
+| `226` | **Augmented Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `16` | `1d4` | `270` | `675` | `8` | `object_list:116` (VMS lv `30`, P0) |
+| `227` | **Bar Chain Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `18` | `1d4` | `280` | `720` | `9` | `object_list:117` (VMS lv `34`, P0) |
+| `228` | **Metal Brigandine Armor** | `ICAT_ARMOR (3)` | `[` | L.Grey | `19` | `1d4` | `290` | `775` | `9` | `object_list:118` (VMS lv `36`, P0) |
+| `229` | **Laminated Armor** | `ICAT_ARMOR (3)` | `[` | L.Grey | `20` | `1d4` | `300` | `825` | `10` | `object_list:119` (VMS lv `38`, P0) |
+| `230` | **Partial Plate Armor** | `ICAT_ARMOR (3)` | `[` | White | `22` | `1d6` | `260` | `900` | `11` | `object_list:120` (VMS lv `42`, P0) |
+| `231` | **Metal Lamellar Armor** | `ICAT_ARMOR (3)` | `[` | White | `23` | `1d6` | `340` | `950` | `11` | `object_list:121` (VMS lv `44`, P0) |
+| `232` | **Plate Mail** | `ICAT_ARMOR (3)` | `[` | L.Grey | `25` | `0d0` | `380` | `1050` | `12` | `Full Plate Armor` (`#121`) |
+| `233` | **Ribbed Plate Armor** | `ICAT_ARMOR (3)` | `[` | White | `28` | `2d4` | `380` | `1200` | `12` | `object_list:123` (VMS lv `50`, P0) |
+| `234` | **Short Bow** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `30` | `50` | `2` | `Short Bow` (`#74`, fires Arrows `#240`) |
+| `235` | **Long Bow** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `40` | `120` | `4` | `Long Bow` (`#75`, fires Arrows `#240`; added 2026-10-26) |
+| `236` | **Composite Bow** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `40` | `240` | `10` | `Composite Bow` (`#76`, fires Arrows `#240`; added 2026-10-26) |
+| `237` | **Light Crossbow** | `ICAT_WEAPON (2)` | `}` | L.Grey | `0` | `0d0` | `50` | `140` | `3` | `Light Crossbow` (`#77`, fires Bolts `#241`) |
+| `238` | **Heavy Crossbow** | `ICAT_WEAPON (2)` | `}` | Light grey | `0` | `0d0` | `200` | `300` | `8` | `Heavy Crossbow` (`#78`, fires Bolts `#241`; added 2026-10-26) |
+| `239` | **Sling** | `ICAT_WEAPON (2)` | `}` | Brown | `0` | `0d0` | `5` | `5` | `1` | `Sling` (`#79`, fires Rocks `#242`) |
+| `240` | **Arrow** | `ICAT_WEAPON (2)` | `{` | Brown | `0` | `1d4` | `2` | `1` | `1` | `Arrow` (`#80`) |
+| `241` | **Bolt** | `ICAT_WEAPON (2)` | `{` | L.Grey | `0` | `1d5` | `2` | `2` | `2` | `Bolt` (`#81`) |
+| `242` | **Rock** | `ICAT_WEAPON (2)` | `{` | Grey | `0` | `1d2` | `4` | `1` | `1` | `Rounded Pebble` (`#82`) |
+| `243` | **Iron Shot** | `ICAT_WEAPON (2)` | `{` | D.Grey | `0` | `1d3` | `5` | `2` | `1` | `object_list:84` (VMS lv `3`, P0) |
+| `244` | **Soft Leather Cap** | `ICAT_HELM (5)` | `]` | Brown | `1` | `0d0` | `10` | `4` | `1` | `object_list:95` (VMS lv `2`, P0) |
+| `245` | **Hard Leather Cap** | `ICAT_HELM (5)` | `]` | Brown | `2` | `0d0` | `15` | `12` | `1` | `object_list:96` (VMS lv `4`, P0) |
+| `246` | **Metal Cap** | `ICAT_HELM (5)` | `]` | Grey | `3` | `0d0` | `20` | `30` | `4` | `Metal Cap` (`#96`) |
+| `247` | **Iron Helm** | `ICAT_HELM (5)` | `]` | Grey | `5` | `0d0` | `30` | `75` | `5` | `Iron Helm` (`#97`) |
+| `248` | **Steel Helm** | `ICAT_HELM (5)` | `]` | L.Grey | `6` | `0d0` | `60` | `200` | `10` | `Steel Helm` (`#98`) |
+| `249` | **Silver Crown** | `ICAT_HELM (5)` | `]` | White | `0` | `1d1` | `20` | `250` | `11` | `Silver Crown` (`#100`; the Magi ego, 2026-11-11, MON-030) |
+| `250` | **Golden Crown** | `ICAT_HELM (5)` | `]` | Yellow | `0` | `1d2` | `30` | `500` | `12` | `Golden Crown` (`#101`; the Magi ego, 2026-11-11, MON-030) |
+| `251` | **Jewel Encrusted Crown** | `ICAT_HELM (5)` | `]` | L.Green | `0` | `1d3` | `40` | `1000` | `12` | `Jewel Encrusted Crown` (`#102`; the Magi ego, 2026-11-11, MON-030) |
+| `252` | **Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `1` | `0d0` | `10` | `4` | `1` | `Pair of Soft Leather Shoes` (`#91`) |
+| `253` | **Soft Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `2` | `0d0` | `5` | `7` | `1` | `Pair of Soft Leather Boots` (`#92`) |
+| `254` | **Hard Leather Boots** | `ICAT_BOOTS (7)` | `]` | Brown | `3` | `0d0` | `20` | `12` | `3` | `Pair of Hard Leather Boots` (`#93`) |
+| `255` | **Leather Gloves** | `ICAT_GLOVES (6)` | `]` | Brown | `1` | `0d0` | `5` | `3` | `1` | `Set of Leather Gloves` (`#124`, P1 slot 0) |
+| `256` | **Gauntlets** | `ICAT_GLOVES (6)` | `]` | L.Grey | `2` | `0d0` | `25` | `35` | `2` | `Set of Gauntlets` (`#125`, P1 slot 1) |
+| `257` | **Small Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `2` | `1d1` (a bash rolls it; `0d0` until 2026-10-25) | `50` | `30` | `2` | `Small Leather Shield` (`#126`, P1 slot 2) |
+| `258` | **Medium Leather Shield** | `ICAT_SHIELD (4)` | `)` | Brown | `3` | `1d2` | `75` | `60` | `2` | `object_list:128` (VMS lv `8`, P0, P1 slot 3) |
+| `259` | **Large Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `4` | `1d2` (VMS Large Leather Shield; `0d0` until 2026-10-25) | `100` | `120` | `4` | `Large Leather/Metal Shield` (`#128`/`#131`, P1 slot 4) |
+| `260` | **Small Metal Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `3` | `1d2` | `65` | `50` | `3` | `object_list:130` (VMS lv `10`, P0, P1 slot 5) |
+| `261` | **Medium Metal Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `4` | `1d3` | `90` | `125` | `5` | `object_list:131` (VMS lv `20`, P0, P1 slot 6) |
+| `262` | **Large Metal Shield** | `ICAT_SHIELD (4)` | `)` | L.Grey | `5` | `1d3` | `120` | `200` | `8` | `object_list:132` (VMS lv `30`, P0, P1 slot 7) |
+| `263` | **Main Gauche** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d5` | `30` | `25` | `1` | `Dagger (Main Gauche)` (`#28`, P1 slot 8) |
+| `264` | **Dagger (Misericorde)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `15` | `10` | `0` | `object_list:30` (VMS lv `0`, P0, P1 slot 9) |
+| `265` | **Dagger** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `12` | `10` | `1` | `Dagger (Stiletto)` (`#30`, P1 slot 10) |
+| `266` | **Dagger (Bodkin)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `20` | `10` | `1` | `object_list:32` (VMS lv `1`, P0, P1 slot 11) |
+| `267` | **Broken Dagger** | `ICAT_WEAPON (2)` | `/` | Grey | `0` | `1d1` | `15` | `0` | `0` | `object_list:33` (VMS lv `0`, P0, P1 slot 12) |
+| `268` | **Backsword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d9` | `95` | `60` | `2` | `object_list:34` (VMS lv `7`, P0, P1 slot 13) |
+| `269` | **Bastard Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `3d4` | `140` | `350` | `6` | `Bastard Sword` (`#34`, P1 slot 14) |
+| `270` | **Thrusting Sword (Bilbo)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `80` | `60` | `1` | `object_list:36` (VMS lv `4`, P0, P1 slot 15) |
+| `271` | **Thrusting Sword (Baselard)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d7` | `100` | `80` | `2` | `object_list:37` (VMS lv `5`, P0, P1 slot 16) |
+| `272` | **Broad Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `2d5` | `75` | `255` | `4` | `Broadsword` (`#37`, P1 slot 17) |
+| `273` | **Two-Handed Sword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d6` | `200` | `180` | `8` | `Two-Handed Sword (Claymore)` (`#38`, P1 slot 18) |
+| `274` | **Cutlass** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `110` | `85` | `4` | `Cutlass` (`#39`, P1 slot 19) |
+| `275` | **Two-Handed Sword (Espadon)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `3d6` | `180` | `655` | `9` | `object_list:41` (VMS lv `35`, P0, P1 slot 20) |
+| `276` | **Executioner's Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d5` | `260` | `850` | `10` | `object_list:42` (VMS lv `40`, P0, P1 slot 21) |
+| `277` | **Two-Handed Sword (Flamberge)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d5` | `240` | `1000` | `12` | `object_list:43` (VMS lv `45`, P0, P1 slot 22) |
+| `278` | **Foil** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d5` | `30` | `35` | `1` | `object_list:44` (VMS lv `2`, P0, P1 slot 23) |
+| `279` | **Katana** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `120` | `400` | `7` | `Katana` (`#44`, P1 slot 24) |
+| `280` | **Long Sword** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d8` | `50` | `300` | `3` | `Longsword` (`#45`, `1d10` in orig, P1 slot 25) |
+| `281` | **Two-Handed Sword (No-Dachi)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d4` | `200` | `675` | `12` | `object_list:47` (VMS lv `45`, P0, P1 slot 26) |
+| `282` | **Rapier** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `40` | `42` | `2` | `Rapier` (`#47`, P1 slot 27) |
+| `283` | **Sabre** | `ICAT_WEAPON (2)` | `/` | White | `0` | `1d7` | `50` | `50` | `3` | `Sabre` (`#48`, P1 slot 28) |
+| `284` | **Short Sword** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `30` | `48` | `1` | `Small Sword` (`#49`, P1 slot 29) |
+| `285` | **Two-Handed Sword (Zweihander)** | `ICAT_WEAPON (2)` | `/` | White | `0` | `4d6` | `280` | `1000` | `12` | `object_list:51` (VMS lv `50`, P0, P1 slot 30) |
+| `286` | **Broken Sword** | `ICAT_WEAPON (2)` | `/` | Grey | `0` | `1d1` | `75` | `0` | `0` | `object_list:52` (VMS lv `0`, P0, P1 slot 31) |
+| `287` | **Battle Axe (Balestarius)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d8` | `180` | `500` | `8` | `object_list:53` (VMS lv `30`, P0, P1 slot 32) |
+| `288` | **Ball and Chain** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `150` | `200` | `5` | `object_list:54` (VMS lv `20`, P0, P1 slot 33) |
+| `289` | **Battle Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `170` | `120` | `7` | `Battle Axe (European)` (`#72`, P1 slot 34) |
+| `290` | **Broad Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `160` | `304` | `5` | `Broad Axe` (`#73`, P1 slot 35) |
+| `291` | **Cat-o'-Nine-Tails** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `40` | `14` | `1` | `object_list:57` (VMS lv `3`, P0, P1 slot 36) |
+| `292` | **Wooden Club** | `ICAT_WEAPON (2)` | `/` | Brown | `0` | `1d3` | `100` | `1` | `0` | `object_list:58` (VMS lv `0`, P0, P1 slot 37) |
+| `293` | **Flail** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `150` | `120` | `5` | `Flail` (`#55`, P1 slot 38) |
+| `294` | **Two-Handed Great Flail** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d6` | `280` | `590` | `12` | `object_list:60` (VMS lv `45`, P0, P1 slot 39) |
+| `295` | **Morningstar** | `ICAT_WEAPON (2)` | `/` | White | `0` | `2d6` | `150` | `100` | `6` | `Morningstar` (`#57`, P1 slot 40) |
+| `296` | **Mace** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d4` | `50` | `45` | `2` | `Mace` (`#58`, P1 slot 41) |
+| `297` | **War Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d3` | `120` | `90` | `5` | `War Hammer` (`#59`, P1 slot 42) |
+| `298` | **Mace (Lead-Filled)** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `180` | `502` | `4` | `object_list:64` (VMS lv `15`, P0, P1 slot 43) |
+| `299` | **Awl-Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d8` | `160` | `340` | `4` | `Awl-Pike` (`#61`, P1 slot 44) |
+| `300` | **Beaked Axe** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `180` | `408` | `4` | `object_list:66` (VMS lv `15`, P0, P1 slot 45) |
+| `301` | **Fauchard** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d10` | `170` | `376` | `5` | `object_list:67` (VMS lv `17`, P0, P1 slot 46) |
+| `302` | **Glaive** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d6` | `190` | `363` | `5` | `object_list:68` (VMS lv `20`, P0, P1 slot 47) |
+| `303` | **Halberd** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `3d4` | `190` | `430` | `9` | `Halberd` (`#65`, P1 slot 48) |
+| `304` | **Lucerne Hammer** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `120` | `376` | `6` | `Lucerne Hammer` (`#66`, P1 slot 49) |
+| `305` | **Pike** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d5` | `160` | `358` | `8` | `Pike` (`#67`, P1 slot 50) |
+| `306` | **Spear** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d6` | `50` | `36` | `2` | `Spear` (`#68`, P1 slot 51) |
+| `307` | **Lance** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `2d8` | `300` | `230` | `3` | `object_list:73` (VMS lv `10`, P0, P1 slot 52) |
+| `308` | **Javelin** | `ICAT_WEAPON (2)` | `/` | L.Grey | `0` | `1d4` | `30` | `18` | `1` | `object_list:74` (VMS lv `4`, P0, P1 slot 53) |
+| `309` | **Ring of Strength** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `400` | `8` | `Ring of Strength` (`#132`, P1 slot 54) |
+| `310` | **Ring of Gain Dexterity** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `400` | `8` | `object_list:134` (VMS lv `30`, P1 slot 55) |
+| `311` | **Ring of Gain Constitution** | `ICAT_RING (12)` | `=` | Blue | `0` | `0d0` | `2` | `400` | `8` | `object_list:135` (VMS lv `30`, P1 slot 56) |
+| `312` | **Ring of Gain Intelligence** | `ICAT_RING (12)` | `=` | L.Green | `0` | `0d0` | `2` | `350` | `8` | `object_list:136` (VMS lv `30`, P1 slot 57) |
+| `313` | **Ring of Speed** | `ICAT_RING (12)` | `=` | Yellow | `0` | `0d0` | `2` | `3000` | `12` | `Ring of Speed` (`#136`, P1 slot 58) |
+| `314` | **Ring of Searching** | `ICAT_RING (12)` | `=` | Red | `0` | `0d0` | `2` | `250` | `2` | `object_list:138` (VMS lv `7`, P1 slot 59) |
+| `315` | **Ring of Teleportation** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `2` | `object_list:139` (VMS lv `7`, P1 slot 60) |
+| `316` | **Ring of Slow Digestion** | `ICAT_RING (12)` | `=` | Orange | `0` | `0d0` | `2` | `250` | `2` | `object_list:140` (VMS lv `7`, P1 slot 61) |
+| `317` | **Ring of Resist Fire** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `250` | `4` | `Ring of Resist Fire` (`#140`, P1 slot 62) |
+| `318` | **Ring of Resist Cold** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `250` | `4` | `Ring of Resist Cold` (`#141`, P1 slot 63) |
+| `319` | **Ring of Feather Falling** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `200` | `2` | `object_list:143` (VMS lv `7`, P1 slot 64) |
 | `320` | **Ring of Adornment** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `20` | `2` | `object_list:144` (VMS lv `7`, P1 slot 65) |
 | `321` | **Ring of Adornment** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `30` | `2` | `object_list:145` (VMS lv `7`, P1 slot 66) |
-| `322` | **Ring of Feather Falling** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `200` | `2` | `object_list:143` (VMS lv `7`, P1 slot 67) |
-| `323` | **Ring of Searching** | `ICAT_RING (12)` | `=` | Red | `0` | `0d0` | `2` | `250` | `2` | `object_list:138` (VMS lv `7`, P1 slot 68) |
-| `324` | **Ring of Slow Digestion** | `ICAT_RING (12)` | `=` | Orange | `0` | `0d0` | `2` | `250` | `2` | `object_list:140` (VMS lv `7`, P1 slot 69) |
-| `325` | **Ring of Sustain Charisma** | `ICAT_RING (12)` | `=` | L.Green | `0` | `0d0` | `2` | `500` | `2` | `object_list:162` (VMS lv `7`, P1 slot 70) |
-| `326` | **Ring of Stupidity** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `5` | `object_list:151` (VMS lv `20`, P1 slot 71) |
-| `327` | **Ring of Increase Damage** | `ICAT_RING (12)` | `=` | Green | `0` | `0d0` | `2` | `100` | `5` | `object_list:152` (VMS lv `20`, P1 slot 72) |
-| `328` | **Ring of Increase To-Hit** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `100` | `5` | `object_list:153` (VMS lv `20`, P1 slot 73) |
-| `329` | **Ring of Gain Intelligence** | `ICAT_RING (12)` | `=` | L.Green | `0` | `0d0` | `2` | `350` | `8` | `object_list:136` (VMS lv `30`, P1 slot 74) |
-| `330` | **Ring of Gain Dexterity** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `400` | `8` | `object_list:134` (VMS lv `30`, P1 slot 75) |
-| `331` | **Ring of Gain Constitution** | `ICAT_RING (12)` | `=` | Blue | `0` | `0d0` | `2` | `400` | `8` | `object_list:135` (VMS lv `30`, P1 slot 76) |
-| `332` | **Ring of Sustain Intelligence** | `ICAT_RING (12)` | `=` | Red | `0` | `0d0` | `2` | `600` | `11` | `object_list:158` (VMS lv `44`, P1 slot 77) |
-| `333` | **Ring of Sustain Wisdom** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `600` | `11` | `object_list:159` (VMS lv `44`, P1 slot 78) |
-| `334` | **Ring of Sustain Strength** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `750` | `11` | `object_list:157` (VMS lv `44`, P1 slot 79) |
-| `335` | **Ring of Sustain Constitution** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `750` | `11` | `object_list:160` (VMS lv `44`, P1 slot 80) |
-| `336` | **Ring of Sustain Dexterity** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `750` | `11` | `object_list:161` (VMS lv `44`, P1 slot 81) |
-| `337` | **Ring of WOE** | `ICAT_RING (12)` | `=` | White | `0` | `0d0` | `2` | `0` | `12` | `object_list:150` (VMS lv `50`, P1 slot 82) |
-| `338` | **Wand of Heal Monster** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `0` | `1` | `object_list:276` (VMS lv `2`, P1 slot 83) |
-| `339` | **Wand of Haste Monster** | `ICAT_WAND (14)` | `-` | Grey | `0` | `1d1` | `10` | `0` | `1` | `object_list:277` (VMS lv `2`, P1 slot 84) |
-| `340` | **Wand of Clone Monster** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `0` | `1` | `object_list:285` (VMS lv `2`, P1 slot 85) |
-| `341` | **Wand of Magic Missile** | `ICAT_WAND (14)` | `-` | Brown | `0` | `1d1` | `10` | `200` | `1` | `object_list:283` (VMS lv `2`, P1 slot 86) |
-| `342` | **Wand of Wonder** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `250` | `1` | `object_list:293` (VMS lv `2`, P1 slot 87) |
-| `343` | **Wand of Confuse Monster** | `ICAT_WAND (14)` | `-` | Brown | `0` | `1d1` | `10` | `400` | `1` | `object_list:279` (VMS lv `2`, P1 slot 88) |
-| `344` | **Wand of Sleep Monster** | `ICAT_WAND (14)` | `-` | White | `0` | `1d1` | `10` | `500` | `2` | `object_list:280` (VMS lv `7`, P1 slot 89) |
-| `345` | **Wand of Trap/Door Destruction** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `100` | `3` | `object_list:282` (VMS lv `12`, P1 slot 90) |
-| `346` | **Wand of Polymorph** | `ICAT_WAND (14)` | `-` | Grey | `0` | `1d1` | `10` | `400` | `5` | `object_list:275` (VMS lv `20`, P1 slot 91) |
-| `347` | **Wand of Disarming** | `ICAT_WAND (14)` | `-` | L.Grey | `0` | `1d1` | `10` | `700` | `5` | `object_list:287` (VMS lv `20`, P1 slot 92) |
-| `348` | **Wand of Wall Building** | `ICAT_WAND (14)` | `-` | Grey | `0` | `1d1` | `10` | `400` | `7` | `object_list:284` (VMS lv `25`, P1 slot 93) |
-| `349` | **Staff of Treasure Location** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `200` | `2` | `object_list:297` (VMS lv `5`, P1 slot 94) |
-| `350` | **Staff of Object Location** | `ICAT_STAFF (15)` | `/` | Red | `0` | `1d2` | `50` | `200` | `2` | `object_list:298` (VMS lv `5`, P1 slot 95) |
-| `351` | **Staff of Detect Invisible** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `200` | `2` | `object_list:309` (VMS lv `5`, P1 slot 96) |
-| `352` | **Staff of Summoning** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `3` | `object_list:301` (VMS lv `10`, P1 slot 97) |
-| `353` | **Staff of Haste Monsters** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `3` | `object_list:305` (VMS lv `10`, P1 slot 98) |
-| `354` | **Staff of Door/Stair Location** | `ICAT_STAFF (15)` | `/` | Yellow | `0` | `1d2` | `50` | `350` | `3` | `object_list:295` (VMS lv `10`, P1 slot 99) |
-| `355` | **Staff of Trap Location** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `350` | `3` | `object_list:296` (VMS lv `10`, P1 slot 100) |
-| `356` | **Staff of Sleep Monsters** | `ICAT_STAFF (15)` | `/` | D.Grey | `0` | `1d2` | `50` | `700` | `3` | `object_list:307` (VMS lv `10`, P1 slot 101) |
-| `357` | **Staff of Slow Monsters** | `ICAT_STAFF (15)` | `/` | L.Grey | `0` | `1d2` | `50` | `800` | `3` | `object_list:306` (VMS lv `10`, P1 slot 102) |
-| `358` | **Staff of Detect Evil** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `350` | `5` | `object_list:314` (VMS lv `20`, P1 slot 103) |
-| `359` | **Staff of Starlite** | `ICAT_STAFF (15)` | `/` | Green | `0` | `1d2` | `50` | `800` | `5` | `object_list:304` (VMS lv `20`, P1 slot 104) |
-| `360` | **Staff of Curing** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `1000` | `7` | `object_list:315` (VMS lv `25`, P1 slot 105) |
-| `361` | **Staff of Slowness** | `ICAT_STAFF (15)` | `/` | L.Green | `0` | `1d2` | `50` | `0` | `10` | `object_list:311` (VMS lv `40`, P1 slot 106) |
-| `362` | **Staff of Earthquakes** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `350` | `10` | `object_list:300` (VMS lv `40`, P1 slot 107) |
-| `363` | **Staff of Mass Polymorph** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `750` | `12` | `object_list:312` (VMS lv `46`, P1 slot 108) |
-| `364` | **Staff of Darkness** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `2` | `object_list:318` (VMS lv `5`, P1 slot 109) |
-| `365` | **Piece of Elvish Waybread** | `ICAT_FOOD (9)` | `,` | Yellow | `0` | `0d0` | `3` | `10` | `5` | `object_list:28` (VMS lv `20`, P1 slot 110) |
-| `366` | **Scroll of Trap Detection** | `ICAT_SCROLL (11)` | `?` | White | `0` | `0d0` | `5` | `35` | `3` | `object_list:196` (VMS lv `12`, P1 slot 111) |
-| `367` | **Scroll of Door/Stair Location** | `ICAT_SCROLL (11)` | `?` | L.Grey | `0` | `0d0` | `5` | `35` | `4` | `object_list:199` (VMS lv `15`, P1 slot 112) |
-| `368` | **Staff of Summoning** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `12` | `object_list:302` (VMS lv `50`, P1 slot 113) |
-| `369` | **Staff of Darkness** | `ICAT_STAFF (15)` | `/` | Brown | `0` | `1d2` | `50` | `0` | `12` | `object_list:317` (VMS lv `50`, P1 slot 114) |
+| `322` | **Ring of Weakness** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `2` | `object_list:146` (VMS lv `7`, P1 slot 67) |
+| `323` | **Ring of Lordly Protection (Fire)** | `ICAT_RING (12)` | `=` | L.Red | `5` | `0d0` | `2` | `1200` | `12` | `Ring of Lordly Protection (FIRE)` (`#147`, fire resistance + `5` AC; added 2026-11-11, MON-029, P1 slot 68) |
+| `324` | **Ring of Lordly Protection (Acid)** | `ICAT_RING (12)` | `=` | L.Green | `5` | `0d0` | `2` | `1200` | `12` | `Ring of Lordly Protection (ACID)` (`#148`, acid resistance + `5` AC; added 2026-11-11, MON-029, P1 slot 69) |
+| `325` | **Ring of Lordly Protection (Cold)** | `ICAT_RING (12)` | `=` | Cyan | `5` | `0d0` | `2` | `1200` | `12` | `Ring of Lordly Protection (COLD)` (`#149`, cold resistance + `5` AC; added 2026-11-11, MON-029, P1 slot 70) |
+| `326` | **Ring of WOE** | `ICAT_RING (12)` | `=` | White | `0` | `0d0` | `2` | `0` | `12` | `object_list:150` (VMS lv `50`, P1 slot 71) |
+| `327` | **Ring of Stupidity** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `5` | `object_list:151` (VMS lv `20`, P1 slot 72) |
+| `328` | **Ring of Increase Damage** | `ICAT_RING (12)` | `=` | Green | `0` | `0d0` | `2` | `100` | `5` | `object_list:152` (VMS lv `20`, P1 slot 73) |
+| `329` | **Ring of Increase To-Hit** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `100` | `5` | `object_list:153` (VMS lv `20`, P1 slot 74) |
+| `330` | **Ring of Protection** | `ICAT_RING (12)` | `=` | Yellow | `1` | `0d0` | `2` | `100` | `4` | `Ring of Protection` (`#153`, base AC `1` + `+to_ac`, P1 slot 75) |
+| `331` | **Ring of Aggravate Monster** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `0` | `2` | `object_list:155` (VMS lv `7`, P1 slot 76) |
+| `332` | **Ring of See Invisible** | `ICAT_RING (12)` | `=` | L.Green | `0` | `0d0` | `2` | `500` | `9` | `Ring of See Invisible` (`#155`, P1 slot 77) |
+| `333` | **Ring of Sustain Strength** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `750` | `11` | `object_list:157` (VMS lv `44`, P1 slot 78) |
+| `334` | **Ring of Sustain Intelligence** | `ICAT_RING (12)` | `=` | Red | `0` | `0d0` | `2` | `600` | `11` | `object_list:158` (VMS lv `44`, P1 slot 79) |
+| `335` | **Ring of Sustain Wisdom** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `600` | `11` | `object_list:159` (VMS lv `44`, P1 slot 80) |
+| `336` | **Ring of Sustain Constitution** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `750` | `11` | `object_list:160` (VMS lv `44`, P1 slot 81) |
+| `337` | **Ring of Sustain Dexterity** | `ICAT_RING (12)` | `=` | Cyan | `0` | `0d0` | `2` | `750` | `11` | `object_list:161` (VMS lv `44`, P1 slot 82) |
+| `338` | **Ring of Sustain Charisma** | `ICAT_RING (12)` | `=` | L.Green | `0` | `0d0` | `2` | `500` | `2` | `object_list:162` (VMS lv `7`, P1 slot 83) |
+| `339` | **Ring of Slaying** | `ICAT_RING (12)` | `=` | L.Red | `0` | `0d0` | `2` | `1000` | `12` | `Ring of Slaying` (`#162`, P1 slot 84) |
+| `340` | **Amulet of Adornment** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `20` | `4` | `object_list:164` (VMS lv `16`, P0, P1 slot 85) |
+| `341` | **Amulet of Adornment** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `30` | `4` | `object_list:165` (VMS lv `16`, P0, P1 slot 86) |
+| `342` | **Amulet of Wisdom** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `300` | `5` | `Amulet of Wisdom` (`#163`, P1 slot 87) |
+| `343` | **Amulet of Charisma** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `250` | `5` | `object_list:167` (VMS lv `20`, P0, P1 slot 88) |
+| `344` | **Amulet of Searching** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `250` | `4` | `object_list:168` (VMS lv `14`, P0, P1 slot 89) |
+| `345` | **Amulet of Teleportation** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `0` | `4` | `object_list:169` (VMS lv `14`, P0, P1 slot 90) |
+| `346` | **Amulet of Slow Digestion** | `ICAT_AMULET (16)` | `"` | Yellow | `0` | `0d0` | `3` | `200` | `4` | `object_list:170` (VMS lv `14`, P0, P1 slot 91) |
+| `347` | **Amulet of Resist Acid** | `ICAT_AMULET (16)` | `"` | L.Green | `0` | `0d0` | `3` | `300` | `8` | `Amulet of Resist Acid` (`#171`, acid resistance; added 2026-11-11, MON-029, P1 slot 92) |
+| `348` | **Amulet of the Magi** | `ICAT_AMULET (16)` | `"` | L.Green | `3` | `0d0` | `3` | `5000` | `12` | `Amulet of the Magi` (`#171`, base AC `3` + See Invisible + Free Action, P1 slot 93) |
+| `349` | **Amulet of DOOM** | `ICAT_AMULET (16)` | `"` | Red | `0` | `0d0` | `3` | `0` | `12` | `object_list:173` (VMS lv `50`, P0, P1 slot 94) |
+| `350` | **Rat Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `10` | `0` | `1` | `object_list:333` (VMS lv `1`, P0, P1 slot 95) |
+| `351` | **Giant Centipede Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `25` | `0` | `1` | `object_list:334` (VMS lv `1`, P0, P1 slot 96) |
+| `352` | **Empty Bottle** | `ICAT_MISC (20)` | `~` | L.Green | `0` | `1d1` | `2` | `0` | `0` | `object_list:336` (VMS lv `0`, P0, P1 slot 97) |
+| `353` | **Shards of Pottery** | `ICAT_MISC (20)` | `~` | Orange | `0` | `1d1` | `5` | `0` | `0` | `object_list:337` (VMS lv `0`, P0, P1 slot 98) |
+| `354` | **Human Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `50` | `0` | `1` | `object_list:338` (VMS lv `1`, P0, P1 slot 99) |
+| `355` | **Dwarf Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `60` | `0` | `1` | `object_list:339` (VMS lv `1`, P0, P1 slot 100) |
+| `356` | **Elf Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `40` | `0` | `1` | `object_list:340` (VMS lv `1`, P0, P1 slot 101) |
+| `357` | **Gnome Skeleton** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `25` | `0` | `1` | `object_list:341` (VMS lv `1`, P0, P1 slot 102) |
+| `358` | **Broken Set of Teeth** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `3` | `0` | `0` | `object_list:342` (VMS lv `0`, P0, P1 slot 103) |
+| `359` | **Large Broken Bone** | `ICAT_MISC (20)` | `~` | White | `0` | `1d1` | `2` | `0` | `0` | `object_list:343` (VMS lv `0`, P0, P1 slot 104) |
+| `360` | **Broken Stick** | `ICAT_MISC (20)` | `~` | Brown | `0` | `1d1` | `3` | `0` | `0` | `object_list:344` (VMS lv `0`, P0, P1 slot 105) |
 
 ---
+
 ### 8.3.2 Complete VMS Moria 4.8 & Umoria 5.7.15 Base Item Catalog (`0..419` Row-by-Row)
 
 In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/data_treasure.cpp:64-522`), `game_objects[0..343]` corresponds 1-to-1 with 1-indexed `object_list[1..344]` in VMS Moria, followed by store-only templates (`344..366`), terrain/trap objects (`367..398`), gold/gems (`399..416`), and special placeholders (`417..419`). Every template is listed below with its Umoria index (`0..419`), VMS Moria 1-based index (`1..344` / `inventory_init` / `gold_list`), category, stats (`Cost / Weight / Depth / Dam or AC`), Moria8 item ID mapping, and verdict.
@@ -1354,11 +1351,11 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `8` | `9` | **Mushroom of Cure Confusion** | `TV_FOOD (80)` | `50` | `1` | `6` | `food=500`, `flags=0x00000100` (cures confusion) | Omitted | **Missing** |
 | `9` | `10` | **Mushroom of Weakness** | `TV_FOOD (80)` | `0` | `1` | `7` | `food=500`, `flags=0x04000200` (drains STR) | Omitted | **Missing** |
 | `10` | `11` | **Mushroom of Unhealth** | `TV_FOOD (80)` | `50` | `1` | `15` | `food=500`, `10d10` damage, drains CON | Omitted | **Missing** |
-| `11` | `12` | **Mushroom of Restore Constitution** | `TV_FOOD (80)` | `350` | `1` | `20` | `food=500`, `flags=0x00010000` (restores CON) | Omitted (`Restoration Potion #97`) | **Missing** |
+| `11` | `12` | **Mushroom of Restore Constitution** | `TV_FOOD (80)` | `350` | `1` | `20` | `food=500`, `flags=0x00010000` (restores CON) | **Moria8 `Mushroom of Restore Constitution`** (`cost=350`, `wt=1`, `min_lvl=5`) | **Implemented** |
 | `12` | `13` | **Mushroom of First-Aid** | `TV_FOOD (80)` | `5` | `1` | `6` | `food=500`, heals `1d6` HP | Omitted | **Missing** |
 | `13` | `14` | **Mushroom of Minor Cures** | `TV_FOOD (80)` | `20` | `1` | `7` | `food=500`, heals `2d6` HP | Omitted | **Missing** |
 | `14` | `15` | **Mushroom of Light Cures** | `TV_FOOD (80)` | `30` | `1` | `10` | `food=500`, heals `4d6` HP | Omitted | **Missing** |
-| `15` | `16` | **Mushroom of Restoration / Restoring** | `TV_FOOD (80)` | `1000` | `1` | `30` | `food=500`, restores all 6 primary stats | Consolidated into `Restoration Potion` (`#97`) | **Approximation** |
+| `15` | `16` | **Mushroom of Restoration / Restoring** | `TV_FOOD (80)` | `1000` | `1` | `30` | `food=500`, restores all 6 primary stats | **Moria8 `Mushroom of Restoring`** (`cost=1000`, `wt=1`, `min_lvl=8`) | **Implemented** |
 | `16` | `17` | **Hairy Mold of Poison** | `TV_FOOD (80)` | `0` | `1` | `15` | `food=1200`, `flags=0x00000001` | Omitted | **Missing** |
 | `17` | `18` | **Hairy Mold of Hallucination** | `TV_FOOD (80)` | `0` | `1` | `18` | `food=1200`, `flags=0x00000010` | Omitted | **Missing** |
 | `18` | `19` | **Hairy Mold of Cure Poison** | `TV_FOOD (80)` | `75` | `1` | `19` | `food=1200`, `flags=0x00000020` | Omitted | **Missing** |
@@ -1372,7 +1369,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `30` | `31` | **Dagger (Stiletto)** | `TV_SWORD (23)` | `10` | `12` | `0` | `1d4` | **Moria8 `#2` (`Dagger`)**: `1d4`, `cost=10`, `wt=12`, `min_lvl=1` | **Implemented** |
 | `31` | `32` | **Dagger (Bodkin)** | `TV_SWORD (23)` | `10` | `20` | `1` | `1d4` | Consolidated into **Moria8 `#2` (`Dagger`)** | **Approximation** |
 | `32` | `33` | **Broken Dagger** | `TV_SWORD (23)` | `0` | `15` | `0` | `1d1`, `-2` To-Hit, `-2` To-Dam | Omitted | **Missing** |
-| `33` | `34` | **Backsword** | `TV_SWORD (23)` | `150` (`60` VMS) | `95` | `7` | `1d9` | Adapted as **Moria8 `#70` (`Scimitar`)** (`1d8`, `cost=50`, `wt=40`, `min_lvl=3`) | **Approximation** |
+| `33` | `34` | **Backsword** | `TV_SWORD (23)` | `150` (`60` VMS) | `95` | `7` | `1d9` | **Moria8 `Backsword`** (`cost=60`, `wt=95`, `min_lvl=2`, `1d9`) | **Implemented** |
 | `34` | `35` | **Bastard Sword** | `TV_SWORD (23)` | `350` | `140` | `14` | `3d4` | **Moria8 `#68` (`Bastard Sword`)**: `3d4`, `cost=350`, `wt=140`, `min_lvl=6` | **Implemented** |
 | `35` | `36` | **Thrusting Sword (Bilbo)** | `TV_SWORD (23)` | `60` | `80` | `4` | `1d6` | Omitted | **Missing** |
 | `36` | `37` | **Thrusting Sword (Baselard)** | `TV_SWORD (23)` | `80` | `100` | `5` | `1d7` | Omitted | **Missing** |
@@ -1393,7 +1390,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `51` | `52` | **Broken Sword** | `TV_SWORD (23)` | `0` | `75` | `0` | `1d1`, `-2` To-Hit, `-2` To-Dam | Omitted | **Missing** |
 | `52` | `54` | **Ball and Chain** | `TV_HAFTED (21)` | `200` | `150` | `20` | `2d4` | Omitted | **Missing** |
 | `53` | `57` | **Cat-o'-Nine-Tails** | `TV_HAFTED (21)` | `14` | `40` | `3` | `1d4` | Omitted | **Missing** |
-| `54` | `58` | **Wooden Club** | `TV_HAFTED (21)` | `10` (`1` VMS) | `100` | `0` | `1d3` | Replaced by **Moria8 `#77` (`Quarterstaff`)** (`1d9`, `cost=20`, `wt=40`, `min_lvl=1`) | **Approximation** |
+| `54` | `58` | **Wooden Club** | `TV_HAFTED (21)` | `10` (`1` VMS) | `100` | `0` | `1d3` | **Moria8 `Wooden Club`** (`cost=1`, `wt=100`, `min_lvl=0`, `1d3`) | **Implemented** |
 | `55` | `59` | **Flail** | `TV_HAFTED (21)` | `353` | `150` | `12` | `2d6` | **Moria8 `#92` (`Flail`)**: `2d6`, `cost=120`, `wt=150`, `min_lvl=5` | **Implemented** |
 | `56` | `60` | **Two-Handed Great Flail** | `TV_HAFTED (21)` | `590` | `280` | `45` | `3d6` | Omitted | **Missing** |
 | `57` | `61` | **Morningstar** | `TV_HAFTED (21)` | `396` | `150` | `10` | `2d6` | **Moria8 `#73` (`Morningstar`)**: `2d6`, `cost=100`, `wt=150`, `min_lvl=6` | **Implemented** |
@@ -1451,7 +1448,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `109` | `110` | **Hard Leather Ring Mail** | `TV_SOFT_ARMOR (36)` | `230` | `150` | `12` | `AC 8`, `-2` To-Hit | Omitted | **Missing** |
 | `110` | `111` | **Leather Scale Mail** | `TV_SOFT_ARMOR (36)` | `330` | `140` | `14` | `AC 11`, `-1` To-Hit | Omitted (`Scale Mail #80` covers scale armor) | **Missing** |
 | `111` | `112` | **Metal Scale Mail** | `TV_HARD_ARMOR (35)` | `430` | `250` | `24` | `AC 13`, `-2` To-Hit | **Moria8 `#80` (`Scale Mail`)**: `AC 13`, `cost=430`, `wt=250`, `min_lvl=7` | **Implemented** |
-| `112` | `113` | **Chain Mail** | `TV_HARD_ARMOR (35)` | `530` | `220` | `26` | `AC 14`, `-2` To-Hit | **Moria8 `#8` (`Chain Mail`)**: `AC 14`, `cost=530`, `wt=120`, `min_lvl=7` (plus **Moria8 `#122` `Mithril Chain Mail`**, `AC 16`, `cost=530`, `wt=200`, `min_lvl=7`) | **Implemented** |
+| `112` | `113` | **Chain Mail** | `TV_HARD_ARMOR (35)` | `530` | `220` | `26` | `AC 14`, `-2` To-Hit | **Moria8 `Chain Mail`** (`cost=530`, `wt=120`, `min_lvl=7`, `AC 14`) | **Implemented** |
 | `113` | `114` | **Rusty Chain Mail** | `TV_HARD_ARMOR (35)` | `0` | `220` | `26` | `AC 14`, `-8` To-AC, `-5` To-Hit | Omitted | **Missing** |
 | `114` | `115` | **Double Chain Mail** | `TV_HARD_ARMOR (35)` | `630` | `260` | `28` | `AC 15`, `-2` To-Hit | Omitted | **Missing** |
 | `115` | `116` | **Augmented Chain Mail** | `TV_HARD_ARMOR (35)` | `675` | `270` | `30` | `AC 16`, `-2` To-Hit | Omitted | **Missing** |
@@ -1460,8 +1457,8 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `118` | `119` | **Laminated Armor** | `TV_HARD_ARMOR (35)` | `825` | `300` | `38` | `AC 20`, `-3` To-Hit | Omitted | **Missing** |
 | `119` | `120` | **Partial Plate Armor** | `TV_HARD_ARMOR (35)` | `900` | `320` (`260` VMS) | `42` | `AC 22`, `-3` To-Hit | Omitted | **Missing** |
 | `120` | `121` | **Metal Lamellar Armor** | `TV_HARD_ARMOR (35)` | `950` | `340` | `44` | `AC 23`, `-3` To-Hit | Omitted | **Missing** |
-| `121` | `122` | **Full Plate Armor** | `TV_HARD_ARMOR (35)` | `1050` | `380` | `48` | `AC 25`, `-3` To-Hit | **Moria8 `#81` (`Plate Mail`)**: `AC 25`, `cost=1050`, `wt=380`, `min_lvl=12` (plus **Moria8 `#123` `Mithril Plate Mail`**, `AC 28`, `cost=1050`, `wt=320`, `min_lvl=12`) | **Implemented** |
-| `122` | `123` | **Ribbed Plate Armor** | `TV_HARD_ARMOR (35)` | `1200` | `380` | `50` | `AC 28`, `-3` To-Hit | Represented by **Moria8 `#123` (`Mithril Plate Mail`)** (`AC 28`, `cost=1200`) | **Approximation** |
+| `121` | `122` | **Full Plate Armor** | `TV_HARD_ARMOR (35)` | `1050` | `380` | `48` | `AC 25`, `-3` To-Hit | **Moria8 `Plate Mail`** (`cost=1050`, `wt=380`, `min_lvl=12`, `AC 25`) | **Implemented** |
+| `122` | `123` | **Ribbed Plate Armor** | `TV_HARD_ARMOR (35)` | `1200` | `380` | `50` | `AC 28`, `-3` To-Hit | **Moria8 `Ribbed Plate Armor`** (`cost=1200`, `wt=380`, `min_lvl=12`, `AC 28`) | **Implemented** |
 | `123` | `124` | **Cloak** | `TV_CLOAK (32)` | `3` | `10` | `1` | `AC 1` | **Moria8 `#82` (`Cloak`)**: `AC 1`, `cost=3`, `wt=10`, `min_lvl=2` | **Implemented** |
 | `124` | `125` | **Set of Leather Gloves** | `TV_GLOVES (31)` | `3` | `5` | `1` | `AC 1` | **Moria8 `#11` (`Leather Gloves`)**: `AC 1`, `cost=3`, `wt=5`, `min_lvl=1` | **Implemented** |
 | `125` | `126` | **Set of Gauntlets** | `TV_GLOVES (31)` | `35` | `25` | `12` | `AC 2`, `1d1` | **Moria8 `#84` (`Gauntlets`)**: `AC 2`, `cost=35`, `wt=25`, `min_lvl=2` | **Implemented** |
@@ -1505,14 +1502,14 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `169` | `164..165` | **Amulet of Adornment** *(2 rows in VMS)* | `TV_AMULET (40)` | `20` / `30` | `3` | `16` | Cosmetic amulet | Omitted | **Missing** |
 | `171` | `172` | **Amulet of the Magi** | `TV_AMULET (40)` | `5000` | `3` | `50` | `TR_SEE_INVIS \| TR_FREE_ACT \| TR_SEARCH`, `+3` AC | **Moria8 `#125` (`Amulet of the Magi`)**: `AC 3` + See Invisible + Free Action (2026-11-08), `cost=5000`, `wt=3`, `min_lvl=12`; no searching bonus | **Implemented** |
 | `172` | `173` | **Amulet of DOOM** | `TV_AMULET (40)` | `0` | `3` | `50` | `TR_CURSED`, `-5` to all 6 stats & search | Omitted | **Missing** |
-| `173` | `174` | **Scroll of Enchant Weapon To-Hit** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-Hit on wielded weapon (uncurses) | Combined into **Moria8 `#34` (`Scroll of Enchant Weapon`)** (`+1` To-Hit and/or `+1` To-Dam, `cost=125`, `min_lvl=6`) | **Implemented** |
-| `174` | `175` | **Scroll of Enchant Weapon To-Dam** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-Dam on wielded weapon (uncurses) | Combined into **Moria8 `#34` (`Scroll of Enchant Weapon`)** | **Implemented** |
+| `173` | `174` | **Scroll of Enchant Weapon To-Hit** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-Hit on wielded weapon (uncurses) | **Moria8 `Scroll of Enchant Weapon To-Hit`** (`cost=125`, `wt=5`, `min_lvl=3`) | **Implemented** |
+| `174` | `175` | **Scroll of Enchant Weapon To-Dam** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-Dam on wielded weapon (uncurses) | **Moria8 `Scroll of Enchant Weapon To-Dam`** (`cost=125`, `wt=5`, `min_lvl=3`) | **Implemented** |
 | `175` | `176` | **Scroll of Enchant Armor** | `TV_SCROLL1 (70)` | `125` | `5` | `12` | `+1` To-AC on worn armor (uncurses) | **Moria8 `#35` (`Scroll of Enchant Armor`)**: `cost=125`, `wt=2`, `min_lvl=6`. As VMS (`scrolls.inc` case 4, `enchant()` `spells.inc:1935`): a cursed worn armour piece first, else one at random among those worn (body, shield, head, hands, feet; no cloak slot); its to-AC rises by one always at `+0` or below, else when `randint(1000)` beats `40, 100, 200, 400, 600, 700, 800, 900, 950` for `+1..+9` and `995` above ("The enchantment fails."); success lifts a curse (`irs_effect_enchant_armor`, `core/item_actions_overlay.s`).<br>**Fixed 2026-11-06 (playtest queue):** it took the first piece under `+5` by an unsigned compare, so armour that acid had worn below zero (`[14,-14]`) was never enchanted; it stopped at `+5`; and a cursed piece was reset to `+0`. Enchant Weapon's `+5` test is signed too since then | **Implemented** |
 | `176..179` | `177..179` | **Scroll of Identify** *(4 depth rows: dlvl `1, 5, 10, 30`; 3 in VMS)* | `TV_SCROLL1 (70)` | `50` | `5` | `1 / 5 / 10 / 30` | Identifies 1 item | **Moria8 `#21` (`Scroll of Identify`)**: `cost=50`, `wt=2`, `min_lvl=2` | **Implemented** |
 | `180` | `180` | **Scroll of Remove Curse** | `TV_SCROLL1 (70)` | `100` | `5` | `7` | Clears `TR_CURSED` on worn equipment | **Moria8 `#33` (`Scroll of Remove Curse`)**: `cost=100`, `wt=2`, `min_lvl=4` | **Implemented** |
 | `181..183` | `181..183` | **Scroll of Light** *(3 depth rows: dlvl `0, 3, 7`)* | `TV_SCROLL1 (70)` | `15` | `5` | `0 / 3 / 7` | Lights room / area | **Moria8 `#20` (`Scroll of Light`)**: `cost=15`, `wt=2`, `min_lvl=1` | **Implemented** |
 | `184` | `184` | **Scroll of Summon Monster** | `TV_SCROLL1 (70)` | `0` | `5` | `1` | Spawns `1d3` monsters adjacent to player | Omitted | **Missing** |
-| `185` | `185` | **Scroll of Phase Door** | `TV_SCROLL1 (70)` | `15` | `5` | `1` | `teleport(10)` | Item `136` (`ITEM_TYPE_SCR_PHASE_DOOR`, 2026-10-25): 15 gp, level 1, 0.5 lb, read through `eff_phase_door` (the mage spell's VMS `teleport(10)`, §8.1 spell `2`), sold at the Alchemist; `test_phase_door.s` 4-7.<br>**Fixed 2026-10-31:** the move often failed silently (20 whole-map tries) while the read still printed its message. Source: `vms-moria: source/include/moria.inc` `teleport`, `source/macro/distance.mar`; `umoria: src/player.cpp` `playerTeleport`, `src/dungeon.cpp` `coordDistanceBetween`; `moria8: core/dungeon_features.s` `find_random_floor_near`. | **Implemented** |
+| `185` | `185` | **Scroll of Phase Door** | `TV_SCROLL1 (70)` | `15` | `5` | `1` | `teleport(10)` | `ITEM_SCROLL_OF_PHASE_DOOR` (2026-10-25): 15 gp, level 1, 0.5 lb, read through `eff_phase_door` (the mage spell's VMS `teleport(10)`, §8.1 spell `2`), sold at the Alchemist; `test_phase_door.s` 4-7.<br>**Fixed 2026-10-31:** the move often failed silently (20 whole-map tries) while the read still printed its message. Source: `vms-moria: source/include/moria.inc` `teleport`, `source/macro/distance.mar`; `umoria: src/player.cpp` `playerTeleport`, `src/dungeon.cpp` `coordDistanceBetween`; `moria8: core/dungeon_features.s` `find_random_floor_near`. | **Implemented** |
 | `186` | `186` | **Scroll of Teleport** | `TV_SCROLL1 (70)` | `40` | `5` | `10` | `teleport(100)` | **Moria8 `#22` (`Scroll of Teleportation`)**: `cost=40`, `wt=2`, `min_lvl=3` | **Implemented** |
 | `187` | `187` | **Scroll of Teleport Level** | `TV_SCROLL1 (70)` | `50` | `5` | `20` | `dun_level := dun_level - 3 + 2*randint(2)`, at least `1` | **Moria8 `#101` (`Scroll of Teleport Level`)**: `cost=50`, `wt=5`, `min_lvl=5`; `irs_p3_teleport_level` goes one level up or down, at least level `1`, so from the town it always goes to level `1` (descending: max depth updated, arrival on up stairs).<br>**Fixed 2026-10-31:** read in the town, the "up" roll wrapped level `0` to `255`. It is the only teleport-level path (no trap door or spell). Source: `vms-moria: source/include/scrolls.inc` case 10; `umoria: src/scrolls.cpp` `scrollTeleportLevel`; `moria8: core/scroll_effects_p3.s`; C64 `test_scroll_p3.s` 16. | **Implemented** |
 | `188` | `188` | **Scroll of Monster Confusion** | `TV_SCROLL1 (70)` | `30` | `5` | `5` | Next melee hit confuses monster (`confuse_monster = true`) | **Moria8 `#36` (`Scroll of Monster Confusion`)**: `cost=30`, `wt=2`, `min_lvl=3` | **Implemented** |
@@ -1535,7 +1532,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `209` | `209` | **Scroll of Protection from Evil** | `TV_SCROLL1 (70)` | `100` (`50` VMS) | `5` | `30` | `protevil += randint(25) + 3 * char_lev` | **Moria8 `#38` (`Scroll of Protect from Evil`)**: `cost=100`, `wt=2`, `min_lvl=8`; adds `randint(25) + 3 * lev` (saturating at `255`); evil attackers up to the player's level are repelled (§6.5).<br>**Fixed 2026-10-31:** added `rng(25)+25` and nothing read the timer. Source: `vms-moria: source/include/scrolls.inc` case 28, `spells.inc` `protect_evil`, `creature.inc` `make_attack`; `moria8: core/item_actions_overlay.s`, `core/monster_attack.s`. | **Implemented** |
 | `210` | `210` | **Scroll of Create Food** | `TV_SCROLL1 (70)` | `10` | `5` | `5` | `create_food()` | Omitted as scroll (implemented as Spell `#16` / Prayer `#13`) | **Missing** |
 | `211` | `211` | **Scroll of Dispel Undead** | `TV_SCROLL1 (70)` | `200` | `5` | `40` | `dispel_creature(CD_UNDEAD, 60)` | Omitted as scroll (implemented as Prayer `#26`) | **Missing** |
-| `212` | `212` | **Scroll of \*Enchant Weapon\*** | `TV_SCROLL2 (71)` | `500` | `5` | `50` | `+1d4` To-Hit and `+1d4` To-Dam | Consolidated into `Scroll of Enchant Weapon #34` | **Approximation** |
+| `212` | `212` | **Scroll of \*Enchant Weapon\*** | `TV_SCROLL2 (71)` | `500` | `5` | `50` | `+1d4` To-Hit and `+1d4` To-Dam | **Moria8 `Scroll of \*Enchant Weapon\*`** (`cost=500`, `wt=5`, `min_lvl=12`) | **Implemented** |
 | `213` | `213` | **Scroll of Curse Weapon** | `TV_SCROLL2 (71)` | `0` | `5` | `50` | Curses wielded weapon (`-1d4` hit/dam) | Omitted | **Missing** |
 | `214` | `214` | **Scroll of \*Enchant Armor\*** | `TV_SCROLL2 (71)` | `500` | `5` | `50` | `+(1d3+2)` To-AC | Consolidated into `Scroll of Enchant Armor #35` | **Approximation** |
 | `215` | `215` | **Scroll of Curse Armor** | `TV_SCROLL2 (71)` | `0` | `5` | `50` | Curses worn body armor (`-1d4` AC) | Omitted | **Missing** |
@@ -1548,23 +1545,23 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `222` | `248` | **Potion of Slime Mold Juice** | `TV_POTION1 (75)` | `2` | `4` | `0` | `food=400`, heals `2d4+1` HP | Omitted | **Missing** |
 | `223` | `249` | **Potion of Apple Juice** | `TV_POTION1 (75)` | `1` | `4` | `0` | `food=250` | Omitted | **Missing** |
 | `224` | `250` | **Potion of Water** | `TV_POTION1 (75)` | `0` | `4` | `0` | `food=200` | Omitted | **Missing** |
-| `225` | `222` | **Potion of Strength / Gain Strength** | `TV_POTION1 (75)` | `300` (`200` VMS) | `4` | `25` | Permanently raises `STR` (`inc_stat(A_STR)`) | **Moria8 `#140`**: `wt=4`, generation level `8` (as Restoration), flavoured, Black Market stock. Raises the base STR by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
+| `225` | `222` | **Potion of Strength / Gain Strength** | `TV_POTION1 (75)` | `300` (`200` VMS) | `4` | `25` | Permanently raises `STR` (`inc_stat(A_STR)`) | **Moria8 `Potion of Gain Strength`**: `wt=4`, generation level `8`, flavoured, Black Market stock. Raises the base STR by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
 | `226` | `223` | **Potion of Weakness** *(VMS: second `Potion of Poison`)* | `TV_POTION1 (75)` | `0` | `4` | `3` | Drains `STR` (`dec_stat(A_STR)`) | Omitted | **Missing** |
-| `227` | `224` | **Potion of Restore Strength** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_STR)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** (restores all drained stats & XP) | **Approximation** |
-| `228` | `225` | **Potion of Intelligence / Gain Intelligence** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_INT)` | **Moria8 `#141`**: `wt=4`, generation level `8` (as Restoration), flavoured, Black Market stock. Raises the base INT by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
+| `227` | `224` | **Potion of Restore Strength** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_STR)` | **Moria8 `Potion of Restore Strength`** (`cost=300`, `wt=4`, `min_lvl=10`) | **Implemented** |
+| `228` | `225` | **Potion of Intelligence / Gain Intelligence** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_INT)` | **Moria8 `Potion of Gain Intelligence`**: `wt=4`, generation level `8`, flavoured, Black Market stock. Raises the base INT by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
 | `229` | `226` | **Potion of Lose Intelligence** | `TV_POTION1 (75)` | `0` | `4` | `25` | `dec_stat(A_INT)` | Omitted | **Missing** |
-| `230` | `227` | **Potion of Restore Intelligence** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_INT)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
-| `231` | `228` | **Potion of Wisdom / Gain Wisdom** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_WIS)` | **Moria8 `#142`**: `wt=4`, generation level `8` (as Restoration), flavoured, Black Market stock. Raises the base WIS by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
+| `230` | `227` | **Potion of Restore Intelligence** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_INT)` | **Moria8 `Potion of Restore Intelligence`** (`cost=300`, `wt=4`, `min_lvl=10`) | **Implemented** |
+| `231` | `228` | **Potion of Wisdom / Gain Wisdom** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_WIS)` | **Moria8 `Potion of Gain Wisdom`**: `wt=4`, generation level `8`, flavoured, Black Market stock. Raises the base WIS by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
 | `232` | `229` | **Potion of Lose Wisdom** | `TV_POTION1 (75)` | `0` | `4` | `25` | `dec_stat(A_WIS)` | Omitted | **Missing** |
-| `233` | `230` | **Potion of Restore Wisdom** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_WIS)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
-| `234` | `231` | **Potion of Charisma** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_CHR)` | **Moria8 `#145`**: `wt=4`, generation level `8` (as Restoration), flavoured, Black Market stock. Raises the base CHR by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
+| `233` | `230` | **Potion of Restore Wisdom** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_WIS)` | **Moria8 `Potion of Restore Wisdom`** (`cost=300`, `wt=4`, `min_lvl=10`) | **Implemented** |
+| `234` | `231` | **Potion of Charisma** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_CHR)` | **Moria8 `Potion of Charisma`**: `wt=4`, generation level `8`, flavoured, Black Market stock. Raises the base CHR by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
 | `235` | `232` | **Potion of Ugliness** | `TV_POTION1 (75)` | `0` | `4` | `25` | `dec_stat(A_CHR)` | Omitted | **Missing** |
-| `236` | `233` | **Potion of Restore Charisma** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_CHR)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
+| `236` | `233` | **Potion of Restore Charisma** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_CHR)` | **Moria8 `Potion of Restore Charisma`** (`cost=300`, `wt=4`, `min_lvl=10`) | **Implemented** |
 | `237..239` | `234..236` | **Potion of Cure Light Wounds** *(3 depth rows: dlvl `0, 1, 2`)* | `TV_POTION1 (75)` | `15` | `4` | `0 / 1 / 2` | Heals `2d7` HP + cures blindness | **Moria8 `#17` (`Cure Light Wounds Potion`)**: `cost=15`, `wt=4`, `min_lvl=1`, heals `2d7` HP and cures blindness, all ports. A cure sets a timer above `1` to `1` (VMS `cure_*`), so the effect tick of the same turn ends it with the usual message ("You can see again.", "You feel less confused.", "You feel better."); the heal is VMS `hp_player`: nothing and no message at full HP, else the message for the rolled amount. Identified on quaff only when the heal does something (VMS `ident := hp_player(...)`; Umoria also identifies on a cure) on Apple IIe, C128, CX16 and BBC Master; C64, Plus/4 and Atari 8-bit keep the documented unconditional identify.<br>**Fixed 2026-10-31:** Moria8 healed `rng(8)+4` (`4..11`) and cured nothing (this row said `2d7`). Source: `vms-moria: source/include/potions.inc` quaff cases `13`-`16`, `29`-`31` (flags in `values.inc`), `source/include/spells.inc` `hp_player`, `cure_blindness`, `cure_confusion`, `cure_poison`; `umoria: src/player_quaff.cpp`, `src/player_magic.cpp`; `moria8: core/eff_potion_cure.s`, `core/player_item_commands.s`. | **Implemented** |
 | `240` | `237` | **Potion of Cure Serious Wounds** | `TV_POTION1 (75)` | `40` | `4` | `3` | Heals `4d7` HP + cures blindness/confusion | **Moria8 `#25` (`Cure Serious Wounds Potion`)**: `cost=40`, `wt=4`, `min_lvl=3`, heals `4d7` HP and cures blindness and confusion, all ports (as Cure Light Wounds above).<br>**Fixed 2026-10-31:** Moria8 healed `5d8+5` (`10..45`) and cured nothing. Source: `vms-moria: source/include/potions.inc` quaff cases `13`-`16`, `29`-`31` (flags in `values.inc`), `source/include/spells.inc` `hp_player`, `cure_blindness`, `cure_confusion`, `cure_poison`; `umoria: src/player_quaff.cpp`, `src/player_magic.cpp`; `moria8: core/eff_potion_cure.s`, `core/player_item_commands.s`. | **Implemented** |
 | `241` | `238` | **Potion of Cure Critical Wounds** | `TV_POTION1 (75)` | `100` | `4` | `5` | Heals `6d7` HP + cures blindness/confusion/poison | **Moria8 `#100` (`Cure Critical Wounds Potion`)**: `cost=100`, `wt=4`, `min_lvl=2`, heals `6d7` HP and cures blindness, confusion and poison, all ports (as Cure Light Wounds above).<br>**Fixed 2026-10-31:** Moria8 healed `6d7` and cured nothing. Source: `vms-moria: source/include/potions.inc` quaff cases `13`-`16`, `29`-`31` (flags in `values.inc`), `source/include/spells.inc` `hp_player`, `cure_blindness`, `cure_confusion`, `cure_poison`; `umoria: src/player_quaff.cpp`, `src/player_magic.cpp`; `moria8: core/eff_potion_cure.s`, `core/player_item_commands.s`. | **Implemented** |
 | `242` | `239` | **Potion of Healing** | `TV_POTION1 (75)` | `200` | `4` | `12` | Heals `1000` HP + cures blindness/confusion/poison | **Moria8 `#96` (`Healing Potion`)**: `cost=200`, `wt=4`, `min_lvl=4`, heals `1000` HP (capped at max HP; "You feel very good.") and cures blindness, confusion and poison, all ports (as Cure Light Wounds above).<br>**Fixed 2026-10-31:** Moria8 healed `200` HP and cured nothing (this row said it cured status). Source: `vms-moria: source/include/potions.inc` quaff cases `13`-`16`, `29`-`31` (flags in `values.inc`), `source/include/spells.inc` `hp_player`, `cure_blindness`, `cure_confusion`, `cure_poison`; `umoria: src/player_quaff.cpp`, `src/player_magic.cpp`; `moria8: core/eff_potion_cure.s`, `core/player_item_commands.s`. | **Implemented** |
-| `243` | `240` | **Potion of Constitution / Gain Constitution** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_CON)` | **Moria8 `#144`**: `wt=4`, generation level `8` (as Restoration), flavoured, Black Market stock. Raises the base CON by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07). Constitution also adds `1` to max HP (VMS), then heals to full (VMS adds max HP to HP, which can pass the maximum) | **Implemented** |
+| `243` | `240` | **Potion of Constitution / Gain Constitution** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_CON)` | **Moria8 `Potion of Gain Constitution`**: `wt=4`, generation level `8`, flavoured, Black Market stock. Raises the base CON by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07). Constitution also adds `1` to max HP (VMS), then heals to full (VMS adds max HP to HP, which can pass the maximum) | **Implemented** |
 | `244` | `241` | **Potion of Gain Experience** | `TV_POTION1 (75)` | `2500` | `4` | `50` | Adds `(exp / 2) + 10` XP (up to `100,000`) | Omitted | **Missing** |
 | `245` | `242` | **Potion of Sleep** | `TV_POTION1 (75)` | `0` | `4` | `0` | Paralyzes player for `randint(4) + 4` turns | Omitted | **Missing** |
 | `246` | `243` | **Potion of Blindness** | `TV_POTION1 (75)` | `0` | `4` | `0` | Blinds player for `randint(100) + 100` turns | **Moria8 `#28` (`Blindness Potion`)**: `cost=5`, `wt=4`, `min_lvl=1` | **Implemented** |
@@ -1572,9 +1569,9 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `248` | `245` | **Potion of Poison** | `TV_POTION1 (75)` | `0` | `4` | `3` | Poisons player for `randint(15) + 10` turns | **Moria8 `#19` (`Poison Potion`)**: `cost=5`, `wt=4`, `min_lvl=1` | **Implemented** |
 | `249` | `246` | **Potion of Haste Self** | `TV_POTION1 (75)` | `75` | `4` | `1` | `fast += randint(25) + 15` turns | **Moria8 `#18` (`Speed Potion`)**: `cost=75`, `wt=4`, `min_lvl=3`; adds `randint(25) + 15` turns (signed add, stops at `+127`; §6.5).<br>**Fixed 2026-10-31:** added `rng(20)+10` and capped at `255`, which read as slow past `127`. Source: `vms-moria: source/include/potions.inc` case 23; `umoria: src/player_quaff.cpp`; `moria8: core/player_item_commands.s` `iq_effect_speed`. | **Implemented** |
 | `250` | `247` | **Potion of Slowness** | `TV_POTION1 (75)` | `0` | `4` | `1` | `slow += randint(25) + 15` turns | Omitted | **Missing** |
-| `251` | `251` | **Potion of Dexterity / Gain Dexterity** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_DEX)` | **Moria8 `#143`**: `wt=4`, generation level `8` (as Restoration), flavoured, Black Market stock. Raises the base DEX by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
-| `252` | `252` | **Potion of Restore Dexterity** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_DEX)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
-| `253` | `253` | **Potion of Restore Constitution** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_CON)` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Approximation** |
+| `251` | `251` | **Potion of Dexterity / Gain Dexterity** | `TV_POTION1 (75)` | `300` | `4` | `25` | `inc_stat(A_DEX)` | **Moria8 `Potion of Gain Dexterity`**: `wt=4`, generation level `8`, flavoured, Black Market stock. Raises the base DEX by VMS `in_statp` (`misc.inc`): `+1` below `18`, `+1d25` below `18/70`, `+1d10` below `18/90`, else `+1`, capped at `18/100`; the current value moves by the same step (a drain stays), mirrored to ZP. All ports; `core/eff_gain_stat.s` (added 2026-11-07) | **Implemented** |
+| `252` | `252` | **Potion of Restore Dexterity** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_DEX)` | **Moria8 `Potion of Restore Dexterity`** (`cost=300`, `wt=4`, `min_lvl=10`) | **Implemented** |
+| `253` | `253` | **Potion of Restore Constitution** | `TV_POTION1 (75)` | `300` | `4` | `40` | `res_stat(A_CON)` | **Moria8 `Potion of Restore Constitution`** (`cost=300`, `wt=4`, `min_lvl=10`) | **Implemented** |
 | *(VMS only)* | `254` | **Potion of Learning** *(VMS Moria only; removed in Umoria)* | `TV_POTION2 (76)` | `200` | `4` | `45` | Grants `+1` learnable spell (`new_spells++`) | Omitted (removed in Umoria) | **Missing** |
 | `254` | `255` | **Potion of Lose Experience / Lose Memories** | `TV_POTION2 (76)` | `0` | `4` | `10` | Drains `25%` of player XP | Omitted | **Missing** |
 | `255` | `256` | **Potion of Salt Water** | `TV_POTION2 (76)` | `0` | `4` | `0` | Vomits (`food = 0`), cures poison, paralyzes `4` turns | Omitted | **Missing** |
@@ -1582,10 +1579,10 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `257` | `258` | **Potion of Heroism** | `TV_POTION2 (76)` | `35` | `4` | `1` | `hero += randint(25) + 25`, heals `10` HP, cures fear | **Moria8 `#27` (`Heroism Potion`)**: `cost=35`, `wt=4`, `min_lvl=4` | **Implemented** |
 | `258` | `259` | **Potion of Super Heroism** | `TV_POTION2 (76)` | `100` | `4` | `3` | `shero += randint(25) + 25`, heals `30` HP, cures fear | Consolidated into `Heroism Potion #27` | **Approximation** |
 | `259` | `260` | **Potion of Boldness / Boldliness** | `TV_POTION2 (76)` | `10` | `4` | `1` | `remove_fear()` | Covered by `Heroism Potion #27` | **Approximation** |
-| `260` | `261` | **Potion of Restore Life Levels** | `TV_POTION2 (76)` | `400` | `4` | `40` | `restore_level()` | Consolidated into **Moria8 `#97` (`Restoration Potion`)** | **Implemented** |
+| `260` | `261` | **Potion of Restore Life Levels** | `TV_POTION2 (76)` | `400` | `4` | `40` | `restore_level()` | **Moria8 `Potion of Restore Life Levels`** (`cost=400`, `wt=4`, `min_lvl=10`) | **Implemented** |
 | `261` | `262` | **Potion of Resist Heat** | `TV_POTION2 (76)` | `30` | `4` | `1` | `resist_heat += randint(10) + 10` | **Moria8 `#98` (`Resist Heat Potion`)**: `cost=30`, `wt=4`, `min_lvl=1` | **Implemented** |
 | `262` | `263` | **Potion of Resist Cold** | `TV_POTION2 (76)` | `30` | `4` | `1` | `resist_cold += randint(10) + 10` | **Moria8 `#99` (`Resist Cold Potion`)**: `cost=30`, `wt=4`, `min_lvl=1`; adds `randint(10) + 10` (`11..20`; `10..19` until 2026-11-08) to `eff_resist_cold_timer`, which divides frost breath (`monster_cast_breath`, §6.5) | **Implemented** |
-| `263` | `264` | **Potion of Detect Invisible** | `TV_POTION2 (76)` | `50` | `4` | `3` | `detect_inv2(randint(12) + 12)` | Adapted as **Moria8 `#30` (`Detect Monsters Potion`)** (`cost=60`, `wt=4`, `min_lvl=2`) | **Approximation** |
+| `263` | `264` | **Potion of Detect Invisible** | `TV_POTION2 (76)` | `50` | `4` | `3` | `detect_inv2(randint(12) + 12)` | **Moria8 `Potion of Detect Invisible`** (`cost=50`, `wt=4`, `min_lvl=1`) | **Implemented** |
 | `264` | `265` | **Potion of Slow Poison** | `TV_POTION2 (76)` | `25` | `4` | `1` | `slow_poison()` | Consolidated into `Neutralize Poison Potion #126` | **Approximation** |
 | `265` | `266` | **Potion of Neutralize Poison** | `TV_POTION2 (76)` | `75` | `4` | `5` | `cure_poison()` | **Moria8 `#126` (`Neutralize Poison Potion`)**: `cost=75`, `wt=4`, `min_lvl=2` | **Implemented** |
 | `266` | `267` | **Potion of Restore Mana** | `TV_POTION2 (76)` | `350` (`35` VMS) | `4` | `25` | Restores `cmana = mana` | **Moria8 `#26` (`Restore Mana Potion`)**: `cost=35`, `wt=4`, `min_lvl=7` | **Implemented** |
@@ -1629,7 +1626,7 @@ In VMS Moria 4.8 (`source/include/values.inc:755-1880`) and Umoria 5.7.15 (`src/
 | `305` | `306` | **Staff of Slow Monsters** | `TV_STAFF (55)` | `800` | `50` | `10` | `1d5+6` charges, slows all LOS monsters | Omitted | **Missing** |
 | `306` | `307` | **Staff of Sleep Monsters** | `TV_STAFF (55)` | `700` | `50` | `10` | `1d5+6` charges, `sleep_monsters3()` | Omitted as staff (implemented as Spell `#21`) | **Missing** |
 | `307` | `308` | **Staff of Cure Light Wounds** | `TV_STAFF (55)` | `200` (`350` VMS) | `50` | `5` | `1d10+12` charges, heals `randint(8)` HP | **Moria8 `#46` (`Staff of Cure Light Wounds`)**: `cost=200`, `wt=50`, `min_lvl=3` | **Implemented** |
-| `308` | `309` | **Staff of Detect Invisible** | `TV_STAFF (55)` | `200` | `50` | `5` | `1d3+4` charges, `detect_inv2()` | Adapted as **Moria8 `#44` (`Staff of Detect Monsters`)** (`cost=100`, `wt=50`, `min_lvl=3`) | **Approximation** |
+| `308` | `309` | **Staff of Detect Invisible** | `TV_STAFF (55)` | `200` | `50` | `5` | `1d3+4` charges, `detect_inv2()` | **Moria8 `Staff of Detect Invisible`** (`cost=200`, `wt=50`, `min_lvl=2`) | **Implemented** |
 | `309` | `310` | **Staff of Speed** | `TV_STAFF (55)` | `1000` (`800` VMS) | `50` | `40` | `1d3+4` charges, `fast += randint(30) + 15` | **Moria8 `#121` (`Staff of Speed`)**: `cost=1000`, `wt=50`, `min_lvl=10`; `eff_staff_speed` adds `randint(30) + 15` turns (§6.5). **Fixed 2026-10-31:** it ran Haste Self (`randint(20) + lev`). Source: `vms-moria: source/include/staffs.inc` case 17; `umoria: src/staves.cpp`. | **Implemented** |
 | `310` | `311` | **Staff of Slowness** | `TV_STAFF (55)` | `0` | `50` | `40` | `1d5+6` charges, `slow += randint(30) + 15` | Omitted | **Missing** |
 | `311` | `312` | **Staff of Mass Polymorph** | `TV_STAFF (55)` | `750` | `50` | `46` | `1d5+6` charges, `mass_poly()` | Omitted | **Missing** |
@@ -2015,7 +2012,7 @@ Every one of the **279 creatures** (`0..278` in `umoria: src/data_creatures.cpp:
 | **Combat & Monster Attacks** | `19` Methods, `24` Effects (`4` attacks/monster) | `19` Methods, `24` Effects (`4` attacks/monster) | All `19` `ADESC_*` Methods, all `24` `ATK_*` Effects (`4` attacks/monster) | **Implemented (`100%` Attack Verb & Effect Parity)**. Executes all 4 monster attack slots (`atk0..atk3`), all 19 VMS `ADESC_*` verbs, and all 24 VMS `ATK_*` effects across all 7 ports + 5 cartridges (`core/monster_attack.s`, `core/monster_attack_effects.s`, `MON-032`). |
 | **Mage Spells & Priest Prayers** | `31` Spells + `31` Prayers (`8` active books) | `31` Spells + `31` Prayers (`8` active books) | `31` Spells + `31` Prayers (`8` active books) | **Implemented (`100%` Catalog Parity)**. All 62 spells/prayers are implemented with matching level, mana, failure rate, overcasting faint/CON-drain penalty, elemental `2×` `CD_*` vulnerability / `/4` breath resistance, `CD_LIGHT` `2d8`, `CD_STONE` `100`, and `CD_NO_SLEEP` immunity (`core/spell_data.s`, `core/player_magic*.s`, `core/spell_effects.s`). |
 | **Ego Items** | `55`–`56` Ego Templates | `56` Ego Templates | All `55` VMS Ego Templates (`1..55`) + `2` Digging Tool Prefixes + Chest Status Tags | **Implemented (`100%` Catalog Parity)**. Implements all 55 VMS ego templates (`1..55` in `'ITM2'` `ITEM.CAT` + `core/ego_items.s`, stored in 6-bit `EGO_ID_MASK = $3F` across `inv_ego`, `si_meta_hi`, and `fi_meta_hi`, including `1.5×` `Flame Tongue`/`Frost Brand`/`Fire` ammo vs `CD_FIRE`/`CD_FROST`) plus `Gnomish`/`Dwarven` digging tool prefixes (`core/game_loop.s`). |
-| **Base Item Catalog** | `414`–`420` Templates | `420` Templates (`src/data_treasure.cpp`) | All `370` VMS Dungeon & Store Item Templates (`IDs 0..369` in `'ITM2'` `ITEM.CAT` + `item_hot_tables.s`) | **Implemented (`100%` VMS Item Parity)**. Full 370-item catalog (`0..369`) under Base-255 Paged 9-bit IDs (`ITEM_PAGE_BIT = $40`), 16-bit weights/costs, 32-bit flags, 174 randomized flavors (`FLAVOUR_COUNT = 174`), and Cloak equipment slot (`EQUIP_CLOAK = 32`, `TOTAL_INV_SLOTS = 34`). |
+| **Base Item Catalog** | `414`–`420` Templates | `420` Templates (`src/data_treasure.cpp`) | All `361` VMS Dungeon & Store Item Templates (`IDs 0..360` in `'ITM2'` `ITEM.CAT` + `item_hot_tables.s` + `item_ids.s`) | **Implemented (`100%` VMS Item Parity)**. Full 361-item VMS catalog (`0..360`) in contiguous VMS category & `object_list` order under Base-255 Paged 9-bit IDs (`ITEM_PAGE_BIT = $40`), 16-bit weights/costs, 32-bit flags, 174 randomized flavors (`FLAVOUR_COUNT = 174`), and Cloak equipment slot (`EQUIP_CLOAK = 32`, `TOTAL_INV_SLOTS = 34`). |
 | **Monster Spells & Breaths** | `18` `CSPELL` Flags | `18` `CSPELL` Flags | All `18` VMS `CSPELL` Flags (`cr_spell_chance` + `cr_spell_flags` + `cr_spell_flags2`) | **Implemented (Single-Target Breath `Approximation`)**. Implements all 18 VMS monster spells and breaths across `MS_HOLD`, 5 breath elements (`6` = all 5), 8 `MSF_*` spells, and 5 `MSF2_*` spells (`Blink`, `Teleport Self`, `Summon Undead` via `cat_undead[35]`, `Slow`, `Drain Mana`) (`core/monster_magic.s`, `MON-033`). |
 | **Monster Catalog** | `279` Creatures | `279` Creatures (`src/data_creatures.cpp`) | All **`279 / 279` VMS Creatures** (`MONSTER.CAT` + `MONSTER.EXT`, `29` SoA fields, `57 B/record`) | **Implemented (`100%` VMS Monster Parity)**. All 279 VMS Moria 4.8 creatures are playable (`cat_available` all `1`s) across all 7 ports + 5 cartridges, with `CM2_PHASE`/`CM2_EATS_OTHER`/`CM2_PICKS_UP`, `CD_INVISIBLE`/`CD_NO_SLEEP`/`CD_FROST..CD_STONE`, full Balrog (`#278`), and `15`-field `/` Monster Recall across `recall[279]` (`core/monster_catalog.s`, `core/ui_recall.s`). |
 | **Cross-Port Gameplay Parity** | 1 Platform (VAX/VMS) | Cross-platform desktop C/C++ | `7` Active 8-Bit Ports (`C64`, `C128`, `Plus/4`, `Apple IIe`, `CX16`, `Atari 8-bit`, `BBC Master 128`) | **100% Gameplay Logic Parity Across All 7 Ports**. All 7 ports share the exact same `core/` gameplay, RNG, combat, magic, item, and monster tier tables; ports differ only in map/viewport geometry (`40×25` scrolling on `80×48` map for `C64`/`Plus4`/`Atari8` vs `80×24/25` on `198×66` map for `C128`/`Apple2`/`CX16`/`BBCMaster`), color hardware, sound (`Plus/4` stubbed), and RAM/disk banking. |

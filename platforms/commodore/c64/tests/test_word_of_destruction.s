@@ -456,14 +456,18 @@ test_setup_destruction_map:
     jsr test_write_tile
 
     // Floor items: slot 0 under player (22,12); slot 1 outside (42,12)
-    lda #1
+    lda #ITEM_SLOT_GOLD_LARGE
     sta fi_item_id
     lda #22
     sta fi_x
     lda #12
     sta fi_y
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta fi_item_id + 1
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi + 1
+    }
     lda #42
     sta fi_x + 1
     lda #12

@@ -32,6 +32,7 @@ test_exit_trampoline:
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestUnused2 [start=$D000, min=$D000, max=$FFF9]
 #define TRAP_TRIGGER_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -71,7 +72,9 @@ player_create:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
@@ -79,7 +82,32 @@ player_create:
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
+#define SCROLL_P3_ROUTER_ENABLED
 #import "../../../../core/player_items.s"
+#import "../../../../core/los_trace.s"
+#define SCROLL_P3_EXISTING_OWNER
+#define SCROLL_P3_NEW_OWNER
+#import "../../../../core/scroll_effects_p3.s"
+#undef SCROLL_P3_NEW_OWNER
+#undef SCROLL_P3_EXISTING_OWNER
+irs_p3_swap_exec:
+    jsr irs_dispatch_p3_overlay
+    sec
+    rts
+eff_recharge_item:
+eff_earthquake:
+chest_mark_found_all:
+eff_glyph_of_warding:
+eff_genocide:
+eff_destroy_area:
+eff_slow_monster_dir:
+eff_teleport_other:
+eff_staff_speed:
+eff_ball:
+ped_s28:
+eff_reveal_floorplan:
+pmx_print_inline:
+    rts
 #import "../../../../core/spell_data.s"
 .segment TestCreateOverlay
 #import "../../../../core/projectile.s"
@@ -89,12 +117,15 @@ player_create:
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
+.segment TestUnused2
 #import "../../../../core/player_magic.s"
 .segment TestCreateOverlay
 #import "../dungeon_render.s"
 .segment Default
 #import "../../../../core/dungeon_los.s"
+.segment TestUnused
 #import "../../../../core/player_move.s"
+.segment Default
 #import "../../../../core/combat.s"
 .segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
@@ -301,7 +332,7 @@ test_start:
     sta fi_add_x
     lda #15
     sta fi_add_y
-    lda #0
+    lda #ITEM_SLOT_GOLD_SMALL
     sta fi_add_id
     lda #42
     sta fi_add_qty
@@ -313,7 +344,7 @@ test_start:
 
     // Check stored fields
     lda fi_item_id
-    cmp #0
+    cmp #ITEM_SLOT_GOLD_SMALL
     bne !t2_fail+
     lda fi_x
     cmp #20
@@ -371,7 +402,7 @@ test_start:
     sta fi_add_x
     lda #15
     sta fi_add_y
-    lda #1
+    lda #ITEM_SLOT_GOLD_LARGE
     sta fi_add_id
     lda #10
     sta fi_add_qty
@@ -392,7 +423,7 @@ test_start:
     sta fi_add_x
     lda #15
     sta fi_add_y
-    lda #0
+    lda #ITEM_SLOT_GOLD_SMALL
     sta fi_add_id
     lda #5
     sta fi_add_qty
@@ -486,20 +517,30 @@ test_start:
 !t8:
     jsr item_init_inventory
 
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_add_ego
+    }
     jsr inv_add_item
+    .if (ITEM_PAGE_DAGGER != 0) {
+        php
+        lda #0
+        sta fi_add_ego
+        plp
+    }
     bcc !t8_fail+
 
     // Check slot 0
     cpx #0
     bne !t8_fail+
     lda inv_item_id
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t8_fail+
     lda inv_qty
     cmp #1
@@ -517,15 +558,23 @@ test_start:
     // ==========================================
 !t9:
     // Already have 1 item (from test 8). Add 2 more.
-    lda #3                      // Short sword
+    lda #ITEM_SLOT_SHORT_SWORD                      // Short sword
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    .if (ITEM_PAGE_SHORT_SWORD != 0) {
+        lda #ITEM_PAGE_SHORT_SWORD
+        sta fi_add_ego
+    }
     jsr inv_add_item
+    .if (ITEM_PAGE_SHORT_SWORD != 0) {
+        lda #0
+        sta fi_add_ego
+    }
 
-    lda #15                     // Ration of food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Ration of food
     sta fi_add_id
     lda #3
     sta fi_add_qty
@@ -567,7 +616,7 @@ test_start:
 
     // Check that first item is gold (type 0 or 1)
     lda fi_item_id
-    cmp #2
+    cmp #ITEM_SLOT_GOLD_LARGE + 1
     bcs !t10_fail+              // Type >= 2 means not gold
 
     lda #$01
@@ -622,7 +671,7 @@ test_start:
     sta fi_add_x
     lda #12
     sta fi_add_y
-    lda #0              // Gold (small)
+    lda #ITEM_SLOT_GOLD_SMALL              // Gold (small)
     sta fi_add_id
     lda #50             // 50 gold pieces
     sta fi_add_qty
@@ -691,13 +740,21 @@ test_start:
     sta fi_add_x
     lda #12
     sta fi_add_y
-    lda #2              // Dagger
+    lda #ITEM_SLOT_DAGGER              // Dagger
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_add_ego
+    }
     jsr floor_item_add
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+        sta fi_add_ego
+    }
 
     // Stuff keyboard buffer
     lda #1
@@ -711,7 +768,7 @@ test_start:
 
     // Check inventory slot 0 has dagger
     lda inv_item_id
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t12_fail+
 
     // Check floor slot is empty
@@ -784,13 +841,21 @@ test_start:
     sta zp_player_y
 
     // Add dagger to inventory slot 0
-    lda #2              // Dagger
+    lda #ITEM_SLOT_DAGGER              // Dagger
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_add_ego
+    }
     jsr inv_add_item
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+        sta fi_add_ego
+    }
 
     // Stuff keyboard buffer: 'A' ($41) to select slot 0, then space for -more-
     lda #2
@@ -817,7 +882,7 @@ test_start:
 
     // Check it's a dagger
     lda fi_item_id,x
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t14_fail+
 
     lda #$01
@@ -838,8 +903,12 @@ test_start:
     sta zp_msg_flags
 
     // Put dagger (type 2) in inv slot 0
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego
+    }
     lda #1
     sta inv_qty
     lda #0
@@ -859,7 +928,7 @@ test_start:
 
     // Check EQUIP_WEAPON has dagger
     lda inv_item_id + EQUIP_WEAPON
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t15_fail+
 
     // Check slot 0 is empty (moved to equip)
@@ -892,7 +961,7 @@ test_start:
     sta t16_base_ac
 
     // Put leather armor (type 7, base AC = 4) in inv slot 0
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -936,8 +1005,12 @@ test_start:
     sta zp_msg_flags
 
     // Put dagger in EQUIP_WEAPON slot
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #0
@@ -962,7 +1035,7 @@ test_start:
 
     // Check carried slot 0 has dagger
     lda inv_item_id
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t17_fail+
 
     lda #$01
@@ -989,7 +1062,7 @@ test_start:
     sta zp_player_food_hi
 
     // Put ration of food (type 15) in inv slot 0
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -1065,7 +1138,7 @@ test_start:
     jsr item_init_inventory
 
     // Equip leather armor (type 7, base AC = 4) in BODY slot
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
@@ -1074,8 +1147,12 @@ test_start:
     sta inv_flags + EQUIP_BODY
 
     // Equip small shield (type 9, base AC = 2) in SHIELD slot
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     lda #1
     sta inv_qty + EQUIP_SHIELD
     lda #0
@@ -1172,7 +1249,7 @@ test_start:
     lda #1
     sta zp_player_dlvl
 
-    lda #15                     // Ration of food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Ration of food
     jsr roll_enchantment
     cmp #0
     beq !t23_pass+
@@ -1187,7 +1264,7 @@ test_start:
     // Test 24: roll_enchantment returns charges for torch
     // ==========================================
 !t24:
-    lda #13                     // Wooden torch
+    lda #ITEM_SLOT_WOODEN_TORCH                     // Wooden torch
     jsr roll_enchantment
     // Should be in range [67, 133]  (67 + rng(67), each charge = 30 turns)
     cmp #67
@@ -1241,8 +1318,16 @@ test_start:
     lda fi_item_id,x
     cmp #FI_EMPTY
     beq !t25_next+
-    cmp #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda fi_meta_hi,x
+        and #ITEM_PAGE_BIT
+        bne !t25_found+
+        lda fi_item_id,x
+    }
+    .assert "Gold occupies 0..19 on Page 0", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_MITHRIL == 19 && ITEM_PAGE_GOLD_MITHRIL == 0, true
+    cmp #ITEM_SLOT_GOLD_MITHRIL + 1
     bcc !t25_next+
+!t25_found:
     // Found non-gold item
     inc tc_valid_ctr
 !t25_next:
@@ -1306,15 +1391,23 @@ test_start:
     // ==========================================
 !t27:
     // Set dagger (type 2) as known (it already should be)
-    ldx #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta item_cur_page
+    }
+    ldx #ITEM_SLOT_DAGGER
     jsr id_known_set
 
     lda #$12
     sta zp_ptr1
     lda #$34
     sta zp_ptr1_hi
-    lda #2                          // Dagger
+    lda #ITEM_SLOT_DAGGER                          // Dagger
     jsr item_get_name_ptr
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+        sta item_cur_page
+    }
     lda zp_ptr1
     cmp #$12
     bne !t27_fail+
@@ -1345,12 +1438,12 @@ test_start:
     // ==========================================
 !t28:
     // Set type 17 (CLW) as unknown
-    lda #0
+    lda #ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
     sta item_cur_page
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_clear
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr item_get_name_ptr
     // zp_ptr0 should NOT decode to "Potion of Cure Light Wounds"
     ldy #0
@@ -1380,38 +1473,66 @@ t28_known_cure_name:
     jsr item_init_identification
 
     // Check type 2 (dagger) is known
-    ldx #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta item_cur_page
+    }
+    ldx #ITEM_SLOT_DAGGER
     jsr id_known_test
     bne !t29_c1+
     jmp !t29_fail+
 !t29_c1:
+    .if (ITEM_PAGE_DAGGER != ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS) {
+        lda #ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
+        sta item_cur_page
+    }
     // Check type 17 (CLW potion) is unknown
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_test
     beq !t29_c2+
     jmp !t29_fail+
 !t29_c2:
     // Check type 23 (Protection ring) is unknown
-    ldx #23
+    .if (ITEM_PAGE_RING_OF_PROTECTION != ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS) {
+        lda #ITEM_PAGE_RING_OF_PROTECTION
+        sta item_cur_page
+    }
+    ldx #ITEM_SLOT_RING_OF_PROTECTION
     jsr id_known_test
     beq !t29_c3+
     jmp !t29_fail+
 !t29_c3:
     // Appended fixed equipment defaults known; future capacity remains unknown.
-    ldx #64
+    .if (ITEM_PAGE_MAIN_GAUCHE != ITEM_PAGE_RING_OF_PROTECTION) {
+        lda #ITEM_PAGE_MAIN_GAUCHE
+        sta item_cur_page
+    }
+    ldx #ITEM_SLOT_MAIN_GAUCHE
     jsr id_known_test
     bne !t29_c4+
     jmp !t29_fail+
 !t29_c4:
-    ldx #65
+    .if (ITEM_PAGE_STUDDED_LEATHER_ARMOR != ITEM_PAGE_MAIN_GAUCHE) {
+        lda #ITEM_PAGE_STUDDED_LEATHER_ARMOR
+        sta item_cur_page
+    }
+    ldx #ITEM_SLOT_STUDDED_LEATHER_ARMOR
     jsr id_known_test
     beq !t29_fail+
-    ldx #79
+    ldx #ITEM_SLOT_HARD_LEATHER_ARMOR
     jsr id_known_test
     beq !t29_fail+
-    ldx #ITEM_TYPE_AMULET_MAGI
+    .if (ITEM_PAGE_AMULET_OF_THE_MAGI != ITEM_PAGE_HARD_LEATHER_ARMOR) {
+        lda #ITEM_PAGE_AMULET_OF_THE_MAGI
+        sta item_cur_page
+    }
+    ldx #ITEM_SLOT_AMULET_OF_THE_MAGI
     jsr id_known_test
     beq !t29_fail+
+    .if (ITEM_PAGE_AMULET_OF_THE_MAGI != 0 && ITEM_TYPE_COUNT >= ITEM_ID_CAPACITY) {
+        lda #0
+        sta item_cur_page
+    }
     .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
         lda #ITEM_PAGE_BIT
         sta item_cur_page
@@ -1424,11 +1545,11 @@ t28_known_cure_name:
 
     // If an appended fixed item is forced unknown by bad state, it still
     // resolves through fixed item data instead of a shuffled class table.
-    lda #0
+    lda #ITEM_PAGE_AUGMENTED_CHAIN_MAIL
     sta item_cur_page
-    ldx #ITEM_TYPE_MITHRIL_CHAIN
+    ldx #ITEM_SLOT_AUGMENTED_CHAIN_MAIL
     jsr id_known_clear
-    lda #ITEM_TYPE_MITHRIL_CHAIN
+    lda #ITEM_SLOT_AUGMENTED_CHAIN_MAIL
     jsr item_get_name_ptr
     lda #<t29_expected_appended_name
     sta zp_ptr1
@@ -1444,14 +1565,14 @@ t28_known_cure_name:
     iny
     bne !t29_cmp_appended-
 !t29_check_color:
-    lda #0
+    lda #ITEM_PAGE_AUGMENTED_CHAIN_MAIL
     sta item_cur_page
-    lda #ITEM_TYPE_MITHRIL_CHAIN
+    lda #ITEM_SLOT_AUGMENTED_CHAIN_MAIL
     jsr item_get_floor_color
     sta t29_expected_color
-    lda #0
+    lda #ITEM_PAGE_AUGMENTED_CHAIN_MAIL
     sta item_cur_page
-    lda #ITEM_TYPE_MITHRIL_CHAIN
+    lda #ITEM_SLOT_AUGMENTED_CHAIN_MAIL
     jsr item_get_color_a
     cmp t29_expected_color
     bne !t29_fail+
@@ -1502,13 +1623,21 @@ t28_known_cure_name:
     sta fi_add_x
     lda #12
     sta fi_add_y
-    lda #4                          // Long sword
+    lda #ITEM_SLOT_LONG_SWORD                          // Long sword
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #$fd                        // -3 enchant
     sta fi_add_p1
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta fi_add_ego
+    }
     jsr floor_item_add
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #0
+        sta fi_add_ego
+    }
 
     // Set IF_CURSED flag on floor item
     lda #IF_CURSED
@@ -1555,11 +1684,11 @@ t28_known_cure_name:
     sta zp_player_mhp_hi
 
     // Make cure light wounds known so we can verify
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_set
 
     // Put CLW potion (type 17) in inv slot 0
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -1604,11 +1733,11 @@ t28_known_cure_name:
     sta zp_msg_flags
 
     // Reset id_known for type 17 to unknown
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_clear
 
     // Put identify scroll (type 21) in inv slot 0
-    lda #21
+    lda #ITEM_SLOT_SCROLL_OF_IDENTIFY
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -1617,7 +1746,7 @@ t28_known_cure_name:
     sta inv_flags
 
     // Put unknown potion (type 17) in inv slot 1
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -1642,17 +1771,17 @@ t28_known_cure_name:
     jsr item_read_scroll
 
     // id_known[17] should now be 1
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_test
     beq !t32_fail+
 
     // Scroll in slot 0 should be consumed, compacting the potion into slot 0
     lda inv_item_id
-    cmp #17
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     bne !t32_fail+
 
     // Scroll type 21 should also be known (auto-identified on use)
-    ldx #21
+    ldx #ITEM_SLOT_SCROLL_OF_IDENTIFY
     jsr id_known_test
     beq !t32_fail+
 
@@ -1693,7 +1822,7 @@ t28_known_cure_name:
     sta player_data + PL_MHP_HI
 
     // Put CSW potion (type 25) in inv slot 0
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -1741,7 +1870,7 @@ t28_known_cure_name:
     sta zp_player_mmp
 
     // Put Restore Mana potion (type 26) in inv slot 0
-    lda #26
+    lda #ITEM_SLOT_POTION_OF_RESTORE_MANA
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -1779,20 +1908,25 @@ t28_known_cure_name:
     lda #0
     sta zp_msg_flags
 
-    // Equip a dagger (type 2) with +2 combat stats in weapon slot
-    lda #2
+    // Equip a dagger with +0 combat stats in weapon slot (100% VMS enchant success)
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
-    lda #2
+    lda #0
     sta inv_to_hit + EQUIP_WEAPON
     sta inv_to_dam + EQUIP_WEAPON
-    lda #0
     sta inv_flags + EQUIP_WEAPON
 
-    // Put Enchant Weapon scroll (type 34) in inv slot 0
-    lda #34
+    // Put Enchant Weapon To-Hit scroll in inv slot 0
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
     sta inv_item_id
+    lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+    sta inv_ego
     lda #1
     sta inv_qty
     lda #0
@@ -1808,12 +1942,40 @@ t28_known_cure_name:
 
     jsr item_read_scroll
 
-    // Weapon combat stats should be 3
     lda inv_to_hit + EQUIP_WEAPON
-    cmp #3
+    cmp #1
     bne !t35_fail+
     lda inv_to_dam + EQUIP_WEAPON
-    cmp #3
+    bne !t35_fail+
+
+    // Put Enchant Weapon To-Dam scroll in inv slot 0
+    lda #0
+    sta zp_msg_flags
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_DAM
+    sta inv_item_id
+    lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_DAM
+    sta inv_ego
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // Weapon combat stats should now be +1/+1
+    lda inv_to_hit + EQUIP_WEAPON
+    cmp #1
+    bne !t35_fail+
+    lda inv_to_dam + EQUIP_WEAPON
+    cmp #1
     bne !t35_fail+
 
     lda #$01
@@ -1834,7 +1996,7 @@ t28_known_cure_name:
     sta zp_eff_word_recall
 
     // Put Word of Recall scroll (type 32) in inv slot 0
-    lda #32
+    lda #ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -1876,7 +2038,7 @@ t28_known_cure_name:
     sta zp_eff_blind
 
     // Put Blindness potion (type 28) in inv slot 0
-    lda #28
+    lda #ITEM_SLOT_POTION_OF_BLINDNESS
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -1925,7 +2087,7 @@ t28_known_cure_name:
     sta tc_loop_ctr
 !t38_loop:
     jsr pick_item_type
-    cmp #25
+    cmp #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     bcc !t38_under+
     inc tc_valid_ctr
 !t38_under:
@@ -1953,8 +2115,12 @@ t28_known_cure_name:
     sta zp_eff_blind                 // Clear blindness from test 37
 
     // Equip a cursed long sword (type 4) with combat stats=$FD (-3)
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #$fd                        // -3 enchantment
@@ -1963,9 +2129,11 @@ t28_known_cure_name:
     lda #IF_CURSED
     sta inv_flags + EQUIP_WEAPON
 
-    // Put Enchant Weapon scroll (type 34) in inv slot 0
-    lda #34
+    // Put Enchant Weapon To-Hit scroll in inv slot 0
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
     sta inv_item_id
+    lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+    sta inv_ego
     lda #1
     sta inv_qty
     lda #0
@@ -1981,10 +2149,12 @@ t28_known_cure_name:
 
     jsr item_read_scroll
 
-    // Combat stats at EQUIP_WEAPON should be 0 (curse removed, reset)
+    // Negative to-hit rises by 1 ($fd -> $fe), to-dam stays $fd, curse cleared
     lda inv_to_hit + EQUIP_WEAPON
+    cmp #$fe
     bne !t39_fail+
     lda inv_to_dam + EQUIP_WEAPON
+    cmp #$fd
     bne !t39_fail+
 
     // IF_CURSED should be cleared
@@ -2000,7 +2170,7 @@ t28_known_cure_name:
     sta tc_results + 38
 
     // ==========================================
-    // Test 40: Enchant Weapon at cap (p1=5) does nothing
+    // Test 40: Enchant Weapon at VMS cap (+15) does nothing
     // ==========================================
 !t40:
     jsr item_init_inventory
@@ -2009,20 +2179,26 @@ t28_known_cure_name:
     sta zp_msg_flags
     sta zp_eff_blind                 // Ensure blindness is clear
 
-    // Equip dagger (type 2) with combat stats at cap
-    lda #2
+    // Equip dagger with combat stats at VMS cap (+15)
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
-    lda #5
+    lda #15
     sta inv_to_hit + EQUIP_WEAPON
     sta inv_to_dam + EQUIP_WEAPON
     lda #0
     sta inv_flags + EQUIP_WEAPON
 
-    // Put Enchant Weapon scroll (type 34) in inv slot 0
-    lda #34
+    // Put *Enchant Weapon* scroll in inv slot 0
+    lda #ITEM_SLOT_SCROLL_OF_STAR_ENCHANT_WEAPON
     sta inv_item_id
+    lda #ITEM_PAGE_SCROLL_OF_STAR_ENCHANT_WEAPON
+    sta inv_ego
     lda #1
     sta inv_qty
     lda #0
@@ -2038,12 +2214,12 @@ t28_known_cure_name:
 
     jsr item_read_scroll
 
-    // Combat stats should still be 5 (not 6)
+    // Combat stats should still be 15 (not 16)
     lda inv_to_hit + EQUIP_WEAPON
-    cmp #5
+    cmp #15
     bne !t40_fail+
     lda inv_to_dam + EQUIP_WEAPON
-    cmp #5
+    cmp #15
     bne !t40_fail+
 
     lda #$01
@@ -2066,7 +2242,7 @@ t28_known_cure_name:
     sta zp_eff_blind
 
     // Equip cursed leather armor (type 7) at EQUIP_BODY with AC=$FD (-3)
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
@@ -2076,7 +2252,7 @@ t28_known_cure_name:
     sta inv_flags + EQUIP_BODY
 
     // Put Enchant Armor scroll (type 35) in inv slot 0
-    lda #35
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2122,7 +2298,7 @@ t28_known_cure_name:
     sta zp_eff_blind
 
     // Equip leather armor (type 7) at EQUIP_BODY with AC at cap
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
@@ -2132,7 +2308,7 @@ t28_known_cure_name:
     sta inv_flags + EQUIP_BODY
 
     // Put Enchant Armor scroll (type 35) in inv slot 0
-    lda #35
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2174,8 +2350,12 @@ t28_known_cure_name:
     sta zp_eff_blind
 
     // Equip small leather shield (type 9) with room to enchant
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     lda #1
     sta inv_qty + EQUIP_SHIELD
     lda #2
@@ -2184,7 +2364,7 @@ t28_known_cure_name:
     sta inv_flags + EQUIP_SHIELD
 
     // Put Enchant Armor scroll (type 35) in inv slot 0
-    lda #35
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2320,7 +2500,7 @@ t28_known_cure_name:
     sta fi_add_x
     lda #12
     sta fi_add_y
-    lda #2                          // Dagger
+    lda #ITEM_SLOT_DAGGER                          // Dagger
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -2333,9 +2513,13 @@ t28_known_cure_name:
     sta fi_add_to_dam
     lda #IF_IDENTIFIED
     sta fi_add_flags
-    lda #4
+    lda #(4 | ITEM_PAGE_DAGGER)
     sta fi_add_ego
     jsr floor_item_add
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+        sta fi_add_ego
+    }
 
     lda #1
     sta $c6
@@ -2346,7 +2530,7 @@ t28_known_cure_name:
     bcc !t46_fail+
 
     lda inv_item_id
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t46_fail+
     lda inv_to_hit
     cmp #2
@@ -2358,7 +2542,7 @@ t28_known_cure_name:
     and #IF_IDENTIFIED
     beq !t46_fail+
     lda inv_ego
-    cmp #4
+    cmp #(4 | ITEM_PAGE_DAGGER)
     bne !t46_fail+
 
     lda #$01
@@ -2392,7 +2576,7 @@ t28_known_cure_name:
     sta zp_player_x
     sta zp_player_y
 
-    lda #2                          // Dagger
+    lda #ITEM_SLOT_DAGGER                          // Dagger
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2405,7 +2589,7 @@ t28_known_cure_name:
     sta inv_to_dam
     lda #IF_IDENTIFIED
     sta inv_flags
-    lda #2
+    lda #(2 | ITEM_PAGE_DAGGER)
     sta inv_ego
 
     lda #2
@@ -2424,7 +2608,7 @@ t28_known_cure_name:
     bcc !t47_fail+
 
     lda fi_item_id,x
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t47_fail+
     lda fi_to_hit,x
     cmp #4
@@ -2436,7 +2620,7 @@ t28_known_cure_name:
     and #IF_IDENTIFIED
     beq !t47_fail+
     jsr floor_item_get_ego_x
-    cmp #2
+    cmp #(2 | ITEM_PAGE_DAGGER)
     bne !t47_fail+
 
     lda #$01
@@ -2464,7 +2648,7 @@ t28_known_cure_name:
     lda #0
     sta zp_player_mhp_hi
 
-    lda #ITEM_TYPE_POT_HEALING
+    lda #ITEM_SLOT_POTION_OF_HEALING
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2499,7 +2683,7 @@ t28_known_cure_name:
     lda #40
     sta zp_eff_poison
 
-    lda #ITEM_TYPE_POT_NEUTRALIZE
+    lda #ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2526,7 +2710,7 @@ t28_known_cure_name:
     lda #0
     sta zp_msg_flags
 
-    lda #ITEM_TYPE_POT_RESIST_HEAT
+    lda #ITEM_SLOT_POTION_OF_RESIST_HEAT
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2558,7 +2742,7 @@ t28_known_cure_name:
     lda #0
     sta zp_msg_flags
 
-    lda #ITEM_TYPE_POT_RESIST_COLD
+    lda #ITEM_SLOT_POTION_OF_RESIST_COLD
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -2602,8 +2786,10 @@ t28_known_cure_name:
     sta player_data + PL_CON_CUR
     sta zp_player_con                // the ZP mirror drained as well
 
-    lda #ITEM_TYPE_POT_RESTORATION
+    lda #ITEM_SLOT_POTION_OF_RESTORE_CONSTITUTION
     sta inv_item_id
+    lda #ITEM_PAGE_POTION_OF_RESTORE_CONSTITUTION
+    sta inv_ego
     lda #1
     sta inv_qty
     lda #0
@@ -2644,8 +2830,12 @@ t28_known_cure_name:
     jsr item_init_inventory
 
     // Resist Fire ring equipped → PFLAG_RESIST_FIRE at recalc
-    lda #ITEM_TYPE_RING_RESIST_FIRE
+    lda #ITEM_SLOT_RING_OF_RESIST_FIRE
     sta inv_item_id + EQUIP_RING
+    .if (ITEM_PAGE_RING_OF_RESIST_FIRE != 0) {
+        lda #ITEM_PAGE_RING_OF_RESIST_FIRE
+        sta inv_ego + EQUIP_RING
+    }
     lda #1
     sta inv_qty + EQUIP_RING
     jsr player_calc_stats
@@ -2657,8 +2847,12 @@ t28_known_cure_name:
 
     // Ring of Speed equipped → PFLAG_SPEED
     jsr item_init_inventory
-    lda #ITEM_TYPE_RING_SPEED
+    lda #ITEM_SLOT_RING_OF_SPEED
     sta inv_item_id + EQUIP_RING
+    .if (ITEM_PAGE_RING_OF_SPEED != 0) {
+        lda #ITEM_PAGE_RING_OF_SPEED
+        sta inv_ego + EQUIP_RING
+    }
     lda #1
     sta inv_qty + EQUIP_RING
     jsr player_calc_stats
@@ -2674,8 +2868,12 @@ t28_known_cure_name:
 
     // Amulet of the Magi equipped → PFLAG_SEE_INVIS
     jsr item_init_inventory
-    lda #ITEM_TYPE_AMULET_MAGI
+    lda #ITEM_SLOT_AMULET_OF_THE_MAGI
     sta inv_item_id + EQUIP_AMULET
+    .if (ITEM_PAGE_AMULET_OF_THE_MAGI != 0) {
+        lda #ITEM_PAGE_AMULET_OF_THE_MAGI
+        sta inv_ego + EQUIP_AMULET
+    }
     lda #1
     sta inv_qty + EQUIP_AMULET
     jsr player_calc_stats
@@ -2703,8 +2901,12 @@ t28_known_cure_name:
     sta t49_base_tohit
     lda player_data + PL_TODMG
     sta t49_base_todmg
-    lda #ITEM_TYPE_RING_SLAYING
+    lda #ITEM_SLOT_RING_OF_SLAYING
     sta inv_item_id + EQUIP_RING
+    .if (ITEM_PAGE_RING_OF_SLAYING != 0) {
+        lda #ITEM_PAGE_RING_OF_SLAYING
+        sta inv_ego + EQUIP_RING
+    }
     lda #1
     sta inv_qty + EQUIP_RING
     lda #3
@@ -2734,8 +2936,10 @@ t28_known_cure_name:
     // Test 50: roll_enchantment handles Phase 3 categories
     // ==========================================
 !t50:
+    lda #0
+    sta item_cur_page
     // New wand (114) gets charges in [5, 8]
-    lda #ITEM_TYPE_WAND_SLOW
+    lda #ITEM_SLOT_WAND_OF_SLOW_MONSTER
     jsr roll_enchantment
     cmp #5
     bcc !t50_fail+
@@ -2743,7 +2947,7 @@ t28_known_cure_name:
     bcs !t50_fail+
 
     // New staff (119) gets charges in [3, 8]
-    lda #ITEM_TYPE_STAFF_DISPEL_EVIL
+    lda #ITEM_SLOT_STAFF_OF_DISPEL_EVIL
     jsr roll_enchantment
     cmp #3
     bcc !t50_fail+
@@ -2757,7 +2961,11 @@ t28_known_cure_name:
     ldx #8
 !t50_am_loop:
     stx t50_retries
-    lda #ITEM_TYPE_AMULET_MAGI
+    .if (ITEM_PAGE_AMULET_OF_THE_MAGI != 0) {
+        lda #ITEM_PAGE_AMULET_OF_THE_MAGI
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_AMULET_OF_THE_MAGI
     jsr roll_enchantment
     bne !t50_am_ok+
     ldx t50_retries
@@ -2770,7 +2978,11 @@ t28_known_cure_name:
     ldx #8
 !t50_sl_loop:
     stx t50_retries
-    lda #ITEM_TYPE_RING_SLAYING
+    .if (ITEM_PAGE_RING_OF_SLAYING != 0) {
+        lda #ITEM_PAGE_RING_OF_SLAYING
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_RING_OF_SLAYING
     jsr roll_enchantment
     lda fi_add_to_hit
     beq !t50_sl_retry+
@@ -2782,11 +2994,19 @@ t28_known_cure_name:
     bne !t50_sl_loop-
     jmp !t50_fail+
 !t50_sl_ok:
+    .if (ITEM_PAGE_AMULET_OF_THE_MAGI != 0 || ITEM_PAGE_RING_OF_SLAYING != 0) {
+        lda #0
+        sta item_cur_page
+    }
 
     lda #$01
     sta tc_results + 49
     jmp !t51+
 !t50_fail:
+    .if (ITEM_PAGE_AMULET_OF_THE_MAGI != 0 || ITEM_PAGE_RING_OF_SLAYING != 0) {
+        lda #0
+        sta item_cur_page
+    }
     lda #$00
     sta tc_results + 49
 
@@ -2801,8 +3021,12 @@ t28_known_cure_name:
     lda #11
     sta player_data + PL_INT_BASE    // Baked natural stat (mods included)
 
-    lda #ITEM_TYPE_AMULET_MAGI
+    lda #ITEM_SLOT_AMULET_OF_THE_MAGI
     sta inv_item_id + EQUIP_AMULET
+    .if (ITEM_PAGE_AMULET_OF_THE_MAGI != 0) {
+        lda #ITEM_PAGE_AMULET_OF_THE_MAGI
+        sta inv_ego + EQUIP_AMULET
+    }
     lda #1
     sta inv_qty + EQUIP_AMULET
     lda #19
@@ -2864,7 +3088,7 @@ t28_known_cure_name:
     // ==========================================
 !t53:
     jsr item_init_floor
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_item_id
     lda #10
     sta fi_x
@@ -2888,8 +3112,12 @@ t28_known_cure_name:
     // ==========================================
 !t54:
     jsr item_init_floor
-    lda #2                      // Dagger — not a chest
+    lda #ITEM_SLOT_DAGGER                      // Dagger — not a chest
     sta fi_item_id
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi
+    }
     lda #10
     sta fi_x
     sta df_target_x
@@ -2929,6 +3157,8 @@ t28_known_cure_name:
     // for the small wooden chest. rng_range is patched to scripted returns.
     // ==========================================
 !t56:
+    lda #0
+    sta item_cur_page
     lda rng_range
     sta t56_save0
     lda rng_range + 1
@@ -2945,7 +3175,7 @@ t28_known_cure_name:
     ldx t56_idx
     lda t56_band_table,x
     sta t_rng_ret
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     jsr roll_enchantment
     ldx t56_idx
     cmp t56_band_table + 1,x
@@ -2980,7 +3210,7 @@ t28_known_cure_name:
 !t57_loop:
     lda t56_idx
     clc
-    adc #ITEM_TYPE_CHEST_SMALL_WOOD
+    adc #ITEM_SLOT_SMALL_WOODEN_CHEST
     jsr roll_enchantment
     ldx t56_idx
     lda fi_add_to_hit
@@ -3075,25 +3305,41 @@ t28_known_cure_name:
     // never stack.
 !t59:
     jsr item_init_inventory
-    lda #15                     // Ration of Food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Ration of Food
     jsr t59_add_one
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     jsr t59_add_one
-    lda #2                      // Dagger
-    jsr t59_add_one
-    lda #2
-    jsr t59_add_one
+    lda #ITEM_SLOT_DAGGER                      // Dagger
+    .if (ITEM_PAGE_DAGGER != 0) {
+        jsr t59_add_one_setup
+        lda #ITEM_PAGE_DAGGER
+        sta fi_add_ego
+        jsr inv_add_item
+    } else {
+        jsr t59_add_one
+    }
+    lda #ITEM_SLOT_DAGGER
+    .if (ITEM_PAGE_DAGGER != 0) {
+        jsr t59_add_one_setup
+        lda #ITEM_PAGE_DAGGER
+        sta fi_add_ego
+        jsr inv_add_item
+        lda #0
+        sta fi_add_ego
+    } else {
+        jsr t59_add_one
+    }
     lda inv_item_id + 0
-    cmp #15
+    cmp #ITEM_SLOT_RATION_OF_FOOD
     bne !t59_fail+
     lda inv_qty + 0
     cmp #2
     bne !t59_fail+
     lda inv_item_id + 1
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t59_fail+
     lda inv_item_id + 2
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t59_fail+
     lda inv_qty + 2
     cmp #1
@@ -3113,13 +3359,13 @@ t28_known_cure_name:
 !t60:
     lda #255
     sta inv_qty + 0
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     jsr t59_add_one
     lda inv_qty + 0
     cmp #255
     bne !t60_fail+
     lda inv_item_id + 3
-    cmp #15
+    cmp #ITEM_SLOT_RATION_OF_FOOD
     bne !t60_fail+
     lda inv_qty + 3
     cmp #1
@@ -3144,7 +3390,7 @@ t28_known_cure_name:
     ldx #0
     jsr inv_consume_one
     lda inv_item_id + 0
-    cmp #2                      // the first dagger moved up
+    cmp #ITEM_SLOT_DAGGER                      // the first dagger moved up
     bne !t61_fail+
     lda #$01
     sta tc_results + 60
@@ -3164,13 +3410,13 @@ t28_known_cure_name:
     lda #10
     jsr t62_add_torch
     lda inv_item_id + 0
-    cmp #ITEM_TYPE_WOODEN_TORCH
+    cmp #ITEM_SLOT_WOODEN_TORCH
     bne !t62_fail+
     lda inv_qty + 0
     cmp #2
     bne !t62_fail+
     lda inv_item_id + 1
-    cmp #ITEM_TYPE_WOODEN_TORCH
+    cmp #ITEM_SLOT_WOODEN_TORCH
     bne !t62_fail+
     lda inv_p1 + 1
     cmp #10
@@ -3192,7 +3438,7 @@ t28_known_cure_name:
     sta inv_qty + 0
     lda #134
     jsr t62_add_torch           // a stack of 3 in slot 0
-    lda #ITEM_TYPE_WOODEN_TORCH
+    lda #ITEM_SLOT_WOODEN_TORCH
     sta inv_item_id + EQUIP_LIGHT
     lda #1
     sta inv_qty + EQUIP_LIGHT
@@ -3218,7 +3464,7 @@ t28_known_cure_name:
     cmp #2
     bne !t63_fail+
     lda inv_item_id + 1
-    cmp #ITEM_TYPE_WOODEN_TORCH
+    cmp #ITEM_SLOT_WOODEN_TORCH
     bne !t63_fail+
     lda inv_p1 + 1
     cmp #5
@@ -3242,14 +3488,18 @@ t28_known_cure_name:
     jsr t62_add_torch           // a stack of 2 in slot 0
     ldx #1
 !t64_fill:
-    lda #2                      // daggers fill slots 1..21
+    lda #ITEM_SLOT_DAGGER                      // daggers fill slots 1..21
     sta inv_item_id,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego,x
+    }
     lda #1
     sta inv_qty,x
     inx
     cpx #MAX_INV_SLOTS
     bcc !t64_fill-
-    lda #ITEM_TYPE_WOODEN_TORCH
+    lda #ITEM_SLOT_WOODEN_TORCH
     sta inv_item_id + EQUIP_LIGHT
     lda #1
     sta inv_qty + EQUIP_LIGHT
@@ -3278,7 +3528,7 @@ t28_known_cure_name:
     jsr floor_item_find_at      // the old one lies at the player's feet
     bcc !t64_fail+
     lda fi_item_id,x
-    cmp #ITEM_TYPE_WOODEN_TORCH
+    cmp #ITEM_SLOT_WOODEN_TORCH
     bne !t64_fail+
     lda #$01
     sta tc_results + 63
@@ -3293,19 +3543,23 @@ t28_known_cure_name:
     // 2026-11-06: a Ranger's Create Food fell to the floor for good.
 !t65:
     jsr item_init_inventory
-    lda #15                     // a Ration of Food in slot 0
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // a Ration of Food in slot 0
     jsr t59_add_one
     ldx #1
 !t65_fill:
-    lda #2                      // daggers fill slots 1..21
+    lda #ITEM_SLOT_DAGGER                      // daggers fill slots 1..21
     sta inv_item_id,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego,x
+    }
     lda #1
     sta inv_qty,x
     inx
     cpx #MAX_INV_SLOTS
     bcc !t65_fill-
     jsr t58_gold_setup
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     jsr t59_add_one_setup
     jsr floor_item_add          // a ration underfoot
     jsr item_pickup
@@ -3318,9 +3572,17 @@ t28_known_cure_name:
     jsr floor_item_find_at
     bcs !t65_fail+              // gone from the floor
     jsr t58_gold_setup
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     jsr t59_add_one_setup
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_add_ego
+    }
     jsr floor_item_add          // a dagger underfoot
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+        sta fi_add_ego
+    }
     jsr item_pickup
     bcs !t65_fail+              // no room: refused
     lda #20
@@ -3358,8 +3620,12 @@ t28_known_cure_name:
     jsr t66_armor_setup
     lda #0
     sta inv_to_ac + EQUIP_BODY
-    lda #9                          // a Small shield
+    lda #ITEM_SLOT_SMALL_SHIELD                          // a Small shield
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     lda #1
     sta inv_qty + EQUIP_SHIELD
     lda #$fd                        // -3
@@ -3411,18 +3677,18 @@ t28_known_cure_name:
     // ring; both rings' flags and Slaying bonuses count.
 !t69:
     jsr item_init_inventory
-    lda #ITEM_TYPE_RING_RESIST_FIRE
+    lda #ITEM_SLOT_RING_OF_RESIST_FIRE
     jsr t69_wear_ring
     lda inv_item_id + EQUIP_RING
-    cmp #ITEM_TYPE_RING_RESIST_FIRE
+    cmp #ITEM_SLOT_RING_OF_RESIST_FIRE
     bne !t69_fail_near+
     lda inv_item_id + EQUIP_RING2           // the right hand first
     cmp #FI_EMPTY
     bne !t69_fail_near+
-    lda #ITEM_TYPE_RING_RESIST_COLD
+    lda #ITEM_SLOT_RING_OF_RESIST_COLD
     jsr t69_wear_ring
     lda inv_item_id + EQUIP_RING2           // then the left
-    cmp #ITEM_TYPE_RING_RESIST_COLD
+    cmp #ITEM_SLOT_RING_OF_RESIST_COLD
     bne !t69_fail_near+
     jsr player_calc_stats
     lda player_pflags
@@ -3432,16 +3698,16 @@ t28_known_cure_name:
 !t69_fail_near:
     jmp !t69_fail+
 !t69_both:
-    lda #ITEM_TYPE_RING_SPEED
+    lda #ITEM_SLOT_RING_OF_SPEED
     jsr t69_wear_ring
     lda inv_item_id + EQUIP_RING2           // the left hand's ring replaced
-    cmp #ITEM_TYPE_RING_SPEED
+    cmp #ITEM_SLOT_RING_OF_SPEED
     bne !t69_fail+
     lda inv_item_id + EQUIP_RING
-    cmp #ITEM_TYPE_RING_RESIST_FIRE
+    cmp #ITEM_SLOT_RING_OF_RESIST_FIRE
     bne !t69_fail+
     lda inv_item_id                         // ... and back in the pack
-    cmp #ITEM_TYPE_RING_RESIST_COLD
+    cmp #ITEM_SLOT_RING_OF_RESIST_COLD
     bne !t69_fail+
     jsr player_calc_stats
     lda player_pflags
@@ -3453,8 +3719,12 @@ t28_known_cure_name:
     jsr player_recalc_equipment
     lda player_data + PL_TOHIT
     sta t49_base_tohit
-    lda #ITEM_TYPE_RING_SLAYING
+    lda #ITEM_SLOT_RING_OF_SLAYING
     sta inv_item_id + EQUIP_RING2
+    .if (ITEM_PAGE_RING_OF_SLAYING != 0) {
+        lda #ITEM_PAGE_RING_OF_SLAYING
+        sta inv_ego + EQUIP_RING2
+    }
     lda #1
     sta inv_qty + EQUIP_RING2
     lda #3
@@ -3476,9 +3746,9 @@ t28_known_cure_name:
     // (VMS inven_carry: tval and subval alone); the stack keeps its flags.
 !t70:
     jsr item_init_inventory
-    lda #15                     // Ration of Food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Ration of Food
     jsr t59_add_one
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     jsr t59_add_one_setup
     lda #IF_IDENTIFIED
     sta fi_add_flags
@@ -3503,19 +3773,23 @@ t28_known_cure_name:
     // again: Balrog queue, 2026-11-09); the stack keeps its own flags.
 !t71:
     jsr item_init_inventory
-    lda #ITEM_TYPE_POT_HEALING
+    lda #ITEM_SLOT_POTION_OF_HEALING
     jsr t59_add_one
     ldx #1
 !t71_fill:
-    lda #2                      // daggers fill slots 1..21
+    lda #ITEM_SLOT_DAGGER                      // daggers fill slots 1..21
     sta inv_item_id,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego,x
+    }
     lda #1
     sta inv_qty,x
     inx
     cpx #MAX_INV_SLOTS
     bcc !t71_fill-
     jsr t58_gold_setup
-    lda #ITEM_TYPE_POT_HEALING
+    lda #ITEM_SLOT_POTION_OF_HEALING
     jsr t59_add_one_setup
     lda #2
     sta fi_add_qty
@@ -3576,16 +3850,22 @@ t28_known_cure_name:
 !t73:
     ldx #t73_ids_end - t73_ids - 1
 !t73_loop:
+    lda t73_pages,x
+    sta item_cur_page
     ldy t73_ids,x
     jsr item_get_base_ac        // preserves X, Y
     cmp t73_ac,x
     bne !t73_fail+
     dex
     bpl !t73_loop-
+    lda #0
+    sta item_cur_page
     lda #$01
     sta tc_results + 72
     jmp !t74+
 !t73_fail:
+    lda #0
+    sta item_cur_page
     lda #$00
     sta tc_results + 72
 
@@ -3619,21 +3899,25 @@ t28_known_cure_name:
     clc
     adc #30
     sta t74_ac
-    lda #4                          // Long sword (+5,+7) of Defender
+    lda #ITEM_SLOT_LONG_SWORD                          // Long sword (+5,+7) of Defender
     sta inv_item_id + EQUIP_WEAPON
     lda #5
     sta inv_to_hit + EQUIP_WEAPON
     lda #7
     sta inv_to_dam + EQUIP_WEAPON
-    lda #EGO_DEFENDER
+    lda #(EGO_DEFENDER | ITEM_PAGE_LONG_SWORD)
     sta inv_ego + EQUIP_WEAPON
-    lda #ITEM_TYPE_RING_SLAYING     // (+3,+4)
+    lda #ITEM_SLOT_RING_OF_SLAYING     // (+3,+4)
     sta inv_item_id + EQUIP_RING
+    .if (ITEM_PAGE_RING_OF_SLAYING != 0) {
+        lda #ITEM_PAGE_RING_OF_SLAYING
+        sta inv_ego + EQUIP_RING
+    }
     lda #3
     sta inv_to_hit + EQUIP_RING
     lda #4
     sta inv_to_dam + EQUIP_RING
-    lda #ITEM_TYPE_PLATE_MAIL       // [25,+0]
+    lda #ITEM_SLOT_PLATE_MAIL       // [25,+0]
     sta inv_item_id + EQUIP_BODY
     jsr player_recalc_equipment
     jsr t74_check
@@ -3646,15 +3930,19 @@ t28_known_cure_name:
     jsr player_calc_stats
     jsr t74_check
     bne !t74_fail+
-    lda #EGO_NONE
+    lda #(EGO_NONE | ITEM_PAGE_LONG_SWORD)
     sta inv_ego + EQUIP_WEAPON
-    lda #ITEM_TYPE_MITHRIL_PLATE    // [28,+100] and a Large Shield [4,+100]
+    lda #ITEM_SLOT_RIBBED_PLATE_ARMOR    // [28,+100] and a Large Shield [4,+100]
     sta inv_item_id + EQUIP_BODY
     lda #100
     sta inv_to_ac + EQUIP_BODY
     sta inv_to_ac + EQUIP_SHIELD
-    lda #78
+    lda #ITEM_SLOT_LARGE_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_LARGE_SHIELD != 0) {
+        lda #ITEM_PAGE_LARGE_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     jsr player_recalc_equipment
     lda player_data + PL_AC
     cmp #60
@@ -3671,8 +3959,11 @@ t28_known_cure_name:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
 
-t73_ids: .byte 8, 10, 78, 80, 81, 83, 84, 85, 86, 87, 122, 123, 7, 9, 4
+t73_ids: .byte ITEM_SLOT_CHAIN_MAIL, ITEM_SLOT_IRON_HELM, ITEM_SLOT_LARGE_SHIELD, ITEM_SLOT_SCALE_MAIL, ITEM_SLOT_PLATE_MAIL, ITEM_SLOT_STEEL_HELM, ITEM_SLOT_GAUNTLETS, ITEM_SLOT_SOFT_LEATHER_BOOTS, ITEM_SLOT_HARD_LEATHER_BOOTS, ITEM_SLOT_METAL_CAP, ITEM_SLOT_AUGMENTED_CHAIN_MAIL, ITEM_SLOT_RIBBED_PLATE_ARMOR, ITEM_SLOT_LEATHER_ARMOR, ITEM_SLOT_SMALL_SHIELD, ITEM_SLOT_LONG_SWORD
 t73_ids_end:
+t73_pages: .byte ITEM_PAGE_CHAIN_MAIL, ITEM_PAGE_IRON_HELM, ITEM_PAGE_LARGE_SHIELD, ITEM_PAGE_SCALE_MAIL, ITEM_PAGE_PLATE_MAIL, ITEM_PAGE_STEEL_HELM, ITEM_PAGE_GAUNTLETS, ITEM_PAGE_SOFT_LEATHER_BOOTS, ITEM_PAGE_HARD_LEATHER_BOOTS, ITEM_PAGE_METAL_CAP, ITEM_PAGE_AUGMENTED_CHAIN_MAIL, ITEM_PAGE_RIBBED_PLATE_ARMOR, ITEM_PAGE_LEATHER_ARMOR, ITEM_PAGE_SMALL_SHIELD, ITEM_PAGE_LONG_SWORD
+t73_pages_end:
+.assert "t73 page table matches id table", t73_pages_end - t73_pages, t73_ids_end - t73_ids
 t73_ac:  .byte 14, 5, 4, 13, 25, 6, 2, 2, 3, 3, 16, 28, 4, 2, 0
 .assert "t73 tables pair up", t73_ids_end - t73_ids, 15
 
@@ -3717,6 +4008,7 @@ t72_count_deep:
 t72_deep: .byte 0
 
 // t69_wear_ring — wear ring type A from pack slot 0 through item_wear ('A').
+.assert "t69_wear_ring rings share one catalog page", ITEM_PAGE_RING_OF_RESIST_FIRE == ITEM_PAGE_RING_OF_RESIST_COLD && ITEM_PAGE_RING_OF_RESIST_FIRE == ITEM_PAGE_RING_OF_SPEED, true
 t69_wear_ring:
     sta inv_item_id
     lda #1
@@ -3727,7 +4019,13 @@ t69_wear_ring:
     sta inv_to_hit
     sta inv_to_dam
     sta inv_to_ac
+    .if (ITEM_PAGE_RING_OF_RESIST_FIRE != 0) {
+        lda #ITEM_PAGE_RING_OF_RESIST_FIRE
+    }
     sta inv_ego
+    .if (ITEM_PAGE_RING_OF_RESIST_FIRE != 0) {
+        lda #0
+    }
     sta zp_msg_flags
     lda #2
     sta $c6
@@ -3743,7 +4041,7 @@ t66_armor_setup:
     jsr item_init_inventory
     lda #0
     sta zp_msg_flags
-    lda #8                          // Chain mail
+    lda #ITEM_SLOT_CHAIN_MAIL                          // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
@@ -3753,7 +4051,7 @@ t66_armor_setup:
 
 // t66_read_one — read one Enchant Armor scroll (type 35) from pack slot 0.
 t66_read_one:
-    lda #35
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -3773,7 +4071,7 @@ t68_left: .byte 0
 // t62_add_torch — inv_add_item one wooden torch with A turns (p1).
 t62_add_torch:
     pha
-    lda #ITEM_TYPE_WOODEN_TORCH
+    lda #ITEM_SLOT_WOODEN_TORCH
     jsr t59_add_one_setup
     pla
     sta fi_add_p1
@@ -3819,8 +4117,10 @@ t58_gold_setup:
     lda #12
     sta zp_player_y
     sta fi_add_y
-    lda #0                      // Gold (small)
+    lda #ITEM_SLOT_GOLD_SMALL                      // Gold (small)
     sta fi_add_id
+    lda #0
+    sta fi_add_ego
     lda #1                      // Stuff the keyboard buffer for -more-
     sta $c6
     lda #$20
@@ -3848,7 +4148,7 @@ t56_band_table:
 t27_expected_name:
     .text "Dagger" ; .byte 0
 t29_expected_appended_name:
-    .text "Mithril Chain Mail" ; .byte 0
+    .text "Augmented Chain Mail" ; .byte 0
 t29_expected_color: .byte 0
 t48_expected_con: .byte 0
 t50_retries: .byte 0
@@ -3872,8 +4172,10 @@ player_disarm_get_effective_chance:
 test_check_spawned_item_valid:
     bit item_cur_page
     bvs !p1+
-    cmp #2
+    cmp #ITEM_SLOT_GOLD_MITHRIL + 1
     bcc !bad+
+    cmp #ITEM_SLOT_RUINED_CHEST
+    beq !bad+
     cmp #ITEM_PAGE_SIZE
     bcs !bad+
     sec

@@ -336,7 +336,7 @@ test_reset_recharge_state:
     rts
 
 test_seed_wand:
-    lda #39
+    lda #ITEM_SLOT_WAND_OF_LIGHT
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -376,7 +376,7 @@ test_start:
     cmp #50
     bne !t1_fail+
     lda inv_item_id
-    cmp #39
+    cmp #ITEM_SLOT_WAND_OF_LIGHT
     bne !t1_fail+
     lda inv_p1
     cmp #9
@@ -464,7 +464,7 @@ test_start:
     cmp #HSTR_PM_FAIL
     bne !t3_fail+
     lda inv_item_id
-    cmp #39
+    cmp #ITEM_SLOT_WAND_OF_LIGHT
     bne !t3_fail+
     lda inv_p1
     cmp #1

@@ -12,8 +12,12 @@ usage: check_save_secondary.py <save-file> <expected-version-byte>
 from pathlib import Path
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from item_ids import ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER  # noqa: E402
+
+EGO_DEFENDER = 6
 SLOTS = 34
-SECONDARY = [2, 1, 0, 3, 4, 0, 2, 6]
+SECONDARY = [ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, EGO_DEFENDER | ITEM_PAGE_DAGGER]
 CLOAK = [0xFF, 0, 0, 0, 0, 0, 0, 0]
 
 

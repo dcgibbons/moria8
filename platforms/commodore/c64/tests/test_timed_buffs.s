@@ -286,7 +286,7 @@ test_start:
     // Test 1: Potion of Speed (#18) from no haste: randint(25) + 15 =
     // 16-40 over 100 quaffs (VMS potions.inc case 23; before: 10-29).
     // ==========================================
-    lda #18
+    lda #ITEM_SLOT_POTION_OF_SPEED
     sta ttb_item
     lda #0
     sta ttb_start
@@ -413,7 +413,7 @@ test_start:
     // ==========================================
     lda #20
     sta zp_player_lvl
-    lda #38
+    lda #ITEM_SLOT_SCROLL_OF_PROTECT_FROM_EVIL
     sta ttb_item
     lda #0
     sta ttb_start

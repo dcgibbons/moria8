@@ -23,7 +23,38 @@ if str(CONNECTOR_DIR) not in sys.path:
 from vice_connector import VICEConnector, allocate_free_port, monitor_status_has_pc, parse_vs_symbols
 
 sys.path.insert(0, str(ROOT / "tools"))
+from item_ids import (  # noqa: E402
+    ID_BY_SLUG,
+    ITEM_LARGE_IRON_CHEST,
+    ITEM_LARGE_STEEL_CHEST,
+    ITEM_LARGE_WOODEN_CHEST,
+    ITEM_PAGE_BIT,
+    ITEM_RUINED_CHEST,
+    ITEM_SMALL_IRON_CHEST,
+    ITEM_SMALL_STEEL_CHEST,
+    ITEM_SMALL_WOODEN_CHEST,
+    item_page,
+    item_slot,
+)
 from vice_config import vice_config  # noqa: E402
+
+GOLD_PAGED_IDS = {
+    (item_page(lid), item_slot(lid))
+    for slug, lid in ID_BY_SLUG.items()
+    if slug.startswith("GOLD_")
+}
+CHEST_PAGED_IDS = {
+    (item_page(lid), item_slot(lid))
+    for lid in (
+        ITEM_SMALL_WOODEN_CHEST,
+        ITEM_LARGE_WOODEN_CHEST,
+        ITEM_SMALL_IRON_CHEST,
+        ITEM_LARGE_IRON_CHEST,
+        ITEM_SMALL_STEEL_CHEST,
+        ITEM_LARGE_STEEL_CHEST,
+        ITEM_RUINED_CHEST,
+    )
+}
 
 # N (New), A (Human), CR (accept stats), A (Warrior), A + CR (name),
 # B (Female), SPACE (begin), L (step onto '>' in town), '>' (descend to DL1).
@@ -53,7 +84,6 @@ EMPTY_SLOT = 0xFF
 
 MAX_FLOOR_ITEMS = 42
 MAX_INV_SLOTS = 22
-ITEM_PAGE_BIT = 0x40
 TRAP_ARROW = 1
 
 PL_LEVEL = 19
@@ -318,8 +348,8 @@ def main() -> int:
             if f_xs[idx] < MAP_COLS and f_ys[idx] < 48:
                 cur_t = read_bytes(connector, tile_addr(f_xs[idx], f_ys[idx]), 1)[0]
                 connector.poke(tile_addr(f_xs[idx], f_ys[idx]), cur_t & ~FLAG_HAS_ITEM)
-            is_gold = page == 0 and iid < 2
-            is_chest = page == 0 and 128 <= iid <= 134
+            is_gold = (page, iid) in GOLD_PAGED_IDS
+            is_chest = (page, iid) in CHEST_PAGED_IDS
             if chosen_slot is None and not is_gold and not is_chest:
                 chosen_slot = idx
             else:

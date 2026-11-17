@@ -24,7 +24,7 @@
 
 // Ego IDs: core/item_defs.s (shared with player.s and monster_acid.s).
 .assert "Ego IDs fill EGO_TYPE_COUNT", EGO_AMMO_SLAY_ANIMAL + 1, EGO_TYPE_COUNT
-.assert "Crowns are contiguous", ITEM_TYPE_CROWN_JEWEL == ITEM_TYPE_CROWN_SILVER + 2, true
+.assert "Crowns are contiguous on Page 0", ITEM_GOLDEN_CROWN == ITEM_SILVER_CROWN + 1 && ITEM_JEWEL_ENCRUSTED_CROWN == ITEM_SILVER_CROWN + 2 && ITEM_PAGE_JEWEL_ENCRUSTED_CROWN == 0, true
 // ============================================================
 // roll_ego_type — Determine ego type for a spawned item
 // Input: A = item slot_lo, item_cur_page = 0 or ITEM_PAGE_BIT
@@ -175,9 +175,9 @@ roll_armour_ego:
 !rae_helm:
     bit item_cur_page
     bvs !rae_reg_helm+
-    cpy #ITEM_TYPE_CROWN_SILVER
+    cpy #ITEM_SLOT_SILVER_CROWN
     bcc !rae_reg_helm+
-    cpy #ITEM_TYPE_CROWN_JEWEL + 1
+    cpy #ITEM_SLOT_JEWEL_ENCRUSTED_CROWN + 1
     bcs !rae_reg_helm+
     jmp roll_crown_ego
 !rae_reg_helm:

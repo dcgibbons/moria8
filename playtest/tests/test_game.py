@@ -610,8 +610,8 @@ class C64VariantTest(unittest.TestCase):
             home = Path(tmp)
             hal = home / "builds" / "b" / "platforms" / "commodore" / "c64" / "hal"
             hal.mkdir(parents=True)
-            (hal / "storage_policy.s").write_text(".const hal_storage_save_version = $21\n")
-            self.assertEqual(queue.save_versions("b", "c64-cart", home), (0x21, 0x21))
+            (hal / "storage_policy.s").write_text(".const hal_storage_save_version = $22\n")
+            self.assertEqual(queue.save_versions("b", "c64-cart", home), (0x22, 0x22))
             self.assertEqual(queue.save_versions("b", "c64-cart", home), queue.save_versions("b", "c64", home))
 
 
@@ -702,8 +702,8 @@ class Atari8CartridgeTest(unittest.TestCase):
             home = Path(tmp)
             hal = home / "builds" / "b" / "platforms" / "atari8" / "hal"
             hal.mkdir(parents=True)
-            (hal / "storage_policy.s").write_text(".const hal_storage_save_version = $21\n")
-            self.assertEqual(queue.save_versions("b", "atari8-cart", home), (0x21, 0x21))
+            (hal / "storage_policy.s").write_text(".const hal_storage_save_version = $22\n")
+            self.assertEqual(queue.save_versions("b", "atari8-cart", home), (0x22, 0x22))
             self.assertEqual(queue.save_versions("b", "atari8-cart", home), queue.save_versions("b", "atari8", home))
 
 

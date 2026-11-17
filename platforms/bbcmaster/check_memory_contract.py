@@ -12,6 +12,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools"))
+import check_item_catalog_ports  # noqa: E402
 BEEB_SRC_DIR = Path(__file__).resolve().parent
 DEFAULT_BUILD_DIR = ROOT / "build" / "bbcmaster"
 STORAGE_SRC = BEEB_SRC_DIR / "hal" / "storage.s"
@@ -966,6 +969,8 @@ def main() -> int:
         return 1 if errors else 0
 
     errors = validate_build(args.build_dir)
+    if not errors and args.build_dir.resolve() == DEFAULT_BUILD_DIR.resolve():
+        errors.extend(check_item_catalog_ports.verify_port("bbcmaster"))
     if errors:
         print("BBC Master 128 memory contract check FAILED:", file=sys.stderr)
         for err in errors:

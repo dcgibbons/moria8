@@ -161,7 +161,7 @@ test_start:
     // ============================================================
     lda #20                     // dlvl 20 (high chance)
     sta zp_player_dlvl
-    lda #15                     // Ration of food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Ration of food
     jsr roll_ego_type
     cmp #EGO_NONE
     beq !t1_pass+
@@ -179,7 +179,11 @@ test_start:
     // ============================================================
     lda #0
     sta zp_player_dlvl
-    lda #2                      // Dagger
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     jsr roll_ego_type
     cmp #EGO_NONE
     beq !t2_pass+
@@ -202,7 +206,11 @@ test_start:
     sta tc_loop
 
 !t3_loop:
-    lda #2                      // Dagger
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     jsr roll_ego_type
     cmp #EGO_NONE
     beq !t3_next+
@@ -212,6 +220,10 @@ test_start:
     lda tc_loop
     cmp #200
     bne !t3_loop-
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+        sta item_cur_page
+    }
 
     lda tc_count
     beq !t3_fail+               // If 0 egos in 200 tries, fail
@@ -355,7 +367,7 @@ test_start:
     bne !t9_clr-
 
     // Place a dagger with slay evil at floor slot 0
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta fi_item_id
     lda #5                      // x=5
     sta fi_x
@@ -367,6 +379,10 @@ test_start:
     sta fi_p1
     lda #EGO_SLAY_EVIL
     sta fi_meta
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi
+    }
     lda #1
     sta zp_item_count
 
@@ -375,14 +391,14 @@ test_start:
     sta inv_item_id
 
     // Set up fi_add scratch for inv_add_item
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #0
     sta fi_add_p1
     sta fi_add_flags
-    lda #EGO_SLAY_EVIL
+    lda #(EGO_SLAY_EVIL | ITEM_PAGE_DAGGER)
     sta fi_add_ego
 
     jsr inv_add_item
@@ -390,7 +406,7 @@ test_start:
     // Check inv_ego at slot where item was placed
     // inv_add_item finds first empty carried slot (0-21)
     lda inv_ego
-    cmp #EGO_SLAY_EVIL
+    cmp #(EGO_SLAY_EVIL | ITEM_PAGE_DAGGER)
     beq !t9_pass+
     lda #$00
     jmp !t9_store+
@@ -405,7 +421,7 @@ test_start:
     // ============================================================
     lda #20
     sta zp_player_dlvl
-    lda #49                     // Short Bow
+    lda #ITEM_SLOT_SHORT_BOW                     // Short Bow
     jsr roll_ego_type
     cmp #EGO_NONE
     beq !t10_pass+
@@ -468,7 +484,7 @@ test_start:
     bne !t12_clr-
     lda #0
     sta zp_item_count
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta fi_add_id
     lda #6
     sta fi_add_x
@@ -482,13 +498,13 @@ test_start:
     sta fi_add_to_ac
     lda #IF_IDENTIFIED
     sta fi_add_flags
-    lda #EGO_SLAY_DRAGON
+    lda #(EGO_SLAY_DRAGON | ITEM_PAGE_DAGGER)
     sta fi_add_ego
     jsr floor_item_add
     bcc !t12_fail+
     stx t12_slot
     jsr floor_item_get_ego_x
-    cmp #EGO_SLAY_DRAGON
+    cmp #(EGO_SLAY_DRAGON | ITEM_PAGE_DAGGER)
     bne !t12_fail+
     ldx t12_slot
     jsr floor_item_get_flags_x
@@ -513,7 +529,7 @@ test_start:
     // Test 13: Chain mail with no magic bonus (to-AC 0) never gets one
     lda #0
     sta fi_add_to_ac
-    lda #8
+    lda #ITEM_SLOT_CHAIN_MAIL
     jsr t_armour_trials
     lda tc_count
     jsr t_store_zero
@@ -522,8 +538,16 @@ test_start:
     // Test 14: a cursed Small shield (to-AC -2) never gets one
     lda #$fe
     sta fi_add_to_ac
-    lda #9
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_SMALL_SHIELD
     jsr t_armour_trials
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #0
+        sta item_cur_page
+    }
     lda tc_count
     jsr t_store_zero
     sta tc_results + 13
@@ -532,7 +556,7 @@ test_start:
     // trials give 8-35 resistances; each one of the five, and (R) +5 AC
     lda #3
     sta fi_add_to_ac
-    lda #8
+    lda #ITEM_SLOT_CHAIN_MAIL
     jsr t_armour_trials
     lda t_bad
     bne !t15_fail+
@@ -551,7 +575,11 @@ test_start:
     // gloves get none, magic gloves roll only Free Action or Slaying
     lda #0
     sta fi_add_to_ac
-    lda #11
+    .if (ITEM_PAGE_LEATHER_GLOVES != 0) {
+        lda #ITEM_PAGE_LEATHER_GLOVES
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_LEATHER_GLOVES
     jsr t_armour_trials
     lda tc_count
     bne !t16_fail+
@@ -561,7 +589,11 @@ test_start:
     sta tc_count
     sta tc_loop
 !t16_loop:
-    lda #11
+    .if (ITEM_PAGE_LEATHER_GLOVES != 0) {
+        lda #ITEM_PAGE_LEATHER_GLOVES
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_LEATHER_GLOVES
     jsr roll_ego_type
     beq !t16_next+
     inc tc_count
@@ -584,11 +616,15 @@ test_start:
 !t16_fail:
     lda #$00
     sta tc_results + 15
+    .if (ITEM_PAGE_LEATHER_GLOVES != 0) {
+        lda #0
+        sta item_cur_page
+    }
 
     // Test 17: the flags from what is worn: (Resist) body armour and a
     // (Resist Acid) shield give the four resistances; a Defender adds Free
     // Action, See Invisible and Feather Falling; a digging tool's ego gives none
-    lda #63                     // Pick (ICAT_DIGGING): inv_ego is a tool prefix
+    lda #ITEM_SLOT_PICK                     // Pick (ICAT_DIGGING): inv_ego is a tool prefix
     sta inv_item_id + EQUIP_WEAPON
     lda #EGO_RESIST
     sta inv_ego + EQUIP_BODY
@@ -664,12 +700,24 @@ test_start:
     // Test 20: the rings of Lordly Protection and the Amulet of Resist Acid
     // (MON-029; VMS values.inc): Fire on the right hand and Cold on the left
     // give those two; the amulet acid; a Lordly ring adds its 5 base AC
-    lda #ITEM_TYPE_RING_LORDLY_FIRE
+    lda #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_FIRE
     sta inv_item_id + EQUIP_RING
-    lda #ITEM_TYPE_RING_LORDLY_COLD
+    .if (ITEM_PAGE_RING_OF_LORDLY_PROTECTION_FIRE != 0) {
+        lda #ITEM_PAGE_RING_OF_LORDLY_PROTECTION_FIRE
+        sta inv_ego + EQUIP_RING
+    }
+    lda #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_COLD
     sta inv_item_id + EQUIP_RING2
-    lda #ITEM_TYPE_AMULET_RESIST_ACID
+    .if (ITEM_PAGE_RING_OF_LORDLY_PROTECTION_COLD != 0) {
+        lda #ITEM_PAGE_RING_OF_LORDLY_PROTECTION_COLD
+        sta inv_ego + EQUIP_RING2
+    }
+    lda #ITEM_SLOT_AMULET_OF_RESIST_ACID
     sta inv_item_id + EQUIP_AMULET
+    .if (ITEM_PAGE_AMULET_OF_RESIST_ACID != 0) {
+        lda #ITEM_PAGE_AMULET_OF_RESIST_ACID
+        sta inv_ego + EQUIP_AMULET
+    }
     jsr player_recalc_pflags_equipment
     lda player_pflags
     cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID
@@ -696,6 +744,12 @@ test_start:
     sta inv_item_id + EQUIP_RING
     sta inv_item_id + EQUIP_RING2
     sta inv_item_id + EQUIP_AMULET
+    .if (ITEM_PAGE_RING_OF_LORDLY_PROTECTION_FIRE != 0 || ITEM_PAGE_RING_OF_LORDLY_PROTECTION_COLD != 0 || ITEM_PAGE_AMULET_OF_RESIST_ACID != 0) {
+        lda #0
+        sta inv_ego + EQUIP_RING
+        sta inv_ego + EQUIP_RING2
+        sta inv_ego + EQUIP_AMULET
+    }
     jsr player_recalc_pflags_equipment
 
     // Test 21: crown vs regular-helm egos (VMS magic_treasure): on DL50 a
@@ -712,6 +766,7 @@ test_start:
     lda #$f1
     sta zp_rng_3
     lda #0
+    sta item_cur_page
     sta tc_count
     sta tc_loop
     sta t_bad
@@ -720,7 +775,7 @@ test_start:
     sta fi_add_to_ac
     lda #0
     sta fi_add_p1
-    lda #ITEM_TYPE_CROWN_SILVER
+    lda #ITEM_SLOT_SILVER_CROWN
     jsr roll_ego_type
     cmp #EGO_NONE
     beq !t21_none+
@@ -763,7 +818,7 @@ test_start:
     sta tc_count
     sta tc_loop
 !t21_helm_loop:
-    lda #10                     // Iron Helm: helm egos 25..27 only
+    lda #ITEM_SLOT_IRON_HELM                     // Iron Helm: helm egos 25..27 only
     jsr roll_ego_type
     beq !t21_helm_next+
     inc tc_count
@@ -780,7 +835,7 @@ test_start:
     beq !t21_fail+
     lda #0
     sta fi_add_to_ac
-    lda #ITEM_TYPE_CROWN_JEWEL
+    lda #ITEM_SLOT_JEWEL_ENCRUSTED_CROWN
     jsr t_armour_trials
     lda tc_count
     bne !t21_fail+
@@ -793,7 +848,7 @@ test_start:
     // Test 22: worn, a crown of the Magi gives See Invisible and fire, acid
     // and cold resistance (VMS %X'01380008': no lightning); its p1 raises
     // INT on wearing and lowers it on taking off, as the Amulet of the Magi
-    lda #ITEM_TYPE_CROWN_GOLDEN
+    lda #ITEM_SLOT_GOLDEN_CROWN
     sta inv_item_id + EQUIP_HEAD
     lda #EGO_MAGI
     sta inv_ego + EQUIP_HEAD
@@ -866,18 +921,26 @@ test_start:
     sta player_data + PL_STR_BASE
     sta player_data + PL_INT_BASE
     sta player_data + PL_WIS_BASE
-    lda #ITEM_TYPE_CROWN_SILVER
+    lda #ITEM_SLOT_SILVER_CROWN
     sta inv_item_id + EQUIP_HEAD
     lda #EGO_MAGI
     sta inv_ego + EQUIP_HEAD
     lda #2
     sta inv_p1 + EQUIP_HEAD
-    lda #ITEM_TYPE_AMULET_WISDOM
+    lda #ITEM_SLOT_AMULET_OF_WISDOM
     sta inv_item_id + EQUIP_AMULET
+    .if (ITEM_PAGE_AMULET_OF_WISDOM != 0) {
+        lda #ITEM_PAGE_AMULET_OF_WISDOM
+        sta inv_ego + EQUIP_AMULET
+    }
     lda #1
     sta inv_p1 + EQUIP_AMULET
-    lda #ITEM_TYPE_RING_STRENGTH
+    lda #ITEM_SLOT_RING_OF_STRENGTH
     sta inv_item_id + EQUIP_RING2
+    .if (ITEM_PAGE_RING_OF_STRENGTH != 0) {
+        lda #ITEM_PAGE_RING_OF_STRENGTH
+        sta inv_ego + EQUIP_RING2
+    }
     lda #3
     sta inv_p1 + EQUIP_RING2
     jsr player_calc_stats
@@ -901,6 +964,12 @@ test_start:
     sta inv_item_id + EQUIP_RING2
     lda #0
     sta inv_ego + EQUIP_HEAD
+    .if (ITEM_PAGE_AMULET_OF_WISDOM != 0) {
+        sta inv_ego + EQUIP_AMULET
+    }
+    .if (ITEM_PAGE_RING_OF_STRENGTH != 0) {
+        sta inv_ego + EQUIP_RING2
+    }
     sta inv_p1 + EQUIP_HEAD
     sta inv_p1 + EQUIP_AMULET
     sta inv_p1 + EQUIP_RING2
@@ -925,6 +994,7 @@ t_armour_trials:
     lda fi_add_to_ac
     sta t_to_ac
     lda #0
+    sta item_cur_page
     sta tc_count
     sta tc_loop
     sta t_bad

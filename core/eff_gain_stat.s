@@ -14,19 +14,24 @@
 // Owner: Default resident on C64, Plus/4, and C128; RuntimeBanked (ATARI.BNK)
 // on Atari 8-bit; A2PlaySlot (a2.play) on Apple IIe; ItemActionsOverlay
 // (OVL.ITEMS) on CX16; SpellOverlay (OVL.SPELL) on BBC Master 128.
-// Lifetime: one potion quaff (ITEM_TYPE_POT_GAIN_STR..ITEM_TYPE_POT_GAIN_CHR).
+// Lifetime: one potion quaff (ITEM_POTION_OF_GAIN_STRENGTH..ITEM_POTION_OF_CHARISMA).
 // Callers: Phase 3 quaff dispatch (iq_dispatch_p3 in player_item_commands.s on
 // C64/Plus/4/CX16/Atari, resident c128_quaff_p3_dispatch on C128, or
 // iq_dispatch_p3_spell in OVL.SPELL on Apple IIe and BBC Master, where the
 // items-overlay router reloads OVL.ITEMS on return). Calls only resident helpers.
 
 // eff_potion_gain_stat — Raise the stat of potion type A and say so.
-// Input: A = ITEM_TYPE_POT_GAIN_STR..ITEM_TYPE_POT_GAIN_CHR (PL_*_BASE order)
+// Input: A = Page-0 slot_lo of one of the 6 gain-stat potions (unmatched -> rts)
 // Clobbers: A, X, Y
 eff_potion_gain_stat:
-    sec
-    sbc #ITEM_TYPE_POT_GAIN_STR
-    tay                         // Y = the stat; rng_range keeps Y
+    ldy #5
+!egs_find:
+    cmp egs_pot_ids,y
+    beq !egs_found+
+    dey
+    bpl !egs_find-
+    rts
+!egs_found:                     // Y = the stat (0..5); rng_range keeps Y
     lda player_data + PL_STR_BASE,y
     sta egs_old
     cmp #18
@@ -81,7 +86,12 @@ eff_potion_gain_stat:
     jmp status_draw
 
 egs_old:  .byte 0
-.assert "Gain potions follow PL_*_BASE order", ITEM_TYPE_POT_GAIN_CHR - ITEM_TYPE_POT_GAIN_STR, PL_CHR_BASE - PL_STR_BASE
+// Indexed by stat 0..5 (PL_STR_BASE..PL_CHR_BASE): VMS potions are non-contiguous.
+egs_pot_ids:
+    .byte ITEM_SLOT_POTION_OF_GAIN_STRENGTH, ITEM_SLOT_POTION_OF_GAIN_INTELLIGENCE
+    .byte ITEM_SLOT_POTION_OF_GAIN_WISDOM, ITEM_SLOT_POTION_OF_GAIN_DEXTERITY
+    .byte ITEM_SLOT_POTION_OF_GAIN_CONSTITUTION, ITEM_SLOT_POTION_OF_CHARISMA
+.assert "All six gain-stat potions live on Page 0", ITEM_PAGE_POTION_OF_GAIN_STRENGTH == 0 && ITEM_PAGE_POTION_OF_GAIN_INTELLIGENCE == 0 && ITEM_PAGE_POTION_OF_GAIN_WISDOM == 0 && ITEM_PAGE_POTION_OF_GAIN_DEXTERITY == 0 && ITEM_PAGE_POTION_OF_GAIN_CONSTITUTION == 0 && ITEM_PAGE_POTION_OF_CHARISMA == 0, true
 .assert "Gain messages are consecutive in PL_*_BASE order", HSTR_PIQ_GAIN_INT == HSTR_PIQ_GAIN_STR + 1 && HSTR_PIQ_GAIN_WIS == HSTR_PIQ_GAIN_STR + 2 && HSTR_PIQ_GAIN_DEX == HSTR_PIQ_GAIN_STR + 3 && HSTR_PIQ_GAIN_CON == HSTR_PIQ_GAIN_STR + 4 && HSTR_PIQ_GAIN_CHR == HSTR_PIQ_GAIN_STR + 5, true
 .assert "PL_*_CUR follows PL_*_BASE order", PL_CHR_CUR - PL_STR_CUR, PL_CHR_BASE - PL_STR_BASE
 .assert "The ZP stat mirrors follow PL_*_BASE order", zp_player_chr - zp_player_str, PL_CHR_BASE - PL_STR_BASE

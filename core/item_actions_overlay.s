@@ -96,40 +96,23 @@ item_read_scroll:
 
     ldx piw_slot
     jsr inv_consume_one             // one scroll from the stack (clobbers item_cur_page)
+    .assert "All 42 VMS scrolls occupy Page 0 95..136", ITEM_SCROLL_OF_ENCHANT_WEAPON_TO_HIT == 95 && ITEM_SCROLL_OF_STAR_DESTRUCTION == 136 && ITEM_PAGE_SCROLL_OF_STAR_DESTRUCTION == 0, true
     lda piw_ego
     sta item_cur_page
+    bne !irs_effect_generic+
     lda piw_item_id
-    bit piw_ego
-    bvs !irs_effect_p3_or_generic+
-
-    cmp #20
-    bcc !irs_dispatch_generic+
-    cmp #23
-    bcc !irs_sub20+                 // 20..22 -> table indices 0..2
-    cmp #32
-    bcc !irs_effect_generic+        // 23..31 unused as scrolls
-    cmp #39
-    bcs !irs_dispatch_generic+
-    sbc #28                         // C=0 (bcc didn't trigger), so 32..38 -> 3..9
-    bne !irs_table_jump+
-!irs_sub20:
-    sec
-    sbc #20
-!irs_table_jump:
-    tax
-    lda irs_dispatch_lo,x
-    sta zp_ptr1
-    lda irs_dispatch_hi,x
-    sta zp_ptr1_hi
-    jmp (zp_ptr1)
-!irs_dispatch_generic:
-    cmp #ITEM_TYPE_SCR_PHASE_DOOR
-    beq irs_effect_phase_door
-    cmp #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    cmp #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
     bcc !irs_effect_generic+
-    cmp #ITEM_TYPE_SCR_DESTRUCTION + 1
+    cmp #ITEM_SLOT_SCROLL_OF_STAR_DESTRUCTION + 1
     bcs !irs_effect_generic+
-!irs_effect_p3_or_generic:
+
+    ldx #9
+!irs_loc_scan:
+    cmp irs_local_ids,x
+    beq !irs_table_jump+
+    dex
+    bpl !irs_loc_scan-
+
 #if SCROLL_P3_ROUTER_ENABLED
 #if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
     jsr irs_effect_p3_swap
@@ -145,16 +128,30 @@ item_read_scroll:
 #endif
 !irs_effect_generic:
     jmp irs_effect_generic
+!irs_table_jump:
+    lda irs_dispatch_lo,x
+    sta zp_ptr1
+    lda irs_dispatch_hi,x
+    sta zp_ptr1_hi
+    jmp (zp_ptr1)
 
-// Compact scroll table covering Page 0 scroll IDs 20..22 (0..2) and 32..38 (3..9).
+// 10 scrolls handled directly in ItemActionsOverlay (Page 0)
+irs_local_ids:
+    .byte ITEM_SLOT_SCROLL_OF_LIGHT, ITEM_SLOT_SCROLL_OF_IDENTIFY, ITEM_SLOT_SCROLL_OF_TELEPORTATION
+    .byte ITEM_SLOT_SCROLL_OF_PHASE_DOOR, ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL, ITEM_SLOT_SCROLL_OF_REMOVE_CURSE
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_ARMOR, ITEM_SLOT_SCROLL_OF_MONSTER_CONFUSION, ITEM_SLOT_SCROLL_OF_AGGRAVATE
+    .byte ITEM_SLOT_SCROLL_OF_PROTECT_FROM_EVIL
 irs_dispatch_lo:
     .byte <irs_effect_light, <irs_effect_identify, <irs_effect_teleport
-    .byte <irs_effect_wor, <irs_effect_remove_curse, <irs_effect_enchant_weapon, <irs_effect_enchant_armor
-    .byte <irs_effect_mon_confuse, <irs_effect_aggravate, <irs_effect_protect
+    .byte <irs_effect_phase_door, <irs_effect_wor, <irs_effect_remove_curse
+    .byte <irs_effect_enchant_armor, <irs_effect_mon_confuse, <irs_effect_aggravate
+    .byte <irs_effect_protect
 irs_dispatch_hi:
     .byte >irs_effect_light, >irs_effect_identify, >irs_effect_teleport
-    .byte >irs_effect_wor, >irs_effect_remove_curse, >irs_effect_enchant_weapon, >irs_effect_enchant_armor
-    .byte >irs_effect_mon_confuse, >irs_effect_aggravate, >irs_effect_protect
+    .byte >irs_effect_phase_door, >irs_effect_wor, >irs_effect_remove_curse
+    .byte >irs_effect_enchant_armor, >irs_effect_mon_confuse, >irs_effect_aggravate
+    .byte >irs_effect_protect
+.assert "irs_local_ids/lo/hi have 10 entries each", (irs_dispatch_lo - irs_local_ids == 10) && (irs_dispatch_hi - irs_dispatch_lo == 10) && (* - irs_dispatch_hi == 10), true
 
 irs_effect_light:
     jmp eff_light_and_report
@@ -187,57 +184,6 @@ irs_effect_remove_curse:
     jsr eff_remove_curse
     ldx #HSTR_PIQ_CLEANSED
     jmp hpm_sec_rts
-
-irs_effect_enchant_weapon:
-    ldx #EQUIP_WEAPON
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !irs_ew_has+
-    ldx #HSTR_PIQ_VIBRATION
-    jmp hpm_sec_rts
-
-!irs_ew_has:
-    lda inv_flags,x
-    and #IF_CURSED
-    beq !irs_ew_not_cursed+
-    lda inv_flags + EQUIP_WEAPON
-    and #~IF_CURSED & $ff
-    sta inv_flags + EQUIP_WEAPON
-    lda #0
-    sta inv_to_hit + EQUIP_WEAPON
-    sta inv_to_dam + EQUIP_WEAPON
-    jsr player_recalc_equipment
-    jmp !irs_ew_msg+
-
-!irs_ew_not_cursed:
-    lda inv_to_hit,x                // signed: a bonus below zero is under +5
-    bmi !irs_ew_inc+
-    cmp #5
-    bcc !irs_ew_inc+
-    lda inv_to_dam,x
-    bmi !irs_ew_inc+
-    cmp #5
-    bcc !irs_ew_inc+
-    jmp irs_effect_generic
-
-!irs_ew_inc:
-    inc inv_to_hit + EQUIP_WEAPON
-    inc inv_to_dam + EQUIP_WEAPON
-    jsr player_recalc_equipment
-
-!irs_ew_msg:
-    ldx #HSTR_PIQ_WPN_GLOW
-    jsr huff_print_msg
-#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
-    lda #8
-    sta c64_test_scroll_selector_return_pending
-#endif
-#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
-    lda #8
-    sta c128_test_scroll_selector_return_pending
-#endif
-    sec
-    rts
 
 // irs_effect_enchant_armor — Enchant Armor (VMS scrolls.inc case 4 with
 // enchant(), spells.inc:1935): a cursed worn armour piece if there is one,
@@ -375,10 +321,10 @@ irs_effect_p3_swap:
 #if HAL_PLATFORM_STAFF_SPEED_TRAMPOLINED
     // Staff of Speed has a dedicated resident return path because its effect
     // lives in the death overlay; other Phase 3 effects use the generic modal
-    // dispatcher. Guard Page 1 IDs so they never alias ITEM_TYPE_STAFF_SPEED.
+    // dispatcher. Guard Page 1 IDs so they never alias ITEM_SLOT_STAFF_OF_SPEED.
     bit piw_ego
     bvs !irsp3_generic+
-    cmp #ITEM_TYPE_STAFF_SPEED
+    cmp #ITEM_SLOT_STAFF_OF_SPEED
     beq !irsp3_staff_speed+
     bne !irsp3_generic+
 !irsp3_staff_speed:
@@ -431,21 +377,21 @@ item_aim_wand:
     jmp hpm_clc_rts
 
 !iaw_has_charges:
+    .assert "All 24 VMS wands occupy Page 0 137..160 starting with Light, Lightning, Frost, Fire Bolts", ITEM_WAND_OF_LIGHT == 137 && ITEM_WAND_OF_LIGHTNING == 138 && ITEM_WAND_OF_FROST == 139 && ITEM_WAND_OF_FIRE_BOLTS == 140 && ITEM_WAND_OF_WONDER == 160 && ITEM_PAGE_WAND_OF_WONDER == 0, true
     jsr ia_spend_charge_identify
     bit piw_ego
-    bvs !iaw_p3+
+    bvs !iaw_not_p3+
 
-    cmp #39
+    cmp #ITEM_SLOT_WAND_OF_LIGHT
     beq !iaw_light+
-    cmp #40
+    cmp #ITEM_SLOT_WAND_OF_LIGHTNING
     beq !iaw_lightning+
-    cmp #41
+    cmp #ITEM_SLOT_WAND_OF_FROST
     beq !iaw_frost+
-    cmp #42
-    beq !iaw_p3+
-    cmp #ITEM_TYPE_WAND_SLOW
+    cmp #ITEM_SLOT_WAND_OF_FIRE_BOLTS
     bcc !iaw_not_p3+
-!iaw_p3:
+    cmp #ITEM_SLOT_WAND_OF_WONDER + 1
+    bcs !iaw_not_p3+
 #if SCROLL_P3_ROUTER_ENABLED
     jmp irs_effect_p3_swap    // unmatched IDs are no-ops inside the router
 #endif
@@ -486,21 +432,21 @@ item_use_staff:
     jmp hpm_clc_rts
 
 !ius_has_charges:
+    .assert "All 25 VMS staves occupy Page 0 161..185", ITEM_STAFF_OF_LIGHT == 161 && ITEM_STAFF_OF_DARKNESS_L5 == 185 && ITEM_PAGE_STAFF_OF_DARKNESS_L5 == 0 && ITEM_PAGE_STAFF_OF_SPEED == 0, true
     jsr ia_spend_charge_identify
     bit piw_ego
-    bvs !ius_p3+
+    bvs !ius_not_p3+
 
-    cmp #43
+    cmp #ITEM_SLOT_STAFF_OF_LIGHT
     beq !ius_light+
-    cmp #44
-    beq !ius_detect+
-    cmp #45
+    cmp #ITEM_SLOT_STAFF_OF_TELEPORTATION
     beq !ius_teleport+
-    cmp #46
+    cmp #ITEM_SLOT_STAFF_OF_CURE_LIGHT_WOUNDS
     beq !ius_clw+
-    cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
+    cmp #ITEM_SLOT_STAFF_OF_LIGHT
     bcc !ius_not_p3+
-!ius_p3:
+    cmp #ITEM_SLOT_STAFF_OF_DARKNESS_L5 + 1
+    bcs !ius_not_p3+
 #if SCROLL_P3_ROUTER_ENABLED
     jmp irs_effect_p3_swap    // unmatched IDs are no-ops inside the router
 #endif
@@ -510,11 +456,6 @@ item_use_staff:
 
 !ius_light:
     jmp eff_light_and_report
-
-!ius_detect:
-    jsr eff_detect_monsters
-    ldx #HSTR_PIQ_SENSE
-    jmp hpm_sec_rts
 
 !ius_teleport:
     jmp irs_effect_teleport
@@ -538,7 +479,7 @@ item_refuel:
     and #ITEM_PAGE_BIT
     bne !ir_not_lamp+
     lda inv_item_id,x
-    cmp #14
+    cmp #ITEM_SLOT_BRASS_LANTERN
     beq !ir_has_lamp+
 
 !ir_not_lamp:

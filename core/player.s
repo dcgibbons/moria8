@@ -273,7 +273,7 @@ player_calc_stats:
     bcs !pcs_eq-
 
     // The ZP stat mirrors (bash, throw, the to-hit) follow at once: a
-    // restore (Holy Word, a Potion of Restoration) left them stale until the
+    // restore (Holy Word, a Potion of Restore <Stat>) left them stale until the
     // next load, and Holy Word's player_sync_to_zp, which refreshed them, also
     // undid the heal with the last save's HP (C64 Balrog queue, 2026-11-11).
     ldy #STAT_COUNT - 1
@@ -292,7 +292,7 @@ player_calc_stats:
     jmp player_recalc_pflags_equipment
 #endif
 .assert "Ring, amulet and left-hand ring slots are contiguous", EQUIP_AMULET == EQUIP_RING + 1 && EQUIP_RING2 == EQUIP_AMULET + 1, true
-.assert "The jewels' flag ranges do not overlap (player_recalc_pflags_equipment)", ITEM_TYPE_RING_SLAYING <= ITEM_TYPE_AMULET_MAGI && ITEM_TYPE_AMULET_MAGI < ITEM_TYPE_RING_LORDLY_FIRE, true
+.assert "All rings and amulets live on Page 1", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_ADORNMENT_VMS_SUB11 == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_DOOM == ITEM_PAGE_BIT, true
 .assert "Weapon, body, shield and head slots are contiguous", EQUIP_BODY == EQUIP_WEAPON + 1 && EQUIP_SHIELD == EQUIP_BODY + 1 && EQUIP_HEAD == EQUIP_SHIELD + 1, true
 
 #if !PLAYER_PFLAGS_EXTERNAL
@@ -323,20 +323,10 @@ equip_stat_mask_x:
     dey
     bpl !esm_ego_loop-
 !esm_item:
+    .assert "All stat-modifying rings and amulets live on Page 1", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_WISDOM == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_THE_MAGI == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_CHARISMA == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_DOOM == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_WEAKNESS == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_STUPIDITY == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_GAIN_INTELLIGENCE == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_GAIN_DEXTERITY == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_GAIN_CONSTITUTION == ITEM_PAGE_BIT, true
     lda inv_ego,x
     and #ITEM_PAGE_BIT
-    bne !esm_page1+
-    lda inv_item_id,x
-    ldy #esm_p0_ids_end - esm_p0_ids - 1
-!esm_p0_loop:
-    cmp esm_p0_ids,y
-    beq !esm_p0_hit+
-    dey
-    bpl !esm_p0_loop-
-!esm_zero:
-    lda #0
-    rts
-!esm_page1:
+    beq !esm_zero+
     lda inv_item_id,x
     ldy #esm_p1_ids_end - esm_p1_ids - 1
 !esm_p1_loop:
@@ -344,12 +334,11 @@ equip_stat_mask_x:
     beq !esm_p1_hit+
     dey
     bpl !esm_p1_loop-
-    bmi !esm_zero-
+!esm_zero:
+    lda #0
+    rts
 !esm_ego_hit:
     lda esm_ego_masks,y
-    rts
-!esm_p0_hit:
-    lda esm_p0_masks,y
     rts
 !esm_p1_hit:
     lda esm_p1_masks,y
@@ -362,17 +351,14 @@ esm_ego_ids:
 esm_ego_ids_end:
 esm_ego_masks:
     .byte $01, $02, $08, $01, $02, $04, $19, $24, $20, $02, $04, $20
-esm_p0_ids:
-    .byte ITEM_TYPE_RING_STRENGTH, ITEM_TYPE_AMULET_WISDOM, ITEM_TYPE_AMULET_MAGI, 212, 213
-esm_p0_ids_end:
-esm_p0_masks:
-    .byte $01, $04, $02, $20, $3f
 esm_p1_ids:
-    .byte 318 - ITEM_PAGE_SIZE, 326 - ITEM_PAGE_SIZE, 329 - ITEM_PAGE_SIZE
-    .byte 330 - ITEM_PAGE_SIZE, 331 - ITEM_PAGE_SIZE
+    .byte ITEM_SLOT_RING_OF_STRENGTH, ITEM_SLOT_AMULET_OF_WISDOM, ITEM_SLOT_AMULET_OF_THE_MAGI
+    .byte ITEM_SLOT_AMULET_OF_CHARISMA, ITEM_SLOT_AMULET_OF_DOOM
+    .byte ITEM_SLOT_RING_OF_WEAKNESS, ITEM_SLOT_RING_OF_STUPIDITY, ITEM_SLOT_RING_OF_GAIN_INTELLIGENCE
+    .byte ITEM_SLOT_RING_OF_GAIN_DEXTERITY, ITEM_SLOT_RING_OF_GAIN_CONSTITUTION
 esm_p1_ids_end:
 esm_p1_masks:
-    .byte $01, $02, $02, $08, $10
+    .byte $01, $04, $02, $20, $3f, $01, $02, $02, $08, $10
 
 // equip_stat_index — X = equipment slot: carry set and Y = primary stat (0..5)
 // for its p1 modifier; carry clear if none. Preserves X.
@@ -413,20 +399,18 @@ wield_flags_3:      .byte 0
 // Slaying/Enveloping glove bonuses to pcc_eq_tohit/pcc_eq_todam.
 // Clobbers: A, X
 player_apply_slaying_bonuses:
+    .assert "Combat-bonus rings live on Page 1", ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_INCREASE_DAMAGE == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_INCREASE_TO_HIT == ITEM_PAGE_BIT, true
     ldx #EQUIP_RING
 !pasb_ring:
     lda inv_ego,x
     and #ITEM_PAGE_BIT
-    bne !pasb_p1+
+    beq !pasb_next+
     lda inv_item_id,x
-    cmp #ITEM_TYPE_RING_SLAYING
+    cmp #ITEM_SLOT_RING_OF_SLAYING
     beq !pasb_add+
-    bne !pasb_next+
-!pasb_p1:
-    lda inv_item_id,x
-    cmp #327 - ITEM_PAGE_SIZE       // Ring of Increase Damage
+    cmp #ITEM_SLOT_RING_OF_INCREASE_DAMAGE
     beq !pasb_add+
-    cmp #328 - ITEM_PAGE_SIZE       // Ring of Increase To-Hit
+    cmp #ITEM_SLOT_RING_OF_INCREASE_TO_HIT
     bne !pasb_next+
 !pasb_add:
     lda inv_to_hit,x

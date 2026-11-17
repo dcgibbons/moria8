@@ -120,10 +120,10 @@ def selftest() -> None:
     # A name that is not the game's.
     errors = check(defs, names, wizard.replace("| 1 | Dagger |", "| 1 | dagger |"), fmap)
     assert errors == ["docs/WIZARD.md: item 1 is 'dagger', the game shows 'Dagger'"], errors
-    # Simulated 370-item check() against repo docs via item_catalog_spec.json.
+    # Simulated 361-item check() against repo docs via item_catalog_spec.json.
     if SPEC.is_file() and WIZARD.is_file() and FEATURE_MAP.is_file():
         spec_count, spec_names = load_spec_catalog(SPEC)
-        assert spec_count == 370, spec_count
+        assert spec_count == 361, spec_count
         assert all('"' not in spec_names[i] for i in range(spec_count))
         sim_defs = f".const ITEM_TYPE_COUNT = {spec_count}\n"
         sim_names = "\n".join(f'ein_{i}: .text "{spec_names[i]}" ; .byte 0' for i in range(spec_count))
@@ -131,11 +131,11 @@ def selftest() -> None:
         fm_text = FEATURE_MAP.read_text()
         sim_errors = check(sim_defs, sim_names, wiz_text, fm_text)
         assert sim_errors == [], sim_errors
-        # Also verify simulated failure detection on item 369 / count 371.
-        bad_371 = check(f".const ITEM_TYPE_COUNT = {spec_count + 1}\n",
-                        sim_names + f'\nein_{spec_count}: .text "Mock" ; .byte 0',
-                        wiz_text, fm_text)
-        assert any(f"no Item IDs row for {spec_count} (Mock)" in e for e in bad_371), bad_371
+        # Also verify simulated failure detection on item 360 / count 362.
+        bad_next = check(f".const ITEM_TYPE_COUNT = {spec_count + 1}\n",
+                         sim_names + f'\nein_{spec_count}: .text "Mock" ; .byte 0',
+                         wiz_text, fm_text)
+        assert any(f"no Item IDs row for {spec_count} (Mock)" in e for e in bad_next), bad_next
         print(f"check_wizard_doc: simulated {spec_count}-item check() PASS")
     print("check_wizard_doc self-test: PASS")
 
@@ -153,20 +153,24 @@ def main(argv: list[str]) -> int:
         spec_count, spec_names = load_spec_catalog(SPEC)
         core_names = {int(i): name for i, name in NAME.findall(names_src)}
         errors: list[str] = []
-        for idx in range(min(core_count, spec_count)):
-            if idx in core_names and core_names[idx] != spec_names[idx]:
+        if core_count != spec_count:
+            errors.append(
+                f"core/item_defs.s: ITEM_TYPE_COUNT is {core_count}, "
+                f"item_catalog_spec.json has {spec_count}"
+            )
+        for idx in range(spec_count):
+            if idx not in core_names:
+                errors.append(f"test_item_desc.s: missing ein_{idx} ({spec_names[idx]})")
+            elif core_names[idx] != spec_names[idx]:
                 errors.append(
                     f"item_catalog_spec.json: item {idx} is '{spec_names[idx]}', "
                     f"test_item_desc.s has '{core_names[idx]}'"
                 )
-        if core_count < spec_count:
-            # Wave 4.1 bridge while core/item_defs.s still defines core_count < 370.
-            errors += check_wizard(spec_count, spec_names, wizard)
-            errors += check_feature_map(spec_count, feature_map)
-            status_msg = f"Item doc check passed ({spec_count} spec items; core/item_defs.s at {core_count})."
-        else:
-            errors += check(defs, names_src, wizard, feature_map)
-            status_msg = f"Item doc check passed ({core_count} items)."
+        for idx in sorted(i for i in core_names if i >= spec_count):
+            errors.append(f"test_item_desc.s: ein_{idx} is past ITEM_TYPE_COUNT ({spec_count})")
+        errors += check_wizard(spec_count, spec_names, wizard)
+        errors += check_feature_map(spec_count, feature_map)
+        status_msg = f"Item doc check passed ({spec_count} items)."
     else:
         errors = check(defs, names_src, wizard, feature_map)
         status_msg = f"Item doc check passed ({core_count} items)."

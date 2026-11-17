@@ -46,8 +46,8 @@
 .const FOOD_MAX_LO          = <4000
 .const FOOD_MAX_HI          = >4000
 
-.const ITEM_RATION     = 15    // Type ID for ration of food
-.const ITEM_SLIME_MOLD = 16   // Type ID for slime mold
+.const ITEM_RATION     = ITEM_SLOT_RATION_OF_FOOD // Slot ID for ration of food
+.const ITEM_SLIME_MOLD = ITEM_SLOT_FOOD_SLIME_MOLD // Slot ID for slime mold
 
 // ============================================================
 // Scratch variables
@@ -200,14 +200,13 @@ piw_inv_slot_matches_filter:
     beq !piw_inv_mage_book+
     cpy #PIW_FILTER_PRAYER_BOOK
     bne !piw_inv_fail+
+    .assert "Priest books 1..4 are contiguous on Page 0", ITEM_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM == ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK + 1 && ITEM_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS == ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK + 2 && ITEM_HOLY_BOOK_OF_PRAYERS_EXORCISM == ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK + 3 && ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_EXORCISM == 0, true
     bit item_cur_page
     bvs !piw_inv_fail+
     lda piw_item_id
-    cmp #48
-    beq !piw_inv_match+
     sec
-    sbc #58
-    cmp #3
+    sbc #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
+    cmp #4
     bcs !piw_inv_fail+
     bcc !piw_inv_match+
 
@@ -220,6 +219,7 @@ piw_inv_slot_matches_filter:
 
 !piw_inv_wearable:
     tax
+    .assert "Flask of Oil lives on Page 0", ITEM_PAGE_FLASK_OF_OIL, 0
     bit item_cur_page
     bvs !piw_wear_chk+
     lda piw_item_id
@@ -232,14 +232,13 @@ piw_inv_slot_matches_filter:
     bne !piw_inv_match+
 
 !piw_inv_mage_book:
+    .assert "Mage books 1..4 are contiguous on Page 0", ITEM_SPELLBOOK_MAGICK_I == ITEM_SPELLBOOK_BEGINNERS_MAGICK + 1 && ITEM_SPELLBOOK_MAGICK_II == ITEM_SPELLBOOK_BEGINNERS_MAGICK + 2 && ITEM_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER == ITEM_SPELLBOOK_BEGINNERS_MAGICK + 3 && ITEM_PAGE_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER == 0, true
     bit item_cur_page
     bvs !piw_inv_fail+
     lda piw_item_id
-    cmp #47
-    beq !piw_inv_match+
     sec
-    sbc #55
-    cmp #3
+    sbc #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
+    cmp #4
     bcs !piw_inv_fail+
 
 !piw_inv_match:

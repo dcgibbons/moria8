@@ -1371,7 +1371,7 @@ test_start:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17                     // Cure Light Wounds potion
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Cure Light Wounds potion
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -1477,7 +1477,7 @@ test_start:
     sta fi_add_x
     lda #12
     sta fi_add_y
-    lda #17                     // Cure Light Wounds potion
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Cure Light Wounds potion
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -1682,7 +1682,7 @@ test_start:
     sta fi_add_x
     lda #12
     sta fi_add_y
-    lda #0                      // Gold (small)
+    lda #ITEM_SLOT_GOLD_SMALL                      // Gold (small)
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -1720,7 +1720,7 @@ test_start:
     sta fi_add_x
     lda #12
     sta fi_add_y
-    lda #0                      // Gold (small)
+    lda #ITEM_SLOT_GOLD_SMALL                      // Gold (small)
     sta fi_add_id
     lda #1
     sta fi_add_qty

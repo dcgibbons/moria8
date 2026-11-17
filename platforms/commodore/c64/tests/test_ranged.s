@@ -143,7 +143,7 @@ test_start:
     // ==========================================
     // Test 1: item_get_missile(49) = 1 (Short Bow)
     // ==========================================
-    ldx #49
+    ldx #ITEM_SLOT_SHORT_BOW
     jsr item_get_missile
     cmp #1
     beq !t1_pass+
@@ -158,7 +158,7 @@ test_start:
     // ==========================================
     // Test 2: item_get_missile(52) = $81 (Arrow)
     // ==========================================
-    ldx #52
+    ldx #ITEM_SLOT_ARROW
     jsr item_get_missile
     cmp #$81
     beq !t2_pass+
@@ -173,7 +173,7 @@ test_start:
     // ==========================================
     // Test 3: item_get_missile(1) = 0 (Dagger, not ranged)
     // ==========================================
-    ldx #1
+    ldx #ITEM_SLOT_GOLD_LARGE
     jsr item_get_missile
     cmp #0
     beq !t3_pass+
@@ -189,24 +189,34 @@ test_start:
     // Test 4: Crossbow(50)→2, Bolt(53)→$82, Sling(51)→3, Rock(54)→$83,
     // and melee IDs above the missile table remain non-ranged.
     // ==========================================
-    ldx #50
+    ldx #ITEM_SLOT_LIGHT_CROSSBOW
     jsr item_get_missile
     cmp #2
     bne !t4_fail+
-    ldx #53
+    ldx #ITEM_SLOT_BOLT
     jsr item_get_missile
     cmp #$82
     bne !t4_fail+
-    ldx #51
+    ldx #ITEM_SLOT_SLING
     jsr item_get_missile
     cmp #3
     bne !t4_fail+
-    ldx #54
+    ldx #ITEM_SLOT_ROCK
     jsr item_get_missile
     cmp #$83
     bne !t4_fail+
-    ldx #77
+    .if (ITEM_PAGE_TWO_HANDED_SWORD != 0) {
+        lda #ITEM_PAGE_TWO_HANDED_SWORD
+        sta item_cur_page
+    }
+    ldx #ITEM_SLOT_TWO_HANDED_SWORD
     jsr item_get_missile
+    .if (ITEM_PAGE_TWO_HANDED_SWORD != 0) {
+        pha
+        lda #0
+        sta item_cur_page
+        pla
+    }
     cmp #0
     bne !t4_fail+
     lda #$01
@@ -221,10 +231,10 @@ test_start:
     // Test 5: Ammo matching — bow ammo_type matches arrow type
     // bow it_missile=1, arrow it_missile=$81, ($81 & $7f) == 1
     // ==========================================
-    ldx #49
+    ldx #ITEM_SLOT_SHORT_BOW
     jsr item_get_missile
     sta tr_save               // 1 (bow ammo type)
-    ldx #52
+    ldx #ITEM_SLOT_ARROW
     jsr item_get_missile
     and #$7f                  // Strip high bit → 1
     cmp tr_save
@@ -241,7 +251,7 @@ test_start:
     // Test 6: Ammo depletion — qty 1 → 0 clears slot
     // ==========================================
     ldx #3
-    lda #52                   // Arrow
+    lda #ITEM_SLOT_ARROW                   // Arrow
     sta inv_item_id,x
     lda #1
     sta inv_qty,x
@@ -284,7 +294,7 @@ test_start:
     // (not 0d0 from bow). Run 10 trials, all should be 1-2.
     // ==========================================
     ldx #EQUIP_WEAPON
-    lda #49                   // Short Bow
+    lda #ITEM_SLOT_SHORT_BOW                   // Short Bow
     sta inv_item_id,x
     lda #1
     sta inv_qty,x
@@ -355,7 +365,7 @@ test_start:
     lda #0
     sta rf_ammo_slot
     sta inv_qty
-    lda #53                   // Bolt
+    lda #ITEM_SLOT_BOLT                   // Bolt
     sta inv_item_id
 
     jsr rf_consume_ammo
@@ -378,9 +388,9 @@ test_start:
     // weaponMissileFacts multiplies by 3, so 40 rolls are all multiples of
     // 3 in 3..15 and not all the minimum
     // ==========================================
-    lda #50 - IT_MISSILE_BASE   // Light Crossbow
+    lda #ITEM_SLOT_LIGHT_CROSSBOW - IT_MISSILE_BASE   // Light Crossbow
     sta rf_launcher
-    lda #53                     // Bolt
+    lda #ITEM_SLOT_BOLT                     // Bolt
     sta tw_item_id
     lda #0
     sta tw_save_to_dam
@@ -422,9 +432,9 @@ test_start:
     // Test 12: Short Bow +1 to-dam and Arrow (1d4) +3: (1d4 + 4) x 2 is
     // 10, 12, 14 or 16; an Arrow at -10 floors at 0 before the multiplier
     // ==========================================
-    lda #49 - IT_MISSILE_BASE   // Short Bow
+    lda #ITEM_SLOT_SHORT_BOW - IT_MISSILE_BASE   // Short Bow
     sta rf_launcher
-    lda #52                     // Arrow
+    lda #ITEM_SLOT_ARROW                     // Arrow
     sta tw_item_id
     lda #3
     sta tw_save_to_dam
@@ -519,30 +529,30 @@ test_start:
     // Composite Bow fire arrows, Heavy Crossbow bolts, each shown '}';
     // Phase Door (136) and the Arrow keep their values
     // ==========================================
-    ldx #137                    // Long Bow
+    ldx #ITEM_SLOT_LONG_BOW                    // Long Bow
     jsr item_get_missile
     cmp #1
     bne !t14_fail+
-    ldx #138                    // Composite Bow
+    ldx #ITEM_SLOT_COMPOSITE_BOW                    // Composite Bow
     jsr item_get_missile
     cmp #1
     bne !t14_fail+
-    ldx #139                    // Heavy Crossbow
+    ldx #ITEM_SLOT_HEAVY_CROSSBOW                    // Heavy Crossbow
     jsr item_get_missile
     cmp #2
     bne !t14_fail+
-    ldx #136                    // Phase Door
+    ldx #ITEM_SLOT_SCROLL_OF_PHASE_DOOR                    // Phase Door
     jsr item_get_missile
     bne !t14_fail+
-    ldx #139
+    ldx #ITEM_SLOT_HEAVY_CROSSBOW
     jsr item_get_display_char
     cmp #$1c                    // '}'
     bne !t14_fail+
-    ldx #137
+    ldx #ITEM_SLOT_LONG_BOW
     jsr item_get_display_char
     cmp #$1c
     bne !t14_fail+
-    ldx #52                     // Arrow
+    ldx #ITEM_SLOT_ARROW                     // Arrow
     jsr item_get_display_char
     cmp #$1b                    // '{'
     bne !t14_fail+
@@ -556,20 +566,20 @@ test_start:
 
     // ==========================================
     // Test 15: Firing tables for the appended launchers (VMS facts range,
-    // Umoria multiplier): a Heavy Crossbow with no bolts is launcher 5,
-    // range 35, x4; a Long Bow launcher 3, range 30, x3
+    // Umoria multiplier): a Heavy Crossbow with no bolts is launcher 4,
+    // range 35, x4; a Long Bow launcher 1, range 30, x3
     // ==========================================
     jsr msg_init
     jsr item_init_inventory
     ldx #EQUIP_WEAPON
-    lda #139                    // Heavy Crossbow
+    lda #ITEM_SLOT_HEAVY_CROSSBOW                    // Heavy Crossbow
     sta inv_item_id,x
     lda #1
     sta inv_qty,x
     jsr ranged_fire
     bcs !t15_fail+              // no bolts: nothing fired
     ldx rf_launcher
-    cpx #5
+    cpx #(ITEM_SLOT_HEAVY_CROSSBOW - ITEM_SLOT_SHORT_BOW)
     bne !t15_fail+
     lda rf_range_tbl,x
     cmp #35
@@ -578,11 +588,11 @@ test_start:
     cmp #4
     bne !t15_fail+
     ldx #EQUIP_WEAPON
-    lda #137                    // Long Bow
+    lda #ITEM_SLOT_LONG_BOW                    // Long Bow
     sta inv_item_id,x
     jsr ranged_fire
     ldx rf_launcher
-    cpx #3
+    cpx #(ITEM_SLOT_LONG_BOW - ITEM_SLOT_SHORT_BOW)
     bne !t15_fail+
     lda rf_range_tbl,x
     cmp #30
@@ -603,7 +613,7 @@ test_start:
     // the Short Bow does (test 8)
     // ==========================================
     ldx #EQUIP_WEAPON
-    lda #139                    // Heavy Crossbow
+    lda #ITEM_SLOT_HEAVY_CROSSBOW                    // Heavy Crossbow
     sta inv_item_id,x
     jsr player_recalc_pflags_equipment  // wield_* is a recalc-time cache
     lda #10

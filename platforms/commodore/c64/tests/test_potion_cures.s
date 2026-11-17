@@ -402,7 +402,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 0
@@ -448,7 +448,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 1
@@ -488,7 +488,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 2
@@ -529,7 +529,7 @@ test_start:
     lda #1
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_HEALING
+    lda #ITEM_SLOT_POTION_OF_HEALING
     jsr tq_quaff
     lda #$00
     sta tc_results + 3
@@ -582,7 +582,7 @@ test_start:
     lda #100
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_HEALING
+    lda #ITEM_SLOT_POTION_OF_HEALING
     jsr tq_quaff
     lda #$00
     sta tc_results + 4
@@ -619,7 +619,7 @@ test_start:
     lda #<300
     ldx #>300
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 5
@@ -657,7 +657,7 @@ test_start:
     sta tq_lo
     lda #14
     sta tq_hi
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr tq_range
     lda #$00
     sta tc_results + 6
@@ -673,7 +673,7 @@ test_start:
     sta tq_lo
     lda #28
     sta tq_hi
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr tq_range
     lda tq_ok
     sta tc_results + 7
@@ -682,7 +682,7 @@ test_start:
     sta tq_lo
     lda #42
     sta tq_hi
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_range
     lda tq_ok
     sta tc_results + 8
@@ -705,7 +705,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr tq_quaff
     lda #0
     sta vis_room_revealed
@@ -734,7 +734,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr tq_quaff
     lda #0
     sta tpm_huff_calls
@@ -764,7 +764,7 @@ test_start:
     lda #20
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_quaff
     lda #0
     sta tpm_huff_calls
@@ -796,7 +796,7 @@ test_start:
     lda #10
     ldx #8
     jsr tg_stat
-    lda #ITEM_TYPE_POT_GAIN_STR
+    lda #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
     jsr tq_quaff
     lda #$00
     sta tc_results + 12
@@ -825,7 +825,7 @@ test_start:
     // Test 14: Gain Dexterity (#143) at 50 (18/32) raises 1d25: 40 quaffs
     // land in 51-75 and one passes 60 (more than 1d10 could).
     // ==========================================
-    lda #ITEM_TYPE_POT_GAIN_STR + 3
+    lda #ITEM_SLOT_POTION_OF_GAIN_DEXTERITY
     sta tq_item
     lda #50
     sta tq_lo
@@ -849,7 +849,7 @@ test_start:
     // Test 15: Gain Wisdom (#142) at 100 (18/82) raises 1d10: 40 quaffs land
     // in 101-110 and one passes 105.
     // ==========================================
-    lda #ITEM_TYPE_POT_GAIN_STR + 2
+    lda #ITEM_SLOT_POTION_OF_GAIN_WISDOM
     sta tq_item
     lda #100
     sta tq_lo
@@ -878,7 +878,7 @@ test_start:
     lda #117
     ldx #118
     jsr tg_stat
-    lda #ITEM_TYPE_POT_GAIN_STR + 1
+    lda #ITEM_SLOT_POTION_OF_GAIN_INTELLIGENCE
     jsr tq_quaff
     lda #$00
     sta tc_results + 15
@@ -895,7 +895,7 @@ test_start:
     lda #118
     ldx #100
     jsr tg_stat
-    lda #ITEM_TYPE_POT_GAIN_CHR
+    lda #ITEM_SLOT_POTION_OF_CHARISMA
     jsr tq_quaff
     lda player_data + PL_CHR_BASE
     cmp #118
@@ -928,7 +928,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_GAIN_STR + 4
+    lda #ITEM_SLOT_POTION_OF_GAIN_CONSTITUTION
     jsr tq_quaff
     lda #$00
     sta tc_results + 16

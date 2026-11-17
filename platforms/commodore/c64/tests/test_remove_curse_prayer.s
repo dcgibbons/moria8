@@ -251,14 +251,18 @@ test_reset_remove_curse_state:
     rts
 
 test_seed_equipped_and_carried_curses:
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #IF_CURSED
     sta inv_flags + EQUIP_WEAPON
 
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -267,14 +271,18 @@ test_seed_equipped_and_carried_curses:
     rts
 
 test_seed_uncursed_equipment_and_carried_item:
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #0
     sta inv_flags + EQUIP_WEAPON
 
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty

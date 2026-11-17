@@ -198,7 +198,7 @@ random_floor_in_room:
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
-.const hal_storage_save_version = $21
+.const hal_storage_save_version = $22
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -1260,15 +1260,19 @@ t7_set_slot31:
     bne !t9_clr-
 
     // Place 5 items at various slots
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta fi_item_id + 0
-    lda #15                     // Food
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi + 0
+    }
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Food
     sta fi_item_id + 3
-    lda #7                      // Leather armor
+    lda #ITEM_SLOT_LEATHER_ARMOR                      // Leather armor
     sta fi_item_id + 10
-    lda #0                      // Gold (small)
+    lda #ITEM_SLOT_GOLD_SMALL                      // Gold (small)
     sta fi_item_id + 20
-    lda #13                     // Torch
+    lda #ITEM_SLOT_WOODEN_TORCH                     // Torch
     sta fi_item_id + 31
 
     lda #0
@@ -1324,8 +1328,8 @@ t7_set_slot31:
     sta tc_results + 10
 
     // ============================================================
-    // Test 12: Only SAVE_VERSION ($21) is accepted; legacy V1 ($17),
-    // intermediate ($0f, $18, $19, $20), and future ($22) versions
+    // Test 12: Only SAVE_VERSION ($22) is accepted; legacy V1 ($17),
+    // intermediate ($0f, $18, $19, $20, $21), and future ($23) versions
     // are rejected, and load_game on a $17 save returns
     // LOAD_RESULT_UNSUPPORTED without reading or mutating game RAM.
     // ============================================================
@@ -1343,10 +1347,13 @@ t7_set_slot31:
     lda #$19
     jsr save_version_supported
     bcs !t12_fail_far+
-    lda #(SAVE_VERSION - 1)     // $20 (pre-Phase 5 V2)
+    lda #$20
     jsr save_version_supported
     bcs !t12_fail_far+
-    lda #(SAVE_VERSION + 1)     // $22 (future)
+    lda #(SAVE_VERSION - 1)     // $21 (370-item pre-VMS-renumber V2)
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #(SAVE_VERSION + 1)     // $23 (future)
     jsr save_version_supported
     bcs !t12_fail_far+
     lda #$0f
@@ -1434,7 +1441,7 @@ t7_set_slot31:
     jsr test_clear_store_items
 
     // Inventory slot 2: weapon-like item with split combat stats.
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2
@@ -1448,11 +1455,11 @@ t7_set_slot31:
     sta inv_to_ac + 2
     lda #(IF_IDENTIFIED | IF_CURSED)
     sta inv_flags + 2
-    lda #EGO_FLAME_TONGUE
+    lda #(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
     sta inv_ego + 2
 
     // Equipment body slot: armor AC must persist independently.
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
@@ -1462,8 +1469,12 @@ t7_set_slot31:
     sta inv_flags + EQUIP_BODY
 
     // New V3 amulet slot: save/load must preserve the 31st slot.
-    lda #24
+    lda #ITEM_SLOT_RING_OF_STRENGTH
     sta inv_item_id + EQUIP_AMULET
+    .if (ITEM_PAGE_RING_OF_STRENGTH != 0) {
+        lda #ITEM_PAGE_RING_OF_STRENGTH
+        sta inv_ego + EQUIP_AMULET
+    }
     lda #1
     sta inv_qty + EQUIP_AMULET
     lda #$7f
@@ -1472,7 +1483,7 @@ t7_set_slot31:
     sta inv_flags + EQUIP_AMULET
 
     // Boundary IDs: first appended (96) and last appended (127) must persist.
-    lda #96
+    lda #ITEM_SLOT_POTION_OF_HEALING
     sta inv_item_id + 3
     lda #1
     sta inv_qty + 3
@@ -1480,7 +1491,7 @@ t7_set_slot31:
     sta inv_p1 + 3
     lda #IF_IDENTIFIED
     sta inv_flags + 3
-    lda #127
+    lda #ITEM_SLOT_STAFF_OF_REMOVE_CURSE
     sta inv_item_id + 4
     lda #1
     sta inv_qty + 4
@@ -1490,7 +1501,7 @@ t7_set_slot31:
     sta inv_flags + 4
 
     // Store/home slot 10: packed flags+ego plus split stat sidecars.
-    lda #1
+    lda #ITEM_SLOT_GOLD_LARGE
     sta si_item_id + 10
     sta si_qty + 10
     lda #$33
@@ -1507,7 +1518,7 @@ t7_set_slot31:
     sta si_meta_hi + 10
 
     // Floor slot 3: V2 stores raw fi_meta flags and fi_meta_hi ego/page.
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta fi_item_id + 3
     lda #11
     sta fi_x + 3
@@ -1519,7 +1530,7 @@ t7_set_slot31:
     sta fi_p1 + 3
     lda #(IF_IDENTIFIED | IF_CURSED)
     sta fi_meta + 3
-    lda #EGO_FROST_BRAND
+    lda #(EGO_FROST_BRAND | ITEM_PAGE_DAGGER)
     sta fi_meta_hi + 3
     lda #$82
     sta fi_to_hit + 3
@@ -1539,7 +1550,7 @@ t7_set_slot31:
     jsr test_load_item_state_blocks
 
     lda inv_item_id + 2
-    :t13_expect(2)
+    :t13_expect(ITEM_SLOT_DAGGER)
     lda inv_p1 + 2
     :t13_expect($44)
     lda inv_to_hit + 2
@@ -1549,17 +1560,21 @@ t7_set_slot31:
     lda inv_flags + 2
     :t13_expect(IF_IDENTIFIED | IF_CURSED)
     lda inv_ego + 2
-    :t13_expect(EGO_FLAME_TONGUE)
+    :t13_expect(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
 
     lda inv_item_id + EQUIP_BODY
-    :t13_expect(7)
+    :t13_expect(ITEM_SLOT_LEATHER_ARMOR)
     lda inv_to_ac + EQUIP_BODY
     :t13_expect(5)
     lda inv_flags + EQUIP_BODY
     :t13_expect(IF_IDENTIFIED)
 
     lda inv_item_id + EQUIP_AMULET
-    :t13_expect(24)
+    :t13_expect(ITEM_SLOT_RING_OF_STRENGTH)
+    .if (ITEM_PAGE_RING_OF_STRENGTH != 0) {
+        lda inv_ego + EQUIP_AMULET
+        :t13_expect(ITEM_PAGE_RING_OF_STRENGTH)
+    }
     lda inv_qty + EQUIP_AMULET
     :t13_expect(1)
     lda inv_p1 + EQUIP_AMULET
@@ -1568,7 +1583,7 @@ t7_set_slot31:
     :t13_expect(IF_IDENTIFIED)
 
     lda inv_item_id + 3
-    :t13_expect(96)
+    :t13_expect(ITEM_SLOT_POTION_OF_HEALING)
     lda inv_qty + 3
     :t13_expect(1)
     lda inv_p1 + 3
@@ -1576,7 +1591,7 @@ t7_set_slot31:
     lda inv_flags + 3
     :t13_expect(IF_IDENTIFIED)
     lda inv_item_id + 4
-    :t13_expect(127)
+    :t13_expect(ITEM_SLOT_STAFF_OF_REMOVE_CURSE)
     lda inv_qty + 4
     :t13_expect(1)
     lda inv_p1 + 4
@@ -1585,7 +1600,7 @@ t7_set_slot31:
     :t13_expect(IF_TRIED)
 
     lda si_item_id + 10
-    :t13_expect(1)
+    :t13_expect(ITEM_SLOT_GOLD_LARGE)
     lda si_p1 + 10
     :t13_expect($33)
     lda si_to_hit + 10
@@ -1600,7 +1615,7 @@ t7_set_slot31:
     :t13_expect(EGO_DEFENDER)
 
     lda fi_item_id + 3
-    :t13_expect(2)
+    :t13_expect(ITEM_SLOT_DAGGER)
     lda fi_x + 3
     :t13_expect(11)
     lda fi_y + 3
@@ -1612,7 +1627,7 @@ t7_set_slot31:
     lda fi_meta + 3
     :t13_expect(IF_IDENTIFIED | IF_CURSED)
     lda fi_meta_hi + 3
-    :t13_expect(EGO_FROST_BRAND)
+    :t13_expect(EGO_FROST_BRAND | ITEM_PAGE_DAGGER)
     lda fi_to_hit + 3
     :t13_expect($82)
     lda fi_to_dam + 3
@@ -2175,7 +2190,7 @@ t22_fail_code:
     // ============================================================
     // Test 23: V2 known-item round-trip writes ID_KNOWN_BYTES (47 B),
     // preserves Page 0 and Page 1 known bits, refreshes fixed-known
-    // items, and keeps spare capacity bits (370-375) clear.
+    // items, and keeps spare capacity bits (361-375) clear.
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
@@ -2270,9 +2285,10 @@ t22_fail_code:
     cpx #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
     bcc !t23_chk_p1-
 
-    .assert "370 occupies bit 2 of last known byte", (ITEM_TYPE_COUNT & 7), 2
-    lda id_known_bits + ID_KNOWN_BYTES - 1
-    and #$fc
+    .assert "361 occupies bit 0 of byte 45 (second-to-last known byte)", (ITEM_TYPE_COUNT >> 3) == (ID_KNOWN_BYTES - 2) && (ITEM_TYPE_COUNT & 7) == 1, true
+    lda id_known_bits + ID_KNOWN_BYTES - 2
+    and #$fe
+    ora id_known_bits + ID_KNOWN_BYTES - 1
     beq !t23_spare_ok+
     lda #5
     jmp t23_fail_code
@@ -2297,16 +2313,16 @@ t23_fail_code:
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_inventory
-    lda #(ITEM_TYPE_POT_WATER - ITEM_PAGE_SIZE)
+    lda #ITEM_SLOT_CLEAR_POTION_OF_WATER
     sta inv_item_id + 1
     lda #3
     sta inv_qty + 1
     lda #IF_IDENTIFIED
     sta inv_flags + 1
-    lda #ITEM_PAGE_BIT
+    lda #ITEM_PAGE_CLEAR_POTION_OF_WATER
     sta inv_ego + 1
 
-    lda #ITEM_TYPE_CLOAK
+    lda #ITEM_SLOT_CLOAK
     sta inv_item_id + EQUIP_CLOAK
     lda #1
     sta inv_qty + EQUIP_CLOAK
@@ -2316,10 +2332,10 @@ t23_fail_code:
     sta inv_to_ac + EQUIP_CLOAK
     lda #IF_IDENTIFIED
     sta inv_flags + EQUIP_CLOAK
-    lda #EGO_STEALTH
+    lda #(ITEM_PAGE_CLOAK | EGO_STEALTH)
     sta inv_ego + EQUIP_CLOAK
 
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_SECONDARY
     lda #1
     sta inv_qty + EQUIP_SECONDARY
@@ -2329,7 +2345,7 @@ t23_fail_code:
     sta inv_to_dam + EQUIP_SECONDARY
     lda #(IF_IDENTIFIED | IF_CURSED)
     sta inv_flags + EQUIP_SECONDARY
-    lda #EGO_SLAY_EVIL
+    lda #(ITEM_PAGE_DAGGER | EGO_SLAY_EVIL)
     sta inv_ego + EQUIP_SECONDARY
 
     jsr test_stream_reset_write
@@ -2343,19 +2359,19 @@ t23_fail_code:
     jsr save_sanitize_inv_ids
 
     lda inv_item_id + 1
-    cmp #(ITEM_TYPE_POT_WATER - ITEM_PAGE_SIZE)
+    cmp #ITEM_SLOT_CLEAR_POTION_OF_WATER
     beq !t24_p1_id_ok+
     lda #2
     jmp t24_fail_code
 !t24_p1_id_ok:
     lda inv_ego + 1
-    cmp #ITEM_PAGE_BIT
+    cmp #ITEM_PAGE_CLEAR_POTION_OF_WATER
     beq !t24_p1_bit_ok+
     lda #3
     jmp t24_fail_code
 !t24_p1_bit_ok:
     lda inv_item_id + EQUIP_CLOAK
-    cmp #ITEM_TYPE_CLOAK
+    cmp #ITEM_SLOT_CLOAK
     beq !t24_clk_id_ok+
     lda #4
     jmp t24_fail_code
@@ -2367,19 +2383,19 @@ t23_fail_code:
     jmp t24_fail_code
 !t24_clk_ac_ok:
     lda inv_ego + EQUIP_CLOAK
-    cmp #EGO_STEALTH
+    cmp #(ITEM_PAGE_CLOAK | EGO_STEALTH)
     beq !t24_clk_ego_ok+
     lda #6
     jmp t24_fail_code
 !t24_clk_ego_ok:
     lda inv_item_id + EQUIP_SECONDARY
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     beq !t24_sec_id_ok+
     lda #7
     jmp t24_fail_code
 !t24_sec_id_ok:
     lda inv_ego + EQUIP_SECONDARY
-    cmp #EGO_SLAY_EVIL
+    cmp #(ITEM_PAGE_DAGGER | EGO_SLAY_EVIL)
     beq !t24_sec_ego_ok+
     lda #8
     jmp t24_fail_code
@@ -2452,7 +2468,7 @@ t25_fail_code:
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_floor
-    lda #0                      // Page 0 gold (slot_lo = 0)
+    lda #ITEM_SLOT_GOLD_SMALL                      // Page 0 gold (slot_lo = 0)
     sta fi_item_id + 0
     sta fi_meta_hi + 0
     lda #$34
@@ -2465,7 +2481,7 @@ t25_fail_code:
     sta fi_y + 0
 
     lda #0                      // Page 1 logical 255 (slot_lo = 0)
-    sta fi_item_id + 1
+    sta fi_item_id + 1          // raw-id-ok: synthetic boundary test
     lda #(ITEM_PAGE_BIT | EGO_RESIST)
     sta fi_meta_hi + 1
     lda #2
@@ -2480,7 +2496,7 @@ t25_fail_code:
     sta fi_meta + 1
 
     lda #1                      // Page 1 logical 256 (slot_lo = 1)
-    sta fi_item_id + 2
+    sta fi_item_id + 2          // raw-id-ok: synthetic boundary test
     lda #ITEM_PAGE_BIT
     sta fi_meta_hi + 2
     lda #$5b
@@ -2526,7 +2542,7 @@ t25_fail_code:
     jmp t26_fail_code
 !t26_p2_chk:
     lda fi_item_id + 2
-    cmp #1
+    cmp #1 // raw-id-ok: synthetic boundary test
     bne !t26_p2_fail+
     lda fi_meta_hi + 2
     cmp #ITEM_PAGE_BIT
@@ -2552,13 +2568,13 @@ t26_fail_code:
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_inventory
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=370)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=361)
     sta inv_item_id + 2
     lda #ITEM_PAGE_BIT
     sta inv_ego + 2
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta inv_item_id + 3
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=369)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=360)
     sta inv_item_id + 4
     lda #ITEM_PAGE_BIT
     sta inv_ego + 4
@@ -2578,7 +2594,7 @@ t26_fail_code:
     jmp t27_fail_code
 !t27_bad_ok:
     lda inv_item_id + 3
-    cmp #ITEM_TYPE_CHEST_SMALL_WOOD
+    cmp #ITEM_SLOT_SMALL_WOODEN_CHEST
     beq !t27_good_ok+
     lda #3
     jmp t27_fail_code
@@ -2602,7 +2618,7 @@ t27_fail_code:
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_floor
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=370)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=361)
     sta fi_item_id + 1
     lda #ITEM_PAGE_BIT
     sta fi_meta_hi + 1
@@ -2610,9 +2626,9 @@ t27_fail_code:
     sta fi_x + 1
     lda #12
     sta fi_y + 1
-    lda #ITEM_TYPE_CHEST_LARGE_STEEL
+    lda #ITEM_SLOT_LARGE_STEEL_CHEST
     sta fi_item_id + 5
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=369)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=360)
     sta fi_item_id + 6
     lda #ITEM_PAGE_BIT
     sta fi_meta_hi + 6
@@ -2631,7 +2647,7 @@ t27_fail_code:
     jmp t28_fail_code
 !t28_bad_ok:
     lda fi_item_id + 5
-    cmp #ITEM_TYPE_CHEST_LARGE_STEEL
+    cmp #ITEM_SLOT_LARGE_STEEL_CHEST
     beq !t28_good_ok+
     lda #3
     jmp t28_fail_code
@@ -2653,13 +2669,13 @@ t28_fail_code:
     // and keeps valid chest and Page-1 IDs.
     // ============================================================
     jsr test_clear_store_items
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=370)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=361)
     sta si_item_id + 1
     lda #ITEM_PAGE_BIT
     sta si_meta_hi + 1
-    lda #ITEM_TYPE_CHEST_RUINED
+    lda #ITEM_SLOT_RUINED_CHEST
     sta si_item_id + 7
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=369)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=360)
     sta si_item_id + 8
     lda #ITEM_PAGE_BIT
     sta si_meta_hi + 8
@@ -2672,7 +2688,7 @@ t28_fail_code:
     jmp t29_fail_code
 !t29_bad_ok:
     lda si_item_id + 7
-    cmp #ITEM_TYPE_CHEST_RUINED
+    cmp #ITEM_SLOT_RUINED_CHEST
     beq !t29_good_ok+
     lda #3
     jmp t29_fail_code
@@ -2760,17 +2776,17 @@ t29_fail_code:
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr test_clear_store_items
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id + 0
     lda #IF_IDENTIFIED
     sta si_meta + 0
-    lda #EGO_FLAME_TONGUE
+    lda #(ITEM_PAGE_DAGGER | EGO_FLAME_TONGUE)
     sta si_meta_hi + 0
-    lda #(ITEM_TYPE_POT_WATER - ITEM_PAGE_SIZE)
+    lda #ITEM_SLOT_CLEAR_POTION_OF_WATER
     sta si_item_id + (STORE_TOTAL_SLOTS - 1)
     lda #IF_SENSED
     sta si_meta + (STORE_TOTAL_SLOTS - 1)
-    lda #(ITEM_PAGE_BIT | EGO_MAGI)
+    lda #(ITEM_PAGE_CLEAR_POTION_OF_WATER | EGO_MAGI)
     sta si_meta_hi + (STORE_TOTAL_SLOTS - 1)
 
     jsr test_stream_reset_write
@@ -2794,19 +2810,19 @@ t29_fail_code:
     lda save_io_error
     bne !t31_fail+
     lda si_item_id + 0
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t31_fail+
     lda si_meta_hi + 0
-    cmp #EGO_FLAME_TONGUE
+    cmp #(ITEM_PAGE_DAGGER | EGO_FLAME_TONGUE)
     bne !t31_fail+
     lda si_item_id + (STORE_TOTAL_SLOTS - 1)
-    cmp #(ITEM_TYPE_POT_WATER - ITEM_PAGE_SIZE)
+    cmp #ITEM_SLOT_CLEAR_POTION_OF_WATER
     bne !t31_fail+
     lda si_meta + (STORE_TOTAL_SLOTS - 1)
     cmp #IF_SENSED
     bne !t31_fail+
     lda si_meta_hi + (STORE_TOTAL_SLOTS - 1)
-    cmp #(ITEM_PAGE_BIT | EGO_MAGI)
+    cmp #(ITEM_PAGE_CLEAR_POTION_OF_WATER | EGO_MAGI)
     bne !t31_fail+
     jsr test_load_sentinel
     bne !t31_fail+
@@ -2906,7 +2922,7 @@ t29_fail_code:
     bne !t35_cmp_hi-
 }
     lda SAVE_STREAM_BUF + 2                         // inv_item_id[2]
-    cmp #2
+    cmp #2 // raw-id-ok: synthetic boundary test
     bne !t35_fail+
     lda SAVE_STREAM_BUF + TOTAL_INV_SLOTS + 2       // inv_qty[2]
     cmp #$42
@@ -2997,36 +3013,36 @@ t29_fail_code:
 
     // ============================================================
     // Test 37: 9-bit paged ID sanitization boundary edges across
-    // Page 0 (0..254 valid, 255=empty) and Page 1 (255..369 valid,
-    // 370+ wiped to FI_EMPTY) for inventory and floor tables.
+    // Page 0 (0..254 valid, 255=empty) and Page 1 (255..360 valid,
+    // 361+ wiped to FI_EMPTY) for inventory and floor tables.
     // ============================================================
     jsr item_init_inventory
     lda #(ITEM_PAGE_SIZE - 1)               // 254 (max Page 0)
-    sta inv_item_id + 0
+    sta inv_item_id + 0                     // raw-id-ok: synthetic boundary test
     lda #0
     sta inv_ego + 0
     lda #FI_EMPTY                           // 255 (empty Page 0)
     sta inv_item_id + 1
     lda #0                                  // logical 255 (min Page 1)
-    sta inv_item_id + 2
+    sta inv_item_id + 2                     // raw-id-ok: synthetic boundary test
     lda #ITEM_PAGE_BIT
     sta inv_ego + 2
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // 114 (logical 369, max valid)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // 105 (logical 360, max valid)
     sta inv_item_id + 3
     lda #(ITEM_PAGE_BIT | EGO_DEFENDER)
     sta inv_ego + 3
-    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE) // 115 (logical 370, invalid)
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE) // 106 (logical 361, invalid)
     sta inv_item_id + 4
     lda #ITEM_PAGE_BIT
     sta inv_ego + 4
     lda #(ITEM_PAGE_SIZE - 1)               // 254 on Page 1 (invalid)
-    sta inv_item_id + 5
+    sta inv_item_id + 5                     // raw-id-ok: synthetic boundary test
     lda #ITEM_PAGE_BIT
     sta inv_ego + 5
     jsr save_sanitize_inv_ids
 
     lda inv_item_id + 0
-    cmp #(ITEM_PAGE_SIZE - 1)
+    cmp #(ITEM_PAGE_SIZE - 1)               // raw-id-ok: synthetic boundary test
     bne !t37_fail+
     lda inv_item_id + 1
     cmp #FI_EMPTY
@@ -3051,7 +3067,7 @@ t29_fail_code:
 
     jsr item_init_floor
     lda #(ITEM_PAGE_SIZE - 1)
-    sta fi_item_id + 0
+    sta fi_item_id + 0                      // raw-id-ok: synthetic boundary test
     lda #0
     sta fi_meta_hi + 0
     lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
@@ -3064,7 +3080,7 @@ t29_fail_code:
     sta fi_meta_hi + 2
     jsr save_sanitize_floor_ids
     lda fi_item_id + 0
-    cmp #(ITEM_PAGE_SIZE - 1)
+    cmp #(ITEM_PAGE_SIZE - 1)               // raw-id-ok: synthetic boundary test
     bne !t37_fail+
     lda fi_item_id + 1
     cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
@@ -3093,9 +3109,9 @@ t29_fail_code:
     sta potion_shuffle
     lda #$22
     sta staff_shuffle + FLAVOUR_STAFF_COUNT - 1
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id + STORE_TOTAL_SLOTS - 1
-    lda #EGO_SLAY_DRAGON
+    lda #(ITEM_PAGE_DAGGER | EGO_SLAY_DRAGON)
     sta si_meta_hi + STORE_TOTAL_SLOTS - 1
     lda #$03
     sta level_entry_dir
@@ -3141,7 +3157,7 @@ t29_fail_code:
     cmp #$22
     bne !t38_fail+
     lda si_meta_hi + STORE_TOTAL_SLOTS - 1
-    cmp #EGO_SLAY_DRAGON
+    cmp #(ITEM_PAGE_DAGGER | EGO_SLAY_DRAGON)
     bne !t38_fail+
     lda level_entry_dir
     cmp #$03
@@ -3194,9 +3210,9 @@ t29_fail_code:
     // ============================================================
     // Test 40: a current save made before an item was added carries a
     // clear bit for it. After the load the fixed-description items are
-    // known as in a new game (Page-0 Amulet of Resist Acid, crowns,
-    // Leather Armour, plus Page-1 Water potion) and flavoured ones stay
-    // unknown (Lordly rings, Gain Stat potion, Page-1 Staff of Earthquakes).
+    // known as in a new game (Page-0 crowns, Leather Armour, Water potion;
+    // Page-1 Amulet of Resist Acid, Dagger) and flavoured ones stay unknown
+    // (Page-0 Gain Stat potion, Staff of Earthquakes; Page-1 Lordly rings).
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
@@ -3208,30 +3224,38 @@ t29_fail_code:
     jsr load_read_known_items
     lda #0
     sta item_cur_page
-    ldx #ITEM_TYPE_AMULET_RESIST_ACID
-    ldy #ITEM_TYPE_CROWN_JEWEL + 1
+    .assert "t40 Page-0 known/unknown items live on Page 0", ITEM_JEWEL_ENCRUSTED_CROWN == ITEM_SILVER_CROWN + 2 && ITEM_GOLDEN_CROWN == ITEM_SILVER_CROWN + 1 && ITEM_PAGE_SILVER_CROWN == 0 && ITEM_PAGE_JEWEL_ENCRUSTED_CROWN == 0 && ITEM_PAGE_LEATHER_ARMOR == 0 && ITEM_PAGE_POTION_OF_GAIN_STRENGTH == 0 && ITEM_PAGE_CLEAR_POTION_OF_WATER == 0 && ITEM_PAGE_STAFF_OF_EARTHQUAKES == 0, true
+    .assert "t40 Page-1 known/unknown items live on Page 1", ITEM_RING_OF_LORDLY_PROTECTION_COLD == ITEM_RING_OF_LORDLY_PROTECTION_FIRE + 2 && ITEM_RING_OF_LORDLY_PROTECTION_ACID == ITEM_RING_OF_LORDLY_PROTECTION_FIRE + 1 && ITEM_PAGE_RING_OF_LORDLY_PROTECTION_FIRE == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_LORDLY_PROTECTION_COLD == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_RESIST_ACID == ITEM_PAGE_BIT && ITEM_PAGE_DAGGER == ITEM_PAGE_BIT, true
+    ldx #ITEM_SLOT_SILVER_CROWN
+    ldy #ITEM_SLOT_JEWEL_ENCRUSTED_CROWN + 1
     jsr ts_expect_known_range
     bcc !t40_fail+
-    ldx #7                          // Leather Armour
-    ldy #8
+    ldx #ITEM_SLOT_LEATHER_ARMOR                          // Leather Armour
+    ldy #ITEM_SLOT_LEATHER_ARMOR + 1
     jsr ts_expect_known_range
     bcc !t40_fail+
-    ldx #ITEM_TYPE_RING_LORDLY_FIRE
-    ldy #ITEM_TYPE_RING_LORDLY_COLD + 1
-    jsr ts_expect_unknown_range
-    bcc !t40_fail+
-    ldx #ITEM_TYPE_POT_GAIN_STR
-    ldy #ITEM_TYPE_POT_GAIN_STR + 1
-    jsr ts_expect_unknown_range
-    bcc !t40_fail+
-    lda #ITEM_PAGE_BIT
-    sta item_cur_page
-    ldx #(ITEM_TYPE_POT_WATER - ITEM_PAGE_SIZE)
+    ldx #ITEM_SLOT_CLEAR_POTION_OF_WATER
     jsr id_known_test
     beq !t40_fail+
-    ldx #(ITEM_TYPE_STAFF_EARTHQUAKES - ITEM_PAGE_SIZE)
+    ldx #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    ldy #ITEM_SLOT_POTION_OF_GAIN_STRENGTH + 1
+    jsr ts_expect_unknown_range
+    bcc !t40_fail+
+    ldx #ITEM_SLOT_STAFF_OF_EARTHQUAKES
     jsr id_known_test
     bne !t40_fail+
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx #ITEM_SLOT_AMULET_OF_RESIST_ACID
+    jsr id_known_test
+    beq !t40_fail+
+    ldx #ITEM_SLOT_DAGGER
+    jsr id_known_test
+    beq !t40_fail+
+    ldx #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_FIRE
+    ldy #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_COLD + 1
+    jsr ts_expect_unknown_range
+    bcc !t40_fail+
     lda #0
     sta item_cur_page
     lda #$01

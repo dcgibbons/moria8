@@ -9,6 +9,7 @@
 #import "../../../core/input_contract.s"
 #import "../../../core/input_tables.s"
 #import "../../../core/input_run_cancel.s"
+#import "../../shared/item_catalog/item_ids.s"
 //
 // Note: GETIN returns PETSCII codes. We convert to command IDs
 // via a lookup table. The KERNAL IRQ handler must remain active
@@ -537,6 +538,14 @@ input_ctrl_r_held:
 
 icr_result: .byte 0
 
+// Scripted keystrokes typing val (0..999) in decimal ASCII, no leading zeros.
+.macro EmitDecimalAscii(val) {
+    .assert "EmitDecimalAscii value is 0..999", val >= 0 && val <= 999, true
+    .if (val >= 100) .byte $30 + floor(val / 100)
+    .if (val >= 10)  .byte $30 + mod(floor(val / 10), 10)
+    .byte $30 + mod(val, 10)
+}
+
 #if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT || C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT || C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT || C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT || C64_TEST_SCRIPTED_RETIREMENT_PRODUCT || C64_TEST_SCRIPTED_WIZARD_REVEAL_PRODUCT || C64_TEST_SCRIPTED_WIZARD_ITEM_PRODUCT || C64_TEST_SCRIPTED_SCROLL_TELEPORT_PRODUCT || C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C64_TEST_SCRIPTED_EXCHANGE_PRODUCT || C64_TEST_SCRIPTED_GAME_OVER_PRODUCT
 c64_test_input_idx: .byte 0
 c64_test_input_script:
@@ -722,15 +731,11 @@ c64_test_input_script:
     .byte $20              // SPACE = dismiss any pending message
     .byte $17              // CTRL+W = open wizard menu
     .byte $47              // G = generate item
-    .byte $31              // 1
-    .byte $32              // 2
-    .byte $38              // 8 = Small Wooden Chest
+    :EmitDecimalAscii(ITEM_SMALL_WOODEN_CHEST)
     .byte $0d              // RETURN
     .byte $17              // CTRL+W = open wizard menu
     .byte $47              // G = generate item
-    .byte $31              // 1
-    .byte $30              // 0
-    .byte $31              // 1
+    :EmitDecimalAscii(ITEM_SCROLL_OF_TELEPORT_LEVEL)
     .byte $0d              // RETURN
     .byte $20              // SPACE = dismiss done message
     .byte $20              // SPACE = dismiss any monster-sighting message
@@ -754,20 +759,15 @@ c64_test_input_script:
     .byte $20              // SPACE = dismiss any pending message
     .byte $17              // CTRL+W = open wizard menu
     .byte $47              // G = generate item
-    .byte $31              // 1
-    .byte $32              // 2
-    .byte $38              // 8 = Small Wooden Chest (ID 128)
+    :EmitDecimalAscii(ITEM_SMALL_WOODEN_CHEST)
     .byte $0d              // RETURN
     .byte $17              // CTRL+W = open wizard menu
     .byte $47              // G = generate item
-    .byte $39              // 9
-    .byte $36              // 6 = first appended ID (96)
+    :EmitDecimalAscii(ITEM_POTION_OF_HEALING)
     .byte $0d              // RETURN
     .byte $17              // CTRL+W = open wizard menu
     .byte $47              // G = generate item
-    .byte $31              // 1
-    .byte $32              // 2
-    .byte $37              // 7 = last appended ID (127)
+    :EmitDecimalAscii(ITEM_STAFF_OF_REMOVE_CURSE)
     .byte $0d              // RETURN
     .byte $49              // I = inventory display
     .byte $20              // SPACE = dismiss inventory view

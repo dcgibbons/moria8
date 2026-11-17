@@ -24,13 +24,13 @@ rf_ammo_id:    .byte 0     // Item type ID of ammo
 rf_launcher:   .byte 0     // Launcher index into rf_range_tbl/rf_mult_tbl
 rf_dist:       .byte 0     // Squares flown
 
-// Per launcher, Short Bow, Light Crossbow, Sling (IT_MISSILE_BASE + 0..2),
-// then Long Bow, Composite Bow, Heavy Crossbow (IT_MISSILE2_BASE + 0..2):
-// range (VMS facts: 25, 25, 20, 30, 35, 35) and damage multiplier (Umoria:
-// x2, x3, x2, x3, x4, x4).
-rf_range_tbl:  .byte 25, 25, 20, 30, 35, 35
-rf_mult_tbl:   .byte 2, 3, 2, 3, 4, 4
-.assert "Launcher tables cover the six launchers", rf_mult_tbl - rf_range_tbl, 3 + IT_MISSILE2_END - IT_MISSILE2_BASE
+// Per launcher, Short Bow, Long Bow, Composite Bow, Light Crossbow,
+// Heavy Crossbow, Sling (IT_MISSILE_BASE + 0..5):
+// range (VMS facts: 25, 30, 35, 25, 35, 20) and damage multiplier (Umoria:
+// x2, x3, x4, x3, x4, x2).
+rf_range_tbl:  .byte 25, 30, 35, 25, 35, 20
+rf_mult_tbl:   .byte 2, 3, 4, 3, 4, 2
+.assert "Launcher tables cover the six contiguous launchers on Page 0", (rf_mult_tbl - rf_range_tbl == IT_LAUNCHER_END - IT_MISSILE_BASE) && ITEM_LONG_BOW == ITEM_SHORT_BOW + 1 && ITEM_COMPOSITE_BOW == ITEM_SHORT_BOW + 2 && ITEM_LIGHT_CROSSBOW == ITEM_SHORT_BOW + 3 && ITEM_HEAVY_CROSSBOW == ITEM_SHORT_BOW + 4 && ITEM_SLING == ITEM_SHORT_BOW + 5 && ITEM_PAGE_SLING == 0, true
 // Strings migrated to Huffman compression (HSTR_RF_* in huffman_data.s)
 
 // ============================================================
@@ -60,15 +60,11 @@ ranged_fire:
     jmp rf_msg_no_weapon        // $80+ = ammo, not a launcher
 !rf_is_launcher:
 
-    // Valid launcher — save ammo type (1/2/3) and the launcher index
+    // Valid launcher — save ammo type (1/2/3) and the launcher index (0..5)
     sta rf_ammo_type
     lda inv_item_id + EQUIP_WEAPON
     sec
     sbc #IT_MISSILE_BASE
-    cmp #IT_MISSILE2_BASE - IT_MISSILE_BASE
-    bcc !rf_index+
-    sbc #IT_MISSILE2_BASE - IT_MISSILE_BASE - 3   // carry set: index 3-5
-!rf_index:
     sta rf_launcher
 
     // 2. Scan inventory (slots 0-21) for matching ammo

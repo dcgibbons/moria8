@@ -5,6 +5,8 @@
 // can reference equipment slot indices and inventory constants.
 // Imported before player.s in the build order.
 
+#import "../platforms/shared/item_catalog/item_ids.s"
+
 // Item Instance Flags
 .const IF_CURSED     = $01
 .const IF_IDENTIFIED = $02
@@ -14,7 +16,7 @@
 
 // Base-255 Paged 9-bit Item ID / Ego Packing (V2 catalog)
 // Logical 0..254 -> page_bit = 0, slot_lo = id (0..254).
-// Logical 255..369 -> page_bit = ITEM_PAGE_BIT ($40), slot_lo = id - 255 (0..114).
+// Logical 255..360 -> page_bit = ITEM_PAGE_BIT ($40), slot_lo = id - 255 (0..105).
 // Packed into inv_ego[34], fi_meta_hi[42], si_meta_hi[128] as (page_bit | ego_id).
 .const ITEM_PAGE_BIT = $40
 .const EGO_ID_MASK   = $3f
@@ -137,62 +139,13 @@
 .const ICAT_SPIKE    = 18
 .const ICAT_CLOAK    = 19
 .const ICAT_JUNK     = 20
-.const ITEM_TYPE_FLASK_OF_OIL = 61
-.const ITEM_TYPE_WOODEN_TORCH = 13
-.const ITEM_TYPE_CLOAK        = 82
 
-// Phase 3 item type constants (IDs 96-127)
-.const ITEM_TYPE_POT_HEALING        = 96
-.const ITEM_TYPE_POT_RESTORATION    = 97
-.const ITEM_TYPE_POT_RESIST_HEAT    = 98
-.const ITEM_TYPE_POT_RESIST_COLD    = 99
-.const ITEM_TYPE_POT_CURE_CRITICAL  = 100
 // Status timers a cure-wounds/Healing potion cures (eff_potion_cure.s masks;
 // bit order follows zp_eff_poison, zp_eff_blind, zp_eff_confuse).
 .const EFF_CURE_POISON  = %001
 .const EFF_CURE_BLIND   = %010
 .const EFF_CURE_CONFUSE = %100
 .const EFF_CURE_ALL     = EFF_CURE_POISON | EFF_CURE_BLIND | EFF_CURE_CONFUSE
-.const ITEM_TYPE_SCR_TELEPORT_LEVEL = 101
-.const ITEM_TYPE_SCR_MAGIC_MAPPING  = 102
-.const ITEM_TYPE_SCR_OBJECT_DETECT  = 103
-.const ITEM_TYPE_SCR_RECHARGING     = 104
-.const ITEM_TYPE_SCR_RUNE_PROTECTION = 105
-.const ITEM_TYPE_SCR_GENOCIDE       = 106
-.const ITEM_TYPE_SCR_MASS_GENOCIDE  = 107
-.const ITEM_TYPE_SCR_DESTRUCTION    = 108
-.const ITEM_TYPE_RING_RESIST_FIRE   = 109
-.const ITEM_TYPE_RING_RESIST_COLD   = 110
-.const ITEM_TYPE_RING_SPEED         = 111
-.const ITEM_TYPE_RING_SEE_INVIS     = 112
-.const ITEM_TYPE_RING_SLAYING       = 113
-.const ITEM_TYPE_RING_STRENGTH      = 24
-.const ITEM_TYPE_WAND_SLOW          = 114
-.const ITEM_TYPE_WAND_STONE_MUD     = 115
-.const ITEM_TYPE_WAND_TELEPORT_AWAY = 116
-.const ITEM_TYPE_WAND_FIRE_BALL     = 117
-.const ITEM_TYPE_WAND_COLD_BALL     = 118
-.const ITEM_TYPE_STAFF_DISPEL_EVIL  = 119
-.const ITEM_TYPE_STAFF_DESTRUCTION  = 120
-.const ITEM_TYPE_STAFF_SPEED        = 121
-.const ITEM_TYPE_PLATE_MAIL         = 81
-.const ITEM_TYPE_MITHRIL_CHAIN      = 122
-.const ITEM_TYPE_MITHRIL_PLATE      = 123
-.const ITEM_TYPE_AMULET_WISDOM      = 124
-.const ITEM_TYPE_AMULET_MAGI        = 125
-.const ITEM_TYPE_POT_NEUTRALIZE     = 126
-.const ITEM_TYPE_STAFF_REMOVE_CURSE = 127
-
-// Chest item type constants (IDs 128-134; docs/CHEST_DESIGN.md)
-.const ITEM_TYPE_CHEST_SMALL_WOOD  = 128
-.const ITEM_TYPE_CHEST_LARGE_WOOD  = 129
-.const ITEM_TYPE_CHEST_SMALL_IRON  = 130
-.const ITEM_TYPE_CHEST_LARGE_IRON  = 131
-.const ITEM_TYPE_CHEST_SMALL_STEEL = 132
-.const ITEM_TYPE_CHEST_LARGE_STEEL = 133
-.const ITEM_TYPE_CHEST_RUINED      = 134
-.const ITEM_TYPE_IRON_SPIKE        = 135
-.const ITEM_TYPE_SCR_PHASE_DOOR    = 136   // VMS Scroll of Phase Door (teleport(10))
 
 // Chest p1 state bits (docs/CHEST_DESIGN.md state layout)
 .const CHEST_P1_LOCKED      = $01
@@ -274,7 +227,7 @@
 
 // Master Item Type Catalog Constants (match item_hot_tables.s)
 #define ITEM_DEFS_CONSTS_INCLUDED
-.const ITEM_TYPE_COUNT      = 370
+.const ITEM_TYPE_COUNT      = 361
 .const ITEM_PAGE_SIZE       = 255
 .const EGO_COUNT            = 55
 .const FLAVOUR_COUNT        = 174
@@ -283,58 +236,15 @@
 .const FLAVOUR_RING_COUNT   = 30
 .const FLAVOUR_WAND_COUNT   = 24
 .const FLAVOUR_STAFF_COUNT  = 25
-.const IT_AC_EXTRA_COUNT    = 11
-
-// VMS Moria attack wands (values.inc, wands.inc; IDs 153-156 on Page 0)
-.const ITEM_TYPE_WAND_FIRE_BOLT      = 153
-.const ITEM_TYPE_WAND_DRAIN_LIFE     = 154
-.const ITEM_TYPE_WAND_LIGHTNING_BALL = 155
-.const ITEM_TYPE_WAND_ACID_BALL      = 156
-// VMS Moria rings of Lordly Protection and the Amulet of Resist Acid
-.const ITEM_TYPE_RING_LORDLY_FIRE = 146
-.const ITEM_TYPE_RING_LORDLY_ACID = 147
-.const ITEM_TYPE_RING_LORDLY_COLD = 148
-.const ITEM_TYPE_AMULET_RESIST_ACID = 149
-// VMS Moria crowns (helms that may roll EGO_MAGI)
-.const ITEM_TYPE_CROWN_SILVER = 150
-.const ITEM_TYPE_CROWN_GOLDEN = 151
-.const ITEM_TYPE_CROWN_JEWEL  = 152
-// VMS Moria potions of gain stat (Page 0)
-.const ITEM_TYPE_POT_GAIN_STR = 140
-.const ITEM_TYPE_POT_GAIN_CHR = 145
-// Page 1 IDs (logical 255..369 -> slot_lo = id - 255 with item_cur_page = ITEM_PAGE_BIT)
-.const ITEM_TYPE_AMMO_IRON_SHOT     = 188
-.const ITEM_TYPE_HARD_BISCUIT       = 243
-.const ITEM_TYPE_FINE_ALE           = 244
-.const ITEM_TYPE_BEEF_JERKY         = 245
-.const ITEM_TYPE_FINE_WINE          = 246
-.const ITEM_TYPE_POT_WATER          = 271
-.const ITEM_TYPE_POT_APPLE_JUICE    = 273
-.const ITEM_TYPE_POT_SLIME_JUICE    = 274
-.const ITEM_TYPE_POT_BOLDNESS       = 276
-.const ITEM_TYPE_POT_SLOW_POISON    = 277
-.const ITEM_TYPE_POT_RESTORE_STR    = 286
-.const ITEM_TYPE_POT_RESTORE_INT    = 287
-.const ITEM_TYPE_POT_RESTORE_WIS    = 288
-.const ITEM_TYPE_POT_RESTORE_CHR    = 289
-.const ITEM_TYPE_POT_RESTORE_DEX    = 290
-.const ITEM_TYPE_POT_RESTORE_CON    = 291
-.const ITEM_TYPE_POT_RESTORE_LIFE   = 292
-.const ITEM_TYPE_SCR_TREASURE_DETECT = 295
-.const ITEM_TYPE_SCR_BLESSING       = 298
-.const ITEM_TYPE_SCR_DETECT_INVIS   = 299
-.const ITEM_TYPE_SCR_ENCH_WEAP_HIT  = 308
-.const ITEM_TYPE_SCR_ENCH_WEAP_DAM  = 309
-.const ITEM_TYPE_ELVISH_WAYBREAD_L  = 249
-.const ITEM_TYPE_ELVISH_WAYBREAD_H  = 365
-.const ITEM_TYPE_STAFF_EARTHQUAKES  = 362
+.const IT_AC_EXTRA_COUNT    = 9
 
 .const ITEM_ID_CAPACITY = 376
 .const ID_KNOWN_BYTES   = 47
 .assert "ID_KNOWN_BYTES covers ITEM_TYPE_COUNT", ID_KNOWN_BYTES * 8 >= ITEM_TYPE_COUNT, true
 .assert "ID_KNOWN_BYTES matches ITEM_ID_CAPACITY", ID_KNOWN_BYTES, floor((ITEM_ID_CAPACITY + 7) / 8)
+.assert "Page 0 ends at Hard Leather Boots (254) and Page 1 starts at Leather Gloves (255)", ITEM_HARD_LEATHER_BOOTS == ITEM_PAGE_SIZE - 1 && ITEM_LEATHER_GLOVES == ITEM_PAGE_SIZE && ITEM_BROKEN_STICK == ITEM_TYPE_COUNT - 1, true
 
-// Active Base-255 page bit for paged helpers ($00 for 0..254, ITEM_PAGE_BIT=$40 for 255..369).
+// Active Base-255 page bit for paged helpers ($00 for 0..254, ITEM_PAGE_BIT=$40 for 255..360).
 item_cur_page: .byte 0
 
 // Known-item identification state (Save Format V2, 47 bytes = 376 bits)
@@ -391,22 +301,23 @@ id_known_test:
 
 // ============================================================
 // piq_quaff_identify — Mark paged item (item_cur_page, X) identified on quaff
-// Heal-family potions (#17, #25, #96, #100 on Page 0) at full HP are a silent
-// no-op: no message and no identification. Everything else identifies on quaff.
+// Heal-family potions on Page 0 at full HP are a silent no-op: no message and
+// no identification. Everything else identifies on quaff.
 // Input: X = item slot_lo, item_cur_page ($00 or $40). Clobbers: A, Y (X preserved).
 // ============================================================
 #if HAL_PLATFORM_QUAFF_IDENTIFY_RESIDENT
+.assert "Heal-family potions live on Page 0", ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS == 0 && ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS == 0 && ITEM_PAGE_POTION_OF_HEALING == 0 && ITEM_PAGE_POTION_OF_CURE_CRITICAL_WOUNDS == 0, true
 piq_quaff_identify:
     bit item_cur_page
     bvs !pqi_ident+             // All Page 1 potions identify unconditionally on quaff
     txa
-    cmp #17                     // Cure Light Wounds
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     beq !pqi_heal+
-    cmp #25                     // Cure Serious Wounds
+    cmp #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     beq !pqi_heal+
-    cmp #ITEM_TYPE_POT_HEALING
+    cmp #ITEM_SLOT_POTION_OF_HEALING
     beq !pqi_heal+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    cmp #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     beq !pqi_heal+
 !pqi_ident:
     jmp id_known_set            // (item_cur_page, X)

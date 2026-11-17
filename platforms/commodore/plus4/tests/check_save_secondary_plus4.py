@@ -4,11 +4,15 @@
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER  # noqa: E402
+
 SLOTS = 34
+EGO_DEFENDER = 6
 # Header (8) + player_data (111) + player_background (160) + ZP_STATE (32) + eff_fear_timer (1) + ZP_RNG (4)
 INV_OFFSET = 8 + 111 + 160 + 32 + 1 + 4
-EXPECTED_CLOAK = [0xFF, 0, 0, 0, 0, 0, 0, 0]
-EXPECTED_SECONDARY = [2, 1, 0, 3, 4, 0, 2, 6]
+EXPECTED_CLOAK = [FI_EMPTY, 0, 0, 0, 0, 0, 0, 0]
+EXPECTED_SECONDARY = [ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | EGO_DEFENDER]
 
 
 def main() -> int:
@@ -16,7 +20,7 @@ def main() -> int:
         print(f"Usage: {sys.argv[0]} <save.seq> [version]", file=sys.stderr)
         return 2
     path = Path(sys.argv[1])
-    version = int(sys.argv[2], 0) if len(sys.argv) == 3 else 0x21
+    version = int(sys.argv[2], 0) if len(sys.argv) == 3 else 0x22
     data = path.read_bytes()
     if len(data) < INV_OFFSET + 8 * SLOTS:
         print(f"FAIL: save too short ({len(data)} bytes)", file=sys.stderr)

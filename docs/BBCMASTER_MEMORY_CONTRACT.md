@@ -114,8 +114,9 @@ shadow and `beeb_acccon_shadow` in platform ZP):
    * `disk_marker_init` (and `tools/make_ssd.py --blank-disk` for uninitialized
      media) initializes a Save Disk on `save_device` (`:0`..`:3`) with `MORIAID`
      (`"M8SAVE"`), and `hal_storage_open` pre-allocates a 1-sector (`256` B,
-     `$0100`) `HISCORE` file and contiguous 64-sector (`16,384` B, `$4000`) save
-     slot files (`SAVE0`..`SAVE3`) via `OSFILE A=$07` on first write.
+     `$0100`) `HISCORE` file and contiguous 68-sector (`17,408` B, `$4400`) Save
+     Format V2 (`SAVE_VERSION = $22`, `17,161` B stream) slot files (`SAVE0`..`SAVE3`)
+     via `OSFILE A=$07` on first write.
    * When opening an existing save slot for writing, `save_stream.s` opens it
      with **`OSFIND A=$C0` (open for random-access read/write update)** and
      writes sequential chunks at `stream_off0..2` (`OSGBPB A=$01`) so saves

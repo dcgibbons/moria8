@@ -484,7 +484,7 @@ test_start:
     // stays worn with no light (VMS moria.inc, Umoria playerUpdateLight).
     jsr reset_state
     ldx #EQUIP_LIGHT
-    lda #13
+    lda #ITEM_SLOT_WOODEN_TORCH
     sta inv_item_id,x
     lda #3
     sta inv_p1,x
@@ -510,7 +510,7 @@ test_start:
     sta light_tick_counter
     jsr turn_tick_light
     lda inv_item_id + EQUIP_LIGHT
-    cmp #13                         // still worn
+    cmp #ITEM_SLOT_WOODEN_TORCH                         // still worn
     bne !t4_fail+
     lda inv_p1 + EQUIP_LIGHT
     bne !t4_fail+
@@ -784,8 +784,12 @@ t18_test:
     sta zp_player_lvl
     lda #$0f
     sta zp_turn_lo
-    lda #5
+    lda #ITEM_SLOT_MACE
     sta inv_item_id + 1
+    .if (ITEM_PAGE_MACE != 0) {
+        lda #ITEM_PAGE_MACE
+        sta inv_ego + 1
+    }
     lda #1
     sta inv_p1 + 1
     lda #1
@@ -815,8 +819,12 @@ t19_test:
     sta zp_player_lvl
     lda #$0f
     sta zp_turn_lo
-    lda #5
+    lda #ITEM_SLOT_MACE
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_MACE != 0) {
+        lda #ITEM_PAGE_MACE
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_p1 + EQUIP_WEAPON
     lda #0
@@ -848,8 +856,12 @@ t20_test:
     sta zp_player_lvl
     lda #$0f
     sta zp_turn_lo
-    lda #5
+    lda #ITEM_SLOT_MACE
     sta inv_item_id + 1
+    .if (ITEM_PAGE_MACE != 0) {
+        lda #ITEM_PAGE_MACE
+        sta inv_ego + 1
+    }
     lda #2
     sta inv_p1 + 1
     lda #0
@@ -881,7 +893,7 @@ t21_test:
     sta zp_player_lvl
     lda #$0f
     sta zp_turn_lo
-    lda #13
+    lda #ITEM_SLOT_WOODEN_TORCH
     sta inv_item_id + EQUIP_LIGHT
     lda #10
     sta inv_p1 + EQUIP_LIGHT

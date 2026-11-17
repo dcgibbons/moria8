@@ -198,6 +198,7 @@ wizard_generate_item_execute:
     jmp !wiz_try_floor+
 
 !wiz_make_gold:
+    .assert "All gold items live on Page 0", ITEM_PAGE_GOLD_SMALL == 0 && ITEM_PAGE_GOLD_MITHRIL == 0, true
     lda fi_add_id
     bne !wiz_large_gold+
     lda #25

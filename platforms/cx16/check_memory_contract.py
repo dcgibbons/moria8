@@ -11,6 +11,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools"))
+import check_item_catalog_ports  # noqa: E402
 BUILD = ROOT / "build" / "cx16"
 MEMORY_S = Path(__file__).resolve().parent / "memory.s"
 MAIN_SYM = BUILD / "main.sym"
@@ -149,6 +152,13 @@ def check_artifacts(build_dir: Path = BUILD) -> int:
         f"auxdata_free={aux_free}B"
     )
     checks += 1
+
+    if build_dir.resolve() == BUILD.resolve():
+        cat_errs = check_item_catalog_ports.verify_port("cx16")
+        if cat_errs:
+            raise ContractViolation("item catalog 0..360 check failed: " + "; ".join(cat_errs[:4]))
+        print("ASSERT item-catalog-0..360 PASS 361 items")
+        checks += 1
 
     print(f"RESULT {checks} asserts 0 failures")
     return 0

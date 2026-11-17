@@ -4508,7 +4508,7 @@ test_start:
     lda #0
     sta door_state_count
     // Two spikes in carried slot 0
-    lda #ITEM_TYPE_IRON_SPIKE
+    lda #ITEM_SLOT_IRON_SPIKE
     sta inv_item_id
     lda #2
     sta inv_qty
@@ -4557,7 +4557,7 @@ test_start:
     sta door_state_y
     lda #15
     sta door_state_val          // Locked 15
-    lda #ITEM_TYPE_IRON_SPIKE
+    lda #ITEM_SLOT_IRON_SPIKE
     sta inv_item_id
     lda #1
     sta inv_qty                 // Last spike
@@ -4723,7 +4723,7 @@ test_start:
     lda #10
     sta df_target_x
     sta df_target_y
-    lda #ITEM_TYPE_IRON_SPIKE
+    lda #ITEM_SLOT_IRON_SPIKE
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -4741,7 +4741,7 @@ test_start:
     cmp #1
     bne !t64_fail+
     lda inv_item_id
-    cmp #ITEM_TYPE_IRON_SPIKE
+    cmp #ITEM_SLOT_IRON_SPIKE
     bne !t64_fail+
     lda #$01
     sta tc_results + 63

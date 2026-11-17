@@ -41,9 +41,9 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$1000-$1fff` | UI overlay cache |
 | `$2000-$2fff` | HELP overlay cache |
 | `$3000-$3fff` | ITEMS overlay cache |
-| `$4000-$730b` | active 198x66 live map span (`13,068 B` — full `MAP_SIZE` on C128; also used at cold boot before title/dungeon generation as the transient `7,573 B` `$4000-$5d94` staging buffer for streaming `ITEM.CAT` into 16 KB VDC RAM under `C128M-015`) |
+| `$4000-$730b` | active 198x66 live map span (`13,068 B` — full `MAP_SIZE` on C128; also used at cold boot before title/dungeon generation as the transient `7,478 B` `$4000-$5d35` staging buffer for streaming `ITEM.CAT` into 16 KB VDC RAM under `C128M-015`) |
 | `$730c-$73ff` | reserved unowned gap between map and DB regions (`244 B`) |
-| `$7400-$7a5f` | DB/data region (`Bank1DB`, `1,632 B`, `C128M-013`/`C128M-015`): `recall[279]` (`1,116 B` at `$7400-$785b`) + `zp_save_buf` (`142 B` at `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free to `$7a5f`), accessed through `mmu_safe_db_read/write_ptr0/1`. Replaces the retired `128.names` payload (`ITEM.CAT` serves all `370` item templates and `55` ego names directly from 16 KB VDC RAM on disk builds or MD128 cartridge ROM on `.crt` builds; C128 does not use REU, `reu_present = 0`) |
+| `$7400-$7a5f` | DB/data region (`Bank1DB`, `1,632 B`, `C128M-013`/`C128M-015`): `recall[279]` (`1,116 B` at `$7400-$785b`) + `zp_save_buf` (`142 B` at `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free to `$7a5f`), accessed through `mmu_safe_db_read/write_ptr0/1`. Replaces the retired `128.names` payload (`ITEM.CAT` serves all `361` VMS item templates and `55` ego names directly from 16 KB VDC RAM on disk builds or MD128 cartridge ROM on `.crt` builds; C128 does not use REU, `reu_present = 0`) |
 | `$7a60-$9567` | the monster catalog (C128M-007): `$7a60-$7e5f` the name pool, 32 species slots x 32 B written at species fetch; `$7e60-$9542` `128.cat`, the catalog's 21 fields x 279 creatures, loaded at boot; 37 B spare. Until 2026-11-02 the tier cache, 6920 bytes |
 | `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
 | `$9800-$9cff` | MODAL small-overlay cache |
@@ -90,7 +90,7 @@ boundary (`item_pickup`, `run_initialize`, `hal_item_cat_read_byte`, and
 | `$1000-$10ff` | `256 B` | `dungeon_render_vdc.s` overlap-safe right-scroll scratch (`RVSD_SCRATCH_CHAR = $1000`, `RVSD_SCRATCH_ATTR = $1080`, `78 B` each) |
 | `$1100-$1fff` | `3,840 B` | `ITEM.CAT[0..3839]` (`VDC_ITEM_CAT_LO_BASE..END`, `C128M-015`, disk builds; untouched on `.crt` which reads MD128 ROM directly) |
 | `$2000-$3fff` (bytes `0..7` / 16 B cell) | `4,096 B` | Live 8x8 glyph rasters across all `512` character cells (`$2000-$2fff` Set 0 uppercase/graphics, `$3000-$3fff` Set 1 mixed-case gameplay font; `8` scanlines/row uses only cell bytes `0..7`) |
-| `$2000-$3fff` (bytes `8..15` / 16 B cell) | `4,096 B` | Unused scanline tail in 8-scanline text mode: `ITEM.CAT[3840..7572]` (`3,733 B` across `467` cells at `$2008-$200f, $2018-$201f, ..., $3d28-$3d2c`, `363 B` spare to `$3fff`, `C128M-015`). Populated once at boot (`c128_load_core_residents`) strictly AFTER any `JDLCHR` (`$ff62`) font restore |
+| `$2000-$3fff` (bytes `8..15` / 16 B cell) | `4,096 B` | Unused scanline tail in 8-scanline text mode: `ITEM.CAT[3840..7477]` (`3,638 B` across `455` cells at `$2008-$200f, $2018-$201f, ..., $3c68-$3c6d`, `458 B` spare to `$3fff`, `C128M-015`). Populated once at boot (`c128_load_core_residents`) strictly AFTER any `JDLCHR` (`$ff62`) font restore |
 
 ## Required Change Record
 

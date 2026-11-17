@@ -337,20 +337,20 @@ tx_row_hi: .byte >SCREEN_RAM, >(SCREEN_RAM + 40)
 
 // Records: id, qty, p1, to_hit, to_dam, to_ac, flags, ego
 rec_empty:         .byte FI_EMPTY, 0, 0, 0, 0, 0, 0, 0
-rec_mace:          .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED, 0
-rec_mace_cursed:   .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, 0
-rec_dagger:        .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, EGO_DEFENDER
-rec_dagger_cursed: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER
-rec_dagger_ac:     .byte 2, 1, 0, 3, 4, 7, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER
-rec_dagger_ac_uncursed: .byte 2, 1, 0, 3, 4, 7, IF_IDENTIFIED, EGO_DEFENDER
-rec_potion:        .byte 17, 1, 0, 0, 0, 0, 0, 0
-rec_armor:         .byte 7, 1, 0, 0, 0, 2, IF_IDENTIFIED, 0
-rec_armor_cursed:  .byte 7, 1, 0, 0, 0, 2, IF_IDENTIFIED | IF_CURSED, 0
-rec_robe:          .byte 6, 1, 0, 0, 0, 0, 0, 0
-rec_torch_cursed:  .byte ITEM_TYPE_WOODEN_TORCH, 1, 100, 0, 0, 0, IF_CURSED, 0
-rec_torches:       .byte ITEM_TYPE_WOODEN_TORCH, 2, 200, 0, 0, 0, 0, 0
-rec_torch_one:     .byte ITEM_TYPE_WOODEN_TORCH, 1, 200, 0, 0, 0, 0, 0
-rec_torch_old:     .byte ITEM_TYPE_WOODEN_TORCH, 1, 100, 0, 0, 0, 0, 0
+rec_mace:          .byte ITEM_SLOT_MACE, 1, 0, 1, 0, 0, IF_IDENTIFIED, ITEM_PAGE_MACE
+rec_mace_cursed:   .byte ITEM_SLOT_MACE, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, ITEM_PAGE_MACE
+rec_dagger:        .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_dagger_cursed: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_dagger_ac:     .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 7, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_dagger_ac_uncursed: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 7, IF_IDENTIFIED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_potion:        .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
+rec_armor:         .byte ITEM_SLOT_LEATHER_ARMOR, 1, 0, 0, 0, 2, IF_IDENTIFIED, ITEM_PAGE_LEATHER_ARMOR
+rec_armor_cursed:  .byte ITEM_SLOT_LEATHER_ARMOR, 1, 0, 0, 0, 2, IF_IDENTIFIED | IF_CURSED, ITEM_PAGE_LEATHER_ARMOR
+rec_robe:          .byte ITEM_SLOT_ROBE, 1, 0, 0, 0, 0, 0, ITEM_PAGE_ROBE
+rec_torch_cursed:  .byte ITEM_SLOT_WOODEN_TORCH, 1, 100, 0, 0, 0, IF_CURSED, ITEM_PAGE_WOODEN_TORCH
+rec_torches:       .byte ITEM_SLOT_WOODEN_TORCH, 2, 200, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
+rec_torch_one:     .byte ITEM_SLOT_WOODEN_TORCH, 1, 200, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
+rec_torch_old:     .byte ITEM_SLOT_WOODEN_TORCH, 1, 100, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
 
 // Messages, as the player reads them
 s_no_weapons: .text "No weapons to exchange." ; .byte 0
@@ -558,7 +558,7 @@ test_start:
     jsr item_takeoff
     :EXPECT_CS()
     :EXPECT_SLOT(EQUIP_SECONDARY, rec_empty)
-    :EXPECT_MEM(inv_item_id + 0, 17)
+    :EXPECT_MEM(inv_item_id + 0, ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS)
     :END_TEST(8)
 
     // ==========================================================

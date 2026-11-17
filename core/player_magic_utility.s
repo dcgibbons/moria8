@@ -89,7 +89,7 @@ pmu_create_food:
     bcc !ecf_free+
     jsr floor_item_remove
 !ecf_free:
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     sta fi_add_id
     jsr fi_add_clear_plain_meta
     lda #1
@@ -209,7 +209,7 @@ eff_holy_word:
     ldx #HSTR_PIQ_VERY_GOOD
     jsr huff_print_msg
     // The stats restored (Umoria playerStatRestore) as a Potion of
-    // Restoration does: player_calc_stats, which refreshes the ZP stat
+    // Restore <Stat> does: player_calc_stats, which refreshes the ZP stat
     // mirrors too. No player_sync_to_zp: the player record is refreshed only
     // at save and load, and copying it back undid the heal, the position,
     // mana and food with the last save's (C64 Balrog queue, 2026-11-11: HP

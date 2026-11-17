@@ -406,6 +406,9 @@ check-hal-boundaries:
 	cd ../.. && python3 -B tools/check_overlay_calls.py
 	cd ../.. && python3 -B tools/check_overlay_fallthrough.py --selftest
 	cd ../.. && python3 -B tools/check_overlay_fallthrough.py
+	cd ../.. && python3 -B tools/check_raw_item_ids.py --selftest
+	cd ../.. && python3 -B tools/check_raw_item_ids.py
+	cd ../.. && python3 -B tools/build_item_catalog.py --selftest
 
 # ── C64 build rules ───────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)

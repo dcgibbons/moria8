@@ -294,9 +294,10 @@ test_start:
     sta zp_store_idx
     jsr store_pick_item
     // Returned (item_cur_page, A) should be an armor-category item (not gold!)
+    .assert "Gold occupies 0..19 on Page 0", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_MITHRIL == 19 && ITEM_PAGE_GOLD_MITHRIL == 0, true
     bit item_cur_page
     bvs !t4_id_ok+
-    cmp #2                      // Must be >= 2 (skip gold types 0-1)
+    cmp #ITEM_SLOT_GOLD_MITHRIL + 1                    // Must be >= 20 on Page 0 (skip gold types 0-19)
     bcc !t4_fail+
 !t4_id_ok:
     jsr item_get_category_a
@@ -419,7 +420,11 @@ test_start:
     sta player_data + PL_CHR_CUR
     lda #0
     sta sb_item_p1              // No enchantment
-    lda #2                      // Dagger
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     jsr calc_buy_price
     lda sb_price_lo
     cmp #10
@@ -441,7 +446,11 @@ test_start:
     sta player_data + PL_CHR_CUR
     lda #0
     sta sb_item_p1              // No enchantment
-    lda #2                      // Dagger
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     jsr calc_buy_price
     lda sb_price_lo
     cmp #13
@@ -466,7 +475,11 @@ test_start:
     sta sb_item_to_hit
     sta sb_item_to_dam
     sta sb_item_to_ac
-    lda #2                      // Dagger (base 10)
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (base 10)
     jsr calc_sell_price
     lda sb_price_lo
     cmp #5
@@ -644,8 +657,12 @@ test_start:
     inx
     jmp !t17_clr-
 !t17_clr_done:
-    lda #2                      // Dagger in slot 0
+    lda #ITEM_SLOT_DAGGER                      // Dagger in slot 0
     sta si_item_id + 0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + 0
+    }
     lda #0
     sta zp_store_idx
     jsr store_find_empty_slot
@@ -671,7 +688,11 @@ test_start:
     lda #0
     sta sb_item_p1
     sta sb_item_to_ac
-    lda #2                      // Dagger (base 10)
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (base 10)
     jsr calc_buy_price
     lda sb_price_lo
     cmp #<410
@@ -698,7 +719,11 @@ test_start:
     lda #0
     sta sb_item_p1
     sta sb_item_to_ac
-    lda #2                      // Dagger (base 10)
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (base 10)
     jsr calc_sell_price
     lda sb_price_lo
     cmp #<405
@@ -724,7 +749,11 @@ test_start:
     sta sb_item_to_hit
     sta sb_item_to_dam
     sta sb_item_to_ac
-    lda #2                      // Dagger (base 10)
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (base 10)
     jsr calc_buy_min_price
     lda sb_price_lo
     cmp #10
@@ -751,7 +780,11 @@ test_start:
     lda #0
     sta sb_item_p1
     sta sb_item_to_ac
-    lda #2                      // Dagger
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     jsr calc_buy_min_price
     lda sb_price_lo
     cmp #<410
@@ -823,7 +856,11 @@ test_start:
     sta sb_item_to_hit
     sta sb_item_to_dam
     sta sb_item_to_ac
-    lda #2                      // Dagger (base 10)
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (base 10)
     jsr calc_bm_buy_price
     lda sb_price_lo
     cmp #30
@@ -843,8 +880,16 @@ test_start:
     // ============================================================
     lda #0
     sta sb_item_p1              // No enchantment
-    lda #2                      // Dagger (base 10)
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta sb_item_ego
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (base 10)
     jsr calc_bm_sell_price
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+        sta sb_item_ego
+    }
     lda sb_price_lo
     cmp #1
     bne !t24_fail+
@@ -1046,8 +1091,12 @@ test_start:
     lda #0
     sta zp_store_idx
     sta sb_abs_slot
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id + 0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + 0
+    }
     lda #0
     sta si_p1 + 0
     sta sb_price_hi
@@ -1080,8 +1129,12 @@ test_start:
     lda #0
     sta zp_store_idx
     sta sb_abs_slot
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id + 0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + 0
+    }
     lda #0
     sta si_p1 + 0
     sta sb_price_hi
@@ -1175,8 +1228,12 @@ test_start:
     ldx #STORE_BM
     lda store_base_idx,x
     tax
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi,x
+    }
     lda #1
     sta si_qty,x
     lda #<script_buy_yes
@@ -1184,7 +1241,7 @@ test_start:
     jsr set_test_input_script
     jsr store_buy
     lda inv_item_id + 0
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t35_fail+
     lda hg_insults
     cmp #1
@@ -1212,8 +1269,12 @@ test_start:
     sta hg_insults
     lda #50
     sta player_data + PL_GOLD_0
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id + 0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + 0
+    }
     lda #1
     sta si_qty + 0
     lda #<script_buy_yes
@@ -1221,7 +1282,7 @@ test_start:
     jsr set_test_input_script
     jsr store_buy
     lda inv_item_id + 0
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t36_fail+
     lda hg_insults
     cmp #1
@@ -1244,8 +1305,12 @@ test_start:
     lda #0
     sta zp_store_idx
     sta sb_abs_slot
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id + 0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + 0
+    }
     lda #0
     sta si_p1 + 0
     sta sb_price_hi
@@ -1282,7 +1347,7 @@ test_start:
     ldx #STORE_BM
     lda store_base_idx,x
     tax
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id,x
     lda #1
     sta si_qty,x
@@ -1294,14 +1359,14 @@ test_start:
     sta si_to_ac,x
     lda #IF_IDENTIFIED
     sta si_meta,x
-    lda #3
+    lda #(3 | ITEM_PAGE_DAGGER)
     sta si_meta_hi,x
     lda #<script_buy_yes
     ldy #>script_buy_yes
     jsr set_test_input_script
     jsr store_buy
     lda inv_item_id + 0
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t38_fail+
     lda inv_to_hit + 0
     cmp #4
@@ -1313,7 +1378,7 @@ test_start:
     and #IF_IDENTIFIED
     beq !t38_fail+
     lda inv_ego + 0
-    cmp #3
+    cmp #(3 | ITEM_PAGE_DAGGER)
     bne !t38_fail+
     lda #$01
     jmp !t38_store+
@@ -1328,7 +1393,7 @@ test_start:
     jsr reset_haggle_fixture
     lda #STORE_BM
     sta zp_store_idx
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
@@ -1340,7 +1405,7 @@ test_start:
     sta inv_to_ac + 0
     lda #IF_IDENTIFIED
     sta inv_flags + 0
-    lda #4
+    lda #(4 | ITEM_PAGE_DAGGER)
     sta inv_ego + 0
     lda #<script_sell_yes
     ldy #>script_sell_yes
@@ -1350,7 +1415,7 @@ test_start:
     lda store_base_idx,x
     tax
     lda si_item_id,x
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t39_fail+
     lda si_to_hit,x
     cmp #6
@@ -1379,7 +1444,9 @@ test_start:
     // ============================================================
     // Test 40: sro_set_p1 initializes light fuel for store stock
     // ============================================================
-    lda #13                     // Wooden Torch
+    lda #0
+    sta item_cur_page
+    lda #ITEM_SLOT_WOODEN_TORCH                     // Wooden Torch
     sta si_item_id + 0
     lda #0
     sta srr_abs_slot
@@ -1389,7 +1456,7 @@ test_start:
     cmp #134
     bne !t40_fail+
 
-    lda #14                     // Brass Lantern
+    lda #ITEM_SLOT_BRASS_LANTERN                     // Brass Lantern
     sta si_item_id + 1
     lda #1
     sta srr_abs_slot
@@ -1399,7 +1466,7 @@ test_start:
     cmp #LANTERN_MAX_CHARGES
     bne !t40_fail+
 
-    lda #ITEM_FLASK_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     sta si_item_id + 2
     lda #2
     sta srr_abs_slot
@@ -1421,7 +1488,7 @@ test_start:
     jsr reset_haggle_fixture
     lda #0
     sta zp_store_idx
-    lda #57                     // Spellbook The Mages Guide to Power
+    lda #ITEM_SLOT_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER                     // Spellbook The Mages Guide to Power
     sta si_item_id + 0
     lda #1
     sta si_qty + 0
@@ -1501,11 +1568,19 @@ test_start:
     lda #0
     sta sb_price_hi
     sta sb_item_to_ac
-    lda #ITEM_TYPE_AMULET_WISDOM
+    lda #ITEM_SLOT_AMULET_OF_WISDOM
     sta sb_item_type
     lda #1
     sta sb_item_p1
+    .if (ITEM_PAGE_AMULET_OF_WISDOM != 0) {
+        lda #ITEM_PAGE_AMULET_OF_WISDOM
+        sta item_cur_page
+    }
     jsr price_add_p1_bonus
+    .if (ITEM_PAGE_AMULET_OF_WISDOM != 0) {
+        lda #0
+        sta item_cur_page
+    }
     lda sb_price_lo
     cmp #200
     bne !t42_fail+
@@ -1539,7 +1614,7 @@ test_start:
     bcc !t43a_bad+
     bit item_cur_page
     bvs !t43a_chk_cat+
-    cmp #ITEM_TYPE_CHEST_RUINED
+    cmp #ITEM_SLOT_RUINED_CHEST
     beq !t43a_bad+
 !t43a_chk_cat:
     jsr item_get_category_a
@@ -1596,17 +1671,15 @@ test_start:
 !t43c_ok:
 
     // Part D: every store fallback is implemented and sold by its store.
-    lda #0
-    sta item_cur_page
     ldx #0
 !t43c_loop:
     stx zp_store_idx
     stx t43_cursor
+    lda store_fallback_page,x
+    sta item_cur_page
     lda store_fallback,x
-    cmp #2
+    jsr t43_check_cur_valid
     bcc !t43_fail_j+
-    cmp #ITEM_PAGE_SIZE
-    bcs !t43_fail_j+
     jsr item_get_category_a
     jsr check_store_category
     bcs !t43c_next+
@@ -1617,6 +1690,8 @@ test_start:
     inx
     cpx #8
     bcc !t43c_loop-
+    lda #0
+    sta item_cur_page
 
     // Part E: production store_pick_item yields implemented IDs for every
     // store, sellable to it where it stocks by category. The General Store,
@@ -1672,9 +1747,9 @@ test_start:
 !t43f_check_pages:
     lda #0
     sta item_cur_page
-    ldx #2
+    ldx #0
 !t43f_p0_loop:
-    cpx #ITEM_TYPE_CHEST_RUINED
+    cpx #ITEM_SLOT_RUINED_CHEST
     beq !t43f_p0_absent+    // Ruined chest never generates
     txa
     jsr item_get_category_a
@@ -1729,13 +1804,13 @@ test_start:
     // VMS randint(3) is 1..3, so 2..4 go: STORE_MIN_KEEP daggers (never
     // General Store stock) in store 0 leave STORE_MIN_KEEP - 4 .. - 2.
     // ============================================================
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     ldx #STORE_MIN_KEEP
     jsr t44_fill_store0
     lda #0
     sta zp_store_idx
     jsr store_restock_one
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     jsr t44_count_id
     cmp #STORE_MIN_KEEP - 4
     bcc !t44_fail+
@@ -1753,13 +1828,13 @@ test_start:
     // 16 slots it never passes store$max_inven (20), so it sells off
     // 1+randint(3) (2..4) of its 16 daggers and restocks into the room left.
     // ============================================================
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     ldx #STORE_MAX_ITEMS
     jsr t44_fill_store0
     lda #0
     sta zp_store_idx
     jsr store_restock_one
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     jsr t44_count_id
     cmp #STORE_MAX_ITEMS - 4
     bcc !t45_fail+
@@ -1892,7 +1967,7 @@ test_start:
     ldy #>t48_alchemy_set
     jsr t48_check_store
     lda t48_p1_seen
-    bne !t48_alc_ok+
+    beq !t48_alc_ok+
     lda #$00
     sta tc_results + 47
 !t48_alc_ok:
@@ -1900,7 +1975,7 @@ test_start:
     ldy #0
 !t48_pd:
     lda sro_alchemy_choice,x
-    cmp #ITEM_TYPE_SCR_PHASE_DOOR
+    cmp #ITEM_SLOT_SCROLL_OF_PHASE_DOOR
     bne !t48_pd_next+
     iny
 !t48_pd_next:
@@ -1913,22 +1988,24 @@ test_start:
 !t48_pd_ok:
 
     // ============================================================
-    // Test 49: the CHR markup's product needs 24 bits. Mithril Chain Mail
-    // (600 gp) at CHR 3 is 600 x 130 / 100 = 780; dropping the top byte of
-    // 78,000 priced it at 124, under the haggle's base-cost floor, so the
-    // shown price was refused (M5a playtest: a Gnome offered 40 gp for it).
+    // Test 49: the CHR markup's product needs 24 bits. Augmented Chain Mail
+    // (675 gp) at CHR 3 is 675 x 130 / 100 = 877; dropping the top byte of
+    // 87,750 priced it at 222, under the haggle's base-cost floor, so the
+    // shown price was refused.
     // ============================================================
     lda #3
     sta player_data + PL_CHR_CUR
     lda #0
     sta sb_item_p1
-    lda #122                    // Mithril Chain Mail
+    lda #ITEM_PAGE_AUGMENTED_CHAIN_MAIL
+    sta sb_item_ego
+    lda #ITEM_SLOT_AUGMENTED_CHAIN_MAIL
     jsr calc_buy_price
     lda sb_price_lo
-    cmp #<780
+    cmp #<877
     bne !t49_fail+
     lda sb_price_hi
-    cmp #>780
+    cmp #>877
     bne !t49_fail+
     lda #$01
     jmp !t49_store+
@@ -1942,22 +2019,30 @@ test_start:
     // second Flask of Oil adds to the first; two Daggers keep two slots.
     // ============================================================
     jsr reset_haggle_fixture
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldx #0
     ldy #2
     jsr t50_put
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldx #3
     ldy #1
     jsr t50_put
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     ldx #1
     ldy #1
     jsr t50_put
-    lda #2
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + 1
+    }
+    lda #ITEM_SLOT_DAGGER
     ldx #4
     ldy #1
     jsr t50_put
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + 4
+    }
     ldy #3
     jsr sro_merge_slot
     ldy #4
@@ -1969,10 +2054,10 @@ test_start:
     cmp #FI_EMPTY
     bne !t50_fail+
     lda si_item_id + 1
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t50_fail+
     lda si_item_id + 4
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t50_fail+
     lda #$01
     jmp !t50_store+
@@ -1986,17 +2071,17 @@ test_start:
     // with other turns of fuel is not the same item and keeps its slot.
     // ============================================================
     jsr reset_haggle_fixture
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldx #0
     ldy #23
     jsr t50_put
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldx #2
     ldy #5
     jsr t50_put
     ldy #2
     jsr sro_merge_slot
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldx #5
     ldy #1
     jsr t50_put
@@ -2010,7 +2095,7 @@ test_start:
     cmp #FI_EMPTY
     bne !t51_fail+
     lda si_item_id + 5
-    cmp #ITEM_TYPE_FLASK_OF_OIL
+    cmp #ITEM_SLOT_FLASK_OF_OIL
     bne !t51_fail+
     lda #$01
     jmp !t51_store+
@@ -2028,7 +2113,7 @@ test_start:
     ldx #STORE_BM
     lda store_base_idx,x
     tax
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldy #3
     jsr t50_put
     lda #<script_buy_yes
@@ -2042,10 +2127,10 @@ test_start:
     cmp #2
     bne !t52_fail+
     lda si_item_id,x
-    cmp #ITEM_TYPE_FLASK_OF_OIL
+    cmp #ITEM_SLOT_FLASK_OF_OIL
     bne !t52_fail+
     lda inv_item_id + 0
-    cmp #ITEM_TYPE_FLASK_OF_OIL
+    cmp #ITEM_SLOT_FLASK_OF_OIL
     bne !t52_fail+
     lda inv_qty + 0
     cmp #1
@@ -2069,10 +2154,10 @@ test_start:
     ldx #T53_STORE
     lda store_base_idx,x
     tax
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldy #2
     jsr t50_put
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
@@ -2102,7 +2187,7 @@ test_start:
     ldy #STORE_MAX_ITEMS
 !t53_scan:
     lda si_item_id,x
-    cmp #ITEM_TYPE_FLASK_OF_OIL
+    cmp #ITEM_SLOT_FLASK_OF_OIL
     bne !t53_next+
     lda si_p1,x
     cmp #7
@@ -2134,14 +2219,14 @@ test_start:
     // 9; the over-stocked branch takes the whole entry (one_of = false).
     // ============================================================
     jsr reset_haggle_fixture
-    lda #ITEM_TYPE_FLASK_OF_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     ldx #0
     ldy #10
     jsr t50_put
     lda #1
     jsr sro_sell_one
     lda si_item_id + 0
-    cmp #ITEM_TYPE_FLASK_OF_OIL
+    cmp #ITEM_SLOT_FLASK_OF_OIL
     bne !t54_fail+
     lda si_qty + 0
     cmp #9
@@ -2202,6 +2287,8 @@ test_start:
     ldy #0
 !t56_loop:
     sty t28_slot
+    lda t56_pages,y
+    sta sb_item_ego
     lda t56_ids,y
     jsr load_item_base_cost
     ldy t28_slot
@@ -2212,43 +2299,53 @@ test_start:
     cmp t56_hi,y
     bne !t56_fail+
     iny
-    cpy #t56_lo - t56_ids
+    cpy #t56_pages - t56_ids
     bne !t56_loop-
+    lda #0
+    sta sb_item_ego
     lda #$01
     jmp !t56_store+
 !t56_fail:
+    lda #0
+    sta sb_item_ego
     lda #$00
 !t56_store:
     sta tc_results + 55
 
     jmp test_exit_trampoline
 
-t56_ids: .byte 24, 40, 41, 42, 75, 76, 93, 94, 95
-t56_lo:  .byte <400, <600, <800, <400, <358, <430, <376, <304, <340
-t56_hi:  .byte >400, >600, >800, >400, >358, >430, >376, >304, >340
+t56_ids:   .byte ITEM_SLOT_RING_OF_STRENGTH, ITEM_SLOT_WAND_OF_LIGHTNING, ITEM_SLOT_WAND_OF_FROST, ITEM_SLOT_WAND_OF_STINKING_CLOUD, ITEM_SLOT_PIKE, ITEM_SLOT_HALBERD, ITEM_SLOT_LUCERNE_HAMMER, ITEM_SLOT_BROAD_AXE, ITEM_SLOT_AWL_PIKE
+t56_pages: .byte ITEM_PAGE_RING_OF_STRENGTH, ITEM_PAGE_WAND_OF_LIGHTNING, ITEM_PAGE_WAND_OF_FROST, ITEM_PAGE_WAND_OF_STINKING_CLOUD, ITEM_PAGE_PIKE, ITEM_PAGE_HALBERD, ITEM_PAGE_LUCERNE_HAMMER, ITEM_PAGE_BROAD_AXE, ITEM_PAGE_AWL_PIKE
+t56_lo:    .byte <400, <600, <800, <400, <358, <430, <376, <304, <340
+t56_hi:    .byte >400, >600, >800, >400, >358, >430, >376, >304, >340
+.assert "t56 parallel tables match length", t56_lo - t56_pages, t56_pages - t56_ids
 
 t55_ids:
-    .byte 52, 53, 54, ITEM_TYPE_AMMO_IRON_SHOT
-    .byte 15, ITEM_TYPE_HARD_BISCUIT, ITEM_TYPE_BEEF_JERKY, ITEM_TYPE_FINE_ALE
-    .byte ITEM_TYPE_FINE_WINE, 136, ITEM_TYPE_CLOAK, 2
+    .byte ITEM_SLOT_ARROW, ITEM_SLOT_BOLT, ITEM_SLOT_ROCK, ITEM_SLOT_IRON_SHOT
+    .byte ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_HARD_BISCUIT, ITEM_SLOT_STRIP_OF_BEEF_JERKY, ITEM_SLOT_PINT_OF_FINE_ALE
+    .byte ITEM_SLOT_PINT_OF_FINE_WINE, ITEM_SLOT_SCROLL_OF_PHASE_DOOR, ITEM_SLOT_CLOAK
+    .byte ITEM_SLOT_POTION_OF_BOLDNESS
+    .byte ITEM_SLOT_POTION_OF_SLOW_POISON
+    .byte ITEM_SLOT_SCROLL_OF_TREASURE_DETECTION
+    .byte ITEM_SLOT_SCROLL_OF_BLESSING
+    .byte ITEM_SLOT_SCROLL_OF_DETECT_INVISIBLE
+    .byte ITEM_SLOT_POTION_OF_RESTORE_STRENGTH
+    .byte ITEM_SLOT_POTION_OF_RESTORE_WISDOM
+    .byte ITEM_SLOT_POTION_OF_RESTORE_LIFE_LEVELS
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_DAM
+    .byte ITEM_SLOT_POTION_OF_SLEEP
+.assert "t55_ids stay on Page 0", (ITEM_PAGE_ARROW | ITEM_PAGE_BOLT | ITEM_PAGE_ROCK | ITEM_PAGE_IRON_SHOT | ITEM_PAGE_RATION_OF_FOOD | ITEM_PAGE_HARD_BISCUIT | ITEM_PAGE_STRIP_OF_BEEF_JERKY | ITEM_PAGE_PINT_OF_FINE_ALE | ITEM_PAGE_PINT_OF_FINE_WINE | ITEM_PAGE_SCROLL_OF_PHASE_DOOR | ITEM_PAGE_CLOAK | ITEM_PAGE_POTION_OF_BOLDNESS | ITEM_PAGE_POTION_OF_SLOW_POISON | ITEM_PAGE_SCROLL_OF_TREASURE_DETECTION | ITEM_PAGE_SCROLL_OF_BLESSING | ITEM_PAGE_SCROLL_OF_DETECT_INVISIBLE | ITEM_PAGE_POTION_OF_RESTORE_STRENGTH | ITEM_PAGE_POTION_OF_RESTORE_WISDOM | ITEM_PAGE_POTION_OF_RESTORE_LIFE_LEVELS | ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT | ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_DAM | ITEM_PAGE_POTION_OF_SLEEP) == 0, true
 t55_p1_ids:
-    .byte ITEM_TYPE_POT_BOLDNESS - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_SLOW_POISON - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_TREASURE_DETECT - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_BLESSING - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_DETECT_INVIS - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_STR - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_WIS - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_LIFE - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_ENCH_WEAP_HIT - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_ENCH_WEAP_DAM - ITEM_PAGE_SIZE
-    .byte 15
+    .byte ITEM_SLOT_DAGGER
+.assert "t55_p1_ids stay on Page 1", ITEM_PAGE_DAGGER == ITEM_PAGE_BIT, true
 t55_qty:
     .byte 24, 24, 24, 24
     .byte 5, 5, 5, 3
-    .byte 1, 2, 1, 1
+    .byte 1, 2, 1
     .byte 2, 2, 2, 2, 2
     .byte 1, 1, 1, 1, 1, 1
+    .byte 1
 
 // t50_put — Store slot X = item A, Y of them, 7 turns of fuel, no bonuses,
 // identified.
@@ -2323,33 +2420,32 @@ t48_check_store:
 
 t48_recall:  .byte 0
 t48_p1_seen: .byte 0
-// General Store (all Page 0; Cloak #82 required sentinel first):
+// General Store (all Page 0; Cloak required sentinel first):
 t48_general_set:
-    .byte ITEM_TYPE_CLOAK, 15, ITEM_TYPE_HARD_BISCUIT, ITEM_TYPE_BEEF_JERKY
-    .byte ITEM_TYPE_FINE_ALE, ITEM_TYPE_FINE_WINE, 61, 13, 14, 135, 62, 63
-    .byte $FF, 0
-// Temple (Page 0 with Word of Recall #32 first, then $FF, then Page 1):
+    .byte ITEM_SLOT_CLOAK, ITEM_SLOT_RATION_OF_FOOD, ITEM_SLOT_HARD_BISCUIT, ITEM_SLOT_STRIP_OF_BEEF_JERKY
+    .byte ITEM_SLOT_PINT_OF_FINE_ALE, ITEM_SLOT_PINT_OF_FINE_WINE, ITEM_SLOT_FLASK_OF_OIL, ITEM_SLOT_WOODEN_TORCH, ITEM_SLOT_BRASS_LANTERN, ITEM_SLOT_IRON_SPIKE, ITEM_SLOT_SHOVEL, ITEM_SLOT_PICK
+    .byte $FF, 0                            // raw-id-ok: synthetic list terminator
+// Temple (Page 0 with Word of Recall first, then $FF, then Page-1 Hafted weapons):
 t48_temple_set:
-    .byte 32, 48, 58, 59, 60, 33, 17, 25, 100, 27, 126, 73, 5, 72, $FF
-    .byte ITEM_TYPE_SCR_BLESSING - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_BOLDNESS - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_WIS - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_LIFE - ITEM_PAGE_SIZE
-    .byte 0
-// Alchemy (Page 0 with Word of Recall #32 first, then $FF, then Page 1):
+    .byte ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_EXORCISM, ITEM_SLOT_SCROLL_OF_REMOVE_CURSE, ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS, ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, ITEM_SLOT_POTION_OF_HEROISM, ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
+    .byte ITEM_SLOT_SCROLL_OF_BLESSING, ITEM_SLOT_POTION_OF_BOLDNESS, ITEM_SLOT_POTION_OF_RESTORE_WISDOM, ITEM_SLOT_POTION_OF_RESTORE_LIFE_LEVELS, $FF
+    .byte ITEM_SLOT_MORNINGSTAR, ITEM_SLOT_MACE, ITEM_SLOT_WAR_HAMMER
+    .byte 0                                 // raw-id-ok: synthetic list terminator
+// Alchemy (all Page 0 with Word of Recall first):
 t48_alchemy_set:
-    .byte 32, 35, 21, 20, ITEM_TYPE_SCR_PHASE_DOOR, 102, 103, 104, $FF
-    .byte ITEM_TYPE_SCR_ENCH_WEAP_HIT - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_ENCH_WEAP_DAM - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_TREASURE_DETECT - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_SCR_DETECT_INVIS - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_STR - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_INT - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_DEX - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_CON - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_RESTORE_CHR - ITEM_PAGE_SIZE
-    .byte ITEM_TYPE_POT_SLOW_POISON - ITEM_PAGE_SIZE
-    .byte 0
+    .byte ITEM_SLOT_SCROLL_OF_WORD_OF_RECALL, ITEM_SLOT_SCROLL_OF_ENCHANT_ARMOR, ITEM_SLOT_SCROLL_OF_IDENTIFY, ITEM_SLOT_SCROLL_OF_LIGHT, ITEM_SLOT_SCROLL_OF_PHASE_DOOR, ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING, ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION, ITEM_SLOT_SCROLL_OF_RECHARGING
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+    .byte ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_DAM
+    .byte ITEM_SLOT_SCROLL_OF_TREASURE_DETECTION
+    .byte ITEM_SLOT_SCROLL_OF_DETECT_INVISIBLE
+    .byte ITEM_SLOT_POTION_OF_RESTORE_STRENGTH
+    .byte ITEM_SLOT_POTION_OF_RESTORE_INTELLIGENCE
+    .byte ITEM_SLOT_POTION_OF_RESTORE_DEXTERITY
+    .byte ITEM_SLOT_POTION_OF_RESTORE_CONSTITUTION
+    .byte ITEM_SLOT_POTION_OF_RESTORE_CHARISMA
+    .byte ITEM_SLOT_POTION_OF_SLOW_POISON
+    .byte $FF, 0                            // raw-id-ok: synthetic list terminator
+.assert "t48_temple/alchemy sets match Page 0/1 split", (ITEM_PAGE_MORNINGSTAR & ITEM_PAGE_MACE & ITEM_PAGE_WAR_HAMMER) == ITEM_PAGE_BIT && (ITEM_PAGE_SCROLL_OF_WORD_OF_RECALL | ITEM_PAGE_SCROLL_OF_BLESSING | ITEM_PAGE_POTION_OF_BOLDNESS | ITEM_PAGE_POTION_OF_RESTORE_WISDOM | ITEM_PAGE_POTION_OF_RESTORE_LIFE_LEVELS | ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT | ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_DAM | ITEM_PAGE_SCROLL_OF_TREASURE_DETECTION | ITEM_PAGE_SCROLL_OF_DETECT_INVISIBLE | ITEM_PAGE_POTION_OF_RESTORE_STRENGTH | ITEM_PAGE_POTION_OF_RESTORE_INTELLIGENCE | ITEM_PAGE_POTION_OF_RESTORE_DEXTERITY | ITEM_PAGE_POTION_OF_RESTORE_CONSTITUTION | ITEM_PAGE_POTION_OF_RESTORE_CHARISMA | ITEM_PAGE_POTION_OF_SLOW_POISON) == 0, true
 
 // t44_fill_store0 — A = item id for slots 0..X-1 of store 0, rest empty.
 t44_fill_store0:
@@ -2366,6 +2462,10 @@ t44_fill_store0:
 !t44f_item:
     sta si_item_id,x
     pha
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi,x
+    }
     lda #1                      // an occupied slot holds at least one
     sta si_qty,x
     pla
@@ -2390,6 +2490,12 @@ t44_count_id:
     inc tc_count
     cmp t44_id
     bne !t44c_next+
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda si_meta_hi,x
+        and #ITEM_PAGE_BIT
+        cmp #ITEM_PAGE_DAGGER
+        bne !t44c_next+
+    }
     inc t44_food
 !t44c_next:
     inx
@@ -2456,13 +2562,15 @@ t43_test_seen:              // (item_cur_page, A) -> carry set = present
     clc
     rts
 
-// Check (item_cur_page, A) is a valid spawned item ID (P0: 2..254, P1: 0..114).
+// Check (item_cur_page, A) is a valid spawned item ID (P0: 20..254 excl. Ruined Chest, P1: 0..105).
 // Preserves A; clobbers nothing.
 t43_check_cur_valid:
     bit item_cur_page
     bvs !t43cv_p1+
-    cmp #2
+    cmp #ITEM_SLOT_GOLD_MITHRIL + 1
     bcc !t43cv_bad+
+    cmp #ITEM_SLOT_RUINED_CHEST
+    beq !t43cv_bad+
     cmp #ITEM_PAGE_SIZE
     bcs !t43cv_bad+
     sec
@@ -2585,7 +2693,7 @@ reset_haggle_fixture:
     sta sb_price_hi
     sta sb_abs_slot
     sta ss_inv_slot
-    sta ss_item_id
+    sta ss_item_id                          // raw-id-ok: zero-clear scratch
     sta sb_item_p1
     sta sb_item_ego
     sta zp_store_idx

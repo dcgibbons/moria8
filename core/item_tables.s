@@ -1,16 +1,15 @@
 #importonce
 // item_tables.s — Hot item property tables, page-aware accessors, and
-// cold ITEM.CAT wrappers (V2 370-item Base-255 paged catalog).
+// cold ITEM.CAT wrappers (V2 361-item Base-255 paged catalog).
 
 // Named item type constants
-.const ITEM_FLASK_OIL = 61
+.const ITEM_FLASK_OIL = ITEM_SLOT_FLASK_OF_OIL
 .const LANTERN_MAX_CHARGES = 250
 
-.const IT_MISSILE_BASE  = 49     // First Page-0 ranged block (49-54)
-.const IT_MISSILE_END   = 55
-.const IT_MISSILE2_BASE = 137    // Appended Page-0 launchers (137-139)
-.const IT_MISSILE2_END  = 140
-.assert "The appended launchers end within Page 0", IT_MISSILE2_END <= ITEM_PAGE_SIZE, true
+.const IT_MISSILE_BASE  = ITEM_SLOT_SHORT_BOW          // Contiguous Page-0 ranged block (Short Bow..Iron Shot)
+.const IT_LAUNCHER_END  = ITEM_SLOT_SLING + 1
+.const IT_MISSILE_END   = ITEM_SLOT_IRON_SHOT + 1
+.assert "Ranged launchers and ammo are contiguous on Page 0", ITEM_LONG_BOW == ITEM_SHORT_BOW + 1 && ITEM_COMPOSITE_BOW == ITEM_SHORT_BOW + 2 && ITEM_LIGHT_CROSSBOW == ITEM_SHORT_BOW + 3 && ITEM_HEAVY_CROSSBOW == ITEM_SHORT_BOW + 4 && ITEM_SLING == ITEM_SHORT_BOW + 5 && ITEM_ARROW == ITEM_SHORT_BOW + 6 && ITEM_BOLT == ITEM_SHORT_BOW + 7 && ITEM_ROCK == ITEM_SHORT_BOW + 8 && ITEM_IRON_SHOT == ITEM_SHORT_BOW + 9 && IT_MISSILE_END <= ITEM_PAGE_SIZE, true
 
 // ============================================================
 // Hot Catalog Arrays (generated in platforms/shared/item_catalog/item_hot_tables.s)
@@ -270,25 +269,18 @@ item_get_display_char:
     bit item_cur_page
     bvs !igd_cat+
     cpx #IT_MISSILE_BASE
-    bcc !igd_cat+
+    bcc !igd_not_ranged+
     cpx #IT_MISSILE_END
     bcs !igd_not_ranged+
-    cpx #52
+    cpx #ITEM_SLOT_ARROW
     bcc !igd_bow+
-!igd_ammo:
     lda #$1b                    // '{' ammo
     rts
 !igd_bow:
     lda #$1c                    // '}' launcher
     rts
 !igd_not_ranged:
-    cpx #IT_MISSILE2_BASE
-    bcc !igd_not_late+
-    cpx #IT_MISSILE2_END
-    bcc !igd_bow-
-!igd_not_late:
-    cpx #ITEM_TYPE_AMMO_IRON_SHOT
-    beq !igd_ammo-
+    .assert "Flask of Oil lives on Page 0", ITEM_PAGE_FLASK_OF_OIL, 0
     cpx #ITEM_FLASK_OIL
     bne !igd_cat+
     lda #$21                    // '!' flask
@@ -319,29 +311,15 @@ item_get_missile:
     cpx #IT_MISSILE_BASE
     bcc !igm_zero+
     cpx #IT_MISSILE_END
-    bcc !igm_tbl1+
-    cpx #IT_MISSILE2_BASE
-    bcc !igm_zero+
-    cpx #IT_MISSILE2_END
-    bcc !igm_tbl2+
-    cpx #ITEM_TYPE_AMMO_IRON_SHOT
-    bne !igm_zero+
-    lda #$83
-    rts
-!igm_tbl1:
-    lda igm_vals_49 - IT_MISSILE_BASE,x
-    rts
-!igm_tbl2:
-    lda igm_vals_137 - IT_MISSILE2_BASE,x
+    bcs !igm_zero+
+    lda igm_vals - IT_MISSILE_BASE,x
     rts
 !igm_zero:
     lda #0
     rts
-igm_vals_49:  .byte 1, 2, 3, $81, $82, $83
-igm_vals_137: .byte 1, 1, 2
+igm_vals: .byte 1, 1, 1, 2, 2, 3, $81, $82, $83, $83
 igm_vals_end:
-.assert "igm_vals_49 matches IT_MISSILE span", (igm_vals_137 - igm_vals_49 == 6) && (IT_MISSILE_END - IT_MISSILE_BASE == 6), true
-.assert "igm_vals_137 matches IT_MISSILE2 span", (igm_vals_end - igm_vals_137 == 3) && (IT_MISSILE2_END - IT_MISSILE2_BASE == 3), true
+.assert "igm_vals matches unified IT_MISSILE span", (igm_vals_end - igm_vals == 10) && (IT_MISSILE_END - IT_MISSILE_BASE == 10), true
 #else
     txa
     jsr item_get_category_a     // preserves X, Y
@@ -399,7 +377,7 @@ item_get_cost_x:
     lda icat_cost_lo
     rts
 
-// item_unpack_id_ay — Convert 9-bit logical item ID (Y=hi, A=lo) in 0..369
+// item_unpack_id_ay — Convert 9-bit logical item ID (Y=hi, A=lo) in 0..360
 // into (item_cur_page = $00/$40, A = slot_lo in 0..254).
 // Preserves: X
 item_unpack_id_ay:

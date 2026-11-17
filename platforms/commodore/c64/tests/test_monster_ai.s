@@ -36,7 +36,7 @@ test_finish:
 
 .pc = * "Test Body"
 
-.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$FFF9]
 .segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
 #define PLAYER_CHARGEN_EXTERNAL
 #define TRAP_TRIGGER_EXTERNAL
@@ -2866,8 +2866,12 @@ test_start:
     sta zp_eff_speed            // no timer — ring only
     lda #PFLAG_SPEED
     sta player_pflags
-    lda #ITEM_TYPE_RING_SPEED   // the ring worn: the speed step counts rings (MON-026)
+    lda #ITEM_SLOT_RING_OF_SPEED   // the ring worn: the speed step counts rings (MON-026)
     sta inv_item_id + EQUIP_RING
+    .if (ITEM_PAGE_RING_OF_SPEED != 0) {
+        lda #ITEM_PAGE_RING_OF_SPEED
+        sta inv_ego + EQUIP_RING
+    }
     lda #1                      // odd turn
     jsr t69_kobold_turn
     cmp #20                     // skipped: still at (20,15)
@@ -2879,6 +2883,10 @@ test_start:
     sta tc_results + 37
     lda #FI_EMPTY
     sta inv_item_id + EQUIP_RING
+    .if (ITEM_PAGE_RING_OF_SPEED != 0) {
+        lda #0
+        sta inv_ego + EQUIP_RING
+    }
 
     // ==========================================
     // Test 39: slowed player (zp_eff_speed < 0) hastens a speed-1 monster
@@ -3802,9 +3810,14 @@ test_start:
     // by 3 only (Umoria monsterMovementRate: 2 - s), the turn's high byte
     // counted ($0100 = 256: 1 mod 3, skipped; $0102 = 258: 0 mod 3). Until
     // 2026-11-10 the second ring did nothing: every other turn.
-    lda #ITEM_TYPE_RING_SPEED
+    lda #ITEM_SLOT_RING_OF_SPEED
     sta inv_item_id + EQUIP_RING
     sta inv_item_id + EQUIP_RING2
+    .if (ITEM_PAGE_RING_OF_SPEED != 0) {
+        lda #ITEM_PAGE_RING_OF_SPEED
+        sta inv_ego + EQUIP_RING
+        sta inv_ego + EQUIP_RING2
+    }
     lda #0
     sta zp_eff_speed
     lda #1

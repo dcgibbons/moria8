@@ -201,6 +201,7 @@ setup_scene:
     sta muv_clear_detected
     sta zp_eff_blind
     sta cr_mflags + 1
+    lda #FI_EMPTY
     sta fi_item_id
     lda #COL_WHITE
     sta zp_text_color

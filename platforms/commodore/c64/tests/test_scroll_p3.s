@@ -113,38 +113,38 @@ eff_earthquake:
 chest_mark_found_all:
     rts
 eff_glyph_of_warding:
-    lda #ITEM_TYPE_SCR_RUNE_PROTECTION
+    lda #ITEM_SLOT_SCROLL_OF_RUNE_OF_PROTECTION
     sta spy_last
     rts
 eff_genocide:
-    lda #ITEM_TYPE_SCR_GENOCIDE
+    lda #ITEM_SLOT_SCROLL_OF_GENOCIDE
     sta spy_last
     rts
 eff_destroy_area:
-    lda #ITEM_TYPE_SCR_DESTRUCTION
+    lda #ITEM_SLOT_SCROLL_OF_STAR_DESTRUCTION
     sta spy_last
     rts
 eff_slow_monster_dir:
-    lda #ITEM_TYPE_WAND_SLOW
+    lda #ITEM_SLOT_WAND_OF_SLOW_MONSTER
     sta spy_last
     rts
 eff_teleport_other:
-    lda #ITEM_TYPE_WAND_TELEPORT_AWAY
+    lda #ITEM_SLOT_WAND_OF_TELEPORT_AWAY
     sta spy_last
     rts
 eff_staff_speed:
-    lda #ITEM_TYPE_STAFF_SPEED
+    lda #ITEM_SLOT_STAFF_OF_SPEED
     sta spy_last
     rts
 eff_ball:
     sta spy_last
     rts
 ped_s28:
-    lda #ITEM_TYPE_STAFF_DISPEL_EVIL
+    lda #ITEM_SLOT_STAFF_OF_DISPEL_EVIL
     sta spy_last
     rts
 eff_reveal_floorplan:
-    lda #ITEM_TYPE_SCR_MAGIC_MAPPING
+    lda #ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING
     sta spy_last
     rts
 pmx_print_inline:
@@ -215,7 +215,7 @@ test_start:
     // ==========================================
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_SCR_RECHARGING
+    lda #ITEM_SLOT_SCROLL_OF_RECHARGING
     jsr irs_dispatch_p3_overlay
     lda spy_last
     cmp #50
@@ -233,10 +233,10 @@ test_start:
 !t2:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_SCR_RUNE_PROTECTION
+    lda #ITEM_SLOT_SCROLL_OF_RUNE_OF_PROTECTION
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_SCR_RUNE_PROTECTION
+    cmp #ITEM_SLOT_SCROLL_OF_RUNE_OF_PROTECTION
     bne !t2_fail+
     lda #$01
     sta tc_results + 1
@@ -251,10 +251,10 @@ test_start:
 !t3:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_SCR_GENOCIDE
+    lda #ITEM_SLOT_SCROLL_OF_GENOCIDE
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_SCR_GENOCIDE
+    cmp #ITEM_SLOT_SCROLL_OF_GENOCIDE
     bne !t3_fail+
     lda #$01
     sta tc_results + 2
@@ -269,10 +269,10 @@ test_start:
 !t4:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_SCR_DESTRUCTION
+    lda #ITEM_SLOT_SCROLL_OF_STAR_DESTRUCTION
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_SCR_DESTRUCTION
+    cmp #ITEM_SLOT_SCROLL_OF_STAR_DESTRUCTION
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
@@ -287,10 +287,10 @@ test_start:
 !t5:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_SCR_MAGIC_MAPPING
+    lda #ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_SCR_MAGIC_MAPPING
+    cmp #ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING
     bne !t5_fail+
     lda #$01
     sta tc_results + 4
@@ -317,8 +317,12 @@ test_start:
     sta (zp_ptr0),y
 
     // Give the item a floor slot pointing at that tile
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta fi_item_id
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi
+    }
     lda #12
     sta fi_x
     lda #8
@@ -335,7 +339,7 @@ test_start:
     and #~FLAG_VISITED & $ff
     sta (zp_ptr0),y
 
-    lda #ITEM_TYPE_SCR_OBJECT_DETECT
+    lda #ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION
     jsr irs_dispatch_p3_overlay
 
     // Tile should now be visited
@@ -432,7 +436,7 @@ test_start:
     jsr monster_spawn_one
     stx t7_slot_b
 
-    lda #ITEM_TYPE_SCR_MASS_GENOCIDE
+    lda #ITEM_SLOT_SCROLL_OF_MASS_GENOCIDE
     jsr irs_dispatch_p3_overlay
 
     // Slot A (LOS) should be removed; slot B (blocked) should remain
@@ -462,7 +466,7 @@ test_start:
 !t8:
     lda #5
     sta zp_player_dlvl
-    lda #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    lda #ITEM_SLOT_SCROLL_OF_TELEPORT_LEVEL
     jsr irs_dispatch_p3_overlay
     lda zp_player_dlvl
     cmp #4
@@ -477,7 +481,7 @@ test_start:
     // From dlvl 1, teleport must clamp to >= 1
     lda #1
     sta zp_player_dlvl
-    lda #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    lda #ITEM_SLOT_SCROLL_OF_TELEPORT_LEVEL
     jsr irs_dispatch_p3_overlay
     lda zp_player_dlvl
     cmp #1
@@ -495,10 +499,10 @@ test_start:
 !t9:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_WAND_SLOW
+    lda #ITEM_SLOT_WAND_OF_SLOW_MONSTER
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_WAND_SLOW
+    cmp #ITEM_SLOT_WAND_OF_SLOW_MONSTER
     bne !t9_fail+
     lda #$01
     sta tc_results + 8
@@ -513,14 +517,14 @@ test_start:
 !t11:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_WAND_FIRE_BALL
+    lda #ITEM_SLOT_WAND_OF_FIRE_BALLS
     jsr irs_dispatch_p3_overlay
     lda spy_last
     cmp #49
     bne !t11_fail+
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_WAND_COLD_BALL
+    lda #ITEM_SLOT_WAND_OF_COLD_BALLS
     jsr irs_dispatch_p3_overlay
     lda spy_last
     cmp #33
@@ -538,10 +542,10 @@ test_start:
 !t12:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_STAFF_DISPEL_EVIL
+    lda #ITEM_SLOT_STAFF_OF_DISPEL_EVIL
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
+    cmp #ITEM_SLOT_STAFF_OF_DISPEL_EVIL
     bne !t12_fail+
     lda #$01
     sta tc_results + 10
@@ -560,10 +564,10 @@ test_start:
     lda #5
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
-    lda #ITEM_TYPE_STAFF_SPEED
+    lda #ITEM_SLOT_STAFF_OF_SPEED
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_STAFF_SPEED
+    cmp #ITEM_SLOT_STAFF_OF_SPEED
     bne !t13_fail+
     lda zp_player_dlvl
     cmp #5
@@ -581,7 +585,7 @@ test_start:
 !t14:
     lda #0
     sta spy_last
-    lda #128                    // No effect row owns this ID
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST                    // No effect row owns this ID
     jsr irs_dispatch_p3_overlay
     lda spy_last
     bne !t14_fail+
@@ -598,10 +602,10 @@ test_start:
 !t15:
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_STAFF_DESTRUCTION
+    lda #ITEM_SLOT_STAFF_OF_DESTRUCTION
     jsr irs_dispatch_p3_overlay
     lda spy_last
-    cmp #ITEM_TYPE_SCR_DESTRUCTION
+    cmp #ITEM_SLOT_SCROLL_OF_STAR_DESTRUCTION
     bne !t15_fail+
     lda #$01
     sta tc_results + 13
@@ -632,7 +636,7 @@ test_start:
     sta player_data + PL_MAX_DLVL
     lda #$5a
     sta level_entry_dir
-    lda #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    lda #ITEM_SLOT_SCROLL_OF_TELEPORT_LEVEL
     jsr irs_dispatch_p3_overlay
     lda zp_player_dlvl
     cmp #1
@@ -661,7 +665,7 @@ test_start:
     sta player_data + PL_MAX_DLVL
     lda #$5a
     sta level_entry_dir
-    lda #ITEM_TYPE_SCR_TELEPORT_LEVEL
+    lda #ITEM_SLOT_SCROLL_OF_TELEPORT_LEVEL
     jsr irs_dispatch_p3_overlay
     lda zp_player_dlvl
     cmp player_data + PL_DLEVEL
@@ -695,14 +699,14 @@ test_start:
     // ==========================================
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_WAND_LIGHTNING_BALL
+    lda #ITEM_SLOT_WAND_OF_LIGHTNING_BALLS
     jsr irs_dispatch_p3_overlay
     lda spy_last
     cmp #24
     bne !t17_fail+
     lda #0
     sta spy_last
-    lda #ITEM_TYPE_WAND_ACID_BALL
+    lda #ITEM_SLOT_WAND_OF_ACID_BALLS
     jsr irs_dispatch_p3_overlay
     lda spy_last
     cmp #40
@@ -720,7 +724,7 @@ test_start:
     :PatchJump(get_direction_target, tsp_direction_east)
     jsr tsp_spawn_east
     bcc !t18_fail+
-    lda #ITEM_TYPE_WAND_FIRE_BOLT
+    lda #ITEM_SLOT_WAND_OF_FIRE_BOLTS
     jsr irs_dispatch_p3_overlay
     jsr tsp_hp
     bne !t18_fail+              // high byte: still under 256
@@ -742,7 +746,7 @@ test_start:
     sta cr_mflags + 1
     jsr tsp_spawn_east
     bcc !t19_fail+
-    lda #ITEM_TYPE_WAND_DRAIN_LIFE
+    lda #ITEM_SLOT_WAND_OF_DRAIN_LIFE
     jsr irs_dispatch_p3_overlay
     jsr tsp_hp
     bne !t19_fail+
@@ -752,7 +756,7 @@ test_start:
     sta cr_mflags + 1
     jsr tsp_spawn_east
     bcc !t19_fail+
-    lda #ITEM_TYPE_WAND_DRAIN_LIFE
+    lda #ITEM_SLOT_WAND_OF_DRAIN_LIFE
     jsr irs_dispatch_p3_overlay
     jsr tsp_hp
     bne !t19_fail+

@@ -30,16 +30,29 @@ from .nav import read_map
 from .view import DIRS
 from .worker import Worker
 
+_TOOLS_DIR = str(Path(__file__).resolve().parents[2] / "tools")
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+from item_ids import (  # noqa: E402
+    FI_EMPTY,
+    ITEM_PAGE_ARROW,
+    ITEM_PAGE_BIT,
+    ITEM_PAGE_SHORT_BOW,
+    ITEM_PAGE_SPELLBOOK_MAGICK_I,
+    ITEM_SLOT_ARROW,
+    ITEM_SLOT_SHORT_BOW,
+    ITEM_SLOT_SPELLBOOK_MAGICK_I,
+)
+
 KEY_ESC = 0x1B
 SEED = 1004
 PL_GOLD = 43                       # core/player.s PL_GOLD_0..2
 WEAPONSMITH_DOOR = (39, 6)         # core/dungeon_data.s store_door_x/y[2]
 HOME_DOOR = (51, 16)               # store_door_x/y[STORE_HOME]
-MAGICK_I = 55                      # docs/WIZARD.md: Spellbook Magick I
 INV_FIELDS = ("inv_item_id", "inv_qty", "inv_p1", "inv_to_hit", "inv_to_dam", "inv_to_ac", "inv_flags", "inv_ego")
 PACK_SLOTS = 22
 IF_KNOWN = 0x02
-SHORT_BOW, ARROW, EGO_ARROW_SLAY_EVIL = 49, 52, 44   # item_catalog_spec.json; core/item_defs.s EGO_AMMO_SLAY_EVIL
+EGO_ARROW_SLAY_EVIL = 44           # core/item_defs.s EGO_AMMO_SLAY_EVIL
 EQUIP_WEAPON = 22                  # core/item_defs.s
 KEY_FIRE = 0xC6                    # SHIFT+F: the wielded launcher at the first matching ammunition
 SHOT_RANGE = 2                     # squares to the townsperson
@@ -161,7 +174,10 @@ class Tour:
 
     def second_book(self) -> None:
         pack = self.pack()
-        self.seed_slot(pack.index(0xFF), (MAGICK_I, 1, 0, 0, 0, 0, IF_KNOWN, 0))
+        self.seed_slot(
+            pack.index(FI_EMPTY),
+            (ITEM_SLOT_SPELLBOOK_MAGICK_I, 1, 0, 0, 0, 0, IF_KNOWN, ITEM_PAGE_SPELLBOOK_MAGICK_I),
+        )
         self.press(ord("M"))
         self.expect("the two-book prompt", lambda: "Spell book (a-b)?" in self.text())
         self.press(ord("?"))
@@ -219,8 +235,8 @@ class Tour:
         # has it, +20 to-hit on it and the arrows (3 skill a point): seeded
         # in the weapon slot, a level 1 Mage's ten shots all missed on the
         # BBC (2026-11-15).
-        bow = self.pack().index(0xFF)
-        self.seed_slot(bow, (SHORT_BOW, 1, 0, SHOT_TOHIT, 0, 0, IF_KNOWN, 0))
+        bow = self.pack().index(FI_EMPTY)
+        self.seed_slot(bow, (ITEM_SLOT_SHORT_BOW, 1, 0, SHOT_TOHIT, 0, 0, IF_KNOWN, ITEM_PAGE_SHORT_BOW))
         self.press(ord("W"))
         self.expect("the wear prompt", lambda: "Wear which item" in self.text())
         self.press(ord("?"))   # its letters count the wearable items alone
@@ -228,9 +244,16 @@ class Tour:
         self.expect("the bow in the wear list", lambda: letter is not None)
         self.press(ord(letter.upper()))   # type: ignore[union-attr]
         self.settle()
-        self.expect("the bow wielded", lambda: self.peek(self.sym("inv_item_id") + EQUIP_WEAPON, 1)[0] == SHORT_BOW)
-        slot = self.pack().index(0xFF)
-        self.seed_slot(slot, (ARROW, 10, 0, SHOT_TOHIT, 0, 0, IF_KNOWN, EGO_ARROW_SLAY_EVIL))
+        self.expect(
+            "the bow wielded",
+            lambda: self.peek(self.sym("inv_item_id") + EQUIP_WEAPON, 1)[0] == ITEM_SLOT_SHORT_BOW
+            and (self.peek(self.sym("inv_ego") + EQUIP_WEAPON, 1)[0] & ITEM_PAGE_BIT) == ITEM_PAGE_SHORT_BOW,
+        )
+        slot = self.pack().index(FI_EMPTY)
+        self.seed_slot(
+            slot,
+            (ITEM_SLOT_ARROW, 10, 0, SHOT_TOHIT, 0, 0, IF_KNOWN, ITEM_PAGE_ARROW | EGO_ARROW_SLAY_EVIL),
+        )
         cols = abi.hal_layout_map_cols
         px, py = STREET   # out in the street: the Home's step left it on the doorway
         self.poke(self.sym("zp_player_x"), bytes([px]))

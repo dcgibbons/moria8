@@ -871,7 +871,7 @@ def run_cartridge_suite(x16emu: Path, rom: Path | None) -> int:
         sav_files = [p.name for p in save_fsroot.iterdir() if p.name.upper().startswith("THE.GAME")]
         tb.assert_line("cart_saved_file", len(sav_files) >= 1, f"no THE.GAME created in {save_fsroot}")
         sav_hdr = (save_fsroot / sav_files[0]).read_bytes()[:8]
-        tb.assert_line("cart_save_v2", sav_hdr == b"MORIA01\x21", f"save header={sav_hdr!r}")
+        tb.assert_line("cart_save_v2", sav_hdr == b"MORIA01\x22", f"save header={sav_hdr!r}")
     finally:
         tb.close()
 

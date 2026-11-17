@@ -27,7 +27,19 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import catalog_disk  # noqa: E402
 import catalog_lore  # noqa: E402
+import item_ids  # noqa: E402
 from make_atr import build_blank_atr  # noqa: E402
+
+
+LUA_ITEM_CONSTS = item_ids.lua_item_consts(
+    "DAGGER",
+    "MACE",
+    "CLOAK",
+    "RING_OF_LORDLY_PROTECTION_FIRE",
+    "RING_OF_LORDLY_PROTECTION_ACID",
+    "POTION_OF_RESTORE_STRENGTH",
+    "SCROLL_OF_HOLY_CHANT",
+)
 
 CAR_IMAGE = ROOT / "build" / "moria8-atari8.car"
 CART_SYM_PATH = ROOT / "build" / "atari8-cart" / "main.sym"
@@ -180,7 +192,7 @@ local function flush_save_atr()
 end
 """
 
-    return f"""
+    return LUA_ITEM_CONSTS + f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local cpu = manager.machine.devices[":maincpu"]
 local KBDBUF = 0x{kbdbuf:04X}
@@ -639,10 +651,12 @@ end
 
 function run()
     assert_line("subA_chargen_town_ready", start_new_game("A"))
-    inv_seed(32, {{82, 1, 0, 0, 0, 1, 0, 0}}) -- Cloak (EQUIP_CLOAK = 32)
-    inv_seed(33, {{2, 1, 0, 3, 4, 0, 2, 6}})  -- Dagger (+3,+4) (Defender) (EQUIP_SECONDARY = 33)
-    prog:write_u8(ID_KNOWN_ADDR + (146 >> 3), prog:read_u8(ID_KNOWN_ADDR + (146 >> 3)) | (1 << (146 & 7)))
-    prog:write_u8(ID_KNOWN_ADDR + (286 >> 3), prog:read_u8(ID_KNOWN_ADDR + (286 >> 3)) | (1 << (286 & 7)))
+    inv_seed(32, {{ITEM_SLOT_CLOAK, 1, 0, 0, 0, 1, 0, ITEM_PAGE_CLOAK}})
+    inv_seed(33, {{ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6}})
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_FIRE >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_FIRE >> 3)) | (1 << (ITEM_RING_OF_LORDLY_PROTECTION_FIRE & 7)))
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_POTION_OF_RESTORE_STRENGTH >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_POTION_OF_RESTORE_STRENGTH >> 3)) | (1 << (ITEM_POTION_OF_RESTORE_STRENGTH & 7)))
     if RECALL_ADDR ~= 0 then
         prog:write_u8(RECALL_ADDR + 5, 0x5A)
         prog:write_u8(RECALL_ADDR + 1110, 0xA5)
@@ -784,10 +798,12 @@ function run()
     assert_line("subB_trig3_gintlk_clean_after_load",
         prog:read_u8(0xD013) == 0 and prog:read_u8(0x03FA) == 0)
 
-    -- Mutate slot 33 + known bits 147/305 + recall, save with Overwrite cancel 'N' first, then confirm 'Y'.
-    inv_seed(33, {{5, 1, 0, 1, 2, 0, 2, 0}}) -- Mace (+1,+2)
-    prog:write_u8(ID_KNOWN_ADDR + (147 >> 3), prog:read_u8(ID_KNOWN_ADDR + (147 >> 3)) | (1 << (147 & 7)))
-    prog:write_u8(ID_KNOWN_ADDR + (305 >> 3), prog:read_u8(ID_KNOWN_ADDR + (305 >> 3)) | (1 << (305 & 7)))
+    -- Mutate slot 33 + known bits + recall, save with Overwrite cancel 'N' first, then confirm 'Y'.
+    inv_seed(33, {{ITEM_SLOT_MACE, 1, 0, 1, 2, 0, 2, ITEM_PAGE_MACE}})
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_ACID >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_ACID >> 3)) | (1 << (ITEM_RING_OF_LORDLY_PROTECTION_ACID & 7)))
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_SCROLL_OF_HOLY_CHANT >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_SCROLL_OF_HOLY_CHANT >> 3)) | (1 << (ITEM_SCROLL_OF_HOLY_CHANT & 7)))
     if RECALL_ADDR ~= 0 then prog:write_u8(RECALL_ADDR + 5, 0x3C) end
     local shuf2, known2, cloak2, sec2 = {{}}, {{}}, {{}}, {{}}
     for i = 0, 173 do shuf2[#shuf2 + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
@@ -1152,7 +1168,20 @@ def selftest() -> int:
         st_a = tmp / "a.json"
         st_b = tmp / "b.json"
         st_a.write_text(
-            json.dumps({"px": 10, "py": 12, "lvl": 1, "hp_lo": 20, "hp_hi": 0, "cloak": [82] + [0] * 7, "sec": [1] * 8, "shuf": [2] * 174, "known": [3] * 47, "rec": [4, 5]}),
+            json.dumps(
+                {
+                    "px": 10,
+                    "py": 12,
+                    "lvl": 1,
+                    "hp_lo": 20,
+                    "hp_hi": 0,
+                    "cloak": [item_ids.ITEM_SLOT_CLOAK] + [0] * 6 + [item_ids.ITEM_PAGE_CLOAK],
+                    "sec": [1] * 8,
+                    "shuf": [2] * 174,
+                    "known": [3] * 47,
+                    "rec": [4, 5],
+                }
+            ),
             encoding="utf-8",
         )
         sync_atr = tmp / "save.atr"

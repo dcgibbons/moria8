@@ -634,7 +634,7 @@ test_start:
     // =========================================================
 !t8:
     jsr tc_reset_state
-    lda #12                     // Leather Boots (base AC > 0)
+    lda #ITEM_SLOT_LEATHER_BOOTS                     // Leather Boots (base AC > 0)
     sta inv_item_id + EQUIP_FEET
     lda #0
     sta inv_to_ac + EQUIP_FEET
@@ -829,7 +829,7 @@ test_start:
     jsr tc_reset_state
     lda #1
     sta zp_eff_paralyze
-    lda #15                     // Ration of Food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Ration of Food
     sta inv_item_id + 0
     lda #2
     sta inv_qty + 0
@@ -1189,21 +1189,29 @@ test_start:
     // =========================================================
 !t23:
     jsr tc_reset_state
-    lda #2                      // Dagger (+1/+1)
+    lda #ITEM_SLOT_DAGGER                      // Dagger (+1/+1)
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_to_hit + EQUIP_WEAPON
     sta inv_to_dam + EQUIP_WEAPON
-    lda #7                      // Leather Armor (+3 AC)
+    lda #ITEM_SLOT_LEATHER_ARMOR                      // Leather Armor (+3 AC)
     sta inv_item_id + EQUIP_BODY
     lda #3
     sta inv_to_ac + EQUIP_BODY
-    lda #ITEM_TYPE_CLOAK        // Cursed Cloak (-2 AC)
+    lda #ITEM_SLOT_CLOAK        // Cursed Cloak (-2 AC)
     sta inv_item_id + EQUIP_CLOAK
     lda #<-2
     sta inv_to_ac + EQUIP_CLOAK
-    lda #ITEM_TYPE_RING_SLAYING // Ring (+4/+4, immune to VMS disenchant!)
+    lda #ITEM_SLOT_RING_OF_SLAYING // Ring (+4/+4, immune to VMS disenchant!)
     sta inv_item_id + EQUIP_RING
+    .if (ITEM_PAGE_RING_OF_SLAYING != 0) {
+        lda #ITEM_PAGE_RING_OF_SLAYING
+        sta inv_ego + EQUIP_RING
+    }
     lda #4
     sta inv_to_hit + EQUIP_RING
     sta inv_to_dam + EQUIP_RING
@@ -1242,11 +1250,11 @@ test_start:
     // =========================================================
 !t24:
     jsr tc_reset_state
-    lda #17                     // Potion in slot 0 (not food)
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion in slot 0 (not food)
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
-    lda #15                     // Ration of Food in slot 1 (qty 2)
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Ration of Food in slot 1 (qty 2)
     sta inv_item_id + 1
     lda #2
     sta inv_qty + 1
@@ -1273,7 +1281,7 @@ test_start:
     jsr mon_atk_effect_dispatch // Eats 2nd ration -> compacts slot 1
     jsr mon_atk_effect_dispatch // No food left -> Potion in slot 0 untouched!
     lda inv_item_id + 0
-    cmp #17
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     bne !t25+
     lda inv_item_id + 1
     cmp #FI_EMPTY
@@ -1285,7 +1293,7 @@ test_start:
     // =========================================================
 !t25:
     jsr tc_reset_state
-    lda #14                     // Brass Lantern
+    lda #ITEM_SLOT_BRASS_LANTERN                     // Brass Lantern
     sta inv_item_id + EQUIP_LIGHT
     lda #30
     sta inv_p1 + EQUIP_LIGHT
@@ -1321,19 +1329,19 @@ test_start:
     // =========================================================
 !t26:
     jsr tc_reset_state
-    lda #39                     // Wand of Light (0 charges: skipped)
+    lda #ITEM_SLOT_WAND_OF_LIGHT                     // Wand of Light (0 charges: skipped)
     sta inv_item_id + 0
     lda #0
     sta inv_p1 + 0
     lda #1
     sta inv_qty + 0
-    lda #17                     // Potion with p1=9 (not wand/staff: skipped)
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion with p1=9 (not wand/staff: skipped)
     sta inv_item_id + 1
     lda #9
     sta inv_p1 + 1
     lda #1
     sta inv_qty + 1
-    lda #43                     // Staff of Light (6 charges)
+    lda #ITEM_SLOT_STAFF_OF_LIGHT                     // Staff of Light (6 charges)
     sta inv_item_id + 2
     lda #6
     sta inv_p1 + 2

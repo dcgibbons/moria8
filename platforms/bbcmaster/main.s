@@ -1264,17 +1264,17 @@ ovl_items_end:
     #import "../../core/eff_gain_stat.s"
 
 iq_dispatch_p3_spell:
-    .assert "Phase 3 potions 96..100 contiguous below 126 < 140", ITEM_TYPE_POT_RESTORATION == ITEM_TYPE_POT_HEALING + 1 && ITEM_TYPE_POT_RESIST_HEAT == ITEM_TYPE_POT_HEALING + 2 && ITEM_TYPE_POT_RESIST_COLD == ITEM_TYPE_POT_HEALING + 3 && ITEM_TYPE_POT_CURE_CRITICAL == ITEM_TYPE_POT_HEALING + 4 && ITEM_TYPE_POT_CURE_CRITICAL < ITEM_TYPE_POT_NEUTRALIZE && ITEM_TYPE_POT_NEUTRALIZE < ITEM_TYPE_POT_GAIN_STR, true
-    cmp #ITEM_TYPE_POT_GAIN_STR
-    bcs eff_potion_gain_stat        // potions of gain stat (140-145)
-    cmp #ITEM_TYPE_POT_RESTORATION
-    bcc iqp3_healing
-    beq iqp3_restoration
-    cmp #ITEM_TYPE_POT_RESIST_COLD
-    bcc iqp3_resist_heat
+    cmp #ITEM_SLOT_POTION_OF_HEALING
+    beq iqp3_healing
+    cmp #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
+    beq iqp3_cure_critical
+    cmp #ITEM_SLOT_POTION_OF_RESIST_HEAT
+    beq iqp3_resist_heat
+    cmp #ITEM_SLOT_POTION_OF_RESIST_COLD
     beq iqp3_resist_cold
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    cmp #ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
     beq iqp3_neutralize
+    jmp eff_potion_gain_stat        // 6 gain-stat potions (unmatched -> rts)
 
 iqp3_cure_critical:
     // 6d7 HP, cures blindness, confusion and poison
@@ -1285,11 +1285,6 @@ iqp3_cure_critical:
 
 iqp3_healing:
     jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
-
-iqp3_restoration:
-    jsr player_calc_stats
-    ldx #HSTR_PIQ_RESTORED
-    bra !iqp3_msg+
 
 iqp3_resist_heat:
     ldx #zp_eff_resist

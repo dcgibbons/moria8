@@ -12,6 +12,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools"))
+import check_item_catalog_ports  # noqa: E402
 DEFAULT_BUILD_DIR = ROOT / "build" / "atari8"
 
 OS_PAGE2_DCB_BASE = 0x0200
@@ -522,7 +525,7 @@ def run_selftest() -> int:
         write_synthetic_prg(bdir / "OVL.TTL", 0xE000, 0x0BCD)
         write_synthetic_prg(bdir / "legalui", 0xE000, 0x03DD)
         (bdir / CATALOG_FILE).write_bytes(bytes(139 * 125 + 57))
-        (bdir / ITEM_CATALOG_FILE).write_bytes(b"ITM2" + struct.pack("<H", 7573) + bytes(7573 - 6))
+        (bdir / ITEM_CATALOG_FILE).write_bytes(b"ITM2" + struct.pack("<H", 7478) + bytes(7478 - 6))
 
         errs = validate_build(bdir)
         if errs:
@@ -630,7 +633,7 @@ def run_selftest() -> int:
         if not validate_build(bdir):
             print("FAIL: failed to catch ITEM.CAT exceeding 7800 B cap", file=sys.stderr)
             return 1
-        (bdir / ITEM_CATALOG_FILE).write_bytes(b"BAD!" + struct.pack("<H", 7573) + bytes(7573 - 6))
+        (bdir / ITEM_CATALOG_FILE).write_bytes(b"BAD!" + struct.pack("<H", 7478) + bytes(7478 - 6))
         if not validate_build(bdir):
             print("FAIL: failed to catch ITEM.CAT bad header", file=sys.stderr)
             return 1
@@ -649,6 +652,8 @@ def main() -> int:
         return run_selftest()
 
     errors = validate_build(args.build_dir)
+    if not errors and args.build_dir.resolve() == DEFAULT_BUILD_DIR.resolve():
+        errors.extend(check_item_catalog_ports.verify_port("atari8"))
     if errors:
         print("Atari 8-bit memory contract check FAILED:", file=sys.stderr)
         for err in errors:

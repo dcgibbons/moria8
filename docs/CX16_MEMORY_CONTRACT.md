@@ -39,7 +39,7 @@ Each 8 KB RAM bank (`$A000-$BFFF`) has a dedicated, non-overlapping owner:
 | `3` | `$6000-$7FFF` | `CX16.AUXDATA` (`Cx16AuxData`) | Preloaded at boot: item name streams, `it_unknown_idx`, `key_map_petscii`/`key_map_cmd`, store inventory/runtime, recall arrays, spell tables/names, ego suffix slots |
 | `4` | `$8000-$9FFF` | `CX16.HUFFDATA` (`Cx16HuffData`) | Preloaded at boot: Huffman tree and compressed string corpus, then the monster catalog's Huffman-coded names |
 | `5` | `$A000-$BFFF` | `MONSTER.EXT` (`CX16_BANK_CATALOG_EXT = 5`) | Preloaded at boot: Phase 5 extended monster catalog (`279 × 8 B = 2,232 / 8,192 B`, `$A000-$A8B7`, `5,960 B` free), read via `$00`-preserving `catalog_fetch_ext` (`platforms/cx16/monster_catalog_bank.s`) |
-| `6` | `$A000-$BFFF` | `ITEM.CAT` (`CX16_BANK_ITEM_CAT = 6`) | Preloaded at boot: `'ITM2'` item/ego/flavor catalog (`7,573 / 8,192 B`, `$A000-$BD94`, `619 B` free), read via Low-RAM `$00`-preserving helpers (`platforms/cx16/item_cat_bank.s`) |
+| `6` | `$A000-$BFFF` | `ITEM.CAT` (`CX16_BANK_ITEM_CAT = 6`) | Preloaded at boot: `'ITM2'` `361`-item VMS/ego/flavor catalog (`7,478 / 8,192 B`, `$A000-$BD35`, `714 B` free; Save Format V2 `SAVE_VERSION = $22`), read via Low-RAM `$00`-preserving helpers (`platforms/cx16/item_cat_bank.s`) |
 | `7-8` | `$A000-$BFFF` | Reserved (`CX16_BANK_EXT_BASE..END = 7..8`) | Reclaimed from obsolete `MONSTER.DB.3..4`; free extended HiRAM banks (`16 KB`) |
 | `9` | `$A000-$BFFF` | `OVL.START` (`OVL_STARTUP = 1`) | Preloaded at boot: character creation, `player_chargen_cold.s`, & item ID init |
 | `10` | `$A000-$BFFF` | `OVL.TOWN` (`OVL_TOWN = 2`) | Preloaded at boot: town stores UI (`store.s`, `ui_store.s`; Home moved to `OVL.HOME` under `HOME_OVERLAY_SEPARATE`) |
@@ -70,7 +70,7 @@ The catalog's Huffman-coded names ride in Bank 4 after the corpus
 (`Cx16HuffData`, virtual `$8DF6-$9C10`), read like the corpus.
 `core/monster_catalog.s` copies a species' 29 fields into resident `cr_*` rows
 and decodes its name into the `$9B00` pool. Bank 6 (`CX16_BANK_ITEM_CAT`) holds
-the preloaded `'ITM2'` `ITEM.CAT` (`7,573 B` at `$A000-$BD94`, `619 B` free).
+the preloaded `'ITM2'` `ITEM.CAT` (`7,478 B` at `$A000-$BD35`, `714 B` free).
 Banks 7-8 (`CX16_BANK_EXT_BASE..END`) and Banks 25-63 (`CX16_BANK_WARM_BASE..END`)
 are formally partitioned in `platforms/cx16/memory.s` (`0..63`, **23 used / 41 free = 328 KB free**)
 and verified without collision at assemble time and by `check_memory_contract.py`.
@@ -288,7 +288,7 @@ Problem and success criteria: Wire Phase 5's 29-field cr_* buffers (+320 B), 279
 State being changed: platforms/cx16/{main.s,memory.s,monster_catalog_bank.s,storage_kernal.s,cartridge_contract.s,Makefile,check_memory_contract.py} & tools/{make_cx16_cart.py,check_cx16_cart.py} — preload MONSTER.EXT into Bank 5 (CX16_BANK_CATALOG_EXT), add $00-preserving catalog_fetch_ext <= $9980, add cat_undead[35] to Bank 23 MONSTER.CAT, evict Wave 5.2 cold modules + mae_cold_body into HiRAM overlays, and register 23rd cartridge asset.
 Search scope and terms: rg across platforms/cx16/, core/, and tools/ for CX16_BANK_CATALOG_EXT, catalog_fetch_ext, cat_ext_record, LOW_RAM_MIN_FREE, UI_CHAR_BG_EXTERNAL, TRAP_TRIGGER_EXTERNAL, STARTING_KIT_EXTERNAL, mae_cold_body.
 Relevant readers/writers found and known exclusions: catalog_fetch_ext saves/restores $00 under php; sei using self-modified absolute address $A000 + id * 8 (zero ZP touched) so overlay callers in Banks 9..21 never lose their mapped bank; cat_ext_record and catalog_fetch_ext_end are asserted <= $9980 for cartridge_test_live.s compatibility.
-Initialization, reset and persistence points: cx16_preload_banks loads MONSTER.EXT into Bank 5 at boot alongside Bank 23 MONSTER.CAT; Save Format V2 (SAVE_VERSION = $21, 17,161 B).
+Initialization, reset and persistence points: cx16_preload_banks loads MONSTER.EXT into Bank 5 at boot alongside Bank 23 MONSTER.CAT; Save Format V2 (SAVE_VERSION = $22, 17,161 B).
 Affected production sequence through the changed transition: entry_main -> cx16_preload_banks (loads Bank 5 MONSTER.EXT & Bank 23 MONSTER.CAT) -> gameplay cat_fetch / catalog_recall_match_and_fill -> catalog_fetch_ext (maps Bank 5, copies 8 B -> cat_ext_record, restores caller $00) -> '/' recall dispatches OVL.MODAL -> ui_recall_display.
 Contract decision or selected upstream oracle with source locations: Commander X16 64-bank HiRAM partition (platforms/cx16/memory.s, check_memory_contract.py) and VMS Moria 4.8 279-creature catalog.
 Intentional Moria8 deviations: None to VMS gameplay; splitting core 21 fields + index in Bank 23 (5,976 B) and 8 extended fields in Bank 5 (2,232 B) keeps every segment inside a single 8 KB $A000-$BFFF bank without cross-bank straddling.

@@ -230,7 +230,11 @@ test_rng_range:
     rts
 
 test_pick_item_type:
-    lda #5                      // Fixed loot item ID (Mace)
+    .if (ITEM_PAGE_MACE != 0) {
+        lda #ITEM_PAGE_MACE
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_MACE         // Fixed loot item ID (Mace)
     rts
 
 test_roll_enchantment:
@@ -310,7 +314,7 @@ test_reset:
 // place_chest_at_latch — put a Small Wooden Chest (id 128) in floor slot 0 at
 // the latch position so the stale-latch guard finds it.
 place_chest_at_latch:
-    lda #128
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_item_id + 0
     lda chest_loot_x
     sta fi_x + 0
@@ -457,16 +461,28 @@ test_start:
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
-    cmp #5
+    cmp #ITEM_SLOT_MACE
     bne !t2_fail+
+    .if (ITEM_PAGE_MACE != 0) {
+        lda fi_meta_hi,x
+        and #ITEM_PAGE_BIT
+        cmp #ITEM_PAGE_MACE
+        bne !t2_fail+
+    }
     // Drop 2 at (14,28) is the stub item id 5
     lda #14
     ldy #28
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
-    cmp #5
+    cmp #ITEM_SLOT_MACE
     bne !t2_fail+
+    .if (ITEM_PAGE_MACE != 0) {
+        lda fi_meta_hi,x
+        and #ITEM_PAGE_BIT
+        cmp #ITEM_PAGE_MACE
+        bne !t2_fail+
+    }
     lda #$01
     sta tc_results + 2
     jmp !t3+
@@ -737,7 +753,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t9_fail+
     lda fi_item_id,x
-    cmp #2                    // gold IDs are 0/1
+    cmp #ITEM_SLOT_GOLD_LARGE + 1                    // gold IDs are 0/1
     bcs !t9_fail+
     lda fi_qty,x
     cmp #5

@@ -450,7 +450,8 @@ chest_loot_place_one:
 
 !clpo_place_gold:
     // --- Gold (ID 0 or 1), qty = rng_range_word(dlvl*10) + 5 ---
-    lda #2
+    .assert "Chest gold spawner uses Page-0 IDs 0..1", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_LARGE == 1 && ITEM_PAGE_GOLD_LARGE == 0, true
+    lda #(ITEM_SLOT_GOLD_LARGE + 1)
     jsr rng_range
     sta fi_add_id
     jsr fi_add_clear_plain_meta
@@ -534,7 +535,7 @@ chest_product_setup:
     sta fi_add_x
     lda #10
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_LARGE_WOOD
+    lda #ITEM_SLOT_LARGE_WOODEN_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty

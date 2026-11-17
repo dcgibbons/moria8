@@ -45,19 +45,20 @@ monster_ai_tick:
     // Player speed (MON-026, Umoria playerChangeSpeed): each Ring of Speed
     // worn, Boots of Speed/Slowness, and active haste/slow timer add cleanly.
     ldx #0
+    .assert "Ring of Speed on Page 1", ITEM_PAGE_RING_OF_SPEED, ITEM_PAGE_BIT
     lda inv_ego + EQUIP_RING
     and #ITEM_PAGE_BIT
-    bne !mat_ring2+
+    beq !mat_ring2+
     lda inv_item_id + EQUIP_RING
-    cmp #ITEM_TYPE_RING_SPEED
+    cmp #ITEM_SLOT_RING_OF_SPEED
     bne !mat_ring2+
     inx
 !mat_ring2:
     lda inv_ego + EQUIP_RING2
     and #ITEM_PAGE_BIT
-    bne !mat_boots+
+    beq !mat_boots+
     lda inv_item_id + EQUIP_RING2
-    cmp #ITEM_TYPE_RING_SPEED
+    cmp #ITEM_SLOT_RING_OF_SPEED
     bne !mat_boots+
     inx
 !mat_boots:

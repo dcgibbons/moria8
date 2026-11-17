@@ -368,7 +368,8 @@ cmb_in_way_str:
 #import "../../core/turn_data.s"
 // Heal feedback (spell/potion heal + message) in resident main RAM too: the
 // play slot has no room. The potion heal/cure effects sit beside it, where
-// both the items overlay (#17, #25) and the spell overlay (#96, #100) reach.
+// both the items overlay (Cure Light/Serious Wounds) and the spell overlay
+// (Healing, Cure Critical Wounds) reach.
 #import "../../core/player_heal_feedback.s"
 #import "../../core/eff_potion_cure.s"
 
@@ -1427,23 +1428,17 @@ ovl_items_end:
     #undef SCROLL_P3_EXISTING_OWNER
 
 iq_dispatch_p3_spell:
-    cmp #ITEM_TYPE_POT_GAIN_STR
-    bcc !iqp3_not_gain+
-    jmp tramp_eff_potion_gain_stat  // potions of gain stat (140-145, OVL.DEATH)
-!iqp3_not_gain:
-    cmp #ITEM_TYPE_POT_HEALING
+    cmp #ITEM_SLOT_POTION_OF_HEALING
     beq iqp3_healing
-    cmp #ITEM_TYPE_POT_RESTORATION
-    beq iqp3_restoration
-    cmp #ITEM_TYPE_POT_RESIST_HEAT
-    beq iqp3_resist_heat
-    cmp #ITEM_TYPE_POT_RESIST_COLD
-    beq iqp3_resist_cold
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    cmp #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     beq iqp3_cure_critical
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    cmp #ITEM_SLOT_POTION_OF_RESIST_HEAT
+    beq iqp3_resist_heat
+    cmp #ITEM_SLOT_POTION_OF_RESIST_COLD
+    beq iqp3_resist_cold
+    cmp #ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
     beq iqp3_neutralize
-    // Fall through: caller constrains A to {96-100, 126} (140-145 above)
+    jmp tramp_eff_potion_gain_stat  // 6 gain-stat potions (OVL.DEATH; unmatched -> rts)
 
 iqp3_healing:
     jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
@@ -1454,11 +1449,6 @@ iqp3_cure_critical:
     ldx #7
     ldy #6
     jmp eff_potion_heal_cure
-
-iqp3_restoration:
-    jsr player_calc_stats
-    ldx #HSTR_PIQ_RESTORED
-    jmp huff_print_msg
 
 iqp3_resist_heat:
     // No message (upstream prints nothing for resist potions)

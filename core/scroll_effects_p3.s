@@ -8,11 +8,13 @@
 
 #if SCROLL_P3_EXISTING_OWNER || SCROLL_P3_NEW_OWNER
 irs_dispatch_p3_overlay:
-#if SCROLL_P3_EXISTING_OWNER
+    .assert "All scrolls, wands, and staves live on Page 0", ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT == 0 && ITEM_PAGE_STAFF_OF_DARKNESS_L5 == 0, true
     bit piw_ego
-    bvc !irs_p0+
-    cmp #ITEM_TYPE_STAFF_EARTHQUAKES - ITEM_PAGE_SIZE
-    bne !irs_p1_exec+
+    bvs irs_p3_nop
+    sta piw_item_id
+#if SCROLL_P3_EXISTING_OWNER
+    cmp #ITEM_SLOT_STAFF_OF_EARTHQUAKES
+    bne !irs_not_eq+
     lda #0
     sta pm_spell_idx                // clear Map Area alias (C128)
 #if HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE || HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP || HAL_PLATFORM_ITEM_PICKUP_OVERLAY
@@ -20,94 +22,39 @@ irs_dispatch_p3_overlay:
 #else
     jmp eff_earthquake
 #endif
-!irs_p1_exec:
-#if HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
-    jmp tramp_eff_item_p1
-#else
-    jmp eff_item_p1_exec
+!irs_not_eq:
 #endif
-!irs_p0:
-    // Wand of Stinking Cloud is a legacy ID (42), not a Phase 3 row. It still
-    // uses the existing-owner path, but must bypass the 101-based scroll table.
-    cmp #42
-    beq irs_p3_run_existing
-    cmp #ITEM_TYPE_WAND_SLOW
-    bcc !irs_p3_scroll_tbl+
-    // Wand/staff Phase 3 effects (114-121) ride the same inner-swap mechanism
-    jmp irs_p3_run_existing
-!irs_p3_scroll_tbl:
-#endif
-    sec
-    sbc #ITEM_TYPE_SCR_TELEPORT_LEVEL
-    tax
-    lda irs_p3_table_lo,x
+#if SCROLL_P3_NEW_OWNER
+    ldx #3
+!irs_new_scan:
+    cmp irs_new_ids,x
+    beq !irs_new_hit+
+    dex
+    bpl !irs_new_scan-
+    bmi !irs_not_new+
+!irs_new_hit:
+    lda irs_new_lo,x
     sta zp_ptr1
-    lda irs_p3_table_hi,x
+    lda irs_new_hi,x
     sta zp_ptr1_hi
     jmp (zp_ptr1)
-
-irs_p3_table_lo:
-#if SCROLL_P3_NEW_OWNER
-    .byte <irs_p3_teleport_level, <irs_p3_magic_mapping, <irs_p3_object_detect
-#else
-    .byte <irs_p3_nop, <irs_p3_nop, <irs_p3_nop
+irs_new_ids:
+    .byte ITEM_SLOT_SCROLL_OF_TELEPORT_LEVEL, ITEM_SLOT_SCROLL_OF_MAGIC_MAPPING
+    .byte ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION, ITEM_SLOT_SCROLL_OF_MASS_GENOCIDE
+irs_new_lo:
+    .byte <irs_p3_teleport_level, <irs_p3_magic_mapping, <irs_p3_object_detect, <irs_p3_mass_genocide
+irs_new_hi:
+    .byte >irs_p3_teleport_level, >irs_p3_magic_mapping, >irs_p3_object_detect, >irs_p3_mass_genocide
+!irs_not_new:
 #endif
 #if SCROLL_P3_EXISTING_OWNER
-    .byte <irs_p3_recharging, <irs_p3_rune, <irs_p3_genocide
-#else
-    .byte <irs_p3_nop, <irs_p3_nop, <irs_p3_nop
-#endif
-#if SCROLL_P3_NEW_OWNER
-    .byte <irs_p3_mass_genocide
-#else
-    .byte <irs_p3_nop
-#endif
-#if SCROLL_P3_EXISTING_OWNER
-    .byte <irs_p3_destruction
-#else
-    .byte <irs_p3_nop
-#endif
-irs_p3_table_hi:
-#if SCROLL_P3_NEW_OWNER
-    .byte >irs_p3_teleport_level, >irs_p3_magic_mapping, >irs_p3_object_detect
-#else
-    .byte >irs_p3_nop, >irs_p3_nop, >irs_p3_nop
-#endif
-#if SCROLL_P3_EXISTING_OWNER
-    .byte >irs_p3_recharging, >irs_p3_rune, >irs_p3_genocide
-#else
-    .byte >irs_p3_nop, >irs_p3_nop, >irs_p3_nop
-#endif
-#if SCROLL_P3_NEW_OWNER
-    .byte >irs_p3_mass_genocide
-#else
-    .byte >irs_p3_nop
-#endif
-#if SCROLL_P3_EXISTING_OWNER
-    .byte >irs_p3_destruction
-#else
-    .byte >irs_p3_nop
+    jmp irs_p3_run_existing
 #endif
 irs_p3_nop:
     rts
 #endif
 
 #if SCROLL_P3_EXISTING_OWNER
-irs_p3_destruction:
-    lda #ITEM_TYPE_SCR_DESTRUCTION
-    jmp irs_p3_run_existing
-
-irs_p3_recharging:
-    lda #ITEM_TYPE_SCR_RECHARGING
-    jmp irs_p3_run_existing
-
-irs_p3_rune:
-    lda #ITEM_TYPE_SCR_RUNE_PROTECTION
-    jmp irs_p3_run_existing
-
-irs_p3_genocide:
-    lda #ITEM_TYPE_SCR_GENOCIDE
-
 // irs_p3_run_existing — Run an established spell-overlay/death-overlay
 // handler for a Phase 3 scroll. On C128 those handlers live in OVL_DEATH and
 // the router left OVL_MODAL_MISC loaded, so swap out and back. On Apple IIe
@@ -132,12 +79,12 @@ irs_p3_run_existing:
 #if HAL_PLATFORM_SCROLL_P3_MODAL_DEATH_TRAMP
     // Death-overlay handlers are called through the resident swap-call
     // trampoline; this overlay cannot swap to OVL_DEATH without evicting its
-    // own continuation. A = item type ID.
-    cmp #42
+    // own continuation. A = item slot_lo.
+    cmp #ITEM_SLOT_WAND_OF_STINKING_CLOUD
     bne !irs_re_not_cloud+
     jmp tramp_p3_death_cloud
 !irs_re_not_cloud:
-    cmp #ITEM_TYPE_STAFF_REMOVE_CURSE
+    cmp #ITEM_SLOT_STAFF_OF_REMOVE_CURSE
     bne !irs_re_not_rc+
     jmp tramp_p3_death_remove_curse
 !irs_re_not_rc:
@@ -146,7 +93,7 @@ irs_p3_run_existing:
 !irs_re_find:
     lda irs_re_id_tab,x
     cmp #$ff
-    beq !irs_re_found+
+    beq !irs_re_p1_exec+
     cmp irs_re_item
     beq !irs_re_found+
     inx
@@ -154,8 +101,14 @@ irs_p3_run_existing:
     inx
     inx
     bne !irs_re_find-
+!irs_re_p1_exec:
+#if HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
+    jmp tramp_eff_item_p1
+#else
+    jmp eff_item_p1_exec
+#endif
 !irs_re_found:
-    // X indexes the matching entry (or the $ff default: no-op).
+    // X indexes the matching entry.
     lda irs_re_id_tab + 2,x
     sta tpdi_target + 1
     lda irs_re_id_tab + 3,x
@@ -164,78 +117,91 @@ irs_p3_run_existing:
     jmp tramp_p3_death_items
 
 irs_re_item: .byte 0
-// Entries: item ID, effect argument, handler lo, handler hi. $ff terminates
-// and defaults to a no-op; only the two explicit destruction rows may run
-// eff_destroy_area, so an unmatched ID can never destroy the level.
+// Entries: item slot_lo, effect argument, handler lo, handler hi. $ff terminates
+// and delegates remaining scroll/wand/staff IDs to eff_item_p1_exec (whose
+// unmatched IDs are safe no-ops); only the two explicit destruction rows may
+// run eff_destroy_area.
 irs_re_id_tab:
-    .byte ITEM_TYPE_SCR_RECHARGING, 50, <eff_recharge_item, >eff_recharge_item
-    .byte ITEM_TYPE_SCR_RUNE_PROTECTION, 0, <eff_glyph_of_warding, >eff_glyph_of_warding
-    .byte ITEM_TYPE_SCR_GENOCIDE, 0, <eff_genocide, >eff_genocide
-    .byte ITEM_TYPE_SCR_DESTRUCTION, 0, <eff_destroy_area, >eff_destroy_area
-    .byte ITEM_TYPE_STAFF_DESTRUCTION, 0, <eff_destroy_area, >eff_destroy_area
-    .byte ITEM_TYPE_WAND_SLOW, 0, <eff_slow_monster_dir, >eff_slow_monster_dir
-    .byte ITEM_TYPE_WAND_STONE_MUD, 0, <eff_wall_to_mud, >eff_wall_to_mud
-    .byte ITEM_TYPE_WAND_TELEPORT_AWAY, 0, <eff_teleport_other, >eff_teleport_other
-    .byte ITEM_TYPE_WAND_FIRE_BALL, 49, <eff_ball, >eff_ball
-    .byte ITEM_TYPE_WAND_COLD_BALL, 33, <eff_ball, >eff_ball
+    .byte ITEM_SLOT_SCROLL_OF_RECHARGING, 50, <eff_recharge_item, >eff_recharge_item
+    .byte ITEM_SLOT_SCROLL_OF_RUNE_OF_PROTECTION, 0, <eff_glyph_of_warding, >eff_glyph_of_warding
+    .byte ITEM_SLOT_SCROLL_OF_GENOCIDE, 0, <eff_genocide, >eff_genocide
+    .byte ITEM_SLOT_SCROLL_OF_STAR_DESTRUCTION, 0, <eff_destroy_area, >eff_destroy_area
+    .byte ITEM_SLOT_STAFF_OF_DESTRUCTION, 0, <eff_destroy_area, >eff_destroy_area
+    .byte ITEM_SLOT_WAND_OF_SLOW_MONSTER, 0, <eff_slow_monster_dir, >eff_slow_monster_dir
+    .byte ITEM_SLOT_WAND_OF_STONE_TO_MUD, 0, <eff_wall_to_mud, >eff_wall_to_mud
+    .byte ITEM_SLOT_WAND_OF_TELEPORT_AWAY, 0, <eff_teleport_other, >eff_teleport_other
+    .byte ITEM_SLOT_WAND_OF_FIRE_BALLS, 49, <eff_ball, >eff_ball
+    .byte ITEM_SLOT_WAND_OF_COLD_BALLS, 33, <eff_ball, >eff_ball
     // VMS wands.inc: Fire Bolts 6d8, Drain Life 50, Lightning Balls 24, Acid Balls 40
-    .byte ITEM_TYPE_WAND_FIRE_BOLT, 0, <eff_wand_fire_bolt, >eff_wand_fire_bolt
-    .byte ITEM_TYPE_WAND_DRAIN_LIFE, 0, <eff_wand_drain_life, >eff_wand_drain_life
-    .byte ITEM_TYPE_WAND_LIGHTNING_BALL, 24, <eff_ball, >eff_ball
-    .byte ITEM_TYPE_WAND_ACID_BALL, 40, <eff_ball, >eff_ball
-    .byte ITEM_TYPE_STAFF_DISPEL_EVIL, 0, <ped_s28, >ped_s28
-    .byte ITEM_TYPE_STAFF_SPEED, 0, <eff_staff_speed, >eff_staff_speed
-    .byte $ff, 0, <eff_p3_nop, >eff_p3_nop
+    .byte ITEM_SLOT_WAND_OF_FIRE_BOLTS, 0, <eff_wand_fire_bolt, >eff_wand_fire_bolt
+    .byte ITEM_SLOT_WAND_OF_DRAIN_LIFE, 0, <eff_wand_drain_life, >eff_wand_drain_life
+    .byte ITEM_SLOT_WAND_OF_LIGHTNING_BALLS, 24, <eff_ball, >eff_ball
+    .byte ITEM_SLOT_WAND_OF_ACID_BALLS, 40, <eff_ball, >eff_ball
+    .byte ITEM_SLOT_STAFF_OF_DISPEL_EVIL, 0, <ped_s28, >ped_s28
+    .byte ITEM_SLOT_STAFF_OF_SPEED, 0, <eff_staff_speed, >eff_staff_speed
+    .byte $ff
 #else
-    cmp #ITEM_TYPE_SCR_RECHARGING
+    cmp #ITEM_SLOT_SCROLL_OF_RECHARGING
     bne !irs_not_recharge+
     jmp !irs_re_recharge+
 !irs_not_recharge:
-    cmp #ITEM_TYPE_SCR_RUNE_PROTECTION
+    cmp #ITEM_SLOT_SCROLL_OF_RUNE_OF_PROTECTION
     bne !irs_not_rune+
     jmp !irs_re_rune+
 !irs_not_rune:
-    cmp #ITEM_TYPE_SCR_GENOCIDE
+    cmp #ITEM_SLOT_SCROLL_OF_GENOCIDE
     bne !irs_not_genocide+
     jmp !irs_re_genocide+
 !irs_not_genocide:
-    cmp #ITEM_TYPE_WAND_SLOW
+    cmp #ITEM_SLOT_WAND_OF_SLOW_MONSTER
     bne !irs_not_slow+
     jmp !irs_re_slow+
 !irs_not_slow:
-    cmp #ITEM_TYPE_WAND_STONE_MUD
+    cmp #ITEM_SLOT_WAND_OF_STONE_TO_MUD
     bne !irs_not_mud+
     jmp !irs_re_mud+
 !irs_not_mud:
-    cmp #ITEM_TYPE_WAND_TELEPORT_AWAY
+    cmp #ITEM_SLOT_WAND_OF_TELEPORT_AWAY
     bne !irs_not_teleport+
     jmp !irs_re_teleport+
 !irs_not_teleport:
-    cmp #ITEM_TYPE_WAND_FIRE_BALL
+    cmp #ITEM_SLOT_WAND_OF_FIRE_BALLS
     bne !irs_not_fire+
     jmp !irs_re_fire+
 !irs_not_fire:
-    cmp #ITEM_TYPE_WAND_COLD_BALL
+    cmp #ITEM_SLOT_WAND_OF_COLD_BALLS
     bne !irs_not_cold+
     jmp !irs_re_cold+
 !irs_not_cold:
-    cmp #ITEM_TYPE_WAND_FIRE_BOLT
-    bcc !irs_not_new_wand+
-    jmp !irs_re_new_wand+           // 153-156, the last item IDs
-!irs_not_new_wand:
-    cmp #ITEM_TYPE_STAFF_DISPEL_EVIL
+    cmp #ITEM_SLOT_WAND_OF_FIRE_BOLTS
+    bne !irs_not_fbolt+
+    jmp !irs_re_fbolt+
+!irs_not_fbolt:
+    cmp #ITEM_SLOT_WAND_OF_DRAIN_LIFE
+    bne !irs_not_drain+
+    jmp !irs_re_drain+
+!irs_not_drain:
+    cmp #ITEM_SLOT_WAND_OF_LIGHTNING_BALLS
+    bne !irs_not_lball+
+    jmp !irs_re_lball+
+!irs_not_lball:
+    cmp #ITEM_SLOT_WAND_OF_ACID_BALLS
+    bne !irs_not_aball+
+    jmp !irs_re_aball+
+!irs_not_aball:
+    cmp #ITEM_SLOT_STAFF_OF_DISPEL_EVIL
     bne !irs_not_dispel+
     jmp !irs_re_dispel+
 !irs_not_dispel:
-    cmp #ITEM_TYPE_STAFF_SPEED
+    cmp #ITEM_SLOT_STAFF_OF_SPEED
     beq !irs_re_speed+
-    cmp #ITEM_TYPE_STAFF_REMOVE_CURSE
+    cmp #ITEM_SLOT_STAFF_OF_REMOVE_CURSE
     beq !irs_re_remove_curse+
-    cmp #42
+    cmp #ITEM_SLOT_WAND_OF_STINKING_CLOUD
     beq !irs_re_cloud+
-    cmp #ITEM_TYPE_SCR_DESTRUCTION
+    cmp #ITEM_SLOT_SCROLL_OF_STAR_DESTRUCTION
     beq !irs_re_destroy+
-    cmp #ITEM_TYPE_STAFF_DESTRUCTION
+    cmp #ITEM_SLOT_STAFF_OF_DESTRUCTION
     bne !irs_re_unmatched+
 !irs_re_destroy:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
@@ -248,8 +214,12 @@ irs_re_id_tab:
     jmp !irs_re_done+
 #endif
 !irs_re_unmatched:
-    // Unmatched ID: no effect. Never default to area destruction.
-    jmp !irs_re_done+
+    // Remaining scroll/wand/staff IDs run in eff_item_p1_exec (unmatched -> rts).
+#if HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
+    jmp tramp_eff_item_p1
+#else
+    jmp eff_item_p1_exec
+#endif
 !irs_re_speed:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
     :CompactReCall(eff_staff_speed)
@@ -355,16 +325,11 @@ irs_re_id_tab:
 // that called the router restores OVL.ITEMS.
 // VMS wands.inc: Fire Bolts 6d8, Drain Life 50, Lightning Balls 24, Acid
 // Balls 40. Drain Life (core/wand_bolt_entries.s) is beside this chain, or on
-// the compact ports in OVL.SPELL with the other handlers. Carry set, Z set
-// for Fire Bolts.
-.assert "The four VMS wands are the last Phase 3 Page 0 IDs, in dispatch order", ITEM_TYPE_WAND_DRAIN_LIFE == ITEM_TYPE_WAND_FIRE_BOLT + 1 && ITEM_TYPE_WAND_LIGHTNING_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 2 && ITEM_TYPE_WAND_ACID_BALL == ITEM_TYPE_WAND_FIRE_BOLT + 3, true
-!irs_re_new_wand:
-    beq !irs_re_fbolt+              // 153
-    cmp #ITEM_TYPE_WAND_LIGHTNING_BALL
-    bcc !irs_re_drain+              // 154
-    beq !irs_re_lball+              // 155
+// the compact ports in OVL.SPELL with the other handlers.
+.assert "The four VMS attack wands live on Page 0", ITEM_PAGE_WAND_OF_FIRE_BOLTS == 0 && ITEM_PAGE_WAND_OF_DRAIN_LIFE == 0 && ITEM_PAGE_WAND_OF_LIGHTNING_BALLS == 0 && ITEM_PAGE_WAND_OF_ACID_BALLS == 0, true
+!irs_re_aball:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    :CompactReCallArg(eff_ball, 40)          // 156: Acid Balls
+    :CompactReCallArg(eff_ball, 40)          // Acid Balls
 !irs_re_lball:
     :CompactReCallArg(eff_ball, 24)
 !irs_re_drain:
@@ -372,7 +337,7 @@ irs_re_id_tab:
 !irs_re_fbolt:
     :CompactReCall(eff_wand_fire_bolt)
 #else
-    lda #40                         // 156: Acid Balls
+    lda #40                         // Acid Balls
     .byte $2c                       // BIT abs: skips the lda #24
 !irs_re_lball:
     lda #24

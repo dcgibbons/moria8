@@ -59,30 +59,23 @@ calc_dig_ability:
     sta tun_dig_ability
 
     lda item_cur_page
-    bne !cda_done-              // All digging tools are Page 0 (#62,#63,#157..160)
-    cpx #157
-    bcc !cda_legacy_tool+
-    cpx #161
-    bcs !cda_done-
-    lda dig_base_ext - 157,x
-    clc
-    adc tun_dig_ability
-    bcc !cda_ext_ok+
-    lda #$FF
-!cda_ext_ok:
-    sta tun_dig_ability
-    rts
-
-!cda_legacy_tool:
-    // Add base bonus from table (#62 Shovel, #63 Pick)
+    bne !cda_done-              // All digging tools are Page 0
+    .assert "Digging tools 198..203 contiguous on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_ORCISH_PICK == ITEM_PICK + 2 && ITEM_DWARVEN_PICK == ITEM_PICK + 3 && ITEM_GNOMISH_SHOVEL == ITEM_PICK + 4 && ITEM_DWARVEN_SHOVEL == ITEM_PICK + 5 && ITEM_PAGE_DWARVEN_SHOVEL == 0, true
     txa
     sec
-    sbc #62                     // Index into dig_base_table (0=Shovel, 1=Pick)
+    sbc #ITEM_SLOT_PICK
+    cmp #6
+    bcs !cda_done-
     tax
     lda dig_base_table,x
     clc
     adc tun_dig_ability
+    bcc !cda_base_ok+
+    lda #$FF
+!cda_base_ok:
     sta tun_dig_ability
+    cpx #2                      // Only base Pick (0) and Shovel (1) add tool ego * 12
+    bcs !cda_done-
 
     // Add ego bonus: ego * 12
     lda inv_ego + EQUIP_WEAPON
@@ -106,6 +99,4 @@ calc_dig_ability:
     rts
 
 dig_base_table:
-    .byte 6, 20                 // Shovel base=6, Pick base=20
-dig_base_ext:
-    .byte 18, 32, 30, 44        // #157 Gnomish S, #158 Orcish P, #159 Dwarven S, #160 Dwarven P
+    .byte 20, 6, 32, 44, 18, 30 // Pick, Shovel, Orcish P, Dwarven P, Gnomish S, Dwarven S

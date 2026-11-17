@@ -201,7 +201,7 @@ test_setup_chest:
     txa
     pha
     jsr item_init_floor
-    lda #128
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_item_id + 0
     lda df_target_x
     sta fi_x + 0
@@ -228,7 +228,7 @@ test_start:
     jsr chest_bash_command
     bcc !t0_fail+
     lda fi_item_id + 0
-    cmp #134
+    cmp #ITEM_SLOT_RUINED_CHEST
     bne !t0_fail+
     lda fi_p1 + 0
     bne !t0_fail+
@@ -258,7 +258,7 @@ test_start:
     jsr chest_bash_command
     bcc !t1_fail+
     lda fi_item_id + 0
-    cmp #128
+    cmp #ITEM_SLOT_SMALL_WOODEN_CHEST
     bne !t1_fail+
     lda fi_p1 + 0
     and #CHEST_P1_LOCKED
@@ -319,7 +319,7 @@ test_start:
     and #CHEST_P1_OPENED
     beq !t3_fail+
     lda fi_item_id + 0
-    cmp #128
+    cmp #ITEM_SLOT_SMALL_WOODEN_CHEST
     bne !t3_fail+
     lda #$01
     sta tc_results + 3
@@ -340,7 +340,7 @@ test_start:
     jsr chest_bash_command
     bcc !t4_fail+
     lda fi_item_id + 0
-    cmp #134
+    cmp #ITEM_SLOT_RUINED_CHEST
     bne !t4_fail+
     lda fi_p1 + 0
     bne !t4_fail+

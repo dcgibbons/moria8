@@ -2,7 +2,7 @@
 // item_identification.s — Item ID state, 174-flavour shuffles, and lookup helpers
 
 // ============================================================
-// Item Identification System (V2 370-item Base-255 paged catalog)
+// Item Identification System (V2 361-item Base-255 paged catalog)
 // ============================================================
 
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
@@ -38,7 +38,7 @@ staff_shuffle:  .fill FLAVOUR_STAFF_COUNT,  0
 // iuk_flavour_x — Global flavour index (0..173) of unknown paged item (item_cur_page, X).
 // Output: Carry clear and X = global flavour index for randomized potion/scroll/
 //         ring/wand/staff; Carry set for fixed classes, books, or fixed-flavour
-//         items (it_unknown_idx == $FF, e.g. #271 Water, #273 Apple Juice, #274 Slime Mold Juice).
+//         items (it_unknown_idx == $FF, e.g. Water, Apple Juice, Slime Mold Juice).
 // Sets item_display_id and item_display_page. Preserves item_cur_page. Clobbers: A, X, Y.
 iuk_flavour_x:
     stx item_display_id
@@ -57,7 +57,7 @@ iuk_flavour_x:
     sta iuf_base
     txa
     jsr item_get_unknown_idx_a
-    cmp #$ff                        // Fixed-flavour potions (#271/#273/#274) keep real name & color
+    cmp #$ff                        // Fixed-flavour potions (Water/Apple Juice/Slime Mold Juice) keep real name & color
     beq !iuf_none+
     clc
     adc iuf_base

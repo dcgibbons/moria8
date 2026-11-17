@@ -378,17 +378,21 @@ reset_shared_state:
 test_filtered_inventory_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
 
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 4
     lda #1
     sta inv_qty + 4
@@ -426,22 +430,22 @@ test_filtered_inventory_view:
 test_book_filtered_inventory_view:
     jsr reset_shared_state
 
-    lda #47
+    lda #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
 
-    lda #48
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
 
-    lda #55
+    lda #ITEM_SLOT_SPELLBOOK_MAGICK_I
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2
 
-    lda #58
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM
     sta inv_item_id + 3
     lda #1
     sta inv_qty + 3
@@ -479,12 +483,16 @@ test_book_filtered_inventory_view:
 test_filtered_equipment_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
 
-    lda #14
+    lda #ITEM_SLOT_BRASS_LANTERN
     sta inv_item_id + EQUIP_LIGHT
     lda #1
     sta inv_qty + EQUIP_LIGHT

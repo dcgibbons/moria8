@@ -3,12 +3,12 @@
 from pathlib import Path
 import sys
 
-# The C128 product build writes Save Format V2 ($21) with the 370-item Base-255
+# The C128 product build writes Save Format V2 ($22) with the 361-item Base-255
 # paged catalog, 34 inventory slots (including EQUIP_CLOAK = 32 and
 # EQUIP_SECONDARY = 33), 47-byte known-item bitset, 174-byte flavour shuffles,
 # 8 store arrays (including si_meta_hi), 11 floor-item blocks (including
 # fi_meta_hi), and 279 creature rows of persistent recall (1,116 B).
-SAVE_VERSION = 0x21
+SAVE_VERSION = 0x22
 ID_KNOWN_BYTES = 47
 FLAVOUR_COUNT = 174
 MAX_DOOR_STATES = 16

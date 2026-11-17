@@ -585,7 +585,7 @@ test_start:
     lda #10
     sta fi_add_x
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_SMALL_IRON
+    lda #ITEM_SLOT_SMALL_IRON_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -603,7 +603,7 @@ test_start:
     lda #12
     sta fi_add_x
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_LARGE_STEEL
+    lda #ITEM_SLOT_LARGE_STEEL_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -681,7 +681,7 @@ test_setup_search_chest_map:
     sta fi_add_x
     lda #20
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty

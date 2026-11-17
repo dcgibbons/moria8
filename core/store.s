@@ -244,8 +244,8 @@ calc_chr_price:
     // 16-bit × 8-bit multiply
     jsr math_mul_16x8           // Result in mul_result_0/1/2
 
-    // Divide all 24 bits by 100: 600 gp × 116% is 69,600, and dropping
-    // the top byte priced Mithril Chain Mail at 40 gp, under the haggle floor.
+    // Divide all 24 bits by 100: 1,200 gp × 116% is 139,200, and dropping
+    // the top byte priced Ribbed Plate Armor at 81 gp, under the haggle floor.
     ldx #100
     jsr hg_div_mul_result_24x8
     lda mul_result_0

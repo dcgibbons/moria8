@@ -775,10 +775,10 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertIsNone(service.balrog.state["items"]["c128/human-priest"]["start"])
 
     def test_single_save_version_policy_without_v1_constant_pins_exact_version(self) -> None:
-        """Save Format V2 policies define only hal_storage_save_version ($21),
-        rejecting legacy $17/$20 saves while continuing matching $21 runs."""
+        """Save Format V2 policies define only hal_storage_save_version ($22),
+        rejecting legacy $17/$21 saves while continuing matching $22 runs."""
         service = self.service(4, 2)
-        for build, ver, built in (("v1", 0x17, 1), ("cur1", 0x21, 2), ("cur2", 0x21, 3)):
+        for build, ver, built in (("v1", 0x17, 1), ("cur1", 0x22, 2), ("cur2", 0x22, 3)):
             root = self.make_build(service, build, built)
             policy = root / "platforms" / "commodore" / "c64" / "hal" / "storage_policy.s"
             policy.parent.mkdir(parents=True)
@@ -787,7 +787,7 @@ class BalrogQueueTest(unittest.TestCase):
             bot.mkdir(parents=True)
             for name in queue.BRAIN_MODULES:
                 (bot / name).write_text("class Brain:\n    def __init__(self):\n        self.food = 0\n")
-        self.assertEqual(queue.save_versions("cur2", "c64", service.home), (0x21, 0x21))
+        self.assertEqual(queue.save_versions("cur2", "c64", service.home), (0x22, 0x22))
         self.assertFalse(queue.start_loads({"run": "old", "build": "v1", "save": "s"}, "cur2", "c64", service.home))
         self.assertTrue(queue.start_loads({"run": "ok", "build": "cur1", "save": "s"}, "cur2", "c64", service.home))
 

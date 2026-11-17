@@ -526,9 +526,9 @@ test_start:
     lda #0
     sta zp_eff_blind
     sta zp_msg_flags
-    ldx #ITEM_TYPE_SCR_PHASE_DOOR
+    ldx #ITEM_SLOT_SCROLL_OF_PHASE_DOOR
     jsr id_known_clear
-    lda #ITEM_TYPE_SCR_PHASE_DOOR
+    lda #ITEM_SLOT_SCROLL_OF_PHASE_DOOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -547,7 +547,7 @@ test_start:
     lda inv_item_id
     cmp #FI_EMPTY
     bne !t4_fail+
-    ldx #ITEM_TYPE_SCR_PHASE_DOOR
+    ldx #ITEM_SLOT_SCROLL_OF_PHASE_DOOR
     jsr id_known_test
     beq !t4_fail+
     lda #$01

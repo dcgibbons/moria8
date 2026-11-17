@@ -242,7 +242,7 @@ test_setup_chest:
     txa
     pha
     jsr item_init_floor
-    lda #128
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_item_id + 0
     lda df_target_x
     sta fi_x + 0

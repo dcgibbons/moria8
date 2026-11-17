@@ -152,9 +152,10 @@ chest_stage_loot:
     sta chest_loot_x
     lda fi_y,x
     sta chest_loot_y
+    .assert "Chests are contiguous on Page 0", ITEM_LARGE_WOODEN_CHEST == ITEM_SMALL_WOODEN_CHEST + 1 && ITEM_SMALL_IRON_CHEST == ITEM_SMALL_WOODEN_CHEST + 2 && ITEM_LARGE_IRON_CHEST == ITEM_SMALL_WOODEN_CHEST + 3 && ITEM_SMALL_STEEL_CHEST == ITEM_SMALL_WOODEN_CHEST + 4 && ITEM_LARGE_STEEL_CHEST == ITEM_SMALL_WOODEN_CHEST + 5 && ITEM_RUINED_CHEST == ITEM_SMALL_WOODEN_CHEST + 6 && ITEM_PAGE_RUINED_CHEST == 0, true
     lda fi_item_id,x
     sec
-    sbc #128
+    sbc #ITEM_SLOT_SMALL_WOODEN_CHEST
     tax
     lda chest_loot_flags_table,x
     sta chest_loot_flags
@@ -669,7 +670,7 @@ chest_disarm_command:
 // ============================================================
 // chest_bash_command — Bash a chest (docs/CHEST_DESIGN.md; VMS bash at
 // moria.inc:3454). A 1-in-10 roll destroys the chest — identity becomes a
-// Ruined Chest (ID 134), p1/to_hit zeroed, contents never generated — even for
+// Ruined Chest (ITEM_RUINED_CHEST), p1/to_hit zeroed, contents never generated — even for
 // an already-opened chest. Otherwise, if locked, a separate 1-in-10 breaks the
 // lock ("The lock breaks open!"); anything else prints "The chest holds firm."
 // Bash never disarms a trap and never opens the chest; there is no off-balance
@@ -708,7 +709,7 @@ chest_bash_command:
     rts
 !cbc_destroy:
     ldx chest_slot
-    lda #134                  // Ruined Chest
+    lda #ITEM_SLOT_RUINED_CHEST
     sta fi_item_id,x
     lda #0
     sta fi_p1,x

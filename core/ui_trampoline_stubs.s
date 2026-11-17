@@ -135,12 +135,13 @@ banked_ego_put_suffix:
     rts
 
 // put_tool_ego_prefix — Print ego prefix for digging tools
-// Input: A = ego (1 or 2), X = item type ID (62 or 63)
+// Input: A = ego (1 or 2), X = item slot_lo (Pick or Shovel)
 put_tool_ego_prefix:
+    .assert "Pick precedes Shovel on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0, true
     and #EGO_ID_MASK
-    cpx #62
+    cpx #ITEM_SLOT_PICK
     beq !ptep_valid_tool+
-    cpx #63
+    cpx #ITEM_SLOT_SHOVEL
     bne !ptep_done+
 !ptep_valid_tool:
     sec
@@ -148,7 +149,7 @@ put_tool_ego_prefix:
     sta ptep_temp2
     txa
     sec
-    sbc #62                     // type - 62
+    sbc #ITEM_SLOT_PICK         // type - Pick
     asl                         // * 2
     clc
     adc ptep_temp2              // + (ego - 1) → index
@@ -168,11 +169,11 @@ ego_pfx_orcish:  .text "Orcish " ; .byte 0
 ego_pfx_dwarven: .text "Dwarven " ; .byte 0
 
 tool_ego_pfx_lo:
-    .byte <ego_pfx_gnomish, <ego_pfx_dwarven
     .byte <ego_pfx_orcish,  <ego_pfx_dwarven
+    .byte <ego_pfx_gnomish, <ego_pfx_dwarven
 tool_ego_pfx_hi:
-    .byte >ego_pfx_gnomish, >ego_pfx_dwarven
     .byte >ego_pfx_orcish,  >ego_pfx_dwarven
+    .byte >ego_pfx_gnomish, >ego_pfx_dwarven
 
 // put_inv_name_with_ego — Print item name with ego prefix/suffix
 // Input: X = inventory slot index

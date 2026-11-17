@@ -195,14 +195,14 @@ test_start:
     // Test 2: roll_enchantment gives charges for wands
     // ==========================================
 !t2:
-    lda #39                     // Wand of Light
+    lda #ITEM_SLOT_WAND_OF_LIGHT                     // Wand of Light
     jsr roll_enchantment        // Returns charges in A
     cmp #0
     beq !t2_fail+               // Should have charges
     cmp #50
     bcs !t2_fail+               // Should be reasonable (10-15)
 
-    lda #40                     // Wand of Lightning
+    lda #ITEM_SLOT_WAND_OF_LIGHTNING                     // Wand of Lightning
     jsr roll_enchantment
     cmp #0
     beq !t2_fail+
@@ -218,12 +218,12 @@ test_start:
     // Test 3: roll_enchantment gives charges for staves
     // ==========================================
 !t3:
-    lda #43                     // Staff of Light
+    lda #ITEM_SLOT_STAFF_OF_LIGHT                     // Staff of Light
     jsr roll_enchantment
     cmp #0
     beq !t3_fail+
 
-    lda #46                     // Staff of CLW
+    lda #ITEM_SLOT_STAFF_OF_CURE_LIGHT_WOUNDS                     // Staff of CLW
     jsr roll_enchantment
     cmp #0
     beq !t3_fail+
@@ -244,7 +244,7 @@ test_start:
     sta zp_msg_flags
 
     // Add Wand of Light (39) to slot 0 with 5 charges
-    lda #39
+    lda #ITEM_SLOT_WAND_OF_LIGHT
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -270,7 +270,7 @@ test_start:
     bne !t4_fail+
 
     // Check id_known set
-    ldx #39
+    ldx #ITEM_SLOT_WAND_OF_LIGHT
     jsr id_known_test
     beq !t4_fail+
 
@@ -290,7 +290,7 @@ test_start:
     sta zp_msg_flags
 
     // Wand of Light with 0 charges
-    lda #39
+    lda #ITEM_SLOT_WAND_OF_LIGHT
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -327,7 +327,7 @@ test_start:
     sta zp_msg_flags
 
     // Add Staff of Light (43) to slot 0 with 5 charges
-    lda #43
+    lda #ITEM_SLOT_STAFF_OF_LIGHT
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -353,7 +353,7 @@ test_start:
     bne !t6_fail+
 
     // Check id_known
-    ldx #43
+    ldx #ITEM_SLOT_STAFF_OF_LIGHT
     jsr id_known_test
     beq !t6_fail+
 
@@ -373,7 +373,7 @@ test_start:
     sta zp_msg_flags
 
     // Staff with 0 charges
-    lda #43
+    lda #ITEM_SLOT_STAFF_OF_LIGHT
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -423,7 +423,7 @@ test_start:
     sta eff_bolt + 2
 
     // Wand of Lightning (40) in slot 0 with 5 charges
-    lda #40
+    lda #ITEM_SLOT_WAND_OF_LIGHTNING
     sta inv_item_id
     lda #1
     sta inv_qty

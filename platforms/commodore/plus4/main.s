@@ -1274,17 +1274,18 @@ plus4_test_overlay_id:
 #endif
 
 #if PLUS4_TEST_SCRIPTED_WAND_SELECTOR_PRODUCT
+.assert "Plus/4 wand-selector test wands live on Page 0", ITEM_PAGE_WAND_OF_LIGHT == 0 && ITEM_PAGE_WAND_OF_LIGHTNING == 0 && ITEM_PAGE_WAND_OF_STINKING_CLOUD == 0, true
 plus4_test_wand_selector_overlay_return:
     sei
     jsr plus4_bank_ram
     jsr msg_init
     jsr item_init_inventory
 
-    lda #39
+    lda #ITEM_SLOT_WAND_OF_LIGHT
     sta inv_item_id + 0
-    lda #40
+    lda #ITEM_SLOT_WAND_OF_LIGHTNING
     sta inv_item_id + 1
-    lda #42
+    lda #ITEM_SLOT_WAND_OF_STINKING_CLOUD
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 0
@@ -2811,8 +2812,12 @@ balrog_product_setup:
     sta player_data + PL_TOHIT
     lda #10
     sta player_data + PL_TODMG
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
 
     // combat_note_kill's level-100 guard reads the active roster row.
     lda #100

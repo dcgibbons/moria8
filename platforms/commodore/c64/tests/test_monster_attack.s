@@ -119,6 +119,10 @@ inv_p1:
     .fill TOTAL_INV_SLOTS, 0
 it_color_ac:
     .fill ITEM_TYPE_COUNT, 0
+it_color_ac_p1:
+.if (ITEM_PAGE_SMALL_SHIELD != 0 || ITEM_PAGE_LEATHER_GLOVES != 0) {
+    .fill (ITEM_TYPE_COUNT - ITEM_PAGE_SIZE), 0
+}
 icat_flags_0:  .byte 0
 icat_flags_1:  .byte 0
 icat_flags_2:  .byte 0
@@ -140,9 +144,21 @@ item_get_category_inv_x:
 scroll_teleport_level_exec:
     rts
 item_get_base_ac:
+.if (ITEM_PAGE_SMALL_SHIELD != 0 || ITEM_PAGE_LEATHER_GLOVES != 0) {
+    bit item_cur_page
+    bvs !igba_p1+
     lda it_color_ac,y
     and #$0f
     rts
+!igba_p1:
+    lda it_color_ac_p1,y
+    and #$0f
+    rts
+} else {
+    lda it_color_ac,y
+    and #$0f
+    rts
+}
 inv_to_hit:
     .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:
@@ -812,16 +828,24 @@ test_start:
     // ==========================================
 !t19:
     lda #4
-    sta it_color_ac + 7
+    sta it_color_ac + ITEM_SLOT_LEATHER_ARMOR
     lda #2
-    sta it_color_ac + 9
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        sta it_color_ac_p1 + ITEM_SLOT_SMALL_SHIELD
+    } else {
+        sta it_color_ac + ITEM_SLOT_SMALL_SHIELD
+    }
     lda #1
-    sta it_color_ac + 11
+    .if (ITEM_PAGE_LEATHER_GLOVES != 0) {
+        sta it_color_ac_p1 + ITEM_SLOT_LEATHER_GLOVES
+    } else {
+        sta it_color_ac + ITEM_SLOT_LEATHER_GLOVES
+    }
 
     // Test 18: body armour only, AC 4 + 0: damage 7 -> 3 (div 2), to-AC -1,
     // equipment recalculated
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #7
     jsr acid_hit
@@ -843,7 +867,7 @@ test_start:
     // Test 19: worn out (AC 4, to-AC -4): full damage, nothing changes
 !t20:
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #$fc
     sta inv_to_ac + EQUIP_BODY
@@ -882,8 +906,12 @@ test_start:
     // Test 21: the last slot (gloves only) is found and damaged
 !t22:
     jsr acid_clear_armour
-    lda #11
+    lda #ITEM_SLOT_LEATHER_GLOVES
     sta inv_item_id + EQUIP_HANDS
+    .if (ITEM_PAGE_LEATHER_GLOVES != 0) {
+        lda #ITEM_PAGE_LEATHER_GLOVES
+        sta inv_ego + EQUIP_HANDS
+    }
     lda #8
     jsr acid_hit
     cmp #4
@@ -908,10 +936,14 @@ test_start:
     sta tc_loop
 !t23_loop:
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     lda #$fe
     sta inv_to_ac + EQUIP_SHIELD
     lda #8
@@ -1383,7 +1415,7 @@ test_start:
 
     // Test 48: resisted, and the body armour (AC 4) damaged: 9 -> 2, to-AC -1
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #9
     jsr acid_hit
@@ -1404,7 +1436,7 @@ test_start:
     // Test 49: body armour (Resist) takes it unharmed: 9 -> 2, to-AC stays 0,
     // no recalculation
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #EGO_RESIST
     sta inv_ego + EQUIP_BODY
@@ -1539,7 +1571,7 @@ test_start:
     lda #PFLAG_RESIST_ACID
     sta player_pflags
     jsr acid_clear_armour
-    lda #ITEM_TYPE_CROWN_GOLDEN
+    lda #ITEM_SLOT_GOLDEN_CROWN
     sta inv_item_id + EQUIP_HEAD
     lda #3
     sta inv_to_ac + EQUIP_HEAD

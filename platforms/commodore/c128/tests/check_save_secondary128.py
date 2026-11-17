@@ -12,9 +12,13 @@ usage: check_save_secondary128.py <save-file> <expected-version-byte>
 from pathlib import Path
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER  # noqa: E402
+
 SLOTS = 34
-SECONDARY = [2, 1, 0, 3, 4, 0, 2, 6]
-CLOAK = [0xFF, 0, 0, 0, 0, 0, 0, 0]
+EGO_DEFENDER = 6
+SECONDARY = [ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | EGO_DEFENDER]
+CLOAK = [FI_EMPTY, 0, 0, 0, 0, 0, 0, 0]
 
 
 def main() -> int:

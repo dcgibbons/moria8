@@ -30,7 +30,7 @@
     sta itemdesc_to_ac
     :LoadStoreFlagsX()
     sta itemdesc_flags
-    :LoadStoreEgoX()
+    :LoadStoreMetaHiX()
     sta itemdesc_ego
     jmp itemdesc_put_staged
 }

@@ -12,16 +12,6 @@
     and #ITEM_META_FLAGS_MASK
 }
 
-.macro LoadStoreEgoX() {
-    :AuxReadX(si_meta_hi)
-    and #EGO_ID_MASK
-}
-
-.macro LoadStoreEgoY() {
-    :AuxReadY(si_meta_hi)
-    and #EGO_ID_MASK
-}
-
 .macro LoadStorePageX() {
     :AuxReadX(si_meta_hi)
     and #ITEM_PAGE_BIT

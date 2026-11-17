@@ -28,8 +28,24 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import catalog_disk  # noqa: E402
 import catalog_lore  # noqa: E402  (the generated monster catalog's data)
-sys.path.insert(0, str(ROOT / "tools"))
+import item_ids  # noqa: E402
 from make_atr import build_blank_atr  # noqa: E402
+
+
+LUA_ITEM_CONSTS = item_ids.lua_item_consts(
+    "DAGGER",
+    "MACE",
+    "SPELLBOOK_MAGICK_I",
+    "HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS",
+    "CLOAK",
+    "POTION_OF_GAIN_DEXTERITY",
+    "POTION_OF_CHARISMA",
+    "POTION_OF_CURE_CRITICAL_WOUNDS",
+    "POTION_OF_NEUTRALIZE_POISON",
+    "SCROLL_OF_MAGIC_MAPPING",
+    "RING_OF_LORDLY_PROTECTION_FIRE",
+    "POTION_OF_RESTORE_STRENGTH",
+)
 
 ATR_IMAGE = ROOT / "build" / "moria8-atari8.atr"
 SYM_PATH = ROOT / "build" / "atari8" / "main.sym"
@@ -119,6 +135,8 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     zp_lvl = syms.get("zp_player_lvl", 0x0033)
     zp_dlvl = syms.get("zp_player_dlvl", 0x0034)
     zp_gflags = syms.get("zp_game_flags", 0x003C)
+    zp_hp = syms.get("zp_player_hp_lo", 0x002D)
+    zp_poison = syms.get("zp_eff_poison", 0x0050)
     player_data = syms.get("player_data", 0x1800)
     inv_item_id = syms.get("inv_item_id", 0x1900)
     inv_qty = syms.get("inv_qty", 0x1921)
@@ -134,7 +152,7 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi", "cat_record", "cat_ext_record"))
 
-    header = f"""
+    header = LUA_ITEM_CONSTS + f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local KBDBUF = 0x{kbdbuf:04X}
 local KBDBUF_LEN = 0x{kbdbuf_len:04X}
@@ -151,6 +169,8 @@ local PLAYER_MP_ADDR = 0x{zp_mp:04X}
 local PLAYER_LVL_ADDR = 0x{zp_lvl:04X}
 local DLVL_ADDR = 0x{zp_dlvl:04X}
 local GAME_FLAGS_ADDR = 0x{zp_gflags:04X}
+local PLAYER_HP_ADDR = 0x{zp_hp:04X}
+local POISON_ADDR = 0x{zp_poison:04X}
 local PLAYER_DATA_ADDR = 0x{player_data:04X}
 local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
@@ -244,6 +264,12 @@ local function send_key(petscii)
         if prog:read_u8(KBDBUF_LEN) == 0 and prog:read_u8(0xD301) == 0xFE then break end
     end
     wait_frames(10)
+end
+
+local function send_int(n)
+    local s = tostring(n)
+    for i = 1, #s do send_key(string.byte(s, i)) end
+    send_key(0x0D)
 end
 
 -- type_ahead: keys typed together while the program waits for one, as a
@@ -569,13 +595,15 @@ function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
     -- Cloak (slot 32) and Secondary weapon (slot 33); ring2 slot 31 stays empty.
-    inv_seed(32, {82, 1, 0, 0, 0, 1, 0, 0})
-    inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})
+    inv_seed(32, {ITEM_SLOT_CLOAK, 1, 0, 0, 0, 1, 0, ITEM_PAGE_CLOAK})
+    inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
     -- Flavour shuffles (174 B), known bits (47 B), and persistent recall[279]
     -- (1,116 B) live in Default RAM (< $C100) and serialize in Save V2 ($20).
-    -- Mark both Page 0 (146) and Page 1 (286) known bits, plus recall head/tail.
-    prog:write_u8(ID_KNOWN_ADDR + (146 >> 3), prog:read_u8(ID_KNOWN_ADDR + (146 >> 3)) | (1 << (146 & 7)))
-    prog:write_u8(ID_KNOWN_ADDR + (286 >> 3), prog:read_u8(ID_KNOWN_ADDR + (286 >> 3)) | (1 << (286 & 7)))
+    -- Mark both Page 0 and Page 1 known bits, plus recall head/tail.
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_FIRE >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_FIRE >> 3)) | (1 << (ITEM_RING_OF_LORDLY_PROTECTION_FIRE & 7)))
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_POTION_OF_RESTORE_STRENGTH >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_POTION_OF_RESTORE_STRENGTH >> 3)) | (1 << (ITEM_POTION_OF_RESTORE_STRENGTH & 7)))
     if RECALL_ADDR ~= 0 then
         prog:write_u8(RECALL_ADDR + 0, 0x5A)
         prog:write_u8(RECALL_ADDR + 1110, 0xA5)
@@ -618,9 +646,10 @@ function run()
     assert_line("save_load_resumed", prog:read_u8(PLAYER_X_ADDR) > 0)
     assert_line("save_load_secondary_restored",
         INV_STRIDE == 34
-        and inv_field(33, 0) == 2 and inv_field(33, 3) == 3 and inv_field(33, 4) == 4
-        and inv_field(33, 6) == 2 and inv_field(33, 7) == 6
-        and inv_field(32, 0) == 82 and inv_field(32, 5) == 1
+        and inv_field(33, 0) == ITEM_SLOT_DAGGER and inv_field(33, 3) == 3 and inv_field(33, 4) == 4
+        and inv_field(33, 6) == 2 and inv_field(33, 7) == (ITEM_PAGE_DAGGER | 6)
+        and inv_field(32, 0) == ITEM_SLOT_CLOAK and inv_field(32, 5) == 1
+        and inv_field(32, 7) == ITEM_PAGE_CLOAK
         and inv_field(31, 0) == 0xFF)
     local same = SHUFFLES_ADDR ~= 0 and ID_KNOWN_ADDR ~= 0
     for i = 0, 173 do same = same and prog:read_u8(SHUFFLES_ADDR + i) == saved_shuf[i + 1] end
@@ -858,29 +887,60 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
+    prog:write_u8(PLAYER_DATA_ADDR + 24, 14)   -- PL_DEX_BASE
+    prog:write_u8(PLAYER_DATA_ADDR + 30, 14)   -- PL_DEX_CUR
+    prog:write_u8(PLAYER_DATA_ADDR + 26, 13)   -- PL_CHR_BASE
+    prog:write_u8(PLAYER_DATA_ADDR + 32, 13)   -- PL_CHR_CUR
     assert_line("wizard_open", wizard_menu_open())
     press_until("ITEM", 0x47) -- 'G'
-    send_key(0x39) -- '9'
-    send_key(0x37) -- '7' (Potion of Restoration)
-    send_key(0x0D)
+    send_int(ITEM_POTION_OF_GAIN_DEXTERITY)
     assert_line("wizard_gain_ok", wait_screen("OK", 60))
     send_key(0x51) -- 'Q' (quaff)
     assert_line("quaff_prompt", wait_screen("Quaff which potion", 80))
     send_key(0x41) -- 'A'
-    assert_line("quaff_effect", wait_screen("strength return", 80))
+    assert_line("quaff_gain_dex", wait_screen("more limber!", 80) and prog:read_u8(PLAYER_DATA_ADDR + 30) == 15)
+    drain_more(4)
+    wait_frames(30)
+
+    inv_seed(0, {ITEM_SLOT_POTION_OF_CHARISMA, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CHARISMA})
+    send_key(0x51) -- 'Q'
+    assert_line("quaff_chr_prompt", wait_screen("Quaff which potion", 80))
+    send_key(0x41) -- 'A'
+    assert_line("quaff_gain_chr", wait_screen("ain't you cute!", 80) and prog:read_u8(PLAYER_DATA_ADDR + 32) == 14)
+    drain_more(4)
+    wait_frames(30)
+
+    prog:write_u8(PLAYER_HP_ADDR, 1)
+    prog:write_u8(PLAYER_DATA_ADDR + 33, 1)
+    prog:write_u8(POISON_ADDR, 5)
+    inv_seed(0, {ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_CRITICAL_WOUNDS})
+    send_key(0x51) -- 'Q'
+    assert_line("quaff_ccw_prompt", wait_screen("Quaff which potion", 80))
+    send_key(0x41) -- 'A'
+    wait_frames(40)
+    drain_more(4)
+    assert_line("quaff_ccw", prog:read_u8(PLAYER_HP_ADDR) > 1 and prog:read_u8(POISON_ADDR) == 0)
+
+    prog:write_u8(POISON_ADDR, 5)
+    inv_seed(0, {ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_NEUTRALIZE_POISON})
+    send_key(0x51) -- 'Q'
+    assert_line("quaff_neut_prompt", wait_screen("Quaff which potion", 80))
+    send_key(0x41) -- 'A'
+    assert_line("quaff_neutralize", wait_screen("You feel better.", 80) and prog:read_u8(POISON_ADDR) == 0)
     -- SHIFT+X (KBCODE Shift+X normalizes to $D8): a cursed primary is
     -- refused with no turn; uncursed, the swap takes one turn and reports
     -- both slots (VMS moria.inc switch_weapon).
     assert_line("kbcode_shift_x_is_d8", prog:read_u8(KBCODE_TABLE + 0x56) == 0xD8)
     drain_more(4)
     wait_frames(60)                          -- the quaff's own turn ends first
-    inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
-    inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+    inv_seed(22, {ITEM_SLOT_MACE, 1, 0, 1, 0, 0, 3, ITEM_PAGE_MACE})
+    inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
     local turn0 = prog:read_u8(TURN_LO_ADDR)
     send_key(0xD8)
     assert_line("exchange_cursed_refused",
         wait_screen("You cannot remove it, it is cursed!", 60)
-        and inv_field(22, 0) == 5 and inv_field(33, 0) == 2
+        and inv_field(22, 0) == ITEM_SLOT_MACE and (inv_field(22, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_MACE
+        and inv_field(33, 0) == ITEM_SLOT_DAGGER and (inv_field(33, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_DAGGER
         and prog:read_u8(TURN_LO_ADDR) == turn0)
     prog:write_u8(INV_ITEM_ID_ADDR + 6 * INV_STRIDE + 22, 2) -- lift the curse
     send_key(0xD8)
@@ -890,8 +950,9 @@ function run()
         wait_screen("Primary: Dagger (Defender) (+3,+4)", 60)
         and wait_screen("Secondary: Mace (+1,+0)", 60))
     assert_line("exchange_swapped",
-        inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
-        and inv_field(33, 0) == 5 and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+        inv_field(22, 0) == ITEM_SLOT_DAGGER and inv_field(22, 3) == 3 and inv_field(22, 7) == (ITEM_PAGE_DAGGER | 6)
+        and inv_field(33, 0) == ITEM_SLOT_MACE and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+        and inv_field(33, 7) == ITEM_PAGE_MACE
         and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF)
     for _ = 1, 60 do
         if prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256 then break end
@@ -923,7 +984,7 @@ function run()
     drain_more(4)
     local free = nil
     for i = 0, 21 do if prog:read_u8(INV_ITEM_ID_ADDR + i) == 0xFF then free = i break end end
-    inv_seed(free, {55, 1, 0, 0, 0, 0, 2, 0})   -- Spellbook Magick I, known
+    inv_seed(free, {ITEM_SLOT_SPELLBOOK_MAGICK_I, 1, 0, 0, 0, 0, 2, ITEM_PAGE_SPELLBOOK_MAGICK_I})
     send_key(0x4D) -- 'M' (cast)
     assert_line("cast_book2_prompt", wait_screen("Spell book (a-b)?", 80))
     send_key(0x3F) -- '?': the book list
@@ -969,8 +1030,9 @@ function run()
     prog:write_u8(PLAYER_DATA_ADDR + 63, prog:read_u8(PLAYER_DATA_ADDR + 63) | 0x40)
     for i = 0, 30 do
         if prog:read_u8(INV_ITEM_ID_ADDR + i) == 0xFF then
-            prog:write_u8(INV_ITEM_ID_ADDR + i, 59)
+            prog:write_u8(INV_ITEM_ID_ADDR + i, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
             prog:write_u8(INV_QTY_ADDR + i, 1)
+            prog:write_u8(INV_ITEM_ID_ADDR + 7 * INV_STRIDE + i, ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
             break
         end
     end
@@ -998,10 +1060,7 @@ function run()
     assert_line("chargen_town_ready", ok)
     assert_line("wizard_open", wizard_menu_open())
     press_until("ITEM", 0x47) -- 'G'
-    send_key(0x31) -- '1'
-    send_key(0x30) -- '0'
-    send_key(0x32) -- '2' (Scroll of Magic Mapping)
-    send_key(0x0D)
+    send_int(ITEM_SCROLL_OF_MAGIC_MAPPING)
     assert_line("wizard_gain_ok", wait_screen("OK", 80))
     send_key(0x52) -- 'R' (read scroll)
     assert_line("read_prompt", wait_screen("Read which scroll", 80))
@@ -1120,6 +1179,11 @@ function run()
         if screen_has("OK") or screen_has("FAIL") then break end
     end
     drain_more(4)
+    -- 1 HP + poison guarantees death on the next turn regardless of which
+    -- monster DL10's RNG stream summoned (matching apple2/bbcmaster death_flow).
+    prog:write_u8(PLAYER_HP_ADDR, 1)
+    prog:write_u8(PLAYER_HP_ADDR + 1, 0)
+    prog:write_u8(POISON_ADDR, 100)
     local slain = false
     for _ = 1, 200 do
         if screen_has("You have been slain") or screen_has("DISK SETUP") then slain = true break end

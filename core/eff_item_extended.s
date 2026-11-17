@@ -1,6 +1,6 @@
 #importonce
-// eff_item_extended.s — Extended VMS food/mushroom (#248-#269, #365) and
-// Page 1 potion (#270-#294) effects.
+// eff_item_extended.s — Extended VMS food/mushroom (mushrooms, molds, Elvish
+// Waybread) and extended potion (eff_ext_pot_ids) effects.
 //
 // Imported by player_item_commands.s when !HAL_PLATFORM_COMPACT_PLAY_SLOT &&
 // !HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL, or by player_magic_execute_overlay.s
@@ -26,47 +26,53 @@ eff_ext_tmp: .byte 0
 // Input (eff_ext_eat_piw): piw_ego, piw_item_id.
 // Input (eff_ext_eat): A = slot_lo, item_cur_page = $00 or ITEM_PAGE_BIT ($40).
 // Clobbers: A, X, Y, zp_temp0-4, zp_math_*, zp_ptr0-1
+.assert "Mushrooms/molds occupy 20..40 and Waybreads occupy 43..44 on Page 0", ITEM_MUSHROOM_OF_POISON == 20 && ITEM_HAIRY_MOLD_OF_CURE_SERIOUS_WOUNDS == 40 && ITEM_PIECE_OF_ELVISH_WAYBREAD_L6 == 43 && ITEM_PIECE_OF_ELVISH_WAYBREAD_L20 == 44 && ITEM_PAGE_PINT_OF_FINE_WINE == 0, true
 eff_ext_eat_piw:
     lda piw_ego
     sta item_cur_page
     lda piw_item_id
 eff_ext_eat:
     bit item_cur_page
-    bvs !eee_p1+
-    cmp #248
+    bvs !eee_ret+
+    cmp #ITEM_SLOT_MUSHROOM_OF_POISON
     bcc !eee_ret+
-    sec
-    sbc #248                        // 0..6: #248..254
+    cmp #ITEM_SLOT_HAIRY_MOLD_OF_CURE_SERIOUS_WOUNDS + 1
+    bcs !eee_chk_wb+
+    sbc #(ITEM_SLOT_MUSHROOM_OF_POISON - 1) // C=0 -> 20..40 => 0..20
     jmp eff_ext_run
-!eee_p1:
-    cmp #ITEM_TYPE_ELVISH_WAYBREAD_H - ITEM_PAGE_SIZE
-    bne !eee_p1_mush+
-    lda #1                          // #365 Elvish Waybread == #249 Waybread
-    bne eff_ext_run                 // always
-!eee_p1_mush:
-    cmp #15
+!eee_chk_wb:
+    sec
+    sbc #ITEM_SLOT_PIECE_OF_ELVISH_WAYBREAD_L6
+    cmp #2
     bcs !eee_ret+
-    clc
-    adc #7                          // 7..21: #255..269
-    bne eff_ext_run                 // always >= 7
+    lda #21                         // 21: Elvish Waybread (L6 & L20)
+    bne eff_ext_run                 // always
 !eee_ret:
     rts
 
-// eff_ext_quaff_piw / eff_ext_quaff — Execute Page 1 potion effect (#270-#294 -> lo 15..39).
+// eff_ext_quaff_piw / eff_ext_quaff — Execute extended VMS potion effect (Page 0).
 // Input (eff_ext_quaff_piw): piw_ego, piw_item_id.
-// Input (eff_ext_quaff): A = slot_lo, item_cur_page = ITEM_PAGE_BIT ($40).
+// Input (eff_ext_quaff): A = slot_lo, item_cur_page = $00.
 // Clobbers: A, X, Y, zp_temp0-4, zp_math_*, zp_ptr0-1
+.assert "All extended potions live on Page 0", ITEM_PAGE_POTION_OF_WEAKNESS == 0 && ITEM_PAGE_POTION_OF_SLOW_POISON == 0, true
 eff_ext_quaff_piw:
     lda piw_ego
     sta item_cur_page
     lda piw_item_id
 eff_ext_quaff:
-    cmp #15
-    bcc !eee_ret-
-    cmp #40
-    bcs !eee_ret-
+    bit item_cur_page
+    bvs !eee_ret-
+    ldx #24
+!eeq_scan:
+    cmp eff_ext_pot_ids,x
+    beq !eeq_hit+
+    dex
+    bpl !eeq_scan-
+    rts
+!eeq_hit:
+    txa
     clc
-    adc #7                          // 22..46: #270..294
+    adc #22                         // 22..46
 
 eff_ext_run:
     tax
@@ -89,40 +95,49 @@ eff_ext_jmp_hi:
     .byte >(ee_op_bold-1), >(ee_op_drain-1), >(ee_op_restore-1), >(ee_op_drink-1)
     .byte >(ee_op_timed_misc-1), >(ee_op_xp-1)
 
-// Compact dispatch tables for indices 0..46 (#248..294).
+// 25 extended Page-0 potion slot_lo IDs (indices 0..24 -> table rows 22..46)
+eff_ext_pot_ids:
+    .byte ITEM_SLOT_POTION_OF_WEAKNESS, ITEM_SLOT_POTION_OF_RESTORE_STRENGTH, ITEM_SLOT_POTION_OF_LOSE_INTELLIGENCE
+    .byte ITEM_SLOT_POTION_OF_RESTORE_INTELLIGENCE, ITEM_SLOT_POTION_OF_LOSE_WISDOM, ITEM_SLOT_POTION_OF_RESTORE_WISDOM
+    .byte ITEM_SLOT_POTION_OF_UGLINESS, ITEM_SLOT_POTION_OF_RESTORE_CHARISMA, ITEM_SLOT_POTION_OF_GAIN_EXPERIENCE
+    .byte ITEM_SLOT_POTION_OF_SLEEP, ITEM_SLOT_POTION_OF_SLOWNESS, ITEM_SLOT_ICKY_GREEN_POTION_OF_SLIME_MOLD_JUICE
+    .byte ITEM_SLOT_LIGHT_BROWN_POTION_OF_APPLE_JUICE, ITEM_SLOT_CLEAR_POTION_OF_WATER, ITEM_SLOT_POTION_OF_RESTORE_DEXTERITY
+    .byte ITEM_SLOT_POTION_OF_RESTORE_CONSTITUTION, ITEM_SLOT_POTION_OF_LEARNING, ITEM_SLOT_POTION_OF_LOSE_MEMORIES
+    .byte ITEM_SLOT_POTION_OF_SALT_WATER, ITEM_SLOT_POTION_OF_INVULNERABILITY, ITEM_SLOT_POTION_OF_SUPER_HEROISM
+    .byte ITEM_SLOT_POTION_OF_BOLDNESS, ITEM_SLOT_POTION_OF_RESTORE_LIFE_LEVELS, ITEM_SLOT_POTION_OF_DETECT_INVISIBLE
+    .byte ITEM_SLOT_POTION_OF_SLOW_POISON
+.assert "eff_ext_pot_ids has 25 entries", * - eff_ext_pot_ids, 25
+
+// Compact dispatch tables for indices 0..46 (0..20 = mushrooms/molds 20..40,
+// 21 = Elvish Waybread 43..44, 22..46 = extended potions).
 eff_ext_op_tbl:
-    // 0..6: Page 0 #248..254
-    .byte EE_OP_HEAL_CURE, EE_OP_HEAL_CURE, EE_OP_CURE, EE_OP_POISON
-    .byte EE_OP_TIMER, EE_OP_DRAIN, EE_OP_HEAL_CURE
-    // 7..21: Page 1 #255..269
-    .byte EE_OP_CURE, EE_OP_TIMER, EE_OP_TIMER, EE_OP_HEAL_CURE
-    .byte EE_OP_CURE, EE_OP_BOLD, EE_OP_TIMER, EE_OP_POISON
-    .byte EE_OP_DRAIN, EE_OP_HEAL_CURE, EE_OP_TIMER, EE_OP_CURE
-    .byte EE_OP_RESTORE, EE_OP_DRAIN, EE_OP_RESTORE
-    // 22..46: Page 1 #270..294
-    .byte EE_OP_TIMER, EE_OP_DRINK, EE_OP_DRINK, EE_OP_DRINK
-    .byte EE_OP_DRINK, EE_OP_TIMED_MISC, EE_OP_BOLD, EE_OP_TIMED_MISC
-    .byte EE_OP_DRAIN, EE_OP_TIMED_MISC, EE_OP_TIMED_MISC, EE_OP_XP
-    .byte EE_OP_DRAIN, EE_OP_DRAIN, EE_OP_DRAIN, EE_OP_TIMED_MISC
-    .byte EE_OP_RESTORE, EE_OP_RESTORE, EE_OP_RESTORE, EE_OP_RESTORE
-    .byte EE_OP_RESTORE, EE_OP_RESTORE, EE_OP_XP, EE_OP_XP, EE_OP_XP
+    .byte EE_OP_POISON, EE_OP_TIMER, EE_OP_TIMER, EE_OP_TIMER
+    .byte EE_OP_TIMER, EE_OP_CURE, EE_OP_CURE, EE_OP_BOLD
+    .byte EE_OP_CURE, EE_OP_DRAIN, EE_OP_DRAIN, EE_OP_RESTORE
+    .byte EE_OP_HEAL_CURE, EE_OP_HEAL_CURE, EE_OP_HEAL_CURE, EE_OP_RESTORE
+    .byte EE_OP_POISON, EE_OP_TIMER, EE_OP_CURE, EE_OP_DRAIN
+    .byte EE_OP_HEAL_CURE, EE_OP_HEAL_CURE, EE_OP_DRAIN, EE_OP_RESTORE
+    .byte EE_OP_DRAIN, EE_OP_RESTORE, EE_OP_DRAIN, EE_OP_RESTORE
+    .byte EE_OP_DRAIN, EE_OP_RESTORE, EE_OP_XP, EE_OP_TIMER
+    .byte EE_OP_TIMED_MISC, EE_OP_DRINK, EE_OP_DRINK, EE_OP_DRINK
+    .byte EE_OP_RESTORE, EE_OP_RESTORE, EE_OP_XP, EE_OP_XP
+    .byte EE_OP_DRINK, EE_OP_TIMED_MISC, EE_OP_TIMED_MISC, EE_OP_BOLD
+    .byte EE_OP_XP, EE_OP_TIMED_MISC, EE_OP_TIMED_MISC
 
 eff_ext_arg_tbl:
-    // #248..254
-    .byte $18 | EFF_CURE_BLIND, $40 | EFF_CURE_POISON, EFF_CURE_CONFUSE, 1
-    .byte 0, STAT_STR, $20 | EFF_CURE_ALL
-    // #255..269
-    .byte EFF_CURE_POISON, 1, 2, $10 | EFF_CURE_BLIND
-    .byte EFF_CURE_BLIND, 0, 3, 2
-    .byte STAT_CON, $30 | EFF_CURE_BLIND | EFF_CURE_CONFUSE, 3, EFF_CURE_POISON
-    .byte STAT_CON, STAT_CON | $80, $ff
-    // #270..294
-    .byte 4, 100, 0, 125
-    .byte 200, 0, 1, 1
-    .byte STAT_STR, 2, 4, 0
-    .byte STAT_INT, STAT_WIS, STAT_CHR, 3
-    .byte STAT_STR, STAT_INT, STAT_WIS, STAT_CHR
-    .byte STAT_DEX, STAT_CON, 1, 2, 3
+    .byte 1, 1, 2, 0
+    .byte 3, EFF_CURE_POISON, EFF_CURE_BLIND, 0
+    .byte EFF_CURE_CONFUSE, STAT_STR, STAT_CON, STAT_CON
+    .byte $18 | EFF_CURE_BLIND, $20 | EFF_CURE_ALL, $10 | EFF_CURE_BLIND, $ff
+    .byte 2, 3, EFF_CURE_POISON, STAT_CON | $80
+    .byte $30 | EFF_CURE_BLIND | EFF_CURE_CONFUSE, $40 | EFF_CURE_POISON, STAT_STR, STAT_STR
+    .byte STAT_INT, STAT_INT, STAT_WIS, STAT_WIS
+    .byte STAT_CHR, STAT_CHR, 3, 4
+    .byte 0, 200, 125, 100
+    .byte STAT_DEX, STAT_CON, 2, 0
+    .byte 0, 3, 4, 1
+    .byte 1, 2, 1
+.assert "eff_ext_op_tbl and eff_ext_arg_tbl have 47 entries each", (eff_ext_arg_tbl - eff_ext_op_tbl == 47) && (* - eff_ext_arg_tbl == 47), true
 
 // ============================================================
 // Opcode handlers (entered via RTS dispatch)
@@ -294,14 +309,19 @@ ee_op_restore:
     ldx #HSTR_PIQ_RESTORED
     jmp huff_print_msg
 !eer_single:
-    sta eff_ext_tmp
     ldx #5
 !eer_push:
     lda player_data + PL_STR_CUR,x
     pha
     dex
     bpl !eer_push-
+    // Preserve target stat on the hardware stack across player_calc_stats,
+    // which swaps overlays and reloads this overlay's BSS (eff_ext_tmp) to 0.
+    lda eff_ext_arg
+    pha
     jsr player_calc_stats           // Recalculates all CUR from BASE + equipment
+    pla
+    sta eff_ext_tmp
     ldx #0
 !eer_pop:
     pla

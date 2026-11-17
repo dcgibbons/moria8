@@ -22,7 +22,7 @@ import os
 import re
 import struct
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,12 +31,14 @@ import huff_encoder as huff  # noqa: E402
 
 DEFAULT_SPEC = ROOT / "platforms" / "shared" / "item_catalog" / "item_catalog_spec.json"
 DEFAULT_EMIT_DIR = ROOT / "platforms" / "shared" / "item_catalog"
+DEFAULT_PY_OUT = ROOT / "tools" / "item_ids.py"
 
 ITMCAT_MAGIC = b"ITM2"
 ITMCAT_HDR_SIZE = 32
 ITMCAT_SIZE_CAP = 7800
 STR_BLOCK_STRIDE = 8
 PAGE_SIZE = 255
+ITEM_PAGE_BIT = 0x40
 ICAT_POTION = 10
 ICAT_SCROLL = 11
 ICAT_RING = 12
@@ -259,11 +261,22 @@ def validate_spec(spec: dict) -> None:
     flavs = spec["flavours"]
     consts = spec["constants"]
 
-    assert len(items) == consts["ITEM_TYPE_COUNT"] == 370
+    assert len(items) == consts["ITEM_TYPE_COUNT"] == 361
     assert len(egos) == consts["EGO_COUNT"] == 55
     assert len(flavs) == consts["FLAVOUR_COUNT"] == 174
-    assert items[82]["cat"] == ICAT_CLOAK, f"Item #82 must use ICAT_CLOAK (19), got {items[82]['cat']}"
-    assert items[121]["cost"] == 1000, f"Item #121 Staff of Speed cost must be 1000, got {items[121]['cost']}"
+    items_by_name = {it["name"]: it for it in items}
+    assert items_by_name["Cloak"]["cat"] == ICAT_CLOAK, (
+        f"Cloak must use ICAT_CLOAK (19), got {items_by_name['Cloak']['cat']}"
+    )
+    assert items_by_name["Staff of Speed"]["cost"] == 1000, (
+        f"Staff of Speed cost must be 1000, got {items_by_name['Staff of Speed']['cost']}"
+    )
+    assert sum(1 for it in items if it["base_ac"] >= 15) == 9, (
+        "Expected 9 heavy armors with base_ac >= 15"
+    )
+    assert sum(1 for it in items if it.get("vms_source") == "m8_custom" and it["cat"] != 1) == 0, (
+        "Non-gold m8_custom items must not appear in VMS 361-item catalog"
+    )
 
     expected_flav_counts = [
         ("potion", consts["FLAVOUR_POTION_COUNT"]),
@@ -646,7 +659,7 @@ def decode_item_cat(blob: bytes) -> dict:
 
 
 def verify_roundtrip(spec: dict, blob: bytes) -> None:
-    """Assert bit-exact round-trip equality of all 370 items, 55 egos, and 174 flavors."""
+    """Assert bit-exact round-trip equality of all 361 items, 55 egos, and 174 flavors."""
     dec = decode_item_cat(blob)
     for exp, got in zip(spec["items"], dec["items"]):
         for key in (
@@ -665,6 +678,174 @@ def _hex_rows(vals: list[int], width: int = 16, comments: list[str] | None = Non
     if comments is not None:
         return [f"    .byte ${v:02x}  // {c}" for v, c in zip(vals, comments)]
     return ["    .byte " + ", ".join(f"${v:02x}" for v in vals[k : k + width]) for k in range(0, len(vals), width)]
+
+
+def compute_item_slugs(items: list[dict]) -> dict[int, str]:
+    """Derive deterministic, ID-independent uppercase slugs for every catalog item.
+
+    Never embeds logical item IDs or list positions in symbol names so that
+    catalog reordering and renumbering preserve every symbol name unchanged:
+      - '*X*' greater scrolls/items normalize to 'STAR_X'.
+      - VMS gold_list (tval == 100) items normalize under 'GOLD_<NAME>' ('GOLD_COINS'
+        for plain 'Gold') and disambiguate multi-entry minerals by intrinsic cost rank.
+      - Depth-variant pairs disambiguate by '_L<vms_level>'.
+      - Multi-subval VMS items (e.g. Ring/Amulet of Adornment) disambiguate by
+        '_VMS_SUB<subval>'.
+    """
+    def raw_base(it: dict) -> str:
+        s = re.sub(r"\*([^*]+)\*", r"STAR_\1", it["name"])
+        s = s.replace("'", "")
+        s = re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_").upper()
+        if it.get("tval") == 100:
+            return "GOLD_COINS" if s == "GOLD" else f"GOLD_{s}"
+        if it.get("cat") == 9 and s == "SLIME_MOLD":
+            return "FOOD_SLIME_MOLD"
+        return s
+
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for it in items:
+        groups[raw_base(it)].append(it)
+
+    out: dict[int, str] = {}
+    for base, grp in groups.items():
+        if len(grp) == 1:
+            out[grp[0]["id"]] = base
+            continue
+        levels = {x["vms_level"] for x in grp}
+        subvals = {x["subval"] for x in grp}
+        if len(levels) == len(grp):
+            for x in grp:
+                out[x["id"]] = f"{base}_L{x['vms_level']}"
+        elif len(subvals) == len(grp) and all(x.get("tval") != 100 for x in grp):
+            for x in grp:
+                out[x["id"]] = f"{base}_VMS_SUB{x['subval']}"
+        else:
+            ordered = sorted(
+                grp,
+                key=lambda x: (x["cost"], x.get("vms_source") or "", x["subval"], x["vms_level"]),
+            )
+            for rank, x in enumerate(ordered, start=1):
+                out[x["id"]] = f"{base}_{rank}"
+
+    if len(set(out.values())) != len(items):
+        raise ValueError("Duplicate item slug generated")
+    for slug in out.values():
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", slug):
+            raise ValueError(f"Invalid item slug {slug!r}")
+    return out
+
+
+def render_item_ids_s(spec: dict) -> str:
+    """Render segmentless Kick Assembler item constants (item_ids.s)."""
+    items = spec["items"]
+    page_size = spec["constants"]["PAGE_SIZE"]
+    slugs = compute_item_slugs(items)
+    lines = [
+        "#importonce",
+        "// Generated by tools/build_item_catalog.py from item_catalog_spec.json. Do not edit.",
+        "// Segmentless symbolic item IDs, Base-255 slot_lo bytes, and page bits ($00 / $40).",
+        "// Safe to #import standalone in unit tests or via core/item_defs.s; emits zero bytes.",
+        "",
+    ]
+    for it in items:
+        item_id = it["id"]
+        slug = slugs[item_id]
+        slot_lo = item_id if item_id < page_size else item_id - page_size
+        page_bit = 0x00 if item_id < page_size else ITEM_PAGE_BIT
+        lines.extend(
+            [
+                f"// {it['name']} (cat={it['cat']}, tval={it['tval']}, subval={it['subval']}, vms_level={it['vms_level']})",
+                f".const ITEM_{slug} = {item_id}",
+                f".const ITEM_SLOT_{slug} = {slot_lo}",
+                f".const ITEM_PAGE_{slug} = ${page_bit:02x}",
+            ]
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_item_ids_py(spec: dict) -> str:
+    """Render Python symbolic item constants and Base-255 helpers (tools/item_ids.py)."""
+    items = spec["items"]
+    consts = spec["constants"]
+    page_size = consts["PAGE_SIZE"]
+    slugs = compute_item_slugs(items)
+    lines = [
+        '"""Generated symbolic item IDs from item_catalog_spec.json. Do not edit.',
+        "",
+        "Regenerate via: python3 -B tools/build_item_catalog.py --emit-s",
+        '"""',
+        "from __future__ import annotations",
+        "",
+        f"ITEM_TYPE_COUNT = {consts['ITEM_TYPE_COUNT']}",
+        f"ITEM_PAGE_SIZE = {page_size}",
+        f"ITEM_PAGE_BIT = 0x{ITEM_PAGE_BIT:02X}",
+        "EGO_ID_MASK = 0x3F",
+        "FI_EMPTY = 0xFF",
+        "",
+    ]
+    for it in items:
+        item_id = it["id"]
+        slug = slugs[item_id]
+        slot_lo = item_id if item_id < page_size else item_id - page_size
+        page_bit = 0x00 if item_id < page_size else ITEM_PAGE_BIT
+        lines.extend(
+            [
+                f"ITEM_{slug} = {item_id}",
+                f"ITEM_SLOT_{slug} = {slot_lo}",
+                f"ITEM_PAGE_{slug} = 0x{page_bit:02X}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "SLUG_BY_ID: dict[int, str] = {",
+            *[f'    {it["id"]}: "{slugs[it["id"]]}",' for it in items],
+            "}",
+            "",
+            "ID_BY_SLUG: dict[str, int] = {v: k for k, v in SLUG_BY_ID.items()}",
+            "",
+            "",
+            "def item_slot(item_id: int) -> int:",
+            '    """Return Base-255 8-bit slot_lo (0..254) for logical item_id."""',
+            "    if not (0 <= item_id < ITEM_TYPE_COUNT):",
+            '        raise ValueError(f"item_id {item_id} out of range 0..{ITEM_TYPE_COUNT - 1}")',
+            "    return item_id if item_id < ITEM_PAGE_SIZE else item_id - ITEM_PAGE_SIZE",
+            "",
+            "",
+            "def item_page(item_id: int) -> int:",
+            '    """Return Base-255 page bit (0x00 or ITEM_PAGE_BIT=0x40) for logical item_id."""',
+            "    if not (0 <= item_id < ITEM_TYPE_COUNT):",
+            '        raise ValueError(f"item_id {item_id} out of range 0..{ITEM_TYPE_COUNT - 1}")',
+            "    return 0x00 if item_id < ITEM_PAGE_SIZE else ITEM_PAGE_BIT",
+            "",
+            "",
+            "def pack_item_ego(item_id: int, ego_id: int = 0) -> tuple[int, int]:",
+            '    """Pack logical item_id + ego_id into (slot_lo, page_bit | ego_id)."""',
+            "    if not (0 <= ego_id <= EGO_ID_MASK):",
+            '        raise ValueError(f"ego_id {ego_id} out of range 0..{EGO_ID_MASK}")',
+            "    return item_slot(item_id), item_page(item_id) | ego_id",
+            "",
+            "",
+            "def lua_item_consts(*slugs: str) -> str:",
+            '    """Emit Lua ITEM_*, ITEM_SLOT_*, and ITEM_PAGE_* constants for MAME harnesses."""',
+            '    lines = [f"ITEM_PAGE_BIT = 0x{ITEM_PAGE_BIT:02X}"]',
+            "    for slug in slugs:",
+            "        item_id = ID_BY_SLUG[slug]",
+            '        lines.append(f"ITEM_{slug} = {item_id}")',
+            '        lines.append(f"ITEM_SLOT_{slug} = {item_slot(item_id)}")',
+            '        lines.append(f"ITEM_PAGE_{slug} = 0x{item_page(item_id):02X}")',
+            '    return "\\n".join(lines) + "\\n"',
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def emit_python_ids(spec: dict, out_path: Path = DEFAULT_PY_OUT) -> None:
+    """Write generated Python item constants to out_path."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(render_item_ids_py(spec))
 
 
 def emit_assembly(spec: dict, blob: bytes, offsets: dict, out_dir: Path) -> None:
@@ -739,7 +920,7 @@ def emit_assembly(spec: dict, blob: bytes, offsets: dict, out_dir: Path) -> None
         "// 'ITM2' 32-byte header field offsets",
         ".const ITMCAT_HDR_MAGIC = 0           // 4 bytes: 'ITM2'",
         ".const ITMCAT_HDR_TOTAL_SIZE = 4      // 2 bytes: total byte size",
-        ".const ITMCAT_HDR_ITEM_COUNT = 6      // 2 bytes: item count (370)",
+        f".const ITMCAT_HDR_ITEM_COUNT = 6      // 2 bytes: item count ({cnts['items']})",
         ".const ITMCAT_HDR_EGO_COUNT = 8       // 1 byte: ego count (55)",
         ".const ITMCAT_HDR_FLAV_COUNT = 9      // 1 byte: flavour count (174)",
         ".const ITMCAT_HDR_TOK_COUNT = 10      // 1 byte: non-recursive $80+ token count",
@@ -760,7 +941,7 @@ def emit_assembly(spec: dict, blob: bytes, offsets: dict, out_dir: Path) -> None
         ".const ITMCAT_HDR_OFF_CANON = 28      // 2 bytes",
         ".const ITMCAT_HDR_OFF_STREAM = 30     // 2 bytes",
         "",
-        "// Cold item record layout (4 bytes per item ID 0..369)",
+        f"// Cold item record layout (4 bytes per item ID 0..{cnts['items'] - 1})",
         ".const ITMCAT_REC_SIZE = 4",
         ".const ITMCAT_REC_COST_DEPTH = 0      // bits 0..6 = cost_idx, bit 7 = is_depth_variant",
         ".const ITMCAT_REC_WD_AMMO = 1         // bits 0..6 = wd_idx, bit 7 = is_ammo ($80)",
@@ -825,6 +1006,9 @@ def emit_assembly(spec: dict, blob: bytes, offsets: dict, out_dir: Path) -> None
     ]
     (out_dir / "item_cat_data.s").write_text("\n".join(data))
 
+    # 4. item_ids.s (segmentless symbolic constants: ITEM_*, ITEM_SLOT_*, ITEM_PAGE_*)
+    (out_dir / "item_ids.s").write_text(render_item_ids_s(spec))
+
 
 def verify_against_vms(spec: dict, vms_src: Path) -> None:
     """Optional cross-check of VMS Moria 4.8 values.inc and misc.inc when supplied."""
@@ -886,7 +1070,7 @@ def run_selftest() -> None:
         hot_txt = hot_s.read_text()
         assert ".segment" not in hot_txt, "item_hot_tables.s must not declare any .segment"
         for sym in (
-            "ITEM_TYPE_COUNT = 370",
+            "ITEM_TYPE_COUNT = 361",
             "EGO_COUNT = 55",
             "FLAVOUR_COUNT = 174",
             "FLAVOUR_POTION_COUNT = 46",
@@ -894,6 +1078,7 @@ def run_selftest() -> None:
             "FLAVOUR_RING_COUNT = 30",
             "FLAVOUR_WAND_COUNT = 24",
             "FLAVOUR_STAFF_COUNT = 25",
+            "IT_AC_EXTRA_COUNT = 9",
             "it_category:",
             "it_color_ac:",
             "it_ac_extra_id_lo:",
@@ -917,9 +1102,51 @@ def run_selftest() -> None:
     packed = tokenize_and_encode_strings(sample)
     assert packed["tok_count"] >= 0 and len(packed["stream_bytes"]) > 0
 
+    # Verify symbolic item ID slugs are unique, ID-free, and reorder/renumber-invariant
+    slugs = compute_item_slugs(spec["items"])
+    assert len(slugs) == len(spec["items"]) == 361
+    renumbered = [dict(it, id=1000 - idx) for idx, it in enumerate(reversed(spec["items"]))]
+    renumbered_slugs = compute_item_slugs(renumbered)
+    for orig, rev in zip(reversed(spec["items"]), renumbered):
+        assert slugs[orig["id"]] == renumbered_slugs[rev["id"]], (
+            f"Slug changed under reordering/renumbering: {slugs[orig['id']]} != {renumbered_slugs[rev['id']]}"
+        )
+    # Verify exact 361-item VMS layout invariants (0 non-gold custom items,
+    # Gold small/large #0..1 and Ruined Chest #210 retained, Page 0 = 255 items, Page 1 = 106 items).
+    m8_non_gold = [
+        it for it in spec["items"]
+        if it.get("vms_source") == "m8_custom" and it.get("cat") != 1
+    ]
+    assert m8_non_gold == [], f"Unexpected non-gold custom items in 361-item spec: {m8_non_gold}"
+    assert spec["items"][0]["name"] == "Gold (small)" and spec["items"][1]["name"] == "Gold (large)"
+    assert spec["items"][254]["id"] == 254 and spec["items"][255]["id"] == 255
+    assert all(it["cat"] in (1, 9, 10, 11, 14, 15, 13, 8, 18, 0, 17, 19, 3, 2, 5, 7) for it in spec["items"][:255])
+    assert all(it["cat"] in (6, 4, 2, 12, 16, 20) for it in spec["items"][255:])
+
+    ids_s = DEFAULT_EMIT_DIR / "item_ids.s"
+    if ids_s.is_file():
+        ids_txt = ids_s.read_text()
+        assert ".segment" not in ids_txt and ".byte" not in ids_txt and ".word" not in ids_txt
+        assert ids_txt == render_item_ids_s(spec), "Committed item_ids.s is out of sync with item_catalog_spec.json"
+
+    if DEFAULT_PY_OUT.is_file():
+        py_txt = DEFAULT_PY_OUT.read_text()
+        assert py_txt == render_item_ids_py(spec), "Committed tools/item_ids.py is out of sync with item_catalog_spec.json"
+        import item_ids as gen_ids  # noqa: PLC0415
+
+        assert gen_ids.ITEM_TYPE_COUNT == len(spec["items"])
+        for it in spec["items"]:
+            slug = slugs[it["id"]]
+            lid = getattr(gen_ids, f"ITEM_{slug}")
+            slot_lo = getattr(gen_ids, f"ITEM_SLOT_{slug}")
+            page_bit = getattr(gen_ids, f"ITEM_PAGE_{slug}")
+            assert lid == it["id"]
+            assert gen_ids.pack_item_ego(lid, 0) == (slot_lo, page_bit)
+            assert slot_lo + (gen_ids.ITEM_PAGE_SIZE if page_bit else 0) == lid
+
     print(
         f"build_item_catalog selftest PASSED: ITEM.CAT={len(blob)}/{ITMCAT_SIZE_CAP} B, "
-        f"370 items + 55 egos + 174 flavours round-tripped cleanly."
+        f"{len(spec['items'])} items ({len(slugs)} symbolic slugs) + 55 egos + 174 flavours round-tripped cleanly."
     )
 
 
@@ -932,7 +1159,14 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         const=DEFAULT_EMIT_DIR,
         type=Path,
-        help="Emit item_hot_tables.s, item_cat_layout.s, item_cat_data.s (default: platforms/shared/item_catalog)",
+        help="Emit item_hot_tables.s, item_cat_layout.s, item_cat_data.s, item_ids.s (+ tools/item_ids.py)",
+    )
+    parser.add_argument(
+        "--emit-py",
+        nargs="?",
+        const=DEFAULT_PY_OUT,
+        type=Path,
+        help="Emit Python symbolic item constants (default: tools/item_ids.py)",
     )
     parser.add_argument("--vms-src", type=Path, help="Optional VMS Moria source path for upstream verification")
     parser.add_argument("--selftest", action="store_true", help="Run offline validation and round-trip self-test")
@@ -952,6 +1186,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.emit_s is not None:
         emit_assembly(spec, blob, offsets, args.emit_s)
+        if args.emit_py is None and args.emit_s.resolve() == DEFAULT_EMIT_DIR.resolve():
+            emit_python_ids(spec, DEFAULT_PY_OUT)
+
+    if args.emit_py is not None:
+        emit_python_ids(spec, args.emit_py)
 
     if args.out is not None:
         args.out.mkdir(parents=True, exist_ok=True)

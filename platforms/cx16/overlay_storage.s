@@ -98,7 +98,7 @@ cx16_preload_banks:
     bcc !tier_loop-
 #endif
 
-    // 4. Bank 6: ITEM.CAT ('ITM2' 370-item catalog)
+    // 4. Bank 6: ITEM.CAT ('ITM2' 361-item catalog)
     lda #CX16_BANK_ITEM_CAT
     sta CX16_RAM_BANK_REG
     lda #cx16_item_cat_name_len

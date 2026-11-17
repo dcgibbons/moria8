@@ -4,32 +4,33 @@
 
 ---
 
-**Phase 5 bump & V1 cleanup (`2026-11-16`, maintainer: "with this big change,
+**Phase 5 & VMS 361-item renumbering bump (`2026-11-16`, maintainer: "with this big change,
 let's kill savefile compatibility again"):** every port's `hal_storage_save_version`
-is `$21` (`SAVE_VERSION = $21`), and the retired `hal_storage_save_v1_version`
+is `$22` (`SAVE_VERSION = $22`), and the retired `hal_storage_save_v1_version`
 HAL constant, `OLDEST_SAVE_VERSION`, `load_save_version`, `stat_bake_mode`
 (`core/player_chargen_cold.s`), and C128 `--legacy-room8` test-fixture mode have
-been removed. The stream layout below is unchanged, all pre-`$21` saves
-(including legacy `$17` V1 and `$20` saves) are rejected with
+been removed. The stream layout below is unchanged (`ID_KNOWN_BYTES = 47` covers
+all `361` VMS items `0..360` within `376`-bit capacity), all pre-`$22` saves
+(including legacy `$17` V1 and `$20`–`$21` saves) are rejected with
 `LOAD_RESULT_UNSUPPORTED` (`4`), and `playtest/moria_playtest/queue.py`
 (`save_versions()` / `start_loads()`) reads `hal_storage_save_version` directly
-so pre-`$21` checkpoints restart cleanly from level 1 (`disk.SAVE_VERSION = 0x21`).
+so pre-`$22` checkpoints restart cleanly from level 1 (`disk.SAVE_VERSION = 0x22`).
 
 ## 1. Single Save Format V2 Bump Policy
 
-All seven Moria8 ports switch in **one atomic Phase 4/5 cutover** to Save Format V2 (`$21`):
+All seven Moria8 ports switch in **one atomic cutover** to Save Format V2 (`$22`):
 
-1. **Single Exact Version (`SAVE_VERSION = $21`)**:
-   - Set `hal_storage_save_version = $21` across every port's `hal/storage_policy.s` (`hal_storage_save_v1_version` and `OLDEST_SAVE_VERSION` are retired).
+1. **Single Exact Version (`SAVE_VERSION = $22`)**:
+   - Set `hal_storage_save_version = $22` across every port's `hal/storage_policy.s` (`hal_storage_save_v1_version` and `OLDEST_SAVE_VERSION` are retired).
    - Keep the existing 8-byte magic prefix (`"MORIA01" + SAVE_VERSION`, or `"MORIA+4" + SAVE_VERSION` under `HAL_STORAGE_SAVE_MAGIC_ALT_SIGNATURE` on Plus/4).
-   - Compile-time `.assert` in `platforms/shared/save.s` verifies `SAVE_VERSION == $21`.
+   - Compile-time `.assert` in `platforms/shared/save.s` verifies `SAVE_VERSION == $22`.
 2. **Zero V1 Backward Migration; Clean Rejection**:
-   - `save_version_supported` (`platforms/shared/save.s`) accepts **only** `version == SAVE_VERSION` (`$21`).
-   - Any older save file (`< $21`, including legacy C64 `$17`) or future version (`> $21`) is rejected immediately after reading the 8-byte magic header with `LOAD_RESULT_UNSUPPORTED` (`4`) and zero writes to player, inventory, store, map, or recall RAM (`load_save_version` is removed).
+   - `save_version_supported` (`platforms/shared/save.s`) accepts **only** `version == SAVE_VERSION` (`$22`).
+   - Any older save file (`< $22`, including legacy C64 `$17` and `$20`–`$21`) or future version (`> $22`) is rejected immediately after reading the 8-byte magic header with `LOAD_RESULT_UNSUPPORTED` (`4`) and zero writes to player, inventory, store, map, or recall RAM (`load_save_version` is removed).
    - All V1..V19 migration paths (`SAVE_KNOWN96_VERSION`, `SAVE_KNOWN_BITS_VERSION`, `SAVE_KNOWN160_VERSION`, `SAVE_INV31_VERSION`, `SAVE_INV33_VERSION`, `SAVE_STATS_BAKED_VERSION` + `stat_bake_mode` in `core/player_chargen_cold.s`, `SAVE_DOOR_STATE_VERSION`, `SAVE_FLOOR42_VERSION`, `HAL_STORAGE_LEGACY_ROOM8_MIGRATION`, `HAL_STORAGE_LEGACY_STORE12_MIGRATION`) are deleted.
 3. **Playtest Queue Reset to DL1**:
    - `playtest/moria_playtest/queue.py` (`save_versions()` and `start_loads()`) parses `hal_storage_save_version` from each build's `hal/storage_policy.s` (with optional `hal_storage_save_v1_version` fallback for archived historical builds) and resumes a saved run only when `loads[0] <= saved[1] <= loads[1]`.
-   - Because `loads[0] == loads[1] == 0x21`, every pre-`$21` Balrog-queue checkpoint automatically fails `start_loads()` and restarts cleanly from DL1 without manual queue edits.
+   - Because `loads[0] == loads[1] == 0x22`, every pre-`$22` Balrog-queue checkpoint automatically fails `start_loads()` and restarts cleanly from DL1 without manual queue edits.
 
 ---
 
@@ -41,14 +42,14 @@ All seven shipping ports run with `HAL_PLATFORM_MONSTER_CATALOG = 1`. Unless not
 
 | # | Stream Block | V1 (`80x48`) | V1 (`198x66`) | V2 (`80x48`) | V2 (`198x66`) | Delta (`V2 - V1`) & Encoding Details |
 |---:|---|---:|---:|---:|---:|---|
-| 1 | `save_magic` | `8` | `8` | `8` | `8` | `0`: `"MORIA01" + SAVE_VERSION` (Plus/4 `"MORIA+4" + SAVE_VERSION`, `SAVE_VERSION = $21`) |
+| 1 | `save_magic` | `8` | `8` | `8` | `8` | `0`: `"MORIA01" + SAVE_VERSION` (Plus/4 `"MORIA+4" + SAVE_VERSION`, `SAVE_VERSION = $22`) |
 | 2a | `player_data` (`PL_STRUCT_SIZE`) | `111` | `111` | `111` | `111` | `0`: player struct (`core/player.s`) with stats pre-baked |
 | 2b | `player_background` | `160` | `160` | `160` | `160` | `0`: 4×40 character background lines |
 | 2c | `ZP_STATE_START` (`$40-$5F`) | `32` | `32` | `32` | `32` | `0`: turn counter, timed effects, game flags |
 | 2d | `eff_fear_timer` | `1` | `1` | `1` | `1` | `0` |
 | 2e | `ZP_RNG_START` (`$1A-$1D`) | `4` | `4` | `4` | `4` | `0`: 32-bit PRNG state |
-| 2f | `inv_item_id..inv_ego` (`8 × TOTAL_INV_SLOTS`) | `264` | `264` | **`272`** | **`272`** | **`+8`**: `TOTAL_INV_SLOTS` `33 -> 34` (adds `EQUIP_CLOAK = 32`, `EQUIP_SECONDARY = 33`; `7 * 34 = 238 < 256` preserves 8-bit stride invariant). `55` egos (`0` = none, `1..55`) use `inv_ego` bits `0..5` (`EGO_ID_MASK = $3F`); **bit 6 (`ITEM_PAGE_BIT = $40`) of `inv_ego`** encodes the Base-255 page bit (`0..254` vs `255..369`) with **zero 9th inventory array**. |
-| 3 | `id_known_bits` | `20` | `20` | **`47`** | **`47`** | **`+27`**: `ceil(370 / 8) = 47 B` (`ID_KNOWN_BYTES`, `376`-bit capacity covering linear IDs `0..369`; fixed categories refreshed post-load via `item_refresh_fixed_known`) |
+| 2f | `inv_item_id..inv_ego` (`8 × TOTAL_INV_SLOTS`) | `264` | `264` | **`272`** | **`272`** | **`+8`**: `TOTAL_INV_SLOTS` `33 -> 34` (adds `EQUIP_CLOAK = 32`, `EQUIP_SECONDARY = 33`; `7 * 34 = 238 < 256` preserves 8-bit stride invariant). `55` egos (`0` = none, `1..55`) use `inv_ego` bits `0..5` (`EGO_ID_MASK = $3F`); **bit 6 (`ITEM_PAGE_BIT = $40`) of `inv_ego`** encodes the Base-255 page bit (`0..254` vs `255..360`) with **zero 9th inventory array**. |
+| 3 | `id_known_bits` | `20` | `20` | **`47`** | **`47`** | **`+27`**: `47 B` (`ID_KNOWN_BYTES`, `376`-bit capacity covering linear IDs `0..360`; fixed categories refreshed post-load via `item_refresh_fixed_known`) |
 | 4a | Flavor shuffles (`potion_shuffle`, `FLAVOUR_COUNT`) | `38` | `38` | **`174`** | **`174`** | **`+136`**: single contiguous `FLAVOUR_COUNT` block covering all randomized VMS pools (`46` potions + `49` scrolls + `30` rings + `24` wands + `25` staves = `174 B`) |
 | 4b | Stores (`si_item_id..si_meta_hi`, `8 × STORE_TOTAL_SLOTS`) | `896` | `896` | **`1,024`** | **`1,024`** | **`+128`**: `8 × 16 = 128` store slots (`7 × 128 = 896 B`) plus contiguous **`128 B` sidecar** (`si_meta_hi[128]`: bits `0..5` = 6-bit ego `0..55`, bit `6` = `ITEM_PAGE_BIT`; `si_meta` keeps unshifted `IF_*` bits `0..3`). |
 | 4c | Stairs & entry (`stairs_up_x..level_entry_dir`) | `7` | `7` | `7` | `7` | `0`: 6 stair bytes + 1 direction byte |
@@ -66,7 +67,7 @@ All seven shipping ports run with `HAL_PLATFORM_MONSTER_CATALOG = 1`. Unless not
 ### 2.2 Critical Data-Encoding Invariants for Phase 4
 
 1. **Base-255 9-bit Paging (`FI_EMPTY = $FF` vs. Item ID `#255`)**:
-   - Logical template IDs `0..254` encode with `page_bit = 0`, `slot_lo = id`; logical template IDs `255..369` encode with `page_bit = $40` (`ITEM_PAGE_BIT`), `slot_lo = id - 255` (`0..114`), so `logical_id = slot_lo + (255 if (meta_hi & $40) else 0)`.
+   - Logical template IDs `0..254` encode with `page_bit = 0`, `slot_lo = id`; logical template IDs `255..360` encode with `page_bit = $40` (`ITEM_PAGE_BIT`), `slot_lo = id - 255` (`0..105`), so `logical_id = slot_lo + (255 if (meta_hi & $40) else 0)`.
    - `FI_EMPTY` (`$FF`) is never valid on either page (`255 - 255 = 0` for Page 1 slot `#255`), eliminating the `$FF` collision completely. `save_sanitize_id_table` / `save_sanitize_store_ids` validate `(slot_lo, meta_hi)` pairs on load (Page 0: `FI_EMPTY` or `< ITEM_PAGE_SIZE`; Page 1: `< ITEM_TYPE_COUNT - ITEM_PAGE_SIZE`, otherwise clearing both `slot_lo = FI_EMPTY` and `meta_hi = 0`).
 2. **`FLOOR_ITEM_BASE` Page Ceiling**:
    - `FLOOR_ITEM_BASE` (`6 × 42 = 252 B`: `fi_item_id`, `fi_x`, `fi_y`, `fi_qty`, `fi_p1`, `fi_meta`) fits inside one 256-byte page across all 7 ports. `fi_meta_hi[42]` lives outside `FLOOR_ITEM_BASE` immediately after `fi_to_ac`.

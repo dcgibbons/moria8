@@ -2615,7 +2615,7 @@ test_start:
     lda #1
     sta test_dir_ok
     jsr item_init_floor
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_item_id
     lda #10
     sta fi_x
@@ -3135,11 +3135,15 @@ test_start:
     dex
     bpl !t56_stats-
     jsr item_init_inventory
-    lda #4                          // Long sword (+5,+0)
+    lda #ITEM_SLOT_LONG_SWORD                          // Long sword (+5,+0)
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #5
     sta inv_to_hit + EQUIP_WEAPON
-    lda #ITEM_TYPE_PLATE_MAIL
+    lda #ITEM_SLOT_PLATE_MAIL
     sta inv_item_id + EQUIP_BODY
     lda #$77                        // stale, as saved
     sta player_data + PL_TOHIT

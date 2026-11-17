@@ -98,13 +98,14 @@ fi_add_clear_plain_meta:
     rts
 
 // floor_item_get_qty_hi_x — Get 16-bit gold high byte for floor slot X
-// Output: A = qty_hi for Page-0 gold items (#0/#1), 0 for non-gold
+// Output: A = qty_hi for Page-0 gold items (#0..#19), 0 for non-gold
 floor_item_get_qty_hi_x:
+    .assert "All 20 gold types occupy Page 0 0..19", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_MITHRIL == 19 && ITEM_PAGE_GOLD_MITHRIL == 0, true
     lda fi_meta_hi,x
     and #ITEM_PAGE_BIT
     bne !fi_qty_zero+
     lda fi_item_id,x
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     bcc !fi_get_qty_hi_gold+
 !fi_qty_zero:
     lda #0
@@ -114,13 +115,13 @@ floor_item_get_qty_hi_x:
     rts
 
 // floor_item_get_p1_x — Get p1/charges for non-gold floor slot X
-// Output: A = p1 for non-gold, 0 for Page-0 gold (#0/#1)
+// Output: A = p1 for non-gold, 0 for Page-0 gold (#0..#19)
 floor_item_get_p1_x:
     lda fi_meta_hi,x
     and #ITEM_PAGE_BIT
     bne !fi_get_p1_ok+
     lda fi_item_id,x
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     bcs !fi_get_p1_ok+
     lda #0
     rts
@@ -215,7 +216,7 @@ floor_item_add:
     and #ITEM_PAGE_BIT
     bne !fia_non_gold+
     lda fi_add_id
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     bcc !fia_gold_hi+
 !fia_non_gold:
     lda fi_add_p1
@@ -1076,14 +1077,9 @@ item_append_desc:
     jsr combat_append_char
     jmp !iad_ring_p1+           // Crown of the Magi INT; 0 elsewhere
 !iad_ring:
+    .assert "All rings live on Page 1", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT, true
     bit item_cur_page
-    bvs !iad_ring_p1_chk+
-    lda fi_add_id
-    cmp #23
-    beq !iad_ring_ac+
-    cmp #24
-    beq !iad_ring_p1+
-!iad_ring_p1_chk:
+    bvc !iad_ring_done+
     lda fi_add_to_ac
     bne !iad_ring_ac+
     lda fi_add_to_hit
@@ -1093,6 +1089,7 @@ item_append_desc:
 !iad_ring_ac:
     lda fi_add_to_ac
     bne !iad_ring_ac_has_bonus+
+!iad_ring_done:
     rts
 !iad_ring_ac_has_bonus:
     lda #$20
@@ -1177,7 +1174,8 @@ tunnel_spawn_gold:
     sta fi_add_y
 
     // Gold type: rng(2) → ID 0 or 1 (small or large)
-    lda #2
+    .assert "Tunnel gold spawner uses Page-0 IDs 0..1", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_LARGE == 1 && ITEM_PAGE_GOLD_LARGE == 0, true
+    lda #(ITEM_SLOT_GOLD_LARGE + 1)
     jsr rng_range
     sta fi_add_id
     jsr fi_add_clear_plain_meta
@@ -1300,7 +1298,7 @@ roll_enchantment:
     bit re_page
     bvs !re_zero-
     lda zp_temp0
-    cmp #13
+    cmp #ITEM_SLOT_WOODEN_TORCH
     bne !re_lantern+
     lda #67
     jsr rng_range
@@ -1310,7 +1308,7 @@ roll_enchantment:
 
 !re_lantern:
     lda zp_temp0
-    cmp #14
+    cmp #ITEM_SLOT_BRASS_LANTERN
     bne !re_flask_oil+
     lda #125
     jsr rng_range
@@ -1326,7 +1324,7 @@ roll_enchantment:
     bit re_page
     bvs !re_wand_std+
     lda zp_temp0
-    cmp #39                         // Wand of Light: [10,15]
+    cmp #ITEM_SLOT_WAND_OF_LIGHT    // Wand of Light: [10,15]
     beq !re_wand_light+
 !re_wand_std:
     lda #4                          // Others: [5,8]
@@ -1345,9 +1343,9 @@ roll_enchantment:
     bit re_page
     bvs !re_staff_std+
     lda zp_temp0
-    cmp #43                         // Staff of Light: [10,15]
+    cmp #ITEM_SLOT_STAFF_OF_LIGHT   // Staff of Light: [10,15]
     beq !re_staff_light+
-    cmp #45                         // Staff of Teleportation: [3,5]
+    cmp #ITEM_SLOT_STAFF_OF_TELEPORTATION // Staff of Teleportation: [3,5]
     beq !re_staff_tele+
 !re_staff_std:
     lda #6                          // Others: [3,8]
@@ -1373,9 +1371,10 @@ roll_enchantment:
     rts
 
 !re_chest:
+    .assert "Chests are contiguous on Page 0", ITEM_LARGE_WOODEN_CHEST == ITEM_SMALL_WOODEN_CHEST + 1 && ITEM_SMALL_IRON_CHEST == ITEM_SMALL_WOODEN_CHEST + 2 && ITEM_LARGE_IRON_CHEST == ITEM_SMALL_WOODEN_CHEST + 3 && ITEM_SMALL_STEEL_CHEST == ITEM_SMALL_WOODEN_CHEST + 4 && ITEM_LARGE_STEEL_CHEST == ITEM_SMALL_WOODEN_CHEST + 5 && ITEM_RUINED_CHEST == ITEM_SMALL_WOODEN_CHEST + 6 && ITEM_PAGE_RUINED_CHEST == 0, true
     lda zp_temp0
     sec
-    sbc #ITEM_TYPE_CHEST_SMALL_WOOD
+    sbc #ITEM_SLOT_SMALL_WOODEN_CHEST
     tax
     lda chest_source_level,x
     sta fi_add_to_hit
@@ -1391,7 +1390,7 @@ roll_enchantment:
     rts
 
 chest_source_level:
-    .byte 7, 15, 25, 35, 45, 50, 0  // IDs 128-133; ruined (134) = 0
+    .byte 7, 15, 25, 35, 45, 50, 0  // Small Wood..Large Steel; Ruined = 0
 
 chest_trap_band:
     .byte CHEST_P1_TRAP_POISON, CHEST_P1_TRAP_POISON
@@ -1439,7 +1438,7 @@ re_equip:
     lda re_page
     beq !re_cursed_base_p1+
     lda zp_temp0
-    cmp #337 - ITEM_PAGE_SIZE       // Ring of WOE carries -3 AC
+    cmp #ITEM_SLOT_RING_OF_WOE      // Ring of WOE carries -3 AC
     bne !re_cursed_base_p1+
     lda #$fd
     sta fi_add_to_ac
@@ -1519,20 +1518,21 @@ re_equip:
     rts
 
 !re_ring:
+    .assert "All rings live on Page 1 and Lordly Protection rings are contiguous", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT && ITEM_RING_OF_LORDLY_PROTECTION_ACID == ITEM_RING_OF_LORDLY_PROTECTION_FIRE + 1 && ITEM_RING_OF_LORDLY_PROTECTION_COLD == ITEM_RING_OF_LORDLY_PROTECTION_FIRE + 2, true
     bit re_page
-    bvs !re_ring_p1+
+    bvc !re_ret_zero-
     lda zp_temp0
-    cmp #23                         // Ring of Protection
+    cmp #ITEM_SLOT_RING_OF_PROTECTION
     beq !re_ring_ac+
-    cmp #146
+    cmp #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_FIRE
     bcc !re_not_lordly+
-    cmp #149                        // Rings of Lordly Protection (146-148)
+    cmp #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_COLD + 1
     bcc !re_ring_ac+
 !re_not_lordly:
-    cmp #ITEM_TYPE_RING_SLAYING     // Ring of Slaying (113)
+    cmp #ITEM_SLOT_RING_OF_SLAYING
     beq !re_weapon-
-    cmp #ITEM_TYPE_RING_SPEED       // Ring of Speed (111): +1 (or -1 if cursed)
-    bne !re_ring_misc+
+    cmp #ITEM_SLOT_RING_OF_SPEED    // Ring of Speed: +1 (or -1 if cursed)
+    bne !re_ring_p1+
     lda fi_add_flags
     and #IF_CURSED
     bne !re_speed_neg+
@@ -1542,20 +1542,19 @@ re_equip:
     lda #$ff
     rts
 !re_ring_p1:
-    lda zp_temp0
-    cmp #327 - ITEM_PAGE_SIZE       // Ring of Increase Damage
+    cmp #ITEM_SLOT_RING_OF_INCREASE_DAMAGE
     bne !+
     lda re_bonus_dam
     sta fi_add_to_dam
     lda #0
     rts
-!:  cmp #328 - ITEM_PAGE_SIZE       // Ring of Increase To-Hit
+!:  cmp #ITEM_SLOT_RING_OF_INCREASE_TO_HIT
     bne !+
     lda re_bonus_hit
     sta fi_add_to_hit
     lda #0
     rts
-!:  cmp #337 - ITEM_PAGE_SIZE       // Ring of WOE: negative AC + stat penalty
+!:  cmp #ITEM_SLOT_RING_OF_WOE      // Ring of WOE: negative AC + stat penalty
     bne !re_ring_misc+
     lda re_bonus_ac
     sta fi_add_to_ac
@@ -1605,5 +1604,5 @@ re_negate_a:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 370
+.assert "Item type count", ITEM_TYPE_COUNT, 361
 .assert "Inventory total slots", TOTAL_INV_SLOTS, 34

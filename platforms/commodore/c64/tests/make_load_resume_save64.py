@@ -4,12 +4,12 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-# The product build uses Save Format V2 ($21) and the full VMS item/monster
+# The product build uses Save Format V2 ($22) and the full VMS item/monster
 # catalogs: 34 inventory slots (22 carried + 12 equipment including cloak and
 # secondary), 47-byte known-item bitset, 174-byte flavour shuffles, 8 store
 # arrays, door-state + species tables, 11 floor-item arrays, and 279 creature
 # rows of recall (1116 bytes, hal/storage_policy.s, platforms/shared/save.s).
-SAVE_VERSION = 0x21
+SAVE_VERSION = 0x22
 ID_KNOWN_BYTES = 47
 MAX_DOOR_STATES = 16
 CATALOG_SLOTS = 32

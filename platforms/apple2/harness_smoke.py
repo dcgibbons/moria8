@@ -32,6 +32,34 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import build_catalog  # noqa: E402
 import catalog_lore  # noqa: E402  (the generated monster catalog's data)
+import item_ids  # noqa: E402
+
+
+LUA_ITEM_CONSTS = item_ids.lua_item_consts(
+    "DAGGER",
+    "MACE",
+    "RING_OF_PROTECTION",
+    "WAND_OF_LIGHTNING",
+    "WAND_OF_STINKING_CLOUD",
+    "HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK",
+    "SPELLBOOK_MAGICK_I",
+    "HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS",
+    "POTION_OF_GAIN_DEXTERITY",
+    "POTION_OF_CHARISMA",
+    "POTION_OF_RESTORE_INTELLIGENCE",
+    "POTION_OF_CURE_CRITICAL_WOUNDS",
+    "POTION_OF_NEUTRALIZE_POISON",
+    "SCROLL_OF_MAGIC_MAPPING",
+    "SCROLL_OF_OBJECT_DETECTION",
+    "SCROLL_OF_RECHARGING",
+    "SCROLL_OF_RUNE_OF_PROTECTION",
+    "RING_OF_RESIST_FIRE",
+    "RING_OF_RESIST_COLD",
+    "AMULET_OF_THE_MAGI",
+    "GOLDEN_CROWN",
+    "WAND_OF_FIRE_BOLTS",
+    "WAND_OF_DRAIN_LIFE",
+)
 PO_IMAGE = ROOT / "build" / "moria8-apple2.po"
 MAME_OUTPUT_ROOT = ROOT / "build" / "apple2" / "mame"
 MAME_OUTPUT_DIRS = {
@@ -123,7 +151,7 @@ co = coroutine.create(run)
 coroutine.resume(co)
 """
 
-LUA_HELPERS = r"""
+LUA_HELPERS = LUA_ITEM_CONSTS + r"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local aux = emu.item(manager.machine.devices[":aux:ext80"].items["0/m_ram"])
 local keymap = {}
@@ -150,6 +178,11 @@ local function press(ch)
     local f = findkey(ch)
     if not f then print("NOKEY " .. string.format("%q", ch)) return end
     f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.12)
+end
+local function press_int(n)
+    local s = tostring(n)
+    for i = 1, #s do press(string.sub(s, i, i)) end
+    press("\r")
 end
 -- Longer hold/release for prompts reached right after disk activity: under
 -- -nothrottle a 0.03 s hold can vanish inside a single emulated frame while
@@ -486,10 +519,12 @@ prog:write_u8(pd + 37, 50)              -- PL_MANA (save copy)
 prog:write_u8(0x31, 50)                 -- zp_player_mp (live mana)
 prog:write_u8(pd + 63, prog:read_u8(pd + 63) | 0x40)  -- learnt bit 22
 local gave_book = false
+local inv_stride = INV_QTY_ADDR - INV_ITEM_ID_ADDR
 for i = 0, 30 do
     if prog:read_u8(INV_ITEM_ID_ADDR + i) == 0xff then
-        prog:write_u8(INV_ITEM_ID_ADDR + i, 59)   -- Chants and Blessings
+        prog:write_u8(INV_ITEM_ID_ADDR + i, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
         prog:write_u8(INV_QTY_ADDR + i, 1)
+        prog:write_u8(INV_ITEM_ID_ADDR + 7 * inv_stride + i, ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
         gave_book = true
         break
     end
@@ -674,10 +709,10 @@ print("SCENARIO DONE")
 """
 
 LUA_WIZARD_BODY = r"""
--- Wizard mode: enable, open the menu, generate item 48, see it carried.
+-- Wizard mode: enable, open the menu, generate Beginners Handbook, see it carried.
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("4") press("8") press("\r")
+press_int(ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press("I")
@@ -977,12 +1012,16 @@ print("SCENARIO DONE")
 
 
 LUA_QUAFF_P3_BODY = r"""
--- Wizard-generate a Phase 3 potion (Restoration, 97), quaff it, and verify
--- the effect message prints. Regression for the Apple IIe Phase 3 potion
--- overlay swap (resident trampoline into OVL.SPELL).
+-- Exercise Apple IIe Phase 3 potion dispatch (resident trampoline into
+-- OVL.SPELL:iq_dispatch_p3_spell) across non-contiguous VMS Gain-Stat potions
+-- (Gain Dexterity + Charisma), Cure Critical Wounds, and Neutralize Poison.
+prog:write_u8(PLAYER_DATA_ADDR + 24, 14)   -- PL_DEX_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 30, 14)   -- PL_DEX_CUR
+prog:write_u8(PLAYER_DATA_ADDR + 26, 13)   -- PL_CHR_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 32, 13)   -- PL_CHR_CUR
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("9") press("7") press("\r")
+press_int(ITEM_POTION_OF_GAIN_DEXTERITY)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -991,25 +1030,70 @@ press("q")
 emu.wait(1)
 assert_line("quaff_prompt", screen_has("Quaff which potion"), "quaff prompt did not open")
 press("a")
-local quaff_msg = false
-for i = 1, 100 do
-    emu.wait(0.1)
-    if screen_has("strength return") then quaff_msg = true break end
-end
-assert_line("quaff_msg", quaff_msg, "quaff effect message missing")
+local dex_msg = wait_screen("more limber!", 20)
+wait_idle(20)
+assert_line("quaff_gain_dex", dex_msg and prog:read_u8(PLAYER_DATA_ADDR + 30) == 15,
+            "Gain Dexterity failed: dex=" .. prog:read_u8(PLAYER_DATA_ADDR + 30))
+
+inv_seed(0, {ITEM_SLOT_POTION_OF_CHARISMA, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CHARISMA})
+press("q")
+assert_line("quaff_chr_prompt", wait_screen("Quaff which potion", 20), "charisma quaff prompt missing")
+press("a")
+local chr_msg = wait_screen("ain't you cute!", 20)
+wait_idle(20)
+assert_line("quaff_gain_chr", chr_msg and prog:read_u8(PLAYER_DATA_ADDR + 32) == 14,
+            "Charisma potion failed: chr=" .. prog:read_u8(PLAYER_DATA_ADDR + 32))
+
+prog:write_u8(HP_LO_ADDR, 1)
+prog:write_u8(PLAYER_DATA_ADDR + 33, 1)
+prog:write_u8(POISON_ADDR, 5)
+inv_seed(0, {ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_CRITICAL_WOUNDS})
+press("q")
+assert_line("quaff_ccw_prompt", wait_screen("Quaff which potion", 20), "ccw quaff prompt missing")
+press("a")
+wait_idle(25)
+assert_line("quaff_ccw", prog:read_u8(HP_LO_ADDR) > 1 and prog:read_u8(POISON_ADDR) == 0,
+            "Cure Critical Wounds failed: hp=" .. prog:read_u8(HP_LO_ADDR) .. " poison=" .. prog:read_u8(POISON_ADDR))
+
+prog:write_u8(POISON_ADDR, 5)
+inv_seed(0, {ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_NEUTRALIZE_POISON})
+press("q")
+assert_line("quaff_neut_prompt", wait_screen("Quaff which potion", 20), "neutralize quaff prompt missing")
+press("a")
+local neut_msg = wait_screen("You feel better.", 20)
+wait_idle(20)
+assert_line("quaff_neutralize", neut_msg and prog:read_u8(POISON_ADDR) == 0,
+            "Neutralize Poison failed: poison=" .. prog:read_u8(POISON_ADDR))
+
+-- Restore Intelligence (eff_item_extended.s ee_op_restore !eer_single):
+-- player_calc_stats swaps overlays on Apple IIe and reloads OVL.HOME/OVL.SPELL,
+-- which wiped eff_ext_tmp to 0 (STAT_STR) before the hardware-stack fix.
+prog:write_u8(PLAYER_DATA_ADDR + 21, 16)   -- PL_STR_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 27, 10)   -- PL_STR_CUR (drained)
+prog:write_u8(PLAYER_DATA_ADDR + 22, 16)   -- PL_INT_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 28, 10)   -- PL_INT_CUR (drained)
+inv_seed(0, {ITEM_SLOT_POTION_OF_RESTORE_INTELLIGENCE, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_RESTORE_INTELLIGENCE})
+press("q")
+assert_line("quaff_rest_int_prompt", wait_screen("Quaff which potion", 20), "restore int quaff prompt missing")
+press("a")
+wait_idle(25)
+assert_line("quaff_restore_int_only",
+            prog:read_u8(PLAYER_DATA_ADDR + 28) == 16 and prog:read_u8(PLAYER_DATA_ADDR + 27) == 10,
+            "Restore INT failed across overlay swap: int=" .. prog:read_u8(PLAYER_DATA_ADDR + 28)
+            .. " str=" .. prog:read_u8(PLAYER_DATA_ADDR + 27))
 print("SCENARIO DONE")
 """
 
 
 
 LUA_SCROLL_OBJDET_BODY = r"""
--- Wizard-generate a Scroll of Object Detection (103), read it, and verify
+-- Wizard-generate a Scroll of Object Detection, read it, and verify
 -- the effect runs and reports (no poison/death misdispatch). Regression for
 -- the Apple IIe new-owner Phase 3 scroll handlers calling OVL.SPELL helpers
 -- from OVL.DEATH (wild jump into uninitialized window memory).
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("1") press("0") press("3") press("\r")
+press_int(ITEM_SCROLL_OF_OBJECT_DETECTION)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -1031,11 +1115,11 @@ print("SCENARIO DONE")
 """
 
 LUA_SCROLL_MAP_BODY = r"""
--- Wizard-generate a Scroll of Magic Mapping (102), read it, and verify the
+-- Wizard-generate a Scroll of Magic Mapping, read it, and verify the
 -- effect runs and reports. Companion to scroll_objdet (spell-overlay helper).
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("1") press("0") press("2") press("\r")
+press_int(ITEM_SCROLL_OF_MAGIC_MAPPING)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -1055,12 +1139,12 @@ print("SCENARIO DONE")
 """
 
 LUA_SCROLL_RUNE_BODY = r"""
--- Wizard-generate a Scroll of Rune of Protection (105), read it, and verify
+-- Wizard-generate a Scroll of Rune of Protection, read it, and verify
 -- the effect runs: the glyph is created and its message prints. Regression
 -- for the Apple IIe Phase 3 scroll overlay swaps (resident router/trampoline).
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("1") press("0") press("5") press("\r")
+press_int(ITEM_SCROLL_OF_RUNE_OF_PROTECTION)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -1122,7 +1206,7 @@ press("S")
 wait_generation()
 wizard_menu_open()
 press_until("ITEM", "G")
-press("1") press("0") press("3") press("\r")
+press_int(ITEM_SCROLL_OF_OBJECT_DETECTION)
 emu.wait(2)
 press(" ")
 emu.wait(1)
@@ -1233,7 +1317,7 @@ press("\27")
 assert_line("book2_idle", wait_idle(20), "game busy after the list")
 local free = nil
 for slot = 0, 21 do if inv_field(slot, 0) == 0xFF then free = slot break end end
-inv_seed(free, {55, 1, 0, 0, 0, 0, 2, 0})   -- Spellbook Magick I, known
+inv_seed(free, {ITEM_SLOT_SPELLBOOK_MAGICK_I, 1, 0, 0, 0, 0, 2, ITEM_PAGE_SPELLBOOK_MAGICK_I})
 press_slow("M")
 assert_line("cast_book2_prompt", wait_screen("Spell book (a-b)?"), "no two-book prompt: " .. rowtext(0))
 shift("/")
@@ -1553,13 +1637,16 @@ LUA_WEAPON_EXCHANGE_BODY = r"""
 -- SHIFT+X (VMS `x`, moria.inc switch_weapon): a cursed primary is refused
 -- with no turn; uncursed, the swap takes one turn, moves all 8 fields and
 -- reports both slots.
-inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
-inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+inv_seed(22, {ITEM_SLOT_MACE, 1, 0, 1, 0, 0, 3, ITEM_PAGE_MACE})
+inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
 local turn0 = prog:read_u8(TURN_LO_ADDR)
 shift("X")
 local refused = wait_screen("You cannot remove it, it is cursed!", 20)
-assert_line("exchange_cursed_refused", refused and inv_field(22, 0) == 5
-            and inv_field(33, 0) == 2 and prog:read_u8(TURN_LO_ADDR) == turn0,
+assert_line("exchange_cursed_refused", refused and inv_field(22, 0) == ITEM_SLOT_MACE
+            and (inv_field(22, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_MACE
+            and inv_field(33, 0) == ITEM_SLOT_DAGGER
+            and (inv_field(33, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_DAGGER
+            and prog:read_u8(TURN_LO_ADDR) == turn0,
             "refusal message, records or turn wrong")
 prog:write_u8(INV + 6 * INV_STRIDE + 22, 2) -- lift the curse
 shift("X")
@@ -1568,8 +1655,9 @@ wait_idle(20)
 assert_line("exchange_report", reported and screen_has("Secondary: Mace (+1,+0)"),
             "report lines missing: " .. rowtext(0) .. " / " .. rowtext(1))
 assert_line("exchange_swapped",
-            inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
-            and inv_field(33, 0) == 5 and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+            inv_field(22, 0) == ITEM_SLOT_DAGGER and inv_field(22, 3) == 3 and inv_field(22, 7) == (ITEM_PAGE_DAGGER | 6)
+            and inv_field(33, 0) == ITEM_SLOT_MACE and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+            and inv_field(33, 7) == ITEM_PAGE_MACE
             and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF, "records not exchanged")
 assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256,
             "turn " .. prog:read_u8(TURN_LO_ADDR) .. " from " .. turn0)
@@ -1579,7 +1667,7 @@ assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256
 -- the path). The game goes on: a search takes its turn.
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
 assert_line("aim_idle", wait_idle(20), "game busy before the aim")
-inv_seed(0, {42, 1, 5, 0, 0, 0, 0, 0})
+inv_seed(0, {ITEM_SLOT_WAND_OF_STINKING_CLOUD, 1, 5, 0, 0, 0, 0, ITEM_PAGE_WAND_OF_STINKING_CLOUD})
 press("A")
 assert_line("aim_prompt", wait_screen("Aim which wand"), "aim prompt missing")
 press("A")
@@ -1596,12 +1684,16 @@ press("S")
 emu.wait(1.0)
 assert_line("play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn1,
             "no turn after the aim: " .. rowtext(0))
--- The VMS Wands of Fire Bolts (153) and Drain Life (154), MON-031: the death
+-- The VMS Wands of Fire Bolts and Drain Life, MON-031: the death
 -- overlay's router runs them in OVL.SPELL through irs_re_compact_call. Aimed
 -- at nothing, each takes its turn and play goes on.
-for _, id in ipairs({153, 154}) do
+for _, w in ipairs({
+    {ITEM_WAND_OF_FIRE_BOLTS, ITEM_SLOT_WAND_OF_FIRE_BOLTS, ITEM_PAGE_WAND_OF_FIRE_BOLTS},
+    {ITEM_WAND_OF_DRAIN_LIFE, ITEM_SLOT_WAND_OF_DRAIN_LIFE, ITEM_PAGE_WAND_OF_DRAIN_LIFE},
+}) do
+    local id, slot_lo, page_bit = w[1], w[2], w[3]
     for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
-    inv_seed(0, {id, 1, 5, 0, 0, 0, 0, 0})
+    inv_seed(0, {slot_lo, 1, 5, 0, 0, 0, 0, page_bit})
     local turn_w = prog:read_u8(TURN_LO_ADDR)
     -- Right after the previous wand's overlay swap a quick press can vanish
     -- (2026-11-12: the Drain Life aim's 'A' was lost once): retried, held.
@@ -1627,8 +1719,8 @@ emu.wait(2.0)
 -- OVL.SPELL reload clobbered, so another slot was recharged, named or
 -- "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
 -- (BBC build queue, 2026-11-12; the Apple IIe shares the trampoline).
-inv_seed(0, {40, 1, 0, 0, 0, 0, 0, 0})    -- Wand of Lightning, empty
-inv_seed(1, {104, 1, 0, 0, 0, 0, 0, 0})   -- Scroll of Recharging
+inv_seed(0, {ITEM_SLOT_WAND_OF_LIGHTNING, 1, 0, 0, 0, 0, 0, ITEM_PAGE_WAND_OF_LIGHTNING})
+inv_seed(1, {ITEM_SLOT_SCROLL_OF_RECHARGING, 1, 0, 0, 0, 0, 0, ITEM_PAGE_SCROLL_OF_RECHARGING})
 local turn_r = prog:read_u8(TURN_LO_ADDR)
 assert_line("recharge_read_prompt", press_until("Read which scroll", "R", 8), "read prompt missing")
 press_slow("A")
@@ -1639,7 +1731,9 @@ emu.wait(0.5)
 press_slow("A")
 assert_line("recharge_glows", wait_screen("glows briefly"), "no recharge message: " .. rowtext(0) .. " / " .. rowtext(1))
 for _ = 1, 4 do if screen_has("-more-") then press_slow(" ") end emu.wait(0.3) end
-assert_line("recharge_charged", inv_field(0, 0) == 40 and inv_field(0, 2) > 0,
+assert_line("recharge_charged", inv_field(0, 0) == ITEM_SLOT_WAND_OF_LIGHTNING
+            and (inv_field(0, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_WAND_OF_LIGHTNING
+            and inv_field(0, 2) > 0,
             "slot a: " .. inv_field(0, 0) .. " charges " .. inv_field(0, 2))
 press_slow("S")
 emu.wait(1.0)
@@ -1655,13 +1749,13 @@ emu.wait(2.0)
 -- rebuild (2026-11-08 review). The Ring of Resist Fire sets
 -- PFLAG_RESIST_FIRE ($01); a Ring of Protection worn over it clears it; the
 -- Amulet of the Magi sets See Invisible ($08) and Free Action ($10).
-local function wear_slot_a(id, what)
+local function wear_slot_a(slot_lo, page_bit, what)
     for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
     -- The previous turn (and any cold overlay load) must be over: a W typed
     -- while the game is busy is overwritten by the next key (the one-key
     -- latch), and the stray 'A' then runs the Aim command ("nothing there").
     assert_line(what .. "_idle", wait_idle(20), "game busy before the wear")
-    inv_seed(0, {id, 1, 0, 0, 0, 0, 2, 0})
+    inv_seed(0, {slot_lo, 1, 0, 0, 0, 0, 2, page_bit})
     press("W")
     assert_line(what .. "_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
     assert_line(what .. "_prompt_idle", wait_idle(20), "game busy at the wear prompt")
@@ -1671,26 +1765,26 @@ local function wear_slot_a(id, what)
 end
 -- The Dagger (Defender) wielded since the exchange resists fire and cold
 -- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
-prog:write_u8(INV + 7 * INV_STRIDE + 22, 0)
+prog:write_u8(INV + 7 * INV_STRIDE + 22, inv_field(22, 7) & ITEM_PAGE_BIT)
 prog:write_u8(PFLAGS_ADDR, 0)
-wear_slot_a(109, "resist_fire_ring")
+wear_slot_a(ITEM_SLOT_RING_OF_RESIST_FIRE, ITEM_PAGE_RING_OF_RESIST_FIRE, "resist_fire_ring")
 assert_line("resist_fire_flag", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 -- Two ring hands (VMS moria.inc:528, 2026-11-08): the left hand next, then
 -- a third ring replaces the left-hand one
-wear_slot_a(110, "resist_cold_ring")
+wear_slot_a(ITEM_SLOT_RING_OF_RESIST_COLD, ITEM_PAGE_RING_OF_RESIST_COLD, "resist_cold_ring")
 assert_line("both_resist_flags", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x03, "pflags " .. prog:read_u8(PFLAGS_ADDR))
-wear_slot_a(23, "protection_ring")
+wear_slot_a(ITEM_SLOT_RING_OF_PROTECTION, ITEM_PAGE_RING_OF_PROTECTION, "protection_ring")
 assert_line("left_ring_replaced", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
-wear_slot_a(125, "magi_amulet")
+wear_slot_a(ITEM_SLOT_AMULET_OF_THE_MAGI, ITEM_PAGE_AMULET_OF_THE_MAGI, "magi_amulet")
 assert_line("free_action_flag", prog:read_u8(PFLAGS_ADDR) & 0x18 == 0x18, "pflags " .. prog:read_u8(PFLAGS_ADDR))
--- A Golden Crown of the Magi (MON-030; 151, INT +2, ego 14) through this
+-- A Golden Crown of the Magi (MON-030; INT +2, ego 14) through this
 -- port's own player_adjust_equipment_stat: worn, INT +2 and fire, cold and
 -- acid resisted ($23); taken off, INT back.
 local PL_INT_CUR = 28
 local int0 = prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR)
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
 assert_line("magi_crown_idle", wait_idle(20), "game busy before the crown")
-inv_seed(0, {151, 1, 2, 0, 0, 3, 2, 14})
+inv_seed(0, {ITEM_SLOT_GOLDEN_CROWN, 1, 2, 0, 0, 3, 2, ITEM_PAGE_GOLDEN_CROWN | 14})
 press("W")
 assert_line("magi_crown_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
 assert_line("magi_crown_prompt_idle", wait_idle(20), "game busy at the wear prompt")
@@ -1781,7 +1875,7 @@ LUA_REBOOT_SAVE_BODY = r"""
 -- Session A of save_reboot_load: chargen, then save slot 1 to the SAVE1
 -- volume in drive 2 (same setup flow as save_load). The secondary weapon
 -- slot (33) holds a Dagger (+3,+4) (Defender); slot 32 (cloak) & 31 stay empty.
-inv_seed(33, {2, 1, 0, 3, 4, 0, 2, 6})
+inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
 local s = keymap["Left Shift"]
 local f = findkey("S")
 s:set_value(1) emu.wait(0.02)
@@ -1860,7 +1954,7 @@ assert_line("loaded", loaded, "reboot load did not resume the saved game")
 assert_line("stats_restored", screen_has("test") and prog:read_u8(0x3c) == 0,
             "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)")
 local sec_ok = inv_field(31, 0) == 0xFF and inv_field(32, 0) == 0xFF
-local expect = {2, 1, 0, 3, 4, 0, 2, 6}
+local expect = {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6}
 for k = 0, 7 do
     if inv_field(33, k) ~= expect[k + 1] then sec_ok = false end
 end
@@ -2075,7 +2169,11 @@ def balrog_victory_lua() -> str:
 
 
 def quaff_p3_lua() -> str:
-    return _chargen_body("A") + LUA_QUAFF_P3_BODY
+    return (
+        _chargen_body("A") + _idle_helpers() + _inv_helpers() + LUA_QUAFF_P3_BODY
+    ).replace("PLAYER_DATA_ADDR", hex(_sym_addr("player_data"))).replace(
+        "HP_LO_ADDR", hex(_sym_addr("zp_player_hp_lo"))
+    ).replace("POISON_ADDR", hex(_sym_addr("zp_eff_poison")))
 
 
 def _catalog_const(name: str) -> int:

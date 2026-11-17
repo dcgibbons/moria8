@@ -28,10 +28,10 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
-// $21 (Save Format V2): expanded 370-item catalog, 34 inventory slots (with
-// Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and 279-species
-// persistent monster recall. Only SAVE_VERSION ($21) is accepted.
-.const hal_storage_save_version = $21
+// $22 (Save Format V2): canonical 361-item VMS catalog, 34 inventory slots
+// (with Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and
+// 279-species persistent monster recall. Only SAVE_VERSION ($22) is accepted.
+.const hal_storage_save_version = $22
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP

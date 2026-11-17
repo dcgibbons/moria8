@@ -247,6 +247,7 @@ floor_item_find_at:
     cpx #MAX_FLOOR_ITEMS
     bcs !miss+
     lda fi_item_id,x
+    cmp #FI_EMPTY
     beq !next+
     lda fi_x,x
     cmp zp_temp0
@@ -264,8 +265,9 @@ floor_item_find_at:
     rts
 
 floor_item_remove:
-    lda #0
+    lda #FI_EMPTY
     sta fi_item_id,x
+    lda #0
     sta fi_qty,x
     sta fi_x,x
     sta fi_y,x
@@ -277,6 +279,7 @@ floor_item_add:
     cpx #MAX_FLOOR_ITEMS
     bcs !fail+
     lda fi_item_id,x
+    cmp #FI_EMPTY
     beq !use+
     inx
     jmp !slot-
@@ -393,12 +396,13 @@ test_calc_spell_failure_fail:
 
 test_reset_glyph_state:
     ldx #MAX_FLOOR_ITEMS - 1
-    lda #0
 !clear_items:
+    lda #0
     sta fi_x,x
     sta fi_y,x
-    sta fi_item_id,x
     sta fi_qty,x
+    lda #FI_EMPTY
+    sta fi_item_id,x
     dex
     bpl !clear_items-
     jsr glyph_clear_all
@@ -453,11 +457,13 @@ test_seed_underfoot_item:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty
     jsr fi_add_clear_plain_meta
+    lda #ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
+    sta fi_add_ego
     jsr floor_item_add
     rts
 

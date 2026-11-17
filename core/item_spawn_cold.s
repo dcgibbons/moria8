@@ -83,7 +83,8 @@ item_spawn_level:
     sta fi_add_y
 
     // Gold type: rng(2) -> ID 0 or 1
-    lda #2
+    .assert "Floor gold spawner uses Page-0 IDs 0..1", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_LARGE == 1 && ITEM_PAGE_GOLD_LARGE == 0, true
+    lda #(ITEM_SLOT_GOLD_LARGE + 1)
     jsr rng_range
     sta fi_add_id
     jsr fi_add_clear_plain_meta

@@ -653,7 +653,7 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_look_overlay_guard,c128_80col_layout_guard,c128_ref_hal_guard,c128_save_load_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_look_overlay_guard,c128_80col_layout_guard,c128_ref_hal_guard,c128_save_load_guard,c128_item_catalog_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
@@ -688,7 +688,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_user_visible_string_guard|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_look_overlay_guard|c128_80col_layout_guard|c128_ref_hal_guard|c128_save_load_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_user_visible_string_guard|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_look_overlay_guard|c128_80col_layout_guard|c128_ref_hal_guard|c128_save_load_guard|c128_item_catalog_guard) return 0 ;;
             esac
             ;;
         units)
@@ -2100,7 +2100,7 @@ if not has_ordered_chain(items, [
 if not has_ordered_chain(items, [
     "irs_effect_p3_swap:",
     "#if HAL_PLATFORM_STAFF_SPEED_TRAMPOLINED",
-    "cmp #ITEM_TYPE_STAFF_SPEED",
+    "cmp #ITEM_SLOT_STAFF_OF_SPEED",
     "beq !irsp3_staff_speed+",
     "!irsp3_staff_speed:",
     "jmp tramp_staff_speed_items",
@@ -2390,6 +2390,30 @@ PY
 
     echo "PASS"
     PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_c128_item_catalog_guard_check() {
+    echo -n "  c128_item_catalog_guard: "
+
+    if [ ! -f "$REPO_ROOT/build/c128/moria128.prg" ] || [ ! -f "$REPO_ROOT/build/c128/main.vs" ]; then
+        if ! "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" build128 >/dev/null 2>&1; then
+            echo "FAIL (build128)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    fi
+
+    local check_out
+    if check_out=$(python3 -B "$REPO_ROOT/tools/check_item_catalog_ports.py" --selftest 2>&1 && python3 -B "$REPO_ROOT/tools/check_item_catalog_ports.py" --port c128 --if-built c64 2>&1); then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        echo "$check_out" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    fi
     TOTAL=$((TOTAL + 1))
 }
 
@@ -4505,7 +4529,7 @@ run_boot_title_save_write_product_smoke() {
     check_log="$(test128_tmp_file "test128_${name}_check.log")"
     rm -f "$save_seq"
     if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
-            || ! python3 -B tests/check_save_secondary128.py "$save_seq" 0x21 >>"$check_log" 2>&1; then
+            || ! python3 -B tests/check_save_secondary128.py "$save_seq" 0x22 >>"$check_log" 2>&1; then
         echo "FAIL (secondary weapon not in the written save)"
         tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5780,9 +5804,9 @@ run_scroll_p3_return_smoke() {
     build_boot_assets || return
 
     local main_vs="../../../build/test/c128/main.vs" sym
-    local irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty
+    local irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty inv_ego
     local input_key_wait_strict input_key_wait_fast
-    for sym in irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty \
+    for sym in irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty inv_ego \
             input_key_wait_strict input_key_wait_fast; do
         printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
         if [ -z "${!sym}" ]; then
@@ -5801,6 +5825,9 @@ run_scroll_p3_return_smoke() {
     log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
+    local objdet_slot objdet_page
+    read -r objdet_slot objdet_page < <(python3 -B -c 'import sys; sys.path.insert(0, "../../../tools"); from item_ids import ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION as s, ITEM_PAGE_SCROLL_OF_OBJECT_DETECTION as p; print(f"{s:02x} {p:02x}")')
+
     local exit_pc
     exit_pc=$(printf '%04X' $((16#$input_key_wait_strict + 2)))
     {
@@ -5809,8 +5836,9 @@ run_scroll_p3_return_smoke() {
         echo "break \$${input_key_wait_fast}"
         echo "g"                                        # the town's command prompt
         printf 'f %s %04x ff\n' "$inv_item_id" $(( 16#$inv_item_id + 21 ))
-        printf '> %s %02x\n' "$inv_item_id" 103         # ITEM_TYPE_SCR_OBJECT_DETECT
+        printf '> %s %s\n' "$inv_item_id" "$objdet_slot" # ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION
         printf '> %s 01\n' "$inv_qty"
+        printf '> %s %s\n' "$inv_ego" "$objdet_page"    # ITEM_PAGE_SCROLL_OF_OBJECT_DETECTION
         echo "r a=52"                                   # R: read a scroll
         echo "r pc=${exit_pc}"
         echo "g"
@@ -6207,8 +6235,9 @@ run_chest_open_product_smoke128() {
 
     build_scripted_chest_open_boot_assets || return
 
-    local abs_d71
+    local abs_d71 chest_slot_hex
     abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedchestopen.d71"
+    chest_slot_hex="$(python3 -B -c 'import sys; sys.path.insert(0, "../../../tools"); from item_ids import ITEM_SLOT_LARGE_WOODEN_CHEST as s; print(f"0x{s:02x}")')"
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
         --name "$name" \
@@ -6225,7 +6254,7 @@ run_chest_open_product_smoke128() {
         --expect-byte-symbol ".chest_loot_pending=0x00" \
         --expect-byte-symbol ".chest_pending_summons=0x00" \
         --expect-byte-symbol ".current_overlay=0x04" \
-        --expect-byte-symbol ".fi_item_id=0x81" \
+        --expect-byte-symbol ".fi_item_id=${chest_slot_hex}" \
         --expect-byte-symbol ".fi_p1=0x80" \
         --expect-byte-symbol ".zp_player_dlvl=0x01" \
         --timeout 30 \
@@ -6280,8 +6309,9 @@ run_exchange_product_smoke128() {
 
     build_scripted_exchange_boot_assets || return
 
-    local abs_d71
+    local abs_d71 mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex
     abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedexchange.d71"
+    read -r mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex < <(python3 -B -c 'import sys; sys.path.insert(0, "../../../tools"); from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER, ITEM_SLOT_MACE; print(f"0x{ITEM_SLOT_MACE:02x} 0x{ITEM_SLOT_DAGGER:02x} 0x{ITEM_PAGE_DAGGER | 6:02x} 0x{FI_EMPTY:02x}")')
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
         --name "$name" \
@@ -6295,12 +6325,12 @@ run_exchange_product_smoke128() {
         --autostart-only-drive8 \
         --expect-byte-symbol ".exchange_product_presses=0x02" \
         --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
-        --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
-        --expect-byte-symbol ".exchange_product_primary_id=0x02" \
-        --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
-        --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+        --expect-byte-symbol ".exchange_product_refused_primary=${mace_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_id=${dagger_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_ego=${dagger_def_ego_hex}" \
+        --expect-byte-symbol ".exchange_product_secondary_id=${mace_slot_hex}" \
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-        --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
+        --expect-byte-symbol ".exchange_product_ring2_id=${empty_hex}" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
         --expect-byte-symbol ".current_overlay=0x0c" \
         --timeout 30 \
@@ -7156,6 +7186,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path("../../../tools").resolve()))
+from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER
+
+EGO_DEFENDER = 6
 vs_path, mon_path = Path(sys.argv[1]), Path(sys.argv[2])
 syms = {}
 for line in vs_path.read_text().splitlines():
@@ -7254,8 +7288,8 @@ lines = [
     f"> {syms['trap_x']:04x} 17",
     f"> {syms['trap_y']:04x} 14",
     f"> {syms['trap_type']:04x} 00",
-    f"f {fi_id:04x} {fi_id + 41:04x} ff",
-    f"> {fi_id:04x} 02",
+    f"f {fi_id:04x} {fi_id + 41:04x} {FI_EMPTY:02x}",
+    f"> {fi_id:04x} {ITEM_SLOT_DAGGER:02x}",
     f"> {syms['fi_x']:04x} 18",
     f"> {syms['fi_y']:04x} 14",
     f"> {syms['fi_qty']:04x} 01",
@@ -7264,8 +7298,8 @@ lines = [
     f"> {syms['fi_to_hit']:04x} 02",
     f"> {syms['fi_to_dam']:04x} 03",
     f"> {syms['fi_to_ac']:04x} 00",
-    f"> {syms['fi_meta_hi']:04x} 06",
-    f"> {syms['inv_item_id'] + 21:04x} ff",
+    f"> {syms['fi_meta_hi']:04x} {ITEM_PAGE_DAGGER | EGO_DEFENDER:02x}",
+    f"> {syms['inv_item_id'] + 21:04x} {FI_EMPTY:02x}",
     # Sentinel read of $FF00 to mark start of zero-disk hot-path gauntlet in monitor log:
     "m ff00 ff00",
     f"break ${syms['w_open']:04X}",
@@ -7329,6 +7363,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path("../../../tools").resolve()))
+from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER
+
+EGO_DEFENDER = 6
 vs_path, log_path = Path(sys.argv[1]), Path(sys.argv[2])
 syms = {}
 for line in vs_path.read_text().splitlines():
@@ -7400,15 +7438,16 @@ if (r1byte(0x4f8d) & 0xf0) != 0x70:
     raise SystemExit(f"locked door at (21,20) not open: tile=${r1byte(0x4f8d):02X}")
 if (r1byte(0x4f8f) & 0xf0) != 0xe0:
     raise SystemExit(f"floor trap at (23,20) not revealed/triggered: tile=${r1byte(0x4f8f):02X}")
-if (r1byte(0x4f90) & 0x02) != 0x00 or cbyte(syms["fi_item_id"]) != 0xff:
+if (r1byte(0x4f90) & 0x02) != 0x00 or cbyte(syms["fi_item_id"]) != FI_EMPTY:
     raise SystemExit(f"floor item at (24,20) not picked up: tile=${r1byte(0x4f90):02X} fi0=${cbyte(syms['fi_item_id']):02X}")
 
 picked = any(
-    cbyte(syms["inv_item_id"] + i) == 0x02 and cbyte(syms["inv_ego"] + i) == 0x06
+    cbyte(syms["inv_item_id"] + i) == ITEM_SLOT_DAGGER
+    and cbyte(syms["inv_ego"] + i) == (ITEM_PAGE_DAGGER | EGO_DEFENDER)
     for i in range(22)
 )
 if not picked:
-    raise SystemExit("picked ego weapon (item_id=2, ego=6) not found in carried inventory")
+    raise SystemExit("picked ego Dagger (Defender) not found in carried inventory")
 
 hist_bytes = bytes(r1byte(a) for a in range(0xdcb8, 0xdf38))
 def sc_to_ascii(b: int) -> str:
@@ -7832,6 +7871,7 @@ run_selected_suites() {
     run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
     run_named_suite c128_save_load_guard run_save_load_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
+    run_named_suite c128_item_catalog_guard run_c128_item_catalog_guard_check || return 1
 
     run_parallel_unit_tests || return 1
 

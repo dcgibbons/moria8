@@ -649,7 +649,8 @@ door_jam_at_target:
     cpx #EQUIP_WEAPON
     bcs !cj_no_spike+
     lda inv_item_id,x
-    cmp #ITEM_TYPE_IRON_SPIKE
+    .assert "Iron Spike on Page 0 above Page-1 max slot_lo", ITEM_PAGE_IRON_SPIKE == 0 && ITEM_SLOT_IRON_SPIKE >= (ITEM_TYPE_COUNT - ITEM_PAGE_SIZE), true
+    cmp #ITEM_SLOT_IRON_SPIKE
     beq !cj_have+
     inx
     bne !cj_scan-
