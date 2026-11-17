@@ -528,6 +528,28 @@ class FoodCountTest(unittest.TestCase):
         brain.count_food("You eat the Ration of Food. Delicious!")
         self.assertEqual(brain.food, 1)
 
+    def test_after_a_meal_the_pack_list_corrects_the_food_count(self) -> None:
+        """A single kind of food is eaten with no prompt (no list): the
+        inventory after each meal is the check, as a player glances at the
+        pack. Its 'Press any key' screen takes no game turn."""
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food = 7
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        ate = command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=60, mhp=60,
+                          rows={0: "You eat the Ration of Food. Delicious!",
+                                21: "bot Search*                 LV:8  DL:2".ljust(40)})
+        decision = brain.decide(ate, view)
+        self.assertEqual((decision.key, decision.reason), (ord("I"), "look at the pack: count the food"))
+        listing = command_obs(pos=(5, 5), dlvl=2, clvl=8)
+        pack = ["Inventory", " a) Ration of Food", " b) 2 Flask of Oil (250 turns)", " c) Dagger (1d4)",
+                "", "Press any key"]
+        listing.rows = [r.ljust(40) for r in pack] + [" " * 40] * (25 - len(pack))
+        listing.mode, listing.stage = Mode.DISMISS, "anykey"
+        self.assertEqual(brain.decide(listing, None).key, KEY_SPACE)
+        self.assertEqual((brain.food, brain.oil), (1, 2))
+        self.assertNotEqual(brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=60, mhp=60,
+                            rows={21: "bot Search*                 LV:8  DL:2".ljust(40)}), view).key, ord("I"))
+
     def test_a_slime_mold_in_the_list_counts_a_third(self) -> None:
         brain = Brain(GOALS["reach_dl8"])
         brain.food = 9
@@ -4490,6 +4512,26 @@ class UnseenSearchTest(unittest.TestCase):
         brain.track(o, view)
         brain.level.unseen_until = o.step + 10
         decision = brain.decide(o, view)
+        self.assertNotEqual(decision.key, KEY_SEARCH)
+
+
+    def test_hemmed_in_by_what_was_felt_strikes_it_not_searches(self) -> None:
+        """Build queue, Phase 5 (2026-11-17): a clvl 2 Human Ranger stood in a
+        corridor between two invisible Clear Icky-Things, both squares felt
+        by a bump, and searched in place from 23 HP to death: no square was
+        left to keep moving to. Moving into an unseen creature attacks it."""
+        brain = Brain(GOALS["clvl10"])
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=1)
+        view.types = [WALL] * (COLS * ROWS)
+        for y in range(2, 9):
+            view.types[y * COLS + 5] = 0x0                      # a north-south corridor
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=2, hp=12, mhp=23)
+        brain.track(o, view)
+        brain.level.unseen_until = o.step + 10
+        brain.level.bumped = {(5, 4): o.step + 5, (5, 6): o.step + 8}
+        decision = brain.decide(o, view)
+        self.assertEqual(decision.key, DIRS[(0, 1)])            # the one felt last
         self.assertNotEqual(decision.key, KEY_SEARCH)
 
 

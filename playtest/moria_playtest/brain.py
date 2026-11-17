@@ -770,6 +770,8 @@ class Brain:
         self.seen_messages = ""                # this command screen's messages and the -more- screens' before it
         self.pending_item: int | None = None   # answer for the next item prompt
         self.eat_listing = False               # a meal's food list is wanted (eat_prompt)
+        self.pack_check_due = False            # a meal eaten: list the pack (check_pack)
+        self.listing_pack = False              # the inventory list is on screen next
         self.waited = 0                        # first-strike waits for the current target
         self.unseen_attack = False             # attacked this turn with nothing in view
         self.attacked = False                  # attacked this turn (any message naming an attack)
@@ -1302,7 +1304,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.unseen_foe_attack, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -1329,6 +1331,18 @@ class Brain:
             for (dx, dy), key in sorted(DIRS.items()):
                 if view.passable(view.pos[0] + dx, view.pos[1] + dy, avoid_monsters=True):
                     return Decision(key, "fallback", "attacked unseen: keep moving")
+            # Hemmed in by what was felt (note_bump): strike it, the latest
+            # felt first; moving into an unseen creature attacks it. A clvl 2
+            # Ranger stood between two invisible Clear Icky-Things in a
+            # corridor and searched in place from 23 HP to death (build
+            # queue, Phase 5, 2026-11-17).
+            felt = [p for p, until in self.level.bumped.items()
+                    if until > obs.step and chebyshev(p, view.pos) == 1]
+            if felt:
+                spot = max(felt, key=lambda p: self.level.bumped[p])
+                self.last_move = (view.pos, spot)
+                return Decision(DIRS[(spot[0] - view.pos[0], spot[1] - view.pos[1])], "fallback",
+                                "attacked unseen, hemmed in: strike where it was felt")
         if obs.dlvl > 0:
             # A search takes the same one turn as resting and may find a
             # secret door; in the dark no wall is known, so no search spot is
@@ -1549,6 +1563,20 @@ class Brain:
             return None
         self.equip_checked, self.listing_equipment = True, True
         return Decision(ord("E"), "gear", "look at the armour worn")
+
+    def check_pack(self, obs: Observation, view: View) -> Decision | None:
+        """List the pack after each meal (no game turn), as a player glances
+        at it: one kind of food is eaten with no prompt and no list, and a
+        thief's touch takes a ration with no message. A C128 Human Warrior's
+        count ran 7 over and it starved on DL1 with gold, never sent home
+        (build queue, Phase 5, 2026-11-17). sync_counts sets every count.
+        Not at the reserve already: that count goes home anyway."""
+        if self.food_low():
+            self.pack_check_due = False
+        if not self.pack_check_due or self.close_threats(obs, view):
+            return None
+        self.pack_check_due, self.listing_pack = False, True
+        return Decision(ord("I"), "gear", "look at the pack: count the food")
 
     def close_threats(self, obs: Observation, view: View) -> set[Pos]:
         """``threats``, but in town only those within two squares:
@@ -2374,6 +2402,10 @@ class Brain:
             return Decision(*self.magic.book_list(obs))
         if self.picking is not None and obs.mode == Mode.ITEM:
             return self.pick_item(obs)   # a -more- first keeps the pick pending
+        if obs.mode == Mode.DISMISS and self.listing_pack:
+            self.listing_pack = False
+            self.sync_counts(obs.rows[1:], "all")
+            return Decision(KEY_SPACE, "prompt", f"pack listed: {self.food:.3g} food")
         if obs.mode == Mode.DISMISS and self.listing_equipment:
             self.listing_equipment = False
             worn = self.read_equipment(obs.rows)
@@ -3633,6 +3665,7 @@ class Brain:
             self.food = 0
         elif "You eat " in messages:
             self.food = max(0, self.food - (SLIME if "Slime" in messages else 1))
+            self.pack_check_due = True
         elif "You picked up" in messages and any(f in messages for f in FOODS):
             self.food += SLIME if "Slime" in messages else 1
             self.no_food = False   # here, not only in eat: a prayer layer can come first
