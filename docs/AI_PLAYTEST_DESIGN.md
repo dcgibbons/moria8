@@ -3449,6 +3449,19 @@ into still hazards and walled the replayed Paladin off the stairs.
 - *Names.* Every creature and item name the bot uses is in the Phase 5
   catalogs.
 
+`break_oscillation` exempts a "fight" decision only when it strikes a
+creature. `clear_way`'s approach to a blocker is a step into an empty square,
+and so it alternated with `leave_caster` unchecked. An Atari 8-bit Half-Orc
+Priest walked between two DL2 squares for 70,000 steps and used up its budget
+at clvl 5 (build queue, 2026-11-17).
+
+`classify` reads command mode from the command loop's return on the stack
+and a status line on any of rows 20-23, not only row 21. On a Plus/4 disk
+game, a failed `ITEM.CAT` read printed its drive command ("B-P 5", a digit
+and a return) to the screen, which moved the status line to row 22. Back at
+the command prompt, the bot pressed RUN/STOP 83,000 times at what it took
+for an unknown prompt (build queue, 2026-11-17).
+
 A **variant** changes goal fields for a subqueue's runs: `field=value` terms
 separated by commas, semicolons or spaces, a bare word after a term being
 another value of it. `tactics` takes `-name` (remove), `+name` (add), bare

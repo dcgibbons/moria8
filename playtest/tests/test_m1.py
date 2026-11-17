@@ -4506,6 +4506,24 @@ class TileMemoryTest(unittest.TestCase):
         self.assertEqual(later.type_at(6, 6), UNKNOWN)
 
 
+class ShiftedStatusTest(unittest.TestCase):
+    """Build queue, 2026-11-17: on a Plus/4 disk game a failed ITEM.CAT read
+    printed its drive command ("B-P 5", a digit, a return) to the screen,
+    which moved the status line from row 21 to row 22. Back at the command
+    prompt (the command loop's return on the stack), the bot read the screen
+    as an unknown prompt and pressed RUN/STOP 83,000 times; a command redraws
+    the screen."""
+
+    def test_the_command_loop_is_command_mode_with_the_status_a_row_off(self) -> None:
+        from moria_playtest.game import Mode, classify
+        from test_game import ABI, COMMAND_RET, obs
+        status = "bot                         LV:7  DL:3"
+        shifted = obs({0: "Direction?", 1: "You see a Gold (larelar.", 22: status}, ret=COMMAND_RET)
+        self.assertEqual(classify(shifted, ABI, COMMAND_RET), (Mode.COMMAND, "command"))
+        elsewhere = obs({0: "Direction?", 22: status}, ret=COMMAND_RET + 3)
+        self.assertNotEqual(classify(elsewhere, ABI, COMMAND_RET)[0], Mode.COMMAND)   # not the command loop
+
+
 class OscillationTest(unittest.TestCase):
     """M4 round 34 (§15.5): back and forth between two squares is no
     progress, whichever layer or view change flips the choice."""
@@ -4520,6 +4538,28 @@ class OscillationTest(unittest.TestCase):
         decision = brain.break_oscillation(command_obs(pos=(6, 5), dlvl=2, clvl=3), view, back)
         self.assertIn((5, 5), brain.level.bumped)
         self.assertNotEqual(decision.key, DIRS[(-1, 0)])
+
+    def test_a_fight_layer_step_into_an_empty_square_is_no_exception(self) -> None:
+        """Build queue, 2026-11-17: an Atari 8-bit Half-Orc Priest stepped
+        back and forth 70,000 steps between leave_caster (out of a caster's
+        reach) and clear_way ("the 'J' blocks the only way on: approach
+        it"). The approach is a move, not a blow, but every "fight" decision
+        was exempt. An attack on a creature still is."""
+        from moria_playtest.brain import Decision
+        brain = Brain(GOALS["reach_dl2"])
+        view = town_view((6, 5), (40, 40), dlvl=2)
+        brain.track(command_obs(pos=(6, 5), dlvl=2, clvl=3), view)
+        brain.trail = [(5, 5), (6, 5), (5, 5), (6, 5), (5, 5)]
+        approach = Decision(DIRS[(-1, 0)], "fight", "the 'J' blocks the only way on: approach it")
+        decision = brain.break_oscillation(command_obs(pos=(6, 5), dlvl=2, clvl=3), view, approach)
+        self.assertIn((5, 5), brain.level.bumped)
+        self.assertNotEqual(decision.key, DIRS[(-1, 0)])
+        attacker = Brain(GOALS["reach_dl2"])
+        view = town_view((6, 5), (40, 40), dlvl=2, monsters={(5, 5)})
+        attacker.track(command_obs(pos=(6, 5), dlvl=2, clvl=3), view)
+        attacker.trail = [(5, 5), (6, 5), (5, 5), (6, 5), (5, 5)]
+        blow = Decision(DIRS[(-1, 0)], "fight", "attack adjacent 'k'")
+        self.assertIs(attacker.break_oscillation(command_obs(pos=(6, 5), dlvl=2, clvl=3), view, blow), blow)
 
     def test_the_same_square_ending_loops_again_is_blocked_longer(self) -> None:
         """2026-11-03 A/B: blocked 10 steps each time, a rest/explore loop

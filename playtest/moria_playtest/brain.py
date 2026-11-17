@@ -3278,7 +3278,13 @@ class Brain:
         1012 stepped A-B-A-B for hundreds of steps and died there). A longer
         circuit is no progress either: a C128 Warrior walked an 8-square lap
         toward the up stairs 2,300 times and starved (M6, seed 1002)."""
-        if decision.key not in DIRS.values() or decision.layer in ("fight", "look", "prompt"):
+        if decision.key not in DIRS.values() or decision.layer in ("look", "prompt"):
+            return decision
+        step = next(d for d, k in DIRS.items() if k == decision.key)
+        if decision.layer == "fight" and (view.pos[0] + step[0], view.pos[1] + step[1]) in view.creatures:
+            # A blow, not a step. clear_way's approach to a blocker is a step:
+            # exempt as a "fight", it alternated with leave_caster 70,000
+            # steps on an Atari 8-bit DL2 (build queue, 2026-11-17).
             return decision
         # Moves only: a potion drunk between the steps put the same square in
         # the trail twice, which reads as standing still, and a Halfling

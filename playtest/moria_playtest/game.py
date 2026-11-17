@@ -194,8 +194,10 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.DEATH, "tombstone"
     if obs.game_flags & abi.GAME_FLAG_OVER and "Disk Setup" in obs.rows[0]:
         return Mode.DEATH, "disk_setup"  # score save asks for a save drive
-    status = obs.rows[21]
-    if obs.ret == command_ret and "LV:" in status and "DL:" in status:
+    # The status line, or one a row or two off: a failed Plus/4 ITEM.CAT read
+    # printed its drive command to the screen and moved it to row 22, and at
+    # the command loop the bot pressed RUN/STOP 83,000 times (2026-11-17).
+    if obs.ret == command_ret and any("LV:" in row and "DL:" in row for row in obs.rows[20:24]):
         return Mode.COMMAND, "command"
     if "-more-" in obs.rows[0] or "-more-" in obs.rows[1]:
         return Mode.DISMISS, "more"
