@@ -223,9 +223,8 @@ player_sync_from_zp:
     rts
 
 // player_calc_stats — Recalculate current stats from the baked base plus
-// equipment. Race/class modifiers are folded into the base once at creation
-// (player_bake_creation_stats) or at legacy-save migration
-// (player_bake_race_class_mods), so this routine must be deterministic:
+// equipment. Race/class modifiers are folded into the base once at character
+// creation (player_bake_creation_stats), so this routine must be deterministic:
 // rerolling the randomized exceptional stepping here would change 18+ stats
 // on every load and restoration.
 // Stats use single-byte encoding: 3-18 literal, 19-118 = 18/01 to 18/100.

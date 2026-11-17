@@ -35,23 +35,11 @@ player_init:
     rts
 
 // player_bake_creation_stats — Character-creation entry: fold race/class
-// modifiers into base stats with the upstream randomized exceptional
-// stepping, making the roll permanent. The only randomizing stat path.
-player_bake_creation_stats:
-    lda #1
-    sta stat_bake_mode
-    jmp player_bake_stat_modifiers
-
-// player_bake_stat_modifiers — Fold race/class modifiers into base stats and
-// mirror the result into current stats, making the roll permanent.
-// stat_bake_mode nonzero (character creation): upstream randomized stepping
-// for the 18+ band — the only place stats may randomize.
-// stat_bake_mode zero (legacy-save migration): exact signed arithmetic, so
-// pre-baked saves convert deterministically.
+// modifiers into base stats with the upstream randomized exceptional stepping
+// for the 18+ band, mirroring the result into current stats and making the
+// roll permanent.
 // Preserves: nothing
-stat_bake_mode: .byte 0
-
-player_bake_stat_modifiers:
+player_bake_creation_stats:
     // Precompute race*6 into zp_temp0 (safe across math_dice)
     lda player_data + PL_RACE
     asl
@@ -84,7 +72,7 @@ player_bake_stat_modifiers:
     adc zp_temp1            // + stat_index
     tax
     lda race_stat_adj,x
-    jsr player_bake_apply_one
+    jsr apply_modifier
 
     // Apply class modifier
     lda zp_temp2            // class*6
@@ -92,7 +80,7 @@ player_bake_stat_modifiers:
     adc zp_temp1            // + stat_index
     tax
     lda class_stat_adj,x
-    jsr player_bake_apply_one
+    jsr apply_modifier
 
     // Bake result into base and current
     ldy zp_temp1
@@ -104,17 +92,6 @@ player_bake_stat_modifiers:
     cpy #STAT_COUNT
     bne !bake_loop-
     rts
-
-// player_bake_apply_one — Apply modifier A to stat_work per stat_bake_mode.
-player_bake_apply_one:
-    ldx stat_bake_mode
-    bne !pbao_roll+
-    clc
-    adc stat_work
-    sta stat_work
-    rts
-!pbao_roll:
-    jmp apply_modifier
 
 // apply_modifier — Apply a signed modifier to stat_work using increment/decrement
 // Each +1 or -1 is applied individually via incrementStat/decrementStat (umoria).

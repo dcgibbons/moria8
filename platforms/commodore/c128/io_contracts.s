@@ -84,7 +84,8 @@
 :C128AuditBelowIo("hal_recall_write_byte", hal_recall_write_byte)
 :C128AuditBelowIo("recall_clear_all", recall_clear_all)
 :C128AuditBelowIo("tramp_eff_item_p1", tramp_eff_item_p1)
-:C128AuditBelowIo("tramp_item_pickup", tramp_item_pickup)
+:C128AuditBelowIo("item_pickup", item_pickup)
+:C128AuditBelowIo("run_initialize", run_initialize)
 :C128AuditBelowIo("re_equip_entry", re_equip_entry)
 :C128AuditBelowIo("winner_apply_retirement_bonus", winner_apply_retirement_bonus)
 :C128AuditBelowIo("save_game", save_game)
@@ -216,7 +217,6 @@
 :C128AuditStorageOverlay("item_quaff", item_quaff)
 :C128AuditStorageOverlay("eff_ext_eat_piw", eff_ext_eat_piw)
 :C128AuditStorageOverlay("eff_ext_quaff_piw", eff_ext_quaff_piw)
-:C128AuditStorageOverlay("item_pickup", item_pickup)
 :C128AuditStorageOverlay("re_equip", re_equip)
 :C128AuditStorageOverlay("roll_armour_ego", roll_armour_ego)
 

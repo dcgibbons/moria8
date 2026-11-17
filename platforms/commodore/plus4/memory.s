@@ -61,16 +61,26 @@
 .const BANK1_DB_BASE    = $e000
 .const SCREEN_RAM       = $0c00
 .const COLOR_RAM        = $0800
-// $0400-$07FF (1,024 B): idle outside ovl.gen (boot/cart loaders finish before
-// entry_main; exit_trampoline touches it only at RESET). Owned by
-// DUNGEON_GEN_SCAN_SCRATCH during ovl.gen and reserved outside ovl.gen for a
-// non-generation disk catalog LRU cache (invalidated on ovl.gen entry).
+// $0400-$07FF (1,024 B): owned by DUNGEON_GEN_SCAN_SCRATCH during ovl.gen
+// (which runs under sei with all-RAM $FF3F, zero KERNAL calls). Outside
+// ovl.gen, $0500-$05FF belongs to the live Plus/4 KERNAL workspace ($0527
+// KEYD, $055D PLUS4_KEY_INDEX, $0567-$0584 LAT/FAT/SAT logical file tables
+// touched on SCNKEY/GETIN/OPEN/CLOSE), so non-generation caches partition
+// around $0500-$05FF (invalidated on ovl.gen entry):
+//   $0400-$04FF (256 B): PLUS4_CATALOG_LRU_CACHE
+//   $0500-$05FF (256 B): Plus/4 KERNAL workspace (reserved, untouched)
+//   $0600-$07FF (512 B): ITEM_PICKUP_CACHE (!PLUS4_CARTRIDGE)
 .const DUNGEON_GEN_SCAN_SCRATCH_BASE = $0400
 .const DUNGEON_GEN_SCAN_SCRATCH_SIZE = 1024
 .const DUNGEON_GEN_SCAN_SCRATCH_END  = DUNGEON_GEN_SCAN_SCRATCH_BASE + DUNGEON_GEN_SCAN_SCRATCH_SIZE - 1
-.const PLUS4_CATALOG_LRU_CACHE_BASE  = DUNGEON_GEN_SCAN_SCRATCH_BASE
-.const PLUS4_CATALOG_LRU_CACHE_SIZE  = DUNGEON_GEN_SCAN_SCRATCH_SIZE
-.const PLUS4_CATALOG_LRU_CACHE_END   = DUNGEON_GEN_SCAN_SCRATCH_END
+.const PLUS4_CATALOG_LRU_CACHE_BASE  = $0400
+.const PLUS4_CATALOG_LRU_CACHE_SIZE  = 256
+.const PLUS4_CATALOG_LRU_CACHE_END   = PLUS4_CATALOG_LRU_CACHE_BASE + PLUS4_CATALOG_LRU_CACHE_SIZE - 1
+.const PLUS4_KERNAL_LOW_WS_BASE      = $0500
+.const PLUS4_KERNAL_LOW_WS_END       = $05ff
+.const ITEM_PICKUP_CACHE_BASE        = $0600
+.const ITEM_PICKUP_CACHE_SIZE        = 512
+.const ITEM_PICKUP_CACHE_END         = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE - 1
 .const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0400
 
@@ -165,6 +175,7 @@ mmu_select_bank0:
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in low scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
 .assert "Catalog LRU cache window is page-aligned", <PLUS4_CATALOG_LRU_CACHE_BASE, 0
-.assert "Catalog LRU cache aliases 1 KB dungeon-gen scan scratch", PLUS4_CATALOG_LRU_CACHE_BASE == DUNGEON_GEN_SCAN_SCRATCH_BASE && PLUS4_CATALOG_LRU_CACHE_END == DUNGEON_GEN_SCAN_SCRATCH_END && PLUS4_CATALOG_LRU_CACHE_SIZE == 1024, true
+.assert "Catalog LRU cache claims $0400-$04FF below Plus/4 KERNAL workspace", PLUS4_CATALOG_LRU_CACHE_BASE == DUNGEON_GEN_SCAN_SCRATCH_BASE && PLUS4_CATALOG_LRU_CACHE_END + 1 == PLUS4_KERNAL_LOW_WS_BASE && PLUS4_CATALOG_LRU_CACHE_SIZE == 256, true
 .assert "Catalog LRU cache sits cleanly below color RAM and above cassette door scan", PLUS4_CATALOG_LRU_CACHE_BASE >= DUNGEON_GEN_DOOR_SCAN_LIMIT && PLUS4_CATALOG_LRU_CACHE_END < COLOR_RAM, true
+.assert "Item pickup cache claims $0600-$07FF above Plus/4 KERNAL workspace and below color RAM", ITEM_PICKUP_CACHE_BASE == PLUS4_KERNAL_LOW_WS_END + 1 && ITEM_PICKUP_CACHE_END == DUNGEON_GEN_SCAN_SCRATCH_END && ITEM_PICKUP_CACHE_SIZE == 512 && ITEM_PICKUP_CACHE_END < COLOR_RAM, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true

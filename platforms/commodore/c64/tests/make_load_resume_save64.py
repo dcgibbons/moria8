@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-# The product build uses Save V2 ($20) and the full Phase 4 item/monster
+# The product build uses Save Format V2 ($21) and the full VMS item/monster
 # catalogs: 34 inventory slots (22 carried + 12 equipment including cloak and
 # secondary), 47-byte known-item bitset, 174-byte flavour shuffles, 8 store
 # arrays, door-state + species tables, 11 floor-item arrays, and 279 creature
@@ -15,8 +15,6 @@ MAX_DOOR_STATES = 16
 CATALOG_SLOTS = 32
 
 PL_STRUCT_SIZE = 111
-ITEM_TYPE_COUNT = 370
-ITEM_ID_CAPACITY = 376
 FLAVOUR_COUNT = 174
 STORE_TOTAL_SLOTS = 128
 MAX_ROOMS = 8

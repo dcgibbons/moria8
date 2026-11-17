@@ -198,7 +198,6 @@ random_floor_in_room:
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
-.const hal_storage_save_v1_version = $21
 .const hal_storage_save_version = $21
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
@@ -374,9 +373,6 @@ rle_decompress_map:
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
 tc_results: .fill 40, $ff
 
-test_t31_ptr_lo: .byte 0
-test_t31_ptr_hi: .byte 0
-
 // ui_character.s dropped to keep the test body under MAP_BASE.
 ui_char_display:
     rts
@@ -534,8 +530,6 @@ test_stream_reset_read:
 // Load a current-version door-state block whose count byte is A.
 test_load_door_count:
     sta SAVE_STREAM_BUF
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jmp load_read_door_state
@@ -568,8 +562,6 @@ test_save_item_state_blocks:
     rts
 
 test_load_item_state_blocks:
-    lda #SAVE_VERSION
-    sta load_save_version
     :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
     jsr save_sanitize_inv_ids
     :load_block(si_item_id, 8 * STORE_TOTAL_SLOTS)
@@ -651,17 +643,6 @@ ts_reset_io_state:
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
-    rts
-
-// ts_poison_all_known — Set every known-item bit (0..ITEM_ID_CAPACITY-1).
-// Clobbers: A, X
-ts_poison_all_known:
-    ldx #ID_KNOWN_BYTES - 1
-    lda #$ff
-!loop:
-    sta id_known_bits,x
-    dex
-    bpl !loop-
     rts
 
 // ts_clear_known_bits — Zero the full known-item bitset. Clobbers: A, X
@@ -1343,20 +1324,96 @@ t7_set_slot31:
     sta tc_results + 10
 
     // ============================================================
-    // Test 12: V2 rejects pre-V2 and future save versions.
+    // Test 12: Only SAVE_VERSION ($21) is accepted; legacy V1 ($17),
+    // intermediate ($0f, $18, $19, $20), and future ($22) versions
+    // are rejected, and load_game on a $17 save returns
+    // LOAD_RESULT_UNSUPPORTED without reading or mutating game RAM.
     // ============================================================
     lda #SAVE_VERSION
     jsr save_version_supported
-    bcc !t12_fail+
-    lda #(SAVE_VERSION - 1)
+    bcs !t12_cur_ok+
+    jmp !t12_fail+
+!t12_cur_ok:
+    lda #$17                    // Legacy C64 Save V1
     jsr save_version_supported
-    bcs !t12_fail+
-    lda #(SAVE_VERSION + 1)
+    bcs !t12_fail_far+
+    lda #$18
     jsr save_version_supported
-    bcs !t12_fail+
+    bcs !t12_fail_far+
+    lda #$19
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #(SAVE_VERSION - 1)     // $20 (pre-Phase 5 V2)
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #(SAVE_VERSION + 1)     // $22 (future)
+    jsr save_version_supported
+    bcs !t12_fail_far+
     lda #$0f
     jsr save_version_supported
+    bcc !t12_stream_test+
+!t12_fail_far:
+    jmp !t12_fail+
+
+!t12_stream_test:
+    ldx #0
+!t12_copy_hdr:
+    lda save_magic,x
+    sta SAVE_STREAM_BUF,x
+    inx
+    cpx #SAVE_MAGIC_SIZE - 1
+    bcc !t12_copy_hdr-
+    lda #$17
+    sta SAVE_STREAM_BUF + SAVE_MAGIC_SIZE - 1
+    lda #$aa
+    sta SAVE_STREAM_BUF + SAVE_MAGIC_SIZE
+    sta SAVE_STREAM_BUF + SAVE_MAGIC_SIZE + 1
+
+    lda #$77
+    sta player_data + PL_LEVEL
+    jsr item_init_inventory
+    jsr test_clear_store_items
+
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    lda #1
+    sta test_save_marker_present
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    jsr test_stream_reset_read
+    jsr load_game
+    php
+    lda #0
+    sta test_save_marker_present
+    plp
     bcs !t12_fail+
+    lda load_result
+    cmp #LOAD_RESULT_UNSUPPORTED
+    bne !t12_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_UNSUPPORTED
+    bne !t12_fail+
+    lda zp_ptr2
+    cmp #<(SAVE_STREAM_BUF + SAVE_MAGIC_SIZE)
+    bne !t12_fail+
+    lda zp_ptr2_hi
+    cmp #>(SAVE_STREAM_BUF + SAVE_MAGIC_SIZE)
+    bne !t12_fail+
+    lda player_data + PL_LEVEL
+    cmp #$77
+    bne !t12_fail+
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t12_fail+
+    lda si_item_id
+    cmp #FI_EMPTY
+    bne !t12_fail+
     lda #$01
     bne !t12_store+
 !t12_fail:
@@ -2164,8 +2221,6 @@ t22_fail_code:
 !t23_len_hi_ok:
 
     jsr ts_clear_known_bits
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr load_read_known_items
 
@@ -2282,8 +2337,6 @@ t23_fail_code:
     jsr test_save_sentinel
 
     jsr item_init_inventory
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
@@ -2441,8 +2494,6 @@ t25_fail_code:
     jsr save_write_floor_items
 
     jsr item_init_floor
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jsr load_read_floor_items
@@ -2515,8 +2566,6 @@ t26_fail_code:
     :save_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
 
     jsr item_init_inventory
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
@@ -2571,8 +2620,6 @@ t27_fail_code:
     jsr save_write_floor_items
 
     jsr item_init_floor
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jsr load_read_floor_items
@@ -2672,8 +2719,6 @@ t29_fail_code:
     sta door_state_y + 1
     sta door_state_val + 1
 
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jsr load_read_door_state
@@ -2741,8 +2786,6 @@ t29_fail_code:
     jmp !t31_fail+
 !t31_len_ok:
     jsr test_clear_store_items
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     :load_block(si_item_id, 8 * STORE_TOTAL_SLOTS)
@@ -2909,8 +2952,6 @@ t29_fail_code:
     jsr test_stream_reset_write
     jsr test_save_product_inventory_desc
     jsr item_init_inventory
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
@@ -3132,8 +3173,6 @@ t29_fail_code:
     sta door_state_count
     lda #$77
     sta door_state_x
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jsr load_read_door_state
@@ -3165,8 +3204,6 @@ t29_fail_code:
     jsr test_stream_reset_write
     jsr save_write_known_items
     jsr ts_clear_known_bits
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr load_read_known_items
     lda #0

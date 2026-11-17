@@ -659,7 +659,7 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,catalog_spawn_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,catalog_spawn_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,hot_path_zero_disk_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
             printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
@@ -668,7 +668,7 @@ describe_phase_token() {
             printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
             ;;
         cache)
-            printf 'cache\tcache_survival_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
+            printf 'cache\tcache_survival_smoke,hot_path_zero_disk_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
             ;;
         diag)
             printf 'diag\treal_input_town_move_diag,real_boot_crash_harness,overlay_data_transition_smoke,boot_diag_copy\n'
@@ -700,7 +700,7 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|catalog_spawn_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scroll_p3_return_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|catalog_spawn_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scroll_p3_return_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|hot_path_zero_disk_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
@@ -715,7 +715,7 @@ suite_matches_phase_token() {
             ;;
         cache)
             case "$suite_name" in
-                cache_survival_smoke|overlay_partial_failure_smoke|overlay_data_transition_smoke) return 0 ;;
+                cache_survival_smoke|hot_path_zero_disk_smoke|overlay_partial_failure_smoke|overlay_data_transition_smoke) return 0 ;;
             esac
             ;;
         diag)
@@ -7134,6 +7134,306 @@ run_cache_survival_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_hot_path_zero_disk_smoke() {
+    local name="hot_path_zero_disk_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local main_vs="../../../build/test/c128/main.vs"
+    local abs_d71 mon_file log_file check_log
+    abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    check_log="$(test128_tmp_file "test128_${name}_check.log")"
+    : > "$log_file"
+
+    if ! python3 -B - "$main_vs" "$mon_file" >"$check_log" 2>&1 <<'PY'
+import re
+import sys
+from pathlib import Path
+
+vs_path, mon_path = Path(sys.argv[1]), Path(sys.argv[2])
+syms = {}
+for line in vs_path.read_text().splitlines():
+    m = re.match(r"al\s+C:([0-9A-Fa-f]+)\s+\.([A-Za-z0-9_]+)$", line)
+    if m:
+        syms[m.group(2)] = int(m.group(1), 16)
+
+required = [
+    "title_enter_menu", "hal_platform_character_sheet_begin", "main_loop",
+    "input_key_wait_strict", "input_key_wait_fast",
+    "w_open", "w_load", "overlay_load_disk", "runtime_load_failed",
+    "zp_player_x", "zp_player_y", "zp_player_hp_lo", "zp_player_mhp_lo",
+    "zp_player_lvl", "zp_player_dlvl", "zp_view_x", "zp_view_y",
+    "player_data", "monster_table", "room_count",
+    "door_state_count", "door_state_x", "door_state_y", "door_state_val",
+    "trap_count", "trap_x", "trap_y", "trap_type",
+    "fi_item_id", "fi_x", "fi_y", "fi_qty", "fi_p1", "fi_meta",
+    "fi_to_hit", "fi_to_dam", "fi_to_ac", "fi_meta_hi",
+    "inv_item_id", "inv_ego",
+]
+missing = [k for k in required if k not in syms]
+if missing:
+    raise SystemExit(f"missing monitor symbols: {', '.join(missing)}")
+
+strict_pc = syms["input_key_wait_strict"]
+fast_pc = syms["input_key_wait_fast"]
+exit_pc = strict_pc + 2
+
+def feed_ascii(chars: str) -> list[str]:
+    out = [f"break ${strict_pc:04X}", f"break ${fast_pc:04X}"]
+    for ch in chars:
+        out.extend(["g", f"r a=${ord(ch):02x}", f"r pc=${exit_pc:04X}"])
+    out.append("del")
+    return out
+
+def feed_hex(hex_bytes: list[int]) -> list[str]:
+    out = []
+    for b in hex_bytes:
+        out.extend(["g", f"r a=${b:02x}", f"r pc=${exit_pc:04X}"])
+    return out
+
+p_data = syms["player_data"]
+m_tab = syms["monster_table"]
+fi_id = syms["fi_item_id"]
+
+lines = [
+    "bank ram01",
+    "> fe02 08",
+    "bank cpu",
+    f"break ${syms['title_enter_menu']:04X}",
+    "g",
+    "del",
+    *feed_ascii("NA\rABOT\rB"),
+    f"break ${syms['hal_platform_character_sheet_begin']:04X}",
+    "g",
+    "del",
+    *feed_ascii(" "),
+    f"break ${syms['main_loop']:04X}",
+    "g",
+    "del",
+    # Clear town NPCs so town down-stairs at (32, 18) is unobstructed, then descend '>' to DL 1.
+    f"f {m_tab:04x} {m_tab + 383:04x} ff",
+    *feed_ascii("L>"),
+    f"break ${syms['main_loop']:04X}",
+    "g",
+    "del",
+    # Stage deterministic East corridor at y=20 (Bank 1 $4000 + 20*198 = $4F78) on live DL 1:
+    f"f {m_tab:04x} {m_tab + 383:04x} ff",
+    f"> {syms['room_count']:04x} 00",
+    "bank ram01",
+    "f 4ebb 4ecc 14",
+    "f 5047 5058 14",
+    "> 4f81 14",
+    "f 4f82 4f91 04",
+    "> 4f92 14",
+    "> 4f8b 84",
+    "> 4f8d 84",
+    "> 4f90 06",
+    "bank cpu",
+    f"> {syms['zp_player_x']:04x} 0b",
+    f"> {syms['zp_player_y']:04x} 14",
+    f"> {syms['zp_view_x']:04x} 00",
+    f"> {syms['zp_view_y']:04x} 0b",
+    f"> {syms['zp_player_hp_lo']:04x} 64 00",
+    f"> {syms['zp_player_mhp_lo']:04x} 64 00",
+    f"> {syms['zp_player_lvl']:04x} 28",
+    f"> {p_data + 19:04x} 28",
+    f"> {p_data + 28:04x} 76",
+    f"> {p_data + 30:04x} 76",
+    f"> {p_data + 33:04x} 64 00 64 00",
+    f"> {syms['door_state_count']:04x} 01",
+    f"> {syms['door_state_x']:04x} 15",
+    f"> {syms['door_state_y']:04x} 14",
+    f"> {syms['door_state_val']:04x} 01",
+    f"> {syms['trap_count']:04x} 01",
+    f"> {syms['trap_x']:04x} 17",
+    f"> {syms['trap_y']:04x} 14",
+    f"> {syms['trap_type']:04x} 00",
+    f"f {fi_id:04x} {fi_id + 41:04x} ff",
+    f"> {fi_id:04x} 02",
+    f"> {syms['fi_x']:04x} 18",
+    f"> {syms['fi_y']:04x} 14",
+    f"> {syms['fi_qty']:04x} 01",
+    f"> {syms['fi_p1']:04x} 00",
+    f"> {syms['fi_meta']:04x} 01",
+    f"> {syms['fi_to_hit']:04x} 02",
+    f"> {syms['fi_to_dam']:04x} 03",
+    f"> {syms['fi_to_ac']:04x} 00",
+    f"> {syms['fi_meta_hi']:04x} 06",
+    f"> {syms['inv_item_id'] + 21:04x} ff",
+    # Sentinel read of $FF00 to mark start of zero-disk hot-path gauntlet in monitor log:
+    "m ff00 ff00",
+    f"break ${syms['w_open']:04X}",
+    f"break ${syms['w_load']:04X}",
+    f"break ${syms['overlay_load_disk']:04X}",
+    f"break ${syms['runtime_load_failed']:04X}",
+    f"break ${strict_pc:04X}",
+    f"break ${fast_pc:04X}",
+    # 1. Normal moves: 'l' (11->12), 'l' (12->13)
+    # 2. Shift+L ($CC) corridor run: (13->18, stops before plain door at 19)
+    # 3. Plain door 'o'+'l' open, 'c'+'l' close, 'o'+'l' re-open, 'l','l' step to (20,20)
+    # 4. Locked door at (21,20): 'o'+'l' pick & open (door_pick_roll), 'l','l' step to (22,20)
+    # 5. Trap at (23,20): 'l' step onto pit trap (trap_trigger)
+    # 6. Non-gold ego item at (24,20): 'l' step onto item + 'g' pickup!
+    *feed_hex([
+        0x4c, 0x4c,
+        0xcc,
+    ]),
+    # Verify Shift+L ran all 5 corridor tiles (13 -> 18) and stopped before closed door at 19:
+    "g",
+    f"m {syms['zp_player_x']:04x} {syms['zp_player_y']:04x}",
+    f"r a=$4f",
+    f"r pc=${exit_pc:04X}",
+    *feed_hex([
+        0x4c, 0x43, 0x4c, 0x4f, 0x4c, 0x4c, 0x4c,
+        0x4f, 0x4c, 0x20, 0x4c, 0x4c,
+        0x4c,
+        0x4c, 0x47,
+    ]),
+    # Wait for 'g' pickup turn to finish back at input_key_wait_strict/fast, while keeping w_open/w_load breakpoints armed!
+    "g",
+    "del",
+    f"m {syms['zp_player_x']:04x} {syms['zp_player_dlvl']:04x}",
+    f"m {syms['door_state_count']:04x} {syms['door_state_count']:04x}",
+    f"m {fi_id:04x} {fi_id:04x}",
+    f"m {syms['inv_item_id']:04x} {syms['inv_item_id'] + 21:04x}",
+    f"m {syms['inv_ego']:04x} {syms['inv_ego'] + 21:04x}",
+    "bank ram01",
+    "m 4f8b 4f90",
+    "m dcb8 df37",
+    "bank cpu",
+    "quit",
+]
+mon_path.write_text("\n".join(lines) + "\n")
+PY
+    then
+        echo "FAIL ($(head -n 1 "$check_log"))"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if ! python3 -B - "$main_vs" "$log_file" >"$check_log" 2>&1 <<'PY'
+import re
+import sys
+from pathlib import Path
+
+vs_path, log_path = Path(sys.argv[1]), Path(sys.argv[2])
+syms = {}
+for line in vs_path.read_text().splitlines():
+    m = re.match(r"al\s+C:([0-9A-Fa-f]+)\s+\.([A-Za-z0-9_]+)$", line)
+    if m:
+        syms[m.group(2)] = int(m.group(1), 16)
+
+log = log_path.read_text(errors="replace")
+marker = re.search(r">C:ff00\b", log, re.IGNORECASE)
+if not marker:
+    raise SystemExit("did not reach DL 1 hot-path gauntlet start")
+
+gauntlet_log = log[marker.end():]
+forbidden = {
+    syms["w_open"]: "w_open",
+    syms["w_load"]: "w_load",
+    syms["overlay_load_disk"]: "overlay_load_disk",
+    syms["runtime_load_failed"]: "runtime_load_failed",
+}
+for m in re.finditer(r"Stop on\s+exec\s+([0-9A-Fa-f]{4})", gauntlet_log):
+    pc = int(m.group(1), 16)
+    if pc in forbidden:
+        raise SystemExit(f"floppy/disk routine {forbidden[pc]} (${pc:04X}) executed during hot-path gauntlet")
+
+mem: dict[tuple[str, int], int] = {}
+for line in gauntlet_log.splitlines():
+    m = re.match(r">([A-Za-z0-9_]+):([0-9a-fA-F]{4})\s+((?:[0-9a-fA-F]{2}\s*)+)", line)
+    if m:
+        btag = m.group(1)
+        base = int(m.group(2), 16)
+        vals = [int(x, 16) for x in m.group(3).split()[:16]]
+        for idx, v in enumerate(vals):
+            mem[(btag, base + idx)] = v
+
+def cbyte(addr: int) -> int:
+    if ("C", addr) not in mem:
+        raise SystemExit(f"missing CPU dump byte at ${addr:04X}")
+    return mem[("C", addr)]
+
+def r1byte(addr: int) -> int:
+    for tag in ("1", "ram01", "C"):
+        if (tag, addr) in mem:
+            return mem[(tag, addr)]
+    for (_tag, a), val in mem.items():
+        if a == addr:
+            return val
+    raise SystemExit(f"missing Bank 1 dump byte at ${addr:04X}")
+
+# First zp_player_x dump is right after Shift+L corridor run (expected x=18, y=20):
+first_pos = re.search(rf">C:0*{syms['zp_player_x']:02x}\s+([0-9a-fA-F]{{2}})\s+([0-9a-fA-F]{{2}})", gauntlet_log, re.IGNORECASE)
+if not first_pos or (int(first_pos.group(1), 16), int(first_pos.group(2), 16)) != (18, 20):
+    got = (int(first_pos.group(1), 16), int(first_pos.group(2), 16)) if first_pos else None
+    raise SystemExit(f"Shift+L corridor run did not stop at (18,20): got {got}")
+
+px = cbyte(syms["zp_player_x"])
+py = cbyte(syms["zp_player_y"])
+hp = cbyte(syms["zp_player_hp_lo"])
+dlvl = cbyte(syms["zp_player_dlvl"])
+if (dlvl, px, py) != (1, 24, 20):
+    raise SystemExit(f"unexpected end player state dlvl={dlvl} pos=({px},{py}), expected dlvl=1 pos=(24,20)")
+if not (0 < hp < 100):
+    raise SystemExit(f"pit trap did not apply expected non-lethal damage: hp={hp}")
+
+if cbyte(syms["door_state_count"]) != 0:
+    raise SystemExit(f"locked door was not unlocked by door_pick_roll: door_state_count={cbyte(syms['door_state_count'])}")
+if (r1byte(0x4f8b) & 0xf0) != 0x70:
+    raise SystemExit(f"plain door at (19,20) not open: tile=${r1byte(0x4f8b):02X}")
+if (r1byte(0x4f8d) & 0xf0) != 0x70:
+    raise SystemExit(f"locked door at (21,20) not open: tile=${r1byte(0x4f8d):02X}")
+if (r1byte(0x4f8f) & 0xf0) != 0xe0:
+    raise SystemExit(f"floor trap at (23,20) not revealed/triggered: tile=${r1byte(0x4f8f):02X}")
+if (r1byte(0x4f90) & 0x02) != 0x00 or cbyte(syms["fi_item_id"]) != 0xff:
+    raise SystemExit(f"floor item at (24,20) not picked up: tile=${r1byte(0x4f90):02X} fi0=${cbyte(syms['fi_item_id']):02X}")
+
+picked = any(
+    cbyte(syms["inv_item_id"] + i) == 0x02 and cbyte(syms["inv_ego"] + i) == 0x06
+    for i in range(22)
+)
+if not picked:
+    raise SystemExit("picked ego weapon (item_id=2, ego=6) not found in carried inventory")
+
+hist_bytes = bytes(r1byte(a) for a in range(0xdcb8, 0xdf38))
+def sc_to_ascii(b: int) -> str:
+    if 1 <= b <= 26:
+        return chr(ord("a") + b - 1)
+    if 0x41 <= b <= 0x5a:
+        return chr(b)
+    if 0x20 <= b <= 0x3f:
+        return chr(b)
+    return " "
+hist_text = "".join(sc_to_ascii(b) for b in hist_bytes).lower()
+if "dagger" not in hist_text and "sword" not in hist_text:
+    raise SystemExit(f"VDC ITEM.CAT decoded weapon name missing from msg_history: {hist_text!r}")
+PY
+    then
+        echo "FAIL ($(head -n 1 "$check_log"))"
+        echo "    vice_rc=$vice_rc log=$log_file"
+        tail -25 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_dungeon_attack_stability_smoke() {
     local name="dungeon_attack_stability_smoke"
     echo -n "  $name: "
@@ -7577,6 +7877,7 @@ run_selected_suites() {
     run_named_suite real_boot_crash_harness run_real_boot_crash_harness || return 1
     run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke || return 1
     run_named_suite cache_survival_smoke run_cache_survival_smoke || return 1
+    run_named_suite hot_path_zero_disk_smoke run_hot_path_zero_disk_smoke || return 1
     run_named_suite dungeon_attack_stability_smoke run_dungeon_attack_stability_smoke || return 1
     run_named_suite death_overlay_smoke run_death_overlay_smoke || return 1
     run_named_suite restart_to_title_smoke run_restart_to_title_smoke || return 1

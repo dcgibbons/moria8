@@ -41,9 +41,9 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$1000-$1fff` | UI overlay cache |
 | `$2000-$2fff` | HELP overlay cache |
 | `$3000-$3fff` | ITEMS overlay cache |
-| `$4000-$730b` | reserved 198x66 live map span |
-| `$730c-$73ff` | reserved unowned gap between map and DB regions |
-| `$7400-$7a5f` | DB/data region (`Bank1DB`, `1,632 B`, `C128M-013`): `recall[279]` (`1,116 B` at `$7400-$785b`) + `zp_save_buf` (`142 B` at `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free to `$7a5f`), accessed through `mmu_safe_db_read/write_ptr0/1`. Replaces the retired `128.names` payload (`ITEM.CAT` + `ITEM.IDX` now serve all `370` item templates and `55` ego names via REU Bank 2 / MD128 cartridge ROM / 1541-1571-1581 sector streaming into Bank 0 `$1b00-$1bff`) |
+| `$4000-$730b` | active 198x66 live map span (`13,068 B` — full `MAP_SIZE` on C128; also used at cold boot before title/dungeon generation as the transient `7,573 B` `$4000-$5d94` staging buffer for streaming `ITEM.CAT` into 16 KB VDC RAM under `C128M-015`) |
+| `$730c-$73ff` | reserved unowned gap between map and DB regions (`244 B`) |
+| `$7400-$7a5f` | DB/data region (`Bank1DB`, `1,632 B`, `C128M-013`/`C128M-015`): `recall[279]` (`1,116 B` at `$7400-$785b`) + `zp_save_buf` (`142 B` at `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free to `$7a5f`), accessed through `mmu_safe_db_read/write_ptr0/1`. Replaces the retired `128.names` payload (`ITEM.CAT` serves all `370` item templates and `55` ego names directly from 16 KB VDC RAM on disk builds or MD128 cartridge ROM on `.crt` builds; C128 does not use REU, `reu_present = 0`) |
 | `$7a60-$9567` | the monster catalog (C128M-007): `$7a60-$7e5f` the name pool, 32 species slots x 32 B written at species fetch; `$7e60-$9542` `128.cat`, the catalog's 21 fields x 279 creatures, loaded at boot; 37 B spare. Until 2026-11-02 the tier cache, 6920 bytes |
 | `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
 | `$9800-$9cff` | MODAL small-overlay cache |
@@ -74,7 +74,23 @@ cartridge reader `cart_read`/`cart_desc_buf < $8000` resident), `$af00-$cfff`
 `$1b00-$1bff`, the overlay window at `$e000-$efff`, and reloadable banked
 code at `$f000` below `$ff00`. `main.s` and `cartridge_copy.s` assertions are
 authoritative for resident bounds and the `< $8000` cartridge-bank-safe
-boundary.
+boundary (`item_pickup`, `run_initialize`, `hal_item_cat_read_byte`, and
+`vdc_item_cat_map_addr` all reside in Bank 0 `Default < $af00` under `C128M-015`).
+
+## 16 KB Physical VDC RAM Ownership Snapshot
+
+`memory128.s` (`VDC_*` constants and overlap `.assert`s) and `dungeon_render_vdc.s`
+(`RVSD_SCRATCH_*` `.assert`s) are the executable authority for physical MOS 8563/8568
+16 KB VDC RAM (`$0000-$3fff`).
+
+| VDC Span | Size | Owner/lifetime |
+| --- | --- | --- |
+| `$0000-$07ff` | `2,048 B` | 80x25 character matrix (`$0000-$07cf` = `2,000 B` live; `$07d0-$07ff` = `48 B` `screen_clear` 8-page pad) |
+| `$0800-$0fff` | `2,048 B` | 80x25 attribute matrix (`$0800-$0fcf` = `2,000 B` live with `VDC_ATTR_MODE = $80` selecting Set 1; `$0fd0-$0fff` = `48 B` `screen_clear` pad) |
+| `$1000-$10ff` | `256 B` | `dungeon_render_vdc.s` overlap-safe right-scroll scratch (`RVSD_SCRATCH_CHAR = $1000`, `RVSD_SCRATCH_ATTR = $1080`, `78 B` each) |
+| `$1100-$1fff` | `3,840 B` | `ITEM.CAT[0..3839]` (`VDC_ITEM_CAT_LO_BASE..END`, `C128M-015`, disk builds; untouched on `.crt` which reads MD128 ROM directly) |
+| `$2000-$3fff` (bytes `0..7` / 16 B cell) | `4,096 B` | Live 8x8 glyph rasters across all `512` character cells (`$2000-$2fff` Set 0 uppercase/graphics, `$3000-$3fff` Set 1 mixed-case gameplay font; `8` scanlines/row uses only cell bytes `0..7`) |
+| `$2000-$3fff` (bytes `8..15` / 16 B cell) | `4,096 B` | Unused scanline tail in 8-scanline text mode: `ITEM.CAT[3840..7572]` (`3,733 B` across `467` cells at `$2008-$200f, $2018-$201f, ..., $3d28-$3d2c`, `363 B` spare to `$3fff`, `C128M-015`). Populated once at boot (`c128_load_core_residents`) strictly AFTER any `JDLCHR` (`$ff62`) font restore |
 
 ## Required Change Record
 
@@ -141,8 +157,8 @@ C128 memory contract.
 | Bank isolation, IRQ-state preservation, CPU-memory row-copy helpers, and Bank 1 `$d000-$dfff` `$7f` bounce spike | `platforms/commodore/c128/tests/test_memory128.s` | `TEST_FILTER='memory128' make test128` |
 | Bank 1 ownership, `< $af00` consolidated resident bound, `< $8000` cartridge/legal-stream bounds, and overlay bounds | `.assert` blocks in `memory128.s`, `main.s`, `cartridge_copy.s`, and `legal.s` | `make build128`, `make cartridge128` |
 | Built payloads: each standalone PRG at its segment's start and within its max, `moria128.prg` inside `$1c01..$aeff`, resident Bank 0 windows and emitted bytes pairwise disjoint, `Bank1DB` (`recall[279]` + `zp_save_buf`) inside `$7400..$7a5f` before the catalog name pool | `tools/check_c128_payloads.py` (actual emitted bytes, not end labels) | `make check128-payloads`; runs before `make test128` and `make test128-fast-smoke` |
-| Overlay/cache runtime behavior and partial preload fallback | `cache_survival_smoke`, `overlay_partial_failure_smoke`, `overlay_data_transition_smoke` (`preload_partial_failure_smoke` retired under `C128M-007`) | `TEST_FILTER='cache' make test128`, then authoritative `make test128` for broad changes |
-| VDC copy/scroll physical behavior | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s` | `TEST_FILTER='vdc_scroll_delta128' make test128` |
+| Overlay/cache runtime behavior and partial preload fallback | `cache_survival_smoke`, `hot_path_zero_disk_smoke`, `overlay_partial_failure_smoke`, `overlay_data_transition_smoke` (`preload_partial_failure_smoke` retired under `C128M-007`) | `TEST_FILTER='cache' make test128`, then authoritative `make test128` for broad changes |
+| VDC copy/scroll and VDC `ITEM.CAT` non-overlap physical behavior | `platforms/commodore/c128/tests/test_vdc_scroll_delta128.s`, `platforms/commodore/c128/tests/test_item_desc128.s`, `hot_path_zero_disk_smoke` | `TEST_FILTER='vdc_scroll_delta128|item_desc128|hot_path_zero_disk_smoke' make test128` |
 | Complete normal/no-I/O MMU and KERNAL transition matrix | none | `NOT IMPLEMENTED` |
 
 ## Decision Ledger
@@ -166,6 +182,7 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-012 | Proposed (awaiting maintainer review) | 2026-11-14 | Phase 2 cold code eviction on C128 (`docs/MEMORY_REDESIGN_PLAN.md` §4.2, §5, §6): (1) enable `HOME_OVERLAY_SEPARATE` and `RECALL_VIEW_OVERLAYED`, moving `core/ui_home.s` (from `128.bank`) and `core/ui_home_text.s` (from `ovl.town`) into a new uncached on-demand `$e000` overlay `ovl.home` (`128.home`, `OVL_HOME = 11`, skipped by `c128_preload_all_overlays`), wired via `platforms/commodore/c128/overlays.mk`, `hal_platform_overlay_count = 11`, 12-byte `ovl_ready_mask`/`ovl_ready_mask_hi`, `tramp_store_enter` `#STORE_HOME` dispatch, and `CART_ASSET_HOME = 23` (`CART_ASSET_COUNT` `27 -> 28` of `32`); (2) keep `SAVE_IN_STORAGE_OVERLAY` OFF (`128.persist` already holds `save.s`/`save_slot_menu.s`/`title_screen.s`); (3) evict `wizard_generate_item_execute` (`:WizardGenExecSegment()`) from `128.play` into `128.bank` (`RuntimeBankedCode` `$f000`) rather than `ovl.modal` so Bank 1 `cache.ovl.modal` (`225 B` free) does not overflow, move `recall_view_body` (`:RecallViewBodySegment()`) from `128.play` into `ovl.ui`, move `eff_find_doors`/`eff_fd_row` from `128.play` into `Default`, and move `core/ui_disk_setup.s` from `ovl.help` into `128.persist` (`disk_setup_runtime128.s` enters via `c128_modal_require_persist`). | `main.s` segment/ID/mask `.assert`s; `io_contracts.s` `C128AuditHomeOverlay`; `cartridge_contract.s` `28`-asset `.assert`; `check_c128_payloads.py --both` (`24` payloads); `check_c128_md128.py`; `test128-fast-smoke`, `test128`, `test128-cartridge` | `C128M-009` placement of `eff_find_doors` in `128.play` |
 | C128M-013 | Proposed (awaiting maintainer review) | 2026-11-15 | Phase 4 full VMS item/ego/trap/recall/Save V2 integration on C128 (`docs/MEMORY_REDESIGN_PLAN.md` §4.3, §6): (1) retire `128.names` from Bank 1 `$7400-$7a5f` (`Bank1DB`) and place `recall[279]` (`1,116 B`, `$7400-$785b`) + `zp_save_buf` (`142 B`, `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free) in `Bank1DB` accessed via `mmu_safe_db_read/write_ptr0/1`; (2) adopt `'ITM2'` `item.cat` (`7,573 B`) + `item.idx` (`65 B` header + 30-sector track/sector table patched in-place on `.d64`/`.d71`/`.d81` by `tools/fix_c128_item_idx.py`), reading records into Bank 0 `$1b00-$1bff` (`icat_sector_buf`) from REU Bank 2 (`$020000`) when REU is present, from MD128 cartridge ROM (`CART_ASSET_ITEM_CAT = 25`), or via 1541/1571/1581 direct `U1` sector reads (`common/item_cat_fetch.s`); (3) enable `SAVE_IN_STORAGE_OVERLAY` (`ovl.storage` / `128.storage`, `OVL_STORAGE = 12`, `$e000-$effa`, `4,091 B`, `5 B` free, uncached on-demand `$e000` overlay) and move `platforms/shared/save.s` into `StorageOverlay` while `128.persist` (`$af00-$c028`, `4,393 B`, `4,055 B` free) retains `title_screen.s`, `save_slot_menu.s`, `ui_disk_setup.s`, and `item_cat_boot_load`; (4) update MD128 cartridge directory to `29/32` slots (`CART_ASSET_COUNT = 29`, `126,172 B` free) and Save Format V2 to `SAVE_VERSION = $20` (`17,161 B` stream). | `memory128.s` & `main.s` `.assert`s; `check_c128_payloads.py --both`; `check_c128_md128.py` (`29/32` assets); `report_memory_budgets.py --port c128`; `make test128` & `make test128-cartridge` | `128.names` in Bank 1 `$7400-$7a5f`; `C128M-012` keeping `SAVE_IN_STORAGE_OVERLAY` OFF |
 | C128M-014 | Proposed (awaiting maintainer review) | 2026-11-16 | Phase 5 full `279/279` VMS monster catalog (`29` SoA fields, `4` attacks, `19` `ADESC_*` verbs, `24` `ATK_*` effects, `5` `MSF2_*` spells, `CD_*`/`CM2_*`) & Bank 1 `$d000-$dfff` data adoption (`docs/MEMORY_REDESIGN_PLAN.md` §4.3, §5, §6): (1) amend `C128M-002` to allocate Bank 1 `$d000-$dfff` (`4,096 B`) to `128.cex` (`$d000-$d8b7`, `2,232 B`, `279 x 8 B` extended species rows loaded at boot via `c128_load_catalog_ext_prg` / `CART_ASSET_CEX`), `BANK1_STORE_INV_RESERVED` (`$d8b8-$dcb7`, `1,024 B` reserved), and `msg_history` (`$dcb8-$df37`, `640 B`, freeing `640 B` of Bank 0 `Default` RAM; `$df38-$dfff` = `200 B` free), accessed strictly via bottom-common `< $4000` (`$0c06+`) `SEI` + `MMU_RAM_BANK1_NOIO ($7f)` pointer thunks (`mmu_common_b1_noio_read/write_ptr0/1` with `$d506 = $0d`), while keeping `OVL_DEATH` cached at `$c000-$cfff`; (2) evict Wave 5.2 cold code (`player_chargen_cold.s`, `trap_trigger_cold.s`/`trap_damage_cold.s`, `door_open_close_cold.s`, `item_drop_cold.s`, `starting_kit_cold.s`, `player_bg_draw_cold.s`, `ui_help_cmd_cold.s`) and cold zero-HP melee effects (`mae_steal` -> `ovl.items`, `mae_lose_exp`/`ATK_AGGRAVATE` -> `128.bank`, `mae_disenchant`..`mae_eat_charges` -> `ovl.home`), plus 80-col `ui_recall.s` tables in `ovl.ui`; (3) update MD128 cartridge directory to `30/32` slots (`CART_ASSET_COUNT = 30`, `140,399 / 262,144 B` used, `121,745 B` free). | `memory128.s` `$d000-$dfff` `.assert`s; `catalog_ext_fetch128.s`; `check_c128_payloads.py --both`; `check_c128_md128.py` (`30/32` assets); `report_memory_budgets.py --port c128`; `make test128` & `make test128-cartridge` | `C128M-002` blanket post-boot runtime ban on Bank 1 `$d000-$dfff`; Bank 0 `msg_history` |
+| C128M-015 | Proposed (awaiting maintainer review) | 2026-11-16 | Eliminate all runtime floppy disk seeks on C128 disk builds across `ITEM.CAT` reads, `g` item pickup, `Shift+dir` running, `o`/`c` plain + locked doors, and floor traps using native C128 Bank 0 + 16 KB VDC RAM only (C128 never uses REU): (1) replace `ITEM.IDX` + `item_catalog_records.s` sector streaming on disk builds with `platforms/commodore/c128/item_cat_vdc128.s`, which loads `ITEM.CAT` (`7,573 B`) at boot (`c128_load_core_residents`, strictly after any `$ff62` `JDLCHR` font restore, keeping `20/20` startup load count unchanged) via `crl_sa = 0` into Bank 1 `MAP_BASE` (`$4000-$5d94`), verifies `'ITM2'`, and streams `ITEM.CAT[0..3839]` into VDC `$1100-$1fff` (`3,840 B`) and `ITEM.CAT[3840..7572]` into the unused scanlines `8..15` of `467` character cells in VDC `$2008-$3d2c` (`4,096 B` capacity, `363 B` spare, leaving all Set 0 `$2000` and Set 1 `$3000` scanlines `0..7` untouched); `C128_CARTRIDGE` retains `hal_item_cat_cart_read_byte` (`< $8000`); (2) promote `item_pickup` (`220 B`, out of uncached `StorageOverlay`, retiring `HAL_PLATFORM_ITEM_PICKUP_OVERLAY` and `tramp_item_pickup`) and `run_initialize` (`166 B`, out of `ModalMiscOverlay`) into Bank 0 `Default` (`moria128.prg` `$1c01-$adb2`, raising disk `Default` headroom `155 -> 334 B`, `128.play` `233 -> 268 B`, `cache.ovl.modal` `39 -> 205 B`, and `ovl.storage` `3 -> 223 B`); keep `door_try_open`/`close` in cached `OVL_HELP` and `door_pick_roll` in cached `OVL_DISARM`. | `memory128.s`, `dungeon_render_vdc.s`, & `main.s` VDC/resident `.assert`s; `io_contracts.s`; `check_c128_payloads.py --both`; `check_c128_md128.py`; `check_overlay_calls.py --port c128 --check-sym`; `item_desc128`, `cache_survival_smoke`, `hot_path_zero_disk_smoke`; `make test128` & `make test128-legal` | `C128M-013` runtime `ITEM.IDX`/`U1` sector streaming on C128 disk builds; `item_pickup` in `ovl.storage`; `run_initialize` in `ovl.modal` |
 
 ## License/source modal ownership (2026-11-10)
 
@@ -1081,6 +1098,229 @@ production runtime test:
 - **Broad banking/MMU/runtime-loaded change**: Verified by `check_c128_payloads.py --both`, `check_c128_md128.py`, `report_memory_budgets.py` (`0` overflows), `make test128`, `make test128-cartridge`, and `make playtest-gate`.
 - **Physical VDC change**: N/A.
 - **Shared payload composition**: Verified across all 7 ports + 5 cartridges in Phase 5 integration (`42f8f7e7`).
+
+## Change Record — Zero-Disk Hot Gameplay Residency & 16 KB VDC `ITEM.CAT` Preload (`C128M-015`, 2026-11-16)
+
+### 1. Protocol Change Record (`BEHAVIOR_CHANGE_PROTOCOL.md`)
+
+```text
+Problem and success criteria:
+  Eliminate all gameplay floppy disk seeks on C128 disk builds (`.d64`/`.d71`/`.d81`)
+  across normal movement, `Shift+dir` running, `o`/`c` doors (plain, stuck, and
+  locked `door_pick_roll`), floor trap stepping (`trap_trigger`), and `g` item
+  pickup (plus all `ITEM.CAT` item/ego catalog lookups across inventory, equipment,
+  drop, wear, and stores) using native C128 Bank 0 RAM, Bank 1 RAM, and 16 KB VDC
+  RAM only (`reu_present = 0` permanently on C128). Prove `0` calls to `w_open`,
+  `w_load`, and `overlay_load_disk` after level entry in an automated C128 `.d71`
+  runtime smoke test.
+
+State being changed:
+  - C128 disk `ITEM.CAT` backing store: moved from on-demand 1541/1571/1581 `U1`
+    sector streaming (`common/item_catalog_records.s` + `ITEM.IDX`) to boot-preloaded
+    physical 16 KB VDC RAM (`$1100-$1fff` + cell scanlines `8..15` at `$2008-$3d2c`,
+    `platforms/commodore/c128/item_cat_vdc128.s`).
+  - C128 code residency: `item_pickup` moved from uncached `StorageOverlay`
+    (`OVL_STORAGE = 12`) to Bank 0 `Default` (`< $af00`), retiring
+    `HAL_PLATFORM_ITEM_PICKUP_OVERLAY` and `tramp_item_pickup` on C128;
+    `run_initialize` (`run_initialize_impl`) moved from `ModalMiscOverlay` (`OVL 9`)
+    to Bank 0 `Default` (`< $af00`).
+  - Zero gameplay formula, RNG, monster AI, turn-consumption, or save-format changes.
+
+Search scope and terms:
+  Searched `platforms/commodore/c128/`, `platforms/commodore/common/`, `core/`,
+  `tools/`, and `playtest/` for `hal_item_cat_read_byte`, `item_catalog_records`,
+  `ITEM.IDX`, `ITEM.CAT`, `HAL_PLATFORM_ITEM_PICKUP_OVERLAY`, `tramp_item_pickup`,
+  `run_initialize`, `door_try_open`, `door_pick_roll`, `trap_trigger`,
+  `vdc_set_update_addr`, `RVSD_SCRATCH`, `$ff62`, and `vdc_screenshot`.
+
+Relevant readers/writers found and known exclusions:
+  - Bank 1 `$4000-$730b` (`13,068 B`) was verified to be 100% live (`198x66` map in
+    `hal/layout.s` and `save_map_span_c128`), so placing `ITEM.CAT` permanently in
+    Bank 1 `$4f00-$730b` was rejected to prevent map/save corruption.
+  - Physical VDC `$3000-$3fff` bytes `0..7` per cell were verified to be live Set 1
+    mixed-case glyphs (`VDC_ATTR_MODE = $80` and `playtest` `vdc_screenshot`), while
+    bytes `8..15` of all `512` character cells in `$2000-$3fff` (`4,096 B`) plus
+    `$1100-$1fff` (`3,840 B`) are never read or written after `$ff62` `JDLCHR`.
+  - `C128_CARTRIDGE` continues to use `hal_item_cat_cart_read_byte` (`< $8000`)
+    directly from MD128 External Function ROM; `item.cat` and `item.idx` remain on
+    shipping/test disk images for build/packaging/playtest parity.
+
+Initialization, reset and persistence points:
+  - Cold boot (`restart_entry` -> `c128_load_core_residents`): runs strictly AFTER
+     both `c128_prepare_startup_loading_screen` and the test-variant
+    `c128_restore_vdc_rom_font` (`$ff62` `JDLCHR`) calls, loads `"ITEM.CAT"` with
+    `crl_sa = 0` into Bank 1 `MAP_BASE` (`$4000-$5d94`), validates `'ITM2'`, and
+    streams `7,573 B` into VDC `$1100-$1fff` + `$2008-$3d2c` before title art or
+    dungeon generation uses `MAP_BASE`.
+  - Soft restart (`game_restart` -> `title_enter_menu`): skips `JDLCHR`, preserving
+    the preloaded VDC `ITEM.CAT` across unlimited sessions.
+
+Affected production sequence through the changed transition:
+  Boot preload (`20/20` files) -> `c128_load_item_cat_vdc` -> title -> chargen ->
+  town -> `>` DL 1 `198x66` generation -> `player_try_move` / `Shift+dir`
+  (`run_initialize` + `run_step`) / `o` & `c` (`OVL_HELP` + `OVL_DISARM` Bank 1
+  cache) / `trap_trigger` / `g` (`item_pickup` + VDC `hal_item_cat_read_byte`).
+
+Contract decision or selected upstream oracle with source locations:
+  Port-local C128 memory/VDC residency change `C128M-015` (`memory128.s`,
+  `item_cat_vdc128.s`, `main.s`). Gameplay behavior is unchanged (`N/A` upstream).
+
+Intentional Moria8 deviations:
+  None — player-visible strings, UI, and gameplay rules are 100% unchanged.
+
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  `vdc_item_cat_map_addr` maps unsigned 16-bit `off` (`0..7572 < $1e95`):
+  - `off_hi < $0f`: `vdc = $1100 + off` (`$1100..$1fff`, no carry out).
+  - `off_hi >= $0f`: `rel = off - $0f00` (`$0000..$0e94`), `S = rel >> 3` (`0..466`),
+    `B = rel & 7`: `asl` shifts bit 4 of `S` into `C`, preserved across `ora`/`tay`/
+    `lda` into `rol`, then `ora #$20` -> `$2008..$3d2c <= $3fff`.
+
+RNG reduction and bias, if applicable:
+  N/A — zero RNG calls added, removed, or reordered.
+
+Affected platforms, overlays, banks and owners:
+  Commodore 128 only (`platforms/commodore/c128/**`, `docs/C128_MEMORY_CONTRACT.md`,
+  `C128_ENTRIES` in `tools/trampoline_manifest.py`). Zero changes to `core/`,
+  C64, Plus/4, or non-Commodore ports.
+
+Required production-path tests:
+  `make check-hal-boundaries`, `check_c128_payloads.py --both`,
+  `check_c128_md128.py`, `check_overlay_calls.py --port c128 --check-sym`,
+  `item_desc128`, `cache_survival_smoke`, `hot_path_zero_disk_smoke`,
+  `make test128` (including `test128-cartridge`), and `make test128-legal`.
+
+Known behavior explicitly out of scope:
+  Cold modals/commands (`w` wear, `t` takeoff, `E` eat, `q` quaff, `Shift+X`
+  exchange in `ovl.storage`; `ovl.home`; `ovl.chest`; `ovl.start` on New Game)
+  remain in their existing segments (`ITEM.CAT` reads inside them are now 0-disk).
+
+Unresolved uncertainty and risk:
+  None; `C128M-015` recorded as `Proposed` pending maintainer review.
+```
+
+### 2. Required CPU-Memory Change Record (`C128M-015`)
+
+```text
+symbol/payload and linked segment:
+  - `item_cat_vdc128.s` (`vdc_item_cat_map_addr`, `hal_item_cat_read_byte`,
+    `c128_load_item_cat_vdc`), `item_pickup` (`core/item.s`), and `run_initialize`
+    (`run_initialize_impl`, `core/player_run.s`) linked in Bank 0 `Default`
+    (`moria128.prg`, `$1c01..<$af00`).
+  - Retires `item_catalog_records.s`, `c128_load_item_idx_prg`,
+    `c128_copy_item_idx_data`, and `tramp_item_pickup` from `Default`.
+
+PRG load header:
+  - `moria128.prg`: `$1c01` (`$1c01-$adb2` disk = `334 B` free `< $af00`;
+    `$1c01-$ab7d` cart = `899 B` free `< $af00`).
+  - `item.cat`: `$7400` on disk (`7,575 B` = 2 B header + `7,573 B` `'ITM2'`),
+    loaded at boot with `crl_sa = 0` (`SETLFS` `SA=0`) to relocate into Bank 1
+    `MAP_BASE` (`$4000-$5d94`).
+
+source and destination spans:
+  - Boot disk load: `"ITEM.CAT"` -> Bank 1 `$4000-$5d94` (`7,573 B`, inside
+    `$4000-$730b` `MAP_BASE` prior to title/dungeon map use) -> streamed via
+    `mmu_safe_map_read_ptr0` into 16 KB VDC RAM (`$1100-$1fff` + `$2008-$3d2c`).
+  - Cartridge: `hal_item_cat_read_byte` jumps to `hal_item_cat_cart_read_byte`
+    (`< $8000` in `cartridge_copy.s`), reading `CART_ASSET_ITEM_CATALOG` directly
+    from External Function ROM.
+
+source/destination bank and lifetime:
+  - Code (`item_pickup`, `run_initialize`, `hal_item_cat_read_byte`): Bank 0
+    `Default` (`< $af00`), permanent session lifetime.
+  - `ITEM.CAT` data (disk): Bank 1 `$4000-$5d94` transient during boot preload
+    only; physical 16 KB VDC RAM (`$1100-$1fff` + `$2008-$3d2c`) permanent across
+    the entire session and `game_restart` cycles.
+
+MMU/$01 configuration at load, copy, execution and return:
+  - `c128_load_item_cat_vdc` loads via `c128_load_runtime_prg` (`SETBNK(1,0)`,
+    `EnterKernal`/`ExitKernal`), then reads Bank 1 `$4000-$5d94` from Bank 0
+    `Default` via bottom-common `mmu_safe_map_read_ptr0` (`$7f` -> `$3e`), writing
+    `$d600/$d601` under `MMU_ALL_RAM` (`$3e`, I/O visible) and `sei`.
+  - `hal_item_cat_read_byte` executes in Bank 0 `Default` under `MMU_ALL_RAM`
+    (`$3e`, `$01 = $36`, I/O visible) wrapped in `php / sei / ... / plp`,
+    preserving `X`, all ZP, and MMU state.
+
+common-RAM and interrupt/vector assumptions:
+  - Zero bottom/top common-RAM edits; all Bank 1 staging reads use existing
+    `mmu_safe_map_read_ptr0` (`$0c06+`), and all VDC transactions mask IRQs via
+    `php / sei / ... / plp`. Zero new ZP bytes used.
+
+KERNAL transition path:
+  - Boot `"ITEM.CAT"` load uses `c128_load_runtime_prg` (`w_setnam`/`w_setlfs`/
+    `w_load` below `$4000`, `crl_sa` restored to `1` on exit). Runtime gameplay
+    `hal_item_cat_read_byte`, `item_pickup`, and `run_initialize` perform **zero**
+    KERNAL transitions.
+
+overlapping owners and guarding assertions:
+  - `memory128.s`: asserts `VDC_SCRATCH_END < VDC_ITEM_CAT_LO_BASE` (`$10ff < $1100`),
+    `VDC_ITEM_CAT_LO_END < VDC_CHARSET_BASE` (`$1fff < $2000`), cell tail offset `8`
+    + `8 == 16`, and `VDC_CHARSET_END == $3fff`.
+  - `dungeon_render_vdc.s` & `main.s`: assert `RVSD_SCRATCH_ATTR + VIEWPORT_W <= $1100`,
+    `ITMCAT_TOTAL_SIZE <= VDC_ITEM_CAT_TOTAL_CAP` (`7,573 <= 7,936`),
+    `MAP_BASE + ITMCAT_TOTAL_SIZE - 1 <= MAP_END`, and `item_pickup` &
+    `run_initialize` inside `$1c01..program_end <= $af00`.
+  - `io_contracts.s`: `C128AuditBelowIo` on `item_pickup`, `run_initialize`, and
+    `hal_item_cat_read_byte`.
+
+production runtime test:
+  - `hot_path_zero_disk_smoke` (real `.d71` boot -> chargen -> town -> `>` DL 1
+    `198x66` generation -> normal moves, `Shift+L` corridor run, `o`/`c` plain door,
+    `o` locked door `door_pick_roll`, floor pit `trap_trigger`, and `g` non-gold
+    ego item pickup with `w_open`, `w_load`, and `overlay_load_disk` breakpoints
+    proving `0` disk calls and verifying VDC-decoded `ITEM.CAT` item text in
+    Bank 1 `msg_history`).
+```
+
+### 3. Physical VDC Contract Record (`C128M-015`)
+
+```text
+active VDC register(s):
+  Regs `18`/`19` (Update Address Hi/Lo via `vdc_set_update_addr`) and Reg `31`
+  (VRAM Data Read/Write via `vdc_select_reg` / `vdc_read_reg` / `VDC_DATA_REG`).
+
+internal source and destination addresses:
+  - `ITEM.CAT[0..3839]` (`off = $0000..$0eff`): linear VDC `$1100..$1fff`.
+  - `ITEM.CAT[3840..7572]` (`off = $0f00..$1d94`, `rel = off - $0f00`, `S = rel >> 3`
+    in `0..466`, `B = rel & 7`): cell-tail VDC `$2000 + 16*S + 8 + B`
+    (`$2008..$200f, $2018..$201f, ..., $3d28..$3d2c`).
+
+screen/attribute base and row stride:
+  Unchanged (`VDC_SCREEN_BASE = $0000`, `VDC_ATTRIB_BASE = $0800`, stride `80`;
+  scroll-delta scratch `$1000-$10cd < $1100`; Set 0 `$2000` & Set 1 `$3000` live
+  glyph scanlines `0..7` at `cell*16 + 0..7` untouched).
+
+copy direction, length, and overlap policy:
+  CPU -> VDC streaming write at boot (`3,840 B` continuous auto-increment at
+  `$1100`, then `467` 8-byte cell-tail bursts reseeded every 8 bytes so bytes `0..7`
+  of every character cell are skipped); single-byte CPU <- VDC read via Reg `31`
+  during gameplay. Disjoint by construction and compile-time `.assert`s from screen,
+  attributes, scroll-delta scratch, and 8x8 glyph rasters.
+
+ready-polling and interrupt assumptions:
+  Every `$d600` register select and `$d601` data access polls `$d600` bit 7
+  (`vdc_wait`) under `php / sei / ... / plp`. All screen/viewport callers re-establish
+  Regs `18`/`19` inside their own `sei` critical sections and never call
+  `item_catalog.s` mid-stream.
+
+horizontal/vertical bound equivalence:
+  Scroll-delta horizontal scratch (`RVSD_SCRATCH_CHAR = $1000`,
+  `RVSD_SCRATCH_ATTR = $1080`, end `$10cd`) and vertical row copies (`$0000-$0fcf`)
+  both remain strictly below `$1100`.
+
+production runtime test:
+  `item_desc128` (all 370 item names + ego suffixes decoded from live `x128` VDC RAM
+  with Set 0/Set 1 glyph scanline `0..7` sentinel verification),
+  `vdc_scroll_delta128`, and `hot_path_zero_disk_smoke`.
+```
+
+### 4. Verification Matrix Status (`C128M-015`, 2026-11-16)
+
+- **Any C128 layout change**: `Default` (`moria128.prg`) `$1c01-$adb2` (`37,297 B`, **`334 B` free** `< $af00`, `+179 B` vs baseline) disk / `$1c01-$ab7d` (`36,732 B`, **`899 B` free**) cart; `128.play` `$af00-$cef4` (**`268 B` free**, `+35 B`); `cache.ovl.modal` `$e000-$e433` (**`205 B` free**, `+166 B`); `ovl.storage` `$e000-$ef21` (**`223 B` free**, `+220 B`).
+- **Overlay/cache/load/copy change**: Verified by `check_c128_payloads.py --both`, `check_c128_md128.py`, `check_overlay_calls.py --port c128 --check-sym`, `cache_survival_smoke`, and `hot_path_zero_disk_smoke`.
+- **Broad banking/MMU/runtime-loaded change**: Verified by `make check-hal-boundaries`, `make test128` (including `test128-cartridge`), and `make test128-legal`.
+- **Physical VDC change**: Verified by `item_desc128`, `vdc_scroll_delta128`, and `hot_path_zero_disk_smoke`.
+- **Shared payload composition**: N/A (`core/` and shared Commodore files untouched).
+
 
 
 

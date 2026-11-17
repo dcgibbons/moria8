@@ -4,28 +4,32 @@
 
 ---
 
-**Phase 5 bump (`2026-11-16`, maintainer: "with this big change, let's kill
-savefile compatibility again"):** every port's `hal_storage_save_version` and
-`hal_storage_save_v1_version` are `$21`. The stream layout below is unchanged,
-but `$20` saves made before the full VMS monster catalog are refused, and every
-Balrog-queue checkpoint fails `start_loads()` and plays again from level 1, as
-§1 describes for the `$20` cutover.
+**Phase 5 bump & V1 cleanup (`2026-11-16`, maintainer: "with this big change,
+let's kill savefile compatibility again"):** every port's `hal_storage_save_version`
+is `$21` (`SAVE_VERSION = $21`), and the retired `hal_storage_save_v1_version`
+HAL constant, `OLDEST_SAVE_VERSION`, `load_save_version`, `stat_bake_mode`
+(`core/player_chargen_cold.s`), and C128 `--legacy-room8` test-fixture mode have
+been removed. The stream layout below is unchanged, all pre-`$21` saves
+(including legacy `$17` V1 and `$20` saves) are rejected with
+`LOAD_RESULT_UNSUPPORTED` (`4`), and `playtest/moria_playtest/queue.py`
+(`save_versions()` / `start_loads()`) reads `hal_storage_save_version` directly
+so pre-`$21` checkpoints restart cleanly from level 1 (`disk.SAVE_VERSION = 0x21`).
 
 ## 1. Single Save Format V2 Bump Policy
 
-All seven Moria8 ports switch in **one atomic Phase 4 bump** to Save Format V2:
+All seven Moria8 ports switch in **one atomic Phase 4/5 cutover** to Save Format V2 (`$21`):
 
-1. **Single Version Window (`OLDEST_SAVE_VERSION = SAVE_VERSION`)**:
-   - Bump `hal_storage_save_version` across every port's `hal/storage_policy.s` to a unified V2 version (recommended: `$20`, cleanly above the highest current V1 version, C128 `$1B`), and pin `hal_storage_save_v1_version = hal_storage_save_version`.
+1. **Single Exact Version (`SAVE_VERSION = $21`)**:
+   - Set `hal_storage_save_version = $21` across every port's `hal/storage_policy.s` (`hal_storage_save_v1_version` and `OLDEST_SAVE_VERSION` are retired).
    - Keep the existing 8-byte magic prefix (`"MORIA01" + SAVE_VERSION`, or `"MORIA+4" + SAVE_VERSION` under `HAL_STORAGE_SAVE_MAGIC_ALT_SIGNATURE` on Plus/4).
-   - Set `OLDEST_SAVE_VERSION = SAVE_VERSION` in `platforms/shared/save.s`.
+   - Compile-time `.assert` in `platforms/shared/save.s` verifies `SAVE_VERSION == $21`.
 2. **Zero V1 Backward Migration; Clean Rejection**:
-   - `save_version_supported` (`platforms/shared/save.s`) accepts **only** `version == SAVE_VERSION`.
-   - Any pre-V2 save file (`< $20`) or future version (`> $20`) is rejected immediately after reading the 8-byte magic header with `LOAD_RESULT_UNSUPPORTED` (`4`) and zero writes to player, inventory, store, map, or recall RAM.
-   - All V1..V19 migration paths (`SAVE_KNOWN96_VERSION`, `SAVE_KNOWN_BITS_VERSION`, `SAVE_KNOWN160_VERSION`, `SAVE_INV31_VERSION`, `SAVE_INV33_VERSION`, `SAVE_STATS_BAKED_VERSION`, `SAVE_DOOR_STATE_VERSION`, `SAVE_FLOOR42_VERSION`, `HAL_STORAGE_LEGACY_ROOM8_MIGRATION`, `HAL_STORAGE_LEGACY_STORE12_MIGRATION`) are deleted.
+   - `save_version_supported` (`platforms/shared/save.s`) accepts **only** `version == SAVE_VERSION` (`$21`).
+   - Any older save file (`< $21`, including legacy C64 `$17`) or future version (`> $21`) is rejected immediately after reading the 8-byte magic header with `LOAD_RESULT_UNSUPPORTED` (`4`) and zero writes to player, inventory, store, map, or recall RAM (`load_save_version` is removed).
+   - All V1..V19 migration paths (`SAVE_KNOWN96_VERSION`, `SAVE_KNOWN_BITS_VERSION`, `SAVE_KNOWN160_VERSION`, `SAVE_INV31_VERSION`, `SAVE_INV33_VERSION`, `SAVE_STATS_BAKED_VERSION` + `stat_bake_mode` in `core/player_chargen_cold.s`, `SAVE_DOOR_STATE_VERSION`, `SAVE_FLOOR42_VERSION`, `HAL_STORAGE_LEGACY_ROOM8_MIGRATION`, `HAL_STORAGE_LEGACY_STORE12_MIGRATION`) are deleted.
 3. **Playtest Queue Reset to DL1**:
-   - `playtest/moria_playtest/queue.py` (`save_versions()` and `start_loads()`, lines `393-427`) parses `hal_storage_save_v1_version` and `hal_storage_save_version` from each build's `hal/storage_policy.s` and resumes a saved run only when `loads[0] <= saved[1] <= loads[1]`.
-   - Because Phase 4 sets `loads[0] == loads[1] == V2`, every active pre-V2 Balrog-queue checkpoint automatically fails `start_loads()` and restarts cleanly from DL1 without manual queue edits.
+   - `playtest/moria_playtest/queue.py` (`save_versions()` and `start_loads()`) parses `hal_storage_save_version` from each build's `hal/storage_policy.s` (with optional `hal_storage_save_v1_version` fallback for archived historical builds) and resumes a saved run only when `loads[0] <= saved[1] <= loads[1]`.
+   - Because `loads[0] == loads[1] == 0x21`, every pre-`$21` Balrog-queue checkpoint automatically fails `start_loads()` and restarts cleanly from DL1 without manual queue edits.
 
 ---
 
@@ -37,7 +41,7 @@ All seven shipping ports run with `HAL_PLATFORM_MONSTER_CATALOG = 1`. Unless not
 
 | # | Stream Block | V1 (`80x48`) | V1 (`198x66`) | V2 (`80x48`) | V2 (`198x66`) | Delta (`V2 - V1`) & Encoding Details |
 |---:|---|---:|---:|---:|---:|---|
-| 1 | `save_magic` | `8` | `8` | `8` | `8` | `0`: `"MORIA01" + SAVE_VERSION` (Plus/4 `"MORIA+4" + SAVE_VERSION`, `SAVE_VERSION = $20`) |
+| 1 | `save_magic` | `8` | `8` | `8` | `8` | `0`: `"MORIA01" + SAVE_VERSION` (Plus/4 `"MORIA+4" + SAVE_VERSION`, `SAVE_VERSION = $21`) |
 | 2a | `player_data` (`PL_STRUCT_SIZE`) | `111` | `111` | `111` | `111` | `0`: player struct (`core/player.s`) with stats pre-baked |
 | 2b | `player_background` | `160` | `160` | `160` | `160` | `0`: 4×40 character background lines |
 | 2c | `ZP_STATE_START` (`$40-$5F`) | `32` | `32` | `32` | `32` | `0`: turn counter, timed effects, game flags |

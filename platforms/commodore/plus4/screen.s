@@ -122,7 +122,9 @@ screen_vectors:
     jmp screen_put_char     // +0: put char at cursor
     jmp screen_put_string   // +3: put string at (row,col)
 
+#if !PLUS4_PRODUCT_OVERLAY_RUNTIME
 #import "../../../core/ui_equipment_wrap.s"
+#endif
 
 .label hal_screen_init = screen_noop
 .label hal_screen_clear = screen_clear

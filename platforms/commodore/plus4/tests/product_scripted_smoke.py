@@ -780,7 +780,6 @@ def main() -> int:
         ".load_result",
         ".save_io_error",
         ".save_magic_buf",
-        ".load_save_version",
         ".save_device",
         ".save_cksum_lo",
         ".save_cksum_hi",

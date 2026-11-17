@@ -143,7 +143,7 @@ verification and physical hardware checklist. An experimental **Atari 8-bit 128 
 AtariMax MaxFlash (`.car` Type 41)** cartridge edition (`make cartridgeatari8`)
 likewise boots directly from Bank 0 into `MORIA8.RES`, streams all 10 overlays,
 the 279-monster catalog, and embedded legal texts (`LICENSE`/`SOURCE-OFFER`)
-from ROM with zero floppy swaps, and shares DOS 2.5 `SAVE_VERSION = $18` save
+from ROM with zero floppy swaps, and shares DOS 2.5 `SAVE_VERSION = $21` save
 disks (`D1:`–`D4:`, defaulting to `D1:`) bidirectionally with the standard disk
 image; see [`ATARI8_CARTRIDGE_EXPERIMENT.md`](ATARI8_CARTRIDGE_EXPERIMENT.md). The
 following matrix describes the existing disk builds.

@@ -74,120 +74,77 @@ Required work:
 
 ### Add the VMS `x` weapon swap (secondary weapon slot)
 
-VMS Moria keeps a secondary weapon in its own equipment slot
-(`inventory[34]`) and `x` swaps it with the wielded one (`moria.inc`
-`switch_weapon`, 615-650): refused with "The <weapon> you are wielding
-appears to be cursed." when the wielded weapon is cursed, otherwise the two
-trade places, their bonuses move (`py_bonuses(...,-1)` / `(...,1)`), it
-prints "Primary weapon   : <name>" and "Secondary weapon : <name>", and it
-takes a turn; with neither weapon, "But you are wielding no weapons."
-Moria8 has no such slot or command (`docs/FEATURE_MAP.md` "Exchange
-Primary/Secondary Weapon", `Missing`; the slot-layout row there wrongly
-mentions an `x` swap and `player_aux_slot`). A Rogue or Ranger switching
-between launcher and melee weapon spends a turn wielding from the pack each
-way (M5d playtest, 2026-10-26).
+Product support shipped 2026-10-31 (`docs/X_WEAPON_SWAP_DESIGN.md`): `SHIFT+X`
+(`CMD_EXCHANGE`, `core/item_exchange.s`) swaps `EQUIP_WEAPON` and
+`EQUIP_SECONDARY` (`TOTAL_INV_SLOTS = 34`, `core/item_defs.s`) across all seven
+ports, displays on the equipment screen (`core/ui_equipment.s`), refuses a
+cursed primary or empty pair without consuming a turn, and is covered by
+`test_item_exchange.s` and per-port save round-trips.
+
+Remaining follow-up (`docs/X_WEAPON_SWAP_DESIGN.md` §0 decision 8, §15): a Rogue
+or Ranger in `playtest/moria_playtest/brain.py` (`wielding_launcher`) still
+keeps its melee weapon in the pack and swaps via `w` (`KEY_WEAR`) instead of
+keeping it (or its launcher) in `EQUIP_SECONDARY` and swapping via `SHIFT+X`.
 
 Required work:
 
-- Add a 32nd inventory slot (`TOTAL_INV_SLOTS`, 8 parallel arrays, 34 uses)
-  excluded from the pack, the equipment bonus sum and pack-only loops.
-- Bump the save format, loading older saves with the slot empty.
-- `x`: the VMS behavior above, through the shared equipment recalculation.
-- Show the secondary weapon on the equipment screen; correct the
-  FEATURE_MAP slot-layout row.
-- Teach the playtest bot to keep its melee weapon (or launcher) there.
+- Teach the playtest bot (`playtest/moria_playtest/brain.py`) to keep its melee
+  weapon (or launcher) in `EQUIP_SECONDARY` and swap with `SHIFT+X` (`$D8`).
+- Optionally add `$D8` to `playtest/moria_playtest/fuzz.py`'s key list.
 
 Acceptance target:
 
-- `x` swaps as VMS does on every port, old saves load, and focused tests
-  cover the cursed refusal, the empty case, bonus transfer and the turn.
+- A playtest Rogue or Ranger with a launcher keeps its alternate weapon in
+  `EQUIP_SECONDARY`, swaps via `SHIFT+X` without spending pack slots, and keeps
+  frozen suites green.
 
-### Add a cloak equipment slot
+### Align per-class starting armour and cloak kits with VMS
 
-VMS Moria 4.8 and Umoria 5.7.15 start every class but the VMS Rogue with a
-Cloak [1] worn in its own slot (`player_init` / `class_base_provisions`), and
-only the Warrior (and the VMS Rogue) with Soft Leather Armor. Moria8 has the
-Cloak (item 82) but no cloak slot: it is `ICAT_ARMOR`, worn in `EQUIP_BODY`,
-so it competes with body armour. Until a slot exists, every class starts with
-Soft Leather Armor and no Cloak (`core/game_loop.s` starting kit, recorded in
-`docs/FEATURE_MAP.md` Starting Weapons & Armor).
+Phase 4 shipped `EQUIP_CLOAK` (`32`), `ICAT_CLOAK` (`19`), `Cloak` (`#82`) slot
+routing, and 34-slot Save V2 across all seven ports, but `init_starting_kit`
+(`core/starting_kit_cold.s:55-63`) still equips every class with `Soft Leather
+Armor` (`#7`) in `EQUIP_BODY` and no `Cloak` in `EQUIP_CLOAK` (`docs/FEATURE_MAP.md`
+§2.7), and `playtest/moria_playtest/brain.py` (`STARTING_ARMOUR = {"ICAT_ARMOR": 4}`)
+still assumes starting Leather Armor on all classes.
 
-With the slot (maintainer, 2026-10-25), the kits become upstream's: the Cloak
-for every class but the VMS Rogue; Soft Leather Armor only for the Warrior
-(and the VMS Rogue); a Priest or Mage buys body armour at the Armoury.
-
-Required work:
-
-- Add `EQUIP_CLOAK` and a cloak item category; route item 82 to it.
-- Equipment layout on every port (slot arrays, `EQUIP_LAST`, memory
-  contracts), the equipment screen, wear/take-off, AC totals.
-- Save format: a new slot with a migration for older saves.
-- Starting kits per class as above; the playtest bot's starting armour.
-- Tests: wearing a cloak with body armour, AC totals, save migration.
-
-### Stack identical inventory items (spikes first)
-
-Upstream Moria/Umoria merge identical items on pickup (`inven_carry` merges
-matching TV/subval entries, adding quantity), so iron spikes, food, oil, and
-similar consumables occupy one slot with a count. Moria8's `inv_add_item`
-(`core/item.s`) has no merge machinery at all: every item, including each
-individual Iron Spike (item 135), consumes a whole carried slot. The
-`item_defs.s` "stacks" claim was a comment bug (fixed 2026-09-10); this entry
-tracks the missing behavior.
-
-Player-visible cost is concentrated on spikes: jamming doors is a
-spike-per-attempt mechanic, and the general store restocks spikes at
-`si_qty = 1` per shelf slot (`store_restock_overlay.s`), so stocking up means
-buying many single-spike entries that each eat a pack slot, and spike shelf
-slots can crowd out food/oil in a small inventory.
-
-This is a design call, not a bug fix: one-slot-per-item is internally
-consistent (nothing in the port stacks), and adding merge machinery touches
-pickup, store buy/sell, drop, inventory display, and save format.
+Maintainer direction (2026-10-25): match VMS Moria 4.8 `player_init` — equip
+`Cloak [1]` (`#82`) in `EQUIP_CLOAK` for every class except Rogue, and equip
+`Soft Leather Armor [4]` (`#7`) in `EQUIP_BODY` only for Warrior and Rogue (so
+Mage, Priest, Ranger, and Paladin buy body armour at the Armoury).
 
 Required work:
 
-- Decide the stacking rule: merge identical items generally (upstream parity),
-  or merge only a whitelist (spikes/food/oil), or keep one-per-slot and
-  instead sell spikes in bundles (qty 5/10 per entry) to fix only the
-  store/pack pressure.
-- If merging: define identity (which of p1/to_hit/to_dam/flags/ego must
-  match), cap quantities at 255, and decide how partial pickups from a full
-  stack behave.
-- If bundling only: pick the bundle size and update `store_restock_overlay.s`
-  plus spike pricing/weight so a bundle is coherent.
-- Regression coverage for pickup/buy/sell/drop of stackables, including the
-  full-pack and stack-overflow edges, and save/load round-trip of stacked
-  quantities.
-
-Acceptance target:
-
-- Spikes no longer consume one pack slot each (and, if general merging is
-  chosen, identical consumables merge per the documented rule), with store
-  stock not starving food/oil, and no change to non-stackable item handling.
+- Update `init_starting_kit` (`core/starting_kit_cold.s`) per class as above.
+- Update `STARTING_ARMOUR` in `playtest/moria_playtest/brain.py` and re-check
+  early Armoury shopping and frozen playtest suites.
+- Update `docs/FEATURE_MAP.md` §2.7 (`Starting Weapons & Armor`) and starting-kit
+  tests.
 
 ### Sweep platform-specific inlines in core/ behind HAL macros
 
-`core/` currently contains a few direct platform conditionals instead of HAL
-macros: `#if APPLE2 jsr mmu_safe_map_write_ptr1` in `core/ui_messages.s`
-(message-history writes) and `#if C128_PRODUCT_OVERLAY_RUNTIME jsr
-mmu_common_copy_map_row` plus `SCREEN_RAM,y` reads in
-`core/dungeon_features.s` (`place_secrets` row scan). Both work and are
-assert-guarded, but they break the convention that core stays
-platform-agnostic (`docs/CROSS_PLATFORM_STRATEGY.md`).
+`core/` currently contains a few direct platform-coupled blocks instead of HAL
+macros: `jsr mmu_safe_map_write_ptr1` (and `jsr mmu_safe_map_read_ptr1`) under
+`#if MSG_HISTORY_IN_AUX` in `core/ui_messages.s` and `#if
+HAL_PLATFORM_AUX_PERSISTENT_DATA` in `core/recall.s`, plus
+`jsr mmu_common_copy_map_row` / `jsr mmu_common_store_map_row` and `SCREEN_RAM,y`
+row scratch under `#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP` in
+`core/dungeon_gen.s` and `core/place_secrets_cold.s`. All are assert-guarded,
+but they call platform helpers directly from `core/`
+(`docs/CROSS_PLATFORM_STRATEGY.md`).
 
 Required work:
 
-- Introduce a HAL write macro (e.g. `:HalAuxWritePtr1()`) defaulting to
-  `sta (zp_ptr1),y` and overridden by Apple II to the aux thunk; same
-  pattern for a row-read/scan macro covering the C128 bank-copy path.
-- Sweep both call sites; no behavior change, so existing gates
-  (`make test`, `make test128`) suffice.
+- Introduce HAL read/write macros (e.g. `:HalAuxWritePtr1()`) defaulting to
+  `sta (zp_ptr1),y` and overridden by Aux/Bank-1 ports to their thunks; same
+  pattern for row-copy/scan macros covering the C128 bank-copy path.
+- Sweep all four `core/` modules (`core/ui_messages.s`, `core/recall.s`,
+  `core/dungeon_gen.s`, and `core/place_secrets_cold.s`); no behavior change, so
+  existing gates (`make -j7 -O test`) suffice.
 
 Acceptance target:
 
-- No `#if <PLATFORM>` platform calls remain in the touched core modules;
-  all four platform builds and test gates stay green.
+- No direct platform helper/address calls remain in the touched core modules;
+  all seven platform builds and test gates stay green.
 
 ### Implement Plus/4 TED sound effects
 
@@ -301,59 +258,24 @@ Acceptance target:
 - Numeric prefixes work for supported repeatable commands without changing
   single-key command behavior or prompt input semantics.
 
-### Fix equipment screen item wrapping
-
-DONE 2026-09-04. The reported overrun ("Mace (Holy Avenger) (+13,+25)"
-spilling) predated the fix: the entry was written 2026-06-02 and the 2-line
-equipment wrapper (`core/ui_equipment_wrap.s`, HAL_LAYOUT_EQUIPMENT_WRAP,
-C64/Plus4 40-column) landed 2026-08-13 in ea899d3. Reproduction against the
-current build (production item_desc_banked.s formatter staged with the exact
-reported item) shows the line wraps correctly: name+ego on the slot row,
-"(+13,+25)" on the continuation row at the description column, next slot
-uncorrupted. One residual defect found and fixed: on the continuation row
-the wrapper still applied the first-row deferred-space and paren-wrap rules,
-so a second suffix lost its " (" separator to the one-wrap cap (rendered
-"(Holy Avenger)+13,+25)"); the wrapper now applies those rules on the first
-row only and clips the continuation row only at the hard right edge. 80-col
-platforms (C128/A2) need no wrapper — the longest equipment lines fit.
-Coverage: test_ui_views.s now links the production item formatter
-(item_desc_banked.s via the C64_TEST_REAL_ITEMDESC opt-out in
-ui_trampoline_stubs.s, which never printed stats) and pins both the reported
-Mace case and the longer Two-Handed Sword case (ego parenthetical wraps as a
-unit); harness count 17→19. Gates: make test exit 0 (all four platforms),
-make test128 137/137.
-
 ### Monster data design decisions from the creature audit
 
-The 2026-11-01 audit of all 150 shipped creatures against VMS 4.8 and Umoria
-5.7.15 (`tools/parse_creatures.py` reads Umoria only) found differences that
-need a design decision before any fix (maintainer: backlog them). Each makes
-deep monsters weaker or different than upstream:
+Remaining differences from VMS 4.8 and Umoria 5.7.15 that need a design
+decision before any fix (maintainer: backlog them):
 
-- Breath: DONE 2026-11-08 (MON-025): no 255 cap, and a Multi-Hued
-  dragon's five breaths are five choices of the cast. What still differs is
-  "Faithful breath: what the limited version leaves out".
-- Speed: capped at two moves a turn (`map_speed`); the Balrog, Invisible
-  Stalker, Poltergeist and Huge Brown Bat lose a third of their actions, the
-  Iron Golem (upstream 1/3) moves 1/2. Speed code 3 is unused. (The
-  maintainer accepted extending the cadence to speed code 3 on 2026-11-08;
-  it was left out of the limited breath work and is still open, changing
-  MON-008.)
-- Lost monster spells: Slow, Blink, Teleport (self) and Drain Mana are
-  dropped, so the kept spells are cast more often (VMS counts each as a
-  choice); summons appear beside the caster, not the player (VMS
-  `creature.inc` ~991). Hold Person: DONE 2026-11-08 (MON-025).
-- Elemental resistance and weakness: bolts ignore a creature's matching
-  breath bit (÷4) and hurt-by flags (×2) (VMS `spells.inc` fire_bolt;
-  Umoria `spells.cpp` ~781-789); hurt-by-light/rock are dropped; no Slay
-  Dragon ego reads CF_DRAGON.
-- Fleeing: every monster flees below 25% HP (`core/monster_ai.s` ~272), a
-  rule neither upstream has.
-- Town creatures: `core/monster.s` ~120 sets every town speed to 1, dropping
-  their random-move bits.
-- Oracle: the generator follows Umoria where VMS (the default oracle)
-  differs (sleep, aaf, treasure, evil flags on several creatures; three
-  shipped creatures have no VMS row).
+- Speed: capped at two moves a turn (`map_speed`, `core/monster_ai.s`); the
+  Balrog, Invisible Stalker, Poltergeist and Huge Brown Bat lose a third of
+  their actions, the Iron Golem (upstream 1/3) moves 1/2. Speed code 3 is
+  unused. (The maintainer accepted extending the cadence to speed code 3 on
+  2026-11-08; it was left out of the limited breath work and is still open,
+  changing MON-008.)
+- Summons: monster summons (`core/monster_magic.s` `find_adjacent_empty_mon`)
+  appear beside the caster rather than beside the player (VMS `creature.inc`
+  ~991).
+- Fleeing: every monster flees below 25% HP (`core/monster_ai.s`
+  `monster_check_flee`), a rule neither upstream has.
+- Town creatures: `core/monster.s` (`cr_speed` town rows) sets every resident
+  town creature's speed byte to `1`, dropping their random-move bits.
 
 Each: decide faithful vs deliberate 8-bit choice, then implement with tests
 and the byte budget, or record it in `docs/FEATURE_MAP.md` as intentional.
@@ -368,39 +290,17 @@ never reach AC 200; check how high Moria8's AC can go, then either clamp AC to
 with a test at the boundary. Moria8 truncates like Umoria; VMS rounds to
 nearest (maintainer, 2026-11-01: leave the rounding as it is).
 
-### Blinding monster touches and Free Action
+### Make 0d0 monster attacks explicit
 
-Two upstream mechanics Moria8 lacks (`docs/FEATURE_MAP.md` §6.4-§6.5 audit,
-2026-11-01; maintainer: "backlog 4"):
+Follow-up from the no-HP attack fix (2026-11-01):
 
-- Blindness touch (upstream attack type 10): `tools/parse_creatures.py` maps
-  it to a normal hit (to-hit 60, upstream 2) that never blinds, although
-  player blindness (`zp_eff_blind`, the Blindness potion) exists. Give it a
-  handler: upstream damage, then blindness unless saved, as VMS
-  `creature.inc` `make_attack` case 10.
-- Free Action: PARTLY DONE 2026-11-08 (MON-025). The Amulet of the Magi
-  grants it (`PFLAG_FREE_ACT`), and the paralysis touch, Hold Person and the
-  chest gas trap read it. Still missing are the other upstream sources, such
-  as the ego "of Free Action" on gloves (§8.2).
-
-Required work: the handlers per VMS, generator mapping, per-effect tests
-through `monster_attack_player`, FEATURE_MAP rows, and the byte budgets on
-every port.
-
-### Make 0d0 monster attacks explicit, and aggravate work in any slot
-
-Two follow-ups from the no-HP attack fix (2026-11-01):
-
-- `mon_atk_hit` passes the attack's dice count to `math_dice`, documented for
-  1-255 dice. A 0d0 attack (fear wails, thieves, and since 2026-11-01 the
-  Banshee, Ghost and Liches' drain touches) deals no damage only because 0
-  loops 256 times, each `rng_range(0)` returning 0, and only the low byte of
-  the $0100 sum is used. Add an explicit `cpy #0` skip so that no longer
-  rests on the wrap (a few bytes on every port; `test_monster_attack` t29-t30
-  cover the behavior today).
-- `ATK_AGGRAVATE` is handled only in attack slot 0; in slot 1 it falls
-  through to a normal hit. No shipped creature has it there today, so this
-  only matters once the special attacks are expanded.
+- `mon_atk_hit` (`core/monster_attack.s`) passes the attack's dice count to
+  `math_dice`, documented for 1-255 dice. A 0d0 attack (fear wails, thieves,
+  and since 2026-11-01 the Banshee, Ghost and Liches' drain touches) deals no
+  damage only because 0 loops 256 times, each `rng_range(0)` returning 0, and
+  only the low byte of the `$0100` sum is used. Add an explicit `cpy #0` skip
+  so that no longer rests on the wrap (a few bytes on every port;
+  `test_monster_attack` t29-t30 cover the behavior today).
 
 ### Raise `MAX_MONSTERS` on the large-map ports, up to VMS's limit
 
@@ -408,10 +308,9 @@ Two follow-ups from the no-HP attack fix (2026-11-01):
 (`core/monster.s` `MAX_MONSTERS`). With the monster catalog a level can hold
 no more species than live monsters, so the creature rows are 32 dungeon
 species plus the 8 town creatures (40) on every catalog port. The 198x66
-ports (C128, CX16, and the Apple IIe and BBC Master once they take the
-catalog) have the room for more, and VMS's population on that map size
-reaches the 32-slot cap from about DL25 (`docs/MONSTER_CATALOG_DESIGN.md`,
-"Population on Moria8's maps").
+ports (C128, CX16, Apple IIe, and BBC Master) have the room for more, and
+VMS's population on that map size reaches the 32-slot cap from about DL25
+(`docs/MONSTER_CATALOG_DESIGN.md`, "Population on Moria8's maps").
 
 Raise `MAX_MONSTERS` on those ports, never above VMS's limit: `max_malloc =
 100 + 1` (VMS `constants.inc:107`; slot 0 unused, so 100 live monsters).
@@ -422,112 +321,22 @@ the AI loop) grow too, and the generation cap of 26 (6 slots kept for
 summons, breeders, new arrivals and pits) is revisited with it. About 200
 resident bytes for 48 monsters, per the design doc's estimate.
 
-### High priority: the monster abilities Moria8 lacks
+### Split player haste and slow into separate saved counters
 
-**High priority (maintainer, 2026-11-02).** The monster catalog
-(`docs/MONSTER_CATALOG_DESIGN.md`) adds every VMS creature unless most of its
-abilities are missing; the rest play with the missing ones degraded. Every
-missing ability is high-priority work, because each one either degrades a
-creature in play or keeps one out. `tools/build_catalog.py` lists them
-(`catalog.json`: `backlog_abilities`, `degraded`, `ask_maintainer`,
-`skipped_not_in_todays_roster`).
-
-Until 2026-11-01 the no-HP effects were worse than missing: the generator
-mapped Lose experience (19), Steal Money/Object (12/13), Aggravate (20),
-Disenchant (21) and Eat food/light/charges (22-24) to normal hits that dealt
-their dice as HP damage (Umoria `monster.cpp` ~1540-1800 applies none of them
-as HP damage). A Banshee's 14d8 experience drain hit for ~63 HP and killed 70
-of 102 queue characters past DL23. They now do no HP damage; the effects
-themselves remain.
-
-Missing abilities, by the number of VMS creatures that have them (2026-11-02,
-in play degraded, asked about, or kept out):
-
-| Ability | Kind | Creatures |
-| --- | --- | --- |
-| Picks up objects | movement (`cmove` `0x100000`) | 29 |
-| Hold person | spell (`0x200`) | 24 |
-| Invisible | movement (`0x10000`) | 22 |
-| Drain mana | spell (`0x10000`) | 20 |
-| Blink | spell (`0x10`) | 18 |
-| Lose experience | touch (attack 19) | 17 |
-| Eats weaker creatures | movement (`0x80000`) | 15 |
-| Teleport self | spell (`0x20`) | 14 |
-| Fire touch | attack 5 | 11 |
-| Cold touch, slow, passes through walls | attack 7, spell `0x8000`, movement `0x40000` | 10 each |
-| Lose strength | touch (attack 2) | 9 |
-| Gas, acid, lightning and frost breath | spells `0x100000`, `0x200000`, `0x80000`, `0x400000` (all breath is fire today) | 8 each |
-| Lose dexterity | touch (attack 15) | 7 |
-| Lightning touch | attack 8 | 6 |
-| Disenchant | touch (attack 21) | 5 |
-| Steal gold, steal object, blinding touch, eat charges | attacks 12, 13, 10, 24 | 4 each |
-| Eat food, eat light | attacks 22, 23 | 3, 2 |
-| Lose constitution, wisdom, intelligence | attacks 16, 18, 17 | 1 each |
-
-The Balrog needs fire touch, eat charges, hold person, slow, drain mana,
-invisible, passing walls, eating weaker creatures and picking up objects:
-M8 depends on these.
-
-Separate player-side feature: creatures' reactions to the player's fire,
-frost, acid, light and sleep attacks (`cdefense` `0x10`-`0x200`, `0x1000`),
-on most of the catalog.
+Moria8 now includes upstream player-slowing sources (`Potion of Slowness`
+`#275`, `Staff of Slowness` `#361`, `of Slowness` ego boots, and the monster
+`Slow Person` spell `MSF2_SLOW`), while `zp_eff_speed` (`$54`) still nets haste
+(`> 0`) and slow (`< 0`) into a single signed timer so haste while slowed
+cancels slow turn for turn (`docs/FEATURE_MAP.md` §3.1, §6.5). VMS Moria keeps
+separate `fast` and `slow` counters that run concurrently and net each turn
+(`potions.inc`).
 
 Required work:
 
-- Each ability as a compact engine handler, in the order above (most
-  creatures first), the Balrog's ahead of equals.
-- Add each to `SUPPORTED_ATTACKS`, `SUPPORTED_SPELLS` or `SUPPORTED_CMOVE` in
-  `tools/build_catalog.py`, so the creatures waiting on it stop degrading or
-  join the catalog.
-- Per-effect tests for damage and status, messages, inventory, light and
-  resource changes, and save/load where relevant.
-
-Acceptance target:
-
-- No creature in play has a degraded ability.
-
-### Add player slowness (sources and a separate slow counter)
-
-Nothing in Moria8 can slow the player today: there is no Potion or Staff of
-Slowness, no slowing monster spell and no slowing trap; only the wizard menu
-sets slowness (scroll/potion audit, 2026-10-31). VMS Moria keeps separate
-`fast` and `slow` counters that run at once and net each turn
-(`potions.inc`); Moria8 nets haste and slow into one signed timer, haste
-capped at +127, which is equivalent while nothing slows the player
-(maintainer decision 2026-10-31: keep the single timer until a slowness
-source exists).
-
-Required work:
-
-- Add the upstream slowness sources Moria8 omits (`docs/FEATURE_MAP.md`
-  Potion of Slowness, Staff of Slowness, the slowing monster spell), each
-  per VMS.
-- With them, split haste and slow into separate saved counters as VMS does:
-  a byte in the saved effect block (`$50-$5F` has none free, so a zero-page
-  reallocation the maintainer approves) and a save-format change.
+- Split haste and slow into separate saved counters as VMS does: a byte in the
+  saved effect block (`$50-$5F` has none free, so a zero-page or main-RAM
+  allocation the maintainer approves) and a save-format bump.
 - Tests: stacking, haste while slowed, expiry messages, save/load.
-
-### Element-correct monster breath
-
-DONE 2026-11-08, in the limited faithful form the maintainer chose ("do your
-limited but faithful version"; MON-025, `docs/FEATURE_MAP.md` §9.2).
-
-- `cr_spell_chance` holds three things:
-  - bits 0-3: the upstream 1-in-N cast frequency (`randint(N) = 1` casts);
-  - bits 4-6: the breath element;
-  - bit 7: Hold Person.
-- Every breath prints its element: "The <name> breathes lightning." (gas,
-  acid, frost, fire).
-- Damage is the breather's HP / 4 for lightning and HP / 3 for the others,
-  16-bit and uncapped, through the VMS element routines:
-  - lightning `light_dam`;
-  - gas `poison_gas`: poisoned + 12 + randint(dam);
-  - acid `acid_dam`: a worn armour piece is damaged and halves it;
-  - frost `cold_dam`: the Resist Cold ring and timer, div 3 each;
-  - fire `fire_dam`: the Resist Fire ring and Resist Heat timer, div 3 each.
-- A Multi-Hued dragon's five breaths are five choices.
-
-Tests: C64 `test_monster_magic.s` t28-t37.
 
 ### Faithful breath: what the limited version leaves out
 
@@ -548,8 +357,7 @@ about 900 B a port. Each is also a row in `docs/FEATURE_MAP.md`.
     and closed doors.
   - VMS flashes `*` on the ball's squares.
   - The 2026-11-08 attempt cost about 761 B for this alone (review: about
-    350 B in one 5x5 pass). The weakness bits need a creature field the
-    catalog does not carry.
+    350 B in one 5x5 pass).
 - **Pack damage** (`misc.inc` `inven_damage`). Each matching pack slot
   loses one item 2% of the time (VMS `randint(100) < 3`) for fire and acid,
   4% for frost (potions). Umoria adds lightning (rings, wands, staffs, 3%:
@@ -559,129 +367,41 @@ about 900 B a port. Each is also a row in `docs/FEATURE_MAP.md`.
   fire, acid, frost and lightning touches and the fire and acid traps, which
   Moria8 maps to plain damage. One shared routine: about 80 B, plus the
   item classification and the messages.
-- **Resistances.** No Moria8 item resists lightning, acid or poison (VMS
-  armour egos), so those breaths are never reduced.
 - **Hold Person texts.** VMS is silent when it paralyses, and says "You are
   unaffected..." to Free Action. Moria8 prints "The <name> paralyzes you."
   (as its other effect spells print their effect, MON-011) and reuses the
   chest trap's "You are unaffected.".
 - **Recall.** A Hold Person cast marks recall's spell bit 0 (Cause Light
   Wounds). Recall shows only SPELLS: YES / NONE.
-- **Choices with no Moria8 form.** Upstream counts blink, teleport self,
-  slow and drain mana among the choices, so the kept spells are cast more
-  often here ("Lost monster spells" above).
 
 Acceptance target: each item decided as faithful (then implemented with tests
 and a measured byte cost) or recorded as an intentional 8-bit difference.
 
-### Add "of Regeneration" equipment
+### Align Regeneration equipment with VMS `x1.5` rate and hunger cost
 
-Moria8 has no Regeneration source. The status timer `zp_eff_regen` (ZP
-`$5B`) is counted down, cleared on new game and read by mana regeneration,
-but no item, potion, scroll or spell ever sets it, so it is always 0. HP
-regeneration (TRN-009 in `docs/TURN_RENDER_CONTRACT.md`) does not read it:
-the VMS x1.5 factor was left out because C64 resident code had no bytes for
-dead state.
+Phase 4 added `"of Regeneration"` (`EGO_REGENERATION = 32`), `Ring of
+Regeneration`, and `PFLAG2_REGEN` (`core/player_pflags_cold.s`). Three gaps
+remain against pinned VMS Moria (`misc.inc`, `moria.inc`):
 
-In pinned VMS Moria, Regeneration is a worn-equipment flag
-(`%X'00000800'`), not a timer: magic helms can roll the "of Regeneration"
-suffix (`misc.inc` helm enchantment, +1500 cost); wearing one sets
-`py.flags.regenerate` (`moria.inc` `py_bonuses`), which multiplies the
-regeneration rate by 1.5 (`moria.inc` `regen_amount*1.5`) and adds 3 to
-`food_digested` (faster hunger). Umoria not yet checked for other sources.
+- `turn_tick_regen` (`core/turn.s`) currently doubles HP regeneration (`x2` via
+  `asl`/`rol`) instead of VMS's `x1.5` (`regen_amount * 1.5`).
+- `turn_tick_hunger` (`core/turn.s`) applies no faster food digestion while
+  `PFLAG2_REGEN` is worn (VMS adds `+3` to `food_digested`).
+- The status timer `zp_eff_regen` (ZP `$5B`) is still counted down and read by
+  mana/HP regeneration, with no item, potion, scroll, or spell ever setting it.
 
 Required work:
 
-- Add the "of Regeneration" helm ego (or the upstream item set) and an
-  equipment flag recomputed with the other worn-item flags.
-- HP regeneration: rate x1.5 while the flag is set (the product + product/2
-  on `mul_result`, about 30 bytes); decide whether mana follows VMS too.
-- Food: +3 digestion per turn while worn.
+- HP regeneration: rate `x1.5` while `PFLAG2_REGEN` is set (product + product/2
+  on `mul_result`), and decide whether mana follows VMS too.
+- Food: faster digestion per turn while `PFLAG2_REGEN` is worn.
 - Retire `zp_eff_regen` or give it a producer, so no dead state remains.
-- Budget: C64 resident has about 10 spare bytes, Apple IIe play slot 5 and
-  C128 resident play 15 (2026-10-22); recover bytes first.
 
 Acceptance target:
 
-- A worn Regeneration item heals at 1.5x the TRN-009 rate and digests food
+- A worn Regeneration item heals at `1.5x` the TRN-009 rate and digests food
   faster, with C64 tests computed from the VMS formula; no unread or unset
   regeneration state remains.
-
-### Add monster door opening and bashing
-
-DONE 2026-09-02 (C64/C128/Plus/4; Apple IIe blocked on the resident-RAM
-expansion below). Door capability folds into `cr_aaf` bit 7
-(`CD_OPEN_DOOR_BIT`; AAF tops out at 40 upstream, so the bit is free),
-generated by `tools/parse_creatures.py` from Umoria `CM_OPEN_DOOR`
-(`0x00020000`) — 92 of 279 upstream creatures qualify, including all town
-creatures and the Balrog. `monster_try_step`'s blocked branch now runs the
-door engine (`!mts_door_block` in `core/monster_ai.s`): door-capable monsters
-silently open closed doors and pass secret doors (door stays secret);
-non-capable monsters bash with the exact Umoria `monsterOpenDoor` formula
-`randomNumber((hp+1)*80) < 40*(hp-20)` on current HP (clamped to 254 so
-`hp+1` fits a byte; hp≤20 never bashes) via `math_multiply` +
-`rng_range_word`; success prints "You hear a door burst open!" (new huffman
-string `@MAT_DOOR_BURST`) and any door action consumes the move without
-stepping into the doorway. Occupied doors are protected, opened tiles mark
-`mat_action_dirty` and route through `mat_mark_tile_dirty_if_nonlocal`.
-Documented approximations: no locked/stuck door state (tile-only model),
-no 50% broken-door roll, bash HP clamp at 254 (≤0.1% probability shift).
-Coverage: `test_monster_ai.s` t41-t46 (capable open, failed/successful bash,
-hp≤20 guard, secret pass/block, occupied protection), harness count 40→46.
-Regression fixes exposed by the layout growth: `test_subsystems.s` banked
-fixture re-encoded for the new huffman tree; `test_chest_loot.s` t7 now pins
-its scripted RNG offsets to zero per its documented intent (it previously
-read leftover staged draws and then code bytes as map tiles); bolt/dispel/
-effects_magic suites slim unused `ui_inventory`/`ui_equipment`/`ui_character`
-imports to stay under `$C000`. Placement funding: `place_secrets` moved to
-the GEN overlay on C64/Plus/4 (existing `PLACE_SECRETS_EXTERNAL` pattern);
-scripted chest/balrog product fixtures moved to the CHEST overlay on
-C64/Plus/4 (`ChestFixtureSegment`); C128 moved `recall.s` to the Default
-image. Gates: `make test64` 195/195, `make test128-fast`,
-`make test128-fast-smoke`, `make test128` 137/137, `make testplus4` 40/40.
-Apple IIe: enabled 2026-09-02 — the A2 RAM expansion item below freed the
-resident bytes, so the door engine runs on all four platforms; the
-`#if !APPLE2` guard is removed. The relocated map-area engine has direct
-A2 MAME coverage (`priest_map_area` scenario casts Sense Surroundings
-through `tramp_eff_map_area` and asserts the mana-cost signature and clean
-return); earthquake shares the identical trampoline pattern (WoD exemption
-class); C64 unit suites cover the engines themselves.
-
-### input_ctrl_r_held CIA matrix probe raced the KERNAL scanner
-
-DONE 2026-09-08 (found during the wizard-teleport investigation).
-`input_ctrl_r_held` (C64) reprogrammed the CIA1 keyboard-matrix
-ports/DDRs from a `CLI` context with no IRQ masking, so the KERNAL
-SCNKEY interrupt could interleave between its row-select writes and
-column reads, producing phantom "CTRL+R held" readings (confirmed stuck
-at `$01` in a live snapshot). A false positive injects `CMD_AUTOREST`
-into the command stream and starves real key input. Fix: wrap the probe
-in `php`/`sei` ... `plp` (3 bytes), matching the already-protected
-`input_run_key_held` pattern; the caller's interrupt state is preserved.
-Verified live on a patched product disk: probe executes with the new
-prologue and returns `$00` with no keys held. Gates: make test exit 0,
-make test128 137/137.
-
-### Wizard teleport freezes on a tier-mismatched level (one-step tier transition)
-
-DONE 2026-09-07 (player report + VICE snapshots). Root cause chain:
-(a) `tier_check_transition` stepped only ONE tier per call, so a
-multi-tier move (wizard level jump, Word of Recall) left `current_tier`
-behind `zp_player_dlvl` (snapshot: tier 2 on dlvl 20 — wrong-tier
-monsters as a side effect). (b) The wizard teleport's gameplay-view
-restore then fired `tier_load` for the correct tier into the `$E000`
-window, evicting the ModalMisc wizard overlay; the redraw (resident)
-completed, but the restore helper's `rts` returned into the evicted
-window and executed tier data as code — nondeterministic: benign,
-spurious overlay load, or JAM (`$FFBE` in one trace). Fix:
-`tier_check_transition` now computes the containing tier directly for any
-out-of-range dlvl (single disk load, same bounds as the first-entry
-path), so `current_tier` can never lag behind dlvl and the
-modal-restore tier load can never fire spuriously. Regression tests:
-test_tier.s t16-t17 (multi-tier up/down), 17/17. Verified end-to-end
-with a scripted level-jump-to-20 + teleport product build: previously
-JAMmed, now completes with the dungeon correctly repainted. Gates:
-make test exit 0, make test128 137/137.
 
 ### Rubble blocks movement, and tunnelling needs no tool
 
@@ -722,74 +442,6 @@ Acceptance target:
   generated level strands a character without a digging tool; the bot's
   frozen suites hold.
 
-### Locked/stuck/spiked doors
-
-DONE 2026-09-06 (design approved 2026-09-04). All four steps shipped on
-all four platforms; change record in the session plan. (1) Per-door state
-lives in a position-keyed SoA side table (cap 16, beside the trap table in
-core/dungeon_features.s; locked 11-20, stuck = sign bit + magnitude, 1 on
-an open tile = broken); generation rolls state over place_secrets'
-leftover door scan (single rng_range(120) per leftover closed door:
-2/12 locked, 1/12 stuck, upstream distribution); new save block with
-SAVE_VERSION bump per platform and gated legacy read (old saves load
-all-plain). (2) Player semantics: door_try_open picks locks
-((skill-lock) > rng(100), Umoria-shaped disarm skill, +1 XP once, opens
-same turn) and refuses stuck doors; door_try_close refuses broken doors;
-bash_door uses Umoria's formula (STR + 75 fixed weight proxy,
-rng(chance*(20+|s|)) < 10*(chance-|s|), 50% break, step-through); WoD and
-destroy-traps-doors purge state. (3) Monster engine is state-aware:
-door-capable monsters pick locks (unlock only) and burst stuck doors
-(open + 50% break), non-capable bash gains |s| terms via the shared
-mts_state_roll helper; plain doors roll identically to before. (4) Iron
-Spike (item 135, ICAT_SPIKE, general store) and the CTRL+D (jam) command:
-VMS flat +20 magnitude per spike (locked becomes stuck, cap 127), Umoria
-turn policy, occupied doorway refuses via combat_msg_monster_in_way,
-spike consumed on success. Resident budget funded by approved cold-code
-moves (C64/Plus4 level-up magic + calc_spell_failure -> ModalMisc, picker
-chain GEN -> CHEST, C64 store_restock -> ModalMisc, C128 door-state code
- -> Default image, A2 msg_history -> aux RAM); jam handler parks in the
- C64 items overlay and the Plus4/A2 chest overlay, while C128 keeps it in
- resident Default RAM. The lock-pick roll lives beside its effective-disarm
- helper: cached Disarm on C128, Chest on the other product builds.
-Post-review fixes (2026-09-07): pick roll moved off resident (it called
-the overlay-parked disarm formula -> wild jump) and gained hopeless-skill
-guards (skill <= lock no longer wraps unsigned to always-succeed); jam
-key is CTRL+D on all platforms (CTRL+J was tried first, but the Apple IIe
-encoder emits $0A for both CTRL+J and the down-arrow key, so the chord is
-unreachable there; F was already gain-spell and first match wins; V is
-reserved for future work; SHIFT+C is character info); C64
-SCROLL_P3_ROUTER_ENABLED restored (accidentally dropped with the
-store_restock move, silently no-op'ing phase-3 scrolls). Gates: make test
-exit 0 (test64 195/195, C128 fast+smoke 10/10 each, testplus4 40/40, A2
-runtime 0 failures), make test128 137/137. Also hardened the Plus4
-disk-setup smoke harness against its $E000 window being shared with the
-KERNAL ROM (modal key reads bank ROM in for GETIN, firing window
-breakpoints on ROM keyboard code): pass/fail stops now count only when
-the Help overlay is live AND the instruction at PC matches the real
-function prologue.
-
-Post-review fixes (2026-09-10, multi-reviewer pass): (a) `mts_state_roll`
-returned success when monster hp exactly equalled the B term (`cmp`/`beq`
-exited through the carry-preserving epilogue with carry set); equality now
-explicitly `clc`s. Boundary tests t53-t55 added (red-green verified).
-(b) Phantom spike: `door_jam_at_target` consumed the spike and printed
-success even when the state table was full and `door_state_set_at`
-silently dropped the write; jamming a door with no entry now refuses
-(turn consumed, spike kept, new message) when `door_state_count` ==
-MAX_DOOR_STATES. C64 t64 pins it. (c) place_secrets' state roll used to
-scan at most the first MAX_DOOR_STATES leftover doors, which starved the
-table (~1/4 of rolls produce a state) and biased locked/stuck doors
-toward the top of the row-major map scan; a separate full-map pass now
-covers every leftover door and stops rolling only when the table fills
-(a subsequent bounded 32-door scan was also rejected). Deliberate RNG-stream
-change per DUNGEON_GENERATION_CONTRACT (draw count grows only on levels
-with >16 leftover closed doors; bounds/reduction unchanged: one
-rng_range(120) per rolled door, [0,20) locked mag 11+r/2, [60,70) stuck
-mag r-49). (d) Dead `mts_door_state` store removed; stale GEN-overlay and
-ICAT-range comments corrected. (e) item_defs' "stacks" claim removed —
-no item in this port merges slots; whether spikes should stack like
-upstream is an open design question (below).
-
 ### Disturb the player mid-turn when a monster bursts a door
 
 Upstream Umoria calls `playerDisturb(1,0)` when a monster bursts a door
@@ -806,111 +458,6 @@ Required work:
 - If pursued, add an explicit disturb hook at the two burst-print sites
   in `core/monster_ai.s` and verify rest/run interruption against the
   upstream mid-step timing.
-
-### Overlay callers of the gameplay-view restore can be evicted mid-flow
-
-The C64/Plus4/A2 gameplay-view restore (`ui_view_redraw_gameplay_view`,
-resident) calls `tier_restore_after_overlay`, which can load tier data
-into the shared `$E000` window. Modal overlays whose code lives in that
-window (wizard restore helpers, spell/item modal exit paths) continue
-executing there after the load — the window then holds tier data, not
-code, so the continuation is wild. Today this only fires when the tier
-is stale (after a tier-load failure, `current_tier=0`); the normal
-in-range path skips the load. Hardening options: move the small restore
-helpers resident, or have the restore reload the caller's overlay
-before returning. Exposed by the wizard-teleport freeze above; not
-triggered in normal play once the tier always matches dlvl.
-
-### Closing a door onto a monster's tile breaks attack targeting
-
-DONE 2026-09-04 (player report 2026-09-02). Both halves fixed to upstream
-parity. (a) `door_try_close` now resolves `FLAG_OCCUPIED` against the live
-monster table: a live monster in the doorway refuses the close with "The
-<name> is in your way!" (new `combat_msg_monster_in_way` helper + plain-text
-suffix, VMS `closeobject` / Umoria `playerCloseDoor` parity, turn still
-consumed per both oracles), while a stale flag is repaired and the close
-proceeds (same repair semantics as `player_move_check_live_occupant`). The
-helper resolves `cmb_type` from the blocking slot before composing:
-`combat_append_monster_name` reads `cmb_type`, which is stale outside combat
-(play-test 2026-09-04: a Cloud Giant blocking the door was named "Balrog"
-from the previous level's combat). (b)
-`player_try_move` now checks `FLAG_OCCUPIED` before walkability (VMS
-`move_char` checks `cptr` before door/floor handling), so bumping a monster
-standing on a closed door — or any blocked tile — routes to
-`player_attack_monster`; Umoria's unlit-monster free-turn carve-out is not
-followed (VMS is the default oracle and Moria8 already attacks unseen
-monsters on floor). `door_try_open` on an occupied closed door is unchanged:
-the state is unreachable once close refuses. Placement: the helper parks in
-the A2 resident Default and C128 C128ResidentWorld next to its caller via the
-new `CMB_IN_WAY_EXTERNAL` define (A2 play slot and C128 play payload were
-both full); C128 keeps the string in C128ResidentItems via the existing
-`COMBAT_STRINGS_EXTERNAL` path. Coverage: test_dungeon.s t46-t51 (unoccupied
-close regression, occupied refusal with tile/turn assertions, stale-flag
-repair, closed-door bump routes to attack with coordinates, unoccupied
-closed-door bump stays blocked, occupied-floor attack regression; t47 also
-pins the refusal message content against a seeded stale cmb_type); harness
-count 45→51. Regression repairs: test_chest_loot.s drops its unused
-ui_character.s import (same pattern as 7710268) to stay under its map-write
-boundary; test_item_ui.s/test_monster_attack.s/test_ui_views_filters.s gain
-link stubs. Gates: make build all four platforms; test64 195/195; test128
-137/137 (town-move diag labels reordered with the flow, harness validation
-is order-insensitive); test128-fast/test128-fast-smoke 10/10; testplus4
-40/40; A2 MAME runtime all scenarios 0 failures; check-hal-boundaries green.
-
-### Apple IIe resident RAM expansion
-
-DONE 2026-09-02 (first tranche). The spell-execution engines
-`player_magic_map.s` (`eff_map_area`, 362 B) and
-`player_magic_earthquake.s` (`eff_earthquake`, 110 B) moved from the
-resident image into the A2 death overlay beside `player_destroy_area.s`,
-behind new resident swap trampolines (`tramp_eff_map_area`,
-`tramp_eff_earthquake`, same OVL_DEATH-load + OVL.SPELL-restore pattern as
-WoD's `tramp_eff_destroy_area`); the execute-overlay call site now routes
-through `PMX_MAP_AREA_TARGET` (`PMX_MAP_AREA_TRAMPOLINE` set only on A2).
-Result: resident ends `$7954` (684 B free, was `$7BA7` with 89 B free),
-unblocking the monster door engine on A2 and funding several future items.
-The death overlay is 4,139 B (window cap 5,632 B). The durable big lever
-remains aux code execution (policy change + execution-safety analysis +
-MAME verification) if overlay externalization runs out.
-
-### Add upstream monster sleep immunity
-
-VMS Moria and Umoria represent magical sleep immunity independently from a
-creature's ordinary starting sleep value. Their `CD_NO_SLEEP` defense prevents
-Sleep I, Sleep II, Sleep III, Sanctuary, and other monster-sleep effects from
-changing the monster's sleep state. Moria8 now implements shared level
-resistance for its sleep spell family, but its one-byte `cr_mflags` table has no
-remaining bit for `CD_NO_SLEEP`. Treating `cr_sleep = 0` as immunity would be
-incorrect because natural alertness and magical sleep immunity are separate
-upstream properties.
-
-Required work:
-
-- Add a compact independent sleep-immunity representation without overloading
-  `cr_sleep` or changing existing `cr_mflags` meanings.
-- Update `tools/parse_creatures.py` and every generated creature tier payload
-  to preserve upstream `cdefense & $1000` / `CD_NO_SLEEP` data.
-- Update tier loading, embedded test rosters, table-size assertions, C128 cache
-  ownership, and disk payload accounting for the selected representation.
-- Route every monster-sleep producer through one shared resistance check that
-  handles both monster level and categorical sleep immunity.
-- Leave immune monsters' `MF_AWAKE` and `MX_SLEEP_CUR` unchanged and report the
-  effect as ineffective through the existing sleep feedback path.
-- Decide whether and how observing immunity updates Moria8 monster recall;
-  Umoria records observed `CD_NO_SLEEP` for visible monsters.
-- Add production-path C64, C128, and Plus/4 tests for susceptible, level-
-  resistant, and immune monsters across directional, adjacent, and visible-all
-  sleep effects, including an immune monster with a nonzero natural sleep
-  value.
-- Preserve all resident, overlay, tier-cache, and banked-payload memory
-  assertions.
-
-Acceptance target:
-
-- Every shipped creature carrying upstream `CD_NO_SLEEP` is immune to magical
-  sleep on all three platforms, ordinary sleep values retain their original
-  meaning, and susceptible creatures continue to use the shared level-
-  resistance behavior.
 
 ### Align shared monster distance with upstream
 
@@ -931,8 +478,7 @@ Required work:
 - Decide separately whether visibility, infravision, projectile range, and
   group-wake radius should retain their current Chebyshev metrics or converge
   on the same upstream distance function.
-- Preserve the C64/C128 resident layout boundaries; both currently have only a
-  five-byte margin at their primary resident boundary.
+- Preserve the C64/C128 resident layout boundaries.
 
 Acceptance target:
 
@@ -940,144 +486,55 @@ Acceptance target:
   with explicit tests for diagonal boundaries and no regressions in visibility,
   targeting, or platform memory layout.
 
-### Implement invisible monster visibility
-
-The catalog includes the upstream invisible-movement roster, including Clear
-Icky-Thing, Poltergeist, ghosts, spirits, quasits, oozes, Quylthulgs, the
-Invisible Stalker, Evil Iggy, and the Balrog. The Ring of See Invisible plus
-Sense Invisible already expose player-side see-invisible state, but monster
-invisibility is not currently preserved or consumed: the generated monster
-flags do not carry the upstream invisible-movement bit, and `PFLAG_SEE_INVIS`
-does not affect monster visibility, rendering, detection, or targeting.
-
-Required work:
-
-- Add an explicit invisible-monster flag or generated sidecar without
-  overloading `CF_INFRA` or changing the existing one-byte monster-flag budget
-  unsafely.
-- Preserve the upstream invisible-movement bit for every affected creature in
-  the source data and generated tier data.
-- Update the authoritative monster visibility producer so ordinary LOS hides
-  invisible monsters unless the player has Ring of See Invisible or an active
-  Sense Invisible effect.
-- Define and preserve the distinction between ordinary visibility, infravision,
-  detection, inspection, and targeting; revealing a monster must not silently
-  reveal terrain or imply Detect Monsters.
-- Ensure renderers, target selection, melee/ranged attacks, and monster
-  inspection consume the same authoritative visibility state.
-- Add production-path C64, C128, Plus/4, and Apple IIe coverage for hidden and
-  revealed Invisible Stalkers, including ring equip/remove and temporary Sense
-  Invisible expiry.
-- Preserve resident, overlay, tier-cache, save/load, and platform memory
-  assertions.
-
-Acceptance target:
-
-- Every upstream invisible creature remains hidden and unavailable to ordinary
-  targeting without See Invisible, becomes visible and targetable with the
-  ring or active spell, retains normal LOS/terrain rules, and behaves
-  consistently on every platform.
-
-### Bring Word of Destruction up to upstream area-devastation
-
-DONE 2026-08-30. `eff_destroy_area` now runs the shared upstream-style
-devastation engine (`core/player_destroy_area.s`): 15-radius terrain reroll
-(floor/WALL_H/MAGMA/QUARTZ via upstream typ odds, boundary edges spared,
-player tile forced floor, upstream distance metric), silent deletion of
-in-radius monsters (no XP, no winner flag), floor items, glyphs, and traps,
-room_lit clearing, additive 11..20 blindness with 255 clamp, and the
-upstream blast message; town applies message+blind only. Placed per platform
-(C64 spell overlay, C128 chest overlay + `tramp_eff_destroy_area`,
-Plus/4 modal-misc + restore-OVL_SPELL trampoline, Apple IIe death overlay +
-restore-OVL_SPELL trampoline). Coverage: `test_word_of_destruction.s` (7
-tests, production dispatch), `test_word_of_destruction128.s`; earthquake
-regressions added to `test_utility_effects.s` (attack-only 3000 path, edge
-guard, player-tile skip); scroll/staff routing remains spy-proven in
-`test_scroll_p3.s` (exemption: that suite cannot host the engine; effect
-proven via the WoD suites). Plus/4 and Apple IIe runtime coverage exempted
-on shared-source + layout-assert evidence; gates `make test64`,
-`make test128-fast`, `make test128-fast-smoke`, `make test128`,
-`make testplus4`, `make testapple2`, `make test` all pass.
-
 ### Add Balrog victory and retirement flow
 
-Status: implemented in product code; coverage landed 2026-08-20 except as
-noted. C64: `test_balrog_victory.s` (combat_note_kill guards, eff_kill_monster
-choke point, once-only message), melee kill wiring (`test_combat` t41), bash
-kill wiring (`test_bash` t9), hiscore winner marker (`test_score` t12), and
-dispatch cases for save-blocked and quit-to-retirement (`test_main_loop`
-t43/t44). C128: the same two dispatch cases in `test_main_loop128` (t33/t34).
-Plus/4: `balrog_product_plus4` scripted product smoke (deterministic one-HP
-Balrog fixture at level gen, real bump-attack kill, winner flag, save-block
-message). Apple IIe: `balrog_victory` MAME scenario (stock image; Lua rewrites
-a level-spawned slot into a one-HP stunned Balrog after generation settles,
-real bump-attack kill, winner flag, save-block), 3/3 consecutive passes.
-
-Moria8 ships the Balrog as the level-100 endgame monster. Killing it now sets a
-winner flag, prints a victory notice, blocks ordinary save-and-quit, and routes
-Shift+Q through retirement, royal art, and winner score treatment.
-
-Upstream behavior:
-
-- VMS Moria sets `total_winner` when the Balrog dies, prints congratulations,
-  and tells the player to quit when ready.
-- Umoria sets `game.total_winner`, prints `*** CONGRATULATIONS *** You have
-  won the game.`, and tells the player the game cannot be saved but may be
-  retired.
-- Save-and-exit is blocked for total winners; the character must retire.
-- Final exit uses the royal/winner death-screen path and enters the score table
-  as a winner.
-
-Implemented behavior:
-
-- `CREATURE_BALROG` and `CREATURE_BALROG_TIER` are generated from creature data,
-  with assembly asserts guarding the win-creature invariant.
-- Balrog death through melee, spell/effect kill helpers, earthquake/dispel paths,
-  and bash sets `GAME_FLAG_WINNER`.
-- Save-and-exit is blocked for total winners; the character must retire.
-- Retirement applies the compact winner bonus, shows the royal overlay, and
-  records the score with a winner marker.
+Product support and cross-port victory coverage are shipped: killing the Balrog
+(`catalog_slot_is_balrog` / `CATALOG_BALROG_ID`, `core/monster_catalog.s`,
+`core/combat.s` `combat_note_kill`, and `catalog_place_win_creature`) sets
+`GAME_FLAG_WINNER`, prints the victory notice, blocks ordinary save-and-exit,
+and routes `SHIFT+Q` through retirement, the royal overlay
+(`score_death_screen`, `core/score.s`), and the winner high-score marker across
+all seven ports (`test_balrog_victory.s`, `test_combat` `t41`, `test_bash` `t9`,
+`test_score` `t12`, `test_main_loop` `t43-t44`, C128 `test_main_loop128`
+`t33-t34`, Plus/4 `balrog_product_plus4`, and the Apple IIe, CX16, Atari 8-bit,
+and BBC Master `balrog_victory` smoke scenarios).
 
 Remaining work:
 
-- Add C64/C128/Plus/4 coverage for Balrog kill detection, winner-state display,
-  save blocking or chosen save behavior, retirement, score insertion, and
-  wizard/no-rank interaction.
+- Add focused C64/C128/Plus/4 coverage for the royal-retirement winner display
+  (`score_death_screen` with `GAME_FLAG_WINNER`) and `GAME_FLAG_WIZARD +
+  GAME_FLAG_WINNER` suppressing high-score insertion.
 
 Acceptance target:
 
-- Killing the Balrog is visibly and mechanically the win condition on every
-  supported Commodore platform, with documented retirement/save behavior and no
-  ordinary monster-kill continuation.
+- Royal-retirement presentation and wizard-mode score suppression for a
+  `GAME_FLAG_WINNER` character have automated Commodore coverage alongside the
+  existing kill, save-block, and high-score tests.
 
 ### Split Home/store screen ownership
 
-The Home screen currently reuses the store renderer, then overrides the store
-footer. That previously produced stale footer text such as `Q)uituit` because
-the store renderer drew row 18 first and Home replaced it with shorter text
-afterward. That visible bug is fixed: Home clears row 18 before drawing the Home
-footer. The remaining issue is architectural ownership. Home should not call a
-renderer that draws the wrong footer in the first place.
+Phase 2 enabled `HOME_OVERLAY_SEPARATE` (`ovl.home`) across all seven shipping
+ports: `home_draw_screen` (`core/ui_home.s`) and `store_draw_screen`
+(`core/ui_store.s`) now share body macros (`core/ui_home_text.s`
+`:StoreDrawSlotListBody`, `:StorePutGoldValueBody`) and draw their own titles
+and footers independently in product builds.
 
-The broader screen-clear audit was handled during the v1.1.0 release-candidate
-work. Title entry now has an explicit full-screen clear and below-menu clear
-contract, C128 title-cache redraws use the same contract, and modal gameplay
-restore uses the platform-safe full-screen clear path. The remaining cleanup is
-the older Home/store renderer ownership problem.
+Remaining cleanup:
 
-Required work:
-
-- Split shared store/Home drawing so the item/body layout and footer/menu
-  drawing have separate ownership.
-- Remove the Home-specific row-clear patch once Home no longer calls a renderer
-  that draws the wrong footer.
-- Add focused regression coverage proving Home cannot inherit stale Store footer
-  text or color residue.
+- Retire the legacy `#if !HOME_OVERLAY_SEPARATE` fallback (`core/ui_home.s`,
+  `core/ui_store.s`, `core/ui_home_text.s`) where `home_enter` still calls
+  `store_draw_screen` and overwrites `STORE_MENU_ROW`.
+- Drop the 3-space overwrite padding on `hm_menu_str`
+  (`core/ui_home_text.s:178-180`) once nothing writes it over the Store menu.
+- Switch `test_home_view` (`platforms/commodore/c64/tests/test_ui_views.s`) onto
+  the `HOME_OVERLAY_SEPARATE` `home_draw_screen` path and assert that Home
+  cannot inherit stale Store footer text or color residue.
 
 Acceptance target:
 
 - Store and Home draw their shared body without either view writing the other's
-  footer, and no Home path depends on clearing over stale Store text.
+  footer in product or unit-test builds, and `!HOME_OVERLAY_SEPARATE` is
+  retired.
 
 ### Friendlier Commodore I/O error messages
 
@@ -1114,20 +571,22 @@ Acceptance target:
 ### CHKIN on a file the drive refused can hang the Commodore ports
 
 Seven places OPENed a file that may not exist, then CHKIN it without asking
-the drive whether the OPEN worked. Five are fixed
-(`HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE`): the save-slot probe
-(`common/save_slot_menu.s`) opens channel 15 first and reads the status
-before any CHKIN (asking again when the read times out before a digit
-comes: `status_retry_slot`); `save_file_exists`, now `storage_file_exists`
-for any name (`platforms/shared/save.s`), asks the drive instead of reading
-the file; and the save-disk marker reads ask it first on all three ports
-(2026-10-31: C64 `c64_disk_marker_present` and Plus/4
+the drive whether the OPEN worked. Six are fixed
+(`HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE`, `HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE`):
+the save-slot probe (`common/save_slot_menu.s`) opens channel 15 first and
+reads the status before any CHKIN (asking again when the read times out before
+a digit comes: `status_retry_slot`); `save_file_exists`, now
+`storage_file_exists` for any name (`platforms/shared/save.s`), asks the drive
+instead of reading the file; the C64 program-media probe
+(`common/disk_setup_banked.s` `disk_program_media_present`) asks via
+`storage_file_exists`; and the save-disk marker reads ask it first on all three
+ports (2026-10-31: C64 `c64_disk_marker_present` and Plus/4
 `plus4_storage_marker_present` through `storage_file_exists`, C128
 `disk_marker_present` with channel 15 open, as the slot probe).
 `slot2_save_product_smoke` and `single_drive_fresh_save_no_init_product_smoke`,
 which hung as code moved, pass with 0-12 and 0-8 bytes of padding ahead of
-them. Two remain: the C64 program-media read probe
-(`common/disk_setup_banked.s`) and `load_game` (`platforms/shared/save.s`).
+them. One remains: `load_game` (`platforms/shared/save.s`), plus non-C64
+`!HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE` callers if enabled.
 If the drive has already failed the OPEN (`62 FILE NOT FOUND`) when CHKIN's
 TALK arrives, it stays idle and the KERNAL's talker turnaround waits for it
 forever (no timeout).
@@ -1146,14 +605,11 @@ nameless channel-15 OPEN).
 
 Required work:
 
-- Keep the command channel open around each such OPEN: open 15, OPEN the file,
-  read the status on the open channel, CHKIN only on `00`-`19`, then close the
-  file and 15. Split each port's status reader into open/read/close steps.
-- Fit the C64 detect-evil and dungeon-spell test builds (`$BFFA` and `$BFF9`
-  on 2026-10-31: six and seven bytes below `$C000`), the Plus/4
-  wand-selector and chest-open test builds (`$C7F7` and `$C7F3`: nine and
-  thirteen bytes below `MAP_BASE`), and the C128 `C128ResidentDiskIo`
-  segment.
+- Keep the command channel open around `load_game`'s OPEN: open 15, OPEN the
+  file, read the status on the open channel, CHKIN only on `00`-`19`, then
+  close the file and 15. Split each port's status reader into open/read/close
+  steps.
+- Fit the C128 `C128ResidentDiskIo` and `StorageOverlay` budgets.
 - Then move `c64_storage_read_command_status` onto the shared
   `storage_status_from_dos_digits`, as C128 and Plus/4 already are; it was
   reverted because the timing shift exposed this hang. Until then C64 keeps an
@@ -1270,34 +726,13 @@ Acceptance target:
   supported Commodore platform, with enough diagnostic detail for user support
   and hardware-feature verification.
 
-### Expand monster catalog toward full Umoria roster
-
-Moria8 currently ships with 120 selected creatures from Umoria's 279-creature
-catalog. Expanding toward the full roster requires more than adding data files.
-
-Required work:
-
-- Redesign creature tier partitioning beyond the current four dungeon tiers.
-- Add stable global creature IDs instead of relying only on active-tier-local
-  creature indices.
-- Rework monster recall persistence around global creature identity.
-- Adjust C128 tier cache/preload ownership or switch to selective tier loading.
-- Review C64 disk/REU tier loading for larger or more numerous tier files.
-- Expand imported monster attack/spell behavior where current mappings collapse
-  Umoria effects into simplified Commodore behavior.
-
-Acceptance target:
-
-- Full or substantially expanded Umoria creature roster can appear at the
-  appropriate dungeon depths without breaking C64/C128 memory, loading, save,
-  recall, or monster behavior contracts.
-
 ### Byte recovery held back for speed or disk loads (2026-11-07)
 
 The 2026-11-07 memory pass (for the potions of gain stat) applied every
 candidate that kept the game as fast and loaded no more from disk. The
-maintainer held these three until they are needed ("hold off on any that are
-not and backlog them"). Estimates are the memory analysis's, not measured.
+maintainer held these remaining two until they are needed ("hold off on any
+that are not and backlog them"). Estimates are the memory analysis's, not
+measured.
 
 - **Phase-3 potion handlers into an overlay (~190 B resident on C64, Plus/4,
   Atari).** The eight special potions' handlers
@@ -1307,48 +742,69 @@ not and backlog them"). Estimates are the memory analysis's, not measured.
   A load-once home (Atari's `RuntimeBanked`, where the gain-stat effect went)
   costs no disk load, but C64's `RuntimeBanked` has 65 B free and Plus/4's needs a
   ROM-banking trampoline.
-- **`core/dungeon_los.s` row pointers and room bounds (~56 B).** APPLIED
-  2026-11-08, for the Atari's room for the faithful breath (49 B a port).
-  Four inline `map_row_lo/hi` loads became `jsr map_row_ptr0_x`, and the
-  room bounds of `light_room_x` and `reveal_room` became
-  `vis_room_bounds_x`. Each call adds 12 cycles:
-  - once per visibility row (`update_visibility`, a few rows a turn);
-  - once per room lit or revealed;
-  - about 100 cycles a turn in all.
-- **C128 save/load per-byte step (~68 B in `128.runtime`).** The checksum,
-  pointer and counter tail shared by `save_stage_from_ptr0_c128`,
+- **C128 save/load per-byte step (~68 B in `platforms/shared/save.s`).** The
+  checksum, pointer and counter tail shared by `save_stage_from_ptr0_c128`,
   `load_unstage_to_ptr0_c128`, `save_stage_map_c128` and
   `load_unstage_map_c128` (`platforms/shared/save.s`) becomes one
   subroutine: 12 cycles more for every byte saved or loaded (~0.1-0.2 s a
-  save, beside the disk time). `128.runtime` had 5 B free.
+  save, beside the disk time).
 
 Acceptance target:
 
 - Each is applied only when a feature needs the room, with its cost measured
   (cycles on the hot path, or the disk loads added) and accepted.
 
+### Optional: C128 64 KB VDC auto-detection and full disk-asset caching
+
+C128DCR (`8568`) and upgraded flat C128 (`8563`) machines provide `64 KB` of
+physical VDC RAM (`$0000-$FFFF`, adding `+48 KB` at `$4000-$FFFF`), whereas
+stock flat C128s provide `16 KB` (`$0000-$3FFF`). C128 never uses REU
+(`reu_present = 0`). On `16 KB` VDC disk builds (`docs/C128_MEMORY_CONTRACT.md`
+`C128M-015`, `platforms/commodore/c128/item_cat_vdc128.s`), Bank 1 RAM plus
+`16 KB` VDC RAM (`$1100-$1FFF` and unused cell scanlines `8..15` at
+`$2008-$3D2C`) already cache `128.CAT`/`128.CNM`/`128.CEX`, `ITEM.CAT`,
+`128.HUFF`, and 8 of 12 `$E000` overlays, leaving only `ovl.storage`,
+`ovl.chest`, `ovl.home`, `ovl.start`, `legalui` (plus `license,s` /
+`source-offer,s`), and the `$AF00-$CFFF` `128.play`/`128.persist` modal-slot
+pair (`~36 KB` total) on disk.
+
+Hardware guardrail: toggling VDC Register 28 (`$1C`) bit 4 (`4416` 16K vs
+`4164`/`4464` 64K DRAM row/column mux) alters row/column addressing across
+`$0000-$3FFF` as well. The `64 KB` vs `16 KB` probe (`$1100` vs `$5100`
+non-aliasing pattern + bit-flip test) must therefore run once at early cold
+boot in `entry_main` *before* `JDLCHR` (`$FF62`) copies the `$2000-$3FFF`
+charsets, screen/attribute init, and `ITEM.CAT` preload — restoring Reg 28
+bit 4 = `0` immediately when `16 KB` aliases, and preserving Reg 28 bit 4 = `1`
+across any subsequent `JDLCHR` call when `64 KB` is present.
+
+Required work:
+
+- Add an early-boot `64 KB` vs `16 KB` VDC probe (`vdc_64k_present` in
+  `entry_main`); keep `16 KB` behavior (`C128M-015`) identical when
+  `vdc_64k_present = 0` (and keep `C128_CARTRIDGE` asset reads on MD128 ROM).
+- When `vdc_64k_present = 1` on disk builds: store `ITEM.CAT` contiguously at
+  VDC `$4000+` (for a linear byte reader) and preload the remaining uncached
+  `$E000` overlays (`OVL_STORAGE`, `OVL_CHEST`, `OVL_HOME`, `OVL_STARTUP`,
+  `legalui`, and legal text streams if Help `L` / Title `A` also stay
+  disk-free) plus `128.play` and `128.persist` into `$6000-$FFFF`, bypassing
+  `disk_prompt_game` / `"INSERT PROGRAM DISK"` swaps so single-drive C128
+  players can leave their Save Disk in Drive 8 after boot.
+- Display `64KB VDC` vs `16KB VDC` on the C128 title/system-info readout
+  (`title_show_sysinfo_banked`).
+- Update `docs/C128_MEMORY_CONTRACT.md` (CPU + Physical VDC records and
+  overlap `.assert`s in `memory128.s`) and add headless `x128` runtime smokes
+  covering both `-vdc16k` and `-vdc64k`, including single-drive save/resume
+  without program-disk reinsert on `-vdc64k`.
+
+Acceptance target:
+
+- Stock `-vdc16k` C128 disk builds behave identically to `C128M-015`, while
+  `-vdc64k` disk builds report `64KB VDC`, perform zero post-boot program-disk
+  reads across all overlays and `128.play`/`128.persist` transitions, and
+  complete single-drive Drive 8 save/load/resume cycles without program-disk
+  swaps.
+
 ## Apple IIe
-
-### Fix wizard summon in town rendering as `@` / unknown `?`
-
-DONE 2026-09-04. Root cause was hypothesis 1, on every platform (not just
-A2): in town (dlvl 0) `pick_creature_type` falls back to dungeon index 0,
-but no tier is loaded in town so the dungeon roster rows are all zero —
-glyph `$00` renders as `@` and the null name pointer prints `?`. Fix at the
-picker layer (`pick_wizard_summon_creature_type` in `core/tier_manager.s`),
-not the renderer: in town, wizard summon now picks a random town creature
-from the always-resident town roster (`TOWN_CREATURE_BASE +
-rng_range(TOWN_CREATURE_COUNT)`); dungeon behavior (level-appropriate pick,
-Balrog at DL100+) is unchanged. Maintainer decision 2026-09-04: town summon
-produces a random town creature (no upstream oracle; wizard mode is
-Moria8-owned). Coverage: C64 test_tier.s t15 pins the town-picker range and
-the DL100 Balrog path; new A2 MAME scenario `wizard_summon_town` asserts the
-summoned slot is adjacent, town-roster typed, and has a nonzero glyph and
-name pointer (reproduced the bug against the unfixed image: type 0, zero
-glyph, null name). test_tier128.s gained town-roster const/rng stubs for its
-minimal tier_manager import. Gates: make test (exit 0; test64 195/195, C128
-fast batch PASS, fast-smoke 10/10, testplus4 40/40, A2 runtime incl. the new
-scenario 0 failures), make test128 137/137.
 
 ### Investigate AppleSqueezer accelerator incompatibility
 
@@ -1520,44 +976,41 @@ Acceptance target:
 
 ### Normalize cross-platform save schema and versioning
 
-The shared serializer currently interprets a platform-local version byte:
-C64 and Apple IIe use the `$0f` lineage, C128 uses the `$10` lineage with
-platform-specific migrations, and Plus/4 uses the `$01` lineage. This preserves
-existing saves but makes one shared format harder to audit because the same
-schema milestone has a different numeric version on each platform.
+Save Format V2 (`$21` across all seven `hal/storage_policy.s` files) unified the
+numeric save-version sequence and retired pre-V2 migration branches, but six of
+the seven ports (`80x48` C64 and Atari 8-bit alongside `198x66` C128, Apple IIe,
+CX16, and BBC Master) still share the identical `"MORIA01"` magic prefix with no
+explicit platform/map-layout identifier in the header (only Plus/4 uses
+`"MORIA+4"`).
 
 Required work:
 
-- Define one global save-schema version sequence and an explicit platform/layout
-  identifier for data that cannot be shared across map sizes or memory models.
-- Inventory every existing platform-local version and map it to the equivalent
-  global schema and platform-specific migration steps.
-- Preserve loading of every still-supported legacy version; do not renumber
-  persisted versions in place or infer platform solely from record length.
-- Centralize format milestones so shared serialization code does not depend on
-  independently numbered platform constants.
+- Add an explicit platform/map-layout identifier in the save header so a save
+  written for a different map geometry (`80x48` vs `198x66`) is rejected by
+  header rather than failing only at EOF/checksum.
+- Centralize format milestones in one shared manifest once post-release
+  migrations return.
 - Add cross-platform schema fixtures and negative tests for wrong-platform,
   unknown-version, truncated, and malformed-but-checksummed saves.
 
 Acceptance target:
 
 - Every new save carries an unambiguous global schema version and platform/layout
-  identity, all supported legacy saves migrate correctly, and one manifest
-  documents and tests the complete format history.
+  identity, and one manifest documents and tests the format and negative cases.
 
 ### Archive legacy-version save fixtures for migration testing
 
-Save-version bumps (e.g. `SAVE_DOOR_STATE_VERSION`, 2026-09 doors phase) are
-covered by unit tests (`test_save.s` legacy-stream alignment, zeroed door
-table on old versions), but no test loads a genuine binary save produced by a
-historical release. A stream-alignment slip between versions would only
+Save-version validation is covered by unit tests (`test_save.s`), and
+pre-release Save Format V2 (`$21`) currently accepts only `SAVE_VERSION`
+(`save_version_supported`), but once shipping releases introduce
+backward-compatible save upgrades, no test loads a genuine binary save produced
+by a historical release. A stream-alignment slip between versions would only
 surface as garbled inventory/state when a player upgrades with an old save.
 
 Required work:
 
-- Capture real save files from the last release of each platform (C64/C128/
-  Plus/4 disk images, Apple IIe ProDOS save) at each still-supported legacy
-  version and commit them as test fixtures.
+- Capture real save files from shipping releases of each platform at each
+  supported legacy version and commit them as test fixtures.
 - Add a per-platform harness step that loads each legacy fixture, migrates,
   saves, and verifies key invariants (player stats, inventory ids/quantities,
   dlvl, gold) against recorded expectations.
@@ -1567,7 +1020,7 @@ Required work:
 Acceptance target:
 
 - Every supported save-version upgrade path has at least one archived
-  binary fixture that loads cleanly on the current build on all four
+  binary fixture that loads cleanly on the current build across all supported
   platforms.
 
 ### Collapse disk matrix execution into one shared runner
@@ -1614,69 +1067,32 @@ filesystem) and fault injection at their `hal_asset_load_prg_header`, with
 each port's save-disk flow. Also missing on every port: the hall of fame
 written on death or retirement.
 
-### Fix Plus/4 disarm scripted-build crash
+### Guard C64 CRT against interactive VICE writeback
 
-DONE 2026-09-04. Root cause: `run_disarm_smoke` built its scripted-boot d64
-without `4.start` (the chargen overlay) — it was the only chargen-driven
-Plus4 smoke missing it. `tramp_player_create` ignores the `overlay_load`
-failure and JSRs into the $E000 window regardless, so chargen landed on
-whatever the window happened to hold from boot timing (~25% wild JSR).
-Fix: the smoke's disk now includes `4.start` like every other chargen smoke.
-Verified deterministic: 12/12 isolated runs pass (previously ~25% crash
-rate), and the full `make testplus4` gate is 40/40. Product-side hardening
-(guarding the `tramp_player_create` jump on overlay_load failure) remains
-optional future work; shipping disks always carry 4.start.
-
-### Split BBC Master `item_actions` smoke scenario (and guard C64 CRT against VICE writeback)
-
-`bbcm:item_actions` (`platforms/bbcmaster/harness_smoke.py`) has grown to 49
-assertions across 11 sub-flows (ANDY corpus check, wizard gain, quaff,
-cursed/uncursed weapon exchange, Wand of Stinking Cloud, Wands 153/154, Scroll
-of Recharging via `?`, Scroll of Genocide, Scroll of Identify, and Crown of the
-Magi wear/take-off). Standalone `make testbbcmaster` passes all 17 scenarios
-within the 30-second cap, but under `make -j7 -O test` — where all seven
-platform stages and nested Commodore VICE worker pools run concurrently — MAME
-`bbcm` hits the 30-second host wall-clock cap while still making forward
-progress (`genocide_read_prompt`, 2026-11-12).
-
-In the same parallel run, an earlier interactive VICE exit had rewritten
-`build/moria8-c64.crt` in-place in sparse EasyFlash format (15 CHIP blocks,
-updating mtime past `build/c64-cart/.main.stamp`), causing
-`tools/check_easyflash.py` (`len(chips) == 128`) to fail until the stale `.crt`
-was deleted and rebuilt.
+`bbcm:item_actions` was split into `item_actions` and `equip_flags`
+(`platforms/bbcmaster/harness_smoke.py`), and `tools/make_easyflash.py` /
+`tools/check_easyflash.py` now emit and verify sparse EasyFlash CHIP blocks
+(`4180dcd`). However, running `build/moria8-c64.crt` directly in VICE without
+`+easyflashcrtwrite` (`playtest/moria_playtest/launch.py:236` or interactive
+`x64sc -cartcrt`) still allows VICE to rewrite `build/moria8-c64.crt` in-place
+on exit and advance its mtime past `build/c64-cart/.main.stamp`.
 
 Required work:
 
-- Split `bbcm:item_actions` in `platforms/bbcmaster/harness_smoke.py` into two
-  shorter scenarios (e.g. `item_actions` and `wand_scroll_actions`) and update
-  `SCENARIOS` / `selftest()` so each finishes with margin below 30 seconds
-  under `make -j7 -O test`.
-- Guard `build/moria8-c64.crt` against interactive VICE writeback (e.g. run
-  interactive cartridge targets against a scratch copy or rebuild when the
-  `.crt` does not match `build/moria8-c64.json`).
+- Guard `build/moria8-c64.crt` against interactive/playtest VICE writeback
+  (e.g. pass `+easyflashcrtwrite` in `playtest/moria_playtest/launch.py`, run
+  interactive cartridge targets against a scratch copy, or rebuild when the
+  `.crt` does not match `build/c64-cart`).
 
 ## Rendering Performance (Px)
 
 Tracked candidates from the 2026-07-25 cross-platform render performance
 audit (hand-counted cycle estimates; full analysis in
-`docs/APPLE2_PORT.md` and `docs/C128_PERFORMANCE.md`). Status as of
-2026-07-28:
+`docs/APPLE2_PORT.md` and `docs/C128_PERFORMANCE.md`):
 
-- **P5** — ~~Tile-level scene-dirty list in core (all platforms).~~ DONE
-  2026-07-28 (immediate tile render at mark time + cheap-path scene
-  dispatch; see APPLE2_PORT.md).
-- **P6** — ~~`a2_map_char` branch-chain -> 256-byte lookup table (A2).~~
-  DONE 2026-07-29 as a 128-byte staged table: master in A2AuxData,
-  block-read into the `a2_ss_buf` tail once per `render_viewport`; ~19
-  cy/cell saved; resident cost +31 B recovered by thunk-install and
-  `screen_clear` dedups (see APPLE2_PORT.md).
 - **P7** — VDC block-fill for `screen_clear` / `screen_clear_row` (C128).
   **BACKLOGGED** (maintainer, 2026-07-28). Revisit the reverted "Opt 5";
   requires root-causing the past character-creation crash first.
-- **P8** — ~~X-split cell-write loops on A2 (drop the per-cell `php/plp`
-  parity shuffle in render_viewport staging).~~ DONE 2026-07-29
-  (parity branch moved before `a2_map_char`; ~7 cy/cell, byte-neutral;
-  see APPLE2_PORT.md).
 - **P9** — Burst variant of `render_single_tile` for C128 local-area
   updates (batch consecutive cells under one VDC address setup).
   **BACKLOGGED** (maintainer, 2026-07-28). ~400 -> ~45 cy/cell on the
@@ -1691,7 +1107,9 @@ audit (hand-counted cycle estimates; full analysis in
 
 Completed: P1 (glyph/item scan early-outs), P2 (A2 AUX row block read),
 P3 (C128 leftward block-copy + V-strip burst), P4 (A2 scroll-delta
-renderer + V half-row overflow fix).
+renderer + V half-row overflow fix), P5 (immediate tile render at mark
+time + cheap-path scene dispatch), P6 (A2 128-byte staged `a2_map_char`
+table), P8 (A2 parity branch before `a2_map_char`).
 
 ## Data Width
 

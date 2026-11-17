@@ -121,9 +121,7 @@ test_start:
     dex
     bpl !set10-
 
-    lda #1
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
+    jsr player_bake_creation_stats
 
     // Check: STR should be 10+0+5 = 15
     lda player_data + PL_STR_CUR
@@ -171,9 +169,7 @@ test_start:
     dex
     bpl !set10b-
 
-    lda #1
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
+    jsr player_bake_creation_stats
 
     // STR: 10+2-3 = 9
     lda player_data + PL_STR_CUR
@@ -253,9 +249,7 @@ test_start:
     dex
     bpl !set18-
 
-    lda #1
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
+    jsr player_bake_creation_stats
 
     // STR must be >= 19 (entered 18/xx range)
     lda player_data + PL_STR_CUR

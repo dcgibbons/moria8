@@ -447,3 +447,7 @@ icr_hash: .text "#"
 icr_name: .text "ITEM.CAT"
 icr_name_end:
 #endif
+
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+#import "item_pickup_cache.s"
+#endif

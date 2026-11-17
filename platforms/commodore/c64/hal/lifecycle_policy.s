@@ -6,7 +6,12 @@
 .const hal_platform_string_bank_load_invalidates_tier = 1
 .const hal_platform_character_sheet_begin_enabled = 0
 .const hal_platform_character_background_resync = 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+.const hal_platform_player_magic_helpers_external = 1
+#define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
+#else
 .const hal_platform_player_magic_helpers_external = 0
+#endif
 .const hal_platform_item_action_key_restores_bank = 0
 .const hal_platform_ego_ac_bonus_external = 0
 .const hal_platform_chargen_runtime_resync = 0
@@ -114,5 +119,4 @@
 #define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-#define HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
 #endif

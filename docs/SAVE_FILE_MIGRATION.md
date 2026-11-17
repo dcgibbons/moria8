@@ -1,7 +1,7 @@
-# Save File Migration Plan
+# Save File Migration Plan (Historical V1 Design Record)
 
 > [!NOTE]
-> **Phase 0 Status (Superseded for V2):** Incremental V1..V19 compatibility is retained only until Phase 4 (`Save Format V2`) lands. See [`docs/SAVE_FORMAT_V2_PLAN.md`](SAVE_FORMAT_V2_PLAN.md) for the single V2 format bump (`370` items, `55` egos, Cloak slot, `18` traps, `recall[279]`), clean `LOAD_RESULT_UNSUPPORTED` rejection of pre-V2 saves, per-port fixed save-slot budgets, and removal of V1..V19 migration branches (`platforms/shared/save.s`).
+> **Superseded by Save Format V2 (`SAVE_VERSION = $21`, Implemented in Phases 4–5):** All incremental Save V1 (`$01`..`$1B`, including C64 `$17`) and `$20` migration code, `OLDEST_SAVE_VERSION`, `hal_storage_save_v1_version`, `load_save_version`, `stat_bake_mode` legacy-save stat migration (`core/player_chargen_cold.s`), and C128 `--legacy-room8` test-fixture scaffolding have been removed across all seven ports. `save_version_supported` (`platforms/shared/save.s`) accepts **only** `SAVE_VERSION` (`hal_storage_save_version = $21`) and rejects all older or newer save files immediately after the 8-byte magic header with `LOAD_RESULT_UNSUPPORTED` (`4`). See [`docs/SAVE_FORMAT_V2_PLAN.md`](SAVE_FORMAT_V2_PLAN.md) for the authoritative Save Format V2 specification (`370` Base-255 paged items, `55` egos, `34` inventory slots with Cloak + Secondary, `47 B` `id_known_bits`, `174` flavours, `128` store slots with `si_meta_hi`, `42` floor slots with `fi_meta_hi`, and `279`-species `1,116 B` persistent monster recall). The sections below remain as the historical V1 design record; only the **Slot-empty invariant** note under *Compatibility Risks* still applies to V2's paged `save_sanitize_id_table` / `save_sanitize_store_ids`.
 
 ## Bottom Line
 

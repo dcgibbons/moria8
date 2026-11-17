@@ -452,8 +452,9 @@ def start_pickle(start: dict[str, Any]) -> Path | None:
 
 def save_versions(build_id: str, platform: str, home: Path = HOME) -> tuple[int, int] | None:
     """(oldest loadable, current) save versions of ``platform`` in a build,
-    from its storage policy's first branch (the monster catalog's); None
-    when the build or the constants are missing."""
+    from its storage policy; current Save Format V2 builds define only
+    ``hal_storage_save_version`` (oldest == current), while archived pre-cleanup
+    builds may also define ``hal_storage_save_v1_version``."""
     root = home / "builds" / build_id / "platforms"
     platform = PORTS[platform].platform if platform in PORTS else platform   # a variant: its source's
     root = root / "commodore" / platform if platform in ("c64", "c128", "plus4") else root / platform
@@ -461,9 +462,12 @@ def save_versions(build_id: str, platform: str, home: Path = HOME) -> tuple[int,
         text = (root / "hal" / "storage_policy.s").read_text()
     except OSError:
         return None
-    found = [re.search(rf"^\.const {name}\s*=\s*\$([0-9A-Fa-f]+)", text, re.M)
-             for name in ("hal_storage_save_v1_version", "hal_storage_save_version")]
-    return (int(found[0].group(1), 16), int(found[1].group(1), 16)) if all(found) else None
+    cur = re.search(r"^\.const hal_storage_save_version\s*=\s*\$([0-9A-Fa-f]+)", text, re.M)
+    if not cur:
+        return None
+    current = int(cur.group(1), 16)
+    old = re.search(r"^\.const hal_storage_save_v1_version\s*=\s*\$([0-9A-Fa-f]+)", text, re.M)
+    return (int(old.group(1), 16) if old else current, current)
 
 
 def start_loads(start: dict[str, Any], build_id: str, platform: str, home: Path = HOME) -> bool:

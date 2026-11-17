@@ -774,6 +774,23 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertNotIn("resume", jobs["human-priest"])                     # $19 does not
         self.assertIsNone(service.balrog.state["items"]["c128/human-priest"]["start"])
 
+    def test_single_save_version_policy_without_v1_constant_pins_exact_version(self) -> None:
+        """Save Format V2 policies define only hal_storage_save_version ($21),
+        rejecting legacy $17/$20 saves while continuing matching $21 runs."""
+        service = self.service(4, 2)
+        for build, ver, built in (("v1", 0x17, 1), ("cur1", 0x21, 2), ("cur2", 0x21, 3)):
+            root = self.make_build(service, build, built)
+            policy = root / "platforms" / "commodore" / "c64" / "hal" / "storage_policy.s"
+            policy.parent.mkdir(parents=True)
+            policy.write_text(f".const hal_storage_save_version = ${ver:02X}\n")
+            bot = root / "playtest" / "moria_playtest"
+            bot.mkdir(parents=True)
+            for name in queue.BRAIN_MODULES:
+                (bot / name).write_text("class Brain:\n    def __init__(self):\n        self.food = 0\n")
+        self.assertEqual(queue.save_versions("cur2", "c64", service.home), (0x21, 0x21))
+        self.assertFalse(queue.start_loads({"run": "old", "build": "v1", "save": "s"}, "cur2", "c64", service.home))
+        self.assertTrue(queue.start_loads({"run": "ok", "build": "cur1", "save": "s"}, "cur2", "c64", service.home))
+
     def test_a_field_on_a_class_no_save_holds_keeps_the_start(self) -> None:
         """2026-11-06: a field added to View, built anew each step and never
         pickled, retired nine level-17-24 starts to level 1. Only the

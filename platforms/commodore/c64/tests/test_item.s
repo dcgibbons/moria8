@@ -2825,8 +2825,9 @@ t28_known_cure_name:
     sta tc_results + 50
 
     // ==========================================
-    // Test 52: legacy-save stat migration folds race/class modifiers into
-    // the base exactly once with deterministic arithmetic.
+    // Test 52: player_bake_creation_stats folds race/class modifiers into
+    // base stats once at creation, and load-path player_calc_stats preserves
+    // the baked 18/xx roll without re-rolling.
     // ==========================================
 !t52:
     jsr item_init_inventory
@@ -2837,18 +2838,18 @@ t28_known_cure_name:
     lda #14
     sta player_data + PL_INT_BASE
 
-    lda #0
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
+    jsr player_bake_creation_stats
     lda player_data + PL_INT_BASE
-    cmp #19                     // 14 + 2 + 3, exactly
+    cmp #19                     // 14 + 2 + 3 enters 18/xx (>= 19)
+    bcc !t52_fail+
+    cmp #119                    // capped at 18/100 (<= 118)
+    bcs !t52_fail+
+    cmp player_data + PL_INT_CUR // mirrored to current
     bne !t52_fail+
-    lda player_data + PL_INT_CUR
-    cmp #19                     // mirrored to current
-    bne !t52_fail+
+    pha
     jsr player_calc_stats
-    lda player_data + PL_INT_CUR
-    cmp #19                     // load-path rebuild preserves it
+    pla
+    cmp player_data + PL_INT_CUR // load-path rebuild preserves exact roll
     bne !t52_fail+
 
     lda #$01

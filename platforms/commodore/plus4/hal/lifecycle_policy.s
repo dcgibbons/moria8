@@ -47,12 +47,12 @@
 .const hal_platform_overlay_force_reload = 0
 .const hal_platform_overlay_tier_cache_guard = 0
 .const hal_platform_overlay_cache_enabled = 0
-#if PLUS4_CARTRIDGE
+// Plus/4 has no C64 $DF00 REU (manifest.json reu_overlay_cache: false).
 #define HAL_PLATFORM_REU_DISABLED
 .const hal_platform_overlay_reu_stash_enabled = 0
+#if PLUS4_CARTRIDGE
 .const hal_platform_overlay_prompt_program_media = 0
 #else
-.const hal_platform_overlay_reu_stash_enabled = 1
 .const hal_platform_overlay_prompt_program_media = 1
 #endif
 .const hal_platform_overlay_cpu_port_dma_bank = 0
@@ -97,7 +97,6 @@
 #endif
 #define HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT
 #if !PLUS4_CARTRIDGE
-#define HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
 #define HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA
 #endif
 #define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
@@ -106,5 +105,5 @@
 #define HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
 #define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
 #define HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
-#define HAL_PLATFORM_ITEM_PICKUP_OVERLAY
+#define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
 #endif

@@ -97,6 +97,16 @@
 //
 // boot128 staging source span before scrub:
 //   - $1C01-$FEFF in Bank 1, copied into Bank 0 and scrubbed page-by-page.
+//
+// 16 KB physical VDC RAM ownership ($0000-$3FFF):
+//   - screen characters:       $0000-$07FF (2,000 B active + 48 B bulk-clear pad)
+//   - screen attributes:       $0800-$0FFF (2,000 B active + 48 B bulk-clear pad)
+//   - scroll-delta scratch:    $1000-$10FF (RVSD_SCRATCH_CHAR $1000, RVSD_SCRATCH_ATTR $1080)
+//   - ITEM.CAT low span:       $1100-$1FFF (3,840 B = ITEM.CAT[0..3839], disk build)
+//   - Set 0 & Set 1 charsets:  $2000-$3FFF (512 cells x 16 B:
+//       bytes 0..7 per cell  = live 8x8 glyph rasters for Set 0 ($2000) & Set 1 ($3000);
+//       bytes 8..15 per cell = unused in 8-scanline text mode -> holds
+//                              ITEM.CAT[3840..7572] across 467 cells at $2008-$3D2C)
 
 .macro AssertRegionBefore(desc, left_end, right_base) {
     .assert desc, left_end < right_base, true
@@ -249,6 +259,21 @@
 .const DUNGEON_GEN_DOOR_SCAN_SIZE = 65
 .const DUNGEON_GEN_DOOR_SCAN_END  = DUNGEON_GEN_DOOR_SCAN_BASE + DUNGEON_GEN_DOOR_SCAN_SIZE - 1
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0800
+
+// 16 KB VDC RAM non-overlapping layout constants (C128M-015).
+.const VDC_RAM_SIZE              = $4000
+.const VDC_SCRATCH_BASE          = $1000
+.const VDC_SCRATCH_END           = $10ff
+.const VDC_ITEM_CAT_LO_BASE      = $1100
+.const VDC_ITEM_CAT_LO_SIZE      = $0f00
+.const VDC_ITEM_CAT_LO_END       = VDC_ITEM_CAT_LO_BASE + VDC_ITEM_CAT_LO_SIZE - 1
+.const VDC_CHARSET_BASE          = $2000
+.const VDC_CHARSET_END           = $3fff
+.const VDC_ITEM_CAT_CELL_OFFSET  = $08
+.const VDC_ITEM_CAT_CELL_STRIDE  = $10
+.const VDC_ITEM_CAT_CELL_BYTES   = $08
+.const VDC_ITEM_CAT_HI_CAP       = ((VDC_CHARSET_END - VDC_CHARSET_BASE + 1) / VDC_ITEM_CAT_CELL_STRIDE) * VDC_ITEM_CAT_CELL_BYTES
+.const VDC_ITEM_CAT_TOTAL_CAP    = VDC_ITEM_CAT_LO_SIZE + VDC_ITEM_CAT_HI_CAP
 
 // ZP save buffer — stores $02–$8F in Bank 1 ($785C-$78E9) during game, restored on exit.
 .const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
@@ -1057,3 +1082,7 @@ mmu_common_cart_blob_end:
 :AssertRegionBefore("Bank1 store-inv reserve ends before Bank1 msg_history", BANK1_STORE_INV_RESERVED_END, BANK1_MSG_HISTORY_BASE)
 .assert "Bank1 msg_history ends at $DF37 inside $D000-$DFFF", BANK1_MSG_HISTORY_BASE == BANK1_STORE_INV_RESERVED_END + 1 && BANK1_MSG_HISTORY_END == BANK1_MSG_HISTORY_BASE + BANK1_MSG_HISTORY_SIZE - 1 && BANK1_MSG_HISTORY_END == $df37 && BANK1_MSG_HISTORY_END <= BANK1_HIGH_DATA_END, true
 :AssertRegionBefore("Bank1 high data window ends before DUNGEON overlay cache", BANK1_HIGH_DATA_END, BANK1_OVERLAY_DUNGEON_BASE)
+:AssertRegionBefore("VDC scroll-delta scratch ends before VDC ITEM.CAT low span", VDC_SCRATCH_END, VDC_ITEM_CAT_LO_BASE)
+:AssertRegionBefore("VDC ITEM.CAT low span ends before VDC charset base", VDC_ITEM_CAT_LO_END, VDC_CHARSET_BASE)
+.assert "VDC ITEM.CAT cell tail stays in unused scanlines 8..15", VDC_ITEM_CAT_CELL_OFFSET == 8 && VDC_ITEM_CAT_CELL_OFFSET + VDC_ITEM_CAT_CELL_BYTES == VDC_ITEM_CAT_CELL_STRIDE, true
+.assert "VDC charset ends at top of 16 KB VDC RAM", VDC_CHARSET_END == VDC_RAM_SIZE - 1, true

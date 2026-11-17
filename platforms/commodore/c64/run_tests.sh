@@ -5237,6 +5237,37 @@ run_load_missing_savefile_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_hot_residency_product_smoke() {
+    local name="hot_residency_product_smoke"
+    echo -n "  $name: "
+
+    local build_log smoke_log
+    build_log=$(mktemp -t "build_${name}_log")
+    smoke_log=$(mktemp -t "test_${name}_log")
+
+    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
+        echo "FAIL (disk64 build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -u "$RUN_TESTS64_DIR/tests/product_hot_residency_smoke.py" \
+            --vice "$VICE" \
+            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
+            --vs "$REPO_ROOT/build/c64/main.vs" >"$smoke_log" 2>&1; then
+        echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
+        rm -f -- "$build_log" "$smoke_log"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        sed 's/^/    /' "$smoke_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 echo "=== Moria Phase 1 Tests ==="
 echo ""
 
@@ -5544,6 +5575,7 @@ run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefi
 run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke "wrong_media_detection_selected_devices" "write_protected_or_forced_write_error"
 run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
 run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
+run_suite_function "hot_residency_product_smoke" run_hot_residency_product_smoke
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 if [ $FAIL -gt 0 ]; then

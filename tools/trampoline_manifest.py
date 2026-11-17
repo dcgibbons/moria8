@@ -567,9 +567,8 @@ ATARI8_ENTRIES: Tuple[TrampolineEntry, ...] = (
 # Commodore 64 (63 entries: platforms/commodore/c64/main.s + legal.s + look_trampoline.s + monster_catalog64.s)
 # ---------------------------------------------------------------------------
 C64_ENTRIES: Tuple[TrampolineEntry, ...] = (
-    # Generated: simple / alias / resync (3)
+    # Generated: simple / alias (2)
     _gen("c64", "tramp_find_special_room", "alias", target="find_special_room"),
-    _gen("c64", "tramp_sr_epilogue", "sr_epilogue_resync", target="platform_runtime_resync_c64"),
     _gen("c64", "tramp_game_over_disk_setup_failed", "direct_jmp", target="disk_prompt_game"),
     # Generated: c64_bank_no_roms_preserve_flags (2)
     _gen("c64", "tramp_assign_special_room", "c64_bank_no_roms_preserve_flags", target="assign_special_room"),
@@ -578,11 +577,10 @@ C64_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _gen("c64", "tramp_spawn_special_room_monsters", "c64_ovl_gen_bank_no_roms_sr", overlay="OVL_DUNGEON_GEN", target="spawn_special_room_monsters"),
     # Generated: ovl_help_sr (1)
     _gen("c64", "tramp_help_cmd_body", "ovl_help_sr", overlay="OVL_HELP", target="help_cmd_body"),
-    # Generated: ovl_sr (27)
-    _gen("c64", "tramp_ui_char_display", "ovl_sr", overlay="OVL_UI", target="ui_char_display"),
+    # Generated: ovl_sr (24)
+    _gen("c64", "tramp_ui_char_display", "ovl_sr", overlay="OVL_HELP", target="ui_char_display"),
     _gen("c64", "tramp_magic_recalc_mana", "ovl_sr", overlay="OVL_MODAL_MISC", target="magic_recalc_mana"),
     _gen("c64", "tramp_magic_check_new_spells", "ovl_sr", overlay="OVL_MODAL_MISC", target="magic_check_new_spells"),
-    _gen("c64", "tramp_calc_spell_failure", "ovl_sr", overlay="OVL_MODAL_MISC", target="calc_spell_failure"),
     _gen("c64", "tramp_ui_inv_display", "ovl_sr", overlay="OVL_HELP", target="ui_inv_display"),
     _gen("c64", "tramp_ui_equip_display", "ovl_sr", overlay="OVL_HELP", target="ui_equip_display"),
     _gen("c64", "tramp_item_gain_spell", "ovl_sr", overlay="OVL_UI", target="item_gain_spell"),
@@ -601,20 +599,22 @@ C64_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _gen("c64", "tramp_spell_list_display", "ovl_sr", overlay="OVL_UI", target="spell_list_display"),
     _gen("c64", "tramp_spell_execute_selected", "ovl_sr", overlay="OVL_SPELL", target="spell_execute_selected"),
     _gen("c64", "tramp_reveal_floorplan", "ovl_sr", overlay="OVL_SPELL", target="eff_reveal_floorplan"),
+    _gen("c64", "tramp_eff_identify_scroll_resident", "ovl_sr", overlay="OVL_SPELL", target="eff_identify_prompt"),
     _gen("c64", "tramp_ui_wizard_display", "ovl_sr", overlay="OVL_MODAL_MISC", target="ui_wizard_display"),
     _gen("c64", "tramp_store_init_all", "ovl_sr", overlay="OVL_CHEST", target="store_init_all"),
     _gen("c64", "tramp_store_restock_all", "ovl_sr", overlay="OVL_CHEST", target="store_restock_all"),
-    _gen("c64", "tramp_door_try_open", "ovl_sr", overlay="OVL_TITLE", target="door_try_open"),
-    _gen("c64", "tramp_door_try_close", "ovl_sr", overlay="OVL_TITLE", target="door_try_close"),
-    _gen("c64", "tramp_item_drop", "ovl_sr", overlay="OVL_TITLE", target="item_drop"),
     _gen("c64", "tramp_init_starting_kit", "ovl_sr", overlay="OVL_TITLE", target="init_starting_kit"),
-    # Generated: ay_dispatch -> c64_title_piw_dispatch (4)
+    # Generated: ay_dispatch -> c64_title_piw_dispatch / c64_modal_cast_dispatch (6)
     _gen("c64", "tramp_item_wear", "ay_dispatch", overlay="OVL_TITLE", target="item_wear", dispatcher="c64_title_piw_dispatch"),
     _gen("c64", "tramp_item_takeoff", "ay_dispatch", overlay="OVL_TITLE", target="item_takeoff", dispatcher="c64_title_piw_dispatch"),
     _gen("c64", "tramp_item_eat", "ay_dispatch", overlay="OVL_TITLE", target="item_eat", dispatcher="c64_title_piw_dispatch"),
     _gen("c64", "tramp_item_quaff", "ay_dispatch", overlay="OVL_TITLE", target="item_quaff", dispatcher="c64_title_piw_dispatch"),
-    # Generated: ovl_death_restore_spell_fatal (1)
+    _gen("c64", "tramp_player_cast_spell", "ay_dispatch", overlay="OVL_MODAL_MISC", target="player_cast_spell", dispatcher="c64_modal_cast_dispatch"),
+    _gen("c64", "tramp_player_pray", "ay_dispatch", overlay="OVL_MODAL_MISC", target="player_pray", dispatcher="c64_modal_cast_dispatch"),
+    # Generated: ovl_death_restore_spell_fatal (3)
     _gen("c64", "tramp_eff_item_p1", "ovl_death_restore_spell_fatal", overlay="OVL_HOME", target="eff_item_p1_exec"),
+    _gen("c64", "tramp_eff_map_area", "ovl_death_restore_spell_fatal", overlay="OVL_DEATH", target="eff_map_area"),
+    _gen("c64", "tramp_eff_destroy_area", "ovl_death_restore_spell_fatal", overlay="OVL_DEATH", target="da_devastate"),
     # Generated: shared game_over_prepare_ovl (1)
     _gen("c64", "tramp_game_over_prepare", "game_over_prepare_ovl", overlay="OVL_DEATH", target="creature_get_name"),
     # Custom (30)
@@ -634,7 +634,10 @@ C64_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("c64", "tramp_ui_recall", "platforms/commodore/c64/main.s", "Loads OVL_DEATH via overlay_load_no_kernal before ui_recall_display", overlay="OVL_DEATH", target="ui_recall_display"),
     _custom("c64", "tramp_eff_earthquake", "platforms/commodore/c64/main.s", "Preserves caller $01/I and engages c64u_turbo_fast/normal around banked eff_earthquake_banked", target="eff_earthquake_banked"),
     _custom("c64", "tramp_item_exchange", "platforms/commodore/c64/main.s", "Loads via chest_dispatch and returns through tramp_sr_epilogue", overlay="OVL_ITEMS", target="item_exchange"),
-    _custom("c64", "tramp_door_pick_roll", "platforms/commodore/c64/main.s", "Preserves caller current_overlay, $01, I, and Carry across OVL_CHEST door_pick_roll", overlay="OVL_CHEST", target="door_pick_roll"),
+    _custom("c64", "tramp_sr_epilogue", "platforms/commodore/c64/main.s", "Restores c64_caller_ovl_restore when nested inside an overlay caller, else runs platform_runtime_resync_c64", target="platform_runtime_resync_c64"),
+    _custom("c64", "tramp_door_pick_roll", "platforms/commodore/c64/main.s", "Preserves caller $01, I, and Carry around banked door_pick_roll", target="door_pick_roll"),
+    _custom("c64", "tramp_load_resume_reset", "platforms/commodore/c64/main.s", "Runs load_resume_reset in already-resident OVL_STORAGE and invalidates current_overlay", overlay="OVL_STORAGE", target="load_resume_reset"),
+    _custom("c64", "tramp_item_refresh_fixed_known", "platforms/commodore/c64/main.s", "Swaps to OVL_STORAGE for item_refresh_fixed_known and restores caller overlay", overlay="OVL_STORAGE", target="item_refresh_fixed_known"),
     _custom("c64", "tramp_ui_identify", "platforms/commodore/c64/main.s", "Restores BANK_NO_BASIC before tier_restore_after_overlay then tramp_sr_epilogue", overlay="OVL_UI", targets=("ui_identify_print", "tier_restore_after_overlay")),
     _custom("c64", "tramp_disk_setup", "platforms/commodore/c64/main.s", "Loads OVL_STORAGE with KERNAL, switches BANK_NO_ROMS for disk_setup_run", overlay="OVL_STORAGE", target="disk_setup_run"),
     _custom("c64", "tramp_disk_prepare_selected", "platforms/commodore/c64/main.s", "Reinstalls C64 RAM IRQ vectors and preserves carry after storage prep", overlay="OVL_STORAGE", targets=("disk_setup_prepare_selected", "c64_install_ram_irq_vectors")),
@@ -648,12 +651,11 @@ C64_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("c64", "tramp_do_look", "platforms/commodore/c64/look_trampoline.s", "Lives in separate look_trampoline.s unit", overlay="OVL_MODAL_MISC", target="do_look"),
     _custom("c64", "tramp_catalog_place_win", "platforms/commodore/c64/monster_catalog64.s", "Banks banked win-creature catalog via hal_memory_cpu_port", target="catalog_place_win_creature"),
     _custom("c64", "tramp_item_pickup", "platforms/commodore/c64/main.s", "Preserves caller $01/I and Carry around banked item_pickup", target="item_pickup"),
-    _custom("c64", "tramp_trap_trigger", "platforms/commodore/c64/main.s", "Loads OVL_DEATH and passes df_disarm_trap_idx in X into trap_trigger", overlay="OVL_DEATH", target="trap_trigger"),
 )
 
 
 # ---------------------------------------------------------------------------
-# Commodore Plus/4 (65 entries: platforms/commodore/plus4/main.s + legal.s + look_trampoline.s)
+# Commodore Plus/4 (platforms/commodore/plus4/main.s + legal.s + look_trampoline.s)
 # ---------------------------------------------------------------------------
 PLUS4_ENTRIES: Tuple[TrampolineEntry, ...] = (
     # Generated: simple / resync (3)
@@ -665,52 +667,49 @@ PLUS4_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _gen("plus4", "tramp_vault_seal_entrance", "plus4_bank_ram_preserve_flags", target="vault_seal_entrance"),
     # Generated: plus4_ovl_gen_cached_sr (1)
     _gen("plus4", "tramp_spawn_special_room_monsters", "plus4_ovl_gen_cached_sr", overlay="OVL_DUNGEON_GEN", target="spawn_special_room_monsters"),
-    # Generated: plus4_bank_ram_preserve_a_ret (2)
-    _gen("plus4", "tramp_roll_ego_type", "plus4_bank_ram_preserve_a_ret", target="roll_ego_type"),
+    # Generated: plus4_bank_ram_preserve_a_ret (1)
     _gen("plus4", "tramp_ego_get_ac_bonus", "plus4_bank_ram_preserve_a_ret", target="ego_get_ac_bonus"),
-    # Generated: ovl_sr (28)
-    _gen("plus4", "tramp_ui_char_display", "ovl_sr", overlay="OVL_TITLE", target="ui_char_display"),
-    _gen("plus4", "tramp_run_initialize", "ovl_sr", overlay="OVL_MODAL_MISC", target="run_initialize_impl"),
-    _gen("plus4", "tramp_item_pickup", "ovl_sr", overlay="OVL_ITEMS", target="item_pickup"),
-    _gen("plus4", "tramp_eff_earthquake", "ovl_sr", overlay="OVL_SPELL", target="eff_earthquake"),
+    # Generated: ay_dispatch -> plus4_ovl_sr_dispatch (21)
+    _gen("plus4", "tramp_ui_char_display", "ay_dispatch", overlay="OVL_TITLE", target="ui_char_display", dispatcher="plus4_disp_title"),
+    _gen("plus4", "tramp_magic_recalc_mana", "ay_dispatch", overlay="OVL_MODAL_MISC", target="magic_recalc_mana", dispatcher="plus4_disp_modal"),
+    _gen("plus4", "tramp_magic_check_new_spells", "ay_dispatch", overlay="OVL_MODAL_MISC", target="magic_check_new_spells", dispatcher="plus4_disp_modal"),
+    _gen("plus4", "tramp_ui_inv_display", "ay_dispatch", overlay="OVL_HELP", target="ui_inv_display", dispatcher="plus4_disp_help"),
+    _gen("plus4", "tramp_ui_equip_display", "ay_dispatch", overlay="OVL_HELP", target="ui_equip_display", dispatcher="plus4_disp_help"),
+    _gen("plus4", "tramp_item_read_scroll", "ay_dispatch", overlay="OVL_ITEMS", target="item_read_scroll", dispatcher="plus4_disp_items"),
+    _gen("plus4", "tramp_item_aim_wand", "ay_dispatch", overlay="OVL_ITEMS", target="item_aim_wand", dispatcher="plus4_disp_items"),
+    _gen("plus4", "tramp_item_use_staff", "ay_dispatch", overlay="OVL_ITEMS", target="item_use_staff", dispatcher="plus4_disp_items"),
+    _gen("plus4", "tramp_item_refuel", "ay_dispatch", overlay="OVL_ITEMS", target="item_refuel", dispatcher="plus4_disp_items"),
+    _gen("plus4", "tramp_item_exchange", "ay_dispatch", overlay="OVL_ITEMS", target="item_exchange", dispatcher="plus4_disp_items"),
+    _gen("plus4", "tramp_ranged_fire", "ay_dispatch", overlay="OVL_ITEMS", target="ranged_fire", dispatcher="plus4_disp_items"),
+    _gen("plus4", "tramp_throw_item", "ay_dispatch", overlay="OVL_ITEMS", target="throw_item", dispatcher="plus4_disp_items"),
+    _gen("plus4", "tramp_bash_command", "ay_dispatch", overlay="OVL_TITLE", target="bash_command", dispatcher="plus4_disp_title"),
+    _gen("plus4", "tramp_disarm_command", "ay_dispatch", overlay="OVL_TITLE", target="disarm_command", dispatcher="plus4_disp_title"),
+    _gen("plus4", "tramp_cmd_jam", "ay_dispatch", overlay="OVL_CHEST", target="door_jam_command", dispatcher="plus4_disp_chest"),
+    _gen("plus4", "tramp_chest_open", "ay_dispatch", overlay="OVL_CHEST", target="chest_open_command", dispatcher="plus4_disp_chest"),
+    _gen("plus4", "tramp_player_tunnel", "ay_dispatch", overlay="OVL_TITLE", target="player_tunnel", dispatcher="plus4_disp_title"),
+    _gen("plus4", "tramp_ui_wizard_display", "ay_dispatch", overlay="OVL_MODAL_MISC", target="ui_wizard_display", dispatcher="plus4_disp_modal"),
+    _gen("plus4", "tramp_store_init_all", "ay_dispatch", overlay="OVL_HELP", target="store_init_all", dispatcher="plus4_disp_help"),
+    _gen("plus4", "tramp_store_restock_all", "ay_dispatch", overlay="OVL_HELP", target="store_restock_all", dispatcher="plus4_disp_help"),
+    _gen("plus4", "tramp_init_starting_kit", "ay_dispatch", overlay="OVL_HELP", target="init_starting_kit", dispatcher="plus4_disp_help"),
+    # Generated: ovl_sr (4)
     _gen("plus4", "tramp_item_init_identification", "ovl_sr", overlay="OVL_DEATH", target="item_init_identification"),
-    _gen("plus4", "tramp_magic_recalc_mana", "ovl_sr", overlay="OVL_MODAL_MISC", target="magic_recalc_mana"),
-    _gen("plus4", "tramp_magic_check_new_spells", "ovl_sr", overlay="OVL_MODAL_MISC", target="magic_check_new_spells"),
-    _gen("plus4", "tramp_ui_inv_display", "ovl_sr", overlay="OVL_HELP", target="ui_inv_display"),
-    _gen("plus4", "tramp_ui_equip_display", "ovl_sr", overlay="OVL_HELP", target="ui_equip_display"),
     _gen("plus4", "tramp_item_gain_spell", "ovl_sr", overlay="OVL_UI", target="item_gain_spell"),
-    _gen("plus4", "tramp_item_read_scroll", "ovl_sr", overlay="OVL_ITEMS", target="item_read_scroll"),
-    _gen("plus4", "tramp_item_aim_wand", "ovl_sr", overlay="OVL_ITEMS", target="item_aim_wand"),
-    _gen("plus4", "tramp_item_use_staff", "ovl_sr", overlay="OVL_ITEMS", target="item_use_staff"),
-    _gen("plus4", "tramp_item_refuel", "ovl_sr", overlay="OVL_ITEMS", target="item_refuel"),
-    _gen("plus4", "tramp_item_exchange", "ovl_sr", overlay="OVL_ITEMS", target="item_exchange"),
-    _gen("plus4", "tramp_ranged_fire", "ovl_sr", overlay="OVL_ITEMS", target="ranged_fire"),
-    _gen("plus4", "tramp_throw_item", "ovl_sr", overlay="OVL_ITEMS", target="throw_item"),
-    _gen("plus4", "tramp_bash_command", "ovl_sr", overlay="OVL_TITLE", target="bash_command"),
-    _gen("plus4", "tramp_disarm_command", "ovl_sr", overlay="OVL_TITLE", target="disarm_command"),
-    _gen("plus4", "tramp_cmd_jam", "ovl_sr", overlay="OVL_CHEST", target="door_jam_command"),
-    _gen("plus4", "tramp_chest_open", "ovl_sr", overlay="OVL_CHEST", target="chest_open_command"),
-    _gen("plus4", "tramp_player_tunnel", "ovl_sr", overlay="OVL_TITLE", target="player_tunnel"),
     _gen("plus4", "tramp_reveal_floorplan", "ovl_sr", overlay="OVL_SPELL", target="eff_reveal_floorplan"),
-    _gen("plus4", "tramp_ui_wizard_display", "ovl_sr", overlay="OVL_MODAL_MISC", target="ui_wizard_display"),
-    _gen("plus4", "tramp_store_init_all", "ovl_sr", overlay="OVL_HELP", target="store_init_all"),
-    _gen("plus4", "tramp_store_restock_all", "ovl_sr", overlay="OVL_HELP", target="store_restock_all"),
-    _gen("plus4", "tramp_init_starting_kit", "ovl_sr", overlay="OVL_HELP", target="init_starting_kit"),
-    # Generated: ovl_death_restore_spell_fatal (2)
+    _gen("plus4", "tramp_eff_identify_scroll_resident", "ovl_sr", overlay="OVL_SPELL", target="eff_identify_prompt"),
+    # Generated: ovl_death_restore_spell_fatal (4)
+    _gen("plus4", "tramp_eff_earthquake", "ovl_death_restore_spell_fatal", overlay="OVL_TITLE", target="eff_earthquake"),
+    _gen("plus4", "tramp_eff_map_area", "ovl_death_restore_spell_fatal", overlay="OVL_TITLE", target="eff_map_area"),
     _gen("plus4", "tramp_eff_destroy_area", "ovl_death_restore_spell_fatal", overlay="OVL_MODAL_MISC", target="da_devastate"),
     _gen("plus4", "tramp_eff_item_p1", "ovl_death_restore_spell_fatal", overlay="OVL_HOME", target="eff_item_p1_exec"),
-    # Generated: plus4_title_ovl (4)
-    _gen("plus4", "tramp_title_clear_full_screen", "plus4_title_ovl", overlay="OVL_TITLE", target="title_clear_full_screen"),
-    _gen("plus4", "tramp_title_load_and_draw", "plus4_title_ovl", overlay="OVL_TITLE", target="title_load_and_draw"),
-    _gen("plus4", "tramp_title_render_data", "plus4_title_ovl", overlay="OVL_TITLE", target="title_render_data"),
-    _gen("plus4", "tramp_title_clear_below_menu", "plus4_title_ovl", overlay="OVL_TITLE", target="title_clear_below_menu"),
-    # Generated: shared game_over_prepare_ovl (1)
+    # Generated: plus4_title_ovl (2)
+    _gen("plus4", "tramp_title_load_and_draw", "plus4_title_ovl", overlay="OVL_TITLE", target="plus4_title_load_menu_ovl"),
+    _gen("plus4", "tramp_title_render_data", "plus4_title_ovl", overlay="OVL_TITLE", target="plus4_title_redraw_menu_ovl"),
+    # Generated: shared game_over_prepare_ovl + game_over_direct (2)
     _gen("plus4", "tramp_game_over_prepare", "game_over_prepare_ovl", overlay="OVL_DEATH", target="creature_get_name"),
-    # Custom (40)
+    _gen("plus4", "tramp_game_over", "game_over_direct", target="tramp_game_over_run"),
+    # Custom (37)
     _custom("plus4", "tramp_load_resume_reset", "platforms/commodore/plus4/main.s", "Runs load_resume_reset in already-resident OVL_STORAGE and invalidates current_overlay", overlay="OVL_STORAGE", target="load_resume_reset"),
-    _custom("plus4", "tramp_trap_trigger", "platforms/commodore/plus4/main.s", "Loads OVL_TITLE and reloads X=df_disarm_trap_idx before trap_trigger", overlay="OVL_TITLE", target="trap_trigger"),
-    _custom("plus4", "tramp_door_try_open", "platforms/commodore/plus4/main.s", "Loads OVL_CHEST via plus4_ovl_caller_dispatch preserving carry", overlay="OVL_CHEST", target="door_try_open"),
-    _custom("plus4", "tramp_door_try_close", "platforms/commodore/plus4/main.s", "Loads OVL_CHEST via plus4_ovl_caller_dispatch preserving carry", overlay="OVL_CHEST", target="door_try_close"),
+    _custom("plus4", "tramp_trap_trigger", "platforms/commodore/plus4/main.s", "Banks RAM and reloads X=df_disarm_trap_idx before resident $F000 trap_trigger", target="trap_trigger"),
     _custom("plus4", "tramp_item_drop", "platforms/commodore/plus4/main.s", "Loads OVL_HELP via plus4_ovl_caller_dispatch preserving caller overlay for ? selector", overlay="OVL_HELP", target="item_drop"),
     _custom("plus4", "tramp_help_cmd_body", "platforms/commodore/plus4/main.s", "Loads OVL_HELP via plus4_ovl_caller_dispatch preserving C=1 LEGALUI request", overlay="OVL_HELP", target="plus4_help_cmd_body"),
     _custom("plus4", "tramp_spawn_nest_gold", "platforms/commodore/plus4/main.s", "Checks RT_NEST in $F000 first, loads OVL_DUNGEON_GEN, and restores caller overlay", overlay="OVL_DUNGEON_GEN", targets=("find_special_room", "spawn_nest_gold")),
@@ -731,17 +730,16 @@ PLUS4_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("plus4", "tramp_calc_spell_failure", "platforms/commodore/plus4/main.s", "Preserves carry across caller-overlay restore and plus4_platform_runtime_resync", overlay="OVL_MODAL_MISC", target="calc_spell_failure"),
     _custom("plus4", "tramp_ego_append_suffix", "platforms/commodore/plus4/main.s", "Decodes ego via item_cat_decode_ego in Default without banking RAM over KERNAL", target="item_cat_decode_ego"),
     _custom("plus4", "tramp_ego_apply_damage", "platforms/commodore/plus4/main.s", "Banks RAM around ego_apply_damage without preserving return A", target="ego_apply_damage"),
-    _custom("plus4", "tramp_re_equip", "platforms/commodore/plus4/main.s", "Banks RAM without input A preservation around banked re_equip", target="re_equip"),
+    _custom("plus4", "tramp_roll_ego_type", "platforms/commodore/plus4/main.s", "Preserves input A across OVL_CHEST swap for roll_ego_type/roll_armour_ego and restores caller overlay", overlay="OVL_CHEST", target="roll_ego_type"),
+    _custom("plus4", "tramp_re_equip", "platforms/commodore/plus4/main.s", "Loads OVL_CHEST for re_equip and restores caller current_overlay returning A", overlay="OVL_CHEST", target="re_equip"),
     _custom("plus4", "tramp_ui_recall", "platforms/commodore/plus4/main.s", "Loads OVL_DEATH and calls sei + plus4_bank_ram before ui_recall_display", overlay="OVL_DEATH", target="ui_recall_display"),
-    _custom("plus4", "tramp_door_pick_roll", "platforms/commodore/plus4/main.s", "Preserves carry across resync on success, clears carry after resync on fail", overlay="OVL_CHEST", target="door_pick_roll"),
     _custom("plus4", "tramp_ui_identify", "platforms/commodore/plus4/main.s", "Banks RAM before tier_restore_after_overlay after ui_identify_print", overlay="OVL_UI", targets=("ui_identify_print", "tier_restore_after_overlay")),
     _custom("plus4", "tramp_disk_setup", "platforms/commodore/plus4/main.s", "Loads OVL_STORAGE with KERNAL then banks RAM for disk_setup_run", overlay="OVL_STORAGE", target="disk_setup_run"),
     _custom("plus4", "tramp_disk_prepare_selected", "platforms/commodore/plus4/main.s", "Preserves carry across resync and returns directly on load failure", overlay="OVL_STORAGE", target="disk_setup_prepare_selected"),
     _custom("plus4", "tramp_store_enter", "platforms/commodore/plus4/main.s", "Branches STORE_HOME (overlay_load_no_kernal + bank_ram) vs store_overlay_preamble", targets=("store_enter", "home_enter")),
     _custom("plus4", "tramp_player_create", "platforms/commodore/plus4/main.s", "Loads OVL_STARTUP with KERNAL then sets sei + plus4_bank_ram", overlay="OVL_STARTUP", target="player_create"),
     _custom("plus4", "tramp_game_over_disk_setup", "platforms/commodore/plus4/main.s", "Stashes/restores $E000 across disk setup using MAP_BASE", targets=("tramp_game_over_prepare", "tramp_game_over_stash", "tramp_disk_setup", "tramp_game_over_restore_stash")),
-    _custom("plus4", "tramp_game_over", "platforms/commodore/plus4/main.s", "Falls directly through from jsr tramp_game_over_prepare into tramp_game_over_run", targets=("tramp_game_over_prepare", "tramp_game_over_run")),
-    _custom("plus4", "tramp_game_over_run", "platforms/commodore/plus4/main.s", "Interleaves plus4_bank_ram toggles around score_calculate and storage calls", overlay="OVL_DEATH", targets=("score_calculate", "score_death_screen")),
+    _custom("plus4", "tramp_game_over_run", "platforms/commodore/plus4/main.s", "DeathOverlay tail routine running score_calculate, high score I/O, and score_death_screen", overlay="OVL_DEATH", targets=("score_calculate", "score_death_screen")),
     _custom("plus4", "tramp_winner_royal", "platforms/commodore/plus4/main.s", "Direct modal_misc asset load + scripted retirement test exit hook", targets=("winner_apply_retirement_bonus_overlay", "royal_screen")),
     _custom("plus4", "tramp_game_over_stash", "platforms/commodore/plus4/main.s", "RuntimeBanked helper copying $E000-$EFFF overlay to MAP_BASE", target="plus4_copy_overlay_window"),
     _custom("plus4", "tramp_game_over_restore_stash", "platforms/commodore/plus4/main.s", "RuntimeBanked helper restoring MAP_BASE back to $E000-$EFFF", target="plus4_copy_overlay_window"),
@@ -751,13 +749,12 @@ PLUS4_ENTRIES: Tuple[TrampolineEntry, ...] = (
 
 
 # ---------------------------------------------------------------------------
-# Commodore 128 (74 entries: platforms/commodore/c128/main.s + legal.s + look_trampoline.s + common/disk_setup_runtime128.s)
+# Commodore 128 (73 entries: platforms/commodore/c128/main.s + legal.s + look_trampoline.s + common/disk_setup_runtime128.s)
 # ---------------------------------------------------------------------------
 C128_ENTRIES: Tuple[TrampolineEntry, ...] = (
-    # Generated: c128_ovl_compute (16)
+    # Generated: c128_ovl_compute (15)
     _gen("c128", "tramp_eff_item_p1", "c128_ovl_compute", overlay="C128_HOME_OVERLAY_ID", target="eff_item_p1_exec"),
     _gen("c128", "tramp_init_starting_kit", "c128_ovl_compute", overlay="C128_HOME_OVERLAY_ID", target="init_starting_kit"),
-    _gen("c128", "tramp_item_pickup", "c128_ovl_compute", overlay="OVL_STORAGE", target="item_pickup"),
     _gen("c128", "tramp_cmd_jam", "c128_ovl_compute", overlay="OVL_STORAGE", target="door_jam_command"),
     _gen("c128", "tramp_item_read_scroll", "c128_ovl_compute", overlay="C128_ITEMS_OVERLAY_ID", target="item_read_scroll"),
     _gen("c128", "tramp_item_aim_wand", "c128_ovl_compute", overlay="C128_ITEMS_OVERLAY_ID", target="item_aim_wand"),

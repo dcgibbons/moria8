@@ -46,7 +46,7 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 .const SAVE_VERSION    = hal_storage_save_version
-.const OLDEST_SAVE_VERSION = hal_storage_save_v1_version
+.assert "Save Format V2 version is $21", SAVE_VERSION, $21
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -154,7 +154,6 @@ rle_lit_len:    .byte 0         // Literal buffer length
 #endif
 save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
-load_save_version: .byte 0
 #if !SAVE_SLOT_INDEX_EXTERNAL
 save_slot_index: .byte $ff       // $ff until a slot is selected; then 0-3
 #endif
@@ -973,8 +972,6 @@ plus4_test_after_load_magic:
     bcs !load_version_ok+
     jmp !load_unsupported+
 !load_version_ok:
-    lda save_magic_buf + SAVE_MAGIC_SIZE - 1
-    sta load_save_version
 
     // --- Read all blocks in same order as save ---
 
@@ -1977,7 +1974,8 @@ load_read_recall_custom:
 #endif
 
 // ============================================================
-// save_version_supported — Accept only Save Format V2 (SAVE_VERSION).
+// save_version_supported — Accept only SAVE_VERSION ($21); reject all
+// older and future save versions with carry clear (LOAD_RESULT_UNSUPPORTED).
 // Input: A = save version byte
 // Output: carry set = supported, carry clear = unsupported
 // ============================================================

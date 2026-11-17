@@ -20,6 +20,26 @@ test_start:
 
 #import "../screen_vdc.s"
 
+.const VDC_ITEM_CAT_LO_BASE     = $1100
+.const VDC_ITEM_CAT_LO_SIZE     = $0f00
+.const VDC_CHARSET_BASE         = $2000
+.const VDC_ITEM_CAT_CELL_OFFSET = $08
+
+disk_temp:              .byte 0
+disk_status:            .byte 0
+c128_runtime_load_bank: .byte 0
+crl_sa:                 .byte 1
+
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
+#import "../../../shared/item_catalog/item_cat_data.s"
+.label MAP_BASE = item_cat_data
+
+c128_load_runtime_prg:
+    clc
+    rts
+
+#import "../item_cat_vdc128.s"
+
 // config128.s is not imported by tests; the unit test links all data into one
 // RAM bank, so the map/db thunks are direct accesses here.
 mmu_safe_map_read_ptr0:
@@ -99,6 +119,16 @@ test_main:
     txs
     lda #$3e
     sta $ff00
+
+    jsr test_seed_vdc_font_sentinels
+    jsr c128_load_item_cat_vdc
+    bcc !vdc_cat_loaded+
+    jmp test_fail
+!vdc_cat_loaded:
+    jsr test_verify_vdc_cat_boundaries_and_fonts
+    bcs !vdc_cat_verified+
+    jmp test_fail
+!vdc_cat_verified:
 
     jsr item_refresh_fixed_known
     lda #COL_WHITE
@@ -1002,3 +1032,102 @@ screen_put_string_ay:
     sta zp_ptr0
     sty zp_ptr0_hi
     jmp hal_screen_put_string
+
+// Seed Set 0 ($2000, $2010) and Set 1 ($3000, $3D20) scanlines 0..7 with
+// non-zero sentinels before c128_load_item_cat_vdc streams into VDC RAM.
+test_seed_vdc_font_sentinels:
+    ldx #0
+!seed_cell:
+    cpx #4
+    bcs !seed_done+
+    lda vdc_font_sentinel_hi,x
+    ldy vdc_font_sentinel_lo,x
+    stx vdc_sentinel_idx
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+    ldy #0
+!seed_byte:
+    tya
+    eor #$a5
+    jsr vdc_wait
+    sta VDC_DATA_REG
+    iny
+    cpy #8
+    bcc !seed_byte-
+    ldx vdc_sentinel_idx
+    inx
+    jmp !seed_cell-
+!seed_done:
+    rts
+
+test_verify_vdc_cat_boundaries_and_fonts:
+    // 1. Verify vdc_item_cat_map_addr exact boundary mapping across both spans.
+    ldx #0
+!chk_map:
+    cpx #8
+    bcs !chk_fonts+
+    lda vdc_map_off_lo,x
+    sta item_cat_off_lo
+    lda vdc_map_off_hi,x
+    sta item_cat_off_hi
+    jsr vdc_item_cat_map_addr
+    cmp vdc_map_exp_hi,x
+    bne !vdc_verify_fail+
+    tya
+    cmp vdc_map_exp_lo,x
+    bne !vdc_verify_fail+
+    inx
+    jmp !chk_map-
+
+!chk_fonts:
+    // 2. Verify Set 0 and Set 1 glyph scanlines 0..7 were never touched by preload.
+    ldx #0
+!chk_cell:
+    cpx #4
+    bcs !chk_last_byte+
+    lda vdc_font_sentinel_hi,x
+    ldy vdc_font_sentinel_lo,x
+    stx vdc_sentinel_idx
+    jsr vdc_set_update_addr
+    ldy #0
+!chk_byte:
+    sty assert_idx
+    ldx #31
+    jsr vdc_read_reg
+    ldy assert_idx
+    sta assert_expected
+    tya
+    eor #$a5
+    cmp assert_expected
+    bne !vdc_verify_fail+
+    iny
+    cpy #8
+    bcc !chk_byte-
+    ldx vdc_sentinel_idx
+    inx
+    jmp !chk_cell-
+
+!chk_last_byte:
+    // 3. Verify final byte of ITEM.CAT (ITMCAT_TOTAL_SIZE - 1 = 7572 = $1D94) round-trips.
+    lda #<(ITMCAT_TOTAL_SIZE - 1)
+    sta item_cat_off_lo
+    lda #>(ITMCAT_TOTAL_SIZE - 1)
+    sta item_cat_off_hi
+    jsr hal_item_cat_read_byte
+    cmp item_cat_data + ITMCAT_TOTAL_SIZE - 1
+    bne !vdc_verify_fail+
+    sec
+    rts
+
+!vdc_verify_fail:
+    clc
+    rts
+
+vdc_sentinel_idx: .byte 0
+vdc_font_sentinel_lo: .byte $00, $10, $00, $20
+vdc_font_sentinel_hi: .byte $20, $20, $30, $3d
+vdc_map_off_lo: .byte $00, $ff, $00, $07, $08, $7f, $80, $94
+vdc_map_off_hi: .byte $00, $0e, $0f, $0f, $0f, $0f, $0f, $1d
+vdc_map_exp_lo: .byte $00, $ff, $08, $0f, $18, $ff, $08, $2c
+vdc_map_exp_hi: .byte $11, $1f, $20, $20, $20, $20, $21, $3d

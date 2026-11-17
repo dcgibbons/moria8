@@ -671,6 +671,10 @@ item_cat_decode_flavour_at_dst:
 // item_name_dst_idx, expanding non-recursive $80+ tokens. Sets zp_ptr0 -> item_name_decode_buf.
 // Preserves: X.
 item_cat_decode_entry_at_dst:
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jmp item_pickup_cache_decode_entry_at_dst
+item_cat_decode_entry_uncached:
+#endif
     jsr icat_seek_entry
 !icde_loop:
     jsr icat_read_sym

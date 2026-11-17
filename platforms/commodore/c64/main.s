@@ -22,6 +22,7 @@
 #define CATALOG_REU
 #define CATALOG_EXT_DISK_ENABLED
 #define ITEM_CATALOG_REU
+#define HAL_PLATFORM_ITEM_PICKUP_CACHE
 #else
 #import "cartridge_contract.s"
 #define ITEM_CATALOG_CART
@@ -37,8 +38,6 @@
 #define RECALL_ARRAY_DATA_EXTERNAL
 #define HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
 #define PLAYER_PFLAGS_EXTERNAL
-#define DOOR_OPEN_CLOSE_EXTERNAL
-#define ITEM_DROP_EXTERNAL
 #define STARTING_KIT_EXTERNAL
 #define ITEM_SPAWN_EXTERNAL
 #define ITEM_SPAWN_EGO_MODAL_TRAMP
@@ -47,7 +46,16 @@
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
 #define CALC_DIG_EXTERNAL
 #define CALC_DIG_CO_LOCATED
-#define TRAP_TRIGGER_EXTERNAL
+#define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
+#define UI_CHAR_BG_EXTERNAL
+#define PLAYER_MAGIC_BROWSE_EXTERNAL
+#define PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#define BALL_HARM_EXTERNAL
+#define EFF_IDENTIFY_PROMPT_EXTERNAL
+#define EFF_DETECT_EVIL_EXTERNAL
+#define LOAD_RESUME_RESET_EXTERNAL
+#define ITEM_REFRESH_KNOWN_EXTERNAL
+#define ITEMDESC_STORE_SLOT_DUPLICATED
 #define HAL_PLATFORM_ITEM_PICKUP_OVERLAY
 .macro ItemPickupSegment() {
     .segment RuntimeBanked
@@ -96,9 +104,10 @@
     .segment C64HuffIndex
 }
 
-// Cast/pray cores stay resident on this platform.
+// Cast/pray entry points park in ModalMiscOverlay co-located with
+// player_magic_cast_cold.s and calc_spell_failure; PmHelpers stay in Default.
 .macro PlayerCastSegment() {
-    .segment Default
+    .segment ModalMiscOverlay
 }
 .macro PlayerCastRestoreResidentSegment() {
     .segment Default
@@ -574,11 +583,12 @@ hal_huff_index_word:
 .macro CmdJamRestoreSegment() {
     .segment Default
 }
-// The locked-door pick roll needs the effective-disarm formula; it parks in
-// the chest overlay with chest_disarm_skill (resident budget).
+// The locked-door pick roll and effective-disarm helpers live in the $F000
+// RAM runtime (64.bank) behind RAM-only tramp_door_pick_roll (zero disk loads).
 #define DOOR_PICK_EXTERNAL
+#define DOOR_PICK_USE_DISARM_HELPER
 .macro DoorPickSegment() {
-    .segment ChestOverlay
+    .segment RuntimeBanked
 }
 .macro DoorPickRestoreSegment() {
     .segment Default
@@ -640,6 +650,18 @@ ol_target:        .byte 0
 .assert "Cartridge descriptor shift ABI", CART_DESCRIPTOR_SIZE, 8
 #endif
 #undef OVERLAY_LOAD_PROMPT_GAME
+
+// Keep item_spawn_level below BASIC ROM ($A000) so monitor `until $item_spawn_level`
+// in catalog_spawn_product_smoke never collides with BASIC ROM during autostart.
+item_spawn_level:
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !isl_done+
+    jsr item_spawn_level_gen
+!isl_done:
+    jmp tramp_sr_epilogue
+.assert "item_spawn_level stays below BASIC ROM ($A000)", item_spawn_level < $a000, true
+
 #import "../../../core/monster_ai.s"
 #import "../../../core/scene_dirty.s"
 #import "../../../core/scene_mat_tile.s"
@@ -733,6 +755,21 @@ hal_recall_write_byte:
     lda c64_item_cat_saved_port
     sta hal_memory_cpu_port
 }
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+.macro ItemPickupCacheMap() {
+    php
+    sei
+    lda hal_memory_cpu_port
+    pha
+    lda #BANK_ALL_RAM
+    sta hal_memory_cpu_port
+}
+.macro ItemPickupCacheUnmap() {
+    pla
+    sta hal_memory_cpu_port
+    plp
+}
+#endif
 c64_item_cat_saved_port: .byte 0
 #import "../common/item_catalog_records.s"
 #if !C64_CARTRIDGE
@@ -835,9 +872,6 @@ c64_save_resident_state_probe_end:
 #import "../../../core/combat.s"
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../../../core/projectile.s"
-// The ball's per-creature damage (resident: the spell overlay is full;
-// called only from eff_ball there). Orb of Draining's entry is banked.
-#import "../../../core/player_magic_ball_harm.s"
 #import "../../../core/monster_attack.s"
 #import "../../../core/turn.s"
 #import "../../../core/store_data.s"
@@ -1356,18 +1390,12 @@ c64_test_disk_setup_single_drive_return_unexpected_return:
 #endif
 
 title_draw_menu:
-    // --- Show title menu: N)EW  L)OAD  D)ISK SETUP ---
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #18
-    sta zp_cursor_row
-    lda #(SCREEN_COLS - (title_menu_str_end - title_menu_str)) / 2
-    sta zp_cursor_col
-    lda #<title_menu_str
-    sta zp_ptr0
-    lda #>title_menu_str
-    sta zp_ptr0_hi
-    jmp screen_put_string
+    lda #OVL_TITLE
+    jsr overlay_load_no_kernal
+    bcs !tdm_done+
+    jsr title_draw_menu_ovl
+!tdm_done:
+    jmp platform_runtime_resync_c64
 
 title_load_game:
     jsr rng_seed
@@ -1408,7 +1436,6 @@ c64_test_load_then_save_new_empty_fail:
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_media_ready:
 #endif
-    jsr overlay_invalidate      // Avoid reloading cold OVL_STORAGE in hal_player_recalc_pflags
     jmp load_resume_game
 !title_load_fail:
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
@@ -1631,74 +1658,6 @@ tramp_element_divisor:
     plp
     rts
 
-#if C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT
-// c64_test_element_divisor — Minimal resident call site for the product's
-// element divisor entry (tramp_element_divisor into the $F000 runtime), called
-// with KERNAL in and interrupts enabled. Setup pokes (player_pflags,
-// zp_eff_resist) and invariant checks (I flag, X, $01, mm_divisor) run via
-// monitor commands in run_tests.sh so the resident image stays tiny.
-.label c64_test_k_pflag_resist_fire   = PFLAG_RESIST_FIRE
-.label c64_test_k_ms_breath_fire      = MS_BREATH_FIRE
-.label c64_test_k_ms_breath_lightning = MS_BREATH_LIGHTNING
-c64_test_element_divisor:
-    cli
-c64_test_element_call_sym:
-    jsr mm_element_divisor_entry
-c64_test_element_after_sym:
-    brk
-#endif
-
-#if C64_TEST_SCRIPTED_EGO_DAMAGE_PRODUCT
-// c64_test_ego_damage — The product's ego damage entry (tramp_ego_apply_damage
-// into the $F000 runtime), called as OVL.ITEMS's rf_roll_damage calls it for
-// ego ammunition: from $E000, the KERNAL out, interrupts on and off. $01 and
-// the I flag come back as they were; a slay that does not apply leaves the
-// damage, while Slay Evil ammo triples damage against CF_EVIL (VMS tot_dam).
-c64_test_ego_damage:
-    cli
-    lda #BANK_NO_KERNAL
-    sta $01
-    lda #0
-    sta cmb_type                    // monster slot 0: no evil flag set below
-    sta cr_mflags
-    lda #12
-    sta cmb_damage
-    lda #EGO_AMMO_SLAY_EVIL
-    jsr tramp_ego_apply_damage
-    php
-    pla
-    and #$04                        // I: still clear
-    bne c64_test_ego_fail_sym
-    lda $01
-    cmp #BANK_NO_KERNAL
-    bne c64_test_ego_fail_sym
-    lda cmb_damage
-    cmp #12
-    bne c64_test_ego_fail_sym
-    sei
-    lda #CF_EVIL
-    sta cr_mflags
-    lda #EGO_AMMO_SLAY_EVIL
-    jsr tramp_ego_apply_damage
-    php
-    pla
-    and #$04                        // I: still set
-    beq c64_test_ego_fail_sym
-    lda $01
-    cmp #BANK_NO_KERNAL
-    bne c64_test_ego_fail_sym
-    lda cmb_damage
-    cmp #36                         // 12 * 3
-    bne c64_test_ego_fail_sym
-    lda #BANK_NO_BASIC
-    sta $01
-    jmp c64_test_ego_pass_sym
-c64_test_ego_fail_sym:
-    brk
-c64_test_ego_pass_sym:
-    brk
-#endif
-
 // hal_player_recalc_pflags — player_recalc_pflags_equipment (in OVL.TITLE,
 // co-located with item_wear/item_takeoff; its tail runs player_calc_combat).
 // Saves and restores caller current_overlay, $01, and I flag so Default and
@@ -1814,23 +1773,6 @@ tramp_item_pickup:
     cpy #1
     rts
 
-#if !C64_CARTRIDGE
-// tramp_reu_show_status — Bank out KERNAL to call banked status display
-// Patched into reu_show_status at startup by init code.
-tramp_reu_show_status:
-    php
-    sei
-    lda $01
-    pha
-    lda #BANK_NO_KERNAL         // $35 — I/O visible for screen writes
-    sta $01
-    jsr reu_show_status_banked
-    pla
-    sta $01
-    plp
-    rts
-
-#endif
 platform_main_loop_begin_c64:
 platform_vector_reassert_c64:
 platform_runtime_resync_c64:
@@ -1978,55 +1920,95 @@ tramp_item_exchange:
     jsr chest_dispatch
     jmp tramp_sr_epilogue
 
-// door_pick_roll lives in the chest overlay with chest_disarm_skill; saves and
-// restores caller current_overlay, $01, and I flag while propagating carry
-// (picked) back to door_try_open in OVL_TITLE.
+// door_pick_roll and player_disarm_get_effective_chance live in the $F000 RAM
+// runtime (64.bank); preserves caller $01, I, and Carry with zero disk loads.
 tramp_door_pick_roll:
     php
     sei
     lda $01
     pha
-    lda current_overlay
-    pha
-    lda #OVL_CHEST
-    jsr overlay_load_no_kernal
-    bcc !tdpr_run+
-    ldy #0
-    beq !tdpr_restore+
-!tdpr_run:
+    lda #BANK_NO_KERNAL
+    sta $01
     jsr door_pick_roll
     lda #0
     rol
     tay
-!tdpr_restore:
-    pla
-    beq !tdpr_bank+
-    cmp #OVL_CHEST
-    beq !tdpr_bank+
-    sty c64_tdpr_carry
-    jsr overlay_load_no_kernal
-    bcs !tdpr_fatal+
-    ldy c64_tdpr_carry
-!tdpr_bank:
-    jsr c64_install_ram_irq_vectors
     pla
     sta $01
     plp
     cpy #1
     rts
-!tdpr_fatal:
-    pla
-    plp
-    jmp entry_main
-c64_tdpr_carry: .byte 0
 
-item_spawn_level:
-    lda #OVL_CHEST
+// load_resume_reset runs in already-resident OVL_STORAGE right after load_game
+// and invalidates current_overlay so hal_player_recalc_pflags skips reloading it.
+tramp_load_resume_reset:
+    lda #OVL_STORAGE
     jsr overlay_load_no_kernal
-    bcs !isl_done+
-    jsr item_spawn_level_gen
-!isl_done:
+    bcs !tlrr_done+
+    jsr load_resume_reset
+    jsr overlay_invalidate
+!tlrr_done:
     jmp tramp_sr_epilogue
+
+// Shared A/Y dispatcher for cast/pray entry points in OVL_MODAL_MISC; records
+// c64_caller_ovl_restore = OVL_MODAL_MISC so nested tramp_sr_epilogue calls
+// restore OVL_MODAL_MISC, and preserves Carry on exit via c64_save_load_resync.
+c64_modal_cast_dispatch:
+    sta !cmcd_jsr+ + 1
+    sty !cmcd_jsr+ + 2
+    lda #OVL_MODAL_MISC
+    sta c64_caller_ovl_restore
+    jsr overlay_load_no_kernal
+    bcs !cmcd_fail+
+!cmcd_jsr:
+    jsr $ffff
+    php
+    lda #0
+    sta c64_caller_ovl_restore
+    plp
+    jmp c64_save_load_resync
+!cmcd_fail:
+    lda #0
+    sta c64_caller_ovl_restore
+    clc
+    jmp c64_save_load_resync
+
+tramp_sr_epilogue:
+    php
+    lda c64_caller_ovl_restore
+    beq !tsre_resync+
+    jsr overlay_load_no_kernal
+    bcs !tsre_fatal+
+    plp
+    sei
+    rts
+!tsre_resync:
+    jsr platform_runtime_resync_c64
+    plp
+    rts
+!tsre_fatal:
+    pla
+    jmp entry_main
+
+// Cold one-shot initialization helper (item_refresh_fixed_known in OVL_STORAGE);
+// saves and restores caller overlay.
+tramp_item_refresh_fixed_known:
+    lda current_overlay
+    pha
+    lda #OVL_STORAGE
+    jsr overlay_load_no_kernal
+    bcs !tirfk_fatal+
+    jsr item_refresh_fixed_known
+    pla
+    beq !tirfk_done+
+    jsr overlay_load_no_kernal
+    bcs !tirfk_fatal_no_pop+
+!tirfk_done:
+    rts
+!tirfk_fatal:
+    pla
+!tirfk_fatal_no_pop:
+    jmp entry_main
 
 tramp_spawn_nest_gold:
     lda #RT_NEST
@@ -2110,15 +2092,6 @@ tramp_ui_equip_select_display:
 !tuesd_keep_ovl:
     rts
 !tuesd_epilogue:
-    jmp tramp_sr_epilogue
-
-tramp_trap_trigger:
-    lda #OVL_DEATH
-    jsr overlay_load_no_kernal
-    bcs !ttt_done+
-    ldx df_disarm_trap_idx
-    jsr trap_trigger
-!ttt_done:
     jmp tramp_sr_epilogue
 
 // chest_dispatch is tail-called (A/Y = handler) from bash_command/disarm_command
@@ -2236,12 +2209,16 @@ test_expect_row: .byte 0
 test_expect_col: .byte 0
 
 .encoding "screencode_mixed"
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY
 test_inventory_title_str: .text "Inventory" ; .byte 0
 test_beginner_book_str:   .text "Spellbook Beginners-Magick" ; .byte 0
+#endif
+#if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 test_mage_book_title_str: .text "Mage Book" ; .byte 0
 test_magic_missile_str:   .text "Magic Missile" ; .byte 0
 // The cast list shows learned spells only (as Umoria); a new mage knows one.
 test_cast_one_spell_str:  .text "Cast which? (a-a, esc)" ; .byte 0
+#endif
 #endif
 
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY
@@ -2576,6 +2553,76 @@ program_end:
 // this init tail. Keeping it here leaves runtime-bank space for run setup.
 #if !C64_CARTRIDGE
 #import "../common/reu_loading_banked.s"
+tramp_reu_show_status:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_KERNAL         // $35 — I/O visible for screen writes
+    sta $01
+    jsr reu_show_status_banked
+    pla
+    sta $01
+    plp
+    rts
+#endif
+
+#if C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT
+.label c64_test_k_pflag_resist_fire   = PFLAG_RESIST_FIRE
+.label c64_test_k_ms_breath_fire      = MS_BREATH_FIRE
+.label c64_test_k_ms_breath_lightning = MS_BREATH_LIGHTNING
+c64_test_element_divisor:
+    cli
+c64_test_element_call_sym:
+    jsr mm_element_divisor_entry
+c64_test_element_after_sym:
+    brk
+#endif
+
+#if C64_TEST_SCRIPTED_EGO_DAMAGE_PRODUCT
+c64_test_ego_damage:
+    cli
+    lda #BANK_NO_KERNAL
+    sta $01
+    lda #0
+    sta cmb_type
+    sta cr_mflags
+    lda #12
+    sta cmb_damage
+    lda #EGO_AMMO_SLAY_EVIL
+    jsr tramp_ego_apply_damage
+    php
+    pla
+    and #$04
+    bne c64_test_ego_fail_sym
+    lda $01
+    cmp #BANK_NO_KERNAL
+    bne c64_test_ego_fail_sym
+    lda cmb_damage
+    cmp #12
+    bne c64_test_ego_fail_sym
+    sei
+    lda #CF_EVIL
+    sta cr_mflags
+    lda #EGO_AMMO_SLAY_EVIL
+    jsr tramp_ego_apply_damage
+    php
+    pla
+    and #$04
+    beq c64_test_ego_fail_sym
+    lda $01
+    cmp #BANK_NO_KERNAL
+    bne c64_test_ego_fail_sym
+    lda cmb_damage
+    cmp #36
+    bne c64_test_ego_fail_sym
+    lda #BANK_NO_BASIC
+    sta $01
+    jmp c64_test_ego_pass_sym
+c64_test_ego_fail_sym:
+    brk
+c64_test_ego_pass_sym:
+    brk
 #endif
 
 #if HAL_PLATFORM_CATALOG_RECORDS
@@ -3308,16 +3355,15 @@ catalog_init_tail_end:
     // eff_find_traps / eff_destroy_traps_doors: called from SpellOverlay ($E000)
     // with KERNAL banked out ($01 = $35), so $F000-$FFF9 is directly callable.
     #import "../../../core/spell_effects_overlay.s"
-    #define PM_MAP_BANKED
-    #define PM_MAP_SCRATCH_EXTERNAL
-    #import "../../../core/player_magic_map.s"
-    #undef PM_MAP_SCRATCH_EXTERNAL
-    #undef PM_MAP_BANKED
+    // Effective-disarm helpers: called from banked door_pick_roll ($F000) and
+    // from disarm_command in DeathOverlay ($E000, $01 = $35).
+    #import "../../../core/disarm_helpers.s"
     #define PM_EQ_BANKED
     #define PM_EQ_SCRATCH_EXTERNAL
     #import "../../../core/player_magic_earthquake.s"
     // Orb of Draining's ball entry (eff_ball_holy): called from ped_s17 in
     // the spell overlay, which stays loaded around it.
+    #import "../../../core/player_magic_ball_harm.s"
     #import "../../../core/player_magic_ball_holy.s"
     #undef PM_EQ_SCRATCH_EXTERNAL
     #undef PM_EQ_BANKED
@@ -3330,6 +3376,8 @@ banked_code_end:
 .assert "Runner visibility trampoline stays resident", run_monster_update_visibility_one < MAP_BASE, true
 .assert "Runner initialization implementation stays banked", run_initialize_impl >= $F000 && run_initialize_impl < banked_code_end, true
 .assert "Runner initialization trampoline stays resident", run_initialize < MAP_BASE, true
+.assert "Hot door open/close, trap trigger, and drop stay resident below MAP_BASE", door_try_open < MAP_BASE && door_try_close < MAP_BASE && trap_trigger < MAP_BASE && item_drop < MAP_BASE, true
+.assert "Hot lock-pick roll and disarm skill helpers stay banked in RAM", door_pick_roll >= $f000 && door_pick_roll < banked_code_end && player_disarm_get_effective_chance >= $f000 && player_disarm_get_effective_chance < banked_code_end && tramp_door_pick_roll < MAP_BASE, true
 
 // ============================================================
 // Town overlay — store code at $E000, output to separate PRG
@@ -3446,8 +3494,10 @@ c64_death_score_io:
     rts
     #import "../../../core/ui_recall.s"
     #import "../../../core/disarm.s"
-    #import "../../../core/disarm_helpers.s"
-    #import "../../../core/trap_trigger_cold.s"
+    #define PM_MAP_SCRATCH_EXTERNAL
+    #import "../../../core/player_magic_map.s"
+    #undef PM_MAP_SCRATCH_EXTERNAL
+    #import "../../../core/player_destroy_area.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
@@ -3514,6 +3564,7 @@ wizard_prompt_bad_value:
 
 wizard_bad_value_str:
     .text "BAD" ; .byte 0
+    #import "../../../core/player_magic_cast_cold.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
@@ -3524,20 +3575,21 @@ ovl_modal_misc_end:
 .segment SpellOverlay
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
+    #define PMX_MAP_AREA_TRAMPOLINE
+    #define PMX_DESTROY_AREA_EXTERNAL
     #define PMX_DETECT_EFFECTS_EXTERNAL
-    #define BALL_HARM_EXTERNAL
     #import "../../../core/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
     #import "../../../core/player_magic_execute_overlay.s"
-    #undef BALL_HARM_EXTERNAL
     #undef PMX_DETECT_EFFECTS_EXTERNAL
+    #undef PMX_DESTROY_AREA_EXTERNAL
+    #undef PMX_MAP_AREA_TRAMPOLINE
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
-    // Word of Destruction devastation engine: co-located with its only C64
-    // callers (mage dispatch + scroll/staff router) in this overlay.
-    #import "../../../core/player_destroy_area.s"
+    #import "../../../core/eff_identify_prompt_cold.s"
+    #import "../../../core/eff_detect_evil_cold.s"
     #define HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE
     #define SCROLL_P3_EXISTING_OWNER
     #define SCROLL_P3_NEW_OWNER
@@ -3559,6 +3611,8 @@ ovl_spell_end:
     #import "../../../core/ui_help_cmd_cold.s"
     #import "../../../core/ui_inventory.s"
     #import "../../../core/ui_equipment.s"
+    #import "../../../core/ui_character.s"
+    #import "../../../core/player_bg_draw_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
@@ -3567,11 +3621,11 @@ ovl_help_end:
 // UI overlay — low-frequency modal UI and symbol identify screens
 // ============================================================
 .segment UiOverlay
-    #import "../../../core/ui_character.s"
     #import "../../../core/ui_identify.s"
     #import "../../../core/spell_names.s"
     #import "../../../core/player_magic_select_overlay.s"
     #import "../../../core/player_gain_spell_impl.s"
+    #import "../../../core/player_magic_browse_cold.s"
     #import "../../../core/player_magic_learn_op.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
@@ -3646,6 +3700,8 @@ ovl_home_end:
     #import "../common/save_slot_menu.s"
     #import "../../../core/ui_disk_setup.s"
     #import "../common/disk_setup_banked.s"
+    #import "../../../core/load_resume_reset_cold.s"
+    #import "../../../core/item_refresh_known_cold.s"
 ovl_storage_end:
 .print "Storage overlay: " + (ovl_storage_end - $e000) + " bytes at $E000-$" + toHexString(ovl_storage_end)
 .assert "Storage overlay fits in $E000-$EFFF", ovl_storage_end <= $F000, true
@@ -3662,10 +3718,21 @@ c64_title_draw_entry:
     jsr title_clear_full_screen
     jsr title_load_and_draw
     jmp title_clear_below_menu
+title_draw_menu_ovl:
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #18
+    sta zp_cursor_row
+    lda #(SCREEN_COLS - (title_menu_str_end - title_menu_str)) / 2
+    sta zp_cursor_col
+    lda #<title_menu_str
+    sta zp_ptr0
+    lda #>title_menu_str
+    sta zp_ptr0_hi
+    jmp screen_put_string
     #import "../../../core/player_item_commands.s"
+    #import "../../../core/player_adjust_equipment_stat.s"
     #import "../../../core/player_pflags_cold.s"
-    #import "../../../core/door_open_close_cold.s"
-    #import "../../../core/item_drop_cold.s"
     #import "../../../core/starting_kit_cold.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $e000) + " bytes at $E000-$" + toHexString(ovl_title_end)

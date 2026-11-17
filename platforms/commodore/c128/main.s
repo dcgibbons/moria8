@@ -1047,11 +1047,7 @@ tramp_game_over_run:
     // 3. Calculate score
     jsr score_calculate
 
-    // 4. Load high scores from disk (needs KERNAL-visible ROM; shares CREATURE_BASE with item_cat_buf)
-#if !C128_CARTRIDGE
-    lda #0
-    sta icr_cache_valid
-#endif
+    // 4. Load high scores from disk (needs KERNAL-visible ROM)
     php
     sei
     lda #$ff
@@ -1275,6 +1271,7 @@ tramp_ui_exit:
     jmp tramp_ui_exit
 }
 
+#import "item_cat_vdc128.s"
 #define C128_PRODUCT_SOUND_UPDATE_FROM_INPUT
 #import "input128.s"
 
@@ -1968,6 +1965,13 @@ restart_entry:
     bcc !runtime_banked_loaded+
     jmp runtime_load_failed
 !runtime_banked_loaded:
+#if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
+    jsr screen_clear_for_font_restore
+    jsr c128_restore_vdc_rom_font
+#endif
+    // Load core residents AFTER any JDLCHR ($FF62) font restore so VDC cell
+    // bytes 8..15 ($2008-$3D2C) retain preloaded ITEM.CAT data, and BEFORE
+    // c128_preload_resident_play (relied on by test_cartridge.py).
     jsr c128_load_core_residents
     lda #11
     sta c128_runtime_load_stage
@@ -1976,8 +1980,7 @@ restart_entry:
     jmp runtime_load_failed
 !resident_play_loaded:
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
-    jsr screen_clear_for_font_restore
-    jsr c128_restore_vdc_rom_font
+    jsr hal_screen_clear
 #endif
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT
     lda c128_test_single_drive_fresh_save_armed
@@ -2432,15 +2435,6 @@ runtime_common_filename:
 runtime_common_filename_end:
     .byte 0
 .const RUNTIME_COMMON_FILENAME_LEN = runtime_common_filename_end - runtime_common_filename
-.const ITEM_IDX_FILE_NUM = 14
-.const ITEM_IDX_LOAD_ADDR = $0600
-#if !C128_CARTRIDGE
-item_idx_filename:
-    .text "ITEM.IDX"
-item_idx_filename_end:
-    .byte 0
-.const ITEM_IDX_FILENAME_LEN = item_idx_filename_end - item_idx_filename
-#endif
 .const RESIDENT_HUFFMAN_FILE_NUM = 15
 resident_huffman_filename:
     .text "128.HUFF"
@@ -2542,6 +2536,10 @@ c128_load_runtime_prg:
     dec c128_load_progress_count    // the repeat shows as the same file
     jmp !crl_try-
 !crl_done:
+    php
+    lda #1
+    sta crl_sa
+    plp
     rts
 
 crl_bank:     .byte 0
@@ -2550,6 +2548,7 @@ crl_name_len: .byte 0
 crl_name:     .word 0
 crl_dest:     .word 0
 crl_left:     .byte 0
+crl_sa:       .byte 1
 
 crl_load_once:
     lda c128_runtime_load_bank
@@ -2566,7 +2565,7 @@ crl_load_once:
 !runtime_no_display:
     lda disk_temp
     ldx program_device
-    ldy #1
+    ldy crl_sa
     jsr w_setlfs
 
     lda #0
@@ -2674,23 +2673,6 @@ c128_load_runtime_common_prg:
     jmp c128_load_runtime_prg
 }
 
-c128_load_item_idx_prg:
-    lda #ITEM_IDX_FILE_NUM
-    sta disk_temp
-    lda #ITEM_IDX_FILENAME_LEN
-    sta disk_status
-    lda #<item_idx_filename
-    sta zp_ptr0
-    lda #>item_idx_filename
-    sta zp_ptr0_hi
-    lda #<ITEM_IDX_LOAD_ADDR
-    sta zp_ptr1
-    lda #>ITEM_IDX_LOAD_ADDR
-    sta zp_ptr1_hi
-    lda #0
-    sta c128_runtime_load_bank
-    jmp c128_load_runtime_prg
-
 // Load the Huffman corpus into the Bank 1 $F000 region.
 c128_load_resident_huffman_prg:
     lda #RESIDENT_HUFFMAN_FILE_NUM
@@ -2734,11 +2716,10 @@ c128_load_core_residents:
     lda #3
     sta c128_runtime_load_stage
 #if !C128_CARTRIDGE
-    jsr c128_load_item_idx_prg
-    bcc !item_idx_loaded+
+    jsr c128_load_item_cat_vdc
+    bcc !item_cat_loaded+
     jmp runtime_load_failed
-!item_idx_loaded:
-    jsr c128_copy_item_idx_data
+!item_cat_loaded:
 #endif
     jsr recall_clear_all
     lda #4
@@ -3678,12 +3659,6 @@ tool_ego_prefix_hi:
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
-.macro ItemPickupSegment() {
-    .segment StorageOverlay
-}
-.macro ItemPickupRestoreSegment() {
-    .segment Default
-}
 #define RE_EQUIP_SEGMENT_CUSTOM
 .macro ReEquipSegment() {
     .segment StorageOverlay
@@ -4039,38 +4014,6 @@ recall_clear_all:
     sta zp_ptr1
     rts
 
-#define ITEM_CAT_MAP_CUSTOM
-#if C128_CARTRIDGE
-#define ITEM_CATALOG_CART
-#else
-#define ITEM_CAT_BUF_EXTERNAL
-.label ITEM_CAT_BUF_BASE = CREATURE_BASE
-// Keep MMU_ALL_RAM ($3E) active during ITEM.CAT IEC reads so top-common RAM
-// w_* wrappers ($FFB7-$FFD5, including w_close's explicit CLC before $FFC3)
-// handle KERNAL calls without shadowing $C000-$CFFF (numeric_format_u8).
-.macro ItemCatKernalIn() {
-}
-.macro ItemCatMap() {
-}
-.macro ItemCatUnmap() {
-}
-.macro ItemCatKernalOut() {
-    lda $d030
-    ora #$01
-    sta $d030
-}
-#endif
-#import "../common/item_catalog_records.s"
-#if !C128_CARTRIDGE
-c128_copy_item_idx_data:
-    ldy #ITMCAT_IDX_BODY_SIZE - 1
-!item_idx_copy:
-    lda ITEM_IDX_LOAD_ADDR,y
-    sta item_cat_idx_data,y
-    dey
-    bpl !item_idx_copy-
-    rts
-#endif
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 // Monitor seed file (outBin, zero bytes in Default): played by run_tests128.sh
 // when execution stops at c128_test_seed_scripted_spell_state (< $4000).
@@ -4205,15 +4148,16 @@ c128_resident_play_body:
 #import "../../../core/player_move.s"
 #undef PLAYER_LOOK_SCRATCH_RESIDENT
 // player_run uses pm_live_occ_x/y defined by the preceding player_move import.
+// Keep run_initialize resident in Bank 0 Default (< $AF00) so Shift+dir starts
+// directly with zero overlay swaps and zero floppy access.
 .macro PlayerRunInitializeSegment() {
-    .segment ModalMiscOverlay
+    .segment Default
 }
 .macro PlayerRunRestoreResidentSegment() {
     .segment C128ResidentPlay
 }
 #define PLAYER_RUN_INITIALIZE_EXTERNAL
-run_initialize:
-    :C128OverlayComputeTrampoline(9, run_initialize_impl)
+.label run_initialize = run_initialize_impl
 #import "../../../core/player_run.s"
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 #define HELP_TITLE_EXTERNAL
@@ -4963,7 +4907,10 @@ program_end:
 .assert "C128 modal persist stays below main_loop in Play slot", c128_resident_persist_end <= main_loop, true
 .assert "Wizard item generation lives in banked payload", wizard_generate_item_execute >= banked_payload && wizard_generate_item_execute < banked_code_end, true
 #endif
-.assert "C128 item.idx load buffer avoids vic40 boot probe ($0400-$043F) and stays in SCREEN_RAM scratch ($0400-$07FF)", ITEM_IDX_LOAD_ADDR >= $0600 && ITEM_IDX_LOAD_ADDR + ITMCAT_IDX_BODY_SIZE <= $0800, true
+.assert "VDC ITEM.CAT capacity covers full ITEM.CAT payload", ITMCAT_TOTAL_SIZE <= VDC_ITEM_CAT_TOTAL_CAP, true
+.assert "Bank 1 MAP_BASE staging covers full ITEM.CAT payload", MAP_BASE + ITMCAT_TOTAL_SIZE - 1 <= MAP_END, true
+.assert "VDC scroll-delta scratch stays below VDC ITEM.CAT low span", RVSD_SCRATCH_ATTR + VIEWPORT_W <= VDC_ITEM_CAT_LO_BASE, true
+.assert "Item pickup and run_initialize stay in Bank 0 resident image below $AF00", item_pickup >= $1c01 && item_pickup < program_end && run_initialize >= $1c01 && run_initialize < program_end && program_end <= $AF00, true
 .assert "C128 Disk Setup UI lives in persist payload", uds_show_insert_prompt >= c128_resident_persist_start && uds_show_insert_prompt < c128_resident_persist_end, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
@@ -4985,8 +4932,8 @@ program_end:
 .assert "Exit trampoline stays below $4000 BASIC ROM window", exit_trampoline_end <= $4000, true
 .assert "Runtime common ends before cartridge common chunk stub", runtime_common_data_end <= MMU_COMMON_CART_BASE, true
 #endif
-.assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num != ITEM_IDX_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
-.assert "C128 item-index logical file avoids marker and command channel", ITEM_IDX_FILE_NUM != hal_storage_marker_file_num && ITEM_IDX_FILE_NUM < hal_storage_cmd_channel, true
+.assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num != ITEM_CAT_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
+.assert "C128 item-catalog logical file avoids marker and command channel", ITEM_CAT_FILE_NUM != hal_storage_marker_file_num && ITEM_CAT_FILE_NUM < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Low runtime code stays below C128 scratch page", runtime_low_data_end <= CREATURE_BASE, true
 .assert "C128 play signature starts payload", c128_resident_play_sig0 == c128_resident_play_start, true
@@ -5313,7 +5260,7 @@ ovl_home_end:
 
 // ============================================================
 // Storage/Auxiliary item overlay — cold on-demand item commands, enchantment,
-// armour ego sub-tables, pickup, door jam, and exchange at $E000
+// armour ego sub-tables, door jam, and exchange at $E000
 // ============================================================
 .segment StorageOverlay
     #import "../../../core/player_item_commands.s"

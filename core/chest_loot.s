@@ -145,6 +145,9 @@ chest_product_after_generate_sym:
 !cfl_product_store:
     sta chest_product_path_stage
 #endif
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_warm_floor
+#endif
 !cfl_clear:
     lda #0
     sta chest_loot_pending

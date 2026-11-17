@@ -32,7 +32,7 @@ from .vice import CMD_MEM_GET, StopInfo
 from .worker import Worker
 
 D64_SIZE = 174848
-SAVE_VERSION = 0x20
+SAVE_VERSION = 0x21
 TOTAL_INV_SLOTS = 34
 ITEM_PAGE_SIZE = 255
 ITEM_PAGE_BIT = 0x40

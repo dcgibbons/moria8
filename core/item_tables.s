@@ -313,6 +313,36 @@ idc_save_y: .byte 0
 // Output: A = missile value (0 if not ranged; N/Z reflect A)
 // Preserves: X, Y
 item_get_missile:
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    bit item_cur_page
+    bvs !igm_zero+
+    cpx #IT_MISSILE_BASE
+    bcc !igm_zero+
+    cpx #IT_MISSILE_END
+    bcc !igm_tbl1+
+    cpx #IT_MISSILE2_BASE
+    bcc !igm_zero+
+    cpx #IT_MISSILE2_END
+    bcc !igm_tbl2+
+    cpx #ITEM_TYPE_AMMO_IRON_SHOT
+    bne !igm_zero+
+    lda #$83
+    rts
+!igm_tbl1:
+    lda igm_vals_49 - IT_MISSILE_BASE,x
+    rts
+!igm_tbl2:
+    lda igm_vals_137 - IT_MISSILE2_BASE,x
+    rts
+!igm_zero:
+    lda #0
+    rts
+igm_vals_49:  .byte 1, 2, 3, $81, $82, $83
+igm_vals_137: .byte 1, 1, 2
+igm_vals_end:
+.assert "igm_vals_49 matches IT_MISSILE span", (igm_vals_137 - igm_vals_49 == 6) && (IT_MISSILE_END - IT_MISSILE_BASE == 6), true
+.assert "igm_vals_137 matches IT_MISSILE2 span", (igm_vals_end - igm_vals_137 == 3) && (IT_MISSILE2_END - IT_MISSILE2_BASE == 3), true
+#else
     txa
     jsr item_get_category_a     // preserves X, Y
     cmp #ICAT_WEAPON
@@ -327,11 +357,15 @@ item_get_missile:
     ldy it_save_y
     ora #0
     rts
+#endif
 
 // item_get_weight_x — Load 16-bit weight for paged item (item_cur_page, X)
 // Output: icat_weight_lo/hi loaded, A = icat_weight_lo
 // Preserves: X, Y
 item_get_weight_x:
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jmp item_pickup_cache_get_weight_x
+#else
     sty it_save_y
     txa
     jsr item_cat_select_id
@@ -339,6 +373,7 @@ item_get_weight_x:
     ldy it_save_y
     lda icat_weight_lo
     rts
+#endif
 
 // item_get_dmg_packed_x — Load packed (dice<<4)|sides for paged item (item_cur_page, X)
 // Output: A = (dice<<4)|sides, icat_dmg_dice & icat_dmg_sides also set

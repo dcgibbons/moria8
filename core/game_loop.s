@@ -650,6 +650,9 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
 #endif
     jsr monster_spawn_level
     jsr item_spawn_level
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_prewarm
+#endif
 #if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_begin
     .byte $25
@@ -810,6 +813,9 @@ c64_test_single_drive_load_return_resume_entry:
     jsr tier_restore_after_overlay
 #if HAL_PLATFORM_MONSTER_CATALOG
     jsr catalog_refetch_slots
+#endif
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_prewarm
 #endif
 
     // Render the loaded level onto the cleared screen
@@ -1852,6 +1858,9 @@ level_change_generate_current:
 #endif
 #if C128_TEST_FORCE_DUNGEON_MELEE
     jsr c128_test_force_dungeon_melee
+#endif
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_prewarm
 #endif
 #if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda wizard_level_jump_active

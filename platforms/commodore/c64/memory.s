@@ -66,11 +66,19 @@
 .const C64_HIDDEN_ZP_SAVE_BASE     = C64_HIDDEN_AUX_BASE                 // $D700-$D78D (142 B, !C64_CARTRIDGE)
 .const C64_HIDDEN_MSG_HIST_BASE    = C64_HIDDEN_ZP_SAVE_BASE + ZP_SAVE_SIZE // $D78E-$D8CD (320 B)
 .const C64_HIDDEN_RECALL_BASE      = C64_HIDDEN_MSG_HIST_BASE + 320      // $D8CE-$DD29 (1,116 B, recall[279])
-.const C64_HIDDEN_FREE_BASE        = C64_HIDDEN_RECALL_BASE + 1116       // $DD2A-$DEFF (470 B free)
+.const C64_HIDDEN_FREE_BASE        = C64_HIDDEN_RECALL_BASE + 1116       // $DD2A-$DEFF (470 B: item pickup cache on !C64_CARTRIDGE)
 .assert "C64 hidden aux starts right after Huffman index", C64_HIDDEN_AUX_BASE == HUFF_INDEX_HIDDEN_END + 1, true
 .assert "C64 hidden aux excludes $DF00-$DFFF I/O page", C64_HIDDEN_AUX_END < C64_HIDDEN_RAM_RESERVE_BASE, true
 .assert "C64 recall[279] excludes $DE00-$DFFF cartridge/REU I/O pages", C64_HIDDEN_RECALL_BASE + 1116 <= $de00, true
 .assert "C64 hidden aux allocations fit within $D700-$DEFF", C64_HIDDEN_FREE_BASE <= C64_HIDDEN_AUX_END + 1, true
+#if !C64_CARTRIDGE
+// Active-level item weight + decoded-name cache ($DD2A-$DEFF = 470 B, !C64_CARTRIDGE),
+// strictly below $DF00 (REU/UCI I/O reserve) and accessed only under SEI + BANK_ALL_RAM ($30).
+.const ITEM_PICKUP_CACHE_BASE      = C64_HIDDEN_FREE_BASE
+.const ITEM_PICKUP_CACHE_SIZE      = C64_HIDDEN_AUX_END - ITEM_PICKUP_CACHE_BASE + 1
+.label c64_hidden_aux_end          = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE
+.assert "C64 item pickup cache fits in $DD2A-$DEFF hidden DRAM (< $DF00)", ITEM_PICKUP_CACHE_BASE == $dd2a && ITEM_PICKUP_CACHE_SIZE == 470 && c64_hidden_aux_end <= C64_HIDDEN_RAM_RESERVE_BASE, true
+#endif
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
 // C128-only constant used by shared tier_manager staging metadata.
