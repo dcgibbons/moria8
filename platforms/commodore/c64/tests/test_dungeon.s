@@ -22,7 +22,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #67
+    ldx #68                     // tc_results' 69 bytes
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -406,7 +406,7 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 68, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 69, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 t67_trials: .byte 0
 run_cycle_expected:
@@ -4974,6 +4974,39 @@ test_start:
     lda #$00
     sta tc_results + 67
 !t68_done:
+
+    // ==========================================
+    // Test 69: "You take N damage." is one message (build queue, 2026-11-16).
+    // trap_apply_damage printed "You take " as the message and the number and
+    // " damage." past it, so the message row's length ended at column 9 and
+    // a following -more- covered the number: "You take  -more-ge." on every
+    // port, one trap hit in four. With row 0 in use, 1d1 lands on row 1, and
+    // its length must reach the end of "You take 1 damage." (18 columns).
+    // ==========================================
+    lda #50
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #MSG_PENDING            // row 0 holds a message: the damage goes to row 1
+    sta zp_msg_flags
+    lda #1
+    ldx #1
+    jsr trap_apply_damage       // 1d1: "You take 1 damage."
+    lda msg_row1_col
+    cmp #18
+    bne !t69_fail+
+    lda zp_player_hp_lo
+    cmp #49
+    bne !t69_fail+
+    lda #$01
+    sta tc_results + 68
+    jmp !t69_done+
+!t69_fail:
+    lda #$00
+    sta tc_results + 68
+!t69_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

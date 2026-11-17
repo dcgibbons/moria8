@@ -90,8 +90,11 @@ hal_item_cat_read_byte:
 .segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
-.segment TestUnusedMonsterMagic
+// combat.s runs: trap_apply_damage builds "You take N damage." with its
+// message helpers (huff_append_combat, combat_append_decimal,
+// cmb_term_and_print; 2026-11-16), so it is resident, not parked.
 #import "../../../../core/combat.s"
+.segment TestUnusedMonsterMagic
 #import "../../../../core/scene_mat_tile.s"
 .segment Default
 .segment TestCreateOverlay

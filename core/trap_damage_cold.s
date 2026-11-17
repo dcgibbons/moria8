@@ -54,27 +54,21 @@ trap_apply_rolled_damage:
     lda zp_player_hp_hi
     sta player_data + PL_HP_HI
 
-    // Print "YOU TAKE N DAMAGE."
+    // Print "You take N damage." as one message, built in combat_msg_buf as
+    // "You found N gold pieces." is (core/item.s). Printed as "You take " with
+    // the number and " damage." written past it, the message row's length
+    // ended at column 9 and a following -more- covered the number: "You take
+    // -more-ge." on every port, about one trap hit in four, and the history
+    // kept "You take " alone (build queue, 2026-11-16).
+    lda #0
+    sta cmb_buf_idx
     ldx #HSTR_DF_DAMAGE_PRE
-    jsr huff_print_msg
-
-    // Print damage number and " DAMAGE." inline on same row
-    // msg_print left cursor at end of "YOU TAKE "
-    // Set message color for inline text
-    lda zp_text_color
-    pha
-    lda #COL_MSG_TEXT
-    sta zp_text_color
-
+    jsr huff_append_combat
     lda df_target_x
-    jsr screen_put_decimal
-
+    jsr combat_append_decimal
     ldx #HSTR_DF_DAMAGE_POST
-    jsr huff_decode_string
-    jsr hal_screen_put_string
-
-    pla
-    sta zp_text_color
+    jsr huff_append_combat
+    jsr cmb_term_and_print
 
     // Play hit sound for surviving hits; lethal trap damage uses the
     // standard death path so the death sound is not overwritten.

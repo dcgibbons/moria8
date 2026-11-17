@@ -76,6 +76,7 @@ render_local_area:
 #import "../../../../core/monster_attack.s"
 
 combat_append_str:
+combat_append_decimal:
 combat_append_monster_name:
 cmb_term_and_print:
 combat_msg_monster_in_way:
