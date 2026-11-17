@@ -211,6 +211,16 @@ class DeathCauseTest(unittest.TestCase):
         self.assertEqual(self.cause("the Kobold hits you. | You have been slain.", status=faint), "Kobold")
         self.assertEqual(self.cause("You found nothing.", "You have been slain."), "unknown")
 
+    def test_the_phase_4_traps_are_named(self) -> None:
+        """2026-11-16: 10 of 45 deaths on 3e9fd0c were "unknown": the trap
+        door, blade, fire, acid and dart traps (core/trap_trigger_cold.s)
+        were not named. The damage line itself is garbled on screen."""
+        for message, cause in (("A trap door opens!", "trap: trap door"), ("A blade hits you!", "trap: blade"),
+                               ("Flames hit you!", "trap: fire"), ("Acid hits you!", "trap: acid"),
+                               ("A dart hits you!", "trap: dart")):
+            self.assertEqual(self.cause(f"{message} | You take  -more-ge.", "You have been slain. | -more-"), cause)
+        self.assertEqual(self.cause("the Red Dragon breathes acid. | You have been slain."), "Red Dragon")
+
     def test_spits_is_not_a_pit(self) -> None:
         self.assertEqual(self.cause("the Green Naga spits acid on you.", "You have been slain."), "Green Naga")
         self.assertEqual(self.cause("You fall into a pit!", "You have been slain."), "trap: pit")

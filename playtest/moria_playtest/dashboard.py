@@ -347,6 +347,12 @@ def trace_tail(trace: Path, count: int) -> list[dict[str, Any]]:
     return rows
 
 
+# The Phase 4 traps' messages (core/trap_trigger_cold.s, huffman DF_DART_HITS):
+# unnamed, their deaths were "unknown" (2026-11-16: 10 of 45 on 3e9fd0c).
+TRAP_MESSAGES = {"A trap door opens!": "trap: trap door", "A blade hits you!": "trap: blade",
+                 "Flames hit you!": "trap: fire", "Acid hits you!": "trap: acid", "A dart hits you!": "trap: dart"}
+
+
 def death(trace: Path) -> dict[str, Any]:
     """How a character died, from its trace's end: the cause in groups (a
     trap, poison, a caster's spell, or the creature that hit it), the kit it
@@ -368,6 +374,8 @@ def death(trace: Path) -> dict[str, Any]:
         cause = "trap: pit"
     elif "arrow" in text.lower():
         cause = "trap: arrow"
+    elif any(message in text for message in TRAP_MESSAGES):
+        cause = next(name for message, name in TRAP_MESSAGES.items() if message in text)
     elif "casts a spell" in text:
         cause = "caster's spell"
     elif any("poison" in (r.get("msg") or "").lower() for r in rows) and (
