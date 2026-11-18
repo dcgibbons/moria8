@@ -41,30 +41,50 @@ player_cast_spell:
     clc
     rts
 !pm_can_cast:
+    lda #SPELL_MAGE
+    bne pm_cast_or_pray_common
+
+// ============================================================
+// player_pray — Handle 'p' (priest-affinity spell classes)
+// Output: carry SET = turn consumed, CLEAR = cancelled
+// ============================================================
+player_pray:
+    lda player_data + PL_SPELL_TYPE
+    cmp #SPELL_PRIEST
+    beq !pp_can_pray+
+    ldx #HSTR_PM_NO_PRAY
+    jsr huff_print_msg
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_no_cast_sym
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jmp c64_test_spell_fail_no_cast_sym
+#endif
+    clc
+    rts
+!pp_can_pray:
+    lda #SPELL_PRIEST
+
+pm_cast_or_pray_common:
+    pha
 #if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
     jsr tramp_pm_require_class_level
 #else
     jsr pm_require_class_level
 #endif
+    pla
     bcs !pm_level_ok+
-#if C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_level_sym
 #endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_fail_level_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_level_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_level_sym
 #endif
     clc
     rts
 !pm_level_ok:
-    lda #SPELL_MAGE
     sta pm_spell_type
-    lsr
+    lda #0
     sta pm_mode
     jsr pm_setup_active_tables
     jsr pm_select_book
@@ -78,16 +98,10 @@ player_cast_spell:
     bne !pm_have_spells+
     ldx #HSTR_PM_NOT_KNOWN
     jsr huff_print_msg
-#if C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_known_sym
 #endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_fail_known_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_known_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_known_sym
 #endif
     clc
@@ -101,16 +115,10 @@ player_cast_spell:
     jsr pm_validate_selected_spell
 #endif
     bcs !pm_ready+
-#if C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_validate_sym
 #endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_fail_validate_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_validate_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_validate_sym
 #endif
     clc
@@ -134,8 +142,11 @@ player_cast_spell:
     rts
 !pm_success:
     jsr tramp_spell_execute_selected
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_detect_check_point:        // the runner checks an evil monster is detected here
+#endif
     jsr pm_finish_success_common
-#if C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
 c128_test_spell_pass_sym:
     brk
 #endif
@@ -148,124 +159,6 @@ c128_test_spell_pass_sym:
     lda #12
     sta c64_test_spell_return_pending
 #endif
-    sec
-    rts
-
-!pm_cancel:
-#if C128_TEST_SCRIPTED_SPELL
-    jmp c128_test_spell_fail_cancel_sym
-#endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_cancel_pass_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_cancel_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jmp c64_test_spell_fail_cancel_sym
-#endif
-    clc
-    rts
-
-// ============================================================
-// player_pray — Handle 'p' (priest-affinity spell classes)
-// Output: carry SET = turn consumed, CLEAR = cancelled
-// ============================================================
-player_pray:
-    lda player_data + PL_SPELL_TYPE
-    cmp #SPELL_PRIEST
-    beq !pp_can_pray+
-    ldx #HSTR_PM_NO_PRAY
-    jsr huff_print_msg
-#if C128_TEST_SCRIPTED_PRAYER
-    jmp c128_test_spell_fail_no_cast_sym
-#endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jmp c64_test_spell_fail_no_cast_sym
-#endif
-    clc
-    rts
-!pp_can_pray:
-#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
-    jsr tramp_pm_require_class_level
-#else
-    jsr pm_require_class_level
-#endif
-    bcs !pp_level_ok+
-#if C128_TEST_SCRIPTED_PRAYER
-    jmp c128_test_spell_fail_level_sym
-#endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jmp c64_test_spell_fail_level_sym
-#endif
-    clc
-    rts
-!pp_level_ok:
-    lda #SPELL_PRIEST
-    sta pm_spell_type
-    lda #0
-    sta pm_mode
-    jsr pm_setup_active_tables
-    jsr pm_select_book
-    bcc !pp_cancel+
-#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
-    jsr tramp_pm_build_known_list
-#else
-    jsr pm_build_known_list_from_book
-#endif
-    lda pm_spell_count
-    bne !pp_have_prayers+
-    ldx #HSTR_PM_NOT_KNOWN
-    jsr huff_print_msg
-#if C128_TEST_SCRIPTED_PRAYER
-    jmp c128_test_spell_fail_known_sym
-#endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jmp c64_test_spell_fail_known_sym
-#endif
-    clc
-    rts
-!pp_have_prayers:
-    jsr pm_prompt_visible_spell_choice
-    bcc !pp_cancel+
-#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
-    jsr tramp_pm_validate_spell
-#else
-    jsr pm_validate_selected_spell
-#endif
-    bcs !pp_ready+
-#if C128_TEST_SCRIPTED_PRAYER
-    jmp c128_test_spell_fail_validate_sym
-#endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jmp c64_test_spell_fail_validate_sym
-#endif
-    clc
-    rts
-!pp_ready:
-#if HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
-    jsr tramp_calc_spell_failure
-#else
-    jsr calc_spell_failure
-#endif
-    bcc !pp_success+
-#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
-    jsr tramp_pm_handle_fail_roll
-#else
-    jsr pm_handle_fail_roll
-#endif
-    sec
-    rts
-!pp_success:
-    jsr tramp_spell_execute_selected
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-c64_test_detect_check_point:        // the runner checks an evil monster is detected here
-#endif
-    jsr pm_finish_success_common
-#if C128_TEST_SCRIPTED_PRAYER
-c128_test_spell_pass_sym:
-    brk
-#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     inc c64_test_spell_success_count
     lda c64_test_spell_return_pending
@@ -277,11 +170,14 @@ c128_test_spell_pass_sym:
     sec
     rts
 
-!pp_cancel:
-#if C128_TEST_SCRIPTED_PRAYER
+!pm_cancel:
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_cancel_sym
 #endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_cancel_pass_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_cancel_sym
 #endif
     clc
@@ -347,14 +243,19 @@ pm_select_book:
     sec
     sbc pm_spell_type
 #if HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
-    // The caller's overlay, which a '?' list must restore: OVL_UI for a
-    // spell gained, OVL_SPELL on the Atari for a cast or prayer (2026-11-15:
-    // with only the gain declared, 708f3df's end of the stack probe left the
-    // cast's '?' book list returning into OVL_HELP's bytes).
+    // Overlay callers (G study: pm_mode != 0 in OVL_UI, or non-resident cast
+    // overlays) set piw_return_overlay so '?' restores them; resident cast/pray
+    // (PLAYER_CAST_RESIDENT with pm_mode == 0) leave piw_return_overlay = OVL_NONE
+    // so book-'?' keeps OVL_UI cached in $E000 for spell-'?'.
+#if PLAYER_CAST_RESIDENT
+    ldy pm_mode
+    beq !pm_sb_no_ret_ovl+
+#endif
     pha
     lda current_overlay
     sta piw_return_overlay
     pla
+!pm_sb_no_ret_ovl:
 #endif
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_select_filtered_inv

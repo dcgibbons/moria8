@@ -279,7 +279,7 @@ mae_slot_ok:
 // Input: A = mat_atk_type (preserved from mon_atk_effect_ext)
 // ============================================================
 mae_cold_call:
-#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME || PLAYER_MAGIC_BROWSE_TRAMPOLINED
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME || HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
     jmp mae_cold_body
 #elif HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
     cmp #ATK_LOSE_EXP

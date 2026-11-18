@@ -2,14 +2,14 @@
 // player_magic_cast_cold.s — Cold cast/pray validation & book-known list helpers
 //
 // Module ownership:
-//   owner: PmHelpersSegment (resident / play-slot) when
-//     !PLAYER_MAGIC_CAST_HELPERS_EXTERNAL, or co-located with PlayerCastSegment
-//     (e.g. SpellOverlay on Atari8) / port cold overlay when
+//   owner: PmHelpersSegment (resident Default on Plus/4, C64, Atari 8-bit;
+//     play-slot on Apple IIe, BBC Master, CX16) when
+//     !PLAYER_MAGIC_CAST_HELPERS_EXTERNAL, or TownOverlay on C128 when
 //     PLAYER_MAGIC_CAST_HELPERS_EXTERNAL is defined.
 //   lifetime: one 'm' cast or 'p' pray invocation; leaf/resident-only callees
 //     with zero nested overlay loads (preserves piw_return_overlay 662921d).
 //   callers: player_cast_spell and player_pray (core/player_magic.s; direct when
-//     co-located, or via tramp_pm_* when PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED).
+//     resident/co-located, or via tramp_pm_* when PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED).
 
 pm_require_class_level:
     ldx player_data + PL_CLASS

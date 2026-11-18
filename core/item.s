@@ -1220,7 +1220,13 @@ re_bonus_p1:  .byte 0
 re_page:      .byte 0
 re_cat:       .byte 0
 
+#if !ROLL_ENCHANTMENT_SEGMENT_CUSTOM
+.macro RollEnchantmentSegment() {}
+.macro RollEnchantmentRestoreSegment() {}
 roll_enchantment:
+#endif
+:RollEnchantmentSegment()
+roll_enchantment_body:
     sta zp_temp0                // Save slot_lo
     lda item_cur_page
     sta re_page
@@ -1399,6 +1405,7 @@ chest_trap_band:
     .byte CHEST_P1_TRAP_SUMMON, CHEST_P1_TRAP_SUMMON, CHEST_P1_TRAP_SUMMON
     .byte (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA), (CHEST_P1_TRAP_STR | CHEST_P1_TRAP_POISON | CHEST_P1_TRAP_PARA)
     .byte (CHEST_P1_TRAP_SUMMON | CHEST_P1_TRAP_EXPL)
+:RollEnchantmentRestoreSegment()
 
 // re_equip — roll_enchantment's equipment branch (re_page, zp_temp0, re_cat,
 // and icat_flags_0..3 / icat_p1_lo preloaded). NEVER calls ITEM.CAT I/O!

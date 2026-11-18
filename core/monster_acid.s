@@ -129,10 +129,10 @@ mat_acid_slot: .byte 0
 mat_acid_msg:  .byte 0
 maea_slots:    .byte EQUIP_BODY, EQUIP_SHIELD, EQUIP_HEAD, EQUIP_HANDS, EQUIP_FEET, EQUIP_CLOAK
 
-#if PLAYER_MAGIC_BROWSE_TRAMPOLINED
+#if HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
 .segment Default
 #endif
 #import "monster_attack_effects.s"
-#if PLAYER_MAGIC_BROWSE_TRAMPOLINED
+#if HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
 .segment RuntimeBanked
 #endif

@@ -29,7 +29,9 @@ from item_ids import (  # noqa: E402
     ITEM_LARGE_STEEL_CHEST,
     ITEM_LARGE_WOODEN_CHEST,
     ITEM_PAGE_BIT,
+    ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK,
     ITEM_RUINED_CHEST,
+    ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK,
     ITEM_SMALL_IRON_CHEST,
     ITEM_SMALL_STEEL_CHEST,
     ITEM_SMALL_WOODEN_CHEST,
@@ -86,6 +88,7 @@ MAX_FLOOR_ITEMS = 42
 MAX_INV_SLOTS = 22
 TRAP_ARROW = 1
 
+PL_CLASS = 18
 PL_LEVEL = 19
 PL_INT_CUR = 28
 PL_DEX_CUR = 30
@@ -93,9 +96,17 @@ PL_HP_LO = 33
 PL_HP_HI = 34
 PL_MHP_LO = 35
 PL_MHP_HI = 36
+PL_MANA = 37
+PL_MAX_MANA = 38
 PL_XP_0 = 46
 PL_MAP_X = 49
 PL_MAP_Y = 50
+PL_SPELL_TYPE = 60
+PL_SPELLS_LEARNT_0 = 61
+CLASS_ROGUE = 3
+SPELL_MAGE = 1
+OVL_UI = 6
+OVL_SPELL = 8
 
 KBDBUF_ADDR = 0x0277
 KBDBUF_COUNT_ADDR = 0x00C6
@@ -232,6 +243,11 @@ def main() -> int:
     fi_y = int(symbols[".fi_y"], 16)
     fi_meta_hi = int(symbols[".fi_meta_hi"], 16)
     inv_item_id = int(symbols[".inv_item_id"], 16)
+    inv_qty = int(symbols[".inv_qty"], 16)
+    inv_ego = int(symbols[".inv_ego"], 16)
+    zp_player_mp = int(symbols[".zp_player_mp"], 16)
+    zp_player_mmp = int(symbols[".zp_player_mmp"], 16)
+    current_overlay_addr = int(symbols[".current_overlay"], 16)
 
     disk_watch_syms = (
         ".c64_disk_open",
@@ -493,9 +509,63 @@ def main() -> int:
             print("FAIL: 'd' drop did not place item on floor at (25,10)")
             return 2
 
+        # 8. Seed [Beginners-Magick] in free carried slot 10 and grant Light
+        # (spell 3: 0% fail at Rogue L23 / INT 118, 3 MP cost), warm OVL_SPELL
+        # once, then verify 0 disk/overlay reads on cancel + repeat cast, and
+        # cached OVL_UI across Book-'?' -> Spell-'?'.
+        connector.clear_breakpoints()
+        connector.send_command(f"break ${input_get_key_addr}")
+        connector.poke(inv_item_id + 10, ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK)
+        connector.poke(inv_qty + 10, 1)
+        connector.poke(inv_ego + 10, ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK)
+        connector.poke(player_data + PL_CLASS, CLASS_ROGUE)
+        connector.poke(player_data + PL_LEVEL, 23)
+        connector.poke(zp_player_lvl, 23)
+        connector.poke(player_data + PL_SPELL_TYPE, SPELL_MAGE)
+        connector.poke(player_data + PL_MANA, 50)
+        connector.poke(player_data + PL_MAX_MANA, 40)
+        connector.poke(zp_player_mp, 50)
+        connector.poke(zp_player_mmp, 40)
+        connector.poke(player_data + PL_SPELLS_LEARNT_0, 0x08)
+
+        # Warm-up cast ('m', 'a', 'a') loads OVL_SPELL once (50 -> 47 MP).
+        step_keys(connector, [0x4D, PETSCII_A, PETSCII_A], input_get_key_addr, "warmup cast", args.boot_timeout)
+        if read_bytes(connector, zp_player_mp, 1)[0] != 47 or read_bytes(connector, current_overlay_addr, 1)[0] != OVL_SPELL:
+            print("FAIL: warmup cast did not leave mp=47 and current_overlay=OVL_SPELL")
+            return 2
+
+        # Re-arm all zero-disk / zero-overlay-load traps for cancel + repeat cast.
+        for addr in disk_watch_addrs:
+            if int(addr, 16) < 0xA000:
+                connector.send_command(f"break ${addr}")
+            else:
+                connector.send_command(f"break ${addr} if (@cpu:$0001 & $01) == $00")
+        connector.send_command("break $ffc0 if (@cpu:$0001 & $02) != $00")
+        connector.send_command("break $ffd5 if (@cpu:$0001 & $02) != $00")
+
+        step_keys(connector, [0x4D, 0x20], input_get_key_addr, "cast cancel", args.step_timeout)
+        step_keys(connector, [0x4D, PETSCII_A, PETSCII_A], input_get_key_addr, "repeat cast", args.step_timeout)
+        if read_bytes(connector, zp_player_mp, 1)[0] != 44 or read_bytes(connector, current_overlay_addr, 1)[0] != OVL_SPELL:
+            print("FAIL: repeat cast did not spend 3 MP (47->44) in warm OVL_SPELL")
+            return 2
+
+        # Book-'?' loads OVL_UI once; Spell-'?' must hit cached OVL_UI with 0 reloads.
+        connector.clear_breakpoints()
+        connector.send_command(f"break ${input_get_key_addr}")
+        step_keys(connector, [0x4D, 0x3F, PETSCII_A], input_get_key_addr, "book '?' list", args.boot_timeout)
+        if read_bytes(connector, current_overlay_addr, 1)[0] != OVL_UI:
+            print("FAIL: book '?' did not keep OVL_UI cached")
+            return 2
+        ovl_disk_addr = symbols[".overlay_load_disk"]
+        if int(ovl_disk_addr, 16) < 0xA000:
+            connector.send_command(f"break ${ovl_disk_addr}")
+        else:
+            connector.send_command(f"break ${ovl_disk_addr} if (@cpu:$0001 & $01) == $00")
+        step_keys(connector, [0x3F, 0x20], input_get_key_addr, "spell '?' cached OVL_UI", args.step_timeout)
+
         print(
             f"PASS: product_hot_residency_smoke (reu=0, cache=${ipc_end:04X}, "
-            f"item_id={f_ids[chosen_slot]}, 0 disk/ITEM.CAT/overlay reads)"
+            f"item_id={f_ids[chosen_slot]}, 0 disk/ITEM.CAT/overlay reads incl. repeat cast & '?' cache)"
         )
         return 0
     except Exception as exc:  # noqa: BLE001

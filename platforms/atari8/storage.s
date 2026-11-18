@@ -46,7 +46,7 @@ xe_slot_populated:
 .const XE_SLOT4_PAGES  = 15   // OVL.HLP
 .const XE_SLOT5_PAGES  = 16   // OVL.UI
 .const XE_SLOT6_PAGES  = 15   // OVL.ITM
-.const XE_SLOT7_PAGES  = 15   // OVL.SPL
+.const XE_SLOT7_PAGES  = 16   // OVL.SPL
 .const XE_SLOT8_PAGES  = 14   // OVL.MDL
 .const XE_SLOT9_PAGES  = 16   // OVL.CHS
 .const XE_SLOT10_PAGES = 16   // MONSTER.CAT sectors 0..31   (4,096 B)
@@ -56,7 +56,7 @@ xe_slot_populated:
 .const XE_SLOT14_PAGES = 3    // TITLE.DAT (621 B)
 .const XE_SLOT15_PAGES = 6    // MONSTER.CAT sectors 128..139 (1,536 B)
 .const XE_SLOT16_PAGES = 16   // OVL.HOM
-.const XE_SLOT17_PAGES = 16   // OVL.STO
+.const XE_SLOT17_PAGES = 15   // OVL.STO
 
 // Bank 0 ($E2, $4000-$7FFF): Slots 0, 5, 9, 10 (64/64 pages)
 .const XE_SLOT0_WIN_HI     = XE_WIN_BASE_HI

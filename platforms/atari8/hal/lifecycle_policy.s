@@ -84,6 +84,7 @@
 #define HAL_PLATFORM_ITEM_PROMPT_RELOAD_PLUS4_BANK_RAM
 #define HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
 #define HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
+#define HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
 #endif
 
 // Optional legal-load cancellation returns directly to resident gameplay.

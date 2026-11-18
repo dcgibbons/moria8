@@ -38,7 +38,7 @@
 #define STARTING_KIT_EXTERNAL
 #define LOAD_RESUME_RESET_EXTERNAL
 #define PLAYER_MAGIC_BROWSE_EXTERNAL
-#define PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#define PLAYER_CAST_RESIDENT
 #define EFF_IDENTIFY_PROMPT_EXTERNAL
 #define EFF_DETECT_EVIL_EXTERNAL
 #define RECALL_VIEW_OVERLAYED
@@ -95,10 +95,11 @@
     .segment Plus4HuffIndex
 }
 
-// Cast/pray cores live in OVL_TITLE; shared pm_* helpers stay resident
-// because OVL_UI (player_gain_spell_impl) and OVL_MODAL_MISC call them directly.
+// Cast/pray selection shell and shared pm_* helpers stay resident so repeat
+// casts hit cached OVL_SPELL (0 disk loads) and multi-book '?' browsing hits
+// cached OVL_UI (1 load total).
 .macro PlayerCastSegment() {
-    .segment TitleOverlay
+    .segment Default
 }
 .macro PlayerCastRestoreResidentSegment() {
     .segment Default
@@ -490,8 +491,7 @@ plus4_storage_marker_present:
 #define CMD_JAM_EXTERNAL
 #define CMD_JAM_SEGMENT_CUSTOM
 .macro CmdJamSegment() {
-    // Items overlay is full; jam parks with the cold chest commands.
-    .segment ChestOverlay
+    .segment ItemActionsOverlay
 }
 .macro CmdJamRestoreSegment() {
     .segment Default
@@ -587,9 +587,17 @@ plus4_high_bss_end:
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
-// roll_enchantment's equipment branch parks in OVL_CHEST behind tramp_re_equip
-// (co-located with item_spawn_level_gen and chest_loot), freeing 4.bank for
-// resident trap_trigger_cold.s.
+// roll_enchantment_body and re_equip co-locate in OVL_CHEST behind resident
+// roll_enchantment (item_spawn_level_gen and chest_loot already run inside
+// OVL_CHEST with 0 swaps; wizard_generate_item_execute swaps and restores
+// OVL_MODAL_MISC), freeing Default for the resident spell-cast shell.
+#define ROLL_ENCHANTMENT_SEGMENT_CUSTOM
+.macro RollEnchantmentSegment() {
+    .segment ChestOverlay
+}
+.macro RollEnchantmentRestoreSegment() {
+    .segment Default
+}
 #define RE_EQUIP_SEGMENT_CUSTOM
 .macro ReEquipSegment() {
     .segment ChestOverlay
@@ -597,7 +605,7 @@ plus4_high_bss_end:
 .macro ReEquipRestoreSegment() {
     .segment Default
 }
-.label re_equip_entry = tramp_re_equip
+.label re_equip_entry = re_equip
 #import "../../../core/item.s"
 #if PLUS4_CARTRIDGE
 #define ITEM_CATALOG_CART
@@ -651,7 +659,6 @@ plus4_high_bss_end:
 .segment ModalMiscOverlay
 #import "../../../core/player_magic_levelup.s"
 #import "../../../core/player_magic_tail.s"
-#import "../../../core/player_magic_display.s"
 .segment Default
 #import "../../../core/player_magic.s"
 
@@ -1505,18 +1512,6 @@ tramp_item_quaff:
     ldx #OVL_ITEMS
     jmp plus4_ovl_caller_dispatch
 
-tramp_player_cast_spell:
-    lda #<player_cast_spell
-    ldy #>player_cast_spell
-    ldx #OVL_TITLE
-    jmp plus4_ovl_caller_dispatch
-
-tramp_player_pray:
-    lda #<player_pray
-    ldy #>player_pray
-    ldx #OVL_TITLE
-    jmp plus4_ovl_caller_dispatch
-
 plus4_disp_items:
     ldx #OVL_ITEMS
     .byte $2c
@@ -1666,7 +1661,7 @@ tramp_ui_inv_select_display:
     lda plus4_caller_ovl_restore
     sta piw_return_overlay
 !tuisd_have_ret:
-    lda #OVL_HELP
+    lda #OVL_UI
     jsr overlay_load_no_kernal
     bcs !tuisd_done+
     jsr ui_inv_select_display
@@ -1679,22 +1674,6 @@ tramp_ui_equip_select_display:
     bcs !tuesd_done+
     jsr ui_equip_select_display
 !tuesd_done:
-    jmp plus4_ovl_caller_epilogue
-
-tramp_spell_list_display:
-    lda #OVL_UI
-    jsr overlay_load_no_kernal
-    bcs !tsld_done+
-    jsr spell_list_display
-!tsld_done:
-    jmp plus4_ovl_caller_epilogue
-
-tramp_spell_execute_selected:
-    lda #OVL_SPELL
-    jsr overlay_load_no_kernal
-    bcs !tses_done+
-    jsr spell_execute_selected
-!tses_done:
     jmp plus4_ovl_caller_epilogue
 
 tramp_eff_ext_eat:
@@ -1713,26 +1692,18 @@ tramp_eff_ext_quaff:
 !teeq_done:
     jmp plus4_ovl_caller_epilogue
 
-// calc_spell_failure lives in OVL.MODAL on this platform; carry is the
-// result, so the resync runs under php/plp.
+// calc_spell_failure lives in OVL.SPELL co-located with spell_execute_selected;
+// carry is the result (C=1 fail, C=0 success), preserved across resync.
 tramp_calc_spell_failure:
-    lda #OVL_MODAL_MISC
+    lda #OVL_SPELL
     jsr overlay_load_no_kernal
     bcs !done+
     jsr calc_spell_failure
 !done:
     php
-    lda plus4_caller_ovl_restore
-    beq !tcsf_resync+
-    jsr overlay_load_no_kernal
-    bcs !tcsf_fatal+
-!tcsf_resync:
     jsr plus4_platform_runtime_resync
     plp
     rts
-!tcsf_fatal:
-    pla
-    jmp entry_main
 
 // ============================================================
 // Ego item trampolines — SEI + bank out KERNAL, call $F000+
@@ -1780,9 +1751,9 @@ tramp_ego_apply_damage:
     rts
 
 
-// tramp_roll_ego_type / tramp_re_equip — Swap OVL_CHEST when needed (for
-// roll_armour_ego and re_equip) while preserving any active caller overlay.
-// Level item generation and chest loot already run inside OVL_CHEST (0 swaps).
+// tramp_roll_ego_type / roll_enchantment — Swap OVL_CHEST when needed (for
+// roll_armour_ego and roll_enchantment_body) while preserving any active caller
+// overlay. Level item generation and chest loot already run inside OVL_CHEST (0 swaps).
 plus4_tret_arg: .byte 0
 plus4_tret_res: .byte 0
 
@@ -1802,7 +1773,8 @@ tramp_roll_ego_type:
     jsr roll_ego_type
     jmp plus4_chest_ovl_restore_ret_a
 
-tramp_re_equip:
+roll_enchantment:
+    sta plus4_tret_arg
     lda current_overlay
     pha
     cmp #OVL_CHEST
@@ -1813,7 +1785,8 @@ tramp_re_equip:
 !tre_loaded:
     sei
     jsr plus4_bank_ram
-    jsr re_equip
+    lda plus4_tret_arg
+    jsr roll_enchantment_body
 plus4_chest_ovl_restore_ret_a:
     sta plus4_tret_res
     pla
@@ -2688,6 +2661,7 @@ ovl_modal_misc_end:
     #undef PMX_DESTROY_AREA_EXTERNAL
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
+    #import "../../../core/player_magic_display.s"
     #import "../../../core/spell_effects_overlay.s"
     #import "../../../core/eff_identify_prompt_cold.s"
     #import "../../../core/eff_detect_evil_cold.s"
@@ -2710,7 +2684,6 @@ ovl_spell_end:
     #import "../../../core/ui_help_data.s"
     #import "../../../core/ui_help_page2_data.s"
     #import "../../../core/ui_help.s"
-    #import "../../../core/ui_inventory.s"
     #import "../../../core/ui_equipment.s"
 plus4_help_cmd_body:
     lda #<help_pages
@@ -2733,6 +2706,7 @@ ovl_help_end:
 // ============================================================
 .segment UiOverlay
     #import "../../../core/ui_identify.s"
+    #import "../../../core/ui_inventory.s"
     #import "../../../core/spell_names.s"
     #import "../../../core/player_magic_select_overlay.s"
     #import "../../../core/player_gain_spell_impl.s"
@@ -2940,13 +2914,12 @@ plus4_title_finish_menu_ovl:
     #import "../../../core/disarm.s"
     #import "../../../core/tunnel.s"
     #import "../../../core/calc_dig_cold.s"
-    #import "../../../core/player_magic_cast_cold.s"
     #import "../../../core/player_magic_earthquake.s"
     #import "../../../core/player_magic_map.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $e000) + " bytes at $E000-$" + toHexString(ovl_title_end)
 .assert "Title overlay fits in $E000-$EFFF", ovl_title_end <= $F000, true
-.assert "Plus/4 hot gameplay entries stay resident (< MAP_BASE / $F000-$FBFF) while cold bodies live in $E000 overlays", run_initialize < MAP_BASE && door_try_open < MAP_BASE && door_try_close < MAP_BASE && door_pick_roll < MAP_BASE && player_disarm_get_effective_chance < MAP_BASE && item_pickup < MAP_BASE && tramp_trap_trigger < MAP_BASE && trap_trigger >= $f000 && trap_trigger < banked_code_end && hal_player_recalc_pflags < MAP_BASE && player_recalc_pflags_equipment >= $e000 && player_recalc_pflags_equipment < ovl_modal_misc_end && tramp_load_resume_reset < MAP_BASE && load_resume_reset >= $e000 && load_resume_reset < ovl_storage_end && calc_dig_ability >= $e000 && calc_dig_ability < ovl_title_end && eff_earthquake >= $e000 && eff_earthquake < ovl_title_end && eff_map_area >= $e000 && eff_map_area < ovl_title_end && eff_wall_to_mud >= $e000 && eff_wall_to_mud < ovl_spell_end && eff_find_traps >= $e000 && eff_find_traps < ovl_spell_end && eff_destroy_traps_doors >= $e000 && eff_destroy_traps_doors < ovl_spell_end && eff_identify_prompt >= $e000 && eff_identify_prompt < ovl_spell_end && eff_detect_evil_only >= $e000 && eff_detect_evil_only < ovl_spell_end && item_spawn_level < MAP_BASE && item_spawn_level_gen >= $e000 && item_spawn_level_gen < ovl_chest_end && re_equip >= $e000 && re_equip < ovl_chest_end && roll_armour_ego >= $e000 && roll_armour_ego < ovl_chest_end && tramp_item_drop < MAP_BASE && item_drop >= $e000 && item_drop < ovl_help_end && tramp_help_cmd_body < MAP_BASE && plus4_help_cmd_body >= $e000 && plus4_help_cmd_body < ovl_help_end, true
+.assert "Plus/4 hot gameplay entries stay resident (< MAP_BASE / $F000-$FBFF) while cold bodies live in $E000 overlays", run_initialize < MAP_BASE && door_try_open < MAP_BASE && door_try_close < MAP_BASE && door_pick_roll < MAP_BASE && player_disarm_get_effective_chance < MAP_BASE && item_pickup < MAP_BASE && tramp_trap_trigger < MAP_BASE && trap_trigger >= $f000 && trap_trigger < banked_code_end && hal_player_recalc_pflags < MAP_BASE && player_recalc_pflags_equipment >= $e000 && player_recalc_pflags_equipment < ovl_modal_misc_end && tramp_load_resume_reset < MAP_BASE && load_resume_reset >= $e000 && load_resume_reset < ovl_storage_end && calc_dig_ability >= $e000 && calc_dig_ability < ovl_title_end && eff_earthquake >= $e000 && eff_earthquake < ovl_title_end && eff_map_area >= $e000 && eff_map_area < ovl_title_end && player_cast_spell < MAP_BASE && player_pray < MAP_BASE && pm_build_known_list_from_book < MAP_BASE && calc_spell_failure >= $e000 && calc_spell_failure < ovl_spell_end && ui_inv_select_display >= $e000 && ui_inv_select_display < ovl_ui_end && eff_wall_to_mud >= $e000 && eff_wall_to_mud < ovl_spell_end && eff_find_traps >= $e000 && eff_find_traps < ovl_spell_end && eff_destroy_traps_doors >= $e000 && eff_destroy_traps_doors < ovl_spell_end && eff_identify_prompt >= $e000 && eff_identify_prompt < ovl_spell_end && eff_detect_evil_only >= $e000 && eff_detect_evil_only < ovl_spell_end && item_spawn_level < MAP_BASE && item_spawn_level_gen >= $e000 && item_spawn_level_gen < ovl_chest_end && re_equip >= $e000 && re_equip < ovl_chest_end && roll_armour_ego >= $e000 && roll_armour_ego < ovl_chest_end && tramp_item_drop < MAP_BASE && item_drop >= $e000 && item_drop < ovl_help_end && tramp_help_cmd_body < MAP_BASE && plus4_help_cmd_body >= $e000 && plus4_help_cmd_body < ovl_help_end, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

@@ -149,6 +149,7 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     shuffles = syms.get("potion_shuffle", 0)
     id_known = syms.get("id_known_bits", 0)
     recall_data = syms.get("recall_data_start", 0)
+    ovl_load_disk = syms.get("overlay_load_disk", 0)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi", "cat_record", "cat_ext_record"))
 
@@ -163,6 +164,7 @@ local KEY_WAIT_END = 0x{key_wait_end:04X}
 local XE_PRESENT = 0x{xe_present:04X}
 local XE_SLOT_POP = 0x{xe_slot_pop:04X}
 local CURRENT_OVL = 0x{current_ovl:04X}
+local OVL_LOAD_DISK_ADDR = 0x{ovl_load_disk:04X}
 local PLAYER_X_ADDR = 0x{zp_px:04X}
 local PLAYER_Y_ADDR = 0x{zp_py:04X}
 local PLAYER_MP_ADDR = 0x{zp_mp:04X}
@@ -923,8 +925,10 @@ function run()
 
     prog:write_u8(POISON_ADDR, 5)
     inv_seed(0, {ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_NEUTRALIZE_POISON})
-    send_key(0x51) -- 'Q'
+    send_key(0x51) -- 'Q' (OVL_HELP) -> '?' (OVL_UI) -> 'A' (restores OVL_HELP)
     assert_line("quaff_neut_prompt", wait_screen("Quaff which potion", 80))
+    send_key(0x3F) -- '?'
+    assert_line("quaff_neut_inv_list", wait_screen("Inventory", 150) or wait_screen("Potion", 150))
     send_key(0x41) -- 'A'
     assert_line("quaff_neutralize", wait_screen("You feel better.", 80) and prog:read_u8(POISON_ADDR) == 0)
     -- SHIFT+X (KBCODE Shift+X normalizes to $D8): a cursed primary is
@@ -989,9 +993,30 @@ function run()
     assert_line("cast_book2_prompt", wait_screen("Spell book (a-b)?", 80))
     send_key(0x3F) -- '?': the book list
     assert_line("cast_book_list", wait_screen("Magick I", 200))
+    assert_line("cast_book_list_ovl_ui", prog:read_u8(CURRENT_OVL) == 6)
     send_key(0x42) -- 'B'
     assert_line("cast_book2_refused", wait_screen("You don't know that spell.", 200))
     drain_more(4)
+    -- OVL.UI (6) is still cached from Book-'?': another M -> '?' -> A -> '?'
+    -- must execute both Book-'?' and Spell-'?' with 0 overlay_load_disk calls!
+    local cpu = manager.machine.devices[":maincpu"]
+    local ovl_hits = 0
+    local ovl_tap = prog:install_read_tap(OVL_LOAD_DISK_ADDR, OVL_LOAD_DISK_ADDR, "ovl_ui_cache",
+        function(offset, data, mask)
+            if cpu.state["PC"].value == OVL_LOAD_DISK_ADDR then ovl_hits = ovl_hits + 1 end
+        end)
+    send_key(0x4D) -- 'M'
+    assert_line("cast_cached_book_prompt", wait_screen("Spell book (a-b)?", 80))
+    send_key(0x3F) -- Book-'?'
+    assert_line("cast_cached_book_list", wait_screen("Magick I", 80))
+    send_key(0x41) -- 'A' ([Beginners-Magick])
+    assert_line("cast_cached_which", wait_screen("Cast which?", 80))
+    send_key(0x3F) -- Spell-'?'
+    assert_line("cast_cached_spell_list", wait_screen("Magic Missile", 80))
+    send_key(0x1B) -- ESC
+    wait_frames(30)
+    ovl_tap:remove()
+    assert_line("cast_book_and_spell_q_zero_reload", ovl_hits == 0 and prog:read_u8(CURRENT_OVL) == 6)
     local turn_c = prog:read_u8(TURN_LO_ADDR)
     send_key(0x53) -- 'S' (search)
     wait_frames(60)
@@ -1011,10 +1036,43 @@ function run()
     send_key(0x3F) -- '?'
     assert_line("priest_book_title", wait_screen("Prayer Book", 80))
     assert_line("priest_names", wait_screen("Bless", 20) and screen_has("Detect Evil"))
+    local turn0 = prog:read_u8(TURN_LO_ADDR)
     send_key(0x41) -- 'A'
-    wait_frames(80)
-    drain_more(4)
-    assert_line("pray_executed", not screen_has("Pray which?"))
+    for _ = 1, 200 do
+        wait_frames(10)
+        if screen_has("-more-") then send_key(0x20) end
+        if prog:read_u8(TURN_LO_ADDR) ~= turn0 and prog:read_u8(CURRENT_OVL) == 8 then break end
+    end
+    assert_line("pray_executed", not screen_has("Pray which?") and prog:read_u8(CURRENT_OVL) == 8)
+    -- Repeat prayer & cancel while OVL.SPL (8) is warm: 0 overlay_load_disk hits.
+    prog:write_u8(PLAYER_DATA_ADDR + 37, 50)
+    prog:write_u8(PLAYER_DATA_ADDR + 38, 40)
+    prog:write_u8(PLAYER_MP_ADDR, 50)
+    prog:write_u8(PLAYER_MP_ADDR + 1, 40)
+    local cpu = manager.machine.devices[":maincpu"]
+    local ovl_hits = 0
+    local ovl_tap = prog:install_read_tap(OVL_LOAD_DISK_ADDR, OVL_LOAD_DISK_ADDR, "ovl_spl_cache",
+        function(offset, data, mask)
+            if cpu.state["PC"].value == OVL_LOAD_DISK_ADDR then ovl_hits = ovl_hits + 1 end
+        end)
+    send_key(0x50) -- 'P'
+    assert_line("pray_cancel_prompt", wait_screen("Prayer book", 80))
+    send_key(0x1B) -- ESC cancel
+    wait_frames(30)
+    local turn1 = prog:read_u8(TURN_LO_ADDR)
+    send_key(0x50) -- 'P'
+    assert_line("pray_repeat_book", wait_screen("Prayer book", 80))
+    send_key(0x41) -- 'A'
+    assert_line("pray_repeat_which", wait_screen("Pray which?", 80))
+    send_key(0x41) -- 'A'
+    for _ = 1, 80 do
+        wait_frames(5)
+        if screen_has("-more-") then send_key(0x20) end
+        if prog:read_u8(TURN_LO_ADDR) ~= turn1 then break end
+    end
+    ovl_tap:remove()
+    assert_line("pray_repeat_zero_disk",
+        ovl_hits == 0 and prog:read_u8(PLAYER_MP_ADDR) == 49 and prog:read_u8(CURRENT_OVL) == 8)
     manager.machine:exit()
 end
 """

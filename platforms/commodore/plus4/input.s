@@ -56,9 +56,14 @@ input_get_key:
     ldx plus4_test_key_index
 #if PLUS4_TEST_SCRIPTED_HOT_RES_PRODUCT
     cpx #10
-    bne plus4_test_hot_res_continue
+    bne !hot_res_chk_warm+
 plus4_test_hot_res_wait_for_harness:
     jmp plus4_test_hot_res_wait_for_harness
+!hot_res_chk_warm:
+    cpx #13
+    bne plus4_test_hot_res_continue
+plus4_test_hot_res_warm_wait:
+    jmp plus4_test_hot_res_warm_wait
 plus4_test_hot_res_continue:
 #endif
     lda plus4_test_key_script,x
@@ -128,15 +133,18 @@ plus4_test_key_script:
     .byte $20, $d3, $20, 0
 #elif PLUS4_TEST_SCRIPTED_HOT_RES_PRODUCT
     // Keys 0..9: New game -> Town -> East -> '>' descend to DL1 (prewarm runs).
-    // Keys 10..: L/H moves, SHIFT+L corridor run, O/C/O plain door, step through,
+    // Keys 10..12: Warm-up M A A cast loads 4.SPELL once before zero-disk watch.
+    // Keys 13..: L/H moves, SHIFT+L corridor run, O/C/O plain door, step through,
     // O locked door (door_pick_roll), step through, L onto arrow trap, L onto
-    // non-gold item, G pickup.
+    // non-gold item, G pickup, M SPACE cancel, and M A A repeat spell cast.
     .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, $4c, $3e
+    .byte $4d, $41, $41
     .byte $4c, $48, $cc
     .byte $4f, $4c, $43, $4c, $4f, $4c, $4c, $4c
     .byte $4f, $4c, $20, $4c, $4c
     .byte $4c
-    .byte $4c, $47, 0
+    .byte $4c, $47
+    .byte $4d, $20, $4d, $41, $41, 0
 #else
     .byte $44, $32, $39, $0d, $33, $20, $59, 0 // D, 2, 9, RETURN, 3, SPACE, Y
 #endif

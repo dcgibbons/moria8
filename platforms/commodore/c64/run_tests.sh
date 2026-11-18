@@ -2582,7 +2582,7 @@ PY
     # Reaching scripted-input exhaustion means all three generations, the overlay
     # restore, and the inventory view returned to the main loop. Verify
     # invariants: still on dungeon level 1, and the inventory display left its
-    # owning overlay resident (OVL_HELP = 5).
+    # owning overlay resident (OVL_UI = 6).
     local dlvl_lc ovl_lc
     dlvl_lc=$(echo "$dlvl_addr" | tr '[:upper:]' '[:lower:]')
     ovl_lc=$(echo "$ovl_addr" | tr '[:upper:]' '[:lower:]')
@@ -2595,7 +2595,7 @@ PY
         return
     fi
 
-    if ! grep -qiE "^>C:${ovl_lc}  05" "$tty_log"; then
+    if ! grep -qiE "^>C:${ovl_lc}  06" "$tty_log"; then
         echo "FAIL (inventory overlay not resident after inventory display)"
         echo "    Log: $tty_log"
         FAIL=$((FAIL + 1))
@@ -2699,7 +2699,7 @@ print(f"0x{I.ITEM_SLOT_MACE:02x} 0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.
             --name "$name" \
             --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
-            --start-symbol ".title_menu_loop" \
+            --start-symbol ".msg_init" \
             --until-pass \
             --main-vs "$main_vs" \
             --boot-d64 "$boot_d64" \
@@ -2791,7 +2791,7 @@ run_chest_open_product_smoke() {
             --name "$name" \
             --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
-            --start-symbol ".title_menu_loop" \
+            --start-symbol ".msg_init" \
             --until-pass \
             --main-vs "$main_vs" \
             --boot-d64 "$boot_d64" \
@@ -2879,13 +2879,14 @@ run_chest_open_product_reu_smoke() {
 
     # Same scripted chest open, but with a 512K REU attached: overlays stash
     # into the REU at boot and the deferred GEN fetch (and CHEST load) come
-    # from REU DMA rather than disk. reu_overlays_stashed=1 proves the boot
-    # stash ran; the stage/loot state proves the REU-backed path completes.
+    # from REU DMA rather than disk. Split the monitor phases at
+    # .reu_stash_overlays (< $E000 RAM) so boot+catalog preload and 13-overlay
+    # stash+REU gameplay each stay well under the 30s per-phase cap under load.
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
             --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
-            --start-symbol ".title_menu_loop" \
+            --start-symbol ".reu_stash_overlays" \
             --until-pass \
             --main-vs "$main_vs" \
             --boot-d64 "$boot_d64" \
@@ -3000,7 +3001,7 @@ run_chest_open_product_genfail_smoke() {
             --name "$name" \
             --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
-            --start-symbol ".title_menu_loop" \
+            --start-symbol ".msg_init" \
             --until-pass \
             --main-vs "$main_vs" \
             --boot-d64 "$boot_d64" \

@@ -49,7 +49,7 @@
 #define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
 #define UI_CHAR_BG_EXTERNAL
 #define PLAYER_MAGIC_BROWSE_EXTERNAL
-#define PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#define PLAYER_CAST_RESIDENT
 #define BALL_HARM_EXTERNAL
 #define EFF_IDENTIFY_PROMPT_EXTERNAL
 #define EFF_DETECT_EVIL_EXTERNAL
@@ -104,10 +104,11 @@
     .segment C64HuffIndex
 }
 
-// Cast/pray entry points park in ModalMiscOverlay co-located with
-// player_magic_cast_cold.s and calc_spell_failure; PmHelpers stay in Default.
+// Cast/pray selection shell and shared pm_* helpers stay resident so repeat
+// casts hit cached OVL_SPELL (0 disk loads) and multi-book '?' browsing hits
+// cached OVL_UI (1 load total).
 .macro PlayerCastSegment() {
-    .segment ModalMiscOverlay
+    .segment Default
 }
 .macro PlayerCastRestoreResidentSegment() {
     .segment Default
@@ -119,9 +120,9 @@
     .segment Default
 }
 .macro ItemInitIdentSegment() {
-    // One-shot new-game identification init runs from the items overlay so
-    // the resident image keeps room for the chest catalog rows.
-    .segment ItemActionsOverlay
+    // Co-locate one-shot new-game identification init in OVL_TITLE alongside
+    // starting_kit_cold.s and player_pflags_cold.s (0 extra load at New Game).
+    .segment TitleOverlay
 }
 .macro ChestRouteSegment() {
     .segment Default
@@ -654,12 +655,17 @@ ol_target:        .byte 0
 // Keep item_spawn_level below BASIC ROM ($A000) so monitor `until $item_spawn_level`
 // in catalog_spawn_product_smoke never collides with BASIC ROM during autostart.
 item_spawn_level:
+    jsr item_init_floor
+    lda zp_player_dlvl
+    beq !isl_town+
     lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !isl_done+
     jsr item_spawn_level_gen
 !isl_done:
     jmp tramp_sr_epilogue
+!isl_town:
+    rts
 .assert "item_spawn_level stays below BASIC ROM ($A000)", item_spawn_level < $a000, true
 
 #import "../../../core/monster_ai.s"
@@ -726,8 +732,17 @@ hal_recall_write_byte:
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
-// roll_enchantment's equipment branch rides the banked runtime behind
-// tramp_re_equip (resistance armour, 2026-11-11, filled Default).
+// roll_enchantment_body parks in OVL_CHEST alongside item_spawn_level_gen (0
+// swaps during level generation; chest/drop/wizard callers swap and restore
+// caller current_overlay), freeing Default for the resident spell-cast shell;
+// its equipment branch rides the banked runtime behind tramp_re_equip.
+#define ROLL_ENCHANTMENT_SEGMENT_CUSTOM
+.macro RollEnchantmentSegment() {
+    .segment ChestOverlay
+}
+.macro RollEnchantmentRestoreSegment() {
+    .segment Default
+}
 #define RE_EQUIP_SEGMENT_CUSTOM
 .macro ReEquipSegment() {
     .segment RuntimeBanked
@@ -817,10 +832,6 @@ c64_item_cat_saved_port: .byte 0
 .segment ModalMiscOverlay
 #import "../../../core/player_magic_levelup.s"
 #import "../../../core/player_magic_tail.s"
-// Spell-failure calc is cold (per cast attempt); parks here to fund the
-// state-aware monster door engine. player_magic.s reaches it via
-// tramp_calc_spell_failure (HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE).
-#import "../../../core/player_magic_display.s"
 .segment Default
 #import "../../../core/player_magic.s"
 
@@ -1692,6 +1703,39 @@ hal_player_recalc_pflags:
     plp
     jmp entry_main
 
+// roll_enchantment — Resident wrapper running roll_enchantment_body in
+// OVL_CHEST while preserving caller current_overlay, $01, and I flag.
+roll_enchantment:
+    php
+    sei
+    tay
+    lda $01
+    pha
+    lda current_overlay
+    pha
+    cmp #OVL_CHEST
+    beq !re_ovl_ready+
+    lda #OVL_CHEST
+    jsr overlay_load_no_kernal
+    bcs !hprp_fatal-
+!re_ovl_ready:
+    tya
+    jsr roll_enchantment_body
+    tay
+    pla
+    beq !re_restore_bank+
+    cmp #OVL_CHEST
+    beq !re_restore_bank+
+    jsr overlay_load_no_kernal
+    bcs !hprp_fatal_after_pop-
+!re_restore_bank:
+    jsr c64_install_ram_irq_vectors
+    pla
+    sta $01
+    plp
+    tya
+    rts
+
 // tramp_re_equip — roll_enchantment's equipment branch (banked at $F000).
 // Input: zp_temp0 = item type. Output: A = p1, fi_add_* set. Restores the
 // caller's $01 and I flag: the GEN and Chest overlays call it from $E000.
@@ -1912,12 +1956,13 @@ tramp_eff_earthquake:
     plp
     rts
 
-// item_exchange lives in the Chest overlay (the Items overlay is full); a
-// failed load returns carry set, like the Items trampolines.
+// item_exchange lives in OVL_ITEMS; a failed load returns carry set.
 tramp_item_exchange:
-    lda #<item_exchange
-    ldy #>item_exchange
-    jsr chest_dispatch
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !tie_done+
+    jsr item_exchange
+!tie_done:
     jmp tramp_sr_epilogue
 
 // door_pick_roll and player_disarm_get_effective_chance live in the $F000 RAM
@@ -1950,28 +1995,18 @@ tramp_load_resume_reset:
 !tlrr_done:
     jmp tramp_sr_epilogue
 
-// Shared A/Y dispatcher for cast/pray entry points in OVL_MODAL_MISC; records
-// c64_caller_ovl_restore = OVL_MODAL_MISC so nested tramp_sr_epilogue calls
-// restore OVL_MODAL_MISC, and preserves Carry on exit via c64_save_load_resync.
-c64_modal_cast_dispatch:
-    sta !cmcd_jsr+ + 1
-    sty !cmcd_jsr+ + 2
-    lda #OVL_MODAL_MISC
-    sta c64_caller_ovl_restore
+// calc_spell_failure lives in OVL.SPELL co-located with spell_execute_selected;
+// carry is the result (C=1 fail, C=0 success), preserved across resync.
+tramp_calc_spell_failure:
+    lda #OVL_SPELL
     jsr overlay_load_no_kernal
-    bcs !cmcd_fail+
-!cmcd_jsr:
-    jsr $ffff
+    bcs !done+
+    jsr calc_spell_failure
+!done:
     php
-    lda #0
-    sta c64_caller_ovl_restore
+    jsr platform_runtime_resync_c64
     plp
-    jmp c64_save_load_resync
-!cmcd_fail:
-    lda #0
-    sta c64_caller_ovl_restore
-    clc
-    jmp c64_save_load_resync
+    rts
 
 tramp_sr_epilogue:
     php
@@ -2072,7 +2107,7 @@ tramp_ui_inv_select_display:
     lda c64_caller_ovl_restore
     sta piw_return_overlay
 !tuisd_load:
-    lda #OVL_HELP
+    lda #OVL_UI
     jsr overlay_load_no_kernal
     bcs !tuisd_done+
     jsr ui_inv_select_display
@@ -3564,7 +3599,7 @@ wizard_prompt_bad_value:
 
 wizard_bad_value_str:
     .text "BAD" ; .byte 0
-    #import "../../../core/player_magic_cast_cold.s"
+    #import "../../../core/store_restock_overlay.s"
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
@@ -3588,6 +3623,7 @@ ovl_modal_misc_end:
     #undef PMX_MAP_AREA_TRAMPOLINE
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
+    #import "../../../core/player_magic_display.s"
     #import "../../../core/eff_identify_prompt_cold.s"
     #import "../../../core/eff_detect_evil_cold.s"
     #define HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE
@@ -3609,7 +3645,6 @@ ovl_spell_end:
     #import "../../../core/ui_help_page2_data.s"
     #import "../../../core/ui_help.s"
     #import "../../../core/ui_help_cmd_cold.s"
-    #import "../../../core/ui_inventory.s"
     #import "../../../core/ui_equipment.s"
     #import "../../../core/ui_character.s"
     #import "../../../core/player_bg_draw_cold.s"
@@ -3622,6 +3657,7 @@ ovl_help_end:
 // ============================================================
 .segment UiOverlay
     #import "../../../core/ui_identify.s"
+    #import "../../../core/ui_inventory.s"
     #import "../../../core/spell_names.s"
     #import "../../../core/player_magic_select_overlay.s"
     #import "../../../core/player_gain_spell_impl.s"
@@ -3637,6 +3673,7 @@ ovl_ui_end:
 .segment ItemActionsOverlay
     #define SCROLL_P3_ROUTER_ENABLED
     #import "../../../core/item_actions_overlay.s"
+    #import "../../../core/item_exchange.s"
     #import "../../../core/ranged_fire.s"
     #import "../../../core/throw.s"
     #import "../../../core/bash.s"
@@ -3670,13 +3707,9 @@ ovl_gen_end:
 // ============================================================
 .segment ChestOverlay
     #import "../../../core/chest.s"
-    #import "../../../core/item_exchange.s"   // SHIFT+X: the Items overlay is full
-    // Store init/restock is transition-only (new game, town re-entry); moved
-    // from ModalMiscOverlay so wizard_generate_item_execute fits there (OVL_CHEST).
-    #import "../../../core/store_restock_overlay.s"
     #import "../../../core/item_spawn_cold.s"
 ovl_chest_end:
-.assert "Store restock runs in OVL.CHEST", store_init_all >= $e000 && store_restock_all < ovl_chest_end, true
+.assert "Store restock runs in OVL.MODAL", store_init_all >= $e000 && store_restock_all < ovl_modal_misc_end, true
 .assert "Wizard item generation runs in OVL.MODAL", wizard_generate_item_execute >= $e000 && wizard_generate_item_execute < ovl_modal_misc_end, true
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true
@@ -3751,3 +3784,4 @@ legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
 .segment Default
+.assert "C64 cast/pray shell stays below BASIC ROM ($A000) while spell failure and inventory '?' co-locate in OVL.SPELL / OVL.UI", player_cast_spell < $a000 && player_pray < $a000 && pm_build_known_list_from_book < $a000 && calc_spell_failure >= $e000 && calc_spell_failure < ovl_spell_end && ui_inv_select_display >= $e000 && ui_inv_select_display < ovl_ui_end && roll_enchantment_body >= $e000 && roll_enchantment_body < ovl_chest_end, true

@@ -21,7 +21,7 @@ reu_show_status_banked:
     adc #$ff                    // Add 1023 low byte
     lda reu_tier_offset_hi
     adc #$03                    // Add 1023 high byte + carry
-    lsr                         // >> 2 to get KB
+    ror                         // >> 2 to get KB (preserving carry at 63..64 KB)
     lsr
     // A = used KB (0-255 range, actual max ~18)
 

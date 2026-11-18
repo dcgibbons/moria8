@@ -27,9 +27,8 @@
 #define ITEM_REFRESH_KNOWN_EXTERNAL
 #define EFF_IDENTIFY_PROMPT_EXTERNAL
 #define EFF_DETECT_EVIL_EXTERNAL
-#define PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#define PLAYER_CAST_RESIDENT
 #define PLAYER_MAGIC_BROWSE_EXTERNAL
-#define PLAYER_MAGIC_BROWSE_TRAMPOLINED
 #define STARTING_KIT_EXTERNAL
 #define LOAD_RESUME_RESET_EXTERNAL
 #define CALC_DIG_EXTERNAL
@@ -88,7 +87,7 @@
     .segment Default
 }
 .macro PlayerCastSegment() {
-    .segment StorageOverlay
+    .segment Default
 }
 .macro PlayerCastRestoreResidentSegment() {
     .segment Default
@@ -459,7 +458,6 @@ high_resident_end:
 .segment ModalMiscOverlay
 #import "../../core/player_magic_levelup.s"
 #import "../../core/player_magic_tail.s"
-#import "../../core/player_magic_display.s"
 .segment Default
 #import "../../core/player_magic.s"
 
@@ -817,14 +815,51 @@ tramp_spawn_nest_gold:
     rts
 
 item_spawn_level:
+    jsr item_init_floor
+    lda zp_player_dlvl
+    beq !isl_town+
     lda #<item_spawn_level_gen
     ldy #>item_spawn_level_gen
     jmp a8_disp_chs
+!isl_town:
+    rts
 
 hal_player_recalc_pflags:
     lda #<player_recalc_pflags_equipment
     ldy #>player_recalc_pflags_equipment
     jmp a8_swap_dth
+
+a8_caller_ovl_restore: .byte 0
+
+// Shared A/Y dispatcher for OVL_HELP commands (wear/eat/quaff) whose '?'
+// inventory picker swaps in OVL_UI via tramp_ui_inv_select_display.
+a8_disp_hlp_piw:
+    sta !adhp_jsr+ + 1
+    sty !adhp_jsr+ + 2
+    lda #OVL_HELP
+    sta a8_caller_ovl_restore
+    jsr overlay_load_no_kernal
+    bcs !adhp_fail+
+!adhp_jsr:
+    jsr $0000
+    ldx #0
+    stx a8_caller_ovl_restore
+    jmp tramp_sr_epilogue
+!adhp_fail:
+    lda #0
+    sta a8_caller_ovl_restore
+    clc
+    jmp tramp_sr_epilogue
+
+tramp_ui_inv_select_display:
+    lda piw_return_overlay
+    bne !tuisd_go+
+    lda a8_caller_ovl_restore
+    sta piw_return_overlay
+!tuisd_go:
+    lda #<ui_inv_select_display
+    ldy #>ui_inv_select_display
+    jmp a8_disp_ui
 
 // Shared ovl_sr dispatch tails -> a8_ovl_sr_common (every OVL_* ID != 0).
 a8_disp_mdl:
@@ -1374,6 +1409,7 @@ ovl_modal_misc_end:
     #undef PMX_DESTROY_AREA_EXTERNAL
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
+    #import "../../core/player_magic_display.s"
     #import "../../core/spell_effects_overlay.s"
     #import "../../core/eff_identify_prompt_cold.s"
     #import "../../core/eff_detect_evil_cold.s"
@@ -1392,22 +1428,22 @@ ovl_spell_end:
     #import "../../core/ui_help_page2_data.s"
     #import "../../core/ui_help.s"
     #import "../../core/ui_help_cmd_cold.s"
-    #import "../../core/ui_inventory.s"
+    #import "../../core/ui_character.s"
     #import "../../core/ui_equipment.s"
     #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
     #import "../../core/player_item_commands.s"
     #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
-    #import "../../core/player_magic_browse_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
 
 .segment UiOverlay
-    #import "../../core/ui_character.s"
     #import "../../core/ui_identify.s"
+    #import "../../core/ui_inventory.s"
     #import "../../core/spell_names.s"
     #import "../../core/player_magic_select_overlay.s"
     #import "../../core/player_gain_spell_impl.s"
+    #import "../../core/player_magic_browse_cold.s"
     #import "../../core/player_magic_learn_op.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
@@ -1459,7 +1495,6 @@ ovl_home_end:
     #import "../commodore/common/save_slot_menu.s"
     #import "disk_setup_atari.s"
     #import "../../core/item_refresh_known_cold.s"
-    #import "../../core/player_magic_cast_cold.s"
 ovl_storage_end:
 .assert "Storage overlay hosts save/load, slot menu, and disk setup", save_game_impl >= $e000 && save_game_impl < ovl_storage_end && load_game_impl >= $e000 && load_game_impl < ovl_storage_end && save_select_slot_prompt_impl >= $e000 && save_select_slot_prompt_impl < ovl_storage_end && disk_setup_menu >= $e000 && disk_setup_menu < ovl_storage_end, true
 .print "Storage overlay: " + (ovl_storage_end - $e000) + " bytes at $E000-$" + toHexString(ovl_storage_end)
@@ -1532,6 +1567,7 @@ legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
 .segment Default
+.assert "Atari 8-bit cast/pray shell stays resident (< MAP_BASE) while spell failure and inventory '?' co-locate in OVL.SPL / OVL.UI", player_cast_spell < MAP_BASE && player_pray < MAP_BASE && pm_build_known_list_from_book < MAP_BASE && calc_spell_failure >= $e000 && calc_spell_failure < ovl_spell_end && ui_inv_select_display >= $e000 && ui_inv_select_display < ovl_ui_end && ui_char_display >= $e000 && ui_char_display < ovl_help_end, true
 #if !ATARI8_CARTRIDGE
 .assert "130XE Slot 0 covers OVL.STA", (ovl_start_end - $e000) <= XE_SLOT0_PAGES * 256, true
 .assert "130XE Slot 1 covers OVL.TWN", (ovl_town_end - $e000) <= XE_SLOT1_PAGES * 256, true

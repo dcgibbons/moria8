@@ -34,7 +34,13 @@ REPO_ROOT = SCRIPT_DIR.parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from item_ids import FI_EMPTY, ITEM_PAGE_BIT, ITEM_PAGE_SIZE  # noqa: E402
+from item_ids import (  # noqa: E402
+    FI_EMPTY,
+    ITEM_PAGE_BIT,
+    ITEM_PAGE_SIZE,
+    ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK,
+    ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK,
+)
 from vice_config import vice_config  # noqa: E402
 from vice_connector import (  # noqa: E402
     VICEConnector,
@@ -84,9 +90,15 @@ PL_HP_LO = 33
 PL_HP_HI = 34
 PL_MHP_LO = 35
 PL_MHP_HI = 36
+PL_MANA = 37
+PL_MAX_MANA = 38
 PL_MAP_X = 49
 PL_MAP_Y = 50
+PL_SPELL_TYPE = 60
+PL_SPELLS_LEARNT_0 = 61
 CLASS_ROGUE = 3
+SPELL_MAGE = 1
+OVL_SPELL = 8
 
 
 def sym_int(symbols: dict[str, str], name: str) -> int:
@@ -217,10 +229,25 @@ def stage_dl1_fixture(connector: VICEConnector, symbols: dict[str, str]) -> tupl
     connector.poke(pdata + PL_MHP_HI, 0)
 
     connector.poke(pdata + PL_CLASS, CLASS_ROGUE)
-    connector.poke(pdata + PL_LEVEL, 50)
-    connector.poke(sym_int(symbols, ".zp_player_lvl"), 50)
+    connector.poke(pdata + PL_LEVEL, 23)
+    connector.poke(sym_int(symbols, ".zp_player_lvl"), 23)
     connector.poke(pdata + PL_DEX_CUR, 118)
     connector.poke(pdata + PL_INT_CUR, 118)
+    connector.poke(sym_int(symbols, ".zp_player_dex"), 118)
+    connector.poke(sym_int(symbols, ".zp_player_int"), 118)
+
+    # Seed [Beginners-Magick] in free carried slot 10 and grant Light (spell 3,
+    # 0% fail at Rogue L23 / INT 118, 3 MP cost) for 0-disk repeat-cast check.
+    inv_qty_base = sym_int(symbols, ".inv_qty")
+    connector.poke(inv_id_base + 10, ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK)
+    connector.poke(inv_qty_base + 10, 1)
+    connector.poke(inv_ego_base + 10, ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK)
+    connector.poke(pdata + PL_SPELL_TYPE, SPELL_MAGE)
+    connector.poke(pdata + PL_MANA, 50)
+    connector.poke(pdata + PL_MAX_MANA, 40)
+    connector.poke(sym_int(symbols, ".zp_player_mp"), 50)
+    connector.poke(sym_int(symbols, ".zp_player_mmp"), 40)
+    connector.poke(pdata + PL_SPELLS_LEARNT_0, 0x08)
 
     inv_ids = read_monitor_bytes(connector, inv_id_base, inv_id_base + MAX_INV_SLOTS - 1)
     inv_count_before = sum(1 for v in inv_ids if v != FI_EMPTY)
@@ -238,6 +265,7 @@ def main() -> int:
 
     symbols = parse_vs_symbols(args.main_vs)
     wait_addr = sym_int(symbols, ".plus4_test_hot_res_wait_for_harness")
+    warm_wait_addr = sym_int(symbols, ".plus4_test_hot_res_warm_wait")
     cont_addr = sym_int(symbols, ".plus4_test_hot_res_continue")
     done_addr = sym_int(symbols, ".plus4_test_script_exhausted_wait")
 
@@ -297,6 +325,19 @@ def main() -> int:
 
         target_slot, inv_before = stage_dl1_fixture(connector, symbols)
 
+        # Let warm-up cast (keys 10..12: M A A) load 4.SPELL once from disk.
+        connector.clear_breakpoints()
+        connector.set_register("pc", cont_addr)
+        if not wait_for_pc(connector, warm_wait_addr, timeout=args.timeout):
+            reg = connector.send_command("r")
+            print(f"FAIL: {args.name} (did not reach post-warmup wait ${warm_wait_addr:04X}: {reg.strip()})")
+            return 1
+        warm_mp = read_monitor_byte(connector, sym_int(symbols, ".zp_player_mp"))
+        warm_ovl = read_monitor_byte(connector, sym_int(symbols, ".current_overlay"))
+        if warm_mp != 47 or warm_ovl != OVL_SPELL:
+            print(f"FAIL: {args.name} (warmup cast expected mp=47 ovl=8, got mp={warm_mp} ovl={warm_ovl})")
+            return 1
+
         # Arm forbidden disk/overlay/catalog breakpoints + final pass breakpoint.
         connector.clear_breakpoints()
         for addr in forbidden.values():
@@ -325,6 +366,8 @@ def main() -> int:
         px = read_monitor_byte(connector, sym_int(symbols, ".zp_player_x"))
         py = read_monitor_byte(connector, sym_int(symbols, ".zp_player_y"))
         hp = read_monitor_byte(connector, sym_int(symbols, ".zp_player_hp_lo"))
+        mp = read_monitor_byte(connector, sym_int(symbols, ".zp_player_mp"))
+        cur_ovl = read_monitor_byte(connector, sym_int(symbols, ".current_overlay"))
         row10 = MAP_BASE + 10 * MAP_COLS
         plain_door_tile = read_monitor_byte(connector, row10 + 16)
         locked_door_tile = read_monitor_byte(connector, row10 + 18)
@@ -348,6 +391,10 @@ def main() -> int:
             errors.append(f"trap tile=${trap_tile or 0:02x}, expected revealed TILE_TRAP")
         if hp is None or not (192 <= hp <= 199):
             errors.append(f"hp={hp}, expected 192..199 after 1d8 arrow trap from 200")
+        if mp != 44:
+            errors.append(f"mp={mp}, expected 44 after zero-disk repeat cast (47->44)")
+        if cur_ovl != OVL_SPELL:
+            errors.append(f"current_overlay={cur_ovl}, expected OVL_SPELL ({OVL_SPELL})")
         if picked_fi_id != FI_EMPTY:
             errors.append(f"floor slot {target_slot} id=${picked_fi_id or 0:02x}, expected FI_EMPTY after pickup")
         if inv_after <= inv_before and sum(
