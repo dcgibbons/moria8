@@ -4,210 +4,21 @@
 // ATK_STEAL_GOLD/ITEM, ATK_LOSE_EXP, ATK_DISENCHANT, ATK_EAT_FOOD/LIGHT/CHARGES).
 //
 // Module ownership:
-//   - Hot resident (Default on all 7 ports, <= 470 B): 5-bit packed 19-verb
-//     phrase unpacker, extended effect dispatcher, ATK_CORRODE, ATK_LOSE_STR..WIS,
+//   - Hot resident (Default on C64/Plus4/C128/Apple2/CX16/BBC, RuntimeBanked on
+//     Atari8): 5-bit packed phrase unpacker (19 verbs + 5 VMS theft messages),
+//     extended effect dispatcher, ATK_CORRODE, ATK_LOSE_STR..WIS,
 //     mae_recalc_hp_combat, and unified 1-pass uniform reservoir slot picker.
-//   - Cold zero-HP effects (mae_cold_body, ~445 B): ATK_STEAL_GOLD/ITEM,
-//     ATK_LOSE_EXP, ATK_DISENCHANT, ATK_EAT_FOOD/LIGHT/CHARGES — placed in
-//     resident banked RAM on C64/Plus4/Atari8 (RuntimeBanked) and C128
-//     (RuntimeBankedCode), in HelpOverlay on Apple2/BBC/CX16, and in Default
-//     in standalone unit tests (!PLATFORM_PRODUCT_OVERLAY_RUNTIME).
+//   - Theft & XP drain (ATK_STEAL_GOLD/ITEM 12..13, ATK_LOSE_EXP 19): resident
+//     banked RAM on C64/Plus4/Atari8 (RuntimeBanked, 0 disk I/O), Bank 1 cached
+//     ItemActionsOverlay / RuntimeBankedCode on C128 (0 disk I/O), and
+//     HelpOverlay on Apple2/BBC/CX16.
+//   - Rare deep-dungeon effects (ATK_DISENCHANT 21, ATK_EAT_FOOD/LIGHT/CHARGES
+//     22..24): HomeOverlay on C128/Plus4/Atari8, ModalMiscOverlay on C64, and
+//     HelpOverlay on Apple2/BBC/CX16 (Default in standalone unit tests).
 
-// ============================================================
-// Compact 5-bit packed 19-verb screen-code phrase unpacker (ADESC 2..19)
-// ADESC_NONE (0) and ADESC_HITS (1) use HSTR_MAT_HITS directly in monster_attack.s.
-// 5-bit symbols: 1..26 = 'a'..'z' (C64 screen codes 1..26), 27 = ' ',
-//   28 = "s you.", 29 = "s on you.", 30 = " you.", 31 = "."
-// Output: zp_ptr2 -> hd_decode_buf (" <verb phrase>.")
-// ============================================================
-mon_atk_verb_to_ptr2:
-    cmp #ADESC_INSULTS + 1
-    bcc !mav_ok+
-    lda #ADESC_BITES
-!mav_ok:
-    ldy #0
-    sty zp_temp2                // Bitstream byte index
-    sty zp_temp3                // Current shifted byte + sentinel
-    sec
-    sbc #2
-    tax
-    beq !mav_go+
-!mav_sk:
-    jsr mav_get5
-    cmp #28
-    bcc !mav_sk-
-    dex
-    bne !mav_sk-
-!mav_go:
-    lda #' '
-    sta hd_decode_buf,x
-    inx
-!mav_cp:
-    jsr mav_get5
-    cmp #28
-    bcs !mav_end+
-    cmp #27
-    bcc !mav_ch+
-    lda #' '
-!mav_ch:
-    sta hd_decode_buf,x
-    inx
-    bne !mav_cp-
-!mav_end:
-    tay
-    lda mav_off - 28,y
-    tay
-!mav_tl:
-    lda mav_tail,y
-    sta hd_decode_buf,x
-    beq !mav_ptr+
-    inx
-    iny
-    bne !mav_tl-
-!mav_ptr:
-    lda #<hd_decode_buf
-    sta zp_ptr2
-    lda #>hd_decode_buf
-    sta zp_ptr2_hi
-    rts
-
-mav_get5:
-    lda #$08                    // 5 shifts left -> C=1 and bits 7..5 == 0
-!mg5_lp:
-    pha
-    lda zp_temp3
-    asl
-    sta zp_temp3
-    bne !mg5_b+
-    ldy zp_temp2
-    inc zp_temp2
-    lda mav_bits,y
-    sec
-    rol                         // Sentinel 1 in bit 0, MSB in C
-    sta zp_temp3
-!mg5_b:
-    pla
-    rol
-    bcc !mg5_lp-
-    rts
-.assert "screencode 'z' == 26", 'z', 26
-
-mav_off:  .byte 0, 7, 11, 15
-mav_tail: .text "s you." ; .byte 0 ; .text "s on you." ; .byte 0
-mav_bits:
-    .byte $12, $68, $5e, $0d, $81, $bf, $27, $44, $b8, $fc, $a3, $ea, $34, $17, $8b, $48
-    .byte $d7, $c3, $87, $45, $9e, $c3, $4f, $0a, $45, $0d, $10, $5e, $ce, $09, $a7, $5a
-    .byte $15, $96, $7b, $0e, $d0, $f9, $49, $22, $61, $77, $70, $a5, $9f, $2b, $45, $20
-    .byte $8c, $bc, $1c, $83, $76, $76, $45, $61, $43, $32, $cf, $61, $d8, $d8, $fa, $93
-    .byte $6f, $36, $e7, $07, $c8, $b3, $f8, $8a, $79, $ef, $2f, $ae, $cc, $f9, $6d, $af
-    .byte $71, $73, $f9, $b1, $2d, $2f, $07, $2a, $cd, $05, $e5, $24, $16, $c1, $85, $e1
-    .byte $24, $f7, $b3, $a9, $74, $ea, $ca, $70
-
-// ============================================================
-// Extended ATK_* Effect Dispatcher (Default resident)
-// Input: A = mat_atk_type (2, 9, 12, 13, 15..24)
-// ============================================================
 mae_mode:        .byte 0        // Shared with mae_tmp (non-overlapping lifetimes)
 .label mae_tmp = mae_mode
 mae_idx:         .byte 0
-mae_dmg_lo:      .byte 0
-mae_recalc_pend: .byte 0
-
-mon_atk_effect_ext:
-    cmp #ATK_LOSE_STR
-    beq mae_lose_str
-    cmp #ATK_CORRODE
-    beq mae_corrode
-    cmp #ATK_LOSE_DEX
-    bcc !maee_cold+             // 12..13: STEAL_GOLD / STEAL_ITEM
-    cmp #ATK_LOSE_EXP
-    bcc mae_lose_stat           // 15..18: LOSE_DEX/CON/INT/WIS
-!maee_cold:
-    // Zero-HP cold effects (12, 13, 19..24)
-    ldy zp_combat_dmg
-    sty mae_dmg_lo
-    ldx #0
-    stx zp_combat_dmg
-    stx mae_recalc_pend
-    jsr mae_cold_call
-    lda mae_recalc_pend
-    beq !mc_done+
-    jmp mat_recalc_equip
-
-// ============================================================
-// ATK_CORRODE (9) — VMS corrode_gas (moria.inc:1672): minus_ac, else +1d8 HP
-// ============================================================
-mae_corrode:
-    ldx #HSTR_DF_POISON_GAS
-    jsr huff_print_msg
-    jsr mon_atk_acid_armour
-    bcs !mc_done+
-    lda #8
-    jsr rng_range
-    sec
-    adc zp_combat_dmg
-    bcc !mc_st+
-    lda #255
-!mc_st:
-    sta zp_combat_dmg
-!mc_done:
-    rts
-
-// ============================================================
-// Stat Drains: ATK_LOSE_STR (2, 50% when unsustained) & 15..18 (DEX/CON/INT/WIS)
-// AC-reduced HP damage + decrement_stat on PL_*_CUR, blocked by player_sust_mask.
-// ============================================================
-mae_stat_idx: .byte 3, 4, 1, 2  // 15=DEX(3), 16=CON(4), 17=INT(1), 18=WIS(2)
-mae_sust_bit: .byte SUST_STR, SUST_INT, SUST_WIS, SUST_DEX, SUST_CON
-
-mae_lose_str:
-    ldy #0
-    beq !mls_go+
-mae_lose_stat:
-    tax
-    ldy mae_stat_idx - ATK_LOSE_DEX,x
-!mls_go:
-    sty mae_tmp
-    jsr mon_atk_ac_reduce
-    ldy mae_tmp
-    lda mae_sust_bit,y
-    and player_sust_mask
-    beq !mls_unsust+
-    ldx #HSTR_CHEST_UNAFFECTED
-    jmp huff_print_msg
-!mls_unsust:
-    cpy #0                      // VMS creature.inc case 2: randint(2) = 1
-    bne !mls_drain+
-    jsr rng_byte
-    lsr
-    bcs !mc_done-
-!mls_drain:
-    ldy mae_tmp
-    lda player_data + PL_STR_CUR,y
-    jsr decrement_stat
-    ldy mae_tmp
-    sta player_data + PL_STR_CUR,y
-    sta zp_player_str,y
-    jsr mae_recalc_hp_combat
-    ldx #HSTR_DF_CON_DRAIN
-    jmp huff_print_msg
-
-mae_recalc_hp_combat:
-    jsr player_calc_combat
-    jsr player_calc_hp          // Returns A = player_data + PL_MHP_HI
-    sta zp_player_mhp_hi
-    ldx player_data + PL_MHP_LO
-    stx zp_player_mhp_lo
-    cpx zp_player_hp_lo
-    sbc zp_player_hp_hi
-    bcs !msm_ok+
-    stx zp_player_hp_lo
-    stx player_data + PL_HP_LO
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-!msm_ok:
-    rts
 
 // ============================================================
 // Unified 1-pass uniform reservoir slot picker (Default resident)
@@ -274,14 +85,241 @@ mae_slot_ok:
     rts
 .assert "ICAT_STAFF immediately follows ICAT_WAND", ICAT_STAFF, ICAT_WAND + 1
 
+#if !C64_UNIT_TEST || MONSTER_ATTACK_PRODUCTION_EXTENDED
+
+// ============================================================
+// Compact 5-bit packed phrase unpacker (ADESC 2..19 & 5 VMS theft messages)
+// ADESC_NONE (0) and ADESC_HITS (1) use HSTR_MAT_HITS directly in monster_attack.s.
+// 5-bit symbols: 1..26 = 'a'..'z' (C64 screen codes 1..26), 27 = ' ',
+//   28..31 = 4 tail suffixes at offsets mav_off[0..3] in zp_ptr1.
+// Output: zp_ptr2 -> hd_decode_buf, A/Y = <hd_decode_buf / >hd_decode_buf.
+// ============================================================
+mon_atk_verb_to_ptr2:
+    cmp #ADESC_INSULTS + 1
+    bcc !mav_ok+
+    lda #ADESC_BITES
+!mav_ok:
+    sec
+    sbc #2
+    ldx #' '
+    ldy #0
+mav_unpack:
+    stx hd_decode_buf
+    pha
+    lda mav_bits_lo,y
+    sta zp_ptr0
+    lda mav_bits_hi,y
+    sta zp_ptr0_hi
+    lda mav_tail_lo,y
+    sta zp_ptr1
+    lda mav_tail_hi,y
+    sta zp_ptr1_hi
+    ldy #0
+    sty zp_temp2                // Bitstream byte index
+    sty zp_temp3                // Current shifted byte + sentinel
+    pla
+    tax
+    beq !mav_go+
+!mav_sk:
+    jsr mav_get5
+    cmp #28
+    bcc !mav_sk-
+    dex
+    bne !mav_sk-
+!mav_go:
+    ldx #1
+!mav_cp:
+    jsr mav_get5
+    cmp #28
+    bcs !mav_end+
+    tay
+    bne !mav_sp+
+    lda #'.'
+    bne !mav_ch+
+!mav_sp:
+    cmp #27
+    bcc !mav_ch+
+    lda #' '
+!mav_ch:
+    sta hd_decode_buf,x
+    inx
+    bne !mav_cp-
+!mav_end:
+    tay
+    lda mav_off - 28,y
+    tay
+!mav_tl:
+    lda (zp_ptr1),y
+    sta hd_decode_buf,x
+    beq !mav_ptr+
+    inx
+    iny
+    bne !mav_tl-
+!mav_ptr:
+    lda #<hd_decode_buf
+    ldy #>hd_decode_buf
+    sta zp_ptr2
+    sty zp_ptr2_hi
+    rts
+
+mav_get5:
+    lda #$08                    // 5 shifts left -> C=1 and bits 7..5 == 0
+!mg5_lp:
+    pha
+    lda zp_temp3
+    asl
+    sta zp_temp3
+    bne !mg5_b+
+    ldy zp_temp2
+    inc zp_temp2
+    lda (zp_ptr0),y
+    sec
+    rol                         // Sentinel 1 in bit 0, MSB in C
+    sta zp_temp3
+!mg5_b:
+    pla
+    rol
+    bcc !mg5_lp-
+    rts
+.assert "screencode 'z' == 26", 'z', 26
+
+mav_bits_lo: .byte <mav_bits, <mae_bits
+mav_bits_hi: .byte >mav_bits, >mae_bits
+mav_tail_lo: .byte <mav_tail, <mae_tail
+mav_tail_hi: .byte >mav_tail, >mae_tail
+mav_off:     .byte 0, 7, 11, 15
+mav_tail:    .text "s you." ; .byte 0 ; .text "s on you." ; .byte 0
+mav_bits:
+    .byte $12, $68, $5e, $0d, $81, $bf, $27, $44, $b8, $fc, $a3, $ea, $34, $17, $8b, $48
+    .byte $d7, $c3, $87, $45, $9e, $c3, $4f, $0a, $45, $0d, $10, $5e, $ce, $09, $a7, $5a
+    .byte $15, $96, $7b, $0e, $d0, $f9, $49, $22, $61, $77, $70, $a5, $9f, $2b, $45, $20
+    .byte $8c, $bc, $1c, $83, $76, $76, $45, $61, $43, $32, $cf, $61, $d8, $d8, $fa, $93
+    .byte $6f, $36, $e7, $07, $c8, $b3, $f8, $8a, $79, $ef, $2f, $ae, $cc, $f9, $6d, $af
+    .byte $71, $73, $f9, $b1, $2d, $2f, $07, $2a, $cd, $05, $e5, $24, $16, $c1, $85, $e1
+    .byte $24, $f7, $b3, $a9, $74, $ea, $ca, $70
+
+// ============================================================
+// Extended ATK_* Effect Dispatcher (Default resident)
+// Input: A = mat_atk_type (2, 9, 12, 13, 15..24)
+// ============================================================
+mae_dmg_lo:      .byte 0
+mae_recalc_pend: .byte 0
+
+mon_atk_effect_ext:
+    cmp #ATK_LOSE_STR
+    beq mae_lose_str
+    cmp #ATK_CORRODE
+    beq mae_corrode
+    cmp #ATK_LOSE_DEX
+    bcc !maee_cold+             // 12..13: STEAL_GOLD / STEAL_ITEM
+    cmp #ATK_LOSE_EXP
+    bcc mae_lose_stat           // 15..18: LOSE_DEX/CON/INT/WIS
+!maee_cold:
+    // Zero-HP cold effects (12, 13, 19..24)
+    ldy zp_combat_dmg
+    sty mae_dmg_lo
+    ldx #0
+    stx zp_combat_dmg
+    stx mae_recalc_pend
+    jsr mae_cold_call
+    lda mae_recalc_pend
+    beq !mc_done+
+    bmi !maee_gold_ui+
+    jmp mat_recalc_equip
+!maee_gold_ui:
+    jsr status_mark_dirty
+    jmp status_draw
+
+// ============================================================
+// ATK_CORRODE (9) — VMS corrode_gas (moria.inc:1672): minus_ac, else +1d8 HP
+// ============================================================
+mae_corrode:
+    ldx #HSTR_DF_POISON_GAS
+    jsr huff_print_msg
+    jsr mon_atk_acid_armour
+    bcs !mc_done+
+    lda #8
+    jsr rng_range
+    sec
+    adc zp_combat_dmg
+    bcc !mc_st+
+    lda #255
+!mc_st:
+    sta zp_combat_dmg
+!mc_done:
+    rts
+
+// ============================================================
+// Stat Drains: ATK_LOSE_STR (2, 50% when unsustained) & 15..18 (DEX/CON/INT/WIS)
+// AC-reduced HP damage + decrement_stat on PL_*_CUR, blocked by player_sust_mask.
+// ============================================================
+mae_stat_idx: .byte 3, 4, 1, 2  // 15=DEX(3), 16=CON(4), 17=INT(1), 18=WIS(2)
+mae_sust_bit: .byte SUST_STR, SUST_INT, SUST_WIS, SUST_DEX, SUST_CON
+
+mae_lose_str:
+    ldy #0
+    beq !mls_go+
+mae_lose_stat:
+    tax
+    ldy mae_stat_idx - ATK_LOSE_DEX,x
+!mls_go:
+    sty mae_tmp
+    jsr mon_atk_ac_reduce
+    ldy mae_tmp
+    lda mae_sust_bit,y
+    and player_sust_mask
+    beq !mls_unsust+
+    ldx #HSTR_CHEST_UNAFFECTED
+    jmp huff_print_msg
+!mls_unsust:
+    cpy #0                      // VMS creature.inc case 2: randint(2) = 1
+    bne !mls_drain+
+    jsr rng_byte
+    lsr
+    bcs !mc_done-
+!mls_drain:
+    ldy mae_tmp
+    lda player_data + PL_STR_CUR,y
+    jsr decrement_stat
+    ldy mae_tmp
+    sta player_data + PL_STR_CUR,y
+    sta zp_player_str,y
+    jsr mae_recalc_hp_combat
+    lda mat_atk_type
+    pha
+    lda mae_tmp
+    clc
+    adc #5
+    sta mat_atk_type
+    jsr mae_cold_call
+    pla
+    sta mat_atk_type
+    rts
+
+mae_recalc_hp_combat:
+    jsr player_calc_combat
+    jmp player_calc_hp
+
 // ============================================================
 // Platform-safe resident bridge to mae_cold_body
 // Input: A = mat_atk_type (preserved from mon_atk_effect_ext)
 // ============================================================
 mae_cold_call:
-#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME || HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
     jmp mae_cold_body
+#elif HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
+    cmp #ATK_DISENCHANT
+    bcc !mcc_a8_go+             // 12..13, 19..20 -> RuntimeBanked ($F000, 0 I/O)
+    lda #OVL_HOME               // 21..24 -> HomeOverlay (#11)
+    jsr overlay_load
+    bcs !mcc_a8_ret+
+!mcc_a8_go:
+    jmp mae_cold_body
+!mcc_a8_ret:
+    rts
 #elif HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+    cmp #ATK_STEAL_GOLD
+    bcc !mcc_bank+              // 5..9: stat-drain msg -> RuntimeBankedCode ($F000)
     cmp #ATK_LOSE_EXP
     bcc !mcc_items+             // 12..13 -> ItemActionsOverlay (cached #7)
     cmp #ATK_DISENCHANT
@@ -320,22 +358,61 @@ mae_cold_call:
 #elif HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     php
     sei
-    lda hal_memory_cpu_port
+    ldx hal_memory_cpu_port
+    txa
     pha
+    lda mat_atk_type
+    cmp #ATK_STEAL_GOLD
+    bcc !mcc_c64_go+            // 5..9 -> RuntimeBanked ($F000, 0 I/O)
+    cmp #ATK_LOSE_EXP
+    bcc !mcc_c64_home+          // 12..13 -> HomeOverlay (#11)
+    cmp #ATK_DISENCHANT
+    bcc !mcc_c64_go+            // 19..20 -> RuntimeBanked ($F000, 0 I/O)
+    ldx #OVL_MODAL_MISC         // 21..24 -> ModalMiscOverlay (#9)
+    .byte $2c
+!mcc_c64_home:
+    ldx #OVL_HOME
+    lda current_overlay
+    pha
+    txa
+    jsr overlay_load_no_kernal
+    bcs !mcc_c64_rest+
     lda #BANK_NO_KERNAL
     sta hal_memory_cpu_port
     jsr mae_cold_body
+!mcc_c64_rest:
+    pla
+    beq !mcc_c64_ret+
+    jsr overlay_load_no_kernal
+    jmp !mcc_c64_ret+
+!mcc_c64_go:
+    lda #BANK_NO_KERNAL
+    sta hal_memory_cpu_port
+    jsr mae_cold_body
+!mcc_c64_ret:
     pla
     sta hal_memory_cpu_port
     plp
     rts
 #else
+    cmp #ATK_STEAL_GOLD
+    bcc !mcc_p4_go+             // 5..9 -> RuntimeBanked ($F000, 0 I/O)
+    cmp #ATK_LOSE_EXP
+    bcc !mcc_p4_home+           // 12..13 -> HomeOverlay (#11)
+    cmp #ATK_DISENCHANT
+    bcc !mcc_p4_go+             // 19..20 -> RuntimeBanked ($F000, 0 I/O)
+!mcc_p4_home:
+    lda #OVL_HOME               // 12..13, 21..24 -> HomeOverlay (#11)
+    jsr overlay_load_no_kernal
+    bcs !mcc_p4_ret+
+!mcc_p4_go:
     php
     sei
     jsr plus4_bank_ram
     jsr mae_cold_body
     jsr plus4_bank_ram
     plp
+!mcc_p4_ret:
     rts
 #endif
 
@@ -354,6 +431,8 @@ mae_cold_call:
 
 mae_cold_body:
     lda mat_atk_type
+    cmp #11
+    bcc !mcb_msg+               // 5..10: stat/XP drain message
     cmp #ATK_LOSE_EXP
     bcc !mcb_stl+               // 12..13: STEAL_GOLD / STEAL_ITEM
     beq !mcb_exp+               // 19: LOSE_EXP
@@ -364,6 +443,8 @@ mae_cold_body:
     bcc !mcb_food+              // 22: EAT_FOOD
     beq !mcb_light+             // 23: EAT_LIGHT
     jmp mae_eat_charges         // 24: EAT_CHARGES
+!mcb_msg:
+    jmp mae_print_steal_msg
 !mcb_stl:
     jmp mae_steal
 !mcb_agg:
@@ -378,45 +459,77 @@ mae_cold_body:
     jmp mae_eat_light
 
 // ============================================================
-// ATK_STEAL_GOLD (12) & ATK_STEAL_ITEM (13) — VMS creature.inc:498-534
+// ATK_STEAL_GOLD (12) & ATK_STEAL_ITEM (13) — VMS creature.inc:483-520,
+// spells.inc:1202-1230 (teleport_away), misc.inc:1419-1479, 2526-2548 (inven_destroy)
 // ============================================================
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME && HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 .segment ItemActionsOverlay
+#elif !HAL_PLATFORM_HUFFMAN_DATA_AUX && !HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
+.segment HomeOverlay
+#endif
 #endif
 mae_steal:
+    lda mat_atk_type
+    and #1                      // 0 = ATK_STEAL_GOLD (12), 1 = ATK_STEAL_ITEM (13)
+    asl                         // 0 or 2 (dodge message index)
+    tay                         // rng_range preserves Y
     lda zp_eff_paralyze
     bne !ms_theft+
     lda #124
-    jsr rng_range
-    clc
+    jsr rng_range               // C=0 on exit; preserves Y
     adc #1                      // randint(124) in 1..124
     cmp zp_player_dex
-    bcc !ms_blink+              // Anti-theft roll succeeded!
+    bcs !ms_theft+
+    tya                         // 0 ("You quickly protect...") or 2 ("You grab hold...")
+    jsr mae_print_steal_msg
+    jmp !ms_blink+
 !ms_theft:
-    lda mat_atk_type
-    cmp #ATK_STEAL_ITEM
-    beq !ms_item+
+    tya
+    bne !ms_item+
     ldy #PL_GOLD_0
     lda #10
     jsr mae_load_ccl_div        // ccl_adj_0..2 = au div 10
     lda #25
-    jsr rng_range
-    clc
+    jsr rng_range               // C=0 on exit
     adc #1                      // 1..25 = randint(25)
     ldx #0
     ldy #PL_GOLD_0
     jsr mae_add_sub24
-    jmp !ms_blink+
+    dec mae_recalc_pend         // $ff (< 0) -> refresh gold status bar (VMS prt_gold)
+    lda #1                      // "Your purse feels lighter."
+    bne !ms_msg_blink+          // Always
 !ms_item:
     lda #0                      // Mode 0: any non-empty pack slot
     jsr mae_pick_slot
     beq !ms_blink+
+    // VMS inven_destroy (misc.inc:2533): takes 1 only when subval < 512.
+    // VMS tval 10..13 (Arrow, Bolt, Rock, Iron Shot, Iron Spike) get
+    // subval = missle_ctr + 512 in magic_treasure (misc.inc:1419, 1478),
+    // so stealing from those stacks removes the entire slot.
+    lda inv_item_id,x
+    cmp #ITEM_SLOT_IRON_SPIKE
+    beq !ms_rem_all+
+    sec
+    sbc #ITEM_SLOT_ARROW
+    cmp #(ITEM_SLOT_IRON_SHOT + 1) - ITEM_SLOT_ARROW
+    bcs !ms_rem_one+
+!ms_rem_all:
+    jsr inv_remove_item
+    jmp !ms_item_msg+
+!ms_rem_one:
     jsr inv_consume_one
+!ms_item_msg:
+    lda #3                      // "Your backpack feels lighter."
+!ms_msg_blink:
+    jsr mae_print_steal_msg
 !ms_blink:
     jsr rng_byte                // VMS randint(2) = 1: 50% blink away
     lsr
     bcs !ms_done+
-    jsr find_random_floor
+    lda #4                      // "There is a puff of smoke!"
+    jsr mae_print_steal_msg
+    jsr mae_find_blink_tile
     bcc !ms_done+
     ldx zp_mon_y
     ldy zp_mon_x
@@ -442,6 +555,20 @@ mae_steal:
 !ms_done:
     rts
 .assert "MX_X=0, MX_Y=1 and zp_mon_y=zp_mon_x+1", MX_X == 0 && MX_Y == 1 && zp_mon_y == zp_mon_x + 1, true
+.assert "VMS subval>=512 items (Iron Spike + 4 contiguous ammo) live on Page 0 above Page-1 max slot_lo", ITEM_PAGE_IRON_SPIKE == 0 && ITEM_SLOT_IRON_SPIKE >= (ITEM_TYPE_COUNT - ITEM_PAGE_SIZE) && ITEM_PAGE_ARROW == 0 && ITEM_SLOT_ARROW >= (ITEM_TYPE_COUNT - ITEM_PAGE_SIZE) && ITEM_SLOT_BOLT == ITEM_SLOT_ARROW + 1 && ITEM_SLOT_ROCK == ITEM_SLOT_ARROW + 2 && ITEM_SLOT_IRON_SHOT == ITEM_SLOT_ARROW + 3, true
+
+// ============================================================
+// VMS message unpacker & teleport_away(monptr, max_sight=20)
+// ============================================================
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+.segment RuntimeBankedCode
+#elif HAL_PLATFORM_HUFFMAN_DATA_AUX
+.segment HelpOverlay
+#else
+.segment RuntimeBanked
+#endif
+#endif
 
 mae_toggle_occ:
     jsr map_row_ptr0_x          // Preserves Y
@@ -450,11 +577,136 @@ mae_toggle_occ:
     :MapWrite_ptr0_y()
     rts
 
+mae_lim: .byte MAP_COLS - 1, MAP_ROWS - 1
+
+// mae_find_blink_tile — VMS teleport_away(monptr, max_sight=20) (spells.inc:1202-1230):
+// picks a random free floor square within +-20 of (zp_mon_x, zp_mon_y),
+// widening dis by +5 after every 10 failed tries (ctr > 9).
+// Output: C=1 and df_target_x/y set on success; C=0 if all 256 safety tries fail.
+mae_find_blink_tile:
+    lda #20
+    sta mae_dmg_lo              // dis (starts at max_sight = 20)
+    lda #10
+    sta mae_idx                 // ctr countdown (widens after 10 failed tries)
+    lda #0
+    sta frf_attempts            // 256-try safety bound for synthetic all-wall maps
+!mfb_try:
+    lda mae_dmg_lo
+    cmp #126
+    bcc !mfb_box+
+    jsr df_roll_interior_xy
+    jmp !mfb_chk+
+!mfb_box:
+    ldy #1
+!mfb_ax:
+    lda mae_dmg_lo
+    asl                         // 2*dis (40..250), C=0
+    adc #1                      // 2*dis + 1 (41..251)
+    jsr rng_range               // 0..2*dis, preserves Y; C=0 on exit
+    sec
+    sbc mae_dmg_lo              // A = r - dis; C=1 iff r >= dis
+    bcc !mfb_neg+
+    clc
+    adc zp_mon_x,y
+    bcs !mfb_ax-                // >= 256 -> out of bounds, reroll
+    cmp mae_lim,y
+    bcs !mfb_ax-                // >= MAP_COLS-1 / MAP_ROWS-1 -> reroll
+    bcc !mfb_set+               // Always (1..limit-1)
+!mfb_neg:
+    adc zp_mon_x,y              // C=0 -> zp_mon_x,y - (dis - r)
+    bcc !mfb_ax-                // < 0 -> out of bounds, reroll
+    beq !mfb_ax-                // == 0 -> border wall, reroll
+!mfb_set:
+    sta df_target_x,y
+    dey
+    bpl !mfb_ax-
+!mfb_chk:
+    // Reject player's square (VMS cave[yn,xn].cptr = 1) and non-open / occupied tiles
+    lda df_target_x
+    cmp zp_player_x
+    bne !mfb_map+
+    lda df_target_y
+    cmp zp_player_y
+    beq !mfb_next+
+!mfb_map:
+    jsr df_target_row_ptr
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK | FLAG_OCCUPIED
+    bne !mfb_next+
+    sec
+    rts
+!mfb_next:
+    dec mae_idx
+    bne !mfb_cap+
+    lda #10
+    sta mae_idx
+    lda mae_dmg_lo
+    clc
+    adc #5
+    sta mae_dmg_lo
+!mfb_cap:
+    dec frf_attempts
+    bne !mfb_try-
+    clc
+    rts
+
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+.segment Default
+#elif HAL_PLATFORM_HUFFMAN_DATA_AUX
+.segment HelpOverlay
+#else
+.segment RuntimeBanked
+#endif
+#endif
+mae_print_steal_msg:
+    ldx #'Y'
+    cmp #4
+    bne !mpsm_ld+
+    ldx #'T'
+!mpsm_ld:
+    ldy #1
+    jsr mav_unpack
+    jmp msg_print_ay
+
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME && !HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES && !HAL_PLATFORM_MONSTER_CPU_PORT_BANK && !HAL_PLATFORM_HUFFMAN_DATA_AUX && !HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
+.segment Default
+#endif
+mae_tail:
+    .text " away!" ; .byte 0
+    .text "!" ; .byte 0, 0, 0
+    .text "." ; .byte 0, 0, 0
+    .text " feels lighter." ; .byte 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME && !HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES && !HAL_PLATFORM_MONSTER_CPU_PORT_BANK && !HAL_PLATFORM_HUFFMAN_DATA_AUX
+#if HAL_PLATFORM_RUNTIME_BANKED_ALWAYS_VISIBLE
+.segment Default
+#else
+.segment RuntimeBanked
+#endif
+#endif
+mae_bits:
+    .byte $7d, $77, $1a, $a4, $6b, $66, $77, $09, $3e, $85, $1d, $37, $97, $d6, $5b, $6b
+    .byte $dc, $5c, $ee, $0f, $a8, $d1, $d7, $d6, $5b, $85, $65, $32, $fd, $f5, $d9, $e4
+    .byte $11, $6d, $0f, $61, $36, $f3, $6f, $2f, $ac, $b6, $20, $8d, $70, $08, $d7, $d7
+    .byte $d6, $5b, $10, $46, $b8, $04, $6b, $fa, $0b, $22, $ed, $33, $d8, $77, $0a, $98
+    .byte $db, $79, $b7, $36, $bd, $65, $eb, $eb, $b3, $14, $ac, $dd, $ca, $15, $96, $5e
+    .byte $7d, $76, $62, $95, $9b, $cb, $eb, $2d, $b4, $ad, $7c, $92, $59, $ec, $c1, $22
+    .byte $5c, $70, $03, $cf, $ac, $b7, $74, $cc, $8f, $6e, $d3, $3d, $92, $41, $4b, $8a
+    .byte $4f, $3e, $bb, $31, $4a, $cd, $b5, $f2, $2e, $c6, $ca, $b6, $79, $f3, $eb, $2d
+    .byte $a0, $a1, $65, $11, $b4, $cf, $64, $0b, $42, $72, $93, $af, $ae, $cc, $52, $b3
+    .byte $79, $7d, $65, $b6, $24, $c5, $d9, $24, $14, $b9, $2e, $3f, $00
+
 // ============================================================
 // ATK_LOSE_EXP (19) — VMS creature.inc:583-588, spells.inc lose_exp
 // ============================================================
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME && HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 .segment RuntimeBankedCode
+#elif HAL_PLATFORM_HUFFMAN_DATA_AUX
+.segment HelpOverlay
+#else
+.segment RuntimeBanked
+#endif
 #endif
 mae_lose_exp:
     ldy #PL_XP_0
@@ -491,16 +743,20 @@ mae_lose_exp:
     jsr mae_recalc_hp_combat
     jmp !mle_lvl_lp-
 !mle_done:
-    ldx #HSTR_DF_CON_DRAIN
-    jmp huff_print_msg
+    lda #10
+    jmp mae_print_steal_msg
 
 // ============================================================
 // ATK_DISENCHANT (21) — VMS creature.inc:590-623
 // Pick 1 random worn equipment slot in {WEAPON, BODY, SHIELD, HEAD, HANDS, FEET, CLOAK};
 // lower any positive to_hit, to_dam, to_ac by randint(2) floored at 0 + stage recalc.
 // ============================================================
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME && HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
+.segment ModalMiscOverlay
+#elif HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES || !HAL_PLATFORM_HUFFMAN_DATA_AUX
 .segment HomeOverlay
+#endif
 #endif
 mae_disenchant:
     lda #7
@@ -612,8 +868,12 @@ mae_eat_charges:
     jmp huff_print_msg
 
 // mae_load_ccl_div — ccl_adj_0..2 = player_data[Y..Y+2] div A
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME && HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 .segment RuntimeBankedCode
+#elif !HAL_PLATFORM_HUFFMAN_DATA_AUX
+.segment RuntimeBanked
+#endif
 #endif
 mae_load_ccl_div:
     sta ccl_divisor
@@ -663,4 +923,11 @@ mae_add_sub24:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .segment Default
+#endif
+#else
+// Legacy C64 spell/item unit tests import monster_attack.s into 4 KB
+// TestCreateOverlay / TestUnused without exercising extended monster blows.
+mon_atk_verb_to_ptr2:
+mon_atk_effect_ext:
+    brk
 #endif

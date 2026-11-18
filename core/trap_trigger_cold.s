@@ -136,20 +136,15 @@ trap_do_dart:
     lda #3
     jsr trap_do_huff_dmg
     beq !tdd_done+
+    ldy #0
     lda df_search_chance
     cmp #TRAP_POISON_DART
-    bne !tdd_str+
+    bne !tdd_drain+
     jsr rng_byte
     and #1
     beq !tdd_done+
     ldy #PL_CON_CUR - PL_STR_CUR
-    lda #HSTR_DF_CON_DRAIN
-    bne !tdd_drain+         // HSTR_DF_CON_DRAIN > 0
-!tdd_str:
-    ldy #0
-    lda #HSTR_CHEST_WEAKENED
 !tdd_drain:
-    pha
     tya
     bne !tdd_chk_con_sust+
     lda #SUST_STR
@@ -157,20 +152,22 @@ trap_do_dart:
 !tdd_chk_con_sust:
     lda #SUST_CON
     and player_sust_mask
-    bne !tdd_pop_done+
+    bne !tdd_done+
     lda player_data + PL_STR_CUR,y
     cmp #4
-    bcc !tdd_pop_done+
+    bcc !tdd_done+
     sty df_found
     jsr decrement_stat
     ldy df_found
     sta player_data + PL_STR_CUR,y
     sta zp_player_str,y
-    pla
-    tax
+    cpy #PL_CON_CUR - PL_STR_CUR
+    bne !tdd_combat+
+    jsr player_calc_hp
+!tdd_combat:
+    jsr player_calc_combat
+    ldx #HSTR_CHEST_WEAKENED
     jmp huff_print_msg
-!tdd_pop_done:
-    pla
 !tdd_done:
     rts
 

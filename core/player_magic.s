@@ -384,11 +384,12 @@ pm_consume_mana:
     sta zp_temp0
 
     ldx #HSTR_PM_NO_MANA
+    lda player_data + PL_SPELL_TYPE
+    lsr                         // SPELL_MAGE == 1 -> C=1; SPELL_PRIEST == 2 -> C=0
+    bcc !pm_cm_faint_msg+
+    ldx #HSTR_PM_FAINT_EFFORT
+!pm_cm_faint_msg:
     jsr huff_print_msg
-    // The faint reason is important feedback; acknowledge it during the
-    // initiating action so forced paralysis turns never enter -MORE-.
-    jsr msg_show_more
-    jsr hal_input_get_key
 
     lda #5
     ldx zp_temp0
@@ -407,13 +408,22 @@ pm_consume_mana:
     lda #3
     jsr rng_range
     lsr
-    bcc !pm_cm_done+
+    bcc !pm_cm_more+
+    ldx #HSTR_PM_HEALTH_DAMAGED
+    jsr huff_print_msg
     lda player_data + PL_CON_CUR
     cmp #4
-    bcc !pm_cm_done+
+    bcc !pm_cm_more+
     dec player_data + PL_CON_CUR
     dec zp_player_con
-    jmp player_calc_hp
+    jsr player_calc_hp
+!pm_cm_more:
+    // Acknowledge faint (and any CON-damage) feedback during the initiating
+    // action so forced paralysis turns never enter -MORE-.
+    jsr msg_show_more
+    jsr hal_input_get_key
+    rts
+.assert "SPELL_MAGE==1 and SPELL_PRIEST==2", SPELL_MAGE == 1 && SPELL_PRIEST == 2, true
 
 !pm_cm_normal:
     lda zp_player_mp

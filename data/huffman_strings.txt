@@ -107,14 +107,14 @@ Sorry, what was that again?
 @DF_ROCKFALL You are hit by falling rock.
 @DF_DAMAGE_PRE You take ~
 @DF_DAMAGE_POST  damage.
-@DF_CON_DRAIN You feel weakened.
+@PM_FAINT_EFFORT You faint from the effort!
 @DF_POISONED You feel poisoned.
 
 # ===== Player magic strings (Pattern A + C) =====
 @PM_NO_CAST You cannot cast spells.
 @PM_NO_PRAY You cannot pray.
 @PM_NOT_KNOWN You don't know that spell.
-@PM_NO_MANA You faint from fatigue.
+@PM_NO_MANA You faint from fatigue!
 @PM_NO_EXP You're not experienced enough.
 @PM_FAIL Your spell fails.
 @PM_YOU_CAST Spell book (a-v)?
@@ -243,7 +243,7 @@ Sorry, what was that again?
 @BASH_OFFBAL You are off balance.
 @BASH_EMPTY You bash at empty space.
 @BASH_STUNNED  appears stunned!
-@BASH_IGNORES  ignores your bash!
+@PM_HEALTH_DAMAGED You have damaged your health!
 
 @PIQ_VERY_GOOD You feel very good.
 @PID_CARRY You sense magik on what you carry.

@@ -141,36 +141,20 @@ player_sync_to_zp:
     sta zp_player_x
     lda player_data + PL_MAP_Y
     sta zp_player_y
-    lda player_data + PL_HP_LO
-    sta zp_player_hp_lo
-    lda player_data + PL_HP_HI
-    sta zp_player_hp_hi
-    lda player_data + PL_MHP_LO
-    sta zp_player_mhp_lo
-    lda player_data + PL_MHP_HI
-    sta zp_player_mhp_hi
-    lda player_data + PL_MANA
-    sta zp_player_mp
-    lda player_data + PL_MAX_MANA
-    sta zp_player_mmp
+    ldx #5
+!pstz_vitals:
+    lda player_data + PL_HP_LO,x
+    sta zp_player_hp_lo,x
+    lda player_data + PL_STR_CUR,x
+    sta zp_player_str,x
+    dex
+    bpl !pstz_vitals-
     lda player_data + PL_LEVEL
     sta zp_player_lvl
     lda player_data + PL_DLEVEL
     sta zp_player_dlvl
     lda player_data + PL_AC
     sta zp_player_ac
-    lda player_data + PL_STR_CUR
-    sta zp_player_str
-    lda player_data + PL_INT_CUR
-    sta zp_player_int
-    lda player_data + PL_WIS_CUR
-    sta zp_player_wis
-    lda player_data + PL_DEX_CUR
-    sta zp_player_dex
-    lda player_data + PL_CON_CUR
-    sta zp_player_con
-    lda player_data + PL_CHR_CUR
-    sta zp_player_chr
     lda player_data + PL_RACE
     sta zp_player_race
     lda player_data + PL_CLASS
@@ -184,6 +168,7 @@ player_sync_to_zp:
     lda player_data + PL_RESERVED
     sta zp_pseudo_id_timer
     rts
+.assert "PL_HP_LO..PL_MAX_MANA and zp_player_hp_lo..zp_player_mmp are 6 contiguous bytes", PL_HP_HI == PL_HP_LO + 1 && PL_MHP_LO == PL_HP_LO + 2 && PL_MHP_HI == PL_HP_LO + 3 && PL_MANA == PL_HP_LO + 4 && PL_MAX_MANA == PL_HP_LO + 5 && zp_player_mmp - zp_player_hp_lo == 5, true
 
 // player_sync_from_zp — Copy ZP hot fields back to struct
 // Called before saving.
@@ -196,18 +181,12 @@ player_sync_from_zp:
     sta player_data + PL_MAP_X
     lda zp_player_y
     sta player_data + PL_MAP_Y
-    lda zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    lda zp_player_mhp_lo
-    sta player_data + PL_MHP_LO
-    lda zp_player_mhp_hi
-    sta player_data + PL_MHP_HI
-    lda zp_player_mp
-    sta player_data + PL_MANA
-    lda zp_player_mmp
-    sta player_data + PL_MAX_MANA
+    ldx #5
+!psfz_vitals:
+    lda zp_player_hp_lo,x
+    sta player_data + PL_HP_LO,x
+    dex
+    bpl !psfz_vitals-
     lda zp_player_lvl
     sta player_data + PL_LEVEL
     lda zp_player_dlvl
@@ -788,12 +767,10 @@ player_calc_hp:
     lsr                     // hit_die / 2
     clc
     adc zp_temp1            // + CON bonus
-    bpl !min_check+
+    bmi !min1+
+    bne !ok+
+!min1:
     lda #1                  // Minimum 1 HP per level
-!min_check:
-    cmp #1
-    bcs !ok+
-    lda #1
 !ok:
     sta zp_temp1            // HP per additional level
 
@@ -808,9 +785,21 @@ player_calc_hp:
     clc
     adc zp_temp0            // + base hit die
     sta player_data + PL_MHP_LO
+    sta zp_player_mhp_lo
+    tax
     lda zp_math_b
     adc #0
     sta player_data + PL_MHP_HI
+    sta zp_player_mhp_hi
+    cpx zp_player_hp_lo
+    sbc zp_player_hp_hi
+    bcs !pch_hp_ok+
+    stx zp_player_hp_lo
+    stx player_data + PL_HP_LO
+    lda zp_player_mhp_hi
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+!pch_hp_ok:
     rts
 
 // mul_x_by_a — Helper: multiply X by A, result in A
@@ -833,20 +822,14 @@ mul_x_by_a:
 player_search_mode_on:
     lda player_data + PL_FLAGS
     ora #PLF_SEARCHING
-    cmp player_data + PL_FLAGS
-    beq !done+
-    sta player_data + PL_FLAGS
-    lda zp_ui_dirty
-    ora #$01
-    sta zp_ui_dirty
-!done:
-    rts
+    bne !psm_set+           // always (PLF_SEARCHING != 0)
 
 // player_search_mode_off — Disable persistent search mode
 // Preserves: nothing
 player_search_mode_off:
     lda player_data + PL_FLAGS
     and #($ff - PLF_SEARCHING)
+!psm_set:
     cmp player_data + PL_FLAGS
     beq !done+
     sta player_data + PL_FLAGS

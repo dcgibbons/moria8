@@ -106,6 +106,8 @@ work16 behavior review; this ledger is their durable approval provenance.
 | MON-033 | Accepted | Project maintainer, 2026-11-16 (Phase 5 monster magic parity) | Adds `cr_spell_flags2` bits `0..4` (`MSF2_BLINK $01`, `MSF2_TELE_SELF $02`, `MSF2_SUMMON_UNDEAD $04`, `MSF2_SLOW $08`, `MSF2_DRAIN_MANA $10`) in `core/monster_magic.s`: `monster_can_cast` requires `(cr_spell_chance & $0F) != 0` and at least one bit in `MSF | MSF2[4:0] | MS_HOLD`; `monster_pick_spell` chooses uniformly across all set `MSF + MSF2[4:0] + MS_HOLD` bits (with Multi-Hued's 5 breaths counted as 5). `MSF2_BLINK` (`range 10`) and `MSF2_TELE_SELF` (`range 60`) self-teleport the caster (`FLAG_OCCUPIED` moved, never onto the player); `MSF2_SUMMON_UNDEAD` picks uniformly from the 35-byte `cat_undead` bitmap (`catalog_index.s`); `MSF2_SLOW` checks `PFLAG_FREE_ACT` + `wis_adj + lev` save, else slows `zp_eff_speed` by `randint(5) + 3` (`+2` stack, clamped at `-128`); `MSF2_DRAIN_MANA` drains `min(MP, floor((rng_range(lev)+1)/2) + 1)` MP and heals the caster `6 * r1` HP (clamped at `$7FFF`). All 18 VMS `CSPELL` bits are now implemented (wounds consolidated into 3d8/8d8). | pinned VMS `creature.inc:860-1060`, `misc.inc:650-690`; C64 `test_monster_magic.s`, `test_monster_magic3.s` | MON-021 unmapped `MSF2_*` spells |
 | MON-034 | Accepted | Project maintainer, 2026-11-16 (Phase 5 `cr_cdefense` & `CD_INVISIBLE`) | Adds `cr_cdefense` (`CD_FROST $01`, `CD_FIRE $02`, `CD_POISON $04`, `CD_ACID $08`, `CD_LIGHT $10`, `CD_STONE $20`, `CD_NO_SLEEP $40`, `CD_INVISIBLE $80`): (1) `eff_scale_elem_damage` (`core/spell_effects.s`) and `ball_target_damage` double (`2x`) elemental bolt/ball damage on matching `CD_*` and quarter (`/4`) damage when non-vulnerable and the target breathes that element (or `MS_BREATH_ALL`); (2) `ego_apply_damage` (`core/ego_items.s`) scales `cmb_damage` by `1.5x` (`trunc(dmg * 1.5)`) before `+2d4` for `EGO_FLAME_TONGUE` / `EGO_AMMO_FIRE` vs `CD_FIRE` and `EGO_FROST_BRAND` vs `CD_FROST`; (3) `eff_light_room` deals `2d8` + wake to `CD_LIGHT` creatures in the lit box, and `eff_wall_to_mud` deals `100` damage to `CD_STONE` creatures (dug wall occupant or traced ray); (4) `CD_NO_SLEEP` grants immunity to Sleep I/II/III, Sanctuary, Scroll/Staff/Wand of Sleep, Confuse Monster spell/wand, Blind Creature prayer, and melee confusion-on-hit (`combat.s`, `eff_item_p1.s`, `player_magic_feedback.s`); (5) `muvo_apply_visible` (`core/monster.s`) withholds `MF_VISIBLE` from `CD_INVISIBLE` creatures unless `(player_pflags & PFLAG_SEE_INVIS) | zp_eff_see_inv | zp_eff_invis` is nonzero (`MF_DETECTED` still reveals under Detect Monsters). | pinned VMS `spells.inc`, `moria.inc` (`tot_dam`, `light_room`, `wall_to_mud`), `creature.inc` (`update_mon`); C64 `test_monster_magic3.s`, `test_monster_ai2.s` | MON-006 open `CD_NO_SLEEP`; unmodelled elemental vuln/resist & `CD_INVISIBLE` |
 | MON-035 | Accepted | Project maintainer, 2026-11-16 (Phase 5 `CM2_*` movement & 15-field recall) | Adds `cr_spell_flags2` bits `5..7` in `monster_try_step` (`core/monster_ai.s`) and 15-field `/` recall (`core/ui_recall.s`): (1) `CM2_PHASE ($20)` allows dungeon (`zp_player_dlvl > 0`) creatures to step onto non-walkable interior walls, veins, rubble, and closed/locked/jammed/secret doors without altering tile/door bytes (outer permanent boundary walls `x==0`, `x==MAP_COLS-1`, `y==0`, `y==MAP_ROWS-1` and town `dlvl == 0` buildings remain blocked); (2) `CM2_EATS_OTHER ($40)` lets a mover override an occupied tile when the target is not a win creature (`catalog_slot_is_balrog` / `cr_level >= 100`) and 16-bit `cr_xp[mover] >= cr_xp[target]`, calling `monster_remove` (no player XP or loot) and setting `mat_force_new_dirty` if the eaten target was `MF_VISIBLE | MF_DETECTED`; (3) `CM2_PICKS_UP ($80)` removes a non-gold floor item (`ICAT_GOLD` excluded; `glyph_*` lives in its own table and is unaffected) via `floor_item_remove` + `inc mat_force_new_dirty`; (4) `/` recall (`ui_recall_display`) renders all 15 VMS recall fields across all 279 species on all 7 ports + 5 cartridges. | pinned VMS `creature.inc:770-835` (`make_move`); C64 `test_monster_ai2.s`, `test_score.s` | walls/occupants always blocking; 2-attack tier-only recall |
+| MON-036 | Accepted | Project maintainer, 2026-11-17 (VMS theft messages, gold refresh, `subval >= 512` stack rule, & `teleport_away` range) | `mae_steal` (`core/monster_attack_effects.s`, `ATK_STEAL_GOLD = 12` & `ATK_STEAL_ITEM = 13`) matches pinned VMS Moria 4.8 `creature.inc:483-520`, `spells.inc:1202-1230` (`teleport_away`), and `misc.inc:1419-1479, 2526-2548` (`inven_destroy`): (1) prints all five VMS messages via 5-bit packed `mae_print_steal_msg` (`"You quickly protect your money pouch!"` on gold dodge, `"Your purse feels lighter."` + immediate `status_mark_dirty` / `status_draw` gold refresh on gold theft, `"You grab hold of your backpack!"` on item dodge, `"Your backpack feels lighter."` when a pack item is stolen, and `"There is a puff of smoke!"` on the `50%` `randint(2) = 1` blink roll); (2) removes the entire carried slot (`inv_remove_item`) for VMS `subval >= 512` group-stacked kinds (`tval in [10..13]`: `Arrow`, `Bolt`, `Rock`, `Iron Shot`, `Iron Spike`) and one unit (`inv_consume_one`) for `subval < 512` kinds (food, potions, scrolls, oil flasks, torches, singletons); (3) `mae_find_blink_tile` teleports the thief to a uniform random in-bounds free floor square (excluding the player's square) within `+-20` (`max_sight`) of `(zp_mon_x, zp_mon_y)`, widening `dis += 5` after every `10` failed tries (`ctr > 9`), clearing `MF_VISIBLE`, moving `FLAG_OCCUPIED`, and incrementing `zp_dirty_count`. Deviation: an empty pack on an undodged `ATK_STEAL_ITEM` steals nothing and omits `"Your backpack feels lighter."` (as Umoria fixes VMS's `randint(0)`). | explicit maintainer bug report 2026-11-17; pinned VMS `creature.inc:483-520`, `spells.inc:1202-1230`, `misc.inc:1419-1479, 2526-2548`; C64 `test_monster_attack2.s` | silent `mae_steal`, full-map `find_random_floor` thief blink, and 1-unit `inv_consume_one` on `tval 10..13` stacks in MON-032 |
+| MON-037 | Accepted | Project maintainer, 2026-11-18 (VMS per-stat & XP-drain melee messages) | `mae_lose_str` (`ATK_LOSE_STR = 2`), `mae_lose_stat` (`ATK_LOSE_DEX..WIS = 15..18`), and `mae_lose_exp` (`ATK_LOSE_EXP = 19`) in `core/monster_attack_effects.s` print the six distinct pinned VMS Moria 4.8 `creature.inc` messages via `mae_print_steal_msg` (`5..10` in 5-bit `mae_bits`/`mae_tail`): `"You feel weaker."` (`STR`, `creature.inc:398`), `"You feel more clumsy."` (`DEX`, `:535`), `"Your health is damaged!"` (`CON`, `:548`), `"You feel your memories fading..."` (`INT`, `:564`), `"Your wisdom is drained."` (`WIS`, `:577`), and `"You feel your life draining away!"` (`EXP`, `:584`). Deviation: sustained hits retain Moria8's shared `"You are unaffected."` (`HSTR_CHEST_UNAFFECTED`). | explicit maintainer bug report 2026-11-18 (Bug C); pinned VMS `creature.inc:392-403, 528-588`; C64 `test_monster_attack2.s` t33 | shared `"You feel weakened."` (`HSTR_DF_CON_DRAIN`) across all five monster stat drains and XP loss |
 
 ## Conditional Verification Matrix
 
@@ -173,6 +175,8 @@ execute the changed production routine through its real dispatch/overlay path.
 | Phase 5 4-slot melee loop, 19 `ADESC_*` verbs, and extended `ATK_*` effects (MON-032): slot 2/3 dispatch, 5-bit verb unpacking, `ATK_LOSE_STR` `-3` BTH & 50% unsustained roll, `ATK_LOSE_DEX..WIS` sustain guard & HP/combat recalc, `ATK_CORRODE`, `ATK_STEAL_GOLD/ITEM` vs `clvl` + DEX anti-theft + 50% blink, `ATK_LOSE_EXP` 24-bit drain + level drop, `ATK_DISENCHANT`, `ATK_EAT_FOOD/LIGHT/CHARGES` | C64 `test_monster_attack2.s` through production `monster_attack_player`, `mon_atk_verb_to_ptr2`, and `mon_atk_effect_ext` / `mae_cold_body` | `TEST_FILTER='monster_attack2' make test64`; all 7 ports + 5 cartridges compile the identical shared `core/monster_attack.s` and `core/monster_attack_effects.s` |
 | Phase 5 `MSF2_*` monster spells & `cr_cdefense` vulnerabilities/immunities (MON-033, MON-034): `MSF2_BLINK`, `MSF2_TELE_SELF`, `MSF2_SUMMON_UNDEAD` (`cat_undead[35]`), `MSF2_SLOW` (`PFLAG_FREE_ACT` + save), `MSF2_DRAIN_MANA` (`6*r1` heal), elemental `2x` vuln & `/4` breath resist, `CD_LIGHT` `2d8`, `CD_STONE` `100`, `CD_NO_SLEEP` sleep/confuse immunity, Flame Tongue / Frost Brand `1.5x` | C64 `test_monster_magic3.s` through production `monster_can_cast`, `monster_pick_spell`, `eff_scale_elem_damage`, `eff_light_room`, `eff_wall_to_mud`, and `ego_apply_damage` | `TEST_FILTER='monster_magic3' make test64`; all 7 ports + 5 cartridges compile the identical shared modules |
 | Phase 5 `CD_INVISIBLE` visibility, `CM2_PHASE`, `CM2_EATS_OTHER`, `CM2_PICKS_UP`, & 15-field `/` recall (MON-034, MON-035) | C64 `test_monster_ai2.s` and `test_score.s` through production `monster_update_visibility_all`, `monster_try_step`, and `ui_recall_display`, plus cross-port `make playtest-gate` | `TEST_FILTER='^(monster_ai2|score)$' make test64`; `make playtest-gate` |
+| Monster theft VMS feedback, `AU:` status refresh, `subval >= 512` whole-bundle theft, and `±20` blink range (MON-036) | C64 `test_monster_attack2.s` t27-t32 through production `monster_attack_player` and `mon_atk_effect_dispatch` (all 5 VMS messages, Row 23 `AU:` refresh, `Arrow`/`Iron Spike` whole-slot vs `Ration` 1-unit stack rule, and `±20` `max_sight` range over 12,544-tile open map) | `TEST_FILTER='^monster_attack2$' make test64`; all 7 ports + 5 cartridges compile the identical shared `core/monster_attack_effects.s`; `make playtest-gate` |
+| Monster stat & XP drain VMS messages (MON-037) | C64 `test_monster_attack2.s` t33 through production `mon_atk_effect_dispatch` and `mon_atk_hit` asserting all 6 rendered VMS messages (`STR`, `DEX`, `CON`, `INT`, `WIS`, `EXP`) on screen row 0 | `TEST_FILTER='^monster_attack2$' make test64`; all 7 ports + 5 cartridges compile the identical shared `core/monster_attack_effects.s` |
 
 ## Change Record — Phase 5 Full 279-Species VMS Monster Parity (2026-11-16)
 
@@ -246,4 +250,113 @@ Unresolved uncertainty and risk:
   Tight (< 64 B) overlay/resident budgets on Apple IIe, C128, Atari 8-bit, Plus/4,
   and BBC Master are guarded fail-closed by link-time .asserts and contract checkers.
 ```
+
+## Change Record — Monster Theft VMS Feedback, Stack Rule & Blink Range (2026-11-17)
+
+```text
+Problem and success criteria:
+  Restore full VMS Moria 4.8 parity in shared mae_steal (ATK_STEAL_GOLD = 12 and
+  ATK_STEAL_ITEM = 13) across all 7 ports and 5 cartridges: print all 5 VMS theft,
+  dodge, and blink messages, refresh the gold status display after gold theft,
+  apply VMS inven_destroy's subval >= 512 whole-bundle rule on missile/spike stacks,
+  and bound thief blink distance to +-20 (widening +5 every 10 failed tries).
+State being changed:
+  - core/monster_attack_effects.s: generalized 5-bit mav_unpack for all 5 VMS theft
+    messages, status_mark_dirty + status_draw trigger on mae_recalc_pend < 0,
+    whole-slot inv_remove_item for ITEM_SLOT_IRON_SPIKE and ITEM_SLOT_ARROW..
+    ITEM_SLOT_IRON_SHOT vs inv_consume_one otherwise, and mae_find_blink_tile
+    implementing VMS teleport_away(monptr, max_sight=20).
+Search scope and terms:
+  rg across core/, platforms/, tools/, and upstream vms-moria/source/include/ for
+  mae_steal, ATK_STEAL_GOLD, ATK_STEAL_ITEM, inv_consume_one, teleport_away,
+  inven_destroy, missle_ctr, status_draw, and spell_effects_overlay.
+Relevant readers/writers found and known exclusions:
+  ATK_EAT_FOOD (case 22 in VMS creature.inc:625-640) is intentionally silent in VMS
+  and remains unchanged. Test suites importing monster_attack.s without ui_status.s
+  (test_monster_attack.s) stub status_mark_dirty/status_draw, while test_monster_attack2.s
+  links production ui_status.s in Default.
+Initialization, reset and persistence points:
+  N/A for save format (no persistent struct or save-file layout changes); mae_recalc_pend,
+  mae_dmg_lo, mae_idx, and frf_attempts are initialized on every mon_atk_effect_ext /
+  mae_find_blink_tile entry.
+Affected production sequence through the changed transition:
+  monster_attack_player -> mon_atk_hit -> mon_atk_effect_dispatch -> mon_atk_effect_ext
+  -> mae_cold_call -> mae_cold_body -> mae_steal -> mae_print_steal_msg / inv_remove_item
+  or inv_consume_one / mae_find_blink_tile -> FLAG_OCCUPIED + MX_X/Y + clear MF_VISIBLE
+  + inc zp_dirty_count -> status_mark_dirty + status_draw (on gold theft).
+Contract decision or selected upstream oracle with source locations:
+  Pinned VMS Moria 4.8 creature.inc:483-520, spells.inc:1202-1230, constants.inc:110
+  (max_sight = 20), and misc.inc:1419-1479, 2526-2548 (MON-036 above).
+Intentional Moria8 deviations:
+  mae_find_blink_tile includes a 256-attempt safety cap (frf_attempts) so synthetic
+  all-wall test maps terminate cleanly without hanging.
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  dis starts at 20 and widens by +5 up to 125 (2*dis + 1 = 251 <= 255 for 8-bit
+  rng_range), falling back to full-map df_roll_interior_xy once dis >= 126; 9-bit
+  carry checks reject < 1 and >= MAP_COLS-1 / MAP_ROWS-1 without wraparound.
+RNG reduction and bias, if applicable:
+  rng_range(2*dis + 1) picks uniform integer offsets in [-dis, +dis] on each axis,
+  rerolling out-of-bounds coordinates identically to VMS randint(2*dis + 1) - 1 - dis.
+Affected platforms, overlays, banks and owners:
+  All 7 ports and 5 cartridges via shared core/monster_attack_effects.s; ATK 12..13
+  execute in HomeOverlay on C64/Plus4, RuntimeBanked on Atari8, cached OVL_ITEMS on
+  C128/CX16, and HelpOverlay on Apple2/BBC Master.
+Required production-path tests:
+  C64 test_monster_attack2.s t27-t32, full make test across all 7 ports, and
+  make playtest-gate across all 7 ports and 5 cartridges.
+Known behavior explicitly out of scope:
+  Monster-picked-up loot pouches (CM2_PICKS_UP) and ATK_EAT_FOOD feedback.
+Unresolved uncertainty and risk:
+  None; all segment budgets and cross-overlay call boundaries verified statically and
+  at runtime.
+```
+
+## Change Record — VMS Monster Stat/XP Drain Messages (MON-037, 2026-11-18)
+
+```text
+Problem and success criteria:
+  Replace generic HSTR_DF_CON_DRAIN ("You feel weakened.") across monster stat drains
+  (ATK_LOSE_STR, ATK_LOSE_DEX..WIS) and monster XP drain (ATK_LOSE_EXP) with the six
+  exact VMS Moria 4.8 creature.inc messages across all 7 ports and 5 cartridges.
+State being changed:
+  - core/monster_attack_effects.s: extended mav_unpack (code 0 -> '.', shared tail
+    offsets 0, 7, 5, 21) and mae_bits/mae_tail (indices 5..10) for STR, INT, WIS, DEX,
+    CON, and EXP drain messages; mae_lose_stat routes unsustained drain feedback through
+    mae_cold_call (5..9), and mae_lose_exp calls mae_print_steal_msg (10); deduplicated
+    mae_recalc_hp_combat into player_calc_combat + player_calc_hp.
+Search scope and terms:
+  rg across core/, platforms/, data/, and upstream vms-moria/source/include/creature.inc
+  for HSTR_DF_CON_DRAIN, mae_lose_stat, mae_lose_exp, feel weakened, clumsy, wisdom is drained.
+Relevant readers/writers found and known exclusions:
+  Sustained hits retain HSTR_CHEST_UNAFFECTED; dart traps (core/trap_trigger_cold.s)
+  use HSTR_CHEST_WEAKENED ("You feel weakened!") for both STR and CON darts (matching VMS
+  moria.inc:1859, 1933).
+Initialization, reset and persistence points:
+  N/A (transient message output only; mat_atk_type is reloaded per melee blow).
+Affected production sequence through the changed transition:
+  monster_attack_player -> mon_atk_hit -> mon_atk_effect_dispatch -> mon_atk_effect_ext
+  -> mae_lose_str / mae_lose_stat -> mae_recalc_hp_combat -> mae_cold_call -> mae_cold_body
+  -> mae_print_steal_msg -> mav_unpack -> msg_print_ay (and mae_lose_exp -> mae_print_steal_msg).
+Contract decision or selected upstream oracle with source locations:
+  Pinned VMS Moria 4.8 creature.inc:398, 535, 548, 564, 577, 584 (MON-037 above).
+Intentional Moria8 deviations:
+  Sustained hits retain shared HSTR_CHEST_UNAFFECTED.
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  5-bit codes 0..31 unpacked into hd_decode_buf (max length 33 + NUL = 34 B <= 40-col row).
+RNG reduction and bias, if applicable:
+  N/A (no RNG change).
+Affected platforms, overlays, banks and owners:
+  All 7 ports + 5 cartridges via shared core/monster_attack_effects.s; stat/XP drain
+  messages execute with zero disk I/O in RuntimeBanked on C64/Plus4/Atari8, RuntimeBankedCode
+  + Default on C128/CX16, and HelpOverlay on Apple2/BBC Master (C64 and Plus/4 mae_steal
+  placed in HomeOverlay).
+Required production-path tests:
+  C64 test_monster_attack2.s t33, full 7-port make test, and 65-target make playtest-gate.
+Known behavior explicitly out of scope:
+  Per-stat sustained messages.
+Unresolved uncertainty and risk:
+  None.
+```
+
+
 

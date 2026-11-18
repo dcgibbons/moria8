@@ -3387,9 +3387,6 @@ catalog_init_tail_end:
 .segment RuntimeBanked
     #import "../../../core/ego_items.s"
     #import "../../../core/item_desc_banked.s"
-    // eff_find_traps / eff_destroy_traps_doors: called from SpellOverlay ($E000)
-    // with KERNAL banked out ($01 = $35), so $F000-$FFF9 is directly callable.
-    #import "../../../core/spell_effects_overlay.s"
     // Effective-disarm helpers: called from banked door_pick_roll ($F000) and
     // from disarm_command in DeathOverlay ($E000, $01 = $35).
     #import "../../../core/disarm_helpers.s"
@@ -3402,6 +3399,7 @@ catalog_init_tail_end:
     #import "../../../core/player_magic_ball_holy.s"
     #undef PM_EQ_SCRATCH_EXTERNAL
     #undef PM_EQ_BANKED
+    #import "../../../core/spell_effects_overlay.s"
 
 banked_code_end:
 

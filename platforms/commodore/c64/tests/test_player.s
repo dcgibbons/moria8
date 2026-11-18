@@ -309,6 +309,29 @@ test_start:
     lda player_data + PL_MHP_LO
     cmp #55
     bne !t7_fail+
+    lda zp_player_mhp_lo
+    cmp #55
+    bne !t7_fail+
+    // Lowering CON to 6 (con_adj = -1 -> MHP = 19 + 4*8 = 51) syncs zp_player_mhp
+    // and clamps HP > MHP down to 51
+    lda #80
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #6
+    sta player_data + PL_CON_CUR
+    jsr player_calc_hp
+    lda player_data + PL_MHP_LO
+    cmp #51
+    bne !t7_fail+
+    lda zp_player_mhp_lo
+    cmp #51
+    bne !t7_fail+
+    lda zp_player_hp_lo
+    cmp #51
+    bne !t7_fail+
+    lda player_data + PL_HP_LO
+    cmp #51
+    bne !t7_fail+
     lda #$01
     sta $0406
     jmp !t7_done+

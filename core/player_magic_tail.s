@@ -26,12 +26,12 @@ magic_recalc_mana:
     pha
     ldx player_data + PL_CLASS
     :AuxReadX(class_spell_min_level)    // may clobber Y (Apple IIe)
-    sta pm_cost_tmp
+    sta zp_temp1
     pla
     tay
     lda zp_player_lvl
     sec
-    sbc pm_cost_tmp
+    sbc zp_temp1
     bcc !mrm_no_mana+
     adc #0                  // C=1: levels = level - min + 1
     ldx mrm_mana_halves,y
@@ -48,7 +48,7 @@ magic_recalc_mana:
 
 !mrm_clamp_max:
     lda #255
-    jmp !mrm_store+
+    bne !mrm_store+         // always
 
 !mrm_no_mana:
     lda #0

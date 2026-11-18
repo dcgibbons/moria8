@@ -218,8 +218,9 @@ def build_lua_script(scenario: str, syms: dict[str, int]) -> str:
     acid_syms = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cr_atk0_type", "cr_atk0_dice", "cr_atk0_sides", "cr_atk1_type", "cr_spell_chance", "cr_speed",
         "inv_to_ac", "zp_player_ac", "player_pflags", "ovl_town_end", "auto_rest_active",
-        "trap_count", "trap_x", "trap_y", "trap_type",
-        "door_state_count", "door_state_x", "door_state_y", "door_state_val"))
+        "trap_count", "trap_x", "trap_y", "trap_type", "floor_item_count",
+        "door_state_count", "door_state_x", "door_state_y", "door_state_val",
+        "beeb_dfs_load_to_bank"))
 
     header = LUA_ITEM_CONSTS + f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
@@ -790,6 +791,38 @@ function run()
     send_key(0x53) -- 'S' (search): play continues cleanly after trap
     wait_frames(40)
     assert_line("acid_trap_play_continues", prog:read_u8(TURN_ADDR) ~= turn_t)
+    -- Regression: after an uncached overlay (OVL_CHEST = 10), consecutive '.'
+    -- run commands must copy OVL_MODAL_MISC (9) from SWR Bank 5 once and never
+    -- hit beeb_dfs_load_to_bank to reload the stale uncached current_overlay.
+    assert_line("pre_run_uncached_ovl", prog:read_u8(CURRENT_OVL) == 10)
+    local rx = math.max(2, math.min(MAP_COLS - 6, px + 1))
+    local ry = math.max(2, math.min(MAP_ROWS - 3, py))
+    prog:write_u8(PLAYER_X_ADDR, rx)
+    prog:write_u8(PLAYER_Y_ADDR, ry)
+    prog:write_u8(TRAP_COUNT_ADDR, 0)
+    prog:write_u8(FLOOR_ITEM_COUNT_ADDR, 0)
+    prog:write_u8(MON_COUNT_ADDR, 0)
+    write_map_u8(rx - 1, ry, 0x10) -- TILE_WALL_H stops the return west run at rx
+    write_map_u8(rx, ry, 0x00)
+    write_map_u8(rx + 1, ry, 0x00)
+    write_map_u8(rx + 2, ry, 0x00)
+    write_map_u8(rx + 3, ry, 0x00)
+    write_map_u8(rx + 4, ry, 0x10) -- TILE_WALL_H stops the east run at rx + 3
+    for dy = -1, 1, 2 do
+        for dx = -1, 4 do write_map_u8(rx + dx, ry + dy, 0x10) end
+    end
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR, 0x38)     -- SEC (any DFS load prompts & stalls)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1, 0x60) -- RTS
+    send_key(0x2E) -- '.' (run)
+    send_key(0x4C) -- 'L' (east: rx -> rx + 3)
+    wait_frames(60)
+    assert_line("run_east_zero_dfs", prog:read_u8(PLAYER_X_ADDR) == rx + 3
+        and prog:read_u8(CURRENT_OVL) == 9)
+    send_key(0x2E) -- '.' (consecutive run)
+    send_key(0x48) -- 'H' (west: rx + 3 -> rx)
+    wait_frames(60)
+    assert_line("run_west_zero_dfs", prog:read_u8(PLAYER_X_ADDR) == rx
+        and prog:read_u8(CURRENT_OVL) == 9)
     manager.machine:exit()
 end
 """

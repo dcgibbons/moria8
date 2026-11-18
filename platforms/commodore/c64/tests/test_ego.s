@@ -857,12 +857,12 @@ test_start:
     jsr player_recalc_pflags_equipment
     lda player_pflags
     cmp #PFLAG_SEE_INVIS | PFLAG_RESIST_FIRE | PFLAG_RESIST_ACID | PFLAG_RESIST_COLD
-    bne !t22_fail+
+    bne !t22_fail_jmp+
     ldx #EQUIP_HEAD
     jsr equip_stat_index
-    bcc !t22_fail+
+    bcc !t22_fail_jmp+
     cpy #PL_INT_CUR - PL_STR_CUR
-    bne !t22_fail+
+    bne !t22_fail_jmp+
     lda player_data + PL_INT_CUR
     sta t_to_ac
     lda #EQUIP_HEAD
@@ -873,19 +873,69 @@ test_start:
     sec
     sbc t_to_ac
     cmp #2
-    bne !t22_fail+
+    bne !t22_fail_jmp+
     lda #EQUIP_HEAD
     sta piw_equip
     clc
     jsr player_adjust_equipment_stat
     lda player_data + PL_INT_CUR
     cmp t_to_ac
-    bne !t22_fail+
+    beq !t22_plain+
+!t22_fail_jmp:
+    jmp !t22_fail+
+!t22_plain:
     lda #0                      // a plain crown: no stat
     sta inv_ego + EQUIP_HEAD
     ldx #EQUIP_HEAD
     jsr equip_stat_index
     bcs !t22_fail+
+    // Ring of Gain Constitution (+2) at level 5 (CON 16 -> 18) updates zp_player_con
+    // and zp_player_mhp on equip, and clamps zp_player_hp down on unequip
+    lda #5
+    sta player_data + PL_LEVEL
+    lda #16
+    sta player_data + PL_CON_CUR
+    sta zp_player_con
+    jsr player_calc_hp
+    lda zp_player_mhp_lo
+    sta t_to_ac
+    lda #ITEM_SLOT_RING_OF_GAIN_CONSTITUTION
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_GAIN_CONSTITUTION
+    sta inv_ego + EQUIP_RING
+    lda #2
+    sta inv_p1 + EQUIP_RING
+    lda #EQUIP_RING
+    sta piw_equip
+    sec
+    jsr player_adjust_equipment_stat
+    lda zp_player_con
+    cmp #18
+    bne !t22_fail+
+    lda zp_player_mhp_lo
+    sec
+    sbc t_to_ac
+    cmp #8                      // +2 CON bonus/lvl * 4 levels = +8 MHP
+    bne !t22_fail+
+    lda zp_player_mhp_lo
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    clc
+    jsr player_adjust_equipment_stat
+    lda zp_player_con
+    cmp #16
+    bne !t22_fail+
+    lda zp_player_mhp_lo
+    cmp t_to_ac
+    bne !t22_fail+
+    lda zp_player_hp_lo
+    cmp t_to_ac
+    bne !t22_fail+
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    lda #0
+    sta inv_ego + EQUIP_RING
+    sta inv_p1 + EQUIP_RING
     lda #$01
     .byte $2c
 !t22_fail:

@@ -1153,19 +1153,14 @@ combat_apply_levelup:
     lda zp_player_lvl
     sta player_data + PL_LEVEL
 
-    // Recalculate HP
+    // Recalculate HP (syncs zp_player_mhp_lo/hi) and heal to full
     jsr player_calc_hp
-
-    // Heal to full
-    // ... and sync max HP to ZP
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
     sta zp_player_hp_lo
-    sta zp_player_mhp_lo
     lda player_data + PL_MHP_HI
     sta player_data + PL_HP_HI
     sta zp_player_hp_hi
-    sta zp_player_mhp_hi
 
     // Recalculate combat bonuses (may change with level)
     jsr player_calc_combat

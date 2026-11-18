@@ -116,6 +116,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | TRN-010 | Accepted | Project maintainer, 2026-10-22 | Poison damage follows pinned VMS Moria (`moria.inc` poisoned tick; Umoria `playerUpdatePoisonedState` identical): each turn the poison timer stays above 0, the player takes damage by `con_adj` (`player_con_hp_adj`, VMS `con_adj`): -4: 4 HP; -3 and -2: 3; -1: 2; 0 (CON 7-16): 1; 1-3 (CON 17 to 18/75 and 18/76-18/98): 1 HP on turns where `turn mod 2 = 0`; 4 (18/99+): 1 HP when `turn mod 3 = 0`, using the 16-bit turn counter before `turn_post_action` advances it. The expiry turn does no damage. Table `poison_damage` lives in `core/turn_data.s` (Apple IIe: resident main RAM, imported before the play slot). | explicit maintainer direction 2026-10-22 ("yes align the poison") after the M4 baseline found poison deaths (`docs/AI_PLAYTEST_DESIGN.md` §15); pinned VMS/Umoria sources; C64 `test_effects.s` 39-46 (production `turn_tick_effects` and `player_con_hp_adj`; mutation-checked), `test_turn.s` t9 | 1 HP every poisoned turn at any CON |
 | TRN-011 | Accepted | Project maintainer, 2026-10-22 | The last paralyzed turn follows pinned VMS Moria (`moria.inc`: the turn's counter update runs `paralysis := paralysis - 1`, then "Accept a command?" when `paralysis < 1`, then creatures move) and Umoria `playDungeon` (`playerUpdateParalysis`, then `executeInputCommands`, then `updateMonsters`): when the main loop finds `zp_eff_paralyze` = 1, it clears it, prints the paralysis-end message and reads a command; the command's own `turn_post_action` then runs the timers and the monsters. Paralysis above 1 still spends whole turns (`turn_post_action`, which counts it down). Before, the expiring turn ran `turn_post_action`, so monsters acted between expiry and the player's first command, and a paralyzing attacker (White Mushroom patch) could re-paralyze the player forever. | explicit maintainer direction 2026-10-22 ("yes") after the M4 baseline (`docs/AI_PLAYTEST_DESIGN.md` §15.2: 8 of 32 deaths); pinned VMS/Umoria sources; C64 `test_main_loop.s` t48 (real main-loop paralysis dispatch; fails on the old order) | expiring paralysis as a monster turn |
 | TRN-012 | Accepted | Project maintainer, 2026-11-16 (Phase 5 `CD_INVISIBLE` & `CM2_*` redraw rules) | (1) `muvo_apply_visible` (`core/monster.s`) clears `MF_VISIBLE` on `CD_INVISIBLE ($80)` creatures unless `(player_pflags & PFLAG_SEE_INVIS) \| zp_eff_see_inv \| zp_eff_invis` is nonzero; a creature newly gaining `MF_VISIBLE` turns off search mode (`player_search_mode_off`), whereas an unseen `CD_INVISIBLE` mover neither sets `MF_VISIBLE` nor triggers search-off until it attacks or becomes visible (`MF_DETECTED` continues to render under Detect Monsters per TRN-001). (2) `CM2_PHASE ($20)` creatures traverse interior walls/veins/rubble/doors without mutating tile or `door_state` bytes; when a visible or detected phasing creature steps into or out of a non-local viewport wall/door tile, `mat_mark_move_dirty` (`scene_render_mat_tile`) redraws both the vacated wall/door glyph and the newly occupied tile immediately. (3) When an unseen mover (`MF_VISIBLE == 0 && MF_DETECTED == 0`) mutates its destination tile by breaking a glyph, eating a `MF_VISIBLE \| MF_DETECTED` creature (`CM2_EATS_OTHER $40`), or removing a floor item (`CM2_PICKS_UP $80`), `monster_try_step` sets `mat_force_new_dirty` so `mat_mark_tile_dirty_if_nonlocal` still redraws the destination tile to erase the stale glyph, monster, or item glyph. | pinned VMS `creature.inc` (`update_mon`, `make_move`); C64 `test_monster_ai2.s` through production `monster_update_visibility_all` and `monster_ai_tick`; `make playtest-gate` | unconditional `MF_VISIBLE` in LOS; non-local redraw gated solely on mover `MF_VISIBLE \| MF_DETECTED` |
+| TRN-013 | Accepted | Project maintainer, 2026-11-18 (Bugs A & B: overcast mana/faint/CON parity & Umoria-style CON max-HP sync) | (1) `player_calc_hp` (`core/player.s`) always writes both `player_data + PL_MHP_LO/HI` and `zp_player_mhp_lo/hi` and clamps `zp_player_hp_lo/hi` + `player_data + PL_HP_LO/HI` when `HP > MHP`, and every `CON` mutation site (`pm_consume_mana`, `mae_lose_stat`, `mae_lose_exp`, `trap_do_dart`, `ee_op_drain`, `ee_op_restore`, `eff_holy_word`, `player_adjust_equipment_stat` / Apple2 & BBC Master `player_adjust_equipment_stat_apply`) updates `zp_player_str,y` and calls `player_calc_hp` when `CON` changes so status-bar Row 22/23 (`status_draw` diffing `zp_player_con` and `zp_player_mhp_lo/hi`) never stays stale. (2) `pm_consume_mana` (`core/player_magic.s`) prints `"You faint from the effort!"` (`SPELL_MAGE`) vs `"You faint from fatigue!"` (`SPELL_PRIEST`) and, on the `1/3` CON-drain roll, prints `"You have damaged your health!"` before `-MORE-` acknowledgement. (3) `magic_recalc_mana` (`core/player_magic_tail.s`) uses `zp_temp1` rather than `pm_cost_tmp` so an in-cast `magic_recalc_mana` cannot overwrite the active spell's mana cost. | explicit maintainer bug report 2026-11-18 (Bugs A & B); pinned VMS `magic.inc:106-120`, `prayer.inc:99-113`, Umoria `player_stats.cpp:275-277`; C64 `test_overcast_ordering.s`, `test_player.s`, `test_ego.s`, C128 `test_prayer_prayer128.s` | `player_calc_hp` leaving `zp_player_mhp` stale; silent overcast CON drain; `magic_recalc_mana` clobbering `pm_cost_tmp` |
 
 ## Executable Enforcement
 
@@ -138,6 +139,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | SHIFT+X weapon exchange (`cmd_exchange`, status-only tail): a swap consumes one turn (two in search mode, TRN-002), a refusal none | C64 `test_main_loop.s` t51-t53 and C128 `test_main_loop128.s` tests 35-37 (real key map and dispatch, stub trampoline); product smokes on all 7 ports check the turn counter | `TEST_FILTER='main_loop' make test64`; `TEST_FILTER='main_loop128\|exchange_product_smoke128' make test128` |
 | A disk prompt since the last pass rebuilds the gameplay view before the next command, and the request is cleared | C64 `test_main_loop.s` t54 and C128 `test_main_loop128.s` test 38 through the real `main_loop` (both fail without the redraw) | `TEST_FILTER='main_loop' make test64`; `TEST_FILTER='main_loop128' make test128-fast`; other platforms compile the identical shared loop and prompt |
 | `CD_INVISIBLE` visibility/search-off gate, `CM2_PHASE` wall/door non-mutation & non-local wall redraw, and `mat_force_new_dirty` redraw on unseen eat/pickup/glyph-break (TRN-012) | C64 `test_monster_ai2.s` through production `monster_update_visibility_all` and `monster_ai_tick` | `TEST_FILTER='monster_ai2' make test64`; all 7 ports compile the identical shared visibility/dirty producers |
+| Overcast arcane/divine faint messages, overcast CON-drain feedback before `-MORE-`, `magic_recalc_mana` non-clobber of `pm_cost_tmp`, and `player_calc_hp` ZP `zp_player_mhp` sync & `HP <= MHP` clamp across CON mutations (TRN-013) | C64 `test_overcast_ordering.s`, `test_player.s` t7, `test_ego.s` t22, and C128 `test_prayer_prayer128.s` t3 | `TEST_FILTER='^(overcast_ordering\|player\|ego)$' make test64`; `TEST_FILTER='^prayer_prayer128$' make test128-fast` |
 | Search two-turn dirty aggregation with dirty/clean and clean/dirty orderings | none | `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
 
@@ -226,4 +228,62 @@ Known behavior explicitly out of scope:
 Unresolved uncertainty and risk:
   None.
 ```
+
+## Overcast Mana/Faint/CON Parity & CON Max-HP Sync Verification (TRN-013, 2026-11-18)
+
+```text
+Problem and success criteria:
+  (A) Prevent magic_recalc_mana from overwriting pm_cost_tmp with class_spell_min_level;
+  (B) Emit separate VMS arcane/divine faint messages ("You faint from the effort!" /
+  "You faint from fatigue!") plus "You have damaged your health!" on the 1/3 overcast CON
+  drain before -MORE- acknowledgement, and recompute max HP + zp_player_mhp_lo/hi (clamping
+  HP <= MHP) on every CON change across all 7 ports.
+State being changed:
+  - core/player_magic_tail.s::magic_recalc_mana: uses zp_temp1 instead of pm_cost_tmp.
+  - core/player_magic.s::pm_consume_mana: selects HSTR_PM_FAINT_EFFORT vs HSTR_PM_NO_MANA
+    from PL_SPELL_TYPE, prints HSTR_PM_HEALTH_DAMAGED on the 1/3 CON roll, decrements
+    PL_CON_CUR & zp_player_con, calls player_calc_hp, and acknowledges via msg_show_more.
+  - core/player.s::player_calc_hp: syncs zp_player_mhp_lo/hi and clamps zp_player_hp_lo/hi
+    and PL_HP_LO/HI when HP > MHP.
+  - core/player_adjust_equipment_stat.s, platforms/apple2/main.s, platforms/bbcmaster/main.s,
+    core/trap_trigger_cold.s, core/eff_item_extended.s, core/player_magic_utility.s: sync
+    zp_player_str,y and invoke player_calc_hp whenever CON changes.
+Search scope and terms:
+  rg across core/, platforms/, playtest/, and upstream vms-moria/umoria for pm_cost_tmp,
+  pm_consume_mana, player_calc_hp, PL_CON_CUR, zp_player_con, player_adjust_equipment_stat.
+Relevant readers/writers found and known exclusions:
+  Potion of Gain Constitution (core/eff_gain_stat.s) already maintains VMS +1 MHP across
+  both PL_MHP and zp_player_mhp + eff_heal_full; playtest/moria_playtest/magic.py infrastructure
+  findings are reported separately under AGENTS.md Rule 5 without unrequested edits.
+Initialization, reset and persistence points:
+  player_sync_to_zp / player_sync_from_zp sync PL_HP_LO..PL_MAX_MANA and ZP mirrors on
+  chargen, save, and load; load_resume_game runs player_calc_hp to converge both copies.
+Affected production sequence through the changed transition:
+  player_cast_spell / player_pray -> tramp_spell_execute_selected -> pm_finish_success_common
+  -> pm_consume_mana -> huff_print_msg -> player_calc_hp -> msg_show_more -> main_loop status_draw.
+Contract decision or selected upstream oracle with source locations:
+  Pinned VMS magic.inc:106-120, prayer.inc:99-113; pinned Umoria mage_spells.cpp:251-264,
+  player_pray.cpp:256-269, player_stats.cpp:24-60, 275-277 (TRN-013 above).
+Intentional Moria8 deviations:
+  Overcast CON drain uses 1-point decrement down to min 3 (preserving standalone C128
+  spell-unit harness linkage).
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  16-bit unsigned MHP/HP comparison (cpx zp_player_hp_lo / sbc zp_player_hp_hi) clamps
+  HP > MHP across 0..65535.
+RNG reduction and bias, if applicable:
+  Unchanged (rng_range(5 * missing_mp) + 1 paralysis; rng_range(3) == 1 1/3 CON drain).
+Affected platforms, overlays, banks and owners:
+  All 7 ports + 5 cartridges; core/player.s shrinks net -44 B via 6-byte vital/stat loops,
+  keeping Apple IIe Default ($7BBB < $7C00), Atari Default ($C0E2 < $C100), C64 Default,
+  C128 128.bank/128.huff, Plus/4 Plus4HuffIndex (16 B tail intact), and BBC Master ANDY
+  within all hard boundaries.
+Required production-path tests:
+  C64 test_overcast_ordering.s, test_player.s, test_ego.s, C128 test_prayer_prayer128.s,
+  full 7-port make test, and 65-target make playtest-gate.
+Known behavior explicitly out of scope:
+  Playtest bot book-tracking fix in playtest/moria_playtest/magic.py (reported per Rule 5).
+Unresolved uncertainty and risk:
+  None.
+```
+
 

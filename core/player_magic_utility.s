@@ -205,16 +205,20 @@ eff_destroy_area:
 eff_holy_word:
     jsr eff_remove_fear
     jsr eff_cure_poison
+    // Restore stats (Umoria playerStatRestore) before healing so any restored
+    // CON raises max HP via player_calc_hp first, then eff_heal_full heals to
+    // the restored maximum without copying stale saved record fields back.
+    lda player_data + PL_CON_CUR
+    pha
+    jsr player_calc_stats
+    pla
+    cmp player_data + PL_CON_CUR
+    beq !ehw_heal+
+    jsr player_calc_hp
+!ehw_heal:
     jsr eff_heal_full
     ldx #HSTR_PIQ_VERY_GOOD
     jsr huff_print_msg
-    // The stats restored (Umoria playerStatRestore) as a Potion of
-    // Restore <Stat> does: player_calc_stats, which refreshes the ZP stat
-    // mirrors too. No player_sync_to_zp: the player record is refreshed only
-    // at save and load, and copying it back undid the heal, the position,
-    // mana and food with the last save's (C64 Balrog queue, 2026-11-11: HP
-    // 652/443 after a clvl 40 Priest's Holy Word).
-    jsr player_calc_stats
     lda #3
     sta eff_invuln_timer
     lda #CF_EVIL

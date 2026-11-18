@@ -634,4 +634,5 @@ Unresolved uncertainty and risk:
 | `LowHelpers < $3000`, `Default <= $8000`, `BeebPlaySlot <= $A400`, & `projectile.s >= $9000` | `check_memory_contract.py` + `report_memory_budgets.py --port bbcmaster` (`low_helpers_end = $23F1`, `program_end = $7F5F` [`161 B` free], `beeb_play_end = $A34B` [`181 B` free]) | Verified |
 | `MONEXT` (`2,232 B`), `17/31` DFS `.ssd` entries (`312` sectors free), `LICENSE` & `SRCOFFR` | `make diskbbcmaster`, `check_memory_contract.py --disk` | Verified |
 | `zp_temp0`/`zp_temp1` preservation (`48c7904`) + live MAME `bbcm` & `playtest-gate` | `make testbbcmaster` + `make playtest-gate` (`bbcmaster` seed + tour, `0` findings) | Verified |
+| `run_initialize` SWR-only dispatch (`ovl_dispatch_ay` -> `OVL_MODAL_MISC`, never reloading stale uncached `current_overlay` from DFS) | `platforms/bbcmaster/main.s` + `harness_smoke.py` `dungeon_descend` (`pre_run_uncached_ovl`, `run_east_zero_dfs`, `run_west_zero_dfs` with `beeb_dfs_load_to_bank` poisoned) | Verified |
 

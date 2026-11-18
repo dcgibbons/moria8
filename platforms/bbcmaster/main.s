@@ -492,10 +492,16 @@ save_select_slot_prompt:
 // ============================================================
 .label overlay_load_no_kernal = overlay_load
 
+// run_initialize is called only from BeebPlaySlot (game_loop.s), never from an
+// $A800 overlay: dispatch directly to SWR-cached OVL.MODAL without restoring a
+// stale uncached current_overlay (e.g. OVL.START, OVL.TOWN, OVL.HELP, OVL.CHEST)
+// from DFS floppy on every run command.
 run_initialize:
     lda #<run_initialize_impl
     ldy #>run_initialize_impl
-    bra modal_swap_dispatch
+    pha
+    lda #OVL_MODAL_MISC
+    bne ovl_dispatch_ay
 
 // Resident dispatcher into SWR-cached OVL.MODAL that preserves caller overlay
 // (e.g. OVL.GEN for re_equip or OVL.ITEMS/OVL.SPELL for pflags) and returns A.
@@ -1219,6 +1225,11 @@ player_adjust_equipment_stat_apply:
     clc
     adc stat_work
     sta player_data + PL_STR_CUR,y
+    sta zp_player_str,y
+    cpy #PL_CON_CUR - PL_STR_CUR
+    bne !paes_apply_done+
+    jmp player_calc_hp
+!paes_apply_done:
     rts
 
 #import "../../core/player_item_commands.s"

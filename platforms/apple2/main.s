@@ -1384,6 +1384,11 @@ player_adjust_equipment_stat_apply:
     clc
     adc stat_work
     sta player_data + PL_STR_CUR,y
+    sta zp_player_str,y
+    cpy #PL_CON_CUR - PL_STR_CUR
+    bne !paes_apply_done+
+    jmp player_calc_hp
+!paes_apply_done:
     rts
 
 #import "../../core/player_item_commands.s"

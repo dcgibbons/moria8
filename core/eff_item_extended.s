@@ -269,6 +269,7 @@ ee_op_bold:
 
 ee_op_drain:
     lda eff_ext_arg
+    pha
     and #$07
     tax
     lda ee_sust_tbl,x
@@ -282,6 +283,11 @@ ee_op_drain:
     ldx eff_ext_tmp
     sta player_data + PL_STR_CUR,x
     sta zp_player_str,x
+    cpx #STAT_CON
+    bne !eed_combat+
+    jsr player_calc_hp
+!eed_combat:
+    jsr player_calc_combat
     lda #<ee_msg_weak
     ldy #>ee_msg_weak
     jsr msg_print_ay
@@ -290,7 +296,7 @@ ee_op_drain:
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
 !eed_unhealth:
-    bit eff_ext_arg
+    pla
     bpl !eed_done+
     lda #10
     ldx #10
@@ -305,7 +311,15 @@ ee_op_restore:
     lda eff_ext_arg
     cmp #$ff
     bne !eer_single+
+    lda player_data + PL_CON_CUR
+    pha
     jsr player_calc_stats
+    pla
+    cmp player_data + PL_CON_CUR
+    beq !eer_msg+
+!eer_recalc_hp:
+    jsr player_calc_hp
+!eer_msg:
     ldx #HSTR_PIQ_RESTORED
     jmp huff_print_msg
 !eer_single:
@@ -335,8 +349,13 @@ ee_op_restore:
     inx
     cpx #STAT_COUNT
     bcc !eer_pop-
-    ldx #HSTR_PIQ_RESTORED
-    jmp huff_print_msg
+    lda eff_ext_tmp
+    pha
+    jsr player_calc_combat
+    pla
+    cmp #STAT_CON
+    beq !eer_recalc_hp-
+    bne !eer_msg-
 
 ee_op_drink:
     lda eff_ext_arg

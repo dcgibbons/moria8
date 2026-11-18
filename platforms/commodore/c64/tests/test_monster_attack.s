@@ -36,6 +36,7 @@ test_exit_trampoline:
 .encoding "screencode_mixed"
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#define MONSTER_ATTACK_PRODUCTION_EXTENDED
 #define PLAYER_CHARGEN_EXTERNAL
 #define TRAP_TRIGGER_EXTERNAL
 
@@ -84,6 +85,8 @@ combat_compute_level_threshold:
 ccl_div_24x8:
 inv_remove_item:
 inv_consume_one:
+status_mark_dirty:
+status_draw:
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:

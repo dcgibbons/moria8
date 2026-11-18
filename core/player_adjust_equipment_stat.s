@@ -31,6 +31,16 @@ player_adjust_equipment_stat:
     clc
     adc stat_work
     sta player_data + PL_STR_CUR,y
+    sta zp_player_str,y
+    cpy #PL_CON_CUR - PL_STR_CUR
+    bne !paes_pop+
+    txa
+    pha
+    jsr player_calc_hp
+    pla
+    tax
+    ldy #PL_CON_CUR - PL_STR_CUR
+!paes_pop:
     pla
 !paes_skip:
     beq !paes_done+
