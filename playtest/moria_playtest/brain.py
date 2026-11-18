@@ -58,7 +58,8 @@ RECHARGEABLE = ("Wand of Light", "Staff of Light")   # the Staff of Detect Monst
 # 2026-11-11.
 ATTACK_WANDS = {"Wand of Drain Life": 50.0, "Wand of Fire Balls": 49.0, "Wand of Acid Balls": 40.0,
                 "Wand of Cold Balls": 33.0, "Wand of Fire Bolts": 27.0, "Wand of Lightning Balls": 24.0,
-                "Wand of Frost": 18.0, "Wand of Lightning": 13.5, "Wand of Stinking Cloud": 12.0}
+                "Wand of Frost": 18.0, "Wand of Lightning": 13.5, "Wand of Stinking Cloud": 12.0,
+                "Wand of Magic Missile": 7.5}
 BALL_WANDS = frozenset({"Wand of Fire Balls", "Wand of Cold Balls", "Wand of Acid Balls",
                         "Wand of Lightning Balls", "Wand of Stinking Cloud"})   # radius 2
 DRAIN_WAND = "Wand of Drain Life"   # nothing to the undead (VMS drain_life)
@@ -73,6 +74,28 @@ SPEED_STAFF = "Staff of Speed"              # randint(30) + 15 turns hasted: twi
 DISPEL_STAFF = "Staff of Dispel Evil"       # up to 60 to every evil creature in view
 SLOW_WAND = "Wand of Slow Monster"          # one speed step off the creature it hits
 FIGHT_DEVICES = (SPEED_STAFF, DISPEL_STAFF, SLOW_WAND)
+# Found, not bought (the item audit, maintainer, 2026-11-18), as a player uses
+# them: Confuse Monster once at each strong creature in line, Sleep Monster at
+# one while hurt (to get away), the area staffs at two strong at once, the
+# Staff of Destruction only surrounded and bleeding with no other escape.
+CONFUSE_WAND = "Wand of Confuse Monster"
+SLEEP_WAND = "Wand of Sleep Monster"
+SLEEP_STAFF, SLOW_STAFF = "Staff of Sleep Monsters", "Staff of Slow Monsters"
+DESTRUCTION_STAFF = "Staff of Destruction"
+AREA_STAFF_STEPS = 10    # steps between uses of an area staff
+# Healing and curing staffs when the potions are gone; the scouting staffs
+# once a level, Door/Stair Location while no staircase is known; Detect
+# Invisible after an unseen attack; Stone-to-Mud to dig out; the trap wands
+# on a trap in the way.
+CURE_STAFF, CURING_STAFF = "Staff of Cure Light Wounds", "Staff of Curing"
+DETECT_INVIS_STAFF = "Staff of Detect Invisible"
+SCOUT_STAFFS = ("Staff of Trap Location", "Staff of Detect Evil", "Staff of Treasure Location",
+                "Staff of Object Location")
+STAIRS_STAFF = "Staff of Door/Stair Location"
+STONE_TO_MUD = "Wand of Stone-to-Mud"
+DISARM_WANDS = ("Wand of Disarming", "Wand of Trap/Door Destruction")
+FOUND_DEVICES = (CONFUSE_WAND, SLEEP_WAND, SLEEP_STAFF, SLOW_STAFF, DESTRUCTION_STAFF, CURE_STAFF, CURING_STAFF,
+                 DETECT_INVIS_STAFF, *SCOUT_STAFFS, STAIRS_STAFF, STONE_TO_MUD, *DISARM_WANDS)
 RECHARGE_SCROLL = "Scroll of Recharging"    # recharge(60): charges back on an empty wand or staff
 RECHARGE_RESERVE = 2                        # carried while any fighting wand or staff is
 WAND_BUYS = tuple(sorted(ATTACK_WANDS, key=ATTACK_WANDS.get, reverse=True))   # the best first, as the gold allows
@@ -207,6 +230,14 @@ COLLECT_STEPS = 12       # farthest gold or food in view worth walking to (MON-0
 COLLECT_WALKS = 3 * COLLECT_STEPS   # walk decisions toward one item before giving it up
 OPEN_TRIES, BASH_TRIES = 3, 8
 DISARM_TRIES = 3         # disarm attempts on a known trap in the way, then walk over it
+# Chests (core/chest.s, docs/CHEST_DESIGN.md): searched, a found trap
+# disarmed, the lock picked; an explosion is 5d8 (40 at most), so only with
+# CHEST_HP to spare and CHEST_HP_SHARE of full health.
+CHEST_SEARCHES = 2       # searches beside a chest for a hidden trap before opening it
+CHEST_DISARM_TRIES = 6   # tries at a found trap; then the chest is left, as a careful player does
+CHEST_OPEN_TRIES = 8     # tries at its lock
+CHEST_HP, CHEST_HP_SHARE = 45, 0.6
+CHEST_STEPS = 2 * 12     # farthest chest in view worth walking to (COLLECT_STEPS twice)
 SEARCHES_PER_SPOT = 6
 SEALED_DIG_AFTER = 1500  # steps sealed in, searching, before tunnelling out
 DIG_COST = {0xD: 60, 0xC: 150}   # path cost of a quartz vein and a magma one (core/tunnel.s: quartz gives way more easily)
@@ -236,7 +267,11 @@ STARTING_WEAPON = ("Dagger", 0)               # core/game_loop.s starting equipm
 # range; the ammunition's dice average (core/item_tables.s: 1d5, 1d4, 1d2).
 LAUNCHERS = {"Heavy Crossbow": ("Bolt", 4, 35), "Composite Bow": ("Arrow", 4, 35), "Long Bow": ("Arrow", 3, 30),
              "Light Crossbow": ("Bolt", 3, 25), "Short Bow": ("Arrow", 2, 25), "Sling": ("Rock", 2, 20)}
-AMMO_AVERAGE = {"Bolt": 3.0, "Arrow": 2.5, "Rock": 1.5}
+AMMO_AVERAGE = {"Bolt": 3.0, "Arrow": 2.5, "Rock": 1.5, "Iron Shot": 2.0}
+# A launcher's ammunition by name: the Sling throws Iron Shot (1d3, the
+# better) and Rocks (1d2); the item audit found Iron Shot never taken
+# (maintainer, 2026-11-18). LAUNCHERS names the one its damage is reckoned by.
+AMMO_KINDS = {"Rock": ("Iron Shot", "Rock")}
 AMMO_RESERVE = 20        # shots carried
 AMMO_STACKS = 2          # stacks of the launcher's ammunition kept on a full pack, the fullest
 AMMO_MAX_GOLD = 10       # most paid a shot: a Human Warrior paid 407 of 473 starting gold for a
@@ -415,6 +450,7 @@ RESTORERS = {**{name: (stat,) for name, stat in RESTORE_POTIONS.items()},
 STAT_MAXED = 28          # 18/100 as track_stats reads it (18 + 100 // 10)
 RESIST_WORTH = 0.25      # a breather whose breath, as resisted now, is this share of HP: resist first
 TOWN_REST_STRIKES = 5    # town rests before Word of Recall to the Balrog that may gain nothing (recall_trip)
+RECALL_REST_HP = 0.8     # below this share of max HP, any recall down waits for a rest in town
 RESIST_TIMER_LOW = 3     # Resist Heat (Cold) turns left that count as none: renewed before a breath
                          # outlasts it (the prayer adds randint(10) + 10, pmx_resist_add)
 NEUTRALIZE_RESERVE = 2   # carried from STRONG_LEVEL on the strong_potions goals
@@ -537,7 +573,10 @@ MAGE_HEAL_AVERAGE = {CURE_LIGHT: 10.0}                 # the Mage book's is 4d4 
 PRAY_HEAL_HP = 0.5       # below this share of max HP a known heal is prayed (M5b; potions below QUAFF_HP)
 SPELL_MARGIN = 0.75      # HP under this share of a caster's biggest spell in view: heal, do not hunt it (M5b)
 QUAFF_HP = 0.3           # below this fraction of max HP, drink one
-FOODS = ("Ration of Food", "Slime Mold")
+# Elvish Waybread counts a ration: found, never sold (the item audit,
+# maintainer, 2026-11-18).
+WAYBREAD = "Piece of Elvish Waybread"
+FOODS = ("Ration of Food", "Slime Mold", WAYBREAD)
 SLIME = 1 / 3            # a Slime Mold feeds 500 turns, a Ration 1,500 (core/player_items.s)
 FOOD_PER_DEPTH = 3       # one more ration of reserve per this many levels down (M4 round 42)
 FOOD_RESERVE = 2         # below this many known foods, head for town (§14.3 round 3)
@@ -717,6 +756,12 @@ class LevelMemory:
     near_until: int = 0             # step before which a creature seen close may still follow
     groped: set[Pos] = field(default_factory=set)   # unknown squares already stepped into
     slowed: set[tuple[str, int, str]] = field(default_factory=set)   # creatures a Wand of Slow Monster was aimed at
+    confused: set[tuple[str, int, str]] = field(default_factory=set)   # ... Confuse Monster
+    slept: set[tuple[str, int, str]] = field(default_factory=set)      # ... Sleep Monster
+    area_staff_after: int = 0                                          # step of the next area staff
+    staffs_used: set[str] = field(default_factory=set)                 # the scouting staffs used here
+    cure_after: int = 0                                                # step of the next Staff of Curing
+    detect_invis_after: int = 0                                        # ... Staff of Detect Invisible
     felt: set[Pos] = field(default_factory=set)   # unknown squares a move into went nowhere: walls in the dark
     glyphs: dict[Pos, str] = field(default_factory=dict)   # unidentified glyphs seen, on screen or not
     retreat_path: set[Pos] = field(default_factory=set)   # tiles the current retreat crossed
@@ -725,6 +770,8 @@ class LevelMemory:
     retreat_stuck: int = 0          # retreat steps taken from there that left the bot there (RETREAT_STUCK)
     bumped: dict[Pos, int] = field(default_factory=dict)   # tile -> step it is blocked until
     collected: set[Pos] = field(default_factory=set)   # tiles a pickup was tried on, or given up
+    chests: dict[Pos, dict[str, int]] = field(default_factory=dict)   # chest work: searches, disarms, opens, trapped, done
+    chest_action: tuple[Pos, str] | None = None   # the last chest command, read by its messages
     collect_walks: dict[Pos, int] = field(default_factory=dict)   # walk decisions toward each
     slow_seen: dict[Pos, int] = field(default_factory=dict)   # slow creature tile -> step last seen
     loop_blocks: dict[Pos, int] = field(default_factory=dict)   # tile -> times it ended an oscillation here
@@ -1312,13 +1359,13 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.support_staffs, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.unseen_foe_attack, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
                       self.recall_trip, self.chosen_blocker, self.resupply, self.dive_down,
-                      self.rest, self.collect,
-                      self.shop, self.scout, self.find_traps, self.identify_items, self.try_unknown, self.exercise, self.descend, self.hunt, self.explore, self.clear_way, self.dig_out, *last):
+                      self.rest, self.collect, self.chest,
+                      self.shop, self.scout_staffs, self.scout, self.find_traps, self.identify_items, self.try_unknown, self.exercise, self.descend, self.hunt, self.explore, self.clear_way, self.dig_out, *last):
             decision = layer(obs, view)
             if decision is not None:
                 return decision
@@ -1482,7 +1529,19 @@ class Brain:
                 "Strength": 15 * bonus if melee else 0, "Slaying": 60 if melee else 0,
                 "Increase Damage": 25 * bonus if melee else 0, "Increase To-Hit": 8 * bonus if melee else 0,
                 "Wisdom": (20 if self.goal.klass in ("priest", "paladin") else 2) * bonus,
+                # The Gain rings (the item audit, 2026-11-18): Constitution is
+                # HP for everyone, Dexterity blows and AC, Intelligence a
+                # Mage's (and Ranger's) mana.
+                "Gain Constitution": 20 * bonus, "Gain Dexterity": (15 if melee else 5) * bonus,
+                "Gain Intelligence": (20 if self.goal.klass in ("mage", "ranger") else 2) * bonus,
                 "See Invisible": 20}.get(kind, 0)
+
+    def ammo_kinds(self) -> tuple[str, ...]:
+        """The carried launcher's ammunition names (AMMO_KINDS); none without one."""
+        if self.launcher is None:
+            return ()
+        ammo = LAUNCHERS[self.launcher][0]
+        return AMMO_KINDS.get(ammo, (ammo,))
 
     def jewel_resists(self, but: str = "") -> frozenset[str]:
         """The elements the rings and amulet worn resist (``JEWEL_ELEMENTS``),
@@ -1611,7 +1670,7 @@ class Brain:
         2026-11-12)."""
         if not self.recharge_scrolls or obs.step < self.blind_until or self.close_threats(obs, view):
             return None
-        empty = next((w for w in (*ATTACK_WANDS, *FIGHT_DEVICES, TELEPORT_STAFF)
+        empty = next((w for w in (*ATTACK_WANDS, *FIGHT_DEVICES, *FOUND_DEVICES, TELEPORT_STAFF)
                       if w in self.wands and self.wands[w] == 0), None)
         if empty is None:
             return None
@@ -2704,7 +2763,7 @@ class Brain:
         if self.recharge_scrolls < RECHARGE_RESERVE and any(w in self.wands for w in (*ATTACK_WANDS, *FIGHT_DEVICES)):
             wants.append(RECHARGE_SCROLL)
         if self.launcher is not None and self.ammo < self.ammo_reserve():
-            wants.append(LAUNCHERS[self.launcher][0])   # 1-2 gp a shot
+            wants.extend(self.ammo_kinds())   # 1-2 gp a shot
         if self.at_store == TEMPLE and self.book_next is not None and self.book_next not in MAGE_BOOKS:
             wants.insert(0, store_name(self.book_next))   # a caster's prayers first (maintainer, 2026-10-25)
         if self.at_store == MAGIC_SHOP:
@@ -2961,7 +3020,7 @@ class Brain:
             elif self.launcher is not None and item.startswith(self.launcher):
                 self.launcher = None   # a spare one dropped leaves the one carried
         elif item.startswith(tuple(AMMO_AVERAGE)):
-            if self.launcher is not None and item.startswith(LAUNCHERS[self.launcher][0]):
+            if self.launcher is not None and item.startswith(self.ammo_kinds()):
                 self.ammo += n
         elif book_of(item) is not None:
             if n > 0:
@@ -3009,9 +3068,9 @@ class Brain:
         if scope == "all" and self.launcher is not None:
             # A clvl 37 Gnome Rogue's count said none with 197 Bolts carried
             # (C64 Balrog, 2026-11-14): balrog_damage counts them.
-            self.ammo = held(LAUNCHERS[self.launcher][0])
+            self.ammo = held(self.ammo_kinds())   # type: ignore[arg-type]  # startswith takes a tuple
         if scope in ("food", "all"):
-            self.food = held(FOODS[0]) + SLIME * held(FOODS[1])
+            self.food = held(FOODS[0]) + SLIME * held(FOODS[1]) + held(WAYBREAD)
         if scope == "all":
             # Flasks too: the lantern is refueled only while the count says
             # some are carried. A clvl 40 Human Paladin with a lantern and
@@ -3498,6 +3557,13 @@ class Brain:
         target = (view.pos[0] + step[0], view.pos[1] + step[1])
         if view.type_at(*target) == TYPE_TRAP:
             tries = self.level.disarm_attempts.get(target, 0)
+            wand = next((w for w in DISARM_WANDS if self.wands.get(w, 0) > 0), None)
+            if wand is not None and tries == 0:
+                # A trap wand first, as a player spends a charge to keep his
+                # skin (the item audit, 2026-11-18); the hands after.
+                self.level.disarm_attempts[target] = 1
+                self.picking, self.listed, self.pending, self.last_aimed = wand, False, DIRS[step], wand
+                return Decision(KEY_AIM, layer, f"{reason}: aim the {wand} at the trap")
             if tries < DISARM_TRIES:
                 self.level.disarm_attempts[target] = tries + 1
                 self.pending = DIRS[step]
@@ -4675,7 +4741,67 @@ class Brain:
                 self.picking, self.listed, self.pending, self.last_aimed = SLOW_WAND, False, DIRS[step], SLOW_WAND
                 self.aimed = (pos, c.glyph)
                 return Decision(KEY_AIM, "device", f"aim the {SLOW_WAND} at '{c.glyph}'")
+        hurt = obs.hp < RETREAT_HP * obs.mhp
+        for wand, marked, when in ((CONFUSE_WAND, self.level.confused, True), (SLEEP_WAND, self.level.slept, hurt)):
+            if not when or self.wands.get(wand, 0) <= 0:
+                continue
+            for pos, c in sorted(strong, key=lambda pc: chebyshev(pc[0], view.pos)):
+                step = self.line_to(view, pos, missile=True)
+                if step is None or (c.glyph, c.level, c.name) in marked:
+                    continue
+                marked.add((c.glyph, c.level, c.name))
+                self.picking, self.listed, self.pending, self.last_aimed = wand, False, DIRS[step], wand
+                self.aimed = (pos, c.glyph)
+                return Decision(KEY_AIM, "device", f"aim the {wand} at '{c.glyph}'")
+        if len(strong) >= 2 and obs.step >= self.level.area_staff_after:
+            staff = next((s for s in (SLOW_STAFF, SLEEP_STAFF) if self.wands.get(s, 0) > 0), None)
+            if staff is not None:
+                self.level.area_staff_after = obs.step + AREA_STAFF_STEPS
+                self.picking, self.listed, self.last_aimed = staff, False, staff
+                return Decision(KEY_USE, "device", f"{len(strong)} strong in view: use the {staff}")
+        beside = sum(1 for p in self.threats(view) if chebyshev(p, view.pos) == 1)
+        if (beside >= 2 and obs.hp < QUAFF_HP * obs.mhp and self.wands.get(DESTRUCTION_STAFF, 0) > 0
+                and not (self.phase or self.teleports or self.wands.get(TELEPORT_STAFF, 0))):
+            self.picking, self.listed, self.last_aimed = DESTRUCTION_STAFF, False, DESTRUCTION_STAFF
+            return Decision(KEY_USE, "device", f"{beside} beside at HP {obs.hp}/{obs.mhp}, no escape: "
+                                               f"use the {DESTRUCTION_STAFF}")
         return None
+
+    def support_staffs(self, obs: Observation, view: View) -> Decision | None:
+        """The healing and curing staffs when the potions are gone, and Detect
+        Invisible after an unseen attack (the item audit, 2026-11-18)."""
+        if obs.dlvl == 0:
+            return None
+        if obs.hp < QUAFF_HP * obs.mhp and not self.clw and self.wands.get(CURE_STAFF, 0) > 0:
+            self.picking, self.listed, self.last_aimed = CURE_STAFF, False, CURE_STAFF
+            return Decision(KEY_USE, "device", f"HP {obs.hp}/{obs.mhp}, no potion: use the {CURE_STAFF}")
+        if self.poisoned and not self.neutralize and self.wands.get(CURING_STAFF, 0) > 0 \
+                and obs.step >= self.level.cure_after:
+            self.level.cure_after = obs.step + AREA_STAFF_STEPS
+            self.picking, self.listed, self.last_aimed = CURING_STAFF, False, CURING_STAFF
+            return Decision(KEY_USE, "device", f"poisoned: use the {CURING_STAFF}")
+        if self.unseen_attack and self.wands.get(DETECT_INVIS_STAFF, 0) > 0 \
+                and obs.step >= self.level.detect_invis_after:
+            self.level.detect_invis_after = obs.step + UNSEEN_STEPS
+            self.picking, self.listed, self.last_aimed = DETECT_INVIS_STAFF, False, DETECT_INVIS_STAFF
+            return Decision(KEY_USE, "device", f"attacked unseen: use the {DETECT_INVIS_STAFF}")
+        return None
+
+    def scout_staffs(self, obs: Observation, view: View) -> Decision | None:
+        """The scouting staffs once a level with nothing close, Door/Stair
+        Location while no staircase is known, as a player reads a new level
+        (the item audit, 2026-11-18)."""
+        if obs.dlvl == 0 or self.unseen_attack or self.close_threats(obs, view):
+            return None
+        wanted = list(SCOUT_STAFFS)
+        if not (view.stairs_up() | view.stairs_down()):
+            wanted.append(STAIRS_STAFF)
+        staff = next((s for s in wanted if self.wands.get(s, 0) > 0 and s not in self.level.staffs_used), None)
+        if staff is None:
+            return None
+        self.level.staffs_used.add(staff)
+        self.picking, self.listed, self.last_aimed = staff, False, staff
+        return Decision(KEY_USE, "scout", f"scout the level: use the {staff}")
 
     def aim(self, obs: Observation, view: View) -> Decision | None:
         """An attack wand at a creature in line (maintainer, 2026-11-04):
@@ -4810,7 +4936,7 @@ class Brain:
                     value(self.launcher) if self.launcher else 0) and (best is None or value(launcher) > best[0]):
                 best = (value(launcher), letter, name)
             elif (self.launcher is not None and self.ammo < self.ammo_reserve() and price <= gold
-                  and name.startswith(LAUNCHERS[self.launcher][0])):
+                  and name.startswith(self.ammo_kinds())):
                 ammo_row = (letter, name)
         if best is not None:
             return best[1], best[2]
@@ -4822,7 +4948,7 @@ class Brain:
             self.ammo = 0
         if "No ranged weapon." in messages:
             self.wielding_launcher = False
-        if self.launcher is not None and "You picked up" in messages and LAUNCHERS[self.launcher][0] in messages:
+        if self.launcher is not None and "You picked up" in messages and any(k in messages for k in self.ammo_kinds()):
             self.ammo += 1   # a shot that missed, collected
 
     def shoot(self, obs: Observation, view: View) -> Decision | None:
@@ -5114,7 +5240,7 @@ class Brain:
                 return False
             if name.startswith(FOODS):
                 return True
-            if self.launcher is not None and name.startswith(LAUNCHERS[self.launcher][0]):
+            if self.launcher is not None and name.startswith(self.ammo_kinds()):
                 return True
             if self.restorer_wanted(name) and not self.pack_full:
                 return True
@@ -5147,6 +5273,82 @@ class Brain:
             return None
         return Decision(DIRS[step], "collect", f"walk to the '{self.items_seen[self.collect_to][0]}' "
                                                f"at {self.collect_to}")
+
+    def chest(self, obs: Observation, view: View) -> Decision | None:
+        """Open a chest in view, as a player does: walk beside it, search it
+        for a hidden trap, disarm a trap found, pick its lock; the loot falls
+        around it for ``collect``. Maintainer, 2026-11-18: the bot never
+        opened one, and chest loot and chest traps went unplayed. The look
+        names its state (CHEST_DESIGN.md step 14: "(empty)", "(trapped)",
+        "(locked)", "(disarmed)"); each command's messages say how it went."""
+        self.read_chest_messages()
+        if self.unseen_attack or obs.hp < CHEST_HP or obs.hp < CHEST_HP_SHARE * obs.mhp:
+            return None
+        if any(self.awake_near(p, obs, view) for p in self.threats(view)):
+            return None
+        chests = {p: name for p, (glyph, name) in self.items_seen.items()
+                  if "Chest" in name and not name.startswith("Ruined") and "(empty)" not in name
+                  and not self.level.chests.get(p, {}).get("done")}
+        if not chests:
+            return None
+        beside = [p for p in chests if chebyshev(p, view.pos) == 1]
+        if beside:
+            spot = beside[0]
+            state = self.level.chests.setdefault(spot, {})
+            if "(trapped)" in chests[spot]:
+                state.setdefault("trapped", 1)
+            elif "(disarmed)" in chests[spot]:
+                state.setdefault("trapped", 0)
+            step = (spot[0] - view.pos[0], spot[1] - view.pos[1])
+            if state.get("trapped") is None and state.get("searches", 0) < CHEST_SEARCHES:
+                state["searches"] = state.get("searches", 0) + 1
+                self.level.chest_action = (spot, "search")
+                return Decision(KEY_SEARCH, "chest", "search the chest for a trap")
+            if state.get("trapped"):
+                if state.get("disarms", 0) >= CHEST_DISARM_TRIES:
+                    state["done"] = 1   # left: its trap held
+                    return None
+                state["disarms"] = state.get("disarms", 0) + 1
+                self.level.chest_action = (spot, "disarm")
+                self.pending = DIRS[step]
+                return Decision(KEY_DISARM, "chest", "disarm the chest's trap")
+            if state.get("opens", 0) >= CHEST_OPEN_TRIES:
+                state["done"] = 1   # its lock held
+                return None
+            state["opens"] = state.get("opens", 0) + 1
+            self.level.chest_action = (spot, "open")
+            self.pending = DIRS[step]
+            return Decision(ord("O"), "chest", "open the chest")
+        targets = {(p[0] + dx, p[1] + dy) for p in chests for dx, dy in DIRS if (dx, dy) != (0, 0)}
+        targets = {t for t in targets if view.passable(*t, avoid_monsters=True)}
+        reach = view.path_steps(targets, avoid_monsters=True) if targets else None
+        if reach is None or reach > CHEST_STEPS:
+            return None
+        step = view.step_toward(targets, avoid_monsters=True)
+        return self.move(view, step, "chest", "walk to a chest")
+
+    def read_chest_messages(self) -> None:
+        """The last chest command's outcome, from its messages."""
+        action, self.level.chest_action = self.level.chest_action, None
+        if action is None:
+            return
+        spot, kind = action
+        state = self.level.chests.setdefault(spot, {})
+        messages = self.seen_messages
+        if "You have discovered a trap on the chest!" in messages:
+            state["trapped"] = 1
+        elif kind == "search" and state.get("searches", 0) >= CHEST_SEARCHES:
+            state.setdefault("trapped", 0)   # none found: open it
+        if any(m in messages for m in ("You have disarmed the chest.", "The chest was not trapped.",
+                                       "I don't see a trap...")):
+            state["trapped"] = 0
+        if kind == "open" and not any(m in messages for m in ("You failed to pick the lock.",
+                                                              "You are too confused to pick the lock.")):
+            state["done"] = 1   # opened, or blown apart ("There is a sudden explosion!")
+
+    def awake_near(self, p: Pos, obs: Observation, view: View) -> bool:
+        """A threat that can reach the chest work: not one asleep a way off."""
+        return not (self.still_there(p, obs) and chebyshev(p, view.pos) > 2)
 
     def carry_limit(self, name: str) -> tuple[int, int] | None:
         """(carried, limit) for a supply the bot keeps a reserve of: it stops
@@ -5494,7 +5696,12 @@ class Brain:
                 # town trip (C64 Balrog, 2026-11-09).
                 return None
             mp, mmp = self.magic.mana(obs)
-            if self.balrog_bound() and self.max_dlvl >= BALROG_DLVL and (obs.hp < obs.mhp or mp < mmp) \
+            to_balrog = self.balrog_bound() and self.max_dlvl >= BALROG_DLVL and (obs.hp < obs.mhp or mp < mmp)
+            # Any recall down rests first when badly hurt: a clvl 19 Elf
+            # Ranger restored in town at 48 of 120 HP recalled to DL15-16 and
+            # died there, restore after restore (C64 Balrog, 2026-11-18).
+            hurt = obs.hp < RECALL_REST_HP * obs.mhp
+            if (to_balrog or hurt) \
                     and not self.no_food and not any(chebyshev(p, view.pos) <= 1 for p in view.creatures):
                 # Down to the Balrog at full mana, as a player goes: recall
                 # lands off the stairs, where a dive level has no rest. A clvl
@@ -5510,8 +5717,9 @@ class Brain:
                     self.level.rest_strikes += 1
                 self.level.rested = max(total, self.level.rested or 0)
                 if self.level.rest_strikes < TOWN_REST_STRIKES:
-                    return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp} MP {mp}/{mmp}: "
-                                                          "rest before Word of Recall to the Balrog")
+                    return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp} MP {mp}/{mmp}: rest before "
+                                                          + ("Word of Recall to the Balrog" if to_balrog
+                                                             else "Word of Recall"))
         elif not (self.food_low() and self.sealed(view)) and not self.stuck(view) and not self.lightless() \
                 and not self.far_above_deepest(obs) and not self.hopping_out() and (
                 obs.dlvl < RECALL_FROM or not self.needs_resupply(obs)) and not (
@@ -5910,7 +6118,7 @@ class Brain:
             # empty lanterns and three burnt-out torches, dropped one item a
             # town trip, and every purchase of light and Word of Recall
             # failed on the full pack (M8, 2026-11-02).
-            missiles = ((self.launcher, LAUNCHERS[self.launcher][0]) if self.launcher is not None
+            missiles = ((self.launcher, *self.ammo_kinds()) if self.launcher is not None
                         else (*LAUNCHERS, *AMMO_AVERAGE))
             # The melee weapon is in the pack while the launcher is wielded.
             # Only the wands and staffs it uses: every "Wand of" kept filled a
@@ -5919,7 +6127,8 @@ class Brain:
             recharging = any(n in self.magic.known and not self.magic.confirmed(n) for n in RECHARGE_SPELLS)
             # Restore Mana for a caster: a half-troll Priest bought one for the
             # Balrog and dropped it as junk (C64 Balrog, 2026-11-12).
-            useful = (*ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *FIGHT_DEVICES, *(RECHARGEABLE if recharging else ()),
+            useful = (*ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *FIGHT_DEVICES, *FOUND_DEVICES,
+                      *(RECHARGEABLE if recharging else ()),
                       *((RESTORE_MANA,) if self.mana_klass() else ()))
             keep = KEEP_PREFIXES + missiles + ((self.weapon[0],) if self.wielding_launcher else ()) + tuple(useful)
 
@@ -6821,6 +7030,11 @@ class Brain:
         if chebyshev(target, view.pos) == 1:
             self.level.dig_tries[target] = self.level.dig_tries.get(target, 0) + 1
             self.pending = DIRS[(target[0] - view.pos[0], target[1] - view.pos[1])]
+            if self.wands.get(STONE_TO_MUD, 0) > 0:
+                # A charge turns the vein to mud at once (the item audit,
+                # 2026-11-18), where tunnelling takes many turns.
+                self.picking, self.listed, self.last_aimed = STONE_TO_MUD, False, STONE_TO_MUD
+                return Decision(KEY_AIM, "dig", f"sealed in: aim the {STONE_TO_MUD} at {target}")
             kind = "quartz vein" if view.veins.get(target) == 0xD else "magma"
             return Decision(KEY_TUNNEL, "dig", f"sealed in: tunnel into the {kind} at {target}")
         beside = {p for p in view.neighbors(*target) if view.passable(*p, avoid_monsters=False)}

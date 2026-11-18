@@ -175,6 +175,12 @@ def load_brain(snapshot: Path, goal: Goal) -> Brain:
                 saved = getattr(obj, name)
                 for key, default in value.items():
                     saved.setdefault(key, default)
+    # The book list is listed again before the first cast: a save's can be
+    # wrong for the books carried. A clvl 19 Elf Ranger's held
+    # ["Beginners-Magick"] with only Magick I carried, one book either way,
+    # and every restore fainted first (C64 Balrog, 2026-11-18).
+    brain.magic.ever_books |= brain.magic.listed_books
+    brain.magic.books = None
     return brain
 
 

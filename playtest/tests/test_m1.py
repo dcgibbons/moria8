@@ -609,6 +609,102 @@ class FoodCountTest(unittest.TestCase):
         self.assertEqual(brain.food, 0)
 
 
+class ChestTest(unittest.TestCase):
+    """Maintainer, 2026-11-18: the bot never opened a chest, so chest loot
+    and chest traps went unplayed. A player walks up to one, searches it,
+    disarms a trap found, picks the lock and takes what falls out."""
+
+    @staticmethod
+    def setup(name: str, hp: int = 60, mhp: int = 60):
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=8)
+        view.screen = (0, 0, COLS, ROWS)
+        o = command_obs(pos=(5, 5), dlvl=8, clvl=12, hp=hp, mhp=mhp)
+        brain.track(o, view)                                     # the level's memory begins
+        brain.level.identified[((8, 5), "~")] = ("item", name)   # looked at
+        view.unknown[(8, 5)] = "~"
+        return brain, view, o
+
+    def at(self, brain, view, o, msg: str = ""):
+        view.pos = (7, 5)
+        view.unknown[(8, 5)] = "~"                                # each screen shows it again
+        o2 = command_obs(pos=(7, 5), dlvl=8, clvl=12, hp=o.hp, mhp=o.mhp, rows={0: msg})
+        return brain.decide(o2, view)
+
+    def test_walks_to_a_chest_then_searches_disarms_and_opens_it(self) -> None:
+        from moria_playtest.brain import KEY_DISARM
+        brain, view, o = self.setup("Small Wooden Chest (locked)")
+        decision = brain.decide(o, view)
+        self.assertEqual((decision.layer, decision.key), ("chest", DIRS[(1, 0)]))
+        first = self.at(brain, view, o)
+        self.assertEqual((first.layer, first.key), ("chest", KEY_SEARCH))          # search it first
+        trapped = self.at(brain, view, o, "You have discovered a trap on the chest!")
+        self.assertEqual((trapped.key, brain.pending), (KEY_DISARM, DIRS[(1, 0)]))
+        brain.pending = None
+        opened = self.at(brain, view, o, "You have disarmed the chest.")
+        self.assertEqual((opened.key, brain.pending), (ord("O"), DIRS[(1, 0)]))
+        brain.pending = None
+        again = self.at(brain, view, o, "You failed to pick the lock.")
+        self.assertEqual(again.key, ord("O"))                                      # the lock again
+        brain.pending = None
+        done = self.at(brain, view, o, "You have picked the lock.")
+        self.assertNotEqual(done.layer, "chest")                                   # its loot to collect
+
+    def test_a_trap_it_cannot_disarm_leaves_the_chest(self) -> None:
+        from moria_playtest.brain import CHEST_DISARM_TRIES, KEY_DISARM
+        brain, view, o = self.setup("Large Iron Chest (trapped)")
+        self.assertEqual(self.at(brain, view, o).key, KEY_DISARM)
+        for _ in range(CHEST_DISARM_TRIES - 1):
+            brain.pending = None
+            self.assertEqual(self.at(brain, view, o, "You failed to disarm the chest.").key, KEY_DISARM)
+        brain.pending = None
+        self.assertNotEqual(self.at(brain, view, o, "You failed to disarm the chest.").layer, "chest")
+
+    def test_no_chest_when_hurt_empty_or_ruined(self) -> None:
+        for name, hp in (("Small Wooden Chest (locked)", 30), ("Small Wooden Chest (empty)", 60),
+                         ("Ruined Chest", 60)):
+            brain, view, o = self.setup(name, hp=hp, mhp=60)
+            self.assertNotEqual(brain.decide(o, view).layer, "chest", name)
+
+
+class ItemAuditTest(unittest.TestCase):
+    """Maintainer, 2026-11-18, the item audit: Elvish Waybread is food, Iron
+    Shot is Sling ammunition, and the Rings of Gain Dexterity, Constitution
+    and Intelligence are worth wearing."""
+
+    def test_elvish_waybread_is_food(self) -> None:
+        brain = Brain(GOALS["reach_dl8"])
+        brain.food = 0
+        brain.credit("Piece of Elvish Waybread", 1)
+        self.assertEqual(brain.food, 1)
+        brain.count_food("You eat the Piece of Elvish Waybread.")
+        self.assertEqual(brain.food, 0)
+        brain.sync_counts([" a) 2 Ration of Food", " b) 3 Piece of Elvish Waybread"], "all")
+        self.assertEqual(brain.food, 5)
+
+    def test_iron_shot_is_sling_ammunition(self) -> None:
+        brain = Brain(GOALS["deep"])
+        brain.credit("Sling (x2)", 1)
+        self.assertEqual(brain.launcher, "Sling")
+        brain.ammo = 0
+        brain.credit("Iron Shot", 1)
+        self.assertEqual(brain.ammo, 1)
+        brain.sync_counts([" a) 12 Iron Shot", " b) 8 Rock", " c) Dagger (1d4)"], "all")
+        self.assertEqual(brain.ammo, 20)
+
+    def test_the_gain_rings_are_worth_wearing(self) -> None:
+        from moria_playtest import goals
+        warrior = Brain(goals.for_character(GOALS["deep"], "human-warrior"))
+        mage = Brain(goals.for_character(GOALS["deep"], "human-mage"))
+        for name in ("Ring of Gain Constitution (+2)", "Ring of Gain Dexterity (+2)"):
+            self.assertGreater(warrior.jewel_value(name), 0, name)
+        self.assertGreater(mage.jewel_value("Ring of Gain Intelligence (+2)"), 0)
+        self.assertGreater(mage.jewel_value("Ring of Gain Constitution (+2)"), 0)   # HP for everyone
+        self.assertGreater(mage.jewel_value("Ring of Gain Intelligence (+2)"),
+                           warrior.jewel_value("Ring of Gain Intelligence (+2)"))
+
+
 class DropJunkTest(unittest.TestCase):
     """M5b round 29: worn-out gear filled the pack; every purchase failed and
     two Dwarf Priests hopped between town and DL1 for 4,000 steps."""
@@ -2554,6 +2650,11 @@ class ThreatDepthTest(unittest.TestCase):
         shallow.__dict__.update({k: v for k, v in full.__dict__.items() if k != "level"})
         shallow.max_dlvl = 40                                          # not to the Balrog's levels
         self.assertEqual(shallow.recall_trip(town(76), view).reason, "read Word of Recall")
+        # Badly hurt, any depth: rest first. A clvl 19 Elf Ranger restored in
+        # town at 48 of 120 HP recalled to DL15-16 and died there, restore
+        # after restore (C64 Balrog, 2026-11-18).
+        hurt = shallow.recall_trip(town(161, hp=150), view)
+        self.assertEqual((hurt.layer, hurt.key), ("rest", KEY_AUTOREST))
 
     def test_no_find_traps_on_the_balrogs_levels(self) -> None:
         """C64 Balrog, 2026-11-12: a clvl 40 Priest prayed Find Traps 660
@@ -5583,6 +5684,46 @@ class PrayerBookTest(unittest.TestCase):
         self.assertIn("Portal", magic.refused)
         self.assertIsNone(magic.books)                                   # list them again
 
+    def test_spells_filed_under_a_book_not_carried_are_read_again(self) -> None:
+        """C64 Balrog, 2026-11-18: a clvl 19 Elf Ranger read Magick I's list
+        believing it Beginners-Magick (stolen), so every spell was filed
+        under a book it lacked. Listed right, each was refused in turn, 307
+        times in 15,000 steps, and it fought without its spells. The books
+        offered are read again, which files the spells under them."""
+        brain = self.priest()
+        magic = brain.magic
+        from moria_playtest.magic import Prayer
+        magic.books, magic.listed_books = ["Words of Wisdom"], {"Beginners Handbook", "Words of Wisdom"}
+        magic.known["Portal"] = Prayer("b", 4, 5, "Beginners Handbook")   # misfiled
+        magic.pray("Portal", "boxed in")
+        brain.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None)
+        self.assertNotIn("Words of Wisdom", magic.listed_books)          # its list read again
+        magic.current = "Words of Wisdom"
+        listing = PrayerBookTest.spell("list", {2: " b) Portal                     4   5"})
+        brain.decide(listing, None)
+        self.assertEqual(magic.known["Portal"].book, "Words of Wisdom")
+        self.assertNotIn("Portal", magic.refused)                        # castable again
+        # Read again or not, a book once carried keeps the one-book shortcut
+        # shut: the Ranger, its Magick I list unread again, took the one book
+        # offered for Beginners-Magick and fainted on (2026-11-18).
+        magic.books, magic.wanted = None, "Portal"
+        magic.listed_books = {"Beginners Handbook"}
+        self.assertEqual(brain.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None).key, ord("?"))
+
+    def test_a_restored_brain_lists_its_books_before_casting(self) -> None:
+        """A save's book list can be wrong for the books it carries (the
+        Ranger's held ["Beginners-Magick"] with Magick I carried, one book
+        either way, and every restore fainted first): loading forgets it."""
+        import tempfile
+        from pathlib import Path
+        from moria_playtest.session import load_brain, save_brain
+        brain = self.priest()
+        brain.magic.books = ["Beginners Handbook"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "snap"
+            save_brain(brain, path)
+            self.assertIsNone(load_brain(path, brain.goal).magic.books)
+
     def test_a_picked_up_book_is_owned_and_studied(self) -> None:
         brain = self.priest()
         magic = brain.magic
@@ -5607,9 +5748,17 @@ class PrayerBookTest(unittest.TestCase):
         magic.books = ["Beginners Handbook", "Words of Wisdom"]
         magic.wanted = "Bless"
         self.assertEqual(brain.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None).key, ord("?"))
-        fresh = self.priest()
-        fresh.magic.books, fresh.magic.wanted = None, "Bless"
-        self.assertNotEqual(fresh.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None).key, ord("?"))
+        # Nor when no list is known: a restored save forgets it, and the clvl
+        # 19 Ranger, its Beginners-Magick gone, fainted 23 times again after
+        # a restore and lost 72 max HP (C64 Balrog, 2026-11-18). A list costs
+        # no game turn.
+        restored = self.priest()
+        restored.magic.books, restored.magic.wanted = None, "Bless"
+        restored.magic.listed_books = {"Beginners Handbook", "Words of Wisdom"}   # it had a second book
+        self.assertEqual(restored.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None).key, ord("?"))
+        new = self.priest()                                              # only ever the starting book
+        new.magic.books, new.magic.wanted, new.magic.listed_books = None, "Bless", {"Beginners Handbook"}
+        self.assertNotEqual(new.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None).key, ord("?"))
 
     def test_both_vms_faint_messages_refuse_the_spell(self) -> None:
         """Game, 2026-11-18: VMS's overcast messages, "You faint from the
@@ -5619,8 +5768,14 @@ class PrayerBookTest(unittest.TestCase):
         for message in ("You faint from the effort!", "You faint from fatigue!"):
             brain = self.priest()
             brain.magic.last = "Bless"
+            brain.magic.books = ["Beginners Handbook"]
             brain.magic.note(message)
             self.assertIn("Bless", brain.magic.refused, message)
+            # A faint says the book or the cost was wrong: list the books
+            # again. A clvl 19 Elf Ranger's save held ["Beginners-Magick"]
+            # with only Magick I carried (one book either way), and every
+            # restore fainted again (C64 Balrog, 2026-11-18).
+            self.assertIsNone(brain.magic.books, message)
 
     def test_pack_list_names_cut_short(self) -> None:
         from moria_playtest.magic import book_of
@@ -6223,10 +6378,12 @@ class MageBookTest(unittest.TestCase):
         brain, _ = self.caster("half-orc-warrior", {})
         brain.dropping = True
         rows = {0: "Inventory", 1: "---------", 2: "a) 2 Potion of Resist Cold", 3: "b) 3 Potion of Resist Heat",
-                4: "c) Potion of Healing", 5: "d) 2 Potion of Heroism", 6: "e) Iron Shot"}
+                4: "c) Potion of Healing", 5: "d) 2 Potion of Heroism", 6: "e) Shards of Pottery"}
         o = command_obs(rows=rows)
         o.mode, o.stage = Mode.ITEM, "list"
-        self.assertEqual(brain.decide(o, None).reason, "drop Iron Shot")      # the junk, not the potions
+        # Junk, not the potions. (Iron Shot was the junk here until the item
+        # audit made it Sling ammunition, kept with the rest without a launcher.)
+        self.assertEqual(brain.decide(o, None).reason, "drop Shards of Pottery")
         brain.food = 5
         view = town_view((5, 5), (40, 40), dlvl=37)
         view.screen = (0, 0, COLS, ROWS)
@@ -8306,6 +8463,100 @@ class StairsEscapeTest(unittest.TestCase):
         o = command_obs(pos=(5, 5), dlvl=1, clvl=5, hp=60, mhp=60,
                         rows={19: "ST:18/50 DX:12", 23: "HP:60/60  MP:0/0   AC:20  AU:277"})
         self.assertNotEqual(brain.decide(o, view).key, ord("<"))
+
+
+class FoundDeviceTest(unittest.TestCase):
+    """The item audit (maintainer, 2026-11-18): the wands and staffs the bot
+    only identified are used as a player uses them."""
+
+    @staticmethod
+    def dragons(n: int = 1, hp: int = 256):
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        kind = knowledge.kinds_by_name()["Ancient Blue Dragon"]
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        view.creatures = {(14, 10 + 2 * i): Creature(*kind, "Ancient Blue Dragon") for i in range(n)}
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=31, hp=hp, mhp=256)
+        return brain, view, o
+
+    def test_confuse_monster_once_at_a_strong_creature_sleep_monster_only_hurt(self) -> None:
+        from moria_playtest.brain import CONFUSE_WAND, SLEEP_WAND
+        brain, view, o = self.dragons()
+        brain.wands[SLEEP_WAND] = 5
+        self.assertIsNone(brain.devices(o, view))                        # well: no sleep wand
+        brain.wands[CONFUSE_WAND] = 5
+        decision = brain.devices(o, view)
+        self.assertEqual((decision.key, brain.picking), (ord("A"), CONFUSE_WAND))
+        self.assertIsNone(brain.devices(o, view))                        # once at each
+        hurt = command_obs(pos=(10, 10), dlvl=37, clvl=31, hp=100, mhp=256)
+        self.assertEqual(brain.devices(hurt, view).reason, "aim the Wand of Sleep Monster at 'D'")
+
+    def test_an_area_staff_at_two_strong_and_destruction_only_cornered(self) -> None:
+        from moria_playtest.brain import DESTRUCTION_STAFF, SLOW_STAFF
+        brain, view, o = self.dragons(2)
+        brain.wands[SLOW_STAFF] = 5
+        self.assertEqual(brain.devices(o, view).reason, "2 strong in view: use the Staff of Slow Monsters")
+        brain.wands[SLOW_STAFF] = 0
+        brain.wands[DESTRUCTION_STAFF] = 3
+        kind = knowledge.kinds_by_name()["Ancient Blue Dragon"]
+        view.creatures = {(11, 10): Creature(*kind, "Ancient Blue Dragon"), (11, 11): Creature(*kind, "Ancient Blue Dragon")}
+        low = command_obs(pos=(10, 10), dlvl=37, clvl=31, hp=50, mhp=256)
+        self.assertEqual(brain.devices(low, view).key, ord("Z"))         # no escape carried: destroy
+        brain.phase = 3
+        self.assertIsNone(brain.devices(low, view))                      # Phase Door first
+
+    def test_the_cure_staffs_when_the_potions_are_gone(self) -> None:
+        from moria_playtest.brain import CURE_STAFF, CURING_STAFF
+        brain = Brain(GOALS["deep"])
+        view = town_view((10, 10), (40, 40), dlvl=10)
+        o = command_obs(pos=(10, 10), dlvl=10, clvl=15, hp=20, mhp=100)
+        brain.clw, brain.wands[CURE_STAFF] = 0, 4
+        self.assertEqual(brain.support_staffs(o, view).reason, f"HP 20/100, no potion: use the {CURE_STAFF}")
+        brain.clw = 3
+        self.assertIsNone(brain.support_staffs(o, view))                 # the potions first
+        brain.poisoned, brain.neutralize, brain.wands[CURING_STAFF] = True, 0, 4
+        well = command_obs(pos=(10, 10), dlvl=10, clvl=15, hp=90, mhp=100)
+        self.assertEqual(brain.support_staffs(well, view).reason, f"poisoned: use the {CURING_STAFF}")
+
+    def test_the_scouting_staffs_once_a_level_stairs_while_none_known(self) -> None:
+        from moria_playtest.brain import STAIRS_STAFF
+        brain = Brain(GOALS["deep"])
+        view = town_view((10, 10), (40, 40), dlvl=10)                    # a staircase in view
+        o = command_obs(pos=(10, 10), dlvl=10, clvl=15, hp=90, mhp=100)
+        brain.wands.update({"Staff of Trap Location": 5, STAIRS_STAFF: 5})
+        self.assertEqual(brain.scout_staffs(o, view).reason, "scout the level: use the Staff of Trap Location")
+        self.assertIsNone(brain.scout_staffs(o, view))                   # once a level; stairs known
+        view.types = [0x0 if t in (0x9, 0xA) else t for t in view.types]  # no staircase known
+        self.assertEqual(brain.scout_staffs(o, view).reason, f"scout the level: use the {STAIRS_STAFF}")
+
+    def test_a_trap_wand_before_the_hands_and_magic_missile_is_an_attack_wand(self) -> None:
+        from moria_playtest.brain import ATTACK_WANDS, KEY_DISARM
+        brain = Brain(GOALS["deep"])
+        view = town_view((5, 5), (40, 40), dlvl=5)
+        view.types[5 * COLS + 6] = TYPE_TRAP                             # a known trap east
+        brain.wands["Wand of Disarming"] = 4
+        first = brain.move(view, (1, 0), "explore", "walk")
+        self.assertEqual((first.key, brain.picking), (ord("A"), "Wand of Disarming"))
+        self.assertEqual(brain.move(view, (1, 0), "explore", "walk").key, KEY_DISARM)   # then the hands
+        self.assertIn("Wand of Magic Missile", ATTACK_WANDS)
+
+    def test_stone_to_mud_digs_out(self) -> None:
+        from moria_playtest.brain import SEALED_DIG_AFTER, STONE_TO_MUD
+        from moria_playtest.view import View
+        cols, rows = 12, 5
+        types = [WALL] * (cols * rows)
+        for x in (1, 2, 3, 5, 6, 7, 8):
+            types[2 * cols + x] = 0x0
+        types[2 * cols + 8] = 0xA
+        veins = {(4, 2): 0xD}
+        brain = Brain(GOALS["deep"])
+        brain.wands[STONE_TO_MUD] = 6
+        o = command_obs(pos=(3, 2), dlvl=1, clvl=4)
+        o.step = 1000
+        brain.dig_out(o, View(cols, rows, list(types), (3, 2), 1, veins=veins))
+        o.step = 1000 + SEALED_DIG_AFTER
+        decision = brain.dig_out(o, View(cols, rows, list(types), (3, 2), 1, veins=veins))
+        self.assertEqual((decision.key, brain.picking, brain.pending), (ord("A"), STONE_TO_MUD, DIRS[(1, 0)]))
 
 
 class SpellReadinessTest(unittest.TestCase):

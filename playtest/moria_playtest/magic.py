@@ -171,6 +171,7 @@ class Magic:
         self.mage = klass in MAGE_CLASSES
         self.book_names = MAGE_BOOKS if self.mage else PRAYER_BOOKS
         self.first_book = self.book_names[0]   # every caster starts with its first book (core/game_loop.s)
+        self.ever_books: set[str] = set()      # every book ever listed or read: only grows (prompt's shortcut)
         self.key = KEY_CAST if self.mage else KEY_PRAY
         self.known: dict[str, Prayer] = {}
         self.books: list[str] | None = None   # prayer books in book-prompt order; None: unknown
@@ -237,6 +238,12 @@ class Magic:
             # Constitution): trying again would repeat forever, or drain it.
             self.refused.add(self.last)
             self.last = None
+            if any(f in messages for f in FAINTS):
+                # The book or the cost was not what the bot thought: list the
+                # books again. A clvl 19 Elf Ranger's save held
+                # ["Beginners-Magick"] with only Magick I carried, and every
+                # restore fainted again (C64 Balrog, 2026-11-18).
+                self.books = None
         spell = self.last or self.wanted
         if spell and "Never mind." in messages and "which?" in messages:
             # The spell's book is not carried (burnt or lost): the book prompt
@@ -338,6 +345,12 @@ class Magic:
                 # Priest that picked up books asked for Portal 2,500 times).
                 self.refused.add(self.wanted)
                 self.books = None
+                # Its spell may be filed under a book it lacks: read the
+                # offered books' lists again, which files their spells under
+                # them. A clvl 19 Elf Ranger read Magick I's list believing it
+                # Beginners-Magick (stolen) and refused every spell in turn,
+                # 307 times in 15,000 steps (C64 Balrog, 2026-11-18).
+                self.listed_books.difference_update(letter_of)
             self.wanted = None
             return KEY_ESC, "prompt", "no book wanted: cancel"
         self.current = book
@@ -357,6 +370,7 @@ class Magic:
                 letters[name] = match.group(1)
                 order.append(name)
         self.listing_books = False
+        self.ever_books.update(order)
         if not order:
             self.studying, self.wanted = False, None
             return KEY_ESC, "prompt", "no prayer book listed: cancel"
@@ -375,15 +389,18 @@ class Magic:
             match = BOOK_RANGE.search(obs.rows[0])
             count = ord(match.group(1)) - ord("a") + 1 if match else 1
             if self.books is None or len(self.books) != count:
-                if count == 1 and self.books is None:
-                    # The starting book: no list needed. Not one book left of
-                    # several: a Brigand stole a clvl 16 Elf Ranger's
-                    # Beginners-Magick, Magick I was book a, and "Magic
-                    # Missile" cast its Confuse Monster at 6 mana, 23 faints
-                    # and its Constitution (C64 Balrog, 2026-11-17).
+                if count == 1 and self.books is None and (self.listed_books | self.ever_books) <= {self.first_book}:
+                    # A new character's one book is its starting book: no list.
                     self.books = [self.first_book]
                     self.listed = self.first_book in self.listed_books
                 else:
+                    # Listed otherwise (no game turn): one book offered of a
+                    # character that had others need not be the starting one.
+                    # A Brigand stole a clvl 16 Elf Ranger's Beginners-Magick,
+                    # Magick I was book a, and "Magic Missile" cast its Confuse
+                    # Monster at 6 mana, 23 faints and its Constitution (C64
+                    # Balrog, 2026-11-17); a restored save, its book list
+                    # forgotten, fainted 23 times again (2026-11-18).
                     self.listing_books = True
                     return KEY_LIST, "prompt", "list the prayer books"
             return self.choose_book({b: chr(ord("a") + i) for i, b in enumerate(self.books)})
@@ -395,7 +412,9 @@ class Magic:
                 match = LIST_ROW.match(row)
                 if match:
                     self.known[match.group(2)] = Prayer(match.group(1), int(match.group(3)), int(match.group(4)), book)
+                    self.refused.discard(match.group(2))   # in a book carried: castable again
             self.listed_books.add(book)
+            self.ever_books.add(book)
             self.listed = self.books is not None and all(b in self.listed_books for b in self.books)
         wanted, prayer = self.wanted, self.known.get(self.wanted or "")
         if obs.stage == "which" and book not in self.listed_books:
