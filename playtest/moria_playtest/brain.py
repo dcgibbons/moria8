@@ -2481,7 +2481,11 @@ class Brain:
         if obs.mode == Mode.ITEM and self.dropping:
             return self.drop_prompt(obs)
         if obs.mode == Mode.ITEM and obs.stage == "list" and self.magic.listing_books:
-            return Decision(*self.magic.book_list(obs))
+            decision = Decision(*self.magic.book_list(obs))
+            if self.magic.carried_books is not None:
+                # The books owned are the books carried (see sync_counts).
+                self.books_owned, self.magic.carried_books = set(self.magic.carried_books), None
+            return decision
         if self.picking is not None and obs.mode == Mode.ITEM:
             return self.pick_item(obs)   # a -more- first keeps the pick pending
         if obs.mode == Mode.DISMISS and self.listing_pack:
@@ -3071,6 +3075,11 @@ class Brain:
             self.ammo = held(self.ammo_kinds())   # type: ignore[arg-type]  # startswith takes a tuple
         if scope in ("food", "all"):
             self.food = held(FOODS[0]) + SLIME * held(FOODS[1]) + held(WAYBREAD)
+        if scope == "all" and self.book_levels() is not None:
+            # The books owned are the books carried: a Brigand stole a clvl
+            # 16 Elf Ranger's Beginners-Magick, the bot counted it owned and
+            # never bought another (C64 Balrog, 2026-11-18). Wanted again.
+            self.books_owned = {book for name, _ in listed if (book := book_of(name)) is not None}
         if scope == "all":
             # Flasks too: the lantern is refueled only while the count says
             # some are carried. A clvl 40 Human Paladin with a lantern and

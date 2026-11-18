@@ -172,6 +172,7 @@ class Magic:
         self.book_names = MAGE_BOOKS if self.mage else PRAYER_BOOKS
         self.first_book = self.book_names[0]   # every caster starts with its first book (core/game_loop.s)
         self.ever_books: set[str] = set()      # every book ever listed or read: only grows (prompt's shortcut)
+        self.carried_books: list[str] | None = None   # the last book list as read, for the brain's books owned
         self.key = KEY_CAST if self.mage else KEY_PRAY
         self.known: dict[str, Prayer] = {}
         self.books: list[str] | None = None   # prayer books in book-prompt order; None: unknown
@@ -371,6 +372,7 @@ class Magic:
                 order.append(name)
         self.listing_books = False
         self.ever_books.update(order)
+        self.carried_books = order
         if not order:
             self.studying, self.wanted = False, None
             return KEY_ESC, "prompt", "no prayer book listed: cancel"

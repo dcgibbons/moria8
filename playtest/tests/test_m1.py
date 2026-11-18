@@ -5628,6 +5628,24 @@ class PrayerBookTest(unittest.TestCase):
         from moria_playtest import goals
         return Brain(goals.for_character(GOALS["clvl10"], "human-priest"))
 
+    def test_a_stolen_starting_book_is_bought_again(self) -> None:
+        """C64 Balrog, 2026-11-18: a Brigand stole a clvl 16 Elf Ranger's
+        Beginners-Magick; the bot still counted it owned and never bought
+        another, and Magic Missile, Phase Door and Cure Light Wounds were
+        gone for good. A book list is what is carried: the books owned are
+        set from it, and the lost one is wanted again."""
+        brain = self.priest()
+        brain.books_owned = {"Beginners Handbook", "Words of Wisdom"}
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=8)                      # Chants and Blessings is clvl 9
+        self.assertIsNone(brain.book_wanted(o))
+        brain.magic.listing_books, brain.magic.wanted = True, "Bless"
+        brain.decide(self.pack_list({1: " a) Holy Book of Prayers Words"}), None)   # the book prompt's list
+        self.assertEqual(brain.book_wanted(o), "Beginners Handbook")
+        whole = self.priest()
+        whole.books_owned = {"Beginners Handbook", "Words of Wisdom"}
+        whole.sync_counts([" a) Holy Book of Prayers Words", " b) Dagger (1d4)"], "all")   # the drop list
+        self.assertEqual(whole.book_wanted(o), "Beginners Handbook")
+
     def test_buys_the_next_book_at_its_level(self) -> None:
         brain = self.priest()
         o = command_obs(pos=(5, 5), dlvl=0, clvl=4)
