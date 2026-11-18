@@ -144,7 +144,7 @@ KEEP_PREFIXES = ("Ration", "Slime Mold", "Flask of Oil", "Wooden Torch", "Brass 
                  "Scroll of Word of Rec", "Scroll of Phase Door", "Scroll of Teleportation", "Holy Book", "Spellbook",
                  # The full item list (708f3df): kept when found, as a player keeps them
                  "Potion of Super Heroism", "Potion of Invulnerability", "Scroll of Protect from Evil",
-                 "Potion of Restore", "Mushroom of Restoring")
+                 "Potion of Restore", "Mushroom of Restor")
 DROP_RETRY = 500         # steps before looking for junk again after finding none
 KEY_RETURN = 0x0D
 LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
@@ -404,6 +404,14 @@ GAIN_POTIONS = {"Potion of Gain Strength": "ST", "Potion of Gain Intelligence": 
 RESTORE_POTIONS = {"Potion of Restore Strength": "ST", "Potion of Restore Intelligence": "IN",
                    "Potion of Restore Wisdom": "WI", "Potion of Restore Dexterity": "DX",
                    "Potion of Restore Constitution": "CO", "Potion of Restore Charisma": "CH"}
+# Every restorer, by the stats it restores: the Restore potions and, found in
+# the dungeon, VMS's two mushrooms (values.inc 778, 786: Restoring's flags
+# restore all six). A clvl 18 Elf Ranger with Constitution drained to 3
+# walked past a Mushroom of Restore Constitution and died after each restore
+# at 46 max HP (C64 Balrog, 2026-11-17).
+RESTORERS = {**{name: (stat,) for name, stat in RESTORE_POTIONS.items()},
+             "Mushroom of Restore Constitution": ("CO",),
+             "Mushroom of Restoring": ("ST", "IN", "WI", "DX", "CO", "CH")}
 STAT_MAXED = 28          # 18/100 as track_stats reads it (18 + 100 // 10)
 RESIST_WORTH = 0.25      # a breather whose breath, as resisted now, is this share of HP: resist first
 TOWN_REST_STRIKES = 5    # town rests before Word of Recall to the Balrog that may gain nothing (recall_trip)
@@ -1626,6 +1634,21 @@ class Brain:
         Restoration (every stat at once) left the catalog with the
         renumbering (b268b63); VMS sells a potion a stat."""
         return [name for name, stat in RESTORE_POTIONS.items() if stat in self.drained and not self.restores.get(name)]
+
+    def restored(self, kind: str) -> None:
+        """A restorer used: one fewer carried, its stats no longer drained."""
+        self.restores[kind] = max(0, self.restores.get(kind, 0) - 1)
+        for stat in RESTORERS[kind]:
+            self.drained.discard(stat)
+            if self.stat_max is not None:
+                self.stat_max.pop(stat, None)   # read again as it now is
+        self.restore_due = bool(self.drained)
+
+    def restorer_wanted(self, name: str) -> bool:
+        """A restorer (RESTORERS) for a drained stat, none of it carried."""
+        stats = next((v for k, v in RESTORERS.items() if name.startswith(k)), ())
+        kind = next((k for k in RESTORERS if name.startswith(k)), None)
+        return bool(self.drained.intersection(stats)) and not self.restores.get(kind)
 
     def weapon_enchant_wanted(self, gold: int) -> bool:
         """Rich and the weapon's to-dam short of ENCHANT_WEAPON_MAX: Scrolls of
@@ -2888,8 +2911,8 @@ class Brain:
             self.lamp_packed = n > 0
         elif item.startswith(OIL):
             self.oil += n
-        elif item.startswith(tuple(RESTORE_POTIONS)):
-            kind = next(k for k in RESTORE_POTIONS if item.startswith(k))
+        elif item.startswith(tuple(RESTORERS)):
+            kind = next(k for k in RESTORERS if item.startswith(k))
             self.restores[kind] = max(0, self.restores.get(kind, 0) + n)
         elif item.startswith(tuple(GAIN_POTIONS)):
             kind = next(k for k in GAIN_POTIONS if item.startswith(k))
@@ -3003,7 +3026,7 @@ class Brain:
             self.extra.update({kind: held(kind) for kind in (SUPER_HEROISM, INVULNERABILITY)})
             self.restore_mana = held(RESTORE_MANA)
             self.gains = {k: held(k) for k in GAIN_POTIONS if held(k)}
-            self.restores = {k: held(k) for k in RESTORE_POTIONS if held(k)}
+            self.restores = {k: held(k) for k in RESTORERS if held(k)}
             for kind in self.strong:
                 self.strong[kind] = held(kind)
 
@@ -3073,13 +3096,8 @@ class Brain:
                     self.equip_checked = self.equip_checked and self.weapon_scrolls > 0    # the weapon's plusses then
                 elif self.picking in GAIN_POTIONS:
                     self.gains[self.picking] = max(0, self.gains.get(self.picking, 0) - 1)
-                elif self.picking in RESTORE_POTIONS:
-                    self.restores[self.picking] = max(0, self.restores.get(self.picking, 0) - 1)
-                    stat = RESTORE_POTIONS[self.picking]
-                    self.drained.discard(stat)
-                    if self.stat_max is not None:
-                        self.stat_max.pop(stat, None)   # read again as it now is
-                    self.restore_due = bool(self.drained)
+                elif self.picking in RESTORERS and not self.picking.startswith("Mushroom"):
+                    self.restored(self.picking)   # a mushroom by its message (count_food)
                 elif self.picking == RECALL:
                     self.recall = max(0, self.recall - 1)
                     self.recalling = True
@@ -3170,7 +3188,7 @@ class Brain:
             self.restore_mana = 0
         elif self.picking in GAIN_POTIONS:
             self.gains.pop(self.picking, None)
-        elif self.picking in RESTORE_POTIONS:
+        elif self.picking in RESTORERS:
             self.restores.pop(self.picking, None)
         elif self.picking == ENCHANT_ARMOR:
             self.enchant_scrolls = 0
@@ -3663,7 +3681,15 @@ class Brain:
     def count_food(self, messages: str) -> None:
         if "You have no food." in messages:
             self.food = 0
-        elif "You eat " in messages:
+        if "Your backpack feels lighter." in messages:
+            # A thief's touch took something (VMS: one of a stack, a whole
+            # stack of missiles): the pack list sets every count again.
+            self.pack_check_due = True
+        mushroom = next((k for k in RESTORERS if k.startswith("Mushroom") and f"You eat the {k}" in messages), None)
+        if mushroom is not None:
+            # By the message: the only food carried is eaten with no prompt.
+            self.restored(mushroom)
+        elif any(f"You eat the {f}" in messages for f in FOODS):   # a mushroom is no ration
             self.food = max(0, self.food - (SLIME if "Slime" in messages else 1))
             self.pack_check_due = True
         elif "You picked up" in messages and any(f in messages for f in FOODS):
@@ -5090,6 +5116,8 @@ class Brain:
                 return True
             if self.launcher is not None and name.startswith(LAUNCHERS[self.launcher][0]):
                 return True
+            if self.restorer_wanted(name) and not self.pack_full:
+                return True
             if name.startswith(RESTORE_MANA) and self.mana_klass() and not self.pack_full:
                 # A second mana bar, found: no store sells one. Ready clvl 40
                 # Priests walked past 8-17 in an hour and fought the Balrog's
@@ -5580,10 +5608,14 @@ class Brain:
         from death: drinking first at low levels (the prayer can fail) cost
         Gnome and Elf Priests 5 of 40 on reach_dl8 (M5f round 7 A/B)."""
         strong = next((k for k in self.strong if self.potion_ready(k, obs)), None)
-        restore = next((k for k, stat in RESTORE_POTIONS.items() if stat in self.drained and self.restores.get(k)), None)
+        restore = next((k for k, stats in RESTORERS.items()
+                        if self.drained.intersection(stats) and self.restores.get(k)), None)
         if restore is not None and not self.close_threats(obs, view):
             self.picking, self.listed = restore, False
-            return Decision(ord("Q"), "quaff", f"{RESTORE_POTIONS[restore]} drained: drink {restore}")
+            stats = "/".join(s for s in RESTORERS[restore] if s in self.drained)
+            if restore.startswith("Mushroom"):
+                return Decision(KEY_EAT, "quaff", f"{stats} drained: eat {restore}")
+            return Decision(ord("Q"), "quaff", f"{stats} drained: drink {restore}")
         gain = next((k for k, n in self.gains.items() if n), None)
         about = max(self.remembered_bursts(obs), default=0) >= RESIST_WORTH * obs.hp
         if gain is not None and not self.close_threats(obs, view) and not about \

@@ -80,7 +80,10 @@ AT_CREATURES = frozenset({"Sleep II", "Sleep III", "Turn Undead", "Dispel Undead
 # needs (Priests and Paladins lacked only it, 2026-11-01).
 NOT_EXERCISED = frozenset({"Word of Destruction", "Genocide"})
 # A cast that did nothing to see: failure, a bolt that hit nothing, a refusal.
-NO_EFFECT = ("Your spell fails.", "fizzles out", "You faint from fatigue.", "You're not experienced enough.",
+# VMS's overcast messages: spells and prayers (the game since 2026-11-18;
+# "You faint from fatigue." before).
+FAINTS = ("You faint from the effort", "You faint from fatigue")
+NO_EFFECT = ("Your spell fails.", "fizzles out", *FAINTS, "You're not experienced enough.",
              "You don't know that spell.", "You have nothing there.")
 # A creature's own doing in the same messages is not the spell's effect (a
 # Magic Missile's "evidence" was "the White Icky-Thing hits you", M7).
@@ -228,9 +231,10 @@ class Magic:
             self.study_due = True
             self.study_done.clear()
             self.refused.clear()
-        if self.last and ("You're not experienced enough." in messages or "You faint from fatigue." in messages
+        if self.last and ("You're not experienced enough." in messages or any(f in messages for f in FAINTS)
                           or "You don't know that spell." in messages):
-            # No turn passes: trying again would repeat forever.
+            # Refused, or a faint (a turn, paralysis, and a third of the time
+            # Constitution): trying again would repeat forever, or drain it.
             self.refused.add(self.last)
             self.last = None
         spell = self.last or self.wanted
@@ -371,8 +375,13 @@ class Magic:
             match = BOOK_RANGE.search(obs.rows[0])
             count = ord(match.group(1)) - ord("a") + 1 if match else 1
             if self.books is None or len(self.books) != count:
-                if count == 1:
-                    self.books = [self.first_book]   # the starting book: no list needed
+                if count == 1 and self.books is None:
+                    # The starting book: no list needed. Not one book left of
+                    # several: a Brigand stole a clvl 16 Elf Ranger's
+                    # Beginners-Magick, Magick I was book a, and "Magic
+                    # Missile" cast its Confuse Monster at 6 mana, 23 faints
+                    # and its Constitution (C64 Balrog, 2026-11-17).
+                    self.books = [self.first_book]
                     self.listed = self.first_book in self.listed_books
                 else:
                     self.listing_books = True

@@ -233,6 +233,43 @@ class BrainM2Test(unittest.TestCase):
         decision = brain.quaff(command_obs(pos=(5, 5), dlvl=0, hp=21, mhp=21), view)
         self.assertEqual((decision.key, brain.picking), (ord("Q"), "Potion of Restore Constitution"))
 
+    def test_a_restorer_seen_for_a_drained_stat_is_picked_up_and_used(self) -> None:
+        """C64 Balrog, 2026-11-17: a clvl 18 Elf Ranger with Constitution
+        drained from 12 to 3 walked past a Mushroom of Restore Constitution on
+        DL14, found none at the Alchemist, and died after each restore at 46
+        max HP. A player eats it: VMS's two restorer mushrooms (Restore
+        Constitution; Restoring, every stat) and the Restore potions are
+        taken for a drained stat they restore, and used."""
+        from moria_playtest.brain import KEY_EAT
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.food = 5
+        view = town_view((5, 5), (40, 40), dlvl=14)
+        view.screen = (0, 0, COLS, ROWS)
+        brain.items_seen[(8, 5)] = (",", "Mushroom of Restore Constitution")
+        seen = command_obs(pos=(5, 5), dlvl=14, clvl=18, hp=46, mhp=46)
+        self.assertIsNone(brain.collect(seen, view))                 # nothing drained: not wanted
+        brain.drained = {"CO"}
+        self.assertEqual(brain.collect(seen, view).layer, "collect")
+        brain.drained = {"DX"}
+        brain.items_seen[(8, 5)] = (",", "Mushroom of Restoring")     # every stat
+        self.assertEqual(brain.collect(seen, view).layer, "collect")
+        brain.drained = {"CO"}
+        brain.credit("Mushroom of Restore Constitution", 1)
+        decision = brain.quaff(seen, view)
+        self.assertEqual((decision.key, decision.reason, brain.picking),
+                         (KEY_EAT, "CO drained: eat Mushroom of Restore Constitution",
+                          "Mushroom of Restore Constitution"))
+        listing = command_obs(rows={0: "Inventory", 1: "---------", 2: " a) 5 Ration of Food",
+                                    3: " b) Mushroom of Restore Constitution"})
+        listing.mode, listing.stage = Mode.ITEM, "list"
+        self.assertEqual(brain.decide(listing, None).key, ord("B"))
+        food = brain.food
+        brain.count_food("You eat the Mushroom of Restore Constitution.")   # with or without a prompt
+        self.assertEqual((brain.food, brain.drained, brain.restores.get("Mushroom of Restore Constitution")),
+                         (food, set(), 0))                           # no ration eaten; restored
+        self.assertNotEqual(brain.quaff(seen, view).reason if brain.quaff(seen, view) else "",
+                            "CO drained: eat Mushroom of Restore Constitution")   # not eaten again
+
     def test_store_buys_food_then_leaves(self) -> None:
         brain = Brain(GOALS["reach_dl2"])
         stock = {3: " a) Iron Spike                 1 GP", 5: " c) Ration of Food             3 GP",
@@ -549,6 +586,13 @@ class FoodCountTest(unittest.TestCase):
         self.assertEqual((brain.food, brain.oil), (1, 2))
         self.assertNotEqual(brain.decide(command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=60, mhp=60,
                             rows={21: "bot Search*                 LV:8  DL:2".ljust(40)}), view).key, ord("I"))
+
+    def test_a_theft_lists_the_pack(self) -> None:
+        """Game, 2026-11-18: a thief's touch says "Your backpack feels
+        lighter." (VMS), where it took an item in silence before."""
+        brain = Brain(GOALS["reach_dl8"])
+        brain.count_food("the Cutpurse touches you. | Your backpack feels lighter.")
+        self.assertTrue(brain.pack_check_due)
 
     def test_a_slime_mold_in_the_list_counts_a_third(self) -> None:
         brain = Brain(GOALS["reach_dl8"])
@@ -5549,6 +5593,34 @@ class PrayerBookTest(unittest.TestCase):
         self.assertEqual(magic.books, ["Beginners Handbook", "Words of Wisdom"])
         self.assertTrue(magic.study_due)
         self.assertIsNone(brain.book_wanted(command_obs(pos=(5, 5), dlvl=0, clvl=6)))
+
+    def test_a_lost_book_lists_the_survivor_before_casting(self) -> None:
+        """C64 Balrog, 2026-11-17 (found by the agent fixing the game): a
+        Brigand stole a clvl 16 Elf Ranger's Beginners-Magick. The book
+        prompt then offered one book, and the bot took it for the starting
+        book without listing: "Magic Missile" (book a, spell a) cast Magick
+        I's Confuse Monster at 6 mana, and the Ranger fainted 23 times and
+        lost its Constitution. One book offered where more were carried
+        lists them first."""
+        brain = self.priest()
+        magic = brain.magic
+        magic.books = ["Beginners Handbook", "Words of Wisdom"]
+        magic.wanted = "Bless"
+        self.assertEqual(brain.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None).key, ord("?"))
+        fresh = self.priest()
+        fresh.magic.books, fresh.magic.wanted = None, "Bless"
+        self.assertNotEqual(fresh.decide(PrayerBookTest.spell("book", {0: "Prayer book (a-a)?"}), None).key, ord("?"))
+
+    def test_both_vms_faint_messages_refuse_the_spell(self) -> None:
+        """Game, 2026-11-18: VMS's overcast messages, "You faint from the
+        effort!" (spells) and "You faint from fatigue!" (prayers), replaced
+        "You faint from fatigue.". Either refuses the spell until a level
+        up, as before."""
+        for message in ("You faint from the effort!", "You faint from fatigue!"):
+            brain = self.priest()
+            brain.magic.last = "Bless"
+            brain.magic.note(message)
+            self.assertIn("Bless", brain.magic.refused, message)
 
     def test_pack_list_names_cut_short(self) -> None:
         from moria_playtest.magic import book_of
