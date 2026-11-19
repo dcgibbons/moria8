@@ -154,3 +154,28 @@ class RomArgsTest(unittest.TestCase):
                    "PLAYTEST_KERNAL": "/the/c64/kernal.bin"}
             self.assertEqual(rom_args(env, PLUS4),
                              ["-kernal", str(kernal.resolve()), "-dos1541", str(drive.resolve())])
+
+    def test_c128_takes_its_own_kernal_and_1571_rom(self) -> None:
+        """Maintainer, 2026-11-18: the C128 under JiffyDOS too, its own
+        KERNAL and 1571 drive ROM, not the C64's pair; unset, VICE's own."""
+        import tempfile
+        from pathlib import Path
+        from moria_playtest.launch import rom_args
+        from moria_playtest.ports import C128, C128_CART
+        self.assertEqual(rom_args({"PLAYTEST_KERNAL": "/the/c64/kernal.bin",
+                                   "PLAYTEST_DOS1541": "/the/1541.bin"}, C128), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            kernal, drive = Path(tmp) / "k.bin", Path(tmp) / "d.bin"
+            kernal.write_bytes(b"\0" * 16384)
+            drive.write_bytes(b"\0" * 32768)
+            env = {"PLAYTEST_C128_KERNAL": str(kernal), "PLAYTEST_DOS1571": str(drive),
+                   "PLAYTEST_KERNAL": "/the/c64/kernal.bin"}
+            for port in (C128, C128_CART):
+                self.assertEqual(rom_args(env, port),
+                                 ["-kernal", str(kernal.resolve()), "-dos1571", str(drive.resolve())])
+            # JiffyDOS works only as a pair: half of one is refused, never
+            # a JiffyDOS KERNAL over a stock 1571 or the other way round.
+            for var in ("PLAYTEST_C128_KERNAL", "PLAYTEST_DOS1571"):
+                half = {k: v for k, v in env.items() if k != var}
+                with self.assertRaisesRegex(FileNotFoundError, var):
+                    rom_args(half, C128)

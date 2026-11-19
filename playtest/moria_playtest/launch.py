@@ -154,6 +154,10 @@ def rom_args(env: dict[str, str] | None = None, port: Port = C64) -> list[str]:
     missing = [var for var in port.required_roms if not env.get(var, "")]
     if missing:
         raise FileNotFoundError(f"{port.name} plays under named ROM images: set {', '.join(missing)}")
+    pair = [var for var in port.paired_roms if env.get(var, "")]
+    if pair and len(pair) < len(port.paired_roms):
+        unset = [var for var in port.paired_roms if var not in pair]
+        raise FileNotFoundError(f"{port.name}: {', '.join(pair)} works only with {', '.join(unset)}: set it too")
     args: list[str] = []
     for var, option in port.rom_env:
         path = env.get(var, "")

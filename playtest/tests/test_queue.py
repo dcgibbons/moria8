@@ -1,3 +1,4 @@
+import collections
 import contextlib
 import dataclasses
 import functools
@@ -243,6 +244,27 @@ class ScheduleTest(unittest.TestCase):
         service.schedule(q, {})
         self.assertEqual(sum(j["platform"] == "c64" and j["queue"] == "build"
                              for j in service.running.values()), 1)       # not two
+
+    def test_build_workers_go_to_the_ports_still_covering(self) -> None:
+        """Maintainer, 2026-11-18: the disk ports cover a build several times
+        slower; ``build_workers`` build slots in all: one to each port still
+        covering, the rest to the port with the most combinations left per
+        run it plays, none past what it has left."""
+        service = self.service(10)
+        service.config.update(build_platforms=["c64", "atari8", "apple2"], build_goal="clvl10",
+                              build_workers=6, build_per_port=1)
+        service.ci_build = "head1"
+        for name, left in (("atari8", 0), ("apple2", 1)):
+            entry = service.buildq.coverage(name, "head1")
+            entry["next"] = len(queue.combos(name)) - left
+        q = queue.Queue("deep", service.home)
+        service.schedule(q, {})
+        build = collections.Counter(j["platform"] for j in service.running.values() if j["queue"] == "build")
+        self.assertEqual(build, {"c64": 5, "apple2": 1})       # atari8 is covered; apple2 has one left
+        c64 = [j["character"] for j in service.running.values() if j["platform"] == "c64"]
+        self.assertEqual(len(set(c64)), 5)
+        service.schedule(q, {})                                 # the pool is full: nothing more starts
+        self.assertEqual(sum(j["queue"] == "build" for j in service.running.values()), 6)
 
     def test_the_build_queue_plays_beside_a_focus(self) -> None:
         """Maintainer, 2026-11-08: the build queue "ready to test each

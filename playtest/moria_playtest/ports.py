@@ -52,6 +52,9 @@ class Port:
     color_table: str = ""     # empty: colour memory holds C64 indexes
     color_mask: int = 0x0F
     snapshots: bool = True    # the emulator can save and restore a machine mid-game
+    # rom_env variables set together or not at all: a KERNAL and drive ROM
+    # that work only as a pair (JiffyDOS)
+    paired_roms: tuple[str, ...] = ()
     # build/<cartridge>: a cartridge image the machine boots from (VICE
     # -cartcrt), the disk attached in drive 8 as the disk build's: it reads
     # and writes saves there the same way. Empty: the disk is autostarted.
@@ -233,7 +236,11 @@ C128 = Port(
         "-reu", "-reusize", "512",
         "-drive8type", "1571", "-drive8truedrive",
     ),
-    rom_env=(),
+    # JiffyDOS/128 as the C64 and Plus/4 play it (maintainer, 2026-11-18): its
+    # C128 KERNAL and its 1571 drive ROM (the 310654 replacement, VICE's
+    # 1571), a pair; unset, VICE's own ROMs.
+    rom_env=(("PLAYTEST_C128_KERNAL", "-kernal"), ("PLAYTEST_DOS1571", "-dos1571")),
+    paired_roms=("PLAYTEST_C128_KERNAL", "PLAYTEST_DOS1571"),
     required_roms=(),
     consts={
         "VDC_SCREEN_BASE": ("platforms/commodore/c128/screen_vdc.s", 0x0000),

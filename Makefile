@@ -145,7 +145,8 @@ PLAYTEST_SEEDS = $(if $(SEEDS),--seeds $(SEEDS))
 PLAYTEST_CHARACTER = $(if $(CHARACTER),--character $(CHARACTER))
 # PORT=plus4, c128, apple2, atari8, bbcmaster or cx16 plays another port
 # (playtest/moria_playtest/ports.py, §21); the Plus/4 needs
-# PLAYTEST_PLUS4_KERNAL and PLAYTEST_DOS1541 (JiffyDOS), the MAME ports
+# PLAYTEST_PLUS4_KERNAL and PLAYTEST_DOS1541 (JiffyDOS), the C128 takes
+# PLAYTEST_C128_KERNAL with PLAYTEST_DOS1571 (an optional pair), the MAME ports
 # A2ROMS, ATARI8ROMS or BBCMROMS, the X16 X16EMU and X16ROM; PLAYTEST_X16_BLOCK=1
 # reads the X16 a block at a time, with an x16emu patched for it (docs/BACKLOG.md).
 PORT ?= c64

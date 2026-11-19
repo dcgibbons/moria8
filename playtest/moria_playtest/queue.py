@@ -125,6 +125,10 @@ DEFAULTS: dict[str, Any] = {
     # Runs of each port at once, each a different combination (maintainer,
     # 2026-11-18: idle cores; 1 until then)
     "build_per_port": 1,
+    # Above 0: this many build-queue runs in all instead, each free one to the
+    # port with the most combinations left per run it plays, so the slow disk
+    # ports take the slots the fast ones are done with (maintainer, 2026-11-18)
+    "build_workers": 0,
     # Non-empty: the Balrog queue plays every combination of these ports,
     # from level 1 when it has no start, and takes no other port's
     # graduates (maintainer, 2026-11-06: the C64)
@@ -2042,11 +2046,7 @@ class Service:
             balrog_pending = max(0, int(config["balrog_workers"]) - balrog_running)
         # The build queue: build_per_port runs of each port, out of the total as
         # the Balrog queue's are, never more than its coverage has left.
-        build_playing = collections.Counter(j["platform"] for j in self.running.values() if j["queue"] == "build")
-        per_port = max(1, int(config.get("build_per_port", 1)))
-        build_ready = [p for p in config.get("build_platforms") or [] if self.ci_build
-                       and self.backoff.get(f"build/{p}", 0) < time.time()
-                       for _ in range(min(per_port - build_playing[p], self.buildq.remaining(p, self.ci_build)))]
+        build_ready = self.build_ready(config)
         pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending + len(build_ready)
         target = max(minimum, total - sub_running - pending)
         if len(main_active) > target:
@@ -2149,6 +2149,34 @@ class Service:
         self.balrog.save()
         self.start(job)
         return True
+
+    def build_ready(self, config: dict[str, Any]) -> list[str]:
+        """The build queue's runs to start now, a port once per run: up to
+        ``build_per_port`` of each, or with ``build_workers`` the free slots
+        of that pool: one to each port with coverage left and none playing,
+        then each to the port with the most combinations left per run it
+        plays (the slow ports are the ones left); never more than a port's
+        coverage has left."""
+        ports = config.get("build_platforms") or []
+        playing = collections.Counter(j["platform"] for j in self.running.values() if j["queue"] == "build")
+        if not self.ci_build:
+            return []
+        left = {p: self.buildq.remaining(p, self.ci_build) for p in ports
+                if self.backoff.get(f"build/{p}", 0) < time.time()}
+        pool = int(config.get("build_workers") or 0)
+        if pool <= 0:
+            per_port = max(1, int(config.get("build_per_port", 1)))
+            return [p for p, n in left.items() for _ in range(min(per_port - playing[p], n))]
+        ready: list[str] = []
+        for _ in range(pool - sum(playing[p] for p in ports)):
+            open_ports = [p for p in left if left[p] > 0]
+            if not open_ports:
+                break
+            port = max(open_ports, key=lambda p: (playing[p] == 0, left[p] / (playing[p] + 1)))
+            ready.append(port)
+            left[port] -= 1
+            playing[port] += 1
+        return ready
 
     def start_build(self, platform: str) -> None:
         """The build queue's next combination on ``platform``, at the goal's
