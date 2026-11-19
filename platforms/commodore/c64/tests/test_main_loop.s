@@ -23,7 +23,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #55
+    ldx #58
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -152,7 +152,8 @@ delete_savefile:
 .label tramp_spell_list_display = test_spell_list_display
 .label tramp_spell_execute_selected = test_spell_execute_selected
 .label tramp_item_gain_spell = test_item_gain_spell
-.label tramp_player_create = player_create
+tramp_player_create:
+    rts
 
 tramp_ui_char_display:
     rts
@@ -280,8 +281,6 @@ status_mark_dirty:
 // Modules this test never executes sit in the $D000 I/O hole so they neither
 // push Default past MAP_BASE ($C000) nor overlap Test Bodies ($E700+).
 .segment TestCreateOverlay
-player_create:
-    brk
 #import "../../../../core/player_chargen_cold.s"
 .segment Default
 #import "../../../../core/sound.s"
@@ -383,7 +382,7 @@ mad_dmg_hi: .byte 0
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 56, $ff
+tc_results: .fill 59, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -474,10 +473,12 @@ test_scene_dirty: .byte 0
 test_trap_fires: .byte 0
 test_trap_trigger_calls: .byte 0
 test_turn_sets_message: .byte 0
-test_turn_disturbs: .byte 0     // Turn reports damage/hunger (turn_rest_disturbed)
+test_turn_disturbs: .byte 0     // Turn raises zp_disturb
 test_turn_heal_hp: .byte 0
 test_turn_heal_mp: .byte 0
 test_turn_resting: .byte 0      // turn_resting seen by any turn of the case
+test_turn_resting_flag: .byte 0 // PLF_RESTING seen during any turn of the case
+test_run_steps_left: .byte 0    // If nonzero, test_run_continue stops once decremented to 0
 test_turn_ticks_paralysis: .byte 0  // Turn counts zp_eff_paralyze down, as turn_tick_effects does
 test_any_key_held_sample: .byte 0
 test_cancel_key_sample: .byte 0
@@ -654,6 +655,9 @@ reset_state:
     sta test_turn_heal_hp
     sta test_turn_heal_mp
     sta test_turn_resting
+    sta test_turn_resting_flag
+    sta test_run_steps_left
+    sta zp_disturb
     sta test_turn_ticks_paralysis
     sta test_any_key_held_sample
     sta test_cancel_key_sample
@@ -808,6 +812,10 @@ test_turn_post_action:
     lda turn_resting
     ora test_turn_resting
     sta test_turn_resting
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    ora test_turn_resting_flag
+    sta test_turn_resting_flag
     lda test_turn_heal_hp
     beq !no_hp+
     inc zp_player_hp_lo
@@ -818,9 +826,9 @@ test_turn_post_action:
 !no_mp:
     lda test_scene_dirty
     sta turn_scene_dirty
-    lda test_turn_disturbs          // Damage/hunger this turn set it (never cleared per turn)
+    lda test_turn_disturbs          // Disturbance producer this turn (never cleared per turn)
     beq !no_disturb+
-    sta turn_rest_disturbed
+    inc zp_disturb
 !no_disturb:
     lda test_turn_sets_message
     beq !done+
@@ -933,7 +941,15 @@ test_run_initialize:
     rts
 
 test_run_continue:
+    lda test_run_steps_left
+    beq !trc_go+
+    dec test_run_steps_left
+    beq !trc_stop+
+!trc_go:
     clc
+    rts
+!trc_stop:
+    sec
     rts
 
 test_run_area_affect:
@@ -2088,8 +2104,8 @@ test_start:
     sta tc_results + 25
     jmp !t27+
 
-    // Test 27: a message produced during running stops the run before the
-    // next automatic step clears the message area again.
+    // Test 27: a message or zp_disturb stops running after one step, while
+    // render-only turn_scene_dirty triggers full redraws without stopping it.
 !t27:
     jsr reset_state
     lda #26
@@ -2105,23 +2121,27 @@ test_start:
     jsr run_case
     lda zp_run_dir
     cmp #$ff
-    bne !t27_fail+
+    bne !t27_fail_a+
     lda test_turn_calls
     cmp #1
-    bne !t27_fail+
+    bne !t27_fail_a+
     lda test_quit_msg_clear_calls
     cmp #2
-    bne !t27_fail+
+    bne !t27_fail_a+
     lda test_quit_msg_flags
     cmp #MSG_PENDING
-    bne !t27_fail+
+    beq !t27_sub_b+
+!t27_fail_a:
+    jmp !t27_fail+
+!t27_sub_b:
+    // Subcase B: zp_disturb stops auto-run after one step.
     jsr reset_state
     lda #26
     sta test_case_idx
     lda #1
     sta test_move_ok
     sta test_move_relocated
-    sta test_scene_dirty
+    sta test_turn_disturbs
     lda #CMD_RUN_N
     sta test_cmd_script
     lda #1
@@ -2133,10 +2153,31 @@ test_start:
     lda test_turn_calls
     cmp #1
     bne !t27_fail+
+    // Subcase C: render-only turn_scene_dirty forces full redraws without stopping run.
+    jsr reset_state
+    lda #26
+    sta test_case_idx
+    lda #1
+    sta test_move_ok
+    sta test_move_relocated
+    sta test_scene_dirty
+    lda #2
+    sta test_run_steps_left
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_run_dir
+    cmp #$ff
+    bne !t27_fail+
+    lda test_turn_calls
+    cmp #2
+    bne !t27_fail+
     lda test_render_local_calls
     bne !t27_fail+
     lda test_render_full_calls
-    cmp #1
+    cmp #2
     bne !t27_fail+
     lda #$01
     sta tc_results + 26
@@ -2409,6 +2450,9 @@ test_start:
     lda player_data + PL_FLAGS
     and #PLF_SEARCHING
     bne !t34_fail+
+    lda test_status_calls
+    cmp #1                      // Repaints Row 21 so Search* clears immediately.
+    bne !t34_fail+
     lda #$01
     sta tc_results + 33
     jmp !t35+
@@ -2440,6 +2484,12 @@ test_start:
     cmp #1
     bne !t35_fail+
     lda auto_rest_active
+    bne !t35_fail+
+    lda test_turn_resting_flag
+    cmp #PLF_RESTING
+    bne !t35_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
     bne !t35_fail+
     lda zp_player_hp_lo
     cmp #10
@@ -2482,7 +2532,8 @@ test_start:
     sta tc_results + 35
     jmp !t37+
 
-    // Test 37: any held key stops active auto-rest before a turn.
+    // Test 37: any held key stops active auto-rest before a turn, clears
+    // PLF_RESTING, and redraws the status bar to erase "Rest*".
 !t37:
     jsr reset_state
     lda #36
@@ -2491,12 +2542,20 @@ test_start:
     sta auto_rest_active
     sta run_input_armed
     sta test_any_key_held_sample
+    lda #PLF_RESTING
+    sta player_data + PL_FLAGS
     lda #9
     sta zp_player_hp_lo
     jsr run_case
     lda test_turn_calls
     bne !t37_fail+
     lda auto_rest_active
+    bne !t37_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    bne !t37_fail+
+    lda test_status_calls
+    cmp #1
     bne !t37_fail+
     lda #$01
     sta tc_results + 36
@@ -2768,6 +2827,15 @@ test_start:
     cmp #1
     bne !t45_fail+
     lda auto_rest_active
+    bne !t45_fail+
+    lda test_turn_resting_flag
+    cmp #PLF_RESTING
+    bne !t45_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    bne !t45_fail+
+    lda test_status_calls
+    cmp #2                      // 1 for the rest turn + 1 on !auto_rest_stop
     bne !t45_fail+
     lda #$01
     sta tc_results + 44
@@ -3167,10 +3235,137 @@ test_start:
     bne !t56_fail+
     lda #$01
     sta tc_results + 55
-    jmp test_finish
+    jmp !t57+
 !t56_fail:
     lda #0
     sta tc_results + 55
+
+    // Test 57: render-only turn_scene_dirty triggers full redraws during
+    // auto-rest without stopping it; PLF_RESTING stays set while resting and
+    // is cleared with status_draw on recovery stop (TRN-014).
+!t57:
+    jsr reset_state
+    lda #56
+    sta test_case_idx
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta test_turn_heal_hp
+    sta test_scene_dirty
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #2
+    bne !t57_fail+
+    lda test_render_full_calls
+    cmp #2
+    bne !t57_fail+
+    lda auto_rest_active
+    bne !t57_fail+
+    lda test_turn_resting_flag
+    cmp #PLF_RESTING
+    bne !t57_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    bne !t57_fail+
+    lda test_status_calls
+    cmp #3                      // 2 rest turns + 1 on !auto_rest_stop
+    bne !t57_fail+
+    lda #$01
+    sta tc_results + 56
+    jmp !t58+
+!t57_fail:
+    lda #$00
+    sta tc_results + 56
+
+    // Test 58: stale zp_disturb from before CMD_RUN_* is discarded at the top
+    // of run_step so auto-run continues across steps until stopped (TRN-014).
+!t58:
+    jsr reset_state
+    lda #57
+    sta test_case_idx
+    lda #1
+    sta zp_disturb              // Stale disturbance from prior turn
+    sta test_move_ok
+    sta test_move_relocated
+    lda #2
+    sta test_run_steps_left
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_run_dir
+    cmp #$ff
+    bne !t58_fail+
+    lda test_turn_calls
+    cmp #2
+    bne !t58_fail+
+    lda #$01
+    sta tc_results + 57
+    jmp !t59+
+!t58_fail:
+    lda #$00
+    sta tc_results + 57
+
+    // Test 59: game_new_start and load_resume_game clear stale zp_disturb and
+    // PLF_RESTING while preserving persistent flags such as PLF_MALE.
+!t59:
+    jsr reset_state
+    lda #58
+    sta test_case_idx
+    lda #5
+    sta zp_disturb
+    lda #(PLF_MALE | PLF_RESTING)
+    sta player_data + PL_FLAGS
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
+    lda #1
+    sta test_key_len
+    lda #$20
+    sta test_key_script
+    jsr game_new_start
+    lda zp_disturb
+    bne !t59_fail+
+    lda player_data + PL_FLAGS
+    cmp #PLF_MALE
+    bne !t59_fail+
+    jsr reset_state
+    lda #58
+    sta test_case_idx
+    lda #3
+    sta zp_disturb
+    lda #(PLF_MALE | PLF_RESTING)
+    sta player_data + PL_FLAGS
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
+    lda #1
+    sta test_key_len
+    lda #$20
+    sta test_key_script
+    jsr load_resume_game
+    lda zp_disturb
+    bne !t59_fail+
+    lda player_data + PL_FLAGS
+    cmp #PLF_MALE
+    bne !t59_fail+
+    lda #$01
+    sta tc_results + 58
+    jmp test_finish
+!t59_fail:
+    lda #$00
+    sta tc_results + 58
     jmp test_finish
 
 t55_probe_ok:

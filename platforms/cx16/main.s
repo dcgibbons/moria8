@@ -35,7 +35,6 @@
 #define CALC_DIG_EXTERNAL
 #define CALC_DIG_CO_LOCATED
 #define STORE_CHECK_CAT_DUPLICATED
-#define TURN_REST_DISTURBED_EXTERNAL
 #define LEVELUP_MAGIC_PENDING_EXTERNAL
 #define PLATFORM_NF_DIGIT_BUF_EXTERNAL
 #define PLATFORM_ITEM_NAME_BUF_LOW
@@ -151,9 +150,8 @@ save_slot_index:    .byte $ff
 .const PLATFORM_PIW_VISIBLE_SLOTS_BASE    = $0672 // 22 B ($0672-$0687)
 .const PLATFORM_PM_SPELL_LIST_BASE        = $0688 //  9 B ($0688-$0690)
 .const PLATFORM_NF_DIGIT_BUF_BASE         = $0691 //  8 B ($0691-$0698)
-.label turn_rest_disturbed                = $0699 //  1 B
-.label levelup_magic_pending              = $069a //  1 B
-.assert "CX16 $0642-$069A scratch fits $0600-$06FF clear of door scan", PLATFORM_ITEM_NAME_DECODE_BUF_BASE >= DUNGEON_GEN_DOOR_SCAN_BASE + 65 && $069a < DUNGEON_GEN_DOOR_SCAN_LIMIT, true
+.label levelup_magic_pending              = $0699 //  1 B
+.assert "CX16 $0642-$0699 scratch fits $0600-$06FF clear of door scan", PLATFORM_ITEM_NAME_DECODE_BUF_BASE >= DUNGEON_GEN_DOOR_SCAN_BASE + 65 && levelup_magic_pending < DUNGEON_GEN_DOOR_SCAN_LIMIT, true
 #import "bank_port_consts.s"
 #import "hal/lifecycle_policy.s"
 #import "overlay.s"

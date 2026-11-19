@@ -31,7 +31,7 @@ slot test and must precede mutation through table scans.
 | `MX_CONFUSE` | Live confusion timer used by AI | combat and `monster_process_one` |
 | `MX_FLEE_LO`, `MX_FLEE_HI` | 16-bit flee HP threshold | movement/flee logic |
 | `MF_PROVOKED` | Player hostility; permits town-creature retaliation | combat, bash, AI |
-| `MF_VISIBLE` | Current ordinary sight and renderer authority | visibility, targeting |
+| `MF_VISIBLE` | Current ordinary sight and renderer authority | visibility, targeting, sighting & hostile-action disturbance (`zp_disturb`, MON-038 / TRN-014) |
 | `MF_DETECTED` | Magical detection knowledge: timed Detect Monsters or immediate Detect Evil pending its post-redraw clear | renderer, free-look, and dirty tracking; not ordinary targeting |
 | `MF_CONFUSED` | Defined flag with no production consumer found | not authoritative; use `MX_CONFUSE` |
 
@@ -55,6 +55,10 @@ with diagonal boundary tests rather than being changed incidentally here.
 | Empty-slot scan | Skip before writing any other field | all table scans | monster/attack tests |
 | Detect Monsters | May set and expose `MF_DETECTED`; must not imply `MF_VISIBLE` | visibility producer, inspection, dirty tracking, renderers | platform detect/render tests |
 | Explicit aggravation | Clear sleep and wake every live slot; upstream nearby haste remains unresolved | `monster_aggravate_all` | C64 attack and Plus/4 shared-producer coverage |
+| Monster sighting (`MF_VISIBLE` `0 -> 1`) | Call `player_search_mode_off` and `inc zp_disturb`; unseen `CD_INVISIBLE` returns early without setting `MF_VISIBLE` or disturbing (TRN-012) | `muvo_apply_visible` (`core/monster.s`) | C64 `test_monster_ai2.s` t16 (MON-038) |
+| Visible hostile monster action | Tag `mat_action_dirty` bit 1 (`$02`) for hostile moves (`$83`) and spells/breeding/door-open/glyph-break (`$03`), leaving bit 1 clear (`$81`) for unprovoked townies; at `!mpo_done`, `inc zp_disturb` iff `(mat_action_dirty & $02) != 0 && (zp_mon_flags & MF_VISIBLE) != 0`; sleeping monsters stay quiet (MON-005) | `monster_process_one` (`core/monster_ai.s`) | C64 `test_monster_ai2.s` t17-t19, t23 (MON-038) |
+| Monster door burst | Print `HSTR_MAT_DOOR_BURST` unconditionally and `inc zp_disturb` mid-turn via shared `!mts_bash_set` tail (plain door open adds no extra door-tile LOS check) | `monster_try_step` (`!mts_stuck`, `!mts_bash` in `core/monster_ai.s`) | C64 `test_monster_ai2.s` t20 (MON-009, MON-038) |
+| Monster melee round | Execute `inc zp_disturb` right after `!map_has_atk0:` (past the `ATK_NONE` early exit) | `monster_attack_player` (`core/monster_attack.s`) | C64 `test_monster_attack.s` t55 (MON-038) |
 
 Numeric counters are unsigned bytes unless a field says otherwise. Arithmetic
 must not wrap accidentally. For each changed formula, record every input and
@@ -79,7 +83,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | MON-006 | Accepted in part | Project maintainer, 2026-07-09 | Explicit/group wakes clear `MX_SLEEP_CUR`; Sleep I/II/III use monster-level resistance; aggravation wakes globally | shared helpers and C64/C128/Plus4 focused gates; `CD_NO_SLEEP` immunity implemented in MON-034; upstream nearby aggravation haste remains open | none |
 | MON-007 | Accepted | Project maintainer, 2026-07-10 | Compact ordinary wake pressure uses distance steps `{8,8,4,3,2,2,1...}` scaled from VMS Moria's `floor(75/d)`; an eligible zero sleep counter wakes before rest/stealth gates | explicit maintainer direction to address staff review; C64 deterministic wake regressions | none |
 | MON-008 | Superseded by MON-026 | Project maintainer, 2026-08-05 | Player haste/slow (`zp_eff_speed`) and Ring of Speed (`PFLAG_SPEED`) fold into the per-tick monster cadence: haste or ring steps a monster one cadence slower, an active slow timer one faster, clamped to the existing 0-2 cadence (floor = act every other turn, cap = double move); haste+ring stacking yields no extra effect; the fold is computed per-tick and never mutates stored monster speed state (`cr_speed`, `MX_SPEED_CNT`) | explicit maintainer direction 2026-08-05; oracle Umoria `playerChangeSpeed` (`player.cpp:367-377`) and `monsterMovementRate` (`monster.cpp:74-92`) with documented floor/cap deviations (Umoria -1 = every 3rd turn; Moria8 floor = every 2nd); C64 `test_monster_ai.s` t36-t40, `test_turn.s` t27-t29 | none |
-| MON-009 | Accepted | Project maintainer, 2026-09-10 | Monster door-state engine (`!mts_door_block` in `core/monster_ai.s`): door-capable monsters (`cr_aaf` bit 7) pick locks (success unlocks without opening; turn spent either way) and burst stuck doors (open + 50% break); non-capable monsters bash with the |s|-adjusted terms. All three rolls share `mts_state_roll`, the exact Umoria `monsterOpenDoor` formula, translated from one-based `randomNumber(N) < T` to zero-based `rng_range_word(N) < T-1`: `rng_range_word((hp+1)*A) < 40*(hp-B)-1`, with pick A=50+p/B=10+p, burst/bash A=50+|s| or 80+|s|, B=10+|s| or 20+|s|; hp is clamped to 254 and hp <= B never succeeds (equality explicitly clears carry). The burst message "You hear a door burst open!" is printed unconditionally, matching upstream, which has no visibility/distance gate | pinned Umoria `monster.cpp::monsterOpenDoor`; C64 `test_monster_ai.s` t47-t55 including the hp == B boundary set (red-green verified 2026-09-10); multi-platform build asserts | none |
+| MON-009 | Accepted | Project maintainer, 2026-09-10 | Monster door-state engine (`!mts_door_block` in `core/monster_ai.s`): door-capable monsters (`cr_aaf` bit 7) pick locks (success unlocks without opening; turn spent either way) and burst stuck doors (open + 50% break); non-capable monsters bash with the |s|-adjusted terms. All three rolls share `mts_state_roll`, the exact Umoria `monsterOpenDoor` formula, translated from one-based `randomNumber(N) < T` to zero-based `rng_range_word(N) < T-1`: `rng_range_word((hp+1)*A) < 40*(hp-B)-1`, with pick A=50+p/B=10+p, burst/bash A=50+|s| or 80+|s|, B=10+|s| or 20+|s|; hp is clamped to 254 and hp <= B never succeeds (equality explicitly clears carry). The burst message "You hear a door burst open!" is printed unconditionally, matching upstream, which has no visibility/distance gate (extended by MON-038 to execute `inc zp_disturb` mid-turn alongside the burst message) | pinned Umoria `monster.cpp::monsterOpenDoor`; C64 `test_monster_ai.s` t47-t55 including the hp == B boundary set (red-green verified 2026-09-10); multi-platform build asserts | none |
 | MON-010 | Accepted | Project maintainer, 2026-10-21 | Any monster within one step (including diagonally across a wall corner) is in line of sight for `MF_VISIBLE`, subject to the existing light/infravision range and blindness gates; line-of-sight tracing applies only at distance 2 and beyond. A monster that can attack the player is therefore never drawn as bare floor | explicit maintainer direction 2026-10-21; pinned Umoria `dungeon_los.cpp::los` adjacency return and VMS Moria `los`; AI playtest finding F-M2-3; C64 `test_monster.s` t20-t22 and `test_effects.s` Test 35 | PR #46 corner-hidden expectation in `test_effects.s` Test 35 |
 | MON-011 | Accepted | Project maintainer, 2026-10-21 | Monster wound, blind, confuse and fear spells follow pinned VMS Moria `creature.inc` `cast_spell` (spells 8, 9, 11, 12, 13; Umoria `monster.cpp` identical): Cause Light Wounds 3d8 (`MSF_WOUND_LIGHT`, bit 0) and Cause Serious Wounds 8d8 (`MSF_WOUND_SERIOUS`, bit 6, formerly the unused monster heal) print "casts a spell."; blind 12+randint(3) or +6, confuse and fear randint(5)+3 or +2, saturating at 255; fear (`MSF_FEAR`, bit 7) is now cast and Heroism blocks it. Each is preceded by a player saving throw (`core/player_save.s`): `rng_range(100) < race save + class save + adjustment` (VMS `player_saves`), adjustment wis_adj + level for spells and con_adj for the paralysis touch, using Moria8's existing race/class save values. Deviations: saved spells print Umoria's "You resist the effects of the spell."; failed blind/confuse/fear keep Moria8's effect messages because the status line has no effect indicators. Breath, Hold Person and the 1-in-N cast roll are MON-025 (2026-11-08) | explicit maintainer direction 2026-10-21 (`docs/AI_PLAYTEST_DESIGN.md` §14.6-14.7); pinned VMS `creature.inc`, `misc.inc` (`player_saves`, `wis_adj`, `con_adj`); pinned Umoria `monster.cpp`; C64 `test_monster_magic.s` t5, t7, t8, t15-t26 (mutation-checked), `test_monster_ai.s` t15 | generic 2d8+level bolt without save; 1d10+10 blind and 1d5+5 confuse without save; monster self-heal spell; paralysis save of class save + level |
 | MON-012 | Accepted | Project maintainer, 2026-10-23 | The monster fear attack (`ATK_FEAR`, `mon_atk_effect_fear`) follows pinned VMS Moria `creature.inc` (fear attack 4; Umoria `monster.cpp` case 4 identical apart from the save formula): after the hit's damage, the player gets `player_saves(wis_adj)` (`player_wis_save_adj`, `player_saving_throw`); if not saved, a player who is not afraid becomes afraid for 3 + randint(level) turns ("frightens you" message), and an afraid player gains 3 more turns (no message), saturating at 255. Heroism still blocks it (VMS clears fear each turn while heroic). Deviations: a resisted fear prints nothing (VMS "You resist the effects!"), as Moria8's paralysis touch already does; Moria8's own race/class save values (MON-011). | maintainer direction 2026-10-23 ("make recommended fixes as discovered", M4 goal) after the M4 baseline's Poltergeist deaths (`docs/AI_PLAYTEST_DESIGN.md` §15.2); pinned VMS/Umoria sources; C64 `test_monster_attack.s` t11, t14-t17 | no save; timer rng_range(level) + 3, replaced only when larger |
@@ -108,6 +112,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | MON-035 | Accepted | Project maintainer, 2026-11-16 (Phase 5 `CM2_*` movement & 15-field recall) | Adds `cr_spell_flags2` bits `5..7` in `monster_try_step` (`core/monster_ai.s`) and 15-field `/` recall (`core/ui_recall.s`): (1) `CM2_PHASE ($20)` allows dungeon (`zp_player_dlvl > 0`) creatures to step onto non-walkable interior walls, veins, rubble, and closed/locked/jammed/secret doors without altering tile/door bytes (outer permanent boundary walls `x==0`, `x==MAP_COLS-1`, `y==0`, `y==MAP_ROWS-1` and town `dlvl == 0` buildings remain blocked); (2) `CM2_EATS_OTHER ($40)` lets a mover override an occupied tile when the target is not a win creature (`catalog_slot_is_balrog` / `cr_level >= 100`) and 16-bit `cr_xp[mover] >= cr_xp[target]`, calling `monster_remove` (no player XP or loot) and setting `mat_force_new_dirty` if the eaten target was `MF_VISIBLE | MF_DETECTED`; (3) `CM2_PICKS_UP ($80)` removes a non-gold floor item (`ICAT_GOLD` excluded; `glyph_*` lives in its own table and is unaffected) via `floor_item_remove` + `inc mat_force_new_dirty`; (4) `/` recall (`ui_recall_display`) renders all 15 VMS recall fields across all 279 species on all 7 ports + 5 cartridges. | pinned VMS `creature.inc:770-835` (`make_move`); C64 `test_monster_ai2.s`, `test_score.s` | walls/occupants always blocking; 2-attack tier-only recall |
 | MON-036 | Accepted | Project maintainer, 2026-11-17 (VMS theft messages, gold refresh, `subval >= 512` stack rule, & `teleport_away` range) | `mae_steal` (`core/monster_attack_effects.s`, `ATK_STEAL_GOLD = 12` & `ATK_STEAL_ITEM = 13`) matches pinned VMS Moria 4.8 `creature.inc:483-520`, `spells.inc:1202-1230` (`teleport_away`), and `misc.inc:1419-1479, 2526-2548` (`inven_destroy`): (1) prints all five VMS messages via 5-bit packed `mae_print_steal_msg` (`"You quickly protect your money pouch!"` on gold dodge, `"Your purse feels lighter."` + immediate `status_mark_dirty` / `status_draw` gold refresh on gold theft, `"You grab hold of your backpack!"` on item dodge, `"Your backpack feels lighter."` when a pack item is stolen, and `"There is a puff of smoke!"` on the `50%` `randint(2) = 1` blink roll); (2) removes the entire carried slot (`inv_remove_item`) for VMS `subval >= 512` group-stacked kinds (`tval in [10..13]`: `Arrow`, `Bolt`, `Rock`, `Iron Shot`, `Iron Spike`) and one unit (`inv_consume_one`) for `subval < 512` kinds (food, potions, scrolls, oil flasks, torches, singletons); (3) `mae_find_blink_tile` teleports the thief to a uniform random in-bounds free floor square (excluding the player's square) within `+-20` (`max_sight`) of `(zp_mon_x, zp_mon_y)`, widening `dis += 5` after every `10` failed tries (`ctr > 9`), clearing `MF_VISIBLE`, moving `FLAG_OCCUPIED`, and incrementing `zp_dirty_count`. Deviation: an empty pack on an undodged `ATK_STEAL_ITEM` steals nothing and omits `"Your backpack feels lighter."` (as Umoria fixes VMS's `randint(0)`). | explicit maintainer bug report 2026-11-17; pinned VMS `creature.inc:483-520`, `spells.inc:1202-1230`, `misc.inc:1419-1479, 2526-2548`; C64 `test_monster_attack2.s` | silent `mae_steal`, full-map `find_random_floor` thief blink, and 1-unit `inv_consume_one` on `tval 10..13` stacks in MON-032 |
 | MON-037 | Accepted | Project maintainer, 2026-11-18 (VMS per-stat & XP-drain melee messages) | `mae_lose_str` (`ATK_LOSE_STR = 2`), `mae_lose_stat` (`ATK_LOSE_DEX..WIS = 15..18`), and `mae_lose_exp` (`ATK_LOSE_EXP = 19`) in `core/monster_attack_effects.s` print the six distinct pinned VMS Moria 4.8 `creature.inc` messages via `mae_print_steal_msg` (`5..10` in 5-bit `mae_bits`/`mae_tail`): `"You feel weaker."` (`STR`, `creature.inc:398`), `"You feel more clumsy."` (`DEX`, `:535`), `"Your health is damaged!"` (`CON`, `:548`), `"You feel your memories fading..."` (`INT`, `:564`), `"Your wisdom is drained."` (`WIS`, `:577`), and `"You feel your life draining away!"` (`EXP`, `:584`). Deviation: sustained hits retain Moria8's shared `"You are unaffected."` (`HSTR_CHEST_UNAFFECTED`). | explicit maintainer bug report 2026-11-18 (Bug C); pinned VMS `creature.inc:392-403, 528-588`; C64 `test_monster_attack2.s` t33 | shared `"You feel weakened."` (`HSTR_DF_CON_DRAIN`) across all five monster stat drains and XP loss |
+| MON-038 | Accepted | Project maintainer, 2026-11-19 (GitHub Issue #21: monster sighting, hostile-action, door-burst & melee disturbance; companion to TRN-014) | Monster disturbance feeds the unified `zp_disturb` (`$69`) latch without relying on render-only `turn_scene_dirty`: (1) `muvo_apply_visible` (`core/monster.s`) executes `inc zp_disturb` beside `player_search_mode_off` on every `MF_VISIBLE` `0 -> 1` sighting; town creatures start `MF_VISIBLE` on town entry so resting in town does not immediately false-trigger on pre-existing townies, and unseen `CD_INVISIBLE` creatures return before `!muvo_can_see` (TRN-012) without setting `MF_VISIBLE` or disturbing. (2) `core/monster_ai.s` tags `mat_action_dirty` bit 1 (`$02`) for hostile actions (`$83` on hostile moves; `$03` on spells, breeder spawns, door opens via `mts_write_open`, and glyph breaks) while leaving bit 1 clear (`$81`) for unprovoked townie wandering (`!mpo_not_town` bypass); at `!mpo_done` (after the breed check), if `mat_action_dirty != 0`, `(mat_action_dirty & $02) != 0 && (zp_mon_flags & MF_VISIBLE) != 0` executes `inc zp_disturb`. This catches all visible hostile moves (including inside `<= zp_light_radius + 1` where local redraws leave `turn_scene_dirty == 0`), silent `MSF2_BLINK`/`MSF2_TELE_SELF`, and visible breeding, while keeping sleeping monsters (MON-005), unprovoked wandering townies, and detected-only monsters behind walls (`MF_DETECTED` without `MF_VISIBLE`) quiet. (3) Door bursts (`!mts_stuck` and `!mts_bash`, extending MON-009) print `HSTR_MAT_DOOR_BURST` unconditionally and execute `inc zp_disturb` mid-turn via a shared `!mts_bash_set` tail (net `-1 B`); plain door opens (`!mts_open_plain`) add no extra door-tile LOS check, matching upstream VMS/Umoria (`muvo_apply_visible` catches the opener becoming visible). (4) Monster melee rounds (`core/monster_attack.s` right after `!map_has_atk0:`, past the `ATK_NONE` early exit) execute `inc zp_disturb` (including repelled melee rounds). | explicit maintainer direction 2026-11-19 (GitHub Issue #21); pinned VMS Moria `source/include/creature.inc:42-55, 697-757, 1191-1202` and pinned Umoria `src/monster.cpp:54-60, 477-540, 610-613`; C64 `test_monster_ai2.s` t16-t20, t23 and `test_monster_attack.s` t55 | MON-009 post-turn message-only door-burst disturbance; render-coupled `turn_scene_dirty` hostile-activity heuristic |
 
 ## Conditional Verification Matrix
 
@@ -177,6 +182,7 @@ execute the changed production routine through its real dispatch/overlay path.
 | Phase 5 `CD_INVISIBLE` visibility, `CM2_PHASE`, `CM2_EATS_OTHER`, `CM2_PICKS_UP`, & 15-field `/` recall (MON-034, MON-035) | C64 `test_monster_ai2.s` and `test_score.s` through production `monster_update_visibility_all`, `monster_try_step`, and `ui_recall_display`, plus cross-port `make playtest-gate` | `TEST_FILTER='^(monster_ai2|score)$' make test64`; `make playtest-gate` |
 | Monster theft VMS feedback, `AU:` status refresh, `subval >= 512` whole-bundle theft, and `±20` blink range (MON-036) | C64 `test_monster_attack2.s` t27-t32 through production `monster_attack_player` and `mon_atk_effect_dispatch` (all 5 VMS messages, Row 23 `AU:` refresh, `Arrow`/`Iron Spike` whole-slot vs `Ration` 1-unit stack rule, and `±20` `max_sight` range over 12,544-tile open map) | `TEST_FILTER='^monster_attack2$' make test64`; all 7 ports + 5 cartridges compile the identical shared `core/monster_attack_effects.s`; `make playtest-gate` |
 | Monster stat & XP drain VMS messages (MON-037) | C64 `test_monster_attack2.s` t33 through production `mon_atk_effect_dispatch` and `mon_atk_hit` asserting all 6 rendered VMS messages (`STR`, `DEX`, `CON`, `INT`, `WIS`, `EXP`) on screen row 0 | `TEST_FILTER='^monster_attack2$' make test64`; all 7 ports + 5 cartridges compile the identical shared `core/monster_attack_effects.s` |
+| Monster sighting (`muvo_apply_visible`), visible hostile-action (`mat_action_dirty` bit 1 + `MF_VISIBLE`, incl. local radius `<= zp_light_radius + 1` and silent `MSF2_BLINK`), door-burst mid-turn `inc zp_disturb`, melee disturbance, and non-disturbance of sleeping monsters (MON-005), unprovoked townies, detected-only behind walls, and unseen `CD_INVISIBLE` creatures (MON-038 / TRN-012 / TRN-014) | C64 `test_monster_ai2.s` t16-t20, t23 (24/24) and `test_monster_attack.s` t55 (55/55) through production `monster_update_visibility_all`, `monster_ai_tick`, and `monster_attack_player` | `TEST_FILTER='^(monster_ai2\|monster_attack)$' make test64`; all 7 ports + 5 cartridges compile the identical shared `core/monster.s`, `core/monster_ai.s`, and `core/monster_attack.s` |
 
 ## Change Record — Phase 5 Full 279-Species VMS Monster Parity (2026-11-16)
 
@@ -356,6 +362,89 @@ Known behavior explicitly out of scope:
   Per-stat sustained messages.
 Unresolved uncertainty and risk:
   None.
+```
+
+## Change Record — Monster Sighting, Hostile-Action & Door-Burst Disturbance (MON-038, 2026-11-19)
+
+```text
+Problem and success criteria:
+  Ensure visible hostile monster activity (including local-radius moves inside
+  <= zp_light_radius + 1 where turn_scene_dirty remains 0, silent MSF2_BLINK /
+  MSF2_TELE_SELF, and visible breeding), MF_VISIBLE 0 -> 1 sightings, monster
+  melee rounds, and unconditional door bursts all raise zp_disturb ($69) mid-turn,
+  while keeping sleeping monsters (MON-005), unprovoked wandering townies,
+  detected-only monsters behind walls, and unseen CD_INVISIBLE creatures (TRN-012)
+  quiet.
+State being changed:
+  - core/monster.s::muvo_apply_visible: executes inc zp_disturb alongside
+    jsr player_search_mode_off on MF_VISIBLE 0 -> 1 transition.
+  - core/monster_ai.s: sets mat_action_dirty bit 1 ($02) on hostile moves ($83)
+    and spells/breeding/door-open/glyph-break ($03), keeping bit 1 clear ($81)
+    on unprovoked townie wandering (!mpo_not_town bypass); !mpo_done executes
+    inc zp_disturb when (mat_action_dirty & $02) != 0 && (zp_mon_flags & MF_VISIBLE) != 0;
+    !mts_stuck and !mts_bash share !mts_bash_set executing inc zp_disturb alongside
+    HSTR_MAT_DOOR_BURST (net -1 B).
+  - core/monster_attack.s: executes inc zp_disturb right after !map_has_atk0:
+    (past the ATK_NONE early return, including repelled melee rounds).
+Search scope and terms:
+  rg across core/ and platforms/ for muvo_apply_visible, mat_action_dirty,
+  mts_stuck, mts_bash, mts_open_plain, mts_write_open, map_has_atk0,
+  HSTR_MAT_DOOR_BURST, MF_VISIBLE, CD_INVISIBLE.
+Relevant readers/writers found and known exclusions:
+  Plain door opens (!mts_open_plain) add no extra door-tile LOS check, matching
+  pinned VMS/Umoria (muvo_apply_visible catches the opener entering sight);
+  sleeping monsters never reach active AI actions during auto-rest (MON-005);
+  unseen CD_INVISIBLE creatures exit muvo_apply_visible before !muvo_can_see
+  (TRN-012) and only disturb if they attack or become visible.
+Initialization, reset and persistence points:
+  zp_disturb ($69) is transient unsaved ZP state cleared in game_new_start,
+  load_resume_reset_cold.s, cmd_autorest, and run_step (see TRN-014);
+  mat_action_dirty is cleared per monster at the start of monster_process_one.
+Affected production sequence through the changed transition:
+  turn_post_action -> monster_ai_tick -> monster_process_one -> monster_try_step
+  (door burst / hostile move / attack) or monster_pick_spell / breed -> !mpo_done
+  (hostile bit 1 + MF_VISIBLE -> inc zp_disturb) -> main_loop
+  monster_update_visibility_all -> muvo_apply_visible (0 -> 1 -> inc zp_disturb)
+  -> auto_rest_should_stop / !run_active_post.
+Contract decision or selected upstream oracle with source locations:
+  MON-038 and TRN-014; pinned VMS Moria source/include/creature.inc:42-55,
+  697-757, 1191-1202 and pinned Umoria src/monster.cpp:54-60, 477-540, 610-613.
+Intentional Moria8 deviations:
+  Unprovoked wandering townies leave mat_action_dirty bit 1 clear ($81) so
+  resting in town is not interrupted by harmless townspeople moving in sight;
+  provoked townies clear the bypass and disturb normally.
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  8-bit bitmasks (mat_action_dirty bit 1 = $02, MF_VISIBLE = $08) and 8-bit
+  non-zero latch zp_disturb incremented via 2-byte inc zp_disturb (preserving
+  A/X/Y/C).
+RNG reduction and bias, if applicable:
+  N/A (no RNG changes).
+Affected platforms, overlays, banks and owners:
+  All 7 ports + 5 cartridges via shared core/monster.s, core/monster_ai.s, and
+  core/monster_attack.s; all 12 product builds and all rebuilt test-variant PRGs
+  verified within hard limits by tools/report_memory_budgets.py (0 overflows, 0
+  stray artifacts; see TRN-014 in docs/TURN_RENDER_CONTRACT.md for the full
+  7-port table, e.g. C64 Default $BF80/$C000, C128 128.play $CEBA/$D000 &
+  128.bank $FEDA/$FF00, Apple IIe Default $7BD2/$7C00, Atari 8-bit Default
+  $C0AC/$C100, BBC Master Default $7F77/$8000).
+Required production-path tests:
+  C64 test_monster_ai2.s t16-t20, t23 (24/24) and test_monster_attack.s t55
+  (55/55), plus C64 monster (24/24), monster_ai (70/70), full C64 run_tests.sh
+  (224/224 + cart), C128 make test128 (141/141 + legal 6/6 + cart PAL/NTSC
+  23/23), Apple IIe (26/26), CX16 (27/27 + cart), Atari 8-bit (21/21 + 6/6
+  cart), Plus/4 make testplus4 PASS (legal 6/6 + 47/47 + cart), BBC Master
+  make testbbcmaster-runtime PASS (18/18), and make playtest-gate (65/65 PASS,
+  0 failed, 0 targets skipped, exit 0; incl. plus4 5/5, plus4-cart 5/5, and
+  JiffyDOS-enabled c64/c128 targets alongside all other ports and cartridges).
+Known behavior explicitly out of scope:
+  Shared monster distance Chebyshev-to-upstream conversion (tracked separately
+  in docs/BACKLOG.md).
+Unresolved uncertainty and risk:
+  Zero product or test-suite defects remain (all 7 ports, all 5 cartridges,
+  and 65/65 make playtest-gate passed); sole external timing caveat is
+  test64-legal help hitting its 30s wall-clock cap on the final post-return
+  bsave (memory(0xC000, 3840) after returning to gameplay) under sustained
+  external host load 32.81-43.85 (title passed; not a product hang).
 ```
 
 

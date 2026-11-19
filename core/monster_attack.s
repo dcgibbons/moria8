@@ -124,6 +124,7 @@ monster_attack_player:
     // so no round, miss message or recall count.
     rts
 !map_has_atk0:
+    inc zp_disturb
 
     // Protection from Evil (VMS Moria creature.inc make_attack): while active,
     // every attack of an evil creature with cr_level <= zp_player_lvl is repelled.

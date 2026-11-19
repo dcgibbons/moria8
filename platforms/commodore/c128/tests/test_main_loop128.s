@@ -454,7 +454,15 @@ run_initialize:
     rts
 
 run_continue:
+    lda test_run_steps_left
+    beq !rc_go+
+    dec test_run_steps_left
+    beq !rc_stop+
+!rc_go:
     clc
+    rts
+!rc_stop:
+    sec
     rts
 
 run_area_affect:
@@ -491,7 +499,7 @@ hal_sound_init:
     rts
 
 input_run_scan_held_raw:
-    lda #0
+    lda test_any_key_held_sample
     rts
 irs_count_modifiers: .byte 0    // input_run_raw128.s's flag, for input_wait_release
 
@@ -577,7 +585,6 @@ msg_clear:
 
 turn_post_action:
     jmp test_turn_post_action
-turn_rest_disturbed: .byte 0     // core/turn.s (not imported here); auto-rest stop latch
 regen_frac_lo: .byte 0           // core/turn.s; HP regen fraction low byte (cleared on new game/load)
 md_count: .byte 0                // core/monster_death.s; staged monster drops (cleared on load)
 
@@ -730,7 +737,9 @@ ovl_ready_mask:
 .const PL_LIGHT_RAD = 55
 .const PL_SPELL_TYPE = 60
 .const PL_TODMG = 41
+.const PLF_MALE = $01
 .const PLF_SEARCHING = $10
+.const PLF_RESTING = $20
 current_overlay: .byte 0
 ovl_fn_addr_lo: .byte 0, 0, 0, 0, 0, 0
 ovl_fn_addr_hi: .byte 0, 0, 0, 0, 0, 0
@@ -912,6 +921,11 @@ test_disk_setup_success: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
+test_turn_disturbs: .byte 0
+test_turn_heal_hp: .byte 0
+test_turn_resting_flag: .byte 0
+test_run_steps_left: .byte 0
+test_any_key_held_sample: .byte 0
 test_update_clears_reveal: .byte 0
 test_scroll_delta_success: .byte 0
 test_force_view_scroll_y: .byte 0
@@ -1015,6 +1029,13 @@ reset_state:
     sta test_move_relocated
     sta test_move_disturbs_search
     sta test_scene_dirty
+    sta test_turn_disturbs
+    sta test_turn_heal_hp
+    sta test_turn_resting_flag
+    sta test_run_steps_left
+    sta test_any_key_held_sample
+    sta zp_disturb
+    sta auto_rest_active
     sta test_update_clears_reveal
     sta test_scroll_delta_success
     sta test_force_view_scroll_y
@@ -1050,6 +1071,15 @@ reset_state:
     sta zp_view_y
     lda #1
     sta zp_player_dlvl
+    lda #10
+    sta zp_player_hp_lo
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    lda #5
+    sta zp_player_mp
+    sta zp_player_mmp
     rts
 
 run_case:
@@ -1084,8 +1114,20 @@ test_platform_runtime_resync_api:
 
 test_turn_post_action:
     inc test_turn_calls
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    ora test_turn_resting_flag
+    sta test_turn_resting_flag
+    lda test_turn_heal_hp
+    beq !tpa_no_hp+
+    inc zp_player_hp_lo
+!tpa_no_hp:
     lda test_scene_dirty
     sta turn_scene_dirty
+    lda test_turn_disturbs
+    beq !tpa_done+
+    inc zp_disturb
+!tpa_done:
     rts
 
 test_status_draw:
@@ -1349,7 +1391,7 @@ test_entry:
     lda #1
     sta test_dir_ok
     sta test_open_ok
-    sta test_scene_dirty     // A real door open changes the map tile, which
+    sta test_scene_dirty   // A real door open changes the map tile, which
                            // dirties the scene; model it explicitly rather
                            // than depending on leftover state from test 3.
     lda #CMD_OPEN
@@ -2375,16 +2417,21 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 30: a scene-dirty continued run step redraws fully and stops.
+    // Test 30: render-only turn_scene_dirty forces full redraws (bypassing
+    // C128 scroll-delta) without stopping auto-run; zp_disturb stops after
+    // one step; stale zp_disturb from before CMD_RUN_* is discarded.
     lda #30
     sta test_case_id
     jsr install_jump_patch
     jsr reset_state
     lda #1
     sta test_move_ok
+    sta test_move_relocated
     sta test_scene_dirty
     sta test_scroll_delta_success
     sta test_force_view_scroll_y
+    lda #2
+    sta test_run_steps_left
     lda #CMD_RUN_N
     sta test_cmd_script
     lda #1
@@ -2395,7 +2442,7 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_turn_calls
-    cmp #1
+    cmp #2
     beq *+5
     jmp test_fail
     lda test_render_local_calls
@@ -2405,16 +2452,18 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_render_full_calls
-    cmp #1
+    cmp #2
     beq *+5
     jmp test_fail
+    // Part B: zp_disturb stops auto-run after one step (and full redraw runs).
     jsr reset_state
     lda #1
     sta test_move_ok
+    sta test_move_relocated
     sta test_scene_dirty
+    sta test_turn_disturbs
     sta test_scroll_delta_success
     sta test_force_view_scroll_y
-    sta test_run_should_stop
     lda #CMD_RUN_N
     sta test_cmd_script
     lda #1
@@ -2436,6 +2485,23 @@ test_entry:
     jmp test_fail
     lda test_render_full_calls
     cmp #1
+    beq *+5
+    jmp test_fail
+    // Part C: stale zp_disturb before CMD_RUN_* is discarded at top of run_step.
+    jsr reset_state
+    lda #1
+    sta zp_disturb
+    sta test_move_ok
+    sta test_move_relocated
+    lda #2
+    sta test_run_steps_left
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #2
     beq *+5
     jmp test_fail
 
@@ -2658,6 +2724,171 @@ test_entry:
     sec
     sbc t38_plain_views
     cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 39: C128 auto-rest sets PLF_RESTING during rest turns, discards
+    // stale zp_disturb, ignores render-only turn_scene_dirty, and clears
+    // PLF_RESTING + calls status_draw on recovery stop (TRN-014).
+    lda #39
+    sta test_case_id
+    jsr reset_state
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta zp_disturb              // stale
+    sta test_turn_heal_hp
+    sta test_scene_dirty
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda auto_rest_active
+    beq *+5
+    jmp test_fail
+    lda test_turn_resting_flag
+    cmp #PLF_RESTING
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #3                      // 2 rest turns + 1 on !auto_rest_stop
+    beq *+5
+    jmp test_fail
+    // Already recovered with PLF_SEARCHING active: clears search and repaints
+    // Row 21 without consuming a turn.
+    jsr reset_state
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    beq *+5
+    jmp test_fail
+    lda auto_rest_active
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 40: C128 auto-rest stops on zp_disturb after one turn and on a held
+    // cancel key before a turn, clearing PLF_RESTING + calling status_draw.
+    lda #40
+    sta test_case_id
+    jsr reset_state
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta test_turn_heal_hp
+    sta test_turn_disturbs
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda auto_rest_active
+    beq *+5
+    jmp test_fail
+    lda test_turn_resting_flag
+    cmp #PLF_RESTING
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    // Cancel key path
+    jsr reset_state
+    lda #8
+    sta zp_player_hp_lo
+    lda #1
+    sta auto_rest_active
+    sta test_any_key_held_sample
+    lda #PLF_RESTING
+    sta player_data + PL_FLAGS
+    jsr run_case
+    lda test_turn_calls
+    beq *+5
+    jmp test_fail
+    lda auto_rest_active
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    and #PLF_RESTING
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 41: C128 game_new_start and load_resume_game clear stale zp_disturb
+    // and stale PLF_RESTING while preserving PLF_MALE.
+    lda #41
+    sta test_case_id
+    jsr reset_state
+    lda #5
+    sta zp_disturb
+    lda #(PLF_MALE | PLF_RESTING)
+    sta player_data + PL_FLAGS
+    lda #$20
+    sta test_key_script
+    lda #1
+    sta test_key_len
+    jsr game_new_start
+    lda zp_disturb
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    cmp #PLF_MALE
+    beq *+5
+    jmp test_fail
+    jsr reset_state
+    lda #7
+    sta zp_disturb
+    lda #(PLF_MALE | PLF_RESTING)
+    sta player_data + PL_FLAGS
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
+    jsr load_resume_game
+    lda zp_disturb
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    cmp #PLF_MALE
     beq *+5
     jmp test_fail
 

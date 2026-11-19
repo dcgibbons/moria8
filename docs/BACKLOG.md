@@ -173,29 +173,6 @@ Acceptance target:
 - Plus/4 gameplay produces audible, bounded sound effects for the existing
   shared `SFX_*` events without stuck tones or display-mode regressions.
 
-### Complete auto-rest disturbance model
-
-Moria8 now has a first-pass `CTRL+R` rest-until-recovered command. It keeps `.`
-as one-turn rest, `R` as Read Scroll, and `SHIFT+R` as Refuel. The current
-implementation advances ordinary rest turns until HP and mana are full, clears
-search mode when started, stops on cancel input, and stops when a message asks
-for player attention. Existing C64/C128 tests cover full-recovery no-turn
-behavior, HP/mana recovery, attention-message interruption, held-key
-interruption, and search-mode clearing.
-
-Remaining polish:
-
-- Add an explicit disturbance flag so auto-rest can stop on silent-but-dangerous
-  state changes without relying on `zp_msg_flags`.
-- Stop on visible hostile monster activity even when the monster only moves and
-  no attack/spell message is generated.
-- Stop on player displacement, newly discovered objects/features, hunger
-  warnings, and other attention-worthy events through one shared disturbance
-  path.
-- Add compact status text such as `Rest *` or `Resting` if resident memory or an
-  overlay-owned display path can afford it.
-- Keep C128 resident play below `$D000`.
-
 ### Optional: exact Umoria per-blow melee messages
 
 Moria8 now calculates melee blow counts from the Umoria-style STR/DEX/weapon
@@ -441,23 +418,6 @@ Acceptance target:
   rubble bare-handed clears it within a few turns at ordinary strength; no
   generated level strands a character without a digging tool; the bot's
   frozen suites hold.
-
-### Disturb the player mid-turn when a monster bursts a door
-
-Upstream Umoria calls `playerDisturb(1,0)` when a monster bursts a door
-(`monster.cpp::monsterOpenDoor`), interrupting rest/run immediately.
-Moria8 prints the same unconditional message, and `huff_print_msg` sets
-`zp_msg_flags`, which already breaks auto-rest and running at the
-post-turn check (`core/game_loop.s` rest loop and `run_post`). The only
-residual delta is timing: upstream's disturb fires mid-step, so a
-multi-tile run could in principle continue one step further here before
-stopping. Minor gameplay parity; no correctness issue.
-
-Required work:
-
-- If pursued, add an explicit disturb hook at the two burst-print sites
-  in `core/monster_ai.s` and verify rest/run interruption against the
-  upstream mid-step timing.
 
 ### Align shared monster distance with upstream
 

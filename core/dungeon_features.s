@@ -809,6 +809,7 @@ search_scan_adjacent_silent:
     ldx #HSTR_DF_FOUND_SECRET
 !ds_found_common:
     jsr huff_print_msg
+    inc zp_disturb
     inc df_found
     bne !ds_next+
 

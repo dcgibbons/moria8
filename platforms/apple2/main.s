@@ -936,9 +936,7 @@ a2_play_body:
 #undef DISARM_COMMAND_EXTERNAL
 #undef PLAYER_LOOK_EXTERNAL
 #import "dungeon_scroll_a2.s"
-#define TURN_REST_DISTURBED_EXTERNAL
 #import "../../core/turn.s"
-#undef TURN_REST_DISTURBED_EXTERNAL
 // Small play-resident modules (play is present in every gameplay phase).
 #import "../../core/ui_restore.s"
 #import "../../core/ui_help_clear.s"
@@ -991,10 +989,6 @@ cmb_winner_str:
     .text "You have won! Shift+Q to claim victory." ; .byte 0
 
 .segment Default
-
-// Auto-rest disturbance flag (core/turn.s, TRN-007) in resident main RAM:
-// the play slot has no room for it (TURN_REST_DISTURBED_EXTERNAL).
-turn_rest_disturbed: .byte 0
 
 // The acid attack's armour damage (MON-015), resident for the same reason
 // (MON_ATK_ACID_EXTERNAL). tramp_item_recalc saves/restores current_overlay

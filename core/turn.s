@@ -47,21 +47,12 @@ player_update_hunger_state:
     sta zp_hunger_state
     rts
 
-// turn_rest_disturbed — the player took damage or got hungrier. Set by the
-// producers below; cleared when auto-rest starts (cmd_autorest), so while
-// auto-rest runs a nonzero value means one of its own rest turns disturbed
-// the player and it must stop (VMS Moria take_hit -> rest_off, hunger
-// alerts; TRN-007). Platforms with a full play slot define it elsewhere.
-#if !TURN_REST_DISTURBED_EXTERNAL
-turn_rest_disturbed: .byte 0
-#endif
-
 // turn_maybe_play_hunger_alert — Alert only when hunger gets worse.
 // Input: A = previous hunger state, zp_hunger_state = current state
 turn_maybe_play_hunger_alert:
     cmp zp_hunger_state
     bcs !done+              // Same or improved state: no alert
-    inc turn_rest_disturbed
+    inc zp_disturb
 
     lda zp_hunger_state
     cmp #HUNGER_FAINT
@@ -130,6 +121,7 @@ turn_tick_effects:
     beq !blind_tick+
     lda zp_eff_blind
     bne !blind_cursed_dec+
+    inc zp_disturb
     lda #1
     sta zp_eff_blind
     sta vis_room_revealed
@@ -185,6 +177,7 @@ turn_tick_effects:
     bne !fear_tick+
     lda eff_fear_timer
     bne !fear_cursed_dec+
+    inc zp_disturb
     inc eff_fear_timer
     bne !no_fear+
 !fear_cursed_dec:
@@ -257,6 +250,7 @@ turn_tick_effects:
     sbc #1
     sta zp_eff_hero
     bne !no_hero+
+    inc zp_disturb
 
     lda player_data + PL_MHP_LO
     sec
@@ -313,11 +307,14 @@ turn_tick_effects:
     jsr msg_clear
     ldx #HSTR_RECALL_ARRIVE
     jsr huff_print_msg
+    inc zp_disturb
 !no_recall:
 
     lda eff_invuln_timer
     beq !no_invuln+
     dec eff_invuln_timer
+    bne !no_invuln+
+    inc zp_disturb
 !no_invuln:
 
     // Detect monsters timer
@@ -411,9 +408,9 @@ turn_tick_hunger:
     jmp player_death_check
 
 // turn_apply_one_damage — Subtract 1 HP from the player, clamped at 0.
-// Syncs HP back to player_data. Disturbs auto-rest (turn_rest_disturbed).
+// Syncs HP back to player_data. Disturbs repeat commands (zp_disturb).
 turn_apply_one_damage:
-    inc turn_rest_disturbed
+    inc zp_disturb
     lda zp_player_hp_lo
     sec
     sbc #1

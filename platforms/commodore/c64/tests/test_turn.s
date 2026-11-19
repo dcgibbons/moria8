@@ -81,7 +81,7 @@ map_row_ptr0_x:                     // as core/dungeon_data.s
     sta zp_ptr0_hi
     rts
 
-tc_results: .fill 33, $ff
+tc_results: .fill 39, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -270,6 +270,9 @@ inv_remove_item:
     sta inv_p1,x
     rts
 
+// Expose production ITR3_BLIND / ITR3_TIMID curse branches in core/turn.s.
+#define CORE_PLAYER_IMPORTED
+player_curse_flags: .byte 0
 #import "../../../../core/turn.s"
 #import "../../../../core/scene_force.s"
 
@@ -347,7 +350,12 @@ reset_state:
     sta zp_eff_bless
     sta zp_eff_hero
     sta zp_eff_regen
+    sta zp_eff_see_inv
     sta zp_eff_word_recall
+    sta eff_invuln_timer
+    sta eff_detect_timer
+    sta player_curse_flags
+    sta zp_disturb
     sta zp_player_mp
     sta player_data + PL_MANA
     sta zp_player_dlvl
@@ -1141,10 +1149,205 @@ t21_test:
     bne !t29_fail+
     lda #$01
     sta tc_results + 28
-    jmp !t1_seq-
+    jmp !t34+
 !t29_fail:
     lda #$00
     sta tc_results + 28
+
+!t34:
+    // Test 34: cursed ITR3_BLIND onset (0->1) disturbs once (and is safe when
+    // zp_disturb wraps $ff->$00); staying cursed (1->1) does not re-disturb.
+    jsr reset_state
+    lda #ITR3_BLIND
+    sta player_curse_flags
+    jsr turn_tick_effects
+    lda zp_eff_blind
+    cmp #1
+    bne !t34_fail+
+    lda zp_disturb
+    cmp #1
+    bne !t34_fail+
+    // Second tick while already blind (1->1): stays 1, no re-disturb
+    lda #0
+    sta zp_disturb
+    jsr turn_tick_effects
+    lda zp_eff_blind
+    cmp #1
+    bne !t34_fail+
+    lda zp_disturb
+    bne !t34_fail+
+    // Wrap-safety: zp_disturb == $ff -> $00 must still take bne !no_blind+
+    lda #0
+    sta zp_eff_blind
+    lda #$ff
+    sta zp_disturb
+    jsr turn_tick_effects
+    lda zp_eff_blind
+    cmp #1
+    bne !t34_fail+
+    lda #$01
+    sta tc_results + 33
+    jmp !t35+
+!t34_fail:
+    lda #$00
+    sta tc_results + 33
+
+!t35:
+    // Test 35: cursed ITR3_TIMID onset (0->1) disturbs once when not heroic;
+    // staying cursed (1->1) does not re-disturb; heroism suppresses onset.
+    jsr reset_state
+    lda #ITR3_TIMID
+    sta player_curse_flags
+    lda #2
+    sta zp_eff_hero             // Heroism suppresses ITR3_TIMID onset
+    jsr turn_tick_effects
+    lda eff_fear_timer
+    bne !t35_fail+
+    lda zp_disturb
+    bne !t35_fail+
+    // Without heroism: 0->1 triggers and disturbs
+    lda #0
+    sta zp_eff_hero
+    jsr turn_tick_effects
+    lda eff_fear_timer
+    cmp #1
+    bne !t35_fail+
+    lda zp_disturb
+    cmp #1
+    bne !t35_fail+
+    // Staying cursed (1->1): no re-disturb
+    lda #0
+    sta zp_disturb
+    jsr turn_tick_effects
+    lda eff_fear_timer
+    cmp #1
+    bne !t35_fail+
+    lda zp_disturb
+    bne !t35_fail+
+    lda #$01
+    sta tc_results + 34
+    jmp !t36+
+!t35_fail:
+    lda #$00
+    sta tc_results + 34
+
+!t36:
+    // Test 36: zp_eff_hero expiry (1->0) disturbs; mid-timer (2->1) stays quiet.
+    jsr reset_state
+    lda #2
+    sta zp_eff_hero
+    lda #50
+    sta player_data + PL_MHP_LO
+    sta zp_player_mhp_lo
+    sta player_data + PL_HP_LO
+    sta zp_player_hp_lo
+    jsr turn_tick_effects       // 2 -> 1: quiet
+    lda zp_eff_hero
+    cmp #1
+    bne !t36_fail+
+    lda zp_disturb
+    bne !t36_fail+
+    jsr turn_tick_effects       // 1 -> 0: MHP -10 and disturbs
+    lda zp_eff_hero
+    bne !t36_fail+
+    lda zp_disturb
+    cmp #1
+    bne !t36_fail+
+    lda zp_player_mhp_lo
+    cmp #40
+    bne !t36_fail+
+    lda #$01
+    sta tc_results + 35
+    jmp !t37+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+
+!t37:
+    // Test 37: eff_invuln_timer expiry (1->0) disturbs; mid-timer (2->1) quiet.
+    jsr reset_state
+    lda #2
+    sta eff_invuln_timer
+    jsr turn_tick_effects       // 2 -> 1: quiet
+    lda eff_invuln_timer
+    cmp #1
+    bne !t37_fail+
+    lda zp_disturb
+    bne !t37_fail+
+    jsr turn_tick_effects       // 1 -> 0: disturbs
+    lda eff_invuln_timer
+    bne !t37_fail+
+    lda zp_disturb
+    cmp #1
+    bne !t37_fail+
+    lda #$01
+    sta tc_results + 36
+    jmp !t38+
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
+
+!t38:
+    // Test 38: Word of Recall arrival (dungeon -> town) disturbs; town fizzle
+    // with PL_MAX_DLVL == 0 does not disturb.
+    jsr reset_state
+    lda #0
+    sta zp_player_dlvl
+    sta player_data + PL_MAX_DLVL
+    lda #1
+    sta zp_eff_word_recall
+    jsr turn_tick_effects       // Town fizzle
+    lda zp_disturb
+    bne !t38_fail+
+    lda #3
+    sta zp_player_dlvl
+    lda #1
+    sta zp_eff_word_recall
+    jsr turn_tick_effects       // Dungeon -> town arrival
+    lda zp_player_dlvl
+    bne !t38_fail+
+    lda zp_disturb
+    cmp #1
+    bne !t38_fail+
+    lda #$01
+    sta tc_results + 37
+    jmp !t39+
+!t38_fail:
+    lda #$00
+    sta tc_results + 37
+
+!t39:
+    // Test 39: benign silent timers in !tse_loop (protect, invis, infra,
+    // resist, regen, resist_cold, see_inv) and eff_detect_timer stay quiet
+    // when expiring (1->0).
+    jsr reset_state
+    lda #1
+    sta zp_eff_protect
+    sta zp_eff_invis
+    sta zp_eff_infra
+    sta zp_eff_resist
+    sta zp_eff_regen
+    sta eff_resist_cold_timer
+    sta zp_eff_see_inv
+    sta eff_detect_timer
+    jsr turn_tick_effects
+    lda zp_eff_protect
+    ora zp_eff_invis
+    ora zp_eff_infra
+    ora zp_eff_resist
+    ora zp_eff_regen
+    ora eff_resist_cold_timer
+    ora zp_eff_see_inv
+    ora eff_detect_timer
+    bne !t39_fail+
+    lda zp_disturb
+    bne !t39_fail+
+    lda #$01
+    sta tc_results + 38
+    jmp !t1_seq-
+!t39_fail:
+    lda #$00
+    sta tc_results + 38
     jmp !t1_seq-
 
 !t12:
@@ -1321,7 +1524,7 @@ t21_test:
     sta tc_results + 24
 
 // Tests 30-33 run last, whatever path reached test_finish: the auto-rest
-// disturbance event (turn_rest_disturbed, TRN-007) and its producers.
+// disturbance event (turn_rest_disturbed, TRN-014 superseding TRN-007) and its producers.
 test_finish:
     // Test 30: an ordinary turn neither sets nor clears the disturbance
     // (only producers set it; auto-rest entry clears it).
@@ -1406,7 +1609,7 @@ test_finish:
     sta tc_results + 32
 
 test_copy_results:
-    ldx #32
+    ldx #38
 !copy:
     lda tc_results,x
     sta $0400,x

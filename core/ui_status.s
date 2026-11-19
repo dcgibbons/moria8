@@ -227,11 +227,16 @@ status_draw:
     jsr status_put_state
 !sd_row21_not_poisoned:
     lda player_data + PL_FLAGS
-    and #PLF_SEARCHING
+    and #(PLF_SEARCHING | PLF_RESTING)
     beq !sd_row21_states_done+
-    lda #COL_YELLOW
     ldx #<status_searching_str
     ldy #>status_searching_str
+    and #PLF_SEARCHING
+    bne !sd_row21_put_mode+
+    ldx #<status_resting_str
+    ldy #>status_resting_str
+!sd_row21_put_mode:
+    lda #COL_YELLOW
     jsr status_put_state
 !sd_row21_states_done:
     lda #COL_STATUS
@@ -645,22 +650,25 @@ status_exp_str:
     .text "EXP:" ; .byte $00
 status_searching_str:
     .text "Search*" ; .byte $00
+status_resting_str:
+    .text "Rest*" ; .byte $00
 status_poisoned_str:
     .text "Poisoned" ; .byte $00
 
-// status_state — A = search mode (PLF_SEARCHING), and bit 7 while the
-// poison timer runs: what rows 21 and 23 show besides the numbers. N and Z
-// follow A. Clobbers C.
+// status_state — A = search/rest mode (PLF_SEARCHING | PLF_RESTING), and
+// bit 7 while the poison timer runs: what row 21 shows besides the numbers.
+// N and Z follow A. Clobbers C.
 status_state:
     lda zp_eff_poison
     cmp #1                      // C = poisoned
     lda player_data + PL_FLAGS
-    and #PLF_SEARCHING
+    and #(PLF_SEARCHING | PLF_RESTING)
     bcc !ss_done+
     ora #$80
 !ss_done:
     rts
 .assert "Search mode is not bit 7", PLF_SEARCHING & $80, 0
+.assert "Rest mode is not bit 7", PLF_RESTING & $80, 0
 
 :StatusTextRestoreSegment()
 

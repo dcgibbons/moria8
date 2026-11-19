@@ -8,7 +8,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 7, $ff
+tc_results: .fill 8, $ff
 
 .pc = $080E "Test Code"
 
@@ -22,7 +22,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #6
+    ldx #7
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -447,10 +447,39 @@ test_start:
     bne !t6_fail+
     lda #$01
     sta tc_results + 6
-    jmp !done+
+    jmp !t7+
 !t6_fail:
     lda #$00
     sta tc_results + 6
+
+    // Test 7: chest_search_reveal increments zp_disturb on fresh trap discovery
+    // and leaves zp_disturb unchanged on repeat searches of an already-found trap.
+!t7:
+    jsr test_reset
+    lda #CHEST_P1_TRAP_STR
+    ldx #5
+    jsr test_setup_chest
+    lda #100
+    sta df_search_chance
+    lda #0
+    sta zp_disturb
+    jsr chest_search_reveal          // fresh discovery -> disturbs
+    bcc !t7_fail+
+    lda zp_disturb
+    cmp #1
+    bne !t7_fail+
+    lda #0
+    sta zp_disturb
+    jsr chest_search_reveal          // already found -> quiet
+    bcc !t7_fail+
+    lda zp_disturb
+    bne !t7_fail+
+    lda #$01
+    sta tc_results + 7
+    jmp !done+
+!t7_fail:
+    lda #$00
+    sta tc_results + 7
 
 !done:
     jmp test_finish

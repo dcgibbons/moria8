@@ -23,7 +23,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #53
+    ldx #54
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -190,7 +190,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 54, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 55, $ff      // Result buffer (copied to $0400 at end)
 tc_repels:  .byte 0             // " is repelled." summaries seen
 tc_hurt:    .byte 0             // Rounds that did damage or poisoned
 .const NA_BANSHEE = 11          // tier4.s index map: [196] DL24 Banshee
@@ -1599,6 +1599,43 @@ test_start:
     jsr acid_clear_armour
     lda #0
     sta player_pflags
+
+    // Test 55: monster_attack_player increments zp_disturb after !map_has_atk0
+    // (even when repelled by Protection from Evil), and leaves zp_disturb == 0
+    // on ATK_NONE (Quylthulg early exit).
+    lda #0
+    sta zp_disturb
+    lda #4                      // Kobold (CF_EVIL, level 1, ATK_NORMAL)
+    sta zp_mon_type
+    lda #5
+    sta zp_player_lvl
+    sta zp_eff_protect          // Repelled before any hit roll
+    jsr monster_attack_player
+    lda zp_disturb
+    cmp #1
+    bne !t55_fail+
+    // ATK_NONE early exit: must NOT disturb
+    lda #0
+    sta zp_disturb
+    sta zp_eff_protect
+    lda cr_atk0_type + 4
+    pha
+    lda #ATK_NONE
+    sta cr_atk0_type + 4
+    lda #4
+    sta zp_mon_type
+    jsr monster_attack_player
+    pla
+    sta cr_atk0_type + 4
+    lda zp_disturb
+    bne !t55_fail+
+    lda #$01
+    .byte $2c
+!t55_fail:
+    lda #$00
+    sta tc_results + 54
+    lda #0
+    sta zp_eff_protect
 
 !tests_done:
     jmp test_exit_trampoline

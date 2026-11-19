@@ -627,6 +627,7 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
     sta zp_run_dir              // Not running
     lda #0
     sta auto_rest_active
+    sta zp_disturb
     sta regen_frac_lo           // no HP regen fraction from a previous character
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     sta levelup_magic_pending   // none owed by a previous character
@@ -635,6 +636,9 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
     sta zp_view_y
     sta old_view_x
     sta old_view_y
+    lda player_data + PL_FLAGS
+    and #($ff - PLF_RESTING)
+    sta player_data + PL_FLAGS
     lda #OVL_DUNGEON_GEN
 #if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_begin
@@ -1017,18 +1021,19 @@ c128_town_move_diag_loop_top:
     beq !not_auto_rest+
 
     jsr auto_rest_should_stop
-    bcc !auto_rest_keep+
-    lda #0
-    sta auto_rest_active
-    jmp !not_auto_rest+
-!auto_rest_keep:
+    bcs !auto_rest_stop+
     jsr hal_input_any_key_held
     bne !auto_rest_cancel+
     jmp cmd_rest
 !auto_rest_cancel:
     jsr input_flush_run_cancel_buffer
+!auto_rest_stop:
     lda #0
     sta auto_rest_active
+    lda player_data + PL_FLAGS
+    and #($ff - PLF_RESTING)
+    sta player_data + PL_FLAGS
+    jsr status_draw
 !not_auto_rest:
     // Paralysis check — skip input, just tick the turn
     lda zp_eff_paralyze
@@ -2002,15 +2007,15 @@ cmd_autorest:
     jsr run_stop_running
 
     jsr auto_rest_check_recovered
-    bcc !start+
-    jmp main_loop
-!start:
+    bcs !toggle_done-           // Already recovered: repaint Row 21 if Search* cleared.
     jsr hal_input_wait_release
     lda #0
-    sta turn_scene_dirty        // Discard preceding command's scene change.
-    sta turn_rest_disturbed     // ...and its damage/hunger disturbance (stale).
+    sta zp_disturb              // Discard stale disturbance from prior turns.
     lda #1
     sta auto_rest_active
+    lda player_data + PL_FLAGS
+    ora #PLF_RESTING
+    sta player_data + PL_FLAGS
     jmp main_loop
 
 cmd_pickup:
@@ -2290,15 +2295,13 @@ auto_rest_check_recovered:
     rts
 
 // auto_rest_should_stop — Carry set if auto-rest must stop: recovered, or
-// its own rest turn printed a message, dirtied the scene, or disturbed the
-// player with damage or worsening hunger (TRN-007).
+// its own rest turn printed a message or raised zp_disturb (TRN-014).
 auto_rest_should_stop:
     jsr auto_rest_check_recovered
     bcs !done+                  // Recovered: carry set = stop
 
     lda zp_msg_flags
-    ora turn_scene_dirty
-    ora turn_rest_disturbed
+    ora zp_disturb
     cmp #1                      // Any stop event: carry set = stop
 !done:
     rts
@@ -2339,6 +2342,8 @@ run_continue_step:
 run_step:
     // Save positions before move for dirty render
     jsr main_loop_snapshot_view
+    lda #0
+    sta zp_disturb              // Discard stale disturbance before this run step.
 
     // Convert running direction to movement command
     ldx zp_run_dir
@@ -2417,7 +2422,7 @@ run_step:
 !run_active_post:
     jsr status_draw
     lda zp_msg_flags
-    ora turn_scene_dirty
+    ora zp_disturb
     beq !run_keep_running+
     jsr run_stop_running
 !run_keep_running:

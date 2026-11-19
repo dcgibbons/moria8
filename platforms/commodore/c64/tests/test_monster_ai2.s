@@ -1,9 +1,9 @@
 // test_monster_ai2.s — Phase 5 Wave 5.4b runtime tests for CD_INVISIBLE,
 // CM2_PHASE, CM2_EATS_OTHER, and CM2_PICKS_UP in core/monster.s & monster_ai.s.
 //
-// Results at $0400-$040f (16 tests): $01 = pass, $00 = fail per test.
+// Results at $0400-$0417 (24 tests): $01 = pass, $00 = fail per test.
 
-.const TEST_COUNT = 16
+.const TEST_COUNT = 24
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -27,6 +27,7 @@ test_finish:
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 #define MONSTER_AI_PRODUCTION_REST_STATE
+#define MONSTER_MAGIC_PRODUCTION_EXTENDED
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$FFF9]
 .segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
@@ -182,8 +183,13 @@ reset_box:
     jsr monster_init_table
     jsr item_init_floor
     jsr item_init_inventory
+    jsr msg_clear
     lda #0
     sta door_state_count
+    sta trap_count
+    sta zp_disturb
+    sta zp_dirty_count
+    sta mat_scene_dirty
     sta zp_eff_blind
     sta zp_eff_speed
     sta zp_eff_see_inv
@@ -383,6 +389,28 @@ patch_glyph_hold:
     lda #<rng_word_max
     sta rng_range_word + 1
     lda #>rng_word_max
+    sta rng_range_word + 2
+    rts
+
+// rng_word_zero — Force rng_range_word to return 0 (guaranteed door burst)
+rng_word_zero:
+    lda #0
+    sta zp_temp2
+    sta zp_temp3
+    rts
+
+patch_rng_word_zero:
+    ldx #2
+!prwz_save:
+    lda rng_range_word,x
+    sta tai_rng_word_orig,x
+    dex
+    bpl !prwz_save-
+    lda #$4c
+    sta rng_range_word
+    lda #<rng_word_zero
+    sta rng_range_word + 1
+    lda #>rng_word_zero
     sta rng_range_word + 2
     rts
 
@@ -1426,6 +1454,444 @@ test_start:
     lda #$01
     sta tc_results + 15
 !t15_done:
+
+    // ----------------------------------------------------------
+    // Test 16: muvo_apply_visible MF_VISIBLE 0->1 increments zp_disturb;
+    // 1->1 stays quiet; CD_INVISIBLE without see-invis stays quiet and with
+    // PFLAG_SEE_INVIS disturbs; detected-only behind wall stays quiet.
+    // ----------------------------------------------------------
+    jsr reset_box
+    lda #2
+    sta zp_light_radius
+    ldx #12
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake             // starts MF_VISIBLE == 0
+    lda #0
+    sta zp_disturb
+    jsr monster_update_visibility_all
+    lda zp_disturb
+    cmp #1                      // 0 -> 1 sighting disturbs
+    beq !+
+    jmp !t16_done+
+!:  // Second pass: 1 -> 1 already visible stays quiet
+    lda #0
+    sta zp_disturb
+    jsr monster_update_visibility_all
+    lda zp_disturb
+    beq !+
+    jmp !t16_done+
+!:  // CD_INVISIBLE without see-invis: stays unseen, no disturb
+    jsr reset_box
+    lda #CD_INVISIBLE
+    sta cr_cdefense + T_M1
+    lda #2
+    sta zp_light_radius
+    ldx #11
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    lda #0
+    sta zp_disturb
+    jsr monster_update_visibility_all
+    lda zp_disturb
+    beq !+
+    jmp !t16_done+
+!:  // Grant PFLAG_SEE_INVIS: 0 -> 1 disturbs
+    lda #PFLAG_SEE_INVIS
+    sta player_pflags
+    jsr monster_update_visibility_all
+    lda zp_disturb
+    cmp #1
+    beq !+
+    jmp !t16_done+
+!:  // Detected-only behind wall: MF_DETECTED set, MF_VISIBLE == 0, no disturb
+    jsr reset_box
+    ldx #11
+    ldy #10
+    lda #(TILE_WALL_H | FLAG_LIT | FLAG_VISITED)
+    jsr set_tile
+    ldx #13
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    lda #5
+    sta eff_detect_timer
+    lda #0
+    sta zp_disturb
+    jsr monster_update_visibility_all
+    lda zp_disturb
+    bne !t16_done+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    cmp #MF_DETECTED
+    bne !t16_done+
+    lda #$01
+    sta tc_results + 16
+!t16_done:
+
+    // ----------------------------------------------------------
+    // Test 17: Visible hostile local-radius move (<= zp_light_radius + 1, so
+    // mat_scene_dirty / turn_scene_dirty == 0) STILL disturbs via zp_disturb;
+    // unseen hostile move (MF_VISIBLE == 0, even with MF_DETECTED) stays quiet.
+    // ----------------------------------------------------------
+    jsr reset_box
+    lda #2
+    sta zp_light_radius         // local radius = 3
+    ldx #13
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #(MF_AWAKE | MF_VISIBLE)
+    sta (zp_ptr0),y
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick         // (13,10) -> (12,10), both <= local radius 3
+    cmp #0                      // mat_scene_dirty == 0 (local move)
+    bne !t17_done+
+    lda zp_disturb
+    beq !t17_done+
+    // Unseen hostile mover (MF_DETECTED only, MF_VISIBLE == 0): quiet
+    jsr reset_box
+    lda #1
+    sta zp_light_radius
+    ldx #15
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #(MF_AWAKE | MF_DETECTED)
+    sta (zp_ptr0),y
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick
+    lda zp_disturb
+    bne !t17_done+
+    lda #$01
+    sta tc_results + 17
+!t17_done:
+
+    // ----------------------------------------------------------
+    // Test 18: Unprovoked visible townie wandering stays quiet (mat_action_dirty
+    // = $81, bit 1 clear); provoked visible townie moving disturbs ($83).
+    // ----------------------------------------------------------
+    jsr reset_box
+    lda #0
+    sta zp_player_dlvl
+    ldx #15
+    ldy #10
+    lda #TOWN_CREATURE_BASE
+    jsr spawn_awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #(MF_AWAKE | MF_VISIBLE)
+    sta (zp_ptr0),y
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick
+    lda mat_action_dirty
+    cmp #$81
+    bne !t18_done+
+    lda zp_disturb
+    bne !t18_done+
+    // Now provoke the townie -> hostile move sets bit 1 and disturbs
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #(MF_AWAKE | MF_VISIBLE | MF_PROVOKED)
+    sta (zp_ptr0),y
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick
+    lda mat_action_dirty
+    cmp #$83
+    bne !t18_done+
+    lda zp_disturb
+    beq !t18_done+
+    lda #$01
+    sta tc_results + 18
+!t18_done:
+
+    // ----------------------------------------------------------
+    // Test 19: Sleeping visible monster during auto-rest (MON-005): stays
+    // asleep across monster_ai_tick + monster_update_visibility_all and
+    // leaves zp_disturb == 0.
+    // ----------------------------------------------------------
+    jsr reset_box
+    lda #1
+    sta auto_rest_active
+    lda #2
+    sta zp_light_radius
+    ldx #12
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_VISIBLE             // Visible but asleep (!MF_AWAKE)
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    lda #50
+    sta (zp_ptr0),y
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick
+    jsr monster_update_visibility_all
+    lda zp_disturb
+    bne !t19_done+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !t19_done+
+    lda #$01
+    sta tc_results + 19
+!t19_done:
+
+    // ----------------------------------------------------------
+    // Test 20: Door burst (!mts_bash and !mts_stuck) increments zp_disturb
+    // even for an unseen monster (MF_VISIBLE == 0); plain closed door open
+    // (mts_open_plain) by an unseen opener leaves zp_disturb == 0 in AI.
+    // ----------------------------------------------------------
+    // Part A: !mts_bash (non-opener) bursts closed door
+    jsr reset_box
+    ldx #14
+    ldy #9
+    lda #TILE_WALL_H
+    jsr set_tile
+    ldx #14
+    ldy #11
+    lda #TILE_WALL_H
+    jsr set_tile
+    ldx #14
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    jsr set_tile
+    ldx #15
+    ldy #10
+    lda #T_M1                   // cr_aaf = 20 (non-opener)
+    jsr spawn_awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #100
+    sta (zp_ptr0),y
+    jsr patch_rng_word_zero
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick
+    jsr restore_glyph_rng
+    ldx #14
+    ldy #10
+    jsr get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    beq !+
+    jmp !t20_done+
+!:  lda zp_disturb
+    bne !+
+    jmp !t20_done+
+!:  // Part B: !mts_stuck (door-capable opener) bursts stuck door
+    jsr reset_box
+    lda #(20 | CD_OPEN_DOOR_BIT)
+    sta cr_aaf + T_M1
+    ldx #14
+    ldy #9
+    lda #TILE_WALL_H
+    jsr set_tile
+    ldx #14
+    ldy #11
+    lda #TILE_WALL_H
+    jsr set_tile
+    ldx #14
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    jsr set_tile
+    lda #14
+    sta df_target_x
+    lda #10
+    sta df_target_y
+    lda #$85                    // stuck door (sign bit set)
+    jsr door_state_set_at
+    ldx #15
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #100
+    sta (zp_ptr0),y
+    jsr patch_rng_word_zero
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick
+    jsr restore_glyph_rng
+    ldx #14
+    ldy #10
+    jsr get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !t20_done+
+    lda zp_disturb
+    beq !t20_done+
+    // Part C: plain closed door open by unseen opener leaves zp_disturb == 0
+    jsr reset_box
+    lda #(20 | CD_OPEN_DOOR_BIT)
+    sta cr_aaf + T_M1
+    ldx #14
+    ldy #9
+    lda #TILE_WALL_H
+    jsr set_tile
+    ldx #14
+    ldy #11
+    lda #TILE_WALL_H
+    jsr set_tile
+    ldx #14
+    ldy #10
+    lda #TILE_DOOR_CLOSED
+    jsr set_tile
+    ldx #15
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    lda #0
+    sta zp_disturb
+    jsr monster_ai_tick
+    ldx #14
+    ldy #10
+    jsr get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    bne !t20_done+
+    lda zp_disturb
+    bne !t20_done+
+    lda #$01
+    sta tc_results + 20
+!t20_done:
+
+    // ----------------------------------------------------------
+    // Test 21: eff_teleport_apply_target moves player, clears PLF_SEARCHING,
+    // sets vis_room_revealed, and increments zp_disturb.
+    // ----------------------------------------------------------
+    jsr reset_box
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #0
+    sta vis_room_revealed
+    sta zp_disturb
+    lda #20
+    ldy #12
+    jsr eff_teleport_apply_target
+    lda zp_player_x
+    cmp #20
+    bne !t21_done+
+    lda zp_player_y
+    cmp #12
+    bne !t21_done+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne !t21_done+
+    lda vis_room_revealed
+    beq !t21_done+
+    lda zp_disturb
+    cmp #1
+    bne !t21_done+
+    lda #$01
+    sta tc_results + 21
+!t21_done:
+
+    // ----------------------------------------------------------
+    // Test 22: search_scan_adjacent_silent (!ds_found_common) increments
+    // zp_disturb on secret door discovery and trap discovery, and stays quiet
+    // when nothing is found.
+    // ----------------------------------------------------------
+    jsr reset_box
+    lda #0
+    sta zp_disturb
+    lda #100
+    jsr search_scan_adjacent_silent
+    bcs !t22_done+
+    lda zp_disturb
+    bne !t22_done+
+    // Secret door at (11,10)
+    ldx #11
+    ldy #10
+    lda #TILE_SECRET
+    jsr set_tile
+    lda #100
+    jsr search_scan_adjacent_silent
+    bcc !t22_done+
+    lda zp_disturb
+    cmp #1
+    bne !t22_done+
+    // Hidden trap at (9,10)
+    jsr msg_clear
+    lda #0
+    sta zp_disturb
+    lda #1
+    sta trap_count
+    lda #9
+    sta trap_x
+    lda #10
+    sta trap_y
+    lda #0
+    sta trap_type
+    lda #100
+    jsr search_scan_adjacent_silent
+    bcc !t22_done+
+    lda zp_disturb
+    cmp #1
+    bne !t22_done+
+    lda #$01
+    sta tc_results + 22
+!t22_done:
+
+    // ----------------------------------------------------------
+    // Test 23: Visible caster casting silent MSF2_BLINK sets mat_action_dirty
+    // bit 1 ($03) and increments zp_disturb without printing a message.
+    // ----------------------------------------------------------
+    jsr reset_box
+    lda #1
+    sta cr_spell_chance + T_M1  // 1-in-1 cast frequency (always casts)
+    lda #0
+    sta cr_spell_flags + T_M1
+    lda #MSF2_BLINK
+    sta cr_spell_flags2 + T_M1
+    ldx #13
+    ldy #10
+    lda #T_M1
+    jsr spawn_awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #(MF_AWAKE | MF_VISIBLE)
+    sta (zp_ptr0),y
+    lda #0
+    sta zp_disturb
+    sta zp_msg_flags
+    jsr monster_ai_tick
+    lda mat_action_dirty
+    cmp #$03
+    bne !t23_done+
+    lda zp_msg_flags
+    bne !t23_done+              // Blink is silent (no message)
+    lda zp_disturb
+    beq !t23_done+              // Still disturbs via visible hostile spell bit 1
+    lda #$01
+    sta tc_results + 23
+!t23_done:
 
     jmp test_finish
 

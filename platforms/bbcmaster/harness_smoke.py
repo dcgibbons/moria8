@@ -265,6 +265,8 @@ local CLASS_PROPS_ADDR = 0x{syms.get("class_properties", 0):04X}
 local PL_RACE = {core_const("player.s", "PL_RACE")}
 local PL_CLASS = {core_const("player.s", "PL_CLASS")}
 local PL_MHP_LO = {core_const("player.s", "PL_MHP_LO")}
+local PL_FLAGS = {core_const("player.s", "PL_FLAGS")}
+local PLF_RESTING = {core_const("player.s", "PLF_RESTING")}
 local RACE_PROP_SIZE = {core_const("tables.s", "RACE_PROP_SIZE")}
 local CLASS_PROP_SIZE = {core_const("tables.s", "CLASS_PROP_SIZE")}
 local IGGY_ID = {catalog_lore.const("CATALOG_IGGY_ID")}
@@ -755,6 +757,7 @@ function run()
     -- swapping OVL_HELP -> OVL_CHEST -> OVL_HELP), and S2a+S2b (acid trap at X=1
     -- preserving X across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
     write_play_u8(AUTO_REST_ACTIVE_ADDR, 0)
+    prog:write_u8(PLAYER_DATA_ADDR + PL_FLAGS, prog:read_u8(PLAYER_DATA_ADDR + PL_FLAGS) & (~PLF_RESTING & 0xFF))
     prog:write_u8(PLAYER_HP_ADDR, 60)
     wait_frames(10)
     local px, py = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)

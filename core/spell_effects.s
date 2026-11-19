@@ -203,6 +203,7 @@ eff_teleport_apply_target:
     // Move player
     sta zp_player_x
     sty zp_player_y
+    inc zp_disturb
     jsr player_search_mode_off
 
     // Trigger full visibility update and redraw

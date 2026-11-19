@@ -1460,11 +1460,13 @@ muvo_apply_visible:
     ora zp_eff_invis
     beq !muvo_vis_done+
 !muvo_can_see:
-    // A monster coming into sight ends search mode (VMS creature.inc
-    // update_mon search_off; Umoria updateMon playerDisturb(1, 0)).
+    // A monster coming into sight ends search mode and disturbs repeat
+    // commands (VMS creature.inc update_mon search_off; Umoria updateMon
+    // playerDisturb(1, 0)).
     lda muv_old_flags
     and #MF_VISIBLE
     bne !muvo_seen_before+
+    inc zp_disturb
     jsr player_search_mode_off
 !muvo_seen_before:
     lda muv_new_flags
