@@ -9,8 +9,8 @@ from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER  # noqa: E402
 
 SLOTS = 34
 EGO_DEFENDER = 6
-# Header (8) + player_data (111) + player_background (160) + ZP_STATE (32) + eff_fear_timer (1) + ZP_RNG (4)
-INV_OFFSET = 8 + 111 + 160 + 32 + 1 + 4
+# Header (8) + player_data (114) + player_background (160) + ZP_STATE (32) + eff_fear_timer (1) + ZP_RNG (4)
+INV_OFFSET = 8 + 114 + 160 + 32 + 1 + 4
 EXPECTED_CLOAK = [FI_EMPTY, 0, 0, 0, 0, 0, 0, 0]
 EXPECTED_SECONDARY = [ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | EGO_DEFENDER]
 

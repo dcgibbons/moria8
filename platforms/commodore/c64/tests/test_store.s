@@ -152,6 +152,7 @@ cmb_term_and_print:
 combat_append_char:
 combat_append_decimal:
 combat_check_levelup:
+combat_check_leveldown:
 combat_apply_damage_16:
 combat_kill_message:
 combat_award_xp:

@@ -487,7 +487,7 @@ plus4_storage_marker_present:
 #import "sound.s"
 #import "../../../core/huffman.s"
 #import "../../../core/dungeon_data.s"
-// The jam command handler parks in the chest overlay (resident budget).
+// The jam command handler parks in ItemActionsOverlay (resident budget).
 #define CMD_JAM_EXTERNAL
 #define CMD_JAM_SEGMENT_CUSTOM
 .macro CmdJamSegment() {
@@ -2615,10 +2615,12 @@ wizard_prompt_clear_digits:
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
+    ldx #3
+!wpcd_clr:
     lda #$20
     jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    dex
+    bne !wpcd_clr-
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col

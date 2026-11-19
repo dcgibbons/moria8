@@ -848,6 +848,7 @@ tc_recall_sub: .fill 4, $ff
 
 trcl_reset_slot0:
     lda #0
+    sta zp_game_flags
     sta recall_found_type
     sta cr_mflags
     sta cr_atk0_type
@@ -1052,8 +1053,42 @@ test_recall_279_suite:
     rts
 
 !r3_start:
-    // --- R3: Extended caster recall (cr_spell_flags2 & $1f, MS_HOLD $80) ---
+    // --- R3: VMS spell recall: Spl: None when recall_spells == 0 & !wizard,
+    //         Spl: Yes once recall_spells != 0 or in Wizard Mode ---
     jsr trcl_reset_slot0
+    lda #MSF2_BLINK
+    sta cr_spell_flags2
+    lda #4
+    sta cr_spell_chance
+    jsr ui_recall_display
+
+    lda #<trcl_exp_spl_none
+    sta zp_ptr0
+    lda #>trcl_exp_spl_none
+    sta zp_ptr0_hi
+    lda #8
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r3_fail_jmp+
+
+    // Observed spell (recall_spells = 1) -> Spl: Yes
+    lda #1
+    sta recall_spells
+    jsr ui_recall_display
+
+    lda #<trcl_exp_spl_yes
+    sta zp_ptr0
+    lda #>trcl_exp_spl_yes
+    sta zp_ptr0_hi
+    lda #8
+    ldx #2
+    jsr trcl_assert_at
+    bcc !r3_fail_jmp+
+
+    // Wizard Mode reveals static caster flags even with recall_spells == 0
+    jsr trcl_reset_slot0
+    lda #GAME_FLAG_WIZARD
+    sta zp_game_flags
     lda #MSF2_BLINK
     sta cr_spell_flags2
     lda #4
@@ -1067,10 +1102,15 @@ test_recall_279_suite:
     lda #8
     ldx #2
     jsr trcl_assert_at
-    bcc !r3_fail+
+    bcs !r3_cm2+
+!r3_fail_jmp:
+    jmp !r3_fail+
 
+!r3_cm2:
     // Movement-only CM2_* bits in cr_spell_flags2 ($E0) must NOT show Spl: Yes
     jsr trcl_reset_slot0
+    lda #GAME_FLAG_WIZARD
+    sta zp_game_flags
     lda #CM2_PHASE | CM2_EATS_OTHER | CM2_PICKS_UP
     sta cr_spell_flags2
     lda #4
@@ -1086,8 +1126,10 @@ test_recall_279_suite:
     jsr trcl_assert_at
     bcc !r3_fail+
 
-    // MS_HOLD ($80) with non-zero frequency -> Spl: Yes; with freq 0 -> Spl: None
+    // MS_HOLD ($80) in Wizard Mode: non-zero frequency -> Spl: Yes; freq 0 -> Spl: None
     jsr trcl_reset_slot0
+    lda #GAME_FLAG_WIZARD
+    sta zp_game_flags
     lda #MS_HOLD | 6
     sta cr_spell_chance
     jsr ui_recall_display
@@ -1102,6 +1144,8 @@ test_recall_279_suite:
     bcc !r3_fail+
 
     jsr trcl_reset_slot0
+    lda #GAME_FLAG_WIZARD
+    sta zp_game_flags
     lda #MS_HOLD
     sta cr_spell_chance
     jsr ui_recall_display

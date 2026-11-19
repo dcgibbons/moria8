@@ -9,8 +9,8 @@ per scenario (AGENTS.md Rule 8) with -nothrottle -seconds_to_run 120 emulated
 time.
 
 Suite:
-  15 behavioral scenarios on a800xl (64 KB disk-overlay baseline)
-  + 3 dedicated 130XE cache/SIO coexistence scenarios on a130xe.
+  16 behavioral scenarios on a800xl (64 KB disk-overlay baseline)
+  + 5 dedicated 130XE cache/SIO coexistence scenarios on a130xe (21 total).
 """
 
 from __future__ import annotations

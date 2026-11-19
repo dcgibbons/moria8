@@ -323,6 +323,13 @@ local function write_map_u8(x, y, val)
     prog:write_u8(0xFE30, rom)
 end
 
+local function write_play_u8(addr, val)
+    local rom = prog:read_u8(0x00F4)
+    prog:write_u8(0xFE30, 0x04)
+    prog:write_u8(addr, val)
+    prog:write_u8(0xFE30, rom)
+end
+
 -- Removes every live monster (its map square's monster bit too), so nothing
 -- on the level can see, disturb or reach the character.
 local function clear_monsters()
@@ -747,7 +754,7 @@ function run()
     -- Wave 5.2 cold evictions: S4 ('?' drop in OVL_HELP), S3 (locked door pick
     -- swapping OVL_HELP -> OVL_CHEST -> OVL_HELP), and S2a+S2b (acid trap at X=1
     -- preserving X across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
-    prog:write_u8(AUTO_REST_ACTIVE_ADDR, 0)
+    write_play_u8(AUTO_REST_ACTIVE_ADDR, 0)
     prog:write_u8(PLAYER_HP_ADDR, 60)
     wait_frames(10)
     local px, py = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)
@@ -1126,6 +1133,7 @@ function run()
     -- death overlay's router runs them in OVL.SPELL through
     -- irs_re_compact_call. Aimed at nothing, each takes its turn (a charge
     -- spent) and play goes on.
+    clear_monsters()
     for _, w in ipairs({
         {ITEM_WAND_OF_FIRE_BOLTS, ITEM_SLOT_WAND_OF_FIRE_BOLTS, ITEM_PAGE_WAND_OF_FIRE_BOLTS},
         {ITEM_WAND_OF_DRAIN_LIFE, ITEM_SLOT_WAND_OF_DRAIN_LIFE, ITEM_PAGE_WAND_OF_DRAIN_LIFE},
@@ -1139,8 +1147,15 @@ function run()
         send_key(0x41) -- 'A'
         assert_line("aim_direction_" .. id, wait_screen("Direction?", 80))
         send_key(0x4C) -- 'L'
-        wait_frames(60)
+        for _ = 1, 400 * DFS_SLACK do
+            if screen_has("-more-") or (in_town() and prog:read_u8(TURN_ADDR) ~= turn_w) then break end
+            emu.wait(1/60)
+        end
         drain_more(4)
+        for _ = 1, 400 * DFS_SLACK do
+            if in_town() and prog:read_u8(TURN_ADDR) ~= turn_w then break end
+            if screen_has("-more-") then drain_more(2) else emu.wait(1/60) end
+        end
         assert_line("wand_returns_" .. id, in_town() and prog:read_u8(TURN_ADDR) ~= turn_w
             and inv_field(0, 2) == 4)
     end

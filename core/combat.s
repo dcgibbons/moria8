@@ -1104,27 +1104,13 @@ ccl_no_short:
     sta zp_temp1                    // excess_mid
     lda player_data + PL_XP_2
     sbc ccl_adj_2
-    sta zp_temp2                    // excess_hi
-    lda player_data + PL_XP_FRAC_LO
-    sta zp_temp3                    // excess fraction lo
-    lda player_data + PL_XP_FRAC_HI
-    sta zp_temp4                    // excess fraction hi
-    lda zp_temp2
     lsr
     sta zp_temp2
-    lda zp_temp1
-    ror
-    sta zp_temp1
-    lda zp_temp0
-    ror
-    sta zp_temp0
-    lda zp_temp4
-    ror
-    sta zp_temp4
-    lda zp_temp3
-    ror
-    sta zp_temp3
-    lda zp_temp0                   // new XP = threshold + halved excess
+    ror zp_temp1
+    ror zp_temp0
+    ror player_data + PL_XP_FRAC_HI
+    ror player_data + PL_XP_FRAC_LO
+    lda zp_temp0                    // new XP = threshold + halved excess
     clc
     adc ccl_adj_0
     sta player_data + PL_XP_0
@@ -1134,15 +1120,44 @@ ccl_no_short:
     lda zp_temp2
     adc ccl_adj_2
     sta player_data + PL_XP_2
-    lda zp_temp3
-    sta player_data + PL_XP_FRAC_LO
-    lda zp_temp4
-    sta player_data + PL_XP_FRAC_HI
 
     jmp !ccl_loop-
 
+.label combat_sync_max_xp = player_sync_max_xp
 ccl_no:
+    jmp player_sync_max_xp
+
+// combat_check_leveldown — Drop player level(s) while PL_XP < level threshold,
+// recalculating combat, max/clamped HP, and mana when at least one level drops.
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
+combat_check_leveldown:
+    lda zp_player_lvl
+    cmp #2
+    bcc !ccld_done+
+    dec zp_player_lvl
+    jsr combat_compute_level_threshold
+    lda player_data + PL_XP_0
+    cmp ccl_adj_0
+    lda player_data + PL_XP_1
+    sbc ccl_adj_1
+    lda player_data + PL_XP_2
+    sbc ccl_adj_2
+    bcc !ccld_drop+
+    inc zp_player_lvl
+!ccld_done:
     rts
+!ccld_drop:
+    lda zp_player_lvl
+    sta player_data + PL_LEVEL
+    jsr player_calc_combat
+    jsr player_calc_hp
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    lda #1
+    sta levelup_magic_pending
+#else
+    jsr magic_recalc_mana
+#endif
+    jmp combat_check_leveldown
 
 // combat_apply_levelup — Apply one real level-up event
 // Shared by normal XP gain and Wizard Mode. Performs the actual level

@@ -49,6 +49,7 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+status_mark_dirty:
 status_draw:
     rts
 #import "../../../../core/ui_help_clear.s"

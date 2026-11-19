@@ -179,6 +179,7 @@ tramp_ego_append_suffix:
 pm_consume_mana:
 magic_recalc_mana:
 magic_check_new_spells:
+status_mark_dirty:
 status_draw:
     rts
 

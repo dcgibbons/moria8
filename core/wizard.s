@@ -349,19 +349,19 @@ cmd_wizard_entry:
 wizard_prompt_clear_digits:
     lda #0
     sta wizard_num_digits
-    lda #5
-    sta zp_cursor_row
-    lda wizard_prompt_input_col
-    sta zp_cursor_col
-    lda #$20
-    jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    jsr !wpcd_pos+
+    jsr !wpcd_spc+
+    jsr !wpcd_spc+
+    jsr !wpcd_spc+
+!wpcd_pos:
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
     rts
+!wpcd_spc:
+    lda #$20
+    jmp hal_screen_put_char
 
 wizard_prompt_bad_value:
     lda #<wizard_bad_value_str
@@ -454,6 +454,7 @@ wizard_cmd_gain_level:
     lda #0
     sta player_data + PL_XP_FRAC_LO
     sta player_data + PL_XP_FRAC_HI
+    jsr player_sync_max_xp
 !wiz_do_level:
     jsr wizard_restore_gameplay_view
     jsr combat_apply_levelup

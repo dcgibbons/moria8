@@ -98,7 +98,7 @@ shadow and `beeb_acccon_shadow` in platform ZP):
      and `LYNNE` bit `X`), unwinds `SP` to `beeb_mos_saved_sp`, and returns `SEC`
      to the wrapper, which then exits cleanly through `ExitMos` (`ROMSEL = $04`,
      `restore_zp`).
-5. **Separate Save Disk Enforcement & In-Place Update (`OSFIND A=$C0`) for Pre-Allocated 64-Sector DFS Save Slots:**
+5. **Separate Save Disk Enforcement & In-Place Update (`OSFIND A=$C0`) for Pre-Allocated 68-Sector DFS Save Slots:**
    Saves are **strictly forbidden on the Program Disk** (`build/moria8-bbcmaster.ssd`
    never carries `MORIAID`, `HISCORE`, or `SAVE0`..`SAVE3`). Whenever a save,
    load, or high-score write targets `save_device`, `disk_require_save_media`,
@@ -115,7 +115,7 @@ shadow and `beeb_acccon_shadow` in platform ZP):
      media) initializes a Save Disk on `save_device` (`:0`..`:3`) with `MORIAID`
      (`"M8SAVE"`), and `hal_storage_open` pre-allocates a 1-sector (`256` B,
      `$0100`) `HISCORE` file and contiguous 68-sector (`17,408` B, `$4400`) Save
-     Format V2 (`SAVE_VERSION = $22`, `17,161` B stream) slot files (`SAVE0`..`SAVE3`)
+     Format V2 (`SAVE_VERSION = $22`, `17,164` B stream) slot files (`SAVE0`..`SAVE3`)
      via `OSFILE A=$07` on first write.
    * When opening an existing save slot for writing, `save_stream.s` opens it
      with **`OSFIND A=$C0` (open for random-access read/write update)** and
@@ -476,7 +476,7 @@ Unresolved uncertainty and risk:
 - **SWR Banks 6 & 7 (`256/256` Pages Across Banks 4–7):**
   - **Bank 6 (`64/64p`):** `BeebAuxData` (`19p` `$8000-$92FF`, `4,824 / 4,864 B`, **`40 B` free**), `BEEB_ICAT_B6` (`2p` `$9300-$94FF`, `512 B` preloaded `ITEMCAT` header/index), `BeebCatalog` (`37p` `$9500-$B9FF`, `9,239 / 9,472 B`, **`233 B` free**), and `cache.ovl.ui` (`6p` `$BA00-$BFFF`, `1,467 / 1,536 B`, **`69 B` free**).
   - **Bank 7 (`64/64p`):** `cache.ovl.spell` (`21p` `$8000-$94FF`, `5,270 / 5,376 B`, **`106 B` free**), `cache.ovl.items` (`23p` `$9500-$ABFF`, `5,721 / 5,888 B`, **`167 B` free**), `cache.ovl.gen` (`16p` `$AC00-$BBFF`, `3,922 / 4,096 B`, **`174 B` free**), and `BEEB_ICAT_CACHE` (`4p` `$BC00-$BFFF`, `1,024 B` 4-sector LRU cache for `ITEMCAT`).
-- **Shipping `.ssd` (`build/moria8-bbcmaster.ssd`):** `16 / 31` DFS catalog entries (adds `ITEMCAT` `7,573 B`), `467 / 800` sectors used (**`333` free**). Save Disk slots use `68` sectors (`17,408 B` capacity) for the `17,161 B` V2 save stream (`SAVE_VERSION = $20`).
+- **Shipping `.ssd` (`build/moria8-bbcmaster.ssd`):** `16 / 31` DFS catalog entries (adds `ITEMCAT` `7,478 B` in current 361-item catalog; `7,573 B` at Phase 4), `467 / 800` sectors used (**`333` free**). Save Disk slots use `68` sectors (`17,408 B` capacity) for the `17,164 B` V2 save stream (`SAVE_VERSION = $22`; `17,161 B` / `$20` at Phase 4).
 
 
 ## Overlay Cache Leaves `zp_temp0`/`zp_temp1` to the Caller (2026-11-16)

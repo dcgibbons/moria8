@@ -82,6 +82,8 @@ combat_append_monster_name:
 cmb_term_and_print:
 combat_msg_monster_in_way:
 combat_compute_level_threshold:
+combat_check_levelup:
+combat_check_leveldown:
 ccl_div_24x8:
 inv_remove_item:
 inv_consume_one:

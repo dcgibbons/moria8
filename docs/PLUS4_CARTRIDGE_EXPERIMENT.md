@@ -4,7 +4,7 @@
 
 `build/moria8-plus4.crt` packages Moria8 for the **Commodore Plus/4** as a read-only **256 KB `c264 magic cart`** cartridge (CRT v2.0 `$0200`, `PLUS4 CARTRIDGE `, Hardware ID `1`, `16 × 16 KB` C1LO ROM banks at `$8000-$BFFF`; raw binary `build/plus4-cart/moria8-plus4.bin` for `xplus4 -cartmagic`, manifest `build/plus4-cart/moria8-plus4.json`, diagnostic driver `build/plus4-cart/catalog-test.prg`).
 
-- **No flash/cartridge saves**: Save files, loads, and high scores remain on IEC 1541 disk images (Devices `8..11`), sharing `SAVE_VERSION = $0A` bidirectionally with `build/moria8-plus4.d64`.
+- **No flash/cartridge saves**: Save files, loads, and high scores remain on IEC 1541 disk images (Devices `8..11`), sharing `SAVE_VERSION = $22` (Save Format V2) bidirectionally with `build/moria8-plus4.d64`.
 - **Zero disk-build impact**: Building with `-define PLUS4_CARTRIDGE` outputs to isolated `build/plus4-cart/`; `build/plus4/moria4.prg` and `build/moria8-plus4.d64` remain 100% byte-identical.
 - **Standalone legal viewing (Rule 7)**: `data/LICENSE` and `data/SOURCE-OFFER` are embedded as NUL-padded ROM assets served through Title `A` (`About`) and Help `L` with zero drives/disks attached.
 
@@ -83,7 +83,7 @@
 ## Behavioral Change Protocol Record
 
 - **Problem / Success**: Deliver a `256 KB` `c264 magic cart` `.crt` (and `-cartmagic` `.bin`) cold-booting on Plus/4 PAL/NTSC with zero attached disks, full overlay/catalog/legal support, clean Quit/`exit_trampoline` reset, bidirectional `.d64` saves on IEC Drives `8..11`, and 100% byte-identical disk builds.
-- **Authority & Decisions**: Stage 1 Plus/4 cartridge implementation reusing `core/` gameplay, `49`-byte monster catalogs, and `SAVE_VERSION = $0A`; hardware banking empirically verified against `xplus4` (`$FDD2` = C1LO+KERNAL vs `$FDD1` = 3-plus-1 Function ROM; `$FC4E` autostart before `IOINIT`/`RAMTAS`/`RESTOR`/`CINT`).
+- **Authority & Decisions**: Stage 1 Plus/4 cartridge implementation reusing `core/` gameplay, `49`-byte monster catalogs, and `SAVE_VERSION = $0A` (since upgraded to Save Format V2 `SAVE_VERSION = $22`); hardware banking empirically verified against `xplus4` (`$FDD2` = C1LO+KERNAL vs `$FDD1` = 3-plus-1 Function ROM; `$FC4E` autostart before `IOINIT`/`RAMTAS`/`RESTOR`/`CINT`).
 - **Ownership & Ranges**: All Plus/4 cartridge assembly and harnesses live under `platforms/commodore/plus4/` (`cartridge_{contract,boot,copy,catalog,test_catalog}.s`, `legal_stream.s`, `test_cartridge{,_persistence}.py`), `tools/{make,check}_plus4_magic.py`, and `#if PLUS4_CARTRIDGE` HAL policy/boot branches in `platforms/commodore/plus4/{main,config,legal,monster_catalog4}.s` and `hal/{storage,lifecycle}_policy.s`. Disk builds (`build/plus4/moria4.prg`, `build/moria8-plus4.d64`) remain untouched.
 - **RNG & Gameplay Arithmetic**: N/A — `cartridge_catalog.s` computes deterministic `id * 49` offsets (`id * 48 + id`) matching `catalog_disk.records()` across all `279` entries; no RNG draws, turn consumption, visibility, or monster AI logic changed.
 - **Contract Rows**:

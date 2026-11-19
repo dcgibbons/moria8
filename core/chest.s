@@ -192,12 +192,10 @@ chest_trigger_traps:
     lda player_sust_mask
     and #SUST_STR
     bne !ctt_str_immune+
-    lda player_data + PL_STR_CUR
-    cmp #4
+    ldy #0
+    jsr player_drain_stat_y
     bcc !ctt_str_immune+
-    jsr decrement_stat
-    sta player_data + PL_STR_CUR
-    sta zp_player_str
+    jsr player_calc_combat
     ldx #HSTR_CHEST_WEAKENED
     jsr huff_print_msg
 !ctt_str_immune:
@@ -301,18 +299,10 @@ chest_trigger_traps:
     rts
 
 // ============================================================
-// chest_award_xp — Add A (0-255) to player XP (24-bit accumulate).
+// chest_award_xp — Add A (0-255) to player XP (24-bit accumulate + PL_MAX_XP).
 // ============================================================
 chest_award_xp:
-    clc
-    adc player_data + PL_XP_0
-    sta player_data + PL_XP_0
-    bcc !cax_done+
-    inc player_data + PL_XP_1
-    bne !cax_done+
-    inc player_data + PL_XP_2
-!cax_done:
-    rts
+    jmp player_award_xp_a
 
 // ============================================================
 // chest_threshold_value — Value-based chest lock/disarm success threshold.

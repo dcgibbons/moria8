@@ -15,4 +15,3 @@ cat_level_playable: // the same, playable creatures only
 cat_undead:         // bit i%8 of byte i/8: creature i has CD_UNDEAD
     .byte $00, $00, $00, $00, $04, $00, $00, $90, $00, $00, $c0, $10, $00, $00, $02, $70, $00, $08, $00, $00, $00, $08, $10, $00, $1a, $20, $02, $20, $49, $30, $07, $21, $0c, $07, $08
 catalog_index_end:
-.label cat_available = cat_undead

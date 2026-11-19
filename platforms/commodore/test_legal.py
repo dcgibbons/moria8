@@ -64,7 +64,7 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                "-8", str(image), "-remotemonitor", "-remotemonitoraddress",
                f"127.0.0.1:{endpoint}"]
     if port == "c128":
-        command.append("-80col")
+        command += ["-80col", "-VDC16KB"]
     elif port == "c64":
         command += ["-autostartprgmode", "1"]
     with (output / "vice.log").open("wb", buffering=0) as log:
@@ -200,9 +200,9 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                 key(" ")
                 until("main_loop")
                 def state():
-                    return (memory(sym["player_data"], 111), memory(0x40, 2),
+                    return (memory(sym["player_data"], 114), memory(0x40, 2),
                             memory(0x1A, 4),
-                            memory(sym["inv_item_id"], 33),
+                            memory(sym["inv_item_id"], 34),
                             memory(0x4000, 13068, "ram01") if port == "c128"
                             else memory(0xC800 if port == "plus4" else 0xC000, 3840))
                 before = state()

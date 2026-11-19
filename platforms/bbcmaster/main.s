@@ -1006,10 +1006,12 @@ wizard_prompt_clear_digits:
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
+    ldx #3
+!wpcd_clr:
     lda #$20
     jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    dex
+    bne !wpcd_clr-
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col
@@ -1040,132 +1042,7 @@ ovl_modal_misc_end:
 #import "../../core/ui_help_cmd_cold.s"
 
 // Relocated spell helpers (EFF_FIND_DOORS_EXTERNAL / EFF_DESTROY_TRAPS_DOORS_EXTERNAL)
-eff_fd_row: .byte 0
-
-eff_find_doors_impl:
-    lda #1
-    sta eff_fd_row
-!efd_row_loop:
-    lda eff_fd_row
-    cmp #MAP_ROWS - 1
-    bcs !efd_done+
-    ldx eff_fd_row
-    jsr map_row_ptr0_x
-    ldy #1
-!efd_col_loop:
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_SECRET
-    bne !efd_col_next+
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_CLOSED
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-!efd_col_next:
-    iny
-    cpy #MAP_COLS - 1
-    bcc !efd_col_loop-
-    inc eff_fd_row
-    jmp !efd_row_loop-
-!efd_done:
-    lda #1
-    sta vis_room_revealed
-    rts
-
-eff_destroy_traps_doors_impl:
-    lda #0
-    sta adj_dir_idx
-!edtd_tile_loop:
-    lda adj_dir_idx
-    cmp #8
-    bcs !edtd_tiles_done+
-    tax
-    jsr df_target_from_dir
-    jsr !edtd_tile_cb+
-    inc adj_dir_idx
-    jmp !edtd_tile_loop-
-!edtd_tiles_done:
-    jsr !edtd_remove_adjacent_traps+
-    lda #1
-    sta vis_room_revealed
-    rts
-
-!edtd_tile_cb:
-    jsr df_target_row_ptr
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    sta zp_temp0
-    cmp #TILE_TRAP
-    bne !edtd_check_door+
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_FLOOR
-    :MapWrite_ptr0_y()
-    rts
-
-!edtd_check_door:
-    lda zp_temp0
-    cmp #TILE_DOOR_CLOSED
-    beq !edtd_open_door+
-    cmp #TILE_SECRET
-    bne !edtd_tile_done+
-
-!edtd_open_door:
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_OPEN
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-    lda df_target_x
-    ldy df_target_y
-    jsr door_state_clear_at
-!edtd_tile_done:
-    rts
-
-!edtd_remove_adjacent_traps:
-    ldx #0
-!edtd_scan:
-    cpx trap_count
-    bcs !edtd_scan_done+
-    lda trap_x,x
-    sec
-    sbc zp_player_x
-    clc
-    adc #1
-    cmp #3
-    bcs !edtd_scan_next+
-    lda trap_y,x
-    sec
-    sbc zp_player_y
-    clc
-    adc #1
-    cmp #3
-    bcs !edtd_scan_next+
-    lda trap_x,x
-    cmp zp_player_x
-    bne !edtd_remove+
-    lda trap_y,x
-    cmp zp_player_y
-    beq !edtd_scan_next+
-
-!edtd_remove:
-    dec trap_count
-    ldy trap_count
-    lda trap_x,y
-    sta trap_x,x
-    lda trap_y,y
-    sta trap_y,x
-    lda trap_type,y
-    sta trap_type,x
-    jmp !edtd_scan-
-
-!edtd_scan_next:
-    inx
-    jmp !edtd_scan-
-
-!edtd_scan_done:
-    rts
+#import "../../core/eff_doors_traps_cold.s"
 
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $a800) + " bytes"
@@ -1199,37 +1076,48 @@ tramp_inv_add_carried:
     ldx #HSTR_UIS_PACK_FULL
     clc
     rts
+
+player_adjust_equipment_stat_play:
+    bcs !paes_store+
+    eor #$ff
+    adc #1                      // carry clear: -p1
+!paes_store:
+    sta stat_work
+    jsr equip_stat_mask_x       // A = 6-bit mask (bit 0=STR..5=CHR), preserves X
+    beq !paes_done+
+    ldy #0
+!paes_bit:
+    lsr
+    bcc !paes_skip+
+    pha
+    lda stat_work
+    jsr player_apply_stat_delta_y
+    cpy #PL_CON_CUR - PL_STR_CUR
+    bne !paes_pop+
+    txa
+    pha
+    jsr player_calc_hp
+    pla
+    tax
+    ldy #PL_CON_CUR - PL_STR_CUR
+!paes_pop:
+    pla
+!paes_skip:
+    beq !paes_done+
+    iny
+    cpy #STAT_COUNT
+    bcc !paes_bit-
+!paes_done:
+    rts
 .segment ItemActionsOverlay
 
 player_adjust_equipment_stat:
-    // As core/player_adjust_equipment_stat.s: the stat by the item
-    // (equip_stat_index, core/player.s), p1 added or taken away.
-    jsr player_adjust_equipment_stat_prepare
-    jsr equip_stat_index
-    bcc !paes_done+
-    jmp player_adjust_equipment_stat_apply   // Y = the stat
-!paes_done:
-    rts
-
-player_adjust_equipment_stat_prepare:
+    // As core/player_adjust_equipment_stat.s: apply/remove p1 across all set
+    // stat bits from equip_stat_mask_x (body in Bank 4 BeebPlaySlot).
     lda inv_p1,x
-    bcs !paes_prepare_store+
-    eor #$ff
-    adc #1                      // carry clear: -p1
-!paes_prepare_store:
-    sta stat_work
-    rts
-
-player_adjust_equipment_stat_apply:
-    lda player_data + PL_STR_CUR,y
-    clc
-    adc stat_work
-    sta player_data + PL_STR_CUR,y
-    sta zp_player_str,y
-    cpy #PL_CON_CUR - PL_STR_CUR
-    bne !paes_apply_done+
-    jmp player_calc_hp
-!paes_apply_done:
+    beq !paes_noop+
+    jmp player_adjust_equipment_stat_play
+!paes_noop:
     rts
 
 #import "../../core/player_item_commands.s"
@@ -1517,6 +1405,32 @@ tramp_roll_ego_type_modal:
 tramp_roll_ego_type_gen:
     ldx current_overlay
 !roll_ego_common:
+    // Pre-filter non-ego categories before swapping uncached floppy overlays
+    // (OVL_CHEST is 18 DFS sectors; potions/scrolls/food/gold/unenchanted
+    // armour return EGO_NONE immediately without touching RNG or Bank 4).
+    tay                         // Y = slot_lo (preserved by item_get_category_a)
+    jsr item_get_category_a     // A = ICAT_*, Z set if ICAT_DIGGING (0), keeps X, Y
+    beq !ego_digging+
+    cmp #ICAT_WEAPON
+    beq !ego_do_swap+
+    cmp #ICAT_CLOAK
+    beq !ego_chk_ac+
+    cmp #ICAT_ARMOR
+    bcc !ego_none+
+    cmp #ICAT_BOOTS + 1
+    bcs !ego_none+
+!ego_chk_ac:
+    lda fi_add_to_ac
+    bne !ego_do_swap+
+!ego_none:
+    lda #EGO_NONE
+    rts
+!ego_digging:
+    lda zp_player_dlvl
+    cmp #10
+    bcc !ego_none-
+!ego_do_swap:
+    tya                         // restore A = slot_lo
     stx ego_restore_ovl+1
     jsr tramp_roll_ego_type
     pha

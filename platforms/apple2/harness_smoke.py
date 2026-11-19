@@ -2380,7 +2380,10 @@ def aux_lc_spike_lua() -> str:
     bounce = 0x02E0
     arg_bank = 0x02F1
     arg_dir = 0x02F3
-    drv_base = 0x7C80
+    # Match snd_upd's low byte inside free Title-Menu play-slot RAM ($8800-$9FFF,
+    # above save_lc_base $8600-$86FF) so patching only igk_call+2 is 100% atomic
+    # and can never dispatch a torn JSR target if emu.wait stops mid-instruction.
+    drv_base = 0x8800 | (snd_upd & 0xFF)
     out_base = 0x8400
     ext_out_base = 0x8500
     save_lc_base = 0x8600
@@ -2441,9 +2444,8 @@ def aux_lc_spike_lua() -> str:
         code.extend((0xA2, addr & 0xFF, 0xA0, (addr >> 8) & 0xFF, 0x20))
         w16(xfer)
 
-    # Restore original jsr target immediately so driver executes once.
-    lda(snd_upd & 0xFF)
-    sta_abs(igk_call + 1)
+    # Restore original jsr target high byte immediately so driver executes once
+    # (low byte at igk_call+1 already equals snd_upd & 0xFF == drv_base & 0xFF).
     lda(snd_upd >> 8)
     sta_abs(igk_call + 2)
 
@@ -2501,7 +2503,7 @@ def aux_lc_spike_lua() -> str:
     code.append(0x4C)
     w16(snd_upd)
 
-    assert drv_base + len(code) <= 0x8000, f"aux_lc_spike driver too large: {len(code)}"
+    assert drv_base + len(code) <= 0xA000, f"aux_lc_spike driver too large: {len(code)}"
     bytes_lua = ", ".join(f"0x{b:02X}" for b in code)
     vec_expected = (
         nmi_rti & 0xFF, nmi_rti >> 8,
@@ -2539,7 +2541,6 @@ for i, b in ipairs(drv) do
 end
 assert_line("lc_pre_altzp_off", (prog:read_u8(0xC016) & 0x80) == 0,
             "RDALTZP unexpectedly active at title")
-prog:write_u8(0x{igk_call + 1:04X}, 0x{drv_base & 0xFF:02X})
 prog:write_u8(0x{igk_call + 2:04X}, 0x{drv_base >> 8:02X})
 
 local done = false

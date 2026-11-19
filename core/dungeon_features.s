@@ -389,16 +389,8 @@ disarm_award_trap_xp:
     ldx df_disarm_trap_idx
     lda trap_type,x
     tax
-    lda player_data + PL_XP_0
-    clc
-    adc trap_disarm_xp,x
-    sta player_data + PL_XP_0
-    bcc !done+
-    inc player_data + PL_XP_1
-    bne !done+
-    inc player_data + PL_XP_2
-!done:
-    rts
+    lda trap_disarm_xp,x
+    jmp player_award_xp_a
 
 #endif
 

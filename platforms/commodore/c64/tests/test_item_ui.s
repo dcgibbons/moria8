@@ -157,6 +157,7 @@ combat_print_winner_message:
 player_disarm_get_effective_chance:
 combat_award_xp:
 combat_check_levelup:
+combat_check_leveldown:
 combat_note_kill:
     rts
 mad_dmg_hi: .byte 0               // the 16-bit damage entry's high byte (monster_attack.s)

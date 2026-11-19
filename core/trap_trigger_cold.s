@@ -153,14 +153,8 @@ trap_do_dart:
     lda #SUST_CON
     and player_sust_mask
     bne !tdd_done+
-    lda player_data + PL_STR_CUR,y
-    cmp #4
+    jsr player_drain_stat_y
     bcc !tdd_done+
-    sty df_found
-    jsr decrement_stat
-    ldy df_found
-    sta player_data + PL_STR_CUR,y
-    sta zp_player_str,y
     cpy #PL_CON_CUR - PL_STR_CUR
     bne !tdd_combat+
     jsr player_calc_hp

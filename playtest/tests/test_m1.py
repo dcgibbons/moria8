@@ -40,7 +40,7 @@ def command_obs(pos=(10, 5), hp=21, mhp=21, sp=0xF2, view=(0, 0), rows=None,
     screen_rows[row] = " " * col + "@"
     screen_rows.update(rows or {})
     screen = screen_bytes(screen_rows)
-    obs = Observation(1, 0x10B9, sp, 0x36, 0x1181, 4, bytes(zp), bytes(111), bytes(table),
+    obs = Observation(1, 0x10B9, sp, 0x36, 0x1181, 4, bytes(zp), bytes(ABI.PL_STRUCT_SIZE), bytes(table),
                       screen, decode_rows(screen), abi=ABI)
     obs.mode, obs.stage = Mode.COMMAND, "command"
     return obs
@@ -4758,21 +4758,24 @@ class TileMemoryTest(unittest.TestCase):
 
 
 class ShiftedStatusTest(unittest.TestCase):
-    """Build queue, 2026-11-17: on a Plus/4 disk game a failed ITEM.CAT read
-    printed its drive command ("B-P 5", a digit, a return) to the screen,
-    which moved the status line from row 21 to row 22. Back at the command
-    prompt (the command loop's return on the stack), the bot read the screen
-    as an unknown prompt and pressed RUN/STOP 83,000 times; a command redraws
-    the screen."""
+    """Build queue, 2026-11-17 (updated H9): on a Plus/4 disk game a failed
+    ITEM.CAT read printed its drive command to the screen, scrolling the status
+    line from row 21 to row 22. Rather than masking corrupted screen geometry
+    as normal Mode.COMMAND, classify() tags status_row_shifted and Auditor
+    files a cls="game" finding immediately."""
 
-    def test_the_command_loop_is_command_mode_with_the_status_a_row_off(self) -> None:
+    def test_the_command_loop_flags_shifted_status_as_a_game_finding(self) -> None:
+        from moria_playtest.auditor import Finding
         from moria_playtest.game import Mode, classify
         from test_game import ABI, COMMAND_RET, obs
         status = "bot                         LV:7  DL:3"
         shifted = obs({0: "Direction?", 1: "You see a Gold (larelar.", 22: status}, ret=COMMAND_RET)
-        self.assertEqual(classify(shifted, ABI, COMMAND_RET), (Mode.COMMAND, "command"))
+        shifted.mode, shifted.stage = classify(shifted, ABI, COMMAND_RET)
+        self.assertEqual((shifted.mode, shifted.stage), (Mode.UNKNOWN, "status_row_shifted"))
+        self.assertEqual(Auditor().check(shifted, None),
+                         [Finding("status_row_shifted", "game", "status line on row 22, expected row 21")])
         elsewhere = obs({0: "Direction?", 22: status}, ret=COMMAND_RET + 3)
-        self.assertNotEqual(classify(elsewhere, ABI, COMMAND_RET)[0], Mode.COMMAND)   # not the command loop
+        self.assertNotEqual(classify(elsewhere, ABI, COMMAND_RET), (Mode.UNKNOWN, "status_row_shifted"))
 
 
 class OscillationTest(unittest.TestCase):
@@ -8690,6 +8693,54 @@ class FightDeviceTest(unittest.TestCase):
         self.assertGreaterEqual(12, ENCHANT_WEAPON_MAX)
         mage = Brain(for_character(GOALS["balrog"], "elf-mage"))
         self.assertFalse(mage.weapon_enchant_wanted(1_184_000))
+
+    def test_holy_avenger_trailing_str_bonus_and_multi_paren_gear_parse_cleanly(self) -> None:
+        """Identified Holy Avenger appends (+str) after (+hit,+dam); GEAR_WEAPON,
+        GEAR_ARMOUR, and JEWEL_NAME must preserve the weapon/armour/jewel kind."""
+        from moria_playtest.brain import BLACK_MARKET, GEAR_ARMOUR, GEAR_WEAPON, WEAPONSMITH
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        obs = command_obs(pos=(5, 5), dlvl=0, clvl=20)
+        # 80-col full suffix, +0/+0 (+p1)-only suffix, 40-col wrapped, and 40-col clipped (+p1)
+        brain.read_weapon(["", " a) Weapon: Long Sword (Holy Avenger) (+2,+3) (+3)"])
+        self.assertEqual(brain.weapon, ("Long Sword (Holy Avenger)", 3))
+        self.assertGreater(brain.melee_score(*brain.weapon, obs),
+                           brain.melee_score("Long Sword", 3, obs))
+        brain.read_weapon(["", " a) Weapon: Long Sword (Holy Avenger) (+4)"])
+        self.assertEqual(brain.weapon, ("Long Sword (Holy Avenger)", 0))
+        self.assertGreater(brain.melee_score(*brain.weapon, obs), 0.0)
+        brain.read_weapon(["", " a) Weapon: Long Sword (Holy Avenger)", "            (+2,+3) (+3)"])
+        self.assertEqual(brain.weapon, ("Long Sword (Holy Avenger)", 3))
+        brain.read_weapon(["", " a) Weapon: Executioner's Sword", "            (Holy Avenger) (+10,+12) (+"])
+        self.assertEqual(brain.weapon, ("Executioner's Sword (Holy Avenger)", 12))
+        self.assertIsNotNone(GEAR_WEAPON.match("Dagger (magik)"))
+        # Never replaces a wielded Holy Avenger with a mundane store sword, and buys HA over mundane
+        brain.weapon = ("Long Sword (Holy Avenger)", 3)
+        brain.at_store = WEAPONSMITH
+        shop_rows = [""] * 25
+        shop_rows[3] = "a) Broad Sword (+0,+0)            255 GP"
+        shop_rows[19] = "Gold: 50000"
+        self.assertIsNone(brain.gear_pick(dataclasses.replace(obs, rows=shop_rows)))
+        brain.weapon = ("Dagger", 0)
+        brain.at_store = BLACK_MARKET
+        shop_rows[3] = "a) Broad Sword (+1,+1)            500 GP"
+        shop_rows[4] = "b) Long Sword (Holy Avenger) (+2,+3) (+3) 12000 GP"
+        self.assertEqual(brain.gear_pick(dataclasses.replace(obs, rows=shop_rows)),
+                         ("b", "Long Sword (Holy Avenger) (+2,+3) (+3)"))
+        # Sibling multi-paren armour & jewels: Crown [ac,+toac] (+p1), Slaying (+h,+d), WOE [-ac] (-p1)
+        crown = GEAR_ARMOUR.match("Golden Crown of Might [0,+2] (+3)")
+        self.assertIsNotNone(crown)
+        self.assertEqual(crown.group(1), "Golden Crown of Might")
+        self.assertEqual(Brain.read_equipment([" d) Head:   Golden Crown of Might [0,+2] (+3)"]),
+                         {"ICAT_HELM": 2})
+        self.assertEqual(brain.jewel_value("Ring of Slaying (+3,+4)"), 60)
+        self.assertEqual(brain.jewel_value("Ring of Slaying (-3,-4)"), -1)
+        self.assertEqual(brain.jewel_value("Ring of Increase Damage (+0,+6)"), 150)
+        self.assertEqual(brain.jewel_value("Ring of Increase To-Hit (+6,+0)"), 48)
+        self.assertEqual(brain.jewel_value("Ring of WOE [-8] (-3)"), -1)
+        brain.jewel_names = {"Ring": "Ring of Increase Damage (+0,+6)", "Ring2": "Ring of Slaying (+3,+4)"}
+        self.assertEqual(brain.jewel_bonus("Increase Damage"), 10)
+        self.assertEqual(brain.jewel_bonus("Increase To-Hit"), 3)
 
     def test_drain_life_is_not_aimed_at_the_undead(self) -> None:
         """VMS drain_life does nothing to the undead (cdefense $0008)."""

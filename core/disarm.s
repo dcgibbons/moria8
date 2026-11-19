@@ -74,15 +74,8 @@ disarm_command:
     :MapWrite_ptr0_y()
     pla
     tax
-    lda player_data + PL_XP_0
-    clc
-    adc trap_disarm_xp,x
-    sta player_data + PL_XP_0
-    bcc !xp_done+
-    inc player_data + PL_XP_1
-    bne !xp_done+
-    inc player_data + PL_XP_2
-!xp_done:
+    lda trap_disarm_xp,x
+    jsr player_award_xp_a
     txa
     cmp #TRAP_HIDDEN_OBJECT
     bne !normal_ok+

@@ -304,6 +304,9 @@ price_add_p1_bonus:
 !pap_done:
     rts
 
+!pap_ring:
+    lda sb_item_p1
+    jsr price_add_signed_stat_100
 !pap_equip:
     lda sb_item_to_hit
     jsr price_add_signed_stat_100
@@ -312,34 +315,17 @@ price_add_p1_bonus:
     lda sb_item_to_ac
     jmp price_add_signed_stat_100
 
-!pap_ring:
-    lda sb_item_to_ac
-    jsr price_add_signed_stat_100
-    lda sb_item_p1
-    jmp price_add_signed_stat_100
-
 !pap_charges:
     lda sb_item_p1
-    beq !pap_done-
-    // Add p1 × 10 to price (max 8×10 = 80, fits in byte)
-    lda sb_item_p1
-    asl                         // ×2
-    asl                         // ×4
-    clc
-    adc sb_item_p1              // ×5
-    asl                         // ×10
-    clc
-    adc sb_price_lo
-    sta sb_price_lo
-    lda #0
-    adc sb_price_hi
-    sta sb_price_hi
-    rts
+    beq !passt_done+
+    ldx #10
+    bne price_add_mul_x
 
 price_add_signed_stat_100:
     beq !passt_done+
     bmi !passt_done+
     ldx #100
+price_add_mul_x:
     jsr math_multiply           // A = lo, zp_math_b = hi
     clc
     adc sb_price_lo

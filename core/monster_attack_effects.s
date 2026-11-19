@@ -279,11 +279,7 @@ mae_lose_stat:
     bcs !mc_done-
 !mls_drain:
     ldy mae_tmp
-    lda player_data + PL_STR_CUR,y
-    jsr decrement_stat
-    ldy mae_tmp
-    sta player_data + PL_STR_CUR,y
-    sta zp_player_str,y
+    jsr player_drain_stat_y
     jsr mae_recalc_hp_combat
     lda mat_atk_type
     pha
@@ -723,26 +719,7 @@ mae_lose_exp:
     sta player_data + PL_XP_FRAC_LO
     sta player_data + PL_XP_FRAC_HI
 !mle_lvl_lp:
-    lda zp_player_lvl
-    cmp #2
-    bcc !mle_done+
-    dec zp_player_lvl
-    jsr combat_compute_level_threshold
-    lda player_data + PL_XP_0
-    cmp ccl_adj_0
-    lda player_data + PL_XP_1
-    sbc ccl_adj_1
-    lda player_data + PL_XP_2
-    sbc ccl_adj_2
-    bcc !mle_drop+
-    inc zp_player_lvl
-    bcs !mle_done+
-!mle_drop:
-    lda zp_player_lvl
-    sta player_data + PL_LEVEL
-    jsr mae_recalc_hp_combat
-    jmp !mle_lvl_lp-
-!mle_done:
+    jsr combat_check_leveldown
     lda #10
     jmp mae_print_steal_msg
 

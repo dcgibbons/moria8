@@ -10,7 +10,9 @@ real prompts. A step whose screen is not the one expected, or a hang, fails.
 - a drop and a pick-up;
 - an ego arrow shot from a bow into a townsperson (2026-11-15: the C64's
   tramp_ego_apply_damage, called from OVL.ITEMS for ego ammunition, banked
-  the KERNAL in over the overlay and jammed the machine).
+  the KERNAL in over the overlay and jammed the machine);
+- the in-game ``? -> L`` legal viewer streaming ``LICENSE`` and
+  ``SOURCE-OFFER`` and returning to play.
 
 Usage: ``python -m moria_playtest.tour TARGET OUT_DIR`` writes ``OUT_DIR/tour.json``.
 """
@@ -290,6 +292,25 @@ class Tour:
                 break
         self.expect("an ego arrow hit the townsperson", lambda: hit)
 
+    def legal(self) -> None:
+        self.press(ord("?"))
+        self.expect("the Help screen lists L:License",
+                    lambda: "Command Reference" in self.text() and "L:License" in self.text())
+        self.press(ord("L"))
+        self.expect("the legal viewer menu", lambda: "License & Source" in self.text())
+        self.press(ord("1"))
+        self.expect("the streamed LICENSE notice", lambda: "MORIA8 LICENSE NOTICE" in self.text())
+        self.press(ord("Q"))
+        self.expect("back at the legal menu from LICENSE", lambda: "License & Source" in self.text())
+        self.press(ord("2"))
+        self.expect("the streamed SOURCE-OFFER notice", lambda: "MORIA8 SOURCE OFFER" in self.text())
+        self.press(ord("Q"))
+        self.expect("back at the legal menu from SOURCE-OFFER", lambda: "License & Source" in self.text())
+        self.press(ord("Q"))
+        self.expect("Help restored after the legal viewer", lambda: "Command Reference" in self.text())
+        self.press(ord("Q"))
+        self.at_command("back at the command prompt after Help")
+
     def run(self) -> None:
         self.chargen()
         self.store_buy()
@@ -297,6 +318,7 @@ class Tour:
         self.home()
         self.drop_pickup()
         self.ego_shot()
+        self.legal()
 
 
 def tour(target: str, out: Path) -> dict[str, object]:

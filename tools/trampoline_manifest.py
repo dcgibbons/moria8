@@ -45,7 +45,6 @@ STANDARD_KINDS: Tuple[str, ...] = (
     "ay_dispatch",
     "c128_banked_compute",
     "c128_banked_preserve_a",
-    "c128_banked_preserve_a_return",
     "c128_banked_preserve_flags",
     "c128_banked_shared_epilogue",
     "c128_ovl_compute",
@@ -774,10 +773,9 @@ C128_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _gen("c128", "tramp_magic_check_new_spells", "c128_banked_compute", target="magic_check_new_spells"),
     # Generated: c128_ui_display (1)
     _gen("c128", "tramp_spell_list_display", "c128_ui_display", target="spell_list_display"),
-    # Generated: c128 banked macro families (7)
+    # Generated: c128 banked macro families (6)
     _gen("c128", "tramp_find_special_room", "c128_banked_preserve_a", target="find_special_room"),
     _gen("c128", "tramp_ego_apply_damage", "c128_banked_preserve_a", target="ego_apply_damage"),
-    _gen("c128", "tramp_roll_ego_type", "c128_banked_preserve_a_return", target="roll_ego_type"),
     _gen("c128", "tramp_assign_special_room", "c128_banked_preserve_flags", target="assign_special_room"),
     _gen("c128", "tramp_vault_seal_entrance", "c128_banked_preserve_flags", target="vault_seal_entrance"),
     _gen("c128", "tramp_spawn_special_room_monsters", "c128_banked_shared_epilogue", target="spawn_special_room_monsters"),
@@ -809,7 +807,8 @@ C128_ENTRIES: Tuple[TrampolineEntry, ...] = (
     # Generated: ay_dispatch / alias (2)
     _gen("c128", "tramp_chest_open", "ay_dispatch", overlay="C128_CHEST_OVERLAY_ID", target="chest_open_command", dispatcher="chest_dispatch"),
     _gen("c128", "tramp_game_over_disk_setup", "alias", target="tramp_disk_setup"),
-    # Custom (37)
+    # Custom (38)
+    _custom("c128", "tramp_roll_ego_type", "platforms/commodore/c128/main.s", "Swaps in C128_STORAGE_OVERLAY_ID around roll_ego_type/roll_armour_ego and restores caller overlay", overlay="C128_STORAGE_OVERLAY_ID", target="roll_ego_type"),
     _custom("c128", "tramp_player_create", "platforms/commodore/c128/main.s", "Startup overlay execution tracking + C128_TEST_TOWN_SELF_DUMP diagnostics + return site", target="player_create"),
     _custom("c128", "tramp_player_create_return_site", "platforms/commodore/c128/main.s", "Continuation label cleared after player_create returns"),
     _custom("c128", "tramp_game_over_disk_setup_failed", "platforms/commodore/c128/main.s", "Falls directly through into tramp_game_over_prepare"),

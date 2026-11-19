@@ -60,6 +60,7 @@ test_finish:
 // ui_status.s is not imported: these tests never render the status line and
 // its ~1 KB would push the test body past MAP_BASE (assert at the end).
 // status_draw is its only referenced entry point.
+status_mark_dirty:
 status_draw:
     rts
 #import "../../../../core/ui_help_clear.s"

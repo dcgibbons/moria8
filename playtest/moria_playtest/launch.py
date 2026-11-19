@@ -108,39 +108,36 @@ class StaleDisk(RuntimeError):
     """The disk image was not written from the program and symbols beside it."""
 
 
-def _disk_file_matches(name: str, actual: bytes | None, expected: bytes) -> bool:
-    if actual == expected:
-        return True
-    # C128's item.idx is emitted with a zeroed sector table in build/c128/item.idx
-    # and patched in-place per image geometry (.d64/.d71/.d81) by fix_c128_item_idx.py.
-    if (name == "item.idx" and actual is not None and len(actual) == len(expected) >= 5
-            and actual[:5] == expected[:5] and not any(expected[5:]) and any(actual[5:])):
-        return True
-    return False
-
-
 def check_disk(build: Build) -> None:
     """Every program file on the disk must equal the build output it is written
     from: ``make test`` rebuilds the program and symbols without the disk, and a
     stale disk then fails every worker at boot. A disk this module cannot read
     (ProDOS) must at least be newer than its program."""
-    if build.disk.is_dir():   # the X16's -fsroot: the build output itself
-        return
     if build.target.cartridge:
-        # The cartridge holds the program; the disk is only for saves.
+        # The cartridge holds the program; the disk (or -fsroot dir on X16) is only for saves.
         cart = build.disk.parent / build.target.cartridge
-        if not cart.is_file() or cart.stat().st_mtime < build.prg.stat().st_mtime:
+        if (not cart.is_file() or not build.prg.is_file()
+                or cart.stat().st_mtime < build.prg.stat().st_mtime):
             raise StaleDisk(f"{cart} is missing or older than {build.prg}; "
                             f"rebuild it with `make {build.target.disk_target}`")
-        return
-    if not build.target.disk_files:
-        if build.disk.stat().st_mtime < build.prg.stat().st_mtime:
-            raise StaleDisk(f"{build.disk} is older than {build.prg}; "
+        if not build.disk.exists():
+            raise StaleDisk(f"{build.disk} is missing; "
                             f"rebuild it with `make {build.target.disk_target}`")
         return
+    if build.disk.is_dir():   # the X16's -fsroot: the build output itself
+        return
+    if not build.target.disk_files:
+        if (not build.disk.is_file() or not build.prg.is_file()
+                or build.disk.stat().st_mtime < build.prg.stat().st_mtime):
+            raise StaleDisk(f"{build.disk} is missing or older than {build.prg}; "
+                            f"rebuild it with `make {build.target.disk_target}`")
+        return
+    if not build.disk.is_file():
+        raise StaleDisk(f"{build.disk} is missing; "
+                        f"rebuild it with `make {build.target.disk_target}`")
     files = d64_files(build.disk.read_bytes())
     stale = sorted(name for name, out in build.target.disk_files.items()
-                   if not _disk_file_matches(name, files.get(name), (build.prg.parent / out).read_bytes()))
+                   if files.get(name) != (build.prg.parent / out).read_bytes())
     if stale:
         raise StaleDisk(f"{build.disk} does not match {build.prg.parent} ({', '.join(stale)}); "
                         f"rebuild it with `make {build.target.disk_target}`")

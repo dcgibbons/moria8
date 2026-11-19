@@ -193,6 +193,10 @@ hal_item_cat_read_byte:
 
     ldx #ICR_LFN
     jsr hal_storage_chkin
+    bcs !icr_cmd_failed+
+    jsr hal_storage_readst
+    and #$bf
+    bne !icr_cmd_failed+
     // Sector 0 carries a 2-byte PRG load header before ITEM.CAT[0].
     lda icr_sec_idx
     bne !icr_u1_read+
@@ -222,6 +226,7 @@ hal_item_cat_read_byte:
     jsr hal_storage_open
     ldx #ICR_LFN
     jsr hal_storage_chkin
+    bcs !icr_wrong_disk+
     jsr hal_storage_readst
     and #$bf
     bne !icr_wrong_disk+
@@ -399,30 +404,36 @@ icr_send_u1_bp:
     lda #$0d
     jsr hal_storage_chrout
     jsr hal_storage_clrchn
-    clc
-!isub_done:
-    rts
+    jmp icr_drive_ok
 !isub_failed:
     jsr hal_storage_clrchn
+!isub_err:
     sec
+!isub_done:
     rts
 
 // icr_drive_ok — After a command on the command channel (LFN 15, open): the
-// first digit of the drive's status, carry clear for "0x", set for an error
-// (the next command resets the message, so the rest is left unread). A
-// buffer channel the drive refused ("70, NO CHANNEL") got a CHKIN anyway,
-// and the KERNAL's talk turnaround waits for a talker that never comes: the
-// Plus/4 hung buying in a store (playtest gate, 2026-11-15, once in about
-// 2,200 sector reads). Shared with catalog_fetch.s via icr_send_u1_bp.
+// first digit of the drive's status, carry clear for "0x" with clean READST,
+// set for any serial/status error (the next command resets the message, so the
+// rest is left unread). A buffer channel the drive refused ("70, NO CHANNEL")
+// got a CHKIN anyway, and the KERNAL's talk turnaround waits for a talker that
+// never comes: the Plus/4 hung buying in a store (playtest gate, 2026-11-15,
+// once in about 2,200 sector reads). Shared with catalog_fetch.s via icr_send_u1_bp.
 // Clobbers: A, X, Y
 icr_drive_ok:
     ldx #15
     jsr hal_storage_chkin
+    bcs !isub_failed-
     jsr hal_storage_chrin
+    eor #$30                    // '0' ($30) -> $00; any other status byte -> != $00
+    sta icr_idx
+    jsr hal_storage_readst
+    and #$bf                    // non-EOF serial error bits ($00 when clean)
+    ora icr_idx
     pha
     jsr hal_storage_clrchn
     pla
-    cmp #$31                    // '0': OK; '1'-'9': an error
+    cmp #1                      // C = 0 iff first char == '0' and READST clean
     rts
 
 icr_put_text:

@@ -1,4 +1,5 @@
 #importonce
+#define CORE_ITEM_IMPORTED
 // item.s — Item data structures, floor items, inventory, and gold spawning
 //
 // Phase 6.1: Master item type table (SoA), floor item table at $CF00,
@@ -147,8 +148,8 @@ floor_item_get_ego_x:
 // Clobbers: A, X
 item_init_floor:
     ldx #MAX_FLOOR_ITEMS - 1
-    lda #FI_EMPTY
 !iif_loop:
+    lda #FI_EMPTY
     sta fi_item_id,x
     lda #0
     sta fi_x,x
@@ -156,20 +157,13 @@ item_init_floor:
     sta fi_qty,x
     sta fi_p1,x
     sta fi_meta,x
-    lda #FI_EMPTY
-    dex
-    bpl !iif_loop-
-    lda #0
-    sta zp_item_count
-    ldx #MAX_FLOOR_ITEMS - 1
-    lda #0
-!iif_stat_loop:
     sta fi_to_hit,x
     sta fi_to_dam,x
     sta fi_to_ac,x
     sta fi_meta_hi,x
     dex
-    bpl !iif_stat_loop-
+    bpl !iif_loop-
+    sta zp_item_count
     jmp glyph_clear_all
 
 // item_init_inventory — Clear all inventory/equipment slots and reset weight
@@ -183,6 +177,13 @@ item_init_inventory:
     lda #0
     sta inven_weight_lo
     sta inven_weight_hi
+#if CORE_PLAYER_IMPORTED
+    ldx #STAT_COUNT - 1
+!iiv_res_loop:
+    sta player_stat_res,x
+    dex
+    bpl !iiv_res_loop-
+#endif
     rts
 
 // floor_item_add — Add an item to the floor item table
@@ -499,22 +500,48 @@ iw_res_1:   .byte 0
 iw_res_2:   .byte 0
 iw_save_x:  .byte 0
 
+// inven_mul_slot_x — Multiply 16-bit weight of inventory slot X (doubled for
+// EGO_GREAT_MASS) by quantity A. Preserves: X, Y. Clobbers: A.
+inven_mul_slot_x:
+    sta iw_qty
+    lda inv_ego,x
+    sta iw_mc_2
+    lda inv_item_id,x
+    jmp inven_mul_ego_a
+
 // inven_mul_item_qty — Multiply 16-bit weight of (item_cur_page, A) by iw_qty.
 // Output: iw_res_0/1/2 = 24-bit weight; carry set if iw_res_2 != 0 (>= 65536).
 // Preserves: X, Y. Clobbers: A.
 inven_mul_item_qty:
+    pha
+    lda item_cur_page
+    sta iw_mc_2
+    pla
+inven_mul_ego_a:
     stx iw_save_x
     tax
+    lda iw_mc_2
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     jsr item_get_weight_x           // sets icat_weight_lo/hi; preserves X, Y
-    lda #0
-    sta iw_res_0
-    sta iw_res_1
-    sta iw_res_2
-    sta iw_mc_2
     lda icat_weight_lo
     sta iw_mc_lo
     lda icat_weight_hi
     sta iw_mc_hi
+    lda #0
+    sta iw_res_0
+    sta iw_res_1
+    sta iw_res_2
+    ldx iw_mc_2
+    sta iw_mc_2
+    txa
+    and #EGO_ID_MASK
+    cmp #EGO_GREAT_MASS
+    bne !im_no_mass+
+    asl iw_mc_lo
+    rol iw_mc_hi
+    rol iw_mc_2
+!im_no_mass:
     ldx #8
 !im_loop:
     lsr iw_qty
@@ -549,12 +576,11 @@ inven_mul_item_qty:
 // Preserves: X, Y. Clobbers: A.
 inven_calc_fi_add_weight:
     lda fi_add_ego
-    and #ITEM_PAGE_BIT
-    sta item_cur_page
+    sta iw_mc_2
     lda fi_add_qty
     sta iw_qty
     lda fi_add_id
-    jsr inven_mul_item_qty
+    jsr inven_mul_ego_a
     bcs !icw_ov+
     lda iw_res_0
     clc
@@ -590,12 +616,7 @@ inven_sub_one_slot_x:
 inven_sub_slot_x:
     lda inv_qty,x
 !isw_set_qty:
-    sta iw_qty
-    lda inv_ego,x
-    and #ITEM_PAGE_BIT
-    sta item_cur_page
-    lda inv_item_id,x
-    jsr inven_mul_item_qty
+    jsr inven_mul_slot_x
     bcs !isw_zero+
     lda inven_weight_lo
     sec
@@ -625,12 +646,7 @@ inven_recalc_weight:
     beq !irw_next+
     lda inv_qty,x
     beq !irw_next+
-    sta iw_qty
-    lda inv_ego,x
-    and #ITEM_PAGE_BIT
-    sta item_cur_page
-    lda inv_item_id,x
-    jsr inven_mul_item_qty
+    jsr inven_mul_slot_x
     bcs !irw_sat+
     lda inven_weight_lo
     clc
@@ -1046,26 +1062,19 @@ item_append_desc:
 !iad_weapon:
     lda fi_add_to_hit
     ora fi_add_to_dam
-    bne !iad_weapon_has_bonus+
-    rts
+    beq !iad_ring_p1+
 !iad_weapon_has_bonus:
-    lda #$20
-    jsr combat_append_char
-    lda #$28
-    jsr combat_append_char
+    jsr iad_space_lparen
     lda fi_add_to_hit
     jsr item_append_signed_combat
     lda #$2c
     jsr combat_append_char
     lda fi_add_to_dam
     jsr item_append_signed_combat
-    lda #$29
-    jmp combat_append_char
+    jsr iad_rparen
+    jmp !iad_ring_p1+
 !iad_armor:
-    lda #$20
-    jsr combat_append_char
-    lda #$1b                    // '[' screen code
-    jsr combat_append_char
+    jsr iad_space_lbrack
     ldy fi_add_id
     jsr item_get_base_ac
     jsr combat_append_decimal
@@ -1081,21 +1090,15 @@ item_append_desc:
     bit item_cur_page
     bvc !iad_ring_done+
     lda fi_add_to_ac
-    bne !iad_ring_ac+
+    bne !iad_ring_ac_has_bonus+
     lda fi_add_to_hit
     ora fi_add_to_dam
     bne !iad_weapon-
-    jmp !iad_ring_p1+
-!iad_ring_ac:
-    lda fi_add_to_ac
-    bne !iad_ring_ac_has_bonus+
+    beq !iad_ring_p1+
 !iad_ring_done:
     rts
 !iad_ring_ac_has_bonus:
-    lda #$20
-    jsr combat_append_char
-    lda #$1b                    // '[' screen code
-    jsr combat_append_char
+    jsr iad_space_lbrack
     lda fi_add_to_ac
     jsr item_append_signed_combat
     lda #$1d                    // ']' screen code
@@ -1103,17 +1106,11 @@ item_append_desc:
     // fall through to show Ring of WOE p1 if non-zero
 !iad_ring_p1:
     lda fi_add_p1
-    bne !iad_ring_p1_has_bonus+
-    rts
-!iad_ring_p1_has_bonus:
-    lda #$20
-    jsr combat_append_char
-    lda #$28
-    jsr combat_append_char
+    beq !iad_ring_done-
+    jsr iad_space_lparen
     lda fi_add_p1
     jsr item_append_signed_combat
-    lda #$29
-    jmp combat_append_char
+    jmp iad_rparen
 !iad_charges:
     lda #<item_append_charges_str
     ldy #>item_append_charges_str
@@ -1124,10 +1121,7 @@ item_append_desc:
 item_append_count_suffix_combat:
     sta zp_ptr0
     sty zp_ptr0_hi
-    lda #$20
-    jsr combat_append_char
-    lda #$28
-    jsr combat_append_char
+    jsr iad_space_lparen
     lda fi_add_p1
     jsr combat_append_decimal
     lda #$20
@@ -1135,7 +1129,18 @@ item_append_count_suffix_combat:
     lda zp_ptr0
     ldy zp_ptr0_hi
     jsr combat_append_str
+iad_rparen:
     lda #$29
+    jmp combat_append_char
+
+iad_space_lbrack:
+    ldy #$1b                    // '[' screen code
+    .byte $2c                   // BIT abs: skip ldy #$28
+iad_space_lparen:
+    ldy #$28                    // '(' screen code
+    lda #$20
+    jsr combat_append_char
+    tya
     jmp combat_append_char
 
 item_append_signed_combat:

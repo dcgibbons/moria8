@@ -81,6 +81,15 @@ roll_ego_type:
     jsr rng_range               // [0, 7]
     clc
     adc #1                      // [1, 8]
+    cmp #EGO_HOLY_AVENGER
+    bne !ret_wep_done+
+    lda #4
+    jsr rng_range               // VMS magic_treasure: randint(4) = 1..4 STR
+    clc
+    adc #1
+    sta fi_add_p1
+    lda #EGO_HOLY_AVENGER
+!ret_wep_done:
     rts
 !ret_ammo_ego:
     lda #4
@@ -362,23 +371,7 @@ ego_cat:    .byte 0
 // ============================================================
 ego_get_suffix_ptr:
     and #EGO_ID_MASK
-    beq !egsp_none+
-    cmp #EGO_TYPE_COUNT
-    bcc !egsp_decode+
-!egsp_none:
-    lda #0
-    sta item_name_decode_buf
-    lda #<item_name_decode_buf
-    sta zp_ptr0
-    lda #>item_name_decode_buf
-    sta zp_ptr0_hi
-    rts
-!egsp_decode:
     jmp item_cat_decode_ego
-
-#if !EGO_SUFFIX_STRINGS_EXTERNAL
-#import "ego_suffix_strings.s"
-#endif
 
 // ============================================================
 // Ego data tables (weapons 1-8)

@@ -411,18 +411,34 @@ pm_consume_mana:
     bcc !pm_cm_more+
     ldx #HSTR_PM_HEALTH_DAMAGED
     jsr huff_print_msg
+#if CORE_PLAYER_IMPORTED
+    lda player_sust_mask
+    and #SUST_CON
+    beq !pm_cm_drain_con+
+    ldx #HSTR_CHEST_UNAFFECTED
+    jsr huff_print_msg
+    jmp !pm_cm_more+
+!pm_cm_drain_con:
+#endif
+#if CORE_PLAYER_IMPORTED
+    ldy #PL_CON_CUR - PL_STR_CUR
+    jsr player_drain_stat_y
+    bcc !pm_cm_more+
+#else
     lda player_data + PL_CON_CUR
     cmp #4
     bcc !pm_cm_more+
     dec player_data + PL_CON_CUR
     dec zp_player_con
+#endif
     jsr player_calc_hp
 !pm_cm_more:
     // Acknowledge faint (and any CON-damage) feedback during the initiating
-    // action so forced paralysis turns never enter -MORE-.
+    // action so forced paralysis turns never enter -MORE-, then clear
+    // MSG_FULL so subsequent turn messages start fresh.
     jsr msg_show_more
     jsr hal_input_get_key
-    rts
+    jmp msg_clear
 .assert "SPELL_MAGE==1 and SPELL_PRIEST==2", SPELL_MAGE == 1 && SPELL_PRIEST == 2, true
 
 !pm_cm_normal:

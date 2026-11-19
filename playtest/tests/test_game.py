@@ -1,3 +1,4 @@
+import os
 import struct
 import tempfile
 import unittest
@@ -39,7 +40,7 @@ def obs(rows: dict[int, str], ret: int = 0, flags: int = 0, hp: int = 21) -> Obs
     zp[0x43] = flags
     zp[0x2D:0x2F] = struct.pack("<h", hp)
     screen = screen_bytes(rows)
-    return Observation(1, 0x10B9, 0xF2, 0x36, ret, 0, bytes(zp), bytes(111), bytes(384),
+    return Observation(1, 0x10B9, 0xF2, 0x36, ret, 0, bytes(zp), bytes(ABI.PL_STRUCT_SIZE), bytes(384),
                        screen, decode_rows(screen), abi=ABI)
 
 
@@ -52,7 +53,21 @@ class ClassifyTest(unittest.TestCase):
 
     def test_command_needs_resident_return_and_status(self) -> None:
         self.assertEqual(self.mode(obs(STATUS, ret=COMMAND_RET)), (Mode.COMMAND, "command"))
-        self.assertEqual(self.mode(obs({}, ret=COMMAND_RET))[0], Mode.UNKNOWN)
+        self.assertEqual(self.mode(obs({}, ret=COMMAND_RET)), (Mode.UNKNOWN, ""))
+
+    def test_shifted_status_row_at_command_loop_triggers_game_finding(self) -> None:
+        from moria_playtest.auditor import Auditor, Finding
+
+        for row in (20, 22, 23):
+            with self.subTest(row=row):
+                shifted = obs({row: STATUS[21]}, ret=COMMAND_RET)
+                shifted.mode, shifted.stage = self.mode(shifted)
+                self.assertEqual((shifted.mode, shifted.stage), (Mode.UNKNOWN, "status_row_shifted"))
+                self.assertEqual(Auditor().check(shifted, None),
+                                 [Finding("status_row_shifted", "game",
+                                          f"status line on row {row}, expected row 21")])
+        elsewhere = obs({22: STATUS[21]}, ret=COMMAND_RET + 3)
+        self.assertNotEqual(self.mode(elsewhere), (Mode.UNKNOWN, "status_row_shifted"))
 
     def test_genocides_type_prompt(self) -> None:
         """eff_genocide's "Type?" is answered with a creature letter, not
@@ -601,8 +616,17 @@ class C64VariantTest(unittest.TestCase):
             (root / "moria8-c64.d64").write_bytes(b"d")
             with self.assertRaisesRegex(launch.StaleDisk, "moria8-c64.crt is missing"):
                 launch.check_disk(build)
-            (root / "moria8-c64.crt").write_bytes(b"c")
+            cart = root / "moria8-c64.crt"
+            cart.write_bytes(b"c")
             launch.check_disk(build)                                 # newer than the program: fine
+            mtime = prg.stat().st_mtime
+            os.utime(cart, (mtime - 10, mtime - 10))
+            with self.assertRaisesRegex(launch.StaleDisk, "moria8-c64.crt is missing or older"):
+                launch.check_disk(build)
+            os.utime(cart, (mtime + 1, mtime + 1))
+            (root / "moria8-c64.d64").unlink()
+            with self.assertRaisesRegex(launch.StaleDisk, r"moria8-c64\.d64 is missing.*make disk64 cartridge64"):
+                launch.check_disk(build)
 
     def test_variants_use_the_c64_save_versions(self) -> None:
         from moria_playtest import queue
@@ -660,6 +684,26 @@ class CommodoreAndX16CartridgeTest(unittest.TestCase):
             self.assertEqual(list((root / "fsroot").iterdir()), [])               # saves only: no program files
             self.assertEqual(disk[disk.index("-fsroot") + 1], str(root / "cx16"))  # the disk build as before
             self.assertNotIn("-cart", disk)
+
+    def test_cx16_cartridge_check_disk_validates_crt_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "cx16-cart"
+            out.mkdir()
+            prg = out / "MORIA8.PRG"
+            prg.write_bytes(b"p")
+            build = launch.Build.from_out(root, CX16_CART)
+            self.assertTrue(build.disk.is_dir())
+            with self.assertRaisesRegex(launch.StaleDisk, r"moria8-cx16\.crt is missing"):
+                launch.check_disk(build)
+            cart = root / "moria8-cx16.crt"
+            cart.write_bytes(b"c")
+            mtime = prg.stat().st_mtime
+            os.utime(cart, (mtime - 10, mtime - 10))
+            with self.assertRaisesRegex(launch.StaleDisk, r"moria8-cx16\.crt is missing or older"):
+                launch.check_disk(build)
+            os.utime(cart, (mtime + 1, mtime + 1))
+            launch.check_disk(build)
 
 
 class Atari8CartridgeTest(unittest.TestCase):

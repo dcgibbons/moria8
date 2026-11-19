@@ -203,9 +203,12 @@ test_start:
     sta zp_player_dlvl
     lda #0
     sta tc_count                // Count non-zero egos
+    sta t_ha_count              // Count Holy Avengers (must roll fi_add_p1 in 1..4)
     sta tc_loop
 
 !t3_loop:
+    lda #0
+    sta fi_add_p1
     .if (ITEM_PAGE_DAGGER != 0) {
         lda #ITEM_PAGE_DAGGER
         sta item_cur_page
@@ -213,8 +216,19 @@ test_start:
     lda #ITEM_SLOT_DAGGER                      // Dagger
     jsr roll_ego_type
     cmp #EGO_NONE
-    beq !t3_next+
+    beq !t3_chk_zero+
     inc tc_count
+    cmp #EGO_HOLY_AVENGER
+    bne !t3_chk_zero+
+    inc t_ha_count
+    lda fi_add_p1
+    beq !t3_fail+
+    cmp #5
+    bcs !t3_fail+
+    bcc !t3_next+
+!t3_chk_zero:
+    lda fi_add_p1
+    bne !t3_fail+
 !t3_next:
     inc tc_loop
     lda tc_loop
@@ -227,6 +241,8 @@ test_start:
 
     lda tc_count
     beq !t3_fail+               // If 0 egos in 200 tries, fail
+    lda t_ha_count
+    beq !t3_fail+               // Must observe Holy Avenger with p1 in 1..4
     lda #$01
     jmp !t3_store+
 !t3_fail:
@@ -863,7 +879,9 @@ test_start:
     bcc !t22_fail_jmp+
     cpy #PL_INT_CUR - PL_STR_CUR
     bne !t22_fail_jmp+
-    lda player_data + PL_INT_CUR
+    lda #12
+    sta player_data + PL_INT_CUR
+    sta zp_player_int
     sta t_to_ac
     lda #EQUIP_HEAD
     sta piw_equip
@@ -1025,10 +1043,11 @@ test_start:
     sta inv_p1 + EQUIP_RING2
 
     jmp test_exit_trampoline
-t12_slot: .byte 0
-t_bad:    .byte 0
-t_item:   .byte 0
-t_to_ac:  .byte 0
+t12_slot:   .byte 0
+t_bad:      .byte 0
+t_item:     .byte 0
+t_to_ac:    .byte 0
+t_ha_count: .byte 0
 t19_light:  .text " (Resist Lightning)" ; .byte 0
 t19_light_end:
 t19_resist: .text " (Resist)" ; .byte 0

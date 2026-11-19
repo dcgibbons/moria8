@@ -15,7 +15,7 @@ ifneq ($(filter clean,$(MAKECMDGOALS)),)
 $(filter-out clean,$(MAKECMDGOALS)): | clean
 endif
 
-OUT        = ../../build
+OUT        ?= ../../build
 OUTATARI8  = $(OUT)/atari8
 OUTATARI8_CART = $(OUT)/atari8-cart
 OVL_OUTATARI8 = $(abspath $(OUTATARI8))

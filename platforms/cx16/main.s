@@ -756,10 +756,12 @@ wizard_prompt_clear_digits:
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
+    ldx #3
+!wpcd_clr:
     lda #$20
     jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    dex
+    bne !wpcd_clr-
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col

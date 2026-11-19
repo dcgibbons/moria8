@@ -100,7 +100,7 @@ A2_MAIN_STAMP = $(OUTA2)/.main.stamp
 MAME_OUTPUT_ROOT = $(abspath $(OUTA2)/mame)
 
 A2_OVL_PRGS += $(OUTA2)/legalui
-.PHONY: all build disk run test-memory-contract test-memory-contract-selftest test-runtime clean ensure-kickass kickass ac prodos
+.PHONY: all build disk run test-memory-contract test-memory-contract-selftest test-runtime clean ensure-kickass kickass ac ensure-ac prodos ensure-prodos
 
 all: build
 
@@ -126,7 +126,7 @@ run: $(A2_DISK_IMAGE)
 		-share_directory "$(MAME_OUTPUT_ROOT)/share" \
 		-flop1 "$(A2_DISK_IMAGE)"
 
-test-memory-contract: build $(OUTA2)/main.sym $(OUTA2)/boot.sym
+test-memory-contract: build $(OUTA2)/main.sym $(OUTA2)/boot.sym test-memory-contract-selftest
 	python3 -B check_memory_contract.py
 
 test-memory-contract-selftest:
@@ -135,7 +135,7 @@ test-memory-contract-selftest:
 # Runtime MAME suite (harness_smoke.py; one scenario per invocation). Runs only
 # when A2ROMS points at a MAME ROM directory; otherwise warns and skips so the
 # default `make test` mix stays green on ROM-less machines.
-test-runtime: $(A2_DISK_IMAGE)
+test-runtime: $(A2_DISK_IMAGE) test-memory-contract
 ifeq ($(strip $(A2ROMS)),)
 	@echo "WARNING: A2ROMS is not set - skipping the Apple IIe runtime harness (MAME scenarios)."
 	@echo "         Set A2ROMS to the ROM directory (containing apple2ee.zip) and rerun to include them."

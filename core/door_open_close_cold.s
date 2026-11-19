@@ -70,13 +70,9 @@ door_try_open:
 !dto_picked:
     ldx #HSTR_DF_PICKED
     jsr huff_print_msg
-    // +1 XP (24-bit), once — state clears below, so retries pay nothing
-    inc player_data + PL_XP_0
-    bne !dto_xp_done+
-    inc player_data + PL_XP_1
-    bne !dto_xp_done+
-    inc player_data + PL_XP_2
-!dto_xp_done:
+    // +1 XP (24-bit + PL_MAX_XP), once — state clears below, so retries pay nothing
+    lda #1
+    jsr player_award_xp_a
     lda #0
     jsr door_state_set_at       // Unlock (removes the table entry)
 

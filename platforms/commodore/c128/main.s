@@ -213,6 +213,46 @@ banked_payload:
 entry:
     jmp entry_real
 
+#if C128_TEST_VIC40_BLANKED_BOOT
+// Placed below $4000 so c128_vic40_boot_probe_{pass,fail}_sym never collide
+// with C128 BASIC 7.0 ROM ($4000-$AFFF) during autostart before moria128 loads.
+// boot128 blanks the VIC display ($D011 = 0) and the 80-column game never
+// turns it on, so nothing can show on the 40-column screen: the display
+// must still be off when the game starts.
+c128_vic40_boot_probe:
+    lda $d011
+    and #$10                    // DEN
+    bne c128_vic40_boot_probe_fail_sym
+
+    // And nothing was drawn on the screen the VIC reads ($0400; bit 0
+    // is unused and reads 1) to show if the display came on.
+    lda $d018
+    and #$fe
+    cmp #$14
+    bne c128_vic40_boot_probe_fail_sym
+    ldx #0
+!vic40_screen_loop:
+    lda $0400,x
+    cmp #$20                    // boot clears it to spaces
+    bne c128_vic40_boot_probe_fail_sym
+    inx
+    cpx #$40
+    bne !vic40_screen_loop-
+    // Colour RAM is not checked: nothing writes it while the display is
+    // off, so it keeps its power-on pattern.
+
+    jmp c128_vic40_boot_probe_pass_sym
+
+c128_vic40_boot_probe_pass_sym:
+    nop
+    jmp c128_vic40_boot_probe_pass_sym
+
+c128_vic40_boot_probe_fail_sym:
+    nop
+    jmp c128_vic40_boot_probe_fail_sym
+.assert "c128_vic40_boot_probe stays below BASIC ROM ($4000)", c128_vic40_boot_probe_fail_sym < $4000, true
+#endif
+
 #if C128_TEST_TOWN_SELF_DUMP
 c128_town_dump_log:
     ldx c128_town_dump_idx
@@ -1542,6 +1582,49 @@ re_equip_entry:
     ldy #>re_equip
     jmp c128_call_storage_preserve_ovl
 
+tramp_roll_ego_type:
+    // Pre-filter non-StorageOverlay items before swapping cold floppy
+    // OVL.STORAGE (12): roll_ego_type and roll_tool_ego_check are already
+    // resident in Bank 0, so only enchanted armour/cloaks (fi_add_to_ac != 0)
+    // and uncursed ammo (ego_ammo_pick) need StorageOverlay.
+    tax                         // X = slot_lo (preserved by item_get_category_a & item_get_missile)
+    jsr item_get_category_a     // A = ICAT_*, Z set if ICAT_DIGGING
+    beq !tret_digging+
+    cmp #ICAT_WEAPON
+    beq !tret_weapon+
+    cmp #ICAT_CLOAK
+    beq !tret_chk_ac+
+    cmp #ICAT_ARMOR
+    bcc !tret_none+
+    cmp #ICAT_BOOTS + 1
+    bcs !tret_none+
+!tret_chk_ac:
+    lda fi_add_to_ac
+    bne !tret_storage+
+!tret_none:
+    lda #EGO_NONE
+    rts
+!tret_digging:
+    lda zp_player_dlvl
+    cmp #10
+    bcc !tret_none-
+    bcs !tret_resident+
+!tret_weapon:
+    jsr item_get_missile        // X = slot_lo -> A = 0 melee, 1..3 launcher, $81..$83 ammo
+    beq !tret_resident+         // Melee weapon -> resident roll_ego_type (no StorageOverlay)
+    bpl !tret_none-             // Launchers never get ego
+    lda fi_add_flags
+    and #IF_CURSED
+    bne !tret_none-             // Cursed ammo never gets ego
+!tret_storage:
+    txa                         // A = slot_lo
+    ldx #<roll_ego_type
+    ldy #>roll_ego_type
+    jmp c128_call_storage_preserve_ovl
+!tret_resident:
+    txa                         // A = slot_lo
+    jmp roll_ego_type
+
 c128_call_chest_preserve_ovl:
     pha
     lda #C128_CHEST_OVERLAY_ID
@@ -1588,7 +1671,7 @@ c128_call_ovl_preserve_common:
     sta c128_storage_ret_a
     pla
     beq !ovl_no_restore+
-    cmp c128_target_ovl
+    cmp current_overlay
     beq !ovl_no_restore+
     jsr overlay_load
     jsr c128_restore_runtime_guards
@@ -3012,20 +3095,24 @@ tramp_sr_epilogue:
 tramp_ego_append_suffix:
     and #EGO_ID_MASK
     beq !teas_done+
+    cmp #EGO_TYPE_COUNT
+    bcs !teas_done+
     jsr ego_get_suffix_ptr
     ldx cmb_buf_idx
     ldy #0
 !teas_loop:
+    cpx #(PLATFORM_COMBAT_MSG_BUF_SIZE - 1)
+    bcs !teas_end+
     lda (zp_ptr0),y
     beq !teas_end+
     sta combat_msg_buf,x
     inx
     iny
-    cpx #81
-    bcs !teas_end+
     jmp !teas_loop-
 !teas_end:
     stx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + PLATFORM_COMBAT_MSG_BUF_SIZE - 1
 !teas_done:
     rts
 
@@ -3713,10 +3800,12 @@ wizard_prompt_clear_digits:
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
+    ldx #3
+!wpcd_clr:
     lda #$20
     jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    dex
+    bne !wpcd_clr-
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col
@@ -3748,7 +3837,6 @@ wizard_bad_value_str:
     .macro EgoArmourDataRestoreSegment() {
         .segment Default
     }
-    #define EGO_SUFFIX_STRINGS_EXTERNAL   // imported in the banked runtime (below)
     #import "../../../core/ego_items.s"
     #undef EGO_ARMOUR_DATA_SEGMENT_CUSTOM
     #undef EGO_ARMOUR_SEGMENT_CUSTOM
@@ -4358,45 +4446,6 @@ c128_test_validate_partial_state:
     rts
 #endif
 
-#if C128_TEST_VIC40_BLANKED_BOOT
-// In Default with its caller: RuntimeLowData has 5 bytes free below
-// FLOOR_ITEM_BASE, too few for the probe.
-// boot128 blanks the VIC display ($D011 = 0) and the 80-column game never
-// turns it on, so nothing can show on the 40-column screen: the display
-// must still be off when the game starts.
-c128_vic40_boot_probe:
-    lda $d011
-    and #$10                    // DEN
-    bne c128_vic40_boot_probe_fail_sym
-
-    // And nothing was drawn on the screen the VIC reads ($0400; bit 0
-    // is unused and reads 1) to show if the display came on.
-    lda $d018
-    and #$fe
-    cmp #$14
-    bne c128_vic40_boot_probe_fail_sym
-    ldx #0
-!vic40_screen_loop:
-    lda $0400,x
-    cmp #$20                    // boot clears it to spaces
-    bne c128_vic40_boot_probe_fail_sym
-    inx
-    cpx #$40
-    bne !vic40_screen_loop-
-    // Colour RAM is not checked: nothing writes it while the display is
-    // off, so it keeps its power-on pattern.
-
-    jmp c128_vic40_boot_probe_pass_sym
-
-c128_vic40_boot_probe_pass_sym:
-    nop
-    jmp c128_vic40_boot_probe_pass_sym
-
-c128_vic40_boot_probe_fail_sym:
-    nop
-    jmp c128_vic40_boot_probe_fail_sym
-#endif
-
 .segment RuntimeCommonData
 .pseudopc $0d60 {
 runtime_common_data_start:
@@ -4754,7 +4803,6 @@ runtime_low_data_end:
 ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
 ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
 ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
-#import "../../../core/ego_suffix_strings.s"
 tool_ego_prefix_lo:
     .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
     .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven

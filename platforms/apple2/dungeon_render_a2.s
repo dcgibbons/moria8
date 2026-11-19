@@ -157,11 +157,11 @@ viewport_update:
 // also serves all non-viewport callers. Preserves X, Y.
 rv_map_char_staged:
     cpx #$80
-    beq !tbl+
-    jmp a2_map_char
-!tbl:
+    bcs !fallback+
     lda rv_char_map,x
     rts
+!fallback:
+    jmp a2_map_char
 
 // ============================================================
 // render_viewport — Draw the 78x18 viewport

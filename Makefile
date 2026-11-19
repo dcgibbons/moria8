@@ -1,7 +1,7 @@
-.PHONY: all build build64 build128 buildplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
-	test test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long testplus4 testplus4-build testplus4-runtime clean \
+.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
+	test test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test64-cartridge test64-cartridge-persistence test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
 	check-zp check-6502-lint check-hal-boundaries check-item-docs report-budgets ensure-kickass kickass tools-ready tools-ready-apple2 \
-	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 \
+	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 test-stage-atari8 test-stage-bbcmaster FORCE \
 	buildapple2 diskapple2 runapple2 testapple2 testapple2-smoke testapple2-runtime testapple2-memory-contract testapple2-memory-contract-selftest \
 	buildcx16 diskcx16 cartridgecx16 runcx16 runcx16-cart testcx16 testcx16-smoke testcx16-runtime testcx16-cartridge testcx16-memory-contract testcx16-memory-contract-selftest \
 	buildatari8 diskatari8 cartridgeatari8 runatari8 runatari8-130xe runatari8-cart runatari8-cart-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-cartridge testatari8-memory-contract testatari8-memory-contract-selftest \
@@ -83,6 +83,7 @@ test: $(TEST_STAGES)
 check-item-docs:
 	python3 tools/check_wizard_doc.py --selftest
 	python3 tools/check_wizard_doc.py
+	python3 -B tools/huff_encoder.py --check
 
 report-budgets:
 	python3 tools/report_memory_budgets.py
@@ -93,22 +94,28 @@ test-prebuild: tools-ready-apple2
 	$(MAKE) build
 	python3 -B tools/check_overlay_calls.py --check-sym
 	$(MAKE) -C platforms/commodore disk
+	$(MAKE) -C platforms/apple2 test-memory-contract
 	$(MAKE) -C platforms/apple2 disk
+	$(MAKE) -C platforms/cx16 disk
 	$(MAKE) -C platforms/cx16 test-memory-contract
 	$(MAKE) -C platforms/atari8 test-memory-contract
 	$(MAKE) -C platforms/atari8 disk
 	$(MAKE) -C platforms/bbcmaster test-memory-contract
 	$(MAKE) -C platforms/bbcmaster disk
+	python3 -B tools/check_item_catalog_ports.py --selftest
+	python3 -B tools/check_item_catalog_ports.py
+	$(MAKE) playtest-check
 
 test-stage-c64: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/commodore test64
 	$(ISOLATED) $(MAKE) -C platforms/commodore test64-cartridge
 
 test-stage-c128: test-prebuild
-	$(ISOLATED) $(MAKE) -C platforms/commodore test128 test128-cartridge
+	$(ISOLATED) $(MAKE) -C platforms/commodore test128
 
 test-stage-plus4: test-prebuild
-	$(ISOLATED) $(MAKE) -C platforms/commodore testplus4 testplus4-cartridge
+	$(ISOLATED) $(MAKE) -C platforms/commodore testplus4
+	$(ISOLATED) $(MAKE) -C platforms/commodore testplus4-cartridge
 
 test-stage-apple2: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/apple2 test-runtime
@@ -143,15 +150,20 @@ PLAYTEST_CHARACTER = $(if $(CHARACTER),--character $(CHARACTER))
 # reads the X16 a block at a time, with an x16emu patched for it (docs/BACKLOG.md).
 PORT ?= c64
 PLAYTEST_DISK = $(or $(PLAYTEST_DISK_$(PORT)),disk64)
+PLAYTEST_DISK_c64-cart = disk64 cartridge64
 PLAYTEST_DISK_plus4 = diskplus4
+PLAYTEST_DISK_plus4-cart = diskplus4 cartridgeplus4
 PLAYTEST_DISK_c128 = disk128
+PLAYTEST_DISK_c128-cart = disk128 cartridge128
 PLAYTEST_DISK_apple2 = diskapple2
 PLAYTEST_DISK_atari8 = diskatari8
+PLAYTEST_DISK_atari8-cart = diskatari8 cartridgeatari8
 PLAYTEST_DISK_bbcmaster = diskbbcmaster
 PLAYTEST_DISK_cx16 = buildcx16
+PLAYTEST_DISK_cx16-cart = cartridgecx16
 PLAYTEST_PORT = --port $(PORT)
 
-playtest-check: build64 buildplus4 build128 buildapple2 buildatari8 buildbbcmaster buildcx16
+playtest-check: build64 cartridge64 buildplus4 cartridgeplus4 build128 cartridge128 buildapple2 buildatari8 cartridgeatari8 buildbbcmaster buildcx16 cartridgecx16
 	$(PLAYTEST_PY) -m moria_playtest.check
 
 playtest-smoke: disk64
@@ -161,7 +173,7 @@ playtest-smoke: disk64
 # commit: a game finding or a run error fails it (moria_playtest/gate.py).
 # Each run isolates itself, as the queue's do. Minutes, not seconds.
 playtest-gate: disk64 cartridge64 diskplus4 cartridgeplus4 disk128 cartridge128 diskapple2 diskatari8 \
-		cartridgeatari8 diskbbcmaster buildcx16
+		cartridgeatari8 diskbbcmaster buildcx16 cartridgecx16
 	$(PLAYTEST_PY) -m moria_playtest.gate $(if $(GATE_WORKERS),--workers $(GATE_WORKERS)) \
 		$(if $(TARGETS),--targets $(TARGETS)) $(if $(GATE_ALLOW_SKIP),--allow-skip)
 
@@ -320,22 +332,22 @@ runatari8-cart:
 runatari8-cart-130xe:
 	$(MAKE) -C platforms/atari8 run-cart-130xe
 
-testatari8: testatari8-memory-contract
+testatari8: testatari8-memory-contract tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/atari8 test-runtime
 	$(ISOLATED) $(MAKE) -C platforms/atari8 test-cartridge
 
 testatari8-smoke: testatari8-runtime
 
-testatari8-fast-smoke: testatari8-memory-contract
+testatari8-fast-smoke: testatari8-memory-contract tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/atari8 test-fast-smoke
 
-testatari8-runtime:
+testatari8-runtime: tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/atari8 test-runtime
 
 testatari8-cartridge: tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/atari8 test-cartridge
 
-testatari8-memory-contract:
+testatari8-memory-contract: tools-ready
 	$(MAKE) -C platforms/atari8 test-memory-contract
 
 testatari8-memory-contract-selftest:
@@ -350,18 +362,18 @@ diskbbcmaster:
 runbbcmaster:
 	$(MAKE) -C platforms/bbcmaster run
 
-testbbcmaster: testbbcmaster-memory-contract
-	$(MAKE) -C platforms/bbcmaster test-runtime
+testbbcmaster: testbbcmaster-memory-contract tools-ready
+	$(ISOLATED) $(MAKE) -C platforms/bbcmaster test-runtime
 
 testbbcmaster-smoke: testbbcmaster-runtime
 
-testbbcmaster-fast-smoke: testbbcmaster-memory-contract
-	$(MAKE) -C platforms/bbcmaster test-fast-smoke
+testbbcmaster-fast-smoke: testbbcmaster-memory-contract tools-ready
+	$(ISOLATED) $(MAKE) -C platforms/bbcmaster test-fast-smoke
 
-testbbcmaster-runtime:
-	$(MAKE) -C platforms/bbcmaster test-runtime
+testbbcmaster-runtime: tools-ready
+	$(ISOLATED) $(MAKE) -C platforms/bbcmaster test-runtime
 
-testbbcmaster-memory-contract:
+testbbcmaster-memory-contract: tools-ready
 	$(MAKE) -C platforms/bbcmaster test-memory-contract
 
 testbbcmaster-memory-contract-selftest:
@@ -377,15 +389,20 @@ BUILD       ?= build
 
 DISK64_IMAGE       = $(BUILD)/moria8-c64.d64
 C64_ZIP_IMAGE      = $(BUILD)/moria8-c64.zip
+CART64_IMAGE       = $(BUILD)/moria8-c64.crt
 DISK128_D64_IMAGE  = $(BUILD)/moria8-c128.d64
 DISK128_D71_IMAGE  = $(BUILD)/moria8-c128.d71
 DISK128_D81_IMAGE  = $(BUILD)/moria8-c128.d81
+CART128_IMAGE      = $(BUILD)/moria8-c128.crt
 DISKPLUS4_IMAGE    = $(BUILD)/moria8-plus4.d64
+CARTPLUS4_IMAGE    = $(BUILD)/moria8-plus4.crt
 DISKAPPLE2_IMAGE   = $(BUILD)/moria8-apple2.po
 DISKCX16_IMAGE     = $(BUILD)/moria8-cx16.zip
+CARTCX16_IMAGE     = $(BUILD)/moria8-cx16.crt
 DISKATARI8_IMAGE   = $(BUILD)/moria8-atari8.atr
+CARTATARI8_IMAGE   = $(BUILD)/moria8-atari8.car
 DISKBBCMASTER_IMAGE = $(BUILD)/moria8-bbcmaster.ssd
-RELEASE_ARTIFACTS  = $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(DISKPLUS4_IMAGE) $(DISKAPPLE2_IMAGE) $(DISKCX16_IMAGE) $(DISKATARI8_IMAGE) $(DISKBBCMASTER_IMAGE)
+RELEASE_ARTIFACTS  = $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(CART64_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(CART128_IMAGE) $(DISKPLUS4_IMAGE) $(CARTPLUS4_IMAGE) $(DISKAPPLE2_IMAGE) $(DISKCX16_IMAGE) $(CARTCX16_IMAGE) $(DISKATARI8_IMAGE) $(CARTATARI8_IMAGE) $(DISKBBCMASTER_IMAGE)
 ARTIFACT_MANIFEST  = $(BUILD)/SHA256SUMS
 ARTIFACT_SIGNATURES = $(addsuffix .asc,$(RELEASE_ARTIFACTS) $(ARTIFACT_MANIFEST))
 
@@ -399,6 +416,9 @@ $(DISK64_IMAGE): FORCE
 $(C64_ZIP_IMAGE): FORCE
 	$(MAKE) -C platforms/commodore zip64
 
+$(CART64_IMAGE): FORCE
+	$(MAKE) -C platforms/commodore cartridge64
+
 $(DISK128_D64_IMAGE): FORCE
 	$(MAKE) -C platforms/commodore disk128
 
@@ -408,8 +428,14 @@ $(DISK128_D71_IMAGE): FORCE
 $(DISK128_D81_IMAGE): FORCE
 	$(MAKE) -C platforms/commodore disk128
 
+$(CART128_IMAGE): FORCE
+	$(MAKE) -C platforms/commodore cartridge128
+
 $(DISKPLUS4_IMAGE): FORCE
 	$(MAKE) -C platforms/commodore diskplus4
+
+$(CARTPLUS4_IMAGE): FORCE
+	$(MAKE) -C platforms/commodore cartridgeplus4
 
 $(DISKAPPLE2_IMAGE): FORCE
 	$(MAKE) -C platforms/apple2 disk
@@ -417,8 +443,14 @@ $(DISKAPPLE2_IMAGE): FORCE
 $(DISKCX16_IMAGE): FORCE
 	$(MAKE) -C platforms/cx16 disk
 
+$(CARTCX16_IMAGE): FORCE
+	$(MAKE) -C platforms/cx16 cartridge
+
 $(DISKATARI8_IMAGE): FORCE
 	$(MAKE) -C platforms/atari8 disk
+
+$(CARTATARI8_IMAGE): FORCE
+	$(MAKE) -C platforms/atari8 cartridge
 
 $(DISKBBCMASTER_IMAGE): FORCE
 	$(MAKE) -C platforms/bbcmaster disk

@@ -283,7 +283,7 @@ init_test_arena:
 reset_player_baseline:
     jsr item_init_inventory
     lda #0
-    ldx #(zp_eff_word_recall - zp_eff_poison)
+    ldx #(zp_eff_see_inv - zp_eff_poison)
 !rpb_eff:
     sta zp_eff_poison,x
     dex
@@ -334,9 +334,11 @@ reset_player_baseline:
     sta player_data + PL_XP_1
     sta player_data + PL_XP_2
 
-    lda #12
     ldx #0
 !rpb_stats:
+    lda #0
+    sta player_stat_res,x
+    lda #12
     sta player_data + PL_STR_BASE,x
     sta player_data + PL_STR_CUR,x
     sta zp_player_str,x
@@ -376,11 +378,13 @@ run_quaff_a:
     sta t_id
     jsr reset_player_baseline
     lda t_id
+run_quaff_keep_a:
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
     lda #0
     sta inv_ego + 0
+    sta zp_msg_flags
     jsr stuff_slot_a_keys
     jsr item_quaff
     lda #0
@@ -737,7 +741,26 @@ test_start:
 !:  lda #ITEM_SLOT_POTION_OF_DETECT_INVISIBLE
     jsr run_quaff_a
     lda zp_eff_see_inv
-    bne !+
+    cmp #13
+    bcs !+
+    jmp !t3_fail+
+!:  cmp #25
+    bcc !+
+    jmp !t3_fail+
+!:  lda zp_eff_invis
+    beq !+
+    jmp !t3_fail+
+    // H1: Temporary See-Invisible ticks down to 0 via turn_tick_effects
+!:  lda #2
+    sta zp_eff_see_inv
+    jsr turn_tick_effects
+    lda zp_eff_see_inv
+    cmp #1
+    beq !+
+    jmp !t3_fail+
+!:  jsr turn_tick_effects
+    lda zp_eff_see_inv
+    beq !+
     jmp !t3_fail+
 !:  lda #ITEM_SLOT_POTION_OF_RESTORE_MANA
     jsr run_quaff_a
@@ -753,7 +776,130 @@ test_start:
 !:  lda #ITEM_SLOT_POTION_OF_SLEEP
     jsr run_quaff_a
     lda zp_eff_paralyze
-    bne !t3_pass+
+    bne !+
+    jmp !t3_fail+
+
+    // 3D: H7 Potion of Lose Memories (#81) drops XP & level while preserving
+    // PL_MAX_XP, and Potion of Restore Life Levels (#87) restores XP & level
+!:  jsr reset_player_baseline
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #100
+    sta player_data + PL_EXPFACT
+    lda #3
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+    lda #28                             // Level 3 threshold is 25 XP; 28 - 7 = 21 -> Level 2
+    sta player_data + PL_XP_0
+    sta player_data + PL_MAX_XP_0
+    lda #0
+    sta player_data + PL_XP_1
+    sta player_data + PL_XP_2
+    sta player_data + PL_MAX_XP_1
+    sta player_data + PL_MAX_XP_2
+    lda #ITEM_SLOT_POTION_OF_LOSE_MEMORIES
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    jsr stuff_slot_a_keys
+    jsr item_quaff
+    lda player_data + PL_XP_0
+    cmp #21
+    beq !+
+    jmp !t3_fail+
+!:  lda zp_player_lvl
+    cmp #2
+    beq !+
+    jmp !t3_fail+
+!:  lda player_data + PL_MAX_XP_0
+    cmp #28
+    beq !+
+    jmp !t3_fail+
+!:  lda #0
+    sta zp_msg_flags
+    lda #ITEM_SLOT_POTION_OF_RESTORE_LIFE_LEVELS
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    jsr stuff_slot_a_keys
+    jsr item_quaff
+    lda player_data + PL_XP_0
+    cmp #28
+    beq !+
+    jmp !t3_fail+
+!:  lda zp_player_lvl
+    cmp #3
+    beq !+
+    jmp !t3_fail+
+
+    // 3E: 18/100 (118) positive player_stat_res drain + single-stat restore
+    // preserves drained residual on non-target stats and restores target residual
+!:  jsr reset_player_baseline
+    lda #117
+    sta player_data + PL_STR_BASE
+    sta player_data + PL_INT_BASE
+    lda #ITEM_SLOT_RING_OF_STRENGTH
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_STRENGTH
+    sta inv_ego + EQUIP_RING
+    lda #4
+    sta inv_p1 + EQUIP_RING
+    lda #1
+    sta inv_qty + EQUIP_RING
+    lda #ITEM_SLOT_RING_OF_GAIN_INTELLIGENCE
+    sta inv_item_id + EQUIP_RING2
+    lda #ITEM_PAGE_RING_OF_GAIN_INTELLIGENCE
+    sta inv_ego + EQUIP_RING2
+    lda #4
+    sta inv_p1 + EQUIP_RING2
+    lda #1
+    sta inv_qty + EQUIP_RING2
+    jsr player_calc_stats               // Both 117 + 4 -> cur=118, res=+3
+    lda #ITEM_SLOT_POTION_OF_WEAKNESS
+    jsr run_quaff_keep_a
+    lda #ITEM_SLOT_POTION_OF_LOSE_INTELLIGENCE
+    jsr run_quaff_keep_a
+    // Restore ONLY Intelligence: INT residual returns to +3, STR stays at +2
+    lda #ITEM_SLOT_POTION_OF_RESTORE_INTELLIGENCE
+    jsr run_quaff_keep_a
+    lda player_data + PL_INT_CUR
+    cmp #118
+    beq !+
+    jmp !t3_fail+
+!:  lda player_stat_res + 1
+    cmp #3
+    beq !+
+    jmp !t3_fail+
+!:  lda player_stat_res + 0
+    cmp #2
+    beq !+
+    jmp !t3_fail+
+!:  lda #EQUIP_RING
+    sta piw_equip
+    tax
+    clc
+    jsr player_adjust_equipment_stat    // Unequip +4 STR ring: 118 + 2 - 4 = 116
+    lda player_data + PL_STR_CUR
+    cmp #116
+    beq !+
+    jmp !t3_fail+
+!:  lda #EQUIP_RING
+    sta piw_equip
+    tax
+    sec
+    jsr player_adjust_equipment_stat    // Re-equip +4 STR ring (cur=118, res=+2) and restore STR
+    lda #ITEM_SLOT_POTION_OF_RESTORE_STRENGTH
+    jsr run_quaff_keep_a
+    lda #EQUIP_RING
+    sta piw_equip
+    tax
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #117
+    beq !t3_pass+
     jmp !t3_fail+
 
 !t3_pass:
@@ -940,6 +1086,102 @@ test_start:
     jmp !t4_fail+
 !:  lda inv_to_dam + EQUIP_WEAPON
     cmp #1
+    beq !+
+    jmp !t4_fail+
+
+    // C1: Scroll of Summon Monster seeds fae_cx/fae_cy from zp_player_x/y
+    // even when prior fae_cx/fae_cy holds OOB $ff
+!:  jsr init_test_arena
+    jsr reset_player_baseline
+    lda #$ff
+    sta fae_cx
+    sta fae_cy
+    lda #ITEM_SLOT_SCROLL_OF_SUMMON_MONSTER
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    jsr stuff_slot_a_keys
+    jsr item_read_scroll
+    lda zp_mon_count
+    bne !+
+    jmp !t4_fail+
+!:  ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sec
+    sbc #9                              // adjacent to zp_player_x=10 -> 9..11
+    cmp #3
+    bcc !+
+    jmp !t4_fail+
+!:  ldy #MX_Y
+    lda (zp_ptr0),y
+    sec
+    sbc #9                              // adjacent to zp_player_y=10 -> 9..11
+    cmp #3
+    bcc !+
+    jmp !t4_fail+
+
+    // Scroll of Curse Armor reverses Crown of Might (+3) STR/DEX/CON & zeroes p1,
+    // and recalculates weight when stripping EGO_GREAT_MASS from worn boots
+!:  jsr reset_player_baseline
+    lda #ITEM_SLOT_GOLDEN_CROWN
+    sta inv_item_id + EQUIP_HEAD
+    lda #EGO_MIGHT
+    sta inv_ego + EQUIP_HEAD
+    lda #3
+    sta inv_p1 + EQUIP_HEAD
+    lda #1
+    sta inv_qty + EQUIP_HEAD
+    jsr player_calc_stats               // STR/DEX/CON: 12 -> 15
+    lda #ITEM_SLOT_SCROLL_OF_CURSE_ARMOR
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    jsr stuff_slot_a_keys
+    jsr item_read_scroll
+    lda inv_ego + EQUIP_HEAD
+    ora inv_p1 + EQUIP_HEAD
+    beq !+
+    jmp !t4_fail+
+!:  lda player_data + PL_STR_CUR
+    cmp #12
+    beq !+
+    jmp !t4_fail+
+!:  lda player_data + PL_DEX_CUR
+    cmp #12
+    beq !+
+    jmp !t4_fail+
+!:  lda player_data + PL_CON_CUR
+    cmp #12
+    beq !+
+    jmp !t4_fail+
+
+!:  jsr reset_player_baseline
+    lda #ITEM_SLOT_HARD_LEATHER_BOOTS
+    sta inv_item_id + EQUIP_FEET
+    lda #(ITEM_PAGE_HARD_LEATHER_BOOTS | EGO_GREAT_MASS)
+    sta inv_ego + EQUIP_FEET
+    lda #1
+    sta inv_qty + EQUIP_FEET
+    jsr inven_recalc_weight
+    lda inven_weight_lo
+    cmp #40
+    beq !+
+    jmp !t4_fail+
+!:  lda #ITEM_SLOT_SCROLL_OF_CURSE_ARMOR
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    jsr inven_recalc_weight
+    jsr stuff_slot_a_keys
+    jsr item_read_scroll
+    lda inv_ego + EQUIP_FEET
+    cmp #ITEM_PAGE_HARD_LEATHER_BOOTS
+    beq !+
+    jmp !t4_fail+
+!:  lda inven_weight_lo
+    cmp #20
     beq !t4_pass+
     jmp !t4_fail+
 

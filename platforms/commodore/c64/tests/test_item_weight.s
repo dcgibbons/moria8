@@ -499,9 +499,49 @@ test_start:
     jsr tw_add
     :EXPECT_CS()
     :EXPECT_MEM(inv_qty, 2)
+
+    // H6: Boots of Great Mass (EGO_GREAT_MASS) double item weight across
+    // inv_add_carried, inven_recalc_weight, and inv_remove_item without drift.
+    jsr tx_begin
+    lda #ITEM_SLOT_SOFT_LEATHER_BOOTS
+    ldx #1
+    jsr tw_add
+    :EXPECT_CS()
+    lda inven_weight_lo
+    bne !+
+    jsr tx_fail
+!:  asl
+    sta tw_double_w
+    ldx #0
+    jsr inv_remove_item
+    :EXPECT_MEM(inven_weight_lo, 0)
+    :EXPECT_MEM(inven_weight_hi, 0)
+    lda #ITEM_SLOT_SOFT_LEATHER_BOOTS
+    ldx #1
+    jsr tw_fields
+    lda #(ITEM_PAGE_SOFT_LEATHER_BOOTS | EGO_GREAT_MASS)
+    sta fi_add_ego
+    jsr inv_add_carried
+    :EXPECT_CS()
+    lda inven_weight_lo
+    cmp tw_double_w
+    beq !+
+    jsr tx_fail
+!:  jsr inven_recalc_weight
+    lda inven_weight_lo
+    cmp tw_double_w
+    beq !+
+    jsr tx_fail
+!:  :EXPECT_MEM(inven_weight_hi, 0)
+    ldx #0
+    jsr inv_remove_item
+    :EXPECT_MEM(inven_weight_lo, 0)
+    :EXPECT_MEM(inven_weight_hi, 0)
     :END_TEST(4)
 
     jmp test_exit_trampoline
+
+tw_double_w: .byte 0
 
 // tw_seed_1280 — a passing test with STR 10 and 128.0 lb carried: long
 // swords and two armours in slots 0-1, chain mail worn.

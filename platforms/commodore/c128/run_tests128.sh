@@ -9,8 +9,16 @@ java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
+        local has_symdir=0 a
+        for a in "$@"; do
+            [ "$a" = "-symbolfiledir" ] && has_symdir=1
+        done
+        local -a symdir_args=()
+        if [ "$has_symdir" -eq 0 ] && [ -n "${TMPDIR:-}" ]; then
+            symdir_args=(-symbolfiledir "$TMPDIR")
+        fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
         local rc=$? prev="" arg
         if [ "$rc" -ne 0 ]; then
             # The assembler still wrote its -o file; left behind, the
@@ -27,9 +35,9 @@ java() {
 }
 RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/platforms/commodore/c128}"
 cd "$RUN_TESTS128_DIR"
-# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
-# gets its own directory, and runs older than six hours are cleared here, so
-# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+# Temp files under build/, never the shared system temp dir (AGENTS.md rule 9):
+# each run gets its own directory, and runs older than six hours are cleared
+# here, so leftovers cannot pile up.
 mkdir -p ../../../build/test/c128/tmp
 find ../../../build/test/c128/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
 TMPDIR=$(cd ../../../build/test/c128/tmp && mktemp -d "$(pwd)/run.XXXXXX")
@@ -60,17 +68,9 @@ if [ "$kickass_status" -ne 0 ]; then
 fi
 KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
 python3 -B ../../../tools/gen_trampolines.py --port c128 --output ../../../build/trampolines/c128_trampolines.inc || exit 1
-if [ -n "${VICE128:-}" ]; then
-    VICE="$VICE128"
-elif command -v x128 >/dev/null 2>&1; then
-    VICE="$(command -v x128)"
-elif [ -x /opt/homebrew/bin/x128 ]; then
-    VICE="/opt/homebrew/bin/x128"
-else
-    VICE="/Applications/VICE/bin/x128"
-fi
+VICE="${VICE128:-$(command -v x128 2>/dev/null || printf 'x128')}"
 # VICE reads this config (with the installed version tag) instead of the
-# user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
+# user's vicerc; passing an empty config made VICE pop up "No version tag found" dialogs.
 VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
 # vice_keep_inputs.py stands in for x128: it keeps the files each run boots
 # and the VICE seed (power-on RAM), so a failed suite can be replayed exactly.
@@ -138,13 +138,14 @@ KA_DEFINES=(-define C128 :OVL_OUT=../../../build/test/c128)
 
 cleanup_test128_tmp() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
-    rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
-    rm -f "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
     if [ "${TEST128_KEEP_TMP:-0}" = "1" ]; then
         return
     fi
     if [ -n "${TEST128_TMP_DIR:-}" ] && [ -d "$TEST128_TMP_DIR" ]; then
         rm -rf "$TEST128_TMP_DIR"
+    fi
+    if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
+        rm -rf "$TMPDIR"
     fi
 }
 
@@ -593,7 +594,6 @@ c128_disk_payload_args() {
     for f in runtime input proj fdisk; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
-    C128_DISK_PAYLOAD_ARGS+=(-write "$dir/item.idx" "item.idx")
     for f in huff hvec persist play bank; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
@@ -1342,7 +1342,6 @@ for runtime_name, expected_load in (
     ("128.input.prg", 0x0B00),
     ("128.proj.prg", 0x0A80),
     ("128.fdisk.prg", 0x0D60),
-    ("item.idx", 0x0600),
     ("128.huff.prg", 0xF000),
     ("128.hvec.prg", 0xFFFA),
     ("128.persist.prg", 0xAF00),
@@ -2501,7 +2500,7 @@ run_vic40_blanked_boot_smoke() {
             -attach "$probe_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$probe_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1 || ! python3 -B fix_c128_item_idx.py "$probe_d64" >>"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
         echo "FAIL (vic40 probe d64 creation failed)"
         tail -20 "$(test128_tmp_file "test128_${name}_c1541.log")" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2613,7 +2612,7 @@ build_real_boot_diag_assets() {
             -attach "$diag_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$diag_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (real-boot diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2670,7 +2669,7 @@ build_overlay_transition_diag_assets() {
             -attach "$diag_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$diag_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$diag_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2719,7 +2718,7 @@ build_title_art_boot_assets() {
             -attach "$title_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$title_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$title_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (title-art disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2919,7 +2918,7 @@ build_save_write_product_assets() {
             -attach "$save_write_d64" \
             -write ../../../build/test/c128/boot128.prg "boot128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$save_write_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (save-write product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3009,7 +3008,7 @@ build_save_media_fail_product_assets() {
             -attach "$fail_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$fail_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (save-media-fail product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3099,7 +3098,7 @@ build_overlay_partial_failure_boot_assets() {
             -attach "$partial_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$partial_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$partial_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-partial disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3146,7 +3145,7 @@ build_death_overlay_boot_assets() {
             -attach "$death_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$death_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$death_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (death-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3193,7 +3192,7 @@ build_overlay_state_boot_assets() {
             -attach "$state_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write "$state_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$state_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-state disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3238,7 +3237,6 @@ c128_patch_scripted_boot_d71() {
         -delete "128.input" \
         -delete "128.proj" \
         -delete "128.fdisk" \
-        -delete "item.idx" \
         -delete "128.huff" \
         -delete "128.hvec" \
         -delete "128.persist" \
@@ -3261,13 +3259,11 @@ c128_patch_scripted_boot_d71() {
         -write ../../../build/test/c128/128.input.prg "128.input" \
         -write ../../../build/test/c128/128.proj.prg "128.proj" \
         -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-        -write ../../../build/test/c128/item.idx "item.idx" \
         -write ../../../build/test/c128/128.huff.prg "128.huff" \
         -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
         -write ../../../build/test/c128/128.persist.prg "128.persist" \
         -write ../../../build/test/c128/128.play.prg "128.play" \
-        -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1 \
-        && python3 -B fix_c128_item_idx.py "$target_d71" >>"$build_log" 2>&1
+        -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1
 }
 
 build_scripted_input_boot_assets() {
@@ -3555,7 +3551,7 @@ build_load_resume_boot_assets() {
             -attach "$loadresume_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$loadresume_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (load-resume disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4130,7 +4126,7 @@ run_boot_d64_smoke() {
             -attach "$scripted_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$scripted_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4586,7 +4582,7 @@ run_retirement_royal_smoke() {
             -attach "$boot_d64" \
             -write "$smoke_c128/boot128.prg" "boot128" \
             -write "$smoke_c128/moria128.prg" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >"$build_log" 2>&1; then
         echo "FAIL (retirement product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4758,7 +4754,7 @@ run_boot_title_change_save_drive_smoke() {
             -attach "$boot_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (change-save-drive product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4850,7 +4846,7 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
             -attach "$wrong_media_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$wrong_media_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive save wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4923,7 +4919,7 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
             -attach "$wrong_media_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$wrong_media_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load wrong-media product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5003,7 +4999,7 @@ run_boot_title_single_drive_load_corrupt_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load corrupt product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5098,7 +5094,7 @@ run_boot_title_single_drive_load_return_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive load return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5185,7 +5181,7 @@ run_boot_title_load_then_save_new_empty_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (load-then-save-new-empty product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5286,7 +5282,7 @@ run_boot_title_disk_setup_single_drive_return_smoke() {
     if ! "$c1541_bin" -attach "$boot_d64" \
             -delete "moria128" "${C128_DISK_PAYLOAD_DELETE_ARGS[@]}" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$boot_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (disk-setup single-drive return product disk patch failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5363,7 +5359,7 @@ run_boot_title_single_drive_fresh_save_smoke() {
             -attach "$fresh_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$fresh_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -5454,7 +5450,7 @@ run_boot_title_single_drive_fresh_save_no_init_smoke() {
             -attach "$fresh_d64" \
             -write ../../../build/test/c128/boot128.prg "moria8.128" \
             -write ../../../build/test/c128/moria128.prg "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1 || ! python3 -B fix_c128_item_idx.py "$fresh_d64" >>"$build_log" 2>&1; then
+            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
         echo "FAIL (single-drive fresh-save no-init product disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -6253,7 +6249,7 @@ run_chest_open_product_smoke128() {
         --expect-byte-symbol ".chest_product_loot_placed=0x01" \
         --expect-byte-symbol ".chest_loot_pending=0x00" \
         --expect-byte-symbol ".chest_pending_summons=0x00" \
-        --expect-byte-symbol ".current_overlay=0x04" \
+        --expect-byte-symbol ".current_overlay=0x0a" \
         --expect-byte-symbol ".fi_item_id=${chest_slot_hex}" \
         --expect-byte-symbol ".fi_p1=0x80" \
         --expect-byte-symbol ".zp_player_dlvl=0x01" \

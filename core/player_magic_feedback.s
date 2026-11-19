@@ -177,19 +177,23 @@ pmx_confuse_monster_dir_msg:
     ldx #HSTR_PIW_WAND_CLOUD
     jmp huff_print_msg
 
+// pmx_set_see_invisible_msg — Sense Invisible prayer: VMS spells.inc
+// detect_inv2(randint(24) + 24) -> +25..48 turns in zp_eff_see_inv,
+// saturating at 255; prints HSTR_PIQ_EYES_TINGLE on onset.
 pmx_set_see_invisible_msg:
-    lda zp_eff_see_inv
+    lda #24
+    jsr rng_range
+    sec
+    adc #24
+    ldy #zp_eff_see_inv
+    jsr pmx_add_zp_was_zero
     ora zp_eff_invis
-    pha
-    lda #1
-    sta zp_eff_see_inv
-    sta zp_eff_invis
-    pla
     bne !pssim_done+
     ldx #HSTR_PIQ_EYES_TINGLE
     jmp huff_print_msg
 !pssim_done:
     rts
+.assert "See-invisible timer is zero-page", zp_eff_see_inv < $100, true
 
 pmx_print_inline:
     sta zp_ptr0

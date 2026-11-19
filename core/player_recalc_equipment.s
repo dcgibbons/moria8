@@ -38,20 +38,13 @@ player_recalc_equipment:
     beq !pre_no_slay+
     lda inv_item_id,x
     cmp #ITEM_SLOT_RING_OF_SLAYING
-    beq !pre_add_slay+
+    beq !pre_r_hit+
     cmp #ITEM_SLOT_RING_OF_INCREASE_DAMAGE
-    beq !pre_add_slay+
+    beq !pre_r_hit+
     cmp #ITEM_SLOT_RING_OF_INCREASE_TO_HIT
     bne !pre_no_slay+
-!pre_add_slay:
-    lda inv_to_hit,x
-    clc
-    adc pcc_eq_tohit
-    sta pcc_eq_tohit
-    lda inv_to_dam,x
-    clc
-    adc pcc_eq_todam
-    sta pcc_eq_todam
+!pre_r_hit:
+    jsr !pre_add_slay_x+
 !pre_no_slay:
     cpx #EQUIP_RING2
     beq !pre_slay_gloves+
@@ -59,16 +52,20 @@ player_recalc_equipment:
     bne !pre_slay_ring-
 !pre_slay_gloves:
     ldx #EQUIP_HANDS
-    lda inv_item_id,x
-    cmp #FI_EMPTY
+    lda #EGO_SLAYING
+    jsr !pre_chk_ego+
+    ldx #EQUIP_CLOAK
+    lda #EGO_ENVELOPING
+    jsr !pre_chk_ego+
+    jmp !pre_after_slay+
+!pre_chk_ego:
+    ldy inv_item_id,x
+    iny
     beq !pre_done_slay+
-    lda inv_ego,x
+    eor inv_ego,x
     and #EGO_ID_MASK
-    cmp #EGO_SLAYING
-    beq !pre_add_g+
-    cmp #EGO_ENVELOPING
     bne !pre_done_slay+
-!pre_add_g:
+!pre_add_slay_x:
     lda inv_to_hit,x
     clc
     adc pcc_eq_tohit
@@ -78,6 +75,8 @@ player_recalc_equipment:
     adc pcc_eq_todam
     sta pcc_eq_todam
 !pre_done_slay:
+    rts
+!pre_after_slay:
 #else
     jsr player_apply_slaying_bonuses
 #endif

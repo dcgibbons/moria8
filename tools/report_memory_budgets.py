@@ -188,7 +188,7 @@ def measure_segment(
     note = spec.note
     if spec.measure == "atari_high_tail":
         if "id_known_bits" in syms and base_addr <= syms["id_known_bits"] < ceil_addr:
-            sym_end = syms["id_known_bits"] + 20
+            sym_end = syms["id_known_bits"] + 47
         elif "consol_released" in syms and base_addr <= syms["consol_released"] < ceil_addr:
             sym_end = syms["consol_released"] + 1
     elif spec.measure == "c64_hidden_aux":
@@ -388,7 +388,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
                 0xE000,
                 end_sym="plus4_high_bss_end",
                 measure="sym",
-                note="$DF00-$DFFF hidden RAM (item.cat 254B sector LRU cache on disk); $0400-$07FF 1,024B non-gen monster catalog LRU cache window",
+                note="$DF00-$DFFF hidden RAM (item.cat 254B sector LRU cache on disk); non-gen $0400-$04FF (256B) monster catalog LRU + $0600-$07AF (432B) pickup cache ($0500-$05FF & $07B0-$07FF KERNAL reserved)",
             ),
             SegmentSpec("4.bank", "banked", 0xF000, 0xFC00, end_sym="banked_code_end", prg_file="4.bank", note="HARD ceiling < $FC00 (not $FDFF)"),
             SegmentSpec("legalui", "overlay", 0xE000, 0xE600, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),

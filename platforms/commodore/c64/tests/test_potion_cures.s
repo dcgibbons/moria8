@@ -914,41 +914,46 @@ test_start:
 !t16_done:
 
     // ==========================================
-    // Test 17: Gain Constitution (#144) adds 1 to max HP and heals to full:
-    // CON 10 -> 11, HP 50/200 -> 201/201 in ZP and player_data.
+    // Test 17: Gain Constitution (#144) recalculates max HP via player_calc_hp
+    // and heals to full: L10 Human Warrior CON 16 -> 17 (con_adj 0 -> +1),
+    // HP 50/100 -> 109/109 in ZP and player_data.
     // ==========================================
-    ldy #PL_CON_BASE - PL_STR_BASE
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
     lda #10
-    ldx #10
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+    ldy #PL_CON_BASE - PL_STR_BASE
+    lda #16
+    ldx #16
     jsr tg_stat
-    lda #200
-    sta tq_lo
-    lda #0
-    sta tq_hi
+    jsr player_calc_hp
     lda #50
-    ldx #0
-    jsr tq_set_hp
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
     lda #ITEM_SLOT_POTION_OF_GAIN_CONSTITUTION
     jsr tq_quaff
     lda #$00
     sta tc_results + 16
     lda player_data + PL_CON_BASE
-    cmp #11
+    cmp #17
     bne !t17_done+
     lda zp_player_con
-    cmp #11
+    cmp #17
     bne !t17_done+
     lda zp_player_mhp_lo
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda player_data + PL_MHP_LO
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda zp_player_hp_lo
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda player_data + PL_HP_LO
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda zp_player_mhp_hi
     ora zp_player_hp_hi

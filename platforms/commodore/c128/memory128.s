@@ -106,7 +106,7 @@
 //   - Set 0 & Set 1 charsets:  $2000-$3FFF (512 cells x 16 B:
 //       bytes 0..7 per cell  = live 8x8 glyph rasters for Set 0 ($2000) & Set 1 ($3000);
 //       bytes 8..15 per cell = unused in 8-scanline text mode -> holds
-//                              ITEM.CAT[3840..7572] across 467 cells at $2008-$3D2C)
+//                              ITEM.CAT[3840..7477] across 455 cells at $2008-$3C6D)
 
 .macro AssertRegionBefore(desc, left_end, right_base) {
     .assert desc, left_end < right_base, true

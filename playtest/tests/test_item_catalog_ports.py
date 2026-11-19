@@ -13,7 +13,8 @@ import check_item_catalog_ports as cicp  # noqa: E402
 
 class ItemCatalogPortsTest(cicp.CheckItemCatalogPortsSelfTest):
     def _built_ports(self, build_root: Path = cicp.DEFAULT_BUILD_ROOT) -> list[str]:
-        built = [p for p in cicp.CANONICAL_PORTS if cicp.is_port_built(p, build_root)]
+        targets = getattr(cicp, "ALL_TARGETS", cicp.CANONICAL_PORTS)
+        built = [p for p in targets if cicp.is_port_built(p, build_root)]
         if not built:
             self.skipTest(f"no built ports under {build_root}; run make build first")
         return built

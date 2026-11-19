@@ -77,9 +77,10 @@ LICENSE_FILE = ../../data/LICENSE
 SOURCE_OFFER = ../../data/SOURCE-OFFER
 LICENSE_DISK_FILE = $(OUT)/license.seq
 SOURCE_OFFER_DISK_FILE = $(OUT)/source-offer.seq
-RUN_FLAGS64  = -autostartprgmode 1 -sound -sounddev coreaudio
-RUN_FLAGS128 = -80col -sound -sounddev coreaudio
-RUN_FLAGSPLUS4 = -autostartprgmode 1 -sound -sounddev coreaudio
+VICE_SOUND_ARGS ?=
+RUN_FLAGS64  = -autostartprgmode 1 -sound $(VICE_SOUND_ARGS)
+RUN_FLAGS128 = -80col -VDC16KB -sound $(VICE_SOUND_ARGS)
+RUN_FLAGSPLUS4 = -autostartprgmode 1 -sound $(VICE_SOUND_ARGS)
 KA_FLAGS     = -showmem -vicesymbols -libdir ../../core -libdir common -afo
 KA_FLAGS64   = $(KA_FLAGS) -libdir c64
 KA_FLAGSPLUS4 = $(KA_FLAGS) -libdir c64 -define PLUS4
@@ -184,10 +185,9 @@ C128_RUNTIME_INPUT = $(OUT128)/128.input.prg
 C128_RUNTIME_PROJECTILE = $(OUT128)/128.proj.prg
 C128_RUNTIME_LOW   = $(OUT128)/128.runtime.prg
 C128_RUNTIME_COMMON = $(OUT128)/128.fdisk.prg
-C128_ITEM_CAT_SOURCES = ../shared/item_catalog/item_catalog_spec.json ../../tools/build_item_catalog.py
+C128_ITEM_CAT_SOURCES = ../shared/item_catalog/item_catalog_spec.json ../shared/item_catalog/item_cat_data.s ../shared/item_catalog/item_cat_layout.s ../../tools/build_item_catalog.py
 C128_ITEM_CAT_STAMP   = $(OUT128)/.item_catalog.stamp
 C128_ITEM_CAT_FILE    = $(OUT128)/item.cat
-C128_ITEM_IDX_FILE    = $(OUT128)/item.idx
 C128_RESIDENT_HUFFMAN = $(OUT128)/128.huff.prg
 C128_RESIDENT_HUFFMAN_VECTOR = $(OUT128)/128.hvec.prg
 # The monster catalog's Bank 1 fields, names, and extended rows (memory128.s,
@@ -249,7 +249,7 @@ C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) 
 	$(C128_BOOTART_DIAG_PRG) \
 	$(C128_TITLE_PRG) $(C128_CATALOG_PRGS) $(C128_CATALOG_EXT_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_MODAL_MISC) \
 		$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) $(C128_OVL_CHEST) $(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) \
-		$(C128_ITEM_CAT_FILE) $(C128_ITEM_IDX_FILE) $(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) $(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
+		$(C128_ITEM_CAT_FILE) $(C128_RESIDENT_HUFFMAN) $(C128_RESIDENT_HUFFMAN_VECTOR) $(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) $(C128_OVL_MODAL_MISC) \
 	$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_OVL_DISARM) $(C128_OVL_CHEST) \
 		$(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) \
@@ -264,7 +264,7 @@ C128_MAIN_OUTPUTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
 .PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 	bootart128-charset-demo \
 	test test-disk test-disk-static test-disk-debt test64 test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
-	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols ensure-kickass kickass create-symlinks
+	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols cleanup-source-symbols-c64 cleanup-source-symbols-c128 cleanup-source-symbols-plus4 ensure-kickass kickass create-symlinks
 
 all: build
 
@@ -273,15 +273,15 @@ build: build64 build128 buildplus4
 build64: $(C64_BUILD_ARTIFACTS) cartridge64
 	@mkdir -p "$(OUT64)"
 	@python3 ../../tools/parse_creatures.py --sync-web
-	@$(MAKE) --no-print-directory cleanup-source-symbols
+	@$(MAKE) --no-print-directory cleanup-source-symbols-c64
 
 build128: $(C128_BUILD_ARTIFACTS) cartridge128
 	@mkdir -p "$(OUT128)"
-	@$(MAKE) --no-print-directory cleanup-source-symbols
+	@$(MAKE) --no-print-directory cleanup-source-symbols-c128
 
 buildplus4: $(PLUS4_BUILD_ARTIFACTS) cartridgeplus4
 	@mkdir -p "$(OUTPLUS4)"
-	@$(MAKE) --no-print-directory cleanup-source-symbols
+	@$(MAKE) --no-print-directory cleanup-source-symbols-plus4
 
 disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(OUT)/moria8-c64.crt $(DISK128_IMAGES) $(OUT)/moria8-c128.crt $(DISKPLUS4_IMAGE) $(OUT)/moria8-plus4.crt
 
@@ -304,17 +304,17 @@ run128: $(DISK128_IMAGE)
 	$(VICE128) -drive8truedrive -drive8type 1571 +busdevice8 $(RUN_FLAGS128) $(DISK128_IMAGE)
 
 run128-cart: cartridge128
-	$(VICE128) -80col -cartcrt $(OUT)/moria8-c128.crt
+	$(VICE128) -80col -VDC16KB -sound $(VICE_SOUND_ARGS) -cartcrt $(OUT)/moria8-c128.crt
 
 runplus4: $(DISKPLUS4_IMAGE)
 	$(VICEPLUS4) -drive8truedrive -drive8type 1541 $(RUN_FLAGSPLUS4) -autostart $(DISKPLUS4_IMAGE)
 
 runplus4-cart: cartridgeplus4
-	$(VICEPLUS4) -cartcrt $(OUT)/moria8-plus4.crt -sound -sounddev coreaudio
+	$(VICEPLUS4) -cartcrt $(OUT)/moria8-plus4.crt -sound $(VICE_SOUND_ARGS)
 
 bootart128-charset-demo: $(C128_CHARSET_DEMO_PRG)
 
-test: test64 test64-cartridge test128-fast test128-fast-smoke test128-cartridge testplus4
+test: test64 test64-cartridge test128-fast test128-fast-smoke test128-cartridge testplus4 testplus4-cartridge
 
 test-disk: ensure-kickass
 	python3 -u disk_test_matrix.py \
@@ -368,7 +368,8 @@ test128-fast-smoke: ensure-kickass check128-payloads
 testplus4-build: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
 	@echo "Plus/4 build artifacts assembled; runtime smoke is make testplus4-runtime."
 
-testplus4: testplus4-runtime testplus4-legal test-scripted-smoke-harness testplus4-cartridge
+testplus4: ensure-kickass testplus4-legal test-scripted-smoke-harness
+	cd plus4 && KICKASS="$(KICKASS_RESOLVED)" VICEPLUS4="$(VICEPLUS4)" ./run_testsplus4.sh
 
 testplus4-runtime: ensure-kickass
 	cd plus4 && KICKASS="$(KICKASS_RESOLVED)" VICEPLUS4="$(VICEPLUS4)" ./run_testsplus4.sh
@@ -409,6 +410,14 @@ check-hal-boundaries:
 	cd ../.. && python3 -B tools/check_raw_item_ids.py --selftest
 	cd ../.. && python3 -B tools/check_raw_item_ids.py
 	cd ../.. && python3 -B tools/build_item_catalog.py --selftest
+	cd ../.. && python3 -B tools/huff_encoder.py --check
+	cd ../.. && python3 -B -m unittest discover -s tools -p 'test_*catalog*.py'
+	cd ../.. && python3 -B tools/check_item_catalog_ports.py --selftest
+	cd ../.. && python3 -B tools/report_memory_budgets.py --selftest
+	$(MAKE) -C ../apple2 test-memory-contract-selftest
+	$(MAKE) -C ../cx16 test-memory-contract-selftest
+	$(MAKE) -C ../atari8 test-memory-contract-selftest
+	$(MAKE) -C ../bbcmaster test-memory-contract-selftest
 
 # ── C64 build rules ───────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)
@@ -523,10 +532,11 @@ $(C128_MAIN_OUTPUTS): $(C128_MAIN_STAMP)
 	@test -f "$@"
 
 $(C128_ITEM_CAT_STAMP): $(C128_ITEM_CAT_SOURCES) $(CATALOG_DISK) Makefile | $(OUT128)
-	python3 -B "$(CATALOG_DISK)" item-records "$(OUT128)" 0x7400 0x0600
+	rm -f "$(OUT128)/item.idx"
+	python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0, '../../tools'); import catalog_disk; Path('$(C128_ITEM_CAT_FILE)').write_bytes(b'\x00\x74' + catalog_disk.item_catalog_bytes())"
 	touch "$@"
 
-$(C128_ITEM_CAT_FILE) $(C128_ITEM_IDX_FILE): $(C128_ITEM_CAT_STAMP)
+$(C128_ITEM_CAT_FILE): $(C128_ITEM_CAT_STAMP)
 	@test -f "$@" || { rm -f "$(C128_ITEM_CAT_STAMP)"; $(MAKE) "$(C128_ITEM_CAT_STAMP)"; }
 	@test -f "$@"
 
@@ -740,7 +750,6 @@ define C128_DISK_WRITE_FILES
 		-write "$(C128_RUNTIME_PROJECTILE)" "128.proj" \
 		-write "$(C128_RUNTIME_LOW)" "128.runtime" \
 		-write "$(C128_RUNTIME_COMMON)" "128.fdisk" \
-		-write "$(C128_ITEM_IDX_FILE)" "item.idx" \
 		-write "$(C128_RESIDENT_HUFFMAN)" "128.huff" \
 		-write "$(C128_RESIDENT_HUFFMAN_VECTOR)" "128.hvec" \
 		-write "$(C128_RESIDENT_PERSIST)" "128.persist" \
@@ -759,19 +768,18 @@ define BUILD_C128_DISK_IMAGE
 $(C128_DISK_WRITE_FILES)
 	python3 "$(PATCH_D64)" "$@" 1 0 "$(C128_BOOTSECT_PRG)" 0x0b00
 	python3 "$(DISKART)" "$@" c128
-	python3 -B c128/fix_c128_item_idx.py "$@"
 	@mkdir -p "$(OUT128)"
 	cp -f "$@" "$(OUT128)/$(notdir $@)"
 	cp -f "$@" "$(OUT128)/moria128.$(1)"
 endef
 
-$(DISK128_D64_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) c128/fix_c128_item_idx.py $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+$(DISK128_D64_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	$(call BUILD_C128_DISK_IMAGE,d64)
 
-$(DISK128_D71_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) c128/fix_c128_item_idx.py $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+$(DISK128_D71_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	$(call BUILD_C128_DISK_IMAGE,d71)
 
-$(DISK128_D81_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) c128/fix_c128_item_idx.py $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
+$(DISK128_D81_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	$(call BUILD_C128_DISK_IMAGE,d81)
 
 kickass: ensure-kickass
@@ -803,10 +811,16 @@ $(OUT128):
 $(OUTPLUS4):
 	mkdir -p "$(OUTPLUS4)"
 
-cleanup-source-symbols:
+cleanup-source-symbols-c64:
 	rm -f c64/*.sym c64/*.vs c64/creature_data/*.sym c64/creature_data/*.vs
+
+cleanup-source-symbols-c128:
 	rm -f c128/*.sym c128/*.vs
+
+cleanup-source-symbols-plus4:
 	rm -f plus4/*.sym plus4/*.vs
+
+cleanup-source-symbols: cleanup-source-symbols-c64 cleanup-source-symbols-c128 cleanup-source-symbols-plus4
 	rm -f ../../core/*.sym ../../core/*.vs
 
 clean:
@@ -815,7 +829,6 @@ clean:
 	rm -f c128/*.prg c128/*.sym c128/*.vs c128/tests/*.prg c128/tests/*.vs c128/tests/*.sym
 	rm -f plus4/*.prg plus4/*.sym plus4/*.vs plus4/tests/*.prg plus4/tests/*.vs plus4/tests/*.sym
 	rm -f ../../core/*.sym ../../core/*.vs
-	rm -f /tmp/test_*.mon
 
 # The C64 EasyFlash cartridge (a shipping package, built by `make disk`): its own
 # output directory and compile define.
@@ -902,7 +915,7 @@ $(CARTPLUS4_OUT)/legalui: $(CARTPLUS4_OUT)/.main.stamp
 	@test -f "$@" || { rm -f "$(CARTPLUS4_OUT)/.main.stamp"; $(MAKE) "$(CARTPLUS4_OUT)/.main.stamp"; }
 	@test -f "$@"
 
-$(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin &: $(CARTPLUS4_OUT)/.main.stamp $(CARTPLUS4_OUT)/legalui $(CARTPLUS4_OUT)/.boot.stamp $(CARTPLUS4_OUT)/title ../../tools/make_plus4_magic.py ../../tools/build_catalog.py $(CATALOG_DISK) $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
+$(OUT)/moria8-plus4.crt $(CARTPLUS4_OUT)/moria8-plus4.bin &: $(CARTPLUS4_OUT)/.main.stamp $(CARTPLUS4_OUT)/legalui $(CARTPLUS4_OUT)/.boot.stamp $(CARTPLUS4_OUT)/title ../../tools/make_plus4_magic.py ../../tools/build_catalog.py ../shared/catalog/monster_catalog_spec.json $(CATALOG_DISK) $(CATALOG_SOURCES) $(PLUS4_ITEM_CATALOG_SOURCES) $(LICENSE_FILE) $(SOURCE_OFFER)
 	python3 -B ../../tools/make_plus4_magic.py "$(CARTPLUS4_OUT)" "$(OUT)/moria8-plus4.crt"
 
 $(CARTPLUS4_OUT)/catalog-test.prg: plus4/cartridge_test_catalog.s $(CARTPLUS4_OUT)/.main.stamp

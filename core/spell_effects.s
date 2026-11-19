@@ -353,42 +353,9 @@ eff_remove_curse:
 // overlay (the resident image funds chest gameplay there).
 // ============================================================
 #if !EFF_FIND_DOORS_EXTERNAL
-eff_fd_row: .byte 0
-
-eff_find_doors:
-#if HAL_PLATFORM_TURBO_BURST_HOOKS
-    jsr c64u_turbo_fast
-#endif
-    lda #1
-    sta eff_fd_row
-!efd_row_loop:
-    ldx eff_fd_row
-    jsr map_row_ptr0_x
-    ldy #1
-!efd_col_loop:
-    :MapRead_ptr0_y()
-    tax
-    and #TILE_TYPE_MASK
-    cmp #TILE_SECRET
-    bne !efd_col_next+
-    txa
-    and #TILE_FLAG_MASK
-    ora #(TILE_DOOR_CLOSED | FLAG_VISITED)
-    :MapWrite_ptr0_y()
-!efd_col_next:
-    iny
-    cpy #MAP_COLS - 1
-    bcc !efd_col_loop-
-    inc eff_fd_row
-    lda eff_fd_row
-    cmp #MAP_ROWS - 1
-    bcc !efd_row_loop-
-#if HAL_PLATFORM_TURBO_BURST_HOOKS
-    jsr c64u_turbo_normal
-#endif
-    lda #1
-    sta vis_room_revealed
-    rts
+#define EFF_DOORS_TRAPS_EMIT_DOORS_ONLY
+#import "eff_doors_traps_cold.s"
+#undef EFF_DOORS_TRAPS_EMIT_DOORS_ONLY
 #endif
 
 // adj_dir_idx — direction counter for spell_effects_overlay.s's adjacent

@@ -157,8 +157,7 @@ itemdesc_put_stats:
 !idps_weapon:
     lda itemdesc_to_hit
     ora itemdesc_to_dam
-    bne !idps_weapon_has_bonus+
-    rts
+    beq !idps_ring_p1+
 !idps_weapon_has_bonus:
     lda #$20
     jsr hal_screen_put_char
@@ -171,20 +170,18 @@ itemdesc_put_stats:
     lda itemdesc_to_dam
     jsr itemdesc_put_signed
     lda #$29
-    jmp hal_screen_put_char
+    jsr hal_screen_put_char
+    jmp !idps_ring_p1+
 !idps_ring:
     .assert "All rings live on Page 1", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT, true
     bit item_cur_page
     bvc !idps_ring_done+
     lda itemdesc_to_ac
-    bne !idps_ring_ac+
+    bne !idps_ring_ac_has_bonus+
     lda itemdesc_to_hit
     ora itemdesc_to_dam
     bne !idps_weapon-
     jmp !idps_ring_p1+
-!idps_ring_ac:
-    lda itemdesc_to_ac
-    bne !idps_ring_ac_has_bonus+
 !idps_ring_done:
     rts
 !idps_ring_ac_has_bonus:

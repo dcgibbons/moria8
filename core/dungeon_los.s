@@ -485,6 +485,5 @@ player_get_infra_range:
 !pgir_done:
     tya
     rts
-    rts
 
 #endif

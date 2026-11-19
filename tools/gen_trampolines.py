@@ -666,7 +666,6 @@ _RENDERERS: Mapping[str, Callable[[TrampolineEntry], str]] = {
     "ay_dispatch": _render_ay_dispatch,
     "c128_banked_compute": _render_c128_macro("C128BankedComputeTrampoline", False),
     "c128_banked_preserve_a": _render_c128_macro("C128BankedPreserveATrampoline", False),
-    "c128_banked_preserve_a_return": _render_c128_macro("C128BankedPreserveAReturnTrampoline", False),
     "c128_banked_preserve_flags": _render_c128_macro("C128BankedPreserveFlagsTrampoline", False),
     "c128_banked_shared_epilogue": _render_c128_macro("C128BankedSharedEpilogueTrampoline", False),
     "c128_ovl_compute": _render_c128_macro("C128OverlayComputeTrampoline", True),
@@ -1041,7 +1040,7 @@ def run_selftest() -> int:
     errs, _ = validate_manifest_and_sources(sample_entries, {}, strict_migrated=True)
     assert any("missing from declared owner_file" in e for e in errs), errs
 
-    print("gen_trampolines selftest passed (all 7 ports, 45 template kinds, 6 fixture assertions)")
+    print(f"gen_trampolines selftest passed (all 7 ports, {len(STANDARD_KINDS)} template kinds, 6 fixture assertions)")
     return 0
 
 

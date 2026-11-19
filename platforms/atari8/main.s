@@ -969,22 +969,14 @@ a8_ovl_swap_restore:
     rts
 
 tramp_ego_append_suffix:
-    cmp #0
+    and #EGO_ID_MASK
     beq !teas_done+
+    cmp #EGO_TYPE_COUNT
+    bcs !teas_done+
     jsr item_cat_decode_ego
-    ldx cmb_buf_idx
-    ldy #0
-!teas_loop:
-    lda (zp_ptr0),y
-    beq !teas_end+
-    sta combat_msg_buf,x
-    inx
-    iny
-    cpx #COMBAT_MSG_BUF_LAST
-    bcs !teas_end+
-    jmp !teas_loop-
-!teas_end:
-    stx cmb_buf_idx
+    lda zp_ptr0
+    ldy zp_ptr0_hi
+    jmp combat_append_str
 !teas_done:
     rts
 
@@ -1369,10 +1361,12 @@ wizard_prompt_clear_digits:
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
+    ldx #3
+!wpcd_clr:
     lda #$20
     jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    dex
+    bne !wpcd_clr-
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col

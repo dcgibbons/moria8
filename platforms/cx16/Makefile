@@ -109,7 +109,7 @@ run: build
 run-cart: cartridge
 	"$(X16EMU)" $(X16ROM_FLAG) -cart "$(abspath $(CX16_CART_IMAGE))"
 
-test-memory-contract: build
+test-memory-contract: build test-memory-contract-selftest
 	python3 -B check_memory_contract.py
 	python3 -B check_memory_contract.py --build-dir "$(CARTCX16_OUT)"
 	python3 -B ../../tools/check_cx16_cart.py --crt "$(CX16_CART_IMAGE)" --bin "$(CX16_CART_BIN)" --manifest "$(CX16_CART_MANIFEST)" --build-dir "$(CARTCX16_OUT)" --data-dir ../../data
@@ -207,6 +207,7 @@ $(CX16_ZIP_IMAGE): $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_
 		OVL.UI OVL.ITEMS OVL.SPELL OVL.CHEST OVL.HOME OVL.STORAGE OVL.TITLE \
 		MONSTER.CAT MONSTER.EXT ITEM.CAT \
 		TITLE LICENSE SOURCE-OFFER LEGALUI
+	python3 -B check_memory_contract.py --zip "$@" --build-dir "$(OUTCX16)" || { rm -f "$@"; exit 1; }
 
 $(CARTCX16_OUT):
 	mkdir -p "$(CARTCX16_OUT)"

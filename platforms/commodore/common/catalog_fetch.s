@@ -135,8 +135,8 @@ catalog_fetch_record:
     lda #15
     jsr hal_storage_close
     jsr cfr_check
-    beq !cfr_ok+
     bne !cfr_by_name+
+    jmp !cfr_ok+
 !cfr_u1_err:
     jsr icr_close_buf
     lda #15
@@ -174,11 +174,17 @@ catalog_fetch_record:
     sta cfr_skip_hi
     ldx #CFR_LFN
     jsr hal_storage_chkin
+    jsr hal_storage_readst
+    and #$bf
+    bne !cfr_by_name_err+
 !cfr_skip:
     lda cfr_skip_lo
     ora cfr_skip_hi
     beq !cfr_skipped+
     jsr hal_storage_chrin
+    jsr hal_storage_readst
+    and #$bf
+    bne !cfr_by_name_err+
     lda cfr_skip_lo
     bne !cfr_skip_lo+
     dec cfr_skip_hi
@@ -188,11 +194,12 @@ catalog_fetch_record:
 !cfr_skipped:
     jsr cfr_read_record
     jsr cfr_check
-    beq !cfr_ok+
-    jmp !cfr_wrong+
+    bne !cfr_wrong+
 !cfr_ok:
     :CatalogKernalOut()
     rts
+!cfr_by_name_err:
+    jsr icr_close_buf
 !cfr_wrong:
     lda #cfr_name_end - cfr_name
     sta alr_len

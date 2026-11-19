@@ -158,6 +158,9 @@ ui_recall_display:
 #if HAL_PLATFORM_MONSTER_CATALOG
     lda recall_view_spells
     bne !rcl_spl_put+
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    beq !rcl_no_spl+
     lda recall_view_spell_chance
     and #MS_FREQ_MASK
     beq !rcl_no_spl+
@@ -171,6 +174,9 @@ ui_recall_display:
     ldx recall_found_type
     :AuxReadX(recall_spells)
     bne !rcl_spl_put+
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    beq !rcl_no_spl+
     ldx recall_found_type
     lda cr_spell_chance,x
     and #MS_FREQ_MASK
@@ -264,7 +270,7 @@ rcl_lbl_dec:
     pla
     jmp screen_put_decimal
 
-// rcl_next_lbl — Stream next (col, high-bit-terminated label) from rcl_lbls.
+// rcl_next_lbl — Stream next (col, space-terminated label) from rcl_lbls.
 // Whenever col == 2, advances zp_cursor_row to the next even row (4,6,8,10,12,14).
 rcl_next_lbl:
     ldx rcl_lpos

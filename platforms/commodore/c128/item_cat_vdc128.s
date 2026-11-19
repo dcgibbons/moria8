@@ -17,12 +17,12 @@
 //
 // Disk builds (#else):
 //   - At startup (c128_load_core_residents, after any JDLCHR font restore),
-//     c128_load_item_cat_vdc loads "ITEM.CAT" (7,573 B payload) into Bank 1
-//     MAP_BASE ($4000-$5D94) at full KERNAL/Burst speed (SA=0), verifies the
-//     'ITM2' header, and streams all 7,573 bytes into unused 16 KB VDC RAM:
+//     c128_load_item_cat_vdc loads "ITEM.CAT" (7,478 B payload) into Bank 1
+//     MAP_BASE ($4000-$5D35) at full KERNAL/Burst speed (SA=0), verifies the
+//     'ITM2' header, and streams all 7,478 bytes into unused 16 KB VDC RAM:
 //       * ITEM.CAT[0..3839]    ($0000-$0EFF) -> VDC $1100-$1FFF (3,840 B)
-//       * ITEM.CAT[3840..7572] ($0F00-$1D94) -> VDC $2008-$3D2C (bytes 8..15
-//         of 467 16-byte character cells in $2000-$3FFF; 80x25 8-scanline text
+//       * ITEM.CAT[3840..7477] ($0F00-$1D35) -> VDC $2008-$3C6D (bytes 8..15
+//         of 455 16-byte character cells in $2000-$3FFF; 80x25 8-scanline text
 //         mode uses only bytes 0..7 of each cell for Set 0 and Set 1 glyphs).
 //   - Gameplay hal_item_cat_read_byte reads directly from VDC RAM via $D600/$D601
 //     in ~95 cycles with zero floppy disk access, zero new ZP bytes, and full
@@ -56,7 +56,7 @@ vdc_item_cat_map_addr:
     adc #>VDC_ITEM_CAT_LO_BASE
     rts
 !icv_hi_span:
-    // Carry set: rel = off - $0F00 ($0000..$0E94); slot S = rel >> 3, B = rel & 7.
+    // Carry set: rel = off - $0F00 ($0000..$0E35); slot S = rel >> 3, B = rel & 7.
     sbc #>VDC_ITEM_CAT_LO_SIZE
     sta icv_tmp
     tya
@@ -69,8 +69,8 @@ vdc_item_cat_map_addr:
     ora icv_addr_lo                 // ORA/TAY/LDA preserve C for ROL below
     tay
     lda icv_tmp
-    rol                             // A = (rel_hi << 1) | C ($00..$1D)
-    ora #>VDC_CHARSET_BASE          // $20..$3D
+    rol                             // A = (rel_hi << 1) | C ($00..$1C)
+    ora #>VDC_CHARSET_BASE          // $20..$3C
     rts
 
 // hal_item_cat_read_byte — Input: item_cat_off_lo/hi. Output: A = byte.
@@ -96,7 +96,7 @@ item_cat_filename_end:
 .const ITEM_CAT_FILENAME_LEN = item_cat_filename_end - item_cat_filename
 
 // c128_load_item_cat_vdc — Preload "ITEM.CAT" into 16 KB VDC RAM via Bank 1
-// MAP_BASE ($4000-$5D94) before title/gameplay maps use MAP_BASE.
+// MAP_BASE ($4000-$5D35) before title/gameplay maps use MAP_BASE.
 // Output: carry clear = success, carry set = load or magic failure.
 c128_load_item_cat_vdc:
     lda #ITEM_CAT_FILE_NUM

@@ -11,15 +11,16 @@
 //     hal_player_recalc_pflags, which saves and restores current_overlay / $01.
 
 player_recalc_pflags_equipment:
+    .assert "player_pflags..wield_flags_3 are 12 contiguous bytes", wield_flags_3 - player_pflags, 11
     lda #0
-    sta pfe_f0
-    sta pfe_f1
-    sta pfe_f2
-    sta pfe_f3
-    sta player_sust_mask
-    ldx #7
+    ldx #3
+!pfe_zero_f:
+    sta pfe_f0,x
+    dex
+    bpl !pfe_zero_f-
+    ldx #11
 !pfe_zero_wield:
-    sta wield_weight_lo,x
+    sta player_pflags,x
     dex
     bpl !pfe_zero_wield-
 
@@ -61,12 +62,7 @@ player_recalc_pflags_equipment:
     jsr item_cat_get_missile_type
     sta wield_missile_type
 !pfe_wield_flags:
-    ldy #3
-!pfe_wf_loop:
-    lda icat_flags_0,y
-    sta wield_flags_0,y
-    dey
-    bpl !pfe_wf_loop-
+    jsr !pfe_or_wield_flags+
 !pfe_chk_ego:
     lda inv_ego,x
     and #EGO_ID_MASK
@@ -103,23 +99,17 @@ player_recalc_pflags_equipment:
 !pfe_ego_wield:
     cpx #EQUIP_WEAPON
     bne !pfe_next+
-    ldy #3
-!pfe_we_loop:
-    lda wield_flags_0,y
-    ora icat_flags_0,y
-    sta wield_flags_0,y
-    dey
-    bpl !pfe_we_loop-
+    jsr !pfe_or_wield_flags+
 !pfe_next:
     inx
     cpx #EQUIP_END
     beq !pfe_slots_done+
     jmp !pfe_slot-
 !pfe_slots_done:
+    lda pfe_f3
+    and #(ITR3_BLIND | ITR3_TIMID)
+    sta player_curse_flags
 
-    lda #0
-    sta player_pflags
-    sta player_pflags2
     ldx #14
 !pfe_map_loop:
     ldy pfe_src_off,x
@@ -142,6 +132,16 @@ player_recalc_pflags_equipment:
 
     // Update combat bonuses from stats
     jmp player_calc_combat
+
+!pfe_or_wield_flags:
+    ldy #3
+!pfe_we_loop:
+    lda wield_flags_0,y
+    ora icat_flags_0,y
+    sta wield_flags_0,y
+    dey
+    bpl !pfe_we_loop-
+    rts
 
 !pfe_merge_flags:
     ldy #3

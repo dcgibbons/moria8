@@ -586,6 +586,9 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
 #else
 #import "starting_kit_cold.s"
 #endif
+#if CORE_ITEM_IMPORTED
+    jsr inven_recalc_weight
+#endif
 
     // Recalculate combat stats with equipped items
 #if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
@@ -798,6 +801,9 @@ c64_test_single_drive_load_return_resume_entry:
     jsr tramp_load_resume_reset
 #else
 #import "load_resume_reset_cold.s"
+#endif
+#if CORE_ITEM_IMPORTED
+    jsr inven_recalc_weight
 #endif
 
     // The weapon/ring/ego bonuses player_calc_combat adds (pcc_eq_*) are not
@@ -1328,15 +1334,11 @@ c128_town_move_diag_after_turn_post_action:
 
 	    // Did a room get revealed?
 	    lda vis_room_revealed
-    beq !no_room_reveal+
-	    jmp !full_redraw+
-!no_room_reveal:
+    bne !full_redraw+
 
 	    // Did monsters or other scene elements move this turn?
 	    lda turn_scene_dirty
-    beq !no_scene_dirty+
-	    jmp !scene_dirty_redraw+
-!no_scene_dirty:
+    bne !scene_dirty_redraw+
 
     // No scroll, no room reveal, no remote scene changes — render local area around old+new position
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1753,7 +1755,7 @@ cmd_dispatch_ignore:
 cmd_stairs_dn:
     jsr check_stairs_at_player
     cmp #9                  // Stairs down type
-    bne !no_stairs_dn+
+    bne !no_stairs+
 !stairs_dn_ok:
     // Descend: increment dungeon level
     inc zp_player_dlvl
@@ -1762,29 +1764,21 @@ cmd_stairs_dn:
     // Update max depth if deeper than before
     cmp player_data + PL_MAX_DLVL
     bcc !dn_not_deeper+
-    beq !dn_not_deeper+
     sta player_data + PL_MAX_DLVL
 !dn_not_deeper:
     lda #0
-    sta level_entry_dir         // 0 = descended
-    jsr level_change_generate_current
-    jsr msg_clear
+    jsr stairs_generate_and_clear
     :MsgPrintStr(descend_str)
-    jmp main_loop
-!no_stairs_dn:
-    :MsgPrintStr(no_stairs_str)
     jmp main_loop
 
 cmd_stairs_up:
     jsr check_stairs_at_player
     cmp #10                 // Stairs up type
-    bne !no_stairs_up+
+    bne !no_stairs+
 !stairs_up_ok:
     // Ascend
     lda zp_player_dlvl
-    bne !stairs_up_not_surface+
-    jmp !at_surface+
-!stairs_up_not_surface:
+    beq !at_surface+
     dec zp_player_dlvl
     lda zp_player_dlvl
     sta player_data + PL_DLEVEL
@@ -1793,17 +1787,20 @@ cmd_stairs_up:
     jsr tramp_store_restock_all
 !not_entering_town:
     lda #1
-    sta level_entry_dir         // 1 = ascended
-    jsr level_change_generate_current
-    jsr msg_clear
+    jsr stairs_generate_and_clear
     :MsgPrintStr(ascend_str)
     jmp main_loop
 !at_surface:
     :MsgPrintStr(at_surface_str)
     jmp main_loop
-!no_stairs_up:
+!no_stairs:
     :MsgPrintStr(no_stairs_str)
     jmp main_loop
+
+stairs_generate_and_clear:
+    sta level_entry_dir
+    jsr level_change_generate_current
+    jmp msg_clear
 
 // level_change_generate_current — Shared tail after caller has already updated
 // depth/max-depth/restock state and set level_entry_dir.
@@ -2341,14 +2338,7 @@ run_continue_step:
 // ============================================================
 run_step:
     // Save positions before move for dirty render
-    ldx zp_player_x
-    stx old_player_x
-    ldx zp_player_y
-    stx old_player_y
-    ldx zp_view_x
-    stx old_view_x
-	    ldx zp_view_y
-	    stx old_view_y
+    jsr main_loop_snapshot_view
 
     // Convert running direction to movement command
     ldx zp_run_dir
@@ -2361,9 +2351,7 @@ run_step:
     jmp !run_blocked+           // Wall → stop, no turn consumed
 !run_move_ok:
     lda player_move_relocated
-    bne !run_relocated+
-    jmp !run_stop_move+         // Unseen-monster attack consumed the turn.
-!run_relocated:
+    beq !run_stop_move+         // Unseen-monster attack consumed the turn.
 
 	    // Check trap
 	    jsr msg_clear
@@ -2374,17 +2362,16 @@ run_step:
     lda zp_player_dlvl
     bne !run_not_store+
     jsr check_player_on_store_door
-    bcc !run_not_store+
-    jmp !run_stop_move+
+    bcs !run_stop_move+
 !run_not_store:
 
 	    // UMoria evaluates newly adjacent squares after each successful move.
 	    jsr run_area_affect
 	    bcc !run_keep_step+
-    jmp !run_stop_move+         // Should stop → final move
+!run_stop_move:
+    jsr run_stop_running
 !run_keep_step:
-
-	    // Continue running — run AI before render (BUG-17 fix)
+	    // Run AI before render (BUG-17 fix)
     jsr player_move_maybe_passive_search
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
@@ -2396,18 +2383,13 @@ run_step:
     // Check for viewport scroll or room reveal
 	    lda zp_view_x
 	    cmp old_view_x
-    beq !run_chk_y+
-	    jmp !run_full_redraw+
-!run_chk_y:
+    bne !run_full_redraw+
 	    lda zp_view_y
 	    cmp old_view_y
-    beq !run_chk_reveal+
-	    jmp !run_full_redraw+
-!run_chk_reveal:
+    bne !run_full_redraw+
 	    lda vis_room_revealed
     ora turn_scene_dirty
-    beq !run_local+
-	    jmp !run_full_redraw+
+    bne !run_full_redraw+
 
 !run_local:
 	    jsr render_local_area
@@ -2426,6 +2408,13 @@ run_step:
 	    jsr render_viewport
 
 !run_post:
+    lda zp_run_dir
+    cmp #$ff
+    bne !run_active_post+
+    jsr try_store_entry
+    jsr status_draw
+    jmp main_loop
+!run_active_post:
     jsr status_draw
     lda zp_msg_flags
     ora turn_scene_dirty
@@ -2446,57 +2435,6 @@ run_step:
 !not_dead:
     jsr update_visibility
     jmp vp_render_status_loop
-
-!run_stop_move:
-    jsr run_stop_running
-    jsr player_move_maybe_passive_search
-    jsr turn_post_action_searchable_or_die
-    bcc !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr game_loop_update_visibility_preserve_reveal
-    jsr viewport_update
-
-    // Check for viewport scroll or room reveal
-	    lda zp_view_x
-	    cmp old_view_x
-    beq !rsm_chk_y+
-	    jmp !rsm_full+
-!rsm_chk_y:
-	    lda zp_view_y
-	    cmp old_view_y
-    beq !rsm_chk_reveal+
-	    jmp !rsm_full+
-!rsm_chk_reveal:
-	    lda vis_room_revealed
-    beq !rsm_chk_scene+
-	    jmp !rsm_full+
-!rsm_chk_scene:
-	    lda turn_scene_dirty
-    beq !rsm_local+
-	    jmp !rsm_scene_full+
-
-!rsm_local:
-	    jsr render_local_area
-	    jmp !rsm_post+
-!rsm_scene_full:
-	    jsr render_viewport
-	    jmp !rsm_post+
-!rsm_full:
-#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
-	    lda turn_scene_dirty
-    bne !rsm_full_fallback+
-	    jsr render_viewport_scroll_delta
-	    bcc !rsm_full_fallback+
-	    jsr render_local_area
-	    jmp !rsm_post+
-!rsm_full_fallback:
-#endif
-	    jsr render_viewport
-!rsm_post:
-    jsr try_store_entry
-    jsr status_draw
-    jmp main_loop
 
 try_store_entry:
     lda zp_player_dlvl
@@ -2534,19 +2472,17 @@ player_died:
     jsr hal_input_get_key
 
     // Now do disk I/O (player sees -more- prompt, knows they died)
+game_over_finish:
     jsr game_over_prepare_for_disk_io
     bcs !pd_skip_disk_io+
     jsr game_over_save_and_show
-    jmp !pd_done+
+    jmp !quit+
 !pd_skip_disk_io:
     jsr tramp_game_over_disk_setup_failed
     lda death_source_saved
     sta zp_death_source
     jsr tramp_game_over
     jsr input_get_modal_dismiss_key
-!pd_done:
-    jmp !quit+
-
 !quit:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
@@ -2558,16 +2494,7 @@ player_retired:
     lda #DEATH_ALIVE
     sta death_source_saved
     sta zp_death_source
-    jsr game_over_prepare_for_disk_io
-    bcs !pr_skip_disk_io+
-    jsr game_over_save_and_show
-    jmp !pr_done+
-!pr_skip_disk_io:
-    jsr tramp_game_over_disk_setup_failed
-    jsr tramp_game_over
-    jsr input_get_modal_dismiss_key
-!pr_done:
-    jmp !quit-
+    jmp game_over_finish
 
 game_over_prepare_for_disk_io:
     lda disk_setup_done

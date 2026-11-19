@@ -484,6 +484,15 @@ irs_p3_mass_genocide:
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
     beq !irs_mg_next+
+    tax
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_slot_is_balrog
+    beq !irs_mg_next+
+#else
+    lda cr_level,x
+    cmp #100
+    bcs !irs_mg_next+
+#endif
     ldy #MX_X
     lda (zp_ptr0),y
     sta zp_los_dx

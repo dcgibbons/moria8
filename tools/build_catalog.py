@@ -683,7 +683,6 @@ def write_engine_catalog(
             "cat_undead:         // bit i%8 of byte i/8: creature i has CD_UNDEAD",
             hexrow(bitmap),
             "catalog_index_end:",
-            ".label cat_available = cat_undead",
         ]
     else:
         bitmap = [0] * ((len(creatures) + 7) // 8)

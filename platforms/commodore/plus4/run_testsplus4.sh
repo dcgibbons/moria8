@@ -9,8 +9,16 @@ java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
+        local has_symdir=0 a
+        for a in "$@"; do
+            [ "$a" = "-symbolfiledir" ] && has_symdir=1
+        done
+        local -a symdir_args=()
+        if [ "$has_symdir" -eq 0 ] && [ -n "${TMPDIR:-}" ]; then
+            symdir_args=(-symbolfiledir "$TMPDIR")
+        fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
     else
         command java "$@"
     fi
@@ -30,8 +38,9 @@ export TMPDIR
 export PYTHONDONTWRITEBYTECODE=1
 cleanup() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
-    rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
-    rm -f "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
+    if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
+        rm -rf "$TMPDIR"
+    fi
 }
 trap cleanup EXIT
 
@@ -44,25 +53,8 @@ esac
 make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" ensure-kickass || exit 1
 python3 -B ../../../tools/gen_trampolines.py --port plus4 --output ../../../build/trampolines/plus4_trampolines.inc || exit 1
 
-if [ -n "${VICEPLUS4:-}" ]; then
-    VICE="$VICEPLUS4"
-elif command -v xplus4 >/dev/null 2>&1; then
-    VICE="$(command -v xplus4)"
-elif [ -x /opt/homebrew/bin/xplus4 ]; then
-    VICE="/opt/homebrew/bin/xplus4"
-else
-    VICE="/Applications/VICE/bin/xplus4"
-fi
-
-C1541="${C1541:-}"
-if [ -z "$C1541" ]; then
-    if command -v c1541 >/dev/null 2>&1; then
-        C1541="$(command -v c1541)"
-    elif [ -x /opt/homebrew/bin/c1541 ]; then
-        C1541="/opt/homebrew/bin/c1541"
-    else
-        C1541="/Applications/VICE/bin/c1541"
-    fi
+VICE="${VICEPLUS4:-$(command -v xplus4 2>/dev/null || printf 'xplus4')}"
+C1541="${C1541:-$(command -v c1541 2>/dev/null || printf 'c1541')}"
 
 # Images with the monster catalog: MONSTER.IDX's sector table for where
 # MONSTER.CAT1-4 landed on this image (tools/catalog_disk.py fix).
@@ -78,7 +70,6 @@ c1541_catalog() {
         python3 -B "$REPO_ROOT/tools/catalog_disk.py" item-fix "$img"
     fi
 }
-fi
 
 TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
@@ -194,16 +185,21 @@ make_product_out() {
 run_test() {
     local name="$1"
     local source="$2"
-    local prg="${source%.s}.prg"
-    local vs="${source%.s}.vs"
 
     if ! suite_selected "$name"; then
         return
     fi
 
+    local prg_dir base prg vs
+    prg_dir=$(mktemp -d "$TMPDIR/test_${name}.XXXXXX")
+    base="$(basename "${source%.s}")"
+    prg="$prg_dir/${base}.prg"
+    vs="$prg_dir/${base}.vs"
+
     TOTAL=$((TOTAL + 1))
-    java -jar "$KICKASS" "$source" -libdir "$REPO_ROOT/platforms/commodore/c64" -define PLUS4 -symbolfiledir "$PLUS4_TEST_OUT" -vicesymbols -o "$prg" >/dev/null || {
+    java -jar "$KICKASS" "$source" -libdir "$REPO_ROOT/platforms/commodore/c64" -define PLUS4 -symbolfiledir "$prg_dir" -vicesymbols -o "$prg" >/dev/null || {
         echo "FAIL: $name (assembly)"
+        rm -rf -- "$prg_dir"
         FAIL=$((FAIL + 1))
         return
     }
@@ -213,6 +209,7 @@ run_test() {
     else
         FAIL=$((FAIL + 1))
     fi
+    rm -rf -- "$prg_dir"
 }
 
 run_disk_media_probe() {
@@ -391,13 +388,13 @@ run_plus4_item_catalog_contract() {
 
     TOTAL=$((TOTAL + 1))
     local check_out
-    if make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" buildplus4 >/dev/null && \
+    if make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" diskplus4 >/dev/null && \
         check_out=$(python3 -B "$REPO_ROOT/tools/check_item_catalog_ports.py" --port plus4 --if-built c64 2>&1); then
         echo "PASS: $name"
         PASS=$((PASS + 1))
     else
         echo "FAIL: $name"
-        echo "${check_out:-buildplus4 failed}" | tail -20 | sed 's/^/    /'
+        echo "${check_out:-diskplus4 failed}" | tail -20 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
     fi
 }

@@ -284,6 +284,7 @@ ui_wizard_cmd_gain_level:
     lda #0
     sta player_data + PL_XP_FRAC_LO
     sta player_data + PL_XP_FRAC_HI
+    jsr player_sync_max_xp
 !wiz_do_level:
     jsr ui_wizard_restore_gameplay_view
 #if HAL_PLATFORM_WIZARD_LEVELUP_RESTORE_MODAL

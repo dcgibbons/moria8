@@ -98,10 +98,32 @@ item_name_dst_idx:  .byte 0
 // Output: A = byte. Clobbers: A, Y (preserves X).
 icat_read_next:
     jsr hal_item_cat_read_byte
+icat_inc_off:
     inc item_cat_off_lo
     bne !irn_done+
     inc item_cat_off_hi
 !irn_done:
+    rts
+
+// icat_idx_x2 — Set item_cat_off = A * 2 (16-bit). Preserves: X, Y.
+icat_idx_x2:
+    asl
+    sta item_cat_off_lo
+    lda #0
+    rol
+    sta item_cat_off_hi
+    rts
+
+// icat_add_off_ya — Add 16-bit (A = hi, Y = lo) to item_cat_off. Preserves: X.
+icat_add_off_ya:
+    pha
+    tya
+    clc
+    adc item_cat_off_lo
+    sta item_cat_off_lo
+    pla
+    adc item_cat_off_hi
+    sta item_cat_off_hi
     rts
 
 // icat_select_id — Select paged item slot A (0..254) using item_cur_page,
@@ -142,13 +164,9 @@ item_cat_select_cur:
     sta item_cat_off_hi
     asl item_cat_off_lo
     rol item_cat_off_hi
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_RECORDS
-    sta item_cat_off_lo
-    lda item_cat_off_hi
-    adc #>ITMCAT_OFF_RECORDS
-    sta item_cat_off_hi
+    ldy #<ITMCAT_OFF_RECORDS
+    lda #>ITMCAT_OFF_RECORDS
+    jsr icat_add_off_ya
     jsr icat_read_next
     sta icat_rec_0
     jsr icat_read_next
@@ -170,20 +188,10 @@ item_cat_select_16:
 item_cat_get_cost:
     lda icat_rec_0
     and #ITMCAT_REC_COST_MASK
-    asl
-    sta item_cat_off_lo
-    lda #0
-    rol
-    clc
-    adc #>ITMCAT_OFF_COSTS
-    sta item_cat_off_hi
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_COSTS
-    sta item_cat_off_lo
-    bcc !icgc_nc+
-    inc item_cat_off_hi
-!icgc_nc:
+    jsr icat_idx_x2
+    ldy #<ITMCAT_OFF_COSTS
+    lda #>ITMCAT_OFF_COSTS
+    jsr icat_add_off_ya
     jsr icat_read_next
     sta icat_cost_lo
     jsr hal_item_cat_read_byte
@@ -203,20 +211,10 @@ item_cat_is_depth_variant:
 item_cat_get_weight:
     jsr icat_seek_wd
     jsr hal_item_cat_read_byte   // weight_idx
-    asl
-    sta item_cat_off_lo
-    lda #0
-    rol
-    clc
-    adc #>ITMCAT_OFF_WEIGHTS
-    sta item_cat_off_hi
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_WEIGHTS
-    sta item_cat_off_lo
-    bcc !icgw_nc+
-    inc item_cat_off_hi
-!icgw_nc:
+    jsr icat_idx_x2
+    ldy #<ITMCAT_OFF_WEIGHTS
+    lda #>ITMCAT_OFF_WEIGHTS
+    jsr icat_add_off_ya
     jsr icat_read_next
     sta icat_weight_lo
     jsr hal_item_cat_read_byte
@@ -228,24 +226,12 @@ item_cat_get_weight:
 // item_cat_get_dmg — Load dice (A, icat_dmg_dice) and sides (Y, icat_dmg_sides). Preserves: X.
 item_cat_get_dmg:
     jsr icat_seek_wd
-    inc item_cat_off_lo
-    bne !+
-    inc item_cat_off_hi
-!:  jsr hal_item_cat_read_byte   // dmg_idx
-    asl
-    sta item_cat_off_lo
-    lda #0
-    rol
-    clc
-    adc #>ITMCAT_OFF_DMGS
-    sta item_cat_off_hi
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_DMGS
-    sta item_cat_off_lo
-    bcc !icgd_nc+
-    inc item_cat_off_hi
-!icgd_nc:
+    jsr icat_inc_off
+    jsr hal_item_cat_read_byte   // dmg_idx
+    jsr icat_idx_x2
+    ldy #<ITMCAT_OFF_DMGS
+    lda #>ITMCAT_OFF_DMGS
+    jsr icat_add_off_ya
     jsr icat_read_next
     sta icat_dmg_dice
     jsr hal_item_cat_read_byte
@@ -271,21 +257,10 @@ item_cat_get_dmg_packed:
 icat_seek_wd:
     lda icat_rec_1
     and #ITMCAT_REC_WD_MASK
-    asl
-    sta item_cat_off_lo
-    lda #0
-    rol
-    clc
-    adc #>ITMCAT_OFF_WDS
-    sta item_cat_off_hi
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_WDS
-    sta item_cat_off_lo
-    bcc !isw_nc+
-    inc item_cat_off_hi
-!isw_nc:
-    rts
+    jsr icat_idx_x2
+    ldy #<ITMCAT_OFF_WDS
+    lda #>ITMCAT_OFF_WDS
+    jmp icat_add_off_ya
 
 // item_cat_get_level — Output: A = vms_level (0..63). Preserves: X, Y.
 item_cat_get_level:
@@ -312,20 +287,10 @@ item_cat_get_effects:
     lda icat_rec_2
 // item_cat_load_effect_a — Load flags/bonuses for effect index A. Preserves: X.
 item_cat_load_effect_a:
-    sta item_cat_off_lo
-    lda #0
-    asl item_cat_off_lo
-    rol
-    clc
-    adc #>ITMCAT_OFF_EFFECTS
-    sta item_cat_off_hi
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_EFFECTS
-    sta item_cat_off_lo
-    bcc !icle_nc+
-    inc item_cat_off_hi
-!icle_nc:
+    jsr icat_idx_x2
+    ldy #<ITMCAT_OFF_EFFECTS
+    lda #>ITMCAT_OFF_EFFECTS
+    jsr icat_add_off_ya
     jsr icat_read_next           // flags_idx
     pha
     jsr hal_item_cat_read_byte   // bonus_idx
@@ -333,22 +298,12 @@ item_cat_load_effect_a:
 
     // Read 4 flag bytes at ITMCAT_OFF_FLAGS + flags_idx * 4
     pla
-    sta item_cat_off_lo
-    lda #0
+    jsr icat_idx_x2
     asl item_cat_off_lo
-    rol
-    asl item_cat_off_lo
-    rol
-    clc
-    adc #>ITMCAT_OFF_FLAGS
-    sta item_cat_off_hi
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_FLAGS
-    sta item_cat_off_lo
-    bcc !icf_nc+
-    inc item_cat_off_hi
-!icf_nc:
+    rol item_cat_off_hi
+    ldy #<ITMCAT_OFF_FLAGS
+    lda #>ITMCAT_OFF_FLAGS
+    jsr icat_add_off_ya
     jsr icat_read_next
     sta icat_flags_0
     jsr icat_read_next
@@ -360,13 +315,9 @@ item_cat_load_effect_a:
 
     // Read 5 bonus bytes at ITMCAT_OFF_BONUSES + bonus_idx * 5
     lda icat_tmp
-    sta item_cat_off_lo
-    lda #0
+    jsr icat_idx_x2
     asl item_cat_off_lo
-    rol
-    asl item_cat_off_lo
-    rol
-    sta item_cat_off_hi
+    rol item_cat_off_hi
     clc
     lda item_cat_off_lo
     adc icat_tmp
@@ -374,13 +325,9 @@ item_cat_load_effect_a:
     bcc !icb_nc1+
     inc item_cat_off_hi
 !icb_nc1:
-    clc
-    lda item_cat_off_lo
-    adc #<ITMCAT_OFF_BONUSES
-    sta item_cat_off_lo
-    lda item_cat_off_hi
-    adc #>ITMCAT_OFF_BONUSES
-    sta item_cat_off_hi
+    ldy #<ITMCAT_OFF_BONUSES
+    lda #>ITMCAT_OFF_BONUSES
+    jsr icat_add_off_ya
     jsr icat_read_next
     sta icat_p1_lo
     jsr icat_read_next
@@ -639,6 +586,7 @@ item_cat_decode_item_at_dst:
     jmp item_cat_decode_entry_at_dst
 
 // item_cat_decode_ego — Decode ego name A (1..EGO_COUNT) into item_name_decode_buf.
+// Out-of-range ego IDs (0 or >= EGO_COUNT + 1) write an empty NUL-terminated buffer.
 // Output: zp_ptr0/hi = item_name_decode_buf, NUL-terminated. Preserves: X.
 item_cat_decode_ego:
     ldy #0
@@ -646,13 +594,24 @@ item_cat_decode_ego:
 item_cat_decode_ego_at_dst:
     sec
     sbc #1
-    clc
+    cmp #EGO_COUNT
+    bcs icde_finish_buf
     adc #<ITMCAT_STR_BASE_EGO
     sta icat_str_id_lo
     lda #>ITMCAT_STR_BASE_EGO
     adc #0
     sta icat_str_id_hi
     jmp item_cat_decode_entry_at_dst
+
+icde_finish_buf:
+    ldy item_name_dst_idx
+    lda #0
+    sta item_name_decode_buf,y
+    lda #<item_name_decode_buf
+    sta zp_ptr0
+    lda #>item_name_decode_buf
+    sta zp_ptr0_hi
+    rts
 
 // item_cat_decode_flavour — Decode flavour A (0..FLAVOUR_COUNT-1) into item_name_decode_buf.
 // Output: zp_ptr0/hi = item_name_decode_buf, NUL-terminated. Preserves: X.
@@ -678,7 +637,7 @@ item_cat_decode_entry_uncached:
     jsr icat_seek_entry
 !icde_loop:
     jsr icat_read_sym
-    beq !icde_done+
+    beq icde_finish_buf
     bmi !icde_token+
     ldy item_name_dst_idx
     cpy #ITEM_NAME_DECODE_BUF_SIZE - 1
@@ -688,15 +647,14 @@ item_cat_decode_entry_uncached:
     bne !icde_loop-
 !icde_token:
     // Save outer stream cursor in BSS (non-recursive 1-level token expansion)
+    .assert "icat stream cursor fields are 4 contiguous bytes", icat_bits_left - icat_str_off_lo == 3 && icat_outer_bits - icat_outer_off_lo == 3, true
     pha
-    lda icat_str_off_lo
-    sta icat_outer_off_lo
-    lda icat_str_off_hi
-    sta icat_outer_off_hi
-    lda icat_cur_byte
-    sta icat_outer_byte
-    lda icat_bits_left
-    sta icat_outer_bits
+    ldy #3
+!icde_save_outer:
+    lda icat_str_off_lo,y
+    sta icat_outer_off_lo,y
+    dey
+    bpl !icde_save_outer-
     pla
     sec
     sbc #ITMCAT_TOK_MIN
@@ -717,21 +675,10 @@ item_cat_decode_entry_uncached:
     inc item_name_dst_idx
     bne !icde_tok_loop-
 !icde_tok_done:
-    lda icat_outer_off_lo
-    sta icat_str_off_lo
-    lda icat_outer_off_hi
-    sta icat_str_off_hi
-    lda icat_outer_byte
-    sta icat_cur_byte
-    lda icat_outer_bits
-    sta icat_bits_left
+    ldy #3
+!icde_rest_outer:
+    lda icat_outer_off_lo,y
+    sta icat_str_off_lo,y
+    dey
+    bpl !icde_rest_outer-
     jmp !icde_loop-
-!icde_done:
-    ldy item_name_dst_idx
-    lda #0
-    sta item_name_decode_buf,y
-    lda #<item_name_decode_buf
-    sta zp_ptr0
-    lda #>item_name_decode_buf
-    sta zp_ptr0_hi
-    rts

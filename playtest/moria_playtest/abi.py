@@ -73,7 +73,7 @@ CONSTS: dict[str, tuple[str, int]] = {
     "PL_AC": ("core/player.s", 39),
     "PL_FOOD_LO": ("core/player.s", 51),
     "PL_LIGHT_RAD": ("core/player.s", 55),
-    "PL_STRUCT_SIZE": ("core/player.s", 111),
+    "PL_STRUCT_SIZE": ("core/player.s", 114),
     "MAX_MONSTERS": ("core/monster.s", 32),
     "TIER_DUNGEON_CREATURES": ("core/monster.s", 57),      # dungeon creature rows, tier builds
     "CATALOG_DUNGEON_CREATURES": ("core/monster.s", 32),   # ... monster-catalog builds

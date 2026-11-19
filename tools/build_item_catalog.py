@@ -1056,13 +1056,26 @@ def run_selftest() -> None:
     assert len(blob) <= ITMCAT_SIZE_CAP, f"Size cap failed: {len(blob)}"
     verify_roundtrip(spec, blob)
 
-    # Confirm emitted item_cat_data.s matches binary blob byte-for-byte if present
-    data_s = DEFAULT_EMIT_DIR / "item_cat_data.s"
-    if data_s.is_file():
-        hex_bytes = [int(x, 16) for x in re.findall(r"\$([0-9a-fA-F]{2})", "\n".join(
-            l.split("//")[0] for l in data_s.read_text().splitlines() if l.strip().startswith(".byte")
-        ))]
-        assert bytes(hex_bytes) == blob, "Committed item_cat_data.s is out of sync with item_catalog_spec.json"
+    # Confirm ALL 5 committed generated files match item_catalog_spec.json exactly
+    import tempfile  # noqa: PLC0415
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        emit_assembly(spec, blob, offsets, tmp_path)
+        tmp_py = tmp_path / "item_ids.py"
+        emit_python_ids(spec, tmp_py)
+        expected_files = (
+            (DEFAULT_EMIT_DIR / "item_ids.s", tmp_path / "item_ids.s"),
+            (DEFAULT_PY_OUT, tmp_py),
+            (DEFAULT_EMIT_DIR / "item_hot_tables.s", tmp_path / "item_hot_tables.s"),
+            (DEFAULT_EMIT_DIR / "item_cat_layout.s", tmp_path / "item_cat_layout.s"),
+            (DEFAULT_EMIT_DIR / "item_cat_data.s", tmp_path / "item_cat_data.s"),
+        )
+        for committed_path, generated_path in expected_files:
+            assert committed_path.is_file(), f"Missing committed generated file: {committed_path}"
+            assert committed_path.read_text(encoding="utf-8") == generated_path.read_text(encoding="utf-8"), (
+                f"Committed {committed_path.relative_to(REPO_ROOT)} is out of sync with item_catalog_spec.json"
+            )
 
     # Confirm hot tables contain NO .segment directive and expose required symbols
     hot_s = DEFAULT_EMIT_DIR / "item_hot_tables.s"

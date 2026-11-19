@@ -194,11 +194,16 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.DEATH, "tombstone"
     if obs.game_flags & abi.GAME_FLAG_OVER and "Disk Setup" in obs.rows[0]:
         return Mode.DEATH, "disk_setup"  # score save asks for a save drive
-    # The status line, or one a row or two off: a failed Plus/4 ITEM.CAT read
-    # printed its drive command to the screen and moved it to row 22, and at
-    # the command loop the bot pressed RUN/STOP 83,000 times (2026-11-17).
-    if obs.ret == command_ret and any("LV:" in row and "DL:" in row for row in obs.rows[20:24]):
-        return Mode.COMMAND, "command"
+    # The status line must sit on hal_layout_status_row (row 21). If a screen
+    # bug scrolls it onto another row at the command loop (e.g. Plus/4 drive
+    # output on 2026-11-17), flag status_row_shifted so the auditor fails the
+    # run with cls="game" instead of masking corrupted geometry.
+    if obs.ret == command_ret:
+        status_row = abi.hal_layout_status_row
+        if "LV:" in obs.rows[status_row] and "DL:" in obs.rows[status_row]:
+            return Mode.COMMAND, "command"
+        if any("LV:" in row and "DL:" in row for i, row in enumerate(obs.rows) if i != status_row):
+            return Mode.UNKNOWN, "status_row_shifted"
     if "-more-" in obs.rows[0] or "-more-" in obs.rows[1]:
         return Mode.DISMISS, "more"
     if "B)uy  S)ell  Q)uit" in screen:

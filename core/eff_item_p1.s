@@ -135,15 +135,9 @@ ep1_detect_objects:
 // ============================================================
 ep1_detect_invis:
     lda #24
-    jsr rng_range
-    clc
-    adc #25
-    clc
-    adc zp_eff_see_inv
-    bcc !ep1_di_ok+
-    lda #255
-!ep1_di_ok:
-    sta zp_eff_see_inv
+    ldx #25
+    ldy #zp_eff_see_inv
+    jsr ep1_add_zp_y
     ldx #HSTR_PIQ_EYES_TINGLE
     jmp huff_print_msg
 
@@ -205,17 +199,20 @@ ep1_holy_prayer:
     jmp huff_print_msg
 
 ep1_add_bless:
+    ldy #zp_eff_bless
+ep1_add_zp_y:
     stx ep1_tmp
     jsr rng_range
     clc
     adc ep1_tmp
     clc
-    adc zp_eff_bless
+    adc $0000,y
     bcc !ep1_ba_store+
     lda #255
 !ep1_ba_store:
-    sta zp_eff_bless
+    sta $0000,y
     rts
+.assert "ep1_add_zp_y timers are zero-page", zp_eff_see_inv < $100 && zp_eff_bless < $100, true
 
 // ============================================================
 // Darkness (Scroll of Darkness, Staff of Darkness L5/L50)
@@ -414,11 +411,7 @@ ep1_create_traps:
     jsr ep1_read_xy
     and #TILE_TYPE_MASK | FLAG_OCCUPIED | FLAG_HAS_ITEM
     bne !ep1_ct_next+               // requires bare TILE_FLOOR (0) unoccupied/no item
-    lda ep1_x
-    sta df_target_x
-    lda ep1_y
-    sta df_target_y
-    jsr trap_find_at_target
+    jsr ep1_trap_at_xy
     bcs !ep1_ct_next+               // already trapped
     lda #TRAP_TYPE_COUNT
     jsr rng_range
@@ -452,11 +445,7 @@ ep1_create_doors:
     ldy ep1_y
     jsr floor_item_find_at
     bcs !ep1_cd_next+
-    lda ep1_x
-    sta df_target_x
-    lda ep1_y
-    sta df_target_y
-    jsr trap_find_at_target
+    jsr ep1_trap_at_xy
     bcs !ep1_cd_next+
     jsr ep1_read_xy
     and #TILE_FLAG_MASK
@@ -536,25 +525,32 @@ ep1_clear_tile_td:
     cmp #TILE_SECRET
     bne !ep1_cttd_done+
 !ep1_cttd_door:
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK             // TILE_FLOOR == 0
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
+    jsr ep1_floor_visited_reveal
     lda ep1_x
     ldy ep1_y
-    jsr door_state_clear_at
-    lda #1
-    sta vis_room_revealed
+    jmp door_state_clear_at
 !ep1_cttd_done:
     rts
 
-// Disarm floor trap & floor chest trap at (ep1_x, ep1_y).
-ep1_disarm_tile:
+ep1_trap_at_xy:
     lda ep1_x
     sta df_target_x
     lda ep1_y
     sta df_target_y
-    jsr trap_find_at_target
+    jmp trap_find_at_target
+
+ep1_floor_visited_reveal:
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK             // TILE_FLOOR == 0
+    ora #FLAG_VISITED
+    :MapWrite_ptr0_y()
+    lda #1
+    sta vis_room_revealed
+    rts
+
+// Disarm floor trap & floor chest trap at (ep1_x, ep1_y).
+ep1_disarm_tile:
+    jsr ep1_trap_at_xy
     bcc !ep1_dt_chk_map+
     jsr trap_remove_at_index
 !ep1_dt_chk_map:
@@ -562,12 +558,7 @@ ep1_disarm_tile:
     and #TILE_TYPE_MASK
     cmp #TILE_TRAP
     bne !ep1_dt_chk_chest+
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK             // TILE_FLOOR == 0
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-    lda #1
-    sta vis_room_revealed
+    jsr ep1_floor_visited_reveal
 !ep1_dt_chk_chest:
     lda ep1_x
     ldy ep1_y
@@ -637,12 +628,6 @@ ep1_ench_wpn_star:
 !ep1_ew_next:
     dec ep1_cnt
     bne !ep1_ew_loop-
-#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
-    lda #1
-    sta piw_recalc_pending
-#else
-    jsr player_recalc_equipment
-#endif
 #if C64_TEST_SCRIPTED_SCROLL_SELECTOR
     lda #8
     sta c64_test_scroll_selector_return_pending
@@ -652,7 +637,7 @@ ep1_ench_wpn_star:
     sta c128_test_scroll_selector_return_pending
 #endif
     ldx #HSTR_PIQ_WPN_GLOW
-    jmp huff_print_msg
+    bne !ep1_recalc_msg+
 
 ep1_curse_weapon:
     ldx #EQUIP_WEAPON
@@ -665,13 +650,16 @@ ep1_curse_weapon:
     jsr ep1_neg_1_to_5
     sta inv_to_dam + EQUIP_WEAPON
 !ep1_curse_finish:
+    ldx #HSTR_PIQ_HUMMING
+!ep1_recalc_msg:
 #if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
     lda #1
     sta piw_recalc_pending
 #else
+    stx ep1_tmp
     jsr player_recalc_equipment
+    ldx ep1_tmp
 #endif
-    ldx #HSTR_PIQ_HUMMING
     jmp huff_print_msg
 
 ep1_curse_armor:
@@ -708,14 +696,8 @@ ep1_ench_arm_star:
 !ep1_eas_next:
     dec ep1_cnt
     bne !ep1_eas_loop-
-#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
-    lda #1
-    sta piw_recalc_pending
-#else
-    jsr player_recalc_equipment
-#endif
     ldx #HSTR_PIQ_ARM_GLOW
-    jmp huff_print_msg
+    bne !ep1_recalc_msg-
 
 // C=1 if signed bonus in A (< 15) succeeds enchantment roll.
 ep1_enchant_try:
@@ -747,9 +729,55 @@ ep1_curse_slot_common:
     lda inv_flags,x
     ora #IF_CURSED
     sta inv_flags,x
+#if CORE_ITEM_IMPORTED
+    cpx #EQUIP_WEAPON
+    bne !ep1_csc_strip+
+    jsr item_get_category_inv_x     // preserves X
+    cmp #ICAT_DIGGING
+    beq !ep1_csc_done+
+!ep1_csc_strip:
+#endif
+#if CORE_PLAYER_IMPORTED
+    lda inv_p1,x
+    beq !ep1_csc_clr+
+    eor #$ff
+    clc
+    adc #1                          // A = -inv_p1,x
+    sta stat_work
+    jsr equip_stat_mask_x           // A = 6-bit stat mask, preserves X
+    beq !ep1_csc_clr+
+    ldy #0
+!ep1_csc_stat_lp:
+    lsr
+    bcc !ep1_csc_stat_nx+
+    pha
+    lda stat_work
+    jsr player_apply_stat_delta_y   // preserves X, Y
+    cpy #PL_CON_CUR - PL_STR_CUR
+    bne !ep1_csc_stat_pop+
+    stx ep1_tmp
+    jsr player_calc_hp
+    ldx ep1_tmp
+    ldy #PL_CON_CUR - PL_STR_CUR
+!ep1_csc_stat_pop:
+    pla
+!ep1_csc_stat_nx:
+    iny
+    cmp #0
+    bne !ep1_csc_stat_lp-
+!ep1_csc_clr:
+#endif
+    lda #0
+    sta inv_p1,x
+    sta inv_to_hit,x
+    sta inv_to_dam,x
     lda inv_ego,x
     and #ITEM_PAGE_BIT              // clear ego while preserving Page 1 flag
     sta inv_ego,x
+#if CORE_ITEM_IMPORTED
+    jmp inven_recalc_weight
+#endif
+!ep1_csc_done:
     rts
 
 ep1_neg_1_to_5:
@@ -842,6 +870,10 @@ ep1_summon_undead:
     jmp huff_print_msg
 !ep1_sum_go:
     jsr tier_check_transition
+    lda zp_player_x
+    sta fae_cx
+    lda zp_player_y
+    sta fae_cy
 !ep1_sum_loop:
     jsr find_adjacent_empty
     bcc !ep1_sum_done+
@@ -890,17 +922,40 @@ ep1_pick_undead_type:
 !ep1_put_fb:
     jmp pick_creature_type
 
-ep1_dispel_undead:
-    lda #0
-    sta ep1_idx
-!ep1_hvf_loop:
+// Load zp_ptr0 + A = MX_TYPE for ep1_idx (< MAX_MONSTERS).
+// C=1, Z=1 when ep1_idx >= MAX_MONSTERS; C=0, Z=1 when EMPTY_SLOT;
+// C=0, Z=0, A = MX_TYPE when active.
+ep1_mon_visible:
+    jsr ep1_mon_active
+    beq !ep1_mv_ret+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_VISIBLE
+!ep1_mv_ret:
+    rts
+
+ep1_mon_active:
     ldx ep1_idx
     cpx #MAX_MONSTERS
-    bcs !ep1_hvf_ret+
+    bcs !ep1_ma_zero+
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
+    beq !ep1_ma_empty+
+    rts
+!ep1_ma_empty:
+    clc
+!ep1_ma_zero:
+    lda #0
+    rts
+
+ep1_dispel_undead:
+    lda #0
+    sta ep1_idx
+!ep1_hvf_loop:
+    jsr ep1_mon_active
+    bcs !ep1_hvf_ret+
     beq !ep1_hvf_next+
     sta cmb_type
     tay
@@ -954,13 +1009,8 @@ ep1_sleep_all:
     lda #0
     sta ep1_idx
 !ep1_sa_loop:
-    ldx ep1_idx
-    cpx #MAX_MONSTERS
+    jsr ep1_mon_active
     bcs !ep1_sa_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
     beq !ep1_sa_next+
     lda ep1_arg
     beq !ep1_sa_chk_vis+
@@ -1021,17 +1071,8 @@ ep1_staff_slow:
     lda #0
     sta ep1_idx
 !ep1_shs_loop:
-    ldx ep1_idx
-    cpx #MAX_MONSTERS
+    jsr ep1_mon_visible
     bcs !ep1_shs_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !ep1_shs_next+
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    and #MF_VISIBLE
     beq !ep1_shs_next+
     ldx ep1_idx
     lda ep1_arg
@@ -1046,28 +1087,23 @@ ep1_staff_slow:
 !ep1_shs_done:
     rts
 
+ep1_slow_slot:
+    lda #$ff
+    .byte $2c
 ep1_haste_slot:
+    lda #1
+    pha
     jsr monster_get_ptr
     ldy #MX_SPEED_CNT
-    lda (zp_ptr0),y
-    cmp #2                          // cap at +2
-    beq !ep1_hs_ret+
+    pla
     clc
-    adc #1
+    adc (zp_ptr0),y
+    cmp #3                          // cap at +2
+    beq !ep1_hs_ret+
+    cmp #$fd                        // cap at -2
+    beq !ep1_hs_ret+
     sta (zp_ptr0),y
 !ep1_hs_ret:
-    rts
-
-ep1_slow_slot:
-    jsr monster_get_ptr
-    ldy #MX_SPEED_CNT
-    lda (zp_ptr0),y
-    cmp #$fe                        // cap at -2
-    beq !ep1_sl_ret+
-    sec
-    sbc #1
-    sta (zp_ptr0),y
-!ep1_sl_ret:
     rts
 
 ep1_detect_evil:
@@ -1075,13 +1111,8 @@ ep1_detect_evil:
     sta vis_room_revealed
     sta ep1_idx
 !ep1_de_loop:
-    ldx ep1_idx
-    cpx #MAX_MONSTERS
+    jsr ep1_mon_active
     bcs !ep1_de_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
     beq !ep1_de_next+
     tay
     lda cr_mflags,y
@@ -1134,17 +1165,8 @@ ep1_mass_polymorph:
     lda #0
     sta ep1_idx
 !ep1_mp_loop:
-    ldx ep1_idx
-    cpx #MAX_MONSTERS
+    jsr ep1_mon_visible
     bcs !ep1_mp_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !ep1_mp_next+
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    and #MF_VISIBLE
     beq !ep1_mp_next+
     ldx ep1_idx
     jsr ep1_poly_slot
@@ -1201,6 +1223,15 @@ ep1_wand_clone:
     ldy #MX_TYPE
     lda (zp_ptr0),y
     sta ep1_arg                     // creature type
+    tax
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_slot_is_balrog
+    beq !ep1_wh_done-
+#else
+    lda cr_level,x
+    cmp #100
+    bcs !ep1_wh_done-
+#endif
     ldy #MX_X
     lda (zp_ptr0),y
     sta ep1_cnt                     // origin X
@@ -1298,6 +1329,17 @@ ep1_wand_polymorph:
 ep1_poly_slot:
     stx ep1_slot
     jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_slot_is_balrog
+    beq !ep1_wb_done+
+#else
+    lda cr_level,x
+    cmp #100
+    bcs !ep1_wb_done+
+#endif
     ldy #MX_X
     lda (zp_ptr0),y
     sta ms_spawn_x
@@ -1309,8 +1351,6 @@ ep1_poly_slot:
     jsr pick_creature_type
     jsr monster_spawn_one
     inc zp_dirty_count
-    rts
-
 !ep1_wb_done:
     rts
 
@@ -1355,11 +1395,8 @@ ep1_wand_td_destr:
     lda proj_cy
     sta ep1_y
     lda ep1_arg
-    bne !ep1_wb_td+
+    bne !ep1_wb_break-
     jsr ep1_disarm_tile
-    jmp !ep1_wb_step-
-!ep1_wb_td:
-    jsr ep1_clear_tile_td
     jmp !ep1_wb_step-
 
 ep1_wand_wall:
@@ -1415,14 +1452,10 @@ ep1_wand_wonder:
     cmp #11
     beq !ep1_wwd_frost+
     lda #6
-    ldx #8
-    ldy #0
-    jmp eff_bolt
+    .byte $2c
 !ep1_wwd_light:
     lda #3
-    ldx #8
-    ldy #0
-    jmp eff_bolt
+    .byte $2c
 !ep1_wwd_frost:
     lda #4
     ldx #8
@@ -1433,20 +1466,10 @@ ep1_wand_wonder:
 // Internal Coordinate & Geometry Helpers
 // ============================================================
 ep1_beam_start:
-    jsr get_direction_target
+    jsr eff_bolt_dir_trace_init
     bcc !ep1_bs_fail+
-    jsr calc_direction_index
-    bcc !ep1_bs_fail+
-    lda zp_player_x
-    sta proj_cx
-    lda zp_player_y
-    sta proj_cy
-    lda #21                         // 20 trace steps (pre-decremented)
-    sta proj_steps
-    sec
-    rts
+    inc proj_steps                  // 21 (pre-decremented in loop)
 !ep1_bs_fail:
-    clc
     rts
 
 // Neighbor X = 0..7 -> 8 dirs; X = 8 -> player center. Sets ep1_x/y; C=1 if in bounds.

@@ -271,19 +271,13 @@ ee_op_drain:
     lda eff_ext_arg
     pha
     and #$07
-    tax
-    lda ee_sust_tbl,x
+    tay
+    lda ee_sust_tbl,y
     and player_sust_mask
     bne !eed_sustained+
-    lda player_data + PL_STR_CUR,x
-    cmp #4
+    jsr player_drain_stat_y
     bcc !eed_sustained+
-    stx eff_ext_tmp
-    jsr decrement_stat
-    ldx eff_ext_tmp
-    sta player_data + PL_STR_CUR,x
-    sta zp_player_str,x
-    cpx #STAT_CON
+    cpy #STAT_CON
     bne !eed_combat+
     jsr player_calc_hp
 !eed_combat:
@@ -323,9 +317,11 @@ ee_op_restore:
     ldx #HSTR_PIQ_RESTORED
     jmp huff_print_msg
 !eer_single:
-    ldx #5
+    ldx #STAT_COUNT - 1
 !eer_push:
     lda player_data + PL_STR_CUR,x
+    pha
+    lda player_stat_res,x
     pha
     dex
     bpl !eer_push-
@@ -333,18 +329,24 @@ ee_op_restore:
     // which swaps overlays and reloads this overlay's BSS (eff_ext_tmp) to 0.
     lda eff_ext_arg
     pha
-    jsr player_calc_stats           // Recalculates all CUR from BASE + equipment
+    jsr player_calc_stats           // Recalculates all CUR & res from BASE + equipment
     pla
     sta eff_ext_tmp
     ldx #0
 !eer_pop:
     pla
+    tay                             // Y = old_res
+    pla                             // A = old_cur
     cpx eff_ext_tmp
-    beq !eer_keep_new+
+    bne !eer_restore_old+           // Non-target stats keep exact old CUR & res
     cmp player_data + PL_STR_CUR,x
-    bcs !eer_keep_new+              // Keep drained value on un-targeted stats
+    bcc !eer_keep_new+              // old_cur < new_cur: restored
+    beq !eer_keep_new+              // old_cur == new_cur (incl. drained res at 3/118): keep restored res
+!eer_restore_old:
     sta player_data + PL_STR_CUR,x
     sta zp_player_str,x
+    tya
+    sta player_stat_res,x
 !eer_keep_new:
     inx
     cpx #STAT_COUNT
@@ -459,12 +461,10 @@ ee_op_timed_misc:
 !eetm_not1:
     cpx #2
     bne !eetm_not2+
-    // 2: Detect Invisible
-    lda #1
-    sta zp_eff_see_inv
+    // 2: Detect Invisible (VMS detect_inv2(randint(12) + 12) -> +13..24)
     lda #12
-    ldx #12
-    ldy #zp_eff_invis - zp_eff_poison
+    ldx #13
+    ldy #zp_eff_see_inv - zp_eff_poison
     jsr ee_add_zp_timer
     ldx #HSTR_PIQ_EYES_TINGLE
     jmp huff_print_msg
@@ -538,16 +538,37 @@ ee_op_xp:
     lda player_data + PL_XP_2
     sbc zp_temp2
     sta player_data + PL_XP_2
+    jsr combat_check_leveldown
+    jsr status_mark_dirty
     lda #<ee_msg_memories
     ldy #>ee_msg_memories
     jmp msg_print_ay
 !eex_not0:
     cpx #1
     bne !eex_not1+
-    // 1: Restore Life Levels
+    // 1: Restore Life Levels (VMS restore_level: while exp < max_exp -> exp = max_exp)
     lda #<ee_msg_restore_lvl
     ldy #>ee_msg_restore_lvl
-    jmp msg_print_ay
+    jsr msg_print_ay
+!eex_rll_loop:
+    lda player_data + PL_XP_0
+    cmp player_data + PL_MAX_XP_0
+    lda player_data + PL_XP_1
+    sbc player_data + PL_MAX_XP_1
+    lda player_data + PL_XP_2
+    sbc player_data + PL_MAX_XP_2
+    bcs !eex_rll_done+
+    ldx #2
+!eex_rll_copy:
+    lda player_data + PL_MAX_XP_0,x
+    sta player_data + PL_XP_0,x
+    dex
+    bpl !eex_rll_copy-
+    jsr combat_check_levelup
+    jmp !eex_rll_loop-
+!eex_rll_done:
+    jmp status_mark_dirty
+.assert "PL_XP and PL_MAX_XP are 3-byte contiguous", PL_XP_2 - PL_XP_0 == 2 && PL_MAX_XP_2 - PL_MAX_XP_0 == 2, true
 !eex_not1:
     cpx #2
     bne !eex_gain+

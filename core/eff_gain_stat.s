@@ -12,7 +12,7 @@
 // which can pass the maximum, so Moria8 heals to full instead.
 //
 // Owner: Default resident on C64, Plus/4, and C128; RuntimeBanked (ATARI.BNK)
-// on Atari 8-bit; A2PlaySlot (a2.play) on Apple IIe; ItemActionsOverlay
+// on Atari 8-bit; DeathOverlay (ovl.death) on Apple IIe; ItemActionsOverlay
 // (OVL.ITEMS) on CX16; SpellOverlay (OVL.SPELL) on BBC Master 128.
 // Lifetime: one potion quaff (ITEM_POTION_OF_GAIN_STRENGTH..ITEM_POTION_OF_CHARISMA).
 // Callers: Phase 3 quaff dispatch (iq_dispatch_p3 in player_item_commands.s on
@@ -58,6 +58,26 @@ eff_potion_gain_stat:
     sta player_data + PL_STR_BASE,y
     sec
     sbc egs_old                 // the step taken
+#if CORE_PLAYER_IMPORTED
+    jsr player_apply_stat_delta_y
+    tya
+    pha
+    cpy #PL_CON_BASE - PL_STR_BASE
+    bne !egs_combat+
+    jsr player_calc_hp
+    jsr eff_heal_full
+!egs_combat:
+    jsr player_calc_combat
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    lda #1
+    sta levelup_magic_pending
+#else
+    jsr magic_recalc_mana
+    jsr magic_check_new_spells
+#endif
+    pla
+    tay
+#else
     clc
     adc player_data + PL_STR_CUR,y
     cmp #119
@@ -77,6 +97,7 @@ eff_potion_gain_stat:
     lda zp_player_mhp_hi
     sta player_data + PL_MHP_HI
     jsr eff_heal_full
+#endif
 !egs_msg:
     tya
     clc

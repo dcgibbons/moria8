@@ -11,6 +11,7 @@ tcp_results: .fill 3, $ff
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -29,7 +30,7 @@ test_finish:
 
 .pc = $0840 "Test Body"
 
-.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestUnused [start=$E160, min=$E160, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"

@@ -108,7 +108,7 @@ bank numbers (`0..63`, covering reclaimed Banks `5..8` and warm pool `25..63`):
 
 * Static memory contract self-test: `make testcx16-memory-contract-selftest` (`check_memory_contract.py --selftest`, `check_cx16_cart.py --selftest`, `test_cartridge.py --selftest`)
 * Static linked-symbol & PRG extent gate: `make testcx16-memory-contract` (21 asserts × 2 build dirs + 21-asset cart verification)
-* Runtime TestBench suite: `make testcx16-runtime` (26 scenarios in `platforms/cx16/harness_smoke.py`, including `bank_bounce_helpers` and `OVL.HOME` deposit/retrieve in `wizard_flow`)
+* Runtime TestBench suite: `make testcx16-runtime` (27 scenarios in `platforms/cx16/harness_smoke.py`, including `bank_bounce_helpers`, `mage_identify_selector`, and `OVL.HOME` deposit/retrieve in `wizard_flow`)
 * Cartridge verification suite: `make testcx16-cartridge` (`tools/check_cx16_cart.py`, `platforms/cx16/test_cartridge.py`)
 
 ## 5. Cartridge ROM Banks (`$C000-$FFFF`, Banks `32+`, `CX16_CARTRIDGE`)
@@ -122,9 +122,9 @@ When built with `-define CX16_CARTRIDGE` into isolated `build/cx16-cart/`:
 * Resident `platforms/cx16/cartridge_copy.s` (`cart_load_asset`, `cart_read`, `cart_load_prg`) saves and restores `$00`, `$01`, and processor status (`P`), never uses zero-page variables, and handles `$FFFF -> $C000` bank boundaries seamlessly.
 * Character saves (`"THE.GAME"`..`"THE.GAME4"`) and `HALL.OF.FAME` remain on HostFS / SD Drive 8–11 (`save_device`) and are interchangeable with `build/cx16/MORIA8.PRG`.
 
-## License/source modal ownership (2026-11-10)
+## License/source modal ownership (2026-11-10; shifted to Bank 24 in Phase 2)
 
-`LEGALUI` is an uncached modal loaded on title `A` (About) or Help `L`: temporary Bank 23 $A000-$BFFF; restores the previous RAM bank.
+`LEGALUI` is an uncached modal loaded on title `A` (About) or Help `L`: temporary Bank 24 (`CX16_BANK_LEGAL = 24`, formerly Bank 23 before Phase 2 inserted `OVL.HOME` at Bank 19) `$A000-$BFFF`; restores the previous RAM bank.
 Code ends before overlay base+$600; a 142-byte core-ZP snapshot starts there,
 and the disk/ROM input cache occupies base+$700..+$7FF. Both are modal
 workspace, never game-data loans or emitted PRG padding. The resident entry saves core ZP before asset loading, after any media
@@ -136,16 +136,16 @@ this ownership. See `docs/LEGAL_VIEWER.md` for the change and verification recor
 
 Verification (2026-11-10): `make -j7 -O test` passed, including the linked PRG
 ownership checks and the TestBench title/Help legal-viewer scenario, including
-preserved player state and return to gameplay. Bank 23 is temporary; existing
-cached banks retain their owners.
+preserved player state and return to gameplay. `CX16_BANK_LEGAL` (`Bank 24`,
+formerly `Bank 23`) is temporary; existing cached banks retain their owners.
 
 Review repair: the build emits uppercase `LEGALUI` directly. The cold modal
-uses Bank 23 without invalidating the cached overlay tags in Banks 9-20.
+uses `CX16_BANK_LEGAL` (`Bank 24`) without invalidating the cached overlay tags in Banks 9-21.
 A low-resident reader selects Bank 0 once per 128-byte chunk, uses the idle
-row staging buffer, then restores Bank 23 before copying into its cache.
+row staging buffer, then restores `CX16_BANK_LEGAL` (`Bank 24`) before copying into its cache.
 It restores the caller ROM bank too. Fatal READST rejects the refill before
 rendering, and a zero-byte refill performs no copy. Injected $42 verifies
-the error screen, zero count and untouched Bank 23 cache.
+the error screen, zero count and untouched `CX16_BANK_LEGAL` (`Bank 24`) cache.
 
 Repair verification (2026-11-11): `make -j7 -O test` passed. Applicable payload
 bounds, header/load/execution ownership, missing-file cleanup and production
@@ -153,18 +153,20 @@ modal-return rows are complete; see `docs/LEGAL_VIEWER.md` for linked spans and
 coverage. Existing banking configurations and persistent cache owners remain;
 physical display-layout changes are N/A.
 
-## Cartridge port (`CX16_CARTRIDGE`, 2026-11-13)
+## Cartridge port (`CX16_CARTRIDGE`, 2026-11-13; updated through Phase 5)
 
 `CX16_CARTRIDGE` builds into isolated `build/cx16-cart/`, leaving non-cartridge
-`build/cx16/` payloads byte-identical. `MORIA8.PRG` spans `$0801-$98FC`
-(leaving `$98FD-$9AFF` free below `PLATFORM_TIER_NAME_POOL_BASE` at `$9B00`);
-`LEGALUI` (`$A000-$A39E`, Bank 23) streams `LICENSE` and `SOURCE-OFFER` via
+`build/cx16/` payloads byte-identical. `MORIA8.PRG` fits below
+`PLATFORM_TIER_NAME_POOL_BASE` at `$9B00` (and `<= $9980` `CartLiveHelperLimit`);
+`LEGALUI` (`CX16_BANK_LEGAL = 24`, shifted from initial Bank 23 when `OVL.HOME`
+joined at Bank 19) streams `LICENSE` and `SOURCE-OFFER` via
 resident `cart_read` (`cart_is_record = 2`) into `legal_input_cache` (`legal_eof`
 cleared to `$00` on open and set to `$40` on EOF). All 8
 ROM banks (`32..39`, 128 KB raw NOR-flash `moria8-cx16.bin`, 131,552-byte
-`build/moria8-cx16.crt`) are packed via `tools/make_cx16_cart.py` (`101,027` B
-used, `30,045` B free) and validated by `tools/check_cx16_cart.py` (exact asset
-IDs, RAM banks `0/3/4/9..23`, and destination addresses).
+`build/moria8-cx16.crt`) are packed via `tools/make_cx16_cart.py`
+and validated by `tools/check_cx16_cart.py` (exact asset
+IDs, RAM banks `0/3..6/9..24`, and destination addresses; initial 2026-11-13
+pre-Phase-2/4/5 bring-up used 20 assets across RAM banks `0/3/4/9..23`).
 
 Verification (2026-11-13): `make testcx16-memory-contract`, `make testcx16-cartridge`,
 and `make testcx16` passed (`check_memory_contract.py` 19 asserts x 2 build dirs,
@@ -193,7 +195,7 @@ Contract decision or selected upstream oracle with source locations: Commander X
 Intentional Moria8 deviations: key_map_petscii and key_map_cmd reside in Bank 3 AuxData rather than Low RAM; Banks 5-8 stay reserved for Phase 5 monster extensions / extended slots while HAL_PLATFORM_MONSTER_CATALOG is active. No gameplay semantics changed.
 Input/intermediate widths, signedness, carry, range and overflow policy: cx16_bank_read_byte/write_byte take bank in 0..63 and (zp_ptr0),y in $A000-$BFFF; cx16_bank_read_block/write_block take X in 0..255 (0=256 bytes); cx16_bank_copy takes unsigned 16-bit byte count (A=lo, X=hi) bounded within single source/destination banks ($A000-$BFFF), clearing C on completion; per-chunk $0700 bounce runs under php; sei ... plp.
 RNG reduction and bias, if applicable: N/A — memory layout, bank helpers, and static/TestBench contract checks introduce no RNG calls or range reductions.
-Affected platforms, overlays, banks and owners: Commander X16 only; Disk MORIA8.PRG ($0801-$993B, 452 B free < $9B00), Cart MORIA8.PRG ($0801-$9951, 430 B free < $9B00, <= $9980 live-test floor), CX16.AUXDATA Bank 3 ($6000-$74FF, 2,816 B free), Bank 5 (CX16_BANK_CATALOG_EXT), Banks 6-8 (CX16_BANK_EXT_BASE..END), Banks 9-20 overlays, Bank 21 TITLE, Bank 22 MONSTER.CAT, Bank 23 LEGALUI (CX16_BANK_LEGAL), Banks 24-63 (CX16_BANK_WARM_BASE..END).
+Affected platforms, overlays, banks and owners: Commander X16 only; Phase 1 snapshot (superseded in Phase 2/4/5 by Banks 9-21 overlays, Bank 22 TITLE, Bank 23 MONSTER.CAT, Bank 24 LEGALUI, Bank 6 ITEM.CAT, and Warm Pool Banks 25-63 — see §2 above): Disk MORIA8.PRG ($0801-$993B, 452 B free < $9B00), Cart MORIA8.PRG ($0801-$9951, 430 B free < $9B00, <= $9980 live-test floor), CX16.AUXDATA Bank 3 ($6000-$74FF, 2,816 B free), Bank 5 (CX16_BANK_CATALOG_EXT), Banks 6-8 (CX16_BANK_EXT_BASE..END), historical Banks 9-20 overlays / Bank 21 TITLE / Bank 22 MONSTER.CAT / Bank 23 LEGALUI / Banks 24-63 warm pool.
 Required production-path tests: check_memory_contract.py (--selftest and disk+cart checks), diskcx16 (LICENSE + SOURCE-OFFER in build/moria8-cx16.zip), cartridgecx16 (check_cx16_cart.py), testcx16 (26 x16emu TestBench scenarios incl. bank_bounce_helpers and save_load/save_reboot_load), testcx16-cartridge (cold-boot, IRQ/WAV, preloaded bank Fletcher-16, bidirectional disk/cart save interchange).
 Known behavior explicitly out of scope: Populating Bank 5 MONSTER.CAT extensions (Phase 5) or Banks 6-8 / 24-63 runtime payloads (Phases 2/4/5), and any changes to core/, platforms/shared/, or sibling ports.
 Unresolved uncertainty and risk: None in Phase 1; callers of cx16_bank_copy must ensure source/destination slices stay within one 8 KB $A000-$BFFF bank and callers of cx16_bank_read/write_block stay within one 256-byte page window from Y.
@@ -264,7 +266,7 @@ Verification (2026-11-14):
 
 ## Phase 4 `ITEM.CAT` HiRAM Bank 6 Preload & Save Format V2 (2026-11-15)
 
-- **HiRAM Bank 6 (`CX16_BANK_ITEM_CAT = 6`):** Preloads `'ITM2'` `ITEM.CAT` (`7,573 / 8,192 B`, `$A000-$BD94`, **`619 B` free**) at boot on both disk (`cx16_preload_banks`) and cartridge (`CART_ASSET_ITEM_CAT`, 22nd descriptor in Bank 32 `$C100-$C1FF`). `22/64` HiRAM banks are used and **`42/64` (`336 KB`)** remain free (`Bank 5` `CX16_BANK_CATALOG_EXT`, `Banks 7-8`, `Banks 25-63`).
+- **HiRAM Bank 6 (`CX16_BANK_ITEM_CAT = 6`):** Preloads `'ITM2'` `ITEM.CAT` (`7,478 / 8,192 B` at `$A000-$BD35`, **`714 B` free** in current 361-item catalog; `7,573 B` at `$A000-$BD94` at Phase 4) at boot on both disk (`cx16_preload_banks`) and cartridge (`CART_ASSET_ITEM_CAT`, 22nd descriptor in Bank 32 `$C100-$C1FF`). `22/64` HiRAM banks were used at Phase 4 (`24/64` used including Bank 5 `MONSTER.EXT` and Bank 24 cold `LEGALUI`, leaving **`40/64` (`320 KB`)** free across `Banks 7-8` and `Banks 25-63`).
 - **Low RAM & Bank 3 `CX16.AUXDATA`:** Disk `MORIA8.PRG` spans `$0801-$9346` (`35,654 / 37,631 B`, **`1,977 B` free** `< $9B00`); Cart `MORIA8.PRG` spans `$0801-$9344` (`35,652 / 37,631 B`, **`1,979 B` free** `< $9B00`, **`1,595 B` free** `<= $9980` `CartLiveHelperLimit`). Bank 3 `CX16.AUXDATA` (`$6000-$76E1`, `5,858 / 8,192 B`, **`2,334 B` free**) hosts `recall[279]` (`1,116 B`), `si_meta_hi[128]`, `id_known_bits[47]`, and `potion_shuffle..staff_shuffle` (`174 B`).
 - **Overlays & Shipping Media:** All 13 overlays fit `$A000-$BFFF` (`OVL.ITEMS` `6,338 B` / `1,854 B` free, `OVL.SPELL` `5,965 B` / `2,227 B` free, `OVL.CHEST` `5,358 B` / `2,834 B` free, `OVL.HOME` `5,258 B` / `2,934 B` free, `OVL.START` `4,117 B`, `OVL.TOWN` `3,926 B`, `OVL.GEN` `3,718 B`, `OVL.DEATH` `3,354 B`, `OVL.STORAGE` `3,186 B`, `OVL.MODAL` `2,772 B`, `OVL.UI` `2,542 B`, `OVL.HELP` `2,273 B`, `OVL.TITLE` `630 B`). `build/moria8-cx16.crt` packs `22` assets (`116,097 B` payload, `116,609 / 131,072 B` used, **`14,463 B` free**); `build/moria8-cx16.zip` packages `22` files (`116,150 B` uncompressed).
 
@@ -288,7 +290,7 @@ Problem and success criteria: Wire Phase 5's 29-field cr_* buffers (+320 B), 279
 State being changed: platforms/cx16/{main.s,memory.s,monster_catalog_bank.s,storage_kernal.s,cartridge_contract.s,Makefile,check_memory_contract.py} & tools/{make_cx16_cart.py,check_cx16_cart.py} — preload MONSTER.EXT into Bank 5 (CX16_BANK_CATALOG_EXT), add $00-preserving catalog_fetch_ext <= $9980, add cat_undead[35] to Bank 23 MONSTER.CAT, evict Wave 5.2 cold modules + mae_cold_body into HiRAM overlays, and register 23rd cartridge asset.
 Search scope and terms: rg across platforms/cx16/, core/, and tools/ for CX16_BANK_CATALOG_EXT, catalog_fetch_ext, cat_ext_record, LOW_RAM_MIN_FREE, UI_CHAR_BG_EXTERNAL, TRAP_TRIGGER_EXTERNAL, STARTING_KIT_EXTERNAL, mae_cold_body.
 Relevant readers/writers found and known exclusions: catalog_fetch_ext saves/restores $00 under php; sei using self-modified absolute address $A000 + id * 8 (zero ZP touched) so overlay callers in Banks 9..21 never lose their mapped bank; cat_ext_record and catalog_fetch_ext_end are asserted <= $9980 for cartridge_test_live.s compatibility.
-Initialization, reset and persistence points: cx16_preload_banks loads MONSTER.EXT into Bank 5 at boot alongside Bank 23 MONSTER.CAT; Save Format V2 (SAVE_VERSION = $22, 17,161 B).
+Initialization, reset and persistence points: cx16_preload_banks loads MONSTER.EXT into Bank 5 at boot alongside Bank 23 MONSTER.CAT; Save Format V2 (SAVE_VERSION = $22, 17,164 B).
 Affected production sequence through the changed transition: entry_main -> cx16_preload_banks (loads Bank 5 MONSTER.EXT & Bank 23 MONSTER.CAT) -> gameplay cat_fetch / catalog_recall_match_and_fill -> catalog_fetch_ext (maps Bank 5, copies 8 B -> cat_ext_record, restores caller $00) -> '/' recall dispatches OVL.MODAL -> ui_recall_display.
 Contract decision or selected upstream oracle with source locations: Commander X16 64-bank HiRAM partition (platforms/cx16/memory.s, check_memory_contract.py) and VMS Moria 4.8 279-creature catalog.
 Intentional Moria8 deviations: None to VMS gameplay; splitting core 21 fields + index in Bank 23 (5,976 B) and 8 extended fields in Bank 5 (2,232 B) keeps every segment inside a single 8 KB $A000-$BFFF bank without cross-bank straddling.

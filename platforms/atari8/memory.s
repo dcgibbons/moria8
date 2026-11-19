@@ -199,7 +199,7 @@
 // ============================================================
 .const ATARI_SAVE_SLOT_SECTORS       = 68
 .const ATARI_SAVE_SECTOR_DATA_BYTES  = 125
-.const ATARI_SAVE_SERIALIZED_MAX     = 7855
+.const ATARI_SAVE_SERIALIZED_MAX     = 7858
 .const DOS25_LINK_BYTES              = 125
 .const DOS25_LINK_HI                 = 126
 .const DOS25_LINK_LO                 = 127

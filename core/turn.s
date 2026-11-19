@@ -124,6 +124,24 @@ turn_tick_effects:
 !no_poison:
 
     // Blindness
+#if CORE_PLAYER_IMPORTED
+    lda player_curse_flags
+    and #ITR3_BLIND
+    beq !blind_tick+
+    lda zp_eff_blind
+    bne !blind_cursed_dec+
+    lda #1
+    sta zp_eff_blind
+    sta vis_room_revealed
+#if HAL_LAYOUT_VISIBILITY_FORCE_REDRAW
+    sta vis_force_redraw_pending
+#endif
+    bne !no_blind+
+!blind_cursed_dec:
+    cmp #2
+    bcc !no_blind+
+!blind_tick:
+#endif
     lda zp_eff_blind
     beq !no_blind+
     dec zp_eff_blind
@@ -133,6 +151,9 @@ turn_tick_effects:
     jsr huff_print_msg
     lda #1
     sta vis_room_revealed       // Trigger full viewport redraw
+#if HAL_LAYOUT_VISIBILITY_FORCE_REDRAW
+    sta vis_force_redraw_pending
+#endif
 !no_blind:
 
     // Confusion
@@ -156,6 +177,21 @@ turn_tick_effects:
 !no_para:
 
     // Fear
+#if CORE_PLAYER_IMPORTED
+    lda player_curse_flags
+    and #ITR3_TIMID
+    beq !fear_tick+
+    lda zp_eff_hero
+    bne !fear_tick+
+    lda eff_fear_timer
+    bne !fear_cursed_dec+
+    inc eff_fear_timer
+    bne !no_fear+
+!fear_cursed_dec:
+    cmp #2
+    bcc !no_fear+
+!fear_tick:
+#endif
     lda eff_fear_timer
     beq !no_fear+
     dec eff_fear_timer
@@ -184,8 +220,8 @@ turn_tick_effects:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),
     // heat/fire resist($58), [skip bless($59)], [skip hero($5a)], regen($5b),
-    // cold resist($5c)
-    .assert "Simple-dec range", eff_resist_cold_timer - zp_eff_protect, 7
+    // cold resist($5c), see invisible($5d)
+    .assert "Simple-dec range", zp_eff_see_inv - zp_eff_protect, 8
     ldy #zp_eff_protect
 !tse_loop:
     cpy #zp_eff_bless
@@ -199,7 +235,7 @@ turn_tick_effects:
     sta $00,y
 !tse_next:
     iny
-    cpy #eff_resist_cold_timer + 1
+    cpy #zp_eff_see_inv + 1
     bne !tse_loop-
 
     // Blessed / Prayer

@@ -45,6 +45,7 @@ item_exchange:
     clc
     rts
 !ix_swap:
+    jsr ix_adj_weapon_off
     ldx #0
 !ix_loop:                               // all 8 arrays, stride TOTAL_INV_SLOTS
     lda inv_item_id + EQUIP_WEAPON,x
@@ -57,6 +58,8 @@ item_exchange:
     adc #TOTAL_INV_SLOTS
     tax
     bcc !ix_loop-                       // carry after the 8th array
+    sec
+    jsr ix_adj_weapon_c
     jsr player_recalc_equipment
     ldx #EQUIP_WEAPON
     lda #<ix_primary_str
@@ -86,6 +89,25 @@ ix_report:
     jmp cmb_term_and_print
 !ix_skip:
     rts
+
+ix_adj_weapon_off:
+    clc
+ix_adj_weapon_c:
+    ldx inv_item_id + EQUIP_WEAPON
+    inx
+    beq !ix_skip-                       // FI_EMPTY ($ff) -> 0 (C untouched)
+    lda inv_p1 + EQUIP_WEAPON
+    beq !ix_skip-                       // p1 == 0 (C untouched)
+    bcs !ix_pos+
+    eor #$ff
+    adc #1                              // carry clear: -p1
+!ix_pos:
+    pha
+    ldx #EQUIP_WEAPON
+    jsr equip_stat_index                // resident: C=1 & Y=stat if any
+    pla
+    bcc !ix_skip-
+    jmp player_apply_stat_delta_y
 
 ix_no_weapons_str: .text "No weapons to exchange." ; .byte 0
 ix_primary_str:    .text "Primary: " ; .byte 0

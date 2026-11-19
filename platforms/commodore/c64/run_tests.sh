@@ -33,8 +33,16 @@ java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
+        local has_symdir=0 a
+        for a in "$@"; do
+            [ "$a" = "-symbolfiledir" ] && has_symdir=1
+        done
+        local -a symdir_args=()
+        if [ "$has_symdir" -eq 0 ] && [ -n "${TMPDIR:-}" ]; then
+            symdir_args=(-symbolfiledir "$TMPDIR")
+        fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
     else
         command java "$@"
     fi
@@ -79,8 +87,10 @@ if [ -d "$C64_BUILD_OUT" ]; then
     cp -p "$C64_BUILD_OUT"/* "$C64_TEST_OUT"/ 2>/dev/null || true
 fi
 cleanup() {
-        rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
-    rm -f creature_data/*.sym creature_data/*.vs "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
+    rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
+    if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
+        rm -rf "$TMPDIR"
+    fi
 }
 trap cleanup EXIT
 COMMODORE_MAKE=(make -s -C "$REPO_ROOT/platforms/commodore")
@@ -501,22 +511,27 @@ run_sound_monitor_test() {
 
     echo -n "  $name: "
 
+    local prg_dir prg_file sym_file
+    prg_dir=$(mktemp -d -t "test_${name}.XXXXXX")
+    prg_file="$prg_dir/test_sound_monitor.prg"
+    sym_file="$prg_dir/test_sound_monitor.vs"
+
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -o "${src%.s}.prg" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -o "$prg_file" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
         echo "$asm_output" | grep -i error | head -3
+        rm -rf -- "$prg_dir"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    local sym_file="${src%.s}.vs"
     local mon_file
     local log_file
-    mon_file=$(mktemp -t "test_${name}_mon")
-    log_file=$(mktemp -t "test_${name}_log")
+    mon_file=$(mktemp -t "test_${name}_mon.XXXXXX")
+    log_file=$(mktemp -t "test_${name}_log.XXXXXX")
 
     lookup_label() {
         local label="$1"
@@ -541,6 +556,8 @@ run_sound_monitor_test() {
         done
         echo "quit"
     } > "$mon_file" || {
+        rm -f -- "$mon_file" "$log_file"
+        rm -rf -- "$prg_dir"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -548,7 +565,7 @@ run_sound_monitor_test() {
 
     script -q "$log_file" \
         "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
-        -autostart "${src%.s}.prg" -moncommands "$mon_file" \
+        -autostart "$prg_file" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
 
@@ -612,6 +629,8 @@ PY
     else
         FAIL=$((FAIL + 1))
     fi
+    rm -f -- "$mon_file" "$log_file"
+    rm -rf -- "$prg_dir"
     TOTAL=$((TOTAL + 1))
 }
 
@@ -2712,7 +2731,7 @@ print(f"0x{I.ITEM_SLOT_MACE:02x} 0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.
             --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
             --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
             --expect-byte-symbol ".zp_turn_lo=0x01" \
-            --expect-byte-symbol ".current_overlay=0x0a" \
+            --expect-byte-symbol ".current_overlay=0x07" \
             --expect-screen-symbol ".exchange_product_expect_row0:0:0" \
             --expect-screen-symbol ".exchange_product_expect_row1:1:0" \
             --timeout 30 \
@@ -2976,8 +2995,11 @@ run_chest_open_product_genfail_smoke() {
         return
     fi
 
-    # Swap target: every file except 64.gen, so the deferred GEN fulfillment
-    # load fails on real media after the chest overlay has already loaded.
+    # Swap target: every file except 64.gen. Under PICKER_IN_CHEST_OVERLAY
+    # (c64/main.s), chest_open_command and deferred chest_fulfill_loot + picker
+    # co-locate in OVL_CHEST (64.chest, 0x0a) rather than 64.gen, while
+    # item_pickup_cache_warm_floor reads ITEM.CAT sectors across the hot-swapped
+    # D64 media. Verify full stage-5 loot fulfillment completes without 64.gen.
     cp "$boot_d64" "$nogen_d64"
     if ! "$C1541" -attach "$nogen_d64" -delete "64.gen" >>"$build_log" 2>&1; then
         echo "FAIL (nogen disk image)"
@@ -2987,13 +3009,6 @@ run_chest_open_product_genfail_smoke() {
         return
     fi
 
-    # The swap triggers at tramp_chest_open (resident; reached only when the
-    # Open command finds a chest). At that point dungeon generation is long
-    # done and the CHEST overlay still loads fine from the swapped disk; only
-    # the deferred GEN fulfillment load fails. Expected state: stage stays at
-    # 2 (overlay entered, generator never ran), no loot placed, latch cleared,
-    # current_overlay=NONE after the failed load, and the game reaches the
-    # script-exhaustion trap (still responsive).
     local chest_lw_slot
     chest_lw_slot=$(PYTHONPATH="$REPO_ROOT/tools" python3 -B -c 'import item_ids as I; print(f"0x{I.ITEM_SLOT_LARGE_WOODEN_CHEST:02x}")')
 
@@ -3008,11 +3023,14 @@ run_chest_open_product_genfail_smoke() {
             --swap-symbol ".tramp_chest_open" \
             --swap-attach8-d64 "$nogen_d64" \
             --swap-attach-after-hits 1 \
-            --expect-byte-symbol ".chest_product_path_stage=0x02" \
-            --expect-byte-symbol ".chest_product_loot_placed=0x00" \
+            --expect-byte-symbol ".chest_product_path_stage=0x05" \
+            --expect-byte-symbol ".chest_product_loot_placed=0x01" \
+            --expect-byte-symbol ".zp_dirty_count=0x00" \
+            --expect-byte-symbol ".turn_scene_dirty=0x00" \
+            --expect-byte-symbol ".chest_product_runtime_state=0x36" \
             --expect-byte-symbol ".chest_loot_pending=0x00" \
             --expect-byte-symbol ".chest_pending_summons=0x00" \
-            --expect-byte-symbol ".current_overlay=0x00" \
+            --expect-byte-symbol ".current_overlay=0x0a" \
             --expect-byte-symbol ".fi_item_id=${chest_lw_slot}" \
             --expect-byte-symbol ".fi_p1=0x80" \
             --expect-byte-symbol ".zp_player_dlvl=0x01" \
@@ -5307,7 +5325,8 @@ echo ""
 # Build main program first (compile-time asserts)
 echo -n "  main.s assembly: "
 cd "$RUN_TESTS64_DIR"
-asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -o moria.prg 2>&1)
+mkdir -p ../../../build/test/c64
+asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -o "$TMPDIR/moria.prg" 2>&1)
 assert_info=$(echo "$asm_out" | grep "asserts")
 if echo "$asm_out" | grep -q "0 failed"; then
     echo "PASS ($assert_info)"

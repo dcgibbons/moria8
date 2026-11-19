@@ -216,7 +216,7 @@ C128 = Port(
         "moria8": "boot128.prg", "boot128": "boot128.chain.prg", "bootart128": "bootart128.prg",
         "moria128": "moria128.prg", "t128": "title",
         "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg", "128.cex": "128.cex.prg",   # the monster catalog (no tiers)
-        "item.cat": "item.cat", "item.idx": "item.idx",
+        "item.cat": "item.cat",
         **{f"128.{name}": f"ovl.{name}" for name in
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest", "home", "storage")},
         **{f"128.{name}": f"128.{name}.prg" for name in

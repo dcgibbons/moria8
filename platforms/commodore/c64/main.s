@@ -524,7 +524,7 @@ reu_size_kb: .word 0
 #import "../../../core/math.s"
 #import "../../../core/tables.s"
 #import "../../../core/item_defs.s"
-// Equipment-derived effect flags park in ModalMiscOverlay (PLAYER_PFLAGS_EXTERNAL)
+// Equipment-derived effect flags park in TitleOverlay (PLAYER_PFLAGS_EXTERNAL)
 // behind hal_player_recalc_pflags, freeing 64.bank headroom.
 #import "../../../core/player.s"
 // The element divisor too (breath and the element touches).
@@ -3579,10 +3579,12 @@ wizard_prompt_clear_digits:
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
+    ldx #3
+!wpcd_clr:
     lda #$20
     jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    dex
+    bne !wpcd_clr-
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col

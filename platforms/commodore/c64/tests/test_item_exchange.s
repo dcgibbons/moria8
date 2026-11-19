@@ -351,6 +351,7 @@ rec_torch_cursed:  .byte ITEM_SLOT_WOODEN_TORCH, 1, 100, 0, 0, 0, IF_CURSED, ITE
 rec_torches:       .byte ITEM_SLOT_WOODEN_TORCH, 2, 200, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
 rec_torch_one:     .byte ITEM_SLOT_WOODEN_TORCH, 1, 200, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
 rec_torch_old:     .byte ITEM_SLOT_WOODEN_TORCH, 1, 100, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
+rec_holy:          .byte ITEM_SLOT_DAGGER, 1, 4, 3, 4, 0, IF_IDENTIFIED, EGO_HOLY_AVENGER | ITEM_PAGE_DAGGER
 
 // Messages, as the player reads them
 s_no_weapons: .text "No weapons to exchange." ; .byte 0
@@ -359,6 +360,7 @@ s_pri_mace:   .text "Primary: Mace (+1,+0)" ; .byte 0
 s_pri_dagger: .text "Primary: Dagger (Defender) (+3,+4)" ; .byte 0
 s_sec_mace:   .text "Secondary: Mace (+1,+0)" ; .byte 0
 s_sec_dagger: .text "Secondary: Dagger (Defender) (+3,+4)" ; .byte 0
+s_desc_holy:  .text "Dagger (Holy Avenger) (+3,+4) (+4)" ; .byte 0
 
 test_start:
     ldx #14 - 1
@@ -634,6 +636,63 @@ test_start:
     :EXPECT_SLOT(EQUIP_LIGHT, rec_torch_one)
     :EXPECT_SLOT(0, rec_torch_one)
     :EXPECT_SLOT(1, rec_torch_old)
+
+    // Holy Avenger (+4 STR): item_append_desc (+p1), item_exchange primary <->
+    // secondary STR transfer, player_calc_stats rebuild, and item_takeoff from
+    // both EQUIP_SECONDARY (no STR drain) and EQUIP_WEAPON (reverses +4 STR).
+    jsr item_init_inventory
+    jsr msg_clear
+    lda #0
+    sta zp_msg_flags
+    :SEED(EQUIP_WEAPON, rec_holy)
+    jsr player_calc_stats
+    :EXPECT_MEM(player_data + PL_STR_CUR, 14)
+    :EXPECT_MEM(zp_player_str, 14)
+    lda #0
+    sta cmb_buf_idx
+    ldx #EQUIP_WEAPON
+    jsr inv_slot_to_fi_add
+    jsr item_append_desc
+    jsr cmb_term_and_print
+    :EXPECT_ROW(0, s_desc_holy)
+
+    jsr msg_clear
+    :KEYS($20)
+    jsr item_exchange
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_WEAPON, rec_empty)
+    :EXPECT_SLOT(EQUIP_SECONDARY, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+    :EXPECT_MEM(zp_player_str, 10)
+    jsr player_calc_stats
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+    jsr msg_clear
+    :KEYS($41)
+    jsr item_takeoff
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_SECONDARY, rec_empty)
+    :EXPECT_SLOT(0, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+
+    jsr item_init_inventory
+    jsr msg_clear
+    lda #0
+    sta zp_msg_flags
+    :SEED(EQUIP_SECONDARY, rec_holy)
+    :KEYS($20)
+    jsr item_exchange
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_WEAPON, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 14)
+    :EXPECT_MEM(zp_player_str, 14)
+    jsr msg_clear
+    :KEYS($41)
+    jsr item_takeoff
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_WEAPON, rec_empty)
+    :EXPECT_SLOT(0, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+    :EXPECT_MEM(zp_player_str, 10)
     :END_TEST(13)
 
     jmp test_exit_trampoline

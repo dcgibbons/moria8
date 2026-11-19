@@ -112,6 +112,7 @@ magic_check_new_spells:
     rts
 
 combat_check_levelup:
+combat_check_leveldown:
     rts
 
 eff_heal_sync:

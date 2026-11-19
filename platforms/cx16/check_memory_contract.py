@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import tempfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -159,9 +161,61 @@ def check_artifacts(build_dir: Path = BUILD) -> int:
             raise ContractViolation("item catalog 0..360 check failed: " + "; ".join(cat_errs[:4]))
         print("ASSERT item-catalog-0..360 PASS 361 items")
         checks += 1
+        default_zip = ROOT / "build" / "moria8-cx16.zip"
+        if default_zip.is_file():
+            check_zip_bundle(default_zip, build_dir=build_dir, data_dir=ROOT / "data")
+            print(f"ASSERT {default_zip.name} PASS 23 entries")
+            checks += 1
 
     print(f"RESULT {checks} asserts 0 failures")
     return 0
+
+
+def check_zip_bundle(
+    zip_path: Path,
+    build_dir: Path = BUILD,
+    data_dir: Path = ROOT / "data",
+) -> None:
+    """Validate shipping moria8-cx16.zip entries and LF->CR compliance files."""
+    if not zip_path.is_file():
+        raise ContractViolation(f"missing CX16 zip bundle: {zip_path}")
+    expected_prg_names = {spec.filename for spec in PRG_SPECS}
+    expected_names = expected_prg_names | {"LICENSE", "SOURCE-OFFER"}
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            bad_member = zf.testzip()
+            if bad_member is not None:
+                raise ContractViolation(f"{zip_path.name}: corrupt zip entry {bad_member}")
+            names = [info.filename for info in zf.infolist()]
+            if len(names) != len(set(names)):
+                raise ContractViolation(f"{zip_path.name}: duplicate archive entries in {names}")
+            name_set = set(names)
+            missing = sorted(expected_names - name_set)
+            extra = sorted(name_set - expected_names)
+            if missing or extra:
+                raise ContractViolation(
+                    f"{zip_path.name}: entry mismatch (missing={missing}, extra={extra})"
+                )
+            for doc_name in ("LICENSE", "SOURCE-OFFER"):
+                src_doc = data_dir / doc_name
+                if not src_doc.is_file():
+                    raise ContractViolation(f"missing source compliance file: {src_doc}")
+                want_doc = src_doc.read_bytes().replace(b"\n", b"\r")
+                got_doc = zf.read(doc_name)
+                if got_doc != want_doc:
+                    raise ContractViolation(
+                        f"{zip_path.name}: {doc_name} does not match LF->CR data/{doc_name}"
+                    )
+            for spec in PRG_SPECS:
+                got_blob = zf.read(spec.filename)
+                prg_extent(got_blob, spec)
+                disk_file = build_dir / spec.filename
+                if disk_file.is_file() and got_blob != disk_file.read_bytes():
+                    raise ContractViolation(
+                        f"{zip_path.name}: {spec.filename} differs from {disk_file}"
+                    )
+    except zipfile.BadZipFile as exc:
+        raise ContractViolation(f"{zip_path.name}: invalid zip file: {exc}") from exc
 
 
 def parse_bank_constants(memory_text: str, catalog_enabled: bool = True) -> dict[str, int]:
@@ -498,6 +552,56 @@ def selftest() -> int:
             continue
         raise AssertionError(f"negative symbol fixture unexpectedly passed: {patch}")
 
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        bdir = tmp / "cx16"
+        ddir = tmp / "data"
+        bdir.mkdir()
+        ddir.mkdir()
+        (ddir / "LICENSE").write_bytes(b"Line1\nLine2\n")
+        (ddir / "SOURCE-OFFER").write_bytes(b"Offer1\nOffer2\n")
+        for spec in PRG_SPECS:
+            body_len = max(spec.min_payload, len(spec.signature) + 4)
+            body = spec.signature + b"\xEA" * (body_len - len(spec.signature))
+            (bdir / spec.filename).write_bytes(
+                bytes((spec.start & 0xFF, spec.start >> 8)) + body
+            )
+        good_zip = tmp / "moria8-cx16.zip"
+        with zipfile.ZipFile(good_zip, "w") as zf:
+            for spec in PRG_SPECS:
+                zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("LICENSE", b"Line1\rLine2\r")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        check_zip_bundle(good_zip, build_dir=bdir, data_dir=ddir)
+        checks += 1
+
+        bad_zip_missing = tmp / "missing.zip"
+        with zipfile.ZipFile(bad_zip_missing, "w") as zf:
+            for spec in PRG_SPECS:
+                if spec.filename != "ITEM.CAT":
+                    zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("LICENSE", b"Line1\rLine2\r")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        try:
+            check_zip_bundle(bad_zip_missing, build_dir=bdir, data_dir=ddir)
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("zip missing ITEM.CAT unexpectedly passed")
+
+        bad_zip_lf = tmp / "unconverted_lf.zip"
+        with zipfile.ZipFile(bad_zip_lf, "w") as zf:
+            for spec in PRG_SPECS:
+                zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("LICENSE", b"Line1\nLine2\n")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        try:
+            check_zip_bundle(bad_zip_lf, build_dir=bdir, data_dir=ddir)
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("zip with unconverted LF LICENSE unexpectedly passed")
+
     print(f"RESULT {checks} asserts 0 failures")
     return 0
 
@@ -506,9 +610,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--build-dir", type=Path, default=BUILD)
+    parser.add_argument("--zip", type=Path, default=None, help="Verify a built moria8-cx16.zip bundle")
     args = parser.parse_args()
     try:
-        return selftest() if args.selftest else check_artifacts(args.build_dir)
+        if args.selftest:
+            return selftest()
+        if args.zip is not None:
+            check_zip_bundle(args.zip, build_dir=args.build_dir, data_dir=ROOT / "data")
+            print(f"ASSERT {args.zip.name} PASS 23 entries")
+            print("RESULT 1 asserts 0 failures")
+            return 0
+        return check_artifacts(args.build_dir)
     except (ContractViolation, OSError) as exc:
         print(f"ASSERT memory-contract FAIL {exc}")
         print("RESULT 1 asserts 1 failures")

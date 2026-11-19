@@ -254,12 +254,14 @@ piw_msg_no_turn:
     lda piw_flags
     sta inv_flags,x
 
-    // Remove the equipped item's direct current-stat adjustment.
-#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    // Remove the equipped item's direct current-stat adjustment (EQUIP_SECONDARY
+    // over the shoulder grants no active stat bonus).
     ldx piw_equip
-#endif
+    cpx #EQUIP_SECONDARY
+    beq !ito_skip_stat+
     clc
     jsr player_adjust_equipment_stat
+!ito_skip_stat:
 
     // Clear equipment slot
     ldx piw_equip

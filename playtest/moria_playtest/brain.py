@@ -296,13 +296,16 @@ EQUIP_LINE = re.compile(r"^\s*[a-z]\) (Body|Shield|Head|Hands|Feet|Cloak):\s+(.*
 EQUIP_SLOTS = {"Body": "ICAT_ARMOR", "Shield": "ICAT_SHIELD", "Head": "ICAT_HELM",
                "Hands": "ICAT_GLOVES", "Feet": "ICAT_BOOTS", "Cloak": "ICAT_CLOAK"}
 # A ring or amulet (Magic Shop, Black Market), worn or for sale: its name and
-# the bonus shown, "[+5]" for Protection, "(+2)" for Strength and Wisdom;
-# Speed, Slaying, the Magi and the resists show none.
+# the bonus shown, "[+5]" for Protection, "(+2)" for Strength and Wisdom,
+# "(+3,+4)" / "(+0,+6)" / "(+6,+0)" for Slaying / Increase Damage / To-Hit,
+# "[-8] (-3)" for WOE; Speed, the Magi and the resists may show none.
 # " (magik)" after a sensed jewel not yet identified (itemdesc_put_sensed_suffix):
 # read as part of the kind it valued the Amulet of the Magi at 0, a clvl 40
 # Priest bought an Amulet of Resist Acid over it, dropped it as junk and met the
 # Balrog without Free Action (C64 Balrog, 2026-11-12).
-JEWEL_NAME = re.compile(r"^((Ring|Amulet) of (.+?))(?: [\[(]([+-]\d+)[\])])?(?: \(magik\))?\s*$")
+JEWEL_NAME = re.compile(
+    r"^((Ring|Amulet) of (.+?))(?: [\[(]([+-]\d+)(?:,\s*([+-]\d+))?[\])])?(?: \(([+-]\d+)\))?(?: \(magik\))?\s*$"
+)
 # The equipment list's ring and amulet rows, worn ("h) Ring: ...") or not
 # ("    Ring:   (none)"): both ring hands, the right first (VMS moria.inc:528).
 JEWEL_LINE = re.compile(r"^\s*(?:[a-z]\) )?(Ring|Amulet):\s+(.*)$")
@@ -370,7 +373,7 @@ def resist_egos(text: str) -> list[str]:
     """The resistance egos (``EGO_ELEMENTS`` keys) named in ``text``."""
     return [m.group(1) or m.group(2) for m in EGO_RESIST.finditer(text)]
 RESIST_AC = 10   # each element a found armour newly resists counts as this much AC
-GEAR_WEAPON = re.compile(r"^(.+?)(?: \(([+-]\d+),\s*([+-]\d+)\))?\s*$")
+GEAR_WEAPON = re.compile(r"^(.+?)(?: \(([+-]\d+),\s*([+-]\d+)\))?(?: \((?:[+-](?:\d+\)?)?)?)?(?: \(magik\))?\s*$")
 TEMPLE = 3               # store index (entrance "4"): potions and scrolls, named since stores identify stock
 ALCHEMIST = 4            # store index (entrance "5"): VMS stocks Word of Recall 3 times in 21 there
 MAGIC_SHOP = 5           # store index (entrance "6"): Mage books (M5f)
@@ -1484,7 +1487,7 @@ class Brain:
             if match is None:
                 continue
             text = match.group(2).strip()
-            if i + 1 < len(rows) and re.match(r"^\s*[\[(][+-]\d+[\])]\s*$", rows[i + 1]):
+            if i + 1 < len(rows) and re.match(r"^\s*[\[(][+-]\d+(?:,\s*[+-]\d+)?[\])](?: \([+-]\d+\))?\s*$", rows[i + 1]):
                 text += " " + rows[i + 1].strip()   # wrapped onto the next line on 40 columns
             slot = match.group(1)
             if slot == "Ring" and "Ring" in worn:
@@ -1513,9 +1516,11 @@ class Brain:
         match = JEWEL_NAME.match(name.strip())
         if match is None:
             return -1
-        kind, bonus = match.group(3), int(match.group(4) or 0)
-        if bonus < 0:
+        kind = match.group(3)
+        b1, b2, b3 = int(match.group(4) or 0), int(match.group(5) or 0), int(match.group(6) or 0)
+        if b1 < 0 or b2 < 0 or b3 < 0:
             return -1
+        bonus = b2 if kind == "Increase Damage" and match.group(5) is not None else b1
         melee = self.goal.klass in MELEE_KLASSES
         element = JEWEL_ELEMENTS.get(kind)
         if element is not None:
@@ -3961,12 +3966,17 @@ class Brain:
         return min(INVULN_MAX, max(INVULN_RESERVE, self.extra[INVULNERABILITY] + math.ceil(short / (blows * INVULN_TURNS))))
 
     def jewel_bonus(self, kind: str) -> int:
-        """The bonus of the rings worn of ``kind`` ("Increase Damage"), both hands."""
+        """The bonus of the rings worn of ``kind`` ("Increase Damage",
+        "Increase To-Hit", including "Slaying"), both hands."""
         bonus = 0
         for name in self.jewel_names.values():
             match = JEWEL_NAME.match(name.strip())
-            if match and match.group(3) == kind:
-                bonus += int(match.group(4) or 0)
+            if match is None:
+                continue
+            ring_kind = match.group(3)
+            if ring_kind == kind or (ring_kind == "Slaying" and kind in ("Increase Damage", "Increase To-Hit")):
+                group = match.group(5) if kind == "Increase Damage" and match.group(5) is not None else match.group(4)
+                bonus += int(group or 0)
         return bonus
 
     def balrog_melee(self, obs: Observation) -> float:

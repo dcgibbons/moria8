@@ -45,18 +45,21 @@ a2_ovl_cache_hi:
 //         hal_storage_overlay_name_lo/hi)
 // Output: C=0 cache hit (window populated, nothing more to do);
 //         C=1 miss (caller runs the MLI path)
-// Clobbers: A, X, Y, zp_ptr0/zp_ptr1/zp_temp0/zp_temp1
+// Clobbers: A, X, Y (preserves core ZP zp_temp0..zp_temp3 and zp_ptr0..zp_ptr1
+//           across both cache misses and cache hits; a2_auxmove preserves
+//           firmware $3C-$43).
 // ============================================================
+.assert "a2_overlay_try_cache 8-byte ZP save covers zp_temp0..zp_ptr1_hi", zp_temp1 == zp_temp0 + 1 && zp_ptr0 == zp_temp0 + 4 && zp_ptr0_hi == zp_temp0 + 5 && zp_ptr1 == zp_temp0 + 6 && zp_ptr1_hi == zp_temp0 + 7, true
 a2_overlay_try_cache:
-    stx zp_temp0
-    sty zp_temp1
+    stx atc_name_lo + 1
     ldx #hal_platform_overlay_count - 1
 !find:
     lda hal_storage_overlay_name_lo,x
-    cmp zp_temp0
+atc_name_lo:
+    cmp #$ff                // self-modified filename pointer lo
     bne !next+
-    lda hal_storage_overlay_name_hi,x
-    cmp zp_temp1
+    tya
+    cmp hal_storage_overlay_name_hi,x
     beq !found+
 !next:
     dex
@@ -73,9 +76,18 @@ a2_overlay_try_cache:
     stx $2000               // matched overlay index
     sta $2001               // cache slot hi
 #endif
-    sta zp_ptr0_hi          // source = aux cache slot
-    lda a2_ovl_cache_lo,x
+    txa
+    tay                     // Y = matched overlay index
+    ldx #7                  // save $02-$09 (zp_temp0..3, zp_ptr0..1)
+!save_zp:
+    lda zp_temp0,x
+    pha
+    dex
+    bpl !save_zp-
+    lda a2_ovl_cache_lo,y   // source = aux cache slot
     sta zp_ptr0
+    lda a2_ovl_cache_hi,y
+    sta zp_ptr0_hi
     lda #<BANKED_DATA_BASE  // dest = window $A400
     sta zp_ptr1
     lda #>BANKED_DATA_BASE
@@ -90,6 +102,13 @@ a2_overlay_try_cache:
                             // through a Kick #if on a .const, which tests
                             // definedness and silently picks the #else arm)
     jsr a2_auxmove
+    ldx #0                  // restore $02-$09 (zp_temp0..3, zp_ptr0..1)
+!rest_zp:
+    pla
+    sta zp_temp0,x
+    inx
+    cpx #8
+    bne !rest_zp-
     clc
     rts
 
@@ -101,14 +120,11 @@ a2_overlay_try_cache:
 // ============================================================
 a2_require_play:
     jsr a2_play_signature_ok
-    bcs !load+
-    clc
-    rts
-!load:
+    bcc !ok+
     jsr a2_load_file_to_slot    // asks for the program disk until it loads
     jsr a2_play_signature_ok
     bcs !fatal+
-    clc
+!ok:
     rts
 !fatal:
     lda #HAL_STATUS_ERR_WRONG_MEDIA
