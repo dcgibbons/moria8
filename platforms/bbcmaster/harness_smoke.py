@@ -290,24 +290,28 @@ local function can_read_shadow()
     return prog:read_u8(ACCCON_SHADOW_ADDR) == 0x01 and prog:read_u8(0x00F4) == 0x04
 end
 
-local function restore_acccon()
-    local acc = prog:read_u8(ACCCON_SHADOW_ADDR)
-    if acc == 0 then acc = 0x01 end
-    prog:write_u8(0xFE34, acc)
+local function enter_shadow()
+    local prev = prog:read_u8(0xFE34)
+    prog:write_u8(0xFE34, prev | 0x04)
+    return prev
+end
+
+local function leave_shadow(prev)
+    prog:write_u8(0xFE34, prev)
 end
 
 local function read_shadow_u8(addr)
     if not can_read_shadow() then return 0x20 end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local v = prog:read_u8(addr)
-    restore_acccon()
+    leave_shadow(prev)
     return v
 end
 
 local function write_shadow_u8(addr, val)
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     prog:write_u8(addr, val)
-    restore_acccon()
+    leave_shadow(prev)
 end
 
 local function read_map_u8(x, y)
@@ -348,19 +352,19 @@ end
 
 local function rowtext(r)
     if not can_read_shadow() then return "" end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local base = CHAR_SHADOW + r * 80
     local chars = {{}}
     for c = 0, 79 do
         chars[c + 1] = sc_to_ascii(prog:read_u8(base + c))
     end
-    restore_acccon()
+    leave_shadow(prev)
     return table.concat(chars)
 end
 
 local function screen_has(txt)
     if not can_read_shadow() then return false end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local found = false
     for r = 0, 23 do
         local base = CHAR_SHADOW + r * 80
@@ -373,7 +377,7 @@ local function screen_has(txt)
             break
         end
     end
-    restore_acccon()
+    leave_shadow(prev)
     return found
 end
 
@@ -453,7 +457,7 @@ local function in_town()
     if screen_has("Character") or screen_has("Inventory") or screen_has("Equipment") or screen_has("Command Reference") then
         return false
     end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local walls = 0
     for r = 2, 19 do
         local base = CHAR_SHADOW + r * 80
@@ -463,7 +467,7 @@ local function in_town()
             end
         end
     end
-    restore_acccon()
+    leave_shadow(prev)
     return walls >= 20
 end
 
