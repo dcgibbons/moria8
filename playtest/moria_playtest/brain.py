@@ -6276,6 +6276,29 @@ class Brain:
                 surplus = [((stack_weight(m.group(2), counts[i]), counts[i]), i) for i, m in enumerate(matches)
                            if m and m.group(2).startswith(STACKING)
                            and (held := self.carry_limit(m.group(2).strip())) is not None and counts[i] >= held[1]]
+                if not surplus and self.refused_at != WEAPONSMITH:
+                    # Nothing past its limit: a drained STR lowered the limit
+                    # (STR x 130) under what was carried, and every store
+                    # refused even food and the Restore Strength that would
+                    # lift it; a clvl 27 Elf Warrior starved in town with
+                    # 374,341 gold, three times from one checkpoint (C64
+                    # Balrog, 2026-11-19). The heaviest stack of ammunition
+                    # goes, else the heaviest other supply but food, Word of
+                    # Recall and light, else the oil and spare torches in the
+                    # pack (the light worn stays): a clvl 14 Elf Mage drained
+                    # by strength darts on DL1-4 held only books, staffs, oil
+                    # and a torch, and starved after 63 refused Restore
+                    # Strengths (C64 Balrog, 2026-11-19). The stores refill
+                    # them. Not for a refusal of ammunition, or the
+                    # Weaponsmith and this would trade one stack of Bolts for
+                    # another.
+                    weights = [((stack_weight(m.group(2), counts[i]), counts[i]), i) for i, m in enumerate(matches)
+                               if m and stack_weight(m.group(2), counts[i]) > 0]
+                    ammo = (*AMMO_AVERAGE, *self.ammo_kinds())
+                    surplus = [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(ammo)] or \
+                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(STACKING)
+                         and not m.group(2).startswith((*FOODS, RECALL, TORCH, OIL))] or \
+                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith((TORCH, OIL))]
                 if surplus:
                     shed = max(surplus)[1]
                     heavy = matches[shed]

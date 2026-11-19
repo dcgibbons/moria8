@@ -1479,6 +1479,54 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(decision.key, ord("B"), decision.reason)
         self.assertEqual((brain.torches, brain.phase), (0, 11))      # counted from what stays
 
+    def test_too_heavy_with_no_surplus_drops_the_heaviest_ammunition(self) -> None:
+        """C64 Balrog, 2026-11-19: an unseen drainer took a clvl 27 Elf
+        Warrior's STR on DL24, the weight limit (STR x 130) fell under what
+        it carried, and every store refused it: food, and the Restore
+        Strength that would have lifted the limit. Nothing was past its
+        pickup limit, it dropped nothing, and it starved in town with 374,341
+        gold three times from one checkpoint. The heaviest stack of
+        ammunition goes, then the heaviest other supply but food, Word of
+        Recall and light; never for a refusal of ammunition itself."""
+        from moria_playtest.brain import GENERAL_STORE, WEAPONSMITH
+        pack = {0: "Inventory", 2: " a) 6 Potion of Cure Serious Wounds", 3: " b) 2 Potion of Healing",
+                4: " c) 2 Scroll of Phase Door", 5: " d) Wooden Torch (134 turns)",
+                6: " e) Wand of Teleport Away (magik)", 7: " f) 99 Bolt (+2,+2)",
+                8: " g) 3 Potion of Cure Light Wounds", 9: " h) 180 Bolt", 10: " i) 2 Potion of Resist Heat",
+                11: " j) 1 Scroll of Word of Recall"}
+
+        def drop(refused_at: int, rows: dict[int, str]) -> Decision:
+            brain = Brain(GOALS["deep"])
+            brain.credit("Heavy Crossbow (+5,+5)", 1)
+            brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
+            brain.refused_at = refused_at
+            listing = command_obs(pos=(5, 5), dlvl=0, clvl=27, rows=rows)
+            listing.stage = "list"
+            return brain.drop_prompt(listing)
+
+        decision = drop(GENERAL_STORE, pack)
+        self.assertEqual(decision.key, ord("H"), decision.reason)          # 36 lb of Bolts first
+        self.assertIn("too heavy to buy", decision.reason)
+        self.assertEqual(drop(WEAPONSMITH, pack).key, KEY_RUNSTOP)         # not for more Bolts
+        no_ammo = {k: v for k, v in pack.items() if "Bolt" not in v}
+        decision = drop(GENERAL_STORE, no_ammo)
+        self.assertEqual(decision.key, ord("A"), decision.reason)          # then the heaviest supply
+        light = {0: "Inventory", 2: " a) 5 Ration of Food", 3: " b) 3 Wooden Torch (134 turns)",
+                 4: " c) 1 Scroll of Word of Recall"}
+        decision = drop(GENERAL_STORE, light)
+        self.assertEqual(decision.key, ord("B"), decision.reason)          # spare light, rebought after
+        self.assertEqual(drop(GENERAL_STORE, {k: v for k, v in light.items() if "Torch" not in v}).key,
+                         KEY_RUNSTOP)                                       # food and recall stay
+        # The clvl 14 Elf Mage that starved after 63 refused Restore Strengths,
+        # strength darts having drained it on DL1-4 (C64 Balrog, 2026-11-19):
+        # no ammunition and no supply, and its Flasks of Oil went last.
+        mage = {0: "Inventory", 2: " a) Spellbook Beginners-Magick", 3: " b) Spellbook Magick I",
+                4: " c) Spellbook Magick II", 5: " d) Staff of Teleportation (6 charges)",
+                6: " e) 12 Flask of Oil (250 turns)", 7: " f) Wooden Torch (134 turns)",
+                8: " g) Staff of Speed (2 charges)"}
+        decision = drop(GENERAL_STORE, mage)
+        self.assertEqual(decision.key, ord("E"), decision.reason)
+
     def test_a_full_pack_of_keepers_makes_room_for_word_of_recall(self) -> None:
         """C64 Balrog, 2026-11-14: a clvl 39 Half-Elf Paladin's 22 slots held
         nothing the bot called junk, the Alchemist refused Word of Recall,
