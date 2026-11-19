@@ -22,6 +22,8 @@ mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
 mat_scene_dirty: .byte 0     // count of immediate non-local visible tile renders this turn (nonzero = cheap redraw path)
 mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
+mat_force_new_dirty: .byte 0 // Nonzero when new tile lost visible occupant/item (unseen mover)
+mts_eat_slot: .byte EMPTY_SLOT // Eaten target slot in monster_try_step ($ff = none)
 mat_player_stealth: .byte 0  // Race/class threshold cached once per AI tick
 mat_fast:     .byte 0       // player speed steps this tick (MON-026): Rings of Speed worn + haste - slow, -1..3
 mat_turn_mod: .byte 0, 0, 0, 0   // this turn mod 5, 4, 3, 2: a monster at cadence s <= 0 acts when entry s + 3 is 0
@@ -41,18 +43,38 @@ monster_ai_tick:
     sta mat_player_stealth
 
     // Player speed (MON-026, Umoria playerChangeSpeed): each Ring of Speed
-    // worn and an active haste timer is one step, an active slow timer one
-    // back; the steps add, as VMS and Umoria add every speed bonus.
+    // worn, Boots of Speed/Slowness, and active haste/slow timer add cleanly.
     ldx #0
+    .assert "Ring of Speed on Page 1", ITEM_PAGE_RING_OF_SPEED, ITEM_PAGE_BIT
+    lda inv_ego + EQUIP_RING
+    and #ITEM_PAGE_BIT
+    beq !mat_ring2+
     lda inv_item_id + EQUIP_RING
-    cmp #ITEM_TYPE_RING_SPEED
+    cmp #ITEM_SLOT_RING_OF_SPEED
     bne !mat_ring2+
     inx
 !mat_ring2:
+    lda inv_ego + EQUIP_RING2
+    and #ITEM_PAGE_BIT
+    beq !mat_boots+
     lda inv_item_id + EQUIP_RING2
-    cmp #ITEM_TYPE_RING_SPEED
-    bne !mat_timer+
+    cmp #ITEM_SLOT_RING_OF_SPEED
+    bne !mat_boots+
     inx
+!mat_boots:
+    lda inv_item_id + EQUIP_FEET
+    cmp #FI_EMPTY
+    beq !mat_timer+
+    lda inv_ego + EQUIP_FEET
+    and #EGO_ID_MASK
+    cmp #EGO_SPEED
+    bne !mat_boots_slow+
+    inx
+    bne !mat_timer+
+!mat_boots_slow:
+    cmp #EGO_SLOWNESS
+    bne !mat_timer+
+    dex
 !mat_timer:
     lda zp_eff_speed
     beq !mat_fast_done+
@@ -219,6 +241,7 @@ monster_ai_tick:
 monster_process_one:
     lda #0
     sta mat_action_dirty
+    sta mat_force_new_dirty
 
     // If not awake, try to wake up
     lda zp_mon_flags
@@ -444,15 +467,20 @@ mpo_breed_odds: .byte MON_MULT_ADJ, 2 * MON_MULT_ADJ, 3 * MON_MULT_ADJ
 // normal local redraw does not already cover them.
 // ============================================================
 mat_mark_move_dirty:
+    lda mat_force_new_dirty
+    pha
+    lda #0
+    sta mat_force_new_dirty
     lda mat_old_x
     ldy mat_old_y
     jsr mat_mark_tile_dirty_if_nonlocal
+    pla
+    sta mat_force_new_dirty
     lda zp_mon_x
     ldy zp_mon_y
-    // Tail-call the shared tile helper for the new position.
+    // Fall through to the shared tile helper for the new position.
     // If either old or new tile is non-local visible, the turn layer
     // will promote to the expensive redraw path exactly once.
-    jmp mat_mark_tile_dirty_if_nonlocal
 
 // ============================================================
 // mat_mark_tile_dirty_if_nonlocal — Set mat_scene_dirty only for tiles
@@ -518,11 +546,14 @@ mat_mark_tile_dirty_if_nonlocal:
 
     lda zp_mon_flags
     and #(MF_VISIBLE | MF_DETECTED)
+    ora mat_force_new_dirty
     beq !mtd_done+
 
 !mtd_mark:
     jsr scene_render_mat_tile
 !mtd_done:
+    lda #0
+    sta mat_force_new_dirty
     rts
 
 // ============================================================
@@ -536,6 +567,10 @@ mat_mark_tile_dirty_if_nonlocal:
 monster_wake_check:
     jsr monster_in_awareness
     bcc !mwc_too_far+
+
+    lda player_pflags2
+    and #PFLAG2_AGGRAVATE
+    bne !mwc_wake+
 
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
@@ -1005,20 +1040,70 @@ monster_try_step:
     :MapRead_ptr0_y()
     sta zp_mon_scratch1         // Save full tile byte
 
-    // Check walkable
+    // Check walkable; CM2_PHASE ($20) creatures pass through dungeon walls,
+    // rubble, veins, and closed/locked/jammed/secret doors without altering
+    // terrain (VMS creature.inc make_move %X'40000'; outer perm-walls already
+    // rejected above, and town buildings are permanent rock fval=15).
     lsr
     lsr
     lsr
     lsr                         // Tile type index 0-15
     jsr tile_is_walkable
     bcs !mts_walk_ok+
+    lda zp_player_dlvl
+    beq !mts_to_door_block+
+    ldx zp_mon_type
+    lda cr_spell_flags2,x
+    and #CM2_PHASE
+    bne !mts_walk_ok+
+!mts_to_door_block:
     jmp !mts_door_block+
 !mts_walk_ok:
 
-    // Check FLAG_OCCUPIED
+    // Check CF_ATTACK_ONLY — prevent actual movement (player attack ran above)
+    ldx zp_mon_type
+    lda cr_mflags,x
+    and #CF_ATTACK_ONLY
+    beq !mts_can_move+
+    jmp !mts_blocked+
+!mts_can_move:
+
+    // Check FLAG_OCCUPIED; CM2_EATS_OTHER ($40) overrides non-win creatures
+    // when cr_xp[mover] >= cr_xp[target] (VMS creature.inc %X'80000' + mexp).
+    lda #EMPTY_SLOT
+    sta mts_eat_slot
     lda zp_mon_scratch1
     and #FLAG_OCCUPIED
     beq !mts_unoccupied+
+    ldx zp_mon_type
+    lda cr_spell_flags2,x
+    and #CM2_EATS_OTHER
+    beq !mts_eat_block+
+    lda mat_target_x
+    ldy mat_target_y
+    jsr monster_find_at
+    bcc !mts_unoccupied+        // Stale FLAG_OCCUPIED safety
+    cpx zp_mon_idx
+    beq !mts_eat_block+
+    stx mts_eat_slot
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax                         // X = target creature type
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_slot_is_balrog
+    beq !mts_eat_block+
+#else
+    lda cr_level,x
+    cmp #100
+    bcs !mts_eat_block+
+#endif
+    ldy zp_mon_type
+    lda cr_xp_lo,y
+    cmp cr_xp_lo,x
+    lda cr_xp_hi,y
+    sbc cr_xp_hi,x
+    bcs !mts_unoccupied+
+!mts_eat_block:
     jmp !mts_blocked+           // Another monster there
 !mts_unoccupied:
     lda mat_target_x
@@ -1036,17 +1121,44 @@ monster_try_step:
     jsr glyph_remove
     lda #1
     sta mat_action_dirty
+    inc mat_force_new_dirty
 !mts_no_glyph:
 
-    // Check CF_ATTACK_ONLY — prevent actual movement
-    ldx zp_mon_type
-    lda cr_mflags,x
-    and #CF_ATTACK_ONLY
-    beq !mts_can_move+
-    jmp !mts_blocked+           // Can't move (but player attack above still fires)
-!mts_can_move:
+    // --- Move is valid --- execute side effects and move
 
-    // --- Move is valid --- execute it
+    // Delete eaten creature (VMS delete_monster: no player XP or loot)
+    ldx mts_eat_slot
+    inx                         // EMPTY_SLOT ($ff) -> 0
+    beq !mts_no_eat+
+    dex
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #(MF_VISIBLE | MF_DETECTED)
+    ora mat_force_new_dirty
+    sta mat_force_new_dirty
+    jsr monster_remove
+!mts_no_eat:
+
+    // CM2_PICKS_UP ($80): remove non-gold floor object on destination tile
+    // (VMS creature.inc:823-827 %X'100000', tval < 100 -> delete_object).
+    .assert "monster_try_step: CM2_PICKS_UP is cr_spell_flags2 bit 7", CM2_PICKS_UP, $80
+    lda zp_mon_scratch1
+    and #FLAG_HAS_ITEM
+    beq !mts_no_pickup+
+    ldx zp_mon_type
+    lda cr_spell_flags2,x
+    bpl !mts_no_pickup+
+    lda mat_target_x
+    ldy mat_target_y
+    jsr floor_item_find_at
+    bcc !mts_no_pickup+
+    jsr item_get_category_floor_x
+    cmp #ICAT_GOLD
+    beq !mts_no_pickup+
+    jsr floor_item_remove
+    inc mat_force_new_dirty
+!mts_no_pickup:
 
     // Save old position
     lda zp_mon_x

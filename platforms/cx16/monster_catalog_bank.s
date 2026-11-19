@@ -61,3 +61,50 @@ cx16_catalog_unmap:
     pha
     plp
     rts
+
+// ============================================================
+// Phase 5 Extended Monster Catalog (MONSTER.EXT in Bank 5)
+// ============================================================
+// Bank 5 (CX16_BANK_CATALOG_EXT) holds 279 x 8 B row-major extension records
+// at $A000-$A8B7, preloaded at boot alongside MONSTER.CAT (Bank 23).
+.const CATALOG_EXT_RECORD_SIZE = 8
+cat_ext_record: .fill CATALOG_EXT_RECORD_SIZE, 0
+
+// catalog_fetch_ext — Copy creature cat_id_lo/hi's 8 extended bytes from
+// HiRAM Bank 5 ($A000 + id * 8) into cat_ext_record[0..7].
+// Preserves: CX16_RAM_BANK_REG ($00), processor flags (I/C/V), and all ZP.
+// Clobbers: A, X
+catalog_fetch_ext:
+    php
+    sei
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_BANK_CATALOG_EXT
+    sta CX16_RAM_BANK_REG
+    lda cat_id_hi
+    sta cfe_lda + 2
+    lda cat_id_lo
+    asl
+    rol cfe_lda + 2
+    asl
+    rol cfe_lda + 2
+    asl
+    rol cfe_lda + 2
+    sta cfe_lda + 1
+    lda cfe_lda + 2
+    ora #>BANKED_DATA_BASE
+    sta cfe_lda + 2
+    ldx #CATALOG_EXT_RECORD_SIZE - 1
+!cfe_copy:
+cfe_lda:
+    lda $a000,x
+    sta cat_ext_record,x
+    dex
+    bpl !cfe_copy-
+    pla
+    sta CX16_RAM_BANK_REG
+    plp
+    rts
+catalog_fetch_ext_end:
+
+.assert "cat_ext_record and catalog_fetch_ext stay in fixed Low RAM below $9980", cat_ext_record >= CX16_RESIDENT_BASE && catalog_fetch_ext_end <= $9980, true

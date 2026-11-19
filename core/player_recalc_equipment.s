@@ -3,71 +3,86 @@
 #import "player_adjust_equipment_stat.s"
 #endif
 // player_recalc_equipment — Recalculate AC, to-hit, to-damage from equipment
-// Called after any equip/unequip action.
-// player_calc_combat already handles DEX bonus + equipment AC (R1.6).
-// This adds weapon to-hit/to-damage and ego bonuses.
+// Called after any equip/unequip action or a change to a worn item.
+// Collects the equipment bonuses player_calc_combat adds on every recalc
+// (pcc_eq_*: the weapon's to-hit/to-damage, each Ring of Slaying's, the weapon
+// ego's AC), then recalculates the persistent equipment flags (resistances,
+// See Invisible, Free Action) and player_calc_combat, which the flags routine
+// ends in, without rerolling exceptional current stats.
 // Clobbers: everything
 player_recalc_equipment:
-    // Recalculate equipment-derived flags and combat values without rerolling
-    // exceptional current stats established during character creation: the
-    // persistent equipment flags (resistances, See Invisible, Free Action),
-    // then player_calc_combat, which the flags routine ends in.
-    #if PLAYER_RECALC_PFLAGS_EXTERNAL
-    jsr hal_player_recalc_pflags
-    #else
-    jsr player_recalc_pflags_equipment   // resident (OVL.ITEMS calls it on the Apple IIe, BBC Master)
-    #endif
-
-    // Add weapon split to-hit and to-damage bonuses
+    lda #0
+    sta pcc_eq_tohit
+    sta pcc_eq_todam
+    sta pcc_eq_ac
     ldx #EQUIP_WEAPON
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !pre_no_weapon+
+    beq !pre_rings+
     lda inv_to_hit,x
-    clc
-    adc player_data + PL_TOHIT
-    sta player_data + PL_TOHIT
+    sta pcc_eq_tohit
     lda inv_to_dam,x
-    clc
-    adc player_data + PL_TODMG
-    sta player_data + PL_TODMG
-!pre_no_weapon:
-
-    // Add Ring of Slaying to-hit and to-damage bonuses
+    sta pcc_eq_todam
+    lda inv_ego,x
+    and #EGO_ID_MASK
+    beq !pre_rings+
+    jsr tramp_ego_get_ac_bonus  // Defender / Holy Avenger; clobbers X
+    sta pcc_eq_ac
+!pre_rings:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    .assert "Combat-bonus rings live on Page 1", ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_INCREASE_DAMAGE == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_INCREASE_TO_HIT == ITEM_PAGE_BIT, true
     ldx #EQUIP_RING
 !pre_slay_ring:                 // each hand: EQUIP_RING, then EQUIP_RING2
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    beq !pre_no_slay+
     lda inv_item_id,x
-    cmp #ITEM_TYPE_RING_SLAYING
+    cmp #ITEM_SLOT_RING_OF_SLAYING
+    beq !pre_r_hit+
+    cmp #ITEM_SLOT_RING_OF_INCREASE_DAMAGE
+    beq !pre_r_hit+
+    cmp #ITEM_SLOT_RING_OF_INCREASE_TO_HIT
     bne !pre_no_slay+
-    lda inv_to_hit,x
-    clc
-    adc player_data + PL_TOHIT
-    sta player_data + PL_TOHIT
-    lda inv_to_dam,x
-    clc
-    adc player_data + PL_TODMG
-    sta player_data + PL_TODMG
+!pre_r_hit:
+    jsr !pre_add_slay_x+
 !pre_no_slay:
     cpx #EQUIP_RING2
+    beq !pre_slay_gloves+
     ldx #EQUIP_RING2
-    bcc !pre_slay_ring-
+    bne !pre_slay_ring-
+!pre_slay_gloves:
+    ldx #EQUIP_HANDS
+    lda #EGO_SLAYING
+    jsr !pre_chk_ego+
+    ldx #EQUIP_CLOAK
+    lda #EGO_ENVELOPING
+    jsr !pre_chk_ego+
+    jmp !pre_after_slay+
+!pre_chk_ego:
+    ldy inv_item_id,x
+    iny
+    beq !pre_done_slay+
+    eor inv_ego,x
+    and #EGO_ID_MASK
+    bne !pre_done_slay+
+!pre_add_slay_x:
+    lda inv_to_hit,x
+    clc
+    adc pcc_eq_tohit
+    sta pcc_eq_tohit
+    lda inv_to_dam,x
+    clc
+    adc pcc_eq_todam
+    sta pcc_eq_todam
+!pre_done_slay:
+    rts
+!pre_after_slay:
 #else
     jsr player_apply_slaying_bonuses
 #endif
 
-    // Ego AC bonus (Defender/HA — checked in banked code at $F000)
-    ldx #EQUIP_WEAPON
-    lda inv_ego,x
-    beq !pre_no_ego_ac+
-    jsr tramp_ego_get_ac_bonus
-    beq !pre_no_ego_ac+
-    clc
-    adc player_data + PL_AC
-    sta player_data + PL_AC
-!pre_no_ego_ac:
-
-    // Sync back to ZP
-    lda player_data + PL_AC
-    sta zp_player_ac
-    rts
+    #if PLAYER_RECALC_PFLAGS_EXTERNAL || PLAYER_PFLAGS_EXTERNAL
+    jmp hal_player_recalc_pflags
+    #else
+    jmp player_recalc_pflags_equipment   // resident (OVL.ITEMS calls it on the Apple IIe, BBC Master)
+    #endif

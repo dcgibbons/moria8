@@ -10,6 +10,7 @@
 #import "generation_busy_api.s"
 #import "platform_services_api.s"
 #import "input_ui_helpers.s"
+#import "../platforms/shared/item_catalog/item_ids.s"
 
 // MsgPrintStr — Print a NUL-terminated message string through zp_ptr0.
 // On Apple II the string may live in AUX (platform-externalized strings);
@@ -41,8 +42,12 @@ c128_test_seed_scroll_selector_state:
     lda #0
     sta c128_test_scroll_selector_return_pending
     sta c128_test_scroll_selector_return_count
-    lda #34                 // Enchant Weapon scroll
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
     sta inv_item_id + 2
+    .if (ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT != 0) {
+        lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+        sta inv_ego + 2
+    }
     lda #1
     sta inv_qty + 2
     lda #0
@@ -162,8 +167,12 @@ c64_test_seed_scroll_selector_state:
     sta c64_test_scroll_selector_return_count
     // Carried slot 3: the starting kit holds slots 0-2 (rations, book,
     // torches).
-    lda #34                 // Enchant Weapon scroll
+    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
     sta inv_item_id + 3
+    .if (ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT != 0) {
+        lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
+        sta inv_ego + 3
+    }
     lda #1
     sta inv_qty + 3
     lda #0
@@ -218,54 +227,46 @@ c64_test_seed_scripted_spell_state:
     rts
 #endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
-c64_test_seed_scripted_spell_state:
-    lda #0
-    sta c64_test_spell_success_count
-    sta c64_test_spell_return_pending
-    sta c64_test_spell_return_count
-    lda #CLASS_MAGE
-    sta player_data + PL_CLASS
-    lda #SPELL_MAGE
-    sta player_data + PL_SPELL_TYPE
-    lda #50
-    sta zp_player_lvl
-    sta player_data + PL_LEVEL
-    lda #18
-    sta player_data + PL_INT_CUR
-    // A level-50 mage's hit points, so the scripted rests among monsters
-    // cannot end the game before the script does.
-    // Zero page only: nothing in this test reloads it from player_data.
-    lda #<500
-    sta zp_player_hp_lo
-    sta zp_player_mhp_lo
-    lda #>500
-    sta zp_player_hp_hi
-    sta zp_player_mhp_hi
-    lda #200                // one Magic Missile per active monster type
-    sta zp_player_mp
-    sta player_data + PL_MANA
-    sta zp_player_mmp
-    sta player_data + PL_MAX_MANA
-    lda #1
-    sta player_data + PL_SPELLS_LEARNT_0
-    lda #0
-    sta player_data + PL_SPELLS_LEARNT_1
-    sta player_data + PL_SPELLS_LEARNT_2
-    sta player_data + PL_SPELLS_LEARNT_3
-    sta player_data + PL_SPELLS_WORKED_0
-    sta player_data + PL_SPELLS_WORKED_1
-    sta player_data + PL_SPELLS_WORKED_2
-    sta player_data + PL_SPELLS_WORKED_3
-    sta player_data + PL_NEW_SPELLS     // forgotten: player_init zeroed it
-    lda #99
-    ldx #31
-!c64_test_dungeon_spell_order_clear:
-    sta player_data + PL_SPELL_ORDER,x
-    dex
-    bpl !c64_test_dungeon_spell_order_clear-
-    lda #0
-    sta player_data + PL_SPELL_ORDER
-    rts
+// The seed is VICE monitor writes, not 6502 code: the runner breaks at
+// c64_test_seed_point and plays build/test/c64/dungeon_spell_seed.mon
+// (run_scripted_dungeon_target_spell_smoke), so the hook costs the product
+// image nothing (2026-11-13: 104 B of seed code took it past MAP_BASE).
+// A level-50 Mage, Magic Missile learnt and first in the order, 200 mana
+// (one Missile per active monster type), and a level-50 mage's 500 HP so the
+// scripted rests among monsters cannot end the game before the script does
+// (zero page only: nothing in this test reloads it from player_data).
+.segmentdef C64TestDungeonSpellSeed [outBin=OVL_OUT + "/dungeon_spell_seed.mon"]
+.segment C64TestDungeonSpellSeed
+.encoding "ascii"
+:C64TestMonPoke(c64_test_spell_success_count, 0)
+:C64TestMonPoke(c64_test_spell_return_pending, 0)
+:C64TestMonPoke(c64_test_spell_return_count, 0)
+:C64TestMonPoke(player_data + PL_CLASS, CLASS_MAGE)
+:C64TestMonPoke(player_data + PL_SPELL_TYPE, SPELL_MAGE)
+:C64TestMonPoke(zp_player_lvl, 50)
+:C64TestMonPoke(player_data + PL_LEVEL, 50)
+:C64TestMonPoke(player_data + PL_INT_CUR, 18)
+:C64TestMonPoke(zp_player_hp_lo, <500)
+:C64TestMonPoke(zp_player_mhp_lo, <500)
+:C64TestMonPoke(zp_player_hp_hi, >500)
+:C64TestMonPoke(zp_player_mhp_hi, >500)
+:C64TestMonPoke(zp_player_mp, 200)
+:C64TestMonPoke(player_data + PL_MANA, 200)
+:C64TestMonPoke(zp_player_mmp, 200)
+:C64TestMonPoke(player_data + PL_MAX_MANA, 200)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_0, 1)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_1, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_2, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_LEARNT_3, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_0, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_1, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_2, 0)
+:C64TestMonPoke(player_data + PL_SPELLS_WORKED_3, 0)
+:C64TestMonPoke(player_data + PL_NEW_SPELLS, 0)     // forgotten: player_init zeroed it
+:C64TestMonFill(player_data + PL_SPELL_ORDER, player_data + PL_SPELL_ORDER + 31, 99)
+:C64TestMonPoke(player_data + PL_SPELL_ORDER, 0)
+.encoding "screencode_mixed"
+.segment Default
 
 c64_test_force_spell_target_monster:
     lda zp_player_dlvl
@@ -362,15 +363,29 @@ c64_test_spell_target_type: .byte 0
 c64_test_spell_path_offset: .byte 0
 #endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-c64_test_seed_scripted_spell_state:
-    lda #0
-    sta c64_test_spell_success_count
-    sta c64_test_spell_return_pending
-    sta c64_test_spell_return_count
-    lda #20                 // mana for prayers retried after a fizzle
-    sta zp_player_mp
-    sta player_data + PL_MANA
-    rts
+// The seed is VICE monitor writes (build/test/c64/detect_evil_seed.mon,
+// played at c64_test_seed_point by run_scripted_detect_evil_smoke), and the
+// detection checks are the runner's, from monster-table dumps at
+// c64_test_detect_check_point and at the pass trap: no 6502 code for either
+// (2026-11-13: they took the product image past MAP_BASE).
+.segmentdef C64TestDetectEvilSeed [outBin=OVL_OUT + "/detect_evil_seed.mon"]
+.segment C64TestDetectEvilSeed
+.encoding "ascii"
+:C64TestMonPoke(c64_test_spell_success_count, 0)
+:C64TestMonPoke(c64_test_spell_return_pending, 0)
+:C64TestMonPoke(c64_test_spell_return_count, 0)
+:C64TestMonPoke(zp_player_mp, 20)           // mana for prayers retried after a fizzle
+:C64TestMonPoke(player_data + PL_MANA, 20)
+.encoding "screencode_mixed"
+.segment Default
+// What the runner's detection check reads (labels only: no bytes).
+.label c64_test_k_monster_entry_size = MONSTER_ENTRY_SIZE
+.label c64_test_k_max_monsters = MAX_MONSTERS
+.label c64_test_k_mx_type = MX_TYPE
+.label c64_test_k_mx_flags = MX_FLAGS
+.label c64_test_k_empty_slot = EMPTY_SLOT
+.label c64_test_k_cf_evil = CF_EVIL
+.label c64_test_k_mf_detected = MF_DETECTED
 
 c64_test_force_detect_evil_monster:
     // Five evil monsters on free floor near the player, wherever the level
@@ -474,20 +489,6 @@ c64_test_detect_try_cell:
 
 // After every successful prayer: no evil monster marked fails the test here,
 // so the countdown (armed only by a success) runs after a detection.
-c64_test_detect_evil_assert_detected:
-    jsr c64_test_detect_evil_any_detected
-    bcs !ctderd_seen+
-    jmp c64_test_spell_fail_validate_sym
-!ctderd_seen:
-    rts
-
-c64_test_detect_evil_assert_cleared:
-    jsr c64_test_detect_evil_any_detected
-    bcc !ctdeac_clear_ok+
-    jmp c64_test_spell_fail_validate_sym
-!ctdeac_clear_ok:
-    rts
-
 // Every main-loop pass: the test checks detection marks, not monster AI.
 // Awake, a DL10 monster killed the level-1 priest during the scripted rests.
 // Empty slots too: monster_spawn_one sets the sleep byte of a new monster.
@@ -502,33 +503,6 @@ c64_test_detect_evil_keep_asleep:
     bpl !ctdeka_loop-
     rts
 
-c64_test_detect_evil_any_detected:
-    ldx #0
-!ctdead_loop:
-    cpx #MAX_MONSTERS
-    bcs !ctdead_none+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !ctdead_next+
-    tay
-    lda cr_mflags,y
-    and #CF_EVIL
-    beq !ctdead_next+
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    and #MF_DETECTED
-    bne !ctdead_found+
-!ctdead_next:
-    inx
-    jmp !ctdead_loop-
-!ctdead_found:
-    sec
-    rts
-!ctdead_none:
-    clc
-    rts
 
 c64_test_detect_row: .byte 0
 c64_test_detect_col: .byte 0
@@ -544,12 +518,6 @@ game_new_start:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$70
     jsr c128_town_dump_mark
-#endif
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardInit($85)
-#endif
-#if C128_TEST_STACK_BOTTOM_DIAG
-    :C128StackBottomCanaryInit($90)
 #endif
     // Re-seed RNG after user input for better entropy
     jsr rng_seed
@@ -583,9 +551,6 @@ game_new_start:
     sta eff_fear_timer
 
     jsr tramp_player_create
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($86)
-#endif
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
@@ -612,79 +577,18 @@ game_new_start:
 #if C64_TEST_SCRIPTED_SCROLL_SELECTOR
     jsr c64_test_seed_scroll_selector_state
 #endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jsr c64_test_seed_scripted_spell_state
-#endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jsr c64_test_seed_scripted_spell_state
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_seed_point:                // the runner writes the seed here (*_seed.mon)
 #endif
 
-    // --- Starting equipment ---
-    // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020
-    // turns), and four more in carried slot 2: VMS player_init / Umoria
-    // class_base_provisions give every class 5 torches and 5 rations (one of
-    // each until 2026-10-25, found by the M5b playtest).
-    lda #13
-    sta inv_item_id + EQUIP_LIGHT
-    sta inv_item_id + 2
-    lda #1
-    sta inv_qty + EQUIP_LIGHT
-    lda #134
-    sta inv_p1 + EQUIP_LIGHT
-    sta inv_p1 + 2
-    lda #0
-    sta inv_flags + EQUIP_LIGHT
-    sta inv_flags + 2
-    lda #4
-    sta inv_qty + 2
-    lda #1
-    sta zp_light_radius
-    sta player_data + PL_LIGHT_RAD
-
-    // Five rations of food (type 15) in carried slot 0
-    lda #15
-    sta inv_item_id
-    lda #5
-    sta inv_qty
-    lda #0
-    sta inv_p1
-    sta inv_flags
-
-    // Dagger (type 2) in EQUIP_WEAPON
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
-    lda #1
-    sta inv_qty + EQUIP_WEAPON
-    lda #0
-    sta inv_p1 + EQUIP_WEAPON
-    sta inv_flags + EQUIP_WEAPON
-
-    // Leather armor (type 7) in EQUIP_BODY
-    lda #7
-    sta inv_item_id + EQUIP_BODY
-    lda #1
-    sta inv_qty + EQUIP_BODY
-    lda #0
-    sta inv_p1 + EQUIP_BODY
-    sta inv_flags + EQUIP_BODY
-
-    // Starting spellbook for casters (carried slot 1)
-    lda player_data + PL_SPELL_TYPE
-    beq !no_book+
-    cmp #SPELL_MAGE
-    bne !priest_book+
-    lda #47                 // Beginner's Spellbook
-    jmp !store_book+
-!priest_book:
-    lda #48                 // Holy Prayer Book
-!store_book:
-    sta inv_item_id + 1     // Carried slot 1
-    lda #1
-    sta inv_qty + 1
-    lda #0
-    sta inv_p1 + 1
-    sta inv_flags + 1
-!no_book:
+#if STARTING_KIT_EXTERNAL
+    jsr tramp_init_starting_kit
+#else
+#import "starting_kit_cold.s"
+#endif
+#if CORE_ITEM_IMPORTED
+    jsr inven_recalc_weight
+#endif
 
     // Recalculate combat stats with equipped items
 #if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
@@ -704,9 +608,6 @@ game_new_start:
     sta current_overlay
 #endif
     jsr tramp_store_init_all
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($87)
-#endif
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
@@ -747,9 +648,6 @@ game_new_start:
     bcc !gns_ovl_ok+
     jmp entry_main
 !gns_ovl_ok:
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($88)
-#endif
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
@@ -764,6 +662,9 @@ game_new_start:
 #endif
     jsr monster_spawn_level
     jsr item_spawn_level
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_prewarm
+#endif
 #if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_begin
     .byte $25
@@ -816,15 +717,8 @@ game_new_start:
 #endif
 
 #if C128_TEST_SCRIPTED_INPUT
-#if C128_TEST_CACHE_SURVIVAL
-    jmp c128_test_cache_survival_town_entry
-#else
 c128_test_town_pass_sym:
     brk
-#endif
-
-#elif C128_TEST_CACHE_SURVIVAL
-    jmp c128_test_cache_survival_town_entry
 #endif
 
     jmp main_loop
@@ -901,8 +795,30 @@ load_resume_game:
 #if C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT
 c64_test_single_drive_load_return_resume_entry:
 #endif
-    jsr wizard_reset_session_state
-    jsr player_search_clear_transient_state
+    // Clear transient session state first while OVL_STORAGE is still resident
+    // from load_game (0 extra disk loads on StorageOverlay ports).
+#if LOAD_RESUME_RESET_EXTERNAL
+    jsr tramp_load_resume_reset
+#else
+#import "load_resume_reset_cold.s"
+#endif
+#if CORE_ITEM_IMPORTED
+    jsr inven_recalc_weight
+#endif
+
+    // The weapon/ring/ego bonuses player_calc_combat adds (pcc_eq_*) are not
+    // saved: collect them before player_calc_stats and tier restore, since
+    // OVL.ITEMS shares the tier's window on some ports.
+#if HAL_PLATFORM_CHARGEN_ITEM_RECALC_TRAMPOLINE
+    jsr tramp_item_recalc
+#else
+    jsr player_recalc_equipment
+#endif
+
+    // Recalculate derived stats from loaded base values + pcc_eq_*
+    jsr player_calc_stats
+    jsr player_calc_hp
+    jsr hal_screen_clear
 
     // Reset transient tier metadata from any prior runtime state, then
     // load the correct tier for the resumed dungeon level. The save-file
@@ -910,35 +826,14 @@ c64_test_single_drive_load_return_resume_entry:
     // fallback message here just like overlay restore and generation do.
     jsr tier_invalidate_state
     jsr tier_restore_after_overlay
-
-    // Recalculate derived stats from loaded base values
-    jsr player_calc_stats
-    jsr player_calc_hp
-
-    // Stop any running
-    lda #$ff
-    sta zp_run_dir
-    lda #0
-    sta auto_rest_active
-    sta regen_frac_lo           // not saved (zp_regen_frac, the high byte, is)
-    sta md_count                // no drop staged before the load
-#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-    sta levelup_magic_pending   // none owed by the game played before the load
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_refetch_slots
+#endif
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_prewarm
 #endif
 
-    // Re-init SID
-    jsr hal_sound_init
-
-
-    // Viewport coords are transient and not restored from saves. Seed a
-    // neutral origin before the first post-load deadband update so stale
-    // title/UI state cannot leave the renderer starting from $FF rows/cols.
-    lda #0
-    sta zp_view_x
-    sta zp_view_y
-
-    // Clear screen and render the loaded level
-	    jsr hal_screen_clear
+    // Render the loaded level onto the cleared screen
 	    jsr update_visibility
 	    jsr viewport_update
 	    jsr render_viewport
@@ -1075,8 +970,7 @@ c128_town_move_diag_loop_top:
     lda c64_test_spell_return_count
     cmp #20
     bcc !c64_test_detect_return_done+
-    jsr c64_test_detect_evil_assert_cleared
-    jmp c64_test_spell_pass_sym
+    jmp c64_test_spell_pass_sym     // the runner checks the marks are cleared here
 !c64_test_detect_return_done:
 #endif
 
@@ -1440,15 +1334,11 @@ c128_town_move_diag_after_turn_post_action:
 
 	    // Did a room get revealed?
 	    lda vis_room_revealed
-    beq !no_room_reveal+
-	    jmp !full_redraw+
-!no_room_reveal:
+    bne !full_redraw+
 
 	    // Did monsters or other scene elements move this turn?
 	    lda turn_scene_dirty
-    beq !no_scene_dirty+
-	    jmp !scene_dirty_redraw+
-!no_scene_dirty:
+    bne !scene_dirty_redraw+
 
     // No scroll, no room reveal, no remote scene changes — render local area around old+new position
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1865,7 +1755,7 @@ cmd_dispatch_ignore:
 cmd_stairs_dn:
     jsr check_stairs_at_player
     cmp #9                  // Stairs down type
-    bne !no_stairs_dn+
+    bne !no_stairs+
 !stairs_dn_ok:
     // Descend: increment dungeon level
     inc zp_player_dlvl
@@ -1874,29 +1764,21 @@ cmd_stairs_dn:
     // Update max depth if deeper than before
     cmp player_data + PL_MAX_DLVL
     bcc !dn_not_deeper+
-    beq !dn_not_deeper+
     sta player_data + PL_MAX_DLVL
 !dn_not_deeper:
     lda #0
-    sta level_entry_dir         // 0 = descended
-    jsr level_change_generate_current
-    jsr msg_clear
+    jsr stairs_generate_and_clear
     :MsgPrintStr(descend_str)
-    jmp main_loop
-!no_stairs_dn:
-    :MsgPrintStr(no_stairs_str)
     jmp main_loop
 
 cmd_stairs_up:
     jsr check_stairs_at_player
     cmp #10                 // Stairs up type
-    bne !no_stairs_up+
+    bne !no_stairs+
 !stairs_up_ok:
     // Ascend
     lda zp_player_dlvl
-    bne !stairs_up_not_surface+
-    jmp !at_surface+
-!stairs_up_not_surface:
+    beq !at_surface+
     dec zp_player_dlvl
     lda zp_player_dlvl
     sta player_data + PL_DLEVEL
@@ -1905,17 +1787,20 @@ cmd_stairs_up:
     jsr tramp_store_restock_all
 !not_entering_town:
     lda #1
-    sta level_entry_dir         // 1 = ascended
-    jsr level_change_generate_current
-    jsr msg_clear
+    jsr stairs_generate_and_clear
     :MsgPrintStr(ascend_str)
     jmp main_loop
 !at_surface:
     :MsgPrintStr(at_surface_str)
     jmp main_loop
-!no_stairs_up:
+!no_stairs:
     :MsgPrintStr(no_stairs_str)
     jmp main_loop
+
+stairs_generate_and_clear:
+    sta level_entry_dir
+    jsr level_change_generate_current
+    jmp msg_clear
 
 // level_change_generate_current — Shared tail after caller has already updated
 // depth/max-depth/restock state and set level_entry_dir.
@@ -1979,6 +1864,9 @@ level_change_generate_current:
 #endif
 #if C128_TEST_FORCE_DUNGEON_MELEE
     jsr c128_test_force_dungeon_melee
+#endif
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_prewarm
 #endif
 #if !HAL_PLATFORM_WIZARD_JUMP_INLINE_PLAY
     lda wizard_level_jump_active
@@ -2061,14 +1949,22 @@ chest_open_route:
     bcc !cor_door+
     jmp tramp_chest_open
 !cor_door:
+#if DOOR_OPEN_CLOSE_EXTERNAL
+    jmp tramp_door_try_open
+#else
     jmp door_try_open
+#endif
 :ChestRouteRestoreSegment()
 
 cmd_close:
     jsr msg_clear
     jsr get_direction_target
     bcc !close_no_turn+
+#if DOOR_OPEN_CLOSE_EXTERNAL
+    jsr tramp_door_try_close
+#else
     jsr door_try_close
+#endif
     bcc !close_no_turn+
     // Door closed — consume turn and re-render
     jmp post_turn_update_visibility_or_die
@@ -2119,12 +2015,20 @@ cmd_autorest:
 
 cmd_pickup:
     jsr msg_clear
+#if HAL_PLATFORM_ITEM_PICKUP_OVERLAY
+    jsr tramp_item_pickup
+#else
     jsr item_pickup
+#endif
     jmp command_result_main_or_status_only
 
 cmd_drop:
     jsr msg_clear
+#if ITEM_DROP_EXTERNAL
+    jsr tramp_item_drop
+#else
     jsr item_drop
+#endif
     jmp command_result_main_or_redraw_full
 
 cmd_inventory:
@@ -2252,7 +2156,7 @@ save_product_seed_secondary:
     iny
     bcc !spss_loop-
     rts
-spss_fields: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+spss_fields: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED, ITEM_PAGE_DAGGER | EGO_DEFENDER
 #endif
 #if C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
 // Inventory cells the load smokes read after a resume (no bytes).
@@ -2301,8 +2205,8 @@ exchange_product_presses:         .byte 0
 exchange_product_refused_turns:   .byte $ff
 exchange_product_refused_primary: .byte $ff
 // id, qty, p1, to_hit, to_dam, to_ac, flags, ego
-xps_primary:   .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, 0
-xps_secondary: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6   // 6 = EGO_DEFENDER
+xps_primary:   .byte ITEM_SLOT_MACE, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, ITEM_PAGE_MACE
+xps_secondary: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED, ITEM_PAGE_DAGGER | EGO_DEFENDER
 .label exchange_product_primary_id   = inv_item_id + EQUIP_WEAPON
 .label exchange_product_primary_ego  = inv_ego + EQUIP_WEAPON
 .label exchange_product_secondary_id = inv_item_id + EQUIP_SECONDARY
@@ -2434,14 +2338,7 @@ run_continue_step:
 // ============================================================
 run_step:
     // Save positions before move for dirty render
-    ldx zp_player_x
-    stx old_player_x
-    ldx zp_player_y
-    stx old_player_y
-    ldx zp_view_x
-    stx old_view_x
-	    ldx zp_view_y
-	    stx old_view_y
+    jsr main_loop_snapshot_view
 
     // Convert running direction to movement command
     ldx zp_run_dir
@@ -2454,9 +2351,7 @@ run_step:
     jmp !run_blocked+           // Wall → stop, no turn consumed
 !run_move_ok:
     lda player_move_relocated
-    bne !run_relocated+
-    jmp !run_stop_move+         // Unseen-monster attack consumed the turn.
-!run_relocated:
+    beq !run_stop_move+         // Unseen-monster attack consumed the turn.
 
 	    // Check trap
 	    jsr msg_clear
@@ -2467,17 +2362,16 @@ run_step:
     lda zp_player_dlvl
     bne !run_not_store+
     jsr check_player_on_store_door
-    bcc !run_not_store+
-    jmp !run_stop_move+
+    bcs !run_stop_move+
 !run_not_store:
 
 	    // UMoria evaluates newly adjacent squares after each successful move.
 	    jsr run_area_affect
 	    bcc !run_keep_step+
-    jmp !run_stop_move+         // Should stop → final move
+!run_stop_move:
+    jsr run_stop_running
 !run_keep_step:
-
-	    // Continue running — run AI before render (BUG-17 fix)
+	    // Run AI before render (BUG-17 fix)
     jsr player_move_maybe_passive_search
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
@@ -2489,18 +2383,13 @@ run_step:
     // Check for viewport scroll or room reveal
 	    lda zp_view_x
 	    cmp old_view_x
-    beq !run_chk_y+
-	    jmp !run_full_redraw+
-!run_chk_y:
+    bne !run_full_redraw+
 	    lda zp_view_y
 	    cmp old_view_y
-    beq !run_chk_reveal+
-	    jmp !run_full_redraw+
-!run_chk_reveal:
+    bne !run_full_redraw+
 	    lda vis_room_revealed
     ora turn_scene_dirty
-    beq !run_local+
-	    jmp !run_full_redraw+
+    bne !run_full_redraw+
 
 !run_local:
 	    jsr render_local_area
@@ -2519,6 +2408,13 @@ run_step:
 	    jsr render_viewport
 
 !run_post:
+    lda zp_run_dir
+    cmp #$ff
+    bne !run_active_post+
+    jsr try_store_entry
+    jsr status_draw
+    jmp main_loop
+!run_active_post:
     jsr status_draw
     lda zp_msg_flags
     ora turn_scene_dirty
@@ -2539,57 +2435,6 @@ run_step:
 !not_dead:
     jsr update_visibility
     jmp vp_render_status_loop
-
-!run_stop_move:
-    jsr run_stop_running
-    jsr player_move_maybe_passive_search
-    jsr turn_post_action_searchable_or_die
-    bcc !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr game_loop_update_visibility_preserve_reveal
-    jsr viewport_update
-
-    // Check for viewport scroll or room reveal
-	    lda zp_view_x
-	    cmp old_view_x
-    beq !rsm_chk_y+
-	    jmp !rsm_full+
-!rsm_chk_y:
-	    lda zp_view_y
-	    cmp old_view_y
-    beq !rsm_chk_reveal+
-	    jmp !rsm_full+
-!rsm_chk_reveal:
-	    lda vis_room_revealed
-    beq !rsm_chk_scene+
-	    jmp !rsm_full+
-!rsm_chk_scene:
-	    lda turn_scene_dirty
-    beq !rsm_local+
-	    jmp !rsm_scene_full+
-
-!rsm_local:
-	    jsr render_local_area
-	    jmp !rsm_post+
-!rsm_scene_full:
-	    jsr render_viewport
-	    jmp !rsm_post+
-!rsm_full:
-#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
-	    lda turn_scene_dirty
-    bne !rsm_full_fallback+
-	    jsr render_viewport_scroll_delta
-	    bcc !rsm_full_fallback+
-	    jsr render_local_area
-	    jmp !rsm_post+
-!rsm_full_fallback:
-#endif
-	    jsr render_viewport
-!rsm_post:
-    jsr try_store_entry
-    jsr status_draw
-    jmp main_loop
 
 try_store_entry:
     lda zp_player_dlvl
@@ -2627,19 +2472,17 @@ player_died:
     jsr hal_input_get_key
 
     // Now do disk I/O (player sees -more- prompt, knows they died)
+game_over_finish:
     jsr game_over_prepare_for_disk_io
     bcs !pd_skip_disk_io+
     jsr game_over_save_and_show
-    jmp !pd_done+
+    jmp !quit+
 !pd_skip_disk_io:
     jsr tramp_game_over_disk_setup_failed
     lda death_source_saved
     sta zp_death_source
     jsr tramp_game_over
     jsr input_get_modal_dismiss_key
-!pd_done:
-    jmp !quit+
-
 !quit:
     jmp game_over_prompt    // Platform hook returns to title/menu.
 
@@ -2651,16 +2494,7 @@ player_retired:
     lda #DEATH_ALIVE
     sta death_source_saved
     sta zp_death_source
-    jsr game_over_prepare_for_disk_io
-    bcs !pr_skip_disk_io+
-    jsr game_over_save_and_show
-    jmp !pr_done+
-!pr_skip_disk_io:
-    jsr tramp_game_over_disk_setup_failed
-    jsr tramp_game_over
-    jsr input_get_modal_dismiss_key
-!pr_done:
-    jmp !quit-
+    jmp game_over_finish
 
 game_over_prepare_for_disk_io:
     lda disk_setup_done
@@ -2823,84 +2657,9 @@ c128_test_force_melee_y: .byte 0
 :ResidentPlaySegment()
 #endif
 
-// ============================================================
-// calc_dig_ability — Calculate digging ability (STR + tool/weapon bonus)
-// New formula for R14: (STR>>2) + base_bonus + (ego*12) for digging tools
-// Output: tun_dig_ability set
-// Clobbers: A, X
-// ============================================================
-calc_dig_ability:
-    // Check equipped weapon
-    ldx inv_item_id + EQUIP_WEAPON
-    cpx #$FF
-    bne !cda_has_weapon+
-
-    // Bare hands: ability = 0
-    lda #0
-    sta tun_dig_ability
-    rts
-
-!cda_has_weapon:
-    lda it_category,x
-    cmp #ICAT_DIGGING
-    beq !cda_dig_tool+
-
-    // Regular weapon: ability = (STR >> 2) + max(0, PL_TODMG >> 1)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
-    lda player_data + PL_TODMG
-    bmi !cda_done+              // Negative TODMG → skip (leave ability = STR>>2)
-    lsr                         // TODMG >> 1
-    clc
-    adc tun_dig_ability
-    bcc !cda_ok+
-    lda #$FF                    // Cap at 255
-!cda_ok:
-    sta tun_dig_ability
-!cda_done:
-    rts
-
-!cda_dig_tool:
-    // Digging tool: ability = (STR >> 2) + dig_base_table[type-62] + (ego * 12)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
-
-    // Add base bonus from table
-    txa
-    sec
-    sbc #62                     // Index into dig_base_table (0=Shovel, 1=Pick)
-    tax
-    lda dig_base_table,x
-    clc
-    adc tun_dig_ability
-    sta tun_dig_ability
-
-    // Add ego bonus: ego * 12
-    lda inv_ego + EQUIP_WEAPON
-    beq !cda_done-              // ego=0, no bonus
-    // Multiply ego (1 or 2) by 12
-    // ego * 12 = ego * 8 + ego * 4
-    sta zp_temp2                // save ego
-    asl                         // *2
-    asl                         // *4
-    sta zp_temp3                // ego*4
-    asl                         // *8
-    clc
-    adc zp_temp3                // *8 + *4 = *12
-    clc
-    adc tun_dig_ability
-    bcc !cda_ego_ok+
-    lda #$FF                    // Cap at 255
-!cda_ego_ok:
-    sta tun_dig_ability
-    rts
-
-dig_base_table:
-    .byte 6, 20                 // Shovel base=6, Pick base=20
+#if !CALC_DIG_EXTERNAL
+#import "calc_dig_cold.s"
+#endif
 
 // ============================================================
 // roll_tool_ego_check — Handle ego roll for digging tools
@@ -2938,18 +2697,20 @@ roll_tool_ego_check:
 
 // ============================================================
 // put_tool_ego_prefix — Print ego prefix for digging tools
-// Input: A = ego (1 or 2), X = item type ID (62 or 63)
+// Input: A = ego (1 or 2), X = ITEM_SLOT_PICK or ITEM_SLOT_SHOVEL
 // Output: prefix string printed to screen (e.g., "Gnomish ")
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 put_tool_ego_prefix:
-    // Compute index = (type - 62) * 2 + (ego - 1)
+    .assert "Pick precedes Shovel on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0, true
+    // Compute index = (type - ITEM_SLOT_PICK) * 2 + (ego - 1)
+    and #EGO_ID_MASK
     sec
     sbc #1                      // ego - 1 (0 or 1)
     sta ptep_temp
     txa
     sec
-    sbc #62                     // type - 62 (0=Shovel, 1=Pick)
+    sbc #ITEM_SLOT_PICK         // type - Pick (0=Pick, 1=Shovel)
     asl                         // * 2
     clc
     adc ptep_temp               // + (ego - 1) → index 0-3
@@ -2969,74 +2730,30 @@ ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
 ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
 
 // Prefix lookup table — indexed 0-3
-// Index: (type-62)*2 + (ego-1)
-//   0 = Shovel ego=1 → Gnomish
-//   1 = Shovel ego=2 → Dwarven
-//   2 = Pick ego=1   → Orcish
-//   3 = Pick ego=2   → Dwarven
+// Index: (type - ITEM_SLOT_PICK)*2 + (ego-1)
+//   0 = Pick ego=1   → Orcish
+//   1 = Pick ego=2   → Dwarven
+//   2 = Shovel ego=1 → Gnomish
+//   3 = Shovel ego=2 → Dwarven
 tool_ego_prefix_lo:
-    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
     .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
 tool_ego_prefix_hi:
-    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
 #endif
 
 // ============================================================
-// banked_ego_put_suffix — Write ego suffix to screen
-// Input: A = ego type (0 = no ego)
+// banked_ego_put_suffix — Write ego suffix to screen via ITEM.CAT
+// Input: A = ego byte (page_bit | ego_id; 0 = no ego)
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 banked_ego_put_suffix:
-    cmp #0
+    and #EGO_ID_MASK
     beq !beps_done+
     cmp #EGO_TYPE_COUNT
     bcs !beps_done+
-#if HAL_PLATFORM_AUX_PERSISTENT_DATA
-    // The caller may live in HELP or TOWN, so OVL.ITEMS suffix pointers are
-    // not executable/readable here. Each immutable aux slot is 16 bytes, so
-    // resistance armour prints the " (Resist" slot after the last ego, then
-    // its own: ")", " Acid)", " Fire)", " Cold)" or " Lightning)".
-    .assert "The aux ego suffix slots (and the Resist prefix) fit one page", (EGO_TYPE_COUNT + 1) * 16 <= 256, true
-    cmp #EGO_RESIST
-    bcc beps_put_slot
-    cmp #EGO_MAGI
-    bcs beps_put_slot     // " of the Magi": no prefix
-    pha
-    lda #EGO_TYPE_COUNT
-    jsr beps_put_slot
-    pla
-beps_put_slot:
-    asl
-    asl
-    asl
-    asl
-    sta zp_ptr0
-    lda #>hal_ego_suffix_slots
-    sta zp_ptr0_hi
-    ldx #0
-!beps_loop:
-    txa
-    tay
-    jsr mmu_safe_map_read_ptr0
-    beq !beps_done+
-    jsr hal_screen_put_char
-    inx
-    bne !beps_loop-
-#else
-    jsr ego_get_suffix_ptr
-    ldy #0
-!beps_loop:
-    lda (zp_ptr0),y
-    beq !beps_done+
-    sty beps_save_y
-    jsr hal_screen_put_char
-    ldy beps_save_y
-    iny
-    jmp !beps_loop-
-#endif
+    jsr item_cat_decode_ego     // zp_ptr0/hi -> decoded ego suffix in item_name_decode_buf
+    jmp hal_screen_put_string
 !beps_done:
     rts
-#if !HAL_PLATFORM_AUX_PERSISTENT_DATA
-beps_save_y: .byte 0
-#endif

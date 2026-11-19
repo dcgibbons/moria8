@@ -57,8 +57,8 @@ from pathlib import Path
 from typing import Any
 
 from . import records
-from .goals import (CHARACTERS, GOALS, QUALIFICATION_SEEDS, apply_variant, for_character, for_port, parse_variant,
-                    required)
+from .goals import (CHARACTERS, DEFAULT_TACTICS, GOALS, QUALIFICATION_SEEDS, apply_variant, for_character, for_port,
+                    parse_variant, required)
 from .launch import ROOT
 from .ports import PORTS
 
@@ -88,8 +88,28 @@ ARMOUR_CHECKPOINT_AC = 5
 # on its step budget at clvl 39 went back 2,000,000 experience to its clvl 39
 # checkpoint, and all 17 of the queue's runs were about to (2026-11-10).
 CHECKPOINT_XP = 250_000
+# A checkpoint waits for a character out of danger: not poisoned, at least
+# half its HP. The C64 Human Warrior's clvl 10 checkpoint was taken on its
+# arrival in town poisoned, short of the Temple, and all 1,722 of its
+# restores died 14 steps in (2026-11-15).
+CHECKPOINT_HP_FRACTION = 0.5
+# A start whose restores die this many times in a row, each within
+# DOOMED_STEPS of it, cannot go on: the combination plays from level 1, as
+# for a save that does not load (start_balrog).
+DOOMED_DEATHS = 10
+DOOMED_STEPS = 200
 FINAL_CHECKPOINT_STEPS = 2_000   # in its last this many steps a run keeps one if it gained experience
 ROTATE_POLL_STEPS = 500   # a Balrog run looks for a newer build this often (newer_build)
+# A combination waiting this long for a slot has the longest-playing Balrog
+# run yield at its next town visit, as for a newer build (Service.balrog_yield):
+# with 25 C64 graduates for 18 slots, 20M-step games (about 40 hours) and two
+# deaths in 2.5 hours, seven waited on (2026-11-15).
+BALROG_SLICE_S = 3 * 3600
+# The build queue's runs play the default tactics, as the Balrog queue's do
+# (maintainer, 2026-11-16): its goal (clvl10, the pre-commit gate's too)
+# has none, so its success rates measured a bot the Balrog queue never plays.
+BUILD_VARIANT = "tactics=" + " ".join(sorted(DEFAULT_TACTICS))
+YIELD = "yield"           # in a run's directory: hand the slot over in town (yield_due)
 CHECKPOINTS = "checkpoints"   # in a run's directory: clvl<N>/ each
 ENCOUNTERS = "encounters"     # in the queue home: <run>-s<step>/, a snapshot each Balrog sighting
 BALROG = ("B", 100)          # its glyph and native level (knowledge.kinds_by_name)
@@ -102,6 +122,13 @@ DEFAULTS: dict[str, Any] = {
     "main_characters": [],   # non-empty: the main queue plays only these (2026-11-05: the Balrog starts it lacks)
     # The build queue (BuildQueue): one run per port, of HEAD's commit
     "build_platforms": [], "build_goal": "clvl10",
+    # Runs of each port at once, each a different combination (maintainer,
+    # 2026-11-18: idle cores; 1 until then)
+    "build_per_port": 1,
+    # Above 0: this many build-queue runs in all instead, each free one to the
+    # port with the most combinations left per run it plays, so the slow disk
+    # ports take the slots the fast ones are done with (maintainer, 2026-11-18)
+    "build_workers": 0,
     # Non-empty: the Balrog queue plays every combination of these ports,
     # from level 1 when it has no start, and takes no other port's
     # graduates (maintainer, 2026-11-06: the C64)
@@ -117,6 +144,10 @@ DEFAULTS: dict[str, Any] = {
     # workers for this priest character, and the other half for everyone
     # else"), and no other character's game is stopped.
     "balrog_characters": [], "balrog_copies": 1, "balrog_focus_workers": 0,
+    # The dashboard's statistics (monsters, Balrog kills, build history, run
+    # counts) count runs from this run id prefix on ("YYYYMMDD-HHMMSS"); the
+    # earlier runs stay on disk (maintainer, 2026-11-15: a fresh start).
+    "stats_since": "",
 }
 
 
@@ -134,6 +165,12 @@ def checkpoint_wanted(clvl: int, ac: int | None, last_clvl: int | None, last_ac:
     return ac is not None and last_ac is not None and ac >= last_ac + ARMOUR_CHECKPOINT_AC
 
 
+def checkpoint_safe(hp: int, mhp: int, poisoned: bool) -> bool:
+    """A character a checkpoint may keep: not poisoned, at least
+    CHECKPOINT_HP_FRACTION of its HP."""
+    return not poisoned and hp >= mhp * CHECKPOINT_HP_FRACTION
+
+
 def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None, xp: int = 0) -> str:
     """A checkpoint's directory: ``clvl<N>`` at a new level,
     ``clvl<N>-ac<AC>-xp<XP>`` for better armour or more experience at the
@@ -141,6 +178,27 @@ def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None, xp: int = 
     if last_clvl is not None and clvl <= last_clvl and ac is not None:
         return f"clvl{clvl:02d}-ac{ac:03d}-xp{xp:08d}"
     return f"clvl{clvl:02d}"
+
+
+def keep_victory(run_dir: Path, home: Path, record: dict[str, Any]) -> Path | None:
+    """A won run's crown screen ("Veni, Vidi, Vici!", core/royal.s:
+    session.capture_victory, in the worker's victory directory) kept in
+    ``home``/victories as <date>-<platform>-<character>.png, where the wins
+    are looked for: the captures stayed in each run's directory, and the
+    folder held only the first two, copied by hand (maintainer, 2026-11-14:
+    the crown is "really the one i want captured"). None when there is none
+    to keep."""
+    if record.get("outcome") != "reached":
+        return None
+    for text in sorted(run_dir.glob("w*/victory/*.txt")):
+        picture = text.with_suffix(".png")
+        if "Veni, Vidi, Vici!" in text.read_text(errors="replace") and picture.exists():
+            stamp = time.strftime("%Y%m%d-%H%M", time.localtime(picture.stat().st_mtime))
+            kept = home / "victories" / f"{stamp}-{record.get('platform')}-{record.get('character')}.png"
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(picture, kept)
+            return kept
+    return None
 
 
 def now() -> float:
@@ -286,6 +344,15 @@ def rotate_due(goal: str, dlvl: int, steps: int, build: str, platform: str, home
     return newer_build(build, platform, home)
 
 
+def yield_due(run_dir: Path, goal: str, dlvl: int, steps: int) -> str | None:
+    """"yield" when the service asked a Balrog run in town to hand its slot
+    over (Service.balrog_yield), looked for every ROTATE_POLL_STEPS; None to
+    play on."""
+    if goal != "balrog" or dlvl != 0 or steps % ROTATE_POLL_STEPS:
+        return None
+    return YIELD if (run_dir / YIELD).exists() else None
+
+
 def brain_shape(root: Path) -> dict[str, set[str]] | None:
     """Each class in the modules a saved brain is made of, with the
     attributes its code gives an instance: annotated fields and every
@@ -392,8 +459,9 @@ def start_pickle(start: dict[str, Any]) -> Path | None:
 
 def save_versions(build_id: str, platform: str, home: Path = HOME) -> tuple[int, int] | None:
     """(oldest loadable, current) save versions of ``platform`` in a build,
-    from its storage policy's first branch (the monster catalog's); None
-    when the build or the constants are missing."""
+    from its storage policy; current Save Format V2 builds define only
+    ``hal_storage_save_version`` (oldest == current), while archived pre-cleanup
+    builds may also define ``hal_storage_save_v1_version``."""
     root = home / "builds" / build_id / "platforms"
     platform = PORTS[platform].platform if platform in PORTS else platform   # a variant: its source's
     root = root / "commodore" / platform if platform in ("c64", "c128", "plus4") else root / platform
@@ -401,9 +469,12 @@ def save_versions(build_id: str, platform: str, home: Path = HOME) -> tuple[int,
         text = (root / "hal" / "storage_policy.s").read_text()
     except OSError:
         return None
-    found = [re.search(rf"^\.const {name}\s*=\s*\$([0-9A-Fa-f]+)", text, re.M)
-             for name in ("hal_storage_save_v1_version", "hal_storage_save_version")]
-    return (int(found[0].group(1), 16), int(found[1].group(1), 16)) if all(found) else None
+    cur = re.search(r"^\.const hal_storage_save_version\s*=\s*\$([0-9A-Fa-f]+)", text, re.M)
+    if not cur:
+        return None
+    current = int(cur.group(1), 16)
+    old = re.search(r"^\.const hal_storage_save_v1_version\s*=\s*\$([0-9A-Fa-f]+)", text, re.M)
+    return (int(old.group(1), 16) if old else current, current)
 
 
 def start_loads(start: dict[str, Any], build_id: str, platform: str, home: Path = HOME) -> bool:
@@ -448,6 +519,14 @@ def keep_encounter(home: Path, run_id: str, snapshot: Path, info: dict[str, Any]
     return dest
 
 
+def run_home(run_dir: Path) -> Path:
+    """The queue home a run's directory (``<home>/runs/<id>``) is in. A
+    worker's ``HOME`` is its build snapshot's (``ROOT``, where no
+    ``service.json`` is), so rotate_due never found a newer build and no
+    Balrog run rotated, from 2026-11-11 to 2026-11-15."""
+    return run_dir.resolve().parent.parent
+
+
 def run_one(run_dir: Path) -> int:
     """Play one job (``job.json``) in this process, from the build snapshot
     whose code this is; write ``result.json``. Runs under tools/isolated.sh."""
@@ -486,6 +565,7 @@ def run_one(run_dir: Path) -> int:
             self.checkpoint_xp: int | None = None     # the experience at the latest start or checkpoint
             self.final_checkpoint = False             # the one kept near the step budget's end (observe)
             self.rotating = False                     # in town with a newer build waiting: ending (rotate)
+            self.checkpoint_waiting = False           # one wanted in town, waiting out danger (checkpoint_safe)
 
         def mark_start(self, obs) -> None:   # type: ignore[no-untyped-def]
             self.checkpoint_clvl = max(obs.clvl, 1)   # chargen's screen reads level 0
@@ -499,11 +579,16 @@ def run_one(run_dir: Path) -> int:
             it with ARMOUR_CHECKPOINT_AC more AC or CHECKPOINT_XP more
             experience, a Balrog run keeps a checkpoint, the level-entry
             snapshot itself or, on a ``graduate_save`` port, a saved game at
-            the next command (press)."""
+            the next command (press). A character in danger
+            (checkpoint_safe) is kept on a ``graduate_save`` port once safe
+            in town, else at the next arrival."""
             super().take_snapshot(obs)
             ac = status_ac(obs)
             if not checkpoint_wanted(obs.clvl, ac, self.checkpoint_clvl, self.checkpoint_ac,
                                      obs.xp, self.checkpoint_xp, dlvl=obs.dlvl):
+                return
+            if not checkpoint_safe(obs.hp, obs.mhp, self.brain.poisoned):
+                self.checkpoint_waiting = port.graduate_save
                 return
             self.keep_checkpoint(obs)
 
@@ -528,6 +613,13 @@ def run_one(run_dir: Path) -> int:
 
         def press(self, key: int):   # type: ignore[no-untyped-def]
             game = self.worker.game
+            last = game.last if game is not None else None
+            if self.checkpoint_waiting and last is not None and last.mode == Mode.COMMAND:
+                if last.dlvl != 0:
+                    self.checkpoint_waiting = False   # left town in danger: the next arrival
+                elif checkpoint_safe(last.hp, last.mhp, self.brain.poisoned):
+                    self.checkpoint_waiting = False
+                    self.keep_checkpoint(last)
             if self.checkpoint_due and game is not None and game.last is not None and game.last.mode == Mode.COMMAND:
                 self.checkpoint_due = False
                 self.save_checkpoint()
@@ -590,10 +682,12 @@ def run_one(run_dir: Path) -> int:
             step budget, which cut runs off on their way back down to the
             Balrog (maintainer, 2026-11-11). A saved-game port ends after
             the save (press)."""
-            newer = None if self.rotating else rotate_due(goal.name, obs.dlvl, self.result.steps,
-                                                          job["build"], job["platform"])
-            if newer is None:
-                return
+            newer = None if self.rotating else (
+                rotate_due(goal.name, obs.dlvl, self.result.steps, job["build"], job["platform"],
+                           run_home(run_dir))
+                or yield_due(run_dir, goal.name, obs.dlvl, self.result.steps))
+            if newer is None or not checkpoint_safe(obs.hp, obs.mhp, self.brain.poisoned):
+                return   # in danger: the next poll (checkpoint_safe)
             self.rotating = True
             self.session.event("rotate", seed=self.seed, step=self.result.steps, build=newer)
             if self.checkpoint_xp is not None and obs.xp > self.checkpoint_xp:
@@ -1045,25 +1139,40 @@ class Balrog:
             return
         current["fails"] = current.get("fails", 0) + 1
         current["restores"] = current.get("restores", 0) + 1
+        quick = record["outcome"] == "died" and record.get("steps", 0) - current.get("step", 0) < DOOMED_STEPS
+        current["quick_deaths"] = current.get("quick_deaths", 0) + 1 if quick else 0
+
+    @staticmethod
+    def doomed(start: dict[str, Any]) -> bool:
+        """A start whose last DOOMED_DEATHS restores each died within
+        DOOMED_STEPS of it (fell_short)."""
+        return start.get("quick_deaths", 0) >= DOOMED_DEATHS
 
     def take(self, busy: Collection[str] = (), only: Collection[str] = (),
-             exclude: Collection[str] = ()) -> dict[str, Any] | None:
-        """The next graduate, the highest start first (``rank``), which goes
+             exclude: Collection[str] = (), full: Collection[str] = ()) -> dict[str, Any] | None:
+        """The next graduate, the longest waiting first (``rank``), which goes
         to the back; None when there is none. One not playing already
         (``busy``) first: a long game was
         lapped by the rotation, and two games of one combination played from
         one start while others waited (2026-11-06). One whose start cannot
         go on plays a new character (Service.start_balrog). ``only``
         (characters, focus): those alone, and None when all are busy;
-        ``exclude`` (the focus, beside it): any but those."""
+        ``exclude`` (the focus, beside it): any but those. ``full``: those
+        playing ``balrog_copies`` games already, which play no more: the first
+        graduate took all eight workers at balrog_copies 1, and its 20M-step
+        runs kept them from every later one (2026-11-15)."""
+        # A combination that has won is done: its slots go to the others
+        # (maintainer, 2026-11-12, after the C64 Human Priest's two wins).
         def eligible() -> list[str]:
             return [k for k in self.state["order"] if (not only or k.split("/", 1)[-1] in only)
-                    and k.split("/", 1)[-1] not in exclude]
+                    and k.split("/", 1)[-1] not in exclude and not self.state["items"][k].get("won")]
         if not eligible():
             return None
         self.rank()
         order = eligible()
-        key = next((k for k in order if k not in busy), None if only else order[0])
+        key = next((k for k in order if k not in busy), None)
+        if key is None and not only:
+            key = next((k for k in order if k not in full), None)
         if key is None:
             return None
         self.state["order"].remove(key)
@@ -1077,11 +1186,17 @@ class Balrog:
         start = self.state["items"][key].get("start") or {}
         return int(start.get("clvl") or (M7_CLVL if start else 1))
 
+    def waiting_since(self, key: str) -> float:
+        """When a combination's last counted game ended, else when it joined."""
+        item = self.state["items"][key]
+        return float((item.get("last") or {}).get("ended") or (item.get("graduated") or {}).get("ended") or 0)
+
     def rank(self) -> None:
-        """Highest start first (maintainer, 2026-11-06: the highest-level save
-        is likeliest to go further and find something new), the rotation
-        order among equals."""
-        self.state["order"].sort(key=lambda k: -self.start_level(k))
+        """Longest waiting since its last game first, the highest start among
+        equals (maintainer, 2026-11-15: 25 C64 graduates for 18 slots, and
+        highest-first, 2026-11-06, kept seven from ever playing: the top
+        starts took each slot back the moment they ended)."""
+        self.state["order"].sort(key=lambda k: (self.waiting_since(k), -self.start_level(k)))
 
     def ready(self) -> bool:
         return bool(self.state["order"])
@@ -1142,8 +1257,10 @@ class BuildQueue:
         played; None once every one has played on ``build``. A new build
         starts again from the first (``cycle`` counts the builds covered)."""
         entry = self.coverage(name, build)
-        if entry["retry"]:
-            combo, entry["retry"] = entry["retry"], None
+        retries = self.retries(entry)
+        if retries:
+            combo = retries.pop(0)
+            entry["retry"] = retries
             return combo
         order = combos(name)
         if entry["next"] >= len(order):
@@ -1154,8 +1271,21 @@ class BuildQueue:
 
     def pending(self, name: str, build: str | None) -> bool:
         """``take`` has a combination for ``build`` on port ``name``."""
+        return self.remaining(name, build) > 0
+
+    def remaining(self, name: str, build: str | None) -> int:
+        """How many combinations ``take`` has left for ``build`` on ``name``."""
         entry = self.platform(name)
-        return entry.get("build") != build or bool(entry["retry"]) or entry["next"] < len(combos(name))
+        if entry.get("build") != build:
+            return len(combos(name))
+        return len(self.retries(entry)) + max(0, len(combos(name)) - entry["next"])
+
+    @staticmethod
+    def retries(entry: dict[str, Any]) -> list[str]:
+        """The combinations to play again: a list since several runs of a
+        port play at once (build_per_port); one name or None before."""
+        retry = entry.get("retry")
+        return [] if not retry else [retry] if isinstance(retry, str) else list(retry)
 
     def coverage(self, name: str, build: str | None) -> dict[str, Any]:
         """Port ``name``'s entry, its coverage started again for a new ``build``."""
@@ -1163,14 +1293,14 @@ class BuildQueue:
         if entry.get("build") != build:
             if entry.get("build") is not None:
                 entry["cycle"] += 1
-            entry.update(build=build, next=0, retry=None)
+            entry.update(build=build, next=0, retry=[])
         return entry
 
     def finish(self, record: dict[str, Any]) -> None:
         entry = self.platform(record["platform"])
         if record["outcome"] not in COUNTED:
             if record.get("build") in (None, entry.get("build")):   # not an older build's run
-                entry["retry"] = record["character"]
+                entry["retry"] = [*self.retries(entry), record["character"]]
             return
         item = entry["items"][record["character"]]
         item["runs"] += 1
@@ -1575,6 +1705,12 @@ class Service:
                 self.log(f"queue.db insert failed for {run_id}: {exc}")
             self.log(f"end {run_id}: {record['outcome']} clvl {record.get('clvl')} "
                      f"max DL {record.get('max_dlvl')} steps {record.get('steps')}")
+            try:
+                kept = keep_victory(run_dir, self.home, record)
+                if kept is not None:
+                    self.log(f"victory screen kept: {kept.name}")
+            except OSError as exc:   # the win stands without its picture
+                self.log(f"victory screen not kept for {run_id}: {exc}")
             if job["queue"] == "main":
                 if job["goal"] == queue.goal and job.get("epoch", "") == queue.epoch:
                     queue.finish(record, self.config["retry_cap"], parallel=bool(job.get("parallel")))
@@ -1585,6 +1721,7 @@ class Service:
             if job["queue"] == "build":
                 self.buildq.finish(record)
                 self.buildq.save()
+                self.build_graduate(record)
                 continue
             if job["queue"] == "balrog":
                 if not self.balrog_checkpoint(record, job):
@@ -1646,6 +1783,46 @@ class Service:
         self.log(f"balrog queue: restart {len(old)} runs on older builds in {self.build_id}")
         for run_id in old:
             self.stop_run(run_id)
+
+    def stop_balrog(self) -> None:
+        """``make playtest-queue-stop-balrog CHARACTERS=...``: end the named
+        characters' live Balrog runs now (cancelled: no result). The
+        maintainer freed the slots of a combination that had won twice while
+        six of its games played on (2026-11-13). Names are "character" or
+        "platform/character"."""
+        flag = self.home / "stop-balrog"
+        if not flag.exists():
+            return
+        names = set(read_json(flag) or [])
+        flag.unlink()
+        hit = [r for r, j in self.running.items()
+               if j["queue"] == "balrog" and not j.get("cancelled")
+               and ({j.get("character"), f"{j.get('platform')}/{j.get('character')}"} & names)]
+        self.log(f"balrog queue: stop {len(hit)} runs of {', '.join(sorted(names))}")
+        for run_id in hit:
+            self.stop_run(run_id)
+
+    def balrog_yield(self) -> None:
+        """One Balrog run per combination waiting over BALROG_SLICE_S for a
+        slot, the longest playing first, yields at its next town visit
+        (yield_due): it keeps a checkpoint and ends, as for a newer build,
+        and the longest waiting plays next (Balrog.rank)."""
+        if not self.balrog.ready():
+            return
+        t = time.time()
+        balrog = {r: j for r, j in self.running.items() if j["queue"] == "balrog" and not j.get("cancelled")}
+        playing = {f"{j['platform']}/{j['character']}" for j in balrog.values()}
+        waiting = [k for k in self.balrog.state["order"] if k not in playing
+                   and not self.balrog.state["items"][k].get("won")
+                   and t - self.balrog.waiting_since(k) > BALROG_SLICE_S]
+        flagged = [r for r in balrog if (self.home / "runs" / r / YIELD).exists()]
+        due = sorted((j["started"], r) for r, j in balrog.items()
+                     if r not in flagged and t - j["started"] > BALROG_SLICE_S)
+        for _, run_id in due[:max(0, len(waiting) - len(flagged))]:
+            (self.home / "runs" / run_id).mkdir(parents=True, exist_ok=True)
+            (self.home / "runs" / run_id / YIELD).touch()
+            self.log(f"balrog queue: {run_id} yields in town ({len(waiting)} waiting over "
+                     f"{BALROG_SLICE_S // 3600} hours)")
 
     def stop_run(self, run_id: str) -> None:
         """End a run now (a cancelled subqueue): its whole process group."""
@@ -1796,12 +1973,9 @@ class Service:
         return not ports or platform in ports
 
     def graduate(self, queue: Queue) -> None:
-        """Every combination with an M7 success joins the Balrog queue; with
-        ``balrog_platforms``, every combination of those ports, and only them."""
-        for platform in self.config.get("balrog_platforms") or []:
-            if self.balrog.join(platform):
-                self.balrog.save()
-                self.log(f"balrog queue: every combination on {platform} joins, from level 1")
+        """Every combination with an M7 success joins the Balrog queue (on
+        ``balrog_platforms`` alone, when set); the build queue's clvl 10
+        runs join theirs as they reach it (``build_graduate``)."""
         if queue.goal != "deep":
             return
         for platform, entry in queue.state["platforms"].items():
@@ -1812,6 +1986,20 @@ class Service:
                                                                               "epoch": queue.epoch}):
                     self.balrog.save()
                     self.log(f"balrog queue: {combo} on {platform} joins (M7 run {item['success']['run']})")
+
+    def build_graduate(self, record: dict[str, Any]) -> None:
+        """A build-queue run that reached its goal (clvl 10): its combination
+        joins the Balrog queue from level 1, on ``balrog_platforms`` when set,
+        unless it is in already (maintainer, 2026-11-15: the Balrog queue is
+        filled by the build queue as each platform/race/class reaches the
+        level 10 bar, not every combination at once)."""
+        platform, combo = record.get("platform"), record.get("character")
+        if record.get("outcome") != "reached" or not platform or not combo or not self.balrog_takes(platform):
+            return
+        if self.balrog.graduate(platform, combo, {"run": record.get("id"), "ended": now(), "level1": True,
+                                                  "build": record.get("build")}):
+            self.balrog.save()
+            self.log(f"balrog queue: {combo} on {platform} joins, from level 1 (build-queue run {record.get('id')})")
 
     # -- scheduling
 
@@ -1856,11 +2044,9 @@ class Service:
         main_backoff = max((t for p, t in self.backoff.items() if not p.startswith("build/")), default=0)
         if self.balrog.ready() and self.build_id and main_backoff < time.time():
             balrog_pending = max(0, int(config["balrog_workers"]) - balrog_running)
-        # The build queue: one run per port, out of the total as the Balrog queue's are.
-        build_playing = {j["platform"] for j in self.running.values() if j["queue"] == "build"}
-        build_ready = [p for p in config.get("build_platforms") or [] if p not in build_playing
-                       and self.backoff.get(f"build/{p}", 0) < time.time()
-                       and self.buildq.pending(p, self.ci_build)] if self.ci_build else []
+        # The build queue: build_per_port runs of each port, out of the total as
+        # the Balrog queue's are, never more than its coverage has left.
+        build_ready = self.build_ready(config)
         pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending + len(build_ready)
         target = max(minimum, total - sub_running - pending)
         if len(main_active) > target:
@@ -1931,12 +2117,13 @@ class Service:
         share = int(self.config.get("balrog_focus_workers") or 0)
         focused = sum(1 for job in self.running.values() if job["queue"] == "balrog" and job["character"] in focus)
         item = None
+        full = {k for k, n in playing.items() if n >= copies}
         if not (focus and share and focused >= share):
-            item = self.balrog.take({k for k, n in playing.items() if n >= copies}, focus)
+            item = self.balrog.take(full, focus, full=full)
         if item is None and focus and share:
             # The focus has its share (or every copy plays): everyone else's
             # turn, one game each before a second.
-            item = self.balrog.take(set(playing), exclude=focus)
+            item = self.balrog.take(set(playing), exclude=focus, full=full)
         if item is None:
             return False
         build = self.newest_build(item["platform"])
@@ -1946,6 +2133,11 @@ class Service:
         if start and not start_loads(start, build, item["platform"], self.home):
             self.log(f"balrog queue: {item['character']}'s start (run {start.get('run')}, build "
                      f"{start.get('build')}) does not load in {build}: a new character from level 1")
+            self.balrog.retire_start(item)
+            start = None
+        if start and self.balrog.doomed(start):
+            self.log(f"balrog queue: {item['character']}'s start (run {start.get('run')}) died within "
+                     f"{DOOMED_STEPS} steps {start['quick_deaths']} times in a row: a new character from level 1")
             self.balrog.retire_start(item)
             start = None
         seed = random.SystemRandom().randrange(1, 2**31)
@@ -1958,6 +2150,34 @@ class Service:
         self.start(job)
         return True
 
+    def build_ready(self, config: dict[str, Any]) -> list[str]:
+        """The build queue's runs to start now, a port once per run: up to
+        ``build_per_port`` of each, or with ``build_workers`` the free slots
+        of that pool: one to each port with coverage left and none playing,
+        then each to the port with the most combinations left per run it
+        plays (the slow ports are the ones left); never more than a port's
+        coverage has left."""
+        ports = config.get("build_platforms") or []
+        playing = collections.Counter(j["platform"] for j in self.running.values() if j["queue"] == "build")
+        if not self.ci_build:
+            return []
+        left = {p: self.buildq.remaining(p, self.ci_build) for p in ports
+                if self.backoff.get(f"build/{p}", 0) < time.time()}
+        pool = int(config.get("build_workers") or 0)
+        if pool <= 0:
+            per_port = max(1, int(config.get("build_per_port", 1)))
+            return [p for p, n in left.items() for _ in range(min(per_port - playing[p], n))]
+        ready: list[str] = []
+        for _ in range(pool - sum(playing[p] for p in ports)):
+            open_ports = [p for p in left if left[p] > 0]
+            if not open_ports:
+                break
+            port = max(open_ports, key=lambda p: (playing[p] == 0, left[p] / (playing[p] + 1)))
+            ready.append(port)
+            left[port] -= 1
+            playing[port] += 1
+        return ready
+
     def start_build(self, platform: str) -> None:
         """The build queue's next combination on ``platform``, at the goal's
         own budget for the port."""
@@ -1968,7 +2188,7 @@ class Service:
         self.buildq.save()
         seed = random.SystemRandom().randrange(1, 2**31)
         budget = for_port(GOALS[goal], PORTS[platform]).step_budget
-        self.start(self.new_job("build", platform, combo, goal, seed, budget, self.ci_build))
+        self.start(self.new_job("build", platform, combo, goal, seed, budget, self.ci_build, variant=BUILD_VARIANT))
 
     def start_main(self, queue: Queue, platform: str) -> str:
         assert self.build_id is not None
@@ -2042,6 +2262,8 @@ class Service:
         self.graduate(queue)
         self.refresh_build()
         self.restart_balrog()
+        self.stop_balrog()
+        self.balrog_yield()
         self.refresh_ci()
         self.finish_subs(subs)
         subs = {name: sub for name, sub in subs.items() if not sub.get("done")}
@@ -2143,6 +2365,8 @@ def main(argv: list[str] | None = None) -> int:
     report = sub.add_parser("report", help="print a subqueue's report (an A/B subqueue's comparison)")
     report.add_argument("--name", required=True)
     sub.add_parser("status", help="print the main queue and subqueues")
+    stop = sub.add_parser("stop-balrog", help="end these characters' live Balrog runs now")
+    stop.add_argument("--characters", required=True, help='comma-separated "character" or "platform/character"')
     rebuild = sub.add_parser("rebuild", help="play this working tree as it stands from the next run on")
     rebuild.add_argument("--restart-balrog", action="store_true",
                          help="then end every Balrog run on an older build: each goes on from its start")
@@ -2172,6 +2396,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "status":
         return status()
+    if args.command == "stop-balrog":
+        names = [c.strip() for c in args.characters.split(",") if c.strip()]
+        write_json(HOME / "stop-balrog", names)
+        print(f"the queue service ends the live Balrog runs of {', '.join(names)} on its next tick")
+        return 0
     if args.command == "rebuild":
         HOME.mkdir(parents=True, exist_ok=True)
         (HOME / "rebuild").touch()

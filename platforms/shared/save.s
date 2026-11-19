@@ -1,6 +1,28 @@
 #importonce
 // save.s — Save/Load game system
 //
+// Module ownership:
+//   owner:
+//     !SAVE_IN_STORAGE_OVERLAY: resident/banked main on C64/Plus4/C128/Atari8;
+//       StorageOverlay on Apple II / CX16 / BBC Master.
+//     SAVE_IN_STORAGE_OVERLAY: StorageOverlay (`ovl.storage`) for the save/load
+//       engine (`save_game_impl`, `load_game_impl`), with persistent state kept
+//       in `:SaveStateResidentSegment()` and external probe/slot helpers kept in
+//       `:SaveProbeResidentSegment()`.
+//   lifetime:
+//     !SAVE_IN_STORAGE_OVERLAY: permanent resident (or StorageOverlay on A2/CX16/BBC).
+//     SAVE_IN_STORAGE_OVERLAY: transient StorageOverlay on save/load; state &
+//       probe segments stay permanently resident.
+//   callers:
+//     - !SAVE_IN_STORAGE_OVERLAY: `save_game`, `load_game` directly.
+//     - SAVE_IN_STORAGE_OVERLAY: port resident `save_game` / `load_game`
+//       trampolines load `OVL_STORAGE`, call `save_game_impl` / `load_game_impl`,
+//       and restore the caller overlay/bank on return.
+//     - Always resident when SAVE_IN_STORAGE_OVERLAY: `save_block_lo`..`rle_lit_buf`
+//       (`save_active_*_name_len`), `save_magic`, `storage_status.s`,
+//       `c64_restore_vic_bank0_after_serial`, `save_version_supported`,
+//       `save_file_exists`, `storage_file_exists`, `save_restore_channels`.
+//
 // Writes all game state to a sequential file on 1541 disk via KERNAL I/O.
 // Load restores state without consuming the savefile.
 // Uses 16-bit additive complement checksum for integrity.
@@ -10,41 +32,21 @@
 //   CHKOUT($FFC9), CHKIN($FFC6), CLRCHN($FFCC), CHROUT($FFD2),
 //   CHRIN($FFCF), READST($FFB7)
 
+#if !SAVE_STATE_SEGMENT_CUSTOM
+.macro SaveStateResidentSegment() {}
+.macro SaveStateRestoreSegment() {}
+#endif
+#if !SAVE_PROBE_SEGMENT_CUSTOM
+.macro SaveProbeResidentSegment() {}
+.macro SaveProbeRestoreSegment() {}
+#endif
+
 // ============================================================
 // Constants
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 .const SAVE_VERSION    = hal_storage_save_version
-.const SAVE_V1_VERSION = hal_storage_save_v1_version
-.const OLDEST_SAVE_VERSION = SAVE_V1_VERSION
-.const SAVE_FLOOR42_VERSION = SAVE_V1_VERSION
-.const SAVE_KNOWN96_VERSION = hal_storage_save_known96_version
-// Version where the 16-byte id_known_bits bitset layout was introduced.
-// Pinned: must not track SAVE_VERSION, or bumps misclassify current saves.
-.const SAVE_KNOWN_BITS_VERSION = hal_storage_save_known_bits_version
-
-// Pinned: first version writing the 20-byte (160-ID) known bitset.
-.const SAVE_KNOWN160_VERSION = hal_storage_save_known160_version
-.const SAVE_INV31_VERSION = hal_storage_save_inv31_version
-// First version writing 33 inventory slots (reserved cloak + secondary weapon).
-.const SAVE_INV33_VERSION = hal_storage_save_inv33_version
-.assert "Inventory slot-count versions are ordered", SAVE_INV31_VERSION < SAVE_INV33_VERSION && SAVE_INV33_VERSION <= SAVE_VERSION, true
-// Saves at or above this version store stat bases with race/class modifiers
-// already baked in; older saves get an exact one-time migration at load.
-.const SAVE_STATS_BAKED_VERSION = hal_storage_save_baked_stats_version
-// Saves at or above this version carry the door-state table block after the
-// post-known blocks; older saves load with all doors plain (count zeroed).
-.const SAVE_DOOR_STATE_VERSION = hal_storage_save_door_state_version
-#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
-.const SAVE_ROOM21_VERSION = $13
-.const LEGACY_MAX_ROOMS = 8
-#endif
-#if HAL_STORAGE_LEGACY_STORE12_MIGRATION
-// TODO(release): remove the 12-item store migration (load_read_post_known_store12).
-.const SAVE_STORE16_VERSION = hal_storage_save_store16_version
-.const LEGACY_STORE_MAX_ITEMS = 12
-.assert "12-item store saves are still loadable", SAVE_STORE16_VERSION > OLDEST_SAVE_VERSION && SAVE_STORE16_VERSION == SAVE_VERSION, true
-#endif
+.assert "Save Format V2 version is $22", SAVE_VERSION, $22
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -133,6 +135,9 @@
 // ============================================================
 // Scratch variables (before code so BRK is last in tests)
 // ============================================================
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveStateResidentSegment()
+#endif
 save_block_lo:  .byte 0         // Source address lo for save_write_block
 save_block_hi:  .byte 0         // Source address hi
 save_count_lo:  .byte 0         // Byte count lo
@@ -149,8 +154,6 @@ rle_lit_len:    .byte 0         // Literal buffer length
 #endif
 save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
-load_save_version: .byte 0
-load_floor_item_count: .byte 0
 #if !SAVE_SLOT_INDEX_EXTERNAL
 save_slot_index: .byte $ff       // $ff until a slot is selected; then 0-3
 #endif
@@ -175,6 +178,13 @@ rle_work_hi:    .byte >CREATURE_BASE  // RLE workspace pointer hi
 // Literal buffer for RLE (max 128 bytes)
 rle_lit_buf:    .fill 128, 0
 #endif
+#if SAVE_IN_STORAGE_OVERLAY
+save_active_read_name_len:  .byte hal_storage_save_read_name_len
+save_active_write_name_len: .byte hal_storage_save_write_name_len
+save_active_probe_name_len: .byte hal_storage_save_probe_name_len
+    :SaveStateRestoreSegment()
+    :SaveProbeResidentSegment()
+#endif
 
 save_magic:
 #if HAL_STORAGE_SAVE_MAGIC_ALT_SIGNATURE
@@ -186,6 +196,9 @@ save_magic:
 .assert "Magic is 8 bytes", * - save_magic, SAVE_MAGIC_SIZE
 
 #import "storage_status.s"
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveProbeRestoreSegment()
+#endif
 
 #if HAL_STORAGE_STREAM_STATUS_HELPERS || STORAGE_STREAM_STATUS_HELPER
 // save_stream_status
@@ -327,25 +340,18 @@ save_block_table_pre_inventory:
     :save_block_desc(ZP_STATE_START, ZP_STATE_SIZE)
     :save_block_desc(eff_fear_timer, 1)
     :save_block_desc(ZP_RNG_START, ZP_RNG_SIZE)
-    // Inventory/equipment: the 8 inventory arrays as one block. They are
-    // contiguous in stream order, so this is byte-identical to 8 per-array
-    // blocks of TOTAL_INV_SLOTS. It must stay the last entry: the loader
-    // reads every entry before it, then load_read_inventory_state.
+    // Inventory/equipment: the 8 inventory arrays as one contiguous block
+    // (`8 * TOTAL_INV_SLOTS`). Kept as the final entry so callers can inspect
+    // or adjust inventory blocks independently if needed.
 save_block_desc_inventory:
     :save_block_desc(inv_item_id, 8 * TOTAL_INV_SLOTS)
 save_block_table_pre_inventory_end:
 
 save_block_table_post_known:
-    :save_block_desc(potion_shuffle, 12)
-    :save_block_desc(scroll_shuffle, 12)
-    :save_block_desc(ring_shuffle, 4)
-    :save_block_desc(wand_shuffle, 5)
-    :save_block_desc(staff_shuffle, 5)
-    // The seven store arrays as one block: they are contiguous in stream
-    // order (store_inventory_data.s), so this matches seven per-array blocks.
-save_block_desc_stores:
-    :save_block_desc(si_item_id, 7 * STORE_TOTAL_SLOTS)
-save_block_table_post_stores:
+    :save_block_desc(potion_shuffle, FLAVOUR_COUNT)
+    // The eight store arrays as one block (`8 * STORE_TOTAL_SLOTS`, including
+    // `si_meta_hi` immediately after `si_meta` in store_inventory_data.s).
+    :save_block_desc(si_item_id, 8 * STORE_TOTAL_SLOTS)
     :save_block_desc(stairs_up_x, 7)
     :save_block_desc(room_count, 1)
     :save_block_desc(room_x, MAX_ROOMS * 6)
@@ -353,47 +359,20 @@ save_block_table_post_stores:
     :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 save_block_table_post_known_end:
 
-// Current-version-only block: door-state table (appended after post_known on
-// write; read is gated on SAVE_DOOR_STATE_VERSION so legacy streams stay
-// aligned).
+// Door-state and dungeon creature-species block (written & read unconditionally
+// in V2).
 save_block_table_door_state:
     :save_block_desc(door_state_count, 1 + (MAX_DOOR_STATES * 3))
 #if HAL_PLATFORM_MONSTER_CATALOG
-    // The species in each dungeon creature slot (monster_catalog.s); every
-    // loadable save carries it (OLDEST_SAVE_VERSION = SAVE_DOOR_STATE_VERSION).
+    // The species in each dungeon creature slot (monster_catalog.s).
     :save_block_desc(cat_slot_id_lo, cat_slot_id_end - cat_slot_id_lo)
 #endif
 save_block_table_door_state_end:
 
-#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
-save_block_table_post_known_room8:
-    :save_block_desc(potion_shuffle, 12)
-    :save_block_desc(scroll_shuffle, 12)
-    :save_block_desc(ring_shuffle, 4)
-    :save_block_desc(wand_shuffle, 5)
-    :save_block_desc(staff_shuffle, 5)
-    :save_block_desc(si_item_id, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_qty, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_p1, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)
-    :save_block_desc(si_meta, STORE_TOTAL_SLOTS)
-    :save_block_desc(stairs_up_x, 7)
-    :save_block_desc(room_count, 1)
-    :save_block_desc(room_x, LEGACY_MAX_ROOMS)
-    :save_block_desc(room_y, LEGACY_MAX_ROOMS)
-    :save_block_desc(room_w, LEGACY_MAX_ROOMS)
-    :save_block_desc(room_h, LEGACY_MAX_ROOMS)
-    :save_block_desc(room_lit, LEGACY_MAX_ROOMS)
-    :save_block_desc(room_type, LEGACY_MAX_ROOMS)
-    :save_block_desc(trap_count, 1 + (MAX_TRAPS * 3))
-    :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
-save_block_table_post_known_room8_end:
-#endif
-
 save_block_table_post_floor:
+#if !HAL_STORAGE_RECALL_CUSTOM
     :save_block_desc(recall_data_start, RECALL_DATA_SIZE)
+#endif
 #if !HAL_STORAGE_MAP_BANKED
     :save_block_desc(MAP_BASE, MAP_SIZE)
 #endif
@@ -404,6 +383,7 @@ save_block_table_floor_items_direct:
     :save_block_desc(fi_x, MAX_FLOOR_ITEMS)
     :save_block_desc(fi_y, MAX_FLOOR_ITEMS)
     :save_block_desc(fi_qty, MAX_FLOOR_ITEMS)
+    :save_block_desc(fi_meta_hi, MAX_FLOOR_ITEMS)
     :save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)
     :save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)
     :save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)
@@ -411,15 +391,10 @@ save_block_table_floor_items_direct_end:
 
 .const SAVE_BLOCK_PRE_INVENTORY_COUNT = (save_block_table_pre_inventory_end - save_block_table_pre_inventory) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_POST_KNOWN_COUNT = (save_block_table_post_known_end - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
-.const SAVE_BLOCK_PRE_STORES_COUNT = (save_block_desc_stores - save_block_table_post_known) / SAVE_BLOCK_DESC_SIZE
-.const SAVE_BLOCK_POST_STORES_COUNT = (save_block_table_post_known_end - save_block_table_post_stores) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_DOOR_STATE_COUNT = (save_block_table_door_state_end - save_block_table_door_state) / SAVE_BLOCK_DESC_SIZE
-#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
-.const SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT = (save_block_table_post_known_room8_end - save_block_table_post_known_room8) / SAVE_BLOCK_DESC_SIZE
-#endif
 .const SAVE_BLOCK_POST_FLOOR_COUNT = (save_block_table_post_floor_end - save_block_table_post_floor) / SAVE_BLOCK_DESC_SIZE
 .const SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT = (save_block_table_floor_items_direct_end - save_block_table_floor_items_direct) / SAVE_BLOCK_DESC_SIZE
-.const SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT = 4
+.const SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT = 5
 .const SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT = 3
 .const SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE = save_block_table_floor_items_direct + (SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT * SAVE_BLOCK_DESC_SIZE)
 .assert "Pre-inventory save block table entries are 4 bytes", SAVE_BLOCK_PRE_INVENTORY_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_inventory_end - save_block_table_pre_inventory
@@ -427,20 +402,16 @@ save_block_table_floor_items_direct_end:
 .assert "Inventory arrays contiguous in save stream order", inv_qty == inv_item_id + TOTAL_INV_SLOTS && inv_p1 == inv_item_id + 2 * TOTAL_INV_SLOTS && inv_to_hit == inv_item_id + 3 * TOTAL_INV_SLOTS && inv_to_dam == inv_item_id + 4 * TOTAL_INV_SLOTS && inv_to_ac == inv_item_id + 5 * TOTAL_INV_SLOTS && inv_flags == inv_item_id + 6 * TOTAL_INV_SLOTS && inv_ego == inv_item_id + 7 * TOTAL_INV_SLOTS, true
 .assert "Inventory array offsets fit the 8-bit load offset", 7 * TOTAL_INV_SLOTS < 256, true
 .assert "Post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_end - save_block_table_post_known
-.assert "The store block is one descriptor", save_block_table_post_stores - save_block_desc_stores, SAVE_BLOCK_DESC_SIZE
-.assert "The store block covers all seven store arrays", store_inventory_data_end - si_item_id, 7 * STORE_TOTAL_SLOTS
-#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
-.assert "C128 legacy room8 post-known save block table entries are 4 bytes", SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_known_room8_end - save_block_table_post_known_room8
-#endif
+.assert "The store block covers all eight store arrays", store_inventory_data_end - si_item_id, 8 * STORE_TOTAL_SLOTS
+.assert "Store slot count fits 7-bit signed aux loop", STORE_TOTAL_SLOTS <= 128, true
+.assert "Item page 1 covers all items through ITEM_TYPE_COUNT", (2 * ITEM_PAGE_SIZE) >= ITEM_TYPE_COUNT, true
+.assert "FI_EMPTY is not a valid Page-1 offset", (ITEM_TYPE_COUNT - ITEM_PAGE_SIZE) <= FI_EMPTY, true
 .assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
 .assert "Floor-item direct save block table entries are 4 bytes", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_floor_items_direct_end - save_block_table_floor_items_direct
 .assert "Stair coordinates and entry direction stay contiguous", level_entry_dir - stairs_up_x + 1, 7
 .assert "Room save arrays stay contiguous", room_type - room_x + MAX_ROOMS, MAX_ROOMS * 6
 .assert "Trap save arrays stay contiguous", trap_type - trap_count + MAX_TRAPS, 1 + (MAX_TRAPS * 3)
 .assert "Door-state save arrays stay contiguous", door_state_val - door_state_count + MAX_DOOR_STATES, 1 + (MAX_DOOR_STATES * 3)
-#if HAL_PLATFORM_MONSTER_CATALOG
-.assert "Catalog saves always carry the species table", SAVE_DOOR_STATE_VERSION, OLDEST_SAVE_VERSION
-#endif
 .assert "Floor-item direct save block table count is stable", SAVE_BLOCK_FLOOR_ITEMS_DIRECT_COUNT, SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT + SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
 .assert "Pre-inventory save block table count fits in one page", SAVE_BLOCK_PRE_INVENTORY_COUNT < 64, true
 .assert "Post-known save block table count fits in one page", SAVE_BLOCK_POST_KNOWN_COUNT < 64, true
@@ -454,7 +425,11 @@ save_block_table_floor_items_direct_end:
 #if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
 save_confirm_overwrite:
 save_confirm_probe_len:
+#if SAVE_IN_STORAGE_OVERLAY
+    lda save_active_probe_name_len
+#else
     lda #hal_storage_save_probe_name_len
+#endif
     sta save_count_lo
     lda #<hal_storage_save_probe_name
     sta save_block_lo
@@ -479,7 +454,11 @@ plus4_test_save_overwrite_prompt:
     bne !save_confirm_loop-
 !save_confirm_yes:
 save_confirm_write_len:
+#if SAVE_IN_STORAGE_OVERLAY
+    lda save_active_write_name_len
+#else
     lda #hal_storage_save_write_name_len
+#endif
     sta save_count_lo
     lda #<hal_storage_save_write_name
     sta save_block_lo
@@ -511,7 +490,11 @@ save_select_output_name_c64:
     rts
 #endif
 
+#if SAVE_IN_STORAGE_OVERLAY
+save_game_impl:
+#else
 save_game:
+#endif
 #if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda c128_media_state
     cmp #C128_MEDIA_SAVE
@@ -643,7 +626,11 @@ save_return_c64_with_carry:
     ldy save_block_hi
 #else
 save_open_write_len:
+#if SAVE_IN_STORAGE_OVERLAY
+    lda save_active_write_name_len
+#else
     lda #hal_storage_save_write_name_len
+#endif
     ldx #<hal_storage_save_write_name
     ldy #>hal_storage_save_write_name
 #endif
@@ -692,33 +679,35 @@ save_open_write_len:
     lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
     jsr save_write_block_table
 
-    // 3. Known-item state uses the V2 96-byte runway.
+    // 3. Known-item bitset (ID_KNOWN_BYTES).
     jsr save_write_known_items
 
     // 4. Remaining resident state through monster table.
-#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
-    jsr save_write_post_known_state
-#else
     lda #<save_block_table_post_known
     sta zp_ptr1
     lda #>save_block_table_post_known
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr save_write_block_table
-#endif
-    // 4b. Door-state table (current version only).
+
+    // 4b. Door-state and species table.
     jsr save_write_door_state
 
-    // 16. Floor items (logical 8-field layout, serialized from packed RAM)
+    // 16. Floor items (serialized with 9-bit paged ID + 6-bit ego metadata)
     jsr save_write_floor_items
 
     // 16b-17. Recall data plus non-banked map data.
+#if HAL_STORAGE_RECALL_CUSTOM
+    jsr save_write_recall_custom
+#endif
+#if !HAL_STORAGE_RECALL_CUSTOM || !HAL_STORAGE_MAP_BANKED
     lda #<save_block_table_post_floor
     sta zp_ptr1
     lda #>save_block_table_post_floor
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_POST_FLOOR_COUNT
     jsr save_write_block_table
+#endif
 #if HAL_STORAGE_MAP_BANKED
     jsr save_write_map_banked
 #endif
@@ -834,7 +823,11 @@ save_open_write_len:
 // Clobbers: A, X, Y, all scratch
 // ============================================================
 
+#if SAVE_IN_STORAGE_OVERLAY
+load_game_impl:
+#else
 load_game:
+#endif
     lda #LOAD_RESULT_IOERR
     sta load_result
     jsr disk_require_save_media
@@ -906,7 +899,11 @@ plus4_test_load_media_fail:
 
     // Open save file for sequential read via CHKIN/CHRIN
 load_open_read_len:
+#if SAVE_IN_STORAGE_OVERLAY
+    lda save_active_read_name_len
+#else
     lda #hal_storage_save_read_name_len
+#endif
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
     jsr SAVE_SETNAM
@@ -975,39 +972,30 @@ plus4_test_after_load_magic:
     bcs !load_version_ok+
     jmp !load_unsupported+
 !load_version_ok:
-    lda save_magic_buf + SAVE_MAGIC_SIZE - 1
-    sta load_save_version
 
     // --- Read all blocks in same order as save ---
 
-    // 2. Regular resident state before inventory/equipment.
+    // 2. Regular resident state including inventory/equipment (`8 * TOTAL_INV_SLOTS`).
     lda #<save_block_table_pre_inventory
     sta zp_ptr1
     lda #>save_block_table_pre_inventory
     sta zp_ptr1_hi
-    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT - 1
+    lda #SAVE_BLOCK_PRE_INVENTORY_COUNT
     jsr load_read_block_table
+    jsr save_sanitize_inv_ids
 
-    // 2b. Inventory/equipment state; its slot count depends on the version.
-    jsr load_read_inventory_state
-
-    // 3. Known-item state is 64 bytes in V1, 96 bytes in V2.
+    // 3. Known-item bitset (ID_KNOWN_BYTES).
     jsr load_read_known_items
 
     // 4. Remaining resident state through monster table.
-#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
-    jsr load_read_post_known_state
-#elif HAL_STORAGE_LEGACY_STORE12_MIGRATION
-    jsr load_read_post_known_store12
-#else
     lda #<save_block_table_post_known
     sta zp_ptr1
     lda #>save_block_table_post_known
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_POST_KNOWN_COUNT
     jsr load_read_block_table
-#endif
-    // 4b. Door-state table (SAVE_DOOR_STATE_VERSION+; older saves load plain).
+
+    // 4b. Door-state and species table.
     jsr load_read_door_state
     jsr save_sanitize_store_ids
 
@@ -1015,12 +1003,17 @@ plus4_test_after_load_magic:
     jsr load_read_floor_items
 
     // 16b-17. Recall data plus non-banked map data.
+#if HAL_STORAGE_RECALL_CUSTOM
+    jsr load_read_recall_custom
+#endif
+#if !HAL_STORAGE_RECALL_CUSTOM || !HAL_STORAGE_MAP_BANKED
     lda #<save_block_table_post_floor
     sta zp_ptr1
     lda #>save_block_table_post_floor
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_POST_FLOOR_COUNT
     jsr load_read_block_table
+#endif
 #if HAL_STORAGE_MAP_BANKED
     jsr load_read_map_banked
 #endif
@@ -1098,18 +1091,6 @@ c128_test_load_corrupt_unexpected_success:
 #endif
     // Close file after successful read
     jsr load_close_file_restore
-
-    // Legacy-save migration: fold race/class modifiers into raw stat bases
-    // exactly once with deterministic arithmetic. Skipped for new games
-    // (version 0) and current saves.
-    lda load_save_version
-    beq !load_stats_migrated+
-    cmp #SAVE_STATS_BAKED_VERSION
-    bcs !load_stats_migrated+
-    lda #0
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
-!load_stats_migrated:
 
     // Sync struct → ZP
     jsr player_search_clear_transient_state
@@ -1291,34 +1272,6 @@ load_read_block_table:
 !lrbt_done:
     rts
 
-load_read_floor_block_table:
-    sta zp_temp2
-    ldy #0
-!lrfbt_loop:
-    lda zp_temp2
-    beq !lrfbt_done+
-    lda (zp_ptr1),y
-    sta zp_ptr0
-    iny
-    lda (zp_ptr1),y
-    sta zp_ptr0_hi
-    iny
-    iny
-    iny
-    lda load_floor_item_count
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    tya
-    pha
-    jsr load_read_block
-    pla
-    tay
-    dec zp_temp2
-    jmp !lrfbt_loop-
-!lrfbt_done:
-    rts
-
 // ============================================================
 // save_write_block — Write N bytes from addr to file with checksum
 // Input: save_block_lo/hi = source addr, save_count_lo/hi = byte count
@@ -1334,11 +1287,17 @@ load_close_file_restore:
     rts
 
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveProbeResidentSegment()
+#endif
 c64_restore_vic_bank0_after_serial:
     lda hal_memory_vic_bank_select
     ora #hal_memory_vic_bank0_mask
     sta hal_memory_vic_bank_select
     rts
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveProbeRestoreSegment()
+#endif
 #endif
 
 save_write_block:
@@ -1497,220 +1456,126 @@ save_write_byte_raw:
     rts
 
 // ============================================================
-// load_read_inventory_state
-//
-// The inventory section is the 8 inventory arrays in declaration order
-// (inv_item_id..inv_ego), each as many bytes as the save version's slot
-// count: 30 before SAVE_INV31_VERSION (no amulet slot), 31 before
-// SAVE_INV33_VERSION (no reserved cloak or secondary weapon slot), then
-// TOTAL_INV_SLOTS. Each array is read to its own base, so a shorter stream
-// leaves the slots it does not cover empty (item_init_inventory runs first).
-// Clobbers: A, X, Y, zp_temp2, zp_ptr0/hi
-// ============================================================
-load_inv_slots: .byte 0             // slots per array in this save's stream
-load_read_inventory_state:
-    jsr item_init_inventory
-    ldx #TOTAL_INV_SLOTS
-    lda load_save_version
-    cmp #SAVE_INV33_VERSION
-    bcs !lris_slots+
-    ldx #LEGACY_INV31_SLOTS
-.if (SAVE_INV31_VERSION > OLDEST_SAVE_VERSION) {   // false on Atari: compiled out
-    cmp #SAVE_INV31_VERSION
-    bcs !lris_slots+
-    dex                             // LEGACY_INV30_SLOTS
-}
-!lris_slots:
-    stx load_inv_slots
-    lda #0
-    sta save_count_hi
-    sta zp_temp2                    // array offset; load_read_block keeps it
-!lris_loop:
-    clc
-    adc #<inv_item_id               // pointer recomputed for every array
-    sta zp_ptr0
-    lda #>inv_item_id
-    adc #0
-    sta zp_ptr0_hi
-    lda load_inv_slots
-    sta save_count_lo
-    jsr load_read_block
-    lda zp_temp2
-    clc
-    adc #TOTAL_INV_SLOTS
-    sta zp_temp2
-    cmp #<(8 * TOTAL_INV_SLOTS)     // exactly 8 passes for any 7*T < 256
-    bne !lris_loop-
-    ldx #TOTAL_INV_SLOTS
-    lda #<inv_item_id
-    ldy #>inv_item_id
-    jmp save_sanitize_id_table
-.assert "Pre-amulet inventory saves hold one slot fewer than 31-slot saves", LEGACY_INV31_SLOTS - 1, LEGACY_INV30_SLOTS
-
-// ============================================================
-// save_write_known_items / load_read_known_items
-//
-// Save V1 wrote 64 known-item bytes; V2/V3 wrote 96 (ITEM_ID_CAPACITY at the
-// time). The 128-ID era wrote a 16-byte id_known_bits bitset; the chest
-// catalog (135 implemented, capacity 160) writes 20 bytes. Legacy loads
-// stream the old bytes and pack them into the bitset; old bitset loads
-// stream 16 bytes and default the appended chest IDs.
-// ============================================================
-save_write_known_items:
-    :save_block(id_known_bits, ID_KNOWN_BYTES)
-    rts
-
-// ============================================================
-// save_sanitize_id_table — Corrupt/newer-save hardening (chest design step
-// 4): any loaded item ID that is neither FI_EMPTY nor an implemented catalog
-// ID (>= ITEM_TYPE_COUNT) resets to empty, so name/category/weight table
-// indexing can never run out of bounds. Protects all future catalog growth.
-// Input:  A = ID table lo, Y = ID table hi, X = slot count
-// Clobbers: A, Y, zp_ptr0
+// save_sanitize_id_table — Corrupt/newer-save hardening for paged 9-bit
+// item IDs: any slot that is neither FI_EMPTY (with page bit clear) nor a
+// valid catalog ID (< ITEM_TYPE_COUNT) resets lo = FI_EMPTY and hi = 0 so
+// catalog table lookups can never run out of bounds.
+// Input:  zp_ptr0/hi = slot_lo table, zp_ptr1/hi = meta_hi/ego table,
+//         A = slot count (1..255)
+// Clobbers: A, Y
 // ============================================================
 save_sanitize_id_table:
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    txa
     tay
+    beq !ssit_done+
 !ssit_loop:
     dey
-    bmi !ssit_done+
+    lda (zp_ptr1),y
+    and #ITEM_PAGE_BIT
+    bne !ssit_page1+
     lda (zp_ptr0),y
     cmp #FI_EMPTY
-    beq !ssit_loop-
-    cmp #ITEM_TYPE_COUNT
-    bcc !ssit_loop-
+    beq !ssit_next+
+    cmp #ITEM_PAGE_SIZE
+    bcc !ssit_next+
+    bcs !ssit_clear+
+!ssit_page1:
+    lda (zp_ptr0),y
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcc !ssit_next+
+!ssit_clear:
     lda #FI_EMPTY
     sta (zp_ptr0),y
-    jmp !ssit_loop-
+    lda #0
+    sta (zp_ptr1),y
+!ssit_next:
+    tya
+    bne !ssit_loop-
 !ssit_done:
     rts
 
-// save_sanitize_store_ids — Same hardening for the store slot table.
-// Platforms with HAL_PLATFORM_AUX_PERSISTENT_DATA (Apple IIe / CX16) keep
-// si_item_id in aux/banked RAM, so their loop uses the aux thunks.
+save_sanitize_inv_ids:
+    lda #<inv_item_id
+    sta zp_ptr0
+    lda #>inv_item_id
+    sta zp_ptr0_hi
+    lda #<inv_ego
+    sta zp_ptr1
+    lda #>inv_ego
+    sta zp_ptr1_hi
+    lda #TOTAL_INV_SLOTS
+    jmp save_sanitize_id_table
+
+save_sanitize_floor_ids:
+    lda #<fi_item_id
+    sta zp_ptr0
+    lda #>fi_item_id
+    sta zp_ptr0_hi
+    lda #<fi_meta_hi
+    sta zp_ptr1
+    lda #>fi_meta_hi
+    sta zp_ptr1_hi
+    lda #MAX_FLOOR_ITEMS
+    jmp save_sanitize_id_table
+
+// save_sanitize_store_ids — Same paged-ID hardening for the store slot table.
+// Platforms with HAL_PLATFORM_AUX_PERSISTENT_DATA (Apple IIe / CX16 / BBC
+// Master 128) keep si_item_id/si_meta_hi in aux/banked RAM via AuxReadX.
 save_sanitize_store_ids:
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     ldx #STORE_TOTAL_SLOTS - 1
 !sssi_loop:
+    :AuxReadX(si_meta_hi)
+    and #ITEM_PAGE_BIT
+    bne !sssi_page1+
     :AuxReadX(si_item_id)
     cmp #FI_EMPTY
     beq !sssi_next+
-    cmp #ITEM_TYPE_COUNT
+    cmp #ITEM_PAGE_SIZE
     bcc !sssi_next+
+    bcs !sssi_clear+
+!sssi_page1:
+    :AuxReadX(si_item_id)
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcc !sssi_next+
+!sssi_clear:
     lda #FI_EMPTY
     :AuxWriteX(si_item_id)
+    lda #0
+    :AuxWriteX(si_meta_hi)
 !sssi_next:
     dex
     bpl !sssi_loop-
     rts
 #else
-    ldx #STORE_TOTAL_SLOTS
     lda #<si_item_id
-    ldy #>si_item_id
+    sta zp_ptr0
+    lda #>si_item_id
+    sta zp_ptr0_hi
+    lda #<si_meta_hi
+    sta zp_ptr1
+    lda #>si_meta_hi
+    sta zp_ptr1_hi
+    lda #STORE_TOTAL_SLOTS
     jmp save_sanitize_id_table
 #endif
 
+// ============================================================
+// save_write_known_items / load_read_known_items
+//
+// V2 serializes the packed 47-byte `id_known_bits` bitset (`ID_KNOWN_BYTES`)
+// covering all 361 catalog IDs (`0..360`). Fixed-description categories are
+// defensively refreshed after load via `item_refresh_fixed_known`.
+// ============================================================
+save_write_known_items:
+    :save_block(id_known_bits, ID_KNOWN_BYTES)
+    rts
+
 load_read_known_items:
-    lda load_save_version
-    cmp #SAVE_KNOWN160_VERSION
-    bcs !lrki_current+
-    cmp #SAVE_KNOWN_BITS_VERSION
-    bcc !lrki_legacy+
-
-    // Old bitset saves: 16 bytes cover IDs 0-127. Clear the appended
-    // capacity bytes, then default the chest rows (128+) from it_category.
-    :load_block(id_known_bits, 16)
-    ldx #16
-    lda #0
-!lrki_old_bits_clear:
-    sta id_known_bits,x
-    inx
-    cpx #ID_KNOWN_BYTES
-    bcc !lrki_old_bits_clear-
-    ldx #128
-    jmp !lrki_defaults+
-
-!lrki_current:
     :load_block(id_known_bits, ID_KNOWN_BYTES)
-    // Fixed-description items are always known (item_init_identification):
-    // set them again, so an item added since the save is not left unknown.
-    ldx #0
-    beq !lrki_defaults+         // always
-
-!lrki_legacy:
-    cmp #SAVE_KNOWN96_VERSION
-    bcc !lrki_v1+
-    // V2/V3: 96 legacy bytes staged, then packed into the bitset
-    :load_block(idk_legacy_stage, 96)
-    jsr idk_clear_bits
-    jsr idk_pack_stage
-    ldx #96
-    jmp !lrki_defaults+
-
-!lrki_v1:
-    // V1: 64 legacy bytes staged, then packed into the bitset
-    :load_block(idk_legacy_stage, LEGACY_ITEM_TYPE_COUNT)
-    jsr idk_clear_bits
-    jsr idk_pack_stage
-    ldx #LEGACY_ITEM_TYPE_COUNT
-
-!lrki_defaults:
-    // X = first ID beyond the loaded legacy range (0 for a current save).
-    // Fixed-description classes from X on are set known (it_category);
-    // randomized-appearance classes keep what was loaded (unknown past a
-    // legacy range); IDs past ITEM_TYPE_COUNT stay cleared (unknown).
-    cpx #ITEM_TYPE_COUNT
-    bcs !lrki_def_done+
-!lrki_def_loop:
-    ldy it_category,x
-    cpy #ICAT_POTION
-    bcc !lrki_def_known+
-    cpy #ICAT_AMULET
-    bcs !lrki_def_known+    // AMULET, CHEST, and later fixed classes
-    cpy #ICAT_BOOK
-    beq !lrki_def_known+
-    bne !lrki_def_next+
-!lrki_def_known:
-    jsr id_known_set
-!lrki_def_next:
-    inx
-    cpx #ITEM_TYPE_COUNT
-    bcc !lrki_def_loop-
-!lrki_def_done:
-    rts
-
-// idk_clear_bits — Zero the known-item bitset before a legacy load packs it.
-// Clobbers: A, X
-idk_clear_bits:
-    ldx #ID_KNOWN_BYTES - 1
-    lda #0
-!icb_loop:
-    sta id_known_bits,x
-    dex
-    bpl !icb_loop-
-    rts
-
-// idk_pack_stage — Set bits for every nonzero staged legacy byte.
-// Clobbers: A, X, Y
-idk_pack_stage:
-    ldx #0
-!ips_loop:
-    lda idk_legacy_stage,x
-    beq !ips_skip+
-    jsr id_known_set
-!ips_skip:
-    inx
-    cpx #96
-    bcc !ips_loop-
-    rts
-
-idk_legacy_stage: .fill 96, 0
+    jmp item_refresh_fixed_known
 
 // ============================================================
-// Door-state table: written unconditionally at the current version; read only
-// when the stream version carries it, so older saves stay block-aligned.
+// Door-state and species table (unconditional in V2)
 // ============================================================
 save_write_door_state:
     lda #<save_block_table_door_state
@@ -1723,18 +1588,12 @@ save_write_door_state:
 load_read_door_state:
     lda #0
     sta door_state_count
-    lda load_save_version
-    cmp #SAVE_DOOR_STATE_VERSION
-    bcc !lrds_done+
     lda #<save_block_table_door_state
     sta zp_ptr1
     lda #>save_block_table_door_state
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_DOOR_STATE_COUNT
     jsr load_read_block_table
-#if HAL_PLATFORM_MONSTER_CATALOG
-    jsr catalog_refetch_slots
-#endif
     lda door_state_count
     cmp #MAX_DOOR_STATES + 1
     bcc !lrds_done+
@@ -1745,128 +1604,9 @@ load_read_door_state:
     rts
 
 // ============================================================
-// save_write_post_known_state / load_read_post_known_state
-//
-// C128 save V4 ($13) expands room metadata from 8 to 21 entries so the larger
-// dungeon can keep enough rooms to break up upstream-sized mineral streamers.
-// Older C128 saves still carry the 8-room block; read that exact shape so the
-// following trap/monster/map/checksum stream remains aligned.
-// ============================================================
-#if HAL_STORAGE_LEGACY_ROOM8_MIGRATION
-save_write_post_known_state:
-    lda #<save_block_table_post_known
-    sta zp_ptr1
-    lda #>save_block_table_post_known
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_POST_KNOWN_COUNT
-    jmp save_write_block_table
-
-load_read_post_known_state:
-    lda load_save_version
-    cmp #SAVE_ROOM21_VERSION
-    bcs !lrpks_current+
-    jsr load_clear_room_metadata_tail
-    lda #<save_block_table_post_known_room8
-    sta zp_ptr1
-    lda #>save_block_table_post_known_room8
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_POST_KNOWN_ROOM8_COUNT
-    jmp load_read_block_table
-!lrpks_current:
-    lda #<save_block_table_post_known
-    sta zp_ptr1
-    lda #>save_block_table_post_known
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_POST_KNOWN_COUNT
-    jmp load_read_block_table
-
-load_clear_room_metadata_tail:
-    ldx #LEGACY_MAX_ROOMS
-    lda #0
-!lcrmt_loop:
-    sta room_x,x
-    sta room_y,x
-    sta room_w,x
-    sta room_h,x
-    sta room_lit,x
-    sta room_type,x
-    inx
-    cpx #MAX_ROOMS
-    bne !lcrmt_loop-
-    rts
-#endif
-
-// ============================================================
-// load_read_post_known_store12 — The post-known blocks, from a save of either
-// store size. TODO(release): remove this migration with its C64 define.
-//
-// Saves before SAVE_STORE16_VERSION hold 12 items a store. Each array's eight
-// 12-byte store rows are read into the first 12 slots of its 16-slot rows;
-// the four new slots are empty (id FI_EMPTY, other fields 0). The arrays are
-// contiguous, so the destination simply advances 4 bytes after each row.
-// ============================================================
-#if HAL_STORAGE_LEGACY_STORE12_MIGRATION
-.const STORE12_ROWS = 7 * STORE_COUNT
-.assert "The 12-item migration reads every store of every array", STORE12_ROWS, 7 * 8
-load_read_post_known_store12:
-    lda #<save_block_table_post_known
-    sta zp_ptr1
-    lda #>save_block_table_post_known
-    sta zp_ptr1_hi
-    lda load_save_version
-    cmp #SAVE_STORE16_VERSION
-    lda #SAVE_BLOCK_POST_KNOWN_COUNT
-    bcs !lrpk12_tail+               // current save: every block as written
-    lda #SAVE_BLOCK_PRE_STORES_COUNT
-    jsr load_read_block_table
-
-    lda #<si_item_id
-    sta zp_ptr0
-    lda #>si_item_id
-    sta zp_ptr0_hi
-    lda #STORE12_ROWS
-    sta zp_temp2
-!lrpk12_row:
-    lda #LEGACY_STORE_MAX_ITEMS
-    sta save_count_lo
-    lda #0
-    sta save_count_hi
-    jsr load_read_block             // zp_ptr0 ends past the 12 bytes
-    lda zp_temp2
-    cmp #STORE12_ROWS - STORE_COUNT + 1
-    lda #FI_EMPTY                   // the first array is si_item_id
-    bcs !lrpk12_pad+
-    lda #0
-!lrpk12_pad:
-    ldy #STORE_MAX_ITEMS - LEGACY_STORE_MAX_ITEMS - 1
-!lrpk12_pad_loop:
-    :SaveByteWrite_ptr0_y()
-    dey
-    bpl !lrpk12_pad_loop-
-    lda zp_ptr0
-    clc
-    adc #STORE_MAX_ITEMS - LEGACY_STORE_MAX_ITEMS
-    sta zp_ptr0
-    bcc !lrpk12_next+
-    inc zp_ptr0_hi
-!lrpk12_next:
-    dec zp_temp2
-    bne !lrpk12_row-
-
-    lda #<save_block_table_post_stores
-    sta zp_ptr1
-    lda #>save_block_table_post_stores
-    sta zp_ptr1_hi
-    lda #SAVE_BLOCK_POST_STORES_COUNT
-!lrpk12_tail:
-    jmp load_read_block_table
-#endif
-
-// ============================================================
-// save_write_floor_items — Serialize packed floor-item RAM as the legacy
-// logical field layout:
-//   id, x, y, qty, qty_hi, p1, flags, ego
-// This preserves item semantics while allowing a denser in-RAM layout.
+// save_write_floor_items — Serialize floor-item RAM (`MAX_FLOOR_ITEMS`
+// slots): HEAD (fi_item_id, fi_x, fi_y, fi_qty, fi_meta_hi), qty_hi, p1,
+// raw fi_meta flags, and STAT_TABLE (fi_to_hit, fi_to_dam, fi_to_ac).
 // ============================================================
 save_write_floor_items:
     lda #<save_block_table_floor_items_direct
@@ -1899,21 +1639,11 @@ save_write_floor_items:
     ldx #0
 !swfi_flags:
     cpx #MAX_FLOOR_ITEMS
-    bcs !swfi_ego_start+
-    jsr floor_item_get_flags_x
+    bcs !swfi_to_hit_start+
+    lda fi_meta,x
     jsr save_write_byte
     inx
     jmp !swfi_flags-
-
-!swfi_ego_start:
-    ldx #0
-!swfi_ego:
-    cpx #MAX_FLOOR_ITEMS
-    bcs !swfi_to_hit_start+
-    jsr floor_item_get_ego_x
-    jsr save_write_byte
-    inx
-    jmp !swfi_ego-
 
 !swfi_to_hit_start:
     lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE
@@ -2113,19 +1843,11 @@ load_unstage_to_ptr0_c128:
 #endif
 
 // ============================================================
-// load_read_floor_items — Read floor items from savefile into the packed
-// in-RAM floor table. Supports both the prior 32-slot save layout and the
-// new 42-slot layout via the version byte already validated in load_game.
+// load_read_floor_items — Read V2 floor items into packed RAM (`MAX_FLOOR_ITEMS`
+// slots): HEAD (fi_item_id, fi_x, fi_y, fi_qty, fi_meta_hi), qty_hi, p1, raw
+// fi_meta flags, and STAT_TABLE (fi_to_hit, fi_to_dam, fi_to_ac), then sanitize.
 // ============================================================
 load_read_floor_items:
-    lda #MAX_FLOOR_ITEMS
-    sta load_floor_item_count
-    lda load_save_version
-    jsr save_version_uses_legacy_floor_layout
-    bcc !lrfi_count_ready+
-    lda #32
-    sta load_floor_item_count
-!lrfi_count_ready:
     jsr item_init_floor
 
     lda #<save_block_table_floor_items_direct
@@ -2133,16 +1855,20 @@ load_read_floor_items:
     lda #>save_block_table_floor_items_direct
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_FLOOR_ITEMS_HEAD_COUNT
-    jsr load_read_floor_block_table
+    jsr load_read_block_table
 
     ldx #0
 !lrfi_qty_hi:
-    cpx load_floor_item_count
+    cpx #MAX_FLOOR_ITEMS
     bcs !lrfi_p1_start+
     jsr load_read_byte
     pha
+    .assert "All 20 gold types occupy Page 0 0..19", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_MITHRIL == 19 && ITEM_PAGE_GOLD_MITHRIL == 0, true
+    lda fi_meta_hi,x
+    and #ITEM_PAGE_BIT
+    bne !lrfi_qty_hi_skip+          // Page 1 items never match gold IDs 0..19
     lda fi_item_id,x
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     bcs !lrfi_qty_hi_skip+
     pla
     sta fi_p1,x
@@ -2156,13 +1882,17 @@ load_read_floor_items:
 !lrfi_p1_start:
     ldx #0
 !lrfi_p1:
-    cpx load_floor_item_count
+    cpx #MAX_FLOOR_ITEMS
     bcs !lrfi_flags_start+
     jsr load_read_byte
     pha
+    lda fi_meta_hi,x
+    and #ITEM_PAGE_BIT
+    bne !lrfi_p1_store+             // Page 1 items always keep loaded p1
     lda fi_item_id,x
-    cmp #2
+    cmp #(ITEM_SLOT_GOLD_MITHRIL + 1)
     bcc !lrfi_p1_skip+
+!lrfi_p1_store:
     pla
     sta fi_p1,x
     jmp !lrfi_p1_next+
@@ -2175,71 +1905,94 @@ load_read_floor_items:
 !lrfi_flags_start:
     ldx #0
 !lrfi_flags:
-    cpx load_floor_item_count
-    bcs !lrfi_ego_start+
+    cpx #MAX_FLOOR_ITEMS
+    bcs !lrfi_stats+
     jsr load_read_byte
-    asl
-    asl
-    asl
     sta fi_meta,x
     inx
     jmp !lrfi_flags-
 
-!lrfi_ego_start:
-    ldx #0
-!lrfi_ego:
-    cpx load_floor_item_count
-    bcs !lrfi_stats+
-    jsr load_read_byte
-    and #FI_META_EGO_MASK
-    ora fi_meta,x
-    sta fi_meta,x
-    inx
-    jmp !lrfi_ego-
 !lrfi_stats:
     lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE
     sta zp_ptr1
     lda #>SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE
     sta zp_ptr1_hi
     lda #SAVE_BLOCK_FLOOR_ITEMS_STAT_COUNT
-    jsr load_read_floor_block_table
-!lrfi_done:
-    ldx #MAX_FLOOR_ITEMS
-    lda #<fi_item_id
-    ldy #>fi_item_id
-    jmp save_sanitize_id_table
+    jsr load_read_block_table
+    jmp save_sanitize_floor_ids
+
+#if HAL_STORAGE_RECALL_CUSTOM
+// ============================================================
+// save_write_recall_custom / load_read_recall_custom
+//
+// Stream monster recall (RECALL_DATA_SIZE bytes) byte-by-byte through
+// hal_recall_read_byte / hal_recall_write_byte using 16-bit recall_off_lo/hi
+// on platforms keeping recall under I/O or shadow RAM (e.g. C64 $D700,
+// BBC Master LYNNE $3F80). Both hal_recall_* calls preserve X, while
+// save_write_byte / load_read_byte leave recall_off_lo/hi untouched.
+// ============================================================
+save_write_recall_custom:
+    lda #0
+    sta recall_off_lo
+    sta recall_off_hi
+!swrc_loop:
+    jsr hal_recall_read_byte
+    jsr save_write_byte
+    inc recall_off_lo
+    bne !swrc_chk+
+    inc recall_off_hi
+!swrc_chk:
+    lda recall_off_hi
+    cmp #>RECALL_DATA_SIZE
+    bcc !swrc_loop-
+    bne !swrc_done+
+    lda recall_off_lo
+    cmp #<RECALL_DATA_SIZE
+    bcc !swrc_loop-
+!swrc_done:
+    rts
+
+load_read_recall_custom:
+    lda #0
+    sta recall_off_lo
+    sta recall_off_hi
+!lrrc_loop:
+    jsr load_read_byte
+    jsr hal_recall_write_byte
+    inc recall_off_lo
+    bne !lrrc_chk+
+    inc recall_off_hi
+!lrrc_chk:
+    lda recall_off_hi
+    cmp #>RECALL_DATA_SIZE
+    bcc !lrrc_loop-
+    bne !lrrc_done+
+    lda recall_off_lo
+    cmp #<RECALL_DATA_SIZE
+    bcc !lrrc_loop-
+!lrrc_done:
+    rts
+#endif
 
 // ============================================================
-// save_version_supported — Accept any historical save version this tree
-// has emitted on the current platform.
+// save_version_supported — Accept only SAVE_VERSION ($22); reject all
+// older and future save versions with carry clear (LOAD_RESULT_UNSUPPORTED).
 // Input: A = save version byte
 // Output: carry set = supported, carry clear = unsupported
 // ============================================================
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveProbeResidentSegment()
+#endif
 save_version_supported:
-    cmp #OLDEST_SAVE_VERSION
-    bcc !svs_unsupported+
-    cmp #(SAVE_VERSION + 1)
-    bcs !svs_unsupported+
-    sec
-    rts
-!svs_unsupported:
+    cmp #SAVE_VERSION
     clc
-    rts
-
-// ============================================================
-// save_version_uses_legacy_floor_layout — Older supported saves still carry
-// the pre-expanded 32-slot floor-item layout.
-// Input: A = save version byte
-// Output: carry set = legacy 32-slot floor layout, carry clear = current layout
-// ============================================================
-save_version_uses_legacy_floor_layout:
-    cmp #SAVE_FLOOR42_VERSION
-    bcc !svl_legacy+
-    clc
-    rts
-!svl_legacy:
+    bne !svs_done+
     sec
+!svs_done:
     rts
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveProbeRestoreSegment()
+#endif
 
 #if HAL_STORAGE_STREAM_CHUNKED && HAL_STORAGE_MAP_BANKED
 // ============================================================
@@ -2249,7 +2002,6 @@ save_version_uses_legacy_floor_layout:
 // Apple II implements the same contract in platforms/apple2/save_stream.s
 // (aux-RAM map through the p0 thunk instead of MMU banks).
 // ============================================================
-save_write_map_banked:
 // save_map_span_c128 — zp_ptr0 = MAP_BASE, save_count = MAP_SIZE (both map
 // streams start here).
 save_map_span_c128:
@@ -2263,6 +2015,7 @@ save_map_span_c128:
     sta save_count_hi
     rts
 
+save_write_map_banked:
 save_write_map_c128:
     jsr save_map_span_c128
 !swm_loop:
@@ -2359,9 +2112,16 @@ load_unstage_map_c128:
 // Output: carry set = file exists, carry clear = file not present
 // Clobbers: A, X, Y
 // ============================================================
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveProbeResidentSegment()
+#endif
 save_file_exists:
 save_file_exists_read_len:          // save_slot_apply_name patches the length
+#if SAVE_IN_STORAGE_OVERLAY
+    lda save_active_read_name_len
+#else
     lda #hal_storage_save_read_name_len
+#endif
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
 #if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
@@ -2470,6 +2230,9 @@ save_restore_channels:
 #else
     jsr SAVE_CLRCHN
     rts
+#endif
+#if SAVE_IN_STORAGE_OVERLAY
+    :SaveProbeRestoreSegment()
 #endif
 
 // ============================================================

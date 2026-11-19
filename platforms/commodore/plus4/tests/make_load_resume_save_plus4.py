@@ -4,31 +4,28 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-# The product build plays the monster catalog: its saves are version $0A and
-# older ones are refused (hal/storage_policy.s), so the fixture is written in
-# that format: 33 inventory slots, the 20-byte known-item bitset, the
-# door-state block followed by the species table, and 40 creature rows of
-# recall (save.s, as the C128 fixture).
-SAVE_VERSION = 0x0A
-ID_KNOWN_BYTES = 20
+# The Plus/4 product build writes Save Format V2 ($22; older saves refused):
+# 34 inventory slots, 47-byte known-item bitset, 174-byte flavour shuffles,
+# 8 store arrays, door-state + species tables, 11 floor-item arrays, and 279
+# creature rows of recall (1,116 B, hal/storage_policy.s, platforms/shared/save.s).
+SAVE_VERSION = 0x22
+ID_KNOWN_BYTES = 47
 MAX_DOOR_STATES = 16
 CATALOG_SLOTS = 32
 
-PL_STRUCT_SIZE = 111
-ITEM_TYPE_COUNT = 96
-ITEM_ID_CAPACITY = 96
+PL_STRUCT_SIZE = 114
 STORE_TOTAL_SLOTS = 128
 MAX_ROOMS = 8
 MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
-RECALL_DATA_SIZE = 160   # 40 creature rows x 4 (core/recall_defs.s)
+RECALL_DATA_SIZE = 1116   # 279 creature rows x 4 (core/recall_defs.s)
 # Current Plus/4 product load gate consumes this many map bytes before reading
 # the checksum. Keep this explicit until the storage HAL owns per-platform
 # record layout instead of inheriting the C64 save shape implicitly.
-LOAD_SAVE_MAP_SIZE = 3676
-TOTAL_INV_SLOTS = 33
+LOAD_SAVE_MAP_SIZE = 3840
+TOTAL_INV_SLOTS = 34
 
 PL_LEVEL = 19
 PL_DLEVEL = 20
@@ -66,17 +63,17 @@ def main() -> int:
     payload.extend(block(1))    # eff_fear_timer
     payload.extend(block(4))    # rng
     item_ids = block(TOTAL_INV_SLOTS)
-    item_ids[31] = item_ids[32] = 0xFF   # reserved cloak and secondary: empty
+    item_ids[32] = item_ids[33] = 0xFF   # cloak and secondary: empty
     payload.extend(item_ids)
     for _ in range(7):
         payload.extend(block(TOTAL_INV_SLOTS))
     payload.extend(block(ID_KNOWN_BYTES))
-    payload.extend(block(12))  # potion_shuffle
-    payload.extend(block(12))  # scroll_shuffle
-    payload.extend(block(4))   # ring_shuffle
-    payload.extend(block(5))   # wand_shuffle
-    payload.extend(block(5))   # staff_shuffle
-    for _ in range(7):
+    payload.extend(block(46))  # potion_shuffle
+    payload.extend(block(49))  # scroll_shuffle
+    payload.extend(block(30))  # ring_shuffle
+    payload.extend(block(24))  # wand_shuffle
+    payload.extend(block(25))  # staff_shuffle
+    for _ in range(8):
         payload.extend(block(STORE_TOTAL_SLOTS))
     payload.extend(block(6))  # stairs
     payload.extend(block(1))  # level_entry_dir

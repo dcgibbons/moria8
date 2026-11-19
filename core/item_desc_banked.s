@@ -5,6 +5,7 @@
 // $E000 overlays as long as callers have KERNAL banked out.
 
 #import "store_meta_macros.s"
+#import "itemdesc_store_slot_macro.s"
 
 // itemdesc_put_inv_slot — Print inventory/equipment item description.
 // Input: X = inventory/equipment slot index.
@@ -29,39 +30,37 @@ itemdesc_put_inv_slot:
     sta itemdesc_ego
     jmp itemdesc_put_staged
 
+#if !ITEMDESC_STORE_SLOT_DUPLICATED
 // itemdesc_put_store_slot — Print store/home item description.
 // Input: X = absolute store/home slot index.
 // Clobbers: A, X, Y, zp_ptr0
 itemdesc_put_store_slot:
-    :AuxReadX(si_item_id)
-    sta itemdesc_item_id
-    lda #1
-    sta itemdesc_qty
-    :AuxReadX(si_p1)
-    sta itemdesc_p1
-    :AuxReadX(si_to_hit)
-    sta itemdesc_to_hit
-    :AuxReadX(si_to_dam)
-    sta itemdesc_to_dam
-    :AuxReadX(si_to_ac)
-    sta itemdesc_to_ac
-    :LoadStoreFlagsX()
-    sta itemdesc_flags
-    :LoadStoreEgoX()
-    sta itemdesc_ego
-    jmp itemdesc_put_staged
+    :ItemdescPutStoreSlotBody()
+#endif
 
 
 // itemdesc_put_staged — Print staged item name, ego, sensed marker, and stats.
 // Uses itemdesc_* fields. Callable from $F000 banked code and $E000 overlays.
 itemdesc_put_staged:
     jsr itemdesc_put_qty_prefix
+    lda itemdesc_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     lda itemdesc_item_id
-    tax
-    lda it_category,x
+    jsr item_get_category_a
     cmp #ICAT_DIGGING
     bne !idps_not_tool+
+    .assert "Pick and Shovel live on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0, true
+    bit item_cur_page
+    bvs !idps_not_tool+
+    lda itemdesc_item_id
+    cmp #ITEM_SLOT_PICK
+    beq !idps_legacy_tool+
+    cmp #ITEM_SLOT_SHOVEL
+    bne !idps_not_tool+
+!idps_legacy_tool:
     lda itemdesc_ego
+    and #EGO_ID_MASK
     beq !idps_not_tool+
     cmp #EGO_TYPE_COUNT
     bcs !idps_not_tool+
@@ -77,6 +76,7 @@ itemdesc_put_staged:
     jsr item_get_name_ptr
     jsr hal_screen_put_string
     lda itemdesc_ego
+    and #EGO_ID_MASK
     cmp #EGO_TYPE_COUNT
     bcc !idps_valid_ego+
     lda #0
@@ -112,24 +112,30 @@ itemdesc_put_stats:
     // A light's fuel shows whether identified or not (VMS "with %P5 turns
     // of light", Umoria itemDescription): a burnt-out torch looked like a
     // fresh one until 2026-10-26.
-    ldx itemdesc_item_id
-    lda it_category,x
+    lda itemdesc_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda itemdesc_item_id
+    jsr item_get_category_a
     cmp #ICAT_LIGHT
     bne !idps_not_light+
     jmp !idps_turns+
 !idps_not_light:
+    tay
     lda itemdesc_flags
     and #IF_IDENTIFIED
     bne !idps_identified+
     rts
 !idps_identified:
-    lda it_category,x
+    tya
     cmp #ICAT_WEAPON
     beq !idps_weapon+
+    cmp #ICAT_CLOAK
+    beq !idps_armor_tramp+
     cmp #ICAT_ARMOR
     bcc !idps_not_armor+
     cmp #ICAT_BOOTS + 1
-    bcc !idps_armor+
+    bcc !idps_armor_tramp+
 !idps_not_armor:
     cmp #ICAT_RING
     beq !idps_ring+
@@ -144,13 +150,14 @@ itemdesc_put_stats:
     jmp !idps_charges+
 !idps_not_staff:
     rts
+!idps_armor_tramp:
+    jmp !idps_armor+
 !idps_amulet_tramp:
     jmp !idps_ring_p1+
 !idps_weapon:
     lda itemdesc_to_hit
     ora itemdesc_to_dam
-    bne !idps_weapon_has_bonus+
-    rts
+    beq !idps_ring_p1+
 !idps_weapon_has_bonus:
     lda #$20
     jsr hal_screen_put_char
@@ -163,17 +170,19 @@ itemdesc_put_stats:
     lda itemdesc_to_dam
     jsr itemdesc_put_signed
     lda #$29
-    jmp hal_screen_put_char
+    jsr hal_screen_put_char
+    jmp !idps_ring_p1+
 !idps_ring:
-    lda itemdesc_item_id
-    cmp #23
-    beq !idps_ring_ac+
-    cmp #24
-    beq !idps_ring_p1+
-    rts
-!idps_ring_ac:
+    .assert "All rings live on Page 1", ITEM_PAGE_RING_OF_STRENGTH == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_SLAYING == ITEM_PAGE_BIT, true
+    bit item_cur_page
+    bvc !idps_ring_done+
     lda itemdesc_to_ac
     bne !idps_ring_ac_has_bonus+
+    lda itemdesc_to_hit
+    ora itemdesc_to_dam
+    bne !idps_weapon-
+    jmp !idps_ring_p1+
+!idps_ring_done:
     rts
 !idps_ring_ac_has_bonus:
     lda #$20
@@ -183,7 +192,8 @@ itemdesc_put_stats:
     lda itemdesc_to_ac
     jsr itemdesc_put_signed
     lda #$1d                    // ']' screen code
-    jmp hal_screen_put_char
+    jsr hal_screen_put_char
+    jmp !idps_ring_p1+          // Ring of WOE carries both AC and stat penalty; 0 on others
 !idps_armor:
     lda #$20
     jsr hal_screen_put_char

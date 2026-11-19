@@ -66,28 +66,46 @@ disk_require_save_media:
     sec
     rts
 
-hal_storage_marker_present:
-    lda #hal_storage_marker_read_name_len
-    ldx #<hal_storage_marker_read_name
-    ldy #>hal_storage_marker_read_name
+// Shared open/close helpers for save-media marker routines (StorageOverlay).
+.segment StorageOverlay
+// cx16_marker_open — SETNAM (from caller A/X/Y), SETLFS/OPEN on save_device
+// using secondary address zp_temp0. Preserves Y on stack -> returns C=1 on error.
+cx16_marker_open:
     jsr hal_storage_setnam
     lda #hal_storage_marker_file_num
     ldx save_device
-    ldy #hal_storage_marker_sec_read
+    ldy zp_temp0
     jsr hal_storage_setlfs
-    jsr hal_storage_open
+    jmp hal_storage_open
+
+cx16_marker_close_fail:
+    jsr hal_storage_clrchn
+    lda #hal_storage_marker_file_num
+    jsr hal_storage_close
+    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
+    sta cx16_media_status
+    sec
+    rts
+
+hal_storage_marker_present:
+    lda #hal_storage_marker_sec_read
+    sta zp_temp0
+    lda #hal_storage_marker_read_name_len
+    ldx #<hal_storage_marker_read_name
+    ldy #>hal_storage_marker_read_name
+    jsr cx16_marker_open
     bcs !fail+
     ldx #hal_storage_marker_file_num
     jsr hal_storage_chkin
-    bcs !close_fail+
+    bcs cx16_marker_close_fail
     ldx #0
 !loop:
     jsr hal_storage_chrin
     cmp hal_storage_marker_magic,x
-    bne !close_fail+
+    bne cx16_marker_close_fail
     jsr hal_storage_readst
     and #$03
-    bne !close_fail+
+    bne cx16_marker_close_fail
     inx
     cpx #hal_storage_marker_magic_len
     bcc !loop-
@@ -98,10 +116,6 @@ hal_storage_marker_present:
     sta cx16_media_status
     clc
     rts
-!close_fail:
-    jsr hal_storage_clrchn
-    lda #hal_storage_marker_file_num
-    jsr hal_storage_close
 !fail:
     lda #HAL_STORAGE_STATUS_WRONG_MEDIA
     sta cx16_media_status
@@ -109,15 +123,12 @@ hal_storage_marker_present:
     rts
 
 hal_storage_marker_init:
+    lda #hal_storage_marker_sec_write
+    sta zp_temp0
     lda #hal_storage_marker_write_name_len
     ldx #<hal_storage_marker_write_name
     ldy #>hal_storage_marker_write_name
-    jsr hal_storage_setnam
-    lda #hal_storage_marker_file_num
-    ldx save_device
-    ldy #hal_storage_marker_sec_write
-    jsr hal_storage_setlfs
-    jsr hal_storage_open
+    jsr cx16_marker_open
     bcs !fail+
     ldx #hal_storage_marker_file_num
     jsr hal_storage_chkout
@@ -148,6 +159,8 @@ hal_storage_marker_init:
     sta cx16_media_status
     sec
     rts
+
+.segment Default
 
 // ============================================================
 // Status classifiers
@@ -193,8 +206,13 @@ hal_asset_load_prg_header:
     pla
     tax
     pla
+#if CX16_CARTRIDGE
+    jmp cart_load_prg
+#else
     jmp cx16_kernal_load_banked_window
+#endif
 
+#if !CX16_CARTRIDGE
 // cx16_kernal_load_banked_window — Load PRG file into $A000 of the currently
 // selected CX16_RAM_BANK_REG ($00), preserving ZP $02-$8F across KERNAL LOAD.
 // Input: A = filename len, X = filename lo, Y = filename hi.
@@ -238,6 +256,7 @@ cx16_kernal_load_banked_window:
 cx16_load_fn_len:      .byte 0
 cx16_load_fn_lo:       .byte 0
 cx16_load_fn_hi:       .byte 0
+#endif
 cx16_load_target_bank: .byte 0
 
 hal_asset_load:
@@ -270,46 +289,26 @@ cx16_asset_verify: .byte 0
 cx16_asset_dest:   .word 0
 
 // ============================================================
-// hal_asset_load_title — Copy preloaded TITLE art stream from Bank 21
+// hal_asset_load_title — Copy preloaded TITLE art stream from Bank 22
 // ($A000-$A2FF) into MAP_BASE (Bank 1 $A000-$A2FF) so title_render_data
-// reads it via mmu_safe_map_read_ptr1.
+// reads it via mmu_safe_map_read_ptr1. Runs from TitleOverlay via resident copy.
 // ============================================================
+.segment TitleOverlay
 hal_asset_load_title:
-    lda CX16_RAM_BANK_REG
-    pha
-    lda #>BANKED_DATA_BASE
-    sta cx16_title_page_hi
+    lda #CX16_BANK_TITLE_ART
+    sta zp_temp0
+    lda #CX16_BANK_MAP_LO
+    sta zp_temp1
     stz zp_ptr0
     stz zp_ptr1
-    ldx #3                          // 3 pages (768 B covers 622 B TITLE)
-!page_loop:
-    lda cx16_title_page_hi
+    lda #>BANKED_DATA_BASE
     sta zp_ptr0_hi
     sta zp_ptr1_hi
-    ldy #0
-    lda #CX16_BANK_TITLE_ART
-    sta CX16_RAM_BANK_REG
-!read_page:
-    lda (zp_ptr0),y
-    sta CX16_ROW_STAGE_BASE,y
-    iny
-    bne !read_page-
-    lda #CX16_BANK_MAP_LO
-    sta CX16_RAM_BANK_REG
-!write_page:
-    lda CX16_ROW_STAGE_BASE,y
-    sta (zp_ptr1),y
-    iny
-    bne !write_page-
-    inc cx16_title_page_hi
-    dex
-    bne !page_loop-
-    pla
-    sta CX16_RAM_BANK_REG
-    clc
-    rts
+    lda #0
+    ldx #3                          // 3 pages (768 B covers 622 B TITLE)
+    jmp cx16_bank_copy
 
-cx16_title_page_hi: .byte 0
+.segment Default
 
 hal_asset_close_channel:
     lda #hal_storage_program_file_num
@@ -361,6 +360,7 @@ hal_storage_score_scratch_name:
 hal_storage_init_command:
     .byte $49, $30                              // "I0"
 
+.segment StorageOverlay
 hal_storage_marker_magic:
     .byte $4d, $38, $53, $41, $56, $45          // "M8SAVE"
 .label hal_storage_marker_magic_len = * - hal_storage_marker_magic
@@ -381,7 +381,9 @@ hal_storage_marker_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
+.segment Default
 
+#if !CX16_CARTRIDGE
 // Boot-preloaded data bank filenames
 cx16_auxdata_name:
     .byte $43,$58,$31,$36,$2e,$41,$55,$58,$44,$41,$54,$41 // "CX16.AUXDATA"
@@ -399,11 +401,21 @@ hal_storage_title_name:
 .label hal_storage_title_name_len = * - hal_storage_title_name
     .byte 0
 
+// Item catalog filename (Bank 6)
+cx16_item_cat_name:
+    .byte $49,$54,$45,$4d,$2e,$43,$41,$54       // "ITEM.CAT"
+.label cx16_item_cat_name_len = * - cx16_item_cat_name
+    .byte 0
+
 #if HAL_PLATFORM_MONSTER_CATALOG
-// Monster catalog filename (Bank 22)
+// Monster catalog filename (Bank 23) and extended catalog filename (Bank 5)
 cx16_catalog_name:
     .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$43,$41,$54 // "MONSTER.CAT"
 .label cx16_catalog_name_len = * - cx16_catalog_name
+
+cx16_catalog_ext_name:
+    .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$45,$58,$54 // "MONSTER.EXT"
+.label cx16_catalog_ext_name_len = * - cx16_catalog_ext_name
 #else
 // Tier data filenames
 hal_storage_tier_1_name:
@@ -430,8 +442,9 @@ hal_storage_tier_name_hi:
 hal_storage_tier_name_len:
     .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
 #endif
+#endif
 
-// Overlay asset filenames (indexed by overlay ID - 1; IDs 1..12 -> Banks 9..20)
+// Overlay asset filenames (indexed by overlay ID - 1; IDs 1..13 -> Banks 9..21)
 hal_storage_overlay_start_name:
     .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54   // "OVL.START"
 .label hal_storage_overlay_start_name_len = * - hal_storage_overlay_start_name
@@ -472,6 +485,10 @@ hal_storage_overlay_chest_name:
     .byte $4f,$56,$4c,$2e,$43,$48,$45,$53,$54   // "OVL.CHEST"
 .label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
     .byte 0
+hal_storage_overlay_home_name:
+    .byte $4f,$56,$4c,$2e,$48,$4f,$4d,$45       // "OVL.HOME"
+.label hal_storage_overlay_home_name_len = * - hal_storage_overlay_home_name
+    .byte 0
 hal_storage_overlay_storage_name:
     .byte $4f,$56,$4c,$2e,$53,$54,$4f,$52,$41,$47,$45 // "OVL.STORAGE"
 .label hal_storage_overlay_storage_name_len = * - hal_storage_overlay_storage_name
@@ -482,11 +499,11 @@ hal_storage_overlay_title_name:
     .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_home_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_home_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_home_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
 
 // ============================================================
 // Compile-time validation

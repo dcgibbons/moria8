@@ -19,3 +19,18 @@ pm_mark_worked:
     lda pm_spell_idx
     jmp spell_mask_set_ptr
 pm_mark_worked_end:
+
+// mcns_get_stat_adj — Map INT/WIS cur stat (0..255 in A) to spell stat_adj 0..7.
+// Preserves: X. Clobbers: Y.
+mcns_get_stat_adj:
+    ldy #7
+!mgsa_loop:
+    cmp mcns_stat_thresh - 1,y
+    bcs !mgsa_done+
+    dey
+    bne !mgsa_loop-
+!mgsa_done:
+    tya
+    rts
+mcns_stat_thresh:
+    .byte 8, 15, 18, 68, 88, 108, 118

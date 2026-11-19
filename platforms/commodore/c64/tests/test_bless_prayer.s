@@ -46,41 +46,70 @@ test_finish:
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment Default
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+.segment TestUnused
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
+.segment TestUnused
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/projectile.s"
+.segment TestUnused
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestUnused
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment TestUnused
 #import "../../../../core/combat.s"
+.segment Default
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+.segment TestUnused
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_attack_player:
+mon_atk_acid_armour:
+mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+player_death_check:
+    brk
+mad_dmg_hi: .byte 0
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:

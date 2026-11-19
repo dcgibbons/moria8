@@ -113,20 +113,28 @@ def check_disk(build: Build) -> None:
     from: ``make test`` rebuilds the program and symbols without the disk, and a
     stale disk then fails every worker at boot. A disk this module cannot read
     (ProDOS) must at least be newer than its program."""
-    if build.disk.is_dir():   # the X16's -fsroot: the build output itself
-        return
     if build.target.cartridge:
-        # The cartridge holds the program; the disk is only for saves.
+        # The cartridge holds the program; the disk (or -fsroot dir on X16) is only for saves.
         cart = build.disk.parent / build.target.cartridge
-        if not cart.is_file() or cart.stat().st_mtime < build.prg.stat().st_mtime:
+        if (not cart.is_file() or not build.prg.is_file()
+                or cart.stat().st_mtime < build.prg.stat().st_mtime):
             raise StaleDisk(f"{cart} is missing or older than {build.prg}; "
                             f"rebuild it with `make {build.target.disk_target}`")
-        return
-    if not build.target.disk_files:
-        if build.disk.stat().st_mtime < build.prg.stat().st_mtime:
-            raise StaleDisk(f"{build.disk} is older than {build.prg}; "
+        if not build.disk.exists():
+            raise StaleDisk(f"{build.disk} is missing; "
                             f"rebuild it with `make {build.target.disk_target}`")
         return
+    if build.disk.is_dir():   # the X16's -fsroot: the build output itself
+        return
+    if not build.target.disk_files:
+        if (not build.disk.is_file() or not build.prg.is_file()
+                or build.disk.stat().st_mtime < build.prg.stat().st_mtime):
+            raise StaleDisk(f"{build.disk} is missing or older than {build.prg}; "
+                            f"rebuild it with `make {build.target.disk_target}`")
+        return
+    if not build.disk.is_file():
+        raise StaleDisk(f"{build.disk} is missing; "
+                        f"rebuild it with `make {build.target.disk_target}`")
     files = d64_files(build.disk.read_bytes())
     stale = sorted(name for name, out in build.target.disk_files.items()
                    if files.get(name) != (build.prg.parent / out).read_bytes())
@@ -146,6 +154,10 @@ def rom_args(env: dict[str, str] | None = None, port: Port = C64) -> list[str]:
     missing = [var for var in port.required_roms if not env.get(var, "")]
     if missing:
         raise FileNotFoundError(f"{port.name} plays under named ROM images: set {', '.join(missing)}")
+    pair = [var for var in port.paired_roms if env.get(var, "")]
+    if pair and len(pair) < len(port.paired_roms):
+        unset = [var for var in port.paired_roms if var not in pair]
+        raise FileNotFoundError(f"{port.name}: {', '.join(pair)} works only with {', '.join(unset)}: set it too")
     args: list[str] = []
     for var, option in port.rom_env:
         path = env.get(var, "")

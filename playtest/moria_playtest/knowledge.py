@@ -7,6 +7,7 @@ memory. The brain uses it the way a player uses experience: to tell whether
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -37,6 +38,9 @@ SPEED_SLOW = 0
 SPEED_NORMAL = 1
 SPEED_MASK = 0x03         # cr_speed bits 3-5 hold random-move flags (MON-013)
 RANDOM_MASK = 0x38
+ATK_TYPE_MASK = 0x7F      # cr_atk*_type bit 7 holds ADESC verb bit 0 (core/monster_attack.s)
+ATK_SIDES_MASK = 0x0F     # cr_atk*_sides bits 4-7 hold ADESC verb bits 1-4
+ATK_BLANK = 99            # core/monster.s: blank / repelled attack slot
 
 
 def use_port(name: str) -> None:
@@ -60,20 +64,30 @@ def uses_catalog() -> bool:
 
 def _catalog() -> tuple[list[str], dict[str, list[int]]]:
     """(names, byte tables by field) of the catalog's playable dungeon
-    creatures (platforms/shared/catalog: fields, index and names)."""
+    creatures (platforms/shared/catalog: fields, ext fields, index and names)."""
     assert _catalog_dir is not None
     data = _catalog_dir
-    bank = (data / "catalog_fields.s").read_text() + (data / "catalog_index.s").read_text()
+    bank = (
+        (data / "catalog_fields.s").read_text()
+        + (data / "catalog_ext_fields.s").read_text()
+        + (data / "catalog_index.s").read_text()
+    )
     town = int(re.search(r"^\.const CATALOG_TOWN_COUNT = (\d+)", bank, re.M).group(1))
     names = re.findall(r"^catn_\d+:.*// (.+?)\s*$", (data / "catalog_names.s").read_text(), re.M)
     def values(label: str) -> list[int]:   # the .byte lines after the label
         body = re.search(rf"^{label}:[^\n]*\n((?:[ \t]*\.byte[^\n]*\n)+)", bank, re.M).group(1)
         return [int(v, 16) for v in re.findall(r"\$([0-9a-fA-F]{2})", body)]
 
-    bitmap = values("cat_available")
-    keep = [i for i in range(town, len(names)) if bitmap[i // 8] >> (i % 8) & 1]
-    tables = {label: [v for i, v in enumerate(values(f"cat_cr_{label}")) if i in keep]
+    keep = range(town, len(names))
+    tables = {label: [values(f"cat_cr_{label}")[i] for i in keep]
               for label in re.findall(r"^cat_cr_(\w+):$", bank, re.M)}
+    for label in ("atk2_type", "atk2_dice", "atk2_sides",
+                  "atk3_type", "atk3_dice", "atk3_sides",
+                  "spell_flags2", "cdefense"):
+        tables[label] = [values(f"cat_{label}")[i] for i in keep]
+    for slot in range(4):
+        tables[f"atk{slot}_type"] = [v & ATK_TYPE_MASK for v in tables[f"atk{slot}_type"]]
+        tables[f"atk{slot}_sides"] = [v & ATK_SIDES_MASK for v in tables[f"atk{slot}_sides"]]
     return [names[i] for i in keep], tables
 
 
@@ -196,10 +210,16 @@ def attacks() -> dict[tuple[str, int], tuple[tuple[int, int, int], ...]]:
 
     out: dict[tuple[str, int], tuple[tuple[int, int, int], ...]] = {}
     for _, tables in _tiers():
-        for code, level, *atk in zip(tables["display"], tables["level"],
-                                     tables["atk0_type"], tables["atk0_dice"], tables["atk0_sides"],
-                                     tables["atk1_type"], tables["atk1_dice"], tables["atk1_sides"]):
-            blows = tuple((atk[i], atk[i + 1], atk[i + 2]) for i in (0, 3) if atk[i] and atk[i + 1])
+        zeros = [0] * len(tables["display"])
+        for code, level, *atk in zip(
+            tables["display"], tables["level"],
+            tables["atk0_type"], tables["atk0_dice"], tables["atk0_sides"],
+            tables["atk1_type"], tables["atk1_dice"], tables["atk1_sides"],
+            tables.get("atk2_type", zeros), tables.get("atk2_dice", zeros), tables.get("atk2_sides", zeros),
+            tables.get("atk3_type", zeros), tables.get("atk3_dice", zeros), tables.get("atk3_sides", zeros),
+        ):
+            blows = tuple((atk[i], atk[i + 1], atk[i + 2]) for i in (0, 3, 6, 9)
+                          if atk[i] and atk[i] != ATK_BLANK and atk[i + 1])
             key = (screen_code_to_char(code), level)
             if average(blows) > average(out.get(key, ())):
                 out[key] = blows
@@ -359,13 +379,19 @@ ATK_PARALYZE = 11   # core/monster.s: the paralysing touch or gaze (mon_atk_effe
 ATK_POISON = 14     # ... and the poisoning one
 
 
+def _attack_types(tables: dict[str, list[int]]) -> zip[tuple[int, int, int, int]]:
+    zeros = [0] * len(tables["atk0_type"])
+    return zip(tables["atk0_type"], tables["atk1_type"],
+               tables.get("atk2_type", zeros), tables.get("atk3_type", zeros))
+
+
 @lru_cache(maxsize=1)
 def poisoner_kinds() -> frozenset[tuple[str, int]]:
     """(screen glyph, creature level) of the shipped creatures whose blows
     poison: curing beside one is undone by its next hit."""
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
-                     for code, level, a, b in zip(tables["display"], tables["level"], tables["atk0_type"], tables["atk1_type"])
-                     if ATK_POISON in (a, b))
+                     for code, level, blows in zip(tables["display"], tables["level"], _attack_types(tables))
+                     if ATK_POISON in blows)
 
 
 @lru_cache(maxsize=1)
@@ -375,8 +401,8 @@ def touch_paralyzers() -> frozenset[str]:
     A Hold Person caster's "paralyzes you." reads the same, from any range
     (monster_cast_hold), so walking out of its reach does nothing."""
     return frozenset(name for names, tables in _tiers()
-                     for name, a, b in zip(names, tables["atk0_type"], tables["atk1_type"])
-                     if ATK_PARALYZE in (a, b))
+                     for name, blows in zip(names, _attack_types(tables))
+                     if ATK_PARALYZE in blows)
 
 
 SPELL_HOLD = 0x80   # cr_spell_chance bit 7: Hold Person (MS_HOLD, monster_cast_hold, MON-025)
@@ -388,9 +414,9 @@ def paralyzer_kinds() -> frozenset[tuple[str, int]]:
     paralysing blow (randint(level) + 3 turns) or Hold Person (randint(5) +
     4; MON-025), both stopped by Free Action."""
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
-                     for code, level, a, b, chance in zip(tables["display"], tables["level"], tables["atk0_type"],
-                                                          tables["atk1_type"], tables["spell_chance"])
-                     if ATK_PARALYZE in (a, b) or chance & SPELL_HOLD)
+                     for code, level, blows, chance in zip(tables["display"], tables["level"],
+                                                           _attack_types(tables), tables["spell_chance"])
+                     if ATK_PARALYZE in blows or chance & SPELL_HOLD)
 
 
 def casts(glyph: str, level: int) -> bool:
@@ -405,6 +431,17 @@ def stationary_glyphs() -> frozenset[str]:
     for _, glyph, _, flags in _creatures():
         by_glyph.setdefault(glyph, []).append(bool(flags & CF_ATTACK_ONLY))
     return frozenset(glyph for glyph, still in by_glyph.items() if all(still))
+
+
+@lru_cache(maxsize=1)
+def stationary_names() -> frozenset[str]:
+    """Creature names that never move. Not every creature of a glyph: since
+    Phase 5 (VMS parity) the Disenchanter Eye wanders 20% of the time while
+    every other 'e' stays put."""
+    still: dict[str, bool] = {}
+    for name, _, _, flags in _creatures():
+        still[name] = still.get(name, True) and bool(flags & CF_ATTACK_ONLY)
+    return frozenset(name for name, s in still.items() if s)
 
 
 @lru_cache(maxsize=1)
@@ -441,6 +478,18 @@ def fragile_glyphs() -> frozenset[str]:
         for code, dice, sides in zip(tables["display"], tables["hd_num"], tables["hd_sides"]):
             by_glyph.setdefault(screen_code_to_char(code), []).append(dice * sides <= 4)
     return frozenset(glyph for glyph, weak in by_glyph.items() if all(weak))
+
+
+@lru_cache(maxsize=1)
+def fragile_names() -> frozenset[str]:
+    """Creatures, by name, with at most 4 hit points (``fragile_glyphs`` for
+    one the view names): in the Phase 5 catalog not every ',' is that weak,
+    and by glyph no patch was."""
+    weak: dict[str, bool] = {}
+    for names, tables in _tiers():
+        for name, dice, sides in zip(names, tables["hd_num"], tables["hd_sides"]):
+            weak[name] = weak.get(name, True) and dice * sides <= 4
+    return frozenset(name for name, w in weak.items() if w)
 
 
 @lru_cache(maxsize=1)
@@ -556,10 +605,43 @@ def outpaced_glyphs() -> frozenset[str]:
     return frozenset(glyph for glyph, outpaced in by_glyph.items() if all(outpaced))
 
 
-ITEM_TABLES = ROOT / "core/item_tables.s"
-ITEM_NAME = re.compile(r"^itn_(\d+):(.*)$", re.M)
-ITEM_TOKEN = re.compile(r'^(itok_\w+):\s*\.text "([^"]*)"', re.M)
-ITEM_CATEGORY = re.compile(r"^\s*\.byte (ICAT_\w+)\s*// (\d+):", re.M)
+@lru_cache(maxsize=1)
+def outpaced_names() -> frozenset[str]:
+    """Creatures, by name, a walking player outpaces (``outpaced_glyphs`` for
+    one the view names)."""
+    out: dict[str, bool] = {}
+    for names, tables in _tiers():
+        for name, speed, flags in zip(names, tables["speed"], tables["mflags"]):
+            base = speed & SPEED_MASK
+            out[name] = out.get(name, True) and not flags & CF_ATTACK_ONLY and (
+                base == SPEED_SLOW or (base == SPEED_NORMAL and bool(speed & RANDOM_MASK)))
+    return frozenset(name for name, o in out.items() if o)
+
+
+ITEM_CATALOG_SPEC = ROOT / "platforms/shared/item_catalog/item_catalog_spec.json"
+ICAT_NAMES = {
+    0: "ICAT_DIGGING",
+    1: "ICAT_GOLD",
+    2: "ICAT_WEAPON",
+    3: "ICAT_ARMOR",
+    4: "ICAT_SHIELD",
+    5: "ICAT_HELM",
+    6: "ICAT_GLOVES",
+    7: "ICAT_BOOTS",
+    8: "ICAT_LIGHT",
+    9: "ICAT_FOOD",
+    10: "ICAT_POTION",
+    11: "ICAT_SCROLL",
+    12: "ICAT_RING",
+    13: "ICAT_BOOK",
+    14: "ICAT_WAND",
+    15: "ICAT_STAFF",
+    16: "ICAT_AMULET",
+    17: "ICAT_CHEST",
+    18: "ICAT_SPIKE",
+    19: "ICAT_CLOAK",
+    20: "ICAT_JUNK",
+}
 
 
 def _table_bytes(text: str, label: str) -> list[int]:
@@ -572,14 +654,11 @@ def _table_bytes(text: str, label: str) -> list[int]:
             break
         if code.startswith(".byte"):
             values += [int(v[1:], 16) if v.startswith("$") else int(v)
-                       for v in re.findall(r"\$[0-9a-fA-F]+|\b\d+\b", code[5:])]
+                       for v in re.findall(r"\$[0-9a-fA-F]+|-?\b\d+\b", code[5:])]
         elif code.startswith(".fill"):
             count, value = (int(v) for v in re.findall(r"\d+", code))
             values += [value] * count
     return values
-
-
-MISSILE_IDS = (*range(49, 55), *range(137, 140))   # launchers, ammunition (IT_MISSILE_BASE, IT_MISSILE2_BASE, core/item_tables.s): one blow in melee
 
 
 @dataclass(frozen=True)
@@ -590,27 +669,33 @@ class ItemKind:
     dice: int
     sides: int
     weight: int       # tenths of a pound
+    missile_type: int = 0
 
     @property
     def melee(self) -> bool:
-        return self.category == "ICAT_WEAPON" and self.id not in MISSILE_IDS and self.dice > 0
+        return self.category == "ICAT_WEAPON" and self.missile_type == 0 and self.dice > 0
 
 
 @lru_cache(maxsize=1)
 def item_kinds() -> dict[str, ItemKind]:
-    """Item name -> kind, from the shipped item tables: what a player knows
-    of weapon dice and weights from the manual."""
-    text = ITEM_TABLES.read_text()
-    tokens = {label.upper(): words for label, words in ITEM_TOKEN.findall(text)}
-
-    def expand(stream: str) -> str:   # .text parts and .byte ITOK_* tokens, in order
-        return "".join(m.group(1) if m.group(1) is not None else tokens.get(m.group(2), "")
-                       for m in re.finditer(r'\.text "([^"]*)"|\.byte (ITOK_\w+)', stream))
-    names = {int(i): expand(stream) for i, stream in ITEM_NAME.findall(text)}
-    categories = {int(i): cat for cat, i in ITEM_CATEGORY.findall(text)}
-    weights, dice = _table_bytes(text, "it_weight"), _table_bytes(text, "it_dmg_packed")
-    return {name: ItemKind(i, name, categories.get(i, ""), dice[i] >> 4, dice[i] & 0x0F, weights[i])
-            for i, name in names.items() if i < len(weights) and i < len(dice)}
+    """Item name -> kind, from the shipped item catalog spec: what a player
+    knows of weapon dice, missile types, and weights from the manual."""
+    spec = json.loads(ITEM_CATALOG_SPEC.read_text())
+    kinds: dict[str, ItemKind] = {}
+    for item in spec["items"]:
+        kinds.setdefault(
+            item["name"],
+            ItemKind(
+                item["id"],
+                item["name"],
+                ICAT_NAMES.get(item["cat"], ""),
+                item["dice"],
+                item["sides"],
+                item["weight"],
+                item["missile_type"],
+            ),
+        )
+    return kinds
 
 
 def blows(strength: int, dexterity: int, weight: int) -> int:
@@ -635,6 +720,26 @@ def attacker(messages: str) -> str | None:
     """The creature named in an attack or spell message, if any."""
     match = _attack_pattern().search(messages)
     return match.group(1) if match else None
+
+
+CD_INVISIBLE = 0x80   # cdefense bit 7: VMS CM_INVISIBLE (core/monster.s)
+
+
+@lru_cache(maxsize=1)
+def invisible_names() -> frozenset[str]:
+    """Creatures the game never draws (a player learns them from their touch
+    and the monster recall): the catalog's CD_INVISIBLE kinds."""
+    if _catalog_dir is None:
+        return frozenset()
+    names, tables = _catalog()
+    return frozenset(n for n, d in zip(names, tables["cdefense"]) if d & CD_INVISIBLE)
+
+
+def blow(messages: str) -> bool:
+    """An attack message is a blow (hits, bites, touches you), dealt from
+    beside the player, not a spell or a breath from across the room."""
+    return any(not m.group(0).endswith(("casts a spell", "breathes"))
+               for m in _attack_pattern().finditer(messages))
 
 
 GAME_TABLES = ROOT / "core/tables.s"

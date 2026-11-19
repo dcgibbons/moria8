@@ -493,7 +493,7 @@ test_start:
     lda #5
     sta cr_level + 24
     lda #COL_CYAN
-    sta cr_color + 57
+    sta cr_color + TOWN_CREATURE_BASE
 
     ldx #1                      // cr_level = 1, town-safe dungeon creature
     jsr monster_get_threat_color
@@ -519,9 +519,9 @@ test_start:
     cmp #COL_THREAT_DEADLY
     bne !fail2+
 
-    ldx #57                     // Town NPCs keep authored species colors
+    ldx #TOWN_CREATURE_BASE     // Town NPCs keep authored species colors
     jsr monster_get_threat_color
-    cmp cr_color + 57
+    cmp cr_color + TOWN_CREATURE_BASE
     bne !fail2+
 
     // Test 5: VDC special-effect flash color setter/resetter stay in sync

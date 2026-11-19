@@ -292,12 +292,13 @@ render_viewport:
     jsr floor_item_find_at
     bcc !rv_no_item+
     // X = slot — look up item type
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp0
     txa                             // A = item type ID
     jsr item_get_floor_color        // A = identification-aware color
+    jsr floor_item_page_restore
     sta zp_temp1
 !rv_no_item:
     lda rv_row_has_glyph
@@ -564,12 +565,13 @@ render_single_tile:
     jsr floor_item_find_at
     bcc !rst_no_item+
     // X = slot — look up item type
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp3
     txa                             // A = item type ID
     jsr item_get_floor_color        // A = identification-aware color
+    jsr floor_item_page_restore
     sta zp_temp4
 !rst_no_item:
     ldy zp_temp1                // Y = map_y

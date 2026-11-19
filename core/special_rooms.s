@@ -359,7 +359,8 @@ spawn_nest_gold:
     sty fi_add_y
 
     // Gold type 0, qty = rng(dlvl*10) + 5 (same formula as Phase 1)
-    lda #0
+    .assert "Nest gold spawner uses Page-0 ID 0", ITEM_GOLD_SMALL == 0 && ITEM_PAGE_GOLD_SMALL == 0, true
+    lda #ITEM_SLOT_GOLD_SMALL
     sta fi_add_id
     jsr fi_add_clear_plain_meta
 

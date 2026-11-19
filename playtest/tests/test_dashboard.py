@@ -211,6 +211,16 @@ class DeathCauseTest(unittest.TestCase):
         self.assertEqual(self.cause("the Kobold hits you. | You have been slain.", status=faint), "Kobold")
         self.assertEqual(self.cause("You found nothing.", "You have been slain."), "unknown")
 
+    def test_the_phase_4_traps_are_named(self) -> None:
+        """2026-11-16: 10 of 45 deaths on 3e9fd0c were "unknown": the trap
+        door, blade, fire, acid and dart traps (core/trap_trigger_cold.s)
+        were not named. The damage line itself is garbled on screen."""
+        for message, cause in (("A trap door opens!", "trap: trap door"), ("A blade hits you!", "trap: blade"),
+                               ("Flames hit you!", "trap: fire"), ("Acid hits you!", "trap: acid"),
+                               ("A dart hits you!", "trap: dart")):
+            self.assertEqual(self.cause(f"{message} | You take  -more-ge.", "You have been slain. | -more-"), cause)
+        self.assertEqual(self.cause("the Red Dragon breathes acid. | You have been slain."), "Red Dragon")
+
     def test_spits_is_not_a_pit(self) -> None:
         self.assertEqual(self.cause("the Green Naga spits acid on you.", "You have been slain."), "Green Naga")
         self.assertEqual(self.cause("You fall into a pit!", "You have been slain."), "trap: pit")
@@ -340,7 +350,9 @@ class BuildHistoryTest(unittest.TestCase):
         # The build-queue panel's counts by port, this build's alone (2026-11-08)
         self.assertEqual(aaa["detail"]["bbcmaster"], {"games": 1, "reached": 0, "died": 1, "median_clvl": 4, "played": 1,
                                                       "findings": [{"id": "aaa-110", "character": "human-warrior",
-                                                                    "text": "hang: y"}]})
+                                                                    "text": "hang: y"}],
+                                                      "notes": [{"id": "aaa-110", "character": "human-warrior",
+                                                                 "text": "stall: x"}]})
         self.assertEqual((aaa["detail"]["c64"]["games"], aaa["detail"]["c64"]["reached"]), (1, 1))   # abandoned not counted
         self.assertEqual(builds[1]["detail"]["c64"]["games"], 1)
         self.assertEqual(aaa["ports"], {"c64": [1, 1], "bbcmaster": [1, 0]})
@@ -348,6 +360,22 @@ class BuildHistoryTest(unittest.TestCase):
         self.assertLess(aaa["lo"], 0.5)
         self.assertGreater(aaa["hi"], 0.5)
         self.assertEqual(dashboard.wilson(0, 0), (0.0, 1.0))
+
+    def test_the_bots_notes_are_not_findings(self) -> None:
+        """Maintainer, 2026-11-16: stall notes counted as findings in about 40%
+        of build-queue runs ("they're noise"). Bot notes (stall, loop, an
+        unknown prompt) count apart; a game fault is still a finding."""
+        from unittest import mock
+        records = [{"queue": "build", "build": "aaa", "commit": "aaaa", "started": 100 + n, "platform": "c64",
+                    "outcome": "reached", "clvl": 10, "id": f"r{n}", "character": "human-warrior", "findings": f}
+                   for n, f in enumerate((["loop: square (1, 2) entered 100 times"], ["unknown_prompt: Direction?"],
+                                          ["stall: no new map"], ["hang: no key wait"], [],
+                                          ["no_level: no new character level in 60000 steps"]))]
+        with mock.patch.object(dashboard, "commit_subject", lambda c: ""):
+            build = dashboard.build_history(records, ("reached",))[0]
+        self.assertEqual((build["findings"], build["notes"]), (1, 4))
+        self.assertEqual([f["text"] for f in build["detail"]["c64"]["findings"]], ["hang: no key wait"])
+        self.assertEqual(len(build["detail"]["c64"]["notes"]), 4)
 
 
 class BalrogKillsTest(unittest.TestCase):
@@ -414,3 +442,91 @@ class MonsterStatsTest(unittest.TestCase):
             self.assertEqual(creatures["Balrog"], {"slain": {}, "met": {}, "killed": {"balrog": 1}})
             self.assertEqual(creatures["Ancient Multi-Hued Dragon"]["killed"], {"balrog": 1})
             self.assertNotIn("trap: pit", creatures)   # not a creature
+
+
+class MonsterStatsTest(unittest.TestCase):
+    def test_slain_and_met_count_runs(self) -> None:
+        """Maintainer, 2026-11-12: Evil Iggy showed 69 slain against 53 met
+        because slain counted kills (one run killed him 16 times: every
+        level from DL50 places one) and met counted runs. Both count runs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for run, kills, met in (("20261112-100000-balrog-c64-human-priest-1", 3, True),
+                                    ("20261112-110000-balrog-c64-human-priest-2", 1, True),
+                                    ("20261112-120000-balrog-c64-human-priest-3", 0, True)):
+                run_dir = home / "runs" / run
+                run_dir.mkdir(parents=True)
+                lines = [{"kind": "met", "name": "Evil Iggy"}] if met else []
+                lines += [{"kind": "kill", "name": "Evil Iggy"}] * kills
+                (run_dir / "events.jsonl").write_text("".join(json.dumps(l) + "\n" for l in lines))
+                (run_dir / "job.json").write_text(json.dumps({"queue": "balrog"}))
+            iggy = dashboard.monster_stats(home)["creatures"]["Evil Iggy"]
+            self.assertEqual((iggy["slain"], iggy["met"]), ({"balrog": 2}, {"balrog": 3}))
+
+
+class StatsSinceTest(unittest.TestCase):
+    """A fresh start (maintainer, 2026-11-15: "archive all the stats on the
+    main queue page ... especially the monsters grid"): config "stats_since"
+    leaves the earlier runs out of the page's counts, on disk as they were."""
+
+    def test_the_monsters_balrog_kills_and_run_counts_start_over(self) -> None:
+        from moria_playtest import records as run_records
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            def run(name: str, queue: str, kills: list[str], met: tuple[str, ...] = ()) -> None:
+                path = home / "runs" / name
+                path.mkdir(parents=True)
+                (path / "job.json").write_text(json.dumps({"queue": queue}))
+                (path / "events.jsonl").write_text(
+                    "\n".join([json.dumps({"kind": "kill", "name": k}) for k in kills] +
+                              [json.dumps({"kind": "met", "name": m}) for m in met]) + "\n")
+            old, new = "20261114-100000-balrog-c64-human-priest-1", "20261115-130000-balrog-c64-human-priest-2"
+            run(old, "balrog", ["Kobold", "Evil Iggy"], ("Kobold", "Evil Iggy"))
+            run(new, "balrog", ["Kobold"], ("Kobold",))
+            records = [{"id": old, "queue": "balrog", "outcome": "died", "death": {"cause": "Evil Iggy"}},
+                       {"id": "20261114-110000-build-c64-human-mage-3", "queue": "build", "outcome": "reached",
+                        "platform": "c64", "build": "a", "character": "human-mage"},
+                       {"id": new, "queue": "balrog", "outcome": "died", "death": {"cause": "Kobold"}}]
+            (home / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+            since = "20261115-120000"
+            creatures = dashboard.monster_stats(home, since)["creatures"]
+            self.assertEqual(creatures["Kobold"], {"slain": {"balrog": 1}, "met": {"balrog": 1},
+                                                   "killed": {"balrog": 1}})
+            self.assertNotIn("Evil Iggy", creatures)
+            self.assertEqual(dashboard.balrog_kills(home, since), {"total": {"Kobold": 1}, "runs": 1})
+            whole = dashboard.monster_stats(home)["creatures"]   # no cut-off: every run, as before
+            self.assertEqual(whole["Evil Iggy"]["killed"], {"balrog": 1})
+            runs = dashboard.queue_runs(home, "deep", ("reached", "died"), since=since)
+            self.assertEqual((runs["runs"], runs["builds"], [r["id"] for r in runs["recent"]]), (1, [], [new]))
+            run_records.import_jsonl(home / "runs.jsonl", home, rebuild=True)   # the service's database
+            runs = dashboard.queue_runs(home, "deep", ("reached", "died"), since=since)
+            self.assertEqual((runs["runs"], runs["builds"], [r["id"] for r in runs["recent"]]), (1, [], [new]))
+            self.assertEqual(dashboard.queue_runs(home, "deep", ("reached", "died"))["runs"], 3)
+
+
+class TraceTailTest(unittest.TestCase):
+    def test_a_growing_trace_is_read_on_from_where_the_last_read_stopped(self) -> None:
+        """2026-11-13: reading the 26 live traces from their start took 523
+        of a 645-second publish; the page showed data 16 minutes stale."""
+        import gzip
+        import zlib
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "trace.jsonl.gz"
+            raw = path.open("wb")
+            pack = zlib.compressobj(6, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+            def write(lo: int, hi: int) -> None:
+                text = "".join(json.dumps({"step": i}) + "\n" for i in range(lo, hi))
+                raw.write(pack.compress(text.encode()) + pack.flush(zlib.Z_SYNC_FLUSH))
+                raw.flush()
+            write(0, 500)
+            self.assertEqual([r["step"] for r in dashboard.trace_tail(path, 3)], [497, 498, 499])
+            first = dashboard._tails[str(path)].offset
+            write(500, 1000)
+            self.assertEqual([r["step"] for r in dashboard.trace_tail(path, 2)], [998, 999])
+            self.assertGreater(dashboard._tails[str(path)].offset, first)          # read on, not again
+            raw.write(pack.flush())
+            raw.close()
+            with gzip.open(path, "rt") as whole:
+                last = [json.loads(line) for line in whole.read().splitlines()[-300:]]
+            self.assertEqual(dashboard.trace_tail(path, 300), last)               # a longer tail: read again
+            self.assertEqual(dashboard.trace_tail(path, 1), last[-1:])

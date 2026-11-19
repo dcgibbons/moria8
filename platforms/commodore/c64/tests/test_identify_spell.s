@@ -37,6 +37,8 @@ test_done_break:
 
 .const PIW_FILTER_MAGE_BOOK = $fc
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -50,27 +52,35 @@ test_done_break:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestUnused
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/projectile.s"
@@ -81,13 +91,17 @@ test_done_break:
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestUnused
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:
@@ -240,7 +254,7 @@ test_reset_identify_state:
     sta tid_last_huff_id
     lda #$ff
     sta tid_last_spell_idx
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_clear
     ldx #41
     lda #0
@@ -295,7 +309,7 @@ test_start:
     sta tid_key_script + 0
     lda #0
     sta tid_key_script + 1
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -319,7 +333,7 @@ test_start:
     bne !t1_fail_pre+
     lda tid_huff_calls
     bne !t1_fail_pre+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     beq !t1_fail_pre+
     lda inv_flags + 1
@@ -388,7 +402,7 @@ test_start:
     sta tid_key_script + 0
     lda #0
     sta tid_key_script + 1
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -409,7 +423,7 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PIQ_NOTHING
     bne !t2_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t2_fail+
     lda inv_flags + 1
@@ -450,7 +464,7 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PIW_NOTHING
     bne !t3_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t3_fail+
     lda zp_player_mp
@@ -474,7 +488,7 @@ test_start:
 !t4:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
     jsr test_reset_identify_state
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -491,7 +505,7 @@ test_start:
     lda tid_last_huff_id
     cmp #HSTR_PM_FAIL
     bne !t4_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t4_fail+
     lda inv_flags + 1

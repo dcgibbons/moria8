@@ -13,7 +13,6 @@
 .const hal_platform_character_background_resync = 0
 .const hal_platform_player_magic_helpers_external = 1
 .const hal_platform_item_action_key_restores_bank = 0
-.const hal_platform_ego_holy_avenger_string_external = 0
 .const hal_platform_ego_ac_bonus_external = 0
 .const hal_platform_chargen_runtime_resync = 0
 .const hal_platform_chargen_cutpoint = -1
@@ -34,8 +33,8 @@
 .const hal_platform_game_loop_scroll_delta_render = 1
 #define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 .const hal_platform_game_loop_item_actions_trampolined = 1
-// 10 shared classes (incl. OVL_CHEST) + OVL.STORAGE + OVL.TITLE.
-.const hal_platform_overlay_count = 12
+// 10 shared classes + OVL_HOME + OVL.STORAGE + OVL.TITLE.
+.const hal_platform_overlay_count = 13
 .const hal_platform_overlay_state_external = 0
 .const hal_platform_overlay_force_reload = 1
 .const hal_platform_overlay_tier_cache_guard = 0
@@ -98,4 +97,5 @@
 #define HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
 #define HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 #define HAL_PLATFORM_PLAYER_MOVE_LOOK_SEGMENTED
+#define HAL_PLATFORM_ITEM_PICKUP_OVERLAY
 #endif

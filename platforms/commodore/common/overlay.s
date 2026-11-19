@@ -1,6 +1,13 @@
 #importonce
 // overlay.s — Phase overlay loading for $E000 region
 //
+// Module ownership:
+//   owner: Resident main/common across Commodore and non-Commodore ports
+//     importing it; C64 unit tests link with hal_storage_overlay_test_stub.s.
+//   lifetime: permanent resident overlay loader and current_overlay tracker.
+//   callers: resident trampolines (`tramp_*`), `c128_preload_all_overlays`,
+//     disk/title startup loaders.
+//
 // Manages code overlays at $E000-$EFFF for different game phases.
 // Coexists with creature tier system which also uses $E000.
 // When an overlay loads, tier data is invalidated (and vice versa).
@@ -18,7 +25,11 @@
 //   OVL_MODAL_MISC  = 9  Modal misc: winner retirement / save-slot selector
 //   OVL_CHEST       = 10 Chest interactions (open/disarm/bash); cold everywhere
 //                        (C128: never staged into the Bank 1 overlay cache)
-//   Apple IIe appends OVL_STORAGE/OVL.TITLE after the shared classes.
+//   OVL_HOME        = 11 Dedicated Player Home overlay (Phase 2 cold eviction)
+//   OVL_STORAGE     = 12 Save/load engine overlay (Phase 2 cold eviction)
+//   OVL_TITLE       = 13 Title screen overlay (Phase 2 cold eviction)
+//   (Ports setting HAL_PLATFORM_MAP_GET_TILE_USES_SUBROUTINE define legacy
+//    11=OVL_STORAGE, 12=OVL_TITLE directly in their main.s.)
 //
 // Disk filenames are platform-owned by the storage HAL:
 // `hal_storage_overlay_name_{lo,hi,len}`.
@@ -38,6 +49,11 @@
 .const OVL_SPELL       = 8
 .const OVL_MODAL_MISC  = 9
 .const OVL_CHEST       = 10
+#if !HAL_PLATFORM_MAP_GET_TILE_USES_SUBROUTINE
+.const OVL_HOME        = 11
+.const OVL_STORAGE     = 12
+.const OVL_TITLE       = 13
+#endif
 .const OVL_COUNT       = hal_platform_overlay_count
 
 #import "compat/hal_storage_overlay_test_stub.s"
@@ -412,6 +428,15 @@ c128_preload_all_overlays:
     // ready-mask bits stay clear and overlay_load falls through to disk.
     cpx #OVL_CHEST
     beq cpao_next
+#if !HAL_PLATFORM_MAP_GET_TILE_USES_SUBROUTINE
+    // Phase 2 cold overlays have no Bank 1 cache slot either; load on demand.
+    cpx #OVL_HOME
+    beq cpao_next
+    cpx #OVL_STORAGE
+    beq cpao_next
+    cpx #OVL_TITLE
+    beq cpao_next
+#endif
 #if HAL_PLATFORM_MONSTER_CATALOG
     // STARTUP is not cached either: its slot holds the monster catalog's
     // names (memory128.s, C128M-007). New Game loads it from disk.

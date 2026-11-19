@@ -1,6 +1,8 @@
 #importonce
 // test_main_loop128.s — Focused dispatch tests for common/game_loop.s on C128
 
+#import "../../../shared/item_catalog/item_ids.s"
+
 #define C128_PRODUCT_MODAL_PERSIST
 #define HAL_PLATFORM_GAME_LOOP_MODAL_PERSIST
 #define HAL_PLATFORM_GAME_LOOP_VISIBILITY_PRESERVE_REVEAL_EXTERNAL
@@ -25,7 +27,7 @@ test_start:
 .const HSTR_SAVE_WELCOME = 0
 .const HSTR_EFF_PARALYZE_END = 0   // game_loop.s paralysis expiry (TRN-011)
 .const HSTR_QUIT_CONFIRM = 0       // game_loop.s quit prompt (huff_print_msg is a stub here)
-.const EGO_TYPE_COUNT = 8
+.const EGO_TYPE_COUNT = 56
 .const IF_IDENTIFIED = $02
 .const IF_SENSED = $08
 .const SFX_PICKUP = 0
@@ -379,6 +381,7 @@ door_jam_command:
 do_search:
     rts
 
+tramp_item_pickup:
 item_pickup:
     rts
 
@@ -473,6 +476,7 @@ rng_range:
     lda #0
     rts
 
+item_cat_decode_ego:
 ego_get_suffix_ptr:
     lda #0
     tay
@@ -708,10 +712,14 @@ ovl_ready_mask:
 .const SPELL_MAGE = 1
 .const OVL_DUNGEON_GEN = 4
 .const FI_EMPTY = $ff
-.const TOTAL_INV_SLOTS = 33
+.const ITEM_PAGE_BIT = $40
+.const EGO_ID_MASK = $3f
+.const TOTAL_INV_SLOTS = 34
 .const EQUIP_WEAPON = 22
 .const EQUIP_BODY = 23
 .const EQUIP_LIGHT = 28
+.const EQUIP_CLOAK = 32
+.const EQUIP_SECONDARY = 33
 .const ICAT_DIGGING = 0
 .const INPUT_ROW = 24
 .const FLAG_LIT = $08
@@ -740,7 +748,20 @@ map_row_lo: .fill TEST_MAP_ROWS, <($8000 + i * TEST_MAP_COLS)
 map_row_hi: .fill TEST_MAP_ROWS, >($8000 + i * TEST_MAP_COLS)
 player_data: .fill 80, 0
 player_move_relocated: .byte 0
+item_cur_page: .byte 0
 it_category: .fill 256, 0
+item_get_category_inv_x:
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldy inv_item_id,x
+    cpy #FI_EMPTY
+    beq !igci_empty+
+    lda it_category,y
+    rts
+!igci_empty:
+    lda #$ff
+    rts
 inv_item_id: .fill TOTAL_INV_SLOTS, 0
 inv_ego: .fill TOTAL_INV_SLOTS, 0
 inv_qty: .fill TOTAL_INV_SLOTS, 0
@@ -2423,7 +2444,7 @@ test_entry:
     lda #31
     sta test_case_id
     jsr reset_state
-    lda #66
+    lda #ITEM_SLOT_RAPIER
     sta inv_item_id + 2
     lda #7
     sta inv_qty + 2
@@ -2432,6 +2453,7 @@ test_entry:
     sta inv_to_dam + EQUIP_WEAPON
     sta inv_to_ac + EQUIP_BODY
     sta inv_flags + 2
+    lda #(ITEM_PAGE_RAPIER | 7)
     sta inv_ego + 2
     lda #$ff
     sta eff_invuln_timer
@@ -2443,11 +2465,11 @@ test_entry:
     lda eff_invuln_timer
     beq *+5
     jmp test_fail
-    // Slot 2 holds the starter's four spare torches (type 13, 134 turns each;
+    // Slot 2 holds the starter's four spare torches (134 turns each;
     // VMS player_init: 5 torches): not the loaded game's
-    // item 66 x7, and none of its p1/flags/ego.
+    // Rapier x7, and none of its p1/flags/ego.
     lda inv_item_id + 2
-    cmp #13
+    cmp #ITEM_SLOT_WOODEN_TORCH
     beq *+5
     jmp test_fail
     lda inv_qty + 2
@@ -2462,6 +2484,7 @@ test_entry:
     beq *+5
     jmp test_fail
     lda inv_ego + 2
+    cmp #ITEM_PAGE_WOODEN_TORCH
     beq *+5
     jmp test_fail
     lda inv_to_hit + EQUIP_WEAPON
@@ -2474,19 +2497,35 @@ test_entry:
     beq *+5
     jmp test_fail
     lda inv_item_id + 0
-    cmp #15
+    cmp #ITEM_SLOT_RATION_OF_FOOD
+    beq *+5
+    jmp test_fail
+    lda inv_ego + 0
+    cmp #ITEM_PAGE_RATION_OF_FOOD
     beq *+5
     jmp test_fail
     lda inv_item_id + EQUIP_LIGHT
-    cmp #13
+    cmp #ITEM_SLOT_WOODEN_TORCH
+    beq *+5
+    jmp test_fail
+    lda inv_ego + EQUIP_LIGHT
+    cmp #ITEM_PAGE_WOODEN_TORCH
     beq *+5
     jmp test_fail
     lda inv_item_id + EQUIP_WEAPON
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
+    beq *+5
+    jmp test_fail
+    lda inv_ego + EQUIP_WEAPON
+    cmp #ITEM_PAGE_DAGGER
     beq *+5
     jmp test_fail
     lda inv_item_id + EQUIP_BODY
-    cmp #7
+    cmp #ITEM_SLOT_LEATHER_ARMOR
+    beq *+5
+    jmp test_fail
+    lda inv_ego + EQUIP_BODY
+    cmp #ITEM_PAGE_LEATHER_ARMOR
     beq *+5
     jmp test_fail
 

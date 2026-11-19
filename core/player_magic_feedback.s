@@ -10,8 +10,6 @@
 pmx_feedback_sleep_hits: .byte 0
 pmx_feedback_sleep_seen: .byte 0
 pmx_feedback_dir_idx:    .byte 0
-pmx_feedback_x:          .byte 0
-pmx_feedback_y:          .byte 0
 pmx_feedback_mon_slot:   .byte 0
 
 // pmx_add_speed_msg — Haste for A more turns (A = 1-127). zp_eff_speed is
@@ -29,17 +27,8 @@ pmx_add_speed_msg:
     jmp huff_print_msg
 
 pmx_add_bless_msg:
-    tax
-    lda zp_eff_bless
-    pha
-    txa
-    clc
-    adc zp_eff_bless
-    bcc !pabm_store+
-    lda #255
-!pabm_store:
-    sta zp_eff_bless
-    pla
+    ldy #zp_eff_bless
+    jsr pmx_add_zp_was_zero
     bne !pabm_done+
     lda #<pmx_righteous_msg
     ldy #>pmx_righteous_msg
@@ -48,22 +37,18 @@ pmx_add_bless_msg:
     rts
 
 pmx_add_protect_msg:
-    tax
-    lda zp_eff_protect
-    pha
-    txa
-    clc
-    adc zp_eff_protect
-    bcc !papm_store+
-    lda #255
-!papm_store:
-    sta zp_eff_protect
-    pla
-    bne !papm_done+
+    ldy #zp_eff_protect
+    jsr pmx_add_zp_was_zero
+    bne !pabm_done-
     ldx #HSTR_PIQ_PROTECTED
     jmp huff_print_msg
-!papm_done:
+
+pmx_add_zp_was_zero:
+    ldx $0000,y
+    jsr pmx_add_zp_sat
+    txa
     rts
+.assert "Bless/protect timers are zero-page", zp_eff_bless < $100 && zp_eff_protect < $100, true
 
 // pmx_add_resist_heat_cold_msg — Resist Heat and Cold: VMS
 // resist_heat += randint(10) + 10; resist_cold += randint(10) + 10, a roll
@@ -84,6 +69,7 @@ pmx_resist_add:
     jsr rng_range               // 0-9
     sec                         // + 1: randint(10)
     adc #10
+pmx_add_zp_sat:
     clc
     adc $0000,y
     bcc !pra_store+
@@ -108,45 +94,36 @@ pmx_sleep_adjacent_msg:
     lda #0
     sta pmx_feedback_sleep_hits
     sta pmx_feedback_sleep_seen
-    sta pmx_feedback_dir_idx
+    ldx #7
+    stx pmx_feedback_dir_idx
 !psam_loop:
     ldx pmx_feedback_dir_idx
-    cpx #8
-    bcs !psam_done_scan+
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta pmx_feedback_x
     lda zp_player_y
     clc
     adc dir_dy,x
-    sta pmx_feedback_y
-    lda pmx_feedback_x
-    ldy pmx_feedback_y
+    tay
+    lda zp_player_x
+    clc
+    adc dir_dx,x
     jsr monster_find_at
     bcc !psam_next+
     inc pmx_feedback_sleep_seen
-    stx pmx_feedback_mon_slot
     jsr pmx_try_sleep_monster
     bcc !psam_next+
     inc pmx_feedback_sleep_hits
 !psam_next:
-    inc pmx_feedback_dir_idx
-    jmp !psam_loop-
-!psam_done_scan:
+    dec pmx_feedback_dir_idx
+    bpl !psam_loop-
     lda pmx_feedback_sleep_hits
     bne !psam_any+
     lda pmx_feedback_sleep_seen
-    bne !psam_unaffected+
-    ldx #HSTR_PIQ_NOTHING
-    jmp huff_print_msg
+    beq pmx_print_nothing
+    lda #<pmx_sleep_unaffected_msg
+    ldy #>pmx_sleep_unaffected_msg
+    jmp pmx_print_inline
 !psam_any:
     lda #<pmx_sleep_success_msg
     ldy #>pmx_sleep_success_msg
-    jmp pmx_print_inline
-!psam_unaffected:
-    lda #<pmx_sleep_unaffected_msg
-    ldy #>pmx_sleep_unaffected_msg
     jmp pmx_print_inline
 
 pmx_try_sleep_monster:
@@ -155,6 +132,11 @@ pmx_try_sleep_monster:
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax
+#if (PLACE_SECRETS_EXTERNAL || PLACE_SECRETS_EMITTED) && !C64_TEST_FULL_ITEMDESC_STUB
+    lda cr_cdefense,x
+    and #CD_NO_SLEEP
+    bne !ptsm_resist+
+#endif
     lda #40
     jsr rng_range
     clc
@@ -172,39 +154,46 @@ pmx_try_sleep_monster:
 
 pmx_report_sleep_result:
     cmp #0
-    bne !prvs_any+
+    bne !psam_any-
+pmx_print_nothing:
     ldx #HSTR_PIQ_NOTHING
     jmp huff_print_msg
-!prvs_any:
-    lda #<pmx_sleep_success_msg
-    ldy #>pmx_sleep_success_msg
-    jmp pmx_print_inline
 
 pmx_confuse_monster_dir_msg:
     jsr eff_directional_monster
-    bcc !pcmd_miss+
+    bcc pmx_print_nothing
+#if (PLACE_SECRETS_EXTERNAL || PLACE_SECRETS_EMITTED) && !C64_TEST_FULL_ITEMDESC_STUB
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_cdefense,x
+    and #CD_NO_SLEEP
+    bne pmx_print_nothing
+#endif
     ldy #MX_CONFUSE
     lda #10
     sta (zp_ptr0),y
     ldx #HSTR_PIW_WAND_CLOUD
     jmp huff_print_msg
-!pcmd_miss:
-    ldx #HSTR_PIQ_NOTHING
-    jmp huff_print_msg
 
+// pmx_set_see_invisible_msg — Sense Invisible prayer: VMS spells.inc
+// detect_inv2(randint(24) + 24) -> +25..48 turns in zp_eff_see_inv,
+// saturating at 255; prints HSTR_PIQ_EYES_TINGLE on onset.
 pmx_set_see_invisible_msg:
-    lda zp_eff_see_inv
+    lda #24
+    jsr rng_range
+    sec
+    adc #24
+    ldy #zp_eff_see_inv
+    jsr pmx_add_zp_was_zero
     ora zp_eff_invis
-    pha
-    lda #1
-    sta zp_eff_see_inv
-    sta zp_eff_invis
-    pla
     bne !pssim_done+
     ldx #HSTR_PIQ_EYES_TINGLE
     jmp huff_print_msg
 !pssim_done:
     rts
+.assert "See-invisible timer is zero-page", zp_eff_see_inv < $100, true
 
 pmx_print_inline:
     sta zp_ptr0

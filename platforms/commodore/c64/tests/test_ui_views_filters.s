@@ -28,13 +28,16 @@ combat_msg_buf:  .fill 42, 0
 .const CF_EVIL    = $04
 .const CF_ANIMAL  = $08
 .const CF_DRAGON  = $10
+.const CD_FROST   = $01
+.const CD_FIRE    = $02
 .const STORE_TOTAL_SLOTS = 96
 .const MAX_CREATURES = 65
 .label cmb_period = $00
 cmb_type:   .byte 0
 cmb_damage: .byte 0
 eff_fear_timer: .byte 0
-cr_mflags:  .fill 65, 0
+cr_mflags:   .fill 65, 0
+cr_cdefense: .fill 65, 0
 current_tier: .byte 0
 tier_loaded:  .byte 0
 creature_name_buf: .fill 40, 0
@@ -48,6 +51,20 @@ si_to_hit:  .fill STORE_TOTAL_SLOTS, 0
 si_to_dam:  .fill STORE_TOTAL_SLOTS, 0
 si_to_ac:   .fill STORE_TOTAL_SLOTS, 0
 si_meta:    .fill STORE_TOTAL_SLOTS, 0
+si_meta_hi: .fill STORE_TOTAL_SLOTS, 0
+vis_room_revealed: .byte 0
+md_count:   .byte 0
+md_x:       .fill 4, 0
+md_y:       .fill 4, 0
+md_flags:   .fill 4, 0
+mon_atk_acid_armour:
+    clc
+    rts
+mm_divisor:
+    .byte 0
+mm_element_divisor_entry:
+    sta mm_divisor
+    rts
 help_pages: .byte 0, 0
 .const MX_CONFUSE = 9
 
@@ -114,6 +131,13 @@ magic_recalc_mana:
 magic_check_new_spells:
     rts
 
+combat_check_levelup:
+combat_check_leveldown:
+    rts
+
+eff_heal_sync:
+    rts
+
 player_death_check:
     rts
 
@@ -142,6 +166,7 @@ player_death_check:
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_gen.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/item.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/player_items.s"
@@ -354,17 +379,21 @@ reset_shared_state:
 test_filtered_inventory_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
 
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 4
     lda #1
     sta inv_qty + 4
@@ -402,22 +431,22 @@ test_filtered_inventory_view:
 test_book_filtered_inventory_view:
     jsr reset_shared_state
 
-    lda #47
+    lda #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
 
-    lda #48
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
 
-    lda #55
+    lda #ITEM_SLOT_SPELLBOOK_MAGICK_I
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2
 
-    lda #58
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM
     sta inv_item_id + 3
     lda #1
     sta inv_qty + 3
@@ -455,12 +484,16 @@ test_book_filtered_inventory_view:
 test_filtered_equipment_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
 
-    lda #14
+    lda #ITEM_SLOT_BRASS_LANTERN
     sta inv_item_id + EQUIP_LIGHT
     lda #1
     sta inv_qty + EQUIP_LIGHT
@@ -480,7 +513,7 @@ test_filtered_equipment_view:
     sta zp_ptr0
     lda #>expected_filtered_eq_light
     sta zp_ptr0_hi
-    lda #14
+    lda #8
     ldx #1
     jsr assert_screen_string
     bcc !fail+

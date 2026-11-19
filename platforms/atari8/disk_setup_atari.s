@@ -113,10 +113,17 @@ dsm_orig_save_dev:  .byte 0
 dsm_orig_disk_mode: .byte 0
 
 !select_d1:
+#if ATARI8_CARTRIDGE
+    lda #8
+    sta save_device
+    lda #2
+    sta disk_mode
+#else
     lda program_device
     sta save_device
     lda #1
     sta disk_mode
+#endif
 !done_choice:
     jsr disk_prepare_selected_save_media
     bcc !dsm_ok+
@@ -159,6 +166,11 @@ dsm_orig_disk_mode: .byte 0
 disk_prepare_selected_save_media:
     lda save_device
     sta disk_prompt_device
+#if ATARI8_CARTRIDGE
+    lda #2
+    sta disk_mode
+    jmp !check_media+
+#else
     ldx #2
     cmp program_device
     bne !set_mode+
@@ -170,6 +182,7 @@ disk_prepare_selected_save_media:
 
     // 2-drive mode: check if an initialized Save Disk is already in save_device
     jmp !check_media+
+#endif
 
 !prompt_insert:
     jsr hal_screen_clear
@@ -403,25 +416,31 @@ dsm_is_cancel_key:
 // Save Disk Format Tables & Strings
 // ============================================================
 init_empty_sec_lo:
-    .byte 5, 7, 63, 119, 175, <362
+    .byte 5, 7, 75, 143, 211, <362
 init_empty_sec_hi:
     .byte 0, 0, 0, 0, 0, >362
 
 init_vtoc_head:
-    .byte $02, <707, >707, <480, >480
+    .byte $02, <707, >707, <432, >432
 
 save_disk_dir_table:
     .byte $42, 1,  0, 4,   0, 'M','O','R','I','A','8',' ',' ','I','D',' '
     .byte $42, 2,  0, 5,   0, 'H','I','S','C','O','R','E',' ','D','A','T'
-    .byte $42, 56, 0, 7,   0, 'S','A','V','E','0',' ',' ',' ','S','A','V'
-    .byte $42, 56, 0, 63,  0, 'S','A','V','E','1',' ',' ',' ','S','A','V'
-    .byte $42, 56, 0, 119, 0, 'S','A','V','E','2',' ',' ',' ','S','A','V'
-    .byte $42, 56, 0, 175, 0, 'S','A','V','E','3',' ',' ',' ','S','A','V'
+    .byte $42, 68, 0, 7,   0, 'S','A','V','E','0',' ',' ',' ','S','A','V'
+    .byte $42, 68, 0, 75,  0, 'S','A','V','E','1',' ',' ',' ','S','A','V'
+    .byte $42, 68, 0, 143, 0, 'S','A','V','E','2',' ',' ',' ','S','A','V'
+    .byte $42, 68, 0, 211, 0, 'S','A','V','E','3',' ',' ',' ','S','A','V'
 
 dsm_title_str:         .text "DISK SETUP" ; .byte 0
+#if ATARI8_CARTRIDGE
+dsm_prog_str:          .text "Program: Cartridge" ; .byte 0
+dsm_save_str:          .text "Save:    D" ; .byte 0
+dsm_opt1_str:          .text "1) Use D1: for saves" ; .byte 0
+#else
 dsm_prog_str:          .text "Program: D1:" ; .byte 0
 dsm_save_str:          .text "Save:    D" ; .byte 0
 dsm_opt1_str:          .text "1) Same as program" ; .byte 0
+#endif
 dsm_opt2_str:          .text "2) Pick save drive" ; .byte 0
 dsm_opt3_str:          .text "3) Done" ; .byte 0
 dsm_optq_str:          .text "Q) Back" ; .byte 0

@@ -29,6 +29,9 @@ test_finish:
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestNameStreams [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -42,14 +45,14 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestUnused
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segmentdef TestNameStreams [start=$A000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/input_contract.s"
 #import "../../../../core/sound.s"
@@ -57,17 +60,31 @@ test_finish:
 #import "../../../../core/dungeon_gen.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+.segment TestUnused
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
+.segment TestUnused
 #import "../../../../core/player_items.s"
+.segment Default
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
@@ -80,8 +97,11 @@ test_finish:
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment TestUnused
 #import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
 #import "../../../../core/turn.s"
+.segment Default
 
 store_init_all:
     rts

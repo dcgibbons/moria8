@@ -47,8 +47,6 @@
 .const hal_layout_wizard_menu_col = 30
 .const hal_layout_wizard_footer_col = 34
 .const hal_layout_status_row21_name_col = 1
-.const hal_layout_status_row21_state_col = 0
-.const hal_layout_status_row21_poison_col = 40   // "Poisoned": between the name and LV:
 .const hal_layout_status_row21_lv_col = 58
 .const hal_layout_status_row21_dl_col = 66
 .const hal_layout_status_row22_st_col = 1
@@ -61,10 +59,6 @@
 .const hal_layout_status_row23_mp_col = 16
 .const hal_layout_status_row23_ac_col = 31
 .const hal_layout_status_row23_au_col = 44
-.const hal_layout_status_row23_hunger_col = 63
-.const hal_layout_status_row23_state_col = 70
-.const hal_layout_status_searching_on_row21 = 0
-.const hal_layout_status_searching_on_row23 = 1
 // Title art loads into Bank 5 MAP_BASE ($8000) and renders via mmu_safe_map_read_ptr1.
 .const hal_layout_title_load_uses_cache = 0
 .const hal_layout_title_art_bank1_source = 1

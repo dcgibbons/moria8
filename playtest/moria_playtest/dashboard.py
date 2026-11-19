@@ -35,6 +35,8 @@ import re
 import subprocess
 import sys
 import time
+import zlib
+from collections import OrderedDict, deque
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -200,61 +202,73 @@ def queue_group(queue: str | None) -> str:
     return queue if queue in ("balrog", "build") else "other"
 
 
-def death_counts(runs: Path) -> dict[str, dict[str, int]]:
-    """Per creature, the characters it killed, by queue group, over every
-    run the queue recorded."""
+def deaths(runs: Path) -> list[tuple[str, str, str]]:
+    """Each death the queue recorded: (run id, cause, queue group)."""
+    return [(record.get("id") or "", cause, queue_group(record.get("queue"))) for record in queue_records(runs)
+            if record.get("outcome") == "died" and (cause := (record.get("death") or {}).get("cause"))]
+
+
+def death_counts(runs: Path, since: str = "") -> dict[str, dict[str, int]]:
+    """Per creature, the characters it killed, by queue group, over the runs
+    the queue recorded from ``since`` (a run id prefix) on."""
     out: dict[str, dict[str, int]] = {}
-    for record in queue_records(runs):
-        cause = (record.get("death") or {}).get("cause")
-        if record.get("outcome") != "died" or not cause:
+    for run_id, cause, key in cached(runs, deaths) or []:
+        if run_id[:len(since)] < since:
             continue
         group = out.setdefault(cause, {})
-        key = queue_group(record.get("queue"))
         group[key] = group.get(key, 0) + 1
     return out
 
 
-def monster_stats(home: Path) -> dict[str, Any]:
-    """The Monsters panel: per creature, how many the bots have slain (kill
-    events, by queue group), how many runs met it (met events) and how many
-    characters it has killed (run records). Kills count from KILLS_SINCE,
-    meetings from MET_SINCE, deaths from the first run."""
+def monster_stats(home: Path, since: str = "") -> dict[str, Any]:
+    """The Monsters panel: per creature, how many runs slew it (kill events,
+    by queue group), how many runs met it (met events) and how many
+    characters it has killed (run records): runs alike, so slain and met
+    compare (maintainer, 2026-11-12: Evil Iggy, 69 kills in 22 runs, showed
+    more kills than the 53 runs that met him). Kills count from
+    KILLS_SINCE, meetings from MET_SINCE, deaths from the first run, all
+    from ``since`` (config "stats_since") when later: a fresh start, the
+    runs before it kept (maintainer, 2026-11-15, after 708f3df's 370 items:
+    "archive all the stats ... especially the monsters grid")."""
+    kills_since, met_since = max(KILLS_SINCE, since), max(MET_SINCE, since)
     creatures: dict[str, dict[str, dict[str, int]]] = {}
     def entry(name: str) -> dict[str, dict[str, int]]:
         return creatures.setdefault(name, {"slain": {}, "met": {}, "killed": {}})
     runs = met_runs = 0
     for events in home.glob("runs/*/events.jsonl"):
-        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+        if events.parent.name[:len(kills_since)] < kills_since:
             continue
         counts = cached(events, kill_counts) or {}
-        met = (cached(events, met_names) or []) if events.parent.name[:len(MET_SINCE)] >= MET_SINCE else []
+        met = (cached(events, met_names) or []) if events.parent.name[:len(met_since)] >= met_since else []
         if not (counts or met):
             continue
         runs += bool(counts)
         met_runs += bool(met)
         job = cached(events.parent / "job.json", read_json) or {}
         key = queue_group(job.get("queue") or ("balrog" if "-balrog-" in events.parent.name else None))
-        for name, count in counts.items():
+        for name in counts:
             slain = entry(name)["slain"]
-            slain[key] = slain.get(key, 0) + count
+            slain[key] = slain.get(key, 0) + 1
         for name in met:
             seen = entry(name)["met"]
             seen[key] = seen.get(key, 0) + 1
     shipped = set(knowledge.creature_names())
-    for name, killed in (cached(home / "runs.jsonl", death_counts) or {}).items():
+    for name, killed in death_counts(home / "runs.jsonl", since).items():
         if name in shipped:   # not poison, traps, starvation or "caster's spell"
             entry(name)["killed"] = killed
-    return {"creatures": creatures, "runs": runs, "met_runs": met_runs, "since": KILLS_SINCE,
-            "met_since": MET_SINCE}
+    return {"creatures": creatures, "runs": runs, "met_runs": met_runs, "since": kills_since,
+            "met_since": met_since}
 
 
-def balrog_kills(home: Path) -> dict[str, Any]:
-    """The Balrog queue's kills over every run it kept: what falls, and
-    whether the Balrog, Evil Iggy or an Ancient Multi-Hued Dragon ever has."""
+def balrog_kills(home: Path, since: str = "") -> dict[str, Any]:
+    """The Balrog queue's kills over every run it kept from ``since`` on:
+    what falls, and whether the Balrog, Evil Iggy or an Ancient Multi-Hued
+    Dragon ever has."""
     total: dict[str, int] = {}
     runs = 0
+    cut = max(KILLS_SINCE, since)
     for events in home.glob("runs/*-balrog-*/events.jsonl"):
-        if events.parent.name[:len(KILLS_SINCE)] < KILLS_SINCE:
+        if events.parent.name[:len(cut)] < cut:
             continue
         counts = cached(events, kill_counts) or {}
         runs += bool(counts)
@@ -273,19 +287,70 @@ def killer(trace: Path) -> str:
     return found[-1] if found else ""
 
 
+TAIL_KEEP = 256       # trace lines kept per trace between reads (TIMELINE * 2 and fewer)
+TAIL_TRACES = 64      # traces whose read position is kept (the live runs and a few more)
+
+
+class _Tail:
+    """Where a trace's reading stopped: its gzip stream grows as the run
+    plays, so the next read decompresses only what was added."""
+
+    def __init__(self, keep: int) -> None:
+        self.offset = 0
+        self.inflate = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        self.partial = b""
+        self.lines: deque[bytes] = deque(maxlen=keep)
+
+
+_tails: OrderedDict[str, _Tail] = OrderedDict()
+
+
 def trace_tail(trace: Path, count: int) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+    """The trace's last ``count`` decisions. Read from its start, decoding
+    every line, the 26 live runs' traces (541 MB compressed, twice each) took
+    523 of a 645-second publish, the dashboard showed data 16 minutes stale
+    and the publisher held a core (2026-11-13): each trace is now read on
+    from where the last read stopped, and only the kept lines decoded."""
+    key = str(trace)
     try:
-        with gzip.open(trace, "rt") as handle:
-            for line in handle:
-                try:
-                    rows.append(json.loads(line))
-                except ValueError:
-                    break   # still being written
-                del rows[:-count]
-    except (OSError, EOFError):
-        pass
+        size = trace.stat().st_size
+    except OSError:
+        return []
+    tail = _tails.pop(key, None)
+    if tail is None or size < tail.offset or count > (tail.lines.maxlen or 0):
+        tail = _Tail(max(count, TAIL_KEEP))
+    try:
+        with trace.open("rb") as handle:
+            handle.seek(tail.offset)
+            data = handle.read()
+        tail.offset += len(data)
+        text = b""
+        while data:
+            text += tail.inflate.decompress(data)
+            if not tail.inflate.eof:
+                break
+            data = tail.inflate.unused_data   # a further gzip member
+            tail.inflate = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    except (OSError, zlib.error):
+        return []
+    *complete, tail.partial = (tail.partial + text).split(b"\n")
+    tail.lines.extend(line for line in complete if line)
+    _tails[key] = tail
+    while len(_tails) > TAIL_TRACES:
+        _tails.popitem(last=False)
+    rows: list[dict[str, Any]] = []
+    for line in list(tail.lines)[-count:]:
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            continue
     return rows
+
+
+# The Phase 4 traps' messages (core/trap_trigger_cold.s, huffman DF_DART_HITS):
+# unnamed, their deaths were "unknown" (2026-11-16: 10 of 45 on 3e9fd0c).
+TRAP_MESSAGES = {"A trap door opens!": "trap: trap door", "A blade hits you!": "trap: blade",
+                 "Flames hit you!": "trap: fire", "Acid hits you!": "trap: acid", "A dart hits you!": "trap: dart"}
 
 
 def death(trace: Path) -> dict[str, Any]:
@@ -309,6 +374,8 @@ def death(trace: Path) -> dict[str, Any]:
         cause = "trap: pit"
     elif "arrow" in text.lower():
         cause = "trap: arrow"
+    elif any(message in text for message in TRAP_MESSAGES):
+        cause = next(name for message, name in TRAP_MESSAGES.items() if message in text)
     elif "casts a spell" in text:
         cause = "caster's spell"
     elif any("poison" in (r.get("msg") or "").lower() for r in rows) and (
@@ -317,7 +384,8 @@ def death(trace: Path) -> dict[str, Any]:
         # The poison tick (at most 4 HP) stops at 0 HP; a killing blow usually
         # leaves HP below 0 and prints no "hits you" (M7 queue).
         cause = "poison"
-    elif not found and any(word in (last.get("status") or "") for word in ("Weak", "Faint")):
+    elif not found and any(word in (last.get("states") or "") + (last.get("status") or "")
+                           for word in ("Weak", "Faint")):
         # Starving prints no message; the tombstone says "Starvation" (core/
         # score.s). Recorded as "unknown" until 2026-11-10: Apple IIe, BBC
         # and CX16 build-queue characters lost on no-way-up levels.
@@ -601,15 +669,18 @@ def queue_records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "") -> dict[str, Any]:
+def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "", since: str = "") -> dict[str, Any]:
     """The run records' part of /api/queue: ratings and feature counts over
     the main queue's counted runs on ``goal``, the number of runs and the
     newest 30. From queue.db, the derived counts remembered until a row is
     written (the database file's mtime lags its WAL); from runs.jsonl before
-    the service has made the database."""
+    the service has made the database. Runs before ``since`` (config
+    "stats_since", a run id prefix) are left out."""
+    def fresh(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [r for r in records if (r.get("id") or "")[:len(since)] >= since] if since else records
     db = run_records.open_ro(home)
     if db is None:
-        records = cached(home / "runs.jsonl", queue_records) or []
+        records = fresh(cached(home / "runs.jsonl", queue_records) or [])
         main = [r for r in records if r.get("queue") == "main" and r.get("goal") == goal and r["outcome"] in counted
                 and r.get("epoch", "") == epoch]
         return {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
@@ -618,20 +689,29 @@ def queue_runs(home: Path, goal: str, counted: tuple[str, ...], epoch: str = "")
     with closing(db):
         # Every insert takes a new rowid, so the count and the last rowid change with each.
         version = db.execute("SELECT count(*), max(rowid) FROM runs").fetchone()
-        key = (f"{run_records.path(home)}:{goal}:{epoch}", version)
+        key = (f"{run_records.path(home)}:{goal}:{epoch}:{since}", version)
         if key not in _cache:
             for stale in [k for k in _cache if k[0] == key[0]]:
                 del _cache[stale]
             main = run_records.records(db, f"queue = 'main' AND goal = ? AND outcome IN "
                                            f"({', '.join('?' * len(counted))})", (goal, *counted))
-            main = [r for r in main if r.get("epoch", "") == epoch]   # the current epoch's runs only
+            main = fresh([r for r in main if r.get("epoch", "") == epoch])   # the current epoch's runs only
             _cache[key] = {"ratings": ratings(main), "features": queue_features(main), "difficulty": difficulty(main),
-                           "builds": build_history(run_records.records(db, "queue = 'build'"), counted)}
-        return {**_cache[key], "runs": version[0], "recent": run_records.records(db, newest=30)}
+                           "builds": build_history(run_records.records(db, "queue = 'build' AND id >= ?", (since,)),
+                                                   counted),
+                           "runs": db.execute("SELECT count(*) FROM runs WHERE id >= ?", (since,)).fetchone()[0]}
+        return {**_cache[key], "recent": fresh(run_records.records(db, newest=30))}
 
 
 BUILD_HISTORY = 40      # builds the Builds card shows, newest last
-NOISE_FINDINGS = ("stall:", "load_retry:")   # findings that are no defect (watch.py does the same)
+# The bot's own notes (every finding of class "bot": session.file_finding
+# and the auditor): a stall it recovers from by stair-scumming, a square
+# entered too often, a prompt it did not know, no new character level for
+# the goal's level_steps (no_level). Shown apart from the findings
+# (maintainer, 2026-11-16: about 40% of runs showed a stall note as a
+# finding, "they're noise"; no_level too: "things like we ran out of steps").
+BOT_NOTES = ("stall:", "loop:", "unknown_prompt:", "no_level:")
+NOISE_FINDINGS = BOT_NOTES + ("load_retry:",)   # findings that are no defect (watch.py does the same)
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -687,10 +767,13 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
         detail: dict[str, dict[str, Any]] = {}
         for r in runs:
             d = detail.setdefault(r.get("platform") or "?", {"games": 0, "reached": 0, "died": 0, "levels": [],
-                                                             "played": set(), "findings": []})
+                                                             "played": set(), "findings": [], "notes": []})
             found = [f for f in r.get("findings") or [] if not f.startswith(NOISE_FINDINGS)]
             if found:
                 d["findings"].append({"id": r.get("id"), "character": r.get("character"), "text": found[0]})
+            notes = [f for f in r.get("findings") or [] if f.startswith(BOT_NOTES)]
+            if notes:
+                d["notes"].append({"id": r.get("id"), "character": r.get("character"), "text": notes[0]})
             if r.get("outcome") not in counted:
                 continue
             d["games"] += 1
@@ -712,6 +795,7 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
                     "median_clvl": levels[len(levels) // 2] if levels else None,
                     "findings": sum(any(not f.startswith(NOISE_FINDINGS) for f in r.get("findings") or [])
                                     for r in runs),
+                    "notes": sum(any(f.startswith(BOT_NOTES) for f in r.get("findings") or []) for r in runs),
                     "ports": ports, "detail": detail})
     return out
 
@@ -850,7 +934,8 @@ def queue() -> dict[str, Any]:
     service = read_json(home / "service.json") or {}
     state = read_json(q.state_path(home, config["goal"], config.get("epoch", ""))) or {}
     running = read_json(home / "running.json") or {}
-    runs = queue_runs(home, config["goal"], q.COUNTED, config.get("epoch", ""))
+    since = config.get("stats_since", "")
+    runs = queue_runs(home, config["goal"], q.COUNTED, config.get("epoch", ""), since)
     def summary(path: Path) -> dict[str, Any]:
         sub = cached(path, read_json) or {}
         return ({k: sub.get(k) for k in ("name", "created", "finished", "build", "note", "done", "cancelled",
@@ -881,8 +966,8 @@ def queue() -> dict[str, Any]:
             "platforms": state.get("platforms", {}),
             "live": [queue_live(home, run_id, job) for run_id, job in running.items()],
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
-            "balrog_kills": balrog_kills(home),
-            "monsters": monster_stats(home),
+            "balrog_kills": balrog_kills(home, since),
+            "monsters": monster_stats(home, since),
             "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "builds": runs["builds"],

@@ -2,18 +2,18 @@
 // ui_status.s — Bottom status bar rendering (umoria-style, 3 lines)
 //
 // Three-line status bar at rows 21–23:
-//   Row 21: Name, Race, Level, Dungeon Level
+//   Row 21: Name, its states (hunger, Poisoned, Search*), Level, Dungeon Level
 //   Row 22: ST:nn IN:nn WI:nn DX:nn CO:nn CH:nn
-//   Row 23: HP:nn/nn MP:nn/nn AC:nn AU:nnnnn HUNGRY
+//   Row 23: HP:nn/nn MP:nn/nn AC:nn AU:nnnnn
 //
 // Only redraws when zp_ui_dirty bit 0 is set (dirty flag).
 
 .const STS_ROW21_NAME_COL = hal_layout_status_row21_name_col
-.const STS_ROW21_STATE_COL = hal_layout_status_row21_state_col
-.const STS_ROW21_POISON_COL = hal_layout_status_row21_poison_col
 .const STS_ROW21_LV_COL = hal_layout_status_row21_lv_col
 .const STS_ROW21_DL_COL = hal_layout_status_row21_dl_col
-.assert "Poisoned fits before LV:", STS_ROW21_POISON_COL + 8 < STS_ROW21_LV_COL, true
+// The states follow the name (PL_NAME: 16 characters at most), a space before
+// each: hunger always fits, the longest word "Hungry".
+.assert "Hunger fits after the longest name", STS_ROW21_NAME_COL + 16 + 1 + 6 < STS_ROW21_LV_COL, true
 .const STS_ROW22_ST_COL = hal_layout_status_row22_st_col
 .const STS_ROW22_IN_COL = hal_layout_status_row22_in_col
 .const STS_ROW22_WI_COL = hal_layout_status_row22_wi_col
@@ -24,10 +24,8 @@
 .const STS_ROW23_MP_COL = hal_layout_status_row23_mp_col
 .const STS_ROW23_AC_COL = hal_layout_status_row23_ac_col
 .const STS_ROW23_AU_COL = hal_layout_status_row23_au_col
-.const STS_ROW23_HUNGER_COL = hal_layout_status_row23_hunger_col
-.const STS_ROW23_STATE_COL = hal_layout_status_row23_state_col
-// Gold digits that fit between "AU:" and the hunger word with a space before it
-.const STS_AU_DIGITS = STS_ROW23_HUNGER_COL - STS_ROW23_AU_COL - 4
+// Gold digits that fit between "AU:" and the screen's edge with room for a "K"
+.const STS_AU_DIGITS = SCREEN_COLS - STS_ROW23_AU_COL - 4
 .assert "status gold field holds 16-bit gold", STS_AU_DIGITS >= 5, true
 
 // ============================================================
@@ -135,34 +133,25 @@ status_draw:
     bne !sd_row23_dirty+
     lda player_data + PL_GOLD_2
     cmp status_prev_gold_bank
-    bne !sd_row23_dirty+
-
-    lda zp_hunger_state
-    cmp status_prev_hunger
-    bne !sd_row23_dirty+
-    jmp !sd_check_search+
+    beq !sd_check_search+
 !sd_row23_dirty:
     lda status_dirty_rows
     ora #$04
     sta status_dirty_rows
 
 !sd_check_search:
-    // Search mode and Poisoned (VMS prt_poisoned, Umoria
-    // printCharacterPoisonedState), one state byte: Poisoned is on row 21.
+    // Row 21's states: hunger, Poisoned (VMS prt_poisoned, Umoria
+    // printCharacterPoisonedState) and search mode.
     jsr status_state
     cmp status_prev_searching
+    bne !sd_row21_state_dirty+
+    lda zp_hunger_state
+    cmp status_prev_hunger
     beq !sd_dirty_ready+
-    .if (hal_layout_status_searching_on_row21 != 0) {
-        lda status_dirty_rows
-        ora #$01
-        sta status_dirty_rows
-    }
-    .if (hal_layout_status_searching_on_row23 != 0) {
-        lda status_dirty_rows
-        ora #$05
-        sta status_dirty_rows
-    }
-    jmp !sd_dirty_ready+
+!sd_row21_state_dirty:
+    lda status_dirty_rows
+    ora #$01
+    sta status_dirty_rows
 
 !sd_dirty_ready:
     // Full clears and explicit status-row clears force a full repaint via bit7.
@@ -213,53 +202,40 @@ status_draw:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-    // Space separator
-    lda #$20
-    jsr hal_screen_put_char
-
-    // Race name
+    // Its states after it, most urgent first, each while it fits before LV:
+    // (maintainer, 2026-11-12: the race left the status line, on the
+    // character sheet; hunger moved up from row 23, where it cut MP short on
+    // 40 columns): hunger (nothing when fed, as Umoria), Poisoned, Search*.
+    ldx zp_hunger_state
+    beq !sd_row21_fed+                  // HUNGER_FULL
+    lda #COL_RED                        // weak or faint
+    cpx #HUNGER_HUNGRY
+    bne !sd_row21_hunger_colour+
+    lda #COL_YELLOW
+!sd_row21_hunger_colour:
+    sta zp_text_color
+    ldy hunger_name_ptrs_hi,x
+    lda hunger_name_ptrs_lo,x
+    tax
+    jsr status_put_word
+!sd_row21_fed:
+    lda zp_eff_poison
+    beq !sd_row21_not_poisoned+
+    lda #COL_RED
+    ldx #<status_poisoned_str
+    ldy #>status_poisoned_str
+    jsr status_put_state
+!sd_row21_not_poisoned:
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !sd_row21_states_done+
+    lda #COL_YELLOW
+    ldx #<status_searching_str
+    ldy #>status_searching_str
+    jsr status_put_state
+!sd_row21_states_done:
     lda #COL_STATUS
     sta zp_text_color
-    ldx zp_player_race
-    lda race_name_ptrs_lo,x
-    sta zp_ptr0
-    lda race_name_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-
-    // "Poisoned" while the poison lasts (maintainer, 2026-11-10): on 40
-    // columns in Search*'s slot and ahead of it, one put for either word.
-    .if (hal_layout_status_searching_on_row21 != 0) {
-        jsr status_state
-        bmi !sd_row21_poisoned+
-        beq !sd_row21_state_done+       // neither
-        lda #COL_YELLOW
-        ldx #<status_searching_str
-        ldy #>status_searching_str
-        bne !sd_row21_state_put+        // always: the string is above page 0
-!sd_row21_poisoned:
-        lda #COL_RED
-        ldx #<status_poisoned_str
-        ldy #>status_poisoned_str
-!sd_row21_state_put:
-        sta zp_text_color
-        lda #STS_ROW21_STATE_COL
-        sta zp_cursor_col
-        txa
-        jsr screen_put_string_ay
-!sd_row21_state_done:
-    } else {
-        lda zp_eff_poison
-        beq !sd_row21_poison_done+
-        lda #COL_RED
-        sta zp_text_color
-        lda #STS_ROW21_POISON_COL
-        sta zp_cursor_col
-        lda #<status_poisoned_str
-        ldy #>status_poisoned_str
-        jsr screen_put_string_ay
-!sd_row21_poison_done:
-    }
 
     lda #STS_ROW21_LV_COL
     sta zp_cursor_col
@@ -487,49 +463,6 @@ status_draw:
     jsr screen_put_decimal_u24
 }
 
-    lda #STS_ROW23_HUNGER_COL
-    sta zp_cursor_col
-    // Color-code hunger
-    lda zp_hunger_state
-    cmp #HUNGER_FULL
-    beq !hunger_ok+
-    cmp #HUNGER_HUNGRY
-    beq !hunger_warn+
-    // Weak or faint
-    lda #COL_RED
-    sta zp_text_color
-    bne !hunger_print+          // always: COL_RED is not 0
-!hunger_warn:
-    lda #COL_YELLOW
-    sta zp_text_color
-    bne !hunger_print+          // always: COL_YELLOW is not 0
-    .assert "COL_RED and COL_YELLOW are not 0 (the hunger colour branches)", COL_RED != 0 && COL_YELLOW != 0, true
-!hunger_ok:
-    lda #COL_STATUS
-    sta zp_text_color
-!hunger_print:
-    lda zp_hunger_state
-    tax
-    lda hunger_name_ptrs_lo,x
-    sta zp_ptr0
-    lda hunger_name_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-
-    .if (hal_layout_status_searching_on_row23 != 0) {
-        lda player_data + PL_FLAGS
-        and #PLF_SEARCHING
-        beq !sd_row23_state_done+
-        lda #COL_YELLOW
-        sta zp_text_color
-        lda #STS_ROW23_STATE_COL
-        sta zp_cursor_col
-        lda #<status_searching_str
-        ldy #>status_searching_str
-        jsr screen_put_string_ay
-!sd_row23_state_done:
-    }
-
 !sd_update_cache:
     // Update status cache after successful redraw.
     lda zp_player_lvl
@@ -728,7 +661,35 @@ status_state:
 !ss_done:
     rts
 .assert "Search mode is not bit 7", PLF_SEARCHING & $80, 0
+
 :StatusTextRestoreSegment()
+
+// status_put_state — Row 21's state word at X/Y (lo/hi) in colour A, after a
+// space, when it ends before LV:'s space; once one does not, none after it
+// (the cursor goes to LV:), so a less urgent word never shows in its place.
+// status_put_word: the same in the colour already set.
+// Clobbers: A, X, Y, zp_ptr0
+status_put_state:
+    sta zp_text_color
+status_put_word:                // ... in the colour already set
+    stx zp_ptr0
+    sty zp_ptr0_hi
+    ldy #$ff
+!sps_len:
+    iny
+    lda (zp_ptr0),y
+    bne !sps_len-
+    tya
+    sec                         // + 1: the space before it
+    adc zp_cursor_col
+    cmp #STS_ROW21_LV_COL       // ends at LV_COL - 2 at most: a space before LV:
+    bcs !sps_full+
+    inc zp_cursor_col
+    jmp hal_screen_put_string
+!sps_full:
+    lda #STS_ROW21_LV_COL
+    sta zp_cursor_col
+    rts
 
 // ============================================================
 // Status cache (skip redraw when visible values are unchanged)

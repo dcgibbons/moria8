@@ -17,7 +17,6 @@ skip_overlay="${SKIP_OVERLAY:-0}"
 skip_summary="${SKIP_SUMMARY:-0}"
 skip_call="${SKIP_CALL:-0}"
 skip_guards="${SKIP_GUARDS:-0}"
-final_return_diag="${FINAL_RETURN_DIAG:-0}"
 
 if ! "${COMMODORE_MAKE[@]}" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
     echo "chargen_cut build128/disk128 failed"
@@ -48,9 +47,6 @@ if [ "$skip_guards" = "1" ]; then
     ka_args+=(-define C128_TEST_SKIP_PLAYER_CREATE_GUARDS)
 fi
 
-if [ "$final_return_diag" = "1" ]; then
-    ka_args+=(-define C128_TEST_FINAL_RETURN_DIAG)
-fi
 
 if ! java -jar "$KICKASS" main.s "${ka_args[@]}" -o "$diag_main" >>"$build_log" 2>&1; then
     echo "chargen_cut assembly failed"
@@ -83,7 +79,7 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
 fi
 
 abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_chargen_cut.d64"
-echo "CUTPOINT=$cutpoint SKIP_OVERLAY=$skip_overlay SKIP_SUMMARY=$skip_summary SKIP_CALL=$skip_call SKIP_GUARDS=$skip_guards FINAL_RETURN_DIAG=$final_return_diag"
+echo "CUTPOINT=$cutpoint SKIP_OVERLAY=$skip_overlay SKIP_SUMMARY=$skip_summary SKIP_CALL=$skip_call SKIP_GUARDS=$skip_guards"
 echo "Launching: $abs_d64"
-exec "$VICE" -80col -drive8truedrive -drive8type 1541 +iecdevice8 \
+exec "$VICE" -80col -VDC16KB -drive8truedrive -drive8type 1541 +iecdevice8 \
     -sound -sounddev coreaudio -autostart "$abs_d64"

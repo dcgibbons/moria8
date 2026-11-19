@@ -570,8 +570,11 @@ test_expected_name:
 test_expected_name2:
     .byte 4, 18, 1, 7, 15, 14, 0
 
+monster128_test_code_end:
+.assert "monster128 test code ends before its stubs", monster128_test_code_end <= $9400, true
+
 // Dummy stubs needed by monster.s that aren't imported
-.pc = $8c00 "Stubs"
+.pc = $9400 "Stubs"
 rng_range: rts
 rng_range_word: rts
 math_dice: rts
@@ -602,4 +605,4 @@ dir_dx: .fill 8, 0
 dir_dy: .fill 8, 0
 monster128_code_end:
 .assert "monster128 code stays out of the map's Bank 0 shadow", monster128_code_begin > MAP_END, true
-.assert "monster128 test code ends before its stubs", monster128_code_end <= $9000, true
+.assert "monster128 stubs stay below $9800", monster128_code_end <= $9800, true

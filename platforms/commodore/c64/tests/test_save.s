@@ -51,6 +51,11 @@ test_finish:
 #define HAL_STORAGE_LOAD_ALLOW_UNMARKED_SAVE
 #define HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
 #define HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
+// test_save exercises save/load formats and known-item bitsets using
+// hot tables only; item_cat_data (7.5 KB) is never read here.
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
+hal_item_cat_read_byte:
+    brk
 
 player_cast_spell:
 player_pray:
@@ -67,6 +72,11 @@ monster_ai_tick:
     rts
 mat_scene_dirty: .byte 0
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -80,11 +90,14 @@ mat_scene_dirty: .byte 0
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segmentdef TestUnusedStatus [start=$D000, min=$D000, max=$DFFF]
+.segment TestUnusedStatus
 #import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
 #import "../../../../core/stat_display.s"
+.segment Default
+#import "../../../../core/ui_help_clear.s"
 .segmentdef TestCreateOverlay [start=$D000]
-.segmentdef TestNameStreams [start=$A000]
+.segmentdef TestNameStreams [start=$E100]
 .segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
@@ -95,17 +108,32 @@ mat_scene_dirty: .byte 0
 dg_idx: .byte 0
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/recall.s"
+.segmentdef TestUnusedCombat [start=$d000, min=$d000, max=$dfff]
+.segment TestUnusedCombat
 #import "../../../../core/monster_magic.s"
+.segment Default
+// Adding to the pack (inv_add.s) is not exercised here: parked out of
+// reach, the runner's tripwire (tools/parked_tripwire.py) failing the
+// suite if it is ever called (the VMS weight limit, 2026-11-13, took
+// the body past MAP_BASE).
+#define INV_ADD_EXTERNAL
 #import "../../../../core/item.s"
+#undef INV_ADD_EXTERNAL
+.segmentdef TestParkedInvAdd [start=$f200]
+.segment TestParkedInvAdd
+#import "../../../../core/inv_add.s"
+.segment TestUnusedCombat
 random_floor_in_room:
     lda #0
     tay
     rts
 #import "../../../../core/special_rooms.s"
+.segment Default
 // The resistance armour and crown roll and its data are not exercised here
 // (no item spawns): out of the way with the store code past $D000.
 #define EGO_ARMOUR_SEGMENT_CUSTOM
@@ -122,10 +150,14 @@ random_floor_in_room:
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
+.segment TestStoreOverlay
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment Default
 #import "../../../../core/spell_data.s"
+.segmentdef TestUnusedPlay [start=$d000, min=$d000, max=$fff9]
+.segment TestUnusedPlay
 #import "../../../../core/projectile.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
@@ -133,6 +165,12 @@ random_floor_in_room:
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
+.segment Default
 #import "../../../../core/store_data.s"
 // Store code goes in a dummy overlay segment so it doesn't bloat the test body.
 // test_save.s doesn't test store code, but turn.s→tramp_store_restock_all
@@ -160,18 +198,7 @@ random_floor_in_room:
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
-.const hal_storage_save_v1_version = $0f
-.const hal_storage_save_known96_version = $10
-.const hal_storage_save_version = $12
-.const hal_storage_save_inv31_version = $11
-.const hal_storage_save_inv33_version = $12
-.const hal_storage_save_baked_stats_version = $11
-.const hal_storage_save_known_bits_version = $11
-.const hal_storage_save_known160_version = $12
-.const hal_storage_save_door_state_version = $12
-.const hal_storage_save_store16_version = $12
-// TODO(release): remove with the 12-item store migration (test 39).
-#define HAL_STORAGE_LEGACY_STORE12_MIGRATION
+.const hal_storage_save_version = $22
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
@@ -346,9 +373,6 @@ rle_decompress_map:
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
 tc_results: .fill 40, $ff
 
-test_t31_ptr_lo: .byte 0
-test_t31_ptr_hi: .byte 0
-
 // ui_character.s dropped to keep the test body under MAP_BASE.
 ui_char_display:
     rts
@@ -506,8 +530,6 @@ test_stream_reset_read:
 // Load a current-version door-state block whose count byte is A.
 test_load_door_count:
     sta SAVE_STREAM_BUF
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jmp load_read_door_state
@@ -528,58 +550,23 @@ test_clear_store_items:
     sta si_to_dam,x
     sta si_to_ac,x
     sta si_meta,x
+    sta si_meta_hi,x
     dex
     bpl !fields-
     rts
 
 test_save_item_state_blocks:
     :save_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
-    :save_block(si_item_id, STORE_TOTAL_SLOTS)
-    :save_block(si_qty, STORE_TOTAL_SLOTS)
-    :save_block(si_p1, STORE_TOTAL_SLOTS)
-    :save_block(si_to_hit, STORE_TOTAL_SLOTS)
-    :save_block(si_to_dam, STORE_TOTAL_SLOTS)
-    :save_block(si_to_ac, STORE_TOTAL_SLOTS)
-    :save_block(si_meta, STORE_TOTAL_SLOTS)
+    :save_block(si_item_id, 8 * STORE_TOTAL_SLOTS)
     jsr save_write_floor_items
     rts
 
 test_load_item_state_blocks:
-    lda #SAVE_VERSION
-    sta load_save_version
-    jsr load_read_inventory_state
-    :load_block(si_item_id, STORE_TOTAL_SLOTS)
-    :load_block(si_qty, STORE_TOTAL_SLOTS)
-    :load_block(si_p1, STORE_TOTAL_SLOTS)
-    :load_block(si_to_hit, STORE_TOTAL_SLOTS)
-    :load_block(si_to_dam, STORE_TOTAL_SLOTS)
-    :load_block(si_to_ac, STORE_TOTAL_SLOTS)
-    :load_block(si_meta, STORE_TOTAL_SLOTS)
+    :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
+    jsr save_sanitize_inv_ids
+    :load_block(si_item_id, 8 * STORE_TOTAL_SLOTS)
+    jsr save_sanitize_store_ids
     jsr load_read_floor_items
-    rts
-
-// A pre-amulet save: 8 per-array blocks of 30 slots each.
-test_save_legacy_inventory_state_blocks:
-    :save_block(inv_item_id, LEGACY_INV30_SLOTS)
-    :save_block(inv_qty, LEGACY_INV30_SLOTS)
-    :save_block(inv_p1, LEGACY_INV30_SLOTS)
-    :save_block(inv_to_hit, LEGACY_INV30_SLOTS)
-    :save_block(inv_to_dam, LEGACY_INV30_SLOTS)
-    :save_block(inv_to_ac, LEGACY_INV30_SLOTS)
-    :save_block(inv_flags, LEGACY_INV30_SLOTS)
-    :save_block(inv_ego, LEGACY_INV30_SLOTS)
-    rts
-
-// A pre-secondary-weapon save: 8 per-array blocks of 31 slots each.
-test_save_inv31_inventory_state_blocks:
-    :save_block(inv_item_id, LEGACY_INV31_SLOTS)
-    :save_block(inv_qty, LEGACY_INV31_SLOTS)
-    :save_block(inv_p1, LEGACY_INV31_SLOTS)
-    :save_block(inv_to_hit, LEGACY_INV31_SLOTS)
-    :save_block(inv_to_dam, LEGACY_INV31_SLOTS)
-    :save_block(inv_to_ac, LEGACY_INV31_SLOTS)
-    :save_block(inv_flags, LEGACY_INV31_SLOTS)
-    :save_block(inv_ego, LEGACY_INV31_SLOTS)
     rts
 
 // One sentinel byte after an inventory section (the next block's start).
@@ -658,17 +645,6 @@ ts_reset_io_state:
     sta save_io_error
     rts
 
-// ts_poison_all_known — Set every known-item bit (X=0..ITEM_ID_CAPACITY-1).
-// Clobbers: A, X
-ts_poison_all_known:
-    ldx #0
-!loop:
-    jsr id_known_set
-    inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !loop-
-    rts
-
 // ts_clear_known_bits — Zero the full known-item bitset. Clobbers: A, X
 ts_clear_known_bits:
     ldx #ID_KNOWN_BYTES - 1
@@ -680,21 +656,33 @@ ts_clear_known_bits:
     rts
 
 // ts_expect_known_range / ts_expect_unknown_range — Check id_known state for
-// IDs [X, Y). Output: carry set = all matched, carry clear = mismatch.
+// IDs [X, Y) on active item_cur_page. Output: carry set = all matched.
 // Clobbers: A, X
 ts_range_end: .byte 0
-// ts_fixed_known — Carry set when item X is a fixed-description item a load
-// marks known (lrki_defaults: an implemented ID outside the flavoured classes).
-// Clobbers: Y
+// ts_fixed_known — Carry set when paged item (item_cur_page, X) is fixed-known
+// (irfk_defaults: non-flavoured category or unknown_idx == $ff).
+// Clobbers: A, Y (X preserved)
 ts_fixed_known:
-    cpx #ITEM_TYPE_COUNT
+    bit item_cur_page
+    bvs !tfk_p1+
+    cpx #ITEM_PAGE_SIZE
     bcs !tfk_no+
-    ldy it_category,x
-    cpy #ICAT_POTION
+    bcc !tfk_chk+
+!tfk_p1:
+    cpx #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcs !tfk_no+
+!tfk_chk:
+    txa
+    jsr item_get_category_a
+    cmp #ICAT_POTION
     bcc !tfk_yes+
-    cpy #ICAT_AMULET
+    cmp #ICAT_AMULET
     bcs !tfk_yes+
-    cpy #ICAT_BOOK
+    cmp #ICAT_BOOK
+    beq !tfk_yes+
+    txa
+    jsr item_get_unknown_idx_a
+    cmp #$ff
     beq !tfk_yes+
 !tfk_no:
     clc
@@ -743,7 +731,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #28
+    ldx #39
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1272,15 +1260,19 @@ t7_set_slot31:
     bne !t9_clr-
 
     // Place 5 items at various slots
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta fi_item_id + 0
-    lda #15                     // Food
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi + 0
+    }
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Food
     sta fi_item_id + 3
-    lda #7                      // Leather armor
+    lda #ITEM_SLOT_LEATHER_ARMOR                      // Leather armor
     sta fi_item_id + 10
-    lda #0                      // Gold (small)
+    lda #ITEM_SLOT_GOLD_SMALL                      // Gold (small)
     sta fi_item_id + 20
-    lda #13                     // Torch
+    lda #ITEM_SLOT_WOODEN_TORCH                     // Torch
     sta fi_item_id + 31
 
     lda #0
@@ -1336,20 +1328,99 @@ t7_set_slot31:
     sta tc_results + 10
 
     // ============================================================
-    // Test 12: V1 is supported and uses the current floor layout.
+    // Test 12: Only SAVE_VERSION ($22) is accepted; legacy V1 ($17),
+    // intermediate ($0f, $18, $19, $20, $21), and future ($23) versions
+    // are rejected, and load_game on a $17 save returns
+    // LOAD_RESULT_UNSUPPORTED without reading or mutating game RAM.
     // ============================================================
-    lda #SAVE_V1_VERSION
-    jsr save_version_supported
-    bcc !t12_fail+
-    lda #(SAVE_VERSION + 1)
-    jsr save_version_supported
-    bcs !t12_fail+
-    lda #SAVE_V1_VERSION
-    jsr save_version_uses_legacy_floor_layout
-    bcs !t12_fail+
     lda #SAVE_VERSION
-    jsr save_version_uses_legacy_floor_layout
+    jsr save_version_supported
+    bcs !t12_cur_ok+
+    jmp !t12_fail+
+!t12_cur_ok:
+    lda #$17                    // Legacy C64 Save V1
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #$18
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #$19
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #$20
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #(SAVE_VERSION - 1)     // $21 (370-item pre-VMS-renumber V2)
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #(SAVE_VERSION + 1)     // $23 (future)
+    jsr save_version_supported
+    bcs !t12_fail_far+
+    lda #$0f
+    jsr save_version_supported
+    bcc !t12_stream_test+
+!t12_fail_far:
+    jmp !t12_fail+
+
+!t12_stream_test:
+    ldx #0
+!t12_copy_hdr:
+    lda save_magic,x
+    sta SAVE_STREAM_BUF,x
+    inx
+    cpx #SAVE_MAGIC_SIZE - 1
+    bcc !t12_copy_hdr-
+    lda #$17
+    sta SAVE_STREAM_BUF + SAVE_MAGIC_SIZE - 1
+    lda #$aa
+    sta SAVE_STREAM_BUF + SAVE_MAGIC_SIZE
+    sta SAVE_STREAM_BUF + SAVE_MAGIC_SIZE + 1
+
+    lda #$77
+    sta player_data + PL_LEVEL
+    jsr item_init_inventory
+    jsr test_clear_store_items
+
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    lda #1
+    sta test_save_marker_present
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    jsr test_stream_reset_read
+    jsr load_game
+    php
+    lda #0
+    sta test_save_marker_present
+    plp
     bcs !t12_fail+
+    lda load_result
+    cmp #LOAD_RESULT_UNSUPPORTED
+    bne !t12_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_UNSUPPORTED
+    bne !t12_fail+
+    lda zp_ptr2
+    cmp #<(SAVE_STREAM_BUF + SAVE_MAGIC_SIZE)
+    bne !t12_fail+
+    lda zp_ptr2_hi
+    cmp #>(SAVE_STREAM_BUF + SAVE_MAGIC_SIZE)
+    bne !t12_fail+
+    lda player_data + PL_LEVEL
+    cmp #$77
+    bne !t12_fail+
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t12_fail+
+    lda si_item_id
+    cmp #FI_EMPTY
+    bne !t12_fail+
     lda #$01
     bne !t12_store+
 !t12_fail:
@@ -1370,7 +1441,7 @@ t7_set_slot31:
     jsr test_clear_store_items
 
     // Inventory slot 2: weapon-like item with split combat stats.
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2
@@ -1384,11 +1455,11 @@ t7_set_slot31:
     sta inv_to_ac + 2
     lda #(IF_IDENTIFIED | IF_CURSED)
     sta inv_flags + 2
-    lda #EGO_FLAME_TONGUE
+    lda #(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
     sta inv_ego + 2
 
     // Equipment body slot: armor AC must persist independently.
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
@@ -1398,8 +1469,12 @@ t7_set_slot31:
     sta inv_flags + EQUIP_BODY
 
     // New V3 amulet slot: save/load must preserve the 31st slot.
-    lda #24
+    lda #ITEM_SLOT_RING_OF_STRENGTH
     sta inv_item_id + EQUIP_AMULET
+    .if (ITEM_PAGE_RING_OF_STRENGTH != 0) {
+        lda #ITEM_PAGE_RING_OF_STRENGTH
+        sta inv_ego + EQUIP_AMULET
+    }
     lda #1
     sta inv_qty + EQUIP_AMULET
     lda #$7f
@@ -1408,7 +1483,7 @@ t7_set_slot31:
     sta inv_flags + EQUIP_AMULET
 
     // Boundary IDs: first appended (96) and last appended (127) must persist.
-    lda #96
+    lda #ITEM_SLOT_POTION_OF_HEALING
     sta inv_item_id + 3
     lda #1
     sta inv_qty + 3
@@ -1416,7 +1491,7 @@ t7_set_slot31:
     sta inv_p1 + 3
     lda #IF_IDENTIFIED
     sta inv_flags + 3
-    lda #127
+    lda #ITEM_SLOT_STAFF_OF_REMOVE_CURSE
     sta inv_item_id + 4
     lda #1
     sta inv_qty + 4
@@ -1426,7 +1501,7 @@ t7_set_slot31:
     sta inv_flags + 4
 
     // Store/home slot 10: packed flags+ego plus split stat sidecars.
-    lda #1
+    lda #ITEM_SLOT_GOLD_LARGE
     sta si_item_id + 10
     sta si_qty + 10
     lda #$33
@@ -1437,11 +1512,13 @@ t7_set_slot31:
     sta si_to_dam + 10
     lda #6
     sta si_to_ac + 10
-    lda #((EGO_DEFENDER << ITEM_META_EGO_SHIFT) | IF_IDENTIFIED | IF_SENSED)
+    lda #(IF_IDENTIFIED | IF_SENSED)
     sta si_meta + 10
+    lda #EGO_DEFENDER
+    sta si_meta_hi + 10
 
-    // Floor slot 3: packed floor metadata uses flags<<3 plus low ego bits.
-    lda #2
+    // Floor slot 3: V2 stores raw fi_meta flags and fi_meta_hi ego/page.
+    lda #ITEM_SLOT_DAGGER
     sta fi_item_id + 3
     lda #11
     sta fi_x + 3
@@ -1451,8 +1528,10 @@ t7_set_slot31:
     sta fi_qty + 3
     lda #$55
     sta fi_p1 + 3
-    lda #(((IF_IDENTIFIED | IF_CURSED) << 3) | EGO_FROST_BRAND)
+    lda #(IF_IDENTIFIED | IF_CURSED)
     sta fi_meta + 3
+    lda #(EGO_FROST_BRAND | ITEM_PAGE_DAGGER)
+    sta fi_meta_hi + 3
     lda #$82
     sta fi_to_hit + 3
     lda #9
@@ -1471,7 +1550,7 @@ t7_set_slot31:
     jsr test_load_item_state_blocks
 
     lda inv_item_id + 2
-    :t13_expect(2)
+    :t13_expect(ITEM_SLOT_DAGGER)
     lda inv_p1 + 2
     :t13_expect($44)
     lda inv_to_hit + 2
@@ -1481,17 +1560,21 @@ t7_set_slot31:
     lda inv_flags + 2
     :t13_expect(IF_IDENTIFIED | IF_CURSED)
     lda inv_ego + 2
-    :t13_expect(EGO_FLAME_TONGUE)
+    :t13_expect(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
 
     lda inv_item_id + EQUIP_BODY
-    :t13_expect(7)
+    :t13_expect(ITEM_SLOT_LEATHER_ARMOR)
     lda inv_to_ac + EQUIP_BODY
     :t13_expect(5)
     lda inv_flags + EQUIP_BODY
     :t13_expect(IF_IDENTIFIED)
 
     lda inv_item_id + EQUIP_AMULET
-    :t13_expect(24)
+    :t13_expect(ITEM_SLOT_RING_OF_STRENGTH)
+    .if (ITEM_PAGE_RING_OF_STRENGTH != 0) {
+        lda inv_ego + EQUIP_AMULET
+        :t13_expect(ITEM_PAGE_RING_OF_STRENGTH)
+    }
     lda inv_qty + EQUIP_AMULET
     :t13_expect(1)
     lda inv_p1 + EQUIP_AMULET
@@ -1500,7 +1583,7 @@ t7_set_slot31:
     :t13_expect(IF_IDENTIFIED)
 
     lda inv_item_id + 3
-    :t13_expect(96)
+    :t13_expect(ITEM_SLOT_POTION_OF_HEALING)
     lda inv_qty + 3
     :t13_expect(1)
     lda inv_p1 + 3
@@ -1508,7 +1591,7 @@ t7_set_slot31:
     lda inv_flags + 3
     :t13_expect(IF_IDENTIFIED)
     lda inv_item_id + 4
-    :t13_expect(127)
+    :t13_expect(ITEM_SLOT_STAFF_OF_REMOVE_CURSE)
     lda inv_qty + 4
     :t13_expect(1)
     lda inv_p1 + 4
@@ -1517,7 +1600,7 @@ t7_set_slot31:
     :t13_expect(IF_TRIED)
 
     lda si_item_id + 10
-    :t13_expect(1)
+    :t13_expect(ITEM_SLOT_GOLD_LARGE)
     lda si_p1 + 10
     :t13_expect($33)
     lda si_to_hit + 10
@@ -1527,10 +1610,12 @@ t7_set_slot31:
     lda si_to_ac + 10
     :t13_expect(6)
     lda si_meta + 10
-    :t13_expect((EGO_DEFENDER << ITEM_META_EGO_SHIFT) | IF_IDENTIFIED | IF_SENSED)
+    :t13_expect(IF_IDENTIFIED | IF_SENSED)
+    lda si_meta_hi + 10
+    :t13_expect(EGO_DEFENDER)
 
     lda fi_item_id + 3
-    :t13_expect(2)
+    :t13_expect(ITEM_SLOT_DAGGER)
     lda fi_x + 3
     :t13_expect(11)
     lda fi_y + 3
@@ -1540,7 +1625,9 @@ t7_set_slot31:
     lda fi_p1 + 3
     :t13_expect($55)
     lda fi_meta + 3
-    :t13_expect(((IF_IDENTIFIED | IF_CURSED) << 3) | EGO_FROST_BRAND)
+    :t13_expect(IF_IDENTIFIED | IF_CURSED)
+    lda fi_meta_hi + 3
+    :t13_expect(EGO_FROST_BRAND | ITEM_PAGE_DAGGER)
     lda fi_to_hit + 3
     :t13_expect($82)
     lda fi_to_dam + 3
@@ -2101,242 +2188,118 @@ t22_fail_code:
     sta tc_results + 21
 
     // ============================================================
-    // Test 23: known-item save migration reads V1 as 64 bytes,
-    // clears future IDs, and round-trips the V2 96-byte runway.
+    // Test 23: V2 known-item round-trip writes ID_KNOWN_BYTES (47 B),
+    // preserves Page 0 and Page 1 known bits, refreshes fixed-known
+    // items, and keeps spare capacity bits (361-375) clear.
     // ============================================================
-    jsr ts_reset_io_state
-    jsr test_stream_reset_write
-    ldx #0
-!t23_seed_v1_stream:
-    txa
-    eor #$5a
-    sta SAVE_STREAM_BUF,x
-    inx
-    cpx #LEGACY_ITEM_TYPE_COUNT
-    bcc !t23_seed_v1_stream-
-    lda SAVE_STREAM_BUF
-    cmp #$5a
-    beq !t23_v1_stream_ok+
-    lda #5
-    jmp t23_fail_code
-!t23_v1_stream_ok:
-
-    jsr ts_poison_all_known
-
-    lda #SAVE_V1_VERSION
-    sta load_save_version
-    jsr test_stream_reset_read
-    jsr load_read_known_items
-
-    // Legacy stream bytes were all nonzero: bits 0-63 must be set
-    ldx #0
-    ldy #LEGACY_ITEM_TYPE_COUNT
-    jsr ts_expect_known_range
-    bcs !t23_v1known_ok+
-    lda #2
-    jmp t23_fail_code
-!t23_v1known_ok:
-    // Legacy migration defaults are category-derived: appended fixed rows
-    // (64-95, 122-125) must be set, randomized-class rows (96-121, 126, 127)
-    // must be clear.
-    ldx #LEGACY_ITEM_TYPE_COUNT
-    ldy #96
-    jsr ts_expect_known_range
-    bcs !t23_v1app_ok+
-    lda #3
-    jmp t23_fail_code
-!t23_v1app_ok:
-
-    ldx #96
-    ldy #ITEM_TYPE_MITHRIL_CHAIN
-    jsr ts_expect_unknown_range
-    bcs !t23_v1rand_ok+
-    lda #3
-    jmp t23_fail_code
-!t23_v1rand_ok:
-
-    ldx #ITEM_TYPE_MITHRIL_CHAIN
-    ldy #ITEM_TYPE_AMULET_MAGI + 1
-    jsr ts_expect_known_range
-    bcs !t23_v1fix3_ok+
-    lda #3
-    jmp t23_fail_code
-!t23_v1fix3_ok:
-
-    // Randomized-class rows 126-127 stay unknown after legacy migration
-    ldx #ITEM_TYPE_POT_NEUTRALIZE
-    ldy #ITEM_TYPE_CHEST_SMALL_WOOD
-    jsr ts_expect_unknown_range
-    bcs !t23_v1rand2_ok+
-    lda #3
-    jmp t23_fail_code
-!t23_v1rand2_ok:
-
-    // Chest rows (128-134) and the Iron Spike are fixed-known after legacy
-    // migration; the Phase Door scroll (136) is a randomized-appearance
-    // class, so it migrates unknown (lrki_defaults).
-    ldx #ITEM_TYPE_CHEST_SMALL_WOOD
-    ldy #ITEM_TYPE_SCR_PHASE_DOOR
-    jsr ts_expect_known_range
-    bcs !t23_v1chest_ok+
-    lda #3
-    jmp t23_fail_code
-!t23_v1chest_ok:
-    ldx #ITEM_TYPE_SCR_PHASE_DOOR
-    ldy #ITEM_TYPE_SCR_PHASE_DOOR + 1
-    jsr ts_expect_unknown_range
-    bcs !t23_v1scroll_ok+
-    lda #3
-    jmp t23_fail_code
-!t23_v1scroll_ok:
-
-    // Future capacity: bits past ITEM_TYPE_COUNT must be clear
-    .if (ITEM_TYPE_COUNT < ITEM_ID_CAPACITY) {
-    ldx #ITEM_TYPE_COUNT
-    ldy #ITEM_ID_CAPACITY
-    jsr ts_expect_unknown_range
-    bcs !t23_v1future_ok+
-    lda #3
-    jmp t23_fail_code
-!t23_v1future_ok:
-    }
-    // V2/V3 migration: 96-byte legacy stream packs bits, future stays clear
-    jsr ts_reset_io_state
-    jsr test_stream_reset_write
-    ldx #0
-!t23_seed_v23_stream:
-    txa
-    and #1
-    sta SAVE_STREAM_BUF,x         // odd IDs nonzero, even zero
-    inx
-    cpx #96
-    bcc !t23_seed_v23_stream-
-
-    jsr ts_poison_all_known
-
-    lda #SAVE_KNOWN96_VERSION
-    sta load_save_version
-    jsr test_stream_reset_read
-    jsr load_read_known_items
-
-    ldx #0
-!t23_check_v23:
-    txa
-    and #1
-    beq !t23_v23_expect_clear+
-    jsr id_known_test
-    bne !t23_v23_next+
-    lda #5
-    jmp t23_fail_code
-!t23_v23_expect_clear:
-    jsr id_known_test
-    beq !t23_v23_next+
-    lda #5
-    jmp t23_fail_code
-!t23_v23_next:
-    inx
-    cpx #96
-    bcc !t23_check_v23-
-
-    // V2/V3 appended defaults are category-derived: randomized-class rows
-    // (96-121, 126, 127) clear, fixed rows (122-125) set.
-    ldx #96
-    ldy #ITEM_TYPE_MITHRIL_CHAIN
-    jsr ts_expect_unknown_range
-    bcs !t23_v23f_ok+
-    lda #5
-    jmp t23_fail_code
-!t23_v23f_ok:
-
-    ldx #ITEM_TYPE_MITHRIL_CHAIN
-    ldy #ITEM_TYPE_AMULET_MAGI + 1
-    jsr ts_expect_known_range
-    bcs !t23_v23f3_ok+
-    lda #5
-    jmp t23_fail_code
-!t23_v23f3_ok:
-
-    // Randomized-class rows 126-127 stay unknown after legacy migration
-    ldx #ITEM_TYPE_POT_NEUTRALIZE
-    ldy #ITEM_TYPE_CHEST_SMALL_WOOD
-    jsr ts_expect_unknown_range
-    bcs !t23_v23t_ok+
-    lda #5
-    jmp t23_fail_code
-!t23_v23t_ok:
-
-    // Chest rows (128-134) and the spike are fixed-known after legacy
-    // migration; the Phase Door scroll (136) migrates unknown.
-    ldx #ITEM_TYPE_CHEST_SMALL_WOOD
-    ldy #ITEM_TYPE_SCR_PHASE_DOOR
-    jsr ts_expect_known_range
-    bcs !t23_v23c_ok+
-    lda #5
-    jmp t23_fail_code
-!t23_v23c_ok:
-    ldx #ITEM_TYPE_SCR_PHASE_DOOR
-    ldy #ITEM_TYPE_SCR_PHASE_DOOR + 1
-    jsr ts_expect_unknown_range
-    bcs !t23_v23s_ok+
-    lda #5
-    jmp t23_fail_code
-!t23_v23s_ok:
-
-    // Future capacity bits (135+) stay clear
-    ldx #ITEM_TYPE_COUNT
-    ldy #ITEM_ID_CAPACITY
-    jsr ts_expect_unknown_range
-    bcs !t23_v23f2_ok+
-    lda #5
-    jmp t23_fail_code
-!t23_v23f2_ok:
-
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr ts_clear_known_bits
+    lda #0
+    sta item_cur_page
     ldx #0
-!t23_seed_v2_known:
+!t23_seed_p0:
     txa
     and #1
-    beq !t23_seed_skip+
+    beq !t23_skip_p0+
     jsr id_known_set
-!t23_seed_skip:
+!t23_skip_p0:
     inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !t23_seed_v2_known-
+    cpx #ITEM_PAGE_SIZE
+    bcc !t23_seed_p0-
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx #0
+!t23_seed_p1:
+    txa
+    and #1
+    beq !t23_skip_p1+
+    jsr id_known_set
+!t23_skip_p1:
+    inx
+    cpx #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcc !t23_seed_p1-
+
     jsr test_stream_reset_write
     jsr save_write_known_items
+    lda zp_ptr2
+    cmp #<(SAVE_STREAM_BUF + ID_KNOWN_BYTES)
+    beq !t23_len_lo_ok+
+    lda #2
+    jmp t23_fail_code
+!t23_len_lo_ok:
+    lda zp_ptr2_hi
+    cmp #>(SAVE_STREAM_BUF + ID_KNOWN_BYTES)
+    beq !t23_len_hi_ok+
+    lda #2
+    jmp t23_fail_code
+!t23_len_hi_ok:
 
     jsr ts_clear_known_bits
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr load_read_known_items
 
-    // Odd IDs round-trip known; even ones unknown, but a fixed-description
-    // item is always known after a load (lrki_defaults).
+    lda #0
+    sta item_cur_page
     ldx #0
-!t23_check_v2_known:
+!t23_chk_p0:
     txa
     and #1
-    bne !t23_expect_known+
+    bne !t23_p0_need_known+
     jsr ts_fixed_known
-    bcc !t23_expect_clear+
-!t23_expect_known:
+    bcs !t23_p0_need_known+
     jsr id_known_test
-    bne !t23_v2_next+
-    lda #4
+    beq !t23_p0_next+
+    lda #3
     jmp t23_fail_code
-!t23_expect_clear:
+!t23_p0_need_known:
     jsr id_known_test
-    beq !t23_v2_next+
-    lda #4
+    bne !t23_p0_next+
+    lda #3
     jmp t23_fail_code
-!t23_v2_next:
+!t23_p0_next:
     inx
-    cpx #ITEM_ID_CAPACITY
-    bcc !t23_check_v2_known-
+    cpx #ITEM_PAGE_SIZE
+    bcc !t23_chk_p0-
 
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx #0
+!t23_chk_p1:
+    txa
+    and #1
+    bne !t23_p1_need_known+
+    jsr ts_fixed_known
+    bcs !t23_p1_need_known+
+    jsr id_known_test
+    beq !t23_p1_next+
+    lda #4
+    jmp t23_fail_code
+!t23_p1_need_known:
+    jsr id_known_test
+    bne !t23_p1_next+
+    lda #4
+    jmp t23_fail_code
+!t23_p1_next:
+    inx
+    cpx #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    bcc !t23_chk_p1-
+
+    .assert "361 occupies bit 0 of byte 45 (second-to-last known byte)", (ITEM_TYPE_COUNT >> 3) == (ID_KNOWN_BYTES - 2) && (ITEM_TYPE_COUNT & 7) == 1, true
+    lda id_known_bits + ID_KNOWN_BYTES - 2
+    and #$fe
+    ora id_known_bits + ID_KNOWN_BYTES - 1
+    beq !t23_spare_ok+
+    lda #5
+    jmp t23_fail_code
+!t23_spare_ok:
+    lda #0
+    sta item_cur_page
+    lda save_io_error
+    beq !t23_ok+
+    lda #6
+    jmp t23_fail_code
+!t23_ok:
     lda #$01
     bne !t23_store+
 t23_fail_code:
@@ -2344,65 +2307,102 @@ t23_fail_code:
     sta tc_results + 22
 
     // ============================================================
-    // Test 24: legacy 30-slot inventory saves leave amulet slot empty.
+    // Test 24: V2 34-slot inventory preserves EQUIP_CLOAK (32),
+    // EQUIP_SECONDARY (33), and Page-1 ITEM_PAGE_BIT entries.
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_inventory
-    lda #2
-    sta inv_item_id + 2
+    lda #ITEM_SLOT_CLEAR_POTION_OF_WATER
+    sta inv_item_id + 1
+    lda #3
+    sta inv_qty + 1
+    lda #IF_IDENTIFIED
+    sta inv_flags + 1
+    lda #ITEM_PAGE_CLEAR_POTION_OF_WATER
+    sta inv_ego + 1
+
+    lda #ITEM_SLOT_CLOAK
+    sta inv_item_id + EQUIP_CLOAK
     lda #1
-    sta inv_qty + 2
-    lda #$44
-    sta inv_p1 + 2
+    sta inv_qty + EQUIP_CLOAK
+    lda #$03
+    sta inv_p1 + EQUIP_CLOAK
+    lda #4
+    sta inv_to_ac + EQUIP_CLOAK
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_CLOAK
+    lda #(ITEM_PAGE_CLOAK | EGO_STEALTH)
+    sta inv_ego + EQUIP_CLOAK
+
+    lda #ITEM_SLOT_DAGGER
+    sta inv_item_id + EQUIP_SECONDARY
+    lda #1
+    sta inv_qty + EQUIP_SECONDARY
+    lda #2
+    sta inv_to_hit + EQUIP_SECONDARY
+    lda #3
+    sta inv_to_dam + EQUIP_SECONDARY
+    lda #(IF_IDENTIFIED | IF_CURSED)
+    sta inv_flags + EQUIP_SECONDARY
+    lda #(ITEM_PAGE_DAGGER | EGO_SLAY_EVIL)
+    sta inv_ego + EQUIP_SECONDARY
+
     jsr test_stream_reset_write
-    jsr test_save_legacy_inventory_state_blocks
+    :save_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
     jsr test_save_sentinel
 
     jsr item_init_inventory
-    lda #24
-    sta inv_item_id + EQUIP_AMULET
-    lda #1
-    sta inv_qty + EQUIP_AMULET
-    lda #$7f
-    sta inv_p1 + EQUIP_AMULET
-    lda #SAVE_KNOWN96_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
-    jsr load_read_inventory_state
+    :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
+    jsr save_sanitize_inv_ids
 
-    lda inv_item_id + 2
-    cmp #2
-    beq !t24_slot2_id_ok+
+    lda inv_item_id + 1
+    cmp #ITEM_SLOT_CLEAR_POTION_OF_WATER
+    beq !t24_p1_id_ok+
     lda #2
     jmp t24_fail_code
-!t24_slot2_id_ok:
-    lda inv_p1 + 2
-    cmp #$44
-    beq !t24_slot2_p1_ok+
+!t24_p1_id_ok:
+    lda inv_ego + 1
+    cmp #ITEM_PAGE_CLEAR_POTION_OF_WATER
+    beq !t24_p1_bit_ok+
     lda #3
     jmp t24_fail_code
-!t24_slot2_p1_ok:
-    lda inv_item_id + EQUIP_AMULET
-    cmp #FI_EMPTY
-    beq !t24_amulet_id_ok+
+!t24_p1_bit_ok:
+    lda inv_item_id + EQUIP_CLOAK
+    cmp #ITEM_SLOT_CLOAK
+    beq !t24_clk_id_ok+
     lda #4
     jmp t24_fail_code
-!t24_amulet_id_ok:
-    lda inv_qty + EQUIP_AMULET
-    beq !t24_amulet_qty_ok+
+!t24_clk_id_ok:
+    lda inv_to_ac + EQUIP_CLOAK
+    cmp #4
+    beq !t24_clk_ac_ok+
     lda #5
     jmp t24_fail_code
-!t24_amulet_qty_ok:
-    lda inv_p1 + EQUIP_AMULET
-    beq !t24_amulet_p1_ok+
+!t24_clk_ac_ok:
+    lda inv_ego + EQUIP_CLOAK
+    cmp #(ITEM_PAGE_CLOAK | EGO_STEALTH)
+    beq !t24_clk_ego_ok+
     lda #6
     jmp t24_fail_code
-!t24_amulet_p1_ok:
-    jsr test_load_sentinel          // 30 x 8 bytes read: the next block lines up
-    beq !t24_sentinel_ok+
+!t24_clk_ego_ok:
+    lda inv_item_id + EQUIP_SECONDARY
+    cmp #ITEM_SLOT_DAGGER
+    beq !t24_sec_id_ok+
     lda #7
+    jmp t24_fail_code
+!t24_sec_id_ok:
+    lda inv_ego + EQUIP_SECONDARY
+    cmp #(ITEM_PAGE_DAGGER | EGO_SLAY_EVIL)
+    beq !t24_sec_ego_ok+
+    lda #8
+    jmp t24_fail_code
+!t24_sec_ego_ok:
+    jsr test_load_sentinel
+    beq !t24_sentinel_ok+
+    lda #9
     jmp t24_fail_code
 !t24_sentinel_ok:
     lda #$01
@@ -2462,53 +2462,98 @@ t25_fail_code:
     sta tc_results + 24
 
     // ============================================================
-    // Test 26: old 16-byte known-bitset saves (pre-chest catalog) read
-    // IDs 0-127 from the stream, default chests 128-134 fixed-known, and
-    // clear the appended capacity bytes.
+    // Test 26: V2 floor-item p1 vs gold qty_hi honors ITEM_PAGE_BIT:
+    // Page-0 slot 0/1 reads qty_hi -> fi_p1; Page-1 slot 0/1 keeps fi_p1.
     // ============================================================
     jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr item_init_floor
+    lda #ITEM_SLOT_GOLD_SMALL                      // Page 0 gold (slot_lo = 0)
+    sta fi_item_id + 0
+    sta fi_meta_hi + 0
+    lda #$34
+    sta fi_qty + 0
+    lda #$12
+    sta fi_p1 + 0
+    lda #4
+    sta fi_x + 0
+    lda #5
+    sta fi_y + 0
+
+    lda #0                      // Page 1 logical 255 (slot_lo = 0)
+    sta fi_item_id + 1          // raw-id-ok: synthetic boundary test
+    lda #(ITEM_PAGE_BIT | EGO_RESIST)
+    sta fi_meta_hi + 1
+    lda #2
+    sta fi_qty + 1
+    lda #$7a
+    sta fi_p1 + 1
+    lda #6
+    sta fi_x + 1
+    lda #7
+    sta fi_y + 1
+    lda #IF_IDENTIFIED
+    sta fi_meta + 1
+
+    lda #1                      // Page 1 logical 256 (slot_lo = 1)
+    sta fi_item_id + 2          // raw-id-ok: synthetic boundary test
+    lda #ITEM_PAGE_BIT
+    sta fi_meta_hi + 2
+    lda #$5b
+    sta fi_p1 + 2
+    lda #8
+    sta fi_x + 2
+    lda #9
+    sta fi_y + 2
+
     jsr test_stream_reset_write
-    ldx #0
-    lda #$ff                    // Bitset stream: all 128 legacy bits set
-!t26_seed_stream:
-    sta SAVE_STREAM_BUF,x
-    inx
-    cpx #16
-    bcc !t26_seed_stream-
+    jsr save_write_floor_items
 
-    jsr ts_poison_all_known
-
-    lda #SAVE_KNOWN_BITS_VERSION
-    sta load_save_version
+    jsr item_init_floor
     jsr test_stream_reset_read
-    jsr load_read_known_items
+    jsr ts_reset_io_state
+    jsr load_read_floor_items
 
-    // Stream bytes were all nonzero: IDs 0-127 must be set; chest rows
-    // (128-134) and the spike default fixed-known; the Phase Door scroll
-    // (136, randomized appearance) defaults unknown; future capacity stays
-    // clear.
-    ldx #0
-    ldy #ITEM_TYPE_SCR_PHASE_DOOR
-    jsr ts_expect_known_range
-    bcs !t26_known_ok+
+    lda fi_item_id + 0
+    beq !t26_g0_id+
     lda #2
     jmp t26_fail_code
-!t26_known_ok:
-    ldx #ITEM_TYPE_SCR_PHASE_DOOR
-    ldy #ITEM_TYPE_SCR_PHASE_DOOR + 1
-    jsr ts_expect_unknown_range
-    bcs !t26_scroll_ok+
-    lda #2
-    jmp t26_fail_code
-!t26_scroll_ok:
-    ldx #ITEM_TYPE_COUNT
-    ldy #ITEM_ID_CAPACITY
-    jsr ts_expect_unknown_range
-    bcs !t26_future_ok+
+!t26_g0_id:
+    lda fi_qty + 0
+    cmp #$34
+    bne !t26_g0_fail+
+    lda fi_p1 + 0
+    cmp #$12
+    beq !t26_p1_chk+
+!t26_g0_fail:
     lda #3
     jmp t26_fail_code
-!t26_future_ok:
-
+!t26_p1_chk:
+    lda fi_item_id + 1
+    bne !t26_p1_fail+
+    lda fi_meta_hi + 1
+    cmp #(ITEM_PAGE_BIT | EGO_RESIST)
+    bne !t26_p1_fail+
+    lda fi_p1 + 1
+    cmp #$7a
+    beq !t26_p2_chk+
+!t26_p1_fail:
+    lda #4
+    jmp t26_fail_code
+!t26_p2_chk:
+    lda fi_item_id + 2
+    cmp #1 // raw-id-ok: synthetic boundary test
+    bne !t26_p2_fail+
+    lda fi_meta_hi + 2
+    cmp #ITEM_PAGE_BIT
+    bne !t26_p2_fail+
+    lda fi_p1 + 2
+    cmp #$5b
+    beq !t26_ok+
+!t26_p2_fail:
+    lda #5
+    jmp t26_fail_code
+!t26_ok:
     lda #$01
     bne !t26_store+
 t26_fail_code:
@@ -2517,25 +2562,30 @@ t26_fail_code:
 
     // ============================================================
     // Test 27: invalid item IDs in an inventory save stream wipe to
-    // empty on load (save_sanitize_id_table hardening); valid high IDs
-    // (chests) survive.
+    // empty on load (save_sanitize_inv_ids); valid Page-0/Page-1 IDs
+    // survive.
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_inventory
-    lda #200                    // Invalid: >= ITEM_TYPE_COUNT
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=361)
     sta inv_item_id + 2
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_PAGE_BIT
+    sta inv_ego + 2
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta inv_item_id + 3
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=360)
+    sta inv_item_id + 4
+    lda #ITEM_PAGE_BIT
+    sta inv_ego + 4
     jsr test_stream_reset_write
     :save_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
 
     jsr item_init_inventory
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
-    jsr load_read_inventory_state
+    :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
+    jsr save_sanitize_inv_ids
 
     lda inv_item_id + 2
     cmp #FI_EMPTY
@@ -2544,11 +2594,17 @@ t26_fail_code:
     jmp t27_fail_code
 !t27_bad_ok:
     lda inv_item_id + 3
-    cmp #ITEM_TYPE_CHEST_SMALL_WOOD
+    cmp #ITEM_SLOT_SMALL_WOODEN_CHEST
     beq !t27_good_ok+
     lda #3
     jmp t27_fail_code
 !t27_good_ok:
+    lda inv_item_id + 4
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
+    beq !t27_p1_ok+
+    lda #4
+    jmp t27_fail_code
+!t27_p1_ok:
     lda #$01
     bne !t27_store+
 t27_fail_code:
@@ -2556,26 +2612,30 @@ t27_fail_code:
     sta tc_results + 26
 
     // ============================================================
-    // Test 28: invalid item IDs in a floor-item save stream wipe to
-    // empty on load; valid chest IDs survive.
+    // Test 28: invalid Page-1 item IDs in a floor-item save stream
+    // wipe to empty on load; valid chest & Page-1 IDs survive.
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
     jsr item_init_floor
-    lda #200                    // Invalid: >= ITEM_TYPE_COUNT
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=361)
     sta fi_item_id + 1
+    lda #ITEM_PAGE_BIT
+    sta fi_meta_hi + 1
     lda #10
     sta fi_x + 1
     lda #12
     sta fi_y + 1
-    lda #ITEM_TYPE_CHEST_LARGE_STEEL
+    lda #ITEM_SLOT_LARGE_STEEL_CHEST
     sta fi_item_id + 5
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=360)
+    sta fi_item_id + 6
+    lda #ITEM_PAGE_BIT
+    sta fi_meta_hi + 6
     jsr test_stream_reset_write
     jsr save_write_floor_items
 
     jsr item_init_floor
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jsr load_read_floor_items
@@ -2587,11 +2647,17 @@ t27_fail_code:
     jmp t28_fail_code
 !t28_bad_ok:
     lda fi_item_id + 5
-    cmp #ITEM_TYPE_CHEST_LARGE_STEEL
+    cmp #ITEM_SLOT_LARGE_STEEL_CHEST
     beq !t28_good_ok+
     lda #3
     jmp t28_fail_code
 !t28_good_ok:
+    lda fi_item_id + 6
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
+    beq !t28_p1_ok+
+    lda #4
+    jmp t28_fail_code
+!t28_p1_ok:
     lda #$01
     bne !t28_store+
 t28_fail_code:
@@ -2599,14 +2665,20 @@ t28_fail_code:
     sta tc_results + 27
 
     // ============================================================
-    // Test 29: save_sanitize_store_ids wipes invalid store slot IDs
-    // and keeps valid chest IDs.
+    // Test 29: save_sanitize_store_ids wipes invalid Page-1 store IDs
+    // and keeps valid chest and Page-1 IDs.
     // ============================================================
     jsr test_clear_store_items
-    lda #200                    // Invalid: >= ITEM_TYPE_COUNT
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)  // Invalid Page 1 ID (=361)
     sta si_item_id + 1
-    lda #ITEM_TYPE_CHEST_RUINED
+    lda #ITEM_PAGE_BIT
+    sta si_meta_hi + 1
+    lda #ITEM_SLOT_RUINED_CHEST
     sta si_item_id + 7
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // Max valid Page 1 (=360)
+    sta si_item_id + 8
+    lda #ITEM_PAGE_BIT
+    sta si_meta_hi + 8
     jsr save_sanitize_store_ids
 
     lda si_item_id + 1
@@ -2616,11 +2688,17 @@ t28_fail_code:
     jmp t29_fail_code
 !t29_bad_ok:
     lda si_item_id + 7
-    cmp #ITEM_TYPE_CHEST_RUINED
+    cmp #ITEM_SLOT_RUINED_CHEST
     beq !t29_good_ok+
     lda #3
     jmp t29_fail_code
 !t29_good_ok:
+    lda si_item_id + 8
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
+    beq !t29_p1_ok+
+    lda #4
+    jmp t29_fail_code
+!t29_p1_ok:
     lda #$01
     bne !t29_store+
 t29_fail_code:
@@ -2657,8 +2735,6 @@ t29_fail_code:
     sta door_state_y + 1
     sta door_state_val + 1
 
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
     jsr load_read_door_state
@@ -2694,27 +2770,61 @@ t29_fail_code:
     sta tc_results + 29
 
     // ============================================================
-    // Test 31: pre-door-state saves load with the table cleared and
-    // consume no stream bytes (block absent from the legacy layout).
+    // Test 31: V2 store block writes/reads all 8*STORE_TOTAL_SLOTS
+    // (1024 B) including si_meta_hi Page-1 & ego persistence + sentinel.
     // ============================================================
-    lda #1
-    sta door_state_count
-    jsr test_stream_reset_read
-    lda zp_ptr2
-    sta test_t31_ptr_lo
-    lda zp_ptr2_hi
-    sta test_t31_ptr_hi
-    lda #SAVE_DOOR_STATE_VERSION - 1
-    sta load_save_version
-    jsr load_read_door_state
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr test_clear_store_items
+    lda #ITEM_SLOT_DAGGER
+    sta si_item_id + 0
+    lda #IF_IDENTIFIED
+    sta si_meta + 0
+    lda #(ITEM_PAGE_DAGGER | EGO_FLAME_TONGUE)
+    sta si_meta_hi + 0
+    lda #ITEM_SLOT_CLEAR_POTION_OF_WATER
+    sta si_item_id + (STORE_TOTAL_SLOTS - 1)
+    lda #IF_SENSED
+    sta si_meta + (STORE_TOTAL_SLOTS - 1)
+    lda #(ITEM_PAGE_CLEAR_POTION_OF_WATER | EGO_MAGI)
+    sta si_meta_hi + (STORE_TOTAL_SLOTS - 1)
 
-    lda door_state_count
-    bne !t31_fail+
+    jsr test_stream_reset_write
+    :save_block(si_item_id, 8 * STORE_TOTAL_SLOTS)
+    jsr test_save_sentinel
     lda zp_ptr2
-    cmp test_t31_ptr_lo
-    bne !t31_fail+
+    cmp #<(SAVE_STREAM_BUF + 8 * STORE_TOTAL_SLOTS + 1)
+    bne !t31_fail_far+
     lda zp_ptr2_hi
-    cmp test_t31_ptr_hi
+    cmp #>(SAVE_STREAM_BUF + 8 * STORE_TOTAL_SLOTS + 1)
+    beq !t31_len_ok+
+!t31_fail_far:
+    jmp !t31_fail+
+!t31_len_ok:
+    jsr test_clear_store_items
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    :load_block(si_item_id, 8 * STORE_TOTAL_SLOTS)
+    jsr save_sanitize_store_ids
+
+    lda save_io_error
+    bne !t31_fail+
+    lda si_item_id + 0
+    cmp #ITEM_SLOT_DAGGER
+    bne !t31_fail+
+    lda si_meta_hi + 0
+    cmp #(ITEM_PAGE_DAGGER | EGO_FLAME_TONGUE)
+    bne !t31_fail+
+    lda si_item_id + (STORE_TOTAL_SLOTS - 1)
+    cmp #ITEM_SLOT_CLEAR_POTION_OF_WATER
+    bne !t31_fail+
+    lda si_meta + (STORE_TOTAL_SLOTS - 1)
+    cmp #IF_SENSED
+    bne !t31_fail+
+    lda si_meta_hi + (STORE_TOTAL_SLOTS - 1)
+    cmp #(ITEM_PAGE_CLEAR_POTION_OF_WATER | EGO_MAGI)
+    bne !t31_fail+
+    jsr test_load_sentinel
     bne !t31_fail+
     lda #$01
     bne !t31_store+
@@ -2812,7 +2922,7 @@ t29_fail_code:
     bne !t35_cmp_hi-
 }
     lda SAVE_STREAM_BUF + 2                         // inv_item_id[2]
-    cmp #2
+    cmp #2 // raw-id-ok: synthetic boundary test
     bne !t35_fail+
     lda SAVE_STREAM_BUF + TOTAL_INV_SLOTS + 2       // inv_qty[2]
     cmp #$42
@@ -2820,10 +2930,13 @@ t29_fail_code:
     lda SAVE_STREAM_BUF + 7 * TOTAL_INV_SLOTS + 2   // inv_ego[2] = ($42 ^ $c0) >> 1
     cmp #$41
     bne !t35_fail+
-    lda SAVE_STREAM_BUF + 32                        // inv_item_id[32], the secondary
-    cmp #32
+    lda SAVE_STREAM_BUF + EQUIP_CLOAK               // inv_item_id[32], the cloak
+    cmp #EQUIP_CLOAK
     bne !t35_fail+
-    lda SAVE_STREAM_BUF + 263                       // inv_ego[32], the last byte of 264
+    lda SAVE_STREAM_BUF + EQUIP_SECONDARY           // inv_item_id[33], the secondary
+    cmp #EQUIP_SECONDARY
+    bne !t35_fail+
+    lda SAVE_STREAM_BUF + (8 * TOTAL_INV_SLOTS - 1) // inv_ego[33], byte 271
     cmp #$50
     bne !t35_fail+
     lda save_io_error
@@ -2836,50 +2949,55 @@ t29_fail_code:
     sta tc_results + 34
 
     // ============================================================
-    // Test 36: a current-version inventory section round-trips all
-    // 8 x 33 = 264 bytes (slot 32 = the secondary weapon and slot 31 = the
-    // left-hand ring populated), and the loader reads exactly 264.
+    // Test 36: a V2 inventory section round-trips all
+    // 8 x 34 = 272 bytes (slots EQUIP_CLOAK=32, EQUIP_SECONDARY=33
+    // populated) and reads back exactly 272 bytes.
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
-    jsr ts_fill_inventory_pattern   // every slot, the left-hand ring's too
+    jsr ts_fill_inventory_pattern
+    .const T36_TAIL = 8 * TOTAL_INV_SLOTS - 256
     ldx #0
-!t36_snap:                          // snapshot all 264 bytes
+!t36_snap:
     lda inv_item_id,x
     sta SAVE_STREAM_BUF + $200,x
-    lda inv_item_id + 8,x
-    sta SAVE_STREAM_BUF + $208,x
+    lda inv_item_id + T36_TAIL,x
+    sta SAVE_STREAM_BUF + $200 + T36_TAIL,x
     inx
     bne !t36_snap-
     jsr test_stream_reset_write
     jsr test_save_product_inventory_desc
     jsr item_init_inventory
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr ts_reset_io_state
-    jsr load_read_inventory_state
-    lda zp_ptr2                     // the reader consumed exactly 264 bytes
-    cmp #<(SAVE_STREAM_BUF + 264)
+    :load_block(inv_item_id, 8 * TOTAL_INV_SLOTS)
+    lda zp_ptr2
+    cmp #<(SAVE_STREAM_BUF + 8 * TOTAL_INV_SLOTS)
     bne !t36_fail+
     lda zp_ptr2_hi
-    cmp #>(SAVE_STREAM_BUF + 264)
+    cmp #>(SAVE_STREAM_BUF + 8 * TOTAL_INV_SLOTS)
     bne !t36_fail+
     ldx #0
 !t36_cmp:
     lda inv_item_id,x
     cmp SAVE_STREAM_BUF + $200,x
     bne !t36_fail+
-    lda inv_item_id + 8,x
-    cmp SAVE_STREAM_BUF + $208,x
+    lda inv_item_id + T36_TAIL,x
+    cmp SAVE_STREAM_BUF + $200 + T36_TAIL,x
     bne !t36_fail+
     inx
     bne !t36_cmp-
-    lda inv_item_id + EQUIP_SECONDARY   // hand values for the secondary
-    cmp #32
+    lda inv_item_id + EQUIP_CLOAK
+    cmp #EQUIP_CLOAK
+    bne !t36_fail+
+    lda inv_p1 + EQUIP_CLOAK
+    cmp #$a0
+    bne !t36_fail+
+    lda inv_item_id + EQUIP_SECONDARY
+    cmp #EQUIP_SECONDARY
     bne !t36_fail+
     lda inv_p1 + EQUIP_SECONDARY
-    cmp #$a0
+    cmp #$a1
     bne !t36_fail+
     lda inv_ego + EQUIP_SECONDARY
     cmp #$50
@@ -2894,59 +3012,81 @@ t29_fail_code:
     sta tc_results + 35
 
     // ============================================================
-    // Test 37: a 31-slot save (SAVE_INV31_VERSION..SAVE_INV33_VERSION-1)
-    // restores slots 0-30, leaves the reserved cloak and secondary slots
-    // empty even when they held items before the load, and leaves the
-    // stream aligned on the next block.
+    // Test 37: 9-bit paged ID sanitization boundary edges across
+    // Page 0 (0..254 valid, 255=empty) and Page 1 (255..360 valid,
+    // 361+ wiped to FI_EMPTY) for inventory and floor tables.
     // ============================================================
-    jsr ts_reset_io_state
-    sta test_save_sink_writes
     jsr item_init_inventory
-    lda #2
-    sta inv_item_id + 2
-    lda #$44
-    sta inv_p1 + 2
-    lda #24
-    sta inv_item_id + EQUIP_AMULET
-    lda #$7f
-    sta inv_p1 + EQUIP_AMULET
-    jsr test_stream_reset_write
-    jsr test_save_inv31_inventory_state_blocks
-    jsr test_save_sentinel
-    jsr item_init_inventory
-    lda #2                          // stale secondary/left ring before the load
-    sta inv_item_id + EQUIP_SECONDARY
-    sta inv_item_id + EQUIP_RING2
-    lda #9
-    sta inv_qty + EQUIP_SECONDARY
-    lda #SAVE_INV31_VERSION
-    sta load_save_version
-    jsr test_stream_reset_read
-    jsr ts_reset_io_state
-    jsr load_read_inventory_state
+    lda #(ITEM_PAGE_SIZE - 1)               // 254 (max Page 0)
+    sta inv_item_id + 0                     // raw-id-ok: synthetic boundary test
+    lda #0
+    sta inv_ego + 0
+    lda #FI_EMPTY                           // 255 (empty Page 0)
+    sta inv_item_id + 1
+    lda #0                                  // logical 255 (min Page 1)
+    sta inv_item_id + 2                     // raw-id-ok: synthetic boundary test
+    lda #ITEM_PAGE_BIT
+    sta inv_ego + 2
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1) // 105 (logical 360, max valid)
+    sta inv_item_id + 3
+    lda #(ITEM_PAGE_BIT | EGO_DEFENDER)
+    sta inv_ego + 3
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE) // 106 (logical 361, invalid)
+    sta inv_item_id + 4
+    lda #ITEM_PAGE_BIT
+    sta inv_ego + 4
+    lda #(ITEM_PAGE_SIZE - 1)               // 254 on Page 1 (invalid)
+    sta inv_item_id + 5                     // raw-id-ok: synthetic boundary test
+    lda #ITEM_PAGE_BIT
+    sta inv_ego + 5
+    jsr save_sanitize_inv_ids
+
+    lda inv_item_id + 0
+    cmp #(ITEM_PAGE_SIZE - 1)               // raw-id-ok: synthetic boundary test
+    bne !t37_fail+
+    lda inv_item_id + 1
+    cmp #FI_EMPTY
+    bne !t37_fail+
     lda inv_item_id + 2
-    cmp #2
     bne !t37_fail+
-    lda inv_p1 + 2
-    cmp #$44
+    lda inv_ego + 2
+    cmp #ITEM_PAGE_BIT
     bne !t37_fail+
-    lda inv_item_id + EQUIP_AMULET
-    cmp #24
+    lda inv_item_id + 3
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
     bne !t37_fail+
-    lda inv_p1 + EQUIP_AMULET
-    cmp #$7f
+    lda inv_ego + 3
+    cmp #(ITEM_PAGE_BIT | EGO_DEFENDER)
     bne !t37_fail+
-    lda inv_item_id + EQUIP_RING2
+    lda inv_item_id + 4
     cmp #FI_EMPTY
     bne !t37_fail+
-    lda inv_item_id + EQUIP_SECONDARY
+    lda inv_item_id + 5
     cmp #FI_EMPTY
     bne !t37_fail+
-    lda inv_qty + EQUIP_SECONDARY
+
+    jsr item_init_floor
+    lda #(ITEM_PAGE_SIZE - 1)
+    sta fi_item_id + 0                      // raw-id-ok: synthetic boundary test
+    lda #0
+    sta fi_meta_hi + 0
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
+    sta fi_item_id + 1
+    lda #ITEM_PAGE_BIT
+    sta fi_meta_hi + 1
+    lda #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE)
+    sta fi_item_id + 2
+    lda #ITEM_PAGE_BIT
+    sta fi_meta_hi + 2
+    jsr save_sanitize_floor_ids
+    lda fi_item_id + 0
+    cmp #(ITEM_PAGE_SIZE - 1)               // raw-id-ok: synthetic boundary test
     bne !t37_fail+
-    jsr test_load_sentinel          // 31 x 8 bytes read: the next block lines up
+    lda fi_item_id + 1
+    cmp #(ITEM_TYPE_COUNT - ITEM_PAGE_SIZE - 1)
     bne !t37_fail+
-    lda save_io_error
+    lda fi_item_id + 2
+    cmp #FI_EMPTY
     bne !t37_fail+
     lda #$01
     bne !t37_store+
@@ -2956,15 +3096,75 @@ t29_fail_code:
     sta tc_results + 36
 
     // ============================================================
-    // Test 38: the version gate accepts the 33-slot version (the current
-    // one) and rejects the next.
+    // Test 38: V2 post-known descriptor table streams FLAVOUR_COUNT
+    // (174 B) shuffles, 8*STORE_TOTAL_SLOTS (1024 B) stores, and
+    // level arrays cleanly with exact stream alignment.
     // ============================================================
-    lda #SAVE_INV33_VERSION
-    jsr save_version_supported
-    bcc !t38_fail+
-    lda #SAVE_INV33_VERSION + 1
-    jsr save_version_supported
-    bcs !t38_fail+
+    .const T38_BYTES = FLAVOUR_COUNT + (8 * STORE_TOTAL_SLOTS) + 7 + 1 + (MAX_ROOMS * 6) + (1 + MAX_TRAPS * 3) + (MAX_MONSTERS * MONSTER_ENTRY_SIZE)
+    .assert "Test 38 post-known stream fits in MAP_BASE", T38_BYTES + 1 <= MAP_SIZE, true
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
+    jsr test_clear_store_items
+    lda #$11
+    sta potion_shuffle
+    lda #$22
+    sta staff_shuffle + FLAVOUR_STAFF_COUNT - 1
+    lda #ITEM_SLOT_DAGGER
+    sta si_item_id + STORE_TOTAL_SLOTS - 1
+    lda #(ITEM_PAGE_DAGGER | EGO_SLAY_DRAGON)
+    sta si_meta_hi + STORE_TOTAL_SLOTS - 1
+    lda #$03
+    sta level_entry_dir
+    lda #$44
+    sta monster_table
+    jsr test_stream_reset_write
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
+    jsr save_write_block_table
+    jsr test_save_sentinel
+    lda zp_ptr2
+    cmp #<(SAVE_STREAM_BUF + T38_BYTES + 1)
+    bne !t38_fail+
+    lda zp_ptr2_hi
+    cmp #>(SAVE_STREAM_BUF + T38_BYTES + 1)
+    bne !t38_fail+
+
+    lda #$77
+    sta potion_shuffle
+    sta staff_shuffle + FLAVOUR_STAFF_COUNT - 1
+    sta si_meta_hi + STORE_TOTAL_SLOTS - 1
+    sta level_entry_dir
+    sta monster_table
+    jsr test_stream_reset_read
+    jsr ts_reset_io_state
+    lda #<save_block_table_post_known
+    sta zp_ptr1
+    lda #>save_block_table_post_known
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_KNOWN_COUNT
+    jsr load_read_block_table
+    jsr test_load_sentinel
+    bne !t38_fail+
+    lda save_io_error
+    bne !t38_fail+
+    lda potion_shuffle
+    cmp #$11
+    bne !t38_fail+
+    lda staff_shuffle + FLAVOUR_STAFF_COUNT - 1
+    cmp #$22
+    bne !t38_fail+
+    lda si_meta_hi + STORE_TOTAL_SLOTS - 1
+    cmp #(ITEM_PAGE_DAGGER | EGO_SLAY_DRAGON)
+    bne !t38_fail+
+    lda level_entry_dir
+    cmp #$03
+    bne !t38_fail+
+    lda monster_table
+    cmp #$44
+    bne !t38_fail+
     lda #$01
     bne !t38_store+
 !t38_fail:
@@ -2973,78 +3173,32 @@ t29_fail_code:
     sta tc_results + 37
 
     // ============================================================
-    // Test 39: a 12-item store save loads into the 16-item rows: each
-    // store's 12 items keep their order and the 4 new slots are empty, and
-    // the stream stays aligned for the blocks after the stores.
-    // TODO(release): remove with load_read_post_known_store12.
+    // Test 39: V2 unconditional door-state block round-trips an
+    // empty table (door_state_count = 0) with sentinel alignment.
     // ============================================================
-    .const T39_PRE = 12 + 12 + 4 + 5 + 5
-    .const T39_STORES = 7 * 8 * LEGACY_STORE_MAX_ITEMS
-    .const T39_POST = 7 + 1 + MAX_ROOMS * 6 + 1 + MAX_TRAPS * 3 + MAX_MONSTERS * MONSTER_ENTRY_SIZE
-    .const T39_SENTINEL = T39_PRE + T39_STORES + T39_POST
-    .assert "Test 39 stream fits five pages", T39_SENTINEL < $500, true
-    .assert "Test 39 pattern covers 672 store bytes", T39_STORES, $2a0
-    ldx #0
-!t39_seed:
-    lda #$77                        // poison: every slot must be rewritten
-    sta si_item_id,x
-    sta si_item_id + $100,x
-    sta si_item_id + $200,x
-    sta si_item_id + $280,x
+    jsr ts_reset_io_state
+    sta test_save_sink_writes
     lda #0
-    sta SAVE_STREAM_BUF,x
-    sta SAVE_STREAM_BUF + $100,x
-    sta SAVE_STREAM_BUF + $200,x
-    sta SAVE_STREAM_BUF + $300,x
-    sta SAVE_STREAM_BUF + $400,x
-    inx
-    bne !t39_seed-
-!t39_pattern:                       // legacy store byte n holds n & $ff
-    txa
-    sta SAVE_STREAM_BUF + T39_PRE,x
-    sta SAVE_STREAM_BUF + T39_PRE + $100,x
-    cpx #T39_STORES - $200
-    bcs !t39_pattern_next+
-    sta SAVE_STREAM_BUF + T39_PRE + $200,x
-!t39_pattern_next:
-    inx
-    bne !t39_pattern-
-    lda #$5a
-    sta SAVE_STREAM_BUF + T39_SENTINEL
+    sta door_state_count
+    sta door_state_x
+    jsr test_stream_reset_write
+    jsr save_write_door_state
+    jsr test_save_sentinel
 
-    lda #SAVE_STORE16_VERSION - 1
-    sta load_save_version
+    lda #5
+    sta door_state_count
+    lda #$77
+    sta door_state_x
     jsr test_stream_reset_read
     jsr ts_reset_io_state
-    jsr load_read_post_known_store12
-
+    jsr load_read_door_state
+    jsr test_load_sentinel
+    bne !t39_fail+
     lda save_io_error
     bne !t39_fail+
-    lda si_item_id                  // store 0 item 0: n = 0
+    lda door_state_count
     bne !t39_fail+
-    lda si_item_id + 1 * 16         // store 1 item 0: n = 12
-    cmp #12
-    bne !t39_fail+
-    lda si_item_id + 7 * 16 + 11    // store 7 item 11: n = 95
-    cmp #95
-    bne !t39_fail+
-    lda si_item_id + 12             // new slots: empty
-    cmp #FI_EMPTY
-    bne !t39_fail+
-    lda si_item_id + 7 * 16 + 15
-    cmp #FI_EMPTY
-    bne !t39_fail+
-    lda si_qty                      // si_qty store 0 item 0: n = 96
-    cmp #96
-    bne !t39_fail+
-    lda si_qty + 12                 // new slots of the other arrays: 0
-    bne !t39_fail+
-    lda si_meta + 7 * 16 + 11       // the last legacy byte: n = 671
-    cmp #<671
-    bne !t39_fail+
-    lda si_meta + 7 * 16 + 15
-    bne !t39_fail+
-    jsr test_load_sentinel          // the blocks after the stores line up
+    lda door_state_x
     bne !t39_fail+
     lda #$01
     bne !t39_store+
@@ -3056,9 +3210,9 @@ t29_fail_code:
     // ============================================================
     // Test 40: a current save made before an item was added carries a
     // clear bit for it. After the load the fixed-description items are
-    // known as in a new game (the Amulet of Resist Acid, the crowns, Leather
-    // Armour) and the flavoured ones stay unknown (the Lordly rings, a
-    // potion of gain stat). Review finding, 2026-11-11.
+    // known as in a new game (Page-0 crowns, Leather Armour, Water potion;
+    // Page-1 Amulet of Resist Acid, Dagger) and flavoured ones stay unknown
+    // (Page-0 Gain Stat potion, Staff of Earthquakes; Page-1 Lordly rings).
     // ============================================================
     jsr ts_reset_io_state
     sta test_save_sink_writes
@@ -3066,26 +3220,44 @@ t29_fail_code:
     jsr test_stream_reset_write
     jsr save_write_known_items
     jsr ts_clear_known_bits
-    lda #SAVE_VERSION
-    sta load_save_version
     jsr test_stream_reset_read
     jsr load_read_known_items
-    ldx #ITEM_TYPE_AMULET_RESIST_ACID
-    ldy #ITEM_TYPE_CROWN_JEWEL + 1
+    lda #0
+    sta item_cur_page
+    .assert "t40 Page-0 known/unknown items live on Page 0", ITEM_JEWEL_ENCRUSTED_CROWN == ITEM_SILVER_CROWN + 2 && ITEM_GOLDEN_CROWN == ITEM_SILVER_CROWN + 1 && ITEM_PAGE_SILVER_CROWN == 0 && ITEM_PAGE_JEWEL_ENCRUSTED_CROWN == 0 && ITEM_PAGE_LEATHER_ARMOR == 0 && ITEM_PAGE_POTION_OF_GAIN_STRENGTH == 0 && ITEM_PAGE_CLEAR_POTION_OF_WATER == 0 && ITEM_PAGE_STAFF_OF_EARTHQUAKES == 0, true
+    .assert "t40 Page-1 known/unknown items live on Page 1", ITEM_RING_OF_LORDLY_PROTECTION_COLD == ITEM_RING_OF_LORDLY_PROTECTION_FIRE + 2 && ITEM_RING_OF_LORDLY_PROTECTION_ACID == ITEM_RING_OF_LORDLY_PROTECTION_FIRE + 1 && ITEM_PAGE_RING_OF_LORDLY_PROTECTION_FIRE == ITEM_PAGE_BIT && ITEM_PAGE_RING_OF_LORDLY_PROTECTION_COLD == ITEM_PAGE_BIT && ITEM_PAGE_AMULET_OF_RESIST_ACID == ITEM_PAGE_BIT && ITEM_PAGE_DAGGER == ITEM_PAGE_BIT, true
+    ldx #ITEM_SLOT_SILVER_CROWN
+    ldy #ITEM_SLOT_JEWEL_ENCRUSTED_CROWN + 1
     jsr ts_expect_known_range
     bcc !t40_fail+
-    ldx #7                          // Leather Armour
-    ldy #8
+    ldx #ITEM_SLOT_LEATHER_ARMOR                          // Leather Armour
+    ldy #ITEM_SLOT_LEATHER_ARMOR + 1
     jsr ts_expect_known_range
     bcc !t40_fail+
-    ldx #ITEM_TYPE_RING_LORDLY_FIRE
-    ldy #ITEM_TYPE_RING_LORDLY_COLD + 1
+    ldx #ITEM_SLOT_CLEAR_POTION_OF_WATER
+    jsr id_known_test
+    beq !t40_fail+
+    ldx #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    ldy #ITEM_SLOT_POTION_OF_GAIN_STRENGTH + 1
     jsr ts_expect_unknown_range
     bcc !t40_fail+
-    ldx #ITEM_TYPE_POT_GAIN_STR
-    ldy #ITEM_TYPE_POT_GAIN_STR + 1
+    ldx #ITEM_SLOT_STAFF_OF_EARTHQUAKES
+    jsr id_known_test
+    bne !t40_fail+
+    lda #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx #ITEM_SLOT_AMULET_OF_RESIST_ACID
+    jsr id_known_test
+    beq !t40_fail+
+    ldx #ITEM_SLOT_DAGGER
+    jsr id_known_test
+    beq !t40_fail+
+    ldx #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_FIRE
+    ldy #ITEM_SLOT_RING_OF_LORDLY_PROTECTION_COLD + 1
     jsr ts_expect_unknown_range
     bcc !t40_fail+
+    lda #0
+    sta item_cur_page
     lda #$01
     .byte $2c
 !t40_fail:

@@ -10,12 +10,23 @@ the test checks against the production formatter for every item.
 docs/FEATURE_MAP.md: the Moria8 master item table (section 8.3.1) has a row
 for every item ID and its heading counts them.
 
+During the Wave 4.1->4.2 transition, ``core/item_defs.s`` still defines
+``ITEM_TYPE_COUNT = 157`` and ``test_item_desc.s`` stops at ``ein_156`` while
+``platforms/shared/item_catalog/item_catalog_spec.json`` and the docs already
+define all ``370`` items (``0..369``). While ``core_count < spec_count``,
+``main()`` verifies ``0..(core_count-1)`` against ``spec`` and validates the
+docs against the ``spec`` catalog; once Wave 4.2/4.3 raises
+``core/item_defs.s`` to ``370``, ``core_count == spec_count`` and ``main()``
+enforces ``check()`` directly against ``core/item_defs.s`` and
+``test_item_desc.s``.
+
 An item added without its doc rows fails here, naming the IDs (maintainer,
 2026-11-11: "so we can't miss wizard updates when we add stuff").
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -23,6 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ITEM_DEFS = ROOT / "core" / "item_defs.s"
 NAMES = ROOT / "platforms" / "commodore" / "c64" / "tests" / "test_item_desc.s"
+SPEC = ROOT / "platforms" / "shared" / "item_catalog" / "item_catalog_spec.json"
 WIZARD = ROOT / "docs" / "WIZARD.md"
 FEATURE_MAP = ROOT / "docs" / "FEATURE_MAP.md"
 
@@ -79,6 +91,13 @@ def check_feature_map(count: int, doc: str) -> list[str]:
     return errors
 
 
+def load_spec_catalog(spec_path: Path) -> tuple[int, dict[int, str]]:
+    """Return (item_count, {id: display_name}) from item_catalog_spec.json."""
+    spec = json.loads(spec_path.read_text())
+    items = spec["items"]
+    return len(items), {int(it["id"]): it["name"] for it in items}
+
+
 def check(defs: str, names_src: str, wizard: str, feature_map: str) -> list[str]:
     count = item_count(defs)
     names = {int(i): name for i, name in NAME.findall(names_src)}
@@ -101,6 +120,23 @@ def selftest() -> None:
     # A name that is not the game's.
     errors = check(defs, names, wizard.replace("| 1 | Dagger |", "| 1 | dagger |"), fmap)
     assert errors == ["docs/WIZARD.md: item 1 is 'dagger', the game shows 'Dagger'"], errors
+    # Simulated 361-item check() against repo docs via item_catalog_spec.json.
+    if SPEC.is_file() and WIZARD.is_file() and FEATURE_MAP.is_file():
+        spec_count, spec_names = load_spec_catalog(SPEC)
+        assert spec_count == 361, spec_count
+        assert all('"' not in spec_names[i] for i in range(spec_count))
+        sim_defs = f".const ITEM_TYPE_COUNT = {spec_count}\n"
+        sim_names = "\n".join(f'ein_{i}: .text "{spec_names[i]}" ; .byte 0' for i in range(spec_count))
+        wiz_text = WIZARD.read_text()
+        fm_text = FEATURE_MAP.read_text()
+        sim_errors = check(sim_defs, sim_names, wiz_text, fm_text)
+        assert sim_errors == [], sim_errors
+        # Also verify simulated failure detection on item 360 / count 362.
+        bad_next = check(f".const ITEM_TYPE_COUNT = {spec_count + 1}\n",
+                         sim_names + f'\nein_{spec_count}: .text "Mock" ; .byte 0',
+                         wiz_text, fm_text)
+        assert any(f"no Item IDs row for {spec_count} (Mock)" in e for e in bad_next), bad_next
+        print(f"check_wizard_doc: simulated {spec_count}-item check() PASS")
     print("check_wizard_doc self-test: PASS")
 
 
@@ -108,14 +144,43 @@ def main(argv: list[str]) -> int:
     if "--selftest" in argv:
         selftest()
         return 0
-    errors = check(ITEM_DEFS.read_text(), NAMES.read_text(), WIZARD.read_text(), FEATURE_MAP.read_text())
+    defs = ITEM_DEFS.read_text()
+    names_src = NAMES.read_text()
+    wizard = WIZARD.read_text()
+    feature_map = FEATURE_MAP.read_text()
+    core_count = item_count(defs)
+    if SPEC.is_file():
+        spec_count, spec_names = load_spec_catalog(SPEC)
+        core_names = {int(i): name for i, name in NAME.findall(names_src)}
+        errors: list[str] = []
+        if core_count != spec_count:
+            errors.append(
+                f"core/item_defs.s: ITEM_TYPE_COUNT is {core_count}, "
+                f"item_catalog_spec.json has {spec_count}"
+            )
+        for idx in range(spec_count):
+            if idx not in core_names:
+                errors.append(f"test_item_desc.s: missing ein_{idx} ({spec_names[idx]})")
+            elif core_names[idx] != spec_names[idx]:
+                errors.append(
+                    f"item_catalog_spec.json: item {idx} is '{spec_names[idx]}', "
+                    f"test_item_desc.s has '{core_names[idx]}'"
+                )
+        for idx in sorted(i for i in core_names if i >= spec_count):
+            errors.append(f"test_item_desc.s: ein_{idx} is past ITEM_TYPE_COUNT ({spec_count})")
+        errors += check_wizard(spec_count, spec_names, wizard)
+        errors += check_feature_map(spec_count, feature_map)
+        status_msg = f"Item doc check passed ({spec_count} items)."
+    else:
+        errors = check(defs, names_src, wizard, feature_map)
+        status_msg = f"Item doc check passed ({core_count} items)."
     for error in errors:
         print(error, file=sys.stderr)
     if errors:
         print(f"Item doc check FAILED ({len(errors)} problems): update docs/WIZARD.md and "
               "docs/FEATURE_MAP.md section 8.3.1 with the catalog", file=sys.stderr)
         return 1
-    print(f"Item doc check passed ({item_count(ITEM_DEFS.read_text())} items).")
+    print(status_msg)
     return 0
 
 

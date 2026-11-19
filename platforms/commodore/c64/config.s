@@ -36,6 +36,7 @@
 .const PLATFORM_LTB_SCRATCH_BASE = PLATFORM_PM_SPELL_LIST_BASE + 9   // monster.s tier-loader counters
 .assert "Page-2 scratch buffers stay in $02A7-$02FF", PLATFORM_LTB_SCRATCH_BASE + 2 <= $0300, true
 .const PLATFORM_ITEM_NAME_DECODE_BUF_BASE = $0200
+.label PLATFORM_LEGAL_NAME_STAGE_BASE = PLATFORM_ITEM_NAME_DECODE_BUF_BASE    // LegalOverlay saves/restores 16 B around KERNAL OPEN/CLOSE
 .const PLATFORM_PIW_VISIBLE_SLOTS_BASE = PLATFORM_ITEM_NAME_DECODE_BUF_BASE + 48
 .const PLATFORM_MD_QUEUE_BASE = PLATFORM_PIW_VISIBLE_SLOTS_BASE + 22   // monster_death.s queue
 .const PLATFORM_CHEST_SCRATCH_BASE = PLATFORM_MD_QUEUE_BASE + 1 + 3 * 4  // chest_loot.s scratch
@@ -47,17 +48,15 @@
 #endif
 .const PLATFORM_RESIDENT_PLAY = "Default"
 // The cassette buffer ($033C-$03FB): from $033C the Huffman decode buffer
-// and, during generation, the door scan; past both, once the boot chain stub
-// at $0340 has run, the identification shuffles (set at a new game and by a
-// load) and the catalog record buffer. main.s asserts the door scan ends
-// before them; huffman.s the decode buffer (its limit).
-#define PLATFORM_SHUFFLES_EXTERNAL
-.const PLATFORM_SHUFFLE_BASE = $037d
+// and, during generation, the door scan; at the top of the buffer ($03CB-$03FB),
+// the monster catalog record buffer (49 bytes). Identification shuffles (174 B)
+// stay in Default (< $C000). main.s asserts the door scan ends before the
+// catalog record buffer; huffman.s asserts the decode buffer ends at its limit.
 #define PLATFORM_CAT_RECORD_EXTERNAL
-.const PLATFORM_CAT_RECORD_BASE = PLATFORM_SHUFFLE_BASE + 38
+.const PLATFORM_CAT_RECORD_BASE = $03fc - 49
 .assert "Page-3 buffers end in the cassette buffer", PLATFORM_CAT_RECORD_BASE + 49 <= $03fc, true
 .const PLATFORM_HD_DECODE_BUF_BASE = $033c
-.const PLATFORM_HD_DECODE_BUF_LIMIT = PLATFORM_SHUFFLE_BASE
+.const PLATFORM_HD_DECODE_BUF_LIMIT = PLATFORM_CAT_RECORD_BASE
 
 // Machine type constants (stored in zp_machine_type)
 .const MACHINE_C64  = $00
@@ -152,6 +151,12 @@ hal_asset_load_prg_header:
 
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 hal_asset_load_title:
+    php
+    lda $01
+    pha
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
     lda #hal_storage_title_name_len
     ldx #<hal_storage_title_name
     ldy #>hal_storage_title_name
@@ -172,7 +177,21 @@ hal_asset_load_title:
     lda #2
     jsr $ffc3               // CLOSE
     jsr $ffcc               // CLRCHN
-    jsr platform_runtime_resync_c64
+    lda $dd00
+    ora #%00000011          // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
+    sei
+    jsr c64_install_ram_irq_vectors
+    pla
+    lsr                     // Carry = kernal_load_safe error bit
+    pla
+    sta $01                 // Restore caller $01 ($35 if called from TitleOverlay)
+    pla
+    and #%11111110          // Restore caller P/I flags while keeping load Carry
+    bcc !halt_ok+
+    ora #%00000001
+!halt_ok:
+    pha
     plp
     rts
 #else
@@ -202,8 +221,73 @@ asset_load_save_p: .byte 0
 .const DEATH_STARVE  = $FF    // Killed by starvation
 
 // ============================================================
-// C64 map-safe pointer wrappers (no MMU; direct access)
+// C64 map-safe pointer wrappers
 // ============================================================
+// Product builds keep msg_history in hidden DRAM ($D78E-$D8CD) and route
+// $D700-$DEFF through SEI + $01=$34 while leaving < $D700 (MAP_BASE) and
+// >= $DF00 (REU/cartridge I/O window) on the direct path. Unit tests
+// (C64_UNIT_TEST without C64_TEST_HIDDEN_MAP) keep msg_history and
+// test_config.s self-contained in regular RAM.
+#if !C64_UNIT_TEST || C64_TEST_HIDDEN_MAP
+#define MSG_HISTORY_IN_AUX
+.segmentdef C64MsgHistory [start=C64_HIDDEN_MSG_HIST_BASE, max=C64_HIDDEN_FREE_BASE - 1, virtual]
+.macro MsgHistorySegment() {
+    .segment C64MsgHistory
+}
+.macro MsgHistoryRestoreSegment() {
+    .segment Default
+}
+
+mmu_safe_map_read_ptr0:
+    lda zp_ptr0_hi
+    cmp #>C64_HIDDEN_AUX_BASE
+    bcc !direct+
+    cmp #>C64_HIDDEN_AUX_END + 1
+    bcs !direct+
+    jmp c64_hidden_read_ptr0
+!direct:
+    lda (zp_ptr0),y
+    rts
+
+mmu_safe_map_write_ptr0:
+    pha
+    lda zp_ptr0_hi
+    cmp #>C64_HIDDEN_AUX_BASE
+    bcc !direct+
+    cmp #>C64_HIDDEN_AUX_END + 1
+    bcs !direct+
+    pla
+    jmp c64_hidden_write_ptr0
+!direct:
+    pla
+    sta (zp_ptr0),y
+    rts
+
+mmu_safe_map_read_ptr1:
+    lda zp_ptr1_hi
+    cmp #>C64_HIDDEN_AUX_BASE
+    bcc !direct+
+    cmp #>C64_HIDDEN_AUX_END + 1
+    bcs !direct+
+    jmp c64_hidden_read_ptr1
+!direct:
+    lda (zp_ptr1),y
+    rts
+
+mmu_safe_map_write_ptr1:
+    pha
+    lda zp_ptr1_hi
+    cmp #>C64_HIDDEN_AUX_BASE
+    bcc !direct+
+    cmp #>C64_HIDDEN_AUX_END + 1
+    bcs !direct+
+    pla
+    jmp c64_hidden_write_ptr1
+!direct:
+    pla
+    sta (zp_ptr1),y
+    rts
+#else
 mmu_safe_map_read_ptr0:
     lda (zp_ptr0),y
     rts
@@ -219,6 +303,7 @@ mmu_safe_map_read_ptr1:
 mmu_safe_map_write_ptr1:
     sta (zp_ptr1),y
     rts
+#endif
 
 // ============================================================
 // C64 DB-safe pointer wrappers (no MMU; direct access)

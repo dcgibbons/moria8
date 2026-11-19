@@ -11,6 +11,7 @@ tc_results: .fill 9, $ff
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -29,6 +30,8 @@ test_finish:
 
 .pc = $0840 "Main"
 
+.segmentdef TestUnused [start=$E160, min=$E160, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -44,12 +47,15 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/ui_character.s"
+.segment Default
+.segment TestUnused
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -60,19 +66,32 @@ test_finish:
 }
 #define CHEST_ROUTING_ENABLED
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/chest_search.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+.segment TestCreateOverlay
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
 #import "../../../../core/item.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestUnused
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/spell_data.s"
@@ -80,13 +99,23 @@ test_finish:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestUnused
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
+.segment TestCreateOverlay
 #import "../../../../core/player_move.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/monster_attack.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/item_actions_overlay.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 
@@ -557,7 +586,7 @@ test_start:
     lda #10
     sta fi_add_x
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_SMALL_IRON
+    lda #ITEM_SLOT_SMALL_IRON_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -575,7 +604,7 @@ test_start:
     lda #12
     sta fi_add_x
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_LARGE_STEEL
+    lda #ITEM_SLOT_LARGE_STEEL_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -653,7 +682,7 @@ test_setup_search_chest_map:
     sta fi_add_x
     lda #20
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty

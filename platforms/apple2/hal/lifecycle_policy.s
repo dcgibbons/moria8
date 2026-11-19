@@ -13,7 +13,6 @@
 .const hal_platform_character_background_resync = 0
 .const hal_platform_player_magic_helpers_external = 1
 .const hal_platform_item_action_key_restores_bank = 0
-.const hal_platform_ego_holy_avenger_string_external = 0
 .const hal_platform_ego_ac_bonus_external = 0
 .const hal_platform_chargen_runtime_resync = 0
 .const hal_platform_chargen_cutpoint = -1
@@ -35,8 +34,8 @@
 // Scroll-delta renderer provided by dungeon_scroll_a2.s (A2PlaySlot).
 #define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 .const hal_platform_game_loop_item_actions_trampolined = 1
-// 10 shared classes (incl. OVL_CHEST) + OVL.STORAGE + OVL.TITLE (slot-hosted).
-.const hal_platform_overlay_count = 12
+// 11 shared classes (incl. OVL_CHEST + OVL_HOME) + OVL.STORAGE + OVL.TITLE.
+.const hal_platform_overlay_count = 13
 .const hal_platform_overlay_state_external = 0
 .const hal_platform_overlay_force_reload = 0
 .const hal_platform_overlay_tier_cache_guard = 0
@@ -104,6 +103,9 @@
 #define HAL_PLATFORM_TITLE_SYSINFO_KERNAL_REV_CACHED
 #define HAL_PLATFORM_TITLE_SYSINFO_PRODOS_ROM_ID
 #define HAL_PLATFORM_COMPACT_PLAY_SLOT
+// inv_add_carried's body in OVL.TOWN and OVL.ITEMS, not the full resident
+// image; the floor pickup reaches OVL.ITEMS's copy through the play slot.
+#define HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL
 #define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
 #define HAL_PLATFORM_NO_RESIDENT_IRS_P3_ROUTER
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME

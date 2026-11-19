@@ -28,39 +28,10 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
-#if HAL_PLATFORM_MONSTER_CATALOG
-// $17: the monster catalog: the species table in the door-state block and 40
-// creature rows (a 160-byte recall block). Older saves name tier creatures,
-// so $17 is the oldest the loader takes and the legacy feature versions are
-// pinned at it (the 31-slot inventory version just below it, so its loader
-// compiles out).
-// $18: 16-item stores. $17 saves still load: save.s spreads their 12-item
-// stores over the 16-item rows (the Balrog queue's checkpoints are $17).
-// TODO(release): drop that migration, and pin the oldest version at $18.
-.const hal_storage_save_v1_version = $17
-.const hal_storage_save_known96_version = $17
-.const hal_storage_save_inv31_version = $16
-.const hal_storage_save_known_bits_version = $17
-.const hal_storage_save_baked_stats_version = $17
-.const hal_storage_save_known160_version = $17
-.const hal_storage_save_door_state_version = $17
-.const hal_storage_save_inv33_version = $17
-.const hal_storage_save_version = $18
-.const hal_storage_save_store16_version = $18
-#else
-.const hal_storage_save_v1_version = $0f
-.const hal_storage_save_known96_version = $10
-.const hal_storage_save_inv31_version = $11
-.const hal_storage_save_known_bits_version = $12
-.const hal_storage_save_baked_stats_version = $12
-.const hal_storage_save_known160_version = $14
-.const hal_storage_save_door_state_version = $15
-.const hal_storage_save_inv33_version = $16
-.const hal_storage_save_version = $17
-.const hal_storage_save_store16_version = $17
-#endif
-// TODO(release): remove with the store migration in save.s.
-#define HAL_STORAGE_LEGACY_STORE12_MIGRATION
+// $22 (Save Format V2): canonical 361-item VMS catalog, 34 inventory slots
+// (with Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and
+// 279-species persistent monster recall. Only SAVE_VERSION ($22) is accepted.
+.const hal_storage_save_version = $22
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
@@ -71,10 +42,13 @@
 #define HAL_STORAGE_MARKER_INIT_SKIP_SCRATCH
 // The program-media probe asks the drive (storage_file_exists): no CHKIN.
 #define HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE
+#if C64_PRODUCT_OVERLAY_RUNTIME
+#define HAL_STORAGE_PROGRAM_MEDIA_PRESENT_EXTERNAL
+#endif
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
 #define HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY
-#define HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
+#define HAL_STORAGE_RETURN_LOCAL_STATUS
 #define HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
 #define HAL_STORAGE_SCORE_OPEN_RESTORES_RUNTIME
 // save_game reads the drive's command channel after the write: CBM DOS

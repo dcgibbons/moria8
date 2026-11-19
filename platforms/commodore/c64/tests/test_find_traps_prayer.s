@@ -10,6 +10,7 @@ tc_results: .fill 3, $ff
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 
@@ -29,6 +30,8 @@ test_done_break:
 
 .pc = $0840 "Test Body"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -42,42 +45,71 @@ test_done_break:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/dungeon_gen.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+// Adding to the pack (inv_add.s) is not exercised here: parked out of
+// reach, the runner's tripwire (tools/parked_tripwire.py) failing the
+// suite if it is ever called (the VMS weight limit, 2026-11-13, took
+// the body past MAP_BASE).
+#define INV_ADD_EXTERNAL
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
+#undef INV_ADD_EXTERNAL
+
+.segment TestUnused
+#import "../../../../core/inv_add.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/projectile.s"
+.segment TestUnused
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
+// vis_room_revealed is read and written by the test: it must be real RAM,
+// not the color-RAM nibbles under the I/O hole.
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment TestUnused
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/item_actions_overlay.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 

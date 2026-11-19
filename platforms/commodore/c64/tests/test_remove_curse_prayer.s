@@ -26,6 +26,8 @@ test_finish:
 
 .pc = $0840 "Test Code"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -44,42 +46,71 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestUnused
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
+.segment Default
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 // monster_ai.s is not imported: spells never run the turn tick (stubs below).
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+.segment TestCreateOverlay
+#import "../../../../core/los_trace.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
 #import "../../../../core/item.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestUnused
 #import "../../../../core/projectile.s"
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestUnused
 #import "../dungeon_render.s"
+.segment Default
+.segment TestCreateOverlay
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment Default
+.segment TestUnused
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+.segment Default
+.segment TestCreateOverlay
+#import "../../../../core/element_resist.s"
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
+.segment Default
+.segment TestUnused
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:
@@ -220,14 +251,18 @@ test_reset_remove_curse_state:
     rts
 
 test_seed_equipped_and_carried_curses:
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #IF_CURSED
     sta inv_flags + EQUIP_WEAPON
 
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -236,14 +271,18 @@ test_seed_equipped_and_carried_curses:
     rts
 
 test_seed_uncursed_equipment_and_carried_item:
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #0
     sta inv_flags + EQUIP_WEAPON
 
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id
     lda #1
     sta inv_qty

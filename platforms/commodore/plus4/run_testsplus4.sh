@@ -9,8 +9,16 @@ java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
+        local has_symdir=0 a
+        for a in "$@"; do
+            [ "$a" = "-symbolfiledir" ] && has_symdir=1
+        done
+        local -a symdir_args=()
+        if [ "$has_symdir" -eq 0 ] && [ -n "${TMPDIR:-}" ]; then
+            symdir_args=(-symbolfiledir "$TMPDIR")
+        fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
     else
         command java "$@"
     fi
@@ -19,6 +27,7 @@ PLUS4_DIR="${PLUS4_DIR:-$REPO_ROOT/platforms/commodore/plus4}"
 cd "$PLUS4_DIR"
 PLUS4_TEST_OUT="${PLUS4_TEST_OUT:-../../../build/test/plus4}"
 mkdir -p "$PLUS4_TEST_OUT"
+PLUS4_TEST_OUT="$(cd "$PLUS4_TEST_OUT" && pwd)"
 # Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
 # gets its own directory, and runs older than six hours are cleared here, so
 # leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
@@ -26,10 +35,12 @@ mkdir -p ../../../build/test/plus4/tmp
 find ../../../build/test/plus4/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
 TMPDIR=$(cd ../../../build/test/plus4/tmp && mktemp -d "$(pwd)/run.XXXXXX")
 export TMPDIR
+export PYTHONDONTWRITEBYTECODE=1
 cleanup() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
-    rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
-    rm -f "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
+    if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
+        rm -rf "$TMPDIR"
+    fi
 }
 trap cleanup EXIT
 
@@ -40,26 +51,10 @@ case "$KICKASS" in
 esac
 
 make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" ensure-kickass || exit 1
+python3 -B ../../../tools/gen_trampolines.py --port plus4 --output ../../../build/trampolines/plus4_trampolines.inc || exit 1
 
-if [ -n "${VICEPLUS4:-}" ]; then
-    VICE="$VICEPLUS4"
-elif command -v xplus4 >/dev/null 2>&1; then
-    VICE="$(command -v xplus4)"
-elif [ -x /opt/homebrew/bin/xplus4 ]; then
-    VICE="/opt/homebrew/bin/xplus4"
-else
-    VICE="/Applications/VICE/bin/xplus4"
-fi
-
-C1541="${C1541:-}"
-if [ -z "$C1541" ]; then
-    if command -v c1541 >/dev/null 2>&1; then
-        C1541="$(command -v c1541)"
-    elif [ -x /opt/homebrew/bin/c1541 ]; then
-        C1541="/opt/homebrew/bin/c1541"
-    else
-        C1541="/Applications/VICE/bin/c1541"
-    fi
+VICE="${VICEPLUS4:-$(command -v xplus4 2>/dev/null || printf 'xplus4')}"
+C1541="${C1541:-$(command -v c1541 2>/dev/null || printf 'c1541')}"
 
 # Images with the monster catalog: MONSTER.IDX's sector table for where
 # MONSTER.CAT1-4 landed on this image (tools/catalog_disk.py fix).
@@ -70,9 +65,11 @@ c1541_catalog() {
         [ "$prev" = "-attach" ] && img="$arg"
         prev="$arg"
     done
-    [ -n "$img" ] && python3 "$REPO_ROOT/tools/catalog_disk.py" fix "$img"
+    if [ -n "$img" ]; then
+        python3 -B "$REPO_ROOT/tools/catalog_disk.py" fix "$img" && \
+        python3 -B "$REPO_ROOT/tools/catalog_disk.py" item-fix "$img"
+    fi
 }
-fi
 
 TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
@@ -188,16 +185,21 @@ make_product_out() {
 run_test() {
     local name="$1"
     local source="$2"
-    local prg="${source%.s}.prg"
-    local vs="${source%.s}.vs"
 
     if ! suite_selected "$name"; then
         return
     fi
 
+    local prg_dir base prg vs
+    prg_dir=$(mktemp -d "$TMPDIR/test_${name}.XXXXXX")
+    base="$(basename "${source%.s}")"
+    prg="$prg_dir/${base}.prg"
+    vs="$prg_dir/${base}.vs"
+
     TOTAL=$((TOTAL + 1))
-    java -jar "$KICKASS" "$source" -libdir "$REPO_ROOT/platforms/commodore/c64" -define PLUS4 -vicesymbols -o "$prg" >/dev/null || {
+    java -jar "$KICKASS" "$source" -libdir "$REPO_ROOT/platforms/commodore/c64" -define PLUS4 -symbolfiledir "$prg_dir" -vicesymbols -o "$prg" >/dev/null || {
         echo "FAIL: $name (assembly)"
+        rm -rf -- "$prg_dir"
         FAIL=$((FAIL + 1))
         return
     }
@@ -207,6 +209,7 @@ run_test() {
     else
         FAIL=$((FAIL + 1))
     fi
+    rm -rf -- "$prg_dir"
 }
 
 run_disk_media_probe() {
@@ -279,18 +282,29 @@ def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> 
             return True
     return False
 
+if any("$0102,x" in line or "$0104,x" in line for line in player_items):
+    print("core/player_items.s must not probe raw 6502 return addresses ($0102,x / $0104,x)")
+    raise SystemExit(1)
+
 if not has_ordered_chain(player_items, [
     "show_inv_and_select:",
-    "$0102,x",
-    "$0104,x",
+    "ldx piw_return_overlay",
     "lda #OVL_NONE",
+    "sta piw_return_overlay",
     "jsr overlay_load",
     "brk",
-    "#if HAL_PLATFORM_ITEM_PROMPT_RELOAD_PLUS4_BANK_RAM",
+    "#if !HAL_PLATFORM_AUX_PERSISTENT_DATA",
+    "jsr hal_overlay_post_reload",
+], window=40):
+    print("core/player_items.s inventory selector must return to outer overlays and call hal_overlay_post_reload after reloading the caller overlay")
+    raise SystemExit(1)
+
+if not has_ordered_chain(main, [
+    "hal_overlay_post_reload:",
     "jsr plus4_install_ram_irq_vectors",
-    "jsr plus4_bank_ram",
-], window=80):
-    print("Plus/4 inventory selector must detect outer overlay continuations and restore RAM-visible overlay execution after reloading the caller overlay")
+    "plus4_bank_ram",
+], window=6):
+    print("Plus/4 hal_overlay_post_reload must install RAM IRQ vectors and bank RAM visible")
     raise SystemExit(1)
 
 if not has_ordered_chain(item_actions_overlay, [
@@ -365,6 +379,26 @@ PY
     fi
 }
 
+run_plus4_item_catalog_contract() {
+    local name="plus4_item_catalog_contract"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    local check_out
+    if make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" diskplus4 >/dev/null && \
+        check_out=$(python3 -B "$REPO_ROOT/tools/check_item_catalog_ports.py" --port plus4 --if-built c64 2>&1); then
+        echo "PASS: $name"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL: $name"
+        echo "${check_out:-diskplus4 failed}" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_boot_title_smoke() {
     local name="boot_title_plus4"
     local out_dir="$PLUS4_TEST_OUT"
@@ -409,16 +443,23 @@ run_boot_title_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -481,22 +522,28 @@ run_new_game_to_town_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -560,22 +607,28 @@ run_dungeon_entry_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -626,7 +679,8 @@ run_catalog_spawn_smoke() {
     fi
     local main_vs="$DUNGEON_ENTRY_MAIN_VS" sym
     local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
-    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi; do
+    local cat_id_lo cat_id_hi catalog_fetch_ext cat_ext_record
+    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi cat_id_lo cat_id_hi catalog_fetch_ext cat_ext_record; do
         printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
         if [ -z "${!sym}" ]; then
             echo "FAIL (missing $sym in $main_vs)"
@@ -636,6 +690,9 @@ run_catalog_spawn_smoke() {
     done
     local mon_file="$PLUS4_TEST_OUT/$name.mon" log_file="$PLUS4_TEST_OUT/$name.log"
     local check_log="$PLUS4_TEST_OUT/$name.check.log"
+    local ext_dump="$PLUS4_TEST_OUT/$name.ext.bin"
+    local cfe_lo="${catalog_fetch_ext:2:2}" cfe_hi="${catalog_fetch_ext:0:2}"
+    rm -f "$ext_dump"
     : > "$log_file"
     {
         # The town's items first, then DL1's.
@@ -648,19 +705,57 @@ run_catalog_spawn_smoke() {
         printf 'm %s %04x\n' "$cr_name_hi" $(( 16#$cr_name_hi + 31 ))
         echo "bank ram"
         echo "m d800 dbff"
+        echo "bank cpu"
+        # Exercise disk catalog_fetch_ext across sector & 9-bit ID boundaries (0, 30, 31, 255, 256, 278),
+        # copying each 8-byte cat_ext_record slice to $C7A0 + k*8 in unused resident headroom (< $C800).
+        printf 'f c7e0 c7e5 20 %s %s 4c e3 c7\n' "$cfe_lo" "$cfe_hi"
+        local idx=0 cid cid_lo cid_hi dst_addr
+        for cid in 0 30 31 255 256 278; do
+            cid_lo=$(printf '%02x' $(( cid & 255 )))
+            cid_hi=$(printf '%02x' $(( cid >> 8 )))
+            dst_addr=$(printf '%04x' $(( 0xc7a0 + idx * 8 )))
+            printf 'f %s %s %s\n' "$cat_id_lo" "$cat_id_lo" "$cid_lo"
+            printf 'f %s %s %s\n' "$cat_id_hi" "$cat_id_hi" "$cid_hi"
+            echo "r pc=c7e0"
+            echo "until \$c7e3"
+            printf 't %s %04x %s\n' "$cat_ext_record" $(( 16#$cat_ext_record + 7 )) "$dst_addr"
+            idx=$(( idx + 1 ))
+        done
+        echo "bsave \"$ext_dump\" 0 c7a0 c7cf"
         echo "quit"
     } > "$mon_file"
-    "$VICE" -config "$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")" \
+    "$VICE" -config "$(python3 -B "$REPO_ROOT/tools/vice_config.py" "$VICE")" \
         -default +saveres +autostart-delay-random -console -nativemonitor -warp +sound -sounddev dummy \
         -drive8truedrive -drive8type 1541 -attach8rw -8 "$DUNGEON_ENTRY_BOOT_D64" \
         +busdevice9 -drive9type 0 +busdevice10 -drive10type 0 \
         -autostart "$DUNGEON_ENTRY_BOOT_D64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 900000000 +remotemonitor +binarymonitor > /dev/null 2>&1
-    if ! python3 ../c128/tests/check_catalog128.py "$log_file" d800 5 >"$check_log" 2>&1; then
+    if ! python3 -B ../c128/tests/check_catalog128.py "$log_file" d800 5 >"$check_log" 2>&1; then
         echo "FAIL (catalog species check)"
         tail -3 "$check_log" | sed 's/^/    /'
         echo "    Log: $log_file"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    if ! python3 -B - "$REPO_ROOT" "$ext_dump" <<'PY' >>"$check_log" 2>&1
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "tools"))
+import catalog_disk  # noqa: E402
+
+dump = Path(sys.argv[2]).read_bytes()
+recs = catalog_disk.ext_records()
+ids = (0, 30, 31, 255, 256, 278)
+expected = b"".join(recs[i] for i in ids)
+if dump != expected:
+    raise SystemExit(f"MONSTER.EXT disk fetch mismatch: got {dump.hex()} want {expected.hex()}")
+PY
+    then
+        echo "FAIL (MONSTER.EXT disk fetch check)"
+        tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         return
     fi
@@ -703,27 +798,36 @@ run_exchange_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
         return
     fi
+
+    local mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex
+    read -r mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex < <(python3 -B -c 'import sys; sys.path.insert(0, "'"$REPO_ROOT"'/tools"); from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER, ITEM_SLOT_MACE; print(f"0x{ITEM_SLOT_MACE:02x} 0x{ITEM_SLOT_DAGGER:02x} 0x{ITEM_PAGE_DAGGER | 6:02x} 0x{FI_EMPTY:02x}")')
 
     if python3 -u tests/product_scripted_smoke.py \
         --name "$name" \
@@ -734,12 +838,12 @@ run_exchange_product_smoke() {
         --boot-d64 "$boot_d64" \
         --expect-byte-symbol ".exchange_product_presses=0x02" \
         --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
-        --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
-        --expect-byte-symbol ".exchange_product_primary_id=0x02" \
-        --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
-        --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+        --expect-byte-symbol ".exchange_product_refused_primary=${mace_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_id=${dagger_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_ego=${dagger_def_ego_hex}" \
+        --expect-byte-symbol ".exchange_product_secondary_id=${mace_slot_hex}" \
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-        --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
+        --expect-byte-symbol ".exchange_product_ring2_id=${empty_hex}" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
         --expect-byte-symbol ".current_overlay=0x07" \
         --expect-byte-symbol ".exchange_product_r0c0=0x50" \
@@ -790,27 +894,36 @@ run_chest_open_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
         return
     fi
+
+    local chest_slot_hex
+    chest_slot_hex="$(python3 -B -c 'import sys; sys.path.insert(0, "'"$REPO_ROOT"'/tools"); from item_ids import ITEM_SLOT_LARGE_WOODEN_CHEST as s; print(f"0x{s:02x}")')"
 
     if python3 -u tests/product_scripted_smoke.py \
         --name "$name" \
@@ -827,7 +940,7 @@ run_chest_open_product_smoke() {
         --expect-byte-symbol ".chest_loot_pending=0x00" \
         --expect-byte-symbol ".chest_pending_summons=0x00" \
         --expect-byte-symbol ".current_overlay=0x0a" \
-        --expect-byte-symbol ".fi_item_id=0x81" \
+        --expect-byte-symbol ".fi_item_id=${chest_slot_hex}" \
         --expect-byte-symbol ".fi_p1=0x80" \
         --expect-byte-symbol ".zp_player_dlvl=0x01" \
         --timeout 30 \
@@ -874,22 +987,28 @@ run_balrog_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -953,22 +1072,28 @@ run_dungeon_ascent_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1031,22 +1156,28 @@ run_disarm_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1112,7 +1243,10 @@ run_overlay_load_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1123,6 +1257,9 @@ run_overlay_load_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1187,7 +1324,10 @@ run_retirement_royal_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
@@ -1198,6 +1338,9 @@ run_retirement_royal_smoke() {
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1260,16 +1403,23 @@ run_wand_selector_product_smoke() {
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1378,22 +1528,28 @@ run_disk_setup_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1464,22 +1620,28 @@ run_disk_setup_missing_save_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1525,26 +1687,35 @@ plus4_load_written_save_check() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $load_name (product disk image)"
         return 1
     fi
+    local dagger_slot_hex dagger_def_ego_hex empty_hex
+    read -r dagger_slot_hex dagger_def_ego_hex empty_hex < <(python3 -B -c 'import sys; sys.path.insert(0, "'"$REPO_ROOT"'/tools"); from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER; print(f"0x{ITEM_SLOT_DAGGER:02x} 0x{ITEM_PAGE_DAGGER | 6:02x} 0x{FI_EMPTY:02x}")')
+
     if ! python3 -u tests/product_scripted_smoke.py \
         --name "$load_name" \
         --pass-symbol ".main_loop" \
@@ -1552,12 +1723,12 @@ plus4_load_written_save_check() {
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
         --enable-drive9-bus \
-        --expect-byte-symbol ".save_product_secondary_id=0x02" \
+        --expect-byte-symbol ".save_product_secondary_id=${dagger_slot_hex}" \
         --expect-byte-symbol ".save_product_secondary_hit=0x03" \
         --expect-byte-symbol ".save_product_secondary_dam=0x04" \
         --expect-byte-symbol ".save_product_secondary_flags=0x02" \
-        --expect-byte-symbol ".save_product_secondary_ego=0x06" \
-        --expect-byte-symbol ".save_product_ring2_id=0xff" \
+        --expect-byte-symbol ".save_product_secondary_ego=${dagger_def_ego_hex}" \
+        --expect-byte-symbol ".save_product_ring2_id=${empty_hex}" \
         --timeout 20 \
         --retry-timeouts 0 \
         --vice "$VICE"; then
@@ -1605,22 +1776,28 @@ run_save_write_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1658,12 +1835,12 @@ run_save_write_product_smoke() {
         --retry-timeouts 0 \
         --vice "$VICE"; then
         if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"THE.GAME".*SEQ'; then
-            # The written save carries the 33-slot inventory with the seeded
+            # The written save carries the 34-slot Save V2 inventory with the seeded
             # secondary weapon (save_product_seed_secondary); load it back.
             local save_seq="$out_dir/$name.the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "the.game,s" "$save_seq" >>"$build_log" 2>&1 \
-                    || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x0A >>"$build_log" 2>&1; then
+                    || ! python3 -B tests/check_save_secondary_plus4.py "$save_seq" 0x22 >>"$build_log" 2>&1; then
                 echo "FAIL: $name (secondary weapon not in the written save)"
                 tail -3 "$build_log"
                 FAIL=$((FAIL + 1))
@@ -1721,22 +1898,28 @@ run_save_media_fail_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1832,22 +2015,28 @@ run_change_save_drive_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -1933,22 +2122,28 @@ run_single_drive_save_return_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2028,22 +2223,28 @@ run_single_drive_fresh_save_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2130,22 +2331,28 @@ run_single_drive_fresh_save_no_init_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >>"$build_log" 2>&1; then
         echo "FAIL: $name (product disk fixture)"
         tail -40 "$build_log"
@@ -2228,22 +2435,28 @@ run_single_drive_save_wrong_media_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2304,22 +2517,28 @@ run_single_drive_load_wrong_media_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2384,22 +2603,28 @@ run_disk_setup_single_drive_return_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2426,7 +2651,7 @@ run_disk_setup_single_drive_return_product_smoke() {
         --swap-attach8-d64 "$save_d64" \
         --swap2-symbol ".disk_prompt_game_required_error_shown" \
         --swap2-attach8-d64 "$program_d64" \
-        --expect-screen-symbol ".title_menu_str:18:2" \
+        --expect-screen-symbol ".title_menu_str:18:4" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --attach-delay 5.0 \
@@ -2474,22 +2699,28 @@ run_load_wrong_media_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2567,22 +2798,28 @@ run_load_resume_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2660,22 +2897,28 @@ run_death_hiscore_single_drive_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2753,22 +2996,28 @@ run_single_drive_load_return_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2856,22 +3105,28 @@ run_load_then_save_new_empty_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -2979,22 +3234,28 @@ run_single_drive_load_corrupt_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -3033,7 +3294,7 @@ run_single_drive_load_corrupt_product_smoke() {
         --pass-on-script-exhausted \
         --timeout 10 \
         --retry-timeouts 0 \
-        --expect-screen-symbol ".title_menu_str:18:2" \
+        --expect-screen-symbol ".title_menu_str:18:4" \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -3078,22 +3339,28 @@ run_load_missing_savefile_product_smoke() {
     if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
         -write "$smoke_plus4/moria4.prg" "moria8" \
-        -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.cat1" "monster.cat1" \
         -write "$smoke_plus4/monster.cat2" "monster.cat2" \
         -write "$smoke_plus4/monster.cat3" "monster.cat3" \
         -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
         -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
         -write "$smoke_plus4/ovl.start" "4.start" \
         -write "$smoke_plus4/ovl.town" "4.town" \
         -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
         -write "$smoke_plus4/ovl.gen" "4.gen" \
         -write "$smoke_plus4/ovl.help" "4.help" \
         -write "$smoke_plus4/ovl.ui" "4.ui" \
         -write "$smoke_plus4/ovl.items" "4.items" \
         -write "$smoke_plus4/ovl.spell" "4.spell" \
         -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
         -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
         echo "FAIL: $name (product disk image)"
         FAIL=$((FAIL + 1))
@@ -3133,12 +3400,89 @@ run_load_missing_savefile_product_smoke() {
     fi
 }
 
+run_hot_gameplay_zero_disk_smoke() {
+    local name="hot_gameplay_zero_disk_product_plus4"
+    local out_dir="$PLUS4_TEST_OUT"
+    local smoke_out
+    smoke_out="$(make_product_out "$name")"
+    local smoke_out_rel="$smoke_out"
+    local smoke_plus4="$smoke_out/plus4"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_HOT_RES_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.cat.stamp" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! c1541_catalog -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.cat1" "monster.cat1" \
+        -write "$smoke_plus4/monster.cat2" "monster.cat2" \
+        -write "$smoke_plus4/monster.cat3" "monster.cat3" \
+        -write "$smoke_plus4/monster.cat4" "monster.cat4" \
+        -write "$smoke_plus4/monster.ext" "monster.ext" \
+        -write "$smoke_plus4/monster.idx" "monster.idx" \
+        -write "$smoke_plus4/item.cat" "item.cat" \
+        -write "$smoke_plus4/item.idx" "item.idx" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.modal" "4.modal" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/ovl.chest" "4.chest" \
+        -write "$smoke_plus4/ovl.home" "4.home" \
+        -write "$smoke_plus4/ovl.storage" "4.storage" \
+        -write "$smoke_plus4/ovl.title" "4.title" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/hot_gameplay_zero_disk_smoke.py \
+        --name "$name" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --timeout 20 \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_plus4_static_contracts
 run_plus4_visibility_layout_contract
+run_plus4_item_catalog_contract
 run_vice_resource_contract_plus4
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_test "renderplus4" "tests/test_renderplus4.s"
 run_test "visibility_renderplus4" "tests/test_visibility_renderplus4.s"
+run_test "item_catalog_plus4" "tests/test_item_catalog_plus4.s"
 run_test "dungeon_soakplus4" "tests/test_dungeon_soakplus4.s"
 run_test "look_trampolineplus4" "tests/test_look_trampolineplus4.s"
 run_media_drive8_attach_read_write
@@ -3147,18 +3491,20 @@ run_media_drive10_11_device_probe
 run_boot_title_smoke
 run_new_game_to_town_smoke
 run_dungeon_entry_smoke
+run_hot_gameplay_zero_disk_smoke
 run_catalog_spawn_smoke
 run_exchange_product_smoke
 run_chest_open_product_smoke
 run_balrog_product_smoke
 run_dungeon_ascent_smoke
 # Nest gold calls random_floor_in_room in the dungeon-generation overlay after
-# pick_item_type has loaded the chest overlay (M5b round 33 code corruption).
+# item_spawn_level_gen has loaded the chest overlay (M5b round 33 code
+# corruption), then restores the caller's overlay before returning.
 check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" \
-    "tramp_spawn_nest_gold:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold"
+    "tramp_spawn_nest_gold:|||lda #RT_NEST|||jsr find_special_room|||lda current_overlay|||pha|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_nest_gold|||pla|||jsr overlay_load_disk|||sta current_overlay"
 # Special rooms run in OVL.GEN (2026-11-08): monster population loads it back
 # too, if anything replaced it after generation.
-check_static_contract "special_room_monsters_restore_generation_overlay_contract" "main.s" \
+check_static_contract "special_room_monsters_restore_generation_overlay_contract" "../../../build/trampolines/plus4_trampolines.inc" \
     "tramp_spawn_special_room_monsters:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_special_room_monsters"
 check_static_contract "disarm_command_external_import_contract" "main.s" \
     "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"

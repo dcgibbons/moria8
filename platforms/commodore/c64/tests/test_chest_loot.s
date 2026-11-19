@@ -38,6 +38,8 @@ test_finish:
 
 .pc = $0840 "Main"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -52,14 +54,13 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #define CHEST_ROUTING_ENABLED
 #import "../../../../core/dungeon_features.s"
@@ -71,18 +72,26 @@ test_finish:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
 // Monster spells and breath are not exercised here: out of the way above
 // the result buffer (resistance armour, 2026-11-11, took the body past its
 // first map write).
-.segmentdef TestUnused [start=$e100]
 .segment TestUnused
-#import "../../../../core/monster_magic.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
 #import "../../../../core/item_tables.s"
+.segment TestUnused
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -94,13 +103,25 @@ test_finish:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestUnused
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment Default
 #import "../../../../core/combat.s"
+.segment TestUnused
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_attack_player:
+mon_atk_acid_armour:
+mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+player_death_check:
+    brk
+mad_dmg_hi: .byte 0
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/item_actions_overlay.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 .macro ChestSummonsSegment() {
@@ -209,7 +230,11 @@ test_rng_range:
     rts
 
 test_pick_item_type:
-    lda #5                      // Fixed loot item ID (Mace)
+    .if (ITEM_PAGE_MACE != 0) {
+        lda #ITEM_PAGE_MACE
+        sta item_cur_page
+    }
+    lda #ITEM_SLOT_MACE         // Fixed loot item ID (Mace)
     rts
 
 test_roll_enchantment:
@@ -289,7 +314,7 @@ test_reset:
 // place_chest_at_latch — put a Small Wooden Chest (id 128) in floor slot 0 at
 // the latch position so the stale-latch guard finds it.
 place_chest_at_latch:
-    lda #128
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_item_id + 0
     lda chest_loot_x
     sta fi_x + 0
@@ -436,16 +461,28 @@ test_start:
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
-    cmp #5
+    cmp #ITEM_SLOT_MACE
     bne !t2_fail+
+    .if (ITEM_PAGE_MACE != 0) {
+        lda fi_meta_hi,x
+        and #ITEM_PAGE_BIT
+        cmp #ITEM_PAGE_MACE
+        bne !t2_fail+
+    }
     // Drop 2 at (14,28) is the stub item id 5
     lda #14
     ldy #28
     jsr floor_item_find_at
     bcc !t2_fail+
     lda fi_item_id,x
-    cmp #5
+    cmp #ITEM_SLOT_MACE
     bne !t2_fail+
+    .if (ITEM_PAGE_MACE != 0) {
+        lda fi_meta_hi,x
+        and #ITEM_PAGE_BIT
+        cmp #ITEM_PAGE_MACE
+        bne !t2_fail+
+    }
     lda #$01
     sta tc_results + 2
     jmp !t3+
@@ -716,7 +753,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t9_fail+
     lda fi_item_id,x
-    cmp #2                    // gold IDs are 0/1
+    cmp #ITEM_SLOT_GOLD_LARGE + 1                    // gold IDs are 0/1
     bcs !t9_fail+
     lda fi_qty,x
     cmp #5

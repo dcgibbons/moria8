@@ -105,22 +105,22 @@ mage_effect_dispatch:
     rts
 
 med_tbl_lo:
-    .byte <(med_s0-1),  <(med_s1-1), <(eff_phase_door-1), <(med_s3-1)
-    .byte <(med_s4-1),  <(med_s5-1), <(med_s6-1), <(med_s7-1)
+    .byte <(med_s0-1),  <(pmx_detect_monsters_msg-1), <(eff_phase_door-1), <(pmx_light_room_msg-1)
+    .byte <(med_s4-1),  <(med_s5-1), <(med_s6-1), <(pmx_confuse_monster_dir_msg-1)
     .byte <(med_s8-1),  <(eff_destroy_traps_doors-1), <(eff_sleep_monster_dir-1), <(pmx_cure_poison_msg-1)
     .byte <(eff_teleport_self-1), <(med_s13-1), <(med_s14-1), <(eff_wall_to_mud-1)
-    .byte <(med_s16-1), <(med_s17-1), <(med_s18-1), <(eff_polymorph_other-1)
+    .byte <(med_s16-1), <(med_s17-1), <(pmx_sleep_adjacent_msg-1), <(eff_polymorph_other-1)
     .byte <(eff_identify_prompt-1), <(eff_sleep_all-1), <(med_s22-1), <(eff_slow_monster_dir-1)
-    .byte <(med_s24-1), <(med_s25-1), <(eff_teleport_other-1), <(med_s27-1)
+    .byte <(med_s24-1), <(med_s25-1), <(eff_teleport_other-1), <(eff_haste_self-1)
     .byte <(med_s28-1), <(eff_destroy_area-1), <(eff_genocide-1)
 med_tbl_hi:
-    .byte >(med_s0-1),  >(med_s1-1), >(eff_phase_door-1), >(med_s3-1)
-    .byte >(med_s4-1),  >(med_s5-1), >(med_s6-1), >(med_s7-1)
+    .byte >(med_s0-1),  >(pmx_detect_monsters_msg-1), >(eff_phase_door-1), >(pmx_light_room_msg-1)
+    .byte >(med_s4-1),  >(med_s5-1), >(med_s6-1), >(pmx_confuse_monster_dir_msg-1)
     .byte >(med_s8-1),  >(eff_destroy_traps_doors-1), >(eff_sleep_monster_dir-1), >(pmx_cure_poison_msg-1)
     .byte >(eff_teleport_self-1), >(med_s13-1), >(med_s14-1), >(eff_wall_to_mud-1)
-    .byte >(med_s16-1), >(med_s17-1), >(med_s18-1), >(eff_polymorph_other-1)
+    .byte >(med_s16-1), >(med_s17-1), >(pmx_sleep_adjacent_msg-1), >(eff_polymorph_other-1)
     .byte >(eff_identify_prompt-1), >(eff_sleep_all-1), >(med_s22-1), >(eff_slow_monster_dir-1)
-    .byte >(med_s24-1), >(med_s25-1), >(eff_teleport_other-1), >(med_s27-1)
+    .byte >(med_s24-1), >(med_s25-1), >(eff_teleport_other-1), >(eff_haste_self-1)
     .byte >(med_s28-1), >(eff_destroy_area-1), >(eff_genocide-1)
 
 .assert "Mage dispatch lo count", med_tbl_hi - med_tbl_lo, SPELL_CATALOG_COUNT
@@ -131,25 +131,20 @@ med_s0:
     ldx #6
     ldy #1
     jmp eff_bolt
-med_s1:
-    jmp pmx_detect_monsters_msg
-med_s3:
-    jmp pmx_light_room_msg
-med_s4:
-    lda #4
-    ldx #4
-    ldy #0
-    jmp heal_dice
 med_s5:
     jsr eff_find_doors
     jmp eff_find_traps
 med_s6:
     lda #9
     jmp eff_ball
-med_s7:
-    jmp pmx_confuse_monster_dir_msg
 med_s8:
     lda #3
+    .byte $2c
+med_s14:
+    lda #4
+    .byte $2c
+med_s22:
+    lda #6
     ldx #8
     ldy #1
     jmp eff_bolt
@@ -157,36 +152,22 @@ med_s13:
     jsr eff_remove_curse
     ldx #HSTR_PIQ_CLEANSED
     jmp huff_print_msg
-med_s14:
-    lda #4
-    ldx #8
-    ldy #1
-    jmp eff_bolt
 med_s16:
-    jsr eff_create_food
+    jsr pmu_create_food
     bcs !med_s16_done+
     ldx #HSTR_PMU_GLYPH_BLOCK
-    jsr huff_print_msg
+    jmp huff_print_msg
 !med_s16_done:
     rts
 med_s17:
     lda #20
     jmp eff_recharge_item
-med_s18:
-    jmp pmx_sleep_adjacent_msg
-med_s22:
-    lda #6
-    ldx #8
-    ldy #1
-    jmp eff_bolt
 med_s24:
     lda #33
     jmp eff_ball
 med_s25:
     lda #50
     jmp eff_recharge_item
-med_s27:
-    jmp eff_haste_self
 med_s28:
     lda #49
     jmp eff_ball
@@ -201,28 +182,29 @@ priest_effect_dispatch:
 
 ped_tbl_lo:
     .byte <(ped_s0-1), <(ped_s1-1), <(ped_s2-1), <(eff_remove_fear-1)
-    .byte <(ped_s4-1), <(eff_find_traps-1), <(ped_s6-1), <(ped_s7-1)
-    .byte <(ped_s8-1), <(eff_teleport_self-1), <(ped_s10-1), <(ped_s11-1)
-    .byte <(ped_s12-1), <(ped_s13-1), <(ped_s14-1), <(ped_s15-1)
-    .byte <(pmx_cure_poison_msg-1), <(ped_s17-1), <(ped_s18-1), <(ped_s19-1)
+    .byte <(pmx_light_room_msg-1), <(eff_find_traps-1), <(ped_s6-1), <(pmx_slow_poison_msg-1)
+    .byte <(pmx_confuse_monster_dir_msg-1), <(eff_teleport_self-1), <(med_s4-1), <(ped_s11-1)
+    .byte <(pmx_sleep_adjacent_msg-1), <(med_s16-1), <(ped_s14-1), <(pmx_add_resist_heat_cold_msg-1)
+    .byte <(pmx_cure_poison_msg-1), <(ped_s17-1), <(ped_s18-1), <(pmx_set_see_invisible_msg-1)
     .byte <(ped_s20-1), <(PMX_EARTHQUAKE_TARGET-1), <(ped_s22-1), <(ped_s23-1)
     .byte <(eff_turn_undead-1), <(ped_s25-1), <(ped_s26-1), <(ped_s27-1)
-    .byte <(ped_s28-1), <(ped_s29-1), <(ped_s30-1)
+    .byte <(ped_s28-1), <(eff_glyph_of_warding-1), <(eff_holy_word-1)
 ped_tbl_hi:
     .byte >(ped_s0-1), >(ped_s1-1), >(ped_s2-1), >(eff_remove_fear-1)
-    .byte >(ped_s4-1), >(eff_find_traps-1), >(ped_s6-1), >(ped_s7-1)
-    .byte >(ped_s8-1), >(eff_teleport_self-1), >(ped_s10-1), >(ped_s11-1)
-    .byte >(ped_s12-1), >(ped_s13-1), >(ped_s14-1), >(ped_s15-1)
-    .byte >(pmx_cure_poison_msg-1), >(ped_s17-1), >(ped_s18-1), >(ped_s19-1)
+    .byte >(pmx_light_room_msg-1), >(eff_find_traps-1), >(ped_s6-1), >(pmx_slow_poison_msg-1)
+    .byte >(pmx_confuse_monster_dir_msg-1), >(eff_teleport_self-1), >(med_s4-1), >(ped_s11-1)
+    .byte >(pmx_sleep_adjacent_msg-1), >(med_s16-1), >(ped_s14-1), >(pmx_add_resist_heat_cold_msg-1)
+    .byte >(pmx_cure_poison_msg-1), >(ped_s17-1), >(ped_s18-1), >(pmx_set_see_invisible_msg-1)
     .byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s22-1), >(ped_s23-1)
     .byte >(eff_turn_undead-1), >(ped_s25-1), >(ped_s26-1), >(ped_s27-1)
-    .byte >(ped_s28-1), >(ped_s29-1), >(ped_s30-1)
+    .byte >(ped_s28-1), >(eff_glyph_of_warding-1), >(eff_holy_word-1)
 
 .assert "Priest dispatch lo count", ped_tbl_hi - ped_tbl_lo, SPELL_CATALOG_COUNT
 .assert "Priest dispatch hi count", ped_s0 - ped_tbl_hi, SPELL_CATALOG_COUNT
 
 ped_s0:
-    jmp eff_detect_evil
+eff_detect_evil:
+    jmp pmx_detect_evil_msg
 ped_s1:
     lda #3
     ldx #3
@@ -234,41 +216,19 @@ ped_s2:
     clc
     adc #12
     jmp pmx_add_bless_msg
-ped_s4:
-    jmp pmx_light_room_msg
 ped_s6:
     jsr eff_find_doors
     jmp eff_find_stairs
-ped_s7:
-    jmp pmx_slow_poison_msg
-ped_s8:
-    jmp pmx_confuse_monster_dir_msg
-ped_s10:
-    lda #4
-    ldx #4
-    ldy #0
-    jmp heal_dice
 ped_s11:
     lda #24
     jsr rng_range
     clc
     adc #24
     jmp pmx_add_bless_msg
-ped_s12:
-    jmp pmx_sleep_adjacent_msg
-ped_s13:
-    jsr eff_create_food
-    bcs !ped_s13_done+
-    ldx #HSTR_PMU_GLYPH_BLOCK
-    jsr huff_print_msg
-!ped_s13_done:
-    rts
 ped_s14:
     jsr eff_remove_curse_all
     ldx #HSTR_PIQ_CLEANSED
     jmp huff_print_msg
-ped_s15:
-    jmp pmx_add_resist_heat_cold_msg   // its two rolls there
 ped_s17:
     lda #3
     ldx #6
@@ -276,22 +236,21 @@ ped_s17:
     jsr math_dice
     lda zp_math_a
     jmp eff_ball_holy               // a holy orb: doubled against evil (VMS fire_ball)
+med_s4:
+    lda #4
+    .byte $2c
 ped_s18:
     lda #8
-    ldx #4
-    ldy #0
-    jmp heal_dice
-ped_s19:
-    jmp eff_sense_invisible
-ped_s20:
-    jmp eff_protect_from_evil
-ped_s22:
-    jmp PMX_MAP_AREA_TARGET
+    .byte $2c
 ped_s23:
     lda #16
     ldx #4
     ldy #0
     jmp heal_dice
+ped_s20:
+    jmp eff_protect_from_evil
+ped_s22:
+    jmp PMX_MAP_AREA_TARGET
 ped_s25:
     lda #48
     jsr rng_range
@@ -319,10 +278,6 @@ ped_s28:
     jmp huff_print_msg
 !ped_s28_done:
     rts
-ped_s29:
-    jmp eff_glyph_of_warding
-ped_s30:
-    jmp eff_holy_word
 
 heal_dice:
     jsr math_dice
@@ -375,9 +330,6 @@ eff_remove_fear:
     jsr huff_print_msg
 !erf_done:
     rts
-
-eff_detect_evil:
-    jmp pmx_detect_evil_msg
 
 eff_remove_curse_all:
     ldx #0
@@ -444,9 +396,6 @@ eff_staff_speed:
     adc #15
     jmp pmx_add_speed_msg
 
-eff_sense_invisible:
-    jmp pmx_set_see_invisible_msg
-
 // eff_protect_from_evil — protevil += randint(25) + 3*lev (VMS Moria
 // spells.inc protect_evil; Umoria playerProtectEvil). Levels up to 76 keep
 // the sum below 256, so no carry arises between the adds.
@@ -458,9 +407,6 @@ eff_protect_from_evil:
     adc zp_player_lvl
     adc zp_player_lvl
     jmp pmx_add_protect_msg
-
-eff_create_food:
-    jmp pmu_create_food
 
 eff_recharge_item:
     sta pmx_work_damage
@@ -503,6 +449,9 @@ eff_recharge_item:
     ldx pmx_target_slot
     clc
     adc inv_p1,x
+    bcc !eri_store+
+    lda #$ff
+!eri_store:
     sta inv_p1,x
     jsr pmx_print_recharged_item
 !eri_done:
@@ -510,8 +459,21 @@ eff_recharge_item:
 eff_polymorph_other:
     jsr eff_directional_monster
     bcc !epo_done+
+    lda zp_player_dlvl
+    beq !epo_done+
     stx pmx_work_idx
     jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_slot_is_balrog
+    beq !epo_done+
+#else
+    lda cr_level,x
+    cmp #100
+    bcs !epo_done+
+#endif
     ldy #MX_X
     lda (zp_ptr0),y
     sta ms_spawn_x
@@ -589,6 +551,14 @@ eff_genocide:
     lda cr_display,x
     cmp pmx_work_flag
     bne !egeno_next+
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_slot_is_balrog
+    beq !egeno_next+
+#else
+    lda cr_level,x
+    cmp #100
+    bcs !egeno_next+
+#endif
     ldx pmx_work_idx
     jsr monster_remove
 !egeno_next:

@@ -18,6 +18,9 @@
 //   carry set   = LOAD failed
 // Clobbers: A, X, Y
 c128_preload_asset_load:
+#if C128_CARTRIDGE
+    jmp cart_load_prg
+#else
     php
     sei
 #if C128_TEST_STACK_LOW_WATER
@@ -156,4 +159,5 @@ c128_preload_finish:
 c128_preload_fn_lo: .byte 0
 c128_preload_fn_hi: .byte 0
 c128_preload_saved_p: .byte 0
+#endif
 #endif

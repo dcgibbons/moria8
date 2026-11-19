@@ -20,21 +20,10 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 1
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
-// $17: the monster catalog prototype adds the species table to the door-state
-// block. $18: 40 creature rows (32 species slots and the town), so the recall
-// block is 160 bytes, not 260 (2026-11-05). Older saves do not fit, so $18 is
-// the oldest the loader takes and the legacy feature versions are pinned at
-// it (the 31-slot inventory version just below it, so its loader compiles out).
-// $19: 16-item stores (the store block grew); older saves are refused.
-.const hal_storage_save_v1_version = $19
-.const hal_storage_save_known96_version = $19
-.const hal_storage_save_inv31_version = $18
-.const hal_storage_save_known_bits_version = $19
-.const hal_storage_save_baked_stats_version = $19
-.const hal_storage_save_known160_version = $19
-.const hal_storage_save_door_state_version = $19
-.const hal_storage_save_inv33_version = $19
-.const hal_storage_save_version = $19
+// $22 (Save Format V2): canonical 361-item VMS catalog, 34 inventory slots
+// (with Cloak), 174 flavours, 55 egos, 128 store items with meta_hi, and
+// 279-species persistent monster recall. Only SAVE_VERSION ($22) is accepted.
+.const hal_storage_save_version = $22
 
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
@@ -47,4 +36,9 @@
 #define HAL_STORAGE_MAP_BANKED
 #define HAL_STORAGE_NO_UNIT_TEST_STUBS
 
+#if CX16_CARTRIDGE
+#define HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+#define HAL_STORAGE_ASSET_LOAD_INFALLIBLE
+#else
 #define HAL_STORAGE_LEGAL_BURST_READ
+#endif

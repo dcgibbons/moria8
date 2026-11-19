@@ -38,6 +38,7 @@ map_set_tile:
 
 #import "../../../../core/color.s"
 #import "../screen_vdc.s"
+#import "../../../../core/floor_item_page.s"
 #import "../dungeon_render_vdc.s"
 
 .pc = $0801 "BASIC Stub"
@@ -74,6 +75,7 @@ test_glyph_x:        .byte 0
 test_glyph_y:        .byte 0
 
 fi_item_id: .fill MAX_FLOOR_ITEMS, FI_EMPTY
+fi_meta_hi: .fill MAX_FLOOR_ITEMS, 0   // the floor items' page (floor_item_page_x)
 fi_x:       .fill MAX_FLOOR_ITEMS, 0
 fi_y:       .fill MAX_FLOOR_ITEMS, 0
 it_display: .fill 2, 0

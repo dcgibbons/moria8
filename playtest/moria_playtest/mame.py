@@ -52,6 +52,7 @@ class MameProcess:
     disk: Path
     target: Port
     hang_emulated_seconds: float = 300.0
+    cartridge: Path | None = None   # the port's cartridge image: -cart1, the disk in the port's drive for saves
     proc: subprocess.Popen[bytes] | None = None
     args: list[str] = field(default_factory=list)
     log_path: Path | None = None
@@ -70,6 +71,7 @@ class MameProcess:
         self.args = ["mame", port.mame_machine, *rom_args,
                      *(arg for kind in ("cfg", "nvram", "state", "snapshot", "diff", "comment", "input")
                        for arg in (f"-{kind}_directory", str(cfg))),
+                     *(("-cart1", str(self.cartridge)) if self.cartridge is not None else ()),
                      port.mame_media, str(self.disk), "-video", "none", "-sound", "none", "-nothrottle",
                      "-autoboot_script", str(BRIDGE), "-autoboot_delay", "0"]
         env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy",
@@ -253,6 +255,9 @@ class MameGame(Game):
         """The bridge's taps: each read counts as the key wait only from inside
         input_get_key, not the routines after it that read the same source."""
         start, end = abi.input_get_key, getattr(abi, port.key_wait_end) - 1
+        if end <= start:
+            raise ValueError(f"{port.name}: key_wait_end {port.key_wait_end} (${end + 1:04X}) is not past "
+                             f"input_get_key (${start:04X})")
         return ";".join(f"{kind},{getattr(abi, addr) if isinstance(addr, str) else addr:X},{start:X},{end:X}"
                         + (f",{getattr(abi, buffer):X}" if buffer else "")
                         for kind, addr, buffer in port.key_taps)

@@ -1,622 +1,244 @@
 #importonce
-// item_tables.s — immutable item type tables and base item names
+// item_tables.s — Hot item property tables, page-aware accessors, and
+// cold ITEM.CAT wrappers (V2 361-item Base-255 paged catalog).
 
 // Named item type constants
-.const ITEM_FLASK_OIL = 61
+.const ITEM_FLASK_OIL = ITEM_SLOT_FLASK_OF_OIL
 .const LANTERN_MAX_CHARGES = 250
 
+.const IT_MISSILE_BASE  = ITEM_SLOT_SHORT_BOW          // Contiguous Page-0 ranged block (Short Bow..Iron Shot)
+.const IT_LAUNCHER_END  = ITEM_SLOT_SLING + 1
+.const IT_MISSILE_END   = ITEM_SLOT_IRON_SHOT + 1
+.assert "Ranged launchers and ammo are contiguous on Page 0", ITEM_LONG_BOW == ITEM_SHORT_BOW + 1 && ITEM_COMPOSITE_BOW == ITEM_SHORT_BOW + 2 && ITEM_LIGHT_CROSSBOW == ITEM_SHORT_BOW + 3 && ITEM_HEAVY_CROSSBOW == ITEM_SHORT_BOW + 4 && ITEM_SLING == ITEM_SHORT_BOW + 5 && ITEM_ARROW == ITEM_SHORT_BOW + 6 && ITEM_BOLT == ITEM_SHORT_BOW + 7 && ITEM_ROCK == ITEM_SHORT_BOW + 8 && ITEM_IRON_SHOT == ITEM_SHORT_BOW + 9 && IT_MISSILE_END <= ITEM_PAGE_SIZE, true
+
 // ============================================================
-// Master Item Type Table — Struct-of-Arrays
+// Hot Catalog Arrays (generated in platforms/shared/item_catalog/item_hot_tables.s)
+// Placed in AuxDataSegment on HAL_PLATFORM_AUX_PERSISTENT_DATA targets.
 // ============================================================
-
-// Category
-it_category:
-    .byte ICAT_GOLD     // 0: Gold (small)
-    .byte ICAT_GOLD     // 1: Gold (large)
-    .byte ICAT_WEAPON   // 2: Dagger
-    .byte ICAT_WEAPON   // 3: Short sword
-    .byte ICAT_WEAPON   // 4: Long sword
-    .byte ICAT_WEAPON   // 5: Mace
-    .byte ICAT_ARMOR    // 6: Robe
-    .byte ICAT_ARMOR    // 7: Leather armor
-    .byte ICAT_ARMOR    // 8: Chain mail
-    .byte ICAT_SHIELD   // 9: Small shield
-    .byte ICAT_HELM     // 10: Iron helm
-    .byte ICAT_GLOVES   // 11: Leather gloves
-    .byte ICAT_BOOTS    // 12: Leather boots
-    .byte ICAT_LIGHT    // 13: Wooden torch
-    .byte ICAT_LIGHT    // 14: Brass lantern
-    .byte ICAT_FOOD     // 15: Ration of food
-    .byte ICAT_FOOD     // 16: Slime mold
-    .byte ICAT_POTION   // 17: Cure light wounds
-    .byte ICAT_POTION   // 18: Speed
-    .byte ICAT_POTION   // 19: Poison
-    .byte ICAT_SCROLL   // 20: Light
-    .byte ICAT_SCROLL   // 21: Identify
-    .byte ICAT_SCROLL   // 22: Teleportation
-    .byte ICAT_RING     // 23: Protection
-    .byte ICAT_RING     // 24: Strength
-    .byte ICAT_POTION   // 25: Cure Serious Wounds
-    .byte ICAT_POTION   // 26: Restore Mana
-    .byte ICAT_POTION   // 27: Heroism
-    .byte ICAT_POTION   // 28: Blindness
-    .byte ICAT_POTION   // 29: Confusion
-    .byte ICAT_POTION   // 30: Detect Monsters
-    .byte ICAT_POTION   // 31: Infravision
-    .byte ICAT_SCROLL   // 32: Word of Recall
-    .byte ICAT_SCROLL   // 33: Remove Curse
-    .byte ICAT_SCROLL   // 34: Enchant Weapon
-    .byte ICAT_SCROLL   // 35: Enchant Armor
-    .byte ICAT_SCROLL   // 36: Monster Confusion
-    .byte ICAT_SCROLL   // 37: Aggravate
-    .byte ICAT_SCROLL   // 38: Protect from Evil
-    .byte ICAT_WAND     // 39: Wand of Light
-    .byte ICAT_WAND     // 40: Wand of Lightning
-    .byte ICAT_WAND     // 41: Wand of Frost
-    .byte ICAT_WAND     // 42: Wand of Stinking Cloud
-    .byte ICAT_STAFF    // 43: Staff of Light
-    .byte ICAT_STAFF    // 44: Staff of Detect Monsters
-    .byte ICAT_STAFF    // 45: Staff of Teleportation
-    .byte ICAT_STAFF    // 46: Staff of Cure Light Wounds
-    .byte ICAT_BOOK     // 47: Beginner's Spellbook (Mage Book 1)
-    .byte ICAT_BOOK     // 48: Holy Prayer Book (Priest Book 1)
-    .byte ICAT_WEAPON   // 49: Short Bow
-    .byte ICAT_WEAPON   // 50: Light Crossbow
-    .byte ICAT_WEAPON   // 51: Sling
-    .byte ICAT_WEAPON   // 52: Arrow
-    .byte ICAT_WEAPON   // 53: Bolt
-    .byte ICAT_WEAPON   // 54: Rock
-    .byte ICAT_BOOK     // 55: Magick I (Mage Book 2)
-    .byte ICAT_BOOK     // 56: Magick II (Mage Book 3)
-    .byte ICAT_BOOK     // 57: The Mages Guide to Power (Mage Book 4)
-    .byte ICAT_BOOK     // 58: Words of Wisdom (Priest Book 2)
-    .byte ICAT_BOOK     // 59: Chants and Blessings (Priest Book 3)
-    .byte ICAT_BOOK     // 60: Exorcism and Dispelling (Priest Book 4)
-    .byte ICAT_LIGHT    // 61: Flask of Oil
-    .byte ICAT_DIGGING  // 62: Shovel
-    .byte ICAT_DIGGING  // 63: Pick
-    .byte ICAT_WEAPON   // 64: Main Gauche
-    .byte ICAT_ARMOR    // 65: Studded Leather Armor
-    .byte ICAT_WEAPON   // 66: Rapier
-    .byte ICAT_WEAPON   // 67: Broad Sword
-    .byte ICAT_WEAPON   // 68: Bastard Sword
-    .byte ICAT_WEAPON   // 69: Two-Handed Sword
-    .byte ICAT_WEAPON   // 70: Scimitar
-    .byte ICAT_WEAPON   // 71: Battle Axe
-    .byte ICAT_WEAPON   // 72: War Hammer
-    .byte ICAT_WEAPON   // 73: Morningstar
-    .byte ICAT_WEAPON   // 74: Spear
-    .byte ICAT_WEAPON   // 75: Pike
-    .byte ICAT_WEAPON   // 76: Halberd
-    .byte ICAT_WEAPON   // 77: Quarterstaff
-    .byte ICAT_SHIELD   // 78: Large Shield
-    .byte ICAT_ARMOR    // 79: Hard Leather Armor
-    .byte ICAT_ARMOR    // 80: Scale Mail
-    .byte ICAT_ARMOR    // 81: Plate Mail
-    .byte ICAT_ARMOR    // 82: Cloak
-    .byte ICAT_HELM     // 83: Steel Helm
-    .byte ICAT_GLOVES   // 84: Gauntlets
-    .byte ICAT_BOOTS    // 85: Soft Leather Boots
-    .byte ICAT_BOOTS    // 86: Hard Leather Boots
-    .byte ICAT_HELM     // 87: Metal Cap
-    .byte ICAT_WEAPON   // 88: Sabre
-    .byte ICAT_WEAPON   // 89: Cutlass
-    .byte ICAT_WEAPON   // 90: Tulwar
-    .byte ICAT_WEAPON   // 91: Katana
-    .byte ICAT_WEAPON   // 92: Flail
-    .byte ICAT_WEAPON   // 93: Lucerne Hammer
-    .byte ICAT_WEAPON   // 94: Broad Axe
-    .byte ICAT_WEAPON   // 95: Awl-Pike
-    .byte ICAT_POTION   // 96: Healing
-    .byte ICAT_POTION   // 97: Restoration
-    .byte ICAT_POTION   // 98: Resist Heat
-    .byte ICAT_POTION   // 99: Resist Cold
-    .byte ICAT_POTION   // 100: Cure Critical Wounds
-    .byte ICAT_SCROLL   // 101: Teleport Level
-    .byte ICAT_SCROLL   // 102: Magic Mapping
-    .byte ICAT_SCROLL   // 103: Object Detection
-    .byte ICAT_SCROLL   // 104: Recharging
-    .byte ICAT_SCROLL   // 105: Rune of Protection
-    .byte ICAT_SCROLL   // 106: Genocide
-    .byte ICAT_SCROLL   // 107: Mass Genocide
-    .byte ICAT_SCROLL   // 108: *Destruction*
-    .byte ICAT_RING     // 109: Resist Fire
-    .byte ICAT_RING     // 110: Resist Cold
-    .byte ICAT_RING     // 111: Speed
-    .byte ICAT_RING     // 112: See Invisible
-    .byte ICAT_RING     // 113: Slaying
-    .byte ICAT_WAND     // 114: Slow Monster
-    .byte ICAT_WAND     // 115: Stone-to-Mud
-    .byte ICAT_WAND     // 116: Teleport Away
-    .byte ICAT_WAND     // 117: Fire Balls
-    .byte ICAT_WAND     // 118: Cold Balls
-    .byte ICAT_STAFF    // 119: Dispel Evil
-    .byte ICAT_STAFF    // 120: Destruction
-    .byte ICAT_STAFF    // 121: Speed
-    .byte ICAT_ARMOR    // 122: Mithril Chain Mail
-    .byte ICAT_ARMOR    // 123: Mithril Plate Mail
-    .byte ICAT_AMULET   // 124: Amulet of Wisdom
-    .byte ICAT_AMULET   // 125: Amulet of the Magi
-    .byte ICAT_POTION   // 126: Neutralize Poison
-    .byte ICAT_STAFF    // 127: Remove Curse
-    .byte ICAT_CHEST    // 128: Small Wooden Chest
-    .byte ICAT_CHEST    // 129: Large Wooden Chest
-    .byte ICAT_CHEST    // 130: Small Iron Chest
-    .byte ICAT_CHEST    // 131: Large Iron Chest
-    .byte ICAT_CHEST    // 132: Small Steel Chest
-    .byte ICAT_CHEST    // 133: Large Steel Chest
-    .byte ICAT_CHEST    // 134: Ruined Chest
-    .byte ICAT_SPIKE    // 135: Iron Spike
-    .byte ICAT_SCROLL   // 136: Phase Door
-    .byte ICAT_WEAPON   // 137: Long Bow
-    .byte ICAT_WEAPON   // 138: Composite Bow
-    .byte ICAT_WEAPON   // 139: Heavy Crossbow
-    .byte ICAT_POTION, ICAT_POTION, ICAT_POTION   // 140-142: Gain Strength, Intelligence, Wisdom
-    .byte ICAT_POTION, ICAT_POTION, ICAT_POTION   // 143-145: Gain Dexterity, Constitution, Charisma
-    .byte ICAT_RING, ICAT_RING, ICAT_RING         // 146-148: Lordly Protection (Fire, Acid, Cold)
-    .byte ICAT_AMULET                             // 149: Resist Acid
-    .byte ICAT_HELM     // 150: Silver Crown
-    .byte ICAT_HELM     // 151: Golden Crown
-    .byte ICAT_HELM     // 152: Jewel Encrusted Crown
-    .byte ICAT_WAND, ICAT_WAND, ICAT_WAND, ICAT_WAND   // 153-156: Fire Bolts, Drain Life, Lightning Balls, Acid Balls
-
-// Color and base armor class packed per type: high nibble = display color,
-// low nibble = base AC (<=9).
-it_color_ac:
-    .byte COL_YELLOW << 4                       // 0: Gold (small)
-    .byte COL_YELLOW << 4                       // 1: Gold (large)
-    .byte COL_LGREY << 4                        // 2: Dagger
-    .byte COL_LGREY << 4                        // 3: Short sword
-    .byte COL_WHITE << 4                        // 4: Long sword
-    .byte COL_LGREY << 4                        // 5: Mace
-    .byte (COL_LGREY << 4) | 2                  // 6: Robe
-    .byte (COL_BROWN << 4) | 4                  // 7: Leather armor
-    .byte (COL_GREY << 4) | 6                   // 8: Chain mail
-    .byte (COL_LGREY << 4) | 2                  // 9: Small shield
-    .byte (COL_GREY << 4) | 1                   // 10: Iron helm
-    .byte (COL_BROWN << 4) | 1                  // 11: Leather gloves
-    .byte (COL_BROWN << 4) | 1                  // 12: Leather boots
-    .byte COL_YELLOW << 4                       // 13: Wooden torch
-    .byte COL_ORANGE << 4                       // 14: Brass lantern
-    .byte COL_BROWN << 4                        // 15: Ration of food
-    .byte COL_GREEN << 4                        // 16: Slime mold
-    .byte COL_WHITE << 4                        // 17: Cure light wounds
-    .byte COL_LGREEN << 4                       // 18: Speed
-    .byte COL_GREEN << 4                        // 19: Poison
-    .byte COL_WHITE << 4                        // 20: Light
-    .byte COL_LGREY << 4                        // 21: Identify
-    .byte COL_CYAN << 4                         // 22: Teleportation
-    .byte (COL_YELLOW << 4) | 1                 // 23: Protection
-    .byte COL_LRED << 4                         // 24: Strength
-    .byte COL_WHITE << 4                        // 25: Cure Serious Wounds
-    .byte COL_BLUE << 4                         // 26: Restore Mana
-    .byte COL_LRED << 4                         // 27: Heroism
-    .byte COL_GREY << 4                         // 28: Blindness
-    .byte COL_PURPLE << 4                       // 29: Confusion
-    .byte COL_YELLOW << 4                       // 30: Detect Monsters
-    .byte COL_ORANGE << 4                       // 31: Infravision
-    .byte COL_LGREY << 4                        // 32: Word of Recall
-    .byte COL_CYAN << 4                         // 33: Remove Curse
-    .byte COL_WHITE << 4                        // 34: Enchant Weapon
-    .byte COL_WHITE << 4                        // 35: Enchant Armor
-    .byte COL_LGREEN << 4                       // 36: Monster Confusion
-    .byte COL_LRED << 4                         // 37: Aggravate
-    .byte COL_YELLOW << 4                       // 38: Protect from Evil
-    .byte COL_YELLOW << 4                       // 39: Wand of Light
-    .byte COL_CYAN << 4                         // 40: Wand of Lightning
-    .byte COL_BLUE << 4                         // 41: Wand of Frost
-    .byte COL_GREEN << 4                        // 42: Wand of Stinking Cloud
-    .byte COL_YELLOW << 4                       // 43: Staff of Light
-    .byte COL_LGREEN << 4                       // 44: Staff of Detect Monsters
-    .byte COL_CYAN << 4                         // 45: Staff of Teleportation
-    .byte COL_WHITE << 4                        // 46: Staff of Cure Light Wounds
-    .byte COL_PURPLE << 4                       // 47: Beginner's Spellbook
-    .byte COL_YELLOW << 4                       // 48: Holy Prayer Book
-    .byte COL_BROWN << 4                        // 49: Short Bow
-    .byte COL_LGREY << 4                        // 50: Light Crossbow
-    .byte COL_BROWN << 4                        // 51: Sling
-    .byte COL_BROWN << 4                        // 52: Arrow
-    .byte COL_LGREY << 4                        // 53: Bolt
-    .byte COL_GREY << 4                         // 54: Rock
-    .byte COL_PURPLE << 4                       // 55: Magick I
-    .byte COL_BLUE << 4                         // 56: Magick II
-    .byte COL_LRED << 4                         // 57: The Mages Guide to Power
-    .byte COL_YELLOW << 4                       // 58: Words of Wisdom
-    .byte COL_CYAN << 4                         // 59: Chants and Blessings
-    .byte COL_WHITE << 4                        // 60: Exorcism and Dispelling
-    .byte COL_ORANGE << 4                       // 61: Flask of Oil
-    .byte COL_BROWN << 4                        // 62: Shovel
-    .byte COL_LGREY << 4                        // 63: Pick
-    .byte COL_LGREY << 4                        // 64: Main Gauche
-    .byte (COL_BROWN << 4) | 5                  // 65: Studded Leather Armor
-    .byte COL_LGREY << 4                        // 66: Rapier
-    .byte COL_WHITE << 4                        // 67: Broad Sword
-    .byte COL_WHITE << 4                        // 68: Bastard Sword
-    .byte COL_LGREY << 4                        // 69: Two-Handed Sword
-    .byte COL_WHITE << 4                        // 70: Scimitar
-    .byte COL_LGREY << 4                        // 71: Battle Axe
-    .byte COL_LGREY << 4                        // 72: War Hammer
-    .byte COL_WHITE << 4                        // 73: Morningstar
-    .byte COL_LGREY << 4                        // 74: Spear
-    .byte COL_LGREY << 4                        // 75: Pike
-    .byte COL_LGREY << 4                        // 76: Halberd
-    .byte COL_BROWN << 4                        // 77: Quarterstaff
-    .byte (COL_LGREY << 4) | 3                  // 78: Large Shield
-    .byte (COL_BROWN << 4) | 6                  // 79: Hard Leather Armor
-    .byte (COL_GREY << 4) | 7                   // 80: Scale Mail
-    .byte (COL_LGREY << 4) | 9                  // 81: Plate Mail
-    .byte (COL_LGREY << 4) | 1                  // 82: Cloak
-    .byte (COL_LGREY << 4) | 2                  // 83: Steel Helm
-    .byte (COL_LGREY << 4) | 1                  // 84: Gauntlets
-    .byte (COL_BROWN << 4) | 1                  // 85: Soft Leather Boots
-    .byte (COL_BROWN << 4) | 2                  // 86: Hard Leather Boots
-    .byte (COL_GREY << 4) | 1                   // 87: Metal Cap
-    .byte COL_WHITE << 4                        // 88: Sabre
-    .byte COL_WHITE << 4                        // 89: Cutlass
-    .byte COL_LGREY << 4                        // 90: Tulwar
-    .byte COL_LGREY << 4                        // 91: Katana
-    .byte COL_LGREY << 4                        // 92: Flail
-    .byte COL_LGREY << 4                        // 93: Lucerne Hammer
-    .byte COL_LGREY << 4                        // 94: Broad Axe
-    .byte COL_LGREY << 4                        // 95: Awl-Pike
-    .byte COL_WHITE << 4                        // 96: Healing
-    .byte COL_YELLOW << 4                       // 97: Restoration
-    .byte COL_LRED << 4                         // 98: Resist Heat
-    .byte COL_CYAN << 4                         // 99: Resist Cold
-    .byte COL_WHITE << 4                        // 100: Cure Critical Wounds
-    .byte COL_CYAN << 4                         // 101: Teleport Level
-    .byte COL_LGREEN << 4                       // 102: Magic Mapping
-    .byte COL_YELLOW << 4                       // 103: Object Detection
-    .byte COL_LGREEN << 4                       // 104: Recharging
-    .byte COL_YELLOW << 4                       // 105: Rune of Protection
-    .byte COL_LRED << 4                         // 106: Genocide
-    .byte COL_LRED << 4                         // 107: Mass Genocide
-    .byte COL_LRED << 4                         // 108: *Destruction*
-    .byte COL_LRED << 4                         // 109: Resist Fire
-    .byte COL_CYAN << 4                         // 110: Resist Cold
-    .byte COL_YELLOW << 4                       // 111: Speed
-    .byte COL_LGREEN << 4                       // 112: See Invisible
-    .byte COL_LRED << 4                         // 113: Slaying
-    .byte COL_GREY << 4                         // 114: Slow Monster
-    .byte COL_BROWN << 4                        // 115: Stone-to-Mud
-    .byte COL_CYAN << 4                         // 116: Teleport Away
-    .byte COL_LRED << 4                         // 117: Fire Balls
-    .byte COL_CYAN << 4                         // 118: Cold Balls
-    .byte COL_WHITE << 4                        // 119: Dispel Evil
-    .byte COL_LRED << 4                         // 120: Destruction
-    .byte COL_YELLOW << 4                       // 121: Speed
-    .byte (COL_LGREY << 4) | 11                 // 122: Mithril Chain Mail
-    .byte (COL_LGREY << 4) | 14                 // 123: Mithril Plate Mail
-    .byte COL_YELLOW << 4                       // 124: Amulet of Wisdom
-    .byte (COL_LGREEN << 4) | 3                 // 125: Amulet of the Magi
-    .byte COL_GREEN << 4                        // 126: Neutralize Poison
-    .byte COL_CYAN << 4                         // 127: Remove Curse
-    .byte COL_BROWN << 4                        // 128: Small Wooden Chest
-    .byte COL_BROWN << 4                        // 129: Large Wooden Chest
-    .byte COL_LGREY << 4                        // 130: Small Iron Chest
-    .byte COL_LGREY << 4                        // 131: Large Iron Chest
-    .byte COL_WHITE << 4                        // 132: Small Steel Chest
-    .byte COL_WHITE << 4                        // 133: Large Steel Chest
-    .byte COL_BROWN << 4                        // 134: Ruined Chest
-    .byte COL_WHITE << 4                        // 135: Iron Spike
-    .byte COL_CYAN << 4                         // 136: Phase Door
-    .byte COL_BROWN << 4                        // 137: Long Bow
-    .byte COL_BROWN << 4                        // 138: Composite Bow
-    .byte COL_LGREY << 4                        // 139: Heavy Crossbow
-    .fill 6, COL_WHITE << 4                     // 140-145: potions of gain stat
-    .byte COL_LRED << 4 | 5                     // 146: Lordly Protection (Fire), +5 AC (VMS)
-    .byte COL_LGREEN << 4 | 5                   // 147: Lordly Protection (Acid)
-    .byte COL_CYAN << 4 | 5                     // 148: Lordly Protection (Cold)
-    .byte COL_LGREEN << 4                       // 149: Resist Acid
-    .byte COL_WHITE << 4                        // 150: Silver Crown, AC 0 (VMS)
-    .byte COL_YELLOW << 4                       // 151: Golden Crown
-    .byte COL_LGREEN << 4                       // 152: Jewel Encrusted Crown
-    .byte COL_LRED << 4                         // 153: Fire Bolts
-    .byte COL_PURPLE << 4                       // 154: Drain Life
-    .byte COL_CYAN << 4                         // 155: Lightning Balls
-    .byte COL_LGREEN << 4                       // 156: Acid Balls
-
-// Weight (in 1/10 lbs)
-it_weight:
-    .byte 0, 0, 12, 30, 50, 50, 20, 80, 120, 50
-    .byte 30, 5, 10, 10, 30, 10, 5, 4, 4, 4
-    .byte 2, 2, 2, 2, 2, 4, 4, 4, 4, 4
-    .byte 4, 4, 2, 2, 2, 2, 2, 2, 2
-    .byte 10, 10, 10, 10, 50, 50, 50, 50
-    .byte 30, 30                            // Books (47-48)
-    .byte 30, 50, 5, 2, 2, 4               // Bows, ammo
-    .byte 30, 30, 30, 30, 30, 30           // Books (55-60)
-    .byte 10                               // 61: Flask of Oil
-    .byte 60, 50                            // 62: Shovel, 63: Pick
-    .byte 30, 90                            // 64-65: new weapon/armor
-    .byte 40, 75, 140, 200                  // 66-69: expanded swords
-    .byte 40, 170, 120, 150                 // 70-73: expanded hafted/axe
-    .byte 50, 160, 190, 40                  // 74-77: polearms/staff
-    .byte 100, 120                          // 78-79: shield/armor
-    .byte 250, 380                          // 80-81: heavier armor
-    .byte 10, 60, 25, 5, 20, 20             // 82-87: cloak/helm/gloves/boots/cap
-    .byte 50, 110, 100, 120                 // 88-91: added blades
-    .byte 150, 120, 160, 160                // 92-95: added hafted/pole weapons
-    .byte 4, 4, 4, 4, 4, 5, 5, 5            // 96-103: potions, scrolls
-    .byte 5, 5, 5, 5, 5                     // 104-108: scrolls
-    .byte 2, 2, 2, 2, 2                     // 109-113: rings
-    .byte 10, 10, 10, 10, 10                // 114-118: wands
-    .byte 50, 50, 50                        // 119-121: staves
-    .byte 200, 320                          // 122-123: mithril armor
-    .byte 3, 3                              // 124-125: amulets
-    .byte 4, 50                             // 126: potion, 127: staff
-    // 128-134: chests (heavy rows saturate at 255; docs/CHEST_DESIGN.md)
-    .byte 250, 255, 255, 255, 255, 255, 250
-    .byte 10                                // 135: Iron Spike
-    .byte 5                                 // 136: Phase Door (scroll, 0.5 lb)
-    .byte 40, 40, 200                       // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
-    .fill 6, 4                              // 140-145: potions of gain stat (VMS 0.4 lb)
-    .byte 2, 2, 2, 3                        // 146-148: rings, 149: amulet (VMS)
-    .byte 20, 30, 40                        // 150-152: crowns (VMS)
-    .byte 10, 10, 10, 10                    // 153-156: wands (VMS 1 lb)
-
-// Damage dice packed per type: high nibble = dice count (<=3), low nibble =
-// dice sides (<=9). 0 = no damage dice.
-it_dmg_packed:
-    .byte 0, 0, $14, $16, $18, $24, 0, 0, 0, $11  // 9: Small Shield 1d1 (VMS; a bash rolls it)
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0                              // Books (47-48)
-    .byte 0, 0, 0, $14, $15, $12            // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
-    .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
-    .byte $26                               // 61: Flask of Oil (2d6)
-    .byte $12, $13                          // 62: Shovel (1d2), 63: Pick (1d3)
-    .byte $15, 0                            // 64: Main Gauche (1d5), 65: armor
-    .byte $16, $25, $34, $36                // 66-69: expanded swords
-    .byte $18, $34, $33, $26                // 70-73: expanded hafted/axe
-    .byte $16, $25, $34, $19                // 74-77: polearms/staff
-    .byte $12, 0                            // 78: Large Shield 1d2 (VMS Large Leather Shield), 79: armor
-    .byte 0, 0                              // 80-81: armor
-    .byte 0, 0, 0, 0, 0, 0                  // 82-87: defensive equipment
-    .byte $17, $17, $24, $34                // 88-91: added blades
-    .byte $26, $25, $26, $18                // 92-95: added hafted/pole weapons
-    .fill 32, 0                             // 96-127: no damage dice
-    // 128-134: chest thrown damage 2d3/2d5/2d4/2d6/2d4/2d6; ruined 0d0
-    .byte $23, $25, $24, $26, $24, $26, 0
-    .byte $11                                 // 135: Iron Spike (1d1)
-    .byte 0                                   // 136: Phase Door
-    .byte 0, 0, 0                             // 137-139: launchers 0d0
-    .fill 6, 0                                // 140-145: potions
-    .fill 4, 0                                // 146-149: rings, amulet
-    .byte $11, $12, $13                       // 150-152: crowns 1d1, 1d2, 1d3 (VMS)
-    .fill 4, 0                                // 153-156: wands
-it_dmg_packed_end:
-
-#if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
-.segment TownOverlay
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+:AuxDataSegment()
 #endif
-
-// Base cost (lo)
-it_cost_lo:
-    .byte <0, <0, <10, <48, <300, <45, <4, <18, <530, <30
-    .byte <75, <3, <4, <2, <35, <3, <2, <15, <75, <5
-    .byte <15, <50, <40, <100, <400
-    .byte <40, <35, <35, <5, <5, <60, <20
-    .byte <150, <100, <125, <125, <30, <5, <100
-    .byte <200, <600, <800, <400, <250, <100, <400, <200
-    .byte <25, <25                        // Books (47-48)
-    .byte <50, <140, <5, <1, <2, <1        // Bows, ammo
-    .byte <100, <400, <800, <100, <300, <800 // Books (55-60)
-    .byte <3                                // 61: Flask of Oil
-    .byte <15, <50                          // 62: Shovel (15gp), 63: Pick (50gp)
-    .byte <25, <35
-    .byte <42, <255, <350, <180
-    .byte <50, <120, <90, <100
-    .byte <36, <358, <430, <20
-    .byte <120, <55
-    .byte <430, <1050
-    .byte <3, <200, <35, <7, <12, <30
-    .byte <50, <85, <100, <400
-    .byte <120, <376, <304, <340
-    .byte <200, <44, <30, <30, <100, <50, <40, <15
-    .byte <200, <244, <238, <232, <238, <250, <250, <184
-    .byte <244, <232, <244, <44, <94, <8, <220, <176
-    .byte <196, <244, <88, <176, <44, <136, <75, <244
-    // 128-134: chests (20/60/100/150/200/250, ruined 0)
-    .byte <20, <60, <100, <150, <200, <250, <0, <1 // 135: Iron Spike
-    .byte <15                               // 136: Phase Door (VMS 15 gp)
-    .byte <120, <240, <300                  // 137-139: Long Bow, Composite Bow, Heavy Crossbow (VMS)
-    .byte <200, <300, <300, <300, <300, <300   // 140-145: Gain Strength 200, the others 300 (VMS)
-    .byte <1200, <1200, <1200, <300            // 146-148: Lordly Protection 1200, 149: Resist Acid 300 (VMS)
-    .byte <250, <500, <1000                    // 150-152: crowns (VMS)
-    .byte <1000, <1200, <1200, <1650           // 153-156: Fire Bolts, Drain Life, Lightning Balls, Acid Balls (VMS)
-it_cost_lo_end:
-
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
-// Base cost high bytes are sparse in the current catalog. Product builds keep
-// only non-zero high bytes. C64/Plus4/Apple IIe/CX16 place them in the town
-// overlay; C128 keeps them with the resident item payload so town overlay
-// entry remains code.
-it_cost_hi_extra_id:
-    .byte 4, 8, 45, 56, 57, 59, 60, 68, 80, 81
-    .byte 91, 97, 105, 106, 107, 108, 111, 112, 113, 114
-    .byte 115, 116, 117, 118, 119, 120, 121, 122, 123, 124
-    .byte 125, 127, 139
-    .byte 24, 40, 41, 42, 75, 76, 93, 94, 95   // VMS prices (2026-10-26)
-    .byte 141, 142, 143, 144, 145              // potions of gain stat at 300 (2026-11-07)
-    .byte 146, 147, 148, 149                   // Lordly Protection 1200, Resist Acid 300 (2026-11-11)
-    .byte 151, 152                             // Golden Crown 500, Jewel Encrusted Crown 1000
-    .byte 153, 154, 155, 156                   // wands: Fire Bolts 1000, Drain Life and Lightning Balls 1200, Acid Balls 1650
-it_cost_hi_extra_value:
-    .byte >300, >530, >400, >400, >800, >300, >800, >350, >430, >1050
-    .byte >400, >300, >500, >750, >1000, >750, >3000, >500, >1000, >500
-    .byte >300, >350, >1800, >1500, >1200, >2500, >1000, >600, >1200, >300
-    .byte >5000, >500, >300
-    .byte >400, >600, >800, >400, >358, >430, >376, >304, >340
-    .byte >300, >300, >300, >300, >300
-    .byte >1200, >1200, >1200, >300
-    .byte >500, >1000
-    .byte >1000, >1200, >1200, >1650
-it_cost_hi_extra_end:
-.const IT_COST_HI_EXTRA_COUNT = it_cost_hi_extra_value - it_cost_hi_extra_id
-
-#if HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
-.segment Default
-#endif
-#else
-// Base cost (hi)
-it_cost_hi:
-    .byte >0, >0, >10, >48, >300, >45, >4, >18, >530, >30
-    .byte >75, >3, >4, >2, >35, >3, >2, >15, >75, >5
-    .byte >15, >50, >40, >100, >400
-    .byte >40, >35, >35, >5, >5, >60, >20
-    .byte >150, >100, >125, >125, >30, >5, >100
-    .byte >200, >600, >800, >400, >250, >100, >400, >200
-    .byte >25, >25                        // Books (47-48)
-    .byte >50, >140, >5, >1, >2, >1        // Bows, ammo
-    .byte >100, >400, >800, >100, >300, >800 // Books (55-60)
-    .byte >3                                // 61: Flask of Oil
-    .byte >15, >50                          // 62: Shovel (15gp), 63: Pick (50gp)
-    .byte >25, >35
-    .byte >42, >255, >350, >180
-    .byte >50, >120, >90, >100
-    .byte >36, >358, >430, >20
-    .byte >120, >55
-    .byte >430, >1050
-    .byte >3, >200, >35, >7, >12, >30
-    .byte >50, >85, >100, >400
-    .byte >120, >376, >304, >340
-    .byte >200, >300, >30, >30, >100, >50, >40, >15
-    .byte >200, >500, >750, >1000, >750, >250, >250, >3000
-    .byte >500, >1000, >500, >300, >350, >1800, >1500, >1200
-    .byte >2500, >1000, >600, >1200, >300, >5000, >75, >500
-    .byte >20, >60, >100, >150, >200, >250, >0    // 128-134: chests
-    .byte >1                                      // 135: Iron Spike
-    .byte >15                                     // 136: Phase Door
-    .byte >120, >240, >300                        // 137-139: launchers
-    .byte >200, >300, >300, >300, >300, >300      // 140-145: potions of gain stat
-    .byte >1200, >1200, >1200, >300               // 146-149: Lordly Protection, Resist Acid
-    .byte >250, >500, >1000                       // 150-152: crowns
-    .byte >1000, >1200, >1200, >1650              // 153-156: wands
-it_cost_hi_end:
-#endif
-
-#if PICKER_IN_CHEST_OVERLAY
-.segment ChestOverlay
-#elif PLATFORM_PRODUCT_OVERLAY_RUNTIME
-.segment DungeonGenOverlay
-#endif
-
-// Minimum dungeon level to appear, packed two types per byte: even type in
-// the low nibble, odd type in the high nibble (max 12).
-it_min_level:
-    .byte $00, $11, $23, $21, $24   // 0-9
-    .byte $13, $01, $02, $11, $13   // 10-19
-    .byte $21, $43, $35, $45, $11   // 20-29
-    .byte $22, $45, $66, $13, $34   // 30-39
-    .byte $54, $34, $53, $23        // 40-47
-    .byte $22, $13, $21, $41        // 48-55
-    .byte $c8, $84, $0c             // 56-61
-    .byte $00                       // 62-63: Shovel, Pick (available immediately)
-    .byte $31, $42, $86             // 64-69
-    .byte $73, $65, $82, $19        // 70-77
-    .byte $54, $a7                  // 78-81
-    .byte $62, $12, $43             // 82-87
-    .byte $43, $75, $65, $45        // 88-95
-    .byte $84, $11, $52, $12        // 96-103
-    .byte $b9, $c9, $4a, $c4        // 104-111
-    .byte $c9, $31, $b5, $ba        // 112-119
-    .byte $ac, $75, $c5, $82        // 120-127
-    .byte $42, $97, $cb, $10        // 128-134: chest levels 2/4/7/9/11/12, ruined 0; 135: spike level 1 (high nibble)
-    .byte $41                       // 136: Phase Door level 1 (VMS level 1); 137: Long Bow 4
-    .byte $8a                       // 138: Composite Bow 10, 139: Heavy Crossbow 8
-    .byte $88, $88, $88             // 140-145: potions of gain stat 8 (VMS level 25, as Restoration)
-    .byte $cc, $8c                  // 146-148: Lordly Protection 12 (VMS 50, as Speed); 149: Resist Acid 8 (VMS 24)
-    .byte $cb                       // 150: Silver Crown 11 (VMS 44); 151: Golden 12 (VMS 47)
-    .byte $8c                       // 152: Jewel Encrusted 12 (VMS 50); 153: Fire Bolts 8 (VMS 30, as the Heavy Crossbow)
-    .byte $9b, $0b                  // 154: Drain Life 11 (VMS 50, as Fire Balls); 155: Lightning Balls 9 (VMS 35); 156: Acid Balls 11 (VMS 48)
-    // Launchers on Moria8's compressed scale (VMS depth 10 -> 3-6, 30 -> 4-8,
-    // 40 -> 6-10 elsewhere in this table): VMS 10, 40 and 30.
-it_min_level_end:
-
-// iml_get_for_type — Minimum dungeon level for item type X.
-// Input: X = item type ID. Output: A = min level (0-12). Preserves X. Clobbers: A, Y.
-iml_get_for_type:
-    txa
-    lsr
-    tay
-    lda it_min_level,y
-    bcs !iml_odd+
-    and #$0f
-    rts
-!iml_odd:
-    lsr
-    lsr
-    lsr
-    lsr
-    rts
-
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
+#import "../platforms/shared/item_catalog/item_hot_tables.s"
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
 :ResidentItemsSegment()
-#elif HAL_PLATFORM_ITEM_COST_IN_TOWN_OVERLAY
-.segment Default
 #endif
 
-// Missile type table — encodes ranged weapon/ammo relationships
-// Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
-// Access via item_get_missile subroutine, NOT direct indexing.
-// 0=not ranged, 1=fires arrows, 2=fires bolts, 3=fires rocks
-// $81=IS arrow, $82=IS bolt, $83=IS rock
-.const IT_MISSILE_BASE = 49     // First type with missile data
-.const IT_MISSILE_END  = 55     // One past last type with missile data
-it_missile:
-    .byte 1             // 49: Short Bow — fires arrows
-    .byte 2             // 50: Light Crossbow — fires bolts
-    .byte 3             // 51: Sling — fires rocks
-    .byte $81           // 52: Arrow — IS arrow ammo
-    .byte $82           // 53: Bolt — IS bolt ammo
-    .byte $83           // 54: Rock — IS rock ammo
-// The launchers appended after the original catalog (VMS p1 3, 4, 6)
-.const IT_MISSILE2_BASE = 137
-.const IT_MISSILE2_END  = 140
-it_missile2:
-    .byte 1             // 137: Long Bow — fires arrows
-    .byte 1             // 138: Composite Bow — fires arrows
-    .byte 2             // 139: Heavy Crossbow — fires bolts
-.assert "it_missile2 covers its range", * - it_missile2, IT_MISSILE2_END - IT_MISSILE2_BASE
-.assert "The appended launchers end within the catalog", IT_MISSILE2_END <= ITEM_TYPE_COUNT, true
+// Shared item-name decode scratch buffer (48 bytes)
+.const ITEM_NAME_DECODE_BUF_SIZE = 48
+#if PLATFORM_SCRATCH_BUFS_IN_PAGE2 || PLATFORM_ITEM_NAME_BUF_LOW
+.label item_name_decode_buf = PLATFORM_ITEM_NAME_DECODE_BUF_BASE
+.assert "item_name_decode_buf size matches its page-2 home", ITEM_NAME_DECODE_BUF_SIZE, 48
+#else
+item_name_decode_buf: .fill ITEM_NAME_DECODE_BUF_SIZE, 0
+#endif
 
-// item_get_missile — Get missile type for an item
-// Input: X = item type ID
-// Output: A = missile value (0 if not ranged)
+// Cold 'ITM2' catalog reader (weight, dmg, cost, flags, missile, Huffman names)
+#import "item_catalog.s"
+
+// ============================================================
+// Page-Aware Hot Lookups (NEVER invoke ITEM.CAT I/O)
+// ============================================================
+
+it_save_x: .byte 0
+it_save_y: .byte 0
+it_id_lo:  .byte 0
+it_id_hi:  .byte 0
+
+// item_get_category_inv_x — Set item_cur_page from inv_ego,x and return ICAT_*
+// Input: X = inventory/equipment slot (0..TOTAL_INV_SLOTS-1)
+// Output: A = ICAT_* (ICAT_NONE if slot is FI_EMPTY), item_cur_page updated.
 // Preserves: X, Y
-item_get_missile:
-    cpx #IT_MISSILE2_BASE
-    bcs !igm_late+
-    cpx #IT_MISSILE_BASE
-    bcc !igm_zero+
-    cpx #IT_MISSILE_END
-    bcs !igm_zero+
-    lda it_missile - IT_MISSILE_BASE,x
-    rts
-!igm_late:
-    cpx #IT_MISSILE2_END
-    bcs !igm_zero+                  // the potions past the launchers (140-145)
-    lda it_missile2 - IT_MISSILE2_BASE,x
-    rts
-!igm_zero:
-    lda #0
+item_get_category_inv_x:
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne item_get_category_a
+    lda #ICAT_NONE
     rts
 
-// item_get_base_ac — Get base armor class for an item type
-// Input: Y = item type ID
-// Output: A = base AC (0-9)
+// item_get_category_floor_x — Set item_cur_page from fi_meta_hi,x and return ICAT_*
+// Input: X = floor slot (0..MAX_FLOOR_ITEMS-1)
+// Output: A = ICAT_* (ICAT_NONE if slot is FI_EMPTY), item_cur_page updated.
+// Preserves: X, Y
+item_get_category_floor_x:
+    lda fi_meta_hi,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda fi_item_id,x
+    cmp #FI_EMPTY
+    bne item_get_category_a
+    lda #ICAT_NONE
+    rts
+
+#import "floor_item_page.s"
+
+// item_get_category_a — Read it_category for paged (item_cur_page, A)
+// Input: A = slot_lo (0..254), item_cur_page ($00 or $40)
+// Output: A = ICAT_* (N/Z set from A)
+// Preserves: X, Y
+item_get_category_a:
+    sty it_save_y
+    tay
+    bit item_cur_page
+    bvs !igc_p1+
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_category)
+#else
+    lda it_category,y
+#endif
+!igc_ret:
+    pha
+    ldy it_save_y
+    pla
+    rts
+!igc_p1:
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_category + ITEM_PAGE_SIZE)
+#else
+    lda it_category + ITEM_PAGE_SIZE,y
+#endif
+    jmp !igc_ret-
+
+// item_get_color_a — Read default display color (high nibble of it_color_ac)
+// Input: A = slot_lo (0..254), item_cur_page ($00 or $40)
+// Output: A = color (0..15)
+// Preserves: X, Y
+item_get_color_a:
+    sty it_save_y
+    tay
+    jsr it_read_color_ac_y
+    lsr
+    lsr
+    lsr
+    lsr
+    ldy it_save_y
+    rts
+
+// item_get_unknown_idx_a — Read it_unknown_idx for paged (item_cur_page, A)
+// Input: A = slot_lo (0..254), item_cur_page ($00 or $40)
+// Output: A = class-local flavour index, or $FF if fixed
+// Preserves: X, Y
+item_get_unknown_idx_a:
+    sty it_save_y
+    tay
+    bit item_cur_page
+    bvs !igui_p1+
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_unknown_idx)
+#else
+    lda it_unknown_idx,y
+#endif
+!igui_ret:
+    pha
+    ldy it_save_y
+    pla
+    rts
+!igui_p1:
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_unknown_idx + ITEM_PAGE_SIZE)
+#else
+    lda it_unknown_idx + ITEM_PAGE_SIZE,y
+#endif
+    jmp !igui_ret-
+
+// item_get_flavour_color_x — Read flavour_colors[X]
+// Input: X = global flavour index (0..FLAVOUR_COUNT-1)
+// Output: A = color
+// Preserves: X, Y
+item_get_flavour_color_x:
+    sty it_save_y
+    txa
+    tay
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(flavour_colors)
+#else
+    lda flavour_colors,y
+#endif
+    pha
+    ldy it_save_y
+    pla
+    rts
+
+// it_read_color_ac_y — Internal: read it_color_ac for paged (item_cur_page, Y).
+// Preserves: X, Y
+it_read_color_ac_y:
+    bit item_cur_page
+    bvs !irca_p1+
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_color_ac)
+#else
+    lda it_color_ac,y
+#endif
+    rts
+!irca_p1:
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_color_ac + ITEM_PAGE_SIZE)
+#else
+    lda it_color_ac + ITEM_PAGE_SIZE,y
+#endif
+    rts
+
+// item_get_base_ac — Get base armor class for paged item type (item_cur_page, Y)
+// Input: Y = slot_lo (0..254), item_cur_page ($00 or $40)
+// Output: A = base AC (0..28)
 // Preserves: X, Y
 item_get_base_ac:
-    lda it_color_ac,y
+    jsr it_read_color_ac_y
     and #$0f
+    cmp #15
+    bne !igba_done+
+    // Compute 9-bit logical ID = Y + (page_bit ? 255 : 0) into (A=lo, it_id_hi=hi)
+    stx it_save_x
+    sty it_save_y
+    lda #0
+    sta it_id_hi
+    tya
+    bit item_cur_page
+    bvc !igba_scan_prep+
+    clc
+    adc #ITEM_PAGE_SIZE
+    bcc !igba_scan_prep+
+    inc it_id_hi
+!igba_scan_prep:
+    sta it_id_lo
+    ldy #IT_AC_EXTRA_COUNT - 1
+!igba_loop:
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_ac_extra_id_lo)
+#else
+    lda it_ac_extra_id_lo,y
+#endif
+    cmp it_id_lo
+    beq !igba_match_hi+
+!igba_next:
+    dey
+    bpl !igba_loop-
+    lda #15
+    ldx it_save_x
+    ldy it_save_y
+!igba_done:
+    rts
+!igba_match_hi:
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_ac_extra_id_hi)
+#else
+    lda it_ac_extra_id_hi,y
+#endif
+    cmp it_id_hi
+    bne !igba_next-
+#if HAL_PLATFORM_AUX_PERSISTENT_DATA
+    :AuxReadY(it_ac_extra_val)
+#else
+    lda it_ac_extra_val,y
+#endif
+    ldx it_save_x
+    ldy it_save_y
     rts
 
-// Display glyph by category. Digging tools are the only category-0 types.
-// Exceptions (ranged launchers/ammo, Flask of Oil) are handled in
-// item_get_display_char.
+// Display glyph by category (0..20). Digging tools are category 0.
+// Exceptions (ranged launchers/ammo, Flask of Oil) are handled in item_get_display_char.
 it_display_by_cat:
     .byte $5c   // 0: digging — '\'
     .byte $24   // 1: gold — '$'
@@ -636,18 +258,23 @@ it_display_by_cat:
     .byte $2f   // 15: staff — '/'
     .byte $22   // 16: amulet — '"'
     .byte $26   // 17: chest — '&'
-    .byte $5c   // 18: spike — '\' (tool glyph; no tilde in the C64 charset)
+    .byte $5c   // 18: spike — '\'
+    .byte $28   // 19: cloak — '('
+    .byte $5c   // 20: junk — '\'
 
-// item_get_display_char — Get floor display glyph for an item type
-// Input: X = item type ID
+// item_get_display_char — Get floor display glyph for paged item (item_cur_page, X)
+// NEVER invokes cold ITEM.CAT I/O.
+// Input: X = slot_lo (0..254), item_cur_page ($00 or $40)
 // Output: A = display glyph (screen code)
 // Preserves: X, Y
 item_get_display_char:
+    bit item_cur_page
+    bvs !igd_cat+
     cpx #IT_MISSILE_BASE
-    bcc !igd_cat+
+    bcc !igd_not_ranged+
     cpx #IT_MISSILE_END
     bcs !igd_not_ranged+
-    cpx #52
+    cpx #ITEM_SLOT_ARROW
     bcc !igd_bow+
     lda #$1b                    // '{' ammo
     rts
@@ -655,405 +282,122 @@ item_get_display_char:
     lda #$1c                    // '}' launcher
     rts
 !igd_not_ranged:
-    cpx #IT_MISSILE2_BASE           // the appended launchers
-    bcc !igd_not_late+
-    cpx #IT_MISSILE2_END
-    bcc !igd_bow-
-    bcs !igd_cat+                   // the potions past them (140-145)
-!igd_not_late:
+    .assert "Flask of Oil lives on Page 0", ITEM_PAGE_FLASK_OF_OIL, 0
     cpx #ITEM_FLASK_OIL
     bne !igd_cat+
     lda #$21                    // '!' flask
     rts
 !igd_cat:
     sty idc_save_y
-    ldy it_category,x
+    txa
+    jsr item_get_category_a     // preserves X, Y
+    tay
     lda it_display_by_cat,y
     ldy idc_save_y
     rts
 idc_save_y: .byte 0
 
-// Name pointer tables
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
-// The known-name pointer table rides the Bank 1 item-names payload on C128
-// (read via mmu_safe_db_read_ptr1 in item_identification.s).
-:ResidentItemNamesSegment()
-#endif
-it_name_lo:
-    .byte <itn_0,  <itn_1,  <itn_2,  <itn_3,  <itn_4
-    .byte <itn_5,  <itn_6,  <itn_7,  <itn_8,  <itn_9
-    .byte <itn_10, <itn_11, <itn_12, <itn_13, <itn_14
-    .byte <itn_15, <itn_16, <itn_17, <itn_18, <itn_19
-    .byte <itn_20, <itn_21, <itn_22, <itn_23, <itn_24
-    .byte <itn_25, <itn_26, <itn_27, <itn_28, <itn_29
-    .byte <itn_30, <itn_31, <itn_32, <itn_33, <itn_34
-    .byte <itn_35, <itn_36, <itn_37, <itn_38
-    .byte <itn_39, <itn_40, <itn_41, <itn_42
-    .byte <itn_43, <itn_44, <itn_45, <itn_46
-    .byte <itn_47, <itn_48
-    .byte <itn_49, <itn_50, <itn_51, <itn_52, <itn_53, <itn_54
-    .byte <itn_55, <itn_56, <itn_57, <itn_58, <itn_59, <itn_60
-    .byte <itn_61, <itn_62, <itn_63
-    .byte <itn_64, <itn_65
-    .byte <itn_66, <itn_67, <itn_68, <itn_69
-    .byte <itn_70, <itn_71, <itn_72, <itn_73
-    .byte <itn_74, <itn_75, <itn_76, <itn_77
-    .byte <itn_78, <itn_79
-    .byte <itn_80, <itn_81
-    .byte <itn_82, <itn_83, <itn_84, <itn_85, <itn_86, <itn_87
-    .byte <itn_88, <itn_89, <itn_90, <itn_91
-    .byte <itn_92, <itn_93, <itn_94, <itn_95
-    .byte <itn_96, <itn_97, <itn_98, <itn_99
-    .byte <itn_100, <itn_101, <itn_102, <itn_103
-    .byte <itn_104, <itn_105, <itn_106, <itn_107
-    .byte <itn_108, <itn_109, <itn_110, <itn_111
-    .byte <itn_112, <itn_113, <itn_114, <itn_115
-    .byte <itn_116, <itn_117, <itn_118, <itn_119
-    .byte <itn_120, <itn_121, <itn_122, <itn_123
-    .byte <itn_124, <itn_125, <itn_126, <itn_127
-    .byte <itn_128, <itn_129, <itn_130, <itn_131
-    .byte <itn_132, <itn_133, <itn_134, <itn_135
-    .byte <itn_136, <itn_137, <itn_138, <itn_139
-    .byte <itn_140, <itn_141, <itn_142, <itn_143, <itn_144, <itn_145
-    .byte <itn_146, <itn_147, <itn_148, <itn_149
-    .byte <itn_150, <itn_151, <itn_152
-    .byte <itn_153, <itn_154, <itn_155, <itn_156
-it_name_lo_end:
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
-:ResidentItemsSegment()
-#endif
-#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME
-it_name_hi:
-    .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
-    .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
-    .byte >itn_10, >itn_11, >itn_12, >itn_13, >itn_14
-    .byte >itn_15, >itn_16, >itn_17, >itn_18, >itn_19
-    .byte >itn_20, >itn_21, >itn_22, >itn_23, >itn_24
-    .byte >itn_25, >itn_26, >itn_27, >itn_28, >itn_29
-    .byte >itn_30, >itn_31, >itn_32, >itn_33, >itn_34
-    .byte >itn_35, >itn_36, >itn_37, >itn_38
-    .byte >itn_39, >itn_40, >itn_41, >itn_42
-    .byte >itn_43, >itn_44, >itn_45, >itn_46
-    .byte >itn_47, >itn_48
-    .byte >itn_49, >itn_50, >itn_51, >itn_52, >itn_53, >itn_54
-    .byte >itn_55, >itn_56, >itn_57, >itn_58, >itn_59, >itn_60
-    .byte >itn_61, >itn_62, >itn_63
-    .byte >itn_64, >itn_65
-    .byte >itn_66, >itn_67, >itn_68, >itn_69
-    .byte >itn_70, >itn_71, >itn_72, >itn_73
-    .byte >itn_74, >itn_75, >itn_76, >itn_77
-    .byte >itn_78, >itn_79
-    .byte >itn_80, >itn_81
-    .byte >itn_82, >itn_83, >itn_84, >itn_85, >itn_86, >itn_87
-    .byte >itn_88, >itn_89, >itn_90, >itn_91
-    .byte >itn_92, >itn_93, >itn_94, >itn_95
-    .byte >itn_96, >itn_97, >itn_98, >itn_99
-    .byte >itn_100, >itn_101, >itn_102, >itn_103
-    .byte >itn_104, >itn_105, >itn_106, >itn_107
-    .byte >itn_108, >itn_109, >itn_110, >itn_111
-    .byte >itn_112, >itn_113, >itn_114, >itn_115
-    .byte >itn_116, >itn_117, >itn_118, >itn_119
-    .byte >itn_120, >itn_121, >itn_122, >itn_123
-    .byte >itn_124, >itn_125, >itn_126, >itn_127
-    .byte >itn_128, >itn_129, >itn_130, >itn_131
-    .byte >itn_132, >itn_133, >itn_134, >itn_135
-    .byte >itn_136, >itn_137, >itn_138, >itn_139
-    .byte >itn_140, >itn_141, >itn_142, >itn_143, >itn_144, >itn_145
-    .byte >itn_146, >itn_147, >itn_148, >itn_149
-    .byte >itn_150, >itn_151, >itn_152
-    .byte >itn_153, >itn_154, >itn_155, >itn_156
-it_name_hi_end:
+// ============================================================
+// Cold ITEM.CAT Attribute Wrappers (keep out of combat/turn/render hot loops)
+// ============================================================
+
+// item_get_missile — Get missile type for paged item (item_cur_page, X)
+// Non-weapons short-circuit immediately from hot it_category without ITEM.CAT I/O.
+// Input: X = slot_lo (0..254), item_cur_page
+// Output: A = missile value (0 if not ranged; N/Z reflect A)
+// Preserves: X, Y
+item_get_missile:
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    bit item_cur_page
+    bvs !igm_zero+
+    cpx #IT_MISSILE_BASE
+    bcc !igm_zero+
+    cpx #IT_MISSILE_END
+    bcs !igm_zero+
+    lda igm_vals - IT_MISSILE_BASE,x
+    rts
+!igm_zero:
+    lda #0
+    rts
+igm_vals: .byte 1, 1, 1, 2, 2, 3, $81, $82, $83, $83
+igm_vals_end:
+.assert "igm_vals matches unified IT_MISSILE span", (igm_vals_end - igm_vals == 10) && (IT_MISSILE_END - IT_MISSILE_BASE == 10), true
 #else
-it_name_hi_end:
+    txa
+    jsr item_get_category_a     // preserves X, Y
+    cmp #ICAT_WEAPON
+    beq !igm_query+
+    lda #0
+    rts
+!igm_query:
+    sty it_save_y
+    txa
+    jsr item_cat_select_id
+    jsr item_cat_get_missile_type
+    ldy it_save_y
+    ora #0
+    rts
 #endif
 
-// Tokenized item-name string pool.
-// Bytes below $80 are literal screen codes; bytes $80-$a5 expand through
-// item_name_token_lo/hi. item_get_name_ptr decodes streams into its resident
-// item-name buffer.
-.const ITOK_SCROLL_OF_ART     = $80
-.const ITOK_POTION_SUFFIX     = $81
-.const ITOK_OF                = $82
-.const ITOK_SCROLL            = $83
-.const ITOK_LIGHT             = $84
-.const ITOK_WAND              = $85
-.const ITOK_A_SILVER          = $86
-.const ITOK_LEATHER           = $87
-.const ITOK_DETECT_MONSTERS   = $88
-.const ITOK_STAFF             = $89
-.const ITOK_RING_SUFFIX       = $8a
-.const ITOK_TELEPORTATION     = $8b
-.const ITOK_WOUNDS_SUFFIX     = $8c
-.const ITOK_MAGICK            = $8d
-.const ITOK_GOLD              = $8e
-.const ITOK_CONFUSION         = $8f
-.const ITOK_CURE              = $90
-.const ITOK_BEGINNERS         = $91
-.const ITOK_ENCHANT           = $92
-.const ITOK_A_COPPER          = $93
-.const ITOK_CLOUD_SUFFIX      = $94
-.const ITOK_SWORD_SUFFIX      = $95
-.const ITOK_A_SPACE           = $96
-.const ITOK_AN_SPACE          = $97
-.const ITOK_ARMOR_SUFFIX      = $98
-.const ITOK_MAIL_SUFFIX       = $99
-.const ITOK_SHIELD_SUFFIX     = $9a
-// The chest-name tokens (and Iron/Wooden/Steel in itn_10, 13, 83) were
-// resident-stream ports' only until 2026-11-07: the banked streams spelled
-// them out, 90 bytes more than their tokens cost.
-.const ITOK_SMALL             = $9b
-.const ITOK_LARGE             = $9c
-.const ITOK_WOODEN            = $9d
-.const ITOK_IRON              = $9e
-.const ITOK_STEEL             = $9f
-.const ITOK_CHEST_SUFFIX      = $a0
-.const ITOK_GAIN              = $a1
-.const ITOK_RESIST            = $a2
-.const ITOK_WISDOM            = $a3
-.const ITOK_PROTECTION        = $a4
-.const ITOK_CROSSBOW          = $a5
-.const ITEM_NAME_TOKEN_COUNT  = $26
+// item_get_weight_x — Load 16-bit weight for paged item (item_cur_page, X)
+// Output: icat_weight_lo/hi loaded, A = icat_weight_lo
+// Preserves: X, Y
+item_get_weight_x:
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jmp item_pickup_cache_get_weight_x
+#else
+    sty it_save_y
+    txa
+    jsr item_cat_select_id
+    jsr item_cat_get_weight
+    ldy it_save_y
+    lda icat_weight_lo
+    rts
+#endif
 
-item_name_token_lo:
-    .byte <itok_scroll_of_art, <itok_potion_suffix, <itok_of, <itok_scroll
-    .byte <itok_light, <itok_wand, <itok_a_silver, <itok_leather
-    .byte <itok_detect_monsters, <itok_staff, <itok_ring_suffix, <itok_teleportation
-    .byte <itok_wounds_suffix, <itok_magick, <itok_gold, <itok_confusion
-    .byte <itok_cure, <itok_beginners, <itok_enchant, <itok_a_copper
-    .byte <itok_cloud_suffix, <itok_sword_suffix, <itok_a_space, <itok_an_space
-    .byte <itok_armor_suffix, <itok_mail_suffix, <itok_shield_suffix
-    .byte <itok_small, <itok_large, <itok_wooden, <itok_iron
-    .byte <itok_steel, <itok_chest_suffix, <itok_gain
-    .byte <itok_resist, <itok_wisdom, <itok_protection, <itok_crossbow
-.assert "item_name_token_lo holds every token", * - item_name_token_lo, ITEM_NAME_TOKEN_COUNT
-.assert "The last token is ITEM_NAME_TOKEN_COUNT - 1", ITOK_CROSSBOW - $80, ITEM_NAME_TOKEN_COUNT - 1
-item_name_token_hi:
-    .byte >itok_scroll_of_art, >itok_potion_suffix, >itok_of, >itok_scroll
-    .byte >itok_light, >itok_wand, >itok_a_silver, >itok_leather
-    .byte >itok_detect_monsters, >itok_staff, >itok_ring_suffix, >itok_teleportation
-    .byte >itok_wounds_suffix, >itok_magick, >itok_gold, >itok_confusion
-    .byte >itok_cure, >itok_beginners, >itok_enchant, >itok_a_copper
-    .byte >itok_cloud_suffix, >itok_sword_suffix, >itok_a_space, >itok_an_space
-    .byte >itok_armor_suffix, >itok_mail_suffix, >itok_shield_suffix
-    .byte >itok_small, >itok_large, >itok_wooden, >itok_iron
-    .byte >itok_steel, >itok_chest_suffix, >itok_gain
-    .byte >itok_resist, >itok_wisdom, >itok_protection, >itok_crossbow
+// item_get_dmg_packed_x — Load packed (dice<<4)|sides for paged item (item_cur_page, X)
+// Output: A = (dice<<4)|sides, icat_dmg_dice & icat_dmg_sides also set
+// Preserves: X, Y
+item_get_dmg_packed_x:
+    sty it_save_y
+    txa
+    jsr item_cat_select_id
+    jsr item_cat_get_dmg_packed
+    ldy it_save_y
+    ora #0
+    rts
 
-// The flavour names carry no article since 2026-11-05 ("You see a a Blue
-// Potion."): ITOK_A_SILVER and ITOK_A_COPPER keep their names, not the "a ".
-itok_scroll_of_art:   .text "Scroll of " ; .byte 0
-itok_potion_suffix:   .text " Potion" ; .byte 0
-itok_of:              .text " of " ; .byte 0
-itok_scroll:          .text "Scroll" ; .byte 0
-itok_light:           .text "Light" ; .byte 0
-itok_wand:            .text "Wand" ; .byte 0
-itok_a_silver:        .text "Silver" ; .byte 0
-itok_leather:         .text "Leather " ; .byte 0
-itok_detect_monsters: .text "Detect Monsters" ; .byte 0
-itok_staff:           .text "Staff" ; .byte 0
-itok_ring_suffix:     .text " Ring" ; .byte 0
-itok_teleportation:   .text "Teleportation" ; .byte 0
-itok_wounds_suffix:   .text " Wounds" ; .byte 0
-itok_magick:          .text "Magick" ; .byte 0
-itok_gold:            .text "Gold" ; .byte 0
-itok_confusion:       .text "Confusion" ; .byte 0
-itok_cure:            .text "Cure " ; .byte 0
-itok_beginners:       .text "Beginners" ; .byte 0
-itok_enchant:         .text "Enchant " ; .byte 0
-itok_a_copper:        .text "Copper" ; .byte 0
-itok_cloud_suffix:    .text " Cloud" ; .byte 0
-itok_sword_suffix:    .text " Sword" ; .byte 0
-itok_a_space:         .text "a " ; .byte 0
-itok_an_space:        .text "an " ; .byte 0
-itok_armor_suffix:    .text "Armor" ; .byte 0
-itok_mail_suffix:     .text " Mail" ; .byte 0
-itok_shield_suffix:   .text " Shield" ; .byte 0
-itok_small:           .text "Small " ; .byte 0
-itok_large:           .text "Large " ; .byte 0
-itok_wooden:          .text "Wooden " ; .byte 0
-itok_iron:            .text "Iron " ; .byte 0
-itok_steel:           .text "Steel " ; .byte 0
-itok_chest_suffix:    .text "Chest" ; .byte 0
-itok_gain:            .text "Gain " ; .byte 0
-itok_resist:          .text "Resist " ; .byte 0
-itok_wisdom:          .text "Wisdom" ; .byte 0
-itok_protection:      .text "Protection" ; .byte 0
-itok_crossbow:        .text " Crossbow" ; .byte 0
+// item_get_cost_x — Load 16-bit cost for paged item (item_cur_page, X)
+// Output: icat_cost_lo/hi loaded, A = icat_cost_lo
+// Preserves: X, Y
+item_get_cost_x:
+    sty it_save_y
+    txa
+    jsr item_cat_select_id
+    jsr item_cat_get_cost
+    ldy it_save_y
+    lda icat_cost_lo
+    rts
 
-// Name streams (screen codes plus item-name tokens, null-terminated)
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
-:ItemNameStreamsSegment()
-#endif
-#if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
-// Heavyweight C64 unit tests may park the name streams in RAM they bank in
-// for the whole run (BASIC's or the KERNAL's shadow) to keep Main below
-// MAP_BASE. Opt-in tests declare `.segmentdef TestNameStreams [start=...]`.
-.segment TestNameStreams
-#endif
-itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
-itn_1:  .byte ITOK_GOLD ; .text " (large)" ; .byte 0
-itn_2:  .text "Dagger" ; .byte 0
-itn_3:  .text "Short" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
-itn_4:  .text "Long" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
-itn_5:  .text "Mace" ; .byte 0
-itn_6:  .text "Robe" ; .byte 0
-itn_7:  .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
-itn_8:  .text "Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
-itn_9:  .text "Small" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
-itn_10: .byte ITOK_IRON ; .text "Helm" ; .byte 0
-itn_11: .byte ITOK_LEATHER ; .text "Gloves" ; .byte 0
-itn_12: .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
-itn_13: .byte ITOK_WOODEN ; .text "Torch" ; .byte 0
-itn_14: .text "Brass Lantern" ; .byte 0
-itn_15: .text "Ration" ; .byte ITOK_OF ; .text "Food" ; .byte 0
-itn_16: .text "Slime Mold" ; .byte 0
-itn_17: .byte ITOK_CURE ; .byte ITOK_LIGHT ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
-itn_18: .text "Speed" ; .byte 0
-itn_19: .text "Poison" ; .byte 0
-itn_20: .byte ITOK_LIGHT ; .byte 0
-itn_21: .text "Identify" ; .byte 0
-itn_22: .byte ITOK_TELEPORTATION ; .byte 0
-itn_23: .byte ITOK_PROTECTION ; .byte 0
-itn_24: .text "Strength" ; .byte 0
-itn_25: .byte ITOK_CURE ; .text "Serious" ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
-itn_26: .text "Restore Mana" ; .byte 0
-itn_27: .text "Heroism" ; .byte 0
-itn_28: .text "Blindness" ; .byte 0
-itn_29: .byte ITOK_CONFUSION ; .byte 0
-itn_30: .byte ITOK_DETECT_MONSTERS ; .byte 0
-itn_31: .text "Infravision" ; .byte 0
-itn_32: .text "Word" ; .byte ITOK_OF ; .text "Recall" ; .byte 0
-itn_33: .text "Remove Curse" ; .byte 0
-itn_34: .byte ITOK_ENCHANT ; .text "Weapon" ; .byte 0
-itn_35: .byte ITOK_ENCHANT ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
-itn_36: .text "Monster " ; .byte ITOK_CONFUSION ; .byte 0
-itn_37: .text "Aggravate" ; .byte 0
-itn_38: .text "Protect from Evil" ; .byte 0
-itn_39: .byte ITOK_WAND ; .byte ITOK_OF ; .byte ITOK_LIGHT ; .byte 0
-itn_40: .byte ITOK_WAND ; .byte ITOK_OF ; .byte ITOK_LIGHT ; .text "ning" ; .byte 0
-itn_41: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Frost" ; .byte 0
-itn_42: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Stinking" ; .byte ITOK_CLOUD_SUFFIX ; .byte 0
-itn_43: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_LIGHT ; .byte 0
-itn_44: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_DETECT_MONSTERS ; .byte 0
-itn_45: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_TELEPORTATION ; .byte 0
-itn_46: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_CURE ; .byte ITOK_LIGHT ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
-itn_47: .byte ITOK_BEGINNERS ; .text "-" ; .byte ITOK_MAGICK ; .byte 0
-itn_48: .byte ITOK_BEGINNERS ; .text " Handbook" ; .byte 0
-itn_49: .text "Short Bow" ; .byte 0
-itn_50: .byte ITOK_LIGHT ; .byte ITOK_CROSSBOW ; .byte 0
-itn_51: .text "Sling" ; .byte 0
-itn_52: .text "Arrow" ; .byte 0
-itn_53: .text "Bolt" ; .byte 0
-itn_54: .text "Rock" ; .byte 0
-itn_55: .byte ITOK_MAGICK ; .text " I" ; .byte 0
-itn_56: .byte ITOK_MAGICK ; .text " II" ; .byte 0
-itn_57: .text "The Mages Guide to Power" ; .byte 0
-itn_58: .text "Words" ; .byte ITOK_OF ; .byte ITOK_WISDOM ; .byte 0
-itn_59: .text "Chants and Blessings" ; .byte 0
-itn_60: .text "Exorcism" ; .byte 0
-itn_61: .text "Flask" ; .byte ITOK_OF ; .text "Oil" ; .byte 0
-itn_62: .text "Shovel" ; .byte 0
-itn_63: .text "Pick" ; .byte 0
-itn_64: .text "Main Gauche" ; .byte 0
-itn_65: .text "Studded " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
-itn_66: .text "Rapier" ; .byte 0
-itn_67: .text "Broad" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
-itn_68: .text "Bastard" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
-itn_69: .text "Two-Handed" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
-itn_70: .text "Scimitar" ; .byte 0
-itn_71: .text "Battle Axe" ; .byte 0
-itn_72: .text "War Hammer" ; .byte 0
-itn_73: .text "Morningstar" ; .byte 0
-itn_74: .text "Spear" ; .byte 0
-itn_75: .text "Pike" ; .byte 0
-itn_76: .text "Halberd" ; .byte 0
-itn_77: .text "Quarterstaff" ; .byte 0
-itn_78: .text "Large" ; .byte ITOK_SHIELD_SUFFIX ; .byte 0
-itn_79: .text "Hard " ; .byte ITOK_LEATHER ; .byte ITOK_ARMOR_SUFFIX ; .byte 0
-itn_80: .text "Scale" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
-itn_81: .text "Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
-itn_82: .text "Cloak" ; .byte 0
-itn_83: .byte ITOK_STEEL ; .text "Helm" ; .byte 0
-itn_84: .text "Gauntlets" ; .byte 0
-itn_85: .text "Soft " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
-itn_86: .text "Hard " ; .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
-itn_87: .text "Metal Cap" ; .byte 0
-itn_88: .text "Sabre" ; .byte 0
-itn_89: .text "Cutlass" ; .byte 0
-itn_90: .text "Tulwar" ; .byte 0
-itn_91: .text "Katana" ; .byte 0
-itn_92: .text "Flail" ; .byte 0
-itn_93: .text "Lucerne Hammer" ; .byte 0
-itn_94: .text "Broad Axe" ; .byte 0
-itn_95: .text "Awl-Pike" ; .byte 0
-itn_96: .text "Healing" ; .byte 0
-itn_97: .text "Restoration" ; .byte 0
-itn_98: .byte ITOK_RESIST ; .text "Heat" ; .byte 0
-itn_99: .byte ITOK_RESIST ; .text "Cold" ; .byte 0
-itn_100: .byte ITOK_CURE ; .text "Critical" ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
-itn_101: .text "Teleport Level" ; .byte 0
-itn_102: .text "Magic Mapping" ; .byte 0
-itn_103: .text "Object Detection" ; .byte 0
-itn_104: .text "Recharging" ; .byte 0
-itn_105: .text "Rune" ; .byte ITOK_OF ; .byte ITOK_PROTECTION ; .byte 0
-itn_106: .text "Genocide" ; .byte 0
-itn_107: .text "Mass Genocide" ; .byte 0
-itn_108: .text "*Destruction*" ; .byte 0
-itn_109: .byte ITOK_RESIST ; .text "Fire" ; .byte 0
-itn_110: .byte ITOK_RESIST ; .text "Cold" ; .byte 0
-itn_111: .text "Speed" ; .byte 0
-itn_112: .text "See Invisible" ; .byte 0
-itn_113: .text "Slaying" ; .byte 0
-itn_114: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Slow Monster" ; .byte 0
-itn_115: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Stone-to-Mud" ; .byte 0
-itn_116: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Teleport Away" ; .byte 0
-itn_117: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Fire Balls" ; .byte 0
-itn_118: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Cold Balls" ; .byte 0
-itn_119: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Dispel Evil" ; .byte 0
-itn_120: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Destruction" ; .byte 0
-itn_121: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Speed" ; .byte 0
-itn_122: .text "Mithril Chain" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
-itn_123: .text "Mithril Plate" ; .byte ITOK_MAIL_SUFFIX ; .byte 0
-itn_124: .byte ITOK_WISDOM ; .byte 0
-itn_125: .text "the Magi" ; .byte 0
-itn_126: .text "Neutralize Poison" ; .byte 0
-itn_127: .byte ITOK_STAFF ; .byte ITOK_OF ; .text "Remove Curse" ; .byte 0
-itn_128: .byte ITOK_SMALL ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
-itn_129: .byte ITOK_LARGE ; .byte ITOK_WOODEN ; .byte ITOK_CHEST_SUFFIX ; .byte 0
-itn_130: .byte ITOK_SMALL ; .byte ITOK_IRON ; .byte ITOK_CHEST_SUFFIX ; .byte 0
-itn_131: .byte ITOK_LARGE ; .byte ITOK_IRON ; .byte ITOK_CHEST_SUFFIX ; .byte 0
-itn_132: .byte ITOK_SMALL ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
-itn_133: .byte ITOK_LARGE ; .byte ITOK_STEEL ; .byte ITOK_CHEST_SUFFIX ; .byte 0
-itn_134: .text "Ruined " ; .byte ITOK_CHEST_SUFFIX ; .byte 0
-itn_135: .byte ITOK_IRON ; .text "Spike" ; .byte 0
-// Emitted after 135: product builds find a name by stream order.
-itn_136: .text "Phase Door" ; .byte 0
-itn_137: .text "Long Bow" ; .byte 0
-itn_138: .text "Composite Bow" ; .byte 0
-itn_139: .text "Heavy" ; .byte ITOK_CROSSBOW ; .byte 0
-// VMS Moria names (values.inc): Charisma's has no "Gain".
-itn_140: .byte ITOK_GAIN ; .text "Strength" ; .byte 0
-itn_141: .byte ITOK_GAIN ; .text "Intelligence" ; .byte 0
-itn_142: .byte ITOK_GAIN ; .byte ITOK_WISDOM ; .byte 0
-itn_143: .byte ITOK_GAIN ; .text "Dexterity" ; .byte 0
-itn_144: .byte ITOK_GAIN ; .text "Constitution" ; .byte 0
-itn_145: .text "Charisma" ; .byte 0
-// VMS Moria names (values.inc), "Ring of" and "Amulet of" by category.
-itn_146: .text "Lordly " ; .byte ITOK_PROTECTION ; .text " (Fire)" ; .byte 0
-itn_147: .text "Lordly " ; .byte ITOK_PROTECTION ; .text " (Acid)" ; .byte 0
-itn_148: .text "Lordly " ; .byte ITOK_PROTECTION ; .text " (Cold)" ; .byte 0
-itn_149: .byte ITOK_RESIST ; .text "Acid" ; .byte 0
-itn_150: .text "Silver Crown" ; .byte 0
-itn_151: .text "Golden Crown" ; .byte 0
-itn_152: .text "Jewel Encrusted Crown" ; .byte 0
-// VMS Moria wands (values.inc, wands.inc; 2026-11-11)
-itn_153: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Fire Bolts" ; .byte 0
-itn_154: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Drain Life" ; .byte 0
-itn_155: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Lightning Balls" ; .byte 0
-itn_156: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Acid Balls" ; .byte 0
-#if C64_UNIT_TEST && C64_TEST_NAME_STREAMS_A000
-.segment Default
-#endif
-#if HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
-:ItemNameStreamsRestoreSegment()
-#endif
+// item_unpack_id_ay — Convert 9-bit logical item ID (Y=hi, A=lo) in 0..360
+// into (item_cur_page = $00/$40, A = slot_lo in 0..254).
+// Preserves: X
+item_unpack_id_ay:
+    cpy #0
+    bne !iui_hi+
+    cmp #ITEM_PAGE_SIZE
+    bcs !iui_p0_top+
+    sty item_cur_page           // Y = 0
+    rts
+!iui_p0_top:
+    sec
+    sbc #ITEM_PAGE_SIZE
+    ldy #ITEM_PAGE_BIT
+    sty item_cur_page
+    rts
+!iui_hi:
+    clc
+    adc #1                      // 256 + lo - 255 = lo + 1
+    ldy #ITEM_PAGE_BIT
+    sty item_cur_page
+    rts

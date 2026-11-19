@@ -56,6 +56,11 @@ hal_sound_init:
 tun_dig_ability: .byte 0
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_ego:     .fill TOTAL_INV_SLOTS, 0
+fi_item_id: .byte FI_EMPTY
+fi_meta_hi: .byte 0
+fi_add_flags: .byte 0
+fi_add_to_hit: .byte 0
+fi_add_to_dam: .byte 0
 fi_add_to_ac: .byte 0                  // roll_ego_type's armour branch reads it (MON-027)
 fi_add_p1: .byte 0                     // ... and a crown of the Magi writes its INT (MON-030)
 player_data: .fill PL_RESERVED, 0
@@ -144,7 +149,7 @@ calc_dig_ability:
     // Add base bonus from table
     txa
     sec
-    sbc #62                     // Index into dig_base_table (0=Shovel, 1=Pick)
+    sbc #ITEM_SLOT_PICK                       // Index into dig_base_table (0=Pick, 1=Shovel)
     tax
     lda dig_base_table,x
     clc
@@ -171,7 +176,7 @@ calc_dig_ability:
     rts
 
 dig_base_table:
-    .byte 6, 20                 // Shovel base=6, Pick base=20
+    .byte 20, 6                 // Pick base=20, Shovel base=6
 
 // ============================================================
 // Test scratch
@@ -219,7 +224,7 @@ test_start:
     // Test 2: Shovel (type 62, ego=0) + STR=18 → ability = 4+6 = 10
     // STR>>2 = 18>>2 = 4, shovel base = 6
     // ============================================================
-    lda #62
+    lda #ITEM_SLOT_SHOVEL
     sta inv_item_id + EQUIP_WEAPON
     lda #0
     sta inv_ego + EQUIP_WEAPON
@@ -240,7 +245,7 @@ test_start:
     // ============================================================
     // Test 3: Pick (type 63, ego=0) + STR=18 → ability = 4+20 = 24
     // ============================================================
-    lda #63
+    lda #ITEM_SLOT_PICK
     sta inv_item_id + EQUIP_WEAPON
     lda #0
     sta inv_ego + EQUIP_WEAPON
@@ -261,7 +266,7 @@ test_start:
     // ============================================================
     // Test 4: Gnomish Shovel (type 62, ego=1) + STR=18 → 4+6+12 = 22
     // ============================================================
-    lda #62
+    lda #ITEM_SLOT_SHOVEL
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_ego + EQUIP_WEAPON
@@ -282,7 +287,7 @@ test_start:
     // ============================================================
     // Test 5: Orcish Pick (type 63, ego=1) + STR=18 → 4+20+12 = 36
     // ============================================================
-    lda #63
+    lda #ITEM_SLOT_PICK
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_ego + EQUIP_WEAPON
@@ -303,7 +308,7 @@ test_start:
     // ============================================================
     // Test 6: Dwarven Pick (type 63, ego=2) + STR=18 → 4+20+24 = 48
     // ============================================================
-    lda #63
+    lda #ITEM_SLOT_PICK
     sta inv_item_id + EQUIP_WEAPON
     lda #2
     sta inv_ego + EQUIP_WEAPON
@@ -334,7 +339,7 @@ test_start:
     sta tc_count                // Track any non-zero results
 
 !t7_loop:
-    lda #62                     // Shovel
+    lda #ITEM_SLOT_SHOVEL                     // Shovel
     jsr roll_ego_type
     cmp #0
     beq !t7_next+
@@ -369,7 +374,7 @@ test_start:
     sta tc_max_ego              // Track max ego seen
 
 !t8_loop:
-    lda #62                     // Shovel
+    lda #ITEM_SLOT_SHOVEL                     // Shovel
     jsr roll_ego_type
     cmp #0
     beq !t8_next+

@@ -15,9 +15,10 @@
 .const MONSTER_ENTRY_SIZE = 12
 .const TIER_DUNGEON_CREATURES    = 57 // Largest tier (tier 4)
 .const CATALOG_DUNGEON_CREATURES = 32 // Catalog species slots: one per live monster (MAX_MONSTERS)
-#if HAL_PLATFORM_MONSTER_CATALOG
+#if HAL_PLATFORM_MONSTER_CATALOG || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 // A level holds at most MAX_MONSTERS live monsters, so at most that many
-// species: the catalog needs no more dungeon rows (maintainer, 2026-11-05).
+// species: the catalog and embedded-roster unit tests need no more dungeon
+// rows (maintainer, 2026-11-05).
 .const MAX_DUNGEON_CREATURES = CATALOG_DUNGEON_CREATURES
 #else
 .const MAX_DUNGEON_CREATURES = TIER_DUNGEON_CREATURES
@@ -27,21 +28,64 @@
 .const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57 (catalog: 32)
 .const TOWN_CREATURE_COUNT   = 8  // All 8 umoria town creatures
 .const NUM_SOA_FIELDS        = 23 // Number of SoA arrays for tier loading
+.const CATALOG_EXT_FIELDS    = 8  // Phase 5 extended catalog SoA fields per species
 .const EMPTY_SLOT        = $ff
 
-// Attack type constants
-.const ATK_NONE      = 0
-.const ATK_NORMAL    = 1
-.const ATK_CONFUSE   = 3
-.const ATK_ACID      = 6
-.const ATK_FIRE      = 5     // VMS creature.inc 5: fire_dam (MON-028)
-.const ATK_COLD      = 7     // 7: cold_dam
-.const ATK_LIGHT     = 8     // 8: light_dam
-.const ATK_PARALYZE  = 11
-.const ATK_POISON    = 14
-.const ATK_FEAR      = 4
-.const ATK_CORRODE   = 9
-.const ATK_AGGRAVATE = 20
+// Phase 5 attack packing masks (tools/extract_vms_creatures.py pack_attack):
+//   cr_atkN_sides[3:0] = sides (0..14), cr_atkN_sides[7:4] = verb[4:1] (adesc >> 1)
+//   cr_atkN_type[6:0]  = adtype (0..24, 99), cr_atkN_type[7] = verb[0] (adesc & 1)
+.const ATK_SIDES_MASK    = $0f
+.const ATK_TYPE_MASK     = $7f
+
+// Attack effect type constants (VMS Moria 4.8 creature.inc make_attack 1..24, 99)
+.const ATK_NONE        = 0
+.const ATK_NORMAL      = 1     //  1: Normal damage (BTH 60, AC-reduced)
+.const ATK_LOSE_STR    = 2     //  2: Lose STR (BTH -3)
+.const ATK_CONFUSE     = 3     //  3: Confusion (BTH 10)
+.const ATK_FEAR        = 4     //  4: Terrify / fear (BTH 10)
+.const ATK_FIRE        = 5     //  5: Fire damage (BTH 10, fire_dam, MON-028)
+.const ATK_ACID        = 6     //  6: Acid damage (BTH 0, acid_dam)
+.const ATK_COLD        = 7     //  7: Cold damage (BTH 10, cold_dam)
+.const ATK_LIGHT       = 8     //  8: Lightning damage (BTH 10, light_dam)
+.const ATK_CORRODE     = 9     //  9: Corrosion gas (BTH 0, corrode_gas)
+.const ATK_BLIND       = 10    // 10: Blindness (BTH 2)
+.const ATK_PARALYZE    = 11    // 11: Paralysis (BTH 2)
+.const ATK_STEAL_GOLD  = 12    // 12: Steal money (BTH 5 vs clvl, no HP dmg)
+.const ATK_STEAL_ITEM  = 13    // 13: Steal object (BTH 2 vs clvl, no HP dmg)
+.const ATK_POISON      = 14    // 14: Poison (BTH 5)
+.const ATK_LOSE_DEX    = 15    // 15: Lose DEX (BTH 0)
+.const ATK_LOSE_CON    = 16    // 16: Lose CON (BTH 0)
+.const ATK_LOSE_INT    = 17    // 17: Lose INT (BTH 2)
+.const ATK_LOSE_WIS    = 18    // 18: Lose WIS (BTH 0)
+.const ATK_LOSE_EXP    = 19    // 19: Lose experience (BTH 5, dice = EXP, no HP dmg)
+.const ATK_AGGRAVATE   = 20    // 20: Aggravate monsters (always hits, no HP dmg)
+.const ATK_DISENCHANT  = 21    // 21: Disenchant equipment (BTH 20, no HP dmg)
+.const ATK_EAT_FOOD    = 22    // 22: Eat food (BTH 5, no HP dmg)
+.const ATK_EAT_LIGHT   = 23    // 23: Eat light fuel (BTH 5, no HP dmg)
+.const ATK_EAT_CHARGES = 24    // 24: Eat wand/staff charges (BTH 15, no HP dmg)
+.const ATK_BLANK       = 99    // 99: Blank / repelled attack
+
+// Attack method/verb description IDs (VMS creature.inc:351-383 adesc 0..19)
+.const ADESC_NONE      = 0     //  0: none / blank
+.const ADESC_HITS      = 1     //  1: "hits you."
+.const ADESC_BITES     = 2     //  2: "bites you."
+.const ADESC_CLAWS     = 3     //  3: "claws you."
+.const ADESC_STINGS    = 4     //  4: "stings you."
+.const ADESC_TOUCHES   = 5     //  5: "touches you."
+.const ADESC_KICKS     = 6     //  6: "kicks you."
+.const ADESC_GAZES     = 7     //  7: "gazes at you."
+.const ADESC_BREATHES  = 8     //  8: "breathes on you."
+.const ADESC_SPITS     = 9     //  9: "spits on you."
+.const ADESC_WAILS     = 10    // 10: "makes a horrible wail."
+.const ADESC_EMBRACES  = 11    // 11: "embraces you."
+.const ADESC_CRAWLS    = 12    // 12: "crawls on you."
+.const ADESC_SPORES    = 13    // 13: "releases a cloud of spores."
+.const ADESC_BEGS      = 14    // 14: "begs you for money."
+.const ADESC_SLIMES    = 15    // 15: "You've been slimed!"
+.const ADESC_CRUSHES   = 16    // 16: "crushes you."
+.const ADESC_TRAMPLES  = 17    // 17: "tramples you."
+.const ADESC_DROOLS    = 18    // 18: "drools on you."
+.const ADESC_INSULTS   = 19    // 19: random insult ("insults you!", etc.)
 
 // Active monster entry offsets (12 bytes per entry)
 .const MX_X         = 0
@@ -86,6 +130,29 @@
 .const MS_BREATH_FIRE     = 5
 .const MS_BREATH_ALL      = 6   // Multi-Hued: each breath picks one of the five
 .const MS_HOLD            = $80 // Bit 7: Hold Person (VMS spell 10)
+
+// Phase 5 cr_spell_flags2 constants (monster_catalog_spec.json):
+//   bits 0..4: extended monster spells; bits 5..7: extended VMS cmove flags
+.const MSF2_BLINK         = $01 // Bit 0: Teleport Short / Blink (VMS spell 5, 0x000010)
+.const MSF2_TELE_SELF     = $02 // Bit 1: Teleport Long / Self (VMS spell 6, 0x000020)
+.const MSF2_SUMMON_UNDEAD = $04 // Bit 2: Summon Undead (VMS spell 15, 0x004000)
+.const MSF2_SLOW          = $08 // Bit 3: Slow Person (VMS spell 16, 0x008000)
+.const MSF2_DRAIN_MANA    = $10 // Bit 4: Drain Mana (VMS spell 17, 0x010000)
+.const CM2_PHASE          = $20 // Bit 5: VMS CM_PHASE (0x040000) — moves through walls
+.const CM2_EATS_OTHER     = $40 // Bit 6: VMS CM_EATS_OTHER (0x080000) — overrides weaker monsters
+.const CM2_PICKS_UP       = $80 // Bit 7: VMS CM_PICKS_UP (0x100000) — picks up floor items
+
+// Phase 5 cr_cdefense constants (monster_catalog_spec.json cat_cdefense):
+//   bits 0..6: VMS cdefense7 vulnerabilities/immunities; bit 7: VMS CM_INVISIBLE
+//   (Note: CF_UNDEAD owns $02 in cr_mflags and remains untouched.)
+.const CD_FROST           = $01 // Bit 0: VMS CD_FROST (0x0010) — hurt by frost
+.const CD_FIRE            = $02 // Bit 1: VMS CD_FIRE (0x0020) — hurt by fire
+.const CD_POISON          = $04 // Bit 2: VMS CD_POISON (0x0040) — hurt by poison
+.const CD_ACID            = $08 // Bit 3: VMS CD_ACID (0x0080) — hurt by acid
+.const CD_LIGHT           = $10 // Bit 4: VMS CD_LIGHT (0x0100) — hurt by bright light
+.const CD_STONE           = $20 // Bit 5: VMS CD_STONE (0x0200) — hurt by stone-to-mud
+.const CD_NO_SLEEP        = $40 // Bit 6: VMS CD_NO_SLEEP (0x1000) — immune to sleep/charm/confuse
+.const CD_INVISIBLE       = $80 // Bit 7: VMS CM_INVISIBLE (0x010000) — invisible monster
 
 // ============================================================
 // Active creature buffers — Struct-of-Arrays (65 entries)
@@ -285,7 +352,11 @@ cr_atk0_sides:
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
 #endif
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .byte $70, $90, $70, $70, $06, $70, $0a, $06            // 32-39: town (verb[4:1]<<4 | sides)
+#else
     .byte 0, 0, 0, 0, 6, 0, 10, 6                            // 57-64: town
+#endif
 
 // Attack 0 type
 cr_atk0_type:
@@ -299,7 +370,11 @@ cr_atk0_type:
 #else
     .fill MAX_DUNGEON_CREATURES, 0                                        // 0-56: loaded from tier data
 #endif
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .byte $01, $01, $01, $01, $81, $01, $81, $81            // 32-39: town (verb[0]<<7 | adtype)
+#else
     .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 57-64: town
+#endif
 
 // Attack slot 1 (type, dice, sides — 0 = no second attack)
 cr_atk1_type:
@@ -311,7 +386,11 @@ cr_atk1_type:
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
 #endif
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .byte $80 | ATK_STEAL_GOLD, 0, 0, 0, $80 | ATK_STEAL_ITEM, 0, 0, 0 // 32-39: Urchin/Rogue steal
+#else
     .byte ATK_NORMAL, 0, 0, 0, ATK_NORMAL, 0, 0, 0           // 57-64: town
+#endif
 cr_atk1_dice:
 #if COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0                     // 0-9
@@ -331,7 +410,11 @@ cr_atk1_sides:
 #else
     .fill MAX_DUNGEON_CREATURES, 0                          // 0-56: loaded from tier data
 #endif
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .byte $20, 0, 0, 0, $20, 0, 0, 0                        // 32-39: ADESC_TOUCHES (5)
+#else
     .fill 8, 0                                               // 57-64: town
+#endif
 
 // Spells: 1-in-N frequency, breath element, Hold Person (MS_* above)
 cr_spell_chance:
@@ -388,6 +471,33 @@ cr_name_hi:
     .fill MAX_DUNGEON_CREATURES - 26, 0                      // 26-56: loaded from tier data
     .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5, >crn_t6, >crn_t7 // 57-64: town
 cr_name_tables_end:
+
+// Phase 5 extended creature SoA columns (8 arrays x MAX_CREATURES; +320 B on
+// catalog ports). Contiguous in exact cat_ext_record[0..7] order so cat_fetch
+// copies 8 bytes by stepping zp_ptr1 by MAX_CREATURES; zero-initialized in
+// !HAL_PLATFORM_MONSTER_CATALOG unit-test builds so legacy tier1..4.s blobs
+// remain untouched.
+cr_atk2_type:     .fill MAX_CREATURES, 0
+cr_atk2_dice:     .fill MAX_CREATURES, 0
+cr_atk2_sides:    .fill MAX_CREATURES, 0
+cr_atk3_type:     .fill MAX_CREATURES, 0
+cr_atk3_dice:     .fill MAX_CREATURES, 0
+cr_atk3_sides:    .fill MAX_CREATURES, 0
+cr_spell_flags2:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .fill MAX_DUNGEON_CREATURES, 0
+    .fill MAX_TOWN_CREATURES, CM2_PICKS_UP          // VMS 0..7 town NPCs: 0x100000
+#else
+    .fill MAX_CREATURES, 0
+#endif
+cr_cdefense:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .fill MAX_DUNGEON_CREATURES, 0
+    .fill MAX_TOWN_CREATURES, CD_FROST | CD_FIRE    // VMS 0..7 town NPCs: 0x0030
+#else
+    .fill MAX_CREATURES, 0
+#endif
+cr_ext_tables_end:
 
 // Treasure flags (cr_treasure, tier SoA field after cr_spell_flags) and the
 // kill-time drop queue. Ports defining MONSTER_DEATH_EXTERNAL import it into
@@ -1292,16 +1402,7 @@ monster_update_visibility_one:
     jmp !muvo_store+
 
 !muvo_visible:
-    // A monster coming into sight ends search mode (VMS creature.inc
-    // update_mon search_off; Umoria updateMon playerDisturb(1, 0)).
-    lda muv_old_flags
-    and #MF_VISIBLE
-    bne !muvo_seen_before+
-    jsr player_search_mode_off
-!muvo_seen_before:
-    lda muv_new_flags
-    ora #MF_VISIBLE
-    sta muv_new_flags
+    jsr muvo_apply_visible
 
 !muvo_store:
     ldx muv_slot
@@ -1338,6 +1439,39 @@ muv_clear_detected: .byte 0
 #elif !C64_UNIT_TEST
 .segment Default
 #endif
+
+// muvo_apply_visible — Grant MF_VISIBLE in muv_new_flags unless blocked by
+// CD_INVISIBLE ($80 in cr_cdefense) without PFLAG_SEE_INVIS or temporary
+// see/detect-invisible sight (VMS creature.inc update_mon %X'10000').
+// Lives in Default alongside player_search_mode_off so C128 RuntimeLowData
+// ($1000-$19FF) stays below FLOOR_ITEM_BASE ($1A00).
+.assert "muvo_apply_visible: CD_INVISIBLE is cr_cdefense bit 7", CD_INVISIBLE, $80
+muvo_apply_visible:
+    ldy muv_type
+    lda cr_cdefense,y
+    bpl !muvo_can_see+
+#if ITEM_DEFS_CONSTS_INCLUDED && !PLUS4_INLINE_RUNTIME_BANKED_TEST
+    lda player_pflags
+    and #PFLAG_SEE_INVIS
+    ora zp_eff_see_inv
+#else
+    lda zp_eff_see_inv
+#endif
+    ora zp_eff_invis
+    beq !muvo_vis_done+
+!muvo_can_see:
+    // A monster coming into sight ends search mode (VMS creature.inc
+    // update_mon search_off; Umoria updateMon playerDisturb(1, 0)).
+    lda muv_old_flags
+    and #MF_VISIBLE
+    bne !muvo_seen_before+
+    jsr player_search_mode_off
+!muvo_seen_before:
+    lda muv_new_flags
+    ora #MF_VISIBLE
+    sta muv_new_flags
+!muvo_vis_done:
+    rts
 
 // monster_remove — Remove monster at slot X
 // Clears FLAG_OCCUPIED on map, marks slot empty, decrements count.
@@ -1380,7 +1514,7 @@ monster_remove:
 // ============================================================
 .assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
 .assert "Monster table >256 bytes", MAX_MONSTERS * MONSTER_ENTRY_SIZE > 256, true
-#if HAL_PLATFORM_MONSTER_CATALOG
+#if HAL_PLATFORM_MONSTER_CATALOG || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 .assert "Catalog dungeon rows are the live monster slots", CATALOG_DUNGEON_CREATURES, MAX_MONSTERS
 .assert "Max creatures", MAX_CREATURES, 40
 .assert "Town creature base", TOWN_CREATURE_BASE, 32
@@ -1412,6 +1546,15 @@ monster_remove:
 .assert "cr_spell_flags size", cr_name_lo - cr_spell_flags, MAX_CREATURES
 .assert "cr_name_lo size", cr_name_hi - cr_name_lo, MAX_CREATURES
 .assert "cr_name_hi size", cr_name_tables_end - cr_name_hi, MAX_CREATURES
+.assert "cr_atk2_type size", cr_atk2_dice - cr_atk2_type, MAX_CREATURES
+.assert "cr_atk2_dice size", cr_atk2_sides - cr_atk2_dice, MAX_CREATURES
+.assert "cr_atk2_sides size", cr_atk3_type - cr_atk2_sides, MAX_CREATURES
+.assert "cr_atk3_type size", cr_atk3_dice - cr_atk3_type, MAX_CREATURES
+.assert "cr_atk3_dice size", cr_atk3_sides - cr_atk3_dice, MAX_CREATURES
+.assert "cr_atk3_sides size", cr_spell_flags2 - cr_atk3_sides, MAX_CREATURES
+.assert "cr_spell_flags2 size", cr_cdefense - cr_spell_flags2, MAX_CREATURES
+.assert "cr_cdefense size", cr_ext_tables_end - cr_cdefense, MAX_CREATURES
+.assert "Extended creature SoA block is contiguous", cr_ext_tables_end - cr_atk2_type, CATALOG_EXT_FIELDS * MAX_CREATURES
 
 // ============================================================
 // load_tier_to_buffer — Copy tier SoA data into active creature buffers

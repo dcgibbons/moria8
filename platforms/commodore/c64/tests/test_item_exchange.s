@@ -32,6 +32,7 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -47,11 +48,12 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -60,33 +62,46 @@ test_exit_trampoline:
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/item_exchange.s"
 #import "../../../../core/spell_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment Default
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -136,12 +151,12 @@ ui_help_display:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
 
-// Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
-.segment TestStoreOverlay
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+// Store modules are never executed here; item_cat_data takes the $E100 window
+// (item_cat_kernal_helper.s), so only the store inventory arrays that
+// ui_trampoline_stubs.s references are linked (data, parked).
+.segment Default
+#import "../../../../core/store_data_defs.s"
+#import "../../../../core/store_inventory_data.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s
@@ -322,20 +337,21 @@ tx_row_hi: .byte >SCREEN_RAM, >(SCREEN_RAM + 40)
 
 // Records: id, qty, p1, to_hit, to_dam, to_ac, flags, ego
 rec_empty:         .byte FI_EMPTY, 0, 0, 0, 0, 0, 0, 0
-rec_mace:          .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED, 0
-rec_mace_cursed:   .byte 5, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, 0
-rec_dagger:        .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, EGO_DEFENDER
-rec_dagger_cursed: .byte 2, 1, 0, 3, 4, 0, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER
-rec_dagger_ac:     .byte 2, 1, 0, 3, 4, 7, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER
-rec_dagger_ac_uncursed: .byte 2, 1, 0, 3, 4, 7, IF_IDENTIFIED, EGO_DEFENDER
-rec_potion:        .byte 17, 1, 0, 0, 0, 0, 0, 0
-rec_armor:         .byte 7, 1, 0, 0, 0, 2, IF_IDENTIFIED, 0
-rec_armor_cursed:  .byte 7, 1, 0, 0, 0, 2, IF_IDENTIFIED | IF_CURSED, 0
-rec_robe:          .byte 6, 1, 0, 0, 0, 0, 0, 0
-rec_torch_cursed:  .byte ITEM_TYPE_WOODEN_TORCH, 1, 100, 0, 0, 0, IF_CURSED, 0
-rec_torches:       .byte ITEM_TYPE_WOODEN_TORCH, 2, 200, 0, 0, 0, 0, 0
-rec_torch_one:     .byte ITEM_TYPE_WOODEN_TORCH, 1, 200, 0, 0, 0, 0, 0
-rec_torch_old:     .byte ITEM_TYPE_WOODEN_TORCH, 1, 100, 0, 0, 0, 0, 0
+rec_mace:          .byte ITEM_SLOT_MACE, 1, 0, 1, 0, 0, IF_IDENTIFIED, ITEM_PAGE_MACE
+rec_mace_cursed:   .byte ITEM_SLOT_MACE, 1, 0, 1, 0, 0, IF_IDENTIFIED | IF_CURSED, ITEM_PAGE_MACE
+rec_dagger:        .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_dagger_cursed: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_dagger_ac:     .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 7, IF_IDENTIFIED | IF_CURSED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_dagger_ac_uncursed: .byte ITEM_SLOT_DAGGER, 1, 0, 3, 4, 7, IF_IDENTIFIED, EGO_DEFENDER | ITEM_PAGE_DAGGER
+rec_potion:        .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
+rec_armor:         .byte ITEM_SLOT_LEATHER_ARMOR, 1, 0, 0, 0, 2, IF_IDENTIFIED, ITEM_PAGE_LEATHER_ARMOR
+rec_armor_cursed:  .byte ITEM_SLOT_LEATHER_ARMOR, 1, 0, 0, 0, 2, IF_IDENTIFIED | IF_CURSED, ITEM_PAGE_LEATHER_ARMOR
+rec_robe:          .byte ITEM_SLOT_ROBE, 1, 0, 0, 0, 0, 0, ITEM_PAGE_ROBE
+rec_torch_cursed:  .byte ITEM_SLOT_WOODEN_TORCH, 1, 100, 0, 0, 0, IF_CURSED, ITEM_PAGE_WOODEN_TORCH
+rec_torches:       .byte ITEM_SLOT_WOODEN_TORCH, 2, 200, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
+rec_torch_one:     .byte ITEM_SLOT_WOODEN_TORCH, 1, 200, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
+rec_torch_old:     .byte ITEM_SLOT_WOODEN_TORCH, 1, 100, 0, 0, 0, 0, ITEM_PAGE_WOODEN_TORCH
+rec_holy:          .byte ITEM_SLOT_DAGGER, 1, 4, 3, 4, 0, IF_IDENTIFIED, EGO_HOLY_AVENGER | ITEM_PAGE_DAGGER
 
 // Messages, as the player reads them
 s_no_weapons: .text "No weapons to exchange." ; .byte 0
@@ -344,6 +360,7 @@ s_pri_mace:   .text "Primary: Mace (+1,+0)" ; .byte 0
 s_pri_dagger: .text "Primary: Dagger (Defender) (+3,+4)" ; .byte 0
 s_sec_mace:   .text "Secondary: Mace (+1,+0)" ; .byte 0
 s_sec_dagger: .text "Secondary: Dagger (Defender) (+3,+4)" ; .byte 0
+s_desc_holy:  .text "Dagger (Holy Avenger) (+3,+4) (+4)" ; .byte 0
 
 test_start:
     ldx #14 - 1
@@ -543,7 +560,7 @@ test_start:
     jsr item_takeoff
     :EXPECT_CS()
     :EXPECT_SLOT(EQUIP_SECONDARY, rec_empty)
-    :EXPECT_MEM(inv_item_id + 0, 17)
+    :EXPECT_MEM(inv_item_id + 0, ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS)
     :END_TEST(8)
 
     // ==========================================================
@@ -560,7 +577,7 @@ test_start:
     :EXPECT_A(3)
     :EXPECT_MEM(piw_visible_slots + 0, 22)
     :EXPECT_MEM(piw_visible_slots + 1, 23)
-    :EXPECT_MEM(piw_visible_slots + 2, 32)
+    :EXPECT_MEM(piw_visible_slots + 2, EQUIP_SECONDARY)
     :END_TEST(9)
 
     // ==========================================================
@@ -619,6 +636,63 @@ test_start:
     :EXPECT_SLOT(EQUIP_LIGHT, rec_torch_one)
     :EXPECT_SLOT(0, rec_torch_one)
     :EXPECT_SLOT(1, rec_torch_old)
+
+    // Holy Avenger (+4 STR): item_append_desc (+p1), item_exchange primary <->
+    // secondary STR transfer, player_calc_stats rebuild, and item_takeoff from
+    // both EQUIP_SECONDARY (no STR drain) and EQUIP_WEAPON (reverses +4 STR).
+    jsr item_init_inventory
+    jsr msg_clear
+    lda #0
+    sta zp_msg_flags
+    :SEED(EQUIP_WEAPON, rec_holy)
+    jsr player_calc_stats
+    :EXPECT_MEM(player_data + PL_STR_CUR, 14)
+    :EXPECT_MEM(zp_player_str, 14)
+    lda #0
+    sta cmb_buf_idx
+    ldx #EQUIP_WEAPON
+    jsr inv_slot_to_fi_add
+    jsr item_append_desc
+    jsr cmb_term_and_print
+    :EXPECT_ROW(0, s_desc_holy)
+
+    jsr msg_clear
+    :KEYS($20)
+    jsr item_exchange
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_WEAPON, rec_empty)
+    :EXPECT_SLOT(EQUIP_SECONDARY, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+    :EXPECT_MEM(zp_player_str, 10)
+    jsr player_calc_stats
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+    jsr msg_clear
+    :KEYS($41)
+    jsr item_takeoff
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_SECONDARY, rec_empty)
+    :EXPECT_SLOT(0, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+
+    jsr item_init_inventory
+    jsr msg_clear
+    lda #0
+    sta zp_msg_flags
+    :SEED(EQUIP_SECONDARY, rec_holy)
+    :KEYS($20)
+    jsr item_exchange
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_WEAPON, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 14)
+    :EXPECT_MEM(zp_player_str, 14)
+    jsr msg_clear
+    :KEYS($41)
+    jsr item_takeoff
+    :EXPECT_CS()
+    :EXPECT_SLOT(EQUIP_WEAPON, rec_empty)
+    :EXPECT_SLOT(0, rec_holy)
+    :EXPECT_MEM(player_data + PL_STR_CUR, 10)
+    :EXPECT_MEM(zp_player_str, 10)
     :END_TEST(13)
 
     jmp test_exit_trampoline

@@ -54,6 +54,32 @@
 .assert "Catalog hidden span, then the Huffman index, lie in the old tier name pool", HUFF_INDEX_HIDDEN_BASE == CATALOG_HIDDEN_END + 1 && HUFF_INDEX_HIDDEN_END <= PLATFORM_TIER_NAME_POOL_END, true
 .const C64_TIER_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE // Legacy C64 tests
 .const C64_TIER_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
+// ZP save buffer — stores $02–$8F during game, restored on exit ($D700-$D78D, !C64_CARTRIDGE)
+.const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
+// Phase 1 hidden DRAM window under I/O: $D700-$DEFF (2,048 B).
+// $DF00-$DFFF stays strictly reserved/untouched so REU I/O registers
+// ($DF00-$DF0A) and cartridge I/O ($DFxx) are never touched via I/O or RAM.
+.const C64_HIDDEN_AUX_BASE         = $d700
+.const C64_HIDDEN_AUX_END          = $deff
+.const C64_HIDDEN_RAM_RESERVE_BASE = $df00
+.const C64_HIDDEN_RAM_RESERVE_END  = $dfff
+.const C64_HIDDEN_ZP_SAVE_BASE     = C64_HIDDEN_AUX_BASE                 // $D700-$D78D (142 B, !C64_CARTRIDGE)
+.const C64_HIDDEN_MSG_HIST_BASE    = C64_HIDDEN_ZP_SAVE_BASE + ZP_SAVE_SIZE // $D78E-$D8CD (320 B)
+.const C64_HIDDEN_RECALL_BASE      = C64_HIDDEN_MSG_HIST_BASE + 320      // $D8CE-$DD29 (1,116 B, recall[279])
+.const C64_HIDDEN_FREE_BASE        = C64_HIDDEN_RECALL_BASE + 1116       // $DD2A-$DEFF (470 B: item pickup cache on !C64_CARTRIDGE)
+.assert "C64 hidden aux starts right after Huffman index", C64_HIDDEN_AUX_BASE == HUFF_INDEX_HIDDEN_END + 1, true
+.assert "C64 hidden aux excludes $DF00-$DFFF I/O page", C64_HIDDEN_AUX_END < C64_HIDDEN_RAM_RESERVE_BASE, true
+.assert "C64 recall[279] excludes $DE00-$DFFF cartridge/REU I/O pages", C64_HIDDEN_RECALL_BASE + 1116 <= $de00, true
+.assert "C64 hidden aux allocations fit within $D700-$DEFF", C64_HIDDEN_FREE_BASE <= C64_HIDDEN_AUX_END + 1, true
+#if !C64_CARTRIDGE
+// Active-level item weight + decoded-name cache ($DD2A-$DEFF = 470 B, !C64_CARTRIDGE),
+// strictly below $DF00 (REU/UCI I/O reserve) and accessed only under SEI + BANK_ALL_RAM ($30).
+.const ITEM_PICKUP_CACHE_BASE      = C64_HIDDEN_FREE_BASE
+.const ITEM_PICKUP_CACHE_SIZE      = C64_HIDDEN_AUX_END - ITEM_PICKUP_CACHE_BASE + 1
+.label c64_hidden_aux_end          = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE
+.const ITEM_PICKUP_CACHE_MIN_SIZE  = 464
+.assert "C64 item pickup cache fits in $DD2A-$DEFF hidden DRAM (< $DF00)", ITEM_PICKUP_CACHE_BASE == $dd2a && ITEM_PICKUP_CACHE_SIZE == 470 && c64_hidden_aux_end <= C64_HIDDEN_RAM_RESERVE_BASE, true
+#endif
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
 // C128-only constant used by shared tier_manager staging metadata.
@@ -70,11 +96,6 @@
 // must remain untouched by boot copying.
 .const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0400
-
-// ZP save buffer — stores $02–$8F during game, restored on exit
-// Allocated as program data so it can't collide with code.
-// Located under BASIC ROM when above $A000 — must read before banking BASIC in.
-.const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
 
 // ============================================================
 // Macros
@@ -137,14 +158,20 @@
 // ============================================================
 
 #if !C64_CARTRIDGE
-// The disk build owns this session-long BASIC exit snapshot; the cartridge
-// lifecycle stays in the game/title and has no BASIC-return caller.
-// Buffer allocated as program data — address assigned by assembler
-zp_save_buf: .fill ZP_SAVE_SIZE, 0
+// The disk build owns this session-long BASIC exit snapshot in hidden DRAM
+// ($D700-$D78D); the cartridge lifecycle stays in the game/title and has no
+// BASIC-return caller.
+.label zp_save_buf = C64_HIDDEN_ZP_SAVE_BASE
 
-// save_zp — Copy $02–$8F to zp_save_buf
-// Preserves: nothing (uses A, X)
+// save_zp — Copy $02–$8F to zp_save_buf ($D700-$D78D) under SEI + $01=$34
+// Preserves: $01, I flag (clobbers A, X)
 save_zp:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
     ldx #0
 !loop:
     lda zp_temp0,x
@@ -152,11 +179,20 @@ save_zp:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
+    pla
+    sta $01
+    plp
     rts
 
-// restore_zp — Copy zp_save_buf back to $02–$8F
-// Preserves: nothing (uses A, X)
+// restore_zp — Copy zp_save_buf ($D700-$D78D) back to $02–$8F under SEI + $01=$34
+// Preserves: $01, I flag (clobbers A, X)
 restore_zp:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
     ldx #0
 !loop:
     lda zp_save_buf,x
@@ -164,8 +200,106 @@ restore_zp:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
+    pla
+    sta $01
+    plp
     rts
 #endif
+
+// ============================================================
+// Hidden DRAM helpers ($D700-$DEFF under SEI + $01=$34)
+// ============================================================
+c64_hidden_tmp: .byte 0
+
+// c64_hidden_write_ptr0 / c64_hidden_write_ptr1
+// Write A to (zp_ptr0),y or (zp_ptr1),y in hidden RAM under SEI + $01=$34.
+// Preserves: A, X, Y, $01, I flag
+c64_hidden_write_ptr1:
+    php
+    sei
+    sta c64_hidden_tmp
+    lda #zp_ptr1
+    bne c64_hidden_write_zp
+c64_hidden_write_ptr0:
+    php
+    sei
+    sta c64_hidden_tmp
+    lda #zp_ptr0
+c64_hidden_write_zp:
+    sta !hw_op+ + 1
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
+    lda c64_hidden_tmp
+!hw_op:
+    sta (zp_ptr0),y
+c64_hidden_exit:
+    pla
+    sta $01
+    plp
+    lda c64_hidden_tmp
+    rts
+
+// c64_hidden_read_ptr0 / c64_hidden_read_ptr1
+// Read (zp_ptr0),y or (zp_ptr1),y from hidden RAM under SEI + $01=$34 into A (N/Z set).
+// Preserves: X, Y, $01, I flag
+c64_hidden_read_ptr1:
+    lda #zp_ptr1
+    .byte $2c               // BIT abs: skips next 2-byte lda #zp_ptr0
+c64_hidden_read_ptr0:
+    lda #zp_ptr0
+    php
+    sei
+    sta !hr_op+ + 1
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
+!hr_op:
+    lda (zp_ptr0),y
+    sta c64_hidden_tmp
+    jmp c64_hidden_exit
+
+// c64_hidden_inc_ptr0
+// Increment byte at (zp_ptr0),y in hidden RAM under SEI + $01=$34; A = new value (N/Z set).
+// Preserves: X, Y, $01, I flag
+c64_hidden_inc_ptr0:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
+    lda (zp_ptr0),y
+    clc
+    adc #1
+    sta (zp_ptr0),y
+    sta c64_hidden_tmp
+    jmp c64_hidden_exit
+
+// c64_hidden_copy
+// Copy X bytes (1..255; X=0 copies 256 bytes) from (zp_ptr0) to (zp_ptr1)
+// under SEI + $01=$34 (supports both directions with $D700-$DEFF).
+// Clobbers: A, X, Y   Preserves: $01, I flag, zp_ptr0, zp_ptr1
+c64_hidden_copy:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_ROMS
+    sta $01
+    ldy #0
+!copy:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    dex
+    bne !copy-
+    pla
+    sta $01
+    plp
+    rts
 
 // C128 MMU compatibility stubs for shared code paths that are runtime-gated.
 mmu_select_bank1:
@@ -183,6 +317,7 @@ mmu_select_bank0:
 .assert "Dungeon-gen scan scratch stays in screen scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true
 #if !C64_CARTRIDGE
-.assert "ZP save buffer doesn't overlap CREATURE_BASE", zp_save_buf + ZP_SAVE_SIZE <= CREATURE_BASE, true
+.assert "ZP save buffer sits in $D700-$D78D hidden aux", zp_save_buf >= C64_HIDDEN_AUX_BASE && zp_save_buf + ZP_SAVE_SIZE <= C64_HIDDEN_MSG_HIST_BASE, true
+.assert "restore_zp stays reachable below BASIC ROM", restore_zp < $a000, true
 #endif
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142

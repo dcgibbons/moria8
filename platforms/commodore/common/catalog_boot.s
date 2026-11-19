@@ -93,8 +93,10 @@ catalog_reu_preload:
 // File names: PETSCII capitals, digits and '.' share the screen codes.
 cbl_idx_name: .text "MONSTER.IDX"
 cbl_idx_name_end:
+#if CATALOG_REU
 cbl_cat_name: .text "MONSTER.CAT"
 cbl_cat_digit: .text "1"
 cbl_cat_name_end:
     .byte 0                     // reu_show_file reads a 0-terminated name
+#endif
 catalog_boot_end:

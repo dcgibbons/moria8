@@ -353,22 +353,34 @@ def tile_type_table(flag_visited: int) -> tuple[int, ...]:
 
 
 def catalog_slot_names(game: Game) -> dict[int, str]:
-    """Live monster slot -> its catalog name (``cat_slot_id_lo``/``_hi``, one
-    read), empty on a port without the catalog."""
+    """Creature type (``MX_TYPE``) -> its catalog name, empty on a port
+    without the catalog. Dungeon types from the species table
+    (``cat_slot_id_lo``/``_hi``, one read, filled by cat_fetch); town types,
+    which follow them, are catalog ids from 0 (core/recall.s
+    recall_slot_to_cat_id)."""
     from . import knowledge
     catalog = knowledge.catalog_names()
     abi = game.abi
     lo, hi = (abi.all_symbols.get(n, [None])[0] for n in ("cat_slot_id_lo", "cat_slot_id_hi"))
     if not catalog or lo is None or hi is None:
         return {}
-    count = abi.MAX_MONSTERS
+    count = abi.CATALOG_DUNGEON_CREATURES
     if hi == lo + count:
         raw = game.mon.mem_get(lo, 2 * count, game.ram)
         low, high = raw[:count], raw[count:]
     else:
         low, high = game.mon.mem_get(lo, count, game.ram), game.mon.mem_get(hi, count, game.ram)
-    return {slot: catalog[cid] for slot in range(count)
-            if (cid := low[slot] | high[slot] << 8) < len(catalog)}
+    names = {kind: catalog[cid] for kind in range(count)
+             if (cid := low[kind] | high[kind] << 8) < len(catalog)}
+    names.update({count + town: catalog[town] for town in range(min(abi.MAX_TOWN_CREATURES, len(catalog)))})
+    return names
+
+
+def creature_names(by_pos: dict[Pos, int], names: dict[int, str]) -> dict[Pos, str]:
+    """Each creature's name by its type. By live monster slot (2026-11-10 to
+    2026-11-16) most were another type's: a town 'p' was a "Grey Mushroom
+    patch" that never moves, and its squares walled off the stairs."""
+    return {pos: names.get(kind, "") for pos, kind in by_pos.items()}
 
 
 def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None = None) -> View:
@@ -379,12 +391,10 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
     types = [table[tile] for tile in tiles]
     by_pos = {}
     size = abi.MONSTER_ENTRY_SIZE
-    slots = {}
     for slot in range(abi.MAX_MONSTERS):
         rec = obs.monsters[slot * size:(slot + 1) * size]
         if rec[abi.MX_TYPE] != abi.EMPTY_SLOT:
             by_pos[(rec[abi.MX_X], rec[abi.MX_Y])] = rec[abi.MX_TYPE]
-            slots[(rec[abi.MX_X], rec[abi.MX_Y])] = slot
     creatures = {}
     unknown = {}
     vx, vy = abi.hal_layout_viewport_x, abi.hal_layout_viewport_y
@@ -405,7 +415,8 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
         # fire alone, though drawn as the Ancient Multi-Hued's D at level 40.
         names = catalog_slot_names(game)
         if names:
-            creatures = {pos: Creature(c.glyph, c.level, names.get(slots.get(pos, -1), ""))
+            named = creature_names(by_pos, names)
+            creatures = {pos: Creature(c.glyph, c.level, named.get(pos, ""))
                          for pos, c in creatures.items()}
     stores = []
     if obs.dlvl == 0:

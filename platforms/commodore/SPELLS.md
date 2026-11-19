@@ -55,7 +55,7 @@
   - `Haste Self`, `Protection from Evil`, and `Sense Invisible` keep explicit onset feedback
   - `Resist Heat and Cold` now has explicit onset feedback and split heat/fire vs cold timer storage; the current prayer path refreshes both halves together
   - `Create Food`, `Glyph of Warding`, and `Recharge` now explain blocked/no-target cases instead of failing silently
-  - successful overcasts now run the spell/prayer effect first, then print `You faint from fatigue.` once, show `-MORE-`, and wait for acknowledgement before paralysis turns begin
+  - successful overcasts now run the spell/prayer effect first, then print `You faint from the effort!` (arcane) or `You faint from fatigue!` (divine) — plus `You have damaged your health!` when the 1-in-3 CON drain triggers — show `-MORE-`, and wait for acknowledgement before paralysis turns begin
   - forced paralysis turns intentionally do not enter unattended `-MORE-`; the final recovery tick clears stale message state before `You can move again.`
   - timed expiry text for bless/haste/protection is still intentionally omitted on Commodore; this remains a documented deviation from richer `umoria` status messaging
 

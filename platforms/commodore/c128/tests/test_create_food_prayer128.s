@@ -99,6 +99,7 @@ fi_x: .fill MAX_FLOOR_ITEMS, 0
 fi_y: .fill MAX_FLOOR_ITEMS, 0
 fi_item_id: .fill MAX_FLOOR_ITEMS, 0
 fi_qty: .fill MAX_FLOOR_ITEMS, 0
+fi_meta_hi: .fill (ITEM_PAGE_DAGGER != 0 ? MAX_FLOOR_ITEMS : 0), 0
 fi_add_x: .byte 0
 fi_add_y: .byte 0
 fi_add_id: .byte 0
@@ -202,11 +203,13 @@ test_pmu_create_food:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     sta fi_add_id
     lda #1
     sta fi_add_qty
     jsr fi_add_clear_plain_meta
+    lda #ITEM_PAGE_RATION_OF_FOOD
+    sta fi_add_ego
     jsr floor_item_add
     bcc !fail+
     lda #1
@@ -235,6 +238,7 @@ floor_item_find_at:
     cpx #MAX_FLOOR_ITEMS
     bcs !miss+
     lda fi_item_id,x
+    cmp #FI_EMPTY
     beq !next+
     lda fi_x,x
     cmp zp_temp0
@@ -252,8 +256,9 @@ floor_item_find_at:
     rts
 
 floor_item_remove:
-    lda #0
+    lda #FI_EMPTY
     sta fi_item_id,x
+    lda #0
     sta fi_qty,x
     sta fi_x,x
     sta fi_y,x
@@ -265,6 +270,7 @@ floor_item_add:
     cpx #MAX_FLOOR_ITEMS
     bcs !fail+
     lda fi_item_id,x
+    cmp #FI_EMPTY
     beq !use+
     inx
     jmp !slot-
@@ -277,6 +283,10 @@ floor_item_add:
     sta fi_item_id,x
     lda fi_add_qty
     sta fi_qty,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda fi_add_ego
+        sta fi_meta_hi,x
+    }
     sec
     rts
 !fail:
@@ -326,12 +336,13 @@ test_calc_spell_failure_fail:
 
 test_reset_create_food_state:
     ldx #MAX_FLOOR_ITEMS - 1
-    lda #0
 !clear:
+    lda #0
     sta fi_x,x
     sta fi_y,x
-    sta fi_item_id,x
     sta fi_qty,x
+    lda #FI_EMPTY
+    sta fi_item_id,x
     dex
     bpl !clear-
 
@@ -382,11 +393,13 @@ test_seed_underfoot_item:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty
     jsr fi_add_clear_plain_meta
+    lda #ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
+    sta fi_add_ego
     jsr floor_item_add
     rts
 
@@ -395,13 +408,14 @@ test_fill_floor_items_elsewhere:
 !loop:
     cpx #MAX_FLOOR_ITEMS
     bcs !done+
-    txa
-    clc
-    adc #1
+    lda #ITEM_SLOT_DAGGER
     sta fi_item_id,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi,x
+    }
     lda #1
     sta fi_qty,x
-    lda #1
     sta fi_x,x
     txa
     clc
@@ -461,7 +475,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t1_fail+
     lda fi_item_id,x
-    cmp #15
+    cmp #ITEM_SLOT_RATION_OF_FOOD
     bne !t1_fail+
     lda vis_room_revealed
     cmp #1

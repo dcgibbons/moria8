@@ -44,6 +44,12 @@ magic_recalc_mana:
 magic_check_new_spells:
     rts
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -59,27 +65,32 @@ magic_check_new_spells:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
+status_draw:
+status_mark_dirty:
+    rts
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -88,7 +99,6 @@ magic_check_new_spells:
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/monster_attack.s"
 #import "../../../../core/turn.s"
@@ -99,15 +109,19 @@ store_enter:
     rts
 #import "../../../../core/ui_trampoline_stubs.s"
 
-// The item actions (an overlay in the product) are not exercised here: out of
-// the way above the I/O hole, as player_create is (the enchantment rules of
-// 2026-11-06 took the body past MAP_BASE).
-.segmentdef TestItemActions [start=$E000]
-.segment TestItemActions
-#import "../../../../core/item_actions_overlay.s"
-// The player's spell effects are not exercised either (resistance armour,
-// 2026-11-11, took the body past MAP_BASE again).
+// The suite is split in two (tests 1-22 here, 23-42 in
+// test_monster_magic2.s, which defines MONSTER_MAGIC_PART2) so that combat.s,
+// spell_effects.s (eff_teleport_apply_target), and turn.s (eff_fear_timer) are
+// loaded; player_items.s and item_actions_overlay.s stay parked.
+#import "../../../../core/combat.s"
 #import "../../../../core/spell_effects.s"
+.segment TestCreateOverlay
+#import "../../../../core/item_actions_overlay.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s
@@ -175,6 +189,7 @@ test_start:
     lda #10
     sta zp_player_y
 
+#if !MONSTER_MAGIC_PART2
     // ==========================================
     // Test 1: monster_can_cast returns clear for spell_chance=0
     // Type 0 (White Harpy) has cr_spell_chance = 0
@@ -1059,7 +1074,10 @@ test_start:
     jsr tst_result_eq
     sta tc_results + 21
     jsr tst_unpatch_save
+    jmp !tests_done+
+#endif
 
+#if MONSTER_MAGIC_PART2
     // ==========================================
     // Test 23: player_save_value = race save + class save + adjustment,
     // clamped at 0 (core/tables.s values; MON-011).
@@ -1440,7 +1458,7 @@ test_start:
     inx
     cpx #EQUIP_HANDS + 1
     bne !t34_clear-
-    lda #8                      // Chain mail
+    lda #ITEM_SLOT_CHAIN_MAIL                      // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #<300
     ldx #>300
@@ -1594,7 +1612,7 @@ test_start:
     // also give Free Action and See Invisible).
     lda #EGO_DEFENDER
     sta inv_ego + EQUIP_WEAPON
-    lda #8                      // Chain mail
+    lda #ITEM_SLOT_CHAIN_MAIL                      // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #0
     sta inv_to_ac + EQUIP_BODY
@@ -1610,8 +1628,8 @@ test_start:
     jsr tst_result_eq
     and tc_ok
     sta tc_ok
-    lda player_pflags           // rebuilt from the Defender: all six flags
-    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS
+    lda player_pflags           // rebuilt from the Defender: all seven flags
+    cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT | PFLAG_FREE_ACT | PFLAG_SEE_INVIS | PFLAG_FFALL
     jsr tst_result_eq
     and tc_ok
     sta tc_results + 39
@@ -1655,6 +1673,7 @@ test_start:
 
     pla
     sta cr_spell_chance + 24
+#endif
 
 !tests_done:
     jmp test_exit_trampoline

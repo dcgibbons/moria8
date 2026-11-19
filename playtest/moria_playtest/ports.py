@@ -52,6 +52,9 @@ class Port:
     color_table: str = ""     # empty: colour memory holds C64 indexes
     color_mask: int = 0x0F
     snapshots: bool = True    # the emulator can save and restore a machine mid-game
+    # rom_env variables set together or not at all: a KERNAL and drive ROM
+    # that work only as a pair (JiffyDOS)
+    paired_roms: tuple[str, ...] = ()
     # build/<cartridge>: a cartridge image the machine boots from (VICE
     # -cartcrt), the disk attached in drive 8 as the disk build's: it reads
     # and writes saves there the same way. Empty: the disk is autostarted.
@@ -67,6 +70,12 @@ class Port:
     # clock and replays every line up to the snapshot's (VICE 3.10 has no
     # VDC snapshot module); measured 4.8-5.2 s, 2026-11-07.
     undump_catch_up: float = 0.0
+    # Emulated seconds a cold boot may run before the hang check trips (0.0:
+    # Game.hang_emulated_seconds): the C64's 512 KB REU preload streams the
+    # monster catalog, 13 overlays and ITEM.CAT over stock 1541 IEC (~380 s
+    # emulated after Phase 4; 2026-11-15), while every gameplay step keeps the
+    # 300 s turn limit.
+    boot_emulated_seconds: float = 0.0
     # MAME ports (mame.py): the machine, the disk option, RAM the bridge reads
     # by name (MORIA8_BRIDGE_ITEMS) and the driver's banks in it, the key
     # wait's read taps (kind, address, buffer label: mame_bridge.lua), the
@@ -103,8 +112,10 @@ C64 = Port(
         "moria8": "boot.prg", "boot64": "boot.prg", "bootart64": "bootart64.prg",
         "moria64": "moria8.prg", "t64": "title",
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
+        "monster.ext": "monster.ext",
+        "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"64.{name}": f"ovl.{name}" for name in
-           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
+           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest", "home", "storage", "title")},
         "64.bank": "64.bank", "legalui": "legalui",
     },
     # Pinned machine configuration (§6.1), with a 512 KB REU caching overlays
@@ -152,6 +163,7 @@ C64 = Port(
     # version, where a snapshot only restores into the same game (maintainer,
     # 2026-11-06: the Balrog queue on the C64, always the newest build).
     graduate_save=True,
+    boot_emulated_seconds=600.0,
 )
 
 PLUS4 = Port(
@@ -160,8 +172,10 @@ PLUS4 = Port(
     disk_files={
         "moria8": "boot4.prg", "boot4": "boot4.prg", "moria4": "moria4.prg", "t64": "title",
         **{f"monster.cat{n}": f"monster.cat{n}" for n in range(1, 5)}, "monster.idx": "monster.idx",
+        "monster.ext": "monster.ext",
+        "item.cat": "item.cat", "item.idx": "item.idx",
         **{f"4.{name}": f"ovl.{name}" for name in
-           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest")},
+           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest", "home", "storage", "title")},
         "4.bank": "4.bank", "legalui": "legalui",
     },
     # No REU: every overlay switch and tier crossing loads from the 1541, so the
@@ -204,24 +218,29 @@ C128 = Port(
     disk_files={
         "moria8": "boot128.prg", "boot128": "boot128.chain.prg", "bootart128": "bootart128.prg",
         "moria128": "moria128.prg", "t128": "title",
-        "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg",   # the monster catalog (no tiers)
+        "128.cat": "128.cat.prg", "128.cnm": "128.cnm.prg", "128.cex": "128.cex.prg",   # the monster catalog (no tiers)
+        "item.cat": "item.cat",
         **{f"128.{name}": f"ovl.{name}" for name in
-           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest")},
+           ("start", "town", "death", "modal", "gen", "help", "ui", "items", "disarm", "chest", "home", "storage")},
         **{f"128.{name}": f"128.{name}.prg" for name in
-           ("input", "proj", "runtime", "fdisk", "diskio", "world", "item", "names", "huff", "hvec",
-            "select", "persist", "play", "bank")},
+           ("input", "proj", "runtime", "fdisk", "huff", "hvec", "persist", "play", "bank")},
         "legalui": "legalui",
     },
     # The shipping .d71 on a true 1571, the REU (preload128.s caches overlays
-    # and tiers in it), and the VDC's 80-column screen.
+    # and tiers in it), and the VDC's 80-column screen, on a stock C128's 16 KB
+    # VDC: VICE's default is a C128DCR's 64 KB (maintainer, 2026-11-16).
     resource_args=(
-        "-default", "-config", "VICE_CONFIG", "+saveres",
+        "-default", "-config", "VICE_CONFIG", "+saveres", "-VDC16KB",
         "-console", "+sound", "-sounddev", "dummy",
         "-warp", "-pal", "-seed", "1", "-80col",
         "-reu", "-reusize", "512",
         "-drive8type", "1571", "-drive8truedrive",
     ),
-    rom_env=(),
+    # JiffyDOS/128 as the C64 and Plus/4 play it (maintainer, 2026-11-18): its
+    # C128 KERNAL and its 1571 drive ROM (the 310654 replacement, VICE's
+    # 1571), a pair; unset, VICE's own ROMs.
+    rom_env=(("PLAYTEST_C128_KERNAL", "-kernal"), ("PLAYTEST_DOS1571", "-dos1571")),
+    paired_roms=("PLAYTEST_C128_KERNAL", "PLAYTEST_DOS1571"),
     required_roms=(),
     consts={
         "VDC_SCREEN_BASE": ("platforms/commodore/c128/screen_vdc.s", 0x0000),
@@ -275,7 +294,7 @@ APPLE2 = Port(
     },
     labels={"input_get_key": "platforms/apple2/input.s",
             "input_get_command": "platforms/apple2/input.s",
-            "igk_key": "platforms/apple2/input.s"},
+            "input_wait_release": "platforms/apple2/input.s"},
     kernal={},
     cycles_per_second=1020484,
     crash_entries=(),   # a 65C02 has no JAM and the game owns the machine: hangs only
@@ -290,7 +309,10 @@ APPLE2 = Port(
     # input_get_key polls the keyboard latch, after pushing X and Y.
     key_taps=(("latch", 0xC000, ""),),
     key_wait_pushes=2,
-    key_wait_end="igk_key",   # input_wait_release follows and drains the latch too
+    # input_wait_release follows and drains the latch too. (igk_key, the
+    # byte after the routine until 708f3df moved it to $0339, ended the
+    # window before it began: no key wait seen, every run's boot an error.)
+    key_wait_end="input_wait_release",
     screen_decoder="apple2_80",
     key_map="apple2",
 )
@@ -424,11 +446,36 @@ def without_reu(args: tuple[str, ...]) -> tuple[str, ...]:
 # (maintainer, 2026-11-12: bugs can differ between them, and more cartridges
 # are coming). The disk build without an REU: every overlay switch and tier
 # crossing loads from the 1541.
-C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_reu(C64.resource_args))
+C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_reu(C64.resource_args),
+                    boot_emulated_seconds=0.0)
 # The EasyFlash cartridge (make cartridge64, build/c64-cart): booted from the
 # .crt with the disk build's disk in drive 8 for saves, no REU.
 C64_CART = replace(C64, name="c64-cart", source="c64", out="c64-cart", disk_target="disk64 cartridge64",
-                   disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args))
+                   disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args),
+                   boot_emulated_seconds=0.0)
+
+# The AtariMax MaxFlash cartridge (make cartridgeatari8, build/atari8-cart):
+# booted from the .car with the disk build's disk in drive 1 for saves.
+ATARI8_CART = replace(ATARI8, name="atari8-cart", source="atari8", out="atari8-cart",
+                      disk_target="diskatari8 cartridgeatari8", cartridge="moria8-atari8.car")
+
+# The Plus/4 c264 magic cart (make cartridgeplus4, build/plus4-cart) and the
+# C128 Magic Desk 128 (make cartridge128, build/c128-cart): booted from the
+# .crt with the disk build's disk in drive 8 for saves (maintainer,
+# 2026-11-13: the Plus/4 and the C128 play disk and cartridge).
+PLUS4_CART = replace(PLUS4, name="plus4-cart", source="plus4", out="plus4-cart",
+                     disk_target="diskplus4 cartridgeplus4", disk_files={}, cartridge="moria8-plus4.crt",
+                     snapshots=False)   # xplus4 3.10 exits restoring a snapshot taken with it attached
+C128_CART = replace(C128, name="c128-cart", source="c128", out="c128-cart", disk_target="disk128 cartridge128",
+                    disk_files={}, cartridge="moria8-c128.crt", resource_args=without_reu(C128.resource_args))
+
+# The Commander X16 cartridge (make -C platforms/cx16 cartridge,
+# build/cx16-cart): the X16's only build from 2026-11-13 (maintainer). x16emu
+# -cart with an empty -fsroot for saves; x16.py hands over to its boot.
+CX16_CART = replace(CX16, name="cx16-cart", source="cx16", out="cx16-cart", disk="cx16-cart",
+                    disk_target="buildcx16", cartridge="moria8-cx16.crt",
+                    labels={**CX16.labels, "cx16_preload_banks": "platforms/cx16/overlay_storage.s"})
 
 PORTS: dict[str, Port] = {port.name: port for port in
-                          (C64, C64_NOREU, C64_CART, PLUS4, C128, APPLE2, ATARI8, BBCMASTER, CX16)}
+                          (C64, C64_NOREU, C64_CART, PLUS4, PLUS4_CART, C128, C128_CART, APPLE2, ATARI8,
+                           ATARI8_CART, BBCMASTER, CX16, CX16_CART)}

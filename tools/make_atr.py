@@ -9,6 +9,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_catalog as bc
+
 
 SECTOR_SIZE = 128
 DATA_BYTES_PER_SECTOR = 125
@@ -173,11 +176,20 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
     builder.add_file("LICENSE.TXT", convert_lf_to_atascii((root_dir / "data" / "LICENSE").read_bytes()))
     builder.add_file("SRCOFFER.TXT", convert_lf_to_atascii((root_dir / "data" / "SOURCE-OFFER").read_bytes()))
 
-    # Resident, RuntimeBanked, Overlays, Title Art and the monster catalog
-    # (Program disk never carries MORIA8.ID or save slots; saves require a
-    # separate Save Disk initialized via Disk Setup.)
+    # Resident (PackBits-compressed MORIA8.PKB stored under DOS 2.5 name
+    # MORIA8.RES, while raw build/atari8/MORIA8.RES stays uncompressed on host
+    # for check_memory_contract.py), RuntimeBanked, Overlays, Title Art and
+    # the monster/item catalogs.
+    res_raw = (build_dir / "MORIA8.RES").read_bytes()
+    if len(res_raw) < 3:
+        raise ValueError("MORIA8.RES PRG too short")
+    pkb_path = build_dir / "MORIA8.PKB"
+    res_pkb = pkb_path.read_bytes() if pkb_path.is_file() else (res_raw[:2] + bc.packbits_encode(res_raw[2:]))
+    if res_pkb[:2] != res_raw[:2] or bc.packbits_decode(res_pkb[2:]) != res_raw[2:]:
+        raise ValueError("MORIA8.PKB PackBits roundtrip mismatch against MORIA8.RES")
+    builder.add_file("MORIA8.RES", res_pkb)
+
     asset_files = [
-        ("MORIA8.RES", build_dir / "MORIA8.RES"),
         ("ATARI.BNK", build_dir / "ATARI.BNK"),
         ("LEGALUI", build_dir / "legalui"),
         ("OVL.STA", build_dir / "OVL.STA"),
@@ -190,6 +202,9 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
         ("OVL.SPL", build_dir / "OVL.SPL"),
         ("OVL.CHS", build_dir / "OVL.CHS"),
         ("OVL.GEN", build_dir / "OVL.GEN"),
+        ("OVL.HOM", build_dir / "OVL.HOM"),
+        ("OVL.STO", build_dir / "OVL.STO"),
+        ("OVL.TTL", build_dir / "OVL.TTL"),
         ("TITLE.DAT", build_dir / "TITLE.DAT"),
     ]
     for dos_name, path in asset_files:
@@ -197,6 +212,9 @@ def build_release_atr(build_dir: Path, root_dir: Path, out_atr: Path) -> None:
     # The monster catalog's records, contiguous: the game reads record n at
     # the file's first sector + n / 2 (platforms/atari8/monster_catalog_a8.s).
     builder.add_file("MONSTER.CAT", (build_dir / "MONSTER.CAT").read_bytes(), contiguous=True)
+    # The Phase 4 'ITM2' item/ego/flavour catalog, contiguous for direct 125-B
+    # DOS 2.5 sector reads (platforms/atari8/item_catalog_a8.s).
+    builder.add_file("ITEM.CAT", (build_dir / "ITEM.CAT").read_bytes(), contiguous=True)
 
     out_atr.parent.mkdir(parents=True, exist_ok=True)
     out_atr.write_bytes(builder.to_bytes())
@@ -220,7 +238,7 @@ def run_selftest() -> int:
         builder.add_file("MORIA8.RES", b"\x00\x0c" + bytes(range(256)) * 175)
         builder.add_preallocated_empty_slot("HISCORE.DAT", 2)
         for slot in range(4):
-            builder.add_preallocated_empty_slot(f"SAVE{slot}.SAV", 56)
+            builder.add_preallocated_empty_slot(f"SAVE{slot}.SAV", 68)
 
         atr_bytes = builder.to_bytes()
         if len(atr_bytes) != ATR_IMAGE_SIZE:
@@ -249,8 +267,8 @@ def run_selftest() -> int:
                 print(f"FAIL: missing {key} in directory", file=sys.stderr)
                 return 1
             file_idx, _flags, count, start_sec = dir_names[key]
-            if count != 56:
-                print(f"FAIL: {key} count={count}, expected 56", file=sys.stderr)
+            if count != 68:
+                print(f"FAIL: {key} count={count}, expected 68", file=sys.stderr)
                 return 1
             if start_sec + count - 1 > MAX_FILE_SECTOR:
                 print(f"FAIL: {key} crosses sector 1023", file=sys.stderr)

@@ -8,6 +8,18 @@
 .const VERA_DATA1 = $9f24
 
 render_viewport_scroll_delta:
+    ldx CX16_RAM_BANK_REG
+    phx
+    ldx #CX16_BANK_MODAL
+    stx CX16_RAM_BANK_REG
+    jsr ovl_render_viewport_scroll_delta
+    plx
+    stx CX16_RAM_BANK_REG
+    rts
+
+.segment ModalMiscOverlay
+
+ovl_render_viewport_scroll_delta:
     lda vis_room_revealed
     bne !vsd_no+
     lda zp_view_y
@@ -215,7 +227,7 @@ vsd_strip:
     adc vsd_i
     sta zp_temp0
 !s_draw:
-    jsr render_single_tile
+    jsr ovl_render_single_tile
     inc vsd_i
     lda vsd_i
     ldx vsd_dir
@@ -232,3 +244,5 @@ vsd_strip:
 
 vsd_dir: .byte 0
 vsd_i:   .byte 0
+
+.segment Default

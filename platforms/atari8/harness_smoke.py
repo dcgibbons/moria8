@@ -9,8 +9,8 @@ per scenario (AGENTS.md Rule 8) with -nothrottle -seconds_to_run 120 emulated
 time.
 
 Suite:
-  15 behavioral scenarios on a800xl (64 KB disk-overlay baseline)
-  + 3 dedicated 130XE cache/SIO coexistence scenarios on a130xe.
+  16 behavioral scenarios on a800xl (64 KB disk-overlay baseline)
+  + 5 dedicated 130XE cache/SIO coexistence scenarios on a130xe (21 total).
 """
 
 from __future__ import annotations
@@ -26,9 +26,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import catalog_disk  # noqa: E402
 import catalog_lore  # noqa: E402  (the generated monster catalog's data)
-sys.path.insert(0, str(ROOT / "tools"))
+import item_ids  # noqa: E402
 from make_atr import build_blank_atr  # noqa: E402
+
+
+LUA_ITEM_CONSTS = item_ids.lua_item_consts(
+    "DAGGER",
+    "MACE",
+    "SPELLBOOK_MAGICK_I",
+    "HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS",
+    "CLOAK",
+    "POTION_OF_GAIN_DEXTERITY",
+    "POTION_OF_CHARISMA",
+    "POTION_OF_CURE_CRITICAL_WOUNDS",
+    "POTION_OF_NEUTRALIZE_POISON",
+    "SCROLL_OF_MAGIC_MAPPING",
+    "RING_OF_LORDLY_PROTECTION_FIRE",
+    "POTION_OF_RESTORE_STRENGTH",
+)
 
 ATR_IMAGE = ROOT / "build" / "moria8-atari8.atr"
 SYM_PATH = ROOT / "build" / "atari8" / "main.sym"
@@ -118,6 +135,8 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     zp_lvl = syms.get("zp_player_lvl", 0x0033)
     zp_dlvl = syms.get("zp_player_dlvl", 0x0034)
     zp_gflags = syms.get("zp_game_flags", 0x003C)
+    zp_hp = syms.get("zp_player_hp_lo", 0x002D)
+    zp_poison = syms.get("zp_eff_poison", 0x0050)
     player_data = syms.get("player_data", 0x1800)
     inv_item_id = syms.get("inv_item_id", 0x1900)
     inv_qty = syms.get("inv_qty", 0x1921)
@@ -129,10 +148,12 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     busy_addr = syms.get("generation_busy_active_api", 0x0D40)
     shuffles = syms.get("potion_shuffle", 0)
     id_known = syms.get("id_known_bits", 0)
+    recall_data = syms.get("recall_data_start", 0)
+    ovl_load_disk = syms.get("overlay_load_disk", 0)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
-        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi"))
+        "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi", "cat_record", "cat_ext_record"))
 
-    header = f"""
+    header = LUA_ITEM_CONSTS + f"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local KBDBUF = 0x{kbdbuf:04X}
 local KBDBUF_LEN = 0x{kbdbuf_len:04X}
@@ -143,24 +164,28 @@ local KEY_WAIT_END = 0x{key_wait_end:04X}
 local XE_PRESENT = 0x{xe_present:04X}
 local XE_SLOT_POP = 0x{xe_slot_pop:04X}
 local CURRENT_OVL = 0x{current_ovl:04X}
+local OVL_LOAD_DISK_ADDR = 0x{ovl_load_disk:04X}
 local PLAYER_X_ADDR = 0x{zp_px:04X}
 local PLAYER_Y_ADDR = 0x{zp_py:04X}
 local PLAYER_MP_ADDR = 0x{zp_mp:04X}
 local PLAYER_LVL_ADDR = 0x{zp_lvl:04X}
 local DLVL_ADDR = 0x{zp_dlvl:04X}
 local GAME_FLAGS_ADDR = 0x{zp_gflags:04X}
+local PLAYER_HP_ADDR = 0x{zp_hp:04X}
+local POISON_ADDR = 0x{zp_poison:04X}
 local PLAYER_DATA_ADDR = 0x{player_data:04X}
 local INV_ITEM_ID_ADDR = 0x{inv_item_id:04X}
 local INV_QTY_ADDR = 0x{inv_qty:04X}
-local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (33)
+local INV_STRIDE = INV_QTY_ADDR - INV_ITEM_ID_ADDR   -- TOTAL_INV_SLOTS (34)
 local TURN_LO_ADDR = 0x{turn_lo:04X}
 local MONSTER_TABLE_ADDR = 0x{monster_table:04X}
 local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
 local BUSY_ADDR = 0x{busy_addr:04X}
-local SHUFFLES_ADDR = 0x{shuffles:04X}   -- 38 bytes: potion, scroll, ring, wand, staff (high RAM)
-local ID_KNOWN_ADDR = 0x{id_known:04X}   -- 20 bytes (high RAM)
+local SHUFFLES_ADDR = 0x{shuffles:04X}   -- 174 bytes: potion, scroll, ring, wand, staff (Default RAM)
+local ID_KNOWN_ADDR = 0x{id_known:04X}   -- 47 bytes (Default RAM)
+local RECALL_ADDR = 0x{recall_data:04X}   -- 1116 bytes: 4 * 279 species (Default RAM)
 local SCREEN_RAM = 0x{SCREEN_RAM:04X}
 local ROW18 = 0x{ROW18_ADDR:04X}
 local ROW23 = 0x{ROW23_ADDR:04X}
@@ -241,6 +266,12 @@ local function send_key(petscii)
         if prog:read_u8(KBDBUF_LEN) == 0 and prog:read_u8(0xD301) == 0xFE then break end
     end
     wait_frames(10)
+end
+
+local function send_int(n)
+    local s = tostring(n)
+    for i = 1, #s do send_key(string.byte(s, i)) end
+    send_key(0x0D)
 end
 
 -- type_ahead: keys typed together while the program waits for one, as a
@@ -366,7 +397,7 @@ local function descend_to_dl1()
         wait_frames(20)
         drain_more(2)
         send_key(0x3E) -- '>'
-        for _ = 1, 60 do
+        for _ = 1, 120 do
             wait_frames(10)
             if prog:read_u8(DLVL_ADDR) == 1 and prog:read_u8(BUSY_ADDR) == 0 and not screen_has("GENERATING") then
                 return true
@@ -382,6 +413,10 @@ end
 function run()
     local ok = wait_title()
     assert_line("boot_title_menu", ok)
+    -- Centred from its length: a hard-coded 35 left it off centre (2026-11-12).
+    local menu = "N)ew  L)oad  D)isk Setup  A)bout"
+    local start = math.floor((40 - #menu) / 2)
+    assert_line("title_menu_centred", string.sub(rowtext(18), start + 1, start + #menu) == menu)
     local portb = prog:read_u8(0xD301)
     assert_line("portb_game_ram", portb == 0xFE)
     local chbase = prog:read_u8(0x02F4)
@@ -408,16 +443,17 @@ function run()
     local xe = prog:read_u8(XE_PRESENT)
     assert_line("xe_detect_{machine}", xe == {expected_xe})
     if {expected_xe} == 1 then
-        -- All 16 slots (0..9 overlays, 10..13 and 15 the monster catalog's
-        -- records, 14 TITLE.DAT) must have bit 7 set
+        -- All 18 cached slots (0..9 and 16..17 gameplay overlays, 10..13 and 15
+        -- the monster catalog's records, 14 TITLE.DAT; cold OVL.TTL is uncached)
+        -- must have bit 7 set
         local all_slots_hot = true
-        for slot = 0, 15 do
+        for slot = 0, 17 do
             if (prog:read_u8(XE_SLOT_POP + slot) & 0x80) == 0 then
                 all_slots_hot = false
                 break
             end
         end
-        assert_line("xe_all_16_slots_preloaded", all_slots_hot)
+        assert_line("xe_all_18_slots_preloaded", all_slots_hot)
     end
     manager.machine:exit()
 end
@@ -431,9 +467,11 @@ end
         count = catalog_lore.const("CATALOG_COUNT")
         levels = catalog_lore.field("cat_cr_level")
         names = [catalog_lore.name(cid) + [0] for cid in range(count)]
+        ext_recs = [list(r) for r in catalog_disk.ext_records()]
         body = """
 local LEVELS = {CAT_LEVELS}
 local NAMES = {CAT_NAMES}
+local EXT_RECS = {CAT_EXT_RECS}
 local function slot_id(t)
     return prog:read_u8(CAT_SLOT_ID_LO_ADDR + t) + prog:read_u8(CAT_SLOT_ID_HI_ADDR + t) * 256
 end
@@ -507,16 +545,47 @@ function run()
     print("DIAG DL50 win creatures: " .. winners .. " ids:" .. seen)
     assert_line("cat_win_creature", winners == 1)
     assert_line("cat_win_awake", awake)
+    local last_cid = prog:read_u8(CAT_RECORD_ADDR) + prog:read_u8(CAT_RECORD_ADDR + 1) * 256
+    local ext_ok = (CAT_EXT_RECORD_ADDR == CAT_RECORD_ADDR + 49) and (last_cid >= 0 and last_cid < #EXT_RECS)
+    if ext_ok then
+        local want_ext = EXT_RECS[last_cid + 1]
+        for k = 1, 8 do
+            if prog:read_u8(CAT_EXT_RECORD_ADDR + k - 1) ~= want_ext[k] then
+                ext_ok = false
+                print("DIAG cat_ext_record mismatch at byte " .. k .. " for cid " .. last_cid)
+                break
+            end
+        end
+    end
+    assert_line("cat_ext_record_57b", ext_ok)
     manager.machine:exit()
 end
 """.replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}").replace(
-            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}")
+            "{CAT_NAMES}", "{" + ",".join("{" + ",".join(map(str, n)) + "}" for n in names) + "}").replace(
+            "{CAT_EXT_RECS}", "{" + ",".join("{" + ",".join(map(str, r)) + "}" for r in ext_recs) + "}")
     elif scenario == "town_to_dungeon_130xe":
         body = """
 function run()
     local ok = start_new_game("A")
     assert_line("town_130xe_ready", ok)
     assert_line("xe_active", prog:read_u8(XE_PRESENT) == 1)
+    for i = 0, 31 do
+        local base = MONSTER_TABLE_ADDR + i * 12
+        if prog:read_u8(base + 2) ~= 0xFF and prog:read_u8(base + 0) == 51 and prog:read_u8(base + 1) == 16 then
+            prog:write_u8(base + 2, 0xFF)
+            local ma = 0xC100 + 16 * 80 + 51
+            prog:write_u8(ma, prog:read_u8(ma) & 0xFE)
+        end
+    end
+    prog:write_u8(PLAYER_X_ADDR, 51)
+    prog:write_u8(PLAYER_Y_ADDR, 17)
+    prog:write_u8(PLAYER_DATA_ADDR + 49, 51)
+    prog:write_u8(PLAYER_DATA_ADDR + 50, 17)
+    send_key(0x4B) -- 'K' north onto Home door (51, 16)
+    assert_line("home_overlay_130xe_open", wait_screen("Home", 80))
+    send_key(0x51) -- 'Q' exit Home back to Town
+    wait_frames(40)
+    assert_line("home_overlay_130xe_closed", in_town() and not screen_has("Home"))
     local dl1 = descend_to_dl1()
     assert_line("dungeon_130xe_dl1", dl1)
     manager.machine:exit()
@@ -527,16 +596,26 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
-    -- Secondary weapon (slot 32): Dagger (+3,+4) (Defender); slot 31 stays empty.
-    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
-    -- The flavour shuffles and the known bits live in high RAM under the OS
-    -- ROM (config.s): saved and loaded through the low sector buffer. A
-    -- flavoured item made known (the Ring of Lordly Protection (Fire), 146)
-    -- must come back too.
-    prog:write_u8(ID_KNOWN_ADDR + (146 >> 3), prog:read_u8(ID_KNOWN_ADDR + (146 >> 3)) | (1 << (146 & 7)))
-    local saved_state = {}
-    for i = 0, 37 do saved_state[#saved_state + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
-    for i = 0, 19 do saved_state[#saved_state + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
+    -- Cloak (slot 32) and Secondary weapon (slot 33); ring2 slot 31 stays empty.
+    inv_seed(32, {ITEM_SLOT_CLOAK, 1, 0, 0, 0, 1, 0, ITEM_PAGE_CLOAK})
+    inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
+    -- Flavour shuffles (174 B), known bits (47 B), and persistent recall[279]
+    -- (1,116 B) live in Default RAM (< $C100) and serialize in Save V2 ($20).
+    -- Mark both Page 0 and Page 1 known bits, plus recall head/tail.
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_FIRE >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_RING_OF_LORDLY_PROTECTION_FIRE >> 3)) | (1 << (ITEM_RING_OF_LORDLY_PROTECTION_FIRE & 7)))
+    prog:write_u8(ID_KNOWN_ADDR + (ITEM_POTION_OF_RESTORE_STRENGTH >> 3),
+        prog:read_u8(ID_KNOWN_ADDR + (ITEM_POTION_OF_RESTORE_STRENGTH >> 3)) | (1 << (ITEM_POTION_OF_RESTORE_STRENGTH & 7)))
+    if RECALL_ADDR ~= 0 then
+        prog:write_u8(RECALL_ADDR + 0, 0x5A)
+        prog:write_u8(RECALL_ADDR + 1110, 0xA5)
+    end
+    local saved_shuf = {}
+    local saved_known = {}
+    for i = 0, 173 do saved_shuf[#saved_shuf + 1] = prog:read_u8(SHUFFLES_ADDR + i) end
+    for i = 0, 46 do saved_known[#saved_known + 1] = prog:read_u8(ID_KNOWN_ADDR + i) end
+    local saved_rec0 = RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 0) or 0
+    local saved_rec1 = RECALL_ADDR ~= 0 and prog:read_u8(RECALL_ADDR + 1110) or 0
     send_key(0xD3) -- SHIFT+S (save & quit) -> prompts Disk Setup on first save
     assert_line("save_disk_setup_prompt", wait_screen("DISK SETUP", 80))
     send_key(0x33) -- 3) Done (default Save: D2:)
@@ -551,9 +630,14 @@ function run()
         if screen_has("N)ew") and screen_has("L)oad") then break end
     end
     assert_line("title_after_save", screen_has("N)ew") and screen_has("L)oad"))
-    inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring it back
-    for i = 0, 37 do prog:write_u8(SHUFFLES_ADDR + i, saved_state[i + 1] ~ 0x55) end
-    for i = 0, 19 do prog:write_u8(ID_KNOWN_ADDR + i, 0) end
+    inv_seed(32, {0xFF, 0, 0, 0, 0, 0, 0, 0}) -- only the load can bring them back
+    inv_seed(33, {0xFF, 0, 0, 0, 0, 0, 0, 0})
+    for i = 0, 173 do prog:write_u8(SHUFFLES_ADDR + i, saved_shuf[i + 1] ~ 0x55) end
+    for i = 0, 46 do prog:write_u8(ID_KNOWN_ADDR + i, 0) end
+    if RECALL_ADDR ~= 0 then
+        prog:write_u8(RECALL_ADDR + 0, 0)
+        prog:write_u8(RECALL_ADDR + 1110, 0)
+    end
     send_key(0x4C) -- 'L' (load game)
     assert_line("load_slots_shown", wait_screen("Select Slot 1-4", 80))
     send_key(0x31) -- Slot 1
@@ -563,12 +647,20 @@ function run()
     end
     assert_line("save_load_resumed", prog:read_u8(PLAYER_X_ADDR) > 0)
     assert_line("save_load_secondary_restored",
-        inv_field(32, 0) == 2 and inv_field(32, 3) == 3 and inv_field(32, 4) == 4
-        and inv_field(32, 6) == 2 and inv_field(32, 7) == 6 and inv_field(31, 0) == 0xFF)
+        INV_STRIDE == 34
+        and inv_field(33, 0) == ITEM_SLOT_DAGGER and inv_field(33, 3) == 3 and inv_field(33, 4) == 4
+        and inv_field(33, 6) == 2 and inv_field(33, 7) == (ITEM_PAGE_DAGGER | 6)
+        and inv_field(32, 0) == ITEM_SLOT_CLOAK and inv_field(32, 5) == 1
+        and inv_field(32, 7) == ITEM_PAGE_CLOAK
+        and inv_field(31, 0) == 0xFF)
     local same = SHUFFLES_ADDR ~= 0 and ID_KNOWN_ADDR ~= 0
-    for i = 0, 37 do same = same and prog:read_u8(SHUFFLES_ADDR + i) == saved_state[i + 1] end
-    for i = 0, 19 do same = same and prog:read_u8(ID_KNOWN_ADDR + i) == saved_state[39 + i] end
+    for i = 0, 173 do same = same and prog:read_u8(SHUFFLES_ADDR + i) == saved_shuf[i + 1] end
+    for i = 0, 46 do same = same and prog:read_u8(ID_KNOWN_ADDR + i) == saved_known[i + 1] end
     assert_line("save_load_high_ram_restored", same)
+    assert_line("save_load_recall_restored",
+        RECALL_ADDR ~= 0
+        and prog:read_u8(RECALL_ADDR + 0) == saved_rec0
+        and prog:read_u8(RECALL_ADDR + 1110) == saved_rec1)
     manager.machine:exit()
 end
 """
@@ -772,6 +864,23 @@ function run()
     send_key(0x4E) -- 'N'
     wait_frames(40)
     assert_line("shift_declined", in_town() and not screen_has("Do you really want to quit?"))
+    for i = 0, 31 do
+        local base = MONSTER_TABLE_ADDR + i * 12
+        if prog:read_u8(base + 2) ~= 0xFF and prog:read_u8(base + 0) == 51 and prog:read_u8(base + 1) == 16 then
+            prog:write_u8(base + 2, 0xFF)
+            local ma = 0xC100 + 16 * 80 + 51
+            prog:write_u8(ma, prog:read_u8(ma) & 0xFE)
+        end
+    end
+    prog:write_u8(PLAYER_X_ADDR, 51)
+    prog:write_u8(PLAYER_Y_ADDR, 17)
+    prog:write_u8(PLAYER_DATA_ADDR + 49, 51)
+    prog:write_u8(PLAYER_DATA_ADDR + 50, 17)
+    send_key(0x4B) -- 'K' north onto Home door (51, 16)
+    assert_line("home_overlay_open", wait_screen("Home", 80))
+    send_key(0x51) -- 'Q' exit Home back to Town
+    wait_frames(40)
+    assert_line("home_overlay_closed", in_town() and not screen_has("Home"))
     manager.machine:exit()
 end
 """
@@ -780,39 +889,79 @@ end
 function run()
     local ok = start_new_game("A")
     assert_line("chargen_town_ready", ok)
+    prog:write_u8(PLAYER_DATA_ADDR + 24, 14)   -- PL_DEX_BASE
+    prog:write_u8(PLAYER_DATA_ADDR + 30, 14)   -- PL_DEX_CUR
+    prog:write_u8(PLAYER_DATA_ADDR + 26, 13)   -- PL_CHR_BASE
+    prog:write_u8(PLAYER_DATA_ADDR + 32, 13)   -- PL_CHR_CUR
     assert_line("wizard_open", wizard_menu_open())
     press_until("ITEM", 0x47) -- 'G'
-    send_key(0x39) -- '9'
-    send_key(0x37) -- '7' (Potion of Restoration)
-    send_key(0x0D)
+    send_int(ITEM_POTION_OF_GAIN_DEXTERITY)
     assert_line("wizard_gain_ok", wait_screen("OK", 60))
     send_key(0x51) -- 'Q' (quaff)
     assert_line("quaff_prompt", wait_screen("Quaff which potion", 80))
     send_key(0x41) -- 'A'
-    assert_line("quaff_effect", wait_screen("strength return", 80))
+    assert_line("quaff_gain_dex", wait_screen("more limber!", 80) and prog:read_u8(PLAYER_DATA_ADDR + 30) == 15)
+    drain_more(4)
+    wait_frames(30)
+
+    inv_seed(0, {ITEM_SLOT_POTION_OF_CHARISMA, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CHARISMA})
+    send_key(0x51) -- 'Q'
+    assert_line("quaff_chr_prompt", wait_screen("Quaff which potion", 80))
+    send_key(0x41) -- 'A'
+    assert_line("quaff_gain_chr", wait_screen("ain't you cute!", 80) and prog:read_u8(PLAYER_DATA_ADDR + 32) == 14)
+    drain_more(4)
+    wait_frames(30)
+
+    prog:write_u8(PLAYER_HP_ADDR, 1)
+    prog:write_u8(PLAYER_DATA_ADDR + 33, 1)
+    prog:write_u8(POISON_ADDR, 5)
+    inv_seed(0, {ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_CRITICAL_WOUNDS})
+    send_key(0x51) -- 'Q'
+    assert_line("quaff_ccw_prompt", wait_screen("Quaff which potion", 80))
+    send_key(0x41) -- 'A'
+    wait_frames(40)
+    drain_more(4)
+    assert_line("quaff_ccw", prog:read_u8(PLAYER_HP_ADDR) > 1 and prog:read_u8(POISON_ADDR) == 0)
+
+    prog:write_u8(POISON_ADDR, 5)
+    inv_seed(0, {ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_NEUTRALIZE_POISON})
+    send_key(0x51) -- 'Q' (OVL_HELP) -> '?' (OVL_UI) -> 'A' (restores OVL_HELP)
+    assert_line("quaff_neut_prompt", wait_screen("Quaff which potion", 80))
+    send_key(0x3F) -- '?'
+    assert_line("quaff_neut_inv_list", wait_screen("Inventory", 150) or wait_screen("Potion", 150))
+    send_key(0x41) -- 'A'
+    assert_line("quaff_neutralize", wait_screen("You feel better.", 80) and prog:read_u8(POISON_ADDR) == 0)
     -- SHIFT+X (KBCODE Shift+X normalizes to $D8): a cursed primary is
     -- refused with no turn; uncursed, the swap takes one turn and reports
     -- both slots (VMS moria.inc switch_weapon).
     assert_line("kbcode_shift_x_is_d8", prog:read_u8(KBCODE_TABLE + 0x56) == 0xD8)
     drain_more(4)
     wait_frames(60)                          -- the quaff's own turn ends first
-    inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
-    inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+    inv_seed(22, {ITEM_SLOT_MACE, 1, 0, 1, 0, 0, 3, ITEM_PAGE_MACE})
+    inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
     local turn0 = prog:read_u8(TURN_LO_ADDR)
     send_key(0xD8)
     assert_line("exchange_cursed_refused",
         wait_screen("You cannot remove it, it is cursed!", 60)
-        and inv_field(22, 0) == 5 and inv_field(32, 0) == 2
+        and inv_field(22, 0) == ITEM_SLOT_MACE and (inv_field(22, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_MACE
+        and inv_field(33, 0) == ITEM_SLOT_DAGGER and (inv_field(33, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_DAGGER
         and prog:read_u8(TURN_LO_ADDR) == turn0)
     prog:write_u8(INV_ITEM_ID_ADDR + 6 * INV_STRIDE + 22, 2) -- lift the curse
     send_key(0xD8)
+    -- Each report line decodes its item name from ITEM.CAT on the 800XL's disk
+    -- (~0.1 s per sector), so the second line and the turn's end come later.
     assert_line("exchange_report",
         wait_screen("Primary: Dagger (Defender) (+3,+4)", 60)
-        and screen_has("Secondary: Mace (+1,+0)"))
+        and wait_screen("Secondary: Mace (+1,+0)", 60))
     assert_line("exchange_swapped",
-        inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
-        and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
-        and inv_field(31, 0) == 0xFF)
+        inv_field(22, 0) == ITEM_SLOT_DAGGER and inv_field(22, 3) == 3 and inv_field(22, 7) == (ITEM_PAGE_DAGGER | 6)
+        and inv_field(33, 0) == ITEM_SLOT_MACE and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+        and inv_field(33, 7) == ITEM_PAGE_MACE
+        and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF)
+    for _ = 1, 60 do
+        if prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256 then break end
+        emu.wait(0.1)
+    end
     assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256)
     manager.machine:exit()
 end
@@ -829,6 +978,49 @@ function run()
     send_key(0x3F) -- '?'
     assert_line("mage_book_title", wait_screen("Mage Book", 80))
     assert_line("mage_spell_mm", wait_screen("Magic Missile", 20))
+    -- The book prompt's '?' list from a second book: the cast runs in
+    -- OVL_SPELL and the list in OVL_HELP, and pm_select_book declared only
+    -- OVL_UI (a spell gained) to restore. With 708f3df's stack probe gone
+    -- the cast came back into OVL_HELP's bytes and hung (build queue,
+    -- 2026-11-15). A level 1 Mage knows no Magick I spell: VMS's refusal.
+    send_key(0x1B)
+    wait_frames(60)
+    drain_more(4)
+    local free = nil
+    for i = 0, 21 do if prog:read_u8(INV_ITEM_ID_ADDR + i) == 0xFF then free = i break end end
+    inv_seed(free, {ITEM_SLOT_SPELLBOOK_MAGICK_I, 1, 0, 0, 0, 0, 2, ITEM_PAGE_SPELLBOOK_MAGICK_I})
+    send_key(0x4D) -- 'M' (cast)
+    assert_line("cast_book2_prompt", wait_screen("Spell book (a-b)?", 80))
+    send_key(0x3F) -- '?': the book list
+    assert_line("cast_book_list", wait_screen("Magick I", 200))
+    assert_line("cast_book_list_ovl_ui", prog:read_u8(CURRENT_OVL) == 6)
+    send_key(0x42) -- 'B'
+    assert_line("cast_book2_refused", wait_screen("You don't know that spell.", 200))
+    drain_more(4)
+    -- OVL.UI (6) is still cached from Book-'?': another M -> '?' -> A -> '?'
+    -- must execute both Book-'?' and Spell-'?' with 0 overlay_load_disk calls!
+    local cpu = manager.machine.devices[":maincpu"]
+    local ovl_hits = 0
+    local ovl_tap = prog:install_read_tap(OVL_LOAD_DISK_ADDR, OVL_LOAD_DISK_ADDR, "ovl_ui_cache",
+        function(offset, data, mask)
+            if cpu.state["PC"].value == OVL_LOAD_DISK_ADDR then ovl_hits = ovl_hits + 1 end
+        end)
+    send_key(0x4D) -- 'M'
+    assert_line("cast_cached_book_prompt", wait_screen("Spell book (a-b)?", 80))
+    send_key(0x3F) -- Book-'?'
+    assert_line("cast_cached_book_list", wait_screen("Magick I", 80))
+    send_key(0x41) -- 'A' ([Beginners-Magick])
+    assert_line("cast_cached_which", wait_screen("Cast which?", 80))
+    send_key(0x3F) -- Spell-'?'
+    assert_line("cast_cached_spell_list", wait_screen("Magic Missile", 80))
+    send_key(0x1B) -- ESC
+    wait_frames(30)
+    ovl_tap:remove()
+    assert_line("cast_book_and_spell_q_zero_reload", ovl_hits == 0 and prog:read_u8(CURRENT_OVL) == 6)
+    local turn_c = prog:read_u8(TURN_LO_ADDR)
+    send_key(0x53) -- 'S' (search)
+    wait_frames(60)
+    assert_line("cast_book2_play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn_c)
     manager.machine:exit()
 end
 """
@@ -844,10 +1036,43 @@ function run()
     send_key(0x3F) -- '?'
     assert_line("priest_book_title", wait_screen("Prayer Book", 80))
     assert_line("priest_names", wait_screen("Bless", 20) and screen_has("Detect Evil"))
+    local turn0 = prog:read_u8(TURN_LO_ADDR)
     send_key(0x41) -- 'A'
-    wait_frames(80)
-    drain_more(4)
-    assert_line("pray_executed", not screen_has("Pray which?"))
+    for _ = 1, 200 do
+        wait_frames(10)
+        if screen_has("-more-") then send_key(0x20) end
+        if prog:read_u8(TURN_LO_ADDR) ~= turn0 and prog:read_u8(CURRENT_OVL) == 8 then break end
+    end
+    assert_line("pray_executed", not screen_has("Pray which?") and prog:read_u8(CURRENT_OVL) == 8)
+    -- Repeat prayer & cancel while OVL.SPL (8) is warm: 0 overlay_load_disk hits.
+    prog:write_u8(PLAYER_DATA_ADDR + 37, 50)
+    prog:write_u8(PLAYER_DATA_ADDR + 38, 40)
+    prog:write_u8(PLAYER_MP_ADDR, 50)
+    prog:write_u8(PLAYER_MP_ADDR + 1, 40)
+    local cpu = manager.machine.devices[":maincpu"]
+    local ovl_hits = 0
+    local ovl_tap = prog:install_read_tap(OVL_LOAD_DISK_ADDR, OVL_LOAD_DISK_ADDR, "ovl_spl_cache",
+        function(offset, data, mask)
+            if cpu.state["PC"].value == OVL_LOAD_DISK_ADDR then ovl_hits = ovl_hits + 1 end
+        end)
+    send_key(0x50) -- 'P'
+    assert_line("pray_cancel_prompt", wait_screen("Prayer book", 80))
+    send_key(0x1B) -- ESC cancel
+    wait_frames(30)
+    local turn1 = prog:read_u8(TURN_LO_ADDR)
+    send_key(0x50) -- 'P'
+    assert_line("pray_repeat_book", wait_screen("Prayer book", 80))
+    send_key(0x41) -- 'A'
+    assert_line("pray_repeat_which", wait_screen("Pray which?", 80))
+    send_key(0x41) -- 'A'
+    for _ = 1, 80 do
+        wait_frames(5)
+        if screen_has("-more-") then send_key(0x20) end
+        if prog:read_u8(TURN_LO_ADDR) ~= turn1 then break end
+    end
+    ovl_tap:remove()
+    assert_line("pray_repeat_zero_disk",
+        ovl_hits == 0 and prog:read_u8(PLAYER_MP_ADDR) == 49 and prog:read_u8(CURRENT_OVL) == 8)
     manager.machine:exit()
 end
 """
@@ -863,8 +1088,9 @@ function run()
     prog:write_u8(PLAYER_DATA_ADDR + 63, prog:read_u8(PLAYER_DATA_ADDR + 63) | 0x40)
     for i = 0, 30 do
         if prog:read_u8(INV_ITEM_ID_ADDR + i) == 0xFF then
-            prog:write_u8(INV_ITEM_ID_ADDR + i, 59)
+            prog:write_u8(INV_ITEM_ID_ADDR + i, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
             prog:write_u8(INV_QTY_ADDR + i, 1)
+            prog:write_u8(INV_ITEM_ID_ADDR + 7 * INV_STRIDE + i, ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
             break
         end
     end
@@ -892,10 +1118,7 @@ function run()
     assert_line("chargen_town_ready", ok)
     assert_line("wizard_open", wizard_menu_open())
     press_until("ITEM", 0x47) -- 'G'
-    send_key(0x31) -- '1'
-    send_key(0x30) -- '0'
-    send_key(0x32) -- '2' (Scroll of Magic Mapping)
-    send_key(0x0D)
+    send_int(ITEM_SCROLL_OF_MAGIC_MAPPING)
     assert_line("wizard_gain_ok", wait_screen("OK", 80))
     send_key(0x52) -- 'R' (read scroll)
     assert_line("read_prompt", wait_screen("Read which scroll", 80))
@@ -1002,7 +1225,7 @@ function run()
     send_key(0x31)
     send_key(0x30)
     send_key(0x0D)
-    for _ = 1, 150 do
+    for _ = 1, 400 do   -- DL10 loads OVL.GEN, OVL.CHS (floor items) and more at ~3 s each
         emu.wait(0.1)
         if prog:read_u8(DLVL_ADDR) == 10 and prog:read_u8(BUSY_ADDR) == 0 and not screen_has("GENERATING") then break end
     end
@@ -1014,6 +1237,11 @@ function run()
         if screen_has("OK") or screen_has("FAIL") then break end
     end
     drain_more(4)
+    -- 1 HP + poison guarantees death on the next turn regardless of which
+    -- monster DL10's RNG stream summoned (matching apple2/bbcmaster death_flow).
+    prog:write_u8(PLAYER_HP_ADDR, 1)
+    prog:write_u8(PLAYER_HP_ADDR + 1, 0)
+    prog:write_u8(POISON_ADDR, 100)
     local slain = false
     for _ = 1, 200 do
         if screen_has("You have been slain") or screen_has("DISK SETUP") then slain = true break end

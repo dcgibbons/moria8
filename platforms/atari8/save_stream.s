@@ -44,7 +44,11 @@
 .const STREAM_DIR_WRITE = 2
 
 program_device:      .byte 8
+#if ATARI8_CARTRIDGE
+save_device:         .byte 8
+#else
 save_device:         .byte 9
+#endif
 disk_prompt_device:  .byte 8
 disk_mode:           .byte 2
 disk_setup_done:     .byte 0
@@ -108,22 +112,25 @@ disk_program_media_present_on_device:
     tax
     jsr hal_storage_probe_media
     bcs !not_prog+
-    ldx #10
-!cp_t:
-    lda fn_83_title,x
-    sta atari_fn_83,x
-    dex
-    bpl !cp_t-
-    jmp atari_find_dir_entry
+    ldy #(fn_83_title - fn_83_title)
+    jmp !cp_and_find+
 !not_prog:
     sec
     rts
+!cp_and_find:
+    jsr copy_fn83_idx
+    jmp atari_find_dir_entry
 
 // disk_require_program_media — Verify Program Disk (TITLE.DAT) is in program_device
 // Output: Carry clear = program media present, Carry set = absent/wrong media
 disk_require_program_media:
+#if ATARI8_CARTRIDGE
+    clc
+    rts
+#else
     lda program_device
     jmp disk_program_media_present_on_device
+#endif
 
 disk_require_save_media:
     lda disk_setup_done
@@ -257,6 +264,18 @@ fn_83_hiscore:
 fn_83_save:
     .byte 'S','A','V','E','0',' ',' ',' ','S','A','V'
 
+// copy_fn83_idx — Copy 11-byte canonical 8.3 name at fn_83_title + Y into atari_fn_83.
+copy_fn83_idx:
+    ldx #0
+!cfi_loop:
+    lda fn_83_title,y
+    sta atari_fn_83,x
+    iny
+    inx
+    cpx #11
+    bcc !cfi_loop-
+    rts
+
 // ============================================================
 // KERNAL-Shaped Stream API (SETNAM, SETLFS, OPEN, CLOSE, CHRIN, CHROUT, READST)
 // ============================================================
@@ -365,38 +384,29 @@ hal_storage_open:
     lda (atari_io_src),y
     cmp #'M'
     bne !chk_hall+
-    ldx #10
-!cp_m:
-    lda fn_83_marker,x
-    sta atari_fn_83,x
-    dex
-    bpl !cp_m-
+    ldy #(fn_83_marker - fn_83_title)
+    jsr copy_fn83_idx
     jmp !lookup_dir+
 
 !chk_hall:
+#if !ATARI8_CARTRIDGE
     jsr atari_legal_filename
     bcc !not_offer+
     jmp !lookup_dir+
 !not_offer:
+#endif
     ldy atari_io_cnt
     lda (atari_io_src),y
     cmp #'H'
     bne !chk_save+
-    ldx #10
-!cp_h:
-    lda fn_83_hiscore,x
-    sta atari_fn_83,x
-    dex
-    bpl !cp_h-
+    ldy #(fn_83_hiscore - fn_83_title)
+    jsr copy_fn83_idx
     jmp !lookup_dir+
 
 !chk_save:
-    ldx #10
-!cp_s:
-    lda fn_83_save,x
-    sta atari_fn_83,x
-    dex
-    bpl !cp_s-
+    ldy #(fn_83_save - fn_83_title)
+    jsr copy_fn83_idx
+    ldy atari_io_cnt
     // Check character immediately after "THE.GAME" (offset + 8) for '2'..'4'
     tya
     clc
@@ -421,17 +431,7 @@ hal_storage_open:
 !dev_ok:
     sta atari_io_device
     jsr atari_find_dir_entry
-    bcc !dir_found+
-    lda #HAL_STORAGE_STATUS_NOT_FOUND
-    sta stream_last_status
-    lda #$02
-    sta stream_err
-    lda #1
-    sta stream_eof
-    sec
-    jmp !open_ret+
-
-!dir_found:
+    bcs !open_not_found+
     lda atari_io_sec_lo
     sta stream_cur_sec_lo
     lda atari_io_sec_hi
@@ -453,7 +453,12 @@ hal_storage_open:
     lda sio_sector_buf + DOS25_LINK_BYTES
     bne !read_non_empty+
     // Pre-allocated slot has 0 bytes -> report NOT_FOUND
+!open_not_found:
     lda #HAL_STORAGE_STATUS_NOT_FOUND
+    .byte $2c                   // BIT abs skips next 2-byte lda #imm
+!open_io_err:
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+!open_fail_status:
     sta stream_last_status
     lda #$02
     sta stream_err
@@ -469,16 +474,6 @@ hal_storage_open:
     lda #1
     sta stream_open
     clc
-    jmp !open_ret+
-
-!open_io_err:
-    lda #HAL_STORAGE_STATUS_UNKNOWN
-    sta stream_last_status
-    lda #$02
-    sta stream_err
-    lda #1
-    sta stream_eof
-    sec
     jmp !open_ret+
 
 !open_write:
@@ -594,24 +589,9 @@ hal_storage_chrin:
 // stream_read_cur_sector — Read stream_cur_sec_lo/hi into sio_sector_buf
 // and unpack 10-bit next link into stream_next_sec_lo/hi.
 stream_read_cur_sector:
-    lda #'R'
-    sta DCB_DCOMND
-    lda #$40
-    sta DCB_DSTATS
-    lda #<sio_sector_buf
-    sta DCB_DBUFLO
-    lda #>sio_sector_buf
-    sta DCB_DBUFHI
-    lda #128
-    sta DCB_DBYTLO
-    lda #0
-    sta DCB_DBYTHI
     lda stream_cur_sec_lo
-    sta DCB_DAUX1
-    lda stream_cur_sec_hi
-    sta DCB_DAUX2
-    jsr EnterSio
-    jsr ExitSio
+    ldx stream_cur_sec_hi
+    jsr atari_sio_read_sec_buf
     bcs !fail+
     lda sio_sector_buf + DOS25_LINK_HI
     and #$03
@@ -783,6 +763,7 @@ stream_write_cur_sector:
     clc
     rts
 
+#if !ATARI8_CARTRIDGE
 // Canonical read-only legal files already carried by the release disk.
 // Kept in low resident RAM (< $4000) beside hal_storage_open, which calls
 // atari_legal_filename before EnterSio.
@@ -827,3 +808,4 @@ atari_legal_filename:
 !no:
     clc
     rts
+#endif

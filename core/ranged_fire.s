@@ -24,13 +24,13 @@ rf_ammo_id:    .byte 0     // Item type ID of ammo
 rf_launcher:   .byte 0     // Launcher index into rf_range_tbl/rf_mult_tbl
 rf_dist:       .byte 0     // Squares flown
 
-// Per launcher, Short Bow, Light Crossbow, Sling (IT_MISSILE_BASE + 0..2),
-// then Long Bow, Composite Bow, Heavy Crossbow (IT_MISSILE2_BASE + 0..2):
-// range (VMS facts: 25, 25, 20, 30, 35, 35) and damage multiplier (Umoria:
-// x2, x3, x2, x3, x4, x4).
-rf_range_tbl:  .byte 25, 25, 20, 30, 35, 35
-rf_mult_tbl:   .byte 2, 3, 2, 3, 4, 4
-.assert "Launcher tables cover the six launchers", rf_mult_tbl - rf_range_tbl, 3 + IT_MISSILE2_END - IT_MISSILE2_BASE
+// Per launcher, Short Bow, Long Bow, Composite Bow, Light Crossbow,
+// Heavy Crossbow, Sling (IT_MISSILE_BASE + 0..5):
+// range (VMS facts: 25, 30, 35, 25, 35, 20) and damage multiplier (Umoria:
+// x2, x3, x4, x3, x4, x2).
+rf_range_tbl:  .byte 25, 30, 35, 25, 35, 20
+rf_mult_tbl:   .byte 2, 3, 4, 3, 4, 2
+.assert "Launcher tables cover the six contiguous launchers on Page 0", (rf_mult_tbl - rf_range_tbl == IT_LAUNCHER_END - IT_MISSILE_BASE) && ITEM_LONG_BOW == ITEM_SHORT_BOW + 1 && ITEM_COMPOSITE_BOW == ITEM_SHORT_BOW + 2 && ITEM_LIGHT_CROSSBOW == ITEM_SHORT_BOW + 3 && ITEM_HEAVY_CROSSBOW == ITEM_SHORT_BOW + 4 && ITEM_SLING == ITEM_SHORT_BOW + 5 && ITEM_PAGE_SLING == 0, true
 // Strings migrated to Huffman compression (HSTR_RF_* in huffman_data.s)
 
 // ============================================================
@@ -46,7 +46,11 @@ ranged_fire:
     bne !rf_have_weapon+
     jmp rf_msg_no_weapon
 !rf_have_weapon:
-    tax                         // X = weapon type
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    lda inv_item_id,x
+    tax                         // X = weapon slot_lo
     jsr item_get_missile
     bne !rf_is_ranged+
     jmp rf_msg_no_weapon
@@ -56,15 +60,11 @@ ranged_fire:
     jmp rf_msg_no_weapon        // $80+ = ammo, not a launcher
 !rf_is_launcher:
 
-    // Valid launcher — save ammo type (1/2/3) and the launcher index
+    // Valid launcher — save ammo type (1/2/3) and the launcher index (0..5)
     sta rf_ammo_type
     lda inv_item_id + EQUIP_WEAPON
     sec
     sbc #IT_MISSILE_BASE
-    cmp #IT_MISSILE2_BASE - IT_MISSILE_BASE
-    bcc !rf_index+
-    sbc #IT_MISSILE2_BASE - IT_MISSILE_BASE - 3   // carry set: index 3-5
-!rf_index:
     sta rf_launcher
 
     // 2. Scan inventory (slots 0-21) for matching ammo
@@ -77,9 +77,12 @@ ranged_fire:
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !rf_ammo_next+
-    sta rf_ammo_id              // Save item type temporarily
+    sta rf_ammo_id              // Save item slot_lo temporarily
     stx rf_ammo_slot            // Save loop counter
-    tax                         // X = item type
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
+    ldx rf_ammo_id              // X = item slot_lo
     jsr item_get_missile        // A = missile value
     and #$7f                    // Strip high bit
     cmp rf_ammo_type
@@ -239,8 +242,15 @@ proj_hit_setup:
 // proj_crit_and_damage — The critical blow by tw_item_id's weight (VMS
 // critical_blow), then cmb_damage to cmb_slot: carry set when it dies.
 proj_crit_and_damage:
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx tw_item_id
-    lda it_weight,x
+    jsr item_get_weight_x
+    ldy icat_weight_hi
+    beq !pcd_wt_ok+
+    lda #255
+!pcd_wt_ok:
     jsr combat_critical_blow_weight
     ldx cmb_slot
     lda cmb_damage
@@ -275,8 +285,11 @@ rf_calc_tohit:
 // Output: cmb_damage
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0
 rf_roll_damage:
+    lda tw_save_ego
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx tw_item_id
-    lda it_dmg_packed,x
+    jsr item_get_dmg_packed_x
     pha
     and #$0f
     tax                         // X = sides
@@ -312,6 +325,11 @@ rf_roll_damage:
     lda zp_math_a
 !rf_dmg_ok:
     sta cmb_damage
+    lda tw_save_ego
+    and #EGO_ID_MASK
+    beq !rf_ego_done+
+    jsr tramp_ego_apply_damage
+!rf_ego_done:
     rts
 
 rf_msg_no_weapon:
@@ -334,8 +352,8 @@ rf_msg_ammo_prefix:
     lda #<(cmb_the_str + 1)         // Skip leading space: "THE " not " THE "
     ldy #>(cmb_the_str + 1)
     jsr combat_append_str
-    lda #0
-    sta fi_add_ego              // Ammo has no ego
+    lda tw_save_ego
+    sta fi_add_ego
     lda rf_ammo_id
     jmp item_append_name              // tail call
 

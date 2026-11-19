@@ -23,7 +23,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #54
+    ldx #55
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -91,6 +91,9 @@ wizard_reset_session_state:
 
 wizard_level_jump_active:
     .byte 0
+
+scroll_teleport_level_exec:
+    rts
 
 wizard_wall_walk_active:
     lda #0
@@ -249,8 +252,11 @@ tramp_dig_ability:
 
 tun_dig_ability: .byte 0
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+#define PLAYER_CHARGEN_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
+#define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
 #import "../../common/reu.s"
 #import "../screen.s"
 #import "../../../../core/color.s"
@@ -262,16 +268,21 @@ tun_dig_ability: .byte 0
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
+// ui_status.s and stat_display.s never run here; status_draw is patched by
+// install_jump_patch (3-byte JMP slot) and status_mark_dirty is a no-op.
+status_draw:
+    nop
+    nop
+    rts
+status_mark_dirty:
+    rts
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-// Modules this test never executes load above the overlay, so the test
-// body stays below TestCreateOverlay ($D000).
-.segmentdef TestUnusedOverlay [start=$E100, max=$FFF9]
+// Modules this test never executes sit in the $D000 I/O hole so they neither
+// push Default past MAP_BASE ($C000) nor overlap Test Bodies ($E700+).
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
+#import "../../../../core/player_chargen_cold.s"
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -282,10 +293,19 @@ dg_idx: .byte 0
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
+// monster_ai.s never runs here (turn_post_action is patched to
+// test_turn_post_action); game_loop.s reads mat_scene_dirty and turn.s
+// references monster_ai_tick.
+mat_scene_dirty: .byte 0
+monster_ai_tick:
+    jmp test_finish
 #import "../../../../core/recall.s"
-.segment TestUnusedOverlay
-#import "../../../../core/monster_magic.s"
+.segment TestCreateOverlay
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
 .segment Default
 .macro ChestSummonsSegment() {
     .segment Default
@@ -293,7 +313,13 @@ dg_idx: .byte 0
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+// Test 56 calls load_resume_game -> player_recalc_pflags_equipment on a
+// Long sword and Plate Mail at STR 10 (no heavy-weapon penalty, no flags).
+hal_item_cat_read_byte:
+    lda #0
+    rts
 #import "../../../../core/chest_summons.s"
 .macro ChestLootSegment() {
 }
@@ -304,14 +330,30 @@ random_floor_in_room:
     lda #0
     tay
     rts
-.segment TestUnusedOverlay
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
 .segment Default
+#define EGO_ARMOUR_SEGMENT_CUSTOM
+.macro EgoArmourSegment() {
+    .segment TestCreateOverlay
+}
+.macro EgoArmourRestoreSegment() {
+    .segment Default
+}
+#define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
+.macro EgoArmourDataSegment() {
+    .segment TestCreateOverlay
+}
+.macro EgoArmourDataRestoreSegment() {
+    .segment Default
+}
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../dungeon_render.s"
 #import "../../../../core/dungeon_los.s"
@@ -321,7 +363,15 @@ random_floor_in_room:
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/scene_force.s"
 #import "../../../../core/scene_dirty.s"
-#import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
+monster_attack_player:
+mon_atk_acid_armour:
+mon_atk_apply_damage:
+mon_atk_apply_damage_16:
+player_death_check:
+    brk
+mad_dmg_hi: .byte 0
+.segment Default
 #import "../../../../core/turn.s"
 #import "../../../../core/generation_busy.s"
 .macro ChestRouteSegment() {
@@ -333,7 +383,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 55, $ff
+tc_results: .fill 56, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -2565,7 +2615,7 @@ test_start:
     lda #1
     sta test_dir_ok
     jsr item_init_floor
-    lda #ITEM_TYPE_CHEST_SMALL_WOOD
+    lda #ITEM_SLOT_SMALL_WOODEN_CHEST
     sta fi_item_id
     lda #10
     sta fi_x
@@ -3064,10 +3114,63 @@ test_start:
     beq !t55_fail+
     lda #$01
     sta tc_results + 54
-    jmp test_finish
+    jmp !t56+
 !t55_fail:
     lda #0
     sta tc_results + 54
+
+    // Test 56: a loaded game gets its weapon's to-hit back and the AC the
+    // monsters and status line read (zp_player_ac) from the worn armour:
+    // neither is saved, and the load rebuilt to-hit from stats alone and
+    // left zp_player_ac at the saved value. All stats 10 (no stat bonus),
+    // a Long sword (+5,+0) and Plate Mail [25,+0] (VMS): to-hit 5, AC 25.
+!t56:
+    jsr reset_state
+    lda #55
+    sta test_case_idx
+    ldx #STAT_COUNT - 1
+    lda #10
+!t56_stats:
+    sta player_data + PL_STR_BASE,x
+    dex
+    bpl !t56_stats-
+    jsr item_init_inventory
+    lda #ITEM_SLOT_LONG_SWORD                          // Long sword (+5,+0)
+    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #5
+    sta inv_to_hit + EQUIP_WEAPON
+    lda #ITEM_SLOT_PLATE_MAIL
+    sta inv_item_id + EQUIP_BODY
+    lda #$77                        // stale, as saved
+    sta player_data + PL_TOHIT
+    sta zp_player_ac
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
+    lda #1
+    sta test_key_len
+    lda #$20
+    sta test_key_script
+    jsr load_resume_game
+    lda player_data + PL_TOHIT
+    cmp #5
+    bne !t56_fail+
+    lda zp_player_ac
+    cmp #25
+    bne !t56_fail+
+    lda #$01
+    sta tc_results + 55
+    jmp test_finish
+!t56_fail:
+    lda #0
+    sta tc_results + 55
     jmp test_finish
 
 t55_probe_ok:

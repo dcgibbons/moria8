@@ -24,8 +24,8 @@ item_wear:
     jsr inv_slot_to_fi_add
 
     // The filtered picker already excludes non-equippable categories and oil.
-    ldx piw_item_id
-    lda it_category,x
+    ldx piw_slot
+    jsr item_get_category_inv_x
     tax
     lda equip_slot_for_cat,x
     cmp #EQUIP_RING             // VMS moria.inc:528: the right hand when free,
@@ -58,9 +58,12 @@ item_wear:
     ldx piw_equip
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !iw_no_swap+
+    bne !+
+    jmp !iw_no_swap+
+!:
 
     // Remove the old item's direct current-stat adjustment before the swap.
+    clc
     jsr player_adjust_equipment_stat
 
     // Swap: copy old equipped item to the source carried slot
@@ -100,8 +103,11 @@ item_wear:
     bcs !iw_stack_off+
     jmp piw_pack_full           // no room on the floor either: nothing changes
 !iw_stack_off:
+    ldx piw_equip
     clc
     jsr player_adjust_equipment_stat
+    ldx piw_equip
+    jsr inv_remove_item         // Drop old worn item from equip & weight
 !iw_stack_one:
     ldx piw_slot
     dec inv_qty,x
@@ -111,9 +117,10 @@ item_wear:
     bne !iw_write_equip+        // always
 
 !iw_no_swap:
-    // Clear the source carried slot
+    // Clear the source carried slot; restore the single worn item's weight.
     ldx piw_slot
     jsr inv_remove_item
+    jsr inven_add_fi_add_weight
 
 !iw_write_equip:
     // Write saved carried item data to equipment slot
@@ -247,12 +254,14 @@ piw_msg_no_turn:
     lda piw_flags
     sta inv_flags,x
 
-    // Remove the equipped item's direct current-stat adjustment.
-#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+    // Remove the equipped item's direct current-stat adjustment (EQUIP_SECONDARY
+    // over the shoulder grants no active stat bonus).
     ldx piw_equip
-#endif
+    cpx #EQUIP_SECONDARY
+    beq !ito_skip_stat+
     clc
     jsr player_adjust_equipment_stat
+!ito_skip_stat:
 
     // Clear equipment slot
     ldx piw_equip
@@ -303,10 +312,9 @@ item_eat:
     cmp #FI_EMPTY
     beq !ie_next+
 
-    // Check category: look up it_category[item_type]
-    sta piw_item_id             // Save item type
-    tax
-    lda it_category,x
+    // Check category via page-aware inventory helper (preserves X)
+    sta piw_item_id             // Save slot_lo
+    jsr item_get_category_inv_x
     cmp #ICAT_FOOD
     beq !ie_found+
 
@@ -319,15 +327,29 @@ item_eat:
     jmp piw_msg_no_turn
 
 !ie_found:
-    // piw_slot = inventory slot, piw_item_id = item type
-    // Determine food value
+    // piw_slot = inventory slot, piw_item_id = slot_lo, item_cur_page = $00
+    .assert "All food items occupy Page 0 20..49 with mushrooms 20..40 and Waybreads 43..44", ITEM_MUSHROOM_OF_POISON == 20 && ITEM_HAIRY_MOLD_OF_CURE_SERIOUS_WOUNDS == 40 && ITEM_RATION_OF_FOOD == 41 && ITEM_FOOD_SLIME_MOLD == 42 && ITEM_PIECE_OF_ELVISH_WAYBREAD_L6 == 43 && ITEM_PIECE_OF_ELVISH_WAYBREAD_L20 == 44 && ITEM_PINT_OF_FINE_WINE == 49 && ITEM_PAGE_PINT_OF_FINE_WINE == 0, true
+    lda item_cur_page
+    sta piw_ego                 // Save page bit across inv_consume_one
+    bne !ie_slime+
     lda piw_item_id
     cmp #ITEM_RATION
     beq !ie_ration+
-    // Default to slime mold value
+    sec
+    sbc #ITEM_SLOT_PIECE_OF_ELVISH_WAYBREAD_L6
+    cmp #2
+    bcc !ie_waybread+
+!ie_slime:
+    // Default to slime mold food value
     lda #FOOD_SLIME_VALUE_LO
     sta zp_temp0
     lda #FOOD_SLIME_VALUE_HI
+    sta zp_temp1
+    jmp !ie_add_food+
+!ie_waybread:
+    lda #FOOD_MAX_LO
+    sta zp_temp0
+    lda #FOOD_MAX_HI
     sta zp_temp1
     jmp !ie_add_food+
 !ie_ration:
@@ -381,16 +403,19 @@ item_eat:
     ldx #HSTR_PIW_EAT
     jsr huff_append_combat
 
-    lda #0
-    sta fi_add_ego              // Food has no ego
+    lda piw_ego
+    sta fi_add_ego              // Preserve page bit (food has ego 0)
     lda piw_item_id
     jsr item_append_name
 
-    // Check if slime mold for different flavor text
+    // Check if slime mold for different flavor text (Page 0 only)
+    lda piw_ego
+    bne !ie_delicious+
     lda piw_item_id
     cmp #ITEM_SLIME_MOLD
     beq !ie_yuck+
 
+!ie_delicious:
     ldx #HSTR_PIW_DELICIOUS
     jmp !ie_end_msg+
 !ie_yuck:
@@ -400,6 +425,25 @@ item_eat:
 
     jsr cmb_term_and_print
 
+    // Extended mushroom (20..40) / Elvish Waybread (43..44) effects; skip Ration, Slime Mold, and plain foods
+    lda piw_ego
+    bne !ie_done+
+    lda piw_item_id
+    cmp #ITEM_SLOT_MUSHROOM_OF_POISON
+    bcc !ie_done+
+    cmp #ITEM_SLOT_HAIRY_MOLD_OF_CURE_SERIOUS_WOUNDS + 1
+    bcc !ie_ext_effect+
+    sec
+    sbc #ITEM_SLOT_PIECE_OF_ELVISH_WAYBREAD_L6
+    cmp #2
+    bcs !ie_done+
+!ie_ext_effect:
+#if HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+    jsr tramp_eff_ext_eat
+#else
+    jsr eff_ext_eat_piw
+#endif
+!ie_done:
     sec                         // Turn consumed
     rts
 
@@ -421,14 +465,16 @@ item_eat:
 // Input: X = item type ID. Clobbers: A, Y (X preserved via id_known_set).
 // ============================================================
 piq_quaff_identify:
+    bit item_cur_page
+    bvs !pqi_ident+             // All Page 1 potions identify unconditionally on quaff
     txa
-    cmp #17                 // Cure Light Wounds
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     beq !pqi_heal+
-    cmp #25                 // Cure Serious Wounds
+    cmp #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     beq !pqi_heal+
-    cmp #ITEM_TYPE_POT_HEALING
+    cmp #ITEM_SLOT_POTION_OF_HEALING
     beq !pqi_heal+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    cmp #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     beq !pqi_heal+
 !pqi_ident:
     jmp id_known_set        // X = item type ID
@@ -457,6 +503,10 @@ item_quaff:
 !iq_in_range:
     stx piw_slot
     sta piw_item_id
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta piw_ego
+    sta item_cur_page
     // The prompt has been answered; clear it so an effect that prints nothing
     // (e.g. a heal at full HP) doesn't leave it lingering like a -more- prompt.
     jsr msg_clear
@@ -473,81 +523,85 @@ item_quaff:
     jsr id_known_set
 #endif
 
-    // Use one potion from the stack
+    // Use one potion from the stack (clobbers item_cur_page via weight helper)
     ldx piw_slot
     jsr inv_consume_one
 
-    // Apply effect based on item type.
+    // All 45 VMS potions live on Page 0 (50..94)
+    .assert "All 45 VMS potions occupy Page 0 50..94", ITEM_POTION_OF_GAIN_STRENGTH == 50 && ITEM_POTION_OF_INFRAVISION == 94 && ITEM_PAGE_POTION_OF_INFRAVISION == 0, true
+    lda piw_ego
+    sta item_cur_page
+    bne !iq_gen_jmp+
+
     lda piw_item_id
-    cmp #17
-    bcc !iq_dispatch_generic+
-    cmp #32
-    bcs !iq_dispatch_generic+
+    cmp #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    bcc !iq_gen_jmp+
+    cmp #ITEM_SLOT_POTION_OF_INFRAVISION + 1
+    bcs !iq_gen_jmp+
+
+    ldx #8
+!iq_loc_scan:
+    cmp iq_local_ids,x
+    beq !iq_loc_hit+
+    dex
+    bpl !iq_loc_scan-
+
+    ldx #10
+!iq_p3_scan:
+    cmp iq_p3_ids,x
+    beq !iqd_phase3+
+    dex
+    bpl !iq_p3_scan-
+
+    // Extended Page-0 potion (25 types)
+#if HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+    jsr tramp_eff_ext_quaff
+#else
+    jsr eff_ext_quaff_piw
+#endif
     sec
-    sbc #17
-    tax
+    rts
+!iq_gen_jmp:
+    jmp iq_effect_generic
+!iq_loc_hit:
     lda iq_dispatch_lo,x
     sta zp_ptr1
     lda iq_dispatch_hi,x
     sta zp_ptr1_hi
     jmp (zp_ptr1)
-// Reached from item_quaff with A = potion type ID (96-100, 126, or other).
-!iq_dispatch_generic:
-#if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT || HAL_PLATFORM_COMPACT_PLAY_SLOT
-    cmp #ITEM_TYPE_POT_GAIN_STR
-    bcs !iqd_phase3+                // potions of gain stat (140-145)
-    cmp #ITEM_TYPE_POT_HEALING
-    bcc !iqd_not_p3+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL + 1
-    bcc !iqd_phase3+
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
-    bne !iqd_not_p3+
+
 !iqd_phase3:
 #if HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
     // Phase 3 potion handlers are resident; no overlay or disk access.
     jsr hal_quaff_p3_dispatch
     sec
     rts
-#else
+#elif HAL_PLATFORM_COMPACT_PLAY_SLOT
     // Phase 3 potion handlers live in the spell overlay (items
     // overlay is full). Loading it here would evict this items-overlay
     // continuation, so the swap runs through the resident trampoline.
-    lda piw_item_id
-    sta hal_tsci_arg
     lda #<iq_dispatch_p3_spell
-    sta tsci_target+1
-    lda #>iq_dispatch_p3_spell
-    sta tsci_target+2
-    jsr tramp_spell_call_items
+    ldy #>iq_dispatch_p3_spell
+    jsr piw_call_spell_a_y
     sec
     rts
-#endif
-!iqd_not_p3:
-    jmp iq_effect_generic
 #else
-    cmp #ITEM_TYPE_POT_GAIN_STR
-    bcs !iq_effect_gain_stat+       // potions of gain stat (140-145)
-    cmp #ITEM_TYPE_POT_HEALING
+    cmp #ITEM_SLOT_POTION_OF_HEALING
     beq !iq_effect_healing+
-    cmp #ITEM_TYPE_POT_RESTORATION
-    beq !iq_effect_restoration+
-    cmp #ITEM_TYPE_POT_RESIST_HEAT
+    cmp #ITEM_SLOT_POTION_OF_RESIST_HEAT
     beq !iq_effect_resist_heat+
-    cmp #ITEM_TYPE_POT_RESIST_COLD
+    cmp #ITEM_SLOT_POTION_OF_RESIST_COLD
     beq !iq_effect_resist_cold+
-    cmp #ITEM_TYPE_POT_CURE_CRITICAL
+    cmp #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     beq !iq_effect_cure_critical+
-    cmp #ITEM_TYPE_POT_NEUTRALIZE
+    cmp #ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
     beq !iq_effect_neutralize+
-    jmp iq_effect_generic
+    jsr eff_potion_gain_stat        // A = the potion's type (6 gain-stat potions)
+    sec
+    rts
 
 !iq_effect_healing:
     jmp eff_potion_healing          // 1000 HP + cures (eff_potion_cure.s)
-
-!iq_effect_gain_stat:
-    jsr eff_potion_gain_stat        // A = the potion's type
-    sec
-    rts
 
 !iq_effect_cure_critical:
     // 6d7 HP, cures blindness, confusion and poison
@@ -555,13 +609,6 @@ item_quaff:
     ldx #7
     ldy #6
     jmp eff_potion_heal_cure
-
-!iq_effect_restoration:
-    // Restore all stats: current stats are recomputed from base + modifiers,
-    // which undoes stat drain (drain only lowers CUR, never BASE)
-    jsr player_calc_stats
-    ldx #HSTR_PIQ_RESTORED
-    jmp iq_msg_turn
 
 !iq_effect_resist_heat:
     // Resist heat/fire for randint(10) + 10 turns
@@ -600,18 +647,26 @@ item_quaff:
 #import "eff_gain_stat.s"
 #endif
 
-
-
+iq_local_ids:
+    .byte ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS, ITEM_SLOT_POTION_OF_SPEED, ITEM_SLOT_POTION_OF_POISON
+    .byte ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS, ITEM_SLOT_POTION_OF_RESTORE_MANA, ITEM_SLOT_POTION_OF_HEROISM
+    .byte ITEM_SLOT_POTION_OF_BLINDNESS, ITEM_SLOT_POTION_OF_CONFUSION, ITEM_SLOT_POTION_OF_INFRAVISION
 iq_dispatch_lo:
     .byte <iq_effect_cure, <iq_effect_speed, <iq_effect_poison
-    .byte <iq_effect_generic, <iq_effect_generic, <iq_effect_generic, <iq_effect_generic, <iq_effect_generic
-    .byte <iq_effect_csw, <iq_effect_restore_mana, <iq_effect_heroism, <iq_effect_blindness
-    .byte <iq_effect_confusion, <iq_effect_detect_mon, <iq_effect_infravision
+    .byte <iq_effect_csw, <iq_effect_restore_mana, <iq_effect_heroism
+    .byte <iq_effect_blindness, <iq_effect_confusion, <iq_effect_infravision
 iq_dispatch_hi:
     .byte >iq_effect_cure, >iq_effect_speed, >iq_effect_poison
-    .byte >iq_effect_generic, >iq_effect_generic, >iq_effect_generic, >iq_effect_generic, >iq_effect_generic
-    .byte >iq_effect_csw, >iq_effect_restore_mana, >iq_effect_heroism, >iq_effect_blindness
-    .byte >iq_effect_confusion, >iq_effect_detect_mon, >iq_effect_infravision
+    .byte >iq_effect_csw, >iq_effect_restore_mana, >iq_effect_heroism
+    .byte >iq_effect_blindness, >iq_effect_confusion, >iq_effect_infravision
+.assert "iq_local_ids/lo/hi have 9 entries each", (iq_dispatch_lo - iq_local_ids == 9) && (iq_dispatch_hi - iq_dispatch_lo == 9) && (* - iq_dispatch_hi == 9), true
+
+iq_p3_ids:
+    .byte ITEM_SLOT_POTION_OF_GAIN_STRENGTH, ITEM_SLOT_POTION_OF_GAIN_INTELLIGENCE, ITEM_SLOT_POTION_OF_GAIN_WISDOM
+    .byte ITEM_SLOT_POTION_OF_CHARISMA, ITEM_SLOT_POTION_OF_GAIN_CONSTITUTION, ITEM_SLOT_POTION_OF_GAIN_DEXTERITY
+    .byte ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, ITEM_SLOT_POTION_OF_HEALING, ITEM_SLOT_POTION_OF_RESIST_HEAT
+    .byte ITEM_SLOT_POTION_OF_RESIST_COLD, ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON
+.assert "iq_p3_ids has 11 entries", * - iq_p3_ids, 11
 
 iq_effect_cure:
     // Cure Light Wounds: 2d7 HP, cures blindness (eff_potion_cure.s)
@@ -783,11 +838,6 @@ iq_effect_confusion:
     ldx #HSTR_PIQ_DIZZY
     jmp iq_msg_turn
 
-iq_effect_detect_mon:
-    jsr eff_detect_monsters
-    ldx #HSTR_PIQ_SENSE
-    jmp iq_msg_turn
-
 iq_effect_infravision:
     // Set zp_eff_infra timer (rng(50)+50)
     // NOTE: Timer is infrastructure only — monster reveal effect will be
@@ -813,3 +863,17 @@ iq_msg_turn:
     jsr huff_print_msg
     sec
     rts
+
+#if HAL_PLATFORM_COMPACT_PLAY_SLOT
+piw_call_spell_a_y:
+    sta tsci_target+1
+    sty tsci_target+2
+    lda piw_ego
+    sta item_cur_page
+    lda piw_item_id
+    sta hal_tsci_arg
+    jmp tramp_spell_call_items
+#endif
+#if !HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+    #import "eff_item_extended.s"
+#endif

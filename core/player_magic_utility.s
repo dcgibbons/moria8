@@ -82,16 +82,14 @@ eff_reveal_floorplan:
 
 pmu_create_food:
     lda zp_player_x
+    sta fi_add_x
     ldy zp_player_y
+    sty fi_add_y
     jsr floor_item_find_at
     bcc !ecf_free+
     jsr floor_item_remove
 !ecf_free:
-    lda zp_player_x
-    sta fi_add_x
-    lda zp_player_y
-    sta fi_add_y
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     sta fi_add_id
     jsr fi_add_clear_plain_meta
     lda #1
@@ -207,21 +205,20 @@ eff_destroy_area:
 eff_holy_word:
     jsr eff_remove_fear
     jsr eff_cure_poison
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
+    // Restore stats (Umoria playerStatRestore) before healing so any restored
+    // CON raises max HP via player_calc_hp first, then eff_heal_full heals to
+    // the restored maximum without copying stale saved record fields back.
+    lda player_data + PL_CON_CUR
+    pha
+    jsr player_calc_stats
+    pla
+    cmp player_data + PL_CON_CUR
+    beq !ehw_heal+
+    jsr player_calc_hp
+!ehw_heal:
+    jsr eff_heal_full
     ldx #HSTR_PIQ_VERY_GOOD
     jsr huff_print_msg
-    // The stats restored (Umoria playerStatRestore) as a Potion of
-    // Restoration does: player_calc_stats, which refreshes the ZP stat
-    // mirrors too. No player_sync_to_zp: the player record is refreshed only
-    // at save and load, and copying it back undid the heal, the position,
-    // mana and food with the last save's (C64 Balrog queue, 2026-11-11: HP
-    // 652/443 after a clvl 40 Priest's Holy Word).
-    jsr player_calc_stats
     lda #3
     sta eff_invuln_timer
     lda #CF_EVIL
@@ -241,8 +238,7 @@ eff_glyph_of_warding:
     jsr floor_item_find_at
     bcc !egow_free+
     ldx #HSTR_PMU_GLYPH_BLOCK
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 !egow_free:
     lda zp_player_x
     ldy zp_player_y

@@ -18,15 +18,64 @@
 .const VERA_PSG_WAVE_NOISE  = $c0
 .const CX16_KERNAL_RDTIM    = $ffde     // Returns A = 60 Hz jiffy low byte
 
+cx16_snd_bank_save: .byte 0
+
+hal_sound_init:
+hal_sound_stop:
+    pha
+    lda CX16_RAM_BANK_REG
+    sta cx16_snd_bank_save
+    lda #CX16_BANK_MODAL
+    sta CX16_RAM_BANK_REG
+    jsr ovl_hal_sound_stop
+    lda cx16_snd_bank_save
+    sta CX16_RAM_BANK_REG
+    pla
+    clc
+    rts
+
+hal_sound_play:
+    cmp #10
+    bcs !hsp_done+
+    pha
+    lda CX16_RAM_BANK_REG
+    sta cx16_snd_bank_save
+    lda #CX16_BANK_MODAL
+    sta CX16_RAM_BANK_REG
+    pla
+    jsr ovl_hal_sound_play
+    lda cx16_snd_bank_save
+    sta CX16_RAM_BANK_REG
+!hsp_done:
+    clc
+    rts
+
+hal_sound_update:
+    lda zp_snd_timer
+    bne !hsu_active+
+    clc
+    rts
+!hsu_active:
+    lda CX16_RAM_BANK_REG
+    sta cx16_snd_bank_save
+    lda #CX16_BANK_MODAL
+    sta CX16_RAM_BANK_REG
+    jsr ovl_hal_sound_update
+    lda cx16_snd_bank_save
+    sta CX16_RAM_BANK_REG
+    clc
+    rts
+
+.segment ModalMiscOverlay
+
 cx16_snd_last_jiffy: .byte 0
 cx16_snd_vol:        .byte 0
 cx16_snd_freq_lo:    .byte 0
 cx16_snd_freq_hi:    .byte 0
 
-// hal_sound_init / hal_sound_stop — Silence all 16 VERA PSG voices and reset
+// ovl_hal_sound_stop — Silence all 16 VERA PSG voices and reset
 // software timer state. Preserves X, Y.
-hal_sound_init:
-hal_sound_stop:
+ovl_hal_sound_stop:
     phx
     php
     sei
@@ -52,11 +101,11 @@ hal_sound_stop:
     clc
     rts
 
-// hal_sound_play — Play semantic sound effect A (0..9) on VERA PSG Voice 0.
-// Paced at 60 Hz via KERNAL RDTIM ($FFDE) in hal_sound_update so durations
+// ovl_hal_sound_play — Play semantic sound effect A (0..9) on VERA PSG Voice 0.
+// Paced at 60 Hz via KERNAL RDTIM ($FFDE) in ovl_hal_sound_update so durations
 // and pitch/volume envelopes match 1 MHz SID ADSR feel regardless of 8 MHz CPU.
 // Preserves X, Y.
-hal_sound_play:
+ovl_hal_sound_play:
     cmp #10
     bcs !play_done+
     sta zp_snd_effect
@@ -99,17 +148,14 @@ hal_sound_play:
     clc
     rts
 
-// hal_sound_update — Advance VERA PSG pitch/volume envelope once per 60 Hz
+// ovl_hal_sound_update — Advance VERA PSG pitch/volume envelope once per 60 Hz
 // jiffy tick (RDTIM $FFDE) and gate off Voice 0 when zp_snd_timer expires.
 // Preserves X, Y.
-hal_sound_update:
-    lda zp_snd_timer
-    bne !upd_active+
-    clc
-    rts
-!upd_active:
+ovl_hal_sound_update:
     phx
     phy
+    bra !upd_poll+
+!upd_poll:
     stz CX16_ROM_BANK_REG
     jsr CX16_KERNAL_RDTIM
     cmp cx16_snd_last_jiffy
@@ -221,6 +267,8 @@ cx16_sfx_wave_pw:
     .byte VERA_PSG_WAVE_PULSE | $08
     .byte VERA_PSG_WAVE_PULSE | $04
 
+.segment Default
+
 // ============================================================
 // IRQ HAL
 // ============================================================
@@ -258,7 +306,6 @@ hal_platform_init_early:
     stz CX16_ROM_BANK_REG
     stz CX16_RAM_BANK_REG
     jsr screen_init
-    jsr cx16_input_install_key_events
     clc
     rts
 

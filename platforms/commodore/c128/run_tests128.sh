@@ -9,8 +9,16 @@ java() {
     if [ "$1" = "-jar" ]; then
         local jar_path="$2"
         shift 2
+        local has_symdir=0 a
+        for a in "$@"; do
+            [ "$a" = "-symbolfiledir" ] && has_symdir=1
+        done
+        local -a symdir_args=()
+        if [ "$has_symdir" -eq 0 ] && [ -n "${TMPDIR:-}" ]; then
+            symdir_args=(-symbolfiledir "$TMPDIR")
+        fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
         local rc=$? prev="" arg
         if [ "$rc" -ne 0 ]; then
             # The assembler still wrote its -o file; left behind, the
@@ -27,9 +35,9 @@ java() {
 }
 RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/platforms/commodore/c128}"
 cd "$RUN_TESTS128_DIR"
-# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
-# gets its own directory, and runs older than six hours are cleared here, so
-# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+# Temp files under build/, never the shared system temp dir (AGENTS.md rule 9):
+# each run gets its own directory, and runs older than six hours are cleared
+# here, so leftovers cannot pile up.
 mkdir -p ../../../build/test/c128/tmp
 find ../../../build/test/c128/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
 TMPDIR=$(cd ../../../build/test/c128/tmp && mktemp -d "$(pwd)/run.XXXXXX")
@@ -59,17 +67,10 @@ if [ "$kickass_status" -ne 0 ]; then
     exit 1
 fi
 KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
-if [ -n "${VICE128:-}" ]; then
-    VICE="$VICE128"
-elif command -v x128 >/dev/null 2>&1; then
-    VICE="$(command -v x128)"
-elif [ -x /opt/homebrew/bin/x128 ]; then
-    VICE="/opt/homebrew/bin/x128"
-else
-    VICE="/Applications/VICE/bin/x128"
-fi
+python3 -B ../../../tools/gen_trampolines.py --port c128 --output ../../../build/trampolines/c128_trampolines.inc || exit 1
+VICE="${VICE128:-$(command -v x128 2>/dev/null || printf 'x128')}"
 # VICE reads this config (with the installed version tag) instead of the
-# user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
+# user's vicerc; passing an empty config made VICE pop up "No version tag found" dialogs.
 VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
 # vice_keep_inputs.py stands in for x128: it keeps the files each run boots
 # and the VICE seed (power-on RAM), so a failed suite can be replayed exactly.
@@ -126,7 +127,6 @@ SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=0
 SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=0
 SAVE_WRITE_PRODUCT_BOOT_ASSETS_BUILT=0
-CACHE_SURVIVAL_BOOT_ASSETS_BUILT=0
 LOAD_RESUME_BOOT_ASSETS_BUILT=0
 REAL_BOOT_DIAG_ASSETS_BUILT=0
 TITLE_ART_BOOT_ASSETS_BUILT=0
@@ -138,13 +138,14 @@ KA_DEFINES=(-define C128 :OVL_OUT=../../../build/test/c128)
 
 cleanup_test128_tmp() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
-    rm -f "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.sym "$REPO_ROOT"/platforms/commodore/c64/creature_data/*.vs
-    rm -f "$REPO_ROOT"/core/*.sym "$REPO_ROOT"/core/*.vs
     if [ "${TEST128_KEEP_TMP:-0}" = "1" ]; then
         return
     fi
     if [ -n "${TEST128_TMP_DIR:-}" ] && [ -d "$TEST128_TMP_DIR" ]; then
         rm -rf "$TEST128_TMP_DIR"
+    fi
+    if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
+        rm -rf "$TMPDIR"
     fi
 }
 
@@ -579,14 +580,21 @@ c128_set_active_variant() {
 # sets C128_DISK_PAYLOAD_ARGS.
 c128_disk_payload_args() {
     local dir="$1" f
+    if [ ! -f "$dir/128.cex.prg" ]; then
+        python3 -B ../../../tools/build_catalog.py ext-rows --prg-addr 0xd000 --out "$dir/128.cex.prg" >/dev/null
+    fi
     C128_DISK_PAYLOAD_ARGS=(-write "$dir/title" "t128")
-    for f in cat cnm; do            # the monster catalog (no tier files)
+    for f in cat cnm cex; do        # the monster catalog (no tier files)
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
-    for f in town start death gen modal help ui items disarm chest; do
+    C128_DISK_PAYLOAD_ARGS+=(-write "$dir/item.cat" "item.cat")
+    for f in town start death gen modal help ui items disarm chest home storage; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/ovl.$f" "128.$f")
     done
-    for f in runtime input proj fdisk diskio world item names huff hvec select persist play bank; do
+    for f in runtime input proj fdisk; do
+        C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
+    done
+    for f in huff hvec persist play bank; do
         C128_DISK_PAYLOAD_ARGS+=(-write "$dir/128.$f.prg" "128.$f")
     done
     C128_DISK_PAYLOAD_ARGS+=(-write "$dir/legalui" "legalui")
@@ -594,8 +602,11 @@ c128_disk_payload_args() {
     # would be missing from every test disk.
     if [ -z "${C128_DISK_PAYLOAD_CHECKED:-}" ]; then
         local want have
-        want=$(awk '/^define C128_DISK_WRITE_FILES/ { p = 1; next } /^endef/ { p = 0 }
-            p && /-write/ { split($0, q, "\""); if (take && q[4] !~ /,s$/) print q[4]; if (q[4] == "moria128") take = 1 }' ../Makefile | sort)
+        want=$( (
+            awk '/^define C128_DISK_WRITE_FILES/ { p = 1; next } /^endef/ { p = 0 }
+                p && /-write/ { split($0, q, "\""); if (take && q[4] !~ /,s$/ && q[4] !~ /^\$\(/) print q[4]; if (q[4] == "moria128") take = 1 }' ../Makefile
+            awk -F= '/^C128_EXTRA_OVERLAY_PAIRS/ { for (i = 1; i <= split($2, pairs, /[[:space:]]+/); i++) if (split(pairs[i], kv, ":") == 2 && kv[2] !~ /,s$/) print kv[2] }' overlays.mk
+        ) | sort)
         have=$(for ((f = 2; f < ${#C128_DISK_PAYLOAD_ARGS[@]}; f += 3)); do echo "${C128_DISK_PAYLOAD_ARGS[f]}"; done | sort)
         if [ "$want" != "$have" ]; then
             echo "c128_disk_payload_args: payloads differ from ../Makefile C128_DISK_WRITE_FILES" >&2
@@ -642,13 +653,13 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_look_overlay_guard,c128_80col_layout_guard,c128_ref_hal_guard,c128_save_load_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_look_overlay_guard,c128_80col_layout_guard,c128_ref_hal_guard,c128_save_load_guard,c128_item_catalog_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,catalog_spawn_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,catalog_spawn_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,hot_path_zero_disk_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
             printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
@@ -657,7 +668,7 @@ describe_phase_token() {
             printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
             ;;
         cache)
-            printf 'cache\tcache_survival_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
+            printf 'cache\tcache_survival_smoke,hot_path_zero_disk_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
             ;;
         diag)
             printf 'diag\treal_input_town_move_diag,real_boot_crash_harness,overlay_data_transition_smoke,boot_diag_copy\n'
@@ -677,7 +688,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_user_visible_string_guard|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_look_overlay_guard|c128_80col_layout_guard|c128_ref_hal_guard|c128_save_load_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_user_visible_string_guard|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_look_overlay_guard|c128_80col_layout_guard|c128_ref_hal_guard|c128_save_load_guard|c128_item_catalog_guard) return 0 ;;
             esac
             ;;
         units)
@@ -689,7 +700,7 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|catalog_spawn_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scroll_p3_return_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|catalog_spawn_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scroll_p3_return_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|hot_path_zero_disk_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
@@ -704,7 +715,7 @@ suite_matches_phase_token() {
             ;;
         cache)
             case "$suite_name" in
-                cache_survival_smoke|overlay_partial_failure_smoke|overlay_data_transition_smoke) return 0 ;;
+                cache_survival_smoke|hot_path_zero_disk_smoke|overlay_partial_failure_smoke|overlay_data_transition_smoke) return 0 ;;
             esac
             ;;
         diag)
@@ -800,8 +811,8 @@ suite_matches_filter() {
 }
 
 # Python smokes resolve these symbols only in their own overlay:
-# uds_show_insert_prompt in OVL_HELP (5), royal_screen resident (OVL_NONE, 0).
-C128_OVERLAY_COND_ARGS=(--overlay-cond ".uds_show_insert_prompt=5" --overlay-cond ".royal_screen=0")
+# royal_screen resident (OVL_NONE, 0); uds_show_insert_prompt resides in 128.persist.
+C128_OVERLAY_COND_ARGS=(--overlay-cond ".royal_screen=0")
 
 # c128_exit_png: the screen VICE saves when it exits (-exitscreenshot) for the
 # running suite; run_named_suite names it when the suite fails, since a log
@@ -879,7 +890,10 @@ root = Path(sys.argv[1])
 bad = []
 
 def check_tokens(label: str, values: list[str]) -> None:
-    missing = [flag for flag in ("-config", "-default", "+saveres", "+autostart-delay-random") if flag not in values]
+    # -VDC16KB: a stock C128's 16 KB VDC. VICE defaults to 64 KB (a C128DCR's)
+    # and -default resets a config file's VDC64KB, so the flag must be on the
+    # command line (maintainer, 2026-11-16: disk harness on 16 KB by default).
+    missing = [flag for flag in ("-config", "-default", "+saveres", "-VDC16KB", "+autostart-delay-random") if flag not in values]
     if "-config" in values:
         config_index = values.index("-config")
         if config_index + 1 >= len(values) or values[config_index + 1] != "vice_config()":
@@ -917,7 +931,7 @@ for runner in (root / "run_tests128.sh", root / "run_test_internal_worker.sh"):
         stripped = line.strip()
         if not stripped.startswith('"$VICE" '):
             continue
-        missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres", "+autostart-delay-random") if flag not in line]
+        missing = [flag for flag in ('-config "$VICE_CONFIG"', "-default", "+saveres", "-VDC16KB", "+autostart-delay-random") if flag not in line]
         if missing:
             bad.append(f"{runner.name}:{lineno}: missing {', '.join(missing)}")
 
@@ -1221,6 +1235,8 @@ from pathlib import Path
 import re
 sym = Path("../../../build/test/c128/main.vs").read_text().splitlines()
 main_text = Path("main.s").read_text()
+trampolines_text = Path("../../../build/trampolines/c128_trampolines.inc").read_text()
+trampoline_sources = main_text + "\n" + trampolines_text
 contract_source = Path("io_contracts.s").read_text().splitlines()
 labels = {}
 for line in sym:
@@ -1240,8 +1256,11 @@ contract_patterns = {
     "death_overlay": re.compile(r':C128AuditDeathOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "help_overlay": re.compile(r':C128AuditHelpOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "ui_overlay": re.compile(r':C128AuditUiOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "items_overlay": re.compile(r':C128AuditItemsOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "dungeon_overlay": re.compile(r':C128AuditDungeonOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "chest_overlay": re.compile(r':C128AuditChestOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "home_overlay": re.compile(r':C128AuditHomeOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "storage_overlay": re.compile(r':C128AuditStorageOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "banked_window": re.compile(r':C128AuditBanked\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
 }
 
@@ -1277,8 +1296,11 @@ required_labels = [
     "ovl_death_end",
     "ovl_help_end",
     "ovl_ui_end",
+    "ovl_items_end",
     "ovl_gen_end",
     "ovl_chest_end",
+    "ovl_home_end",
+    "ovl_storage_end",
 ]
 
 below_io_data = [
@@ -1302,11 +1324,11 @@ for name in below_io_data:
     if labels[name] >= 0xD000:
         bad.append((name, labels[name], "below_io_hole"))
 
-if "msg_history" not in labels or "msg_hist_idx" not in labels:
-    missing.append("msg_history/msg_hist_idx")
+if "msg_history" not in labels or "msg_history_end" not in labels or "msg_hist_idx" not in labels:
+    missing.append("msg_history/msg_history_end/msg_hist_idx")
 else:
-    if labels["msg_hist_idx"] - labels["msg_history"] != (8 * 80):
-        bad.append(("msg_history_span", labels["msg_hist_idx"] - labels["msg_history"], "width"))
+    if labels["msg_history_end"] - labels["msg_history"] != (8 * 80):
+        bad.append(("msg_history_span", labels["msg_history_end"] - labels["msg_history"], "width"))
 
 for name in ("help_title_str", "help_lines"):
     if name not in labels:
@@ -1320,12 +1342,8 @@ for runtime_name, expected_load in (
     ("128.input.prg", 0x0B00),
     ("128.proj.prg", 0x0A80),
     ("128.fdisk.prg", 0x0D60),
-    ("128.world.prg", 0x6000),
-    ("128.item.prg", 0x8C50),
-    ("128.names.prg", 0x7400),
     ("128.huff.prg", 0xF000),
     ("128.hvec.prg", 0xFFFA),
-    ("128.select.prg", 0xA800),
     ("128.persist.prg", 0xAF00),
     ("128.play.prg", 0xAF00),
     ("128.bank.prg", 0xF000),
@@ -1351,8 +1369,11 @@ overlay_limits = {
     "death_overlay": labels.get("ovl_death_end"),
     "help_overlay": labels.get("ovl_help_end"),
     "ui_overlay": labels.get("ovl_ui_end"),
+    "items_overlay": labels.get("ovl_items_end"),
     "dungeon_overlay": labels.get("ovl_gen_end"),
     "chest_overlay": labels.get("ovl_chest_end"),
+    "home_overlay": labels.get("ovl_home_end"),
+    "storage_overlay": labels.get("ovl_storage_end"),
 }
 
 for kind, _display, symbol, arg in contracts:
@@ -1407,7 +1428,10 @@ for label in (
     "tramp_ui_equip_display",
     "tramp_ui_recall",
 ):
-    if f"{label}:\n    jsr init_copy_banked" in main_text:
+    if f"{label}:" not in trampoline_sources:
+        print(f"{label}: missing UI trampoline definition")
+        raise SystemExit(1)
+    if f"{label}:\n    jsr init_copy_banked" in trampoline_sources:
         print(f"{label}: stale per-entry init_copy_banked reload reintroduced")
         raise SystemExit(1)
 
@@ -1601,7 +1625,8 @@ core = root.parent.parent / "core"
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 main_text = (root / "c128" / "main.s").read_text()
 items = (core / "player_items.s").read_text().splitlines()
-item_mod = (core / "item.s").read_text().splitlines()
+item_mod = ((core / "item.s").read_text() + "\n"
+            + (core / "item_drop_cold.s").read_text()).splitlines()
 item_cmd_mod = (core / "player_item_commands.s").read_text().splitlines()
 item_actions_mod = (core / "item_actions_overlay.s").read_text().splitlines()
 throw_mod = (core / "throw.s").read_text().splitlines()
@@ -1610,9 +1635,11 @@ dfeat = (core / "dungeon_features.s").read_text().splitlines()
 help_mod = (core / "ui_help.s").read_text().splitlines()
 store_mod = (core / "ui_store.s").read_text().splitlines()
 loop_helpers = ((core / "game_loop_helpers.s").read_text() + "\n"
-                + (core / "ui_help_command.s").read_text()).splitlines()
+                + (core / "ui_help_command.s").read_text() + "\n"
+                + (core / "ui_help_cmd_cold.s").read_text()).splitlines()
 player_magic_mod = (core / "player_magic.s").read_text().splitlines()
-spell_effects_mod = (core / "spell_effects.s").read_text().splitlines()
+spell_effects_mod = ((core / "spell_effects.s").read_text() + "\n"
+                     + (core / "eff_identify_prompt_cold.s").read_text()).splitlines()
 ui_wizard_mod = (core / "ui_wizard.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
@@ -1883,14 +1910,50 @@ if not has_ordered_chain(item_actions_mod, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
     "#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
-    "sta iagk_key",
+    "jmp hal_platform_item_action_restore_bank",
+    "#else",
+    "rts",
+]):
+    print("C128 item overlay key reads must restore overlay banking via hal_platform_item_action_restore_bank")
+    raise SystemExit(1)
+
+if not has_ordered_chain(main_text.splitlines(), [
+    "hal_platform_item_action_restore_bank:",
+    "pha",
     "lda #MMU_ALL_RAM",
     "sta hal_memory_mmu_config_register",
     "lda #BANK_NO_ROMS",
     "sta hal_memory_cpu_port",
-    "lda iagk_key",
+    "pla",
+    "rts",
 ]):
-    print("C128 item overlay key reads must restore overlay banking after input_get_key")
+    print("C128 main.s must define hal_platform_item_action_restore_bank preserving A and banking")
+    raise SystemExit(1)
+
+if not has_ordered_chain(items, [
+    "show_inv_and_select:",
+    "ldx piw_return_overlay",
+    "jsr overlay_load",
+    "jsr hal_overlay_post_reload",
+], window=35):
+    print("core/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
+    raise SystemExit(1)
+
+if any("$0102,x" in ln or "$0104,x" in ln for ln in items):
+    print("core/player_items.s must not hardcode $0102,x/$0104,x stack probing")
+    raise SystemExit(1)
+
+if not has_ordered_chain(main_text.splitlines(), [
+    "hal_overlay_post_reload:",
+    "jsr hal_platform_runtime_resync",
+    "lda #MMU_ALL_RAM",
+    "sta hal_memory_mmu_config_register",
+    "sei",
+    "lda #BANK_NO_KERNAL",
+    "sta hal_memory_cpu_port",
+    "rts",
+]):
+    print("C128 main.s must define hal_overlay_post_reload")
     raise SystemExit(1)
 
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
@@ -1970,18 +2033,56 @@ def section_after(label: str, lines: list[str]) -> list[str]:
         out.append(s)
     return out
 
+player_items = (core / "player_items.s").read_text().splitlines()
+
 if not has_ordered_chain(items, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
     "#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
-    "sta iagk_key",
+    "jmp hal_platform_item_action_restore_bank",
+    "#else",
+    "rts",
+]):
+    print("C128 item overlay key reads must restore overlay banking via hal_platform_item_action_restore_bank")
+    raise SystemExit(1)
+
+if not has_ordered_chain(c128_main, [
+    "hal_platform_item_action_restore_bank:",
+    "pha",
     "lda #MMU_ALL_RAM",
     "sta hal_memory_mmu_config_register",
     "lda #BANK_NO_ROMS",
     "sta hal_memory_cpu_port",
-    "lda iagk_key",
+    "pla",
+    "rts",
 ]):
-    print("C128 item overlay key reads must restore overlay banking after input_get_key")
+    print("C128 main.s must define hal_platform_item_action_restore_bank preserving A and banking")
+    raise SystemExit(1)
+
+if not has_ordered_chain(player_items, [
+    "show_inv_and_select:",
+    "ldx piw_return_overlay",
+    "jsr overlay_load",
+    "jsr hal_overlay_post_reload",
+], window=35):
+    print("core/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
+    raise SystemExit(1)
+
+if any("$0102,x" in ln or "$0104,x" in ln for ln in player_items):
+    print("core/player_items.s must not hardcode $0102,x/$0104,x stack probing")
+    raise SystemExit(1)
+
+if not has_ordered_chain(c128_main, [
+    "hal_overlay_post_reload:",
+    "jsr hal_platform_runtime_resync",
+    "lda #MMU_ALL_RAM",
+    "sta hal_memory_mmu_config_register",
+    "sei",
+    "lda #BANK_NO_KERNAL",
+    "sta hal_memory_cpu_port",
+    "rts",
+]):
+    print("C128 main.s must define hal_overlay_post_reload")
     raise SystemExit(1)
 
 if not has_ordered_chain(items, [
@@ -1998,7 +2099,7 @@ if not has_ordered_chain(items, [
 if not has_ordered_chain(items, [
     "irs_effect_p3_swap:",
     "#if HAL_PLATFORM_STAFF_SPEED_TRAMPOLINED",
-    "cmp #ITEM_TYPE_STAFF_SPEED",
+    "cmp #ITEM_SLOT_STAFF_OF_SPEED",
     "beq !irsp3_staff_speed+",
     "!irsp3_staff_speed:",
     "jmp tramp_staff_speed_items",
@@ -2291,6 +2392,30 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_c128_item_catalog_guard_check() {
+    echo -n "  c128_item_catalog_guard: "
+
+    if [ ! -f "$REPO_ROOT/build/c128/moria128.prg" ] || [ ! -f "$REPO_ROOT/build/c128/main.vs" ]; then
+        if ! "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" build128 >/dev/null 2>&1; then
+            echo "FAIL (build128)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    fi
+
+    local check_out
+    if check_out=$(python3 -B "$REPO_ROOT/tools/check_item_catalog_ports.py" --selftest 2>&1 && python3 -B "$REPO_ROOT/tools/check_item_catalog_ports.py" --port c128 --if-built c64 2>&1); then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        echo "$check_out" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 build_boot_assets() {
     if [ "$BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "base"; then
         return
@@ -2409,7 +2534,7 @@ run_vic40_blanked_boot_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -3106,17 +3231,14 @@ c128_patch_scripted_boot_d71() {
         -delete "128.items" \
         -delete "128.disarm" \
         -delete "128.chest" \
+        -delete "128.home" \
+        -delete "128.storage" \
         -delete "128.runtime" \
         -delete "128.input" \
         -delete "128.proj" \
         -delete "128.fdisk" \
-        -delete "128.diskio" \
-        -delete "128.world" \
-        -delete "128.item" \
-        -delete "128.names" \
         -delete "128.huff" \
         -delete "128.hvec" \
-        -delete "128.select" \
         -delete "128.persist" \
         -delete "128.play" \
         -delete "128.bank" \
@@ -3131,17 +3253,14 @@ c128_patch_scripted_boot_d71() {
         -write ../../../build/test/c128/ovl.items "128.items" \
         -write ../../../build/test/c128/ovl.disarm "128.disarm" \
         -write ../../../build/test/c128/ovl.chest "128.chest" \
+        -write ../../../build/test/c128/ovl.home "128.home" \
+        -write ../../../build/test/c128/ovl.storage "128.storage" \
         -write ../../../build/test/c128/128.runtime.prg "128.runtime" \
         -write ../../../build/test/c128/128.input.prg "128.input" \
         -write ../../../build/test/c128/128.proj.prg "128.proj" \
         -write ../../../build/test/c128/128.fdisk.prg "128.fdisk" \
-        -write ../../../build/test/c128/128.diskio.prg "128.diskio" \
-        -write ../../../build/test/c128/128.world.prg "128.world" \
-        -write ../../../build/test/c128/128.item.prg "128.item" \
-        -write ../../../build/test/c128/128.names.prg "128.names" \
         -write ../../../build/test/c128/128.huff.prg "128.huff" \
         -write ../../../build/test/c128/128.hvec.prg "128.hvec" \
-        -write ../../../build/test/c128/128.select.prg "128.select" \
         -write ../../../build/test/c128/128.persist.prg "128.persist" \
         -write ../../../build/test/c128/128.play.prg "128.play" \
         -write ../../../build/test/c128/128.bank.prg "128.bank" >>"$build_log" 2>&1
@@ -3201,7 +3320,7 @@ build_scripted_spell_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspell.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
         return 0
@@ -3242,7 +3361,7 @@ build_scripted_spell_cancel_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell_cancel" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspellcancel.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
         return 0
@@ -3283,7 +3402,7 @@ build_scripted_book_overlay_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_book_overlay" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedbookoverlay.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
@@ -3324,7 +3443,7 @@ build_scripted_spell_list_overlay_boot_assets() {
 
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "scripted_spell_list_overlay" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d71 ../../../build/test/c128/main.vs -- \
+            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_scriptedspelllistoverlay.d71 ../../../build/test/c128/main.vs ../../../build/test/c128/c128_spell_seed.mon -- \
             main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
         SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
@@ -3394,56 +3513,6 @@ build_scripted_prayer_boot_assets() {
     BOOT_ASSETS_BUILT=0
     SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=1
     c128_set_active_variant "scripted_prayer"
-    return 0
-}
-
-build_cache_survival_boot_assets() {
-    local target_dir="${1:-../../../build/test/c128}"
-    if [ "$target_dir" = "../../../build/test/c128" ] && [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "cache_survival"; then
-        return
-    fi
-
-    build_boot_assets "$target_dir" || return 1
-
-    c128_disk_payload_files "../../../build/test/c128"
-    if [ "$target_dir" = "../../../build/test/c128" ] && c128_active_variant_is "cache_survival" && ! c128_outputs_need_refresh \
-            ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128_cache_survival.d64 ../../../build/test/c128/main.vs -- \
-            main.s ../../../build/test/c128/boot128.prg "${C128_DISK_PAYLOAD_FILES[@]}"; then
-        CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
-        return 0
-    fi
-
-    local build_log
-    build_log="$(test128_tmp_file "test128_boot_cache_survival_build_$(basename "$target_dir").log")"
-    local cache_main="$target_dir/moria128.prg"
-    local cache_d64="$target_dir/moria128_cache_survival.d64"
-
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_CACHE_SURVIVAL ":OVL_OUT=$target_dir" -o "$cache_main" >"$build_log" 2>&1; then
-        echo "FAIL (cache-survival main assembly failed for $target_dir)"
-        tail -20 "$build_log" | sed 's/^/    /'
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return 1
-    fi
-
-    c128_disk_payload_args "$target_dir"
-    if ! "$C1541" -format "moria128,m8" d64 "$cache_d64" \
-            -attach "$cache_d64" \
-            -write "$target_dir/boot128.prg" "moria8.128" \
-            -write "$cache_main" "moria128" \
-            "${C128_DISK_PAYLOAD_ARGS[@]}" >>"$build_log" 2>&1; then
-        echo "FAIL (cache-survival disk build failed for $target_dir)"
-        tail -20 "$build_log" | sed 's/^/    /'
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return 1
-    fi
-
-    if [ "$target_dir" = "../../../build/test/c128" ]; then
-        BOOT_ASSETS_BUILT=0 # Force refresh
-        CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
-        c128_set_active_variant "cache_survival"
-    fi
     return 0
 }
 
@@ -3586,7 +3655,7 @@ run_parallel_unit_tests() {
         "main_loop128 tests/test_main_loop128.s 500000000"
         "msg_prompt128 tests/test_msg_prompt128.s 120000000"
         "vdc_attr128 tests/test_vdc_attr128.s 20000000"
-        "item_desc128 tests/test_item_desc128.s 20000000"
+        "item_desc128 tests/test_item_desc128.s 80000000"
         "speed_equipment128 tests/test_speed_equipment128.s 20000000"
         "vdc_scroll_delta128 tests/test_vdc_scroll_delta128.s 30000000"
         "status_coherence128 tests/test_status_coherence128.s 20000000"
@@ -3862,7 +3931,7 @@ run_test() {
     # -initbreak ready: the C128 powers up on its Z80, and monitor commands
     # run before the 8502 takes over set the Z80's PC, so the test never runs.
     # Every C128 launch whose monitor commands set the PC passes it.
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4089,7 +4158,7 @@ run_boot_d64_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4144,7 +4213,7 @@ run_boot_title_newgame_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4202,7 +4271,7 @@ run_new_key_stability_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4261,7 +4330,7 @@ run_title_art_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 180000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4407,7 +4476,7 @@ run_boot_title_save_write_product_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
         -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
@@ -4448,7 +4517,7 @@ run_boot_title_save_write_product_smoke() {
         return
     fi
 
-    # The written save carries the 33-slot inventory, written through
+    # The written save carries the 34-slot Save V2 inventory, written through
     # c128_save_stream_chunk, with the seeded secondary weapon
     # (save_product_seed_secondary).
     local save_seq check_log
@@ -4456,7 +4525,7 @@ run_boot_title_save_write_product_smoke() {
     check_log="$(test128_tmp_file "test128_${name}_check.log")"
     rm -f "$save_seq"
     if ! "$c1541_bin" -attach "$abs_save_d64" -read "the.game,s" "$save_seq" >"$check_log" 2>&1 \
-            || ! python3 ../c64/tests/check_save_secondary.py "$save_seq" 0x1B >>"$check_log" 2>&1; then
+            || ! python3 -B tests/check_save_secondary128.py "$save_seq" 0x22 >>"$check_log" 2>&1; then
         echo "FAIL (secondary weapon not in the written save)"
         tail -3 "$check_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4612,7 +4681,7 @@ run_boot_title_save_media_fail_product_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
         -drive9type 1541 -attach9ro -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
@@ -4802,7 +4871,7 @@ run_boot_title_single_drive_save_wrong_media_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4875,7 +4944,7 @@ run_boot_title_single_drive_load_wrong_media_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$wrong_media_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 360000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5469,7 +5538,7 @@ run_boot_title_load_resume_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
@@ -5526,7 +5595,7 @@ run_boot_title_idle_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5552,7 +5621,7 @@ run_boot_title_idle_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5578,7 +5647,7 @@ run_boot_title_idle_smoke() {
         echo "g"
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" \
         -monlogname "$log_file" -monlog \
         -limitcycles 220000000 +sound -sounddev dummy \
@@ -5636,7 +5705,7 @@ run_boot_tier_transition_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5692,7 +5761,7 @@ run_town_overlay_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5731,9 +5800,9 @@ run_scroll_p3_return_smoke() {
     build_boot_assets || return
 
     local main_vs="../../../build/test/c128/main.vs" sym
-    local irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty
+    local irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty inv_ego
     local input_key_wait_strict input_key_wait_fast
-    for sym in irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty \
+    for sym in irs_p3_report tramp_p3_dispatch_items_return overlay_load inv_item_id inv_qty inv_ego \
             input_key_wait_strict input_key_wait_fast; do
         printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
         if [ -z "${!sym}" ]; then
@@ -5752,6 +5821,9 @@ run_scroll_p3_return_smoke() {
     log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
+    local objdet_slot objdet_page
+    read -r objdet_slot objdet_page < <(python3 -B -c 'import sys; sys.path.insert(0, "../../../tools"); from item_ids import ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION as s, ITEM_PAGE_SCROLL_OF_OBJECT_DETECTION as p; print(f"{s:02x} {p:02x}")')
+
     local exit_pc
     exit_pc=$(printf '%04X' $((16#$input_key_wait_strict + 2)))
     {
@@ -5760,8 +5832,9 @@ run_scroll_p3_return_smoke() {
         echo "break \$${input_key_wait_fast}"
         echo "g"                                        # the town's command prompt
         printf 'f %s %04x ff\n' "$inv_item_id" $(( 16#$inv_item_id + 21 ))
-        printf '> %s %02x\n' "$inv_item_id" 103         # ITEM_TYPE_SCR_OBJECT_DETECT
+        printf '> %s %s\n' "$inv_item_id" "$objdet_slot" # ITEM_SLOT_SCROLL_OF_OBJECT_DETECTION
         printf '> %s 01\n' "$inv_qty"
+        printf '> %s %s\n' "$inv_ego" "$objdet_page"    # ITEM_PAGE_SCROLL_OF_OBJECT_DETECTION
         echo "r a=52"                                   # R: read a scroll
         echo "r pc=${exit_pc}"
         echo "g"
@@ -5777,7 +5850,7 @@ run_scroll_p3_return_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5845,7 +5918,7 @@ run_town_overlay_female_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5909,7 +5982,7 @@ run_town_overlay_state_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -5972,7 +6045,7 @@ run_scripted_summary_to_town_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6032,8 +6105,10 @@ run_scripted_spell_cast_smoke() {
         fi
         spell_fail_addrs+=("$addr")
     done
-    if [ -z "${c128_test_spell_pass:-}" ]; then
-        echo "FAIL (missing scripted spell pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${c128_test_spell_pass:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted spell pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6049,14 +6124,19 @@ run_scripted_spell_cast_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${spell_fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${c128_test_spell_pass}"
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6151,8 +6231,9 @@ run_chest_open_product_smoke128() {
 
     build_scripted_chest_open_boot_assets || return
 
-    local abs_d71
+    local abs_d71 chest_slot_hex
     abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedchestopen.d71"
+    chest_slot_hex="$(python3 -B -c 'import sys; sys.path.insert(0, "../../../tools"); from item_ids import ITEM_SLOT_LARGE_WOODEN_CHEST as s; print(f"0x{s:02x}")')"
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
         --name "$name" \
@@ -6168,8 +6249,8 @@ run_chest_open_product_smoke128() {
         --expect-byte-symbol ".chest_product_loot_placed=0x01" \
         --expect-byte-symbol ".chest_loot_pending=0x00" \
         --expect-byte-symbol ".chest_pending_summons=0x00" \
-        --expect-byte-symbol ".current_overlay=0x04" \
-        --expect-byte-symbol ".fi_item_id=0x81" \
+        --expect-byte-symbol ".current_overlay=0x0a" \
+        --expect-byte-symbol ".fi_item_id=${chest_slot_hex}" \
         --expect-byte-symbol ".fi_p1=0x80" \
         --expect-byte-symbol ".zp_player_dlvl=0x01" \
         --timeout 30 \
@@ -6224,8 +6305,9 @@ run_exchange_product_smoke128() {
 
     build_scripted_exchange_boot_assets || return
 
-    local abs_d71
+    local abs_d71 mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex
     abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128_scriptedexchange.d71"
+    read -r mace_slot_hex dagger_slot_hex dagger_def_ego_hex empty_hex < <(python3 -B -c 'import sys; sys.path.insert(0, "../../../tools"); from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER, ITEM_SLOT_MACE; print(f"0x{ITEM_SLOT_MACE:02x} 0x{ITEM_SLOT_DAGGER:02x} 0x{ITEM_PAGE_DAGGER | 6:02x} 0x{FI_EMPTY:02x}")')
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
         --name "$name" \
@@ -6239,14 +6321,14 @@ run_exchange_product_smoke128() {
         --autostart-only-drive8 \
         --expect-byte-symbol ".exchange_product_presses=0x02" \
         --expect-byte-symbol ".exchange_product_refused_turns=0x00" \
-        --expect-byte-symbol ".exchange_product_refused_primary=0x05" \
-        --expect-byte-symbol ".exchange_product_primary_id=0x02" \
-        --expect-byte-symbol ".exchange_product_primary_ego=0x06" \
-        --expect-byte-symbol ".exchange_product_secondary_id=0x05" \
+        --expect-byte-symbol ".exchange_product_refused_primary=${mace_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_id=${dagger_slot_hex}" \
+        --expect-byte-symbol ".exchange_product_primary_ego=${dagger_def_ego_hex}" \
+        --expect-byte-symbol ".exchange_product_secondary_id=${mace_slot_hex}" \
         --expect-byte-symbol ".exchange_product_secondary_hit=0x01" \
-        --expect-byte-symbol ".exchange_product_ring2_id=0xff" \
+        --expect-byte-symbol ".exchange_product_ring2_id=${empty_hex}" \
         --expect-byte-symbol ".zp_turn_lo=0x01" \
-        --expect-byte-symbol ".current_overlay=0x07" \
+        --expect-byte-symbol ".current_overlay=0x0c" \
         --timeout 30 \
         --retry-timeouts 0 \
         --vice "$VICE"; then
@@ -6281,8 +6363,10 @@ run_scripted_book_overlay_smoke() {
         fi
         fail_addrs+=("$addr")
     done
-    if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted book overlay pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted book overlay pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6298,14 +6382,21 @@ run_scripted_book_overlay_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${pass_addr}"
+        echo "break \$${pass_addr}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
+        echo "bank vdc"
+        echo "m \$0000 \$07cf"
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6319,6 +6410,16 @@ run_scripted_book_overlay_smoke() {
     if [ "$pass_hit" -eq 1 ]; then
         if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
             boot_log_report_failure "jam during scripted book overlay flow" "$log_file" "c128_test_book_overlay_pass" "$pass_addr" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        local vdc_check_out
+        if ! vdc_check_out=$(python3 -B harness128.py --check-vdc-log "$log_file" --at-stop "$pass_addr" \
+                --expect-screen-str "0:35:Inventory" \
+                --expect-screen-str "2:4:Spellbook Beginners-Magick"); then
+            boot_log_report_failure "scripted book overlay VDC content mismatch" "$log_file" "c128_test_book_overlay_pass" "$pass_addr" "$vice_rc"
+            echo "    ${vdc_check_out}"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6375,8 +6476,10 @@ run_scripted_spell_list_overlay_smoke() {
         fi
         fail_addrs+=("$addr")
     done
-    if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted spell list overlay pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted spell list overlay pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6392,14 +6495,21 @@ run_scripted_spell_list_overlay_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${pass_addr}"
+        echo "break \$${pass_addr}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
+        echo "bank vdc"
+        echo "m \$0000 \$07cf"
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6413,6 +6523,17 @@ run_scripted_spell_list_overlay_smoke() {
     if [ "$pass_hit" -eq 1 ]; then
         if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
             boot_log_report_failure "jam during scripted spell list overlay flow" "$log_file" "c128_test_spell_list_overlay_pass" "$pass_addr" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        local vdc_check_out
+        if ! vdc_check_out=$(python3 -B harness128.py --check-vdc-log "$log_file" --at-stop "$pass_addr" \
+                --expect-screen-str "0:14:Mage Book" \
+                --expect-screen-str "2:4:Magic Missile" \
+                --expect-screen-str "24:5:Cast which? (a-a, esc)"); then
+            boot_log_report_failure "scripted spell list overlay VDC content mismatch" "$log_file" "c128_test_spell_list_overlay_pass" "$pass_addr" "$vice_rc"
+            echo "    ${vdc_check_out}"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -6474,8 +6595,10 @@ run_scripted_spell_list_cancel_smoke() {
         fi
         spell_fail_addrs+=("$addr")
     done
-    if [ -z "${c128_test_spell_pass:-}" ]; then
-        echo "FAIL (missing scripted spell cancel pass symbol in ../../../build/test/c128/main.vs)"
+    local seed_addr seed_file="../../../build/test/c128/c128_spell_seed.mon"
+    seed_addr=$(awk '$3 == ".c128_test_seed_scripted_spell_state" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${c128_test_spell_pass:-}" ] || [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
+        echo "FAIL (missing scripted spell cancel pass/seed symbol or $seed_file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -6491,14 +6614,19 @@ run_scripted_spell_list_cancel_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${seed_addr}"
         for addr in "${spell_fail_addrs[@]}"; do
             echo "break \$${addr}"
         done
-        echo "until \$${c128_test_spell_pass}"
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+        cat "$seed_file"
+        echo "delete 1"
+        echo "g"
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6598,7 +6726,7 @@ run_scripted_prayer_cast_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6718,7 +6846,7 @@ run_real_input_town_move_diag() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6796,7 +6924,7 @@ run_real_boot_crash_harness() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 520000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6868,7 +6996,7 @@ run_overlay_data_transition_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -6909,56 +7037,431 @@ run_cache_survival_smoke() {
     local name="cache_survival_smoke"
     echo -n "  $name: "
 
-    build_cache_survival_boot_assets || return
+    build_boot_assets || return
 
     local main_vs="../../../build/test/c128/main.vs"
-    local c128_test_cache_survival_pass c128_test_cache_survival_fail
-    c128_test_cache_survival_pass=$(awk '/\.c128_test_cache_survival_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    c128_test_cache_survival_fail=$(awk '/\.c128_test_cache_survival_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${c128_test_cache_survival_pass:-}" ] || [ -z "${c128_test_cache_survival_fail:-}" ]; then
-        echo "FAIL (missing cache-survival pass/fail symbols in ../../../build/test/c128/main.vs)"
+    local title_enter sheet_begin main_loop_addr cache_start cache_hi mmu_common
+    local ovl_name_len df_found_addr cur_ovl_addr disk_load_addr load_fail_addr
+    local tramp_pick_addr common_end_addr cache_failed_addr
+    title_enter=$(awk '/\.title_enter_menu$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    sheet_begin=$(awk '/\.hal_platform_character_sheet_begin$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    main_loop_addr=$(awk '/\.main_loop$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cache_start=$(awk '/\.c128_cache_enabled$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cache_hi=$(awk '/\.c128_cache_overlay_bits_hi$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    mmu_common=$(awk '/\.mmu_common_irq$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    ovl_name_len=$(awk '/\.hal_storage_overlay_name_len$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    df_found_addr=$(awk '/\.df_found$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cur_ovl_addr=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    disk_load_addr=$(awk '/\.overlay_load_disk$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    load_fail_addr=$(awk '/\.runtime_load_failed$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    tramp_pick_addr=$(awk '/\.tramp_door_pick_roll$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    common_end_addr=$(awk '/\.runtime_common_data_end$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    cache_failed_addr=$(awk '/\.c128_cache_failed$/ { split($2,a,":"); print tolower(a[2]); exit }' "$main_vs")
+    if [ -z "${title_enter:-}" ] || [ -z "${sheet_begin:-}" ] || [ -z "${main_loop_addr:-}" ] || \
+       [ -z "${cache_start:-}" ] || [ -z "${cache_hi:-}" ] || [ -z "${mmu_common:-}" ] || \
+       [ -z "${ovl_name_len:-}" ] || [ -z "${df_found_addr:-}" ] || [ -z "${cur_ovl_addr:-}" ] || \
+       [ -z "${disk_load_addr:-}" ] || [ -z "${load_fail_addr:-}" ] || \
+       [ -z "${tramp_pick_addr:-}" ] || [ -z "${common_end_addr:-}" ] || \
+       [ -z "${cache_failed_addr:-}" ]; then
+        echo "FAIL (missing cache-survival monitor symbols in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    local abs_d64
-    abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_cache_survival.d64"
-    local mon_file
+    local stub_dec stub_base stub_ret disarm_len_addr mmu_common_end
+    local tramp_dec tramp_lo tramp_hi
+    stub_dec=$((16#$common_end_addr))
+    if [ $((stub_dec + 4)) -gt $((16#1000)) ]; then
+        echo "FAIL (runtime_common_data_end=$common_end_addr leaves <4 bytes below \$1000)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    stub_base=$(printf '%04x' "$stub_dec")
+    stub_ret=$(printf '%04x' $((stub_dec + 3)))
+    disarm_len_addr=$(printf '%04x' $((16#$ovl_name_len + 7)))
+    mmu_common_end=$(printf '%04x' $((16#$mmu_common + 7)))
+    tramp_dec=$((16#$tramp_pick_addr))
+    tramp_lo=$(printf '%02x' $((tramp_dec & 255)))
+    tramp_hi=$(printf '%02x' $(((tramp_dec >> 8) & 255)))
+
+    local abs_d71
+    abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
+    local mon_file log_file check_log
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
-    local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
+    check_log="$(test128_tmp_file "test128_${name}_check.log")"
     : > "$log_file"
 
     {
-        echo "break \$${c128_test_cache_survival_fail}"
-        echo "until \$${c128_test_cache_survival_pass}"
+        echo "bank ram01"
+        echo "> fe02 08"
+        echo "bank cpu"
+        echo "break \$${title_enter}"
         echo "g"
-        echo "quit"     # at the next stop: a stop after the last command waited forever
+        echo "del"
+        echo "m ${mmu_common} ${mmu_common_end}"
+        echo "bank ram01"
+        echo "m 7e60 7e67"
+        echo "m a000 a007"
+        echo "m b000 b007"
+        echo "m c000 c007"
+        echo "m e000 e007"
+        echo "m 9d00 9d07"
+        echo "bank cpu"
+        c128_key_feed_cmds $'NA\rABOT\rB'
+        echo "break \$${sheet_begin}"
+        echo "g"
+        echo "del"
+        c128_key_feed_cmds $' '
+        echo "break \$${sheet_begin}"
+        echo "break \$${main_loop_addr}"
+        echo "g"
+        echo "del"
+        echo "m ${cache_start} ${cache_hi}"
+        echo "m ${mmu_common} ${mmu_common_end}"
+        echo "bank ram01"
+        echo "m 7e60 7e67"
+        echo "m a000 a007"
+        echo "m b000 b007"
+        echo "m c000 c007"
+        echo "m e000 e007"
+        echo "m 9d00 9d07"
+        echo "bank cpu"
+        echo "> ${disarm_len_addr} 00"
+        echo "> ${df_found_addr} 7f"
+        echo "> ${stub_base} 20 ${tramp_lo} ${tramp_hi} ea"
+        echo "break \$${disk_load_addr}"
+        echo "break \$${load_fail_addr}"
+        echo "break \$${stub_ret}"
+        echo "r pc=${stub_base}"
+        echo "g"
+        echo "r"
+        echo "m ${cur_ovl_addr} ${cur_ovl_addr}"
+        echo "m ${cache_failed_addr} ${cache_failed_addr}"
+        echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if boot_log_has_stop_at "$log_file" "$c128_test_cache_survival_fail"; then
-        boot_log_report_failure "cache survival validation failed after summary-to-town flow" "$log_file" "c128_test_cache_survival_fail" "$c128_test_cache_survival_fail" "$vice_rc"
+    if ! python3 -B "$REPO_ROOT/tools/c128_cache_survival_check.py" "$main_vs" "$log_file" >"$check_log" 2>&1; then
+        echo "FAIL ($(head -n 1 "$check_log"))"
+        echo "    vice_rc=$vice_rc log=$log_file"
+        tail -20 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if ! boot_log_has_stop_at "$log_file" "$c128_test_cache_survival_pass"; then
-        boot_log_report_failure "did not reach cache-survival pass trap" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_hot_path_zero_disk_smoke() {
+    local name="hot_path_zero_disk_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local main_vs="../../../build/test/c128/main.vs"
+    local abs_d71 mon_file log_file check_log
+    abs_d71="$(cd ../../../build/test/c128 && pwd)/moria128.d71"
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    check_log="$(test128_tmp_file "test128_${name}_check.log")"
+    : > "$log_file"
+
+    if ! python3 -B - "$main_vs" "$mon_file" >"$check_log" 2>&1 <<'PY'
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("../../../tools").resolve()))
+from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER
+
+EGO_DEFENDER = 6
+vs_path, mon_path = Path(sys.argv[1]), Path(sys.argv[2])
+syms = {}
+for line in vs_path.read_text().splitlines():
+    m = re.match(r"al\s+C:([0-9A-Fa-f]+)\s+\.([A-Za-z0-9_]+)$", line)
+    if m:
+        syms[m.group(2)] = int(m.group(1), 16)
+
+required = [
+    "title_enter_menu", "hal_platform_character_sheet_begin", "main_loop",
+    "input_key_wait_strict", "input_key_wait_fast",
+    "w_open", "w_load", "overlay_load_disk", "runtime_load_failed",
+    "zp_player_x", "zp_player_y", "zp_player_hp_lo", "zp_player_mhp_lo",
+    "zp_player_lvl", "zp_player_dlvl", "zp_view_x", "zp_view_y",
+    "player_data", "monster_table", "room_count",
+    "door_state_count", "door_state_x", "door_state_y", "door_state_val",
+    "trap_count", "trap_x", "trap_y", "trap_type",
+    "fi_item_id", "fi_x", "fi_y", "fi_qty", "fi_p1", "fi_meta",
+    "fi_to_hit", "fi_to_dam", "fi_to_ac", "fi_meta_hi",
+    "inv_item_id", "inv_ego",
+]
+missing = [k for k in required if k not in syms]
+if missing:
+    raise SystemExit(f"missing monitor symbols: {', '.join(missing)}")
+
+strict_pc = syms["input_key_wait_strict"]
+fast_pc = syms["input_key_wait_fast"]
+exit_pc = strict_pc + 2
+
+def feed_ascii(chars: str) -> list[str]:
+    out = [f"break ${strict_pc:04X}", f"break ${fast_pc:04X}"]
+    for ch in chars:
+        out.extend(["g", f"r a=${ord(ch):02x}", f"r pc=${exit_pc:04X}"])
+    out.append("del")
+    return out
+
+def feed_hex(hex_bytes: list[int]) -> list[str]:
+    out = []
+    for b in hex_bytes:
+        out.extend(["g", f"r a=${b:02x}", f"r pc=${exit_pc:04X}"])
+    return out
+
+p_data = syms["player_data"]
+m_tab = syms["monster_table"]
+fi_id = syms["fi_item_id"]
+
+lines = [
+    "bank ram01",
+    "> fe02 08",
+    "bank cpu",
+    f"break ${syms['title_enter_menu']:04X}",
+    "g",
+    "del",
+    *feed_ascii("NA\rABOT\rB"),
+    f"break ${syms['hal_platform_character_sheet_begin']:04X}",
+    "g",
+    "del",
+    *feed_ascii(" "),
+    f"break ${syms['main_loop']:04X}",
+    "g",
+    "del",
+    # Clear town NPCs so town down-stairs at (32, 18) is unobstructed, then descend '>' to DL 1.
+    f"f {m_tab:04x} {m_tab + 383:04x} ff",
+    *feed_ascii("L>"),
+    f"break ${syms['main_loop']:04X}",
+    "g",
+    "del",
+    # Stage deterministic East corridor at y=20 (Bank 1 $4000 + 20*198 = $4F78) on live DL 1:
+    f"f {m_tab:04x} {m_tab + 383:04x} ff",
+    f"> {syms['room_count']:04x} 00",
+    "bank ram01",
+    "f 4ebb 4ecc 14",
+    "f 5047 5058 14",
+    "> 4f81 14",
+    "f 4f82 4f91 04",
+    "> 4f92 14",
+    "> 4f8b 84",
+    "> 4f8d 84",
+    "> 4f90 06",
+    "bank cpu",
+    f"> {syms['zp_player_x']:04x} 0b",
+    f"> {syms['zp_player_y']:04x} 14",
+    f"> {syms['zp_view_x']:04x} 00",
+    f"> {syms['zp_view_y']:04x} 0b",
+    f"> {syms['zp_player_hp_lo']:04x} 64 00",
+    f"> {syms['zp_player_mhp_lo']:04x} 64 00",
+    f"> {syms['zp_player_lvl']:04x} 28",
+    f"> {p_data + 19:04x} 28",
+    f"> {p_data + 28:04x} 76",
+    f"> {p_data + 30:04x} 76",
+    f"> {p_data + 33:04x} 64 00 64 00",
+    f"> {syms['door_state_count']:04x} 01",
+    f"> {syms['door_state_x']:04x} 15",
+    f"> {syms['door_state_y']:04x} 14",
+    f"> {syms['door_state_val']:04x} 01",
+    f"> {syms['trap_count']:04x} 01",
+    f"> {syms['trap_x']:04x} 17",
+    f"> {syms['trap_y']:04x} 14",
+    f"> {syms['trap_type']:04x} 00",
+    f"f {fi_id:04x} {fi_id + 41:04x} {FI_EMPTY:02x}",
+    f"> {fi_id:04x} {ITEM_SLOT_DAGGER:02x}",
+    f"> {syms['fi_x']:04x} 18",
+    f"> {syms['fi_y']:04x} 14",
+    f"> {syms['fi_qty']:04x} 01",
+    f"> {syms['fi_p1']:04x} 00",
+    f"> {syms['fi_meta']:04x} 01",
+    f"> {syms['fi_to_hit']:04x} 02",
+    f"> {syms['fi_to_dam']:04x} 03",
+    f"> {syms['fi_to_ac']:04x} 00",
+    f"> {syms['fi_meta_hi']:04x} {ITEM_PAGE_DAGGER | EGO_DEFENDER:02x}",
+    f"> {syms['inv_item_id'] + 21:04x} {FI_EMPTY:02x}",
+    # Sentinel read of $FF00 to mark start of zero-disk hot-path gauntlet in monitor log:
+    "m ff00 ff00",
+    f"break ${syms['w_open']:04X}",
+    f"break ${syms['w_load']:04X}",
+    f"break ${syms['overlay_load_disk']:04X}",
+    f"break ${syms['runtime_load_failed']:04X}",
+    f"break ${strict_pc:04X}",
+    f"break ${fast_pc:04X}",
+    # 1. Normal moves: 'l' (11->12), 'l' (12->13)
+    # 2. Shift+L ($CC) corridor run: (13->18, stops before plain door at 19)
+    # 3. Plain door 'o'+'l' open, 'c'+'l' close, 'o'+'l' re-open, 'l','l' step to (20,20)
+    # 4. Locked door at (21,20): 'o'+'l' pick & open (door_pick_roll), 'l','l' step to (22,20)
+    # 5. Trap at (23,20): 'l' step onto pit trap (trap_trigger)
+    # 6. Non-gold ego item at (24,20): 'l' step onto item + 'g' pickup!
+    *feed_hex([
+        0x4c, 0x4c,
+        0xcc,
+    ]),
+    # Verify Shift+L ran all 5 corridor tiles (13 -> 18) and stopped before closed door at 19:
+    "g",
+    f"m {syms['zp_player_x']:04x} {syms['zp_player_y']:04x}",
+    f"r a=$4f",
+    f"r pc=${exit_pc:04X}",
+    *feed_hex([
+        0x4c, 0x43, 0x4c, 0x4f, 0x4c, 0x4c, 0x4c,
+        0x4f, 0x4c, 0x20, 0x4c, 0x4c,
+        0x4c,
+        0x4c, 0x47,
+    ]),
+    # Wait for 'g' pickup turn to finish back at input_key_wait_strict/fast, while keeping w_open/w_load breakpoints armed!
+    "g",
+    "del",
+    f"m {syms['zp_player_x']:04x} {syms['zp_player_dlvl']:04x}",
+    f"m {syms['door_state_count']:04x} {syms['door_state_count']:04x}",
+    f"m {fi_id:04x} {fi_id:04x}",
+    f"m {syms['inv_item_id']:04x} {syms['inv_item_id'] + 21:04x}",
+    f"m {syms['inv_ego']:04x} {syms['inv_ego'] + 21:04x}",
+    "bank ram01",
+    "m 4f8b 4f90",
+    "m dcb8 df37",
+    "bank cpu",
+    "quit",
+]
+mon_path.write_text("\n".join(lines) + "\n")
+PY
+    then
+        echo "FAIL ($(head -n 1 "$check_log"))"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        boot_log_report_failure "jam during cache-survival flow" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d71" \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if ! python3 -B - "$main_vs" "$log_file" >"$check_log" 2>&1 <<'PY'
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("../../../tools").resolve()))
+from item_ids import FI_EMPTY, ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER
+
+EGO_DEFENDER = 6
+vs_path, log_path = Path(sys.argv[1]), Path(sys.argv[2])
+syms = {}
+for line in vs_path.read_text().splitlines():
+    m = re.match(r"al\s+C:([0-9A-Fa-f]+)\s+\.([A-Za-z0-9_]+)$", line)
+    if m:
+        syms[m.group(2)] = int(m.group(1), 16)
+
+log = log_path.read_text(errors="replace")
+marker = re.search(r">C:ff00\b", log, re.IGNORECASE)
+if not marker:
+    raise SystemExit("did not reach DL 1 hot-path gauntlet start")
+
+gauntlet_log = log[marker.end():]
+forbidden = {
+    syms["w_open"]: "w_open",
+    syms["w_load"]: "w_load",
+    syms["overlay_load_disk"]: "overlay_load_disk",
+    syms["runtime_load_failed"]: "runtime_load_failed",
+}
+for m in re.finditer(r"Stop on\s+exec\s+([0-9A-Fa-f]{4})", gauntlet_log):
+    pc = int(m.group(1), 16)
+    if pc in forbidden:
+        raise SystemExit(f"floppy/disk routine {forbidden[pc]} (${pc:04X}) executed during hot-path gauntlet")
+
+mem: dict[tuple[str, int], int] = {}
+for line in gauntlet_log.splitlines():
+    m = re.match(r">([A-Za-z0-9_]+):([0-9a-fA-F]{4})\s+((?:[0-9a-fA-F]{2}\s*)+)", line)
+    if m:
+        btag = m.group(1)
+        base = int(m.group(2), 16)
+        vals = [int(x, 16) for x in m.group(3).split()[:16]]
+        for idx, v in enumerate(vals):
+            mem[(btag, base + idx)] = v
+
+def cbyte(addr: int) -> int:
+    if ("C", addr) not in mem:
+        raise SystemExit(f"missing CPU dump byte at ${addr:04X}")
+    return mem[("C", addr)]
+
+def r1byte(addr: int) -> int:
+    for tag in ("1", "ram01", "C"):
+        if (tag, addr) in mem:
+            return mem[(tag, addr)]
+    for (_tag, a), val in mem.items():
+        if a == addr:
+            return val
+    raise SystemExit(f"missing Bank 1 dump byte at ${addr:04X}")
+
+# First zp_player_x dump is right after Shift+L corridor run (expected x=18, y=20):
+first_pos = re.search(rf">C:0*{syms['zp_player_x']:02x}\s+([0-9a-fA-F]{{2}})\s+([0-9a-fA-F]{{2}})", gauntlet_log, re.IGNORECASE)
+if not first_pos or (int(first_pos.group(1), 16), int(first_pos.group(2), 16)) != (18, 20):
+    got = (int(first_pos.group(1), 16), int(first_pos.group(2), 16)) if first_pos else None
+    raise SystemExit(f"Shift+L corridor run did not stop at (18,20): got {got}")
+
+px = cbyte(syms["zp_player_x"])
+py = cbyte(syms["zp_player_y"])
+hp = cbyte(syms["zp_player_hp_lo"])
+dlvl = cbyte(syms["zp_player_dlvl"])
+if (dlvl, px, py) != (1, 24, 20):
+    raise SystemExit(f"unexpected end player state dlvl={dlvl} pos=({px},{py}), expected dlvl=1 pos=(24,20)")
+if not (0 < hp < 100):
+    raise SystemExit(f"pit trap did not apply expected non-lethal damage: hp={hp}")
+
+if cbyte(syms["door_state_count"]) != 0:
+    raise SystemExit(f"locked door was not unlocked by door_pick_roll: door_state_count={cbyte(syms['door_state_count'])}")
+if (r1byte(0x4f8b) & 0xf0) != 0x70:
+    raise SystemExit(f"plain door at (19,20) not open: tile=${r1byte(0x4f8b):02X}")
+if (r1byte(0x4f8d) & 0xf0) != 0x70:
+    raise SystemExit(f"locked door at (21,20) not open: tile=${r1byte(0x4f8d):02X}")
+if (r1byte(0x4f8f) & 0xf0) != 0xe0:
+    raise SystemExit(f"floor trap at (23,20) not revealed/triggered: tile=${r1byte(0x4f8f):02X}")
+if (r1byte(0x4f90) & 0x02) != 0x00 or cbyte(syms["fi_item_id"]) != FI_EMPTY:
+    raise SystemExit(f"floor item at (24,20) not picked up: tile=${r1byte(0x4f90):02X} fi0=${cbyte(syms['fi_item_id']):02X}")
+
+picked = any(
+    cbyte(syms["inv_item_id"] + i) == ITEM_SLOT_DAGGER
+    and cbyte(syms["inv_ego"] + i) == (ITEM_PAGE_DAGGER | EGO_DEFENDER)
+    for i in range(22)
+)
+if not picked:
+    raise SystemExit("picked ego Dagger (Defender) not found in carried inventory")
+
+hist_bytes = bytes(r1byte(a) for a in range(0xdcb8, 0xdf38))
+def sc_to_ascii(b: int) -> str:
+    if 1 <= b <= 26:
+        return chr(ord("a") + b - 1)
+    if 0x41 <= b <= 0x5a:
+        return chr(b)
+    if 0x20 <= b <= 0x3f:
+        return chr(b)
+    return " "
+hist_text = "".join(sc_to_ascii(b) for b in hist_bytes).lower()
+if "dagger" not in hist_text and "sword" not in hist_text:
+    raise SystemExit(f"VDC ITEM.CAT decoded weapon name missing from msg_history: {hist_text!r}")
+PY
+    then
+        echo "FAIL ($(head -n 1 "$check_log"))"
+        echo "    vice_rc=$vice_rc log=$log_file"
+        tail -25 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -7002,7 +7505,7 @@ run_dungeon_attack_stability_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 620000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7059,7 +7562,7 @@ run_death_overlay_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 240000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7115,7 +7618,7 @@ run_restart_to_title_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 420000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7185,7 +7688,7 @@ run_catalog_spawn_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7246,7 +7749,7 @@ run_overlay_partial_failure_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7274,7 +7777,7 @@ run_overlay_partial_failure_smoke() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7333,7 +7836,7 @@ run_boot_diag_copy() {
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
 
-    "$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
         -moncommands "$mon_file" -monlogname "$log_file" -monlog \
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -7364,6 +7867,7 @@ run_selected_suites() {
     run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
     run_named_suite c128_save_load_guard run_save_load_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
+    run_named_suite c128_item_catalog_guard run_c128_item_catalog_guard_check || return 1
 
     run_parallel_unit_tests || return 1
 
@@ -7412,6 +7916,7 @@ run_selected_suites() {
     run_named_suite real_boot_crash_harness run_real_boot_crash_harness || return 1
     run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke || return 1
     run_named_suite cache_survival_smoke run_cache_survival_smoke || return 1
+    run_named_suite hot_path_zero_disk_smoke run_hot_path_zero_disk_smoke || return 1
     run_named_suite dungeon_attack_stability_smoke run_dungeon_attack_stability_smoke || return 1
     run_named_suite death_overlay_smoke run_death_overlay_smoke || return 1
     run_named_suite restart_to_title_smoke run_restart_to_title_smoke || return 1

@@ -28,9 +28,10 @@ from pathlib import Path
 from typing import Any
 
 from . import knowledge, nav
+from .abi import CONSTS
 from .auditor import Auditor
 from .brain import Brain
-from .game import EmulatorUnresponsive, GameFault, Mode, Observation
+from .game import KEY_SPACE, EmulatorUnresponsive, GameFault, Mode, Observation
 from .goals import (CHARACTERS, DEFAULT_CHARACTER, GOALS, QUALIFICATION_SEEDS, Goal, for_character,
                     for_port, required)
 from .launch import PLAYTEST_OUT, ROOT, Build, StaleDisk, build_identity, check_disk
@@ -44,6 +45,8 @@ SUITES = ROOT / "playtest" / "suites"
 PLATEAU_CHARACTERS = 10
 WIND_DOWN_SECONDS = 5   # a failed run waits this long per worker before SIGTERM
 MAX_RESTARTS_PER_STEP = 2
+KEY_CLAIM_VICTORY = 0xD1   # Shift+Q: a winner retires (game_loop CMD_QUIT, player_retired)
+VICTORY_SCREENS = 8        # screens kept from the win to the title (capture_victory)
 ASSET_PROMPT = "Insert program disk"   # asset_load_ask_for_disk: every attempt at a required load failed
 ASSET_PROMPT_LIMIT = 20  # that prompt this many steps running: the game is stuck under it (Plus/4, 2026-11-09)
 
@@ -164,6 +167,20 @@ def load_brain(snapshot: Path, goal: Goal) -> Brain:
         for name, value in vars(new).items():
             if name not in vars(obj):
                 setattr(obj, name, value)
+            elif isinstance(value, dict) and isinstance(getattr(obj, name), dict):
+                # A key newer code starts a count with, as a new attribute:
+                # brain.strong gained Potion of Healing, and every resume of
+                # two Balrog characters ended in a KeyError at the Black
+                # Market, 400 runs each (2026-11-13).
+                saved = getattr(obj, name)
+                for key, default in value.items():
+                    saved.setdefault(key, default)
+    # The book list is listed again before the first cast: a save's can be
+    # wrong for the books carried. A clvl 19 Elf Ranger's held
+    # ["Beginners-Magick"] with only Magick I carried, one book either way,
+    # and every restore fainted first (C64 Balrog, 2026-11-18).
+    brain.magic.ever_books |= brain.magic.listed_books
+    brain.magic.books = None
     return brain
 
 
@@ -344,6 +361,45 @@ class Character:
                     self.worker.game.press(replay_key)
         raise AssertionError("unreachable")
 
+    def reached_kills(self, obs: Observation) -> None:
+        """The goal's screen never reaches the brain: its kills, the Balrog's
+        on the -more- before "You have won!", are logged here (the first two
+        wins left none, so the Monsters panel showed no Balrog slain,
+        2026-11-12)."""
+        self.brain.note_kills(self.brain.prompt_messages + " " + " ".join(obs.rows[:2]))
+        self.log_kills(obs)
+
+    def log_kills(self, obs: Observation) -> None:
+        """The brain's kills since the last command screen, as kill events."""
+        for name in self.brain.kills:
+            self.session.event("kill", seed=self.seed, step=self.result.steps, name=name,
+                               dlvl=obs.dlvl, clvl=obs.clvl)
+        self.brain.kills.clear()
+
+    def capture_victory(self, obs: Observation) -> None:
+        """The win kept as it looks (maintainer, 2026-11-12: the first two
+        Balrog kills were seen only as a status line): the winning screen,
+        then Shift+Q (claim victory, player_retired) and each screen after it
+        to the title, as text and, on the VICE ports, a PNG, in the worker's
+        ``victory`` directory. A screen that cannot be taken costs the win
+        nothing."""
+        out = self.worker.workdir / "victory"
+        game = self.worker.game
+        try:
+            out.mkdir(parents=True, exist_ok=True)
+            key, shots = KEY_CLAIM_VICTORY, 0
+            for n in range(VICTORY_SCREENS):
+                (out / f"{n:02d}.txt").write_text("\n".join(obs.rows) + "\n")
+                shots += bool(game and game.screenshot(out / f"{n:02d}.png"))
+                if n and obs.mode == Mode.CHARGEN:
+                    break   # the title again
+                assert game is not None
+                obs = game.press(key)
+                key = KEY_SPACE
+            self.session.event("victory_captured", seed=self.seed, dir=str(out), screens=n + 1, pictures=shots)
+        except Exception as exc:   # noqa: BLE001 - never at the win's cost
+            self.session.event("victory_capture_failed", seed=self.seed, error=f"{type(exc).__name__}: {exc}")
+
     def play(self) -> Result:
         started = time.monotonic()
         try:
@@ -367,6 +423,9 @@ class Character:
                     self.observe(obs)
                 if obs.mode == Mode.COMMAND and self.reached(obs):
                     self.result.outcome = "reached"
+                    self.reached_kills(obs)
+                    if obs.game_flags & CONSTS["GAME_FLAG_WINNER"][1]:
+                        self.capture_victory(obs)
                     break
                 if obs.mode == Mode.DEATH:
                     self.result.outcome = "died"
@@ -397,10 +456,7 @@ class Character:
                 for event in self.brain.events:
                     self.file_finding("stall", "bot", event, obs)
                 self.brain.events.clear()
-                for name in self.brain.kills:
-                    self.session.event("kill", seed=self.seed, step=self.result.steps, name=name,
-                                       dlvl=obs.dlvl, clvl=obs.clvl)
-                self.brain.kills.clear()
+                self.log_kills(obs)
                 # The first time this run names or looks at each creature,
                 # for the Monsters panel's met column (an invisible Evil Iggy
                 # fought for hours left no kill and no death, 2026-11-12).

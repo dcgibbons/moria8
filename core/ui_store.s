@@ -1,11 +1,26 @@
 #importonce
 // ui_store.s — Store screen rendering, buy/sell UI, entry detection
 //
+// Module ownership:
+//   owner: TownOverlay across all 7 ports (e.g. `ovl.town` / `$E000-$EFFF`).
+//   lifetime: transient overlay; loaded on store entry and released on exit.
+//   callers: port `tramp_store_enter` (via `game_loop.s:try_store_entry`).
+//     - !HOME_OVERLAY_SEPARATE: `store_enter` jumps directly to `home_enter` on
+//       `#STORE_HOME` (valid only when `ui_home.s` is resident or banked).
+//     - HOME_OVERLAY_SEPARATE: port `tramp_store_enter` dispatches `#STORE_HOME`
+//       directly to `OVL_HOME` (`home_enter`), keeping `ovl.town` and `ovl.home`
+//       completely disjoint; caller overlay/bank restore happens in
+//       `tramp_store_enter`.
+//   .assert: protected by each port's TownOverlay end .assert.
+//
 // The store is a separate mode with its own input loop.
 // Player enters by stepping on a store door tile in town.
 
 #import "input_ui_helpers.s"
 #import "store_meta_macros.s"
+#define UI_HOME_TEXT_MACROS_ONLY
+#import "ui_home_text.s"
+#undef UI_HOME_TEXT_MACROS_ONLY
 
 // ============================================================
 // PETSCII key constants for store UI
@@ -55,12 +70,14 @@
 // Input: zp_store_idx = store index (0-5)
 // Clobbers: everything
 store_enter:
-    // Home uses separate UI at $F000
+#if !HOME_OVERLAY_SEPARATE
+    // Home uses separate UI (banked/resident when not in HomeOverlay)
     lda zp_store_idx
     cmp #STORE_HOME
     bne !se_not_home+
     jmp home_enter              // Shared Home UI entry; valid in the town runtime state
 !se_not_home:
+#endif
     lda #0
     sta hg_insults              // Reset insult counter for this visit
     jsr store_draw_screen
@@ -147,56 +164,28 @@ store_draw_screen:
     jsr draw_separator_at_a
 
     // Rows 3-18: Item list
-    lda #COL_LGREY
-    sta zp_text_color
+#if ITEMDESC_STORE_SLOT_DUPLICATED
+    :StoreDrawSlotListBody(sb_abs_slot, sd_row, sd_save_x, store_put_letter, itemdesc_put_store_slot_town, 1, store_draw_slot_price)
+#else
+    :StoreDrawSlotListBody(sb_abs_slot, sd_row, sd_save_x, store_put_letter, itemdesc_put_store_slot, 1, store_draw_slot_price)
+#endif
 
-    ldx zp_store_idx
-    lda store_base_idx,x
-    sta sb_abs_slot             // Starting absolute slot
+    // Row 19: Menu, then the gold to its right
+    ldx #MSG_MENU
+    jsr show_msg
+    ldx #MSG_GOLD
+    lda #USTORE_GOLD_COL
+    jsr show_msg_at_col
 
-    lda #3
-    sta sd_row                  // Current display row
-    lda #0
-    sta sd_save_x               // Slot counter 0-15
+    :StorePutGoldValueBody()
 
-!sds_item_loop:
-    lda sd_save_x
-    cmp #STORE_MAX_ITEMS
-    bcc !sds_item_cont+
-    jmp !sds_items_done+
-!sds_item_cont:
-
-    lda sd_row
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-
-    // Check if slot occupied
-    ldy sb_abs_slot
-    :AuxReadY(si_item_id)
-    cmp #FI_EMPTY
-    bne !sds_has_item+
-    jmp !sds_empty_slot+
-!sds_has_item:
-
-    // Letter: A + slot_counter (screen code A = $01)
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr store_put_letter
-    lda #$20                    // Space
-    jsr hal_screen_put_char
-
-    // Item description
-    lda #COL_LGREY
-    sta zp_text_color
-    ldx sb_abs_slot
-    jsr itemdesc_put_store_slot
-
+store_draw_slot_price:
+#if !HOME_OVERLAY_SEPARATE
     // Skip price display for Home (no prices)
     lda zp_store_idx
     cmp #STORE_HOME
-    beq !sds_next_slot+
-
+    beq !sdsp_done+
+#endif
     // Price column is platform-tuned (C128 uses wider right anchor).
     lda sd_row
     sta zp_cursor_row
@@ -220,38 +209,8 @@ store_draw_screen:
     lda #<uis_store_gp_pad_str
     ldy #>uis_store_gp_pad_str
     jsr uis_screen_put_inline
-
-    jmp !sds_next_slot+
-
-!sds_empty_slot:
-    // Show dash for empty slot
-    lda #COL_DGREY
-    sta zp_text_color
-    jsr store_put_letter
-
-!sds_next_slot:
-    lda #COL_LGREY
-    sta zp_text_color
-    inc sd_row
-    inc sb_abs_slot
-    inc sd_save_x
-    jmp !sds_item_loop-
-
-!sds_items_done:
-    // Row 19: Menu, then the gold to its right
-    ldx #MSG_MENU
-    jsr show_msg
-    ldx #MSG_GOLD
-    lda #USTORE_GOLD_COL
-    jsr show_msg_at_col
-
-    lda player_data + PL_GOLD_0
-    sta zp_temp0
-    lda player_data + PL_GOLD_1
-    sta zp_temp1
-    lda player_data + PL_GOLD_2
-    sta nf_value_2
-    jmp screen_put_decimal_u24
+!sdsp_done:
+    rts
 
 // ============================================================
 // Buy flow
@@ -341,8 +300,8 @@ store_buy:
     rts                         // Cancelled or no deal
 
 store_load_price_fields_x:
-    :LoadStoreEgoX()
-    sta sb_item_ego             // Pass ego for pricing (R14)
+    :LoadStoreMetaHiX()
+    sta sb_item_ego             // Pass (page_bit | ego_id) for pricing & ITEM.CAT page
     :AuxReadX(si_p1)
     sta sb_item_p1              // Pass charges/type-specific p1 for pricing
     :AuxReadX(si_to_hit)
@@ -378,9 +337,9 @@ sbuy_execute:
     sta fi_add_to_ac
     :LoadStoreFlagsX()
     sta fi_add_flags
-    :LoadStoreEgoX()
+    :LoadStoreMetaHiX()
     sta fi_add_ego
-    jsr inv_add_item
+    jsr inv_add_carried             // the weight limit, then a slot
     bcs !sb_has_room+
     jmp sbuy_full
 !sb_has_room:
@@ -423,7 +382,11 @@ sbuy_no_gold:
     ldx #MSG_NO_AFFORD
     jmp store_clear_show_msg_wait
 
-sbuy_full:
+sbuy_full:                          // X = inv_add_carried's refusal
+    cpx #HSTR_UIS_TOO_HEAVY
+    bne !sbf_full+
+    jmp store_show_huff_wait        // VMS store2.inc: inven_check_weight
+!sbf_full:
     ldx #MSG_PACK_FULL
     jmp store_clear_show_msg_wait
 
@@ -475,10 +438,12 @@ store_sell:
 
     // Check if store buys this category
     ldx sd_save_x
-    lda inv_item_id,x
-    tax
-    lda it_category,x
+    jsr item_get_category_inv_x
+#if STORE_CHECK_CAT_DUPLICATED
+    jsr check_store_category_town
+#else
     jsr check_store_category
+#endif
     bcs !ssl_buyable+
 
     // Store doesn't buy it — grey
@@ -544,9 +509,13 @@ store_sell:
     sta ss_item_id
 
     // Check if store buys this category
-    tax
-    lda it_category,x
+    ldx ss_inv_slot
+    jsr item_get_category_inv_x
+#if STORE_CHECK_CAT_DUPLICATED
+    jsr check_store_category_town
+#else
     jsr check_store_category
+#endif
     bcs !ssell_cat_ok+
 
     // Store doesn't buy it
@@ -768,29 +737,12 @@ check_cancel:
 draw_separator_at_a:
     sta zp_cursor_row
 draw_separator:
-    lda #0
-    sta zp_cursor_col
-    ldx #SCREEN_COLS
-!ds_loop:
-    lda #$2d                    // Screen code '-'
-    jsr hal_screen_put_char
-    dex
-    bne !ds_loop-
-    rts
+    :StoreDrawSeparatorBody()
 
 // store_clear_msg_area — Clear rows 20-23 for messages
 // Clobbers: A, X, Y
 store_clear_msg_area:
-    lda #20
-!scma_loop:
-    pha
-    jsr hal_screen_clear_row
-    pla
-    clc
-    adc #1
-    cmp #24
-    bcc !scma_loop-
-    rts
+    :StoreClearMsgAreaBody()
 
 // ============================================================
 // Number input (R6.1 haggling)
@@ -1059,15 +1011,7 @@ haggle_buy:
     sta hg_ask_hi
 
     ldx sb_abs_slot
-    :AuxReadX(si_p1)
-    sta sb_item_p1
-    :AuxReadX(si_to_hit)
-    sta sb_item_to_hit
-    :AuxReadX(si_to_dam)
-    sta sb_item_to_dam
-    :AuxReadX(si_to_ac)
-    sta sb_item_to_ac
-    :AuxReadX(si_item_id)
+    jsr store_load_price_fields_x
     jsr calc_buy_min_price
     lda sb_price_lo
     sta hg_min_lo
@@ -1445,6 +1389,13 @@ hg_do_accept:
 // hg_show_insult_msg — Display random insult, wait for key
 // Clobbers: everything
 hg_show_insult_msg:
+    lda #HSTR_INSULT_COUNT
+    jsr rng_range
+    tax
+// store_show_huff_wait — Huffman string X in red on row 23, wait for a key
+store_show_huff_wait:
+    txa
+    pha
     jsr store_clear_msg_area
     lda #COL_RED
     sta zp_text_color
@@ -1452,8 +1403,7 @@ hg_show_insult_msg:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    lda #HSTR_INSULT_COUNT
-    jsr rng_range
+    pla
     tax
     jsr huff_decode_string
     jsr hal_screen_put_string
@@ -1651,9 +1601,16 @@ msg_tbl_hi:
 // store_put_letter — "A)" for the slot in sd_save_x (screen code A = $01)
 // Clobbers: A, X, Y (hal_screen_put_char)
 store_put_letter:
-    lda sd_save_x
-    clc
-    adc #$01                    // Screen code 'A'
-    jsr hal_screen_put_char
-    lda #$29                    // ')'
-    jmp hal_screen_put_char
+    :StorePutLetterBody(sd_save_x)
+
+#if STORE_CHECK_CAT_DUPLICATED
+#import "store_check_category_macro.s"
+check_store_category_town:
+    :CheckStoreCategoryBody()
+#endif
+
+#if ITEMDESC_STORE_SLOT_DUPLICATED
+#import "itemdesc_store_slot_macro.s"
+itemdesc_put_store_slot_town:
+    :ItemdescPutStoreSlotBody()
+#endif

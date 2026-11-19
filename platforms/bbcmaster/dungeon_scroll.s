@@ -131,12 +131,13 @@ render_viewport_scroll_delta:
     ldx #0
     jmp bsd_strip
 
+bsd_strip_limit: .byte VIEWPORT_H, VIEWPORT_W
+
 // bsd_strip — Redraw the exposed edge strip via render_single_tile.
 bsd_strip:
     sta zp_temp2
     stx bsd_dir
-    lda #0
-    sta bsd_i
+    stz bsd_i
 !s:
     lda zp_temp2
     ldx bsd_dir
@@ -146,7 +147,7 @@ bsd_strip:
     clc
     adc bsd_i
     sta zp_temp1
-    jmp !s_draw+
+    bra !s_draw+
 !s_row:
     sta zp_temp1
     lda zp_view_x
@@ -156,15 +157,9 @@ bsd_strip:
 !s_draw:
     jsr render_single_tile
     inc bsd_i
-    lda bsd_i
     ldx bsd_dir
-    beq !s_col+
-    cmp #VIEWPORT_W
-    bne !s-
-    sec
-    rts
-!s_col:
-    cmp #VIEWPORT_H
+    lda bsd_i
+    cmp bsd_strip_limit,x
     bne !s-
     sec
     rts

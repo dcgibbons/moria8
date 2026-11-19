@@ -1,7 +1,6 @@
 #importonce
 #import "../shared/legal_entry.s"
-.const CX16_BANK_LEGAL = 23
-.assert "Legal bank follows catalog and fits RAM", CX16_BANK_LEGAL > CX16_BANK_CATALOG && CX16_BANK_LEGAL < 64, true
+.assert "Legal bank follows catalog and stays below warm pool", CX16_BANK_LEGAL > CX16_BANK_CATALOG && CX16_BANK_LEGAL < CX16_BANK_WARM_BASE && CX16_BANK_WARM_END < CX16_BANK_COUNT, true
 // Resident entry; Bank 23 is temporary for one modal, never boot-preloaded.
 tramp_ui_legal_display:
     lda CX16_RAM_BANK_REG
@@ -20,6 +19,7 @@ tramp_ui_legal_display:
     rts
 
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
+#if !CX16_CARTRIDGE
 legal_notice_filename: .byte 'L','I','C','E','N','S','E',',','S',',','R'
 .label legal_notice_filename_len = * - legal_notice_filename
 legal_offer_filename: .byte 'S','O','U','R','C','E','-','O','F','F','E','R',',','S',',','R'
@@ -87,3 +87,4 @@ legal_fill_status:
 legal_chunk_count: .byte 0
 legal_chunk_status: .byte 0
 .assert "Legal burst reader stays outside banked RAM", legal_os_fill_cache < $9b00, true
+#endif

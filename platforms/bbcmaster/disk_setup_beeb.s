@@ -210,7 +210,7 @@ disk_prepare_selected_save_media:
     jmp !prompt_insert-
 
 !check_marker:
-    jsr disk_marker_present
+    jsr disk_marker_present_ovl
     bcc !media_ready+
 
     // Unmarked disk: prompt to initialize it as a Save Disk
@@ -246,7 +246,7 @@ disk_prepare_selected_save_media:
 !do_init:
     lda save_device
     sta disk_prompt_device
-    jsr disk_marker_init
+    jsr disk_marker_init_ovl
     bcc !media_ready+
     lda #<dsm_init_err_str
     ldy #>dsm_init_err_str
@@ -277,7 +277,7 @@ disk_prompt_save_impl:
     clc
     rts
 !dps_check:
-    jsr disk_require_save_media
+    jsr disk_require_save_media_ovl
     bcs !dps_prompt+
     clc
     rts
@@ -388,26 +388,19 @@ hal_storage_save_block_mode:
 
     lda zp_ptr0_hi
     cmp #>si_item_id
-    bcc !try_recall+
+    bcc !done+
     bne !store_check_end+
     lda zp_ptr0
     cmp #<si_item_id
-    bcc !try_recall+
+    bcc !done+
 !store_check_end:
     lda zp_ptr0_hi
     cmp #>store_inventory_data_end
     bcc !aux+
-    bne !try_recall+
+    bne !done+
     lda zp_ptr0
     cmp #<store_inventory_data_end
-    bcc !aux+
-!try_recall:
-    lda zp_ptr0_hi
-    cmp #>recall_data_start
-    bne !done+
-    lda zp_ptr0
-    cmp #<recall_data_start
-    bne !done+
+    bcs !done+
 !aux:
     lda #$80
     sta beeb_save_aux_mode_flag
@@ -490,4 +483,204 @@ load_read_map_banked:
     dec save_count_hi
     jmp !lrm_loop-
 !lrm_done:
+    rts
+
+// disk_marker_init_ovl — Initialize Save Disk on save_device with MORIAID ("M8SAVE").
+// Refuses to touch any disk containing TITLE (Program Disk).
+// If the disk has an uninitialized 0-sector catalogue (raw zeroed .ssd), writes
+// an 800-sector empty DFS catalogue to Track 0 Sector 0 & 1 via OSWORD $7F first.
+disk_marker_init_ovl:
+    lda save_device
+    jsr disk_program_media_present_on_device
+    bcc !init_fail+         // Refuse to overwrite Program Disk!
+
+    jsr beeb_write_marker_file
+    bcc !init_ok+
+
+    // Fallback for raw all-zero .ssd images: initialize 800-sector DFS catalogue
+    // on Track 0 Sector 0 & Sector 1 via OSWORD $7F and retry writing MORIAID.
+    jsr beeb_format_empty_catalogue
+    bcs !init_fail+
+    jsr beeb_write_marker_file
+    bcs !init_fail+
+
+!init_ok:
+    lda #HAL_STORAGE_STATUS_OK
+    sta stream_last_status
+    lda #0
+    sta disk_status
+    clc
+    rts
+
+!init_fail:
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+    sta stream_last_status
+    sec
+    rts
+
+beeb_write_marker_file:
+    lda save_device
+    sta beeb_io_device
+    lda #hal_storage_marker_write_name_len
+    ldx #<hal_storage_marker_write_name
+    ldy #>hal_storage_marker_write_name
+    jsr beeb_set_pathname
+
+    // Copy "M8SAVE" into low-RAM beeb_ss_buf
+    ldx #hal_storage_marker_magic_len - 1
+!cp_m:
+    lda hal_storage_marker_magic,x
+    sta beeb_ss_buf,x
+    dex
+    bpl !cp_m-
+
+    jsr beeb_zero_os_ctrl
+    lda #<BEEB_OS_PATH_BASE
+    sta BEEB_OS_CTRL_BASE + 0
+    lda #>BEEB_OS_PATH_BASE
+    sta BEEB_OS_CTRL_BASE + 1
+    lda #$ff
+    sta BEEB_OS_CTRL_BASE + 4
+    sta BEEB_OS_CTRL_BASE + 5
+    sta BEEB_OS_CTRL_BASE + 8
+    sta BEEB_OS_CTRL_BASE + 9
+    lda #<beeb_ss_buf
+    sta BEEB_OS_CTRL_BASE + 10
+    lda #>beeb_ss_buf
+    sta BEEB_OS_CTRL_BASE + 11
+    lda #$ff
+    sta BEEB_OS_CTRL_BASE + 12
+    sta BEEB_OS_CTRL_BASE + 13
+    lda #<(beeb_ss_buf + hal_storage_marker_magic_len)
+    sta BEEB_OS_CTRL_BASE + 14
+    lda #>(beeb_ss_buf + hal_storage_marker_magic_len)
+    sta BEEB_OS_CTRL_BASE + 15
+    lda #$ff
+    sta BEEB_OS_CTRL_BASE + 16
+    sta BEEB_OS_CTRL_BASE + 17
+
+    lda #$00                // OSFILE A=$00: Save block of memory via < $3000 helper
+    jmp beeb_mos_osfile_a
+
+// beeb_format_empty_catalogue — Write 800-sector empty DFS catalogue to Track 0
+// Sector 0 & Sector 1 on save_device via OSWORD $7F ($53 write sector).
+beeb_format_empty_catalogue:
+    ldx #0
+    lda #0
+!clr_buf:
+    sta beeb_ss_buf,x
+    inx
+    bne !clr_buf-
+
+    // Write Track 0 Sector 0 (all zeroes)
+    lda #0
+    jsr beeb_write_track0_sector
+    bcs !fmt_fail+
+
+    // Write Track 0 Sector 1 (sec1[6] = $03, sec1[7] = $20 -> 800 sectors)
+    lda #$03
+    sta beeb_ss_buf + 6
+    lda #$20
+    sta beeb_ss_buf + 7
+    lda #1
+    jsr beeb_write_track0_sector
+!fmt_fail:
+    rts
+
+beeb_write_track0_sector:
+    pha
+    jsr beeb_zero_os_ctrl
+    lda save_device
+    sec
+    sbc #8
+    and #$03
+    sta BEEB_OS_CTRL_BASE + 0
+    lda #<beeb_ss_buf
+    sta BEEB_OS_CTRL_BASE + 1
+    lda #>beeb_ss_buf
+    sta BEEB_OS_CTRL_BASE + 2
+    lda #$ff
+    sta BEEB_OS_CTRL_BASE + 3
+    sta BEEB_OS_CTRL_BASE + 4
+    lda #3
+    sta BEEB_OS_CTRL_BASE + 5
+    lda #$53                // 8271/1770 write single sector
+    sta BEEB_OS_CTRL_BASE + 6
+    lda #0                  // Track 0
+    sta BEEB_OS_CTRL_BASE + 7
+    pla
+    sta BEEB_OS_CTRL_BASE + 8 // Sector 0 or 1
+    lda #$21                // 1 sector of 256 bytes
+    sta BEEB_OS_CTRL_BASE + 9
+    jsr beeb_mos_osword7f
+    bcs !err+
+    lda BEEB_OS_CTRL_BASE + 10
+    bne !err+
+    clc
+    rts
+!err:
+    sec
+    rts
+
+// ============================================================
+// Save media marker/validation (moved from Default to StorageOverlay)
+// ============================================================
+disk_require_save_media_ovl:
+    lda disk_setup_done
+    bne !drsm_chk+
+    sec
+    rts
+!drsm_chk:
+    jsr disk_program_media_present
+    bcs !not_prog_disk+
+    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
+    sta stream_last_status
+    lda #3
+    sta disk_status
+    sec
+    rts
+!not_prog_disk:
+    jsr disk_marker_present_ovl
+    bcs !missing_marker+
+    lda #HAL_STORAGE_STATUS_OK
+    sta stream_last_status
+    lda #0
+    sta disk_status
+    clc
+    rts
+!missing_marker:
+    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
+    sta stream_last_status
+    lda #2
+    sta disk_status
+    sec
+    rts
+
+disk_marker_present_ovl:
+    lda #hal_storage_marker_read_name_len
+    ldx #<hal_storage_marker_read_name
+    ldy #>hal_storage_marker_read_name
+    jsr hal_storage_setnam
+    lda #hal_storage_marker_file_num
+    ldx save_device
+    ldy #hal_storage_marker_sec_read
+    jsr hal_storage_setlfs
+    jsr hal_storage_open
+    bcs !absent+
+
+    ldx #0
+!chk_magic:
+    jsr hal_storage_chrin
+    cmp hal_storage_marker_magic,x
+    bne !close_absent+
+    inx
+    cpx #hal_storage_marker_magic_len
+    bcc !chk_magic-
+    jsr hal_storage_close
+    clc
+    rts
+!close_absent:
+    jsr hal_storage_close
+!absent:
+    sec
     rts

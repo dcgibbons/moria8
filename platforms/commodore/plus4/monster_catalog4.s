@@ -24,4 +24,10 @@
 .macro CatalogKernalOut() {
 }
 
+#if PLUS4_CARTRIDGE
+#import "cartridge_catalog.s"
+#else
+#define CATALOG_EXT_DISK_ENABLED
 #import "../common/catalog_fetch.s"
+.assert "Plus/4 catalog filenames stay below $8000 ROM window", cfr_ext_name_end <= $8000 && cfr_record_offset <= $8000, true
+#endif

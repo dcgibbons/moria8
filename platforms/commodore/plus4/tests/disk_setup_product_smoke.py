@@ -20,9 +20,9 @@ from vice_config import vice_config  # noqa: E402  (VICE -config file with a ver
 
 MEM_DUMP_RE = re.compile(r">\S+:\S+\s+([0-9a-fA-F]{2})")
 
-# OVL_HELP from platforms/commodore/common/overlay.s — the overlay that owns
+# OVL_STORAGE from platforms/commodore/common/overlay.s — the overlay that owns
 # the disk-setup UI (and therefore the pass/fail breakpoint symbols).
-PLUS4_OVL_HELP = 5
+PLUS4_OVL_STORAGE = 12
 
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
@@ -154,9 +154,9 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[Monito
                 # key read banks ROM in for GETIN, so a breakpoint there
                 # also fires while the CPU runs ROM at the same address
                 # (current_overlay alone cannot tell these apart). Accept a
-                # stop only when the Help overlay is the live overlay AND
+                # stop only when the Storage overlay is the live overlay AND
                 # the instruction at PC matches the real function prologue.
-                if read_byte(connector, resolved["current_overlay"]) != PLUS4_OVL_HELP:
+                if read_byte(connector, resolved["current_overlay"]) != PLUS4_OVL_STORAGE:
                     connector.go()
                     continue
                 pc_match = re.search(r"C:([0-9a-fA-F]{4})", result.last_status or "")

@@ -79,8 +79,7 @@ chest_fulfill_loot:
     ldy chest_loot_y
     jsr floor_item_find_at
     bcc !cfl_stale+           // Nothing there -> stale latch, discard
-    ldy fi_item_id,x
-    lda it_category,y
+    jsr item_get_category_floor_x
     cmp #ICAT_CHEST
     beq !cfl_load+
 !cfl_stale:                   // Not a chest -> stale latch, discard
@@ -145,6 +144,9 @@ chest_product_after_generate_sym:
     lda #5
 !cfl_product_store:
     sta chest_product_path_stage
+#endif
+#if HAL_PLATFORM_ITEM_PICKUP_CACHE
+    jsr item_pickup_cache_warm_floor
 #endif
 !cfl_clear:
     lda #0
@@ -384,8 +386,12 @@ chest_loot_place_one:
     jsr pick_item_type          // Unit assemblies have no GEN overlay
 #endif
     sta fi_add_id
+    lda item_cur_page
+    sta cl_page
     jsr roll_enchantment        // sets fi_add_p1 + combat/armor stats
     sta fi_add_p1
+    lda cl_page
+    sta item_cur_page
     lda fi_add_id
 #if HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP
     // The ordinary C64 trampoline exposes KERNAL before returning, which would
@@ -415,6 +421,10 @@ chest_loot_place_one:
     pla
 #endif
     sta fi_add_ego
+    lda cl_page
+    sta item_cur_page
+    ora fi_add_ego
+    sta fi_add_ego
     lda #1
     sta fi_add_qty
     ldx fi_add_id
@@ -440,7 +450,8 @@ chest_loot_place_one:
 
 !clpo_place_gold:
     // --- Gold (ID 0 or 1), qty = rng_range_word(dlvl*10) + 5 ---
-    lda #2
+    .assert "Chest gold spawner uses Page-0 IDs 0..1", ITEM_GOLD_SMALL == 0 && ITEM_GOLD_LARGE == 1 && ITEM_PAGE_GOLD_LARGE == 0, true
+    lda #(ITEM_SLOT_GOLD_LARGE + 1)
     jsr rng_range
     sta fi_add_id
     jsr fi_add_clear_plain_meta
@@ -471,6 +482,7 @@ chest_loot_place_one:
     rts
 
 cl_drops_this: .byte 0          // This drop's resolved type (1=object, 2=gold)
+cl_page: .byte 0                // Saved ITEM_PAGE_BIT for object roll
 
 #if C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 // Deterministic product-path fixture: an unlocked Large Wooden Chest directly
@@ -523,7 +535,7 @@ chest_product_setup:
     sta fi_add_x
     lda #10
     sta fi_add_y
-    lda #ITEM_TYPE_CHEST_LARGE_WOOD
+    lda #ITEM_SLOT_LARGE_WOODEN_CHEST
     sta fi_add_id
     lda #1
     sta fi_add_qty

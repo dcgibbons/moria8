@@ -21,7 +21,9 @@
 .assert "Low scratch buffers stay in $0200-$0258", PLATFORM_PM_SPELL_LIST_BASE + 9 <= $0259, true
 #define PLATFORM_GET_INFRA_RANGE_INLINE
 #define PLATFORM_COPY_DEATH_SOURCE
+#if !PLUS4_CARTRIDGE
 #define PLATFORM_REQUIRES_MEDIA_PROBE
+#endif
 .const PLATFORM_RESIDENT_PLAY = "Default"
 .const PLATFORM_HD_DECODE_BUF_BASE = $033c
 .const PLATFORM_HD_DECODE_BUF_LIMIT = $0400
@@ -40,6 +42,11 @@ detect_machine:
     sta zp_column_mode
     rts
 
+#if PLUS4_CARTRIDGE
+#import "cartridge_copy.s"
+.label hal_asset_load_prg_header = cart_load_prg
+.label hal_asset_load_title = cart_load_title
+#else
 kernal_load:
     jmp $ffd5
 
@@ -107,6 +114,7 @@ hal_asset_close_channel:
     rts
 
 asset_load_save_p: .byte 0
+#endif
 
 .const DEATH_ALIVE   = $00
 .const DEATH_CHEST_NEEDLE = $F7

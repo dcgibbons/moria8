@@ -31,6 +31,7 @@ test_finish:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -44,43 +45,59 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment Default
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/ui_inventory.s"
 #import "../../../../core/ui_equipment.s"
 #import "../../../../core/ui_help.s"
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment Default
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/spell_effects.s"
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
@@ -88,11 +105,12 @@ test_finish:
 #define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../../../core/ui_trampoline_stubs.s"
 
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
-.segment TestStoreOverlay
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+// Store modules are never executed here; item_cat_data takes the $E100 window
+// (item_cat_kernal_helper.s), so only the store inventory arrays that
+// ui_trampoline_stubs.s references are linked (data, parked).
+.segment Default
+#import "../../../../core/store_data_defs.s"
+#import "../../../../core/store_inventory_data.s"
 .segment Default
 
 .segmentdef TestPromptData [start=$bd00, min=$bd00, max=$bfff]
@@ -139,6 +157,7 @@ combat_print_winner_message:
 player_disarm_get_effective_chance:
 combat_award_xp:
 combat_check_levelup:
+combat_check_leveldown:
 combat_note_kill:
     rts
 mad_dmg_hi: .byte 0               // the 16-bit damage entry's high byte (monster_attack.s)
@@ -358,15 +377,19 @@ test_start:
     lda #0
     sta zp_player_mhp_hi
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
     lda #0
     sta inv_p1 + 0
     sta inv_flags + 0
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -374,7 +397,7 @@ test_start:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 4
     lda #1
     sta inv_qty + 4
@@ -393,13 +416,13 @@ test_start:
     cmp #FI_EMPTY
     bne !t1_fail+
     lda inv_item_id + 3
-    cmp #25
+    cmp #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     bne !t1_fail+
     lda inv_item_id + 4
     cmp #FI_EMPTY
     bne !t1_fail+
     lda inv_item_id + 0
-    cmp #4
+    cmp #ITEM_SLOT_LONG_SWORD
     bne !t1_fail+
     lda #$01
     sta tc_results + 0
@@ -417,15 +440,19 @@ test_start:
     sta test_key_idx
     sta zp_msg_flags
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #0
     sta inv_p1 + EQUIP_WEAPON
     sta inv_flags + EQUIP_WEAPON
 
-    lda #14
+    lda #ITEM_SLOT_BRASS_LANTERN
     sta inv_item_id + EQUIP_LIGHT
     lda #1
     sta inv_qty + EQUIP_LIGHT
@@ -444,13 +471,13 @@ test_start:
     jsr item_takeoff
     bcc !t2_fail+
     lda inv_item_id + EQUIP_WEAPON
-    cmp #4
+    cmp #ITEM_SLOT_LONG_SWORD
     bne !t2_fail+
     lda inv_item_id + EQUIP_LIGHT
     cmp #FI_EMPTY
     bne !t2_fail+
     lda inv_item_id + 0
-    cmp #14
+    cmp #ITEM_SLOT_BRASS_LANTERN
     bne !t2_fail+
     lda #$01
     sta tc_results + 1
@@ -466,7 +493,7 @@ test_start:
     sta test_key_idx
     sta zp_msg_flags
 
-    lda #ITEM_FLASK_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
@@ -475,8 +502,12 @@ test_start:
     lda #0
     sta inv_flags + 0
 
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + 4
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + 4
+    }
     lda #1
     sta inv_qty + 4
     lda #0
@@ -491,13 +522,13 @@ test_start:
     jsr item_wear
     bcc !t3_fail+
     lda inv_item_id + EQUIP_WEAPON
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t3_fail+
     lda inv_item_id + 4
     cmp #FI_EMPTY
     bne !t3_fail+
     lda inv_item_id + 0
-    cmp #ITEM_FLASK_OIL
+    cmp #ITEM_SLOT_FLASK_OF_OIL
     bne !t3_fail+
     lda #$01
     sta tc_results + 2
@@ -514,10 +545,10 @@ test_start:
     lda #0
     sta test_key_idx
     sta zp_msg_flags
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_clear
 
-    lda #21
+    lda #ITEM_SLOT_SCROLL_OF_IDENTIFY
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -525,7 +556,7 @@ test_start:
     sta inv_p1
     sta inv_flags
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -544,13 +575,13 @@ test_start:
 
     jsr item_read_scroll
 
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_test
     beq !t4_fail+
     lda inv_item_id
-    cmp #17
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     bne !t4_fail+
-    ldx #21
+    ldx #ITEM_SLOT_SCROLL_OF_IDENTIFY
     jsr id_known_test
     beq !t4_fail+
     lda #$01
@@ -566,10 +597,10 @@ test_start:
     lda #0
     sta test_key_idx
     sta zp_msg_flags
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_clear
 
-    lda #21
+    lda #ITEM_SLOT_SCROLL_OF_IDENTIFY
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -577,7 +608,7 @@ test_start:
     sta inv_p1
     sta inv_flags
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -596,11 +627,11 @@ test_start:
 
     jsr item_read_scroll
 
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_test
     bne !t5_fail+
     lda inv_item_id
-    cmp #17
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     bne !t5_fail+
     lda #$01
     sta tc_results + 4
@@ -616,7 +647,7 @@ test_start:
     sta test_key_idx
     sta zp_msg_flags
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
@@ -624,7 +655,7 @@ test_start:
     sta inv_p1 + 0
     sta inv_flags + 0
 
-    lda #39
+    lda #ITEM_SLOT_WAND_OF_LIGHT
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -633,7 +664,7 @@ test_start:
     lda #0
     sta inv_flags + 1
 
-    lda #43
+    lda #ITEM_SLOT_STAFF_OF_LIGHT
     sta inv_item_id + 3
     lda #1
     sta inv_qty + 3
@@ -653,7 +684,7 @@ test_start:
     bcc !t6_fail+
     cpx #3
     bne !t6_fail+
-    cmp #43
+    cmp #ITEM_SLOT_STAFF_OF_LIGHT
     bne !t6_fail+
     lda #$01
     sta tc_results + 5
@@ -675,13 +706,16 @@ test_start:
     sta fi_add_x
     lda #1
     sta fi_add_y
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #0
     sta fi_add_p1
     sta fi_add_flags
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+    }
     sta fi_add_ego
     jsr floor_item_add
     bcc !t7_fail+
@@ -691,13 +725,16 @@ test_start:
     lda #10
     sta fi_add_x
     sta fi_add_y
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta fi_add_id
     lda #1
     sta fi_add_qty
     lda #0
     sta fi_add_p1
     sta fi_add_flags
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+    }
     sta fi_add_ego
     jsr floor_item_add
     bcc !t7_fail+
@@ -707,7 +744,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t7_fail+
     lda fi_item_id,x
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t7_fail+
     lda zp_item_count
     cmp #33
@@ -742,15 +779,19 @@ test_start:
     lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
     sta (zp_ptr0),y
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
     lda #0
     sta inv_p1 + 0
     sta inv_flags + 0
 
-    lda #6
+    lda #ITEM_SLOT_ROBE
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -758,7 +799,7 @@ test_start:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2
@@ -776,10 +817,10 @@ test_start:
     jsr item_drop
     bcc !t8_fail+
     lda inv_item_id + 0
-    cmp #4
+    cmp #ITEM_SLOT_LONG_SWORD
     bne !t8_fail+
     lda inv_item_id + 1
-    cmp #17
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     bne !t8_fail+
     lda inv_item_id + 2
     cmp #FI_EMPTY
@@ -790,7 +831,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t8_fail+
     lda fi_item_id,x
-    cmp #6
+    cmp #ITEM_SLOT_ROBE
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
@@ -836,15 +877,19 @@ test_start:
     lda #0
     sta zp_msg_flags
 
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + 0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
     lda #0
     sta inv_p1 + 0
     sta inv_flags + 0
 
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -852,8 +897,12 @@ test_start:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + 2
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + 2
+    }
     lda #1
     sta inv_qty + 2
     lda #0
@@ -881,23 +930,31 @@ test_start:
     lda #0
     sta zp_msg_flags
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #0
     sta inv_p1 + EQUIP_WEAPON
     sta inv_flags + EQUIP_WEAPON
 
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     lda #1
     sta inv_qty + EQUIP_SHIELD
     lda #0
     sta inv_p1 + EQUIP_SHIELD
     sta inv_flags + EQUIP_SHIELD
 
-    lda #14
+    lda #ITEM_SLOT_BRASS_LANTERN
     sta inv_item_id + EQUIP_LIGHT
     lda #1
     sta inv_qty + EQUIP_LIGHT
@@ -927,15 +984,19 @@ test_start:
     lda #0
     sta zp_msg_flags
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
     lda #0
     sta inv_p1 + 0
     sta inv_flags + 0
 
-    lda #6
+    lda #ITEM_SLOT_ROBE
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -943,7 +1004,7 @@ test_start:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2
@@ -975,7 +1036,7 @@ test_start:
     lda #SPELL_MAGE
     sta pm_spell_type
 
-    lda #47
+    lda #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
@@ -983,7 +1044,7 @@ test_start:
     sta inv_p1 + 0
     sta inv_flags + 0
 
-    lda #55
+    lda #ITEM_SLOT_SPELLBOOK_MAGICK_I
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -991,7 +1052,7 @@ test_start:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #56
+    lda #ITEM_SLOT_SPELLBOOK_MAGICK_II
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2
@@ -1023,7 +1084,7 @@ test_start:
     lda #SPELL_PRIEST
     sta pm_spell_type
 
-    lda #48
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
@@ -1031,7 +1092,7 @@ test_start:
     sta inv_p1 + 0
     sta inv_flags + 0
 
-    lda #58
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -1039,7 +1100,7 @@ test_start:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #59
+    lda #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS
     sta inv_item_id + 2
     lda #1
     sta inv_qty + 2

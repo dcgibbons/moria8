@@ -27,8 +27,12 @@ def check(crt: Path, source: Path) -> None:
         chips[bank, address] = image[offset + 16:offset + length]
         assert len(chips[bank, address]) == size
         offset += length
-    assert offset == len(image) and len(chips) == 128
-    rom = b"".join(chips[bank, 0x8000] for bank in range(64))
+    erased_bank = b"\xff" * 8192
+    assert offset == len(image)
+    assert all(data != erased_bank for data in chips.values()), "Erased $FF flash bank must not be emitted as a CHIP block"
+    assert (0, 0x8000) in chips and (0, 0xA000) in chips
+    assert {bank for bank, address in chips if address == 0xA000} == {0}
+    rom = b"".join(chips.get((bank, 0x8000), erased_bank) for bank in range(64))
     assert rom[4:9] == b"\xc3\xc2\xcd80"
     assert chips[0, 0xA000] == (source / "romh.bin").read_bytes()
     reset = int.from_bytes(chips[0, 0xA000][-4:-2], "little")
@@ -56,11 +60,13 @@ def check(crt: Path, source: Path) -> None:
     names = {contract["CART_ASSET_RESIDENT"]: "moria8.prg",
              contract["CART_ASSET_RUNTIME"]: "64.bank",
              contract["CART_ASSET_INDEX"]: None,
-             contract["CART_ASSET_TITLE"]: "title",
+             contract["CART_ASSET_TITLE_ART"]: "title",
              contract["CART_ASSET_CATALOG"]: None,
              contract["CART_ASSET_LEGAL_UI"]: "legalui",
              contract["CART_ASSET_LEGAL_NOTICE"]: None,
-             contract["CART_ASSET_LEGAL_OFFER"]: None}
+             contract["CART_ASSET_LEGAL_OFFER"]: None,
+             contract["CART_ASSET_ITEM_CATALOG"]: None,
+             contract["CART_ASSET_CATALOG_EXT"]: None}
     names.update({contract["CART_ASSET_" + symbol]: f"ovl.{name}"
                   for symbol, name in make_easyflash.OVERLAYS})
     previous_end = 8192
@@ -73,9 +79,14 @@ def check(crt: Path, source: Path) -> None:
             assert address == 0x8000, "Boot copier requires an aligned resident source"
         if asset_id == contract["CART_ASSET_INDEX"]:
             arrays = catalog_disk.byte_arrays((catalog_disk.CATALOG / "catalog_index.s").read_text())
-            expected = b"\x00\xce" + bytes(arrays["cat_level_raw"] + arrays["cat_level_playable"] + arrays["cat_available"])
+            bitmap = arrays["cat_available"] if "cat_available" in arrays else arrays["cat_undead"]
+            expected = b"\x00\xce" + bytes(arrays["cat_level_raw"] + arrays["cat_level_playable"] + bitmap)
         elif asset_id == contract["CART_ASSET_CATALOG"]:
             expected = b"\0\0" + b"".join(catalog_disk.records())
+        elif asset_id == contract["CART_ASSET_CATALOG_EXT"]:
+            expected = b"\0\0" + b"".join(catalog_disk.ext_records())
+        elif asset_id == contract["CART_ASSET_ITEM_CATALOG"]:
+            expected = b"\0\0" + catalog_disk.item_catalog_bytes()
         elif asset_id in (contract["CART_ASSET_LEGAL_NOTICE"], contract["CART_ASSET_LEGAL_OFFER"]):
             name = "LICENSE" if asset_id == contract["CART_ASSET_LEGAL_NOTICE"] else "SOURCE-OFFER"
             doc = (make_easyflash.ROOT / "data" / name).read_bytes()
@@ -85,6 +96,9 @@ def check(crt: Path, source: Path) -> None:
         assert destination == int.from_bytes(expected[:2], "little"), asset_id
         assert rom[start:start + size] == expected[2:], asset_id
         previous_end = start + size
+    expected_roml_banks = (previous_end + 8191) // 8192
+    assert {bank for bank, address in chips if address == 0x8000} == set(range(expected_roml_banks))
+    assert len(chips) == expected_roml_banks + 1
     # Boundary rejection is checked without changing built inputs.
     with tempfile.TemporaryDirectory(dir=source, prefix="packer-test-") as temp:
         path = Path(temp) / "invalid.prg"
@@ -96,7 +110,10 @@ def check(crt: Path, source: Path) -> None:
                 pass
             else:
                 raise AssertionError("Accepted empty, wrongly linked or oversize overlay")
-    print("PASS CRT: 128 chips, reset/header, 18 exact assets, compliance texts, rejected invalid PRGs")
+    print(
+        f"PASS CRT: {len(chips)} sparse chips ({len(image)} B), reset/header, "
+        f"{len(names)} exact assets, compliance texts, rejected invalid PRGs"
+    )
 
 
 if __name__ == "__main__":

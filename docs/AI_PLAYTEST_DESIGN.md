@@ -138,6 +138,23 @@ reinforcement learning a non-goal. The learning loop lives in development
 - **Make targets** (Part I only):
   - `playtest-check`: static. Unit tests plus the symbol/offset check.
   - `playtest-smoke`: launches VICE, ≤ 30 s.
+  - `playtest-gate [TARGETS=a,b] [GATE_WORKERS=n]`: before a product commit
+    (AGENTS.md; added 2026-11-15 after unit and harness suites passed a build
+    whose first store buy crashed the BBC and Apple IIe). On every port and
+    cartridge whose ROMs are set, the bot plays four characters—Human Warrior,
+    Elf Mage, Dwarf Priest, and Half-Elf Ranger (`half-elf-ranger`, added for
+    bow/launcher coverage)—from fixed seeds for 3,000 steps each (`gate.py`, as
+    the build queue plays a run), and a scripted tour (`tour.py`) buys from the
+    Weaponsmith, casts from a second book through the `?` list, deposits and
+    retrieves at the Home, drops and picks up, fires an ego arrow (`ego_shot`)
+    from a wielded bow into a townsperson, and opens the `? -> L` in-game legal
+    viewer (`legal`) to stream `LICENSE` and `SOURCE-OFFER` before returning to
+    `Mode.COMMAND`. A game finding, a run error or a failed tour step fails it;
+    deaths and the bot's own findings do not. A target skipped because its ROMs
+    are not set fails it too, unless `GATE_ALLOW_SKIP=1`: without the Plus/4's
+    JiffyDOS ROMs it reported "55 passed, 0 failed" over a build whose every
+    Plus/4 disk game hung at its first store (2026-11-16). About 10 minutes at
+    12 workers.
   - `playtest-session GOAL=<name> [SEEDS=…] [WORKERS=n]`: launches VICE,
     unbounded.
   - `playtest-dashboard`: serves the static page.
@@ -436,7 +453,12 @@ three suites pass 20/20 again (session `20261021-141656`).
   - The client takes such a dump only when a resume has run longer than the
     1 s poll interval.
   - The first poll records the clock. A later poll raises a `hang` once more
-    than 300 emulated seconds pass with no input stop.
+    than 300 emulated seconds pass with no input stop (`Port.boot_emulated_seconds`
+    raises this ceiling during `Game.boot()` only—`600 s` on `C64`, whose 512 KB
+    REU cold preload streams the monster catalog, 13 overlays, and `ITEM.CAT`
+    over stock 1541 IEC in ~380 emulated s after Phase 4, and `0.0` on
+    `C64_NOREU`, `C64_CART`, and other ports—then restores the `300 s` turn
+    limit at the title menu).
   - The longest measured legitimate span is a stair descent: about 3 emulated
     seconds and 0.16 s wall. 300 emulated s is about 10 s wall at the
     measured ~29× warp, so the limit trips well inside the 60 s wall budget.
@@ -2469,12 +2491,18 @@ another port; a suite records `"port"` and is named with it
 | Key feed | KERNAL buffer `$0277`/`$C6` | KERNAL buffer `$0527`/`$EF` | the game scans the matrix (no buffer): the driver stops in `input_get_key`'s or `input_get_key_fast`'s wait loop and returns the key through its `sta igk_key` exit |
 | Crash entries | `$FCE2`, `$FE66` with `$01` HIRAM set | `$FFF6` with TED `$FF13` bit 0 set | `$FF3D`, `$FF05` with MMU `$D500` bits 5-4 clear |
 | Screen, map | `$0400`, `$C000` | `$0C00`, `$C800` | VDC `$0000` (80 columns), Bank 1 `$4000` |
-| ROMs | optional JiffyDOS pair | JiffyDOS required (`PLAYTEST_PLUS4_KERNAL`, `PLAYTEST_DOS1541`) | VICE's |
+| ROMs | optional JiffyDOS pair | JiffyDOS required (`PLAYTEST_PLUS4_KERNAL`, `PLAYTEST_DOS1541`) | optional JiffyDOS pair (`PLAYTEST_C128_KERNAL`, `PLAYTEST_DOS1571`), both or neither |
 
 - **The Plus/4 plays under JiffyDOS** (maintainer, 2026-10-27: "definitely
   use the jiffydos kernal on plus/4, it's too slow otherwise"): with no
   REU, every overlay and tier crossing loads from the 1541. The drive ROM
   is the C64's (`JiffyDOS_C1541.bin`).
+- **The C128 plays under JiffyDOS/128 too** (maintainer, 2026-11-18): its
+  own KERNAL (`PLAYTEST_C128_KERNAL`, `JiffyDOS_C128.bin`) and the JiffyDOS
+  1571 ROM that replaces VICE's 310654 (`PLAYTEST_DOS1571`,
+  `JiffyDOS_1571_repl310654.bin`). JiffyDOS works only as a pair, so a
+  session refuses one without the other (`Port.paired_roms`); with neither,
+  VICE's own ROMs play.
 - **x128 snapshots leave out the VDC.** A restored C128 showed the VDC's
   power-on pattern, and the game reads VDC RAM back, so the driver saves the
   VDC's 64 KB beside each snapshot (`<name>.vdc`) and writes it back after
@@ -2998,7 +3026,21 @@ a win is unlikely until the bot plays much better.
   start goes first (maintainer: the highest-level save is likeliest to go
   further and find something new; `Balrog.rank`): a combination already
   playing is passed over while another can start, and equal levels take
-  turns.
+  turns. Since 2026-11-15 the combination waiting longest since its last
+  counted game (or since it joined) goes first, the highest start among
+  equals (`Balrog.waiting_since`). With 25 C64 graduates for 18 slots,
+  highest-first had kept seven from ever playing, because the top starts
+  took each slot back the moment they ended. A 20M-step game lasts about 40
+  hours, and only two games died in 2.5 hours, so a slot can also be
+  handed over (`Service.balrog_yield`). Once a combination has waited
+  `BALROG_SLICE_S` (3 hours), the longest-playing run is asked to yield,
+  one per waiting combination. It does so at its next town visit
+  (`yield_due`, a `yield` file in its run directory) as it would for a
+  newer build: it keeps a checkpoint, unless it is in danger
+  (`checkpoint_safe`), and ends. Until 2026-11-15 no Balrog run ever
+  rotated. A worker's `HOME` is its build snapshot's (`ROOT`), which has no
+  `service.json`, so `rotate_due` never found a newer build. A worker now
+  looks in the queue home its run directory is in (`run_home`).
 - **Goal.** `balrog` (`goals.py`): the game's winner flag, which the Balrog's
   death sets (`core/combat.s`). It plays as `deep`, with every tactic, down to
   where the Balrog appears: DL100 with the tiers, DL50 with the monster
@@ -3012,7 +3054,7 @@ a win is unlikely until the bot plays much better.
   character also goes deeper where no native creature's worst turn (its
   breaths, against the resistance and speed worn) is 90% of its HP
   (`brain.threat_ready`, maintainer 2026-11-08: "be like a real human
-  player"); without Free Action (the Amulet of the Magi) a native's melee
+  player"); without Free Action (the Amulet of the Magi or a Defender weapon) a native's melee
   round counts on top of its breath, and four more rounds when it can
   paralyse by Hold Person or touch (`brain.native_exchange`, maintainer
   2026-11-12: clvl 32 Warriors were breathed on, held and bitten to death
@@ -3022,7 +3064,37 @@ a win is unlikely until the bot plays much better.
   40 the bot dives for the Balrog with a way out in its pack
   (`brain.balrog_dive`), detecting each level and leaving one whose
   creature could kill in a breath, since DL40's Ancient Multi-Hued Dragon
-  (693 a breath) outclasses a 400-HP Priest for good. A dive from level 35
+  (693 a breath) outclasses a 400-HP Priest for good. The Balrog's levels
+  wait for Free Action too, against its Hold Person (`brain.balrog_ready`,
+  maintainer 2026-11-12: a clvl 40 Priest without it was held and burned to
+  death in three of seven fights in an hour), and the Amulet of the Magi is
+  worth more than an amulet of resistance. One fight a visit, as a player
+  wins it: a level is new each time, so every return met a Balrog at full
+  HP; Word of Recall to its levels is read after a rest to full in town
+  (`brain.recall_trip`; the Priest read it at 76-105 of 161 mana), and no
+  Find Traps there (660 prayers an hour). From an unseen breather a Phase
+  Door breaks no sight line: once a window, then a heal, then the stairs
+  or Word of Recall (`brain.breath_guard`; the Priest read twenty running
+  and was found). A Resist Heat (Cold) timer with `RESIST_TIMER_LOW` turns
+  or fewer left counts as none, so the prayer is renewed before a breath
+  outlasts it (the Priest's first ready fight: Orb at 261/412 under the
+  prayer's last turns, then the ring alone against 284). From DL50 the
+  natives' breaths no longer decide (`threat_ready` is false there): the
+  Balrog is on every level, and a Half-Troll Priest at 806 HP with Free
+  Action passed every depth, walked to DL94, recalled to DL100 and met it
+  with 1 mana; its levels are `balrog_dive`'s, to DL50 once ready. Mana
+  is read from zero page (`zp_player_mp`, `zp_player_mmp`; `magic.mana`):
+  on 40 columns three-digit mana pushes the maximum's last digit off the
+  status line ("MP:100/16"), and the bot took 100 of 161 for full. On its
+  levels the Balrog's fire is kept resisted at any price only within
+  `BALROG_NEAR_STEPS` of a sighting, else from nearly full mana: kept up
+  from the first sighting, a Priest prayed it 44 times exploring DL50 and
+  met the Balrog with nothing for Orb. Casters pick up and keep Potions of
+  Restore Mana, which no store sells. As deep as it survives only with a
+  way out at once (`brain.short_escape`: Phase Door, Teleportation, a
+  Staff of Teleportation, or Phase Door, Teleport Self or Portal known):
+  two Half-Orc Warriors with Free Action and none went to DL37 and fought
+  Ancient Blue Dragons to the last breath. A dive from level 35
   to DL49 for the experience (`DIVE_FROM_CLVL`, `DIVE_MAX_DLVL`) was tried
   the same day and turned off: six deaths to Ancient Multi-Hued Dragons
   breathing from beyond Detect Evil's panel in two hours, and less
@@ -3090,7 +3162,15 @@ a win is unlikely until the bot plays much better.
   success becomes the chain's base instead of replacing it. Each start
   records `restores`, the chain's runs that ended before it, and a win
   through checkpoints counts for M8 (maintainer: "it should count"), with
-  its restores in the item's `wins`. Later, once the gameplay tweaks are
+  its restores in the item's `wins`. Since 2026-11-15 a checkpoint waits for
+  a character out of danger (`checkpoint_safe`: not poisoned, at least half
+  its HP): on a `graduate_save` port it is saved at the first such command
+  still in town, else it waits for the next arrival. The C64 Human
+  Warrior's clvl 10 checkpoint was taken as it arrived in town poisoned, and
+  all 1,722 of its restores died 14 steps in. A start whose restores die
+  `DOOMED_DEATHS` (10) times in a row, each within `DOOMED_STEPS` (200)
+  steps of it, is retired like a save that does not load (`Balrog.doomed`,
+  `start_balrog`): the combination plays from level 1. Later, once the gameplay tweaks are
   done, a final Balrog queue plays from level 1 on an ongoing basis.
 - **Balrog encounters (maintainer, 2026-11-10).** The first time a run sees
   or detects the Balrog on a level (`balrog_in_view`: glyph `B`, native
@@ -3208,15 +3288,22 @@ playing starts one: the next combination not yet played on this build, or
 again one whose run on it did not count (stale, abandoned); a port that has
 played every combination on the build waits for the next
 (`BuildQueue.pending`). Its workers come out of the total, as the
-Balrog queue's do. The MAME and Plus/4 ports need their ROMs in the
+Balrog queue's do. Its runs play the default tactics, as the Balrog
+queue's do (`BUILD_VARIANT`, maintainer 2026-11-16). The `clvl10` goal itself
+has none, because the pre-commit gate plays it, so until then the build
+queue's success rates measured a bot that the Balrog queue never plays. The MAME and Plus/4 ports need their ROMs in the
 service's environment (a drop-in beside `x16.conf`: `A2ROMS`,
 `ATARI8ROMS`, `BBCMROMS`, and JiffyDOS for the Plus/4 and so the C64). The
 dashboard's Build queue panel shows the build being played alone (the
 maintainer, 2026-11-08: the counts reset with each build): a row per port
-with its games, goals reached, deaths, findings, median level, coverage of
+with its games, goals reached, deaths, findings, bot notes, median level, coverage of
 the 31 combinations and the game playing now, and below it, collapsed, a
 grid like M6's "every port plays" with this build's last game per
-combination and port; the
+combination and port. Findings there are game faults alone. The bot's own
+notes (`dashboard.BOT_NOTES`: a stall it gets out of by stair-scumming, a
+square entered too often, a prompt it did not know) are counted in their
+own column, because about 40% of runs had shown a stall note as a finding
+(maintainer 2026-11-16: "they're noise"). The
 Builds over time card below it (`dashboard.build_history`, maintainer
 2026-11-06) draws each build's live span (its first game to the next build's)
 as a band labelled with the short hash, the share of its counted games that
@@ -3295,6 +3382,97 @@ as they were frozen:
 | `ghost` | a ghost's strike marks the level summoned, as a summoner does |
 | `swat_yield` | badly hurt with potions, swatting a fragile creature beside yields to drinking |
 | `summon_phase` | just after a summoning (`summoner` or `ghost`), anything in contact means Phase Door |
+
+With `strong_potions`, a character that is still short of them once the
+Temple and the Black Market are shopped, rich (`MARKET_GEAR_GOLD`) and holding
+three or more Word of Recall, takes the stairs to DL1 and reads Word of Recall
+straight back. The stores restock on each return to town (VMS `store_maint`).
+It does this up to `RESTOCK_SCUMS` (3) times a visit, then goes on as before
+(`Brain.recall_trip`, 2026-11-16). A clvl 36 Ranger with 3,610,346 gold had
+found none, recalled to DL37 with two Cure Light Wounds, and died to a Young
+Multi-Hued Dragon's breaths while it waited for Word of Recall. Food and light
+have their own hops (`RESTOCK_HOPS`), which use the stairs both ways.
+
+From `ESCAPE_MANA_DLVL` (20) down, a spell is cast only if it leaves the
+mana for the best known heal and for the cheaper of Teleport Self and Portal
+(`Magic.spare`). A clvl 36 Ranger had cast Magic Missile at an Ancient White
+Dragon down to 4 of 103 mana; it survived a breath at 65 HP with Teleport
+Self known but unaffordable, and died to the next (2026-11-16).
+
+After `IDENTIFY_FAIL_STREAK` (5) failed Identify casts running, none for
+`IDENTIFY_FAIL_WAIT` (20,000) steps; a Scroll of Identify still serves. A
+clvl 29 Elf Rogue, with Identify at 95% to fail, cast it at one wand 750
+times on DL1 between rests for the mana: 264,000 steps (2026-11-16).
+
+A move that leaves the character in place with "You hit/miss the <name>"
+has found an invisible creature. If the lore says the character beats it
+(`fight_odds` under 1), that square is struck again for `UNSEEN_FOE_STEPS`
+(4) after each blow (`Brain.unseen_foe_attack`); otherwise the square is kept
+off as before (`note_bump`). Phase 5 made the Clear creatures invisible, and
+Clear Icky-Things killed 5 of the first 30 who died on 38b16b4. A Plus/4 Mage
+hit one, then stepped elsewhere each turn ("attacked unseen: keep moving")
+from 16 HP to death.
+
+`move` refuses a step beside a creature that has paralysed the bot
+(`into_paralyzer`). `clear_way` counts a way out as open only when `move`
+would take its first step. When the blocker it goes to kill never moves, it
+may step beside that blocker (`past`). Before this, a level-4 Plus/4 Paladin
+was in a dead-end DL1 corridor whose only way out passed beside a Floating
+Eye. `clear_way` saw a path, every layer's step was refused, and the bot
+searched one square for 13,000 steps until it starved (build queue,
+2026-11-16).
+
+`Brain.stationary` judges a creature the view names by its own kind
+(`knowledge.stationary_names`), and an unnamed one by glyph as before.
+Phase 5 follows VMS, where the Disenchanter Eye wanders 20% of the time
+(cmove `0x09`; Umoria made it `0x01`). By glyph, no 'e' counted as still
+any more, so `clear_way` never took on that Paladin's Floating Eye.
+
+The view names a creature by its type (`MX_TYPE`, `view.creature_names`).
+The species table (`cat_slot_id_lo`/`_hi`) is indexed by type, and town
+types follow the dungeon's as catalog ids from 0 (core/recall.s
+`recall_slot_to_cat_id`). From 2026-11-10 the view looked names up by live
+monster slot, so most names belonged to another type. Once stillness went
+by name, a town 'p' named "Grey Mushroom patch" turned the squares it walked
+into still hazards and walled the replayed Paladin off the stairs.
+
+**Phase 5 lore and item audit (2026-11-16).**
+- *Lore by kind.* A creature the view names is judged by its own kind:
+  `Brain.slow`, `outpaced`, `fragile` and `avoided`, through
+  `knowledge.fragile_names` and `outpaced_names`. A nameless creature is
+  still judged by its glyph, or its glyph and level. In the catalog no ','
+  counts as fragile by glyph (the Black Mushroom patch is not), and every
+  'e' was avoided, though only the Floating Eye's gaze paralyses.
+  `avoided` stays an eye rule: molds that paralyse are walked around, as
+  before.
+- *Weapon enchanting.* VMS stock gives the Alchemist Enchant Weapon To-Hit
+  and To-Dam, where Moria8 had one Scroll of Enchant Weapon. The bot buys
+  for to-dam, so it skips the To-Hit scroll (`ENCHANT_TO_HIT`) that the
+  name prefix also matched.
+- *Drained stats.* A drained stat (`Brain.drained`) is bought and drunk back
+  with that stat's Restore potion (`RESTORE_POTIONS`): five at the
+  Alchemist, Wisdom at the Temple. The Potion of Restoration, every stat at
+  once, was the Black Market's alone, and the bot no longer looks for it:
+  it left the catalog with the renumbering (b268b63), as did the Staff of
+  Detect Monsters that `RECHARGEABLE` listed.
+- *Black Market only.* Scrolls of Teleportation and Potions of Resist Heat
+  and Resist Cold left the Alchemist's stock and come from the Black Market
+  when rich, as before.
+- *Names.* Every creature and item name the bot uses is in the Phase 5
+  catalogs.
+
+`break_oscillation` exempts a "fight" decision only when it strikes a
+creature. `clear_way`'s approach to a blocker is a step into an empty square,
+and so it alternated with `leave_caster` unchecked. An Atari 8-bit Half-Orc
+Priest walked between two DL2 squares for 70,000 steps and used up its budget
+at clvl 5 (build queue, 2026-11-17).
+
+`classify` reads command mode from the command loop's return on the stack
+and a status line on any of rows 20-23, not only row 21. On a Plus/4 disk
+game, a failed `ITEM.CAT` read printed its drive command ("B-P 5", a digit
+and a return) to the screen, which moved the status line to row 22. Back at
+the command prompt, the bot pressed RUN/STOP 83,000 times at what it took
+for an unknown prompt (build queue, 2026-11-17).
 
 A **variant** changes goal fields for a subqueue's runs: `field=value` terms
 separated by commas, semicolons or spaces, a bare word after a term being

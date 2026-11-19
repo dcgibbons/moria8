@@ -18,6 +18,7 @@ tramp_ui_legal_display:
     jmp tramp_sr_epilogue
 
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
+#if !PLUS4_CARTRIDGE
 legal_notice_filename: .byte 'L','I','C','E','N','S','E',',','S',',','R'
 .label legal_notice_filename_len = * - legal_notice_filename
 legal_offer_filename: .byte 'S','O','U','R','C','E','-','O','F','F','E','R',',','S',',','R'
@@ -46,3 +47,4 @@ legal_os_read_open_status:
 .segment Default
 
 .label legal_os_fill_cache = legal_stream_fill_bytes
+#endif

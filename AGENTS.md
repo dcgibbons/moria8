@@ -52,14 +52,18 @@ If the quote does not name the action, stop and ask.
    build outputs, VICE snapshots, downloaded toolchains, or monitor logs. Do
    not leave generated `.prg`, `.sym`, `.vs`, or `out/` artifacts in source
    directories.
-7. Release compliance: every shipping disk image must include `data/LICENSE`
-   and `data/SOURCE-OFFER` (LF→CR converted, or LF→`$9B` ATASCII EOL on Atari
-   8-bit). Commodore images carry them as SEQ files `license,s`/`source-offer,s`;
+7. Release compliance: every shipping disk and cartridge image must include
+   `data/LICENSE` and `data/SOURCE-OFFER` (LF→CR converted, LF→`$9B` ATASCII
+   EOL on Atari 8-bit disk, or raw/NUL-padded ROM assets in cartridges).
+   Commodore disk images carry them as SEQ files `license,s`/`source-offer,s`;
    the Apple IIe image carries ProDOS TXT files `LICENSE`/`SOURCE.OFFER`; the
    Commander X16 `.zip` bundle carries `LICENSE` and `SOURCE-OFFER`; the Atari
    8-bit `.atr` image carries DOS 2.5 files `LICENSE.TXT` and `SRCOFFER.TXT`;
-   the BBC Master 128 `.ssd` image carries DFS files `LICENSE` and `SRCOFFR`.
-   New platform ports must do the same.
+   the BBC Master 128 `.ssd` image carries DFS files `LICENSE` and `SRCOFFR`;
+   and the five shipping cartridges (`moria8-c64.crt`, `moria8-c128.crt`,
+   `moria8-plus4.crt`, `moria8-cx16.crt`, `moria8-atari8.car`) embed both
+   documents in ROM for Title `A` (`About`) and Help `L`. New platform ports and
+   cartridges must do the same.
 8. Runtime verification uses VICE warp mode and never relies on timeouts above
    30 seconds. Commands that launch VICE, MAME, or `x16emu` need localhost
    monitor/socket access, which sandboxed execution blocks (you'll see
@@ -67,7 +71,8 @@ If the quote does not name the action, stop and ask.
    not try a sandboxed run first. See Memory And Verification Details for the
    full escalation list. Exception: AI playtest *sessions* and measurement
    runs (`make playtest-session`, `make playtest-qualify`, `make
-   playtest-regress`, `make playtest-m0-report`, `make playtest-disk`) and the opt-in full C128
+   playtest-regress`, `make playtest-m0-report`, `make playtest-disk`), the
+   pre-commit bot gate (`make playtest-gate`, minutes), and the opt-in full C128
    generation soak (`make test128-soak-long`) are long-running operational
    jobs, not runtime verification. They have no overall time limit and run until their goal is
    reached. Every emulator command and resume inside a session has a
@@ -151,8 +156,10 @@ Hard boundaries:
   `platforms/cx16/memory.s`: unified resident/play ends at or below `$9AFF`,
   the tier-name pool spans `$9B00-$9EFF`, `$9F00-$9FFF` is the VERA/VIA I/O
   hole, and the `$A000-$BFFF` banked RAM window (switched via `$00`) hosts
-  map Banks 1–2, auxdata Bank 3, huffdata Bank 4, monster tiers Banks 5–8,
-  overlays Banks 9–20, and title art Bank 21
+  KERNAL `KVARSB0` Bank 0, map Banks 1–2, auxdata Bank 3, huffdata + monster
+  catalog Huffman names Bank 4, `MONSTER.EXT` Bank 5, `ITEM.CAT` Bank 6,
+  reserved extension Banks 7–8, 13 overlays Banks 9–21, title art Bank 22,
+  `MONSTER.CAT` Bank 23, cold `LEGALUI` Bank 24, and free/warm pool Banks 25–63
 - Atari 8-bit ownership comes from `docs/ATARI8_MEMORY_CONTRACT.md` and
   `platforms/atari8/memory.s`: low resident banking/SIO/130XE/interrupt helpers
   end at or below `$4000`, `Default` resident ends at or below `$C100`,
@@ -192,17 +199,23 @@ bootstrap stub below BASIC ROM that banks RAM visible before jumping to
 
 VICE/MAME/`x16emu` escalation list (these launch an emulator and need
 unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
-or `x16emu`; `make test64`; `make test64-cartridge`;
+`mame`, or `x16emu`; `make test`; `make test64`; `make test64-cartridge`;
 `make test64-cartridge-persistence`; `make test64-legal`; `make test128-legal`;
 `make testplus4-legal`; direct `test_legal.py` runs; direct `test_cartridge.py` and
 `test_cartridge_persistence.py` runs; `make testplus4`; `make testplus4-runtime`;
+`make testplus4-cartridge`; `make testplus4-cartridge-assets`;
+`make testplus4-cartridge-persistence`; `make testapple2-smoke`;
 `make testapple2-runtime`; `make test128-fast`; `make test128-fast-smoke`;
-`make test128`; `make test128-soak-long`; `make testcx16`; `make testcx16-runtime`;
+`make test128`; `make test128-cartridge`; `make test128-soak-long`;
+`make testcx16`; `make testcx16-smoke`; `make testcx16-runtime`;
+`make testcx16-cartridge`; `make testatari8`; `make testatari8-smoke`;
 `make testatari8-runtime`; `make testatari8-fast-smoke`;
+`make testatari8-cartridge`; `make testbbcmaster`; `make testbbcmaster-smoke`;
 `make testbbcmaster-runtime`; `make testbbcmaster-fast-smoke`;
-`make playtest-smoke`; `make playtest-session`; `make playtest-repro`;
+`make playtest-smoke`; `make playtest-gate`; `make playtest-session`; `make playtest-repro`;
 `make playtest-m0-report`; `make playtest-qualify`; `make playtest-regress`;
-`make playtest-disk`; `make playtest-selftest`; direct `harness128.py`, `harness128_batch.py`,
+`make playtest-disk`; `make playtest-selftest`; `make playtest-queue`;
+`make playtest-ab`; direct `harness128.py`, `harness128_batch.py`,
 `harnessplus4.py`, or `harness_smoke.py` runs; and filtered runtime harness
 targets. Static/build-only checks stay sandboxed: `make build`, `make
 check-hal-boundaries`, Python static checkers, `git diff`, and similar commands
@@ -218,13 +231,14 @@ prefix them with `tools/isolated.sh` when other agents may be testing.
 The Apple IIe harness (`platforms/apple2/harness_smoke.py`) drives headless
 MAME apple2ee instead of VICE and requires Apple IIe ROMs via the `A2ROMS`
 env var or `--rompath` (ROMs are not redistributable). Run one scenario per
-invocation; the suite is 14 scenarios plus `boot_title`. The Commander X16
-harness (`platforms/cx16/harness_smoke.py`) drives headless `x16emu -testbench`
-when `X16EMU` and `X16ROM` are available (20 scenarios). The Atari 8-bit
-harness (`platforms/atari8/harness_smoke.py`) drives headless MAME `a800xl` and
-`a130xe` when `ATARI8ROMS` is set (15 `a800xl` scenarios plus 3 `a130xe`
-scenarios). The BBC Master 128 harness (`platforms/bbcmaster/harness_smoke.py`)
-drives headless MAME `bbcm` when `BBCMROMS` is set (15 scenarios).
+invocation; the suite is 24 scenarios plus `boot_title` and `save_reboot_load`
+(26 total). The Commander X16 harness (`platforms/cx16/harness_smoke.py`)
+drives headless `x16emu -testbench` when `X16EMU` and `X16ROM` are available
+(27 scenarios). The Atari 8-bit harness (`platforms/atari8/harness_smoke.py`)
+drives headless MAME `a800xl` and `a130xe` when `ATARI8ROMS` is set (16
+`a800xl` scenarios plus 5 `a130xe` scenarios = 21 total). The BBC Master 128
+harness (`platforms/bbcmaster/harness_smoke.py`) drives headless MAME `bbcm`
+when `BBCMROMS` is set (18 scenarios).
 
 ## Working Style
 
@@ -259,6 +273,10 @@ Operational rules:
   obviously connect to the change, read the failing test and harness
   before running anything. Never burn gate cycles on repeated blind
   reruns: two identical failures means stop and analyze, not rerun.
+- Before committing a product-code change (`core/`, `platforms/`), run
+  `make playtest-gate` after the verification gate: the bot plays every port
+  and cartridge from fixed seeds, and a game finding fails it. Unit and
+  harness suites passed builds whose first store buy crashed two ports.
 - Define success as: the user's failing command passes, or `make test` passes
   if no command was given. Loop until verified. Stop and ask the user when a
   gate action is needed, infrastructure is broken, or the 30-second timeout cap

@@ -975,6 +975,9 @@ input_key_wait_fast:        // test key feed: the BEQ back to the poll
     tax
     lda igk_key
     rts
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.assert "C128 input wait hooks avoid boot128 ($2000-$23FF) and bootart128 ($2800-$298F) executable ranges", input_key_wait_strict >= $2990 && input_key_wait_fast >= $2990 && input_key_wait_fast < $8000, true
+#endif
 #endif
 
 // petscii_to_command — Convert PETSCII key code to command ID

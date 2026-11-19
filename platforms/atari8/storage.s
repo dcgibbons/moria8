@@ -24,48 +24,121 @@ atari_io_device:    .byte 8
 .label atari_dir_count_hi = A8_STORAGE_VARS_BASE + 1
 .label xe_present         = A8_STORAGE_VARS_BASE + 2
 .label xe_saved_main      = A8_STORAGE_VARS_BASE + 3
+#if !ATARI8_CARTRIDGE
 xe_slot_populated:
-    .fill 16, 0
+    .fill 18, 0
 
 // ============================================================
-// 130XE Slot Geometry Tables (Slots 0..15)
+// 130XE Page-Packed Bank Allocation & Slot Geometry (Slots 0..17)
 // ============================================================
-// Slots 0..9:  OVL.STA, OVL.TWN, OVL.DTH, OVL.GEN, OVL.HLP,
-//              OVL.UI,  OVL.ITM, OVL.SPL, OVL.MDL, OVL.CHS  (16 pages @ $E000)
-// Slots 10..13, 15: the monster catalog's record sectors, staged at $E000
-//              (monster_catalog_a8.s; the tiers' MONSTER.DB1..4 until 2026-11-05)
-// Slot 14:     TITLE.DAT                                     (3 pages @ $C100)
+// Slots 0..9:   OVL.STA, OVL.TWN, OVL.DTH, OVL.GEN, OVL.HLP,
+//               OVL.UI,  OVL.ITM, OVL.SPL, OVL.MDL, OVL.CHS  (page-ceil @ $E000)
+// Slots 10..13, 15: MONSTER.CAT sector groups, staged at $E000
+//               (monster_catalog_a8.s: 4x32 + 1x12 = 140 sectors @ 128 B = 70 pages)
+// Slot 14:      TITLE.DAT                                     (3 pages @ $C100)
+// Slots 16..17: OVL.HOM, OVL.STO                              (page-ceil @ $E000)
+// Cold OVL.TTL (overlay 13) is uncached ($FF) on 130XE so 100% of gameplay
+// overlays, MONSTER.CAT, and TITLE.DAT stay RAM-cached within 256/256 pages.
+.const XE_SLOT0_PAGES  = 16   // OVL.STA
+.const XE_SLOT1_PAGES  = 15   // OVL.TWN
+.const XE_SLOT2_PAGES  = 14   // OVL.DTH
+.const XE_SLOT3_PAGES  = 15   // OVL.GEN
+.const XE_SLOT4_PAGES  = 15   // OVL.HLP
+.const XE_SLOT5_PAGES  = 16   // OVL.UI
+.const XE_SLOT6_PAGES  = 15   // OVL.ITM
+.const XE_SLOT7_PAGES  = 16   // OVL.SPL
+.const XE_SLOT8_PAGES  = 14   // OVL.MDL
+.const XE_SLOT9_PAGES  = 16   // OVL.CHS
+.const XE_SLOT10_PAGES = 16   // MONSTER.CAT sectors 0..31   (4,096 B)
+.const XE_SLOT11_PAGES = 16   // MONSTER.CAT sectors 32..63  (4,096 B)
+.const XE_SLOT12_PAGES = 16   // MONSTER.CAT sectors 64..95  (4,096 B)
+.const XE_SLOT13_PAGES = 16   // MONSTER.CAT sectors 96..127 (4,096 B)
+.const XE_SLOT14_PAGES = 3    // TITLE.DAT (621 B)
+.const XE_SLOT15_PAGES = 6    // MONSTER.CAT sectors 128..139 (1,536 B)
+.const XE_SLOT16_PAGES = 16   // OVL.HOM
+.const XE_SLOT17_PAGES = 15   // OVL.STO
+
+// Bank 0 ($E2, $4000-$7FFF): Slots 0, 5, 9, 10 (64/64 pages)
+.const XE_SLOT0_WIN_HI     = XE_WIN_BASE_HI
+.const XE_SLOT5_WIN_HI     = XE_SLOT0_WIN_HI + XE_SLOT0_PAGES
+.const XE_SLOT9_WIN_HI     = XE_SLOT5_WIN_HI + XE_SLOT5_PAGES
+.const XE_SLOT10_WIN_HI    = XE_SLOT9_WIN_HI + XE_SLOT9_PAGES
+.const XE_BANK0_FREE_HI    = XE_SLOT10_WIN_HI + XE_SLOT10_PAGES
+.const XE_BANK0_USED_PAGES = XE_BANK0_FREE_HI - XE_WIN_BASE_HI
+.const XE_BANK0_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK0_FREE_HI
+
+// Bank 1 ($E6, $4000-$7FFF): Slots 11, 12, 13, 16 (64/64 pages)
+.const XE_SLOT11_WIN_HI    = XE_WIN_BASE_HI
+.const XE_SLOT12_WIN_HI    = XE_SLOT11_WIN_HI + XE_SLOT11_PAGES
+.const XE_SLOT13_WIN_HI    = XE_SLOT12_WIN_HI + XE_SLOT12_PAGES
+.const XE_SLOT16_WIN_HI    = XE_SLOT13_WIN_HI + XE_SLOT13_PAGES
+.const XE_BANK1_FREE_HI    = XE_SLOT16_WIN_HI + XE_SLOT16_PAGES
+.const XE_BANK1_USED_PAGES = XE_BANK1_FREE_HI - XE_WIN_BASE_HI
+.const XE_BANK1_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK1_FREE_HI
+
+// Bank 2 ($EA, $4000-$7FFF): Slots 1, 3, 7, 17, 14 (64/64 pages)
+.const XE_SLOT1_WIN_HI     = XE_WIN_BASE_HI
+.const XE_SLOT3_WIN_HI     = XE_SLOT1_WIN_HI + XE_SLOT1_PAGES
+.const XE_SLOT7_WIN_HI     = XE_SLOT3_WIN_HI + XE_SLOT3_PAGES
+.const XE_SLOT17_WIN_HI    = XE_SLOT7_WIN_HI + XE_SLOT7_PAGES
+.const XE_SLOT14_WIN_HI    = XE_SLOT17_WIN_HI + XE_SLOT17_PAGES
+.const XE_BANK2_FREE_HI    = XE_SLOT14_WIN_HI + XE_SLOT14_PAGES
+.const XE_BANK2_USED_PAGES = XE_BANK2_FREE_HI - XE_WIN_BASE_HI
+.const XE_BANK2_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK2_FREE_HI
+
+// Bank 3 ($EE, $4000-$7FFF): Slots 2, 4, 6, 8, 15 (64/64 pages)
+.const XE_SLOT2_WIN_HI     = XE_WIN_BASE_HI
+.const XE_SLOT4_WIN_HI     = XE_SLOT2_WIN_HI + XE_SLOT2_PAGES
+.const XE_SLOT6_WIN_HI     = XE_SLOT4_WIN_HI + XE_SLOT4_PAGES
+.const XE_SLOT8_WIN_HI     = XE_SLOT6_WIN_HI + XE_SLOT6_PAGES
+.const XE_SLOT15_WIN_HI    = XE_SLOT8_WIN_HI + XE_SLOT8_PAGES
+.const XE_BANK3_FREE_HI    = XE_SLOT15_WIN_HI + XE_SLOT15_PAGES
+.const XE_BANK3_USED_PAGES = XE_BANK3_FREE_HI - XE_WIN_BASE_HI
+.const XE_BANK3_FREE_PAGES = XE_WIN_LIMIT_HI - XE_BANK3_FREE_HI
+
+.const XE_TOTAL_USED_PAGES = XE_BANK0_USED_PAGES + XE_BANK1_USED_PAGES + XE_BANK2_USED_PAGES + XE_BANK3_USED_PAGES
+.const XE_TOTAL_FREE_PAGES = XE_BANK0_FREE_PAGES + XE_BANK1_FREE_PAGES + XE_BANK2_FREE_PAGES + XE_BANK3_FREE_PAGES
+
 xe_slot_portb:
-    .byte PORTB_XE_BANK0, PORTB_XE_BANK0, PORTB_XE_BANK0, PORTB_XE_BANK0
-    .byte PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK1
-    .byte PORTB_XE_BANK2, PORTB_XE_BANK2, PORTB_XE_BANK2, PORTB_XE_BANK2
-    .byte PORTB_XE_BANK3, PORTB_XE_BANK3, PORTB_XE_BANK3, PORTB_XE_BANK3
+    .byte PORTB_XE_BANK0, PORTB_XE_BANK2, PORTB_XE_BANK3, PORTB_XE_BANK2
+    .byte PORTB_XE_BANK3, PORTB_XE_BANK0, PORTB_XE_BANK3, PORTB_XE_BANK2
+    .byte PORTB_XE_BANK3, PORTB_XE_BANK0, PORTB_XE_BANK0, PORTB_XE_BANK1
+    .byte PORTB_XE_BANK1, PORTB_XE_BANK1, PORTB_XE_BANK2, PORTB_XE_BANK3
+    .byte PORTB_XE_BANK1, PORTB_XE_BANK2
 
 xe_slot_win_hi:
-    .byte $40, $50, $60, $70
-    .byte $40, $50, $60, $70
-    .byte $40, $50, $60, $70
-    .byte $40, $50, $60, $70
+    .byte XE_SLOT0_WIN_HI,  XE_SLOT1_WIN_HI,  XE_SLOT2_WIN_HI,  XE_SLOT3_WIN_HI
+    .byte XE_SLOT4_WIN_HI,  XE_SLOT5_WIN_HI,  XE_SLOT6_WIN_HI,  XE_SLOT7_WIN_HI
+    .byte XE_SLOT8_WIN_HI,  XE_SLOT9_WIN_HI,  XE_SLOT10_WIN_HI, XE_SLOT11_WIN_HI
+    .byte XE_SLOT12_WIN_HI, XE_SLOT13_WIN_HI, XE_SLOT14_WIN_HI, XE_SLOT15_WIN_HI
+    .byte XE_SLOT16_WIN_HI, XE_SLOT17_WIN_HI
 
 xe_slot_ram_hi:
-    .byte $e0, $e0, $e0, $e0, $e0, $e0, $e0, $e0, $e0, $e0
-    .byte $e0, $e0, $e0, $e0
+    .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE
+    .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE
+    .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE, >BANKED_DATA_BASE
+    .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE
     .byte >MAP_BASE
-    .byte $e0
+    .byte >BANKED_DATA_BASE
+    .byte >BANKED_DATA_BASE, >BANKED_DATA_BASE
 
 xe_slot_pages:
-    .byte 16, 16, 16, 16, 16, 16, 16, 16, 16, 16
-    .byte 16, 16, 16, 16
-    .byte 3
-    .byte 16
+    .byte XE_SLOT0_PAGES,  XE_SLOT1_PAGES,  XE_SLOT2_PAGES,  XE_SLOT3_PAGES
+    .byte XE_SLOT4_PAGES,  XE_SLOT5_PAGES,  XE_SLOT6_PAGES,  XE_SLOT7_PAGES
+    .byte XE_SLOT8_PAGES,  XE_SLOT9_PAGES,  XE_SLOT10_PAGES, XE_SLOT11_PAGES
+    .byte XE_SLOT12_PAGES, XE_SLOT13_PAGES, XE_SLOT14_PAGES, XE_SLOT15_PAGES
+    .byte XE_SLOT16_PAGES, XE_SLOT17_PAGES
 
-// 3-char overlay extension lookup table for slots 0..9
+// 3-char overlay extension lookup table for OVL.* (overlays 0..12)
 atari_ovl_ext_c0:
-    .byte 'S', 'T', 'D', 'G', 'H', 'U', 'I', 'S', 'M', 'C'
+    .byte 'S', 'T', 'D', 'G', 'H', 'U', 'I', 'S', 'M', 'C', 'H', 'S', 'T'
 atari_ovl_ext_c1:
-    .byte 'T', 'W', 'T', 'E', 'L', 'I', 'T', 'P', 'D', 'H'
+    .byte 'T', 'W', 'T', 'E', 'L', 'I', 'T', 'P', 'D', 'H', 'O', 'T', 'T'
 atari_ovl_ext_c2:
-    .byte 'A', 'N', 'H', 'N', 'P', ' ', 'M', 'L', 'L', 'S'
+    .byte 'A', 'N', 'H', 'N', 'P', ' ', 'M', 'L', 'L', 'S', 'M', 'O', 'L'
+atari_ovl_xe_slot:
+    .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 17, $ff
+#endif
 
 // ============================================================
 // EnterSio & ExitSio — Mandatory Atari OS ROM SIOV ($E459) Wrapper
@@ -179,6 +252,7 @@ ExitSio:
     clc
     rts
 
+#if !ATARI8_CARTRIDGE
 // ============================================================
 // 130XE Extended RAM Detection & Slot Copy (< $4000)
 // ============================================================
@@ -189,7 +263,7 @@ xe_detect:
     sta NMIEN
     sta xe_present
 
-    ldx #15
+    ldx #17
 !clr_slots:
     sta xe_slot_populated,x
     dex
@@ -250,58 +324,33 @@ xe_detect:
 xe_bank_table:
     .byte PORTB_XE_BANK0, PORTB_XE_BANK1, PORTB_XE_BANK2, PORTB_XE_BANK3
 
-// xe_cache_stash — Copy slot X (0..15) from Main/High RAM to 130XE bank
+// xe_cache_stash — Copy slot X (0..17) from Main/High RAM to 130XE bank
 xe_cache_stash:
-    cpx #16
+    cpx #18
     bcs !done+
-    php
-    sei
-    lda #$00
-    sta NMIEN
-    sta atari_io_src
-    sta atari_io_dst
     lda xe_slot_ram_hi,x
     sta atari_io_src_hi
     lda xe_slot_win_hi,x
     sta atari_io_dst_hi
-    lda xe_slot_pages,x
-    sta atari_io_pages
     lda xe_slot_portb,x
     sta xe_slot_populated,x
-    sta PORTB
-
-    ldy #0
-!page_loop:
-    lda (atari_io_src),y
-    sta (atari_io_dst),y
-    iny
-    bne !page_loop-
-    inc atari_io_src_hi
-    inc atari_io_dst_hi
-    dec atari_io_pages
-    bne !page_loop-
-
-    lda #PORTB_GAME_RAM
-    sta PORTB
-    sta NMIRES
-    lda #$c0
-    sta NMIEN
-    plp
+    jmp xe_cache_xfer
 !done:
     rts
 
-// xe_cache_fetch — Copy slot X (0..15) from 130XE bank to Main/High RAM
+// xe_cache_fetch — Copy slot X (0..18) from 130XE bank to Main/High RAM
 xe_cache_fetch:
+    lda xe_slot_win_hi,x
+    sta atari_io_src_hi
+    lda xe_slot_ram_hi,x
+    sta atari_io_dst_hi
+xe_cache_xfer:
     php
     sei
     lda #$00
     sta NMIEN
     sta atari_io_src
     sta atari_io_dst
-    lda xe_slot_win_hi,x
-    sta atari_io_src_hi
-    lda xe_slot_ram_hi,x
-    sta atari_io_dst_hi
     lda xe_slot_pages,x
     sta atari_io_pages
     lda xe_slot_portb,x
@@ -368,7 +417,7 @@ atari_match_cache_slot:
     lda atari_fn_83 + 1
     cmp #'V'
     bne !uncached+
-    ldx #9
+    ldx #hal_platform_overlay_count - 1
 !ovl_loop:
     lda atari_fn_83 + 8
     cmp atari_ovl_ext_c0,x
@@ -378,11 +427,16 @@ atari_match_cache_slot:
     bne !ovl_next+
     lda atari_fn_83 + 10
     cmp atari_ovl_ext_c2,x
-    beq !matched+
+    beq !matched_ovl+
 !ovl_next:
     dex
     bpl !ovl_loop-
     jmp !uncached+
+
+!matched_ovl:
+    lda atari_ovl_xe_slot,x
+    tax
+    rts
 
 !check_monster:
     cmp #'M'
@@ -413,6 +467,31 @@ atari_match_cache_slot:
     ldx #$ff
 !matched:
     rts
+#endif
+
+// atari_sio_prep_read_sec_buf — Populate DCB to read sector X:A into sio_sector_buf.
+atari_sio_prep_read_sec_buf:
+    sta DCB_DAUX1
+    stx DCB_DAUX2
+    lda #'R'
+    sta DCB_DCOMND
+    lda #$40
+    sta DCB_DSTATS
+    lda #<sio_sector_buf
+    sta DCB_DBUFLO
+    lda #>sio_sector_buf
+    sta DCB_DBUFHI
+    lda #128
+    sta DCB_DBYTLO
+    lda #0
+    sta DCB_DBYTHI
+    rts
+
+// atari_sio_read_sec_buf — Read sector X:A into sio_sector_buf (returns C from ExitSio).
+atari_sio_read_sec_buf:
+    jsr atari_sio_prep_read_sec_buf
+    jsr EnterSio
+    jmp ExitSio
 
 // atari_find_dir_entry — Locate atari_fn_83 in DOS 2.5 directory (Sectors 361..368)
 // Output: C=0 found (atari_io_sec_lo/hi = start sector, atari_dir_count_lo/hi = count,
@@ -427,24 +506,9 @@ atari_find_dir_entry:
 
 !dir_sec_loop:
     // Read directory sector into sio_sector_buf
-    lda #'R'
-    sta DCB_DCOMND
-    lda #$40
-    sta DCB_DSTATS
-    lda #<sio_sector_buf
-    sta DCB_DBUFLO
-    lda #>sio_sector_buf
-    sta DCB_DBUFHI
-    lda #128
-    sta DCB_DBYTLO
-    lda #0
-    sta DCB_DBYTHI
     lda atari_io_sec_lo
-    sta DCB_DAUX1
-    lda atari_io_sec_hi
-    sta DCB_DAUX2
-    jsr EnterSio
-    jsr ExitSio
+    ldx atari_io_sec_hi
+    jsr atari_sio_read_sec_buf
     bcs !dir_fail+
 
     ldx #0
@@ -502,6 +566,18 @@ atari_find_dir_entry:
 // HAL Asset Loader Contract (checked by check_hal_asset_exports.py)
 // ============================================================
 
+#if ATARI8_CARTRIDGE
+#import "cartridge_copy.s"
+.label hal_asset_load_prg_header = cart_load_prg
+.label hal_asset_load_title      = cart_load_title
+
+hal_asset_load:
+    jmp cart_load_prg
+
+hal_asset_close_channel:
+    clc
+    rts
+#else
 // hal_asset_load_prg_header — Load PRG-headed asset (overlay, tier, title, or bank)
 // Input: A = filename length, X/Y = filename pointer lo/hi
 // Output: Carry clear = success, Carry set = error
@@ -512,8 +588,10 @@ hal_asset_load_prg_header:
     jsr atari_format_83
     jsr atari_match_cache_slot
     stx atari_io_slot
-    cpx #15
+    cpx #18
     bcs !disk_load+
+    cpx #15
+    beq !disk_load+
     lda xe_present
     beq !disk_load+
     lda xe_slot_populated,x
@@ -536,22 +614,9 @@ hal_asset_load_prg_header:
     ora atari_io_sec_hi
     beq !load_done+
 
-    lda #'R'
-    sta DCB_DCOMND
-    lda #$40
-    sta DCB_DSTATS
-    lda #<sio_sector_buf
-    sta DCB_DBUFLO
-    lda #>sio_sector_buf
-    sta DCB_DBUFHI
-    lda #128
-    sta DCB_DBYTLO
-    lda #0
-    sta DCB_DBYTHI
     lda atari_io_sec_lo
-    sta DCB_DAUX1
-    lda atari_io_sec_hi
-    sta DCB_DAUX2
+    ldx atari_io_sec_hi
+    jsr atari_sio_prep_read_sec_buf
     jsr EnterSio
     jsr ExitSio
     bcs !load_err+
@@ -595,8 +660,10 @@ hal_asset_load_prg_header:
     lda xe_present
     beq !load_ok+
     ldx atari_io_slot
-    cpx #15
+    cpx #18
     bcs !load_ok+
+    cpx #15
+    beq !load_ok+
     jsr xe_cache_stash
 !load_ok:
     clc
@@ -620,4 +687,11 @@ hal_asset_close_channel:
     clc
     rts
 
-.assert "130XE slot tables cover slots 0..15", xe_slot_win_hi - xe_slot_portb == 16 && xe_slot_ram_hi - xe_slot_win_hi == 16 && xe_slot_pages - xe_slot_ram_hi == 16, true
+.assert "130XE slot tables cover slots 0..17", xe_slot_win_hi - xe_slot_portb == 18 && xe_slot_ram_hi - xe_slot_win_hi == 18 && xe_slot_pages - xe_slot_ram_hi == 18, true
+.assert "130XE Bank 0 stays within $4000-$7FFF", XE_BANK0_FREE_HI <= XE_WIN_LIMIT_HI, true
+.assert "130XE Bank 1 stays within $4000-$7FFF", XE_BANK1_FREE_HI <= XE_WIN_LIMIT_HI, true
+.assert "130XE Bank 2 stays within $4000-$7FFF", XE_BANK2_FREE_HI <= XE_WIN_LIMIT_HI, true
+.assert "130XE Bank 3 stays within $4000-$7FFF", XE_BANK3_FREE_HI <= XE_WIN_LIMIT_HI, true
+.assert "130XE used + free pages equal 256", XE_TOTAL_USED_PAGES + XE_TOTAL_FREE_PAGES == XE_TOTAL_PAGES, true
+.assert "130XE TITLE.DAT slot stays inside MAP_BASE ($C100-$CFFF)", (>MAP_BASE) + XE_SLOT14_PAGES <= (>IO_HOLE_BASE), true
+#endif

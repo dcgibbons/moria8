@@ -24,6 +24,9 @@ c128_title_load_and_draw_cached:
     jmp title_render_data
 
 c128_title_asset_load:
+#if C128_CARTRIDGE
+    jmp cart_load_title
+#else
     // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
     // SETBNK controls LOAD destination bank; keep filename in Bank 0.
     lda #1
@@ -56,6 +59,7 @@ c128_title_asset_load:
 
     plp
     rts
+#endif
 
 c128_title_cache_is_valid:
     php

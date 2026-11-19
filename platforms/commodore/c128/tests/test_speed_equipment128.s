@@ -1,10 +1,16 @@
 #importonce
-// test_speed_equipment128.s — Ring of Speed equip/remove regression
+// test_speed_equipment128.s — Ring of Speed & Cloak slot equip/remove regression
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
 
 .pc = $0810 "Test Code"
+test_start:
+    sei
+    lda #$3e
+    sta $ff00
+    jmp test_main
+.assert "test_start stays below C128 BASIC ROM", test_start < $4000, true
 
 #import "../../../../core/zeropage.s"
 #import "../hal/entropy_consts.s"
@@ -35,20 +41,20 @@ hal_screen_put_string:
 screen_put_decimal:
     rts
 
-#import "../../../../core/player.s"
-
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
+inv_qty:     .fill TOTAL_INV_SLOTS, 0
 inv_p1:      .fill TOTAL_INV_SLOTS, 0
 inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
 inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
+inv_flags:   .fill TOTAL_INV_SLOTS, 0
 inv_ego:     .fill TOTAL_INV_SLOTS, 0
-it_color_ac: .fill ITEM_TYPE_COUNT, 0
+fi_item_id:  .byte FI_EMPTY
+fi_meta_hi:  .byte 0
+si_meta_hi:  .byte 0
 
-item_get_base_ac:
-    lda it_color_ac,y
-    and #$0f
-    rts
+#import "../../../../core/item_tables.s"
+#import "../../../../core/player.s"
 
 tramp_ego_get_ac_bonus:
     lda #0
@@ -59,7 +65,7 @@ tramp_ego_get_ac_bonus:
 #define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
 #import "../../../../core/player_recalc_equipment.s"
 
-test_start:
+test_main:
     sei
     cld
     ldx #$ff
@@ -78,10 +84,13 @@ test_start:
     sta player_data + PL_STR_BASE,x
     dex
     bpl !set_stats-
+    jsr player_calc_stats
 
     // Equipping the ring must enable permanent speed.
-    lda #ITEM_TYPE_RING_SPEED
+    lda #ITEM_SLOT_RING_OF_SPEED
     sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_SPEED
+    sta inv_ego + EQUIP_RING
     jsr player_recalc_equipment
     lda player_pflags
     and #PFLAG_SPEED
@@ -90,9 +99,40 @@ test_start:
     // Removing the ring through the same production recalculation must clear it.
     lda #FI_EMPTY
     sta inv_item_id + EQUIP_RING
+    lda #0
+    sta inv_ego + EQUIP_RING
     jsr player_recalc_equipment
     lda player_pflags
     and #PFLAG_SPEED
+    bne test_fail
+
+    // Equipping Cloak (base AC 1) [+2] of Speed in EQUIP_CLOAK (slot 32)
+    // must apply both AC (1 + 2 = 3) and ego passive flags.
+    lda #ITEM_SLOT_CLOAK
+    sta inv_item_id + EQUIP_CLOAK
+    lda #2
+    sta inv_to_ac + EQUIP_CLOAK
+    lda #(ITEM_PAGE_CLOAK | EGO_SPEED)
+    sta inv_ego + EQUIP_CLOAK
+    jsr player_recalc_equipment
+    lda player_pflags
+    and #PFLAG_SPEED
+    beq test_fail
+    lda zp_player_ac
+    cmp #3
+    bne test_fail
+
+    // Removing the cloak must clear both AC and ego passive flags.
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_CLOAK
+    lda #0
+    sta inv_to_ac + EQUIP_CLOAK
+    sta inv_ego + EQUIP_CLOAK
+    jsr player_recalc_equipment
+    lda player_pflags
+    and #PFLAG_SPEED
+    bne test_fail
+    lda zp_player_ac
     bne test_fail
 
 test_pass:

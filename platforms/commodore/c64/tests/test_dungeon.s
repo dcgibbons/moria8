@@ -22,7 +22,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #67
+    ldx #68                     // tc_results' 69 bytes
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -36,6 +36,12 @@ test_exit_trampoline:
 .const T38_TRAP_X = 10        // test 38's rockfall trap, at (10, 10)
 .const T38_TRAP_Y = T38_TRAP_X
 
+.segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestNameStreams [start=$E300, min=$E300, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+#define PLAYER_CHARGEN_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
@@ -54,14 +60,12 @@ test_exit_trampoline:
 // The resistance armour roll, its suffixes and the equipment flags are not
 // exercised here (no item spawns, no equipping): out of the way above the
 // I/O hole (2026-11-11, which took the body past MAP_BASE).
-.segmentdef TestUnusedEgoArmour [start=$e100]
 // No item is named here either: the item-name streams go above it
 // (2026-11-11, when the four VMS wands took the body 36 bytes past MAP_BASE).
 #define C64_TEST_NAME_STREAMS_A000
-.segmentdef TestNameStreams [start=$e300]
 #define PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {
-    .segment TestUnusedEgoArmour
+    .segment Default
 }
 .macro PflagsRestoreSegment() {
     .segment Default
@@ -73,23 +77,25 @@ test_exit_trampoline:
 hal_player_recalc_pflags:
     brk
 #import "../../../../core/ui_messages.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/store_door_lookup.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #define DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/dungeon_gen.s"
 #undef DUNGEON_TEST_TUNNEL_HOOK
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 // Recall stubs — minimal footprint to keep test below MAP_BASE ($C000).
 // Full recall.s adds 267 bytes; stubs save ~260 bytes.
 // Safe: dungeon tests never exercise recall code paths.
@@ -120,25 +126,46 @@ spell_mask_count_ptr:
 // block movement; the unseen-collision case uses fear, which forbids attacks).
 eff_kill_monster:
     rts
+mon_atk_acid_armour:
+    clc
+    rts
+mm_divisor:
+    .byte 0
+mm_element_divisor_entry:
+    sta mm_divisor
+    rts
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment TestUnusedEgoArmour
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
+.segment Default
+.segment TestCreateOverlay
+.segment Default
 #import "../../../../core/special_rooms.s"
+.segment TestCreateOverlay
+.segment Default
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
-    .segment TestUnusedEgoArmour
+    .segment Default
 }
 .macro EgoArmourRestoreSegment() {
     .segment Default
 }
 #define EGO_ARMOUR_DATA_SEGMENT_CUSTOM
 .macro EgoArmourDataSegment() {
-    .segment TestUnusedEgoArmour
+    .segment Default
 }
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/player_run.s"
@@ -150,7 +177,9 @@ tramp_dig_ability:
     sta tun_dig_ability
     rts
 #import "../../../../core/tunnel.s"
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -377,7 +406,7 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 68, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 69, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 t67_trials: .byte 0
 run_cycle_expected:
@@ -4479,7 +4508,7 @@ test_start:
     lda #0
     sta door_state_count
     // Two spikes in carried slot 0
-    lda #ITEM_TYPE_IRON_SPIKE
+    lda #ITEM_SLOT_IRON_SPIKE
     sta inv_item_id
     lda #2
     sta inv_qty
@@ -4528,7 +4557,7 @@ test_start:
     sta door_state_y
     lda #15
     sta door_state_val          // Locked 15
-    lda #ITEM_TYPE_IRON_SPIKE
+    lda #ITEM_SLOT_IRON_SPIKE
     sta inv_item_id
     lda #1
     sta inv_qty                 // Last spike
@@ -4694,7 +4723,7 @@ test_start:
     lda #10
     sta df_target_x
     sta df_target_y
-    lda #ITEM_TYPE_IRON_SPIKE
+    lda #ITEM_SLOT_IRON_SPIKE
     sta inv_item_id
     lda #1
     sta inv_qty
@@ -4712,7 +4741,7 @@ test_start:
     cmp #1
     bne !t64_fail+
     lda inv_item_id
-    cmp #ITEM_TYPE_IRON_SPIKE
+    cmp #ITEM_SLOT_IRON_SPIKE
     bne !t64_fail+
     lda #$01
     sta tc_results + 63
@@ -4945,6 +4974,39 @@ test_start:
     lda #$00
     sta tc_results + 67
 !t68_done:
+
+    // ==========================================
+    // Test 69: "You take N damage." is one message (build queue, 2026-11-16).
+    // trap_apply_damage printed "You take " as the message and the number and
+    // " damage." past it, so the message row's length ended at column 9 and
+    // a following -more- covered the number: "You take  -more-ge." on every
+    // port, one trap hit in four. With row 0 in use, 1d1 lands on row 1, and
+    // its length must reach the end of "You take 1 damage." (18 columns).
+    // ==========================================
+    lda #50
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #MSG_PENDING            // row 0 holds a message: the damage goes to row 1
+    sta zp_msg_flags
+    lda #1
+    ldx #1
+    jsr trap_apply_damage       // 1d1: "You take 1 damage."
+    lda msg_row1_col
+    cmp #18
+    bne !t69_fail+
+    lda zp_player_hp_lo
+    cmp #49
+    bne !t69_fail+
+    lda #$01
+    sta tc_results + 68
+    jmp !t69_done+
+!t69_fail:
+    lda #$00
+    sta tc_results + 68
+!t69_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

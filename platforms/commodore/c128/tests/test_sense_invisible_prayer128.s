@@ -274,8 +274,8 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_sense_invisible_prayer_execute)
 
-    // Test 1: onset sets both see-invisible flags, prints the eye-tingle
-    // text, spends 8 mana, and marks Sense Invisible worked.
+    // Test 1: onset adds 25..48 turns to zp_eff_see_inv (leaving zp_eff_invis 0),
+    // prints the eye-tingle text, spends 8 mana, and marks Sense Invisible worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_sense_invisible_prayer_state
     jsr player_pray
@@ -287,10 +287,11 @@ test_start:
     cmp #19
     bne !t1_fail+
     lda zp_eff_see_inv
-    cmp #1
-    bne !t1_fail+
+    cmp #25
+    bcc !t1_fail+
+    cmp #49
+    bcs !t1_fail+
     lda zp_eff_invis
-    cmp #1
     bne !t1_fail+
     lda test_huff_calls
     cmp #1
@@ -313,7 +314,7 @@ test_start:
 !t1_fail:
     jmp test_fail
 
-    // Test 2: refresh stays silent and ensures both flags remain active.
+    // Test 2: refresh stays silent and stacks +25..48 onto zp_eff_see_inv (26..49).
 test_after_onset:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_sense_invisible_prayer_state
@@ -328,10 +329,11 @@ test_after_onset:
     cmp #19
     bne !t2_fail+
     lda zp_eff_see_inv
-    cmp #1
-    bne !t2_fail+
+    cmp #26
+    bcc !t2_fail+
+    cmp #50
+    bcs !t2_fail+
     lda zp_eff_invis
-    cmp #1
     bne !t2_fail+
     lda test_huff_calls
     bne !t2_fail+

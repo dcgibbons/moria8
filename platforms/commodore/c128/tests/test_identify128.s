@@ -100,7 +100,7 @@ df_target_x: .byte 0
 df_target_y: .byte 0
 piw_filter: .byte 0
 id_known: .fill 64, 0
-inv_item_id: .fill 30, 0
+inv_item_id: .fill 30, FI_EMPTY
 inv_flags: .fill 30, 0
 inv_qty: .fill 30, 0
 inv_p1: .fill 30, 0
@@ -239,7 +239,7 @@ huff_append_combat:
     rts
 
 item_append_name:
-    cmp #25
+    cmp #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     bne !done+
     lda #<tid_item25_name
     ldy #>tid_item25_name
@@ -311,12 +311,15 @@ test_reset_identify_state:
     sta tid_spell_exec_calls
     lda #$ff
     sta tid_last_spell_idx
-    ldx #25
-    jsr id_known_clear          // each test starts with type 25 unknown
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
+    sta item_cur_page
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
+    jsr id_known_clear          // each test starts with Cure Serious Wounds unknown
     ldx #29
-    lda #0
 !clr_inv:
+    lda #FI_EMPTY
     sta inv_item_id,x
+    lda #0
     sta inv_flags,x
     sta inv_qty,x
     sta inv_p1,x
@@ -369,7 +372,8 @@ test_pass:
 // picker that offers an item. The test stocks its one unidentified item in
 // slot 1 and scripts the key 'A' for it.
 piw_prompt_filtered_inv:
-    lda inv_item_id + 1         // the fixture's only stocked slot (cleared = 0)
+    lda inv_item_id + 1         // the fixture's only stocked slot (cleared = FI_EMPTY)
+    cmp #FI_EMPTY
     bne !prompt_have+
     ldx #HSTR_PIW_NOTHING       // as core: nothing visible to choose
     jsr huff_print_msg
@@ -382,6 +386,9 @@ piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:
     cmp #$41
     bne !pick_none+
+    lda inv_ego + 1
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     ldx #1                      // X = carried slot
     lda inv_item_id + 1         // A = item type ID
     sec
@@ -415,7 +422,7 @@ test_start:
     sta tid_key_script + 0
     lda #0
     sta tid_key_script + 1
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -427,7 +434,7 @@ test_start:
     sta inv_to_hit + 1
     lda #6
     sta inv_to_dam + 1
-    lda #0
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_ego + 1
     jsr player_cast_spell
     bcc !t1_fail_pre+
@@ -439,7 +446,9 @@ test_start:
     bne !t1_fail_pre+
     lda tid_huff_calls
     bne !t1_fail_pre+
-    ldx #25
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
+    sta item_cur_page
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     beq !t1_fail_pre+
     lda inv_flags + 1
@@ -499,13 +508,15 @@ test_after_success:
     sta tid_key_script + 0
     lda #0
     sta tid_key_script + 1
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
     lda #0
     sta inv_p1 + 1
     sta inv_flags + 1
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
+    sta inv_ego + 1
     jsr player_cast_spell
     bcc !t2_fail+
     lda tid_spell_exec_calls
@@ -520,7 +531,9 @@ test_after_success:
     lda tid_last_huff
     cmp #HSTR_PIQ_NOTHING
     bne !t2_fail+
-    ldx #25
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
+    sta item_cur_page
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t2_fail+
     lda inv_flags + 1
@@ -560,7 +573,9 @@ test_after_cancel:
     lda tid_last_huff
     cmp #HSTR_PIW_NOTHING
     bne !t3_fail+
-    ldx #25
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
+    sta item_cur_page
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t3_fail+
     lda zp_player_mp
@@ -583,13 +598,15 @@ test_after_cancel:
 test_after_no_item:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
     jsr test_reset_identify_state
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
     lda #0
     sta inv_p1 + 1
     sta inv_flags + 1
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
+    sta inv_ego + 1
     jsr player_cast_spell
     bcc !t4_fail+
     lda tid_spell_exec_calls
@@ -600,7 +617,9 @@ test_after_no_item:
     lda tid_last_huff
     cmp #HSTR_PM_FAIL
     bne !t4_fail+
-    ldx #25
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
+    sta item_cur_page
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     bne !t4_fail+
     lda inv_flags + 1

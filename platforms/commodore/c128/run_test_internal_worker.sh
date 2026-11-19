@@ -84,7 +84,7 @@ mkdir -p "${exit_png%/*}"
 rm -f "$exit_png"    # never name a stale screen
 
 # -initbreak ready: see run_tests128.sh run_test().
-"$VICE" -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -exitscreenshot "$exit_png" -console -nativemonitor -warp -80col -initbreak ready \
+"$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$exit_png" -console -nativemonitor -warp -80col -initbreak ready \
     -moncommands "$mon_file" -monlogname "$log_file" -monlog \
     -limitcycles "$CYCLES" +sound -sounddev dummy \
     +remotemonitor +binarymonitor >/dev/null 2>&1

@@ -274,10 +274,12 @@ hunger_name_ptrs_lo:
 hunger_name_ptrs_hi:
     .byte >hunger_0, >hunger_1, >hunger_2, >hunger_3
 
-hunger_0: .text "Full  " ; .byte 0
+// Row 21's hunger word (ui_status.s): none when fed, as Umoria; the row is
+// cleared before it is drawn, so no padding.
+hunger_0: .byte 0
 hunger_1: .text "Hungry" ; .byte 0
-hunger_2: .text "Weak  " ; .byte 0
-hunger_3: .text "Faint " ; .byte 0
+hunger_2: .text "Weak" ; .byte 0
+hunger_3: .text "Faint" ; .byte 0
 
 // ============================================================
 // Compile-time validation

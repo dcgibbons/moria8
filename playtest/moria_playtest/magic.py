@@ -53,6 +53,12 @@ BLESS, PRIEST_FIND_TRAPS, SLOW_POISON = "Bless", "Find Traps", "Slow Poison"   #
 NEUTRALIZE_POISON = "Neutralize Poison"                                         # Chants and Blessings
 LIGHTNING_BOLT, CURE_POISON, SLEEP_I = "Lightning Bolt", "Cure Poison", "Sleep I"   # Magick I, level 5
 TELEPORT_SELF, FROST_BOLT = "Teleport Self", "Frost Bolt"   # Magick I, level 7
+# From this deep, the mana for a known long escape (Teleport Self, Portal) is
+# kept as the heal's is (Magic.spare): a clvl 36 Ranger cast Magic Missile at
+# an Ancient White Dragon down to 4 of 103 mana, survived a breath at 65 HP
+# with Teleport Self known but unaffordable, and died to the next (C64 Balrog,
+# 2026-11-16).
+ESCAPE_MANA_DLVL = 20
 FIRE_BOLT, FROST_BALL, FIRE_BALL = "Fire Bolt", "Frost Ball", "Fire Ball"   # Magick II 15; Guide to Power 19, 29
 # A Mage's attacks and their average damage (core/spell_effects.s; docs/
 # FEATURE_MAP.md §7.2): bolts 2d6, 3d8, 4d8 and 6d8; balls 9, 33 and 49.
@@ -74,7 +80,10 @@ AT_CREATURES = frozenset({"Sleep II", "Sleep III", "Turn Undead", "Dispel Undead
 # needs (Priests and Paladins lacked only it, 2026-11-01).
 NOT_EXERCISED = frozenset({"Word of Destruction", "Genocide"})
 # A cast that did nothing to see: failure, a bolt that hit nothing, a refusal.
-NO_EFFECT = ("Your spell fails.", "fizzles out", "You faint from fatigue.", "You're not experienced enough.",
+# VMS's overcast messages: spells and prayers (the game since 2026-11-18;
+# "You faint from fatigue." before).
+FAINTS = ("You faint from the effort", "You faint from fatigue")
+NO_EFFECT = ("Your spell fails.", "fizzles out", *FAINTS, "You're not experienced enough.",
              "You don't know that spell.", "You have nothing there.")
 # A creature's own doing in the same messages is not the spell's effect (a
 # Magic Missile's "evidence" was "the White Icky-Thing hits you", M7).
@@ -162,6 +171,8 @@ class Magic:
         self.mage = klass in MAGE_CLASSES
         self.book_names = MAGE_BOOKS if self.mage else PRAYER_BOOKS
         self.first_book = self.book_names[0]   # every caster starts with its first book (core/game_loop.s)
+        self.ever_books: set[str] = set()      # every book ever listed or read: only grows (prompt's shortcut)
+        self.carried_books: list[str] | None = None   # the last book list as read, for the brain's books owned
         self.key = KEY_CAST if self.mage else KEY_PRAY
         self.known: dict[str, Prayer] = {}
         self.books: list[str] | None = None   # prayer books in book-prompt order; None: unknown
@@ -186,6 +197,13 @@ class Magic:
 
     @staticmethod
     def mana(obs: Observation) -> tuple[int, int]:
+        """Mana and its maximum, from zero page where the build lists them:
+        on 40 columns three-digit mana pushes the maximum's last digit off
+        the status line ("MP:100/16AC:57"), read as full, and a clvl 40
+        Priest left town for the Balrog at 100 of 161 again and again (C64
+        Balrog, 2026-11-12). The status line otherwise."""
+        if obs.abi is not None and hasattr(obs.abi, "zp_player_mmp"):
+            return obs.zp8("zp_player_mp"), obs.zp8("zp_player_mmp")
         match = STATUS_MP.search(obs.rows[23])
         return (int(match.group(1)), int(match.group(2))) if match else (0, 0)
 
@@ -215,11 +233,18 @@ class Magic:
             self.study_due = True
             self.study_done.clear()
             self.refused.clear()
-        if self.last and ("You're not experienced enough." in messages or "You faint from fatigue." in messages
+        if self.last and ("You're not experienced enough." in messages or any(f in messages for f in FAINTS)
                           or "You don't know that spell." in messages):
-            # No turn passes: trying again would repeat forever.
+            # Refused, or a faint (a turn, paralysis, and a third of the time
+            # Constitution): trying again would repeat forever, or drain it.
             self.refused.add(self.last)
             self.last = None
+            if any(f in messages for f in FAINTS):
+                # The book or the cost was not what the bot thought: list the
+                # books again. A clvl 19 Elf Ranger's save held
+                # ["Beginners-Magick"] with only Magick I carried, and every
+                # restore fainted again (C64 Balrog, 2026-11-18).
+                self.books = None
         spell = self.last or self.wanted
         if spell and "Never mind." in messages and "which?" in messages:
             # The spell's book is not carried (burnt or lost): the book prompt
@@ -261,11 +286,16 @@ class Magic:
     def spare(self, obs: Observation, name: str) -> bool:
         """``name`` can be prayed and still leave the mana for the best heal
         known: a level-1 Priest's Bless spent the 2 mana its only heal
-        needed (M5b round 16)."""
+        needed (M5b round 16). From ESCAPE_MANA_DLVL down, the long escape's
+        too (Teleport Self or Portal, the cheaper known)."""
         if not self.can(obs, name):
             return False
         heal = next((self.known[h].mana for h in HEALS if h in self.known and self.known[h].level <= obs.clvl), 0)
-        return self.mana(obs)[0] - self.known[name].mana >= heal
+        escape = 0
+        if obs.dlvl >= ESCAPE_MANA_DLVL and name not in (TELEPORT_SELF, PORTAL):
+            escape = min((self.known[e].mana for e in (TELEPORT_SELF, PORTAL)
+                          if e in self.known and self.known[e].level <= obs.clvl), default=0)
+        return self.mana(obs)[0] - self.known[name].mana >= heal + escape
 
     def book_of(self, name: str) -> str | None:
         """The book of this caster's kind that a pack line names."""
@@ -316,6 +346,12 @@ class Magic:
                 # Priest that picked up books asked for Portal 2,500 times).
                 self.refused.add(self.wanted)
                 self.books = None
+                # Its spell may be filed under a book it lacks: read the
+                # offered books' lists again, which files their spells under
+                # them. A clvl 19 Elf Ranger read Magick I's list believing it
+                # Beginners-Magick (stolen) and refused every spell in turn,
+                # 307 times in 15,000 steps (C64 Balrog, 2026-11-18).
+                self.listed_books.difference_update(letter_of)
             self.wanted = None
             return KEY_ESC, "prompt", "no book wanted: cancel"
         self.current = book
@@ -335,6 +371,8 @@ class Magic:
                 letters[name] = match.group(1)
                 order.append(name)
         self.listing_books = False
+        self.ever_books.update(order)
+        self.carried_books = order
         if not order:
             self.studying, self.wanted = False, None
             return KEY_ESC, "prompt", "no prayer book listed: cancel"
@@ -353,10 +391,18 @@ class Magic:
             match = BOOK_RANGE.search(obs.rows[0])
             count = ord(match.group(1)) - ord("a") + 1 if match else 1
             if self.books is None or len(self.books) != count:
-                if count == 1:
-                    self.books = [self.first_book]   # the starting book: no list needed
+                if count == 1 and self.books is None and (self.listed_books | self.ever_books) <= {self.first_book}:
+                    # A new character's one book is its starting book: no list.
+                    self.books = [self.first_book]
                     self.listed = self.first_book in self.listed_books
                 else:
+                    # Listed otherwise (no game turn): one book offered of a
+                    # character that had others need not be the starting one.
+                    # A Brigand stole a clvl 16 Elf Ranger's Beginners-Magick,
+                    # Magick I was book a, and "Magic Missile" cast its Confuse
+                    # Monster at 6 mana, 23 faints and its Constitution (C64
+                    # Balrog, 2026-11-17); a restored save, its book list
+                    # forgotten, fainted 23 times again (2026-11-18).
                     self.listing_books = True
                     return KEY_LIST, "prompt", "list the prayer books"
             return self.choose_book({b: chr(ord("a") + i) for i, b in enumerate(self.books)})
@@ -368,7 +414,9 @@ class Magic:
                 match = LIST_ROW.match(row)
                 if match:
                     self.known[match.group(2)] = Prayer(match.group(1), int(match.group(3)), int(match.group(4)), book)
+                    self.refused.discard(match.group(2))   # in a book carried: castable again
             self.listed_books.add(book)
+            self.ever_books.add(book)
             self.listed = self.books is not None and all(b in self.listed_books for b in self.books)
         wanted, prayer = self.wanted, self.known.get(self.wanted or "")
         if obs.stage == "which" and book not in self.listed_books:

@@ -22,6 +22,15 @@
 #import "../../../../core/item_defs.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/player.s"
+#import "../../../../core/player_recalc_equipment.s"
+
+piw_equip:    .byte 0
+tp_base_hit:  .byte 0
+tp_base_dam:  .byte 0
+
+tramp_ego_get_ac_bonus:
+    lda #0
+    rts
 
 // As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
 // = pointer
@@ -39,6 +48,24 @@ inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
 inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
 inv_ego:     .fill TOTAL_INV_SLOTS, 0   // the equipment flags read worn egos (MON-027)
 it_color_ac: .fill 62, 0
+icat_flags_0:  .byte 0
+icat_flags_1:  .byte 0
+icat_flags_2:  .byte 0
+icat_flags_3:  .byte 0
+icat_p1_lo:    .byte 0
+icat_weight_lo: .byte 0
+icat_weight_hi: .byte 0
+icat_dmg_packed: .byte 0
+icat_missile_type: .byte 0
+item_cat_select_id:
+item_cat_get_effects:
+item_cat_get_weight:
+item_cat_get_dmg_packed:
+item_cat_get_missile_type:
+item_cat_get_ego:
+item_get_category_inv_x:
+    lda #0
+    rts
 item_get_base_ac:
     lda it_color_ac,y
     and #$0f
@@ -103,9 +130,7 @@ test_start:
     dex
     bpl !set10-
 
-    lda #1
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
+    jsr player_bake_creation_stats
 
     // Check: STR should be 10+0+5 = 15
     lda player_data + PL_STR_CUR
@@ -153,9 +178,7 @@ test_start:
     dex
     bpl !set10b-
 
-    lda #1
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
+    jsr player_bake_creation_stats
 
     // STR: 10+2-3 = 9
     lda player_data + PL_STR_CUR
@@ -206,6 +229,53 @@ test_start:
     lda player_data + PL_STR_CUR
     cmp #3
     bne !t4_fail+
+
+    // H4c: Cursed -5 Ring of Weakness at STR=4 clamps to 3 (not 255) and
+    // reverses cleanly back to 4 on takeoff without stat leak
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #CLASS_PRIEST
+    sta player_data + PL_CLASS
+    lda #7
+    sta player_data + PL_STR_BASE
+    jsr player_bake_creation_stats
+    jsr player_calc_stats               // STR = 7 + 0 - 3 = 4
+    lda player_data + PL_STR_CUR
+    cmp #4
+    bne !t4_fail+
+    lda #ITEM_SLOT_RING_OF_WEAKNESS
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_WEAKNESS
+    sta inv_ego + EQUIP_RING
+    lda #$fb                            // -5
+    sta inv_p1 + EQUIP_RING
+    lda #EQUIP_RING
+    sta piw_equip
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #3
+    bne !t4_fail+
+    lda zp_player_str
+    cmp #3
+    bne !t4_fail+
+    jsr player_str_tohit_adj
+    cmp #<-3
+    bne !t4_fail+
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #4
+    bne !t4_fail+
+    lda zp_player_str
+    cmp #4
+    bne !t4_fail+
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    lda #0
+    sta inv_ego + EQUIP_RING
+    sta inv_p1 + EQUIP_RING
+
     lda #$01
     sta $0403
     jmp !t4_done+
@@ -235,9 +305,7 @@ test_start:
     dex
     bpl !set18-
 
-    lda #1
-    sta stat_bake_mode
-    jsr player_bake_stat_modifiers
+    jsr player_bake_creation_stats
 
     // STR must be >= 19 (entered 18/xx range)
     lda player_data + PL_STR_CUR
@@ -297,6 +365,29 @@ test_start:
     lda player_data + PL_MHP_LO
     cmp #55
     bne !t7_fail+
+    lda zp_player_mhp_lo
+    cmp #55
+    bne !t7_fail+
+    // Lowering CON to 6 (con_adj = -1 -> MHP = 19 + 4*8 = 51) syncs zp_player_mhp
+    // and clamps HP > MHP down to 51
+    lda #80
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #6
+    sta player_data + PL_CON_CUR
+    jsr player_calc_hp
+    lda player_data + PL_MHP_LO
+    cmp #51
+    bne !t7_fail+
+    lda zp_player_mhp_lo
+    cmp #51
+    bne !t7_fail+
+    lda zp_player_hp_lo
+    cmp #51
+    bne !t7_fail+
+    lda player_data + PL_HP_LO
+    cmp #51
+    bne !t7_fail+
     lda #$01
     sta $0406
     jmp !t7_done+
@@ -351,13 +442,13 @@ test_start:
     // Verify ZP
     lda zp_player_x
     cmp #42
-    bne !t10_fail+
+    bne !t10_fail_early+
     lda zp_player_y
     cmp #7
-    bne !t10_fail+
+    bne !t10_fail_early+
     lda zp_player_hp_lo
     cmp #99
-    bne !t10_fail+
+    bne !t10_fail_early+
 
     // Modify ZP and sync back
     lda #50
@@ -365,7 +456,105 @@ test_start:
     jsr player_sync_from_zp
     lda player_data + PL_MAP_X
     cmp #50
+    beq !t10_equip+
+!t10_fail_early:
+    jmp !t10_fail+
+
+!t10_equip:
+    // H4a/H4b: Ring of WOE stat mask ($24 = WIS | CHR) & reversible 2-stat adjust
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #1
+    sta player_data + PL_LEVEL
+    ldx #5
+    lda #12
+!t10_set12:
+    sta player_data + PL_STR_BASE,x
+    dex
+    bpl !t10_set12-
+    jsr player_bake_creation_stats
+    jsr player_calc_stats               // Warrior: STR=17, WIS=10, CHR=11
+    lda #ITEM_SLOT_RING_OF_WOE
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_WOE
+    sta inv_ego + EQUIP_RING
+    lda #$fd                            // -3
+    sta inv_p1 + EQUIP_RING
+    ldx #EQUIP_RING
+    jsr equip_stat_mask_x
+    cmp #$24                            // WIS ($04) | CHR ($20)
+    bne !t10_fail_early-
+    lda #EQUIP_RING
+    sta piw_equip
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_WIS_CUR
+    cmp #7
+    bne !t10_fail_early-
+    lda player_data + PL_CHR_CUR
+    cmp #8
+    bne !t10_fail_early-
+    lda player_data + PL_STR_CUR
+    cmp #17
+    bne !t10_fail_early-
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_WIS_CUR
+    cmp #10
+    bne !t10_fail_early-
+    lda player_data + PL_CHR_CUR
+    cmp #11
+    bne !t10_fail_early-
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    lda #0
+    sta inv_ego + EQUIP_RING
+    sta inv_p1 + EQUIP_RING
+
+    // H5: Cloak of Enveloping (+3, +4) on EQUIP_CLOAK adds to-hit and to-dam
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sta tp_base_hit
+    lda player_data + PL_TODMG
+    sta tp_base_dam
+    lda #ITEM_SLOT_CLOAK
+    sta inv_item_id + EQUIP_CLOAK
+    lda #(ITEM_PAGE_CLOAK | EGO_ENVELOPING)
+    sta inv_ego + EQUIP_CLOAK
+    lda #3
+    sta inv_to_hit + EQUIP_CLOAK
+    lda #4
+    sta inv_to_dam + EQUIP_CLOAK
+    jsr player_recalc_equipment
+    lda player_data + PL_TOHIT
+    sec
+    sbc tp_base_hit
+    cmp #3
     bne !t10_fail+
+    lda player_data + PL_TODMG
+    sec
+    sbc tp_base_dam
+    cmp #4
+    bne !t10_fail+
+    jsr player_calc_stats
+    lda player_data + PL_TOHIT
+    sec
+    sbc tp_base_hit
+    cmp #3
+    bne !t10_fail+
+    lda player_data + PL_TODMG
+    sec
+    sbc tp_base_dam
+    cmp #4
+    bne !t10_fail+
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_CLOAK
+    lda #0
+    sta inv_ego + EQUIP_CLOAK
+    sta inv_to_hit + EQUIP_CLOAK
+    sta inv_to_dam + EQUIP_CLOAK
 
     lda #$01
     sta $0409
@@ -376,3 +565,6 @@ test_start:
 !t10_done:
 
     brk
+
+player_test_end:
+.assert "Player test stays below MAP_BASE", player_test_end <= MAP_BASE, true

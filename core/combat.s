@@ -134,6 +134,10 @@ player_attack_monster:
     beq !pam_no_confuse+
     lda #0
     sta zp_confuse_melee            // Clear — one-time use
+    ldx cmb_type
+    lda cr_cdefense,x
+    and #CD_NO_SLEEP
+    bne !pam_no_confuse+
     // Set monster's confusion timer
     ldy #MX_CONFUSE
     lda (zp_ptr0),y
@@ -168,7 +172,11 @@ player_attack_monster:
 
     // Track kill in recall
     ldx cmb_type
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr recall_inc_kills_slot
+#else
     :AuxIncX(recall_kills)
+#endif
 
     ldx cmb_slot
     jsr monster_remove
@@ -263,27 +271,28 @@ combat_calc_melee_total_tohit_bonus:
     cmp #FI_EMPTY
     beq !ccmt_unarmed+
 
-    cmp #IT_MISSILE2_BASE           // the appended launchers
-    bcs !ccmt_done+
-    cmp #IT_MISSILE_BASE
-    bcc !ccmt_weapon+
-    cmp #IT_MISSILE_END
-    bcc !ccmt_done+
-!ccmt_weapon:
-    tay
-    lda it_weight,y
+    lda wield_missile_type
+    bne !ccmt_done+
+    lda wield_weight_lo
+    ora wield_weight_hi
     beq !ccmt_unarmed+
-    sta ccb_wt_save
     lda player_data + PL_STR_CUR
     ldx #15
-    jsr math_multiply
-    lda zp_math_b
-    bne !ccmt_done+
+    jsr math_multiply           // zp_math_b:zp_math_a = STR * 15
     lda zp_math_a
-    cmp ccb_wt_save
-    bcs !ccmt_done+
     sec
-    sbc ccb_wt_save                // Signed negative penalty.
+    sbc wield_weight_lo
+    tay
+    lda zp_math_b
+    sbc wield_weight_hi
+    bcs !ccmt_done+             // STR * 15 >= weapon_weight
+    cmp #$ff
+    bne !ccmt_cap_pen+
+    tya
+    bmi !ccmt_apply_pen+
+!ccmt_cap_pen:
+    lda #$80                    // Clamp heavy penalty to -128
+!ccmt_apply_pen:
     clc
     adc cmb_total_tohit
     sta cmb_total_tohit
@@ -474,45 +483,55 @@ combat_calc_blows:
     beq !ccb_unarmed+
 
     // Ranged launchers/ammo used as melee are forced to one blow.
-    cmp #IT_MISSILE2_BASE           // the appended launchers
-    bcs !ccb_one_blow+
-    cmp #IT_MISSILE_BASE
-    bcc !ccb_get_weight+
-    cmp #IT_MISSILE_END
-    bcs !ccb_get_weight+
+    lda wield_missile_type
+    beq !ccb_get_weight+
 !ccb_one_blow:
     lda #1
     bne !ccb_store_blows+
 
 !ccb_get_weight:
-    // Get weapon weight
-    tay                         // Y = weapon type
-    lda it_weight,y             // A = weapon weight (1/10 lbs)
+    // Check non-zero weapon weight
+    lda wield_weight_lo
+    ora wield_weight_hi
     beq !ccb_unarmed+          // Zero weight → treat as unarmed
-    sta ccb_wt_save             // Save weapon weight
 
     // Too-heavy check: if STR * 15 < weapon_weight, force 1 blow
     // Compute STR * 15 = STR * 16 - STR (fits in 16-bit for stats up to 118)
     lda player_data + PL_STR_CUR
     ldx #15
     jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
-    // Compare 16-bit (zp_math_b:zp_math_a) vs weapon_weight (8-bit, zero-extended)
-    lda zp_math_b
-    bne !ccb_not_heavy+         // Hi > 0 → STR*15 >= 256 > any weapon weight
     lda zp_math_a
-    cmp ccb_wt_save
-    bcs !ccb_not_heavy+         // STR*15 >= weapon_weight → ok
-    // Too heavy: force 1 blow
-    lda #1
-    bne !ccb_store_blows+
+    sec
+    sbc wield_weight_lo
+    lda zp_math_b
+    sbc wield_weight_hi
+    bcc !ccb_one_blow-          // STR*15 < weapon_weight → force 1 blow
 
-!ccb_not_heavy:
     // Compute adj_weight = (STR * 10) / weapon_weight
+    lda wield_weight_hi
+    bne !ccb_heavy_div+
     lda player_data + PL_STR_CUR
     ldx #10
     jsr math_multiply           // zp_math_a = lo, zp_math_b = hi (STR*10)
-    ldx ccb_wt_save             // X = weapon weight (divisor)
+    ldx wield_weight_lo         // X = weapon weight (divisor)
     jsr math_div_16x8           // zp_math_a = quotient lo (adj_weight)
+    jmp !ccb_got_adj+
+!ccb_heavy_div:
+    cmp #2
+    bcc !ccb_div_half+
+    lda #0                      // weight >= 512: lowest adj_weight bracket
+    beq !ccb_got_adj+
+!ccb_div_half:
+    lsr
+    lda wield_weight_lo
+    ror                         // weight >> 1 fits in 8 bits (128..255)
+    sta ccb_wt_save
+    lda player_data + PL_STR_CUR
+    ldx #5
+    jsr math_multiply           // (STR*5) / (weight/2) == (STR*10) / weight
+    ldx ccb_wt_save
+    jsr math_div_16x8
+!ccb_got_adj:
 
     // Map adj_weight to Umoria bracket (0-6)
     // <2, <3, <4, <5, <7, <9, else
@@ -593,16 +612,15 @@ combat_roll_damage:
     cmp #FI_EMPTY
     beq !crd_unarmed+
 
-    // Check if weapon is a ranged launcher (it_missile 1-3) — use unarmed for melee
-    tax                         // X = weapon type
-    jsr item_get_missile
+    // Check if weapon is a ranged launcher (wield_missile_type 1-3) — use unarmed for melee
+    lda wield_missile_type
     beq !crd_has_melee+         // 0 = normal melee weapon
     cmp #4
     bcc !crd_unarmed+           // 1-3 = ranged launcher → unarmed in melee
 !crd_has_melee:
 
-    // Weapon equipped — use weapon dice
-    lda it_dmg_packed,x
+    // Weapon equipped — use cached weapon dice
+    lda wield_dmg_packed
     pha
     and #$0f
     tax                         // X = sides
@@ -629,6 +647,7 @@ combat_roll_damage:
     // --- Ego damage modifiers (banked at $F000) ---
     ldx #EQUIP_WEAPON
     lda inv_ego,x
+    and #EGO_ID_MASK
     beq !crd_ego_done+
     jsr tramp_ego_apply_damage  // Reads/writes cmb_damage, cmb_type
 
@@ -676,24 +695,29 @@ combat_critical_blow:
 !ccb_armed:
 
     // Guard: ranged launcher = no crit (melee only)
-    tax
-    jsr item_get_missile
+    lda wield_missile_type
     beq !ccb_has_weapon+
     cmp #4
     bcs !ccb_has_weapon+
     rts                         // 1-3 = ranged launcher
 !ccb_has_weapon:
 
-    // Save weapon weight (8-bit, will zero-extend to 16 later)
-    lda it_weight,x
-// combat_critical_blow_weight — the same with A = the weight (a bash: STR)
+    // Save 16-bit weapon weight
+    lda wield_weight_hi
+    sta ccb_weight_hi
+    lda wield_weight_lo
+    jmp !ccb_got_weight+
+// combat_critical_blow_weight — the same with A = 8-bit weight (a bash: STR, ranged/throw)
 combat_critical_blow_weight:
+    ldy #0
+    sty ccb_weight_hi
+!ccb_got_weight:
     sta ccb_weight
 
     // --- Compute 16-bit chance ---
-    // Start with weight (zero-extended to 16)
+    // Start with 16-bit weight
     sta ccb_chance_lo
-    lda #0
+    lda ccb_weight_hi
     sta ccb_chance_hi
 
     // Add class_level_adj[class*5+0] * player_level
@@ -776,13 +800,13 @@ combat_critical_blow_weight:
     sta zp_temp1
     jsr rng_range_word          // Result: zp_temp2 (lo), zp_temp3 (hi)
 
-    // Add weapon weight to random roll (16-bit)
+    // Add 16-bit weapon weight to random roll
     lda zp_temp2
     clc
     adc ccb_weight
     sta zp_temp2
     lda zp_temp3
-    adc #0
+    adc ccb_weight_hi
     sta zp_temp3                // zp_temp3:zp_temp2 = tier_weight
 
     // Save original damage for multiplication
@@ -863,6 +887,7 @@ combat_critical_blow_weight:
 
 // Static vars for combat_critical_blow
 ccb_weight:     .byte 0
+ccb_weight_hi:  .byte 0
 ccb_chance_lo:  .byte 0
 ccb_chance_hi:  .byte 0
 ccb_orig_dmg:   .byte 0
@@ -1079,27 +1104,13 @@ ccl_no_short:
     sta zp_temp1                    // excess_mid
     lda player_data + PL_XP_2
     sbc ccl_adj_2
-    sta zp_temp2                    // excess_hi
-    lda player_data + PL_XP_FRAC_LO
-    sta zp_temp3                    // excess fraction lo
-    lda player_data + PL_XP_FRAC_HI
-    sta zp_temp4                    // excess fraction hi
-    lda zp_temp2
     lsr
     sta zp_temp2
-    lda zp_temp1
-    ror
-    sta zp_temp1
-    lda zp_temp0
-    ror
-    sta zp_temp0
-    lda zp_temp4
-    ror
-    sta zp_temp4
-    lda zp_temp3
-    ror
-    sta zp_temp3
-    lda zp_temp0                   // new XP = threshold + halved excess
+    ror zp_temp1
+    ror zp_temp0
+    ror player_data + PL_XP_FRAC_HI
+    ror player_data + PL_XP_FRAC_LO
+    lda zp_temp0                    // new XP = threshold + halved excess
     clc
     adc ccl_adj_0
     sta player_data + PL_XP_0
@@ -1109,15 +1120,44 @@ ccl_no_short:
     lda zp_temp2
     adc ccl_adj_2
     sta player_data + PL_XP_2
-    lda zp_temp3
-    sta player_data + PL_XP_FRAC_LO
-    lda zp_temp4
-    sta player_data + PL_XP_FRAC_HI
 
     jmp !ccl_loop-
 
+.label combat_sync_max_xp = player_sync_max_xp
 ccl_no:
+    jmp player_sync_max_xp
+
+// combat_check_leveldown — Drop player level(s) while PL_XP < level threshold,
+// recalculating combat, max/clamped HP, and mana when at least one level drops.
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
+combat_check_leveldown:
+    lda zp_player_lvl
+    cmp #2
+    bcc !ccld_done+
+    dec zp_player_lvl
+    jsr combat_compute_level_threshold
+    lda player_data + PL_XP_0
+    cmp ccl_adj_0
+    lda player_data + PL_XP_1
+    sbc ccl_adj_1
+    lda player_data + PL_XP_2
+    sbc ccl_adj_2
+    bcc !ccld_drop+
+    inc zp_player_lvl
+!ccld_done:
     rts
+!ccld_drop:
+    lda zp_player_lvl
+    sta player_data + PL_LEVEL
+    jsr player_calc_combat
+    jsr player_calc_hp
+#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
+    lda #1
+    sta levelup_magic_pending
+#else
+    jsr magic_recalc_mana
+#endif
+    jmp combat_check_leveldown
 
 // combat_apply_levelup — Apply one real level-up event
 // Shared by normal XP gain and Wizard Mode. Performs the actual level
@@ -1128,19 +1168,14 @@ combat_apply_levelup:
     lda zp_player_lvl
     sta player_data + PL_LEVEL
 
-    // Recalculate HP
+    // Recalculate HP (syncs zp_player_mhp_lo/hi) and heal to full
     jsr player_calc_hp
-
-    // Heal to full
-    // ... and sync max HP to ZP
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
     sta zp_player_hp_lo
-    sta zp_player_mhp_lo
     lda player_data + PL_MHP_HI
     sta player_data + PL_HP_HI
     sta zp_player_hp_hi
-    sta zp_player_mhp_hi
 
     // Recalculate combat bonuses (may change with level)
     jsr player_calc_combat

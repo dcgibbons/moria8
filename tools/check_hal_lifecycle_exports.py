@@ -54,7 +54,6 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_character_background_resync",
     "hal_platform_player_magic_helpers_external",
     "hal_platform_item_action_key_restores_bank",
-    "hal_platform_ego_holy_avenger_string_external",
     "hal_platform_ego_ac_bonus_external",
     "hal_platform_chargen_runtime_resync",
     "hal_platform_chargen_cutpoint",
@@ -137,7 +136,6 @@ CONST_DEFINE_PARITY = {
     "hal_platform_character_background_resync": "HAL_PLATFORM_CHARACTER_BACKGROUND_RESYNC",
     "hal_platform_player_magic_helpers_external": "HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL",
     "hal_platform_item_action_key_restores_bank": "HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK",
-    "hal_platform_ego_holy_avenger_string_external": "HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL",
     "hal_platform_ego_ac_bonus_external": "HAL_PLATFORM_EGO_AC_BONUS_EXTERNAL",
     "hal_platform_chargen_runtime_resync": "HAL_PLATFORM_CHARGEN_RUNTIME_RESYNC",
     "hal_platform_wizard_entry_uses_overlay": "HAL_PLATFORM_WIZARD_ENTRY_OVERLAY",
@@ -353,19 +351,11 @@ def main() -> int:
         if name not in wizard_text:
             policy_missing.append(f"core/wizard.s does not consume {name}")
 
-    ego_policy_consumers = (
-        "HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL",
-        "HAL_PLATFORM_EGO_AC_BONUS_LOCAL",
-    )
-    ego_text = "\n".join(
-        (COMMON_DIR / fname).read_text(encoding="utf-8", errors="replace")
-        for fname in ("ego_items.s", "ego_suffix_strings.s")
-    )
-    for name in ego_policy_consumers:
-        if name not in ego_text:
-            policy_missing.append(
-                f"core/ego_items.s (+ ego_suffix_strings.s) does not consume {name}"
-            )
+    ego_text = (COMMON_DIR / "ego_items.s").read_text(encoding="utf-8", errors="replace")
+    if "HAL_PLATFORM_EGO_AC_BONUS_LOCAL" not in ego_text:
+        policy_missing.append(
+            "core/ego_items.s does not consume HAL_PLATFORM_EGO_AC_BONUS_LOCAL"
+        )
 
     spell_effects_text = (COMMON_DIR / "spell_effects.s").read_text(
         encoding="utf-8", errors="replace"

@@ -7,10 +7,10 @@
 // Cure-wounds and Healing potions, every port (VMS Moria 4.8
 // `source/include/potions.inc` quaff cases 13-16 and 29-31, flags in
 // `values.inc`; Umoria 5.7.15 `src/player_quaff.cpp`, same amounts and cures):
-//   Cure Light Wounds    (#17)  2d7 HP, cures blindness
-//   Cure Serious Wounds  (#25)  4d7 HP, cures blindness and confusion
-//   Cure Critical Wounds (#100) 6d7 HP, cures blindness, confusion and poison
-//   Healing              (#96)  1000 HP, cures blindness, confusion and poison
+//   Cure Light Wounds     2d7 HP, cures blindness
+//   Cure Serious Wounds   4d7 HP, cures blindness and confusion
+//   Cure Critical Wounds  6d7 HP, cures blindness, confusion and poison
+//   Healing               1000 HP, cures blindness, confusion and poison
 // The heal is VMS `hp_player` (pmx_heal_and_report): nothing at full HP, else
 // the message for the rolled amount. A cure is VMS `cure_blindness` /
 // `cure_confusion` / `cure_poison` (`spells.inc`): a timer above 1 drops to 1

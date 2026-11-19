@@ -1,6 +1,6 @@
 #importonce
 // overlay_storage.s — Commander X16 boot bank preloader & O(1) RAM bank
-// switcher for overlays (Banks 9-20) and monster tiers (Banks 5-8).
+// switcher for overlays (Banks 9-21) and monster tiers (Banks 5-8).
 
 #import "hal/storage_policy.s"
 
@@ -9,13 +9,34 @@ cx16_preload_idx:     .byte 0
 
 // ============================================================
 // cx16_preload_banks — Preload the runtime banked payloads from device 8
-// into RAM Banks 3..21 at $A000 at boot time (with the monster catalog,
-// Bank 22 instead of the tier Banks 5-8).
+// into RAM Banks 3..22 at $A000 at boot time (with the monster catalog,
+// Bank 23 instead of the tier Banks 5-8).
 // ============================================================
 cx16_preload_banks:
     lda #0
     sta cx16_banks_preloaded
 
+#if CX16_CARTRIDGE
+    ldx #CART_ASSET_AUXDATA
+!cart_preload_loop:
+    txa
+    phx
+    jsr cart_load_asset
+    bcs !cart_fatal+
+    plx
+    inx
+    cpx #CART_ASSET_MONSTER_EXT + 1
+    bcc !cart_preload_loop-
+    lda #1
+    sta cx16_banks_preloaded
+    stz CX16_RAM_BANK_REG
+    stz CX16_ROM_BANK_REG
+    clc
+    rts
+!cart_fatal:
+    plx
+    bra !fatal+
+#else
     // 1. Bank 3: CX16.AUXDATA
     lda #CX16_BANK_AUXDATA
     sta CX16_RAM_BANK_REG
@@ -35,12 +56,21 @@ cx16_preload_banks:
     bcs !fatal+
 
 #if HAL_PLATFORM_MONSTER_CATALOG
-    // 3. Bank 22: the monster catalog (MONSTER.CAT; its names ride in Bank 4)
+    // 3. Bank 23: the monster catalog (MONSTER.CAT; its names ride in Bank 4)
     lda #CX16_BANK_CATALOG
     sta CX16_RAM_BANK_REG
     lda #cx16_catalog_name_len
     ldx #<cx16_catalog_name
     ldy #>cx16_catalog_name
+    jsr cx16_kernal_load_banked_window
+    bcs !fatal+
+
+    // 3b. Bank 5: extended monster catalog (MONSTER.EXT, 279 x 8 B at $A000-$A8B7)
+    lda #CX16_BANK_CATALOG_EXT
+    sta CX16_RAM_BANK_REG
+    lda #cx16_catalog_ext_name_len
+    ldx #<cx16_catalog_ext_name
+    ldy #>cx16_catalog_ext_name
     jsr cx16_kernal_load_banked_window
     bcs !fatal+
 #else
@@ -68,7 +98,16 @@ cx16_preload_banks:
     bcc !tier_loop-
 #endif
 
-    // 4. Banks 9..20: 12 overlays (OVL.START .. OVL.TITLE)
+    // 4. Bank 6: ITEM.CAT ('ITM2' 361-item catalog)
+    lda #CX16_BANK_ITEM_CAT
+    sta CX16_RAM_BANK_REG
+    lda #cx16_item_cat_name_len
+    ldx #<cx16_item_cat_name
+    ldy #>cx16_item_cat_name
+    jsr cx16_kernal_load_banked_window
+    bcs !fatal+
+
+    // 5. Banks 9..21: 13 overlays (OVL.START .. OVL.TITLE)
     lda #0
     sta cx16_preload_idx
 !ovl_loop:
@@ -91,7 +130,7 @@ cx16_preload_banks:
     cmp #hal_platform_overlay_count
     bcc !ovl_loop-
 
-    // 5. Bank 21: TITLE art stream
+    // 5. Bank 22: TITLE art stream
     lda #CX16_BANK_TITLE_ART
     sta CX16_RAM_BANK_REG
     lda #hal_storage_title_name_len
@@ -104,6 +143,7 @@ cx16_preload_banks:
     sta cx16_banks_preloaded
     clc
     rts
+#endif
 
 !fatal:
     lda #HAL_STATUS_ERR_WRONG_MEDIA
@@ -121,7 +161,7 @@ cx16_asset_try_bank_switch:
     stx zp_temp0
     sty zp_temp1
 
-    // Check 12 overlays -> Bank (index + 9)
+    // Check 13 overlays -> Bank (index + 9)
     ldx #hal_platform_overlay_count - 1
 !find_ovl:
     lda hal_storage_overlay_name_lo,x

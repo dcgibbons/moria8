@@ -125,30 +125,23 @@ roll_tool_ego_check:
 #if C64_TEST_FULL_ITEMDESC_STUB
 // banked_ego_put_suffix — Write ego suffix to screen (no banking in tests)
 banked_ego_put_suffix:
-    cmp #0
+    and #EGO_ID_MASK
     beq !beps_done+
     cmp #EGO_TYPE_COUNT
     bcs !beps_done+
-    jsr ego_get_suffix_ptr
-    ldy #0
-!beps_loop:
-    lda (zp_ptr0),y
-    beq !beps_done+
-    sty beps_save_y2
-    jsr hal_screen_put_char
-    ldy beps_save_y2
-    iny
-    jmp !beps_loop-
+    jsr item_cat_decode_ego
+    jmp hal_screen_put_string
 !beps_done:
     rts
-beps_save_y2: .byte 0
 
 // put_tool_ego_prefix — Print ego prefix for digging tools
-// Input: A = ego (1 or 2), X = item type ID (62 or 63)
+// Input: A = ego (1 or 2), X = item slot_lo (Pick or Shovel)
 put_tool_ego_prefix:
-    cpx #62
+    .assert "Pick precedes Shovel on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0, true
+    and #EGO_ID_MASK
+    cpx #ITEM_SLOT_PICK
     beq !ptep_valid_tool+
-    cpx #63
+    cpx #ITEM_SLOT_SHOVEL
     bne !ptep_done+
 !ptep_valid_tool:
     sec
@@ -156,7 +149,7 @@ put_tool_ego_prefix:
     sta ptep_temp2
     txa
     sec
-    sbc #62                     // type - 62
+    sbc #ITEM_SLOT_PICK         // type - Pick
     asl                         // * 2
     clc
     adc ptep_temp2              // + (ego - 1) → index
@@ -176,11 +169,11 @@ ego_pfx_orcish:  .text "Orcish " ; .byte 0
 ego_pfx_dwarven: .text "Dwarven " ; .byte 0
 
 tool_ego_pfx_lo:
-    .byte <ego_pfx_gnomish, <ego_pfx_dwarven
     .byte <ego_pfx_orcish,  <ego_pfx_dwarven
+    .byte <ego_pfx_gnomish, <ego_pfx_dwarven
 tool_ego_pfx_hi:
-    .byte >ego_pfx_gnomish, >ego_pfx_dwarven
     .byte >ego_pfx_orcish,  >ego_pfx_dwarven
+    .byte >ego_pfx_gnomish, >ego_pfx_dwarven
 
 // put_inv_name_with_ego — Print item name with ego prefix/suffix
 // Input: X = inventory slot index
@@ -190,12 +183,14 @@ put_inv_name_with_ego:
     lda inv_item_id,x
     sta pinwe_id
     stx pinwe_sl
-    tax
-    lda it_category,x
+    jsr item_get_category_inv_x
     cmp #ICAT_DIGGING
+    bne !pinwe_not_tool+
+    lda item_cur_page
     bne !pinwe_not_tool+
     ldx pinwe_sl
     lda inv_ego,x
+    and #EGO_ID_MASK
     beq !pinwe_not_tool+
     cmp #EGO_TYPE_COUNT
     bcs !pinwe_not_tool+
@@ -212,6 +207,7 @@ put_inv_name_with_ego:
     jsr hal_screen_put_string
     ldx pinwe_sl
     lda inv_ego,x
+    and #EGO_ID_MASK
     cmp #EGO_TYPE_COUNT
     bcc !pinwe_valid_ego+
     lda #0
@@ -237,10 +233,14 @@ pinwe_id: .byte 0
 pinwe_sl: .byte 0
 
 itemdesc_put_store_slot:
+    :AuxReadX(si_meta_hi)
+    pha
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     :AuxReadX(si_item_id)
     jsr item_get_name_ptr
     jsr hal_screen_put_string
-    :LoadStoreEgoX()
+    pla
     jmp banked_ego_put_suffix
 #endif
 #else

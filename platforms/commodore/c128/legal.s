@@ -2,9 +2,11 @@
 #import "../../shared/legal_entry.s"
 // Bank 0 resident below $6000; all code survives the KERNAL transition.
 tramp_ui_legal_display:
+#if !C128_CARTRIDGE
     jsr disk_prompt_game
     bcc !load+
     rts
+#endif
 !load:
     :LegalSnapshot()
     lda #0
@@ -19,6 +21,7 @@ tramp_ui_legal_display:
     jmp tramp_ui_exit
 
 // Reuse the resident wrappers which already restore MMU/common RAM/ZP/I.
+#if !C128_CARTRIDGE
 .label legal_os_setnam = w_setnam
 .label legal_os_setlfs = w_setlfs
 .label legal_os_open = w_open
@@ -27,8 +30,10 @@ tramp_ui_legal_display:
 .label legal_os_chrin = w_chrin
 .label legal_os_readst = w_readst
 .label legal_os_clrchn = w_clrchn
+#endif
 
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
+#if !C128_CARTRIDGE
 legal_notice_filename: .byte 'L','I','C','E','N','S','E',',','S',',','R'
 .label legal_notice_filename_len = * - legal_notice_filename
 legal_offer_filename: .byte 'S','O','U','R','C','E','-','O','F','F','E','R',',','S',',','R'
@@ -91,4 +96,5 @@ legal_fill_status:
     rts
 legal_chunk_count: .byte 0
 legal_chunk_status: .byte 0
-.assert "Legal burst reader stays visible under KERNAL", legal_os_fill_cache < $6000, true
+.assert "Legal burst reader stays below $8000 ExtROM/KERNAL window", legal_os_fill_cache < $8000, true
+#endif

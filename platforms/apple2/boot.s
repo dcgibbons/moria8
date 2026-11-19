@@ -8,14 +8,14 @@
 // Boot payload container (docs/APPLE2_MEMORY_POLICY.md boot file list):
 //   MORIA8.PAK — one OPEN, one sequential pass:
 //     header (512 B): count byte, pad, then count 16-bit lengths
-//     entries (in table order): RES, AUXDATA, CATALOG (the monster
-//     catalog's fields), UI, ITEMS, SPELL, MODAL, HUFFDATA (the Huffman
-//     corpus and the catalog's names)
+//     boot prefix entries (in table order): RES, UI, ITEMS, SPELL, MODAL,
+//     HUFFDATA (the Huffman corpus and the catalog's names)
 //   A single open sequential read keeps the drive stepping forward; the
 //   previous per-file OPEN/GFI/READ/CLOSE cycle seek-thrashed the directory
 //   and ProDOS 2.4.3's driver could lose the head after several files.
-//   Cold payloads (A2.PLAY, OVL.START, OVL.TOWN, OVL.DEATH, OVL.GEN,
-//   OVL.HELP, OVL.CHEST, OVL.STORAGE, OVL.TITLE, TITLE) are loaded on demand.
+//   PackBits boot data (A2.AUXDATA, A2.CATALOG, A2.CATEXT) + ITEM.CAT are
+//   unpacked/preloaded by TitleOverlay:a2_boot_preload_aux_lc; cold overlays,
+//   A2.PLAY, LEGALUI, and TITLE are loaded on demand via MLI_SET_MARK ($CE).
 //
 // Assembled standalone (no core imports); Kick emits a PRG with the $2000
 // header, tools/prg_to_bin.py strips it and AppleCommander inserts it as
@@ -42,7 +42,7 @@
 .const HDR          = $a400   // pak header staging (window; free until the
                              // game runs); holds 512 B for the whole boot.
 .const LOADER_DEST  = $0800
-.const PAK_COUNT    = 8       // entries in MORIA8.PAK (see file_table)
+.const PAK_COUNT    = 6       // sequential boot entries in MORIA8.PAK (see file_table)
 .const BOOT_ROW     = $05a8   // text row 11 half-row base (progress line)
 .const BOOT_LINE_DIGIT = 21   // offset of the count digit in boot_line
 #import "cache_layout.s"
@@ -105,9 +105,9 @@ loader:
     bcc !hdr_ok+
     jmp boot_error
 !hdr_ok:
-    lda HDR                 // entry-count sanity check
+    lda HDR                 // entry-count sanity check (>= boot prefix count)
     cmp #PAK_COUNT
-    beq !count_ok+
+    bcs !count_ok+
     lda #$f1                // pak/header mismatch
     jmp boot_error
 !count_ok:
@@ -291,7 +291,7 @@ boot_draw_line:
     rts
 
 boot_line:
-    .text "    MORIA8  LOADING  0/8  PLEASE WAIT   "
+    .text "    MORIA8  LOADING  0/6  PLEASE WAIT   "
 boot_line_end:
 
 mode80:     .byte 0
@@ -335,8 +335,6 @@ pak_name:
 // Aux destinations use the shared cache manifest in cache_layout.s.
 file_table:
     .word $0a00, $0000        // MORIA8.RES -> main resident
-    .word STAGE, A2_AUX_DATA_BASE   // A2.AUXDATA -> aux data region
-    .word STAGE, A2_AUX_CATALOG     // A2.CATALOG -> the monster catalog's fields
     .word STAGE, A2_AUX_CACHE_UI
     .word STAGE, A2_AUX_CACHE_ITEMS
     .word STAGE, A2_AUX_CACHE_SPELL

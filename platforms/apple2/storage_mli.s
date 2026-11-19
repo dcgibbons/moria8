@@ -51,40 +51,31 @@
 .const A2_MLI_READ        = $ca
 .const A2_MLI_WRITE       = $cb
 .const A2_MLI_CLOSE       = $cc
+.const A2_MLI_SET_MARK    = $ce
 .const A2_MLI_SET_EOF     = $d0
 
 // MLI OPEN io_buffer: reserved 1024-byte page-aligned block (memory.s).
 .const A2_MLI_IO_BUFFER   = $bb00
 
-// MLI pathname buffer in platform scratch ($0200-$03CF, memory.s).
+// MLI pathname buffer in platform scratch ($0290-$02D0, memory.s).
 .const A2_MLI_PATHNAME    = $0290
 .const A2_MLI_PATHNAME_CAPACITY = 64
 
-// Name converter workspace: platform-owned ZP ($90-$EF, memory.s). Survives
+// Name converter & PAK workspace: platform-owned ZP ($90-$EF, memory.s). Survives
 // MLI calls; never inside the saved $02-$8F core window.
 .const a2_nc_ptr          = $a4       // 2 bytes: source name pointer
 .const a2_nc_len          = $a6       // source name length
 .const a2_nc_tmp          = $a7       // suffix mode-letter stash
+.const a2_pak_id          = $ab       // resolved MORIA8.PAK entry index
+.const a2_pak_len         = $ac       // 2 bytes: resolved PAK entry length
 
 // ============================================================
-// Diagnostic and classification state (contract diag bytes)
+// Diagnostic and classification state (ASCII digits stay initialized here;
+// zero-init bytes live in claimed low scratch $0329-$0335, memory.s).
 // ============================================================
 
-hal_storage_diag_code:    .byte 0     // last raw ProDOS error code (0 = none)
-hal_storage_diag_phase:   .byte 0     // HAL_STORAGE_PHASE_* of last MLI op
-hal_storage_diag_readst:  .byte 0     // last synthesized READST byte
-hal_storage_diag_device:  .byte 0     // logical device from last SETLFS (advisory)
 hal_storage_diag_dos0:    .byte $30   // ASCII tens digit of diag_code
 hal_storage_diag_dos1:    .byte $30   // ASCII ones digit of diag_code
-
-a2_last_status:           .byte 0     // last HAL_STATUS_* mapped result
-a2_media_status:          .byte 0     // last HAL_STORAGE_STATUS_* media verdict
-
-// Name-mode flags produced by a2_mli_set_pathname (consumed by save_stream.s).
-a2_name_write:            .byte 0     // 1 = ",S,W" suffix (open for write)
-a2_name_replace:          .byte 0     // 1 = '@' prefix (destroy before create)
-a2_name_scratch:          .byte 0     // 1 = "S0:" prefix (destroy command)
-a2_name_drive:            .byte 0     // 1 = "0:"/"S0:" save-volume prefix seen
 
 // ============================================================
 // Static MLI parameter blocks (resident main RAM; the MLI reads values and
@@ -134,6 +125,12 @@ a2_rw_trans:    .word 0
 a2_close_params:
     .byte 1
 a2_close_ref:   .byte 0             // 0 = close all files
+
+a2_mark_params:
+    .byte 2
+a2_mark_ref:    .byte 0
+    .byte 0, 0, 0                   // 24-bit file position (LE)
+.label a2_mark_pos = a2_mark_ref + 1
 
 a2_eof_params:
     .byte 2
@@ -233,6 +230,12 @@ a2i_close_open_ref:
     sta a2_close_ref
     jmp a2i_close
 
+a2i_set_mark:
+    jsr A2_MLI
+    .byte A2_MLI_SET_MARK
+    .word a2_mark_params
+    rts
+
 a2i_set_eof0:
     jsr A2_MLI
     .byte A2_MLI_SET_EOF
@@ -258,96 +261,60 @@ a2_code_to_digits:
     rts
 
 // ============================================================
-// a2_map_error — classify a raw ProDOS error into the contract shape.
-// Input: A = raw ProDOS error code; hal_storage_diag_phase already set.
-// Output: hal_storage_diag_code/dos0/dos1, a2_last_status updated;
-//         carry set; A = HAL_STATUS_*, X = raw code, Y = phase.
+// a2_map_error / a2_map_media_error — classify a raw ProDOS error via shared
+// lookup table. Both update hal_storage_diag_code/dos0/dos1 and a2_last_status,
+// and return with carry set.
+// a2_map_error:       A = HAL_STATUS_*, X = raw code, Y = phase.
+// a2_map_media_error: a2_media_status = a2_last_status = A = HAL_STORAGE_STATUS_*.
 // ============================================================
+a2_err_raw:
+    .byte A2ERR_NOT_FOUND, A2ERR_PATH_NOT_FOUND
+    .byte A2ERR_WRITE_PROT, A2ERR_ACCESS
+    .byte A2ERR_DISK_FULL
+    .byte A2ERR_NO_DEVICE, A2ERR_VOL_NOT_FOUND, A2ERR_DISK_SWITCHED
+.const A2_ERR_MAP_COUNT = * - a2_err_raw
+a2_err_status:
+    .byte HAL_STATUS_ERR_NOT_FOUND, HAL_STATUS_ERR_NOT_FOUND
+    .byte HAL_STATUS_ERR_WRITE_PROTECTED, HAL_STATUS_ERR_WRITE_PROTECTED
+    .byte HAL_STATUS_ERR_DISK_FULL
+    .byte HAL_STATUS_ERR_NO_DEVICE, HAL_STATUS_ERR_NO_DEVICE, HAL_STATUS_ERR_UNKNOWN
+    .byte HAL_STATUS_ERR_UNKNOWN
+a2_err_media:
+    .byte HAL_STORAGE_STATUS_WRONG_MEDIA, HAL_STORAGE_STATUS_WRONG_MEDIA
+    .byte HAL_STORAGE_STATUS_WRITE_PROTECTED, HAL_STORAGE_STATUS_WRITE_PROTECTED
+    .byte HAL_STORAGE_STATUS_DISK_FULL
+    .byte HAL_STORAGE_STATUS_NO_DEVICE, HAL_STORAGE_STATUS_WRONG_MEDIA, HAL_STORAGE_STATUS_WRONG_MEDIA
+    .byte HAL_STORAGE_STATUS_UNKNOWN
+
 a2_map_error:
-    sta hal_storage_diag_code
-    jsr a2_code_to_digits
-    lda hal_storage_diag_code
-    cmp #A2ERR_NOT_FOUND
-    beq !not_found+
-    cmp #A2ERR_PATH_NOT_FOUND
-    beq !not_found+
-    cmp #A2ERR_WRITE_PROT
-    beq !write_prot+
-    cmp #A2ERR_ACCESS               // locked file written → treat as protected
-    beq !write_prot+
-    cmp #A2ERR_DISK_FULL
-    beq !disk_full+
-    cmp #A2ERR_NO_DEVICE
-    beq !no_device+
-    cmp #A2ERR_VOL_NOT_FOUND
-    beq !no_device+
-    lda #HAL_STATUS_ERR_UNKNOWN
-    jmp !store+
-!not_found:
-    lda #HAL_STATUS_ERR_NOT_FOUND
-    jmp !store+
-!write_prot:
-    lda #HAL_STATUS_ERR_WRITE_PROTECTED
-    jmp !store+
-!disk_full:
-    lda #HAL_STATUS_ERR_DISK_FULL
-    jmp !store+
-!no_device:
-    lda #HAL_STATUS_ERR_NO_DEVICE
-!store:
+    jsr a2_map_err_find
+    lda a2_err_status,x
     sta a2_last_status
     ldx hal_storage_diag_code
     ldy hal_storage_diag_phase
     sec
     rts
 
-// ============================================================
-// a2_map_media_error — media-probe verdict for a raw ProDOS error.
-// A missing marker/program file means uninitialized-or-wrong media, not a
-// generic failure, so NOT_FOUND classifies as WRONG_MEDIA here. A missing
-// volume ($45) or a switched disk ($2e) likewise means the mounted media is
-// not the expected volume, which is exactly the wrong-media class the swap
-// recovery flow (tramp_disk_prepare_selected) handles.
-// Input: A = raw ProDOS error code.
-// Output: a2_media_status + a2_last_status + diag bytes; carry set.
-// ============================================================
 a2_map_media_error:
-    sta hal_storage_diag_code
-    jsr a2_code_to_digits
-    lda hal_storage_diag_code
-    cmp #A2ERR_NOT_FOUND
-    beq !wrong+
-    cmp #A2ERR_PATH_NOT_FOUND
-    beq !wrong+
-    cmp #A2ERR_VOL_NOT_FOUND
-    beq !wrong+
-    cmp #A2ERR_DISK_SWITCHED
-    beq !wrong+
-    cmp #A2ERR_WRITE_PROT
-    beq !wp+
-    cmp #A2ERR_ACCESS
-    beq !wp+
-    cmp #A2ERR_DISK_FULL
-    beq !full+
-    cmp #A2ERR_NO_DEVICE
-    beq !nodev+
-    lda #HAL_STORAGE_STATUS_UNKNOWN
-    jmp !store+
-!wrong:
-    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
-    jmp !store+
-!wp:
-    lda #HAL_STORAGE_STATUS_WRITE_PROTECTED
-    jmp !store+
-!full:
-    lda #HAL_STORAGE_STATUS_DISK_FULL
-    jmp !store+
-!nodev:
-    lda #HAL_STORAGE_STATUS_NO_DEVICE
-!store:
+    jsr a2_map_err_find
+    lda a2_err_media,x
     sta a2_media_status
     sta a2_last_status
     sec
+    rts
+
+a2_map_err_find:
+    sta hal_storage_diag_code
+    jsr a2_code_to_digits
+    lda hal_storage_diag_code
+    ldx #0
+!loop:
+    cmp a2_err_raw,x
+    beq !done+
+    inx
+    cpx #A2_ERR_MAP_COUNT
+    bne !loop-
+!done:
     rts
 
 // a2_clear_diag — reset diagnostics before a successful-path sequence.
@@ -494,7 +461,7 @@ a2_mli_set_pathname:
 
 // ============================================================
 // hal_storage_probe_media — check whether program media responds. The probe
-// is GET_FILE_INFO on A2.PLAY (always present on the game volume, addressed
+// is GET_FILE_INFO on MORIA8.PAK (always present on the game volume, addressed
 // relative to the boot prefix); in one-drive swap mode it fails while the
 // save disk is mounted, which is exactly what disk_prompt_game[_required]
 // needs. The device number in X is advisory on Commodore and ignored here.
@@ -592,12 +559,19 @@ hal_storage_marker_present:
 // save.s and score_io.s call the historical common symbol directly.
 .label disk_require_save_media = hal_storage_marker_present
 
+.label hal_storage_diag_code   = a2_diag_code
+.label hal_storage_diag_phase  = a2_diag_phase
+.label hal_storage_diag_readst = a2_diag_readst
+.label hal_storage_diag_device = a2_diag_device
+
 // ============================================================
 // hal_storage_marker_init — create MORIA8.ID and write the marker magic.
 // DESTROY (missing file is fine) + CREATE + OPEN + WRITE magic + CLOSE.
+// Lives in StorageOverlay (sole caller is disk_setup_a2.s).
 // Output: carry clear = marker written, carry set = failure
 //         (a2_media_status = HAL_STORAGE_STATUS_* verdict).
 // ============================================================
+.segment StorageOverlay
 hal_storage_marker_init:
     lda #hal_storage_marker_write_name_len
     ldx #<hal_storage_marker_write_name
@@ -642,6 +616,7 @@ hal_storage_marker_init:
 !fail_end:
     jsr a2_mli_end
     jmp a2_map_media_error  // carry set
+.segment Default
 
 
 // ============================================================
@@ -676,11 +651,176 @@ hal_storage_command_status:
     rts
 
 // ============================================================
-// hal_asset_load_prg_header — load a whole BIN payload to its recorded
-// address. Our disk build stores each payload's load address in the ProDOS
-// aux_type (AppleCommander `bin 0x<addr>`), which is the exact equivalent of
-// the Commodore PRG header: GET_FILE_INFO supplies both destination
-// (aux_type) and size (blocks_used * 512).
+// MORIA8.PAK random-access resolver & loader (MLI_SET_MARK = $CE)
+// Entries 0..5 are sequential boot payloads; entries 6..21 are cold/preload
+// assets packed into MORIA8.PAK (A2.PLAY, OVL.START..TITLE, LEGALUI, TITLE,
+// PackBits A2.AUXDATA/A2.CATALOG/A2.CATEXT, and ITEM.CAT).
+// ============================================================
+
+.const A2_PAK_ENTRY_PLAY     = 6
+.const A2_PAK_ENTRY_LEGALUI  = 16
+.const A2_PAK_ENTRY_TITLE    = 17
+.const A2_PAK_ENTRY_AUXDATA  = 18
+.const A2_PAK_ENTRY_CATALOG  = 19
+.const A2_PAK_ENTRY_CATEXT   = 20
+.const A2_PAK_ENTRY_ITEM_CAT = 21
+.const A2_PRELOAD_SEQ_COUNT  = 4
+.assert "Preload PAK entries #18..#21 are contiguous",
+    A2_PAK_ENTRY_CATALOG == A2_PAK_ENTRY_AUXDATA + 1
+    && A2_PAK_ENTRY_CATEXT == A2_PAK_ENTRY_AUXDATA + 2
+    && A2_PAK_ENTRY_ITEM_CAT == A2_PAK_ENTRY_AUXDATA + 3, true
+.const A2_OVL_LOAD_ADDR      = $a400
+.const A2_CATEXT_STAGE       = $9000
+
+// Parallel to hal_storage_overlay_name_lo/hi/len (0..12 -> MORIA8.PAK indices).
+a2_overlay_pak_id:
+    .byte 7, 8, 9, 10, 11, 1, 2, 3, 4, 12, 13, 14, 15
+.assert "PAK id table matches hal_platform_overlay_count", * - a2_overlay_pak_id, hal_platform_overlay_count
+
+// Compare A2_MLI_PATHNAME against string at (a2_nc_ptr) of length a2_nc_len.
+// Output: Z=1 (BEQ) on match, Z=0 (BNE) on mismatch. Preserves X.
+a2_cmp_pathname:
+    lda A2_MLI_PATHNAME
+    cmp a2_nc_len
+    bne !no+
+    tay
+    beq !yes+
+!loop:
+    lda A2_MLI_PATHNAME,y
+    dey
+    cmp (a2_nc_ptr),y
+    bne !no+
+    tya
+    bne !loop-
+!yes:
+    lda #0
+!no:
+    rts
+
+// Match normalized A2_MLI_PATHNAME against packed MORIA8.PAK cold payloads.
+// Output: C=0 -> A = PAK entry index, X/Y = BIN load address (lo/hi);
+//         C=1 -> filename is not a packed entry.
+a2_pak_resolve:
+    ldx #hal_platform_overlay_count - 1
+!ovl_chk:
+    lda hal_storage_overlay_name_lo,x
+    sta a2_nc_ptr
+    lda hal_storage_overlay_name_hi,x
+    sta a2_nc_ptr + 1
+    lda hal_storage_overlay_name_len,x
+    sta a2_nc_len
+    jsr a2_cmp_pathname
+    beq !ovl_hit+
+    dex
+    bpl !ovl_chk-
+
+    lda #<a2_play_file_name
+    sta a2_nc_ptr
+    lda #>a2_play_file_name
+    sta a2_nc_ptr + 1
+    lda #a2_play_file_name_len
+    sta a2_nc_len
+    jsr a2_cmp_pathname
+    bne !chk_legal+
+    lda #A2_PAK_ENTRY_PLAY
+    ldx #<A2_PLAY_SLOT_BASE
+    ldy #>A2_PLAY_SLOT_BASE
+    clc
+    rts
+
+!chk_legal:
+    lda #<legal_ui_filename
+    sta a2_nc_ptr
+    lda #>legal_ui_filename
+    sta a2_nc_ptr + 1
+    lda #7
+    sta a2_nc_len
+    jsr a2_cmp_pathname
+    bne !miss+
+    lda #A2_PAK_ENTRY_LEGALUI
+!ret_ovl_addr:
+    ldx #<A2_OVL_LOAD_ADDR
+    ldy #>A2_OVL_LOAD_ADDR
+    clc
+    rts
+!ovl_hit:
+    lda a2_overlay_pak_id,x
+    jmp !ret_ovl_addr-
+!miss:
+    sec
+    rts
+
+// Open MORIA8.PAK, read its 256-byte header prefix into a2_ss_buf, fetch
+// 16-bit length (bytes 2..) and 24-bit offset (bytes 128..), and SET_MARK ($CE).
+// Precondition: caller inside a2_clear_diag + a2_mli_begin.
+// Input: A = PAK entry index. Output: C=0 open & positioned; C=1 closed + A=err.
+a2_pak_open_seek:
+    sta a2_pak_id
+    lda #hal_storage_program_probe_name_len
+    ldx #<hal_storage_program_probe_name
+    ldy #>hal_storage_program_probe_name
+    jsr a2_mli_set_pathname
+    lda #HAL_STORAGE_PHASE_OPEN
+    sta hal_storage_diag_phase
+    jsr a2i_open
+    bcs !open_err+
+    lda a2_open_ref
+    sta a2_rw_ref
+    sta a2_mark_ref
+    lda #HAL_STORAGE_PHASE_READ
+    sta hal_storage_diag_phase
+    lda #<a2_ss_buf
+    sta a2_rw_buf
+    lda #>a2_ss_buf
+    sta a2_rw_buf + 1
+    lda #0
+    sta a2_rw_req
+    lda #1
+    sta a2_rw_req + 1               // 256-byte PAK header prefix (<= 42 entries)
+    jsr a2i_read
+    bcs !err_close+
+    lda a2_rw_trans + 1
+    beq !err_bad_close+             // truncated header
+    lda a2_pak_id
+    cmp #42
+    bcs !err_bad_close+
+    cmp a2_ss_buf                   // entry index < entry count
+    bcs !err_bad_close+
+    asl
+    tay
+    lda a2_ss_buf + 2,y
+    sta a2_pak_len
+    lda a2_ss_buf + 3,y
+    sta a2_pak_len + 1
+    ora a2_pak_len
+    beq !err_bad_close+
+    tya
+    clc
+    adc a2_pak_id
+    tay
+    lda a2_ss_buf + 128,y
+    sta a2_mark_pos
+    lda a2_ss_buf + 129,y
+    sta a2_mark_pos + 1
+    lda a2_ss_buf + 130,y
+    sta a2_mark_pos + 2
+    jsr a2i_set_mark
+    bcs !err_close+
+    clc
+!open_err:
+    rts
+!err_bad_close:
+    lda #$53
+!err_close:
+    pha
+    jsr a2i_close_open_ref
+    pla
+    sec
+    rts
+
+// ============================================================
+// hal_asset_load_prg_header — load a packed payload (A2.PLAY, OVL.*, LEGALUI)
+// from MORIA8.PAK to its recorded load address ($7C00 or $A400).
 // Input: A = filename length, X = filename lo, Y = filename hi.
 // Output: carry clear = success, carry set = failure.
 // ============================================================
@@ -695,7 +835,11 @@ hal_asset_load_prg_header:
     pha
     jsr a2_overlay_try_cache
     bcs !no_cache+
-    jmp !cache_done+                // C=0: cache hit, window populated
+    pla
+    pla
+    pla
+    clc
+    rts
 !no_cache:
     pla
     tay
@@ -703,64 +847,54 @@ hal_asset_load_prg_header:
     tax
     pla
     jsr a2_mli_set_pathname
+    jsr a2_pak_resolve
+    bcs a2_asset_not_packed
+    stx a2_asset_dest
+    sty a2_asset_dest + 1
+a2_pak_load_to_dest:
+    sta a2_pak_id
     jsr a2_clear_diag
     jsr a2_mli_begin
-    lda #HAL_STORAGE_PHASE_PROBE
-    sta hal_storage_diag_phase
-    jsr a2i_get_file_info
-    bcs !fail_end+
-    lda a2_gfi_aux
-    ora a2_gfi_aux + 1
-    beq !bad_file+                  // no recorded load address
-    lda a2_gfi_blocks + 1
-    bne !bad_file+                  // payload must be < 128 blocks
-    lda a2_gfi_blocks
-    beq !bad_file+                  // empty payload is a build error
-    asl                             // request = blocks * 512 (lo byte always 0)
-    bcs !bad_file+
-    sta a2_rw_req + 1
-    lda #0
+    lda a2_pak_id
+    jsr a2_pak_open_seek
+    bcs a2_asset_fail_end
+    lda a2_pak_len
     sta a2_rw_req
-    lda a2_gfi_aux
+    lda a2_pak_len + 1
+    sta a2_rw_req + 1
+    lda a2_asset_dest
     sta a2_rw_buf
-    lda a2_gfi_aux + 1
+    lda a2_asset_dest + 1
     sta a2_rw_buf + 1
-    lda #HAL_STORAGE_PHASE_OPEN
-    sta hal_storage_diag_phase
-    jsr a2i_open
-    bcs !fail_end+
-    lda a2_open_ref
-    sta a2_rw_ref
+a2_asset_read_close:
     lda #HAL_STORAGE_PHASE_READ
     sta hal_storage_diag_phase
-    jsr a2i_read                    // short transfer at EOF is success (TRM 4.5.3)
-    bcs !close_fail+
+    jsr a2i_read
+    bcs a2_asset_close_fail
     jsr a2i_close_open_ref
-    bcs !fail_end+
+    bcs a2_asset_fail_end
+a2_asset_done_ok:
     jsr a2_mli_end
     clc
     rts
-!cache_done:
-    pla
-    pla
-    pla
-    clc
-    rts
-!bad_file:
-    lda #$53                        // synthetic invalid-parameter error
-    jmp !fail_end+
-!close_fail:
+a2_asset_close_fail:
     pha
     jsr a2i_close_open_ref
     pla
-!fail_end:
+a2_asset_fail_end:
     jsr a2_mli_end
-    jmp a2_map_error                             // carry set
+    jmp a2_map_error                // carry set
+a2_asset_not_packed:
+    jsr a2_clear_diag
+    lda #HAL_STORAGE_PHASE_PROBE
+    sta hal_storage_diag_phase
+    lda #$53                        // synthetic invalid-parameter error
+    jmp a2_map_error
 
 // ============================================================
 // hal_asset_load — KERNAL LOAD equivalent over the name stashed by
 // hal_storage_setnam. A = 0 for LOAD, nonzero for VERIFY (existence probe).
-// X/Y = caller-selected load address.
+// X/Y = caller-selected load address. Only packed MORIA8.PAK assets resolve.
 // ============================================================
 hal_asset_load:
     sta a2_asset_verify
@@ -770,63 +904,26 @@ hal_asset_load:
     ldx a2_ss_name_lo
     ldy a2_ss_name_hi
     jsr a2_mli_set_pathname
+    jsr a2_pak_resolve
+    bcs a2_asset_not_packed
+    ldx a2_asset_verify
+    beq a2_pak_load_to_dest
+    sta a2_pak_id
     jsr a2_clear_diag
     jsr a2_mli_begin
-    lda #HAL_STORAGE_PHASE_PROBE
-    sta hal_storage_diag_phase
-    jsr a2i_get_file_info
-    bcs !fail_end+
-    lda a2_asset_verify
-    bne !done_ok+                   // VERIFY = existence probe only
-    lda a2_gfi_blocks + 1
-    bne !bad_file+
-    lda a2_gfi_blocks
-    beq !bad_file+
-    asl
-    bcs !bad_file+
-    sta a2_rw_req + 1
-    lda #0
-    sta a2_rw_req
-    lda a2_asset_dest
-    sta a2_rw_buf
-    lda a2_asset_dest + 1
-    sta a2_rw_buf + 1
-    lda #HAL_STORAGE_PHASE_OPEN
-    sta hal_storage_diag_phase
-    jsr a2i_open
-    bcs !fail_end+
-    lda a2_open_ref
-    sta a2_rw_ref
-    lda #HAL_STORAGE_PHASE_READ
-    sta hal_storage_diag_phase
-    jsr a2i_read
-    bcs !close_fail+
+    lda a2_pak_id
+    jsr a2_pak_open_seek
+    bcs a2_asset_fail_end
     jsr a2i_close_open_ref
-    bcs !fail_end+
-!done_ok:
-    jsr a2_mli_end
-    clc
-    rts
-!bad_file:
-    lda #$53
-    jmp !fail_end+
-!close_fail:
-    pha
-    jsr a2i_close_open_ref
-    pla
-!fail_end:
-    jsr a2_mli_end
-    jmp a2_map_error
+    bcs a2_asset_fail_end
+    jmp a2_asset_done_ok
 
 .label hal_storage_load = hal_asset_load
 
-a2_asset_verify:  .byte 0
-a2_asset_dest:    .word 0
-
 // ============================================================
-// hal_asset_load_title — load the TITLE art asset into MAP_BASE.
+// hal_asset_load_title — stream TITLE from MORIA8.PAK into aux MAP_BASE.
 // MAP_BASE lives in AUXILIARY RAM on this platform and the MLI writes only
-// main RAM, so the file streams through a 256-byte main-RAM staging buffer
+// main RAM, so the payload streams through a 256-byte main-RAM staging buffer
 // and each chunk crosses via mmu_safe_map_write_ptr1 (RAMWRT writes-only
 // switch, safe from resident code). zp_ptr1 is the aux destination; core ZP
 // is already saved by the surrounding a2_mli_begin/end.
@@ -837,22 +934,13 @@ a2_asset_dest:    .word 0
 // ============================================================
 .segment TitleOverlay
 hal_asset_load_title:
-    lda #hal_storage_title_name_len
-    ldx #<hal_storage_title_name
-    ldy #>hal_storage_title_name
-    jsr a2_mli_set_pathname
     jsr a2_clear_diag
     jsr a2_mli_begin
-    lda #HAL_STORAGE_PHASE_PROBE
-    sta hal_storage_diag_phase
-    jsr a2i_get_file_info
-    bcs !fail_end+
-    lda #HAL_STORAGE_PHASE_OPEN
-    sta hal_storage_diag_phase
-    jsr a2i_open
-    bcs !fail_end+
-    lda a2_open_ref
-    sta a2_rw_ref
+    lda #A2_PAK_ENTRY_TITLE
+    jsr a2_pak_open_seek
+    bcc !seek_ok+
+    jmp !fail_end+
+!seek_ok:
     lda #<MAP_BASE
     sta zp_ptr1
     lda #>MAP_BASE
@@ -860,19 +948,37 @@ hal_asset_load_title:
     lda #HAL_STORAGE_PHASE_READ
     sta hal_storage_diag_phase
 !chunk:
-    lda #<a2_title_stage
-    sta a2_rw_buf
-    lda #>a2_title_stage
-    sta a2_rw_buf + 1
+    lda a2_pak_len + 1
+    bne !req_256+
+    lda a2_pak_len
+    bne !req_partial+
+    jmp !close_done+
+!req_partial:
+    sta a2_rw_req
+    lda #0
+    sta a2_rw_req + 1
+    beq !do_read+                   // A is 0
+!req_256:
     lda #0
     sta a2_rw_req
     lda #1
     sta a2_rw_req + 1               // request 256
+!do_read:
+    lda #<a2_title_stage
+    sta a2_rw_buf
+    lda #>a2_title_stage
+    sta a2_rw_buf + 1
     jsr a2i_read
-    bcc !read_ok+
-    cmp #A2ERR_EOF                  // zero bytes left: exact-multiple size
-    beq !close_done+
+    bcc !read_sub+
     jmp !close_fail+
+!read_sub:
+    sec
+    lda a2_pak_len
+    sbc a2_rw_trans
+    sta a2_pak_len
+    lda a2_pak_len + 1
+    sbc a2_rw_trans + 1
+    sta a2_pak_len + 1
 !read_ok:
     lda a2_rw_trans + 1
     bne !full_chunk+                // 256 bytes transferred
@@ -911,18 +1017,380 @@ hal_asset_load_title:
     jsr a2_mli_end
     jmp a2_map_error
 
+// ============================================================
+// a2_boot_preload_aux_lc — Cold boot preload (runs in TitleOverlay, 0 B Default):
+//   1. Zeroes persistent recall[RECALL_DATA_SIZE] in Aux LC Bank 1 ($D000-$D45B).
+//   2. PackBits-unpacks A2.AUXDATA (#18) -> Aux $3B0C and A2.CATALOG (#19) -> Aux $5000.
+//   3. PackBits-unpacks A2.CATEXT (#20) -> Main $7C00, then copies 2,232 B to
+//      Aux LC Bank 2 ($D000-$D8B7).
+//   4. Reads ITEM.CAT (#21) into $7C00, verifies 'ITM2' magic + size, and copies
+//      to Aux LC High ($E000-$FD94).
+// Stages through free A2_PLAY_SLOT_BASE ($7C00-$9FFF) before A2.PLAY loads.
+// ============================================================
+a2_boot_preload_aux_lc:
+    // 1. Zero Aux LC Bank 1 recall[279] ($D000-$D45B).
+    ldx #A2_LC_BOUNCE_SIZE - 1
+    lda #0
+!zero_bounce:
+    sta A2_LC_BOUNCE,x
+    dex
+    bpl !zero_bounce-
+    lda #A2_LC_BANK1
+    sta A2_LC_ARG_BANK
+    lda #A2_LC_DIR_WRITE
+    sta A2_LC_ARG_DIR
+    lda #<A2_LC_RECALL_BASE
+    sta zp_ptr1
+    lda #>A2_LC_RECALL_BASE
+    sta zp_ptr1_hi
+    lda #<RECALL_DATA_SIZE
+    sta zp_temp0
+    lda #>RECALL_DATA_SIZE
+    sta zp_temp1
+!zero_loop:
+    jsr !calc_chunk+
+    beq !preload_auxdata+
+    ldx zp_ptr1
+    ldy zp_ptr1_hi
+    jsr a2_aux_lc_bounce_xfer
+    jsr !advance_dst+
+    jmp !zero_loop-
+
+!preload_auxdata:
+    // Open MORIA8.PAK once at #18 and stream #18..#21 sequentially on the kept-open ref.
+    jsr a2_preload_open_pak
+
+    // 2a. A2.AUXDATA (PackBits) -> Aux $3B0C..a2_auxdata_end
+    ldx #<A2_PLAY_SLOT_BASE
+    ldy #>A2_PLAY_SLOT_BASE
+    jsr a2_preload_read_next
+    lda #<A2_AUX_DATA_BASE
+    ldx #>A2_AUX_DATA_BASE
+    jsr a2_preload_unpack_to_aux
+    lda #<a2_auxdata_end
+    ldx #>a2_auxdata_end
+    jsr a2_preload_check_ptr1
+
+    // 2b. A2.CATALOG (PackBits) -> Aux $5000..catalog_fields_end
+    ldx #<A2_PLAY_SLOT_BASE
+    ldy #>A2_PLAY_SLOT_BASE
+    jsr a2_preload_read_next
+    lda #<A2_AUX_CATALOG
+    ldx #>A2_AUX_CATALOG
+    jsr a2_preload_unpack_to_aux
+    lda #<catalog_fields_end
+    ldx #>catalog_fields_end
+    jsr a2_preload_check_ptr1
+
+    // 3. A2.CATEXT (PackBits staged at $9000 -> Main $7C00 -> Aux LC Bank 2 $D000)
+    ldx #<A2_CATEXT_STAGE
+    ldy #>A2_CATEXT_STAGE
+    jsr a2_preload_read_next
+    lda #<A2_CATEXT_STAGE
+    sta zp_ptr0
+    lda #>A2_CATEXT_STAGE
+    sta zp_ptr0_hi
+    lda #<A2_PLAY_SLOT_BASE
+    sta zp_ptr1
+    lda #>A2_PLAY_SLOT_BASE
+    sta zp_ptr1_hi
+    jsr a2_packbits_unpack
+    lda #<(A2_PLAY_SLOT_BASE + A2_CATEXT_SIZE)
+    ldx #>(A2_PLAY_SLOT_BASE + A2_CATEXT_SIZE)
+    jsr a2_preload_check_ptr1
+    lda #<A2_LC_CATEXT_BASE
+    sta zp_ptr1
+    lda #>A2_LC_CATEXT_BASE
+    sta zp_ptr1_hi
+    lda #<A2_CATEXT_SIZE
+    sta zp_temp0
+    lda #>A2_CATEXT_SIZE
+    sta zp_temp1
+    jsr a2_preload_copy_play_to_lc_b2
+
+    // 4. ITEM.CAT (raw MORIA8.PAK entry #21 -> $7C00 -> Aux LC High $E000; closes PAK ref)
+    ldx #<A2_PLAY_SLOT_BASE
+    ldy #>A2_PLAY_SLOT_BASE
+    jsr a2_preload_read_next
+    lda a2_rw_trans
+    cmp #<ITMCAT_TOTAL_SIZE
+    bne !icat_bad+
+    lda a2_rw_trans + 1
+    cmp #>ITMCAT_TOTAL_SIZE
+    bne !icat_bad+
+    lda A2_PLAY_SLOT_BASE
+    cmp #$49                        // 'I'
+    bne !icat_bad+
+    lda A2_PLAY_SLOT_BASE + 1
+    cmp #$54                        // 'T'
+    bne !icat_bad+
+    lda A2_PLAY_SLOT_BASE + 2
+    cmp #$4d                        // 'M'
+    bne !icat_bad+
+    lda A2_PLAY_SLOT_BASE + 3
+    cmp #$32                        // '2'
+    beq !icat_ok+
+!icat_bad:
+    jmp a2_preload_close_bad
+!icat_ok:
+    lda #<A2_LC_ITEM_CAT_BASE
+    sta zp_ptr1
+    lda #>A2_LC_ITEM_CAT_BASE
+    sta zp_ptr1_hi
+    lda #<ITMCAT_TOTAL_SIZE
+    sta zp_temp0
+    lda #>ITMCAT_TOTAL_SIZE
+    sta zp_temp1
+    jsr a2_preload_copy_play_to_lc_b2
+    lda #0                          // keep A2.PLAY signature clear until loaded
+    sta A2_PLAY_SLOT_BASE
+    clc
+    rts
+
+// Open MORIA8.PAK once at A2_PAK_ENTRY_AUXDATA (#18) and cache the 4 sequential
+// 16-bit entry lengths (#18..#21) in TitleOverlay so subsequent reads need no
+// MLI_OPEN / directory scan / SET_MARK cycles.
+a2_preload_open_pak:
+    lda #0
+    sta a2_preload_seq_idx
+    sta a2_preload_pak_open
+    jsr a2_clear_diag
+    jsr a2_mli_begin
+    lda #A2_PAK_ENTRY_AUXDATA
+    jsr a2_pak_open_seek
+    bcc !open_ok+
+    jmp a2_preload_mli_fail
+!open_ok:
+    lda #1
+    sta a2_preload_pak_open
+    lda a2_ss_buf
+    cmp #(A2_PAK_ENTRY_ITEM_CAT + 1)
+    bcs !cnt_ok+
+    jmp a2_preload_close_fail
+!cnt_ok:
+    ldx #(A2_PRELOAD_SEQ_COUNT * 2 - 1)
+!copy_pak_lens:
+    lda a2_ss_buf + 2 + (A2_PAK_ENTRY_AUXDATA * 2),x
+    sta a2_preload_pak_lens,x
+    dex
+    bpl !copy_pak_lens-
+    jsr a2_mli_end
+    rts
+
+// Read the next sequential MORIA8.PAK preload entry into Main RAM at X/Y
+// (asserted <= $A000 end); closes a2_open_ref after the 4th entry (#21).
+a2_preload_read_next:
+    stx a2_asset_dest
+    sty a2_asset_dest + 1
+    ldx a2_preload_seq_idx
+    lda a2_preload_pak_lens,x
+    sta a2_pak_len
+    lda a2_preload_pak_lens + 1,x
+    sta a2_pak_len + 1
+    ora a2_pak_len
+    beq a2_preload_close_bad
+    inx
+    inx
+    stx a2_preload_seq_idx
+    clc
+    lda a2_asset_dest
+    adc a2_pak_len
+    lda a2_asset_dest + 1
+    adc a2_pak_len + 1
+    bcs a2_preload_close_bad
+    cmp #>(A2_PLAY_SLOT_END + 1)
+    bcc !preload_len_ok+
+    bne a2_preload_close_bad
+    lda a2_asset_dest
+    clc
+    adc a2_pak_len
+    bne a2_preload_close_bad
+!preload_len_ok:
+    jsr a2_clear_diag
+    jsr a2_mli_begin
+    lda a2_open_ref
+    sta a2_rw_ref
+    lda a2_pak_len
+    sta a2_rw_req
+    lda a2_pak_len + 1
+    sta a2_rw_req + 1
+    lda a2_asset_dest
+    sta a2_rw_buf
+    lda a2_asset_dest + 1
+    sta a2_rw_buf + 1
+    lda #HAL_STORAGE_PHASE_READ
+    sta hal_storage_diag_phase
+    jsr a2i_read
+    bcs a2_preload_close_fail
+    lda a2_preload_seq_idx
+    cmp #(A2_PRELOAD_SEQ_COUNT * 2)
+    bcc !keep_pak_open+
+    lda #0
+    sta a2_preload_pak_open
+    jsr a2i_close_open_ref
+    bcs a2_preload_mli_fail
+!keep_pak_open:
+    jsr a2_mli_end
+    lda a2_rw_trans
+    cmp a2_pak_len
+    bne a2_preload_close_bad
+    lda a2_rw_trans + 1
+    cmp a2_pak_len + 1
+    bne a2_preload_close_bad
+    rts
+
+a2_preload_close_bad:
+    lda a2_preload_pak_open
+    beq a2_preload_bad
+    jsr a2_mli_begin
+a2_preload_close_fail:
+    lda #0
+    sta a2_preload_pak_open
+    jsr a2i_close_open_ref
+a2_preload_mli_fail:
+    jsr a2_mli_end
+a2_preload_bad:
+    lda #$ee
+    jmp hal_platform_panic
+
+a2_preload_pak_lens: .fill A2_PRELOAD_SEQ_COUNT * 2, 0
+a2_preload_seq_idx:  .byte 0
+a2_preload_pak_open: .byte 0
+
+a2_preload_check_ptr1:
+    cmp zp_ptr1
+    bne a2_preload_close_bad
+    cpx zp_ptr1_hi
+    bne a2_preload_close_bad
+    rts
+
+a2_preload_unpack_to_aux:
+    sta zp_ptr1
+    stx zp_ptr1_hi
+    lda #<A2_PLAY_SLOT_BASE
+    sta zp_ptr0
+    lda #>A2_PLAY_SLOT_BASE
+    sta zp_ptr0_hi
+    sta A2_RAMWRT_ON
+    jsr a2_packbits_unpack
+    sta A2_RAMWRT_OFF
+    rts
+
+// a2_packbits_unpack — Unpack PackBits stream ($80 EOF) from Main (zp_ptr0)
+// to (zp_ptr1) (Main RAM when RAMWRT=0, Aux RAM when RAMWRT=1; $00-$1FF stays Main).
+a2_packbits_unpack:
+    ldy #0
+!pb_pkt:
+    jsr !pb_get_src+
+    cmp #$80
+    beq !pb_done+                   // $80 = EOF
+    bcs !pb_run+                    // $81..$FF = repeat (257 - n) times
+    tax                             // $00..$7F = copy (X + 1) literal bytes
+!pb_lit:
+    jsr !pb_get_src+
+    jsr !pb_put_dst+
+    dex
+    bpl !pb_lit-
+    bmi !pb_pkt-
+!pb_run:
+    eor #$ff
+    adc #1                          // C=1 on entry -> A = (255 - n) + 2 = 257 - n
+    tax
+    jsr !pb_get_src+
+!pb_fill:
+    jsr !pb_put_dst+
+    dex
+    bne !pb_fill-
+    beq !pb_pkt-
+!pb_get_src:
+    lda (zp_ptr0),y
+    inc zp_ptr0
+    bne !pb_done+
+    inc zp_ptr0_hi
+!pb_done:
+    rts
+!pb_put_dst:
+    sta (zp_ptr1),y
+    inc zp_ptr1
+    bne !pb_put_rts+
+    inc zp_ptr1_hi
+!pb_put_rts:
+    rts
+
+// Copy zp_temp1:zp_temp0 bytes from A2_PLAY_SLOT_BASE ($7C00) to Aux LC Bank 2 / High (zp_ptr1).
+a2_preload_copy_play_to_lc_b2:
+    lda #A2_LC_BANK2
+    sta A2_LC_ARG_BANK
+    lda #A2_LC_DIR_WRITE
+    sta A2_LC_ARG_DIR
+    lda #<A2_PLAY_SLOT_BASE
+    sta zp_ptr0
+    lda #>A2_PLAY_SLOT_BASE
+    sta zp_ptr0_hi
+!copy_loop:
+    jsr !calc_chunk+
+    beq !copy_done+
+    tay
+    dey
+!fill_bounce:
+    lda (zp_ptr0),y
+    sta A2_LC_BOUNCE,y
+    dey
+    bpl !fill_bounce-
+    lda a2_tc
+    ldx zp_ptr1
+    ldy zp_ptr1_hi
+    jsr a2_aux_lc_bounce_xfer
+    clc
+    lda zp_ptr0
+    adc a2_tc
+    sta zp_ptr0
+    bcc !src_nc+
+    inc zp_ptr0_hi
+!src_nc:
+    jsr !advance_dst+
+    jmp !copy_loop-
+!copy_done:
+    rts
+
+// Output: A = a2_tc = min(16, zp_temp1:zp_temp0), Z=1 iff remaining == 0.
+!calc_chunk:
+    lda zp_temp1
+    bne !use16+
+    lda zp_temp0
+    beq !done_chunk+
+    cmp #A2_LC_BOUNCE_SIZE
+    bcc !store_chunk+
+!use16:
+    lda #A2_LC_BOUNCE_SIZE
+!store_chunk:
+    sta a2_tc
+!done_chunk:
+    rts
+
+!advance_dst:
+    clc
+    lda zp_ptr1
+    adc a2_tc
+    sta zp_ptr1
+    bcc !dst_nc+
+    inc zp_ptr1_hi
+!dst_nc:
+    sec
+    lda zp_temp0
+    sbc a2_tc
+    sta zp_temp0
+    bcs !rem_nc+
+    dec zp_temp1
+!rem_nc:
+    rts
+
 a2_tc:            .byte 0
 .segment Default
-a2_probe_buf:     .fill 8, 0        // marker magic read-back scratch
 // Title-art staging shares the save-stream buffer: title loads, ON_LINE
 // reports (disk_setup_a2.s), and save streams are never open concurrently.
+// a2_probe_buf, a2_program_volume, and a2_save_volume live in $0301-$0328 (memory.s).
 .label a2_title_stage = a2_ss_buf
-
-// Configured volumes (ProDOS len-prefixed: byte 0 = length, 1-15 = name).
-// a2_program_volume is discovered from GET_PREFIX by a2_init_program_volume;
-// a2_save_volume is chosen by Disk Setup. Both zero-length until then.
-a2_program_volume: .fill 16, 0
-a2_save_volume:    .fill 16, 0
 
 // ============================================================
 // hal_asset_close_channel — close any open file and restore default state.
@@ -969,7 +1437,8 @@ hal_storage_save_read_name:
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
     .byte $52                                   // spare suffix byte for "THE.GAME2"
 
-// High-score filenames.
+// High-score filenames (sole consumer core/score_io.s lives in DeathOverlay).
+.segment DeathOverlay
 hal_storage_score_read_name:
     .byte $30, $3a                              // "0:"
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45 // "HALL.OF.FAME"
@@ -986,6 +1455,7 @@ hal_storage_score_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45 // "HALL.OF.FAME"
 .label hal_storage_score_scratch_name_len = * - hal_storage_score_scratch_name
+.segment Default
 
 // Commodore drive-init command. Unused on ProDOS; exported for the contract.
 hal_storage_init_command:
@@ -1013,9 +1483,9 @@ hal_storage_marker_scratch_name:
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
 
-// Program-media probe file: the play-slot payload on the game volume.
+// Program-media probe file: the packed container on the game volume.
 hal_storage_program_probe_name:
-    .byte $41, $32, $2e, $50, $4c, $41, $59     // "A2.PLAY"
+    .byte $4d,$4f,$52,$49,$41,$38,$2e,$50,$41,$4b // "MORIA8.PAK"
 .label hal_storage_program_probe_name_len = * - hal_storage_program_probe_name
     .byte 0
 
@@ -1054,8 +1524,8 @@ hal_storage_tier_name_len:
 #endif
 
 // Overlay asset filenames, indexed by overlay ID - 1 (common/overlay.s).
-// IDs 1-10 are the shared classes (incl. OVL_CHEST); OVL.STORAGE (11) and
-// OVL.TITLE (12) are the Apple II slot-hosted classes appended at the end.
+// IDs 1-11 are the shared classes (incl. OVL_CHEST, OVL_HOME); OVL.STORAGE (12)
+// and OVL.TITLE (13) are the Apple II window-hosted classes appended at the end.
 hal_storage_overlay_start_name:
     .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54   // "OVL.START"
 .label hal_storage_overlay_start_name_len = * - hal_storage_overlay_start_name
@@ -1096,6 +1566,10 @@ hal_storage_overlay_chest_name:
     .byte $4f,$56,$4c,$2e,$43,$48,$45,$53,$54   // "OVL.CHEST"
 .label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
     .byte 0
+hal_storage_overlay_home_name:
+    .byte $4f,$56,$4c,$2e,$48,$4f,$4d,$45       // "OVL.HOME"
+.label hal_storage_overlay_home_name_len = * - hal_storage_overlay_home_name
+    .byte 0
 hal_storage_overlay_storage_name:
     .byte $4f,$56,$4c,$2e,$53,$54,$4f,$52,$41,$47,$45 // "OVL.STORAGE"
 .label hal_storage_overlay_storage_name_len = * - hal_storage_overlay_storage_name
@@ -1106,11 +1580,11 @@ hal_storage_overlay_title_name:
     .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_home_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_home_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_home_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len
 
 // ============================================================
 // Compile-time validation
@@ -1129,7 +1603,9 @@ hal_storage_overlay_name_len:
 #endif
 .assert "Longest overlay basename fits a ProDOS name element", hal_storage_overlay_storage_name_len <= 15, true
 .assert "MLI io_buffer is page aligned", <A2_MLI_IO_BUFFER, 0
+.assert "MLI pathname buffer fits before Aux LC bounce", A2_MLI_PATHNAME + 1 + A2_MLI_PATHNAME_CAPACITY <= A2_LC_BOUNCE, true
 .assert "MLI pathname buffer holds a max pathname", A2_MLI_PATHNAME + 1 + A2_MLI_PATHNAME_CAPACITY <= $0300, true
+.assert "PAK workspace fits platform ZP before thunks", a2_pak_len + 1 < A2_ZP_THUNK_READ_P0 && a2_pak_id > save_slot_index, true
 .assert "Save volume pathname (slash + 15 + slash + 15) fits", 17 + 15 <= A2_MLI_PATHNAME_CAPACITY, true
 
 // ============================================================

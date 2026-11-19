@@ -133,7 +133,7 @@ def main() -> int:
     args = parser.parse_args()
 
     symbols = parse_vs_symbols(args.vs)
-    cast_addr = symbols[".player_cast_spell"]
+    cast_addr = symbols.get(".tramp_player_cast_spell", symbols[".player_cast_spell"])
     inventory_addr = symbols[".cmd_show_inventory_view"]
 
     command = [

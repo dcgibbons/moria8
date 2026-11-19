@@ -241,6 +241,9 @@ ui_wizard_cmd_identify:
     and #~IF_SENSED & $ff
     ora #IF_IDENTIFIED
     sta inv_flags,x
+    lda inv_ego,x
+    and #ITEM_PAGE_BIT
+    sta item_cur_page
     lda inv_item_id,x
     tay
     jsr id_known_set_y
@@ -281,6 +284,7 @@ ui_wizard_cmd_gain_level:
     lda #0
     sta player_data + PL_XP_FRAC_LO
     sta player_data + PL_XP_FRAC_HI
+    jsr player_sync_max_xp
 !wiz_do_level:
     jsr ui_wizard_restore_gameplay_view
 #if HAL_PLATFORM_WIZARD_LEVELUP_RESTORE_MODAL
@@ -333,8 +337,9 @@ ui_wizard_cmd_generate_item:
     sta zp_ptr0
     lda #>wiz_item_prompt_str
     sta zp_ptr0_hi
-    lda #WIZARD_MAX_ITEM
-    jsr ui_wizard_prompt_two_digit
+    lda #<WIZARD_MAX_ITEM
+    ldy #>WIZARD_MAX_ITEM
+    jsr ui_wizard_prompt_three_digit
     bcs !wiz_item_have+
     jsr ui_view_return_to_gameplay_view
     rts
@@ -343,9 +348,11 @@ ui_wizard_cmd_generate_item:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda wizard_prompt_value
-    sta fi_add_id
     jsr fi_add_clear_plain_meta
+    lda wizard_prompt_value
+    ldy wizard_prompt_value_hi
+    jsr item_unpack_id_ay
+    sta fi_add_id
     jsr wizard_generate_item_execute
     bcs !wiz_item_ok+
     jmp ui_wizard_fail_message
@@ -368,7 +375,10 @@ ui_wizard_cmd_level_jump:
     jmp wizard_execute_level_jump
 
 ui_wizard_prompt_two_digit:
+    ldy #0
+ui_wizard_prompt_three_digit:
     sta wizard_prompt_max
+    sty wizard_prompt_max_hi
     jsr ui_help_clear_all
     lda #COL_WHITE
     sta zp_text_color
@@ -431,37 +441,53 @@ ui_wizard_prompt_two_digit:
 ui_wizard_parse_two_digit:
     lda #0
     sta wizard_prompt_value
+    sta wizard_prompt_value_hi
     ldx #0
 !wiz_pd_loop:
     cpx wizard_num_digits
     bcs !wiz_pd_done+
+    asl wizard_prompt_value
+    rol wizard_prompt_value_hi  // ×2
     lda wizard_prompt_value
-    asl
     sta zp_temp0
-    asl
-    asl
+    lda wizard_prompt_value_hi
+    sta zp_temp1
+    asl wizard_prompt_value
+    rol wizard_prompt_value_hi  // ×4
+    asl wizard_prompt_value
+    rol wizard_prompt_value_hi  // ×8
+    lda wizard_prompt_value
     clc
     adc zp_temp0
     sta wizard_prompt_value
+    lda wizard_prompt_value_hi
+    adc zp_temp1
+    sta wizard_prompt_value_hi  // ×10
     lda wizard_num_buf0,x
     sec
     sbc #$30
     clc
     adc wizard_prompt_value
     sta wizard_prompt_value
+    bcc !wiz_pd_no_c+
+    inc wizard_prompt_value_hi
+!wiz_pd_no_c:
     inx
     jmp !wiz_pd_loop-
 !wiz_pd_done:
+    lda wizard_prompt_value_hi
+    cmp wizard_prompt_max_hi
+    bcc !wiz_parse_ok+
+    bne !wiz_parse_fail+
     lda wizard_prompt_value
-!wiz_range_check:
     cmp wizard_prompt_max
+    bcc !wiz_parse_ok+
     beq !wiz_parse_ok+
-    bcs !wiz_parse_fail+
-!wiz_parse_ok:
-    sec
-    rts
 !wiz_parse_fail:
     clc
+    rts
+!wiz_parse_ok:
+    sec
     rts
 
 ui_wizard_restore_gameplay_with_visibility_message:

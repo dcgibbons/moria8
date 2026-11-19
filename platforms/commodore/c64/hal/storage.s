@@ -24,12 +24,12 @@
 .label hal_storage_open = c64_disk_open
 .label hal_storage_close = c64_disk_close
 .label hal_storage_chkin = c64_disk_chkin
-.label hal_storage_chkout = KERNAL_CHKOUT
+.label hal_storage_chkout = c64_disk_chkout
 .label hal_storage_chrin = c64_disk_chrin
-.label hal_storage_chrout = KERNAL_CHROUT
+.label hal_storage_chrout = c64_disk_chrout
 .label hal_storage_clrchn = c64_disk_clrchn
 .label hal_storage_readst = c64_disk_readst
-.label hal_storage_load = KERNAL_LOAD
+.label hal_storage_load = c64_disk_load
 .label hal_storage_read_command_status = c64_storage_read_command_status
 .label hal_storage_status_lost = cdrs_lost   // nonzero: the last status read lost its byte
 .label hal_storage_command_status = disk_save_media_status
@@ -107,12 +107,10 @@ hal_storage_init_selected_drive:
 .label hal_storage_marker_write_name = c64_marker_name_low
 .label hal_storage_marker_write_name_len = c64_marker_name_low_len
 
-.segment RuntimeBanked
 hal_storage_marker_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
-.segment Default
 
 // Platform-owned save-record filenames. PETSCII bytes for KERNAL SETNAM.
 hal_storage_save_write_name:
@@ -219,10 +217,22 @@ hal_storage_overlay_chest_name:
     .byte $36,$34,$2e,$43,$48,$45,$53,$54       // "64.CHEST"
 .label hal_storage_overlay_chest_name_len = * - hal_storage_overlay_chest_name
     .byte 0
+hal_storage_overlay_home_name:
+    .byte $36,$34,$2e,$48,$4f,$4d,$45           // "64.HOME"
+.label hal_storage_overlay_home_name_len = * - hal_storage_overlay_home_name
+    .byte 0
+hal_storage_overlay_storage_name:
+    .byte $36,$34,$2e,$53,$54,$4f,$52,$41,$47,$45 // "64.STORAGE"
+.label hal_storage_overlay_storage_name_len = * - hal_storage_overlay_storage_name
+    .byte 0
+hal_storage_overlay_title_name:
+    .byte $36,$34,$2e,$54,$49,$54,$4c,$45       // "64.TITLE"
+.label hal_storage_overlay_title_name_len = * - hal_storage_overlay_title_name
+    .byte 0
 
 hal_storage_overlay_name_lo:
-    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name, <hal_storage_overlay_spell_name, <hal_storage_modal_misc_name, <hal_storage_overlay_chest_name, <hal_storage_overlay_home_name, <hal_storage_overlay_storage_name, <hal_storage_overlay_title_name
 hal_storage_overlay_name_hi:
-    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name, >hal_storage_overlay_spell_name, >hal_storage_modal_misc_name, >hal_storage_overlay_chest_name, >hal_storage_overlay_home_name, >hal_storage_overlay_storage_name, >hal_storage_overlay_title_name
 hal_storage_overlay_name_len:
-    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len, hal_storage_overlay_spell_name_len, hal_storage_modal_misc_name_len, hal_storage_overlay_chest_name_len, hal_storage_overlay_home_name_len, hal_storage_overlay_storage_name_len, hal_storage_overlay_title_name_len

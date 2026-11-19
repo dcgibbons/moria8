@@ -12,7 +12,9 @@
 // - :CatalogKernalIn() / :CatalogKernalOut(): the KERNAL visible for the
 //   drive transaction / the caller's banking back (C64: a summon cast from an
 //   overlay runs with the KERNAL banked out; Plus/4: its wrappers bank);
-// - CATALOG_REU when the REU path is built (C64).
+// - CATALOG_REU when the REU path is built (C64);
+// - CATALOG_EXT_DISK_ENABLED when Phase 5 MONSTER.EXT (9 sectors, 31 x 8 B
+//   per sector) is wired on the port's disk / REU path.
 //
 // Most species are fetched while a level is generated; a new arrival or a
 // summon of a species not yet on the level fetches during play (maintainer,
@@ -20,7 +22,11 @@
 // gameplay on non-REU systems, I think that is OK").
 
 #import "catalog_records.s"
-.const CFR_LFN = 5              // The buffer channel (the drive commands name it)
+.const CFR_LFN = 5              // The buffer channel (shared with ICR_LFN)
+.const CATALOG_EXT_RECORD_SIZE        = 8
+.const CATALOG_EXT_RECORDS_PER_SECTOR = 31
+.const CATALOG_EXT_SECTORS            = 9
+.const CATALOG_EXT_LOAD               = $e000
 
 // The index the picker reads and the record sectors' places on the disk, in
 // MONSTER.IDX order (tools/catalog_disk.py): labels only, the data is loaded.
@@ -29,6 +35,10 @@
 #import "../../shared/catalog/catalog_index.s"
 cat_sector_track:  .fill CATALOG_RECORD_SECTORS, 0
 cat_sector_number: .fill CATALOG_RECORD_SECTORS, 0
+#if CATALOG_EXT_DISK_ENABLED
+cat_ext_sector_track:  .fill CATALOG_EXT_SECTORS, 0
+cat_ext_sector_number: .fill CATALOG_EXT_SECTORS, 0
+#endif
 cat_hidden_end:
 .segment Default
 .const CATALOG_IDX_SIZE = cat_hidden_end - cat_level_raw
@@ -43,6 +53,13 @@ cat_hidden_end:
 #else
 cat_record:   .fill CATALOG_RECORD_SIZE, 0   // The record catalog_fetch_record read
 #endif
+#if CATALOG_EXT_DISK_ENABLED
+#if PLATFORM_CAT_EXT_RECORD_EXTERNAL
+.label cat_ext_record = PLATFORM_CAT_EXT_RECORD_BASE
+#else
+cat_ext_record: .fill CATALOG_EXT_RECORD_SIZE, 0
+#endif
+#endif
 cfr_group:    .byte 0                       // Record sector (id / records per sector)
 cfr_offset:   .byte 0                       // Byte of the record in its sector's data
 cfr_track:    .byte 0
@@ -54,11 +71,10 @@ cfr_skip_hi:  .byte 0
 
 // catalog_fetch_record — Read creature cat_id_lo/hi's record into cat_record.
 // Clobbers: A, X, Y, zp_temp0-3, nf_value_2 (the drive path's digits)
-// Called unmapped. The drive path reads the record's sector directly (the
-// fast way); a record that names another creature (files copied one by one,
-// a drive without block commands such as an SD card's, a read error) is read
-// again through MONSTER.CATn by name, and only when that fails too does the
-// game ask for the program disk and try again: it always returns the record.
+// Called unmapped. The drive path reads the record's sector directly via split
+// U1 -> icr_drive_ok -> B-P commands (#367 #7); a refused '#' channel or read
+// error aborts before CHKIN 5 and falls back to reading MONSTER.CATn by name,
+// and only when that fails too does the game ask for the program disk.
 catalog_fetch_record:
     // Sector and place: id / and % CATALOG_RECORDS_PER_SECTOR (id <= 278).
     lda cat_id_lo
@@ -103,48 +119,29 @@ catalog_fetch_record:
     sta cfr_sector
     :CatalogUnmap()
 !cfr_retry:
-    // OPEN 15,dev,15 (the command channel) and OPEN 5,dev,5,"#" (a buffer).
-    lda #0
-    jsr hal_storage_setnam
-    lda #15
-    ldx program_device
-    ldy #15
-    jsr hal_storage_setlfs
-    jsr hal_storage_open
-    lda #1
-    ldx #<cfr_hash
-    ldy #>cfr_hash
-    jsr hal_storage_setnam
-    lda #CFR_LFN
-    ldx program_device
-    ldy #CFR_LFN
-    jsr hal_storage_setlfs
-    jsr hal_storage_open
-    // "U1 5 0 t s": the sector into the buffer; "B-P 5 o": to the record.
-    ldx #15
-    jsr hal_storage_chkout
-    lda #0
-    jsr cfr_put_text
     lda cfr_track
-    jsr cfr_put_num
-    lda #$20
-    jsr hal_storage_chrout
+    beq !cfr_by_name+
+    jsr cfr_open_cmd_and_buf
+    lda cfr_track
+    sta icr_track
     lda cfr_sector
-    jsr cfr_put_num
-    lda #$0d
-    jsr hal_storage_chrout
-    lda #cfr_bp - cfr_u1
-    jsr cfr_put_text
+    sta icr_sector
+    clc
     lda cfr_offset
-    jsr cfr_put_num
-    lda #$0d
-    jsr hal_storage_chrout
-    jsr hal_storage_clrchn
+    adc #2                      // Skip 2-byte T/S link in 1541 '#' buffer
+    jsr icr_send_u1_bp
+    bcs !cfr_u1_err+
     jsr cfr_read_record
     lda #15
     jsr hal_storage_close
     jsr cfr_check
-    beq !cfr_ok+
+    bne !cfr_by_name+
+    jmp !cfr_ok+
+!cfr_u1_err:
+    jsr icr_close_buf
+    lda #15
+    jsr hal_storage_close
+!cfr_by_name:
     // By name: MONSTER.CATn, skipping to the record (s * 254 + its offset).
     lda cfr_group
     lsr
@@ -177,11 +174,17 @@ catalog_fetch_record:
     sta cfr_skip_hi
     ldx #CFR_LFN
     jsr hal_storage_chkin
+    jsr hal_storage_readst
+    and #$bf
+    bne !cfr_by_name_err+
 !cfr_skip:
     lda cfr_skip_lo
     ora cfr_skip_hi
     beq !cfr_skipped+
     jsr hal_storage_chrin
+    jsr hal_storage_readst
+    and #$bf
+    bne !cfr_by_name_err+
     lda cfr_skip_lo
     bne !cfr_skip_lo+
     dec cfr_skip_hi
@@ -191,11 +194,12 @@ catalog_fetch_record:
 !cfr_skipped:
     jsr cfr_read_record
     jsr cfr_check
-    beq !cfr_ok+
-    jmp !cfr_wrong+
+    bne !cfr_wrong+
 !cfr_ok:
     :CatalogKernalOut()
     rts
+!cfr_by_name_err:
+    jsr icr_close_buf
 !cfr_wrong:
     lda #cfr_name_end - cfr_name
     sta alr_len
@@ -213,6 +217,26 @@ catalog_fetch_record:
     sta status_cache_valid
     jmp !cfr_retry-
 
+// cfr_open_cmd_and_buf — OPEN 15,dev,15 and OPEN 5,dev,5,"#" (with cfr_hash < $8000).
+// Clobbers: A, X, Y
+cfr_open_cmd_and_buf:
+    lda #0
+    jsr hal_storage_setnam
+    lda #15
+    ldx program_device
+    ldy #15
+    jsr hal_storage_setlfs
+    jsr hal_storage_open
+    lda #1
+    ldx #<cfr_hash
+    ldy #>cfr_hash
+    jsr hal_storage_setnam
+    lda #CFR_LFN
+    ldx program_device
+    ldy #CFR_LFN
+    jsr hal_storage_setlfs
+    jmp hal_storage_open
+
 // cfr_read_record — CATALOG_RECORD_SIZE bytes from the buffer channel (its
 // input already selected for the by-name read) into cat_record; close it.
 // Clobbers: A, X
@@ -229,9 +253,7 @@ cfr_read_record:
     stx cfr_idx
     cpx #CATALOG_RECORD_SIZE
     bne !crr_read-
-    jsr hal_storage_clrchn
-    lda #CFR_LFN
-    jmp hal_storage_close
+    jmp icr_close_buf
 
 // cfr_check — Z = 1 when cat_record is creature cat_id's record.
 // Clobbers: A
@@ -284,41 +306,200 @@ cfr_from_reu:
 .assert "Catalog files are 16 sectors, $1000 apart in the REU", CATALOG_FILE_SECTORS, 16
 #endif
 
-// cfr_put_text — Send cfr_u1 + A up to its 0 to the current output channel.
-// Clobbers: A, X, Y
-cfr_put_text:
-    sta cfr_idx
-!cpt_send:
-    ldx cfr_idx
-    lda cfr_u1,x
-    beq !cpt_done+
-    jsr hal_storage_chrout
-    inc cfr_idx
-    bne !cpt_send-
-!cpt_done:
-    rts
+#if CATALOG_EXT_DISK_ENABLED
+#if !CATALOG_EXT_REU_CUSTOM
+.const CATALOG_EXT_REU_BANK = 1
+.const CATALOG_EXT_REU_BASE = $2000
+#endif
 
-// cfr_put_num — Send A (0-255) as decimal digits (the shared formatter's
-// screen-code digits are the ASCII ones).
-// Clobbers: A, X, Y, zp_temp0, zp_temp1, zp_temp3, nf_value_2
-cfr_put_num:
-    jsr numeric_format_u8
+// catalog_fetch_ext — Read creature cat_id_lo/hi's 8 extended Phase 5 bytes
+// into cat_ext_record from REU Bank 1 ($2000) or 9-sector MONSTER.EXT.
+// Clobbers: A, X, Y, zp_temp0-3, nf_value_2
+catalog_fetch_ext:
+    lda cat_id_lo
+    sta cfr_track
+    lda cat_id_hi
+    sta cfr_sector
+    ldx #0
+!cfe_div:
+    lda cfr_track
+    sec
+    sbc #CATALOG_EXT_RECORDS_PER_SECTOR
+    tay
+    lda cfr_sector
+    sbc #0
+    bcc !cfe_div_done+
+    sta cfr_sector
+    sty cfr_track
+    inx
+    bne !cfe_div-
+!cfe_div_done:
+    stx cfr_group               // s = id / 31 (0..8)
+    lda cfr_track               // r = id % 31 (0..30)
+    asl
+    asl
+    asl                         // r * 8 (0..240)
+    clc
+    adc #CATALOG_SECTOR_HEADER  // 2 + r * 8 (2..242)
+    sta cfr_offset
+    :CatalogKernalIn()
+#if CATALOG_REU
+    lda reu_present
+    beq !cfe_disk+
+    jsr cfr_ext_from_reu
+    :CatalogKernalOut()
+    rts
+!cfe_disk:
+#endif
+    :CatalogMap()
+    ldx cfr_group
+    lda cat_ext_sector_track,x
+    sta cfr_track
+    lda cat_ext_sector_number,x
+    sta cfr_sector
+    :CatalogUnmap()
+!cfe_retry:
+    lda cfr_track
+    beq !cfe_by_name+
+    jsr cfr_open_cmd_and_buf
+    lda cfr_track
+    sta icr_track
+    lda cfr_sector
+    sta icr_sector
+    clc
+    lda cfr_offset
+    adc #2                      // Skip 2-byte T/S link in '#' buffer
+    jsr icr_send_u1_bp
+    bcs !cfe_u1_err+
+    jsr cfr_read_ext_record
+    lda #15
+    jsr hal_storage_close
+    jmp !cfe_ok+
+!cfe_u1_err:
+    jsr icr_close_buf
+    lda #15
+    jsr hal_storage_close
+!cfe_by_name:
+    lda #cfr_ext_name_end - cfr_ext_name
+    ldx #<cfr_ext_name
+    ldy #>cfr_ext_name
+    jsr hal_storage_setnam
+    lda #CFR_LFN
+    ldx program_device
+    ldy #CFR_LFN
+    jsr hal_storage_setlfs
+    jsr hal_storage_open
+    lda cfr_group
+    sta cfr_skip_hi             // s * 256 ...
+    asl
+    sta cfr_skip_lo
+    lda cfr_offset
+    sec
+    sbc cfr_skip_lo             // ... - 2s + cfr_offset
+    sta cfr_skip_lo
+    lda cfr_skip_hi
+    sbc #0
+    sta cfr_skip_hi
+    ldx #CFR_LFN
+    jsr hal_storage_chkin
+    jsr hal_storage_readst
+    and #$bf
+    bne !cfe_by_name_err+
+!cfe_skip:
+    lda cfr_skip_lo
+    ora cfr_skip_hi
+    beq !cfe_skipped+
+    jsr hal_storage_chrin
+    jsr hal_storage_readst
+    and #$bf
+    bne !cfe_by_name_err+
+    lda cfr_skip_lo
+    bne !cfe_skip_lo+
+    dec cfr_skip_hi
+!cfe_skip_lo:
+    dec cfr_skip_lo
+    jmp !cfe_skip-
+!cfe_skipped:
+    jsr cfr_read_ext_record
+!cfe_ok:
+    :CatalogKernalOut()
+    rts
+!cfe_by_name_err:
+    jsr icr_close_buf
+    lda #cfr_ext_name_end - cfr_ext_name
+    sta alr_len
+    lda #<cfr_ext_name
+    sta alr_name_lo
+    lda #>cfr_ext_name
+    sta alr_name_hi
+    lda #0
+    sta alr_left
+    jsr asset_load_ask_for_disk
+    lda #1
+    sta vis_room_revealed
+    lda #0
+    sta status_cache_valid
+    jmp !cfe_retry-
+
+cfr_read_ext_record:
+    ldx #CFR_LFN
+    jsr hal_storage_chkin
     lda #0
     sta cfr_idx
-!cpn_send:
+!crer_read:
+    jsr hal_storage_chrin
     ldx cfr_idx
-    lda nf_digit_buf,x
-    jsr hal_storage_chrout
-    inc cfr_idx
-    lda cfr_idx
-    cmp zp_temp2                // The digit count: the KERNAL wrappers keep zp_temp2
-    bne !cpn_send-
-    rts
+    sta cat_ext_record,x
+    inx
+    stx cfr_idx
+    cpx #CATALOG_EXT_RECORD_SIZE
+    bne !crer_read-
+    jmp icr_close_buf
 
-// Drive commands (ASCII: capitals, digits, space and '-' share the screen
-// codes), the buffer channel's name and the prompt's file name.
-cfr_u1:   .text "U1 5 0 " ; .byte 0
-cfr_bp:   .text "B-P 5 " ; .byte 0
+#if CATALOG_REU
+// cfr_ext_from_reu — Fetch 8 bytes from REU Bank 1 ($2000 + s * 254 + r * 8).
+cfr_ext_from_reu:
+    lda cfr_group
+    sta cfr_track               // s (0..8)
+    asl
+    sta cfr_sector              // 2s
+    lda cfr_offset
+    sec
+    sbc #CATALOG_SECTOR_HEADER
+    sec
+    sbc cfr_sector              // lo(s * 254 + r * 8); C = 0 on borrow
+    tay
+    lda cfr_track
+    sbc #0                      // hi(s * 254 + r * 8)
+    tax
+    tya
+    clc
+    adc #<CATALOG_EXT_REU_BASE
+    sta REU_REULO
+    txa
+    adc #>CATALOG_EXT_REU_BASE
+    sta REU_REUHI
+    lda #CATALOG_EXT_REU_BANK
+    sta REU_BANK
+    lda #0
+    sta REU_LENHI
+    sta REU_CONTROL
+    lda #<cat_ext_record
+    sta REU_C64LO
+    lda #>cat_ext_record
+    sta REU_C64HI
+    lda #CATALOG_EXT_RECORD_SIZE
+    sta REU_LENLO
+    lda #REU_CMD_FETCH
+    sta REU_COMMAND
+    rts
+#endif
+
+cfr_ext_name: .text "MONSTER.EXT"
+cfr_ext_name_end:
+#endif
+
+// Buffer channel's '#' filename and MONSTER.CAT1-4 filename (< $8000 on Plus/4).
 cfr_hash: .text "#"
 cfr_name: .text "MONSTER.CAT"
 cfr_name_end:

@@ -7,10 +7,11 @@ store_cat_mask_lo:
 store_cat_mask_hi:
     .byte >$0300, >$00F8, >$0004, >$0C00, >$0400, >$F000, >$FFFF, >$FFFF
 
-// Extended category bitmask (bit N = ICAT 16+N). Amulets sell at the magic
-// shop (with rings), the black market, and home.
+// Extended category bitmask (bit N = ICAT 16+N).
+// Bit 0 (16=AMULET): Magic shop (5), Black Market (6), Home (7).
+// Bit 3 (19=CLOAK):  General Store (0), Armory (1), Black Market (6), Home (7).
 store_cat_mask_x:
-    .byte $00, $00, $00, $00, $00, $01, $FF, $FF
+    .byte $08, $08, $00, $00, $00, $01, $FF, $FF
 
 bit_mask_table:
     .byte $01, $02, $04, $08, $10, $20, $40, $80

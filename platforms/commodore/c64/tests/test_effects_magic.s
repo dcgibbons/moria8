@@ -32,6 +32,8 @@ test_finish:
 
 .pc = $0840 "Main"
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -45,33 +47,59 @@ test_finish:
 #import "../../../../core/item_defs.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+.segment Default
+#import "../../../../core/ui_status.s"
+.segment TestCreateOverlay
+.segment Default
+#import "../../../../core/ui_help_clear.s"
+.segment TestCreateOverlay
+.segment Default
+#import "../../../../core/stat_display.s"
+.segment TestCreateOverlay
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+.segment TestCreateOverlay
+#import "../../../../core/player_save.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
+.segment TestCreateOverlay
 #import "../../../../core/ego_items.s"
+.segment Default
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
+.segment TestCreateOverlay
+.segment Default
 #import "../../../../core/spell_effects.s"
+.segment TestCreateOverlay
+.segment Default
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../../core/spell_data.s"
 #import "../../../../core/spell_names.s"
@@ -79,7 +107,11 @@ test_finish:
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestCreateOverlay
+.segment Default
 #import "../dungeon_render.s"
+.segment TestCreateOverlay
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
@@ -749,7 +781,7 @@ tem_saved_val:
     sta zp_player_lvl
     sta player_data + PL_LEVEL
     lda #0
-    sta inv_item_id + 0
+    sta inv_item_id + 0             // raw-id-ok: shared zero-init non-book slot fill
     sta tpm_huff_calls
     sta tpm_last_huff_id
     jsr player_cast_spell
@@ -776,7 +808,7 @@ tem_saved_val:
     sta zp_player_lvl
     sta player_data + PL_LEVEL
     lda #0
-    sta inv_item_id + 0
+    sta inv_item_id + 0             // raw-id-ok: shared zero-init non-book slot fill
     sta tpm_huff_calls
     sta tpm_last_huff_id
     jsr player_cast_spell
@@ -1183,12 +1215,12 @@ tem_saved_val:
     :PatchJump(cmb_term_and_print, test_cmb_term_and_print_capture)
     jsr item_init_inventory
 
-    lda #0
+    lda #ITEM_PAGE_POTION_OF_CURE_SERIOUS_WOUNDS
     sta tpm_msg_seen
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_clear
 
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -1199,7 +1231,7 @@ tem_saved_val:
 
     jsr eff_identify_prompt
 
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     beq !t49_fail+
     lda inv_flags + 1
@@ -1247,12 +1279,12 @@ tem_saved_val:
     :PatchJump(input_get_key, test_input_get_key_b)
     jsr item_init_inventory
 
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_clear
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_clear
 
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -1260,7 +1292,7 @@ tem_saved_val:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     sta inv_item_id + 4
     lda #1
     sta inv_qty + 4
@@ -1270,10 +1302,10 @@ tem_saved_val:
 
     jsr eff_identify_prompt
 
-    ldx #17
+    ldx #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr id_known_test
     bne !t50_fail+
-    ldx #25
+    ldx #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr id_known_test
     beq !t50_fail+
     lda inv_flags + 4

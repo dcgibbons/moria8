@@ -391,13 +391,15 @@ test_after_onset:
     jmp test_fail
 
     // Test 3: successful overcast prayer executes, then prints upstream-style
-    // fatigue faint feedback, zeros mana, and applies paralysis.
+    // fatigue faint feedback (and CON-drain feedback on 1/3 roll), zeros mana,
+    // and applies paralysis.
 test_after_refresh:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_prayer_prayer_state
     lda #1
     sta zp_player_mp
     sta player_data + PL_MANA
+    lda #0
     sta test_rng_value
     jsr player_pray
     bcc !t3_fail+
@@ -420,7 +422,7 @@ test_after_refresh:
     cmp #1
     bne !t3_fail+
     lda zp_eff_paralyze
-    cmp #2
+    cmp #1
     bne !t3_fail+
     lda zp_player_mp
     bne !t3_fail+
@@ -429,6 +431,32 @@ test_after_refresh:
     lda player_data + PL_SPELLS_WORKED_3
     and #$02
     beq !t3_fail+
+
+    // 1/3 CON drain roll (rng_range(3) == 1) prints HSTR_PM_HEALTH_DAMAGED and lowers CON
+    jsr test_reset_prayer_prayer_state
+    lda #18
+    sta zp_player_con
+    lda #1
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta test_rng_value
+    jsr player_pray
+    bcc !t3_fail+
+    lda test_huff_calls
+    cmp #2
+    bne !t3_fail+
+    lda test_last_huff
+    cmp #HSTR_PM_HEALTH_DAMAGED
+    bne !t3_fail+
+    lda player_data + PL_CON_CUR
+    cmp #17
+    bne !t3_fail+
+    lda zp_player_con
+    cmp #17
+    bne !t3_fail+
+    lda zp_eff_paralyze
+    cmp #2
+    bne !t3_fail+
     lda #4
     sta test_progress
     jmp test_after_overcast

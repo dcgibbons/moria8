@@ -27,6 +27,8 @@ test_finish:
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -43,10 +45,9 @@ test_finish:
 #import "../../../../core/ui_help_clear.s"
 put_stat_val:
     rts
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/input_contract.s"
 #import "../../../../core/sound.s"
@@ -54,13 +55,18 @@ put_stat_val:
 #import "../../../../core/dungeon_gen.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
+.segment Default
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/spell_effects_overlay.s"
 #import "../../../../core/player_magic_state.s"
@@ -76,11 +82,19 @@ put_stat_val:
 tramp_eff_destroy_area:
     rts
 
+.segment Default
+.segment Default
 #import "../dungeon_render.s"
+.segment Default
+.segment Default
 #import "../../../../core/dungeon_los.s"
+.segment Default
 #import "../../../../core/player_move.s"
+.segment Default
 #import "../../../../core/combat.s"
+.segment Default
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/turn_render_state.s"
 eff_fear_timer: .byte 0
 mat_scene_dirty: .byte 0
@@ -127,6 +141,15 @@ store_restock_all:
 store_enter:
     rts
 
+mon_atk_acid_armour:
+    clc
+    rts
+mm_divisor:
+    .byte 0
+mm_element_divisor_entry:
+    sta mm_divisor
+    rts
+
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:
@@ -156,6 +179,7 @@ tramp_ego_append_suffix:
 pm_consume_mana:
 magic_recalc_mana:
 magic_check_new_spells:
+status_mark_dirty:
 status_draw:
     rts
 
@@ -464,7 +488,7 @@ test_start:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -506,7 +530,7 @@ test_start:
     sta fi_add_x
     lda zp_player_y
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty
@@ -530,7 +554,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t4_fail+
     lda fi_item_id,x
-    cmp #15
+    cmp #ITEM_SLOT_RATION_OF_FOOD
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
@@ -893,7 +917,7 @@ test_start:
     sta fi_add_x
     lda #11
     sta fi_add_y
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta fi_add_id
     lda #1
     sta fi_add_qty

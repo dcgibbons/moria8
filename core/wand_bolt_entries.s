@@ -42,11 +42,6 @@ eff_wand_drain_life:
     bcc !ewdl_alive+
     jmp combat_kill_message         // X preserved by helper
 !ewdl_alive:
-    ldx zp_temp2
-    jsr monster_wake
-    lda #0
-    sta cmb_buf_idx
-    ldx #HSTR_EB_SPELL_HITS
-    jmp projectile_msg_suffix
+    jmp eff_bolt_wake_hit_msg
 !ewdl_done:
     rts

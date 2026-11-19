@@ -36,6 +36,11 @@ test_exit_trampoline:
 .encoding "screencode_mixed"
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+#define MONSTER_ATTACK_PRODUCTION_EXTENDED
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
@@ -55,6 +60,11 @@ test_exit_trampoline:
 #import "../../../../core/dungeon_gen.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+.segment Default
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
@@ -67,15 +77,26 @@ render_local_area:
 #import "../../../../core/monster_attack.s"
 
 combat_append_str:
+combat_append_decimal:
 combat_append_monster_name:
 cmb_term_and_print:
 combat_msg_monster_in_way:
+combat_compute_level_threshold:
+combat_check_levelup:
+combat_check_leveldown:
+ccl_div_24x8:
 inv_remove_item:
 inv_consume_one:
+status_mark_dirty:
+status_draw:
 tramp_assign_special_room:
 tramp_vault_seal_entrance:
 tramp_spawn_special_room_monsters:
     rts
+ccl_adj_0:   .byte 0
+ccl_adj_1:   .byte 0
+ccl_adj_2:   .byte 0
+ccl_divisor: .byte 0
 player_get_infra_range:
     lda #0
     rts
@@ -96,22 +117,58 @@ cmb_buf_idx:
 cmb_the_str:
     .text "THE " ; .byte 0
 inv_qty:
-    .fill 31, 0
+    .fill TOTAL_INV_SLOTS, 0
 inv_item_id:
     .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_p1:
     .fill TOTAL_INV_SLOTS, 0
 it_color_ac:
     .fill ITEM_TYPE_COUNT, 0
+it_color_ac_p1:
+.if (ITEM_PAGE_SMALL_SHIELD != 0 || ITEM_PAGE_LEATHER_GLOVES != 0) {
+    .fill (ITEM_TYPE_COUNT - ITEM_PAGE_SIZE), 0
+}
+icat_flags_0:  .byte 0
+icat_flags_1:  .byte 0
+icat_flags_2:  .byte 0
+icat_flags_3:  .byte 0
+icat_p1_lo:    .byte 0
+icat_weight_lo: .byte 0
+icat_weight_hi: .byte 0
+icat_dmg_packed: .byte 0
+icat_missile_type: .byte 0
+item_cat_select_id:
+item_cat_get_effects:
+item_cat_get_weight:
+item_cat_get_dmg_packed:
+item_cat_get_missile_type:
+item_cat_get_ego:
+item_get_category_inv_x:
+    lda #0
+    rts
+scroll_teleport_level_exec:
+    rts
 item_get_base_ac:
+.if (ITEM_PAGE_SMALL_SHIELD != 0 || ITEM_PAGE_LEATHER_GLOVES != 0) {
+    bit item_cur_page
+    bvs !igba_p1+
     lda it_color_ac,y
     and #$0f
     rts
-inv_to_ac:
-    .fill TOTAL_INV_SLOTS, 0
+!igba_p1:
+    lda it_color_ac_p1,y
+    and #$0f
+    rts
+} else {
+    lda it_color_ac,y
+    and #$0f
+    rts
+}
 inv_to_hit:
     .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:
+    .fill TOTAL_INV_SLOTS, 0
+inv_to_ac:
     .fill TOTAL_INV_SLOTS, 0
 inv_flags:
     .fill TOTAL_INV_SLOTS, 0
@@ -776,16 +833,24 @@ test_start:
     // ==========================================
 !t19:
     lda #4
-    sta it_color_ac + 7
+    sta it_color_ac + ITEM_SLOT_LEATHER_ARMOR
     lda #2
-    sta it_color_ac + 9
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        sta it_color_ac_p1 + ITEM_SLOT_SMALL_SHIELD
+    } else {
+        sta it_color_ac + ITEM_SLOT_SMALL_SHIELD
+    }
     lda #1
-    sta it_color_ac + 11
+    .if (ITEM_PAGE_LEATHER_GLOVES != 0) {
+        sta it_color_ac_p1 + ITEM_SLOT_LEATHER_GLOVES
+    } else {
+        sta it_color_ac + ITEM_SLOT_LEATHER_GLOVES
+    }
 
     // Test 18: body armour only, AC 4 + 0: damage 7 -> 3 (div 2), to-AC -1,
     // equipment recalculated
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #7
     jsr acid_hit
@@ -807,7 +872,7 @@ test_start:
     // Test 19: worn out (AC 4, to-AC -4): full damage, nothing changes
 !t20:
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #$fc
     sta inv_to_ac + EQUIP_BODY
@@ -846,8 +911,12 @@ test_start:
     // Test 21: the last slot (gloves only) is found and damaged
 !t22:
     jsr acid_clear_armour
-    lda #11
+    lda #ITEM_SLOT_LEATHER_GLOVES
     sta inv_item_id + EQUIP_HANDS
+    .if (ITEM_PAGE_LEATHER_GLOVES != 0) {
+        lda #ITEM_PAGE_LEATHER_GLOVES
+        sta inv_ego + EQUIP_HANDS
+    }
     lda #8
     jsr acid_hit
     cmp #4
@@ -872,10 +941,14 @@ test_start:
     sta tc_loop
 !t23_loop:
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
-    lda #9
+    lda #ITEM_SLOT_SMALL_SHIELD
     sta inv_item_id + EQUIP_SHIELD
+    .if (ITEM_PAGE_SMALL_SHIELD != 0) {
+        lda #ITEM_PAGE_SMALL_SHIELD
+        sta inv_ego + EQUIP_SHIELD
+    }
     lda #$fe
     sta inv_to_ac + EQUIP_SHIELD
     lda #8
@@ -1347,7 +1420,7 @@ test_start:
 
     // Test 48: resisted, and the body armour (AC 4) damaged: 9 -> 2, to-AC -1
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #9
     jsr acid_hit
@@ -1368,7 +1441,7 @@ test_start:
     // Test 49: body armour (Resist) takes it unharmed: 9 -> 2, to-AC stays 0,
     // no recalculation
     jsr acid_clear_armour
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #EGO_RESIST
     sta inv_ego + EQUIP_BODY
@@ -1503,7 +1576,7 @@ test_start:
     lda #PFLAG_RESIST_ACID
     sta player_pflags
     jsr acid_clear_armour
-    lda #ITEM_TYPE_CROWN_GOLDEN
+    lda #ITEM_SLOT_GOLDEN_CROWN
     sta inv_item_id + EQUIP_HEAD
     lda #3
     sta inv_to_ac + EQUIP_HEAD

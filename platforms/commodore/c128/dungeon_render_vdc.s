@@ -26,10 +26,11 @@
 .label rv_row_scratch_end = rv_row_occ + VIEWPORT_W
 
 // VDC-internal scratch lines for the overlap-safe right-shift block copy.
-// VDC RAM: chars $0000-$07CF, attrs $0800-$0FCF; $1000+ is unused.
+// VDC RAM: chars $0000-$07CF, attrs $0800-$0FCF, scratch $1000-$10FF, ITEM.CAT $1100+.
 .const RVSD_SCRATCH_CHAR = $1000
 .const RVSD_SCRATCH_ATTR = $1080
 .assert "VDC scratch lines clear of attribute RAM", RVSD_SCRATCH_CHAR >= VDC_ATTRIB_BASE + SCREEN_COLS * SCREEN_ROWS, true
+.assert "VDC scratch lines stay below $1100 ITEM.CAT span", RVSD_SCRATCH_ATTR + VIEWPORT_W <= $1100, true
 
 // viewport_update — Center viewport on player, clamp to map edges
 // Updates zp_view_x, zp_view_y
@@ -380,12 +381,13 @@ rv_render_row:
     sec
     sbc #$01
     tax                             // X = slot index
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp0
     txa
     jsr item_get_floor_color        // A = VIC color (identification-aware)
+    jsr floor_item_page_restore
     tax
     lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp1
@@ -1151,12 +1153,13 @@ render_single_tile:
     jsr floor_item_find_at
     bcc !rst_no_item+
     // X = slot — look up item type
-    lda fi_item_id,x
+    jsr floor_item_page_x          // A = item id, item_cur_page = its page
     tax
     jsr item_get_display_char
     sta zp_temp3
     txa                             // A = item type ID
     jsr item_get_floor_color        // A = VIC color (identification-aware)
+    jsr floor_item_page_restore
     tax
     lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp4

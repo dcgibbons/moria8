@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """Check a product-written save for the secondary-weapon fixture.
 
-The save-write smokes save with slot 32 (EQUIP_SECONDARY) holding a
+The save-write smokes save with slot 33 (EQUIP_SECONDARY) holding a
 Dagger (+3,+4) (Defender): fields id, qty, p1, to_hit, to_dam, to_ac,
-flags, ego = 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6. The 33-slot inventory
-section stores the 8 arrays back to back, so those 8 bytes sit 33 bytes
-apart, each one directly after slot 31 (reserved cloak: id $FF, fields 0).
+flags, ego = 2, 1, 0, 3, 4, 0, IF_IDENTIFIED, 6. The 34-slot inventory
+section stores the 8 arrays back to back, so those 8 bytes sit 34 bytes
+apart, each one directly after slot 32 (EQUIP_CLOAK: id $FF, fields 0).
 
 usage: check_save_secondary.py <save-file> <expected-version-byte>
 """
 from pathlib import Path
 import sys
 
-SLOTS = 33
-SECONDARY = [2, 1, 0, 3, 4, 0, 2, 6]
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+from item_ids import ITEM_PAGE_DAGGER, ITEM_SLOT_DAGGER  # noqa: E402
+
+EGO_DEFENDER = 6
+SLOTS = 34
+SECONDARY = [ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, EGO_DEFENDER | ITEM_PAGE_DAGGER]
 CLOAK = [0xFF, 0, 0, 0, 0, 0, 0, 0]
 
 
@@ -34,7 +38,7 @@ def main() -> int:
     if len(hits) != 1:
         print(f"FAIL: secondary-weapon pattern found {len(hits)} times (expected once)")
         return 1
-    print(f"PASS: slot 32 at offset {hits[0]} (inventory section from {hits[0] - 32})")
+    print(f"PASS: slot 33 at offset {hits[0]} (inventory section from {hits[0] - 33})")
     return 0
 
 

@@ -30,6 +30,7 @@ test_finish:
 
 .pc = $0840 "Main"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -48,26 +49,36 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 // dungeon_gen removed for MAP_BASE headroom
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 // monster_ai.s is not imported: spells never run the turn tick (stubs below).
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+.segment TestCreateOverlay
+#import "../../../../core/los_trace.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
+.segment TestCreateOverlay
 #import "../../../../core/special_rooms.s"
+.segment Default
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
@@ -80,12 +91,21 @@ test_finish:
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_destroy_area.s"
 #import "../../../../core/player_magic_utility.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
+.segment Default
 #import "../../../../core/turn.s"
 #import "../../../../core/ui_trampoline_stubs.s"
 
@@ -436,14 +456,18 @@ test_setup_destruction_map:
     jsr test_write_tile
 
     // Floor items: slot 0 under player (22,12); slot 1 outside (42,12)
-    lda #1
+    lda #ITEM_SLOT_GOLD_LARGE
     sta fi_item_id
     lda #22
     sta fi_x
     lda #12
     sta fi_y
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta fi_item_id + 1
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta fi_meta_hi + 1
+    }
     lda #42
     sta fi_x + 1
     lda #12

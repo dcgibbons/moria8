@@ -58,7 +58,7 @@ TRANSACTION_BODIES = {
     "apple2": (
         ROOT / "platforms/apple2/storage_mli.s",
         "hal_asset_load_prg_header",
-        ("a2_overlay_try_cache", "a2i_get_file_info", "a2i_open", "a2i_read", "a2i_close_open_ref"),
+        ("a2_overlay_try_cache", "a2_mli_set_pathname", "a2_pak_resolve"),
     ),
     "cx16": (
         ROOT / "platforms/cx16/storage_kernal.s",
@@ -95,7 +95,15 @@ TITLE_TRANSACTION_BODIES = {
     "apple2": (
         ROOT / "platforms/apple2/storage_mli.s",
         "hal_asset_load_title",
-        ("hal_storage_title_name", "a2i_get_file_info", "a2i_open", "a2i_read", "a2i_close_open_ref"),
+        (
+            "a2_mli_begin",
+            "A2_PAK_ENTRY_TITLE",
+            "a2_pak_open_seek",
+            "a2i_read",
+            "mmu_safe_map_write_ptr1",
+            "a2i_close_open_ref",
+            "a2_mli_end",
+        ),
     ),
     "cx16": (
         ROOT / "platforms/cx16/storage_kernal.s",
@@ -135,6 +143,13 @@ CLOSE_TRANSACTION_BODIES = {
         ("hal_storage_close", "hal_storage_clrchn"),
     ),
 }
+APPLE2_STORAGE = ROOT / "platforms/apple2/storage_mli.s"
+APPLE2_PAK_BODIES = (
+    ("a2_pak_load_to_dest", ("a2_mli_begin", "a2_pak_open_seek")),
+    ("a2_asset_read_close", ("a2i_read", "a2i_close_open_ref")),
+    ("a2_asset_done_ok", ("a2_mli_end",)),
+    ("a2_pak_open_seek", ("a2i_open", "a2i_read", "a2i_set_mark", "a2i_close_open_ref")),
+)
 OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
 # Disk asset loads go through asset_load_retry, which repeats the HAL load;
 # required ones through asset_load_required, which then asks for the disk.
@@ -321,6 +336,20 @@ def check_common_tier_loader() -> list[str]:
     return errors
 
 
+def check_apple2_pak_loader() -> list[str]:
+    """Verify Apple IIe MORIA8.PAK cold-load helpers perform expected MLI steps."""
+    errors: list[str] = []
+    for label, required_tokens in APPLE2_PAK_BODIES:
+        body = label_body(APPLE2_STORAGE, label)
+        if body is None:
+            errors.append(f"storage_mli.s: missing {label} body")
+            continue
+        for token in required_tokens:
+            if token not in body:
+                errors.append(f"storage_mli.s: {label} is missing {token}")
+    return errors
+
+
 def check_asset_name_namespace() -> list[str]:
     errors: list[str] = []
     for root in ASSEMBLY_ROOTS:
@@ -449,6 +478,11 @@ def main() -> int:
         for error in namespace_errors:
             print(error)
         failed = True
+    apple2_pak_errors = check_apple2_pak_loader()
+    if apple2_pak_errors:
+        for error in apple2_pak_errors:
+            print(error)
+        failed = True
 
     if failed:
         return 1
@@ -459,6 +493,7 @@ def main() -> int:
         f"{len(TRANSACTION_BODIES)} PRG-header transactions, "
         f"{len(TITLE_TRANSACTION_BODIES)} title transactions, "
         f"{len(CLOSE_TRANSACTION_BODIES)} standalone close transactions, "
+        "Apple IIe PAK loader, "
         "common overlay/string-bank/title/tier HAL paths, "
         "storage-owned asset filename namespace)."
     )

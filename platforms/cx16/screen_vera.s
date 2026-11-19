@@ -222,6 +222,18 @@ vera_set_addr_inc1:
 // Used by bolt animation in spell_effects.s.
 // Clobbers: A, X, Y
 screen_flash_at:
+    lda CX16_RAM_BANK_REG
+    pha
+    lda #CX16_BANK_MODAL
+    sta CX16_RAM_BANK_REG
+    jsr ovl_screen_flash_at
+    pla
+    sta CX16_RAM_BANK_REG
+    rts
+
+.segment ModalMiscOverlay
+
+ovl_screen_flash_at:
     stx sfa_row
     sty sfa_col
     stz VERA_CTRL
@@ -277,3 +289,5 @@ sfa_row:  .byte 0
 sfa_col:  .byte 0
 sfa_char: .byte 0
 sfa_attr: .byte 0
+
+.segment Default

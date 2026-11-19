@@ -42,7 +42,7 @@ test_finish:
 // The equipment flags, the resistance armour roll and its suffixes are not
 // exercised here (no equipping, no item spawns): out of the way above the
 // I/O hole (2026-11-11, the Lordly rings and the element touches).
-.segmentdef TestUnusedEgoArmour [start=$e100]
+.segmentdef TestUnusedEgoArmour [start=$e100, min=$e100, max=$fff9]
 #define PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {
     .segment TestUnusedEgoArmour
@@ -60,26 +60,38 @@ hal_player_recalc_pflags:
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 .segment TestCreateOverlay
 #import "../../../../core/background_data.s"
 #import "../../../../core/player_create.s"
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
 #import "../../../../core/monster_magic.s"
+// Adding to the pack (inv_add.s) is not exercised here: parked out of
+// reach, the runner's tripwire (tools/parked_tripwire.py) failing the
+// suite if it is ever called (the VMS weight limit, 2026-11-13, took
+// the body past MAP_BASE).
+#define INV_ADD_EXTERNAL
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+hal_item_cat_read_byte:
+    brk
+#undef INV_ADD_EXTERNAL
+.segment TestUnusedEgoArmour
+#import "../../../../core/inv_add.s"
 // Special rooms run in level generation only, never here: parked in the $D000
 // test overlay (the second ring hand, 2026-11-08, left the code 15 bytes over).
-.segment TestCreateOverlay
+.segment Default
 #import "../../../../core/special_rooms.s"
 .segment Default
 #define EGO_ARMOUR_SEGMENT_CUSTOM
@@ -100,19 +112,32 @@ hal_player_recalc_pflags:
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/projectile.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
 #import "../../../../core/player_magic_feedback.s"
+.segment TestUnusedEgoArmour
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
+.segment TestUnusedEgoArmour
 #import "../../../../core/combat.s"
+.segment Default
 #import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
+.segment TestUnusedEgoArmour
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
 #import "../../../../core/turn.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 store_init_all:
@@ -244,8 +269,8 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
-    // Test 1: onset sets both see-invisible flags, prints the eye-tingle text,
-    // spends 8 mana, and marks Sense Invisible worked.
+    // Test 1: onset adds 25..48 turns to zp_eff_see_inv (leaving zp_eff_invis 0),
+    // prints the eye-tingle text, spends 8 mana, and marks Sense Invisible worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_sense_invisible_prayer_state
     jsr player_pray
@@ -257,10 +282,11 @@ test_start:
     cmp #19
     bne !t1_fail+
     lda zp_eff_see_inv
-    cmp #1
-    bne !t1_fail+
+    cmp #25
+    bcc !t1_fail+
+    cmp #49
+    bcs !t1_fail+
     lda zp_eff_invis
-    cmp #1
     bne !t1_fail+
     lda tsip_huff_calls
     cmp #1
@@ -284,7 +310,7 @@ test_start:
     lda #$00
     sta tc_results + 0
 
-    // Test 2: refresh stays silent and ensures both flags remain active.
+    // Test 2: refresh stays silent and stacks +25..48 onto zp_eff_see_inv (26..49).
 !t2:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_sense_invisible_prayer_state
@@ -299,10 +325,11 @@ test_start:
     cmp #19
     bne !t2_fail+
     lda zp_eff_see_inv
-    cmp #1
-    bne !t2_fail+
+    cmp #26
+    bcc !t2_fail+
+    cmp #50
+    bcs !t2_fail+
     lda zp_eff_invis
-    cmp #1
     bne !t2_fail+
     lda tsip_huff_calls
     bne !t2_fail+

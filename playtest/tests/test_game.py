@@ -1,3 +1,4 @@
+import os
 import struct
 import tempfile
 import unittest
@@ -8,7 +9,8 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import C64, C64_CART, C64_NOREU, C128, PLUS4, PORTS
+from moria_playtest.ports import (APPLE2, ATARI8, ATARI8_CART, BBCMASTER, C64, C64_CART, C64_NOREU, C128, C128_CART,
+                                   CX16, CX16_CART, PLUS4, PLUS4_CART, PORTS)
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
 ABI = abimod.Abi(labels={"zp_player_x": 0x2B, "zp_player_y": 0x2C, "zp_player_hp_lo": 0x2D,
@@ -38,7 +40,7 @@ def obs(rows: dict[int, str], ret: int = 0, flags: int = 0, hp: int = 21) -> Obs
     zp[0x43] = flags
     zp[0x2D:0x2F] = struct.pack("<h", hp)
     screen = screen_bytes(rows)
-    return Observation(1, 0x10B9, 0xF2, 0x36, ret, 0, bytes(zp), bytes(111), bytes(384),
+    return Observation(1, 0x10B9, 0xF2, 0x36, ret, 0, bytes(zp), bytes(ABI.PL_STRUCT_SIZE), bytes(384),
                        screen, decode_rows(screen), abi=ABI)
 
 
@@ -51,7 +53,21 @@ class ClassifyTest(unittest.TestCase):
 
     def test_command_needs_resident_return_and_status(self) -> None:
         self.assertEqual(self.mode(obs(STATUS, ret=COMMAND_RET)), (Mode.COMMAND, "command"))
-        self.assertEqual(self.mode(obs({}, ret=COMMAND_RET))[0], Mode.UNKNOWN)
+        self.assertEqual(self.mode(obs({}, ret=COMMAND_RET)), (Mode.UNKNOWN, ""))
+
+    def test_shifted_status_row_at_command_loop_triggers_game_finding(self) -> None:
+        from moria_playtest.auditor import Auditor, Finding
+
+        for row in (20, 22, 23):
+            with self.subTest(row=row):
+                shifted = obs({row: STATUS[21]}, ret=COMMAND_RET)
+                shifted.mode, shifted.stage = self.mode(shifted)
+                self.assertEqual((shifted.mode, shifted.stage), (Mode.UNKNOWN, "status_row_shifted"))
+                self.assertEqual(Auditor().check(shifted, None),
+                                 [Finding("status_row_shifted", "game",
+                                          f"status line on row {row}, expected row 21")])
+        elsewhere = obs({22: STATUS[21]}, ret=COMMAND_RET + 3)
+        self.assertNotEqual(self.mode(elsewhere), (Mode.UNKNOWN, "status_row_shifted"))
 
     def test_genocides_type_prompt(self) -> None:
         """eff_genocide's "Type?" is answered with a creature letter, not
@@ -87,6 +103,7 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.mode(obs({**menu, 20: " Buy which item? (a-l)"})), (Mode.STORE, "buy_which"))
         self.assertEqual(self.mode(obs({**menu, 21: " Price: 3 gp. Buy? (Y/N)"})), (Mode.STORE, "buy_confirm"))
         self.assertEqual(self.mode(obs({**menu, 22: " Your pack is full."})), (Mode.STORE, "message"))
+        self.assertEqual(self.mode(obs({**menu, 23: " You can't carry that much weight."})), (Mode.STORE, "message"))
         self.assertEqual(self.mode(obs({**menu, 21: " Your offer? (Q=cancel)"})), (Mode.STORE, "haggle"))
 
     def test_chargen_stages(self) -> None:
@@ -118,6 +135,21 @@ class ClassifyTest(unittest.TestCase):
 
     def test_hp_is_signed(self) -> None:
         self.assertEqual(obs({}, hp=-3).hp, -3)
+
+
+class RoyalCrownTest(unittest.TestCase):
+    def test_every_row_of_the_winners_crown_shares_one_center(self) -> None:
+        """Maintainer, 2026-11-14: the victory crown's bottom row
+        (*#######*#######*) sat a column left of the rest. Every row of
+        core/royal.s's crown is centered on the same column, as VMS
+        death.inc's crown is, and keeps the rows' common width."""
+        import re
+        text = (launch.ROOT / "core" / "royal.s").read_text()
+        rows = re.findall(r'^royal_crown_\d+: \.text "([^"]*)"', text, re.M)
+        self.assertEqual(len(rows), 7)
+        self.assertEqual({len(row) for row in rows}, {len(rows[0])})
+        centers = {(len(row) - len(row.lstrip()) + len(row.rstrip()) - 1) / 2 for row in rows}
+        self.assertEqual(centers, {17.0}, rows)
 
 
 class HelpersTest(unittest.TestCase):
@@ -159,6 +191,89 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(game.key_exits, {0x26EC + 11: 0x26EC + 13, 0x2990 + 11: 0x2990 + 13})
         Mon.mem_get = lambda self, start, length, bank=0: bytes(length)   # not loaded: a cold boot
         self.assertEqual(Game(Mon(), abi, Path("."), port=C128).key_stops(), (0x26EC, 0x2990))   # type: ignore[arg-type]
+
+    def test_a_boot_loader_stop_at_a_key_entry_is_not_the_title(self) -> None:
+        """2026-11-13: every C128 boot of build d528b8f stopped in bootart128
+        ($2800-$5930), one of whose instructions began at input_get_key_fast's
+        $2975, and failed in resolve_sites (31 runs). boot() waits for the
+        game's own code: its command reader calling a key routine."""
+        from moria_playtest.game import Game
+
+        art = bytes.fromhex("d0f3e607c608d0eb60860 8a21f205229".replace(" ", "")) + bytes(64)
+        real = bytes.fromhex("a901854920752920 8e29".replace(" ", "")) + bytes(64)
+        class Mon:
+            loaded = False
+            resumes = 0
+            def resume(self) -> None:
+                Mon.resumes += 1
+                Mon.loaded = Mon.resumes >= 2       # the main program lands after the first stop
+            def mem_get(self, start: int, length: int, bank: int = 0) -> bytes:
+                return ((real if Mon.loaded else art) if start == 0x2930 else bytes(64))[:length]
+            def registers(self) -> dict[str, int]:
+                return {}
+
+        abi = abimod.Abi(labels={**ABI.labels, "input_get_command": 0x2930, "input_get_key": 0x26B2,
+                                 "input_get_key_fast": 0x2975}, consts=ABI.consts, all_symbols={})
+        game = Game(Mon(), abi, Path("."), port=C128)   # type: ignore[arg-type]
+        game.arm = lambda crash=True: None                                 # type: ignore[method-assign]
+        game.arm_crash = lambda: None                                      # type: ignore[method-assign]
+        game.key_exits = {0x2975: 0x2977}                                  # the loops found: no re-arm
+        stops: list[int] = []
+        def run(wall0: float) -> Observation:
+            game.step += 1
+            stops.append(Mon.resumes)
+            return Observation(game.step, 0x2975, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+        game._run_to_input = run                                            # type: ignore[method-assign]
+        resolved: list[bool] = []
+        game.resolve_sites = lambda: resolved.append(Mon.loaded)           # type: ignore[method-assign]
+        game.observe = lambda stop: "title"                                # type: ignore[method-assign]
+        self.assertEqual(game.boot(), "title")
+        self.assertEqual((stops, resolved, game.step), ([1, 2], [True], 1))   # the loader's stop passed over
+
+    def test_a_cartridge_boots_from_reset_with_its_key_checkpoint_set(self) -> None:
+        """2026-11-13, plus4-cart: VICE runs from launch, and the cartridge
+        reached the title's key wait before the monitor had set its
+        checkpoint; the title waited for a key forever (a step-0 hang, PC
+        $DC02). boot() resets the machine once the key checkpoint is set
+        (VICE's reset runs it, so no resume follows) and arms the KERNAL crash
+        entries, which a cold boot runs through, at the title. A disk port
+        loads for emulated seconds and boots as before."""
+        from moria_playtest.game import Game
+
+        abi = abimod.Abi(labels={**ABI.labels, "input_get_command": 0x19DB, "input_get_key": 0x1933},
+                         consts=ABI.consts, all_symbols={})
+        for port, expected in (
+                (PLUS4_CART, ["cp $1933", "reset", "stop", "cp $FFF6"]),
+                (PLUS4, ["cp $1933", "cp $FFF6", "resume", "stop"])):
+            calls: list[str] = []
+            class Mon:
+                def bank(self, name: str) -> int:
+                    return 0
+                def load_register_ids(self) -> dict[str, int]:
+                    return {}
+                def checkpoint_list(self) -> list[object]:
+                    return []
+                def checkpoint_set(self, start: int, *args: object, **kwargs: object) -> int:
+                    calls.append(f"cp ${start:04X}")
+                    return len(calls)
+                def reset(self) -> None:
+                    calls.append("reset")
+                def resume(self) -> None:
+                    calls.append("resume")
+                def mem_get(self, start: int, length: int, bank: int = 0) -> bytes:
+                    return (bytes([0x20, 0x33, 0x19]) + bytes(length))[:length]
+                def registers(self) -> dict[str, int]:
+                    return {}
+
+            game = Game(Mon(), abi, Path("."), port=port)   # type: ignore[arg-type]
+            def run(wall0: float) -> Observation:
+                calls.append("stop")
+                return Observation(1, 0x1933, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+            game._run_to_input = run                                        # type: ignore[method-assign]
+            game.resolve_sites = lambda: None                              # type: ignore[method-assign]
+            game.observe = lambda stop: "title"                            # type: ignore[method-assign]
+            self.assertEqual(game.boot(), "title")
+            self.assertEqual(calls, expected, port.name)
 
     def test_c128_key_returns_through_the_routine_it_stopped_in(self) -> None:
         """The C128 scans the keyboard matrix itself (no KERNAL buffer): a key
@@ -226,6 +341,70 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(budgets, [(60.0 + 400.0, 60.0 + 400.0), (60.0, 60.0)])
         self.assertEqual(C64.undump_catch_up, 0.0)
 
+    def test_c64_reu_cold_boot_uses_boot_emulated_seconds_then_restores_turn_limit(self) -> None:
+        """The C64's 512 KB REU cold boot preloads the monster catalog, 13
+        overlays and ITEM.CAT over stock 1541 IEC (~380 s emulated after
+        Phase 4): boot() uses Port.boot_emulated_seconds (600 s) across its
+        _run_to_input stops and restores the 300 s turn limit before the title."""
+        from moria_playtest.game import Game
+
+        self.assertEqual(C64.boot_emulated_seconds, 600.0)
+        self.assertEqual(C64_NOREU.boot_emulated_seconds, 0.0)
+        self.assertEqual(C64_CART.boot_emulated_seconds, 0.0)
+        self.assertEqual(PLUS4.boot_emulated_seconds, 0.0)
+        self.assertEqual(C128.boot_emulated_seconds, 0.0)
+
+        abi = abimod.Abi(labels={**ABI.labels, "input_get_command": 0x19DB, "input_get_key": 0x1933},
+                         consts=ABI.consts, all_symbols={})
+
+        class Mon:
+            def bank(self, name: str) -> int:
+                return 0
+            def load_register_ids(self) -> dict[str, int]:
+                return {}
+            def checkpoint_list(self) -> list[object]:
+                return []
+            def checkpoint_set(self, start: int, *args: object, **kwargs: object) -> int:
+                return 1
+            def resume(self) -> None:
+                pass
+            def mem_get(self, start: int, length: int, bank: int = 0) -> bytes:
+                return (bytes([0x20, 0x33, 0x19]) + bytes(length))[:length]
+            def registers(self) -> dict[str, int]:
+                return {}
+
+        seen: list[float] = []
+        game = Game(Mon(), abi, Path("."), port=C64)   # type: ignore[arg-type]
+        def run(wall0: float) -> Observation:
+            seen.append(game.hang_emulated_seconds)
+            return Observation(1, 0x1933, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+        game._run_to_input = run                                        # type: ignore[method-assign]
+        game.resolve_sites = lambda: seen.append(game.hang_emulated_seconds)   # type: ignore[method-assign]
+        game.observe = lambda stop: "title"                            # type: ignore[method-assign]
+        self.assertEqual(game.boot(), "title")
+        self.assertEqual(seen, [600.0, 300.0])
+        self.assertEqual(game.hang_emulated_seconds, 300.0)
+
+        def fail(wall0: float) -> Observation:
+            seen.append(game.hang_emulated_seconds)
+            raise RuntimeError("boom")
+        game._run_to_input = fail                                       # type: ignore[method-assign]
+        with self.assertRaises(RuntimeError):
+            game.boot()
+        self.assertEqual(game.hang_emulated_seconds, 300.0)
+
+        custom = Game(Mon(), abi, Path("."), port=C64, hang_emulated_seconds=900.0)   # type: ignore[arg-type]
+        custom_seen: list[float] = []
+        def run_custom(wall0: float) -> Observation:
+            custom_seen.append(custom.hang_emulated_seconds)
+            return Observation(1, 0x1933, 0xF0, 0, 0, 0, bytes(256), b"", b"", b"", [])
+        custom._run_to_input = run_custom                               # type: ignore[method-assign]
+        custom.resolve_sites = lambda: None                            # type: ignore[method-assign]
+        custom.observe = lambda stop: "title"                          # type: ignore[method-assign]
+        self.assertEqual(custom.boot(), "title")
+        self.assertEqual(custom_seen, [900.0])
+        self.assertEqual(custom.hang_emulated_seconds, 900.0)
+
     def test_snapshot_cpu_clock(self) -> None:
         module = b"MAINCPU" + bytes(9) + bytes([1, 4]) + struct.pack("<I", 125) + struct.pack("<Q", 286899223)
         with tempfile.TemporaryDirectory() as tmp:
@@ -270,6 +449,28 @@ class AbiTableTest(unittest.TestCase):
     @unittest.skipUnless(abimod.C64_VS.exists(), "C64 build symbols not present")
     def test_table_matches_build_and_sources(self) -> None:
         self.assertEqual(abimod.check(), [])
+
+    def test_the_key_wait_window_ends_past_input_get_key(self) -> None:
+        # 708f3df moved the Apple's igk_key, the window's end, from the byte
+        # after input_get_key to $0339: every Apple IIe run's boot an error.
+        for port in (APPLE2, ATARI8, BBCMASTER):
+            with self.subTest(port=port.name):
+                source = abimod.ROOT / port.labels["input_get_key"]
+                self.assertEqual(port.labels.get(port.key_wait_end), port.labels["input_get_key"])
+                lines = source.read_text(encoding="utf-8").splitlines()
+                start = lines.index("input_get_key:")
+                end = next((n for n, line in enumerate(lines) if line.split(":", 1)[0] == port.key_wait_end
+                            and ":" in line), None)
+                self.assertIsNotNone(end, f"{port.key_wait_end}: not a label in {source.name}")
+                self.assertGreater(end, start)
+
+    def test_a_window_ending_before_it_begins_is_refused(self) -> None:
+        from moria_playtest import mame
+        abi = abimod.Abi({"input_get_key": 0x1000, "input_wait_release": 0x1020}, {}, {})
+        self.assertEqual(mame.MameGame.tap_spec(abi, APPLE2), "latch,C000,1000,101F")
+        abi = abimod.Abi({"input_get_key": 0x1000, "input_wait_release": 0x0339}, {}, {})
+        with self.assertRaises(ValueError):
+            mame.MameGame.tap_spec(abi, APPLE2)
 
 
 def d64_image(files: dict[str, bytes]) -> bytes:
@@ -415,8 +616,17 @@ class C64VariantTest(unittest.TestCase):
             (root / "moria8-c64.d64").write_bytes(b"d")
             with self.assertRaisesRegex(launch.StaleDisk, "moria8-c64.crt is missing"):
                 launch.check_disk(build)
-            (root / "moria8-c64.crt").write_bytes(b"c")
+            cart = root / "moria8-c64.crt"
+            cart.write_bytes(b"c")
             launch.check_disk(build)                                 # newer than the program: fine
+            mtime = prg.stat().st_mtime
+            os.utime(cart, (mtime - 10, mtime - 10))
+            with self.assertRaisesRegex(launch.StaleDisk, "moria8-c64.crt is missing or older"):
+                launch.check_disk(build)
+            os.utime(cart, (mtime + 1, mtime + 1))
+            (root / "moria8-c64.d64").unlink()
+            with self.assertRaisesRegex(launch.StaleDisk, r"moria8-c64\.d64 is missing.*make disk64 cartridge64"):
+                launch.check_disk(build)
 
     def test_variants_use_the_c64_save_versions(self) -> None:
         from moria_playtest import queue
@@ -424,8 +634,121 @@ class C64VariantTest(unittest.TestCase):
             home = Path(tmp)
             hal = home / "builds" / "b" / "platforms" / "commodore" / "c64" / "hal"
             hal.mkdir(parents=True)
-            (hal / "storage_policy.s").write_text("")
+            (hal / "storage_policy.s").write_text(".const hal_storage_save_version = $22\n")
+            self.assertEqual(queue.save_versions("b", "c64-cart", home), (0x22, 0x22))
             self.assertEqual(queue.save_versions("b", "c64-cart", home), queue.save_versions("b", "c64", home))
+
+
+class CommodoreAndX16CartridgeTest(unittest.TestCase):
+    """Maintainer, 2026-11-13: the Plus/4 and the C128 play disk and
+    cartridge, the X16 only its cartridge. The Plus/4's c264 magic cart and
+    the C128's Magic Desk 128 boot as the C64's EasyFlash; xplus4 exits
+    restoring a snapshot taken with its cartridge, so that port boots each
+    character. The X16 cartridge boots under the testbench as
+    platforms/cx16/test_cartridge.py does it."""
+
+    def test_the_ports(self) -> None:
+        for port, base, cart, target in ((PLUS4_CART, PLUS4, "moria8-plus4.crt", "diskplus4 cartridgeplus4"),
+                                         (C128_CART, C128, "moria8-c128.crt", "disk128 cartridge128")):
+            self.assertIn(port.name, PORTS)
+            self.assertEqual(port.platform, base.name)
+            self.assertEqual((port.out, port.disk, port.cartridge), (f"{base.name}-cart", base.disk, cart))
+            self.assertEqual(port.disk_target, target)
+        self.assertFalse(PLUS4_CART.snapshots)
+        self.assertIn("-reu", C128.resource_args)
+        self.assertNotIn("-reu", C128_CART.resource_args)                 # the cartridge holds the overlays
+        self.assertEqual((CX16_CART.platform, CX16_CART.backend, CX16_CART.cartridge), ("cx16", "x16", "moria8-cx16.crt"))
+        self.assertIn("cx16_preload_banks", CX16_CART.labels)
+
+    def test_x16emu_boots_a_signature_less_copy_with_an_empty_fsroot(self) -> None:
+        from unittest import mock
+        from moria_playtest import x16
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cart = root / "moria8-cx16.crt"
+            cart.write_bytes(bytes(x16.CART_SIGNATURE) + b"CX16" + bytes(16))
+            launched: list[list[str]] = []
+
+            def popen(args, **kw):
+                launched.append(list(args))
+                return mock.Mock(stdin=None, stdout=mock.Mock(fileno=lambda: 0))
+            with mock.patch.object(x16.subprocess, "Popen", side_effect=popen), \
+                    mock.patch.object(x16.os, "set_blocking"), mock.patch.object(x16.X16Process, "ready"):
+                x16.X16Process(0, root, root / "cx16-cart", CX16_CART, cartridge=cart).start_x16("x16emu", "rom.bin")
+                x16.X16Process(1, root, root / "cx16", CX16).start_x16("x16emu", "rom.bin")
+            booted, disk = launched
+            media = root / "testbench.crt"
+            self.assertEqual(booted[booted.index("-cart") + 1], str(media))
+            self.assertEqual(media.read_bytes()[x16.CART_SIGNATURE], 0)            # the ROM stops at the testbench
+            self.assertEqual(cart.read_bytes()[x16.CART_SIGNATURE], ord("C"))      # the build's own untouched
+            self.assertEqual(list((root / "fsroot").iterdir()), [])               # saves only: no program files
+            self.assertEqual(disk[disk.index("-fsroot") + 1], str(root / "cx16"))  # the disk build as before
+            self.assertNotIn("-cart", disk)
+
+    def test_cx16_cartridge_check_disk_validates_crt_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "cx16-cart"
+            out.mkdir()
+            prg = out / "MORIA8.PRG"
+            prg.write_bytes(b"p")
+            build = launch.Build.from_out(root, CX16_CART)
+            self.assertTrue(build.disk.is_dir())
+            with self.assertRaisesRegex(launch.StaleDisk, r"moria8-cx16\.crt is missing"):
+                launch.check_disk(build)
+            cart = root / "moria8-cx16.crt"
+            cart.write_bytes(b"c")
+            mtime = prg.stat().st_mtime
+            os.utime(cart, (mtime - 10, mtime - 10))
+            with self.assertRaisesRegex(launch.StaleDisk, r"moria8-cx16\.crt is missing or older"):
+                launch.check_disk(build)
+            os.utime(cart, (mtime + 1, mtime + 1))
+            launch.check_disk(build)
+
+
+class Atari8CartridgeTest(unittest.TestCase):
+    """Maintainer, 2026-11-12: the Atari 8-bit MaxFlash cartridge is its own
+    build-queue platform, as the C64's EasyFlash is: MAME boots the .car
+    (-cart1) with the disk build's disk in drive 1 for saves."""
+
+    def test_the_port(self) -> None:
+        self.assertIn(ATARI8_CART.name, PORTS)
+        self.assertEqual(ATARI8_CART.platform, "atari8")
+        self.assertEqual((ATARI8_CART.out, ATARI8_CART.disk, ATARI8_CART.cartridge),
+                         ("atari8-cart", ATARI8.disk, "moria8-atari8.car"))
+        self.assertEqual(ATARI8_CART.disk_target.split(), ["diskatari8", "cartridgeatari8"])
+        self.assertEqual((ATARI8_CART.backend, ATARI8_CART.mame_machine), (ATARI8.backend, ATARI8.mame_machine))
+
+    def test_mame_boots_the_cartridge_with_the_disk_in_drive_1(self) -> None:
+        from unittest import mock
+        from moria_playtest import mame
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            disk, cart = root / "moria8-atari8.atr", root / "moria8-atari8.car"
+            launched: list[list[str]] = []
+
+            def popen(args, **kw):
+                launched.append(list(args))
+                return mock.Mock(poll=lambda: None)
+            with mock.patch.object(mame.subprocess, "Popen", side_effect=popen), \
+                    mock.patch.object(mame.MameProcess, "_open", return_value=None):
+                mame.MameProcess(0, root, disk, ATARI8_CART, cartridge=cart).start([], "")
+                mame.MameProcess(1, root, disk, ATARI8).start([], "")
+            car, plain = launched
+            at = car.index("-cart1")
+            self.assertEqual(car[at:at + 4], ["-cart1", str(cart), "-flop1", str(disk)])
+            self.assertNotIn("-cart1", plain)
+            self.assertIn("-flop1", plain)
+
+    def test_it_uses_the_atari_save_versions(self) -> None:
+        from moria_playtest import queue
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            hal = home / "builds" / "b" / "platforms" / "atari8" / "hal"
+            hal.mkdir(parents=True)
+            (hal / "storage_policy.s").write_text(".const hal_storage_save_version = $22\n")
+            self.assertEqual(queue.save_versions("b", "atari8-cart", home), (0x22, 0x22))
+            self.assertEqual(queue.save_versions("b", "atari8-cart", home), queue.save_versions("b", "atari8", home))
 
 
 class DiskCheckTest(unittest.TestCase):

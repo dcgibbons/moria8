@@ -21,7 +21,7 @@ from .abi import Abi
 from .ports import C64, Port
 from .screen import ROWS, decode_rows
 from .vice import (CMD_MEM_SET, CMD_REGISTERS_SET, RESP_CHECKPOINT_INFO, StopInfo, ViceMonitor,
-                   ViceTimeout, parse_checkpoint)
+                   ViceTimeout, parse_checkpoint, write_png)
 
 # KERNAL entry points that only run on a crash or reset, per port
 # (ports.Port.crash_entries); the C64's are named here for the M0 report.
@@ -62,6 +62,7 @@ STORE_STAGES = (
     ("buy_which", "Buy which item?"),
     ("message", "You cannot afford that."),
     ("message", "Your pack is full."),
+    ("message", "You can't carry that much weight."),   # VMS weight limit (2026-11-13)
     ("message", "Get out of my store!"),
     ("haggle", "Your offer?"),
     ("haggle", "Take it? (Y/N)"),
@@ -193,9 +194,16 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.DEATH, "tombstone"
     if obs.game_flags & abi.GAME_FLAG_OVER and "Disk Setup" in obs.rows[0]:
         return Mode.DEATH, "disk_setup"  # score save asks for a save drive
-    status = obs.rows[21]
-    if obs.ret == command_ret and "LV:" in status and "DL:" in status:
-        return Mode.COMMAND, "command"
+    # The status line must sit on hal_layout_status_row (row 21). If a screen
+    # bug scrolls it onto another row at the command loop (e.g. Plus/4 drive
+    # output on 2026-11-17), flag status_row_shifted so the auditor fails the
+    # run with cls="game" instead of masking corrupted geometry.
+    if obs.ret == command_ret:
+        status_row = abi.hal_layout_status_row
+        if "LV:" in obs.rows[status_row] and "DL:" in obs.rows[status_row]:
+            return Mode.COMMAND, "command"
+        if any("LV:" in row and "DL:" in row for i, row in enumerate(obs.rows) if i != status_row):
+            return Mode.UNKNOWN, "status_row_shifted"
     if "-more-" in obs.rows[0] or "-more-" in obs.rows[1]:
         return Mode.DISMISS, "more"
     if "B)uy  S)ell  Q)uit" in screen:
@@ -298,8 +306,9 @@ class Game:
 
     # -- setup ------------------------------------------------------------
 
-    def arm(self) -> None:
-        """(Re-)arm checkpoints; required after connect, undump, or restart."""
+    def arm(self, crash: bool = True) -> None:
+        """(Re-)arm checkpoints; required after connect, undump, or restart.
+        ``crash=False`` leaves the KERNAL crash entries unarmed (``arm_crash``)."""
         mon = self.mon
         self.ram = mon.bank("ram")
         self.io = mon.bank("io")
@@ -310,9 +319,14 @@ class Game:
             mon.checkpoint_delete(cp.number)
         self.input_cps = {mon.checkpoint_set(addr): addr for addr in self.key_stops()}
         self.input_cp = next(iter(self.input_cps))
-        self.crash_cps = {mon.checkpoint_set(addr): addr for addr in self.port.crash_entries}
+        self.crash_cps = {}
+        if crash:
+            self.arm_crash()
         self.seed_cp = None
         self.stop_hooks = {}   # their checkpoints were deleted above
+
+    def arm_crash(self) -> None:
+        self.crash_cps = {self.mon.checkpoint_set(addr): addr for addr in self.port.crash_entries}
 
     def key_entries(self) -> tuple[int, ...]:
         return tuple(getattr(self.abi, name) for name in self.port.key_entries)
@@ -432,18 +446,52 @@ class Game:
 
     def boot(self) -> Observation:
         """From a fresh VICE process: arm, run to the title menu, resolve sites."""
-        self.arm()
-        self.mon.resume()
-        obs = self._run_to_input(time.monotonic())
-        if self.port.key_feed == "return" and obs.pc not in self.key_exits:
-            # The game is loaded now: stop in the wait loop instead (key_stops),
-            # the same key wait, not a new step.
-            self.arm()
+        # VICE runs from launch, and a cartridge reaches the title's key wait
+        # ~5 ms of warp after the monitor is armed: on a loaded host the game
+        # passed input_get_key before its checkpoint was set and waited for a
+        # key forever (2026-11-13, plus4-cart, PC $1942 and $DC02). Booted
+        # again from reset (which runs it), the checkpoints are in place; the
+        # crash entries wait for the title, as a cold boot runs the KERNAL's
+        # reset code (the C64's $FCE2, the C128's $FF3D).
+        self.arm(crash=not self.port.cartridge)
+        if self.port.cartridge:
+            self.mon.reset()
+        else:
             self.mon.resume()
-            obs = self._run_to_input(time.monotonic())
-            self.step -= 1
+        wall0 = time.monotonic()
+        saved_hang = self.hang_emulated_seconds
+        self.hang_emulated_seconds = max(saved_hang, self.port.boot_emulated_seconds)
+        try:
+            obs = self._run_to_input(wall0)
+            while not self.game_loaded():
+                # A boot loader ran over the game's addresses: not a key wait.
+                self.step -= 1
+                self.mon.resume()
+                obs = self._run_to_input(wall0)
+            if not self.crash_cps:
+                self.arm_crash()
+            if self.port.key_feed == "return" and obs.pc not in self.key_exits:
+                # The game is loaded now: stop in the wait loop instead (key_stops),
+                # the same key wait, not a new step.
+                self.arm()
+                self.mon.resume()
+                obs = self._run_to_input(time.monotonic())
+                self.step -= 1
+        finally:
+            self.hang_emulated_seconds = saved_hang
         self.resolve_sites()
         return self.observe(StopInfo(pc=obs.pc, registers=self.mon.registers()))
+
+    def game_loaded(self) -> bool:
+        """The game's own code is in memory: its command reader calls a key
+        routine, as ``resolve_sites`` needs. A boot loader runs over the
+        game's addresses first (the C128's bootart128, $2800-$5930), and when
+        one of its instructions starts where a key routine will be, the stop
+        there is not the title's key wait: every C128 boot of 2026-11-13's
+        d528b8f stopped in bootart128 at input_get_key_fast's $2975 and
+        failed in resolve_sites (31 runs)."""
+        code = self.mon.mem_get(self.abi.input_get_command, 64, self.ram)
+        return any(bytes([0x20, e & 0xFF, e >> 8]) in code for e in self.key_entries())
 
     def _run_to_input(self, wall0: float) -> Observation:
         mon = self.mon
@@ -575,6 +623,77 @@ class Game:
         self.seed_cp = None
 
     # -- snapshots --------------------------------------------------------
+
+    def screenshot(self, path: Path) -> bool:
+        """The screen as a PNG where the emulator gives its display (VICE; the
+        C128's 80-column VDC); False on the MAME and X16 ports."""
+        if self.port.backend != "vice":
+            return False
+        if self.port.screen_bank == "vdc":
+            self.vdc_screenshot(path)
+        elif self.port.color_bank == "io":
+            self.vic_screenshot(path)
+        else:
+            self.mon.screenshot(path)   # the Plus/4's TED: VICE's picture, which may lag in warp
+        return True
+
+    def vic_screenshot(self, path: Path, border: int = 32) -> None:
+        """The C64's screen drawn from its RAM: VICE's picture lags in warp,
+        which skips frames (a whole menu behind, 2026-11-12). The character
+        set where the VIC-II finds it (CIA 2's bank, $D018; the character ROM
+        in banks 0 and 2), screen and colour RAM, $D020/$D021, VICE's palette."""
+        mon, cols = self.mon, self.port.screen_cols
+        io = mon.bank("io")
+        dd00, d018 = mon.mem_get(0xDD00, 1, io)[0], mon.mem_get(0xD018, 1, io)[0]
+        frame, back = (c & 0x0F for c in mon.mem_get(0xD020, 2, io))
+        base, chars = (3 - (dd00 & 3)) * 0x4000, ((d018 >> 1) & 7) * 0x800
+        if base in (0x0000, 0x8000) and chars in (0x1000, 0x1800):
+            font = mon.mem_get(0xD000 + chars - 0x1000, 0x800, mon.bank("rom"))
+        else:
+            font = mon.mem_get(base + chars, 0x800, self.ram)
+        screen = mon.mem_get(getattr(self.abi, self.port.screen_const), cols * ROWS, mon.bank(self.port.screen_bank))
+        colours = mon.mem_get(getattr(self.abi, self.port.color_const), cols * ROWS, io)
+        palette = mon.palette()
+        edge = palette[frame] * (cols * 8 + 2 * border)
+        lines = [b"\0" + edge] * border
+        for row in range(ROWS):
+            for y in range(8):
+                line = bytearray(b"\0" + palette[frame] * border)
+                for col in range(cols):
+                    at = row * cols + col
+                    bits, fg = font[screen[at] * 8 + y], palette[colours[at] & 0x0F]
+                    line += b"".join(fg if bits & (0x80 >> x) else palette[back] for x in range(8))
+                lines.append(bytes(line + palette[frame] * border))
+        lines += [b"\0" + edge] * border
+        write_png(path, cols * 8 + 2 * border, ROWS * 8 + 2 * border, b"".join(lines))
+
+    def vdc_screenshot(self, path: Path, charset: int = 0x2000) -> None:
+        """The C128's 80 columns drawn from VDC RAM: VICE's VDC picture does not
+        refresh in warp (black, or the power-on pattern, 2026-11-12). Screen
+        and attribute RAM (bit 7 the second character set, bit 6 reverse, bits
+        0-3 the RGBI colour) over the KERNAL's font at ``charset``, each
+        scanline doubled for the VDC's tall pixels."""
+        bank = self.mon.bank(self.port.screen_bank)
+        cells = self.port.screen_cols * ROWS
+        screen = self.mon.mem_get(getattr(self.abi, self.port.screen_const), cells, bank)
+        attrs = self.mon.mem_get(getattr(self.abi, self.port.color_const), cells, bank)
+        font = self.mon.mem_get(charset, 0x2000, bank)
+        palette = self.mon.palette(vdc=True)
+        black = palette[0]
+        lines = []
+        for row in range(ROWS):
+            for y in range(8):
+                line = bytearray(b"\0")
+                for col in range(self.port.screen_cols):
+                    at = row * self.port.screen_cols + col
+                    attr = attrs[at]
+                    bits = font[((screen[at] + (256 if attr & 0x80 else 0)) * 16 + y) % len(font)]
+                    if attr & 0x40:
+                        bits ^= 0xFF
+                    fg = palette[attr & 0x0F]
+                    line += b"".join(fg if bits & (0x80 >> x) else black for x in range(8))
+                lines += [bytes(line), bytes(line)]
+        write_png(path, self.port.screen_cols * 8, ROWS * 16, b"".join(lines))
 
     def dump(self, path: Path) -> None:
         if self.mon.mem_get(self.abi.KBDBUF_COUNT, 1, self.ram)[0] != 0:

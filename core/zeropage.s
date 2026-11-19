@@ -162,7 +162,7 @@
 .label zp_eff_hero     = $5a   // Heroism timer
 .label zp_eff_regen    = $5b   // Extra regeneration timer
 .label eff_resist_cold_timer = $5c // Resist cold timer
-.label zp_eff_see_inv  = $5d   // See invisible flag
+.label zp_eff_see_inv  = $5d   // See invisible timer
 .label zp_eff_word_recall = $5e // Word of recall timer
 .label zp_death_source = $5f   // Death cause (monster index or special DEATH_* code)
 

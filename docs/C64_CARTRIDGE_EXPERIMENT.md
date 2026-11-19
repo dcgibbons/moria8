@@ -266,10 +266,11 @@ raw EasyFlash binary rather than a CRT file.
 preserving the generated image and its recorded hash.
 
 Outputs are `build/moria8-c64.crt` and the accompanying `.json`
-manifest. The CRT is native EasyFlash type 32, standard subtype 0, with both
-flash chips represented (1 MiB plus CRT headers). It uses 15 asset descriptors
-and about 107 KiB of ROML, including embedded license/source-offer text. ROMH
-bank 0 contains reset code; the other ROMH banks are erased. No EAPI, cartridge
+manifest. The CRT is native EasyFlash type 32, standard subtype 0, using
+canonical sparse EasyFlash `CHIP` blocks (omitting erased `$FF` 8 KB flash
+banks, matching `cartconv` and VICE — ~121 KiB / 15 `CHIP` blocks for ~109 KiB
+of ROML plus Bank 0 ROMH reset code; unrepresented flash banks default to `$FF`).
+ROMH bank 0 contains reset code; the other ROMH banks are erased. No EAPI, cartridge
 RAM, REU, or flash writes are required. Use your normal EasyFlash/EF3 flashing
 tool to install the CRT in a game slot. The host flashing tool programs the
 cartridge; the game itself never programs it.

@@ -186,9 +186,6 @@ tier_init:
     jsr c128_preload_all_tiers
 #endif
     jsr c128_preload_all_overlays
-#if C128_TEST_CACHE_SURVIVAL
-    jsr c128_test_snapshot_cache_probes
-#endif
     rts
 #endif
 

@@ -570,9 +570,15 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     dumps.append(connector.send_command(f"m {start} {end}"))
                 except Exception as exc:
                     dumps.append(f"{start}: {exc}")
-            if args.until_pass:
+            if args.until_pass and result.reason.startswith("timeout"):
                 if any(monitor_text_has_pc(dump, pass_addr) for dump in dumps):
                     result = MonitorTestResult(True, "target PC reached after timeout", result.last_status)
+                    byte_error = check_byte_expectations(connector, args)
+                    if byte_error:
+                        result = MonitorTestResult(False, byte_error, result.last_status)
+                    screen_error = check_screen_expectations(connector, args)
+                    if screen_error and result.passed:
+                        result = MonitorTestResult(False, screen_error, result.last_status)
             if (
                 not result.passed
                 and args.pass_on_script_exhausted
@@ -780,7 +786,6 @@ def main() -> int:
         ".load_result",
         ".save_io_error",
         ".save_magic_buf",
-        ".load_save_version",
         ".save_device",
         ".save_cksum_lo",
         ".save_cksum_hi",

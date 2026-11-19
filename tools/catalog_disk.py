@@ -1,30 +1,52 @@
 #!/usr/bin/env python3
 """The monster catalog's disk files for the C64, Plus/4 and Atari 8-bit.
 
-records OUTDIR IDX_LOAD_ADDRESS
+records OUTDIR IDX_LOAD_ADDRESS [--ext]
     Write MONSTER.CAT1-4 (PRG files) from the committed catalog sources
     (platforms/shared/catalog: fields, names, index), in the record layout of
-    platforms/commodore/common/catalog_records.s.
+    platforms/commodore/common/catalog_records.s. With --ext, also write 9-sector
+    MONSTER.EXT (31 x 8 B = 248 <= 252 B/sector) and include its 9-sector table
+    in MONSTER.IDX.
 
-    It also writes MONSTER.IDX with an empty sector table, for images that
-    `fix` completes.
+ext-records OUTDIR [LOAD_ADDRESS]
+    Write 9-sector 1541 sector-packed monster.ext PRG (default load $E000) into OUTDIR.
 
-index D64 OUTFILE LOAD_ADDRESS
-    Read where MONSTER.CAT1-4 landed on the D64 image and write MONSTER.IDX
-    (a PRG loading at LOAD_ADDRESS): the level index, then the track and the
-    sector of every record sector, in record order. Run after the record
-    files are written and before anything that could move them.
+index D64 OUTFILE LOAD_ADDRESS [--ext]
+    Read where MONSTER.CAT1-4 (and MONSTER.EXT when --ext is passed) landed on
+    the D64 image and write MONSTER.IDX (a PRG loading at LOAD_ADDRESS).
+
+ext-index D64 OUTFILE LOAD_ADDRESS
+    Alias for `index D64 OUTFILE LOAD_ADDRESS --ext` (writes 249-byte MONSTER.IDX
+    covering both 56 MONSTER.CAT1-4 sectors and 9 MONSTER.EXT sectors).
 
 fix D64
     On an image holding MONSTER.CAT1-4 and MONSTER.IDX, rewrite MONSTER.IDX's
-    sector table in place for where the records landed on it (the test
-    runners' images). An image without them is left alone.
+    sector table in place (automatically including MONSTER.EXT's 9 sectors when
+    MONSTER.EXT is present and MONSTER.IDX carries the extended table).
 
-atari OUTFILE
-    Write MONSTER.CAT for the Atari 8-bit: the same records,
-    A8_CATALOG_RECORDS_PER_SECTOR to each DOS 2.5 sector's data
-    (platforms/atari8/monster_catalog_a8.s), no load header. tools/make_atr.py
-    writes it contiguous, so record n is in file sector n / 2.
+atari OUTFILE [--phase5-records]
+    Write MONSTER.CAT for the Atari 8-bit: 2 records per 125-byte DOS 2.5 sector
+    (49 B legacy or 57 B with --phase5-records: 2 x 57 = 114 <= 125 B, 140 sectors),
+    no load header.
+
+item-raw OUTDIR
+    Write headerless ITEM.CAT ('ITM2', <= 7,800 B) from
+    platforms/shared/item_catalog/item_cat_data.s into OUTDIR/ITEM.CAT.
+
+item-atari OUTFILE
+    Write headerless Atari DOS 2.5 ITEM.CAT payload to OUTFILE.
+
+item-records OUTDIR PRG_LOAD_ADDRESS IDX_LOAD_ADDRESS
+    Write Commodore PRG item.cat and empty item.idx into OUTDIR.
+
+item-index D64 OUTFILE LOAD_ADDRESS
+    Write item.idx from where item.cat landed on D64.
+
+item-fix D64
+    Rewrite item.idx's sector table in place on a D64 carrying item.cat and item.idx.
+
+item-selftest
+    Run offline self-tests on ITEM.CAT extraction and disk packing shapes.
 
 docs/MONSTER_CATALOG_DESIGN.md, "C64 and Plus/4" and "Atari 8-bit".
 """
@@ -34,15 +56,26 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
+import build_catalog as bc  # noqa: E402
 import huff_encoder as huff  # noqa: E402
 
 CATALOG = ROOT / "platforms/shared/catalog"
+ITEM_CATALOG = ROOT / "platforms/shared/item_catalog"
 LAYOUT = ROOT / "platforms/commodore/common/catalog_records.s"
 ATARI_LAYOUT = ROOT / "platforms/atari8/monster_catalog_a8.s"
 FILES = [f"monster.cat{i}" for i in range(1, 5)]
+EXT_FILE = "monster.ext"
 INDEX_FILE = "monster.idx"
+ITEM_FILE = "item.cat"
+ITEM_INDEX_FILE = "item.idx"
+EXT_RECORD_SIZE = bc.EXT_SOA_FIELD_COUNT          # 8 B
+EXT_RECORDS_PER_SECTOR = bc.EXT_1541_PER_SECTOR   # 31 (31 * 8 = 248 <= 252 B)
+EXT_SECTORS = bc.EXT_1541_SECTORS                 # 9  (9 * 31 = 279, 0 straddles)
+EXT_SECTOR_HEADER = bc.EXT_1541_SECTOR_HEADER     # 2 B
+EXT_LOAD_DEFAULT = 0xE000
 SECTORS_PER_TRACK = [0, *([21] * 17), *([19] * 7), *([18] * 6), *([17] * 5)]
 
 
@@ -84,7 +117,10 @@ def layout() -> dict[str, int]:
     return {**c, **idx}
 
 
-def records() -> list[bytes]:
+def records(*, phase5: bool = False) -> list[bytes]:
+    if phase5:
+        spec_doc = bc.load_spec()
+        return bc.fixed_records(spec_doc["creatures"], phase5=True)
     lay = layout()
     fields = byte_arrays((CATALOG / "catalog_fields.s").read_text())
     names = re.findall(r"^catn_\d+:.*// (.+?)\s*$", (CATALOG / "catalog_names.s").read_text(), re.M)
@@ -99,9 +135,39 @@ def records() -> list[bytes]:
     return out
 
 
-def write_records(outdir: Path, idx_load: int) -> None:
+def ext_records() -> list[bytes]:
+    """Return 279 8-byte extended records from platforms/shared/catalog/catalog_ext_fields.s."""
+    ext_path = CATALOG / "catalog_ext_fields.s"
+    arrays = byte_arrays(ext_path.read_text())
+    cols = [arrays[label] for label in bc.EXT_FIELD_LABELS]
+    assert all(len(col) == bc.CREATURE_COUNT for col in cols)
+    return [bytes(col[n] for col in cols) for n in range(bc.CREATURE_COUNT)]
+
+
+def ext_sector_bytes(load: int = EXT_LOAD_DEFAULT) -> bytes:
+    """Return 9-sector 1541 sector-packed monster.ext PRG (31 x 8 B = 248 <= 252 B/sec = 2,286 B)."""
+    recs = ext_records()
+    assert len(recs) == bc.CREATURE_COUNT == EXT_SECTORS * EXT_RECORDS_PER_SECTOR
+    sectors: list[bytes] = []
+    for s in range(EXT_SECTORS):
+        body = b"".join(recs[s * EXT_RECORDS_PER_SECTOR : (s + 1) * EXT_RECORDS_PER_SECTOR])
+        assert len(body) <= 254 - EXT_SECTOR_HEADER
+        first_id = s * EXT_RECORDS_PER_SECTOR
+        hdr = bytes([load & 0xFF, (load >> 8) & 0xFF]) if s == 0 else bytes([first_id & 0xFF, (first_id >> 8) & 0xFF])
+        sectors.append(hdr + body + bytes((254 - EXT_SECTOR_HEADER) - len(body)))
+    return b"".join(sectors)
+
+
+def write_ext_records(outdir: Path, load: int = EXT_LOAD_DEFAULT) -> Path:
+    outdir.mkdir(parents=True, exist_ok=True)
+    out = outdir / EXT_FILE
+    out.write_bytes(ext_sector_bytes(load))
+    return out
+
+
+def write_records(outdir: Path, idx_load: int, *, include_ext: bool = False) -> None:
     lay = layout()
-    per, size = lay["CATALOG_RECORDS_PER_SECTOR"], lay["CATALOG_RECORD_SIZE"]
+    per = lay["CATALOG_RECORDS_PER_SECTOR"]
     recs = records()
     sectors = []
     for s in range(lay["CATALOG_RECORD_SECTORS"]):
@@ -114,33 +180,41 @@ def write_records(outdir: Path, idx_load: int) -> None:
         data = bytearray(b"".join(chunk))
         data[0:2] = bytes([load & 0xFF, load >> 8])   # the first header is the load address
         (outdir / name).write_bytes(bytes(data))
-    (outdir / INDEX_FILE).write_bytes(index_bytes(None, idx_load))
+    if include_ext:
+        write_ext_records(outdir, load)
+    (outdir / INDEX_FILE).write_bytes(index_bytes(None, idx_load, include_ext=include_ext))
 
 
-def atari_records() -> bytes:
+def atari_records(*, phase5: bool = False) -> bytes:
     """MONSTER.CAT's data for the Atari: per DOS 2.5 sector (its data bytes),
     the records in turn, then padding; the last sector holds what is left."""
     a8 = consts(ATARI_LAYOUT)
     per, data = a8["A8_CATALOG_RECORDS_PER_SECTOR"], a8["A8_CATALOG_SECTOR_DATA"]
-    recs = records()
+    recs = records(phase5=phase5)
     sectors = -(-len(recs) // per)
     assert sectors == a8["A8_CATALOG_SECTORS"], (sectors, a8["A8_CATALOG_SECTORS"])
     out = bytearray()
     for s in range(sectors):
         body = b"".join(recs[s * per:(s + 1) * per])
+        assert len(body) <= data, (s, len(body), data)
         out += body + bytes(data - len(body)) if s < sectors - 1 else body
     return bytes(out)
 
 
-def index_bytes(image: bytes | None, load: int) -> bytes:
+def index_bytes(image: bytes | None, load: int, *, include_ext: bool = False) -> bytes:
     """MONSTER.IDX: the load address, the level index and the sector table of
-    the records on ``image`` (zeros without one)."""
+    the records on ``image`` (zeros without one), plus MONSTER.EXT sectors when include_ext."""
     lay = layout()
     index = byte_arrays((CATALOG / "catalog_index.s").read_text())
-    data = index["cat_level_raw"] + index["cat_level_playable"] + index["cat_available"]
+    bitmap = index["cat_available"] if "cat_available" in index else index["cat_undead"]
+    data = index["cat_level_raw"] + index["cat_level_playable"] + bitmap
     count = lay["CATALOG_RECORD_SECTORS"]
     sectors = record_sectors(image) if image is not None else [(0, 0)] * count
     data += [t for t, _ in sectors] + [s for _, s in sectors]
+    if include_ext:
+        ext_secs = ext_sectors(image) if image is not None else [(0, 0)] * EXT_SECTORS
+        data += [t for t, _ in ext_secs] + [s for _, s in ext_secs]
+    assert len(data) <= 252, f"MONSTER.IDX body ({len(data)} B) exceeds single 1541 sector"
     return bytes([load & 0xFF, load >> 8] + data)
 
 
@@ -159,6 +233,22 @@ def record_sectors(image: bytes) -> list[tuple[int, int]]:
     for s, (t, sec) in enumerate(sectors):
         off = sector_offset(t, sec) + 2 + lay["CATALOG_SECTOR_HEADER"]
         assert image[off] | image[off + 1] << 8 == s * per, (s, t, sec)
+    return sectors
+
+
+def ext_sectors(image: bytes) -> list[tuple[int, int]]:
+    """Locate MONSTER.EXT on a D64 image and verify all 9 sector payloads."""
+    dirs = directory(image)
+    if EXT_FILE not in dirs:
+        raise SystemExit(f"no {EXT_FILE} on the image")
+    sectors = chain(image, *dirs[EXT_FILE])
+    assert len(sectors) == EXT_SECTORS, (len(sectors), EXT_SECTORS)
+    recs = ext_records()
+    body_len = EXT_RECORDS_PER_SECTOR * EXT_RECORD_SIZE
+    for s, (t, sec) in enumerate(sectors):
+        off = sector_offset(t, sec) + 2 + EXT_SECTOR_HEADER
+        expected = b"".join(recs[s * EXT_RECORDS_PER_SECTOR : (s + 1) * EXT_RECORDS_PER_SECTOR])
+        assert image[off : off + body_len] == expected, (s, t, sec)
     return sectors
 
 
@@ -188,8 +278,8 @@ def directory(image: bytes) -> dict[str, tuple[int, int]]:
     return out
 
 
-def write_index(d64: Path, out: Path, load: int) -> None:
-    out.write_bytes(index_bytes(d64.read_bytes(), load))
+def write_index(d64: Path, out: Path, load: int, *, include_ext: bool = False) -> None:
+    out.write_bytes(index_bytes(d64.read_bytes(), load, include_ext=include_ext))
 
 
 def fix_index(d64: Path) -> None:
@@ -201,24 +291,152 @@ def fix_index(d64: Path) -> None:
     assert len(blocks) == 1, f"{INDEX_FILE} spans {len(blocks)} blocks"
     off = sector_offset(*blocks[0])
     old = image[off + 2: off + 4]
-    data = index_bytes(bytes(image), old[0] | old[1] << 8)
+    ext_idx_len = len(index_bytes(None, 0, include_ext=True))
+    include_ext = EXT_FILE in dirs and image[off + 1] == ext_idx_len + 1
+    data = index_bytes(bytes(image), old[0] | old[1] << 8, include_ext=include_ext)
     assert image[off] == 0 and image[off + 1] == len(data) + 1, "MONSTER.IDX is not the expected size"
     image[off + 2: off + 2 + len(data)] = data
     d64.write_bytes(bytes(image))
 
 
+def item_catalog_bytes() -> bytes:
+    """Return packed 'ITM2' ITEM.CAT bytes from platforms/shared/item_catalog/item_cat_data.s."""
+    lay = consts(ITEM_CATALOG / "item_cat_layout.s")
+    arrays = byte_arrays((ITEM_CATALOG / "item_cat_data.s").read_text())
+    data = bytes(arrays["item_cat_data"])
+    assert data[:4] == b"ITM2", "item_cat_data.s must begin with 'ITM2' magic"
+    assert len(data) == lay["ITMCAT_TOTAL_SIZE"] <= lay["ITMCAT_SIZE_CAP"], (
+        len(data),
+        lay["ITMCAT_TOTAL_SIZE"],
+        lay["ITMCAT_SIZE_CAP"],
+    )
+    return data
+
+
+def write_item_raw(outdir: Path) -> Path:
+    """Write headerless binary ITEM.CAT into outdir (e.g. build/)."""
+    outdir.mkdir(parents=True, exist_ok=True)
+    out = outdir / "ITEM.CAT"
+    out.write_bytes(item_catalog_bytes())
+    return out
+
+
+def item_atari_bytes() -> bytes:
+    """Return Atari DOS 2.5 contiguous ITEM.CAT payload (125 bytes/sector, no PRG header)."""
+    return item_catalog_bytes()
+
+
+def item_sectors(image: bytes, expected_len: int) -> list[tuple[int, int]]:
+    """Locate the D64 track/sector chain for item.cat and verify its 'ITM2' header."""
+    dirs = directory(image)
+    if ITEM_FILE not in dirs:
+        raise SystemExit(f"no {ITEM_FILE} on the image")
+    sectors = chain(image, *dirs[ITEM_FILE])
+    expected_sectors = -(-(expected_len + 2) // 254)
+    assert len(sectors) == expected_sectors, (len(sectors), expected_sectors)
+    off = sector_offset(*sectors[0]) + 4  # skip T/S link (2B) + PRG load address (2B)
+    assert image[off:off + 4] == b"ITM2", "item.cat on image missing 'ITM2' header"
+    return sectors
+
+
+def item_index_bytes(image: bytes | None, load: int) -> bytes:
+    """item.idx PRG: [load_lo, load_hi, size_lo, size_hi, sector_count, T..., S...]."""
+    blob = item_catalog_bytes()
+    sector_count = -(-(len(blob) + 2) // 254)
+    sectors = item_sectors(image, len(blob)) if image is not None else [(0, 0)] * sector_count
+    header = [load & 0xFF, load >> 8, len(blob) & 0xFF, len(blob) >> 8, sector_count]
+    data = header + [t for t, _ in sectors] + [s for _, s in sectors]
+    assert len(data) - 2 <= 254, "item.idx exceeds one 1541 sector"
+    return bytes(data)
+
+
+def write_item_records(outdir: Path, prg_load: int, idx_load: int) -> None:
+    """Write Commodore PRG item.cat and empty item.idx into outdir (e.g. build/)."""
+    outdir.mkdir(parents=True, exist_ok=True)
+    blob = item_catalog_bytes()
+    (outdir / ITEM_FILE).write_bytes(bytes([prg_load & 0xFF, prg_load >> 8]) + blob)
+    (outdir / ITEM_INDEX_FILE).write_bytes(item_index_bytes(None, idx_load))
+
+
+def write_item_index(d64: Path, out: Path, load: int) -> None:
+    """Write item.idx from where item.cat landed on D64."""
+    out.write_bytes(item_index_bytes(d64.read_bytes(), load))
+
+
+def fix_item_index(d64: Path) -> None:
+    """Rewrite item.idx's sector table in place on a D64 carrying item.cat and item.idx."""
+    image = bytearray(d64.read_bytes())
+    dirs = directory(bytes(image))
+    if ITEM_INDEX_FILE not in dirs or ITEM_FILE not in dirs:
+        return
+    blocks = chain(bytes(image), *dirs[ITEM_INDEX_FILE])
+    assert len(blocks) == 1, f"{ITEM_INDEX_FILE} spans {len(blocks)} blocks"
+    off = sector_offset(*blocks[0])
+    old = image[off + 2: off + 4]
+    data = item_index_bytes(bytes(image), old[0] | old[1] << 8)
+    assert image[off] == 0 and image[off + 1] == len(data) + 1, "item.idx is not the expected size"
+    image[off + 2: off + 2 + len(data)] = data
+    d64.write_bytes(bytes(image))
+
+
+def item_selftest() -> None:
+    """Verify ITEM.CAT byte extraction, D64 index table shape, and Atari payload offline."""
+    blob = item_catalog_bytes()
+    assert blob[:4] == b"ITM2" and len(blob) <= 7800
+    assert item_atari_bytes() == blob
+    idx = item_index_bytes(None, 0xCF00)
+    expected_secs = -(-(len(blob) + 2) // 254)
+    assert idx[0:2] == bytes([0x00, 0xCF])
+    assert (idx[2] | (idx[3] << 8)) == len(blob)
+    assert idx[4] == expected_secs
+    assert len(idx) == 5 + 2 * expected_secs
+    print(f"catalog_disk item selftest PASSED: ITEM.CAT={len(blob)} B, D64={expected_secs} sectors, idx={len(idx)} B")
+
+
 def main() -> int:
-    if len(sys.argv) == 4 and sys.argv[1] == "records":
-        write_records(Path(sys.argv[2]), int(sys.argv[3], 0))
+    raw_args = sys.argv[1:]
+    include_ext = "--ext" in raw_args
+    phase5_recs = "--phase5-records" in raw_args
+    pos = [a for a in raw_args if a not in ("--ext", "--phase5-records")]
+
+    if len(pos) == 3 and pos[0] == "records":
+        write_records(Path(pos[1]), int(pos[2], 0), include_ext=include_ext)
         return 0
-    if len(sys.argv) == 3 and sys.argv[1] == "fix":
-        fix_index(Path(sys.argv[2]))
+    if len(pos) in (2, 3) and pos[0] == "ext-records":
+        load = int(pos[2], 0) if len(pos) == 3 else EXT_LOAD_DEFAULT
+        write_ext_records(Path(pos[1]), load)
         return 0
-    if len(sys.argv) == 3 and sys.argv[1] == "atari":
-        Path(sys.argv[2]).write_bytes(atari_records())
+    if len(pos) == 2 and pos[0] == "fix":
+        fix_index(Path(pos[1]))
         return 0
-    if len(sys.argv) == 5 and sys.argv[1] == "index":
-        write_index(Path(sys.argv[2]), Path(sys.argv[3]), int(sys.argv[4], 0))
+    if len(pos) == 2 and pos[0] == "atari":
+        Path(pos[1]).parent.mkdir(parents=True, exist_ok=True)
+        Path(pos[1]).write_bytes(atari_records(phase5=phase5_recs))
+        return 0
+    if len(pos) == 4 and pos[0] == "index":
+        write_index(Path(pos[1]), Path(pos[2]), int(pos[3], 0), include_ext=include_ext)
+        return 0
+    if len(pos) == 4 and pos[0] == "ext-index":
+        write_index(Path(pos[1]), Path(pos[2]), int(pos[3], 0), include_ext=True)
+        return 0
+    if len(pos) == 2 and pos[0] == "item-raw":
+        write_item_raw(Path(pos[1]))
+        return 0
+    if len(pos) == 2 and pos[0] == "item-atari":
+        Path(pos[1]).parent.mkdir(parents=True, exist_ok=True)
+        Path(pos[1]).write_bytes(item_atari_bytes())
+        return 0
+    if len(pos) == 4 and pos[0] == "item-records":
+        write_item_records(Path(pos[1]), int(pos[2], 0), int(pos[3], 0))
+        return 0
+    if len(pos) == 4 and pos[0] == "item-index":
+        write_item_index(Path(pos[1]), Path(pos[2]), int(pos[3], 0))
+        return 0
+    if len(pos) == 2 and pos[0] == "item-fix":
+        fix_item_index(Path(pos[1]))
+        return 0
+    if len(pos) == 1 and pos[0] == "item-selftest":
+        item_selftest()
         return 0
     print(__doc__, file=sys.stderr)
     return 2

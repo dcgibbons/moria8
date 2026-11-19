@@ -1,5 +1,6 @@
 #importonce
 #if HAL_PLATFORM_MONSTER_CATALOG
+#import "recall_defs.s"
 // monster_catalog.s — The VMS Moria monster catalog in far memory
 // (prototype, docs/MONSTER_CATALOG_DESIGN.md; HAL_PLATFORM_MONSTER_CATALOG).
 //
@@ -45,7 +46,10 @@
 .assert "Catalog names fit a pool entry", CATALOG_NAME_MAX < CAT_NAME_SIZE, true
 .assert "Catalog town ids end on an availability byte", CATALOG_TOWN_COUNT & 7, 0
 .assert "Catalog playable counts follow the raw counts", cat_level_playable, cat_level_raw + CAT_LEVELS
+.assert "Catalog undead bitmap follows playable counts", cat_undead, cat_level_playable + CAT_LEVELS
+.assert "Catalog undead bitmap spans 35 bytes", catalog_index_end - cat_undead, floor((CATALOG_COUNT + 7) / 8)
 .assert "Catalog fields are the engine's tier fields", CATALOG_SOA_FIELDS, NUM_SOA_FIELDS - 2
+.assert "Catalog extended fields count", CATALOG_EXT_FIELDS, 8
 .assert "Catalog ids fit 9 bits", CATALOG_COUNT <= 512, true
 
 // Species table: the catalog id in each slot; id hi $FF = empty. Saved as
@@ -58,6 +62,12 @@ cat_id_hi:  .byte 0
 cat_slot:   .byte 0
 cat_tmp:    .byte 0
 cat_level:  .byte 0
+cat_rcl_id_lo:  .byte 0
+cat_rcl_id_hi:  .byte 0
+cat_rcl_rem_lo: .byte 0
+cat_rcl_rem_hi: .byte 0
+cat_rcl_field:  .byte 0
+cat_rcl_out:    .byte 0
 
 // catalog_reset_slots — Empty every species slot (a new level).
 // Clobbers: A, X
@@ -97,15 +107,6 @@ cat_slot_mapped:
     stx cat_slot
     bcc !csm_done+
     jsr cat_fetch
-    :CatalogUnmap()
-    // A new species in the slot: forget the old one's recall.
-    lda #0
-    ldx cat_slot
-    :AuxWriteX(recall_kills)
-    :AuxWriteX(recall_deaths)
-    :AuxWriteX(recall_attacks)
-    :AuxWriteX(recall_spells)
-    jmp !csm_restore+
 !csm_done:
     :CatalogUnmap()
 !csm_restore:
@@ -124,6 +125,23 @@ cat_slot_mapped:
     pla
     sta zp_temp0
     lda cat_slot
+    rts
+
+cat_restore_zp_keep_c:
+    pla
+    sta zp_ptr1_hi
+    pla
+    sta zp_ptr1
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
+    pla
+    sta zp_temp2
+    pla
+    sta zp_temp1
+    pla
+    sta zp_temp0
     rts
 
 // cat_save_zp — Push the zero page the catalog routines use beyond the
@@ -251,6 +269,8 @@ cat_fetch:
     // The whole record at once: the drive reads by sector, not by field.
     :CatalogUnmap()
     jsr catalog_fetch_record
+    jsr catalog_fetch_ext
+    jsr cat_store_ext_slot
     :CatalogMap()
     ldx #0
 !cf_field:
@@ -346,6 +366,10 @@ cat_fetch:
     :CatalogPoolWrite()
     lda hd_decode_buf,y
     bne !cf_name-
+    :CatalogUnmap()
+    jsr catalog_fetch_ext
+    jsr cat_store_ext_slot
+    :CatalogMap()
     rts
 .assert "hd_tree_right_ptr follows hd_tree_left_ptr", hd_tree_right_ptr, hd_tree_left_ptr + 2
 
@@ -353,6 +377,30 @@ cat_fetch:
 cat_names_tree:  .word catn_tree_left, catn_tree_right
 cat_corpus_tree: .word huff_tree_left, huff_tree_right
 #endif
+
+// cat_store_ext_slot — Copy cat_ext_record[0..7] into slot cat_slot of
+// contiguous cr_atk2_type..cr_cdefense.
+// Clobbers: A, X, Y, zp_ptr1
+cat_store_ext_slot:
+    lda #<cr_atk2_type
+    sta zp_ptr1
+    lda #>cr_atk2_type
+    sta zp_ptr1_hi
+    ldy cat_slot
+    ldx #0
+!cses_loop:
+    lda cat_ext_record,x
+    sta (zp_ptr1),y
+    lda zp_ptr1
+    clc
+    adc #MAX_CREATURES
+    sta zp_ptr1
+    bcc !+
+    inc zp_ptr1_hi
+!:  inx
+    cpx #CATALOG_EXT_FIELDS
+    bcc !cses_loop-
+    rts
 
 // cat_pool_entry — zp_ptr1 = slot cat_slot's name pool entry,
 // CATALOG_NAME_POOL_BASE + slot * 32, and cr_name_lo/hi point there.
@@ -427,7 +475,6 @@ cat_pick_id:
     // misc.inc alloc_monster lacks + m_level[0]).
     tay
     dey
-    ldx #0
     jsr cat_sum_levels          // zp_temp0/1 = raw count of levels 1..T-1
     lda cat_tmp
     cmp #1
@@ -444,64 +491,27 @@ cat_pick_id:
     lda zp_temp1
     adc #0
     sta cat_id_hi
-    // Playable? (id / 8 is at most 34; the bit is recall_spell_bit[id & 7])
-    lsr
-    lda cat_id_lo
-    ror
-    lsr
-    lsr
-    tax
-    lda cat_id_lo
-    and #7
-    tay
-    lda cat_available,x
-    and recall_spell_bit,y
-    beq !cpi_normal+
     rts
 !cpi_normal:
-    // The r-th playable creature of levels 1..L, walking ids up from the town.
-    ldx #CAT_LEVELS             // The playable counts
+    // Uniform over levels 1..L (all 279 catalog species are playable in Phase 5).
     ldy cat_level
-    jsr cat_sum_levels
-    jsr rng_range_word          // zp_temp2/3 = r
-    lda #CATALOG_TOWN_COUNT
+    jsr cat_sum_levels          // zp_temp0/1 = raw count of levels 1..L
+    jsr rng_range_word          // zp_temp2/3 = r in [0, count - 1]
+    lda zp_temp2
+    clc
+    adc #CATALOG_TOWN_COUNT
     sta cat_id_lo
-    lda #0
+    lda zp_temp3
+    adc #0
     sta cat_id_hi
-    lda #1
-    sta cat_tmp                 // Availability bit of cat_id
-    ldx #CATALOG_TOWN_COUNT / 8
-!cpi_walk:
-    lda cat_available,x
-    and cat_tmp
-    beq !cpi_next+
-    lda zp_temp2
-    ora zp_temp3
-    beq !cpi_done+
-    lda zp_temp2
-    bne !cpi_dec_lo+
-    dec zp_temp3
-!cpi_dec_lo:
-    dec zp_temp2
-!cpi_next:
-    inc cat_id_lo
-    bne !cpi_id_ok+
-    inc cat_id_hi
-!cpi_id_ok:
-    asl cat_tmp
-    bcc !cpi_walk-
-    rol cat_tmp                 // Bit 0 of the next byte
-    inx
-    bne !cpi_walk-
-!cpi_done:
     rts
 
-// cat_sum_levels — zp_temp0/1 = sum of cat_level_raw[X+1 .. X+Y].
+// cat_sum_levels — zp_temp0/1 = sum of cat_level_raw[1 .. Y].
 // Clobbers: A, X, Y
 cat_sum_levels:
-    lda #0
-    sta zp_temp0
-    sta zp_temp1
+    ldx #0
+    stx zp_temp0
+    stx zp_temp1
     cpy #0
     beq !csl_done+
 !csl_loop:
@@ -556,6 +566,223 @@ catalog_population:
 }
     rts
 .assert "Catalog area scale is a fraction", CAT_AREA_SCALE > 0 && CAT_AREA_SCALE <= 256, true
+.assert "Recall count matches catalog creature count", RECALL_COUNT, CATALOG_COUNT
+
+// catalog_recall_match_and_fill — Find next encountered species (0..CATALOG_COUNT-1)
+// whose display char matches recall_query_sc, populate recall_view_* and
+// creature_name_buf without modifying active level slots.
+// Output: C = 1 found (recall_view_* & creature_name_buf populated), C = 0 none.
+// Clobbers: everything except preserved caller ZP (zp_temp0-2, zp_ptr0, zp_ptr1)
+crl_field_idx:
+    .byte 0, 1, 3, 4, 5, 6, 7, 12, 13, 14, 15, 16, 17, 18, 19
+crl_field_idx_end:
+.assert "Recall view field table matches view struct", crl_field_idx_end - crl_field_idx, recall_view_spell_flags - recall_view_display + 1
+
+catalog_recall_match_and_fill:
+    jsr cat_save_zp
+    lda recall_query_sc
+    cmp recall_last_sc
+    bne !crl_start_zero+
+    clc
+    lda recall_last_cat_lo
+    adc #1
+    sta cat_rcl_id_lo
+    lda recall_last_cat_hi
+    adc #0
+    sta cat_rcl_id_hi
+    cmp #>CATALOG_COUNT
+    bcc !crl_start_ok+
+    bne !crl_start_zero+
+    lda cat_rcl_id_lo
+    cmp #<CATALOG_COUNT
+    bcc !crl_start_ok+
+!crl_start_zero:
+    lda #0
+    sta cat_rcl_id_lo
+    sta cat_rcl_id_hi
+!crl_start_ok:
+    lda #<CATALOG_COUNT
+    sta cat_rcl_rem_lo
+    lda #>CATALOG_COUNT
+    sta cat_rcl_rem_hi
+!crl_loop:
+    lda cat_rcl_id_lo
+    sta recall_cat_id_lo
+    lda cat_rcl_id_hi
+    sta recall_cat_id_hi
+    jsr recall_load_view_counters
+    bne !crl_check_disp+
+    jmp !crl_next+
+!crl_check_disp:
+    lda cat_rcl_id_lo
+    sta cat_id_lo
+    lda cat_rcl_id_hi
+    sta cat_id_hi
+#if HAL_PLATFORM_CATALOG_RECORDS
+    jsr catalog_fetch_record
+    lda cat_record + 2
+    cmp recall_query_sc
+    beq !crl_rec_hit+
+    jmp !crl_next+
+!crl_rec_hit:
+    ldx #0
+!crl_rec_fields:
+    ldy crl_field_idx,x
+    lda cat_record + 2,y
+    sta recall_view_display,x
+    inx
+    cpx #15
+    bcc !crl_rec_fields-
+    ldy #$ff
+!crl_rec_name:
+    iny
+    cpy #31
+    bcs !crl_rec_name_nul+
+    lda cat_record + CATALOG_RECORD_NAME,y
+    sta creature_name_buf,y
+    bne !crl_rec_name-
+    beq !crl_found+
+!crl_rec_name_nul:
+    lda #0
+    sta creature_name_buf,y
+    beq !crl_found+
+#else
+    :CatalogMap()
+    clc
+    lda #<catalog_fields
+    adc cat_id_lo
+    sta zp_ptr0
+    lda #>catalog_fields
+    adc cat_id_hi
+    sta zp_ptr0_hi
+    ldy #0
+    :CatalogFieldRead()
+    cmp recall_query_sc
+    beq !crl_fld_hit+
+    :CatalogUnmap()
+    jmp !crl_next+
+!crl_fld_hit:
+    lda #0
+    sta cat_rcl_field
+    sta cat_rcl_out
+!crl_fld_loop:
+    ldx cat_rcl_out
+    lda cat_rcl_field
+    cmp crl_field_idx,x
+    bne !crl_fld_skip+
+    ldy #0
+    :CatalogFieldRead()
+    ldx cat_rcl_out
+    sta recall_view_display,x
+    inc cat_rcl_out
+    lda cat_rcl_out
+    cmp #15
+    bcs !crl_fld_name+
+!crl_fld_skip:
+    clc
+    lda zp_ptr0
+    adc #<CATALOG_COUNT
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #>CATALOG_COUNT
+    sta zp_ptr0_hi
+    inc cat_rcl_field
+    bne !crl_fld_loop-
+!crl_fld_name:
+    clc
+    lda #<cat_name_lo
+    adc cat_id_lo
+    sta zp_ptr1
+    lda #>cat_name_lo
+    adc cat_id_hi
+    sta zp_ptr1_hi
+    ldy #0
+    :HuffDbReadPtr1()
+    pha
+    clc
+    lda zp_ptr1
+    adc #<CATALOG_COUNT
+    sta zp_ptr1
+    lda zp_ptr1_hi
+    adc #>CATALOG_COUNT
+    sta zp_ptr1_hi
+    :HuffDbReadPtr1()
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
+    ldx #3
+!crl_ntree:
+    lda cat_names_tree,x
+    sta hd_tree_left_ptr,x
+    dex
+    bpl !crl_ntree-
+    jsr huff_decode_from_ptr
+    ldx #3
+!crl_ctree:
+    lda cat_corpus_tree,x
+    sta hd_tree_left_ptr,x
+    dex
+    bpl !crl_ctree-
+    :CatalogUnmap()
+    ldy #$ff
+!crl_cpname:
+    iny
+    cpy #31
+    bcs !crl_cpname_nul+
+    lda hd_decode_buf,y
+    sta creature_name_buf,y
+    bne !crl_cpname-
+    beq !crl_found+
+!crl_cpname_nul:
+    lda #0
+    sta creature_name_buf,y
+#endif
+!crl_found:
+    jsr catalog_fetch_ext
+    ldx #CATALOG_EXT_FIELDS - 1
+!crl_ext_copy:
+    lda cat_ext_record,x
+    sta recall_view_atk2_type,x
+    dex
+    bpl !crl_ext_copy-
+    lda cat_rcl_id_lo
+    sta recall_last_cat_lo
+    sta recall_last_idx
+    lda cat_rcl_id_hi
+    sta recall_last_cat_hi
+    lda recall_query_sc
+    sta recall_last_sc
+    sec
+    jmp cat_restore_zp_keep_c
+!crl_next:
+    inc cat_rcl_id_lo
+    bne !+
+    inc cat_rcl_id_hi
+!:  lda cat_rcl_id_hi
+    cmp #>CATALOG_COUNT
+    bcc !crl_id_ok+
+    bne !crl_id_wrap+
+    lda cat_rcl_id_lo
+    cmp #<CATALOG_COUNT
+    bcc !crl_id_ok+
+!crl_id_wrap:
+    lda #0
+    sta cat_rcl_id_lo
+    sta cat_rcl_id_hi
+!crl_id_ok:
+    lda cat_rcl_rem_lo
+    bne !+
+    dec cat_rcl_rem_hi
+!:  dec cat_rcl_rem_lo
+    lda cat_rcl_rem_lo
+    ora cat_rcl_rem_hi
+    beq !crl_miss+
+    jmp !crl_loop-
+!crl_miss:
+    lda #0
+    sta recall_last_sc
+    clc
+    jmp cat_restore_zp_keep_c
 
 // catalog_place_win_creature — From VMS win_mon_appear on, until the game is
 // won, an awake Evil Iggy or Balrog lands beyond sight of the player (VMS

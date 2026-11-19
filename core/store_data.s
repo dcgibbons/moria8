@@ -61,65 +61,13 @@ check_player_on_store_door:
     ldy zp_player_y
 
 #import "store_door_lookup.s"
+#import "store_check_category_macro.s"
 
-// csc_bit — Load the bit mask for category offset X into zp_temp0 and the
-// store index into X. Used by all three category-mask paths.
-csc_bit:
-    txa
-    :AuxReadX(bit_mask_table)
-    sta zp_temp0
-    ldx zp_store_idx
-    rts
-
+#if !STORE_CHECK_CAT_DUPLICATED
 // check_store_category — Test if item category matches store
-// Input: A = ICAT value (0-18), zp_store_idx = store index
+// Input: A = ICAT value (0-20), zp_store_idx = store index
 // Output: carry set = category sold here, carry clear = not
 // Clobbers: A, X
 check_store_category:
-    cmp #8
-    bcs !csc_hi+
-
-    tax
-    jsr csc_bit
-    :AuxReadX(store_cat_mask_lo)
-    and zp_temp0
-    beq !csc_no+
-    sec
-    rts
-
-!csc_hi:
-    cmp #ICAT_SPIKE
-    beq !csc_spike+
-    cmp #ICAT_AMULET
-    beq !csc_amulet+
-    bcs !csc_no+            // Categories above AMULET (e.g. chest) buy nowhere;
-                            // also keeps the 8-entry bit_mask_table in bounds.
-    sec
-    sbc #8
-    tax
-    jsr csc_bit
-    :AuxReadX(store_cat_mask_hi)
-    and zp_temp0
-    beq !csc_no+
-    sec
-    rts
-
-!csc_spike:
-    // Spikes sell only at the general store (store 0), matching upstream.
-    lda zp_store_idx
-    beq !csc_spike_ok+
-    clc
-    rts
-!csc_spike_ok:
-    sec
-    rts
-
-!csc_amulet:
-    ldx zp_store_idx
-    :AuxReadX(store_cat_mask_x)
-    lsr                     // Bit 0 -> carry = sold-here result
-    rts
-
-!csc_no:
-    clc
-    rts
+    :CheckStoreCategoryBody()
+#endif

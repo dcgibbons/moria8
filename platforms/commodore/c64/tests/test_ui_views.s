@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #21
+    ldx #23
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -111,6 +111,13 @@ magic_recalc_mana:
 magic_check_new_spells:
     rts
 
+combat_check_levelup:
+combat_check_leveldown:
+    rts
+
+eff_heal_sync:
+    rts
+
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
@@ -138,7 +145,9 @@ magic_check_new_spells:
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/asset_load_retry.s"   // tier_load_disk's loader
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
@@ -217,7 +226,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 22, $ff
+tc_results: .fill 24, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -270,6 +279,8 @@ test_start:
     jsr test_status_gold_24bit
     jsr test_character_gold_xp_24bit
     jsr test_status_poisoned_row21
+    jsr test_store_slot_page1_names
+    jsr test_store_slot_dwarven_tool_prefix
 
     jmp test_exit_trampoline
 
@@ -348,6 +359,7 @@ reset_shared_state:
     sta si_qty,x
     sta si_p1,x
     sta si_meta,x
+    sta si_meta_hi,x
     dex
     bpl !clr_store_rest-
 
@@ -535,11 +547,11 @@ test_help_view:
 test_inventory_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
-    lda #EGO_SLAY_EVIL
+    lda #(EGO_SLAY_EVIL | ITEM_PAGE_LONG_SWORD)
     sta inv_ego + 0
     lda #IF_SENSED
     sta inv_flags + 0
@@ -584,11 +596,11 @@ test_inventory_view:
 test_inventory_invalid_ego_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
-    lda #$40
+    lda #(EGO_TYPE_COUNT | ITEM_PAGE_LONG_SWORD)
     sta inv_ego + 0
 
     jsr ui_inv_display
@@ -623,11 +635,15 @@ test_inventory_invalid_ego_view:
 test_inventory_select_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -674,8 +690,12 @@ test_inventory_select_view:
 test_inventory_identify_select_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + 0
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + 0
+    }
     lda #1
     sta inv_qty + 0
     lda #$fd
@@ -703,11 +723,11 @@ test_inventory_identify_select_view:
 test_equipment_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
-    lda #EGO_SLAY_EVIL
+    lda #(EGO_SLAY_EVIL | ITEM_PAGE_LONG_SWORD)
     sta inv_ego + EQUIP_WEAPON
     lda #IF_SENSED
     sta inv_flags + EQUIP_WEAPON
@@ -744,11 +764,11 @@ test_equipment_view:
 test_equipment_wrap_long:
     jsr reset_shared_state
 
-    lda #5                      // Mace
+    lda #ITEM_SLOT_MACE                      // Mace
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
-    lda #EGO_HOLY_AVENGER
+    lda #(EGO_HOLY_AVENGER | ITEM_PAGE_MACE)
     sta inv_ego + EQUIP_WEAPON
     lda #IF_IDENTIFIED
     sta inv_flags + EQUIP_WEAPON
@@ -802,11 +822,11 @@ test_equipment_wrap_long:
 test_equipment_wrap_longer:
     jsr reset_shared_state
 
-    lda #69                     // Two-Handed Sword
+    lda #ITEM_SLOT_TWO_HANDED_SWORD                     // Two-Handed Sword
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
-    lda #EGO_HOLY_AVENGER
+    lda #(EGO_HOLY_AVENGER | ITEM_PAGE_TWO_HANDED_SWORD)
     sta inv_ego + EQUIP_WEAPON
     lda #IF_IDENTIFIED
     sta inv_flags + EQUIP_WEAPON
@@ -846,8 +866,12 @@ test_equipment_wrap_longer:
 test_equipment_select_view:
     jsr reset_shared_state
 
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
     lda #1
     sta inv_qty + EQUIP_WEAPON
 
@@ -994,7 +1018,7 @@ test_store_view:
 
     lda #0
     sta zp_store_idx
-    lda #15
+    lda #ITEM_SLOT_RATION_OF_FOOD
     sta si_item_id + 0
     lda #1
     sta si_qty + 0
@@ -1093,8 +1117,12 @@ test_home_view:
 
     lda #STORE_HOME
     sta zp_store_idx
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta si_item_id + STORE_HOME * STORE_MAX_ITEMS
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta si_meta_hi + STORE_HOME * STORE_MAX_ITEMS
+    }
     lda #1
     sta si_qty + STORE_HOME * STORE_MAX_ITEMS
 
@@ -1269,7 +1297,7 @@ test_status_search_indicator_row21:
     lda #>expected_status_search
     sta zp_ptr0_hi
     lda #21
-    ldx #19
+    ldx #1                          // after the (empty) name: the race left row 21
     sei
     jsr assert_screen_string
     bcc !string_fail+
@@ -1285,8 +1313,11 @@ test_status_search_indicator_row21:
     sta tc_results + 16
     rts
 
-// Test 22: "Poisoned" while the poison timer runs (VMS prt_poisoned), in
-// Search*'s row-21 slot on 40 columns; Search* again once it ends.
+// Test 22: row 21's states after the name, most urgent first, each while it
+// fits before LV: (maintainer, 2026-11-12: the race left the status line and
+// hunger moved up from row 23): hunger, Poisoned (VMS prt_poisoned), Search*.
+// The poison ending redraws the row; after a 12-character name Poisoned does
+// not fit, and Search*, which would, is not shown in its place.
 test_status_poisoned_row21:
     jsr reset_shared_state
     lda #0
@@ -1299,6 +1330,7 @@ test_status_poisoned_row21:
     sta zp_player_mp
     sta zp_player_mmp
     sta zp_player_ac
+    lda #HUNGER_HUNGRY
     sta zp_hunger_state
     lda #1
     sta zp_player_lvl
@@ -1314,15 +1346,10 @@ test_status_poisoned_row21:
     lda #5
     sta zp_eff_poison
     jsr status_draw
-    lda #<expected_status_poisoned
-    sta zp_ptr0
-    lda #>expected_status_poisoned
-    sta zp_ptr0_hi
-    lda #21
-    ldx #19
-    sei
-    jsr assert_screen_string
-    cli
+    lda #<expected_status_states
+    ldx #>expected_status_states
+    ldy #1
+    jsr assert_row21_at
     bcc !tsp_fail+
     lda #0
     sta zp_eff_poison                // the poison ends: the state changed, row 21 redraws
@@ -1332,15 +1359,28 @@ test_status_poisoned_row21:
     sei
     jsr status_draw
     cli
-    lda #<expected_status_search_after_poison
-    sta zp_ptr0
-    lda #>expected_status_search_after_poison
-    sta zp_ptr0_hi
-    lda #21
-    ldx #19
+    lda #<expected_status_states_cured
+    ldx #>expected_status_states_cured
+    ldy #1
+    jsr assert_row21_at
+    bcc !tsp_fail+
+    ldx #12                          // a 12-character name, poisoned again
+!tsp_name:
+    lda test_name12,x
+    sta player_data + PL_NAME,x
+    dex
+    bpl !tsp_name-
+    lda #5
+    sta zp_eff_poison
+    lda #0
+    sta status_cache_valid           // a cold draw: the name is not cached
     sei
-    jsr assert_screen_string
+    jsr status_draw
     cli
+    lda #<expected_status_long_name
+    ldx #>expected_status_long_name
+    ldy #0
+    jsr assert_row21_at
     bcc !tsp_fail+
     lda #$01
     .byte $2c
@@ -1349,6 +1389,157 @@ test_status_poisoned_row21:
     sta tc_results + 21
     lda #0
     sta player_data + PL_FLAGS
+    sta player_data + PL_NAME
+    sta zp_eff_poison
+    sta zp_hunger_state
+    rts
+
+// itemdesc_put_store_slot must keep si_meta_hi's page bit: Page-1 store
+// stock (Magic Shop ring, Weaponsmith dagger) named from Page 0 instead
+// when the formatter stripped it to the ego ID.
+test_store_slot_page1_names:
+    .assert "Store-slot page test items live on Page 1", ITEM_PAGE_RING_OF_PROTECTION == ITEM_PAGE_BIT && ITEM_PAGE_DAGGER == ITEM_PAGE_BIT, true
+    jsr reset_shared_state
+    lda #ITEM_PAGE_RING_OF_PROTECTION
+    sta item_cur_page
+    ldx #ITEM_SLOT_RING_OF_PROTECTION
+    jsr id_known_set
+    ldx #0
+    lda #ITEM_SLOT_RING_OF_PROTECTION
+    ldy #ITEM_PAGE_RING_OF_PROTECTION
+    jsr seed_store_slot_x
+    lda #IF_IDENTIFIED
+    sta si_meta + 0
+    ldx #1
+    lda #ITEM_SLOT_DAGGER
+    ldy #ITEM_PAGE_DAGGER
+    jsr seed_store_slot_x
+    lda #0
+    sta item_cur_page               // The formatter must take the page from si_meta_hi.
+
+    lda #3
+    ldx #0
+    jsr put_store_slot_row
+    lda #4
+    ldx #1
+    jsr put_store_slot_row
+
+    lda #<expected_store_ring_of_protection
+    sta zp_ptr0
+    lda #>expected_store_ring_of_protection
+    sta zp_ptr0_hi
+    lda #3
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+    lda #<expected_store_dagger
+    sta zp_ptr0
+    lda #>expected_store_dagger
+    sta zp_ptr0_hi
+    lda #4
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 22
+    lda #0
+    sta item_cur_page
+    rts
+
+// A digging tool with tool ego 2 prints "Dwarven " through put_tool_ego_prefix
+// (tool_ego_pfx_lo/hi index 1 = Pick, index 3 = Shovel).
+test_store_slot_dwarven_tool_prefix:
+    .assert "Digging tools live on Page 0", ITEM_PAGE_PICK == 0 && ITEM_PAGE_SHOVEL == 0, true
+    jsr reset_shared_state
+    lda #0
+    sta item_cur_page
+    ldx #0
+    lda #ITEM_SLOT_PICK
+    ldy #(ITEM_PAGE_PICK | 2)       // tool ego 2 = Dwarven
+    jsr seed_store_slot_x
+    ldx #1
+    lda #ITEM_SLOT_SHOVEL
+    ldy #(ITEM_PAGE_SHOVEL | 2)
+    jsr seed_store_slot_x
+
+    lda #5
+    ldx #0
+    jsr put_store_slot_row
+    lda #6
+    ldx #1
+    jsr put_store_slot_row
+
+    lda #<expected_store_dwarven_pick
+    sta zp_ptr0
+    lda #>expected_store_dwarven_pick
+    sta zp_ptr0_hi
+    lda #5
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+    lda #<expected_store_dwarven_shovel
+    sta zp_ptr0
+    lda #>expected_store_dwarven_shovel
+    sta zp_ptr0_hi
+    lda #6
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 23
+    rts
+
+// Seed store slot X with item slot_lo A, si_meta_hi Y, qty 1, no bonuses.
+seed_store_slot_x:
+    sta si_item_id,x
+    tya
+    sta si_meta_hi,x
+    lda #1
+    sta si_qty,x
+    lda #0
+    sta si_p1,x
+    sta si_to_hit,x
+    sta si_to_dam,x
+    sta si_to_ac,x
+    sta si_meta,x
+    rts
+
+// Format store slot X at row A, column 1.
+put_store_slot_row:
+    sta zp_cursor_row
+    stx pssr_slot
+    lda #1
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    ldx pssr_slot
+    jmp itemdesc_put_store_slot
+pssr_slot: .byte 0
+
+expected_store_ring_of_protection: .text "Ring of Protection" ; .byte 0
+expected_store_dagger:             .text "Dagger" ; .byte 0
+expected_store_dwarven_pick:       .text "Dwarven Pick" ; .byte 0
+expected_store_dwarven_shovel:     .text "Dwarven Shovel" ; .byte 0
+
+// A/X = expected text at row 21, column Y; C set on a match.
+assert_row21_at:
+    sta zp_ptr0
+    stx zp_ptr0_hi
+    tya
+    tax
+    lda #21
+    sei
+    jsr assert_screen_string
+    cli
     rts
 
 test_inventory_identify_select_view_six_items:
@@ -1358,8 +1549,12 @@ test_inventory_identify_select_view_six_items:
     sta piw_filter
     ldx #0
 !fill_loop:
-    lda #4
+    lda #ITEM_SLOT_LONG_SWORD
     sta inv_item_id,x
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego,x
+    }
     lda #1
     sta inv_qty,x
     inx
@@ -1431,8 +1626,8 @@ test_screen_put_string_clamps_to_row:
 
 // Gold is 24-bit (PL_GOLD_0-2): the status line printed the low 16 bits,
 // so 65,547 gold showed as 11 (C128 Balrog queue, 2026-11-05). Production
-// status_draw: exact up to the 40-column field's five digits, thousands with
-// a "K" beyond, and a change in the top byte alone redraws the row.
+// status_draw: exact up to the 40-column field's seven digits (hunger left the
+// row, 2026-11-12), thousands with a "K" beyond, and a change in the top byte alone redraws the row.
 test_status_gold_24bit:
     jsr reset_shared_state
     lda #0
@@ -1464,12 +1659,30 @@ test_status_gold_24bit:
     jsr assert_gold_field
     bcc !fail+
 
-    lda #$a0                    // 100,000 = $0186A0: thousands and a K
+    lda #$a0                    // 100,000 = $0186A0: exact, hunger gone from the row
     ldx #$86
     ldy #$01
     jsr set_gold_and_draw
-    lda #<expected_gold_100k
-    ldx #>expected_gold_100k
+    lda #<expected_gold_100000
+    ldx #>expected_gold_100000
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$7f                    // 9,999,999 = $98967F: the widest exact value
+    ldx #$96
+    ldy #$98
+    jsr set_gold_and_draw
+    lda #<expected_gold_9999999
+    ldx #>expected_gold_9999999
+    jsr assert_gold_field
+    bcc !fail+
+
+    lda #$80                    // 10,000,000 = $989680: thousands and a K
+    ldx #$96
+    ldy #$98
+    jsr set_gold_and_draw
+    lda #<expected_gold_10000k
+    ldx #>expected_gold_10000k
     jsr assert_gold_field
     bcc !fail+
 
@@ -1702,16 +1915,24 @@ expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_search:
     .text "Search*" ; .byte 0
-expected_status_poisoned:
-    .text "Poisoned" ; .byte 0
-expected_status_search_after_poison:
-    .text "Search* " ; .byte 0
+expected_status_states:
+    .text "Hungry Poisoned Search*" ; .byte 0
+expected_status_states_cured:
+    .text "Hungry Search*  " ; .byte 0
+expected_status_long_name:
+    .text "ABCDEFGHIJKL Hungry         LV:" ; .byte 0
+test_name12:
+    .text "ABCDEFGHIJKL" ; .byte 0
 expected_gold_65547:
     .text "AU:65547 " ; .byte 0
 expected_gold_99999:
     .text "AU:99999 " ; .byte 0
-expected_gold_100k:
-    .text "AU:100K  " ; .byte 0
+expected_gold_100000:
+    .text "AU:100000 " ; .byte 0
+expected_gold_9999999:
+    .text "AU:9999999" ; .byte 0
+expected_gold_10000k:
+    .text "AU:10000K " ; .byte 0
 expected_gold_69632:
     .text "AU:69632 " ; .byte 0
 expected_char_gold_65547:

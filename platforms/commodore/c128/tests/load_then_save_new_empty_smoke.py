@@ -21,7 +21,7 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-config",
         vice_config(args.vice),
         "-default",
-        "+saveres",
+        "+saveres", "-VDC16KB",
         "+autostart-delay-random",
         "-console",
         "-nativemonitor",

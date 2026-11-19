@@ -8,7 +8,7 @@
 .const hal_platform_character_background_resync = 1
 .const hal_platform_player_magic_helpers_external = 1
 .const hal_platform_item_action_key_restores_bank = 1
-.const hal_platform_ego_holy_avenger_string_external = 1
+.const hal_platform_ego_holy_avenger_string_external = 0
 .const hal_platform_ego_ac_bonus_external = 1
 .const hal_platform_chargen_runtime_resync = 1
 #if C128_TEST_CHARGEN_CUTPOINT
@@ -32,7 +32,7 @@
 .const hal_platform_game_loop_run_stop_reset_input = 1
 .const hal_platform_game_loop_scroll_delta_render = 1
 .const hal_platform_game_loop_item_actions_trampolined = 1
-.const hal_platform_overlay_count = 10
+.const hal_platform_overlay_count = 12
 .const hal_platform_overlay_state_external = 1
 .const hal_platform_overlay_force_reload = 1
 .const hal_platform_overlay_tier_cache_guard = 1
@@ -49,7 +49,6 @@
 #define HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
 #define HAL_PLATFORM_PICK_ITEM_RESIDENT_ITEMS_SEGMENT
 #define HAL_PLATFORM_ITEM_TABLES_SPLIT_RESIDENT
-#define HAL_PLATFORM_ITEM_NAME_STREAMS_BANKED
 #define HAL_PLATFORM_PLAYER_MOVE_LOOK_SEGMENTED
 #else
 .const hal_platform_item_prompt_overlay_runtime = 0
@@ -63,7 +62,10 @@
 .const hal_platform_monster_overlay_stale_name = 0
 .const hal_platform_monster_stale_tier_reload = 1
 #define HAL_PLATFORM_WIZARD_ENTRY_OVERLAY
-#define HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
+#define HAL_PLATFORM_RECALL_CUSTOM
+#define RECALL_ARRAY_DATA_EXTERNAL
+#define HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
 #define HAL_PLATFORM_EGO_AC_BONUS_EXTERNAL
 #define HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL
 #define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL

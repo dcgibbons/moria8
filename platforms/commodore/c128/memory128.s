@@ -56,6 +56,10 @@
                                 // Use to access Bank 1 data regions. boot128 stages the
                                 // program into Bank 1 for the copy-to-Bank-0 step, then
                                 // scrubs the staged source pages during that copy.
+.const MMU_RAM_BANK1_NOIO = $7F // Bank 1, all RAM, I/O hidden ($D000-$DFFF = Bank 1 RAM)
+                                // Bits 7-6=01(Bank1), 5-4=11(RAM), 3-2=11(RAM), 1=1(RAM), 0=1(RAM)
+                                // Used only inside SEI-guarded common-RAM helpers ($D506=$0D
+                                // keeps 4KB bottom/top common RAM and CPU vectors intact).
 .const MMU_ALL_RAM      = $3E   // Bank 0, all RAM, I/O visible
                                 // Bits 7-6=00(Bank0), 5-4=11(RAM), 3-2=11(RAM), 1=1(RAM), 0=0(I/O)
                                 // Hides Screen Editor ROM ($C000-$CFFF) AND KERNAL ROM
@@ -78,7 +82,7 @@
 //   - overlay cache HELP:      $2000-$2FFF
 //   - overlay cache ITEMS:     $3000-$3FFF
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
-//   - DB/data region:          $7400-$7A5F
+//   - DB/data region:          $7400-$7A5F ($7400-$785B = recall[279] BSS)
 //   - tier cache window:       $7A60-$9567
 //   - title-art cache:         $9568-$97FF
 //   - small overlay cache MODAL:$9800-$9CFF
@@ -86,13 +90,23 @@
 //   - overlay cache STARTUP:   $A000-$AFFF
 //   - overlay cache TOWN:      $B000-$BFFF
 //   - overlay cache DEATH:     $C000-$CFFF
-//   - reserved I/O-visible gap:$D000-$DFFF
+//   - Bank 1 high data ($7F):  $D000-$DFFF ($D000-$D8B7 = 128.CEX, $D8B8-$DCB7 = store inv reserve, $DCB8-$DF37 = msg_history)
 //   - overlay cache DUNGEON:   $E000-$EFFF
 //   - top common RAM:          $F000-$FEFF (shared with Bank 0; not cache-safe)
 //   - Bank 1 NMI vector bridge:$FFFA-$FFFB (visible only with top common off)
 //
 // boot128 staging source span before scrub:
 //   - $1C01-$FEFF in Bank 1, copied into Bank 0 and scrubbed page-by-page.
+//
+// 16 KB physical VDC RAM ownership ($0000-$3FFF):
+//   - screen characters:       $0000-$07FF (2,000 B active + 48 B bulk-clear pad)
+//   - screen attributes:       $0800-$0FFF (2,000 B active + 48 B bulk-clear pad)
+//   - scroll-delta scratch:    $1000-$10FF (RVSD_SCRATCH_CHAR $1000, RVSD_SCRATCH_ATTR $1080)
+//   - ITEM.CAT low span:       $1100-$1FFF (3,840 B = ITEM.CAT[0..3839], disk build)
+//   - Set 0 & Set 1 charsets:  $2000-$3FFF (512 cells x 16 B:
+//       bytes 0..7 per cell  = live 8x8 glyph rasters for Set 0 ($2000) & Set 1 ($3000);
+//       bytes 8..15 per cell = unused in 8-scanline text mode -> holds
+//                              ITEM.CAT[3840..7477] across 455 cells at $2008-$3C6D)
 
 .macro AssertRegionBefore(desc, left_end, right_base) {
     .assert desc, left_end < right_base, true
@@ -114,7 +128,12 @@
 .const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
-.const BANK1_DB_END     = $7a5f   // the names payload ends with its streams at $79e6, 121 bytes to grow; the catalog has the rest
+.const BANK1_DB_END     = $7a5f   // $7400-$785B (1,116 B) = recall[279] BSS; $785C-$78E9 (142 B) = zp_save_buf; $78EA-$7A5F = 374 B free
+.const BANK1_RECALL_BASE = BANK1_DB_BASE
+.const BANK1_RECALL_SIZE = 1116   // 279 * 4 bytes (must match RECALL_DATA_SIZE)
+.const BANK1_RECALL_END  = BANK1_RECALL_BASE + BANK1_RECALL_SIZE - 1
+.const BANK1_ZP_SAVE_BASE = BANK1_RECALL_END + 1
+.const BANK1_ZP_SAVE_END  = BANK1_ZP_SAVE_BASE + 142 - 1
 // The tier cache took the DB region's last page when tiers gained the
 // cr_treasure SoA field (MON-014): tiers 1-4 needed 5520 bytes. Five DL 1
 // creatures added to tier 1 (2026-10-25) needed 5733: the cache's end moved
@@ -152,6 +171,8 @@
 .const BANK1_OVERLAY_DEATH_END    = $cfff
 .const BANK1_RESERVED_IO_BASE     = $d000
 .const BANK1_RESERVED_IO_END      = $dfff
+.const BANK1_HIGH_DATA_BASE       = BANK1_RESERVED_IO_BASE
+.const BANK1_HIGH_DATA_END        = BANK1_RESERVED_IO_END
 .const BANK1_OVERLAY_DUNGEON_BASE = $e000
 .const BANK1_OVERLAY_DUNGEON_END  = $efff
 .const BANK1_RESERVED_TOP_BASE    = $f000
@@ -164,12 +185,15 @@
 .const BANK1_HUFFMAN_NMI_VECTOR_BASE = $fffa
 .const BANK1_HUFFMAN_NMI_VECTOR_END  = $fffb
 #if HAL_PLATFORM_MONSTER_CATALOG
-// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md, C128M-007) takes the
-// tier cache window and the STARTUP overlay slot, which is no longer cached
-// (New Game loads OVL_STARTUP from disk):
+// The monster catalog (docs/MONSTER_CATALOG_DESIGN.md, C128M-002 / C128M-007)
+// takes the tier cache window, the STARTUP overlay slot (New Game loads
+// OVL_STARTUP from disk), and the Bank 1 $D000-$D8B7 no-I/O data window:
 //   $7A60-$7E5F  name pool, 32 species slots x 32 B, written at species fetch
 //   $7E60-$9567  128.CAT: the catalog's 21 fields x 279 creatures, at boot
 //   $A000-$AFFF  128.CNM: the catalog's Huffman-coded names, at boot
+//   $D000-$D8B7  128.CEX: Phase 5 279 x 8 B extended rows, at boot ($7F read)
+//   $D8B8-$DCB7  reserved 1,024 B store-inventory window inside $D000-$DFFF
+//   $DCB8-$DF37  msg_history (8 x 80 = 640 B BSS via MSG_HISTORY_IN_AUX)
 .const BANK1_CATALOG_POOL_BASE   = BANK1_TIER_CACHE_BASE
 .const BANK1_CATALOG_POOL_END    = BANK1_CATALOG_POOL_BASE + 32 * 32 - 1
 .const BANK1_CATALOG_FIELDS_BASE = BANK1_CATALOG_POOL_END + 1
@@ -177,6 +201,15 @@
 .const BANK1_CATALOG_NAMES_BASE  = BANK1_OVERLAY_STARTUP_BASE
 .const BANK1_CATALOG_NAMES_END   = BANK1_OVERLAY_STARTUP_END
 #endif
+.const BANK1_CATALOG_EXT_BASE        = $d000
+.const BANK1_CATALOG_EXT_SIZE        = 279 * 8
+.const BANK1_CATALOG_EXT_END         = $d8b7
+.const BANK1_STORE_INV_RESERVED_BASE = $d8b8
+.const BANK1_STORE_INV_RESERVED_SIZE = 1024
+.const BANK1_STORE_INV_RESERVED_END  = $dcb7
+.const BANK1_MSG_HISTORY_BASE        = $dcb8
+.const BANK1_MSG_HISTORY_SIZE        = 8 * 80
+.const BANK1_MSG_HISTORY_END         = $df37
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
 
@@ -187,6 +220,10 @@
 .const MMU_IRQ_SAVE_FF00     = $0c04
 .const MMU_IRQ_SAVE_D506     = $0c05
 .const MMU_COMMON_HELPERS_BASE = $0c06
+#if C128_CARTRIDGE
+.const MMU_COMMON_CART_CHUNK_MAX = 32
+.const MMU_COMMON_CART_BASE      = $0fb0
+#endif
 .const BANK1_STAGE_SOURCE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
 .const BANK1_STAGE_SOURCE_END  = $feff // copy stub stops before $ff00
 .const TIER_PRELOAD_REQUIRED = BANK1_TIER_CACHE_SIZE
@@ -223,13 +260,25 @@
 .const DUNGEON_GEN_DOOR_SCAN_END  = DUNGEON_GEN_DOOR_SCAN_BASE + DUNGEON_GEN_DOOR_SCAN_SIZE - 1
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0800
 
-// ZP save buffer — stores $02–$8F during game, restored on exit.
-// Keep this as owned program data (not a fixed low-RAM page), because
-// native C128 KERNAL/BASIC workspace usage differs from C64.
-.const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
+// 16 KB VDC RAM non-overlapping layout constants (C128M-015).
+.const VDC_RAM_SIZE              = $4000
+.const VDC_SCRATCH_BASE          = $1000
+.const VDC_SCRATCH_END           = $10ff
+.const VDC_ITEM_CAT_LO_BASE      = $1100
+.const VDC_ITEM_CAT_LO_SIZE      = $0f00
+.const VDC_ITEM_CAT_LO_END       = VDC_ITEM_CAT_LO_BASE + VDC_ITEM_CAT_LO_SIZE - 1
+.const VDC_CHARSET_BASE          = $2000
+.const VDC_CHARSET_END           = $3fff
+.const VDC_ITEM_CAT_CELL_OFFSET  = $08
+.const VDC_ITEM_CAT_CELL_STRIDE  = $10
+.const VDC_ITEM_CAT_CELL_BYTES   = $08
+.const VDC_ITEM_CAT_HI_CAP       = ((VDC_CHARSET_END - VDC_CHARSET_BASE + 1) / VDC_ITEM_CAT_CELL_STRIDE) * VDC_ITEM_CAT_CELL_BYTES
+.const VDC_ITEM_CAT_TOTAL_CAP    = VDC_ITEM_CAT_LO_SIZE + VDC_ITEM_CAT_HI_CAP
 
-zp_save_buf:
-    .fill ZP_SAVE_SIZE, 0
+// ZP save buffer — stores $02–$8F in Bank 1 ($785C-$78E9) during game, restored on exit.
+.const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
+.label zp_save_buf      = BANK1_ZP_SAVE_BASE
+zp_save_orig_ptr:       .word 0
 
 // KERNAL ZP save buffer — used during EnterKernal/ExitKernal calls
 // to protect game state from KERNAL clobbering.
@@ -375,19 +424,7 @@ ExitKernal_sub:
 #endif
     sei                     // Atomic: KERNAL calls (like LOAD) often re-enable IRQs
     
-#if C128_TEST_STACK_SLOT_DIAG
-    // Diagnostic invariant check: ensure stack hasn't underflowed
-    // A stray PLA or missing PHA will make SP too high.
-    tsx
-    cpx #$f0
-    bcc !ex_stack_ok+       // SP < $F0 (Safe)
-    jmp c128_stack_leak_trap
-!ex_stack_ok:
-#endif
 
-#if C128_TEST_STACK_BOTTOM_DIAG
-    :C128StackBottomCanaryCheck($91)
-#endif
 
     dec KERNAL_NESTING_DEPTH
     bne !ex_nest+           // Still nested — don't restore yet
@@ -430,14 +467,6 @@ ExitKernal_sub:
     lda #MMU_ALL_RAM
     sta MMU_CR
 }
-
-// ============================================================
-// Diagnostics — Traps for fatal invariant failures
-// ============================================================
-c128_stack_leak_trap:
-    lda #COL_RED
-    sta $d020
-    jmp *               // Clear JAM for stack leak (SP >= $F0 in ExitKernal)
 
 #if C128_TEST_STACK_LOW_WATER
 c128_stack_low_water_check:
@@ -507,6 +536,14 @@ init_common_mmu_helpers:
     inx
     jmp !copy_tail-
 !done:
+#if C128_CARTRIDGE
+    ldx #mmu_common_cart_blob_end - mmu_common_cart_blob - 1
+!copy_cart:
+    lda mmu_common_cart_blob,x
+    sta MMU_COMMON_CART_BASE,x
+    dex
+    bpl !copy_cart-
+#endif
     rts
 
 // mmu_save_p — Static storage for CPU status register during bank switches
@@ -555,26 +592,75 @@ restore_kernal_zp:
     bne !loop-
     rts
 
-// save_zp — Copy $02–$8F to zp_save_buf (original BASIC state)
+// save_zp — Copy $02–$8F to Bank 1 BANK1_ZP_SAVE_BASE (original BASIC state)
 save_zp:
+    lda zp_ptr1
+    sta zp_save_orig_ptr
+    lda zp_ptr1_hi
+    sta zp_save_orig_ptr + 1
+    lda #<BANK1_ZP_SAVE_BASE
+    sta zp_ptr1
+    lda #>BANK1_ZP_SAVE_BASE
+    sta zp_ptr1_hi
     ldx #0
 !loop:
     lda zp_temp0,x
-    sta zp_save_buf,x
+    cpx #(zp_ptr1 - zp_temp0)
+    bne !chk_hi+
+    lda zp_save_orig_ptr
+!chk_hi:
+    cpx #(zp_ptr1_hi - zp_temp0)
+    bne !write+
+    lda zp_save_orig_ptr + 1
+!write:
+    ldy #0
+    jsr mmu_common_db_write_ptr1
+    inc zp_ptr1
+    bne !next+
+    inc zp_ptr1_hi
+!next:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
+    lda zp_save_orig_ptr
+    sta zp_ptr1
+    lda zp_save_orig_ptr + 1
+    sta zp_ptr1_hi
     rts
 
-// restore_zp — Copy zp_save_buf back to $02–$8F (original BASIC state)
+// restore_zp — Copy Bank 1 BANK1_ZP_SAVE_BASE back to $02–$8F (original BASIC state)
 restore_zp:
+    lda #<BANK1_ZP_SAVE_BASE
+    sta zp_ptr0
+    lda #>BANK1_ZP_SAVE_BASE
+    sta zp_ptr0_hi
     ldx #0
 !loop:
-    lda zp_save_buf,x
+    ldy #0
+    jsr mmu_common_db_read_ptr0
+    cpx #(zp_ptr0 - zp_temp0)
+    bne !chk_hi+
+    sta zp_save_orig_ptr
+    jmp !next+
+!chk_hi:
+    cpx #(zp_ptr0_hi - zp_temp0)
+    bne !store+
+    sta zp_save_orig_ptr + 1
+    jmp !next+
+!store:
     sta zp_temp0,x
+!next:
+    inc zp_ptr0
+    bne !inc_ok+
+    inc zp_ptr0_hi
+!inc_ok:
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
+    lda zp_save_orig_ptr
+    sta zp_ptr0
+    lda zp_save_orig_ptr + 1
+    sta zp_ptr0_hi
     rts
 
 // c128_vdc_reassert_mode — Defensive VDC mode restore
@@ -830,7 +916,7 @@ mmu_common_select_bank1:
     sei
     pla
     sta mmu_common_save_p
-    lda #MMU_RAM_BANK1
+    lda #MMU_RAM_BANK1_NOIO
     sta MMU_CR
     rts
 
@@ -856,14 +942,75 @@ mmu_common_tile_tmp:
     .byte 0
 mmu_common_huff_value:
     .byte 0
+#if C128_CARTRIDGE
+mmu_common_cart_bank:     .byte 0
+mmu_common_cart_dst_mmu:  .byte 0
+mmu_common_cart_dst_d506: .byte 0
+mmu_common_cart_len:      .byte 0
+mmu_common_cart_buf:      .fill MMU_COMMON_CART_CHUNK_MAX, 0
+#endif
 }
 mmu_common_helpers_blob_end:
-// The item DB shares Bank 1 with the map, so its pointer thunks are the
-// map's (identical bodies until 2026-10-25).
+#if C128_CARTRIDGE
+mmu_common_cart_blob:
+.pseudopc MMU_COMMON_CART_BASE {
+// Copy 1..32 bytes from External Function ROM (zp_ptr0, $8000-$BFFF) through
+// bottom-common bounce buffer into Bank 0 or Bank 1 (zp_ptr1).
+// Entry: X = byte count (1..32), mmu_common_cart_{bank,dst_mmu,dst_d506} set.
+// Clobbers: A, X, Y. Preserves caller MMU_CR, $D506=$0D, interrupt state, ZP ptrs.
+mmu_common_cart_copy_chunk:
+    stx mmu_common_cart_len
+    php
+    sei
+    lda MMU_CR
+    pha
+    lda #$3a                        // Bank 0 RAM, Ext Function ROM ($8000-$BFFF), I/O
+    sta MMU_CR
+    lda mmu_common_cart_bank
+    sta $de00
+    ldy #0
+!rd:
+    lda (zp_ptr0),y
+    sta mmu_common_cart_buf,y
+    iny
+    dex
+    bne !rd-
+    lda mmu_common_cart_dst_d506
+    sta $d506
+    lda mmu_common_cart_dst_mmu
+    sta MMU_CR
+    ldx mmu_common_cart_len
+    ldy #0
+!wr:
+    lda mmu_common_cart_buf,y
+    sta (zp_ptr1),y
+    iny
+    dex
+    bne !wr-
+    lda #$3e                        // Re-enable $D000-$DFFF I/O before writing $D506
+    sta MMU_CR
+    lda #$0d                        // Restore 4KB bottom/top common invariant
+    sta $d506
+    pla
+    sta MMU_CR
+    plp
+    rts
+mmu_common_cart_copy_end:
+}
+mmu_common_cart_blob_end:
+.assert "Cartridge common stub fits at $0FB0-$0FFF", mmu_common_cart_blob_end - mmu_common_cart_blob <= $1000 - MMU_COMMON_CART_BASE, true
+#endif
+// The item DB and Bank 1 $D000-$DFFF extended catalog share SEI-guarded
+// $7F Bank 1 pointer thunks in bottom common RAM ($D506=$0D preserves 4KB
+// bottom/top common RAM and CPU vectors).
 .label mmu_common_db_read_ptr0  = mmu_common_map_read_ptr0
 .label mmu_common_db_write_ptr0 = mmu_common_map_write_ptr0
 .label mmu_common_db_read_ptr1  = mmu_common_map_read_ptr1
 .label mmu_common_db_write_ptr1 = mmu_common_map_write_ptr1
+.label mmu_common_b1_noio_read_ptr0  = mmu_common_map_read_ptr0
+.label mmu_common_b1_noio_write_ptr0 = mmu_common_map_write_ptr0
+.label mmu_common_b1_noio_read_ptr1  = mmu_common_map_read_ptr1
+.label mmu_common_b1_noio_write_ptr1 = mmu_common_map_write_ptr1
 
 
 // ============================================================
@@ -888,6 +1035,12 @@ mmu_common_helpers_blob_end:
 :AssertRegionBefore("Items overlay cache ends before map region", BANK1_OVERLAY_ITEMS_END, MAP_BASE)
 :AssertRegionBefore("Reserved future map span ends before Bank1 DB region", BANK1_MAP_RESERVED_END, BANK1_DB_BASE)
 :AssertRegionBefore("Bank1 DB ends before tier cache window", BANK1_DB_END, BANK1_TIER_CACHE_BASE)
+.assert "Bank1 recall starts at Bank1 DB base", BANK1_RECALL_BASE, BANK1_DB_BASE
+.assert "Bank1 recall fits inside Bank1 DB region", BANK1_RECALL_END <= BANK1_DB_END, true
+.assert "Bank1 ZP save follows Bank1 recall", BANK1_ZP_SAVE_BASE, BANK1_RECALL_END + 1
+.assert "Bank1 ZP save size matches ZP_SAVE_SIZE", BANK1_ZP_SAVE_END - BANK1_ZP_SAVE_BASE + 1, ZP_SAVE_SIZE
+.assert "Bank1 ZP save fits inside Bank1 DB region", BANK1_ZP_SAVE_END <= BANK1_DB_END, true
+:AssertRegionBefore("Bank1 recall ends before tier cache window", BANK1_RECALL_END, BANK1_TIER_CACHE_BASE)
 :AssertRegionBefore("Tier cache ends before reserved gap 0", BANK1_TIER_CACHE_END, BANK1_RESERVED_GAP0_BASE)
 :AssertRegionBefore("Reserved gap 0 ends before STARTUP overlay slot", BANK1_RESERVED_GAP0_END, BANK1_OVERLAY_STARTUP_BASE)
 .assert "Title cache marker starts inside reserved gap 0", BANK1_TITLE_CACHE_MARKER_BASE >= BANK1_RESERVED_GAP0_BASE && BANK1_TITLE_CACHE_MARKER_BASE <= BANK1_RESERVED_GAP0_END, true
@@ -921,3 +1074,15 @@ mmu_common_helpers_blob_end:
 .assert "Overlay cache avoids $D000-$DFFF", BANK1_OVERLAY_DEATH_END < BANK1_RESERVED_IO_BASE, true
 .assert "DUNGEON overlay slot starts after $DFFF", BANK1_OVERLAY_DUNGEON_BASE > BANK1_RESERVED_IO_END, true
 .assert "Overlay cache fits in named owned Bank1 span", OVERLAY_CACHE_DISARM_END <= BANK1_CACHE_OWNED_END, true
+:AssertRegionBefore("DEATH overlay cache ends before Bank1 extended catalog", BANK1_OVERLAY_DEATH_END, BANK1_CATALOG_EXT_BASE)
+.assert "Bank1 extended catalog starts page-aligned at $D000", BANK1_CATALOG_EXT_BASE, $d000
+.assert "Bank1 extended catalog ends at $D8B7", BANK1_CATALOG_EXT_END == BANK1_CATALOG_EXT_BASE + BANK1_CATALOG_EXT_SIZE - 1 && BANK1_CATALOG_EXT_END == $d8b7, true
+:AssertRegionBefore("Bank1 extended catalog ends before store-inv reserve", BANK1_CATALOG_EXT_END, BANK1_STORE_INV_RESERVED_BASE)
+.assert "Bank1 store-inv reserve ends at $DCB7 inside $D000-$DFFF", BANK1_STORE_INV_RESERVED_BASE == BANK1_CATALOG_EXT_END + 1 && BANK1_STORE_INV_RESERVED_END == BANK1_STORE_INV_RESERVED_BASE + BANK1_STORE_INV_RESERVED_SIZE - 1 && BANK1_STORE_INV_RESERVED_END == $dcb7 && BANK1_STORE_INV_RESERVED_END <= BANK1_HIGH_DATA_END, true
+:AssertRegionBefore("Bank1 store-inv reserve ends before Bank1 msg_history", BANK1_STORE_INV_RESERVED_END, BANK1_MSG_HISTORY_BASE)
+.assert "Bank1 msg_history ends at $DF37 inside $D000-$DFFF", BANK1_MSG_HISTORY_BASE == BANK1_STORE_INV_RESERVED_END + 1 && BANK1_MSG_HISTORY_END == BANK1_MSG_HISTORY_BASE + BANK1_MSG_HISTORY_SIZE - 1 && BANK1_MSG_HISTORY_END == $df37 && BANK1_MSG_HISTORY_END <= BANK1_HIGH_DATA_END, true
+:AssertRegionBefore("Bank1 high data window ends before DUNGEON overlay cache", BANK1_HIGH_DATA_END, BANK1_OVERLAY_DUNGEON_BASE)
+:AssertRegionBefore("VDC scroll-delta scratch ends before VDC ITEM.CAT low span", VDC_SCRATCH_END, VDC_ITEM_CAT_LO_BASE)
+:AssertRegionBefore("VDC ITEM.CAT low span ends before VDC charset base", VDC_ITEM_CAT_LO_END, VDC_CHARSET_BASE)
+.assert "VDC ITEM.CAT cell tail stays in unused scanlines 8..15", VDC_ITEM_CAT_CELL_OFFSET == 8 && VDC_ITEM_CAT_CELL_OFFSET + VDC_ITEM_CAT_CELL_BYTES == VDC_ITEM_CAT_CELL_STRIDE, true
+.assert "VDC charset ends at top of 16 KB VDC RAM", VDC_CHARSET_END == VDC_RAM_SIZE - 1, true

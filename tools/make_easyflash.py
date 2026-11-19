@@ -21,7 +21,8 @@ ROM_SIZE = 64 * BANK_SIZE
 OVERLAYS = (("STARTUP", "start"), ("TOWN", "town"), ("DEATH", "death"),
             ("DUNGEON_GEN", "gen"), ("HELP", "help"), ("UI", "ui"),
             ("ITEMS", "items"), ("SPELL", "spell"), ("MODAL_MISC", "modal"),
-            ("CHEST", "chest"))
+            ("CHEST", "chest"), ("HOME", "home"), ("STORAGE", "storage"),
+            ("TITLE", "title"))
 
 
 def index_bytes():
@@ -51,11 +52,13 @@ def pack(source: Path, output: Path) -> dict:
         CONTRACT["CART_ASSET_RESIDENT"]: ("resident", *prg(source / "moria8.prg", 0x0801, 0xCE00)),
         CONTRACT["CART_ASSET_RUNTIME"]: ("runtime", *prg(source / "64.bank", 0xF000, 0xFFFA)),
         CONTRACT["CART_ASSET_INDEX"]: ("index", 0xCE00, index_bytes()),
-        CONTRACT["CART_ASSET_TITLE"]: ("title", *prg(source / "title", 0xC000, 0xCF00)),
+        CONTRACT["CART_ASSET_TITLE_ART"]: ("title", *prg(source / "title", 0xC000, 0xCF00)),
         CONTRACT["CART_ASSET_CATALOG"]: ("catalog", 0, b"".join(catalog_disk.records())),
         CONTRACT["CART_ASSET_LEGAL_UI"]: ("legalui", *prg(source / "legalui", 0xE000, 0xE600)),
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: ("license", 0, (ROOT / "data/LICENSE").read_bytes()),
         CONTRACT["CART_ASSET_LEGAL_OFFER"]: ("source-offer", 0, (ROOT / "data/SOURCE-OFFER").read_bytes()),
+        CONTRACT["CART_ASSET_ITEM_CATALOG"]: ("item-catalog", 0, catalog_disk.item_catalog_bytes()),
+        CONTRACT["CART_ASSET_CATALOG_EXT"]: ("catalog-ext", 0, b"".join(catalog_disk.ext_records())),
     }
     inputs.update({CONTRACT["CART_ASSET_" + symbol]:
                    (f"ovl.{name}", *prg(source / f"ovl.{name}", 0xE000, 0xF000))
@@ -71,6 +74,8 @@ def pack(source: Path, output: Path) -> dict:
         raise ValueError("Asset directory exceeds ROM bank zero")
     if len(inputs[CONTRACT["CART_ASSET_CATALOG"]][2]) > 0x6000:
         raise ValueError("Catalog offsets exceed the reader's source-address range")
+    if len(inputs[CONTRACT["CART_ASSET_CATALOG_EXT"]][2]) > 0x6000:
+        raise ValueError("Extended catalog offsets exceed the reader's source-address range")
     manifest = {"format": "EasyFlash", "crt_type": 32, "subtype": 0,
                 "flash_writes": False, "assets": []}
     offset = BANK_SIZE
@@ -92,15 +97,26 @@ def pack(source: Path, output: Path) -> dict:
     header[0x1A] = 0  # Standard EasyFlash; no dependence on Ultimate extensions.
     header[0x20:0x20+len(b"MORIA8 EASYFLASH EXPERIMENT")] = b"MORIA8 EASYFLASH EXPERIMENT"
     image = bytearray(header)
-    # Supply both chips for all banks; empty ROMH banks are erased flash.
+    # Omit erased ($FF) 8 KB flash banks; VICE and EasyFlash hardware default
+    # unrepresented banks to $FF, matching canonical cartconv sparse CRTs.
+    erased_bank = b"\xff" * BANK_SIZE
+    chip_count = 0
     for bank in range(64):
-        for address, data in ((0x8000, roml[bank*BANK_SIZE:(bank+1)*BANK_SIZE]),
-                              (0xA000, romh_boot if bank == 0 else b"\xff" * BANK_SIZE)):
+        for address, data in ((0x8000, bytes(roml[bank*BANK_SIZE:(bank+1)*BANK_SIZE])),
+                              (0xA000, romh_boot if bank == 0 else erased_bank)):
+            if data == erased_bank:
+                continue
             image += struct.pack(">4sIHHHH", b"CHIP", BANK_SIZE + 16, 2, bank, address, BANK_SIZE)
             image += data
+            chip_count += 1
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(image)
-    manifest.update(roml_bytes_used=offset, crt_sha256=hashlib.sha256(image).hexdigest())
+    manifest.update(
+        roml_bytes_used=offset,
+        chip_count=chip_count,
+        crt_bytes=len(image),
+        crt_sha256=hashlib.sha256(image).hexdigest(),
+    )
     output.with_suffix(".json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
@@ -111,4 +127,7 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     result = pack(args.source, args.output)
-    print(f"{args.output}: {len(result['assets'])} assets, {result['roml_bytes_used']} ROML bytes")
+    print(
+        f"{args.output}: {len(result['assets'])} assets, {result['chip_count']} CHIP blocks, "
+        f"{result['roml_bytes_used']} ROML bytes, {result['crt_bytes']} CRT bytes"
+    )

@@ -117,6 +117,12 @@
 .const PORTB_XE_BANK2 = $ea
 .const PORTB_XE_BANK3 = $ee
 
+// 130XE Extended RAM Window ($4000-$7FFF = 64 pages/bank, 256 pages across 4 banks)
+.const XE_WIN_BASE_HI  = $40
+.const XE_WIN_LIMIT_HI = $80
+.const XE_BANK_PAGES   = XE_WIN_LIMIT_HI - XE_WIN_BASE_HI   // 64 pages (16 KB)
+.const XE_TOTAL_PAGES  = 4 * XE_BANK_PAGES                    // 256 pages (64 KB)
+
 // ANTIC ($D400-$D4FF)
 .const DMACTL = $d400
 .const CHACTL = $d401
@@ -191,18 +197,23 @@
 // ============================================================
 // Save Slot Capacity Contract
 // ============================================================
-.const ATARI_SAVE_SLOT_SECTORS       = 56
+.const ATARI_SAVE_SLOT_SECTORS       = 68
 .const ATARI_SAVE_SECTOR_DATA_BYTES  = 125
-.const ATARI_SAVE_SERIALIZED_MAX     = 6616
+.const ATARI_SAVE_SERIALIZED_MAX     = 7858
 .const DOS25_LINK_BYTES              = 125
 .const DOS25_LINK_HI                 = 126
 .const DOS25_LINK_LO                 = 127
+
+// Atari 57-byte MONSTER.CAT record contract (49B base + 8B Phase 5 extended)
+.const A8_CATALOG_EXT_SIZE           = 8
+.const A8_CATALOG_RECORD_SIZE        = 57
 
 // ============================================================
 // Link-Time Boundary Assertions
 // ============================================================
 .assert "ATARI_CHARSET_BASE is 1 KB aligned", (<ATARI_CHARSET_BASE) == 0 && ((>ATARI_CHARSET_BASE) & 3) == 0, true
 .assert "SCREEN_RAM stays below $4000", SCREEN_END < $4000, true
+.assert "130XE extended window is 64 pages ($4000-$7FFF)", XE_WIN_BASE_HI == $40 && XE_WIN_LIMIT_HI == $80 && XE_BANK_PAGES == 64, true
 .assert "MAP_BASE + ATARI_MAP_SIZE ends at $CFFF below $D000 I/O hole", MAP_BASE + ATARI_MAP_SIZE - 1 == MAP_END && MAP_END == $cfff, true
 .assert "MAP_END does not overlap IO_HOLE_BASE", MAP_END < IO_HOLE_BASE, true
 .assert "Save slot sector budget fits full serialized save", ATARI_SAVE_SLOT_SECTORS * ATARI_SAVE_SECTOR_DATA_BYTES >= ATARI_SAVE_SERIALIZED_MAX, true

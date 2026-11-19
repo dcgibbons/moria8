@@ -1,6 +1,18 @@
 #importonce
 // player_items.s — Equip, Remove, Eat, and equipment recalculation
 //
+// Placement & ownership:
+// - Resident in Default across all 7 ports; command handlers in
+//   core/player_item_commands.s are resident on C64/Plus/4/Atari 8-bit, in
+//   RuntimeBanked ($F000) on C128, and in ItemActionsOverlay (OVL_ITEMS) on
+//   Apple IIe/BBC Master 128/Commander X16.
+//
+// Lifetime & cross-overlay callers:
+// - show_inv_and_select transiently displays OVL_UI/OVL_HELP, restores
+//   OVL_MODAL, and reloads any non-OVL_NONE piw_return_overlay (calling
+//   hal_overlay_post_reload on non-persistent-aux ports). Overlay callers MUST
+//   declare their return overlay via piw_return_overlay (never probed).
+//
 // Phase 6.3: Player item interaction routines.
 // item_wear: equip an item from carried inventory
 // item_takeoff: remove an equipped item back to carried inventory
@@ -34,8 +46,8 @@
 .const FOOD_MAX_LO          = <4000
 .const FOOD_MAX_HI          = >4000
 
-.const ITEM_RATION     = 15    // Type ID for ration of food
-.const ITEM_SLIME_MOLD = 16   // Type ID for slime mold
+.const ITEM_RATION     = ITEM_SLOT_RATION_OF_FOOD // Slot ID for ration of food
+.const ITEM_SLIME_MOLD = ITEM_SLOT_FOOD_SLIME_MOLD // Slot ID for slime mold
 
 // ============================================================
 // Scratch variables
@@ -47,6 +59,7 @@ piw_qty:      .byte 0          // Item qty being processed
 piw_p1:       .byte 0          // Item p1 being processed
 piw_flags:    .byte 0          // Item flags being processed
 piw_ego:      .byte 0          // Item ego type being processed
+piw_recalc_pending: .byte 0    // Deferred recalc flag for overlay scroll handlers
 piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
 piw_visible_count: .byte 0     // Number of cached visible slots
 #if PLATFORM_SCRATCH_BUFS_IN_PAGE2 || PLATFORM_LIST_BUFS_LOW
@@ -86,6 +99,8 @@ equip_slot_for_cat:
     .byte EQUIP_AMULET     // ICAT_AMULET (16) -> slot 30
     .byte $ff              // ICAT_CHEST (17) -> invalid
     .byte $ff              // ICAT_SPIKE (18) -> invalid
+    .byte EQUIP_CLOAK      // ICAT_CLOAK (19) -> slot 32
+    .byte $ff              // ICAT_JUNK (20) -> invalid
 
 // ============================================================
 // Subroutines
@@ -110,47 +125,6 @@ show_inv_and_select:
     jsr input_get_followup_key
 #endif
     tay
-#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
-    lda piw_return_overlay
-    bne !sias_have_return_overlay+
-#if HAL_PLATFORM_AUX_PERSISTENT_DATA
-    // Every no-hint Apple/CX16 caller is immediately resident or in OVL.ITEMS;
-    // OVL.SPELL callers provide an explicit hint before entering the selector.
-    tsx
-    lda $0102,x
-    cmp #hal_platform_overlay_window_hi_min
-    bcc !sias_return_resident+
-    cmp #hal_platform_overlay_window_hi_max_exclusive
-    bcs !sias_return_resident+
-    lda #OVL_ITEMS
-    sta piw_return_overlay
-#else
-    // Restore an item overlay when either the immediate return target or the
-    // selector's outer continuation is inside the overlay window.
-    tsx
-    lda $0102,x
-    cmp #hal_platform_overlay_window_hi_min
-    bcc !sias_check_outer_return+
-    cmp #hal_platform_overlay_window_hi_max_exclusive
-    bcc !sias_return_overlay+
-!sias_check_outer_return:
-    lda $0104,x
-    cmp #hal_platform_overlay_window_hi_min
-    bcc !sias_return_resident+
-    cmp #hal_platform_overlay_window_hi_max_exclusive
-    bcs !sias_return_resident+
-!sias_return_overlay:
-    lda current_overlay
-    cmp #OVL_ITEMS
-    beq !sias_store_return_overlay+
-    cmp #OVL_SPELL
-    bne !sias_return_resident+
-!sias_store_return_overlay:
-    sta piw_return_overlay
-#endif
-!sias_return_resident:
-!sias_have_return_overlay:
-#endif
     tya
     pha
     jsr ui_view_restore_modal_overlay
@@ -169,22 +143,7 @@ show_inv_and_select:
     brk
 !sias_overlay_loaded:
 #if !HAL_PLATFORM_AUX_PERSISTENT_DATA
-#if PLATFORM_PRODUCT_OVERLAY_RELOAD_RESYNC
-    jsr hal_platform_runtime_resync
-    lda #MMU_ALL_RAM
-    sta hal_memory_mmu_config_register
-#endif
-    sei
-#if PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
-    jsr hal_irq_install_runtime
-#endif
-#if HAL_PLATFORM_ITEM_PROMPT_RELOAD_PLUS4_BANK_RAM
-    jsr plus4_install_ram_irq_vectors
-    jsr plus4_bank_ram
-#else
-    lda #BANK_NO_KERNAL
-    sta hal_memory_cpu_port
-#endif
+    jsr hal_overlay_post_reload
 #endif
 !sias_no_items_reload:
 !sias_no_overlay_reload:
@@ -230,8 +189,7 @@ piw_inv_slot_matches_filter:
     beq !piw_inv_match+
     cpy #$fd
     beq !piw_inv_match+
-    tax
-    lda it_category,x
+    jsr item_get_category_inv_x // sets item_cur_page, A = category; preserves X, Y
     cpy #PIW_FILTER_RECHARGE
     beq !piw_inv_recharge+
     cpy #$fe
@@ -242,12 +200,13 @@ piw_inv_slot_matches_filter:
     beq !piw_inv_mage_book+
     cpy #PIW_FILTER_PRAYER_BOOK
     bne !piw_inv_fail+
+    .assert "Priest books 1..4 are contiguous on Page 0", ITEM_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM == ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK + 1 && ITEM_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS == ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK + 2 && ITEM_HOLY_BOOK_OF_PRAYERS_EXORCISM == ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK + 3 && ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_EXORCISM == 0, true
+    bit item_cur_page
+    bvs !piw_inv_fail+
     lda piw_item_id
-    cmp #48
-    beq !piw_inv_match+
     sec
-    sbc #58
-    cmp #3
+    sbc #ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
+    cmp #4
     bcs !piw_inv_fail+
     bcc !piw_inv_match+
 
@@ -260,21 +219,26 @@ piw_inv_slot_matches_filter:
 
 !piw_inv_wearable:
     tax
+    .assert "Flask of Oil lives on Page 0", ITEM_PAGE_FLASK_OF_OIL, 0
+    bit item_cur_page
+    bvs !piw_wear_chk+
     lda piw_item_id
     cmp #ITEM_FLASK_OIL
     beq !piw_inv_fail+
+!piw_wear_chk:
     lda equip_slot_for_cat,x
     cmp #$ff
     beq !piw_inv_fail+
     bne !piw_inv_match+
 
 !piw_inv_mage_book:
+    .assert "Mage books 1..4 are contiguous on Page 0", ITEM_SPELLBOOK_MAGICK_I == ITEM_SPELLBOOK_BEGINNERS_MAGICK + 1 && ITEM_SPELLBOOK_MAGICK_II == ITEM_SPELLBOOK_BEGINNERS_MAGICK + 2 && ITEM_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER == ITEM_SPELLBOOK_BEGINNERS_MAGICK + 3 && ITEM_PAGE_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER == 0, true
+    bit item_cur_page
+    bvs !piw_inv_fail+
     lda piw_item_id
-    cmp #47
-    beq !piw_inv_match+
     sec
-    sbc #55
-    cmp #3
+    sbc #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
+    cmp #4
     bcs !piw_inv_fail+
 
 !piw_inv_match:

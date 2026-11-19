@@ -18,10 +18,7 @@
 .segment C128Bank1CatalogNames
 #import "../../shared/catalog/catalog_names.s"
 .assert "Catalog names fit their Bank1 span", catalog_names_end <= BANK1_CATALOG_NAMES_END + 1, true
-.segment C128ResidentWorld
-
-// Boot loads (main.s c128_load_core_residents, after this world payload has
-// loaded): the main image has no room for them.
+.segment Default
 // The monster catalog's fields and names, into their Bank 1 spans.
 catalog_filename:
     .text "128.CAT"
@@ -31,6 +28,11 @@ catalog_names_filename:
     .text "128.CNM"
 catalog_names_filename_end:
 .const CATALOG_NAMES_FILENAME_LEN = catalog_names_filename_end - catalog_names_filename
+#if !C128_CARTRIDGE
+catalog_ext_filename:
+    .text "128.CEX"
+catalog_ext_filename_end:
+.const CATALOG_EXT_FILENAME_LEN = catalog_ext_filename_end - catalog_ext_filename
 .macro C128Bank1LoadFile(filename, filename_len, dest) {
     lda #RESIDENT_HUFFMAN_FILE_NUM
     sta disk_temp
@@ -48,10 +50,30 @@ catalog_names_filename_end:
     sta c128_runtime_load_bank
     jmp c128_load_runtime_prg
 }
+#endif
 c128_load_catalog_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_CAT
+    jmp cart_load_asset
+#else
     :C128Bank1LoadFile(catalog_filename, CATALOG_FILENAME_LEN, BANK1_CATALOG_FIELDS_BASE)
+#endif
 c128_load_catalog_names_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_CNM
+    jmp cart_load_asset
+#else
     :C128Bank1LoadFile(catalog_names_filename, CATALOG_NAMES_FILENAME_LEN, BANK1_CATALOG_NAMES_BASE)
+#endif
+c128_load_catalog_ext_prg:
+#if C128_CARTRIDGE
+    lda #CART_ASSET_CEX
+    jmp cart_load_asset
+#else
+    :C128Bank1LoadFile(catalog_ext_filename, CATALOG_EXT_FILENAME_LEN, BANK1_CATALOG_EXT_BASE)
+#endif
+
+#import "catalog_ext_fetch128.s"
 
 .const CATALOG_NAME_POOL_BASE = BANK1_CATALOG_POOL_BASE
 .const CATALOG_NAME_POOL_END  = BANK1_CATALOG_POOL_END

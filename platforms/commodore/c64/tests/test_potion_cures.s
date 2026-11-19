@@ -52,6 +52,7 @@ test_finish:
 
 .pc = $0840 "Main"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -67,37 +68,49 @@ test_finish:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
 #import "../../../../core/monster_ai.s"
 #import "../../../../core/recall.s"
+.segment TestCreateOverlay
 #import "../../../../core/monster_magic.s"
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
+.segment TestCreateOverlay
 #import "../../../../core/projectile.s"
+.segment Default
 #import "../../../../core/spell_effects.s"
 #import "../../../../core/spell_data.s"
+.segment TestCreateOverlay
 #import "../../../../core/player_move.s"
+.segment Default
 #import "../../../../core/turn.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/combat.s"
+.segment TestCreateOverlay
 #import "../../../../core/scene_mat_tile.s"
+.segment Default
 #import "../../../../core/monster_attack.s"
 // Linker stub — special-room generation is not exercised by this suite.
 random_floor_in_room:
@@ -389,7 +402,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 0
@@ -435,7 +448,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 1
@@ -475,7 +488,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 2
@@ -516,7 +529,7 @@ test_start:
     lda #1
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_HEALING
+    lda #ITEM_SLOT_POTION_OF_HEALING
     jsr tq_quaff
     lda #$00
     sta tc_results + 3
@@ -569,7 +582,7 @@ test_start:
     lda #100
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_HEALING
+    lda #ITEM_SLOT_POTION_OF_HEALING
     jsr tq_quaff
     lda #$00
     sta tc_results + 4
@@ -606,7 +619,7 @@ test_start:
     lda #<300
     ldx #>300
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_quaff
     lda #$00
     sta tc_results + 5
@@ -644,7 +657,7 @@ test_start:
     sta tq_lo
     lda #14
     sta tq_hi
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr tq_range
     lda #$00
     sta tc_results + 6
@@ -660,7 +673,7 @@ test_start:
     sta tq_lo
     lda #28
     sta tq_hi
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr tq_range
     lda tq_ok
     sta tc_results + 7
@@ -669,7 +682,7 @@ test_start:
     sta tq_lo
     lda #42
     sta tq_hi
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_range
     lda tq_ok
     sta tc_results + 8
@@ -692,7 +705,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #17
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     jsr tq_quaff
     lda #0
     sta vis_room_revealed
@@ -721,7 +734,7 @@ test_start:
     lda #50
     ldx #0
     jsr tq_set_hp
-    lda #25
+    lda #ITEM_SLOT_POTION_OF_CURE_SERIOUS_WOUNDS
     jsr tq_quaff
     lda #0
     sta tpm_huff_calls
@@ -751,7 +764,7 @@ test_start:
     lda #20
     ldx #0
     jsr tq_set_hp
-    lda #ITEM_TYPE_POT_CURE_CRITICAL
+    lda #ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS
     jsr tq_quaff
     lda #0
     sta tpm_huff_calls
@@ -783,7 +796,7 @@ test_start:
     lda #10
     ldx #8
     jsr tg_stat
-    lda #ITEM_TYPE_POT_GAIN_STR
+    lda #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
     jsr tq_quaff
     lda #$00
     sta tc_results + 12
@@ -812,7 +825,7 @@ test_start:
     // Test 14: Gain Dexterity (#143) at 50 (18/32) raises 1d25: 40 quaffs
     // land in 51-75 and one passes 60 (more than 1d10 could).
     // ==========================================
-    lda #ITEM_TYPE_POT_GAIN_STR + 3
+    lda #ITEM_SLOT_POTION_OF_GAIN_DEXTERITY
     sta tq_item
     lda #50
     sta tq_lo
@@ -836,7 +849,7 @@ test_start:
     // Test 15: Gain Wisdom (#142) at 100 (18/82) raises 1d10: 40 quaffs land
     // in 101-110 and one passes 105.
     // ==========================================
-    lda #ITEM_TYPE_POT_GAIN_STR + 2
+    lda #ITEM_SLOT_POTION_OF_GAIN_WISDOM
     sta tq_item
     lda #100
     sta tq_lo
@@ -865,7 +878,7 @@ test_start:
     lda #117
     ldx #118
     jsr tg_stat
-    lda #ITEM_TYPE_POT_GAIN_STR + 1
+    lda #ITEM_SLOT_POTION_OF_GAIN_INTELLIGENCE
     jsr tq_quaff
     lda #$00
     sta tc_results + 15
@@ -882,7 +895,7 @@ test_start:
     lda #118
     ldx #100
     jsr tg_stat
-    lda #ITEM_TYPE_POT_GAIN_CHR
+    lda #ITEM_SLOT_POTION_OF_CHARISMA
     jsr tq_quaff
     lda player_data + PL_CHR_BASE
     cmp #118
@@ -901,41 +914,46 @@ test_start:
 !t16_done:
 
     // ==========================================
-    // Test 17: Gain Constitution (#144) adds 1 to max HP and heals to full:
-    // CON 10 -> 11, HP 50/200 -> 201/201 in ZP and player_data.
+    // Test 17: Gain Constitution (#144) recalculates max HP via player_calc_hp
+    // and heals to full: L10 Human Warrior CON 16 -> 17 (con_adj 0 -> +1),
+    // HP 50/100 -> 109/109 in ZP and player_data.
     // ==========================================
-    ldy #PL_CON_BASE - PL_STR_BASE
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
     lda #10
-    ldx #10
+    sta player_data + PL_LEVEL
+    sta zp_player_lvl
+    ldy #PL_CON_BASE - PL_STR_BASE
+    lda #16
+    ldx #16
     jsr tg_stat
-    lda #200
-    sta tq_lo
-    lda #0
-    sta tq_hi
+    jsr player_calc_hp
     lda #50
-    ldx #0
-    jsr tq_set_hp
-    lda #ITEM_TYPE_POT_GAIN_STR + 4
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #ITEM_SLOT_POTION_OF_GAIN_CONSTITUTION
     jsr tq_quaff
     lda #$00
     sta tc_results + 16
     lda player_data + PL_CON_BASE
-    cmp #11
+    cmp #17
     bne !t17_done+
     lda zp_player_con
-    cmp #11
+    cmp #17
     bne !t17_done+
     lda zp_player_mhp_lo
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda player_data + PL_MHP_LO
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda zp_player_hp_lo
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda player_data + PL_HP_LO
-    cmp #201
+    cmp #109
     bne !t17_done+
     lda zp_player_mhp_hi
     ora zp_player_hp_hi

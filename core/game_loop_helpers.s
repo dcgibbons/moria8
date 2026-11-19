@@ -99,6 +99,15 @@ recall_view_body:
 	    jmp vp_render_status_loop
 
 recall_show_matching_entry:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    jsr catalog_recall_match_and_fill
+    bcc !recall_none+
+    jsr tramp_ui_recall
+    jsr input_prepare_modal_dismiss_key
+    jmp hal_input_get_key
+!recall_none:
+    rts
+#else
     lda recall_query_sc
     cmp recall_last_sc
     bne !recall_new_char+
@@ -157,6 +166,7 @@ recall_show_matching_entry:
     jsr tramp_ui_recall
     jsr input_prepare_modal_dismiss_key
     jmp hal_input_get_key
+#endif
 #if RECALL_VIEW_OVERLAYED
 :RecallViewBodyRestoreSegment()
 #endif

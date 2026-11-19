@@ -107,6 +107,9 @@ plus4_display_resync:
     and #$03
     ora #TED_CHARSET_LOWER_UPPER
     sta TED_CHARPTR
+    lda #$ff                    // Park TED hardware cursor off-screen ($03FF >= 1000).
+    sta TED_CURSOR_HI
+    sta TED_CURSOR_LO
     rts
 
 // ============================================================
@@ -119,7 +122,9 @@ screen_vectors:
     jmp screen_put_char     // +0: put char at cursor
     jmp screen_put_string   // +3: put string at (row,col)
 
+#if !PLUS4_PRODUCT_OVERLAY_RUNTIME
 #import "../../../core/ui_equipment_wrap.s"
+#endif
 
 .label hal_screen_init = screen_noop
 .label hal_screen_clear = screen_clear

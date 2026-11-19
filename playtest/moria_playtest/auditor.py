@@ -62,6 +62,13 @@ class Auditor:
 
     def check(self, obs: Observation, tiles: bytes | None) -> list[Finding]:
         if obs.mode == Mode.UNKNOWN:
+            if obs.stage == "status_row_shifted":
+                expected = obs.abi.hal_layout_status_row if obs.abi is not None else 21
+                shifted = next((i for i, row in enumerate(obs.rows)
+                                if i != expected and "LV:" in row and "DL:" in row), None)
+                where = f"row {shifted}" if shifted is not None else "shifted row"
+                return [Finding("status_row_shifted", "game",
+                                f"status line on {where}, expected row {expected}")]
             label = obs.stage or (obs.rows[0].strip()[:40] or "(blank)")
             if label not in self.reported_unknown:
                 self.reported_unknown.add(label)

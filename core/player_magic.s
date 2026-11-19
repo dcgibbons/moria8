@@ -41,115 +41,8 @@ player_cast_spell:
     clc
     rts
 !pm_can_cast:
-    jsr pm_require_class_level
-    bcs !pm_level_ok+
-#if C128_TEST_SCRIPTED_SPELL
-    jmp c128_test_spell_fail_level_sym
-#endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_fail_level_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_level_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jmp c64_test_spell_fail_level_sym
-#endif
-    clc
-    rts
-!pm_level_ok:
     lda #SPELL_MAGE
-    sta pm_spell_type
-    lsr
-    sta pm_mode
-    jsr pm_setup_active_tables
-    jsr pm_select_book
-    bcc !pm_cancel+
-    jsr pm_build_known_list_from_book
-    lda pm_spell_count
-    bne !pm_have_spells+
-    ldx #HSTR_PM_NOT_KNOWN
-    jsr huff_print_msg
-#if C128_TEST_SCRIPTED_SPELL
-    jmp c128_test_spell_fail_known_sym
-#endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_fail_known_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_known_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jmp c64_test_spell_fail_known_sym
-#endif
-    clc
-    rts
-!pm_have_spells:
-    jsr pm_prompt_visible_spell_choice
-    bcc !pm_cancel+
-    jsr pm_validate_selected_spell
-    bcs !pm_ready+
-#if C128_TEST_SCRIPTED_SPELL
-    jmp c128_test_spell_fail_validate_sym
-#endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_fail_validate_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_validate_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jmp c64_test_spell_fail_validate_sym
-#endif
-    clc
-    rts
-!pm_ready:
-#if HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
-    jsr tramp_calc_spell_failure
-#else
-    jsr calc_spell_failure
-#endif
-    bcc !pm_success+
-    jsr pm_handle_fail_roll
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_fail_roll_sym
-#endif
-    sec
-    rts
-!pm_success:
-    jsr tramp_spell_execute_selected
-    jsr pm_finish_success_common
-#if C128_TEST_SCRIPTED_SPELL
-c128_test_spell_pass_sym:
-    brk
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    inc c64_test_spell_success_count
-    inc c64_test_spell_return_pending
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    inc c64_test_spell_success_count
-    lda #12
-    sta c64_test_spell_return_pending
-#endif
-    sec
-    rts
-
-!pm_cancel:
-#if C128_TEST_SCRIPTED_SPELL
-    jmp c128_test_spell_fail_cancel_sym
-#endif
-#if C128_TEST_SCRIPTED_SPELL_CANCEL
-    jmp c128_test_spell_cancel_pass_sym
-#endif
-#if C64_TEST_SCRIPTED_SPELL
-    jmp c64_test_spell_fail_cancel_sym
-#endif
-#if C64_TEST_SCRIPTED_DUNGEON_SPELL
-    jmp c64_test_spell_fail_cancel_sym
-#endif
-    clc
-    rts
+    bne pm_cast_or_pray_common
 
 // ============================================================
 // player_pray — Handle 'p' (priest-affinity spell classes)
@@ -170,69 +63,101 @@ player_pray:
     clc
     rts
 !pp_can_pray:
+    lda #SPELL_PRIEST
+
+pm_cast_or_pray_common:
+    pha
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_require_class_level
+#else
     jsr pm_require_class_level
-    bcs !pp_level_ok+
-#if C128_TEST_SCRIPTED_PRAYER
+#endif
+    pla
+    bcs !pm_level_ok+
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_level_sym
 #endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_level_sym
 #endif
     clc
     rts
-!pp_level_ok:
-    lda #SPELL_PRIEST
+!pm_level_ok:
     sta pm_spell_type
     lda #0
     sta pm_mode
     jsr pm_setup_active_tables
     jsr pm_select_book
-    bcc !pp_cancel+
+    bcc !pm_cancel+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_build_known_list
+#else
     jsr pm_build_known_list_from_book
+#endif
     lda pm_spell_count
-    bne !pp_have_prayers+
+    bne !pm_have_spells+
     ldx #HSTR_PM_NOT_KNOWN
     jsr huff_print_msg
-#if C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_known_sym
 #endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_known_sym
 #endif
     clc
     rts
-!pp_have_prayers:
+!pm_have_spells:
     jsr pm_prompt_visible_spell_choice
-    bcc !pp_cancel+
+    bcc !pm_cancel+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_validate_spell
+#else
     jsr pm_validate_selected_spell
-    bcs !pp_ready+
-#if C128_TEST_SCRIPTED_PRAYER
+#endif
+    bcs !pm_ready+
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_validate_sym
 #endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_validate_sym
 #endif
     clc
     rts
-!pp_ready:
+!pm_ready:
 #if HAL_PLATFORM_CAST_FAILURE_USES_TRAMPOLINE
     jsr tramp_calc_spell_failure
 #else
     jsr calc_spell_failure
 #endif
-    bcc !pp_success+
+    bcc !pm_success+
+#if PLAYER_MAGIC_CAST_HELPERS_TRAMPOLINED
+    jsr tramp_pm_handle_fail_roll
+#else
     jsr pm_handle_fail_roll
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_roll_sym
+#endif
     sec
     rts
-!pp_success:
+!pm_success:
     jsr tramp_spell_execute_selected
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    jsr c64_test_detect_evil_assert_detected
+c64_test_detect_check_point:        // the runner checks an evil monster is detected here
 #endif
     jsr pm_finish_success_common
-#if C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
 c128_test_spell_pass_sym:
     brk
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    inc c64_test_spell_success_count
+    inc c64_test_spell_return_pending
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    inc c64_test_spell_success_count
+    lda #12
+    sta c64_test_spell_return_pending
 #endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     inc c64_test_spell_success_count
@@ -245,11 +170,14 @@ c128_test_spell_pass_sym:
     sec
     rts
 
-!pp_cancel:
-#if C128_TEST_SCRIPTED_PRAYER
+!pm_cancel:
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_cancel_sym
 #endif
-#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_cancel_pass_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DUNGEON_SPELL || C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_cancel_sym
 #endif
     clc
@@ -300,26 +228,13 @@ pm_setup_active_tables:
     sta pm_name_hi_hi
     rts
 
-pm_require_class_level:
-    ldx player_data + PL_CLASS
-    :AuxReadX(class_spell_min_level)
-    cmp zp_player_lvl
-    beq !pm_rcl_ready+
-    bcc !pm_rcl_ready+
-    ldx #HSTR_PM_NO_EXP
-    jsr huff_print_msg
-    clc
-    rts
-!pm_rcl_ready:
-    sec
-    rts
+#if !PLAYER_MAGIC_CAST_HELPERS_EXTERNAL
+#import "player_magic_cast_cold.s"
+#endif
 
-pm_handle_fail_roll:
-    ldx #HSTR_PM_FAIL
-    jsr huff_print_msg
-    lda #SFX_SPELL_FAIL
-    jsr hal_sound_play
-    jmp pm_consume_mana
+#if !PLAYER_MAGIC_BROWSE_EXTERNAL
+#import "player_magic_browse_cold.s"
+#endif
 
 pm_select_book:
 !pm_select_retry:
@@ -328,13 +243,19 @@ pm_select_book:
     sec
     sbc pm_spell_type
 #if HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
+    // Overlay callers (G study: pm_mode != 0 in OVL_UI, or non-resident cast
+    // overlays) set piw_return_overlay so '?' restores them; resident cast/pray
+    // (PLAYER_CAST_RESIDENT with pm_mode == 0) leave piw_return_overlay = OVL_NONE
+    // so book-'?' keeps OVL_UI cached in $E000 for spell-'?'.
+#if PLAYER_CAST_RESIDENT
     ldy pm_mode
-    beq !pm_select_no_ui_return_hint+
+    beq !pm_sb_no_ret_ovl+
+#endif
     pha
-    lda #OVL_UI
+    lda current_overlay
     sta piw_return_overlay
     pla
-!pm_select_no_ui_return_hint:
+!pm_sb_no_ret_ovl:
 #endif
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
     jsr tramp_select_filtered_inv
@@ -372,99 +293,6 @@ pm_select_book:
     sta pm_book_mask_hi
     jsr msg_clear
     sec
-    rts
-
-pm_build_known_list_from_book:
-    lda #0
-    sta pm_spell_count
-    ldx #0
-!pm_bk_loop:
-    cpx #SPELL_CATALOG_COUNT
-    bcs !pm_bk_done+
-
-    lda pm_lvl_tbl_lo
-    sta zp_ptr0
-    lda pm_lvl_tbl_hi
-    sta zp_ptr0_hi
-    txa
-    tay
-    :SpellTblRead_ptr0_y()
-    cmp #99
-    beq !pm_bk_next+
-
-    lda pm_book_mask_lo
-    sta zp_ptr0
-    lda pm_book_mask_hi
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcc !pm_bk_next+
-
-    lda #<player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0
-    lda #>player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcc !pm_bk_next+
-
-    ldy pm_spell_count
-    txa
-    sta pm_spell_list,y
-    inc pm_spell_count
-!pm_bk_next:
-    inx
-    jmp !pm_bk_loop-
-!pm_bk_done:
-    rts
-
-pm_build_learnable_list_from_book:
-    lda #0
-    sta pm_spell_count
-    ldx #0
-!pm_bl_loop:
-    cpx #SPELL_CATALOG_COUNT
-    bcs !pm_bl_done+
-
-    lda pm_lvl_tbl_lo
-    sta zp_ptr0
-    lda pm_lvl_tbl_hi
-    sta zp_ptr0_hi
-    txa
-    tay
-    :SpellTblRead_ptr0_y()
-    cmp #99
-    beq !pm_bl_next+
-    cmp zp_player_lvl
-    beq !pm_bl_check_book+
-    bcc !pm_bl_check_book+
-    jmp !pm_bl_next+
-
-!pm_bl_check_book:
-    lda pm_book_mask_lo
-    sta zp_ptr0
-    lda pm_book_mask_hi
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcc !pm_bl_next+
-
-    lda #<player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0
-    lda #>player_data + PL_SPELLS_LEARNT_0
-    sta zp_ptr0_hi
-    txa
-    jsr spell_mask_test_ptr
-    bcs !pm_bl_next+
-
-    ldy pm_spell_count
-    txa
-    sta pm_spell_list,y
-    inc pm_spell_count
-!pm_bl_next:
-    inx
-    jmp !pm_bl_loop-
-!pm_bl_done:
     rts
 
 pm_prompt_visible_spell_choice:
@@ -546,32 +374,6 @@ pm_pick_visible_spell:
     clc
     rts
 
-pm_validate_selected_spell:
-    lda pm_mana_tbl_lo
-    sta zp_ptr0
-    lda pm_mana_tbl_hi
-    sta zp_ptr0_hi
-    ldy pm_spell_idx
-    :SpellTblRead_ptr0_y()
-    sta pm_cost_tmp
-
-    lda pm_lvl_tbl_lo
-    sta zp_ptr0
-    lda pm_lvl_tbl_hi
-    sta zp_ptr0_hi
-    ldy pm_spell_idx
-    :SpellTblRead_ptr0_y()
-    cmp zp_player_lvl
-    beq !pm_valid_done+
-    bcc !pm_valid_done+
-    ldx #HSTR_PM_NO_EXP
-    jsr huff_print_msg
-    clc
-    rts
-!pm_valid_done:
-    sec
-    rts
-
 pm_consume_mana:
     lda pm_cost_tmp
     cmp zp_player_mp
@@ -582,11 +384,12 @@ pm_consume_mana:
     sta zp_temp0
 
     ldx #HSTR_PM_NO_MANA
+    lda player_data + PL_SPELL_TYPE
+    lsr                         // SPELL_MAGE == 1 -> C=1; SPELL_PRIEST == 2 -> C=0
+    bcc !pm_cm_faint_msg+
+    ldx #HSTR_PM_FAINT_EFFORT
+!pm_cm_faint_msg:
     jsr huff_print_msg
-    // The faint reason is important feedback; acknowledge it during the
-    // initiating action so forced paralysis turns never enter -MORE-.
-    jsr msg_show_more
-    jsr hal_input_get_key
 
     lda #5
     ldx zp_temp0
@@ -605,13 +408,38 @@ pm_consume_mana:
     lda #3
     jsr rng_range
     lsr
-    bcc !pm_cm_done+
+    bcc !pm_cm_more+
+    ldx #HSTR_PM_HEALTH_DAMAGED
+    jsr huff_print_msg
+#if CORE_PLAYER_IMPORTED
+    lda player_sust_mask
+    and #SUST_CON
+    beq !pm_cm_drain_con+
+    ldx #HSTR_CHEST_UNAFFECTED
+    jsr huff_print_msg
+    jmp !pm_cm_more+
+!pm_cm_drain_con:
+#endif
+#if CORE_PLAYER_IMPORTED
+    ldy #PL_CON_CUR - PL_STR_CUR
+    jsr player_drain_stat_y
+    bcc !pm_cm_more+
+#else
     lda player_data + PL_CON_CUR
     cmp #4
-    bcc !pm_cm_done+
+    bcc !pm_cm_more+
     dec player_data + PL_CON_CUR
     dec zp_player_con
-    jmp player_calc_hp
+#endif
+    jsr player_calc_hp
+!pm_cm_more:
+    // Acknowledge faint (and any CON-damage) feedback during the initiating
+    // action so forced paralysis turns never enter -MORE-, then clear
+    // MSG_FULL so subsequent turn messages start fresh.
+    jsr msg_show_more
+    jsr hal_input_get_key
+    jmp msg_clear
+.assert "SPELL_MAGE==1 and SPELL_PRIEST==2", SPELL_MAGE == 1 && SPELL_PRIEST == 2, true
 
 !pm_cm_normal:
     lda zp_player_mp

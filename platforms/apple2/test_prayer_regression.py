@@ -17,6 +17,18 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+from item_ids import (  # noqa: E402
+    ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK,
+    ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS,
+    ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_EXORCISM,
+    ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM,
+    ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK,
+    ITEM_SLOT_SPELLBOOK_MAGICK_I,
+    ITEM_SLOT_SPELLBOOK_MAGICK_II,
+    ITEM_SLOT_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER,
+)
+
 BUILD = ROOT / "build" / "apple2"
 BIN = BUILD / "bin"
 
@@ -45,12 +57,21 @@ def main():
     assert type_addr >= aux_base and affinity_addr >= aux_base
     types = aux[type_addr - aux_base:type_addr - aux_base + 8]
     affinity = aux[affinity_addr - aux_base:affinity_addr - aux_base + 8]
-    assert types == bytes((47, 55, 56, 57, 48, 58, 59, 60)), types
+    assert types == bytes((
+        ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK,
+        ITEM_SLOT_SPELLBOOK_MAGICK_I,
+        ITEM_SLOT_SPELLBOOK_MAGICK_II,
+        ITEM_SLOT_SPELLBOOK_THE_MAGES_GUIDE_TO_POWER,
+        ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK,
+        ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_WORDS_OF_WISDOM,
+        ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS,
+        ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_EXORCISM,
+    )), types
     assert affinity == bytes((1, 1, 1, 1, 2, 2, 2, 2)), affinity
 
-    # Exact failing scenario: level-1 priest, Holy Prayer Book (item 48),
+    # Exact failing scenario: level-1 priest, Holy Prayer Book (Beginners Handbook),
     # creation mask $07. The assembled lookup contract must expose prayers 0-2.
-    book_index = types.index(48)
+    book_index = types.index(ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK)
     assert affinity[book_index] == 2
     book_mask = 0xFF
     learned = 0x07
@@ -79,7 +100,7 @@ def main():
     aux_hits = [name for name, data in blobs.items() if aux_read in data]
     assert aux_hits, "no aux-thunk read of book_spell_affinity in any binary"
 
-    print("PASS apple2 priest prayer lookup: book 48 -> prayers 0,1,2 "
+    print(f"PASS apple2 priest prayer lookup: book {ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK} -> prayers 0,1,2 "
           f"(aux read via {aux_hits})")
     return 0
 

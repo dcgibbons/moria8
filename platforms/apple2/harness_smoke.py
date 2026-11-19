@@ -26,9 +26,40 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import build_catalog  # noqa: E402
 import catalog_lore  # noqa: E402  (the generated monster catalog's data)
+import item_ids  # noqa: E402
+
+
+LUA_ITEM_CONSTS = item_ids.lua_item_consts(
+    "DAGGER",
+    "MACE",
+    "RING_OF_PROTECTION",
+    "WAND_OF_LIGHTNING",
+    "WAND_OF_STINKING_CLOUD",
+    "HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK",
+    "SPELLBOOK_MAGICK_I",
+    "HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS",
+    "POTION_OF_GAIN_DEXTERITY",
+    "POTION_OF_CHARISMA",
+    "POTION_OF_RESTORE_INTELLIGENCE",
+    "POTION_OF_CURE_CRITICAL_WOUNDS",
+    "POTION_OF_NEUTRALIZE_POISON",
+    "SCROLL_OF_MAGIC_MAPPING",
+    "SCROLL_OF_OBJECT_DETECTION",
+    "SCROLL_OF_RECHARGING",
+    "SCROLL_OF_RUNE_OF_PROTECTION",
+    "RING_OF_RESIST_FIRE",
+    "RING_OF_RESIST_COLD",
+    "AMULET_OF_THE_MAGI",
+    "GOLDEN_CROWN",
+    "WAND_OF_FIRE_BOLTS",
+    "WAND_OF_DRAIN_LIFE",
+)
 PO_IMAGE = ROOT / "build" / "moria8-apple2.po"
 MAME_OUTPUT_ROOT = ROOT / "build" / "apple2" / "mame"
 MAME_OUTPUT_DIRS = {
@@ -43,11 +74,10 @@ MAME_OUTPUT_DIRS = {
 }
 
 # Row 18 text-page base: $400 + (18&7)*$80 + (18>>3)*$28 = $550.
-# Menu "N)ew  L)oad  D)isk Setup" starts at column 22 (main.s title_draw_menu).
+# The menu is centred on the 80 columns (main.s title_draw_menu).
 # Even columns live in the aux half, odd columns in the main half; each half
 # row holds 40 bytes, so column c maps to half-row offset c>>1.
 ROW18_BASE = 0x550
-MENU_START_COL = 22
 
 # Expected Apple display codes for the complete title menu.
 MENU_EXPECTED = [
@@ -55,6 +85,11 @@ MENU_EXPECTED = [
     0xA0, 0xC4, 0xA9, 0xE9, 0xF3, 0xEB, 0xA0, 0xD3, 0xE5, 0xF4, 0xF5, 0xF0,
     0xA0, 0xA0, 0xC1, 0xA9, 0xE2, 0xEF, 0xF5, 0xF4,
 ]
+MENU_START_COL = (80 - len(MENU_EXPECTED)) // 2
+# The menu's first ')' in an odd (main-half) column: the boot-title wait
+# polls it, the half-row offset col>>1.
+MENU_PAREN_OFF = next((MENU_START_COL + i) >> 1 for i, b in enumerate(MENU_EXPECTED)
+                      if b == 0xA9 and (MENU_START_COL + i) % 2 == 1)
 
 LUA_BOOT_TITLE = r"""
 function run()
@@ -71,7 +106,7 @@ function run()
             local d = prog:read_u8(0x05A8 + 21)
             if d > bootprog then bootprog = d end
         end
-        if prog:read_u8(ROW18_BASE + 14) == 0xA9 then
+        if prog:read_u8(ROW18_BASE + MENU_PAREN_OFF) == 0xA9 then
             ready = true
             break
         end
@@ -116,7 +151,7 @@ co = coroutine.create(run)
 coroutine.resume(co)
 """
 
-LUA_HELPERS = r"""
+LUA_HELPERS = LUA_ITEM_CONSTS + r"""
 local prog = manager.machine.devices[":maincpu"].spaces["program"]
 local aux = emu.item(manager.machine.devices[":aux:ext80"].items["0/m_ram"])
 local keymap = {}
@@ -143,6 +178,11 @@ local function press(ch)
     local f = findkey(ch)
     if not f then print("NOKEY " .. string.format("%q", ch)) return end
     f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.12)
+end
+local function press_int(n)
+    local s = tostring(n)
+    for i = 1, #s do press(string.sub(s, i, i)) end
+    press("\r")
 end
 -- Longer hold/release for prompts reached right after disk activity: under
 -- -nothrottle a 0.03 s hold can vanish inside a single emulated frame while
@@ -268,7 +308,7 @@ LUA_CHARGEN = r"""
 -- Title -> chargen -> town. CLASS_KEY substituted by the caller.
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press_until("Choose your race", "N")
 press_until("Roll Statistics", "A")
@@ -479,10 +519,12 @@ prog:write_u8(pd + 37, 50)              -- PL_MANA (save copy)
 prog:write_u8(0x31, 50)                 -- zp_player_mp (live mana)
 prog:write_u8(pd + 63, prog:read_u8(pd + 63) | 0x40)  -- learnt bit 22
 local gave_book = false
+local inv_stride = INV_QTY_ADDR - INV_ITEM_ID_ADDR
 for i = 0, 30 do
     if prog:read_u8(INV_ITEM_ID_ADDR + i) == 0xff then
-        prog:write_u8(INV_ITEM_ID_ADDR + i, 59)   -- Chants and Blessings
+        prog:write_u8(INV_ITEM_ID_ADDR + i, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
         prog:write_u8(INV_QTY_ADDR + i, 1)
+        prog:write_u8(INV_ITEM_ID_ADDR + 7 * inv_stride + i, ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_CHANTS_AND_BLESSINGS)
         gave_book = true
         break
     end
@@ -552,7 +594,7 @@ LUA_HELP_BODY = r"""
 legal_wait_input()
 shift("/")
 for i = 1, 100 do
-    if screen_has("Command Reference") then break end
+    if screen_has("Command Reference") and screen_has("L:License") then break end
     emu.wait(0.1)
 end
 assert_line("help_open", screen_has("Command Reference"),
@@ -608,7 +650,7 @@ assert_line("legal_help_restore_program", game_drive:load("GAME_IMAGE") == nil, 
 legal_wait_input()
 shift("/")
 for i = 1, 100 do
-    if screen_has("Command Reference") then break end
+    if screen_has("Command Reference") and screen_has("L:License") then break end
     emu.wait(0.1)
 end
 assert_line("help_reopened", screen_has("Command Reference"), "Help did not reopen")
@@ -667,10 +709,10 @@ print("SCENARIO DONE")
 """
 
 LUA_WIZARD_BODY = r"""
--- Wizard mode: enable, open the menu, generate item 48, see it carried.
+-- Wizard mode: enable, open the menu, generate Beginners Handbook, see it carried.
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("4") press("8") press("\r")
+press_int(ITEM_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press("I")
@@ -918,7 +960,16 @@ assert_line("balrog_killed", dead,
             " mx=" .. mx .. " my=" .. my ..
             " tile=" .. aux:read(ma) ..
             " dlvl=" .. prog:read_u8(DLVL_ADDR))
-assert_line("winner_flag", prog:read_u8(GAME_FLAGS_ADDR) & 0x04 == 0x04,
+-- The kill's treasure drop is generated in OVL.GEN, loaded from disk, and
+-- ProDOS borrows $3A-$4E (zp_game_flags among them) until a2_mli_end restores
+-- them: read the flag once the command has finished, not mid-load (a drop
+-- read $60 there; the flag was back to $04 once the load ended, 2026-11-13).
+local won = false
+for i = 1, 40 do
+    if prog:read_u8(GAME_FLAGS_ADDR) & 0x04 == 0x04 then won = true break end
+    emu.wait(0.25)
+end
+assert_line("winner_flag", won,
             "GAME_FLAG_WINNER not set after Balrog kill")
 
 -- Post-kill message prompts: the -more- marker is not always visible on A2,
@@ -961,12 +1012,16 @@ print("SCENARIO DONE")
 
 
 LUA_QUAFF_P3_BODY = r"""
--- Wizard-generate a Phase 3 potion (Restoration, 97), quaff it, and verify
--- the effect message prints. Regression for the Apple IIe Phase 3 potion
--- overlay swap (resident trampoline into OVL.SPELL).
+-- Exercise Apple IIe Phase 3 potion dispatch (resident trampoline into
+-- OVL.SPELL:iq_dispatch_p3_spell) across non-contiguous VMS Gain-Stat potions
+-- (Gain Dexterity + Charisma), Cure Critical Wounds, and Neutralize Poison.
+prog:write_u8(PLAYER_DATA_ADDR + 24, 14)   -- PL_DEX_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 30, 14)   -- PL_DEX_CUR
+prog:write_u8(PLAYER_DATA_ADDR + 26, 13)   -- PL_CHR_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 32, 13)   -- PL_CHR_CUR
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("9") press("7") press("\r")
+press_int(ITEM_POTION_OF_GAIN_DEXTERITY)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -975,25 +1030,70 @@ press("q")
 emu.wait(1)
 assert_line("quaff_prompt", screen_has("Quaff which potion"), "quaff prompt did not open")
 press("a")
-local quaff_msg = false
-for i = 1, 100 do
-    emu.wait(0.1)
-    if screen_has("strength return") then quaff_msg = true break end
-end
-assert_line("quaff_msg", quaff_msg, "quaff effect message missing")
+local dex_msg = wait_screen("more limber!", 20)
+wait_idle(20)
+assert_line("quaff_gain_dex", dex_msg and prog:read_u8(PLAYER_DATA_ADDR + 30) == 15,
+            "Gain Dexterity failed: dex=" .. prog:read_u8(PLAYER_DATA_ADDR + 30))
+
+inv_seed(0, {ITEM_SLOT_POTION_OF_CHARISMA, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CHARISMA})
+press("q")
+assert_line("quaff_chr_prompt", wait_screen("Quaff which potion", 20), "charisma quaff prompt missing")
+press("a")
+local chr_msg = wait_screen("ain't you cute!", 20)
+wait_idle(20)
+assert_line("quaff_gain_chr", chr_msg and prog:read_u8(PLAYER_DATA_ADDR + 32) == 14,
+            "Charisma potion failed: chr=" .. prog:read_u8(PLAYER_DATA_ADDR + 32))
+
+prog:write_u8(HP_LO_ADDR, 1)
+prog:write_u8(PLAYER_DATA_ADDR + 33, 1)
+prog:write_u8(POISON_ADDR, 5)
+inv_seed(0, {ITEM_SLOT_POTION_OF_CURE_CRITICAL_WOUNDS, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_CURE_CRITICAL_WOUNDS})
+press("q")
+assert_line("quaff_ccw_prompt", wait_screen("Quaff which potion", 20), "ccw quaff prompt missing")
+press("a")
+wait_idle(25)
+assert_line("quaff_ccw", prog:read_u8(HP_LO_ADDR) > 1 and prog:read_u8(POISON_ADDR) == 0,
+            "Cure Critical Wounds failed: hp=" .. prog:read_u8(HP_LO_ADDR) .. " poison=" .. prog:read_u8(POISON_ADDR))
+
+prog:write_u8(POISON_ADDR, 5)
+inv_seed(0, {ITEM_SLOT_POTION_OF_NEUTRALIZE_POISON, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_NEUTRALIZE_POISON})
+press("q")
+assert_line("quaff_neut_prompt", wait_screen("Quaff which potion", 20), "neutralize quaff prompt missing")
+press("a")
+local neut_msg = wait_screen("You feel better.", 20)
+wait_idle(20)
+assert_line("quaff_neutralize", neut_msg and prog:read_u8(POISON_ADDR) == 0,
+            "Neutralize Poison failed: poison=" .. prog:read_u8(POISON_ADDR))
+
+-- Restore Intelligence (eff_item_extended.s ee_op_restore !eer_single):
+-- player_calc_stats swaps overlays on Apple IIe and reloads OVL.HOME/OVL.SPELL,
+-- which wiped eff_ext_tmp to 0 (STAT_STR) before the hardware-stack fix.
+prog:write_u8(PLAYER_DATA_ADDR + 21, 16)   -- PL_STR_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 27, 10)   -- PL_STR_CUR (drained)
+prog:write_u8(PLAYER_DATA_ADDR + 22, 16)   -- PL_INT_BASE
+prog:write_u8(PLAYER_DATA_ADDR + 28, 10)   -- PL_INT_CUR (drained)
+inv_seed(0, {ITEM_SLOT_POTION_OF_RESTORE_INTELLIGENCE, 1, 0, 0, 0, 0, 0, ITEM_PAGE_POTION_OF_RESTORE_INTELLIGENCE})
+press("q")
+assert_line("quaff_rest_int_prompt", wait_screen("Quaff which potion", 20), "restore int quaff prompt missing")
+press("a")
+wait_idle(25)
+assert_line("quaff_restore_int_only",
+            prog:read_u8(PLAYER_DATA_ADDR + 28) == 16 and prog:read_u8(PLAYER_DATA_ADDR + 27) == 10,
+            "Restore INT failed across overlay swap: int=" .. prog:read_u8(PLAYER_DATA_ADDR + 28)
+            .. " str=" .. prog:read_u8(PLAYER_DATA_ADDR + 27))
 print("SCENARIO DONE")
 """
 
 
 
 LUA_SCROLL_OBJDET_BODY = r"""
--- Wizard-generate a Scroll of Object Detection (103), read it, and verify
+-- Wizard-generate a Scroll of Object Detection, read it, and verify
 -- the effect runs and reports (no poison/death misdispatch). Regression for
 -- the Apple IIe new-owner Phase 3 scroll handlers calling OVL.SPELL helpers
 -- from OVL.DEATH (wild jump into uninitialized window memory).
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("1") press("0") press("3") press("\r")
+press_int(ITEM_SCROLL_OF_OBJECT_DETECTION)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -1015,11 +1115,11 @@ print("SCENARIO DONE")
 """
 
 LUA_SCROLL_MAP_BODY = r"""
--- Wizard-generate a Scroll of Magic Mapping (102), read it, and verify the
+-- Wizard-generate a Scroll of Magic Mapping, read it, and verify the
 -- effect runs and reports. Companion to scroll_objdet (spell-overlay helper).
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("1") press("0") press("2") press("\r")
+press_int(ITEM_SCROLL_OF_MAGIC_MAPPING)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -1039,12 +1139,12 @@ print("SCENARIO DONE")
 """
 
 LUA_SCROLL_RUNE_BODY = r"""
--- Wizard-generate a Scroll of Rune of Protection (105), read it, and verify
+-- Wizard-generate a Scroll of Rune of Protection, read it, and verify
 -- the effect runs: the glyph is created and its message prints. Regression
 -- for the Apple IIe Phase 3 scroll overlay swaps (resident router/trampoline).
 assert_line("wizard_menu", wizard_menu_open(), "wizard menu did not open")
 press_until("ITEM", "G")
-press("1") press("0") press("5") press("\r")
+press_int(ITEM_SCROLL_OF_RUNE_OF_PROTECTION)
 emu.wait(2)
 assert_line("wizard_gain", screen_has("OK"), "item generation did not report OK")
 press(" ")
@@ -1053,7 +1153,9 @@ press("r")
 emu.wait(1)
 assert_line("read_prompt", screen_has("Read which scroll"), "read prompt did not open")
 press("a")
-emu.wait(3)
+-- The scroll router loads the cold OVL.DEATH from disk; reads taken while the
+-- CPU is mid-load (or inside an aux-read thunk) see the wrong bank.
+assert_line("rune_idle", wait_idle(20), "game did not return to the key wait")
 assert_line("no_balrog", not screen_has("Balrog"), "Balrog appeared after rune scroll")
 assert_line("rune_msg", screen_has("strange rune"), "rune effect message missing")
 assert_line("rune_glyph", prog:read_u8(GLYPHADDR) == 1,
@@ -1104,7 +1206,7 @@ press("S")
 wait_generation()
 wizard_menu_open()
 press_until("ITEM", "G")
-press("1") press("0") press("3") press("\r")
+press_int(ITEM_SCROLL_OF_OBJECT_DETECTION)
 emu.wait(2)
 press(" ")
 emu.wait(1)
@@ -1208,6 +1310,24 @@ assert_line("name_dm", screen_has("Detect Monsters"),
 assert_line("name_pd", screen_has("Phase Door"), "Phase Door missing")
 assert_line("no_priest_names", not screen_has("Protect"),
             "priest name leaked into mage list")
+-- The book prompt's '?' list from a second book: the list's overlay must
+-- give way to the caller's again (2026-11-15: the Atari's cast came back
+-- into OVL_HELP's bytes). A level 1 Mage knows no Magick I spell.
+press("\27")
+assert_line("book2_idle", wait_idle(20), "game busy after the list")
+local free = nil
+for slot = 0, 21 do if inv_field(slot, 0) == 0xFF then free = slot break end end
+inv_seed(free, {ITEM_SLOT_SPELLBOOK_MAGICK_I, 1, 0, 0, 0, 0, 2, ITEM_PAGE_SPELLBOOK_MAGICK_I})
+press_slow("M")
+assert_line("cast_book2_prompt", wait_screen("Spell book (a-b)?"), "no two-book prompt: " .. rowtext(0))
+shift("/")
+assert_line("cast_book_list", wait_screen("Magick I"), "no book list")
+press_slow("B")
+assert_line("cast_book2_refused", wait_screen("You don't know that spell."), "no refusal: " .. rowtext(0))
+local turn_c = prog:read_u8(TURN_LO_ADDR)
+press_slow("S")
+emu.wait(1.0)
+assert_line("cast_book2_play_goes_on", wait_idle(20) and prog:read_u8(TURN_LO_ADDR) ~= turn_c, "no turn")
 dump("mage_list")
 print("SCENARIO DONE")
 """
@@ -1253,7 +1373,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then title_ok = true break end
 end
 assert_line("save_completed", title_ok, "save did not complete")
 assert_line("title_after_save", title_ok,
@@ -1282,8 +1402,8 @@ for i = 1, 30 do
     if screen_has("Welcome back to Moria8!") then loaded = true break end
 end
 assert_line("loaded", loaded, "load did not resume the saved game")
-assert_line("stats_restored", screen_has("test") and screen_has("Human"),
-            "status line does not show the restored character")
+assert_line("stats_restored", screen_has("test") and prog:read_u8(0x3c) == 0,
+            "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)")
 assert_line("invuln_cleared", prog:read_u8(0x6f) == 0,
             "eff_invuln_timer not cleared on load: " .. prog:read_u8(0x6f))
 dump("after_load")
@@ -1295,7 +1415,7 @@ LUA_DISK_SETUP_TWO_DRIVE_BODY = r"""
 -- MORIA8.ID landed on the second disk image.
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("D")
 assert_line("ds_menu", wait_screen("Pick save drive"),
@@ -1318,7 +1438,7 @@ press("Y")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then back = true break end
 end
 assert_line("ds_done", back, "did not return to title after setup")
 dump("after_ds_two_drive")
@@ -1336,7 +1456,7 @@ for tag, img in pairs(manager.machine.images) do
 end
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("D")
 assert_line("sw_menu", wait_screen("Pick save drive"),
@@ -1387,7 +1507,7 @@ press(" ")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then back = true break end
 end
 assert_line("sw_done", back, "did not return to title after swap setup")
 dump("after_ds_swap")
@@ -1406,7 +1526,7 @@ for tag, img in pairs(manager.machine.images) do
 end
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("D")
 assert_line("ad_menu", wait_screen("Pick save drive"),
@@ -1426,7 +1546,7 @@ press("Y")
 local back = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then back = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then back = true break end
 end
 assert_line("ad_commit", back, "did not return to title after adopting SAVE2")
 -- Phase 2: unreadable media on the save unit. Setup runs again (D), Done
@@ -1471,15 +1591,36 @@ press("Q")
 local home = false
 for i = 1, 40 do
     emu.wait(0.5)
-    if prog:read_u8(0x550 + 11) == 0xA9 then home = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then home = true break end
 end
 assert_line("ad_quit", home, "did not return to title after Q")
 dump("after_ds_adopt")
 print("SCENARIO DONE")
 """
+LUA_IDLE_HELPERS = r"""
+-- wait_idle(max_s): true once the CPU has sat in the key-wait loop
+-- (input_entropy_tick .. hal_input_get_key, plus hal_sound_update) for eight
+-- consecutive 50 ms samples. Cold overlay loads (cold OVL.DEATH from disk, ~2.5 s)
+-- and aux-read thunks make fixed sleeps and bank-dependent reads racy.
+local idle_cpu = manager.machine.devices[":maincpu"]
+local function wait_idle(max_s)
+    local streak = 0
+    for _ = 1, math.floor(max_s / 0.05) do
+        emu.wait(0.05)
+        local pc = idle_cpu.state["PC"].value
+        if (pc >= IDLE_LO and pc < IDLE_HI) or (pc >= SND_LO and pc <= SND_LO + 1) then
+            streak = streak + 1
+        else
+            streak = 0
+        end
+        if streak >= 8 then return true end
+    end
+    return false
+end
+"""
 # inv_seed(slot, fields) / inv_field(slot, k): the 8 inventory fields of one
 # slot (id, qty, p1, to_hit, to_dam, to_ac, flags, ego). The arrays are
-# contiguous with a stride of TOTAL_INV_SLOTS (33); main RAM, as the CPU
+# contiguous with a stride of TOTAL_INV_SLOTS (34); main RAM, as the CPU
 # sees it between commands.
 LUA_INV_HELPERS = r"""
 local INV = INV_ITEM_ID_ADDR
@@ -1496,23 +1637,28 @@ LUA_WEAPON_EXCHANGE_BODY = r"""
 -- SHIFT+X (VMS `x`, moria.inc switch_weapon): a cursed primary is refused
 -- with no turn; uncursed, the swap takes one turn, moves all 8 fields and
 -- reports both slots.
-inv_seed(22, {5, 1, 0, 1, 0, 0, 3, 0})   -- Mace (+1,+0), cursed
-inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})   -- Dagger (+3,+4) (Defender)
+inv_seed(22, {ITEM_SLOT_MACE, 1, 0, 1, 0, 0, 3, ITEM_PAGE_MACE})
+inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
 local turn0 = prog:read_u8(TURN_LO_ADDR)
 shift("X")
 local refused = wait_screen("You cannot remove it, it is cursed!", 20)
-assert_line("exchange_cursed_refused", refused and inv_field(22, 0) == 5
-            and inv_field(32, 0) == 2 and prog:read_u8(TURN_LO_ADDR) == turn0,
+assert_line("exchange_cursed_refused", refused and inv_field(22, 0) == ITEM_SLOT_MACE
+            and (inv_field(22, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_MACE
+            and inv_field(33, 0) == ITEM_SLOT_DAGGER
+            and (inv_field(33, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_DAGGER
+            and prog:read_u8(TURN_LO_ADDR) == turn0,
             "refusal message, records or turn wrong")
 prog:write_u8(INV + 6 * INV_STRIDE + 22, 2) -- lift the curse
 shift("X")
 local reported = wait_screen("Primary: Dagger (Defender) (+3,+4)", 20)
+wait_idle(20)
 assert_line("exchange_report", reported and screen_has("Secondary: Mace (+1,+0)"),
             "report lines missing: " .. rowtext(0) .. " / " .. rowtext(1))
 assert_line("exchange_swapped",
-            inv_field(22, 0) == 2 and inv_field(22, 3) == 3 and inv_field(22, 7) == 6
-            and inv_field(32, 0) == 5 and inv_field(32, 3) == 1 and inv_field(32, 6) == 2
-            and inv_field(31, 0) == 0xFF, "records not exchanged")
+            inv_field(22, 0) == ITEM_SLOT_DAGGER and inv_field(22, 3) == 3 and inv_field(22, 7) == (ITEM_PAGE_DAGGER | 6)
+            and inv_field(33, 0) == ITEM_SLOT_MACE and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
+            and inv_field(33, 7) == ITEM_PAGE_MACE
+            and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF, "records not exchanged")
 assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256,
             "turn " .. prog:read_u8(TURN_LO_ADDR) .. " from " .. turn0)
 -- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it in
@@ -1520,7 +1666,8 @@ assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256
 -- load first (2026-11-06: the BBC build queue's panic; the Apple IIe shares
 -- the path). The game goes on: a search takes its turn.
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
-inv_seed(0, {42, 1, 5, 0, 0, 0, 0, 0})
+assert_line("aim_idle", wait_idle(20), "game busy before the aim")
+inv_seed(0, {ITEM_SLOT_WAND_OF_STINKING_CLOUD, 1, 5, 0, 0, 0, 0, ITEM_PAGE_WAND_OF_STINKING_CLOUD})
 press("A")
 assert_line("aim_prompt", wait_screen("Aim which wand"), "aim prompt missing")
 press("A")
@@ -1537,12 +1684,16 @@ press("S")
 emu.wait(1.0)
 assert_line("play_goes_on", in_town() and prog:read_u8(TURN_LO_ADDR) ~= turn1,
             "no turn after the aim: " .. rowtext(0))
--- The VMS Wands of Fire Bolts (153) and Drain Life (154), MON-031: the death
+-- The VMS Wands of Fire Bolts and Drain Life, MON-031: the death
 -- overlay's router runs them in OVL.SPELL through irs_re_compact_call. Aimed
 -- at nothing, each takes its turn and play goes on.
-for _, id in ipairs({153, 154}) do
+for _, w in ipairs({
+    {ITEM_WAND_OF_FIRE_BOLTS, ITEM_SLOT_WAND_OF_FIRE_BOLTS, ITEM_PAGE_WAND_OF_FIRE_BOLTS},
+    {ITEM_WAND_OF_DRAIN_LIFE, ITEM_SLOT_WAND_OF_DRAIN_LIFE, ITEM_PAGE_WAND_OF_DRAIN_LIFE},
+}) do
+    local id, slot_lo, page_bit = w[1], w[2], w[3]
     for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
-    inv_seed(0, {id, 1, 5, 0, 0, 0, 0, 0})
+    inv_seed(0, {slot_lo, 1, 5, 0, 0, 0, 0, page_bit})
     local turn_w = prog:read_u8(TURN_LO_ADDR)
     -- Right after the previous wand's overlay swap a quick press can vanish
     -- (2026-11-12: the Drain Life aim's 'A' was lost once): retried, held.
@@ -1568,8 +1719,8 @@ emu.wait(2.0)
 -- OVL.SPELL reload clobbered, so another slot was recharged, named or
 -- "eaten", or a stale ego swapped OVL.ITEMS in under the spell overlay
 -- (BBC build queue, 2026-11-12; the Apple IIe shares the trampoline).
-inv_seed(0, {40, 1, 0, 0, 0, 0, 0, 0})    -- Wand of Lightning, empty
-inv_seed(1, {104, 1, 0, 0, 0, 0, 0, 0})   -- Scroll of Recharging
+inv_seed(0, {ITEM_SLOT_WAND_OF_LIGHTNING, 1, 0, 0, 0, 0, 0, ITEM_PAGE_WAND_OF_LIGHTNING})
+inv_seed(1, {ITEM_SLOT_SCROLL_OF_RECHARGING, 1, 0, 0, 0, 0, 0, ITEM_PAGE_SCROLL_OF_RECHARGING})
 local turn_r = prog:read_u8(TURN_LO_ADDR)
 assert_line("recharge_read_prompt", press_until("Read which scroll", "R", 8), "read prompt missing")
 press_slow("A")
@@ -1580,7 +1731,9 @@ emu.wait(0.5)
 press_slow("A")
 assert_line("recharge_glows", wait_screen("glows briefly"), "no recharge message: " .. rowtext(0) .. " / " .. rowtext(1))
 for _ = 1, 4 do if screen_has("-more-") then press_slow(" ") end emu.wait(0.3) end
-assert_line("recharge_charged", inv_field(0, 0) == 40 and inv_field(0, 2) > 0,
+assert_line("recharge_charged", inv_field(0, 0) == ITEM_SLOT_WAND_OF_LIGHTNING
+            and (inv_field(0, 7) & ITEM_PAGE_BIT) == ITEM_PAGE_WAND_OF_LIGHTNING
+            and inv_field(0, 2) > 0,
             "slot a: " .. inv_field(0, 0) .. " charges " .. inv_field(0, 2))
 press_slow("S")
 emu.wait(1.0)
@@ -1596,44 +1749,54 @@ emu.wait(2.0)
 -- rebuild (2026-11-08 review). The Ring of Resist Fire sets
 -- PFLAG_RESIST_FIRE ($01); a Ring of Protection worn over it clears it; the
 -- Amulet of the Magi sets See Invisible ($08) and Free Action ($10).
-local function wear_slot_a(id, what)
+local function wear_slot_a(slot_lo, page_bit, what)
     for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
-    inv_seed(0, {id, 1, 0, 0, 0, 0, 2, 0})
+    -- The previous turn (and any cold overlay load) must be over: a W typed
+    -- while the game is busy is overwritten by the next key (the one-key
+    -- latch), and the stray 'A' then runs the Aim command ("nothing there").
+    assert_line(what .. "_idle", wait_idle(20), "game busy before the wear")
+    inv_seed(0, {slot_lo, 1, 0, 0, 0, 0, 2, page_bit})
     press("W")
     assert_line(what .. "_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
+    assert_line(what .. "_prompt_idle", wait_idle(20), "game busy at the wear prompt")
     press("A")
     assert_line(what .. "_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
+    assert_line(what .. "_done_idle", wait_idle(20), "game busy after the wear")
 end
 -- The Dagger (Defender) wielded since the exchange resists fire and cold
 -- itself (MON-027, 2026-11-11): its ego cleared, the rings alone decide.
-prog:write_u8(INV + 7 * INV_STRIDE + 22, 0)
+prog:write_u8(INV + 7 * INV_STRIDE + 22, inv_field(22, 7) & ITEM_PAGE_BIT)
 prog:write_u8(PFLAGS_ADDR, 0)
-wear_slot_a(109, "resist_fire_ring")
+wear_slot_a(ITEM_SLOT_RING_OF_RESIST_FIRE, ITEM_PAGE_RING_OF_RESIST_FIRE, "resist_fire_ring")
 assert_line("resist_fire_flag", prog:read_u8(PFLAGS_ADDR) & 0x01 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 -- Two ring hands (VMS moria.inc:528, 2026-11-08): the left hand next, then
 -- a third ring replaces the left-hand one
-wear_slot_a(110, "resist_cold_ring")
+wear_slot_a(ITEM_SLOT_RING_OF_RESIST_COLD, ITEM_PAGE_RING_OF_RESIST_COLD, "resist_cold_ring")
 assert_line("both_resist_flags", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x03, "pflags " .. prog:read_u8(PFLAGS_ADDR))
-wear_slot_a(23, "protection_ring")
+wear_slot_a(ITEM_SLOT_RING_OF_PROTECTION, ITEM_PAGE_RING_OF_PROTECTION, "protection_ring")
 assert_line("left_ring_replaced", prog:read_u8(PFLAGS_ADDR) & 0x03 == 0x01, "pflags " .. prog:read_u8(PFLAGS_ADDR))
-wear_slot_a(125, "magi_amulet")
+wear_slot_a(ITEM_SLOT_AMULET_OF_THE_MAGI, ITEM_PAGE_AMULET_OF_THE_MAGI, "magi_amulet")
 assert_line("free_action_flag", prog:read_u8(PFLAGS_ADDR) & 0x18 == 0x18, "pflags " .. prog:read_u8(PFLAGS_ADDR))
--- A Golden Crown of the Magi (MON-030; 151, INT +2, ego 14) through this
+-- A Golden Crown of the Magi (MON-030; INT +2, ego 14) through this
 -- port's own player_adjust_equipment_stat: worn, INT +2 and fire, cold and
 -- acid resisted ($23); taken off, INT back.
 local PL_INT_CUR = 28
 local int0 = prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR)
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
-inv_seed(0, {151, 1, 2, 0, 0, 3, 2, 14})
+assert_line("magi_crown_idle", wait_idle(20), "game busy before the crown")
+inv_seed(0, {ITEM_SLOT_GOLDEN_CROWN, 1, 2, 0, 0, 3, 2, ITEM_PAGE_GOLDEN_CROWN | 14})
 press("W")
 assert_line("magi_crown_wear_prompt", wait_screen("Wear which item"), "wear prompt missing: " .. rowtext(0))
+assert_line("magi_crown_prompt_idle", wait_idle(20), "game busy at the wear prompt")
 press("A")
 assert_line("magi_crown_worn", wait_screen("You are wearing"), "no wear message: " .. rowtext(0))
+assert_line("magi_crown_done_idle", wait_idle(20), "game busy after the wear")
 assert_line("magi_crown_int", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0 + 2,
             "INT " .. prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) .. " from " .. int0)
 assert_line("magi_crown_flags", prog:read_u8(PFLAGS_ADDR) & 0x23 == 0x23, "pflags " .. prog:read_u8(PFLAGS_ADDR))
 -- Take it off: the equipment letters count the worn slots before the head.
 for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+assert_line("magi_crown_off_idle", wait_idle(20), "game busy before the take-off")
 local head_letter = 0
 for slot = 22, 24 do if inv_field(slot, 0) ~= 0xFF then head_letter = head_letter + 1 end end
 press("T")
@@ -1642,6 +1805,68 @@ press(string.char(65 + head_letter))
 assert_line("magi_crown_taken_off", wait_screen("You take off"), "no take-off message: " .. rowtext(0))
 assert_line("magi_crown_int_restored", prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) == int0,
             "INT " .. prog:read_u8(PLAYER_DATA_ADDR + PL_INT_CUR) .. " from " .. int0)
+-- A store buy: the town overlay's copy of the weight-limit body
+-- (inv_add_carried) had no rts and ran past OVL.TOWN's end into stale bytes
+-- (2026-11-15: every BBC build-queue run's first buy panicked; the Apple IIe
+-- shares the body). BRKs past the overlay's end in the window make a run-on
+-- stop there. The Weaponsmith's door is (39, 6).
+for _ = 1, 4 do if screen_has("-more-") then press(" ") emu.wait(0.3) end end
+assert_line("buy_idle", wait_idle(20), "game busy before the store")
+local function pack_count()
+    local n = 0
+    for slot = 0, 21 do if inv_field(slot, 0) ~= 0xFF then n = n + 1 end end
+    return n
+end
+for slot = 0, 21 do inv_seed(slot, {0xFF, 0, 0, 0, 0, 0, 0, 0}) end
+prog:write_u8(PLAYER_DATA_ADDR + 43, 0x50)   -- PL_GOLD: 50,000
+prog:write_u8(PLAYER_DATA_ADDR + 44, 0xC3)
+prog:write_u8(PLAYER_DATA_ADDR + 45, 0x00)
+prog:write_u8(PLAYER_X_ADDR, 39)
+prog:write_u8(PLAYER_Y_ADDR, 7)
+press_slow("K")
+assert_line("store_entered", wait_screen("B)uy", 40), "no store: " .. rowtext(0))
+assert_line("store_idle", wait_idle(20), "store busy")
+for a = OVL_TOWN_END_ADDR, 0xB9FF do prog:write_u8(a, 0x00) end
+press_slow("B")
+assert_line("buy_prompt", wait_screen("Buy which item"), "buy prompt missing: " .. rowtext(20))
+press_slow("A")
+-- The first item depends on the seed, which a build's disk timing moves: a
+-- dear one is haggled over ("Your offer?"), a cheap one sold at its price
+-- ("Buy? (Y/N)"). A 2 gp Iron Shot failed this step when it asked only for
+-- an offer (2026-11-16).
+local offer, fixed = false, false
+for _ = 1, 40 do
+    emu.wait(0.5)
+    if screen_has("Your offer?") then offer = true break end
+    if screen_has("Buy? (Y/N)") then fixed = true break end
+end
+assert_line("buy_asks", offer or fixed, "no offer or price prompt")
+local ask = nil
+for r = 0, 23 do
+    local n = rowtext(r):match("Asks (%d+) gp") or rowtext(r):match("Price: (%d+) gp")
+    if n then ask = n end
+end
+assert_line("buy_ask_read", ask ~= nil, "no asking price")
+if offer then
+    for i = 1, #(ask or "") do press_slow(ask:sub(i, i)) end
+    press_slow("\r")
+else
+    press_slow("Y")
+end
+local bought = false
+for _ = 1, 40 do
+    emu.wait(0.5)
+    if pack_count() == 1 and screen_has("B)uy") and screen_has("Gold: " .. (50000 - tonumber(ask or 0))) then
+        bought = true break
+    end
+end
+assert_line("buy_carried", bought, string.format("pc %04X pack %d", idle_cpu.state["PC"].value, pack_count()))
+press_slow("Q")
+assert_line("buy_left_store", wait_idle(20) and in_town(), "not back in town")
+local turn_b = prog:read_u8(TURN_LO_ADDR)
+press_slow("S")
+emu.wait(1.0)
+assert_line("buy_play_goes_on", wait_idle(20) and prog:read_u8(TURN_LO_ADDR) ~= turn_b, "no turn")
 dump("after_exchange")
 print("SCENARIO DONE")
 """
@@ -1649,8 +1874,8 @@ print("SCENARIO DONE")
 LUA_REBOOT_SAVE_BODY = r"""
 -- Session A of save_reboot_load: chargen, then save slot 1 to the SAVE1
 -- volume in drive 2 (same setup flow as save_load). The secondary weapon
--- slot (32) holds a Dagger (+3,+4) (Defender); slot 31 stays empty.
-inv_seed(32, {2, 1, 0, 3, 4, 0, 2, 6})
+-- slot (33) holds a Dagger (+3,+4) (Defender); slot 32 (cloak) & 31 stay empty.
+inv_seed(33, {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6})
 local s = keymap["Left Shift"]
 local f = findkey("S")
 s:set_value(1) emu.wait(0.02)
@@ -1683,7 +1908,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then title_ok = true break end
 end
 assert_line("save_completed", title_ok, "save did not complete")
 print("SCENARIO DONE")
@@ -1695,7 +1920,7 @@ LUA_REBOOT_LOAD_BODY = r"""
 -- a2_require_play has loaded the play payload (cold-boot crash).
 for i = 1, 300 do
     emu.wait(0.1)
-    if prog:read_u8(0x550 + 11) == 0xA9 then break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
 end
 press("L")
 local DISK_MODE = 0x0a05
@@ -1726,14 +1951,14 @@ for i = 1, 40 do
     if screen_has("Welcome back to Moria8!") then loaded = true break end
 end
 assert_line("loaded", loaded, "reboot load did not resume the saved game")
-assert_line("stats_restored", screen_has("test") and screen_has("Human"),
-            "status line does not show the restored character")
-local sec_ok = inv_field(31, 0) == 0xFF
-local expect = {2, 1, 0, 3, 4, 0, 2, 6}
+assert_line("stats_restored", screen_has("test") and prog:read_u8(0x3c) == 0,
+            "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)")
+local sec_ok = inv_field(31, 0) == 0xFF and inv_field(32, 0) == 0xFF
+local expect = {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6}
 for k = 0, 7 do
-    if inv_field(32, k) ~= expect[k + 1] then sec_ok = false end
+    if inv_field(33, k) ~= expect[k + 1] then sec_ok = false end
 end
-assert_line("secondary_restored", sec_ok, "slot 32/31 not restored from the save")
+assert_line("secondary_restored", sec_ok, "slot 33/32/31 not restored from the save")
 dump("after_load")
 print("SCENARIO DONE")
 """
@@ -1773,7 +1998,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then title_ok = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then title_ok = true break end
 end
 assert_line("st_saved", title_ok, "save to slot 2 did not complete")
 press("L")
@@ -1818,7 +2043,7 @@ for i = 1, 90 do
     emu.wait(0.5)
     if screen_has("Overwrite?") then press("Y") end
     if screen_has("-more-") then press(" ") end
-    if prog:read_u8(0x550 + 11) == 0xA9 then saved2 = true break end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then saved2 = true break end
 end
 assert_line("st_resaved", saved2, "re-save to slot 2 did not complete")
 dump("after_slot_tracking")
@@ -1894,7 +2119,7 @@ assert_line("legal_title_return", screen_has("N)ew"), "legal viewer did not retu
 """
     ready = (LUA_LEGAL_INPUT_HELPER
              .replace("LEGAL_KEY_WAIT_START", hex(_sym_addr("input_get_key")))
-             .replace("LEGAL_KEY_WAIT_END", hex(_sym_addr("igk_key"))))
+             .replace("LEGAL_KEY_WAIT_END", hex(_sym_addr("input_wait_release"))))
     return (LUA_HELPERS + ready + title_check.replace("LEGAL_SAVE_ADDR", hex(_sym_addr("legal_zp_save"))) + LUA_CHARGEN.replace("CLASS_KEY", "A")
             + LUA_HELP_BODY.replace("LEGAL_NOTICE_ADDR", hex(_sym_addr("legal_notice_filename")))
                            .replace("LEGAL_OPENED_ADDR", hex(_sym_addr("legal_opened")))
@@ -1944,7 +2169,11 @@ def balrog_victory_lua() -> str:
 
 
 def quaff_p3_lua() -> str:
-    return _chargen_body("A") + LUA_QUAFF_P3_BODY
+    return (
+        _chargen_body("A") + _idle_helpers() + _inv_helpers() + LUA_QUAFF_P3_BODY
+    ).replace("PLAYER_DATA_ADDR", hex(_sym_addr("player_data"))).replace(
+        "HP_LO_ADDR", hex(_sym_addr("zp_player_hp_lo"))
+    ).replace("POISON_ADDR", hex(_sym_addr("zp_eff_poison")))
 
 
 def _catalog_const(name: str) -> int:
@@ -2073,9 +2302,16 @@ def scroll_map_lua() -> str:
     return _chargen_body("A") + LUA_SCROLL_MAP_BODY
 
 
+def _idle_helpers() -> str:
+    return (LUA_IDLE_HELPERS
+            .replace("IDLE_LO", hex(_sym_addr("input_entropy_tick")))
+            .replace("IDLE_HI", hex(_sym_addr("hal_input_get_key") + 0x10))
+            .replace("SND_LO", hex(_sym_addr("hal_sound_update"))))
+
+
 def scroll_rune_lua() -> str:
     body = LUA_SCROLL_RUNE_BODY.replace("GLYPHADDR", hex(_sym_addr("glyph_active")))
-    return _chargen_body("A") + body
+    return _chargen_body("A") + _idle_helpers() + body
 
 
 def dungeon_descend_lua() -> str:
@@ -2096,10 +2332,13 @@ def _inv_helpers() -> str:
 
 
 def weapon_exchange_lua() -> str:
-    return (_chargen_body("A") + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
+    return (_chargen_body("A") + _idle_helpers() + _inv_helpers() + LUA_WEAPON_EXCHANGE_BODY
             ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo"))).replace(
             "PFLAGS_ADDR", hex(_sym_addr("player_pflags"))).replace(
-            "PLAYER_DATA_ADDR", hex(_sym_addr("player_data")))
+            "PLAYER_DATA_ADDR", hex(_sym_addr("player_data"))).replace(
+            "PLAYER_X_ADDR", hex(_sym_addr("zp_player_x"))).replace(
+            "PLAYER_Y_ADDR", hex(_sym_addr("zp_player_y"))).replace(
+            "OVL_TOWN_END_ADDR", hex(_sym_addr("ovl_town_end")))
 
 
 def save_load_lua() -> str:
@@ -2107,7 +2346,8 @@ def save_load_lua() -> str:
 
 
 def mage_list_lua() -> str:
-    return _chargen_body("B") + LUA_MAGE_LIST_BODY
+    return (_chargen_body("B") + _idle_helpers() + _inv_helpers() + LUA_MAGE_LIST_BODY
+            ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo")))
 
 
 def disk_setup_two_drive_lua() -> str:
@@ -2124,6 +2364,284 @@ def disk_setup_adopt_lua() -> str:
 
 def save_slot_tracking_lua() -> str:
     return _chargen_body("A") + LUA_SLOT_TRACKING_BODY
+
+
+def aux_lc_spike_lua() -> str:
+    """Build MAME apple2ee ALTZP=1 Aux LC ($D000-$FFF9) + A2.CATEXT + PAK post-check script."""
+    igk_call = _sym_addr("igk_sound_call")
+    snd_upd = _sym_addr("input_sound_update")
+    xfer = _sym_addr("a2_aux_lc_bounce_xfer")
+    fetch_ext = _sym_addr("catalog_fetch_ext")
+    cat_id_lo_addr = _sym_addr("cat_id_lo")
+    cat_id_hi_addr = _sym_addr("cat_id_hi")
+    cat_ext_rec_addr = _sym_addr("cat_ext_record")
+    nmi_rti = _sym_addr("a2_aux_nmi_rti")
+    rst_stub = _sym_addr("a2_aux_reset_stub")
+    bounce = 0x02E0
+    arg_bank = 0x02F1
+    arg_dir = 0x02F3
+    # Match snd_upd's low byte inside free Title-Menu play-slot RAM ($8800-$9FFF,
+    # above save_lc_base $8600-$86FF) so patching only igk_call+2 is 100% atomic
+    # and can never dispatch a torn JSR target if emu.wait stops mid-instruction.
+    drv_base = 0x8800 | (snd_upd & 0xFF)
+    out_base = 0x8400
+    ext_out_base = 0x8500
+    save_lc_base = 0x8600
+    sample_ids = (0, 32, 136, 256, 278)
+    catext_raw = build_catalog.ext_row_major_bytes(
+        build_catalog.load_spec()["creatures"]
+    )
+
+    code = bytearray()
+
+    def w16(v: int) -> None:
+        code.extend((v & 0xFF, (v >> 8) & 0xFF))
+
+    def lda(imm: int) -> None:
+        code.extend((0xA9, imm & 0xFF))
+
+    def lda_abs(addr: int) -> None:
+        code.append(0xAD)
+        w16(addr)
+
+    def sta_abs(addr: int) -> None:
+        code.append(0x8D)
+        w16(addr)
+
+    def jsr_abs(addr: int) -> None:
+        code.append(0x20)
+        w16(addr)
+
+    def snap_zp_stk(zp_page: int, stk_page: int) -> None:
+        code.extend((0xA2, 0x00))  # ldx #0
+        code.extend((0xBD, 0x00, 0x00))
+        code.extend((0x9D, 0x00, zp_page))
+        code.extend((0xBD, 0x00, 0x01))
+        code.extend((0x9D, 0x00, stk_page))
+        code.extend((0xE8, 0xD0, 0xF1))  # inx; bne -15
+
+    def fill_xor(seed: int) -> None:
+        code.extend((0xA2, 0x0F, 0x8A, 0x49, seed, 0x9D, bounce & 0xFF, bounce >> 8, 0xCA, 0x10, 0xF7))
+
+    def zero_bounce(count: int) -> None:
+        code.extend((0xA2, count - 1, 0xA9, 0x00, 0x9D, bounce & 0xFF, bounce >> 8, 0xCA, 0x10, 0xFA))
+
+    def copy_bounce(dst: int, count: int) -> None:
+        code.extend((0xA2, count - 1, 0xBD, bounce & 0xFF, bounce >> 8, 0x9D, dst & 0xFF, dst >> 8, 0xCA, 0x10, 0xF7))
+
+    def load_bounce(src: int, count: int) -> None:
+        code.extend((0xA2, count - 1, 0xBD, src & 0xFF, src >> 8, 0x9D, bounce & 0xFF, bounce >> 8, 0xCA, 0x10, 0xF7))
+
+    def copy_mem(src: int, dst: int, count: int) -> None:
+        code.extend((0xA2, count - 1, 0xBD, src & 0xFF, src >> 8, 0x9D, dst & 0xFF, dst >> 8, 0xCA, 0x10, 0xF7))
+
+    def call_xfer(bank: int, direction: int, count: int, addr: int) -> None:
+        lda(bank)
+        sta_abs(arg_bank)
+        lda(direction)
+        sta_abs(arg_dir)
+        lda(count)
+        code.extend((0xA2, addr & 0xFF, 0xA0, (addr >> 8) & 0xFF, 0x20))
+        w16(xfer)
+
+    # Restore original jsr target high byte immediately so driver executes once
+    # (low byte at igk_call+1 already equals snd_upd & 0xFF == drv_base & 0xFF).
+    lda(snd_upd >> 8)
+    sta_abs(igk_call + 2)
+
+    lda_abs(0xC011); sta_abs(out_base + 0x60)
+    lda_abs(0xC012); sta_abs(out_base + 0x61)
+    lda_abs(0xC016); sta_abs(out_base + 0x62)
+    code.append(0xBA)  # tsx
+    code.extend((0x8E, 0x63, out_base >> 8))  # stx out_base+0x63
+    snap_zp_stk(0x80, 0x81)
+
+    zero_bounce(6)
+    call_xfer(0x00, 0x00, 6, 0xFFFA)
+    copy_bounce(out_base + 0x00, 6)
+
+    # 1. Verify boot-preloaded Aux LC Bank 2 $D000-$D8B7 (A2.CATEXT) and
+    #    production catalog_fetch_ext -> cat_ext_record[0..7] (ZP-free under guard!).
+    zero_bounce(16); call_xfer(0x00, 0x00, 16, 0xD000); copy_bounce(ext_out_base + 0x00, 16)
+    zero_bounce(8);  call_xfer(0x00, 0x00, 8,  0xD8B0); copy_bounce(ext_out_base + 0x10, 8)
+    for idx, cid in enumerate(sample_ids):
+        lda(cid & 0xFF); sta_abs(cat_id_lo_addr)
+        lda(cid >> 8);   sta_abs(cat_id_hi_addr)
+        jsr_abs(fetch_ext)
+        copy_mem(cat_ext_rec_addr, ext_out_base + 0x20 + idx * 8, 8)
+
+    # Save preloaded 16 B at Bank 1 $D000, Bank 2 $D000, and High $E000 before spike writes.
+    call_xfer(0x08, 0x00, 16, 0xD000); copy_bounce(save_lc_base + 0x00, 16)
+    call_xfer(0x00, 0x00, 16, 0xD000); copy_bounce(save_lc_base + 0x10, 16)
+    call_xfer(0x00, 0x00, 16, 0xE000); copy_bounce(save_lc_base + 0x20, 16)
+
+    fill_xor(0xB1); call_xfer(0x08, 0x01, 16, 0xD000)  # Aux LC Bank 1 $D000
+    fill_xor(0xD2); call_xfer(0x00, 0x01, 16, 0xD000)  # Aux LC Bank 2 $D000
+    fill_xor(0xE5); call_xfer(0x00, 0x01, 16, 0xE000)  # Aux LC $E000
+    fill_xor(0xF9); call_xfer(0x00, 0x01, 16, 0xFFE9)  # Aux LC $FFE9-$FFF8
+
+    zero_bounce(16); call_xfer(0x08, 0x00, 16, 0xD000); copy_bounce(out_base + 0x10, 16)
+    zero_bounce(16); call_xfer(0x00, 0x00, 16, 0xD000); copy_bounce(out_base + 0x20, 16)
+    zero_bounce(16); call_xfer(0x08, 0x00, 16, 0xE000); copy_bounce(out_base + 0x30, 16)
+    zero_bounce(16); call_xfer(0x00, 0x00, 16, 0xFFE9); copy_bounce(out_base + 0x40, 16)
+    zero_bounce(6);  call_xfer(0x00, 0x00, 6,  0xFFFA); copy_bounce(out_base + 0x50, 6)
+
+    # Restore preloaded 16 B at Bank 1 $D000, Bank 2 $D000, and High $E000.
+    load_bounce(save_lc_base + 0x00, 16); call_xfer(0x08, 0x01, 16, 0xD000)
+    load_bounce(save_lc_base + 0x10, 16); call_xfer(0x00, 0x01, 16, 0xD000)
+    load_bounce(save_lc_base + 0x20, 16); call_xfer(0x00, 0x01, 16, 0xE000)
+
+    code.append(0xBA)  # tsx
+    code.extend((0x8E, 0x64, out_base >> 8))  # stx out_base+0x64
+    lda_abs(0xC011); sta_abs(out_base + 0x65)
+    lda_abs(0xC012); sta_abs(out_base + 0x66)
+    lda_abs(0xC016); sta_abs(out_base + 0x67)
+    snap_zp_stk(0x82, 0x83)
+
+    lda(0xA5)
+    sta_abs(out_base + 0xFF)
+    code.append(0x4C)
+    w16(snd_upd)
+
+    assert drv_base + len(code) <= 0xA000, f"aux_lc_spike driver too large: {len(code)}"
+    bytes_lua = ", ".join(f"0x{b:02X}" for b in code)
+    vec_expected = (
+        nmi_rti & 0xFF, nmi_rti >> 8,
+        rst_stub & 0xFF, rst_stub >> 8,
+        nmi_rti & 0xFF, nmi_rti >> 8,
+    )
+    vec_lua = ", ".join(f"0x{b:02X}" for b in vec_expected)
+    catext_head_lua = ", ".join(f"0x{b:02X}" for b in catext_raw[:16])
+    catext_tail_lua = ", ".join(f"0x{b:02X}" for b in catext_raw[278 * 8 : 279 * 8])
+    fetch_samples_bytes = b"".join(catext_raw[cid * 8 : (cid + 1) * 8] for cid in sample_ids)
+    fetch_samples_lua = ", ".join(f"0x{b:02X}" for b in fetch_samples_bytes)
+
+    body = f"""
+for i = 1, 300 do
+    emu.wait(0.1)
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then break end
+end
+assert_line("lc_title_ready", prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9,
+            "title menu did not appear")
+
+-- Fill Aux ZP ($0000-$00FF) and Aux Stack ($0100-$01FF) with deterministic guards.
+local aux_guard = {{}}
+for a = 0x0000, 0x01FF do
+    local g = ((a * 37) ~ 0x5A) & 0xFF
+    aux_guard[a] = g
+    aux:write(a, g)
+end
+
+for a = 0x{out_base:04X}, 0x{ext_out_base + 0xFF:04X} do
+    prog:write_u8(a, 0x00)
+end
+local drv = {{{bytes_lua}}}
+for i, b in ipairs(drv) do
+    prog:write_u8(0x{drv_base:04X} + i - 1, b)
+end
+assert_line("lc_pre_altzp_off", (prog:read_u8(0xC016) & 0x80) == 0,
+            "RDALTZP unexpectedly active at title")
+prog:write_u8(0x{igk_call + 2:04X}, 0x{drv_base >> 8:02X})
+
+local done = false
+for i = 1, 80 do
+    emu.wait(0.05)
+    if prog:read_u8(0x{out_base + 0xFF:04X}) == 0xA5 then done = true break end
+end
+assert_line("lc_driver_ran", done, "6502 Aux LC driver did not complete")
+
+local function hex_slice(base, n)
+    local s = ""
+    for i = 0, n - 1 do s = s .. string.format("%02X", prog:read_u8(base + i)) end
+    return s
+end
+
+local vec_exp = {{{vec_lua}}}
+local vec_init_ok, vec_post_ok = true, true
+for i = 1, 6 do
+    if prog:read_u8(0x{out_base:04X} + i - 1) ~= vec_exp[i] then vec_init_ok = false end
+    if prog:read_u8(0x{out_base + 0x50:04X} + i - 1) ~= vec_exp[i] then vec_post_ok = false end
+end
+assert_line("lc_aux_vectors_boot", vec_init_ok,
+            "got " .. hex_slice(0x{out_base:04X}, 6) .. " exp " .. string.format("%02X%02X%02X%02X%02X%02X", table.unpack(vec_exp)))
+assert_line("lc_aux_vectors_post", vec_post_ok, "got " .. hex_slice(0x{out_base + 0x50:04X}, 6))
+
+local catext_head_exp = {{{catext_head_lua}}}
+local catext_tail_exp = {{{catext_tail_lua}}}
+local fetch_exp = {{{fetch_samples_lua}}}
+local catext_head_ok, catext_tail_ok, fetch_ext_ok = true, true, true
+for i = 1, 16 do
+    if prog:read_u8(0x{ext_out_base:04X} + i - 1) ~= catext_head_exp[i] then catext_head_ok = false end
+end
+for i = 1, 8 do
+    if prog:read_u8(0x{ext_out_base + 0x10:04X} + i - 1) ~= catext_tail_exp[i] then catext_tail_ok = false end
+end
+for i = 1, 40 do
+    if prog:read_u8(0x{ext_out_base + 0x20:04X} + i - 1) ~= fetch_exp[i] then fetch_ext_ok = false end
+end
+assert_line("lc_catext_bank2_d000_head", catext_head_ok, "got " .. hex_slice(0x{ext_out_base:04X}, 16))
+assert_line("lc_catext_bank2_d8b0_balrog", catext_tail_ok, "got " .. hex_slice(0x{ext_out_base + 0x10:04X}, 8))
+assert_line("lc_catalog_fetch_ext_samples", fetch_ext_ok, "got " .. hex_slice(0x{ext_out_base + 0x20:04X}, 40))
+
+local b1_ok, b2_ok, e0_ok, top_ok = true, true, true, true
+for i = 0, 15 do
+    if prog:read_u8(0x{out_base + 0x10:04X} + i) ~= (0xB1 ~ i) then b1_ok = false end
+    if prog:read_u8(0x{out_base + 0x20:04X} + i) ~= (0xD2 ~ i) then b2_ok = false end
+    if prog:read_u8(0x{out_base + 0x30:04X} + i) ~= (0xE5 ~ i) then e0_ok = false end
+    if prog:read_u8(0x{out_base + 0x40:04X} + i) ~= (0xF9 ~ i) then top_ok = false end
+end
+assert_line("lc_bank1_d000_non_alias", b1_ok, "got " .. hex_slice(0x{out_base + 0x10:04X}, 16))
+assert_line("lc_bank2_d000_non_alias", b2_ok, "got " .. hex_slice(0x{out_base + 0x20:04X}, 16))
+assert_line("lc_e000_shared_upper", e0_ok, "got " .. hex_slice(0x{out_base + 0x30:04X}, 16))
+assert_line("lc_ffe9_fff8_near_vec", top_ok, "got " .. hex_slice(0x{out_base + 0x40:04X}, 16))
+
+local aux_zp_bad, aux_stk_bad = 0, 0
+for a = 0x0000, 0x00FF do
+    if aux:read(a) ~= aux_guard[a] then aux_zp_bad = aux_zp_bad + 1 end
+end
+for a = 0x0100, 0x01FF do
+    if aux:read(a) ~= aux_guard[a] then aux_stk_bad = aux_stk_bad + 1 end
+end
+assert_line("lc_aux_zp_untouched", aux_zp_bad == 0, aux_zp_bad .. " Aux ZP bytes changed")
+assert_line("lc_aux_stack_untouched", aux_stk_bad == 0, aux_stk_bad .. " Aux Stack bytes changed")
+
+local main_zp_bad = 0
+for i = 0, 255 do
+    if prog:read_u8(0x8000 + i) ~= prog:read_u8(0x8200 + i) then main_zp_bad = main_zp_bad + 1 end
+end
+assert_line("lc_main_zp_preserved", main_zp_bad == 0, main_zp_bad .. " Main ZP bytes changed")
+
+local sp_pre = prog:read_u8(0x{out_base + 0x63:04X})
+local sp_post = prog:read_u8(0x{out_base + 0x64:04X})
+assert_line("lc_main_sp_preserved", sp_pre == sp_post,
+            string.format("SP pre=%02X post=%02X", sp_pre, sp_post))
+local main_stk_bad = 0
+for i = 0, 255 do
+    -- jsr catalog_fetch_ext (2 B) -> php (1 B) -> jsr a2_aux_lc_bounce_xfer (2 B)
+    -- uses scratch stack slots [sp_pre - 4 .. sp_pre]; active caller stack (i > sp_pre)
+    -- and deeper unused stack (i < sp_pre - 4) must remain untouched.
+    if (i > sp_pre or i < sp_pre - 4) and prog:read_u8(0x8100 + i) ~= prog:read_u8(0x8300 + i) then
+        main_stk_bad = main_stk_bad + 1
+    end
+end
+assert_line("lc_main_stack_preserved", main_stk_bad == 0, main_stk_bad .. " Main Stack bytes changed")
+
+local bnk_pre = prog:read_u8(0x{out_base + 0x60:04X}) & 0x80
+local ram_pre = prog:read_u8(0x{out_base + 0x61:04X}) & 0x80
+local bnk_post = prog:read_u8(0x{out_base + 0x65:04X}) & 0x80
+local ram_post = prog:read_u8(0x{out_base + 0x66:04X}) & 0x80
+local alt_post = prog:read_u8(0x{out_base + 0x67:04X}) & 0x80
+assert_line("lc_main_state_restored", bnk_pre == bnk_post and ram_pre == ram_post and alt_post == 0,
+            string.format("C011=%02X->%02X C012=%02X->%02X C016=%02X",
+                          bnk_pre, bnk_post, ram_pre, ram_post, alt_post))
+"""
+    return (
+        LUA_HELPERS
+        + body
+        + LUA_CHARGEN.replace("CLASS_KEY", "A")
+        + 'assert_line("post_aux_lc_mli_town", in_town(), "MORIA8.PAK load to town failed after Aux LC spike")\n'
+        + 'print("SCENARIO DONE")\n'
+    )
 
 
 def scroll_delta_lua() -> str:
@@ -2252,6 +2770,7 @@ SCENARIO_LUA = {
     "save_slot_tracking": save_slot_tracking_lua,
     "weapon_exchange": weapon_exchange_lua,
     "acid_armour": acid_armour_lua,
+    "aux_lc_spike": aux_lc_spike_lua,
 }
 
 # Scenarios that exercise a separate save disk (blank ProDOS image, volume
@@ -2281,7 +2800,8 @@ SCENARIOS = ("boot_title",) + tuple(SCENARIO_LUA) + ("save_reboot_load",)
 
 def _run_mame(args, lua, flop2):
     with tempfile.NamedTemporaryFile("w", suffix=".lua", delete=False) as f:
-        f.write(lua)
+        # Every scenario finds the title by the menu's ')' (MENU_PAREN_OFF).
+        f.write(lua.replace("MENU_PAREN_OFF", str(MENU_PAREN_OFF)))
         lua_path = f.name
 
     for output_dir in MAME_OUTPUT_DIRS.values():
@@ -2368,6 +2888,7 @@ def main() -> int:
             LUA_BOOT_TITLE
             .replace("WAIT_TENTHS", str(int(args.seconds * 10)))
             .replace("MENU_START_COL", str(MENU_START_COL))
+            .replace("MENU_PAREN_OFF", str(MENU_PAREN_OFF))
             .replace("ROW18_BASE", str(ROW18_BASE))
         )
 
@@ -2493,7 +3014,7 @@ def main() -> int:
     check("boot_progress", bootprog >= 0xB1,
           f"max count digit={bootprog:#04x}")
 
-    # Menu string "N)ew  L)oad  D)isk Setup" starts at column 22; each half
+    # The menu string starts at MENU_START_COL (centred); each half
     # row holds 40 bytes at half-row offset col>>1.
     for half_name, parity in (("main", 1), ("aux", 0)):
         if half_name not in dumps:

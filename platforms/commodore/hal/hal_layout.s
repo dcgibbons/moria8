@@ -24,8 +24,6 @@
 //   hal_layout_inventory_select_col
 //   hal_layout_inventory_identify_col
 //   hal_layout_status_row21_name_col
-//   hal_layout_status_row21_state_col
-//   hal_layout_status_row21_poison_col
 //   hal_layout_status_row21_lv_col
 //   hal_layout_status_row21_dl_col
 //   hal_layout_status_row22_st_col
@@ -38,10 +36,6 @@
 //   hal_layout_status_row23_mp_col
 //   hal_layout_status_row23_ac_col
 //   hal_layout_status_row23_au_col
-//   hal_layout_status_row23_hunger_col
-//   hal_layout_status_row23_state_col
-//   hal_layout_status_searching_on_row21
-//   hal_layout_status_searching_on_row23
 //   hal_layout_title_load_uses_cache
 //   hal_layout_title_art_bank1_source
 //   hal_layout_title_reverse_space_attr

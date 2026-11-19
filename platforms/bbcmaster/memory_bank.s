@@ -8,6 +8,7 @@
 // transition.
 
 #import "memory.s"
+#import "cache_layout.s"
 
 // ============================================================
 // EnterMos / ExitMos — Safe MOS / DFS Call Envelope (< $3000)
@@ -17,6 +18,8 @@
 // ($FE30 = zp_mos_romsel_shadow) before calling into MOS/DFS.
 EnterMos:
 hal_memory_enter_os:
+    php
+    sei
     lda #ACCCON_NORMAL
     sta beeb_acccon_shadow
     sta SHEILA_ACCCON
@@ -24,6 +27,7 @@ hal_memory_enter_os:
     lda beeb_boot_romsel
     sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
+    plp
     clc
     rts
 
@@ -31,6 +35,7 @@ ExitMos:
 hal_memory_exit_os:
     php
     pha
+    sei
     lda #ROMSEL_BANK4
     sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
@@ -43,12 +48,15 @@ hal_memory_exit_os:
     rts
 
 hal_memory_restore_runtime:
+    php
+    sei
     lda #ROMSEL_BANK4
     sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda #ACCCON_NORMAL
     sta beeb_acccon_shadow
     sta SHEILA_ACCCON
+    plp
     clc
     rts
 
@@ -72,14 +80,10 @@ mmu_safe_huff_read_ptr0:
     bcc !hr0+
     lda #ROMSEL_BANK6
 !hr0:
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda (zp_ptr0),y
-    sta beeb_mmu_byte
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
-    plp
-    lda beeb_mmu_byte
-    rts
+    bra mmu_romsel_store_exit
 
 mmu_safe_huff_read_ptr1:
     php
@@ -90,131 +94,107 @@ mmu_safe_huff_read_ptr1:
     bcc !hr1+
     lda #ROMSEL_BANK6
 !hr1:
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda (zp_ptr1),y
-    sta beeb_mmu_byte
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
-    plp
-    lda beeb_mmu_byte
-    rts
+    bra mmu_romsel_store_exit
 
 // ============================================================
 // Map & BeebAuxData Readers/Writers
 // ============================================================
-// Dispatches by high byte of pointer:
-//   - >= $80 (bmi): Bank 5 Map ($8000-$B30B), zero address arithmetic.
-//   - $60..$76 (bpl): Bank 6 BeebAuxData (virtual $6000-$76FF -> physical
-//                     $8000-$96FF = virt + $2000 via dedicated beeb_aux_ptr).
+// Dispatches by virtual address:
+//   - >= $8000 (bmi): Bank 5 Map ($8000-$B30B), zero address arithmetic.
+//   - $6000-$7FFF:    Bank 6 BeebAuxData (virtual $6000-$72FF -> physical
+//                     $8000-$92FF = virt + $2000 via dedicated beeb_aux_ptr).
+//   - otherwise:      Main RAM.
 // Preserves X, Y, C, I, D, V; sets N/Z from A on reads; preserves A on writes.
 mmu_safe_map_read_ptr0:
     php
     sei
     lda zp_ptr0_hi
-    bpl !aux0+
+    bpl !cold_r0+
     lda #ROMSEL_BANK5
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda (zp_ptr0),y
+mmu_romsel_store_exit:
     sta beeb_mmu_byte
+mmu_romsel_exit:
     lda #ROMSEL_BANK4
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     plp
     lda beeb_mmu_byte
     rts
-!aux0:
+!cold_r0:
+    sta beeb_aux_ptr_hi
+    lda zp_ptr0
+mmu_cold_read:
+    sta beeb_aux_ptr
+    lda beeb_aux_ptr_hi
     cmp #>BEEB_AUXDATA_VIRT_BASE
-    bcc !main0+
+    bcc !main_read+
     clc
     adc #BEEB_AUXDATA_PHYS_OFFSET
     sta beeb_aux_ptr_hi
-    lda zp_ptr0
-    sta beeb_aux_ptr
     lda #ROMSEL_BANK6
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda (beeb_aux_ptr),y
-    sta beeb_mmu_byte
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
+    bra mmu_romsel_store_exit
+!main_read:
     plp
-    lda beeb_mmu_byte
-    rts
-!main0:
-    plp
-    lda (zp_ptr0),y
+    lda (beeb_aux_ptr),y
     rts
 
 mmu_safe_map_read_ptr1:
     php
     sei
     lda zp_ptr1_hi
-    bpl !aux1+
+    bpl !cold_r1+
     lda #ROMSEL_BANK5
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda (zp_ptr1),y
-    sta beeb_mmu_byte
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
-    plp
-    lda beeb_mmu_byte
-    rts
-!aux1:
-    cmp #>BEEB_AUXDATA_VIRT_BASE
-    bcc !main1+
-    clc
-    adc #BEEB_AUXDATA_PHYS_OFFSET
+    bra mmu_romsel_store_exit
+!cold_r1:
     sta beeb_aux_ptr_hi
     lda zp_ptr1
-    sta beeb_aux_ptr
-    lda #ROMSEL_BANK6
-    sta SHEILA_ROMSEL
-    lda (beeb_aux_ptr),y
-    sta beeb_mmu_byte
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
-    plp
-    lda beeb_mmu_byte
-    rts
-!main1:
-    plp
-    lda (zp_ptr1),y
-    rts
+    bra mmu_cold_read
 
 mmu_safe_map_write_ptr0:
     php
     sei
     sta beeb_mmu_byte
     lda zp_ptr0_hi
-    bpl !aux_w0+
+    bpl !cold_w0+
     lda #ROMSEL_BANK5
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda beeb_mmu_byte
     sta (zp_ptr0),y
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
-    plp
-    lda beeb_mmu_byte
-    rts
-!aux_w0:
+    bra mmu_romsel_exit
+!cold_w0:
+    sta beeb_aux_ptr_hi
+    lda zp_ptr0
+mmu_cold_write:
+    sta beeb_aux_ptr
+    lda beeb_aux_ptr_hi
     cmp #>BEEB_AUXDATA_VIRT_BASE
-    bcc !main_w0+
+    bcc !main_write+
     clc
     adc #BEEB_AUXDATA_PHYS_OFFSET
     sta beeb_aux_ptr_hi
-    lda zp_ptr0
-    sta beeb_aux_ptr
     lda #ROMSEL_BANK6
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda beeb_mmu_byte
     sta (beeb_aux_ptr),y
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
+    bra mmu_romsel_exit
+!main_write:
     plp
     lda beeb_mmu_byte
-    rts
-!main_w0:
-    plp
-    lda beeb_mmu_byte
-    sta (zp_ptr0),y
+    sta (beeb_aux_ptr),y
     rts
 
 mmu_safe_map_write_ptr1:
@@ -222,38 +202,17 @@ mmu_safe_map_write_ptr1:
     sei
     sta beeb_mmu_byte
     lda zp_ptr1_hi
-    bpl !aux_w1+
+    bpl !cold_w1+
     lda #ROMSEL_BANK5
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     lda beeb_mmu_byte
     sta (zp_ptr1),y
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
-    plp
-    lda beeb_mmu_byte
-    rts
-!aux_w1:
-    cmp #>BEEB_AUXDATA_VIRT_BASE
-    bcc !main_w1+
-    clc
-    adc #BEEB_AUXDATA_PHYS_OFFSET
+    jmp mmu_romsel_exit
+!cold_w1:
     sta beeb_aux_ptr_hi
     lda zp_ptr1
-    sta beeb_aux_ptr
-    lda #ROMSEL_BANK6
-    sta SHEILA_ROMSEL
-    lda beeb_mmu_byte
-    sta (beeb_aux_ptr),y
-    lda #ROMSEL_BANK4
-    sta SHEILA_ROMSEL
-    plp
-    lda beeb_mmu_byte
-    rts
-!main_w1:
-    plp
-    lda beeb_mmu_byte
-    sta (zp_ptr1),y
-    rts
+    bra mmu_cold_write
 
 // mmu_safe_map_read_block — Burst-copy X bytes from Bank 5 Map (zp_ptr0),y
 // to low main RAM (zp_ptr1),y. Clobbers A, X, Y.
@@ -261,6 +220,7 @@ mmu_safe_map_read_block:
     php
     sei
     lda #ROMSEL_BANK5
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
 !loop:
     lda (zp_ptr0),y
@@ -269,6 +229,7 @@ mmu_safe_map_read_block:
     dex
     bne !loop-
     lda #ROMSEL_BANK4
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     plp
     rts
@@ -288,6 +249,7 @@ beeb_swr_copy_to_window:
     php
     sei
     lda swr_src_bank
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
 !rd_page:
     lda (zp_ptr0),y
@@ -295,6 +257,7 @@ beeb_swr_copy_to_window:
     iny
     bne !rd_page-
     lda #ROMSEL_BANK4
+    sta zp_mos_romsel_shadow
     sta SHEILA_ROMSEL
     plp
 
@@ -376,3 +339,288 @@ hal_memory_write_byte:
     sta (zp_ptr0),y
     clc
     rts
+
+// ============================================================
+// Monster Recall Shadow-RAM Accessors (< $3000, LYNNE $3F80-$43DB)
+// ============================================================
+// Preserves X and all zero-page slots (restores beeb_acccon_shadow).
+hal_recall_read_byte:
+    clc
+    lda recall_off_lo
+    adc #<BEEB_LYNNE_AUX_BASE
+    sta hrrb_lda + 1
+    lda recall_off_hi
+    adc #>BEEB_LYNNE_AUX_BASE
+    sta hrrb_lda + 2
+    php
+    sei
+    ldy beeb_acccon_shadow
+    lda #ACCCON_LYNNE
+    sta beeb_acccon_shadow
+    sta SHEILA_ACCCON
+hrrb_lda:
+    lda BEEB_LYNNE_AUX_BASE
+!recall_exit:
+    sty beeb_acccon_shadow
+    sty SHEILA_ACCCON
+    plp
+    rts
+
+hal_recall_write_byte:
+    sta hrwb_val + 1
+    clc
+    lda recall_off_lo
+    adc #<BEEB_LYNNE_AUX_BASE
+    sta hrwb_sta + 1
+    lda recall_off_hi
+    adc #>BEEB_LYNNE_AUX_BASE
+    sta hrwb_sta + 2
+    php
+    sei
+    ldy beeb_acccon_shadow
+    lda #ACCCON_LYNNE
+    sta beeb_acccon_shadow
+    sta SHEILA_ACCCON
+hrwb_val:
+    lda #$00
+hrwb_sta:
+    sta BEEB_LYNNE_AUX_BASE
+    bra !recall_exit-
+
+// ============================================================
+// ITEMCAT DFS On-Demand 10-Slot Page Cache (< $3000)
+//   Slots 0,1,4 (LYNNE $3400-$35FF, B6 $9300): pages  0..5  (RECORDS, mod 3)
+//   Slot  2     (LYNNE  $3600):                pages 14..21 (item base names)
+//   Slot  3     (LYNNE  $3700):                pages 22..26 (ego & flavour names)
+//   Slot  5     (Bank 6 $9400):                pages  6..9  (costs/wds/flags/bonuses)
+//   Slot  6     (Bank 7 $BC00):                pages 10..11 (effects & egos)
+//   Slot  7     (Bank 7 $BD00):                pages 27..29 ($80+ token strings)
+//   Slot  8     (Bank 7 $BE00):                page   12    (BLK_INDEX + CANON — pinned)
+//   Slot  9     (Bank 7 $BF00):                page   13    (CANON_SYMS + names — pinned)
+// ============================================================
+beeb_icat_inv_lynne:
+    lda #$ff
+    ldy #3
+!inv_lp:
+    sta beeb_icat_slot_page,y
+    dey
+    bpl !inv_lp-
+    rts
+
+// Input:  item_cat_off_lo/hi = 16-bit offset into ITEMCAT.
+// Output: A = byte. Clobbers: A, Y (preserves X and all ZP).
+hal_item_cat_read_byte:
+    phx
+    ldy item_cat_off_hi
+    ldx beeb_icat_page_slot,y
+    tya
+    cmp beeb_icat_slot_page,x
+    beq !hic_hit+
+    jsr beeb_icat_load_page
+!hic_hit:
+    lda beeb_icat_slot_hi,x
+    ldy item_cat_off_lo
+    php
+    sei
+    cpx #4
+    bcc !hic_lynne+
+    sta hic_lda + 2
+    cpx #6
+    lda #ROMSEL_BANK6
+    adc #0                  // $06 for Slots 4..5 (C=0), $07 for Slots 6..9 (C=1)
+    ldx zp_mos_romsel_shadow
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
+hic_lda:
+    lda BEEB_ICAT_B6_ADDR,y
+    stx zp_mos_romsel_shadow
+    stx SHEILA_ROMSEL
+    plp
+    plx
+    rts
+!hic_lynne:
+    sta hic_lyn_lda + 2
+    ldx beeb_acccon_shadow
+    lda #ACCCON_LYNNE
+    sta beeb_acccon_shadow
+    sta SHEILA_ACCCON
+hic_lyn_lda:
+    lda DUNGEON_GEN_SCAN_SCRATCH_BASE,y
+    stx beeb_acccon_shadow
+    stx SHEILA_ACCCON
+    plp
+    plx
+    rts
+
+beeb_icat_load_page:
+    sta beeb_icat_req_page
+    stx beeb_icat_req_slot
+    jsr EnterMos
+    lda beeb_icat_handle
+    bne !hilp_have_h+
+    lda #hal_storage_item_cat_name_len
+    ldx #<hal_storage_item_cat_name
+    ldy #>hal_storage_item_cat_name
+    jsr beeb_open_prog_asset
+    bcs !hilp_fail_mos+
+    sta beeb_icat_handle
+!hilp_have_h:
+    jsr beeb_prep_ss_osgbpb
+    lda #$01
+    sta BEEB_OS_CTRL_BASE + 6
+    lda beeb_icat_req_page
+    sta BEEB_OS_CTRL_BASE + 10
+    lda #$03
+    jsr beeb_call_osgbpb
+    // Partial final page (page 29) triggers EOF Carry=1 after transferring
+    // 149 bytes, clearing BEEB_OS_CTRL_BASE+6 to 0; 0-byte faults leave it 1.
+    lda BEEB_OS_CTRL_BASE + 6
+    bne !hilp_fail_mos+
+    jsr ExitMos
+    ldx beeb_icat_req_slot
+    lda beeb_icat_slot_hi,x
+    sta hilp_sta + 2
+    php
+    sei
+    cpx #4
+    bcc !hilp_lynne+
+    cpx #6
+    lda #ROMSEL_BANK6
+    adc #0
+    ldy zp_mos_romsel_shadow
+    sta zp_mos_romsel_shadow
+    sta SHEILA_ROMSEL
+    jsr !hilp_copy+
+    sty zp_mos_romsel_shadow
+    sty SHEILA_ROMSEL
+    bra !hilp_done+
+!hilp_lynne:
+    ldy beeb_acccon_shadow
+    lda #ACCCON_LYNNE
+    sta beeb_acccon_shadow
+    sta SHEILA_ACCCON
+    jsr !hilp_copy+
+    sty beeb_acccon_shadow
+    sty SHEILA_ACCCON
+!hilp_done:
+    plp
+    ldx beeb_icat_req_slot
+    lda beeb_icat_req_page
+    sta beeb_icat_slot_page,x
+    rts
+!hilp_copy:
+    ldx #0
+!hilp_clp:
+    lda beeb_ss_buf,x
+hilp_sta:
+    sta DUNGEON_GEN_SCAN_SCRATCH_BASE,x
+    inx
+    bne !hilp_clp-
+    rts
+!hilp_fail_mos:
+    jsr beeb_close_icat_in_mos
+    jsr ExitMos
+    lda #$fc
+    jmp hal_platform_panic
+
+beeb_icat_slot_page: .fill 10, $ff
+beeb_icat_page_slot:
+    .byte 0, 1, 4, 0, 1, 4              // pages  0..5  -> Slots 0, 1, 4 (RECORDS)
+    .byte 5, 5, 5, 5                    // pages  6..9  -> Slot 5 (costs/wds/flags/bonuses)
+    .byte 6, 6                          // pages 10..11 -> Slot 6 (effects & egos)
+    .byte 8, 9                          // pages 12..13 -> Slots 8, 9 (BLK_INDEX & CANON — pinned)
+    .byte 2, 2, 2, 2, 2, 2, 2, 2        // pages 14..21 -> Slot 2 (item base names)
+    .byte 3, 3, 3, 3, 3                 // pages 22..26 -> Slot 3 (ego & flavour names)
+    .byte 7, 7, 7                       // pages 27..29 -> Slot 7 ($80+ tokens)
+beeb_icat_slot_hi:
+    .assert "beeb_icat_page_slot covers 30 ITEMCAT pages", beeb_icat_slot_hi - beeb_icat_page_slot, 30
+    .byte >DUNGEON_GEN_SCAN_SCRATCH_BASE, >(DUNGEON_GEN_SCAN_SCRATCH_BASE + $100)
+    .byte >(DUNGEON_GEN_SCAN_SCRATCH_BASE + $200), >(DUNGEON_GEN_SCAN_SCRATCH_BASE + $300)
+    .byte >BEEB_ICAT_B6_ADDR, >(BEEB_ICAT_B6_ADDR + $100)
+    .byte >BEEB_ICAT_CACHE_ADDR, >(BEEB_ICAT_CACHE_ADDR + $100)
+    .byte >(BEEB_ICAT_CACHE_ADDR + $200), >(BEEB_ICAT_CACHE_ADDR + $300)
+beeb_icat_req_page:  .byte 0
+beeb_icat_req_slot:  .byte 0
+beeb_icat_handle:    .byte 0
+
+beeb_open_prog_asset:
+    pha
+    lda program_device
+    sta beeb_io_device
+    pla
+    jsr beeb_set_pathname
+    lda #$40
+    jsr beeb_call_osfind_keep_icat
+    bcs !bopa_fail+
+    cmp #$00
+    bne !bopa_ok+
+    sec
+!bopa_fail:
+    rts
+!bopa_ok:
+    clc
+    rts
+
+// ============================================================
+// MONEXT DFS On-Demand 8-Byte Extended Species Fetch (< $3000)
+// ============================================================
+// Reads creature cat_id_lo/hi's 8 extended Phase 5 bytes (offset id * 8) from
+// DFS MONEXT into cat_ext_record[0..7] via OSGBPB A=3. Reuses a persistent DFS
+// handle (beeb_mext_handle) that beeb_close_icat_in_mos closes automatically
+// before any OSFILE/OSFIND/OSWORD7F stream or disk-swap call (keeping open DFS
+// handles <= 3 of 5). Preserves all ZP ($02-$AF) and ROMSEL/ACCCON invariants.
+catalog_fetch_ext:
+    jsr EnterMos
+    lda beeb_mext_handle
+    bne !cfe_have_h+
+    lda #hal_storage_mon_ext_name_len
+    ldx #<hal_storage_mon_ext_name
+    ldy #>hal_storage_mon_ext_name
+    jsr beeb_open_prog_asset
+    bcs !cfe_fail_mos+
+    sta beeb_mext_handle
+!cfe_have_h:
+    jsr beeb_prep_ss_osgbpb
+    lda #<cat_ext_record
+    sta BEEB_OS_CTRL_BASE + 1
+    lda #>cat_ext_record
+    sta BEEB_OS_CTRL_BASE + 2
+    lda #8
+    sta BEEB_OS_CTRL_BASE + 5
+    lda cat_id_hi
+    sta BEEB_OS_CTRL_BASE + 10
+    ldx #3
+    lda cat_id_lo
+!cfe_shl:
+    asl
+    rol BEEB_OS_CTRL_BASE + 10
+    dex
+    bne !cfe_shl-
+    sta BEEB_OS_CTRL_BASE + 9
+    lda #$03
+    jsr beeb_call_osgbpb
+    bcs !cfe_fail_mos+
+    lda BEEB_OS_CTRL_BASE + 5
+    bne !cfe_fail_mos+
+    jmp ExitMos
+!cfe_fail_mos:
+    jsr beeb_close_icat_in_mos
+    jsr ExitMos
+    jsr save_zp
+    lda #hal_storage_mon_ext_name_len
+    sta alr_len
+    stz alr_left
+    lda #<hal_storage_mon_ext_name
+    sta alr_name_lo
+    lda #>hal_storage_mon_ext_name
+    sta alr_name_hi
+    jsr asset_load_ask_for_disk
+    lda #1
+    sta vis_room_revealed
+    stz status_cache_valid
+    jsr restore_zp
+    jmp catalog_fetch_ext
+
+cat_ext_record:   .fill 8, 0
+beeb_mext_handle: .byte 0
+.assert "cat_ext_record (8 B) stays below $3000", cat_ext_record + 8 <= $3000, true

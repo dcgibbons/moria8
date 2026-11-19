@@ -152,9 +152,10 @@ chest_stage_loot:
     sta chest_loot_x
     lda fi_y,x
     sta chest_loot_y
+    .assert "Chests are contiguous on Page 0", ITEM_LARGE_WOODEN_CHEST == ITEM_SMALL_WOODEN_CHEST + 1 && ITEM_SMALL_IRON_CHEST == ITEM_SMALL_WOODEN_CHEST + 2 && ITEM_LARGE_IRON_CHEST == ITEM_SMALL_WOODEN_CHEST + 3 && ITEM_SMALL_STEEL_CHEST == ITEM_SMALL_WOODEN_CHEST + 4 && ITEM_LARGE_STEEL_CHEST == ITEM_SMALL_WOODEN_CHEST + 5 && ITEM_RUINED_CHEST == ITEM_SMALL_WOODEN_CHEST + 6 && ITEM_PAGE_RUINED_CHEST == 0, true
     lda fi_item_id,x
     sec
-    sbc #128
+    sbc #ITEM_SLOT_SMALL_WOODEN_CHEST
     tax
     lda chest_loot_flags_table,x
     sta chest_loot_flags
@@ -188,12 +189,13 @@ chest_trigger_traps:
     beq !ctt_no_str+
     ldx #HSTR_CHEST_NEEDLE
     jsr huff_print_msg
-    lda player_data + PL_STR_CUR
-    cmp #4
+    lda player_sust_mask
+    and #SUST_STR
+    bne !ctt_str_immune+
+    ldy #0
+    jsr player_drain_stat_y
     bcc !ctt_str_immune+
-    jsr decrement_stat
-    sta player_data + PL_STR_CUR
-    sta zp_player_str
+    jsr player_calc_combat
     ldx #HSTR_CHEST_WEAKENED
     jsr huff_print_msg
 !ctt_str_immune:
@@ -297,18 +299,10 @@ chest_trigger_traps:
     rts
 
 // ============================================================
-// chest_award_xp — Add A (0-255) to player XP (24-bit accumulate).
+// chest_award_xp — Add A (0-255) to player XP (24-bit accumulate + PL_MAX_XP).
 // ============================================================
 chest_award_xp:
-    clc
-    adc player_data + PL_XP_0
-    sta player_data + PL_XP_0
-    bcc !cax_done+
-    inc player_data + PL_XP_1
-    bne !cax_done+
-    inc player_data + PL_XP_2
-!cax_done:
-    rts
+    jmp player_award_xp_a
 
 // ============================================================
 // chest_threshold_value — Value-based chest lock/disarm success threshold.
@@ -666,7 +660,7 @@ chest_disarm_command:
 // ============================================================
 // chest_bash_command — Bash a chest (docs/CHEST_DESIGN.md; VMS bash at
 // moria.inc:3454). A 1-in-10 roll destroys the chest — identity becomes a
-// Ruined Chest (ID 134), p1/to_hit zeroed, contents never generated — even for
+// Ruined Chest (ITEM_RUINED_CHEST), p1/to_hit zeroed, contents never generated — even for
 // an already-opened chest. Otherwise, if locked, a separate 1-in-10 breaks the
 // lock ("The lock breaks open!"); anything else prints "The chest holds firm."
 // Bash never disarms a trap and never opens the chest; there is no off-balance
@@ -705,7 +699,7 @@ chest_bash_command:
     rts
 !cbc_destroy:
     ldx chest_slot
-    lda #134                  // Ruined Chest
+    lda #ITEM_SLOT_RUINED_CHEST
     sta fi_item_id,x
     lda #0
     sta fi_p1,x

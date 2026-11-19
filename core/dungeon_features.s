@@ -52,17 +52,22 @@ df_disarm_chance: .byte 0
 df_disarm_trap_idx: .byte 0
 df_disarm_total: .byte 0
 df_disarm_base: .byte 0
+df_tile_tmp:    .byte 0
 
 #import "df_target_row.s"
 
 #if PLATFORM_DISARM_COMMAND_INLINE || !DISARM_HELPERS_EXTERNAL
 trap_difficulty:
-    .byte 5, 15, 10, 20, 20, 25
+    .byte 5, 15, 10, 20, 20, 25, 10, 20, 20, 30, 30, 30, 15, 20, 20, 0, 25, 20
+trap_difficulty_end:
+.assert "dungeon_features trap_difficulty covers TRAP_TYPE_COUNT", trap_difficulty_end - trap_difficulty, TRAP_TYPE_COUNT
 #endif
 
 #if PLATFORM_DISARM_COMMAND_INLINE || !DISARM_COMMAND_EXTERNAL
 trap_disarm_xp:
-    .byte 1, 3, 2, 5, 6, 8
+    .byte 1, 3, 2, 5, 6, 8, 2, 6, 5, 10, 10, 10, 3, 5, 5, 0, 8, 5
+trap_disarm_xp_end:
+.assert "dungeon_features trap_disarm_xp covers TRAP_TYPE_COUNT", trap_disarm_xp_end - trap_disarm_xp, TRAP_TYPE_COUNT
 
 disarm_no_visible_str:
     .text "I do not see anything to disarm there." ; .byte 0
@@ -204,184 +209,7 @@ find_random_floor_near:
 
 #if !PLACE_SECRETS_EXTERNAL
 :DoorStateSegment()
-place_secrets:
-    // Only caller is dungeon_generate (dungeon levels); town uses
-    // town_generate and never reaches here.
-
-    // Scan entire map for TILE_DOOR_CLOSED
-    lda #0
-    sta door_scan_count
-
-    ldx #1                  // Start at row 1
-!ps_row:
-    jsr map_row_ptr0_x
-    stx df_target_y         // Save row
-
-#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
-    // The C128 map lives in Bank 1. Copy once per row instead of switching
-    // banks for every tile in this full-map generation scan.
-    lda #MAP_COLS
-    jsr mmu_common_copy_map_row
-#endif
-
-    ldy #1                  // Start at col 1
-!ps_col:
-#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
-    lda SCREEN_RAM,y
-#else
-    :MapRead_ptr0_y()
-#endif
-    and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_CLOSED
-    bne !ps_next+
-
-    // Found a closed door — add to scan list
-    lda door_scan_count
-    cmp #MAX_DOOR_SCAN
-    bcs !ps_next+           // List full
-
-    tax
-    lda df_target_y
-    sta door_scan_y,x
-    tya
-    sta door_scan_x,x
-    inc door_scan_count
-
-!ps_next:
-    iny
-    cpy #MAP_COLS - 1
-    bne !ps_col-
-
-    ldx df_target_y         // Restore row
-    inx
-    cpx #MAP_ROWS - 1
-    bne !ps_row-
-
-    // How many doors did we find?
-    lda door_scan_count
-    bne !ps_some+
-    rts                     // None found
-!ps_some:
-
-    // Pick 1-3 doors to convert (don't exceed count)
-    lda #3
-    jsr rng_range           // [0, 2]
-    clc
-    adc #1                  // [1, 3]
-    sta df_found            // Number to convert
-
-    // Clamp to door_scan_count
-    cmp door_scan_count
-    bcc !ps_convert+
-    lda door_scan_count
-    sta df_found
-
-!ps_convert:
-    // Pick a random door from the list
-    lda door_scan_count
-    jsr rng_range           // [0, count-1]
-    sta df_dir_idx          // Save random index
-
-    // Get its coordinates
-    tax
-    lda door_scan_y,x
-    sta df_target_y
-    lda door_scan_x,x
-    sta df_target_x
-
-    // Convert map tile to TILE_SECRET (keep flags)
-    jsr df_target_row_ptr
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK     // Keep flags
-    ora #TILE_SECRET        // Change type to secret
-    :MapWrite_ptr0_y()
-
-    // Remove from scan list: swap picked entry with last, decrement count
-    dec door_scan_count
-    ldx df_dir_idx          // X = picked index
-    ldy door_scan_count     // Y = new last index (was count-1)
-    lda door_scan_x,y
-    sta door_scan_x,x
-    lda door_scan_y,y
-    sta door_scan_y,x
-
-    dec df_found
-    bne !ps_convert-
-
-
-    // ---- Locked/stuck door state roll (second map pass) ----
-    // Rescan the map after secret conversion so every remaining closed door
-    // is eligible, including doors beyond the bounded secret-selection list.
-    // Upstream closed-door branch (VMS place_door /
-    // Umoria dungeonPlaceDoor): 2/12 locked, 1/12 stuck, 9/12 plain, with
-    // uniform magnitude randint(10)+10. One rng_range(120) draw per door
-    // encodes class and magnitude exactly: [0,20) locked (mag 11+roll/2),
-    // [60,70) stuck (mag roll-49, negated), else plain. Draws append after
-    // all existing generation draws, preserving topology seeds. Every
-    // remaining closed door is rolled; rolling stops when the state table fills
-    // (MAX_DOOR_STATES entries) and any remaining doors stay plain.
-    // Keep this loop in sync with the PLACE_SECRETS_EXTERNAL copy in
-    // core/dungeon_gen.s (C64/Plus4/A2).
-    // Capping either the roll count or the secret-selection scratch list
-    // would bias locked/stuck doors toward the top of the row-major map.
-    ldx #1
-!pss_row:
-    jsr map_row_ptr0_x
-    stx df_target_y
-#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
-    lda #MAP_COLS
-    jsr mmu_common_copy_map_row
-#endif
-    ldy #1
-!pss_col:
-#if HAL_LAYOUT_DUNGEON_GEN_ROW_BATCHED_MAP
-    lda SCREEN_RAM,y
-#else
-    :MapRead_ptr0_y()
-#endif
-    and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_CLOSED
-    bne !pss_next+
-    ldx door_state_count
-    cpx #MAX_DOOR_STATES
-    bcs !pss_done+              // State table full: rest stay plain
-    lda #120
-    jsr rng_range
-    cmp #20
-    bcc !pss_locked+
-    cmp #60
-    bcc !pss_next+              // [20, 60) plain
-    cmp #70
-    bcs !pss_next+              // [70, 120) plain
-    // Stuck: roll in [60, 70) -> magnitude roll-49 in [11, 20], sign bit set
-    sec
-    sbc #49
-    ora #$80
-    jmp !pss_store+
-!pss_locked:
-    // roll in [0, 20) -> magnitude 11 + roll/2 in [11, 20] (each twice)
-    lsr
-    clc
-    adc #11
-!pss_store:
-    ldx door_state_count
-    sta door_state_val,x
-    tya
-    sta door_state_x,x
-    lda df_target_y
-    sta door_state_y,x
-    inc door_state_count
-!pss_next:
-    iny
-    cpy #MAP_COLS - 1
-    bne !pss_col-
-    ldx df_target_y
-    inx
-    cpx #MAP_ROWS - 1
-    bne !pss_row-
-!pss_done:
-!ps_done:
-    rts
+#import "place_secrets_cold.s"
 :DoorStateRestoreSegment()
 #endif
 
@@ -397,47 +225,55 @@ place_secrets:
 trap_check_at_player:
     lda trap_count
     beq !tcp_done+          // No traps
-
-    ldx #0
-!tcp_loop:
-    cpx trap_count
-    bcs !tcp_done+
-
-    lda trap_x,x
-    cmp zp_player_x
-    bne !tcp_next+
-    lda trap_y,x
-    cmp zp_player_y
-    bne !tcp_next+
-
-    // Found a trap at player position!
-    // Save trap index
-    stx df_dir_idx
+    lda zp_player_x
+    sta df_target_x
+    lda zp_player_y
+    sta df_target_y
+    jsr trap_find_at_target
+    bcc !tcp_done+
 
     // Reveal trap on map: change tile to TILE_TRAP | flags
-    ldy zp_player_y
-    jsr map_row_ptr0_y
-    ldy zp_player_x
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK     // Keep existing flags
-    ora #TILE_TRAP          // Set tile type to trap
-    ora #FLAG_VISITED       // Ensure visible
-    :MapWrite_ptr0_y()
+    lda #TILE_TRAP | FLAG_VISITED
+    jsr df_set_target_tile
 
-    // Trigger the trap effect
-    ldx df_dir_idx
+    // Trigger the trap effect (df_disarm_trap_idx set by trap_find_at_target)
+    ldx df_disarm_trap_idx
+#if TRAP_TRIGGER_EXTERNAL && PLATFORM_PRODUCT_OVERLAY_RUNTIME
+    jsr tramp_trap_trigger
+#else
     jsr trap_trigger
+#endif
+    jsr chest_run_pending_summons  // Deferred TRAP_SUMMON spawns (preserves C)
 
     // Done (only one trap per tile)
     sec                     // Carry set = trap fired
     rts
 
-!tcp_next:
-    inx
-    jmp !tcp_loop-
-
 !tcp_done:
     clc                     // Carry clear = no trap
+    rts
+
+// trap_find_at_target — Scan trap table for (df_target_x, df_target_y).
+// Output: carry set + X/df_disarm_trap_idx = index if found; carry clear if not.
+trap_find_at_target:
+    ldx #0
+!tfat_loop:
+    cpx trap_count
+    bcs !tfat_no+
+    lda trap_x,x
+    cmp df_target_x
+    bne !tfat_next+
+    lda trap_y,x
+    cmp df_target_y
+    bne !tfat_next+
+    stx df_disarm_trap_idx
+    sec
+    rts
+!tfat_next:
+    inx
+    bne !tfat_loop-         // MAX_TRAPS <= 16
+!tfat_no:
+    clc
     rts
 
 // trap_remove_at_index — Remove trap table entry X by swapping with the last.
@@ -456,29 +292,9 @@ trap_remove_at_index:
 // Requires df_target_x/df_target_y from get_direction_target.
 // Output: carry set = found, X/index stored in df_disarm_trap_idx.
 trap_find_target_visible:
-    jsr df_target_row_ptr
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
+    jsr df_read_target_tile_type
     cmp #TILE_TRAP
-    bne !not_found+
-
-    ldx #0
-!scan:
-    cpx trap_count
-    bcs !not_found+
-    lda trap_x,x
-    cmp df_target_x
-    bne !next+
-    lda trap_y,x
-    cmp df_target_y
-    bne !next+
-    stx df_disarm_trap_idx
-    sec
-    rts
-!next:
-    inx
-    jmp !scan-
-!not_found:
+    beq trap_find_at_target
     clc
     rts
 
@@ -521,14 +337,23 @@ disarm_command:
     rts
 
 !success:
-    lda #<disarm_success_str
-    ldy #>disarm_success_str
-    jsr msg_print_ay
     jsr disarm_award_trap_xp
     jsr disarm_restore_target_floor
     ldx df_disarm_trap_idx
+    lda trap_type,x
+    pha
     jsr trap_remove_at_index
     jsr disarm_move_player_to_target
+    pla
+    cmp #TRAP_HIDDEN_OBJECT
+    bne !normal_ok+
+    jsr df_stage_hidden_drop
+    sec
+    rts
+!normal_ok:
+    lda #<disarm_success_str
+    ldy #>disarm_success_str
+    jsr msg_print_ay
     sec
     rts
 
@@ -564,16 +389,8 @@ disarm_award_trap_xp:
     ldx df_disarm_trap_idx
     lda trap_type,x
     tax
-    lda player_data + PL_XP_0
-    clc
-    adc trap_disarm_xp,x
-    sta player_data + PL_XP_0
-    bcc !done+
-    inc player_data + PL_XP_1
-    bne !done+
-    inc player_data + PL_XP_2
-!done:
-    rts
+    lda trap_disarm_xp,x
+    jmp player_award_xp_a
 
 #endif
 
@@ -581,267 +398,21 @@ disarm_award_trap_xp:
 #import "disarm_helpers.s"
 #endif
 
-// ============================================================
-// trap_trigger — Execute a trap's effect
-// Input: X = trap table index (trap_type[X] has the type)
-// ============================================================
-trap_trigger:
-    jsr player_search_mode_off
-    lda trap_type,x
-
-    cmp #TRAP_OPEN_PIT
-    bne !not_pit+
-    // Open pit: 2d6 damage, as VMS open and covered pits (values.inc
-    // trap_lista '2d6'; 1d4 until 2026-10-27). Formerly trap_do_pit,
-    // inlined at its only dispatch site.
-    ldx #HSTR_DF_YOU_FELL
-    jsr huff_print_msg
-    lda #DEATH_TRAP_PIT
-    sta df_death_source
-    lda #HSTR_DF_TRAP_0
-    sta df_death_hstr
-    lda #2              // 2 dice
-    ldx #6              // d6
-    jmp trap_apply_damage
-!not_pit:
-    cmp #TRAP_ARROW
-    bne !not_arrow+
-    jmp trap_do_arrow
-!not_arrow:
-    cmp #TRAP_POISON_GAS
-    bne !not_gas+
-    jmp trap_do_gas
-!not_gas:
-    cmp #TRAP_TELEPORT
-    bne !not_tele+
-    jmp trap_do_teleport
-!not_tele:
-    cmp #TRAP_POISON_DART
-    bne !not_dart+
-    jmp trap_do_dart
-!not_dart:
-    // Must be TRAP_ROCKFALL
-    jmp trap_do_rockfall
-
-// --- Trap effect handlers ---
-
-// Arrow trap: 1d8 damage
-trap_do_arrow:
-    ldx #HSTR_DF_ARROW_HITS
-    jsr huff_print_msg
-    lda #DEATH_TRAP_ARROW
-    sta df_death_source
-    lda #HSTR_DF_TRAP_1
-    sta df_death_hstr
-    lda #1
-    ldx #8
-    jmp trap_apply_damage
-
-// Poison gas: set poison timer to 10 + 1d10
-trap_do_gas:
-    ldx #HSTR_DF_POISON_GAS
-    jsr huff_print_msg
-    // Set poison timer: 10 + rng_range(10) + 1 = 11..20
-    lda #10
-    jsr rng_range           // [0, 9]
-    clc
-    adc #11                 // [11, 20]
-    sta zp_eff_poison
-    // Print "YOU FEEL POISONED."
-    ldx #HSTR_DF_POISONED
-    jmp huff_print_msg
-
-// Teleport: move player to random floor tile
-trap_do_teleport:
-    ldx #HSTR_DF_TELEPORTED
-    jsr huff_print_msg
-    jmp trap_teleport
-
-// Poison dart: 1d4 damage + 50% chance CON decrement
-trap_do_dart:
-    ldx #HSTR_DF_DART_HITS
-    jsr huff_print_msg
-    lda #DEATH_TRAP_DART
-    sta df_death_source
-    lda #HSTR_DF_TRAP_4
-    sta df_death_hstr
-    lda #1
-    ldx #4
-    jsr trap_apply_damage
-    // 50% chance to lose 1 CON
-    jsr rng_byte
-    and #1
-    beq !no_con_drain+
-    // Decrement CON
-    lda player_data + PL_CON_CUR
-    cmp #4                  // Don't go below 3
-    bcc !no_con_drain+
-    jsr decrement_stat
-    sta player_data + PL_CON_CUR
-    sta zp_player_con
-    ldx #HSTR_DF_CON_DRAIN
-    jsr huff_print_msg
-!no_con_drain:
-    rts
-
-// Rockfall: 2d6 damage (VMS values.inc "some loose rock" '2d6'; Umoria
-// data_treasure.cpp {2, 6}; 2d8 until 2026-10-25), and the trap becomes
-// rubble (VMS moria.inc pusht(tptr); place_rubble(y, x); Umoria
-// trapRockfall): it stayed a trap and fell again until 2026-10-26.
-// Input: X = trap table index.
-trap_do_rockfall:
-    lda trap_x,x
-    sta df_target_x
-    lda trap_y,x
-    sta df_target_y
-    jsr trap_remove_at_index
+df_set_target_tile:
+    sta df_tile_tmp
     jsr df_target_row_ptr
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
-    ora #TILE_RUBBLE | FLAG_VISITED
+    ora df_tile_tmp
     :MapWrite_ptr0_y()
-    ldx #HSTR_DF_ROCKFALL
-    jsr huff_print_msg
-    lda #DEATH_TRAP_ROCKFALL
-    sta df_death_source
-    lda #HSTR_DF_DEATH_ROCKFALL
-    sta df_death_hstr
-    lda #2              // 2 dice
-    ldx #6              // d6
-    jmp trap_apply_damage
-
-// ============================================================
-// trap_apply_damage — Roll damage and subtract from player HP
-// Input: A = dice count, X = dice sides (no bonus: every trap is plain dice)
-// Prints "YOU TAKE N DAMAGE." message.
-// ============================================================
-trap_apply_damage:
-    ldy #0                  // +0
-    jsr math_dice           // Result in zp_math_a (lo), zp_math_b (hi)
-
-    // Save damage amount
-    lda zp_math_a
-    sta df_target_x         // Reuse scratch for damage value
-
-    // Subtract from player HP (16-bit)
-    lda zp_player_hp_lo
-    sec
-    sbc zp_math_a
-    sta zp_player_hp_lo
-    lda zp_player_hp_hi
-    sbc zp_math_b
-    sta zp_player_hp_hi
-
-    // Clamp lethal trap damage before syncing the player struct (A and N
-    // still hold the high byte).
-    bmi !trap_lethal+
-    ora zp_player_hp_lo
-    bne !trap_sync+
-
-!trap_lethal:
-    lda #0
-    sta zp_player_hp_lo
-    sta zp_player_hp_hi
-    lda df_death_source
-    sta zp_death_source
-    jsr trap_resolve_death_name
-
-!trap_sync:
-    // Sync to player struct
-    lda zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
-
-    // Print "YOU TAKE N DAMAGE."
-    ldx #HSTR_DF_DAMAGE_PRE
-    jsr huff_print_msg
-
-    // Print damage number and " DAMAGE." inline on same row
-    // msg_print left cursor at end of "YOU TAKE "
-    // Set message color for inline text
-    lda zp_text_color
-    pha
-    lda #COL_MSG_TEXT
-    sta zp_text_color
-
-    lda df_target_x
-    jsr screen_put_decimal
-
-    ldx #HSTR_DF_DAMAGE_POST
-    jsr huff_decode_string
-    jsr hal_screen_put_string
-
-    pla
-    sta zp_text_color
-
-    // Play hit sound for surviving hits; lethal trap damage uses the
-    // standard death path so the death sound is not overwritten.
-    lda zp_player_hp_hi
-    ora zp_player_hp_lo
-    beq !trap_death+
-
-    lda #SFX_HIT
-    jmp hal_sound_play
-
-!trap_death:
-    jmp player_death_check
-
-// ============================================================
-// trap_resolve_death_name — Resolve lethal trap cause text
-// ============================================================
-// Copies the existing trap name string into creature_name_buf so the death
-// overlay can display it after tier/overlay memory has been replaced.
-trap_resolve_death_name:
-    ldx df_death_hstr
-    jsr huff_decode_string
-    ldy #0
-!trdn_copy:
-    lda hd_decode_buf,y
-    sta creature_name_buf,y
-    beq !trdn_done+
-    iny
-    cpy #31
-    bne !trdn_copy-
-    lda #0
-    sta creature_name_buf,y
-!trdn_done:
     rts
 
-// ============================================================
-// trap_teleport — Move player to a random floor tile
-// ============================================================
-trap_teleport:
-    jsr player_search_mode_off
-    // Find a random floor tile using simple scan
-    lda #100                // Max attempts
-    sta df_found
-!tt_loop:
-    jsr df_roll_interior_xy
+#if !TRAP_TRIGGER_EXTERNAL
+#import "trap_trigger_cold.s"
+#endif
 
-    // Check if floor
-    jsr df_target_row_ptr
-    :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    beq !tt_found+
-
-    dec df_found
-    bne !tt_loop-
-    rts                     // Give up, stay in place
-
-!tt_found:
-    // Move player to new position
-#if PLATFORM_DISARM_COMMAND_INLINE || !DISARM_COMMAND_EXTERNAL
-    jmp disarm_move_player_to_target   // the same six stores
-#else
-    lda df_target_x
-    sta zp_player_x
-    sta player_data + PL_MAP_X
-    lda df_target_y
-    sta zp_player_y
-    sta player_data + PL_MAP_Y
-    rts
+#if !TRAP_DAMAGE_EXTERNAL
+#import "trap_damage_cold.s"
 #endif
 
 // ============================================================
@@ -893,194 +464,16 @@ get_direction_target:
     clc                     // Carry clear = invalid
     rts
 
-// ============================================================
-// door_try_open — Attempt to open a door at (df_target_x, df_target_y).
-// Consults per-door state: plain doors open, locked doors roll the lock
-// pick (door_pick_roll), stuck doors are refused (jam/bash to clear).
-// Output: carry set = door opened (or stuck msg shown, turn consumed)
-//         carry clear = no door there
-// ============================================================
-door_try_open:
-    // Read map tile at target
+df_read_target_tile_type:
     jsr df_target_row_ptr
     :MapRead_ptr0_y()
     sta df_dir_idx          // Save full tile byte
-
-    // Check tile type
     and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_CLOSED
-    beq !dto_closed+
-    cmp #TILE_DOOR_OPEN
-    beq !dto_already_open+
-    cmp #TILE_SECRET
-    beq !dto_no_door+       // Secret doors can't be opened directly
-
-    // Not a door
-!dto_no_door:
-    ldx #HSTR_DF_NO_DOOR
-    jsr huff_print_msg
-    clc                     // No turn consumed
     rts
 
-!dto_already_open:
-    ldx #HSTR_DF_ALREADY_OPEN
-    jsr huff_print_msg
-    clc                     // No turn consumed
-    rts
-
-!dto_closed:
-    // Real per-door state (replaces the old transient 25% stuck roll):
-    // locked (val > 0) → pick attempt; stuck (val < 0) → must be bashed.
-    lda df_target_x
-    ldy df_target_y
-    jsr door_state_get
-    sta df_found                // Signed door state
-    beq !dto_open_it+           // Plain door → open
-    bmi !dto_stuck+
-
-    // Locked: pick the lock (VMS openobject / Umoria playerOpenClosedObject):
-    // success iff disarm_skill - lock > randint(100); +1 XP on success.
-    lda zp_eff_confuse
-    beq !dto_pick+
-    ldx #HSTR_DF_PICK_CONFUSED
-    jsr huff_print_msg
-    sec                         // Turn consumed
-    rts
-!dto_pick:
-    // The effective-disarm formula is overlay-parked on every product build,
-    // so resident callers reach the colocated roll via tramp_door_pick_roll.
-    // Carry set = picked.
-#if DOOR_PICK_EXTERNAL
-    jsr tramp_door_pick_roll
-#else
-    jsr door_pick_roll
+#if !DOOR_OPEN_CLOSE_EXTERNAL
+#import "door_open_close_cold.s"
 #endif
-    bcs !dto_picked+
-    ldx #HSTR_DF_PICK_FAIL
-    jsr huff_print_msg
-    sec                         // Turn consumed (retry allowed)
-    rts
-!dto_picked:
-    ldx #HSTR_DF_PICKED
-    jsr huff_print_msg
-    // +1 XP (24-bit), once — state clears below, so retries pay nothing
-    inc player_data + PL_XP_0
-    bne !dto_xp_done+
-    inc player_data + PL_XP_1
-    bne !dto_xp_done+
-    inc player_data + PL_XP_2
-!dto_xp_done:
-    lda #0
-    jsr door_state_set_at       // Unlock (removes the table entry)
-    jmp !dto_open_it+           // Picked doors open in the same turn
-
-!dto_stuck:
-    ldx #HSTR_DF_STUCK
-    jsr huff_print_msg
-    lda #SFX_BUMP
-    jsr hal_sound_play
-    sec                         // Turn consumed
-    rts
-
-!dto_open_it:
-    // Open the door: change tile type to TILE_DOOR_OPEN, keep flags
-    lda df_dir_idx          // Original tile byte
-    and #TILE_FLAG_MASK     // Keep flags
-    ora #TILE_DOOR_OPEN     // Set to open door
-    jsr df_target_row_ptr
-    lda df_dir_idx
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_OPEN
-    :MapWrite_ptr0_y()
-
-    ldx #HSTR_DF_DOOR_OPENED
-    jsr huff_print_msg
-    sec                     // Turn consumed
-    rts
-
-// ============================================================
-// door_try_close — Attempt to close a door at (df_target_x, df_target_y)
-// Output: carry set = door closed, carry clear = no open door there
-// ============================================================
-door_try_close:
-    // Read map tile at target
-    jsr df_target_row_ptr
-    :MapRead_ptr0_y()
-    sta df_dir_idx          // Save full tile byte
-
-    // Check tile type
-    and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_OPEN
-    beq !dtc_open+
-    cmp #TILE_DOOR_CLOSED
-    beq !dtc_already_closed+
-
-    // Not a door
-    ldx #HSTR_DF_NO_DOOR
-    jsr huff_print_msg
-    clc
-    rts
-
-!dtc_already_closed:
-    ldx #HSTR_DF_ALREADY_CLOSED
-    jsr huff_print_msg
-    clc
-    rts
-
-!dtc_open:
-    // Broken doors (state 1 on an open tile) cannot be closed
-    // (VMS closeobject / Umoria playerCloseDoor: "The door appears to be
-    // broken.", turn consumed).
-    lda df_target_x
-    ldy df_target_y
-    jsr door_state_get
-    cmp #1
-    bne !dtc_not_broken+
-    ldx #HSTR_DF_DOOR_BROKEN
-    jsr huff_print_msg
-    sec                         // Turn consumed
-    rts
-!dtc_not_broken:
-    // A live monster in the doorway blocks the close (VMS closeobject /
-    // Umoria playerCloseDoor: refuse with "The <name> is in your way!" and
-    // still consume the turn). Resolve FLAG_OCCUPIED against the live monster
-    // table and repair stale flags, matching player_move_check_live_occupant.
-    lda df_dir_idx
-    and #FLAG_OCCUPIED
-    beq !dtc_do_close+
-    lda df_target_x
-    ldy df_target_y
-    jsr monster_find_at         // Clobbers zp_ptr0
-    bcc !dtc_stale+
-    jsr combat_msg_monster_in_way
-    sec                         // Turn consumed (upstream refuses without a free turn)
-    rts
-
-!dtc_stale:
-    // No live monster — repair the stale flag, then close the door.
-    jsr df_target_row_ptr
-    :MapRead_ptr0_y()
-    and #~FLAG_OCCUPIED & $ff
-    :MapWrite_ptr0_y()
-    lda df_dir_idx
-    and #~FLAG_OCCUPIED & $ff
-    sta df_dir_idx
-
-!dtc_do_close:
-    // Close the door
-    lda df_dir_idx
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_CLOSED
-    jsr df_target_row_ptr
-    lda df_dir_idx
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_CLOSED
-    :MapWrite_ptr0_y()
-
-    ldx #HSTR_DF_DOOR_CLOSED
-    jsr huff_print_msg
-    sec                     // Turn consumed
-    rts
 
 :DoorStateSegment()
 // ============================================================
@@ -1115,6 +508,10 @@ door_state_find:
     clc
     rts
 
+// door_state_get_target — Input: df_target_x/y. Output: A = signed state (0 = plain).
+door_state_get_target:
+    lda df_target_x
+    ldy df_target_y
 // door_state_get — Input: A=x, Y=y. Output: A = signed state (0 = plain).
 // Clobbers: A, X
 door_state_get:
@@ -1144,9 +541,7 @@ door_state_remove_idx:
 // Clobbers: A, X, Y
 door_state_clear_at:
     jsr door_state_find
-    bcc !dsca_done+
-    jmp door_state_remove_idx
-!dsca_done:
+    bcs door_state_remove_idx
     rts
 
 // door_state_set_at — Set state at (df_target_x, df_target_y); A = val.
@@ -1169,17 +564,15 @@ door_state_set_at:
     lda df_target_y
     sta door_state_y,x
     lda dss_val
-    sta door_state_val,x
     inc door_state_count
-    rts
+    bne !dss_write+         // Count is 1..MAX_DOOR_STATES (> 0)
 !dss_update:
     lda dss_val
-    beq !dss_remove+
+    beq door_state_remove_idx
+!dss_write:
     sta door_state_val,x
 !dss_done:
     rts
-!dss_remove:
-    jmp door_state_remove_idx
 :DoorStateRestoreSegment()
 
 // ============================================================
@@ -1248,7 +641,8 @@ door_jam_at_target:
     cpx #EQUIP_WEAPON
     bcs !cj_no_spike+
     lda inv_item_id,x
-    cmp #ITEM_TYPE_IRON_SPIKE
+    .assert "Iron Spike on Page 0 above Page-1 max slot_lo", ITEM_PAGE_IRON_SPIKE == 0 && ITEM_SLOT_IRON_SPIKE >= (ITEM_TYPE_COUNT - ITEM_PAGE_SIZE), true
+    cmp #ITEM_SLOT_IRON_SPIKE
     beq !cj_have+
     inx
     bne !cj_scan-
@@ -1370,15 +764,12 @@ search_scan_adjacent_silent:
     sta df_search_chance
     lda #0
     sta df_found
-
-    // Loop through 8 directions (indices 0-7)
-    lda #0
     sta df_dir_idx
 
 !ds_loop:
     ldx df_dir_idx
 
-    // Compute adjacent tile coordinates
+    // Compute adjacent tile coordinates; check Y bounds immediately in A
     lda zp_player_x
     clc
     adc dir_dx,x
@@ -1387,121 +778,69 @@ search_scan_adjacent_silent:
     clc
     adc dir_dy,x
     sta df_target_y
-
-    // Bounds check — use trampoline for distance
+    beq !ds_skip+
+    cmp #MAP_ROWS - 1
+    bcs !ds_skip+
     lda df_target_x
     beq !ds_skip+
     cmp #MAP_COLS - 1
-    bcs !ds_skip+
-    lda df_target_y
-    beq !ds_skip+
-    cmp #MAP_ROWS - 1
     bcc !ds_bounds_ok+
 !ds_skip:
     jmp !ds_next+
 !ds_bounds_ok:
 
-    // Read map tile
+    // Read map tile once and cache full byte across secret/chest/trap checks
     jsr df_target_row_ptr
     :MapRead_ptr0_y()
+    sta df_tile_tmp
     and #TILE_TYPE_MASK
 
     // Check for secret door
     cmp #TILE_SECRET
     bne !ds_chest_gate+
 
-    lda df_search_chance
-    beq !ds_chest_gate+
-    lda #100
-    jsr rng_range
-    cmp df_search_chance
-    bcs !ds_chest_gate+
+    jsr df_roll_search_chance
+    bcc !ds_chest_gate+
 
 !ds_secret_found:
     // Reveal: change to TILE_DOOR_CLOSED
-    ldy df_target_x
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_DOOR_CLOSED
-    :MapWrite_ptr0_y()
-
+    lda #TILE_DOOR_CLOSED
+    jsr df_set_target_tile
     ldx #HSTR_DF_FOUND_SECRET
+!ds_found_common:
     jsr huff_print_msg
-    lda #1
-    sta df_found
-    jmp !ds_next+
+    inc df_found
+    bne !ds_next+
 
 !ds_chest_gate:
 #if CHEST_ROUTING_ENABLED
     // Chest branch (docs/CHEST_DESIGN.md): gated on FLAG_HAS_ITEM so the
     // floor-table scan stays off the per-move hot path.
-    ldy df_target_x
-    :MapRead_ptr0_y()
+    lda df_tile_tmp
     and #FLAG_HAS_ITEM
     beq !ds_check_trap+
     jsr chest_search_reveal
-    bcc !ds_check_trap+
-    jmp !ds_next+
-#else
-    jmp !ds_check_trap+
+    bcs !ds_next+
 #endif
 
 !ds_check_trap:
-    // Check trap table for hidden traps at this position
-    ldx #0
-!ds_trap_scan:
-    cpx trap_count
-    bcs !ds_next+
+    jsr trap_find_at_target
+    bcc !ds_next+
 
-    lda trap_x,x
-    cmp df_target_x
-    bne !ds_trap_next+
-    lda trap_y,x
-    cmp df_target_y
-    bne !ds_trap_next+
-
-    ldy df_target_x
-    :MapRead_ptr0_y()
+    lda df_tile_tmp
     and #TILE_TYPE_MASK
     cmp #TILE_TRAP
-    beq !ds_trap_next+
+    beq !ds_next+
 
-    txa
-    pha                     // Save trap index on stack
-
-    lda df_search_chance
-    beq !ds_trap_not_found+
-    lda #100
-    jsr rng_range
-    cmp df_search_chance
-    bcs !ds_trap_not_found+
+    jsr df_roll_search_chance
+    bcc !ds_next+
 
 !ds_trap_found:
     // Reveal trap: change map tile to TILE_TRAP | flags
-    pla                     // Restore trap index
-    tax
-
-    ldy trap_y,x
-    jsr map_row_ptr0_y
-    ldy trap_x,x
-    :MapRead_ptr0_y()
-    and #TILE_FLAG_MASK
-    ora #TILE_TRAP
-    ora #FLAG_VISITED
-    :MapWrite_ptr0_y()
-
+    lda #TILE_TRAP | FLAG_VISITED
+    jsr df_set_target_tile
     ldx #HSTR_DF_FOUND_TRAP
-    jsr huff_print_msg
-    lda #1
-    sta df_found
-    jmp !ds_next+
-
-!ds_trap_not_found:
-    pla                     // Discard saved trap index
-
-!ds_trap_next:
-    inx
-    jmp !ds_trap_scan-
+    bne !ds_found_common-   // HSTR_DF_FOUND_TRAP > 0
 
 !ds_next:
     inc df_dir_idx
@@ -1512,11 +851,21 @@ search_scan_adjacent_silent:
 
 !ds_done:
     lda df_found
-    beq !ds_none+
-    sec
+    cmp #1
     rts
-!ds_none:
+
+df_roll_search_chance:
+    lda df_search_chance
+    beq !drsc_no+
+    lda #100
+    jsr rng_range
+    cmp df_search_chance
+    bcc !drsc_yes+
+!drsc_no:
     clc
+    rts
+!drsc_yes:
+    sec
     rts
 
 // do_search — Search adjacent tiles for secrets and traps
@@ -1534,5 +883,6 @@ do_search:
 // Compile-time validation
 // ============================================================
 .assert "MAX_TRAPS", MAX_TRAPS, 16
-.assert "TRAP_TYPE_COUNT", TRAP_TYPE_COUNT, 6
+.assert "TRAP_TYPE_COUNT", TRAP_TYPE_COUNT, 18
+.assert "trap_teleport: PL_MAP_Y follows PL_MAP_X", PL_MAP_Y, PL_MAP_X + 1
 #endif

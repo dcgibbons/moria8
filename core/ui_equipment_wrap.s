@@ -95,11 +95,17 @@ ueq_wrap_put_char:
     lda ueq_wrap_line
     bne !ueqw_done+             // Continuation overflow: clip cleanly
 !ueqw_wrap:
+    lda zp_cursor_row
+    cmp #(SCREEN_ROWS - 2)
+    bcs !ueqw_done+             // Never wrap onto reserved footer row (SCREEN_ROWS - 1)
     inc ueq_wrap_line
     inc zp_cursor_row
     lda ueq_wrap_col
     sta zp_cursor_col
 !ueqw_write:
+    ldx zp_cursor_row
+    cpx #(SCREEN_ROWS - 1)
+    bcs !ueqw_done+
     lda ueq_wrap_char
     jsr screen_put_char
     pla

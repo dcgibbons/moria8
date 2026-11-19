@@ -64,7 +64,7 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                "-8", str(image), "-remotemonitor", "-remotemonitoraddress",
                f"127.0.0.1:{endpoint}"]
     if port == "c128":
-        command.append("-80col")
+        command += ["-80col", "-VDC16KB"]
     elif port == "c64":
         command += ["-autostartprgmode", "1"]
     with (output / "vice.log").open("wb", buffering=0) as log:
@@ -142,6 +142,16 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                 attrs = memory(color_base, 1000, "cpu")
                 assert bytes(a & (0x7F if port == "plus4" else 0x0F) for a in attrs) == bytes([expected]) * 1000, "Full clear left stale attributes"
             until("legal_page_wait")
+        def centred_menu() -> None:
+            # The A)bout entry grew the menu to 32 characters and a hard-coded
+            # 35 left it off centre (2026-11-12): centred on the row it is on.
+            menu = "N)ew  L)oad  D)isk Setup  A)bout"
+            cols = 80 if port == "c128" else 40
+            row = memory(18 * 80, 80, "vdc") if port == "c128" else \
+                memory((0x0C00 if port == "plus4" else 0x0400) + 18 * 40, 40)
+            start = (cols - len(menu)) // 2
+            want = bytes(ord(ch) - 0x60 if "a" <= ch <= "z" else ord(ch) for ch in menu)
+            assert row[start:start + len(menu)] == want, f"{port}: title menu not centred: {row!r}"
         def has(text: str) -> None:
             if port == "c128":
                 screen = memory(0, 80*25, "vdc")
@@ -164,6 +174,7 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                 until("entry")
                 cmd("> ba 08")  # Device fixture normally supplied by boot LOAD.
             until("title_menu_loop")
+            centred_menu()
             if mode == "boot":
                 key("A")
                 until("legal_menu_wait")
@@ -189,9 +200,9 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                 key(" ")
                 until("main_loop")
                 def state():
-                    return (memory(sym["player_data"], 111), memory(0x40, 2),
+                    return (memory(sym["player_data"], 114), memory(0x40, 2),
                             memory(0x1A, 4),
-                            memory(sym["inv_item_id"], 33),
+                            memory(sym["inv_item_id"], 34),
                             memory(0x4000, 13068, "ram01") if port == "c128"
                             else memory(0xC800 if port == "plus4" else 0xC000, 3840))
                 before = state()

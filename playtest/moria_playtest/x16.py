@@ -26,6 +26,15 @@ from .mame import BridgeClosed, MameGame, MameProcess, Stop
 from .ports import Port
 from .vice import StopInfo
 
+# The cartridge (ports.CX16_CART), as platforms/cx16/test_cartridge.py boots it
+# under the testbench: a copy with the bank-32 "CX16" signature's first byte
+# cleared (after the .crt's 480-byte header, tools/make_cx16_cart.py), so the
+# ROM stops at the testbench, an empty -fsroot for saves and a one-RTS -prg;
+# then "M8TB" at $07FC, ROM bank 32, cartridge_boot.s's boot_cold_start and
+# cx16_preload_banks, before entry_bootstrap as the disk build.
+CART_SIGNATURE = 480
+CART_HANDOFF, CART_MAGIC, CART_ROM_BANK = 0x07FC, b"M8TB", 32
+ROM_BANK_REG = 0x0001
 RAM_BANK_REG = 0x0000
 BANK_WINDOW = 0xA000
 BANK_SIZE = 0x2000
@@ -46,8 +55,21 @@ class X16Process(MameProcess):
     """One owned ``x16emu -testbench`` and its stdin/stdout."""
 
     def start_x16(self, emulator: str, rom: str, connect_timeout: float = 60.0) -> "X16Process":
-        self.args = [emulator, "-testbench", "-warp", "-zeroram", "-rom", rom,
-                     "-fsroot", str(self.disk), "-prg", str(self.disk / self.target.program)]
+        self.args = [emulator, "-testbench", "-warp", "-zeroram", "-rom", rom]
+        if self.cartridge is None:
+            self.args += ["-fsroot", str(self.disk), "-prg", str(self.disk / self.target.program)]
+        else:
+            image = bytearray(self.cartridge.read_bytes())
+            if image[CART_SIGNATURE] != ord("C"):
+                raise ValueError(f"{self.cartridge}: no CX16 signature at byte {CART_SIGNATURE}")
+            image[CART_SIGNATURE] = 0
+            media = self.workdir / "testbench.crt"
+            media.write_bytes(image)
+            fsroot = self.workdir / "fsroot"   # saves only: the program is the cartridge's
+            fsroot.mkdir(exist_ok=True)
+            stub = self.workdir / "stub.prg"
+            stub.write_bytes(bytes((0x01, 0x08, 0x60)))   # $0801: RTS
+            self.args += ["-cart", str(media), "-fsroot", str(fsroot), "-prg", str(stub)]
         env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
         self.log_path = self.workdir / "x16emu.log"
         self.proc = subprocess.Popen(self.args, cwd=self.workdir, stdin=subprocess.PIPE,
@@ -199,6 +221,7 @@ class X16Game(MameGame):
         super().__init__(process, abi, workdir, port=port, resume_budget=resume_budget,
                          hang_emulated_seconds=hang_emulated_seconds)
         self.mon = X16Monitor(process)   # type: ignore[assignment]
+        self.boot_cold_start = 0         # the cartridge's boot (worker.py, cartridge_boot.sym)
         self.mon.map_base = abi.MAP_BASE
         self.map: bytearray | None = None   # read_map's copy of the level map
         self.map_dlvl = self.map_step = self.map_keys = 0
@@ -238,6 +261,12 @@ class X16Game(MameGame):
 
     def boot(self) -> Observation:
         self.map = None
+        if self.process.cartridge is not None:
+            self.mon.mem_set(CART_HANDOFF, CART_MAGIC)
+            for entry in (self.boot_cold_start, self.abi.cx16_preload_banks):
+                self.mon.mem_set(ROM_BANK_REG, bytes((CART_ROM_BANK,)))
+                self.process.send(f"RUN {entry:04X}")
+                self.process.ready(self.resume_budget)
         self.arm()
         self.mon.mem_set(self.abi.cx16_testbench_enabled, b"\x01")
         self.process.send(f"RUN {self.abi.entry_bootstrap:04X}")

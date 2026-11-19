@@ -27,6 +27,7 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -42,11 +43,12 @@ test_exit_trampoline:
 #import "../../../../core/ui_messages.s"
 #import "../../../../core/ui_status.s"
 #import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/stat_display.s"
+.segment Default
+.segment TestCreateOverlay
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
@@ -55,43 +57,68 @@ test_exit_trampoline:
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
+.segment TestCreateOverlay
+mat_scene_dirty: .byte 0
+monster_ai_tick:
+    brk
+.segment Default
 #import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+.segment TestCreateOverlay
+#import "../../../../core/los_trace.s"
+#import "../../../../core/element_resist.s"
+monster_can_cast:
+monster_pick_spell:
+    brk
+.segment Default
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
 #import "../../../../core/item.s"
+#import "item_cat_resident_helper.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
 #import "../../../../core/player_items.s"
 #import "../../../../core/spell_data.s"
 #import "../../../../core/projectile.s"
+.segment TestCreateOverlay
 #import "../../../../core/spell_effects.s"
+.segment Default
 #import "../../../../core/player_magic_state.s"
 #import "../../../../core/player_magic_state_ops.s"
 #import "../../../../core/player_magic.s"
+.segment TestCreateOverlay
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
 #import "../../../../core/scene_mat_tile.s"
 #import "../../../../core/ranged_fire.s"
 #import "../../../../core/throw.s"
-#import "../../../../core/monster_attack.s"
+.segment TestCreateOverlay
+mad_dmg_hi: .byte 0
+mon_atk_acid_armour:
+mon_atk_apply_damage_16:
+monster_attack_player:
+player_death_check:
+    brk
+.segment Default
 #import "../../../../core/turn.s"
-// Store modules move to the dummy segment so the test body stays below
-// MAP_BASE ($C000); map writes during tests must not corrupt test code.
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
-.segment TestStoreOverlay
-#import "../../../../core/store_data.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+// Store modules are never executed here; item_cat_data takes the $E100 window
+// (item_cat_kernal_helper.s), so only the store inventory arrays that
+// ui_trampoline_stubs.s references are linked (data, parked).
+.segment TestCreateOverlay
+#import "../../../../core/store_data_defs.s"
+#import "../../../../core/store_inventory_data.s"
+.segment Default
 .segment Default
 #import "../../../../core/ui_help.s"
+.segment Default
 #import "../../../../core/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -180,8 +207,12 @@ test_start:
     // Test 3: Range — weightless item (gold, weight=0)
     // Weight 0 → max range = 10
     // ==========================================
-    ldx #0                      // Type 0 (gold), weight = 0
-    lda it_weight,x
+    lda #ITEM_PAGE_GOLD_SMALL
+    sta item_cur_page
+    ldx #ITEM_SLOT_GOLD_SMALL                      // Type 0 (gold), weight = 0
+    jsr item_get_weight_x
+    lda icat_weight_lo
+    ora icat_weight_hi
     cmp #0
     bne !t3_fail+
     // If weight is 0, range should be 10
@@ -200,8 +231,10 @@ test_start:
     // ==========================================
     // Test 4: Potion detection — type 17 (Cure Light Wounds) = ICAT_POTION
     // ==========================================
-    ldx #17
-    lda it_category,x
+    lda #ITEM_PAGE_POTION_OF_CURE_LIGHT_WOUNDS
+    sta item_cur_page
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
+    jsr item_get_category_a
     cmp #ICAT_POTION
     beq !t4_pass+
     lda #$00
@@ -216,13 +249,16 @@ test_start:
     // Test 5: Item consumption — qty 3 → 2 after throw
     // ==========================================
     ldx #5                      // Use slot 5
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta inv_item_id,x
     lda #3
     sta inv_qty,x
     lda #0
     sta inv_p1,x
     sta inv_flags,x
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+    }
     sta inv_ego,x
 
     // Simulate throw consumption
@@ -232,7 +268,7 @@ test_start:
     cmp #2
     bne !t5_fail+
     lda inv_item_id,x
-    cmp #2                      // Still a dagger
+    cmp #ITEM_SLOT_DAGGER                      // Still a dagger
     bne !t5_fail+
     lda #$01
     sta tc_results+4
@@ -278,15 +314,19 @@ test_start:
     // Slot 1 is empty; visible list must be 0, 2, 5.
     // ==========================================
     jsr item_init_inventory
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta inv_item_id+0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego+0
+    }
     lda #1
     sta inv_qty+0
-    lda #17                     // Potion
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion
     sta inv_item_id+2
     lda #1
     sta inv_qty+2
-    lda #15                     // Food
+    lda #ITEM_SLOT_RATION_OF_FOOD                     // Food
     sta inv_item_id+5
     lda #1
     sta inv_qty+5
@@ -322,7 +362,7 @@ test_start:
     bcc !t8_fail+
     cpx #2
     bne !t8_fail+
-    cmp #17
+    cmp #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS
     bne !t8_fail+
     lda #$01
     sta tc_results+7
@@ -373,7 +413,7 @@ test_start:
     sta inv_flags+0
     sta inv_ego+0
     sta tw_slot
-    lda #47                     // Beginner's Spellbook
+    lda #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK                     // Beginner's Spellbook
     sta inv_item_id+0
     sta tw_item_id
     lda #20
@@ -393,7 +433,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t10_fail+
     lda fi_item_id,x
-    cmp #47
+    cmp #ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK
     bne !t10_fail+
     lda #$01
     sta tc_results+9
@@ -434,10 +474,10 @@ test_start:
     lda #IF_IDENTIFIED
     sta inv_flags+0
     sta tw_save_flags
-    lda #EGO_FLAME_TONGUE
+    lda #(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
     sta inv_ego+0
     sta tw_save_ego
-    lda #2                      // Dagger
+    lda #ITEM_SLOT_DAGGER                      // Dagger
     sta inv_item_id+0
     sta tw_item_id
     lda #1
@@ -457,7 +497,7 @@ test_start:
     jsr floor_item_find_at
     bcc !t11_fail+
     lda fi_item_id,x
-    cmp #2
+    cmp #ITEM_SLOT_DAGGER
     bne !t11_fail+
     lda fi_to_hit,x
     cmp #$fe
@@ -471,7 +511,7 @@ test_start:
     and #IF_IDENTIFIED
     beq !t11_fail+
     jsr floor_item_get_ego_x
-    cmp #EGO_FLAME_TONGUE
+    cmp #(EGO_FLAME_TONGUE | ITEM_PAGE_DAGGER)
     bne !t11_fail+
     lda #$01
     sta tc_results+10
@@ -503,13 +543,13 @@ test_start:
     sta zp_player_x
     lda #15
     sta zp_player_y
-    lda #51 - IT_MISSILE_BASE   // Sling
+    lda #ITEM_SLOT_SLING - IT_MISSILE_BASE   // Sling
     sta rf_launcher
     jsr t12_shot
     lda tw_last_x
     cmp #25
     bne !t12_fail+
-    lda #49 - IT_MISSILE_BASE   // Short Bow
+    lda #ITEM_SLOT_SHORT_BOW - IT_MISSILE_BASE   // Short Bow
     sta rf_launcher
     jsr t12_shot
     lda tw_last_x
@@ -574,7 +614,7 @@ test_start:
     sta zp_player_str
     lda #10
     sta player_data + PL_TODMG
-    lda #ITEM_FLASK_OIL
+    lda #ITEM_SLOT_FLASK_OF_OIL
     sta tw_item_id
     lda #0
     sta tw_save_to_dam
@@ -686,7 +726,7 @@ test_start:
     sta tt_count
 !t16_potion:
     jsr t13_stock_arrow
-    lda #17                     // Potion of Cure Light Wounds
+    lda #ITEM_SLOT_POTION_OF_CURE_LIGHT_WOUNDS                     // Potion of Cure Light Wounds
     sta tw_item_id
     jsr tw_consume_item
     lda #20
@@ -719,7 +759,7 @@ test_start:
 t13_stock_arrow:
     jsr item_init_floor
     jsr item_init_inventory
-    lda #52                     // Arrow
+    lda #ITEM_SLOT_ARROW                     // Arrow
     sta inv_item_id
     sta rf_ammo_id
     lda #1
@@ -740,7 +780,7 @@ t13_stock_arrow:
 t12_shot:
     jsr item_init_floor
     jsr item_init_inventory
-    lda #52                     // Arrow
+    lda #ITEM_SLOT_ARROW                     // Arrow
     sta inv_item_id
     sta rf_ammo_id
     lda #1

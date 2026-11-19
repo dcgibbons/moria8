@@ -23,9 +23,17 @@
 .const CREATURE_END     = $c8ff
 .const PLATFORM_TIER_NAME_POOL_BASE = $d800
 .const PLATFORM_TIER_NAME_POOL_END  = $dfff
-// The monster catalog splits that hidden span (core/monster_catalog.s,
-// common/catalog_fetch.s; maintainer, 2026-11-05): 32 species names of 32
-// bytes, then the level index and record-sector table MONSTER.IDX fills at boot.
+// The monster catalog splits the $D800-$DFFF hidden span (core/monster_catalog.s,
+// common/catalog_fetch.s; maintainer, 2026-11-05):
+//   $D800-$DBFF (1,024 B): CATALOG_NAME_POOL — 32 active species names x 32 B
+//   $DC00-$DCFF   (256 B): CATALOG_HIDDEN — level index & record-sector table
+//                          (247 B used on disk -> 9 B tail $DCF7-$DCFF free;
+//                           117 B used on cart -> 139 B tail $DC75-$DCFF free)
+//   $DD00-$DEFF   (512 B): HUFF_INDEX_HIDDEN — Huffman string index
+//                          (496 B used -> 16 B tail $DEF0-$DEFF free)
+//   $DF00-$DFFF   (256 B): PLUS4_HIGH_BSS — high BSS under $FF3F (disk 254 B
+//                          item.cat sector buffer at $DF00-$DFFD -> 2 B free;
+//                          recall[279] lives in Default RAM)
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
 .const CATALOG_NAME_POOL_END  = $dbff
 .const CATALOG_HIDDEN_BASE    = CATALOG_NAME_POOL_END + 1
@@ -35,25 +43,63 @@
 // visible in play. Two pages leave the index room to grow.
 .const HUFF_INDEX_HIDDEN_BASE = CATALOG_HIDDEN_END + 1
 .const HUFF_INDEX_HIDDEN_END  = $deff
+// High BSS above the Huffman index ($DF00-$DFFF, 256 B): visible in play under
+// $FF3F with zero banking cost and preserved across KERNAL ROM calls ($FF3E
+// maps ROM on reads only; plus4_kernal_call restores $FF3F before returning).
+.const PLUS4_HIGH_BSS_BASE    = HUFF_INDEX_HIDDEN_END + 1
+.const PLUS4_HIGH_BSS_END     = $dfff
+.const PLUS4_HIGH_BSS_SIZE    = PLUS4_HIGH_BSS_END - PLUS4_HIGH_BSS_BASE + 1
 // MONSTER.IDX's boot buffer: the map's last page, unused until the first
 // level, past the init-only tail; the $E000 window holds the title's overlay.
 .const CATALOG_IDX_LOAD       = $d600
 .assert "MONSTER.IDX's boot buffer is in the map", CATALOG_IDX_LOAD >= MAP_BASE && CATALOG_IDX_LOAD + $ff <= MAP_END, true
 .assert "Catalog hidden span, then the Huffman index, lie in the old tier name pool", HUFF_INDEX_HIDDEN_BASE == CATALOG_HIDDEN_END + 1 && HUFF_INDEX_HIDDEN_END <= PLATFORM_TIER_NAME_POOL_END, true
+.assert "Catalog hidden, Huffman index, and high BSS partition $D800-$DFFF", PLUS4_HIGH_BSS_BASE == HUFF_INDEX_HIDDEN_END + 1 && PLUS4_HIGH_BSS_END == PLATFORM_TIER_NAME_POOL_END, true
+.assert "Plus/4 high BSS claims $DF00-$DFFF", PLUS4_HIGH_BSS_BASE == $df00 && PLUS4_HIGH_BSS_END == $dfff && PLUS4_HIGH_BSS_SIZE == 256, true
 .const BANKED_DATA_BASE = $e000
 .const BANKED_DATA_END  = $ffff
 .const BANK1_DB_BASE    = $e000
 .const SCREEN_RAM       = $0c00
 .const COLOR_RAM        = $0800
+// $0400-$07FF (1,024 B): owned by DUNGEON_GEN_SCAN_SCRATCH during ovl.gen
+// (which runs under sei with all-RAM $FF3F, zero KERNAL calls). Outside
+// ovl.gen, $0500-$05FF belongs to the live Plus/4 KERNAL workspace ($0527
+// KEYD, $055D PLUS4_KEY_INDEX, $0567-$0584 LAT/FAT/SAT logical file tables
+// touched on SCNKEY/GETIN/OPEN/CLOSE), and so does $07B0-$07FF (the stock
+// 318004/318005 KERNALs and JiffyDOS read and write $07B0-$07FC some 250 times,
+// the serial bus routines at $D894-$DB0B among them). Non-generation caches
+// partition around both (invalidated on ovl.gen entry):
+//   $0400-$04FF (256 B): PLUS4_CATALOG_LRU_CACHE
+//   $0500-$05FF (256 B): Plus/4 KERNAL workspace (reserved, untouched)
+//   $0600-$07AF (432 B): ITEM_PICKUP_CACHE (!PLUS4_CARTRIDGE)
+//   $07B0-$07FF  (80 B): Plus/4 KERNAL workspace (reserved, untouched)
+// Until 2026-11-16 the pickup cache ran to $07FF: its prewarm overwrote that
+// workspace and every disk game hung at its first store entry, in the KERNAL
+// at $D90A/$D90F or in the overwritten $07D9 (build queue, 22d5078).
 .const DUNGEON_GEN_SCAN_SCRATCH_BASE = $0400
 .const DUNGEON_GEN_SCAN_SCRATCH_SIZE = 1024
 .const DUNGEON_GEN_SCAN_SCRATCH_END  = DUNGEON_GEN_SCAN_SCRATCH_BASE + DUNGEON_GEN_SCAN_SCRATCH_SIZE - 1
+.const PLUS4_CATALOG_LRU_CACHE_BASE  = $0400
+.const PLUS4_CATALOG_LRU_CACHE_SIZE  = 256
+.const PLUS4_CATALOG_LRU_CACHE_END   = PLUS4_CATALOG_LRU_CACHE_BASE + PLUS4_CATALOG_LRU_CACHE_SIZE - 1
+.const PLUS4_KERNAL_LOW_WS_BASE      = $0500
+.const PLUS4_KERNAL_LOW_WS_END       = $05ff
+.const ITEM_PICKUP_CACHE_BASE        = $0600
+.const ITEM_PICKUP_CACHE_SIZE        = 432
+.const ITEM_PICKUP_CACHE_END         = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE - 1
+// The most contiguous RAM the Plus/4 has outside the KERNAL workspace: a full
+// pool stops caching and reads ITEM.CAT (ipc_insert), so less is slower, not unsafe.
+.const ITEM_PICKUP_CACHE_MIN_SIZE    = 432
+.const PLUS4_KERNAL_HIGH_WS_BASE     = $07b0
+.const PLUS4_KERNAL_HIGH_WS_END      = $07ff
 .const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
 .const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0400
 
 .const PLUS4_ROM_ENABLE = $ff3e
 .const PLUS4_RAM_ENABLE = $ff3f
 
+.const TED_CURSOR_HI    = $ff0c
+.const TED_CURSOR_LO    = $ff0d
 .const TED_SND1_LO      = $ff0e
 .const TED_SND2_LO      = $ff0f
 .const TED_SND2_HI      = $ff10
@@ -139,4 +185,8 @@ mmu_select_bank0:
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "Dungeon-gen scan scratch remains page-aligned", <DUNGEON_GEN_SCAN_SCRATCH_BASE, 0
 .assert "Dungeon-gen scan scratch stays in low scratch window", DUNGEON_GEN_SCAN_SCRATCH_END <= $07ff, true
+.assert "Catalog LRU cache window is page-aligned", <PLUS4_CATALOG_LRU_CACHE_BASE, 0
+.assert "Catalog LRU cache claims $0400-$04FF below Plus/4 KERNAL workspace", PLUS4_CATALOG_LRU_CACHE_BASE == DUNGEON_GEN_SCAN_SCRATCH_BASE && PLUS4_CATALOG_LRU_CACHE_END + 1 == PLUS4_KERNAL_LOW_WS_BASE && PLUS4_CATALOG_LRU_CACHE_SIZE == 256, true
+.assert "Catalog LRU cache sits cleanly below color RAM and above cassette door scan", PLUS4_CATALOG_LRU_CACHE_BASE >= DUNGEON_GEN_DOOR_SCAN_LIMIT && PLUS4_CATALOG_LRU_CACHE_END < COLOR_RAM, true
+.assert "Item pickup cache claims $0600-$07AF between the Plus/4 KERNAL workspaces", ITEM_PICKUP_CACHE_BASE == PLUS4_KERNAL_LOW_WS_END + 1 && ITEM_PICKUP_CACHE_END + 1 == PLUS4_KERNAL_HIGH_WS_BASE && ITEM_PICKUP_CACHE_SIZE == 432 && PLUS4_KERNAL_HIGH_WS_END == DUNGEON_GEN_SCAN_SCRATCH_END && PLUS4_KERNAL_HIGH_WS_END < COLOR_RAM, true
 .assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true

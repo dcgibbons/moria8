@@ -15,6 +15,31 @@
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define CX16_PRODUCT_IRQ_VECTOR_RUNTIME
 #define PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
+#define HOME_OVERLAY_SEPARATE
+#define WALL_TO_MUD_SEGMENT_CUSTOM
+#define ITEM_SPAWN_IN_GEN_OVERLAY
+#define RE_EQUIP_SEGMENT_CUSTOM
+#define CX16_DETECT_MACHINE_EXTERNAL
+#define HAL_PLATFORM_ITEM_CAT_CUSTOM
+#define HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
+#define HAL_PLATFORM_EFF_ITEM_EXTENDED_EXTERNAL
+#define HELP_TITLE_EXTERNAL
+#define PFLAGS_SEGMENT_CUSTOM
+#define PLAYER_RECALC_PFLAGS_EXTERNAL
+#define PLAYER_CHARGEN_EXTERNAL
+#define UI_CHAR_BG_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define STARTING_KIT_EXTERNAL
+#define DOOR_OPEN_CLOSE_EXTERNAL
+#define ITEM_DROP_EXTERNAL
+#define CALC_DIG_EXTERNAL
+#define CALC_DIG_CO_LOCATED
+#define STORE_CHECK_CAT_DUPLICATED
+#define TURN_REST_DISTURBED_EXTERNAL
+#define LEVELUP_MAGIC_PENDING_EXTERNAL
+#define PLATFORM_NF_DIGIT_BUF_EXTERNAL
+#define PLATFORM_ITEM_NAME_BUF_LOW
+#define PLATFORM_LIST_BUFS_LOW
 .if (!cmdLineVars.containsKey("OVL_OUT")) {
     .error "OVL_OUT is required; generated files belong under build/"
 }
@@ -38,6 +63,7 @@
 .segmentdef StorageOverlay     [outPrg=OVL_OUT + "/OVL.STORAGE",   start=$a000, min=$a000, max=$bfff]
 .segmentdef TitleOverlay       [outPrg=OVL_OUT + "/OVL.TITLE",     start=$a000, min=$a000, max=$bfff]
 .segmentdef ChestOverlay       [outPrg=OVL_OUT + "/OVL.CHEST",     start=$a000, min=$a000, max=$bfff]
+.segmentdef HomeOverlay        [outPrg=OVL_OUT + "/OVL.HOME",      start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16Catalog        [outPrg=OVL_OUT + "/MONSTER.CAT",   start=$a000, min=$a000, max=$bfff]
 .segmentdef Cx16AuxData        [outPrg=OVL_OUT + "/CX16.AUXDATA",  start=$6000, min=$6000, max=$7fff]
 .segmentdef Cx16HuffData       [outPrg=OVL_OUT + "/CX16.HUFFDATA", start=$8000, min=$8000, max=$9fff]
@@ -88,10 +114,16 @@
 // Default segment opens at $0801 with BASIC Upstart stub
 // ============================================================
 .pc = $0801 "BasicUpstart"
+#if CX16_CARTRIDGE
+#import "cartridge_contract.s"
+#endif
 :BasicUpstart2(entry_bootstrap)
 
 .pc = $080d "Resident"
 entry_bootstrap:
+#if CX16_CARTRIDGE
+.assert "CART_ENTRY matches entry_bootstrap", entry_bootstrap == CART_ENTRY, true
+#endif
     jmp entry_main
 
 // ============================================================
@@ -107,21 +139,29 @@ tsi_ram_banks_cached: .byte 0
 // survives overlay bank switches.
 save_slot_index:    .byte $ff
 
-// tramp_dig_ability — pinned jump for tunnel code (resident).
-tramp_dig_ability:
-    jmp calc_dig_ability
-
 // ============================================================
 // Resident import cascade
 // ============================================================
 #import "../../core/zeropage.s"
 #import "hal/layout.s"
 #import "memory.s"
+// Cold/transient item and UI buffers share unused tail of the $0600-$06FF scratch
+// page above hd_decode_buf ($0600-$063F) and dungeon_door_scan ($0600-$0640).
+.const PLATFORM_ITEM_NAME_DECODE_BUF_BASE = $0642 // 48 B ($0642-$0671)
+.const PLATFORM_PIW_VISIBLE_SLOTS_BASE    = $0672 // 22 B ($0672-$0687)
+.const PLATFORM_PM_SPELL_LIST_BASE        = $0688 //  9 B ($0688-$0690)
+.const PLATFORM_NF_DIGIT_BUF_BASE         = $0691 //  8 B ($0691-$0698)
+.label turn_rest_disturbed                = $0699 //  1 B
+.label levelup_magic_pending              = $069a //  1 B
+.assert "CX16 $0642-$069A scratch fits $0600-$06FF clear of door scan", PLATFORM_ITEM_NAME_DECODE_BUF_BASE >= DUNGEON_GEN_DOOR_SCAN_BASE + 65 && $069a < DUNGEON_GEN_DOOR_SCAN_LIMIT, true
 #import "bank_port_consts.s"
 #import "hal/lifecycle_policy.s"
 #import "overlay.s"
-.const OVL_STORAGE = 11
-.const OVL_TITLE   = 12
+.const OVL_HOME    = 11
+.const OVL_STORAGE = 12
+.const OVL_TITLE   = 13
+.const CX16_BANK_MODAL = CX16_BANK_OVERLAY_BASE + OVL_MODAL_MISC - 1
+.const CX16_BANK_ITEMS = CX16_BANK_OVERLAY_BASE + OVL_ITEMS - 1
 #define SAVE_SLOT_INDEX_EXTERNAL
 #import "reu_stub.s"
 #import "screen_vera.s"
@@ -132,6 +172,13 @@ tramp_dig_ability:
 #import "../../core/math.s"
 #import "../../core/tables.s"
 #import "../../core/item_defs.s"
+#import "../../core/recall_defs.s"
+.macro PflagsSegment() {
+    .segment ModalMiscOverlay
+}
+.macro PflagsRestoreSegment() {
+    .segment Default
+}
 #import "../../core/player.s"
 #define MSG_HISTORY_IN_AUX
 .macro MsgHistorySegment() {
@@ -213,6 +260,24 @@ cmb_in_way_str:
 .macro ChestSummonsRestoreSegment() {
     .segment Default
 }
+.macro ItemSpawnSegment() {
+    .segment DungeonGenOverlay
+}
+.macro ItemSpawnRestoreSegment() {
+    .segment Default
+}
+.macro ItemPickupSegment() {
+    .segment ItemActionsOverlay
+}
+.macro ItemPickupRestoreSegment() {
+    .segment Default
+}
+.macro ReEquipSegment() {
+    .segment ModalMiscOverlay
+}
+.macro ReEquipRestoreSegment() {
+    .segment Default
+}
 #import "../../core/item.s"
 .macro ChestLootSegment() {
     .segment DungeonGenOverlay
@@ -225,12 +290,17 @@ cmb_in_way_str:
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
 #define PLAYER_ITEM_SELECT_EXTERNAL
 #import "../../core/player_items.s"
+.macro WallToMudSegment() {
+    .segment SpellOverlay
+}
+.macro WallToMudRestoreSegment() {
+    .segment Default
+}
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../core/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 
 #import "../../core/store_data_defs.s"
-#import "../../core/recall_defs.s"
 #import "../../core/spell_data_defs.s"
 
 #import "../../core/player_magic_state.s"
@@ -243,6 +313,9 @@ cmb_in_way_str:
 #import "memory_bank.s"
 #import "mmu_macros.s"
 #import "save_stream.s"
+#if CX16_CARTRIDGE
+#import "cartridge_copy.s"
+#endif
 #import "storage_kernal.s"
 #import "overlay_storage.s"
 #import "services.s"
@@ -252,201 +325,55 @@ cmb_in_way_str:
 // ============================================================
 entry_main:
     jsr hal_platform_init_early
-    jsr cx16_reset_session_state
     jsr cx16_preload_banks
     jsr generation_busy_install
-    jsr platform_services_install_cx16
+    lda #OVL_TITLE
+    jsr overlay_load
+    bcs !preload_halt+
+    jsr cx16_cold_boot_init
     jsr platform_services_assert_installed
-
-restart_entry:
-    jsr detect_machine
     jsr tier_init
     jsr hal_sound_init
     jsr rng_seed
 
 title_enter_menu:
-    lda #$ff
-    sta save_slot_index
-    lda #COL_LGREY
-    sta zp_text_color
-
     lda #OVL_TITLE
     jsr overlay_load
-    jsr title_clear_full_screen
-    jsr title_load_and_draw
-    jsr title_clear_below_menu
+    bcs !preload_halt+
+    jmp title_enter_menu_ovl
+!preload_halt:
+    lda #$01
+    jmp hal_platform_panic
 
-    jsr msg_init
-    jsr title_show_sysinfo
-    jsr title_draw_menu
-
-title_menu_loop:
-    jsr input_get_key
-    cmp #$4e                // 'N' — new game
-    bne !not_n+
-!new_game:
-    jmp game_new_start
-!not_n:
-    cmp #$4c                // 'L' — load game
-    bne !not_l+
+tramp_title_load_game:
     lda disk_setup_done
     bne !load_now+
     jsr tramp_disk_setup
     bcs title_enter_menu
 !load_now:
-    jmp title_load_game
-!not_l:
-    cmp #$41                // A: About, before a character exists
-    bne !not_legal_title+
-    jsr tramp_ui_legal_display
-    jmp title_enter_menu
-!not_legal_title:
-    cmp #$44                // 'D' — disk setup
-    bne title_menu_loop
-    jsr tramp_disk_setup
-    jmp title_enter_menu
-
-title_draw_menu:
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #18
-    sta zp_cursor_row
-    lda #(SCREEN_COLS - 35) / 2
-    sta zp_cursor_col
-    lda #<title_menu_str
-    sta zp_ptr0
-    lda #>title_menu_str
-    sta zp_ptr0_hi
-    jmp screen_put_string
-
-title_str:
-    .text "MORIA 8 (COMMANDER X16)"
-    .byte 0
-
-cx16_reset_session_state:
-    lda #8
-    sta save_device
-    sta program_device
-    lda #1
-    sta disk_mode
-    lda #hal_storage_disk_setup_done_value
-    sta disk_setup_done
-    rts
-
-title_load_game:
-    jsr rng_seed
-    lda #SFX_PICKUP
-    jsr hal_sound_play
-#if !BYPASS_SLOT_PROMPT
-    jsr save_prepare_slot_prompt
-    bcs !title_load_fail+
-#endif
-    jsr disk_prompt_save
-    jsr ui_clear_full_screen_safe
-    jsr ui_reset_message_state
-#if !BYPASS_SLOT_PROMPT
-    jsr save_select_slot_prompt
-#endif
-    jsr load_game
-    bcc !title_load_fail+
-    jsr disk_prompt_game
-    jsr disk_prompt_game_required
-    jmp load_resume_game
-!title_load_fail:
-    jsr input_get_modal_dismiss_key
-    jmp title_enter_menu
-
-title_show_sysinfo:
-    stz CX16_ROM_BANK_REG
-    lda CX16_KERNAL_REV
-    sta tsi_krev_cached
-    sec
-    jsr CX16_KERNAL_MEMTOP
-    sta tsi_ram_banks_cached
-    lda #OVL_TITLE
+    lda #OVL_STORAGE
     jsr overlay_load
-    bcs !done+
-    jsr title_show_sysinfo_banked
-!done:
-    rts
+    bcs title_enter_menu
+    jmp title_load_game_ovl
 
 // ============================================================
-// Platform services (indirect API slots in core/platform_services_api.s)
+// Special rooms & level item-spawn trampolines
 // ============================================================
-platform_services_install_cx16:
-    lda #$4c
-    sta platform_main_loop_begin_api
-    sta platform_vector_reassert_api
-    sta platform_runtime_resync_api
-
-    lda #<cx16_platform_main_loop_begin
-    sta platform_main_loop_begin_api + 1
-    lda #>cx16_platform_main_loop_begin
-    sta platform_main_loop_begin_api + 2
-
-    lda #<cx16_platform_vector_reassert
-    sta platform_vector_reassert_api + 1
-    lda #>cx16_platform_vector_reassert
-    sta platform_vector_reassert_api + 2
-
-    lda #<cx16_platform_runtime_resync
-    sta platform_runtime_resync_api + 1
-    lda #>cx16_platform_runtime_resync
-    sta platform_runtime_resync_api + 2
-
-    jmp platform_services_mark_installed
-
-// ============================================================
-// Special rooms trampolines
-// ============================================================
-tramp_level_generate:
-    jmp level_generate
-
-tramp_assign_special_room:
+tramp_gen_dispatch:
+    sta tramp_gen_jmp+1
+    sty tramp_gen_jmp+2
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
     bcs !done+
-    jsr assign_special_room
+tramp_gen_jmp:
+    jmp $0000
 !done:
     rts
 
-tramp_vault_seal_entrance:
-    lda #OVL_DUNGEON_GEN
-    jsr overlay_load
-    bcs !done+
-    jsr vault_seal_entrance
-!done:
-    rts
-
-tramp_spawn_special_room_monsters:
-    lda #OVL_DUNGEON_GEN
-    jsr overlay_load
-    bcs !done+
-    jsr spawn_special_room_monsters
-!done:
-    rts
-
-tramp_spawn_nest_gold:
-    lda #OVL_DUNGEON_GEN
-    jsr overlay_load
-    bcs !done+
-    jsr spawn_nest_gold
-!done:
-    rts
-
-tramp_find_special_room:
-    lda #OVL_DUNGEON_GEN
-    jsr overlay_load
-    bcs !done+
-    jsr find_special_room
-!done:
-    rts
-
-tramp_sr_epilogue:
-    php
-    jsr cx16_platform_runtime_resync
-    plp
-    rts
+item_spawn_level:
+    lda #<item_spawn_level_gen
+    ldy #>item_spawn_level_gen
+    bra tramp_gen_dispatch
 
 #if !BYPASS_SLOT_PROMPT
 save_prepare_slot_prompt:
@@ -464,145 +391,72 @@ overlay_load_no_kernal:
     jmp overlay_load
 
 run_initialize:
-    jmp run_initialize_impl
+    ldx CX16_RAM_BANK_REG
+    phx
+    ldx #CX16_BANK_MODAL
+    stx CX16_RAM_BANK_REG
+    jsr run_initialize_impl
+    plx
+    stx CX16_RAM_BANK_REG
+    rts
+
+re_equip_entry:
+    ldx CX16_RAM_BANK_REG
+    phx
+    ldx #CX16_BANK_MODAL
+    stx CX16_RAM_BANK_REG
+    jsr re_equip
+    tay
+    plx
+    stx CX16_RAM_BANK_REG
+    tya
+    rts
+
+tramp_item_pickup:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !load_failed+
+    jmp item_pickup
+!load_failed:
+    clc
+    rts
+
+tramp_trap_trigger:
+    phx
+    lda #OVL_ITEMS
+    jsr overlay_load
+    plx
+    bcs !ttt_done+
+    jmp trap_trigger
+!ttt_done:
+    rts
+
+tramp_door_pick_roll:
+    lda current_overlay
+    pha
+    lda #OVL_CHEST
+    jsr overlay_load
+    bcs !load_failed+
+    jsr door_pick_roll
+    bra !restore_caller+
+!load_failed:
+    clc
+!restore_caller:
+    pla
+    beq !no_caller_ovl+
+    php
+    jsr overlay_load
+    bcc !restored+
+    brk
+!restored:
+    plp
+    rts
+!no_caller_ovl:
+    sta current_overlay
+    rts
 
 #import "legal.s"
-
-tramp_ui_help_display:
-    lda #OVL_HELP
-    jsr overlay_load
-    bcs !done+
-    lda #<help_pages
-    sta help_pages_src_lo
-    lda #>help_pages
-    sta help_pages_src_hi
-    jsr ui_help_display
-!done:
-    rts
-
-tramp_ui_char_display:
-    lda #OVL_UI
-    jsr overlay_load
-    bcs !done+
-    jsr ui_char_display
-!done:
-    rts
-
-tramp_ui_inv_display:
-    lda #OVL_HELP
-    jsr overlay_load
-    bcs !done+
-    jsr ui_inv_display
-!done:
-    rts
-
-tramp_ui_inv_select_display:
-    lda #OVL_HELP
-    jsr overlay_load
-    bcs !done+
-    jsr ui_inv_select_display
-!done:
-    rts
-
-tramp_ui_equip_display:
-    lda #OVL_HELP
-    jsr overlay_load
-    bcs !done+
-    jsr ui_equip_display
-!done:
-    rts
-
-tramp_ui_equip_select_display:
-    lda #OVL_HELP
-    jsr overlay_load
-    bcs !done+
-    jsr ui_equip_select_display
-!done:
-    rts
-
-tramp_ui_recall:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load
-    bcs !done+
-    jsr ui_recall_display
-!done:
-    rts
-
-tramp_item_gain_spell:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr item_gain_spell
-!done:
-    rts
-
-tramp_item_read_scroll:
-    lda #<item_read_scroll
-    ldy #>item_read_scroll
-    jmp tramp_items_dispatch
-
-tramp_item_aim_wand:
-    lda #<item_aim_wand
-    ldy #>item_aim_wand
-    jmp tramp_items_dispatch
-
-tramp_item_use_staff:
-    lda #<item_use_staff
-    ldy #>item_use_staff
-    jmp tramp_items_dispatch
-
-tramp_eff_earthquake:
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcs !load_failed+
-    jsr eff_earthquake
-    jmp tramp_restore_spell_overlay
-!load_failed:
-    rts
-
-tramp_eff_map_area:
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcs !load_failed+
-    jsr eff_map_area
-    jmp tramp_restore_spell_overlay
-!load_failed:
-    rts
-
-tramp_item_refuel:
-    lda #<item_refuel
-    ldy #>item_refuel
-    jmp tramp_items_dispatch
-
-tramp_item_exchange:
-    lda #<item_exchange
-    ldy #>item_exchange
-    jmp tramp_items_dispatch
-
-tramp_ranged_fire:
-    lda #<ranged_fire
-    ldy #>ranged_fire
-    jmp tramp_items_dispatch
-
-tramp_throw_item:
-    lda #<throw_item
-    ldy #>throw_item
-    jmp tramp_items_dispatch
-
-tramp_bash_command:
-    lda #<bash_command
-    ldy #>bash_command
-    jmp tramp_items_dispatch
-
-tramp_disarm_command:
-    lda #<disarm_command
-    ldy #>disarm_command
-    jmp tramp_items_dispatch
-
-tramp_chest_open:
-    lda #<chest_open_command
-    ldy #>chest_open_command
-    jmp chest_dispatch
+#import "../../build/trampolines/cx16_trampolines.inc"
 
 chest_dispatch:
     sta chest_disp_jmp+1
@@ -615,245 +469,27 @@ chest_disp_jmp:
 !done:
     rts
 
-tramp_player_tunnel:
-    lda #<player_tunnel
-    ldy #>player_tunnel
-    jmp tramp_items_dispatch
-
-tramp_spell_list_display:
+tramp_spell_dispatch:
+    sta tramp_spell_jmp+1
+    sty tramp_spell_jmp+2
     lda #OVL_SPELL
     jsr overlay_load
     bcs !done+
-    jsr spell_list_display
-!done:
-    rts
-
-tramp_spell_execute_selected:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr spell_execute_selected
-!done:
-    rts
-
-tramp_reveal_floorplan:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr eff_reveal_floorplan
-!done:
-    rts
-
-tramp_cmd_jam:
-    lda #OVL_CHEST
-    jsr overlay_load
-    bcs !done+
-    jsr door_jam_command
-!done:
-    rts
-
-tramp_door_pick_roll:
-    lda #OVL_CHEST
-    jsr overlay_load
-    bcs !load_failed+
-    jsr door_pick_roll
-    rts
-!load_failed:
-    clc
-    rts
-
-tramp_magic_recalc_mana:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr magic_recalc_mana
-!done:
-    rts
-
-tramp_magic_check_new_spells:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr magic_check_new_spells
-!done:
-    rts
-
-tramp_calc_spell_failure:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr calc_spell_failure
-!done:
-    rts
-
-tramp_player_cast_spell:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr player_cast_spell
-!done:
-    rts
-
-tramp_player_pray:
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcs !done+
-    jsr player_pray
-!done:
-    rts
-
-tramp_item_wear:
-    lda #<item_wear
-    ldy #>item_wear
-    jmp tramp_items_dispatch
-
-tramp_item_takeoff:
-    lda #<item_takeoff
-    ldy #>item_takeoff
-    jmp tramp_items_dispatch
-
-tramp_item_eat:
-    lda #<item_eat
-    ldy #>item_eat
-    jmp tramp_items_dispatch
-
-tramp_item_quaff:
-    lda #<item_quaff
-    ldy #>item_quaff
-    jmp tramp_items_dispatch
-
-tramp_item_recalc:
-    lda #<player_recalc_equipment
-    ldy #>player_recalc_equipment
-    jmp tramp_items_dispatch
-
-tramp_select_filtered_inv:
-    pha
-    txa
-    pha
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !load_failed+
-    lda #OVL_ITEMS
-    sta piw_return_overlay
-    pla
-    tax
-    pla
-    jsr piw_select_filtered_inv
-    jmp tramp_restore_spell_overlay
-!load_failed:
-    pla
-    pla
-    clc
-    rts
-
-tramp_eff_destroy_area:
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcs !load_failed+
-    jsr da_devastate
-    jmp tramp_restore_spell_overlay
-!load_failed:
-    rts
-
-tramp_restore_spell_overlay:
-    php
-    pha
-    txa                         // the selector's X (the slot chosen)
-    pha
-    lda #OVL_NONE
-    sta piw_return_overlay
-    lda #OVL_SPELL
-    jsr overlay_load
-    bcc !restored+
-    brk
-!restored:
-    pla
-    tax
-    pla
-    plp
-    rts
-
-tramp_select_filtered_inv_key_spell:
-    pha
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !load_failed+
-    lda #OVL_ITEMS
-    sta piw_return_overlay
-    pla
-    jsr piw_select_filtered_inv_key
-    jmp tramp_restore_spell_overlay
-!load_failed:
-    pla
-    clc
-    rts
-
-tramp_ui_identify:
-    lda #OVL_UI
-    jsr overlay_load
-    bcs !done+
-    jsr ui_identify_print
-    jsr tier_restore_after_overlay
-!done:
-    rts
-
-tramp_ui_wizard_display:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load
-    bcs !done+
-    jsr ui_wizard_display
-!done:
-    rts
-
-tramp_item_init_identification:
-    lda #OVL_STARTUP
-    jsr overlay_load
-    bcs !done+
-    jsr item_init_identification
+tramp_spell_jmp:
+    jmp $0000
 !done:
     rts
 
 tramp_disk_setup:
+    lda CX16_RAM_BANK_REG
+    pha
     lda #OVL_STORAGE
     jsr overlay_load
     bcs !done+
     jsr cx16_disk_setup_run
 !done:
-    rts
-
-tramp_disk_prepare_selected:
-    lda #OVL_STORAGE
-    jsr overlay_load
-    bcs !done+
-    jsr cx16_disk_prepare_selected
-!done:
-    rts
-
-tramp_store_init_all:
-    lda #<store_init_all
-    ldy #>store_init_all
-    jmp chest_dispatch
-
-tramp_store_restock_all:
-    lda #<store_restock_all
-    ldy #>store_restock_all
-    jmp chest_dispatch
-
-tramp_store_enter:
-    lda #OVL_TOWN
-    jsr overlay_load
-    bcs !done+
-    jsr store_enter
-!done:
-    rts
-
-tramp_player_create:
-    lda #OVL_STARTUP
-    jsr overlay_load
-    bcs !done+
-    jsr player_create
-!done:
+    pla
+    sta CX16_RAM_BANK_REG
     rts
 
 // ============================================================
@@ -870,58 +506,6 @@ disk_prompt_game:
 // ============================================================
 // Death orchestration
 // ============================================================
-tramp_game_over_disk_setup:
-    jsr tramp_disk_setup
-    bcs !done+
-    lda #1
-    sta disk_setup_done
-    jsr tramp_game_over_prepare
-    clc
-!done:
-    rts
-
-tramp_game_over_disk_setup_failed:
-    clc
-    rts
-
-tramp_game_over_prepare:
-    lda death_source_saved
-    sta zp_death_source
-
-    lda zp_game_flags
-    and #GAME_FLAG_WINNER
-    bne !tgo_load_overlay+
-    lda zp_death_source
-    cmp #DEATH_ALIVE
-    beq !tgo_load_overlay+
-    cmp #DEATH_CHEST_NEEDLE
-    bcs !tgo_load_overlay+
-    tax
-    jsr creature_get_name
-
-!tgo_load_overlay:
-    lda #OVL_DEATH
-    jmp overlay_load
-
-tramp_game_over:
-    jsr tramp_game_over_prepare
-    bcs !done+
-    jmp tramp_game_over_run
-!done:
-    rts
-
-tramp_winner_royal:
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcs !done+
-    jsr winner_apply_retirement_bonus_overlay
-    lda #OVL_MODAL_MISC
-    jsr overlay_load
-    bcs !done+
-    jsr royal_screen
-!done:
-    rts
-
 game_over_prompt:
     lda #OVL_DEATH
     jsr overlay_load
@@ -995,7 +579,7 @@ game_over_prompt:
 #import "../../core/player_move.s"
 #undef PLAYER_LOOK_EXTERNAL
 .macro PlayerRunInitializeSegment() {
-    .segment Default
+    .segment ModalMiscOverlay
 }
 .macro PlayerRunRestoreResidentSegment() {
     .segment Default
@@ -1021,14 +605,6 @@ game_over_prompt:
 #import "../../core/ui_restore.s"
 #import "../../core/ui_help_clear.s"
 
-tramp_do_look:
-    lda #OVL_MODAL_MISC
-    jsr overlay_load_no_kernal
-    bcs !done+
-    jsr do_look
-!done:
-    jmp tramp_sr_epilogue
-
 // ============================================================
 // Data-only Bank 3 (Cx16AuxData at virtual $6000-$7FFF)
 // ============================================================
@@ -1042,67 +618,35 @@ tramp_do_look:
 #import "../../core/spell_helper_tables.s"
 #import "../../core/spell_names.s"
 
-.align $100
-cx16_ego_suffix_slots:
-hal_ego_suffix_slots:
-cx16_ego_suffix_none: .byte 0
-    .fill 16 - (* - cx16_ego_suffix_none), 0
-cx16_ego_suffix_slay_animal: .text " (Slay Animal)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_slay_animal), 0
-cx16_ego_suffix_slay_evil: .text " (Slay Evil)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_slay_evil), 0
-cx16_ego_suffix_slay_undead: .text " (Slay Undead)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_slay_undead), 0
-cx16_ego_suffix_flame: .text " (Flame)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_flame), 0
-cx16_ego_suffix_frost: .text " (Frost)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_frost), 0
-cx16_ego_suffix_defender: .text " (Defender)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_defender), 0
-cx16_ego_suffix_holy_avenger: .text " (Holy Avenger)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_holy_avenger), 0
-cx16_ego_suffix_slay_dragon: .text " (Slay Dragon)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_slay_dragon), 0
-// Resistance armour (EGO_RESIST..EGO_RESIST_LIGHT): banked_ego_put_suffix
-// prints the " (Resist" slot (index EGO_TYPE_COUNT) before each.
-cx16_ego_suffix_resist: .text ")" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_resist), 0
-cx16_ego_suffix_resist_acid: .text " Acid)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_resist_acid), 0
-cx16_ego_suffix_resist_fire: .text " Fire)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_resist_fire), 0
-cx16_ego_suffix_resist_cold: .text " Cold)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_resist_cold), 0
-cx16_ego_suffix_resist_light: .text " Lightning)" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_resist_light), 0
-cx16_ego_suffix_magi: .text " of the Magi" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_magi), 0
-cx16_ego_suffix_resist_prefix: .text " (Resist" ; .byte 0
-    .fill 16 - (* - cx16_ego_suffix_resist_prefix), 0
-cx16_ego_suffix_slots_end:
-.assert "CX16 ego suffix slots are page aligned", <cx16_ego_suffix_slots, 0
-.assert "CX16 ego suffix slots are EGO_TYPE_COUNT + 1 (the Resist prefix) x 16 bytes", cx16_ego_suffix_slots_end - cx16_ego_suffix_slots, (EGO_TYPE_COUNT + 1) * 16
-
 ovl_auxdata_end:
 .print "CX16 AuxData: " + (ovl_auxdata_end - $6000) + " bytes"
 .assert "CX16 AuxData fits Bank 3 ($6000-$7FFF)", ovl_auxdata_end <= $8000, true
 .segment Default
 
 // ============================================================
-// Overlay segment blocks (Banks 9-20 at $A000-$BFFF)
+// Overlay segment blocks (Banks 9-21 at $A000-$BFFF)
 // ============================================================
 .segment TownOverlay
 #import "../../core/store.s"
 #import "../../core/ui_store.s"
-#import "../../core/ui_home.s"
-#import "../../core/ui_home_text.s"
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $a000) + " bytes"
 .assert "Town overlay fits 8KB bank", ovl_town_end <= $c000, true
 
+.segment HomeOverlay
+#import "../../core/ui_home.s"
+#import "../../core/ui_home_text.s"
+#import "../../core/eff_item_p1.s"
+#import "../../core/eff_item_extended.s"
+ovl_home_end:
+.print "Home overlay: " + (ovl_home_end - $a000) + " bytes"
+.assert "Home overlay fits 8KB bank", ovl_home_end <= $c000, true
+
 .segment StartupOverlay
 #import "../../core/background_data.s"
 #import "../../core/player_create.s"
+#import "../../core/player_chargen_cold.s"
+#import "../../core/starting_kit_cold.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $a000) + " bytes"
 .assert "Startup overlay fits 8KB bank", ovl_start_end <= $c000, true
@@ -1212,10 +756,12 @@ wizard_prompt_clear_digits:
     sta zp_cursor_row
     lda wizard_prompt_input_col
     sta zp_cursor_col
+    ldx #3
+!wpcd_clr:
     lda #$20
     jsr hal_screen_put_char
-    lda #$20
-    jsr hal_screen_put_char
+    dex
+    bne !wpcd_clr-
     lda #5
     sta zp_cursor_row
     lda wizard_prompt_input_col
@@ -1238,15 +784,19 @@ ovl_modal_misc_end:
 
 .segment HelpOverlay
 #import "../commodore/c128/ui_help_data_80.s"
+#import "../../core/ui_help_title.s"
 #import "../../core/ui_help.s"
 #import "../../core/ui_inventory.s"
 #import "../../core/ui_equipment.s"
+#import "../../core/door_open_close_cold.s"
+#import "../../core/item_drop_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $a000) + " bytes"
 .assert "Help overlay fits 8KB bank", ovl_help_end <= $c000, true
 
 .segment UiOverlay
 #import "../../core/ui_character.s"
+#import "../../core/player_bg_draw_cold.s"
 #import "../../core/ui_identify.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a000) + " bytes"
@@ -1263,7 +813,9 @@ ovl_ui_end:
 #import "../../core/bash.s"
 #import "../../core/disarm.s"
 #import "../../core/disarm_helpers.s"
+#import "../../core/trap_trigger_cold.s"
 #import "../../core/tunnel.s"
+#import "../../core/calc_dig_cold.s"
 ovl_items_end:
 .print "Item actions overlay: " + (ovl_items_end - $a000) + " bytes"
 .assert "Item actions overlay fits 8KB bank", ovl_items_end <= $c000, true
@@ -1321,12 +873,141 @@ ovl_gen_end:
 #import "../shared/save.s"
 #import "save_slot_menu.s"
 #import "disk_setup_cx16.s"
+title_load_game_ovl:
+    jsr rng_seed
+    lda #SFX_PICKUP
+    jsr hal_sound_play
+    jsr disk_prompt_save
+    jsr ui_clear_full_screen_safe
+    jsr ui_reset_message_state
+#if !BYPASS_SLOT_PROMPT
+    jsr save_select_slot_prompt_impl
+#endif
+    jsr load_game
+    bcc !title_load_fail+
+    jsr disk_prompt_game
+    jsr disk_prompt_game_required
+    jmp load_resume_game
+!title_load_fail:
+    jsr input_get_modal_dismiss_key
+    jmp title_enter_menu
 ovl_storage_end:
 .print "Storage overlay: " + (ovl_storage_end - $a000) + " bytes"
 .assert "Storage overlay fits 8KB bank", ovl_storage_end <= $c000, true
 
 .segment TitleOverlay
 #import "title_screen.s"
+
+cx16_cold_boot_init:
+    jsr cx16_reset_session_state
+    jsr detect_machine
+    jsr cx16_input_install_key_events
+platform_services_install_cx16:
+    lda #$4c
+    sta platform_main_loop_begin_api
+    sta platform_vector_reassert_api
+    sta platform_runtime_resync_api
+
+    lda #<cx16_platform_main_loop_begin
+    sta platform_main_loop_begin_api + 1
+    lda #>cx16_platform_main_loop_begin
+    sta platform_main_loop_begin_api + 2
+
+    lda #<cx16_platform_vector_reassert
+    sta platform_vector_reassert_api + 1
+    lda #>cx16_platform_vector_reassert
+    sta platform_vector_reassert_api + 2
+
+    lda #<cx16_platform_runtime_resync
+    sta platform_runtime_resync_api + 1
+    lda #>cx16_platform_runtime_resync
+    sta platform_runtime_resync_api + 2
+
+    jmp platform_services_mark_installed
+
+cx16_reset_session_state:
+    lda #8
+    sta save_device
+    sta program_device
+    lda #1
+    sta disk_mode
+    lda #hal_storage_disk_setup_done_value
+    sta disk_setup_done
+    rts
+
+detect_machine:
+    lda #MACHINE_CX16
+    sta zp_machine_type
+    lda #COLUMNS_80
+    sta zp_column_mode
+    stz CX16_ROM_BANK_REG
+    lda CX16_KERNAL_REV
+    sta tsi_krev_cached
+    sec
+    jsr CX16_KERNAL_MEMTOP
+    sta tsi_ram_banks_cached
+    rts
+
+title_enter_menu_ovl:
+    lda #$ff
+    sta save_slot_index
+    lda #COL_LGREY
+    sta zp_text_color
+
+    jsr title_clear_full_screen
+    jsr title_load_and_draw
+    jsr title_clear_below_menu
+
+    jsr msg_init
+    jsr title_show_sysinfo_ovl
+    jsr title_draw_menu
+
+title_menu_loop:
+    jsr input_get_key
+    cmp #$4e                // 'N' — new game
+    bne !not_n+
+!new_game:
+    jmp game_new_start
+!not_n:
+    cmp #$4c                // 'L' — load game
+    bne !not_l+
+    jmp tramp_title_load_game
+!not_l:
+    cmp #$41                // A: About, before a character exists
+    bne !not_legal_title+
+    jsr tramp_ui_legal_display
+    jmp title_enter_menu
+!not_legal_title:
+    cmp #$44                // 'D' — disk setup
+    bne title_menu_loop
+    jsr tramp_disk_setup
+    jmp title_enter_menu
+
+title_draw_menu:
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #18
+    sta zp_cursor_row
+    lda #(SCREEN_COLS - (title_menu_str_end - title_menu_str)) / 2
+    sta zp_cursor_col
+    lda #<title_menu_str
+    sta zp_ptr0
+    lda #>title_menu_str
+    sta zp_ptr0_hi
+    jmp screen_put_string
+
+title_str:
+    .text "MORIA 8 (COMMANDER X16)"
+    .byte 0
+
+title_show_sysinfo_ovl:
+    stz CX16_ROM_BANK_REG
+    lda CX16_KERNAL_REV
+    sta tsi_krev_cached
+    sec
+    jsr CX16_KERNAL_MEMTOP
+    sta tsi_ram_banks_cached
+
 title_show_sysinfo_banked:
     lda #COL_DGREY
     sta zp_text_color
@@ -1416,19 +1097,6 @@ ovl_chest_end:
 // Ego-item & cross-overlay trampolines (resident)
 // ============================================================
 .segment Default
-tramp_roll_ego_type:
-    pha
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !load_failed+
-    pla
-    jsr roll_ego_type
-    rts
-!load_failed:
-    pla
-    lda #0
-    rts
-
 tramp_items_dispatch:
     sta tramp_items_jmp+1
     sty tramp_items_jmp+2
@@ -1440,71 +1108,6 @@ tramp_items_jmp:
 !done:
     rts
 
-tramp_roll_ego_type_modal:
-    pha
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !load_failed+
-    pla
-    jsr roll_ego_type
-    pha
-    lda #OVL_MODAL_MISC
-    jsr overlay_load
-    bcc !restored+
-    brk
-!restored:
-    pla
-    rts
-!load_failed:
-    pla
-    lda #0
-    rts
-
-tramp_roll_ego_type_gen:
-    pha
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !load_failed+
-    pla
-    jsr roll_ego_type
-    pha
-    lda #OVL_DUNGEON_GEN
-    jsr overlay_load
-    bcc !restored+
-    brk
-!restored:
-    pla
-    rts
-!load_failed:
-    pla
-    lda #0
-    rts
-
-tramp_ego_apply_damage:
-    pha
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !load_failed+
-    pla
-    jsr ego_apply_damage
-    rts
-!load_failed:
-    pla
-    rts
-
-tramp_ego_get_ac_bonus:
-    pha
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !load_failed+
-    pla
-    jsr ego_get_ac_bonus
-    rts
-!load_failed:
-    pla
-    lda #0
-    rts
-
 tramp_ui_view_restore_spell_overlay:
     jsr ui_view_restore_modal_overlay
     lda #OVL_SPELL
@@ -1513,6 +1116,22 @@ tramp_ui_view_restore_spell_overlay:
 tramp_ui_view_restore_items_overlay:
     jsr ui_view_restore_modal_overlay
     jmp !restore_items+
+
+tramp_eff_ext_eat:
+    lda #OVL_HOME
+    jsr overlay_load
+    bcs !te_done+
+    jsr eff_ext_eat_piw
+    jmp !restore_items+
+
+tramp_eff_ext_quaff:
+    lda #OVL_HOME
+    jsr overlay_load
+    bcs !te_done+
+    jsr eff_ext_quaff_piw
+    jmp !restore_items+
+!te_done:
+    rts
 
 tramp_combat_check_levelup_items:
     jsr combat_check_levelup
@@ -1537,18 +1156,55 @@ tramp_combat_apply_levelup_modal:
 !restored:
     rts
 
-tramp_ego_append_suffix:
-    beq !teas_done+
+// hal_item_cat_read_byte — Read byte at item_cat_off_lo/hi from Bank 6 ITEM.CAT ($A000-$BD94).
+// Input: item_cat_off_lo/hi. Output: A = byte. Clobbers: A, Y (preserves X, ZP).
+hal_item_cat_read_byte:
+    php
+    sei
+    lda CX16_RAM_BANK_REG
     pha
-    lda #OVL_ITEMS
-    jsr overlay_load
+    lda #CX16_BANK_ITEM_CAT
+    sta CX16_RAM_BANK_REG
+    lda item_cat_off_lo
+    sta hicr_lda + 1
+    clc
+    lda #>BANKED_DATA_BASE
+    adc item_cat_off_hi
+    sta hicr_lda + 2
+hicr_lda:
+    lda $a000
+    tay
     pla
+    sta CX16_RAM_BANK_REG
+    plp
+    tya
+    rts
+
+// tramp_ego_append_suffix — Decode ego 1..55 via resident item_cat_decode_ego
+// into item_name_decode_buf and append to combat_msg_buf without evicting caller
+// overlays (OVL_CHEST/OVL_ITEMS).
+// Input: A = ego type. Clobbers: A, Y, zp_ptr0.
+tramp_ego_append_suffix:
+    and #EGO_ID_MASK
+    beq !teas_done+
+    cmp #EGO_TYPE_COUNT
     bcs !teas_done+
-    jsr ego_get_suffix_ptr
+    jsr item_cat_decode_ego
     lda zp_ptr0
     ldy zp_ptr0_hi
     jmp combat_append_str
 !teas_done:
+    rts
+
+// Resident bank-switch wrapper for relocated equipment pflags recalc
+hal_player_recalc_pflags:
+    ldx CX16_RAM_BANK_REG
+    phx
+    ldx #CX16_BANK_MODAL
+    stx CX16_RAM_BANK_REG
+    jsr player_recalc_pflags_equipment
+    plx
+    stx CX16_RAM_BANK_REG
     rts
 
 // ============================================================
@@ -1558,11 +1214,17 @@ program_end:
 .print "CX16 Unified Resident+Play end: $" + toHexString(program_end)
 .assert "Unified Resident+Play image fits below $9B00 tier name pool", program_end <= PLATFORM_TIER_NAME_POOL_BASE, true
 .assert "HuffData fits Bank 4 ($8000-$9FFF)", ovl_huffdata_end <= $a000, true
+.assert "Home overlay owns home_enter separately from TownOverlay", home_enter >= $a000 && home_enter < ovl_home_end && store_enter >= $a000 && store_enter < ovl_town_end, true
+.assert "Evicted Low-RAM trampolines stay resident while targets live in HiRAM", re_equip_entry < PLATFORM_TIER_NAME_POOL_BASE && re_equip >= $a000 && re_equip < ovl_modal_misc_end && run_initialize < PLATFORM_TIER_NAME_POOL_BASE && run_initialize_impl >= $a000 && run_initialize_impl < ovl_modal_misc_end && item_spawn_level < PLATFORM_TIER_NAME_POOL_BASE && item_spawn_level_gen >= $a000 && item_spawn_level_gen < ovl_gen_end && tramp_item_pickup < PLATFORM_TIER_NAME_POOL_BASE && item_pickup >= $a000 && item_pickup < ovl_items_end && eff_wall_to_mud >= $a000 && eff_wall_to_mud < ovl_spell_end && title_enter_menu < PLATFORM_TIER_NAME_POOL_BASE && title_enter_menu_ovl >= $a000 && title_enter_menu_ovl < ovl_title_end && cx16_cold_boot_init >= $a000 && cx16_cold_boot_init < ovl_title_end && player_init >= $a000 && player_init < ovl_start_end && player_bake_creation_stats >= $a000 && player_bake_creation_stats < ovl_start_end && tramp_door_try_open < PLATFORM_TIER_NAME_POOL_BASE && tramp_door_try_close < PLATFORM_TIER_NAME_POOL_BASE && tramp_door_pick_roll < PLATFORM_TIER_NAME_POOL_BASE && door_try_open >= $a000 && door_try_open < ovl_help_end && door_try_close >= $a000 && door_try_close < ovl_help_end && tramp_item_drop < PLATFORM_TIER_NAME_POOL_BASE && item_drop >= $a000 && item_drop < ovl_help_end, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../core/ui_legal.s"
+#if CX16_CARTRIDGE
+#import "legal_stream.s"
+#else
 #import "../shared/legal_disk_stream.s"
+#endif
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true

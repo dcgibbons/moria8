@@ -222,9 +222,10 @@ test_calc_spell_failure_fail:
 
 test_clear_inventory:
     ldx #29
-    lda #0
 !loop:
+    lda #FI_EMPTY
     sta inv_item_id,x
+    lda #0
     sta inv_flags,x
     dex
     bpl !loop-
@@ -269,35 +270,39 @@ test_reset_remove_curse_state:
     rts
 
 test_seed_equipped_and_carried_curses:
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
     lda #$fe
     sta inv_to_hit + EQUIP_WEAPON
     lda #6
     sta inv_to_dam + EQUIP_WEAPON
-    lda #EGO_FLAME_TONGUE
+    lda #(ITEM_PAGE_DAGGER | EGO_FLAME_TONGUE)
     sta inv_ego + EQUIP_WEAPON
     lda #IF_CURSED
     sta inv_flags + EQUIP_WEAPON
 
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id
     lda #4
     sta inv_to_ac
-    lda #EGO_DEFENDER
+    lda #(ITEM_PAGE_LEATHER_ARMOR | EGO_DEFENDER)
     sta inv_ego
     lda #IF_CURSED
     sta inv_flags
     rts
 
 test_seed_uncursed_equipment_and_carried_curse:
-    lda #2
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
+    lda #ITEM_PAGE_DAGGER
+    sta inv_ego + EQUIP_WEAPON
     lda #0
     sta inv_flags + EQUIP_WEAPON
 
-    lda #7
+    lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id
+    lda #ITEM_PAGE_LEATHER_ARMOR
+    sta inv_ego
     lda #IF_CURSED
     sta inv_flags
     rts
@@ -349,7 +354,7 @@ test_start:
     cmp #6
     bne !t1_fail+
     lda inv_ego + EQUIP_WEAPON
-    cmp #EGO_FLAME_TONGUE
+    cmp #(ITEM_PAGE_DAGGER | EGO_FLAME_TONGUE)
     bne !t1_fail+
     lda inv_flags
     and #IF_CURSED
@@ -358,7 +363,7 @@ test_start:
     cmp #4
     bne !t1_fail+
     lda inv_ego
-    cmp #EGO_DEFENDER
+    cmp #(ITEM_PAGE_LEATHER_ARMOR | EGO_DEFENDER)
     bne !t1_fail+
     lda test_huff_calls
     cmp #1

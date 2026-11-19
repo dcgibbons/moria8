@@ -22,13 +22,18 @@
 //   Banks 1-2:   198x66 live map (virtual $2000-$530B)
 //   Bank 3:      Cx16AuxData (virtual $6000-$7FFF)
 //   Bank 4:      Cx16HuffData (virtual $8000-$9FFF)
-//   Banks 5-8:   MONSTER.DB.1..4
-//   Banks 9-20:  12 code overlays (OVL_STARTUP..OVL_TITLE = IDs 1..12)
-//   Bank 21:     TITLE art stream
-//   Bank 22:     MONSTER.CAT monster catalog fields + level index (names in Bank 4)
+//   Bank 5:      MONSTER.EXT extended monster catalog ($A000-$A8B7, 279 x 8 B)
+//   Bank 6:      ITEM.CAT item/ego/flavor catalog ($A000-$BD94)
+//   Banks 7-8:   Reserved for extended catalog / warm slots (reclaimed from MONSTER.DB.3..4)
+//   Banks 9-21:  13 code overlays (OVL_STARTUP..OVL_TITLE = IDs 1..13)
+//   Bank 22:     TITLE art stream
+//   Bank 23:     MONSTER.CAT monster catalog fields + level index (names in Bank 4)
+//   Bank 24:     LEGALUI cold legal modal (loaded on demand)
+//   Banks 25-63: Reserved free/warm banked RAM pool (39 banks = 312 KB)
 
 #import "hal/memory_bank_consts.s"
 #import "hal/entropy_consts.s"
+#import "hal/lifecycle_policy.s"
 
 // ============================================================
 // Hardware Bank Registers & Bank Assignments
@@ -42,12 +47,23 @@
 .const CX16_BANK_MAP_HI         = 2
 .const CX16_BANK_AUXDATA        = 3
 .const CX16_BANK_HUFFDATA       = 4
+#if HAL_PLATFORM_MONSTER_CATALOG
+.const CX16_BANK_CATALOG_EXT    = 5     // Reclaimed from MONSTER.DB.1 (Phase 5 MONSTER.CAT extensions)
+.const CX16_BANK_ITEM_CAT       = 6     // Boot-preloaded 'ITM2' ITEM.CAT ($A000-$BD94)
+.const CX16_BANK_EXT_BASE       = 7     // Reclaimed from MONSTER.DB.3..4 (warm/extension slots)
+.const CX16_BANK_EXT_END        = 8
+#else
 .const CX16_BANK_TIER_BASE      = 5
 .const CX16_BANK_TIER_END       = 8
+#endif
 .const CX16_BANK_OVERLAY_BASE   = 9
-.const CX16_BANK_OVERLAY_END    = 20
-.const CX16_BANK_TITLE_ART      = 21
-.const CX16_BANK_CATALOG        = 22
+.const CX16_BANK_OVERLAY_END    = 21
+.const CX16_BANK_TITLE_ART      = 22
+.const CX16_BANK_CATALOG        = 23
+.const CX16_BANK_LEGAL          = 24    // Ephemeral legal modal (not boot-preloaded)
+.const CX16_BANK_WARM_BASE      = 25    // Free/warm extended RAM banks (Banks 25..63)
+.const CX16_BANK_WARM_END       = 63
+.const CX16_BANK_COUNT          = 64    // Minimum guaranteed CX16 HiRAM (512 KB = 64 x 8 KB)
 
 // ============================================================
 // Virtual & Physical Memory Map Constants
@@ -152,3 +168,10 @@ mmu_select_bank0:
 .assert "Resident ceiling ends at tier name pool base", CX16_RESIDENT_LIMIT, PLATFORM_TIER_NAME_POOL_BASE
 .assert "Banked window is 8,192 bytes ($A000-$BFFF)", BANKED_DATA_END - BANKED_DATA_BASE + 1, 8192
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 16
+.assert "Map banks precede AuxData and HuffData without collision", CX16_BANK_MAP_LO == CX16_BANK_KERNAL_VARS + 1 && CX16_BANK_MAP_HI == CX16_BANK_MAP_LO + 1 && CX16_BANK_AUXDATA == CX16_BANK_MAP_HI + 1 && CX16_BANK_HUFFDATA == CX16_BANK_AUXDATA + 1, true
+#if HAL_PLATFORM_MONSTER_CATALOG
+.assert "Reclaimed Banks 5-8 sit cleanly between HuffData and overlays", CX16_BANK_CATALOG_EXT == CX16_BANK_HUFFDATA + 1 && CX16_BANK_ITEM_CAT == CX16_BANK_CATALOG_EXT + 1 && CX16_BANK_EXT_BASE == CX16_BANK_ITEM_CAT + 1 && CX16_BANK_EXT_END == CX16_BANK_EXT_BASE + 1 && CX16_BANK_OVERLAY_BASE == CX16_BANK_EXT_END + 1, true
+#else
+.assert "Legacy tier Banks 5-8 sit cleanly between HuffData and overlays", CX16_BANK_TIER_BASE == CX16_BANK_HUFFDATA + 1 && CX16_BANK_TIER_END == CX16_BANK_TIER_BASE + 3 && CX16_BANK_OVERLAY_BASE == CX16_BANK_TIER_END + 1, true
+#endif
+.assert "Overlay, title art, catalog, legal, and warm banks partition 9..63", CX16_BANK_OVERLAY_END == CX16_BANK_OVERLAY_BASE + hal_platform_overlay_count - 1 && CX16_BANK_TITLE_ART == CX16_BANK_OVERLAY_END + 1 && CX16_BANK_CATALOG == CX16_BANK_TITLE_ART + 1 && CX16_BANK_LEGAL == CX16_BANK_CATALOG + 1 && CX16_BANK_WARM_BASE == CX16_BANK_LEGAL + 1 && CX16_BANK_WARM_END == CX16_BANK_COUNT - 1 && CX16_BANK_COUNT == 64, true

@@ -32,6 +32,12 @@ test_exit_trampoline:
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 
+.segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
+.segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
+#define PLAYER_CHARGEN_EXTERNAL
+#define TRAP_TRIGGER_EXTERNAL
+#define ITEM_SPAWN_EXTERNAL
+#define PICK_ITEM_TYPE_EXTERNAL
 #import "../../../../core/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -46,31 +52,43 @@ test_exit_trampoline:
 #import "../../../../core/spell_data.s"
 #import "../../../../core/player.s"
 #import "../../../../core/ui_messages.s"
+.segment TestCreateOverlay
 #import "../../../../core/ui_status.s"
+.segment Default
 #import "../../../../core/ui_help_clear.s"
 #import "../../../../core/ui_character.s"
 #import "../../../../core/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+player_create:
+    brk
 .segment Default
 #import "../../../../core/sound.s"
 #import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
+#import "dungeon_gen_stubs.s"
 #import "../../../../core/huffman.s"
 #import "../../../../core/dungeon_features.s"
+#import "chest_summons_stubs.s"
 #import "../../../../core/monster.s"
 #import "../../../../core/tier_manager.s"
 #import "../../common/overlay.s"
+.segment TestUnused
 #import "../../../../core/monster_ai.s"
+.segment Default
 #import "../../../../core/recall.s"
+.segment TestUnused
 #import "../../../../core/monster_magic.s"
+.segment Default
 #import "../../../../core/item.s"
 #import "../../../../core/special_rooms.s"
 #import "../../../../core/ego_items.s"
 #import "../../../../core/special_rooms_stubs.s"
+.segment TestUnused
+#import "../../../../core/trap_trigger_cold.s"
+#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/item_spawn_cold.s"
+#import "../../../../core/pick_item_type_cold.s"
 #import "../dungeon_render.s"
+.segment Default
 #import "../../../../core/dungeon_los.s"
 #import "../../../../core/player_move.s"
 #import "../../../../core/combat.s"
@@ -148,6 +166,20 @@ tc_loop:    .byte 0
 tc_ok:      .byte 0
 tc_results: .fill 42, $ff      // Result buffer (copied to $0400 at end)
 
+// Refresh Phase-4 wield_* cache without overwriting explicit PL_TOHIT/PL_TODMG setups.
+tc_equip_weapon:
+    sta inv_item_id + EQUIP_WEAPON
+    lda player_data + PL_TOHIT
+    pha
+    lda player_data + PL_TODMG
+    pha
+    jsr player_recalc_pflags_equipment
+    pla
+    sta player_data + PL_TODMG
+    pla
+    sta player_data + PL_TOHIT
+    rts
+
 test_start:
     // Seed RNG deterministically
     lda #$42
@@ -167,8 +199,12 @@ test_start:
 
     // Default to an equipped dagger so generic melee to-hit tests do not
     // include the bare-hand penalty unless a test explicitly clears weapon.
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
 
     // ==========================================
     // Test 1: combat_calc_tohit for Warrior level 1, TOHIT=0
@@ -233,7 +269,7 @@ test_start:
     // ==========================================
 !t3:
     lda #FI_EMPTY
-    sta inv_item_id + EQUIP_WEAPON
+    jsr tc_equip_weapon
     lda #12
     sta player_data + PL_DEX_CUR
 
@@ -255,7 +291,7 @@ test_start:
     // ==========================================
 !t4:
     lda #FI_EMPTY
-    sta inv_item_id + EQUIP_WEAPON
+    jsr tc_equip_weapon
     lda #18
     sta player_data + PL_DEX_CUR
 
@@ -566,7 +602,7 @@ test_start:
     // ==========================================
 !t12:
     lda #FI_EMPTY
-    sta inv_item_id + EQUIP_WEAPON
+    jsr tc_equip_weapon
     lda #7
     sta cmb_damage
 
@@ -591,8 +627,8 @@ test_start:
     // ==========================================
 !t13:
     // Equip weapon type 8 (Two-Handed Sword, weight=120)
-    lda #8
-    sta inv_item_id + EQUIP_WEAPON
+    lda #ITEM_SLOT_CHAIN_MAIL
+    jsr tc_equip_weapon
     lda #0
     sta inv_ego + EQUIP_WEAPON
 
@@ -638,8 +674,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #18
     sta player_data + PL_DEX_CUR
-    lda #4                      // Long Sword (weight=50)
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_LONG_SWORD                      // Long Sword (weight=50)
+    jsr tc_equip_weapon
 
     jsr combat_calc_blows
 
@@ -664,8 +704,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #18
     sta player_data + PL_DEX_CUR
-    lda #2                      // Dagger (weight=12)
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER                      // Dagger (weight=12)
+    jsr tc_equip_weapon
 
     jsr combat_calc_blows
 
@@ -691,8 +735,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #12
     sta player_data + PL_DEX_CUR
-    lda #4                      // Long Sword (weight=50)
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_LONG_SWORD != 0) {
+        lda #ITEM_PAGE_LONG_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_LONG_SWORD                      // Long Sword (weight=50)
+    jsr tc_equip_weapon
 
     jsr combat_calc_blows
 
@@ -718,8 +766,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #15
     sta player_data + PL_DEX_CUR
-    lda #3                      // Short Sword (weight=30)
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_SHORT_SWORD != 0) {
+        lda #ITEM_PAGE_SHORT_SWORD
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_SHORT_SWORD                      // Short Sword (weight=30)
+    jsr tc_equip_weapon
 
     jsr combat_calc_blows
 
@@ -783,7 +835,7 @@ test_start:
 
     lda #12
     sta player_data + PL_DEX_CUR
-    lda #7                      // Leather armor
+    lda #ITEM_SLOT_LEATHER_ARMOR                      // Leather armor
     sta inv_item_id + EQUIP_BODY
     lda #0
     sta inv_to_ac + EQUIP_BODY
@@ -803,9 +855,9 @@ test_start:
     // ==========================================
     // Test 20: AC from DEX + multiple armor + enchantment
     // DEX 18 -> bonus 2
-    // Chain mail (type 8, base_ac=6) in EQUIP_BODY, p1=+2
-    // Iron helm (type 10, base_ac=1) in EQUIP_HEAD, p1=0
-    // AC = 2 + 6 + 2 + 1 = 11
+    // Chain mail (type 8, VMS base_ac=14) in EQUIP_BODY, p1=+2
+    // Iron helm (type 10, VMS base_ac=5) in EQUIP_HEAD, p1=0
+    // AC = 2 + 14 + 2 + 5 = 23
     // ==========================================
 !t20:
     // Clear all equipment slots
@@ -819,11 +871,11 @@ test_start:
 
     lda #18
     sta player_data + PL_DEX_CUR
-    lda #8                      // Chain mail
+    lda #ITEM_SLOT_CHAIN_MAIL                      // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #2                      // +2 enchantment
     sta inv_to_ac + EQUIP_BODY
-    lda #10                     // Iron helm
+    lda #ITEM_SLOT_IRON_HELM                     // Iron helm
     sta inv_item_id + EQUIP_HEAD
     lda #0
     sta inv_to_ac + EQUIP_HEAD
@@ -831,7 +883,7 @@ test_start:
     jsr player_calc_combat
 
     lda player_data + PL_AC
-    cmp #11
+    cmp #23
     bne !t20_fail+
     lda #$01
     sta tc_results + 19
@@ -1208,8 +1260,12 @@ test_start:
     sta player_data + PL_TOHIT
     lda #10
     sta player_data + PL_TODMG
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
 
     // Place a floor tile with an occupied monster at (20,15).
     ldx #15
@@ -1267,8 +1323,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #54
     sta player_data + PL_DEX_CUR
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
 
     jsr combat_calc_blows
 
@@ -1295,8 +1355,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #118
     sta player_data + PL_DEX_CUR
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
 
     jsr combat_calc_blows
 
@@ -1318,8 +1382,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #118
     sta player_data + PL_DEX_CUR
-    lda #49                     // Short Bow
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != ITEM_PAGE_SHORT_BOW) {
+        lda #ITEM_PAGE_SHORT_BOW
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_SHORT_BOW                     // Short Bow
+    jsr tc_equip_weapon
 
     jsr combat_calc_blows
 
@@ -1338,10 +1406,17 @@ test_start:
     // Dagger + rogue level 3 + PL_TOHIT 0 -> chance 12 + 0 + 9 = 21.
     // ==========================================
 !t34:
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
-    lda #0
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
+    lda #ITEM_PAGE_DAGGER
     sta inv_ego + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #0
+    }
     sta player_data + PL_TOHIT
     lda #255
     sta zp_combat_tohit
@@ -1415,8 +1490,12 @@ test_start:
     sta player_data + PL_LEVEL
     lda #2
     sta player_data + PL_TOHIT
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
     lda #1
     sta cmb_target_light_valid
     lda #0
@@ -1450,8 +1529,12 @@ test_start:
     sta player_data + PL_LEVEL
     lda #0
     sta player_data + PL_TOHIT
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
     lda #1
     sta zp_eff_bless
     sta zp_eff_hero
@@ -1487,8 +1570,12 @@ test_start:
     sta player_data + PL_STR_CUR
     lda #0
     sta player_data + PL_TOHIT
-    lda #8
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != ITEM_PAGE_CHAIN_MAIL) {
+        lda #ITEM_PAGE_CHAIN_MAIL
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_CHAIN_MAIL
+    jsr tc_equip_weapon
 
     jsr combat_calc_tohit
 
@@ -1575,8 +1662,12 @@ test_start:
     sta player_data + PL_TOHIT
     lda #10
     sta player_data + PL_TODMG
-    lda #2
-    sta inv_item_id + EQUIP_WEAPON
+    .if (ITEM_PAGE_DAGGER != 0) {
+        lda #ITEM_PAGE_DAGGER
+        sta inv_ego + EQUIP_WEAPON
+    }
+    lda #ITEM_SLOT_DAGGER
+    jsr tc_equip_weapon
 
     // Occupied floor tile at (20,15) with a one-hit-kill Balrog in slot 0.
     ldx #15
