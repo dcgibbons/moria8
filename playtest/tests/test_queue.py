@@ -221,6 +221,29 @@ class ScheduleTest(unittest.TestCase):
         service.schedule(q, {})   # one each: nothing more starts
         self.assertEqual(sum(j["queue"] == "build" for j in service.running.values()), 3)
 
+    def test_build_per_port_plays_that_many_runs_of_each_port(self) -> None:
+        """Maintainer, 2026-11-18: idle cores; ``build_per_port`` runs of each
+        port at once, each a different combination, never more than are
+        left of the build's coverage."""
+        service = self.service(8)
+        service.config.update(build_platforms=["c64", "atari8"], build_goal="clvl10", build_per_port=2)
+        service.ci_build = "head1"
+        q = queue.Queue("deep", service.home)
+        service.schedule(q, {})
+        build = [j for j in service.running.values() if j["queue"] == "build"]
+        self.assertEqual(sorted(j["platform"] for j in build), ["atari8", "atari8", "c64", "c64"])
+        c64 = [j["character"] for j in build if j["platform"] == "c64"]
+        self.assertEqual(c64, queue.combos("c64")[:2])                    # two different combinations
+        service.schedule(q, {})                                           # two each: nothing more starts
+        self.assertEqual(sum(j["queue"] == "build" for j in service.running.values()), 4)
+        entry = service.buildq.platform("c64")
+        entry["next"] = len(queue.combos("c64")) - 1                      # one combination left
+        for run_id in [r for r, j in service.running.items() if j["platform"] == "c64"]:
+            del service.running[run_id]
+        service.schedule(q, {})
+        self.assertEqual(sum(j["platform"] == "c64" and j["queue"] == "build"
+                             for j in service.running.values()), 1)       # not two
+
     def test_the_build_queue_plays_beside_a_focus(self) -> None:
         """Maintainer, 2026-11-08: the build queue "ready to test each
         platform" while the Balrog queue focuses on one character; a focus
@@ -379,6 +402,17 @@ class BuildQueueTest(unittest.TestCase):
         self.assertTrue(self.buildq.pending("bbcmaster", "b2"))
         self.assertEqual(self.buildq.take("bbcmaster", "b2"), order[0])   # a new build starts again
         self.assertEqual(self.buildq.platform("bbcmaster")["cycle"], 2)
+
+    def test_two_runs_that_did_not_count_are_both_played_again(self) -> None:
+        """With two runs of a port at once (build_per_port), two that did not
+        count (stale, cancelled) are both played again, not the last only."""
+        order = queue.combos("bbcmaster")
+        first, second = self.buildq.take("bbcmaster", "b1"), self.buildq.take("bbcmaster", "b1")
+        for combo in (first, second):
+            self.buildq.finish({"platform": "bbcmaster", "character": combo, "outcome": "cancelled", "build": "b1"})
+        self.assertEqual([self.buildq.take("bbcmaster", "b1") for _ in range(3)], [first, second, order[2]])
+        self.buildq.platform("bbcmaster")["retry"] = order[5]             # a state from before: one name
+        self.assertEqual(self.buildq.take("bbcmaster", "b1"), order[5])
 
     def test_an_older_builds_abandoned_run_is_not_retried(self) -> None:
         first = self.buildq.take("c64", "b1")

@@ -122,6 +122,9 @@ DEFAULTS: dict[str, Any] = {
     "main_characters": [],   # non-empty: the main queue plays only these (2026-11-05: the Balrog starts it lacks)
     # The build queue (BuildQueue): one run per port, of HEAD's commit
     "build_platforms": [], "build_goal": "clvl10",
+    # Runs of each port at once, each a different combination (maintainer,
+    # 2026-11-18: idle cores; 1 until then)
+    "build_per_port": 1,
     # Non-empty: the Balrog queue plays every combination of these ports,
     # from level 1 when it has no start, and takes no other port's
     # graduates (maintainer, 2026-11-06: the C64)
@@ -1250,8 +1253,10 @@ class BuildQueue:
         played; None once every one has played on ``build``. A new build
         starts again from the first (``cycle`` counts the builds covered)."""
         entry = self.coverage(name, build)
-        if entry["retry"]:
-            combo, entry["retry"] = entry["retry"], None
+        retries = self.retries(entry)
+        if retries:
+            combo = retries.pop(0)
+            entry["retry"] = retries
             return combo
         order = combos(name)
         if entry["next"] >= len(order):
@@ -1262,8 +1267,21 @@ class BuildQueue:
 
     def pending(self, name: str, build: str | None) -> bool:
         """``take`` has a combination for ``build`` on port ``name``."""
+        return self.remaining(name, build) > 0
+
+    def remaining(self, name: str, build: str | None) -> int:
+        """How many combinations ``take`` has left for ``build`` on ``name``."""
         entry = self.platform(name)
-        return entry.get("build") != build or bool(entry["retry"]) or entry["next"] < len(combos(name))
+        if entry.get("build") != build:
+            return len(combos(name))
+        return len(self.retries(entry)) + max(0, len(combos(name)) - entry["next"])
+
+    @staticmethod
+    def retries(entry: dict[str, Any]) -> list[str]:
+        """The combinations to play again: a list since several runs of a
+        port play at once (build_per_port); one name or None before."""
+        retry = entry.get("retry")
+        return [] if not retry else [retry] if isinstance(retry, str) else list(retry)
 
     def coverage(self, name: str, build: str | None) -> dict[str, Any]:
         """Port ``name``'s entry, its coverage started again for a new ``build``."""
@@ -1271,14 +1289,14 @@ class BuildQueue:
         if entry.get("build") != build:
             if entry.get("build") is not None:
                 entry["cycle"] += 1
-            entry.update(build=build, next=0, retry=None)
+            entry.update(build=build, next=0, retry=[])
         return entry
 
     def finish(self, record: dict[str, Any]) -> None:
         entry = self.platform(record["platform"])
         if record["outcome"] not in COUNTED:
             if record.get("build") in (None, entry.get("build")):   # not an older build's run
-                entry["retry"] = record["character"]
+                entry["retry"] = [*self.retries(entry), record["character"]]
             return
         item = entry["items"][record["character"]]
         item["runs"] += 1
@@ -2022,11 +2040,13 @@ class Service:
         main_backoff = max((t for p, t in self.backoff.items() if not p.startswith("build/")), default=0)
         if self.balrog.ready() and self.build_id and main_backoff < time.time():
             balrog_pending = max(0, int(config["balrog_workers"]) - balrog_running)
-        # The build queue: one run per port, out of the total as the Balrog queue's are.
-        build_playing = {j["platform"] for j in self.running.values() if j["queue"] == "build"}
-        build_ready = [p for p in config.get("build_platforms") or [] if p not in build_playing
+        # The build queue: build_per_port runs of each port, out of the total as
+        # the Balrog queue's are, never more than its coverage has left.
+        build_playing = collections.Counter(j["platform"] for j in self.running.values() if j["queue"] == "build")
+        per_port = max(1, int(config.get("build_per_port", 1)))
+        build_ready = [p for p in config.get("build_platforms") or [] if self.ci_build
                        and self.backoff.get(f"build/{p}", 0) < time.time()
-                       and self.buildq.pending(p, self.ci_build)] if self.ci_build else []
+                       for _ in range(min(per_port - build_playing[p], self.buildq.remaining(p, self.ci_build)))]
         pending = sum(self.sub_pending(sub) for sub in subs.values()) + balrog_pending + len(build_ready)
         target = max(minimum, total - sub_running - pending)
         if len(main_active) > target:
