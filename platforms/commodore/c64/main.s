@@ -231,8 +231,6 @@ c64_marker_name_mode_low:
 // Resident helper for C64 save-disk marker creation. This must stay below
 // $A000: it runs while KERNAL and BASIC ROM are banked in.
 c64_disk_marker_write_resident:
-    lda #2
-    sta disk_status
     lda #$57
     sta c64_marker_name_mode_low
     lda #$36
@@ -249,9 +247,7 @@ c64_disk_marker_write_resident:
     ldy #hal_storage_marker_sec_write
     jsr $ffba
     jsr $ffc0
-    bcc !cdmw_open_ok+
     bcs !cdmw_close+
-!cdmw_open_ok:
     ldx #hal_storage_marker_file_num
     jsr $ffc9
     bcs !cdmw_close+
@@ -268,16 +264,25 @@ c64_disk_marker_write_resident:
     bcc !cdmw_write-
     clc
 !cdmw_close:
-    php
+    // Save only Carry (OPEN/CHKOUT error), never P/I: below we switch to
+    // $01=$34 (all-RAM) with SEI, so plp would re-enable IRQs without KERNAL.
+    lda #0
+    rol
+    pha
     jsr $ffcc
     lda #hal_storage_marker_file_num
     jsr $ffc3
+    sei
     lda #$34
     sta $01
-    jsr c64_restore_vic_bank0_after_serial
-    plp
-    bcs !cdmw_done+
-    lda #0
+    lda save_device
+    sta disk_prompt_device
+    jsr c64_storage_read_command_status
+    pla
+    beq !cdmw_done+
+    lda disk_status
+    bne !cdmw_done+
+    lda #2
     sta disk_status
 !cdmw_done:
     rts
@@ -432,8 +437,6 @@ c64_disk_load:
     rts
 
 c64_disk_marker_present:
-    lda #1
-    sta disk_status
     lda $01
     pha
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
@@ -452,9 +455,17 @@ c64_disk_marker_present:
     ldx #<(c64_marker_name_low + 1)
     ldy #>(c64_marker_name_low + 1)
     jsr storage_file_exists
-    lda #1                      // any failure is 1 here, as before: the probe's
-    sta disk_status             // status read set disk_status to its own code
-    bcc !cdmp_done+
+    bcs !cdmp_open+
+    // Preserve the DOS status left by storage_file_exists (1=62 missing,
+    // 26/72/74 concrete errors, 2=other I/O). Guard against 0 if OPEN failed.
+    lda disk_status
+    bne !cdmp_done+
+    lda #2
+    sta disk_status
+    bne !cdmp_done+
+!cdmp_open:
+    lda #1                      // valid marker sets 0 via dec below; mismatch stays 1
+    sta disk_status
     lda #$36                    // (the probe closed the check file)
     sta $01
     cli
@@ -908,26 +919,6 @@ c64_save_resident_state_probe_end:
 #import "../../../core/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
-
-// c64_storage_dos_code_status — HAL_STORAGE_STATUS_* for the DOS code
-// c64_storage_read_command_status leaves in disk_status (26, 72, 74).
-c64_storage_dos_code_status:
-    lda disk_status
-    beq !cdcs_done+             // HAL_STORAGE_STATUS_OK
-    ldx #HAL_STORAGE_STATUS_WRITE_PROTECTED
-    cmp #26
-    beq !cdcs_x+
-    ldx #HAL_STORAGE_STATUS_DISK_FULL
-    cmp #72
-    beq !cdcs_x+
-    ldx #HAL_STORAGE_STATUS_DEVICE_NOT_READY
-    cmp #74
-    beq !cdcs_x+
-    ldx #HAL_STORAGE_STATUS_UNKNOWN
-!cdcs_x:
-    txa
-!cdcs_done:
-    rts
 
 c64_storage_read_command_status:
     // A read that times out (ST bit 1) before any digit came lost its byte

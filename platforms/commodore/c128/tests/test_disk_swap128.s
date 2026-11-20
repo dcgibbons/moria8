@@ -976,6 +976,195 @@ test_start:
     beq *+5
     jmp test_fail
 
+    // Test 8d: C128 disk_save_media_status preserves concrete DOS errors
+    // (74 not ready, 26 write-protected, 72 disk full), maps 62 -> wrong media,
+    // and maps 00 / unmapped -> unknown while leaving raw DOS digits intact.
+    jsr reset_harness_state
+    lda #$81
+    sta disk_status
+    lda #$37                    // 74, DRIVE NOT READY
+    sta cmd_status_bytes
+    lda #$34
+    sta cmd_status_bytes + 1
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status0
+    cmp #$37
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status1
+    cmp #$34
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$84
+    sta disk_status
+    lda #$32                    // 26, WRITE PROTECT ON
+    sta cmd_status_bytes
+    lda #$36
+    sta cmd_status_bytes + 1
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status0
+    cmp #$32
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status1
+    cmp #$36
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$81
+    sta disk_status
+    lda #$37                    // 72, DISK FULL
+    sta cmd_status_bytes
+    lda #$32
+    sta cmd_status_bytes + 1
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status0
+    cmp #$37
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status1
+    cmp #$32
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$81
+    sta disk_status
+    lda #$36                    // 62, FILE NOT FOUND -> WRONG_MEDIA
+    sta cmd_status_bytes
+    lda #$32
+    sta cmd_status_bytes + 1
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$81
+    sta disk_status
+    lda #$30                    // 00, OK -> UNKNOWN on failed media check
+    sta cmd_status_bytes
+    lda #$30
+    sta cmd_status_bytes + 1
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$81
+    sta disk_status
+    lda #$33                    // 31, unmapped -> UNKNOWN
+    sta cmd_status_bytes
+    lda #$31
+    sta cmd_status_bytes + 1
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status0
+    cmp #$33
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status1
+    cmp #$31
+    beq *+5
+    jmp test_fail
+
+    // Test 8e: full disk_require_save_media -> disk_save_media_status preserves
+    // 74/26/72/31 captured during marker OPEN without re-reading cleared channel 15.
+    jsr reset_harness_state
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #$37                    // 74 on marker OPEN; next read would be "00"
+    sta cmd_status_bytes
+    lda #$34
+    sta cmd_status_bytes + 1
+    jsr disk_require_save_media
+    bcs *+5
+    jmp test_fail
+    lda disk_status
+    cmp #$85
+    beq *+5
+    jmp test_fail
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status0
+    cmp #$37
+    beq *+5
+    jmp test_fail
+    lda disk_diag_cmd_status1
+    cmp #$34
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #$32                    // 26 on marker OPEN
+    sta cmd_status_bytes
+    lda #$36
+    sta cmd_status_bytes + 1
+    jsr disk_require_save_media
+    bcs *+5
+    jmp test_fail
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #$37                    // 72 on marker OPEN
+    sta cmd_status_bytes
+    lda #$32
+    sta cmd_status_bytes + 1
+    jsr disk_require_save_media
+    bcs *+5
+    jmp test_fail
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #$33                    // 31 unmapped on marker OPEN
+    sta cmd_status_bytes
+    lda #$31
+    sta cmd_status_bytes + 1
+    jsr disk_require_save_media
+    bcs *+5
+    jmp test_fail
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
+    jmp test_fail
+
     // Test 9: Disk Setup init status capture should use the shared DOS
     // normalizer for the friendly setup-status codes it preserves.
     jsr reset_harness_state

@@ -350,11 +350,6 @@ uds_clear_after_modal:
     jmp msg_init
 
 uds_show_init_detail:
-#if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
-    lda disk_status
-    cmp #2
-    bcs !show_c64_not_ready+
-#endif
     jsr hal_storage_setup_status
     cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
     bne !check_full+
@@ -400,11 +395,6 @@ uds_show_init_detail:
 #endif
     :UDSPrint(4, UDS_LINE_COL, uds_dos_generic_str)
     rts
-#if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
-!show_c64_not_ready:
-    :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
-    rts
-#endif
 
 #if HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS
 uds_show_c128_status_error:

@@ -233,6 +233,45 @@ class BrainM2Test(unittest.TestCase):
         decision = brain.quaff(command_obs(pos=(5, 5), dlvl=0, hp=21, mhp=21), view)
         self.assertEqual((decision.key, brain.picking), (ord("Q"), "Potion of Restore Constitution"))
 
+    def test_drained_experience_is_restored_at_once_and_a_reserve_carried(self) -> None:
+        """C64 Balrog, 2026-11-20: Wights and Vampires drained 2% of the
+        experience a touch, and level 30-34 characters, with no Restore Life
+        Levels ever drunk, kept a quarter to a half of what their kills
+        earned. The drain message marks it; the potion is drunk once nothing
+        is close, a reserve is bought at the Temple from RESTORE_LIFE_LEVEL,
+        and one seen is taken."""
+        from moria_playtest.brain import LIFE, RESTORE_LIFE, RESTORE_LIFE_LEVEL, RESTORE_LIFE_RESERVE, TEMPLE
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.clvl = RESTORE_LIFE_LEVEL - 1
+        self.assertNotIn(RESTORE_LIFE, brain.shopping_list())             # early: gold for the kit
+        brain.clvl = 32
+        self.assertIn(RESTORE_LIFE, brain.shopping_list())
+        brain.at_store = TEMPLE
+        stock = {3: " a) Potion of Cure Light Wounds     20 GP",
+                 4: " b) Potion of Restore Life Levels  520 GP", 19: " B)uy  S)ell  Q)uit    Gold: 900000"}
+        brain.clw = 99
+        decision = brain.decide(self.store_obs("menu", stock), None)
+        self.assertEqual((decision.key, brain.store_letter), (ord("B"), "b"))
+        brain.credit(RESTORE_LIFE, RESTORE_LIFE_RESERVE)
+        self.assertNotIn(RESTORE_LIFE, brain.shopping_list())
+        view = town_view((5, 5), (40, 40), dlvl=34)
+        view.screen = (0, 0, COLS, ROWS)
+        o = command_obs(pos=(5, 5), dlvl=34, clvl=32, hp=300, mhp=300)
+        self.assertIsNone(brain.quaff(o, view))                           # not drained: kept
+        drained = command_obs(pos=(5, 5), dlvl=34, clvl=32, hp=300, mhp=300,
+                              rows={0: "You feel your life draining away!"})
+        brain.decide(drained, view)
+        self.assertIn(LIFE, brain.drained)
+        brain.track_stats(o)                                              # the stats do not clear it
+        self.assertIn(LIFE, brain.drained)
+        decision = brain.quaff(o, view)
+        assert decision is not None
+        self.assertEqual((decision.key, brain.picking), (ord("Q"), RESTORE_LIFE))
+        brain.restored(RESTORE_LIFE)
+        self.assertEqual((LIFE in brain.drained, brain.restores[RESTORE_LIFE]), (False, RESTORE_LIFE_RESERVE - 1))
+        brain.items_seen[(8, 5)] = ("!", RESTORE_LIFE)
+        self.assertEqual(brain.collect(o, view).layer, "collect")         # one seen: taken
+
     def test_a_restorer_seen_for_a_drained_stat_is_picked_up_and_used(self) -> None:
         """C64 Balrog, 2026-11-17: a clvl 18 Elf Ranger with Constitution
         drained from 12 to 3 walked past a Mushroom of Restore Constitution on
@@ -4220,6 +4259,54 @@ class StepAwayTest(unittest.TestCase):
         brain.level.stationary[(4, 4)] = Creature("J", 3)     # a jelly in the wall corner beside it
         decision = brain.search(command_obs(pos=(5, 5), dlvl=2, clvl=3), view, forced=True)
         self.assertFalse(decision is not None and decision.layer == "search" and decision.key == KEY_SEARCH)
+
+
+class HuntDeepTest(unittest.TestCase):
+    """C64 Balrog, 2026-11-19: 17 of 27 characters at clvl 30-34, none dead
+    at clvl 25+ since the weight-aware bot, yet the best checkpoint went
+    from 33 to 34 in 16 hours. In the last 60,000 steps of each clvl 29+
+    game, exploring took 54% of the steps and searching dead ends for
+    secret doors 13%; fighting, shooting and praying about 5%. XP comes from
+    kills: deep and strong, the bot hunts, not maps."""
+
+    def deep(self, dlvl: int = 26, clvl: int = 30, step: int = 1) -> Observation:
+        o = command_obs(pos=(5, 5), dlvl=dlvl, clvl=clvl)
+        o.step = step
+        return o
+
+    def test_deep_and_strong_it_does_not_search_dead_ends(self) -> None:
+        brain = Brain(GOALS["balrog"])
+        view = UnstuckTest.corridor(UnstuckTest(), 26, (40, 40), unknown_behind=True)
+        self.assertIn((5, 5), view.search_spots(set()))                 # a dead end to search
+        self.assertIsNone(brain.search(self.deep(), view))
+        shallow = Brain(GOALS["balrog"])
+        decision = shallow.search(self.deep(dlvl=12, clvl=15), view)      # not yet deep: as before
+        self.assertEqual((decision.layer, decision.key), ("search", KEY_SEARCH))
+        sealed = brain.search(self.deep(), view, forced=True)              # sealed in: still searched
+        self.assertEqual((sealed.layer, sealed.key), ("search", KEY_SEARCH))
+
+    def test_a_level_that_stopped_paying_is_left(self) -> None:
+        from moria_playtest.brain import HUNT_QUIET_STEPS
+        view = UnstuckTest.corridor(UnstuckTest(), 26, (9, 5))
+        brain = Brain(GOALS["balrog"])
+        brain.food, brain.torches, brain.recall = 10, 3, 2                 # supplied: no trip for them
+        brain.track(self.deep(step=1), view)
+        brain.track(self.deep(step=HUNT_QUIET_STEPS - 1), view)
+        self.assertFalse(brain.level.scum)
+        brain.track(self.deep(step=HUNT_QUIET_STEPS + 2), view)
+        self.assertTrue(brain.level.scum)                                  # no kill, nothing to hunt
+        decision = brain.decide(self.deep(step=HUNT_QUIET_STEPS + 3), view)
+        self.assertEqual(decision.layer, "stair-scum", decision.reason)
+        hunting = Brain(GOALS["balrog"])
+        busy = UnstuckTest.corridor(UnstuckTest(), 26, (9, 5))
+        busy.creatures = {(9, 6): Creature("o", 20)}                      # an orc worth the walk
+        hunting.track(self.deep(step=1), busy)
+        hunting.track(self.deep(step=HUNT_QUIET_STEPS + 2), busy)
+        self.assertFalse(hunting.level.scum)
+        early = Brain(GOALS["balrog"])
+        early.track(self.deep(dlvl=12, clvl=15, step=1), view)
+        early.track(self.deep(dlvl=12, clvl=15, step=HUNT_QUIET_STEPS + 2), view)
+        self.assertFalse(early.level.scum)                                 # shallow play unchanged
 
 
 class OutmatchedTest(unittest.TestCase):
@@ -8667,6 +8754,39 @@ class PrayerTest(unittest.TestCase):
         archer = Brain(GOALS["deep"])
         archer.weapon, archer.wielding_launcher = ("Broad Sword", 3), True
         self.assertEqual(drop(sword, archer).key, KEY_RUNSTOP)              # its melee weapon stays
+
+    def test_starving_with_food_out_of_reach_by_weight_strips_to_eat(self) -> None:
+        """C64 Balrog, 2026-11-19 23:17 (build 5975ea3): the clvl 29 Halfling
+        Rogue starved again holding only two books, its worn gear over a
+        limit strength darts had drained, no Restore Strength in stock. The
+        estimate kept it from even trying the ration, so nothing was ever
+        refused and nothing came off; it walked between the stores until it
+        died Faint. Starving, food the estimate says will not fit counts as
+        refused, and with nothing else left the body armour comes off too."""
+        from moria_playtest.brain import GENERAL_STORE, KEY_TAKEOFF
+        brain = Brain(GOALS["deep"])
+        brain.food = 0
+        brain.at_store, brain.shopped = GENERAL_STORE, False
+        brain.str_code, brain.body_weight = 3, 50              # drained: 3 x 130 + 50 = 440 tenths, 44 lb
+        brain.pack_listed = [("Spellbook Magick II", 1), ("Spellbook Magick I", 1)]
+        brain.worn_listed = ["Plate Mail"]                     # 38 lb, and 6 lb of books: 44 of 44
+        brain.weight_added = 0
+        self.assertTrue(brain.too_heavy_for("Ration of Food", 1))
+        menu = command_obs(pos=(5, 5), dlvl=0, clvl=29)
+        menu.rows = [" " * 40] * 25
+        menu.rows[3] = " a) 5 Ration of Food                3 GP".ljust(40)
+        menu.rows[19] = "Gold: 1184752".ljust(40)
+        menu.mode, menu.stage = Mode.STORE, "menu"
+        brain.store(menu)
+        self.assertTrue(brain.food_weight_refused and brain.too_heavy)   # as if the store refused it
+        brain.nothing_to_shed = True
+        brain.armour_names = {"ICAT_ARMOR": "Plate Mail"}
+        brain.armour = {"ICAT_ARMOR": 32}
+        view = town_view((5, 5), (40, 40))
+        faint = command_obs(pos=(5, 5), dlvl=0, clvl=29, rows={21: "bot Faint  LV:29 DL:0"})
+        decision = brain.take_off_for_food(faint, view)
+        assert decision is not None, "nothing taken off"
+        self.assertEqual((decision.key, brain.taking_off), (KEY_TAKEOFF, "Plate Mail"))
 
     def test_food_refused_with_nothing_to_shed_takes_off_armour(self) -> None:
         """C64 Balrog, 2026-11-19: the Halfling Rogue, its crossbow gone, held

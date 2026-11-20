@@ -46,6 +46,9 @@
 .const DEVICE_NUM       = 8
 .const LOAD_USE_HEADER  = 1
 
+.const CHAIN_STUB_ADDR  = $0340
+.const CHAIN_STUB_MAX   = $c0
+
 .const ZP_SRC_LO        = $FB
 .const ZP_SRC_HI        = $FC
 .const ZP_DST_LO        = $FD
@@ -75,14 +78,17 @@ load_main_program:
     ldy #LOAD_USE_HEADER
     jsr $ffba               // KERNAL SETLFS
 
-    ldx #chain_stub_end - chain_stub - 1
+    ldx #0
 !copy_stub:
     lda chain_stub,x
-    sta $0340,x
-    dex
-    bpl !copy_stub-
+    sta CHAIN_STUB_ADDR,x
+    inx
+    cpx #chain_stub_end - chain_stub
+    bne !copy_stub-
 
-    jmp $0340
+    lda boot_device
+    sta chain_boot_device
+    jmp chain_entry
 
 // ============================================================
 // Art load / display
@@ -257,11 +263,15 @@ copy_color_to_vic_ram:
 
 // ============================================================
 // Chain-load stub (copied to $0340 before main LOAD)
+// Everything read by !err: lives inside $0340-$03FF so a partial
+// MORIA64 load over $0801+ cannot clobber error reporting.
 // ============================================================
+.encoding "ascii"
 chain_stub:
+.pseudopc CHAIN_STUB_ADDR {
+chain_entry:
     lda #0
     jsr $ffd5               // KERNAL LOAD
-    bcs !err+
 
     lda #$37
     sta $01
@@ -274,36 +284,77 @@ chain_stub:
     sta $d016
     lda #TEXT_D011
     sta $d011
+    bcs !err+
+
     lda #0
     sta $d020
     sta $d021
     jmp $080E               // Jump to game entry point
 
 !err:
-    lda #$37
-    sta $01
-    lda $dd00
-    ora #VIC_BANK0_SELECT
-    sta $dd00
-    lda #TEXT_D018
-    sta $d018
-    lda #TEXT_D016
-    sta $d016
-    lda #TEXT_D011
-    sta $d011
     lda #$0e
     sta $d020
+    sta $0286               // Light-blue text on blue background
     lda #$06
     sta $d021
     lda #LOGICAL_FILE
     jsr $ffc3               // CLOSE file after failed LOAD
-    jsr $ffcc               // CLRCHN before returning to BASIC
+    jsr $ffcc               // CLRCHN before printing/returning to BASIC
     cld
     cli
+
+    ldx #0
+!msg_loop:
+    lda chain_err_msg,x
+    beq !msg_done+
+    cmp #1
+    beq !print_dev+
+    jsr $ffd2
+!msg_next:
+    inx
+    bne !msg_loop-
+
+!print_dev:
+    lda chain_boot_device
+    ldy #$2f                // '0' - 1
+!tens:
+    iny
+    sec
+    sbc #10
+    bcs !tens-
+    adc #10 + $30           // remainder -> PETSCII '0'..'9' (C=0)
+    pha
+    tya
+    cmp #$30                // suppress leading '0' for devices 8..9
+    beq !ones+
+    jsr $ffd2
+!ones:
+    pla
+    jsr $ffd2
+    jmp !msg_next-
+
+!msg_done:
     ldx #$ff
     txs
     jmp ($A002)             // BASIC warm start on error
+
+chain_boot_device:
+    .byte DEVICE_NUM
+
+chain_err_msg:
+    .byte $93               // CLR/HOME
+    .text "?LOAD ERROR: MORIA64 (DEV "
+    .byte 1                 // print decimal chain_boot_device
+    .text ")"
+    .byte $0d
+    .text "CHECK BOOT DISK ON DRIVE "
+    .byte 1                 // print decimal chain_boot_device
+    .text "."
+    .byte $0d, 0
+}
 chain_stub_end:
+
+.assert "C64 boot chain stub fits in $0340-$03FF", chain_stub_end - chain_stub <= CHAIN_STUB_MAX, true
 
 // ============================================================
 // Data

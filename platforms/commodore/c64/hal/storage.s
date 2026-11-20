@@ -33,6 +33,7 @@
 .label hal_storage_read_command_status = c64_storage_read_command_status
 .label hal_storage_status_lost = cdrs_lost   // nonzero: the last status read lost its byte
 .label hal_storage_command_status = disk_save_media_status
+.label c64_storage_dos_code_status = disk_dos_code_status
 .label hal_storage_dos_code_status = c64_storage_dos_code_status
 .label hal_storage_diag_code = disk_status
 .label hal_storage_diag_phase = disk_status

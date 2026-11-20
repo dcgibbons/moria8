@@ -193,6 +193,18 @@ run_media_drive10_11_device_probe() {
     run_disk_media_probe "media_drive10_11_device_probe"
 }
 
+run_boot_error_smoke() {
+    local name="boot_error_smoke"
+
+    echo -n "  $name: "
+    if python3 -B -u "$RUN_TESTS64_DIR/tests/boot_error_smoke.py" --vice "$VICE" --c1541 "$C1541" --kickass "$KICKASS"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 check_static_contract() {
     local name="$1"
     local file="$2"
@@ -5574,7 +5586,7 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0418" 25 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0427" 40 1000000000
+run_test "save"  "tests/test_save.s"  "0400 042b" 44 1000000000
 run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
@@ -5593,6 +5605,7 @@ run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2
 run_suite_function "media_drive8_attach_read_write" run_media_drive8_attach_read_write
 run_suite_function "media_drive9_attach_read_write" run_media_drive9_attach_read_write
 run_suite_function "media_drive10_11_device_probe" run_media_drive10_11_device_probe "alternate_drive10_11_save_load_smoke"
+run_suite_function "boot_error_smoke" run_boot_error_smoke
 run_suite_function "scripted_spell_cast_smoke" run_scripted_spell_cast_smoke
 run_suite_function "scripted_book_overlay_smoke" run_scripted_book_overlay_smoke
 run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector_smoke

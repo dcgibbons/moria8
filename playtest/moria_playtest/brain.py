@@ -285,6 +285,14 @@ SEALED_SEARCHES = 25     # per spot when no exit is reachable: each search only
                          # sometimes finds an adjacent secret door (§14.3 round 7)
 SEARCH_BUDGET = 120      # search actions per level before giving up on secret doors
 STALL_STEPS = 300        # steps without new map knowledge or XP before stair-scumming
+# Deep and strong, the bot hunts instead of mapping (C64 Balrog, 2026-11-19:
+# at clvl 29+ exploring took 54% of the steps and secret-door searching 13%,
+# fighting ~5%, and the best checkpoint went from clvl 33 to 34 in 16 hours):
+# from HUNT_CLVL on HUNT_DLVL and below, no secret doors unless sealed in, and
+# a level with no kill and nothing worth hunting for HUNT_QUIET_STEPS is left.
+HUNT_CLVL = 25
+HUNT_DLVL = 20
+HUNT_QUIET_STEPS = 1500
 GENERAL_STORE = 0        # store index (entrance "1")
 ARMOURY = 1              # store index (entrance "2")
 WEAPONSMITH = 2          # store index (entrance "3")
@@ -498,9 +506,22 @@ RESTORE_POTIONS = {"Potion of Restore Strength": "ST", "Potion of Restore Intell
 # restore all six). A clvl 18 Elf Ranger with Constitution drained to 3
 # walked past a Mushroom of Restore Constitution and died after each restore
 # at 46 max HP (C64 Balrog, 2026-11-17).
+# Drained experience, restored as a stat is: a Wight's or Vampire's touch
+# takes 2% of it (VMS creature.inc 584-587, mon$drain_life), and the potion
+# sets it back to the highest reached (spells.inc restore_level), which grows
+# only past that (misc.inc 3009): what is earned while drained is lost, so it
+# is drunk the moment the fight is over. The Temple's (store_choice). Level
+# 30-34 characters that never drank one kept a quarter to a half of what
+# their kills earned (C64 Balrog, 2026-11-20).
+RESTORE_LIFE = "Potion of Restore Life Levels"
+LIFE = "XP"              # its pseudo-stat in Brain.drained
+LIFE_DRAINED = ("You feel your life draining away!", "You feel your memories fading")
+RESTORE_LIFE_LEVEL = 20  # carried from this clvl
+RESTORE_LIFE_RESERVE = 3
 RESTORERS = {**{name: (stat,) for name, stat in RESTORE_POTIONS.items()},
              "Mushroom of Restore Constitution": ("CO",),
-             "Mushroom of Restoring": ("ST", "IN", "WI", "DX", "CO", "CH")}
+             "Mushroom of Restoring": ("ST", "IN", "WI", "DX", "CO", "CH"),
+             RESTORE_LIFE: (LIFE,)}
 STAT_MAXED = 28          # 18/100 as track_stats reads it (18 + 100 // 10)
 RESIST_WORTH = 0.25      # a breather whose breath, as resisted now, is this share of HP: resist first
 TOWN_REST_STRIKES = 5    # town rests before Word of Recall to the Balrog that may gain nothing (recall_trip)
@@ -833,6 +854,7 @@ class LevelMemory:
     still: dict[Pos, tuple[str, int]] = field(default_factory=dict)   # creature tile -> (glyph, step first seen there)
     kinds: dict[str, float] = field(default_factory=dict)   # glyph -> worst creature_danger seen beside (Genocide)
     up_target: Pos | None = None   # the up staircase a walk up is committed to
+    paid: int | None = None        # step of the last kill or creature worth hunting here (HUNT_QUIET_STEPS)
     down_to_climb: bool = False    # no way up found here: the walk to the down stairs is kept
     route: list[Pos] = field(default_factory=list)   # the path a walk to a staircase keeps (committed_step)
     clear_target: Pos | None = None   # the blocker clear_way is walking to
@@ -1133,6 +1155,8 @@ class Brain:
             # screens are (two pickups in a row read the same).
             self.count_food(messages)
             self.track_light(messages)
+            if any(m in messages for m in LIFE_DRAINED):
+                self.drained.add(LIFE)
             if "You feel yourself moving faster." in messages:
                 self.hasted = True
             if "You feel yourself slow down." in messages:
@@ -1804,6 +1828,12 @@ class Brain:
             wanted.append(RESTORE_STR)   # the reserve against strength darts
         return wanted
 
+    def life_restore_wanted(self) -> bool:
+        """Fewer Restore Life Levels than the reserve: RESTORE_LIFE_RESERVE
+        from RESTORE_LIFE_LEVEL, before it one once drained."""
+        reserve = RESTORE_LIFE_RESERVE if self.clvl >= RESTORE_LIFE_LEVEL else int(LIFE in self.drained)
+        return self.restores.get(RESTORE_LIFE, 0) < reserve
+
     def restored(self, kind: str) -> None:
         """A restorer used: one fewer carried, its stats no longer drained."""
         self.restores[kind] = max(0, self.restores.get(kind, 0) - 1)
@@ -1853,7 +1883,7 @@ class Brain:
             self.stat_max = dict(found)
             self.restore_due = obs.clvl >= RESTORE_UNSEEN
             return
-        self.drained = {k for k in found if found[k] < self.stat_max.get(k, 0)}
+        self.drained = {k for k in found if found[k] < self.stat_max.get(k, 0)} | (self.drained & {LIFE})
         self.str_drained_ever = self.str_drained_ever or "ST" in self.drained
         if self.drained:
             self.restore_due = True
@@ -2733,6 +2763,17 @@ class Brain:
                 return Decision(ord("B"), "shop", f"buy {pick[1]}")
         elif obs.stage == "menu" and not done:
             gold = re.search(r"Gold: (\d+)", obs.rows[STORE_GOLD_ROW])
+            hungry = self.food <= 0 or any(w in status_states(obs) for w in ("Hungry", "Weak", "Faint"))
+            if hungry and not self.food_weight_refused and any(
+                    (m := STORE_ITEM.match(row)) and m.group(2).startswith(FOODS) and self.too_heavy_for(m.group(2), 1)
+                    for row in obs.rows[STORE_ROWS]):
+                # Food the estimate says will not fit counts as refused: the
+                # estimate kept a clvl 29 Halfling Rogue from even trying the
+                # ration, nothing was refused, nothing came off, and it
+                # starved Faint with 1.18M gold, two books in its pack (C64
+                # Balrog, 2026-11-19, build 5975ea3).
+                self.food_weight_refused = self.too_heavy = self.pack_full = True
+                self.refused_at = self.at_store
             for want in self.shopping_list(int(gold.group(1)) if gold else None, obs):
                 for row in obs.rows[STORE_ROWS]:
                     match = STORE_ITEM.match(row)
@@ -2867,6 +2908,8 @@ class Brain:
         if "strong_potions" in self.goal.tactics and self.clvl >= STRONG_LEVEL and self.neutralize < NEUTRALIZE_RESERVE:
             wants.append(NEUTRALIZE)
         wants += self.restores_wanted()
+        if self.life_restore_wanted():
+            wants.append(RESTORE_LIFE)   # the Temple's
         if self.max_dlvl >= SCOUT_FROM and self.resist_heat < RESIST_RESERVE:
             wants.append(RESIST_HEAT)
         if self.max_dlvl >= SCOUT_FROM and self.resist_cold < RESIST_RESERVE:
@@ -3717,6 +3760,15 @@ class Brain:
             self.level.since_progress = 0
         else:
             self.level.since_progress += 1
+        if self.level.paid is None or obs.xp > self.last_xp \
+                or any(self.engageable(c, obs) for c in view.creatures.values()):
+            self.level.paid = obs.step
+        if self.hunting_deep(obs) and not self.level.scum and obs.step - self.level.paid >= HUNT_QUIET_STEPS:
+            # Stopped paying: a fresh level holds fresh creatures, as a
+            # player takes the stairs rather than map the rest (HUNT_CLVL).
+            self.level.scum = True
+            self.events.append(f"no kill or creature worth hunting for {HUNT_QUIET_STEPS} steps on "
+                               f"DL{obs.dlvl}; leaving for a fresh level")
         self.last_xp = obs.xp
         if self.level.since_progress > STALL_STEPS and not self.level.stall_reported and obs.dlvl > 0:
             self.level.scum = self.level.stall_reported = True
@@ -5472,8 +5524,8 @@ class Brain:
                 return False
             if self.launcher is not None and name.startswith(self.ammo_kinds()):
                 return True
-            if self.restorer_wanted(name) and not self.pack_full:
-                return True
+            if (self.restorer_wanted(name) or name.startswith(RESTORE_LIFE)) and not self.pack_full:
+                return True   # Restore Life Levels up to its carry limit (carried_enough)
             if name.startswith(RESTORE_MANA) and self.mana_klass() and not self.pack_full:
                 # A second mana bar, found: no store sells one. Ready clvl 40
                 # Priests walked past 8-17 in an hour and fought the Balrog's
@@ -5593,6 +5645,7 @@ class Brain:
                 (SUPER_HEROISM, self.extra[SUPER_HEROISM], SUPER_HEROISM_RESERVE),
                 (INVULNERABILITY, self.extra[INVULNERABILITY], INVULN_RESERVE),
                 (PROTECT_SCROLL, self.extra[PROTECT_SCROLL], PROTECT_RESERVE),
+                (RESTORE_LIFE, self.restores.get(RESTORE_LIFE, 0), RESTORE_LIFE_RESERVE),
                 *((kind, count, self.strong_reserve()) for kind, count in self.strong.items())]
         for prefix, count, reserve in held:
             if name.startswith(prefix):
@@ -6029,6 +6082,7 @@ class Brain:
         return (self.clw < self.clw_reserve() and gold >= CLW_GOLD) or \
             (self.strong_wanted() and gold >= STRONG_GOLD[CSW]) or \
             (self.recall < self.recall_reserve() and gold >= RECALL_GOLD) or \
+            (self.life_restore_wanted() and gold >= RESTORE_GOLD) or \
             (book is not None and book not in MAGE_BOOKS and gold >= BOOK_GOLD.get(book, 0))
 
     def quaff(self, obs: Observation, view: View) -> Decision | None:
@@ -6376,6 +6430,12 @@ class Brain:
             return None
         worn = [(item_weight(self.armour_names[slot]), slot) for slot in SHED_SLOTS
                 if self.armour_names.get(slot) and item_weight(self.armour_names[slot]) > 0]
+        if not worn and any(word in status_states(obs) for word in ("Weak", "Faint")):
+            # Nothing else left, Weak or Faint: the body armour too. The same
+            # Rogue, two books in its pack, starved wearing it (2026-11-19).
+            slot = "ICAT_ARMOR"
+            if self.armour_names.get(slot) and item_weight(self.armour_names[slot]) > 0:
+                worn = [(item_weight(self.armour_names[slot]), slot)]
         if not worn:
             return None
         _, slot = max(worn)
@@ -7081,6 +7141,11 @@ class Brain:
         return self.move(view, view.step_toward(targets, avoid_monsters=True), "hunt",
                          "approach a creature worth fighting")
 
+    @staticmethod
+    def hunting_deep(obs: Observation) -> bool:
+        """Deep and strong enough that XP is hunted, not mapped (HUNT_CLVL)."""
+        return obs.clvl >= HUNT_CLVL and obs.dlvl >= HUNT_DLVL
+
     def explorable(self, view: View) -> bool:
         """An unexplored edge ``explore`` would walk to: the same test, or
         resupply's walk to the down stairs and explore's walk back took turns
@@ -7440,6 +7505,8 @@ class Brain:
         if not forced:
             if self.level.scum or obs.dlvl == 0 or obs.dlvl >= self.goal.target_dlvl:
                 return None
+            if self.hunting_deep(obs):
+                return None   # hunt, don't map (HUNT_CLVL): sealed in, the forced search still runs
             if sum(self.level.searches.values()) >= SEARCH_BUDGET:
                 self.level.scum = True
                 return None

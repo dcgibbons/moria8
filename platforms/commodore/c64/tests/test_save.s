@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence, invalid item-ID load hardening.
 //
-// Results at $0400-$0427: $01 = pass, $00 = fail per test (40 tests)
+// Results at $0400-$042B: $01 = pass, $00 = fail per test (44 tests)
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -27,7 +27,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #39
+    ldx #43
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -42,6 +42,9 @@ test_finish:
 #define STORAGE_SETUP_STATUS_HELPER
 #define STORAGE_STREAM_STATUS_HELPER
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+#define HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+#define HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
+#define HAL_STORAGE_COMMAND_STATUS_FROM_DOS_CODE
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
 #define HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
@@ -234,6 +237,8 @@ random_floor_in_room:
 .label hal_storage_setup_status = disk_setup_status
 .label hal_storage_save_stream_status = save_stream_status
 .label hal_storage_load_stream_status = load_stream_status
+.label hal_storage_read_command_status = test_save_read_command_status
+.label hal_storage_dos_code_status = disk_dos_code_status
 .label hal_storage_marker_present = c64_disk_marker_present
 .label hal_storage_marker_write_resident = c64_disk_marker_write_resident
 hal_storage_init_selected_drive:
@@ -371,7 +376,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 40, $ff
+tc_results: .fill 44, $ff
 
 // ui_character.s dropped to keep the test body under MAP_BASE.
 ui_char_display:
@@ -410,6 +415,11 @@ test_save_chkout_calls: .byte 0
 test_save_chrout_calls: .byte 0
 test_save_prepare_selected_result: .byte 0
 test_save_prepare_selected_calls: .byte 0
+test_save_open_fail: .byte 0
+test_save_chkin_fail: .byte 0
+test_save_cmd_status: .byte 0
+test_save_cmd_calls: .byte 0
+test_save_magic_readst: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -419,6 +429,12 @@ test_save_prepare_selected_calls: .byte 0
     lda #>replacement
     sta target + 2
 }
+
+test_save_read_command_status:
+    inc test_save_cmd_calls
+    lda test_save_cmd_status
+    sta disk_status
+    rts
 
 test_save_setnam:
     clc
@@ -447,20 +463,33 @@ test_save_chkout:
 
 test_save_open:
     inc test_save_open_calls
+    lda test_save_open_fail
+    beq !open_ok+
+    sec
+    rts
+!open_ok:
     clc
     rts
 
 test_save_chkin:
+    lda test_save_chkin_fail
+    beq !chkin_ok+
+    sec
+    rts
+!chkin_ok:
 test_save_clrchn:
     clc
     rts
 
 test_save_readst:
+    lda test_save_magic_readst
+    bne !sticky+
     lda test_save_readst_value
     pha
     lda #0
     sta test_save_readst_value
     pla
+!sticky:
     clc
     rts
 
@@ -643,6 +672,11 @@ ts_reset_io_state:
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
+    sta test_save_open_fail
+    sta test_save_chkin_fail
+    sta test_save_cmd_status
+    sta test_save_cmd_calls
+    sta test_save_magic_readst
     rts
 
 // ts_clear_known_bits — Zero the full known-item bitset. Clobbers: A, X
@@ -731,7 +765,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #39
+    ldx #43
     lda #$ff
 !clr:
     sta tc_results,x
@@ -3263,6 +3297,372 @@ t29_fail_code:
 !t40_fail:
     lda #$00
     sta tc_results + 39
+
+    // ============================================================
+    // Test 41: C64 disk_save_media_status classifies concrete DOS codes
+    // (0/1 -> WRONG_MEDIA, 26 -> WRITE_PROTECTED, 72 -> DISK_FULL,
+    // 74 -> DEVICE_NOT_READY, 2/unmapped -> UNKNOWN) and preserves raw
+    // disk_status.
+    // ============================================================
+    lda #0
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    bne !t41_fail+
+    lda disk_status
+    bne !t41_fail+
+
+    lda #1
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    bne !t41_fail+
+    lda disk_status
+    cmp #1
+    bne !t41_fail+
+
+    lda #26
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    bne !t41_fail+
+    lda disk_status
+    cmp #26
+    bne !t41_fail+
+
+    lda #72
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    bne !t41_fail+
+    lda disk_status
+    cmp #72
+    bne !t41_fail+
+
+    lda #74
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    bne !t41_fail+
+    lda disk_status
+    cmp #74
+    bne !t41_fail+
+
+    lda #2
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    bne !t41_fail+
+    lda disk_status
+    cmp #2
+    bne !t41_fail+
+    lda #$01
+    .byte $2c
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+
+    // ============================================================
+    // Test 42: C64 disk_dos_code_status (c64_storage_dos_code_status)
+    // maps 0 -> OK (Z=1), 1 and 62 -> NOT_FOUND (Z=0), 26/72/74 ->
+    // friendly codes (Z=0), else UNKNOWN (Z=0), preserving disk_status.
+    // ============================================================
+    lda #0
+    sta disk_status
+    jsr disk_dos_code_status
+    bne !t42_fail+
+    cmp #HAL_STORAGE_STATUS_OK
+    bne !t42_fail+
+
+    lda #1
+    sta disk_status
+    jsr disk_dos_code_status
+    beq !t42_fail+
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    bne !t42_fail+
+    lda disk_status
+    cmp #1
+    bne !t42_fail+
+
+    lda #62
+    sta disk_status
+    jsr disk_dos_code_status
+    beq !t42_fail+
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    bne !t42_fail+
+    lda disk_status
+    cmp #62
+    bne !t42_fail+
+
+    lda #26
+    sta disk_status
+    jsr disk_dos_code_status
+    beq !t42_fail+
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    bne !t42_fail+
+
+    lda #72
+    sta disk_status
+    jsr disk_dos_code_status
+    beq !t42_fail+
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    bne !t42_fail+
+
+    lda #74
+    sta disk_status
+    jsr disk_dos_code_status
+    beq !t42_fail+
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    bne !t42_fail+
+    lda disk_status
+    cmp #74
+    bne !t42_fail+
+
+    lda #2
+    sta disk_status
+    jsr disk_dos_code_status
+    beq !t42_fail+
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    bne !t42_fail+
+    lda #$01
+    .byte $2c
+!t42_fail:
+    lda #$00
+    sta tc_results + 41
+
+    // ============================================================
+    // Test 43: load_game classifies command-channel status on early
+    // READST, OPEN failure, and CHKIN failure (62/1/0 -> NOTFOUND,
+    // 74 -> NOT_READY, 26 -> WRITE_PROTECTED, 2/unmapped -> IOERR),
+    // preserving raw disk_status diagnostics.
+    // ============================================================
+    // 43a: Early READST ($42) + DOS 62 (stored as 1 by C64 cmd reader) -> NOTFOUND
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    lda #1
+    sta test_save_marker_present
+    sta disk_setup_done
+    sta test_save_cmd_status
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    lda #$42
+    sta test_save_magic_readst
+    jsr test_stream_reset_read
+    jsr load_game
+    bcs !t43_fail_top+
+    lda load_result
+    cmp #LOAD_RESULT_NOTFOUND
+    bne !t43_fail_top+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NOTFOUND
+    bne !t43_fail_top+
+    lda disk_status
+    cmp #1
+    bne !t43_fail_top+
+
+    // 43b: Early READST ($42) + raw DOS 62 -> NOTFOUND
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    lda #62
+    sta test_save_cmd_status
+    lda #$42
+    sta test_save_magic_readst
+    jsr test_stream_reset_read
+    jsr load_game
+    bcs !t43_fail_top+
+    lda load_result
+    cmp #LOAD_RESULT_NOTFOUND
+    bne !t43_fail_top+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NOTFOUND
+    bne !t43_fail_top+
+    lda disk_status
+    cmp #62
+    beq !t43_c+
+!t43_fail_top:
+    jmp !t43_fail+
+
+!t43_c:
+    // 43c: Early READST ($42) + DOS 74 -> IOERR + "Drive is not ready."
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    lda #74
+    sta test_save_cmd_status
+    lda #$42
+    sta test_save_magic_readst
+    jsr test_stream_reset_read
+    jsr load_game
+    bcs !t43_fail_far+
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    bne !t43_fail_far+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NOT_READY
+    bne !t43_fail_far+
+    lda disk_status
+    cmp #74
+    bne !t43_fail_far+
+
+    // 43d: Early READST ($42) + unmapped (2) -> IOERR + "Disk error!"
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    lda #2
+    sta test_save_cmd_status
+    lda #$42
+    sta test_save_magic_readst
+    jsr test_stream_reset_read
+    jsr load_game
+    bcs !t43_fail_far+
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    bne !t43_fail_far+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_IOERR
+    bne !t43_fail_far+
+    lda disk_status
+    cmp #2
+    beq !t43_open+
+!t43_fail_far:
+    jmp !t43_fail+
+
+!t43_open:
+    // 43e: OPEN fail + DOS 74 -> IOERR + "Drive is not ready."
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    lda #1
+    sta test_save_open_fail
+    lda #74
+    sta test_save_cmd_status
+    jsr load_game
+    bcs !t43_fail+
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    bne !t43_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NOT_READY
+    bne !t43_fail+
+
+    // 43f: OPEN fail + detached/unmapped (2) -> IOERR + "Disk error!"
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    lda #1
+    sta test_save_open_fail
+    lda #2
+    sta test_save_cmd_status
+    jsr load_game
+    bcs !t43_fail+
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    bne !t43_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_IOERR
+    bne !t43_fail+
+
+    // 43g: CHKIN fail + DOS 74 -> IOERR + "Drive is not ready."
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    lda #1
+    sta test_save_chkin_fail
+    lda #74
+    sta test_save_cmd_status
+    jsr load_game
+    bcs !t43_fail+
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    bne !t43_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NOT_READY
+    bne !t43_fail+
+
+    // 43h: CHKIN fail + unmapped (2) -> IOERR + "Disk error!"
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    lda #1
+    sta test_save_chkin_fail
+    lda #2
+    sta test_save_cmd_status
+    jsr load_game
+    bcs !t43_fail+
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    bne !t43_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_IOERR
+    bne !t43_fail+
+    lda #0
+    sta test_save_marker_present
+    lda #$01
+    .byte $2c
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+
+    // ============================================================
+    // Test 44: save_game and load_game media-check failure paths
+    // report friendly messages for 74/26/72 while keeping 2 -> IOERR.
+    // ============================================================
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    sta test_save_dismiss_calls
+    sta test_save_marker_present
+    sta test_save_marker_lsr_return
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta program_device
+    lda #9
+    sta save_device
+
+    lda #74
+    sta test_save_marker_status
+    jsr save_game
+    bcs !t44_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NOT_READY
+    bne !t44_fail+
+    lda disk_status
+    cmp #74
+    bne !t44_fail+
+
+    lda #26
+    sta test_save_marker_status
+    jsr save_game
+    bcs !t44_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_WRITE_PROTECTED
+    bne !t44_fail+
+
+    lda #72
+    sta test_save_marker_status
+    jsr save_game
+    bcs !t44_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_DISK_FULL
+    bne !t44_fail+
+
+    lda #74
+    sta test_save_marker_status
+    jsr load_game
+    bcs !t44_fail+
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    bne !t44_fail+
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_NOT_READY
+    bne !t44_fail+
+    lda #0
+    sta test_save_marker_status
+    lda #$01
+    .byte $2c
+!t44_fail:
+    lda #$00
+    sta tc_results + 43
 
     jmp test_finish
 
