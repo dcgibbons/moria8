@@ -3311,14 +3311,25 @@ test_start:
     lda #$00
     sta tc_results + 57
 
-    // Test 59: game_new_start and load_resume_game clear stale zp_disturb and
-    // PLF_RESTING while preserving persistent flags such as PLF_MALE.
+    // Test 59: game_new_start clears stale $40-$4f / zp_dirty_count /
+    // zp_disturb / PLF_RESTING; load_resume_game clears zp_disturb /
+    // PLF_RESTING while preserving saved turn counter and PLF_MALE.
 !t59:
     jsr reset_state
     lda #58
     sta test_case_idx
     lda #5
     sta zp_disturb
+    lda #$cf
+    sta zp_turn_lo
+    lda #$a8
+    sta zp_turn_hi
+    lda #$02
+    sta zp_hunger_state
+    lda #$01
+    sta zp_confuse_melee
+    lda #$03
+    sta zp_dirty_count
     lda #(PLF_MALE | PLF_RESTING)
     sta player_data + PL_FLAGS
     lda #CMD_QUIT
@@ -3333,6 +3344,11 @@ test_start:
     sta test_key_script
     jsr game_new_start
     lda zp_disturb
+    ora zp_turn_lo
+    ora zp_turn_hi
+    ora zp_hunger_state
+    ora zp_confuse_melee
+    ora zp_dirty_count
     bne !t59_fail+
     lda player_data + PL_FLAGS
     cmp #PLF_MALE
@@ -3342,6 +3358,10 @@ test_start:
     sta test_case_idx
     lda #3
     sta zp_disturb
+    lda #$34
+    sta zp_turn_lo
+    lda #$12
+    sta zp_turn_hi
     lda #(PLF_MALE | PLF_RESTING)
     sta player_data + PL_FLAGS
     lda #CMD_QUIT
@@ -3356,6 +3376,12 @@ test_start:
     sta test_key_script
     jsr load_resume_game
     lda zp_disturb
+    bne !t59_fail+
+    lda zp_turn_lo
+    cmp #$34
+    bne !t59_fail+
+    lda zp_turn_hi
+    cmp #$12
     bne !t59_fail+
     lda player_data + PL_FLAGS
     cmp #PLF_MALE

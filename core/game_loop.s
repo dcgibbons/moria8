@@ -530,19 +530,18 @@ game_new_start:
     jsr msg_init
 
 
-    lda #0
-    sta zp_game_flags
-    jsr wizard_reset_session_state
-    jsr item_init_inventory
-
-    // Clear status effect timers ($50–$5f) — BASIC ZP may have residual values
+    // Clear turn/game state ($40–$4f) and status effect timers ($50–$5f) —
+    // BASIC / ProDOS / MOS ZP may have residual values on cold boot.
+.assert "Turn/game state and effect timers span contiguous $40-$5f (32 B)", zp_eff_poison - zp_turn_lo == 16 && zp_death_source - zp_turn_lo == 31, true
     ldx #0
     lda #0
 !clear_effects:
-    sta zp_eff_poison,x
+    sta zp_turn_lo,x
     inx
-    cpx #16                 // $50–$5f = 16 bytes
+    cpx #32                 // $40–$5f = 32 bytes
     bne !clear_effects-
+    jsr wizard_reset_session_state
+    jsr item_init_inventory
 
     // Clear effect timers outside the ZP $50-$5f range. eff_invuln_timer
     // is already cleared by wizard_reset_session_state above (shared with
@@ -628,6 +627,7 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
     lda #0
     sta auto_rest_active
     sta zp_disturb
+    sta zp_dirty_count
     sta regen_frac_lo           // no HP regen fraction from a previous character
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     sta levelup_magic_pending   // none owed by a previous character
@@ -1228,27 +1228,6 @@ plus4_test_after_save_game:
     jmp main_loop           // no turn taken
 !not_quit:
 
-    // Character info?
-    cmp #CMD_CHAR_INFO
-    bne !not_char+
-    jmp cmd_show_character_view
-!not_char:
-
-    // Help?
-    cmp #CMD_HELP
-    bne !not_help+
-    jmp cmd_show_help_view
-!not_help:
-
-
-
-    // Monster recall?
-    cmp #CMD_RECALL
-    beq !+
-    jmp !not_recall+
-!:  jmp cmd_recall_view
-!not_recall:
-
     // Movement? (CMD_MOVE_N through CMD_MOVE_SE = $01-$08)
     cmp #CMD_MOVE_N
     bcs !mv_hi_check+
@@ -1504,11 +1483,11 @@ command_dispatch_lo_cast:
 command_dispatch_lo_pray:
     .byte <cmd_pray
 command_dispatch_lo_char_info:
-    .byte <cmd_dispatch_ignore    // CMD_CHAR_INFO handled above
+    .byte <cmd_show_character_view
 command_dispatch_lo_exchange:
     .byte <cmd_exchange
 command_dispatch_lo_recall:
-    .byte <cmd_dispatch_ignore    // CMD_RECALL handled above
+    .byte <cmd_recall_view
 command_dispatch_lo_look:
     .byte <cmd_look
 command_dispatch_lo_run:
@@ -1518,9 +1497,13 @@ command_dispatch_lo_save:
 command_dispatch_lo_quit:
     .byte <cmd_dispatch_ignore    // CMD_QUIT handled above
 command_dispatch_lo_help:
-    .byte <cmd_dispatch_ignore    // CMD_HELP handled above
+    .byte <cmd_show_help_view
 command_dispatch_lo_version:
-    .byte <cmd_dispatch_ignore    // CMD_VERSION handled above / ignored
+#if HAL_PLATFORM_LEGAL_VIEWER
+    .byte <cmd_show_version_view
+#else
+    .byte <cmd_dispatch_ignore
+#endif
 command_dispatch_lo_run_n:
     .byte <cmd_dispatch_ignore    // CMD_RUN_N handled above
 command_dispatch_lo_run_s:
@@ -1600,11 +1583,11 @@ command_dispatch_hi_cast:
 command_dispatch_hi_pray:
     .byte >cmd_pray
 command_dispatch_hi_char_info:
-    .byte >cmd_dispatch_ignore
+    .byte >cmd_show_character_view
 command_dispatch_hi_exchange:
     .byte >cmd_exchange
 command_dispatch_hi_recall:
-    .byte >cmd_dispatch_ignore
+    .byte >cmd_recall_view
 command_dispatch_hi_look:
     .byte >cmd_look
 command_dispatch_hi_run:
@@ -1614,9 +1597,13 @@ command_dispatch_hi_save:
 command_dispatch_hi_quit:
     .byte >cmd_dispatch_ignore
 command_dispatch_hi_help:
-    .byte >cmd_dispatch_ignore
+    .byte >cmd_show_help_view
 command_dispatch_hi_version:
+#if HAL_PLATFORM_LEGAL_VIEWER
+    .byte >cmd_show_version_view
+#else
     .byte >cmd_dispatch_ignore
+#endif
 command_dispatch_hi_run_n:
     .byte >cmd_dispatch_ignore
 command_dispatch_hi_run_s:

@@ -68,6 +68,8 @@
     .byte $2f   // / — identify a symbol
     .byte $17   // CTRL+W — wizard mode
     .byte $d8   // SHIFT+X — exchange primary and secondary weapons
+    .byte $56   // v — version / system info
+    .byte $d6   // SHIFT+V — version / system info
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -97,6 +99,7 @@
     .byte CMD_JAM
     .byte CMD_AUTOREST, CMD_SEARCH_MODE
     .byte CMD_TUNNEL, CMD_RECALL, CMD_WIZARD, CMD_EXCHANGE
+    .byte CMD_VERSION, CMD_VERSION
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
 }

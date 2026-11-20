@@ -364,3 +364,36 @@ passed 33 assertions. Full verification remains blocked: two `make -j7 -O test`
 runs hit the existing 30-second watchdog in BBC `save_load` after load-slot
 selection, while a focused isolated run passed all eight assertions. No timeout,
 assertion or scenario was weakened. The full gate has not passed for this repair.
+
+## Cross-Platform Version & System Info View (2026-11-20)
+
+`LegalOverlay` (`LEGALUI`) now hosts both License/Source viewing and the
+cross-platform Version / System Info modal (Issue #25) without adding any
+separate overlay file or consuming cache slots:
+
+- **Workspace expansion:** `legal_zp_save` moved from `LEGAL_BASE + $600` to
+  `LEGAL_BASE + $e00` (`platforms/shared/legal_entry.s`, `LEGAL_ZP_SNAPSHOT_BASE = $02`),
+  and `legal_input_cache` moved from `LEGAL_BASE + $700` to `LEGAL_BASE + $f00`
+  (`core/ui_legal.s`), giving `LEGALUI` code `3,584 B` (`+$000..+$DFF`) inside
+  each existing overlay window while preserving `<= LEGAL_LIMIT` assertions across
+  all 7 ports and 5 cartridge builders. Linked `legalui` sizes range from `1,922 B`
+  (Plus/4 cart) to `2,424 B` (C64 disk), leaving `1,160–1,662 B` free below `+$E00`.
+- **Dual entry & keymap:** `CMD_VERSION` (`$24`) is mapped to both `v` (`$56`)
+  and `SHIFT+V` (`$d6`) in `core/input_tables.s` (plus Atari 8-bit `Shift+HELP`
+  `$93` in `platforms/atari8/input.s`). Gameplay `cmd_show_version_view`
+  (`core/ui_help_command.s`) invokes `tramp_ui_sysinfo_display` (sets resident
+  `legal_entry_mode = 1` and falls through via `BIT abs` `$2c`), whereas Title
+  `A)bout` and Help `L` invoke `tramp_ui_legal_display` (`legal_entry_mode = 0`).
+  Inside `legal_menu_wait`, `3`, `v`, or `SHIFT+V` also opens System Info
+  (`legal_choices`: `"1 License  2 Source  3 Info  Q Back"`).
+- **HAL separation & ZP immutability:** `core/ui_legal_sysinfo.s` contains zero
+  hardware/chip/platform conditionals (`make check-hal-boundaries` compliant)
+  and reads live session telemetry (`zp_turn_lo/hi`, `zp_player_dlvl`,
+  `zp_mon_count`, `zp_item_count`, `zp_game_flags`, `zp_rng_0..3`) strictly from
+  `legal_zp_save` so live ZP, RNG state, and `LegalRestore()` remain untouched.
+  Each port provides `platforms/*/legal_sysinfo.s` for platform ID, build media,
+  ROM/KERNAL/MOS/video detection, memory/REU/HiRAM, mapped drives/disk mode, and
+  `hal_storage_diag_*` Last I/O status.
+- **Resident budget note:** Moving `legal_filename_lo/hi/len` (`6 B`) into
+  `.segment LegalOverlay` in C128 and Plus/4 `legal.s` keeps C128 disk `Default`
+  at `64 B` free (`$AEC0 <= $AF00`).

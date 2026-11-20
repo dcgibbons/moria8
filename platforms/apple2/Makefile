@@ -248,13 +248,16 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	python3 -B "$(BUILD_CATALOG_TOOL)" packbits --in "$(OUTA2)/bin/A2.CATALOG" --out "$(OUTA2)/bin/A2.CATALOG.PB"
 	python3 -B "$(BUILD_CATALOG_TOOL)" ext-rows --out "$(OUTA2)/bin/A2.CATEXT"
 	python3 -B "$(BUILD_CATALOG_TOOL)" ext-rows --packbits --out "$(OUTA2)/bin/A2.CATEXT.PB"
+	@for f in MORIA8.RES OVL.UI OVL.ITEMS OVL.SPELL OVL.MODAL A2.HUFFDATA; do \
+	  python3 -B "$(BUILD_CATALOG_TOOL)" lz4 --in "$(OUTA2)/bin/$$f" --out "$(OUTA2)/bin/$$f.LZ4" || exit 1; \
+	done
 	rm -f "$@"
 	"$(AC_BIN)" -pro140 "$@" MORIA8
 	"$(AC_BIN)" -p "$@" PRODOS sys 0x2000 < "$(PRODOS)"
 	"$(AC_BIN)" -p "$@" MORIA8.SYSTEM sys 0x2000 < "$(OUTA2)/bin/MORIA8.SYSTEM"
 	python3 -B ../../tools/make_pak.py "$(OUTA2)/bin/MORIA8.PAK" \
-	  "$(OUTA2)/bin/MORIA8.RES" "$(OUTA2)/bin/OVL.UI" "$(OUTA2)/bin/OVL.ITEMS" \
-	  "$(OUTA2)/bin/OVL.SPELL" "$(OUTA2)/bin/OVL.MODAL" "$(OUTA2)/bin/A2.HUFFDATA" \
+	  "$(OUTA2)/bin/MORIA8.RES.LZ4" "$(OUTA2)/bin/OVL.UI.LZ4" "$(OUTA2)/bin/OVL.ITEMS.LZ4" \
+	  "$(OUTA2)/bin/OVL.SPELL.LZ4" "$(OUTA2)/bin/OVL.MODAL.LZ4" "$(OUTA2)/bin/A2.HUFFDATA.LZ4" \
 	  "$(OUTA2)/bin/A2.PLAY" "$(OUTA2)/bin/OVL.START" "$(OUTA2)/bin/OVL.TOWN" \
 	  "$(OUTA2)/bin/OVL.DEATH" "$(OUTA2)/bin/OVL.GEN" "$(OUTA2)/bin/OVL.HELP" \
 	  "$(OUTA2)/bin/OVL.CHEST" "$(OUTA2)/bin/OVL.HOME" "$(OUTA2)/bin/OVL.STORAGE" \

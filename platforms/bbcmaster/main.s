@@ -1521,6 +1521,8 @@ program_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../core/ui_legal.s"
+#import "../../core/ui_legal_sysinfo.s"
+#import "legal_sysinfo.s"
 #import "../shared/legal_disk_stream.s"
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true

@@ -2,14 +2,16 @@
 //
 // ProDOS loads this file at $2000 and jumps to it. The resident payload
 // spans $0A00-$7BFF, which covers $2000, so the loader first relocates
-// itself to $0800-$09FF (later reinitialized by core as the floor-item and
-// creature tables — safe, they are written before first use).
+// itself to $A600-$A9FF above HDR ($A400-$A5FF) and below the 4 KB
+// compressed read buffer ($AA00-$B9FF).
 //
 // Boot payload container (docs/APPLE2_MEMORY_POLICY.md boot file list):
 //   MORIA8.PAK — one OPEN, one sequential pass:
-//     header (512 B): count byte, pad, then count 16-bit lengths
-//     boot prefix entries (in table order): RES, UI, ITEMS, SPELL, MODAL,
-//     HUFFDATA (the Huffman corpus and the catalog's names)
+//     header (512 B): count byte, pad, then count 16-bit compressed lengths
+//     boot prefix entries (in table order, raw LZ4 block compressed):
+//     RES, UI, ITEMS, SPELL, MODAL, HUFFDATA.
+//   Relocated to $A600-$A9FF with a 4 KB read stream buffer at $AA00-$B9FF
+//   so MORIA8.RES ($0A00-$7BFF) and STAGE ($7C00-$A3FF) unpack without overlap.
 //   A single open sequential read keeps the drive stepping forward; the
 //   previous per-file OPEN/GFI/READ/CLOSE cycle seek-thrashed the directory
 //   and ProDOS 2.4.3's driver could lose the head after several files.
@@ -37,37 +39,51 @@
 .const IO_BUFFER    = $bb00   // 1,024-byte page-aligned MLI I/O buffer
                              // ($bc00+ would hit the $bf00 global page)
 .const STAGE        = $7c00   // staged-entry buffer (play slot; free until
-                             // the game loads A2.PLAY). Must stay below
-                             // $bb00 by the largest staged entry.
-.const HDR          = $a400   // pak header staging (window; free until the
-                             // game runs); holds 512 B for the whole boot.
-.const LOADER_DEST  = $0800
+                             // the game loads A2.PLAY).
+.const HDR          = $a400   // pak header staging (512 B at $A400-$A5FF)
+.const LOADER_DEST  = $a600   // relocated loader ($A600-$A9FF, 1,024 B)
+.const STREAM_BUF   = $aa00   // LZ4 compressed read window ($AA00-$B9FF)
+.const STREAM_CAP   = $1000   // 4,096-byte chunks (< $BB00 IO_BUFFER)
 .const PAK_COUNT    = 6       // sequential boot entries in MORIA8.PAK (see file_table)
 .const BOOT_ROW     = $05a8   // text row 11 half-row base (progress line)
 .const BOOT_LINE_DIGIT = 21   // offset of the count digit in boot_line
+.const RELOC_SRC    = $f0     // ZP copy pointer during boot relocation (< $F4)
+.const RELOC_DST    = $f2
 #import "cache_layout.s"
 
 boot_start:
-    // Copy loader to $0800. Two stages because the size exceeds 255:
-    // full first page, then the remainder (asserted <= 512 total).
-    ldx #0
-!c1:
-    lda loader_src,x
-    sta LOADER_DEST,x
-    inx
-    bne !c1-
-!c2:
-    lda loader_src + $100,x
-    sta LOADER_DEST + $100,x
-    inx
-    cpx #loader_end - (loader_src + $100)
-    bne !c2-
+    // Relocate 4 pages ($400 B) to $A600-$A9FF above HDR ($A400-$A5FF) and
+    // below STREAM_BUF ($AA00-$B9FF) before any RAM at $0A00+ is written.
+    lda #<loader_src
+    sta RELOC_SRC
+    lda #>loader_src
+    sta RELOC_SRC + 1
+    lda #<LOADER_DEST
+    sta RELOC_DST
+    lda #>LOADER_DEST
+    sta RELOC_DST + 1
+    ldx #4
+    ldy #0
+!cp:
+    lda (RELOC_SRC),y
+    sta (RELOC_DST),y
+    iny
+    bne !cp-
+    inc RELOC_SRC + 1
+    inc RELOC_DST + 1
+    dex
+    bne !cp-
     jmp LOADER_DEST
 
 loader_src:
 .pseudopc LOADER_DEST {
-.const ZP_SRC = $fa
-.const ZP_DST = $fc
+.const ZP_BUF_REM   = $f0
+.const ZP_FILE_REM  = $f2
+.const ZP_LEN       = $f4
+.const ZP_BUF       = $f6
+.const ZP_SRC       = $f8
+.const ZP_MAT       = $fa
+.const ZP_DST       = $fc
 
 loader:
     // ---- Progress display: mode detect, clear, initial line ----
@@ -115,16 +131,17 @@ loader:
     ldx #0                  // entry index
 !entry_loop:
     stx file_idx
-    // ---- per-entry length from header ($a402 + i*2) ----
+    // ---- per-entry compressed length from header ($a402 + i*2) ----
     txa
     asl
     tay
     lda HDR + 2,y
-    sta read_req
-    sta copy_len
+    sta ZP_FILE_REM
     lda HDR + 3,y
-    sta read_req + 1
-    sta copy_len + 1
+    sta ZP_FILE_REM + 1
+    lda #0
+    sta ZP_BUF_REM
+    sta ZP_BUF_REM + 1
 
     // ---- dest from the compile-time table ----
     txa
@@ -132,33 +149,37 @@ loader:
     asl
     tay
     lda file_table + 0,y
-    sta read_buf
+    sta ZP_DST
     lda file_table + 1,y
-    sta read_buf + 1
+    sta ZP_DST + 1
 
 #if A2_DEBUG_BOOTDIAG
-    // Diagnostic: per-entry length hi at text row 1, columns 0,4,8...
+    // Diagnostic: compressed entry length hi at text row 1
     lda file_idx
     lsr
     tay
-    lda read_req + 1
+    lda ZP_FILE_REM + 1
     sta $0480,y
 #endif
 
-    // ---- READ this entry (sequential; position advances) ----
-    jsr MLI
-    .byte MLI_READ
-    .word read_params
-    bcc !read_ok+
-    jmp boot_error
-!read_ok:
+    // ---- Stream and LZ4-unpack this entry sequentially ----
+    jsr lz4_unpack_entry
 
-    // ---- aux copy, if this entry has an aux destination ----
+    // ---- Compute exact uncompressed size copy_len = ZP_DST - dest ----
     ldx file_idx
     txa
     asl
     asl
     tay
+    sec
+    lda ZP_DST
+    sbc file_table + 0,y
+    sta copy_len
+    lda ZP_DST + 1
+    sbc file_table + 1,y
+    sta copy_len + 1
+
+    // ---- aux copy, if this entry has an aux destination ----
     lda file_table + 3,y
     beq !next_entry+            // aux hi = 0 -> main-only
     sta ZP_DST + 1
@@ -220,6 +241,180 @@ boot_error:
 !halt:
     jmp !halt-
 #endif
+
+// ---- Streaming raw LZ4-block decompressor ----
+lz4_unpack_entry:
+!seq:
+    jsr stream_get_byte
+    sta lz4_token
+    lsr
+    lsr
+    lsr
+    lsr
+    jsr lz4_read_ext_len
+!lit_loop:
+    lda ZP_LEN
+    ora ZP_LEN + 1
+    beq !lit_done+
+    jsr stream_get_byte
+    jsr lz4_put_byte
+    jsr lz4_dec_len
+    jmp !lit_loop-
+!lit_done:
+    // Stream terminates cleanly at the end of the final literal run.
+    lda ZP_FILE_REM
+    ora ZP_FILE_REM + 1
+    ora ZP_BUF_REM
+    ora ZP_BUF_REM + 1
+    bne !has_match+
+    rts
+!has_match:
+    jsr stream_get_byte
+    sta lz4_off_lo
+    jsr stream_get_byte
+    sta lz4_off_hi
+    ora lz4_off_lo
+    bne !off_ok+
+    lda #$f2
+    jmp boot_error
+!off_ok:
+    sec
+    lda ZP_DST
+    sbc lz4_off_lo
+    sta ZP_MAT
+    lda ZP_DST + 1
+    sbc lz4_off_hi
+    sta ZP_MAT + 1
+
+    lda lz4_token
+    and #$0f
+    jsr lz4_read_ext_len
+    clc
+    lda ZP_LEN
+    adc #4
+    sta ZP_LEN
+    bcc !mat_loop+
+    inc ZP_LEN + 1
+!mat_loop:
+    ldy #0
+    lda (ZP_MAT),y
+    inc ZP_MAT
+    bne !+
+    inc ZP_MAT + 1
+!:  jsr lz4_put_byte
+    jsr lz4_dec_len
+    lda ZP_LEN
+    ora ZP_LEN + 1
+    bne !mat_loop-
+    jmp !seq-
+
+lz4_read_ext_len:
+    sta ZP_LEN
+    lda #0
+    sta ZP_LEN + 1
+    lda ZP_LEN
+    cmp #15
+    bne !ext_done+
+!ext_loop:
+    jsr stream_get_byte
+    pha
+    clc
+    adc ZP_LEN
+    sta ZP_LEN
+    bcc !+
+    inc ZP_LEN + 1
+!:  pla
+    cmp #$ff
+    beq !ext_loop-
+!ext_done:
+    rts
+
+lz4_dec_len:
+    lda ZP_LEN
+    bne !+
+    dec ZP_LEN + 1
+!:  dec ZP_LEN
+    rts
+
+lz4_put_byte:
+    ldy #0
+    sta (ZP_DST),y
+    inc ZP_DST
+    bne !+
+    inc ZP_DST + 1
+!:  rts
+
+stream_get_byte:
+    lda ZP_BUF_REM
+    ora ZP_BUF_REM + 1
+    bne !have_byte+
+    jsr stream_refill
+!have_byte:
+    ldy #0
+    lda (ZP_BUF),y
+    pha
+    inc ZP_BUF
+    bne !+
+    inc ZP_BUF + 1
+!:  lda ZP_BUF_REM
+    bne !+
+    dec ZP_BUF_REM + 1
+!:  dec ZP_BUF_REM
+    pla
+    rts
+
+stream_refill:
+    lda ZP_FILE_REM
+    ora ZP_FILE_REM + 1
+    bne !nonempty+
+    lda #$f3
+    jmp boot_error
+!nonempty:
+    lda ZP_FILE_REM + 1
+    cmp #>STREAM_CAP
+    bcs !full_cap+
+    lda ZP_FILE_REM
+    sta read_req
+    lda ZP_FILE_REM + 1
+    sta read_req + 1
+    lda #0
+    sta ZP_FILE_REM
+    sta ZP_FILE_REM + 1
+    beq !do_read+
+!full_cap:
+    sec
+    sbc #>STREAM_CAP
+    sta ZP_FILE_REM + 1
+    lda #<STREAM_CAP
+    sta read_req
+    lda #>STREAM_CAP
+    sta read_req + 1
+!do_read:
+    lda #<STREAM_BUF
+    sta read_buf
+    sta ZP_BUF
+    lda #>STREAM_BUF
+    sta read_buf + 1
+    sta ZP_BUF + 1
+    jsr MLI
+    .byte MLI_READ
+    .word read_params
+    bcc !chk_len+
+    jmp boot_error
+!chk_len:
+    lda read_trans
+    cmp read_req
+    bne !short+
+    lda read_trans + 1
+    cmp read_req + 1
+    bne !short+
+    sta ZP_BUF_REM + 1
+    lda read_trans
+    sta ZP_BUF_REM
+    rts
+!short:
+    lda #$f4
+    jmp boot_error
 
 // boot_fill_half — Fill one text half ($0400-$07FF) with spaces, 120
 // bytes per 128-byte block so the firmware holes at $x78-$x7F are never
@@ -297,6 +492,9 @@ boot_line_end:
 mode80:     .byte 0
 file_idx:   .byte 0
 copy_len:   .word 0
+lz4_token:  .byte 0
+lz4_off_lo: .byte 0
+lz4_off_hi: .byte 0
 
 open_params:
     .byte 3
@@ -343,8 +541,8 @@ file_table:
 }
 loader_end:
 
-.assert "Loader fits $0800-$09FF", loader_end - loader_src <= 512, true
-.assert "Loader tail copy is 8-bit", loader_end - (loader_src + $100) <= 255, true
+.assert "Loader fits $A600-$A9FF", loader_end - loader_src <= $400, true
+.assert "Stream buffer stays below MLI I/O buffer", STREAM_BUF + STREAM_CAP <= IO_BUFFER, true
 .assert "Boot image stays clear of ProDOS global page", * <= $bf00, true
 .assert "Boot line is 40 chars", boot_line_end - boot_line, 40
 .assert "Boot line digit in range", BOOT_LINE_DIGIT < 40, true

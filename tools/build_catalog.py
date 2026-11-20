@@ -636,6 +636,160 @@ def packbits_decode(encoded: bytes) -> bytes:
     raise ValueError("Missing $80 EOF marker in PackBits stream")
 
 
+def _lz4_append_ext(out: bytearray, length: int) -> None:
+    """Append 255-chained LZ4 length extension bytes when base nibble == 15."""
+    rem = length - 15
+    while rem >= 255:
+        out.append(255)
+        rem -= 255
+    out.append(rem)
+
+
+def lz4_encode(data: bytes) -> bytes:
+    """Encode raw bytes into a standard raw LZ4 block (no frame header/footer).
+
+    Uses the LZ4 last-5-literals rule so every block ends cleanly right after
+    the final literal run (low nibble 0, no trailing offset bytes). Supports full
+    65,535-byte back-reference window and overlapping offset < match_len copies.
+    """
+    n = len(data)
+    if n == 0:
+        return b"\x00"
+
+    out = bytearray()
+    anchor = 0
+    i = 0
+    ht: dict[bytes, list[int]] = {}
+    match_limit = n - 5
+    start_limit = n - 12
+
+    while i < start_limit:
+        key = data[i : i + 4]
+        candidates = ht.get(key)
+        best_len = 0
+        best_off = 0
+        if candidates:
+            for prev in reversed(candidates):
+                off = i - prev
+                if off > 65535:
+                    break
+                if data[prev : prev + 4] != key:
+                    continue
+                ml = 4
+                max_ml = match_limit - i
+                while ml < max_ml and data[prev + ml] == data[i + ml]:
+                    ml += 1
+                if ml > best_len:
+                    best_len = ml
+                    best_off = off
+                    if ml == max_ml:
+                        break
+        if candidates is None:
+            ht[key] = [i]
+        else:
+            candidates.append(i)
+            if len(candidates) > 16:
+                del candidates[:-16]
+
+        if best_len >= 4:
+            lit_len = i - anchor
+            tok_lit = min(lit_len, 15)
+            mat_base = best_len - 4
+            tok_mat = min(mat_base, 15)
+            out.append((tok_lit << 4) | tok_mat)
+            if lit_len >= 15:
+                _lz4_append_ext(out, lit_len)
+            out.extend(data[anchor:i])
+            out.append(best_off & 0xFF)
+            out.append((best_off >> 8) & 0xFF)
+            if mat_base >= 15:
+                _lz4_append_ext(out, mat_base)
+            # Populate hash entries across skipped match bytes for stronger next match.
+            end_i = i + best_len
+            fill_end = min(end_i, start_limit)
+            for j in range(i + 1, fill_end):
+                fk = data[j : j + 4]
+                fc = ht.get(fk)
+                if fc is None:
+                    ht[fk] = [j]
+                else:
+                    fc.append(j)
+                    if len(fc) > 16:
+                        del fc[:-16]
+            i = end_i
+            anchor = i
+        else:
+            i += 1
+
+    # Final literal run (required to terminate standard raw LZ4 blocks).
+    lit_len = n - anchor
+    tok_lit = min(lit_len, 15)
+    out.append(tok_lit << 4)
+    if lit_len >= 15:
+        _lz4_append_ext(out, lit_len)
+    out.extend(data[anchor:n])
+    return bytes(out)
+
+
+def lz4_decode(encoded: bytes) -> bytes:
+    """Decode a raw LZ4 block back to raw bytes."""
+    n = len(encoded)
+    if n == 0:
+        raise ValueError("Empty LZ4 block stream")
+    out = bytearray()
+    pos = 0
+
+    while True:
+        if pos >= n:
+            raise ValueError("Unexpected end of LZ4 stream expecting token")
+        token = encoded[pos]
+        pos += 1
+
+        lit_len = (token >> 4) & 0x0F
+        if lit_len == 15:
+            while True:
+                if pos >= n:
+                    raise ValueError("Truncated LZ4 literal length extension")
+                ext = encoded[pos]
+                pos += 1
+                lit_len += ext
+                if ext != 255:
+                    break
+
+        if pos + lit_len > n:
+            raise ValueError(f"Truncated LZ4 literals at {pos}: need {lit_len} bytes")
+        out.extend(encoded[pos : pos + lit_len])
+        pos += lit_len
+
+        if pos == n:
+            if (token & 0x0F) != 0:
+                raise ValueError("LZ4 stream ended after literals with non-zero match nibble")
+            return bytes(out)
+
+        if pos + 2 > n:
+            raise ValueError(f"Truncated LZ4 match offset at {pos}")
+        offset = encoded[pos] | (encoded[pos + 1] << 8)
+        pos += 2
+        if offset == 0 or offset > len(out):
+            raise ValueError(f"Invalid LZ4 match offset {offset} at out length {len(out)}")
+
+        match_len = 4 + (token & 0x0F)
+        if (token & 0x0F) == 15:
+            while True:
+                if pos >= n:
+                    raise ValueError("Truncated LZ4 match length extension")
+                ext = encoded[pos]
+                pos += 1
+                match_len += ext
+                if ext != 255:
+                    break
+
+        src = len(out) - offset
+        for _ in range(match_len):
+            out.append(out[src])
+            src += 1
+
+
 def write_engine_catalog(
     out: Path,
     creatures: list[dict],
@@ -1038,13 +1192,19 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     p_pb.add_argument("--decode", action="store_true", help="Decode PackBits input back to raw bytes")
     p_pb.add_argument("--strip-prg", action="store_true", help="Strip 2-byte PRG load header before encoding")
 
+    p_lz4 = sub.add_parser("lz4", help="Raw LZ4-block compress (or --decode) a binary file")
+    p_lz4.add_argument("--in", dest="infile", type=Path, required=True)
+    p_lz4.add_argument("--out", type=Path, required=True)
+    p_lz4.add_argument("--decode", action="store_true", help="Decode raw LZ4 block input back to raw bytes")
+    p_lz4.add_argument("--strip-prg", action="store_true", help="Strip 2-byte PRG load header before encoding")
+
     p_p5_asm = sub.add_parser("phase5-asm", help="Wave 5.4 atomic flip of catalog_fields.s + catalog_ext_fields.s + cat_undead[35]")
     p_p5_asm.add_argument("--out-dir", type=Path, default=DEFAULT_SHARED_CATALOG_DIR)
 
     return parser
 
 
-SUBCOMMANDS = frozenset({"ext-asm", "ext-soa", "ext-rows", "ext-1541", "records", "packbits", "phase5-asm"})
+SUBCOMMANDS = frozenset({"ext-asm", "ext-soa", "ext-rows", "ext-1541", "records", "packbits", "lz4", "phase5-asm"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1067,6 +1227,25 @@ def main(argv: list[str] | None = None) -> int:
                     assert len(raw) >= 2, "Input file shorter than 2-byte PRG header"
                     raw = raw[2:]
                 maybe_packbits_write(args.out, raw, True, args.infile.name)
+            return 0
+
+        if args.cmd == "lz4":
+            raw = args.infile.read_bytes()
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            if args.decode:
+                decoded = lz4_decode(raw)
+                args.out.write_bytes(decoded)
+                print(f"lz4 decode [{args.infile.name}]: {len(raw)} -> {len(decoded)} B")
+            else:
+                if args.strip_prg:
+                    assert len(raw) >= 2, "Input file shorter than 2-byte PRG header"
+                    raw = raw[2:]
+                compressed = lz4_encode(raw)
+                assert lz4_decode(compressed) == raw, f"LZ4 roundtrip mismatch for {args.infile.name}"
+                args.out.write_bytes(compressed)
+                saved = len(raw) - len(compressed)
+                pct = (100.0 * len(compressed) / len(raw)) if raw else 100.0
+                print(f"lz4 [{args.infile.name}]: {len(raw)} -> {len(compressed)} B (saved {saved} B, {pct:.1f}%)")
             return 0
 
         spec_doc = load_spec(args.spec)

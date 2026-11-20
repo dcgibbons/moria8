@@ -278,6 +278,14 @@ test_start:
     jsr petscii_to_command
     cmp #CMD_AUTOREST
     bne !t6_fail+
+    lda #$56               // v
+    jsr petscii_to_command
+    cmp #CMD_VERSION
+    bne !t6_fail+
+    lda #$d6               // SHIFT+V
+    jsr petscii_to_command
+    cmp #CMD_VERSION
+    bne !t6_fail+
     lda #$01
     sta $0405
     jmp !t6_done+

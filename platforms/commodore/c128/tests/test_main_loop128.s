@@ -2851,13 +2851,24 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 41: C128 game_new_start and load_resume_game clear stale zp_disturb
-    // and stale PLF_RESTING while preserving PLF_MALE.
+    // Test 41: C128 game_new_start clears stale $40-$4f / zp_dirty_count /
+    // zp_disturb / PLF_RESTING; load_resume_game clears zp_disturb /
+    // PLF_RESTING while preserving saved turn counter and PLF_MALE.
     lda #41
     sta test_case_id
     jsr reset_state
     lda #5
     sta zp_disturb
+    lda #$cf
+    sta zp_turn_lo
+    lda #$a8
+    sta zp_turn_hi
+    lda #$02
+    sta zp_hunger_state
+    lda #$01
+    sta zp_confuse_melee
+    lda #$03
+    sta zp_dirty_count
     lda #(PLF_MALE | PLF_RESTING)
     sta player_data + PL_FLAGS
     lda #$20
@@ -2866,6 +2877,11 @@ test_entry:
     sta test_key_len
     jsr game_new_start
     lda zp_disturb
+    ora zp_turn_lo
+    ora zp_turn_hi
+    ora zp_hunger_state
+    ora zp_confuse_melee
+    ora zp_dirty_count
     beq *+5
     jmp test_fail
     lda player_data + PL_FLAGS
@@ -2875,6 +2891,10 @@ test_entry:
     jsr reset_state
     lda #7
     sta zp_disturb
+    lda #$34
+    sta zp_turn_lo
+    lda #$12
+    sta zp_turn_hi
     lda #(PLF_MALE | PLF_RESTING)
     sta player_data + PL_FLAGS
     lda #CMD_QUIT
@@ -2885,6 +2905,14 @@ test_entry:
     sta test_cmd_budget
     jsr load_resume_game
     lda zp_disturb
+    beq *+5
+    jmp test_fail
+    lda zp_turn_lo
+    cmp #$34
+    beq *+5
+    jmp test_fail
+    lda zp_turn_hi
+    cmp #$12
     beq *+5
     jmp test_fail
     lda player_data + PL_FLAGS

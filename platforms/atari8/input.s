@@ -383,12 +383,10 @@ petscii_to_command:
 
 key_map_petscii:
     :EmitBasePetsciiKeyMap()
-    .byte $56   // V — version view
     .byte $93   // Shift+HELP — version view
 
 key_map_cmd:
     :EmitBaseCommandKeyMap()
-    .byte CMD_VERSION
     .byte CMD_VERSION
 
 key_map_end:

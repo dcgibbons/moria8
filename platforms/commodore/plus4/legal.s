@@ -1,7 +1,12 @@
 #importonce
 #import "../../shared/legal_entry.s"
 // Resident entry. LegalOverlay remains cold; cached Help is not modified.
+tramp_ui_sysinfo_display:
+    lda #1
+    .byte $2c                   // BIT abs — skip lda #0
 tramp_ui_legal_display:
+    lda #0
+    sta legal_entry_mode
     jsr disk_prompt_game_required
     :LegalSnapshot()
     lda #0
@@ -17,15 +22,13 @@ tramp_ui_legal_display:
 !done:
     jmp tramp_sr_epilogue
 
+legal_entry_mode: .byte 0
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
 #if !PLUS4_CARTRIDGE
 legal_notice_filename: .byte 'L','I','C','E','N','S','E',',','S',',','R'
 .label legal_notice_filename_len = * - legal_notice_filename
 legal_offer_filename: .byte 'S','O','U','R','C','E','-','O','F','F','E','R',',','S',',','R'
 .label legal_offer_filename_len = * - legal_offer_filename
-legal_filename_lo: .byte <legal_notice_filename, <legal_offer_filename
-legal_filename_hi: .byte >legal_notice_filename, >legal_offer_filename
-legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
 .label legal_os_setnam = hal_storage_setnam
 .label legal_os_setlfs = hal_storage_setlfs
 .label legal_os_open = hal_storage_open
@@ -36,6 +39,9 @@ legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
 .label legal_os_clrchn = hal_storage_clrchn
 
 .segment LegalOverlay
+legal_filename_lo: .byte <legal_notice_filename, <legal_offer_filename
+legal_filename_hi: .byte >legal_notice_filename, >legal_offer_filename
+legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
 legal_os_read_open_status:
     lda program_device
     sta disk_prompt_device

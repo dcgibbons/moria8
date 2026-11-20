@@ -369,7 +369,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
                 note="$D700-$DEFF hidden RAM ($DF00-$DFFF reserved for REU; zp_save_buf 142B + msg_history 320B)",
             ),
             SegmentSpec("64.bank", "banked", 0xF000, 0xFFFA, end_sym="banked_code_end", prg_file="64.bank", note="<= $FFFA CPU vectors"),
-            SegmentSpec("legalui", "overlay", 0xE000, 0xE600, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
+            SegmentSpec("legalui", "overlay", 0xE000, 0xEE00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
         ]
         for fname, sym_name in c64_overlays:
             s.append(SegmentSpec(fname, "overlay", 0xE000, 0xF000, end_sym=sym_name, prg_file=fname))
@@ -391,7 +391,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
                 note="$DF00-$DFFF hidden RAM (item.cat 254B sector LRU cache on disk); non-gen $0400-$04FF (256B) monster catalog LRU + $0600-$07AF (432B) pickup cache ($0500-$05FF & $07B0-$07FF KERNAL reserved)",
             ),
             SegmentSpec("4.bank", "banked", 0xF000, 0xFC00, end_sym="banked_code_end", prg_file="4.bank", note="HARD ceiling < $FC00 (not $FDFF)"),
-            SegmentSpec("legalui", "overlay", 0xE000, 0xE600, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
+            SegmentSpec("legalui", "overlay", 0xE000, 0xEE00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
         ]
         for fname, sym_name in c64_overlays:
             s.append(SegmentSpec(fname, "overlay", 0xE000, 0xF000, end_sym=sym_name, prg_file=fname))
@@ -463,7 +463,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
                 note="Bank 1 $D000-$DFFF ($7F NOIO): 128.cex $D000-$D8B7 (2,232B) + store_inv reserve $D8B8-$DCB7 (1,024B) + msg_history $DCB8-$DF37 (640B)",
             ),
             SegmentSpec("128.huff (Bank1)", "aux", 0xF000, 0xFF00, prg_file="128.huff.prg", measure="prg", note="Bank 1 Huffman corpus"),
-            SegmentSpec("legalui", "overlay", 0xE000, 0xE600, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
+            SegmentSpec("legalui", "overlay", 0xE000, 0xEE00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
             SegmentSpec("cache.ovl.disarm (Bank1)", "cache", 0xE000, 0xE300, prg_file="ovl.disarm", end_sym="ovl_disarm_end", note="Bank 1 cache cap (3 pages = 768 B)"),
             SegmentSpec("cache.ovl.modal (Bank1)", "cache", 0xE000, 0xE500, prg_file="ovl.modal", end_sym="ovl_modal_misc_end", note="Bank 1 cache cap (5 pages = 1,280 B)"),
         ])
@@ -541,7 +541,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
         SegmentSpec("cache.ovl.spell (Aux)", "cache", 0x0000, 0x1400, prg_file="ovl.spell", measure="cache_prg", note="Aux cache $6D00-$80FF (20 pages)"),
         SegmentSpec("cache.ovl.modal (Aux)", "cache", 0x0000, 0x0C00, prg_file="ovl.modal", measure="cache_prg", note="Aux cache $8100-$8CFF (12 pages)"),
         SegmentSpec("cache.ovl.items (Aux)", "cache", 0x0000, 0x1600, prg_file="ovl.items", measure="cache_prg", note="Aux cache $AA00-$BFFF (22 pages)"),
-        SegmentSpec("legalui", "overlay", 0xA400, 0xAA00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
+        SegmentSpec("legalui", "overlay", 0xA400, 0xB200, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
     ]
     for fname, sym_name in a2_overlays:
         a2_specs.append(SegmentSpec(fname, "overlay", 0xA400, 0xBA00, end_sym=sym_name, prg_file=fname, note="Code window $A400-$B9FF (5,632 B; $BA00-$BAFF data separate)"))
@@ -593,7 +593,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
             SegmentSpec("ITEM.CAT (Bank 6)", "aux", 0xA000, 0xC000, prg_file="ITEM.CAT", measure="prg", optional=True, note="8 KB Bank 6 ($A000-$BFFF; 'ITM2' catalog)"),
             SegmentSpec("TITLE (Bank 22)", "aux", 0xA000, 0xC000, prg_file="TITLE", measure="prg", note="8 KB Bank 22 ($A000-$BFFF)"),
             SegmentSpec("MONSTER.CAT (Bank 23)", "aux", 0xA000, 0xC000, end_sym="catalog_bank_end", prg_file="MONSTER.CAT", note="8 KB Bank 23 ($A000-$BFFF)"),
-            SegmentSpec("LEGALUI", "overlay", 0xA000, 0xA600, end_sym="legal_code_end", prg_file="LEGALUI", dynamic_ceil_sym="legal_zp_save", note="Bank 24 <= legal_zp_save"),
+            SegmentSpec("LEGALUI", "overlay", 0xA000, 0xAE00, end_sym="legal_code_end", prg_file="LEGALUI", dynamic_ceil_sym="legal_zp_save", note="Bank 24 <= legal_zp_save"),
         ])
         for fname, sym_name in cx16_overlays:
             s.append(SegmentSpec(fname, "overlay", 0xA000, 0xC000, end_sym=sym_name, prg_file=fname, note=cx16_ovl_notes.get(fname, "")))
@@ -623,7 +623,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
             SegmentSpec("HighRAM Tail", "aux", 0xDF3E, 0xE000, measure="atari_high_tail", dynamic_base_sym="combat_msg_buf", note="High RAM combat/name/spell/PIW/MD/chest/digit/consol <= $E000"),
             SegmentSpec("ATARI.BNK", "banked", 0xF000, 0xFFFA, end_sym="banked_code_end", prg_file="ATARI.BNK", note="<= $FFFA CPU vectors"),
             SegmentSpec("TITLE.DAT", "aux", 0xC100, 0xC400, prg_file="TITLE.DAT", measure="prg", note="$C100-$C3FF (768 B max)"),
-            SegmentSpec("legalui", "overlay", 0xE000, 0xE600, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
+            SegmentSpec("legalui", "overlay", 0xE000, 0xEE00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
         ]
         for fname, sym_name in atari_overlays:
             s.append(SegmentSpec(fname, "overlay", 0xE000, 0xF000, end_sym=sym_name, prg_file=fname))
@@ -669,7 +669,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
         SegmentSpec("cache.ovl.spell (Bank 7)", "cache", 0x0000, 21 * 256, prg_file="ovl.spell", measure="cache_prg", note="SWR Bank 7 $8000-$94FF (21 pages)"),
         SegmentSpec("cache.ovl.items (Bank 7)", "cache", 0x0000, 23 * 256, prg_file="ovl.items", measure="cache_prg", note="SWR Bank 7 $9500-$ABFF (23 pages)"),
         SegmentSpec("cache.ovl.gen (Bank 7)", "cache", 0x0000, 16 * 256, prg_file="ovl.gen", measure="cache_prg", note="SWR Bank 7 $AC00-$BBFF (16 pages; $BC00-$BFFF = 4p ITEMCAT)"),
-        SegmentSpec("legalui", "overlay", 0xA800, 0xAE00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
+        SegmentSpec("legalui", "overlay", 0xA800, 0xB600, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
     ]
     for fname, sym_name in beeb_overlays:
         ovl_note = "DFS OVLHOM ($A800-$BFFF)" if fname == "ovl.home" else ""

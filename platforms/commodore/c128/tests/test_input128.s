@@ -837,6 +837,15 @@ test_scan_restore_checks:
     cmp #%00110011 & %00000111
     bne !scan_restore_fail+
 
+    lda #$56               // v
+    jsr petscii_to_command
+    cmp #CMD_VERSION
+    bne !scan_restore_fail+
+    lda #$d6               // SHIFT+V
+    jsr petscii_to_command
+    cmp #CMD_VERSION
+    bne !scan_restore_fail+
+
     jmp test_pass
 !scan_restore_fail:
     jmp test_fail3

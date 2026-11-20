@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -25,7 +27,10 @@ def load_versions(path: Path) -> dict[str, str]:
 
 
 def emit_include(dst: Path, versions: dict[str, str]) -> None:
-    text = f"""// Auto-generated from version.json. Do not edit by hand.
+    text = f"""#importonce
+// Auto-generated from version.json. Do not edit by hand.
+#if !VERSION_STRINGS_INCLUDED
+#define VERSION_STRINGS_INCLUDED
 #if C128
 .const TITLE_VERSION_LEN = {len(versions["c128"])}
 .macro EmitTitleVersion() {{
@@ -62,8 +67,28 @@ def emit_include(dst: Path, versions: dict[str, str]) -> None:
     .text "{versions["c64"]}"
 }}
 #endif
+#endif
 """
-    dst.write_text(text, encoding="utf-8")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists() and dst.read_text(encoding="utf-8") == text:
+        return
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=dst.parent,
+            prefix=f".{dst.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp.write(text)
+            tmp_path = Path(tmp.name)
+        os.replace(tmp_path, dst)
+    except BaseException:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def main() -> int:

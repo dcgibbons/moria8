@@ -1,7 +1,12 @@
 #importonce
 #import "../../shared/legal_entry.s"
 // Resident entry, session-long; called by title or the Help controller.
+tramp_ui_sysinfo_display:
+    lda #1
+    .byte $2c                   // BIT abs — skip lda #0
 tramp_ui_legal_display:
+    lda #0
+    sta legal_entry_mode
     jsr disk_prompt_game_required
     :LegalSnapshot()
     lda #$36
@@ -20,6 +25,7 @@ tramp_ui_legal_display:
 !done:
     jmp tramp_sr_epilogue
 
+legal_entry_mode: .byte 0
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
 .label legal_os_setlfs = hal_storage_setlfs
 .label legal_os_open = hal_storage_open

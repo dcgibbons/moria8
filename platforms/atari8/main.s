@@ -290,7 +290,6 @@ low_helpers_end:
 // ============================================================
 // Resident Core Gameplay Modules ($1400-$C0FF)
 // ============================================================
-#import "build/version_strings.inc"
 #import "../../core/color.s"
 #import "../../core/rng.s"
 #import "../../core/math.s"
@@ -1561,6 +1560,8 @@ ovl_title_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../core/ui_legal.s"
+#import "../../core/ui_legal_sysinfo.s"
+#import "legal_sysinfo.s"
 #if ATARI8_CARTRIDGE
 #import "legal_stream.s"
 #else

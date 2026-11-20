@@ -5395,6 +5395,8 @@ ovl_gen_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../../core/ui_legal.s"
+#import "../../../core/ui_legal_sysinfo.s"
+#import "legal_sysinfo.s"
 #if C128_CARTRIDGE
 #import "legal_stream.s"
 #else

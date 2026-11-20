@@ -36,7 +36,7 @@ class PrgSpec:
 
 
 PRG_SPECS = (
-    PrgSpec("legalui", 0xA400, 0xAA00, "legal_code_end"),
+    PrgSpec("legalui", 0xA400, 0xB200, "legal_code_end"),
     PrgSpec("moria8a2.prg", 0x0A00, 0x7C00, "program_end"),
     PrgSpec("a2.play", 0x7C00, 0xA000, "a2_play_end", b"M8P"),
     # Aux RAM above the map (cache_layout.s): aux data, the monster
@@ -161,10 +161,8 @@ def check_artifacts() -> int:
             f"loader_end ${linked_boot_end:04X}"
         )
     loader_src = require_symbol(boot_symbols, "loader_src")
-    if linked_boot_end - loader_src > 512:
-        raise ContractViolation("relocated loader exceeds $0800-$09FF")
-    if linked_boot_end - (loader_src + 0x100) > 255:
-        raise ContractViolation("relocated loader tail exceeds 8-bit copy count")
+    if linked_boot_end - loader_src > 1024:
+        raise ContractViolation("relocated loader exceeds $A600-$A9FF")
     print(f"ASSERT {boot_path.name} PASS $2000-${boot_end - 1:04X}")
     checks += 1
 
@@ -208,6 +206,20 @@ def check_artifacts() -> int:
                     f"pb={len(pb_bytes)}, raw={len(raw_bytes)}"
                 )
             print(f"ASSERT {raw_name}.PB PASS {len(pb_bytes)}->{len(raw_bytes)}B")
+            checks += 1
+
+    for raw_name in ("MORIA8.RES", "OVL.UI", "OVL.ITEMS", "OVL.SPELL", "OVL.MODAL", "A2.HUFFDATA"):
+        raw_p = BUILD / "bin" / raw_name
+        lz4_p = BUILD / "bin" / f"{raw_name}.LZ4"
+        if raw_p.is_file() and lz4_p.is_file():
+            raw_bytes = raw_p.read_bytes()
+            lz4_bytes = lz4_p.read_bytes()
+            decoded = build_catalog.lz4_decode(lz4_bytes)
+            if decoded != raw_bytes:
+                raise ContractViolation(
+                    f"{raw_name}.LZ4 round-trip failed: lz4={len(lz4_bytes)}, raw={len(raw_bytes)}"
+                )
+            print(f"ASSERT {raw_name}.LZ4 PASS {len(lz4_bytes)}->{len(raw_bytes)}B")
             checks += 1
 
     pak_path = BUILD / "bin" / "MORIA8.PAK"

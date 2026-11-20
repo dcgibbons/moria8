@@ -695,6 +695,18 @@ for i = 1, 100 do
 end
 assert_line("legal_offer", screen_has("MORIA8 SOURCE OFFER"), "existing source offer not shown")
 legal_press("Q")
+legal_press("3")
+for i = 1, 100 do
+    if screen_has("Moria 8 - System Info") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_sysinfo_menu", screen_has("Moria 8 - System Info"), "key 3 did not open System Info")
+legal_press("Q")
+for i = 1, 100 do
+    if screen_has("1 License") then break end
+    emu.wait(0.1)
+end
+assert_line("legal_sysinfo_menu_back", screen_has("1 License"), "System Info did not return to legal menu")
 legal_press("Q")
 for i = 1, 100 do
     if screen_has("Command Reference") then break end
@@ -704,6 +716,15 @@ assert_line("legal_help_return", screen_has("Command Reference"), "Help owner wa
 legal_press("Q")
 emu.wait(2)
 assert_line("help_close", in_town(), "help did not return to the town view")
+legal_press("V")
+for i = 1, 100 do
+    if screen_has("Moria 8 - System Info") then break end
+    emu.wait(0.1)
+end
+assert_line("gameplay_sysinfo", screen_has("Moria 8 - System Info") and screen_has("Turn 0  Town") and screen_has("RNG:"), "V did not open gameplay System Info")
+legal_press("Q")
+emu.wait(2)
+assert_line("gameplay_sysinfo_close", in_town(), "System Info did not return to the town view")
 dump("after_help")
 print("SCENARIO DONE")
 """

@@ -5,7 +5,7 @@
 // State, input cache and core-ZP snapshot never borrow game data.
 
 .const LEGAL_LFN = 8
-.label legal_input_cache = LEGAL_BASE + $700
+.label legal_input_cache = LEGAL_BASE + $f00
 .assert "Legal workspace fits overlay window", legal_input_cache + $100 <= LEGAL_LIMIT, true
 
 legal_viewer:
@@ -13,6 +13,9 @@ legal_viewer:
     jsr legal_restore_zp
     lda #0
     sta legal_opened
+    lda legal_entry_mode
+    beq legal_menu
+    jmp legal_sysinfo_screen
 legal_menu:
     jsr legal_stream_close
     jsr hal_screen_clear
@@ -61,11 +64,20 @@ legal_menu_wait:
     beq !select+
 !source:
     cmp #$32
-    bne !exit+
+    bne !sysinfo+
     lda #1
 !select:
     sta legal_document
     jmp legal_document_start
+!sysinfo:
+    cmp #$33
+    beq !open_sysinfo+
+    cmp #$56                    // v — System Info
+    beq !open_sysinfo+
+    cmp #$d6                    // SHIFT+V — System Info
+    bne !exit+
+!open_sysinfo:
+    jmp legal_sysinfo_screen
 !exit:
     cmp #$51
     beq legal_return
@@ -285,7 +297,7 @@ legal_heading: .text "License & Source"; .byte 0
 legal_copyright: .text "Copyright (C) 2026 Chad Gibbons"; .byte 0
 legal_rights: .text "You may modify and redistribute."; .byte 0
 legal_warranty: .text "GPLv3 or later. No warranty."; .byte 0
-legal_choices: .text "1 License  2 Source Offer  Q Back"; .byte 0
+legal_choices: .text "1 License  2 Source  3 Info  Q Back"; .byte 0
 legal_more_footer: .text "Space: next  R: restart  Q: back"; .byte 0
 legal_end_footer: .text "End. R: restart  Q: back"; .byte 0
 legal_error_text: .text "Document read failed. Press any key."; .byte 0

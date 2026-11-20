@@ -753,3 +753,25 @@ receives, the `"M8P"` signature (`a2_play_start`, checked by
 just before `monster_catalog_a2.s` is imported. Budgets after the change
 (`report_memory_budgets.py --port apple2`): `Default` `$0A00-$7B8F`
 (**113 B free**, was 46), `A2PlaySlot` `$7C00-$9FD6` (**42 B free**, was 178).
+
+## Bootloader LZ4 Stream Decompression (2026-11-20)
+
+To reclaim 140 KB ProDOS floppy headroom without consuming any resident Main RAM
+(`$0A00-$7BFF`) or changing `A2PlaySlot` / Aux RAM runtime ownership, the 6
+sequential boot entries of `MORIA8.PAK` (`MORIA8.RES`, `OVL.UI`, `OVL.ITEMS`,
+`OVL.SPELL`, `OVL.MODAL`, and `A2.HUFFDATA`) are stored raw LZ4-block compressed
+(`.LZ4`) and streamed at cold boot by `platforms/apple2/boot.s` (`MORIA8.SYSTEM`,
+`798 B` at `$2000-$231D`):
+
+- `boot_start` relocates the `1,024 B` loader (`$A600-$A9FF`, using
+  `RELOC_SRC`/`RELOC_DST` `$f0-$f3`) above ProDOS `SYS` HDR (`$A400-$A5FF`) and
+  below a `4 KB` compressed read window `STREAM_BUF` (`$AA00-$B9FF` `< $BB00`
+  `IO_BUFFER`) before writing `$0A00+`.
+- `lz4_unpack_entry` streams entries `0..5` directly into their Main targets
+  (`MORIA8.RES`) or `$A400+` (`OVL.*`/`A2.HUFFDATA`) prior to the existing
+  `AUXMOVE` staging into Aux cache slots, keeping boot ZP `$F0-$FD` strictly
+  below ProDOS `$FF` and verifying `ZP_DST - dest == exact uncompressed length`.
+- `moria8-apple2.po` dropped from `279/280` blocks (`512 B` free) to `261/280`
+  blocks (`9,728 B` / `19` blocks free) prior to the System Info expansion, and
+  now sits at `264/280` blocks (`8,192 B` / `16` blocks free) with `legalui`
+  (`$A400-$AD03`, `2,307 B`, `1,277 B` free below `+$E00`).

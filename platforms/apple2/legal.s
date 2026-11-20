@@ -3,7 +3,12 @@
 // Resident entry. The play slot survives; the active window is invalidated.
 // C=1: optional load cancelled; the caller must not reload a cold owner.
 // C=0: viewer completed. The overlay window is invalidated in both cases.
+tramp_ui_sysinfo_display:
+    lda #1
+    .byte $2c                   // BIT abs — skip lda #0
 tramp_ui_legal_display:
+    lda #0
+    sta legal_entry_mode
     :LegalSnapshot()
     lda #0
     sta current_overlay
@@ -24,6 +29,7 @@ legal_cancel_return:
 !loaded:
     jmp legal_viewer
 
+legal_entry_mode: .byte 0
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
 legal_notice_filename: .byte 'L','I','C','E','N','S','E',',','S',',','R'
 .label legal_notice_filename_len = * - legal_notice_filename

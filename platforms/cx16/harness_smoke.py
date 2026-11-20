@@ -80,6 +80,7 @@ CX16_BANK_LEGAL = BANK_CONSTS["CX16_BANK_LEGAL"]
 CX16_BANK_WARM_BASE = BANK_CONSTS["CX16_BANK_WARM_BASE"]
 
 SAVE_VERSION = 0x22
+CMD_VERSION = 0x24
 TOTAL_INV_SLOTS = 34
 EQUIP_CLOAK = 32
 EQUIP_SECONDARY = 33
@@ -654,6 +655,10 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     tb.press("2")
     tb.assert_line("legal_offer", tb.screen_has("MORIA8 SOURCE OFFER"), "existing source offer not shown")
     tb.press("Q")
+    tb.press("3")
+    tb.assert_line("legal_sysinfo_menu", tb.screen_has("Moria 8 - System Info") and tb.screen_has("Turn 0  Town"), "key 3 did not open System Info")
+    tb.press("Q")
+    tb.assert_line("legal_sysinfo_menu_back", tb.screen_has("1 License"), "System Info did not return to legal menu")
     tb.press("Q")
     tb.assert_line("legal_help_return", tb.screen_has("Command Reference"), "Help owner was not restored")
     after = bytes(tb.read_u8(tb.syms["player_data"] + i) for i in range(64))
@@ -661,6 +666,11 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     tb.press("Q")
     tb.assert_line("help_close", tb.in_town(), "help did not return to the town view")
     check_run_cancel_flush(tb)
+    tb.press("V")
+    tb.assert_line("gameplay_sysinfo", tb.screen_has("Moria 8 - System Info") and tb.screen_has("RNG:"),
+                   "V did not open gameplay System Info")
+    tb.press("Q")
+    tb.assert_line("gameplay_sysinfo_close", tb.in_town(), "System Info did not return to the town view")
 
     # Exercise evicted OVL.HELP item_drop ('d' -> '?' selector -> 'a') and door_try_open/close
     # (including tramp_door_pick_roll -> OVL.CHEST -> OVL.HELP restoration).
@@ -2080,8 +2090,8 @@ def scenario_bank_bounce_helpers(tb: X16Bench) -> None:
     key_count = tb.syms["key_map_count"]
     key_map_cmd_addr = tb.syms["key_map_end"] - key_count
     aux_cmd_base = 0xA000 + (key_map_cmd_addr & 0x1FFF)
-    exp_s = tb.read_bank_u8(3, aux_cmd_base + key_count - 2)
-    exp_v = tb.read_bank_u8(3, aux_cmd_base + key_count - 1)
+    exp_s = tb.read_bank_u8(3, aux_cmd_base + key_count - 1)
+    exp_v = CMD_VERSION
     run_stub(
         [0xA9, 0x73] + jsr("petscii_to_command") + [0x8D, (scratch + 4) & 0xFF, (scratch + 4) >> 8]
         + [0xA9, 0x56] + jsr("petscii_to_command") + [0x8D, (scratch + 5) & 0xFF, (scratch + 5) >> 8]
