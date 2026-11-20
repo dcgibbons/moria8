@@ -37,6 +37,7 @@ KEY_SEARCH_MODE = ord("#")   # CMD_SEARCH_MODE: toggles, no game turn
 SEARCH_MODE_EVERY = 20       # steps between tries to turn search mode on
 KEY_LOOK = ord("X")      # look along a direction; takes no game turn
 KEY_WEAR = ord("W")
+KEY_TAKEOFF = ord("T")   # CMD_TAKEOFF ('t'): "Take off which item (a-h)?", '?' lists the equipment
 KEY_REFUEL = 0xD2        # SHIFT+R
 KEY_THROW = 0xD4         # SHIFT+T
 KEY_FIRE = 0xC6          # SHIFT+F: the wielded launcher at the first matching ammunition
@@ -125,19 +126,57 @@ PICKUPS = ("Potion of Cure", "Potion of Healing", "Potion of Neutralize", "Potio
            "Wand of Stinking Cloud", "Wand of Teleport Away", "Staff of Teleportation")
 CARRY_TIMES = 2          # a found supply is picked up until twice its reserve is carried ...
 CARRY_LEAST = 5          # ... and at least this many (Brain.carried_enough)
+# The weight limit (core/inv_add.s, VMS inven_check_weight): STR x 130 plus
+# the body weight, at most 3000, in tenths of a pound, pack and equipment.
+# Since the review build (57c0e67) counted the weight on loading, refusals
+# rose from 3-7 to 54 per 100,000 Balrog steps, and 15 of 23 Balrog deaths
+# were starvation (C64 Balrog, 2026-11-19).
+WEIGHT_PER_STR = 130
+WEIGHT_CAP = 3000
+WEIGHT_HEADROOM = 100    # kept free in town for food, potions and Word of Recall (10 lb)
+# A Potion of Restore Strength carried against strength darts, drunk where
+# the drain happens: a drained STR lowered the limit under what was worn,
+# the stores refused even the potion that would lift it, and a clvl 29
+# Halfling Rogue starved with 1.1M gold (C64 Balrog, 2026-11-19). Two once
+# drained; from RESTORE_STR_LEVEL, where the gold no longer buys the first
+# weapon and armour.
+RESTORE_STR = "Potion of Restore Strength"
+RESTORE_STR_RESERVE = 1
+RESTORE_STR_DRAINED = 2
+RESTORE_STR_LEVEL = 10   # a clvl 14 Elf Mage was drained from DL1 on (2026-11-19)
+# The worn pieces taken off, heaviest first, when food is refused, the
+# character is Weak, Faint or out of food, and nothing in the pack can go;
+# never the body armour or the weapon. The stores sell them again.
+SHED_SLOTS = ("ICAT_SHIELD", "ICAT_HELM", "ICAT_BOOTS", "ICAT_GLOVES", "ICAT_CLOAK")
+# Bought into that room; everything else only while it stays free.
+ESSENTIAL_BUYS = ("Ration of Food", "Slime Mold", "Piece of Elvish Waybread", "Scroll of Word of Rec",
+                  "Potion of Cure", "Potion of Healing", "Potion of Restore", "Wooden Torch", "Flask of Oil")
 TRY_HP = 0.9             # unknown potions and scrolls are tried at this share of max HP or more
 IDENTIFY = "Identify"    # the Mage and Ranger spell (Magick I; magic.ON_ITEM)
 IDENTIFY_SCROLL = "Scroll of Identify"
 
 
-def stack_weight(name: str, count: int) -> int:
-    """A carried stack's weight in tenths of a pound, from the shipped item
-    tables, which name "Cure Light Wounds" where the pack shows "Potion of
-    Cure Light Wounds"; 0 for a name they do not hold."""
+def item_weight(name: str) -> int:
+    """One item's weight in tenths of a pound, from the shipped item tables
+    (the manual's weights, as a player knows them): the name before its
+    ego, plusses and AC ("Mace (Defender) (+3,+3)", "Chain Mail [32,+4]"),
+    which the tables may also hold without its class ("Cure Light Wounds"
+    where the pack shows "Potion of Cure Light Wounds"); 0 for a name they
+    do not hold (an unknown flavour)."""
     kinds = knowledge.item_kinds()
-    base = name.split(" (")[0].strip()
+    base = re.split(r" \(| \[", re.sub(r"^an? ", "", name.strip()))[0].strip()
     kind = kinds.get(base) or kinds.get(base.split(" of ", 1)[-1])
-    return count * kind.weight if kind is not None else 0
+    return kind.weight if kind is not None else 0
+
+
+def base_name(name: str) -> str:
+    """An item's name before its ego, plusses or AC, however the list shows them."""
+    return re.split(r" \(| \[| ·", re.sub(r"^an? ", "", name.strip()))[0].strip()
+
+
+def stack_weight(name: str, count: int) -> int:
+    """A carried stack's weight in tenths of a pound (``item_weight``)."""
+    return count * item_weight(name)
 
 
 def unknown_kind(name: str) -> str | None:
@@ -284,6 +323,14 @@ STAT = re.compile(r"\b(ST|DX):\s*(\d+)(?:/(\d+|\*\*))?")
 STATS = re.compile(r"\b(ST|IN|WI|DX|CO|CH):\s*(\d+)(?:/(\d+|\*\*))?")   # all six, for drain
 
 
+def str_code(base: str, extra: str) -> int:
+    """A status-line stat as the game keeps it, 3-118: 18/xx is 18 + xx, and
+    "18/00" is 18/100 (core/stat_display.s), the weight limit's STR."""
+    if not extra:
+        return int(base)
+    return 118 if extra in ("**", "00") else 18 + int(extra)
+
+
 def stat_value(base: str, extra: str) -> int:
     """A status-line stat as 18 + xx/10 for 18/xx. The game prints 18/100 as
     "18/00" (core/stat_display.s), which read as a bare 18 until 2026-11-07."""
@@ -293,6 +340,10 @@ def stat_value(base: str, extra: str) -> int:
 # The equipment list ('E'): a worn armour slot, its name and [AC,+to-AC]
 # (wrapped onto the next line on 40 columns).
 EQUIP_LINE = re.compile(r"^\s*[a-z]\) (Body|Shield|Head|Hands|Feet|Cloak):\s+(.*)$")
+# Every slot of the equipment list, for the weight carried: worn items count
+# toward the limit as the pack does (core/inv_add.s inven_weight).
+WORN_LINE = re.compile(r"^\s*(?:[a-z]\) )?(?:Weapon|Body|Shield|Head|Hands|Feet|Light|Ring|Amulet|Cloak|Second):"
+                       r"\s+(.*)$")
 EQUIP_SLOTS = {"Body": "ICAT_ARMOR", "Shield": "ICAT_SHIELD", "Head": "ICAT_HELM",
                "Hands": "ICAT_GLOVES", "Feet": "ICAT_BOOTS", "Cloak": "ICAT_CLOAK"}
 # A ring or amulet (Magic Shop, Black Market), worn or for sale: its name and
@@ -956,6 +1007,23 @@ class Brain:
         self.search_mode_after = 0             # step before which search mode is not turned on again
         self.pack_full = False                 # the game said "Your pack is full."
         self.too_heavy = False                 # ... or "You can't carry that much weight." (TOO_HEAVY)
+        self.headroom_shed = False             # ... or too little room kept (drop_junk)
+        # The weight carried, as a player reckons it from the lists and the
+        # manual's weights (carried_weight); the game shows no total.
+        self.pack_listed: list[tuple[str, int]] | None = None   # the last full pack list
+        self.worn_listed: list[str] | None = None                # the last equipment list
+        self.weight_added = 0                  # tenths gained since that pack list (credit)
+        self.str_code: int | None = None       # STR as the game keeps it, 3-118 (18/xx = 18+xx)
+        self.body_weight = 0                   # lb, the character sheet's
+        self.food_pickup: Pos | None = None    # a food pickup just tried here
+        self.food_refused: Pos | None = None   # food the weight limit refused, lying here
+        self.room_for_food = False             # a drop under way to make room for it
+        self.room_made = False                 # ... done: back to the food
+        self.str_drained_ever = False          # STR drained once: RESTORE_STR_DRAINED carried
+        self.nothing_to_shed = False           # the tiers left nothing to drop for the weight
+        self.food_weight_refused = False       # food refused for the weight (store or floor)
+        self.taking_off: str | None = None     # a worn piece being taken off (take_off_for_food)
+        self.drop_name: str | None = None      # ... then dropped by name (drop_prompt)
         self.refused_at: str | None = None     # the store whose sale the full pack refused
         self.dropping = False                  # a drop prompt is open for junk
         self.drop_after = 0                    # step before which no junk is looked for again
@@ -1078,6 +1146,9 @@ class Brain:
             if any(refusal in messages for refusal in PACK_REFUSALS):
                 self.pack_full = True
                 self.too_heavy = self.too_heavy or TOO_HEAVY in messages
+                if TOO_HEAVY in messages and self.food_pickup is not None and obs.dlvl:
+                    self.food_refused, self.room_made = self.food_pickup, False   # make_room_for_food
+                    self.food_weight_refused = True
             if " is damaged!" in messages:
                 # Acid takes one from a worn piece's to-AC (VMS minus_ac): the
                 # armour counted at purchase stayed, and level-26+ characters
@@ -1100,6 +1171,7 @@ class Brain:
         if obs.dlvl and "You create food." in messages:
             self.created_food = view.pos
         self.pending = self.pending_item = self.picking = None   # their prompts are past
+        self.food_pickup = None                                   # its message is past too
         self.eat_listing = False
         self.magic.watch_cast(obs, (len(view.tiles_of(TYPE_TRAP)),
                                     len(view.tiles_of(TYPE_DOOR_CLOSED) | view.tiles_of(TYPE_DOOR_OPEN)),
@@ -1362,7 +1434,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.support_staffs, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.take_off_for_food, self.make_room_for_food, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.support_staffs, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.unseen_foe_attack, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -1423,6 +1495,34 @@ class Brain:
             ac = re.search(r"\[(-?\d+)(?:,\s*([+-]?\d+))?\]", text)
             worn[EQUIP_SLOTS[match.group(1)]] = 0 if ac is None else int(ac.group(1)) + int(ac.group(2) or 0)
         return worn or None
+
+    @staticmethod
+    def read_worn(rows: list[str]) -> list[str]:
+        """Every item the equipment list shows worn, by name (``carried_weight``)."""
+        return [m.group(1).strip() for row in rows if (m := WORN_LINE.match(row)) and m.group(1).strip() != "(none)"]
+
+    def carried_weight(self) -> int | None:
+        """The weight carried, pack and equipment, in tenths of a pound, as a
+        player reckons it: the last lists by the manual's weights, plus what
+        was gained since (``credit``); None before the pack was ever listed.
+        The game shows no total, and refuses past the limit."""
+        if self.pack_listed is None:
+            return None
+        return (sum(stack_weight(name, n) for name, n in self.pack_listed)
+                + sum(item_weight(name) for name in self.worn_listed or ()) + self.weight_added)
+
+    def weight_limit(self) -> int | None:
+        """STR x 130 plus the body weight, at most 3000 (core/inv_add.s); None
+        before the status line showed STR."""
+        if self.str_code is None:
+            return None
+        return min(WEIGHT_CAP, self.str_code * WEIGHT_PER_STR + self.body_weight)
+
+    def too_heavy_for(self, name: str, count: int = 1, room: int = 0) -> bool:
+        """Taking ``count`` of ``name`` would pass the weight limit, keeping
+        ``room`` tenths free; False while either is unknown."""
+        carried, limit = self.carried_weight(), self.weight_limit()
+        return carried is not None and limit is not None and carried + stack_weight(name, count) > limit - room
 
     def read_weapon(self, rows: list[str]) -> None:
         """The weapon wielded as the equipment list shows it, its to-dam as
@@ -1697,7 +1797,12 @@ class Brain:
         """The Restore potion of each drained stat not carried. The Potion of
         Restoration (every stat at once) left the catalog with the
         renumbering (b268b63); VMS sells a potion a stat."""
-        return [name for name, stat in RESTORE_POTIONS.items() if stat in self.drained and not self.restores.get(name)]
+        wanted = [name for name, stat in RESTORE_POTIONS.items() if stat in self.drained and not self.restores.get(name)]
+        reserve = RESTORE_STR_DRAINED if self.str_drained_ever else \
+            RESTORE_STR_RESERVE if self.clvl >= RESTORE_STR_LEVEL else 0
+        if RESTORE_STR not in wanted and self.restores.get(RESTORE_STR, 0) < reserve:
+            wanted.append(RESTORE_STR)   # the reserve against strength darts
+        return wanted
 
     def restored(self, kind: str) -> None:
         """A restorer used: one fewer carried, its stats no longer drained."""
@@ -1733,6 +1838,11 @@ class Brain:
             self.ac_seen = int(ac.group(1))
         if STATUS_GOLD.search(obs.rows[23]):
             self.gold_seen = self.gold(obs)
+        strength = next((m for row in obs.rows[19:24] for m in STAT.findall(row) if m[0] == "ST"), None)
+        if strength is not None:
+            self.str_code = str_code(strength[1], strength[2])
+        if obs.abi is not None and "PL_WEIGHT" in obs.abi.consts and len(obs.player) > obs.abi.PL_WEIGHT:
+            self.body_weight = obs.player[obs.abi.PL_WEIGHT]
         found = {name: stat_value(base, extra)
                  for row in obs.rows[19:24] for name, base, extra in STATS.findall(row)}
         if len(found) < 6:
@@ -1744,6 +1854,7 @@ class Brain:
             self.restore_due = obs.clvl >= RESTORE_UNSEEN
             return
         self.drained = {k for k in found if found[k] < self.stat_max.get(k, 0)}
+        self.str_drained_ever = self.str_drained_ever or "ST" in self.drained
         if self.drained:
             self.restore_due = True
         for k, v in found.items():
@@ -2484,7 +2595,10 @@ class Brain:
             race, klass = self.goal.character
             return Decision(Game.chargen_key(obs, self.name, race, klass), "prompt", f"chargen {obs.stage}")
         if obs.mode == Mode.ITEM and self.dropping:
-            return self.drop_prompt(obs)
+            decision = self.drop_prompt(obs)
+            if self.room_for_food and decision.reason.startswith("drop "):
+                self.room_for_food, self.room_made = False, True   # make_room_for_food: back to it
+            return decision
         if obs.mode == Mode.ITEM and obs.stage == "list" and self.magic.listing_books:
             decision = Decision(*self.magic.book_list(obs))
             if self.magic.carried_books is not None:
@@ -2503,6 +2617,7 @@ class Brain:
             self.read_weapon(obs.rows)
             self.jewels.update(self.read_jewels(obs.rows))
             self.read_resists(obs.rows)
+            self.worn_listed = self.read_worn(obs.rows)
             if worn is not None:
                 self.armour.update(worn)
                 self.armour_hits = 0
@@ -2562,6 +2677,8 @@ class Brain:
             if any(refusal in row for row in obs.rows for refusal in PACK_REFUSALS):
                 self.pack_full = True          # drop something, then shop again (drop_prompt)
                 self.too_heavy = self.too_heavy or any(TOO_HEAVY in row for row in obs.rows)
+                if self.too_heavy and self.buying is not None and self.buying.startswith(FOODS):
+                    self.food_weight_refused = True   # take_off_for_food, if nothing else goes
                 self.refused_at = self.at_store
             if self.bought is not None:
                 self.credit(self.bought, -1)   # the counted purchase did not happen
@@ -2594,6 +2711,10 @@ class Brain:
         if obs.stage == "menu" and not done and self.at_store in (ARMOURY, WEAPONSMITH):
             missiles = self.missile_pick(obs) if self.at_store == WEAPONSMITH else None
             gear = self.gear_pick(obs)
+            if missiles is not None and self.too_heavy_for(missiles[1], 1, WEIGHT_HEADROOM):
+                # Ammunition into the room kept for food and Word of Recall
+                # was shed again at the next headroom check (drop_junk).
+                missiles = None
             if self.goal.klass in MISSILE_FIRST:
                 pick = missiles or gear
             else:
@@ -2618,6 +2739,8 @@ class Brain:
                     if match and match.group(2).startswith(want) and \
                             not (want == ENCHANT_WEAPON and match.group(2).startswith(ENCHANT_TO_HIT)) and \
                             (gold is None or int(match.group(3)) <= int(gold.group(1))) and \
+                            not self.too_heavy_for(match.group(2), 1, 0 if match.group(2).startswith(ESSENTIAL_BUYS)
+                                                   else WEIGHT_HEADROOM) and \
                             not (want in AMMO_AVERAGE and int(match.group(3)) > AMMO_MAX_GOLD) and \
                             not (want.startswith(("Wand of", "Staff of")) and want not in RECHARGEABLE
                                  and gold is not None
@@ -2927,6 +3050,8 @@ class Brain:
             if kind is not None and kind.category in ARMOUR_SLOTS:
                 ac = int(armour.group(2)) + int((armour.group(3) or "0").replace(" ", ""))
                 gain, change = ac - worn.get(kind.category, 0), ("armour", (kind.category, ac))
+                if self.armour_too_heavy(kind.category, kind.weight):
+                    continue
             elif self.at_store == ARMOURY or (self.at_store == BLACK_MARKET and self.goal.klass == "mage"):
                 continue
             else:
@@ -2941,6 +3066,18 @@ class Brain:
             return None
         self.gear[best[3]] = best[4]
         return best[2], best[3]
+
+    def armour_too_heavy(self, slot: str, weight: int) -> bool:
+        """A piece that, worn in place of the slot's, would leave less than
+        WEIGHT_HEADROOM under the limit, or that the store would refuse now:
+        an upgrade a single strength dart pushes over is none. A clvl 29
+        Halfling Rogue's AC 46 alone met its drained limit and it starved
+        (C64 Balrog, 2026-11-19). False while the weight is unknown."""
+        carried, limit = self.carried_weight(), self.weight_limit()
+        if carried is None or limit is None:
+            return False
+        old = item_weight(self.armour_names.get(slot, ""))
+        return carried + weight > limit or carried - old + weight > limit - WEIGHT_HEADROOM
 
     def offer(self, obs: Observation) -> Decision:
         """Type the asking price as the offer: the store takes it at once."""
@@ -2965,6 +3102,7 @@ class Brain:
 
     def credit(self, item: str, n: int) -> None:
         """Count an item gained (n=1) or a counted one not gained after all (n=-1)."""
+        self.weight_added += n * item_weight(item)
         if item.startswith(("Wand of", "Staff of")):
             name, charges = item.split(" (")[0].strip(), CHARGES.search(item)
             self.wands[name] = max(0, self.wands.get(name, 0) + n * (int(charges.group(1)) if charges else 1))
@@ -2974,6 +3112,7 @@ class Brain:
                 self.on_item_after.pop(name, None)   # something to recharge now: try again
         if item.startswith(FOODS):
             self.food += n * (SLIME if item.startswith("Slime") else 1)
+            self.food_weight_refused = self.food_weight_refused and n <= 0
             self.no_food = self.no_food and n < 0
         elif item.startswith(LANTERN):
             self.lamp_packed = n > 0
@@ -3074,6 +3213,8 @@ class Brain:
             self.weapon_scrolls = held(ENCHANT_WEAPON)
             self.recharge_scrolls = held(RECHARGE_SCROLL)
             self.extra[PROTECT_SCROLL] = held(PROTECT_SCROLL)
+        if scope == "all":
+            self.pack_listed, self.weight_added = listed, 0   # carried_weight
         if scope == "all" and self.launcher is not None:
             # A clvl 37 Gnome Rogue's count said none with 197 Bolts carried
             # (C64 Balrog, 2026-11-14): balrog_damage counts them.
@@ -3106,6 +3247,8 @@ class Brain:
     def pick_item(self, obs: Observation) -> Decision:
         """Answer an item prompt (wear, throw): list the items, then pick by name."""
         rows = obs.rows[1:]
+        if self.taking_off is not None:
+            return self.pick_takeoff(obs)
         kind = self.picking_kind()
         if kind is not None and obs.stage == "list":
             self.sync_counts(rows, kind)   # the read or quaff list: every scroll or potion carried
@@ -3204,6 +3347,31 @@ class Brain:
             return Decision(ord("?"), "prompt", "list the items")
         self.forget_picking()
         return Decision(KEY_RUNSTOP, "prompt", "item to pick not listed: cancel")
+
+    def pick_takeoff(self, obs: Observation) -> Decision:
+        """Take off ``taking_off``: the '?' list is the equipment's, a letter a
+        piece worn; it goes to the pack, to be dropped by name (drop_prompt)."""
+        name = self.taking_off
+        assert name is not None
+        for row in obs.rows[1:]:
+            match = re.match(r"^\s*([a-z])\) (\w+):\s+(.*)$", row)
+            if match and base_name(match.group(3)) == base_name(name):
+                slot = EQUIP_SLOTS.get(match.group(2))
+                if slot is not None:
+                    self.armour[slot] = 0
+                    self.armour_names.pop(slot, None)
+                if self.worn_listed is not None and name in self.worn_listed:
+                    self.worn_listed.remove(name)
+                    self.pack_listed = [*(self.pack_listed or []), (name, 1)]   # still carried, in the pack
+                self.taking_off = self.picking = None
+                self.drop_name, self.pack_full, self.drop_after = name, True, 0
+                return Decision(ord(match.group(1).upper()), "prompt", f"take off {name}")
+        if not self.listed and ITEM_PROMPT.search(obs.rows[0]):
+            self.listed = True
+            return Decision(ord("?"), "prompt", "list the equipment")
+        self.taking_off = None
+        self.forget_picking()
+        return Decision(KEY_RUNSTOP, "prompt", "piece to take off not listed: cancel")
 
     def picking_kind(self) -> str | None:
         """The read or quaff list ``picking`` is chosen from, if either."""
@@ -5231,7 +5399,44 @@ class Brain:
         here, self.created_food = self.created_food, None
         if here != view.pos:
             return None
+        self.food_pickup = view.pos
         return Decision(KEY_PICKUP, "collect", "pick up the food just created")
+
+    def make_room_for_food(self, obs: Observation, view: View) -> Decision | None:
+        """Food the weight limit refused: step off it (a drop needs a free
+        square, "No room on the floor."), drop by drop_prompt's tiers, and
+        go back for it. Refused, Create Food's ration stayed on the floor,
+        the Priest cast it again on the same square, and Balrog characters
+        starved: 1,315 of 2,051 weight refusals were that ration (C64
+        Balrog, 2026-11-19)."""
+        spot = self.food_refused
+        if spot is None:
+            return None
+        if obs.dlvl == 0 or self.threats(view):
+            self.food_refused, self.room_made = (None, False) if obs.dlvl == 0 else (spot, self.room_made)
+            return None
+        if self.room_made:
+            if view.pos == spot:
+                self.food_refused, self.room_made = None, False
+                self.food_pickup = view.pos
+                return Decision(KEY_PICKUP, "collect", "pick up the food: room made")
+            step = view.step_toward({spot}, avoid_monsters=True)
+            if step is None or step == (0, 0):
+                self.food_refused, self.room_made = None, False
+                return None
+            return self.move(view, step, "collect", "back to the food: room made")
+        if view.pos == spot:
+            for (dx, dy), key in sorted(DIRS.items()):
+                sq = (view.pos[0] + dx, view.pos[1] + dy)
+                if (dx, dy) != (0, 0) and view.passable(*sq, avoid_monsters=True) and sq not in self.items_seen \
+                        and sq not in view.hazards:
+                    return Decision(key, "collect", "step off the food: room to drop")
+            self.food_refused = None   # nowhere to drop
+            return None
+        self.room_for_food = self.pack_full = self.too_heavy = True
+        self.refused_at = None
+        self.dropping, self.listed = True, False
+        return Decision(KEY_DROP, "drop", "too heavy for the food: drop what weighs least to lose")
 
     def collect(self, obs: Observation, view: View) -> Decision | None:
         """Pick up gold and food lying in view (MON-014: kills drop them):
@@ -5243,6 +5448,8 @@ class Brain:
             # steps, M4 round 46 seed 1001).
             self.collect_to = None
             self.level.collected.add(view.pos)
+            if self.items_seen.get(view.pos, ("", ""))[1].startswith(FOODS):
+                self.food_pickup = view.pos   # make_room_for_food, if the weight limit refuses it
             return Decision(KEY_PICKUP, "collect", "pick up what lies here")
         # One asleep a way off does not stop it: a giant seen only from inside
         # a room sent a level-23 Gnome in for its gold and out again (C64
@@ -5259,6 +5466,10 @@ class Brain:
                 return False
             if name.startswith(FOODS):
                 return True
+            if self.too_heavy_for(name):
+                # The limit would refuse it: 736 such pickups were walked to
+                # and refused in the review epoch (C64 Balrog, 2026-11-19).
+                return False
             if self.launcher is not None and name.startswith(self.ammo_kinds()):
                 return True
             if self.restorer_wanted(name) and not self.pack_full:
@@ -6119,10 +6330,58 @@ class Brain:
             # or nothing was ever dropped in town and every visit's purchases
             # were refused (2026-11-06: 70 and 170 Word of Recall refusals).
             threats = {p for p in threats if chebyshev(p, view.pos) <= 2}
+        if obs.dlvl == 0 and not (self.pack_full or threats) and obs.step >= self.drop_after \
+                and (limit := self.weight_limit()) is not None and (carried := self.carried_weight()) is not None \
+                and carried > limit - WEIGHT_HEADROOM:
+            # Room kept before the stores refuse: refusals came 54 per 100,000
+            # Balrog steps once the weight carried was counted on loading, and
+            # the refused were the food, Word of Recall and potions bought
+            # last (C64 Balrog, 2026-11-19). drop_prompt sheds by its tiers,
+            # once the fresh list confirms the estimate.
+            self.pack_full = self.too_heavy = self.headroom_shed = True
         if not (self.pack_full or self.more_junk) or obs.step < self.drop_after or threats:
             return None
         self.dropping, self.listed = True, False
         return Decision(KEY_DROP, "drop", "pack full: drop what is not needed")
+
+    def spare_launcher(self, name: str, matches: list[re.Match[str] | None]) -> bool:
+        """A launcher in the pack with none of its ammunition there: a clvl 29
+        Halfling Rogue's 20 lb Heavy Crossbow without a Bolt was what its pack
+        held when the stores refused its food (C64 Balrog, 2026-11-19)."""
+        launcher = next((k for k in LAUNCHERS if name.startswith(k)), None)
+        if launcher is None:
+            return False
+        ammo = AMMO_KINDS.get(LAUNCHERS[launcher][0], (LAUNCHERS[launcher][0],))
+        return not any(m and m.group(2).startswith(ammo) for m in matches)
+
+    def spare_weapon(self, name: str) -> bool:
+        """A melee weapon in the pack, not the one the launcher wielded put there."""
+        if self.wielding_launcher and name.startswith(self.weapon[0]):
+            return False
+        kind = knowledge.item_kinds().get(re.split(r" \(| \[", name.strip())[0])
+        return kind is not None and kind.melee
+
+    def take_off_for_food(self, obs: Observation, view: View) -> Decision | None:
+        """Last resort for food the weight limit refused, the character Weak,
+        Faint or out of food, and nothing in the pack left to shed: take off
+        the heaviest worn piece but the body armour and the weapon, and drop
+        it; the stores sell it again. A clvl 29 Halfling Rogue's pack held a
+        book, an empty crossbow and Word of Recall, strength darts had drained
+        its STR until the AC 46 worn met the limit, and it starved with 1.1M
+        gold (C64 Balrog, 2026-11-19)."""
+        if not (self.food_weight_refused and self.nothing_to_shed) or self.taking_off is not None:
+            return None
+        starving = any(word in status_states(obs) for word in ("Weak", "Faint")) or self.food <= 0
+        if not starving or self.close_threats(obs, view):
+            return None
+        worn = [(item_weight(self.armour_names[slot]), slot) for slot in SHED_SLOTS
+                if self.armour_names.get(slot) and item_weight(self.armour_names[slot]) > 0]
+        if not worn:
+            return None
+        _, slot = max(worn)
+        self.taking_off = self.picking = self.armour_names[slot]
+        self.listed = False
+        return Decision(KEY_TAKEOFF, "drop", f"too heavy to buy food: take off the {self.picking}")
 
     def drop_prompt(self, obs: Observation) -> Decision:
         """The drop prompt: list the pack, then drop the first item not kept."""
@@ -6132,6 +6391,16 @@ class Brain:
                 return Decision(ord("?"), "prompt", "list the pack")
         else:
             self.sync_counts(obs.rows[1:], "all")   # the whole pack: every count it can check
+            if self.drop_name is not None:
+                # The worn piece just taken off for the weight (take_off_for_food).
+                name, self.drop_name = self.drop_name, None
+                taken = next((m for m in (PACK_ITEM.match(r) for r in obs.rows[1:])
+                              if m and base_name(m.group(2)) == base_name(name)), None)
+                if taken is not None:
+                    self.dropping = self.pack_full = self.too_heavy = self.nothing_to_shed = False
+                    self.shopped = False
+                    self.reopen_refused()
+                    return Decision(ord(taken.group(1).upper()), "prompt", f"drop {name}: too heavy to buy food")
             # The launcher carried and its ammunition only: a level-25 Dwarf
             # kept three launchers, seven stacks of arrows and bolts, three
             # empty lanterns and three burnt-out torches, dropped one item a
@@ -6260,7 +6529,12 @@ class Brain:
                         self.shopped = False
                         self.reopen_refused()
                     return Decision(ord(match.group(1).upper()), "prompt", f"drop {match.group(2).strip()}")
-            if self.too_heavy and obs.dlvl == 0:
+            if self.headroom_shed and (limit := self.weight_limit()) is not None \
+                    and (carried := self.carried_weight()) is not None and carried <= limit - WEIGHT_HEADROOM:
+                # The fresh list says there is room: the estimate ran over.
+                self.dropping = self.pack_full = self.too_heavy = self.headroom_shed = False
+                return Decision(KEY_RUNSTOP, "prompt", f"room enough: {carried} of {limit} tenths carried")
+            if self.too_heavy and (obs.dlvl == 0 or self.room_for_food):
                 # A store refused for the weight limit with nothing spare: the
                 # heaviest stack of a supply past its pickup limit
                 # (carry_limit), by the listing's count, whole, as the game
@@ -6298,7 +6572,9 @@ class Brain:
                     surplus = [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(ammo)] or \
                         [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(STACKING)
                          and not m.group(2).startswith((*FOODS, RECALL, TORCH, OIL))] or \
-                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith((TORCH, OIL))]
+                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith((TORCH, OIL))] or \
+                        [w for w in weights if (m := matches[w[1]]) and self.spare_launcher(m.group(2), matches)] or \
+                        [w for w in weights if (m := matches[w[1]]) and self.spare_weapon(m.group(2))]
                 if surplus:
                     shed = max(surplus)[1]
                     heavy = matches[shed]
@@ -6308,7 +6584,8 @@ class Brain:
                     self.sync_counts(rest, "all")
                     self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
                                        for row in rest if (m := PACK_ITEM.match(row)) and m.group(2).startswith(TORCH))
-                    self.too_heavy = self.dropping = self.pack_full = False
+                    self.too_heavy = self.dropping = self.pack_full = self.headroom_shed = False
+                    self.nothing_to_shed = False
                     self.shopped = False
                     self.reopen_refused()
                     return Decision(ord(heavy.group(1).upper()), "prompt", f"drop {count} {name}: too heavy to buy")
@@ -6348,7 +6625,10 @@ class Brain:
                 if obs.dlvl == 0:
                     self.reopen_refused()
                 return Decision(ord(spare.group(1).upper()), "prompt", f"drop {spare.group(2).strip()}: nothing else to spare")
-        self.dropping = self.pack_full = self.more_junk = self.too_heavy = False
+        self.nothing_to_shed = self.nothing_to_shed or self.too_heavy   # take_off_for_food, if it comes to that
+        self.dropping = self.pack_full = self.more_junk = self.too_heavy = self.headroom_shed = False
+        self.food_refused = None if self.room_for_food else self.food_refused   # no room to make: leave it
+        self.room_for_food = False
         self.drop_after = obs.step + DROP_RETRY   # nothing to spare: not again for a while
         # What the full pack held, for the trace: a full pack refused food and
         # light in many games (2026-11-05), and only the listing tells why.

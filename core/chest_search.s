@@ -39,6 +39,7 @@ chest_search_reveal:
     sta fi_p1,x
     ldx #HSTR_CHEST_FOUND_TRAP
     jsr huff_print_msg
+    inc zp_disturb
 !csr_found:
     lda #1
     sta df_found

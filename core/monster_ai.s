@@ -21,7 +21,7 @@ mat_sign_dy:  .byte 0
 mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
 mat_scene_dirty: .byte 0     // count of immediate non-local visible tile renders this turn (nonzero = cheap redraw path)
-mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
+mat_action_dirty: .byte 0    // bit 0: state changed, bit 1: hostile action, bit 7: moved
 mat_force_new_dirty: .byte 0 // Nonzero when new tile lost visible occupant/item (unseen mover)
 mts_eat_slot: .byte EMPTY_SLOT // Eaten target slot in monster_try_step ($ff = none)
 mat_player_stealth: .byte 0  // Race/class threshold cached once per AI tick
@@ -291,7 +291,7 @@ monster_process_one:
     jsr monster_can_cast
     bcc !mpo_no_cast+
     jsr monster_pick_spell
-    lda #1
+    lda #$03
     sta mat_action_dirty
     jmp !mpo_writeback+         // Casting used the monster's turn
 !mpo_no_cast:
@@ -342,7 +342,7 @@ monster_process_one:
     // Normal movement: move toward player
     jsr monster_move_toward
     bcc !mpo_toward_no_move+
-    lda #$81
+    lda #$83
     sta mat_action_dirty
 !mpo_toward_no_move:
     jmp !mpo_writeback+
@@ -350,7 +350,7 @@ monster_process_one:
 !mpo_flee:
     jsr monster_move_away
     bcc !mpo_flee_no_move+
-    lda #$81
+    lda #$83
     sta mat_action_dirty
 !mpo_flee_no_move:
     jmp !mpo_writeback+
@@ -358,7 +358,7 @@ monster_process_one:
 !mpo_confused:
     jsr monster_move_random
     bcc !mpo_conf_no_move+
-    lda #$81
+    lda #$83
     sta mat_action_dirty
 !mpo_conf_no_move:
 
@@ -405,7 +405,7 @@ monster_process_one:
     bcc !breed_fail+
     lda zp_mon_type
     jsr monster_spawn_one
-    lda #1
+    lda #$03
     sta mat_action_dirty
     lda ms_spawn_x
     ldy ms_spawn_y
@@ -417,6 +417,13 @@ monster_process_one:
 !mpo_done:
     lda mat_action_dirty
     beq !mpo_done_clear+
+    and #$02
+    beq !mpo_done_set+
+    lda zp_mon_flags
+    and #MF_VISIBLE
+    beq !mpo_done_set+
+    inc zp_disturb
+!mpo_done_set:
     sec
     rts
 !mpo_done_clear:
@@ -1119,7 +1126,7 @@ monster_try_step:
     jmp !mts_blocked+
 !mts_break_glyph:
     jsr glyph_remove
-    lda #1
+    lda #$03
     sta mat_action_dirty
     inc mat_force_new_dirty
 !mts_no_glyph:
@@ -1237,16 +1244,8 @@ monster_try_step:
     jsr mts_write_open
     lda #2
     jsr rng_range               // 1 - randomNumber(2): 50% break
-    beq !mts_burst_break+
-    lda #0
-    beq !mts_burst_set+
-!mts_burst_break:
-    lda #1
-!mts_burst_set:
-    jsr mts_set_door_state
-    ldx #HSTR_MAT_DOOR_BURST
-    jsr huff_print_msg
-    jmp !mts_blocked+
+    beq !mts_bash_break+
+    bne !mts_bash_unbroken+     // always (rng_range(2) returned 1)
 !mts_bash:
     jsr mts_bash_roll           // Carry set = door bursts open
     bcc !mts_blocked+
@@ -1271,6 +1270,7 @@ monster_try_step:
     jsr mts_set_door_state
     ldx #HSTR_MAT_DOOR_BURST
     jsr huff_print_msg
+    inc zp_disturb
     jmp !mts_blocked+
 !mts_secret:
     ldx zp_mon_type
@@ -1293,7 +1293,7 @@ mts_write_open:
     lda zp_mon_scratch1
     eor #$f0                    // $8_ closed -> $7_ open, flag nibble kept
     :MapWrite_ptr0_y()
-    lda #1
+    lda #$03
     sta mat_action_dirty
     lda mat_target_x
     ldy mat_target_y

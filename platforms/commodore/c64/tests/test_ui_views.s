@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #23
+    ldx #24
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -226,7 +226,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 24, $ff
+tc_results: .fill 25, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -248,7 +248,7 @@ test_start:
     lda #>help_pages
     sta help_pages_src_hi
 
-    ldx #19
+    ldx #24
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -281,6 +281,7 @@ test_start:
     jsr test_status_poisoned_row21
     jsr test_store_slot_page1_names
     jsr test_store_slot_dwarven_tool_prefix
+    jsr test_status_resting_indicator_row21
 
     jmp test_exit_trampoline
 
@@ -1394,6 +1395,89 @@ test_status_poisoned_row21:
     sta zp_hunger_state
     rts
 
+// Test 25: Row 21 "Rest*" indicator via PLF_RESTING (status_state cache diff):
+// draws "Rest*" in COL_YELLOW when PLF_RESTING is set, combines with hunger
+// ("Hungry Rest*"), and immediately erases when PLF_RESTING is cleared.
+test_status_resting_indicator_row21:
+    jsr reset_shared_state
+    lda #0
+    sta player_data + PL_NAME
+    sta status_cache_valid
+    sta player_data + PL_FLAGS
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    sta player_data + PL_HP_HI
+    sta player_data + PL_MHP_HI
+    sta zp_player_mp
+    sta zp_player_mmp
+    sta zp_player_ac
+    sta zp_hunger_state
+    sta zp_eff_poison
+    lda #1
+    sta zp_player_lvl
+    sta zp_player_dlvl
+    lda #21
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #34
+    sta zp_player_mhp_lo
+    sta player_data + PL_MHP_LO
+    sei
+    jsr status_draw                 // Warm cache with neither search nor rest
+    cli
+
+    // Enable PLF_RESTING without invalidating cache: status_state diff must redraw row 21
+    lda #PLF_RESTING
+    sta player_data + PL_FLAGS
+    sei
+    jsr status_draw
+    cli
+    lda #<expected_status_rest
+    ldx #>expected_status_rest
+    ldy #1
+    jsr assert_row21_at
+    bcc !tsr_fail+
+    // Check COL_YELLOW on row 21 col 1 ('R' of "Rest*")
+    lda COLOR_RAM + 21 * 40 + 1
+    and #$0f
+    cmp #COL_YELLOW
+    bne !tsr_fail+
+
+    // Combine with HUNGER_HUNGRY -> "Hungry Rest*"
+    lda #HUNGER_HUNGRY
+    sta zp_hunger_state
+    sei
+    jsr status_draw
+    cli
+    lda #<expected_status_hungry_rest
+    ldx #>expected_status_hungry_rest
+    ldy #1
+    jsr assert_row21_at
+    bcc !tsr_fail+
+
+    // Clear PLF_RESTING -> "Rest*" immediately erased via cache diff
+    lda #0
+    sta player_data + PL_FLAGS
+    sta zp_hunger_state
+    sei
+    jsr status_draw
+    cli
+    lda #<expected_status_rest_cleared
+    ldx #>expected_status_rest_cleared
+    ldy #1
+    jsr assert_row21_at
+    bcc !tsr_fail+
+
+    lda #$01
+    .byte $2c
+!tsr_fail:
+    lda #$00
+    sta tc_results + 24
+    lda #0
+    sta player_data + PL_FLAGS
+    sta zp_hunger_state
+    rts
+
 // itemdesc_put_store_slot must keep si_meta_hi's page bit: Page-1 store
 // stock (Magic Shop ring, Weaponsmith dagger) named from Page 0 instead
 // when the formatter stripped it to the ego ID.
@@ -1915,6 +1999,12 @@ expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_search:
     .text "Search*" ; .byte 0
+expected_status_rest:
+    .text "Rest*" ; .byte 0
+expected_status_hungry_rest:
+    .text "Hungry Rest*" ; .byte 0
+expected_status_rest_cleared:
+    .text "     " ; .byte 0
 expected_status_states:
     .text "Hungry Poisoned Search*" ; .byte 0
 expected_status_states_cured:

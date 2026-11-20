@@ -176,7 +176,8 @@
 .label zp_render_x     = $66   // Current render column
 .label zp_render_y     = $67   // Current render row
 .label zp_tile_tmp     = $68   // Temp for tile decoding
-.label zp_dirty_lo     = $69   // Dirty tile list pointer (lo)
+.label zp_disturb      = $69   // Repeat-command disturbance latch (auto-rest & auto-run)
+.label turn_rest_disturbed = zp_disturb
 .label zp_dirty_hi     = $6a   // Dirty tile list pointer (hi)
 .label zp_dirty_count  = $6b   // Number of dirty tiles
 

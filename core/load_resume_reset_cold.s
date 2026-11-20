@@ -21,11 +21,15 @@ load_resume_reset:
     sta zp_run_dir
     lda #0
     sta auto_rest_active
+    sta zp_disturb
     sta regen_frac_lo           // not saved (zp_regen_frac, the high byte, is)
     sta md_count                // no drop staged before the load
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
     sta levelup_magic_pending   // none owed by the game played before the load
 #endif
+    lda player_data + PL_FLAGS
+    and #($ff - PLF_RESTING)
+    sta player_data + PL_FLAGS
 
     // Re-init sound and seed neutral viewport origin before screen clear
     jsr hal_sound_init

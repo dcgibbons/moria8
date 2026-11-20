@@ -5267,6 +5267,26 @@ class GearTest(unittest.TestCase):
         self.assertEqual(brain.turn_burst(dragon, o, lasting=True), two // 2)
         self.assertTrue(brain.threat_ready(o, 38) or brain.native_burst(o, 38) < two)
 
+    def test_armour_that_leaves_no_room_under_the_limit_is_no_upgrade(self) -> None:
+        """C64 Balrog, 2026-11-19: a clvl 29 Halfling Rogue's AC 46 alone met
+        its weight limit once strength darts drained it, and it starved. A
+        piece that, worn in place of the old, leaves under WEIGHT_HEADROOM is
+        not bought; with room it is."""
+        from moria_playtest.brain import ARMOURY, WEIGHT_HEADROOM, WEIGHT_PER_STR
+        brain = Brain(GOALS["deep"])
+        brain.armour = {"ICAT_SHIELD": 5}
+        brain.armour_names = {"ICAT_SHIELD": "Small Metal Shield [5]"}
+        brain.sync_counts([" a) 5 Ration of Food"], "all")
+        brain.worn_listed = ["Small Metal Shield [5]"]
+        carried = brain.carried_weight()
+        assert carried is not None
+        o = self.store(brain, ARMOURY, [("Large Shield [8,+2]", 400)], 90000)
+        # 50 lb more room than carried: 3.5 lb more worn would leave 4.65 lb.
+        brain.str_code, brain.body_weight = 1, carried + WEIGHT_HEADROOM // 2 - WEIGHT_PER_STR + 35
+        self.assertIsNone(brain.gear_pick(o))
+        brain.body_weight += WEIGHT_HEADROOM                               # room: the upgrade
+        self.assertEqual(brain.gear_pick(o), ("a", "Large Shield [8,+2]"))
+
     def test_an_ego_weapon_is_valued_and_bought(self) -> None:
         """2026-11-07: "Dagger (Defender)" was looked up whole, scored 0 and
         never bought, millions of gold in hand."""
@@ -8437,6 +8457,228 @@ class PrayerTest(unittest.TestCase):
                         rows={0: "You picked up a Ration of Food.", 23: "HP:50/50  MP:20/20 AC:10 AU:32"})
         brain.decide(o, town_view((5, 5), (40, 40), dlvl=2))
         self.assertEqual((brain.food, brain.no_food), (1, False))
+
+    def test_the_weight_carried_and_its_limit_by_the_lists(self) -> None:
+        """C64 Balrog, 2026-11-19: the game refuses past STR x 130 + body
+        weight (at most 3000 tenths), pack and equipment, and shows no total:
+        the bot reckons it from its lists and the manual's weights."""
+        from moria_playtest.brain import item_weight, str_code
+        self.assertEqual((str_code("18", "50"), str_code("18", "00"), str_code("12", "")), (68, 118, 12))
+        self.assertEqual(item_weight("Mace (Defender) (+3,+3)"), 50)
+        self.assertEqual(item_weight("Chain Mail (Resist Lightning) [32,+4]"), 120)
+        brain = Brain(GOALS["deep"])
+        self.assertIsNone(brain.carried_weight())                       # never listed: unknown
+        self.assertFalse(brain.too_heavy_for("Bolt", 99))
+        brain.sync_counts([" a) 5 Ration of Food", " b) 99 Bolt", " c) 2 Potion of Cure Light Wounds"], "all")
+        brain.worn_listed = brain.read_worn(["Equipment", " a) Weapon: Mace (Defender) (+3,+3)",
+                                             " b) Body:   Chain Mail (Resist Lightning) [32,+4]",
+                                             " c) Shield: (none)", " g) Light:  Wooden Torch (43 turns)"])
+        self.assertEqual(brain.worn_listed, ["Mace (Defender) (+3,+3)", "Chain Mail (Resist Lightning) [32,+4]",
+                                             "Wooden Torch (43 turns)"])
+        self.assertEqual(brain.carried_weight(), 50 + 198 + 8 + 50 + 120 + 10)
+        brain.str_code, brain.body_weight = 3, 60
+        self.assertEqual(brain.weight_limit(), 3 * 130 + 60)              # a drained STR: 45 lb
+        brain.str_code = 68
+        self.assertEqual(brain.weight_limit(), 3000)                      # 18/50: the cap
+        brain.credit("Ration of Food", 1)
+        self.assertEqual(brain.carried_weight(), 436 + 10)                # bought since the list
+        brain.str_code, brain.body_weight = 3, 0
+        self.assertTrue(brain.too_heavy_for("Potion of Cure Light Wounds"))
+        brain.sync_counts([" a) 5 Ration of Food"], "all")               # a new list replaces it all
+        self.assertEqual(brain.carried_weight(), 50 + 50 + 120 + 10)
+
+    def test_created_food_refused_for_weight_makes_room(self) -> None:
+        """C64 Balrog, 2026-11-19: 1,315 of 2,051 weight refusals were the
+        ration Create Food left underfoot; it stayed there, the Priest cast
+        again on the same square, and characters starved. Step off it (a
+        drop needs a free square), drop by the tiers, and go back for it."""
+        from moria_playtest.brain import KEY_DROP, KEY_PICKUP
+        from moria_playtest.magic import Prayer
+        brain = Brain(GOALS["reach_dl2"])
+        brain.food, brain.magic.study_due, brain.magic.listed = 0, False, True
+        brain.no_food = True
+        brain.magic.known = {"Create Food": Prayer("f", 5, 7, "Words of Wisdom")}
+        status = "HP:50/50  MP:20/20 AC:10 AU:32"
+        view = town_view((5, 5), (40, 40), dlvl=2)
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=50, mhp=50, rows={0: "You create food.", 23: status})
+        self.assertEqual(brain.decide(o, view).key, KEY_PICKUP)
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=50, mhp=50,
+                        rows={0: "You can't carry that much weight.", 23: status})
+        decision = brain.decide(o, view)
+        self.assertEqual(decision.reason, "step off the food: room to drop")
+        step = next(d for d, k in DIRS.items() if k == decision.key)
+        spot = (5 + step[0], 5 + step[1])
+        o = command_obs(pos=spot, dlvl=2, clvl=8, hp=50, mhp=50, rows={23: status})
+        decision = brain.decide(o, town_view(spot, (40, 40), dlvl=2))
+        self.assertEqual((decision.key, decision.layer), (KEY_DROP, "drop"))
+        listing = command_obs(pos=spot, dlvl=2, clvl=8, rows={0: "Inventory", 2: " a) Holy Book of Prayers [Words of Wisdom]",
+                                                             3: " b) 6 Flask of Oil (250 turns)",
+                                                             4: " c) 4 Potion of Cure Light Wounds"})
+        listing.mode, listing.stage = Mode.ITEM, "list"
+        brain.listed = True
+        decision = brain.decide(listing, town_view(spot, (40, 40), dlvl=2))
+        self.assertEqual(decision.key, ord("C"), decision.reason)        # a supply before the light's oil
+        self.assertTrue(brain.room_made)
+        o = command_obs(pos=spot, dlvl=2, clvl=8, hp=50, mhp=50, rows={23: status})
+        decision = brain.decide(o, town_view(spot, (40, 40), dlvl=2))
+        self.assertEqual(decision.reason, "back to the food: room made")
+        o = command_obs(pos=(5, 5), dlvl=2, clvl=8, hp=50, mhp=50, rows={23: status})
+        decision = brain.decide(o, view)
+        self.assertEqual((decision.key, decision.reason), (KEY_PICKUP, "pick up the food: room made"))
+
+    def test_town_headroom_sheds_before_the_stores_refuse(self) -> None:
+        """C64 Balrog, 2026-11-19: refusals came 54 per 100,000 steps once the
+        weight was counted on loading, and the refused were food, Word of
+        Recall and potions. In town the bot keeps WEIGHT_HEADROOM free,
+        shedding by the tiers once a fresh list confirms the estimate."""
+        from moria_playtest.brain import KEY_DROP, WEIGHT_HEADROOM, WEIGHT_PER_STR
+        brain = Brain(GOALS["deep"])
+        pack = {0: "Inventory", 2: " a) 5 Ration of Food", 3: " b) 99 Bolt", 4: " c) 1 Scroll of Word of Recall"}
+        brain.sync_counts([pack[k] for k in (2, 3, 4)], "all")
+        brain.worn_listed = ["Chain Mail (Resist Lightning) [32,+4]"]
+        carried = brain.carried_weight()
+        assert carried is not None
+        brain.str_code, brain.body_weight = 1, carried - WEIGHT_PER_STR + WEIGHT_HEADROOM // 2   # 5 lb free
+        view = town_view((5, 5), (40, 40))
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=27)
+        decision = brain.drop_junk(o, view)
+        self.assertIsNotNone(decision)
+        assert decision is not None
+        self.assertEqual(decision.key, KEY_DROP)
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=27, rows=pack)
+        listing.stage = "list"
+        decision = brain.drop_prompt(listing)
+        self.assertEqual(decision.key, ord("B"), decision.reason)        # the Bolts, not food or recall
+        brain.body_weight += WEIGHT_HEADROOM                              # room again
+        brain.drop_after = 0
+        brain.sync_counts([pack[k] for k in (2, 3, 4)], "all")
+        self.assertIsNone(brain.drop_junk(o, view))
+        # The estimate over, the fresh list not: nothing dropped.
+        brain.weight_added = 2 * WEIGHT_HEADROOM
+        self.assertEqual(brain.drop_junk(o, view).key, KEY_DROP)
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=27, rows=pack)
+        listing.stage = "list"
+        brain.listed = True
+        self.assertEqual(brain.drop_prompt(listing).key, KEY_RUNSTOP)
+
+    def test_a_pickup_the_limit_would_refuse_is_left(self) -> None:
+        """C64 Balrog, 2026-11-19: 736 pickups were walked to and refused for
+        weight. Food is still taken (make_room_for_food); the rest is left."""
+        brain = Brain(GOALS["deep"])
+        brain.sync_counts([" a) 5 Ration of Food", " b) 8 Flask of Oil (250 turns)"], "all")
+        brain.str_code, brain.body_weight = 1, 0                         # 13 lb, and 13 lb carried
+        view = town_view((5, 5), (40, 40), dlvl=3)
+        brain.items_seen = {(8, 5): ("!", "Potion of Cure Light Wounds"), (5, 9): (",", "Ration of Food")}
+        o = command_obs(pos=(5, 5), dlvl=3, clvl=20, hp=50, mhp=50)
+        decision = brain.collect(o, view)
+        assert decision is not None
+        self.assertEqual(brain.collect_to, (5, 9), decision.reason)     # the food, not the potion
+        brain.str_code = 18
+        brain.level.collect_walks.clear()
+        brain.collect_to = None
+        brain.items_seen = {(8, 5): ("!", "Potion of Cure Light Wounds")}
+        self.assertIsNotNone(brain.collect(o, view))                     # room: taken
+
+    def test_a_restore_strength_is_carried_and_drunk_where_drained(self) -> None:
+        """C64 Balrog, 2026-11-19: strength darts drained a clvl 29 Halfling
+        Rogue until the stores refused even the Restore Strength that would
+        lift its limit, and it starved with 1.1M gold. One is carried from
+        RESTORE_STR_LEVEL, two once drained, and drunk where the drain is."""
+        from moria_playtest.brain import RESTORE_STR, RESTORE_STR_LEVEL
+        brain = Brain(GOALS["deep"])
+        brain.clvl = RESTORE_STR_LEVEL - 1
+        self.assertEqual(brain.restores_wanted(), [])                     # early: gold for the kit
+        brain.clvl = 29
+        self.assertEqual(brain.restores_wanted(), [RESTORE_STR])
+        self.assertIn(RESTORE_STR, brain.shopping_list())
+        brain.credit(RESTORE_STR, 1)
+        self.assertEqual(brain.restores_wanted(), [])
+        stats = "ST:{st}  IN:11  WI:12  DX:18/50  CO:15  CH:17"
+        view = town_view((5, 5), (40, 40), dlvl=24)
+        brain.track_stats(command_obs(pos=(5, 5), dlvl=24, clvl=29, rows={22: stats.format(st="18/40")}))
+        brain.track_stats(command_obs(pos=(5, 5), dlvl=24, clvl=29, rows={22: stats.format(st="18/10")}))
+        self.assertTrue(brain.str_drained_ever)
+        self.assertEqual(brain.restores_wanted(), [RESTORE_STR])          # two once drained
+        o = command_obs(pos=(5, 5), dlvl=24, clvl=29, hp=200, mhp=200, rows={22: stats.format(st="18/10")})
+        decision = brain.quaff(o, view)
+        assert decision is not None
+        self.assertEqual(decision.reason, f"ST drained: drink {RESTORE_STR}")   # on DL24, not home
+
+    def test_too_heavy_sheds_an_empty_launcher_then_a_spare_weapon(self) -> None:
+        """C64 Balrog, 2026-11-19: the clvl 29 Halfling Rogue's whole pack was
+        Spellbook Magick II, a Heavy Crossbow (+1,+1) with no Bolt and a Word
+        of Recall; every store refused its food. The 20 lb crossbow goes;
+        then a spare melee weapon, never the one a wielded launcher stowed."""
+        from moria_playtest.brain import GENERAL_STORE
+        rogue = {0: "Inventory", 2: " a) Spellbook Magick II", 3: " b) Heavy Crossbow (+1,+1)",
+                 4: " c) Scroll of Word of Recall"}
+
+        def drop(rows: dict[int, str], brain: Brain | None = None) -> Decision:
+            brain = brain or Brain(GOALS["deep"])
+            brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
+            brain.refused_at = GENERAL_STORE
+            listing = command_obs(pos=(5, 5), dlvl=0, clvl=29, rows=rows)
+            listing.stage = "list"
+            return brain.drop_prompt(listing)
+
+        self.assertEqual(drop(rogue).key, ord("B"))
+        self.assertEqual(drop({**rogue, 5: " d) 40 Bolt"}).key, ord("D"))     # loaded: the Bolts go first
+        sword = {0: "Inventory", 2: " a) Spellbook Magick II", 3: " b) Broad Sword (+2,+3)",
+                 4: " c) Scroll of Word of Recall"}
+        self.assertEqual(drop(sword).key, ord("B"))
+        archer = Brain(GOALS["deep"])
+        archer.weapon, archer.wielding_launcher = ("Broad Sword", 3), True
+        self.assertEqual(drop(sword, archer).key, KEY_RUNSTOP)              # its melee weapon stays
+
+    def test_food_refused_with_nothing_to_shed_takes_off_armour(self) -> None:
+        """C64 Balrog, 2026-11-19: the Halfling Rogue, its crossbow gone, held
+        only a book and Word of Recall, the AC 46 worn at its drained limit,
+        and the General Store refused its ration. Out of food: the heaviest
+        worn piece but body armour and weapon comes off and is dropped, and
+        the General Store is tried again."""
+        from moria_playtest.brain import GENERAL_STORE, KEY_DROP, KEY_TAKEOFF
+        brain = Brain(GOALS["deep"])
+        brain.food = 0
+        brain.armour_names = {"ICAT_ARMOR": "Metal Brigandine Armor [19,+6]", "ICAT_SHIELD": "Large Shield [3,+4]",
+                              "ICAT_HELM": "Steel Helm [2,+3]", "ICAT_BOOTS": "Hard Leather Boots [2,+3]",
+                              "ICAT_GLOVES": "Leather Gloves [1,+3]"}
+        brain.armour = {"ICAT_ARMOR": 25, "ICAT_SHIELD": 7, "ICAT_HELM": 5, "ICAT_BOOTS": 5, "ICAT_GLOVES": 4}
+        view = town_view((5, 5), (40, 40))
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=29)
+        self.assertIsNone(brain.take_off_for_food(o, view))                # nothing refused yet
+        brain.at_store, brain.buying = GENERAL_STORE, "Ration of Food"
+        refused = command_obs(pos=(5, 5), dlvl=0, clvl=29, rows={23: " You can't carry that much weight."})
+        refused.stage = "message"
+        brain.store(refused)
+        self.assertTrue(brain.food_weight_refused)
+        pack = {0: "Inventory", 2: " a) Spellbook Magick II", 3: " b) Scroll of Word of Recall"}
+        brain.dropping = brain.listed = True
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=29, rows=pack)
+        listing.stage = "list"
+        self.assertEqual(brain.drop_prompt(listing).key, KEY_RUNSTOP)       # no tier left
+        self.assertTrue(brain.nothing_to_shed)
+        decision = brain.take_off_for_food(o, view)
+        assert decision is not None
+        self.assertEqual((decision.key, brain.taking_off), (KEY_TAKEOFF, "Large Shield [3,+4]"))   # 10 lb
+        prompt = command_obs(pos=(5, 5), dlvl=0, clvl=29, rows={0: "Take off which item (a-e)?"})
+        prompt.mode, prompt.stage = Mode.ITEM, "which"
+        self.assertEqual(brain.pick_item(prompt).key, ord("?"))
+        equipment = command_obs(pos=(5, 5), dlvl=0, clvl=29, rows={
+            0: "Equipment", 2: " a) Weapon: Cutlass (+5,+6)", 3: " b) Body:   Metal Brigandine Armour [19,+6]",
+            4: " c) Shield: Large Shield [3,+4]", 5: " d) Head:   Steel Helm [2,+3]"})
+        equipment.mode, equipment.stage = Mode.ITEM, "list"
+        self.assertEqual(brain.pick_item(equipment).key, ord("C"))
+        self.assertEqual((brain.armour["ICAT_SHIELD"], brain.drop_name), (0, "Large Shield [3,+4]"))
+        self.assertEqual(brain.drop_junk(o, view).key, KEY_DROP)
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=29, rows={**pack, 4: " c) Large Shield [3,+4]"})
+        listing.stage = "list"
+        brain.listed = True
+        decision = brain.drop_prompt(listing)
+        self.assertEqual(decision.key, ord("C"), decision.reason)
+        self.assertFalse(brain.shopped)                                     # the General Store again
+        brain.food = 3
+        brain.food_weight_refused, brain.nothing_to_shed = True, True
+        self.assertIsNone(brain.take_off_for_food(o, view))                # fed: the armour stays
 
     def test_no_heal_that_the_adjacent_creatures_outrun(self) -> None:
         """M5b round 8: Cure Light Wounds prayed over and over beside a

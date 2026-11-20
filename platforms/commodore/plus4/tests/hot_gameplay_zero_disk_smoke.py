@@ -211,21 +211,22 @@ def stage_dl1_fixture(connector: VICEConnector, symbols: dict[str, str]) -> tupl
     connector.poke(sym_int(symbols, ".trap_y"), 10)
     connector.poke(sym_int(symbols, ".trap_type"), TRAP_ARROW)
 
-    # Player position (11, 10), high HP (200), high Rogue disarm skill so
-    # door_pick_roll succeeds deterministically on the first attempt.
+    # Player position (11, 10), HP 50/50 (keeps 4-turn VMS HP regen below 1 whole
+    # HP so 1d8 arrow-trap rolls of 1..2 cannot heal back to max HP), high Rogue
+    # disarm skill so door_pick_roll succeeds deterministically on the first attempt.
     pdata = sym_int(symbols, ".player_data")
     connector.poke(sym_int(symbols, ".zp_player_x"), 11)
     connector.poke(sym_int(symbols, ".zp_player_y"), 10)
     connector.poke(pdata + PL_MAP_X, 11)
     connector.poke(pdata + PL_MAP_Y, 10)
 
-    connector.poke(sym_int(symbols, ".zp_player_hp_lo"), 200)
+    connector.poke(sym_int(symbols, ".zp_player_hp_lo"), 50)
     connector.poke(sym_int(symbols, ".zp_player_hp_hi"), 0)
-    connector.poke(sym_int(symbols, ".zp_player_mhp_lo"), 200)
+    connector.poke(sym_int(symbols, ".zp_player_mhp_lo"), 50)
     connector.poke(sym_int(symbols, ".zp_player_mhp_hi"), 0)
-    connector.poke(pdata + PL_HP_LO, 200)
+    connector.poke(pdata + PL_HP_LO, 50)
     connector.poke(pdata + PL_HP_HI, 0)
-    connector.poke(pdata + PL_MHP_LO, 200)
+    connector.poke(pdata + PL_MHP_LO, 50)
     connector.poke(pdata + PL_MHP_HI, 0)
 
     connector.poke(pdata + PL_CLASS, CLASS_ROGUE)
@@ -389,8 +390,8 @@ def main() -> int:
             errors.append(f"door_state_count={door_cnt}, expected 0 after picking lock")
         if trap_tile is None or (trap_tile & TILE_TYPE_MASK) != TILE_TRAP:
             errors.append(f"trap tile=${trap_tile or 0:02x}, expected revealed TILE_TRAP")
-        if hp is None or not (192 <= hp <= 199):
-            errors.append(f"hp={hp}, expected 192..199 after 1d8 arrow trap from 200")
+        if hp is None or not (42 <= hp <= 49):
+            errors.append(f"hp={hp}, expected 42..49 after 1d8 arrow trap from 50")
         if mp != 44:
             errors.append(f"mp={mp}, expected 44 after zero-disk repeat cast (47->44)")
         if cur_ovl != OVL_SPELL:
@@ -412,7 +413,7 @@ def main() -> int:
 
         print(
             f"PASS: {args.name} (0 disk/overlay/catalog hits; pos=({px},{py}), "
-            f"hp=200->{hp}, doors=OPEN, inv={inv_before}->{inv_after})"
+            f"hp=50->{hp}, doors=OPEN, inv={inv_before}->{inv_after})"
         )
         return 0
     finally:

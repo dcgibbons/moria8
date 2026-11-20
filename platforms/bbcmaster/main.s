@@ -798,9 +798,7 @@ hal_msg_print_indirect_aux:
 #undef DISARM_COMMAND_EXTERNAL
 #undef PLAYER_LOOK_EXTERNAL
 #import "dungeon_scroll.s"
-#define TURN_REST_DISTURBED_EXTERNAL
 #import "../../core/turn.s"
-#undef TURN_REST_DISTURBED_EXTERNAL
 #import "../../core/ui_restore.s"
 // Play-phase helpers in BeebPlaySlot ($9000-$A3FF in SWR Bank 4, resident
 // alongside all overlays $A800-$BFFF and unaffected by ANDY $8000-$8FFF).
@@ -864,7 +862,6 @@ ovl_auxdata_end:
 .assert "BeebAuxData fits $6000-$72FF (19 pages: ITEMCAT Slots 0..1 & catalog follow in Bank 6)", ovl_auxdata_end <= $6000 + BEEB_CACHE_AUX_PAGES * $100, true
 
 .segment Default
-turn_rest_disturbed: .byte 0
 
 // ============================================================
 // Overlay segment blocks ($A800-$BFFF in Bank 4)

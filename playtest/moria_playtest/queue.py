@@ -240,6 +240,22 @@ def git(*args: str, check: bool = True, timeout: float = 120) -> str:
     return done.stdout.strip()
 
 
+# Paths that are not the game: a commit changing only these keeps the build
+# queue on its build (maintainer, 2026-11-19: "commiting playtest bot changes
+# should NOT restart the build queue. the build queue is for the game itself.")
+NOT_GAME = ("playtest/", "docs/")
+
+
+def game_changed(old: str, new: str) -> bool:
+    """Whether ``new`` changes the game since ``old``: any path but playtest/,
+    docs/ and top-level Markdown. True when git cannot tell."""
+    try:
+        names = git("diff", "--name-only", old, new).splitlines()
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        return True
+    return any(n and not n.startswith(NOT_GAME) and not ("/" not in n and n.endswith(".md")) for n in names)
+
+
 def tree_state() -> dict[str, Any]:
     """This working tree's commit and whether it differs from it."""
     return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
@@ -1287,6 +1303,13 @@ class BuildQueue:
         retry = entry.get("retry")
         return [] if not retry else [retry] if isinstance(retry, str) else list(retry)
 
+    def carry(self, old: str | None, new: str) -> None:
+        """Every port covering ``old`` goes on covering as ``new``: a build of
+        the same game (``game_changed``), its coverage not started again."""
+        for entry in self.state["platforms"].values():
+            if old is not None and entry.get("build") == old:
+                entry["build"] = new
+
     def coverage(self, name: str, build: str | None) -> dict[str, Any]:
         """Port ``name``'s entry, its coverage started again for a new ``build``."""
         entry = self.platform(name)
@@ -1607,9 +1630,11 @@ class Service:
 
     def refresh_ci(self) -> None:
         """The build queue's build: HEAD's commit for every port in
-        ``build_platforms``, snapshotted when HEAD moves (checked every
-        ``fetch_every_s``). The main queue's fetch and fast-forward, if any,
-        move HEAD first. A failed build keeps the one before."""
+        ``build_platforms``, snapshotted when HEAD moves the game (checked
+        every ``fetch_every_s``; ``game_changed``: a commit of the bot or
+        docs alone keeps the build and its coverage). The main queue's fetch
+        and fast-forward, if any, move HEAD first. A failed build keeps the
+        one before."""
         platforms = list(self.config.get("build_platforms") or [])
         if not platforms or time.time() - self.last_ci < self.config["fetch_every_s"]:
             return
@@ -1619,7 +1644,18 @@ class Service:
             head = git("rev-parse", "HEAD")
             state["head"] = head
             current = build_meta(self.ci_build, self.home) if self.ci_build else {}
-            if current.get("commit") != head or not set(platforms) <= set(current.get("platforms", [])):
+            ported = set(platforms) <= set(current.get("platforms", []))
+            if ported and current.get("commit") not in (None, head) and not game_changed(current["commit"], head):
+                # The bot or docs alone: built, for the Balrog queue's newest
+                # bot, while each port's coverage of the game goes on.
+                old = self.ci_build
+                self.log(f"build queue: {head[:12]} changes no game file: building it, coverage goes on")
+                self.ci_build = snapshot_build(platforms, "commit", self.home)
+                self.buildq.carry(old, self.ci_build)
+                self.buildq.save()
+                state["game_unchanged"] = head
+                self.log(f"build queue: playing build {self.ci_build}")
+            elif current.get("commit") != head or not ported:
                 self.log(f"build queue: building {head[:12]} for {', '.join(platforms)}")
                 self.ci_build = snapshot_build(platforms, "commit", self.home)
                 self.log(f"build queue: playing build {self.ci_build}")

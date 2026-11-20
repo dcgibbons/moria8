@@ -265,6 +265,8 @@ local CLASS_PROPS_ADDR = 0x{syms.get("class_properties", 0):04X}
 local PL_RACE = {core_const("player.s", "PL_RACE")}
 local PL_CLASS = {core_const("player.s", "PL_CLASS")}
 local PL_MHP_LO = {core_const("player.s", "PL_MHP_LO")}
+local PL_FLAGS = {core_const("player.s", "PL_FLAGS")}
+local PLF_RESTING = {core_const("player.s", "PLF_RESTING")}
 local RACE_PROP_SIZE = {core_const("tables.s", "RACE_PROP_SIZE")}
 local CLASS_PROP_SIZE = {core_const("tables.s", "CLASS_PROP_SIZE")}
 local IGGY_ID = {catalog_lore.const("CATALOG_IGGY_ID")}
@@ -288,24 +290,28 @@ local function can_read_shadow()
     return prog:read_u8(ACCCON_SHADOW_ADDR) == 0x01 and prog:read_u8(0x00F4) == 0x04
 end
 
-local function restore_acccon()
-    local acc = prog:read_u8(ACCCON_SHADOW_ADDR)
-    if acc == 0 then acc = 0x01 end
-    prog:write_u8(0xFE34, acc)
+local function enter_shadow()
+    local prev = prog:read_u8(0xFE34)
+    prog:write_u8(0xFE34, prev | 0x04)
+    return prev
+end
+
+local function leave_shadow(prev)
+    prog:write_u8(0xFE34, prev)
 end
 
 local function read_shadow_u8(addr)
     if not can_read_shadow() then return 0x20 end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local v = prog:read_u8(addr)
-    restore_acccon()
+    leave_shadow(prev)
     return v
 end
 
 local function write_shadow_u8(addr, val)
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     prog:write_u8(addr, val)
-    restore_acccon()
+    leave_shadow(prev)
 end
 
 local function read_map_u8(x, y)
@@ -346,19 +352,19 @@ end
 
 local function rowtext(r)
     if not can_read_shadow() then return "" end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local base = CHAR_SHADOW + r * 80
     local chars = {{}}
     for c = 0, 79 do
         chars[c + 1] = sc_to_ascii(prog:read_u8(base + c))
     end
-    restore_acccon()
+    leave_shadow(prev)
     return table.concat(chars)
 end
 
 local function screen_has(txt)
     if not can_read_shadow() then return false end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local found = false
     for r = 0, 23 do
         local base = CHAR_SHADOW + r * 80
@@ -371,7 +377,7 @@ local function screen_has(txt)
             break
         end
     end
-    restore_acccon()
+    leave_shadow(prev)
     return found
 end
 
@@ -451,7 +457,7 @@ local function in_town()
     if screen_has("Character") or screen_has("Inventory") or screen_has("Equipment") or screen_has("Command Reference") then
         return false
     end
-    prog:write_u8(0xFE34, 0x05)
+    local prev = enter_shadow()
     local walls = 0
     for r = 2, 19 do
         local base = CHAR_SHADOW + r * 80
@@ -461,7 +467,7 @@ local function in_town()
             end
         end
     end
-    restore_acccon()
+    leave_shadow(prev)
     return walls >= 20
 end
 
@@ -755,6 +761,7 @@ function run()
     -- swapping OVL_HELP -> OVL_CHEST -> OVL_HELP), and S2a+S2b (acid trap at X=1
     -- preserving X across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
     write_play_u8(AUTO_REST_ACTIVE_ADDR, 0)
+    prog:write_u8(PLAYER_DATA_ADDR + PL_FLAGS, prog:read_u8(PLAYER_DATA_ADDR + PL_FLAGS) & (~PLF_RESTING & 0xFF))
     prog:write_u8(PLAYER_HP_ADDR, 60)
     wait_frames(10)
     local px, py = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)

@@ -222,6 +222,43 @@ class ScheduleTest(unittest.TestCase):
         service.schedule(q, {})   # one each: nothing more starts
         self.assertEqual(sum(j["queue"] == "build" for j in service.running.values()), 3)
 
+    def test_a_commit_of_bot_or_docs_alone_keeps_the_build_queue_on_its_build(self) -> None:
+        """Maintainer, 2026-11-19: "commiting playtest bot changes should NOT
+        restart the build queue. the build queue is for the game itself." A
+        new HEAD whose changes since the build's commit are all under
+        playtest/ or docs/, or top-level Markdown, is built (the Balrog queue
+        plays the newest bot) but each port's coverage goes on where it was;
+        one that touches anything else starts the coverage again."""
+        service = self.service(4)
+        service.config.update(build_platforms=["c64"], fetch_every_s=0)
+        service.ci_build = "b1"
+        service.last_ci = 0
+        changed = {"files": ""}
+
+        def fake_git(*args: str, **_: object) -> str:
+            if args[:2] == ("rev-parse", "HEAD"):
+                return "new"
+            if args[0] == "diff":
+                return changed["files"]
+            raise AssertionError(args)
+
+        meta = {"commit": "old", "platforms": ["c64"]}
+        entry = service.buildq.coverage("c64", "b1")
+        entry["next"] = 7
+        with mock.patch.object(queue, "git", fake_git), \
+                mock.patch.object(queue, "build_meta", return_value=meta), \
+                mock.patch.object(queue, "snapshot_build", side_effect=["b2", "b3"]):
+            changed["files"] = "playtest/moria_playtest/brain.py\nplaytest/tests/test_m1.py\ndocs/FEATURE_MAP.md\nAGENTS.md"
+            service.refresh_ci()
+            self.assertEqual(service.ci_build, "b2")
+            self.assertEqual(service.buildq.take("c64", "b2"), queue.combos("c64")[7])   # goes on
+            self.assertEqual(service.buildq.platform("c64")["cycle"], 1)
+            changed["files"] = "playtest/moria_playtest/brain.py\ncore/turn.s"
+            service.last_ci = 0
+            service.refresh_ci()
+            self.assertEqual(service.ci_build, "b3")
+            self.assertEqual(service.buildq.take("c64", "b3"), queue.combos("c64")[0])   # starts again
+
     def test_build_per_port_plays_that_many_runs_of_each_port(self) -> None:
         """Maintainer, 2026-11-18: idle cores; ``build_per_port`` runs of each
         port at once, each a different combination, never more than are
