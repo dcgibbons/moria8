@@ -648,7 +648,8 @@ C64_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("c64", "tramp_winner_royal", "platforms/commodore/c64/main.s", "Prompts disk, loads modal_misc asset directly, switches BANK_NO_KERNAL", targets=("winner_apply_retirement_bonus_overlay", "royal_screen")),
     _custom("c64", "tramp_ui_legal_display", "platforms/commodore/c64/legal.s", "C64 legal asset stream + RAM IRQ reinstall + dec $01 viewer wrapper", targets=("asset_load_required", "legal_viewer")),
     _custom("c64", "tramp_do_look", "platforms/commodore/c64/look_trampoline.s", "Lives in separate look_trampoline.s unit", overlay="OVL_MODAL_MISC", target="do_look"),
-    _custom("c64", "tramp_catalog_place_win", "platforms/commodore/c64/monster_catalog64.s", "Banks banked win-creature catalog via hal_memory_cpu_port", target="catalog_place_win_creature"),
+    _custom("c64", "tramp_catalog_place_win", "platforms/commodore/c64/monster_catalog64.s", "Banks banked win-creature catalog via hal_memory_cpu_port; C = 1 selects the win creature", target="catalog_place_far"),
+    _custom("c64", "tramp_catalog_place_wanderer", "platforms/commodore/c64/monster_catalog64.s", "Banks banked turn wanderer via hal_memory_cpu_port; C = 0 selects the wanderer", target="catalog_place_far"),
     _custom("c64", "tramp_item_pickup", "platforms/commodore/c64/main.s", "Preserves caller $01/I and Carry around banked item_pickup", target="item_pickup"),
 )
 

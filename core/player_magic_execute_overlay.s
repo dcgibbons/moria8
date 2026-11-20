@@ -1,5 +1,6 @@
 #importonce
 #import "df_target_row.s"
+#import "monster_polymorph.s"
 // player_magic_execute_overlay.s — overlay-owned spell/prayer execution
 //
 // Low-frequency spell effect execution lives here to keep the resident C64
@@ -456,35 +457,12 @@ eff_recharge_item:
     jsr pmx_print_recharged_item
 !eri_done:
     rts
+// Polymorph Other: VMS magic.inc 20 -> spells.inc poly_monster.
 eff_polymorph_other:
     jsr eff_directional_monster
     bcc !epo_done+
-    lda zp_player_dlvl
-    beq !epo_done+
-    stx pmx_work_idx
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-#if HAL_PLATFORM_MONSTER_CATALOG
-    jsr catalog_slot_is_balrog
-    beq !epo_done+
-#else
-    lda cr_level,x
-    cmp #100
-    bcs !epo_done+
-#endif
-    ldy #MX_X
-    lda (zp_ptr0),y
-    sta ms_spawn_x
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    sta ms_spawn_y
-    ldx pmx_work_idx
-    jsr monster_remove
-    jsr pick_creature_type
-    jsr monster_spawn_one
-    inc zp_dirty_count
+    :PolymorphResist(pmx_work_idx, combat_msg_monster_unaffected)
+    :PolymorphReplace(pmx_work_idx)
 !epo_done:
     rts
 

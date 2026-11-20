@@ -390,6 +390,15 @@ high_resident_end:
 #import "../../core/scene_mat_tile.s"
 #import "../../core/scene_force.s"
 #import "../../core/recall.s"
+// The summoned undead's picker sits in ATARI.BNK beside cat_undead (RAM in the
+// game's banking, like the level index): Default has no room.
+#define UNDEAD_PICK_SEGMENT_CUSTOM
+.macro UndeadPickSegment() {
+    .segment RuntimeBanked
+}
+.macro UndeadPickRestoreSegment() {
+    .segment Default
+}
 #import "../../core/monster_magic.s"
 .macro ChestSummonsSegment() {
     .segment Default

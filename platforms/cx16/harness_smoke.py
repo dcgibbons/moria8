@@ -1230,9 +1230,137 @@ def scenario_dungeon_descend(tb: X16Bench) -> None:
     tb.log("SCENARIO DONE")
 
 
+# A stub's code and data in the VERA row staging buffers ($0700-$07FF), idle
+# while the game waits for a key (KEY_EVENT_STUB).
+STUB_BASE = 0x0700
+STUB_DATA = 0x0730
+STUB_COUNT = 0x07F8
+MAX_SIGHT = 20          # VMS max_sight (core/monster_catalog.s CAT_MAX_SIGHT)
+GEN_RESERVE_FROM = 26   # MAX_MONSTERS - CAT_GEN_RESERVE: no wanderer from here
+
+
+def _run_stub(tb: X16Bench, code: list[int]) -> None:
+    assert STUB_BASE + len(code) <= STUB_DATA
+    for i, op in enumerate(code):
+        tb.write_u8(STUB_BASE + i, op)
+    tb.run_addr(STUB_BASE)
+
+
+def _abs(op: int, addr: int) -> list[int]:
+    return [op, addr & 0xFF, addr >> 8]
+
+
+def _live_monsters(tb: X16Bench) -> dict[int, tuple[int, int, int, int, int]]:
+    """Slot -> (type, x, y, flags, sleep) for every live monster."""
+    mt = tb.syms["monster_table"]
+    out = {}
+    for i in range(32):
+        b = mt + i * 12
+        t = tb.read_u8(b + 2)
+        if t != 0xFF:
+            out[i] = (t, tb.read_u8(b), tb.read_u8(b + 1), tb.read_u8(b + 5), tb.read_u8(b + 7))
+    return out
+
+
+def _check_new_wanderer(tb: X16Bench, tag: str, before: dict, type_ok) -> None:
+    """One new monster: beyond max_sight (Chebyshev), awake, of the level's mix."""
+    after = _live_monsters(tb)
+    new = [after[i] for i in after if i not in before]
+    tb.assert_line(f"{tag}_one_new", len(new) == 1, f"new monsters {new}")
+    if len(new) != 1:
+        return
+    t, x, y, flags, sleep = new[0]
+    px = tb.read_u8(tb.syms["zp_player_x"])
+    py = tb.read_u8(tb.syms["zp_player_y"])
+    dist = max(abs(x - px), abs(y - py))
+    tb.assert_line(f"{tag}_beyond_sight", dist > MAX_SIGHT, f"at ({x},{y}), player ({px},{py}): {dist}")
+    tb.assert_line(f"{tag}_awake", flags & 0x01 == 1 and sleep == 0, f"flags {flags:02X} sleep {sleep}")
+    tb.assert_line(f"{tag}_type", type_ok(t), f"type {t}")
+
+
+def _check_wanderers(tb: X16Bench, tag: str, type_ok, clear: bool = False) -> None:
+    """VMS moria.inc alloc_monster(floor_set, 1, max_sight, false): one awake
+    monster beyond sight, none once the table is down to its reserve rows.
+    clear: empty the table first (a deep level is generated full to them)."""
+    count = tb.syms["zp_mon_count"]
+    if clear:
+        _run_stub(tb, _abs(0x20, tb.syms["monster_init_table"]) + [0x60])
+    before = _live_monsters(tb)
+    n0 = tb.read_u8(count)
+    _run_stub(tb, _abs(0x20, tb.syms["catalog_place_wanderer"]) + [0x60])
+    tb.assert_line(f"{tag}_count", tb.read_u8(count) == n0 + 1, f"zp_mon_count {n0} -> {tb.read_u8(count)}")
+    _check_new_wanderer(tb, tag, before, type_ok)
+    before = _live_monsters(tb)
+    n1 = tb.read_u8(count)
+    tb.write_u8(count, GEN_RESERVE_FROM)
+    _run_stub(tb, _abs(0x20, tb.syms["catalog_place_wanderer"]) + [0x60])
+    kept = tb.read_u8(count) == GEN_RESERVE_FROM and _live_monsters(tb) == before
+    tb.write_u8(count, n1)
+    tb.assert_line(f"{tag}_reserve_kept", kept, "a wanderer took a breeder/summon row")
+
+
+def _check_turn_wanderer(tb: X16Bench) -> None:
+    """turn_post_action rolls 1 in 160 for a wanderer (VMS max_malloc_chance):
+    from an empty table, turns until the first monster appears."""
+    _run_stub(tb, _abs(0x20, tb.syms["monster_init_table"]) + [0x60])
+    count = tb.syms["zp_mon_count"]
+    lo, hi = STUB_COUNT, STUB_COUNT + 1
+    code = [0xA9, 0x00] + _abs(0x8D, lo) + _abs(0x8D, hi)
+    loop = len(code)
+    code += _abs(0x20, tb.syms["turn_post_action"]) + _abs(0xAD, count)
+    code += [0xD0, 0x00]                # bne done (patched below)
+    bne_done = len(code) - 1
+    code += _abs(0xEE, lo) + [0xD0, (loop - (len(code) + 5)) & 0xFF]
+    code += _abs(0xEE, hi) + _abs(0xAD, hi) + [0xC9, 0x08]    # at most 2,048 turns
+    code += [0xD0, (loop - (len(code) + 2)) & 0xFF]
+    code[bne_done] = len(code) - (bne_done + 1)
+    code += [0x60]
+    _run_stub(tb, code)
+    turns = tb.read_u8(lo) + 256 * tb.read_u8(hi) + 1
+    tb.assert_line("turn_wanderer", tb.read_u8(count) == 1, f"{tb.read_u8(count)} monsters after {turns} turns")
+    _check_new_wanderer(tb, "turn_wanderer", {}, lambda t: t < 32)
+
+
+def _pick_fields(tb: X16Bench, picker: str, field: str, n: int = 200) -> list[int]:
+    """n production picks through `picker` (A = slot); each slot's `field`."""
+    code = [0xA9, 0x00] + _abs(0x8D, STUB_COUNT)
+    loop = len(code)
+    code += _abs(0x20, tb.syms[picker]) + [0xAA]
+    code += _abs(0xBD, tb.syms[field]) + _abs(0xAC, STUB_COUNT) + _abs(0x99, STUB_DATA)
+    code += _abs(0xEE, STUB_COUNT) + _abs(0xAD, STUB_COUNT) + [0xC9, n]
+    code += [0xD0, (loop - (len(code) + 2)) & 0xFF, 0x60]
+    _run_stub(tb, code)
+    return [tb.read_u8(STUB_DATA + i) for i in range(n)]
+
+
+def _check_poly_and_undead_picks(tb: X16Bench, dlvl: int) -> None:
+    """VMS spells.inc poly_monster / mass_poly: any level 1-40 whatever the
+    depth; misc.inc summon_undead: an undead of any level."""
+    got = _pick_fields(tb, "pick_any_creature_type", "cr_level")
+    tb.assert_line("poly_any_level", min(got) >= 1 and max(got) <= 40 and max(got) > dlvl + 10,
+                   f"levels {min(got)}-{max(got)} at DL{dlvl}")
+    flags = _pick_fields(tb, "pick_undead_creature_type", "cr_mflags", 100)
+    tb.assert_line("undead_pick_undead", all(f & 0x02 for f in flags), f"mflags {sorted(set(flags))}")
+    levels = _pick_fields(tb, "pick_undead_creature_type", "cr_level", 100)
+    tb.assert_line("undead_pick_any_level", max(levels) > dlvl + 2, f"undead levels up to {max(levels)} at DL{dlvl}")
+
+
+def _check_summon_levels(tb: X16Bench, dlvl: int) -> None:
+    """VMS misc.inc summon_monster: levels 1 to dlvl + mon$summon_adj (2), no
+    out-of-depth roll; 200 picks must reach dlvl + 1..2 and never beyond."""
+    n = 200
+    got = _pick_fields(tb, "pick_summon_creature_type", "cr_level", n)
+    above = sum(1 for lv in got if lv > dlvl)
+    tb.assert_line("summon_cap", max(got) <= dlvl + 2, f"levels up to {max(got)} at DL{dlvl}")
+    tb.assert_line("summon_adj", above >= 5, f"{above} of {n} above DL{dlvl}")
+    tb.assert_line("summon_low", min(got) >= 1, f"levels from {min(got)}")
+
+
 def scenario_monster_catalog(tb: X16Bench) -> None:
     """DL16 holds VMS's population and level mix, fetched from the catalog."""
     tb.chargen("A")
+    # The turn's wanderer in town is a townsperson (rows 32-39).
+    _check_wanderers(tb, "town_wanderer", lambda t: 32 <= t <= 39)
     _descend_to_dl1(tb)
     tb.wizard_menu_open()
     tb.press_until("DLVL", "L")
@@ -1269,6 +1397,11 @@ def scenario_monster_catalog(tb: X16Bench) -> None:
     tb.assert_line("cat_names", names_ok, detail)
     low = sum(1 for cid in ids if levels[cid] < 8)
     tb.assert_line("cat_low_levels", low > 0, f"no creature below level 8 among {sorted(ids)}")
+
+    _check_summon_levels(tb, 16)
+    _check_poly_and_undead_picks(tb, 16)
+    _check_wanderers(tb, "wanderer", lambda t: t < 32, clear=True)
+    _check_turn_wanderer(tb)
 
     # From DL50 an awake Evil Iggy or Balrog joins the level (VMS place_win_monster).
     tb.wizard_menu_open()

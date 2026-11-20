@@ -738,3 +738,18 @@ Unresolved uncertainty and risk: Default has 53 B free (< $7C00), A2Catalog 29 B
 
 
 
+
+## Ambient Spawning Placement (MON-039, 2026-11-20)
+
+`catalog_place_far` (`core/monster_catalog.s`: the win creature at generation
+and the turn's wanderer, VMS `alloc_monster`) lives in `A2PlaySlot`, not
+`Default`: `CatalogWinBegin()` / `CatalogWinEnd()` in
+`platforms/apple2/monster_catalog_a2.s` switch to `A2PlaySlot` and back. Its
+only callers are `monster_spawn_level` (called from `game_loop.s`) and
+`turn_post_action` (`core/turn.s`), both reached only from play-slot code, so
+the slot is always loaded when it runs. Because it is the first code the slot
+receives, the `"M8P"` signature (`a2_play_start`, checked by
+`a2_require_play` and `check_memory_contract.py` at `$7C00`) is now emitted
+just before `monster_catalog_a2.s` is imported. Budgets after the change
+(`report_memory_budgets.py --port apple2`): `Default` `$0A00-$7B8F`
+(**113 B free**, was 46), `A2PlaySlot` `$7C00-$9FD6` (**42 B free**, was 178).

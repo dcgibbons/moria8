@@ -21,9 +21,14 @@
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
 .const CATALOG_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
 
+// The win creature and the turn's wanderer (catalog_place_far) live in the
+// play slot: the resident image has no room. Level generation and the turn
+// both run with the play slot loaded (game_loop.s lives there).
 .macro CatalogWinBegin() {
+    .segment A2PlaySlot
 }
 .macro CatalogWinEnd() {
+    .segment Default
 }
 .macro CatalogMap() {
 }

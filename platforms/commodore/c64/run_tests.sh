@@ -2172,7 +2172,9 @@ run_dungeon_ascent_product_smoke() {
 # are placed (item_spawn_level follows monster_spawn_level); the monster
 # table, species table, levels and name pointers, and the hidden name pool
 # (RAM under I/O) are checked against the catalog. $1 = 1 with an REU (the
-# records preloaded at boot), else the drive (direct sector reads).
+# records preloaded at boot), else the drive (direct sector reads). Then the
+# turn's wanderer through tramp_catalog_place_wanderer (the $F000 runtime):
+# one more monster, awake, beyond max_sight (VMS alloc_monster).
 run_catalog_spawn_product_smoke() {
     local reu="${1:-0}"
     local name="catalog_spawn_product_smoke"
@@ -2188,7 +2190,9 @@ run_catalog_spawn_product_smoke() {
     fi
     local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
     local catalog_fetch_ext cat_id_lo cat_ext_record
-    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi catalog_fetch_ext cat_id_lo cat_ext_record; do
+    local tramp_catalog_place_wanderer zp_player_x zp_player_y zp_mon_count
+    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi catalog_fetch_ext cat_id_lo cat_ext_record \
+            tramp_catalog_place_wanderer zp_player_x zp_player_y zp_mon_count; do
         printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
         if [ -z "${!sym}" ]; then
             echo "FAIL (missing $sym in $main_vs)"
@@ -2225,6 +2229,16 @@ run_catalog_spawn_product_smoke() {
             echo "until \$033f"
             echo "bsave \"$TMPDIR/ext_${name}_${ext_id}.bin\" 0 \$${cat_ext_record} \$${cer_end}"
         done
+        local mt_end
+        mt_end=$(printf '%04x' $(( 16#$monster_table + 32 * 12 - 1 )))
+        rm -f "$TMPDIR"/wand_"${name}"_*.bin
+        echo "bsave \"$TMPDIR/wand_${name}_before.bin\" 0 \$${monster_table} \$${mt_end}"
+        echo "bsave \"$TMPDIR/wand_${name}_zp.bin\" 0 \$0000 \$00ff"
+        printf '> 033c 20 %02x %02x ea\n' $(( 16#$tramp_catalog_place_wanderer & 0xff )) $(( 16#$tramp_catalog_place_wanderer >> 8 ))
+        echo "r pc=033c"
+        echo "until \$033f"
+        echo "bsave \"$TMPDIR/wand_${name}_after.bin\" 0 \$${monster_table} \$${mt_end}"
+        echo "bsave \"$TMPDIR/wand_${name}_zp_after.bin\" 0 \$0000 \$00ff"
         echo "quit"
     } > "$mon_file"
     local reu_args=()
@@ -2260,8 +2274,35 @@ PY
         TOTAL=$((TOTAL + 1))
         return
     fi
-    rm -f "$TMPDIR"/ext_"${name}"_*.bin
-    echo "PASS ($(tail -1 "$check_log" | sed 's/^PASS: //'))"
+    if ! python3 -B - "$TMPDIR" "$name" $(( 16#$zp_player_x )) $(( 16#$zp_player_y )) $(( 16#$zp_mon_count )) >>"$check_log" 2>&1 <<'PY'
+import sys
+from pathlib import Path
+tmpdir, name = Path(sys.argv[1]), sys.argv[2]
+px_at, py_at, count_at = (int(a) for a in sys.argv[3:6])
+def load(tag):
+    return (tmpdir / f"wand_{name}_{tag}.bin").read_bytes()
+before, after = load("before"), load("after")
+zp, zp_after = load("zp"), load("zp_after")
+px, py = zp[px_at], zp[py_at]
+new = [i for i in range(32) if before[i * 12 + 2] == 0xFF and after[i * 12 + 2] != 0xFF]
+assert zp[count_at] < 26, ("generation filled the reserve", zp[count_at])
+assert len(new) == 1, ("new monsters", new)
+assert zp_after[count_at] == zp[count_at] + 1, (zp[count_at], zp_after[count_at])
+rec = after[new[0] * 12:new[0] * 12 + 12]
+dist = max(abs(rec[0] - px), abs(rec[1] - py))
+assert dist > 20, ("within max_sight", rec[0], rec[1], px, py)
+assert rec[5] & 0x01 and rec[7] == 0, ("asleep", rec[5], rec[7])
+print(f"PASS: wanderer type {rec[2]} at distance {dist}")
+PY
+    then
+        echo "FAIL (wanderer through tramp_catalog_place_wanderer)"
+        tail -5 "$check_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    rm -f "$TMPDIR"/ext_"${name}"_*.bin "$TMPDIR"/wand_"${name}"_*.bin
+    echo "PASS ($(tail -2 "$check_log" | head -1 | sed 's/^PASS: //'); $(tail -1 "$check_log" | sed 's/^PASS: //'))"
     rm -f -- "$mon_file" "$log_file" "$check_log"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
@@ -5591,7 +5632,7 @@ run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
 run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
-run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 0413" 20 50000000
+run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 041B" 28 50000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0418" 25 500000000

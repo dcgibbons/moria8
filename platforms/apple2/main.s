@@ -304,6 +304,13 @@ combat_msg_monster_in_way:
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
 #import "../../core/recall_defs.s"
+// The play payload's signature "M8P" (a2_require_play) comes first: the
+// catalog's placement code (CatalogWinBegin) is the first the slot receives.
+.segment A2PlaySlot
+a2_play_start:
+    .byte $4d, $38, $50     // "M8P"
+a2_play_body:
+.segment Default
 #import "monster_catalog_a2.s"
 #import "../../core/monster_catalog.s"
 #import "../../core/tier_manager.s"
@@ -842,12 +849,10 @@ hal_msg_print_indirect_aux:
 
 // ============================================================
 // A2PlaySlot segment — play payload (C128 play-class composition).
-// Signature "M8P" validated by a2_require_play after every load.
+// Signature "M8P" (a2_play_start, above) validated by a2_require_play after
+// every load.
 // ============================================================
 .segment A2PlaySlot
-a2_play_start:
-    .byte $4d, $38, $50     // "M8P"
-a2_play_body:
 // Chest summoning-trap runner is called only from game_loop.s (play), so it
 // parks here in the play slot rather than the full resident Default payload.
 #import "../../core/chest_summons.s"

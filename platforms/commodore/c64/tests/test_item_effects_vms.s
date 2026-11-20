@@ -411,6 +411,9 @@ test_start:
     :PatchJump(get_direction_target, spy_dir_east)
     :PatchJump(tier_check_transition, spy_nop_rts)
     :PatchJump(pick_creature_type, spy_pick_creature)
+    // The summon entry sits just before pick_creature_type and runs into it
+    // (lda #2 / BIT abs): spy it too, or the summons run the patched bytes.
+    :PatchJump(pick_summon_creature_type, spy_pick_creature)
 
     lda #2
     sta active_dungeon_count
