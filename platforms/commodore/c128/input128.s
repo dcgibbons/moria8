@@ -66,6 +66,7 @@
 #define HAL_INPUT_FOLLOWUP_USES_FAST_KEY
 #define HAL_INPUT_SELECTABLE_OVERLAY_PREPARE_FOLLOWUP
 #define HAL_INPUT_HELP_FOOTER_USES_ESC_STOP
+#define HAL_INPUT_MORE_WAITS_RELEASE
 
 // C128 runtime MMU mode used by game loop (all RAM, I/O visible)
 .const INPUT_MMU_ALL_RAM  = $3e
@@ -192,6 +193,7 @@ igk_last_sample: .byte 0
 igk_stable: .byte 0
 ips_raw_sample: .byte 0
 csp_ctrl: .byte 0
+iwr_settle: .byte 0
 
 // input_wait_release — Block until keyboard is released (C128 direct scan)
 // Used before one-shot "press any key" prompts to avoid consuming
@@ -212,15 +214,20 @@ input_wait_release:
     jsr c128_stack_guard_check
     .byte $84
 #endif
+    lda #1
+    bne !iwr_set+               // Idle entry: 1 pass; any held key/state arms settle
+!iwr_busy:
+    lda #32                     // ~13 ms @ 2 MHz of consecutive all-clear scans
+!iwr_set:
+    sta iwr_settle
 !iwr_wait:
     inc zp_entropy
     jsr input_sound_update
     jsr cia_scan_petscii
     jsr input_process_sample
     lda igk_stable
-    bne !iwr_wait-
     ora igk_last_sample
-    bne !iwr_wait-
+    bne !iwr_busy-
     // The PETSCII sample shows no lone SHIFT, C=, CTRL or ALT; the raw scan
     // with modifiers counted must show nothing down too (hal_input.s), but
     // for left SHIFT: SHIFT LOCK latches it, and this wait has no bound.
@@ -229,9 +236,9 @@ input_wait_release:
     jsr input_run_scan_held_raw
     asl irs_count_modifiers     // $80 -> 0
     tax                         // Z: the scan's result
+    bne !iwr_busy-
+    dec iwr_settle
     bne !iwr_wait-
-    sta igk_last_sample
-    sta igk_stable
     rts
 #endif
 
@@ -286,22 +293,29 @@ input_normalize_fast_edge_sample:
     rts
 
 // input_process_sample_strict — 2-sample stable press/release filter
+// Normalizes cursor keys identically to input_process_sample so igk_stable
+// shares one domain across strict and fast paths, and only fires a key-down
+// edge from idle (igk_stable == 0) so modifier-release transitions (e.g.
+// SHIFT+CRSR-D $91 -> CRSR-D $11, CTRL+B $02 -> B $42) or key rollover
+// never emit a phantom prompt dismissal.
 // Input:  A = sampled PETSCII (0 = no key)
-// Output: A = PETSCII on stable key-down edge, 0 otherwise
+// Output: A = PETSCII on stable idle->key-down edge, 0 otherwise
 input_process_sample_strict:
+    sta ips_raw_sample
+    jsr input_normalize_fast_edge_sample
     cmp igk_last_sample
     beq !ipss_repeat+
     sta igk_last_sample
+!ipss_none:
     lda #0
     rts
 !ipss_repeat:
     cmp igk_stable
-    beq !ipss_none+
-    sta igk_stable
-    beq !ipss_none+
-    rts
-!ipss_none:
-    lda #0
+    beq !ipss_none-
+    ldx igk_stable              // Z set iff prior stable state was idle (0)
+    sta igk_stable              // STA preserves Z
+    bne !ipss_none-             // Non-idle -> key/release: update/rearm only
+    lda ips_raw_sample          // Idle -> stable press: return raw PETSCII
     rts
 
 input_sound_update:
@@ -720,19 +734,16 @@ cia_scan_petscii:
     jmp !csp_return+
 
 !csp_key_ext_k2:
-    sta csp_col_bits
     ldx #8
-    jmp !csp_key_post_scan+
-
+    bne !csp_key_ext_done+
 !csp_key_ext_k1:
-    sta csp_col_bits
     ldx #9
-    jmp !csp_key_post_scan+
-
+    bne !csp_key_ext_done+
 !csp_key_ext_k0:
-    sta csp_col_bits
     ldx #10
-    jmp !csp_key_post_scan+
+!csp_key_ext_done:
+    sta csp_col_bits
+    bne !csp_key_post_scan+
 
 !csp_key_found:
     // A = column bits (1=pressed), X = row index

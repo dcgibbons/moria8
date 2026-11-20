@@ -479,9 +479,173 @@ test_strict_prompt_checks:
     lda igk_stable
     cmp #0
     bne !strict_fail+
+    beq !strict_ext_checks+
+!strict_fail:
+    jmp test_fail2
+
+!strict_ext_checks:
+    // Cursor Up ($91) normalizes into igk_stable ($11); releasing SHIFT ($11)
+    // must NOT fire a phantom keypress, and switching to fast path while still
+    // held must NOT retrigger.
+    lda #$91               // Sample 1 of Cursor Up
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_ext_fail+
+    lda #$91               // Sample 2 => returns raw $91, stores normalized $11
+    jsr input_process_sample_strict
+    cmp #$91
+    bne !strict_ext_fail+
+    lda igk_stable
+    cmp #$11
+    bne !strict_ext_fail+
+    lda #$11               // SHIFT lifted before CRSR-D sample 1 => 0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_ext_fail+
+    lda #$11               // SHIFT lifted sample 2 => 0 (no phantom key-down!)
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_ext_fail+
+    lda #$91               // Still held in fast path => 0
+    jsr input_process_sample
+    cmp #0
+    bne !strict_ext_fail+
+    lda #0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_ext_fail+
+    lda #0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_ext_fail+
+    lda igk_stable
+    cmp #0
+    bne !strict_ext_fail+
+    beq !strict_left_checks+
+!strict_ext_fail:
+    jmp test_fail2
+
+!strict_left_checks:
+    // Cursor Left ($9D) -> SHIFT released ($1D) must NOT fire a phantom keypress.
+    lda #$9d
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_left_fail+
+    lda #$9d
+    jsr input_process_sample_strict
+    cmp #$9d
+    bne !strict_left_fail+
+    lda igk_stable
+    cmp #$1d
+    bne !strict_left_fail+
+    lda #$1d
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_left_fail+
+    lda #$1d
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_left_fail+
+    lda #0
+    jsr input_process_sample_strict
+    lda #0
+    jsr input_process_sample_strict
+    lda igk_stable
+    cmp #0
+    bne !strict_left_fail+
+    beq !strict_nonidle_checks+
+!strict_left_fail:
+    jmp test_fail2
+
+!strict_nonidle_checks:
+    // Non-idle transition (CTRL+B $02 -> 'B' $42, rollover $4C -> $4B) must
+    // require full release to 0 before firing a new prompt keypress.
+    lda #$02
+    jsr input_process_sample_strict
+    lda #$02
+    jsr input_process_sample_strict
+    cmp #$02
+    bne !strict_nonidle_fail+
+    lda #$42               // CTRL lifted before B sample 1 => 0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda #$42               // Sample 2 from non-idle => 0, igk_stable updated to $42
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda igk_stable
+    cmp #$42
+    bne !strict_nonidle_fail+
+    lda #$4c               // Rollover to L without releasing => 0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda #$4b               // Rollover to K without releasing sample 1 => 0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda #$4b               // Rollover to K sample 2 from non-idle => 0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda igk_stable
+    cmp #$4b
+    bne !strict_nonidle_fail+
+    lda #0                 // Release to idle
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda #0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda igk_stable
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda #$20               // Fresh SPACE after full release => $20
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_nonidle_fail+
+    lda #$20
+    jsr input_process_sample_strict
+    cmp #$20
+    bne !strict_nonidle_fail+
+    beq !iwr_settle_checks+
+!strict_nonidle_fail:
+    jmp test_fail2
+
+!iwr_settle_checks:
+    // input_wait_release settle behavior (with no physical keys down):
+    // 1. From idle: 1 pass only (zero overhead when no key was held).
+    lda #0
+    sta igk_stable
+    sta igk_last_sample
+    sta zp_entropy
+    jsr input_wait_release
+    lda zp_entropy
+    cmp #1
+    bne !iwr_settle_fail+
+    lda iwr_settle
+    bne !iwr_settle_fail+
+
+    // 2. From held state: release + 32 consecutive clear settle scans (33 total).
+    lda #$4c
+    sta igk_stable
+    sta igk_last_sample
+    lda #0
+    sta zp_entropy
+    jsr input_wait_release
+    lda igk_stable
+    ora igk_last_sample
+    ora iwr_settle
+    bne !iwr_settle_fail+
+    lda zp_entropy
+    cmp #33
+    bne !iwr_settle_fail+
 
     jmp test_run_cancel_checks
-!strict_fail:
+!iwr_settle_fail:
     jmp test_fail2
 
 test_run_cancel_checks:

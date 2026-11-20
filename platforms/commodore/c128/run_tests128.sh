@@ -1641,6 +1641,8 @@ player_magic_mod = (core / "player_magic.s").read_text().splitlines()
 spell_effects_mod = ((core / "spell_effects.s").read_text() + "\n"
                      + (core / "eff_identify_prompt_cold.s").read_text()).splitlines()
 ui_wizard_mod = (core / "ui_wizard.s").read_text().splitlines()
+ui_messages_mod = (core / "ui_messages.s").read_text().splitlines()
+input128_text = (root / "c128" / "input128.s").read_text()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
     in_block = False
@@ -1899,7 +1901,32 @@ required_chains = [
         "sta zp_player_mp",
         "sta zp_player_mmp",
     ]),
+    ("more_prompt_release_wait", ui_messages_mod, [
+        "!show_more:",
+        "jsr msg_show_more",
+        "#if HAL_INPUT_MORE_WAITS_RELEASE",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
+    ]),
+    ("overcast_faint_more_release_wait", player_magic_mod, [
+        "!pm_cm_more:",
+        "jsr msg_show_more",
+        "#if HAL_INPUT_MORE_WAITS_RELEASE",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
+    ]),
+    ("player_died_more_release_wait", loop_mod, [
+        "player_died:",
+        "jsr msg_show_more",
+        "#if HAL_INPUT_MORE_WAITS_RELEASE",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
+    ]),
 ]
+
+if "#define HAL_INPUT_MORE_WAITS_RELEASE" not in input128_text:
+    print("input128.s must enable HAL_INPUT_MORE_WAITS_RELEASE")
+    raise SystemExit(1)
 
 for name, lines, chain in required_chains:
     if not has_ordered_chain(lines, chain):

@@ -2474,6 +2474,9 @@ player_died:
     ldy #>slain_str
     jsr msg_print_ay
     jsr msg_show_more
+#if HAL_INPUT_MORE_WAITS_RELEASE
+    jsr hal_input_wait_release
+#endif
     jsr hal_input_get_key
 
     // Now do disk I/O (player sees -more- prompt, knows they died)

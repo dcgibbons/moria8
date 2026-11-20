@@ -437,6 +437,9 @@ pm_consume_mana:
     // action so forced paralysis turns never enter -MORE-, then clear
     // MSG_FULL so subsequent turn messages start fresh.
     jsr msg_show_more
+#if HAL_INPUT_MORE_WAITS_RELEASE
+    jsr hal_input_wait_release
+#endif
     jsr hal_input_get_key
     jmp msg_clear
 .assert "SPELL_MAGE==1 and SPELL_PRIEST==2", SPELL_MAGE == 1 && SPELL_PRIEST == 2, true

@@ -199,6 +199,9 @@ mpc_put_row:
 !show_more:
     // --- State 2: both rows full, 3rd message arriving ---
     jsr msg_show_more
+#if HAL_INPUT_MORE_WAITS_RELEASE
+    jsr hal_input_wait_release
+#endif
     jsr hal_input_get_key
 
     // Clear state and restart from the cached source pointer.
