@@ -6569,12 +6569,23 @@ class Brain:
                     weights = [((stack_weight(m.group(2), counts[i]), counts[i]), i) for i, m in enumerate(matches)
                                if m and stack_weight(m.group(2), counts[i]) > 0]
                     ammo = (*AMMO_AVERAGE, *self.ammo_kinds())
+                    # The cures, the escapes, the oil and the light only for
+                    # food or a Restore potion, never to keep room or for
+                    # what can wait: with 10 lb kept free (d177b75), Mages
+                    # and Priests reached clvl 10 in 12-15% of games, 30%
+                    # before, having dropped Cure Light Wounds, Phase Door and
+                    # their Flasks of Oil at clvl 1 (build queue, 2026-11-19).
+                    keep = (*FOODS, RECALL, *ESSENTIAL_BUYS, PHASE, TELEPORT_SCROLL)
+                    emergency = not self.headroom_shed and (self.food_weight_refused or bool(self.restores_wanted()))
                     surplus = [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(ammo)] or \
-                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(STACKING)
-                         and not m.group(2).startswith((*FOODS, RECALL, TORCH, OIL))] or \
-                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith((TORCH, OIL))] or \
                         [w for w in weights if (m := matches[w[1]]) and self.spare_launcher(m.group(2), matches)] or \
-                        [w for w in weights if (m := matches[w[1]]) and self.spare_weapon(m.group(2))]
+                        [w for w in weights if (m := matches[w[1]]) and self.spare_weapon(m.group(2))] or \
+                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(STACKING)
+                         and not m.group(2).startswith(keep)] or \
+                        ([w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(STACKING)
+                          and not m.group(2).startswith((*FOODS, RECALL, TORCH, OIL))] if emergency else []) or \
+                        ([w for w in weights if (m := matches[w[1]]) and m.group(2).startswith((TORCH, OIL))]
+                         if emergency else [])
                 if surplus:
                     shed = max(surplus)[1]
                     heavy = matches[shed]

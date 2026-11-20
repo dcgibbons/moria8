@@ -1495,11 +1495,12 @@ class UnstuckTest(unittest.TestCase):
                 8: " g) 3 Potion of Cure Light Wounds", 9: " h) 180 Bolt", 10: " i) 2 Potion of Resist Heat",
                 11: " j) 1 Scroll of Word of Recall"}
 
-        def drop(refused_at: int, rows: dict[int, str]) -> Decision:
+        def drop(refused_at: int, rows: dict[int, str], food_refused: bool = True) -> Decision:
             brain = Brain(GOALS["deep"])
             brain.credit("Heavy Crossbow (+5,+5)", 1)
             brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
             brain.refused_at = refused_at
+            brain.food_weight_refused = food_refused           # both cases starved: food was refused
             listing = command_obs(pos=(5, 5), dlvl=0, clvl=27, rows=rows)
             listing.stage = "list"
             return brain.drop_prompt(listing)
@@ -1510,7 +1511,10 @@ class UnstuckTest(unittest.TestCase):
         self.assertEqual(drop(WEAPONSMITH, pack).key, KEY_RUNSTOP)         # not for more Bolts
         no_ammo = {k: v for k, v in pack.items() if "Bolt" not in v}
         decision = drop(GENERAL_STORE, no_ammo)
-        self.assertEqual(decision.key, ord("A"), decision.reason)          # then the heaviest supply
+        self.assertEqual(decision.key, ord("I"), decision.reason)          # a supply that is no cure first
+        cures = {k: v for k, v in no_ammo.items() if "Resist" not in v}
+        decision = drop(GENERAL_STORE, cures)
+        self.assertEqual(decision.key, ord("A"), decision.reason)          # then the heaviest cure
         light = {0: "Inventory", 2: " a) 5 Ration of Food", 3: " b) 3 Wooden Torch (134 turns)",
                  4: " c) 1 Scroll of Word of Recall"}
         decision = drop(GENERAL_STORE, light)
@@ -1526,6 +1530,40 @@ class UnstuckTest(unittest.TestCase):
                 8: " g) Staff of Speed (2 charges)"}
         decision = drop(GENERAL_STORE, mage)
         self.assertEqual(decision.key, ord("E"), decision.reason)
+        # No food refused, a purchase that can wait: the Bolts still go, the
+        # cures, the escapes, the oil and the light never (below).
+        self.assertEqual(drop(GENERAL_STORE, pack, food_refused=False).key, ord("H"))
+        self.assertEqual(drop(GENERAL_STORE, no_ammo, food_refused=False).key, ord("I"))   # Resist Heat is no cure
+        self.assertEqual(drop(GENERAL_STORE, cures, food_refused=False).key, KEY_RUNSTOP)
+        self.assertEqual(drop(GENERAL_STORE, mage, food_refused=False).key, KEY_RUNSTOP)
+
+    def test_a_weak_caster_never_sheds_its_cures_escapes_or_oil_to_shop(self) -> None:
+        """Build queue, 2026-11-19: once the bot kept 10 lb free in town
+        (d177b75), Mages and Priests reached clvl 10 in 12-15% of games
+        (30% before, other classes unchanged): in 19 of 97 caster games it
+        dropped Cure Light Wounds, Phase Door and 5-13 Flasks of Oil, the
+        casters' first attack, mostly with nothing refused yet, at clvl 1
+        (a Gnome Mage at step 334, a Halfling Mage at step 302). Room kept
+        for shopping, or a refusal of what can wait, sheds only surplus,
+        ammunition and spare weapons; the essentials go only for food or a
+        Restore potion."""
+        pack = {0: "Inventory", 2: " a) Spellbook Beginners-Magick", 3: " b) 5 Potion of Cure Light Wounds",
+                4: " c) 3 Scroll of Phase Door", 5: " d) 13 Flask of Oil (250 turns)",
+                6: " e) 2 Wooden Torch (134 turns)", 7: " f) 4 Ration of Food"}
+        for headroom in (True, False):
+            brain = Brain(GOALS["clvl10"])
+            brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
+            brain.headroom_shed = headroom
+            listing = command_obs(pos=(5, 5), dlvl=0, clvl=1, rows=pack)
+            listing.stage = "list"
+            decision = brain.drop_prompt(listing)
+            self.assertEqual(decision.key, KEY_RUNSTOP, decision.reason)
+        brain = Brain(GOALS["clvl10"])
+        brain.too_heavy = brain.pack_full = brain.dropping = brain.listed = True
+        brain.food_weight_refused = True                                     # food itself refused
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=1, rows=pack)
+        listing.stage = "list"
+        self.assertEqual(brain.drop_prompt(listing).key, ord("B"))         # the cures, then the oil
 
     def test_a_full_pack_of_keepers_makes_room_for_word_of_recall(self) -> None:
         """C64 Balrog, 2026-11-14: a clvl 39 Half-Elf Paladin's 22 slots held
