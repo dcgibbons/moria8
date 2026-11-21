@@ -4,17 +4,20 @@
 // Implements hal_item_cat_read_byte for C64, C128, and Plus/4:
 //   - Cartridge builds (#if ITEM_CATALOG_CART): delegates to ROML/cart bank reader
 //     (:ItemCatCartRead() macro if ITEM_CATALOG_CART_MACRO, else hal_item_cat_cart_read_byte).
-//   - REU / Disk builds (#else): keeps a 254-byte cached sector (item_cat_sec_buf).
+//   - REU / Disk builds (#else): keeps one cached window of up to ICR_WINDOW bytes
+//     (item_cat_sec_buf) from the byte a miss asked for to at most its sector's end.
 //     Sector 0 holds ITEM.CAT[0..251] (after the 2-byte PRG load header); sectors 1..N-1
 //     hold 254 bytes starting at sec*254 - 2. Uses item.idx track/sector table with
-//     U1 / B-P 5 2 direct sector reads, falling back to sequential "ITEM.CAT" open and
+//     U1 / B-P 5 <n> direct sector reads, falling back to sequential "ITEM.CAT" open and
 //     asset_load_ask_for_disk if a wrong disk is inserted.
 //
 // Platform port hooks (all optional):
-//   ITEM_CAT_IDX_EXTERNAL     — port supplies item_cat_sec_track / item_cat_sec_number
-//   ITEM_CAT_BUF_EXTERNAL     — port supplies ITEM_CAT_BUF_BASE (254 B buffer)
+//   ITEM_CAT_IDX_EXTERNAL     — port supplies item_cat_idx_data / track / number tables
+//   ITEM_CAT_BUF_EXTERNAL     — port supplies ITEM_CAT_BUF_BASE (ICR_WINDOW B buffer)
 //   ITEM_CAT_MAP_CUSTOM       — port defines :ItemCatMap() / :ItemCatUnmap()
 //                               :ItemCatKernalIn() / :ItemCatKernalOut()
+//   ITEM_CAT_PRE_EOI_HOOK     — port defines :ItemCatPreEoi() run before reading
+//                               buffer byte $FF (EOI)
 //   ITEM_CATALOG_REU          — REU holds headerless ITEM.CAT at ITEM_CAT_REU_BANK /
 //                               ITEM_CAT_REU_ADDR_HI / ITEM_CAT_REU_ADDR_LO
 
@@ -24,6 +27,8 @@
 .const ITMCAT_SECTOR_COUNT   = floor((ITMCAT_TOTAL_SIZE + 2 + ITMCAT_SECTOR_PAYLOAD - 1) / ITMCAT_SECTOR_PAYLOAD)
 .const ITMCAT_IDX_BODY_SIZE  = 3 + 2 * ITMCAT_SECTOR_COUNT
 .const ICR_LFN               = 5
+.const ICR_WINDOW            = 64   // Bytes a miss reads from the one asked for: the buffer's size
+.assert "ICR_WINDOW fits a sector's payload and holds the 'ITM2' magic", ICR_WINDOW >= 4 && ICR_WINDOW <= ITMCAT_SECTOR_PAYLOAD, true
 
 #if !ITEM_CAT_MAP_CUSTOM
 .macro ItemCatMap() {
@@ -56,7 +61,7 @@ item_cat_idx_end:
 #if ITEM_CAT_BUF_EXTERNAL
 .label item_cat_sec_buf = ITEM_CAT_BUF_BASE
 #else
-item_cat_sec_buf:   .fill ITMCAT_SECTOR_PAYLOAD, 0
+item_cat_sec_buf:   .fill ICR_WINDOW, 0
 #endif
 
 icr_cache_valid:    .byte 0
@@ -73,6 +78,7 @@ icr_save_x:         .byte 0
 icr_idx:            .byte 0
 icr_skip_lo:        .byte 0
 icr_skip_hi:        .byte 0
+icr_bp_pos:         .byte 0
 
 #endif
 
@@ -113,16 +119,19 @@ hal_item_cat_read_byte:
     lda zp_temp3
     pha
 
-    // Map byte offset (item_cat_off_lo/hi) to sector index + [start, start + len).
-    // Sector 0 covers [0, 252) (after the 2-byte PRG load header); sectors 1..N-1 cover 254 bytes.
+    // Map byte offset (item_cat_off_lo/hi) to its sector: icr_cache_start =
+    // the file offset at the sector's buffer byte 2, icr_end = its end. Sector
+    // 0 starts at -2 (its 2-byte PRG load header) and covers [0, 252);
+    // sectors 1..N-1 cover 254 bytes.
     lda #0
     sta icr_sec_idx
-    sta icr_cache_start_lo
-    sta icr_cache_start_hi
     sta icr_end_hi
+    lda #<-2
+    sta icr_cache_start_lo
+    lda #>-2
+    sta icr_cache_start_hi
     lda #ITMCAT_SECTOR_PAYLOAD - 2
     sta icr_end_lo
-    sta icr_cache_len
 !icr_find_sec:
     lda item_cat_off_hi
     cmp icr_end_hi
@@ -141,13 +150,31 @@ hal_item_cat_read_byte:
     lda icr_end_lo
     adc #ITMCAT_SECTOR_PAYLOAD
     sta icr_end_lo
-    bcc !+
+    bcc !icr_find_sec-
     inc icr_end_hi
-!:  lda #ITMCAT_SECTOR_PAYLOAD
-    sta icr_cache_len
-    bne !icr_find_sec-
+    bcs !icr_find_sec-          // Always (C = 1 from the adc)
 
 !icr_found_sec:
+    // Only a window from the byte asked for, ICR_WINDOW bytes at most: one
+    // lookup wants 1-4 bytes, and the whole 254 over the serial bus cost a
+    // stock 1541 most of each miss (53 misses entering the game, 2026-11-20).
+    sec
+    lda item_cat_off_lo
+    sbc icr_cache_start_lo
+    clc
+    adc #2                      // Past the sector's two link bytes
+    sta icr_bp_pos
+    sec
+    lda icr_end_lo
+    sbc item_cat_off_lo         // What is left of the sector (1..254)
+    cmp #ICR_WINDOW
+    bcc !+
+    lda #ICR_WINDOW
+!:  sta icr_cache_len
+    lda item_cat_off_lo
+    sta icr_cache_start_lo
+    lda item_cat_off_hi
+    sta icr_cache_start_hi
     :ItemCatKernalIn()
 #if ITEM_CATALOG_REU
     lda reu_present
@@ -169,7 +196,7 @@ hal_item_cat_read_byte:
     jmp !icr_by_name+
 !icr_direct:
 
-    // Direct sector read: OPEN 15,dev,15 / OPEN 5,dev,5,"#" / U1 5 0 t s / B-P 5 2
+    // Direct sector read: OPEN 15,dev,15 / OPEN 5,dev,5,"#" / U1 5 0 t s / B-P 5 <pos>
     lda #0
     jsr hal_storage_setnam
     lda #15
@@ -187,22 +214,36 @@ hal_item_cat_read_byte:
     jsr hal_storage_setlfs
     jsr hal_storage_open
 
-    lda #2
+    // Any sector-0 miss (not just file offset 0) must still verify 'ITM2' so a
+    // wrong disk with a readable t/s fails before returning item records.
+    // Sector 0 ends at offset 252, so icr_cache_start_hi is guaranteed 0 here.
+    lda icr_sec_idx
+    bne !icr_u1_window+
+    lda icr_cache_start_lo
+    beq !icr_u1_window+
+    lda #4
+    jsr icr_send_u1_bp
+    bcs !icr_cmd_failed+
+    jsr icr_chkin_ok
+    bcs !icr_cmd_failed+
+    lda #4
+    jsr icr_read_buf_n
+    jsr hal_storage_clrchn
+    jsr icr_verify_magic
+    bcs !icr_cmd_failed+
+    lda icr_bp_pos
+    jsr icr_send_bp
+    bcs !icr_cmd_failed+
+    bcc !icr_u1_read+           // Always (C = 0 from icr_send_bp)
+
+!icr_u1_window:
+    lda icr_bp_pos
     jsr icr_send_u1_bp
     bcs !icr_cmd_failed+
 
-    ldx #ICR_LFN
-    jsr hal_storage_chkin
-    bcs !icr_cmd_failed+
-    jsr hal_storage_readst
-    and #$bf
-    bne !icr_cmd_failed+
-    // Sector 0 carries a 2-byte PRG load header before ITEM.CAT[0].
-    lda icr_sec_idx
-    bne !icr_u1_read+
-    jsr hal_storage_chrin
-    jsr hal_storage_chrin
 !icr_u1_read:
+    jsr icr_chkin_ok
+    bcs !icr_cmd_failed+
     jsr icr_read_sector_buf
     lda #15
     jsr hal_storage_close
@@ -224,12 +265,8 @@ hal_item_cat_read_byte:
     ldy #ICR_LFN
     jsr hal_storage_setlfs
     jsr hal_storage_open
-    ldx #ICR_LFN
-    jsr hal_storage_chkin
+    jsr icr_chkin_ok
     bcs !icr_wrong_disk+
-    jsr hal_storage_readst
-    and #$bf
-    bne !icr_wrong_disk+
     // Skip 2-byte PRG header + icr_cache_start_lo/hi payload bytes.
     jsr hal_storage_chrin
     jsr hal_storage_chrin
@@ -251,6 +288,8 @@ hal_item_cat_read_byte:
 !:  dec icr_skip_lo
     jmp !icr_skip-
 !icr_read_named:
+    lda #0                      // Sequential stream has no #-buffer $FF EOI
+    sta icr_bp_off
     jsr icr_read_sector_buf
     jsr icr_verify_sector
     bcc !icr_loaded+
@@ -294,39 +333,69 @@ hal_item_cat_read_byte:
     lda item_cat_sec_buf,y
     rts
 
+icr_chkin_ok:
+    ldx #ICR_LFN
+    jsr hal_storage_chkin
+    bcs !ico_err+
+    jsr hal_storage_readst
+    and #$bf
+    beq !ico_ok+
+!ico_err:
+    sec
+    rts
+!ico_ok:
+    clc
+    rts
+
 // icr_read_sector_buf — Read icr_cache_len bytes from active channel ICR_LFN into item_cat_sec_buf; close ICR_LFN.
 icr_read_sector_buf:
-    lda #0
-    sta icr_idx
-!irsb_loop:
-    jsr hal_storage_chrin
-    ldx icr_idx
-    sta item_cat_sec_buf,x
-    inx
-    stx icr_idx
-    cpx icr_cache_len
-    bne !irsb_loop-
+    lda icr_cache_len
+    jsr icr_read_buf_n
 icr_close_buf:
     jsr hal_storage_clrchn
     lda #ICR_LFN
     jmp hal_storage_close
 
-// icr_verify_sector — C = 0 if sector looks valid (sector 0 must start with 'ITM2').
+// icr_read_buf_n — Read A bytes (1..ICR_WINDOW) from active channel ICR_LFN into item_cat_sec_buf.
+// Uses icr_skip_lo as loop limit (dead on !icr_direct and after !icr_skip finishes).
+icr_read_buf_n:
+    sta icr_skip_lo
+    lda #0
+    sta icr_idx
+!irsb_loop:
+#if ITEM_CAT_PRE_EOI_HOOK
+    lda icr_bp_off
+    clc
+    adc icr_idx
+    cmp #$ff
+    bne !irsb_read+
+    :ItemCatPreEoi()
+!irsb_read:
+#endif
+icr_read_chrin:
+    jsr hal_storage_chrin
+    ldx icr_idx
+    sta item_cat_sec_buf,x
+    inx
+    stx icr_idx
+    cpx icr_skip_lo
+    bne !irsb_loop-
+    rts
+
+// icr_verify_sector — C = 0 if the buffer looks valid: one read from the
+// file's start (icr_cache_start = 0) must begin with 'ITM2'.
 icr_verify_sector:
-    lda icr_sec_idx
+    lda icr_cache_start_lo
+    ora icr_cache_start_hi
     bne !ivs_ok+
-    lda item_cat_sec_buf
-    cmp #$49                     // 'I'
+icr_verify_magic:
+    ldx #3
+!ivm_loop:
+    lda item_cat_sec_buf,x
+    cmp icr_magic,x
     bne !ivs_bad+
-    lda item_cat_sec_buf + 1
-    cmp #$54                     // 'T'
-    bne !ivs_bad+
-    lda item_cat_sec_buf + 2
-    cmp #$4d                     // 'M'
-    bne !ivs_bad+
-    lda item_cat_sec_buf + 3
-    cmp #$32                     // '2'
-    bne !ivs_bad+
+    dex
+    bpl !ivm_loop-
 !ivs_ok:
     clc
     rts
@@ -394,6 +463,10 @@ icr_send_u1_bp:
     jsr hal_storage_clrchn
     jsr icr_drive_ok
     bcs !isub_done+
+    bcc !isub_bp+
+icr_send_bp:
+    sta icr_bp_off
+!isub_bp:
     ldx #15
     jsr hal_storage_chkout
     bcs !isub_failed+
@@ -465,8 +538,9 @@ icr_put_num:
 icr_u1:   .text "U1 5 0 " ; .byte 0
 icr_bp:   .text "B-P 5 " ; .byte 0
 .assert "icr_bp offset matches ICR_BP_OFFSET", icr_bp - icr_u1, ICR_BP_OFFSET
-icr_hash: .text "#"
-icr_name: .text "ITEM.CAT"
+icr_hash:  .text "#"
+icr_magic: .text "ITM2"
+icr_name:  .text "ITEM.CAT"
 icr_name_end:
 #endif
 

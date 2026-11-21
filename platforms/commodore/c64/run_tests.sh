@@ -5372,6 +5372,87 @@ run_hot_residency_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+# item_cat_level_entry_product_smoke — ITEM.CAT on the stock disk path (no
+# REU): each miss reads at most ICR_WINDOW bytes, and a stairs level change keeps
+# the item pickup cache (tests/item_cat_level_entry_smoke.py).
+run_item_cat_level_entry_product_smoke() {
+    local name="item_cat_level_entry_product_smoke"
+    echo -n "  $name: "
+
+    local build_log smoke_log
+    build_log=$(mktemp -t "build_${name}_log")
+    smoke_log=$(mktemp -t "test_${name}_log")
+
+    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
+        echo "FAIL (disk64 build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -B -u "$RUN_TESTS64_DIR/tests/item_cat_level_entry_smoke.py" \
+            --vice "$VICE" \
+            --c1541 "$C1541" \
+            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
+            --vs "$REPO_ROOT/build/c64/main.vs" >"$smoke_log" 2>&1; then
+        echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
+        rm -f -- "$build_log" "$smoke_log"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        sed 's/^/    /' "$smoke_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+# item_cat_level_entry_jiffydos1541_product_smoke — Optional stock-KERNAL +
+# JiffyDOS-1541 parity check when PLAYTEST_DOS1541 is supplied by caller env.
+run_item_cat_level_entry_jiffydos1541_product_smoke() {
+    local name="item_cat_level_entry_jiffydos1541_product_smoke"
+    echo -n "  $name: "
+
+    if [ -z "${PLAYTEST_DOS1541:-}" ]; then
+        echo "SKIP (PLAYTEST_DOS1541 not set)"
+        return
+    fi
+    if [ ! -f "$PLAYTEST_DOS1541" ]; then
+        echo "FAIL (PLAYTEST_DOS1541 not found: $PLAYTEST_DOS1541)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local build_log smoke_log
+    build_log=$(mktemp -t "build_${name}_log")
+    smoke_log=$(mktemp -t "test_${name}_log")
+
+    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
+        echo "FAIL (disk64 build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -B -u "$RUN_TESTS64_DIR/tests/item_cat_level_entry_smoke.py" \
+            --vice "$VICE" \
+            --c1541 "$C1541" \
+            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
+            --vs "$REPO_ROOT/build/c64/main.vs" \
+            --dos1541 "$PLAYTEST_DOS1541" >"$smoke_log" 2>&1; then
+        echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
+        rm -f -- "$build_log" "$smoke_log"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        sed 's/^/    /' "$smoke_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 echo "=== Moria Phase 1 Tests ==="
 echo ""
 
@@ -5505,6 +5586,12 @@ check_static_contract "c64_modal_ego_restores_io_contract" "main.s" \
     "tramp_roll_ego_type_modal:|||lda \$01|||pha|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pla|||sta \$01|||plp|||tya|||rts"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
+check_static_contract "c64_item_cat_pre_eoi_vblank_macro_contract" "main.s" \
+    "#define ITEM_CAT_PRE_EOI_HOOK|||.macro ItemCatPreEoi()|||bit \$d011|||bpl !icr_wait_vblank-"
+check_static_contract "item_cat_pre_eoi_hook_contract" "../common/item_catalog_records.s" \
+    "icr_read_buf_n:|||#if ITEM_CAT_PRE_EOI_HOOK|||lda icr_bp_off|||clc|||adc icr_idx|||cmp #\$ff|||bne !irsb_read+|||:ItemCatPreEoi()|||icr_read_chrin:|||jsr hal_storage_chrin"
+check_static_contract "item_cat_sector0_magic_and_named_eoi_contract" "../common/item_catalog_records.s" \
+    "lda icr_sec_idx|||bne !icr_u1_window+|||lda #4|||jsr icr_send_u1_bp|||jsr icr_verify_magic|||lda icr_bp_pos|||jsr icr_send_bp|||!icr_read_named:|||lda #0|||sta icr_bp_off|||jsr icr_read_sector_buf"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
     "game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
 check_static_contract "c64_save_media_hal_contract" "../../shared/save.s" \
@@ -5684,6 +5771,8 @@ run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_s
 run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
 run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
 run_suite_function "hot_residency_product_smoke" run_hot_residency_product_smoke
+run_suite_function "item_cat_level_entry_product_smoke" run_item_cat_level_entry_product_smoke
+run_suite_function "item_cat_level_entry_jiffydos1541_product_smoke" run_item_cat_level_entry_jiffydos1541_product_smoke
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 if [ $FAIL -gt 0 ]; then

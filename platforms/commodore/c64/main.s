@@ -781,6 +781,18 @@ hal_recall_write_byte:
     lda c64_item_cat_saved_port
     sta hal_memory_cpu_port
 }
+#define ITEM_CAT_PRE_EOI_HOOK
+.macro ItemCatPreEoi() {
+    // Wait for VIC-II vertical blank ($D011 bit 7 = 1, raster >= 256) before
+    // reading buffer byte $FF (EOI). Even entering at the last line of VBLANK
+    // leaves >= 51 badline-free lines (>= 3.2 ms PAL/NTSC) before line 51,
+    // covering both a worst-case CIA1 IRQ at c64_disk_call's CLI and the
+    // ~1.8 ms EOI ACPTR handshake so no 43-cycle badline can split stock
+    // KERNAL $EEA9/$EEAC against JiffyDOS 1541's 67 us EOI bit-0 setup.
+!icr_wait_vblank:
+    bit $d011
+    bpl !icr_wait_vblank-
+}
 #if HAL_PLATFORM_ITEM_PICKUP_CACHE
 .macro ItemPickupCacheMap() {
     php
@@ -2953,10 +2965,10 @@ reu_stash_overlays:
     lda zp_temp0
     bne !+
     jmp !rso_icat_eof+
-!:  cmp #ITMCAT_SECTOR_PAYLOAD
+!:  cmp #ICR_WINDOW               // item_cat_sec_buf's size
     bcc !rso_icat_set_len+
 !rso_icat_full:
-    lda #ITMCAT_SECTOR_PAYLOAD
+    lda #ICR_WINDOW
 !rso_icat_set_len:
     sta icr_cache_len
     lda #0
@@ -2974,7 +2986,8 @@ reu_stash_overlays:
     ora zp_temp3
     bne !rso_icat_stash+
     lda #0
-    sta icr_sec_idx
+    sta icr_cache_start_lo      // The file's start: icr_verify_sector checks it
+    sta icr_cache_start_hi
     jsr icr_verify_sector
     bcs !rso_icat_wrong+
 !rso_icat_stash:

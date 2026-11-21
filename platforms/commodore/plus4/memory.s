@@ -31,9 +31,9 @@
 //                           117 B used on cart -> 139 B tail $DC75-$DCFF free)
 //   $DD00-$DEFF   (512 B): HUFF_INDEX_HIDDEN — Huffman string index
 //                          (496 B used -> 16 B tail $DEF0-$DEFF free)
-//   $DF00-$DFFF   (256 B): PLUS4_HIGH_BSS — high BSS under $FF3F (disk 254 B
-//                          item.cat sector buffer at $DF00-$DFFD -> 2 B free;
-//                          recall[279] lives in Default RAM)
+//   $DF00-$DFFF   (256 B): PLUS4_HIGH_BSS — high BSS under $FF3F (disk 64 B
+//                          item.cat window + 63 B item.idx table at
+//                          $DF00-$DF7E -> 129 B free; recall[279] lives in Default RAM)
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE
 .const CATALOG_NAME_POOL_END  = $dbff
 .const CATALOG_HIDDEN_BASE    = CATALOG_NAME_POOL_END + 1

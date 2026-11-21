@@ -565,20 +565,12 @@ ol_target:        .byte 0
 #import "../../../core/scene_force.s"
 #import "../../../core/recall.s"
 #if !PLUS4_CARTRIDGE
-// Disk item catalog 254-byte sector cache lives in Plus4HighBss ($DF00-$DFFD)
-// under $FF3F so Default stays below MAP_BASE ($C800); zeroed at boot by
-// plus4_high_bss_init. item_catalog_records.s asserts size == 254.
+// Disk item catalog 64-byte window buffer ($DF00-$DF3F) and 63-byte item.idx
+// table ($DF40-$DF7E) live in Plus4HighBss under $FF3F so Default stays below
+// MAP_BASE ($C800); zeroed at boot by plus4_high_bss_init.
 #define ITEM_CAT_BUF_EXTERNAL
 .const ITEM_CAT_BUF_BASE = PLUS4_HIGH_BSS_BASE
-.segment Plus4HighBss
-plus4_high_bss_start:
-    .fill 254, 0
-plus4_high_bss_end:
-.segment Default
-.const PLUS4_HIGH_BSS_TAIL_FREE = PLUS4_HIGH_BSS_END + 1 - plus4_high_bss_end
-.assert "Plus4HighBss starts at PLUS4_HIGH_BSS_BASE ($DF00)", plus4_high_bss_start == PLUS4_HIGH_BSS_BASE && PLUS4_HIGH_BSS_BASE == $df00 && PLUS4_HIGH_BSS_END == $dfff, true
-.assert "Plus4HighBss fits in $DF00-$DFFF", plus4_high_bss_end <= PLUS4_HIGH_BSS_END + 1, true
-.print "Plus4HighBss: " + (plus4_high_bss_end - plus4_high_bss_start) + " bytes used, " + PLUS4_HIGH_BSS_TAIL_FREE + " bytes free at $" + toHexString(plus4_high_bss_end) + "-$" + toHexString(PLUS4_HIGH_BSS_END)
+#define ITEM_CAT_IDX_EXTERNAL
 #endif
 #import "../../../core/monster_magic.s"
 .macro ChestSummonsSegment() {
@@ -612,7 +604,24 @@ plus4_high_bss_end:
 #endif
 #import "../common/item_catalog_records.s"
 #if !PLUS4_CARTRIDGE
-.assert "Plus4HighBss item catalog buffer matches ITMCAT_SECTOR_PAYLOAD", plus4_high_bss_end - plus4_high_bss_start, ITMCAT_SECTOR_PAYLOAD
+.segment Plus4HighBss
+plus4_high_bss_start:
+    .fill ICR_WINDOW, 0
+item_cat_idx_data:
+item_cat_idx_size_lo:   .byte 0
+item_cat_idx_size_hi:   .byte 0
+item_cat_idx_sec_count: .byte 0
+item_cat_sec_track:     .fill ITMCAT_SECTOR_COUNT, 0
+item_cat_sec_number:    .fill ITMCAT_SECTOR_COUNT, 0
+item_cat_idx_end:
+plus4_high_bss_end:
+.segment Default
+.const PLUS4_HIGH_BSS_TAIL_FREE = PLUS4_HIGH_BSS_END + 1 - plus4_high_bss_end
+.assert "Plus4HighBss starts at PLUS4_HIGH_BSS_BASE ($DF00)", plus4_high_bss_start == PLUS4_HIGH_BSS_BASE && PLUS4_HIGH_BSS_BASE == $df00 && PLUS4_HIGH_BSS_END == $dfff, true
+.assert "Plus4HighBss fits in $DF00-$DFFF", plus4_high_bss_end <= PLUS4_HIGH_BSS_END + 1, true
+.assert "Plus4HighBss item catalog buffer + idx matches ICR_WINDOW + ITMCAT_IDX_BODY_SIZE", plus4_high_bss_end - plus4_high_bss_start, ICR_WINDOW + ITMCAT_IDX_BODY_SIZE
+.assert "Plus4HighBss item.idx table size matches catalog_disk.py", item_cat_idx_end - item_cat_idx_data, ITMCAT_IDX_BODY_SIZE
+.print "Plus4HighBss: " + (plus4_high_bss_end - plus4_high_bss_start) + " bytes used, " + PLUS4_HIGH_BSS_TAIL_FREE + " bytes free at $" + toHexString(plus4_high_bss_end) + "-$" + toHexString(PLUS4_HIGH_BSS_END)
 #endif
 #import "../../../core/chest_summons.s"
 // Step-13 chest loot: latch + resident handoff stay in Default; the generator
