@@ -272,6 +272,18 @@ class BrainM2Test(unittest.TestCase):
         brain.items_seen[(8, 5)] = ("!", RESTORE_LIFE)
         self.assertEqual(brain.collect(o, view).layer, "collect")         # one seen: taken
 
+    def test_restore_life_levels_is_bought_at_the_black_market_rich(self) -> None:
+        """C64 Balrog, 2026-11-21: the Temple seldom stocks Restore Life
+        Levels; a clvl 31 Human Warrior drained 139 times on DL38-39 drank
+        only the 7 it found and lost 48,000 experience in one run. Rich, the
+        Black Market's is bought too."""
+        from moria_playtest.brain import BLACK_MARKET, RESTORE_LIFE
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.clvl, brain.max_dlvl = 31, 38
+        brain.at_store = BLACK_MARKET
+        self.assertIn(RESTORE_LIFE, brain.shopping_list(gold=900_000))
+        self.assertNotIn(RESTORE_LIFE, brain.shopping_list(gold=1_000))   # not rich: Word of Recall alone
+
     def test_a_restorer_seen_for_a_drained_stat_is_picked_up_and_used(self) -> None:
         """C64 Balrog, 2026-11-17: a clvl 18 Elf Ranger with Constitution
         drained from 12 to 3 walked past a Mushroom of Restore Constitution on
@@ -1653,6 +1665,39 @@ class UnstuckTest(unittest.TestCase):
         deep = command_obs(pos=(5, 5), dlvl=12, clvl=39, rows=pack)
         deep.stage = "list"
         self.assertEqual(brain.drop_prompt(deep).key, KEY_RUNSTOP)  # below town: nothing to buy it from
+
+    def test_a_full_pack_of_unique_keepers_still_makes_room_for_word_of_recall(self) -> None:
+        """C64 Balrog, 2026-11-21: a clvl 33 Human Paladin's 22 slots held 22
+        kinds, none past its pickup limit and no Word of Recall; the Temple
+        refused the scroll and it went between town and DL1-5 for 37 hours.
+        The least use goes: oil with no lantern, then Slow Monster, Resist
+        Cold, Heroism."""
+        from moria_playtest.brain import ALCHEMIST
+        pack = {0: "Inventory", 2: " a) Potion of Healing", 3: " b) Holy Book of Prayers Beginners Handb",
+                4: " c) Potion of Heroism", 5: " d) Potion of Resist Cold", 6: " e) Potion of Super Heroism",
+                7: " f) Potion of Restore Mana", 8: " g) Potion of Neutralize Poison", 9: " h) Potion of Resist Heat",
+                10: " i) Holy Book of Prayers Chants and Bles", 11: " j) Holy Book of Prayers Words of Wisdom",
+                12: " k) Holy Book of Prayers Exorcism", 13: " l) 3 Potion of Cure Light Wounds",
+                14: " m) 2 Potion of Cure Serious Wounds", 15: " n) Wooden Torch (134 turns)",
+                16: " o) Potion of Restore Strength", 17: " p) 3 Scroll of Phase Door",
+                18: " q) Wand of Teleport Away (magik)", 19: " r) Wand of Slow Monster (3 charges)",
+                20: " s) Staff of Teleportation (magik)", 21: " t) Scroll of Teleportation",
+                22: " u) 4 Ration of Food", 23: " v) Flask of Oil (250 turns)"}
+        from moria_playtest.goals import for_character
+        paladin = for_character(GOALS["balrog"], "human-paladin")
+        for lamp, dropped in ((False, ord("V")), (True, ord("R"))):
+            brain = Brain(paladin)
+            brain.clvl, brain.recall, brain.lamp = 33, 0, lamp
+            brain.at_store, brain.alchemist_done = ALCHEMIST, False
+            refused = command_obs(pos=(5, 5), dlvl=0, clvl=33, rows={23: " Your pack is full."})
+            refused.stage = "message"
+            brain.store(refused)
+            brain.dropping, brain.listed = True, True
+            listing = command_obs(pos=(5, 5), dlvl=0, clvl=33, rows=pack)
+            listing.stage = "list"
+            decision = brain.drop_prompt(listing)
+            self.assertEqual((decision.key, decision.reason.endswith("room for Word of Recall")), (dropped, True),
+                             decision.reason)
 
     def test_a_full_pack_refusing_recall_drops_in_town_and_tries_again(self) -> None:
         """2026-11-06: a level-19 Paladin's Word of Recall was refused for a

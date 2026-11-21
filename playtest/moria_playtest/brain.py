@@ -668,6 +668,7 @@ AFRAID_TURNS = 8         # VMS fresh fear lasts randint(5) + 3 turns (§14.3 rou
 FOOD_PER_VISIT = 16      # food purchases per town visit (5 until M4 round 42, 8 until round 80)
 FOOD_EARLY_MAX = 8       # rations' worth to carry at most below EARLY_LEVELS (M5b round 50)
 LANTERN, OIL, TORCH = "Brass Lantern", "Flask of Oil", "Wooden Torch"
+PACK_KINDS = 22          # pack slots a-v: one more kind of item needs one of them free
 LIGHT_TURNS = re.compile(r"\((\d+) turns\)")   # a light's fuel, shown identified or not
 WORN_LIGHT = re.compile(r"You are wearing a (?:Wooden Torch|Brass Lantern) \((\d+) turns")
 LIGHT_CHARGE_TURNS = 30   # each charge the game shows as a "turn" (core/turn.s LIGHT_TICKS_PER_CHARGE)
@@ -2956,8 +2957,12 @@ class Brain:
             # A Brass Lantern too, rich, where the General Store seldom has
             # one (1 of its 25 stock choices): level-37 Priests lit torches
             # and went home for more every 4,000 steps (C64 Balrog, 2026-11-09).
+            # Restore Life Levels too: the Temple seldom stocks it, and a clvl
+            # 31 Human Warrior drained 139 times on DL38-39 drank only the 7 it
+            # found, its experience 115,738 to 67,788 in one run (C64 Balrog,
+            # 2026-11-21).
             keep = (RECALL, PHASE, TELEPORT_SCROLL, HEALING, CCW, CSW, ENCHANT_ARMOR, ENCHANT_WEAPON, RESIST_HEAT, RESIST_COLD,
-                    HEROISM, RESTORE_MANA, LANTERN, *EXTRA_ITEMS) if rich else (RECALL,)
+                    HEROISM, RESTORE_MANA, RESTORE_LIFE, LANTERN, *EXTRA_ITEMS) if rich else (RECALL,)
             wants = [w for w in wants if w in keep]
             if rich and "strong_potions" in self.goal.tactics and self.strong[HEALING] < HEALING_RESERVE:
                 wants.insert(0, HEALING)   # the big heal first: the Temple never has it
@@ -6684,6 +6689,27 @@ class Brain:
                     self.shopped = False
                     self.reopen_refused()
                     return Decision(ord(full.group(1).upper()), "prompt", f"drop {count} {name}: room for Word of Recall")
+                # No stack past its limit: the least use of the 22 kinds goes,
+                # as a player drops one for the way home. A clvl 33 Human
+                # Paladin and a clvl 30 Half-Troll Priest held 22 kinds, none
+                # over its limit and no Word of Recall, and went between town
+                # and DL1-5 for 37 and 26 hours (C64 Balrog, 2026-11-21).
+                order = (*(() if self.lamp else (OIL,)), SLOW_WAND, RESIST_COLD, HEROISM)
+                slots_full = sum(1 for m in matches if m) >= PACK_KINDS
+                spare_at = next((i for kind in order for i, m in enumerate(matches)
+                                 if m and m.group(2).strip().startswith(kind)), None) if slots_full else None
+                if spare_at is not None:
+                    spare = matches[spare_at]
+                    assert spare is not None
+                    name = spare.group(2).strip()
+                    rest = [row for i, row in enumerate(obs.rows[1:]) if i != spare_at]
+                    self.sync_counts(rest, "all")
+                    self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
+                                       for row in rest if (m := PACK_ITEM.match(row)) and m.group(2).startswith(TORCH))
+                    self.dropping = self.pack_full = False
+                    self.shopped = False
+                    self.reopen_refused()
+                    return Decision(ord(spare.group(1).upper()), "prompt", f"drop {name}: room for Word of Recall")
             # Nothing else spare: an unknown flavour goes before the food and
             # light a refused purchase was for (2026-11-05: a level-15 Mage with
             # 5,136 gold and a full pack had every purchase refused, 150,000

@@ -87,7 +87,18 @@ ARMOUR_CHECKPOINT_AC = 5
 # ... and at the same level with this much more experience: a run that ended
 # on its step budget at clvl 39 went back 2,000,000 experience to its clvl 39
 # checkpoint, and all 17 of the queue's runs were about to (2026-11-10).
-CHECKPOINT_XP = 250_000
+# A share of the start's experience, not a flat amount: a flat 250,000 was
+# more than a 3-hour run earns at clvl 30-36, and nine characters replayed
+# the same checkpoint for 10-36 hours, every run's gain thrown away (C64
+# Balrog, 2026-11-21: a clvl 36 Half-Orc Priest reached 890,535 from its
+# 729,169 start and began again from 729,169).
+CHECKPOINT_XP_SHARE = 20     # 1/20 (5%) of the start's experience
+CHECKPOINT_XP_FLOOR = 10_000
+
+
+def checkpoint_xp(last_xp: int) -> int:
+    """The experience a checkpoint at the start's level must add."""
+    return max(CHECKPOINT_XP_FLOOR, last_xp // CHECKPOINT_XP_SHARE)
 # A checkpoint waits for a character out of danger: not poisoned, at least
 # half its HP. The C64 Human Warrior's clvl 10 checkpoint was taken on its
 # arrival in town poisoned, short of the Temple, and all 1,722 of its
@@ -155,12 +166,12 @@ def checkpoint_wanted(clvl: int, ac: int | None, last_clvl: int | None, last_ac:
                       xp: int = 0, last_xp: int | None = None, *, dlvl: int) -> bool:
     """A Balrog run's arrival in town (``dlvl`` 0) is a checkpoint past its
     latest start's character level, or at it with ARMOUR_CHECKPOINT_AC more
-    AC or CHECKPOINT_XP more experience."""
+    AC or ``checkpoint_xp`` more experience."""
     if dlvl != 0 or last_clvl is None or clvl < last_clvl:
         return False
     if clvl > last_clvl:
         return True
-    if last_xp is not None and xp >= last_xp + CHECKPOINT_XP:
+    if last_xp is not None and xp >= last_xp + checkpoint_xp(last_xp):
         return True
     return ac is not None and last_ac is not None and ac >= last_ac + ARMOUR_CHECKPOINT_AC
 
@@ -592,7 +603,7 @@ def run_one(run_dir: Path) -> int:
 
         def take_snapshot(self, obs) -> None:   # type: ignore[no-untyped-def]
             """Each arrival in town: past the start's character level, or at
-            it with ARMOUR_CHECKPOINT_AC more AC or CHECKPOINT_XP more
+            it with ARMOUR_CHECKPOINT_AC more AC or ``checkpoint_xp`` more
             experience, a Balrog run keeps a checkpoint, the level-entry
             snapshot itself or, on a ``graduate_save`` port, a saved game at
             the next command (press). A character in danger
@@ -1130,8 +1141,9 @@ class Balrog:
             base = current.get("ac")
             if base is None and (job.get("resume") or {}).get("run") == current.get("run"):
                 base = start.get("base_ac")   # a start from before 2026-11-07: the run's own AC at it
-            more_ac = base is not None and start.get("ac") is not None and start["ac"] >= base + ARMOUR_CHECKPOINT_AC
-            more_xp = start.get("xp", 0) >= current.get("xp", 0) + CHECKPOINT_XP
+            more_ac = base is not None and start.get("ac") is not None and start["ac"] >= base + ARMOUR_CHECKPOINT_AC \
+                and start.get("xp", 0) >= current.get("xp", 0)   # better armour, never for less experience
+            more_xp = start.get("xp", 0) >= current.get("xp", 0) + checkpoint_xp(current.get("xp", 0))
             if not (more_ac or more_xp):
                 return False
         resume = job.get("resume") or {}
