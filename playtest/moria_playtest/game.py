@@ -231,8 +231,12 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.GENOCIDE, "type"
     if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
-    if obs.rows[0].strip() == "Inventory":
-        return Mode.ITEM, "list"   # the "?" list at an item prompt (no "Press any key")
+    if obs.rows[0].strip() in ("Inventory", "Equipment"):
+        # The "?" list at an item prompt (no "Press any key"): Take off's is
+        # the equipment's. As Mode.UNKNOWN, a drained clvl 27 Human Priest's
+        # take-off for food was cancelled each time and it starved (C64
+        # Balrog, 2026-11-21).
+        return Mode.ITEM, "list"
     if obs.game_flags & abi.GAME_FLAG_OVER:
         return Mode.DEATH, "other"
     stage = (resident_prompts or {}).get(obs.ret, "")

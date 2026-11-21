@@ -272,6 +272,39 @@ class BrainM2Test(unittest.TestCase):
         brain.items_seen[(8, 5)] = ("!", RESTORE_LIFE)
         self.assertEqual(brain.collect(o, view).layer, "collect")         # one seen: taken
 
+    def test_drained_with_nothing_to_restore_it_leaves_the_level(self) -> None:
+        """C64 Balrog, 2026-11-21: Warriors melee'd Wights and Vampires on
+        DL38-39 with no Restore Life Levels and lost a level or two a run.
+        Drained with none carried, the level is left; a creature seen to drain
+        is shunned on the next level too; with one carried, the fight goes on
+        and the potion restores."""
+        from moria_playtest.brain import LIFE, RESTORE_LIFE
+        from moria_playtest.view import Creature
+        view = town_view((5, 5), (40, 40), dlvl=38)
+        view.screen = (0, 0, COLS, ROWS)
+        drained = command_obs(pos=(5, 5), dlvl=38, clvl=31, hp=300, mhp=300,
+                              rows={0: "You feel your life draining away! the Grave Wight touches you."})
+        arrived = command_obs(pos=(5, 5), dlvl=38, clvl=31, hp=300, mhp=300)
+        bare = prepared(Brain(GOALS["deep"]))
+        bare.decide(arrived, view)                                 # on the level first
+        bare.decide(drained, view)
+        self.assertEqual((LIFE in bare.drained, bare.level.drained_bare, bare.drainers),
+                         (True, True, {"Grave Wight"}))
+        self.assertIsNotNone(bare.leave_deadly(drained, view))
+        self.assertEqual(bare.level.deadly, (5, 5))
+        bare.level = type(bare.level)()                            # the next level
+        later = command_obs(pos=(5, 5), dlvl=39, clvl=31, hp=300, mhp=300)
+        self.assertIsNone(bare.leave_deadly(later, view))          # nothing drains here
+        view.creatures[(9, 5)] = Creature("W", 30, "Grave Wight")
+        self.assertIsNotNone(bare.leave_deadly(later, view))       # the drainer again: leave before it touches
+        stocked = prepared(Brain(GOALS["deep"]))
+        stocked.credit(RESTORE_LIFE, 2)
+        view.creatures.clear()
+        stocked.decide(arrived, view)
+        stocked.decide(drained, view)
+        self.assertFalse(stocked.level.drained_bare)
+        self.assertIsNone(stocked.leave_deadly(drained, view))     # carried: fight on, restore after
+
     def test_restore_life_levels_is_bought_at_the_black_market_rich(self) -> None:
         """C64 Balrog, 2026-11-21: the Temple seldom stocks Restore Life
         Levels; a clvl 31 Human Warrior drained 139 times on DL38-39 drank

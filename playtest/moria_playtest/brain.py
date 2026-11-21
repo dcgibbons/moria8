@@ -213,6 +213,8 @@ LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
 SLAIN = re.compile(r"You have slain the (.+?)\.")
 HIT_NEWS = re.compile(r"hits|misses|slain|fails|dies|destroyed|resists|unaffected|unharmed|immune|shrugs")
 CASTS_A_SPELL = re.compile(r"[Tt]he (.+?) (?:casts a spell|frightens you)")
+# The creature whose blow came with a drain ("the Grave Wight touches you.").
+DRAIN_BLOW = re.compile(r"[Tt]he (.+?) (?:touches|claws|bites|hits|gazes at|wails at|stings|crushes) you")
 NAMED_ACT = re.compile(r"[Tt]he (.+?) (?:casts a|frightens|confuses|blinds|summons|breathes)")   # cut at 40 columns too
 AVOID_GLYPHS = {"e"}     # Floating Eye: paralysing gaze when meleed
 RETREAT_HP = 0.60
@@ -808,6 +810,7 @@ def chebyshev(a: Pos, b: Pos) -> int:
 @dataclass
 class LevelMemory:
     unseen_foe: tuple[Pos, str, int] | None = None   # an invisible creature's square, name and step found
+    drained_bare: bool = False   # experience drained here with no Restore Life Levels carried: leave
     detect_after: int = 0   # step before which Detect Doors/Stairs is not prayed again (M5b)
     blind_until: int = 0    # step before which Blind Creature is not prayed again (M5b)
     door_attempts: dict[Pos, int] = field(default_factory=dict)
@@ -954,6 +957,7 @@ class Brain:
         self.gains: dict[str, int] = {}        # potions of gain stat carried, by name
         self.restores: dict[str, int] = {}     # Restore <stat> potions carried, by name
         self.drained: set[str] = set()         # stats read below their highest (track_stats)
+        self.drainers: set[str] = set()        # creatures whose blows drained experience (DRAIN_BLOW)
         self.stat_now: dict[str, int] = {}     # each stat as the status lines last read it
         self.restore_due = False               # a stat is drained: buy and drink Restoration
         self.enchant_scrolls = 0               # Scrolls of Enchant Armor carried (read in town)
@@ -1158,6 +1162,8 @@ class Brain:
             self.track_light(messages)
             if any(m in messages for m in LIFE_DRAINED):
                 self.drained.add(LIFE)
+                self.drainers.update(DRAIN_BLOW.findall(messages))
+                self.level.drained_bare = self.level.drained_bare or not self.restores.get(RESTORE_LIFE)
             if "You feel yourself moving faster." in messages:
                 self.hasted = True
             if "You feel yourself slow down." in messages:
@@ -2489,6 +2495,14 @@ class Brain:
             if self.level.deadly is None and kind is not None \
                     and self.turn_burst(Creature(*kind, name), obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
                 self.level.deadly = view.pos
+        if not self.restores.get(RESTORE_LIFE) and self.level.deadly is None and (
+                self.level.drained_bare or any(c.name in self.drainers for c in view.creatures.values())):
+            # Drained with nothing to restore it, or a drainer in view: the
+            # level is left, as a player without Restore Life Levels leaves
+            # Wights and Vampires. Warriors melee'd them on DL38-39 and lost a
+            # level or two a run, 20,000-40,000 experience an hour (C64
+            # Balrog, 2026-11-21).
+            self.level.deadly = view.pos
         if self.level.deadly is None:
             return None
         here = view.type_at(*view.pos)
