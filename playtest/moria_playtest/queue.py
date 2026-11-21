@@ -1866,6 +1866,21 @@ class Service:
         flagged = [r for r in balrog if (self.home / "runs" / r / YIELD).exists()]
         due = sorted((j["started"], r) for r, j in balrog.items()
                      if r not in flagged and t - j["started"] > BALROG_SLICE_S)
+        # A shared focus short of its slots does not wait out the slice: the
+        # longest-playing other games yield for it at once (maintainer,
+        # 2026-11-21: "give the higher level characters priority"; the focus
+        # set at 15:57 found every slot taken by games 20 minutes old).
+        focus = tuple(self.config.get("balrog_characters") or ())
+        share = int(self.config.get("balrog_focus_workers") or 0)
+        if focus and share:
+            focused = sum(1 for j in balrog.values() if j["character"] in focus)
+            short = [k for k in self.balrog.state["order"] if k not in playing
+                     and self.balrog.state["items"][k]["character"] in focus
+                     and not self.balrog.state["items"][k].get("won")][:max(0, share - focused)]
+            if short:
+                waiting = sorted(set(waiting) | set(short))
+                due = sorted((j["started"], r) for r, j in balrog.items()
+                             if r not in flagged and j["character"] not in focus)
         for _, run_id in due[:max(0, len(waiting) - len(flagged))]:
             (self.home / "runs" / run_id).mkdir(parents=True, exist_ok=True)
             (self.home / "runs" / run_id / YIELD).touch()

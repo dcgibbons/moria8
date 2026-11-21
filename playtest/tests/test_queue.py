@@ -1232,6 +1232,29 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertIsNone(queue.yield_due(run, "balrog", 0, 1001))                # at the poll steps
         self.assertIsNone(queue.yield_due(service.home / "runs" / "new", "balrog", 0, 1000))
 
+    def test_a_focus_short_of_its_slots_has_other_games_yield_at_once(self) -> None:
+        """2026-11-21: the focus set for the clvl 37 characters found every
+        slot taken by games 20 minutes old; they waited for the 3-hour slice.
+        A shared focus short of its slots has the longest-playing games
+        outside it yield at once, never a focus game."""
+        service = self.service(4, 2)
+        service.config.update(balrog_characters=["elf-priest"], balrog_focus_workers=1)
+        balrog = service.balrog
+        for combo in ("human-paladin", "human-priest", "elf-priest"):
+            balrog.graduate("c64", combo, {})
+        t = time.time()
+        balrog.state["items"]["c64/elf-priest"]["graduated"] = {"ended": t - 60}   # waiting a minute
+        service.running = {
+            "old": {"queue": "balrog", "platform": "c64", "character": "human-paladin", "started": t - 1200},
+            "new": {"queue": "balrog", "platform": "c64", "character": "human-priest", "started": t - 600}}
+        service.balrog_yield()
+        self.assertTrue((service.home / "runs" / "old" / queue.YIELD).exists())    # the longest playing
+        self.assertFalse((service.home / "runs" / "new" / queue.YIELD).exists())   # one for the one short
+        service.running["focus"] = {"queue": "balrog", "platform": "c64", "character": "elf-priest", "started": t}
+        (service.home / "runs" / "old" / queue.YIELD).unlink()
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # the focus plays: no yield
+
     def test_a_checkpoint_waits_for_a_character_out_of_danger(self) -> None:
         """2026-11-15: the C64 Human Warrior's clvl 10 checkpoint was taken on
         its arrival in town poisoned, and all 1,722 of its restores died 14
