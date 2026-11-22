@@ -440,8 +440,7 @@ ALCHEMIST = 4            # store index (entrance "5"): VMS stocks Word of Recall
 MAGIC_SHOP = 5           # store index (entrance "6"): Mage books (M5f)
 BLACK_MARKET = 6         # store index (entrance "7"): everything, at a premium
 FIND_TRAPS_EVERY = 40    # steps between a Mage's Find Hidden Traps/Doors while exploring (M5f)
-TRAP_WORST = 24          # the most a floor trap does: 4d6 (VMS blade, fire, acid; FEATURE_MAP traps)
-TRAP_HP_SHARE = 10       # Find Traps only while the worst trap is more than a tenth of max HP
+RUN_MHP = 240            # explore runs from this max HP: the deep characters the replays measured
 RUN_STRAIGHT = 4         # floor squares straight ahead on the path before explore runs there
 RUN_KEYS = {key | 0x80: step for step, key in DIRS.items()}   # SHIFT+direction: the game's Run
 MARKET_GOLD = 600        # gold worth a Black Market trip for Word of Recall (M4 round 48: the
@@ -3514,6 +3513,14 @@ class Brain:
             # unknown wand, found none, cancelled and asked again, 30,000
             # steps (a C128 main-queue game, no level for 150,000 steps).
             self.identify_scrolls = 0
+        if self.picking in self.unknown:
+            # An unknown flavour ("Cypress Staff") not listed: none carried.
+            # A clvl 38 Human Mage cast Identify at one, cancelled the list
+            # without it and cast again, 846 times on one DL1 square (C64
+            # Balrog, 2026-11-22).
+            self.unknown[self.picking] = 0
+            if self.identifying == self.picking:
+                self.identifying = None
         self.picking, self.picking_next = None, None
 
     # -- bookkeeping ----------------------------------------------------------------
@@ -7061,11 +7068,10 @@ class Brain:
         spell = next((name for name in (FIND_TRAPS, PRIEST_FIND_TRAPS) if self.magic.spare(obs, name)), None)
         if obs.dlvl == 0 or self.threats(view) or obs.step < self.level.find_traps_after or spell is None:
             return None
-        if obs.mhp >= TRAP_HP_SHARE * TRAP_WORST:
-            # No trap can hurt: a player stops looking. A clvl 39 Elf Priest
-            # at 352 HP prayed Find Traps 11,762 times in 2.4 hours on DL37,
-            # 7% of its keys, three per prayer (C64 Balrog, 2026-11-22).
-            return None
+        # At any HP: a dart's lost CON costs max HP at every level. Without
+        # Find Traps a clvl 39 Elf Priest stepped on three Lose-CON darts on
+        # DL37 in 70,000 steps, 352 -> 238 max HP, too weak for DL37 until a
+        # town trip restored it (C64 Balrog, 2026-11-22).
         if self.balrog_bound() and obs.dlvl >= BALROG_DLVL:
             # Its mana is the Balrog's: a clvl 40 Priest prayed Find Traps 660
             # times in an hour on DL50 and met it with 29-148 of 161 (C64
@@ -7281,7 +7287,9 @@ class Brain:
         its end with unexplored space or floor beyond (the next square of a
         dark corridor is the nearest unexplored edge: 4,274 of 4,500 explore
         paths in a replay were one square), nothing is in view, the light is
-        lit, and no trap can hurt (TRAP_HP_SHARE). One key for a corridor
+        lit, and max HP at RUN_MHP (the build queue's early games keep
+        single steps; a run meets traps as a walk does, Find Traps shows them
+        and the game stops at one seen). One key for a corridor
         rather than one a square: 53% of a clvl 39 Elf Priest's keys were
         single explore steps (C64 Balrog, 2026-11-22). The game stops a run
         at junctions, doors, room openings and whatever comes into view
@@ -7291,7 +7299,7 @@ class Brain:
         decision = self.move(view, step, layer, reason)
         last, self.last_run = self.last_run, None
         if decision is None or step is None or decision.key != DIRS[step] or view.creatures \
-                or obs.mhp < TRAP_HP_SHARE * TRAP_WORST or self.lightless() or obs.step < self.blind_until \
+                or obs.mhp < RUN_MHP or self.lightless() or obs.step < self.blind_until \
                 or last == (-step[0], -step[1]):
             return decision
         x, y = view.pos

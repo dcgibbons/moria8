@@ -2017,6 +2017,26 @@ class SealedTest(unittest.TestCase):
         self.assertIsNone(brain.identify_items(obs(110), view))                       # resting from it
         self.assertIsNotNone(brain.identify_items(obs(104 + IDENTIFY_FAIL_WAIT), view))   # then again
 
+    def test_an_unknown_staff_not_listed_for_identify_is_not_carried(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 38 Human Mage cast Identify at a
+        Cypress Staff, found it not in the list, cancelled and cast again,
+        846 times in 6,000 steps on one DL1 square."""
+        from moria_playtest.brain import IDENTIFY
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer
+        brain = Brain(for_character(GOALS["balrog"], "human-mage"))
+        brain.magic.known[IDENTIFY] = Prayer("b", 7, 23, "Magick II")
+        brain.unknown["Cypress Staff"] = 1
+        view = town_view((5, 5), (9, 9), dlvl=1)
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=38, hp=343, mhp=343,
+                        rows={23: "HP:343/343  MP:146/153  AC:52  AU:100"})
+        self.assertEqual(brain.identify_items(o, view).reason, "identify the Cypress Staff")
+        brain.listed = True
+        listing = command_obs(rows={0: "Identify which item? (a-b)", 2: " a) a Wand of Frost (5 charges)",
+                                    3: " b) a Scroll of Word of Recall"})
+        self.assertEqual(brain.pick_item(listing).reason, "item to pick not listed: cancel")
+        self.assertIsNone(brain.identify_items(o, view))                 # not cast at it again
+
     def test_deep_the_long_escapes_mana_is_kept(self) -> None:
         """C64 Balrog, 2026-11-16: a clvl 36 Ranger cast Magic Missile at an
         Ancient White Dragon down to 4 of 103 mana, survived a breath at 65
@@ -2866,8 +2886,8 @@ class ThreatDepthTest(unittest.TestCase):
         brain.clvl = 40
         brain.magic.spare = lambda obs, name: True                   # type: ignore[method-assign]
         view = town_view((10, 10), (40, 40), dlvl=50)
-        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=200, mhp=200), view))
-        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=200, mhp=200),
+        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=405, mhp=405), view))
+        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=405, mhp=405),
                                               town_view((10, 10), (40, 40), dlvl=49)))
 
     def test_hunting_deep_no_way_up_hops_down_and_back_or_detects(self) -> None:
@@ -2911,7 +2931,7 @@ class ThreatDepthTest(unittest.TestCase):
         brain.last_run = (-1, 0)
         self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # not straight back after a run west
         weak = command_obs(pos=(5, 5), dlvl=37, clvl=20, hp=200, mhp=200)
-        self.assertEqual(brain.explore(weak, view).key, DIRS[(1, 0)])  # a trap could still hurt: step
+        self.assertEqual(brain.explore(weak, view).key, DIRS[(1, 0)])  # under RUN_MHP: step
         view.creatures = {(40, 15): Creature("o", 10)}
         self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # something in view: step
         view.creatures = {}
@@ -2929,16 +2949,14 @@ class ThreatDepthTest(unittest.TestCase):
         dark.types[4 * COLS + 6] = UNKNOWN
         self.assertEqual(brain.explore(o, dark).key, DIRS[(1, 0)])    # against a wall: step
 
-    def test_no_find_traps_once_no_trap_can_hurt(self) -> None:
-        """C64 Balrog, 2026-11-22: a clvl 39 Elf Priest at 352 HP prayed Find
-        Traps 11,762 times in 2.4 hours on DL37, 7% of its keys. The worst
-        floor trap (4d6) is a tenth of 240 HP."""
+    def test_find_traps_at_any_hp_a_dart_drains_con(self) -> None:
+        """C64 Balrog, 2026-11-22: without Find Traps a clvl 39 Elf Priest
+        stepped on three Lose-CON darts on DL37, 352 -> 238 max HP (38 a
+        point at its level), too weak for DL37 until town restored it."""
         brain = self.priest()
         brain.magic.spare = lambda obs, name: True                   # type: ignore[method-assign]
         view = town_view((10, 10), (40, 40), dlvl=37)
-        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=39, hp=352, mhp=352), view))
-        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=30, hp=100, mhp=240), view))
-        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=30, hp=239, mhp=239), view))
+        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=39, hp=352, mhp=352), view))
 
     def test_diving_for_the_balrog_it_goes_straight_down(self) -> None:
         """C64 Balrog, 2026-11-11: a ready clvl 40 Priest walking down from
