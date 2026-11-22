@@ -2705,9 +2705,19 @@ class GraduateSaveTest(unittest.TestCase):
         game = self.Game(screens)
         text = mock.Mock(command=mock.Mock(return_value=""))
         graduate.save(game, text, Path("save.d64"))
-        text.command.assert_called_once_with('attach "save.d64" 9')
+        self.assertEqual(text.command.mock_calls, [mock.call("detach 9"), mock.call('attach "save.d64" 9')])
         self.assertEqual(game.screens, [])
         return game.keys
+
+    def test_a_detach_error_fails(self) -> None:
+        from moria_playtest import graduate
+        slots = "Save Slots:\n1) *bot\n2)  Empty\nSelect Slot 1-4"
+        game = self.Game([("S+", slots), ("1", "Overwrite? Y/N"),
+                          ("Y", "Overwrite? Y/N\nSaving game... -more-"), (" ", "N)ew  L)oad")])
+        text = mock.Mock(command=mock.Mock(return_value="ERROR: detach 9 failed"))
+        with self.assertRaises(graduate.GraduateError):
+            graduate.save(game, text, Path("save.d64"))
+        text.command.assert_called_once_with("detach 9")
 
     def test_a_first_save(self) -> None:
         slots = "Save Slots:\n1)  Empty\nSelect Slot 1-4"

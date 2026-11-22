@@ -82,8 +82,61 @@ class AssetLoadFindingTest(unittest.TestCase):
         self.assertIn("overlay 7", filed[0][2])
 
 
-if __name__ == "__main__":
-    unittest.main()
+class RigFlushTest(unittest.TestCase):
+    """Rig.flush detaches before reattaching so VICE flushes dirty GCR tracks
+    and error_info before opening the image again."""
+
+    def test_flush_detaches_before_attaching(self) -> None:
+        from pathlib import Path
+        rig = disk.Rig.__new__(disk.Rig)
+        rig.readonly = {9: True}
+        calls: list[str] = []
+
+        class Text:
+            def command(self, cmd: str) -> str:
+                calls.append(cmd)
+                return ""
+
+        rig.text = Text()  # type: ignore[assignment]
+        rig.attach = lambda dev, img, *, readonly=False: calls.append(f"attach:{dev}:{img}:{readonly}")  # type: ignore[method-assign]
+        out = rig.flush(9, Path("save.d64"))
+        self.assertEqual(out, Path("save.d64"))
+        self.assertEqual(calls, ["detach 9", "attach:9:save.d64:True"])
+
+    def test_flush_raises_on_detach_error(self) -> None:
+        from pathlib import Path
+        rig = disk.Rig.__new__(disk.Rig)
+        rig.readonly = {}
+        attached: list[int] = []
+
+        class Text:
+            def command(self, cmd: str) -> str:
+                return "ERROR: cannot detach"
+
+        rig.text = Text()  # type: ignore[assignment]
+        rig.attach = lambda dev, img, *, readonly=False: attached.append(dev)  # type: ignore[method-assign]
+        with self.assertRaises(disk.ScenarioFail):
+            rig.flush(9, Path("save.d64"))
+        self.assertEqual(attached, [])
+
+
+class SaveFileExistsCodeTest(unittest.TestCase):
+    """_save_file_exists_code matches both SAVE_IN_STORAGE_OVERLAY and resident builds."""
+
+    def test_with_save_active_read_name_len(self) -> None:
+        syms = {
+            "hal_storage_save_read_name": [0xB714],
+            "hal_storage_save_read_name_len": [10],
+            "save_active_read_name_len": [0x9188],
+        }
+        self.assertEqual(disk._save_file_exists_code(syms), bytes([0xAD, 0x88, 0x91, 0xA2, 0x14, 0xA0, 0xB7]))
+
+    def test_without_save_active_read_name_len(self) -> None:
+        syms = {
+            "hal_storage_save_read_name": [0xB714],
+            "hal_storage_save_read_name_len": [10],
+        }
+        self.assertEqual(disk._save_file_exists_code(syms), bytes([0xA9, 10, 0xA2, 0x14, 0xA0, 0xB7]))
 
 
 class TextMonitorTest(unittest.TestCase):
@@ -110,3 +163,7 @@ class TextMonitorTest(unittest.TestCase):
         finally:
             monitor.close()
             server.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

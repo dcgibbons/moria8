@@ -228,6 +228,12 @@ class Rig:
     def flush(self, device: int, image: Path) -> Path:
         """Detach and reattach ``image``: true drive emulation keeps written
         tracks in memory and writes them to the file only then."""
+        assert self.text is not None
+        # Detach before re-attaching so VICE writes dirty GCR tracks and
+        # error_info to the host file before disk_image_open reads it back.
+        out = self.text.command(f"detach {device}")
+        if "error" in out.lower():
+            raise ScenarioFail(f"detach {image.name} from {device}: {out.strip()}")
         self.attach(device, image, readonly=self.readonly.get(device, False))
         return image
 
@@ -524,6 +530,16 @@ def at_title(rig: Rig) -> bool:
     return "N)ew  L)oad" in rig.screen()
 
 
+def _save_file_exists_code(syms: dict[str, list[int]]) -> bytes:
+    """First instructions of ``save_file_exists`` (platforms/shared/save.s)."""
+    name = syms["hal_storage_save_read_name"][0]
+    if "save_active_read_name_len" in syms:
+        # SAVE_IN_STORAGE_OVERLAY (C64, Plus/4) loads the patched length from RAM.
+        active = syms["save_active_read_name_len"][0]
+        return bytes([0xAD, active & 0xFF, active >> 8, 0xA2, name & 0xFF, 0xA0, name >> 8])
+    return bytes([0xA9, syms["hal_storage_save_read_name_len"][0], 0xA2, name & 0xFF, 0xA0, name >> 8])
+
+
 def overwrite_slot_losing_status(rig: Rig, slot: str) -> None:
     """``overwrite_slot``, where the check for the slot's file loses its status
     byte once (asked again with a fresh OPEN, so "Overwrite?" still shows)
@@ -531,9 +547,7 @@ def overwrite_slot_losing_status(rig: Rig, slot: str) -> None:
     rig.press(KEY_SAVE)
     rig.expect("Select Slot")
     syms = rig.game.abi.all_symbols   # the check may sit in an overlay not loaded yet:
-    name = syms["hal_storage_save_read_name"][0]   # known by its first instructions
-    probe = rig.lose_status_reads(1, caller="save_file_exists", code=bytes(
-        [0xA9, syms["hal_storage_save_read_name_len"][0], 0xA2, name & 0xFF, 0xA0, name >> 8]))
+    probe = rig.lose_status_reads(1, caller="save_file_exists", code=_save_file_exists_code(syms))
     rig.press(slot)
     rig.expect("Overwrite?")
     if len(probe) != 1:

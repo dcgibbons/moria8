@@ -178,9 +178,9 @@ PLUS4 = Port(
            ("start", "town", "death", "modal", "gen", "help", "ui", "items", "spell", "chest", "home", "storage", "title")},
         "4.bank": "4.bank", "legalui": "legalui",
     },
-    # No REU: every overlay switch and tier crossing loads from the 1541, so the
-    # Plus/4 plays under JiffyDOS (maintainer, 2026-10-27: "definitely use the
-    # jiffydos kernal on plus/4, it's too slow otherwise").
+    # No REU on disk: PLAYTEST_PLUS4_KERNAL + PLAYTEST_DOS1541 is an optional
+    # JiffyDOS pair (like C128); unset, xplus4 defaults to VICE's stock Plus/4
+    # KERNAL and 1541 ROMs.
     resource_args=(
         "-default", "-config", "VICE_CONFIG", "+saveres",
         "-console", "+sound", "-sounddev", "dummy",
@@ -188,7 +188,8 @@ PLUS4 = Port(
         "-drive8type", "1541", "-drive8truedrive",
     ),
     rom_env=(("PLAYTEST_PLUS4_KERNAL", "-kernal"), ("PLAYTEST_DOS1541", "-dos1541")),
-    required_roms=("PLAYTEST_PLUS4_KERNAL", "PLAYTEST_DOS1541"),
+    paired_roms=("PLAYTEST_PLUS4_KERNAL", "PLAYTEST_DOS1541"),
+    required_roms=(),
     consts={
         "SCREEN_RAM": ("platforms/commodore/plus4/memory.s", 0x0C00),
         "COLOR_RAM": ("platforms/commodore/plus4/memory.s", 0x0800),

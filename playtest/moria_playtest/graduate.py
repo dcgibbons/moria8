@@ -65,8 +65,8 @@ SAVE_SCREENS = (("Disk Setup", "3"), ("Insert a Save Disk", " "), ("Initialize t
 
 def save(game: Any, text: TextMonitor, image: Path) -> None:
     """At the command prompt, SHIFT+S, then slot 1 through the screens
-    SAVE_SCREENS names; the save ends at the title. Then reattach ``image``:
-    true drive emulation writes its tracks to the file only then
+    SAVE_SCREENS names; the save ends at the title. Then detach and reattach
+    ``image``: true drive emulation writes its tracks to the file only then
     (disk.save_first_time, Rig.flush)."""
     obs = _press(game, text, KEY_SAVE)
     for _ in range(12):
@@ -79,6 +79,11 @@ def save(game: Any, text: TextMonitor, image: Path) -> None:
             raise GraduateError(f"unexpected screen saving the game:\n{_screen(obs)}")
         obs = _press(game, text, max(keys)[1])
     _expect(obs, "N)ew  L)oad")
+    # VICE 3.10 attach opens the new image before detaching the dirty one, so
+    # detach explicitly first to flush dirty GCR tracks and error_info to disk.
+    out = text.command("detach 9")
+    if "error" in out.lower():
+        raise GraduateError(f"detach of {image.name}: {out.strip()}")
     out = text.command(f'attach "{image}" 9')
     if "error" in out.lower():
         raise GraduateError(f"flush of {image.name}: {out.strip()}")

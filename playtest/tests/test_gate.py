@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from moria_playtest import gate
-from moria_playtest.ports import APPLE2, C64
+from moria_playtest.ports import APPLE2, C64, PLUS4, PLUS4_CART
 
 
 def run(root: Path, outcome: str, findings: list[dict] | None = None, lines: list[str] | None = None) -> Path:
@@ -78,6 +78,8 @@ class GateVerdictTest(unittest.TestCase):
         with mock.patch.dict(gate.os.environ, {}, clear=True):
             self.assertEqual(gate.missing_roms(APPLE2), ["A2ROMS"])
             self.assertEqual(gate.missing_roms(C64), [])
+            self.assertEqual(gate.missing_roms(PLUS4), [])
+            self.assertEqual(gate.missing_roms(PLUS4_CART), [])
 
     def test_its_jobs_play_the_tree_for_the_gate_s_steps(self) -> None:
         job = gate.job_for("bbcmaster", "elf-mage", 1002, "abc", False)
