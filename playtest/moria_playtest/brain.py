@@ -628,7 +628,8 @@ UNSEEN_BREATHS = 2       # ... and the breaths it is weighed as: no sight line t
 THREAT_DEPTH_FROM = 30   # character level from which a threat_depth goal goes as deep as it survives
 OUT_OF_DEPTH = 2         # ... counting natives this much deeper: 1 in 50 picks is out of depth by
                          # 1 + |randnor(0,4)| (VMS alloc_monster mon_nasty, core/monster_catalog.s)
-OUT_OF_DEPTH_FREE = 0    # ... with Free Action worn, natives only: hunt where the experience is
+OUT_OF_DEPTH_FREE = 2    # ... with Free Action worn too (0 for 30 minutes on 2026-11-22: DL39's drainers
+                         # cost more than its kills, -21k experience a run-hour against DL37's +180k)
 SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
 RECALL_CLIMB = 2         # Word of Recall down to a deepest level this many past ready: climb from there
@@ -4329,11 +4330,13 @@ class Brain:
         # took DL37 (a Mature Red Dragon's 160), met Ancient Blue Dragons of
         # DL39 there and died 16 times in 30 minutes (C64 Balrog, 2026-11-11;
         # maintainer: count them). With Free Action worn, natives only
-        # (OUT_OF_DEPTH_FREE): the margin's DL40 Ancient Multi-Hued Dragon
-        # held every clvl 36-39 character at DL37, where a big kill was ~400
+        # (OUT_OF_DEPTH_FREE), tried: the margin's DL40 Ancient Multi-Hued
+        # Dragon holds every clvl 36-39 character at DL37, a big kill ~400
         # experience against DL38-39's 1,500-2,500 (maintainer, 2026-11-22:
-        # "the bots should go lower. don't play it safe! HUNT!"). One met out
-        # of depth is left (leave_deadly).
+        # "the bots should go lower. don't play it safe! HUNT!"), but on
+        # DL39 sixteen runs were drained 5 times a run-hour (2% each, VMS
+        # mon$drain_life) and netted -21k experience a run-hour: back to the
+        # margin until drainers are fought at range and left.
         ood = OUT_OF_DEPTH_FREE if self.free_action() else OUT_OF_DEPTH
         return self.native_exchange(obs, dlvl + ood) < BREATH_LETHAL * obs.mhp
 

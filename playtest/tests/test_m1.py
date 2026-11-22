@@ -2625,23 +2625,19 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertFalse(self.deeper(brain, 35, clvl=31, mhp=256))   # not DL36: DL38's natives
         self.assertFalse(self.deeper(brain, 36, clvl=31, mhp=256))   # nor DL37
 
-    def test_with_free_action_natives_alone_decide_the_depth(self) -> None:
-        """C64 Balrog, 2026-11-22 (maintainer: "the bots should go lower.
-        don't play it safe! HUNT!"): every clvl 36-39 character, Free Action
-        worn, was held at DL37 by DL40's Ancient Multi-Hued Dragon counted
-        two levels out of depth, a big kill there ~400 experience against
-        DL38-39's 1,500-2,500. With Free Action, natives only: DL39, not
-        DL40, where that dragon is native. Without, the margin stays."""
+    def test_with_free_action_the_out_of_depth_margin_stays(self) -> None:
+        """C64 Balrog, 2026-11-22: with Free Action counting natives alone,
+        sixteen clvl 36-39 runs went to DL39, were drained 5 times a
+        run-hour and netted -21k experience a run-hour against DL37's +180k.
+        The margin holds them at DL37 until drainers are handled."""
         from moria_playtest.goals import for_character
         brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
         brain.recall, brain.clw, brain.phase = 3, 20, 5
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Speed",   # its kit on 2026-11-22
                                  Amulet="Amulet of the Magi")                  # Free Action
         o = lambda d: command_obs(pos=(10, 10), dlvl=d, clvl=39, hp=352, mhp=352)
-        self.assertTrue(brain.threat_ready(o(39), 39))
-        self.assertFalse(brain.threat_ready(o(40), 40))
-        brain.jewel_names.pop("Amulet")
-        self.assertFalse(brain.threat_ready(o(39), 39))                     # no Free Action: the margin
+        self.assertTrue(brain.threat_ready(o(37), 37))
+        self.assertFalse(brain.threat_ready(o(38), 38))
 
     def test_threat_depth_wants_a_short_escape(self) -> None:
         """C64 Balrog, 2026-11-12: two clvl 36-37 Half-Orc Warriors with Free
