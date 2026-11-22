@@ -10,15 +10,15 @@ the test checks against the production formatter for every item.
 docs/FEATURE_MAP.md: the Moria8 master item table (section 8.3.1) has a row
 for every item ID and its heading counts them.
 
-During the Wave 4.1->4.2 transition, ``core/item_defs.s`` still defines
-``ITEM_TYPE_COUNT = 157`` and ``test_item_desc.s`` stops at ``ein_156`` while
-``platforms/shared/item_catalog/item_catalog_spec.json`` and the docs already
-define all ``370`` items (``0..369``). While ``core_count < spec_count``,
-``main()`` verifies ``0..(core_count-1)`` against ``spec`` and validates the
-docs against the ``spec`` catalog; once Wave 4.2/4.3 raises
-``core/item_defs.s`` to ``370``, ``core_count == spec_count`` and ``main()``
-enforces ``check()`` directly against ``core/item_defs.s`` and
-``test_item_desc.s``.
+Both ``core/item_defs.s`` (``ITEM_TYPE_COUNT = 361``) and
+``platforms/commodore/c64/tests/test_item_desc.s`` (``ein_0..ein_360``)
+implement the full ``361``-item catalog defined in
+``platforms/shared/item_catalog/item_catalog_spec.json`` (``0..360``). When
+``item_catalog_spec.json`` is present, ``main()`` verifies that
+``core/item_defs.s``, ``test_item_desc.s``, ``docs/WIZARD.md``, and
+``docs/FEATURE_MAP.md`` section 8.3.1 all match those ``361`` items exactly;
+otherwise it falls back to ``check()`` directly against ``core/item_defs.s``
+and ``test_item_desc.s``.
 
 An item added without its doc rows fails here, naming the IDs (maintainer,
 2026-11-11: "so we can't miss wizard updates when we add stuff").

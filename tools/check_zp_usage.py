@@ -95,6 +95,9 @@ def classify_operand(path: Path, line_no: int, line: str) -> list[Finding]:
         return findings
 
     for match in RAW_ZP_RE.finditer(operand):
+        prefix = operand[:match.start()].rstrip()
+        if len(prefix) > 1 and prefix[-1] in "+-*/&|^":
+            continue
         addr = int(match.group("addr"), 16)
         rel = path.relative_to(ROOT)
         display_line = line.rstrip()
@@ -158,6 +161,10 @@ def run_self_test() -> int:
         ("// sta $90", []),
         ("label: lda $8f,x", ["warn"]),
         ("lda $d020", []),
+        ("lda huff_index_stage + $ff,x", []),
+        ("sta HUFF_INDEX_HIDDEN_BASE + $ff,x", []),
+        ("lda $90 + $01", ["error"]),
+        ("lda ($90 + $01),y", ["error"]),
     ]
     failures: list[str] = []
     for index, (line, expected) in enumerate(cases, start=1):
