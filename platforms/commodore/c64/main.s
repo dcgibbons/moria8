@@ -188,12 +188,9 @@ exit_trampoline:
     sta $d418               // Silence SID
     jsr restore_zp          // Must run BEFORE banking BASIC in (buffer may be under BASIC ROM)
     sei
-    // Restore default IRQ vector — our handler (irq_no_blink) is in the
-    // $A000-$BFFF region, hidden once BASIC ROM is banked in.
-    lda #$31
-    sta $0314
-    lda #$ea
-    sta $0315
+    // Restore default IRQ, IBASIN ($0324), and ILOAD ($0330) vectors before
+    // banking BASIC back in (our handlers sit in RAM; IRQ handler is above $A000).
+    jsr $ff8a               // KERNAL RESTOR ($0314..$0333 -> ROM defaults)
     lda $01
     ora #%00000001          // Set bit 0 (LORAM) — bank in BASIC ROM
     sta $01
@@ -360,8 +357,10 @@ c64_disk_call:
     sta !cdc_jsr+ + 2
     lda $01
     sta c64_disk_call_saved_bank
+    sei
     lda #$36
     sta $01
+    jsr c64_apply_safe_iec_vectors
     cli
     pla
     tay
@@ -435,6 +434,127 @@ c64_disk_load:
     jsr c64_disk_call
     .word $ffd5
     rts
+
+// Stock C64 KERNAL safe-EOI IEC hooks (installed at $0324/$0330 by
+// c64_safe_iec_install when Stock KERNAL + real IEC drive are detected).
+// Every serial EOI byte (all LOADs and all CHRINs) waits for vertical blank
+// ($D011 bit 7 == 1) while holding DATA=LOW after EOI ACK so VIC-II badlines
+// cannot split $EEA9/$EEAC against JiffyDOS 1541's 67 us EOI bit-0 setup.
+c64_safe_iec_start:
+c64_basin_safe:
+    lda $99                     // DFLTN: current input device
+    cmp #4                      // Serial IEC devices 4..30
+    bcc !cbs_rom+
+    lda $90                     // ST
+    beq c64_acptr_safe          // Clean ST -> EOI-safe ACPTR
+!cbs_rom:
+    jmp $f157                   // Stock BASIN (keyboard/screen/tape/nonzero ST)
+
+c64_acptr_safe:
+    sei
+    lda #0
+    sta $a5
+    jsr $ee85                   // CLK = HIGH
+!cas_clk_hi:
+    jsr $eea9
+    bpl !cas_clk_hi-
+    lda #$01                    // CIA1 Timer B: 200 us EOI timeout
+    sta $dc07
+    lda #$19
+    sta $dc0f
+    jsr $ee97                   // DATA = HIGH
+    lda $dc0d
+!cas_clk_lo:
+    lda $dc0d
+    and #$02
+    bne !cas_eoi+
+    jsr $eea9
+    bmi !cas_clk_lo-
+    jmp $ee56                   // Non-EOI: stock KERNAL bit-receive loop
+!cas_eoi:
+    jsr $eea0                   // DATA = LOW (EOI ACK)
+    jsr $ee85                   // CLK = HIGH
+    lda #$40
+    jsr $fe1c                   // ST |= $40
+    inc $a5
+!cas_vb:
+    bit $d011                   // Wait for vertical blank ($D011 bit 7 == 1)
+    bpl !cas_vb-
+c64_acptr_eoi_resume:
+    jmp $ee20                   // Stock KERNAL $EE20: release DATA=HIGH & receive EOI byte
+
+c64_iload_safe:
+    tax                         // Set Z from A (caller's LDY #hi cleared Z; $F49E saved X in $C3)
+    stx $93                     // VERCK: 0 = LOAD, nonzero = VERIFY
+    bne !cis_rom+
+    lda $ba                     // FA: device
+    cmp #4
+    bcc !cis_rom+
+    ldy $b7                     // FNLEN
+    bne !cis_open+
+!cis_rom:
+    lda $93
+    jmp $f4a5                   // Stock ILOAD
+!cis_open:
+    lda #0
+    sta $90                     // ST = 0
+    ldx $b9                     // Save original SA (0 = use $C3/$C4, !=0 = PRG header)
+    lda #$60
+    sta $b9
+    jsr $f3d5                   // OPEN serial file
+    lda $ba
+    jsr $ed09                   // TALK
+    lda $b9
+    jsr $edc7                   // TKSA $60
+    jsr c64_acptr_safe          // PRG load addr lo
+    sta $ae
+    lda #$02
+    bit $90
+    bne !cis_fnf+
+    jsr c64_acptr_safe          // PRG load addr hi
+    sta $af
+    txa
+    bne !cis_loop+
+    lda $c3
+    sta $ae
+    lda $c4
+    sta $af
+!cis_loop:
+    lda #$fd
+    and $90
+    sta $90
+    jsr c64_acptr_safe
+    tax
+    lda #$02
+    bit $90
+    bne !cis_loop-
+    txa
+    ldy #0
+    sta ($ae),y
+    inc $ae
+    bne !+
+    inc $af
+!:  bit $90
+    bvc !cis_loop-
+    jmp $f528                   // UNTLK + CLOSE ($F642) + CLC + LDX $AE + LDY $AF + RTS
+!cis_fnf:
+    jmp $f704                   // FILE NOT FOUND (SEC, A=4, RTS)
+c64_safe_iec_active: .byte 0
+c64_apply_safe_iec_vectors:
+    lda c64_safe_iec_active
+    beq !casiv_done+
+    lda #<c64_basin_safe
+    sta $0324
+    lda #>c64_basin_safe
+    sta $0325
+    lda #<c64_iload_safe
+    sta $0330
+    lda #>c64_iload_safe
+    sta $0331
+!casiv_done:
+    rts
+c64_safe_iec_end:
+.assert "C64 safe IEC handlers stay below BASIC ROM ($A000)", c64_safe_iec_end <= $a000, true
 
 c64_disk_marker_present:
     lda $01
@@ -521,14 +641,18 @@ reu_size_kb: .word 0
 #define REU_STASH_OVERLAYS_EXTERNAL
 #define REU_LOAD_ALL_TIERS_EXTERNAL
 #define REU_DETECT_EXTERNAL         // boot only: the init-only tail
+#define REU_PROGRESS_EXTERNAL       // boot only: the init-only tail
 #import "../common/reu.s"
+#undef REU_PROGRESS_EXTERNAL
 #undef REU_DETECT_EXTERNAL
 #undef REU_LOAD_ALL_TIERS_EXTERNAL
 #undef REU_STASH_OVERLAYS_EXTERNAL
 #endif
 #import "screen.s"
 #import "../../../core/color.s"
+#define DETECT_MACHINE_EXTERNAL
 #import "config.s"
+#undef DETECT_MACHINE_EXTERNAL
 #define C64_PRODUCT_SOUND_UPDATE_FROM_INPUT
 #import "input.s"
 #import "../../../core/rng.s"
@@ -781,18 +905,6 @@ hal_recall_write_byte:
     lda c64_item_cat_saved_port
     sta hal_memory_cpu_port
 }
-#define ITEM_CAT_PRE_EOI_HOOK
-.macro ItemCatPreEoi() {
-    // Wait for VIC-II vertical blank ($D011 bit 7 = 1, raster >= 256) before
-    // reading buffer byte $FF (EOI). Even entering at the last line of VBLANK
-    // leaves >= 51 badline-free lines (>= 3.2 ms PAL/NTSC) before line 51,
-    // covering both a worst-case CIA1 IRQ at c64_disk_call's CLI and the
-    // ~1.8 ms EOI ACPTR handshake so no 43-cycle badline can split stock
-    // KERNAL $EEA9/$EEAC against JiffyDOS 1541's 67 us EOI bit-0 setup.
-!icr_wait_vblank:
-    bit $d011
-    bpl !icr_wait_vblank-
-}
 #if HAL_PLATFORM_ITEM_PICKUP_CACHE
 .macro ItemPickupCacheMap() {
     php
@@ -1030,6 +1142,7 @@ entry_main:
 #endif
     jsr disk_reset_session_state
     jsr c64_install_ram_irq_vectors
+    jsr c64_safe_iec_install
 #if C64_CARTRIDGE
     jsr cart_install_nmi
 #endif
@@ -1828,6 +1941,7 @@ platform_runtime_resync_c64:
     sta $0314
     lda #>irq_no_blink
     sta $0315
+    jsr c64_apply_safe_iec_vectors
     jsr c64_install_ram_irq_vectors
     lda #BANK_NO_BASIC
     sta $01
@@ -2669,10 +2783,157 @@ c64_test_ego_pass_sym:
 .assert "Catalog boot loads live in the init-only tail", catalog_boot_load >= program_end, true
 #endif
 
-// REU detection (restart_entry, once at boot) and its probes.
+// Boot-only machine detection and stock-KERNAL EOI IEC vector installer.
+#import "detect_machine.s"
+.assert "detect_machine lives in the init-only tail", detect_machine >= program_end, true
+
+c64_safe_iec_install:
+    lda #0
+    sta c64_safe_iec_active
+    lda #BANK_NO_BASIC
+    sta $01
+    // Only wrap Stock C64 / SX-64 / C64C KERNAL ACPTR/BASIN/ILOAD when not
+    // already hooked (JiffyDOS C64 KERNAL replaces ACPTR/ILOAD and differs here).
+    lda $ee13
+    cmp #$78                    // SEI
+    bne !csii_done+
+    lda $ee14
+    cmp #$a9                    // LDA #
+    bne !csii_done+
+    lda $ee15
+    bne !csii_done+             // $00
+    lda $ee54
+    cmp #$d0                    // BNE
+    bne !csii_done+
+    lda $ee55
+    cmp #$ca                    // $EE20 (-$36)
+    bne !csii_done+
+    lda $0324
+    cmp #$57
+    bne !csii_done+
+    lda $0325
+    cmp #$f1
+    bne !csii_done+
+    lda $0330
+    cmp #$a5
+    bne !csii_done+
+    lda $0331
+    cmp #$f4
+    bne !csii_done+
+    lda program_device
+    cmp #4
+    bcc !csii_done+
+    cmp #31
+    bcs !csii_done+
+    // Release ATN/CLK/DATA; if a powered-off device holds the bus low, abort fast.
+    lda $dd00
+    and #%11000111              // ATN=HIGH, CLK=HIGH, DATA=HIGH
+    ora #%00000011
+    sta $dd00
+    ldx #8
+!csii_settle:
+    dex
+    bne !csii_settle-
+    lda $dd00
+    and #%11000000              // Bit 7=DATA IN, Bit 6=CLK IN
+    cmp #%11000000
+    beq !csii_probe+
+!csii_done:
+    rts
+!csii_probe:
+    // Bounded direct IEC probe on channel 15: bypasses $EDC7's unbounded
+    // $EDD6 talker-turnaround loop (which hangs forever on -drive8type 0 /
+    // missing devices) and VICE virtual traps, so real/JiffyDOS 1541-1581
+    // drives answer cleanly while non-IEC setups fall through in milliseconds.
+    cli
+    lda #0
+    sta $90                     // ST = 0
+    sta $94                     // C3PO = 0 (no buffered byte)
+    sta $a3                     // EOI flag = 0
+    lda program_device
+    jsr $ed09                   // TALK device (sets ST=$80 & releases ATN on timeout)
+    lda $90
+    beq !+
+    jmp !csii_exit+
+!:  lda #$6f                    // Channel 15 TALK SA ($60 | 15)
+    sta $95
+    jsr $ed36                   // Send SA byte under active ATN
+    lda $90
+    beq !+
+    jmp !csii_untlk+
+!:  sei
+    jsr $eea0                   // DATA = LOW
+    jsr $edbe                   // ATN = HIGH
+    jsr $ee85                   // CLK = HIGH
+    // Wait up to ~32 ms for drive to pull CLK LOW (talker turnaround)
+    ldx #4
+    ldy #0
+!csii_clk_lo:
+    jsr $eea9
+    bpl !csii_clk_lo_ok+
+    dey
+    bne !csii_clk_lo-
+    dex
+    bne !csii_clk_lo-
+    jmp !csii_untlk+
+!csii_clk_lo_ok:
+    // Read channel 15 status through EOI, capped at 64 bytes and ~64 ms/byte.
+    lda #64
+    sta csii_left
+!csii_byte:
+    ldx #8
+    ldy #0
+!csii_clk_hi:
+    jsr $eea9
+    bmi !csii_clk_hi_ok+
+    dey
+    bne !csii_clk_hi-
+    dex
+    bne !csii_clk_hi-
+    jmp !csii_untlk+
+!csii_clk_hi_ok:
+    jsr c64_acptr_safe
+    lda $90
+    and #$bf                    // Error bits other than EOI ($40)?
+    bne !csii_untlk+
+    bit $90                     // Clean EOI ($40) ends status channel
+    bvs !csii_install+
+    dec csii_left
+    bne !csii_byte-
+!csii_untlk:
+    cli
+    jsr $edef                   // UNTLK
+!csii_exit:
+    lda #0
+    sta $90
+    lda $dd00
+    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
+    cli
+    rts
+!csii_install:
+    cli
+    jsr $edef                   // UNTLK
+    lda #0
+    sta $90
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    sei
+    lda #1
+    sta c64_safe_iec_active
+    jsr c64_apply_safe_iec_vectors
+    cli
+    rts
+csii_left: .byte 0
+.assert "C64 safe IEC installer lives in the init-only tail", c64_safe_iec_install >= program_end, true
+
+// REU detection and progress (restart_entry, once at boot) and its probes.
 #if !C64_CARTRIDGE
 #import "../common/reu_detect.s"
 .assert "REU detection lives in the init-only tail", reu_detect >= program_end && reu_probe_xfer >= program_end, true
+#import "../common/reu_progress.s"
+.assert "REU progress lives in the init-only tail", reu_show_file >= program_end && reu_render_progress >= program_end, true
 
 #endif
 // One-shot platform-services installer (called once at boot, before the map

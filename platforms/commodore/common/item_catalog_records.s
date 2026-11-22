@@ -16,8 +16,6 @@
 //   ITEM_CAT_BUF_EXTERNAL     — port supplies ITEM_CAT_BUF_BASE (ICR_WINDOW B buffer)
 //   ITEM_CAT_MAP_CUSTOM       — port defines :ItemCatMap() / :ItemCatUnmap()
 //                               :ItemCatKernalIn() / :ItemCatKernalOut()
-//   ITEM_CAT_PRE_EOI_HOOK     — port defines :ItemCatPreEoi() run before reading
-//                               buffer byte $FF (EOI)
 //   ITEM_CATALOG_REU          — REU holds headerless ITEM.CAT at ITEM_CAT_REU_BANK /
 //                               ITEM_CAT_REU_ADDR_HI / ITEM_CAT_REU_ADDR_LO
 
@@ -197,13 +195,7 @@ hal_item_cat_read_byte:
 !icr_direct:
 
     // Direct sector read: OPEN 15,dev,15 / OPEN 5,dev,5,"#" / U1 5 0 t s / B-P 5 <pos>
-    lda #0
-    jsr hal_storage_setnam
-    lda #15
-    ldx program_device
-    ldy #15
-    jsr hal_storage_setlfs
-    jsr hal_storage_open
+    jsr icr_open_cmd
     lda #1
     ldx #<icr_hash
     ldy #>icr_hash
@@ -252,10 +244,9 @@ hal_item_cat_read_byte:
     jmp !icr_loaded+
 
 !icr_cmd_failed:
-    jsr icr_close_buf
-    lda #15
-    jsr hal_storage_close
+    jsr icr_close_all
 !icr_by_name:
+    jsr icr_open_cmd
     lda #icr_name_end - icr_name
     ldx #<icr_name
     ldy #>icr_name
@@ -265,6 +256,9 @@ hal_item_cat_read_byte:
     ldy #ICR_LFN
     jsr hal_storage_setlfs
     jsr hal_storage_open
+    bcs !icr_wrong_disk+
+    jsr icr_drive_ok
+    bcs !icr_wrong_disk+
     jsr icr_chkin_ok
     bcs !icr_wrong_disk+
     // Skip 2-byte PRG header + icr_cache_start_lo/hi payload bytes.
@@ -288,16 +282,14 @@ hal_item_cat_read_byte:
 !:  dec icr_skip_lo
     jmp !icr_skip-
 !icr_read_named:
-    lda #0                      // Sequential stream has no #-buffer $FF EOI
-    sta icr_bp_off
     jsr icr_read_sector_buf
+    lda #15
+    jsr hal_storage_close
     jsr icr_verify_sector
     bcc !icr_loaded+
 
 !icr_wrong_disk:
-    jsr hal_storage_clrchn
-    lda #ICR_LFN
-    jsr hal_storage_close
+    jsr icr_close_all
     lda #icr_name_end - icr_name
     sta alr_len
     lda #<icr_name
@@ -356,6 +348,20 @@ icr_close_buf:
     lda #ICR_LFN
     jmp hal_storage_close
 
+icr_open_cmd:
+    lda #0
+    jsr hal_storage_setnam
+    lda #15
+    ldx program_device
+    ldy #15
+    jsr hal_storage_setlfs
+    jmp hal_storage_open
+
+icr_close_all:
+    jsr icr_close_buf
+    lda #15
+    jmp hal_storage_close
+
 // icr_read_buf_n — Read A bytes (1..ICR_WINDOW) from active channel ICR_LFN into item_cat_sec_buf.
 // Uses icr_skip_lo as loop limit (dead on !icr_direct and after !icr_skip finishes).
 icr_read_buf_n:
@@ -363,16 +369,6 @@ icr_read_buf_n:
     lda #0
     sta icr_idx
 !irsb_loop:
-#if ITEM_CAT_PRE_EOI_HOOK
-    lda icr_bp_off
-    clc
-    adc icr_idx
-    cmp #$ff
-    bne !irsb_read+
-    :ItemCatPreEoi()
-!irsb_read:
-#endif
-icr_read_chrin:
     jsr hal_storage_chrin
     ldx icr_idx
     sta item_cat_sec_buf,x

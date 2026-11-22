@@ -5586,12 +5586,10 @@ check_static_contract "c64_modal_ego_restores_io_contract" "main.s" \
     "tramp_roll_ego_type_modal:|||lda \$01|||pha|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pla|||sta \$01|||plp|||tya|||rts"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
-check_static_contract "c64_item_cat_pre_eoi_vblank_macro_contract" "main.s" \
-    "#define ITEM_CAT_PRE_EOI_HOOK|||.macro ItemCatPreEoi()|||bit \$d011|||bpl !icr_wait_vblank-"
-check_static_contract "item_cat_pre_eoi_hook_contract" "../common/item_catalog_records.s" \
-    "icr_read_buf_n:|||#if ITEM_CAT_PRE_EOI_HOOK|||lda icr_bp_off|||clc|||adc icr_idx|||cmp #\$ff|||bne !irsb_read+|||:ItemCatPreEoi()|||icr_read_chrin:|||jsr hal_storage_chrin"
+check_static_contract "c64_safe_iec_eoi_vectors_contract" "main.s" \
+    "jsr \$ff8a|||c64_disk_call:|||jsr c64_apply_safe_iec_vectors|||c64_basin_safe:|||lda \$99|||beq c64_acptr_safe|||c64_acptr_safe:|||!cas_vb:|||bit \$d011|||bpl !cas_vb-|||c64_acptr_eoi_resume:|||jmp \$ee20|||c64_iload_safe:|||jsr c64_acptr_safe|||c64_safe_iec_active:|||c64_apply_safe_iec_vectors:|||jsr c64_safe_iec_install|||platform_main_loop_begin_c64:|||jsr c64_apply_safe_iec_vectors|||c64_safe_iec_install:"
 check_static_contract "item_cat_sector0_magic_and_named_eoi_contract" "../common/item_catalog_records.s" \
-    "lda icr_sec_idx|||bne !icr_u1_window+|||lda #4|||jsr icr_send_u1_bp|||jsr icr_verify_magic|||lda icr_bp_pos|||jsr icr_send_bp|||!icr_read_named:|||lda #0|||sta icr_bp_off|||jsr icr_read_sector_buf"
+    "lda icr_sec_idx|||bne !icr_u1_window+|||lda #4|||jsr icr_send_u1_bp|||jsr icr_verify_magic|||lda icr_bp_pos|||jsr icr_send_bp|||!icr_by_name:|||jsr icr_open_cmd|||jsr hal_storage_open|||bcs !icr_wrong_disk+|||jsr icr_drive_ok|||bcs !icr_wrong_disk+|||jsr icr_chkin_ok|||!icr_read_named:|||jsr icr_read_sector_buf"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
     "game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
 check_static_contract "c64_save_media_hal_contract" "../../shared/save.s" \
