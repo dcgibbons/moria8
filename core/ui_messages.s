@@ -113,10 +113,6 @@ msg_print_ay:
     sta zp_ptr0
     sty zp_ptr0_hi
 msg_print:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$20
-    jsr c128_town_dump_log
-#endif
     // Cache source pointer in static RAM so IRQ activity cannot clobber
     // low-ZP pointer bytes before/during message handling.
     lda zp_ptr0
@@ -127,10 +123,6 @@ msg_print:
 // msg_print_cached — Display message using msg_src_lo/msg_src_hi as source.
 // Used by C128 Huffman path to avoid a decode->print ZP pointer race.
 msg_print_cached:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$21
-    jsr c128_town_dump_log
-#endif
 #if HAL_PLATFORM_REASSERT_BEFORE_MESSAGE_RENDER
     // Message rendering is hit constantly during live gameplay; reassert
     // platform-selected runtime state here so leaked OS state can't persist
@@ -230,10 +222,6 @@ msg_print_current_ptr:
 // Called at the start of each player turn.
 // Preserves: X, Y
 msg_clear:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$22
-    jsr c128_town_dump_log
-#endif
     lda zp_msg_flags
     beq !done+
 
@@ -251,10 +239,6 @@ msg_clear:
 // msg_show_more — Display " -MORE-" at end of row 1 message
 // Preserves: nothing
 msg_show_more:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$23
-    jsr c128_town_dump_log
-#endif
     lda msg_row1_col
     cmp #MSG_MORE_OVERFLOW_CMP
     bcc !fits+

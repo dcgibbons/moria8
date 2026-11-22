@@ -438,6 +438,11 @@ irs_p3_magic_mapping:
 #endif
 
 // Object Detection: reveal every floor item's tile.
+// Kept separate from ep1_detect_objects (core/eff_item_p1.s): on 6 of 7 ports
+// scroll_effects_p3.s and eff_item_p1.s live in separate $E000 overlays (and
+// test_scroll_p3.s omits eff_item_p1.s), C128 scroll_p3_return_smoke asserts
+// irs_p3_report, and HSTR_PIQ_SENSE is "You sense nearby creatures.", not
+// "You sense treasure nearby."
 irs_p3_object_detect:
     ldx #0
 !irs_od_loop:

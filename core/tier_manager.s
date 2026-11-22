@@ -347,15 +347,6 @@ tier_load:
     bne !tl_reu+
 
     // --- Disk path: load tier file to BANKED_DATA_BASE ---
-#if C128_CACHE_TEST_SKIP_TIER
-    lda current_tier
-    cmp c128_cache_test_skip_tier
-    bne !tl_partial_state_done+
-    jsr c128_test_validate_tier_partial_state
-    bcc !tl_partial_state_done+
-    jmp c128_test_partial_cache_fail_sym
-!tl_partial_state_done:
-#endif
     jsr tier_load_disk
 #if C64_UNIT_TEST
     bcc !tl_disk_ok+            // only unit tests see a load fail (asset_load_retry.s)

@@ -25,8 +25,8 @@ mat_action_dirty: .byte 0    // bit 0: state changed, bit 1: hostile action, bit
 mat_force_new_dirty: .byte 0 // Nonzero when new tile lost visible occupant/item (unseen mover)
 mts_eat_slot: .byte EMPTY_SLOT // Eaten target slot in monster_try_step ($ff = none)
 mat_player_stealth: .byte 0  // Race/class threshold cached once per AI tick
-mat_fast:     .byte 0       // player speed steps this tick (MON-026): Rings of Speed worn + haste - slow, -1..3
-mat_turn_mod: .byte 0, 0, 0, 0   // this turn mod 5, 4, 3, 2: a monster at cadence s <= 0 acts when entry s + 3 is 0
+mat_fast:     .byte 0       // player speed steps this tick (MON-026): Rings of Speed + Boots + haste - slow, -2..4
+mat_turn_mod: .byte 0, 0, 0, 0   // this turn mod 5, 4, 3, 2: a monster at cadence s <= 0 acts when entry max(s + 3, 0) is 0 (clamped to mod 5)
 
 // ============================================================
 // monster_ai_tick — Main AI loop
@@ -175,7 +175,7 @@ monster_ai_tick:
     // one at 1, and at s <= 0 one on turns divisible by 2 - s.
     lda zp_mon_speed
     sec
-    sbc mat_fast                // -3..3
+    sbc mat_fast                // -4..4
     beq !mat_pc_slow+
     bmi !mat_pc_slow+
     cmp #3
@@ -184,7 +184,10 @@ monster_ai_tick:
     bne !mat_not_slow+          // always
 !mat_pc_slow:
     clc
-    adc #3                      // s + 3: 0..3
+    adc #3                      // s + 3: -1..3, clamped >= 0 (mod 5 floor)
+    bpl !mat_mod_ok+
+    lda #0
+!mat_mod_ok:
     tax
     lda mat_turn_mod,x
     bne !mat_next+              // not this turn

@@ -90,10 +90,6 @@ map_bulk_and_mask: .byte 0
 // Sets player start position.
 // Preserves: nothing
 town_generate:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$73
-    jsr c128_town_dump_mark
-#endif
     // Clear trap table for safety (town has no traps)
     lda #0
     sta trap_count
@@ -2542,7 +2538,3 @@ position_player_dungeon:
 .assert "MAX_ROOMS", MAX_ROOMS, hal_layout_dungeon_max_rooms
 .assert "TILE_WALL_H = $10", TILE_WALL_H, $10
 .assert "DUNGEON_FLAGS = $08", DUNGEON_FLAGS, $08
-#if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT
-// balrog_product_setup lives in the CHEST overlay on Plus/4 (GEN has no room
-// beside place_secrets); see plus4/main.s.
-#endif

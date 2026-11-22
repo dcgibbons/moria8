@@ -57,9 +57,6 @@ item_gain_spell:
     jsr ui_view_restore_modal_overlay
 #endif
     jsr pm_learn_selected_spell
-#if C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
-    jmp c128_test_book_overlay_pass_sym
-#endif
     lda #SFX_LEVELUP
     jsr hal_sound_play
     sec

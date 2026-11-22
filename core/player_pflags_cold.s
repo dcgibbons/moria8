@@ -28,7 +28,9 @@ player_recalc_pflags_equipment:
 !pfe_slot:
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !pfe_chk_ego+
+    bne !pfe_have_item+
+    jmp !pfe_next+
+!pfe_have_item:
     lda inv_ego,x
     and #ITEM_PAGE_BIT
     sta item_cur_page
@@ -69,13 +71,9 @@ player_recalc_pflags_equipment:
     beq !pfe_next+
     // Digging tools store prefix IDs (1..4) in inv_ego, not weapon ego IDs.
     tay
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !pfe_load_ego+
     jsr item_get_category_inv_x
     cmp #ICAT_DIGGING
     beq !pfe_next+
-!pfe_load_ego:
     tya
     jsr item_cat_get_ego
     lda inv_ego,x
