@@ -5371,6 +5371,14 @@ class Brain:
             # Heal at once while out of its sight: a rest is many turns, and
             # level-36 Priests rested at 32-43 HP with a hundred potions until
             # the dragon came back (C64 Balrog, 2026-11-08).
+            if obs.hp >= obs.mhp:
+                # Full, and the breath could still all but kill: no rest
+                # helps, it only waits for the breather. Leave the level
+                # (leave_deadly). A clvl 33 Half-Elf Mage at 265/265 rested
+                # with an Ancient Blue Dragon's 240 about, and its two breaths
+                # killed it (C64 Balrog, 2026-11-21).
+                self.level.deadly = self.level.deadly or view.pos
+                return None
             heal = self.heal_now(obs, f"HP {obs.hp}/{obs.mhp}: a breath of {breather[1]} about")
             if heal is not None:
                 return heal

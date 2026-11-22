@@ -3981,6 +3981,14 @@ class ResistFireTest(unittest.TestCase):
         self.assertIn("drink Cure Light Wounds", brain.rest(low, gone).reason)
         full = command_obs(pos=(10, 10), dlvl=31, clvl=35, hp=worst - 10, mhp=worst - 10)
         self.assertNotIn("drink", (brain.rest(full, gone) or Decision(0, "", "")).reason)   # full: no potion
+        # Full and still in reach of it: no rest, leave the level. A clvl 33
+        # Half-Elf Mage at 265/265 rested with an Ancient Blue Dragon's 240
+        # about and died to two breaths (C64 Balrog, 2026-11-21).
+        brain.level.deadly = None                                        # not yet a level to leave
+        brain.magic.mana = lambda obs: (90, 100)                         # type: ignore[method-assign]
+        self.assertEqual((brain.rest(full, gone), brain.level.deadly), (None, (10, 10)))
+        del brain.magic.mana
+        brain.level.deadly = None
         brain.clw = 0
         later = command_obs(pos=(10, 10), dlvl=31, clvl=35, hp=worst - 10, mhp=worst * 2)
         later.step = low.step + BREATHER_MEMORY
