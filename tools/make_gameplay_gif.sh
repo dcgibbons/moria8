@@ -34,8 +34,9 @@ if [ "$width" = "-1" ]; then
     scale="null"
 fi
 
-palette=$(mktemp -t gameplay_pal).png
-trap 'rm -f "$palette"' EXIT
+palette_base=$(mktemp -t gameplay_pal.XXXXXX)
+palette="${palette_base}.png"
+trap 'rm -f "$palette_base" "$palette"' EXIT
 
 # Pass 1: generate a palette from the actual frames.
 # shellcheck disable=SC2086

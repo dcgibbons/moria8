@@ -1,26 +1,29 @@
 # gifcapture
 
-Records gameplay in an emulator and cuts it into the animated GIFs used on the
-website (`docs/assets/moria8-<platform>-gameplay-<n>.gif`).
+Records genuine non-wizard gameplay in VICE, `x16emu`, and MAME and cuts it into
+the animated GIFs used on the website (`docs/assets/moria8-<platform>-gameplay-<n>.gif`).
 
 ```
-tools/gifcapture/record.py c64      # loading art + character creation (clip 1),
-                                    #   level 8 Warrior on DL8 (clips 2-4)
-tools/gifcapture/record.py plus4    # level 10 Rogue on DL10, 4 clips
-tools/gifcapture/record.py c128     # level 5 Mage on DL4, 4 clips
-tools/gifcapture/record.py apple2   # level 30 Priest on DL35, 4 clips
+tools/isolated.sh python3 tools/gifcapture/record.py c64        # boot art + chargen (clip 1), Balrog Gnome Warrior DL7-9 (clips 2-4)
+tools/isolated.sh python3 tools/gifcapture/record.py plus4      # Balrog Half-Troll Warrior DL9-11 (clips 1-4)
+tools/isolated.sh python3 tools/gifcapture/record.py c128       # Balrog Half-Elf Mage DL26, 80-col VDC (clips 1-4)
+tools/isolated.sh python3 tools/gifcapture/record.py cx16       # Balrog Halfling Rogue DL12-13 (clips 1-4)
+tools/isolated.sh python3 tools/gifcapture/record.py apple2     # Balrog Dwarf Priest DL26-27 (clips 1-4)
+tools/isolated.sh python3 tools/gifcapture/record.py atari8     # Balrog Human Ranger DL23-24 (clips 1-4)
+tools/isolated.sh python3 tools/gifcapture/record.py bbcmaster  # Balrog Elf Rogue DL38 (clips 1-4)
 ```
 
-Run from the repository root on a normal desktop session (VICE and MAME are
-driven over localhost sockets and files, so sandboxed runs fail).
+Run from the repository root inside `tools/isolated.sh` with unsandboxed emulator
+permissions (`VICE`, `x16emu`, and `MAME` harnesses use localhost sockets).
 
 ## Requirements
 
-- Built disk images in `build/` (`make disk`)
-- `ffmpeg`, Python 3 with Pillow and numpy
-- VICE (`x64sc`, `x128`, `xplus4`) for the Commodore targets
-- MAME `apple2ee` for the Apple II, with `A2ROMS` set to the directory holding
-  `apple2ee.zip` (the ROMs are not redistributable)
+- Built disk images in `build/` (`make disk`) and Balrog Town checkpoints in
+  `var/moria8/balrog/` (never modified in place)
+- `ffmpeg`, Python 3 with Pillow (`PIL`)
+- VICE (`x64sc`, `x128`, `xplus4`) for Commodore 64, Plus/4, and C128
+- `x16emu` and `X16ROM` for Commander X16
+- MAME (`apple2ee`, `a130xe`, `bbcm`) with `A2ROMS`, `ATARI8ROMS`, and `BBCMROMS`
 
 Frame dumps and emulator scratch files go to `build/gifcapture/`
 (override with `GIFCAP_WORK`). Final GIFs are encoded with
@@ -28,45 +31,37 @@ Frame dumps and emulator scratch files go to `build/gifcapture/`
 
 ## How it works
 
-- **VICE** is driven through its binary monitor: keys are fed to the keyboard
-  buffer, screen text is read straight from screen RAM, and frames are grabbed
-  as images. Emulation speed is raised while disks load and between screens,
-  and frames are only captured while the clip is meant to be "playing".
-- **C128**: the game scans the CIA keyboard matrix directly, so the keyboard
-  routine (`cia_scan_petscii`) is patched in RAM to read a byte the monitor
-  controls. The patch lives only in the running emulator; no repo files change.
-  The C128 screen is read from VDC RAM (monitor bank 10).
-- **Apple II**: MAME runs a Lua script (`rpc.lua`) that polls a command file for
-  key presses, text-page reads and screenshots.
-- **Action clips** skip character creation in the clip: a character is made
-  off-camera, then wizard mode (`Ctrl+W`) raises its level, jumps to the target
-  dungeon level, heals and reveals the map. During the clip the character
-  travels between items and far-off spots and fights, while wizard commands
-  summon monsters and heal (also off-camera).
-- The player's real map position is read from zero page (`$2B`/`$2C`, the same
-  on every platform) so goals are tracked in map coordinates. Screen
-  coordinates are useless because the view scrolls.
+- **Non-wizard Balrog saves (`balrog_save.py`)**: extracts real non-wizard
+  Save Format V2 (`$22`) `THE.GAME` Town checkpoints (`7,858 B` 80x48 for
+  `c64`, `plus4`, `atari8`; spliced onto native `198x66` `17,164 B` Town
+  geometry for `c128`, `apple2`, `cx16`, `bbcmaster` with updated magic and
+  16-bit additive checksum). Each clip loads its save off-camera, uses a real
+  `Scroll of Word of Recall` in Town to reach its earned `max_dl`, and lets
+  `playtest/moria_playtest/brain.py` play naturally with torchlight fog-of-war
+  and zero wizard mode (`Ctrl+W` is never sent).
+- **Commodore (`record_cbm.py`)**:
+  - **C64 Clip 1**: uses `rec.py` (`Game` + VIC binary monitor) to capture boot
+    artwork, title screen, character creation, and Town arrival (`384x288`).
+  - **C64 / Plus/4 / C128 Action Clips**: driven through `playtest`'s `Worker`
+    and `Brain` (with `brain.town_trip` disabled so characters explore and
+    fight continuously). Frames are rendered pixel-exact from live VIC/TED/VDC
+    RAM and palette registers (`384x288` for C64/Plus/4, `656x492` for C128).
+  - **C128 keyboard hook (`rec.py`)**: dynamically resolves `cia_scan_petscii`
+    from `build/c128/main.sym` rather than hardcoding an address.
+- **Commander X16 (`record_cx16.py`)**: drives `x16emu -testbench` over
+  host-FS and captures 80-column `640x480` VERA frames from live registers/VRAM.
+- **MAME (`record_mame.py` + `mame_snap_bridge.lua`)**: drives `apple2ee`,
+  `a130xe`, and `bbcm` via headless `-video soft` + Lua command/screenshot IPC
+  and scales to crisp 4:3 canvases (`560x420`, `384x288`, `640x480`).
 
 ## Files
 
 | File | Role |
 | --- | --- |
-| `record.py` | entry point and per-platform configuration |
-| `gamerec.py` | boot, character creation and the C64 creation clip |
-| `action.py` | wizard setup, fighting loop, off-camera healing/summoning |
-| `explore.py` | movement: committed goals, fighting, anti-dithering |
-| `rec.py` | emulator wrapper (frames, keys, screen text) and GIF encoding |
-| `vcap.py` | VICE binary-monitor client |
-| `mamegame.py`, `rpc.lua` | MAME wrapper and its Lua command loop |
-| `split.py` | cuts a frame dump into numbered clips |
-| `lvl.py`, `paths.py` | level-generation waits, shared paths |
-
-## Gotchas
-
-- Characters die now and then; `record.py` detects it and retries (up to 5
-  times), so a run can take several attempts.
-- MAME only loads the Lua script reliably when run for 299 emulated seconds or
-  less, so the Apple II session is kept inside that budget and the script
-  stops emulation while it waits for commands.
-- The first frames of each action clip are trimmed because they still show the
-  wizard's `OK` message.
+| `record.py` | unified CLI dispatcher across all 7 platforms |
+| `balrog_save.py` | Balrog Save V2 (`$22`) extractor, 80x48/198x66 splicer, disk packager |
+| `record_cbm.py` | non-wizard C64, Plus/4, and C128 capture pipeline |
+| `record_cx16.py` | non-wizard Commander X16 capture pipeline (`x16emu -testbench`) |
+| `record_mame.py`, `mame_snap_bridge.lua` | non-wizard Apple IIe, Atari 8-bit, and BBC Master capture pipeline |
+| `rec.py`, `vcap.py` | VICE monitor wrapper (with dynamic `cia_scan_petscii`) and GIF encoder |
+| `paths.py` | shared repo/build/asset path definitions |
