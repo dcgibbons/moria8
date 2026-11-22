@@ -1,8 +1,13 @@
 #importonce
 #import "../shared/legal_entry.s"
 .assert "Legal bank follows catalog and stays below warm pool", CX16_BANK_LEGAL > CX16_BANK_CATALOG && CX16_BANK_LEGAL < CX16_BANK_WARM_BASE && CX16_BANK_WARM_END < CX16_BANK_COUNT, true
-// Resident entry; Bank 23 is temporary for one modal, never boot-preloaded.
+// Resident entry; Bank 24 is temporary for one modal, never boot-preloaded.
+tramp_ui_sysinfo_display:
+    lda #1
+    .byte $2c                   // BIT abs — skip lda #0
 tramp_ui_legal_display:
+    lda #0
+    sta legal_entry_mode
     lda CX16_RAM_BANK_REG
     pha
     lda #CX16_BANK_LEGAL
@@ -18,6 +23,7 @@ tramp_ui_legal_display:
     sta CX16_RAM_BANK_REG
     rts
 
+legal_entry_mode: .byte 0
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
 #if !CX16_CARTRIDGE
 legal_notice_filename: .byte 'L','I','C','E','N','S','E',',','S',',','R'

@@ -63,19 +63,8 @@ reu_probe_byte: .byte 0
 //   zp_temp1     = transfer length high
 // Clobbers: A
 reu_stash:
-    lda zp_ptr0
-    sta REU_C64LO
-    lda zp_ptr0_hi
-    sta REU_C64HI
-    lda zp_temp0
-    sta REU_LENLO
-    lda zp_temp1
-    sta REU_LENHI
-    lda #0
-    sta REU_CONTROL     // Both addresses increment
     lda #REU_CMD_STASH
-    sta REU_COMMAND     // Execute — DMA completes before next instruction
-    rts
+    bne reu_dma_exec    // Always (REU_CMD_STASH != 0)
 
 
 // ============================================================
@@ -89,6 +78,9 @@ reu_stash:
 //   zp_temp1     = transfer length high
 // Clobbers: A
 reu_fetch:
+    lda #REU_CMD_FETCH
+reu_dma_exec:
+    pha
     lda zp_ptr0
     sta REU_C64LO
     lda zp_ptr0_hi
@@ -99,7 +91,7 @@ reu_fetch:
     sta REU_LENHI
     lda #0
     sta REU_CONTROL     // Both addresses increment
-    lda #REU_CMD_FETCH
+    pla
     sta REU_COMMAND     // Execute — DMA completes before next instruction
     rts
 
@@ -351,44 +343,11 @@ reu_stash_overlays:
     rts
 #endif
 
-// Scratch for overlay stashing
-reu_ovl_idx: .byte 0
-
-
-// ============================================================
-// REU loading display
-// ============================================================
-
-// reu_show_file — Advance the centered REU loading progress display.
-reu_show_file:
-    inc reu_loading_count
-    jmp reu_render_progress
-
-reu_render_progress:
-    lda #12
-    jsr hal_screen_clear_row
-    lda #12
-    sta zp_cursor_row
-    lda #4
-    sta zp_cursor_col
-    lda #<reu_loading_prefix
-    sta zp_ptr0
-    lda #>reu_loading_prefix
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
-    lda reu_loading_count
-    jsr screen_put_decimal
-    lda #$2f
-    jsr hal_screen_put_char
-    lda #(4 + REU_OVERLAY_COUNT)    // tiers + overlays (chest overlay included)
-    jsr screen_put_decimal
-    lda #<reu_loading_suffix
-    sta zp_ptr0
-    lda #>reu_loading_suffix
-    sta zp_ptr0_hi
-    jmp hal_screen_put_string
-
-reu_loading_count: .byte 0
+// Boot progress banner/state (REU_PROGRESS_EXTERNAL parks it in the C64
+// init-only tail past program_end, where the map later overwrites it).
+#if !REU_PROGRESS_EXTERNAL
+#import "reu_progress.s"
+#endif
 
 // reu_show_status — Display REU loading progress
 // Default: RTS (safe for test builds). At startup, main.s patches
@@ -408,7 +367,3 @@ reu_show_status:
 .label reu_fn_ovl_lo = hal_storage_overlay_name_lo
 .label reu_fn_ovl_hi = hal_storage_overlay_name_hi
 .assert "Overlay filename table count stays in sync", hal_storage_overlay_name_hi - hal_storage_overlay_name_lo, REU_OVERLAY_COUNT
-
-// Progress message parts (reassembled by reu_render_progress)
-reu_loading_prefix: .text "MORIA8 LOADING " ; .byte 0
-reu_loading_suffix: .text " PLEASE WAIT" ; .byte 0

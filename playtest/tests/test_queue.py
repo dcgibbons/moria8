@@ -1089,7 +1089,9 @@ class BalrogQueueTest(unittest.TestCase):
         # 2026-11-10: a run that ended on its step budget at clvl 39 went back
         # 2,000,000 experience to its clvl 39 checkpoint.
         self.assertTrue(wanted(39, 40, 39, 40, 4_100_000, 3_850_000))
-        self.assertFalse(wanted(39, 40, 39, 40, 4_099_999, 3_850_000))
+        self.assertTrue(wanted(39, 40, 39, 40, 4_042_500, 3_850_000))    # 5% more
+        self.assertFalse(wanted(39, 40, 39, 40, 4_042_499, 3_850_000))
+        self.assertFalse(wanted(5, 40, 5, 40, 109_999, 100_000))         # the 10,000 floor
         # 2026-11-11: armour checkpoints on DL37 and DL39 level entries put
         # every later game of two clvl 31 Warriors on the level that had
         # killed the last, 84 steps in for one: in town only.
@@ -1125,6 +1127,38 @@ class BalrogQueueTest(unittest.TestCase):
         self.checkpoint_run(service, "b3", 39, 380_000, ac=40, base_ac=40, xp=5_800_000)
         self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3"), {"build": "b0", "resume": level}))
         self.assertEqual((item["start"]["run"], item["start"]["xp"]), ("b3-clvl39-ac040-xp05800000", 5_800_000))
+
+    def test_a_run_short_of_a_flat_250000_still_moves_a_mid_level_start(self) -> None:
+        """C64 Balrog, 2026-11-21: a clvl 36 Half-Orc Priest's runs reached
+        890,535 and 784,527 from its 729,169 start, both short of a flat
+        250,000 more, and each began again from 729,169; nine characters
+        replayed one checkpoint for 10-36 hours. 5% of the start is enough."""
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        self.checkpoint_run(service, "b1", 36, 350_000, xp=729_169)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]}))
+        level = dict(item["start"])
+        self.checkpoint_run(service, "b2", 36, 360_000, ac=43, base_ac=43, xp=750_000)
+        self.assertFalse(service.balrog_checkpoint(self.balrog_record("b2"), {"build": "b0", "resume": level}))
+        self.checkpoint_run(service, "b3", 36, 370_000, ac=43, base_ac=43, xp=890_535)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3"), {"build": "b0", "resume": level}))
+        self.assertEqual(item["start"]["xp"], 890_535)
+        self.assertTrue(queue.checkpoint_wanted(36, 43, 36, 43, 890_535, 729_169, dlvl=0))
+        self.assertFalse(queue.checkpoint_wanted(36, 43, 36, 43, 750_000, 729_169, dlvl=0))
+
+    def test_better_armour_never_costs_experience(self) -> None:
+        """C64 Balrog, 2026-11-21: the clvl 36 Half-Orc Priest's start went
+        from 890,535 experience at AC 43 to a run's 784,527 at AC 48 by the
+        armour rule alone: 106,000 experience for 5 AC."""
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        self.checkpoint_run(service, "b1", 36, 350_000, ac=43, xp=890_535)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]}))
+        level = dict(item["start"])
+        self.checkpoint_run(service, "b2", 36, 360_000, ac=48, base_ac=43, xp=784_527)
+        self.assertFalse(service.balrog_checkpoint(self.balrog_record("b2"), {"build": "b0", "resume": level}))
+        self.checkpoint_run(service, "b3", 36, 370_000, ac=48, base_ac=43, xp=890_535)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3"), {"build": "b0", "resume": level}))
 
     def test_a_run_keeps_the_better_of_its_checkpoints(self) -> None:
         service = self.service(4, 2)
@@ -1197,6 +1231,29 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertIsNone(queue.yield_due(run, "balrog", 12, 1000))               # in town only
         self.assertIsNone(queue.yield_due(run, "balrog", 0, 1001))                # at the poll steps
         self.assertIsNone(queue.yield_due(service.home / "runs" / "new", "balrog", 0, 1000))
+
+    def test_a_focus_short_of_its_slots_has_other_games_yield_at_once(self) -> None:
+        """2026-11-21: the focus set for the clvl 37 characters found every
+        slot taken by games 20 minutes old; they waited for the 3-hour slice.
+        A shared focus short of its slots has the longest-playing games
+        outside it yield at once, never a focus game."""
+        service = self.service(4, 2)
+        service.config.update(balrog_characters=["elf-priest"], balrog_focus_workers=1)
+        balrog = service.balrog
+        for combo in ("human-paladin", "human-priest", "elf-priest"):
+            balrog.graduate("c64", combo, {})
+        t = time.time()
+        balrog.state["items"]["c64/elf-priest"]["graduated"] = {"ended": t - 60}   # waiting a minute
+        service.running = {
+            "old": {"queue": "balrog", "platform": "c64", "character": "human-paladin", "started": t - 1200},
+            "new": {"queue": "balrog", "platform": "c64", "character": "human-priest", "started": t - 600}}
+        service.balrog_yield()
+        self.assertTrue((service.home / "runs" / "old" / queue.YIELD).exists())    # the longest playing
+        self.assertFalse((service.home / "runs" / "new" / queue.YIELD).exists())   # one for the one short
+        service.running["focus"] = {"queue": "balrog", "platform": "c64", "character": "elf-priest", "started": t}
+        (service.home / "runs" / "old" / queue.YIELD).unlink()
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # the focus plays: no yield
 
     def test_a_checkpoint_waits_for_a_character_out_of_danger(self) -> None:
         """2026-11-15: the C64 Human Warrior's clvl 10 checkpoint was taken on

@@ -61,8 +61,8 @@ chest_run_pending_summons:
     ldy ms_spawn_y
     jsr monster_find_at
     bcs !crps_attempt_done+
-    jsr pick_creature_type
-    jsr monster_spawn_one
+    jsr pick_summon_creature_type   // VMS summon_monster: dlvl + mon$summon_adj
+    jsr monster_spawn_awake         // ... placed awake (slp false)
 !crps_attempt_done:
     dec chest_pending_summons
     bne !crps_loop-

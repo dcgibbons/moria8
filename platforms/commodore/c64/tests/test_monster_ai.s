@@ -224,6 +224,7 @@ tc_results: .fill 70, $ff      // Result buffer (copied to $0400 at end)
 t59_toward: .byte 0
 t59_left:   .byte 0
 t60_n:      .byte 0             // neighbours around the breeder (MON-016)
+t60_asleep: .byte 0             // clones born asleep (VMS multiply_monster: awake)
 t60_i:      .byte 0
 t60_left:   .byte 0
 t60_before: .byte 0
@@ -3653,10 +3654,13 @@ test_start:
     lda #$00
     sta tc_results + 59
 
-    // Test 61: alone (n = 1): 1 in 7, about 36 of 250 (band 22-52)
+    // Test 61: alone (n = 1): 1 in 7, about 36 of 250 (band 22-52), and
+    // every clone awake (VMS creature.inc multiply_monster(.., false))
     lda #0
     ldx #250
     jsr t60_run
+    lda t60_asleep
+    bne !t61_fail+
     lda t60_births
     cmp #22
     bcc !t61_fail+
@@ -4026,6 +4030,7 @@ t60_run:
     stx t60_left
     lda #0
     sta t60_births
+    sta t60_asleep
 !t60r_trial:
     jsr monster_init_table
     lda #0
@@ -4086,6 +4091,13 @@ t60_run:
     cmp t60_before
     beq !t60r_next+
     inc t60_births
+    ldx t60_before              // the clone: the first free row
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !t60r_next+
+    inc t60_asleep
 !t60r_next:
     dec t60_left
     beq !t60r_done+

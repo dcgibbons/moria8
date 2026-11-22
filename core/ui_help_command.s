@@ -67,3 +67,9 @@ cmd_show_help_view:
 !help_done:
     jmp ui_view_return_to_gameplay_view
 #endif
+
+#if HAL_PLATFORM_LEGAL_VIEWER
+cmd_show_version_view:
+    jsr tramp_ui_sysinfo_display
+    jmp ui_view_return_to_gameplay_view
+#endif

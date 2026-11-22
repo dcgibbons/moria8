@@ -5,8 +5,13 @@
 //   - cr_cdefense (CD_FROST, CD_FIRE, CD_POISON, CD_ACID, CD_LIGHT, CD_STONE,
 //     CD_NO_SLEEP) across bolts, balls, light room, stone-to-mud, sleep/confuse
 //     spells/items/melee-confuse, breath /4 resistance, and FT/FB/Fire-ammo egos.
+//   - Summoned creatures come from levels 1 to dlvl + 2 (VMS misc.inc
+//     summon_monster, mon$summon_adj = 2): the monster spell and the Staff of
+//     Summoning (tests 21-22).
+//   - VMS summon counts, Summon Undead's creature, summons awake beside the
+//     player, poly_monster's roll and level, mass_poly's reach (tests 23-28).
 //
-// Results at $0400-$0413: $01 = pass, $00 = fail (20 tests).
+// Results at $0400-$041B: $01 = pass, $00 = fail (28 tests).
 
 #define C64_TEST_NAME_STREAMS_A000
 #define MONSTER_MAGIC_PRODUCTION_EXTENDED
@@ -22,7 +27,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei
     :BankOutBasic()
-    ldx #19
+    ldx #27
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -135,7 +140,8 @@ chest_mark_found_all:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results:     .fill 20, $ff
+tc_results:     .fill 28, $ff
+tc_hist:        .fill 6, 0      // runs by monsters placed (0-5+)
 tc_cnt:         .byte 0
 tc_seen_a:      .byte 0
 tc_seen_b:      .byte 0
@@ -293,6 +299,100 @@ tst_setup_room:
     sta cr_mflags,x
     lda #10
     sta cr_level,x
+    rts
+
+// tst_tally_levels — For each live slot from X on: tc_total += 1, tc_seen_a
+// += 1 when its creature level is above dlvl, tc_seen_b += 1 when above
+// dlvl + 2 (the summon limit).
+tst_tally_levels:
+    stx tc_cnt2
+!ttl_loop:
+    ldx tc_cnt2
+    cpx #MAX_MONSTERS
+    bcs !ttl_done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !ttl_next+
+    inc tc_total
+    tay
+    lda cr_level,y
+    cmp zp_player_dlvl
+    beq !ttl_next+
+    bcc !ttl_next+
+    inc tc_seen_a
+    sec
+    sbc #2
+    cmp zp_player_dlvl
+    beq !ttl_next+
+    bcc !ttl_next+
+    inc tc_seen_b
+!ttl_next:
+    inc tc_cnt2
+    bne !ttl_loop-
+!ttl_done:
+    rts
+
+// tst_summon_verdict — A = $01 when something was summoned, some above dlvl
+// and none above dlvl + 2, else $00.
+tst_summon_verdict:
+    lda tc_total
+    beq !tsv_fail+
+    lda tc_seen_a
+    beq !tsv_fail+
+    lda tc_seen_b
+    bne !tsv_fail+
+    lda #$01
+    rts
+!tsv_fail:
+    lda #$00
+    rts
+
+tst_summon_reset:
+    lda #0
+    sta tc_total
+    sta tc_seen_a
+    sta tc_seen_b
+    lda #24
+    sta tc_loop
+    rts
+
+tc_cnt2:        .byte 0
+tc_total:       .byte 0
+tc_loop:        .byte 0
+
+// tst_hist_reset — tc_hist zeroed, 40 runs (tc_loop)
+tst_hist_reset:
+    ldx #5
+    lda #0
+!thr_loop:
+    sta tc_hist,x
+    dex
+    bpl !thr_loop-
+    sta tc_seen_a
+    sta tc_seen_b
+    lda #40
+    sta tc_loop
+    rts
+
+// tst_hist_add — tc_hist[min(zp_mon_count, 5)] += 1
+tst_hist_add:
+    lda zp_mon_count
+    cmp #5
+    bcc !tha_ok+
+    lda #5
+!tha_ok:
+    tax
+    inc tc_hist,x
+    rts
+
+// tst_slot_awake — Z = 0 when slot X is awake (MF_AWAKE)
+tst_slot_awake:
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
     rts
 
 // Spawn creature type 5 at (A, Y) with HP = 200 in slot X; sets zp_mon_* too.
@@ -1235,6 +1335,298 @@ test_start:
     lda #$00
 !t20_store:
     sta tc_results + 19
+
+    // ========================================================
+    // Test 21: MSF_SUMMON at DL2 summons from levels 1-4 (VMS summon_monster:
+    // dun_level + mon$summon_adj). The embedded roster has 14 creatures of
+    // levels 1-2, 10 of levels 3-4 and 2 of level 5: 24 casts must summon
+    // some of levels 3-4 and none of level 5. Before the fix the summons
+    // came from levels 1-2 only.
+    // ========================================================
+    jsr tst_summon_reset
+!t21_loop:
+    jsr tst_setup_room          // a clean room (no FLAG_OCCUPIED left)
+    lda #2
+    sta zp_player_dlvl
+    lda #23
+    ldy #12
+    jsr tst_spawn_t5            // the caster in slot 0 (level 10)
+    lda #MSF_SUMMON
+    sta cr_spell_flags + 5
+    lda #1
+    sta cr_spell_chance + 5
+    jsr monster_pick_spell
+    ldx #1                      // the summoned creature
+    jsr tst_tally_levels
+    dec tc_loop
+    bne !t21_loop-
+    jsr tst_summon_verdict
+    sta tc_results + 20
+
+    // ========================================================
+    // Test 22: the Staff of Summoning (ep1_summon_many) at DL2 also summons
+    // from levels 1-4, 24 uses.
+    // ========================================================
+    jsr tst_summon_reset
+!t22_loop:
+    jsr tst_setup_room
+    lda #2
+    sta zp_player_dlvl
+    jsr ep1_summon_many
+    ldx #0
+    jsr tst_tally_levels
+    dec tc_loop
+    bne !t22_loop-
+    jsr tst_summon_verdict
+    sta tc_results + 21
+
+    // ========================================================
+    // Test 23: Scroll of Summon Monster summons randint(3) = 1-3 (VMS
+    // scrolls.inc 7); 40 reads see one and more, never 0 or 4+. Before the
+    // fix it summoned exactly one.
+    // ========================================================
+    jsr tst_hist_reset
+!t23_loop:
+    jsr tst_setup_room
+    jsr ep1_summon_one
+    jsr tst_hist_add
+    dec tc_loop
+    bne !t23_loop-
+    lda tc_hist + 0
+    ora tc_hist + 4
+    ora tc_hist + 5
+    bne !t23_fail+
+    lda tc_hist + 1
+    beq !t23_fail+
+    lda tc_hist + 2
+    ora tc_hist + 3
+    beq !t23_fail+
+    lda #$01
+    .byte $2c
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
+
+    // ========================================================
+    // Test 24: Staff of Summoning summons randint(4) = 1-4 (VMS staffs.inc
+    // 8); 40 uses see one and four, never 0 or 5. Before: 2-4.
+    // ========================================================
+    jsr tst_hist_reset
+!t24_loop:
+    jsr tst_setup_room
+    jsr ep1_summon_many
+    jsr tst_hist_add
+    dec tc_loop
+    bne !t24_loop-
+    lda tc_hist + 0
+    ora tc_hist + 5
+    bne !t24_fail+
+    lda tc_hist + 1
+    beq !t24_fail+
+    lda tc_hist + 4
+    beq !t24_fail+
+    lda #$01
+    .byte $2c
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
+
+    // ========================================================
+    // Test 25: Scroll of Summon Undead summons randint(3) = 1-3 undead of any
+    // level (VMS scrolls.inc 36, misc.inc summon_undead). At DL1 with two
+    // undead in the roster, type 1 (level 1) and type 13 (level 3), 40 reads
+    // see one and three summoned and the level-3 undead. Before: always two,
+    // picked from DL1's mix (type 1 only).
+    // ========================================================
+    lda cr_mflags + 1
+    pha
+    ora #CF_UNDEAD
+    sta cr_mflags + 1
+    jsr tst_hist_reset
+!t25_loop:
+    jsr tst_setup_room
+    lda #1
+    sta zp_player_dlvl
+    jsr ep1_summon_undead
+    jsr tst_hist_add
+    ldx #MAX_MONSTERS - 1
+!t25_scan:
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #13
+    bne !t25_next+
+    inc tc_seen_a
+!t25_next:
+    dex
+    bpl !t25_scan-
+    dec tc_loop
+    bne !t25_loop-
+    pla
+    sta cr_mflags + 1
+    lda tc_hist + 0
+    ora tc_hist + 4
+    ora tc_hist + 5
+    bne !t25_fail+
+    lda tc_hist + 1
+    beq !t25_fail+
+    lda tc_hist + 3
+    beq !t25_fail+
+    lda tc_seen_a
+    beq !t25_fail+
+    lda #$01
+    .byte $2c
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
+
+    // ========================================================
+    // Test 26: a monster's summons land beside the player, awake (VMS
+    // creature.inc 14: summon_monster(char_row, char_col, false)); a scroll's
+    // are awake too. The caster stands three squares east of the player.
+    // Before: beside the caster, asleep.
+    // ========================================================
+    jsr tst_setup_room
+    lda #23
+    ldy #12
+    jsr tst_spawn_t5
+    lda #MSF_SUMMON
+    sta cr_spell_flags + 5
+    lda #1
+    sta cr_spell_chance + 5
+    jsr monster_pick_spell
+    ldx #1
+    jsr tst_slot_awake
+    beq !t26_fail+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t26_fail+
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sec
+    sbc zp_player_x
+    clc
+    adc #1
+    cmp #3                      // |dx| <= 1
+    bcs !t26_fail+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    sec
+    sbc zp_player_y
+    clc
+    adc #1
+    cmp #3                      // |dy| <= 1
+    bcs !t26_fail+
+    jsr tst_setup_room
+    jsr ep1_summon_one
+    ldx #0
+    jsr tst_slot_awake
+    beq !t26_fail+
+    lda #$01
+    .byte $2c
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
+
+    // ========================================================
+    // Test 27: Wand of Polymorph (VMS spells.inc poly_monster): a level-10
+    // creature changes when randint(40) > 10 (about 30 of 40 zaps) into an
+    // awake creature of any level, and is otherwise unaffected. Before: it
+    // always changed, asleep, into a creature of at most the depth (3).
+    // ========================================================
+    jsr tst_hist_reset
+!t27_loop:
+    jsr tst_setup_room
+    lda #21                     // east of the player (tst_dir_east)
+    ldy #12
+    jsr tst_spawn_t5
+    jsr ep1_wand_polymorph
+    ldx #0
+    jsr tst_slot_awake
+    beq !t27_same+
+    inc tc_hist + 1             // changed
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_level,x
+    cmp #4
+    bcc !t27_next+
+    inc tc_seen_a               // deeper than the level
+    bne !t27_next+
+!t27_same:
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #5
+    bne !t27_next+
+    inc tc_hist + 0             // unaffected
+!t27_next:
+    dec tc_loop
+    bne !t27_loop-
+    lda tc_hist + 0
+    beq !t27_fail+
+    lda tc_hist + 1
+    cmp #20
+    bcc !t27_fail+
+    lda tc_seen_a
+    beq !t27_fail+
+    lda #$01
+    .byte $2c
+!t27_fail:
+    lda #$00
+    sta tc_results + 26
+
+    // ========================================================
+    // Test 28: Staff of Mass Polymorph (VMS spells.inc mass_poly): every
+    // creature nearer than max_sight changes, seen or not, except a win
+    // creature; one 25 squares off stays. Slot 0: unseen at distance 5;
+    // slot 1: level 100 at distance 2; slot 2: seen at distance 25.
+    // Before: only the seen one changed.
+    // ========================================================
+    jsr tst_setup_room
+    lda cr_level + 6
+    pha
+    lda #100
+    sta cr_level + 6
+    lda #25
+    ldy #12
+    jsr tst_spawn_t5
+    lda #22
+    sta ms_spawn_x
+    lda #12
+    sta ms_spawn_y
+    lda #6
+    jsr monster_spawn_one
+    lda #45
+    ldy #12
+    jsr tst_spawn_t5
+    ldy #MX_FLAGS
+    lda #MF_VISIBLE
+    sta (zp_ptr0),y
+    jsr ep1_mass_polymorph
+    pla
+    sta cr_level + 6
+    ldx #0
+    jsr tst_slot_awake
+    beq !t28_fail+              // the unseen one changed
+    ldx #1
+    jsr tst_slot_awake
+    bne !t28_fail+
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #6
+    bne !t28_fail+              // the win creature stayed
+    ldx #2
+    jsr tst_slot_awake
+    bne !t28_fail+
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #5
+    bne !t28_fail+              // the far one stayed
+    lda #$01
+    .byte $2c
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
 
     jmp test_exit_trampoline
 

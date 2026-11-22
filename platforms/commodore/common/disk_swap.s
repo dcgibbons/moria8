@@ -275,12 +275,9 @@ disk_command_status:
 disk_save_media_status:
 #if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
     lda disk_status
-    cmp #2                      // 0/1 = wrong media; >=2 = I/O/device.
-    bcs !ioerr+
+    cmp #2                      // 0/1 = wrong media; >=2 = DOS/device status.
+    bcs disk_setup_status_from_raw_a
     lda #HAL_STORAGE_STATUS_WRONG_MEDIA
-    rts
-!ioerr:
-    lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
 #elif HAL_STORAGE_SAVE_MEDIA_STATUS_ERROR_DIAG
     lda disk_error_phase
@@ -297,6 +294,8 @@ disk_save_media_status:
     jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_NOT_FOUND
     beq !wrong+
+    cmp #HAL_STORAGE_STATUS_OK
+    bne !dos_done+              // Preserves WRITE_PROTECTED, DISK_FULL, DEVICE_NOT_READY, UNKNOWN.
 !check_readst:
     lda disk_error_readst
     bne !unknown+
@@ -304,6 +303,7 @@ disk_save_media_status:
     beq !wrong+
 !unknown:
     lda #HAL_STORAGE_STATUS_UNKNOWN
+!dos_done:
     rts
 !wrong:
     lda #HAL_STORAGE_STATUS_WRONG_MEDIA
@@ -312,7 +312,8 @@ disk_save_media_status:
     lda disk_status
     cmp #$83                    // Marker bytes read, but contents mismatch.
     beq !wrong+
-    cmp #$85
+    cmp #$85                    // Marker probe already captured DOS digits.
+    beq !classify_dos+
     bcs !ioerr+
     cmp #$81                    // Marker open/chkin/read failures need DOS detail.
     bcc !ioerr+
@@ -320,10 +321,12 @@ disk_save_media_status:
     jsr disk_kernal_enter
     jsr hal_storage_read_command_status
     jsr disk_kernal_exit
+!classify_dos:
     jsr hal_storage_command_status
+    beq !ioerr+                 // OK/informational on a failed marker check stays generic I/O.
     cmp #HAL_STORAGE_STATUS_NOT_FOUND
-    bne !ioerr+
-    jmp !wrong+
+    beq !wrong+
+    rts                         // Preserves WRITE_PROTECTED, DISK_FULL, DEVICE_NOT_READY, UNKNOWN.
 !ioerr:
     lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
@@ -357,25 +360,44 @@ disk_setup_status:
 #elif STORAGE_SETUP_STATUS_HELPER
     jmp disk_setup_status_from_raw
 #endif
+#endif
 
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG || STORAGE_SETUP_STATUS_HELPER || HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY || HAL_STORAGE_COMMAND_STATUS_FROM_DOS_CODE || STORAGE_DOS_CODE_STATUS_HELPER
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG || STORAGE_SETUP_STATUS_HELPER
 disk_setup_status_from_raw:
     lda disk_status
+#endif
+disk_setup_status_from_raw_a:
+    ldx #HAL_STORAGE_STATUS_WRITE_PROTECTED
     cmp #26
-    bne !check_full+
-    lda #HAL_STORAGE_STATUS_WRITE_PROTECTED
-    rts
-!check_full:
+    beq !dssfr_x+
+    ldx #HAL_STORAGE_STATUS_DISK_FULL
     cmp #72
-    bne !check_ready+
-    lda #HAL_STORAGE_STATUS_DISK_FULL
-    rts
-!check_ready:
+    beq !dssfr_x+
+    ldx #HAL_STORAGE_STATUS_DEVICE_NOT_READY
     cmp #74
-    bne !unknown+
-    lda #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    beq !dssfr_x+
+    ldx #HAL_STORAGE_STATUS_UNKNOWN
+!dssfr_x:
+    txa
     rts
-!unknown:
-    lda #HAL_STORAGE_STATUS_UNKNOWN
+#endif
+
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DOS_CODE || STORAGE_DOS_CODE_STATUS_HELPER
+// disk_dos_code_status
+// Input:  disk_status = C64 DOS status code (0=OK, 1/62=NOT_FOUND, 26/72/74, else UNKNOWN).
+// Output: A = HAL_STORAGE_STATUS_* (Z set iff HAL_STORAGE_STATUS_OK).
+.assert "HAL_STORAGE_STATUS_OK is 0", HAL_STORAGE_STATUS_OK, 0
+disk_dos_code_status:
+    lda disk_status
+    beq !ddcs_done+             // 0 -> HAL_STORAGE_STATUS_OK (Z=1)
+    cmp #1                      // c64_storage_read_command_status stores 1 for DOS 62
+    beq !ddcs_not_found+
+    cmp #62
+    bne disk_setup_status_from_raw_a
+!ddcs_not_found:
+    lda #HAL_STORAGE_STATUS_NOT_FOUND
+!ddcs_done:
     rts
 #endif
 
@@ -725,11 +747,14 @@ disk_marker_present:
     cmp #2                      // '2' and up: an error
     bcc !dmp_chkin+
     // The answer is classified here: disk_save_media_status reading the
-    // channel again would go on mid-message.
+    // channel again would go on mid-message (or read 00 OK after CLOSE 15).
     jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_NOT_FOUND
-    bne !dmp_io+
+    bne !dmp_dos_captured+
     lda #$83                    // a readable disk with no marker: the wrong disk
+    bne !dmp_set+
+!dmp_dos_captured:
+    lda #$85                    // DOS digits already captured in disk_diag_cmd_status0/1
     bne !dmp_set+
 !dmp_io:
     lda #$81

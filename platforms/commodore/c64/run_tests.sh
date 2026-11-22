@@ -193,6 +193,18 @@ run_media_drive10_11_device_probe() {
     run_disk_media_probe "media_drive10_11_device_probe"
 }
 
+run_boot_error_smoke() {
+    local name="boot_error_smoke"
+
+    echo -n "  $name: "
+    if python3 -B -u "$RUN_TESTS64_DIR/tests/boot_error_smoke.py" --vice "$VICE" --c1541 "$C1541" --kickass "$KICKASS"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 check_static_contract() {
     local name="$1"
     local file="$2"
@@ -2160,7 +2172,9 @@ run_dungeon_ascent_product_smoke() {
 # are placed (item_spawn_level follows monster_spawn_level); the monster
 # table, species table, levels and name pointers, and the hidden name pool
 # (RAM under I/O) are checked against the catalog. $1 = 1 with an REU (the
-# records preloaded at boot), else the drive (direct sector reads).
+# records preloaded at boot), else the drive (direct sector reads). Then the
+# turn's wanderer through tramp_catalog_place_wanderer (the $F000 runtime):
+# one more monster, awake, beyond max_sight (VMS alloc_monster).
 run_catalog_spawn_product_smoke() {
     local reu="${1:-0}"
     local name="catalog_spawn_product_smoke"
@@ -2176,7 +2190,9 @@ run_catalog_spawn_product_smoke() {
     fi
     local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
     local catalog_fetch_ext cat_id_lo cat_ext_record
-    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi catalog_fetch_ext cat_id_lo cat_ext_record; do
+    local tramp_catalog_place_wanderer zp_player_x zp_player_y zp_mon_count
+    for sym in item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi catalog_fetch_ext cat_id_lo cat_ext_record \
+            tramp_catalog_place_wanderer zp_player_x zp_player_y zp_mon_count; do
         printf -v "$sym" '%s' "$(awk -v s=".$sym" '$3 == s { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")"
         if [ -z "${!sym}" ]; then
             echo "FAIL (missing $sym in $main_vs)"
@@ -2213,6 +2229,16 @@ run_catalog_spawn_product_smoke() {
             echo "until \$033f"
             echo "bsave \"$TMPDIR/ext_${name}_${ext_id}.bin\" 0 \$${cat_ext_record} \$${cer_end}"
         done
+        local mt_end
+        mt_end=$(printf '%04x' $(( 16#$monster_table + 32 * 12 - 1 )))
+        rm -f "$TMPDIR"/wand_"${name}"_*.bin
+        echo "bsave \"$TMPDIR/wand_${name}_before.bin\" 0 \$${monster_table} \$${mt_end}"
+        echo "bsave \"$TMPDIR/wand_${name}_zp.bin\" 0 \$0000 \$00ff"
+        printf '> 033c 20 %02x %02x ea\n' $(( 16#$tramp_catalog_place_wanderer & 0xff )) $(( 16#$tramp_catalog_place_wanderer >> 8 ))
+        echo "r pc=033c"
+        echo "until \$033f"
+        echo "bsave \"$TMPDIR/wand_${name}_after.bin\" 0 \$${monster_table} \$${mt_end}"
+        echo "bsave \"$TMPDIR/wand_${name}_zp_after.bin\" 0 \$0000 \$00ff"
         echo "quit"
     } > "$mon_file"
     local reu_args=()
@@ -2248,8 +2274,35 @@ PY
         TOTAL=$((TOTAL + 1))
         return
     fi
-    rm -f "$TMPDIR"/ext_"${name}"_*.bin
-    echo "PASS ($(tail -1 "$check_log" | sed 's/^PASS: //'))"
+    if ! python3 -B - "$TMPDIR" "$name" $(( 16#$zp_player_x )) $(( 16#$zp_player_y )) $(( 16#$zp_mon_count )) >>"$check_log" 2>&1 <<'PY'
+import sys
+from pathlib import Path
+tmpdir, name = Path(sys.argv[1]), sys.argv[2]
+px_at, py_at, count_at = (int(a) for a in sys.argv[3:6])
+def load(tag):
+    return (tmpdir / f"wand_{name}_{tag}.bin").read_bytes()
+before, after = load("before"), load("after")
+zp, zp_after = load("zp"), load("zp_after")
+px, py = zp[px_at], zp[py_at]
+new = [i for i in range(32) if before[i * 12 + 2] == 0xFF and after[i * 12 + 2] != 0xFF]
+assert zp[count_at] < 26, ("generation filled the reserve", zp[count_at])
+assert len(new) == 1, ("new monsters", new)
+assert zp_after[count_at] == zp[count_at] + 1, (zp[count_at], zp_after[count_at])
+rec = after[new[0] * 12:new[0] * 12 + 12]
+dist = max(abs(rec[0] - px), abs(rec[1] - py))
+assert dist > 20, ("within max_sight", rec[0], rec[1], px, py)
+assert rec[5] & 0x01 and rec[7] == 0, ("asleep", rec[5], rec[7])
+print(f"PASS: wanderer type {rec[2]} at distance {dist}")
+PY
+    then
+        echo "FAIL (wanderer through tramp_catalog_place_wanderer)"
+        tail -5 "$check_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    rm -f "$TMPDIR"/ext_"${name}"_*.bin "$TMPDIR"/wand_"${name}"_*.bin
+    echo "PASS ($(tail -2 "$check_log" | head -1 | sed 's/^PASS: //'); $(tail -1 "$check_log" | sed 's/^PASS: //'))"
     rm -f -- "$mon_file" "$log_file" "$check_log"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
@@ -5319,6 +5372,87 @@ run_hot_residency_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+# item_cat_level_entry_product_smoke — ITEM.CAT on the stock disk path (no
+# REU): each miss reads at most ICR_WINDOW bytes, and a stairs level change keeps
+# the item pickup cache (tests/item_cat_level_entry_smoke.py).
+run_item_cat_level_entry_product_smoke() {
+    local name="item_cat_level_entry_product_smoke"
+    echo -n "  $name: "
+
+    local build_log smoke_log
+    build_log=$(mktemp -t "build_${name}_log")
+    smoke_log=$(mktemp -t "test_${name}_log")
+
+    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
+        echo "FAIL (disk64 build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -B -u "$RUN_TESTS64_DIR/tests/item_cat_level_entry_smoke.py" \
+            --vice "$VICE" \
+            --c1541 "$C1541" \
+            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
+            --vs "$REPO_ROOT/build/c64/main.vs" >"$smoke_log" 2>&1; then
+        echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
+        rm -f -- "$build_log" "$smoke_log"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        sed 's/^/    /' "$smoke_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+# item_cat_level_entry_jiffydos1541_product_smoke — Optional stock-KERNAL +
+# JiffyDOS-1541 parity check when PLAYTEST_DOS1541 is supplied by caller env.
+run_item_cat_level_entry_jiffydos1541_product_smoke() {
+    local name="item_cat_level_entry_jiffydos1541_product_smoke"
+    echo -n "  $name: "
+
+    if [ -z "${PLAYTEST_DOS1541:-}" ]; then
+        echo "SKIP (PLAYTEST_DOS1541 not set)"
+        return
+    fi
+    if [ ! -f "$PLAYTEST_DOS1541" ]; then
+        echo "FAIL (PLAYTEST_DOS1541 not found: $PLAYTEST_DOS1541)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local build_log smoke_log
+    build_log=$(mktemp -t "build_${name}_log")
+    smoke_log=$(mktemp -t "test_${name}_log")
+
+    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
+        echo "FAIL (disk64 build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if python3 -B -u "$RUN_TESTS64_DIR/tests/item_cat_level_entry_smoke.py" \
+            --vice "$VICE" \
+            --c1541 "$C1541" \
+            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
+            --vs "$REPO_ROOT/build/c64/main.vs" \
+            --dos1541 "$PLAYTEST_DOS1541" >"$smoke_log" 2>&1; then
+        echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
+        rm -f -- "$build_log" "$smoke_log"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        sed 's/^/    /' "$smoke_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 echo "=== Moria Phase 1 Tests ==="
 echo ""
 
@@ -5452,6 +5586,10 @@ check_static_contract "c64_modal_ego_restores_io_contract" "main.s" \
     "tramp_roll_ego_type_modal:|||lda \$01|||pha|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pla|||sta \$01|||plp|||tya|||rts"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
+check_static_contract "c64_safe_iec_eoi_vectors_contract" "main.s" \
+    "jsr \$ff8a|||c64_disk_call:|||jsr c64_apply_safe_iec_vectors|||c64_basin_safe:|||lda \$99|||beq c64_acptr_safe|||c64_acptr_safe:|||!cas_vb:|||bit \$d011|||bpl !cas_vb-|||c64_acptr_eoi_resume:|||jmp \$ee20|||c64_iload_safe:|||jsr c64_acptr_safe|||c64_safe_iec_active:|||c64_apply_safe_iec_vectors:|||jsr c64_safe_iec_install|||platform_main_loop_begin_c64:|||jsr c64_apply_safe_iec_vectors|||c64_safe_iec_install:"
+check_static_contract "item_cat_sector0_magic_and_named_eoi_contract" "../common/item_catalog_records.s" \
+    "lda icr_sec_idx|||bne !icr_u1_window+|||lda #4|||jsr icr_send_u1_bp|||jsr icr_verify_magic|||lda icr_bp_pos|||jsr icr_send_bp|||!icr_by_name:|||jsr icr_open_cmd|||jsr hal_storage_open|||bcs !icr_wrong_disk+|||jsr icr_drive_ok|||bcs !icr_wrong_disk+|||jsr icr_chkin_ok|||!icr_read_named:|||jsr icr_read_sector_buf"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
     "game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
 check_static_contract "c64_save_media_hal_contract" "../../shared/save.s" \
@@ -5574,12 +5712,12 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0418" 25 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0427" 40 1000000000
+run_test "save"  "tests/test_save.s"  "0400 042b" 44 1000000000
 run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
 run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
-run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 0413" 20 50000000
+run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 041B" 28 50000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0418" 25 500000000
@@ -5593,6 +5731,7 @@ run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2
 run_suite_function "media_drive8_attach_read_write" run_media_drive8_attach_read_write
 run_suite_function "media_drive9_attach_read_write" run_media_drive9_attach_read_write
 run_suite_function "media_drive10_11_device_probe" run_media_drive10_11_device_probe "alternate_drive10_11_save_load_smoke"
+run_suite_function "boot_error_smoke" run_boot_error_smoke
 run_suite_function "scripted_spell_cast_smoke" run_scripted_spell_cast_smoke
 run_suite_function "scripted_book_overlay_smoke" run_scripted_book_overlay_smoke
 run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector_smoke
@@ -5630,6 +5769,8 @@ run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_s
 run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
 run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
 run_suite_function "hot_residency_product_smoke" run_hot_residency_product_smoke
+run_suite_function "item_cat_level_entry_product_smoke" run_item_cat_level_entry_product_smoke
+run_suite_function "item_cat_level_entry_jiffydos1541_product_smoke" run_item_cat_level_entry_jiffydos1541_product_smoke
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 if [ $FAIL -gt 0 ]; then

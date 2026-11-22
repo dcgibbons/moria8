@@ -12,10 +12,11 @@
 //     port-supplied ITEM_PICKUP_CACHE_BASE..+SIZE-1 (470 B hidden RAM on C64,
 //     432 B low RAM $0600-$07AF on Plus/4). Excluded (0 B) on C128, cartridge builds, and
 //     non-Commodore ports.
-//   lifetime: Active level and session read-through cache; invalidated via
-//     item_pickup_cache_invalidate before generation scratch reuse and reset +
-//     pre-warmed on level entry / save resume via item_pickup_cache_prewarm, with
-//     incremental floor-only warm on chest/monster drops via item_pickup_cache_warm_floor.
+//   lifetime: Session read-through cache of immutable catalog facts; invalidated
+//     via item_pickup_cache_invalidate before generation scratch reuse (Plus/4)
+//     or when the pool fills, and topped up (not reset) on level entry / save
+//     resume via item_pickup_cache_prewarm, with incremental floor-only warm on
+//     chest/monster drops via item_pickup_cache_warm_floor.
 //   callers: item_get_weight_x (core/item_tables.s), item_cat_decode_entry_at_dst
 //     (core/item_catalog.s), game_new_start / load_resume_game /
 //     level_change_generate_current (core/game_loop.s), chest_fulfill_loot
@@ -33,6 +34,7 @@
 #if HAL_PLATFORM_ITEM_PICKUP_CACHE
 
 .const IPC_POOL_END = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE
+.const IPC_KEEP_BELOW = ITEM_PICKUP_CACHE_BASE + ITEM_PICKUP_CACHE_SIZE / 2   // prewarm tops up below this
 
 .assert "Item pickup cache sits above page 1", ITEM_PICKUP_CACHE_BASE >= $0200, true
 // Each port names its floor (C64 464 B; Plus/4 432 B, all it has between its
@@ -281,15 +283,36 @@ item_pickup_cache_warm_floor:
     sta ipc_pool_overflow
     jsr ipc_warm_floor_passes
     lda ipc_pool_overflow
-    bne item_pickup_cache_prewarm
+    bne ipc_rewarm
     rts
 
-// item_pickup_cache_prewarm — Full active-level reset + prioritized 3-pass warm:
+// item_pickup_cache_prewarm — Active-level prioritized 3-pass warm:
 //   Pass 1: active floor items (weight + current display name + ego suffix)
 //   Pass 2: active floor items' real catalog names (coherence across mid-level ID)
 //   Pass 3: carried inventory slots 0..MAX_INV_SLOTS-1 (0-disk item_drop)
+// Every record is a fact of the catalog (an item's weight, a string id's
+// text), so the entries already held stay: the carried items' and those the
+// weight recalculation just cached are not read from ITEM.CAT again on each
+// level entry (a stock 1541 paid about 0.3 s a sector read for them; 53 reads
+// entering the game, 2026-11-20). Only a pool that fills up is reset and warmed
+// again in this order, and a pool past half full starts empty, so the floor
+// items of levels left behind do not crowd it; a port that reuses the pool's
+// RAM (Plus/4 generation scratch) empties it through
+// item_pickup_cache_invalidate first.
 item_pickup_cache_prewarm:
+    lda ipc_end_lo
+    cmp #<IPC_KEEP_BELOW
+    lda ipc_end_hi
+    sbc #>IPC_KEEP_BELOW
+    bcs ipc_rewarm              // Past half full: start empty
+    lda #0
+    sta ipc_pool_overflow
+    jsr ipc_warm_all
+    lda ipc_pool_overflow
+    beq !ipcp_done+
+ipc_rewarm:
     jsr item_pickup_cache_invalidate
+ipc_warm_all:
     jsr ipc_warm_floor_passes
     ldx #0
 !ipcp_inv_loop:
@@ -301,6 +324,7 @@ item_pickup_cache_prewarm:
     inx
     cpx #MAX_INV_SLOTS
     bcc !ipcp_inv_loop-
+!ipcp_done:
     rts
 
 ipc_warm_floor_passes:

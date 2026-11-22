@@ -3592,6 +3592,18 @@ combat_msg_monster_in_way:
     jmp combat_msg_monster_suffix
 #import "hal/storage_drive.s"
 #import "hal/storage_tier_names.s"
+// The play payload's signature comes first: the catalog's placement code
+// (CatalogWinBegin) is the first the payload receives.
+.segment C128ResidentPlay
+c128_resident_play_start:
+c128_resident_play_sig0:
+    .byte C128_RESIDENT_PLAY_SIG0
+c128_resident_play_sig1:
+    .byte C128_RESIDENT_PLAY_SIG1
+c128_resident_play_sig2:
+    .byte C128_RESIDENT_PLAY_SIG2
+c128_resident_play_body:
+.segment Default
 #import "monster_catalog128.s"
 #import "../../../core/monster_catalog.s"
 #import "../../../core/tier_manager.s"
@@ -4200,14 +4212,6 @@ c128_resident_persist_end:
 #define GAME_LOOP_NO_STAIRS_STR_EXTERNAL
 #define GAME_LOOP_LOW_DATA_EXTERNAL
 .segment C128ResidentPlay
-c128_resident_play_start:
-c128_resident_play_sig0:
-    .byte C128_RESIDENT_PLAY_SIG0
-c128_resident_play_sig1:
-    .byte C128_RESIDENT_PLAY_SIG1
-c128_resident_play_sig2:
-    .byte C128_RESIDENT_PLAY_SIG2
-c128_resident_play_body:
 #define C128_PRODUCT_PLAY_SEGMENT
 #import "../../../core/dungeon_los.s"
 #undef C128_PRODUCT_PLAY_SEGMENT
@@ -5395,6 +5399,8 @@ ovl_gen_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../../core/ui_legal.s"
+#import "../../../core/ui_legal_sysinfo.s"
+#import "legal_sysinfo.s"
 #if C128_CARTRIDGE
 #import "legal_stream.s"
 #else

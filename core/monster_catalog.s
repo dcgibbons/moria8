@@ -37,6 +37,9 @@
 .const CAT_MON_NASTY = 50            // VMS mon_nasty
 .const CAT_WIN_LEVEL = 50            // VMS win_mon_appear
 .const CAT_MAX_SIGHT = 20            // VMS max_sight
+.const CAT_MALLOC_CHANCE = 160       // VMS max_malloc_chance: 1 in 160 turns a new monster
+.const CAT_SUMMON_ADJ = 2            // VMS mon$summon_adj
+.const CAT_GEN_RESERVE = 6           // Rows generation and wanderers leave for breeders and summons
 .const CAT_LEVELS    = CATALOG_MAX_MONS_LEVEL + 1
 .const CAT_AREA_SCALE = round(256 * MAP_COLS * MAP_ROWS / (198 * 66))   // Population scale, /256
 
@@ -62,6 +65,7 @@ cat_id_hi:  .byte 0
 cat_slot:   .byte 0
 cat_tmp:    .byte 0
 cat_level:  .byte 0
+cat_level_adj: .byte 0          // 0; CAT_SUMMON_ADJ a summon; $ff any level (polymorph)
 cat_rcl_id_lo:  .byte 0
 cat_rcl_id_hi:  .byte 0
 cat_rcl_rem_lo: .byte 0
@@ -83,11 +87,32 @@ catalog_reset_slots:
     rts
 
 // pick_creature_type — Pick a creature for the current dungeon level.
-// Output: A = creature slot (0 in town)
+// pick_summon_creature_type — The same for a summoned creature: VMS misc.inc
+// summon_monster picks from levels 1 to dlvl + mon$summon_adj (at most
+// max_mons_level) with no out-of-depth roll (scrolls, staffs, monster
+// spells, summoning traps and chests).
+// In town (VMS dun_level 0: randint(m_level[0])) either is a townsperson.
+// pick_any_creature_type — Any level 1-40, at any depth, town included (VMS
+// spells.inc poly_monster / mass_poly: randint(m_level[max_mons_level]) +
+// m_level[0]): cat_level_adj = $ff saturates cat_pick_id to max_mons_level.
+// Output: A = creature slot
 // Clobbers: X, Y, zp_temp3, zp_temp4
+pick_any_creature_type:
+    lda #$ff
+    sta cat_level_adj
+    bne !pct_dungeon+
+pick_summon_creature_type:
+    lda #CAT_SUMMON_ADJ
+    .byte $2c                   // BIT abs: skip lda #0
 pick_creature_type:
+    lda #0
+    sta cat_level_adj
     lda zp_player_dlvl
     bne !pct_dungeon+
+    lda #TOWN_CREATURE_COUNT
+    jsr rng_range
+    clc
+    adc #TOWN_CREATURE_BASE
     rts
 !pct_dungeon:
     jsr cat_save_zp
@@ -429,18 +454,26 @@ cat_pool_entry:
     rts
 .assert "Catalog slot name entries are 32 bytes", CAT_NAME_SIZE, 32
 
-// cat_pick_id — VMS alloc_monster's creature for zp_player_dlvl > 0.
+// cat_pick_id — VMS alloc_monster's creature for zp_player_dlvl > 0, or
+// summon_monster's for cat_level_adj = CAT_SUMMON_ADJ, or poly_monster's
+// (any level, any depth) for cat_level_adj = $ff.
 // Fields bank mapped. Output: cat_id_lo/hi
 // Clobbers: A, X, Y, zp_temp0-zp_temp4
 cat_pick_id:
     lda zp_player_dlvl
+    clc
+    adc cat_level_adj
+    bcs !cpi_deep+
     cmp #CAT_LEVELS
     bcc !cpi_in_range+
+!cpi_deep:
     lda #CATALOG_MAX_MONS_LEVEL     // Deeper than the catalog: no out-of-depth roll
     sta cat_level
     bne !cpi_normal+
 !cpi_in_range:
     sta cat_level
+    ldx cat_level_adj
+    bne !cpi_normal+            // A summon: no out-of-depth roll
     lda #CAT_MON_NASTY
     jsr rng_range
     bne !cpi_normal+
@@ -786,18 +819,41 @@ catalog_recall_match_and_fill:
 
 // catalog_place_win_creature — From VMS win_mon_appear on, until the game is
 // won, an awake Evil Iggy or Balrog lands beyond sight of the player (VMS
-// misc.inc place_win_monster). Generation-time only: a port short of resident
-// room places it with :CatalogWinBegin()/:CatalogWinEnd() (the C64's $F000
-// runtime) and calls it through tramp_catalog_place_win.
+// misc.inc place_win_monster), at level generation.
+// catalog_place_wanderer — The turn's new monster (VMS moria.inc: 1 in
+// max_malloc_chance turns, alloc_monster(floor_set, 1, max_sight, false);
+// Umoria monsterPlaceNewWithinDistance): an awake creature of the level's
+// mix (a townsperson in town) beyond sight of the player, while the table
+// keeps CAT_GEN_RESERVE rows for breeders and summons.
+// catalog_place_far — Either: C = 1 the win creature, C = 0 a wanderer.
+// "Beyond sight" is Chebyshev distance > max_sight, as Moria8 measures
+// monster distance. A port short of resident room places these with
+// :CatalogWinBegin()/:CatalogWinEnd() (the C64's $F000 runtime) and calls
+// them through tramp_catalog_place_win / tramp_catalog_place_wanderer.
 // Clobbers: everything
     :CatalogWinBegin()
+#if !HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE
 catalog_place_win_creature:
+    sec
+    .byte $24                   // BIT zp: skip the clc
+catalog_place_wanderer:
+    clc
+#endif
+catalog_place_far:
+    bcs !cpw_win_due+
+    lda zp_mon_count
+    cmp #MAX_MONSTERS - CAT_GEN_RESERVE
+    bcc !cpw_start+             // C = 0: a wanderer
+    rts
+!cpw_win_due:
     lda zp_player_dlvl
     cmp #CAT_WIN_LEVEL
     bcc !cpw_done+
     lda zp_game_flags
-    and #GAME_FLAG_WINNER
+    and #GAME_FLAG_WINNER       // C = 1 kept: the win creature
     bne !cpw_done+
+!cpw_start:
+    php                         // C = which creature
     lda #32
     sta cat_level               // Placement tries
 !cpw_try:
@@ -824,9 +880,16 @@ catalog_place_win_creature:
 !cpw_retry:
     dec cat_level
     bne !cpw_try-
+    plp
 !cpw_done:
     rts
 !cpw_place:
+    plp
+    bcs !cpw_win+
+    inc zp_dirty_count          // A turn's spawn redraws (TURN_RENDER_CONTRACT); never fails below the reserve
+    jsr pick_creature_type      // A townsperson in town
+    jmp !cpw_spawn+
+!cpw_win:
     lda #2
     jsr rng_range
     clc
@@ -835,10 +898,10 @@ catalog_place_win_creature:
     lda #>CATALOG_IGGY_ID
     sta cat_id_hi
     jsr catalog_slot_for_id
-    jsr monster_spawn_one
-    bcc !cpw_done-
-    jmp monster_wake
+!cpw_spawn:
+    jmp monster_spawn_awake
     :CatalogWinEnd()
+.assert "Wanderers leave rows free", CAT_GEN_RESERVE > 0 && CAT_GEN_RESERVE < MAX_MONSTERS, true
 .assert "Catalog win creatures are adjacent", CATALOG_BALROG_ID, CATALOG_IGGY_ID + 1
 .assert "Catalog win ids share a high byte", >CATALOG_IGGY_ID, >CATALOG_BALROG_ID
 

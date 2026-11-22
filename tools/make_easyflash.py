@@ -54,7 +54,7 @@ def pack(source: Path, output: Path) -> dict:
         CONTRACT["CART_ASSET_INDEX"]: ("index", 0xCE00, index_bytes()),
         CONTRACT["CART_ASSET_TITLE_ART"]: ("title", *prg(source / "title", 0xC000, 0xCF00)),
         CONTRACT["CART_ASSET_CATALOG"]: ("catalog", 0, b"".join(catalog_disk.records())),
-        CONTRACT["CART_ASSET_LEGAL_UI"]: ("legalui", *prg(source / "legalui", 0xE000, 0xE600)),
+        CONTRACT["CART_ASSET_LEGAL_UI"]: ("legalui", *prg(source / "legalui", 0xE000, 0xEE00)),
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: ("license", 0, (ROOT / "data/LICENSE").read_bytes()),
         CONTRACT["CART_ASSET_LEGAL_OFFER"]: ("source-offer", 0, (ROOT / "data/SOURCE-OFFER").read_bytes()),
         CONTRACT["CART_ASSET_ITEM_CATALOG"]: ("item-catalog", 0, catalog_disk.item_catalog_bytes()),

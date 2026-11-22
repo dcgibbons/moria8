@@ -529,6 +529,19 @@ turn_post_action:
     jsr turn_tick_hunger
     jsr turn_tick_light
     jsr turn_tick_pseudo_id
+#if HAL_PLATFORM_MONSTER_CATALOG
+    // 1 in 160 turns a new monster beyond sight, before the monsters move
+    // (VMS moria.inc: randint(max_malloc_chance) = 1 -> alloc_monster).
+    lda #CAT_MALLOC_CHANCE
+    jsr rng_range
+    bne !no_wanderer+
+#if HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE
+    jsr tramp_catalog_place_wanderer
+#else
+    jsr catalog_place_wanderer
+#endif
+!no_wanderer:
+#endif
     jsr monster_ai_tick
     ora zp_dirty_count              // pending non-local redraw request
     sta turn_scene_dirty

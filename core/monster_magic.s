@@ -537,7 +537,8 @@ mm_apply_spell_damage_16:
 
 // ============================================================
 // Spell handlers 3 & 11: monster_cast_summon / monster_cast_summon_undead
-// Summon an adjacent monster (or undead from cat_undead[35], VMS spell 15).
+// VMS creature.inc cast_spell 14/15: summon_monster / summon_undead at the
+// player's square (char_row/char_col), the creature placed awake (slp false).
 // ============================================================
 monster_cast_summon:
 #if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
@@ -550,19 +551,37 @@ monster_cast_summon_undead:
     ldx #HSTR_MM_SUMMON
     jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
-    lda zp_player_dlvl
-    beq !mcs_done+
-    jsr find_adjacent_empty_mon // → ms_spawn_x/y
+    jsr find_adjacent_empty_player  // → ms_spawn_x/y
     bcc !mcs_done+
 #if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
     lda mm_chosen
-    bne !mcsu_undead+
+    beq !mcs_monster+
+    jsr pick_undead_creature_type
+    bcs !mcs_spawn+
+    rts
+!mcs_monster:
 #endif
     jsr tier_check_transition
-    jsr pick_creature_type
-#if !C64_UNIT_TEST || MONSTER_MAGIC_PRODUCTION_EXTENDED
-    jmp !mcs_spawn+
-!mcsu_undead:
+    jsr pick_summon_creature_type   // VMS summon_monster: dlvl + mon$summon_adj
+!mcs_spawn:
+    jsr monster_spawn_awake
+    inc zp_dirty_count
+!mcs_done:
+    rts
+
+// pick_undead_creature_type — VMS misc.inc summon_undead's creature: an undead
+// from the whole catalog, any level (cat_undead[35], MON-033), whatever the
+// depth. The monster spell and the Summon Undead scroll. A port short of
+// resident room may place it beside cat_undead with :UndeadPickSegment() /
+// :UndeadPickRestoreSegment() (the Atari: ATARI.BNK, RAM in game banking).
+// Output: C = 1, A = creature slot; C = 0 none (a tier roster without undead)
+// Clobbers: X, Y, zp_temp0-4
+#if !UNDEAD_PICK_SEGMENT_CUSTOM
+.macro UndeadPickSegment() {}
+.macro UndeadPickRestoreSegment() {}
+#endif
+:UndeadPickSegment()
+pick_undead_creature_type:
 #if HAL_PLATFORM_MONSTER_CATALOG
     lda #35
     jsr rng_range
@@ -596,6 +615,8 @@ monster_cast_summon_undead:
     sta cat_id_lo
     :CatalogUnmap()
     jsr catalog_slot_for_id
+    sec
+    rts
 #else
     jsr tier_check_transition
     lda #0
@@ -613,7 +634,8 @@ monster_cast_summon_undead:
     bne !mcsu_cnt_loop-
 !mcsu_cnt_done:
     lda mm_bit_count
-    beq !mcs_done+
+    clc
+    beq !mcsu_none+
     jsr rng_range
     sta mm_kind
     ldy #0
@@ -629,13 +651,11 @@ monster_cast_summon_undead:
     bne !mcsu_pick_loop-
 !mcsu_got_slot:
     tya
-#endif
-#endif
-!mcs_spawn:
-    jsr monster_spawn_one
-    inc zp_dirty_count
-!mcs_done:
+    sec
+!mcsu_none:
     rts
+#endif
+:UndeadPickRestoreSegment()
 
 // ============================================================
 // Spell handler 4: monster_cast_teleport — Teleport To (VMS spell 7)

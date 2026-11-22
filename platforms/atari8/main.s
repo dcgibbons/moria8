@@ -290,7 +290,6 @@ low_helpers_end:
 // ============================================================
 // Resident Core Gameplay Modules ($1400-$C0FF)
 // ============================================================
-#import "build/version_strings.inc"
 #import "../../core/color.s"
 #import "../../core/rng.s"
 #import "../../core/math.s"
@@ -390,6 +389,15 @@ high_resident_end:
 #import "../../core/scene_mat_tile.s"
 #import "../../core/scene_force.s"
 #import "../../core/recall.s"
+// The summoned undead's picker sits in ATARI.BNK beside cat_undead (RAM in the
+// game's banking, like the level index): Default has no room.
+#define UNDEAD_PICK_SEGMENT_CUSTOM
+.macro UndeadPickSegment() {
+    .segment RuntimeBanked
+}
+.macro UndeadPickRestoreSegment() {
+    .segment Default
+}
 #import "../../core/monster_magic.s"
 .macro ChestSummonsSegment() {
     .segment Default
@@ -1552,6 +1560,8 @@ ovl_title_end:
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
 #import "../../core/ui_legal.s"
+#import "../../core/ui_legal_sysinfo.s"
+#import "legal_sysinfo.s"
 #if ATARI8_CARTRIDGE
 #import "legal_stream.s"
 #else

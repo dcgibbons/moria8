@@ -9,6 +9,7 @@
 // does; the overlay IDs as platforms/commodore/common/overlay.s numbers them.
 #define HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
 .const OVL_NONE = 0
+.const MONS_LEVEL_MAX = 40       // core/monster.s (Polymorph Other's roll)
 .const OVL_DEATH = 3
 .const OVL_UI = 6
 .const OVL_SPELL = 8
@@ -289,10 +290,13 @@ los_is_visible:
 inv_remove_item:
     rts
 
+// Polymorph Other (core/monster_polymorph.s) links these; genocide never runs it.
+pick_any_creature_type:
 pick_creature_type:
     lda #1
     rts
 
+monster_spawn_awake:
 monster_spawn_one:
     sec
     rts

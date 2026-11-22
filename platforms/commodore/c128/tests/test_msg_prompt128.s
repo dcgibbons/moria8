@@ -27,6 +27,17 @@ c128_restore_runtime_vectors:
     rts
 
 // Stubbed dependency from ui_messages.s (only needed for -MORE- path)
+#define HAL_INPUT_MORE_WAITS_RELEASE
+hal_input_wait_release:
+.label input_wait_release = hal_input_wait_release
+    inc test_wait_release_calls
+    lda test_key_calls
+    bne !done+
+    lda #1
+    sta test_wait_before_key
+!done:
+    rts
+
 input_get_key:
 .label hal_input_get_key = input_get_key
 .label hal_input_get_text_char = input_get_key
@@ -100,6 +111,10 @@ test_start:
 
     // Case D: long row-1 messages keep their tail when -MORE- is shown.
     jsr assert_long_message_more_placement
+    bcc test_fail
+
+    // Case E: -MORE- waits for key release before reading dismissal key.
+    jsr assert_more_waits_release_before_key
     bcc test_fail
 
     jsr teardown_irq_clobber
@@ -341,6 +356,52 @@ assert_long_message_more_placement:
     clc
     rts
 
+// assert_more_waits_release_before_key
+// When a 3rd message triggers -MORE-, C128 must call hal_input_wait_release
+// before hal_input_get_key so a held command/direction key cannot skip it.
+assert_more_waits_release_before_key:
+    jsr msg_init
+    lda #0
+    sta test_wait_release_calls
+    sta test_key_calls
+    sta test_wait_before_key
+
+    lda #<short_msg
+    sta zp_ptr0
+    lda #>short_msg
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #<long_msg
+    sta zp_ptr0
+    lda #>long_msg
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #<short_msg
+    sta zp_ptr0
+    lda #>short_msg
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda test_wait_release_calls
+    cmp #1
+    bne !bad+
+    lda test_key_calls
+    cmp #1
+    bne !bad+
+    lda test_wait_before_key
+    cmp #1
+    bne !bad+
+    lda zp_msg_flags
+    cmp #MSG_PENDING
+    bne !bad+
+    sec
+    rts
+!bad:
+    clc
+    rts
+
 // capture_expected_prefix
 // Input: test_str_id set
 capture_expected_prefix:
@@ -470,7 +531,9 @@ irq_vec_save_hi:  .byte 0
 acl_iter:         .byte 0
 adl_expected_lo:  .byte 0
 adl_expected_hi:  .byte 0
-test_key_calls:   .byte 0
+test_key_calls:        .byte 0
+test_wait_release_calls: .byte 0
+test_wait_before_key:    .byte 0
 expected_prefix:  .fill TEST_PREFIX_LEN, 0
 irq_garble:       .text "fsY0llffoBd"; .byte 0
 compound_name:    .text "Squint-Eyed Rogue."; .byte 0

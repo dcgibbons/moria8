@@ -3485,6 +3485,7 @@ run_test "visibility_renderplus4" "tests/test_visibility_renderplus4.s"
 run_test "item_catalog_plus4" "tests/test_item_catalog_plus4.s"
 run_test "dungeon_soakplus4" "tests/test_dungeon_soakplus4.s"
 run_test "look_trampolineplus4" "tests/test_look_trampolineplus4.s"
+run_test "storage_errorsplus4" "tests/test_storage_errorsplus4.s"
 run_media_drive8_attach_read_write
 run_media_drive9_attach_read_write
 run_media_drive10_11_device_probe

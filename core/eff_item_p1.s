@@ -1,4 +1,5 @@
 #importonce
+#import "monster_polymorph.s"
 // eff_item_p1.s — Extended Scroll, Wand, and Staff effect dispatcher & handlers
 //
 // Imported into HomeOverlay on ports that define HAL_PLATFORM_EFF_ITEM_P1_EXTERNAL
@@ -847,28 +848,25 @@ ep1_pick_armor_cursed_or_rand:
 // Summoning (Scroll of Summon Monster/Undead, Staff of Summoning L10/L50)
 // & Dispel Undead (Scroll)
 // ============================================================
-ep1_summon_one:
-    lda #1
+// VMS scrolls.inc 7 and 36, staffs.inc 8: randint(3) summon_monster, randint(3)
+// summon_undead, randint(4) summon_monster at the player's square, awake;
+// in town too (summon_monster then picks townspeople).
+ep1_summon_many:                    // Staff of Summoning: randint(4)
+    lda #4
     ldx #0
-    beq !ep1_sum_run+
-ep1_summon_many:
+    beq !ep1_sum_roll+
+ep1_summon_undead:                  // Scroll of Summon Undead: randint(3)
+    ldx #CF_UNDEAD
+    .byte $2c                       // BIT abs: skip ldx #0
+ep1_summon_one:                     // Scroll of Summon Monster: randint(3)
+    ldx #0
     lda #3
+!ep1_sum_roll:
+    stx ep1_arg
     jsr rng_range
     clc
-    adc #2                          // 2..4
-    ldx #0
-    beq !ep1_sum_run+
-ep1_summon_undead:
-    lda #2
-    ldx #CF_UNDEAD
-!ep1_sum_run:
+    adc #1
     sta ep1_cnt
-    stx ep1_arg
-    lda zp_player_dlvl
-    bne !ep1_sum_go+
-    ldx #HSTR_PIQ_NOTHING
-    jmp huff_print_msg
-!ep1_sum_go:
     jsr tier_check_transition
     lda zp_player_x
     sta fae_cx
@@ -879,48 +877,19 @@ ep1_summon_undead:
     bcc !ep1_sum_done+
     lda ep1_arg
     bne !ep1_sum_undead_pick+
-    jsr pick_creature_type
+    jsr pick_summon_creature_type   // VMS summon_monster: dlvl + mon$summon_adj
     jmp !ep1_sum_spawn+
 !ep1_sum_undead_pick:
-    jsr ep1_pick_undead_type
+    jsr pick_undead_creature_type   // VMS summon_undead: any undead
+    bcc !ep1_sum_done+
 !ep1_sum_spawn:
-    jsr monster_spawn_one
+    jsr monster_spawn_awake
     inc zp_dirty_count
     dec ep1_cnt
     bne !ep1_sum_loop-
 !ep1_sum_done:
     ldx #HSTR_PIQ_AIR_CRACKLE
     jmp huff_print_msg
-
-ep1_pick_undead_type:
-    lda #8
-    sta ep1_idx
-!ep1_put_try:
-    jsr pick_creature_type
-    tay
-    lda cr_mflags,y
-    and #CF_UNDEAD
-    beq !ep1_put_next+
-    tya
-    rts
-!ep1_put_next:
-    dec ep1_idx
-    bne !ep1_put_try-
-    // Fallback: scan currently loaded dungeon roster for CF_UNDEAD
-    ldy #0
-!ep1_put_scan:
-    cpy active_dungeon_count
-    bcs !ep1_put_fb+
-    lda cr_mflags,y
-    and #CF_UNDEAD
-    beq !ep1_put_snext+
-    tya
-    rts
-!ep1_put_snext:
-    iny
-    bne !ep1_put_scan-
-!ep1_put_fb:
-    jmp pick_creature_type
 
 // Load zp_ptr0 + A = MX_TYPE for ep1_idx (< MAX_MONSTERS).
 // C=1, Z=1 when ep1_idx >= MAX_MONSTERS; C=0, Z=1 when EMPTY_SLOT;
@@ -1158,18 +1127,32 @@ ep1_slowness:
     ldx #HSTR_PIQ_DIZZY
     jmp huff_print_msg
 
+// Staff of Mass Polymorph: VMS staffs.inc 19 -> spells.inc mass_poly. Every
+// creature nearer than max_sight (Chebyshev, as Moria8 measures monster
+// distance), seen or not, except the win creatures, with no resistance roll.
 ep1_mass_polymorph:
-    lda zp_player_dlvl
-    beq !ep1_mp_done+
     jsr tier_check_transition
     lda #0
     sta ep1_idx
 !ep1_mp_loop:
-    jsr ep1_mon_visible
+    jsr ep1_mon_active
     bcs !ep1_mp_done+
     beq !ep1_mp_next+
+    tax
+    lda cr_level,x
+    cmp #MONS_LEVEL_MAX + 1
+    bcs !ep1_mp_next+               // A win creature (VMS cdefense bit 31)
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sta zp_mon_x
+    iny                             // MX_Y
+    lda (zp_ptr0),y
+    sta zp_mon_y
+    jsr monster_distance_to_player
+    cmp #MONS_MAX_SIGHT
+    bcs !ep1_mp_next+               // VMS cdis < max_sight
     ldx ep1_idx
-    jsr ep1_poly_slot
+    jsr ep1_poly_slot               // The new creature takes this or a lower slot
 !ep1_mp_next:
     inc ep1_idx
     bne !ep1_mp_loop-
@@ -1276,7 +1259,7 @@ ep1_wand_clone:
     lda ep1_y
     sta ms_spawn_y
     lda ep1_arg
-    jsr monster_spawn_one
+    jsr monster_spawn_awake         // VMS multiply_monster(.., false)
     inc zp_dirty_count
     rts
 !ep1_wc_next:
@@ -1318,39 +1301,24 @@ ep1_wand_sleep:
     inc zp_dirty_count
     rts
 
+// Wand of Polymorph: VMS wands.inc 6 -> spells.inc poly_monster.
 ep1_wand_polymorph:
     jsr eff_directional_monster
-    bcc !ep1_wcf_done-
-    lda zp_player_dlvl
-    beq !ep1_wcf_done-
+    bcc !ep1_wp_done+
     stx ep1_slot
     jsr tier_check_transition
     ldx ep1_slot
+    :PolymorphResist(ep1_slot, ep1_poly_unaffected)
+// ep1_poly_slot — Slot X becomes an awake creature of any level (mass_poly).
 ep1_poly_slot:
-    stx ep1_slot
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-#if HAL_PLATFORM_MONSTER_CATALOG
-    jsr catalog_slot_is_balrog
-    beq !ep1_wb_done+
-#else
-    lda cr_level,x
-    cmp #100
-    bcs !ep1_wb_done+
-#endif
-    ldy #MX_X
-    lda (zp_ptr0),y
-    sta ms_spawn_x
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    sta ms_spawn_y
-    ldx ep1_slot
-    jsr monster_remove
-    jsr pick_creature_type
-    jsr monster_spawn_one
-    inc zp_dirty_count
+    :PolymorphReplace(ep1_slot)
+ep1_poly_unaffected:
+    lda #<ep1_unaffected_str
+    ldy #>ep1_unaffected_str
+    jmp combat_msg_monster_suffix
+ep1_unaffected_str:
+    .text " is unaffected." ; .byte 0
+!ep1_wp_done:
 !ep1_wb_done:
     rts
 

@@ -103,7 +103,7 @@ def pack(source: Path, output: Path) -> dict:
         ),
         CONTRACT["CART_ASSET_LEGAL_UI"]: (
             "legalui",
-            *prg(source / "legalui", 0xE000, 0xE600),
+            *prg(source / "legalui", 0xE000, 0xEE00),
         ),
         CONTRACT["CART_ASSET_LEGAL_NOTICE"]: (
             "license",

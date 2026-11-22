@@ -30,6 +30,8 @@
 .const NUM_SOA_FIELDS        = 23 // Number of SoA arrays for tier loading
 .const CATALOG_EXT_FIELDS    = 8  // Phase 5 extended catalog SoA fields per species
 .const EMPTY_SLOT        = $ff
+.const MONS_LEVEL_MAX    = 40   // VMS max_mons_level: deeper creatures are the win creatures
+.const MONS_MAX_SIGHT    = 20   // VMS max_sight
 
 // Phase 5 attack packing masks (tools/extract_vms_creatures.py pack_attack):
 //   cr_atkN_sides[3:0] = sides (0..14), cr_atkN_sides[7:4] = verb[4:1] (adesc >> 1)
@@ -788,9 +790,25 @@ find_monster_floor:
 // cr_level <= current dungeon depth. Unlike the old narrow-band picker, this
 // cannot collapse deep floors to a single monster just because the tier has
 // sparse high-end entries.
+// pick_summon_creature_type — The same up to dlvl + 2 (VMS summon_monster's
+// mon$summon_adj), for the summoners.
 // Output: A = creature type index within [0, active_dungeon_count)
 // Clobbers: X, Y, zp_temp3
+// pick_any_creature_type — Any level (VMS poly_monster / mass_poly).
+pick_any_creature_type:
+    lda #$ff
+    .byte $2c                   // BIT abs: skip lda #2
+pick_summon_creature_type:
+    lda #2
+    .byte $2c                   // BIT abs: skip lda #0
 pick_creature_type:
+    lda #0
+    clc
+    adc zp_player_dlvl
+    bcc !pct_limit+
+    lda #$ff                    // Any level
+!pct_limit:
+    sta pct_level
     lda zp_player_dlvl
     beq !pct_fallback+
     lda active_dungeon_count
@@ -801,7 +819,7 @@ pick_creature_type:
     cpx active_dungeon_count
     bcs !pct_count_done+
     lda cr_level,x
-    cmp zp_player_dlvl
+    cmp pct_level
     bcc !pct_count_hit+
     bne !pct_count_next+
 !pct_count_hit:
@@ -819,7 +837,7 @@ pick_creature_type:
     cpx active_dungeon_count
     bcs !pct_fallback+
     lda cr_level,x
-    cmp zp_player_dlvl
+    cmp pct_level
     bcc !pct_pick_hit+
     bne !pct_pick_next+
 !pct_pick_hit:
@@ -835,6 +853,7 @@ pick_creature_type:
 !pct_found:
     txa
     rts
+pct_level: .byte 0
 #endif
 
 // monster_spawn_one — Create one monster at ms_spawn_x/y
@@ -948,6 +967,15 @@ monster_spawn_one:
 !mso_fail:                      // Reached by bcc: carry already clear
     rts
 
+// monster_spawn_awake — monster_spawn_one, the creature awake: VMS
+// place_monster with slp = false (csleep 0) for summons, breeding, clones,
+// polymorph and the turn's wanderer. Output: X = slot when placed (carry
+// then undefined); carry clear = table full.
+monster_spawn_awake:
+    jsr monster_spawn_one
+    bcc !mso_fail-
+    jmp monster_wake
+
 // find_adjacent_empty — Find adjacent empty floor tile
 // Input: fae_cx, fae_cy = center position
 // Output: carry set = found (ms_spawn_x/y set), carry clear = none
@@ -955,11 +983,18 @@ monster_spawn_one:
 // Clobbers: A, X, Y, zp_ptr0, zp_temp3, zp_temp4
 // find_adjacent_empty_mon — The same around the current monster (zp_mon_x/y):
 // a breeder's clone, a Teleport To landing square.
+// find_adjacent_empty_player — Around the player: a monster's summons (VMS
+// summon_monster/summon_undead at char_row/char_col).
+find_adjacent_empty_player:
+    lda zp_player_x
+    ldy zp_player_y
+    bne !fae_center+            // Always: row 0 is the map's edge wall
 find_adjacent_empty_mon:
     lda zp_mon_x
+    ldy zp_mon_y
+!fae_center:
     sta fae_cx
-    lda zp_mon_y
-    sta fae_cy
+    sty fae_cy
 find_adjacent_empty:
     lda #8
     jsr rng_range               // Random start [0,7]

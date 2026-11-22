@@ -183,7 +183,7 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                 print(f"PASS {port}: shipped disk boot -> legal viewer -> title", flush=True)
                 return
             basic_snapshot = memory(sym["zp_save_buf"], 142) if port == "c64" else None
-            if mode == "help":
+            if mode in ("help", "sysinfo"):
                 key("N")
                 until("create_select_race")
                 key("A")
@@ -206,6 +206,19 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
                             memory(0x4000, 13068, "ram01") if port == "c128"
                             else memory(0xC800 if port == "plus4" else 0xC000, 3840))
                 before = state()
+                if mode == "sysinfo":
+                    key("\xd6")
+                    until("legal_sysinfo_wait")
+                    has("Moria 8 - System Info")
+                    has("Turn 0  Town")
+                    has("RNG:")
+                    key("Q")
+                    until("main_loop")
+                    assert state() == before
+                    if port == "c64":
+                        assert memory(sym["zp_save_buf"], 142) == basic_snapshot
+                    print(f"PASS {port}: gameplay SHIFT+V -> System Info -> play; player, turn, RNG, inventory and map preserved", flush=True)
+                    return
                 key("?")
                 until("hal_input_get_key")
                 has("L:License")
@@ -412,6 +425,13 @@ def run(args: argparse.Namespace, output: Path, mode: str = "title") -> None:
             key("Q")
             until("legal_menu_wait")
             assert memory(sym["legal_opened"], 1) == b"\0"
+            key("3")
+            until("legal_sysinfo_wait")
+            has("Moria 8 - System Info")
+            has("Version:")
+            has("Drives:")
+            key("Q")
+            until("legal_menu_wait")
             key("Q")
             until("title_menu_loop")
             if port == "c64":
@@ -439,7 +459,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--vice", required=True)
     parser.add_argument("--c1541", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("title", "help", "missing", "swap", "boot", "fault", "open-retry"))
+    parser.add_argument("--scenario", choices=("title", "help", "sysinfo", "missing", "swap", "boot", "fault", "open-retry"))
     args = parser.parse_args(argv)
     if args.port == "c64" and args.program is None:
         parser.error("--program is required for c64")
@@ -460,7 +480,7 @@ def main(argv: list[str] | None = None) -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix="run-", dir=args.output))
     print(f"Evidence: {output}", flush=True)
-    modes = [args.scenario] if args.scenario else ["title", "help", "missing", "swap", "fault", "open-retry"]
+    modes = [args.scenario] if args.scenario else ["title", "help", "sysinfo", "missing", "swap", "fault", "open-retry"]
     if args.scenario is None and args.port == "c64":
         modes.append("boot")
     for mode in modes:

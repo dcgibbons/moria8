@@ -30,7 +30,12 @@
 .const hal_platform_player_move_diag_labels = 0
 .const hal_platform_describe_look_masks_irq = 0
 .const hal_platform_game_loop_runtime_resync = 0
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
+.const hal_platform_game_loop_main_loop_begin = 1
+#define HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
+#else
 .const hal_platform_game_loop_main_loop_begin = 0
+#endif
 .const hal_platform_game_loop_restore_generation_overlay = 0
 .const hal_platform_game_loop_save_clears_screen = 1
 .const hal_platform_game_loop_save_return_view = 0

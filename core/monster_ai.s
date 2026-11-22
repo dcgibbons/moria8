@@ -404,7 +404,7 @@ monster_process_one:
     jsr find_adjacent_empty_mon
     bcc !breed_fail+
     lda zp_mon_type
-    jsr monster_spawn_one
+    jsr monster_spawn_awake     // VMS multiply_monster(.., false): awake
     lda #$03
     sta mat_action_dirty
     lda ms_spawn_x

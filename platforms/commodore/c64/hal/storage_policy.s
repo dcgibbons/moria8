@@ -25,7 +25,8 @@
 .const hal_storage_disk_setup_detail_command_status = 0
 .const hal_storage_disk_setup_detail_dos_drive = 0
 .const hal_storage_disk_setup_detail_status_phase = 0
-.const hal_storage_disk_setup_marker_write_status_required = 0
+.const hal_storage_disk_setup_marker_write_status_required = 1
+#define HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
 // $22 (Save Format V2): canonical 361-item VMS catalog, 34 inventory slots

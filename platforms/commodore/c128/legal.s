@@ -1,7 +1,12 @@
 #importonce
 #import "../../shared/legal_entry.s"
 // Bank 0 resident below $6000; all code survives the KERNAL transition.
+tramp_ui_sysinfo_display:
+    lda #1
+    .byte $2c                   // BIT abs — skip lda #0
 tramp_ui_legal_display:
+    lda #0
+    sta legal_entry_mode
 #if !C128_CARTRIDGE
     jsr disk_prompt_game
     bcc !load+
@@ -32,17 +37,18 @@ tramp_ui_legal_display:
 .label legal_os_clrchn = w_clrchn
 #endif
 
+legal_entry_mode: .byte 0
 legal_ui_filename: .byte 'L','E','G','A','L','U','I'
 #if !C128_CARTRIDGE
 legal_notice_filename: .byte 'L','I','C','E','N','S','E',',','S',',','R'
 .label legal_notice_filename_len = * - legal_notice_filename
 legal_offer_filename: .byte 'S','O','U','R','C','E','-','O','F','F','E','R',',','S',',','R'
 .label legal_offer_filename_len = * - legal_offer_filename
+
+.segment LegalOverlay
 legal_filename_lo: .byte <legal_notice_filename, <legal_offer_filename
 legal_filename_hi: .byte >legal_notice_filename, >legal_offer_filename
 legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
-
-.segment LegalOverlay
 legal_os_read_open_status:
     jsr c128_program_read_command_status
     lda disk_diag_readst

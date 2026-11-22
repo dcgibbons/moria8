@@ -183,6 +183,7 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-013 | Proposed (awaiting maintainer review) | 2026-11-15 | Phase 4 full VMS item/ego/trap/recall/Save V2 integration on C128 (`docs/MEMORY_REDESIGN_PLAN.md` §4.3, §6): (1) retire `128.names` from Bank 1 `$7400-$7a5f` (`Bank1DB`) and place `recall[279]` (`1,116 B`, `$7400-$785b`) + `zp_save_buf` (`142 B`, `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free) in `Bank1DB` accessed via `mmu_safe_db_read/write_ptr0/1`; (2) adopt `'ITM2'` `item.cat` (`7,573 B` at Phase 4; now `7,478 B`) + `item.idx` (since retired on C128 by `C128M-015`), reading records into Bank 0 `$1b00-$1bff` (`icat_sector_buf`) from REU Bank 2 (`$020000`) when REU is present, from MD128 cartridge ROM (`CART_ASSET_ITEM_CAT = 25`), or via 1541/1571/1581 direct `U1` sector reads (`common/item_cat_fetch.s`); (3) enable `SAVE_IN_STORAGE_OVERLAY` (`ovl.storage` / `128.storage`, `OVL_STORAGE = 12`, `$e000-$effa`, `4,091 B`, `5 B` free, uncached on-demand `$e000` overlay) and move `platforms/shared/save.s` into `StorageOverlay` while `128.persist` (`$af00-$c028`, `4,393 B`, `4,055 B` free) retains `title_screen.s`, `save_slot_menu.s`, `ui_disk_setup.s`, and `item_cat_boot_load`; (4) update MD128 cartridge directory to `29/32` slots (`CART_ASSET_COUNT = 29`, `126,172 B` free) and Save Format V2 (`SAVE_VERSION = $20` / `17,161 B` at Phase 4; now `$22` / `17,164 B` stream). | `memory128.s` & `main.s` `.assert`s; `check_c128_payloads.py --both`; `check_c128_md128.py` (`29/32` assets); `report_memory_budgets.py --port c128`; `make test128` & `make test128-cartridge` | `128.names` in Bank 1 `$7400-$7a5f`; `C128M-012` keeping `SAVE_IN_STORAGE_OVERLAY` OFF |
 | C128M-014 | Proposed (awaiting maintainer review) | 2026-11-16 | Phase 5 full `279/279` VMS monster catalog (`29` SoA fields, `4` attacks, `19` `ADESC_*` verbs, `24` `ATK_*` effects, `5` `MSF2_*` spells, `CD_*`/`CM2_*`) & Bank 1 `$d000-$dfff` data adoption (`docs/MEMORY_REDESIGN_PLAN.md` §4.3, §5, §6): (1) amend `C128M-002` to allocate Bank 1 `$d000-$dfff` (`4,096 B`) to `128.cex` (`$d000-$d8b7`, `2,232 B`, `279 x 8 B` extended species rows loaded at boot via `c128_load_catalog_ext_prg` / `CART_ASSET_CEX`), `BANK1_STORE_INV_RESERVED` (`$d8b8-$dcb7`, `1,024 B` reserved), and `msg_history` (`$dcb8-$df37`, `640 B`, freeing `640 B` of Bank 0 `Default` RAM; `$df38-$dfff` = `200 B` free), accessed strictly via bottom-common `< $4000` (`$0c06+`) `SEI` + `MMU_RAM_BANK1_NOIO ($7f)` pointer thunks (`mmu_common_b1_noio_read/write_ptr0/1` with `$d506 = $0d`), while keeping `OVL_DEATH` cached at `$c000-$cfff`; (2) evict Wave 5.2 cold code (`player_chargen_cold.s`, `trap_trigger_cold.s`/`trap_damage_cold.s`, `door_open_close_cold.s`, `item_drop_cold.s`, `starting_kit_cold.s`, `player_bg_draw_cold.s`, `ui_help_cmd_cold.s`) and cold zero-HP melee effects (`mae_steal` -> `ovl.items`, `mae_lose_exp`/`ATK_AGGRAVATE` -> `128.bank`, `mae_disenchant`..`mae_eat_charges` -> `ovl.home`), plus 80-col `ui_recall.s` tables in `ovl.ui`; (3) update MD128 cartridge directory to `30/32` slots (`CART_ASSET_COUNT = 30`, `140,399 / 262,144 B` used, `121,745 B` free). | `memory128.s` `$d000-$dfff` `.assert`s; `catalog_ext_fetch128.s`; `check_c128_payloads.py --both`; `check_c128_md128.py` (`30/32` assets); `report_memory_budgets.py --port c128`; `make test128` & `make test128-cartridge` | `C128M-002` blanket post-boot runtime ban on Bank 1 `$d000-$dfff`; Bank 0 `msg_history` |
 | C128M-015 | Proposed (awaiting maintainer review) | 2026-11-16 | Eliminate all runtime floppy disk seeks on C128 disk builds across `ITEM.CAT` reads, `g` item pickup, `Shift+dir` running, `o`/`c` plain + locked doors, and floor traps using native C128 Bank 0 + 16 KB VDC RAM only (C128 never uses REU): (1) replace `ITEM.IDX` + `item_catalog_records.s` sector streaming on disk builds with `platforms/commodore/c128/item_cat_vdc128.s`, which loads `ITEM.CAT` (`7,478 B` in current 361-item catalog) at boot (`c128_load_core_residents`, strictly after any `$ff62` `JDLCHR` font restore, keeping `20/20` startup load count unchanged) via `crl_sa = 0` into Bank 1 `MAP_BASE` (`$4000-$5d35`), verifies `'ITM2'`, and streams `ITEM.CAT[0..3839]` into VDC `$1100-$1fff` (`3,840 B`) and `ITEM.CAT[3840..7477]` into the unused scanlines `8..15` of `455` character cells in VDC `$2008-$3c6d` (`4,096 B` capacity, `458 B` spare, leaving all Set 0 `$2000` and Set 1 `$3000` scanlines `0..7` untouched); `C128_CARTRIDGE` retains `hal_item_cat_cart_read_byte` (`< $8000`); (2) promote `item_pickup` (`220 B`, out of uncached `StorageOverlay`, retiring `HAL_PLATFORM_ITEM_PICKUP_OVERLAY` and `tramp_item_pickup`) and `run_initialize` (`166 B`, out of `ModalMiscOverlay`) into Bank 0 `Default` (`moria128.prg` `$1c01-$adb2`, raising disk `Default` headroom `155 -> 334 B`, `128.play` `233 -> 268 B`, `cache.ovl.modal` `39 -> 205 B`, and `ovl.storage` `3 -> 223 B`); keep `door_try_open`/`close` in cached `OVL_HELP` and `door_pick_roll` in cached `OVL_DISARM`. | `memory128.s`, `dungeon_render_vdc.s`, & `main.s` VDC/resident `.assert`s; `io_contracts.s`; `check_c128_payloads.py --both`; `check_c128_md128.py`; `check_overlay_calls.py --port c128 --check-sym`; `item_desc128`, `cache_survival_smoke`, `hot_path_zero_disk_smoke`; `make test128` & `make test128-legal` | `C128M-013` runtime `ITEM.IDX`/`U1` sector streaming on C128 disk builds; `item_pickup` in `ovl.storage`; `run_initialize` in `ovl.modal` |
+| C128M-016 | Proposed (awaiting maintainer review) | 2026-11-20 | `catalog_place_far` (`core/monster_catalog.s`: the win creature at generation and the turn's VMS wanderer, MON-039; `catalog_place_win_creature` / `catalog_place_wanderer` entries, 105 B) moves from Bank 0 `Default` to the head of `128.play` (`C128ResidentPlay`, `$af03-$af6b`) through `:CatalogWinBegin()`/`:CatalogWinEnd()` in `monster_catalog128.s`, because 920c0c0 left the product image 64 B below `$af00` and put the `C128_TEST_TITLE_ART_CONTENT` variant 66 B over it. The play signature (`c128_resident_play_sig0..2`) is now emitted before `monster_catalog128.s` so it stays the payload's first three bytes. Callers: `monster_spawn_level` (Bank 0, called only from `game_loop.s` in `128.play`) and `turn_post_action` (`128.play`); the modal `128.persist` that shares `$af00` calls neither | `main.s` asserts (program image `<= $af00`, play signature at `$af00`, play `<= $d000`, persist below `main_loop`/`player_died`), `monster.s` assert `catalog_place_win_creature < $e000`, `check_c128_payloads.py`; `make test128` | none |
 
 ## License/source modal ownership (2026-11-10)
 
@@ -1321,7 +1322,39 @@ production runtime test:
 - **Physical VDC change**: Verified by `item_desc128`, `vdc_scroll_delta128`, and `hot_path_zero_disk_smoke`.
 - **Shared payload composition**: N/A (`core/` and shared Commodore files untouched).
 
+## Change Record — Catalog Placement Into `128.play` (`C128M-016`, 2026-11-20)
 
+```text
+symbol/payload and linked segment: catalog_place_win_creature $af03,
+  catalog_place_wanderer $af05, catalog_place_far $af06-$af6b in
+  C128ResidentPlay (128.play.prg), formerly Bank 0 Default ($6a6a-$6ad3)
+PRG load header: build/c128/128.play.prg starts 00 af, then 4d 38 50 ("M8P",
+  c128_resident_play_sig0..2) and the catalog code at $af03
+source and destination spans: 128.play.prg $af00-$cf1e (226 B to $d000) loaded
+  to Bank 0 $af00 by the existing play loader / cartridge copy; unchanged path
+source/destination bank and lifetime: Bank 0, the play payload's lifetime
+  (reloaded after every 128.persist modal before main_loop resumes)
+MMU/$01 configuration at load, copy, execution and return: unchanged play-slot
+  loader; executes in Operational Bank 0 (MMU_ALL_RAM $3e) like the rest of
+  128.play; calls Bank 0 Default (find_monster_floor, pick_creature_type,
+  catalog_slot_for_id, monster_spawn_awake) and returns there
+common-RAM and interrupt/vector assumptions: none new; no banking inside
+KERNAL transition path: catalog_slot_for_id's species fetch reads Bank 1
+  through the existing mmu_safe_db helpers, as before the move
+overlapping owners and guarding assertions: 128.persist shares $af00 but never
+  runs while monster_spawn_level or turn_post_action can (both reached only
+  from 128.play code); main.s play-signature, play <= $d000, persist below
+  main_loop/player_died, program_end <= $af00 asserts; monster.s
+  "catalog_place_win_creature is called directly only below $E000"
+production runtime test: make test128 (catalog_spawn_smoke and the generation
+  soaks place the win creature path; turn tests run turn_post_action)
+```
 
-
+Verification rows: linked address `$af03-$af6b` (`build/c128/main.sym`); load
+header `$af00` with the signature first (`128.play.prg`); load bank Bank 0 (play
+loader, unchanged); execution bank Bank 0 `MMU_ALL_RAM`; copy safety: no copied
+or staged span changed, only the play payload's contents (`check_c128_payloads`
+PASS, 24 payloads). Headroom: program image `171 B` below `$af00` (product, was
+`64 B`), `41 B` with `C128_TEST_TITLE_ART_CONTENT` (was `-66 B`); `128.play`
+`226 B` below `$d000` (was `333 B`).
 

@@ -10,8 +10,9 @@
 // them at boot), else from the drive. The optional C64_CARTRIDGE build
 // imports cartridge_catalog.s instead: ROM records, the same hidden RAM owners.
 
-// Win-creature placement (generation only, from DL50) lives in the $F000
-// runtime: the resident image has no room for it.
+// Win-creature placement (generation, from DL50) and the turn's wanderer
+// (catalog_place_far) live in the $F000 runtime: the resident image has no
+// room for them.
 #if !HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE   // hal/lifecycle_policy.s defines it first
 #define HAL_PLATFORM_CATALOG_WIN_TRAMPOLINE
 #endif
@@ -41,16 +42,22 @@
     sta hal_memory_cpu_port
 }
 
-// tramp_catalog_place_win — The $F000 runtime with the ROMs out, as the
-// special-room trampolines run it (interrupts masked; caller's banking back).
+// tramp_catalog_place_win / tramp_catalog_place_wanderer — The $F000
+// runtime with the ROMs out, as the special-room trampolines run it
+// (interrupts masked; caller's banking back). C picks the creature
+// (catalog_place_far) and survives the banking.
 tramp_catalog_place_win:
+    sec
+    .byte $24                   // BIT zp: skip the clc
+tramp_catalog_place_wanderer:
+    clc
     php
     sei
     lda hal_memory_cpu_port
     pha
     lda #BANK_NO_ROMS
-    sta hal_memory_cpu_port
-    jsr catalog_place_win_creature
+    sta hal_memory_cpu_port     // php, sei, lda, pha and sta keep C
+    jsr catalog_place_far
     pla
     sta hal_memory_cpu_port
     plp

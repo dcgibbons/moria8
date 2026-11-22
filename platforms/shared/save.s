@@ -270,6 +270,39 @@ load_stream_status_message:
     lda disk_status             // 0 = DOS status 00/01
 #endif
 }
+
+// save_query_drive_status
+// Queries save_device's CBM DOS command channel and returns A = HAL_STORAGE_STATUS_*
+// (Z set iff HAL_STORAGE_STATUS_OK). On Plus/4 (HAL_STORAGE_APPEND_DISK_DETAIL),
+// preserves any non-zero stream READST in disk_error_readst for fallback detail.
+save_query_drive_status:
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    lda disk_error_readst       // preserve stream failure READST for fallback detail
+    pha
+#endif
+    lda save_device
+    sta disk_prompt_device      // C128: also disk_ui_action, not live during save/load
+    jsr hal_storage_read_command_status
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    pla
+    beq !sqds_keep_readst+      // prior stream READST was 0; keep any READST set by command-channel read
+    sta disk_error_readst
+!sqds_keep_readst:
+#endif
+    :SaveDriveStatus()          // ends loading A: Z = OK
+    rts
+#endif
+
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+// save_record_error_phase
+// Input: A = stream READST or KERNAL error code, X = DISK_ERR_* phase byte.
+save_record_error_phase:
+    pha
+    txa
+    jsr disk_error_set_phase
+    pla
+    sta disk_error_readst
+    rts
 #endif
 
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
@@ -542,14 +575,13 @@ save_game:
 #else
     ldx #HSTR_SAVE_IOERR
 #endif
-    jmp !save_media_fail+
 !save_media_fail:
-#if HAL_STORAGE_APPEND_DISK_DETAIL
+#if HAL_STORAGE_APPEND_DISK_DETAIL && !HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     txa
     pha
 #endif
     jsr huff_print_msg
-#if HAL_STORAGE_APPEND_DISK_DETAIL
+#if HAL_STORAGE_APPEND_DISK_DETAIL && !HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     pla
     tax
     cpx #HSTR_SAVE_IOERR
@@ -643,11 +675,8 @@ save_open_write_len:
     jsr SAVE_OPEN
     bcc !save_open_ok+
 #if HAL_STORAGE_APPEND_DISK_DETAIL
-    pha
-    lda #$a1
-    jsr disk_error_set_phase
-    pla
-    sta disk_error_readst
+    ldx #$a1                    // DISK_ERR_SAVE_OPEN
+    jsr save_record_error_phase
 #endif
     jmp !save_error+
 !save_open_ok:
@@ -657,11 +686,8 @@ save_open_write_len:
     jsr SAVE_CHKOUT
     bcc !save_chkout_ok+
 #if HAL_STORAGE_APPEND_DISK_DETAIL
-    pha
-    lda #$a2
-    jsr disk_error_set_phase
-    pla
-    sta disk_error_readst
+    ldx #$a2                    // DISK_ERR_SAVE_CHKOUT
+    jsr save_record_error_phase
 #endif
     jmp !save_error_close+
 !save_chkout_ok:
@@ -737,10 +763,7 @@ save_open_write_len:
     // CBM DOS reports a write-protected (26) or full (72) disk only on the
     // command channel, never in READST, so a save counts as written only
     // when the drive says so after the close.
-    lda save_device
-    sta disk_prompt_device      // C128: also disk_ui_action, not live during a save
-    jsr hal_storage_read_command_status
-    :SaveDriveStatus()          // ends loading A: Z = OK
+    jsr save_query_drive_status // ends loading A: Z = OK
     beq !save_drive_ok+
 #if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     jsr save_print_storage_status   // A = the drive's HAL_STORAGE_STATUS_*
@@ -777,26 +800,13 @@ save_open_write_len:
     // CBM DOS names a refused write's cause (26 write-protected, 72 full)
     // only on the command channel; the stream knows only that it failed.
     // Anything the drive does not name stays the generic message.
-#if HAL_STORAGE_APPEND_DISK_DETAIL
-    lda disk_error_readst       // the stream's failure, for the detail
-    pha
-#endif
-    lda save_device
-    sta disk_prompt_device
-    jsr hal_storage_read_command_status
-#if HAL_STORAGE_APPEND_DISK_DETAIL
-    pla
-    sta disk_error_readst
-#endif
-    :SaveDriveStatus()
+    jsr save_query_drive_status
 #else
     jsr hal_storage_save_stream_status
 #endif
     jsr save_print_storage_status
-    jmp !save_error_after_print+
 #else
     ldx #HSTR_SAVE_IOERR
-#endif
 #if HAL_STORAGE_APPEND_DISK_DETAIL
     txa
     pha
@@ -809,6 +819,7 @@ save_open_write_len:
     bne !save_error_no_detail+
     jsr save_append_disk_detail_plus4
 !save_error_no_detail:
+#endif
 #endif
 !save_error_after_print:
     jsr input_get_modal_dismiss_key
@@ -845,12 +856,6 @@ load_game:
     jsr disk_program_media_present
     bcc !load_program_media+
 #endif
-#if HAL_STORAGE_LOAD_ALLOW_UNMARKED_SAVE
-    jsr disk_kernal_enter
-    jsr save_file_exists
-    jsr disk_kernal_exit
-    bcs !load_media_ok+
-#endif
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !load_bad_media+
@@ -859,13 +864,19 @@ load_game:
     jmp !load_media_after_print+
 #else
     ldx #HSTR_SAVE_IOERR
-#endif
     jmp !load_media_fail+
+#endif
 !load_program_media:
     jsr tramp_disk_prepare_selected
     bcc !load_media_ok+
     jmp !load_media_after_print+
 !load_bad_media:
+#if HAL_STORAGE_LOAD_ALLOW_UNMARKED_SAVE
+    jsr disk_kernal_enter
+    jsr save_file_exists
+    jsr disk_kernal_exit
+    bcs !load_media_ok+
+#endif
     ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
 #if PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
@@ -890,6 +901,9 @@ plus4_test_load_media_fail:
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    jsr disk_error_clear
+#endif
 
 #if HAL_STORAGE_CLOSE_SAVE_FILE_BEFORE_LOAD
     jsr SAVE_CLRCHN
@@ -913,7 +927,12 @@ load_open_read_len:
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
     bcc !load_open_ok+
-    // OPEN failed — file not found is the most common cause
+    // OPEN failed — file not found is the most common cause, but drive errors
+    // (74 not ready, device not present) are classified on the command channel.
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    ldx #$b1                    // DISK_ERR_LOAD_OPEN
+    jsr save_record_error_phase
+#endif
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
@@ -925,6 +944,10 @@ load_open_read_len:
     and #$fe
 #endif
     beq !load_open_status_ok+
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    ldx #$b1                    // DISK_ERR_LOAD_OPEN
+    jsr save_record_error_phase
+#endif
     jmp !load_close_notfound+
 !load_open_status_ok:
 #endif
@@ -932,6 +955,10 @@ load_open_read_len:
     jsr SAVE_CHKIN
     bcc !load_chkin_ok+
     // CHKIN failed — close and bail
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    ldx #$b2                    // DISK_ERR_LOAD_CHKIN
+    jsr save_record_error_phase
+#endif
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
@@ -948,13 +975,18 @@ plus4_test_after_load_magic:
 #endif
     // Check STATUS after reading magic: file-not-found on 1541 causes OPEN to
     // succeed but first CHRINs return immediate EOF/timeout (STATUS = $42).
-    // Any non-zero STATUS this early means the file doesn't exist.
+    // Any non-zero STATUS this early means the file doesn't exist or the drive
+    // failed (classified via command channel under HAL_STORAGE_SAVE_CHECKS_DOS_STATUS).
     jsr SAVE_READST
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     and #$fe                // Plus/4 KERNAL may leave write-timeout bit set after CHRIN
 #endif
     beq !load_magic_check+
-    jmp !load_close_notfound+   // STATUS non-zero → file not found
+#if HAL_STORAGE_APPEND_DISK_DETAIL
+    ldx #$b3                    // DISK_ERR_LOAD_READ
+    jsr save_record_error_phase
+#endif
+    jmp !load_close_notfound+   // STATUS non-zero → classify missing file vs drive error
 !load_magic_check:
     ldx #0
 !check_magic:
@@ -1155,10 +1187,16 @@ plus4_test_load_unsupported:
     // File was opened but returned no data — close before showing message
     jsr load_close_file_restore
 !load_notfound:
+    // OPEN-fail path also jumps here (file was never opened, no close needed)
+#if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES && HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    .assert "OK and NOT_FOUND are < 2", HAL_STORAGE_STATUS_OK == 0 && HAL_STORAGE_STATUS_NOT_FOUND == 1, true
+    jsr save_query_drive_status // A = HAL_STORAGE_STATUS_*
+    cmp #2                      // OK (0) or NOT_FOUND (1) -> missing save file
+    bcs !load_fail_status+      // Drive/device failure -> friendly I/O error
+#endif
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_notfound:
 #endif
-    // OPEN-fail path also jumps here (file was never opened, no close needed)
     lda #LOAD_RESULT_NOTFOUND
     sta load_result
 #if HAL_STORAGE_STREAM_STATUS_HELPERS
@@ -1179,16 +1217,23 @@ plus4_test_load_notfound:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_ioerr:
 #endif
+#if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES && HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    jsr save_query_drive_status // A = HAL_STORAGE_STATUS_*
+!load_fail_status:
+    ldx #LOAD_RESULT_IOERR
+    stx load_result
+    jsr save_print_storage_status
+#else
     lda #LOAD_RESULT_IOERR
     sta load_result
 #if HAL_STORAGE_STREAM_STATUS_HELPERS
     jsr hal_storage_load_stream_status
     jsr save_print_storage_status
-    jmp !load_fail_after_print+
 #else
     ldx #HSTR_SAVE_IOERR
-#endif
     jsr huff_print_msg
+#endif
+#endif
 !load_fail_after_print:
 #if HAL_STORAGE_RETURN_DIRECT
     clc
@@ -1349,10 +1394,9 @@ save_write_block:
     beq !swb_ok+
     inc save_io_error
 #if HAL_STORAGE_APPEND_DISK_DETAIL
-    lda #$a3
-    jsr disk_error_set_phase
     lda zp_temp0
-    sta disk_error_readst
+    ldx #$a3                    // DISK_ERR_SAVE_WRITE
+    jsr save_record_error_phase
 #endif
 !swb_ok:
     // Advance pointer
@@ -1406,10 +1450,9 @@ save_write_byte:
     beq !swby_ok+
     inc save_io_error
 #if HAL_STORAGE_APPEND_DISK_DETAIL
-    lda #$a3
-    jsr disk_error_set_phase
     lda zp_temp0
-    sta disk_error_readst
+    ldx #$a3                    // DISK_ERR_SAVE_WRITE
+    jsr save_record_error_phase
 #endif
 !swby_ok:
     pla
@@ -1440,10 +1483,9 @@ save_write_byte_raw:
     beq !swbr_ok+
     inc save_io_error
 #if HAL_STORAGE_APPEND_DISK_DETAIL
-    lda #$a3
-    jsr disk_error_set_phase
     lda zp_temp0
-    sta disk_error_readst
+    ldx #$a3                    // DISK_ERR_SAVE_WRITE
+    jsr save_record_error_phase
 #endif
 !swbr_ok:
     pla

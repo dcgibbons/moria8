@@ -126,6 +126,10 @@ class ClassifyTest(unittest.TestCase):
                          (Mode.ITEM, "list"))
         self.assertEqual(self.mode(obs({0: "               Inventory", 18: "Press any key"})),
                          (Mode.DISMISS, "anykey"))
+        self.assertEqual(self.mode(obs({0: "               Equipment", 2: " a) Weapon: Bastard Sword"})),
+                         (Mode.ITEM, "list"))                       # Take off's "?" list
+        self.assertEqual(self.mode(obs({0: "               Equipment", 18: "Press any key"})),
+                         (Mode.DISMISS, "anykey"))                  # the 'e' display
 
     def test_unknown_gets_resident_label(self) -> None:
         self.assertEqual(self.mode(obs({0: "Direction?"}, ret=0x39F7), {0x39F7: "direction"}),

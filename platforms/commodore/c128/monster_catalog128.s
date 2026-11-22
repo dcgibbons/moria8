@@ -78,9 +78,16 @@ c128_load_catalog_ext_prg:
 .const CATALOG_NAME_POOL_BASE = BANK1_CATALOG_POOL_BASE
 .const CATALOG_NAME_POOL_END  = BANK1_CATALOG_POOL_END
 
+// The win creature and the turn's wanderer (catalog_place_far) live in the
+// $AF00 play payload (128.play): the Bank 0 resident image has no room. Their
+// only callers, monster_spawn_level (from game_loop.s) and turn_post_action,
+// run from the play payload itself, so it is loaded whenever they run; the
+// modal persist payload that shares $AF00 never calls them.
 .macro CatalogWinBegin() {
+    .segment C128ResidentPlay
 }
 .macro CatalogWinEnd() {
+    .segment Default
 }
 .macro CatalogMap() {
 }

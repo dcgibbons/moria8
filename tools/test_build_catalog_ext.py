@@ -54,6 +54,70 @@ def simulate_6502_packbits_unpack(stream: bytes) -> bytes:
     return bytes(dst)
 
 
+def simulate_6502_lz4_unpack(stream: bytes, *, chunk_cap: int = 4096) -> bytes:
+    """Byte-streaming 6502 model matching platforms/apple2/boot.s LZ4 decoder."""
+    src_pos = 0
+    file_rem = len(stream)
+    buf = b""
+    buf_idx = 0
+    buf_rem = 0
+    dst = bytearray()
+
+    def refill() -> None:
+        nonlocal src_pos, file_rem, buf, buf_idx, buf_rem
+        assert file_rem > 0
+        req = min(chunk_cap, file_rem)
+        buf = stream[src_pos : src_pos + req]
+        src_pos += req
+        file_rem -= req
+        buf_idx = 0
+        buf_rem = req
+
+    def get_byte() -> int:
+        nonlocal buf_idx, buf_rem
+        if buf_rem == 0:
+            refill()
+        b = buf[buf_idx]
+        buf_idx += 1
+        buf_rem -= 1
+        return b
+
+    def eof() -> bool:
+        return (file_rem | buf_rem) == 0
+
+    def read_ext_len(base: int) -> int:
+        total = base
+        if base == 15:
+            while True:
+                ext = get_byte()
+                total = (total + ext) & 0xFFFF
+                if ext != 0xFF:
+                    break
+        return total
+
+    while True:
+        tok = get_byte()
+        lit_len = read_ext_len(tok >> 4)
+        while lit_len != 0:
+            dst.append(get_byte())
+            lit_len -= 1
+        if eof():
+            return bytes(dst)
+        off_lo = get_byte()
+        off_hi = get_byte()
+        offset = off_lo | (off_hi << 8)
+        if offset == 0:
+            raise ValueError("Zero offset in 6502 LZ4 stream")
+        mat_idx = len(dst) - offset
+        if mat_idx < 0:
+            raise ValueError("Offset underflows destination buffer")
+        mat_len = read_ext_len(tok & 0x0F) + 4
+        while mat_len != 0:
+            dst.append(dst[mat_idx])
+            mat_idx += 1
+            mat_len -= 1
+
+
 def make_synthetic_d64_with_files(files: list[tuple[str, bytes]]) -> bytes:
     """Create a minimal valid 35-track 1541 D64 image in memory (no external c1541 needed)."""
     total_sectors = sum(cd.SECTORS_PER_TRACK[1:])
@@ -333,6 +397,58 @@ class TestBuildCatalogExt(unittest.TestCase):
         self.assertLess(len(a2_cat_enc), 4750)
         self.assertLess(len(a2_ext_enc), 1300)
         self.assertLess(len(atari_p5_enc), 12000)
+
+    def test_lz4_roundtrip_6502_unpack_and_edge_cases(self) -> None:
+        vectors = [
+            b"",
+            b"A",
+            b"SHORT12BYTES",
+            b"A" * 300,                         # offset=1 run >= 274 (255-chained match ext)
+            bytes(i & 0xFF for i in range(300)),  # lit_len >= 270 (255-chained lit ext)
+            bytes((i * 37) & 0xFF for i in range(600)) + b"\x00" * 520 + bytes((i * 37) & 0xFF for i in range(600)),
+            b"X" * 260 + b"Y" + b"X" * 260 + b"TAIL!",  # back-reference > 256 bytes
+            (bytes(range(251)) * 22)[:5500],     # multi-4KB chunk boundary streaming
+        ]
+        for vec in vectors:
+            enc = bc.lz4_encode(vec)
+            self.assertEqual(bc.lz4_decode(enc), vec)
+            # Chunk sizes across 4KB and tiny boundaries exercise stream refills.
+            self.assertEqual(simulate_6502_lz4_unpack(enc, chunk_cap=4096), vec)
+            self.assertEqual(simulate_6502_lz4_unpack(enc, chunk_cap=17), vec)
+
+        # Malformed streams must raise ValueError.
+        for bad in (
+            b"",                    # empty stream
+            b"\x01\x41",            # non-zero match nibble at EOF
+            b"\x10\x41\x00\x00",    # zero offset
+            b"\x10\x41\x05\x00",    # offset past destination start
+            b"\x10\x41\x01",        # truncated offset
+            b"\xF0\x00",            # truncated literal length/body
+        ):
+            with self.assertRaises(ValueError):
+                bc.lz4_decode(bad)
+
+        # CLI lz4 encode/decode subcommands.
+        with tempfile.TemporaryDirectory() as tmp:
+            tdir = Path(tmp)
+            raw_p = tdir / "sample.bin"
+            lz4_p = tdir / "sample.lz4"
+            dec_p = tdir / "sample.dec"
+            payload = (b"\x00" * 400) + bytes(i & 0xFF for i in range(310)) + (b"\xFF" * 320)
+            raw_p.write_bytes(payload)
+            self.assertEqual(bc.main(["lz4", "--in", str(raw_p), "--out", str(lz4_p)]), 0)
+            self.assertLess(lz4_p.stat().st_size, len(payload))
+            self.assertEqual(bc.main(["lz4", "--decode", "--in", str(lz4_p), "--out", str(dec_p)]), 0)
+            self.assertEqual(dec_p.read_bytes(), payload)
+
+        # If Apple IIe MORIA8.RES is already built locally, check real binary roundtrip.
+        a2_res = REPO_ROOT / "build" / "apple2" / "bin" / "MORIA8.RES"
+        if a2_res.is_file():
+            res_bytes = a2_res.read_bytes()
+            res_lz4 = bc.lz4_encode(res_bytes)
+            self.assertEqual(bc.lz4_decode(res_lz4), res_bytes)
+            self.assertEqual(simulate_6502_lz4_unpack(res_lz4, chunk_cap=4096), res_bytes)
+            self.assertGreater(len(res_bytes) - len(res_lz4), 6000)
 
     def test_phase5_asm_wave54_flip_and_cli_subcommands(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

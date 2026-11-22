@@ -260,6 +260,7 @@ APPLE2_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("apple2", "tramp_combat_apply_levelup_modal", "platforms/apple2/main.s", "Asserted window-return boundary block alongside UI restore stubs", overlay="OVL_MODAL_MISC", target="combat_apply_levelup"),
     _custom("apple2", "tramp_ego_append_suffix", "platforms/apple2/main.s", "Lives in A2PlaySlot; decodes ego via item_cat_decode_ego and tail-calls combat_append_str", targets=("item_cat_decode_ego", "combat_append_str")),
     _custom("apple2", "tramp_ui_legal_display", "platforms/apple2/legal.s", "Legal modal snapshot/disk-retry/viewer trampoline", targets=("asset_load_retry", "legal_viewer")),
+    _custom("apple2", "tramp_ui_sysinfo_display", "platforms/apple2/legal.s", "System Info modal entry into LegalOverlay", targets=("asset_load_retry", "legal_viewer")),
 )
 
 
@@ -361,6 +362,7 @@ BBCMASTER_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("bbcmaster", "tramp_eff_ext_eat", "platforms/bbcmaster/main.s", "Lives in Default; saves/restores current_overlay around OVL_HOME eff_ext_eat_piw", overlay="OVL_HOME", target="eff_ext_eat_piw"),
     _custom("bbcmaster", "tramp_eff_ext_quaff", "platforms/bbcmaster/main.s", "Lives in Default; saves/restores current_overlay around OVL_HOME eff_ext_quaff_piw", overlay="OVL_HOME", target="eff_ext_quaff_piw"),
     _custom("bbcmaster", "tramp_ui_legal_display", "platforms/bbcmaster/legal.s", "Legal modal snapshot/disk-retry/viewer trampoline", targets=("asset_load_retry", "legal_viewer")),
+    _custom("bbcmaster", "tramp_ui_sysinfo_display", "platforms/bbcmaster/legal.s", "System Info modal entry into LegalOverlay", targets=("asset_load_retry", "legal_viewer")),
 )
 
 
@@ -465,6 +467,7 @@ CX16_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("cx16", "tramp_combat_apply_levelup_modal", "platforms/cx16/main.s", "Calls combat_apply_levelup and restores OVL_MODAL_MISC with brk guard", overlay="OVL_MODAL_MISC", target="combat_apply_levelup"),
     _custom("cx16", "tramp_ego_append_suffix", "platforms/cx16/main.s", "Decodes ego 1..55 via resident item_cat_decode_ego without evicting caller overlay and tail-calls combat_append_str", targets=("item_cat_decode_ego", "combat_append_str")),
     _custom("cx16", "tramp_ui_legal_display", "platforms/cx16/legal.s", "Saves/restores CX16_RAM_BANK_REG ($00) around CX16_BANK_LEGAL viewer", targets=("asset_load_required", "legal_viewer")),
+    _custom("cx16", "tramp_ui_sysinfo_display", "platforms/cx16/legal.s", "System Info modal entry into CX16_BANK_LEGAL viewer", targets=("asset_load_required", "legal_viewer")),
 )
 
 
@@ -558,6 +561,7 @@ ATARI8_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("atari8", "tramp_winner_royal", "platforms/atari8/main.s", "Runs OVL_MODAL_MISC winner retirement bonus and royal_screen", overlay="OVL_MODAL_MISC", targets=("winner_apply_retirement_bonus_overlay", "royal_screen")),
     _custom("atari8", "tramp_game_over_run", "platforms/atari8/main.s", "DeathOverlay tail routine asserting $E000-$EFFF bounds and importing ui_recall/earthquake", overlay="OVL_DEATH", targets=("score_calculate", "score_death_screen")),
     _custom("atari8", "tramp_ui_legal_display", "platforms/atari8/legal.s", "Cartridge/disk conditional legal viewer trampoline", targets=("cart_load_asset", "asset_load_retry", "legal_viewer")),
+    _custom("atari8", "tramp_ui_sysinfo_display", "platforms/atari8/legal.s", "System Info modal entry into LegalOverlay", targets=("cart_load_asset", "asset_load_retry", "legal_viewer")),
 )
 
 
@@ -647,8 +651,10 @@ C64_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("c64", "tramp_game_over_run", "platforms/commodore/c64/main.s", "Banks KERNAL out for c64_death_score_io inside OVL_DEATH", overlay="OVL_DEATH", target="c64_death_score_io"),
     _custom("c64", "tramp_winner_royal", "platforms/commodore/c64/main.s", "Prompts disk, loads modal_misc asset directly, switches BANK_NO_KERNAL", targets=("winner_apply_retirement_bonus_overlay", "royal_screen")),
     _custom("c64", "tramp_ui_legal_display", "platforms/commodore/c64/legal.s", "C64 legal asset stream + RAM IRQ reinstall + dec $01 viewer wrapper", targets=("asset_load_required", "legal_viewer")),
+    _custom("c64", "tramp_ui_sysinfo_display", "platforms/commodore/c64/legal.s", "C64 System Info modal entry into LegalOverlay", targets=("asset_load_required", "legal_viewer")),
     _custom("c64", "tramp_do_look", "platforms/commodore/c64/look_trampoline.s", "Lives in separate look_trampoline.s unit", overlay="OVL_MODAL_MISC", target="do_look"),
-    _custom("c64", "tramp_catalog_place_win", "platforms/commodore/c64/monster_catalog64.s", "Banks banked win-creature catalog via hal_memory_cpu_port", target="catalog_place_win_creature"),
+    _custom("c64", "tramp_catalog_place_win", "platforms/commodore/c64/monster_catalog64.s", "Banks banked win-creature catalog via hal_memory_cpu_port; C = 1 selects the win creature", target="catalog_place_far"),
+    _custom("c64", "tramp_catalog_place_wanderer", "platforms/commodore/c64/monster_catalog64.s", "Banks banked turn wanderer via hal_memory_cpu_port; C = 0 selects the wanderer", target="catalog_place_far"),
     _custom("c64", "tramp_item_pickup", "platforms/commodore/c64/main.s", "Preserves caller $01/I and Carry around banked item_pickup", target="item_pickup"),
 )
 
@@ -742,6 +748,7 @@ PLUS4_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("plus4", "tramp_game_over_stash", "platforms/commodore/plus4/main.s", "RuntimeBanked helper copying $E000-$EFFF overlay to MAP_BASE", target="plus4_copy_overlay_window"),
     _custom("plus4", "tramp_game_over_restore_stash", "platforms/commodore/plus4/main.s", "RuntimeBanked helper restoring MAP_BASE back to $E000-$EFFF", target="plus4_copy_overlay_window"),
     _custom("plus4", "tramp_ui_legal_display", "platforms/commodore/plus4/legal.s", "Plus/4 legal asset stream + RAM IRQ install + viewer trampoline", targets=("asset_load_required", "legal_viewer")),
+    _custom("plus4", "tramp_ui_sysinfo_display", "platforms/commodore/plus4/legal.s", "Plus/4 System Info modal entry into LegalOverlay", targets=("asset_load_required", "legal_viewer")),
     _custom("plus4", "tramp_do_look", "platforms/commodore/plus4/look_trampoline.s", "Lives in separate look_trampoline.s unit", overlay="OVL_MODAL_MISC", target="do_look"),
 )
 
@@ -842,6 +849,7 @@ C128_ENTRIES: Tuple[TrampolineEntry, ...] = (
     _custom("c128", "tramp_p3_death_cloud", "platforms/commodore/c128/main.s", "Loads OVL_DEATH for eff_directional_monster, prints message, restores OVL_ITEMS", overlay="OVL_DEATH", target="eff_directional_monster"),
     _custom("c128", "tramp_p3_death_remove_curse", "platforms/commodore/c128/main.s", "Loads OVL_DEATH for eff_remove_curse, prints message, restores OVL_ITEMS", overlay="OVL_DEATH", target="eff_remove_curse"),
     _custom("c128", "tramp_ui_legal_display", "platforms/commodore/c128/legal.s", "C128 cartridge/disk legal loader + modal persist/viewer trampoline", targets=("asset_load_required", "legal_viewer")),
+    _custom("c128", "tramp_ui_sysinfo_display", "platforms/commodore/c128/legal.s", "C128 System Info modal entry into LegalOverlay", targets=("asset_load_required", "legal_viewer")),
     _custom("c128", "tramp_do_look", "platforms/commodore/c128/look_trampoline.s", "Lives in separate look_trampoline.s unit calling tramp_ui_enter/exit", overlay="C128_HELP_OVERLAY_ID", target="do_look"),
     _custom("c128", "tramp_disk_setup_ui_action", "platforms/commodore/common/disk_setup_runtime128.s", "Lives in shared C128 runtime disk-setup module", target="ui_disk_setup_dispatch"),
     _custom("c128", "tramp_disk_setup", "platforms/commodore/common/disk_setup_runtime128.s", "Lives in shared C128 runtime disk-setup module", targets=("c128_modal_require_persist", "disk_setup_run")),

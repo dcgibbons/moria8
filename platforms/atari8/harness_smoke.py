@@ -785,11 +785,20 @@ function run()
     assert_line("legal_offer", wait_screen("MORIA8 SOURCE OFFER", 100))
     send_key(0x51)
     assert_line("legal_menu_final", wait_screen("1 License", 60))
+    send_key(0x33) -- '3' System Info
+    assert_line("legal_sysinfo_menu", wait_screen("Moria 8 - System Info", 100))
+    send_key(0x51) -- 'Q'
+    assert_line("legal_sysinfo_menu_back", wait_screen("1 License", 60))
     send_key(0x51)
     assert_line("legal_help_return", wait_screen("Command Reference", 100))
     send_key(0x51) -- 'Q'
     wait_frames(40)
     assert_line("help_closed", in_town())
+    send_key(0x56) -- 'V' System Info
+    assert_line("gameplay_sysinfo", wait_screen("Moria 8 - System Info", 100) and screen_has("Turn 0  Town") and screen_has("RNG:"))
+    send_key(0x51) -- 'Q'
+    wait_frames(40)
+    assert_line("gameplay_sysinfo_close", in_town())
     manager.machine:exit()
 end
 """
