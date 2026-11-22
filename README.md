@@ -14,13 +14,13 @@ compendium, and platform gameplay previews.
 
 | Platform | Status | Download |
 | -------- | ------ | -------- |
-| Commodore 64 (C64) | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-c64.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c64.crt) (Cartridge) · [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c64.d64) |
-| Commodore 128 (C128) | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.d64) · [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.d71) · [moria8-c128.d81](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.d81) · [moria8-c128.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.crt) (Magic Desk 128) |
-| Commodore Plus/4 | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-plus4.d64) · [moria8-plus4.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-plus4.crt) (Magic Cart) |
-| Apple II | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-apple2.po](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-apple2.po) |
-| Commander X16 | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-cx16.zip](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-cx16.zip) · [moria8-cx16.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-cx16.crt) |
-| Atari 8-bit | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-atari8.atr](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-atari8.atr) · [moria8-atari8.car](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-atari8.car) (AtariMax 128 KB) |
-| Acorn BBC Master 128 | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-bbcmaster.ssd](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-bbcmaster.ssd) |
+| Commodore 64 (C64) | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-c64-v2.0.0.crt](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-c64-v2.0.0.crt) (Cartridge) · [moria8-c64-v2.0.0.d64](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-c64-v2.0.0.d64) |
+| Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-c128-v2.0.0.d64](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-c128-v2.0.0.d64) · [moria8-c128-v2.0.0.d71](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-c128-v2.0.0.d71) · [moria8-c128-v2.0.0.d81](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-c128-v2.0.0.d81) · [moria8-c128-v2.0.0.crt](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-c128-v2.0.0.crt) |
+| Commodore Plus/4 | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-plus4-v2.0.0.d64](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-plus4-v2.0.0.d64) · [moria8-plus4-v2.0.0.crt](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-plus4-v2.0.0.crt) |
+| Apple II | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-apple2-v2.0.0.po](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-apple2-v2.0.0.po) |
+| Commander X16 | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-cx16-v2.0.0.zip](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-cx16-v2.0.0.zip) · [moria8-cx16-v2.0.0.crt](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-cx16-v2.0.0.crt) |
+| Atari 8-bit | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-atari8-v2.0.0.atr](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-atari8-v2.0.0.atr) · [moria8-atari8-v2.0.0.car](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-atari8-v2.0.0.car) |
+| Acorn BBC Master 128 | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-bbcmaster-v2.0.0.ssd](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-bbcmaster-v2.0.0.ssd) |
 | Commodore PET | Unlikely | |
 | Commodore VIC-20 | Unlikely | |
 | CP/M (Z80) | Planned | |
@@ -68,7 +68,7 @@ make build              # Build binaries and cartridges for all platforms under 
 make disk               # Build all 14 shipping disks, archives, and cartridges under build/
 make run                # Launch the Commodore 64 disk in VICE
 make test               # Run the regression suite (`make -j7 -O test` runs all 7 stages)
-make artifact-checksums # Build all 14 release artifacts and build/SHA256SUMS
+make artifact-checksums # Build all 14 versioned release artifacts and build/release/SHA256SUMS
 make artifacts          # Build, checksum, and GPG-sign all 14 release artifacts
 make clean              # Remove build/ artifacts
 ```

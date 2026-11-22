@@ -7,8 +7,9 @@ matches across all 7 ports before tagging).
 
 - Confirm `version.json` matches the release tag across all 7 ports (`c64`,
   `c128`, `plus4`, `apple2`, `cx16`, `atari8`, `bbcmaster`).
-- Add `docs/release_notes/release_notes-vX.Y.Z.md` and confirm links in
-  `README.md` and `docs/index.html`.
+- Add `docs/release_notes/release_notes-vX.Y.Z.md` and confirm versioned
+  download URLs (`.../releases/download/vX.Y.Z/moria8-*-vX.Y.Z.<ext>`) and
+  notes links in `README.md` and `docs/index.html` match `vX.Y.Z`.
 - Confirm player-facing docs (`docs/MANUAL.md`, `docs/MONSTERS.md`,
   `docs/SPELLS.md`, `docs/TROUBLESHOOTING.md`, `docs/monsters.html`) match the
   release scope.
@@ -64,27 +65,29 @@ make artifacts
 
 `make artifacts` signs with GPG and is intended to run from your own
 interactive terminal after preparing or unlocking the signing key. Use
-`make artifact-checksums` when you only need to rebuild all 14 release images
-and `build/SHA256SUMS` without touching GPG.
+`make artifact-checksums` when you only need to rebuild all 14 unversioned
+images in `build/`, stage versioned copies under `build/release/`, and write
+`build/release/SHA256SUMS` without touching GPG.
 
-Expected release artifacts (all 14 items in `RELEASE_ARTIFACTS`):
+Expected staged release artifacts (`RELEASE_ARTIFACTS` under `build/release/`,
+built from `BUILD_ARTIFACTS` in `build/`):
 
-- `build/moria8-c64.d64`
-- `build/moria8-c64.crt` (C64 cartridge)
-- `build/moria8-c128.d64`
-- `build/moria8-c128.d71`
-- `build/moria8-c128.d81`
-- `build/moria8-c128.crt` (Magic Desk 128 cartridge)
-- `build/moria8-plus4.d64`
-- `build/moria8-plus4.crt` (c264 Magic Cart cartridge)
-- `build/moria8-apple2.po`
-- `build/moria8-cx16.zip`
-- `build/moria8-cx16.crt` (Commander X16 cartridge)
-- `build/moria8-atari8.atr`
-- `build/moria8-atari8.car` (AtariMax 128 KB cartridge)
-- `build/moria8-bbcmaster.ssd`
-- `build/SHA256SUMS`
-- `build/*.asc` (detached GPG signatures for all 14 artifacts and `SHA256SUMS`)
+- `build/release/moria8-c64-vX.Y.Z.d64`
+- `build/release/moria8-c64-vX.Y.Z.crt` (C64 cartridge)
+- `build/release/moria8-c128-vX.Y.Z.d64`
+- `build/release/moria8-c128-vX.Y.Z.d71`
+- `build/release/moria8-c128-vX.Y.Z.d81`
+- `build/release/moria8-c128-vX.Y.Z.crt` (Magic Desk 128 cartridge)
+- `build/release/moria8-plus4-vX.Y.Z.d64`
+- `build/release/moria8-plus4-vX.Y.Z.crt` (c264 Magic Cart cartridge)
+- `build/release/moria8-apple2-vX.Y.Z.po`
+- `build/release/moria8-cx16-vX.Y.Z.zip`
+- `build/release/moria8-cx16-vX.Y.Z.crt` (Commander X16 cartridge)
+- `build/release/moria8-atari8-vX.Y.Z.atr`
+- `build/release/moria8-atari8-vX.Y.Z.car` (AtariMax 128 KB cartridge)
+- `build/release/moria8-bbcmaster-vX.Y.Z.ssd`
+- `build/release/SHA256SUMS`
+- `build/release/*.asc` (detached GPG signatures for all 14 versioned artifacts and `SHA256SUMS`)
 
 ## License & Source-Offer Compliance (`AGENTS.md` Rule 7)
 
@@ -204,11 +207,12 @@ gates.
 
 ## Artifact Review
 
-- Verify all 14 artifact filenames in `RELEASE_ARTIFACTS` and `version.json`
-  version strings on title screens.
-- Verify `build/SHA256SUMS` covers all 14 uploaded artifacts.
-- Verify detached GPG signatures (`*.asc`) for all 14 artifacts and
-  `SHA256SUMS`.
+- Verify all 14 unversioned `BUILD_ARTIFACTS` (`build/moria8-<port>.<ext>`) and
+  all 14 versioned `RELEASE_ARTIFACTS` (`build/release/moria8-<port>-vX.Y.Z.<ext>`)
+  plus `version.json` version strings on title screens.
+- Verify `build/release/SHA256SUMS` covers all 14 uploaded artifacts.
+- Verify detached GPG signatures (`build/release/*.asc`) for all 14 versioned
+  artifacts and `SHA256SUMS`.
 - Confirm generated outputs are not staged as source (`git status --ignored -s`
   shows clean source directories with no stray `.prg`, `.sym`, `.vs`,
   `__pycache__`, or root MAME dirs).
