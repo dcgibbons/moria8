@@ -9,8 +9,8 @@ per scenario (AGENTS.md Rule 8) with -nothrottle -seconds_to_run 120 emulated
 time.
 
 Suite:
-  16 behavioral scenarios on a800xl (64 KB disk-overlay baseline)
-  + 5 dedicated 130XE cache/SIO coexistence scenarios on a130xe (21 total).
+  17 behavioral scenarios on a800xl (64 KB disk-overlay baseline)
+  + 5 dedicated 130XE cache/SIO coexistence scenarios on a130xe (22 total).
 """
 
 from __future__ import annotations
@@ -89,6 +89,7 @@ A800XL_SCENARIOS = (
     "balrog_victory",
     "death_flow",
     "save_load",
+    "save_negative",
     "disk_setup",
     "catalog_spawn",
 )
@@ -150,6 +151,8 @@ def build_lua_script(scenario: str, syms: dict[str, int], machine: str) -> str:
     id_known = syms.get("id_known_bits", 0)
     recall_data = syms.get("recall_data_start", 0)
     ovl_load_disk = syms.get("overlay_load_disk", 0)
+    sio_sector_buf = syms.get("sio_sector_buf", 0)
+    exit_sio = syms.get("ExitSio", 0)
     cat_ids = "\n".join(f"local {name.upper()}_ADDR = 0x{syms.get(name, 0):04X}" for name in (
         "cat_slot_id_lo", "cat_slot_id_hi", "cr_name_lo", "cr_name_hi", "cat_record", "cat_ext_record"))
 
@@ -183,6 +186,8 @@ local CR_LEVEL_ADDR = 0x{cr_level:04X}
 local SAVE_DEV_ADDR = 0x{save_device:04X}
 local DISK_SETUP_DONE_ADDR = 0x{disk_setup_done:04X}
 local BUSY_ADDR = 0x{busy_addr:04X}
+local SIO_SECTOR_BUF_ADDR = 0x{sio_sector_buf:04X}
+local EXIT_SIO_ADDR = 0x{exit_sio:04X}
 local SHUFFLES_ADDR = 0x{shuffles:04X}   -- 174 bytes: potion, scroll, ring, wand, staff (Default RAM)
 local ID_KNOWN_ADDR = 0x{id_known:04X}   -- 47 bytes (Default RAM)
 local RECALL_ADDR = 0x{recall_data:04X}   -- 1116 bytes: 4 * 279 species (Default RAM)
@@ -661,6 +666,238 @@ function run()
         RECALL_ADDR ~= 0
         and prog:read_u8(RECALL_ADDR + 0) == saved_rec0
         and prog:read_u8(RECALL_ADDR + 1110) == saved_rec1)
+    manager.machine:exit()
+end
+"""
+    elif scenario == "save_negative":
+        body = """
+local dirty_sectors = {}
+_G.harness_sio_writeback_tap = prog:install_read_tap(0x0303, 0x0303, "harness_sio_writeback",
+    function(offset, data, mask)
+        local pc = cpu.state["PC"].value
+        if pc < EXIT_SIO_ADDR or pc >= EXIT_SIO_ADDR + 0x50 then return end
+        if data ~= 0x01 then return end
+        local dcomnd = prog:read_u8(0x0302)
+        if dcomnd ~= 0x50 and dcomnd ~= 0x57 then return end
+        if prog:read_u8(0x0300) ~= 0x31 or prog:read_u8(0x0301) ~= 2 then return end
+        local sec = prog:read_u8(0x030A) + prog:read_u8(0x030B) * 256
+        if sec >= 1 and sec <= 1040 then
+            local bytes = {}
+            for i = 0, 127 do
+                bytes[i + 1] = string.char(prog:read_u8(SIO_SECTOR_BUF_ADDR + i))
+            end
+            dirty_sectors[sec] = table.concat(bytes)
+        end
+    end)
+
+local function flush_save_atr()
+    local count = 0
+    local f = assert(io.open("LEGAL_SAVE_IMAGE", "r+b"))
+    for sec, payload in pairs(dirty_sectors) do
+        f:seek("set", 16 + (sec - 1) * 128)
+        f:write(payload)
+        count = count + 1
+    end
+    f:flush()
+    f:close()
+    return count
+end
+
+local function read_atr()
+    local f = assert(io.open("LEGAL_SAVE_IMAGE", "rb"))
+    local data = f:read("a")
+    f:close()
+    return data
+end
+
+local function patch_atr(patches)
+    local f = assert(io.open("LEGAL_SAVE_IMAGE", "r+b"))
+    for _, p in ipairs(patches) do
+        f:seek("set", p[1])
+        f:write(p[2])
+    end
+    f:flush()
+    f:close()
+end
+
+function run()
+    local save_drive = nil
+    for _, image in pairs(manager.machine.images) do
+        if image.filename == "LEGAL_SAVE_IMAGE" then save_drive = image end
+    end
+    assert_line("neg_save_drive_found", save_drive ~= nil)
+
+    local ok = start_new_game("A")
+    assert_line("neg_chargen_town_ready", ok)
+    send_key(0xD3) -- SHIFT+S -> Disk Setup
+    assert_line("neg_disk_setup_prompt", wait_screen("DISK SETUP", 80))
+    send_key(0x33) -- 3) Done (default Save: D2:)
+    assert_line("neg_init_prompt", wait_screen("Initialize this disk? (Y/N)", 80))
+    send_key(0x59) -- 'Y'
+    assert_line("neg_slot_prompt", wait_screen("Select Slot 1-4", 120))
+    send_key(0x31) -- Slot 1
+    for _ = 1, 300 do
+        wait_frames(15)
+        if screen_has("Overwrite?") then send_key(0x59) end
+        if screen_has("-more-") or screen_has("saved") then send_key(0x20) end
+        if screen_has("N)ew") and screen_has("L)oad") then break end
+    end
+    assert_line("neg_title_after_save", screen_has("N)ew") and screen_has("L)oad"))
+    assert_line("neg_flushed_save_sectors", flush_save_atr() >= 55)
+    save_drive:unload()
+
+    local atr = read_atr()
+    local start_sec = nil
+    for idx = 0, 63 do
+        local dir_sec = 361 + (idx // 8)
+        local ent_off = 16 + (dir_sec - 1) * 128 + (idx % 8) * 16
+        local flags = atr:byte(ent_off + 1)
+        if flags == 0 then break end
+        if (flags & 0x80) == 0 and atr:sub(ent_off + 6, ent_off + 16) == "SAVE0   SAV" then
+            start_sec = atr:byte(ent_off + 4) + atr:byte(ent_off + 5) * 256
+            break
+        end
+    end
+    local sec = start_sec or 0
+    local chain = {}
+    local seen = {}
+    while sec ~= 0 and not seen[sec] do
+        seen[sec] = true
+        local sec_off = 16 + (sec - 1) * 128
+        local cnt = atr:byte(sec_off + 0x7D + 1)
+        local nxt = ((atr:byte(sec_off + 0x7E + 1) & 3) << 8) | atr:byte(sec_off + 0x7F + 1)
+        chain[#chain + 1] = {sec, cnt}
+        sec = nxt
+    end
+    local sec0_off = 16 + (start_sec - 1) * 128
+    local orig_sec0_cnt, orig_sec0_7e, orig_sec0_7f = atr:byte(sec0_off + 0x7D + 1, sec0_off + 0x7F + 1)
+    local last_sec, last_cnt = chain[#chain][1], chain[#chain][2]
+    local last_off = 16 + (last_sec - 1) * 128 + last_cnt - 1
+    local orig_tail = atr:byte(last_off + 1)
+    assert_line("neg_save0_v22_located",
+        start_sec ~= nil and #chain >= 55 and atr:sub(sec0_off + 1, sec0_off + 8) == "MORIA01\\x22")
+
+    -- 1. Wrong version ($21 -> Unsupported save.)
+    patch_atr({{sec0_off + 7, string.char(0x21)}})
+    assert_line("neg_mount_v21", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_v21_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_v21_rejected", wait_screen("Unsupported save.", 100) and not in_town())
+    send_key(0x20)
+    assert_line("neg_v21_title_recovery", wait_title())
+
+    -- 2. Corrupt checksum at exact full byte count (-> Save file corrupt!)
+    save_drive:unload()
+    patch_atr({
+        {sec0_off + 7, string.char(0x22)},
+        {last_off, string.char(orig_tail ~ 0xFF)},
+    })
+    assert_line("neg_mount_cksum", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_cksum_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_cksum_rejected", wait_screen("Save file corrupt!", 120) and not in_town())
+    send_key(0x20)
+    assert_line("neg_cksum_title_recovery", wait_title())
+
+    -- 3. Truncated Save V2 ($22 header intact, DOS 2.5 EOF at 64 B -> Save file corrupt!)
+    save_drive:unload()
+    patch_atr({
+        {last_off, string.char(orig_tail)},
+        {sec0_off + 0x7D, string.char(64, orig_sec0_7e & 0xFC, 0)},
+    })
+    assert_line("neg_mount_trunc", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_trunc_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_trunc_rejected", wait_screen("Save file corrupt!", 100) and not in_town())
+    send_key(0x20)
+    assert_line("neg_trunc_title_recovery", wait_title())
+
+    -- 4. Restore valid Save V2 metadata and prove clean subsequent load
+    save_drive:unload()
+    patch_atr({{sec0_off + 0x7D, string.char(orig_sec0_cnt, orig_sec0_7e, orig_sec0_7f)}})
+    assert_line("neg_mount_valid", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_valid_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    for _ = 1, 300 do
+        wait_frames(15)
+        if prog:read_u8(PLAYER_X_ADDR) > 0 and screen_has("Welcome back") then break end
+    end
+    assert_line("neg_valid_reload_ok", prog:read_u8(PLAYER_X_ADDR) > 0 and in_town())
+
+    -- 5. Save-write failures (in town with D2: ready):
+    --    (a) SAVE2.SAV missing/deleted in DOS 2.5 directory -> SAVE_OPEN failure
+    --    (b) SAVE1.SAV truncated sector budget (4 sectors = 500 B) -> DISK_FULL mid-write
+    --    (c) Restore directory and verify normal writable save + reload on Slot 1 succeeds
+    save_drive:unload()
+    local atr_wr = read_atr()
+    local slot1_ent, slot2_ent = nil, nil
+    for idx = 0, 63 do
+        local dir_sec = 361 + (idx // 8)
+        local ent_off = 16 + (dir_sec - 1) * 128 + (idx % 8) * 16
+        local flags = atr_wr:byte(ent_off + 1)
+        if flags == 0 then break end
+        local fn = atr_wr:sub(ent_off + 6, ent_off + 16)
+        if (flags & 0x80) == 0 and fn == "SAVE1   SAV" then slot1_ent = ent_off end
+        if (flags & 0x80) == 0 and fn == "SAVE2   SAV" then slot2_ent = ent_off end
+    end
+    assert_line("neg_wr_slots_located", slot1_ent ~= nil and slot2_ent ~= nil)
+    local orig_s1_cnt = atr_wr:sub(slot1_ent + 2, slot1_ent + 3)
+    local orig_s2_flg = atr_wr:byte(slot2_ent + 1)
+    patch_atr({
+        {slot1_ent + 1, string.char(4, 0)},
+        {slot2_ent, string.char(0x80)},
+    })
+    assert_line("neg_mount_wr_fail", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+
+    send_key(0xD3) -- SHIFT+S -> Slot 3 (deleted SAVE2.SAV -> OPEN error)
+    assert_line("neg_wr_open_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x33)
+    assert_line("neg_wr_open_rejected", wait_screen("Disk error!", 100) and not screen_has("Game saved!") and not in_town())
+    send_key(0x20)
+    wait_frames(30)
+    assert_line("neg_wr_open_recovery", in_town())
+
+    send_key(0xD3) -- SHIFT+S -> Slot 2 (4-sector SAVE1.SAV -> DISK_FULL mid-write)
+    assert_line("neg_wr_full_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x32)
+    assert_line("neg_wr_full_rejected", wait_screen("Disk error!", 100) and not screen_has("Game saved!") and not in_town())
+    send_key(0x20)
+    wait_frames(30)
+    assert_line("neg_wr_full_recovery", in_town())
+
+    save_drive:unload()
+    patch_atr({
+        {slot1_ent + 1, orig_s1_cnt},
+        {slot2_ent, string.char(orig_s2_flg)},
+    })
+    assert_line("neg_mount_wr_valid", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    dirty_sectors = {}
+    send_key(0xD3) -- SHIFT+S -> Slot 1 (writable 68-sector SAVE0.SAV)
+    assert_line("neg_wr_valid_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_wr_valid_overwrite", wait_screen("Overwrite?", 80))
+    send_key(0x59)
+    for _ = 1, 300 do
+        wait_frames(15)
+        if screen_has("-more-") then send_key(0x20) end
+        if screen_has("N)ew") and screen_has("L)oad") then break end
+    end
+    assert_line("neg_wr_valid_save_ok", screen_has("N)ew") and screen_has("L)oad"))
+    assert_line("neg_wr_flushed", flush_save_atr() >= 55)
+    save_drive:unload()
+    assert_line("neg_mount_wr_reload", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_wr_valid_load_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    for _ = 1, 300 do
+        wait_frames(15)
+        if prog:read_u8(PLAYER_X_ADDR) > 0 and screen_has("Welcome back") then break end
+    end
+    assert_line("neg_wr_valid_load_ok", prog:read_u8(PLAYER_X_ADDR) > 0 and in_town())
     manager.machine:exit()
 end
 """
@@ -1424,7 +1661,7 @@ def run_scenario(
 
 def selftest() -> int:
     assert HOST_TIMEOUT_SECONDS <= 30, "AGENTS.md Rule 8 requires timeout <= 30s"
-    assert len(A800XL_SCENARIOS) == 16, f"Expected 16 a800xl scenarios, got {len(A800XL_SCENARIOS)}"
+    assert len(A800XL_SCENARIOS) == 17, f"Expected 17 a800xl scenarios, got {len(A800XL_SCENARIOS)}"
     assert len(A130XE_SCENARIOS) == 5, f"Expected 5 a130xe scenarios, got {len(A130XE_SCENARIOS)}"
     syms = parse_symbols(SYM_PATH)
     if syms:

@@ -26,6 +26,7 @@ endif
 
 X16EMU      ?= x16emu
 X16ROM      ?=
+REQUIRE_ALL_ROMS ?= 0
 ifneq ($(strip $(X16ROM)),)
 X16ROM_FLAG  = -rom "$(X16ROM)"
 endif
@@ -50,8 +51,7 @@ TRAMPOLINES_INC      = $(BUILD)/trampolines/cx16_trampolines.inc
 
 CX16_MAIN_SRC  = main.s
 CX16_TITLE_SRC = title_data_cx16.s
-CX16_TIER_DIR  = creature_data
-CX16_SOURCES   = $(wildcard *.s hal/*.s creature_data/*.s ../../core/*.s ../../platforms/shared/*.s ../../platforms/shared/catalog/*.s ../../platforms/shared/item_catalog/*.s ../../platforms/commodore/common/*.s) \
+CX16_SOURCES   = $(wildcard *.s *.inc hal/*.s hal/*.inc ../../core/*.s ../../core/*.inc ../../platforms/shared/*.s ../../platforms/shared/*.inc ../../platforms/shared/catalog/*.s ../../platforms/shared/catalog/*.inc ../../platforms/shared/item_catalog/*.s ../../platforms/shared/item_catalog/*.inc ../../platforms/commodore/common/*.s ../../platforms/commodore/common/*.inc) \
                  ../commodore/c128/ui_help_data_80.s
 
 CX16_MAIN_PRG  = $(OUTCX16)/MORIA8.PRG
@@ -61,12 +61,9 @@ CX16_OVL_PRGS  = $(OUTCX16)/OVL.START $(OUTCX16)/OVL.TOWN $(OUTCX16)/OVL.DEATH $
                  $(OUTCX16)/OVL.GEN $(OUTCX16)/OVL.HELP $(OUTCX16)/OVL.UI $(OUTCX16)/OVL.ITEMS \
                  $(OUTCX16)/OVL.SPELL $(OUTCX16)/OVL.CHEST $(OUTCX16)/OVL.HOME \
                  $(OUTCX16)/OVL.STORAGE $(OUTCX16)/OVL.TITLE
-# The monster catalog (Banks 22-23) replaced the tiers on this port; the tier
-# rules below remain for builds without HAL_PLATFORM_MONSTER_CATALOG.
 CX16_CATALOG_PRGS = $(OUTCX16)/MONSTER.CAT
 CX16_MONSTER_EXT_PRG = $(OUTCX16)/MONSTER.EXT
 CX16_ITEM_CAT_PRG = $(OUTCX16)/ITEM.CAT
-CX16_TIER_PRGS = $(OUTCX16)/MONSTER.DB.1 $(OUTCX16)/MONSTER.DB.2 $(OUTCX16)/MONSTER.DB.3 $(OUTCX16)/MONSTER.DB.4
 CX16_TITLE_PRG = $(OUTCX16)/TITLE
 CX16_LICENSE   = $(OUTCX16)/LICENSE
 CX16_SOURCE_OFFER = $(OUTCX16)/SOURCE-OFFER
@@ -120,15 +117,39 @@ test-memory-contract-selftest:
 	python3 -B test_cartridge.py --selftest
 
 test-cartridge: build $(CX16_CART_LIVE_TEST_PRG) test-memory-contract
-	@if ! command -v "$(X16EMU)" >/dev/null 2>&1 && [ ! -x "$(X16EMU)" ]; then \
+	@emu=""; \
+	if [ -x "$(X16EMU)" ]; then emu="$(X16EMU)"; else emu="$$(command -v "$(X16EMU)" 2>/dev/null || true)"; fi; \
+	if [ -z "$$emu" ]; then \
+		if [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+			echo "ERROR: x16emu not found ($(X16EMU)) and REQUIRE_ALL_ROMS=1." >&2; exit 1; \
+		fi; \
 		echo "WARNING: x16emu not found ($(X16EMU)) - skipping CX16 cartridge runtime harness."; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ] && [ -z "$(strip $(X16ROM))" ] && [ ! -f "$$(dirname "$$emu")/rom.bin" ]; then \
+		echo "ERROR: X16ROM not set (and no rom.bin next to $$emu) and REQUIRE_ALL_ROMS=1." >&2; exit 1; \
+	elif [ -n "$(strip $(X16ROM))" ] && [ ! -f "$(X16ROM)" ]; then \
+		if [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+			echo "ERROR: X16ROM ($(X16ROM)) not found and REQUIRE_ALL_ROMS=1." >&2; exit 1; \
+		fi; \
+		echo "WARNING: X16ROM ($(X16ROM)) not found - skipping CX16 cartridge runtime harness."; \
 	else \
 		X16EMU="$(X16EMU)" X16ROM="$(X16ROM)" python3 -B test_cartridge.py; \
 	fi
 
 test-runtime: build test-memory-contract
-	@if ! command -v "$(X16EMU)" >/dev/null 2>&1 && [ ! -x "$(X16EMU)" ]; then \
+	@emu=""; \
+	if [ -x "$(X16EMU)" ]; then emu="$(X16EMU)"; else emu="$$(command -v "$(X16EMU)" 2>/dev/null || true)"; fi; \
+	if [ -z "$$emu" ]; then \
+		if [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+			echo "ERROR: x16emu not found ($(X16EMU)) and REQUIRE_ALL_ROMS=1." >&2; exit 1; \
+		fi; \
 		echo "WARNING: x16emu not found ($(X16EMU)) - skipping CX16 runtime harness."; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ] && [ -z "$(strip $(X16ROM))" ] && [ ! -f "$$(dirname "$$emu")/rom.bin" ]; then \
+		echo "ERROR: X16ROM not set (and no rom.bin next to $$emu) and REQUIRE_ALL_ROMS=1." >&2; exit 1; \
+	elif [ -n "$(strip $(X16ROM))" ] && [ ! -f "$(X16ROM)" ]; then \
+		if [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+			echo "ERROR: X16ROM ($(X16ROM)) not found and REQUIRE_ALL_ROMS=1." >&2; exit 1; \
+		fi; \
+		echo "WARNING: X16ROM ($(X16ROM)) not found - skipping CX16 runtime harness."; \
 	else \
 		failed=""; for s in $$(python3 -B -c "import sys; sys.path.insert(0,'.'); import harness_smoke as h; print(' '.join(h.SCENARIOS))"); do \
 			echo "=== cx16 scenario: $$s ==="; \
@@ -151,7 +172,7 @@ kickass:
 	@rm -f "$(KICKASS_DIR)/kickass.zip"
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
-	python3 "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
+	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(TRAMPOLINES_INC): $(GEN_TRAMPOLINES_TOOL) $(TRAMPOLINE_MANIFEST) | $(BUILD)
 	python3 -B "$(GEN_TRAMPOLINES_TOOL)" --port cx16 --output "$@"
@@ -165,18 +186,6 @@ $(OUTCX16):
 $(CX16_MAIN_STAMP) $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(OUTCX16)/main.sym &: $(CX16_SOURCES) $(VERSION_INC) $(TRAMPOLINES_INC) | ensure-kickass $(OUTCX16)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" ":OVL_OUT=$(OVL_OUTCX16)" "$(CX16_MAIN_SRC)" $(KA_FLAGS) -symbolfile -o "$(CX16_MAIN_PRG)"
 	touch "$(CX16_MAIN_STAMP)"
-
-$(OUTCX16)/MONSTER.DB.1: $(CX16_TIER_DIR)/tier1_prg.s ../commodore/c64/creature_data/tier1.s | ensure-kickass $(OUTCX16)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier1_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
-
-$(OUTCX16)/MONSTER.DB.2: $(CX16_TIER_DIR)/tier2_prg.s ../commodore/c64/creature_data/tier2.s | ensure-kickass $(OUTCX16)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier2_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
-
-$(OUTCX16)/MONSTER.DB.3: $(CX16_TIER_DIR)/tier3_prg.s ../commodore/c64/creature_data/tier3.s | ensure-kickass $(OUTCX16)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier3_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
-
-$(OUTCX16)/MONSTER.DB.4: $(CX16_TIER_DIR)/tier4_prg.s ../commodore/c64/creature_data/tier4.s | ensure-kickass $(OUTCX16)
-	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TIER_DIR)/tier4_prg.s" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"
 
 $(CX16_TITLE_PRG): $(CX16_TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTCX16)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" "$(CX16_TITLE_SRC)" -symbolfiledir "$(OVL_OUTCX16)" -o "$@"

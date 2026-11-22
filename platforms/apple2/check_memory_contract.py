@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import re
+import struct
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -371,16 +373,241 @@ def selftest() -> int:
             continue
         raise AssertionError("negative fixture unexpectedly passed")
 
-    print("RESULT 11 asserts 0 failures")
+    # ProDOS (.po) Rule 7 selftests (positive seedling/sapling + missing/wrong-type/LF failures)
+    lic_cr = (ROOT / "data" / "LICENSE").read_bytes().replace(b"\n", b"\r")
+    offer_cr = (ROOT / "data" / "SOURCE-OFFER").read_bytes().replace(b"\n", b"\r")
+    good_po = _build_test_pro140(
+        "MORIA8",
+        [
+            ("LICENSE", 0x04, lic_cr),
+            ("SOURCE.OFFER", 0x04, offer_cr),
+        ],
+    )
+    if validate_disk(good_po):
+        raise AssertionError("valid synthetic .po failed Rule 7 check")
+    with tempfile.NamedTemporaryFile(suffix=".po") as tf:
+        Path(tf.name).write_bytes(good_po)
+        if check_disk(Path(tf.name), quiet=True):
+            raise AssertionError("check_disk failed on valid synthetic .po")
+
+    bad_po_cases = (
+        ("missing LICENSE", [("SOURCE.OFFER", 0x04, offer_cr)]),
+        ("missing SOURCE.OFFER", [("LICENSE", 0x04, lic_cr)]),
+        ("wrong file_type BIN", [("LICENSE", 0x06, lic_cr), ("SOURCE.OFFER", 0x04, offer_cr)]),
+        (
+            "unconverted LF in LICENSE",
+            [("LICENSE", 0x04, (ROOT / "data" / "LICENSE").read_bytes()), ("SOURCE.OFFER", 0x04, offer_cr)],
+        ),
+        (
+            "unconverted LF in SOURCE.OFFER",
+            [("LICENSE", 0x04, lic_cr), ("SOURCE.OFFER", 0x04, (ROOT / "data" / "SOURCE-OFFER").read_bytes())],
+        ),
+    )
+    for label, entries in bad_po_cases:
+        bad_po = _build_test_pro140("MORIA8", entries)
+        if not validate_disk(bad_po):
+            raise AssertionError(f"negative ProDOS fixture unexpectedly passed: {label}")
+
+    print("RESULT 17 asserts 0 failures")
     return 0
+
+
+PRODOS_BLOCK_SIZE = 512
+PRODOS_VOL_DIR_BLOCK = 2
+PRODOS_TXT_TYPE = 0x04
+LEGAL_DISK_FILES = (
+    ("LICENSE", "LICENSE"),
+    ("SOURCE.OFFER", "SOURCE-OFFER"),
+)
+
+
+def _prodos_read_block(po: bytes, block: int) -> bytes:
+    off = block * PRODOS_BLOCK_SIZE
+    if block < 0 or off + PRODOS_BLOCK_SIZE > len(po):
+        raise ContractViolation(f"ProDOS block {block} out of range (image {len(po)} B)")
+    return po[off : off + PRODOS_BLOCK_SIZE]
+
+
+def _prodos_root_entries(po: bytes) -> dict[str, tuple[int, int, int, int]]:
+    """Return mapping upper_name -> (storage_type, file_type, key_pointer, eof) from root dir."""
+    if len(po) < 6 * PRODOS_BLOCK_SIZE or len(po) % PRODOS_BLOCK_SIZE != 0:
+        raise ContractViolation(f"invalid ProDOS .po size: {len(po)} B")
+    entries: dict[str, tuple[int, int, int, int]] = {}
+    seen_blocks: set[int] = set()
+    blk_num = PRODOS_VOL_DIR_BLOCK
+    entry_len = 0x27
+    entries_per_blk = 0x0D
+    first = True
+    while blk_num != 0:
+        if blk_num in seen_blocks:
+            raise ContractViolation(f"ProDOS volume directory cycle at block {blk_num}")
+        seen_blocks.add(blk_num)
+        blk = _prodos_read_block(po, blk_num)
+        next_blk = struct.unpack_from("<H", blk, 2)[0]
+        if first:
+            hdr_type = blk[4] >> 4
+            if hdr_type != 0x0F:
+                raise ContractViolation(f"ProDOS block 2 missing volume header (storage type {hdr_type:#x})")
+            entry_len = blk[0x23] or 0x27
+            entries_per_blk = blk[0x24] or 0x0D
+            start_slot = 1
+            first = False
+        else:
+            start_slot = 0
+        for slot in range(start_slot, entries_per_blk):
+            off = 4 + slot * entry_len
+            if off + entry_len > PRODOS_BLOCK_SIZE:
+                break
+            type_len = blk[off]
+            storage_type = type_len >> 4
+            name_len = type_len & 0x0F
+            if storage_type == 0 or name_len == 0:
+                continue
+            name = blk[off + 1 : off + 1 + name_len].decode("ascii", errors="replace").upper()
+            file_type = blk[off + 0x10]
+            key_pointer = struct.unpack_from("<H", blk, off + 0x11)[0]
+            eof = blk[off + 0x15] | (blk[off + 0x16] << 8) | (blk[off + 0x17] << 16)
+            entries[name] = (storage_type, file_type, key_pointer, eof)
+        blk_num = next_blk
+    return entries
+
+
+def _prodos_read_file(po: bytes, storage_type: int, key_pointer: int, eof: int) -> bytes:
+    if storage_type == 1:  # seedling (<= 512 B)
+        if eof > PRODOS_BLOCK_SIZE:
+            raise ContractViolation(f"ProDOS seedling EOF {eof} exceeds 512 B")
+        return _prodos_read_block(po, key_pointer)[:eof]
+    if storage_type == 2:  # sapling (<= 128 KB)
+        idx = _prodos_read_block(po, key_pointer)
+        out = bytearray()
+        nblocks = (eof + PRODOS_BLOCK_SIZE - 1) // PRODOS_BLOCK_SIZE
+        if nblocks > 256:
+            raise ContractViolation(f"ProDOS sapling block count {nblocks} > 256")
+        for i in range(nblocks):
+            blk = idx[i] | (idx[256 + i] << 8)
+            out.extend(bytes(PRODOS_BLOCK_SIZE) if blk == 0 else _prodos_read_block(po, blk))
+        return bytes(out[:eof])
+    if storage_type == 3:  # tree
+        master = _prodos_read_block(po, key_pointer)
+        out = bytearray()
+        rem = eof
+        m_idx = 0
+        while rem > 0 and m_idx < 128:
+            sub_blk = master[m_idx] | (master[256 + m_idx] << 8)
+            m_idx += 1
+            if sub_blk == 0:
+                chunk = min(rem, 256 * PRODOS_BLOCK_SIZE)
+                out.extend(bytes(chunk))
+                rem -= chunk
+                continue
+            sub = _prodos_read_block(po, sub_blk)
+            for i in range(256):
+                if rem <= 0:
+                    break
+                dblk = sub[i] | (sub[256 + i] << 8)
+                take = min(rem, PRODOS_BLOCK_SIZE)
+                out.extend((bytes(PRODOS_BLOCK_SIZE) if dblk == 0 else _prodos_read_block(po, dblk))[:take])
+                rem -= take
+        return bytes(out[:eof])
+    raise ContractViolation(f"unsupported ProDOS storage_type {storage_type}")
+
+
+def validate_disk(po: bytes) -> list[str]:
+    """Verify Rule 7 standalone TXT files LICENSE and SOURCE.OFFER on a ProDOS .po image."""
+    errors: list[str] = []
+    entries = _prodos_root_entries(po)
+    for prodos_name, src_name in LEGAL_DISK_FILES:
+        entry = entries.get(prodos_name)
+        if entry is None:
+            errors.append(f"Rule 7 release legal file {prodos_name} missing from ProDOS root directory")
+            continue
+        storage_type, file_type, key_pointer, eof = entry
+        if file_type != PRODOS_TXT_TYPE:
+            errors.append(
+                f"Rule 7 legal file {prodos_name} has ProDOS file_type ${file_type:02X}, expected TXT (${PRODOS_TXT_TYPE:02X})"
+            )
+            continue
+        payload = _prodos_read_file(po, storage_type, key_pointer, eof)
+        expected = (ROOT / "data" / src_name).read_bytes().replace(b"\n", b"\r")
+        if b"\n" in payload or payload != expected:
+            errors.append(
+                f"Rule 7 legal file {prodos_name} content/EOL mismatch "
+                f"(expected LF->CR copy of data/{src_name}, {len(expected)} B, got {len(payload)} B)"
+            )
+    return errors
+
+
+def _build_test_pro140(vol_name: str, files: list[tuple[str, int, bytes]]) -> bytes:
+    """Minimal pure-Python ProDOS 140K .po writer supporting seedling & sapling files for selftest."""
+    img = bytearray(280 * PRODOS_BLOCK_SIZE)
+    dir_blk = bytearray(PRODOS_BLOCK_SIZE)
+    vname = vol_name.upper().encode("ascii")[:15]
+    dir_blk[4] = (0x0F << 4) | len(vname)
+    dir_blk[5 : 5 + len(vname)] = vname
+    dir_blk[0x23] = 0x27  # entry_length
+    dir_blk[0x24] = 0x0D  # entries_per_block
+    struct.pack_into("<H", dir_blk, 0x25, len(files))  # file_count
+    struct.pack_into("<H", dir_blk, 0x27, 6)  # bit_map_pointer
+    struct.pack_into("<H", dir_blk, 0x29, 280)  # total_blocks
+
+    next_blk = 7
+    for idx, (fname, ftype, data) in enumerate(files, start=1):
+        off = 4 + idx * 0x27
+        raw_name = fname.upper().encode("ascii")[:15]
+        eof = len(data)
+        if eof <= PRODOS_BLOCK_SIZE:
+            stype = 1
+            key_ptr = next_blk
+            img[next_blk * PRODOS_BLOCK_SIZE : next_blk * PRODOS_BLOCK_SIZE + eof] = data
+            next_blk += 1
+        else:
+            stype = 2
+            idx_blk = next_blk
+            next_blk += 1
+            nblks = (eof + PRODOS_BLOCK_SIZE - 1) // PRODOS_BLOCK_SIZE
+            for b_i in range(nblks):
+                dblk = next_blk
+                next_blk += 1
+                img[idx_blk * PRODOS_BLOCK_SIZE + b_i] = dblk & 0xFF
+                img[idx_blk * PRODOS_BLOCK_SIZE + 256 + b_i] = (dblk >> 8) & 0xFF
+                chunk = data[b_i * PRODOS_BLOCK_SIZE : (b_i + 1) * PRODOS_BLOCK_SIZE]
+                img[dblk * PRODOS_BLOCK_SIZE : dblk * PRODOS_BLOCK_SIZE + len(chunk)] = chunk
+            key_ptr = idx_blk
+        dir_blk[off] = (stype << 4) | len(raw_name)
+        dir_blk[off + 1 : off + 1 + len(raw_name)] = raw_name
+        dir_blk[off + 0x10] = ftype
+        struct.pack_into("<H", dir_blk, off + 0x11, key_ptr)
+        dir_blk[off + 0x15] = eof & 0xFF
+        dir_blk[off + 0x16] = (eof >> 8) & 0xFF
+        dir_blk[off + 0x17] = (eof >> 16) & 0xFF
+    img[PRODOS_VOL_DIR_BLOCK * PRODOS_BLOCK_SIZE : (PRODOS_VOL_DIR_BLOCK + 1) * PRODOS_BLOCK_SIZE] = dir_blk
+    return bytes(img)
+
+
+def check_disk(disk_path: Path, *, quiet: bool = False) -> list[str]:
+    errors = validate_disk(disk_path.read_bytes())
+    if not quiet:
+        if errors:
+            for err in errors:
+                print(f"ASSERT apple2-disk-rule7 FAIL {err}", file=sys.stderr)
+            print(f"RESULT 1 asserts {len(errors)} failures", file=sys.stderr)
+        else:
+            print(f"ASSERT apple2-disk-rule7 PASS {disk_path.name}")
+            print("RESULT 1 asserts 0 failures")
+    return errors
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
+    parser.add_argument("--disk", type=Path, help="check this .po holds Rule 7 LICENSE and SOURCE.OFFER")
     args = parser.parse_args()
     try:
-        return selftest() if args.selftest else check_artifacts()
+        if args.selftest:
+            return selftest()
+        if args.disk:
+            return 1 if check_disk(args.disk) else 0
+        return check_artifacts()
     except (ContractViolation, OSError) as exc:
         print(f"ASSERT memory-contract FAIL {exc}")
         print("RESULT 1 asserts 1 failures")

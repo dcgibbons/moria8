@@ -434,6 +434,7 @@ save_write_map_banked:
     jsr hal_storage_chrout
     jsr hal_storage_readst
     beq !swm_advance+
+    inc save_io_error
     sec
     rts
 !swm_advance:

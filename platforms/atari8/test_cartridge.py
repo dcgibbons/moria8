@@ -149,6 +149,7 @@ def _lua_common_header(
     shuffles = syms.get("potion_shuffle", 0)
     id_known = syms.get("id_known_bits", 0)
     recall_data = syms.get("recall_data_start", 0)
+    xe_present = syms.get("xe_present", 0x03D6)
     sio_sector_buf = syms.get("sio_sector_buf", 0)
     exit_sio = syms.get("ExitSio", 0)
 
@@ -223,6 +224,7 @@ local BUSY_ADDR = 0x{busy_addr:04X}
 local SHUFFLES_ADDR = 0x{shuffles:04X}
 local ID_KNOWN_ADDR = 0x{id_known:04X}
 local RECALL_ADDR = 0x{recall_data:04X}
+local XE_PRESENT_ADDR = 0x{xe_present:04X}
 local SCREEN_RAM = 0x{SCREEN_RAM:04X}
 local ROW23 = 0x{ROW23_ADDR:04X}
 {sio_sync_lua}
@@ -457,6 +459,14 @@ function run()
     assert_line("source_offer_reached_end", off_end)
     send_key(0x51) -- 'Q' back to legal menu
     wait_screen("License & Source", 60)
+    send_key(0x33) -- '3' System Info on cartridge (800XL = 64KB RAM)
+    assert_line("cart_sysinfo_title_menu",
+        wait_screen("Moria 8 - System Info", 80)
+        and screen_has("Atari XL/XE")
+        and screen_has("128KB Cartridge")
+        and screen_has("64KB RAM"))
+    send_key(0x51) -- 'Q' back to legal menu
+    assert_line("cart_sysinfo_title_menu_back", wait_screen("1 License", 60))
     send_key(0x51) -- 'Q' back to title
     assert_line("title_returned_after_legal", wait_title())
 
@@ -550,6 +560,16 @@ function run()
         and prog:read_u8(RNG0_ADDR + 2) == rng_before[3]
         and prog:read_u8(RNG0_ADDR + 3) == rng_before[4]
     assert_line("help_legal_gameplay_state_preserved", preserved)
+
+    send_key(0xD6) -- SHIFT+V System Info from cartridge gameplay (800XL = 64KB RAM)
+    assert_line("cart_gameplay_sysinfo",
+        wait_screen("Moria 8 - System Info", 80)
+        and screen_has("128KB Cartridge")
+        and screen_has("64KB RAM")
+        and screen_has("RNG:"))
+    send_key(0x51) -- 'Q' back to DL1
+    wait_frames(30)
+    assert_line("cart_gameplay_sysinfo_close", not screen_has("Moria 8 - System Info") and prog:read_u8(DLVL_ADDR) == 1)
     manager.machine:exit()
 end
 """.replace("{CAT_LEVELS}", "{" + ",".join(map(str, levels)) + "}").replace(
@@ -573,6 +593,19 @@ function run()
     assert_line("portb_game_ram", prog:read_u8(0xD301) == 0xFE)
     assert_line("trig3_disabled", prog:read_u8(0xD013) == 0x00)
     assert_line("cart_banner_row23", string.find(rowtext(23), "ATARI XL/XE  128KB CART", 1, true) ~= nil)
+    assert_line("cart_130xe_detected", prog:read_u8(XE_PRESENT_ADDR) == 1)
+    send_key(0x41) -- 'A' About
+    assert_line("cart_130xe_legal_menu", wait_screen("License & Source", 80))
+    send_key(0x33) -- '3' System Info
+    assert_line("cart_130xe_sysinfo",
+        wait_screen("Moria 8 - System Info", 80)
+        and screen_has("Atari XL/XE")
+        and screen_has("128KB Cartridge")
+        and screen_has("128KB RAM"))
+    send_key(0x51) -- 'Q' back to legal menu
+    wait_screen("1 License", 60)
+    send_key(0x51) -- 'Q' back to title
+    assert_line("cart_130xe_title_restored", wait_title())
     assert_line("catalog_prg_load_c400", LOAD_ADDR == 0xC400)
 
     -- Synchronize on main-thread key wait (PORTB == $FE) before jumping into $C400.
@@ -910,10 +943,116 @@ function run()
     manager.machine:exit()
 end
 """
+    elif scenario == "interchange_cart_negative":
+        body = """
+function run()
+    local flop1 = nil
+    for _, image in pairs(manager.machine.images) do
+        if image.filename == "V21_ATR" then flop1 = image end
+    end
+    assert_line("cart_neg_flop1_found", flop1 ~= nil)
+    assert_line("cart_neg_title", wait_title())
+
+    -- 1. Wrong version ($21 -> Unsupported save.) via D1: Disk Setup -> Slot 1
+    send_key(0x4C) -- 'L'
+    assert_line("cart_neg_disk_setup", wait_screen("DISK SETUP", 80))
+    send_key(0x31) -- '1) Use D1: for saves'
+    assert_line("cart_neg_v21_slots", wait_screen("Select Slot 1-4", 120))
+    send_key(0x31) -- Slot 1
+    assert_line("cart_neg_v21_rejected", wait_screen("Unsupported save.", 100) and not in_town())
+    send_key(0x20)
+    assert_line("cart_neg_v21_title_recovery", wait_title())
+
+    -- 2. Truncated Save V2 (64 B -> Save file corrupt!)
+    assert_line("cart_neg_mount_trunc", flop1:load("TRUNC_ATR") == nil)
+    send_key(0x4C)
+    assert_line("cart_neg_trunc_slots", wait_screen("Select Slot 1-4", 100))
+    send_key(0x31)
+    assert_line("cart_neg_trunc_rejected", wait_screen("Save file corrupt!", 100) and not in_town())
+    send_key(0x20)
+    assert_line("cart_neg_trunc_title_recovery", wait_title())
+
+    -- 3. Corrupt checksum at full byte count (-> Save file corrupt!)
+    assert_line("cart_neg_mount_cksum", flop1:load("CKSUM_ATR") == nil)
+    send_key(0x4C)
+    assert_line("cart_neg_cksum_slots", wait_screen("Select Slot 1-4", 100))
+    send_key(0x31)
+    assert_line("cart_neg_cksum_rejected", wait_screen("Save file corrupt!", 120) and not in_town())
+    send_key(0x20)
+    assert_line("cart_neg_cksum_title_recovery", wait_title())
+
+    -- 4. Restore valid Save V2 ATR and verify clean load recovery
+    assert_line("cart_neg_mount_valid", flop1:load("VALID_ATR") == nil)
+    send_key(0x4C)
+    assert_line("cart_neg_valid_slots", wait_screen("Select Slot 1-4", 100))
+    send_key(0x31)
+    for _ = 1, 300 do
+        wait_frames(15)
+        if prog:read_u8(PLAYER_X_ADDR) > 0 and screen_has("Welcome back") then break end
+    end
+    assert_line("cart_neg_valid_reload_ok", prog:read_u8(PLAYER_X_ADDR) > 0 and in_town())
+    manager.machine:exit()
+end
+"""
     else:
         raise ValueError(f"Unknown Lua scenario: {scenario}")
 
     return header + body + "\nco = coroutine.create(run)\ncoroutine.resume(co)\n"
+
+
+def mutate_atr_save(src_atr: Path, dst_atr: Path, mode: str) -> None:
+    """Copy a DOS 2.5 save ATR and corrupt SAVE0.SAV ('v21', 'trunc', or 'cksum')."""
+    data = bytearray(src_atr.read_bytes())
+    atr_hdr = 16
+    sec_sz = 128
+    start_sec = None
+    for idx in range(64):
+        dir_sec = 361 + (idx // 8)
+        ent_off = atr_hdr + (dir_sec - 1) * sec_sz + (idx % 8) * 16
+        flags = data[ent_off]
+        if flags == 0:
+            break
+        if flags & 0x80:
+            continue
+        if data[ent_off + 5 : ent_off + 16] == b"SAVE0   SAV":
+            start_sec = data[ent_off + 3] | (data[ent_off + 4] << 8)
+            break
+    if not start_sec:
+        raise AssertionError(f"SAVE0   SAV not found in {src_atr}")
+
+    chain: list[tuple[int, int]] = []
+    sec = start_sec
+    seen: set[int] = set()
+    while sec != 0:
+        if sec in seen:
+            raise AssertionError(f"Cycle in SAVE0   SAV chain at sector {sec}")
+        seen.add(sec)
+        sec_off = atr_hdr + (sec - 1) * sec_sz
+        cnt = data[sec_off + 0x7D]
+        next_sec = ((data[sec_off + 0x7E] & 0x03) << 8) | data[sec_off + 0x7F]
+        chain.append((sec, cnt))
+        sec = next_sec
+
+    sec0_off = atr_hdr + (start_sec - 1) * sec_sz
+    if data[sec0_off : sec0_off + 8] != b"MORIA01\x22":
+        raise AssertionError(f"Expected MORIA01\\x22 header in {src_atr}, got {data[sec0_off : sec0_off + 8]!r}")
+
+    if mode == "v21":
+        data[sec0_off + 7] = 0x21
+    elif mode == "trunc":
+        data[sec0_off + 0x7D] = 64
+        data[sec0_off + 0x7E] &= 0xFC
+        data[sec0_off + 0x7F] = 0
+    elif mode == "cksum":
+        last_sec, last_cnt = chain[-1]
+        if last_cnt == 0:
+            raise AssertionError(f"Empty tail sector {last_sec} in {src_atr}")
+        last_off = atr_hdr + (last_sec - 1) * sec_sz + last_cnt - 1
+        data[last_off] ^= 0xFF
+    else:
+        raise ValueError(f"Unknown mutation mode: {mode}")
+
+    dst_atr.write_bytes(bytes(data))
 
 
 def _run_mame(
@@ -1144,6 +1283,30 @@ def run_scenario(
                 flop2_path=tmp_save,
             ):
                 return False
+
+            tmp_v21 = tmp_dir / "save_v21.atr"
+            tmp_trunc = tmp_dir / "save_trunc.atr"
+            tmp_cksum = tmp_dir / "save_cksum.atr"
+            mutate_atr_save(tmp_save, tmp_v21, "v21")
+            mutate_atr_save(tmp_save, tmp_trunc, "trunc")
+            mutate_atr_save(tmp_save, tmp_cksum, "cksum")
+            lua_neg = (
+                build_lua_script("interchange_cart_negative", cart_syms)
+                .replace("V21_ATR", str(tmp_v21))
+                .replace("TRUNC_ATR", str(tmp_trunc))
+                .replace("CKSUM_ATR", str(tmp_cksum))
+                .replace("VALID_ATR", str(tmp_save))
+            )
+            if not _run_mame(
+                "a800xl:interchange_cart_negative",
+                "a800xl",
+                rompath,
+                mame_bin,
+                lua_neg,
+                car_path=car_path,
+                flop1_path=tmp_v21,
+            ):
+                return False
             return True
 
     raise ValueError(f"Unknown scenario: {scenario}")
@@ -1198,6 +1361,45 @@ def selftest() -> int:
             assert "_G.harness_sio_writeback_tap" in lua
         lua_reload = build_lua_script("interchange_disk_reload", syms, state_in_path=st_a, state_out_path=st_b)
         assert "_G.harness_key_poll_tap" in lua_reload and "assert_line(" in lua_reload
+        lua_neg = build_lua_script("interchange_cart_negative", syms)
+        assert "_G.harness_key_poll_tap" in lua_neg and "assert_line(" in lua_neg
+
+        from make_atr import AtrBuilder
+        builder = AtrBuilder()
+        builder.add_file("MORIA8.ID", b"M8SAVE")
+        payload_v22 = b"MORIA01\x22" + (b"\x5a" * 300)
+        builder.add_file("SAVE0.SAV", payload_v22)
+        synth = tmp / "synth.atr"
+        synth.write_bytes(builder.to_bytes())
+        v21_atr = tmp / "v21.atr"
+        trunc_atr = tmp / "trunc.atr"
+        cksum_atr = tmp / "cksum.atr"
+        mutate_atr_save(synth, v21_atr, "v21")
+        mutate_atr_save(synth, trunc_atr, "trunc")
+        mutate_atr_save(synth, cksum_atr, "cksum")
+        # Locate start sector of SAVE0   SAV
+        raw_synth = synth.read_bytes()
+        s_sec = None
+        for idx in range(64):
+            eo = 16 + (361 + idx // 8 - 1) * 128 + (idx % 8) * 16
+            if raw_synth[eo + 5 : eo + 16] == b"SAVE0   SAV":
+                s_sec = raw_synth[eo + 3] | (raw_synth[eo + 4] << 8)
+                break
+        assert s_sec is not None
+        s0 = 16 + (s_sec - 1) * 128
+        assert v21_atr.read_bytes()[s0 + 7] == 0x21
+        assert trunc_atr.read_bytes()[s0 + 0x7D] == 64
+        assert (trunc_atr.read_bytes()[s0 + 0x7E] & 3) == 0 and trunc_atr.read_bytes()[s0 + 0x7F] == 0
+        # Walk chain to verify tail checksum byte flipped
+        c = s_sec
+        while True:
+            co = 16 + (c - 1) * 128
+            nxt = ((raw_synth[co + 0x7E] & 3) << 8) | raw_synth[co + 0x7F]
+            if nxt == 0:
+                tail = co + raw_synth[co + 0x7D] - 1
+                assert cksum_atr.read_bytes()[tail] == (raw_synth[tail] ^ 0xFF)
+                break
+            c = nxt
 
     print("Atari 8-bit test_cartridge.py self-test: PASS")
     return 0

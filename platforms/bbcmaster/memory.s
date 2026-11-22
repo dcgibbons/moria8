@@ -149,10 +149,13 @@
 .label rv_row_scr_buf      = beeb_ss_buf + 80
 
 // Platform Zero-Page Allocation ($90-$AF; $B0-$FF untouched for MOS/DFS)
+// MOS/DFS/Econet own $00-$AF whenever entered; EnterMos/ExitMos snapshot and
+// restore $02-$AF in zp_save_buf ($8F00 in ANDY), so game/platform code outside
+// an active MOS call may use $90-$AF safely while code during a MOS call must
+// never rely on $02-$AF surviving the call.
 .const BEEB_ZP_PLATFORM_BASE = $90
 // $90-$93: hal_entropy_timer0_lo..hal_entropy_timer1_hi (defined in hal/entropy_consts.s)
-.label beeb_io_dst           = $94   // 2 bytes ($94-$95): DFS->SWR destination pointer (outside $A0-$AF DFS NMI)
-.label beeb_io_dst_hi        = $95
+// $94-$95: free/spare (beeb_dfs_load_to_bank uses < $3000 SMC across MOS_OSGBPB)
 .label beeb_ss_name_len      = $96
 .label beeb_ss_lfn           = $97
 .label beeb_ss_sec           = $98

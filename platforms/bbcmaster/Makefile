@@ -50,6 +50,7 @@ BEEB_SAVE_SSD   = $(OUTBEEB)/save-disk.ssd
 MAME           ?= mame
 BEEB_MACHINE   ?= bbcm
 BBCMROMS       ?=
+REQUIRE_ALL_ROMS ?= 0
 MAME_DIR       = $(OVL_OUTBEEB)/mame
 MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -nvram_directory "$(MAME_DIR)/nvram" \
@@ -161,6 +162,8 @@ test-memory-contract: build test-memory-contract-selftest
 test-runtime: disk
 	@if [ -n "$(BBCMROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --all; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: BBCMROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: BBCMROMS not set; skipping BBC Master 128 MAME runtime smoke suite"; \
 	fi
@@ -168,6 +171,8 @@ test-runtime: disk
 test-fast-smoke: disk
 	@if [ -n "$(BBCMROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --fast-smoke; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: BBCMROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: BBCMROMS not set; skipping BBC Master 128 MAME fast smoke suite"; \
 	fi

@@ -60,6 +60,7 @@ ATARI8_CAR            = $(OUT)/moria8-atari8.car
 MAME           ?= mame
 ATARI8_MACHINE ?= a800xl
 ATARI8ROMS     ?=
+REQUIRE_ALL_ROMS ?= 0
 MAME_DIR   = $(OVL_OUTATARI8)/mame
 MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -nvram_directory "$(MAME_DIR)/nvram" \
@@ -174,6 +175,8 @@ test-memory-contract: build test-memory-contract-selftest
 test-runtime: disk
 	@if [ -n "$(ATARI8ROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --all; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: ATARI8ROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME runtime smoke suite"; \
 	fi
@@ -181,6 +184,8 @@ test-runtime: disk
 test-fast-smoke: disk
 	@if [ -n "$(ATARI8ROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --fast-smoke; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: ATARI8ROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME fast smoke suite"; \
 	fi
@@ -188,6 +193,8 @@ test-fast-smoke: disk
 test-cartridge: cartridge disk $(ATARI8_CAT_TEST_PRG)
 	@if [ -n "$(ATARI8ROMS)" ]; then \
 		python3 -B test_cartridge.py --rompath "$(ATARI8ROMS)" --car "$(ATARI8_CAR)" --sym "$(OUTATARI8_CART)/main.sym" --catalog-test "$(ATARI8_CAT_TEST_PRG)" --disk "$(ATARI8_ATR)" --disk-sym "$(OUTATARI8)/main.sym" --mame "$(MAME)"; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: ATARI8ROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME cartridge suite"; \
 	fi

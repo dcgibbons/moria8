@@ -63,6 +63,8 @@ endif
 BUILD       ?= ../../build
 OUTA2        = $(BUILD)/apple2
 OVL_OUTA2    = $(abspath $(OUTA2))
+A2ROMS      ?=
+REQUIRE_ALL_ROMS ?= 0
 
 KA_FLAGS     = -showmem -vicesymbols -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -define APPLE2 -afo
 PRG2BIN      = python3 -B ../../tools/prg_to_bin.py
@@ -137,8 +139,13 @@ test-memory-contract-selftest:
 # default `make test` mix stays green on ROM-less machines.
 test-runtime: $(A2_DISK_IMAGE) test-memory-contract
 ifeq ($(strip $(A2ROMS)),)
+ifeq ($(strip $(REQUIRE_ALL_ROMS)),1)
+	@echo "ERROR: A2ROMS is not set and REQUIRE_ALL_ROMS=1." >&2
+	@exit 1
+else
 	@echo "WARNING: A2ROMS is not set - skipping the Apple IIe runtime harness (MAME scenarios)."
 	@echo "         Set A2ROMS to the ROM directory (containing apple2ee.zip) and rerun to include them."
+endif
 else
 	@failed=""; for s in $$(python3 -B -c "import sys; sys.path.insert(0,'.'); import harness_smoke as h; print(' '.join(h.SCENARIOS))"); do \
 		echo "=== apple2 scenario: $$s ==="; \
@@ -269,3 +276,4 @@ $(A2_DISK_IMAGE): ensure-ac ensure-prodos $(A2_MAIN_PRG) $(A2_PLAY_PRG) $(A2_AUX
 	"$(AC_BIN)" -p "$@" SOURCE.OFFER txt < "$(SOURCE_OFFER_DISK_FILE)"
 	dd if="$(BOOTBLOCKS)" of="$@" bs=512 count=2 conv=notrunc
 	"$(AC_BIN)" -l "$@"
+	python3 -B check_memory_contract.py --disk "$@" || { rm -f "$@"; exit 1; }

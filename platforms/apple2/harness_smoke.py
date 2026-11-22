@@ -1430,6 +1430,260 @@ assert_line("invuln_cleared", prog:read_u8(0x6f) == 0,
 dump("after_load")
 print("SCENARIO DONE")
 """
+LUA_SAVE_NEGATIVE_BODY = r"""
+-- Negative Save V2 ($22) rejection tests: wrong-version ($21), corrupt
+-- checksum, and truncated mid-stream ($22) must reject honestly without
+-- entering town and recover cleanly for subsequent valid loads.
+local flop2 = nil
+for tag, img in pairs(manager.machine.images) do
+    if string.find(tag, "diskiing:1:525") then flop2 = img end
+end
+assert_line("neg_flop2_found", flop2 ~= nil, "flop2 drive missing")
+
+local s = keymap["Left Shift"]
+local f = findkey("S")
+s:set_value(1) emu.wait(0.02)
+f:set_value(1) emu.wait(0.03) f:set_value(0) emu.wait(0.02)
+s:set_value(0)
+local prompt_ok = false
+local DISK_MODE = 0x0a05
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("R) Rescan") then
+        press_slow("2")
+    elseif screen_has("Initialize this disk?") then
+        press_slow("Y")
+    elseif screen_has("Select Slot 1-4") then
+        prompt_ok = true
+        break
+    elseif screen_has("Pick save drive") and prog:read_u8(DISK_MODE) == 0 then
+        if screen_has("/SAVE1") then press_slow("3") else press_slow("2") end
+    end
+end
+assert_line("neg_slot_prompt", prompt_ok, "save slot prompt did not appear")
+press("1")
+local title_ok = false
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("Overwrite?") then press("Y") end
+    if screen_has("-more-") then press(" ") end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then title_ok = true break end
+end
+assert_line("neg_title_after_save", title_ok, "save did not return to title")
+
+local function read_po()
+    local file = assert(io.open("SAVE_IMAGE", "rb"))
+    local data = file:read("a")
+    file:close()
+    return data
+end
+local function patch_po(patches)
+    local file = assert(io.open("SAVE_IMAGE", "r+b"))
+    for _, p in ipairs(patches) do
+        file:seek("set", p[1])
+        file:write(p[2])
+    end
+    file:flush()
+    file:close()
+end
+local function wait_title_menu()
+    for i = 1, 40 do
+        if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then return true end
+        emu.wait(0.3)
+    end
+    return prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9
+end
+
+emu.wait(0.5)
+flop2:unload()
+local po = read_po()
+local entry_off, stype, key_ptr, eof = nil, 0, 0, 0
+local blk_num = 2
+local seen = {}
+while blk_num ~= 0 and not seen[blk_num] do
+    seen[blk_num] = true
+    local blk_off = blk_num * 512
+    local next_blk = po:byte(blk_off + 2 + 1) + po:byte(blk_off + 3 + 1) * 256
+    local start_slot = (blk_num == 2) and 1 or 0
+    for slot = start_slot, 12 do
+        local off = blk_off + 4 + slot * 39
+        local tl = po:byte(off + 1)
+        local st = tl >> 4
+        local nl = tl & 0x0F
+        if st ~= 0 and nl > 0 then
+            local name = po:sub(off + 1 + 1, off + nl + 1)
+            if name == "THE.GAME" then
+                entry_off = off
+                stype = st
+                key_ptr = po:byte(off + 0x11 + 1) + po:byte(off + 0x12 + 1) * 256
+                eof = po:byte(off + 0x15 + 1) + po:byte(off + 0x16 + 1) * 256 + po:byte(off + 0x17 + 1) * 65536
+                break
+            end
+        end
+    end
+    if entry_off then break end
+    blk_num = next_blk
+end
+
+local idx_off = key_ptr * 512
+local blk0 = (stype == 2) and (po:byte(idx_off + 1) + po:byte(idx_off + 256 + 1) * 256) or key_ptr
+local last_i = math.floor((eof - 1) / 512)
+local last_blk = (stype == 2) and (po:byte(idx_off + last_i + 1) + po:byte(idx_off + 256 + last_i + 1) * 256) or key_ptr
+local ver_off = blk0 * 512 + 7
+local tail_off = last_blk * 512 + ((eof - 1) % 512)
+local orig_ver = po:byte(ver_off + 1)
+local orig_tail = po:byte(tail_off + 1)
+local orig_eof0, orig_eof1, orig_eof2 = po:byte(entry_off + 0x15 + 1, entry_off + 0x17 + 1)
+assert_line("neg_located_save_v22", entry_off ~= nil and stype == 2 and orig_ver == 0x22 and eof > 1000,
+            string.format("entry=%s stype=%d ver=%02X eof=%d", tostring(entry_off), stype, orig_ver, eof))
+
+-- 1. Wrong Save version ($21 -> Unsupported save.)
+patch_po({{ver_off, string.char(0x21)}})
+flop2:load("SAVE_IMAGE")
+emu.wait(0.5)
+press("L")
+assert_line("neg_v21_slots", wait_screen("Save Slots:", 15), "load did not show Save Slots")
+press("1")
+assert_line("neg_v21_rejected", wait_screen("Unsupported save.", 20) and not in_town(),
+            "wrong version $21 was not rejected cleanly: " .. rowtext(0))
+press(" ")
+assert_line("neg_v21_title_recovery", wait_title_menu(), "did not return to title after $21 reject")
+
+-- 2. Corrupt checksum at exact full file size (Save file corrupt!)
+emu.wait(0.3)
+flop2:unload()
+patch_po({
+    {ver_off, string.char(0x22)},
+    {tail_off, string.char(orig_tail ~ 0xFF)},
+})
+flop2:load("SAVE_IMAGE")
+emu.wait(0.5)
+press("L")
+assert_line("neg_cksum_slots", wait_screen("Save Slots:", 15), "load did not show Save Slots")
+press("1")
+assert_line("neg_cksum_rejected", wait_screen("Save file corrupt!", 30) and not in_town(),
+            "corrupt checksum save not rejected: " .. rowtext(0))
+press(" ")
+assert_line("neg_cksum_title_recovery", wait_title_menu(), "did not return to title after checksum reject")
+
+-- 3. Truncated Save V2 ($22 header intact, ProDOS EOF = 64 -> Save file corrupt!)
+emu.wait(0.3)
+flop2:unload()
+patch_po({
+    {tail_off, string.char(orig_tail)},
+    {entry_off + 0x15, string.char(0x40, 0x00, 0x00)},
+})
+flop2:load("SAVE_IMAGE")
+emu.wait(0.5)
+press("L")
+assert_line("neg_trunc_slots", wait_screen("Save Slots:", 15), "load did not show Save Slots")
+press("1")
+assert_line("neg_trunc_rejected", wait_screen("Save file corrupt!", 20) and not in_town(),
+            "truncated save not rejected: " .. rowtext(0))
+press(" ")
+assert_line("neg_trunc_title_recovery", wait_title_menu(), "did not return to title after truncated reject")
+
+-- 4. Restore original ProDOS EOF and verify valid load recovers cleanly
+emu.wait(0.3)
+flop2:unload()
+patch_po({{entry_off + 0x15, string.char(orig_eof0, orig_eof1, orig_eof2)}})
+flop2:load("SAVE_IMAGE")
+emu.wait(0.5)
+press("L")
+assert_line("neg_valid_slots", wait_screen("Save Slots:", 15), "load did not show Save Slots")
+press("1")
+assert_line("neg_valid_reload_ok", wait_screen("Welcome back to Moria8!", 30) and screen_has("test"),
+            "valid reload after negative rejections failed")
+
+-- 5. Save-write failures (in town with writable MORIA8.ID on flop2):
+--    (a) Full disk at SAVE_OPEN/CREATE (0 free blocks in ProDOS bitmap block 6)
+--    (b) Full disk mid-map inside save_write_map_banked (10 free blocks -> A2ERR_DISK_FULL)
+--    (c) Restore free blocks and verify normal writable save + reload still succeeds
+emu.wait(0.3)
+flop2:unload()
+local po_saved = read_po()
+local bm_orig = po_saved:sub(6 * 512 + 1, 7 * 512)
+local bm = {}
+local free_blks = {}
+for i = 1, 512 do bm[i] = bm_orig:byte(i) end
+for b = 7, 279 do
+    local bi = (b >> 3) + 1
+    local mask = 1 << (7 - (b & 7))
+    if (bm[bi] & mask) ~= 0 then free_blks[#free_blks + 1] = b end
+end
+local function pack_bm(tbl)
+    local t = {}
+    for i = 1, 512 do t[i] = string.char(tbl[i]) end
+    return table.concat(t)
+end
+local bm_zero = {}
+for i = 1, 512 do bm_zero[i] = 0 end
+patch_po({{6 * 512, pack_bm(bm_zero)}})
+flop2:load("SAVE_IMAGE")
+emu.wait(0.5)
+local function shift_s()
+    local s_k = keymap["Left Shift"]
+    local k_s = findkey("S")
+    s_k:set_value(1) emu.wait(0.02) k_s:set_value(1) emu.wait(0.03) k_s:set_value(0) emu.wait(0.02) s_k:set_value(0)
+end
+shift_s()
+assert_line("neg_wr_open_slots", wait_screen("Select Slot 1-4", 20), "slot prompt missing (0-free)")
+press("2")
+assert_line("neg_wr_open_rejected",
+            wait_screen("Disk error!", 30) and not screen_has("Game saved!") and prog:read_u8(0x550 + MENU_PAREN_OFF) ~= 0xA9,
+            "0-free save was not rejected cleanly: " .. rowtext(0) .. " | " .. rowtext(1))
+press(" ")
+emu.wait(0.5)
+assert_line("neg_wr_open_recovery", in_town(), "did not recover to town after 0-free save reject")
+
+-- Leave 10 free blocks so CREATE + pre-map writes pass and save_write_map_banked hits A2ERR_DISK_FULL.
+emu.wait(0.3)
+flop2:unload()
+local bm_ten = {}
+for i = 1, 512 do bm_ten[i] = bm[i] end
+for idx = 11, #free_blks do
+    local b = free_blks[idx]
+    local bi = (b >> 3) + 1
+    local mask = 1 << (7 - (b & 7))
+    bm_ten[bi] = bm_ten[bi] & (~mask & 0xFF)
+end
+patch_po({{6 * 512, pack_bm(bm_ten)}})
+flop2:load("SAVE_IMAGE")
+emu.wait(0.5)
+shift_s()
+assert_line("neg_wr_full_slots", wait_screen("Select Slot 1-4", 20), "slot prompt missing (10-free)")
+press("2")
+assert_line("neg_wr_full_rejected",
+            wait_screen("Disk error!", 30) and not screen_has("Game saved!") and prog:read_u8(0x550 + MENU_PAREN_OFF) ~= 0xA9,
+            "mid-map full disk save was not rejected: " .. rowtext(0) .. " | " .. rowtext(1))
+press(" ")
+emu.wait(0.5)
+assert_line("neg_wr_full_recovery", in_town(), "did not recover to town after mid-map full save reject")
+
+-- Restore writable ProDOS bitmap, clear any partial Slot 2 write via normal save + reload.
+emu.wait(0.3)
+flop2:unload()
+patch_po({{6 * 512, bm_orig}})
+flop2:load("SAVE_IMAGE")
+emu.wait(0.5)
+shift_s()
+assert_line("neg_wr_valid_slots", wait_screen("Select Slot 1-4", 20), "slot prompt missing (writable save)")
+press("2")
+local wr_title_ok = false
+for i = 1, 90 do
+    emu.wait(0.5)
+    if screen_has("Overwrite?") then press("Y") end
+    if screen_has("-more-") then press(" ") end
+    if prog:read_u8(0x550 + MENU_PAREN_OFF) == 0xA9 then wr_title_ok = true break end
+end
+assert_line("neg_wr_valid_save_ok", wr_title_ok, "writable save after write errors failed")
+press("L")
+assert_line("neg_wr_valid_load_slots", wait_screen("Save Slots:", 15), "load did not show Save Slots after writable save")
+press("2")
+assert_line("neg_wr_valid_load_ok", wait_screen("Welcome back to Moria8!", 30) and in_town(),
+            "reload of writable save after write errors failed")
+print("SCENARIO DONE")
+"""
 LUA_DISK_SETUP_TWO_DRIVE_BODY = r"""
 -- Disk Setup, two drives: pick the blank SAVE1 volume from the ON_LINE pick
 -- list, initialize its marker, and return to title. Host-side check verifies
@@ -2366,6 +2620,10 @@ def save_load_lua() -> str:
     return _chargen_body("A") + LUA_SAVE_LOAD_BODY
 
 
+def save_negative_lua() -> str:
+    return _chargen_body("A") + LUA_SAVE_NEGATIVE_BODY
+
+
 def mage_list_lua() -> str:
     return (_chargen_body("B") + _idle_helpers() + _inv_helpers() + LUA_MAGE_LIST_BODY
             ).replace("TURN_LO_ADDR", hex(_sym_addr("zp_turn_lo")))
@@ -2783,6 +3041,7 @@ SCENARIO_LUA = {
     "catalog_spawn": catalog_spawn_lua,
     "death_flow": death_flow_lua,
     "save_load": save_load_lua,
+    "save_negative": save_negative_lua,
     "mage_list": mage_list_lua,
     "scroll_delta": scroll_delta_lua,
     "disk_setup_two_drive": disk_setup_two_drive_lua,
@@ -2798,10 +3057,10 @@ SCENARIO_LUA = {
 # SAVE1, created fresh per run); two_drive/adopt/save_load/death_flow mount
 # it as -flop2, swap loads it into flop1 from Lua.
 SAVE_DISK_SCENARIOS = ("disk_setup_two_drive", "disk_setup_swap",
-                       "disk_setup_adopt", "save_load", "death_flow",
+                       "disk_setup_adopt", "save_load", "save_negative", "death_flow",
                        "save_reboot_load", "save_slot_tracking", "help_overlay")
 FLOP2_SCENARIOS = ("disk_setup_two_drive", "disk_setup_adopt",
-                   "save_load", "death_flow", "save_slot_tracking")
+                   "save_load", "save_negative", "death_flow", "save_slot_tracking")
 SAVE_IMAGE = ROOT / "build" / "apple2" / "save1.po"
 SAVE2_IMAGE = ROOT / "build" / "apple2" / "save2.po"
 BLANK_IMAGE = ROOT / "build" / "apple2" / "blank.po"

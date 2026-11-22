@@ -122,6 +122,21 @@ def vera_code_to_ascii(b: int) -> str:
     return "."
 
 
+def resolve_rom_path(x16emu: Path, rom: Path | None) -> Path:
+    """Resolve -rom for x16emu or fail fast instead of silently omitting -rom."""
+    if rom is not None:
+        if not rom.is_file():
+            raise FileNotFoundError(f"X16ROM/--rom file not found: {rom}")
+        return rom
+    adjacent = x16emu.parent / "rom.bin"
+    if adjacent.is_file():
+        return adjacent
+    raise RuntimeError(
+        f"X16ROM/--rom is unset and no adjacent rom.bin exists next to {x16emu}; "
+        "set X16ROM or pass --rom"
+    )
+
+
 class X16Bench:
     """Client for x16emu -testbench."""
 
@@ -149,13 +164,19 @@ class X16Bench:
             self.log(f"ASSERT {name} FAIL{suffix}")
 
     def start(self, boot_to_title: bool = True) -> None:
-        cmd = [str(self.x16emu), "-testbench", "-warp", "-zeroram"]
-        rom_path = self.rom
-        if rom_path is None and (self.x16emu.parent / "rom.bin").is_file():
-            rom_path = self.x16emu.parent / "rom.bin"
-        if rom_path is not None and rom_path.is_file():
-            cmd += ["-rom", str(rom_path)]
-        cmd += ["-fsroot", str(self.workdir), "-prg", str(self.workdir / "MORIA8.PRG")]
+        rom_path = resolve_rom_path(self.x16emu, self.rom)
+        cmd = [
+            str(self.x16emu),
+            "-testbench",
+            "-warp",
+            "-zeroram",
+            "-rom",
+            str(rom_path),
+            "-fsroot",
+            str(self.workdir),
+            "-prg",
+            str(self.workdir / "MORIA8.PRG"),
+        ]
         env = os.environ.copy()
         env["SDL_VIDEODRIVER"] = "dummy"
         env["SDL_AUDIODRIVER"] = "dummy"
@@ -1801,6 +1822,119 @@ def scenario_save_load(tb: X16Bench) -> None:
     tb.log("SCENARIO DONE")
 
 
+def verify_negative_save_cases(
+    tb: X16Bench,
+    save_path: Path,
+    prefix: str = "neg",
+    *,
+    reload_valid: bool = True,
+) -> None:
+    """Reject wrong-version ($21), truncated ($22), and bad-checksum saves, then restore valid."""
+    valid_bytes = save_path.read_bytes()
+    tb.assert_line(
+        f"{prefix}_save_v22_size",
+        len(valid_bytes) > 1000 and valid_bytes[:8] == b"MORIA01" + bytes([SAVE_VERSION]),
+        f"len={len(valid_bytes)} hdr={valid_bytes[:8]!r}",
+    )
+
+    # 1. Wrong version ($21 -> Unsupported save.)
+    save_path.write_bytes(valid_bytes[:7] + b"\x21" + valid_bytes[8:])
+    tb.press("L")
+    tb.assert_line(f"{prefix}_v21_slots", tb.screen_has("Save Slots:"), "Save Slots missing ($21)")
+    tb.press("1")
+    tb.assert_line(
+        f"{prefix}_v21_rejected",
+        tb.screen_has("Unsupported save.") and not tb.in_town(),
+        f"row0={tb.rowtext(0)!r}",
+    )
+    tb.press(" ")
+    tb.assert_line(f"{prefix}_v21_title_recovery", tb.on_title(), "did not return to title ($21)")
+
+    # 2. Truncated Save V2 ($22 header intact, truncated at 64 B -> Save file corrupt!)
+    save_path.write_bytes(valid_bytes[:64])
+    tb.press("L")
+    tb.assert_line(f"{prefix}_trunc_slots", tb.screen_has("Save Slots:"), "Save Slots missing (trunc)")
+    tb.press("1")
+    tb.assert_line(
+        f"{prefix}_trunc_rejected",
+        tb.screen_has("Save file corrupt!") and not tb.in_town(),
+        f"row0={tb.rowtext(0)!r}",
+    )
+    tb.press(" ")
+    tb.assert_line(f"{prefix}_trunc_title_recovery", tb.on_title(), "did not return to title (trunc)")
+
+    # 3. Corrupt checksum at exact full byte length (-> Save file corrupt!)
+    save_path.write_bytes(valid_bytes[:-1] + bytes([valid_bytes[-1] ^ 0xFF]))
+    tb.press("L")
+    tb.assert_line(f"{prefix}_cksum_slots", tb.screen_has("Save Slots:"), "Save Slots missing (cksum)")
+    tb.press("1")
+    tb.assert_line(
+        f"{prefix}_cksum_rejected",
+        tb.screen_has("Save file corrupt!") and not tb.in_town(),
+        f"row0={tb.rowtext(0)!r}",
+    )
+    tb.press(" ")
+    tb.assert_line(f"{prefix}_cksum_title_recovery", tb.on_title(), "did not return to title (cksum)")
+
+    # Restore genuine Save V2 bytes and optionally verify clean subsequent load
+    save_path.write_bytes(valid_bytes)
+    if reload_valid:
+        tb.press("L")
+        tb.assert_line(f"{prefix}_valid_slots", tb.screen_has("Save Slots:"), "Save Slots missing (recovery)")
+        tb.press("1")
+        tb.assert_line(
+            f"{prefix}_valid_reload_ok",
+            tb.screen_has("Welcome back to Moria8!") and tb.in_town(),
+            "valid reload after negative rejections failed",
+        )
+
+
+def scenario_save_negative(tb: X16Bench) -> None:
+    tb.chargen("A")
+    tb.shift("S")
+    tb.assert_line("neg_slot_prompt", tb.screen_has("Select Slot 1-4"), "save slot prompt did not appear")
+    tb.press("1")
+    title_ok = _finish_save_to_title(tb)
+    tb.assert_line("neg_title_after_save", title_ok, "save did not return to title")
+    verify_negative_save_cases(tb, tb.workdir / "THE.GAME", prefix="neg")
+
+    # Save-write failures while in town: replace THE.GAME2 with a non-empty
+    # directory so HostFS write-open/replace fails cleanly, then remove it and
+    # verify writable save + reload still succeeds.
+    block_dir = tb.workdir / "THE.GAME2"
+    block_dir.mkdir()
+    (block_dir / "keep").write_text("x", encoding="utf-8")
+    try:
+        tb.shift("S")
+        tb.assert_line("neg_wr_coll_slots", tb.screen_has("Select Slot 1-4"), "slot prompt missing (write failure)")
+        tb.press("2")
+        tb.assert_line(
+            "neg_wr_coll_rejected",
+            tb.screen_has("Disk error!") and not tb.screen_has("Game saved!") and not tb.on_title(),
+            f"row0={tb.rowtext(0)!r} row1={tb.rowtext(1)!r}",
+        )
+        tb.press(" ")
+        tb.assert_line("neg_wr_coll_recovery", tb.in_town() and not tb.on_title(), "did not recover to town (write failure)")
+    finally:
+        if block_dir.is_dir():
+            shutil.rmtree(block_dir)
+
+    # Verify normal writable Slot 2 save + load still succeeds.
+    tb.shift("S")
+    tb.assert_line("neg_wr_valid_slots", tb.screen_has("Select Slot 1-4"), "slot prompt missing (writable save)")
+    tb.press("2")
+    tb.assert_line("neg_wr_valid_save_ok", _finish_save_to_title(tb), "writable save after write error failed")
+    tb.press("L")
+    tb.assert_line("neg_wr_valid_load_slots", tb.screen_has("Save Slots:"), "load slots missing after writable save")
+    tb.press("2")
+    tb.assert_line(
+        "neg_wr_valid_load_ok",
+        tb.screen_has("Welcome back to Moria8!") and tb.in_town(),
+        "reload of writable save after write error failed",
+    )
+    tb.log("SCENARIO DONE")
+
+
 def scenario_save_slot_tracking(tb: X16Bench) -> None:
     tb.chargen("A")
     tb.shift("S")
@@ -2248,6 +2382,7 @@ SCENARIO_FUNCS = {
     "dungeon_descend": scenario_dungeon_descend,
     "death_flow": scenario_death_flow,
     "save_load": scenario_save_load,
+    "save_negative": scenario_save_negative,
     "weapon_exchange": scenario_weapon_exchange,
     "mage_list": scenario_mage_list,
     "mage_identify_selector": scenario_mage_identify_selector,
@@ -2311,9 +2446,34 @@ def _run_save_reboot_load(x16emu: Path, rom: Path | None, workdir: Path, syms: d
     return lines, asserts, failures
 
 
+def selftest() -> int:
+    with tempfile.TemporaryDirectory(prefix="cx16_rom_selftest_") as tmp:
+        tmp_path = Path(tmp)
+        fake_emu = tmp_path / "x16emu"
+        fake_emu.write_bytes(b"")
+        try:
+            resolve_rom_path(fake_emu, None)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("resolve_rom_path failed to reject unset X16ROM with no adjacent rom.bin")
+        try:
+            resolve_rom_path(fake_emu, tmp_path / "missing.bin")
+        except FileNotFoundError:
+            pass
+        else:
+            raise AssertionError("resolve_rom_path failed to reject missing explicit rom path")
+        adj = tmp_path / "rom.bin"
+        adj.write_bytes(b"rom")
+        assert resolve_rom_path(fake_emu, None) == adj
+    print("CX16 harness_smoke.py --selftest: PASS")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scenario", nargs="?", default="boot_title", choices=SCENARIOS)
+    parser.add_argument("--selftest", action="store_true")
     parser.add_argument(
         "--x16emu",
         type=str,
@@ -2326,6 +2486,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.selftest:
+        return selftest()
+
     x16emu_path = Path(args.x16emu)
     if x16emu_path.is_file():
         x16emu = x16emu_path
@@ -2337,7 +2500,11 @@ def main() -> int:
             print(f"error: x16emu not found ({args.x16emu})", file=sys.stderr)
             return 1
 
-    rom = Path(args.rom) if args.rom else None
+    try:
+        rom = resolve_rom_path(x16emu, Path(args.rom) if args.rom else None)
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
     sym_path = BUILD_CX16 / "main.sym"
     if not sym_path.is_file():

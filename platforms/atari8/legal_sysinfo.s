@@ -37,6 +37,7 @@ legal_sysinfo_draw_platform:
     jsr screen_put_string_ay
 
     // System (RAM size + GTIA $D014 PAL/NTSC)
+    // xe_present is initialized at cold boot by xe_detect (disk) or atari_cart_xe_probe (cart).
     lda #<legal_sysinfo_lbl_sys
     ldy #>legal_sysinfo_lbl_sys
     jsr legal_sysinfo_begin_row

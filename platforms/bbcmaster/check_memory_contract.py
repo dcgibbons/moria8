@@ -694,18 +694,38 @@ def loader_disk_names(storage: Path = STORAGE_SRC,
 MONEXT_EXPECTED_BYTES = 279 * 8
 
 
-def ssd_catalog_lengths(ssd: bytes) -> dict[str, int]:
-    """Name -> byte length for files in the default ($) directory of an Acorn
-    DFS single-sided image's catalogue."""
-    out: dict[str, int] = {}
+def ssd_catalog_entries(ssd: bytes) -> dict[str, tuple[int, int]]:
+    """Name -> (byte length, start sector) for files in the default ($)
+    directory of an Acorn DFS single-sided image's catalogue."""
+    out: dict[str, tuple[int, int]] = {}
     for i in range(ssd[0x105] // 8):
         if ssd[15 + i * 8] & 0x7F != ord("$"):   # bit 7: locked
             continue
         name = ssd[8 + i * 8:15 + i * 8].decode("latin-1").rstrip()
         info = ssd[0x108 + i * 8:0x110 + i * 8]
         length = info[4] | (info[5] << 8) | (((info[6] >> 4) & 3) << 16)
-        out[name] = length
+        start_sec = info[7] | ((info[6] & 3) << 8)
+        out[name] = (length, start_sec)
     return out
+
+
+def ssd_catalog_lengths(ssd: bytes) -> dict[str, int]:
+    """Name -> byte length for files in the default ($) directory of an Acorn
+    DFS single-sided image's catalogue."""
+    return {name: length for name, (length, _) in ssd_catalog_entries(ssd).items()}
+
+
+def ssd_read_file(ssd: bytes, name: str) -> bytes | None:
+    """Return file payload from the default ($) directory of an Acorn DFS
+    single-sided image, or None if missing."""
+    entry = ssd_catalog_entries(ssd).get(name)
+    if entry is None:
+        return None
+    length, start_sec = entry
+    start = start_sec * 256
+    if start_sec < 2 or start + length > len(ssd):
+        return None
+    return ssd[start : start + length]
 
 
 def ssd_catalog(ssd: bytes) -> set[str]:
@@ -714,10 +734,16 @@ def ssd_catalog(ssd: bytes) -> set[str]:
     return set(ssd_catalog_lengths(ssd))
 
 
+LEGAL_DISK_FILES = (
+    ("LICENSE", "LICENSE"),
+    ("SRCOFFR", "SOURCE-OFFER"),
+)
+
+
 def validate_disk(ssd: bytes, wanted: dict[str, str]) -> list[str]:
     """Every file the loader reads from DFS by name (loader_disk_names: the
-    monster tiers and the overlays the boot pack does not preload) is on the
-    disk, in the default directory."""
+    monster tiers and the overlays the boot pack does not preload) plus Rule 7
+    legal documents are present and valid on the disk, in the default directory."""
     lengths = ssd_catalog_lengths(ssd)
     errors = [f"{what} loads {name} from the disk, which does not have it"
               for what, name in sorted(wanted.items()) if name not in lengths]
@@ -726,6 +752,17 @@ def validate_disk(ssd: bytes, wanted: dict[str, str]) -> list[str]:
         errors.append(
             f"mon_ext ({mon_ext_name}) has length {lengths[mon_ext_name]} B on disk, expected {MONEXT_EXPECTED_BYTES} B (279 * 8)"
         )
+    for dfs_name, src_name in LEGAL_DISK_FILES:
+        payload = ssd_read_file(ssd, dfs_name)
+        if payload is None:
+            errors.append(f"Rule 7 release legal file $.{dfs_name} missing from DFS disk")
+            continue
+        expected = (ROOT / "data" / src_name).read_bytes().replace(b"\n", b"\r")
+        if b"\n" in payload or payload != expected:
+            errors.append(
+                f"Rule 7 legal file $.{dfs_name} content/EOL mismatch "
+                f"(expected LF->CR copy of data/{src_name}, {len(expected)} B, got {len(payload)} B)"
+            )
     return errors
 
 
@@ -922,29 +959,62 @@ def run_selftest() -> int:
                 or any(k.startswith("tier_") for k in wanted)):
             print(f"FAIL: loader names misread: {wanted}", file=sys.stderr)
             return 1
-        def spec(n: str, d: str = "$", lk: bool = False, size: int | None = None) -> DfsFileSpec:
+        def spec(n: str, d: str = "$", lk: bool = False, size: int | None = None, data: bytes | None = None) -> DfsFileSpec:
             nbytes = size if size is not None else (MONEXT_EXPECTED_BYTES if n == "MONEXT" else 1)
-            return DfsFileSpec(name=n, directory=d, locked=lk, load_addr=0, exec_addr=0, data=b"x" * nbytes)
+            return DfsFileSpec(name=n, directory=d, locked=lk, load_addr=0, exec_addr=0, data=data if data is not None else b"x" * nbytes)
 
-        full = build_ssd_image([spec(n, lk=(n == "OVLTWN")) for n in wanted.values()])
+        legal_specs = [
+            spec(dfs_name, data=(ROOT / "data" / src_name).read_bytes().replace(b"\n", b"\r"))
+            for dfs_name, src_name in LEGAL_DISK_FILES
+        ]
+
+        full = build_ssd_image([spec(n, lk=(n == "OVLTWN")) for n in wanted.values()] + legal_specs)
         if validate_disk(full, wanted):
             print("FAIL: a disk with every loaded file rejected", file=sys.stderr)
             return 1
-        short = build_ssd_image([spec(n) for n in wanted.values() if n != "OVLTWN"])
+        short = build_ssd_image([spec(n) for n in wanted.values() if n != "OVLTWN"] + legal_specs)
         if not validate_disk(short, wanted):
             print("FAIL: failed to catch OVLTWN missing from the disk", file=sys.stderr)
             return 1
-        no_monext = build_ssd_image([spec(n) for n in wanted.values() if n != "MONEXT"])
+        no_monext = build_ssd_image([spec(n) for n in wanted.values() if n != "MONEXT"] + legal_specs)
         if not validate_disk(no_monext, wanted):
             print("FAIL: failed to catch MONEXT missing from the disk", file=sys.stderr)
             return 1
-        bad_monext = build_ssd_image([spec(n, size=100 if n == "MONEXT" else None) for n in wanted.values()])
+        bad_monext = build_ssd_image([spec(n, size=100 if n == "MONEXT" else None) for n in wanted.values()] + legal_specs)
         if not validate_disk(bad_monext, wanted):
             print("FAIL: failed to catch MONEXT wrong byte size on the disk", file=sys.stderr)
             return 1
-        elsewhere = build_ssd_image([spec(n, "A" if n == "OVLTWN" else "$") for n in wanted.values()])
+        elsewhere = build_ssd_image([spec(n, "A" if n == "OVLTWN" else "$") for n in wanted.values()] + legal_specs)
         if not validate_disk(elsewhere, wanted):
             print("FAIL: failed to catch OVLTWN outside the default directory", file=sys.stderr)
+            return 1
+        for missing_legal, _ in LEGAL_DISK_FILES:
+            missing_disk = build_ssd_image(
+                [spec(n) for n in wanted.values()]
+                + [ls for ls in legal_specs if ls.name != missing_legal]
+            )
+            if not validate_disk(missing_disk, wanted):
+                print(f"FAIL: failed to catch missing Rule 7 {missing_legal}", file=sys.stderr)
+                return 1
+        bad_eol_lic = build_ssd_image(
+            [spec(n) for n in wanted.values()]
+            + [
+                spec("LICENSE", data=(ROOT / "data" / "LICENSE").read_bytes()),
+                legal_specs[1],
+            ]
+        )
+        if not validate_disk(bad_eol_lic, wanted):
+            print("FAIL: failed to catch unconverted LF in $.LICENSE", file=sys.stderr)
+            return 1
+        bad_eol_offer = build_ssd_image(
+            [spec(n) for n in wanted.values()]
+            + [
+                legal_specs[0],
+                spec("SRCOFFR", data=(ROOT / "data" / "SOURCE-OFFER").read_bytes()),
+            ]
+        )
+        if not validate_disk(bad_eol_offer, wanted):
+            print("FAIL: failed to catch unconverted LF in $.SRCOFFR", file=sys.stderr)
             return 1
 
     print("BBC Master 128 memory contract self-test: PASS")
