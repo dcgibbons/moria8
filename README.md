@@ -14,15 +14,15 @@ compendium, and platform gameplay previews.
 
 | Platform | Status | Download |
 | -------- | ------ | -------- |
-| Commodore 64 (C64) | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c64.d64) [moria8-c64.zip](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c64.zip) |
-| Commodore Plus/4 | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-plus4.d64) |
-| Commodore 128 (C128) | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d64) [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d71) [moria8-c128.d81](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-c128.d81) |
+| Commodore 64 (C64) | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-c64.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c64.crt) (Cartridge) · [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c64.d64) |
+| Commodore 128 (C128) | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-c128.d64](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.d64) · [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.d71) · [moria8-c128.d81](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.d81) · [moria8-c128.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-c128.crt) (Magic Desk 128) |
+| Commodore Plus/4 | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-plus4.d64](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-plus4.d64) · [moria8-plus4.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-plus4.crt) (Magic Cart) |
+| Apple II | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-apple2.po](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-apple2.po) |
+| Commander X16 | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-cx16.zip](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-cx16.zip) · [moria8-cx16.crt](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-cx16.crt) |
+| Atari 8-bit | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-atari8.atr](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-atari8.atr) · [moria8-atari8.car](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-atari8.car) (AtariMax 128 KB) |
+| Acorn BBC Master 128 | Released ([notes](https://github.com/dcgibbons/moria8/releases/latest)) | [moria8-bbcmaster.ssd](https://github.com/dcgibbons/moria8/releases/latest/download/moria8-bbcmaster.ssd) |
 | Commodore PET | Unlikely | |
 | Commodore VIC-20 | Unlikely | |
-| Commander X16 | In Progress | |
-| Acorn BBC Master | In Progress | |
-| Apple II | Released ([notes](docs/release_notes/release_notes-v1.5.0.md)) | [moria8-apple2.po](https://github.com/dcgibbons/moria8/releases/download/v1.5.0/moria8-apple2.po) |
-| Atari 8-bit | In Progress | |
 | CP/M (Z80) | Planned | |
 | MSX | Planned | |
 | Nintendo Entertainment System | Planned | |
@@ -43,36 +43,47 @@ Want a real floppy disk of Moria8? Please fill out the
 
 ### Requirements
 
-- macOS or Linux host, `make`, Java (for Kick Assembler, auto-downloaded into
-  `tools/kickass/` unless `KICKASS=/path/to/KickAss.jar` is set), and Python 3
-- Emulators (required only for `run*` and runtime `test*` targets):
-  - **Commodore 64 / 128 / Plus/4:** VICE 3.10+ (`x64sc`, `x128`, `xplus4`, `c1541`)
-  - **Apple IIe / Atari 8-bit / BBC Master 128:** MAME (`apple2ee`, `a800xl` /
-    `a130xe`, `bbcm`) with system ROM paths in `A2ROMS`, `ATARI8ROMS`, and
-    `BBCMROMS`
-  - **Commander X16:** `x16emu` (`X16EMU` and optional `X16ROM`)
+- macOS or Linux host, `make`, `curl`, `unzip`, `zip`, Java (for Kick
+  Assembler, auto-downloaded into `tools/kickass/` unless
+  `KICKASS=/path/to/KickAss.jar` is set), and Python 3
+- **Apple IIe disk packaging:** AppleCommander (`ac`) and ProDOS 2.4.3 kernel /
+  boot blocks auto-download (SHA256-pinned) into `tools/applecommander/` and
+  `tools/prodos/` during `make diskapple2` and `make testapple2-runtime`
+  (override with `AC_BIN`, `PRODOS`, and `BOOTBLOCKS`)
+- **Commodore disk packaging & testing:** VICE 3.10+ (`c1541` for `make disk*`,
+  `x64sc`, `x128`, `xplus4`, and `cartconv` for `run*` and `test*` targets)
+- **Apple IIe / Atari 8-bit / BBC Master 128 emulation:** MAME (`apple2ee`,
+  `a800xl` / `a130xe`, `bbcm`) with non-redistributable system ROM paths
+  supplied in `A2ROMS`, `ATARI8ROMS`, and `BBCMROMS` (MAME runtime suites warn
+  and skip when the matching env var is unset)
+- **Commander X16 emulation:** `x16emu` (`X16EMU`, optional `X16ROM`)
+- **Optional tools:** `Pillow`, `numpy`, and `ffmpeg` for gameplay GIF capture
+  (`tools/gifcapture/`); `gpg` (`GPG`) and `shasum` (`SHASUM`) for release
+  packaging (`make artifacts`, `make artifact-checksums`)
 
 ### Common Commands
 
 ```sh
-make build        # Build binaries for all platforms (default target)
-make disk         # Build all shipping disk and bundle images under build/
-make run          # Launch the Commodore 64 disk in VICE
-make test         # Run the regression suite (`make -j7 -O test` runs all 7 platforms in parallel)
-make clean        # Remove build/ artifacts
+make build              # Build binaries and cartridges for all platforms under build/
+make disk               # Build all 14 shipping disks, archives, and cartridges under build/
+make run                # Launch the Commodore 64 disk in VICE
+make test               # Run the regression suite (`make -j7 -O test` runs all 7 stages)
+make artifact-checksums # Build all 14 release artifacts and build/SHA256SUMS
+make artifacts          # Build, checksum, and GPG-sign all 14 release artifacts
+make clean              # Remove build/ artifacts
 ```
 
 ### Platform Targets
 
-| Platform | Disk / Bundle | Run | Test | Output (`build/`) |
-| -------- | ------------- | --- | ---- | ----------------- |
-| Commodore 64 | `make disk64` | `make run64` | `make test64` | `moria8-c64.d64` |
-| Commodore 128 | `make disk128` | `make run128` | `make test128` (`test128-fast`) | `moria8-c128.d64` / `.d71` / `.d81` |
-| Commodore Plus/4 | `make diskplus4` | `make runplus4` | `make testplus4` | `moria8-plus4.d64` |
-| Apple IIe | `make diskapple2` | `make runapple2` | `make testapple2` (`testapple2-runtime`) | `moria8-apple2.po` |
-| Commander X16 | `make diskcx16` | `make runcx16` | `make testcx16` | `moria8-cx16.zip` |
-| Atari 8-bit | `make diskatari8` | `make runatari8` (`runatari8-130xe`) | `make testatari8` | `moria8-atari8.atr` |
-| BBC Master 128 | `make diskbbcmaster` | `make runbbcmaster` | `make testbbcmaster` | `moria8-bbcmaster.ssd` |
+| Platform | Disk / Bundle | Cartridge | Run | Test | Output (`build/`) |
+| -------- | ------------- | --------- | --- | ---- | ----------------- |
+| Commodore 64 | `make disk64` | `make cartridge64` | `make run64` | `make test64` (`test64-cartridge`) | `moria8-c64.crt`, `moria8-c64.d64` |
+| Commodore 128 | `make disk128` | `make cartridge128` | `make run128` (`run128-cart`) | `make test128` (`test128-fast`, `test128-fast-smoke`, `test128-cartridge`) | `moria8-c128.d64`, `moria8-c128.d71`, `moria8-c128.d81`, `moria8-c128.crt` |
+| Commodore Plus/4 | `make diskplus4` | `make cartridgeplus4` | `make runplus4` (`runplus4-cart`) | `make testplus4` (`testplus4-cartridge`) | `moria8-plus4.d64`, `moria8-plus4.crt` |
+| Apple IIe | `make diskapple2` | — | `make runapple2` | `make testapple2` (`testapple2-runtime`) | `moria8-apple2.po` |
+| Commander X16 | `make diskcx16` | `make cartridgecx16` | `make runcx16` (`runcx16-cart`) | `make testcx16` (`testcx16-runtime`, `testcx16-cartridge`) | `moria8-cx16.zip`, `moria8-cx16.crt` |
+| Atari 8-bit | `make diskatari8` | `make cartridgeatari8` | `make runatari8` (`runatari8-130xe`, `runatari8-cart`, `runatari8-cart-130xe`) | `make testatari8` (`testatari8-fast-smoke`, `testatari8-cartridge`) | `moria8-atari8.atr`, `moria8-atari8.car` |
+| BBC Master 128 | `make diskbbcmaster` | — | `make runbbcmaster` | `make testbbcmaster` (`testbbcmaster-fast-smoke`, `testbbcmaster-runtime`) | `moria8-bbcmaster.ssd` |
 
 ## Documentation
 
@@ -80,6 +91,7 @@ make clean        # Remove build/ artifacts
 - [Monster Reference](docs/MONSTERS.md)
 - [Spell And Prayer Reference](docs/SPELLS.md)
 - [Player Guide](docs/PLAYER_GUIDE.md)
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
 - [Development Process](docs/DEVELOPMENT_PROCESS.md) - the story of Moria8,
   including how it was built with modern tooling.
 - [Architecture Reference](docs/ARCHITECTURE.md) - source layout, memory

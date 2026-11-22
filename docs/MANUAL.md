@@ -1,45 +1,96 @@
 # Moria8 Manual
 
-Moria8 is a Commodore 64, Commodore 128, Commodore Plus/4, and Apple IIe
-adaptation of the classic Moria roguelike. You create one adventurer, prepare
-in town, descend through the dungeon, grow stronger, and try to defeat the
-Balrog.
+Moria8 is an assembly adaptation of the classic Moria roguelike for seven 8-bit
+platforms: **Commodore 64**, **Commodore 128**, **Commodore Plus/4**, **Apple
+IIe** (128K), **Commander X16**, **Atari 8-bit** (`800XL`/`65XE`/`130XE`), and
+**Acorn BBC Master 128**. You create one adventurer, prepare in town, descend
+through the dungeon, grow stronger, and try to defeat the Balrog.
 
-This manual covers the current releases. Moria8 follows Moria and
-Umoria closely in spirit, but it is not a byte-for-byte reproduction. The C64
-and Plus/4 ports use compact 40-column interfaces and smaller active maps; the
-C128 and Apple IIe ports use 80-column displays and wider memory models.
+This manual covers the current releases. Moria8 follows VMS Moria and Umoria
+closely in spirit, with two hardware-scaled map geometries sharing the same core
+rules:
+
+- **40-column ports (`80x48` active map):** Commodore 64, Commodore Plus/4, and
+  Atari 8-bit.
+- **80-column ports (`198x66` active map):** Commodore 128, Apple IIe, Commander
+  X16, and Acorn BBC Master 128.
 
 ## Starting The Game
 
-Use the disk image for your machine:
+Choose the cartridge or disk/archive release for your machine:
 
-- C64: `moria8-c64.d64`
-- C64 Ultimate / SoftwareIEC: `moria8-c64.zip`
-- Plus/4: `moria8-plus4.d64`
-- C128: `moria8-c128.d64`
-- Apple IIe (128K, ProDOS): `moria8-apple2.po`
+- **Commodore 64:** `moria8-c64.crt` (cartridge, recommended for cartridge
+  adapters and C64 Ultimate) or `moria8-c64.d64` (1541 disk). Disk builds use
+  REU caching automatically when an REU is present.
+- **Commodore 128:** `moria8-c128.crt` (Magic Desk 128 cartridge) or
+  `moria8-c128.d64`, `moria8-c128.d71`, or `moria8-c128.d81` (boots in native
+  80-column VDC mode; caches code/data in Bank 1 and VDC RAM).
+- **Commodore Plus/4:** `moria8-plus4.crt` (Magic Cart cartridge) or
+  `moria8-plus4.d64` (1541-compatible disk).
+- **Apple IIe (128K, ProDOS):** `moria8-apple2.po` (also runs on Apple IIc and
+  Apple IIgs; caches hot overlays and catalogs in auxiliary / Language Card RAM
+  and streams cold overlays from ProDOS on demand).
+- **Commander X16:** `moria8-cx16.crt` (cartridge) or `moria8-cx16.zip` (extract
+  to an SD card or pass `-fsroot <dir>` in `x16emu` and run `MORIA8.PRG`;
+  preloads overlays and catalogs into banked HiRAM at boot).
+- **Atari 8-bit (`800XL`/`65XE`/`130XE`):** `moria8-atari8.car` (AtariMax 128
+  KB cartridge) or `moria8-atari8.atr` (DOS 2.5 Enhanced Density disk). A
+  `130XE` automatically caches overlays and catalogs in extended RAM at boot;
+  stock `64 KB` `800XL`/`65XE` machines stream from `D1:` on demand.
+- **Acorn BBC Master 128:** `moria8-bbcmaster.ssd` (Acorn DFS 80-track disk;
+  boot via `SHIFT+BREAK` or `*EXEC !BOOT`, using Mode 0 Shadow RAM `LYNNE`,
+  `ANDY`, and Sideways RAM).
 
-The C64 version benefits from REU support when available because some creature
-data can be fetched without as much disk loading. The C128 version uses its own
-banked-memory path. The Plus/4 version uses a standard 1541-compatible disk
-path. The Apple IIe version caches hot data in auxiliary memory and loads cold
-payloads from ProDOS on demand.
+On the title screen, choose:
 
-Use `D)isk Setup` on the title screen before loading or saving if your save
-disk is not already initialized. Program media and save media are deliberately
-separated; the game blocks using the program disk as the save disk. Save device
-selection supports devices 8-11 where the target platform supports them.
+- `N` (`N)ew`) to create a new character.
+- `L` (`L)oad`) to resume a saved character from slots `1`–`4`.
+- `D` (`D)isk Setup`) to select and initialize save media.
+- `A` (`A)bout`) to open the About menu (`1` License, `2` Source Offer, `3`
+  System Info).
 
-On C64 Ultimate or other SoftwareIEC-style storage, the C64 `.zip` distribution
-contains the loose program files normally stored on `moria8-c64.d64`. Extract
-the archive to a directory and `LOAD "MORIA8"` from that directory. Disk Setup
-and the save marker still apply; Moria8 writes `MORIA8.ID` and `THE.GAME` to
-the selected save media.
+### Save Media, Save Format V2 (`$22`), And Compatibility
+
+Program media and save media are deliberately separated; Moria8 refuses to
+write saves or markers onto a program disk. All five cartridge editions load
+game code, overlays, and catalogs directly from read-only ROM with zero program
+disk swaps, but still require writable save storage configured through
+`D)isk Setup`:
+
+- **Commodore / Commander X16:** Supports IEC/HostFS devices `8`–`11`. Moria8
+  writes `MORIA8.ID`, `THE.GAME`–`THE.GAME4`, and `HALL.OF.FAME`
+  (`P4.HALL.FAME` on Plus/4). On Commander X16, HostFS/SD defaults to device `8`.
+- **Apple IIe:** Supports ProDOS volumes across drives (two-drive or
+  single-drive swap), writing `MORIA8.ID`, `THE.GAME`–`THE.GAME4`, and
+  `HALL.OF.FAME`.
+- **Atari 8-bit:** Supports drives `D1:`–`D4:` using DOS 2.5 `.atr` save disks
+  (`MORIA8.ID`, `SAVE0.SAV`–`SAVE3.SAV`, and `HISCORE.DAT`).
+- **Acorn BBC Master 128:** Supports DFS drives `:0`–`:3` (`MORIAID`,
+  `SAVE0`–`SAVE3`, and `HISCORE`).
+
+Current releases use **Save Format V2** (`SAVE_VERSION = $22`) across all seven
+platforms:
+
+- **Pre-V2 saves are rejected:** Older saves (`< $22`) and incompatible future
+  versions (`> $22`) are rejected cleanly with `Unsupported save.` without
+  modifying your session or disk. Start a new character on a fresh or
+  reinitialized save slot.
+- **Disk and cartridge saves are interchangeable within a platform:** For
+  example, saves created on `moria8-c64.d64` load on `moria8-c64.crt` (and vice
+  versa); the same applies to C128, Plus/4, Commander X16, and Atari 8-bit.
+- **Cross-geometry saves (`80x48` vs. `198x66`) are incompatible:** Saves from
+  40-column `80x48` ports (**C64, Plus/4, Atari 8-bit**, `7,858` bytes) cannot
+  be loaded on 80-column `198x66` ports (**C128, Apple IIe, Commander X16, BBC
+  Master 128**, `17,164` bytes) — or vice versa. In particular, C64 and C128
+  share the `"MORIA01"` Save V2 header and Commodore filenames, so attempting to
+  load a C64 save on a C128 (or a C128 save on a C64) will pass the header check
+  and fail mid-stream with `Save file corrupt!`. Always keep separate save disks
+  for 40-column and 80-column machines. (Plus/4 uses its own `"MORIA+4"` header
+  and rejects other ports immediately with `Unsupported save.`.)
 
 On first start, create a character by choosing race, class, sex, and rolled
-stats. The game then generates a background, starting gold, hit points, mana
-where applicable, and starting equipment.
+stats. The game then generates a social background, starting gold, hit points,
+mana where applicable, and starting equipment.
 
 ## Character Basics
 
@@ -65,74 +116,84 @@ maximum. Different races and classes advance at different rates; powerful
 combinations usually require more experience.
 
 Several non-human races have infravision. Infravision can show nearby warm
-monsters while you are in darkness. It does not reveal terrain, items, traps,
-doors, or cold creatures, and blindness blocks it. Dwarves have the longest
-natural infravision; potions of infravision temporarily add to the effective
-range.
+monsters while you are in darkness across all seven ports. It does not reveal
+terrain, items, traps, doors, or cold creatures, and blindness blocks it.
+Dwarves have the longest natural infravision; potions and helms of infravision
+temporarily or permanently add to the effective range.
 
 ## Main Commands
 
-Moria8 uses its own command layout. The in-game help screen is the
-authoritative quick reference: press `?`.
+Moria8 uses a unified keymap across all seven platforms. The in-game help screen
+is the authoritative quick reference: press `?` (and `L` inside Help to view the
+License and Source Offer).
 
 ### Movement
 
 | Key | Action |
 | --- | ------ |
-| `H` / cursor left | Move west. |
-| `L` / cursor right | Move east. |
-| `K` / cursor up | Move north. |
-| `J` / cursor down | Move south. |
-| `Y` | Move northwest. |
-| `U` | Move northeast. |
-| `B` | Move southwest. |
-| `N` | Move southeast. |
-| `.` | Rest or stay for one turn. |
-| `CTRL+R` | Rest until HP and mana are recovered. |
-| `SHIFT` + direction | Run in that direction. |
+| `H` / `4` / cursor left | Move west. |
+| `L` / `6` / cursor right | Move east. |
+| `K` / `8` / cursor up | Move north. |
+| `J` / `2` / cursor down | Move south. |
+| `Y` / `7` | Move northwest. |
+| `U` / `9` | Move northeast. |
+| `B` / `1` | Move southwest. |
+| `N` / `3` | Move southeast. |
+| `5` | Rest or stay for one turn. |
+| `CTRL+R` | Rest until HP and mana are recovered (or disturbed). |
+| `.` then direction, or `SHIFT` + direction | Run in that direction. |
 | `<` | Go up stairs. |
 | `>` | Go down stairs. |
 
-The C128 help screen also shows numeric keypad movement: `7 8 9 / 4 5 6 /
-1 2 3`, with `5` as stay.
+Platform movement notes:
+
+- The C128 numeric keypad (`7 8 9 / 4 5 6 / 1 2 3`) also moves and rests (`5`).
+- On Atari 8-bit, `Ctrl` + `+` / `*` / `-` / `=` serve as directional arrows.
+- On pre-shifted ASCII keyboards (Apple IIe, Atari 8-bit, BBC Master 128),
+  uppercase `H J K L Y U B N` act as `SHIFT` + direction to run.
 
 ### Action And Information Keys
 
 | Key | Action |
 | --- | ------ |
-| `G` | Get item. |
+| `G` or `,` | Get item from the floor. |
 | `D` | Drop item. |
-| `I` | Inventory. |
-| `E` | Equipment. |
+| `I` | Inventory (`22` pack slots `a`–`v`). |
+| `E` | Equipment (`12` equipped slots). |
 | `W` | Wear or wield an item. |
 | `T` | Take off equipment. |
+| `SHIFT+X` | Exchange primary and secondary weapons. |
 | `Q` | Quaff potion. |
 | `R` | Read scroll. |
 | `A` | Aim wand. |
 | `Z` | Use staff. |
-| `F` | Study a book and gain a spell/prayer when eligible. |
+| `F` | Study a book to gain a spell/prayer (or browse books when none are pending). |
 | `M` | Cast a mage spell. |
 | `P` | Pray a priest prayer. |
-| `S` | Search for one turn. |
+| `S` | Search adjacent tiles (hidden traps, secret doors, chest traps) for one turn. |
 | `#` | Toggle search mode. |
-| `O` | Open door. |
+| `O` | Open door or chest (picks locked chests). |
 | `C` | Close door. |
-| `X` | Look. |
-| `/` | Monster recall by monster symbol. |
+| `SHIFT+D` | Disarm a visible adjacent floor trap or revealed chest trap. |
+| `CTRL+B` | Bash a door, chest, or monster. |
+| `CTRL+D` | Jam a door with an iron spike (`CTRL+D` rather than `CTRL+J` across all ports). |
+| `+` | Tunnel through walls, veins, or rubble. |
+| `X` | Look in a direction. |
+| `/` | Monster recall by monster symbol (`/` + symbol). |
 | `SHIFT+C` | Character sheet. |
 | `SHIFT+F` | Fire a missile weapon. |
 | `SHIFT+T` | Throw an item. |
 | `SHIFT+E` | Eat food. |
-| `SHIFT+R` | Refuel light. |
-| `SHIFT+D` | Disarm a visible adjacent trap. |
-| `CTRL+B` | Bash a door or monster. |
-| `+` | Tunnel. |
+| `SHIFT+R` | Refuel lantern with oil. |
+| `V` or `SHIFT+V` | Version and System Info (build version, Save V2 `$22`, geometry, drives, session info). |
+| `?` | Help command reference (`L` inside Help opens License / Source Offer). |
 | `SHIFT+S` | Save and quit after a successful save. |
-| `SHIFT+Q` | Quit. |
-| `CTRL+W` | Wizard/debug mode. Wizard games are not ordinary scored games. |
+| `SHIFT+Q` | Quit without saving (prompts `Y/N`). |
+| `CTRL+W` | Wizard/debug mode. Wizard games cannot record high scores. |
 
-At prompts, `ESC`, `STOP`, or `Q` usually cancels. `SPACE` or `RETURN`
-continues through messages. Inventory letters act directly in most item lists.
+At prompts, `ESC`, `RUN/STOP` (`STOP`), or `Q` usually cancels (`Break` maps to
+backspace on Atari 8-bit). `SPACE` or `RETURN` continues through messages.
+Inventory letters act directly in most item lists.
 
 ## The Town
 
@@ -141,14 +202,14 @@ Moria8 extensions:
 
 | Store | Typical Use |
 | ----- | ----------- |
-| General Store | Food and light. |
-| Armory | Armor, shields, helms, gloves, boots. |
-| Weaponsmith | Weapons. |
+| General Store | Food, torches, flasks of oil, cloaks, picks, shovels, spikes. |
+| Armory | Body armor, shields, helms, gloves, boots. |
+| Weaponsmith | Melee weapons, bows/crossbows/slings, ammunition. |
 | Temple | Healing potions, Word of Recall, Remove Curse, prayer books, blunt weapons. |
 | Alchemy Shop | Utility scrolls (Word of Recall, Identify, Light, Magic Mapping, enchanting) and Restoration. |
-| Magic Shop | Wands, staffs, rings. |
+| Magic Shop | Wands, staffs, rings, amulets, mage spellbooks. |
 | Black Market | Expensive mixed goods, often outside normal shop limits. |
-| Home | Storage, not a normal buying/selling shop. |
+| Home | Storage (`12` slots), not a normal buying/selling shop. |
 
 Charisma affects ordinary store prices. The Black Market uses harsher special
 pricing. Stores restock when you return to town.
@@ -166,74 +227,103 @@ Important dungeon habits:
 
 - Keep a light source fueled.
 - Carry food.
-- Search suspicious dead ends and doorways.
+- Search suspicious dead ends, doorways, and chests.
 - Retreat before you are nearly dead.
 - Do not fight everything at once; corridors are safer than open rooms.
 - Use stairs as exits, not just progression.
 - Use `X` to look and `/` to check monster recall by symbol.
-- Use run carefully; attacks, hazards, and interruptions should stop a run.
+- Use run carefully; attacks, hazards, and interruptions stop a run.
 
-The C64 and Plus/4 dungeons use compact active maps and 40-column views. The
-C128 and Apple IIe views are wider and closer to terminal Moria, but the same
-core rules apply.
+40-column ports (C64, Plus/4, Atari 8-bit) use `80x48` maps with `38x19`
+viewports. 80-column ports (C128, Apple IIe, Commander X16, BBC Master 128) use
+full `198x66` maps (`78x19` viewport on C128; `78x18` on Apple IIe, Commander
+X16, and BBC Master 128), matching classic terminal Moria geometry while sharing
+the same core rules.
+
+### Chests
+
+Moria8 implements all six classic chest types (**Small/Large Wooden**,
+**Small/Large Iron**, **Small/Large Steel**) plus **Ruined Chests**. Chests can
+be locked and armed with hidden traps (poison needles, paralysis gas, explosive
+charges, or monster-summoning runes):
+
+- **Search (`S` / `#`):** Search adjacent squares to reveal traps on a chest.
+- **Disarm (`SHIFT+D`):** Attempt to disarm revealed chest traps before opening.
+- **Open (`O`):** Picks the lock if locked (confusion prevents lock-picking),
+  triggers any remaining armed traps, and spills treasure onto nearby floor
+  tiles (except explosion traps, which destroy the chest and its contents).
+- **Bash (`CTRL+B`):** Breaks open a locked chest by force, turning it into a
+  `Ruined Chest` while still triggering any armed traps.
 
 ## Items And Equipment
 
-Items may be unidentified, cursed, magical, or ordinary. Wear/wield decisions
-matter: cursed equipment may not come off until the curse is removed. Heavy
+Moria8 ships the full **361-item catalog** (`0`–`360`) and **55 ego item
+types** (plus `Gnomish` and `Dwarven` digging tool prefixes). Items may be
+unidentified, cursed, magical, or ordinary. Wear/wield decisions matter: cursed
+equipment cannot be taken off or replaced until the curse is removed. Heavy
 weapons can be poor choices for weak characters even if their damage looks
 large.
 
-Inventory uses letter slots. Equipment uses fixed slots for weapon, body armor,
-shield, head, hands, feet, light, and ring. Dropping an inventory item compacts
-the pack, so item letters may change after removal.
+Inventory uses `22` lettered pack slots (`a`–`v`). Equipment uses `12` fixed
+slots:
 
-Some items are learned by use. Potions, scrolls, wands, staffs, rings, armor,
-and weapons become safer once identified. The `Identify` spell and similar
-effects are valuable because unknown items are a major source of risk.
+- Weapon / Digging Tool, Body Armor, Shield, Helm / Crown, Gloves / Gauntlets,
+  Boots, Light Source, Ring (right hand), Amulet, Ring (left hand), Cloak, and
+  Secondary Weapon (`SHIFT+X` swaps primary and secondary weapons).
+
+Dropping an inventory item compacts the pack, so item letters may change after
+removal. Some items are learned by use; potions, scrolls, wands, staffs, rings,
+armor, and weapons become safer once identified via `Identify` or trial.
 
 ## Combat
 
-Melee is automatic when you move into a monster. Ranged combat uses
-`SHIFT+F` to fire a missile weapon or `SHIFT+T` to throw an item. `CTRL+B`
-can bash; `+` tunnels through rock.
+Melee is automatic when you move into a monster. Ranged combat uses `SHIFT+F`
+to fire a missile weapon (matching bow/crossbow/sling and ammunition) or
+`SHIFT+T` to throw an item. `CTRL+B` can bash doors, chests, or monsters; `+`
+tunnels through rock and veins.
 
 Armor class reduces your chance of being hit. Weapon bonuses, strength,
-dexterity, class, and level affect your offense. Some monsters attack with
-status effects, spells, breath, corrosion, fear, or other dangerous abilities.
-If a new monster is hurting you faster than you can hurt it, leave.
+dexterity, class, ego slays/brands, and level affect your offense. Monsters
+use up to four attacks, 19 attack descriptions, 24 special effects (stat drains,
+theft, corrosion, disenchantment, charge/food/light draining, status effects),
+and 18 spells/breaths. If a new monster is hurting you faster than you can hurt
+it, leave.
 
 Some weapons and stat combinations give more than one melee blow in a single
 attack command. When a melee message ends with a count such as `(2/3)`, the
 first number is successful hits and the second number is total blows attempted.
 
-Monster recall display exists, but recall persistence is not complete in the
-current builds. See [MONSTERS.md](MONSTERS.md) for the shipped
-monster roster and threat notes.
+Moria8 ships all **279 classic monsters** across all seven platforms with
+**persistent Monster Recall** (`/` followed by a monster symbol), saved across
+sessions in Save Format V2. See [MONSTERS.md](MONSTERS.md) for the full
+279-species roster and threat notes.
 
 ## Magic
 
 Mages, Rogues, and Rangers use mage spells. Priests and Paladins use prayers.
-Warriors do not cast. Use `F` to study a book when eligible, then `M` to cast
-or `P` to pray.
+Warriors do not cast. Use `F` to study a book when eligible (or browse books),
+then `M` to cast or `P` to pray.
 
 Spell and prayer access depends on class, level, book, mana, and the character's
 prime stat. Mages care about intelligence; priests and paladins care about
-wisdom. Casting beyond your strength can fail or exhaust you.
+wisdom. Casting beyond your current mana is risky: overcasting raises fail
+chance, drains mana to zero, can knock you unconscious, and can damage CON. See
+[SPELLS.md](SPELLS.md) for levels, mana costs, fail rates, book placement, and
+effect notes.
 
-Moria8 includes the full 31 mage spells and 31 priest prayers from the current
-catalog, though some message timing and feedback are intentionally tighter than
-terminal Umoria. See [SPELLS.md](SPELLS.md) for levels, mana costs, fail rates,
-book placement, and effect notes.
+*(Audio note: six of the seven platforms synthesize all 10 game sound effects;
+Commodore Plus/4 sound is currently silent.)*
 
 ## Winning And Death
 
 The long-term goal is to descend, survive, build enough power, and defeat the
 Balrog. You will need strong equipment, reliable escape options, enough hit
-points to survive sudden damage, and knowledge of which fights to avoid.
+points to survive sudden damage, and knowledge of which fights to avoid. After
+defeating the Balrog, retiring (`SHIFT+Q`) displays the royal victory crown
+screen and awards the winner score bonus.
 
 Unlike the original Moria games, death does not remove your savefile. This
-slight deviation is to allow for more fun for those who choose to restore
-after death, versus starting over.
+slight deviation allows restoring after death instead of starting over.
 
-For early-game advice, see [PLAYER_GUIDE.md](PLAYER_GUIDE.md).
+For early-game advice, see [PLAYER_GUIDE.md](PLAYER_GUIDE.md). For save, disk,
+and emulator troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

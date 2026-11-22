@@ -11,12 +11,12 @@ All paths in this document are repository-relative (`AGENTS.md` Rule 9).
 | Metric | Count / Value |
 | --- | --- |
 | Migrated & removed in this task | **1** symbol (`C128_TEST_CACHE_SURVIVAL`, **3** `#if`/`#elif` lines removed from `core/`) |
-| Remaining test/diag/unit/fault symbols in `core/` | **59** symbols across **226** unique `#if`/`#elif` lines |
-| Breakdown of remaining `core/` symbols | **39** active smoke/product hooks (`105` lines), **4** unwired/dead smoke or canary hooks (`21` lines), **2** boot/town diagnostic trace flags (`48` lines), **1** playtest fault injector (`1` line), **13** unit-test / soak harness flags (`62` lines) |
+| Remaining test/diag/unit/fault symbols in `core/` | **56** symbols across **194** unique `#if`/`#elif` lines |
+| Breakdown of remaining `core/` symbols | **39** active smoke/product hooks (`105` lines), **2** unwired/dead smoke or canary hooks (`12` lines), **1** boot diagnostic trace flag (`22` lines), **1** playtest fault injector (`1` line), **13** unit-test / soak harness flags (`62` lines) |
 | Non-Commodore ports in `core/` (`apple2`, `atari8`, `bbcmaster`, `cx16`) | **0** port-specific test-flag `#if`/`#elif` symbols in `core/` |
 
 > [!NOTE]
-> The Phase 0 summary target (`49` symbols / `177` lines in `docs/MEMORY_REDESIGN_PLAN.md`) counted `*_TEST_*` symbols prior to removing `C128_TEST_CACHE_SURVIVAL`; this audit expands scope to include companion diagnostic, canary, fault-injection, unit-test rest-state, and spell-seed switches (`59` remaining symbols / `226` unique `#if`/`#elif` lines) so no `core/` conditional test code is hidden. Note that `11` lines are shared between categories (e.g. `C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG`), so per-category line totals sum to `237` while unique `core/` `#if`/`#elif` lines total `226`.
+> The Phase 0 summary target (`49` symbols / `177` lines in `docs/MEMORY_REDESIGN_PLAN.md`) counted `*_TEST_*` symbols prior to removing `C128_TEST_CACHE_SURVIVAL` (`-1` symbol, `-3` lines) and later deleting `C128_TEST_TOWN_SELF_DUMP`, `C128_TEST_SCRIPTED_SCROLL_SELECTOR`, and `C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY` (`-3` symbols, `-32` unique lines); this audit expands scope to include companion diagnostic, canary, fault-injection, unit-test rest-state, and spell-seed switches (`56` remaining symbols / `194` unique `#if`/`#elif` lines) so no `core/` conditional test code is hidden. Note that `8` lines are shared between `C128_REAL_BOOT_DIAG` and `C128_STATUS_SP_CANARY_DIAG`, so per-category line totals sum to `202` while unique `core/` `#if`/`#elif` lines total `194`.
 
 ### `cache_survival_smoke` Headroom Delta (`C128_TEST_CACHE_SURVIVAL` Removal)
 
@@ -34,7 +34,7 @@ Switching `cache_survival_smoke` to the product disk image also eliminated the d
 
 ## 2. Explicit Non-Test Exclusions & Zero-`core/` Runner Defines
 
-### Non-Test HAL / Architecture Symbols Excluded from the `59` Count
+### Non-Test HAL / Architecture Symbols Excluded from the `56` Count
 - `HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS` (`15` lines in `core/game_loop.s` and `core/player_move.s`): Enforced HAL lifecycle export flag (`tools/check_hal_lifecycle_exports.py`, `platforms/commodore/c128/hal/lifecycle_policy.s:89`) rather than a test variant build switch.
 - Architecture / segment-ownership flags (not test hooks): `DOOR_STATE_IN_DEFAULT_IMAGE`, `BYPASS_SLOT_PROMPT`, `CATALOG_REU`, `CMD_JAM_WRAPPER_CUSTOM`, `FULL_DETECT_EVIL_EFFECT`, `ITEM_ACTIONS_EARTHQUAKE_OWNER`, `ITEM_ACTIONS_MAP_AREA_OWNER`, `ITEM_SPAWN_IN_GEN_OVERLAY`, `MSG_HISTORY_IN_AUX`, `PICKER_IN_CHEST_OVERLAY`, `SCORE_IO_PLATFORM_CHANNEL_OUT`, `SCROLL_P3_EXISTING_OWNER`, `SCROLL_P3_NEW_OWNER`, `SPELL_EFFECTS_INCLUDE_IDENTIFY`, `STORAGE_STATUS_HELPER`.
 
@@ -59,8 +59,8 @@ Ranking prioritizes smallest remaining ceiling headroom (`tools/report_memory_bu
 | **4** | Plus/4 `chest_open_product_plus4` | `PLUS4_TEST_SCRIPTED_CHEST_OPEN_PRODUCT` | **51 B** free in `Default` (`$c7cd` `< $C800`) | `core/chest.s`, `core/chest_loot.s`, `core/game_loop.s` (`10` `#if` lines) add `chest_product_path_stage` counters, `ChestFixtureSegment` (`chest_product_setup`), and `Default` stage branches (`53 B` net below prod) | Seed chest floor/room state via monitor at `level_change_generate_current` exit and trace `chest_find_loot` / `chest_gen_loot` hits in VICE + Python (`C64` `260 B`, `C128` siblings together). |
 | **5** | C64 tight PRG smokes & Plus/4 `save_write` / `balrog` | `C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY`, `C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT`, `C64_TEST_SCRIPTED_BOOK_OVERLAY`, `C64_TEST_SCRIPTED_DUNGEON_SPELL`, `PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT`, `PLUS4_TEST_SCRIPTED_BALROG_PRODUCT` | C64 `.prg` deltas `+53 B`, `+46 B`, `+35 B`, `+12 B` (prod `Default < $C000` only has `76 B` free); Plus/4 `88 B` (`save_write`), `93 B` (`balrog`) | C64 `core/game_loop.s` `c64_test_force_detect_evil_monster` (`122` lines block), `c64_test_seed_scripted_spell_state` (`45` lines), `c64_test_detect_evil_keep_asleep`, and `.byte` counters sit in `Default`; `PLUS4_TEST_SCRIPTED_BALROG_PRODUCT` puts `OVL_CHEST` load in `Default` | Finish eliminating remaining 6502 `Default` helpers (`c64_test_force_detect_evil_monster`, `c64_test_seed_scripted_spell_state`) in `detect_evil`, `dungeon_spell`, `spell_list_overlay`, `book_overlay`, and `balrog` (`core/dungeon_gen.s:2714` is already empty). |
 | **6** | Remaining scripted smokes (C128 / C64 / Plus/4) | `C128_TEST_SCRIPTED_*`, `C128_TEST_FORCE_*`, `C128_TEST_OVERLAY_STATE_CORRUPT`, `C64_TEST_SCRIPTED_*`, `PLUS4_TEST_SCRIPTED_*` | C128 `< $6000` `302–360 B`; C64 `275+ B` / `-32..-292 B` `.prg`; Plus/4 `136–143 B` | Seed routines (`prayer`, `spell`, `scroll_selector`, `force_dungeon_melee`), wrong-media flags (`ui_disk_setup.s:324`), media-fail flags (`game_loop.s:755,904`) | Batch-convert scripted seeders to `.mon` scripts (`83a190c`) and breakpoint/RAM checks; replace trap `brk` labels with `.vs` symbol breakpoints on product builds. |
-| **7** | Dead / unwired `core/` symbols *(zero-risk cleanup)* | `C128_STATUS_SP_CANARY_DIAG`, `C128_CACHE_TEST_SKIP_TIER`, `C128_TEST_SCRIPTED_SCROLL_SELECTOR`, `C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY`, `C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT` runner gap | Dead code across `21` `core/` `#if` lines (unused in any runner) | Pure maintenance debt / stale hooks (`C128_STATUS_SP_CANARY_DIAG` has 0 refs outside `core/`; `C128_CACHE_TEST_SKIP_TIER` / `STUDY_BOOK_OVERLAY` / `SCROLL_SELECTOR` have 0 calls in `run_tests128.sh`) | Delete dead `core/` blocks cleanly (and empty `#if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT` at `core/dungeon_gen.s:2714`). |
-| **8** | Intentional diagnostic / fault / unit-test switches *(keep or convert last)* | `C128_REAL_BOOT_DIAG`, `C128_TEST_TOWN_SELF_DUMP`, `PLAYTEST_FAULT_STACK_LEAK`, `*UNIT_TEST`, `C64_TEST_*`, `COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER`, `DUNGEON_TEST_*`, `*_REST_STATE` | Separate standalone unit/diag PRGs (never shipped) | Unit PRGs isolate subsystems via `#if C64_UNIT_TEST` / `C128_UNIT_TEST`; `PLAYTEST_FAULT_STACK_LEAK` tests playtest harness detection | Keep unit-test isolation switches until unit tests move or refactor; keep `PLAYTEST_FAULT_STACK_LEAK` (`playtest/moria_playtest/selftest.py` explicit fault injection). |
+| **7** | Dead / unwired `core/` symbols *(zero-risk cleanup)* | `C128_STATUS_SP_CANARY_DIAG`, `C128_CACHE_TEST_SKIP_TIER`, `C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT` runner gap | Dead code across `12` `core/` `#if` lines (unused in any runner; `C128_TEST_SCRIPTED_{SCROLL_SELECTOR,STUDY_BOOK_OVERLAY}` deleted) | Pure maintenance debt / stale hooks (`C128_STATUS_SP_CANARY_DIAG` has 0 refs outside `core/`; `C128_CACHE_TEST_SKIP_TIER` has 0 calls in `run_tests128.sh`) | Delete dead `core/` blocks cleanly (and empty `#if PLUS4_TEST_SCRIPTED_BALROG_PRODUCT` at `core/dungeon_gen.s:2714`). |
+| **8** | Intentional diagnostic / fault / unit-test switches *(keep or convert last)* | `C128_REAL_BOOT_DIAG`, `PLAYTEST_FAULT_STACK_LEAK`, `*UNIT_TEST`, `C64_TEST_*`, `COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER`, `DUNGEON_TEST_*`, `*_REST_STATE` | Separate standalone unit/diag PRGs (never shipped; `C128_TEST_TOWN_SELF_DUMP` deleted) | Unit PRGs isolate subsystems via `#if C64_UNIT_TEST` / `C128_UNIT_TEST`; `PLAYTEST_FAULT_STACK_LEAK` tests playtest harness detection | Keep unit-test isolation switches until unit tests move or refactor; keep `PLAYTEST_FAULT_STACK_LEAK` (`playtest/moria_playtest/selftest.py` explicit fault injection). |
 
 ---
 
@@ -132,24 +132,25 @@ Ranking prioritizes smallest remaining ceiling headroom (`tools/report_memory_bu
 
 ---
 
-### 4.3 Unwired / Dead Test & Diagnostic Symbols (`4` symbols, `21` lines)
+### 4.3 Unwired / Dead Test & Diagnostic Symbols (`2` symbols, `12` lines)
 
 | Symbol | `core/` `file:line` References | References Elsewhere | Owning Test Target | Status & Cleanup Impact |
 | --- | --- | --- | --- | --- |
 | `C128_STATUS_SP_CANARY_DIAG` | `core/game_loop.s:738,743,1113,1121,1459,1464,1947,1955`, `core/ui_status.s:42,530,543` | **None** (`0` hits in `platforms/`, `tools/`, `Makefile`) | None | Dead diagnostic instrumentation (`11` blocks checking return-address canary around `ui_status`); never enabled by any runner. |
 | `C128_CACHE_TEST_SKIP_TIER` | `core/tier_manager.s:350` | `platforms/commodore/c128/main.s:1301,3727,4328,4335` | None (`0` hits in `run_tests128.sh`) | Unwired leftover from an unused partial-tier-cache test variant; safe to remove with its `main.s` helper/table. |
-| `C128_TEST_SCRIPTED_SCROLL_SELECTOR` | `core/game_loop.s:37,562,971`, `core/item_actions_overlay.s:206` | `platforms/commodore/c128/input128.s` (`5`), `platforms/commodore/c128/main.s` (`5`) | None (`0` hits in `run_tests128.sh`) | Unwired C128 scripted scroll-selector stub (`4` `core/` lines). |
-| `C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY` | `core/game_loop.s:54,89,556`, `core/player_gain_spell_impl.s:56`, `core/player_magic_state.s:34` | `platforms/commodore/c128/input128.s` (`5`), `platforms/commodore/c128/main.s` (`8`) | None (`0` hits in `run_tests128.sh`) | Unwired C128 study-book overlay hook (`5` `core/` lines). |
+
+*(Removed: `C128_TEST_SCRIPTED_SCROLL_SELECTOR` and `C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY`.)*
 
 ---
 
-### 4.4 Boot / Town Diagnostics & Playtest Fault Injection (`3` symbols, `49` unique lines)
+### 4.4 Boot Diagnostics & Playtest Fault Injection (`2` symbols, `23` unique lines)
 
 | Symbol | `core/` `file:line` References | Enclosing `core/` Segment(s) | Owning Target(s) | Byte / Layout Impact |
 | --- | --- | --- | --- | --- |
 | `C128_REAL_BOOT_DIAG` | `core/dungeon_los.s:46,197,332,384`, `core/game_loop.s:688,693,703,708,714,719,738,743,1113,1121,1459,1464,1947,1955`, `core/player_create.s:685,690,734,739` (`22` lines) | `Default` / LOS / PlayerCreate | `platforms/commodore/c128/run_tests128.sh:build_real_boot_diag_assets` -> `run_real_boot_crash_harness`, `run_dungeon_attack_stability_smoke` | `moria128.realdiag.prg`: `311 B` free `< $6000`. Inserts `jsr c128_stack_guard_begin/check` + marker bytes (`8` shared lines with `C128_STATUS_SP_CANARY_DIAG`). |
-| `C128_TEST_TOWN_SELF_DUMP` | `core/dungeon_gen.s:93`, `core/game_loop.s:509,946,1117,1125,1131,1161,1314,1325,1333,1343,1355,1367,1374,1402,1427,1434,1443,1455,1468`, `core/player_create.s:38`, `core/ui_messages.s:116,130,230,251`, `core/ui_status.s:38` (`26` lines) | `Default`, `:MsgHistoryRestoreSegment()` | `platforms/commodore/c128/run_town_self_dump.sh:24` | Standalone diagnostic harness injecting `c128_town_dump_mark`/`log` calls and turn-countdown trap (`platforms/commodore/c128/main.s:186,927,2149,2323`). |
 | `PLAYTEST_FAULT_STACK_LEAK` | `core/game_loop.s:915` | `Default` | `playtest/moria_playtest/selftest.py:3,22` | Intentional 1-byte stack leak on `zp_turn_lo != 0` used by AI playtest infrastructure selftest (`make playtest-selftest`). Keep untouched. |
+
+*(Removed: `C128_TEST_TOWN_SELF_DUMP` across `core/` and `tools/trampoline_manifest.py`.)*
 
 ---
 
