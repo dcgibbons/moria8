@@ -1,7 +1,7 @@
 {
   "name": "Moria8",
   "short_name": "Moria8",
-  "description": "The classic roguelike Moria for the Commodore 64, Commodore 128, Commodore Plus/4, and Apple II.",
+  "description": "The classic roguelike Moria for the Commodore 64, Commodore 128, Commodore Plus/4, Apple II, Commander X16, Atari 8-bit, and Acorn BBC Master 128.",
   "start_url": "/",
   "display": "browser",
   "background_color": "#080704",

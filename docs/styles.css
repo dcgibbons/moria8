@@ -514,6 +514,46 @@ em {
   box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.24);
 }
 
+.gameplay-card-featured {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 0.2rem rgba(255, 217, 61, 0.06), 0 1.5rem 4rem rgba(0, 0, 0, 0.24);
+}
+
+.gameplay-card-featured .media-frame {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.gameplay-card-featured .gameplay-caption {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.gameplay-card-featured .gameplay-note {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
+  padding: 0 1.35rem 1.2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.gameplay-card-featured .clip-tabs {
+  grid-column: 2;
+  grid-row: 3;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
 .media-frame {
   position: relative;
   overflow: hidden;
@@ -562,14 +602,53 @@ em {
   opacity: 0.72;
 }
 
+.media-frame-plus4 {
+  background: #14081a;
+}
+
 .media-frame-plus4 .media-fallback {
   background: #3b174d;
   color: #d89ded;
 }
 
+.media-frame-c128 {
+  background: #0a0b1a;
+}
+
+.media-frame-apple {
+  background: #070b07;
+}
+
 .media-frame-apple .media-fallback {
   background: #101410;
   color: #9ef59e;
+}
+
+.media-frame-cx16 {
+  background: #060b0f;
+}
+
+.media-frame-cx16 .media-fallback {
+  background: #0b1b24;
+  color: #7ee3ff;
+}
+
+.media-frame-atari8 {
+  background: #0f0a04;
+}
+
+.media-frame-atari8 .media-fallback {
+  background: #231607;
+  color: #ffbe5c;
+}
+
+.media-frame-bbcmaster {
+  background: #070709;
+}
+
+.media-frame-bbcmaster .media-fallback {
+  background: #0b0c12;
+  color: #f0f2f8;
 }
 
 .gameplay-caption {
@@ -667,13 +746,14 @@ em {
 
 .download-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 
 .download-card {
   display: flex;
-  min-height: 25rem;
+  min-width: 0;
+  min-height: 22rem;
   flex-direction: column;
   border: 1px solid var(--line);
   padding: clamp(1.4rem, 4vw, 2.2rem);
@@ -681,8 +761,39 @@ em {
 }
 
 .download-card-featured {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  grid-template-rows: auto auto 1fr;
+  gap: 0 2.5rem;
+  min-height: auto;
   border-color: var(--gold);
   box-shadow: inset 0 0 0 0.2rem rgba(255, 217, 61, 0.06);
+}
+
+.download-card-featured .card-topline {
+  grid-column: 1;
+  grid-row: 1;
+  margin-bottom: 1.25rem;
+}
+
+.download-card-featured h3 {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.download-card-featured > p {
+  grid-column: 1;
+  grid-row: 3;
+  margin-bottom: 0;
+}
+
+.download-card-featured .download-actions {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  align-self: center;
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .card-topline {
@@ -750,7 +861,8 @@ em {
 
 .format-links {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
 }
 
 .download-help {
@@ -967,8 +1079,46 @@ footer {
     position: static;
   }
 
-  .guide-grid {
+  .guide-grid,
+  .download-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gameplay-card-featured {
+    display: block;
+  }
+
+  .gameplay-card-featured .media-frame {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .gameplay-card-featured .gameplay-note {
+    padding: 0 1.35rem 1.25rem;
+  }
+
+  .gameplay-card-featured .clip-tabs {
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .download-card-featured {
+    display: flex;
+    min-height: auto;
+  }
+
+  .download-card-featured .card-topline {
+    margin-bottom: 2rem;
+  }
+
+  .download-card-featured > p {
+    margin-bottom: 1rem;
+  }
+
+  .download-card-featured .download-actions {
+    align-self: stretch;
+    margin-top: auto;
+    padding-top: 1.5rem;
   }
 
   .community-actions {
@@ -1033,8 +1183,8 @@ footer {
     flex-direction: column;
   }
 
-  .download-card {
-    min-height: 22rem;
+  .download-card:not(.download-card-featured) {
+    min-height: 20rem;
   }
 
   .wordmark-wrap {
