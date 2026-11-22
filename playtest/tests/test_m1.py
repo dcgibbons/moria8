@@ -3963,6 +3963,29 @@ class ResistFireTest(unittest.TestCase):
         brain.note_breath(o, view, 82, "frost")
         self.assertEqual(brain.level.deadly, (10, 10))                 # the second: leave the level
 
+    def test_a_caster_that_kills_in_two_casts_is_teleported_from_not_walked_from(self) -> None:
+        """C64 Balrog, 2026-11-21: a clvl 33 Half-Elf Mage at 265/265 walked
+        toward the stairs from an unseen Ancient Blue Dragon casting at it
+        (240) and its next two breaths killed it, twice from one checkpoint.
+        Just after such a cast, stairs not at hand: teleport first."""
+        from moria_playtest.brain import CASTER_JUST_CAST, TELEPORT_SCROLL
+        kind = knowledge.kinds_by_name()["Ancient Blue Dragon"]
+        burst = knowledge.spell_burst()[kind]
+        brain = Brain(GOALS["deep"])
+        brain.teleports = 1
+        view = town_view((10, 10), (60, 40), dlvl=37)
+        view.stairs_up = lambda: {(40, 10)}                                 # type: ignore[method-assign]
+        hp = burst + 25                                                     # two casts kill
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=33, hp=hp, mhp=hp)
+        brain.level.casters[kind] = o.step                                  # it just cast
+        decision = brain.leave_caster(o, view)
+        self.assertEqual((decision.key, brain.picking), (ord("R"), TELEPORT_SCROLL), decision.reason)
+        brain.level.casters[kind] = o.step - CASTER_JUST_CAST - 1           # not just now: walk
+        self.assertEqual(brain.leave_caster(o, view).layer, "leave-caster")
+        brain.level.casters[kind] = o.step
+        view.stairs_up = lambda: {(12, 10)}                                 # type: ignore[method-assign]
+        self.assertEqual(brain.leave_caster(o, view).layer, "leave-caster")  # the stairs at hand: walk
+
     def test_with_a_lethal_breather_about_it_rests_before_exploring(self) -> None:
         """2026-11-07: a level-35 Priest phased from a Mature Black Dragon
         (160), explored on at 137-152/252 and died to its next breath."""

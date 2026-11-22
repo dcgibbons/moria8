@@ -617,6 +617,8 @@ HELD_TURNS = 4           # the fewest helpless turns of a paralysing blow (randi
 DOOR_BURST = "You hear a door burst open!"   # something awake forcing its way: scout again
 HEROIC = "You feel heroic!"   # a Potion of Heroism's first drink: +10 HP (iq_effect_heroism)
                          # half a screen: Detect Evil sees only the screen (VMS detect_evil, the panel)
+CASTER_JUST_CAST = 2      # steps after a caster's cast in which leave_caster teleports rather than walks
+CASTER_TELEPORT_PAST = 3  # ... unless the stairs are this close
 BREATH_LETHAL = 0.9      # a caster in view whose biggest spell or breath is this share of HP or more: out of its sight
 UNSEEN_BREATH_STEPS = 40 # steps a breath from out of sight is remembered as the next one's size
 UNSEEN_BREATHS = 2       # ... and the breaths it is weighed as: no sight line to step out of
@@ -7102,9 +7104,22 @@ class Brain:
             return Decision(ord("<") if here == TYPE_STAIRS_UP else ord(">"), "leave-caster",
                             f"{why}: take the stairs")
         exits = view.stairs_up() | (view.stairs_down() if deeper_ok else set())
+        far = view.path_steps(exits, avoid_monsters=True) if exits else None
+        latest = max((seen for kind, seen in self.level.casters.items()
+                      if knowledge.spell_burst().get(kind, 0) == burst), default=None)
+        if 2 * burst >= obs.hp and latest is not None and obs.step - latest <= CASTER_JUST_CAST \
+                and (far is None or far > CASTER_TELEPORT_PAST):
+            # Two of its casts kill and it has just cast: away at once, not a
+            # walk in its sight. A clvl 33 Half-Elf Mage at 265/265 walked
+            # toward the stairs from an unseen Ancient Blue Dragon (240) and
+            # its next two breaths killed it (C64 Balrog, 2026-11-21).
+            jump = self.far_escape(obs, f"{why}: away before its next")
+            if jump is None and self.magic.can(obs, TELEPORT_SELF):
+                jump = Decision(*self.magic.pray(TELEPORT_SELF, f"{why}: cast Teleport Self before its next"))
+            if jump is not None:
+                return jump
         if not exits:
             return None
-        far = view.path_steps(exits, avoid_monsters=True)
         if not view.creatures and (far is None or far > LEAVE_WALK_STEPS):
             # Not a long walk hurt in its reach: heal at once, then Word of
             # Recall first. A level-37 Priest walked 25 steps toward stairs at
