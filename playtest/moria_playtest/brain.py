@@ -628,6 +628,7 @@ UNSEEN_BREATHS = 2       # ... and the breaths it is weighed as: no sight line t
 THREAT_DEPTH_FROM = 30   # character level from which a threat_depth goal goes as deep as it survives
 OUT_OF_DEPTH = 2         # ... counting natives this much deeper: 1 in 50 picks is out of depth by
                          # 1 + |randnor(0,4)| (VMS alloc_monster mon_nasty, core/monster_catalog.s)
+OUT_OF_DEPTH_FREE = 0    # ... with Free Action worn, natives only: hunt where the experience is
 SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
 RECALL_CLIMB = 2         # Word of Recall down to a deepest level this many past ready: climb from there
@@ -4327,8 +4328,14 @@ class Brain:
         # Natives OUT_OF_DEPTH deeper too: clvl 31 Warriors at 256-289 HP
         # took DL37 (a Mature Red Dragon's 160), met Ancient Blue Dragons of
         # DL39 there and died 16 times in 30 minutes (C64 Balrog, 2026-11-11;
-        # maintainer: count them).
-        return self.native_exchange(obs, dlvl + OUT_OF_DEPTH) < BREATH_LETHAL * obs.mhp
+        # maintainer: count them). With Free Action worn, natives only
+        # (OUT_OF_DEPTH_FREE): the margin's DL40 Ancient Multi-Hued Dragon
+        # held every clvl 36-39 character at DL37, where a big kill was ~400
+        # experience against DL38-39's 1,500-2,500 (maintainer, 2026-11-22:
+        # "the bots should go lower. don't play it safe! HUNT!"). One met out
+        # of depth is left (leave_deadly).
+        ood = OUT_OF_DEPTH_FREE if self.free_action() else OUT_OF_DEPTH
+        return self.native_exchange(obs, dlvl + ood) < BREATH_LETHAL * obs.mhp
 
     def short_escape(self, obs: Observation) -> bool:
         """Out of a breather's reach at once: a Phase Door or Teleportation
