@@ -630,9 +630,10 @@ OUT_OF_DEPTH = 2         # ... counting natives this much deeper: 1 in 50 picks 
                          # 1 + |randnor(0,4)| (VMS alloc_monster mon_nasty, core/monster_catalog.s)
 SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
 BREATHER_MEMORY = 300    # steps a breather seen on the level keeps the bot resting to its breath
-RECALL_CLIMB = 1         # Word of Recall down to a deepest level this many past ready: climb from there
+RECALL_CLIMB = 2         # Word of Recall down to a deepest level this many past ready: climb from there
                          # (3 for an hour on 2026-11-12: warriors recalled to DL38 and died climbing through
-                         # DL36-38's Ancient Dragons; the starving ones it was for had full packs, AMMO_STACKS)
+                         # DL36-38's Ancient Dragons; the starving ones it was for had full packs, AMMO_STACKS.
+                         # 1 until 2026-11-22: seven characters two past ready walked down from DL1 every town trip)
 RECALL_FAR = 5           # deeper than ready by more than this: Word of Recall up, not the stairs (resupply)
 RECALL_WALK_LEVELS = 5   # levels above the deepest beyond which Word of Recall (via town) beats walking down
 BREATHS_TO_LEAVE = 2     # breaths taken on one level that make it one to leave (leave_deadly)
@@ -3905,10 +3906,17 @@ class Brain:
 
     def recall_returns(self, obs: Observation) -> bool:
         """Word of Recall read in town comes back down: the deepest level it
-        returns to is one the character may go to (or one level past it, a
+        returns to is one the character may go to (or RECALL_CLIMB past it, a
         climb), as the town's recall decides; else it walks down, and a town
         trip costs every level back."""
-        return self.depth_ready(obs, self.max_dlvl, slack=1) or self.depth_ready(obs, self.max_dlvl - RECALL_CLIMB)
+        return self.recall_keeps(obs, self.max_dlvl)
+
+    def recall_keeps(self, obs: Observation, dlvl: int) -> bool:
+        """With ``dlvl`` reached, Word of Recall still comes back down
+        (``recall_returns``): one rule for the town's recall and the bot's own
+        hops below its depth (``way_on``), which set the deepest level."""
+        deepest = max(self.max_dlvl, dlvl)
+        return self.depth_ready(obs, deepest, slack=1) or self.depth_ready(obs, deepest - RECALL_CLIMB)
 
     def book_levels(self) -> tuple[int, ...] | None:
         """The level of each book's first spell for this class, if it buys books."""
@@ -6015,8 +6023,8 @@ class Brain:
                 # deep to stay (resupply's too_deep), or the bot climbs, recalls
                 # up and recalls down again. A level-25 Balrog graduate went
                 # DL28-27-26-town-DL28 over and over (M8, 2026-11-02). The
-                # stairs go down a level at a time instead. One level too deep
-                # is a climb, as a player takes the first stairs up: level-37
+                # stairs go down a level at a time instead. RECALL_CLIMB levels
+                # too deep is a climb, as a player takes the first stairs up: level-37
                 # Priests whose deepest was DL38 walked down from DL1 every
                 # town trip (C64 Balrog, 2026-11-09).
                 return None
@@ -6071,8 +6079,7 @@ class Brain:
         checkpoint saved on DL1, and level-38 Priests walked down from there,
         bouncing DL3-DL4, toward DL37 (C64 Balrog, 2026-11-09)."""
         return (obs.dlvl > 0 and self.recall >= 2 and self.max_dlvl - obs.dlvl > RECALL_WALK_LEVELS
-                and (self.depth_ready(obs, self.max_dlvl, slack=1)
-                     or self.depth_ready(obs, self.max_dlvl - RECALL_CLIMB)))
+                and self.recall_keeps(obs, self.max_dlvl))
 
     def still_there(self, pos: Pos, obs: Observation) -> bool:
         """The creature at ``pos`` has stood there STILL_STEPS or more."""
@@ -7711,7 +7718,10 @@ class Brain:
         529 times."""
         if not self.hunting_deep(obs):
             return None
-        if view.stairs_down():
+        if view.stairs_down() and self.recall_keeps(obs, obs.dlvl + 1):
+            # Never so deep that Word of Recall no longer comes back down:
+            # the deepest level, two past ready, had seven characters walking
+            # down from DL1 after every town trip (C64 Balrog, 2026-11-22).
             decision = self.down_to_climb_back(view)
             if decision is not None:
                 return decision

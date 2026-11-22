@@ -2914,6 +2914,35 @@ class ThreatDepthTest(unittest.TestCase):
         hop = brain.stair_scum(o, down)
         self.assertEqual((hop.layer, hop.reason), ("stair-scum", "no way up: path to the down stairs"))
 
+    def test_recall_comes_back_down_two_levels_past_ready(self) -> None:
+        """C64 Balrog, 2026-11-22: seven characters whose deepest level was
+        DL38-39, ready to DL37, walked down from DL1 after every town trip;
+        86-88% of two runs' steps were above DL30."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-rogue"))
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=37, hp=412, mhp=412)
+        brain.max_dlvl = 39
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 37   # type: ignore[method-assign]
+        self.assertTrue(brain.recall_returns(o))                            # two past ready: recall, climb
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 36   # type: ignore[method-assign]
+        self.assertFalse(brain.recall_returns(o))                           # three past: walk down
+
+    def test_hunting_deep_the_hop_keeps_word_of_recall_coming_back(self) -> None:
+        """The hop below its depth sets the deepest level: never so deep
+        that Word of Recall stops coming back down (recall_keeps)."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
+        brain.food = 20
+        brain.deeper_ok = lambda obs: False                                # type: ignore[method-assign]
+        down = town_view((5, 5), (9, 9), walls=[(6, 5)], dlvl=37)          # only a down staircase known
+        down.types[5 * COLS + 7] = UNKNOWN
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=352, mhp=352)
+        brain.max_dlvl = 37
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 35   # type: ignore[method-assign]
+        self.assertIsNone(brain.way_on(o, down))                            # DL38 would leave recall behind
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 37   # type: ignore[method-assign]
+        self.assertEqual(brain.way_on(o, down).reason, "no way up: path to the down stairs")
+
     def test_explore_runs_a_straight_corridor(self) -> None:
         """C64 Balrog, 2026-11-22: 53% of a clvl 39 Elf Priest's keys were
         single explore steps; the game's Run (SHIFT+direction) walks a
