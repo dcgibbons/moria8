@@ -1130,12 +1130,17 @@ class Balrog:
             return
         item["start"] = start
 
-    def checkpoint(self, record: dict[str, Any], job: dict[str, Any], start: dict[str, Any]) -> bool:
+    def checkpoint(self, record: dict[str, Any], job: dict[str, Any], start: dict[str, Any],
+                   handed_over: bool = False) -> bool:
         """A Balrog run's checkpoint becomes its combination's start when its
         character level is past the start's, or at it with
         ARMOUR_CHECKPOINT_AC more AC (§23.9): the start before it goes on the
         history. ``restores``: the runs of the chain that ended before this
-        start."""
+        start. ``handed_over``: the run ended in town for a newer build or a
+        waiting character (rotate, yield), cut short, and any experience it
+        gained is kept: six builds on 2026-11-22 ended runs an hour in, and a
+        clvl 39 Elf Priest's 184,000 since its 5,764,000 start, short of 5%,
+        was thrown away."""
         item = self.state["items"].get(f"{record['platform']}/{record['character']}")
         if item is None:
             return False
@@ -1148,7 +1153,7 @@ class Balrog:
                 base = start.get("base_ac")   # a start from before 2026-11-07: the run's own AC at it
             more_ac = base is not None and start.get("ac") is not None and start["ac"] >= base + ARMOUR_CHECKPOINT_AC \
                 and start.get("xp", 0) >= current.get("xp", 0)   # better armour, never for less experience
-            more_xp = start.get("xp", 0) >= current.get("xp", 0) + checkpoint_xp(current.get("xp", 0))
+            more_xp = start.get("xp", 0) >= current.get("xp", 0) + (1 if handed_over else checkpoint_xp(current.get("xp", 0)))
             if not (more_ac or more_xp):
                 return False
         resume = job.get("resume") or {}
@@ -2043,7 +2048,9 @@ class Service:
             start["snapshot"] = str(dest / state["snapshot"])
         else:
             start["save"] = str(dest)
-        if not self.balrog.checkpoint(record, job, start):
+        events = self.home / "runs" / record["id"] / "events.jsonl"
+        handed_over = events.exists() and '"kind": "rotate"' in events.read_text(errors="replace")
+        if not self.balrog.checkpoint(record, job, start, handed_over):
             return False
         shutil.copytree(ckpt, dest, dirs_exist_ok=True)
         self.log(f"balrog queue: {record['character']} goes on from its {ckpt.name} checkpoint (run {record['id']}, "

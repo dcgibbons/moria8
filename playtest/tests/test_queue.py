@@ -1128,6 +1128,26 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3"), {"build": "b0", "resume": level}))
         self.assertEqual((item["start"]["run"], item["start"]["xp"]), ("b3-clvl39-ac040-xp05800000", 5_800_000))
 
+    def test_a_run_that_hands_over_keeps_any_gain(self) -> None:
+        """C64 Balrog, 2026-11-22: six builds in a day ended runs an hour in,
+        and a clvl 39 Elf Priest's 184,000 since its 5,764,000 start, short of
+        5%, was thrown away. A run that ended handing over (rotate) keeps it;
+        one that did not still needs checkpoint_xp more."""
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        self.checkpoint_run(service, "b1", 39, 350_000, xp=5_764_000)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]}))
+        level = dict(item["start"])
+        self.checkpoint_run(service, "b2", 39, 360_000, ac=40, base_ac=40, xp=5_948_000)
+        self.assertFalse(service.balrog_checkpoint(self.balrog_record("b2", outcome="budget"),
+                                                   {"build": "b0", "resume": level}))   # not handed over
+        self.checkpoint_run(service, "b3", 39, 370_000, ac=40, base_ac=40, xp=5_948_000)
+        (service.home / "runs" / "b3" / "events.jsonl").write_text(
+            '{"t": 1, "kind": "rotate", "seed": 1, "step": 370000, "build": "b9"}\\n')
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3", outcome="budget"),
+                                                  {"build": "b0", "resume": level}))
+        self.assertEqual(item["start"]["xp"], 5_948_000)
+
     def test_a_run_short_of_a_flat_250000_still_moves_a_mid_level_start(self) -> None:
         """C64 Balrog, 2026-11-21: a clvl 36 Half-Orc Priest's runs reached
         890,535 and 784,527 from its 729,169 start, both short of a flat
