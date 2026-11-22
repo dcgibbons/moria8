@@ -155,6 +155,11 @@ DEFAULTS: dict[str, Any] = {
     # workers for this priest character, and the other half for everyone
     # else"), and no other character's game is stopped.
     "balrog_characters": [], "balrog_copies": 1, "balrog_focus_workers": 0,
+    # Above 0: every character whose start is at this level or higher joins
+    # the focus on its own, one shared slot each (maintainer, 2026-11-21:
+    # "putting the higher level games at the head of the queue is important
+    # for forward progress with limited machine resources").
+    "balrog_focus_min_clvl": 0,
     # The dashboard's statistics (monsters, Balrog kills, build history, run
     # counts) count runs from this run id prefix on ("YYYYMMDD-HHMMSS"); the
     # earlier runs stay on disk (maintainer, 2026-11-15: a fresh start).
@@ -1850,6 +1855,21 @@ class Service:
         for run_id in hit:
             self.stop_run(run_id)
 
+    def balrog_focus(self) -> tuple[tuple[str, ...], int]:
+        """(characters, shared slots) of the Balrog focus: those named
+        (``balrog_characters``, ``balrog_focus_workers``) and, with
+        ``balrog_focus_min_clvl``, every character not yet won whose start
+        is at that level or higher, a shared slot each."""
+        named = tuple(self.config.get("balrog_characters") or ())
+        share = int(self.config.get("balrog_focus_workers") or 0)
+        least = int(self.config.get("balrog_focus_min_clvl") or 0)
+        if not least:
+            return named, share
+        auto = tuple(sorted({item["character"] for item in self.balrog.state["items"].values()
+                             if (item.get("start") or {}).get("clvl", 0) >= least and not item.get("won")}
+                            - set(named)))
+        return named + auto, share + len(auto)
+
     def balrog_yield(self) -> None:
         """One Balrog run per combination waiting over BALROG_SLICE_S for a
         slot, the longest playing first, yields at its next town visit
@@ -1870,8 +1890,7 @@ class Service:
         # longest-playing other games yield for it at once (maintainer,
         # 2026-11-21: "give the higher level characters priority"; the focus
         # set at 15:57 found every slot taken by games 20 minutes old).
-        focus = tuple(self.config.get("balrog_characters") or ())
-        share = int(self.config.get("balrog_focus_workers") or 0)
+        focus, share = self.balrog_focus()
         if focus and share:
             focused = sum(1 for j in balrog.values() if j["character"] in focus)
             short = [k for k in self.balrog.state["order"] if k not in playing
@@ -2082,8 +2101,8 @@ class Service:
         for run_id, job in list(self.running.items()):
             if job["queue"] != "main" and job["paused"]:
                 self.pause(run_id, False)
-        focus = config.get("balrog_characters") or ()
-        shared = int(config.get("balrog_focus_workers") or 0) > 0
+        focus, share = self.balrog_focus()
+        shared = share > 0
         if focus:
             # The main queue's runs and other characters' Balrog games end
             # (theirs play beside the focus when it has a share):
@@ -2176,8 +2195,7 @@ class Service:
         playing = collections.Counter(f"{job['platform']}/{job['character']}" for job in self.running.values()
                                       if job["queue"] == "balrog")
         copies = max(1, int(self.config.get("balrog_copies") or 1))
-        focus = tuple(self.config.get("balrog_characters") or ())
-        share = int(self.config.get("balrog_focus_workers") or 0)
+        focus, share = self.balrog_focus()
         focused = sum(1 for job in self.running.values() if job["queue"] == "balrog" and job["character"] in focus)
         item = None
         full = {k for k, n in playing.items() if n >= copies}

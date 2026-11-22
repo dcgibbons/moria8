@@ -1255,6 +1255,32 @@ class BalrogQueueTest(unittest.TestCase):
         service.balrog_yield()
         self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # the focus plays: no yield
 
+    def test_characters_at_the_focus_level_join_the_focus_on_their_own(self) -> None:
+        """Maintainer, 2026-11-21: "putting the higher level games at the
+        head of the queue is important for forward progress with limited
+        machine resources". With balrog_focus_min_clvl, each character whose
+        start reaches it is in the focus with a slot of its own, and the
+        others yield for it as for a named one."""
+        service = self.service(4, 2)
+        balrog = service.balrog
+        for combo in ("human-paladin", "human-priest", "elf-priest"):
+            balrog.graduate("c64", combo, {})
+        balrog.state["items"]["c64/elf-priest"]["start"] = {"run": "r", "clvl": 37, "xp": 1, "set": 1}
+        balrog.state["items"]["c64/human-priest"]["start"] = {"run": "s", "clvl": 30, "xp": 1, "set": 1}
+        self.assertEqual(service.balrog_focus(), ((), 0))                  # not set: no focus
+        service.config.update(balrog_focus_min_clvl=36)
+        self.assertEqual(service.balrog_focus(), (("elf-priest",), 1))
+        service.config.update(balrog_characters=["human-paladin"], balrog_focus_workers=1)
+        self.assertEqual(service.balrog_focus(), (("human-paladin", "elf-priest"), 2))   # named and reached
+        service.config.update(balrog_characters=[], balrog_focus_workers=0)
+        t = time.time()
+        balrog.state["items"]["c64/elf-priest"]["graduated"] = {"ended": t - 60}
+        service.running = {
+            "old": {"queue": "balrog", "platform": "c64", "character": "human-paladin", "started": t - 1200},
+            "new": {"queue": "balrog", "platform": "c64", "character": "human-priest", "started": t - 600}}
+        service.balrog_yield()
+        self.assertTrue((service.home / "runs" / "old" / queue.YIELD).exists())    # yields for the L37
+
     def test_a_checkpoint_waits_for_a_character_out_of_danger(self) -> None:
         """2026-11-15: the C64 Human Warrior's clvl 10 checkpoint was taken on
         its arrival in town poisoned, and all 1,722 of its restores died 14
