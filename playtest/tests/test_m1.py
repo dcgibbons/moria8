@@ -2927,6 +2927,22 @@ class ThreatDepthTest(unittest.TestCase):
         brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 36   # type: ignore[method-assign]
         self.assertFalse(brain.recall_returns(o))                           # three past: walk down
 
+    def test_waiting_for_recall_out_of_a_creatures_reach(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 39 Half-Elf Priest waited for Word of
+        Recall beside a Grape Jelly (it never moves) and was drained ~88,000
+        XP twice before the yank."""
+        from moria_playtest.brain import chebyshev
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-elf-priest"))
+        brain.recalling = True
+        view = town_view((5, 5), (20, 20), dlvl=37, stairs_type=0)
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=315, mhp=315)
+        self.assertEqual(brain.recall_trip(o, view).key, ord("5"))         # nothing beside: wait
+        view.creatures = {(6, 5): Creature("j", 12)}                       # a Grape Jelly beside
+        step = brain.recall_trip(o, view)
+        target = next((5 + dx, 5 + dy) for (dx, dy), k in DIRS.items() if k == step.key)
+        self.assertGreater(chebyshev(target, (6, 5)), 1)                    # a square out of its reach
+
     def test_hunting_deep_the_hop_keeps_word_of_recall_coming_back(self) -> None:
         """The hop below its depth sets the deepest level: never so deep
         that Word of Recall stops coming back down (recall_keeps)."""

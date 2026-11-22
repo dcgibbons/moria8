@@ -5980,6 +5980,18 @@ class Brain:
         to the deepest level. Waiting for the yank, stay put: stairs would
         undo the trip."""
         if self.recalling:
+            beside = [p for p in view.creatures if chebyshev(p, view.pos) == 1] if view is not None else []
+            if beside:
+                # Wait out of reach of what the fight layers left alone: a
+                # clvl 39 Half-Elf Priest waited beside a Grape Jelly, which
+                # never moves, and its touch drained ~88,000 XP twice before
+                # the yank (C64 Balrog, 2026-11-22).
+                for (dx, dy), key in sorted(DIRS.items()):
+                    target = (view.pos[0] + dx, view.pos[1] + dy)
+                    if view.passable(*target, avoid_monsters=True) and view.type_at(*target) != TYPE_TRAP \
+                            and all(chebyshev(target, p) > 1 for p in view.creatures):
+                        glyph = view.creatures[beside[0]].glyph
+                        return Decision(key, "recall", f"Word of Recall read: wait out of the '{glyph}''s reach")
             return Decision(ord("5"), "recall", "Word of Recall read: wait for it")
         if not self.recall:
             # The count says none, but counts drift: stuck, look anyway, once
