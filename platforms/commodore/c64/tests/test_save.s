@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence, invalid item-ID load hardening.
 //
-// Results at $0400-$042B: $01 = pass, $00 = fail per test (44 tests)
+// Results at $0400-$042C: $01 = pass, $00 = fail per test (45 tests)
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -27,7 +27,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #43
+    ldx #44
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -376,7 +376,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 44, $ff
+tc_results: .fill 45, $ff
 
 // ui_character.s dropped to keep the test body under MAP_BASE.
 ui_char_display:
@@ -391,6 +391,9 @@ tc_count: .byte 0
 // Memory-backed save stream used by persistence tests. MAP_BASE is unused
 // after the RLE tests and gives enough room for the item save blocks.
 .const SAVE_STREAM_BUF = MAP_BASE
+// Full save_game + load_game round-trip in Test 45 (~4.1 KB with zeroed map)
+// sits between test_body_end and MAP_BASE so it never touches MAP_BASE or $D000.
+.const T45_STREAM_BUF = MAP_BASE - $1100
 
 // RLE workspace for the round-trip tests.
 // $0500-$07ff is free in this test image and gives 768 bytes, which is enough
@@ -420,6 +423,17 @@ test_save_chkin_fail: .byte 0
 test_save_cmd_status: .byte 0
 test_save_cmd_calls: .byte 0
 test_save_magic_readst: .byte 0
+test_save_eof_lo:       .byte 0
+test_save_eof_hi:       .byte 0
+test_save_end_lo:       .byte 0
+test_save_end_hi:       .byte 0
+test_save_t45_ck_active:.byte 0
+test_save_t45_ck0_lo:   .byte 0
+test_save_t45_ck0_hi:   .byte 0
+test_save_t45_ck1_lo:   .byte 0
+test_save_t45_ck1_hi:   .byte 0
+test_save_t45_ck_lo:    .byte 0
+test_save_t45_ck_hi:    .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -515,12 +529,65 @@ test_save_chrout:
 
 test_save_chrin:
     sty test_save_tmp_y
+    lda test_save_eof_hi
+    beq !read_next+
+    lda zp_ptr2_hi
+    cmp test_save_eof_hi
+    bcc !read_next+
+    bne !at_eof+
+    lda zp_ptr2
+    cmp test_save_eof_lo
+    bcc !read_next+
+!at_eof:
+    lda #$40
+    sta test_save_readst_value
+    lda #$00
+    ldy test_save_tmp_y
+    clc
+    rts
+!read_next:
+    lda test_save_t45_ck_active
+    beq !read_mem+
+    lda zp_ptr2_hi
+    cmp test_save_t45_ck0_hi
+    bne !chk_ck1+
+    lda zp_ptr2
+    cmp test_save_t45_ck0_lo
+    bne !chk_ck1+
+    lda test_save_t45_ck_lo
+    jmp !got_byte+
+!chk_ck1:
+    lda zp_ptr2_hi
+    cmp test_save_t45_ck1_hi
+    bne !read_mem+
+    lda zp_ptr2
+    cmp test_save_t45_ck1_lo
+    bne !read_mem+
+    lda test_save_t45_ck_hi
+    jmp !got_byte+
+!read_mem:
     ldy #0
     lda (zp_ptr2),y
+!got_byte:
     inc zp_ptr2
     bne !+
     inc zp_ptr2_hi
-!:  ldy test_save_tmp_y
+!:  pha
+    lda test_save_eof_hi
+    beq !no_eof+
+    lda zp_ptr2_hi
+    cmp test_save_eof_hi
+    bcc !no_eof+
+    bne !hit_eof+
+    lda zp_ptr2
+    cmp test_save_eof_lo
+    bcc !no_eof+
+!hit_eof:
+    lda #$40
+    sta test_save_readst_value
+!no_eof:
+    pla
+    ldy test_save_tmp_y
     clc
     rts
 
@@ -677,6 +744,7 @@ ts_reset_io_state:
     sta test_save_cmd_status
     sta test_save_cmd_calls
     sta test_save_magic_readst
+    sta test_save_eof_hi
     rts
 
 // ts_clear_known_bits — Zero the full known-item bitset. Clobbers: A, X
@@ -765,7 +833,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #43
+    ldx #44
     lda #$ff
 !clr:
     sta tc_results,x
@@ -3664,8 +3732,189 @@ t29_fail_code:
     lda #$00
     sta tc_results + 43
 
+    // ============================================================
+    // Test 45: non-chunked $40 EOF during load_read_byte flags
+    // save_io_error and aborts truncated load_game cleanly with
+    // LOAD_RESULT_CORRUPT, while clean $40 EOI on the final checksum
+    // byte succeeds with LOAD_RESULT_OK.
+    // ============================================================
+    :PatchJump(save_file_exists, test_save_file_not_exists)
+    jsr ts_reset_io_state
+    sta test_save_last_msg
+    sta test_save_dismiss_calls
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    lda #1
+    sta test_save_marker_present
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+
+    // 45a: direct load_read_byte accepts READST == 0 and flags READST == $40.
+    lda #$11
+    sta T45_STREAM_BUF
+    lda #$22
+    sta T45_STREAM_BUF + 1
+    lda #<T45_STREAM_BUF
+    sta zp_ptr2
+    lda #>T45_STREAM_BUF
+    sta zp_ptr2_hi
+    jsr load_read_byte
+    cmp #$11
+    bne !t45_fail_top+
+    lda save_io_error
+    bne !t45_fail_top+
+    lda #$40
+    sta test_save_readst_value
+    jsr load_read_byte
+    cmp #$22
+    bne !t45_fail_top+
+    lda save_io_error
+    cmp #1
+    beq !t45_clr_setup+
+!t45_fail_top:
+    jmp !t45_fail+
+!t45_clr_setup:
+
+    // Zero MAP_BASE so RLE compresses cleanly inside T45_STREAM_BUF..MAP_BASE.
+    lda #0
+    ldx #0
+!t45_clr_map:
+    sta MAP_BASE,x
+    sta MAP_BASE + $100,x
+    sta MAP_BASE + $200,x
+    sta MAP_BASE + $300,x
+    sta MAP_BASE + $400,x
+    sta MAP_BASE + $500,x
+    sta MAP_BASE + $600,x
+    sta MAP_BASE + $700,x
+    sta MAP_BASE + $800,x
+    sta MAP_BASE + $900,x
+    sta MAP_BASE + $a00,x
+    sta MAP_BASE + $b00,x
+    sta MAP_BASE + $c00,x
+    sta MAP_BASE + $d00,x
+    sta MAP_BASE + $e00,x
+    inx
+    bne !t45_clr_map-
+
+    jsr item_init_inventory
+    jsr ts_reset_io_state
+    lda #$25
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #<T45_STREAM_BUF
+    sta zp_ptr2
+    lda #>T45_STREAM_BUF
+    sta zp_ptr2_hi
+    jsr save_game
+    bcc !t45_fail_jmp+
+    lda zp_ptr2
+    sta test_save_end_lo
+    lda zp_ptr2_hi
+    sta test_save_end_hi
+
+    // Preserve the 2 tail checksum bytes before load_game restores MAP_BASE
+    // over the upper part of T45_STREAM_BUF ($C000-$CEFF).
+    lda zp_ptr2
+    sec
+    sbc #1
+    sta test_save_t45_ck1_lo
+    sta zp_ptr0
+    lda zp_ptr2_hi
+    sbc #0
+    sta test_save_t45_ck1_hi
+    sta zp_ptr0_hi
+    ldy #0
+    lda (zp_ptr0),y
+    sta test_save_t45_ck_hi
+    lda zp_ptr2
+    sec
+    sbc #2
+    sta test_save_t45_ck0_lo
+    sta zp_ptr0
+    lda zp_ptr2_hi
+    sbc #0
+    sta test_save_t45_ck0_hi
+    sta zp_ptr0_hi
+    lda (zp_ptr0),y
+    sta test_save_t45_ck_lo
+
+    // 45b: Valid complete stream with $40 EOI on the final byte (cksum_hi) -> OK
+    jsr ts_reset_io_state
+    sta test_save_readst_value
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #1
+    sta test_save_t45_ck_active
+    lda test_save_end_lo
+    sta test_save_eof_lo
+    lda test_save_end_hi
+    sta test_save_eof_hi
+    lda #<T45_STREAM_BUF
+    sta zp_ptr2
+    lda #>T45_STREAM_BUF
+    sta zp_ptr2_hi
+    jsr load_game
+    lda #0
+    sta test_save_t45_ck_active
+    bcc !t45_fail_jmp+
+    lda load_result
+    cmp #LOAD_RESULT_OK
+    bne !t45_fail_jmp+
+    lda save_io_error
+    bne !t45_fail_jmp+
+    lda player_data + PL_LEVEL
+    cmp #$25
+    beq !t45_trunc+
+!t45_fail_jmp:
+    jmp !t45_fail+
+
+!t45_trunc:
+    // 45c: Stream truncated mid-payload ($40 at magic + 20 B) -> CORRUPT
+    // and halts reading at the EOF boundary rather than advancing past it.
+    jsr ts_reset_io_state
+    sta test_save_readst_value
+    lda #$99
+    sta player_data + PL_LEVEL
+    lda #<(T45_STREAM_BUF + SAVE_MAGIC_SIZE + 20)
+    sta test_save_eof_lo
+    lda #>(T45_STREAM_BUF + SAVE_MAGIC_SIZE + 20)
+    sta test_save_eof_hi
+    lda #<T45_STREAM_BUF
+    sta zp_ptr2
+    lda #>T45_STREAM_BUF
+    sta zp_ptr2_hi
+    jsr load_game
+    bcs !t45_fail+
+    lda load_result
+    cmp #LOAD_RESULT_CORRUPT
+    bne !t45_fail+
+    lda save_io_error
+    beq !t45_fail+
+    lda zp_ptr2
+    cmp test_save_eof_lo
+    bne !t45_fail+
+    lda zp_ptr2_hi
+    cmp test_save_eof_hi
+    bne !t45_fail+
+    lda #$01
+    .byte $2c
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
+    lda #0
+    sta test_save_t45_ck_active
+    sta test_save_eof_hi
+    sta test_save_readst_value
+    sta test_save_marker_present
+
     jmp test_finish
 
 test_body_end:
 .assert "RLE test buffer stays below test code", RLE_TEST_BUF + $0300 <= $0800, true
+.assert "Test 45 stream buffer stays between test body and MAP_BASE", test_body_end <= T45_STREAM_BUF, true
 .assert "Save test code stays below MAP_BASE (RLE tests overwrite MAP_BASE)", test_body_end <= MAP_BASE, true

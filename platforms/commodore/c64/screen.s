@@ -244,19 +244,14 @@ screen_clear_row:
     lda color_row_hi,x
     sta zp_color_hi
 
-    lda #SC_SPACE
     ldy #SCREEN_COLS - 1
 !loop:
+    lda #SC_SPACE
     sta (zp_screen_lo),y
-    dey
-    bpl !loop-
-
     lda zp_text_color
-    ldy #SCREEN_COLS - 1
-!col:
     sta (zp_color_lo),y
     dey
-    bpl !col-
+    bpl !loop-
     rts
 
 // screen_put_char_at — Write one char at specific (row, col) without moving cursor

@@ -342,6 +342,12 @@ def main() -> int:
                     connector.poke(tile_addr(mx, my), cur_t & ~FLAG_OCCUPIED)
                 connector.poke(monster_table + base + MX_TYPE, EMPTY_SLOT)
         connector.poke(zp_mon_count, 0)
+        # Pin the 32-bit Galois LFSR to a deterministic zero-free seed across
+        # the hot sequence so core/turn.s's 1-in-160 wanderer roll cannot
+        # trigger a cold catalog fetch.
+        zp_rng_0 = int(symbols[".zp_rng_0"], 16)
+        for offset, byte in enumerate((0x1C, 0x58, 0x3C, 0xA5)):
+            connector.poke(zp_rng_0 + offset, byte)
 
         # Clear old player occupancy before carving the controlled test corridor.
         old_px = read_bytes(connector, zp_player_x, 1)[0]

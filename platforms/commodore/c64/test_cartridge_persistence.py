@@ -7,6 +7,7 @@ no driver code is written into the dungeon being saved.
 """
 import argparse
 from pathlib import Path
+import shutil
 import subprocess
 
 from test_cartridge import Experiment, ROOT, prepare_run
@@ -147,6 +148,60 @@ def test_setup(args):
         exp.close()
 
 
+def mutate_save_disk(args, src_disk, name, mutator):
+    dst = args.output.resolve() / f"{name}.d64"
+    shutil.copyfile(src_disk, dst)
+    seq_tmp = args.output.resolve() / f"{name}.the.game"
+    seq_tmp.unlink(missing_ok=True)
+    subprocess.run([args.c1541, "-attach", str(dst), "-read", "the.game,s", str(seq_tmp)],
+                   check=True, capture_output=True, timeout=10)
+    blob = bytearray(seq_tmp.read_bytes())
+    mutator(blob)
+    seq_tmp.write_bytes(blob)
+    subprocess.run(
+        [args.c1541, "-attach", str(dst), "-delete", "the.game", "-write", str(seq_tmp), "the.game,s"],
+        check=True, capture_output=True, timeout=10,
+    )
+    seq_tmp.unlink(missing_ok=True)
+    return dst
+
+
+def test_negative_saves(args, valid_disk):
+    def set_old_version(blob):
+        assert blob[7] == 0x22, f"Unexpected save version {blob[7]:#x}"
+        blob[7] = 0x21
+
+    def corrupt_payload(blob):
+        assert len(blob) > 100
+        blob[100] ^= 0x55
+
+    cases = (
+        ("wrong-v21", set_old_version, 4),
+        ("corrupt-checksum", corrupt_payload, 2),
+    )
+    checks = 0
+    for name, mutator, want_result in cases:
+        bad_disk = mutate_save_disk(args, valid_disk, name, mutator)
+        exp = Experiment(args, name=f"cart-neg-{name}", disk=bad_disk)
+        try:
+            exp.until(exp.sym["title_menu_loop"])
+            setup(exp)
+            exp.forbidden.add(exp.sym["main_loop"])
+            exp.keys("L")
+            exp.until(exp.sym["title_load_game"])
+            exp.key_at_input("1")
+            exp.until(exp.sym["input_get_modal_dismiss_key"])
+            got = exp.memory(exp.sym["load_result"], 1)[0]
+            assert got == want_result, f"{name}: load_result={got}, expected {want_result}"
+            exp.key_at_input(" ")
+            exp.until(exp.sym["title_menu_loop"])
+            exp.check(f"cartridge load rejected {name} save cleanly (load_result={want_result})")
+            checks += exp.count
+        finally:
+            exp.close()
+    return checks
+
+
 def test_interchange(args):
     disk = blank_disk(args, "interchange")
     exp = Experiment(args, name="disk-save", disk=disk, disk_build=True)
@@ -179,7 +234,7 @@ def test_interchange(args):
         exp.check("disk edition loads cartridge save with player, inventory and map intact")
     finally:
         exp.close()
-    return 5
+    return 5 + test_negative_saves(args, disk)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@
 //   - VMS summon counts, Summon Undead's creature, summons awake beside the
 //     player, poly_monster's roll and level, mass_poly's reach (tests 23-28).
 //
-// Results at $0400-$041B: $01 = pass, $00 = fail (28 tests).
+// Results at $0400-$041E: $01 = pass, $00 = fail (31 tests).
 
 #define C64_TEST_NAME_STREAMS_A000
 #define MONSTER_MAGIC_PRODUCTION_EXTENDED
@@ -27,7 +27,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei
     :BankOutBasic()
-    ldx #27
+    ldx #30
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -140,7 +140,7 @@ chest_mark_found_all:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results:     .fill 28, $ff
+tc_results:     .fill 31, $ff
 tc_hist:        .fill 6, 0      // runs by monsters placed (0-5+)
 tc_cnt:         .byte 0
 tc_seen_a:      .byte 0
@@ -148,6 +148,7 @@ tc_seen_b:      .byte 0
 tst_save_mode:  .byte 0         // 0 = fail save, 1 = pass save
 tst_save_orig:  .fill 3, 0
 tst_dice_orig:  .fill 3, 0
+tst_msg_orig:   .fill 3, 0
 tst_fixed_dice: .byte 16
 
 .macro PatchJump(target, replacement) {
@@ -432,6 +433,12 @@ test_start:
     jsr hal_sound_init
     :PatchJump(get_direction_target, tst_dir_east)
     :PatchJump(screen_flash_at, tst_flash_nop)
+    ldx #2
+!save_mp:
+    lda msg_print,x
+    sta tst_msg_orig,x
+    dex
+    bpl !save_mp-
     :PatchJump(msg_print, tst_flash_nop)
 
     // ========================================================
@@ -1628,6 +1635,182 @@ test_start:
     lda #$00
     sta tc_results + 27
 
+    // Restore production msg_print for detection feedback tests 29-31.
+    ldx #2
+!rest_mp:
+    lda tst_msg_orig,x
+    sta msg_print,x
+    dex
+    bpl !rest_mp-
+
+    // ========================================================
+    // Test 29: ep1_detect_treasure (via ep1_run_slot) reveals only gold,
+    // sets vis_room_revealed, passes ep1_msg_treasure to msg_print_ay, and
+    // renders "You sense treasure nearby." (not HSTR_PIQ_SENSE creatures msg).
+    // ========================================================
+    jsr t29_seed_items
+    lda #ITEM_SLOT_SCROLL_OF_TREASURE_DETECTION
+    jsr ep1_run_slot
+    lda vis_room_revealed
+    cmp #1
+    bne !t29_fail+
+    ldx #10
+    jsr map_row_ptr0_x
+    ldy #17
+    lda (zp_ptr0),y
+    cmp #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+    bne !t29_fail+
+    ldy #18
+    lda (zp_ptr0),y
+    bne !t29_fail+
+    lda #<t29_exp_msg
+    sta zp_ptr1
+    lda #>t29_exp_msg
+    sta zp_ptr1_hi
+    lda #<ep1_msg_treasure
+    ldy #>ep1_msg_treasure
+    jsr tst_check_detect_msg
+    bcc !t29_fail+
+    lda #$01
+    .byte $2c
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+
+    // ========================================================
+    // Test 30: ep1_detect_objects (via ep1_run_slot) reveals all floor
+    // items, sets vis_room_revealed, passes ep1_msg_objects to msg_print_ay,
+    // and renders "You sense objects nearby.".
+    // ========================================================
+    jsr t29_seed_items
+    lda #ITEM_SLOT_STAFF_OF_OBJECT_LOCATION
+    jsr ep1_run_slot
+    lda vis_room_revealed
+    cmp #1
+    bne !t30_fail+
+    ldx #10
+    jsr map_row_ptr0_x
+    ldy #17
+    lda (zp_ptr0),y
+    cmp #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+    bne !t30_fail+
+    ldy #18
+    lda (zp_ptr0),y
+    cmp #(TILE_FLOOR | FLAG_VISITED | FLAG_LIT)
+    bne !t30_fail+
+    lda #<t30_exp_msg
+    sta zp_ptr1
+    lda #>t30_exp_msg
+    sta zp_ptr1_hi
+    lda #<ep1_msg_objects
+    ldy #>ep1_msg_objects
+    jsr tst_check_detect_msg
+    bcc !t30_fail+
+    lda #$01
+    .byte $2c
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
+
+    // ========================================================
+    // Test 31: ep1_find_doors_stairs (via ep1_run_slot) reveals secret
+    // doors + stairs, passes ep1_msg_doors_stairs to msg_print_ay, and
+    // renders "You sense doors and stairs.".
+    // ========================================================
+    jsr tst_setup_room
+    ldx #10
+    jsr map_row_ptr0_x
+    ldy #17
+    lda #TILE_SECRET
+    sta (zp_ptr0),y
+    ldy #18
+    lda #TILE_STAIRS_DN
+    sta (zp_ptr0),y
+    lda #0
+    sta msg_src_lo
+    sta msg_src_hi
+    lda #ITEM_SLOT_STAFF_OF_DOOR_STAIR_LOCATION
+    jsr ep1_run_slot
+    lda vis_room_revealed
+    cmp #1
+    bne !t31_fail+
+    ldx #10
+    jsr map_row_ptr0_x
+    ldy #17
+    lda (zp_ptr0),y
+    cmp #(TILE_DOOR_CLOSED | FLAG_VISITED)
+    bne !t31_fail+
+    ldy #18
+    lda (zp_ptr0),y
+    cmp #(TILE_STAIRS_DN | FLAG_VISITED | FLAG_LIT)
+    bne !t31_fail+
+    lda #<t31_exp_msg
+    sta zp_ptr1
+    lda #>t31_exp_msg
+    sta zp_ptr1_hi
+    lda #<ep1_msg_doors_stairs
+    ldy #>ep1_msg_doors_stairs
+    jsr tst_check_detect_msg
+    bcc !t31_fail+
+    lda #$01
+    .byte $2c
+!t31_fail:
+    lda #$00
+    sta tc_results + 30
+
     jmp test_exit_trampoline
+
+// Seed floor slot 0 (gold at 17,10) and slot 1 (dagger at 18,10) in dark room.
+t29_seed_items:
+    jsr tst_setup_room
+    lda #0
+    sta msg_src_lo
+    sta msg_src_hi
+    lda #ITEM_SLOT_GOLD_COPPER_1
+    sta fi_item_id + 0
+    lda #ITEM_PAGE_GOLD_COPPER_1
+    sta fi_meta_hi + 0
+    lda #17
+    sta fi_x + 0
+    lda #10
+    sta fi_y + 0
+    lda #ITEM_SLOT_DAGGER
+    sta fi_item_id + 1
+    lda #ITEM_PAGE_DAGGER
+    sta fi_meta_hi + 1
+    lda #18
+    sta fi_x + 1
+    lda #10
+    sta fi_y + 1
+    rts
+
+// Verify msg_print_ay received pointer A/Y and rendered exact string (zp_ptr1) on row 0.
+tst_check_detect_msg:
+    cmp msg_src_lo
+    bne !tcdm_fail+
+    tya
+    cmp msg_src_hi
+    bne !tcdm_fail+
+    ldy #0
+!tcdm_loop:
+    lda (zp_ptr1),y
+    beq !tcdm_end+
+    cmp $0400,y
+    bne !tcdm_fail+
+    iny
+    bne !tcdm_loop-
+!tcdm_fail:
+    clc
+    rts
+!tcdm_end:
+    lda $0400,y
+    cmp #$20
+    bne !tcdm_fail-
+    sec
+    rts
+
+t29_exp_msg: .text "You sense treasure nearby." ; .byte 0
+t30_exp_msg: .text "You sense objects nearby." ; .byte 0
+t31_exp_msg: .text "You sense doors and stairs." ; .byte 0
 
 .assert "Test body fits below MAP_BASE", * <= MAP_BASE, true

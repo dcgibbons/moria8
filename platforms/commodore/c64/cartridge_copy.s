@@ -296,6 +296,7 @@ cart_nmi:
     rti
 !ordinary:
     pla
+    .assert "cart_original_nmi does not cross page", (cart_original_nmi & $ff) != $ff, true
     jmp (cart_original_nmi)
 
 #if ITEM_CATALOG_CART

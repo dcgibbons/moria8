@@ -230,8 +230,18 @@ save_slot_read_name_len:            // save_slot_apply_name patches the length
     jsr SAVE_CHRIN              // the status's first digit: 0 or 1 = opened
     pha
     jsr SAVE_READST
+    tax
     and #$02                    // read timeout
     sta save_slot_probe_lost
+    txa
+    bne !drained+               // on nonzero ST, do not read further from ch 15
+!drain:
+    jsr SAVE_CHRIN
+    cmp #$0d
+    beq !drained+
+    jsr SAVE_READST
+    beq !drain-
+!drained:
     jsr save_restore_channels
     pla
     eor #$30
@@ -257,44 +267,33 @@ save_slot_read_name_len:            // save_slot_apply_name patches the length
 !opened:
 #else
     bcc !open_ok+
+!empty:
     clc
     bcc !cleanup+
 !open_ok:
 #endif
     ldx #hal_storage_check_file_num
     jsr SAVE_CHKIN
-    bcc !read_magic+
-    clc
-    bcc !cleanup+
-!read_magic:
+    bcs !empty-
     lda #0
     sta save_slot_name_idx
 !magic_loop:
     jsr SAVE_CHRIN
     ldx save_slot_name_idx
     cmp save_magic,x
-    beq !magic_ok+
-    clc
-    bcc !cleanup+
-!magic_ok:
+    bne !empty-
     inc save_slot_name_idx
     lda save_slot_name_idx
     cmp #SAVE_MAGIC_SIZE - 1
     bcc !magic_loop-
     jsr SAVE_CHRIN
     jsr save_version_supported
-    bcs !version_ok+
-    clc
-    bcc !cleanup+
-!version_ok:
+    bcc !empty-
     jsr SAVE_READST
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     and #$fe
 #endif
-    beq !read_name+
-    clc
-    bcc !cleanup+
-!read_name:
+    bne !empty-
     lda #0
     sta save_slot_name_idx
 !name_loop:
@@ -309,10 +308,7 @@ save_slot_read_name_len:            // save_slot_apply_name patches the length
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     and #$fe
 #endif
-    beq !name_ok+
-    clc
-    bcc !cleanup+
-!name_ok:
+    bne !empty-
     sec
 !cleanup:
     php

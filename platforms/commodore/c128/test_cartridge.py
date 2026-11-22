@@ -628,9 +628,15 @@ def run_cartridge_boot_and_assets(args: argparse.Namespace) -> int:
             raise AssertionError("SOURCE-OFFER did not reach EOF")
         exp.key("Q")
         exp.until(exp.sym["legal_menu_wait"])
+        exp.key("3")
+        exp.until(exp.sym["legal_sysinfo_wait"])
+        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Magic Desk 128 Cartridge", "Drives:"):
+            exp.vdc_has(text)
+        exp.key(" ")
+        exp.until(exp.sym["legal_menu_wait"])
         exp.key("Q")
         exp.until(exp.sym["title_menu_loop"])
-        exp.check("Title A legal viewer paged LICENSE and SOURCE-OFFER from ROM")
+        exp.check("Title A legal viewer paged LICENSE, SOURCE-OFFER, and System Info from ROM")
 
         # Verify all 12 overlays (including cold ovl.chest, ovl.home, and ovl.storage) through overlay_load
         ovl_consts = catalog_disk.consts(ROOT / "platforms/commodore/common/overlay.s")
@@ -670,6 +676,15 @@ def run_md128_gameplay_and_reset(args: argparse.Namespace) -> int:
         exp.until(exp.sym["main_loop"])
         assert snapshot(exp) == before
         exp.check("in-game Help and Legal modal returned without mutating game state")
+
+        exp.key(b"\xd6")  # SHIFT+V: System Info
+        exp.until(exp.sym["legal_sysinfo_wait"])
+        for text in ("Moria 8 - System Info", "Magic Desk 128 Cartridge", "Turn 0  Town", "RNG:"):
+            exp.vdc_has(text)
+        exp.key(" ")
+        exp.until(exp.sym["main_loop"])
+        assert snapshot(exp) == before
+        exp.check("SHIFT+V System Info rendered VDC session telemetry without mutating game state")
 
         # Move to town down staircase and descend to dungeon level 1 (ovl.gen + spawns)
         world = exp.memory(0x4000, 198 * 66, "ram01")
@@ -829,6 +844,57 @@ def run_persistence_and_interchange(args: argparse.Namespace) -> int:
         count += exp2.count
     finally:
         exp2.close()
+
+    # Verify negative save rejection on MD128 cartridge: wrong-version ($21) and corrupt checksum
+    def set_old_version(blob: bytearray) -> None:
+        assert blob[7] == 0x22, f"Unexpected save version {blob[7]:#x}"
+        blob[7] = 0x21
+
+    def corrupt_payload(blob: bytearray) -> None:
+        assert len(blob) > 100
+        blob[100] ^= 0x55
+
+    for neg_name, mutator, want_result in (
+        ("wrong-v21", set_old_version, 4),
+        ("corrupt-checksum", corrupt_payload, 2),
+    ):
+        neg_disk = args.output.resolve() / f"{neg_name}.d71"
+        shutil.copyfile(save_disk, neg_disk)
+        seq_tmp = args.output.resolve() / f"{neg_name}.the.game"
+        seq_tmp.unlink(missing_ok=True)
+        subprocess.run(
+            [args.c1541, "-attach", str(neg_disk), "-read", "the.game,s", str(seq_tmp)],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+        blob = bytearray(seq_tmp.read_bytes())
+        mutator(blob)
+        seq_tmp.write_bytes(blob)
+        subprocess.run(
+            [args.c1541, "-attach", str(neg_disk), "-delete", "the.game", "-write", str(seq_tmp), "the.game,s"],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+        seq_tmp.unlink(missing_ok=True)
+        exp_neg = Experiment(args, name=f"crt-neg-{neg_name}", drive8=neg_disk)
+        try:
+            exp_neg.until(exp_neg.sym["title_menu_loop"])
+            setup_disk(exp_neg, drive=8)
+            exp_neg.forbidden.add(exp_neg.sym["main_loop"])
+            exp_neg.key("L")
+            exp_neg.until(exp_neg.sym["title_load_game"])
+            exp_neg.key("1")
+            exp_neg.until(exp_neg.sym["input_get_modal_dismiss_key"])
+            got = exp_neg.memory(exp_neg.sym["load_result"], 1)[0]
+            assert got == want_result, f"{neg_name}: load_result={got}, expected {want_result}"
+            exp_neg.key(" ")
+            exp_neg.until(exp_neg.sym["title_menu_loop"])
+            exp_neg.check(f"cartridge load rejected {neg_name} save cleanly (load_result={want_result})")
+            count += exp_neg.count
+        finally:
+            exp_neg.close()
 
     # Verify Drive 9 cartridge persistence (two-drive setup)
     d9_disk = blank_d71(args, "save-drive9")

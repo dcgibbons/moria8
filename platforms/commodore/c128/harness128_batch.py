@@ -544,8 +544,8 @@ def main() -> int:
     custom_kickass = raw_kickass is not None
     if raw_kickass is None:
         raw_kickass = str(DEFAULT_KICKASS_JAR)
-    args.kickass_path = Path(raw_kickass).expanduser().resolve()
-    args.artifact_dir = Path(args.artifact_dir).expanduser().resolve()
+    args.kickass_path = Path(raw_kickass).resolve()
+    args.artifact_dir = Path(args.artifact_dir).resolve()
     try:
         ensure_kickass(args.kickass_path, custom_kickass)
     except RuntimeError as exc:

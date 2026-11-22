@@ -718,24 +718,40 @@ disk_marker_present:
     jmp !dmp_close+
 
 !dmp_status:
+    lda #$ff
+    sta disk_diag_cmd_status0
+    sta disk_diag_cmd_status1
     ldx #hal_storage_cmd_channel
     jsr SWAP_CHKIN
     bcs !dmp_io+
     jsr SWAP_CHRIN              // the status's first digit: 0 or 1 = opened
     sta disk_diag_cmd_status0
     jsr SWAP_READST
+    sta disk_diag_readst
     and #$02                    // read timeout
     sta dmp_lost
+    lda disk_diag_readst
+    bne !dmp_after_read+
     jsr SWAP_CHRIN
     sta disk_diag_cmd_status1
+    jsr SWAP_READST
+    sta disk_diag_readst
+    and #$02                    // read timeout on byte 1
+    beq !dmp_after_read+
+    sta dmp_lost
+    lda #$ff
+    sta disk_diag_cmd_status1
+!dmp_after_read:
     jsr SWAP_CLRCHN
+    lda dmp_lost
+    bne !dmp_retry+
     lda disk_diag_cmd_status0
     eor #$30
     cmp #10
     bcc !dmp_digit+
-    // No digit: a read that timed out lost it; close both and ask again.
-    lda dmp_lost
-    beq !dmp_io+
+    bcs !dmp_io+                // no digit and dmp_lost == 0
+!dmp_retry:
+    // Read timed out on bus: close both and ask again.
     lda #hal_storage_marker_file_num
     jsr SWAP_CLOSE
     lda #hal_storage_cmd_channel

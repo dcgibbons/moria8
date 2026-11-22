@@ -164,7 +164,21 @@
 
 // Bootstrap — MUST live below $A000 so BASIC's SYS can reach it
 // before BASIC ROM is banked out.
-.const KERNAL_SETMSG = $ff90
+.const KERNAL_SETMSG     = $ff90
+.const KERNAL_STATUS     = $90
+.const KERNAL_VERCK      = $93
+.const KERNAL_C3PO       = $94
+.const KERNAL_BSOUR      = $95
+.const KERNAL_DFLTN      = $99
+.const KERNAL_R2D2       = $a3
+.const KERNAL_CNTDN      = $a5
+.const KERNAL_EAL        = $ae
+.const KERNAL_EAH        = $af
+.const KERNAL_FNLEN      = $b7
+.const KERNAL_SA         = $b9
+.const KERNAL_FA         = $ba
+.const KERNAL_MEMUSS_LO  = $c3
+.const KERNAL_MEMUSS_HI  = $c4
 entry:
 #if C64_CARTRIDGE
 .assert "Cartridge boot entry ABI", entry, CART_ENTRY
@@ -442,10 +456,10 @@ c64_disk_load:
 // cannot split $EEA9/$EEAC against JiffyDOS 1541's 67 us EOI bit-0 setup.
 c64_safe_iec_start:
 c64_basin_safe:
-    lda $99                     // DFLTN: current input device
+    lda KERNAL_DFLTN            // DFLTN: current input device
     cmp #4                      // Serial IEC devices 4..30
     bcc !cbs_rom+
-    lda $90                     // ST
+    lda KERNAL_STATUS           // ST
     beq c64_acptr_safe          // Clean ST -> EOI-safe ACPTR
 !cbs_rom:
     jmp $f157                   // Stock BASIN (keyboard/screen/tape/nonzero ST)
@@ -453,7 +467,7 @@ c64_basin_safe:
 c64_acptr_safe:
     sei
     lda #0
-    sta $a5
+    sta KERNAL_CNTDN
     jsr $ee85                   // CLK = HIGH
 !cas_clk_hi:
     jsr $eea9
@@ -476,7 +490,7 @@ c64_acptr_safe:
     jsr $ee85                   // CLK = HIGH
     lda #$40
     jsr $fe1c                   // ST |= $40
-    inc $a5
+    inc KERNAL_CNTDN
 !cas_vb:
     bit $d011                   // Wait for vertical blank ($D011 bit 7 == 1)
     bpl !cas_vb-
@@ -485,61 +499,74 @@ c64_acptr_eoi_resume:
 
 c64_iload_safe:
     tax                         // Set Z from A (caller's LDY #hi cleared Z; $F49E saved X in $C3)
-    stx $93                     // VERCK: 0 = LOAD, nonzero = VERIFY
+    stx KERNAL_VERCK            // VERCK: 0 = LOAD, nonzero = VERIFY
     bne !cis_rom+
-    lda $ba                     // FA: device
+    lda KERNAL_FA               // FA: device
     cmp #4
     bcc !cis_rom+
-    ldy $b7                     // FNLEN
+    ldy KERNAL_FNLEN            // FNLEN
     bne !cis_open+
 !cis_rom:
-    lda $93
+    lda KERNAL_VERCK
     jmp $f4a5                   // Stock ILOAD
 !cis_open:
     lda #0
-    sta $90                     // ST = 0
-    ldx $b9                     // Save original SA (0 = use $C3/$C4, !=0 = PRG header)
+    sta KERNAL_STATUS           // ST = 0
+    ldx KERNAL_SA               // Save original SA (0 = use $C3/$C4, !=0 = PRG header)
     lda #$60
-    sta $b9
+    sta KERNAL_SA
     jsr $f3d5                   // OPEN serial file
-    lda $ba
+    lda KERNAL_FA
     jsr $ed09                   // TALK
-    lda $b9
+    lda KERNAL_SA
     jsr $edc7                   // TKSA $60
     jsr c64_acptr_safe          // PRG load addr lo
-    sta $ae
+    sta KERNAL_EAL
     lda #$02
-    bit $90
+    bit KERNAL_STATUS
     bne !cis_fnf+
     jsr c64_acptr_safe          // PRG load addr hi
-    sta $af
+    sta KERNAL_EAH
+    lda #$02
+    bit KERNAL_STATUS
+    bne !cis_fnf+
     txa
-    bne !cis_loop+
-    lda $c3
-    sta $ae
-    lda $c4
-    sta $af
+    bne !cis_next+
+    lda KERNAL_MEMUSS_LO
+    sta KERNAL_EAL
+    lda KERNAL_MEMUSS_HI
+    sta KERNAL_EAH
+!cis_next:
+    lda #8
+    sta c64_iload_retries
 !cis_loop:
     lda #$fd
-    and $90
-    sta $90
+    and KERNAL_STATUS
+    sta KERNAL_STATUS
     jsr c64_acptr_safe
     tax
     lda #$02
-    bit $90
+    bit KERNAL_STATUS
+    beq !cis_store+
+    dec c64_iload_retries
     bne !cis_loop-
+    beq !cis_fnf+
+!cis_store:
     txa
     ldy #0
-    sta ($ae),y
-    inc $ae
+    sta (KERNAL_EAL),y
+    inc KERNAL_EAL
     bne !+
-    inc $af
-!:  bit $90
-    bvc !cis_loop-
+    inc KERNAL_EAH
+!:  bit KERNAL_STATUS
+    bvc !cis_next-
     jmp $f528                   // UNTLK + CLOSE ($F642) + CLC + LDX $AE + LDY $AF + RTS
 !cis_fnf:
+    jsr $edef                   // UNTLK
+    jsr $f642                   // CLOSE serial file
     jmp $f704                   // FILE NOT FOUND (SEC, A=4, RTS)
 c64_safe_iec_active: .byte 0
+c64_iload_retries: .byte 0
 c64_apply_safe_iec_vectors:
     lda c64_safe_iec_active
     beq !casiv_done+
@@ -1090,21 +1117,21 @@ c64_storage_read_command_status:
     beq !cdrs_check_62+
     cmp #$37
     beq !cdrs_check_7x+
-    jmp !cdrs_close+
+    bne !cdrs_close+
 !cdrs_check_26:
-    jsr c64_disk_chrin
+    jsr c64_cdrs_chrin_checked
     cmp #$36
     bne !cdrs_close+
     lda #26
-    sta disk_status
-    bne !cdrs_close+
+    bne !cdrs_set+
 !cdrs_check_62:
-    jsr c64_disk_chrin
+    jsr c64_cdrs_chrin_checked
     cmp #$32
     bne !cdrs_close+
-    jmp !cdrs_wrong_media+
+    lda #1
+    bne !cdrs_set+
 !cdrs_check_7x:
-    jsr c64_disk_chrin
+    jsr c64_cdrs_chrin_checked
     cmp #$32
     beq !cdrs_disk_full+
     cmp #$33                    // 73, the DOS banner after a reset: no error
@@ -1112,18 +1139,13 @@ c64_storage_read_command_status:
     cmp #$34
     bne !cdrs_close+
     lda #74
-    sta disk_status
-    jmp !cdrs_close+
+    bne !cdrs_set+
 !cdrs_disk_full:
     lda #72
-    sta disk_status
-    jmp !cdrs_close+
-!cdrs_wrong_media:
-    lda #1
-    sta disk_status
-    bne !cdrs_close+
+    bne !cdrs_set+
 !cdrs_ok:
     lda #0
+!cdrs_set:
     sta disk_status
 !cdrs_close:
     jsr c64_disk_clrchn
@@ -1131,41 +1153,26 @@ c64_storage_read_command_status:
     jsr c64_disk_close
     jmp c64_restore_vic_bank0_after_serial   // serial I/O moved the VIC bank
 
+c64_cdrs_chrin_checked:
+    jsr c64_disk_chrin
+    pha
+    jsr c64_disk_readst
+    and #$02                    // read timeout on byte 1
+    beq !cdrs_byte_ok+
+    sta cdrs_lost
+    pla
+    lda #0                      // cannot match '2','3','4','6'; caller exits via !cdrs_close+
+    rts
+!cdrs_byte_ok:
+    pla
+    rts
+
 cdrs_lost: .byte 0              // nonzero: the status byte was lost (above)
 // ============================================================
 // Entry point
 // ============================================================
 entry_main:
-#if !C64_CARTRIDGE
-    // Save BASIC's zero page state so we can restore on exit
-    jsr save_zp
-#endif
-    jsr disk_reset_session_state
-    jsr c64_install_ram_irq_vectors
-    jsr c64_safe_iec_install
-#if C64_CARTRIDGE
-    jsr cart_install_nmi
-#endif
-
-    // BASIC ROM already banked out by bootstrap above
-
-    // Load banked runtime payload to $F000 before any $F000 trampoline calls.
-    jsr init_load_banked
-
-#if !C64_CARTRIDGE
-    // Patch reu_show_status: RTS → JMP tramp_reu_show_status
-    lda #$4c                    // JMP absolute opcode
-    sta reu_show_status
-    lda #<tramp_reu_show_status
-    sta reu_show_status + 1
-    lda #>tramp_reu_show_status
-    sta reu_show_status + 2
-
-#endif
-    jsr generation_busy_install
-    jsr platform_services_install64
-    jsr platform_services_assert_installed
-    jsr input_lock_charset_switch
+    jsr c64_boot_pre_test_init
 #if C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT
     jmp c64_test_element_divisor
 #endif
@@ -1173,44 +1180,8 @@ entry_main:
     jmp c64_test_ego_damage
 #endif
 
-    // Select lowercase/uppercase character set (52 letter symbols)
-    // Bit 1 of $D018 selects character set: 0=uppercase+graphics, 1=lowercase+uppercase
-    lda $d018
-    ora #%00000010          // Set bit 1 → lowercase + uppercase
-    sta $d018
-    // Also set via $D016 to ensure proper state
-    // (Actually $D018 bit 1 is sufficient on C64)
-
-    // Set border and background to black
-    lda #COL_BLACK
-    sta $d020               // Border
-    sta $d021               // Background
-
-#if C64_CARTRIDGE
-    jsr c64u_turbo_detect
-#else
-    jsr ultimate_detect
-    jsr c64u_turbo_detect
-#endif
-
 restart_entry:
-    // --- Initialize subsystems ---
-    jsr detect_machine
-#if C64_CARTRIDGE
-    // ROM supplies the catalog/overlays; no REU discovery or preload needed.
-    lda #0
-    sta reu_present
-    sta reu_banks
-    sta reu_size_kb
-    sta reu_size_kb + 1
-#else
-    jsr reu_detect
-    jsr reu_detect_extended_c64
-    jsr item_cat_boot_load
-#endif
-    jsr tier_init
-    jsr hal_sound_init
-    jsr rng_seed
+    jsr c64_boot_init_tail
 
 title_enter_menu:
     lda #$ff
@@ -1598,10 +1569,16 @@ irq_no_blink_after_cld:
 c64_irq_hidden_rom:
     cld
     pha
+    lda $01
+    pha
+    lda #BANK_NO_KERNAL         // Ensure I/O is mapped at $D000-$DFFF even if $01=$34
+    sta $01
     lda $dc0d
     lda $dd0d
     lda $d019
     sta $d019
+    pla
+    sta $01
     pla
     rti
 
@@ -1762,10 +1739,7 @@ tramp_ego_apply_damage:
     sta $01
     tya
     jsr ego_apply_damage
-    pla
-    sta $01
-    plp
-    rts
+    jmp c64_banked_ret
 
 // tramp_element_divisor — mm_element_divisor (banked at $F000): A = base,
 // X = element; mm_divisor set, X kept. Monster turns call it from resident
@@ -1780,6 +1754,7 @@ tramp_element_divisor:
     sta $01
     tya
     jsr mm_element_divisor
+c64_banked_ret:
     pla
     sta $01
     plp
@@ -1807,11 +1782,7 @@ hal_player_recalc_pflags:
     jsr overlay_load_no_kernal
     bcs !hprp_fatal_after_pop+
 !hprp_restore_bank:
-    jsr c64_install_ram_irq_vectors
-    pla
-    sta $01
-    plp
-    rts
+    jmp !re_restore_bank+
 !hprp_fatal:
     pla
 !hprp_fatal_after_pop:
@@ -1864,12 +1835,7 @@ tramp_re_equip:
     lda #BANK_NO_ROMS
     sta $01
     jsr re_equip
-    tay
-    pla
-    sta $01
-    plp
-    tya
-    rts
+    jmp c64_banked_tya_ret
 
 // tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000)
 // Input: A = ego type (1-7)
@@ -1885,6 +1851,7 @@ tramp_ego_get_ac_bonus:
     sta $01
     tya
     jsr ego_get_ac_bonus        // preserves Y
+c64_banked_tya_ret:
     tay
     pla
     sta $01
@@ -1924,8 +1891,9 @@ tramp_item_pickup:
     lda #BANK_NO_KERNAL
     sta $01
     jsr item_pickup
+c64_banked_carry_ret:
     lda #0
-    rol                         // Y = item_pickup Carry (0 or 1)
+    rol                         // Y = Carry (0 or 1)
     tay
     pla
     sta $01
@@ -1967,19 +1935,13 @@ overlay_load_no_kernal:
     pla
     jsr overlay_load
     bcs !done+
-    sei
-    jsr c64_install_ram_irq_vectors
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
-!done:
-    rts
-
 // Restore RAM IRQ vectors and BANK_NO_KERNAL after core overlay_load reload.
 hal_overlay_post_reload:
     sei
     jsr hal_irq_install_runtime
-    lda #BANK_NO_KERNAL
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta hal_memory_cpu_port
+!done:
     rts
 
 #if !BYPASS_SLOT_PROMPT
@@ -2022,12 +1984,9 @@ c64_save_load_resync:
 load_game:
     lda #OVL_STORAGE
     jsr overlay_load_no_kernal
-    bcs !lg_fail+
+    bcs !sg_fail-
     jsr load_game_impl
     jmp c64_save_load_resync
-!lg_fail:
-    clc
-    bcc c64_save_load_resync
 
 #import "look_trampoline.s"
 
@@ -2043,10 +2002,7 @@ run_initialize:
     lda #BANK_NO_KERNAL
     sta $01
     jsr run_initialize_impl
-    pla
-    sta $01
-    plp
-    rts
+    jmp c64_banked_ret
 
 #import "../../../build/trampolines/c64_trampolines.inc"
 
@@ -2068,10 +2024,7 @@ tramp_eff_earthquake:
     jsr c64u_turbo_fast
     jsr eff_earthquake_banked
     jsr c64u_turbo_normal
-    pla
-    sta $01
-    plp
-    rts
+    jmp c64_banked_ret
 
 // item_exchange lives in OVL_ITEMS; a failed load returns carry set.
 tramp_item_exchange:
@@ -2092,14 +2045,7 @@ tramp_door_pick_roll:
     lda #BANK_NO_KERNAL
     sta $01
     jsr door_pick_roll
-    lda #0
-    rol
-    tay
-    pla
-    sta $01
-    plp
-    cpy #1
-    rts
+    jmp c64_banked_carry_ret
 
 // load_resume_reset runs in already-resident OVL_STORAGE right after load_game
 // and invalidates current_overlay so hal_player_recalc_pflags skips reloading it.
@@ -2209,13 +2155,12 @@ c64_title_piw_dispatch:
     bcs !ctpd_fail+
 !ctpd_jsr:
     jsr $ffff
-    ldx #0
-    stx c64_caller_ovl_restore
-    jmp tramp_sr_epilogue
+    bcs !ctpd_done+
 !ctpd_fail:
+    clc
+!ctpd_done:
     ldx #0
     stx c64_caller_ovl_restore
-    clc
     jmp tramp_sr_epilogue
 
 tramp_ui_inv_select_display:
@@ -2293,10 +2238,7 @@ tramp_disk_prepare_selected:
     sta $01
     jsr disk_setup_prepare_selected
     php
-    sei
-    jsr c64_install_ram_irq_vectors
-    lda #BANK_NO_KERNAL
-    sta $01
+    jsr hal_overlay_post_reload
     pla
     lsr
 !tdps_done:
@@ -2307,14 +2249,6 @@ tramp_disk_prepare_selected:
 // Store overlay trampolines — load overlay, bank out KERNAL, call $E000+
 // ============================================================
 // Shared preamble: ensure town overlay is loaded, then bank out KERNAL
-store_overlay_preamble:
-    lda #OVL_TOWN
-    jsr overlay_load
-    sei
-    lda #BANK_NO_KERNAL         // $35 — $E000 = RAM + I/O for color RAM
-    sta $01
-    rts
-
 tramp_store_enter:
     lda zp_store_idx
     cmp #STORE_HOME
@@ -2326,7 +2260,9 @@ tramp_store_enter:
 !tse_done:
     jmp tramp_sr_epilogue
 !tse_town:
-    jsr store_overlay_preamble
+    lda #OVL_TOWN
+    jsr overlay_load_no_kernal
+    bcs !tse_done-
     jsr store_enter
     jmp tramp_sr_epilogue
 
@@ -2545,11 +2481,10 @@ c64_test_load_missing_save_fail_input_sym:
 // ============================================================
 tramp_player_create:
     lda #OVL_STARTUP
-    jsr overlay_load
-    sei
-    lda #BANK_NO_KERNAL         // $35 — $E000 = RAM + I/O for color RAM
-    sta $01
+    jsr overlay_load_no_kernal
+    bcs !tpc_done+
     jsr player_create
+!tpc_done:
     jmp tramp_sr_epilogue
 
 // Detect program media on the selected save drive (resident so both
@@ -2582,20 +2517,14 @@ c64_require_program_media:
     lda #BANK_NO_ROMS
     sta $01
     jsr disk_program_media_present
-    lda #0
-    adc #0
-    pha
+    php
     jsr platform_runtime_resync_c64
     pla
     tax
     pla
     sta save_device
     txa
-    beq !crpm_ok+
-    sec
-    rts
-!crpm_ok:
-    clc
+    lsr
     rts
 
 #endif
@@ -2700,6 +2629,64 @@ program_end:
 // it runs once at startup before dungeon map or RLE workspace
 // are used. Overwritten during normal gameplay.
 // ============================================================
+c64_boot_pre_test_init:
+#if !C64_CARTRIDGE
+    // Save BASIC's zero page state so we can restore on exit
+    jsr save_zp
+#endif
+    jsr disk_reset_session_state
+    jsr c64_install_ram_irq_vectors
+    jsr c64_safe_iec_install
+#if C64_CARTRIDGE
+    jsr cart_install_nmi
+#endif
+    // Load banked runtime payload to $F000 before any $F000 trampoline calls.
+    jsr init_load_banked
+#if !C64_CARTRIDGE
+    // Patch reu_show_status: RTS -> JMP tramp_reu_show_status
+    lda #$4c
+    sta reu_show_status
+    lda #<tramp_reu_show_status
+    sta reu_show_status + 1
+    lda #>tramp_reu_show_status
+    sta reu_show_status + 2
+#endif
+    jsr generation_busy_install
+    jsr platform_services_install64
+    jsr platform_services_assert_installed
+    jmp input_lock_charset_switch
+
+c64_boot_init_tail:
+    // Select lowercase/uppercase character set (52 letter symbols)
+    lda $d018
+    ora #%00000010
+    sta $d018
+    lda #COL_BLACK
+    sta $d020
+    sta $d021
+#if C64_CARTRIDGE
+    jsr c64u_turbo_detect
+#else
+    jsr ultimate_detect
+    jsr c64u_turbo_detect
+#endif
+    jsr detect_machine
+#if C64_CARTRIDGE
+    // ROM supplies the catalog/overlays; no REU discovery or preload needed.
+    lda #0
+    sta reu_present
+    sta reu_banks
+    sta reu_size_kb
+    sta reu_size_kb + 1
+#else
+    jsr reu_detect
+    jsr reu_detect_extended_c64
+    jsr item_cat_boot_load
+#endif
+    jsr tier_init
+    jsr hal_sound_init
+    jmp rng_seed
+.assert "Cold boot helpers live in the init-only tail", c64_boot_pre_test_init >= program_end && c64_boot_init_tail >= program_end, true
 
 // REU preload status is startup-only and is dead before MAP_BASE takes over
 // this init tail. Keeping it here leaves runtime-bank space for run setup.
@@ -2847,18 +2834,18 @@ c64_safe_iec_install:
     // drives answer cleanly while non-IEC setups fall through in milliseconds.
     cli
     lda #0
-    sta $90                     // ST = 0
-    sta $94                     // C3PO = 0 (no buffered byte)
-    sta $a3                     // EOI flag = 0
+    sta KERNAL_STATUS           // ST = 0
+    sta KERNAL_C3PO             // C3PO = 0 (no buffered byte)
+    sta KERNAL_R2D2             // EOI flag = 0
     lda program_device
     jsr $ed09                   // TALK device (sets ST=$80 & releases ATN on timeout)
-    lda $90
+    lda KERNAL_STATUS
     beq !+
     jmp !csii_exit+
 !:  lda #$6f                    // Channel 15 TALK SA ($60 | 15)
-    sta $95
+    sta KERNAL_BSOUR
     jsr $ed36                   // Send SA byte under active ATN
-    lda $90
+    lda KERNAL_STATUS
     beq !+
     jmp !csii_untlk+
 !:  sei
@@ -2893,10 +2880,10 @@ c64_safe_iec_install:
     jmp !csii_untlk+
 !csii_clk_hi_ok:
     jsr c64_acptr_safe
-    lda $90
+    lda KERNAL_STATUS
     and #$bf                    // Error bits other than EOI ($40)?
     bne !csii_untlk+
-    bit $90                     // Clean EOI ($40) ends status channel
+    bit KERNAL_STATUS           // Clean EOI ($40) ends status channel
     bvs !csii_install+
     dec csii_left
     bne !csii_byte-
@@ -2905,7 +2892,7 @@ c64_safe_iec_install:
     jsr $edef                   // UNTLK
 !csii_exit:
     lda #0
-    sta $90
+    sta KERNAL_STATUS
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
@@ -2915,7 +2902,7 @@ c64_safe_iec_install:
     cli
     jsr $edef                   // UNTLK
     lda #0
-    sta $90
+    sta KERNAL_STATUS
     lda $dd00
     ora #%00000011
     sta $dd00

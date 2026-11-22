@@ -51,6 +51,8 @@ legal_filename_hi: .byte >legal_notice_filename, >legal_offer_filename
 legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
 legal_os_read_open_status:
     jsr c128_program_read_command_status
+    lda c128_program_status_lost
+    bne !lost+
     lda disk_diag_readst
     and #$02
     beq !answered+
@@ -58,6 +60,7 @@ legal_os_read_open_status:
     eor #$30
     cmp #10                     // Timeout before the first digit: reopen/retry.
     bcc !answered+
+!lost:
     sec
     rts
 !answered:

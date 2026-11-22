@@ -602,6 +602,9 @@ def run_gameplay(args: argparse.Namespace) -> int:
         assert bytes(a & 0x7F for a in attrs) == b"\x71" * 1000, "Full clear left stale attributes"
         exp.until(exp.sym["legal_page_wait"])
 
+    def sc(text: str) -> bytes:
+        return bytes(ord(ch) - 0x60 if "a" <= ch <= "z" else ord(ch) for ch in text)
+
     try:
         exp.until(exp.sym["title_menu_loop"])
         menu = "N)ew  L)oad  D)isk Setup  A)bout"
@@ -633,9 +636,16 @@ def run_gameplay(args: argparse.Namespace) -> int:
             raise AssertionError("Source offer failed to reach EOF")
         exp.key_at_input("Q")
         exp.until(exp.sym["legal_menu_wait"])
+        exp.key_at_input("3")
+        exp.until(exp.sym["legal_sysinfo_wait"])
+        sys_scr = exp.memory(0x0C00, 1000)
+        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Magic Desk Cartridge", "Drives:"):
+            assert sc(text) in sys_scr, f"Missing System Info text: {text}"
+        exp.key_at_input(" ")
+        exp.until(exp.sym["legal_menu_wait"])
         exp.key_at_input("Q")
         exp.until(exp.sym["title_menu_loop"])
-        exp.check("title legal viewer reads both ROM documents, restarts, pages to EOF and returns")
+        exp.check("title legal viewer reads both ROM documents, System Info, and returns")
 
         exp.key_at_input("N")
         exp.until(exp.sym["create_select_race"])
@@ -668,6 +678,17 @@ def run_gameplay(args: argparse.Namespace) -> int:
         assert snapshot(exp) == before, "Legal modal changed player, map or inventory"
         assert_ted_cursor_hidden(exp, "gameplay after Help/Legal modal")
         exp.check("Help legal modal reloads Help and returns without changing game state")
+
+        exp.key_at_input(b"\xd6")
+        exp.until(exp.sym["legal_sysinfo_wait"])
+        gp_sys = exp.memory(0x0C00, 1000)
+        for text in ("Moria 8 - System Info", "Magic Desk Cartridge", "Turn 0  Town", "RNG:"):
+            assert sc(text) in gp_sys, f"Missing gameplay System Info text: {text}"
+        exp.key_at_input(" ")
+        exp.until(exp.sym["main_loop"])
+        assert snapshot(exp) == before, "SHIFT+V System Info changed player, map or inventory"
+        assert_ted_cursor_hidden(exp, "gameplay after SHIFT+V System Info")
+        exp.check("SHIFT+V System Info renders session telemetry and returns unchanged")
 
         world = exp.memory(make_plus4_magic.MAP_BASE, 80 * 48)
         stair = next(i for i, b in enumerate(world) if b & 0xF0 == 0x90)

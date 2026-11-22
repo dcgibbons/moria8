@@ -3486,6 +3486,158 @@ run_test "item_catalog_plus4" "tests/test_item_catalog_plus4.s"
 run_test "dungeon_soakplus4" "tests/test_dungeon_soakplus4.s"
 run_test "look_trampolineplus4" "tests/test_look_trampolineplus4.s"
 run_test "storage_errorsplus4" "tests/test_storage_errorsplus4.s"
+run_plus4_command_status_byte1_timeout_smoke() {
+    local name="plus4_command_status_byte1_timeout_smoke"
+    if ! suite_selected "$name"; then
+        return
+    fi
+
+    echo -n "  $name: "
+    TOTAL=$((TOTAL + 1))
+    local main_prg="$TMPDIR/main.prg"
+    local main_vs="$TMPDIR/main.vs"
+    local build_log="$TMPDIR/${name}_build.log"
+    if ! java -jar "$KICKASS" main.s -libdir "$REPO_ROOT/platforms/commodore/c64" -define PLUS4 \
+            :OVL_OUT="$TMPDIR" -symbolfiledir "$TMPDIR" -vicesymbols -o "$main_prg" >"$build_log" 2>&1 \
+            || [ ! -s "$main_vs" ] || [ ! -s "$main_prg" ]; then
+        echo "FAIL (assembly error)"
+        tail -n 20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    local mon_file="$TMPDIR/${name}.mon"
+    local log_file="$TMPDIR/${name}.log"
+    if ! python3 - "$main_vs" "$mon_file" <<'PY'
+import sys
+
+vs_path, mon_path = sys.argv[1], sys.argv[2]
+syms = {}
+with open(vs_path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0] == "al" and parts[1].startswith("C:"):
+            syms[parts[2]] = int(parts[1][2:], 16)
+
+needed = [
+    ".entry_main",
+    ".plus4_disk_read_command_status",
+    ".plus4_kernal_clrchn",
+    ".plus4_kernal_setnam",
+    ".plus4_kernal_setlfs",
+    ".plus4_kernal_open",
+    ".plus4_kernal_chkin",
+    ".plus4_kernal_chrin",
+    ".plus4_kernal_readst",
+    ".plus4_kernal_close",
+    ".disk_status",
+    ".p4dcs_lost",
+    ".disk_error_readst",
+]
+missing = [k for k in needed if k not in syms]
+if missing:
+    raise SystemExit(f"missing symbols: {missing}")
+
+def lh(addr):
+    return f"{addr & 0xff:02x} {(addr >> 8) & 0xff:02x}"
+
+lines = [
+    f"break exec ${syms['.entry_main']:04x}",
+    "g",
+    "delete 1",
+    f"> 0280 78 20 {lh(syms['.plus4_disk_read_command_status'])} 00",
+]
+for stub in (
+    ".plus4_kernal_clrchn",
+    ".plus4_kernal_setnam",
+    ".plus4_kernal_setlfs",
+    ".plus4_kernal_open",
+    ".plus4_kernal_chkin",
+    ".plus4_kernal_close",
+):
+    lines.append(f"> {syms[stub]:04x} 18 60")
+
+lines.append(f"> {syms['.plus4_kernal_chrin']:04x} 4c 90 02")
+lines.append(f"> {syms['.plus4_kernal_readst']:04x} 4c a8 02")
+lines.append("> 0290 8e 8a 02 ae 84 02 bd 87 02 8d 89 02 bd 85 02 ee 84 02 ae 8a 02 18 60")
+lines.append("> 02a8 ad 89 02 18 60")
+lines.append("break exec $0284")
+
+ds = syms[".disk_status"]
+lost = syms[".p4dcs_lost"]
+rst = syms[".disk_error_readst"]
+cases = [
+    # (b0, b1, st0, st1)
+    (0x32, 0x36, 0x00, 0x02),  # 26 with byte-1 ST=$02 -> ds=2, lost=1, readst=$02
+    (0x30, 0x30, 0x00, 0x02),  # 00 with byte-1 ST=$02 -> ds=2, lost=1, readst=$02
+    (0x32, 0x36, 0x01, 0x01),  # 26 with bit-0 ST=$01 masked -> ds=26 ($1a), lost=0, readst=$01
+    (0x58, 0x30, 0x03, 0x00),  # 'X' with ST=$03 -> ds=2, lost=1, readst=$03
+    (0x32, 0x33, 0x00, 0x00),  # 23 clean -> ds=2, lost=0, readst=$00
+]
+for b0, b1, st0, st1 in cases:
+    lines.extend([
+        f"> 0284 00 {b0:02x} {b1:02x} {st0:02x} {st1:02x} 00",
+        "r sp = ff",
+        "r pc = 0280",
+        "g",
+        f"m {ds:04x} {ds:04x}",
+        f"m {lost:04x} {lost:04x}",
+        f"m {rst:04x} {rst:04x}",
+    ])
+lines.append("quit")
+with open(mon_path, "w", encoding="utf-8") as f:
+    f.write("\n".join(lines) + "\n")
+PY
+    then
+        echo "FAIL (monitor script setup)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    "$VICE" -config "$(python3 -B "$REPO_ROOT/tools/vice_config.py" "$VICE")" \
+        -default +saveres +autostart-delay-random -console -nativemonitor -warp -autostartprgmode 1 \
+        -autostart "$main_prg" -moncommands "$mon_file" -monlogname "$log_file" -monlog \
+        -limitcycles 50000000 +sound -sounddev dummy +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    if python3 - "$log_file" "$main_vs" <<'PY'
+import re, sys
+
+log_path, vs_path = sys.argv[1], sys.argv[2]
+syms = {}
+with open(vs_path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0] == "al" and parts[1].startswith("C:"):
+            syms[parts[2]] = int(parts[1][2:], 16)
+
+ds = f"{syms['.disk_status']:04x}"
+lost = f"{syms['.p4dcs_lost']:04x}"
+rst = f"{syms['.disk_error_readst']:04x}"
+txt = open(log_path, encoding="utf-8", errors="replace").read()
+ds_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{ds}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+lost_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{lost}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+rst_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{rst}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+expected = [
+    (0x02, 0x01, 0x02),
+    (0x02, 0x01, 0x02),
+    (0x1a, 0x00, 0x01),
+    (0x02, 0x01, 0x03),
+    (0x02, 0x00, 0x00),
+]
+got = list(zip(ds_vals, lost_vals, rst_vals))
+if got != expected:
+    raise SystemExit(f"got {got}, expected {expected}")
+PY
+    then
+        echo "PASS (5/5 cases: byte-1 ST=\$02 keeps ds=2/lost=1, ST=\$01 masked)"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        tail -n 30 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    fi
+}
+run_plus4_command_status_byte1_timeout_smoke
 run_media_drive8_attach_read_write
 run_media_drive9_attach_read_write
 run_media_drive10_11_device_probe

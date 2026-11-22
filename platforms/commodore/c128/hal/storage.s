@@ -77,6 +77,11 @@ c128_storage_read_command_status:
     sta disk_diag_cmd_status1
     jsr KERNAL_READST
     sta disk_diag_readst
+    and #$02
+    beq !cs_close+
+    lda #$ff
+    sta disk_diag_cmd_status1
+    inc c128_status_lost
 !cs_close:
     jsr KERNAL_CLRCHN
     lda #hal_storage_cmd_channel
@@ -84,6 +89,8 @@ c128_storage_read_command_status:
     // A read that timed out (ST bit 1) before any digit came lost its byte
     // on the bus: c128_status_lost says so, for a caller that can ask again
     // with a fresh OPEN (reading this channel again goes on mid-message).
+    lda c128_status_lost
+    bne !cs_done+
     lda disk_diag_readst
     and #$02                    // read timeout
     beq !cs_done+
