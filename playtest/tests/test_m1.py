@@ -2866,9 +2866,79 @@ class ThreatDepthTest(unittest.TestCase):
         brain.clvl = 40
         brain.magic.spare = lambda obs, name: True                   # type: ignore[method-assign]
         view = town_view((10, 10), (40, 40), dlvl=50)
-        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=405, mhp=405), view))
-        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=405, mhp=405),
+        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=200, mhp=200), view))
+        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=200, mhp=200),
                                               town_view((10, 10), (40, 40), dlvl=49)))
+
+    def test_hunting_deep_no_way_up_hops_down_and_back_or_detects(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 39 Elf Priest searched DL37 dead ends
+        22,000 times in 2.4 hours, its level mapped and only down stairs known."""
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer
+        brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
+        brain.food, brain.magic.study_due, brain.magic.listed = 20, False, True
+        brain.magic.known = {"Detect Doors/Stairs": Prayer("g", 9, 7, "Beginners Handbook"),
+                             "Portal": Prayer("d", 11, 8, "Words of Wisdom")}
+        view = town_view((5, 5), (5, 5), walls=[(6, 5)], dlvl=37, stairs_type=0)   # a dead end, no stairs known
+        view.types[5 * COLS + 7] = UNKNOWN                                            # unknown space behind the wall
+        rows = {23: "HP:352/352 MP:150/157 AC:52 AU:16066K"}
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=352, mhp=352, rows=rows)
+        self.assertEqual(brain.stair_scum(o, view).reason, "no staircase in reach: pray Detect Doors/Stairs")
+        brain.pending = None
+        self.assertEqual(brain.stair_scum(o, view).layer, "search")       # shown nothing: the walls, as before
+        shallow = command_obs(pos=(5, 5), dlvl=10, clvl=39, hp=352, mhp=352, rows=rows)
+        self.assertEqual(brain.stair_scum(shallow, view).layer, "search")   # mapping depth: search as before
+        down = town_view((5, 5), (9, 9), walls=[(6, 5)], dlvl=37)          # only a down staircase known
+        down.types[5 * COLS + 7] = UNKNOWN
+        brain.deeper_ok = lambda obs: False                               # type: ignore[method-assign]   # DL38 too deep
+        hop = brain.stair_scum(o, down)
+        self.assertEqual((hop.layer, hop.reason), ("stair-scum", "no way up: path to the down stairs"))
+
+    def test_explore_runs_a_straight_corridor(self) -> None:
+        """C64 Balrog, 2026-11-22: 53% of a clvl 39 Elf Priest's keys were
+        single explore steps; the game's Run (SHIFT+direction) walks a
+        corridor in one."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
+        walls = [(x, y) for x in range(0, 24) for y in (4, 6)]
+        view = town_view((5, 5), (1, 1), walls=walls, dlvl=37, stairs_type=0)
+        for x in range(21, 30):
+            view.types[5 * COLS + x] = UNKNOWN                         # the corridor's end unexplored
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=352, mhp=352)
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)] | 0x80)   # run east
+        self.assertEqual(brain.decide(o, view).key, DIRS[(1, 0)] | 0x80)
+        self.assertEqual(brain.last_move, ((5, 5), (6, 5)))           # its first square, for note_bump
+        brain.last_run = (-1, 0)
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # not straight back after a run west
+        weak = command_obs(pos=(5, 5), dlvl=37, clvl=20, hp=200, mhp=200)
+        self.assertEqual(brain.explore(weak, view).key, DIRS[(1, 0)])  # a trap could still hurt: step
+        view.creatures = {(40, 15): Creature("o", 10)}
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # something in view: step
+        view.creatures = {}
+        for x in range(8, 24):
+            view.types[5 * COLS + x] = WALL
+        view.types[6 * COLS + 8] = 0x0                                # the corridor turns south at x=7
+        for y in range(7, 12):
+            view.types[y * COLS + 8] = UNKNOWN
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # turning within four: step
+        dark = town_view((5, 5), (1, 1), walls=walls, dlvl=37, stairs_type=0)
+        for x in range(7, 30):
+            dark.types[5 * COLS + x] = UNKNOWN                         # a dark corridor: one square seen ahead
+        self.assertEqual(brain.explore(o, dark).key, DIRS[(1, 0)] | 0x80)  # run into it
+        dark.types[5 * COLS + 7] = WALL                                # the corridor ends there
+        dark.types[4 * COLS + 6] = UNKNOWN
+        self.assertEqual(brain.explore(o, dark).key, DIRS[(1, 0)])    # against a wall: step
+
+    def test_no_find_traps_once_no_trap_can_hurt(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 39 Elf Priest at 352 HP prayed Find
+        Traps 11,762 times in 2.4 hours on DL37, 7% of its keys. The worst
+        floor trap (4d6) is a tenth of 240 HP."""
+        brain = self.priest()
+        brain.magic.spare = lambda obs, name: True                   # type: ignore[method-assign]
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=39, hp=352, mhp=352), view))
+        self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=30, hp=100, mhp=240), view))
+        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=30, hp=239, mhp=239), view))
 
     def test_diving_for_the_balrog_it_goes_straight_down(self) -> None:
         """C64 Balrog, 2026-11-11: a ready clvl 40 Priest walking down from

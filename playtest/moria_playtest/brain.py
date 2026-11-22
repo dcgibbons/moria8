@@ -440,6 +440,10 @@ ALCHEMIST = 4            # store index (entrance "5"): VMS stocks Word of Recall
 MAGIC_SHOP = 5           # store index (entrance "6"): Mage books (M5f)
 BLACK_MARKET = 6         # store index (entrance "7"): everything, at a premium
 FIND_TRAPS_EVERY = 40    # steps between a Mage's Find Hidden Traps/Doors while exploring (M5f)
+TRAP_WORST = 24          # the most a floor trap does: 4d6 (VMS blade, fire, acid; FEATURE_MAP traps)
+TRAP_HP_SHARE = 10       # Find Traps only while the worst trap is more than a tenth of max HP
+RUN_STRAIGHT = 4         # floor squares straight ahead on the path before explore runs there
+RUN_KEYS = {key | 0x80: step for step, key in DIRS.items()}   # SHIFT+direction: the game's Run
 MARKET_GOLD = 600        # gold worth a Black Market trip for Word of Recall (M4 round 48: the
                          # Temple stocked it for 6 of 17 characters; drops pay for it, MON-014)
 RECALL = "Scroll of Word of Rec"   # Word of Recall (the store line may cut the name short)
@@ -1061,6 +1065,7 @@ class Brain:
         self.chased = False                    # attacked this turn by a creature faster than the player
         self.standing = False                  # hurt, stairs too far to run for: fight this turn
         self.last_move: tuple[Pos, Pos] | None = None   # (from, to) of the last movement decision
+        self.last_run: tuple[int, int] | None = None   # direction of the last explore run (run_or_move)
         self.last_attack: tuple[Pos, str] | None = None   # (tile, glyph) the last fight aimed at
         self.items_seen: dict[Pos, tuple[str, str]] = {}   # identified items on screen: (glyph, name)
         self.recent_attacker: str | None = None   # attacker named since the last command screen
@@ -1380,8 +1385,9 @@ class Brain:
         self.rest_hp = obs.hp if decision.layer == "rest" else None
         decision = self.shun_stationary(obs, view, decision)
         decision = self.break_oscillation(obs, view, decision)
-        if decision.key in DIRS.values() and decision.layer not in ("look", "prompt"):
-            step = next(d for d, k in DIRS.items() if k == decision.key)
+        if (decision.key in DIRS.values() or decision.key in RUN_KEYS) and decision.layer not in ("look", "prompt"):
+            # A run's first square is its move: blocked there, it is a bump.
+            step = RUN_KEYS.get(decision.key) or next(d for d, k in DIRS.items() if k == decision.key)
             target = (view.pos[0] + step[0], view.pos[1] + step[1])
             # A fight move toward a creature is a move too; only an attack on
             # one in view stays in place by design. Sealed in, a C128 Dwarf
@@ -7055,6 +7061,11 @@ class Brain:
         spell = next((name for name in (FIND_TRAPS, PRIEST_FIND_TRAPS) if self.magic.spare(obs, name)), None)
         if obs.dlvl == 0 or self.threats(view) or obs.step < self.level.find_traps_after or spell is None:
             return None
+        if obs.mhp >= TRAP_HP_SHARE * TRAP_WORST:
+            # No trap can hurt: a player stops looking. A clvl 39 Elf Priest
+            # at 352 HP prayed Find Traps 11,762 times in 2.4 hours on DL37,
+            # 7% of its keys, three per prayer (C64 Balrog, 2026-11-22).
+            return None
         if self.balrog_bound() and obs.dlvl >= BALROG_DLVL:
             # Its mana is the Balrog's: a clvl 40 Priest prayed Find Traps 660
             # times in an hour on DL50 and met it with 29-148 of 161 (C64
@@ -7261,7 +7272,40 @@ class Brain:
                 # the torch's light it is remembered, not seen (round 85:
                 # seed 1002).
                 return None
-        return self.move(view, step, "explore", "path to the nearest unexplored edge")
+        return self.run_or_move(obs, view, step, "explore", "path to the nearest unexplored edge")
+
+    def run_or_move(self, obs: Observation, view: View, step: tuple[int, int] | None, layer: str,
+                    reason: str) -> Decision | None:
+        """``move``, or the game's Run (SHIFT+direction) where a player runs:
+        the path goes straight on over floor for RUN_STRAIGHT squares, or to
+        its end with unexplored space or floor beyond (the next square of a
+        dark corridor is the nearest unexplored edge: 4,274 of 4,500 explore
+        paths in a replay were one square), nothing is in view, the light is
+        lit, and no trap can hurt (TRAP_HP_SHARE). One key for a corridor
+        rather than one a square: 53% of a clvl 39 Elf Priest's keys were
+        single explore steps (C64 Balrog, 2026-11-22). The game stops a run
+        at junctions, doors, room openings and whatever comes into view
+        (Umoria find_run, core/player_run.s). Never straight back the way
+        the last run went: two runs could carry it to and fro past the
+        oscillation guard, which watches single steps."""
+        decision = self.move(view, step, layer, reason)
+        last, self.last_run = self.last_run, None
+        if decision is None or step is None or decision.key != DIRS[step] or view.creatures \
+                or obs.mhp < TRAP_HP_SHARE * TRAP_WORST or self.lightless() or obs.step < self.blind_until \
+                or last == (-step[0], -step[1]):
+            return decision
+        x, y = view.pos
+        path = view.last_path[:RUN_STRAIGHT]
+        if not path:
+            return decision
+        for sx, sy in path:
+            if (sx - x, sy - y) != step or view.type_at(sx, sy) != 0x0:   # floor only (WALKABLE_TYPES 0x0)
+                return decision
+            x, y = sx, sy
+        if len(path) < RUN_STRAIGHT and view.type_at(x + step[0], y + step[1]) not in (UNKNOWN, 0x0):
+            return decision   # the path ends against a wall or a door: a step does
+        self.last_run = step
+        return Decision(DIRS[step] | 0x80, layer, f"{reason}: run")
 
     def ranged_at(self, obs: Observation, view: View, pos: Pos) -> Decision | None:
         """Attack the creature at ``pos`` from where the player stands, with
@@ -7636,6 +7680,9 @@ class Brain:
             decision = self.down_to_climb_back(view)
             if decision is not None:
                 return decision
+        decision = self.way_on(obs, view)
+        if decision is not None:
+            return decision
         per_spot = SEALED_SEARCHES if self.sealed(view) else SEARCHES_PER_SPOT
         decision = self.search(obs, view, forced=True, per_spot=per_spot)
         if decision is not None or obs.dlvl >= self.goal.target_dlvl:
@@ -7643,6 +7690,29 @@ class Brain:
         # No way up and nothing left to search (§14.3 round 4): go down even if
         # not ready, then climb straight back to a fresh level (``resupply``).
         return self.down_to_climb_back(view)
+
+    def way_on(self, obs: Observation, view: View) -> Decision | None:
+        """Hunting deep (``hunting_deep``), an exhausted level with no way up
+        in reach and no readiness for deeper: down the known stairs and
+        straight back up to a fresh level, as a player stair-scums; none
+        known, Detect Doors/Stairs (a Mage's Find Hidden Traps/Doors) first.
+        Searching walls came first: a clvl 39 Elf Priest searched DL37 dead
+        ends 22,000 times in 2.4 hours, 5% of its keys, its level mapped and
+        only down stairs known (C64 Balrog, 2026-11-22). A teleport is no
+        help there: in a 12,000-step replay Portal landed on mapped floor all
+        529 times."""
+        if not self.hunting_deep(obs):
+            return None
+        if view.stairs_down():
+            decision = self.down_to_climb_back(view)
+            if decision is not None:
+                return decision
+        magic = self.magic
+        finder = next((name for name in (DETECT_DOORS, FIND_TRAPS) if magic.spare(obs, name)), None)
+        if finder is not None and obs.step >= self.level.detect_after and obs.step >= self.blind_until:
+            self.level.detect_after = obs.step + DETECT_EVERY
+            return Decision(*magic.pray(finder, f"no staircase in reach: pray {finder}"))
+        return None
 
     def hopping_out(self) -> bool:
         """Down-and-back hops that never got higher: arriving by up stairs is
