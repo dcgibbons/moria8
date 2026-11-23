@@ -286,6 +286,7 @@ class BrainM2Test(unittest.TestCase):
                               rows={0: "You feel your life draining away! the Grave Wight touches you."})
         arrived = command_obs(pos=(5, 5), dlvl=38, clvl=31, hp=300, mhp=300)
         bare = prepared(Brain(GOALS["deep"]))
+        bare.food = 20                                             # fed: a starving one eats first (below)
         bare.decide(arrived, view)                                 # on the level first
         bare.decide(drained, view)
         self.assertEqual((LIFE in bare.drained, bare.level.drained_bare, bare.drainers),
@@ -304,6 +305,26 @@ class BrainM2Test(unittest.TestCase):
         stocked.decide(drained, view)
         self.assertFalse(stocked.level.drained_bare)
         self.assertIsNone(stocked.leave_deadly(drained, view))     # carried: fight on, restore after
+
+    def test_a_drain_never_comes_before_food(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 38 Human Rogue, drained with no
+        Restore Life Levels and its Word of Recall spent, walked a lap "to the
+        stairs" on DL4 for 953 steps and starved at 1/423 HP. A level marked
+        by a drain alone gives way to food; a one-breath killer does not."""
+        from moria_playtest.view import Creature
+        view = town_view((5, 5), (40, 40), dlvl=4, stairs_type=0xA)
+        o = command_obs(pos=(5, 5), dlvl=4, clvl=38, hp=423, mhp=423)
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.level.drained_bare, brain.food = True, 0
+        self.assertIsNone(brain.leave_deadly(o, view))              # starving: food first
+        brain.food = 20
+        brain.level = type(brain.level)(drained_bare=True)
+        self.assertIsNotNone(brain.leave_deadly(o, view))           # fed: leave, as before
+        brain.food = 0
+        brain.level = type(brain.level)(drained_bare=True)
+        kind = knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"]
+        view.creatures = {(9, 5): Creature(*kind, "Ancient Multi-Hued Dragon")}
+        self.assertIsNotNone(brain.leave_deadly(o, view))           # a breath that kills: away, fed or not
 
     def test_restore_life_levels_is_bought_at_the_black_market_rich(self) -> None:
         """C64 Balrog, 2026-11-21: the Temple seldom stocks Restore Life
@@ -3471,6 +3492,36 @@ class ScoutTest(unittest.TestCase):
         self.assertEqual(brain.leave_deadly(command_obs(pos=(14, 10), dlvl=31, clvl=34, hp=245, mhp=245), on).key,
                          ord("<"))                                       # remembered once seen
 
+
+    def test_a_one_breath_killer_out_of_sight_finds_the_stairs_before_recall(self) -> None:
+        """C64 Balrog, 2026-11-22: clvl 38-39 Rogues detected one-breath
+        killers out of sight 82-99 steps into DL37-38, read Word of Recall
+        about 30 times in 25 minutes each, recalled back to DL39 and met the
+        next one. Out of sight and out of reach: the stairs-finding prayer,
+        then a walk of up to LEAVE_HIDDEN_WALK; in sight, Recall as before."""
+        from moria_playtest.magic import Prayer
+        kind = knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"]
+        brain = self.priest()
+        brain.magic.known["Detect Doors/Stairs"] = Prayer("g", 9, 7, "Beginners Handbook")
+        brain.magic.can = lambda obs, name: name == "Detect Doors/Stairs"   # type: ignore[method-assign]
+        brain.recall = 3
+        rows = {23: "HP:390/390 MP:150/150 AC:52 AU:100"}
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=38, hp=390, mhp=390, rows=rows)
+        walls = [(20, y) for y in range(0, 30)]                         # a wall between: no line to it
+        view = town_view((10, 10), (60, 25), walls=walls, dlvl=37, stairs_type=0)   # no stairs known
+        view.creatures = {(30, 10): Creature(*kind, "Ancient Multi-Hued Dragon")}
+        self.assertEqual(brain.leave_deadly(o, view).reason,
+                         "a creature that could kill in one breath, out of sight: pray Detect Doors/Stairs for the stairs")
+        brain.pending = None
+        self.assertEqual(brain.leave_deadly(o, view).layer, "recall")   # shown none: Recall
+        stairs = town_view((10, 10), (10, 35), walls=walls, dlvl=37, stairs_type=0xA)   # up stairs 25 south
+        stairs.creatures = dict(view.creatures)
+        brain.level.deadly = None
+        self.assertEqual(brain.leave_deadly(o, stairs).layer, "leave")  # walked, not recalled
+        seen = town_view((10, 10), (10, 35), dlvl=37, stairs_type=0xA)  # no wall: in its sight
+        seen.creatures = dict(view.creatures)
+        brain.level.deadly = None
+        self.assertEqual(brain.leave_deadly(o, seen).layer, "recall")   # as before
 
     def test_heroism_first_when_the_breath_is_ten_hp_too_many(self) -> None:
         """C64 Balrog, 2026-11-10 to 12: an Ancient Multi-Hued Dragon's 693

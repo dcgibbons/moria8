@@ -644,6 +644,8 @@ CAUGHT_TO_LEAVE = 2      # "caught again" teleports on one level that make it on
 RETREAT_STUCK = 3        # retreat steps that leave the bot on its square before the escapes take over
 PROMPT_MESSAGES_KEPT = 400   # characters of -more- screens' messages carried to the next command screen
 LEAVE_WALK_STEPS = 10    # stairs farther than this on a deadly level: Word of Recall first
+LEAVE_HIDDEN_WALK = 40   # ... or this, with the killer out of sight and out of reach (no line to it)
+LEAVE_HIDDEN_NEAR = 6    # ... nearer than this it is no longer out of reach
 TELEPORT_JUMP = 10       # a move farther than this within a level: teleported, the unseen breath behind
 DEEP_HEAL_HP = 0.75      # from SCOUT_FROM deep, below this share of HP: heal (potions, prayers) before walking on
 BREATHES = re.compile(r"\bbreathes\b")
@@ -820,6 +822,8 @@ def chebyshev(a: Pos, b: Pos) -> int:
 class LevelMemory:
     unseen_foe: tuple[Pos, str, int] | None = None   # an invisible creature's square, name and step found
     drained_bare: bool = False   # experience drained here with no Restore Life Levels carried: leave
+    stairs_sought: bool = False  # the stairs looked for with a one-breath killer out of sight (leave_deadly)
+    deadly_drain: bool = False   # the level marked deadly by a drain alone, no breath (leave_deadly)
     detect_after: int = 0   # step before which Detect Doors/Stairs is not prayed again (M5b)
     blind_until: int = 0    # step before which Blind Creature is not prayed again (M5b)
     door_attempts: dict[Pos, int] = field(default_factory=dict)
@@ -2493,7 +2497,7 @@ class Brain:
             return None
         for p, c in view.creatures.items():
             if self.turn_burst(c, obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
-                self.level.deadly = p
+                self.level.deadly, self.level.deadly_drain = p, False
         kinds = knowledge.kinds_by_name()
         for name in NAMED_ACT.findall(self.seen_messages):
             # Unseen but named, and in reach: it just cast at the bot. A ready
@@ -2505,7 +2509,7 @@ class Brain:
             kind = kinds.get(name)
             if self.level.deadly is None and kind is not None \
                     and self.turn_burst(Creature(*kind, name), obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
-                self.level.deadly = view.pos
+                self.level.deadly, self.level.deadly_drain = view.pos, False
         if not self.restores.get(RESTORE_LIFE) and self.level.deadly is None and (
                 self.level.drained_bare or any(c.name in self.drainers for c in view.creatures.values())):
             # Drained with nothing to restore it, or a drainer in view: the
@@ -2513,8 +2517,15 @@ class Brain:
             # Wights and Vampires. Warriors melee'd them on DL38-39 and lost a
             # level or two a run, 20,000-40,000 experience an hour (C64
             # Balrog, 2026-11-21).
-            self.level.deadly = view.pos
+            self.level.deadly, self.level.deadly_drain = view.pos, True
         if self.level.deadly is None:
+            return None
+        if self.level.deadly_drain and self.food_low():
+            # A drain is no breath: short of food, eating and the walk to town
+            # for it come first. A clvl 38 Human Rogue, drained with no
+            # Restore Life Levels and its Word of Recall spent, walked a lap
+            # "to the stairs" on DL4 for 953 steps and starved at 1/423 HP
+            # (C64 Balrog, 2026-11-22).
             return None
         here = view.type_at(*view.pos)
         if here == TYPE_STAIRS_UP or (here == TYPE_STAIRS_DN and self.deeper_ok(obs)):
@@ -2546,15 +2557,32 @@ class Brain:
             return Decision(ord("R"), "phase", "a creature that could kill in one breath is beside: read Phase Door")
         stairs = view.stairs_up() | (view.stairs_down() if self.deeper_ok(obs) else set())
         far = view.path_steps(stairs, avoid_monsters=True) if stairs else None
+        # Out of sight (no line to it) and not close: it cannot breathe this
+        # turn, and a player finds the stairs rather than go home. Seen by
+        # detection 82-99 steps into DL37-38, clvl 38-39 Rogues read Word of
+        # Recall about 30 times in 25 minutes each, recalled back to DL39 and
+        # met the next one (C64 Balrog, 2026-11-22).
+        # (Its square, not the player's: an unseen caster that just cast is
+        # marked on the player's square, and is in reach.)
+        # Seen or remembered, the line decides: a remembered dragon with an
+        # open line to the player breathes as one in view (2026-11-08).
+        hidden = deadly != view.pos and chebyshev(deadly, view.pos) > LEAVE_HIDDEN_NEAR \
+            and self.line_to(view, deadly, missile=True) is None
+        if hidden and far is None and not self.level.stairs_sought and obs.step >= self.blind_until:
+            finder = next((name for name in (DETECT_DOORS, FIND_TRAPS) if self.magic.can(obs, name)), None)
+            if finder is not None:
+                self.level.stairs_sought = True
+                return Decision(*self.magic.pray(finder, f"a creature that could kill in one breath, out of sight: pray {finder} for the stairs"))
+        walk = LEAVE_HIDDEN_WALK if hidden else LEAVE_WALK_STEPS
         if not self.recalling and self.recall and obs.step >= self.blind_until \
-                and (far is None or far > LEAVE_WALK_STEPS):
+                and (far is None or far > walk):
             # A long walk in the open is the danger: Word of Recall first, then
             # the stairs if they come sooner. A level-36 Priest walked 40 steps
             # toward stairs from an Ancient White Dragon (234 of 259) and was
             # breathed on once its resistance ran out (C64 Balrog, 2026-11-08).
             self.picking, self.listed = RECALL, False
             return Decision(ord("R"), "recall", "a creature here could kill in one breath: read Word of Recall")
-        if self.recalling and (far is None or far > LEAVE_WALK_STEPS):
+        if self.recalling and (far is None or far > walk):
             return None
         step = view.step_toward(stairs, avoid_monsters=True) if stairs else None
         if step is not None and step != (0, 0):
