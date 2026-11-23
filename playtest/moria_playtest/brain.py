@@ -2363,10 +2363,16 @@ class Brain:
         # A clvl 37 Half-Orc Rogue at 412 took three of 234 from an Ancient
         # White Dragon, drank its two Healings after the first two, fought an
         # 'R' in the dragon's sight while Word of Recall read, and the fourth
-        # killed it from 178 (C64 Balrog, 2026-11-22).
-        breaths = 1 if self.strong.get(HEALING, 0) else 2
-        lethal = {p: breaths * self.turn_burst(c, obs) for p, c in view.creatures.items()
-                  if not self.stationary(c) and breaths * self.turn_burst(c, obs) >= BREATH_LETHAL * obs.hp
+        # killed it from 178 (C64 Balrog, 2026-11-22). A breather's alone: a
+        # spell is answered in a fight, and Human Mages at clvl 2-7 read a
+        # Novice caster's 24 as 48, cast Phase Door 30-200 times a game and
+        # died on DL1-2 in eight of eight games (build queue, 2026-11-23).
+        doubled = not self.strong.get(HEALING, 0)
+        breathers = knowledge.breath_info()
+        def burst(c: Creature) -> int:
+            return self.turn_burst(c, obs) * (2 if doubled and (c.glyph, c.level) in breathers else 1)
+        lethal = {p: burst(c) for p, c in view.creatures.items()
+                  if not self.stationary(c) and burst(c) >= BREATH_LETHAL * obs.hp
                   and self.sees(view, view.pos, p)}
         breath = self.level.breath
         if lethal:
@@ -4249,8 +4255,15 @@ class Brain:
         # each dive, one healing with a 15-HP spell (C64 Balrog, 2026-11-14).
         if self.resist_heat < BALROG_HEAT_POTIONS or self.balrog_damage(obs) < BALROG_HP:
             return False
+        # The ring's resistance worn, and through both, as the fight has them
+        # (VMS fire_dam: a third for each; resist_fire drinks and keeps the
+        # timer up): by the ring alone a clvl 40 Elf Priest at 322 HP with
+        # eight potions read its 1,000 as 333 of 290 and hunted DL37-38 for
+        # hours (C64 Balrog, 2026-11-23; maintainer: try it).
+        if self.resist_div(obs, "fire", lasting=True) < 3:
+            return False
         balrog = Creature(kind[0], kind[1], BALROG)
-        return self.turn_burst(balrog, obs, lasting=True) < BREATH_LETHAL * obs.mhp
+        return self.turn_burst(balrog, obs, lasting=True, assume=frozenset({"fire"})) < BREATH_LETHAL * obs.mhp
 
     def balrog_damage(self, obs: Observation) -> float:
         """What one fight can do to the Balrog, counted as a player counts it

@@ -2568,6 +2568,21 @@ class BreathGuardTest(unittest.TestCase):
         self.assertEqual((decision.layer, decision.reason),
                          ("retreat", f"the 'd' could breathe {2 * self.burst}: out of its sight"))
 
+    def test_a_caster_s_spell_is_not_counted_twice(self) -> None:
+        """Build queue, 2026-11-23: Human Mages at clvl 2-7 read a Novice
+        caster's 24 as two breaths (48) against 35 HP, cast Phase Door 30-200
+        times a game and died on DL1-2 in eight of eight games. Two breaths
+        are a breather's: a spell alone, as one."""
+        caster = ("p", 2)
+        self.assertNotIn(caster, knowledge.breath_info())
+        self.assertEqual(knowledge.spell_burst()[caster], 24)
+        view = town_view((10, 10), (40, 40), dlvl=2)
+        view.creatures = {(16, 10): Creature(*caster)}
+        o = command_obs(pos=(10, 10), dlvl=2, clvl=5, hp=35, mhp=35)
+        brain = Brain(GOALS["deep"])
+        brain.phase = 3                                                # an escape at hand, as the Mages' spell
+        self.assertIsNone(brain.breath_guard(o, view))                 # 24 of 35: fight it
+
     def test_with_no_escape_it_steps_out_of_sight(self) -> None:
         brain = Brain(GOALS["deep"])
         walls = [(11, 8), (11, 9), (11, 11), (11, 12)]   # a pillar column: (11, 9) and (11, 11) are wall
@@ -2884,7 +2899,13 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=405))    # a third: 333 of 405
         self.assertFalse(self.deeper(brain, 50, clvl=40, mhp=405))   # no deeper than DL50: it is on every level
         self.assertFalse(self.deeper(brain, 69, clvl=40, mhp=405))   # (2026-11-11: dived on to DL70 and DL100)
-        self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=360))   # 333 is too much of 360
+        # With Resist Heat too (two potions carried), a third again: 111 of
+        # 360, and of the 322 of a clvl 40 Elf Priest that hunted DL37-38 for
+        # hours by the ring's 333 alone (C64 Balrog, 2026-11-23; maintainer:
+        # try it). With fewer than two, not ready at all.
+        self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=322))
+        brain.resist_heat = 1
+        self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=405))
         self.assertFalse(self.deeper(brain, 49, clvl=39, mhp=405))   # the top level first
 
     def test_the_balrogs_depth_waits_for_free_action(self) -> None:

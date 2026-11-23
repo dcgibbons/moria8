@@ -104,6 +104,7 @@ class Goal:
     klass: str = "warrior"
     step_budget: int = 2_000
     level_steps: int = 0   # end the game after this many steps without a character level (0: never)
+    stuck_steps: int = 0   # end the game after this many steps with neither XP nor depth changed (0: never)
     target_dlvl: int = 0   # the brain walks down until this depth
     want_xp: bool = False  # M2: seek monsters for XP
     qualify_bar: int = 16  # of the 20 qualification seeds, how many must reach it (§7.2)
@@ -181,6 +182,10 @@ GOALS: dict[str, Goal] = {
         "monster catalog.",
         lambda o: bool(o.game_flags & CONSTS["GAME_FLAG_WINNER"][1]), step_budget=3_000_000, target_dlvl=100,
         want_xp=True, ready_margin=3, threat_depth=True, exercise=True,
+        # No level_steps (a clvl 39 goes hours between levels), but stuck:
+        # a clvl 37 Paladin walked one 20-square lap on DL37 for 2.4 million
+        # steps, its XP and depth unchanged, overnight (C64 Balrog, 2026-11-23).
+        stuck_steps=100_000,
         missile_classes=("rogue", "ranger", "warrior"), tactics=DEFAULT_TACTICS),
 }
 

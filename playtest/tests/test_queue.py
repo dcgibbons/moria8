@@ -1422,6 +1422,23 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual(GOALS["deep"].level_steps, 150_000)
         self.assertEqual(GOALS["balrog"].level_steps, 0)
 
+    def test_a_balrog_game_with_neither_xp_nor_depth_changed_ends(self) -> None:
+        """C64 Balrog, 2026-11-23: a clvl 37 Paladin walked one 20-square lap
+        on DL37 for 2.4 million steps overnight, its XP and depth unchanged:
+        the Balrog goal has no level_steps (a clvl 39 goes hours between
+        levels), and nothing else ended it."""
+        from moria_playtest.goals import GOALS
+        from moria_playtest.session import LevelWatch
+        watch = LevelWatch()
+        self.assertEqual(GOALS["balrog"].stuck_steps, 100_000)
+        self.assertIsNone(watch.stuck(0, 1_575_138, 37, 100_000))
+        self.assertIsNone(watch.stuck(99_999, 1_575_138, 37, 100_000))
+        self.assertIsNone(watch.stuck(99_999, 1_575_200, 37, 100_000))   # a kill restarts the count
+        self.assertIsNone(watch.stuck(199_998, 1_575_200, 38, 100_000))  # so does a new level
+        self.assertIn("1575200 XP on DL38", watch.stuck(299_998, 1_575_200, 38, 100_000))
+        self.assertIsNone(LevelWatch().stuck(10**7, 5, 2, 0))           # 0: never
+        self.assertEqual(GOALS["deep"].stuck_steps, 0)
+
     def test_a_loop_is_named_once_a_stay(self) -> None:
         """Maintainer, 2026-11-03: loops should be obvious. One square entered
         LOOP_RECENT times within LOOP_WINDOW steps is named once a stay on a
