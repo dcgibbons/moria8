@@ -241,7 +241,7 @@
   <section style="grid-area: monsters">
     <h2><span>Monsters</span><small id="moncount"></small></h2>
     <div class="tablewrap"><table class="btable" id="montable"></table></div>
-    <div class="mlegend"><span class="dim">slain: the runs that killed it, from the runs since <span id="monsince"></span>; met: the runs that named it in a message or looked at it, since <span id="metsince"></span>; killed a character: every run recorded. The Balrog, Evil Iggy and the Ancient Multi-Hued Dragon first, then the 40 that killed the most characters</span></div>
+    <div class="mlegend"><span class="dim">slain: the runs that killed it, from the runs since <span id="monsince"></span>; met: the runs that named it in a message or looked at it, since <span id="metsince"></span>; killed a character: every run recorded. The Balrog, Evil Iggy and the Ancient Multi-Hued Dragon first, then every creature that killed a Balrog-queue character, then the 40 others that killed the most characters</span></div>
   </section>
   <section style="grid-area: buildq">
     <h2><span>The build queue</span><small id="cicount"></small></h2>
@@ -906,7 +906,12 @@ function renderQueue() {
   const mrows = Object.entries(mon.creatures).map(([name, c]) => ({name, slain: c.slain || {}, met: c.met || {}, killed: c.killed || {}}));
   const mranked = mrows.filter(r => !mpinned.includes(r.name))
     .sort((a, b) => msum(b.killed) - msum(a.killed) || msum(b.slain) - msum(a.slain));
-  const mshow = mpinned.map(n => mrows.find(r => r.name === n) || {name: n, slain: {}, met: {}, killed: {}}).concat(mranked.slice(0, 40));
+  // Every killer of a Balrog-queue character, the most first: by all
+  // queues' deaths alone, three Ancient White Dragon deaths at clvl 32-37
+  // fell below the build queue's Kobolds and mice (maintainer, 2026-11-22).
+  const mbalrog = mranked.filter(r => r.killed.balrog).sort((a, b) => b.killed.balrog - a.killed.balrog || msum(b.killed) - msum(a.killed));
+  const mshow = mpinned.map(n => mrows.find(r => r.name === n) || {name: n, slain: {}, met: {}, killed: {}})
+    .concat(mbalrog, mranked.filter(r => !r.killed.balrog).slice(0, 40));
   const mcell = (o, k) => o[k] ? o[k].toLocaleString() : `<span class="dim">0</span>`;
   $("montable").innerHTML = `<thead><tr><th>creature</th><th>slain (runs): Balrog queue</th><th>build queue</th><th>other</th>` +
     `<th>met (runs): Balrog queue</th><th>build queue</th><th>other</th>` +

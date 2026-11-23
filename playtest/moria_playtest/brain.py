@@ -646,6 +646,7 @@ RETREAT_STUCK = 3        # retreat steps that leave the bot on its square before
 PROMPT_MESSAGES_KEPT = 400   # characters of -more- screens' messages carried to the next command screen
 LEAVE_WALK_STEPS = 10    # stairs farther than this on a deadly level: Word of Recall first
 LEAVE_HIDDEN_WALK = 40   # ... or this, with the killer out of sight and out of reach (no line to it)
+DRAINER_CLOSE = 2        # squares from a drainer that make leave_deadly read Word of Recall when no stairs are near
 LEAVE_HIDDEN_NEAR = 6    # ... nearer than this it is no longer out of reach
 TELEPORT_JUMP = 10       # a move farther than this within a level: teleported, the unseen breath behind
 DEEP_HEAL_HP = 0.75      # from SCOUT_FROM deep, below this share of HP: heal (potions, prayers) before walking on
@@ -2601,13 +2602,15 @@ class Brain:
             # 36-39 characters without Restore Life Levels recalled from DL37
             # on sight of each Wight or Wraith and back to DL38-39, 359 times
             # in 25 minutes across 16 runs (C64 Balrog, 2026-11-22).
-            if far is None or far > LEAVE_HIDDEN_WALK:
-                close = [p for p, c in view.creatures.items() if self.drainer(c) and chebyshev(p, view.pos) <= 2]
-                key = self.step_away(view, min(close, key=lambda p: chebyshev(p, view.pos))) if close else None
-                if key is not None:
-                    return Decision(key, "leave", "a drainer close and no Restore Life Levels: step out of its reach")
+            close = any(self.drainer(c) and chebyshev(p, view.pos) <= DRAINER_CLOSE for p, c in view.creatures.items())
+            if (far is None or far > LEAVE_HIDDEN_WALK) and not close:
                 return None
-            walk = LEAVE_HIDDEN_WALK
+            # Closed to two squares, it is coming: home by Word of Recall when
+            # no stairs are near. A step out of its reach was undone by the
+            # next explore step, 27-35 times a run, and clvl 37-39 runs took
+            # 3-10 touches of 2% each in 15 minutes (C64 Balrog, 2026-11-22).
+            if far is not None and far <= LEAVE_HIDDEN_WALK:
+                walk = LEAVE_HIDDEN_WALK
         if not self.recalling and self.recall and obs.step >= self.blind_until \
                 and (far is None or far > walk):
             # A long walk in the open is the danger: Word of Recall first, then

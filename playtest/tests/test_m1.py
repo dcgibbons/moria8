@@ -329,12 +329,11 @@ class BrainM2Test(unittest.TestCase):
         brain.level = type(brain.level)(drained_bare=True)
         self.assertEqual(brain.leave_deadly(o, none).layer, "recall")         # drained: as before
 
-    def test_a_drainer_is_never_closed_with_and_stepped_from(self) -> None:
+    def test_a_drainer_is_never_closed_with_and_recalled_from_close(self) -> None:
         """C64 Balrog, 2026-11-22: kept off Word of Recall, sixteen clvl 36-39
         runs were drained 13 times a run-hour as hunt walked them into
         drainers' reach. Known from the catalog before any touch: never
-        hunted, and one two squares off is stepped from."""
-        from moria_playtest.brain import chebyshev
+        hunted, and one two squares off sends the bot home."""
         from moria_playtest.view import Creature
         knowledge.use_port("c64")                                         # the catalog's creatures
         self.addCleanup(knowledge.use_port, "")
@@ -345,10 +344,14 @@ class BrainM2Test(unittest.TestCase):
         o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=432, mhp=432)
         self.assertFalse(brain.engageable(wight, o))                      # never closed with
         view = town_view((5, 5), (5, 5), dlvl=37, stairs_type=0)          # no stairs known
-        view.creatures = {(7, 5): wight}                                  # not yet touched: from the catalog
-        step = brain.leave_deadly(o, view)
-        target = next((5 + dx, 5 + dy) for (dx, dy), k in DIRS.items() if k == step.key)
-        self.assertGreater(chebyshev(target, (7, 5)), 2)                  # out of its reach
+        brain.level.deadly, brain.level.deadly_drain = (9, 5), True      # marked by the drainer in view
+        view.creatures = {(9, 5): wight}                                  # four squares off: no Recall
+        self.assertIsNone(brain.leave_deadly(o, view))
+        # Two squares off, not yet touched (known from the catalog): home by
+        # Word of Recall. A step out of its reach was undone by the next
+        # explore step, 27-35 times a run (C64 Balrog, 2026-11-22).
+        view.creatures = {(7, 5): wight}
+        self.assertEqual(brain.leave_deadly(o, view).layer, "recall")
 
     def test_a_drain_never_comes_before_food(self) -> None:
         """C64 Balrog, 2026-11-22: a clvl 38 Human Rogue, drained with no
