@@ -2619,6 +2619,22 @@ class BreathGuardTest(unittest.TestCase):
         self.assertEqual(decision.layer, "phase")
         self.assertIn("breaths unseen could breathe 436", decision.reason)
 
+    def test_with_no_healing_a_breath_two_of_which_kill_marks_the_level(self) -> None:
+        """C64 Balrog, 2026-11-21 and 22: three clvl 32-37 Rogues took one
+        breath of about 234 of 412 from an Ancient White Dragon, stayed on the
+        level, and died to the next. With no Potion of Healing two would kill:
+        the level is one to leave; with one carried, not yet."""
+        from moria_playtest.brain import HEALING
+        view = town_view((10, 10), (40, 40), dlvl=37)                 # the breather out of sight
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=178, mhp=412)
+        brain = Brain(GOALS["deep"])
+        brain.strong[HEALING] = 1
+        brain.note_breath(o, view, 234)
+        self.assertIsNone(brain.level.deadly)
+        brain = Brain(GOALS["deep"])
+        brain.note_breath(o, view, 234)
+        self.assertEqual(brain.level.deadly, (10, 10))
+
     def test_an_unseen_breath_counts_twice(self) -> None:
         """2026-11-08: a level-37 Priest took 106 from an unseen Young
         Multi-Hued Dragon, explored on at 179/285, and was at 74 after the
@@ -2638,7 +2654,7 @@ class BreathGuardTest(unittest.TestCase):
         breathe 666"), was found, held and burned to death. Out of sight a
         Phase Door breaks no sight line: once a window, then a heal, then
         nothing here (leave_deadly's stairs or Word of Recall)."""
-        from moria_playtest.brain import CSW, UNSEEN_BREATH_STEPS
+        from moria_playtest.brain import CSW, HEALING, UNSEEN_BREATH_STEPS
         brain = Brain(GOALS["deep"])
         brain.phase = 20
         view = town_view((10, 10), (40, 40), dlvl=50)                 # nothing in view
@@ -2650,7 +2666,12 @@ class BreathGuardTest(unittest.TestCase):
         again.step = o.step + 3
         self.assertIsNone(brain.breath_guard(again, view))            # no second phase, nothing to heal with
         brain.strong[CSW] = 4
-        self.assertEqual(brain.breath_guard(again, view).layer, "quaff")
+        # A heal that cannot lift it over the breath is no answer: a clvl 35
+        # Gnome Rogue drank seven Cure Serious Wounds against 468 and died
+        # (C64 Balrog, 2026-11-21). leave_deadly's stairs or Recall instead.
+        self.assertIsNone(brain.breath_guard(again, view))
+        brain.strong[HEALING] = 1
+        self.assertEqual(brain.breath_guard(again, view).reason, "breaths unseen could breathe 666: drink Healing")
         later = command_obs(pos=(12, 10), dlvl=50, clvl=40, hp=191, mhp=410)
         later.step = o.step + 3 + UNSEEN_BREATH_STEPS
         brain.level.breath = (later.step, 333)                        # breathed on again, a window on

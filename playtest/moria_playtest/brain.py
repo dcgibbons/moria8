@@ -2333,7 +2333,12 @@ class Brain:
         self.remember_burst(obs, frozenset({element}) if element else frozenset(),
                             raw * UNSEEN_BREATHS if unseen else raw)
         self.level.breaths_taken += 1
-        if self.level.deadly is None and (loss >= BREATH_LETHAL * obs.mhp
+        # With no Potion of Healing, two breaths from full: nothing bridges
+        # them (breath_guard). Three clvl 32-37 Rogues took one breath of
+        # about 234 from an Ancient White Dragon, stayed, and died to the next
+        # healing a few HP a turn (C64 Balrog, 2026-11-21 and 22).
+        breaths = 1 if self.strong.get(HEALING, 0) else 2
+        if self.level.deadly is None and (breaths * loss >= BREATH_LETHAL * obs.mhp
                                           or self.level.breaths_taken >= BREATHS_TO_LEAVE):
             # A breather that keeps finding the bot is one to leave too, not
             # only one that could kill from full HP: a level-37 Priest took
@@ -2402,8 +2407,13 @@ class Brain:
             # a heal, then leave_deadly's stairs or Word of Recall. A clvl 40
             # Priest at 190/410 read Phase Door twenty times running from an
             # unseen Balrog, was found, held and burned to death (C64 Balrog,
-            # 2026-11-12).
-            return self.heal_now(obs, f"{who} could breathe {worst}")
+            # 2026-11-12). Only a heal that lifts the HP over it: a clvl 35
+            # Gnome Rogue drank seven Cure Serious Wounds and prayed Cure Light
+            # Wounds against 468, and a breath killed it from 108 (2026-11-21);
+            # without one, leave_deadly's stairs or Word of Recall.
+            if obs.hp + POTION_HEAL[HEALING] > worst / BREATH_LETHAL and self.potion_ready(HEALING, obs):
+                return self.heal_now(obs, f"{who} could breathe {worst}")
+            return None
         if self.phase and obs.step >= self.blind_until:
             self.picking, self.listed = PHASE, False
             self.level.phased = obs.step
