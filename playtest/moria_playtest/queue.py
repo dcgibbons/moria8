@@ -116,6 +116,8 @@ ROTATE_POLL_STEPS = 500   # a Balrog run looks for a newer build this often (new
 # with 25 C64 graduates for 18 slots, 20M-step games (about 40 hours) and two
 # deaths in 2.5 hours, seven waited on (2026-11-15).
 BALROG_SLICE_S = 3 * 3600
+FOCUS_WAIT_S = 30           # a focus character waiting this long is short of a slot, not between two of its games
+FOCUS_YIELD_MIN_S = 15 * 60  # a game outside the focus plays this long before it yields for it
 # The build queue's runs play the default tactics, as the Balrog queue's do
 # (maintainer, 2026-11-16): its goal (clvl10, the pre-commit gate's too)
 # has none, so its success rates measured a bot the Balrog queue never plays.
@@ -891,6 +893,7 @@ def run_one(run_dir: Path) -> int:
                                 "missiles": character.brain.missiles if character else {},
                                 "kit": kit(character.brain) if character else {}},
                    "ended": now()})
+    write_json(run_dir / "uses.json", record["features"].get("uses") or {})   # the coverage panel's items
     if result.outcome == "died" and traces:
         detail = death(traces[0])
         record["death"] = {k: detail.get(k) for k in ("cause", "killer", "clw", "oil", "mp", "mmp", "last")}
@@ -908,21 +911,47 @@ def kit(brain: Any) -> dict[str, Any]:
             "books": list(brain.magic.books or []), "spells": sorted(brain.magic.known)}
 
 
+USE_PROMPT = re.compile(r"^(\w+) which ")   # "Quaff which potion (a-i)?": the game's item prompt
+USE_VERBS = frozenset({"Wear", "Read", "Aim", "Quaff", "Throw", "Use", "Study", "Recharge"})   # not Drop, Identify
+ITEM_DETAIL = re.compile(r"\s*(?:\((?:[+-]?\d+(?:,[+-]?\d+)?|\d+ (?:turns|charges))\)|\[[^\]]*\])")
+
+
+def item_name(text: str) -> str:
+    """An item as picked, its bonuses, charges, light and armour class left
+    off: "Heavy Crossbow (+4,+7)" is "Heavy Crossbow"."""
+    return ITEM_DETAIL.sub("", text).strip()
+
+
 def features(trace: Path) -> dict[str, Any]:
     """Counts for the feature grid (§23.6) from a run's trace: decisions by
-    brain layer, and the deepest level and highest level seen."""
+    brain layer, and each item picked at a use prompt by its verb (``uses``:
+    the coverage panel's items, maintainer 2026-11-23: "every spell/prayer
+    has been used, every item, and every monster has been encountered")."""
     layers: dict[str, int] = {}
+    uses: dict[str, dict[str, int]] = {}
+    verb = None
     try:
         with gzip.open(trace, "rt") as handle:
             for line in handle:
                 try:
-                    layer = json.loads(line).get("layer") or "?"
+                    decision = json.loads(line)
                 except ValueError:
                     break
+                layer = decision.get("layer") or "?"
                 layers[layer] = layers.get(layer, 0) + 1
+                prompt = USE_PROMPT.match(decision.get("msg") or "")
+                if prompt:
+                    verb = prompt.group(1)
+                elif layer != "prompt":
+                    verb = None
+                reason = decision.get("reason") or ""
+                if layer == "prompt" and reason.startswith("pick ") and verb in USE_VERBS:
+                    counts = uses.setdefault(item_name(reason[5:]), {})
+                    counts[verb] = counts.get(verb, 0) + 1
+                    verb = None
     except (OSError, EOFError):
         pass
-    return {"layers": layers}
+    return {"layers": layers, "uses": uses}
 
 
 # -- the queue's state ---------------------------------------------------------------
@@ -1898,13 +1927,20 @@ class Service:
         focus, share = self.balrog_focus()
         if focus and share:
             focused = sum(1 for j in balrog.values() if j["character"] in focus)
+            # Not between two of a focus character's own games, and not a
+            # game just begun: a clvl 32 Half-Elf Warrior's games ended in
+            # town 7 seconds after each start, as focus games ended and
+            # restarted around it, and its checkpoint stood 28 hours (C64
+            # Balrog, 2026-11-23).
             short = [k for k in self.balrog.state["order"] if k not in playing
                      and self.balrog.state["items"][k]["character"] in focus
-                     and not self.balrog.state["items"][k].get("won")][:max(0, share - focused)]
+                     and not self.balrog.state["items"][k].get("won")
+                     and t - self.balrog.waiting_since(k) > FOCUS_WAIT_S][:max(0, share - focused)]
             if short:
                 waiting = sorted(set(waiting) | set(short))
                 due = sorted((j["started"], r) for r, j in balrog.items()
-                             if r not in flagged and j["character"] not in focus)
+                             if r not in flagged and j["character"] not in focus
+                             and t - j["started"] > FOCUS_YIELD_MIN_S)
         for _, run_id in due[:max(0, len(waiting) - len(flagged))]:
             (self.home / "runs" / run_id).mkdir(parents=True, exist_ok=True)
             (self.home / "runs" / run_id / YIELD).touch()

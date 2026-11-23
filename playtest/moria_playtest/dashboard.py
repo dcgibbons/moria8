@@ -260,6 +260,69 @@ def monster_stats(home: Path, since: str = "") -> dict[str, Any]:
             "met_since": met_since}
 
 
+COVERAGE_QUEUES = ("build", "balrog")   # the queues still playing (the M7 main queue ended 2026-11-07)
+COVERAGE_PORT = "c64"                     # the Balrog queue's port: its catalog's creatures
+NOT_USED = ("ICAT_GOLD", "ICAT_JUNK")     # picked up, never used
+
+
+def coverage_creatures() -> list[str]:
+    """The catalog's creatures, by name: COVERAGE_PORT's build, the
+    process's port restored after."""
+    before = knowledge.uses_catalog()
+    knowledge.use_port(COVERAGE_PORT)
+    names = list(knowledge.catalog_names()) if knowledge.uses_catalog() else list(knowledge.creature_names())
+    if not before:
+        knowledge.use_port("")
+    return names
+
+
+def coverage(home: Path) -> dict[str, Any]:
+    """The coverage panel (maintainer, 2026-11-23: "I want to know that every
+    spell/prayer has been used, every item, and every monster has been
+    encountered - in that priority"): over the build and Balrog queues'
+    runs, each spell and prayer every class learns with its casts and the
+    casts whose effect was seen; each catalog item with its uses by verb
+    (``queue.features``: runs/*/uses.json); each catalog creature with the
+    runs that met it and slew it (``monster_stats``)."""
+    from . import queue as q
+    spells: dict[str, dict[str, Any]] = {}
+    for klass in CLASSES:
+        for name, level in knowledge.spells(klass).items():
+            entry = spells.setdefault(name, {"classes": {}, "cast": 0, "effect": 0})
+            entry["classes"][klass] = level
+    for record in queue_records(home / "runs.jsonl"):
+        if record.get("queue") not in COVERAGE_QUEUES:
+            continue
+        for name, cast in ((record.get("features") or {}).get("casts") or {}).items():
+            if name in spells:
+                spells[name]["cast"] += cast.get("cast", 0)
+                spells[name]["effect"] += cast.get("effect", 0)
+    kinds = [k for k in knowledge.item_kinds().values() if k.category not in NOT_USED]
+    longest = sorted((k.name for k in kinds), key=len, reverse=True)
+    items = {k.name: {"category": k.category[5:].lower(), "uses": {}} for k in kinds}
+    unknown: dict[str, int] = {}
+    matched: dict[str, str | None] = {}
+    for path in home.glob("runs/*/uses.json"):
+        if not any(f"-{name}-" in path.parent.name for name in COVERAGE_QUEUES):
+            continue
+        for used, verbs in (cached(path, read_json) or {}).items():
+            if used not in matched:
+                matched[used] = next((n for n in longest if used == n or used.startswith(n + " ")), None)
+            name = matched[used]
+            if name is None:
+                unknown[used] = unknown.get(used, 0) + sum(verbs.values())
+                continue
+            counts = items[name]["uses"]
+            for verb, n in verbs.items():
+                counts[verb] = counts.get(verb, 0) + n
+    stats = monster_stats(home)["creatures"]
+    monsters = {name: {"met": sum((stats.get(name) or {}).get("met", {}).values()),
+                       "slain": sum((stats.get(name) or {}).get("slain", {}).values())}
+                for name in coverage_creatures()}
+    return {"spells": spells, "items": items, "unidentified": unknown, "monsters": monsters,
+            "runs_with_uses": sum(1 for _ in home.glob("runs/*/uses.json")), "queues": list(COVERAGE_QUEUES)}
+
+
 def balrog_kills(home: Path, since: str = "") -> dict[str, Any]:
     """The Balrog queue's kills over every run it kept from ``since`` on:
     what falls, and whether the Balrog, Evil Iggy or an Ancient Multi-Hued
@@ -968,6 +1031,7 @@ def queue() -> dict[str, Any]:
             "subqueues": subs, "archived": archived, "balrog": read_json(home / "state-balrog.json") or {"items": {}, "order": []},
             "balrog_kills": balrog_kills(home, since),
             "monsters": monster_stats(home, since),
+            "coverage": coverage(home),
             "build_queue": read_json(home / "state-build.json") or {"platforms": {}},
             "ratings": runs["ratings"], "features": runs["features"], "difficulty": runs["difficulty"],
             "builds": runs["builds"],
