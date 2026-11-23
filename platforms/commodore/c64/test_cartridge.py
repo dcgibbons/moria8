@@ -246,13 +246,13 @@ class Experiment:
                 return target
         raise AssertionError(f"Did not reach ${address:04x}: {response}")
 
-    def call(self, routine, a=0, port=0x36, irq_masked=True, carry=False):
+    def call(self, routine, a=0, x=0, port=0x36, irq_masked=True, carry=False):
         # Title-only map loan: callers here never resume gameplay.
         # C600-C6FF holds the driver, C7F0-C7F1 holds results.
         assert self.sym["program_end"] <= 0xC000
         assert len((self.args.symbols.parent / "title").read_bytes()) - 2 <= 0x600
         code = [0x78 if irq_masked else 0x58, 0xA9, port, 0x85, 1,
-                0xA9, a, 0x20, routine & 255, routine >> 8,
+                0xA9, a, 0xA2, x, 0x20, routine & 255, routine >> 8,
                 0x08, 0x68, 0x8D, 0xF0, 0xC7, 0xA5, 1, 0x8D, 0xF1, 0xC7]
         end = 0xC600 + len(code)
         code += [0x4C, end & 255, end >> 8]
@@ -638,7 +638,7 @@ def run_gameplay(args, turbo=False):
         exp.key_at_input("3")
         exp.until(exp.sym["legal_sysinfo_wait"])
         sys_scr = exp.memory(0x0400, 1000)
-        for text in ("Moria 8 - System Info", "Save V2 ($22)", "EasyFlash Cartridge", "Drives:"):
+        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Cartridge", "Drives:"):
             assert sc(text) in sys_scr, f"Missing System Info text: {text}"
         exp.key_at_input(" ")
         exp.until(exp.sym["legal_menu_wait"])
@@ -689,7 +689,7 @@ def run_gameplay(args, turbo=False):
         exp.key_at_input(b"\xd6")
         exp.until(exp.sym["legal_sysinfo_wait"])
         gp_sys = exp.memory(0x0400, 1000)
-        for text in ("Moria 8 - System Info", "EasyFlash Cartridge", "Turn 0  Town", "RNG:"):
+        for text in ("Moria 8 - System Info", "Cartridge", "Turn 0  Town", "RNG:"):
             assert sc(text) in gp_sys, f"Missing gameplay System Info text: {text}"
         exp.key_at_input(" ")
         exp.until(exp.sym["main_loop"])

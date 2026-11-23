@@ -1582,7 +1582,7 @@ title_show_sysinfo:
     lda #23
     sta zp_cursor_row
 #if ATARI8_CARTRIDGE
-    lda #8
+    lda #9
     sta zp_cursor_col
     lda #<atari_sysinfo_cart_str
     sta zp_ptr0
@@ -1590,7 +1590,7 @@ title_show_sysinfo:
     sta zp_ptr0_hi
     jmp hal_screen_put_string
 
-atari_sysinfo_cart_str: .text "ATARI XL/XE  128KB CART" ; .byte 0
+atari_sysinfo_cart_str: .text "ATARI XL/XE  CARTRIDGE" ; .byte 0
 #else
     lda xe_present
     bne !xe_str+

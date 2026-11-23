@@ -287,7 +287,7 @@ class Experiment:
                 return target
         raise AssertionError(f"Did not reach ${address:04x}: {response}")
 
-    def call(self, routine: int, a: int = 0, irq_masked: bool = True, carry: bool = False) -> int:
+    def call(self, routine: int, a: int = 0, x: int = 0, irq_masked: bool = True, carry: bool = False) -> int:
         # Title-only map loan ($CE00-$CFFF): callers here never resume gameplay.
         # C800-CAFF holds loaded title art; CE00-CEFF holds the driver; CFF0 holds saved P.
         assert self.sym["program_end"] <= 0xC800
@@ -296,6 +296,7 @@ class Experiment:
             0x78 if irq_masked else 0x58,
             0x8D, 0x3F, 0xFF,           # sta PLUS4_RAM_ENABLE ($FF3F)
             0xA9, a,
+            0xA2, x,
             0x20, routine & 255, routine >> 8,
             0x08, 0x68,                 # php; pla
             0x8D, 0xF0, 0xCF,           # sta $CFF0
@@ -639,7 +640,7 @@ def run_gameplay(args: argparse.Namespace) -> int:
         exp.key_at_input("3")
         exp.until(exp.sym["legal_sysinfo_wait"])
         sys_scr = exp.memory(0x0C00, 1000)
-        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Magic Desk Cartridge", "Drives:"):
+        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Cartridge", "Drives:"):
             assert sc(text) in sys_scr, f"Missing System Info text: {text}"
         exp.key_at_input(" ")
         exp.until(exp.sym["legal_menu_wait"])
@@ -682,7 +683,7 @@ def run_gameplay(args: argparse.Namespace) -> int:
         exp.key_at_input(b"\xd6")
         exp.until(exp.sym["legal_sysinfo_wait"])
         gp_sys = exp.memory(0x0C00, 1000)
-        for text in ("Moria 8 - System Info", "Magic Desk Cartridge", "Turn 0  Town", "RNG:"):
+        for text in ("Moria 8 - System Info", "Cartridge", "Turn 0  Town", "RNG:"):
             assert sc(text) in gp_sys, f"Missing gameplay System Info text: {text}"
         exp.key_at_input(" ")
         exp.until(exp.sym["main_loop"])

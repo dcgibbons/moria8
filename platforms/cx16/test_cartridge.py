@@ -549,7 +549,7 @@ def check_legal_viewer(tb: harness_smoke.X16Bench, from_gameplay: bool) -> None:
         "legal_sysinfo_menu",
         tb.screen_has("Moria 8 - System Info")
         and tb.screen_has("Commander X16 (80-col VERA)")
-        and tb.screen_has("ROM Cartridge")
+        and tb.screen_has("Cartridge")
         and (not from_gameplay or tb.screen_has("Turn ")),
         "key 3 did not show expected cartridge System Info",
     )
@@ -564,7 +564,7 @@ def check_legal_viewer(tb: harness_smoke.X16Bench, from_gameplay: bool) -> None:
         tb.assert_line(
             "gameplay_sysinfo",
             tb.screen_has("Moria 8 - System Info")
-            and tb.screen_has("ROM Cartridge")
+            and tb.screen_has("Cartridge")
             and tb.screen_has("RNG:"),
             "SHIFT+V did not open gameplay System Info on cartridge",
         )

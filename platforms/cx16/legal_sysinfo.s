@@ -94,7 +94,7 @@ legal_sysinfo_lbl_io:       .text "Last I/O:"; .byte 0
 
 legal_sysinfo_plat_cx16:    .text "Commander X16 (80-col VERA)"; .byte 0
 #if CX16_CARTRIDGE
-legal_sysinfo_build_cart:   .text "ROM Cartridge"; .byte 0
+legal_sysinfo_build_cart:   .text "Cartridge"; .byte 0
 #else
 legal_sysinfo_build_disk:   .text "SD / HostFS"; .byte 0
 #endif

@@ -101,7 +101,7 @@ legal_sysinfo_lbl_io:       .text "Last I/O:"; .byte 0
 
 #if ATARI8_CARTRIDGE
 legal_sysinfo_plat_cart:    .text "Atari XL/XE"; .byte 0
-legal_sysinfo_build_cart:   .text "128KB Cartridge"; .byte 0
+legal_sysinfo_build_cart:   .text "Cartridge"; .byte 0
 #else
 legal_sysinfo_plat_xl:      .text "Atari 800XL"; .byte 0
 legal_sysinfo_plat_xe:      .text "Atari 130XE"; .byte 0

@@ -434,7 +434,7 @@ function run()
         prog:read_u8(SAVE_DEV_ADDR) == 8
         and prog:read_u8(DISK_MODE_ADDR) == 2
         and prog:read_u8(DISK_SETUP_DONE_ADDR) == 0)
-    assert_line("cart_banner_row23", string.find(rowtext(23), "ATARI XL/XE  128KB CART", 1, true) ~= nil)
+    assert_line("cart_banner_row23", string.find(rowtext(23), "ATARI XL/XE  CARTRIDGE", 1, true) ~= nil)
 
     -- Exercise Title A (About) -> 1 (LICENSE to End.) -> 2 (SOURCE-OFFER to End.) with zero floppies.
     send_key(0x41) -- 'A'
@@ -463,7 +463,7 @@ function run()
     assert_line("cart_sysinfo_title_menu",
         wait_screen("Moria 8 - System Info", 80)
         and screen_has("Atari XL/XE")
-        and screen_has("128KB Cartridge")
+        and screen_has("Cartridge")
         and screen_has("64KB RAM"))
     send_key(0x51) -- 'Q' back to legal menu
     assert_line("cart_sysinfo_title_menu_back", wait_screen("1 License", 60))
@@ -564,7 +564,7 @@ function run()
     send_key(0xD6) -- SHIFT+V System Info from cartridge gameplay (800XL = 64KB RAM)
     assert_line("cart_gameplay_sysinfo",
         wait_screen("Moria 8 - System Info", 80)
-        and screen_has("128KB Cartridge")
+        and screen_has("Cartridge")
         and screen_has("64KB RAM")
         and screen_has("RNG:"))
     send_key(0x51) -- 'Q' back to DL1
@@ -592,7 +592,7 @@ function run()
     assert_line("boot_title_menu_130xe", wait_title())
     assert_line("portb_game_ram", prog:read_u8(0xD301) == 0xFE)
     assert_line("trig3_disabled", prog:read_u8(0xD013) == 0x00)
-    assert_line("cart_banner_row23", string.find(rowtext(23), "ATARI XL/XE  128KB CART", 1, true) ~= nil)
+    assert_line("cart_banner_row23", string.find(rowtext(23), "ATARI XL/XE  CARTRIDGE", 1, true) ~= nil)
     assert_line("cart_130xe_detected", prog:read_u8(XE_PRESENT_ADDR) == 1)
     send_key(0x41) -- 'A' About
     assert_line("cart_130xe_legal_menu", wait_screen("License & Source", 80))
@@ -600,7 +600,7 @@ function run()
     assert_line("cart_130xe_sysinfo",
         wait_screen("Moria 8 - System Info", 80)
         and screen_has("Atari XL/XE")
-        and screen_has("128KB Cartridge")
+        and screen_has("Cartridge")
         and screen_has("128KB RAM"))
     send_key(0x51) -- 'Q' back to legal menu
     wait_screen("1 License", 60)

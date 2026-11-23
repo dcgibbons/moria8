@@ -630,7 +630,7 @@ def run_cartridge_boot_and_assets(args: argparse.Namespace) -> int:
         exp.until(exp.sym["legal_menu_wait"])
         exp.key("3")
         exp.until(exp.sym["legal_sysinfo_wait"])
-        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Magic Desk 128 Cartridge", "Drives:"):
+        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Cartridge", "Drives:"):
             exp.vdc_has(text)
         exp.key(" ")
         exp.until(exp.sym["legal_menu_wait"])
@@ -679,7 +679,7 @@ def run_md128_gameplay_and_reset(args: argparse.Namespace) -> int:
 
         exp.key(b"\xd6")  # SHIFT+V: System Info
         exp.until(exp.sym["legal_sysinfo_wait"])
-        for text in ("Moria 8 - System Info", "Magic Desk 128 Cartridge", "Turn 0  Town", "RNG:"):
+        for text in ("Moria 8 - System Info", "Cartridge", "Turn 0  Town", "RNG:"):
             exp.vdc_has(text)
         exp.key(" ")
         exp.until(exp.sym["main_loop"])

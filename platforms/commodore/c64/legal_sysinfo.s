@@ -138,7 +138,7 @@ legal_sysinfo_plat_c64:     .text "Commodore 64"; .byte 0
 legal_sysinfo_plat_sx64:    .text "Commodore SX-64"; .byte 0
 legal_sysinfo_plat_c64u:    .text "C64 Ultimate"; .byte 0
 #if C64_CARTRIDGE
-legal_sysinfo_build_cart:   .text "EasyFlash Cartridge"; .byte 0
+legal_sysinfo_build_cart:   .text "Cartridge"; .byte 0
 #else
 legal_sysinfo_build_disk:   .text "Floppy / Disk"; .byte 0
 #endif

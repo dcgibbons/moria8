@@ -60,7 +60,7 @@ legal_sysinfo_lbl_io:       .text "Last I/O:"; .byte 0
 
 legal_sysinfo_plat_plus4:   .text "Commodore Plus/4"; .byte 0
 #if PLUS4_CARTRIDGE
-legal_sysinfo_build_cart:   .text "Magic Desk Cartridge"; .byte 0
+legal_sysinfo_build_cart:   .text "Cartridge"; .byte 0
 #else
 legal_sysinfo_build_disk:   .text "Floppy / Disk"; .byte 0
 #endif
