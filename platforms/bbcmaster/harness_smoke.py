@@ -996,9 +996,10 @@ function run()
     local t1 = prog:read_u8(TURN_ADDR) | (prog:read_u8(TURN_ADDR + 1) << 8)
     print("auto-rest turns: " .. ((t1 - t0) & 0xFFFF))
     assert_line("auto_rest_keeps_resting", ((t1 - t0) & 0xFFFF) >= 3)
-    -- Wave 5.2 cold evictions: S4 ('?' drop in OVL_HELP), S3 (locked door pick
-    -- swapping OVL_HELP -> OVL_CHEST -> OVL_HELP), and S2a+S2b (acid trap at X=1
-    -- preserving X across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
+    -- Wave 5.2 cold evictions + Option A door/pick co-location: S4 ('?' drop in
+    -- OVL_HELP), S3 (locked door pick co-located inside OVL_CHEST, so retrying
+    -- performs zero DFS loads), and S2a+S2b (acid trap at X=1 preserving X
+    -- across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
     write_play_u8(AUTO_REST_ACTIVE_ADDR, 0)
     prog:write_u8(PLAYER_DATA_ADDR + PL_FLAGS, prog:read_u8(PLAYER_DATA_ADDR + PL_FLAGS) & (~PLF_RESTING & 0xFF))
     prog:write_u8(PLAYER_HP_ADDR, 60)
@@ -1026,6 +1027,25 @@ function run()
     local saw_lock = wait_screen("lock.", 120)
     drain_more(2)
     assert_line("door_pick_returned", saw_lock and prog:read_u8(TURN_ADDR) ~= turn_d)
+    assert_line("door_pick_ovl_chest", prog:read_u8(CURRENT_OVL) == 10)
+    write_map_u8(px + 1, py, 0x80) -- Re-arm locked door for retry regression
+    prog:write_u8(DOOR_STATE_COUNT_ADDR, 1)
+    prog:write_u8(DOOR_STATE_X_ADDR, px + 1)
+    prog:write_u8(DOOR_STATE_Y_ADDR, py)
+    prog:write_u8(DOOR_STATE_VAL_ADDR, 20)
+    local dfs_b0 = prog:read_u8(BEEB_DFS_LOAD_TO_BANK_ADDR)
+    local dfs_b1 = prog:read_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR, 0x38)     -- SEC (trap any DFS load)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1, 0x60) -- RTS
+    local turn_d2 = prog:read_u8(TURN_ADDR)
+    send_key(0x4F) -- 'O' (open door)
+    assert_line("door_retry_dir", wait_screen("Direction?", 80))
+    send_key(0x4C) -- 'L' (east)
+    local saw_lock2 = wait_screen("lock.", 120)
+    drain_more(2)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR, dfs_b0)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1, dfs_b1)
+    assert_line("door_pick_retry_zero_dfs", saw_lock2 and prog:read_u8(TURN_ADDR) ~= turn_d2 and prog:read_u8(CURRENT_OVL) == 10)
     prog:write_u8(DOOR_STATE_COUNT_ADDR, 0)
     write_map_u8(px + 1, py, 0x00) -- bare TILE_FLOOR
     prog:write_u8(TRAP_COUNT_ADDR, 2)
