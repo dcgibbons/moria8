@@ -2507,6 +2507,14 @@ class Brain:
         level-37 Priest at 186/296 HP fought an Ancient White Dragon whose
         234-HP breath looked survivable and was breathed on twice, 468, in
         one turn (C64 Balrog, 2026-11-08)."""
+        if "fire" not in assume and (c.glyph, c.level) == knowledge.kinds_by_name().get(BALROG) \
+                and self.balrog_ready(obs):
+            # Ready for it, its fire is weighed through both resistances
+            # everywhere, as balrog_ready weighed it: by the ring alone two
+            # clvl 40 Priests read Word of Recall on arriving at DL50 or ran
+            # from a "breath of 666", and Recall took one home mid-fight
+            # after eight Orbs (C64 Balrog, 2026-11-23).
+            assume = assume | {"fire"}
         one = self.burst_now((c.glyph, c.level), obs, lasting, assume, c.name)
         return int(one * max(1.0, self.moves().get((c.glyph, c.level), 1.0)))
 

@@ -2908,6 +2908,25 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=405))
         self.assertFalse(self.deeper(brain, 49, clvl=39, mhp=405))   # the top level first
 
+    def test_ready_for_the_balrog_it_is_not_left_on_sight(self) -> None:
+        """C64 Balrog, 2026-11-23: two clvl 40 Priests ready for the Balrog
+        (both fire resistances, 111 of ~360) dived to DL50, then weighed it
+        by the ring alone (333): one read Word of Recall on arrival and was
+        taken home mid-fight after eight Orbs, the other ran from "a breath
+        of 666". Ready, it is weighed through both, as balrog_ready did."""
+        brain = self.priest()
+        brain.clvl = 40
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=322, mhp=322)
+        self.assertTrue(brain.balrog_ready(o))
+        kind = knowledge.kinds_by_name()["Balrog"]
+        view = town_view((10, 10), (40, 40), dlvl=50, stairs_type=0)
+        view.creatures = {(30, 10): Creature(*kind, "Balrog")}           # detected across the room
+        self.assertIsNone(brain.leave_deadly(o, view))
+        self.assertIsNone(brain.level.deadly)
+        brain.resist_heat = 1                                            # not ready: left, as before
+        self.assertIsNotNone(brain.leave_deadly(o, view))
+
     def test_the_balrogs_depth_waits_for_free_action(self) -> None:
         """C64 Balrog, 2026-11-12: a clvl 40 Human Priest with Speed and
         Resist Fire but no Free Action was held by the Balrog's Hold Person
