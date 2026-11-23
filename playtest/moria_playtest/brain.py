@@ -638,6 +638,7 @@ RECALL_CLIMB = 2         # Word of Recall down to a deepest level this many past
                          # 1 until 2026-11-22: seven characters two past ready walked down from DL1 every town trip)
 RECALL_FAR = 5           # deeper than ready by more than this: Word of Recall up, not the stairs (resupply)
 RECALL_WALK_LEVELS = 5   # levels above the deepest beyond which Word of Recall (via town) beats walking down
+PRESS_ON_HP = 0.5        # share of HP from which a walk far above the deepest level takes the stairs before fighting
 BREATHS_TO_LEAVE = 2     # breaths taken on one level that make it one to leave (leave_deadly)
 CAUGHT_TO_LEAVE = 2      # "caught again" teleports on one level that make it one to leave (leave_deadly)
 RETREAT_STUCK = 3        # retreat steps that leave the bot on its square before the escapes take over
@@ -1475,7 +1476,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.take_off_for_food, self.make_room_for_food, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.support_staffs, self.take_created_food, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.take_off_for_food, self.make_room_for_food, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.support_staffs, self.take_created_food, self.press_on, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.unseen_foe_attack, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -5255,8 +5256,8 @@ class Brain:
             self.picking, self.listed, self.wielding_launcher = self.weapon[0], False, False
             why = "a creature beside" if beside else "out of ammunition"
             return Decision(KEY_WEAR, "shoot", f"{why}: wield the {self.weapon[0]}")
-        if beside or self.ammo <= 0:
-            return None
+        if beside or self.ammo <= 0 or self.walking_down(obs):
+            return None   # walking down (press_on): what lives up here is not worth a shot
         breeders = knowledge.breeder_kinds()
         for pos in sorted(self.threats(view), key=lambda p: chebyshev(p, view.pos)):
             creature = view.creatures[pos]
@@ -6094,6 +6095,31 @@ class Brain:
         self.picking, self.listed = RECALL, False
         return Decision(ord("R"), "recall", "read Word of Recall")
 
+    def press_on(self, obs: Observation, view: View) -> Decision | None:
+        """Walking down to where it hunts, more than RECALL_WALK_LEVELS above
+        its deepest level: on a down staircase it may take, down at once,
+        before the attack layers, as a player walking down does; a fight
+        there is worth nothing at its level. Not hurt (PRESS_ON_HP): the
+        heals come first. A clvl 36 Human Ranger whose deepest was DL40
+        arrived on a down staircase on each of DL1-34 and shot at what was
+        there, 35,000 shots and 45,000 prompt keys, 96% of a run above DL30
+        (C64 Balrog, 2026-11-22)."""
+        if not self.walking_down(obs):
+            return None
+        decision = self.descend(obs, view)   # the stairs underfoot, else the path to known ones
+        if decision is not None:
+            return Decision(decision.key, decision.layer,
+                            f"DL{obs.dlvl}, far above DL{self.max_dlvl}: {decision.reason}, nothing here to fight for")
+        return None
+
+    def walking_down(self, obs: Observation) -> bool:
+        """More than RECALL_WALK_LEVELS above its deepest level, not hurt
+        (PRESS_ON_HP), and ready for deeper: on the way down to where it
+        hunts (press_on), where shots and Orbs at what lives there are
+        wasted keys."""
+        return (0 < obs.dlvl < self.max_dlvl - RECALL_WALK_LEVELS and obs.hp >= PRESS_ON_HP * obs.mhp
+                and self.deeper_ok(obs))
+
     def far_above_deepest(self, obs: Observation) -> bool:
         """Many levels above a deepest level it may go back to, with the two
         Word of Recall reads that take it there (to town, and back down): a
@@ -6876,7 +6902,7 @@ class Brain:
                 self.pending = DIRS[step]
                 self.aimed = (pos, creature.glyph)
                 return Decision(*magic.pray(trial, f"try {trial} at '{creature.glyph}': its effect not seen yet"))
-            if magic.spare(obs, ORB) and worth:
+            if magic.spare(obs, ORB) and worth and not self.walking_down(obs):
                 self.pending = DIRS[step]
                 self.aimed = (pos, creature.glyph)
                 return Decision(*magic.pray(ORB, f"pray Orb of Draining at '{creature.glyph}'"))

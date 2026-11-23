@@ -2625,6 +2625,28 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertFalse(self.deeper(brain, 35, clvl=31, mhp=256))   # not DL36: DL38's natives
         self.assertFalse(self.deeper(brain, 36, clvl=31, mhp=256))   # nor DL37
 
+    def test_walking_down_far_above_its_deepest_it_takes_the_stairs_first(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 36 Human Ranger whose deepest was
+        DL40 arrived on a down staircase on each of DL1-34 and shot at what
+        was there: 35,000 shots, 96% of a run above DL30."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        brain.max_dlvl, brain.food = 40, 20
+        brain.deeper_ok = lambda obs: True                                 # type: ignore[method-assign]
+        view = town_view((5, 5), (5, 5), dlvl=12)                          # on a down staircase
+        view.creatures = {(9, 5): Creature("o", 10)}                       # something to shoot at
+        o = command_obs(pos=(5, 5), dlvl=12, clvl=36, hp=399, mhp=399)
+        self.assertEqual(brain.press_on(o, view).key, ord(">"))
+        hurt = command_obs(pos=(5, 5), dlvl=12, clvl=36, hp=150, mhp=399)
+        self.assertIsNone(brain.press_on(hurt, view))                       # the heals first
+        near = command_obs(pos=(5, 5), dlvl=36, clvl=36, hp=399, mhp=399)
+        self.assertIsNone(brain.press_on(near, town_view((5, 5), (5, 5), dlvl=36)))   # near its depth: as before
+        across = town_view((5, 5), (12, 5), dlvl=12)                       # down stairs across the room
+        across.creatures = {(5, 9): Creature("o", 10)}
+        self.assertEqual(brain.press_on(o, across).key, DIRS[(1, 0)])      # walked to, not fought for
+        brain.launcher, brain.ammo, brain.wielding_launcher = "Long Bow", 40, True
+        self.assertIsNone(brain.shoot(o, across))                          # no shot at what lives up here
+
     def test_with_free_action_the_out_of_depth_margin_stays(self) -> None:
         """C64 Balrog, 2026-11-22: with Free Action counting natives alone,
         sixteen clvl 36-39 runs went to DL39, were drained 5 times a
