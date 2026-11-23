@@ -9,7 +9,6 @@
 
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
-KICKASS_URL  = https://theweb.dk/KickAssembler/KickAssembler.zip
 ifeq ($(filter /%,$(KICKASS)),)
 KICKASS_RESOLVED = $(CURDIR)/$(KICKASS)
 else
@@ -161,15 +160,13 @@ test-runtime: build test-memory-contract
 clean:
 	rm -rf "$(OUTCX16)" "$(CARTCX16_OUT)" "$(CX16_ZIP_IMAGE)" "$(CX16_CART_IMAGE)" "$(BUILD)/test/cx16-cartridge" __pycache__
 
+kickass: ensure-kickass
 ensure-kickass:
-	@test -f "$(KICKASS_RESOLVED)" || $(MAKE) --no-print-directory kickass
-
-kickass:
-	@mkdir -p "$(KICKASS_DIR)"
-	@echo "Downloading Kick Assembler..."
-	@curl -sL "$(KICKASS_URL)" -o "$(KICKASS_DIR)/kickass.zip"
-	@unzip -o "$(KICKASS_DIR)/kickass.zip" -d "$(KICKASS_DIR)"
-	@rm -f "$(KICKASS_DIR)/kickass.zip"
+ifeq ($(origin KICKASS),file)
+	@../../tools/ensure_kickass.sh "$(KICKASS_DIR)" "$(KICKASS_RESOLVED)"
+else
+	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR)" "$(KICKASS_RESOLVED)"
+endif
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
 	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"

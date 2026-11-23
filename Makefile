@@ -389,7 +389,7 @@ testbbcmaster-memory-contract-selftest:
 # Image freshness is owned by the sub-makefiles; these rules always delegate.
 GPG         ?= gpg
 GPG_SIGN_FLAGS ?= --armor --detach-sign
-SHASUM      ?= shasum
+SHA256      ?= $(if $(SHASUM),$(SHASUM) -a 256,$(if $(shell command -v sha256sum 2>/dev/null),sha256sum,shasum -a 256))
 
 BUILD       ?= build
 
@@ -454,7 +454,7 @@ $(RELEASE_ARTIFACTS): $(BUILD_ARTIFACTS)
 	cp -f "$(BUILD)/$(subst -$(_RELEASE_VERSION),,$(notdir $@))" "$@"
 
 $(ARTIFACT_MANIFEST): $(RELEASE_ARTIFACTS)
-	cd "$(RELEASE_DIR)" && $(SHASUM) -a 256 $(notdir $(RELEASE_ARTIFACTS)) > "$(notdir $@)"
+	cd "$(RELEASE_DIR)" && $(SHA256) $(notdir $(RELEASE_ARTIFACTS)) > "$(notdir $@)"
 
 %.asc: %
 	$(GPG) --yes $(GPG_SIGN_FLAGS) --output "$@" "$<"

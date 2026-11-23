@@ -4,7 +4,6 @@ KICKASS_DIR     ?= ../../tools/kickass
 # KICKASS names the jar, as on every port (README: KICKASS=/path/to/KickAss.jar)
 KICKASS         ?= $(KICKASS_DIR)/KickAss.jar
 KICKASS_JAR     = $(KICKASS)
-KICKASS_URL     = https://theweb.dk/KickAssembler/KickAssembler.zip
 # kickass_java.sh fails the build on a failed .assert (KickAssembler itself exits 0)
 KA              = ../../tools/kickass_java.sh -jar $(KICKASS_JAR)
 
@@ -72,19 +71,19 @@ MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -share_directory "$(MAME_DIR)/share"
 
 ATARI8_OVL_PRGS += $(OUTATARI8)/legalui
-.PHONY: all build disk cartridge run run-130xe run-cart run-cart-130xe test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke test-cartridge clean kickass
+.PHONY: all build disk cartridge run run-130xe run-cart run-cart-130xe test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke test-cartridge clean ensure-kickass kickass
 
 all: build
 
 build: $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) $(ATARI8_ITEM_CAT) $(ATARI8_CAR) $(ATARI8_CAT_TEST_PRG)
 
-kickass: $(KICKASS_JAR)
-$(KICKASS_JAR):
-	@echo "Downloading KickAssembler..."
-	@mkdir -p $(KICKASS_DIR)
-	@curl -sL "$(KICKASS_URL)" -o $(KICKASS_DIR)/kickass.zip
-	@unzip -qo $(KICKASS_DIR)/kickass.zip -d $(KICKASS_DIR)
-	@rm -f $(KICKASS_DIR)/kickass.zip
+kickass: ensure-kickass
+ensure-kickass $(KICKASS_JAR):
+ifeq ($(origin KICKASS),file)
+	@../../tools/ensure_kickass.sh "$(KICKASS_DIR)" "$(KICKASS_JAR)"
+else
+	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR)" "$(KICKASS_JAR)"
+endif
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
 	@mkdir -p $(OUT)

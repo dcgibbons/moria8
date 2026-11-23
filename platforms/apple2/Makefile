@@ -14,13 +14,13 @@
 
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
-KICKASS_URL  = https://theweb.dk/KickAssembler/KickAssembler.zip
 ifeq ($(filter /%,$(KICKASS)),)
 KICKASS_RESOLVED = $(CURDIR)/$(KICKASS)
 else
 KICKASS_RESOLVED = $(KICKASS)
 endif
 JAVA        ?= ../../tools/kickass_java.sh
+SHA256      ?= $(if $(SHASUM),$(SHASUM) -a 256,$(if $(shell command -v sha256sum 2>/dev/null),sha256sum,shasum -a 256))
 
 AC_VERSION  ?= 13.2
 AC_DIR      ?= ../../tools/applecommander
@@ -158,21 +158,19 @@ clean:
 	rm -rf "$(OUTA2)" "$(A2_DISK_IMAGE)"
 
 # ── Tooling ───────────────────────────────────────────────
+kickass: ensure-kickass
 ensure-kickass:
-	@test -f "$(KICKASS_RESOLVED)" || $(MAKE) --no-print-directory kickass
-
-kickass:
-	@mkdir -p "$(KICKASS_DIR)"
-	@echo "Downloading Kick Assembler..."
-	@curl -sL "$(KICKASS_URL)" -o "$(KICKASS_DIR)/kickass.zip"
-	@unzip -o "$(KICKASS_DIR)/kickass.zip" -d "$(KICKASS_DIR)"
-	@rm -f "$(KICKASS_DIR)/kickass.zip"
+ifeq ($(origin KICKASS),file)
+	@../../tools/ensure_kickass.sh "$(KICKASS_DIR)" "$(KICKASS_RESOLVED)"
+else
+	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR)" "$(KICKASS_RESOLVED)"
+endif
 
 ac:
 	@mkdir -p "$(AC_DIR)"
 	@echo "Downloading AppleCommander $(AC_VERSION) ($(AC_ASSET))..."
 	@curl -sL "$(AC_URL)" -o "$(AC_DIR)/ac.zip"
-	@echo "$(AC_SHA256)  $(AC_DIR)/ac.zip" | shasum -a 256 -c -
+	@echo "$(AC_SHA256)  $(AC_DIR)/ac.zip" | $(SHA256) -c -
 	@rm -rf "$(AC_DIR)/.extract" && mkdir -p "$(AC_DIR)/.extract"
 	@unzip -o "$(AC_DIR)/ac.zip" -d "$(AC_DIR)/.extract"
 	@rm -f "$(AC_DIR)/ac.zip"
@@ -190,7 +188,7 @@ prodos: ensure-ac
 	@mkdir -p "$(dir $(PRODOS))"
 	@echo "Downloading ProDOS $(PRODOS_VERSION)..."
 	@curl -sL "$(PRODOS_URL)" -o "$(dir $(PRODOS))prodos.po"
-	@echo "$(PRODOS_SHA256)  $(dir $(PRODOS))prodos.po" | shasum -a 256 -c -
+	@echo "$(PRODOS_SHA256)  $(dir $(PRODOS))prodos.po" | $(SHA256) -c -
 	@"$(AC_BIN)" -g "$(dir $(PRODOS))prodos.po" PRODOS > "$(PRODOS)"
 	@dd if="$(dir $(PRODOS))prodos.po" of="$(BOOTBLOCKS)" bs=512 count=2 2>/dev/null
 	@rm -f "$(dir $(PRODOS))prodos.po"

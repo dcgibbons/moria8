@@ -44,7 +44,7 @@ Want a real floppy disk of Moria8? Please fill out the
 ### Requirements
 
 - macOS or Linux host, `make`, `curl`, `unzip`, `zip`, Java (for Kick
-  Assembler, auto-downloaded into `tools/kickass/` unless
+  Assembler, auto-downloaded (SHA256-pinned) into `tools/kickass/` unless
   `KICKASS=/path/to/KickAss.jar` is set), and Python 3
 - **Apple IIe disk packaging:** AppleCommander (`ac`) and ProDOS 2.4.3 kernel /
   boot blocks auto-download (SHA256-pinned) into `tools/applecommander/` and
@@ -58,7 +58,7 @@ Want a real floppy disk of Moria8? Please fill out the
   and skip when the matching env var is unset)
 - **Commander X16 emulation:** `x16emu` (`X16EMU`, optional `X16ROM`)
 - **Optional tools:** `Pillow`, `numpy`, and `ffmpeg` for gameplay GIF capture
-  (`tools/gifcapture/`); `gpg` (`GPG`) and `shasum` (`SHASUM`) for release
+  (`tools/gifcapture/`); `gpg` (`GPG`) and `sha256sum` or `shasum` (`SHA256`) for release
   packaging (`make artifacts`, `make artifact-checksums`)
 
 ### Common Commands

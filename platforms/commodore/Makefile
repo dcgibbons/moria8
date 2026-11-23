@@ -25,7 +25,6 @@
 # ── Tool paths ────────────────────────────────────────────
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
-KICKASS_URL  = https://theweb.dk/KickAssembler/KickAssembler.zip
 ifeq ($(filter /%,$(KICKASS)),)
 KICKASS_RESOLVED = $(CURDIR)/$(KICKASS)
 else
@@ -740,17 +739,9 @@ kickass: ensure-kickass
 
 ensure-kickass: | $(OUT) $(OUT64) $(OUT128) $(OUTPLUS4)
 ifeq ($(origin KICKASS),file)
-	@if [ ! -f "$(KICKASS_RESOLVED)" ]; then \
-		echo "Downloading KickAssembler..."; \
-		mkdir -p "$(KICKASS_DIR_RESOLVED)"; \
-		curl -sL "$(KICKASS_URL)" -o "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip" || { echo "ERROR: failed to download KickAssembler"; exit 1; }; \
-		unzip -qo "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip" -d "$(KICKASS_DIR_RESOLVED)" || { echo "ERROR: failed to unpack KickAssembler"; rm -f "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip"; exit 1; }; \
-		rm -f "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip"; \
-		test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: KickAss.jar not found after download at $(KICKASS_RESOLVED)"; exit 1; }; \
-		echo "KickAssembler ready at $(KICKASS_RESOLVED)"; \
-	fi
+	@../../tools/ensure_kickass.sh "$(KICKASS_DIR_RESOLVED)" "$(KICKASS_RESOLVED)"
 else
-	@test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: custom KICKASS path does not exist: $(KICKASS_RESOLVED)"; exit 1; }
+	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR_RESOLVED)" "$(KICKASS_RESOLVED)"
 endif
 
 $(OUT):
