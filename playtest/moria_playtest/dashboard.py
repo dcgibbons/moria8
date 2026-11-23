@@ -280,8 +280,8 @@ def coverage(home: Path) -> dict[str, Any]:
     """The coverage panel (maintainer, 2026-11-23: "I want to know that every
     spell/prayer has been used, every item, and every monster has been
     encountered - in that priority"): over the build and Balrog queues'
-    runs, each spell and prayer every class learns with its casts and the
-    casts whose effect was seen; each catalog item with its uses by verb
+    runs, each spell and prayer every class learns with the runs that cast
+    it and that saw its effect; each catalog item with its uses by verb
     (``queue.features``: runs/*/uses.json); each catalog creature with the
     runs that met it and slew it (``monster_stats``)."""
     from . import queue as q
@@ -293,10 +293,12 @@ def coverage(home: Path) -> dict[str, Any]:
     for record in queue_records(home / "runs.jsonl"):
         if record.get("queue") not in COVERAGE_QUEUES:
             continue
+        # Runs, not casts: a Balrog run's ledger carries its checkpoints'
+        # (the brain is restored with it), so summed casts count each again.
         for name, cast in ((record.get("features") or {}).get("casts") or {}).items():
             if name in spells:
-                spells[name]["cast"] += cast.get("cast", 0)
-                spells[name]["effect"] += cast.get("effect", 0)
+                spells[name]["cast"] += bool(cast.get("cast", 0))
+                spells[name]["effect"] += bool(cast.get("effect", 0))
     kinds = [k for k in knowledge.item_kinds().values() if k.category not in NOT_USED]
     longest = sorted((k.name for k in kinds), key=len, reverse=True)
     items = {k.name: {"category": k.category[5:].lower(), "uses": {}} for k in kinds}
