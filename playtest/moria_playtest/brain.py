@@ -2353,8 +2353,14 @@ class Brain:
         escape at hand, else a step out of its line of sight."""
         if obs.dlvl == 0:
             return None
-        lethal = {p: self.turn_burst(c, obs) for p, c in view.creatures.items()
-                  if not self.stationary(c) and self.turn_burst(c, obs) >= BREATH_LETHAL * obs.hp
+        # With no Potion of Healing left, two breaths: nothing bridges them.
+        # A clvl 37 Half-Orc Rogue at 412 took three of 234 from an Ancient
+        # White Dragon, drank its two Healings after the first two, fought an
+        # 'R' in the dragon's sight while Word of Recall read, and the fourth
+        # killed it from 178 (C64 Balrog, 2026-11-22).
+        breaths = 1 if self.strong.get(HEALING, 0) else 2
+        lethal = {p: breaths * self.turn_burst(c, obs) for p, c in view.creatures.items()
+                  if not self.stationary(c) and breaths * self.turn_burst(c, obs) >= BREATH_LETHAL * obs.hp
                   and self.sees(view, view.pos, p)}
         breath = self.level.breath
         if lethal:
@@ -2513,7 +2519,7 @@ class Brain:
                     and self.turn_burst(Creature(*kind, name), obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
                 self.level.deadly, self.level.deadly_drain = view.pos, False
         if not self.restores.get(RESTORE_LIFE) and self.level.deadly is None and (
-                self.level.drained_bare or any(c.name in self.drainers for c in view.creatures.values())):
+                self.level.drained_bare or any(self.drainer(c) for c in view.creatures.values())):
             # Drained with nothing to restore it, or a drainer in view: the
             # level is left, as a player without Restore Life Levels leaves
             # Wights and Vampires. Warriors melee'd them on DL38-39 and lost a
@@ -2586,6 +2592,10 @@ class Brain:
             # on sight of each Wight or Wraith and back to DL38-39, 359 times
             # in 25 minutes across 16 runs (C64 Balrog, 2026-11-22).
             if far is None or far > LEAVE_HIDDEN_WALK:
+                close = [p for p, c in view.creatures.items() if self.drainer(c) and chebyshev(p, view.pos) <= 2]
+                key = self.step_away(view, min(close, key=lambda p: chebyshev(p, view.pos))) if close else None
+                if key is not None:
+                    return Decision(key, "leave", "a drainer close and no Restore Life Levels: step out of its reach")
                 return None
             walk = LEAVE_HIDDEN_WALK
         if not self.recalling and self.recall and obs.step >= self.blind_until \
@@ -4635,8 +4645,19 @@ class Brain:
             "dangerous" in self.goal.tactics and obs.dlvl >= DEEP_DLVL and not self.stationary(creature)
             and self.fight_odds(creature, obs) > 1.0)
 
+    def drainer(self, creature: Creature) -> bool:
+        """Its blows drain experience (knowledge.drainer_names, from the
+        catalog before any touch; or one that has touched, DRAIN_BLOW)."""
+        if creature.name:
+            return creature.name in knowledge.drainer_names() or creature.name in self.drainers
+        return (creature.glyph, creature.level) in knowledge.drainer_kinds()
+
     def engageable(self, creature: Creature, obs: Observation) -> bool:
-        return (not self.avoided(creature) and not self.stationary(creature)
+        # Never closed with: a drainer's touch takes 2% of the experience. On
+        # a deeper level sixteen clvl 36-39 runs were drained 13 times a
+        # run-hour as hunt walked them into its reach (C64 Balrog,
+        # 2026-11-22); ranged attacks (Orb, wands) still take it.
+        return (not self.avoided(creature) and not self.stationary(creature) and not self.drainer(creature)
                 and creature.glyph not in self.tough_glyphs(obs) and not self.too_strong(creature, obs)
                 and (not self.slow(creature, by_glyph=True) or self.coins_worth_it(creature, obs))
                 and creature.level <= obs.clvl + 2

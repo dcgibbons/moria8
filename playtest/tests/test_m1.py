@@ -329,6 +329,27 @@ class BrainM2Test(unittest.TestCase):
         brain.level = type(brain.level)(drained_bare=True)
         self.assertEqual(brain.leave_deadly(o, none).layer, "recall")         # drained: as before
 
+    def test_a_drainer_is_never_closed_with_and_stepped_from(self) -> None:
+        """C64 Balrog, 2026-11-22: kept off Word of Recall, sixteen clvl 36-39
+        runs were drained 13 times a run-hour as hunt walked them into
+        drainers' reach. Known from the catalog before any touch: never
+        hunted, and one two squares off is stepped from."""
+        from moria_playtest.brain import chebyshev
+        from moria_playtest.view import Creature
+        knowledge.use_port("c64")                                         # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
+        self.assertTrue({"Emperor Wight", "Nether Wraith", "Grape Jelly"} <= knowledge.drainer_names())
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.recall, brain.food = 3, 20
+        wight = Creature(*knowledge.kinds_by_name()["Emperor Wight"], "Emperor Wight")
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=432, mhp=432)
+        self.assertFalse(brain.engageable(wight, o))                      # never closed with
+        view = town_view((5, 5), (5, 5), dlvl=37, stairs_type=0)          # no stairs known
+        view.creatures = {(7, 5): wight}                                  # not yet touched: from the catalog
+        step = brain.leave_deadly(o, view)
+        target = next((5 + dx, 5 + dy) for (dx, dy), k in DIRS.items() if k == step.key)
+        self.assertGreater(chebyshev(target, (7, 5)), 2)                  # out of its reach
+
     def test_a_drain_never_comes_before_food(self) -> None:
         """C64 Balrog, 2026-11-22: a clvl 38 Human Rogue, drained with no
         Restore Life Levels and its Word of Recall spent, walked a lap "to the
@@ -2520,11 +2541,29 @@ class BreathGuardTest(unittest.TestCase):
 
     def test_in_a_lethal_breather_s_sight_it_teleports_first(self) -> None:
         from moria_playtest.brain import TELEPORT_STAFF
+        from moria_playtest.brain import HEALING
         brain = Brain(GOALS["deep"])
         brain.wands[TELEPORT_STAFF] = 3
+        brain.strong[HEALING] = 1          # one breath: a Healing carried, kept (86 short of 100)
         o = command_obs(pos=(10, 10), dlvl=29, clvl=32, hp=80, mhp=166)
         decision = brain.breath_guard(o, self.view())
         self.assertEqual((decision.layer, decision.reason), ("phase", f"the 'd' could breathe {self.burst}: use the {TELEPORT_STAFF}"))
+
+    def test_with_no_healing_left_two_breaths_are_lethal(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 37 Half-Orc Rogue at full HP fought
+        on in an Ancient White Dragon's sight with no Potion of Healing left,
+        and two breaths killed it. At full HP one breath (88 of 166) is not
+        lethal, two are: out of its sight; a Healing carried bridges them."""
+        from moria_playtest.brain import HEALING
+        walls = [(11, 8), (11, 9), (11, 11), (11, 12), (12, 9), (12, 11)]
+        o = command_obs(pos=(10, 10), dlvl=29, clvl=32, hp=166, mhp=166)
+        brain = Brain(GOALS["deep"])
+        brain.strong[HEALING] = 1
+        self.assertIsNone(brain.breath_guard(o, self.view(walls=walls)))
+        brain.strong[HEALING] = 0
+        decision = brain.breath_guard(o, self.view(walls=walls))
+        self.assertEqual((decision.layer, decision.reason),
+                         ("retreat", f"the 'd' could breathe {2 * self.burst}: out of its sight"))
 
     def test_with_no_escape_it_steps_out_of_sight(self) -> None:
         brain = Brain(GOALS["deep"])
