@@ -443,6 +443,7 @@ FIND_TRAPS_EVERY = 40    # steps between a Mage's Find Hidden Traps/Doors while 
 RUN_MHP = 240            # explore runs from this max HP: the deep characters the replays measured
 RUN_STRAIGHT = 4         # floor squares straight ahead on the path before explore runs there
 RUN_KEYS = {key | 0x80: step for step, key in DIRS.items()}   # SHIFT+direction: the game's Run
+RUN_REPEAT_STEPS = 300   # steps before a run from one square in one direction is made again (run_or_move)
 MARKET_GOLD = 600        # gold worth a Black Market trip for Word of Recall (M4 round 48: the
                          # Temple stocked it for 6 of 17 characters; drops pay for it, MON-014)
 RECALL = "Scroll of Word of Rec"   # Word of Recall (the store line may cut the name short)
@@ -824,6 +825,7 @@ class LevelMemory:
     drained_bare: bool = False   # experience drained here with no Restore Life Levels carried: leave
     stairs_sought: bool = False  # the stairs looked for with a one-breath killer out of sight (leave_deadly)
     deadly_drain: bool = False   # the level marked deadly by a drain alone, no breath (leave_deadly)
+    runs_from: dict[tuple[Pos, tuple[int, int]], int] = field(default_factory=dict)   # (square, direction) of each explore run: step
     detect_after: int = 0   # step before which Detect Doors/Stairs is not prayed again (M5b)
     blind_until: int = 0    # step before which Blind Creature is not prayed again (M5b)
     door_attempts: dict[Pos, int] = field(default_factory=dict)
@@ -2520,12 +2522,15 @@ class Brain:
             self.level.deadly, self.level.deadly_drain = view.pos, True
         if self.level.deadly is None:
             return None
-        if self.level.deadly_drain and self.food_low():
+        if self.level.deadly_drain and (self.food_low()
+                                        or any(w in status_states(obs) for w in ("Hungry", "Weak", "Faint"))):
             # A drain is no breath: short of food, eating and the walk to town
             # for it come first. A clvl 38 Human Rogue, drained with no
             # Restore Life Levels and its Word of Recall spent, walked a lap
             # "to the stairs" on DL4 for 953 steps and starved at 1/423 HP
-            # (C64 Balrog, 2026-11-22).
+            # (C64 Balrog, 2026-11-22). By the status line too: a clvl 36 Elf
+            # Mage's count still showed food, and it starved Faint the same way
+            # (same day).
             return None
         here = view.type_at(*view.pos)
         if here == TYPE_STAIRS_UP or (here == TYPE_STAIRS_DN and self.deeper_ok(obs)):
@@ -2574,6 +2579,15 @@ class Brain:
                 self.level.stairs_sought = True
                 return Decision(*self.magic.pray(finder, f"a creature that could kill in one breath, out of sight: pray {finder} for the stairs"))
         walk = LEAVE_HIDDEN_WALK if hidden else LEAVE_WALK_STEPS
+        if self.level.deadly_drain and not self.level.drained_bare:
+            # A drainer in view, not a breath and no touch yet: away by the
+            # stairs when near, never home by Word of Recall. Marked so, clvl
+            # 36-39 characters without Restore Life Levels recalled from DL37
+            # on sight of each Wight or Wraith and back to DL38-39, 359 times
+            # in 25 minutes across 16 runs (C64 Balrog, 2026-11-22).
+            if far is None or far > LEAVE_HIDDEN_WALK:
+                return None
+            walk = LEAVE_HIDDEN_WALK
         if not self.recalling and self.recall and obs.step >= self.blind_until \
                 and (far is None or far > walk):
             # A long walk in the open is the danger: Word of Recall first, then
@@ -7395,6 +7409,13 @@ class Brain:
             x, y = sx, sy
         if len(path) < RUN_STRAIGHT and view.type_at(x + step[0], y + step[1]) not in (UNKNOWN, 0x0):
             return decision   # the path ends against a wall or a door: a step does
+        made = self.level.runs_from.get((view.pos, step))
+        if made is not None and obs.step - made < RUN_REPEAT_STEPS:
+            # The same run again: it overshot, a step came back, and it ran
+            # again. A clvl 36 Elf Mage ran and stepped back 93 times over on
+            # one DL38 square (loop finding, C64 Balrog, 2026-11-22).
+            return decision
+        self.level.runs_from[(view.pos, step)] = obs.step
         self.last_run = step
         return Decision(DIRS[step] | 0x80, layer, f"{reason}: run")
 

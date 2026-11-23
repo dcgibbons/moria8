@@ -297,7 +297,10 @@ class BrainM2Test(unittest.TestCase):
         later = command_obs(pos=(5, 5), dlvl=39, clvl=31, hp=300, mhp=300)
         self.assertIsNone(bare.leave_deadly(later, view))          # nothing drains here
         view.creatures[(9, 5)] = Creature("W", 30, "Grave Wight")
-        self.assertIsNotNone(bare.leave_deadly(later, view))       # the drainer again: leave before it touches
+        # The drainer again, no touch yet and no stairs known: not home by
+        # Recall (359 such reads in 25 minutes, 2026-11-22); near stairs are
+        # walked to (test_a_drainer_in_view_is_walked_from_never_recalled_from).
+        self.assertIsNone(bare.leave_deadly(later, view))
         stocked = prepared(Brain(GOALS["deep"]))
         stocked.credit(RESTORE_LIFE, 2)
         view.creatures.clear()
@@ -305,6 +308,26 @@ class BrainM2Test(unittest.TestCase):
         stocked.decide(drained, view)
         self.assertFalse(stocked.level.drained_bare)
         self.assertIsNone(stocked.leave_deadly(drained, view))     # carried: fight on, restore after
+
+    def test_a_drainer_in_view_is_walked_from_never_recalled_from(self) -> None:
+        """C64 Balrog, 2026-11-22: clvl 36-39 characters without Restore Life
+        Levels recalled from DL37 on sight of each Wight or Wraith and back to
+        DL38-39, 359 times in 25 minutes across 16 runs. Not yet drained: the
+        stairs when near, no Word of Recall; drained, as before."""
+        from moria_playtest.view import Creature
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.recall, brain.food = 3, 20
+        none = town_view((5, 5), (5, 5), dlvl=37, stairs_type=0)              # no stairs known
+        none.creatures = {(12, 5): Creature("W", 38, "Emperor Wight")}
+        brain.drainers.add("Emperor Wight")
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=432, mhp=432)
+        self.assertIsNone(brain.leave_deadly(o, none))                        # no Recall home
+        near = town_view((5, 5), (5, 35), dlvl=37, stairs_type=0xA)           # up stairs 30 south
+        near.creatures = dict(none.creatures)
+        brain.level = type(brain.level)()
+        self.assertEqual(brain.leave_deadly(o, near).layer, "leave")          # walked to
+        brain.level = type(brain.level)(drained_bare=True)
+        self.assertEqual(brain.leave_deadly(o, none).layer, "recall")         # drained: as before
 
     def test_a_drain_never_comes_before_food(self) -> None:
         """C64 Balrog, 2026-11-22: a clvl 38 Human Rogue, drained with no
@@ -318,6 +341,9 @@ class BrainM2Test(unittest.TestCase):
         brain.level.drained_bare, brain.food = True, 0
         self.assertIsNone(brain.leave_deadly(o, view))              # starving: food first
         brain.food = 20
+        brain.level = type(brain.level)(drained_bare=True)
+        faint = command_obs(pos=(5, 5), dlvl=4, clvl=36, hp=50, mhp=288, rows={21: "bot Faint"})
+        self.assertIsNone(brain.leave_deadly(faint, view))          # the count shows food, the status Faint (Elf Mage)
         brain.level = type(brain.level)(drained_bare=True)
         self.assertIsNotNone(brain.leave_deadly(o, view))           # fed: leave, as before
         brain.food = 0
@@ -3028,8 +3054,11 @@ class ThreatDepthTest(unittest.TestCase):
             view.types[5 * COLS + x] = UNKNOWN                         # the corridor's end unexplored
         o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=352, mhp=352)
         self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)] | 0x80)   # run east
+        brain.level.runs_from.clear()
         self.assertEqual(brain.decide(o, view).key, DIRS[(1, 0)] | 0x80)
         self.assertEqual(brain.last_move, ((5, 5), (6, 5)))           # its first square, for note_bump
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # the same run again from here: a step
+        brain.level.runs_from.clear()
         brain.last_run = (-1, 0)
         self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # not straight back after a run west
         weak = command_obs(pos=(5, 5), dlvl=37, clvl=20, hp=200, mhp=200)
@@ -3043,6 +3072,7 @@ class ThreatDepthTest(unittest.TestCase):
         for y in range(7, 12):
             view.types[y * COLS + 8] = UNKNOWN
         self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # turning within four: step
+        brain.level = type(brain.level)()                              # a fresh level: its runs and explore trail
         dark = town_view((5, 5), (1, 1), walls=walls, dlvl=37, stairs_type=0)
         for x in range(7, 30):
             dark.types[5 * COLS + x] = UNKNOWN                         # a dark corridor: one square seen ahead
