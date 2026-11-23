@@ -43,9 +43,8 @@ legal_filename_lo: .byte <legal_notice_filename, <legal_offer_filename
 legal_filename_hi: .byte >legal_notice_filename, >legal_offer_filename
 legal_filename_len: .byte legal_notice_filename_len, legal_offer_filename_len
 legal_os_read_open_status:
-    lda program_device
-    sta disk_prompt_device
-    jsr hal_storage_read_command_status
+    ldx program_device
+    jsr plus4_disk_read_command_status_x
     lda hal_storage_status_lost
     cmp #1                      // C=1 only when the status byte was lost.
     lda disk_status

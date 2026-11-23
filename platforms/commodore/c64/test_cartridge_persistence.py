@@ -143,6 +143,9 @@ def test_setup(args):
         exp.forbidden.add(exp.sym["hal_storage_init_selected_drive"])
         exp.call(exp.sym["disk_require_save_media"])
         exp.check("marker validation rejects changed media and explicit drive recovery restores access")
+        exp.call(exp.sym["hal_storage_probe_media"], x=10, carry=True)
+        exp.call(exp.sym["hal_storage_probe_media"], x=8)
+        exp.check("device probe rejects absent unit 10 and accepts present drive 8")
         return exp.count
     finally:
         exp.close()
@@ -216,6 +219,8 @@ def test_interchange(args):
     try:
         exp.until(exp.sym["title_menu_loop"])
         setup(exp)
+        # Seed a stale non-8 prompt device (e.g. failed Drive 10 probe) before loading Drive 8.
+        exp.write(exp.sym["disk_prompt_device"], b"\x0a")
         load(exp, expected)
         exp.check("cartridge loads the disk save and resumes play")
         original_disk = disk.read_bytes()

@@ -62,7 +62,7 @@ KERNAL_ST = 0x90   # the KERNAL's I/O status byte (C64, C128, Plus/4)
 # many READSTs come before it (the C128 checks ST after CHKIN).
 STATUS_READERS = {
     "c64": ("c64_storage_read_command_status", "c64_disk_readst", 3, 0),
-    "plus4": ("plus4_disk_read_command_status", "plus4_kernal_readst", "disk_error_dos0", 0),
+    "plus4": ("plus4_disk_read_command_status", "plus4_kernal_readst", "disk_error_dos0", 1),
     "c128": ("c128_storage_read_command_status", "w_readst", "disk_diag_cmd_status0", 1),
 }
 # The program-disk check a resume makes, which reads the drive's status, and
@@ -151,7 +151,9 @@ class Rig:
     build: Build
     run_dir: Path
     drive9: bool = True        # a second drive on the bus (empty unless attached)
+    drive9_type: str = "1541"  # drive 9 VICE type when drive9 is enabled
     reu: bool = True           # C64: overlays come from the REU after boot
+    extra_args: tuple[str, ...] = ()
     worker: Worker | None = None
     text: TextMonitor | None = None
     obs: Observation | None = None
@@ -162,9 +164,10 @@ class Rig:
         text_port = allocate_port(500)   # far above the binary monitors' range
         args = ["-remotemonitor", "-remotemonitoraddress", f"127.0.0.1:{text_port}"]
         if self.drive9:
-            args += ["-drive9type", "1541", "-drive9truedrive"]
+            args += ["-drive9type", self.drive9_type, "-drive9truedrive"]
         if not self.reu and "-reu" in self.port.resource_args:
             args += ["+reu"]   # the port's REU off: overlays load from disk again
+        args += list(self.extra_args)
         self.worker = Worker(self.run_dir, 0, build=self.build, extra_args=tuple(args))
         self.text = TextMonitor(text_port)
 
@@ -604,9 +607,18 @@ class Scenario:
     run: Callable[[Rig, Path], None]   # the rig and a directory for its media
     doc: str
     drive9: bool = True
+    drive9_type: str = "1541"
     reu: bool = True
+    extra_args: tuple[str, ...] = ()
     expect_fail: dict[str, str] = field(default_factory=dict)   # port -> the known defect
     ports: tuple[str, ...] = ()   # where it applies (default: every port the queue runs)
+
+
+def assert_printable_screen(rig: Rig) -> None:
+    """Fail if any non-printable / raw sentinel glyph decoded as middle dot on screen."""
+    screen = rig.screen()
+    if "\u00b7" in screen:
+        raise ScenarioFail(f"non-printable screen glyph detected:\n{screen}")
 
 
 def s_save_resume(rig: Rig, media: Path) -> None:
@@ -940,6 +952,59 @@ def s_quit_confirm(rig: Rig, media: Path) -> None:
         raise ScenarioFail(f"Y did not quit to the title:\n{rig.screen()}")
 
 
+def _pick_save_device(rig: Rig, device_text: str) -> None:
+    rig.expect("Disk Setup")
+    rig.press("2")
+    rig.expect("Save drive (8-11)")
+    rig.keys(device_text + "\r")
+
+
+def s_absent_save_drive(rig: Rig, media: Path) -> None:
+    rig.boot()
+    rig.press("D")
+    _pick_save_device(rig, "10")
+    rig.expect("Drive not found.")
+    assert_printable_screen(rig)
+    save_dev = rig.game.mon.mem_get(rig.game.abi.all_symbols["save_device"][0], 1, rig.game.ram)[0]
+    if save_dev == 10:
+        raise ScenarioFail("absent unit 10 was accepted into save_device")
+    rig.press(" ")
+    rig.expect("3) Done")
+
+
+def s_empty_drive(rig: Rig, media: Path) -> None:
+    rig.boot()
+    rig.press("D")
+    answer(rig, [("3) Done", "3"), ("Insert a Save Disk", " "), ("Insert a separate Save Disk", " "),
+                 ("Initialize this disk?", "Y")], "Could not initialize disk.")
+    rig.expect("Drive is not ready." if rig.port.name == "plus4" else "Check the disk and try again.")
+    assert_printable_screen(rig)
+    setup_done = rig.game.mon.mem_get(rig.game.abi.all_symbols["disk_setup_done"][0], 1, rig.game.ram)[0]
+    if setup_done != 0:
+        raise ScenarioFail(f"empty drive was accepted into disk_setup_done={setup_done}")
+    rig.press(" ")
+    rig.expect("3) Done")
+
+
+def s_plus4_1551_absent_10(rig: Rig, media: Path) -> None:
+    rig.boot()
+    rig.press("D")
+    _pick_save_device(rig, "10")
+    rig.expect("Drive not found.")
+    assert_printable_screen(rig)
+    save_dev = rig.game.mon.mem_get(rig.game.abi.all_symbols["save_device"][0], 1, rig.game.ram)[0]
+    if save_dev == 10:
+        raise ScenarioFail("absent 1551 unit 10 was accepted into save_device")
+    rig.press(" ")
+    rig.expect("3) Done")
+    save1551 = blank_d64(media / "save1551.d64")
+    rig.attach(9, save1551)
+    answer(rig, [("3) Done", "3"), ("Insert a Save Disk", " "), ("Insert a separate Save Disk", " "),
+                 ("Initialize this disk?", "Y")], "N)ew  L)oad")
+    if MARKER not in d64_files(rig.flush(9, save1551)):
+        raise ScenarioFail(f"1551 unit 9 did not initialize marker: {d64_files(save1551)}")
+
+
 SCENARIOS = [
     Scenario("save_resume", s_save_resume,
              "first save to a blank disk in drive 9 (initialize it), resume from the title"),
@@ -976,6 +1041,16 @@ SCENARIOS = [
     Scenario("load_fail_town", s_load_fail_town,
              "a load on the way up to town that keeps failing asks for the program disk by name;"
              " a key tries again and the game goes on", reu=False),
+    Scenario("absent_save_drive", s_absent_save_drive,
+             "picking an unattached save unit (10) shows Drive not found with clean screen output",
+             drive9=False),
+    Scenario("empty_drive", s_empty_drive,
+             "initializing with no disk in drive 9 fails cleanly with zero garbage bytes"),
+    Scenario("plus4_1551_absent_10", s_plus4_1551_absent_10,
+             "Plus/4 with 1551 drives: unit 10 is rejected cleanly and unit 9 initializes without hanging",
+             drive9=True, drive9_type="1551",
+             extra_args=("-busdevice9", "-drive10type", "1551", "-drive10truedrive"),
+             ports=("plus4",)),
 ]
 
 
@@ -1012,7 +1087,8 @@ def run_scenario(port: Port, scenario: Scenario, out: Path) -> tuple[str, str]:
     run_dir = out / scenario.name
     media = run_dir / "media"
     media.mkdir(parents=True, exist_ok=True)
-    rig = Rig(port, Build.shipping(port), run_dir, drive9=scenario.drive9, reu=scenario.reu)
+    rig = Rig(port, Build.shipping(port), run_dir, drive9=scenario.drive9,
+              drive9_type=scenario.drive9_type, reu=scenario.reu, extra_args=scenario.extra_args)
     started = time.monotonic()
     outcome, detail = "error", "interrupted"   # what the finally records if run() never returns
     try:

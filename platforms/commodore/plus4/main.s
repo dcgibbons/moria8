@@ -441,8 +441,6 @@ plus4_storage_marker_present:
 !cdmp_done:
     lda disk_status
     beq !cdmp_status_done+
-    lda save_device             // the drive the marker was read from
-    sta disk_prompt_device
     jsr plus4_disk_read_command_status
     lda disk_status
     bne !cdmp_status_done+
@@ -773,13 +771,15 @@ plus4_storage_marker_write_resident:
     jsr plus4_kernal_close
     lda disk_status
     bne !cdmw_status_done+
-    lda save_device             // the drive the marker was written to
-    sta disk_prompt_device
     jsr plus4_disk_read_command_status
 !cdmw_status_done:
     jmp !cdmp_status_done-
 
 plus4_disk_read_command_status:
+    ldx save_device
+plus4_disk_read_command_status_x:
+    txa
+    pha
     // A read that times out (ST bit 1) before any digit came is a lost
     // transfer, not an answer: under JiffyDOS a byte the drive sends while
     // its disk-controller IRQ runs can arrive cut short, as $58 (playtest-disk
@@ -802,15 +802,26 @@ plus4_disk_read_command_status:
     tax
     tay
     jsr plus4_kernal_setnam
-    lda #hal_storage_cmd_channel
-    ldx disk_prompt_device
-    ldy #hal_storage_cmd_channel
-    jsr plus4_kernal_setlfs
-    jsr plus4_kernal_open
-    bcs !p4dcs_done+
+    pla
+    tax
+    jsr plus4_open_cmd_channel_x
+    bcc !p4dcs_open_ok+
+    sta disk_error_readst
+    rts
+!p4dcs_open_ok:
     ldx #hal_storage_cmd_channel
     jsr plus4_kernal_chkin
-    bcs !p4dcs_close+
+    bcc !p4dcs_chkin_ok+
+    sta disk_error_readst       // KERNAL error code (e.g. $05 = device not present)
+    jsr plus4_kernal_readst
+    beq !p4dcs_close+           // keep KERNAL error if bus ST == 0
+    sta disk_error_readst       // prefer bus ST (e.g. $80 = device not present)
+    bne !p4dcs_close+
+!p4dcs_chkin_ok:
+    jsr plus4_kernal_readst
+    sta disk_error_readst
+    and #$fe
+    bne !p4dcs_close+
     jsr plus4_kernal_chrin
     sta disk_error_dos0
     jsr plus4_kernal_readst
@@ -825,9 +836,7 @@ plus4_disk_read_command_status:
     bne !p4dcs_second_failed+
     jsr plus4_disk_status_to_disk_status
 !p4dcs_close:
-    jsr plus4_kernal_clrchn
-    lda #hal_storage_cmd_channel
-    jmp plus4_kernal_close
+    jmp plus4_close_cmd_channel
 !p4dcs_first_failed:
     and #$02                    // read timeout
     beq !p4dcs_close-
@@ -2465,22 +2474,22 @@ plus4_require_program_media:
 save_append_disk_detail_plus4:
     lda #$20
     jsr screen_put_char
-    lda disk_error_dos0         // 0 or $ff: no DOS digits to show
-    beq !no_dos+
-    cmp #$ff                    // the drive never answered
-    bne !dos+
+    lda disk_error_dos0         // only two ASCII digits ($30..$39) are a DOS code
+    eor #$30
+    cmp #10
+    bcs !no_dos+
+    lda disk_error_dos1
+    eor #$30
+    cmp #10
+    bcs !no_dos+
+    lda disk_error_dos0
+    jsr screen_put_char
+    lda disk_error_dos1
+    jmp screen_put_char
 !no_dos:
     lda disk_error_phase
     ora disk_error_readst
     bne !status+
-    rts
-!dos:                           // A = disk_error_dos0
-    jsr screen_put_char
-    lda disk_error_dos1
-    cmp #$ff                    // only the first digit arrived
-    beq !no_dos1+
-    jmp screen_put_char
-!no_dos1:
     rts
 !status:
     lda #$24                    // $

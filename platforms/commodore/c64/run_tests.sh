@@ -5488,6 +5488,7 @@ needed = [
     ".c64_disk_setnam",
     ".c64_disk_setlfs",
     ".c64_disk_open",
+    ".c64_disk_chkout",
     ".c64_disk_chkin",
     ".c64_disk_chrin",
     ".c64_disk_readst",
@@ -5495,6 +5496,8 @@ needed = [
     ".c64_restore_vic_bank0_after_serial",
     ".disk_status",
     ".cdrs_lost",
+    ".save_device",
+    ".disk_prompt_device",
 ]
 missing = [k for k in needed if k not in syms]
 if missing:
@@ -5514,13 +5517,17 @@ lines = [
 for stub in (
     ".c64_disk_clrchn",
     ".c64_disk_setnam",
-    ".c64_disk_setlfs",
     ".c64_disk_open",
+    ".c64_disk_chkout",
     ".c64_disk_chkin",
     ".c64_disk_close",
     ".c64_restore_vic_bank0_after_serial",
 ):
     lines.append(f"> {syms[stub]:04x} 18 60")
+
+# Record X passed to c64_disk_setlfs at $028b before returning CLC; RTS.
+lines.append(f"> {syms['.c64_disk_setlfs']:04x} 4c b0 02")
+lines.append("> 02b0 8e 8b 02 18 60")
 
 # Jump stubs for CHRIN -> $0290 and READST -> $02a8 (6-byte wrappers)
 lines.append(f"> {syms['.c64_disk_chrin']:04x} 4c 90 02")
@@ -5531,21 +5538,32 @@ lines.append("break exec $0283")
 
 ds = syms[".disk_status"]
 lost = syms[".cdrs_lost"]
+sdev = syms[".save_device"]
+pdev = syms[".disk_prompt_device"]
 cases = [
-    # (b0, b1, st0, st1)
-    (0x32, 0x36, 0x00, 0x02),  # 26 with byte-1 timeout -> ds=2, cdrs_lost=2
-    (0x37, 0x33, 0x00, 0x02),  # 73 ghost digit with byte-1 timeout -> ds=2, cdrs_lost=2
-    (0x32, 0x33, 0x00, 0x00),  # 23 clean READ ERROR -> ds=2, cdrs_lost=0
-    (0x32, 0x36, 0x00, 0x00),  # 26 clean WRITE PROTECT -> ds=26 ($1a), cdrs_lost=0
+    # (b0, b1, st0, st1, chkout_fail, chkin_fail)
+    (0x32, 0x36, 0x00, 0x02, False, False),  # 26 with byte-1 timeout -> ds=2, cdrs_lost=2
+    (0x37, 0x33, 0x00, 0x02, False, False),  # 73 ghost digit with byte-1 timeout -> ds=2, cdrs_lost=2
+    (0x32, 0x33, 0x00, 0x00, False, False),  # 23 clean READ ERROR -> ds=2, cdrs_lost=0
+    (0x32, 0x36, 0x00, 0x00, False, False),  # 26 clean WRITE PROTECT -> ds=26 ($1a), cdrs_lost=0
+    (0x58, 0x30, 0x00, 0x00, False, False),  # non-digit '$58' with ST=$00 -> ds=2, cdrs_lost=0
+    (0x00, 0x00, 0x00, 0x00, True,  False),  # CHKOUT fail + stale disk_prompt_device=10 -> ds=2, lost=0, dev=8
+    (0x00, 0x00, 0x00, 0x00, False, True),   # CHKIN fail + stale disk_prompt_device=10 -> ds=2, lost=0, dev=8
 ]
-for b0, b1, st0, st1 in cases:
+for b0, b1, st0, st1, chkout_fail, chkin_fail in cases:
+    lines.append(f"> {syms['.c64_disk_chkout']:04x} {'38' if chkout_fail else '18'} 60")
+    lines.append(f"> {syms['.c64_disk_chkin']:04x} {'38' if chkin_fail else '18'} 60")
     lines.extend([
+        f"> {sdev:04x} 08",
+        f"> {pdev:04x} 0a",
+        "> 028b ff",
         f"> 0284 00 {b0:02x} {b1:02x} {st0:02x} {st1:02x}",
         "r sp = ff",
         "r pc = 0280",
         "g",
         f"m {ds:04x} {ds:04x}",
         f"m {lost:04x} {lost:04x}",
+        "m 028b 028b",
     ])
 lines.append("quit")
 with open(mon_path, "w", encoding="utf-8") as f:
@@ -5583,18 +5601,22 @@ with open(log_path, encoding="utf-8", errors="replace") as f:
 
 ds_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{ds}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
 lost_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{lost}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+dev_vals = [int(m.group(1), 16) for m in re.finditer(r"^>C:028b\s+([0-9a-fA-F]{2})\b", txt, re.M)]
 expected = [
-    (0x02, 0x02),  # 26 + byte1 ST=$02 -> ds=2, lost!=0
-    (0x02, 0x02),  # 73 + byte1 ST=$02 -> ds=2, lost!=0
-    (0x02, 0x00),  # 23 + ST=$00       -> ds=2, lost==0
-    (0x1a, 0x00),  # 26 + ST=$00       -> ds=26, lost==0
+    (0x02, 0x02, 0x08),  # 26 + byte1 ST=$02 -> ds=2, lost!=0, dev=save_device(8)
+    (0x02, 0x02, 0x08),  # 73 + byte1 ST=$02 -> ds=2, lost!=0, dev=8
+    (0x02, 0x00, 0x08),  # 23 + ST=$00       -> ds=2, lost==0, dev=8
+    (0x1a, 0x00, 0x08),  # 26 + ST=$00       -> ds=26, lost==0, dev=8
+    (0x02, 0x00, 0x08),  # $58 + ST=$00      -> ds=2, lost==0, dev=8
+    (0x02, 0x00, 0x08),  # CHKOUT fail + stale prompt=10 -> ds=2, lost==0, dev=8
+    (0x02, 0x00, 0x08),  # CHKIN fail + stale prompt=10 -> ds=2, lost==0, dev=8
 ]
-got = list(zip(ds_vals, lost_vals))
-if len(got) != 4 or got != expected:
+got = list(zip(ds_vals, lost_vals, dev_vals))
+if len(got) != 7 or got != expected:
     raise SystemExit(f"got {got}, expected {expected}")
 PY
     then
-        echo "PASS (4/4 cases: byte-1 ST=\$02 keeps disk_status=2 and sets cdrs_lost=2)"
+        echo "PASS (7/7 cases: byte-1 timeout, non-digit, CHKOUT/CHKIN fail, save_device binding)"
         rm -f "$mon_file" "$tty_log"
         PASS=$((PASS + 1))
     else

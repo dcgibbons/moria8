@@ -273,8 +273,6 @@ save_query_drive_status:
     lda disk_error_readst       // preserve stream failure READST for fallback detail
     pha
 #endif
-    lda save_device
-    sta disk_prompt_device      // C128: also disk_ui_action, not live during save/load
     jsr hal_storage_read_command_status
 #if HAL_STORAGE_APPEND_DISK_DETAIL
     pla
@@ -2175,8 +2173,7 @@ save_file_exists_read_len:          // save_slot_apply_name patches the length
 #if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
 // storage_file_exists — The same for any file (A = name length, X/Y = name):
 // the save-disk marker's readers use it so that no CHKIN reaches a file the
-// drive refused (docs/BACKLOG.md). It also sets disk_prompt_device to the
-// save drive (C64, Plus/4) and leaves the status reader's results behind
+// drive refused (docs/BACKLOG.md). Leaves the status reader's results behind
 // (disk_status, and the DOS digits where the port keeps them).
 storage_file_exists:            // on the save drive
     sta sfe_len + 1             // the name, kept in the retry's own operands
@@ -2200,10 +2197,6 @@ sfe_name_hi:
     ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
 #if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
-#if !HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
-    lda save_device             // the drive the status is read from
-    sta disk_prompt_device
-#endif
     jsr SAVE_OPEN
     bcs !sfe_refused+
     // No CHKIN: on a file the drive refused, one can wait forever in the

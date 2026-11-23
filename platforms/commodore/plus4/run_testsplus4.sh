@@ -3508,10 +3508,12 @@ run_plus4_command_status_byte1_timeout_smoke() {
 
     local mon_file="$TMPDIR/${name}.mon"
     local log_file="$TMPDIR/${name}.log"
-    if ! python3 - "$main_vs" "$mon_file" <<'PY'
+    local bank_prg="$TMPDIR/4.bank"
+    local ovl_storage="$TMPDIR/ovl.storage"
+    if ! python3 - "$main_vs" "$mon_file" "$bank_prg" "$ovl_storage" <<'PY'
 import sys
 
-vs_path, mon_path = sys.argv[1], sys.argv[2]
+vs_path, mon_path, bank_prg, ovl_storage = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 syms = {}
 with open(vs_path, encoding="utf-8", errors="replace") as f:
     for line in f:
@@ -3533,6 +3535,14 @@ needed = [
     ".disk_status",
     ".p4dcs_lost",
     ".disk_error_readst",
+    ".disk_error_dos0",
+    ".disk_error_dos1",
+    ".disk_error_phase",
+    ".save_append_disk_detail_plus4",
+    ".uds_show_init_detail",
+    ".zp_cursor_row",
+    ".zp_cursor_col",
+    ".zp_text_color",
 ]
 missing = [k for k in needed if k not in syms]
 if missing:
@@ -3552,38 +3562,92 @@ for stub in (
     ".plus4_kernal_setnam",
     ".plus4_kernal_setlfs",
     ".plus4_kernal_open",
-    ".plus4_kernal_chkin",
     ".plus4_kernal_close",
 ):
     lines.append(f"> {syms[stub]:04x} 18 60")
 
+# $028b = chkin_fail_st: 0 -> CLC/RTS; nonzero -> store into cur_st ($0289), A=5, SEC/RTS
+lines.append(f"> {syms['.plus4_kernal_chkin']:04x} 4c b0 02")
 lines.append(f"> {syms['.plus4_kernal_chrin']:04x} 4c 90 02")
 lines.append(f"> {syms['.plus4_kernal_readst']:04x} 4c a8 02")
 lines.append("> 0290 8e 8a 02 ae 84 02 bd 87 02 8d 89 02 bd 85 02 ee 84 02 ae 8a 02 18 60")
 lines.append("> 02a8 ad 89 02 18 60")
+lines.append("> 02b0 ad 8b 02 f0 07 8d 89 02 a9 05 38 60 18 60")
 lines.append("break exec $0284")
 
 ds = syms[".disk_status"]
 lost = syms[".p4dcs_lost"]
 rst = syms[".disk_error_readst"]
+d0 = syms[".disk_error_dos0"]
+d1 = syms[".disk_error_dos1"]
+ph = syms[".disk_error_phase"]
+crow = syms[".zp_cursor_row"]
+ccol = syms[".zp_cursor_col"]
+tcol = syms[".zp_text_color"]
+
 cases = [
-    # (b0, b1, st0, st1)
-    (0x32, 0x36, 0x00, 0x02),  # 26 with byte-1 ST=$02 -> ds=2, lost=1, readst=$02
-    (0x30, 0x30, 0x00, 0x02),  # 00 with byte-1 ST=$02 -> ds=2, lost=1, readst=$02
-    (0x32, 0x36, 0x01, 0x01),  # 26 with bit-0 ST=$01 masked -> ds=26 ($1a), lost=0, readst=$01
-    (0x58, 0x30, 0x03, 0x00),  # 'X' with ST=$03 -> ds=2, lost=1, readst=$03
-    (0x32, 0x33, 0x00, 0x00),  # 23 clean -> ds=2, lost=0, readst=$00
+    # (b0, b1, st0, st1, chkin_fail_st)
+    (0x32, 0x36, 0x00, 0x02, 0x00),  # 26 with byte-1 ST=$02 -> ds=2, lost=1, readst=$02
+    (0x30, 0x30, 0x00, 0x02, 0x00),  # 00 with byte-1 ST=$02 -> ds=2, lost=1, readst=$02
+    (0x32, 0x36, 0x01, 0x01, 0x00),  # 26 with bit-0 ST=$01 masked -> ds=26 ($1a), lost=0, readst=$01
+    (0x58, 0x30, 0x03, 0x00, 0x00),  # 'X' with ST=$03 -> ds=2, lost=1, readst=$03
+    (0x32, 0x33, 0x00, 0x00, 0x00),  # 23 clean -> ds=2, lost=0, readst=$00
+    (0x00, 0x00, 0x00, 0x00, 0x80),  # CHKIN C=1 + ST=$80 -> ds=2, lost=0, readst=$80, dos0/1=$ff
 ]
-for b0, b1, st0, st1 in cases:
+for b0, b1, st0, st1, chk_st in cases:
     lines.extend([
         f"> 0284 00 {b0:02x} {b1:02x} {st0:02x} {st1:02x} 00",
+        f"> 028b {chk_st:02x}",
+        f"> {rst:04x} 00",
         "r sp = ff",
         "r pc = 0280",
         "g",
         f"m {ds:04x} {ds:04x}",
         f"m {lost:04x} {lost:04x}",
         f"m {rst:04x} {rst:04x}",
+        f"m {d0:04x} {d0:04x}",
+        f"m {d1:04x} {d1:04x}",
     ])
+
+# Also verify save_append_disk_detail_plus4 and uds_show_init_detail never print $ff / $58 raw DOS bytes
+lines.extend([
+    "bank ram",
+    f'load "{bank_prg}" 0',
+    f'load "{ovl_storage}" 0',
+    "bank cpu",
+    f"> 02c0 78 20 {lh(syms['.save_append_disk_detail_plus4'])} 00",
+    f"> 02d0 78 20 {lh(syms['.uds_show_init_detail'])} 00",
+    "break exec $02c4",
+    "break exec $02d4",
+])
+for d0v, d1v in ((0xff, 0xff), (0x58, 0xff)):
+    lines.extend([
+        "f 0c00 0c1f 20",
+        f"> {crow:02x} 00",
+        f"> {ccol:02x} 00",
+        f"> {tcol:02x} 01",
+        f"> {d0:04x} {d0v:02x}",
+        f"> {d1:04x} {d1v:02x}",
+        f"> {rst:04x} 80",
+        f"> {ph:04x} 81",
+        "r sp = ff",
+        "r pc = 02c0",
+        "g",
+        "m 0c00 0c09",
+    ])
+lines.extend([
+    "f 0ca0 0cc7 20",
+    f"> {tcol:02x} 01",
+    f"> {ds:04x} 02",
+    f"> {d0:04x} ff",
+    f"> {d1:04x} ff",
+    f"> {rst:04x} 80",
+    f"> {ph:04x} 81",
+    "r sp = ff",
+    "r pc = 02d0",
+    "g",
+    "m 0ca0 0cc7",
+])
 lines.append("quit")
 with open(mon_path, "w", encoding="utf-8") as f:
     f.write("\n".join(lines) + "\n")
@@ -3613,23 +3677,76 @@ with open(vs_path, encoding="utf-8", errors="replace") as f:
 ds = f"{syms['.disk_status']:04x}"
 lost = f"{syms['.p4dcs_lost']:04x}"
 rst = f"{syms['.disk_error_readst']:04x}"
+d0 = f"{syms['.disk_error_dos0']:04x}"
+d1 = f"{syms['.disk_error_dos1']:04x}"
 txt = open(log_path, encoding="utf-8", errors="replace").read()
 ds_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{ds}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
 lost_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{lost}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
 rst_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{rst}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+d0_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{d0}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+d1_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{d1}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
 expected = [
-    (0x02, 0x01, 0x02),
-    (0x02, 0x01, 0x02),
-    (0x1a, 0x00, 0x01),
-    (0x02, 0x01, 0x03),
-    (0x02, 0x00, 0x00),
+    (0x02, 0x01, 0x02, 0x32, 0x36),
+    (0x02, 0x01, 0x02, 0x30, 0x30),
+    (0x1a, 0x00, 0x01, 0x32, 0x36),
+    (0x02, 0x01, 0x03, 0x58, 0xff),
+    (0x02, 0x00, 0x00, 0x32, 0x33),
+    (0x02, 0x00, 0x80, 0xff, 0xff),
 ]
-got = list(zip(ds_vals, lost_vals, rst_vals))
+got = list(zip(ds_vals, lost_vals, rst_vals, d0_vals, d1_vals))
 if got != expected:
     raise SystemExit(f"got {got}, expected {expected}")
+
+row0_dumps = re.findall(r"^>C:0c00\s+([0-9a-fA-F\s]+?)\s*(?:\S.*)?$", txt, re.M)
+# Parse exact hex bytes from m 0c00 0c09 dumps
+def extract_bytes(start_addr, count):
+    out = []
+    cur = start_addr
+    for line in txt.splitlines():
+        if line.startswith(f">C:{cur:04x} "):
+            chunk = line.split()[1:]
+            bs = []
+            for tok in chunk:
+                if re.fullmatch(r"[0-9a-fA-F]{2}", tok):
+                    bs.append(int(tok, 16))
+                else:
+                    break
+            out.append(bs)
+    return out
+
+# Actually VICE prints m 0c00 0c09 on one line (>C:0c00  20 24 38 30  2f 24 38 31  20 20 ...)
+row0_lines = [l for l in txt.splitlines() if l.startswith(">C:0c00 ")]
+if len(row0_lines) != 2:
+    raise SystemExit(f"expected 2 row0 dumps, got {len(row0_lines)}")
+expected_detail = [0x20, 0x24, 0x38, 0x30, 0x2f, 0x24, 0x38, 0x31, 0x20, 0x20]
+for idx, line in enumerate(row0_lines):
+    bs = [int(t, 16) for t in re.findall(r"\b[0-9a-fA-F]{2}\b", line[8:].split("   ", 1)[0])]
+    if bs[:10] != expected_detail:
+        raise SystemExit(f"detail dump {idx} mismatch: {bs[:10]} != {expected_detail}")
+
+# Check row 4 dump ($0ca0..$0cc7): contains "Disk code $80 phase $81." and zero $ff bytes
+row4_bytes = []
+capture = False
+for line in txt.splitlines():
+    if line.startswith(">C:0ca0 "):
+        capture = True
+    if capture and line.startswith(">C:0c"):
+        row4_bytes.extend(int(t, 16) for t in re.findall(r"\b[0-9a-fA-F]{2}\b", line[8:].split("   ", 1)[0]))
+        if len(row4_bytes) >= 40:
+            break
+if 0xff in row4_bytes[:40]:
+    raise SystemExit(f"row 4 contains raw $ff: {row4_bytes[:40]}")
+# screencode for "Disk code $80 phase $81." ($44='D' in mixed screencode? wait D=$44, i=$09...)
+def ch2sc(c):
+    if 'A' <= c <= 'Z': return ord(c) - ord('A') + 0x41
+    if 'a' <= c <= 'z': return ord(c) - ord('a') + 0x01
+    return ord(c)
+needle = [ch2sc(c) for c in "Disk code $80 phase $81."]
+if not any(row4_bytes[i:i+len(needle)] == needle for i in range(40 - len(needle) + 1)):
+    raise SystemExit(f"row 4 missing expected text {needle}: got {row4_bytes[:40]}")
 PY
     then
-        echo "PASS (5/5 cases: byte-1 ST=\$02 keeps ds=2/lost=1, ST=\$01 masked)"
+        echo "PASS (6/6 cmd-status + 3/3 detail formatting cases)"
         PASS=$((PASS + 1))
     else
         echo "FAIL"

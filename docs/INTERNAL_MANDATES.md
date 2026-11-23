@@ -121,3 +121,28 @@ Re-check the full contract before patching local logic near the newest crash.
   before signing off broad banking, loader, overlay, or MMU changes.
 - Headless VICE tests should use warp mode and should not rely on timeouts over
   30 seconds.
+
+## Commodore Storage And KERNAL I/O
+
+Changes touching `core/ui_disk_setup.s`, `platforms/shared/save.s`,
+`platforms/commodore/common/disk_*.s`, `save_slot_menu.s`, or
+`platforms/commodore/*/hal/storage*.s` must verify all three invariants:
+
+1. **Real emulator failure-path coverage:** Never treat mocked unit tests or
+   host `c1541` image checks (`disk_media_probe.py`) as proof of hardware/KERNAL
+   error handling. On C128/Plus/4 KERNALs, empty-name `OPEN` does not probe the
+   bus until `CHKIN`+`READST`. On stock C64 KERNAL, empty-name `OPEN` also
+   skips `STA $90` while `CHKIN`->`TKSA` (`$EDC7`) hangs forever at `$EDD6` on an
+   absent device unless `$90` (`KERNAL_STATUS`) is cleared and `CHKOUT`
+   (`LISTEN`+`SECOND`) probes presence first.
+2. **Producer-to-UI sentinel parity:** Trace error sentinels (`$00`, `$FF`,
+   `READST`, truncated/non-digit DOS bytes) from status readers into screen RAM
+   (`uds_show_init_detail`, `save_append_disk_detail_*`) so non-digit sentinels
+   are never printed as screen codes.
+3. **Explicit device binding:** `hal_storage_read_command_status` binds
+   `save_device` directly; non-save callers (such as `program_device` in
+   `legal.s` or `disk_prompt_device` in `hal_storage_init_selected_drive`) must
+   pass the target device explicitly via `_x` entrypoints rather than relying on
+   a shared `disk_prompt_device` global. Also run the targeted
+   `make playtest-disk` fault scenarios (`absent_save_drive`, `empty_drive`,
+   `status_lost_save`, etc.) when changing Commodore storage or setup UI code.

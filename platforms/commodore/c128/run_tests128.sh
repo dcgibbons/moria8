@@ -4701,18 +4701,19 @@ run_c128_command_status_byte1_timeout_smoke() {
     fi
 
     main_prg="$(cd "$tmp_out/c128" && pwd)/moria128.prg"
+    persist_prg="$(cd "$tmp_out/c128" && pwd)/128.persist.prg"
     main_vs="$(cd "$tmp_out/c128" && pwd)/main.vs"
-    if [ ! -s "$main_prg" ] || [ ! -s "$main_vs" ]; then
-        echo "FAIL (missing compiled moria128.prg or main.vs)"
+    if [ ! -s "$main_prg" ] || [ ! -s "$persist_prg" ] || [ ! -s "$main_vs" ]; then
+        echo "FAIL (missing compiled moria128.prg, 128.persist.prg, or main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if ! python3 - "$main_vs" "$main_prg" "$mon_file" <<'PY'
+    if ! python3 - "$main_vs" "$main_prg" "$persist_prg" "$mon_file" <<'PY'
 import sys
 
-vs_path, prg_path, mon_path = sys.argv[1], sys.argv[2], sys.argv[3]
+vs_path, prg_path, persist_path, mon_path = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 syms = {}
 with open(vs_path, encoding="utf-8", errors="replace") as f:
     for line in f:
@@ -4735,6 +4736,10 @@ needed = [
     ".w_chkin",
     ".w_clrchn",
     ".w_chrin",
+    ".uds_show_init_detail",
+    ".uds_print_row4_ay",
+    ".uds_dos_generic_str",
+    ".hal_storage_setup_status",
 ]
 missing = [k for k in needed if k not in syms]
 if missing:
@@ -4746,8 +4751,10 @@ def lh(addr):
 lines = [
     "bank ram00",
     f"load \"{prg_path}\" 0",
+    f"load \"{persist_path}\" 0",
     f"> 0b80 78 20 {lh(syms['.c128_storage_read_command_status'])} 00",
     f"> 0b85 78 20 {lh(syms['.c128_program_read_command_status'])} 00",
+    f"> 0bd0 78 20 {lh(syms['.uds_show_init_detail'])} 00",
     # idx=$0b8a, bytes[0..1]=$0b8b..$0b8c, sts[0..1]=$0b8d..$0b8e, cur_st=$0b8f, saved_x=$0b90
     "> 0b98 8e 90 0b ae 8a 0b bd 8d 0b 8d 8f 0b bd 8b 0b ee 8a 0b ae 90 0b 18 60",
     "> 0bb4 ad 8f 0b 18 60",
@@ -4764,19 +4771,24 @@ lines.append("bank cpu")
 lines.append("> ff00 3f")
 lines.append("break exec $0b84")
 lines.append("break exec $0b89")
+lines.append("break exec $0bd4")
 
 d0 = syms[".disk_diag_cmd_status0"]
 d1 = syms[".disk_diag_cmd_status1"]
 sl = syms[".c128_status_lost"]
 pl = syms[".c128_program_status_lost"]
 
-for b0, b1, st0, st1 in (
-    (0x36, 0x32, 0x00, 0x02),
-    (0x58, 0x30, 0x02, 0x00),
-    (0x36, 0x32, 0x00, 0x00),
+for b0, b1, st0, st1, chkin_fail in (
+    (0x36, 0x32, 0x00, 0x02, False),
+    (0x58, 0x30, 0x02, 0x00, False),
+    (0x36, 0x32, 0x00, 0x00, False),
+    (0x00, 0x00, 0x00, 0x00, True),
 ):
+    lines.append("bank ram00")
+    if chkin_fail:
+        lines.append("> ffc6 38 60")
+        lines.append(f"> {syms['.w_chkin']:04x} 38 60")
     lines.extend([
-        "bank ram00",
         f"> 0b8a 00 {b0:02x} {b1:02x} {st0:02x} {st1:02x} 00",
         "bank cpu",
         "r sp = ff",
@@ -4785,6 +4797,33 @@ for b0, b1, st0, st1 in (
         f"m {d0:04x} {d0:04x}",
         f"m {d1:04x} {d1:04x}",
         f"m {sl:04x} {sl:04x}",
+    ])
+
+# Restore w_chkin before running program_read and init-detail cases.
+lines.extend([
+    "bank ram00",
+    "> ffc6 18 60",
+    f"> {syms['.w_chkin']:04x} 18 60",
+    f"> {syms['.hal_storage_setup_status']:04x} a9 ff 60",
+    f"> {syms['.uds_print_row4_ay']:04x} 4c d8 0b",
+    "> 0bd8 8d e0 0b 8c e1 0b 60",
+])
+if ".uds_show_c128_status_error" in syms:
+    lines.extend([
+        f"> {syms['.uds_show_c128_status_error']:04x} 4c e4 0b",
+        "> 0be4 ee e2 0b 60",
+    ])
+for d0v, d1v in ((0xff, 0xff), (0x58, 0xff)):
+    lines.extend([
+        "bank ram00",
+        f"> {d0:04x} {d0v:02x}",
+        f"> {d1:04x} {d1v:02x}",
+        "> 0be0 00 00 00 00",
+        "bank cpu",
+        "r sp = ff",
+        "r pc = 0bd0",
+        "g",
+        "m 0be0 0be3",
     ])
 
 for b0, b1, st0, st1 in (
@@ -4835,20 +4874,25 @@ d0 = f"{syms['.disk_diag_cmd_status0']:04x}"
 d1 = f"{syms['.disk_diag_cmd_status1']:04x}"
 sl = f"{syms['.c128_status_lost']:04x}"
 pl = f"{syms['.c128_program_status_lost']:04x}"
+gen = syms[".uds_dos_generic_str"]
 txt = open(log_path, encoding="utf-8", errors="replace").read()
 
 d0_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{d0}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
 d1_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{d1}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
 sl_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{sl}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
 pl_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{pl}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+ui_v = [tuple(int(x, 16) for x in m.groups()) for m in re.finditer(r"^>C:0be0\s+([0-9a-fA-F]{2})\s+([0-9a-fA-F]{2})\s+[0-9a-fA-F]{2}\s+([0-9a-fA-F]{2})", txt, re.M)]
 
-if (d0_v[:3], d1_v[:3], sl_v) != ([0x36, 0x58, 0x36], [0xff, 0xff, 0x32], [1, 1, 0]):
-    raise SystemExit(f"storage_read mismatch: d0={d0_v[:3]} d1={d1_v[:3]} sl={sl_v}")
-if (d0_v[3:], d1_v[3:], pl_v) != ([0x30, 0x30], [0xff, 0x30], [1, 0]):
-    raise SystemExit(f"program_read mismatch: d0={d0_v[3:]} d1={d1_v[3:]} pl={pl_v}")
+if (d0_v[:4], d1_v[:4], sl_v) != ([0x36, 0x58, 0x36, 0xff], [0xff, 0xff, 0x32, 0xff], [1, 1, 0, 0]):
+    raise SystemExit(f"storage_read mismatch: d0={d0_v[:4]} d1={d1_v[:4]} sl={sl_v}")
+if (d0_v[4:], d1_v[4:], pl_v) != ([0x30, 0x30], [0xff, 0x30], [1, 0]):
+    raise SystemExit(f"program_read mismatch: d0={d0_v[4:]} d1={d1_v[4:]} pl={pl_v}")
+want_ui = [(gen & 0xff, (gen >> 8) & 0xff, 0), (gen & 0xff, (gen >> 8) & 0xff, 0)]
+if ui_v != want_ui:
+    raise SystemExit(f"uds_show_init_detail mismatch: got {ui_v}, expected {want_ui}")
 PY
     then
-        echo "PASS (5/5 cases: storage & program cmd-status byte-1 ST=\$02)"
+        echo "PASS (6/6 cmd-status incl. CHKIN fail + 2/2 init-detail cases)"
         PASS=$((PASS + 1))
     else
         echo "FAIL"

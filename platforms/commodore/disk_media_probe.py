@@ -81,7 +81,9 @@ def probe_device(args: argparse.Namespace, work_dir: Path, device: int) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Shared disk media attach/read/write sanity probes")
+    parser = argparse.ArgumentParser(
+        description="Host c1541 disk image read/write sanity checks (no VICE emulator or hal_storage_probe_media)"
+    )
     parser.add_argument("--scenario", required=True, choices=tuple(SCENARIO_DEVICES))
     parser.add_argument("--platform", required=True, choices=("c64", "c128", "plus4"))
     parser.add_argument("--c1541", default="c1541")
@@ -94,7 +96,7 @@ def main() -> int:
             if rc != 0:
                 return rc
 
-    print(f"PASS: {args.scenario} {args.platform}")
+    print(f"PASS (c1541 host image check, no emulator): {args.scenario} {args.platform}")
     return 0
 
 

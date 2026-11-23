@@ -286,8 +286,6 @@ c64_disk_marker_write_resident:
     sei
     lda #$34
     sta $01
-    lda save_device
-    sta disk_prompt_device
     jsr c64_storage_read_command_status
     pla
     beq !cdmw_done+
@@ -1072,6 +1070,10 @@ c64_save_resident_state_probe_end:
 #import "hal/storage.s"
 
 c64_storage_read_command_status:
+    ldx save_device
+c64_storage_read_command_status_x:
+    txa
+    pha
     // A read that times out (ST bit 1) before any digit came lost its byte
     // on the bus (JiffyDOS, playtest-disk): cdrs_lost says so, for a caller
     // that can ask again with a fresh OPEN. Reading this channel again would
@@ -1083,16 +1085,22 @@ c64_storage_read_command_status:
     lda #2
     sta disk_status
     lda #0
+    sta KERNAL_STATUS           // empty-name OPEN skips STA $90; clear stale bit 7
     sta cdrs_lost
     tax
     tay
     jsr c64_disk_setnam
-    lda #15
-    ldx disk_prompt_device
-    tay
-    jsr c64_disk_setlfs
-    jsr c64_disk_open
+    pla
+    tax
+    jsr c64_open_cmd_channel_x
     bcs !cdrs_close+
+    // Stock C64 CHKIN/TKSA hangs in talker turnaround ($EDD6) on an absent
+    // device after empty-name OPEN. Probe with CHKOUT (LISTEN+SECOND) first;
+    // zero bytes written + CLRCHN preserves any pending 1541 DOS message.
+    ldx #15
+    jsr c64_disk_chkout
+    bcs !cdrs_close+
+    jsr c64_disk_clrchn
     ldx #15
     jsr c64_disk_chkin
     bcs !cdrs_close+
