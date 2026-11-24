@@ -911,10 +911,6 @@ test_start:
     sta (zp_ptr0),y
     ldy #MX_CONFUSE
     sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    sta (zp_ptr0),y
-    ldy #MX_FLEE_HI
-    sta (zp_ptr0),y
 
     lda #0
     sta zp_mon_idx
@@ -1259,10 +1255,6 @@ test_start:
     ldy #MX_STUN
     sta (zp_ptr0),y
     ldy #MX_CONFUSE
-    sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    sta (zp_ptr0),y
-    ldy #MX_FLEE_HI
     sta (zp_ptr0),y
 
     lda #0
