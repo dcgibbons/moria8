@@ -18,7 +18,6 @@ mat_target_x: .byte 0       // Movement target
 mat_target_y: .byte 0
 mat_sign_dx:  .byte 0       // Direction sign toward player (-1, 0, +1)
 mat_sign_dy:  .byte 0
-mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
 mat_scene_dirty: .byte 0     // count of immediate non-local visible tile renders this turn (nonzero = cheap redraw path)
 mat_action_dirty: .byte 0    // bit 0: state changed, bit 1: hostile action, bit 7: moved
@@ -338,24 +337,12 @@ monster_process_one:
     bpl !mpo_random_roll-
 !mpo_no_random:
 
-    // Check if monster should flee (HP < threshold)
-    jsr monster_check_flee
-    bcc !mpo_flee+
-
     // Normal movement: move toward player
     jsr monster_move_toward
     bcc !mpo_toward_no_move+
     lda #$83
     sta mat_action_dirty
 !mpo_toward_no_move:
-    jmp !mpo_writeback+
-
-!mpo_flee:
-    jsr monster_move_away
-    bcc !mpo_flee_no_move+
-    lda #$83
-    sta mat_action_dirty
-!mpo_flee_no_move:
     jmp !mpo_writeback+
 
 !mpo_confused:
@@ -736,8 +723,6 @@ monster_resting: .byte 0
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 monster_move_toward:
-    lda #0
-    sta mat_fleeing
     jsr mmt_calc_signs          // Set mat_sign_dx/dy toward player
     lda mat_sign_dx
     ora mat_sign_dy
@@ -866,105 +851,6 @@ mai_random:     .byte 0
 mai_random_x:   .byte 0
 
 // ============================================================
-// monster_check_flee — Check if monster HP is below flee threshold
-// Output: carry clear = should flee (HP < threshold), carry set = normal
-// Clobbers: A, X, Y, zp_ptr0/hi
-// ============================================================
-monster_check_flee:
-    ldx zp_mon_idx
-    jsr monster_get_ptr
-    ldy #MX_HP_LO              // 16-bit HP - threshold: borrow = HP below it
-    lda (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    cmp (zp_ptr0),y
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    ldy #MX_FLEE_HI
-    sbc (zp_ptr0),y
-    rts
-
-// ============================================================
-// monster_move_away — Greedy 3-try movement AWAY from player
-// Same algorithm as monster_move_toward but direction is reversed.
-// Sets mat_fleeing=1 to suppress attack in monster_try_step.
-// Clobbers: A, X, Y, zp_ptr0/hi
-// ============================================================
-monster_move_away:
-    lda #1
-    sta mat_fleeing
-    // sign_dx = sgn(mon_x - player_x) — AWAY from player
-    lda zp_mon_x
-    cmp zp_player_x
-    beq !mma_dx_zero+
-    bcs !mma_dx_pos+
-    lda #$ff
-    sta mat_sign_dx
-    jmp !mma_dy+
-!mma_dx_pos:
-    lda #$01
-    sta mat_sign_dx
-    jmp !mma_dy+
-!mma_dx_zero:
-    lda #$00
-    sta mat_sign_dx
-!mma_dy:
-    lda zp_mon_y
-    cmp zp_player_y
-    beq !mma_dy_zero+
-    bcs !mma_dy_pos+
-    lda #$ff
-    sta mat_sign_dy
-    jmp !mma_try+
-!mma_dy_pos:
-    lda #$01
-    sta mat_sign_dy
-    jmp !mma_try+
-!mma_dy_zero:
-    lda #$00
-    sta mat_sign_dy
-!mma_try:
-    lda mat_sign_dx
-    ora mat_sign_dy
-    beq !mma_done+
-    // Try 1: diagonal
-    lda zp_mon_x
-    clc
-    adc mat_sign_dx
-    sta mat_target_x
-    lda zp_mon_y
-    clc
-    adc mat_sign_dy
-    sta mat_target_y
-    jsr monster_try_step
-    bcs !mma_done+
-    // Try 2: horizontal
-    lda mat_sign_dx
-    beq !mma_vert+
-    lda zp_mon_x
-    clc
-    adc mat_sign_dx
-    sta mat_target_x
-    lda zp_mon_y
-    sta mat_target_y
-    jsr monster_try_step
-    bcs !mma_done+
-!mma_vert:
-    // Try 3: vertical
-    lda mat_sign_dy
-    beq !mma_done+
-    lda zp_mon_x
-    sta mat_target_x
-    lda zp_mon_y
-    clc
-    adc mat_sign_dy
-    sta mat_target_y
-    jsr monster_try_step
-!mma_done:
-    lda #0
-    sta mat_fleeing
-    rts
-
-// ============================================================
 // monster_try_step — Validate and execute a single tile move
 // Input: mat_target_x, mat_target_y = target position
 //        zp_mon_x/y = current position
@@ -983,11 +869,6 @@ monster_try_step:
     cmp zp_player_y
     bne !mts_not_player+
 
-    // Fleeing monsters don't attack — just blocked
-    lda mat_fleeing
-    beq !mts_not_fleeing+
-    jmp !mts_blocked+
-!mts_not_fleeing:
     lda zp_player_x
     ldy zp_player_y
     jsr glyph_find_at

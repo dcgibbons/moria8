@@ -100,8 +100,8 @@
 .const MX_SLEEP_CUR = 7
 .const MX_STUN      = 8
 .const MX_CONFUSE   = 9
-.const MX_FLEE_LO  = 10   // Flee threshold HP (lo byte)
-.const MX_FLEE_HI  = 11   // Flee threshold HP (hi byte)
+.const MX_RESERVED_0 = 10   // Reserved (unused; keeps 12-byte record & Save Format V2)
+.const MX_RESERVED_1 = 11   // Reserved (unused; keeps 12-byte record & Save Format V2)
 
 // Monster flags
 .const MF_AWAKE     = $01
@@ -915,10 +915,10 @@ monster_spawn_one:
     lda zp_math_b
     sta (zp_ptr0),y
 
-    // Clear flags (start asleep), speed counter, sleep, stun and confuse;
-    // the initial sleep is then written over its zero.
+    // Clear flags (start asleep), speed counter, sleep, stun, confuse,
+    // and reserved bytes 10-11; initial sleep is written over its zero.
     lda #0
-    ldy #MX_CONFUSE
+    ldy #MONSTER_ENTRY_SIZE - 1
 !mso_clear:
     sta (zp_ptr0),y
     dey
@@ -926,6 +926,7 @@ monster_spawn_one:
     bne !mso_clear-
 .assert "monster_spawn_one: MX_HP_HI follows MX_HP_LO", MX_HP_HI, MX_HP_LO + 1
 .assert "monster_spawn_one: MX_FLAGS..MX_CONFUSE follow MX_HP_HI", MX_FLAGS == MX_HP_HI + 1 && MX_SPEED_CNT == MX_FLAGS + 1 && MX_SLEEP_CUR == MX_SPEED_CNT + 1 && MX_STUN == MX_SLEEP_CUR + 1 && MX_CONFUSE == MX_STUN + 1, true
+.assert "monster_spawn_one: MX_RESERVED_0..1 complete 12-byte record", MX_RESERVED_0 == MX_CONFUSE + 1 && MX_RESERVED_1 == MX_RESERVED_0 + 1 && MONSTER_ENTRY_SIZE == 12, true
 
     // Set initial sleep from creature sleep value. Upstream randomizes
     // starting sleep; approximate VMS sleep/5 + randint(sleep) as
@@ -935,20 +936,6 @@ monster_spawn_one:
     jsr monster_initial_sleep
     ldy #MX_SLEEP_CUR
     sta (zp_ptr0),y
-
-    // Compute flee threshold = HP / 4
-    // zp_math_a/b still hold the HP
-    lsr zp_math_b
-    ror zp_math_a
-    lsr zp_math_b
-    ror zp_math_a
-    ldy #MX_FLEE_LO
-    lda zp_math_a
-    sta (zp_ptr0),y
-    iny                         // MX_FLEE_HI
-    lda zp_math_b
-    sta (zp_ptr0),y
-.assert "monster_spawn_one: MX_FLEE_HI follows MX_FLEE_LO", MX_FLEE_HI, MX_FLEE_LO + 1
 
     // Set FLAG_OCCUPIED on map tile
     ldx ms_spawn_y

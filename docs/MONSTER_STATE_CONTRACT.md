@@ -23,13 +23,13 @@ slot test and must precede mutation through table scans.
 | --- | --- | --- |
 | `MX_X`, `MX_Y` | Current map position | movement, combat, visibility |
 | `MX_TYPE` | Active creature-table index or `EMPTY_SLOT` | every live-slot scan |
-| `MX_HP_LO`, `MX_HP_HI` | Current 16-bit HP | combat, monster magic, flee logic |
+| `MX_HP_LO`, `MX_HP_HI` | Current 16-bit HP | combat, monster magic, door bash/pick/burst |
 | `MX_FLAGS.MF_AWAKE` | Monster may proceed into active AI | `monster_process_one` |
 | `MX_SLEEP_CUR` | Remaining compact sleep counter | `monster_wake_check` |
 | `MX_SPEED_CNT` | Movement scheduling state | monster AI tick |
 | `MX_STUN` | Turns unable to act | `monster_process_one` |
 | `MX_CONFUSE` | Live confusion timer used by AI | combat and `monster_process_one` |
-| `MX_FLEE_LO`, `MX_FLEE_HI` | 16-bit flee HP threshold | movement/flee logic |
+| `MX_RESERVED_0`, `MX_RESERVED_1` | Reserved, unused bytes 10–11 (formerly `MX_FLEE_LO`, `MX_FLEE_HI`; zeroed on spawn; retained to preserve the 12-byte record and Save Format V2) | none (MON-043) |
 | `MF_PROVOKED` | Player hostility; permits town-creature retaliation | combat, bash, AI |
 | `MF_VISIBLE` | Current ordinary sight and renderer authority | visibility, targeting, sighting & hostile-action disturbance (`zp_disturb`, MON-038 / TRN-014) |
 | `MF_DETECTED` | Magical detection knowledge: timed Detect Monsters or immediate Detect Evil pending its post-redraw clear | renderer, free-look, and dirty tracking; not ordinary targeting |
@@ -98,7 +98,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | MON-021 | Superseded by MON-033 | Project maintainer, 2026-11-01 | Prior zeroing of `cr_spell_chance` when a caster only carried `MSF2_*` spells (blink, teleport self, summon undead, slow, drain mana); Phase 5 implements all 5 `MSF2_*` spells so all 279 VMS casters retain their upstream frequency | superseded by `cr_spell_flags2` (`MSF2_*` bits 0-4) in `core/monster_magic.s` (MON-033) | the upstream frequency kept with no spell |
 | MON-022 | Accepted | Project maintainer, 2026-11-01 | `CF_ATTACK_ONLY` marks every creature that never moves upstream: neither `CM_MOVE_NORMAL` (`0x02`) nor a random-move bit (`0x38`) in CMOVE (VMS `creature.inc` `mon_move:1081-1157`; Umoria `monsterMove`), which adds the Quylthulg (`CM_ONLY_MAGIC 0x04`) to the `0x01` creatures | maintainer approval 2026-11-01 (item C); C64 `test_monster_attack.s` t42, `test_monster_tier3.s` t4 (data, fail before), `test_monster_ai.s` t66 (production `monster_ai_tick` with the shipped flags) | only CMOVE `& 0x3F == 0x01` |
 | MON-023 | Accepted | Project maintainer, 2026-11-01 | `MSF_TELEPORT` is upstream Teleport To (VMS `creature.inc` spell 7 -> `spells.inc` `teleport_to`; Umoria `spellTeleportPlayerTo`): *"The <name> casts a spell."*, then `find_adjacent_empty_mon` (the caster's neighbours, shared with breeding) and `eff_teleport_apply_target` (destination in A/Y; search off, `vis_room_revealed`). Deviations: only the 8 neighbours are tried and never the player's own square; with all blocked the player stays (upstream widens the ring). Upstream has no spell that teleports the player away; the creatures' own blink/teleport (spells 5-6) remain unmapped (no free `MSF_*` bit). The orphaned `HSTR_MM_TELEPORT` (" teleports you!") was removed | maintainer approval 2026-11-01 (item D); C64 `test_monster_ai.s` t67-t68 through production `monster_pick_spell` (fail on the pre-change code) | `eff_teleport_self`: a random teleport away with "teleports you!" |
-| MON-024 | Accepted | Project maintainer, 2026-11-01 | A creature with upstream `CD_MAX_HP` (cdefense `0x4000`; VMS `misc.inc` `place_monster` `max_hp`, Umoria `maxDiceRoll`) spawns with exactly `cr_hd_num x cr_hd_sides` HP (`math_multiply`, at most `255 x 255`; Balrog `75d40 = 3000`). The flag is `cr_speed` bit 7 (`CR_MAX_HP`), a spare bit whose other readers mask it (`CR_SPEED_MASK`, `CM_RANDOM_MOVE`); no layout change. 27 creatures; the flee threshold is a quarter of that HP | maintainer approval 2026-11-01 (item E); C64 `test_monster_attack.s` t44-t46 through production `monster_spawn_one` (t44-t45 fail before; t46 a rolled creature) | every creature rolled its hit dice |
+| MON-024 | Accepted | Project maintainer, 2026-11-01 | A creature with upstream `CD_MAX_HP` (cdefense `0x4000`; VMS `misc.inc` `place_monster` `max_hp`, Umoria `maxDiceRoll`) spawns with exactly `cr_hd_num x cr_hd_sides` HP (`math_multiply`, at most `255 x 255`; Balrog `75d40 = 3000`). The flag is `cr_speed` bit 7 (`CR_MAX_HP`), a spare bit whose other readers mask it (`CR_SPEED_MASK`, `CM_RANDOM_MOVE`); no layout change. 27 creatures (flee threshold removed by MON-043) | maintainer approval 2026-11-01 (item E); C64 `test_monster_attack.s` t44-t46 through production `monster_spawn_one` (t44-t45 fail before; t46 a rolled creature) | every creature rolled its hit dice |
 | MON-025 | Accepted | Project maintainer, 2026-11-08 | Monster breath, Hold Person and the cast roll follow pinned VMS Moria `creature.inc` `cast_spell` (spells 10, 20-24; Umoria `monster.cpp` identical) in the limited faithful form the maintainer chose. `cr_spell_chance` holds the upstream 1-in-N frequency (bits 0-3; `randint(N) = 1` casts, a percent `int(100 / N)` before), the breath element (bits 4-6: 1-5 lightning, gas, acid, frost, fire; 6 all five) and Hold Person (bit 7, `MS_HOLD`); `tools/parse_creatures.py` `map_spells` writes it. Each spell bit is a choice (VMS `spell_choice`): Hold Person one more after the MSF bits, a Multi-Hued dragon's five breaths five. Breath (`monster_cast_breath`): "The <name> breathes lightning." (gas, acid, frost, fire), dam = the breather's HP / 4 for lightning, / 3 otherwise, 16-bit and uncapped (`mon_atk_apply_damage_16`), through VMS `moria.inc` `light_dam`, `poison_gas` (poisoned + 12 + randint(dam), the 8-bit timer saturating), `acid_dam` (`mon_atk_acid_armour`: a damaged worn piece halves it), `cold_dam` and `fire_dam` (div 3 for the Resist Cold / Fire ring, div 3 again for the timer), one divide for the whole divisor. Hold Person (`monster_cast_hold`): Free Action (`PFLAG_FREE_ACT`, the Amulet of the Magi) leaves the player unaffected, a wis_adj + level save resists, else paralysis randint(5) + 4, + 2 if paralysed; Free Action also guards the paralysis touch (after its save, as VMS) and the chest gas trap. Deviations (`docs/BACKLOG.md` "Faithful breath: what the limited version leaves out"): no radius-2 ball (other monsters, floor items, doors), no pack damage, no lightning/acid/poison resistance items, Moria8's Hold texts, Hold marks recall bit 0 | explicit maintainer direction 2026-11-08 ("so can we correct the dragon balance here to be faithful to upstream?", then "do your limited but faithful version"); pinned VMS `creature.inc` 860-1060, `moria.inc` 1683-1760, `misc.inc` `player_saves`; C64 `test_monster_magic.s` t6, t9, t10, t28-t37, `test_monster_ai.s` t14 | the percent cast chance; fire-only breath, HP / 3 capped at 255, resisted by fire resistance whatever the breather; Hold Person not cast (MON-021) |
 | MON-026 | Accepted | Project maintainer, 2026-11-10 ("fix it": two Rings of Speed did nothing more than one) | Player speed steps add, as VMS and Umoria add every speed bonus: each Ring of Speed worn (`EQUIP_RING`, `EQUIP_RING2`), Boots of Speed (`+1`) / Boots of Slowness (`-1`) on `EQUIP_FEET`, and an active haste (`+1`) / slow (`-1`) timer combine into `mat_fast` (`-2..4`, computed once per AI tick). Each monster's cadence (base `cr_speed` with its `MX_SPEED_CNT` adjustment, 0-2) less `mat_fast` is `s` (`-4..4`): two moves at `s >= 2` (the double-move cap stays), one at 1, and at `s <= 0` one move when `mat_turn_mod[max(s + 3, 0)] == 0` over `{mod 5, mod 4, mod 3, mod 2}` — i.e., every `2 - s` turns for `-3 <= s <= 0` (`Umoria monsterMovementRate`), clamped to `mod 5` (every 5th turn) at `s = -4` (`+4` player speed vs speed-0 monster, preventing OOB `mat_turn_mod` reads), from the 16-bit turn (256 = 1 mod 3 and 5). Per tick, never stored in `cr_speed` or `MX_SPEED_CNT` | oracle Umoria `playerChangeSpeed` (`player.cpp:370`), `monsterMovementRate` (`monster.cpp:77`), ring `misc_use = 1` (`treasure.cpp:466`); VMS `moria.inc:141`; C64 `test_monster_ai.s` 36-40 (single steps unchanged), 69 (two rings: every 3rd turn, high byte counted), 70 (haste and two rings: every 4th), 71 (`+4` player speed via two rings + Boots of Speed + haste vs speed-0 monster: `s = -4` clamped to `mod 5` / every 5th turn) | MON-008 (no stacking; floor every other turn) |
 | MON-027 | Accepted | Project maintainer, 2026-11-11 ("obviously if we can't resist anything then this is a game misbalance ... proceed"; options chosen: spelled-out names, faithful VMS rarity, armour + Defender + damage first) | Lightning and acid resistance as pinned VMS Moria: armour suffixes from `magic_treasure` (`misc.inc`): body armour and shields that rolled a positive magic bonus get one with `magik(trunc(min(15 + dlvl, 70) / 6))`, then `randint(9)`: (Resist) fire, cold, acid and lightning + 5 to-AC, (Resist Acid), (Resist Fire) x2, (Resist Cold) x2, (Resist Lightning) x3 (`roll_armour_ego`, ego IDs 9-13). Worn on the weapon, body or shield slot, an ego gives `pf_ego_table` flags (`PFLAG_RESIST_ACID`, `PFLAG_RESIST_LIGHT` new): Defender the four resistances, Free Action and See Invisible; Holy Avenger See Invisible. Breath (`monster_cast_breath`): lightning `div 3` resisted (`light_dam`); acid `div 2` for a piece that took it, `div 3` resisted, `div 4` both (`acid_dam`, also the acid touch `mon_atk_effect_acid`); a Resist or Resist Acid piece chosen by `minus_ac` is not damaged ("Your <item> resists damage!") but counts as taking it. Gas has no resistance, as upstream. Deviations: no store stocks an ego item and egos do not change prices (as the weapon egos); Defender regeneration, feather fall and stealth not modelled; the lightning touch stays a plain hit; Crown of the Magi, Ring of Lordly Protection (Acid) and Amulet of Resist Acid not yet implemented | explicit maintainer direction 2026-11-11 after clvl 40 Priests died to unresistable Ancient Multi-Hued Dragon breath; pinned VMS `misc.inc` `magic_treasure`, `moria.inc` `minus_ac`, `light_dam`, `acid_dam`; C64 `test_monster_magic.s` t38-t42, `test_monster_attack.s` t47-t49, `test_ego.s` t13-t19 | MON-015 and MON-025 "no lightning/acid resistance" deviations |
@@ -117,6 +117,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | MON-040 | Accepted | Project maintainer, 2026-11-20 (same direction) | Summoned creatures follow pinned VMS Moria `misc.inc` `summon_monster`: levels `1..min(dun_level + mon$summon_adj, max_mons_level)` (`mon$summon_adj = 2`), uniform over the catalog species of those levels, with no `mon_nasty` out-of-depth roll. `pick_summon_creature_type` (`core/monster_catalog.s`) sets `cat_level_adj = CAT_SUMMON_ADJ` for `cat_pick_id` (`pick_creature_type` sets `0`; `adc` with carry-out saturation to `CATALOG_MAX_MONS_LEVEL`); callers are the `MSF_SUMMON` spell (`monster_cast_summon`), the Summon Monster scroll and staff (`ep1_summon_many`, `ep1_summon_one`) and the summoning trap and chest (`chest_run_pending_summons`). The unit-test tier picker (`core/monster.s`, non-catalog) applies the same `+2` limit. Out of scope and unchanged: summon undead (`cat_undead` / `ep1_pick_undead_type`), polymorph (VMS `poly_monster` picks from all levels), Moria8 pits and nests, and the wizard summon | pinned VMS `misc.inc:612-645`, `constants.inc:120`, callers `creature.inc:991`, `scrolls.inc:152`, `staffs.inc:52`, `moria.inc:1889, 2661`; C64 `test_monster_magic3.s` t21-t22 (production `monster_pick_spell` -> `monster_cast_summon` and `ep1_summon_many`; both fail with `pick_creature_type`); CX16 `harness_smoke.py monster_catalog` `summon_cap` / `summon_adj` (200 production picks at DL16; fail with the adjustment removed) | summons picked from `1..dun_level` with the out-of-depth roll |
 | MON-041 | Accepted | Project maintainer, 2026-11-20 ("a Moria8 vs VMS difference is usually an early accident: fix it") | Summons, breeding and clones follow pinned VMS Moria: (1) counts: Scroll of Summon Monster `randint(3)` (`scrolls.inc:147-153`), Scroll of Summon Undead `randint(3)` (`scrolls.inc:329-335`), Staff of Summoning `randint(4)` (`staffs.inc:46-52`); the summoning rune `2 + randint(3)` (`moria.inc:1885`) and the chest trap's `3` (`moria.inc:2655`) were already VMS. (2) Summon Undead (scroll and `MSF2_SUMMON_UNDEAD`) picks any undead of the catalog through one `pick_undead_creature_type` (`misc.inc:648-670` `summon_undead`; MON-033's `cat_undead[35]` pick). (3) A monster's summons land beside the player (`creature.inc:986-1001`: `summon_monster(char_row, char_col, ..)`; `find_adjacent_empty_player`), not beside the caster. (4) Every summon, clone (`spells.inc:1192`) and breeder's child (`creature.inc:1080`) is placed awake: `monster_spawn_awake` = `monster_spawn_one` + `monster_wake` (`slp = false`: `csleep := 0`, `misc.inc:529-534`). (5) In town, summons pick townspeople (`pick_creature_type` / `pick_summon_creature_type` return one of the 8 town rows: VMS `randint(m_level[0])`). | pinned VMS sources cited; C64 `test_monster_magic3.s` t23-t26, `test_monster_ai.s` t61 (clones awake); all fail at 312cd3c | scroll `1`, staff `2..4`, undead scroll `2` from the level's mix, summons beside the caster and asleep, clones asleep |
 | MON-042 | Accepted | Project maintainer, 2026-11-20 (same direction) | Polymorph follows pinned VMS `spells.inc`: `poly_monster` (Wand of Polymorph `wands.inc:71`, Polymorph Other `magic.inc:72-73`) changes the first monster along the bolt when `randint(max_mons_level) > level` (`rng_range(40) >= cr_level`), else prints "The `<name>` is unaffected." (`combat_msg_monster_suffix`); `mass_poly` (Staff of Mass Polymorph, `staffs.inc:72`) changes every creature with `cdis < max_sight` except the win creatures (`cdefense` bit 31: Moria8 `cr_level > MONS_LEVEL_MAX`), seen or not, with no roll. The new creature is `randint(m_level[max_mons_level]) + m_level[0]`: any level `1..40` (`pick_any_creature_type`, `cat_level_adj = $ff`), placed awake on the same square, in town as well. One body (`core/monster_polymorph.s` `PolymorphResist`/`PolymorphReplace`) is emitted in the item and spell overlays. Adaptation: `cdis` is Chebyshev | pinned VMS `spells.inc:1113-1147, 1397-1421`; C64 `test_monster_magic3.s` t27-t28; CX16 `harness_smoke.py monster_catalog` `poly_any_level`; t27-t28 fail at 312cd3c | polymorph always succeeding (the Balrog silently refused), a depth-limited replacement placed asleep, Mass Polymorph on seen monsters only, none in town |
+| MON-043 | Accepted | Project maintainer, 2026-11-23 ("make this act like VMS moria") | Monsters never flee at low HP: after confusion and spell/random-move checks, `monster_process_one` calls `monster_move_toward` unconditionally (matching pinned VMS Moria `mon_move` and Umoria `monsterMove`/`monsterDoMove`, where Turn Undead retreating in `monsterMoveUndead` is separate and out of scope). Removed `monster_check_flee`, `monster_move_away`, `mat_fleeing` (and its melee suppression in `monster_try_step`), and the spawn-time `HP / 4` flee threshold in `monster_spawn_one`. Kept the 12-byte monster record (`MONSTER_ENTRY_SIZE = 12`) and Save Format V2 (`$22`) intact by leaving bytes 10–11 as zeroed, unused `MX_RESERVED_0`/`MX_RESERVED_1` | explicit maintainer direction 2026-11-23; pinned VMS `source/include/creature.inc:1061-1135` (`mon_move`); pinned Umoria `src/monster.cpp:1101-1119, 1167-1232` (`monsterDoMove`, `monsterMove`); C64 `test_monster_ai.s` t17–t18 (fail pre-fix) and `test_monster_ai2.s` t6 through production `monster_ai_tick`; 7-port `make -j7 -O test` and `make playtest-gate` | commit `74700dc` (2026-02-15, `R3.4` low-HP fleeing) and MON-024's flee-threshold note |
 
 ## Conditional Verification Matrix
 
@@ -191,6 +192,7 @@ execute the changed production routine through its real dispatch/overlay path.
 | Summon level `dlvl + 2`, no out-of-depth roll (MON-040) | C64 `test_monster_magic3.s` t21-t22; CX16 `harness_smoke.py monster_catalog` | `TEST_FILTER='monster_magic3' make test64`; `make testcx16` |
 | Summon counts, undead pick, beside the player, awake; clones and breeders awake (MON-041) | C64 `test_monster_magic3.s` t23-t26, `test_monster_ai.s` t61; CX16 `monster_catalog` `undead_pick_*` | `TEST_FILTER='monster_magic3\|monster_ai' make test64`; `make testcx16` |
 | Polymorph roll, any-level awake replacement, Mass Polymorph reach (MON-042) | C64 `test_monster_magic3.s` t27-t28; CX16 `monster_catalog` `poly_any_level` | `TEST_FILTER='monster_magic3' make test64`; `make testcx16` |
+| No low-HP monster fleeing; `MX_RESERVED_0/1` zeroed at spawn, ignored if nonzero in older saves; low-HP mobile and `CF_ATTACK_ONLY` monsters advance/attack normally (MON-043) | C64 `test_monster_ai.s` t16–t19 (`t17`–`t18` fail pre-fix) and `test_monster_ai2.s` t6 (`CM2_PHASE` outer-boundary walls) through production `monster_spawn_one` and `monster_ai_tick` | `TEST_FILTER='monster_ai\|monster_ai2\|monster_magic' make test64`; all 7 ports + 5 cartridges compile identical `core/monster.s` and `core/monster_ai.s`; `make -j7 -O test`; `make playtest-gate` |
 
 ## Change Record — Phase 5 Full 279-Species VMS Monster Parity (2026-11-16)
 
@@ -453,6 +455,76 @@ Unresolved uncertainty and risk:
   test64-legal help hitting its 30s wall-clock cap on the final post-return
   bsave (memory(0xC000, 3840) after returning to gameplay) under sustained
   external host load 32.81-43.85 (title passed; not a product hang).
+```
+
+## Change Record — Remove Low-HP Monster Fleeing (MON-043, 2026-11-23)
+
+```text
+Problem and success criteria:
+  Moria8 monsters fled when HP dropped below 1/4 of spawn HP (commit 74700dc, R3.4)
+  and suppressed melee while fleeing (causing injured bosses like the 3,000-HP
+  Balrog to run away below 750 HP and regenerate). Per maintainer direction
+  (2026-11-23: "make this act like VMS moria"), remove low-HP monster fleeing
+  across all 7 ports and 5 cartridges while keeping the 12-byte monster record
+  and Save Format V2 ($22) unchanged.
+State being changed:
+  - core/monster.s: renamed MX_FLEE_LO/HI (bytes 10-11) to MX_RESERVED_0/1;
+    removed HP/4 threshold calculation from monster_spawn_one and extended
+    !mso_clear loop to zero bytes 5..11 (MX_FLAGS..MX_RESERVED_1).
+  - core/monster_ai.s: removed mat_fleeing, monster_check_flee, monster_move_away,
+    the flee branch in monster_process_one, the mat_fleeing clear in
+    monster_move_toward, and the mat_fleeing melee suppression in
+    monster_try_step.
+  - core/game_loop.s: removed MX_FLEE_LO/HI clears in c128_test_force_dungeon_melee.
+Search scope and terms:
+  grep -rn -E "MX_FLEE|monster_check_flee|monster_move_away|mat_fleeing|force_flee|flee_thresh|flee"
+  across core/, platforms/, docs/, tools/, playtest/.
+Relevant readers/writers found and known exclusions:
+  All product readers/writers (core/monster.s, core/monster_ai.s,
+  core/game_loop.s) removed. Excluded: unrelated player AI bot fleeing notes in
+  docs/AI_PLAYTEST_DESIGN.md, Turn Undead retreating (not implemented), and
+  unused constants/comments in platforms/commodore/c64/tests/product_magic_missile_smoke.py
+  and platforms/bbcmaster/harness_smoke.py (which write 0 to bytes 10-11).
+Initialization, reset and persistence points:
+  monster_spawn_one zeroes bytes 10-11 (MX_RESERVED_0/1) on spawn; Save Format
+  V2 ($22) continues saving/loading the 384-byte monster_table (32 x 12 B)
+  without format changes, and any nonzero value in bytes 10-11 of existing live
+  saves is ignored (never read by production code).
+Affected production sequence through the changed transition:
+  monster_ai_tick -> monster_process_one -> (stun / confuse / cast / unprovoked
+  town / CM_RANDOM_MOVE) -> monster_move_toward -> monster_try_step ->
+  monster_attack_player (when target is player tile) or step toward player.
+Contract decision or selected upstream oracle with source locations:
+  MON-043 (Accepted, 2026-11-23), superseding 74700dc/R3.4 and MON-024's flee
+  threshold note; pinned VMS Moria source/include/creature.inc:1061-1135
+  (mon_move) and pinned Umoria src/monster.cpp:1101-1119, 1167-1232
+  (monsterDoMove, monsterMove).
+Intentional Moria8 deviations:
+  None for low-HP fleeing; bytes 10-11 of the 12-byte monster slot remain
+  reserved/unused to preserve Save Format V2 compatibility. (Chebyshev distance
+  and Turn Undead behavior are unchanged and separate.)
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  N/A (removed 16-bit HP/4 shift and 16-bit compare; no new arithmetic added;
+  !mso_clear uses unsigned Y index 11..5 terminating at MX_HP_HI == 4).
+RNG reduction and bias, if applicable:
+  N/A (no RNG changes).
+Affected platforms, overlays, banks and owners:
+  All 7 shipping ports (C64, C128, Plus/4, Apple IIe, CX16, Atari 8-bit, BBC
+  Master 128) and all 5 cartridges via shared core/monster.s, core/monster_ai.s,
+  and core/game_loop.s (all resident segments shrink; no layout/overlay shifts
+  violate hard boundary asserts).
+Required production-path tests:
+  C64 test_monster_ai.s t16-t19 (t17-t18 fail pre-fix via production
+  monster_spawn_one and monster_ai_tick), test_monster_ai2.s t6 (4 outer map
+  boundaries via monster_move_toward -> monster_try_step), test_monster_magic.s,
+  C128 test_resist_heat_cold_prayer128.s, make build, make -j7 -O test, and
+  make playtest-gate.
+Known behavior explicitly out of scope:
+  Turn Undead retreating (Umoria monsterMoveUndead, src/monster.cpp:1070);
+  monster recall / awareness distance metric (MON-017).
+Unresolved uncertainty and risk:
+  None in product semantics or save compatibility; full-suite runtime gates
+  require sufficiently low host load (< 10) to avoid external 30s timeout flakiness.
 ```
 
 

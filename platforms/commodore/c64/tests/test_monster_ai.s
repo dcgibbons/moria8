@@ -139,6 +139,9 @@ hal_item_cat_read_byte:
 #import "../../../../core/scene_mat_tile.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
+    sec
+    rts
+    nop                         // Pad to 3 bytes so :PatchJump never clobbers player_update_hunger_state
 player_update_hunger_state:
     sec
     rts
@@ -270,7 +273,6 @@ tai_door_prep:
     jsr glyph_clear_all
     lda #0
     sta door_state_count
-    sta mat_fleeing
     sta mat_action_dirty
     sta zp_mon_flags
     sta zp_view_x
@@ -321,7 +323,6 @@ tai_attack_once:
     jsr monster_init_table
     lda #0
     sta zp_game_flags
-    sta mat_fleeing
     sta zp_eff_speed
     sta player_pflags
     sta tai_attack_calls
@@ -1557,7 +1558,6 @@ test_start:
 
     // ==========================================
     // Test 16: Full HP monster moves TOWARD player (regression guard)
-    // Spawn with full HP, flee_threshold = HP/4, so HP > threshold
     // ==========================================
 !t16:
     jsr monster_init_table
@@ -1622,19 +1622,34 @@ test_start:
     sta tc_results + 15
 
     // ==========================================
-    // Test 17: Low HP monster moves AWAY from player
-    // Set HP=1, flee_threshold=5 → HP < threshold → flees
+    // Test 17: Low HP (< 1/4 spawn HP) monster still moves TOWARD player
+    // (MON-043: VMS creature.inc mon_move has no low-HP fleeing)
     // ==========================================
 !t17:
+    lda cr_hd_num + 4
+    pha
+    lda cr_hd_sides + 4
+    pha
+    lda cr_speed + 4
+    pha
+    lda #75
+    sta cr_hd_num + 4
+    lda #40
+    sta cr_hd_sides + 4
+    lda #(CR_MAX_HP | 1)        // Balrog-scale 3000 HP, normal speed 1
+    sta cr_speed + 4
+
     jsr monster_init_table
     lda #0
     sta zp_game_flags
+    sta zp_eff_speed
+    sta zp_turn_lo
 
     // Restore keyboard buffer
     lda #8
     sta $c6
 
-    // Create floor corridor from (20,15) to (30,15)
+    // Create floor corridor from (15,15) to (34,15)
     ldx #15
     lda map_row_lo,x
     sta zp_ptr0
@@ -1648,82 +1663,224 @@ test_start:
     cpy #35
     bne !t17_fill-
 
-    // Spawn Kobold at (25,15)
+    // Spawn at (25,15) via production monster_spawn_one (3000 = $0BB8 HP)
     lda #25
     sta ms_spawn_x
     lda #15
     sta ms_spawn_y
-    lda #4                      // Kobold
+    lda #4
     jsr monster_spawn_one
 
-    // Set awake, set HP=1, set flee_threshold=5
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    cmp #$b8
+    bne !t17_fail+
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    cmp #$0b
+    bne !t17_fail+
+    ldy #MX_RESERVED_0
+    lda (zp_ptr0),y
+    bne !t17_fail+
+    ldy #MX_RESERVED_1
+    lda (zp_ptr0),y
+    bne !t17_fail+
+
+    // Set awake and drop HP to 700 ($02BC < 750 = 3000 / 4)
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #$bc
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #$02
+    sta (zp_ptr0),y
+
+    // Player at (30, 15) — monster must step TOWARD player (x=25 -> 26)
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #26
+    bne !t17_fail+
+
+    // Stale saved threshold (750 = $02EE) in bytes 10-11 must also be ignored
+    ldy #MX_RESERVED_0
+    lda #$ee
+    sta (zp_ptr0),y
+    ldy #MX_RESERVED_1
+    lda #$02
+    sta (zp_ptr0),y
+
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #27
+    bne !t17_fail+
+
+    lda #$01
+    sta tc_results + 16
+    jmp !t17_cleanup+
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+!t17_cleanup:
+    pla
+    sta cr_speed + 4
+    pla
+    sta cr_hd_sides + 4
+    pla
+    sta cr_hd_num + 4
+
+    // ==========================================
+    // Test 18: Adjacent low-HP monster still attacks (MON-043)
+    // Part A: mobile monster with open retreat behind it attacks at 700/3000 HP
+    // Part B: CF_ATTACK_ONLY monster (Shrieker) at 1 HP attacks when adjacent
+    // ==========================================
+!t18:
+    :PatchJump(monster_attack_player, test_monster_attack_player)
+    lda #0
+    sta tai_attack_calls
+
+    lda cr_hd_num + 4
+    pha
+    lda cr_hd_sides + 4
+    pha
+    lda cr_speed + 4
+    pha
+    lda #75
+    sta cr_hd_num + 4
+    lda #40
+    sta cr_hd_sides + 4
+    lda #(CR_MAX_HP | 1)
+    sta cr_speed + 4
+
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_speed
+    sta zp_turn_lo
+    lda #8
+    sta $c6
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #23
+!t18_fill_a:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #29
+    bne !t18_fill_a-
+
+    lda #25
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+
     ldx #0
     jsr monster_get_ptr
     ldy #MX_FLAGS
     lda #MF_AWAKE
     sta (zp_ptr0),y
     ldy #MX_HP_LO
-    lda #1
+    lda #$bc
     sta (zp_ptr0),y
     ldy #MX_HP_HI
-    lda #0
-    sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    lda #5
-    sta (zp_ptr0),y
-    ldy #MX_FLEE_HI
-    lda #0
+    lda #$02
     sta (zp_ptr0),y
 
-    // Player at (30, 15) — monster should move AWAY (toward lower x)
-    lda #30
+    lda #26
     sta zp_player_x
     lda #15
     sta zp_player_y
 
-    // Run AI tick
     jsr monster_ai_tick
-
-    // Monster should have moved from x=25 to x=24 (away from player)
+    lda tai_attack_calls
+    cmp #1
+    bne !t18_parta_fail+
     ldx #0
     jsr monster_get_ptr
     ldy #MX_X
     lda (zp_ptr0),y
-    cmp #24
-    bne !t17_fail+
+    cmp #25
+    bne !t18_parta_fail+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #15
+    bne !t18_parta_fail+
 
-    lda #$01
-    sta tc_results + 16
-    jmp !t18+
-!t17_fail:
-    lda #$00
-    sta tc_results + 16
+    ldy #MX_RESERVED_0
+    lda #$ee
+    sta (zp_ptr0),y
+    ldy #MX_RESERVED_1
+    lda #$02
+    sta (zp_ptr0),y
 
-    // ==========================================
-    // Test 18: CF_ATTACK_ONLY monster at low HP stays put
-    // Type 6 (Shrieker) — can't move even when fleeing
-    // ==========================================
-!t18:
+    jsr monster_ai_tick
+    lda tai_attack_calls
+    cmp #2
+    bne !t18_parta_fail+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #25
+    bne !t18_parta_fail+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #15
+    beq !t18_parta_ok+
+!t18_parta_fail:
+    pla
+    sta cr_speed + 4
+    pla
+    sta cr_hd_sides + 4
+    pla
+    sta cr_hd_num + 4
+    jmp !t18_fail+
+!t18_parta_ok:
+    pla
+    sta cr_speed + 4
+    pla
+    sta cr_hd_sides + 4
+    pla
+    sta cr_hd_num + 4
+
     jsr monster_init_table
     lda #0
     sta zp_game_flags
-
-    // Restore keyboard buffer
     lda #8
     sta $c6
 
-    // Place floor at (30, 20)
+    // Place floor at (29, 20) and (30, 20)
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #30
-    lda #TILE_FLOOR | FLAG_LIT
-    sta (zp_ptr0),y
-    // Also place floor at (29, 20) for potential flee target
     ldy #29
     lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #30
     sta (zp_ptr0),y
 
     // Spawn Shrieker at (30, 20)
@@ -1734,7 +1891,6 @@ test_start:
     lda #6                      // Shrieker mushroom (CF_ATTACK_ONLY)
     jsr monster_spawn_one
 
-    // Set awake, low HP, high flee threshold
     ldx #0
     jsr monster_get_ptr
     ldy #MX_FLAGS
@@ -1746,23 +1902,24 @@ test_start:
     ldy #MX_HP_HI
     lda #0
     sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    lda #5
+    ldy #MX_RESERVED_0
+    lda #50
     sta (zp_ptr0),y
-    ldy #MX_FLEE_HI
+    ldy #MX_RESERVED_1
     lda #0
     sta (zp_ptr0),y
 
-    // Player at (31, 20)
+    // Player adjacent at (31, 20)
     lda #31
     sta zp_player_x
     lda #20
     sta zp_player_y
 
-    // Run AI tick
     jsr monster_ai_tick
 
-    // Monster should still be at (30, 20) — CF_ATTACK_ONLY can't move
+    lda tai_attack_calls
+    cmp #3
+    bne !t18_fail+
     ldx #0
     jsr monster_get_ptr
     ldy #MX_X
@@ -1782,9 +1939,7 @@ test_start:
     sta tc_results + 17
 
     // ==========================================
-    // Test 19: Confused + low HP → moves randomly (confusion overrides flee)
-    // Confused movement picks random direction, NOT flee direction
-    // Run multiple times, check position differs from flee path
+    // Test 19: Confused + low HP -> moves randomly
     // ==========================================
 !t19:
     lda #0
@@ -1823,7 +1978,7 @@ test_start:
     lda #4
     jsr monster_spawn_one
 
-    // Set awake, low HP, high flee threshold, MX_CONFUSE timer
+    // Set awake, low HP, MX_CONFUSE timer
     ldx #0
     jsr monster_get_ptr
     ldy #MX_FLAGS
@@ -1838,15 +1993,8 @@ test_start:
     ldy #MX_HP_HI
     lda #0
     sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    lda #10
-    sta (zp_ptr0),y
-    ldy #MX_FLEE_HI
-    lda #0
-    sta (zp_ptr0),y
 
-    // Player at (24, 25) — flee direction would be +x (to 26,25)
-    // Confused movement should sometimes go other directions
+    // Player at (24, 25)
     lda #24
     sta zp_player_x
     lda #25
@@ -2421,7 +2569,6 @@ test_start:
     lda #0
     sta tai_attack_calls
     sta mat_action_dirty
-    sta mat_fleeing
     lda zp_player_x
     sta mat_target_x
     lda zp_player_y
@@ -2447,7 +2594,6 @@ test_start:
     sta tai_rng_values + 1
     sta tai_attack_calls
     sta mat_action_dirty
-    sta mat_fleeing
     lda zp_player_x
     sta mat_target_x
     lda zp_player_y
@@ -2476,7 +2622,6 @@ test_start:
     lda #0
     sta mat_scene_dirty
     sta mat_action_dirty
-    sta mat_fleeing
     sta eff_detect_timer
     lda #20
     sta zp_player_x
