@@ -3011,14 +3011,14 @@ t28_known_cure_name:
     sta tc_results + 49
 
     // ==========================================
-    // Test 51: calc_stats applies Amulet of the Magi p1 deterministically.
-    // Regression guard: equipment bonuses must use raw arithmetic; the
-    // randomized chargen stat stepping (increment_stat) ratchets 18+ stats
-    // upward on every load otherwise.
+    // Test 51: calc_stats applies Amulet of the Magi p1 deterministically
+    // via VMS 18/xx stepping (in_statt: 15 -> 16 -> 17 -> 18 -> 28 -> 38).
+    // Regression guard: load-path rebuild must stay idempotent without
+    // rerolling chargen's randomized increment_stat.
     // ==========================================
 !t51:
     jsr item_init_inventory
-    lda #11
+    lda #15
     sta player_data + PL_INT_BASE    // Baked natural stat (mods included)
 
     lda #ITEM_SLOT_AMULET_OF_THE_MAGI
@@ -3029,16 +3029,16 @@ t28_known_cure_name:
     }
     lda #1
     sta inv_qty + EQUIP_AMULET
-    lda #19
+    lda #5
     sta inv_p1 + EQUIP_AMULET
 
     jsr player_calc_stats
     lda player_data + PL_INT_CUR
-    cmp #30                     // 11 + 19, exactly
+    cmp #38                     // 15 + 5 via in_statt -> 38 (18/20), exactly
     bne !t51_fail+
     jsr player_calc_stats
     lda player_data + PL_INT_CUR
-    cmp #30                     // idempotent rebuild, no ratchet
+    cmp #38                     // idempotent rebuild, no ratchet
     bne !t51_fail+
 
     lda #$01

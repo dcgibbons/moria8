@@ -110,77 +110,95 @@ apply_modifier:
     clc
     adc #1
     sta am_count
-!dec_loop:
     lda stat_work
-    jsr decrement_stat
-    sta stat_work
+!dec_loop:
+    jsr chargen_decrement_stat
     dec am_count
     bne !dec_loop-
-    rts
+    beq !store+
 !positive:
     sta am_count
-!inc_loop:
     lda stat_work
+!inc_loop:
     jsr increment_stat
-    sta stat_work
     dec am_count
     bne !inc_loop-
+!store:
+    sta stat_work
 !done:
     rts
 
 am_count: .byte 0  // Loop counter for apply_modifier (safe from X clobber)
+
+// chargen_decrement_stat — Decrement a stat using create.inc / Umoria
+// character-creation bands (separate from runtime de_statp in decrement_stat).
+// Input: A = current stat value (3-118)
+// Output: A = new stat value
+// Clobbers: X, Y, zp_temp3, zp_temp4, zp_math* (via math_dice)
+chargen_decrement_stat:
+    cmp #109
+    bcs !cdec_sub1+
+    cmp #88
+    bcs !cdec_88_108+
+    cmp #19
+    bcs !cdec_19_87+
+    cmp #4
+    bcc !cdec_done+
+!cdec_sub1:
+    sbc #1
+    rts
+!cdec_88_108:
+    ldx #6
+    ldy #2
+    bne !cdec_roll+
+!cdec_19_87:
+    ldx #15
+    ldy #5
+!cdec_roll:
+    pha
+    lda #1
+    jsr math_dice
+    pla
+    sec
+    sbc zp_math_a
+    cmp #19
+    bcs !cdec_done+
+    lda #18
+!cdec_done:
+    rts
 
 // increment_stat — Increment a stat using umoria's randomized step logic
 // Input: A = current stat value (3-118)
 // Output: A = new stat value
 // Clobbers: zp_temp3, zp_temp4, zp_math* (via math_dice)
 increment_stat:
+    cmp #108
+    bcs !inc_add1+
+    cmp #88
+    bcs !inc_88_107+
     cmp #18
-    bcs !above_17+
-    // stat < 18: simple +1
+    bcs !inc_18_87+
+!inc_add1:
     clc
     adc #1
-    rts
-!above_17:
-    cmp #88
-    bcs !above_87+
-    // stat 18-87: add rng(15)+5 = add 6-20
-    pha
-    lda #1
-    ldx #15
-    ldy #5
-    jsr math_dice           // 1d15+5 = 6..20
-    pla
-    clc
-    adc zp_math_a
-    cmp #119
-    bcc !inc_ok+
-    lda #118                // Cap at 118 (18/100)
-!inc_ok:
-    rts
-!above_87:
-    cmp #108
-    bcs !above_107+
-    // stat 88-107: add rng(6)+2 = add 3-8
-    pha
-    lda #1
+    bne !inc_cap+
+!inc_88_107:
     ldx #6
     ldy #2
-    jsr math_dice           // 1d6+2 = 3..8
+    bne !inc_roll+
+!inc_18_87:
+    ldx #15
+    ldy #5
+!inc_roll:
+    pha
+    lda #1
+    jsr math_dice           // 1d15+5 (6..20) or 1d6+2 (3..8)
     pla
     clc
     adc zp_math_a
+!inc_cap:
     cmp #119
-    bcc !inc_ok2+
-    lda #118
-!inc_ok2:
-    rts
-!above_107:
-    // stat > 107: +1
-    clc
-    adc #1
-    cmp #119
-    bcc !inc_ok3+
-    lda #118
-!inc_ok3:
+    bcc !inc_done+
+    lda #118                // Cap at 118 (18/100)
+!inc_done:
     rts

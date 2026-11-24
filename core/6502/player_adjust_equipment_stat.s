@@ -1,6 +1,7 @@
 #importonce
 // player_adjust_equipment_stat.s — Apply/remove a deterministic equipment stat
-// delta (carry set equips; carry clear unequips; raw arithmetic preserves drains).
+// bonus/penalty via VMS 18/xx stepping (carry set equips; carry clear unequips;
+// floor/ceiling residuals in player_stat_res preserve drains cleanly).
 // Owner: Default resident on C64, Plus/4, and Atari 8-bit; C128ResidentWorld
 // (128.world) on C128; A2PlaySlot (a2.play) on Apple IIe; ItemActionsOverlay
 // (OVL.ITEMS) on CX16. (BBC Master defines its equivalent in BeebPlaySlot+OVL.ITEMS.)
@@ -8,7 +9,7 @@
 // Callers: player_recalc_equipment.s and player_item_commands.s (both in
 // OVL.ITEMS on CX16, reached externally via tramp_item_recalc; resident or in
 // OVL.ITEMS on the four Default/128.world ports). Calls resident equip_stat_mask_x
-// and player_apply_stat_delta_y.
+// and player_step_equip_stat_y.
 player_adjust_equipment_stat:
 #if !HAL_PLATFORM_COMPACT_PLAY_SLOT
     ldx piw_equip
@@ -28,7 +29,7 @@ player_adjust_equipment_stat:
     bcc !paes_skip+
     pha
     lda stat_work
-    jsr player_apply_stat_delta_y
+    jsr player_step_equip_stat_y
     cpy #PL_CON_CUR - PL_STR_CUR
     bne !paes_pop+
     txa
