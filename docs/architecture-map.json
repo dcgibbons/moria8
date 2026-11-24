@@ -231,7 +231,7 @@
       "policy_doc": "docs/CX16_MEMORY_CONTRACT.md",
       "plan_doc": "docs/CX16_PORT_PLAN.md",
       "product_prg": { "name": "MORIA8.PRG", "range": "$0801-$9387", "bytes": 35718 },
-      "product_image": { "name": "moria8-cx16.zip", "format": "ZIP bundle (23 files: MORIA8.PRG, CX16.AUXDATA, CX16.HUFFDATA, MONSTER.CAT/EXT, ITEM.CAT, 13 OVL.*, TITLE, LEGALUI, LICENSE, SOURCE-OFFER)" },
+      "product_image": { "name": "moria8-cx16.zip", "format": "ZIP bundle (25 files: MORIA8.PRG, AUTOBOOT.X16, manifest.json, CX16.AUXDATA, CX16.HUFFDATA, MONSTER.CAT/EXT, ITEM.CAT, 13 OVL.*, TITLE, LEGALUI, LICENSE, SOURCE-OFFER)" },
       "cartridge": { "name": "moria8-cx16.crt", "type": "128 KB CX16 ROM Banks 32-39 ($C000-$FFFF via ZP $01)", "used_bytes": 122656, "capacity_bytes": 131072, "assets": 23 },
       "overlay_count": 13,
       "resident_bytes": 48749,

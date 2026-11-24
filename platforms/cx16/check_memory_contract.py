@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import tempfile
@@ -155,6 +156,12 @@ def check_artifacts(build_dir: Path = BUILD) -> int:
     )
     checks += 1
 
+    for forbidden in ("AUTOBOOT.X16", "manifest.json"):
+        if (build_dir / forbidden).exists():
+            raise ContractViolation(
+                f"packaging-only file {forbidden} must not live in runtime -fsroot dir {build_dir}"
+            )
+
     if build_dir.resolve() == BUILD.resolve():
         cat_errs = check_item_catalog_ports.verify_port("cx16")
         if cat_errs:
@@ -163,8 +170,10 @@ def check_artifacts(build_dir: Path = BUILD) -> int:
         checks += 1
         default_zip = ROOT / "build" / "moria8-cx16.zip"
         if default_zip.is_file():
-            check_zip_bundle(default_zip, build_dir=build_dir, data_dir=ROOT / "data")
-            print(f"ASSERT {default_zip.name} PASS 23 entries")
+            entry_count = check_zip_bundle(
+                default_zip, build_dir=build_dir, data_dir=ROOT / "data"
+            )
+            print(f"ASSERT {default_zip.name} PASS {entry_count} entries")
             checks += 1
 
     print(f"RESULT {checks} asserts 0 failures")
@@ -175,12 +184,18 @@ def check_zip_bundle(
     zip_path: Path,
     build_dir: Path = BUILD,
     data_dir: Path = ROOT / "data",
-) -> None:
-    """Validate shipping moria8-cx16.zip entries and LF->CR compliance files."""
+    version_file: Path = ROOT / "version.json",
+) -> int:
+    """Validate shipping moria8-cx16.zip entries, AUTOBOOT.X16, manifest.json, and LF->CR compliance files."""
     if not zip_path.is_file():
         raise ContractViolation(f"missing CX16 zip bundle: {zip_path}")
     expected_prg_names = {spec.filename for spec in PRG_SPECS}
-    expected_names = expected_prg_names | {"LICENSE", "SOURCE-OFFER"}
+    expected_names = expected_prg_names | {
+        "LICENSE",
+        "SOURCE-OFFER",
+        "AUTOBOOT.X16",
+        "manifest.json",
+    }
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
             bad_member = zf.testzip()
@@ -214,8 +229,60 @@ def check_zip_bundle(
                     raise ContractViolation(
                         f"{zip_path.name}: {spec.filename} differs from {disk_file}"
                     )
+            got_autoboot = zf.read("AUTOBOOT.X16")
+            if got_autoboot != zf.read("MORIA8.PRG"):
+                raise ContractViolation(
+                    f"{zip_path.name}: AUTOBOOT.X16 differs from MORIA8.PRG"
+                )
+            try:
+                manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ContractViolation(
+                    f"{zip_path.name}: invalid manifest.json: {exc}"
+                ) from exc
+            if not isinstance(manifest, dict):
+                raise ContractViolation(f"{zip_path.name}: manifest.json must be a JSON object")
+            if "resources" in manifest:
+                raise ContractViolation(
+                    f"{zip_path.name}: manifest.json must omit 'resources' due to upstream WebEmulator bug"
+                )
+            expected_fields = {
+                "manifest_version": "1.0.0",
+                "name": "Moria8",
+                "author": "Chad Gibbons",
+                "license": "GPL-3.0-or-later",
+                "ram": "512",
+                "start_prg": "MORIA8.PRG",
+            }
+            allowed_keys = set(expected_fields) | {"app_version"}
+            extra_keys = sorted(set(manifest) - allowed_keys)
+            if extra_keys:
+                raise ContractViolation(
+                    f"{zip_path.name}: manifest.json has unexpected keys: {extra_keys}"
+                )
+            for key, want_val in expected_fields.items():
+                if manifest.get(key) != want_val:
+                    raise ContractViolation(
+                        f"{zip_path.name}: manifest.json {key}={manifest.get(key)!r}, expected {want_val!r}"
+                    )
+            app_ver = manifest.get("app_version")
+            if not isinstance(app_ver, str) or not app_ver:
+                raise ContractViolation(
+                    f"{zip_path.name}: manifest.json app_version must be a non-empty string"
+                )
+            if not version_file.is_file():
+                raise ContractViolation(f"missing version file: {version_file}")
+            try:
+                want_ver = json.loads(version_file.read_text(encoding="utf-8"))["cx16"]
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+                raise ContractViolation(f"invalid version file {version_file}: {exc}") from exc
+            if app_ver != want_ver:
+                raise ContractViolation(
+                    f"{zip_path.name}: manifest.json app_version={app_ver!r} != {want_ver!r}"
+                )
     except zipfile.BadZipFile as exc:
         raise ContractViolation(f"{zip_path.name}: invalid zip file: {exc}") from exc
+    return len(expected_names)
 
 
 def parse_bank_constants(memory_text: str, catalog_enabled: bool = True) -> dict[str, int]:
@@ -556,8 +623,10 @@ def selftest() -> int:
         tmp = Path(td)
         bdir = tmp / "cx16"
         ddir = tmp / "data"
+        vfile = tmp / "version.json"
         bdir.mkdir()
         ddir.mkdir()
+        vfile.write_text('{"cx16": "2.0.0"}\n', encoding="utf-8")
         (ddir / "LICENSE").write_bytes(b"Line1\nLine2\n")
         (ddir / "SOURCE-OFFER").write_bytes(b"Offer1\nOffer2\n")
         for spec in PRG_SPECS:
@@ -566,13 +635,26 @@ def selftest() -> int:
             (bdir / spec.filename).write_bytes(
                 bytes((spec.start & 0xFF, spec.start >> 8)) + body
             )
+        good_manifest = json.dumps(
+            {
+                "manifest_version": "1.0.0",
+                "name": "Moria8",
+                "author": "Chad Gibbons",
+                "app_version": "2.0.0",
+                "license": "GPL-3.0-or-later",
+                "ram": "512",
+                "start_prg": "MORIA8.PRG",
+            }
+        )
         good_zip = tmp / "moria8-cx16.zip"
         with zipfile.ZipFile(good_zip, "w") as zf:
             for spec in PRG_SPECS:
                 zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("AUTOBOOT.X16", (bdir / "MORIA8.PRG").read_bytes())
+            zf.writestr("manifest.json", good_manifest)
             zf.writestr("LICENSE", b"Line1\rLine2\r")
             zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
-        check_zip_bundle(good_zip, build_dir=bdir, data_dir=ddir)
+        assert check_zip_bundle(good_zip, build_dir=bdir, data_dir=ddir, version_file=vfile) == 25
         checks += 1
 
         bad_zip_missing = tmp / "missing.zip"
@@ -580,10 +662,12 @@ def selftest() -> int:
             for spec in PRG_SPECS:
                 if spec.filename != "ITEM.CAT":
                     zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("AUTOBOOT.X16", (bdir / "MORIA8.PRG").read_bytes())
+            zf.writestr("manifest.json", good_manifest)
             zf.writestr("LICENSE", b"Line1\rLine2\r")
             zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
         try:
-            check_zip_bundle(bad_zip_missing, build_dir=bdir, data_dir=ddir)
+            check_zip_bundle(bad_zip_missing, build_dir=bdir, data_dir=ddir, version_file=vfile)
         except ContractViolation:
             checks += 1
         else:
@@ -593,14 +677,160 @@ def selftest() -> int:
         with zipfile.ZipFile(bad_zip_lf, "w") as zf:
             for spec in PRG_SPECS:
                 zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("AUTOBOOT.X16", (bdir / "MORIA8.PRG").read_bytes())
+            zf.writestr("manifest.json", good_manifest)
             zf.writestr("LICENSE", b"Line1\nLine2\n")
             zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
         try:
-            check_zip_bundle(bad_zip_lf, build_dir=bdir, data_dir=ddir)
+            check_zip_bundle(bad_zip_lf, build_dir=bdir, data_dir=ddir, version_file=vfile)
         except ContractViolation:
             checks += 1
         else:
             raise AssertionError("zip with unconverted LF LICENSE unexpectedly passed")
+
+        bad_zip_autoboot = tmp / "bad_autoboot.zip"
+        with zipfile.ZipFile(bad_zip_autoboot, "w") as zf:
+            for spec in PRG_SPECS:
+                zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("AUTOBOOT.X16", b"WRONG")
+            zf.writestr("manifest.json", good_manifest)
+            zf.writestr("LICENSE", b"Line1\rLine2\r")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        try:
+            check_zip_bundle(bad_zip_autoboot, build_dir=bdir, data_dir=ddir, version_file=vfile)
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("zip with mismatched AUTOBOOT.X16 unexpectedly passed")
+
+        bad_zip_manifest = tmp / "bad_manifest.zip"
+        bad_manifest = json.dumps(
+            {
+                "manifest_version": "1.0.0",
+                "name": "Moria8",
+                "author": "Chad Gibbons",
+                "app_version": "2.0.0",
+                "license": "GPL-3.0-or-later",
+                "ram": "512",
+                "start_prg": "MORIA8.PRG",
+                "resources": ["MORIA8.PRG"],
+            }
+        )
+        with zipfile.ZipFile(bad_zip_manifest, "w") as zf:
+            for spec in PRG_SPECS:
+                zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("AUTOBOOT.X16", (bdir / "MORIA8.PRG").read_bytes())
+            zf.writestr("manifest.json", bad_manifest)
+            zf.writestr("LICENSE", b"Line1\rLine2\r")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        try:
+            check_zip_bundle(bad_zip_manifest, build_dir=bdir, data_dir=ddir, version_file=vfile)
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("zip with resources in manifest.json unexpectedly passed")
+
+        bad_zip_no_autoboot = tmp / "no_autoboot.zip"
+        with zipfile.ZipFile(bad_zip_no_autoboot, "w") as zf:
+            for spec in PRG_SPECS:
+                zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("manifest.json", good_manifest)
+            zf.writestr("LICENSE", b"Line1\rLine2\r")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        try:
+            check_zip_bundle(bad_zip_no_autoboot, build_dir=bdir, data_dir=ddir, version_file=vfile)
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("zip missing AUTOBOOT.X16 unexpectedly passed")
+
+        bad_zip_no_manifest = tmp / "no_manifest.zip"
+        with zipfile.ZipFile(bad_zip_no_manifest, "w") as zf:
+            for spec in PRG_SPECS:
+                zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("AUTOBOOT.X16", (bdir / "MORIA8.PRG").read_bytes())
+            zf.writestr("LICENSE", b"Line1\rLine2\r")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        try:
+            check_zip_bundle(bad_zip_no_manifest, build_dir=bdir, data_dir=ddir, version_file=vfile)
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("zip missing manifest.json unexpectedly passed")
+
+        bad_manifest_cases = (
+            ("malformed_json", "{not valid json"),
+            (
+                "wrong_start_prg",
+                json.dumps(
+                    {
+                        "manifest_version": "1.0.0",
+                        "name": "Moria8",
+                        "author": "Chad Gibbons",
+                        "app_version": "2.0.0",
+                        "license": "GPL-3.0-or-later",
+                        "ram": "512",
+                        "start_prg": "WRONG.PRG",
+                    }
+                ),
+            ),
+            (
+                "extra_key",
+                json.dumps(
+                    {
+                        "manifest_version": "1.0.0",
+                        "name": "Moria8",
+                        "author": "Chad Gibbons",
+                        "app_version": "2.0.0",
+                        "license": "GPL-3.0-or-later",
+                        "ram": "512",
+                        "ram_kb": "512",
+                        "start_prg": "MORIA8.PRG",
+                    }
+                ),
+            ),
+            (
+                "version_mismatch",
+                json.dumps(
+                    {
+                        "manifest_version": "1.0.0",
+                        "name": "Moria8",
+                        "author": "Chad Gibbons",
+                        "app_version": "1.9.9",
+                        "license": "GPL-3.0-or-later",
+                        "ram": "512",
+                        "start_prg": "MORIA8.PRG",
+                    }
+                ),
+            ),
+        )
+        for case_name, manifest_payload in bad_manifest_cases:
+            bad_case_zip = tmp / f"bad_{case_name}.zip"
+            with zipfile.ZipFile(bad_case_zip, "w") as zf:
+                for spec in PRG_SPECS:
+                    zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+                zf.writestr("AUTOBOOT.X16", (bdir / "MORIA8.PRG").read_bytes())
+                zf.writestr("manifest.json", manifest_payload)
+                zf.writestr("LICENSE", b"Line1\rLine2\r")
+                zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+            try:
+                check_zip_bundle(bad_case_zip, build_dir=bdir, data_dir=ddir, version_file=vfile)
+            except ContractViolation:
+                checks += 1
+            else:
+                raise AssertionError(f"zip {case_name} unexpectedly passed")
+
+        try:
+            check_zip_bundle(
+                good_zip,
+                build_dir=bdir,
+                data_dir=ddir,
+                version_file=tmp / "missing_version.json",
+            )
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("missing version.json unexpectedly passed")
 
     print(f"RESULT {checks} asserts 0 failures")
     return 0
@@ -616,8 +846,10 @@ def main() -> int:
         if args.selftest:
             return selftest()
         if args.zip is not None:
-            check_zip_bundle(args.zip, build_dir=args.build_dir, data_dir=ROOT / "data")
-            print(f"ASSERT {args.zip.name} PASS 23 entries")
+            entry_count = check_zip_bundle(
+                args.zip, build_dir=args.build_dir, data_dir=ROOT / "data"
+            )
+            print(f"ASSERT {args.zip.name} PASS {entry_count} entries")
             print("RESULT 1 asserts 0 failures")
             return 0
         return check_artifacts(args.build_dir)

@@ -17,9 +17,10 @@ as [VICE](https://vice-emu.sourceforge.io/) (Commodore),
 
 ### Three New Platforms
 
-- **Commander X16 (`moria8-cx16-v2.0.0.crt`, `moria8-cx16-v2.0.0.zip`):**
-  80-column VERA display with 65C02 banked-RAM caching (`512 KB`), cartridge
-  boot or HostFS/SD archive, and KERNAL/HostFS save support.
+- **Commander X16 (`moria8-cx16-v2.0.0.zip`, `moria8-cx16-v2.0.0.crt`):**
+  80-column VERA display with 65C02 banked-RAM caching (`512 KB`), SD card /
+  HostFS / CX16 WebEmulator bundle (including `AUTOBOOT.X16` and
+  `manifest.json`) or 128 KB ROM cartridge boot, and KERNAL/HostFS save support.
 - **Atari 8-bit (`moria8-atari8-v2.0.0.car`, `moria8-atari8-v2.0.0.atr`):**
   40-column build supporting stock 64 KB XL/XE systems (Atari 800XL / 65XE) as
   well as auto-detected 128 KB Atari 130XE extended-RAM caching, plus a 128 KB
@@ -41,7 +42,7 @@ editions:
 - **Commodore 128 (`moria8-c128-v2.0.0.crt`):** ROM cartridge booting straight
   to the 80-column VDC title screen.
 - **Commodore Plus/4 (`moria8-plus4-v2.0.0.crt`):** ROM cartridge image.
-- **Commander X16 (`moria8-cx16-v2.0.0.crt`):** 512 KB ROM cartridge image.
+- **Commander X16 (`moria8-cx16-v2.0.0.crt`):** 128 KB ROM cartridge image.
 - **Atari 8-bit (`moria8-atari8-v2.0.0.car`):** 128 KB cartridge image.
 
 ### Gameplay, Item, Monster & Save Parity
@@ -80,7 +81,7 @@ editions:
 | **Commodore 128** | `moria8-c128-v2.0.0.crt` | `moria8-c128-v2.0.0.d64`, `moria8-c128-v2.0.0.d71`, `moria8-c128-v2.0.0.d81` | 80-column VDC; choose 1541, 1571, 1581, or CRT cartridge |
 | **Commodore Plus/4** | `moria8-plus4-v2.0.0.crt` | `moria8-plus4-v2.0.0.d64` | 1541 D64 or CRT cartridge |
 | **Apple II** | — | `moria8-apple2-v2.0.0.po` | ProDOS 140 KB 5.25" image (Apple IIe 128K, IIc, IIgs) |
-| **Commander X16** | `moria8-cx16-v2.0.0.crt` | `moria8-cx16-v2.0.0.zip` | Extract ZIP to SD card / HostFS or attach CRT in `x16emu` |
+| **Commander X16** | `moria8-cx16-v2.0.0.crt` | `moria8-cx16-v2.0.0.zip` | Extract ZIP into an SD card subfolder (e.g. `MORIA8/`, then `BOOT` via `AUTOBOOT.X16`) or upload to the CX16 WebEmulator (`manifest.json`), or attach 128 KB CRT in `x16emu` |
 | **Atari 8-bit** | `moria8-atari8-v2.0.0.car` | `moria8-atari8-v2.0.0.atr` | 128 KB cartridge image or DOS 2.5 ATR (64 KB XL/XE + 128 KB 130XE) |
 | **Acorn BBC Master 128** | — | `moria8-bbcmaster-v2.0.0.ssd` | Auto-booting DFS `.ssd` (`*EXEC !BOOT` / Shift+Break) |
 
@@ -95,7 +96,7 @@ For cartridge mounting, drive setup, and emulator launch details, see the
 - **Apple II:** Apple IIe with 128K (extended 80-column text card), Apple IIc,
   or Apple IIgs and one or two ProDOS disk drives.
 - **Commander X16:** Commander X16 with 512 KB banked RAM and SD card or HostFS
-  (or `x16emu`).
+  (or `x16emu` / CX16 WebEmulator).
 - **Atari 8-bit:** Atari 800XL / 65XE (64 KB) or 130XE (128 KB) with disk
   drive / SIO2SD / FujiNet or 128 KB cartridge support.
 - **Acorn BBC Master 128:** BBC Master 128 with Shadow/Sideways RAM enabled
@@ -121,16 +122,18 @@ floppy made for you, visit this
 
 ## Restrictions and Save Media
 
-1. Program media cannot be used as save media and the game blocks it. Always
+1. The v2.0.0 release does not support save files from previous releases due to
+   the significant changes.
+2. Program media cannot be used as save media and the game blocks it. Always
    prepare or mount a separate save disk so upgrading versions never overwrites
    your characters.
-2. On disk and cartridge editions alike, use `D)isk Setup` (title menu) or
+3. On disk and cartridge editions alike, use `D)isk Setup` (title menu) or
    `Shift+S` (in game) to select and initialize save media (`4` save slots per
    save disk/volume).
-3. On Commodore systems, program and save drives may use device numbers `8-11`.
+4. On Commodore systems, program and save drives may use device numbers `8-11`.
    Cartridge editions interchange save disks directly with the matching
    platform's disk edition.
-4. Unusual I/O failures display compact status codes (for example IEC status
+5. Unusual I/O failures display compact status codes (for example IEC status
    or DOS error details); include the exact text if reporting an issue.
 
 ## What's New in Earlier Releases

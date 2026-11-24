@@ -56,6 +56,8 @@ PROGRAM_ARTIFACTS = {
     "OVL.HOME",
     "OVL.STORAGE",
     "OVL.TITLE",
+    "AUTOBOOT.X16",
+    "MANIFEST.JSON",
 }
 
 
