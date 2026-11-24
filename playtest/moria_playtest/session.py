@@ -66,6 +66,18 @@ class LevelWatch:
     def __init__(self) -> None:
         self.clvl: int | None = None
         self.since = 0
+        self.place: tuple[int, int] | None = None
+        self.place_since = 0
+
+    def stuck(self, step: int, xp: int, dlvl: int, limit: int) -> str | None:
+        """The finding's text once ``limit`` steps pass with neither the
+        experience nor the dungeon level changed, else None (the goal's
+        ``stuck_steps``)."""
+        if (xp, dlvl) != self.place:
+            self.place, self.place_since = (xp, dlvl), step
+        elif limit and step - self.place_since >= limit:
+            return f"no experience and no new dungeon level for {step - self.place_since} steps: {xp} XP on DL{dlvl}"
+        return None
 
     def note(self, step: int, clvl: int, dlvl: int, limit: int) -> str | None:
         """The finding's text once ``limit`` steps pass without a level, else None."""
@@ -444,6 +456,10 @@ class Character:
                     if stuck is not None:
                         self.file_finding("no_level", "bot", stuck, obs)
                         break   # a budget-out, as the step budget would have ended it
+                    stuck = levels_seen.stuck(self.result.steps, obs.xp, obs.dlvl, self.goal.stuck_steps)
+                    if stuck is not None:
+                        self.file_finding("stuck", "bot", stuck, obs)
+                        break   # a budget-out too: the queue resumes it from its checkpoint
                 view = None
                 if tiles is not None:
                     # Catalog builds keep 32 dungeon rows, tier builds 57 (core/monster.s).

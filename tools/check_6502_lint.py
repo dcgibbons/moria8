@@ -28,6 +28,8 @@ SKIP_FILES = {
 LABEL_RE = re.compile(r"^\s*([A-Za-z_@.+!?][\w@.+!?-]*:)\s*")
 REDUNDANT_ZERO_COMPARE_RE = re.compile(r"^\s*(cmp|cpx|cpy)\s+#(?:\$00|0)\b", re.IGNORECASE)
 BRANCH_RE = re.compile(r"^\s*(bcc|bcs|beq|bne|bmi|bpl|bvc|bvs)\b", re.IGNORECASE)
+SMC_PLUS1_RE = re.compile(r"^([A-Za-z_@.+!?][\w@.+!?-]*)\s*\+\s*1(?:\s*,|\s*$)")
+SMC_WRITE_MNEMONICS = {"sta", "stx", "sty", "stz", "inc", "dec"}
 
 FLAG_SETTING_MNEMONICS = {
     "cmp": {"lda", "adc", "sbc", "and", "ora", "eor", "asl", "lsr", "rol", "ror", "pla", "txa", "tya"},
@@ -44,6 +46,7 @@ class Instruction:
     mnemonic: str
     operand: str
     line: str
+    labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -61,11 +64,17 @@ def strip_comment(line: str) -> str:
 
 
 def strip_leading_labels(line: str) -> str:
+    return extract_leading_labels(line)[1]
+
+
+def extract_leading_labels(line: str) -> tuple[list[str], str]:
+    labels: list[str] = []
     current = line
     while True:
         match = LABEL_RE.match(current)
         if not match:
-            return current
+            return labels, current
+        labels.append(match.group(1)[:-1])
         current = current[match.end():]
 
 
@@ -84,11 +93,15 @@ def iter_source_files(scan_roots: list[Path]) -> list[Path]:
 
 def parse_instructions(path: Path) -> list[Instruction]:
     instructions: list[Instruction] = []
+    pending_labels: list[str] = []
     for line_no, raw_line in enumerate(path.read_text().splitlines(), start=1):
-        code = strip_leading_labels(strip_comment(raw_line)).strip()
+        line_labels, rest = extract_leading_labels(strip_comment(raw_line))
+        code = rest.strip()
         if not code:
+            pending_labels.extend(line_labels)
             continue
         if code.startswith(".") or code.startswith(":"):
+            pending_labels.clear()
             continue
         parts = code.split(None, 1)
         mnemonic = parts[0].lower()
@@ -100,15 +113,31 @@ def parse_instructions(path: Path) -> list[Instruction]:
                 mnemonic=mnemonic,
                 operand=operand,
                 line=raw_line.rstrip(),
+                labels=tuple(pending_labels + line_labels),
             )
         )
+        pending_labels.clear()
     return instructions
+
+
+def find_smc_plus1_targets(instructions: list[Instruction]) -> set[str]:
+    targets: set[str] = set()
+    for instr in instructions:
+        if instr.mnemonic not in SMC_WRITE_MNEMONICS:
+            continue
+        match = SMC_PLUS1_RE.match(instr.operand.strip())
+        if match:
+            targets.add(match.group(1))
+    return targets
 
 
 def find_redundant_zero_compares(instructions: list[Instruction]) -> list[Finding]:
     findings: list[Finding] = []
+    smc_targets = find_smc_plus1_targets(instructions)
     for index, instr in enumerate(instructions):
         if not REDUNDANT_ZERO_COMPARE_RE.match(strip_comment(instr.line)):
+            continue
+        if any(label in smc_targets for label in instr.labels):
             continue
         if index == 0 or index + 1 >= len(instructions):
             continue
@@ -172,6 +201,8 @@ def scan_paths(scan_roots: list[Path]) -> tuple[list[Finding], list[Finding], in
 def run_self_test() -> int:
     sample_path = ROOT / "core" / "demo_sample.s"
     sample_lines = [
+        "stx smc_prev + 1",
+        "sta smc_same + 1",
         "lda some_value",
         "cmp #0",
         "beq done",
@@ -183,17 +214,30 @@ def run_self_test() -> int:
         "eor #$ff",
         "cmp #0",
         "bne found",
+        "lda table,x",
+        "smc_prev:",
+        "cmp #$00",
+        "bne next",
+        "lda table,y",
+        "smc_same: cmp #0",
+        "beq match",
+        "lda other,x",
+        "unpatched:",
+        "cmp #$00",
+        "beq dead",
     ]
-    instructions = []
+    instructions: list[Instruction] = []
+    pending_labels: list[str] = []
     for idx, line in enumerate(sample_lines, start=1):
-        instructions.extend(parse_instructions_from_line(sample_path, idx, line))
+        parsed, pending_labels = parse_instructions_from_line(sample_path, idx, line, pending_labels)
+        instructions.extend(parsed)
 
     errors = find_redundant_zero_compares(instructions)
     warnings = find_branch_jump_ladders(instructions)
 
     failures: list[str] = []
-    if len(errors) != 2:
-        failures.append(f"expected 2 redundant-compare errors, got {len(errors)}")
+    if len(errors) != 3:
+        failures.append(f"expected 3 redundant-compare errors, got {len(errors)}")
     if len(warnings) != 1:
         failures.append(f"expected 1 branch-jump warning, got {len(warnings)}")
     if failures:
@@ -204,10 +248,17 @@ def run_self_test() -> int:
     return 0
 
 
-def parse_instructions_from_line(path: Path, line_no: int, raw_line: str) -> list[Instruction]:
-    code = strip_leading_labels(strip_comment(raw_line)).strip()
-    if not code or code.startswith(".") or code.startswith(":"):
-        return []
+def parse_instructions_from_line(
+    path: Path, line_no: int, raw_line: str, pending_labels: list[str] | None = None
+) -> tuple[list[Instruction], list[str]]:
+    pending = list(pending_labels or ())
+    line_labels, rest = extract_leading_labels(strip_comment(raw_line))
+    code = rest.strip()
+    if not code:
+        pending.extend(line_labels)
+        return [], pending
+    if code.startswith(".") or code.startswith(":"):
+        return [], []
     parts = code.split(None, 1)
     return [
         Instruction(
@@ -216,8 +267,9 @@ def parse_instructions_from_line(path: Path, line_no: int, raw_line: str) -> lis
             mnemonic=parts[0].lower(),
             operand=parts[1] if len(parts) > 1 else "",
             line=raw_line.rstrip(),
+            labels=tuple(pending + line_labels),
         )
-    ]
+    ], []
 
 
 def main() -> int:

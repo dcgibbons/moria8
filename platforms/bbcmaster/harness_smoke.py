@@ -15,7 +15,7 @@ the disk's own MORIA8P go where the loader's tables put them, and a stub at
 from the disk). MAME's bbcm has no save states to start from a booted title.
 
 Suite:
-  18 behavioral scenarios on bbcm (128 KB BBC Master 128 with Sideways RAM cache).
+  19 behavioral scenarios on bbcm (128 KB BBC Master 128 with Sideways RAM cache).
 """
 
 from __future__ import annotations
@@ -120,6 +120,8 @@ SCENARIOS = (
     "balrog_victory",
     "death_flow",
     "save_load",
+    "save_negative",
+    "save_write_negative",
     "disk_setup",
     "acid_armour",
     "catalog_spawn",
@@ -698,6 +700,243 @@ function run()
     manager.machine:exit()
 end
 """
+    elif scenario in ("save_negative", "save_write_negative"):
+        ssd_setup_lua = """
+    local save_drive = nil
+    for _, image in pairs(manager.machine.images) do
+        if image.filename == "LEGAL_SAVE_IMAGE" then save_drive = image end
+    end
+    assert_line("neg_save_drive_found", save_drive ~= nil)
+    local function wait_fdc_idle()
+        for _ = 1, 600 do
+            if (prog:read_u8(0xFE28) & 0x80) == 0 then break end
+            emu.wait(1/60)
+        end
+        wait_frames(8)
+    end
+    local function read_ssd()
+        local f = assert(io.open("LEGAL_SAVE_IMAGE", "rb"))
+        local data = f:read("a")
+        f:close()
+        return data
+    end
+    local function write_ssd(data)
+        local f = assert(io.open("LEGAL_SAVE_IMAGE", "wb"))
+        f:write(data)
+        f:close()
+    end
+    local function patch_ssd(patches)
+        local f = assert(io.open("LEGAL_SAVE_IMAGE", "r+b"))
+        for _, p in ipairs(patches) do
+            f:seek("set", p[1])
+            f:write(p[2])
+        end
+        f:flush()
+        f:close()
+    end
+    local function locate_save0()
+        local ssd = read_ssd()
+        local count8 = ssd:byte(0x105 + 1)
+        for i = 0, (count8 // 8) - 1 do
+            local off0 = 8 + i * 8 + 1
+            local name = ssd:sub(off0, off0 + 6):gsub(" +$", "")
+            local dir = ssd:byte(off0 + 7) & 0x7F
+            if name == "SAVE0" and dir == 0x24 then
+                local off1 = 0x108 + i * 8 + 1
+                local b4, b5, b6, b7 = ssd:byte(off1 + 4, off1 + 7)
+                local save_len = b4 + b5 * 256 + (((b6 >> 4) & 3) << 16)
+                local start_sec = b7 + ((b6 & 3) << 8)
+                return ssd, i, save_len, start_sec
+            end
+        end
+        return ssd, nil, 0, 0
+    end
+    local function make_ssd_image(entries)
+        local img = {}
+        for i = 1, 800 * 256 do img[i] = 0 end
+        local title = "M8SAVE"
+        for i = 1, #title do img[i] = title:byte(i) end
+        for idx0, e in ipairs(entries) do
+            local idx = idx0 - 1
+            local dir, name, length, start_sec, payload = e[1], e[2], e[3], e[4], e[5]
+            local o0 = 8 + idx * 8
+            for i = 1, 7 do img[o0 + i] = (i <= #name) and name:byte(i) or 0x20 end
+            img[o0 + 8] = dir
+            local o1 = 0x108 + idx * 8
+            img[o1 + 5] = length & 0xFF; img[o1 + 6] = (length >> 8) & 0xFF
+            local len_hi = (length >> 16) & 3
+            local sec_hi = (start_sec >> 8) & 3
+            img[o1 + 7] = (3 << 6) | (len_hi << 4) | (3 << 2) | sec_hi
+            img[o1 + 8] = start_sec & 0xFF
+            if payload then
+                for i = 1, #payload do img[start_sec * 256 + i] = payload:byte(i) end
+            end
+        end
+        img[0x105 + 1] = #entries * 8
+        img[0x106 + 1] = (3 << 4) | 0x03
+        img[0x107 + 1] = 0x20 -- 800 sectors
+        local magic = "M8SAVE"
+        for i = 1, #magic do img[2 * 256 + i] = magic:byte(i) end
+        local chars = {}
+        for i = 1, #img do chars[i] = string.char(img[i]) end
+        return table.concat(chars)
+    end
+    local function init_drive1()
+        local ok = start_new_game("A")
+        assert_line("neg_chargen_town_ready", ok)
+        send_key(0xD3) -- SHIFT+S -> Disk Setup
+        assert_line("neg_disk_setup_prompt", wait_screen("DISK SETUP", 80))
+        send_key(0x32)
+        wait_screen("Save drive (0-3):", 60)
+        send_key(0x31)
+        wait_screen("Save:    :1", 60)
+        send_key(0x33)
+        assert_line("neg_init_prompt", wait_screen("Initialize this disk? (Y/N)", 80))
+        send_key(0x59)
+        assert_line("neg_slot_prompt", wait_screen("Select Slot 1-4", 120))
+    end
+"""
+        if scenario == "save_write_negative":
+            body = "function run()\n" + ssd_setup_lua + """
+    init_drive1()
+    wait_fdc_idle()
+    save_drive:unload()
+    local ssd_blank = read_ssd()
+    -- 1. Full DFS .ssd leaving 17 free sectors so OSFIND $80 opens $.SAVE0 and
+    --    save_write_map_banked hits Disk full mid-map.
+    write_ssd(make_ssd_image({{0x24, "FILLER", 780 * 256, 20}, {0x24, "MORIAID", 6, 2}}))
+    assert_line("neg_mount_wr_full", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x31)
+    assert_line("neg_wr_full_rejected", wait_screen("Disk error!", 120) and not screen_has("Game saved!") and not screen_has("N)ew"))
+    send_key(0x20)
+    for _ = 1, 80 do
+        if in_town() then break end
+        emu.wait(0.1)
+    end
+    assert_line("neg_wr_full_recovery", in_town())
+
+    -- 2. Locked $.SAVE0 ($80 dir bit) -> OSFIND $C0 raises DFS BRK ("Locked").
+    wait_fdc_idle()
+    save_drive:unload()
+    write_ssd(make_ssd_image({{0xA4, "SAVE0", 64, 3, "MORIA01" .. string.char(0x22)}, {0x24, "MORIAID", 6, 2}}))
+    assert_line("neg_mount_wr_locked", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0xD3)
+    assert_line("neg_wr_locked_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_wr_locked_overwrite", wait_screen("Overwrite?", 80))
+    send_key(0x59)
+    assert_line("neg_wr_locked_more", wait_screen("-more-", 80))
+    send_key(0x20)
+    assert_line("neg_wr_locked_rejected", wait_screen("Disk error!", 120) and not screen_has("Game saved!") and not screen_has("N)ew"))
+    send_key(0x20)
+    for _ = 1, 80 do
+        if in_town() then break end
+        emu.wait(0.1)
+    end
+    assert_line("neg_wr_locked_recovery", in_town())
+
+    -- 3. Restore blank initialized :1 and verify clean save write still succeeds.
+    wait_fdc_idle()
+    save_drive:unload()
+    write_ssd(ssd_blank)
+    assert_line("neg_mount_wr_valid", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0xD3)
+    assert_line("neg_wr_valid_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    for _ = 1, 300 do
+        wait_frames(15)
+        if screen_has("Overwrite?") then send_key(0x59) end
+        if screen_has("-more-") or screen_has("saved") then send_key(0x20) end
+        if screen_has("N)ew") and screen_has("L)oad") then break end
+    end
+    assert_line("neg_title_after_save", screen_has("N)ew") and screen_has("L)oad"))
+    wait_fdc_idle()
+    save_drive:unload()
+    local _, found_idx, save_len, start_sec = locate_save0()
+    local ssd_after = read_ssd()
+    local hdr_off = start_sec * 256
+    assert_line("neg_save0_v22_located", found_idx ~= nil and ssd_after:byte(hdr_off + 7 + 1) == 0x22 and save_len > 1000)
+    manager.machine:exit()
+end
+"""
+        else:
+            body = "function run()\n" + ssd_setup_lua + """
+    init_drive1()
+    send_key(0x31)
+    for _ = 1, 300 do
+        wait_frames(15)
+        if screen_has("Overwrite?") then send_key(0x59) end
+        if screen_has("-more-") or screen_has("saved") then send_key(0x20) end
+        if screen_has("N)ew") and screen_has("L)oad") then break end
+    end
+    assert_line("neg_title_after_save", screen_has("N)ew") and screen_has("L)oad"))
+
+    wait_fdc_idle()
+    save_drive:unload()
+    local ssd, found_idx, save_len, start_sec = locate_save0()
+    local hdr_off = start_sec * 256
+    local orig_ver = ssd:byte(hdr_off + 7 + 1)
+    local orig_tail = ssd:byte(hdr_off + save_len)
+    local sec1_off = 0x108 + (found_idx or 0) * 8
+    local orig_l4, orig_l5, orig_l6 = ssd:byte(sec1_off + 4 + 1, sec1_off + 6 + 1)
+    assert_line("neg_save0_v22_located", found_idx ~= nil and orig_ver == 0x22 and save_len > 1000)
+
+    -- 2. Wrong Save version ($21 -> Unsupported save.)
+    patch_ssd({{hdr_off + 7, string.char(0x21)}})
+    assert_line("neg_mount_v21", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_v21_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_v21_rejected", wait_screen("Unsupported save.", 100) and not in_town())
+    send_key(0x20)
+    assert_line("neg_v21_title_recovery", wait_screen("N)ew", 80) and screen_has("L)oad"))
+
+    -- 3. Corrupt checksum at exact full file size (Save file corrupt!)
+    wait_fdc_idle()
+    save_drive:unload()
+    patch_ssd({
+        {hdr_off + 7, string.char(0x22)},
+        {hdr_off + save_len - 1, string.char(orig_tail ~ 0xFF)},
+    })
+    assert_line("neg_mount_cksum", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_cksum_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_cksum_rejected", wait_screen("Save file corrupt!", 120) and not in_town())
+    send_key(0x20)
+    assert_line("neg_cksum_title_recovery", wait_screen("N)ew", 80) and screen_has("L)oad"))
+
+    -- 4. Truncated Save V2 ($22 header intact, DFS EOF at 64 bytes -> Save file corrupt!)
+    wait_fdc_idle()
+    save_drive:unload()
+    patch_ssd({
+        {hdr_off + save_len - 1, string.char(orig_tail)},
+        {sec1_off + 4, string.char(0x40, 0x00, orig_l6 & 0xCF)},
+    })
+    assert_line("neg_mount_trunc", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_trunc_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    assert_line("neg_trunc_rejected", wait_screen("Save file corrupt!", 100) and not in_town())
+    send_key(0x20)
+    assert_line("neg_trunc_title_recovery", wait_screen("N)ew", 80) and screen_has("L)oad"))
+
+    -- 5. Restore valid Save V2 metadata and prove clean subsequent load succeeds
+    wait_fdc_idle()
+    save_drive:unload()
+    patch_ssd({{sec1_off + 4, string.char(orig_l4, orig_l5, orig_l6)}})
+    assert_line("neg_mount_valid", save_drive:load("LEGAL_SAVE_IMAGE") == nil)
+    send_key(0x4C)
+    assert_line("neg_valid_slots", wait_screen("Select Slot 1-4", 80))
+    send_key(0x31)
+    for _ = 1, 300 do
+        wait_frames(15)
+        if prog:read_u8(PLAYER_X_ADDR) > 0 and screen_has("Welcome back") then break end
+    end
+    assert_line("neg_valid_reload_ok", prog:read_u8(PLAYER_X_ADDR) > 0 and in_town())
+    manager.machine:exit()
+end
+"""
     elif scenario == "chargen_town":
         body = """
 function run()
@@ -757,9 +996,10 @@ function run()
     local t1 = prog:read_u8(TURN_ADDR) | (prog:read_u8(TURN_ADDR + 1) << 8)
     print("auto-rest turns: " .. ((t1 - t0) & 0xFFFF))
     assert_line("auto_rest_keeps_resting", ((t1 - t0) & 0xFFFF) >= 3)
-    -- Wave 5.2 cold evictions: S4 ('?' drop in OVL_HELP), S3 (locked door pick
-    -- swapping OVL_HELP -> OVL_CHEST -> OVL_HELP), and S2a+S2b (acid trap at X=1
-    -- preserving X across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
+    -- Wave 5.2 cold evictions + Option A door/pick co-location: S4 ('?' drop in
+    -- OVL_HELP), S3 (locked door pick co-located inside OVL_CHEST, so retrying
+    -- performs zero DFS loads), and S2a+S2b (acid trap at X=1 preserving X
+    -- across tramp_trap_trigger and OVL_CHEST across tramp_item_recalc).
     write_play_u8(AUTO_REST_ACTIVE_ADDR, 0)
     prog:write_u8(PLAYER_DATA_ADDR + PL_FLAGS, prog:read_u8(PLAYER_DATA_ADDR + PL_FLAGS) & (~PLF_RESTING & 0xFF))
     prog:write_u8(PLAYER_HP_ADDR, 60)
@@ -787,6 +1027,25 @@ function run()
     local saw_lock = wait_screen("lock.", 120)
     drain_more(2)
     assert_line("door_pick_returned", saw_lock and prog:read_u8(TURN_ADDR) ~= turn_d)
+    assert_line("door_pick_ovl_chest", prog:read_u8(CURRENT_OVL) == 10)
+    write_map_u8(px + 1, py, 0x80) -- Re-arm locked door for retry regression
+    prog:write_u8(DOOR_STATE_COUNT_ADDR, 1)
+    prog:write_u8(DOOR_STATE_X_ADDR, px + 1)
+    prog:write_u8(DOOR_STATE_Y_ADDR, py)
+    prog:write_u8(DOOR_STATE_VAL_ADDR, 20)
+    local dfs_b0 = prog:read_u8(BEEB_DFS_LOAD_TO_BANK_ADDR)
+    local dfs_b1 = prog:read_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR, 0x38)     -- SEC (trap any DFS load)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1, 0x60) -- RTS
+    local turn_d2 = prog:read_u8(TURN_ADDR)
+    send_key(0x4F) -- 'O' (open door)
+    assert_line("door_retry_dir", wait_screen("Direction?", 80))
+    send_key(0x4C) -- 'L' (east)
+    local saw_lock2 = wait_screen("lock.", 120)
+    drain_more(2)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR, dfs_b0)
+    prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1, dfs_b1)
+    assert_line("door_pick_retry_zero_dfs", saw_lock2 and prog:read_u8(TURN_ADDR) ~= turn_d2 and prog:read_u8(CURRENT_OVL) == 10)
     prog:write_u8(DOOR_STATE_COUNT_ADDR, 0)
     write_map_u8(px + 1, py, 0x00) -- bare TILE_FLOOR
     prog:write_u8(TRAP_COUNT_ADDR, 2)
@@ -961,7 +1220,7 @@ function run()
     wait_frames(40)
     assert_line("help_closed", in_town())
     send_key(0x56) -- 'V' System Info
-    assert_line("gameplay_sysinfo", wait_screen("Moria 8 - System Info", 100) and screen_has("Turn 0  Town") and screen_has("RNG:"))
+    assert_line("gameplay_sysinfo", wait_screen("Moria 8 - System Info", 100) and wait_screen("RNG:", 40) and screen_has("Turn 0  Town"))
     send_key(0x51) -- 'Q'
     wait_frames(40)
     assert_line("gameplay_sysinfo_close", in_town())
@@ -2052,7 +2311,7 @@ def run_scenario(
 
 def selftest() -> int:
     assert HOST_TIMEOUT_SECONDS <= 30, "AGENTS.md Rule 8 requires timeout <= 30s"
-    assert len(SCENARIOS) == 18, f"Expected 18 bbcm scenarios, got {len(SCENARIOS)}"
+    assert len(SCENARIOS) == 20, f"Expected 20 bbcm scenarios, got {len(SCENARIOS)}"
     syms = parse_symbols(SYM_PATH)
     if syms:
         assert syms.get("zp_player_x") == 0x002B, f"zp_player_x != $002B: {syms.get('zp_player_x')}"

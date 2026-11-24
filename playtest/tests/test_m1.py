@@ -286,6 +286,7 @@ class BrainM2Test(unittest.TestCase):
                               rows={0: "You feel your life draining away! the Grave Wight touches you."})
         arrived = command_obs(pos=(5, 5), dlvl=38, clvl=31, hp=300, mhp=300)
         bare = prepared(Brain(GOALS["deep"]))
+        bare.food = 20                                             # fed: a starving one eats first (below)
         bare.decide(arrived, view)                                 # on the level first
         bare.decide(drained, view)
         self.assertEqual((LIFE in bare.drained, bare.level.drained_bare, bare.drainers),
@@ -296,7 +297,10 @@ class BrainM2Test(unittest.TestCase):
         later = command_obs(pos=(5, 5), dlvl=39, clvl=31, hp=300, mhp=300)
         self.assertIsNone(bare.leave_deadly(later, view))          # nothing drains here
         view.creatures[(9, 5)] = Creature("W", 30, "Grave Wight")
-        self.assertIsNotNone(bare.leave_deadly(later, view))       # the drainer again: leave before it touches
+        # The drainer again, no touch yet and no stairs known: not home by
+        # Recall (359 such reads in 25 minutes, 2026-11-22); near stairs are
+        # walked to (test_a_drainer_in_view_is_walked_from_never_recalled_from).
+        self.assertIsNone(bare.leave_deadly(later, view))
         stocked = prepared(Brain(GOALS["deep"]))
         stocked.credit(RESTORE_LIFE, 2)
         view.creatures.clear()
@@ -304,6 +308,73 @@ class BrainM2Test(unittest.TestCase):
         stocked.decide(drained, view)
         self.assertFalse(stocked.level.drained_bare)
         self.assertIsNone(stocked.leave_deadly(drained, view))     # carried: fight on, restore after
+
+    def test_a_drainer_in_view_is_walked_from_never_recalled_from(self) -> None:
+        """C64 Balrog, 2026-11-22: clvl 36-39 characters without Restore Life
+        Levels recalled from DL37 on sight of each Wight or Wraith and back to
+        DL38-39, 359 times in 25 minutes across 16 runs. Not yet drained: the
+        stairs when near, no Word of Recall; drained, as before."""
+        from moria_playtest.view import Creature
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.recall, brain.food = 3, 20
+        none = town_view((5, 5), (5, 5), dlvl=37, stairs_type=0)              # no stairs known
+        none.creatures = {(12, 5): Creature("W", 38, "Emperor Wight")}
+        brain.drainers.add("Emperor Wight")
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=432, mhp=432)
+        self.assertIsNone(brain.leave_deadly(o, none))                        # no Recall home
+        near = town_view((5, 5), (5, 35), dlvl=37, stairs_type=0xA)           # up stairs 30 south
+        near.creatures = dict(none.creatures)
+        brain.level = type(brain.level)()
+        self.assertEqual(brain.leave_deadly(o, near).layer, "leave")          # walked to
+        brain.level = type(brain.level)(drained_bare=True)
+        self.assertEqual(brain.leave_deadly(o, none).layer, "recall")         # drained: as before
+
+    def test_a_drainer_is_never_closed_with_and_recalled_from_close(self) -> None:
+        """C64 Balrog, 2026-11-22: kept off Word of Recall, sixteen clvl 36-39
+        runs were drained 13 times a run-hour as hunt walked them into
+        drainers' reach. Known from the catalog before any touch: never
+        hunted, and one two squares off sends the bot home."""
+        from moria_playtest.view import Creature
+        knowledge.use_port("c64")                                         # the catalog's creatures
+        self.addCleanup(knowledge.use_port, "")
+        self.assertTrue({"Emperor Wight", "Nether Wraith", "Grape Jelly"} <= knowledge.drainer_names())
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.recall, brain.food = 3, 20
+        wight = Creature(*knowledge.kinds_by_name()["Emperor Wight"], "Emperor Wight")
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=432, mhp=432)
+        self.assertFalse(brain.engageable(wight, o))                      # never closed with
+        view = town_view((5, 5), (5, 5), dlvl=37, stairs_type=0)          # no stairs known
+        brain.level.deadly, brain.level.deadly_drain = (9, 5), True      # marked by the drainer in view
+        view.creatures = {(9, 5): wight}                                  # four squares off: no Recall
+        self.assertIsNone(brain.leave_deadly(o, view))
+        # Two squares off, not yet touched (known from the catalog): home by
+        # Word of Recall. A step out of its reach was undone by the next
+        # explore step, 27-35 times a run (C64 Balrog, 2026-11-22).
+        view.creatures = {(7, 5): wight}
+        self.assertEqual(brain.leave_deadly(o, view).layer, "recall")
+
+    def test_a_drain_never_comes_before_food(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 38 Human Rogue, drained with no
+        Restore Life Levels and its Word of Recall spent, walked a lap "to the
+        stairs" on DL4 for 953 steps and starved at 1/423 HP. A level marked
+        by a drain alone gives way to food; a one-breath killer does not."""
+        from moria_playtest.view import Creature
+        view = town_view((5, 5), (40, 40), dlvl=4, stairs_type=0xA)
+        o = command_obs(pos=(5, 5), dlvl=4, clvl=38, hp=423, mhp=423)
+        brain = prepared(Brain(GOALS["deep"]))
+        brain.level.drained_bare, brain.food = True, 0
+        self.assertIsNone(brain.leave_deadly(o, view))              # starving: food first
+        brain.food = 20
+        brain.level = type(brain.level)(drained_bare=True)
+        faint = command_obs(pos=(5, 5), dlvl=4, clvl=36, hp=50, mhp=288, rows={21: "bot Faint"})
+        self.assertIsNone(brain.leave_deadly(faint, view))          # the count shows food, the status Faint (Elf Mage)
+        brain.level = type(brain.level)(drained_bare=True)
+        self.assertIsNotNone(brain.leave_deadly(o, view))           # fed: leave, as before
+        brain.food = 0
+        brain.level = type(brain.level)(drained_bare=True)
+        kind = knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"]
+        view.creatures = {(9, 5): Creature(*kind, "Ancient Multi-Hued Dragon")}
+        self.assertIsNotNone(brain.leave_deadly(o, view))           # a breath that kills: away, fed or not
 
     def test_restore_life_levels_is_bought_at_the_black_market_rich(self) -> None:
         """C64 Balrog, 2026-11-21: the Temple seldom stocks Restore Life
@@ -2017,6 +2088,26 @@ class SealedTest(unittest.TestCase):
         self.assertIsNone(brain.identify_items(obs(110), view))                       # resting from it
         self.assertIsNotNone(brain.identify_items(obs(104 + IDENTIFY_FAIL_WAIT), view))   # then again
 
+    def test_an_unknown_staff_not_listed_for_identify_is_not_carried(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 38 Human Mage cast Identify at a
+        Cypress Staff, found it not in the list, cancelled and cast again,
+        846 times in 6,000 steps on one DL1 square."""
+        from moria_playtest.brain import IDENTIFY
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer
+        brain = Brain(for_character(GOALS["balrog"], "human-mage"))
+        brain.magic.known[IDENTIFY] = Prayer("b", 7, 23, "Magick II")
+        brain.unknown["Cypress Staff"] = 1
+        view = town_view((5, 5), (9, 9), dlvl=1)
+        o = command_obs(pos=(5, 5), dlvl=1, clvl=38, hp=343, mhp=343,
+                        rows={23: "HP:343/343  MP:146/153  AC:52  AU:100"})
+        self.assertEqual(brain.identify_items(o, view).reason, "identify the Cypress Staff")
+        brain.listed = True
+        listing = command_obs(rows={0: "Identify which item? (a-b)", 2: " a) a Wand of Frost (5 charges)",
+                                    3: " b) a Scroll of Word of Recall"})
+        self.assertEqual(brain.pick_item(listing).reason, "item to pick not listed: cancel")
+        self.assertIsNone(brain.identify_items(o, view))                 # not cast at it again
+
     def test_deep_the_long_escapes_mana_is_kept(self) -> None:
         """C64 Balrog, 2026-11-16: a clvl 36 Ranger cast Magic Missile at an
         Ancient White Dragon down to 4 of 103 mana, survived a breath at 65
@@ -2453,11 +2544,44 @@ class BreathGuardTest(unittest.TestCase):
 
     def test_in_a_lethal_breather_s_sight_it_teleports_first(self) -> None:
         from moria_playtest.brain import TELEPORT_STAFF
+        from moria_playtest.brain import HEALING
         brain = Brain(GOALS["deep"])
         brain.wands[TELEPORT_STAFF] = 3
+        brain.strong[HEALING] = 1          # one breath: a Healing carried, kept (86 short of 100)
         o = command_obs(pos=(10, 10), dlvl=29, clvl=32, hp=80, mhp=166)
         decision = brain.breath_guard(o, self.view())
         self.assertEqual((decision.layer, decision.reason), ("phase", f"the 'd' could breathe {self.burst}: use the {TELEPORT_STAFF}"))
+
+    def test_with_no_healing_left_two_breaths_are_lethal(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 37 Half-Orc Rogue at full HP fought
+        on in an Ancient White Dragon's sight with no Potion of Healing left,
+        and two breaths killed it. At full HP one breath (88 of 166) is not
+        lethal, two are: out of its sight; a Healing carried bridges them."""
+        from moria_playtest.brain import HEALING
+        walls = [(11, 8), (11, 9), (11, 11), (11, 12), (12, 9), (12, 11)]
+        o = command_obs(pos=(10, 10), dlvl=29, clvl=32, hp=166, mhp=166)
+        brain = Brain(GOALS["deep"])
+        brain.strong[HEALING] = 1
+        self.assertIsNone(brain.breath_guard(o, self.view(walls=walls)))
+        brain.strong[HEALING] = 0
+        decision = brain.breath_guard(o, self.view(walls=walls))
+        self.assertEqual((decision.layer, decision.reason),
+                         ("retreat", f"the 'd' could breathe {2 * self.burst}: out of its sight"))
+
+    def test_a_caster_s_spell_is_not_counted_twice(self) -> None:
+        """Build queue, 2026-11-23: Human Mages at clvl 2-7 read a Novice
+        caster's 24 as two breaths (48) against 35 HP, cast Phase Door 30-200
+        times a game and died on DL1-2 in eight of eight games. Two breaths
+        are a breather's: a spell alone, as one."""
+        caster = ("p", 2)
+        self.assertNotIn(caster, knowledge.breath_info())
+        self.assertEqual(knowledge.spell_burst()[caster], 24)
+        view = town_view((10, 10), (40, 40), dlvl=2)
+        view.creatures = {(16, 10): Creature(*caster)}
+        o = command_obs(pos=(10, 10), dlvl=2, clvl=5, hp=35, mhp=35)
+        brain = Brain(GOALS["deep"])
+        brain.phase = 3                                                # an escape at hand, as the Mages' spell
+        self.assertIsNone(brain.breath_guard(o, view))                 # 24 of 35: fight it
 
     def test_with_no_escape_it_steps_out_of_sight(self) -> None:
         brain = Brain(GOALS["deep"])
@@ -2513,6 +2637,22 @@ class BreathGuardTest(unittest.TestCase):
         self.assertEqual(decision.layer, "phase")
         self.assertIn("breaths unseen could breathe 436", decision.reason)
 
+    def test_with_no_healing_a_breath_two_of_which_kill_marks_the_level(self) -> None:
+        """C64 Balrog, 2026-11-21 and 22: three clvl 32-37 Rogues took one
+        breath of about 234 of 412 from an Ancient White Dragon, stayed on the
+        level, and died to the next. With no Potion of Healing two would kill:
+        the level is one to leave; with one carried, not yet."""
+        from moria_playtest.brain import HEALING
+        view = town_view((10, 10), (40, 40), dlvl=37)                 # the breather out of sight
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=37, hp=178, mhp=412)
+        brain = Brain(GOALS["deep"])
+        brain.strong[HEALING] = 1
+        brain.note_breath(o, view, 234)
+        self.assertIsNone(brain.level.deadly)
+        brain = Brain(GOALS["deep"])
+        brain.note_breath(o, view, 234)
+        self.assertEqual(brain.level.deadly, (10, 10))
+
     def test_an_unseen_breath_counts_twice(self) -> None:
         """2026-11-08: a level-37 Priest took 106 from an unseen Young
         Multi-Hued Dragon, explored on at 179/285, and was at 74 after the
@@ -2532,7 +2672,7 @@ class BreathGuardTest(unittest.TestCase):
         breathe 666"), was found, held and burned to death. Out of sight a
         Phase Door breaks no sight line: once a window, then a heal, then
         nothing here (leave_deadly's stairs or Word of Recall)."""
-        from moria_playtest.brain import CSW, UNSEEN_BREATH_STEPS
+        from moria_playtest.brain import CSW, HEALING, UNSEEN_BREATH_STEPS
         brain = Brain(GOALS["deep"])
         brain.phase = 20
         view = town_view((10, 10), (40, 40), dlvl=50)                 # nothing in view
@@ -2544,7 +2684,12 @@ class BreathGuardTest(unittest.TestCase):
         again.step = o.step + 3
         self.assertIsNone(brain.breath_guard(again, view))            # no second phase, nothing to heal with
         brain.strong[CSW] = 4
-        self.assertEqual(brain.breath_guard(again, view).layer, "quaff")
+        # A heal that cannot lift it over the breath is no answer: a clvl 35
+        # Gnome Rogue drank seven Cure Serious Wounds against 468 and died
+        # (C64 Balrog, 2026-11-21). leave_deadly's stairs or Recall instead.
+        self.assertIsNone(brain.breath_guard(again, view))
+        brain.strong[HEALING] = 1
+        self.assertEqual(brain.breath_guard(again, view).reason, "breaths unseen could breathe 666: drink Healing")
         later = command_obs(pos=(12, 10), dlvl=50, clvl=40, hp=191, mhp=410)
         later.step = o.step + 3 + UNSEEN_BREATH_STEPS
         brain.level.breath = (later.step, 333)                        # breathed on again, a window on
@@ -2604,6 +2749,42 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertTrue(self.deeper(brain, 34, clvl=31, mhp=256))    # onto DL35
         self.assertFalse(self.deeper(brain, 35, clvl=31, mhp=256))   # not DL36: DL38's natives
         self.assertFalse(self.deeper(brain, 36, clvl=31, mhp=256))   # nor DL37
+
+    def test_walking_down_far_above_its_deepest_it_takes_the_stairs_first(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 36 Human Ranger whose deepest was
+        DL40 arrived on a down staircase on each of DL1-34 and shot at what
+        was there: 35,000 shots, 96% of a run above DL30."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        brain.max_dlvl, brain.food = 40, 20
+        brain.deeper_ok = lambda obs: True                                 # type: ignore[method-assign]
+        view = town_view((5, 5), (5, 5), dlvl=12)                          # on a down staircase
+        view.creatures = {(9, 5): Creature("o", 10)}                       # something to shoot at
+        o = command_obs(pos=(5, 5), dlvl=12, clvl=36, hp=399, mhp=399)
+        self.assertEqual(brain.press_on(o, view).key, ord(">"))
+        hurt = command_obs(pos=(5, 5), dlvl=12, clvl=36, hp=150, mhp=399)
+        self.assertIsNone(brain.press_on(hurt, view))                       # the heals first
+        near = command_obs(pos=(5, 5), dlvl=36, clvl=36, hp=399, mhp=399)
+        self.assertIsNone(brain.press_on(near, town_view((5, 5), (5, 5), dlvl=36)))   # near its depth: as before
+        across = town_view((5, 5), (12, 5), dlvl=12)                       # down stairs across the room
+        across.creatures = {(5, 9): Creature("o", 10)}
+        self.assertEqual(brain.press_on(o, across).key, DIRS[(1, 0)])      # walked to, not fought for
+        brain.launcher, brain.ammo, brain.wielding_launcher = "Long Bow", 40, True
+        self.assertIsNone(brain.shoot(o, across))                          # no shot at what lives up here
+
+    def test_with_free_action_the_out_of_depth_margin_stays(self) -> None:
+        """C64 Balrog, 2026-11-22: with Free Action counting natives alone,
+        sixteen clvl 36-39 runs went to DL39, were drained 5 times a
+        run-hour and netted -21k experience a run-hour against DL37's +180k.
+        The margin holds them at DL37 until drainers are handled."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
+        brain.recall, brain.clw, brain.phase = 3, 20, 5
+        brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Speed",   # its kit on 2026-11-22
+                                 Amulet="Amulet of the Magi")                  # Free Action
+        o = lambda d: command_obs(pos=(10, 10), dlvl=d, clvl=39, hp=352, mhp=352)
+        self.assertTrue(brain.threat_ready(o(37), 37))
+        self.assertFalse(brain.threat_ready(o(38), 38))
 
     def test_threat_depth_wants_a_short_escape(self) -> None:
         """C64 Balrog, 2026-11-12: two clvl 36-37 Half-Orc Warriors with Free
@@ -2718,6 +2899,10 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=405))    # a third: 333 of 405
         self.assertFalse(self.deeper(brain, 50, clvl=40, mhp=405))   # no deeper than DL50: it is on every level
         self.assertFalse(self.deeper(brain, 69, clvl=40, mhp=405))   # (2026-11-11: dived on to DL70 and DL100)
+        # By the ring alone: weighed through Resist Heat too (111), clvl 40
+        # Priests at 322 and 362 HP died four times on DL50 in 90 minutes,
+        # its first breath through the ring with the timer down (C64 Balrog,
+        # 2026-11-23; maintainer: revert).
         self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=360))   # 333 is too much of 360
         self.assertFalse(self.deeper(brain, 49, clvl=39, mhp=405))   # the top level first
 
@@ -2869,6 +3054,123 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertIsNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=405, mhp=405), view))
         self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=405, mhp=405),
                                               town_view((10, 10), (40, 40), dlvl=49)))
+
+    def test_hunting_deep_no_way_up_hops_down_and_back_or_detects(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 39 Elf Priest searched DL37 dead ends
+        22,000 times in 2.4 hours, its level mapped and only down stairs known."""
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer
+        brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
+        brain.food, brain.magic.study_due, brain.magic.listed = 20, False, True
+        brain.magic.known = {"Detect Doors/Stairs": Prayer("g", 9, 7, "Beginners Handbook"),
+                             "Portal": Prayer("d", 11, 8, "Words of Wisdom")}
+        view = town_view((5, 5), (5, 5), walls=[(6, 5)], dlvl=37, stairs_type=0)   # a dead end, no stairs known
+        view.types[5 * COLS + 7] = UNKNOWN                                            # unknown space behind the wall
+        rows = {23: "HP:352/352 MP:150/157 AC:52 AU:16066K"}
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=352, mhp=352, rows=rows)
+        self.assertEqual(brain.stair_scum(o, view).reason, "no staircase in reach: pray Detect Doors/Stairs")
+        brain.pending = None
+        self.assertEqual(brain.stair_scum(o, view).layer, "search")       # shown nothing: the walls, as before
+        shallow = command_obs(pos=(5, 5), dlvl=10, clvl=39, hp=352, mhp=352, rows=rows)
+        self.assertEqual(brain.stair_scum(shallow, view).layer, "search")   # mapping depth: search as before
+        down = town_view((5, 5), (9, 9), walls=[(6, 5)], dlvl=37)          # only a down staircase known
+        down.types[5 * COLS + 7] = UNKNOWN
+        brain.deeper_ok = lambda obs: False                               # type: ignore[method-assign]   # DL38 too deep
+        hop = brain.stair_scum(o, down)
+        self.assertEqual((hop.layer, hop.reason), ("stair-scum", "no way up: path to the down stairs"))
+
+    def test_recall_comes_back_down_two_levels_past_ready(self) -> None:
+        """C64 Balrog, 2026-11-22: seven characters whose deepest level was
+        DL38-39, ready to DL37, walked down from DL1 after every town trip;
+        86-88% of two runs' steps were above DL30."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-rogue"))
+        o = command_obs(pos=(5, 5), dlvl=0, clvl=37, hp=412, mhp=412)
+        brain.max_dlvl = 39
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 37   # type: ignore[method-assign]
+        self.assertTrue(brain.recall_returns(o))                            # two past ready: recall, climb
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 36   # type: ignore[method-assign]
+        self.assertFalse(brain.recall_returns(o))                           # three past: walk down
+
+    def test_waiting_for_recall_out_of_a_creatures_reach(self) -> None:
+        """C64 Balrog, 2026-11-22: a clvl 39 Half-Elf Priest waited for Word of
+        Recall beside a Grape Jelly (it never moves) and was drained ~88,000
+        XP twice before the yank."""
+        from moria_playtest.brain import chebyshev
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-elf-priest"))
+        brain.recalling = True
+        view = town_view((5, 5), (20, 20), dlvl=37, stairs_type=0)
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=315, mhp=315)
+        self.assertEqual(brain.recall_trip(o, view).key, ord("5"))         # nothing beside: wait
+        view.creatures = {(6, 5): Creature("j", 12)}                       # a Grape Jelly beside
+        step = brain.recall_trip(o, view)
+        target = next((5 + dx, 5 + dy) for (dx, dy), k in DIRS.items() if k == step.key)
+        self.assertGreater(chebyshev(target, (6, 5)), 1)                    # a square out of its reach
+
+    def test_hunting_deep_the_hop_keeps_word_of_recall_coming_back(self) -> None:
+        """The hop below its depth sets the deepest level: never so deep
+        that Word of Recall stops coming back down (recall_keeps)."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
+        brain.food = 20
+        brain.deeper_ok = lambda obs: False                                # type: ignore[method-assign]
+        down = town_view((5, 5), (9, 9), walls=[(6, 5)], dlvl=37)          # only a down staircase known
+        down.types[5 * COLS + 7] = UNKNOWN
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=352, mhp=352)
+        brain.max_dlvl = 37
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 35   # type: ignore[method-assign]
+        self.assertIsNone(brain.way_on(o, down))                            # DL38 would leave recall behind
+        brain.depth_ready = lambda obs, dlvl, slack=0: dlvl - slack <= 37   # type: ignore[method-assign]
+        self.assertEqual(brain.way_on(o, down).reason, "no way up: path to the down stairs")
+
+    def test_explore_runs_a_straight_corridor(self) -> None:
+        """C64 Balrog, 2026-11-22: 53% of a clvl 39 Elf Priest's keys were
+        single explore steps; the game's Run (SHIFT+direction) walks a
+        corridor in one."""
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "elf-priest"))
+        walls = [(x, y) for x in range(0, 24) for y in (4, 6)]
+        view = town_view((5, 5), (1, 1), walls=walls, dlvl=37, stairs_type=0)
+        for x in range(21, 30):
+            view.types[5 * COLS + x] = UNKNOWN                         # the corridor's end unexplored
+        o = command_obs(pos=(5, 5), dlvl=37, clvl=39, hp=352, mhp=352)
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)] | 0x80)   # run east
+        brain.level.runs_from.clear()
+        self.assertEqual(brain.decide(o, view).key, DIRS[(1, 0)] | 0x80)
+        self.assertEqual(brain.last_move, ((5, 5), (6, 5)))           # its first square, for note_bump
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # the same run again from here: a step
+        brain.level.runs_from.clear()
+        brain.last_run = (-1, 0)
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # not straight back after a run west
+        weak = command_obs(pos=(5, 5), dlvl=37, clvl=20, hp=200, mhp=200)
+        self.assertEqual(brain.explore(weak, view).key, DIRS[(1, 0)])  # under RUN_MHP: step
+        view.creatures = {(40, 15): Creature("o", 10)}
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # something in view: step
+        view.creatures = {}
+        for x in range(8, 24):
+            view.types[5 * COLS + x] = WALL
+        view.types[6 * COLS + 8] = 0x0                                # the corridor turns south at x=7
+        for y in range(7, 12):
+            view.types[y * COLS + 8] = UNKNOWN
+        self.assertEqual(brain.explore(o, view).key, DIRS[(1, 0)])    # turning within four: step
+        brain.level = type(brain.level)()                              # a fresh level: its runs and explore trail
+        dark = town_view((5, 5), (1, 1), walls=walls, dlvl=37, stairs_type=0)
+        for x in range(7, 30):
+            dark.types[5 * COLS + x] = UNKNOWN                         # a dark corridor: one square seen ahead
+        self.assertEqual(brain.explore(o, dark).key, DIRS[(1, 0)] | 0x80)  # run into it
+        dark.types[5 * COLS + 7] = WALL                                # the corridor ends there
+        dark.types[4 * COLS + 6] = UNKNOWN
+        self.assertEqual(brain.explore(o, dark).key, DIRS[(1, 0)])    # against a wall: step
+
+    def test_find_traps_at_any_hp_a_dart_drains_con(self) -> None:
+        """C64 Balrog, 2026-11-22: without Find Traps a clvl 39 Elf Priest
+        stepped on three Lose-CON darts on DL37, 352 -> 238 max HP (38 a
+        point at its level), too weak for DL37 until town restored it."""
+        brain = self.priest()
+        brain.magic.spare = lambda obs, name: True                   # type: ignore[method-assign]
+        view = town_view((10, 10), (40, 40), dlvl=37)
+        self.assertIsNotNone(brain.find_traps(command_obs(pos=(10, 10), dlvl=37, clvl=39, hp=352, mhp=352), view))
 
     def test_diving_for_the_balrog_it_goes_straight_down(self) -> None:
         """C64 Balrog, 2026-11-11: a ready clvl 40 Priest walking down from
@@ -3302,6 +3604,36 @@ class ScoutTest(unittest.TestCase):
         self.assertEqual(brain.leave_deadly(command_obs(pos=(14, 10), dlvl=31, clvl=34, hp=245, mhp=245), on).key,
                          ord("<"))                                       # remembered once seen
 
+
+    def test_a_one_breath_killer_out_of_sight_finds_the_stairs_before_recall(self) -> None:
+        """C64 Balrog, 2026-11-22: clvl 38-39 Rogues detected one-breath
+        killers out of sight 82-99 steps into DL37-38, read Word of Recall
+        about 30 times in 25 minutes each, recalled back to DL39 and met the
+        next one. Out of sight and out of reach: the stairs-finding prayer,
+        then a walk of up to LEAVE_HIDDEN_WALK; in sight, Recall as before."""
+        from moria_playtest.magic import Prayer
+        kind = knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"]
+        brain = self.priest()
+        brain.magic.known["Detect Doors/Stairs"] = Prayer("g", 9, 7, "Beginners Handbook")
+        brain.magic.can = lambda obs, name: name == "Detect Doors/Stairs"   # type: ignore[method-assign]
+        brain.recall = 3
+        rows = {23: "HP:390/390 MP:150/150 AC:52 AU:100"}
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=38, hp=390, mhp=390, rows=rows)
+        walls = [(20, y) for y in range(0, 30)]                         # a wall between: no line to it
+        view = town_view((10, 10), (60, 25), walls=walls, dlvl=37, stairs_type=0)   # no stairs known
+        view.creatures = {(30, 10): Creature(*kind, "Ancient Multi-Hued Dragon")}
+        self.assertEqual(brain.leave_deadly(o, view).reason,
+                         "a creature that could kill in one breath, out of sight: pray Detect Doors/Stairs for the stairs")
+        brain.pending = None
+        self.assertEqual(brain.leave_deadly(o, view).layer, "recall")   # shown none: Recall
+        stairs = town_view((10, 10), (10, 35), walls=walls, dlvl=37, stairs_type=0xA)   # up stairs 25 south
+        stairs.creatures = dict(view.creatures)
+        brain.level.deadly = None
+        self.assertEqual(brain.leave_deadly(o, stairs).layer, "leave")  # walked, not recalled
+        seen = town_view((10, 10), (10, 35), dlvl=37, stairs_type=0xA)  # no wall: in its sight
+        seen.creatures = dict(view.creatures)
+        brain.level.deadly = None
+        self.assertEqual(brain.leave_deadly(o, seen).layer, "recall")   # as before
 
     def test_heroism_first_when_the_breath_is_ten_hp_too_many(self) -> None:
         """C64 Balrog, 2026-11-10 to 12: an Ancient Multi-Hued Dragon's 693
@@ -3963,6 +4295,29 @@ class ResistFireTest(unittest.TestCase):
         brain.note_breath(o, view, 82, "frost")
         self.assertEqual(brain.level.deadly, (10, 10))                 # the second: leave the level
 
+    def test_a_caster_that_kills_in_two_casts_is_teleported_from_not_walked_from(self) -> None:
+        """C64 Balrog, 2026-11-21: a clvl 33 Half-Elf Mage at 265/265 walked
+        toward the stairs from an unseen Ancient Blue Dragon casting at it
+        (240) and its next two breaths killed it, twice from one checkpoint.
+        Just after such a cast, stairs not at hand: teleport first."""
+        from moria_playtest.brain import CASTER_JUST_CAST, TELEPORT_SCROLL
+        kind = knowledge.kinds_by_name()["Ancient Blue Dragon"]
+        burst = knowledge.spell_burst()[kind]
+        brain = Brain(GOALS["deep"])
+        brain.teleports = 1
+        view = town_view((10, 10), (60, 40), dlvl=37)
+        view.stairs_up = lambda: {(40, 10)}                                 # type: ignore[method-assign]
+        hp = burst + 25                                                     # two casts kill
+        o = command_obs(pos=(10, 10), dlvl=37, clvl=33, hp=hp, mhp=hp)
+        brain.level.casters[kind] = o.step                                  # it just cast
+        decision = brain.leave_caster(o, view)
+        self.assertEqual((decision.key, brain.picking), (ord("R"), TELEPORT_SCROLL), decision.reason)
+        brain.level.casters[kind] = o.step - CASTER_JUST_CAST - 1           # not just now: walk
+        self.assertEqual(brain.leave_caster(o, view).layer, "leave-caster")
+        brain.level.casters[kind] = o.step
+        view.stairs_up = lambda: {(12, 10)}                                 # type: ignore[method-assign]
+        self.assertEqual(brain.leave_caster(o, view).layer, "leave-caster")  # the stairs at hand: walk
+
     def test_with_a_lethal_breather_about_it_rests_before_exploring(self) -> None:
         """2026-11-07: a level-35 Priest phased from a Mature Black Dragon
         (160), explored on at 137-152/252 and died to its next breath."""
@@ -3981,6 +4336,14 @@ class ResistFireTest(unittest.TestCase):
         self.assertIn("drink Cure Light Wounds", brain.rest(low, gone).reason)
         full = command_obs(pos=(10, 10), dlvl=31, clvl=35, hp=worst - 10, mhp=worst - 10)
         self.assertNotIn("drink", (brain.rest(full, gone) or Decision(0, "", "")).reason)   # full: no potion
+        # Full and still in reach of it: no rest, leave the level. A clvl 33
+        # Half-Elf Mage at 265/265 rested with an Ancient Blue Dragon's 240
+        # about and died to two breaths (C64 Balrog, 2026-11-21).
+        brain.level.deadly = None                                        # not yet a level to leave
+        brain.magic.mana = lambda obs: (90, 100)                         # type: ignore[method-assign]
+        self.assertEqual((brain.rest(full, gone), brain.level.deadly), (None, (10, 10)))
+        del brain.magic.mana
+        brain.level.deadly = None
         brain.clw = 0
         later = command_obs(pos=(10, 10), dlvl=31, clvl=35, hp=worst - 10, mhp=worst * 2)
         later.step = low.step + BREATHER_MEMORY

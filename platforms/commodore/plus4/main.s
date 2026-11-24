@@ -398,6 +398,7 @@ plus4_storage_marker_present:
     bcs !cdmp_close+
     jsr plus4_kernal_readst
     sta disk_error_readst
+    and #$fe
     bne !cdmp_close+
     lda #$82                    // DISK_ERR_MARKER_CHKIN
     jsr disk_error_set_phase
@@ -420,6 +421,7 @@ plus4_storage_marker_present:
     bne !cdmp_close+
     jsr plus4_kernal_readst
     sta disk_error_readst
+    and #$fe
     beq !cdmp_byte_ok+
     cmp #$40
     bne !cdmp_close+
@@ -439,8 +441,6 @@ plus4_storage_marker_present:
 !cdmp_done:
     lda disk_status
     beq !cdmp_status_done+
-    lda save_device             // the drive the marker was read from
-    sta disk_prompt_device
     jsr plus4_disk_read_command_status
     lda disk_status
     bne !cdmp_status_done+
@@ -771,20 +771,15 @@ plus4_storage_marker_write_resident:
     jsr plus4_kernal_close
     lda disk_status
     bne !cdmw_status_done+
-    lda save_device             // the drive the marker was written to
-    sta disk_prompt_device
     jsr plus4_disk_read_command_status
 !cdmw_status_done:
-    lda disk_status
-    beq !cdmw_ok+
-    sec
-    rts
-!cdmw_ok:
-    jsr disk_error_clear
-    clc
-    rts
+    jmp !cdmp_status_done-
 
 plus4_disk_read_command_status:
+    ldx save_device
+plus4_disk_read_command_status_x:
+    txa
+    pha
     // A read that times out (ST bit 1) before any digit came is a lost
     // transfer, not an answer: under JiffyDOS a byte the drive sends while
     // its disk-controller IRQ runs can arrive cut short, as $58 (playtest-disk
@@ -807,29 +802,41 @@ plus4_disk_read_command_status:
     tax
     tay
     jsr plus4_kernal_setnam
-    lda #hal_storage_cmd_channel
-    ldx disk_prompt_device
-    ldy #hal_storage_cmd_channel
-    jsr plus4_kernal_setlfs
-    jsr plus4_kernal_open
-    bcs !p4dcs_done+
+    pla
+    tax
+    jsr plus4_open_cmd_channel_x
+    bcc !p4dcs_open_ok+
+    sta disk_error_readst
+    rts
+!p4dcs_open_ok:
     ldx #hal_storage_cmd_channel
     jsr plus4_kernal_chkin
-    bcs !p4dcs_close+
+    bcc !p4dcs_chkin_ok+
+    sta disk_error_readst       // KERNAL error code (e.g. $05 = device not present)
+    jsr plus4_kernal_readst
+    beq !p4dcs_close+           // keep KERNAL error if bus ST == 0
+    sta disk_error_readst       // prefer bus ST (e.g. $80 = device not present)
+    bne !p4dcs_close+
+!p4dcs_chkin_ok:
+    jsr plus4_kernal_readst
+    sta disk_error_readst
+    and #$fe
+    bne !p4dcs_close+
     jsr plus4_kernal_chrin
     sta disk_error_dos0
     jsr plus4_kernal_readst
     sta disk_error_readst
+    and #$fe
     bne !p4dcs_first_failed+    // as on C128: no second digit after a failed read
     jsr plus4_kernal_chrin
     sta disk_error_dos1
     jsr plus4_kernal_readst
     sta disk_error_readst
+    and #$fe
+    bne !p4dcs_second_failed+
     jsr plus4_disk_status_to_disk_status
 !p4dcs_close:
-    jsr plus4_kernal_clrchn
-    lda #hal_storage_cmd_channel
-    jmp plus4_kernal_close
+    jmp plus4_close_cmd_channel
 !p4dcs_first_failed:
     and #$02                    // read timeout
     beq !p4dcs_close-
@@ -837,8 +844,13 @@ plus4_disk_read_command_status:
     eor #$30
     cmp #10                     // a digit: the drive answered
     bcc !p4dcs_close-
+    bcs !p4dcs_lost+            // C = 1 from cmp
+!p4dcs_second_failed:
+    and #$02                    // read timeout on byte 1
+    beq !p4dcs_close-
+!p4dcs_lost:
     inc p4dcs_lost
-    bcs !p4dcs_close-           // C = 1 from cmp
+    bne !p4dcs_close-
 !p4dcs_done:
     rts
 
@@ -869,26 +881,7 @@ plus4_dos_status_codes:
 // Entry point
 // ============================================================
 entry_main:
-    jsr disk_reset_session_state
-    jsr plus4_install_ram_irq_vectors
-
-    // BASIC ROM already banked out by bootstrap above
-
-    // Load banked runtime payload to $F000 before any $F000 trampoline calls.
-    jsr init_load_banked
-    jsr plus4_huff_index_install    // before any message
-    jsr plus4_high_bss_init         // zero-init $DF00-$DFFF before any recall/gameplay access
-
-    jsr generation_busy_install
-    jsr plus4_platform_services_install
-    jsr platform_services_assert_installed
-    jsr input_lock_charset_switch
-
-    lda #COL_BLACK
-    tax
-    lda plus4_color_attr,x
-    sta TED_BORDER
-    sta TED_BG
+    jsr plus4_boot_init_tail
 
 restart_entry:
     // --- Initialize subsystems ---
@@ -1383,8 +1376,11 @@ irq_no_blink_after_cld:
 // RAM at $FFFA/$FFFE. Return without touching KERNAL ROM, which is not visible
 // in that banking mode.
 plus4_irq_hidden_rom:
+    cld
+    pha
     lda TED_IRQ_STATUS
     sta TED_IRQ_STATUS
+    pla
     rti
 
 plus4_install_ram_irq_vectors:
@@ -1474,6 +1470,7 @@ plus4_ovl_caller_dispatch:
     bcs !tocd_fail+
 plus4_ovl_caller_jmp:
     jsr $0000
+!tocd_ret:
     php
     lda #0
     sta plus4_caller_ovl_restore
@@ -1481,11 +1478,8 @@ plus4_ovl_caller_jmp:
     plp
     rts
 !tocd_fail:
-    lda #0
-    sta plus4_caller_ovl_restore
-    jsr plus4_platform_runtime_resync
     clc
-    rts
+    bcc !tocd_ret-
 
 plus4_ovl_caller_epilogue:
     lda plus4_caller_ovl_restore
@@ -1739,7 +1733,7 @@ tramp_ego_append_suffix:
     iny
     cpx #COMBAT_MSG_BUF_LAST    // Buffer overflow protection
     bcs !teas_end+
-    jmp !teas_loop-
+    bcc !teas_loop-
 !teas_end:
     stx cmb_buf_idx
 !teas_done:
@@ -1864,36 +1858,29 @@ save_select_slot_prompt:
 #endif
 
 save_game:
+    lda #<save_game_impl
+    ldy #>save_game_impl
+    jmp !sg_common+
+
+load_game:
+    lda #<load_game_impl
+    ldy #>load_game_impl
+!sg_common:
+    sta !sg_jsr+ + 1
+    sty !sg_jsr+ + 2
     lda #OVL_STORAGE
     jsr overlay_load_no_kernal
     bcs !sg_fail+
-    sei
-    jsr plus4_bank_ram
-    jsr save_game_impl
+!sg_jsr:
+    jsr $0000
+!sg_ret:
     php
     jsr plus4_platform_runtime_resync
     plp
     rts
 !sg_fail:
-    jsr plus4_platform_runtime_resync
     clc
-    rts
-
-load_game:
-    lda #OVL_STORAGE
-    jsr overlay_load_no_kernal
-    bcs !lg_fail+
-    sei
-    jsr plus4_bank_ram
-    jsr load_game_impl
-    php
-    jsr plus4_platform_runtime_resync
-    plp
-    rts
-!lg_fail:
-    jsr plus4_platform_runtime_resync
-    clc
-    rts
+    bcc !sg_ret-
 
 #import "look_trampoline.s"
 
@@ -1901,8 +1888,6 @@ tramp_ui_recall:
     lda #OVL_DEATH
     jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    jsr plus4_bank_ram
     jsr ui_recall_display
 !done:
     jmp tramp_sr_epilogue
@@ -1934,10 +1919,8 @@ tramp_ui_identify:
 
 tramp_disk_setup:
     lda #OVL_STORAGE
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !tds_done+
-    sei
-    jsr plus4_bank_ram
     jsr disk_setup_run
     jmp tramp_sr_epilogue
 
@@ -1946,10 +1929,8 @@ tramp_disk_setup:
 
 tramp_disk_prepare_selected:
     lda #OVL_STORAGE
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !tdps_done+
-    sei
-    jsr plus4_bank_ram
     jsr disk_setup_prepare_selected
     php
     jsr plus4_platform_runtime_resync
@@ -1960,27 +1941,19 @@ tramp_disk_prepare_selected:
 // ============================================================
 // Store overlay trampolines — load overlay, bank out KERNAL, call $E000+
 // ============================================================
-// Shared preamble: ensure town overlay is loaded, then bank out KERNAL
-store_overlay_preamble:
-    lda #OVL_TOWN
-    jsr overlay_load
-    sei
-    jsr plus4_bank_ram
-    rts
-
 tramp_store_enter:
     lda zp_store_idx
     cmp #STORE_HOME
     beq !tse_home+
-    jsr store_overlay_preamble
+    lda #OVL_TOWN
+    jsr overlay_load_no_kernal
+    bcs !tse_done+
     jsr store_enter
     jmp tramp_sr_epilogue
 !tse_home:
     lda #OVL_HOME
     jsr overlay_load_no_kernal
     bcs !tse_done+
-    sei
-    jsr plus4_bank_ram
     jsr home_enter
 !tse_done:
     jmp tramp_sr_epilogue
@@ -2255,6 +2228,25 @@ plus4_item_cat_boot_end:
 #endif
 #endif
 
+plus4_boot_init_tail:
+    jsr disk_reset_session_state
+    jsr plus4_install_ram_irq_vectors
+    // Load banked runtime payload to $F000 before any $F000 trampoline calls.
+    jsr init_load_banked
+    jsr plus4_huff_index_install    // before any message
+    jsr plus4_high_bss_init         // zero-init $DF00-$DFFF before any recall/gameplay access
+    jsr generation_busy_install
+    jsr plus4_platform_services_install
+    jsr platform_services_assert_installed
+    jsr input_lock_charset_switch
+    lda #COL_BLACK
+    tax
+    lda plus4_color_attr,x
+    sta TED_BORDER
+    sta TED_BG
+    rts
+.assert "Plus/4 cold boot tail lives past catalog boot load", plus4_boot_init_tail >= catalog_boot_end, true
+
 // init_load_banked — Load banked runtime payload to $F000.
 // Called once at startup before any $F000 trampoline is used.
 // Clobbers: A, X, Y
@@ -2482,22 +2474,22 @@ plus4_require_program_media:
 save_append_disk_detail_plus4:
     lda #$20
     jsr screen_put_char
-    lda disk_error_dos0         // 0 or $ff: no DOS digits to show
-    beq !no_dos+
-    cmp #$ff                    // the drive never answered
-    bne !dos+
+    lda disk_error_dos0         // only two ASCII digits ($30..$39) are a DOS code
+    eor #$30
+    cmp #10
+    bcs !no_dos+
+    lda disk_error_dos1
+    eor #$30
+    cmp #10
+    bcs !no_dos+
+    lda disk_error_dos0
+    jsr screen_put_char
+    lda disk_error_dos1
+    jmp screen_put_char
 !no_dos:
     lda disk_error_phase
     ora disk_error_readst
     bne !status+
-    rts
-!dos:                           // A = disk_error_dos0
-    jsr screen_put_char
-    lda disk_error_dos1
-    cmp #$ff                    // only the first digit arrived
-    beq !no_dos1+
-    jmp screen_put_char
-!no_dos1:
     rts
 !status:
     lda #$24                    // $

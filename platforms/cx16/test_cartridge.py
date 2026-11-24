@@ -12,6 +12,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import wave
 
@@ -268,13 +269,15 @@ class CartBench(harness_smoke.X16Bench):
         else:
             raise ValueError(f"unknown mode {self.mode}")
 
-        cmd = [str(self.x16emu), "-testbench", "-warp", "-zeroram"]
-        rom_path = self.rom
-        if rom_path is None and (self.x16emu.parent / "rom.bin").is_file():
-            rom_path = self.x16emu.parent / "rom.bin"
-        if rom_path is not None and rom_path.is_file():
-            cmd += ["-rom", str(rom_path)]
-        cmd += cart_args + ["-fsroot", str(self.workdir), "-prg", str(stub_prg)]
+        rom_path = harness_smoke.resolve_rom_path(self.x16emu, self.rom)
+        cmd = [
+            str(self.x16emu),
+            "-testbench",
+            "-warp",
+            "-zeroram",
+            "-rom",
+            str(rom_path),
+        ] + cart_args + ["-fsroot", str(self.workdir), "-prg", str(stub_prg)]
 
         env = os.environ.copy()
         env["SDL_VIDEODRIVER"] = "dummy"
@@ -541,11 +544,32 @@ def check_legal_viewer(tb: harness_smoke.X16Bench, from_gameplay: bool) -> None:
     _read_legal_doc_to_eof(tb, "source_offer")
     tb.press("Q")
     tb.assert_line("legal_back_from_offer", tb.screen_has("License & Source"), "Q from SOURCE-OFFER did not return to legal menu")
+    tb.press("3")
+    tb.assert_line(
+        "legal_sysinfo_menu",
+        tb.screen_has("Moria 8 - System Info")
+        and tb.screen_has("Commander X16 (80-col VERA)")
+        and tb.screen_has("Cartridge")
+        and (not from_gameplay or tb.screen_has("Turn ")),
+        "key 3 did not show expected cartridge System Info",
+    )
+    tb.press("Q")
+    tb.assert_line("legal_sysinfo_back", tb.screen_has("1 License"), "Q from System Info did not return to legal menu")
     tb.press("Q")
     if from_gameplay:
         tb.assert_line("legal_help_return", tb.screen_has("Command Reference"), "Help screen was not restored")
         tb.press("Q")
         tb.assert_line("legal_return_town", tb.in_town(), "did not return to town after gameplay legal viewer")
+        tb.shift("V")
+        tb.assert_line(
+            "gameplay_sysinfo",
+            tb.screen_has("Moria 8 - System Info")
+            and tb.screen_has("Cartridge")
+            and tb.screen_has("RNG:"),
+            "SHIFT+V did not open gameplay System Info on cartridge",
+        )
+        tb.press("Q")
+        tb.assert_line("gameplay_sysinfo_close", tb.in_town(), "Q from gameplay System Info did not return to town")
     else:
         tb.assert_line("legal_return_title", tb.on_title(), "did not return to title after title legal viewer")
 
@@ -602,10 +626,19 @@ def run_cold_boot_gif_check(x16emu: Path, rom: Path | None, mode: str, media_pat
     if gif_path.exists():
         gif_path.unlink()
 
-    cmd = [str(x16emu), "-warp", "-gif", str(gif_path), "-fsroot", str(fsroot)]
-    if rom is not None and rom.is_file():
-        cmd += ["-rom", str(rom)]
-    cmd += ["-cart" if mode == "crt" else "-cartbin", str(media_path)]
+    rom_path = harness_smoke.resolve_rom_path(x16emu, rom)
+    cmd = [
+        str(x16emu),
+        "-warp",
+        "-gif",
+        str(gif_path),
+        "-fsroot",
+        str(fsroot),
+        "-rom",
+        str(rom_path),
+        "-cart" if mode == "crt" else "-cartbin",
+        str(media_path),
+    ]
 
     env = os.environ.copy()
     env["SDL_VIDEODRIVER"] = "dummy"
@@ -747,6 +780,7 @@ def run_cold_boot_live_sound_irq_check(
 
     wav_path = work_dir / "cold_live.wav"
     dump_path = work_dir / "dump.bin"
+    rom_path = harness_smoke.resolve_rom_path(x16emu, rom)
     cmd = [
         str(x16emu),
         "-dump",
@@ -755,13 +789,11 @@ def run_cold_boot_live_sound_irq_check(
         str(wav_path),
         "-fsroot",
         str(fsroot),
+        "-rom",
+        str(rom_path),
+        "-cart",
+        str(temp_crt),
     ]
-    rom_path = rom
-    if rom_path is None and (x16emu.parent / "rom.bin").is_file():
-        rom_path = x16emu.parent / "rom.bin"
-    if rom_path is not None and rom_path.is_file():
-        cmd += ["-rom", str(rom_path)]
-    cmd += ["-cart", str(temp_crt)]
 
     env = os.environ.copy()
     env["SDL_VIDEODRIVER"] = "dummy"
@@ -875,10 +907,16 @@ def run_cartridge_suite(x16emu: Path, rom: Path | None) -> int:
     finally:
         tb.close()
 
-    # 3. Reload cartridge save in a fresh -cart session + descend to DL16/DL50 monster catalog
+    # 3. Negative Save V2 checks then reload cartridge save in a fresh -cart session + descend to DL16/DL50
     tb_reload = CartBench(x16emu, rom, save_fsroot, cart_syms, "crt", CART_IMAGE, boot_syms)
     try:
         tb_reload.start(boot_to_title=True)
+        harness_smoke.verify_negative_save_cases(
+            tb_reload,
+            save_fsroot / sav_files[0],
+            prefix="cart_neg",
+            reload_valid=False,
+        )
         load_character_from_title(tb_reload)
         name_bytes = bytes(tb_reload.read_u8(cart_syms["player_data"] + i) for i in range(4))
         tb_reload.assert_line("cart_reload_name", name_bytes == b"\x14\x05\x13\x14", f"reloaded name={name_bytes!r}")
@@ -1038,6 +1076,15 @@ def run_selftest() -> int:
     finally:
         if selftest_dir.exists():
             shutil.rmtree(selftest_dir)
+    with tempfile.TemporaryDirectory(prefix="cx16_cart_rom_selftest_") as rom_tmp:
+        fake_emu = Path(rom_tmp) / "x16emu"
+        fake_emu.write_bytes(b"")
+        try:
+            harness_smoke.resolve_rom_path(fake_emu, None)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("resolve_rom_path failed to reject missing X16ROM / adjacent rom.bin")
     print("test_cartridge.py --selftest: PASS")
     return 0
 
@@ -1053,7 +1100,11 @@ def main() -> int:
         return run_selftest()
 
     x16emu = Path(args.x16emu)
-    rom = Path(args.rom) if args.rom else None
+    try:
+        rom = harness_smoke.resolve_rom_path(x16emu, Path(args.rom) if args.rom else None)
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     return run_cartridge_suite(x16emu, rom)
 
 

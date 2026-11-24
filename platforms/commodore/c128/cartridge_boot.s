@@ -43,6 +43,8 @@ boot_copier:
     jsr $ff81                       // CINT
     sei
     cld
+    lda #$00                        // Blank VIC-II before entry_real enables 2MHz
+    sta $d011
     ldx #$ff
     txs
     lda #$05                        // 4KB bottom common; Bank 0 RAM everywhere below $8000

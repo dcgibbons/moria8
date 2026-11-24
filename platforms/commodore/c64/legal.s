@@ -37,9 +37,8 @@ legal_ui_filename: .byte 'L','E','G','A','L','U','I'
 #if !C64_CARTRIDGE
 .segment LegalOverlay
 legal_os_read_open_status:
-    lda program_device
-    sta disk_prompt_device
-    jsr hal_storage_read_command_status
+    ldx program_device
+    jsr c64_storage_read_command_status_x
     lda hal_storage_status_lost
     cmp #1                      // C=1 only when the status byte was lost.
     lda disk_status

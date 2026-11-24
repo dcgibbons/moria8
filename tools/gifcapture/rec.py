@@ -127,11 +127,22 @@ def goto(g, target, hold=0.15, maxsteps=150):
     return False
 
 
+def _c128_cia_scan_addr():
+    from paths import BUILD
+    sym = BUILD / "c128" / "main.sym"
+    for line in sym.read_text().splitlines():
+        if line.startswith(".label cia_scan_petscii="):
+            return int(line.split("$", 1)[1].split()[0], 16)
+    raise RuntimeError(f"cia_scan_petscii not found in {sym}")
+
+
 class InjectGame(Game):
     """C128: the game reads the CIA matrix directly, so patch cia_scan_petscii to
     `lda VAR; rts` and drive VAR from the monitor instead of feeding the KERNAL buffer."""
-    ENTRY = 0x27D1
-    VAR = 0x27D5
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ENTRY = _c128_cia_scan_addr()
+        self.VAR = self.ENTRY + 4
     def patched(self):
         d = self.v.req(0x01, struct.pack("<BHHBH", 0, self.ENTRY, self.ENTRY + 3, 0, 0))[1][2:]
         return d[0] == 0xAD

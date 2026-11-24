@@ -360,7 +360,8 @@ hal_storage_score_scratch_name:
 hal_storage_init_command:
     .byte $49, $30                              // "I0"
 
-.segment StorageOverlay
+// Marker strings live in Default fixed low RAM (< $9B00) so KERNAL_SETNAM /
+// KERNAL_OPEN (called with CX16_RAM_BANK_REG = 0) read valid filename bytes.
 hal_storage_marker_magic:
     .byte $4d, $38, $53, $41, $56, $45          // "M8SAVE"
 .label hal_storage_marker_magic_len = * - hal_storage_marker_magic
@@ -381,7 +382,11 @@ hal_storage_marker_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
-.segment Default
+
+.assert "Marker magic stays in fixed low RAM (< $9B00)", hal_storage_marker_magic >= $0801 && hal_storage_marker_magic + hal_storage_marker_magic_len <= $9b00, true
+.assert "Marker read name stays in fixed low RAM (< $9B00)", hal_storage_marker_read_name >= $0801 && hal_storage_marker_read_name + hal_storage_marker_read_name_len <= $9b00, true
+.assert "Marker write name stays in fixed low RAM (< $9B00)", hal_storage_marker_write_name >= $0801 && hal_storage_marker_write_name + hal_storage_marker_write_name_len <= $9b00, true
+.assert "Marker scratch name stays in fixed low RAM (< $9B00)", hal_storage_marker_scratch_name >= $0801 && hal_storage_marker_scratch_name + hal_storage_marker_scratch_name_len <= $9b00, true
 
 #if !CX16_CARTRIDGE
 // Boot-preloaded data bank filenames

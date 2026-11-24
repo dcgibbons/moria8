@@ -4,7 +4,6 @@ KICKASS_DIR     ?= ../../tools/kickass
 # KICKASS names the jar, as on every port (README: KICKASS=/path/to/KickAss.jar)
 KICKASS         ?= $(KICKASS_DIR)/KickAss.jar
 KICKASS_JAR     = $(KICKASS)
-KICKASS_URL     = https://theweb.dk/KickAssembler/KickAssembler.zip
 # kickass_java.sh fails the build on a failed .assert (KickAssembler itself exits 0)
 KA              = ../../tools/kickass_java.sh -jar $(KICKASS_JAR)
 
@@ -60,6 +59,7 @@ ATARI8_CAR            = $(OUT)/moria8-atari8.car
 MAME           ?= mame
 ATARI8_MACHINE ?= a800xl
 ATARI8ROMS     ?=
+REQUIRE_ALL_ROMS ?= 0
 MAME_DIR   = $(OVL_OUTATARI8)/mame
 MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -nvram_directory "$(MAME_DIR)/nvram" \
@@ -71,19 +71,19 @@ MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -share_directory "$(MAME_DIR)/share"
 
 ATARI8_OVL_PRGS += $(OUTATARI8)/legalui
-.PHONY: all build disk cartridge run run-130xe run-cart run-cart-130xe test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke test-cartridge clean kickass
+.PHONY: all build disk cartridge run run-130xe run-cart run-cart-130xe test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke test-cartridge clean ensure-kickass kickass
 
 all: build
 
 build: $(ATARI8_MAIN_PRG) $(ATARI8_BANK_PRG) $(ATARI8_OVL_PRGS) $(ATARI8_BOOT_PRG) $(ATARI8_TITLE_PRG) $(ATARI8_CATALOG) $(ATARI8_ITEM_CAT) $(ATARI8_CAR) $(ATARI8_CAT_TEST_PRG)
 
-kickass: $(KICKASS_JAR)
-$(KICKASS_JAR):
-	@echo "Downloading KickAssembler..."
-	@mkdir -p $(KICKASS_DIR)
-	@curl -sL "$(KICKASS_URL)" -o $(KICKASS_DIR)/kickass.zip
-	@unzip -qo $(KICKASS_DIR)/kickass.zip -d $(KICKASS_DIR)
-	@rm -f $(KICKASS_DIR)/kickass.zip
+kickass: ensure-kickass
+ensure-kickass $(KICKASS_JAR):
+ifeq ($(origin KICKASS),file)
+	@../../tools/ensure_kickass.sh "$(KICKASS_DIR)" "$(KICKASS_JAR)"
+else
+	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR)" "$(KICKASS_JAR)"
+endif
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
 	@mkdir -p $(OUT)
@@ -174,6 +174,8 @@ test-memory-contract: build test-memory-contract-selftest
 test-runtime: disk
 	@if [ -n "$(ATARI8ROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --all; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: ATARI8ROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME runtime smoke suite"; \
 	fi
@@ -181,6 +183,8 @@ test-runtime: disk
 test-fast-smoke: disk
 	@if [ -n "$(ATARI8ROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(ATARI8ROMS)" --disk "$(ATARI8_ATR)" --sym "$(OUTATARI8)/main.sym" --fast-smoke; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: ATARI8ROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME fast smoke suite"; \
 	fi
@@ -188,6 +192,8 @@ test-fast-smoke: disk
 test-cartridge: cartridge disk $(ATARI8_CAT_TEST_PRG)
 	@if [ -n "$(ATARI8ROMS)" ]; then \
 		python3 -B test_cartridge.py --rompath "$(ATARI8ROMS)" --car "$(ATARI8_CAR)" --sym "$(OUTATARI8_CART)/main.sym" --catalog-test "$(ATARI8_CAT_TEST_PRG)" --disk "$(ATARI8_ATR)" --disk-sym "$(OUTATARI8)/main.sym" --mame "$(MAME)"; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: ATARI8ROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: ATARI8ROMS not set; skipping Atari 8-bit MAME cartridge suite"; \
 	fi

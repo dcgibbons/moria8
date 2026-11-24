@@ -277,6 +277,12 @@ Operational rules:
   `make playtest-gate` after the verification gate: the bot plays every port
   and cartridge from fixed seeds, and a game finding fails it. Unit and
   harness suites passed builds whose first store buy crashed two ports.
+- Changes touching Commodore storage or disk-setup UI (`core/ui_disk_setup.s`,
+  `platforms/shared/save.s`, `platforms/commodore/common/disk_*.s`,
+  `save_slot_menu.s`, `platforms/commodore/*/hal/storage*.s`) must satisfy the
+  Commodore Storage And KERNAL I/O checklist in `docs/INTERNAL_MANDATES.md` and
+  run targeted `make playtest-disk` fault scenarios (`absent_save_drive`,
+  `empty_drive`, `status_lost_save`).
 - Define success as: the user's failing command passes, or `make test` passes
   if no command was given. Loop until verified. Stop and ask the user when a
   gate action is needed, infrastructure is broken, or the 30-second timeout cap

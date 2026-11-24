@@ -188,12 +188,6 @@ banked_payload:
 .const C128_CHARGEN_CUTPOINT = -1
 #endif
 
-#if C128_TEST_TOWN_SELF_DUMP_TARGET
-.const C128_TOWN_SELF_DUMP_TARGET = C128_TEST_TOWN_SELF_DUMP_TARGET
-#else
-.const C128_TOWN_SELF_DUMP_TARGET = $70
-#endif
-
 #if C128_TEST_OVERLAY_TRANSITION_DIAG
 .const C128_OVERLAY_TRANSITION_DIAG = 1
 #else
@@ -253,192 +247,8 @@ c128_vic40_boot_probe_fail_sym:
 .assert "c128_vic40_boot_probe stays below BASIC ROM ($4000)", c128_vic40_boot_probe_fail_sym < $4000, true
 #endif
 
-#if C128_TEST_TOWN_SELF_DUMP
-c128_town_dump_log:
-    ldx c128_town_dump_idx
-    sta c128_town_dump_buf,x
-    inx
-    txa
-    and #$1f
-    sta c128_town_dump_idx
-    rts
-
-c128_town_dump_mark:
-    cmp #C128_TOWN_SELF_DUMP_TARGET
-    beq !hit+
-    jmp c128_town_dump_log
-!hit:
-    jsr c128_town_dump_log
-    jmp c128_town_dump_checkpoint
-
-c128_town_dump_checkpoint:
-    jsr c128_town_dump_render_vic
-!hang:
-    nop
-    jmp !hang-
-
-c128_town_dump_render_vic:
-    lda #<$0400
-    sta zp_ptr0
-    lda #>$0400
-    sta zp_ptr0_hi
-    lda #<$d800
-    sta zp_ptr1
-    lda #>$d800
-    sta zp_ptr1_hi
-    lda #19
-    sta zp_temp0
-!clear_rows:
-    ldx #40
-!clear_cols:
-    lda #$20
-    ldy #0
-    sta (zp_ptr0),y
-    lda #1
-    sta (zp_ptr1),y
-    inc zp_ptr0
-    bne !clr_scr_ok+
-    inc zp_ptr0_hi
-!clr_scr_ok:
-    inc zp_ptr1
-    bne !clr_col_ok+
-    inc zp_ptr1_hi
-!clr_col_ok:
-    dex
-    bne !clear_cols-
-    dec zp_temp0
-    bne !clear_rows-
-
-    lda #<$0400
-    sta zp_ptr0
-    lda #>$0400
-    sta zp_ptr0_hi
-    lda #<$d800
-    sta zp_ptr1
-    lda #>$d800
-    sta zp_ptr1_hi
-
-    lda #<c128_town_dump_title_str
-    sta zp_temp1
-    lda #>c128_town_dump_title_str
-    sta zp_temp2
-    ldy #0
-!title:
-    lda (zp_temp1),y
-    beq !title_done+
-    jsr c128_town_dump_put_char
-    iny
-    bne !title-
-!title_done:
-
-    jsr c128_town_dump_next_row
-    lda c128_town_dump_idx
-    jsr c128_town_dump_put_hex
-    lda #$20
-    jsr c128_town_dump_put_char
-    lda c128_town_dump_countdown
-    jsr c128_town_dump_put_hex
-
-    lda #0
-    sta zp_temp0
-!bc_rows:
-    jsr c128_town_dump_next_row
-    ldx #16
-!bc_cols:
-    ldy zp_temp0
-    lda c128_town_dump_buf,y
-    jsr c128_town_dump_put_hex
-    inc zp_temp0
-    dex
-    bne !bc_cols-
-    lda zp_temp0
-    cmp #32
-    bne !bc_rows-
-
-    ldx #0
-!stack_rows:
-    jsr c128_town_dump_next_row
-    txa
-    jsr c128_town_dump_put_hex
-    lda #$3a
-    jsr c128_town_dump_put_char
-    ldy #0
-!stack_cols:
-    lda $0100,x
-    jsr c128_town_dump_put_hex
-    inx
-    iny
-    cpy #16
-    bne !stack_cols-
-    cpx #0
-    bne !stack_rows-
-    rts
-
-c128_town_dump_next_row:
-    lda zp_ptr0
-    clc
-    adc #40
-    sta zp_ptr0
-    bcc !row_scr_ok+
-    inc zp_ptr0_hi
-!row_scr_ok:
-    lda zp_ptr1
-    clc
-    adc #40
-    sta zp_ptr1
-    bcc !row_col_ok+
-    inc zp_ptr1_hi
-!row_col_ok:
-    rts
-
-c128_town_dump_put_hex:
-    pha
-    lsr
-    lsr
-    lsr
-    lsr
-    jsr c128_town_dump_put_nibble
-    pla
-    and #$0f
-    jmp c128_town_dump_put_nibble
-
-c128_town_dump_put_nibble:
-    cmp #10
-    bcc !digit+
-    sec
-    sbc #9
-    jmp c128_town_dump_put_char
-!digit:
-    clc
-    adc #$30
-    jmp c128_town_dump_put_char
-
-c128_town_dump_put_char:
-    ldy #0
-    sta (zp_ptr0),y
-    lda #1
-    sta (zp_ptr1),y
-    inc zp_ptr0
-    bne !put_scr_ok+
-    inc zp_ptr0_hi
-!put_scr_ok:
-    inc zp_ptr1
-    bne !put_col_ok+
-    inc zp_ptr1_hi
-!put_col_ok:
-    rts
-
-c128_town_dump_title_str:
-    .text "BC CD STK" ; .byte 0
-c128_town_dump_idx: .byte 0
-c128_town_dump_countdown: .byte 8
-c128_town_dump_buf:
-    .fill 32, 0
-#endif
-
 // ============================================================
 // Core System & UI Routines — MUST live in Safe Zone (<$C000)
-// ============================================================
 #import "memory128.s"
 #if C128_CARTRIDGE
 #import "cartridge_copy.s"
@@ -1009,10 +819,6 @@ exit_trampoline_end:
 // can never drift into the $D000 I/O hole.
 // ============================================================
 tramp_player_create:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$71
-    jsr c128_town_dump_mark
-#endif
 #if !C128_TEST_SKIP_PLAYER_CREATE_OVERLAY
     lda #1                      // OVL_STARTUP
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
@@ -1140,7 +946,7 @@ tramp_winner_royal:
     jmp royal_screen
 
 winner_apply_retirement_bonus:
-    :C128OverlayComputeTrampoline(11, winner_apply_retirement_bonus_storage)
+    :C128OverlayComputeTrampoline(9, winner_apply_retirement_bonus_storage)
 
 tramp_store_init_all:
     lda #10                     // C128_CHEST_OVERLAY_ID: store maintenance (cold)
@@ -1184,15 +990,13 @@ tramp_store_enter:
 #if C128_TEST_SCRIPTED_INPUT
 c128_test_town_fail_sym:
     brk
-#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 // Monitor seed stop (< $4000 so no ROM executes this address during autostart):
 // run_tests128.sh plays c128_spell_seed.mon here instead of carrying ~115 B of
 // seeding code in Bank 0 Default.
 c128_test_seed_scripted_spell_state:
     rts
 .assert "scripted spell seed stop is below every ROM", c128_test_seed_scripted_spell_state < $4000, true
-#endif
 c128_test_spell_fail_no_cast_sym:
     brk
 c128_test_spell_fail_level_sym:
@@ -1219,7 +1023,7 @@ c128_test_spell_pass_sym:
 c128_test_spell_cancel_pass_sym:
     brk
 #endif
-#if C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
+#if C128_TEST_SCRIPTED_BOOK_OVERLAY
 c128_test_book_overlay_fail_sym:
     brk
 // VDC screen string checks run in harness128.py from a monitor VDC dump at this
@@ -1236,12 +1040,6 @@ test_assert_spell_list_overlay:
 c128_test_spell_list_overlay_pass_sym:
     brk
 .assert "spell list overlay pass stop is below every ROM", c128_test_spell_list_overlay_pass_sym < $4000, true
-#endif
-#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
-c128_test_scroll_selector_fail_sym:
-    brk
-c128_test_scroll_selector_pass_sym:
-    brk
 #endif
 #elif C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 c128_test_chest_open_pass_sym:
@@ -2230,10 +2028,6 @@ c128_test_disk_setup_single_drive_return_wait_for_harness:
     jmp c128_test_disk_setup_single_drive_return_wait_for_harness
 c128_test_disk_setup_single_drive_return_before_disk_setup:
 #endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$60
-    jsr c128_town_dump_mark
-#endif
 #if C128_TEST_VIC40_BLANKED_BOOT
     jsr c128_vic40_boot_probe
 #endif
@@ -2404,10 +2198,6 @@ title_menu_loop:                // Exported for the scripted product harness
     jsr input_get_key
     cmp #$4e                // 'N' — new game
     bne !not_n+
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$61
-    jsr c128_town_dump_mark
-#endif
     jsr c128_modal_require_play
     jmp game_new_start
 !not_n:
@@ -3794,7 +3584,7 @@ tool_ego_prefix_hi:
 // the play payload has no headroom for the chest summon hooks. Scripted/diag
 // builds omit wizard.s and provide their own stub below, so only assemble the
 // real one in normal builds (else it double-defines against the stub).
-#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_SCROLL_SELECTOR && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
 wizard_wall_walk_active:
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
@@ -3903,6 +3693,8 @@ c128_program_play_exists:
     sec
     bcs !done+
 !not_ok:
+    lda c128_program_status_lost
+    bne !retry_probe+
     lda disk_diag_readst
     and #$02                    // read timeout
     beq !missing+
@@ -3910,6 +3702,7 @@ c128_program_play_exists:
     eor #$30
     cmp #10                     // a digit: the drive answered
     bcc !missing+
+!retry_probe:
     lda #C128_PROGRAM_PROBE_FILE_NUM
     jsr w_close
     jsr w_clrchn
@@ -3926,6 +3719,7 @@ c128_program_play_exists:
     rts
 
 c128_ppe_tries: .byte 0
+c128_program_status_lost: .byte 0
 
 c128_program_read_command_status:
     lda #$ff
@@ -3933,6 +3727,7 @@ c128_program_read_command_status:
     sta disk_diag_cmd_status1
     lda #0
     sta disk_diag_readst
+    sta c128_program_status_lost
     tax
     tay
     jsr w_setnam
@@ -3954,6 +3749,14 @@ c128_program_read_command_status:
     bne !close+
     jsr w_chrin
     sta disk_diag_cmd_status1
+    jsr w_readst
+    sta disk_diag_readst
+    beq !close+
+    ldx #$ff
+    stx disk_diag_cmd_status1
+    and #$02
+    beq !close+
+    inc c128_program_status_lost
 !close:
     jsr w_clrchn
     lda #C128_PROGRAM_CMD_FILE_NUM
@@ -4114,7 +3917,7 @@ recall_clear_all:
     sta zp_ptr1
     rts
 
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 // Monitor seed file (outBin, zero bytes in Default): played by run_tests128.sh
 // when execution stops at c128_test_seed_scripted_spell_state (< $4000).
 .macro C128TestMonPoke(addr, value) {
@@ -4153,11 +3956,7 @@ recall_clear_all:
 :C128TestMonPoke(player_data + PL_SPELLS_FORGOTTEN_1, 0)
 :C128TestMonPoke(player_data + PL_SPELLS_FORGOTTEN_2, 0)
 :C128TestMonPoke(player_data + PL_SPELLS_FORGOTTEN_3, 0)
-#if C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
-:C128TestMonPoke(player_data + PL_NEW_SPELLS, 1)
-#else
 :C128TestMonPoke(player_data + PL_NEW_SPELLS, 0)
-#endif
 :C128TestMonFill(player_data + PL_SPELL_ORDER, player_data + PL_SPELL_ORDER + 31, 99)
 :C128TestMonPoke(player_data + PL_SPELL_ORDER, 0)
 .text "bank cpu" ; .byte $0a
@@ -4255,7 +4054,7 @@ c128_resident_persist_end:
 #define HELP_TITLE_EXTERNAL
 #import "../../../core/ui_help_clear.s"
 #undef HELP_TITLE_EXTERNAL
-#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
 // Scripted/diag test variants exclude wizard mode: those scenarios never enter
 // wizard commands, and the test instrumentation needs the Play payload bytes.
 // Stubs keep the command-dispatch and game-loop references linkable.
@@ -4301,11 +4100,6 @@ recall_prompt_str:
 #import "../../../core/player_adjust_equipment_stat.s"
 .segment C128ResidentPlay
 #import "../../../core/turn.s"
-c128_resident_play_end:
-
-.segment Default
-
-
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_assert:
     lda #<MAP_BASE
@@ -4367,17 +4161,6 @@ c128_test_title_art_assert:
 !pass:
     jmp c128_test_title_art_pass_sym
 #endif
-#if C128_TEST_TITLE_KEY_TRAP
-title_key_trap_base:
-    .fill 256, $00
-#endif
-#if C128_TEST_SCRIPTED_INPUT
-c128_test_summary_seen:
-    .byte 0
-c128_test_summary_count:
-    .byte 0
-#endif
-
 #if C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY
 c128_test_expected_tier_bits:
 #if HAL_PLATFORM_MONSTER_CATALOG
@@ -4448,6 +4231,21 @@ c128_test_validate_partial_state:
 !ctv_fail:
     sec
     rts
+#endif
+c128_resident_play_end:
+
+.segment Default
+
+
+#if C128_TEST_TITLE_KEY_TRAP
+title_key_trap_base:
+    .fill 256, $00
+#endif
+#if C128_TEST_SCRIPTED_INPUT
+c128_test_summary_seen:
+    .byte 0
+c128_test_summary_count:
+    .byte 0
 #endif
 
 .segment RuntimeCommonData
@@ -4955,7 +4753,7 @@ program_end:
 .assert "C128 save staging buffer lives in persist payload", save_stage_buf >= c128_resident_persist_start && save_stage_buf_end <= c128_resident_persist_end, true
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 modal persist stays below player_died/game-over in Play slot", c128_resident_persist_end <= player_died, true
-#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_SCROLL_SELECTOR && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
 .assert "C128 modal persist stays below main_loop in Play slot", c128_resident_persist_end <= main_loop, true
 .assert "Wizard item generation lives in banked payload", wizard_generate_item_execute >= banked_payload && wizard_generate_item_execute < banked_code_end, true
 #endif
@@ -5058,6 +4856,10 @@ program_end:
     .assert "AUDIT-IO-C128 " + name + " stays in the chest overlay", symbol >= $E000 && symbol < ovl_chest_end, true
 }
 
+.macro C128AuditModalMiscOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the modal-misc overlay", symbol >= $E000 && symbol < ovl_modal_misc_end, true
+}
+
 .macro C128AuditHomeOverlay(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in the home overlay", symbol >= $E000 && symbol < ovl_home_end, true
 }
@@ -5136,6 +4938,49 @@ ovl_death_end:
 // Modal-misc overlay — winner retirement art at $E000
 // ============================================================
 .segment ModalMiscOverlay
+winner_apply_retirement_bonus_storage:
+    .const WIN_PL_LEVEL = 19
+    .const WIN_PL_GOLD_0 = 43
+    .const WIN_PL_GOLD_1 = 44
+    .const WIN_PL_GOLD_2 = 45
+    .const WIN_PL_XP_0 = 46
+    .const WIN_PL_XP_1 = 47
+    .const WIN_PL_XP_2 = 48
+    lda player_data + WIN_PL_LEVEL
+    cmp #41
+    bcs !gold+
+    clc
+    adc #40
+    sta player_data + WIN_PL_LEVEL
+    sta zp_player_lvl
+!gold:
+    lda player_data + WIN_PL_GOLD_0
+    clc
+    adc #$90
+    sta player_data + WIN_PL_GOLD_0
+    lda player_data + WIN_PL_GOLD_1
+    adc #$d0
+    sta player_data + WIN_PL_GOLD_1
+    lda player_data + WIN_PL_GOLD_2
+    adc #$03
+    sta player_data + WIN_PL_GOLD_2
+    bcc !win_gold_capped+
+    lda #$ff
+    sta player_data + WIN_PL_GOLD_0
+    sta player_data + WIN_PL_GOLD_1
+    sta player_data + WIN_PL_GOLD_2
+!win_gold_capped:
+    lda player_data + WIN_PL_XP_0
+    clc
+    adc #$40
+    sta player_data + WIN_PL_XP_0
+    lda player_data + WIN_PL_XP_1
+    adc #$4b
+    sta player_data + WIN_PL_XP_1
+    lda player_data + WIN_PL_XP_2
+    adc #$4c
+    sta player_data + WIN_PL_XP_2
+    rts
     #import "../../../core/royal.s"
     #define SCROLL_P3_NEW_OWNER
     #define SCROLL_P3_EXISTING_OWNER
@@ -5185,7 +5030,7 @@ ovl_help_end:
 .segment UiOverlay
     #import "../../../core/ui_character.s"
     #import "../../../core/ui_recall.s"
-#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
 // Scripted/diag test variants exclude the wizard UI with wizard mode (see
 // Play payload).
 ui_wizard_display:
@@ -5263,49 +5108,6 @@ ovl_chest_end:
     #import "../../../core/ui_home.s"
     #import "../../../core/eff_item_p1.s"
     #import "../../../core/starting_kit_cold.s"
-winner_apply_retirement_bonus_storage:
-    .const WIN_PL_LEVEL = 19
-    .const WIN_PL_GOLD_0 = 43
-    .const WIN_PL_GOLD_1 = 44
-    .const WIN_PL_GOLD_2 = 45
-    .const WIN_PL_XP_0 = 46
-    .const WIN_PL_XP_1 = 47
-    .const WIN_PL_XP_2 = 48
-    lda player_data + WIN_PL_LEVEL
-    cmp #41
-    bcs !gold+
-    clc
-    adc #40
-    sta player_data + WIN_PL_LEVEL
-    sta zp_player_lvl
-!gold:
-    lda player_data + WIN_PL_GOLD_0
-    clc
-    adc #$90
-    sta player_data + WIN_PL_GOLD_0
-    lda player_data + WIN_PL_GOLD_1
-    adc #$d0
-    sta player_data + WIN_PL_GOLD_1
-    lda player_data + WIN_PL_GOLD_2
-    adc #$03
-    sta player_data + WIN_PL_GOLD_2
-    bcc !win_gold_capped+
-    lda #$ff
-    sta player_data + WIN_PL_GOLD_0
-    sta player_data + WIN_PL_GOLD_1
-    sta player_data + WIN_PL_GOLD_2
-!win_gold_capped:
-    lda player_data + WIN_PL_XP_0
-    clc
-    adc #$40
-    sta player_data + WIN_PL_XP_0
-    lda player_data + WIN_PL_XP_1
-    adc #$4b
-    sta player_data + WIN_PL_XP_1
-    lda player_data + WIN_PL_XP_2
-    adc #$4c
-    sta player_data + WIN_PL_XP_2
-    rts
 ovl_home_end:
 .print "Home overlay: " + (ovl_home_end - $e000) + " bytes at $E000-$" + toHexString(ovl_home_end)
 .assert "Home overlay fits in $E000-$EFFF", ovl_home_end <= $f000, true

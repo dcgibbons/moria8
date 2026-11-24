@@ -6,10 +6,10 @@
 // Output: carry clear = present, carry set = absent/unusable
 hal_storage_probe_media:
     stx disk_temp
-
+    jsr w_clrchn
     lda #0
-    ldx #0
-    ldy #0
+    tax
+    tay
     jsr w_setnam
     lda #hal_storage_cmd_channel
     ldx disk_temp
@@ -17,13 +17,22 @@ hal_storage_probe_media:
     jsr w_setlfs
     jsr w_open
     bcs !absent+
+    ldx #hal_storage_cmd_channel
+    jsr w_chkin
+    bcc !read_st+
+    lda #1
+    bne !have_res+
+!read_st:
+    jsr w_readst
+!have_res:
+    pha
+    jsr w_clrchn
     lda #hal_storage_cmd_channel
     jsr w_close
-    jsr w_clrchn
-    clc
+    pla
+    cmp #1
     rts
 !absent:
-    jsr w_clrchn
     sec
     rts
 

@@ -241,6 +241,12 @@ hal_storage_close:
     sta a2_ss_status                // post-close READST still reports the failure
     rts                             // carry set
 !ok:
+    lda a2_ss_status
+    and #A2_SS_ERR_WRITE
+    beq !ret_ok+
+    sec
+    rts
+!ret_ok:
     clc
     rts
 
@@ -549,6 +555,7 @@ save_write_map_banked:
     jsr hal_storage_chrout
     jsr hal_storage_readst
     beq !swm_advance+
+    inc save_io_error
     sec
     rts
 !swm_advance:

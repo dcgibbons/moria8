@@ -1128,6 +1128,26 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3"), {"build": "b0", "resume": level}))
         self.assertEqual((item["start"]["run"], item["start"]["xp"]), ("b3-clvl39-ac040-xp05800000", 5_800_000))
 
+    def test_a_run_that_hands_over_keeps_any_gain(self) -> None:
+        """C64 Balrog, 2026-11-22: six builds in a day ended runs an hour in,
+        and a clvl 39 Elf Priest's 184,000 since its 5,764,000 start, short of
+        5%, was thrown away. A run that ended handing over (rotate) keeps it;
+        one that did not still needs checkpoint_xp more."""
+        service = self.service(4, 2)
+        item = self.c128_graduate(service)
+        self.checkpoint_run(service, "b1", 39, 350_000, xp=5_764_000)
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b1"), {"build": "b0", "resume": item["start"]}))
+        level = dict(item["start"])
+        self.checkpoint_run(service, "b2", 39, 360_000, ac=40, base_ac=40, xp=5_948_000)
+        self.assertFalse(service.balrog_checkpoint(self.balrog_record("b2", outcome="budget"),
+                                                   {"build": "b0", "resume": level}))   # not handed over
+        self.checkpoint_run(service, "b3", 39, 370_000, ac=40, base_ac=40, xp=5_948_000)
+        (service.home / "runs" / "b3" / "events.jsonl").write_text(
+            '{"t": 1, "kind": "rotate", "seed": 1, "step": 370000, "build": "b9"}\\n')
+        self.assertTrue(service.balrog_checkpoint(self.balrog_record("b3", outcome="budget"),
+                                                  {"build": "b0", "resume": level}))
+        self.assertEqual(item["start"]["xp"], 5_948_000)
+
     def test_a_run_short_of_a_flat_250000_still_moves_a_mid_level_start(self) -> None:
         """C64 Balrog, 2026-11-21: a clvl 36 Half-Orc Priest's runs reached
         890,535 and 784,527 from its 729,169 start, both short of a flat
@@ -1255,6 +1275,58 @@ class BalrogQueueTest(unittest.TestCase):
         service.balrog_yield()
         self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # the focus plays: no yield
 
+    def test_a_focus_game_between_two_of_its_own_or_a_game_just_begun_makes_no_yield(self) -> None:
+        """C64 Balrog, 2026-11-23: a clvl 32 Half-Elf Warrior's games ended in
+        town 7 seconds after each start, as focus games ended and restarted
+        around it (26 ends in 12 minutes), and its checkpoint stood 28 hours.
+        A focus character a tick from its next game is not short, and a game
+        outside the focus plays FOCUS_YIELD_MIN_S before it yields."""
+        service = self.service(4, 2)
+        service.config.update(balrog_characters=["elf-priest"], balrog_focus_workers=1)
+        balrog = service.balrog
+        for combo in ("human-paladin", "half-elf-warrior", "elf-priest"):
+            balrog.graduate("c64", combo, {})
+        t = time.time()
+        balrog.state["items"]["c64/elf-priest"]["last"] = {"ended": t - 5}   # its game just ended
+        service.running = {
+            "old": {"queue": "balrog", "platform": "c64", "character": "human-paladin", "started": t - 1200},
+            "new": {"queue": "balrog", "platform": "c64", "character": "half-elf-warrior", "started": t - 7}}
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # a tick from its next game
+        balrog.state["items"]["c64/elf-priest"]["last"] = {"ended": t - 120}  # short for two minutes
+        del service.running["old"]
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "new" / queue.YIELD).exists())   # 7 seconds in: plays on
+        service.running["new"]["started"] = t - queue.FOCUS_YIELD_MIN_S - 1
+        service.balrog_yield()
+        self.assertTrue((service.home / "runs" / "new" / queue.YIELD).exists())
+
+    def test_characters_at_the_focus_level_join_the_focus_on_their_own(self) -> None:
+        """Maintainer, 2026-11-21: "putting the higher level games at the
+        head of the queue is important for forward progress with limited
+        machine resources". With balrog_focus_min_clvl, each character whose
+        start reaches it is in the focus with a slot of its own, and the
+        others yield for it as for a named one."""
+        service = self.service(4, 2)
+        balrog = service.balrog
+        for combo in ("human-paladin", "human-priest", "elf-priest"):
+            balrog.graduate("c64", combo, {})
+        balrog.state["items"]["c64/elf-priest"]["start"] = {"run": "r", "clvl": 37, "xp": 1, "set": 1}
+        balrog.state["items"]["c64/human-priest"]["start"] = {"run": "s", "clvl": 30, "xp": 1, "set": 1}
+        self.assertEqual(service.balrog_focus(), ((), 0))                  # not set: no focus
+        service.config.update(balrog_focus_min_clvl=36)
+        self.assertEqual(service.balrog_focus(), (("elf-priest",), 1))
+        service.config.update(balrog_characters=["human-paladin"], balrog_focus_workers=1)
+        self.assertEqual(service.balrog_focus(), (("human-paladin", "elf-priest"), 2))   # named and reached
+        service.config.update(balrog_characters=[], balrog_focus_workers=0)
+        t = time.time()
+        balrog.state["items"]["c64/elf-priest"]["graduated"] = {"ended": t - 60}
+        service.running = {
+            "old": {"queue": "balrog", "platform": "c64", "character": "human-paladin", "started": t - 1200},
+            "new": {"queue": "balrog", "platform": "c64", "character": "human-priest", "started": t - 600}}
+        service.balrog_yield()
+        self.assertTrue((service.home / "runs" / "old" / queue.YIELD).exists())    # yields for the L37
+
     def test_a_checkpoint_waits_for_a_character_out_of_danger(self) -> None:
         """2026-11-15: the C64 Human Warrior's clvl 10 checkpoint was taken on
         its arrival in town poisoned, and all 1,722 of its restores died 14
@@ -1375,6 +1447,49 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertIsNone(LevelWatch().note(10**7, 18, 2, 0))           # 0: never
         self.assertEqual(GOALS["deep"].level_steps, 150_000)
         self.assertEqual(GOALS["balrog"].level_steps, 0)
+
+    def test_features_count_each_item_used_by_its_verb(self) -> None:
+        """Maintainer, 2026-11-23: "I want to know that every spell/prayer has
+        been used, every item, and every monster has been encountered". The
+        trace names each item picked at a use prompt: counted by verb, its
+        bonuses and charges left off; a drop is not a use."""
+        import gzip, json, tempfile
+        rows = [
+            {"layer": "quaff", "reason": "hurt: drink Healing", "msg": ""},
+            {"layer": "prompt", "reason": "list the items", "msg": "Quaff which potion (a-i)?"},
+            {"layer": "prompt", "reason": "pick Potion of Healing", "msg": "Inventory | ---------"},
+            {"layer": "gear", "reason": "wield it", "msg": ""},
+            {"layer": "prompt", "reason": "list", "msg": "Wear which item (a-c)?"},
+            {"layer": "prompt", "reason": "pick Heavy Crossbow (+4,+7)", "msg": "Inventory"},
+            {"layer": "aim", "reason": "aim", "msg": "Aim which wand (a-a)?"},
+            {"layer": "prompt", "reason": "pick Wand of Lightning Balls (5 charges)", "msg": ""},
+            {"layer": "drop", "reason": "drop junk", "msg": "Drop which item (a-c)?"},
+            {"layer": "prompt", "reason": "pick Rusty Chain Mail [32,-5]", "msg": ""},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = Path(tmp) / "trace.jsonl.gz"
+            with gzip.open(trace, "wt") as handle:
+                handle.writelines(json.dumps(r) + "\n" for r in rows)
+            uses = queue.features(trace)["uses"]
+        self.assertEqual(uses, {"Potion of Healing": {"Quaff": 1}, "Heavy Crossbow": {"Wear": 1},
+                                "Wand of Lightning Balls": {"Aim": 1}})
+
+    def test_a_balrog_game_with_neither_xp_nor_depth_changed_ends(self) -> None:
+        """C64 Balrog, 2026-11-23: a clvl 37 Paladin walked one 20-square lap
+        on DL37 for 2.4 million steps overnight, its XP and depth unchanged:
+        the Balrog goal has no level_steps (a clvl 39 goes hours between
+        levels), and nothing else ended it."""
+        from moria_playtest.goals import GOALS
+        from moria_playtest.session import LevelWatch
+        watch = LevelWatch()
+        self.assertEqual(GOALS["balrog"].stuck_steps, 100_000)
+        self.assertIsNone(watch.stuck(0, 1_575_138, 37, 100_000))
+        self.assertIsNone(watch.stuck(99_999, 1_575_138, 37, 100_000))
+        self.assertIsNone(watch.stuck(99_999, 1_575_200, 37, 100_000))   # a kill restarts the count
+        self.assertIsNone(watch.stuck(199_998, 1_575_200, 38, 100_000))  # so does a new level
+        self.assertIn("1575200 XP on DL38", watch.stuck(299_998, 1_575_200, 38, 100_000))
+        self.assertIsNone(LevelWatch().stuck(10**7, 5, 2, 0))           # 0: never
+        self.assertEqual(GOALS["deep"].stuck_steps, 0)
 
     def test_a_loop_is_named_once_a_stay(self) -> None:
         """Maintainer, 2026-11-03: loops should be obvious. One square entered
@@ -2679,9 +2794,19 @@ class GraduateSaveTest(unittest.TestCase):
         game = self.Game(screens)
         text = mock.Mock(command=mock.Mock(return_value=""))
         graduate.save(game, text, Path("save.d64"))
-        text.command.assert_called_once_with('attach "save.d64" 9')
+        self.assertEqual(text.command.mock_calls, [mock.call("detach 9"), mock.call('attach "save.d64" 9')])
         self.assertEqual(game.screens, [])
         return game.keys
+
+    def test_a_detach_error_fails(self) -> None:
+        from moria_playtest import graduate
+        slots = "Save Slots:\n1) *bot\n2)  Empty\nSelect Slot 1-4"
+        game = self.Game([("S+", slots), ("1", "Overwrite? Y/N"),
+                          ("Y", "Overwrite? Y/N\nSaving game... -more-"), (" ", "N)ew  L)oad")])
+        text = mock.Mock(command=mock.Mock(return_value="ERROR: detach 9 failed"))
+        with self.assertRaises(graduate.GraduateError):
+            graduate.save(game, text, Path("save.d64"))
+        text.command.assert_called_once_with("detach 9")
 
     def test_a_first_save(self) -> None:
         slots = "Save Slots:\n1)  Empty\nSelect Slot 1-4"

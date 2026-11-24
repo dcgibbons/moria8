@@ -1344,7 +1344,6 @@ def collect_shipping_media(build_dir: Path, port_filter: str | None) -> list[Med
     media_specs: list[tuple[str, str, str]] = [
         ("c64", "moria8-c64.d64", "cbm"),
         ("c64", "moria8-c64.crt", "cart"),
-        ("c64", "moria8-c64.zip", "zip"),
         ("plus4", "moria8-plus4.d64", "cbm"),
         ("plus4", "moria8-plus4.crt", "cart"),
         ("c128", "moria8-c128.d64", "cbm"),
@@ -1456,6 +1455,85 @@ def _load_prod_syms_map(build_dir: Path) -> dict[tuple[str, str], dict[str, int]
     return out
 
 
+_IMM2_OPS = frozenset({
+    0x09, 0x29, 0x49, 0x69, 0xA0, 0xA2, 0xA9, 0xC0, 0xC9, 0xE0, 0xE9,
+    0x10, 0x30, 0x50, 0x70, 0x90, 0xB0, 0xD0, 0xF0,
+    0x05, 0x24, 0x25, 0x45, 0x65, 0x84, 0x85, 0x86, 0xA4, 0xA5, 0xA6, 0xC4, 0xC5, 0xC6, 0xE4, 0xE5, 0xE6,
+    0x15, 0x35, 0x55, 0x75, 0x94, 0x95, 0x96, 0xB4, 0xB5, 0xB6, 0xD5, 0xD6, 0xF5, 0xF6,
+    0x01, 0x21, 0x41, 0x61, 0x81, 0xA1, 0xC1, 0xE1, 0x11, 0x31, 0x51, 0x71, 0x91, 0xB1, 0xD1, 0xF1,
+})
+_ABS3_OPS = frozenset({
+    0x0D, 0x0E, 0x19, 0x1D, 0x1E, 0x20, 0x2C, 0x2D, 0x2E, 0x39, 0x3D, 0x3E,
+    0x4C, 0x4D, 0x4E, 0x59, 0x5D, 0x5E, 0x6C, 0x6D, 0x6E, 0x79, 0x7D, 0x7E,
+    0x8C, 0x8D, 0x8E, 0x99, 0x9D, 0xAC, 0xAD, 0xAE, 0xB9, 0xBC, 0xBD, 0xBE,
+    0xCC, 0xCD, 0xCE, 0xD9, 0xDD, 0xDE, 0xEC, 0xED, 0xEE, 0xF9, 0xFD, 0xFE,
+})
+_WILD_JSR_JMP = frozenset({0x20, 0x4C})
+
+
+def _compile_init_tail_regex(prefix: bytes) -> re.Pattern[bytes]:
+    """Build a 6502-opcode-aware pattern masking 2-byte JSR ($20) / JMP ($4C) targets."""
+    pat = bytearray()
+    i = 0
+    n = len(prefix)
+    while i < n:
+        op = prefix[i]
+        if op in _WILD_JSR_JMP and i + 2 < n:
+            pat.extend(re.escape(bytes([op])))
+            pat.extend(b"..")
+            i += 3
+        elif op in _ABS3_OPS and i + 2 < n:
+            pat.extend(re.escape(prefix[i : i + 3]))
+            i += 3
+        elif op in _IMM2_OPS and i + 1 < n:
+            pat.extend(re.escape(prefix[i : i + 2]))
+            i += 2
+        else:
+            pat.extend(re.escape(bytes([op])))
+            i += 1
+    return re.compile(bytes(pat), re.DOTALL)
+
+
+def _estimate_resident_delta(
+    prod_bytes: tuple[int, bytes] | None,
+    test_prg_path: Path,
+    prod_prog_end: int,
+    fallback_delta: int,
+) -> tuple[int, bool]:
+    """Estimate resident shift before program_end using the InitTail start signature."""
+    if prod_bytes is None:
+        return fallback_delta, False
+    prod_base, prod_payload = prod_bytes
+    tail_off = prod_prog_end - prod_base
+    if tail_off < 0 or tail_off + 16 > len(prod_payload):
+        return fallback_delta, False
+    data = test_prg_path.read_bytes()
+    if len(data) < 2:
+        return fallback_delta, False
+    test_base = data[0] | (data[1] << 8)
+    test_payload = data[2:]
+    if test_base != prod_base:
+        return fallback_delta, False
+
+    marker = prod_payload[tail_off : tail_off + 16]
+    if prod_payload.count(marker) == 1 and test_payload.count(marker) == 1:
+        return test_payload.index(marker) - tail_off, True
+
+    # Fallback when JSR/JMP operands inside c64_boot_pre_test_init shifted between builds.
+    for prefix_len in (20, 18, 16):
+        if tail_off + prefix_len > len(prod_payload):
+            continue
+        rx = _compile_init_tail_regex(prod_payload[tail_off : tail_off + prefix_len])
+        prod_matches = list(rx.finditer(prod_payload))
+        if len(prod_matches) != 1 or prod_matches[0].start() != tail_off:
+            continue
+        test_matches = list(rx.finditer(test_payload))
+        if len(test_matches) == 1:
+            return test_matches[0].start() - tail_off, True
+
+    return fallback_delta, False
+
+
 def scan_test_variants(
     test_dir: Path,
     build_dir: Path,
@@ -1469,6 +1547,7 @@ def scan_test_variants(
         prod_syms_by_target = _load_prod_syms_map(build_dir)
 
     prod_prg_ends: dict[tuple[str, str], int] = {}
+    prod_prg_bytes: dict[tuple[str, str], tuple[int, bytes]] = {}
     for port, (subdir, prg_name) in (
         ("c64", ("c64", "moria8.prg")),
         ("plus4", ("plus4", "moria4.prg")),
@@ -1477,7 +1556,10 @@ def scan_test_variants(
         p = build_dir / subdir / prg_name
         if p.is_file():
             try:
-                prod_prg_ends[(port, "disk")] = read_prg_span(p)[1]
+                load_addr, prg_end, _ = read_prg_span(p)
+                prod_prg_ends[(port, "disk")] = prg_end
+                if port in ("c64", "plus4"):
+                    prod_prg_bytes[(port, "disk")] = (load_addr, p.read_bytes()[2:])
             except ValueError:
                 pass
 
@@ -1644,25 +1726,36 @@ def scan_test_variants(
                 free_tail = tail_ceil - prg_end
                 prod_prog_end = prod_syms.get("program_end")
                 est_res_free: int | None = None
+                res_delta = delta
                 extra_checks_prg: list[dict] = []
                 if delta is not None and prod_prog_end is not None:
-                    est_res_free = (ceil_addr - prod_prog_end) - delta
+                    res_delta, matched_tail = _estimate_resident_delta(
+                        prod_prg_bytes.get((port, mode)), prg_path, prod_prog_end, delta
+                    )
+                    est_res_free = (ceil_addr - prod_prog_end) - res_delta
                     extra_checks_prg.append({
                         "name": f"est.res (<${ceil_addr:04X})",
-                        "end_addr": prod_prog_end + delta,
+                        "end_addr": prod_prog_end + res_delta,
                         "ceil_addr": ceil_addr,
                         "free_bytes": est_res_free,
-                        "same_as_prod": delta <= 0,
+                        "same_as_prod": res_delta <= 0,
                         "tight": est_res_free < TIGHT_THRESHOLD_BYTES,
                     })
-                    note = f"est. resident ~{est_res_free:,} B (<${ceil_addr:04X}); PRG includes init tail past MAP_BASE"
+                    if matched_tail and res_delta != delta:
+                        tail_delta = delta - res_delta
+                        note = (
+                            f"est. resident ~{est_res_free:,} B (<${ceil_addr:04X}); "
+                            f"PRG {delta:+d} B ({tail_delta:+d} B in InitTail past program_end)"
+                        )
+                    else:
+                        note = f"est. resident ~{est_res_free:,} B (<${ceil_addr:04X}); PRG includes init tail past MAP_BASE"
                 else:
                     note = "PRG includes init-only tail past MAP_BASE; no per-PRG .sym"
                 tight = (free_tail < TIGHT_THRESHOLD_BYTES) or (
                     est_res_free is not None and est_res_free < TIGHT_THRESHOLD_BYTES
                 )
                 overflow = (free_tail < 0) or (
-                    delta is not None and delta > 0 and est_res_free is not None and est_res_free < 0
+                    res_delta is not None and res_delta > 0 and est_res_free is not None and est_res_free < 0
                 )
                 entry = TestVariantBudget(
                     port=port,
@@ -2239,6 +2332,40 @@ class _BudgetSelfTests(unittest.TestCase):
             self.assertTrue(tests["moria_est_overflow_smoke"]["overflow"])
             self.assertEqual(tests["moria_est_overflow_smoke"]["extra_checks"][0]["free_bytes"], -4)
             self.assertIn("est. resident ~30 B (<$C000)", tests["moria_tight_smoke"]["note"])
+
+            # Distinct InitTail signature separates resident delta (+3 B) from InitTail growth (+81 B).
+            res_len = 0xBFCC - 0x0801
+            prod_res = bytes((i * 7 + 3) & 0xFF for i in range(res_len))
+            prod_tail = b"INIT_TAIL_START!" + bytes((i * 13 + 5) & 0xFF for i in range(2508 - 16))
+            (bdir / "c64" / "main.sym").write_text(".label program_end=$BFCC\n")
+            (bdir / "c64" / "moria8.prg").write_bytes(struct.pack("<H", 0x0801) + prod_res + prod_tail)
+            test_payload = prod_res + b"\x4c\x00\xc0" + prod_tail[:24] + (b"\xea" * 81) + prod_tail[24:]
+            (tdir / "c64" / "moria_ego_damage_smoke.prg").write_bytes(struct.pack("<H", 0x0801) + test_payload)
+            rep2 = collect_report(bdir, tdir)
+            ego = {t["name"]: t for t in rep2["tests"]}["moria_ego_damage_smoke"]
+            self.assertFalse(ego["overflow"])
+            self.assertTrue(ego["tight"])
+            self.assertEqual(ego["extra_checks"][0]["free_bytes"], 49)
+            self.assertIn("+81 B in InitTail past program_end", ego["note"])
+
+            # Shifted JSR/JMP operands inside c64_boot_pre_test_init match via wildcard fallback.
+            jsr_tail = (
+                bytes.fromhex("20 e4 0a 20 44 ab 20 3e b9 20 5b c1 20 9a c7 a9 4c 8d b8 0b")
+                + bytes((i * 13 + 5) & 0xFF for i in range(2508 - 20))
+            )
+            shifted_jsr_tail = (
+                bytes.fromhex("20 e4 0a 20 44 ab 20 41 b9 20 af c1 20 ee c7 a9 4c 8d b8 0b")
+                + bytes((i * 13 + 5) & 0xFF for i in range(2508 - 20))
+            )
+            (bdir / "c64" / "moria8.prg").write_bytes(struct.pack("<H", 0x0801) + prod_res + jsr_tail)
+            shifted_payload = prod_res + b"\x4c\x00\xc0" + shifted_jsr_tail[:24] + (b"\xea" * 81) + shifted_jsr_tail[24:]
+            (tdir / "c64" / "moria_ego_damage_smoke.prg").write_bytes(struct.pack("<H", 0x0801) + shifted_payload)
+            rep3 = collect_report(bdir, tdir)
+            ego3 = {t["name"]: t for t in rep3["tests"]}["moria_ego_damage_smoke"]
+            self.assertFalse(ego3["overflow"])
+            self.assertTrue(ego3["tight"])
+            self.assertEqual(ego3["extra_checks"][0]["free_bytes"], 49)
+            self.assertIn("+81 B in InitTail past program_end", ego3["note"])
 
     def test_phase1_port_budgets_and_bank_summaries(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

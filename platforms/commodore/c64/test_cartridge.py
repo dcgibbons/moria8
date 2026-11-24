@@ -246,13 +246,13 @@ class Experiment:
                 return target
         raise AssertionError(f"Did not reach ${address:04x}: {response}")
 
-    def call(self, routine, a=0, port=0x36, irq_masked=True, carry=False):
+    def call(self, routine, a=0, x=0, port=0x36, irq_masked=True, carry=False):
         # Title-only map loan: callers here never resume gameplay.
         # C600-C6FF holds the driver, C7F0-C7F1 holds results.
         assert self.sym["program_end"] <= 0xC000
         assert len((self.args.symbols.parent / "title").read_bytes()) - 2 <= 0x600
         code = [0x78 if irq_masked else 0x58, 0xA9, port, 0x85, 1,
-                0xA9, a, 0x20, routine & 255, routine >> 8,
+                0xA9, a, 0xA2, x, 0x20, routine & 255, routine >> 8,
                 0x08, 0x68, 0x8D, 0xF0, 0xC7, 0xA5, 1, 0x8D, 0xF1, 0xC7]
         end = 0xC600 + len(code)
         code += [0x4C, end & 255, end >> 8]
@@ -602,6 +602,8 @@ def run_gameplay(args, turbo=False):
         assert exp.memory(0x0400, 1000) == b" " * 1000, "Full clear left stale text"
         assert bytes(a & 15 for a in exp.memory(0xD800, 1000, "cpu")) == bytes([color]) * 1000, "Full clear left stale attributes"
         exp.until(exp.sym["legal_page_wait"])
+    def sc(text):
+        return bytes(ord(ch) - 0x60 if "a" <= ch <= "z" else ord(ch) for ch in text)
     try:
         if turbo:
             register = redirect_turbo_register(exp)
@@ -633,9 +635,16 @@ def run_gameplay(args, turbo=False):
             raise AssertionError("Source offer failed to reach EOF")
         exp.key_at_input("Q")
         exp.until(exp.sym["legal_menu_wait"])
+        exp.key_at_input("3")
+        exp.until(exp.sym["legal_sysinfo_wait"])
+        sys_scr = exp.memory(0x0400, 1000)
+        for text in ("Moria 8 - System Info", "Save V2 ($22)", "Cartridge", "Drives:"):
+            assert sc(text) in sys_scr, f"Missing System Info text: {text}"
+        exp.key_at_input(" ")
+        exp.until(exp.sym["legal_menu_wait"])
         exp.key_at_input("Q")
         exp.until(exp.sym["title_menu_loop"])
-        exp.check("title legal viewer reads both ROM documents, restarts, pages to EOF and returns")
+        exp.check("title legal viewer reads both ROM documents, System Info, and returns")
         keys("N")
         exp.until(exp.sym["create_select_race"])
         menu_key("A", "create_roll_stats")
@@ -677,6 +686,15 @@ def run_gameplay(args, turbo=False):
         exp.until(exp.sym["main_loop"])
         assert snapshot(exp) == before, "Legal modal changed player, map or inventory"
         exp.check("Help legal modal reloads Help and returns without changing game state")
+        exp.key_at_input(b"\xd6")
+        exp.until(exp.sym["legal_sysinfo_wait"])
+        gp_sys = exp.memory(0x0400, 1000)
+        for text in ("Moria 8 - System Info", "Cartridge", "Turn 0  Town", "RNG:"):
+            assert sc(text) in gp_sys, f"Missing gameplay System Info text: {text}"
+        exp.key_at_input(" ")
+        exp.until(exp.sym["main_loop"])
+        assert snapshot(exp) == before, "SHIFT+V System Info changed player, map or inventory"
+        exp.check("SHIFT+V System Info renders session telemetry and returns unchanged")
         # Put the player on the town's actual down staircase, then use normal
         # command dispatch. This fixture changes position, not the generator.
         world = exp.memory(0xC000, 80*48)

@@ -134,14 +134,17 @@ class RomArgsTest(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 rom_args({"PLAYTEST_KERNAL": str(Path(tmp) / "missing.bin")})
 
-    def test_plus4_requires_its_jiffydos_pair(self) -> None:
-        """The Plus/4 has no REU and loads every overlay from the 1541, so it
-        plays under JiffyDOS (maintainer, 2026-10-27) and refuses to run
-        without it; the drive ROM is the C64's."""
+    def test_plus4_takes_optional_jiffydos_pair(self) -> None:
+        """The Plus/4 takes PLAYTEST_PLUS4_KERNAL and PLAYTEST_DOS1541 as an
+        optional JiffyDOS pair (both or neither); unset, xplus4 defaults to
+        stock VICE Plus/4 KERNAL and 1541 ROMs."""
         import tempfile
         from pathlib import Path
         from moria_playtest.launch import rom_args
-        from moria_playtest.ports import PLUS4
+        from moria_playtest.ports import PLUS4, PLUS4_CART
+        for port in (PLUS4, PLUS4_CART):
+            self.assertEqual(rom_args({}, port), [])
+            self.assertEqual(rom_args({"PLAYTEST_KERNAL": "/the/c64/kernal.bin"}, port), [])
         with self.assertRaisesRegex(FileNotFoundError, "PLAYTEST_PLUS4_KERNAL"):
             rom_args({"PLAYTEST_DOS1541": "x"}, PLUS4)
         with self.assertRaisesRegex(FileNotFoundError, "PLAYTEST_DOS1541"):
@@ -152,8 +155,9 @@ class RomArgsTest(unittest.TestCase):
             drive.write_bytes(b"\0" * 16384)
             env = {"PLAYTEST_PLUS4_KERNAL": str(kernal), "PLAYTEST_DOS1541": str(drive),
                    "PLAYTEST_KERNAL": "/the/c64/kernal.bin"}
-            self.assertEqual(rom_args(env, PLUS4),
-                             ["-kernal", str(kernal.resolve()), "-dos1541", str(drive.resolve())])
+            for port in (PLUS4, PLUS4_CART):
+                self.assertEqual(rom_args(env, port),
+                                 ["-kernal", str(kernal.resolve()), "-dos1541", str(drive.resolve())])
 
     def test_c128_takes_its_own_kernal_and_1571_rom(self) -> None:
         """Maintainer, 2026-11-18: the C128 under JiffyDOS too, its own

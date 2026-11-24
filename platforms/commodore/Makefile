@@ -4,7 +4,6 @@
 #   make build              Build platform payloads into ../../build/{c64,c128,plus4}
 #   make disk               Build both shipping disk images
 #   make disk64             Build the C64 shipping disk at ../../build/moria8-c64.d64
-#   make zip64              Build the C64 loose-file archive at ../../build/moria8-c64.zip
 #   make disk128            Build the C128 shipping disks at ../../build/moria8-c128.d64/.d71/.d81
 #   make run                Launch the C64 shipping disk in C64 VICE
 #   make run128             Launch the C128 shipping disk in C128 VICE
@@ -26,7 +25,6 @@
 # ── Tool paths ────────────────────────────────────────────
 KICKASS_DIR ?= ../../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
-KICKASS_URL  = https://theweb.dk/KickAssembler/KickAssembler.zip
 ifeq ($(filter /%,$(KICKASS)),)
 KICKASS_RESOLVED = $(CURDIR)/$(KICKASS)
 else
@@ -84,7 +82,9 @@ RUN_FLAGSPLUS4 = -autostartprgmode 1 -sound $(VICE_SOUND_ARGS)
 KA_FLAGS     = -showmem -vicesymbols -libdir ../../core -libdir common -afo
 KA_FLAGS64   = $(KA_FLAGS) -libdir c64
 KA_FLAGSPLUS4 = $(KA_FLAGS) -libdir c64 -define PLUS4
+ifeq ($(filter -afo,$(KA_FLAGSPLUS4)),)
 override KA_FLAGSPLUS4 += -libdir ../../core -libdir common -afo
+endif
 DEBUG_FEAT_DISK_TRACE ?= 0
 ifeq ($(DEBUG_FEAT_DISK_TRACE),1)
 KA_FLAGS64   += -define DEBUG_FEAT_DISK_TRACE
@@ -224,15 +224,12 @@ C128_BOOTART_PREVIEW_PPM = $(OUT128)/bootart128_preview.ppm
 
 # ── Disk artifacts ────────────────────────────────────────
 DISK64_IMAGE       = $(OUT)/moria8-c64.d64
-C64_ZIP_IMAGE      = $(OUT)/moria8-c64.zip
 DISK128_D64_IMAGE  = $(OUT)/moria8-c128.d64
 DISK128_D71_IMAGE  = $(OUT)/moria8-c128.d71
 DISK128_D81_IMAGE  = $(OUT)/moria8-c128.d81
 DISK128_IMAGE      = $(DISK128_D71_IMAGE)
 DISK128_IMAGES     = $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE)
 DISKPLUS4_IMAGE    = $(OUT)/moria8-plus4.d64
-C64_DIST_DIR       = $(OUT)/c64-dist
-C64_DIST_STAMP     = $(C64_DIST_DIR)/.stamp
 EMPTY_PRG          = $(OUT)/empty.prg
 DISK64_LABEL       = "moria8 c64,m8"
 DISK128_LABEL      = "moria8 c128,m8"
@@ -261,9 +258,12 @@ PLUS4_BUILD_ARTIFACTS += $(OUTPLUS4)/legalui $(PLUS4_EXTRA_OVERLAYS)
 C128_BUILD_ARTIFACTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
 C128_MAIN_OUTPUTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
 
-.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
+.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 	bootart128-charset-demo \
-	test test-disk test-disk-static test-disk-debt test64 test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
+	test test-disk test-disk-static test-disk-debt test64 test64-legal test128-legal testplus4-legal test-legal-harness test-scripted-smoke-harness \
+	test64-cartridge test64-cartridge-assets test64-cartridge-persistence \
+	test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge \
+	testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
 	check-zp check-6502-lint check-hal-boundaries cleanup-source-symbols cleanup-source-symbols-c64 cleanup-source-symbols-c128 cleanup-source-symbols-plus4 ensure-kickass kickass create-symlinks
 
 all: build
@@ -272,7 +272,7 @@ build: build64 build128 buildplus4
 
 build64: $(C64_BUILD_ARTIFACTS) cartridge64
 	@mkdir -p "$(OUT64)"
-	@python3 ../../tools/parse_creatures.py --sync-web
+	@python3 ../../tools/parse_creatures.py --check-web
 	@$(MAKE) --no-print-directory cleanup-source-symbols-c64
 
 build128: $(C128_BUILD_ARTIFACTS) cartridge128
@@ -283,13 +283,9 @@ buildplus4: $(PLUS4_BUILD_ARTIFACTS) cartridgeplus4
 	@mkdir -p "$(OUTPLUS4)"
 	@$(MAKE) --no-print-directory cleanup-source-symbols-plus4
 
-disk: $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(OUT)/moria8-c64.crt $(DISK128_IMAGES) $(OUT)/moria8-c128.crt $(DISKPLUS4_IMAGE) $(OUT)/moria8-plus4.crt
+disk: $(DISK64_IMAGE) $(OUT)/moria8-c64.crt $(DISK128_IMAGES) $(OUT)/moria8-c128.crt $(DISKPLUS4_IMAGE) $(OUT)/moria8-plus4.crt
 
-disk64: $(DISK64_IMAGE) $(C64_ZIP_IMAGE)
-
-zip64: $(C64_ZIP_IMAGE)
-
-c64-dist: $(C64_DIST_STAMP)
+disk64: $(DISK64_IMAGE)
 
 disk128: $(DISK128_IMAGES)
 
@@ -314,7 +310,7 @@ runplus4-cart: cartridgeplus4
 
 bootart128-charset-demo: $(C128_CHARSET_DEMO_PRG)
 
-test: test64 test64-cartridge test128-fast test128-fast-smoke test128-cartridge testplus4 testplus4-cartridge
+test: test64 test64-cartridge test128-fast test128-fast-smoke test128-legal test128-cartridge testplus4 testplus4-cartridge
 
 test-disk: ensure-kickass
 	python3 -u disk_test_matrix.py \
@@ -332,7 +328,6 @@ test-disk-static:
 test-disk-debt:
 	python3 -u disk_test_matrix.py --list-debt --list-platform-modes
 
-.PHONY: test-scripted-smoke-harness
 test-scripted-smoke-harness:
 	python3 -B plus4/tests/test_product_scripted_smoke.py
 
@@ -375,9 +370,11 @@ testplus4-runtime: ensure-kickass
 	cd plus4 && KICKASS="$(KICKASS_RESOLVED)" VICEPLUS4="$(VICEPLUS4)" ./run_testsplus4.sh
 
 check-zp:
+	python3 ../../tools/check_zp_usage.py --self-test
 	python3 ../../tools/check_zp_usage.py
 
 check-6502-lint:
+	python3 ../../tools/check_6502_lint.py --self-test
 	python3 ../../tools/check_6502_lint.py
 	python3 ../../tools/parse_creatures.py --check-web
 
@@ -583,57 +580,13 @@ $(C128_BOOTSECT_PRG): $(C128_BOOTSECT_SRC) | ensure-kickass $(OUT128)
 
 # ── Disk recipes ──────────────────────────────────────────
 $(EMPTY_PRG): | $(OUT)
-	printf '\x01\x08' > "$(EMPTY_PRG)"
+	printf '\x01\x08' > "$@.tmp.$$$$" && mv -f "$@.tmp.$$$$" "$(EMPTY_PRG)"
 
 $(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUT)
-	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
+	LC_ALL=C tr '\012' '\015' < "$<" > "$@.tmp.$$$$" && mv -f "$@.tmp.$$$$" "$@"
 
 $(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUT)
-	LC_ALL=C tr '\012' '\015' < "$<" > "$@"
-
-$(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(DISK64_IMAGE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) $(EMPTY_PRG) | $(OUT)
-	rm -rf "$(C64_DIST_DIR)"
-	mkdir -p "$(C64_DIST_DIR)"
-	cp -f "$(EMPTY_PRG)" "$(C64_DIST_DIR)/art1"
-	cp -f "$(EMPTY_PRG)" "$(C64_DIST_DIR)/art2"
-	cp -f "$(EMPTY_PRG)" "$(C64_DIST_DIR)/art3"
-	cp -f "$(EMPTY_PRG)" "$(C64_DIST_DIR)/art4"
-	cp -f "$(EMPTY_PRG)" "$(C64_DIST_DIR)/art5"
-	cp -f "$(C64_BOOT_PRG)" "$(C64_DIST_DIR)/moria8"
-	cp -f "$(C64_BOOT_PRG)" "$(C64_DIST_DIR)/boot64"
-	cp -f "$(C64_BOOTART_PRG)" "$(C64_DIST_DIR)/bootart64"
-	cp -f "$(C64_MAIN_PRG)" "$(C64_DIST_DIR)/moria64"
-	cp -f "$(C64_TITLE_PRG)" "$(C64_DIST_DIR)/t64"
-	cp -f "$(OUT64)/monster.cat1" "$(C64_DIST_DIR)/monster.cat1"
-	cp -f "$(OUT64)/monster.cat2" "$(C64_DIST_DIR)/monster.cat2"
-	cp -f "$(OUT64)/monster.cat3" "$(C64_DIST_DIR)/monster.cat3"
-	cp -f "$(OUT64)/monster.cat4" "$(C64_DIST_DIR)/monster.cat4"
-	cp -f "$(OUT64)/monster.ext" "$(C64_DIST_DIR)/monster.ext"
-	cp -f "$(OUT64)/monster.idx" "$(C64_DIST_DIR)/monster.idx"
-	cp -f "$(OUT64)/item.cat" "$(C64_DIST_DIR)/item.cat"
-	cp -f "$(OUT64)/item.idx" "$(C64_DIST_DIR)/item.idx"
-	cp -f "$(C64_OVL_START)" "$(C64_DIST_DIR)/64.start"
-	cp -f "$(C64_OVL_TOWN)" "$(C64_DIST_DIR)/64.town"
-	cp -f "$(C64_OVL_DEATH)" "$(C64_DIST_DIR)/64.death"
-	cp -f "$(C64_OVL_MODAL_MISC)" "$(C64_DIST_DIR)/64.modal"
-	cp -f "$(C64_OVL_GEN)" "$(C64_DIST_DIR)/64.gen"
-	cp -f "$(C64_OVL_HELP)" "$(C64_DIST_DIR)/64.help"
-	cp -f "$(C64_OVL_UI)" "$(C64_DIST_DIR)/64.ui"
-	cp -f "$(C64_OVL_ITEMS)" "$(C64_DIST_DIR)/64.items"
-	cp -f "$(C64_OVL_SPELL)" "$(C64_DIST_DIR)/64.spell"
-	cp -f "$(C64_OVL_CHEST)" "$(C64_DIST_DIR)/64.chest"
-ifneq ($(strip $(C64_EXTRA_OVERLAY_PAIRS)),)
-	@for pair in $(C64_EXTRA_OVERLAY_PAIRS); do cp -f "$${pair%%:*}" "$(C64_DIST_DIR)/$${pair#*:}"; done
-endif
-	cp -f "$(C64_RUNTIME_BANKED)" "$(C64_DIST_DIR)/64.bank"
-	cp -f "$(OUT64)/legalui" "$(C64_DIST_DIR)/legalui"
-	cp -f "$(LICENSE_DISK_FILE)" "$(C64_DIST_DIR)/license"
-	cp -f "$(SOURCE_OFFER_DISK_FILE)" "$(C64_DIST_DIR)/source-offer"
-	touch "$(C64_DIST_STAMP)"
-
-$(C64_ZIP_IMAGE): $(C64_DIST_STAMP)
-	rm -f "$(C64_ZIP_IMAGE)"
-	cd "$(C64_DIST_DIR)" && zip -q -r "../$(notdir $(C64_ZIP_IMAGE))" . -x .stamp
+	LC_ALL=C tr '\012' '\015' < "$<" > "$@.tmp.$$$$" && mv -f "$@.tmp.$$$$" "$@"
 
 $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) $(EMPTY_PRG) | $(OUT)
 	rm -f "$(DISK64_IMAGE)"
@@ -786,17 +739,9 @@ kickass: ensure-kickass
 
 ensure-kickass: | $(OUT) $(OUT64) $(OUT128) $(OUTPLUS4)
 ifeq ($(origin KICKASS),file)
-	@if [ ! -f "$(KICKASS_RESOLVED)" ]; then \
-		echo "Downloading KickAssembler..."; \
-		mkdir -p "$(KICKASS_DIR_RESOLVED)"; \
-		curl -sL "$(KICKASS_URL)" -o "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip" || { echo "ERROR: failed to download KickAssembler"; exit 1; }; \
-		unzip -qo "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip" -d "$(KICKASS_DIR_RESOLVED)" || { echo "ERROR: failed to unpack KickAssembler"; rm -f "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip"; exit 1; }; \
-		rm -f "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip"; \
-		test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: KickAss.jar not found after download at $(KICKASS_RESOLVED)"; exit 1; }; \
-		echo "KickAssembler ready at $(KICKASS_RESOLVED)"; \
-	fi
+	@../../tools/ensure_kickass.sh "$(KICKASS_DIR_RESOLVED)" "$(KICKASS_RESOLVED)"
 else
-	@test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: custom KICKASS path does not exist: $(KICKASS_RESOLVED)"; exit 1; }
+	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR_RESOLVED)" "$(KICKASS_RESOLVED)"
 endif
 
 $(OUT):
@@ -833,7 +778,6 @@ clean:
 # The C64 EasyFlash cartridge (a shipping package, built by `make disk`): its own
 # output directory and compile define.
 CART64_OUT = $(abspath $(OUT)/c64-cart)
-.PHONY: cartridge64 test64-cartridge
 cartridge64: $(OUT)/moria8-c64.crt
 
 $(CART64_OUT)/.main.stamp: $(C64_SOURCES) $(VERSION_INC) $(C64_TRAMPOLINES_INC) | ensure-kickass
@@ -859,7 +803,6 @@ $(CART64_OUT)/catalog-test.prg: c64/cartridge_test_catalog.s $(CART64_OUT)/.main
 
 test64-cartridge: test64-cartridge-assets test64-cartridge-persistence
 
-.PHONY: test64-cartridge-assets test64-cartridge-persistence
 test64-cartridge-assets: cartridge64 $(CART64_OUT)/catalog-test.prg
 	python3 c64/test_cartridge_harness.py
 	python3 ../../tools/check_easyflash.py "$(OUT)/moria8-c64.crt" "$(CART64_OUT)"
@@ -877,7 +820,6 @@ $(OUTPLUS4)/legalui: $(PLUS4_MAIN_PRG)
 	@test -f "$@" || $(MAKE) --no-print-directory -B "$(PLUS4_MAIN_PRG)"
 	@test -f "$@"
 
-.PHONY: test-legal-harness test64-legal test128-legal testplus4-legal
 test-legal-harness:
 	python3 -B test_legal_harness.py
 test64-legal: disk64 test-legal-harness

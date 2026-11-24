@@ -377,6 +377,7 @@ def ranged_kinds() -> frozenset[tuple[str, int]]:
 
 ATK_PARALYZE = 11   # core/monster.s: the paralysing touch or gaze (mon_atk_effect_paralyze)
 ATK_POISON = 14     # ... and the poisoning one
+ATK_LOSE_EXP = 19   # ... and the experience-draining one (mae_lose_exp, 2% a touch)
 
 
 def _attack_types(tables: dict[str, list[int]]) -> zip[tuple[int, int, int, int]]:
@@ -392,6 +393,24 @@ def poisoner_kinds() -> frozenset[tuple[str, int]]:
     return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
                      for code, level, blows in zip(tables["display"], tables["level"], _attack_types(tables))
                      if ATK_POISON in blows)
+
+
+@lru_cache(maxsize=1)
+def drainer_names() -> frozenset[str]:
+    """Names of the shipped creatures whose blows drain experience (the
+    Wights, Wraiths, Liches, Vampires, Ghosts, Banshee, Grape Jelly): known
+    before the first touch, which takes 2% of the experience."""
+    return frozenset(name for names, tables in _tiers()
+                     for name, blows in zip(names, _attack_types(tables))
+                     if any(b & ATK_TYPE_MASK == ATK_LOSE_EXP for b in blows))
+
+
+@lru_cache(maxsize=1)
+def drainer_kinds() -> frozenset[tuple[str, int]]:
+    """(screen glyph, creature level) of the same creatures, for one seen unnamed."""
+    return frozenset((screen_code_to_char(code), level) for _, tables in _tiers()
+                     for code, level, blows in zip(tables["display"], tables["level"], _attack_types(tables))
+                     if any(b & ATK_TYPE_MASK == ATK_LOSE_EXP for b in blows))
 
 
 @lru_cache(maxsize=1)

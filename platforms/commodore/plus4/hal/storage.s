@@ -42,62 +42,62 @@
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
 
+plus4_open_cmd_channel_x:
+    lda #hal_storage_cmd_channel
+    tay
+    jsr plus4_kernal_setlfs
+    jmp plus4_kernal_open
+
+plus4_close_cmd_channel:
+    jsr plus4_kernal_clrchn
+    lda #hal_storage_cmd_channel
+    jmp plus4_kernal_close
+
 // Check whether an IEC device responds.
 // Input: X = device number (8-30)
 // Output: carry clear = present, carry set = absent/unusable
 hal_storage_probe_media:
     stx disk_temp
-    jsr plus4_bank_rom
-
+    jsr plus4_kernal_clrchn
     lda #0
-    ldx #0
-    ldy #0
+    tax
+    tay
     jsr plus4_kernal_setnam
-    lda #hal_storage_cmd_channel
     ldx disk_temp
-    ldy #hal_storage_cmd_channel
-    jsr plus4_kernal_setlfs
-    jsr plus4_kernal_open
+    jsr plus4_open_cmd_channel_x
     bcs !absent+
+    ldx #hal_storage_cmd_channel
+    jsr plus4_kernal_chkin
+    bcc !read_st+
+    lda #1
+    bne !have_res+
+!read_st:
     jsr plus4_kernal_readst
-    bne !close_absent+
-    lda #hal_storage_cmd_channel
-    jsr plus4_kernal_close
-    jsr plus4_kernal_clrchn
-    jsr plus4_bank_ram
-    clc
+    and #$fe
+!have_res:
+    pha
+    jsr plus4_close_cmd_channel
+    pla
+    cmp #1                      // C=0 if A==0 (present), C=1 if A>=1 (absent)
     rts
-!close_absent:
-    lda #hal_storage_cmd_channel
-    jsr plus4_kernal_close
 !absent:
-    jsr plus4_kernal_clrchn
-    jsr plus4_bank_ram
     sec
     rts
 
 // Best-effort drive init for the selected prompt device.
 hal_storage_init_selected_drive:
-    jsr plus4_bank_rom
     lda #2
     ldx #<hal_storage_init_command
     ldy #>hal_storage_init_command
     jsr plus4_kernal_setnam
-    lda #hal_storage_cmd_channel
     ldx disk_prompt_device
-    ldy #hal_storage_cmd_channel
-    jsr plus4_kernal_setlfs
-    jsr plus4_kernal_open
+    jsr plus4_open_cmd_channel_x
     bcs !fail+
-    lda #hal_storage_cmd_channel
-    jsr plus4_kernal_close
-    jsr plus4_kernal_clrchn
-    jsr plus4_bank_ram
+    jsr plus4_close_cmd_channel
     clc
     rts
 !fail:
     jsr plus4_kernal_clrchn
-    jsr plus4_bank_ram
     sec
     rts
 

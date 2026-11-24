@@ -1,4 +1,4 @@
-.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
+.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 	test test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test64-cartridge test64-cartridge-persistence test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
 	check-zp check-6502-lint check-hal-boundaries check-item-docs report-budgets ensure-kickass kickass tools-ready tools-ready-apple2 \
 	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 test-stage-atari8 test-stage-bbcmaster FORCE \
@@ -23,6 +23,8 @@ endif
 # it, ISOLATE=0 disables it. Downloads happen first, outside the namespace.
 ISOLATE ?= auto
 export ISOLATE
+REQUIRE_ALL_ROMS ?= 0
+export REQUIRE_ALL_ROMS
 ISOLATED = tools/isolated.sh
 
 all:
@@ -46,7 +48,7 @@ disk:
 	$(MAKE) -C platforms/atari8 disk
 	$(MAKE) -C platforms/bbcmaster disk
 
-build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk64 zip64 c64-dist disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
+build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk64 disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass:
 	$(MAKE) -C platforms/commodore $@
 
@@ -91,9 +93,12 @@ report-budgets:
 test-prebuild: tools-ready-apple2
 	$(MAKE) check-item-docs
 	$(MAKE) check-hal-boundaries
+	$(MAKE) check-zp
+	$(MAKE) check-6502-lint
 	$(MAKE) build
 	python3 -B tools/check_overlay_calls.py --check-sym
 	$(MAKE) -C platforms/commodore disk
+	$(MAKE) -C platforms/commodore test-disk-static
 	$(MAKE) -C platforms/apple2 test-memory-contract
 	$(MAKE) -C platforms/apple2 disk
 	$(MAKE) -C platforms/cx16 disk
@@ -144,8 +149,8 @@ PLAYTEST_SEEDS = $(if $(SEEDS),--seeds $(SEEDS))
 # CHARACTER=human-warrior etc. (playtest/moria_playtest/goals.py CHARACTERS)
 PLAYTEST_CHARACTER = $(if $(CHARACTER),--character $(CHARACTER))
 # PORT=plus4, c128, apple2, atari8, bbcmaster or cx16 plays another port
-# (playtest/moria_playtest/ports.py, §21); the Plus/4 needs
-# PLAYTEST_PLUS4_KERNAL and PLAYTEST_DOS1541 (JiffyDOS), the C128 takes
+# (playtest/moria_playtest/ports.py, §21); the Plus/4 takes
+# PLAYTEST_PLUS4_KERNAL with PLAYTEST_DOS1541 (an optional JiffyDOS pair), the C128 takes
 # PLAYTEST_C128_KERNAL with PLAYTEST_DOS1571 (an optional pair), the MAME ports
 # A2ROMS, ATARI8ROMS or BBCMROMS, the X16 X16EMU and X16ROM; PLAYTEST_X16_BLOCK=1
 # reads the X16 a block at a time, with an x16emu patched for it (docs/BACKLOG.md).
@@ -384,12 +389,11 @@ testbbcmaster-memory-contract-selftest:
 # Image freshness is owned by the sub-makefiles; these rules always delegate.
 GPG         ?= gpg
 GPG_SIGN_FLAGS ?= --armor --detach-sign
-SHASUM      ?= shasum
+SHA256      ?= $(if $(SHASUM),$(SHASUM) -a 256,$(if $(shell command -v sha256sum 2>/dev/null),sha256sum,shasum -a 256))
 
 BUILD       ?= build
 
 DISK64_IMAGE       = $(BUILD)/moria8-c64.d64
-C64_ZIP_IMAGE      = $(BUILD)/moria8-c64.zip
 CART64_IMAGE       = $(BUILD)/moria8-c64.crt
 DISK128_D64_IMAGE  = $(BUILD)/moria8-c128.d64
 DISK128_D71_IMAGE  = $(BUILD)/moria8-c128.d71
@@ -403,8 +407,11 @@ CARTCX16_IMAGE     = $(BUILD)/moria8-cx16.crt
 DISKATARI8_IMAGE   = $(BUILD)/moria8-atari8.atr
 CARTATARI8_IMAGE   = $(BUILD)/moria8-atari8.car
 DISKBBCMASTER_IMAGE = $(BUILD)/moria8-bbcmaster.ssd
-RELEASE_ARTIFACTS  = $(DISK64_IMAGE) $(C64_ZIP_IMAGE) $(CART64_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(CART128_IMAGE) $(DISKPLUS4_IMAGE) $(CARTPLUS4_IMAGE) $(DISKAPPLE2_IMAGE) $(DISKCX16_IMAGE) $(CARTCX16_IMAGE) $(DISKATARI8_IMAGE) $(CARTATARI8_IMAGE) $(DISKBBCMASTER_IMAGE)
-ARTIFACT_MANIFEST  = $(BUILD)/SHA256SUMS
+RELEASE_DIR        = $(BUILD)/release
+_RELEASE_VERSION  := $(or $(RELEASE_VERSION),$(shell python3 -B -c "import json; vs=sorted(set(json.load(open('version.json')).values())); print('v'+vs[0] if len(vs)==1 else '')"))
+BUILD_ARTIFACTS    = $(DISK64_IMAGE) $(CART64_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(CART128_IMAGE) $(DISKPLUS4_IMAGE) $(CARTPLUS4_IMAGE) $(DISKAPPLE2_IMAGE) $(DISKCX16_IMAGE) $(CARTCX16_IMAGE) $(DISKATARI8_IMAGE) $(CARTATARI8_IMAGE) $(DISKBBCMASTER_IMAGE)
+RELEASE_ARTIFACTS  = $(foreach f,$(notdir $(BUILD_ARTIFACTS)),$(RELEASE_DIR)/$(basename $(f))-$(_RELEASE_VERSION)$(suffix $(f)))
+ARTIFACT_MANIFEST  = $(RELEASE_DIR)/SHA256SUMS
 ARTIFACT_SIGNATURES = $(addsuffix .asc,$(RELEASE_ARTIFACTS) $(ARTIFACT_MANIFEST))
 
 artifact-checksums: $(ARTIFACT_MANIFEST)
@@ -414,19 +421,10 @@ artifact artifacts: $(ARTIFACT_MANIFEST) $(ARTIFACT_SIGNATURES)
 $(DISK64_IMAGE): FORCE
 	$(MAKE) -C platforms/commodore disk64
 
-$(C64_ZIP_IMAGE): FORCE
-	$(MAKE) -C platforms/commodore zip64
-
 $(CART64_IMAGE): FORCE
 	$(MAKE) -C platforms/commodore cartridge64
 
-$(DISK128_D64_IMAGE): FORCE
-	$(MAKE) -C platforms/commodore disk128
-
-$(DISK128_D71_IMAGE): FORCE
-	$(MAKE) -C platforms/commodore disk128
-
-$(DISK128_D81_IMAGE): FORCE
+$(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) &: FORCE
 	$(MAKE) -C platforms/commodore disk128
 
 $(CART128_IMAGE): FORCE
@@ -441,29 +439,27 @@ $(CARTPLUS4_IMAGE): FORCE
 $(DISKAPPLE2_IMAGE): FORCE
 	$(MAKE) -C platforms/apple2 disk
 
-$(DISKCX16_IMAGE): FORCE
+$(DISKCX16_IMAGE) $(CARTCX16_IMAGE) &: FORCE
 	$(MAKE) -C platforms/cx16 disk
 
-$(CARTCX16_IMAGE): FORCE
-	$(MAKE) -C platforms/cx16 cartridge
-
-$(DISKATARI8_IMAGE): FORCE
+$(DISKATARI8_IMAGE) $(CARTATARI8_IMAGE) &: FORCE
 	$(MAKE) -C platforms/atari8 disk
-
-$(CARTATARI8_IMAGE): FORCE
-	$(MAKE) -C platforms/atari8 cartridge
 
 $(DISKBBCMASTER_IMAGE): FORCE
 	$(MAKE) -C platforms/bbcmaster disk
 
+$(RELEASE_ARTIFACTS): $(BUILD_ARTIFACTS)
+	@test -n "$(_RELEASE_VERSION)" || { echo "ERROR: version.json versions disagree; set RELEASE_VERSION=vX.Y.Z" >&2; exit 1; }
+	mkdir -p "$(RELEASE_DIR)"
+	cp -f "$(BUILD)/$(subst -$(_RELEASE_VERSION),,$(notdir $@))" "$@"
+
 $(ARTIFACT_MANIFEST): $(RELEASE_ARTIFACTS)
-	cd "$(BUILD)" && $(SHASUM) -a 256 $(notdir $(RELEASE_ARTIFACTS)) > "$(notdir $@)"
+	cd "$(RELEASE_DIR)" && $(SHA256) $(notdir $(RELEASE_ARTIFACTS)) > "$(notdir $@)"
 
 %.asc: %
 	$(GPG) --yes $(GPG_SIGN_FLAGS) --output "$@" "$<"
 
 FORCE:
 
-.PHONY: cartridge64 test64-cartridge test64-cartridge-persistence cartridge128 test128-cartridge
 test64-cartridge test64-cartridge-persistence test128-cartridge: tools-ready
 	$(ISOLATED) $(MAKE) -C platforms/commodore $@

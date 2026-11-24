@@ -3,7 +3,7 @@
 // Tests: monster_ai_tick, wake check, movement, speed, FLAG_OCCUPIED,
 //        confused movement, a never-moving creature, Teleport To.
 //
-// Results at $0400-$0443: $01 = pass, $00 = fail per test
+// Results at $0400-$0446: $01 = pass, $00 = fail per test (71 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #69
+    ldx #70
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -220,7 +220,7 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 70, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 71, $ff      // Result buffer (copied to $0400 at end)
 t59_toward: .byte 0
 t59_left:   .byte 0
 t60_n:      .byte 0             // neighbours around the breeder (MON-016)
@@ -3865,6 +3865,68 @@ test_start:
     lda #FI_EMPTY
     sta inv_item_id + EQUIP_RING
     sta inv_item_id + EQUIP_RING2
+
+    // Test 71: player +4 speed (2 Rings of Speed + Boots of Speed + Haste) vs
+    // speed-0 monster (s = -4) clamps s + 3 to 0 (mod 5 cadence, no OOB read).
+    lda #ITEM_SLOT_RING_OF_SPEED
+    sta inv_item_id + EQUIP_RING
+    sta inv_item_id + EQUIP_RING2
+    .if (ITEM_PAGE_RING_OF_SPEED != 0) {
+        lda #ITEM_PAGE_RING_OF_SPEED
+        sta inv_ego + EQUIP_RING
+        sta inv_ego + EQUIP_RING2
+    }
+    lda #ITEM_SLOT_SOFT_LEATHER_BOOTS
+    sta inv_item_id + EQUIP_FEET
+    lda #(ITEM_PAGE_SOFT_LEATHER_BOOTS | EGO_SPEED)
+    sta inv_ego + EQUIP_FEET
+    lda #10
+    sta zp_eff_speed
+    lda cr_speed + 4
+    pha
+    lda #0
+    sta cr_speed + 4
+    sta zp_turn_hi
+    lda #4                      // 4 mod 5 != 0 -> skipped
+    jsr t69_kobold_turn
+    cmp #20
+    bne !t71_fail+
+    lda mat_fast
+    cmp #4
+    bne !t71_fail+
+    lda #5                      // 5 mod 5 == 0 -> acts once
+    jsr t69_kobold_turn
+    cmp #21
+    bne !t71_fail+
+    lda #1
+    sta zp_turn_hi
+    lda #3                      // 259 mod 5 == 4 -> skipped
+    jsr t69_kobold_turn
+    cmp #20
+    bne !t71_fail+
+    lda #4                      // 260 mod 5 == 0 -> acts once
+    jsr t69_kobold_turn
+    cmp #21
+    bne !t71_fail+
+    lda #$01
+    .byte $2c
+!t71_fail:
+    lda #$00
+    sta tc_results + 70
+    pla
+    sta cr_speed + 4
+    lda #0
+    sta zp_turn_hi
+    sta zp_eff_speed
+    .if (ITEM_PAGE_RING_OF_SPEED != 0) {
+        sta inv_ego + EQUIP_RING
+        sta inv_ego + EQUIP_RING2
+    }
+    sta inv_ego + EQUIP_FEET
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    sta inv_item_id + EQUIP_RING2
+    sta inv_item_id + EQUIP_FEET
 
 !tests_done:
     jmp test_finish

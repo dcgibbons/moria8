@@ -16,8 +16,8 @@ Usage:
   --selected  Show the ~120 selected creatures (default)
   --tiers     Show tier breakdown with creature counts
   --asm       Generate assembly data (for R3.5.2) and sync docs/monsters.html
-  --sync-web  Sync docs/monsters.html directly from tier0.s..tier4.s (no UMORIA_SRC needed)
-  --check-web Verify docs/monsters.html matches tier0.s..tier4.s byte-for-byte
+  --sync-web  Sync docs/monsters.html from platforms/shared/catalog/monster_catalog_spec.json (279 species)
+  --check-web Verify docs/monsters.html matches monster_catalog_spec.json and has no stale 150-species UI copy
 
 UMORIA_SRC names Umoria's src/data_creatures.cpp at the pinned revision in
 docs/BEHAVIOR_CHANGE_PROTOCOL.md (2a2a6b791f084cac97db85f5b78739e913dd3572);
@@ -1181,131 +1181,94 @@ def generate_asm(creatures, selected_indices):
     print(f"\nDone.")
 
 
-WEB_TIER_LABELS = {
-    0: "Tier 0 · Town (DL 0)",
-    1: "Tier 1 · Shallow (DL 1–8)",
-    2: "Tier 2 · Early (DL 5–15)",
-    3: "Tier 3 · Mid (DL 11–25)",
-    4: "Tier 4 · Deep (DL 20–100)",
-}
-
-WEB_SOA_KEYS = [
-    ("cr_display",      "display"),
-    ("cr_color",        "color"),
-    ("cr_speed",        "speed"),
-    ("cr_mflags",       "mflags"),
-    ("cr_level",        "level"),
-    ("cr_hd_num",       "hd_num"),
-    ("cr_hd_sides",     "hd_sides"),
-    ("cr_ac",           "ac"),
-    ("cr_sleep",        "sleep"),
-    ("cr_aaf",          "aaf"),
-    ("cr_xp_lo",        "xp_lo"),
-    ("cr_xp_hi",        "xp_hi"),
-    ("cr_atk0_type",    "atk0_type"),
-    ("cr_atk0_dice",    "atk0_dice"),
-    ("cr_atk0_sides",   "atk0_sides"),
-    ("cr_atk1_type",    "atk1_type"),
-    ("cr_atk1_dice",    "atk1_dice"),
-    ("cr_atk1_sides",   "atk1_sides"),
-    ("cr_spell_chance", "spell_chance"),
-    ("cr_spell_flags",  "spell_flags"),
-    ("cr_treasure",     "treasure"),
+WEB_CATALOG_KEYS = [
+    ("display",         lambda c: c["display"]),
+    ("color",           lambda c: c["color"]),
+    ("speed",           lambda c: c["speed_byte"]),
+    ("mflags",          lambda c: c["mflags"]),
+    ("level",           lambda c: c["level"]),
+    ("hd_num",          lambda c: c["hd_num"]),
+    ("hd_sides",        lambda c: c["hd_sides_scaled"]),
+    ("ac",              lambda c: c["ac"]),
+    ("sleep",           lambda c: c["sleep_byte"]),
+    ("aaf",             lambda c: c["aaf_byte"]),
+    ("xp_lo",           lambda c: c["xp_lo"]),
+    ("xp_hi",           lambda c: c["xp_hi"]),
+    ("atk0_type",       lambda c: c["packed_attacks"][0][0]),
+    ("atk0_dice",       lambda c: c["packed_attacks"][0][1]),
+    ("atk0_sides",      lambda c: c["packed_attacks"][0][2]),
+    ("atk1_type",       lambda c: c["packed_attacks"][1][0]),
+    ("atk1_dice",       lambda c: c["packed_attacks"][1][1]),
+    ("atk1_sides",      lambda c: c["packed_attacks"][1][2]),
+    ("atk2_type",       lambda c: c["packed_attacks"][2][0]),
+    ("atk2_dice",       lambda c: c["packed_attacks"][2][1]),
+    ("atk2_sides",      lambda c: c["packed_attacks"][2][2]),
+    ("atk3_type",       lambda c: c["packed_attacks"][3][0]),
+    ("atk3_dice",       lambda c: c["packed_attacks"][3][1]),
+    ("atk3_sides",      lambda c: c["packed_attacks"][3][2]),
+    ("spell_chance",    lambda c: c["spell_chance"]),
+    ("spell_flags",     lambda c: c["spell_flags"]),
+    ("spell_flags2",    lambda c: c["spell_flags2"]),
+    ("cdefense",        lambda c: c["cdefense_byte"]),
+    ("treasure",        lambda c: c["treasure"]),
 ]
 
 WEB_BEGIN_MARKER = "// BEGIN GENERATED_CREATURE_DATA"
 WEB_END_MARKER = "// END GENERATED_CREATURE_DATA"
+WEB_STALE_150_STRINGS = (
+    "all (150)",
+    "/ 150",
+    "150 shipped",
+    "150-creature",
+)
 
 
-def parse_asm_tier_file(filepath, tier_idx):
-    """Parse a committed tier{N}.s file into its exact SoA arrays and metadata."""
-    with open(filepath, "r", encoding="utf-8") as f:
-        text = f.read()
-
-    count_m = re.search(r"\.const\s+TIER_COUNT\s*=\s*(\d+)", text)
-    if not count_m:
-        raise ValueError(f"{filepath}: missing .const TIER_COUNT")
-    count = int(count_m.group(1))
-
-    # Extract Umoria IDs from header comments: //   0: [ 16] DL 1 Kobold
-    ids = [int(m.group(2)) for m in re.finditer(r"^//\s+(\d+):\s+\[\s*(\d+)\]\s+DL\s*\d+\s+", text, re.MULTILINE)]
-    if len(ids) != count:
-        raise ValueError(f"{filepath}: expected {count} header index comments, found {len(ids)}")
-
-    # Extract names from tierN_crn_<i>: .text "..."
-    prefix = f"tier{tier_idx}"
-    names = [m.group(2) for m in re.finditer(rf'^{prefix}_crn_(\d+):\s*\.text\s+"([^"]+)"', text, re.MULTILINE)]
-    if len(names) != count:
-        raise ValueError(f"{filepath}: expected {count} .text name entries, found {len(names)}")
-
-    arrays = {}
-    for asm_field, js_key in WEB_SOA_KEYS:
-        label = f"{prefix}_{asm_field}:"
-        pos = text.find(label)
-        if pos < 0:
-            raise ValueError(f"{filepath}: missing label {label}")
-        rest = text[pos + len(label):]
-        vals = []
-        for line in rest.splitlines():
-            s = line.strip()
-            if not s:
-                if vals:
-                    break
-                continue
-            if s.startswith("//"):
-                continue
-            if not s.startswith(".byte"):
-                break
-            byte_part = s[len(".byte"):].split("//")[0]
-            for tok in byte_part.split(","):
-                tok = tok.strip()
-                if not tok:
-                    continue
-                if tok.startswith("$"):
-                    vals.append(int(tok[1:], 16))
-                else:
-                    vals.append(int(tok, 10))
-        if len(vals) != count:
-            raise ValueError(f"{filepath} {label}: expected {count} bytes, found {len(vals)}")
-        arrays[js_key] = vals
-
-    return {
-        "tier": tier_idx,
-        "label": WEB_TIER_LABELS[tier_idx],
-        "ids": ids,
-        "names": names,
-        "arrays": arrays,
-    }
-
-
-def render_web_tiers_block(tier_dir):
-    """Render the const TIERS_RAW = [...] JS block from tier0.s..tier4.s."""
+def load_web_catalog_spec(spec_path):
+    """Load and validate the 279-species monster_catalog_spec.json catalog."""
     import json
-    lines = [WEB_BEGIN_MARKER, "const TIERS_RAW = ["]
-    for tier_idx in range(len(TIERS)):
-        tier_path = os.path.join(tier_dir, f"tier{tier_idx}.s")
-        t = parse_asm_tier_file(tier_path, tier_idx)
-        lines.append("  {")
-        lines.append(f'    tier: {t["tier"]}, label: {json.dumps(t["label"], ensure_ascii=False)},')
-        lines.append(f'    ids: [{",".join(str(x) for x in t["ids"])}],')
-        lines.append(f'    names: [{",".join(json.dumps(n, ensure_ascii=False) for n in t["names"])}],')
-        for idx, (_, js_key) in enumerate(WEB_SOA_KEYS):
-            vals = t["arrays"][js_key]
-            formatted = ",".join(f"0x{v:02x}" for v in vals)
-            comma = "," if idx + 1 < len(WEB_SOA_KEYS) else ""
-            lines.append(f"    {js_key}: [{formatted}]{comma}")
-        close = "  }," if tier_idx + 1 < len(TIERS) else "  }"
-        lines.append(close)
-    lines.append("];")
+    with open(spec_path, "r", encoding="utf-8") as f:
+        doc = json.load(f)
+    if doc.get("schema_version") != 1:
+        raise ValueError(f"{spec_path}: unsupported schema_version {doc.get('schema_version')}")
+    creatures = doc.get("creatures", [])
+    expected_count = doc.get("constants", {}).get("CREATURE_COUNT", 279)
+    if expected_count != 279 or len(creatures) != 279:
+        raise ValueError(f"{spec_path}: expected 279 creatures, got {len(creatures)}")
+    for idx, c in enumerate(creatures):
+        if c["index"] != idx:
+            raise ValueError(f"{spec_path}: index mismatch at {idx}: {c['index']}")
+        if len(c.get("packed_attacks", [])) != 4:
+            raise ValueError(f"{spec_path}: creature {idx} missing 4 packed_attacks")
+    creatures = sorted(creatures, key=lambda c: (c["level"], c["index"]))
+    return creatures
+
+
+def render_web_catalog_block(spec_path):
+    """Render const CATALOG_RAW = {...}; JS block from monster_catalog_spec.json."""
+    import json
+    creatures = load_web_catalog_spec(spec_path)
+    lines = [WEB_BEGIN_MARKER, "const CATALOG_RAW = {"]
+    lines.append(f"  count: {len(creatures)},")
+    lines.append(f'  ids: [{",".join(str(c["index"]) for c in creatures)}],')
+    lines.append(f'  names: [{",".join(json.dumps(c["moria8_name"], ensure_ascii=False) for c in creatures)}],')
+    for idx, (js_key, getter) in enumerate(WEB_CATALOG_KEYS):
+        vals = [getter(c) for c in creatures]
+        for b in vals:
+            if not (0 <= b <= 0xFF):
+                raise ValueError(f"{spec_path}: field {js_key} byte out of range: {b}")
+        formatted = ",".join(f"0x{b:02x}" for b in vals)
+        comma = "," if idx + 1 < len(WEB_CATALOG_KEYS) else ""
+        lines.append(f"  {js_key}: [{formatted}]{comma}")
+    lines.append("};")
     lines.append(WEB_END_MARKER)
     return "\n".join(lines)
 
 
 def sync_web(check_only=False):
-    """Sync or verify docs/monsters.html against platforms/commodore/c64/creature_data/tier0.s..tier4.s."""
+    """Sync or verify docs/monsters.html against platforms/shared/catalog/monster_catalog_spec.json."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(script_dir, ".."))
-    tier_dir = os.path.join(repo_root, "platforms", "commodore", "c64", "creature_data")
+    spec_path = os.path.join(repo_root, "platforms", "shared", "catalog", "monster_catalog_spec.json")
     html_path = os.path.join(repo_root, "docs", "monsters.html")
 
     with open(html_path, "r", encoding="utf-8") as f:
@@ -1318,15 +1281,23 @@ def sync_web(check_only=False):
         sys.exit(1)
     end += len(WEB_END_MARKER)
 
-    rendered = render_web_tiers_block(tier_dir)
+    rendered = render_web_catalog_block(spec_path)
     current = html[start:end]
 
     if check_only:
         if current != rendered:
             print(
                 "ERROR: docs/monsters.html creature data is out of sync with "
-                "platforms/commodore/c64/creature_data/tier0.s..tier4.s.\n"
+                "platforms/shared/catalog/monster_catalog_spec.json.\n"
                 "Run: python3 tools/parse_creatures.py --sync-web",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        outside = html[:start] + html[end:]
+        stale = [s for s in WEB_STALE_150_STRINGS if s in outside]
+        if stale:
+            print(
+                f"ERROR: docs/monsters.html still contains stale 150-species copy: {stale}",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -1336,7 +1307,7 @@ def sync_web(check_only=False):
         new_html = html[:start] + rendered + html[end:]
         with open(html_path, "w", encoding="utf-8") as f:
             f.write(new_html)
-        print("Updated docs/monsters.html from tier0.s..tier4.s")
+        print("Updated docs/monsters.html from monster_catalog_spec.json (279 species)")
 
 
 if __name__ == "__main__":

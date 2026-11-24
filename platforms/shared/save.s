@@ -103,13 +103,6 @@
 .const SAVE_SLOT_CHAR_T = $54
 .const SAVE_SLOT_CHAR_V = $56
 .const SAVE_SLOT_CHAR_Y = $59
-.const SAVE_SLOT_TITLE_ROW = 9
-.const SAVE_SLOT_FIRST_ROW = 11
-.const SAVE_SLOT_SELECT_ROW = 16
-.const SAVE_SLOT_TITLE_COL = (SCREEN_COLS - 11) / 2
-.const SAVE_SLOT_LINE_COL = (SCREEN_COLS - 20) / 2
-.const SAVE_SLOT_PROMPT_COL = (SCREEN_COLS - 15) / 2
-.const SAVE_SLOT_NAME_LEN = 16
 #else
 .const SAVE_SLOT_CHAR_A = $01
 .const SAVE_SLOT_CHAR_C = $03
@@ -123,6 +116,7 @@
 .const SAVE_SLOT_CHAR_T = $14
 .const SAVE_SLOT_CHAR_V = $16
 .const SAVE_SLOT_CHAR_Y = $19
+#endif
 .const SAVE_SLOT_TITLE_ROW = 9
 .const SAVE_SLOT_FIRST_ROW = 11
 .const SAVE_SLOT_SELECT_ROW = 16
@@ -130,7 +124,6 @@
 .const SAVE_SLOT_LINE_COL = (SCREEN_COLS - 20) / 2
 .const SAVE_SLOT_PROMPT_COL = (SCREEN_COLS - 15) / 2
 .const SAVE_SLOT_NAME_LEN = 16
-#endif
 
 // ============================================================
 // Scratch variables (before code so BRK is last in tests)
@@ -280,8 +273,6 @@ save_query_drive_status:
     lda disk_error_readst       // preserve stream failure READST for fallback detail
     pha
 #endif
-    lda save_device
-    sta disk_prompt_device      // C128: also disk_ui_action, not live during save/load
     jsr hal_storage_read_command_status
 #if HAL_STORAGE_APPEND_DISK_DETAIL
     pla
@@ -754,7 +745,11 @@ save_open_write_len:
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
-#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL || !HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+#if !HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    lda save_io_error
+    bne !save_error+
+#endif
     jsr SAVE_READST
     and #$83
     bne !save_error+
@@ -1097,6 +1092,16 @@ plus4_test_after_load_magic:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     sta plus4_test_file_cksum_hi
 #endif
+    jsr SAVE_READST
+#if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
+    sta disk_error_readst
+    and #$fe
+#endif
+    beq !load_checksum_status_ok+
+    cmp #$40                // EOI after final expected byte is valid
+    beq !load_checksum_status_ok+
+    jmp !load_corrupt_nocl+
+!load_checksum_status_ok:
 #endif
 
     // Check for I/O errors during read
@@ -1377,6 +1382,7 @@ save_write_block:
     beq !swb_done+
     // Read byte from source
     :SaveByteRead_ptr0_y()
+    pha
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -1385,7 +1391,7 @@ save_write_block:
     inc save_cksum_hi
 !swb_no_carry:
     // Write byte
-    :SaveByteRead_ptr0_y()
+    pla
     jsr SAVE_CHROUT
     // Check status
     jsr SAVE_READST
@@ -1778,11 +1784,9 @@ load_read_byte:
 #else
 #if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     sta disk_error_readst
-    and #$02
-#else
-    and #$03
+    and #$fe                // Plus/4 KERNAL may leave write-timeout ($01) set after CHRIN
 #endif
-    beq !lrby_status_ok+
+    beq !lrby_status_ok+    // Any error ($01/$02/$80) or unexpected EOF/EOI ($40) sets save_io_error
     inc save_io_error
 #endif
 !lrby_status_ok:
@@ -2169,8 +2173,7 @@ save_file_exists_read_len:          // save_slot_apply_name patches the length
 #if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
 // storage_file_exists — The same for any file (A = name length, X/Y = name):
 // the save-disk marker's readers use it so that no CHKIN reaches a file the
-// drive refused (docs/BACKLOG.md). It also sets disk_prompt_device to the
-// save drive (C64, Plus/4) and leaves the status reader's results behind
+// drive refused (docs/BACKLOG.md). Leaves the status reader's results behind
 // (disk_status, and the DOS digits where the port keeps them).
 storage_file_exists:            // on the save drive
     sta sfe_len + 1             // the name, kept in the retry's own operands
@@ -2194,10 +2197,6 @@ sfe_name_hi:
     ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
 #if HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
-#if !HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
-    lda save_device             // the drive the status is read from
-    sta disk_prompt_device
-#endif
     jsr SAVE_OPEN
     bcs !sfe_refused+
     // No CHKIN: on a file the drive refused, one can wait forever in the

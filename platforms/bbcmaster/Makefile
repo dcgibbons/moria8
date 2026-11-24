@@ -4,7 +4,6 @@ KICKASS_DIR     ?= ../../tools/kickass
 # KICKASS names the jar, as on every port (README: KICKASS=/path/to/KickAss.jar)
 KICKASS         ?= $(KICKASS_DIR)/KickAss.jar
 KICKASS_JAR     = $(KICKASS)
-KICKASS_URL     = https://theweb.dk/KickAssembler/KickAssembler.zip
 # kickass_java.sh fails the build on a failed .assert (KickAssembler itself exits 0)
 KA              = ../../tools/kickass_java.sh -jar $(KICKASS_JAR)
 
@@ -50,6 +49,7 @@ BEEB_SAVE_SSD   = $(OUTBEEB)/save-disk.ssd
 MAME           ?= mame
 BEEB_MACHINE   ?= bbcm
 BBCMROMS       ?=
+REQUIRE_ALL_ROMS ?= 0
 MAME_DIR       = $(OVL_OUTBEEB)/mame
 MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -nvram_directory "$(MAME_DIR)/nvram" \
@@ -61,19 +61,19 @@ MAME_DIR_FLAGS = -cfg_directory "$(MAME_DIR)/cfg" \
                  -share_directory "$(MAME_DIR)/share"
 
 BEEB_OVL_PRGS += $(OUTBEEB)/legalui
-.PHONY: all build disk run test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke clean kickass
+.PHONY: all build disk run test test-memory-contract test-memory-contract-selftest test-runtime test-fast-smoke clean ensure-kickass kickass
 
 all: build
 
 build: $(BEEB_MAIN_PRG) $(BEEB_PLAY_PRG) $(BEEB_AUX_PRG) $(BEEB_HUFF_PRG) $(BEEB_CAT_PRG) $(BEEB_OVL_PRGS) $(BEEB_TITLE_PRG) $(BEEB_BOOT_PRG)
 
-kickass: $(KICKASS_JAR)
-$(KICKASS_JAR):
-	@echo "Downloading KickAssembler..."
-	@mkdir -p $(KICKASS_DIR)
-	@curl -sL "$(KICKASS_URL)" -o $(KICKASS_DIR)/kickass.zip
-	@unzip -qo $(KICKASS_DIR)/kickass.zip -d $(KICKASS_DIR)
-	@rm -f $(KICKASS_DIR)/kickass.zip
+kickass: ensure-kickass
+ensure-kickass $(KICKASS_JAR):
+ifeq ($(origin KICKASS),file)
+	@../../tools/ensure_kickass.sh "$(KICKASS_DIR)" "$(KICKASS_JAR)"
+else
+	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR)" "$(KICKASS_JAR)"
+endif
 
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
 	@mkdir -p $(OUT)
@@ -161,6 +161,8 @@ test-memory-contract: build test-memory-contract-selftest
 test-runtime: disk
 	@if [ -n "$(BBCMROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --all; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: BBCMROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: BBCMROMS not set; skipping BBC Master 128 MAME runtime smoke suite"; \
 	fi
@@ -168,6 +170,8 @@ test-runtime: disk
 test-fast-smoke: disk
 	@if [ -n "$(BBCMROMS)" ]; then \
 		python3 -B harness_smoke.py --rompath "$(BBCMROMS)" --disk "$(BEEB_SSD)" --sym "$(OUTBEEB)/main.sym" --fast-smoke; \
+	elif [ "$(strip $(REQUIRE_ALL_ROMS))" = "1" ]; then \
+		echo "ERROR: BBCMROMS not set and REQUIRE_ALL_ROMS=1" >&2; exit 1; \
 	else \
 		echo "WARNING: BBCMROMS not set; skipping BBC Master 128 MAME fast smoke suite"; \
 	fi

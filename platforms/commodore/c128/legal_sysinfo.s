@@ -93,7 +93,7 @@ legal_sysinfo_lbl_io:       .text "Last I/O:"; .byte 0
 
 legal_sysinfo_plat_c128:    .text "Commodore 128 (80-col VDC)"; .byte 0
 #if C128_CARTRIDGE
-legal_sysinfo_build_cart:   .text "Magic Desk 128 Cartridge"; .byte 0
+legal_sysinfo_build_cart:   .text "Cartridge"; .byte 0
 #else
 legal_sysinfo_build_disk:   .text "Floppy / Disk"; .byte 0
 #endif

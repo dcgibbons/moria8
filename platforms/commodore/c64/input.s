@@ -598,11 +598,10 @@ c64_test_input_script:
     .byte $0d              // RETURN
     .byte $33              // 3 = done
     .byte $20              // SPACE = acknowledge insert-save-disk prompt
-    .byte $59              // Y = initialize marker if the fixture marker is not accepted
-    .byte $d3              // SHIFT+S = absorbed by post-load fresh-key path
     .byte $d3              // SHIFT+S = save in gameplay
     .byte $59              // Y = overwrite existing save
     .byte $53              // S = start from title after save
+    .byte $00
 #else
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     .byte $4c              // L = load from title

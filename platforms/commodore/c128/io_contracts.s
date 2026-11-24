@@ -208,6 +208,7 @@
 :C128AuditHomeOverlay("home_deposit", home_deposit)
 :C128AuditHomeOverlay("eff_item_p1_exec", eff_item_p1_exec)
 :C128AuditHomeOverlay("init_starting_kit", init_starting_kit)
+:C128AuditModalMiscOverlay("winner_apply_retirement_bonus_storage", winner_apply_retirement_bonus_storage)
 :C128AuditBanked("magic_recalc_mana", magic_recalc_mana)
 :C128AuditBanked("magic_check_new_spells", magic_check_new_spells)
 :C128AuditBanked("player_recalc_equipment", player_recalc_equipment)

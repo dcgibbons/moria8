@@ -77,6 +77,8 @@ icr_idx:            .byte 0
 icr_skip_lo:        .byte 0
 icr_skip_hi:        .byte 0
 icr_bp_pos:         .byte 0
+icr_read_err:       .byte 0
+icr_allow_eoi:      .byte 0
 
 #endif
 
@@ -153,6 +155,14 @@ hal_item_cat_read_byte:
     bcs !icr_find_sec-          // Always (C = 1 from the adc)
 
 !icr_found_sec:
+    // Clamp the final sector's end to ITMCAT_TOTAL_SIZE so sequential fallback
+    // reads near EOF stop at exact file size instead of reading past EOF.
+    lda icr_sec_idx
+    cmp #ITMCAT_SECTOR_COUNT - 1
+    bne !+
+    lda #<ITMCAT_TOTAL_SIZE
+    sta icr_end_lo
+!:
     // Only a window from the byte asked for, ICR_WINDOW bytes at most: one
     // lookup wants 1-4 bytes, and the whole 254 over the serial bus cost a
     // stock 1541 most of each miss (53 misses entering the game, 2026-11-20).
@@ -236,7 +246,14 @@ hal_item_cat_read_byte:
 !icr_u1_read:
     jsr icr_chkin_ok
     bcs !icr_cmd_failed+
-    jsr icr_read_sector_buf
+    // Clean EOI ($40) on '#' direct sector read is valid only on buffer byte 255.
+    // icr_allow_eoi is always 0 at read entry and reset before icr_read_buf_* returns.
+    clc
+    lda icr_bp_pos
+    adc icr_cache_len
+    bne !+
+    inc icr_allow_eoi
+!:  jsr icr_read_sector_buf
     lda #15
     jsr hal_storage_close
     jsr icr_verify_sector
@@ -262,11 +279,12 @@ hal_item_cat_read_byte:
     jsr icr_chkin_ok
     bcs !icr_wrong_disk+
     // Skip 2-byte PRG header + icr_cache_start_lo/hi payload bytes.
-    jsr hal_storage_chrin
-    jsr hal_storage_chrin
+    clc
     lda icr_cache_start_lo
+    adc #2
     sta icr_skip_lo
     lda icr_cache_start_hi
+    adc #0
     sta icr_skip_hi
 !icr_skip:
     lda icr_skip_lo
@@ -274,15 +292,25 @@ hal_item_cat_read_byte:
     beq !icr_read_named+
     jsr hal_storage_chrin
     jsr hal_storage_readst
-    and #$bf
-    bne !icr_wrong_disk+
+    bne !icr_wrong_disk+        // Reject premature EOF ($40) or serial error during skip
     lda icr_skip_lo
     bne !+
     dec icr_skip_hi
 !:  dec icr_skip_lo
     jmp !icr_skip-
 !icr_read_named:
-    jsr icr_read_sector_buf
+    // Clean EOI ($40) on sequential ITEM.CAT read is valid only at ITMCAT_TOTAL_SIZE.
+    // On the last sector icr_cache_start + icr_cache_len spans <= 254 bytes, so 8-bit sum suffices.
+    lda icr_sec_idx
+    cmp #ITMCAT_SECTOR_COUNT - 1
+    bne !+
+    clc
+    lda icr_cache_start_lo
+    adc icr_cache_len
+    cmp #<ITMCAT_TOTAL_SIZE
+    bne !+
+    inc icr_allow_eoi
+!:  jsr icr_read_sector_buf
     lda #15
     jsr hal_storage_close
     jsr icr_verify_sector
@@ -342,7 +370,7 @@ icr_chkin_ok:
 // icr_read_sector_buf — Read icr_cache_len bytes from active channel ICR_LFN into item_cat_sec_buf; close ICR_LFN.
 icr_read_sector_buf:
     lda icr_cache_len
-    jsr icr_read_buf_n
+    jsr icr_read_buf_keep_eoi
 icr_close_buf:
     jsr hal_storage_clrchn
     lda #ICR_LFN
@@ -364,9 +392,15 @@ icr_close_all:
 
 // icr_read_buf_n — Read A bytes (1..ICR_WINDOW) from active channel ICR_LFN into item_cat_sec_buf.
 // Uses icr_skip_lo as loop limit (dead on !icr_direct and after !icr_skip finishes).
+// Clears icr_allow_eoi unless entered at icr_read_buf_keep_eoi; sets icr_read_err on
+// any READST error or premature/unexpected EOI ($40).
 icr_read_buf_n:
+    ldx #0
+    stx icr_allow_eoi
+icr_read_buf_keep_eoi:
     sta icr_skip_lo
     lda #0
+    sta icr_read_err
     sta icr_idx
 !irsb_loop:
     jsr hal_storage_chrin
@@ -374,29 +408,50 @@ icr_read_buf_n:
     sta item_cat_sec_buf,x
     inx
     stx icr_idx
-    cpx icr_skip_lo
+    jsr hal_storage_readst
+    beq !irsb_next+
+    cmp #$40
+    bne !irsb_err+
+    lda icr_allow_eoi
+    beq !irsb_err+
+    lda icr_idx
+    cmp icr_skip_lo
+    bne !irsb_err+
+!irsb_next:
+    lda icr_idx
+    cmp icr_skip_lo
     bne !irsb_loop-
+    beq !irsb_done+
+!irsb_err:
+    inc icr_read_err
+!irsb_done:
+    lda #0
+    sta icr_allow_eoi
     rts
 
-// icr_verify_sector — C = 0 if the buffer looks valid: one read from the
-// file's start (icr_cache_start = 0) must begin with 'ITM2'.
+// icr_verify_sector — C = 0 if the stream read cleanly (icr_read_err == 0)
+// and, on a read from the file's start (icr_cache_start == 0), starts with 'ITM2'.
 icr_verify_sector:
     lda icr_cache_start_lo
     ora icr_cache_start_hi
-    bne !ivs_ok+
+    beq icr_verify_magic
+    lda icr_read_err
+    beq !ivs_ok+
+!ivs_bad:
+    sec
+    rts
 icr_verify_magic:
+    lda icr_read_err
+    bne !ivs_bad-
     ldx #3
 !ivm_loop:
     lda item_cat_sec_buf,x
     cmp icr_magic,x
-    bne !ivs_bad+
+    bne !ivs_bad-
     dex
     bpl !ivm_loop-
 !ivs_ok:
     clc
-    rts
-!ivs_bad:
-    sec
     rts
 
 #if ITEM_CATALOG_REU

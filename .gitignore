@@ -11,12 +11,15 @@ build/
 *.vs
 *.dbg
 
-# Disk images
+# Disk and cartridge images
 *.d64
 *.d71
 *.d81
 *.po
 *.atr
+*.ssd
+*.crt
+*.car
 
 # Virtual ][ state
 *.viisnapshot
@@ -50,6 +53,14 @@ build/
 /platforms/atari8/diff/
 /platforms/atari8/comments/
 /platforms/atari8/share/
+/platforms/bbcmaster/cfg/
+/platforms/bbcmaster/nvram/
+/platforms/bbcmaster/inp/
+/platforms/bbcmaster/sta/
+/platforms/bbcmaster/snap/
+/platforms/bbcmaster/diff/
+/platforms/bbcmaster/comments/
+/platforms/bbcmaster/share/
 
 # KickAssembler (auto-downloaded by make)
 tools/kickass/

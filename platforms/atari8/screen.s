@@ -216,6 +216,7 @@ screen_init:
 // ============================================================
 dli_vector:
     .word dli_row1
+.assert "dli_vector does not cross page", (dli_vector & $ff) != $ff, true
 
 atari_nmi_handler:
     pha
@@ -223,6 +224,7 @@ atari_nmi_handler:
     pha
     tya
     pha
+    cld
 
     // Check physical SYSTEM RESET key NMI (NMIST bit 5 = $20)
     lda NMIST

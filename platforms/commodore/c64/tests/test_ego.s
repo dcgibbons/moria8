@@ -5,7 +5,7 @@
 //        resistance armour (roll, worn flags, suffixes), the Lordly rings,
 //        the crowns of the Magi (roll, flags, INT, suffix).
 //
-// Results at $0400-$0417: $01 = pass, $00 = fail per test (24 tests)
+// Results at $0400-$0418: $01 = pass, $00 = fail per test (25 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -19,7 +19,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #23
+    ldx #24
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -136,7 +136,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 24, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 25, $ff      // Result buffer (copied to $0400 at end)
 tc_loop:    .byte 0
 tc_count:   .byte 0
 
@@ -642,9 +642,13 @@ test_start:
     // Action, See Invisible and Feather Falling; a digging tool's ego gives none
     lda #ITEM_SLOT_PICK                     // Pick (ICAT_DIGGING): inv_ego is a tool prefix
     sta inv_item_id + EQUIP_WEAPON
+    lda #ITEM_SLOT_CHAIN_MAIL
+    sta inv_item_id + EQUIP_BODY
+    lda #ITEM_SLOT_SMALL_SHIELD
+    sta inv_item_id + EQUIP_SHIELD
     lda #EGO_RESIST
     sta inv_ego + EQUIP_BODY
-    lda #EGO_RESIST_ACID
+    lda #(ITEM_PAGE_SMALL_SHIELD | EGO_RESIST_ACID)
     sta inv_ego + EQUIP_SHIELD
     lda #2                      // a tool ego (Dwarven): no flags
     sta inv_ego + EQUIP_WEAPON
@@ -652,10 +656,13 @@ test_start:
     lda player_pflags
     cmp #PFLAG_RESIST_FIRE | PFLAG_RESIST_COLD | PFLAG_RESIST_ACID | PFLAG_RESIST_LIGHT
     bne !t17_fail+
-    lda #FI_EMPTY
+    lda #ITEM_SLOT_DAGGER
     sta inv_item_id + EQUIP_WEAPON
-    lda #EGO_DEFENDER
+    lda #(ITEM_PAGE_DAGGER | EGO_DEFENDER)
     sta inv_ego + EQUIP_WEAPON
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_BODY
+    sta inv_item_id + EQUIP_SHIELD
     lda #0
     sta inv_ego + EQUIP_BODY
     sta inv_ego + EQUIP_SHIELD
@@ -670,6 +677,8 @@ test_start:
     sta tc_results + 16
     lda #FI_EMPTY
     sta inv_item_id + EQUIP_WEAPON
+    sta inv_item_id + EQUIP_BODY
+    sta inv_item_id + EQUIP_SHIELD
     lda #0
     sta inv_ego + EQUIP_WEAPON
     sta inv_ego + EQUIP_BODY
@@ -677,6 +686,8 @@ test_start:
     jsr player_recalc_pflags_equipment
 
     // Test 18: one (Resist Lightning) body armour gives only that
+    lda #ITEM_SLOT_CHAIN_MAIL
+    sta inv_item_id + EQUIP_BODY
     lda #EGO_RESIST_LIGHT
     sta inv_ego + EQUIP_BODY
     jsr player_recalc_pflags_equipment
@@ -684,6 +695,8 @@ test_start:
     cmp #PFLAG_RESIST_LIGHT
     jsr t_store_eq
     sta tc_results + 17
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_BODY
     lda #0
     sta inv_ego + EQUIP_BODY
     jsr player_recalc_pflags_equipment
@@ -1041,6 +1054,43 @@ test_start:
     sta inv_p1 + EQUIP_HEAD
     sta inv_p1 + EQUIP_AMULET
     sta inv_p1 + EQUIP_RING2
+
+    // Test 25: empty equipment slots (FI_EMPTY) with stale inv_ego bits must
+    // yield 0 passive flags (regression guard for player_pflags_cold.s).
+    ldx #EQUIP_WEAPON
+    lda #FI_EMPTY
+!t25_clr:
+    sta inv_item_id,x
+    inx
+    cpx #EQUIP_END
+    bne !t25_clr-
+    lda #(ITEM_PAGE_BIT | EGO_DEFENDER)
+    sta inv_ego + EQUIP_WEAPON
+    lda #EGO_RESIST
+    sta inv_ego + EQUIP_BODY
+    lda #EGO_MAGI
+    sta inv_ego + EQUIP_HEAD
+    lda #EGO_SPEED
+    sta inv_ego + EQUIP_FEET
+    lda #(ITEM_PAGE_BIT | EGO_RESIST_ACID)
+    sta inv_ego + EQUIP_SHIELD
+    jsr player_recalc_pflags_equipment
+    lda player_pflags
+    ora player_pflags2
+    ora player_sust_mask
+    ora wield_flags_0
+    ora wield_flags_1
+    ora wield_flags_2
+    ora wield_flags_3
+    jsr t_store_zero
+    sta tc_results + 24
+    lda #0
+    sta inv_ego + EQUIP_WEAPON
+    sta inv_ego + EQUIP_BODY
+    sta inv_ego + EQUIP_HEAD
+    sta inv_ego + EQUIP_FEET
+    sta inv_ego + EQUIP_SHIELD
+    jsr player_recalc_pflags_equipment
 
     jmp test_exit_trampoline
 t12_slot:   .byte 0

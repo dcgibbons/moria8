@@ -5453,6 +5453,180 @@ run_item_cat_level_entry_jiffydos1541_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_c64_command_status_byte1_timeout_smoke() {
+    local name="c64_command_status_byte1_timeout_smoke"
+    echo -n "  $name: "
+
+    local main_vs="$TMPDIR/main.vs"
+    local main_prg="$TMPDIR/moria.prg"
+    if [ ! -s "$main_vs" ] || [ ! -s "$main_prg" ]; then
+        echo "FAIL (missing compiled main.prg/main.vs in $TMPDIR)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file tty_log
+    mon_file=$(mktemp -t "test_${name}_mon")
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+
+    if ! python3 - "$main_vs" "$mon_file" <<'PY'
+import sys
+
+vs_path, mon_path = sys.argv[1], sys.argv[2]
+syms = {}
+with open(vs_path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0] == "al" and parts[1].startswith("C:"):
+            syms[parts[2]] = int(parts[1][2:], 16)
+
+needed = [
+    ".entry",
+    ".c64_storage_read_command_status",
+    ".c64_disk_clrchn",
+    ".c64_disk_setnam",
+    ".c64_disk_setlfs",
+    ".c64_disk_open",
+    ".c64_disk_chkout",
+    ".c64_disk_chkin",
+    ".c64_disk_chrin",
+    ".c64_disk_readst",
+    ".c64_disk_close",
+    ".c64_restore_vic_bank0_after_serial",
+    ".disk_status",
+    ".cdrs_lost",
+    ".save_device",
+    ".disk_prompt_device",
+]
+missing = [k for k in needed if k not in syms]
+if missing:
+    raise SystemExit(f"missing symbols: {missing}")
+
+def lh(addr):
+    return f"{addr & 0xff:02x} {(addr >> 8) & 0xff:02x}"
+
+lines = [
+    f"break exec ${syms['.entry']:04x}",
+    "g",
+    "delete 1",
+    "> 01 35",
+    f"> 0280 20 {lh(syms['.c64_storage_read_command_status'])} 00",
+    # Stub all non-read I/O calls with CLC; RTS (18 60)
+]
+for stub in (
+    ".c64_disk_clrchn",
+    ".c64_disk_setnam",
+    ".c64_disk_open",
+    ".c64_disk_chkout",
+    ".c64_disk_chkin",
+    ".c64_disk_close",
+    ".c64_restore_vic_bank0_after_serial",
+):
+    lines.append(f"> {syms[stub]:04x} 18 60")
+
+# Record X passed to c64_disk_setlfs at $028b before returning CLC; RTS.
+lines.append(f"> {syms['.c64_disk_setlfs']:04x} 4c b0 02")
+lines.append("> 02b0 8e 8b 02 18 60")
+
+# Jump stubs for CHRIN -> $0290 and READST -> $02a8 (6-byte wrappers)
+lines.append(f"> {syms['.c64_disk_chrin']:04x} 4c 90 02")
+lines.append(f"> {syms['.c64_disk_readst']:04x} 4c a8 02")
+lines.append("> 0290 8e 8a 02 ae 84 02 bd 87 02 8d 89 02 bd 85 02 ee 84 02 ae 8a 02 18 60")
+lines.append("> 02a8 ad 89 02 18 60")
+lines.append("break exec $0283")
+
+ds = syms[".disk_status"]
+lost = syms[".cdrs_lost"]
+sdev = syms[".save_device"]
+pdev = syms[".disk_prompt_device"]
+cases = [
+    # (b0, b1, st0, st1, chkout_fail, chkin_fail)
+    (0x32, 0x36, 0x00, 0x02, False, False),  # 26 with byte-1 timeout -> ds=2, cdrs_lost=2
+    (0x37, 0x33, 0x00, 0x02, False, False),  # 73 ghost digit with byte-1 timeout -> ds=2, cdrs_lost=2
+    (0x32, 0x33, 0x00, 0x00, False, False),  # 23 clean READ ERROR -> ds=2, cdrs_lost=0
+    (0x32, 0x36, 0x00, 0x00, False, False),  # 26 clean WRITE PROTECT -> ds=26 ($1a), cdrs_lost=0
+    (0x58, 0x30, 0x00, 0x00, False, False),  # non-digit '$58' with ST=$00 -> ds=2, cdrs_lost=0
+    (0x00, 0x00, 0x00, 0x00, True,  False),  # CHKOUT fail + stale disk_prompt_device=10 -> ds=2, lost=0, dev=8
+    (0x00, 0x00, 0x00, 0x00, False, True),   # CHKIN fail + stale disk_prompt_device=10 -> ds=2, lost=0, dev=8
+]
+for b0, b1, st0, st1, chkout_fail, chkin_fail in cases:
+    lines.append(f"> {syms['.c64_disk_chkout']:04x} {'38' if chkout_fail else '18'} 60")
+    lines.append(f"> {syms['.c64_disk_chkin']:04x} {'38' if chkin_fail else '18'} 60")
+    lines.extend([
+        f"> {sdev:04x} 08",
+        f"> {pdev:04x} 0a",
+        "> 028b ff",
+        f"> 0284 00 {b0:02x} {b1:02x} {st0:02x} {st1:02x}",
+        "r sp = ff",
+        "r pc = 0280",
+        "g",
+        f"m {ds:04x} {ds:04x}",
+        f"m {lost:04x} {lost:04x}",
+        "m 028b 028b",
+    ])
+lines.append("quit")
+with open(mon_path, "w", encoding="utf-8") as f:
+    f.write("\n".join(lines) + "\n")
+PY
+    then
+        echo "FAIL (monitor script setup)"
+        rm -f "$mon_file" "$tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$main_prg" -moncommands "$mon_file" \
+        -limitcycles 50000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    if python3 - "$tty_log" "$main_vs" <<'PY'
+import re, sys
+
+log_path, vs_path = sys.argv[1], sys.argv[2]
+syms = {}
+with open(vs_path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0] == "al" and parts[1].startswith("C:"):
+            syms[parts[2]] = int(parts[1][2:], 16)
+
+ds = f"{syms['.disk_status']:04x}"
+lost = f"{syms['.cdrs_lost']:04x}"
+with open(log_path, encoding="utf-8", errors="replace") as f:
+    txt = f.read()
+
+ds_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{ds}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+lost_vals = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{lost}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+dev_vals = [int(m.group(1), 16) for m in re.finditer(r"^>C:028b\s+([0-9a-fA-F]{2})\b", txt, re.M)]
+expected = [
+    (0x02, 0x02, 0x08),  # 26 + byte1 ST=$02 -> ds=2, lost!=0, dev=save_device(8)
+    (0x02, 0x02, 0x08),  # 73 + byte1 ST=$02 -> ds=2, lost!=0, dev=8
+    (0x02, 0x00, 0x08),  # 23 + ST=$00       -> ds=2, lost==0, dev=8
+    (0x1a, 0x00, 0x08),  # 26 + ST=$00       -> ds=26, lost==0, dev=8
+    (0x02, 0x00, 0x08),  # $58 + ST=$00      -> ds=2, lost==0, dev=8
+    (0x02, 0x00, 0x08),  # CHKOUT fail + stale prompt=10 -> ds=2, lost==0, dev=8
+    (0x02, 0x00, 0x08),  # CHKIN fail + stale prompt=10 -> ds=2, lost==0, dev=8
+]
+got = list(zip(ds_vals, lost_vals, dev_vals))
+if len(got) != 7 or got != expected:
+    raise SystemExit(f"got {got}, expected {expected}")
+PY
+    then
+        echo "PASS (7/7 cases: byte-1 timeout, non-digit, CHKOUT/CHKIN fail, save_device binding)"
+        rm -f "$mon_file" "$tty_log"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        tail -n 30 "$tty_log"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 echo "=== Moria Phase 1 Tests ==="
 echo ""
 
@@ -5460,7 +5634,7 @@ echo ""
 echo -n "  main.s assembly: "
 cd "$RUN_TESTS64_DIR"
 mkdir -p ../../../build/test/c64
-asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -o "$TMPDIR/moria.prg" 2>&1)
+asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -vicesymbols -o "$TMPDIR/moria.prg" 2>&1)
 assert_info=$(echo "$asm_out" | grep "asserts")
 if echo "$asm_out" | grep -q "0 failed"; then
     echo "PASS ($assert_info)"
@@ -5472,18 +5646,20 @@ else
 fi
 TOTAL=$((TOTAL + 1))
 
-check_static_contract "wizard_heal_contract" "../../../core/wizard.s" \
-    "wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
-check_static_contract "wizard_footer_full_copy_contract" "../../../core/wizard.s" \
+check_static_contract "wizard_heal_contract" "../../../core/ui_wizard.s" \
+    "ui_wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
+check_static_contract "wizard_footer_full_copy_contract" "../../../core/ui_wizard.s" \
     "wiz_footer_str:|||.text \"Q to cancel\""
-check_static_contract "wizard_cancel_text_contract" "../../../core/wizard.s" \
+check_static_contract "wizard_cancel_text_contract" "../../../core/ui_wizard.s" \
     "wiz_row4_str:|||.text \"Q to cancel\""
-check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/wizard.s" \
+check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/ui_wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
-check_static_contract "wizard_item_prompt_range_contract" "../../../core/wizard.s" \
+check_static_contract "wizard_item_prompt_range_contract" "../../../core/ui_wizard.s" \
     "wiz_item_prompt_str:|||.text \"ITEM 0-\" + toIntString(ITEM_TYPE_COUNT - 1) + \": \""
-check_static_contract "wizard_bad_prompt_cleanup_contract" "../../../core/wizard.s" \
-    "wizard_prompt_bad_value:|||jsr msg_print|||jmp wizard_prompt_clear_digits|||wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
+check_static_contract "wizard_bad_prompt_cleanup_contract" "main.s" \
+    "wizard_prompt_bad_value:|||jsr msg_print_ay|||jmp wizard_prompt_clear_digits"
+check_static_contract "wizard_bad_prompt_loop_contract" "../../../core/ui_wizard.s" \
+    "ui_wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
     "disk_prompt:|||jsr hal_input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr hal_storage_init_selected_drive"
 check_static_contract "disk_setup_insert_dismiss_clears_modal_contract" "../../../core/ui_disk_setup.s" \
@@ -5549,7 +5725,9 @@ check_static_contract "overcast_faint_more_contract" "../../../core/player_magic
 check_static_contract "paralysis_final_tick_message_contract" "../../../core/game_loop.s" \
     "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
-    "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_exchange:"
+    "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||jmp c64_banked_ret|||tramp_item_exchange:"
+check_static_contract "c64_banked_ret_restores_bank_contract" "main.s" \
+    "c64_banked_ret:|||pla|||sta \$01|||plp|||rts"
 check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
     "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr loot_generate_pending|||jsr hal_platform_runtime_resync"
 check_static_contract "monster_drops_before_turn_contract" "../../../core/game_loop_helpers.s" \
@@ -5581,13 +5759,13 @@ check_static_contract "modal_restore_uses_safe_full_clear_contract" "../../../co
 check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
     "tramp_do_look:|||lda #OVL_MODAL_MISC|||jsr overlay_load_no_kernal|||bcs !done+|||jsr do_look|||!done:|||jmp tramp_sr_epilogue"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
-    "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
+    "c64_irq_hidden_rom:|||lda \$01|||pha|||lda #BANK_NO_KERNAL|||sta \$01|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||pla|||sta \$01|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
 check_static_contract "c64_modal_ego_restores_io_contract" "main.s" \
     "tramp_roll_ego_type_modal:|||lda \$01|||pha|||lda #BANK_NO_ROMS|||jsr roll_ego_type|||pla|||sta \$01|||plp|||tya|||rts"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
 check_static_contract "c64_safe_iec_eoi_vectors_contract" "main.s" \
-    "jsr \$ff8a|||c64_disk_call:|||jsr c64_apply_safe_iec_vectors|||c64_basin_safe:|||lda \$99|||beq c64_acptr_safe|||c64_acptr_safe:|||!cas_vb:|||bit \$d011|||bpl !cas_vb-|||c64_acptr_eoi_resume:|||jmp \$ee20|||c64_iload_safe:|||jsr c64_acptr_safe|||c64_safe_iec_active:|||c64_apply_safe_iec_vectors:|||jsr c64_safe_iec_install|||platform_main_loop_begin_c64:|||jsr c64_apply_safe_iec_vectors|||c64_safe_iec_install:"
+    "jsr \$ff8a|||c64_disk_call:|||jsr c64_apply_safe_iec_vectors|||c64_basin_safe:|||lda KERNAL_DFLTN|||beq c64_acptr_safe|||c64_acptr_safe:|||!cas_vb:|||bit \$d011|||bpl !cas_vb-|||c64_acptr_eoi_resume:|||jmp \$ee20|||c64_iload_safe:|||jsr c64_acptr_safe|||c64_safe_iec_active:|||c64_apply_safe_iec_vectors:|||platform_main_loop_begin_c64:|||jsr c64_apply_safe_iec_vectors|||c64_boot_pre_test_init:|||jsr c64_safe_iec_install|||c64_safe_iec_install:"
 check_static_contract "item_cat_sector0_magic_and_named_eoi_contract" "../common/item_catalog_records.s" \
     "lda icr_sec_idx|||bne !icr_u1_window+|||lda #4|||jsr icr_send_u1_bp|||jsr icr_verify_magic|||lda icr_bp_pos|||jsr icr_send_bp|||!icr_by_name:|||jsr icr_open_cmd|||jsr hal_storage_open|||bcs !icr_wrong_disk+|||jsr icr_drive_ok|||bcs !icr_wrong_disk+|||jsr icr_chkin_ok|||!icr_read_named:|||jsr icr_read_sector_buf"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
@@ -5602,6 +5780,12 @@ check_static_contract "c64_save_stream_overlay_safe_io_contract" "hal/storage.s"
     ".label hal_storage_chkout = c64_disk_chkout|||.label hal_storage_chrin = c64_disk_chrin|||.label hal_storage_chrout = c64_disk_chrout|||.label hal_storage_clrchn = c64_disk_clrchn|||.label hal_storage_readst = c64_disk_readst|||.label hal_storage_load = c64_disk_load"
 check_static_contract "c64_save_trampoline_overlay_contract" "main.s" \
     "save_game:|||lda #OVL_STORAGE|||jsr overlay_load_no_kernal|||jsr save_game_impl|||load_game:|||lda #OVL_STORAGE|||jsr overlay_load_no_kernal|||jsr load_game_impl"
+check_static_contract "c64_command_status_byte1_timeout_contract" "main.s" \
+    "c64_storage_read_command_status:|||jsr c64_disk_chrin|||pha|||jsr c64_disk_readst|||and #\$02|||sta cdrs_lost|||pla|||!cdrs_check_26:|||jsr c64_cdrs_chrin_checked|||!cdrs_check_62:|||jsr c64_cdrs_chrin_checked|||!cdrs_check_7x:|||jsr c64_cdrs_chrin_checked|||c64_cdrs_chrin_checked:|||jsr c64_disk_chrin|||pha|||jsr c64_disk_readst|||and #\$02|||beq !cdrs_byte_ok+|||sta cdrs_lost|||pla|||lda #0|||rts"
+check_static_contract "save_slot_read_name_drains_cmd_status_contract" "../common/save_slot_menu.s" \
+    "save_slot_read_name:|||lda #3|||sta save_slot_probe_tries|||jsr SAVE_CHRIN|||pha|||jsr SAVE_READST|||tax|||and #\$02|||sta save_slot_probe_lost|||txa|||bne !drained+|||!drain:|||jsr SAVE_CHRIN|||cmp #\$0d|||beq !drained+|||jsr SAVE_READST|||beq !drain-|||!drained:|||jsr save_restore_channels|||pla"
+check_static_contract "c64_iload_safe_timeout_cleanup_contract" "main.s" \
+    "c64_iload_safe:|||jsr c64_acptr_safe|||sta KERNAL_EAL|||lda #\$02|||bit KERNAL_STATUS|||bne !cis_fnf+|||jsr c64_acptr_safe|||sta KERNAL_EAH|||lda #\$02|||bit KERNAL_STATUS|||bne !cis_fnf+|||!cis_next:|||lda #8|||sta c64_iload_retries|||!cis_loop:|||jsr c64_acptr_safe|||bit KERNAL_STATUS|||beq !cis_store+|||dec c64_iload_retries|||bne !cis_loop-|||beq !cis_fnf+|||!cis_fnf:|||jsr \$edef|||jsr \$f642|||jmp \$f704"
 run_vice_resource_contract
 
 # Runtime tests
@@ -5617,7 +5801,7 @@ run_test "turn" "tests/test_turn.s" "0400 0426" 39 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0444" 69 500000000
 run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0445" 70 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0446" 71 500000000
 run_test "monster_ai2" "tests/test_monster_ai2.s" "0400 0417" 24 500000000
 run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
 run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
@@ -5712,17 +5896,17 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0418" 25 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 042b" 44 1000000000
+run_test "save"  "tests/test_save.s"  "0400 042c" 45 1000000000
 run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
 run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
-run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 041B" 28 50000000
+run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 041E" 31 50000000
 run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
 run_test "render" "tests/test_render.s" "0400 0418" 25 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
-run_test "ego" "tests/test_ego.s" "0400 0417" 24 500000000
+run_test "ego" "tests/test_ego.s" "0400 0418" 25 500000000
 run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000
 run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
@@ -5771,6 +5955,7 @@ run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
 run_suite_function "hot_residency_product_smoke" run_hot_residency_product_smoke
 run_suite_function "item_cat_level_entry_product_smoke" run_item_cat_level_entry_product_smoke
 run_suite_function "item_cat_level_entry_jiffydos1541_product_smoke" run_item_cat_level_entry_jiffydos1541_product_smoke
+run_suite_function "c64_command_status_byte1_timeout_smoke" run_c64_command_status_byte1_timeout_smoke
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 if [ $FAIL -gt 0 ]; then

@@ -122,14 +122,23 @@ ep1_detect_objects:
     :MapRead_ptr0_y()
     ora #(FLAG_VISITED | FLAG_LIT)
     :MapWrite_ptr0_y()
-    lda #1
-    sta vis_room_revealed
+    jsr ep1_set_revealed
 !ep1_dfo_next:
     inx
     cpx #MAX_FLOOR_ITEMS
     bcc !ep1_dfo_loop-
-    ldx #HSTR_PIQ_SENSE
-    jmp huff_print_msg
+    lda #<ep1_msg_objects
+    ldy #>ep1_msg_objects
+    ldx ep1_arg
+    beq !ep1_dfo_msg+
+    lda #<ep1_msg_treasure
+    ldy #>ep1_msg_treasure
+!ep1_dfo_msg:
+    jmp msg_print_ay
+
+ep1_msg_treasure:     .text "You sense treasure nearby." ; .byte 0
+ep1_msg_objects:      .text "You sense objects nearby." ; .byte 0
+ep1_msg_doors_stairs: .text "You sense doors and stairs." ; .byte 0
 
 // ============================================================
 // Detect Invisible (Scroll/Staff of Detect Invisible) & Create Food (Scroll)
@@ -160,8 +169,7 @@ ep1_create_food:
     sta fi_add_qty
     jsr floor_item_add
     bcc !ep1_cf_fail+
-    lda #1
-    sta vis_room_revealed
+    jsr ep1_set_revealed
     ldx #HSTR_PMU_CREATE_FOOD
     jmp huff_print_msg
 !ep1_cf_fail:
@@ -303,8 +311,7 @@ ep1_darkness:
     inx
     bne !ep1_dk_row-
 !ep1_dk_blind:
-    lda #1
-    sta vis_room_revealed
+    jsr ep1_set_revealed
     inc zp_dirty_count
     lda zp_eff_blind
     bne !ep1_dk_done+
@@ -352,8 +359,7 @@ ep1_find_traps:
     bne !ep1_ft_loop-
 !ep1_ft_chests:
     jsr chest_mark_found_all
-    lda #1
-    sta vis_room_revealed
+    jsr ep1_set_revealed
     ldx #HSTR_DF_FOUND_TRAP
     lda ep1_cnt
     bne !ep1_ft_msg+
@@ -389,10 +395,10 @@ ep1_find_doors_stairs:
     inc ep1_y
     bne !ep1_fds_row-
 !ep1_fds_done:
-    lda #1
-    sta vis_room_revealed
-    ldx #HSTR_PIQ_SENSE
-    jmp huff_print_msg
+    jsr ep1_set_revealed
+    lda #<ep1_msg_doors_stairs
+    ldy #>ep1_msg_doors_stairs
+    jmp msg_print_ay
 
 // ============================================================
 // Trap Creation, Door Creation, Trap/Door Destruction (Scroll and Wand)
@@ -442,9 +448,7 @@ ep1_create_doors:
     jsr ep1_read_xy
     and #(TILE_TYPE_MASK | FLAG_OCCUPIED)
     bne !ep1_cd_next+               // bare TILE_FLOOR only
-    lda ep1_x
-    ldy ep1_y
-    jsr floor_item_find_at
+    jsr ep1_find_floor_xy
     bcs !ep1_cd_next+
     jsr ep1_trap_at_xy
     bcs !ep1_cd_next+
@@ -452,8 +456,7 @@ ep1_create_doors:
     and #TILE_FLAG_MASK
     ora #(TILE_DOOR_CLOSED | FLAG_VISITED)
     :MapWrite_ptr0_y()
-    lda #1
-    sta vis_room_revealed
+    jsr ep1_set_revealed
 !ep1_cd_next:
     inc ep1_idx
     bne !ep1_cd_loop-
@@ -511,9 +514,7 @@ ep1_destroy_td_area:
     inc ep1_y
     bne !ep1_dt_y-
 !ep1_dt_done:
-    lda #1
-    sta vis_room_revealed
-    rts
+    jmp ep1_set_revealed
 
 // Clear traps, chest traps, and closed/secret doors at (ep1_x, ep1_y).
 // Clobbers: A, X, Y, zp_ptr0
@@ -540,11 +541,17 @@ ep1_trap_at_xy:
     sta df_target_y
     jmp trap_find_at_target
 
+ep1_find_floor_xy:
+    lda ep1_x
+    ldy ep1_y
+    jmp floor_item_find_at
+
 ep1_floor_visited_reveal:
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK             // TILE_FLOOR == 0
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
+ep1_set_revealed:
     lda #1
     sta vis_room_revealed
     rts
@@ -561,9 +568,7 @@ ep1_disarm_tile:
     bne !ep1_dt_chk_chest+
     jsr ep1_floor_visited_reveal
 !ep1_dt_chk_chest:
-    lda ep1_x
-    ldy ep1_y
-    jsr floor_item_find_at
+    jsr ep1_find_floor_xy
     bcc !ep1_dt_ret+
     jsr item_get_category_floor_x
     cmp #ICAT_CHEST
@@ -590,11 +595,7 @@ ep1_ench_wpn_star:
     ldx #EQUIP_WEAPON
     lda inv_item_id,x
     cmp #FI_EMPTY
-    bne !ep1_ew_has+
-!ep1_no_gear:
-    ldx #HSTR_PIQ_VIBRATION
-    jmp huff_print_msg
-!ep1_ew_has:
+    beq ep1_no_gear
     lda inv_flags,x
     and #~IF_CURSED & $ff
     sta inv_flags,x
@@ -605,9 +606,7 @@ ep1_ench_wpn_star:
     bne !ep1_ew_cnt+
 !ep1_ew_star:
     lda #2
-    jsr rng_range
-    clc
-    adc #1
+    jsr ep1_rng_1_to_a
 !ep1_ew_cnt:
     sta ep1_cnt
 !ep1_ew_loop:
@@ -633,18 +632,18 @@ ep1_ench_wpn_star:
     lda #8
     sta c64_test_scroll_selector_return_pending
 #endif
-#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
-    lda #8
-    sta c128_test_scroll_selector_return_pending
-#endif
     ldx #HSTR_PIQ_WPN_GLOW
     bne !ep1_recalc_msg+
+
+ep1_no_gear:
+    ldx #HSTR_PIQ_VIBRATION
+    jmp huff_print_msg
 
 ep1_curse_weapon:
     ldx #EQUIP_WEAPON
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !ep1_no_gear-
+    beq ep1_no_gear
     jsr ep1_curse_slot_common
     jsr ep1_neg_1_to_5
     sta inv_to_hit + EQUIP_WEAPON
@@ -665,9 +664,8 @@ ep1_curse_weapon:
 
 ep1_curse_armor:
     jsr ep1_pick_armor_slot         // X = slot (C=0 if none worn)
-    bcs !+
-    jmp !ep1_no_gear-
-!:  stx ep1_slot
+    bcc ep1_no_gear
+    stx ep1_slot
     jsr ep1_curse_slot_common
     jsr ep1_neg_1_to_5
     ldx ep1_slot
@@ -676,16 +674,13 @@ ep1_curse_armor:
 
 ep1_ench_arm_star:
     jsr ep1_pick_armor_cursed_or_rand
-    bcs !+
-    jmp !ep1_no_gear-
-!:  stx ep1_slot
+    bcc ep1_no_gear
+    stx ep1_slot
     lda inv_flags,x
     and #~IF_CURSED & $ff
     sta inv_flags,x
     lda #2
-    jsr rng_range
-    clc
-    adc #1
+    jsr ep1_rng_1_to_a
     sta ep1_cnt
 !ep1_eas_loop:
     ldx ep1_slot
@@ -781,6 +776,12 @@ ep1_curse_slot_common:
 !ep1_csc_done:
     rts
 
+ep1_rng_1_to_a:
+    jsr rng_range
+    clc
+    adc #1
+    rts
+
 ep1_neg_1_to_5:
     lda #5
     jsr rng_range
@@ -863,9 +864,7 @@ ep1_summon_one:                     // Scroll of Summon Monster: randint(3)
     lda #3
 !ep1_sum_roll:
     stx ep1_arg
-    jsr rng_range
-    clc
-    adc #1
+    jsr ep1_rng_1_to_a
     sta ep1_cnt
     jsr tier_check_transition
     lda zp_player_x
@@ -936,9 +935,7 @@ ep1_dispel_undead:
     and #MF_VISIBLE
     beq !ep1_hvf_next+
     lda #60
-    jsr rng_range
-    clc
-    adc #1
+    jsr ep1_rng_1_to_a
     sta zp_math_a
     lda #0
     sta zp_math_b
@@ -1228,25 +1225,14 @@ ep1_wand_clone:
     cpx #8
     bcs !ep1_wh_done-
     lda ep1_cnt
-    clc
-    adc dir_dx,x
-    beq !ep1_wc_next+
-    cmp #MAP_COLS - 1
-    bcs !ep1_wc_next+
-    sta ep1_x
-    lda ep1_tmp
-    clc
-    adc dir_dy,x
-    beq !ep1_wc_next+
-    cmp #MAP_ROWS - 1
-    bcs !ep1_wc_next+
-    sta ep1_y
+    ldy ep1_tmp
+    jsr ep1_add_dir_xy
+    bcc !ep1_wc_next+
     jsr ep1_read_xy
-    sta ep1_slot
+    tay
     and #FLAG_OCCUPIED
     bne !ep1_wc_next+
-    lda ep1_slot
-    and #TILE_TYPE_MASK
+    tya
     lsr
     lsr
     lsr
@@ -1338,16 +1324,8 @@ ep1_wand_td_destr:
     // Blocked: if proj_cx/cy is in bounds and TD destr hits closed/secret door, break it & continue
     lda ep1_arg
     beq !ep1_wb_done-
-    lda proj_cx
-    beq !ep1_wb_done-
-    cmp #MAP_COLS - 1
-    bcs !ep1_wb_done-
-    sta ep1_x
-    lda proj_cy
-    beq !ep1_wb_done-
-    cmp #MAP_ROWS - 1
-    bcs !ep1_wb_done-
-    sta ep1_y
+    jsr ep1_proj_xy_chk
+    bcc !ep1_wb_done-
     jsr ep1_read_xy
     and #TILE_TYPE_MASK
     cmp #TILE_DOOR_CLOSED
@@ -1358,10 +1336,7 @@ ep1_wand_td_destr:
     jsr ep1_clear_tile_td
     jmp !ep1_wb_step-
 !ep1_wb_open:
-    lda proj_cx
-    sta ep1_x
-    lda proj_cy
-    sta ep1_y
+    jsr ep1_proj_xy_chk
     lda ep1_arg
     bne !ep1_wb_break-
     jsr ep1_disarm_tile
@@ -1383,17 +1358,13 @@ ep1_wand_wall:
     ldy proj_cy
     jsr floor_item_find_at
     bcs !ep1_ww_step-               // skip squares holding items
-    lda proj_cx
-    sta ep1_x
-    lda proj_cy
-    sta ep1_y
+    jsr ep1_proj_xy_chk
     jsr ep1_disarm_tile
     jsr ep1_read_xy
     and #TILE_FLAG_MASK
     ora #(TILE_WALL_H | FLAG_VISITED)
     :MapWrite_ptr0_y()
-    lda #1
-    sta vis_room_revealed
+    jsr ep1_set_revealed
     jmp !ep1_ww_step-
 !ep1_ww_done:
     rts
@@ -1415,20 +1386,13 @@ ep1_wand_wonder:
     lda ep1_wonder_slots,x
     jmp ep1_run_slot
 !ep1_wwd_bolt:
-    cmp #10
-    beq !ep1_wwd_light+
-    cmp #11
-    beq !ep1_wwd_frost+
-    lda #6
-    .byte $2c
-!ep1_wwd_light:
-    lda #3
-    .byte $2c
-!ep1_wwd_frost:
-    lda #4
+    tax
+    lda ep1_wonder_bolt_dice - 10,x
     ldx #8
     ldy #0
     jmp eff_bolt
+ep1_wonder_bolt_dice:
+    .byte 3, 4, 6
 
 // ============================================================
 // Internal Coordinate & Geometry Helpers
@@ -1449,17 +1413,21 @@ ep1_neighbor_xy:
     lda zp_player_y
     sta ep1_y
     beq !ep1_nxy_oob+               // row/col 0 is never playable; skip dir add
-    bne !ep1_nxy_chk+
+    bne ep1_chk_xy
 !ep1_nxy_dir:
     lda zp_player_x
+    ldy zp_player_y
+ep1_add_dir_xy:
     clc
     adc dir_dx,x
     sta ep1_x
-    lda zp_player_y
+    tya
     clc
     adc dir_dy,x
     sta ep1_y
-!ep1_nxy_chk:
+// Check ep1_x/ep1_y in playable interior [1..MAP_COLS-2, 1..MAP_ROWS-2]; C=1 if valid.
+// Preserves: X, Y
+ep1_chk_xy:
     lda ep1_x
     beq !ep1_nxy_oob+
     cmp #MAP_COLS - 1
@@ -1473,6 +1441,14 @@ ep1_neighbor_xy:
 !ep1_nxy_oob:
     clc
     rts
+
+// Copy trace coords (proj_cx, proj_cy) into (ep1_x, ep1_y) and check interior bounds.
+ep1_proj_xy_chk:
+    lda proj_cx
+    sta ep1_x
+    lda proj_cy
+    sta ep1_y
+    jmp ep1_chk_xy
 
 // Read map tile at (ep1_x, ep1_y); returns A = tile, Y = ep1_x, zp_ptr0 set.
 ep1_read_xy:

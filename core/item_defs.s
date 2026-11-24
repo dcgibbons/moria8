@@ -177,7 +177,6 @@
 .const PFLAG2_TELEPORT    = $10
 .const PFLAG2_SEARCH      = $20
 .const PFLAG2_INFRA       = $40
-.const PFLAG2_BLESSED     = $80   // reserved / TIMID or CURSED marker if needed
 
 // Sustain bitmask (player_sust_mask, PL_STR_CUR..PL_CHR_CUR bit order 0..5)
 .const SUST_STR = $01

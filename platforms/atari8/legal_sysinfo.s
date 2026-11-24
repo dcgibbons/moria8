@@ -37,6 +37,7 @@ legal_sysinfo_draw_platform:
     jsr screen_put_string_ay
 
     // System (RAM size + GTIA $D014 PAL/NTSC)
+    // xe_present is initialized at cold boot by xe_detect (disk) or atari_cart_xe_probe (cart).
     lda #<legal_sysinfo_lbl_sys
     ldy #>legal_sysinfo_lbl_sys
     jsr legal_sysinfo_begin_row
@@ -100,7 +101,7 @@ legal_sysinfo_lbl_io:       .text "Last I/O:"; .byte 0
 
 #if ATARI8_CARTRIDGE
 legal_sysinfo_plat_cart:    .text "Atari XL/XE"; .byte 0
-legal_sysinfo_build_cart:   .text "128KB Cartridge"; .byte 0
+legal_sysinfo_build_cart:   .text "Cartridge"; .byte 0
 #else
 legal_sysinfo_plat_xl:      .text "Atari 800XL"; .byte 0
 legal_sysinfo_plat_xe:      .text "Atari 130XE"; .byte 0

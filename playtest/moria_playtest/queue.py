@@ -116,6 +116,8 @@ ROTATE_POLL_STEPS = 500   # a Balrog run looks for a newer build this often (new
 # with 25 C64 graduates for 18 slots, 20M-step games (about 40 hours) and two
 # deaths in 2.5 hours, seven waited on (2026-11-15).
 BALROG_SLICE_S = 3 * 3600
+FOCUS_WAIT_S = 30           # a focus character waiting this long is short of a slot, not between two of its games
+FOCUS_YIELD_MIN_S = 15 * 60  # a game outside the focus plays this long before it yields for it
 # The build queue's runs play the default tactics, as the Balrog queue's do
 # (maintainer, 2026-11-16): its goal (clvl10, the pre-commit gate's too)
 # has none, so its success rates measured a bot the Balrog queue never plays.
@@ -155,6 +157,11 @@ DEFAULTS: dict[str, Any] = {
     # workers for this priest character, and the other half for everyone
     # else"), and no other character's game is stopped.
     "balrog_characters": [], "balrog_copies": 1, "balrog_focus_workers": 0,
+    # Above 0: every character whose start is at this level or higher joins
+    # the focus on its own, one shared slot each (maintainer, 2026-11-21:
+    # "putting the higher level games at the head of the queue is important
+    # for forward progress with limited machine resources").
+    "balrog_focus_min_clvl": 0,
     # The dashboard's statistics (monsters, Balrog kills, build history, run
     # counts) count runs from this run id prefix on ("YYYYMMDD-HHMMSS"); the
     # earlier runs stay on disk (maintainer, 2026-11-15: a fresh start).
@@ -886,6 +893,7 @@ def run_one(run_dir: Path) -> int:
                                 "missiles": character.brain.missiles if character else {},
                                 "kit": kit(character.brain) if character else {}},
                    "ended": now()})
+    write_json(run_dir / "uses.json", record["features"].get("uses") or {})   # the coverage panel's items
     if result.outcome == "died" and traces:
         detail = death(traces[0])
         record["death"] = {k: detail.get(k) for k in ("cause", "killer", "clw", "oil", "mp", "mmp", "last")}
@@ -903,21 +911,47 @@ def kit(brain: Any) -> dict[str, Any]:
             "books": list(brain.magic.books or []), "spells": sorted(brain.magic.known)}
 
 
+USE_PROMPT = re.compile(r"^(\w+) which ")   # "Quaff which potion (a-i)?": the game's item prompt
+USE_VERBS = frozenset({"Wear", "Read", "Aim", "Quaff", "Throw", "Use", "Study", "Recharge"})   # not Drop, Identify
+ITEM_DETAIL = re.compile(r"\s*(?:\((?:[+-]?\d+(?:,[+-]?\d+)?|\d+ (?:turns|charges))\)|\[[^\]]*\])")
+
+
+def item_name(text: str) -> str:
+    """An item as picked, its bonuses, charges, light and armour class left
+    off: "Heavy Crossbow (+4,+7)" is "Heavy Crossbow"."""
+    return ITEM_DETAIL.sub("", text).strip()
+
+
 def features(trace: Path) -> dict[str, Any]:
     """Counts for the feature grid (§23.6) from a run's trace: decisions by
-    brain layer, and the deepest level and highest level seen."""
+    brain layer, and each item picked at a use prompt by its verb (``uses``:
+    the coverage panel's items, maintainer 2026-11-23: "every spell/prayer
+    has been used, every item, and every monster has been encountered")."""
     layers: dict[str, int] = {}
+    uses: dict[str, dict[str, int]] = {}
+    verb = None
     try:
         with gzip.open(trace, "rt") as handle:
             for line in handle:
                 try:
-                    layer = json.loads(line).get("layer") or "?"
+                    decision = json.loads(line)
                 except ValueError:
                     break
+                layer = decision.get("layer") or "?"
                 layers[layer] = layers.get(layer, 0) + 1
+                prompt = USE_PROMPT.match(decision.get("msg") or "")
+                if prompt:
+                    verb = prompt.group(1)
+                elif layer != "prompt":
+                    verb = None
+                reason = decision.get("reason") or ""
+                if layer == "prompt" and reason.startswith("pick ") and verb in USE_VERBS:
+                    counts = uses.setdefault(item_name(reason[5:]), {})
+                    counts[verb] = counts.get(verb, 0) + 1
+                    verb = None
     except (OSError, EOFError):
         pass
-    return {"layers": layers}
+    return {"layers": layers, "uses": uses}
 
 
 # -- the queue's state ---------------------------------------------------------------
@@ -1125,12 +1159,17 @@ class Balrog:
             return
         item["start"] = start
 
-    def checkpoint(self, record: dict[str, Any], job: dict[str, Any], start: dict[str, Any]) -> bool:
+    def checkpoint(self, record: dict[str, Any], job: dict[str, Any], start: dict[str, Any],
+                   handed_over: bool = False) -> bool:
         """A Balrog run's checkpoint becomes its combination's start when its
         character level is past the start's, or at it with
         ARMOUR_CHECKPOINT_AC more AC (§23.9): the start before it goes on the
         history. ``restores``: the runs of the chain that ended before this
-        start."""
+        start. ``handed_over``: the run ended in town for a newer build or a
+        waiting character (rotate, yield), cut short, and any experience it
+        gained is kept: six builds on 2026-11-22 ended runs an hour in, and a
+        clvl 39 Elf Priest's 184,000 since its 5,764,000 start, short of 5%,
+        was thrown away."""
         item = self.state["items"].get(f"{record['platform']}/{record['character']}")
         if item is None:
             return False
@@ -1143,7 +1182,7 @@ class Balrog:
                 base = start.get("base_ac")   # a start from before 2026-11-07: the run's own AC at it
             more_ac = base is not None and start.get("ac") is not None and start["ac"] >= base + ARMOUR_CHECKPOINT_AC \
                 and start.get("xp", 0) >= current.get("xp", 0)   # better armour, never for less experience
-            more_xp = start.get("xp", 0) >= current.get("xp", 0) + checkpoint_xp(current.get("xp", 0))
+            more_xp = start.get("xp", 0) >= current.get("xp", 0) + (1 if handed_over else checkpoint_xp(current.get("xp", 0)))
             if not (more_ac or more_xp):
                 return False
         resume = job.get("resume") or {}
@@ -1850,6 +1889,21 @@ class Service:
         for run_id in hit:
             self.stop_run(run_id)
 
+    def balrog_focus(self) -> tuple[tuple[str, ...], int]:
+        """(characters, shared slots) of the Balrog focus: those named
+        (``balrog_characters``, ``balrog_focus_workers``) and, with
+        ``balrog_focus_min_clvl``, every character not yet won whose start
+        is at that level or higher, a shared slot each."""
+        named = tuple(self.config.get("balrog_characters") or ())
+        share = int(self.config.get("balrog_focus_workers") or 0)
+        least = int(self.config.get("balrog_focus_min_clvl") or 0)
+        if not least:
+            return named, share
+        auto = tuple(sorted({item["character"] for item in self.balrog.state["items"].values()
+                             if (item.get("start") or {}).get("clvl", 0) >= least and not item.get("won")}
+                            - set(named)))
+        return named + auto, share + len(auto)
+
     def balrog_yield(self) -> None:
         """One Balrog run per combination waiting over BALROG_SLICE_S for a
         slot, the longest playing first, yields at its next town visit
@@ -1870,17 +1924,23 @@ class Service:
         # longest-playing other games yield for it at once (maintainer,
         # 2026-11-21: "give the higher level characters priority"; the focus
         # set at 15:57 found every slot taken by games 20 minutes old).
-        focus = tuple(self.config.get("balrog_characters") or ())
-        share = int(self.config.get("balrog_focus_workers") or 0)
+        focus, share = self.balrog_focus()
         if focus and share:
             focused = sum(1 for j in balrog.values() if j["character"] in focus)
+            # Not between two of a focus character's own games, and not a
+            # game just begun: a clvl 32 Half-Elf Warrior's games ended in
+            # town 7 seconds after each start, as focus games ended and
+            # restarted around it, and its checkpoint stood 28 hours (C64
+            # Balrog, 2026-11-23).
             short = [k for k in self.balrog.state["order"] if k not in playing
                      and self.balrog.state["items"][k]["character"] in focus
-                     and not self.balrog.state["items"][k].get("won")][:max(0, share - focused)]
+                     and not self.balrog.state["items"][k].get("won")
+                     and t - self.balrog.waiting_since(k) > FOCUS_WAIT_S][:max(0, share - focused)]
             if short:
                 waiting = sorted(set(waiting) | set(short))
                 due = sorted((j["started"], r) for r, j in balrog.items()
-                             if r not in flagged and j["character"] not in focus)
+                             if r not in flagged and j["character"] not in focus
+                             and t - j["started"] > FOCUS_YIELD_MIN_S)
         for _, run_id in due[:max(0, len(waiting) - len(flagged))]:
             (self.home / "runs" / run_id).mkdir(parents=True, exist_ok=True)
             (self.home / "runs" / run_id / YIELD).touch()
@@ -2024,7 +2084,9 @@ class Service:
             start["snapshot"] = str(dest / state["snapshot"])
         else:
             start["save"] = str(dest)
-        if not self.balrog.checkpoint(record, job, start):
+        events = self.home / "runs" / record["id"] / "events.jsonl"
+        handed_over = events.exists() and '"kind": "rotate"' in events.read_text(errors="replace")
+        if not self.balrog.checkpoint(record, job, start, handed_over):
             return False
         shutil.copytree(ckpt, dest, dirs_exist_ok=True)
         self.log(f"balrog queue: {record['character']} goes on from its {ckpt.name} checkpoint (run {record['id']}, "
@@ -2082,8 +2144,8 @@ class Service:
         for run_id, job in list(self.running.items()):
             if job["queue"] != "main" and job["paused"]:
                 self.pause(run_id, False)
-        focus = config.get("balrog_characters") or ()
-        shared = int(config.get("balrog_focus_workers") or 0) > 0
+        focus, share = self.balrog_focus()
+        shared = share > 0
         if focus:
             # The main queue's runs and other characters' Balrog games end
             # (theirs play beside the focus when it has a share):
@@ -2176,8 +2238,7 @@ class Service:
         playing = collections.Counter(f"{job['platform']}/{job['character']}" for job in self.running.values()
                                       if job["queue"] == "balrog")
         copies = max(1, int(self.config.get("balrog_copies") or 1))
-        focus = tuple(self.config.get("balrog_characters") or ())
-        share = int(self.config.get("balrog_focus_workers") or 0)
+        focus, share = self.balrog_focus()
         focused = sum(1 for job in self.running.values() if job["queue"] == "balrog" and job["character"] in focus)
         item = None
         full = {k for k, n in playing.items() if n >= copies}

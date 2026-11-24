@@ -35,10 +35,6 @@ player_create:
     lda #$ff
     sta save_slot_index
 #endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$72
-    jsr c128_town_dump_mark
-#endif
     .if (hal_platform_chargen_cutpoint == -2) { rts }
     jsr player_init
     .if (hal_platform_chargen_cutpoint == 0) { rts }

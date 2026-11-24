@@ -44,31 +44,44 @@
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
 
+c64_open_cmd_channel_x:
+    lda #hal_storage_cmd_channel
+    tay
+    jsr c64_disk_setlfs
+    jmp c64_disk_open
+
 // Check whether an IEC device responds.
 // Input: X = device number (8-30)
 // Output: carry clear = present, carry set = absent/unusable
 hal_storage_probe_media:
     stx disk_temp
     jsr disk_kernal_enter
-
+    jsr c64_disk_clrchn
     lda #0
-    ldx #0
-    ldy #0
+    sta KERNAL_STATUS           // empty-name OPEN skips STA $90; clear stale bit 7
+    tax
+    tay
     jsr c64_disk_setnam
-    lda #hal_storage_cmd_channel
     ldx disk_temp
-    ldy #hal_storage_cmd_channel
-    jsr c64_disk_setlfs
-    jsr c64_disk_open
+    jsr c64_open_cmd_channel_x
     bcs !absent+
+    ldx #hal_storage_cmd_channel
+    jsr c64_disk_chkout         // LISTEN+SECOND avoids stock C64 CHKIN/TKSA absent-device hang
+    bcc !read_st+
+    lda #1
+    bne !have_res+
+!read_st:
+    jsr c64_disk_readst
+!have_res:
+    pha
+    jsr c64_disk_clrchn
     lda #hal_storage_cmd_channel
     jsr c64_disk_close
-    jsr c64_disk_clrchn
     jsr disk_kernal_exit
-    clc
+    pla
+    cmp #1
     rts
 !absent:
-    jsr c64_disk_clrchn
     jsr disk_kernal_exit
     sec
     rts
@@ -80,17 +93,15 @@ hal_storage_init_selected_drive:
     ldx #<hal_storage_init_command
     ldy #>hal_storage_init_command
     jsr c64_disk_setnam
-    lda #hal_storage_cmd_channel
     ldx disk_prompt_device
-    ldy #hal_storage_cmd_channel
-    jsr c64_disk_setlfs
-    jsr c64_disk_open
+    jsr c64_open_cmd_channel_x
     bcs !done+
     lda #hal_storage_cmd_channel
     jsr c64_disk_close
 !done:
     jsr c64_disk_clrchn
-    jsr c64_storage_read_command_status
+    ldx disk_prompt_device
+    jsr c64_storage_read_command_status_x
     jsr disk_kernal_exit
     lda disk_status
     cmp #2

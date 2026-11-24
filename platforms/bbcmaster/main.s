@@ -217,6 +217,7 @@ ovl_huffdata_end:
     .segment Default
 }
 #define DOOR_PICK_EXTERNAL
+#define DOOR_PICK_CO_LOCATED
 .macro DoorPickSegment() {
     .segment ChestOverlay
 }
@@ -531,9 +532,6 @@ tramp_item_recalc:
     cpx #OVL_CHEST
     bne tramp_items_dispatch
     ldx #OVL_ITEMS
-    bra ovl_swap_dispatch_x
-chest_swap_dispatch:
-    ldx #OVL_CHEST
     bra ovl_swap_dispatch_x
 storage_swap_dispatch:
     ldx #OVL_STORAGE
@@ -1034,7 +1032,6 @@ ovl_modal_misc_end:
 #import "../commodore/c128/ui_help_data_80.s"
 #import "../../core/ui_help.s"
 #import "../../core/ui_identify.s"
-#import "../../core/door_open_close_cold.s"
 #import "../../core/item_drop_cold.s"
 #import "../../core/ui_help_cmd_cold.s"
 
@@ -1365,6 +1362,7 @@ ovl_title_end:
 #import "../../core/disarm_helpers.s"
 #import "../../core/trap_trigger_cold.s"
 #import "../../core/trap_damage_cold.s"
+#import "../../core/door_open_close_cold.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $a800) + " bytes"
 .assert "Chest overlay fits", ovl_chest_end <= $c000, true
@@ -1516,7 +1514,7 @@ program_end:
 .assert "Home overlay owns home_enter separately from TownOverlay", home_enter >= $a800 && home_enter < ovl_home_end && home_inv_add_carried >= $a800 && home_inv_add_carried < ovl_home_end && store_enter >= $a800 && store_enter < ovl_town_end && inv_add_carried >= $a800 && inv_add_carried < ovl_town_end, true
 .assert "Death overlay owns royal_screen", royal_screen >= $a800 && royal_screen < ovl_death_end, true
 .assert "Phase 2 evicted trampolines stay resident while targets live in overlays", re_equip_entry < $8000 && re_equip >= $a800 && re_equip < ovl_modal_misc_end && hal_player_recalc_pflags < $8000 && player_recalc_pflags_equipment >= $a800 && player_recalc_pflags_equipment < ovl_modal_misc_end && run_initialize < $8000 && run_initialize_impl >= $a800 && run_initialize_impl < ovl_modal_misc_end && title_load_game_ovl >= $a800 && title_load_game_ovl < ovl_storage_end && title_enter_menu_ovl >= $a800 && title_enter_menu_ovl < ovl_title_end, true
-.assert "Phase 5 cold evictions and MONEXT helper stay within target segments", catalog_fetch_ext < $3000 && cat_ext_record + 8 <= $3000 && tramp_trap_trigger < $8000 && store_init_all >= title_load_and_draw && store_init_all < generation_busy_install && init_starting_kit >= level_generate && init_starting_kit < ovl_gen_end && trap_trigger >= disarm_command && trap_apply_damage >= trap_trigger && trap_apply_damage < ovl_chest_end && player_init >= player_create && player_init < ovl_start_end && ui_char_draw_background >= ui_char_display && ui_char_draw_background < ui_inv_display && door_try_open >= ui_identify_print && item_drop >= door_try_open && help_cmd_body >= item_drop && help_cmd_body < eff_find_doors_impl && calc_dig_ability >= player_tunnel && calc_dig_ability < ovl_items_end && eff_detect_evil_only >= item_gain_spell && eff_detect_evil_only < ovl_spell_end && item_refresh_fixed_known < $8000 && load_resume_reset >= beeb_disk_setup_run && load_resume_reset < title_load_game_ovl, true
+.assert "Phase 5 cold evictions and MONEXT helper stay within target segments", catalog_fetch_ext < $3000 && cat_ext_record + 8 <= $3000 && tramp_trap_trigger < $8000 && store_init_all >= title_load_and_draw && store_init_all < generation_busy_install && init_starting_kit >= level_generate && init_starting_kit < ovl_gen_end && trap_trigger >= disarm_command && trap_apply_damage >= trap_trigger && trap_apply_damage < door_try_open && door_try_open < door_try_close && door_try_close < ovl_chest_end && player_init >= player_create && player_init < ovl_start_end && ui_char_draw_background >= ui_char_display && ui_char_draw_background < ui_inv_display && item_drop >= ui_identify_print && help_cmd_body >= item_drop && help_cmd_body < eff_find_doors_impl && calc_dig_ability >= player_tunnel && calc_dig_ability < ovl_items_end && eff_detect_evil_only >= item_gain_spell && eff_detect_evil_only < ovl_spell_end && item_refresh_fixed_known < $8000 && load_resume_reset >= beeb_disk_setup_run && load_resume_reset < title_load_game_ovl, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

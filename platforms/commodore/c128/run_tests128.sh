@@ -659,10 +659,10 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,speed_equipment128,vdc_scroll_delta128,status_coherence128,dungeon128,look_trampoline128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,catalog_spawn_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,hot_path_zero_disk_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,marker_init_d64_smoke,c128_command_status_byte1_timeout_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,boot_title_single_drive_save_wrong_media_smoke,boot_title_single_drive_load_wrong_media_smoke,boot_title_single_drive_load_corrupt_smoke,boot_title_single_drive_load_return_smoke,boot_title_single_drive_fresh_save_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,catalog_spawn_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,hot_path_zero_disk_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
-            printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
+            printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,c128_command_status_byte1_timeout_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,boot_title_save_write_product_smoke,boot_title_save_media_fail_product_smoke,vic40_blanked_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
             ;;
         town)
             printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scroll_p3_return_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,chest_open_product_smoke128,exchange_product_smoke128,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
@@ -700,12 +700,12 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|catalog_spawn_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scroll_p3_return_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|hot_path_zero_disk_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|marker_init_d64_smoke|c128_command_status_byte1_timeout_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|boot_title_single_drive_save_wrong_media_smoke|boot_title_single_drive_load_wrong_media_smoke|boot_title_single_drive_load_corrupt_smoke|boot_title_single_drive_load_return_smoke|boot_title_single_drive_fresh_save_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|catalog_spawn_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scroll_p3_return_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|chest_open_product_smoke128|exchange_product_smoke128|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|hot_path_zero_disk_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|boot_diag_copy) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|c128_command_status_byte1_timeout_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|boot_title_save_write_product_smoke|boot_title_save_media_fail_product_smoke|vic40_blanked_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|boot_diag_copy) return 0 ;;
             esac
             ;;
         town)
@@ -1577,7 +1577,7 @@ must_not_contain(screen, "SCREEN_COL_OFFSET", "screen_vdc must not use implicit 
 must_not_contain(render, "VIEWPORT_X + SCREEN_COL_OFFSET", "dungeon_render_vdc must use explicit VIEWPORT_X only")
 
 must_contain(msgs, ".const MSG_HIST_LEN   = SCREEN_COLS", "ui_messages must size history by SCREEN_COLS")
-must_contain(status, "#if C128", "ui_status must use compile-time C128 layout constants")
+must_contain(status, ".const STS_ROW21_NAME_COL = hal_layout_status_row21_name_col", "ui_status must use compile-time HAL layout constants")
 must_contain(help_s, ".const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1", "ui_help border must use SCREEN_COLS")
 must_contain(swap, ".const DS_PROMPT_COL = (SCREEN_COLS - 19) / 2", "disk_swap prompt centering must use SCREEN_COLS math")
 must_contain(main128, "lda #TITLE_MENU_COL", "title menu must use TITLE_MENU_COL")
@@ -4675,6 +4675,230 @@ run_marker_init_d64_smoke() {
 
     echo "PASS"
     PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_c128_command_status_byte1_timeout_smoke() {
+    local name="c128_command_status_byte1_timeout_smoke"
+    echo -n "  $name: "
+
+    local tmp_out log_file mon_file main_prg main_vs
+    tmp_out="$TMPDIR/cmd_status_build"
+    mkdir -p "$tmp_out/c128"
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    : > "$log_file"
+
+    if ! "${COMMODORE_MAKE[@]}" -s \
+            KICKASS="$KICKASS" \
+            OUT="$tmp_out" \
+            build128 >"$log_file" 2>&1; then
+        echo "FAIL (build128 failed)"
+        tail -n 20 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    main_prg="$(cd "$tmp_out/c128" && pwd)/moria128.prg"
+    persist_prg="$(cd "$tmp_out/c128" && pwd)/128.persist.prg"
+    main_vs="$(cd "$tmp_out/c128" && pwd)/main.vs"
+    if [ ! -s "$main_prg" ] || [ ! -s "$persist_prg" ] || [ ! -s "$main_vs" ]; then
+        echo "FAIL (missing compiled moria128.prg, 128.persist.prg, or main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! python3 - "$main_vs" "$main_prg" "$persist_prg" "$mon_file" <<'PY'
+import sys
+
+vs_path, prg_path, persist_path, mon_path = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+syms = {}
+with open(vs_path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0] == "al" and parts[1].startswith("C:"):
+            syms[parts[2]] = int(parts[1][2:], 16)
+
+needed = [
+    ".c128_storage_read_command_status",
+    ".c128_program_read_command_status",
+    ".c128_status_lost",
+    ".c128_program_status_lost",
+    ".disk_diag_cmd_status0",
+    ".disk_diag_cmd_status1",
+    ".w_readst",
+    ".w_setlfs",
+    ".w_setnam",
+    ".w_open",
+    ".w_close",
+    ".w_chkin",
+    ".w_clrchn",
+    ".w_chrin",
+    ".uds_show_init_detail",
+    ".uds_print_row4_ay",
+    ".uds_dos_generic_str",
+    ".hal_storage_setup_status",
+]
+missing = [k for k in needed if k not in syms]
+if missing:
+    raise SystemExit(f"missing symbols: {missing}")
+
+def lh(addr):
+    return f"{addr & 0xff:02x} {(addr >> 8) & 0xff:02x}"
+
+lines = [
+    "bank ram00",
+    f"load \"{prg_path}\" 0",
+    f"load \"{persist_path}\" 0",
+    f"> 0b80 78 20 {lh(syms['.c128_storage_read_command_status'])} 00",
+    f"> 0b85 78 20 {lh(syms['.c128_program_read_command_status'])} 00",
+    f"> 0bd0 78 20 {lh(syms['.uds_show_init_detail'])} 00",
+    # idx=$0b8a, bytes[0..1]=$0b8b..$0b8c, sts[0..1]=$0b8d..$0b8e, cur_st=$0b8f, saved_x=$0b90
+    "> 0b98 8e 90 0b ae 8a 0b bd 8d 0b 8d 8f 0b bd 8b 0b ee 8a 0b ae 90 0b 18 60",
+    "> 0bb4 ad 8f 0b 18 60",
+]
+for kaddr in (0xffcc, 0xffbd, 0xffba, 0xffc0, 0xffc6, 0xffc3):
+    lines.append(f"> {kaddr:04x} 18 60")
+lines.append("> ffcf 4c 98 0b")
+lines.append("> ffb7 4c b4 0b")
+for wstub in (".w_clrchn", ".w_setnam", ".w_setlfs", ".w_open", ".w_chkin", ".w_close"):
+    lines.append(f"> {syms[wstub]:04x} 18 60")
+lines.append(f"> {syms['.w_chrin']:04x} 4c 98 0b")
+lines.append(f"> {syms['.w_readst']:04x} 4c b4 0b")
+lines.append("bank cpu")
+lines.append("> ff00 3f")
+lines.append("break exec $0b84")
+lines.append("break exec $0b89")
+lines.append("break exec $0bd4")
+
+d0 = syms[".disk_diag_cmd_status0"]
+d1 = syms[".disk_diag_cmd_status1"]
+sl = syms[".c128_status_lost"]
+pl = syms[".c128_program_status_lost"]
+
+for b0, b1, st0, st1, chkin_fail in (
+    (0x36, 0x32, 0x00, 0x02, False),
+    (0x58, 0x30, 0x02, 0x00, False),
+    (0x36, 0x32, 0x00, 0x00, False),
+    (0x00, 0x00, 0x00, 0x00, True),
+):
+    lines.append("bank ram00")
+    if chkin_fail:
+        lines.append("> ffc6 38 60")
+        lines.append(f"> {syms['.w_chkin']:04x} 38 60")
+    lines.extend([
+        f"> 0b8a 00 {b0:02x} {b1:02x} {st0:02x} {st1:02x} 00",
+        "bank cpu",
+        "r sp = ff",
+        "r pc = 0b80",
+        "g",
+        f"m {d0:04x} {d0:04x}",
+        f"m {d1:04x} {d1:04x}",
+        f"m {sl:04x} {sl:04x}",
+    ])
+
+# Restore w_chkin before running program_read and init-detail cases.
+lines.extend([
+    "bank ram00",
+    "> ffc6 18 60",
+    f"> {syms['.w_chkin']:04x} 18 60",
+    f"> {syms['.hal_storage_setup_status']:04x} a9 ff 60",
+    f"> {syms['.uds_print_row4_ay']:04x} 4c d8 0b",
+    "> 0bd8 8d e0 0b 8c e1 0b 60",
+])
+if ".uds_show_c128_status_error" in syms:
+    lines.extend([
+        f"> {syms['.uds_show_c128_status_error']:04x} 4c e4 0b",
+        "> 0be4 ee e2 0b 60",
+    ])
+for d0v, d1v in ((0xff, 0xff), (0x58, 0xff)):
+    lines.extend([
+        "bank ram00",
+        f"> {d0:04x} {d0v:02x}",
+        f"> {d1:04x} {d1v:02x}",
+        "> 0be0 00 00 00 00",
+        "bank cpu",
+        "r sp = ff",
+        "r pc = 0bd0",
+        "g",
+        "m 0be0 0be3",
+    ])
+
+for b0, b1, st0, st1 in (
+    (0x30, 0x30, 0x00, 0x02),
+    (0x30, 0x30, 0x00, 0x00),
+):
+    lines.extend([
+        "bank ram00",
+        f"> 0b8a 00 {b0:02x} {b1:02x} {st0:02x} {st1:02x} 00",
+        "bank cpu",
+        "r sp = ff",
+        "r pc = 0b85",
+        "g",
+        f"m {d0:04x} {d0:04x}",
+        f"m {d1:04x} {d1:04x}",
+        f"m {pl:04x} {pl:04x}",
+    ])
+
+lines.append("quit")
+with open(mon_path, "w", encoding="utf-8") as f:
+    f.write("\n".join(lines) + "\n")
+PY
+    then
+        echo "FAIL (monitor script setup)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    : > "$log_file"
+    "$VICE" -config "$VICE_CONFIG" -default +saveres -VDC16KB +autostart-delay-random -exitscreenshot "$(c128_exit_png)" -console -nativemonitor -warp -80col -initbreak ready \
+        -moncommands "$mon_file" -monlogname "$log_file" -monlog \
+        -limitcycles 50000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+
+    if python3 - "$log_file" "$main_vs" <<'PY'
+import re, sys
+
+log_path, vs_path = sys.argv[1], sys.argv[2]
+syms = {}
+with open(vs_path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0] == "al" and parts[1].startswith("C:"):
+            syms[parts[2]] = int(parts[1][2:], 16)
+
+d0 = f"{syms['.disk_diag_cmd_status0']:04x}"
+d1 = f"{syms['.disk_diag_cmd_status1']:04x}"
+sl = f"{syms['.c128_status_lost']:04x}"
+pl = f"{syms['.c128_program_status_lost']:04x}"
+gen = syms[".uds_dos_generic_str"]
+txt = open(log_path, encoding="utf-8", errors="replace").read()
+
+d0_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{d0}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+d1_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{d1}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+sl_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{sl}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+pl_v = [int(m.group(1), 16) for m in re.finditer(rf"^>C:{pl}\s+([0-9a-fA-F]{{2}})\b", txt, re.M)]
+ui_v = [tuple(int(x, 16) for x in m.groups()) for m in re.finditer(r"^>C:0be0\s+([0-9a-fA-F]{2})\s+([0-9a-fA-F]{2})\s+[0-9a-fA-F]{2}\s+([0-9a-fA-F]{2})", txt, re.M)]
+
+if (d0_v[:4], d1_v[:4], sl_v) != ([0x36, 0x58, 0x36, 0xff], [0xff, 0xff, 0x32, 0xff], [1, 1, 0, 0]):
+    raise SystemExit(f"storage_read mismatch: d0={d0_v[:4]} d1={d1_v[:4]} sl={sl_v}")
+if (d0_v[4:], d1_v[4:], pl_v) != ([0x30, 0x30], [0xff, 0x30], [1, 0]):
+    raise SystemExit(f"program_read mismatch: d0={d0_v[4:]} d1={d1_v[4:]} pl={pl_v}")
+want_ui = [(gen & 0xff, (gen >> 8) & 0xff, 0), (gen & 0xff, (gen >> 8) & 0xff, 0)]
+if ui_v != want_ui:
+    raise SystemExit(f"uds_show_init_detail mismatch: got {ui_v}, expected {want_ui}")
+PY
+    then
+        echo "PASS (6/6 cmd-status incl. CHKIN fail + 2/2 init-detail cases)"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        tail -n 30 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    fi
     TOTAL=$((TOTAL + 1))
 }
 
@@ -7907,6 +8131,7 @@ run_selected_suites() {
     run_named_suite boot_title_idle_smoke run_boot_title_idle_smoke || return 1
     run_named_suite title_art_smoke run_title_art_smoke || return 1
     run_named_suite marker_init_d64_smoke run_marker_init_d64_smoke || return 1
+    run_named_suite c128_command_status_byte1_timeout_smoke run_c128_command_status_byte1_timeout_smoke || return 1
     run_named_suite boot_title_load_missing_savefile_smoke --alias missing_device_or_no_disk run_boot_title_load_missing_savefile_smoke || return 1
     run_named_suite boot_title_load_mounted_save_smoke run_boot_title_load_mounted_save_smoke || return 1
     run_named_suite dual_drive_load_then_save_no_program_prompt --alias save_existing_overwrite --alias boot_title_save_write_product_smoke run_boot_title_save_write_product_smoke || return 1

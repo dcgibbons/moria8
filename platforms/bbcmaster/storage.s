@@ -479,10 +479,11 @@ beeb_dfs_load_to_bank:
     pla
     jsr beeb_set_pathname
 
-    lda #$00
-    sta beeb_io_dst
+    // Program the SWR destination pointer via < $3000 SMC so MOS_OSGBPB never
+    // reads or increments a ZP pointer across MOS ownership ($00-$AF).
+    stz bdl_sta + 1
     lda beeb_load_target_hi
-    sta beeb_io_dst_hi
+    sta bdl_sta + 2
 
     jsr beeb_mos_open_read
     bcs !open_done_err+
@@ -516,7 +517,8 @@ beeb_dfs_load_to_bank:
     ldy #0
 !copy_loop:
     lda beeb_ss_buf,y
-    sta (beeb_io_dst),y
+bdl_sta:
+    sta $ff00,y             // Destination page patched before open and between pages
     iny
     dex
     bne !copy_loop-
@@ -526,7 +528,7 @@ beeb_dfs_load_to_bank:
     sta SHEILA_ROMSEL
     plp
 
-    inc beeb_io_dst_hi
+    inc bdl_sta + 2
     // If residual_lo != 0, this was the final partial page
     lda BEEB_OS_CTRL_BASE + 5
     beq !chunk_loop-

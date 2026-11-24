@@ -137,6 +137,11 @@ def stage_dl1_fixture(connector: VICEConnector, symbols: dict[str, str]) -> tupl
     connector.fill_memory(mon_table, mon_table + 383, 0xFF)
     connector.poke(sym_int(symbols, ".zp_mon_count"), 0)
     connector.poke(sym_int(symbols, ".zp_msg_flags"), 0)
+    # Pin the 32-bit Galois LFSR to a deterministic zero-free seed across the
+    # hot sequence so core/turn.s's 1-in-160 wanderer roll cannot trigger a cold
+    # catalog fetch.
+    for offset, byte in enumerate((0x1C, 0x58, 0x3C, 0xA5)):
+        connector.poke(sym_int(symbols, ".zp_rng_0") + offset, byte)
 
     # Locate a real DL1-spawned non-gold floor item (already prewarmed in $0600-$07FF).
     fi_id_base = sym_int(symbols, ".fi_item_id")

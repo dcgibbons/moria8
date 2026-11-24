@@ -189,6 +189,10 @@ entry_main:
 #if !ATARI8_CARTRIDGE
     // Detect 130XE extended RAM (64 KB vs 128 KB)
     jsr xe_detect
+#else
+    // Detect 130XE extended RAM (64 KB vs 128 KB) for System Info without
+    // compiling disk-cache xe_detect / xe_slot_populated into cartridge builds
+    jsr atari_cart_xe_probe
 #endif
 
     // Load RuntimeBanked payload (ATARI.BNK -> $F000-$FFF9)
@@ -282,6 +286,68 @@ exit_trampoline:
     sta CART_BANK_SELECT       // Remap Bank 0 so cold reset re-enters cartridge
 #endif
     jmp OS_COLDSV
+
+#if ATARI8_CARTRIDGE
+// Probe 130XE $4000-$7FFF extended RAM banks while running strictly < $4000
+// with RD5 disabled ($D510 already hit by boot copier) and interrupts masked.
+atari_cart_xe_probe:
+    php
+    sei
+    lda #$00
+    sta NMIEN
+    sta xe_present
+
+    lda #PORTB_GAME_RAM
+    sta PORTB
+    lda $4000
+    sta xe_saved_main
+    lda #$5a
+    sta $4000
+
+    ldx #3
+!tag_banks:
+    lda cart_xe_bank_table,x
+    sta PORTB
+    txa
+    ora #$a0
+    sta $4000
+    dex
+    bpl !tag_banks-
+
+    lda #PORTB_GAME_RAM
+    sta PORTB
+    lda $4000
+    cmp #$5a
+    bne !done+
+
+    ldx #3
+!verify_banks:
+    lda cart_xe_bank_table,x
+    sta PORTB
+    txa
+    ora #$a0
+    cmp $4000
+    bne !done+
+    dex
+    bpl !verify_banks-
+
+    lda #1
+    sta xe_present
+
+!done:
+    lda #PORTB_GAME_RAM
+    sta PORTB
+    lda xe_saved_main
+    sta $4000
+    sta NMIRES
+    lda atari_nmi_enabled
+    sta NMIEN
+    plp
+    rts
+
+cart_xe_bank_table:
+    .byte PORTB_XE_BANK0, PORTB_XE_BANK1, PORTB_XE_BANK2, PORTB_XE_BANK3
+#endif
 
 low_helpers_end:
 .assert "Help and legal controllers stay outside the overlay window", cmd_show_help_view < MAP_BASE && tramp_ui_legal_display >= $f000, true
@@ -1459,6 +1525,7 @@ ovl_ui_end:
     #import "../../core/bash.s"
     #import "../../core/calc_dig_cold.s"
     #import "../../core/tunnel.s"
+    #import "../../core/door_open_close_cold.s"
 inv_add_carried_items:
     :InvAddCarriedBody()
 ovl_items_end:
@@ -1487,7 +1554,6 @@ ovl_chest_end:
     #import "../../core/ui_home_text.s"
     #import "../../core/ui_home.s"
     #import "../../core/eff_item_p1.s"
-    #import "../../core/door_open_close_cold.s"
 ovl_home_end:
 .assert "Home overlay runs home_enter in $E000-$EFFF", home_enter >= $e000 && home_enter < ovl_home_end && home_draw_screen >= $e000 && home_draw_screen < ovl_home_end, true
 .print "Home overlay: " + (ovl_home_end - $e000) + " bytes at $E000-$" + toHexString(ovl_home_end)
@@ -1516,7 +1582,7 @@ title_show_sysinfo:
     lda #23
     sta zp_cursor_row
 #if ATARI8_CARTRIDGE
-    lda #8
+    lda #9
     sta zp_cursor_col
     lda #<atari_sysinfo_cart_str
     sta zp_ptr0
@@ -1524,7 +1590,7 @@ title_show_sysinfo:
     sta zp_ptr0_hi
     jmp hal_screen_put_string
 
-atari_sysinfo_cart_str: .text "ATARI XL/XE  128KB CART" ; .byte 0
+atari_sysinfo_cart_str: .text "ATARI XL/XE  CARTRIDGE" ; .byte 0
 #else
     lda xe_present
     bne !xe_str+

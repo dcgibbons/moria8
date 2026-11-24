@@ -46,7 +46,7 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$7400-$7a5f` | DB/data region (`Bank1DB`, `1,632 B`, `C128M-013`/`C128M-015`): `recall[279]` (`1,116 B` at `$7400-$785b`) + `zp_save_buf` (`142 B` at `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free to `$7a5f`), accessed through `mmu_safe_db_read/write_ptr0/1`. Replaces the retired `128.names` payload (`ITEM.CAT` serves all `361` VMS item templates and `55` ego names directly from 16 KB VDC RAM on disk builds or MD128 cartridge ROM on `.crt` builds; C128 does not use REU, `reu_present = 0`) |
 | `$7a60-$9567` | the monster catalog (C128M-007): `$7a60-$7e5f` the name pool, 32 species slots x 32 B written at species fetch; `$7e60-$9542` `128.cat`, the catalog's 21 fields x 279 creatures, loaded at boot; 37 B spare. Until 2026-11-02 the tier cache, 6920 bytes |
 | `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
-| `$9800-$9cff` | MODAL small-overlay cache |
+| `$9800-$9cff` | MODAL small-overlay cache (`BANK1_OVERLAY_MODAL`, `5` pages = `1,280 B`; caches `ModalMiscOverlay` `ovl.modal` ID `9`, `$e000-$e473` = `1,139 B` code / `1,141 B` PRG incl. 2 B header, `141 B` free, including `winner_apply_retirement_bonus_storage`) |
 | `$9d00-$9fff` | DISARM small-overlay cache |
 | `$a000-$afff` | `128.cnm`, the catalog's Huffman-coded names (tree, pointers, bitstreams; 3380 B), loaded at boot (C128M-007). Until 2026-11-02 the STARTUP overlay cache: STARTUP now loads from disk |
 | `$b000-$bfff` | TOWN overlay cache |
@@ -71,7 +71,11 @@ Important Bank 0 ownership includes the consolidated resident image
 `C128M-011` and keeping the modal footer `press_key_str`, `slain_str`, and
 cartridge reader `cart_read`/`cart_desc_buf < $8000` resident), `$af00-$cfff`
 (`128.persist` / `128.play`), floor items at `$1a00-$1aff`, runtime scratch at
-`$1b00-$1bff`, the overlay window at `$e000-$efff`, and reloadable banked
+`$1b00-$1bff`, the overlay window at `$e000-$efff` (hosting `ovl.modal` ID `9`
+`ModalMiscOverlay` `$e000-$e473` [`1,139 B` payload / `1,141 B` PRG incl. 2 B header,
+`141 B` free in `1,280 B` `BANK1_OVERLAY_MODAL`] with
+`winner_apply_retirement_bonus_storage`, and uncached `HomeOverlay` ID `11`
+`ovl.home` `$e000-$efcd` [`4,045 B`, `51 B` free]), and reloadable banked
 code at `$f000` below `$ff00`. `main.s` and `cartridge_copy.s` assertions are
 authoritative for resident bounds and the `< $8000` cartridge-bank-safe
 boundary (`item_pickup`, `run_initialize`, `hal_item_cat_read_byte`, and

@@ -35,28 +35,7 @@
 c128_test_force_death_pending: .byte 1
 #endif
 
-#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
-c128_test_scroll_selector_return_pending: .byte 0
-c128_test_scroll_selector_return_count:   .byte 0
-c128_test_seed_scroll_selector_state:
-    lda #0
-    sta c128_test_scroll_selector_return_pending
-    sta c128_test_scroll_selector_return_count
-    lda #ITEM_SLOT_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
-    sta inv_item_id + 2
-    .if (ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT != 0) {
-        lda #ITEM_PAGE_SCROLL_OF_ENCHANT_WEAPON_TO_HIT
-        sta inv_ego + 2
-    }
-    lda #1
-    sta inv_qty + 2
-    lda #0
-    sta inv_p1 + 2
-    sta inv_flags + 2
-    rts
-#endif
-
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 #if !C128_SCRIPTED_SPELL_SEED_EXTERNAL
 c128_test_seed_scripted_spell_state:
     lda #0
@@ -91,11 +70,7 @@ c128_test_seed_scripted_spell_state:
     sta player_data + PL_SPELLS_FORGOTTEN_1
     sta player_data + PL_SPELLS_FORGOTTEN_2
     sta player_data + PL_SPELLS_FORGOTTEN_3
-#if C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY
-    lda #1
-#else
     lda #0
-#endif
     sta player_data + PL_NEW_SPELLS
     lda #99
     ldx #31
@@ -515,10 +490,6 @@ c64_test_detect_type: .byte 0
 // Called from platform main.s after title menu selects "New Game".
 // ============================================================
 game_new_start:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$70
-    jsr c128_town_dump_mark
-#endif
     // Re-seed RNG after user input for better entropy
     jsr rng_seed
 
@@ -561,14 +532,11 @@ game_new_start:
     jsr input_get_modal_dismiss_key
     jsr hal_screen_clear
 
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_STUDY_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jsr c128_test_seed_scripted_spell_state
 #endif
 #if C128_TEST_SCRIPTED_PRAYER
     jsr c128_test_seed_scripted_prayer_state
-#endif
-#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
-    jsr c128_test_seed_scroll_selector_state
 #endif
 #if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jsr c64_test_seed_scripted_spell_state
@@ -693,12 +661,12 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
 	    jsr viewport_update
 	    jsr render_viewport
 	    jsr hal_screen_unblank
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_begin
     .byte $91
 #endif
     jsr status_draw
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_check
     .byte $92
 #endif
@@ -893,19 +861,6 @@ c128_town_move_diag_loop_top:
     bcc !no_prompt_redraw+
     jsr ui_view_redraw_gameplay_view
 !no_prompt_redraw:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda c128_town_dump_countdown
-    beq !town_dump_trap+
-    sec
-    sbc #1
-    sta c128_town_dump_countdown
-    bne !town_dump_log+
-!town_dump_trap:
-    jmp c128_town_dump_checkpoint
-!town_dump_log:
-    lda #$10
-    jsr c128_town_dump_log
-#endif
 #if C128_TEST_FORCE_DEATH
     lda c128_test_force_death_pending
     beq !test_force_death_done+
@@ -917,17 +872,6 @@ c128_town_move_diag_loop_top:
     // calling tramp_game_over alone showed the screens and resumed play.
     jmp player_died
 !test_force_death_done:
-#endif
-#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
-    lda c128_test_scroll_selector_return_pending
-    beq !c128_test_scroll_selector_return_done+
-    dec c128_test_scroll_selector_return_pending
-    inc c128_test_scroll_selector_return_count
-    lda c128_test_scroll_selector_return_count
-    cmp #8
-    bcc !c128_test_scroll_selector_return_done+
-    jmp c128_test_scroll_selector_pass_sym
-!c128_test_scroll_selector_return_done:
 #endif
 #if C64_TEST_SCRIPTED_SPELL
     lda c64_test_spell_return_pending
@@ -1061,28 +1005,16 @@ c128_town_move_diag_loop_top:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_begin
     .byte $93
 #endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1e
-    jsr c128_town_dump_log
-#endif
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_check
     .byte $94
 #endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1f
-    jsr c128_town_dump_log
-#endif
     jmp post_turn_update_visibility_after_action   // draws the status line too
 !not_paralyzed:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$11
-    jsr c128_town_dump_log
-#endif
     // Snapshot the pre-command player/view state once per main-loop
     // iteration so any later stationary command can safely use the shared
     // post-turn redraw helpers.
@@ -1108,10 +1040,6 @@ c128_town_move_diag_after_input_get_command:
 !c128_run_prefix_restart:
     jmp main_loop
 !c128_run_prefix_done:
-#endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$12
-    jsr c128_town_dump_log
 #endif
 
     // --- Dispatch command ---
@@ -1241,10 +1169,6 @@ plus4_test_after_save_game:
 
     // Clear message before move so combat messages survive
     pha                         // Save command ID (A) — msg_clear clobbers A
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$13
-    jsr c128_town_dump_log
-#endif
     jsr msg_clear
     pla                         // Restore command ID for player_try_move
 
@@ -1252,17 +1176,9 @@ plus4_test_after_save_game:
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_player_try_move:
 #endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$14
-    jsr c128_town_dump_log
-#endif
     jsr player_try_move
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_player_try_move:
-#endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$15
-    jsr c128_town_dump_log
 #endif
     bcs !move_ok+
     jmp !move_blocked+
@@ -1270,10 +1186,6 @@ c128_town_move_diag_after_player_try_move:
 
     // Move or attack succeeded — run AI before render so screen
     // reflects post-AI monster positions (BUG-17 fix)
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$16
-    jsr c128_town_dump_log
-#endif
     // Only a move onto the square springs its trap: a melee turn leaves the
     // player where they stand (VMS move_char, carry -> hit_trap).
     lda player_move_relocated
@@ -1281,10 +1193,6 @@ c128_town_move_diag_after_player_try_move:
     jsr trap_check_at_player
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_trap_check:
-#endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$17
-    jsr c128_town_dump_log
 #endif
     bcs !move_trap_fired+
 !move_no_trap:
@@ -1294,17 +1202,9 @@ c128_town_move_diag_after_trap_check:
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_turn_post_action:
 #endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$18
-    jsr c128_town_dump_log
-#endif
     bcc !not_dead+
     jmp !player_died+
 !not_dead:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$19
-    jsr c128_town_dump_log
-#endif
     jsr game_loop_update_visibility_preserve_reveal
     jsr viewport_update
 
@@ -1325,10 +1225,6 @@ c128_town_move_diag_after_turn_post_action:
     bne !scene_dirty_redraw+
 
     // No scroll, no room reveal, no remote scene changes — render local area around old+new position
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1a
-    jsr c128_town_dump_log
-#endif
     jsr render_local_area
     jmp !post_move+
 
@@ -1350,26 +1246,14 @@ c128_town_move_diag_after_turn_post_action:
     beq !full_not_scene_dirty+
 	    jmp !full_draw_fallback+
 !full_not_scene_dirty:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1b
-    jsr c128_town_dump_log
-#endif
     jsr render_viewport_scroll_delta
     bcc !full_draw_fallback+
     // Scroll-delta path handled viewport shift; refresh local dynamic area.
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1c
-    jsr c128_town_dump_log
-#endif
     jsr render_local_area
     jmp !post_move+
 !full_draw_fallback:
 #endif
 scene_full_fallback:
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1d
-    jsr c128_town_dump_log
-#endif
 	    jsr render_viewport
 
 !post_move:
@@ -1378,22 +1262,14 @@ scene_post_move:
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_status_draw:
 #endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1e
-    jsr c128_town_dump_log
-#endif
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_begin
     .byte $95
 #endif
     jsr status_draw
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_check
     .byte $96
-#endif
-#if C128_TEST_TOWN_SELF_DUMP
-    lda #$1f
-    jsr c128_town_dump_log
 #endif
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_status_draw:
@@ -1876,7 +1752,7 @@ level_change_generate_current:
 	    jsr viewport_update
 	    jsr render_viewport
 	    jsr hal_screen_unblank
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_begin
     .byte $97
 #endif
@@ -1884,7 +1760,7 @@ level_change_generate_current:
 #if HAL_PLATFORM_TURBO_BURST_HOOKS
     jsr c64u_turbo_normal
 #endif
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+#if C128_REAL_BOOT_DIAG
     jsr c128_stack_guard_check
     .byte $98
 #endif

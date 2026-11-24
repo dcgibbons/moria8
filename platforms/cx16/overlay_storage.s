@@ -1,6 +1,6 @@
 #importonce
 // overlay_storage.s — Commander X16 boot bank preloader & O(1) RAM bank
-// switcher for overlays (Banks 9-21) and monster tiers (Banks 5-8).
+// switcher for overlays (Banks 9-21), catalog banks (5, 23), and data banks.
 
 #import "hal/storage_policy.s"
 
@@ -9,8 +9,7 @@ cx16_preload_idx:     .byte 0
 
 // ============================================================
 // cx16_preload_banks — Preload the runtime banked payloads from device 8
-// into RAM Banks 3..22 at $A000 at boot time (with the monster catalog,
-// Bank 23 instead of the tier Banks 5-8).
+// into RAM Banks 3..23 at $A000 at boot time.
 // ============================================================
 cx16_preload_banks:
     lda #0
@@ -74,28 +73,7 @@ cx16_preload_banks:
     jsr cx16_kernal_load_banked_window
     bcs !fatal+
 #else
-    // 3. Banks 5..8: MONSTER.DB.1..4
-    lda #0
-    sta cx16_preload_idx
-!tier_loop:
-    ldx cx16_preload_idx
-    txa
-    clc
-    adc #CX16_BANK_TIER_BASE
-    sta CX16_RAM_BANK_REG
-    lda hal_storage_tier_name_len,x
-    pha
-    lda hal_storage_tier_name_hi,x
-    tay
-    lda hal_storage_tier_name_lo,x
-    tax
-    pla
-    jsr cx16_kernal_load_banked_window
-    bcs !fatal+
-    inc cx16_preload_idx
-    lda cx16_preload_idx
-    cmp #4
-    bcc !tier_loop-
+    .error "HAL_PLATFORM_MONSTER_CATALOG=0 is unsupported on CX16"
 #endif
 
     // 4. Bank 6: ITEM.CAT ('ITM2' 361-item catalog)
@@ -174,21 +152,6 @@ cx16_asset_try_bank_switch:
     dex
     bpl !find_ovl-
 
-#if !HAL_PLATFORM_MONSTER_CATALOG
-    // Check 4 monster tiers -> Bank (index + 5)
-    ldx #3
-!find_tier:
-    lda hal_storage_tier_name_lo,x
-    cmp zp_temp0
-    bne !next_tier+
-    lda hal_storage_tier_name_hi,x
-    cmp zp_temp1
-    beq !found_tier+
-!next_tier:
-    dex
-    bpl !find_tier-
-#endif
-
 !miss:
     sec
     rts
@@ -200,13 +163,3 @@ cx16_asset_try_bank_switch:
     sta CX16_RAM_BANK_REG
     clc
     rts
-
-#if !HAL_PLATFORM_MONSTER_CATALOG
-!found_tier:
-    txa
-    clc
-    adc #CX16_BANK_TIER_BASE
-    sta CX16_RAM_BANK_REG
-    clc
-    rts
-#endif

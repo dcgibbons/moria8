@@ -1610,7 +1610,9 @@ test_start:
     // The damage recalculates the equipment flags (player_recalc_equipment):
     // the resistance comes from what is worn, a Defender weapon (its flags
     // also give Free Action and See Invisible).
-    lda #EGO_DEFENDER
+    lda #ITEM_SLOT_DAGGER
+    sta inv_item_id + EQUIP_WEAPON
+    lda #(ITEM_PAGE_DAGGER | EGO_DEFENDER)
     sta inv_ego + EQUIP_WEAPON
     lda #ITEM_SLOT_CHAIN_MAIL                      // Chain mail
     sta inv_item_id + EQUIP_BODY
@@ -1652,6 +1654,7 @@ test_start:
     sta tc_results + 40
     lda #FI_EMPTY
     sta inv_item_id + EQUIP_BODY
+    sta inv_item_id + EQUIP_WEAPON
     lda #0
     sta inv_ego + EQUIP_BODY
     sta inv_ego + EQUIP_WEAPON

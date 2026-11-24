@@ -167,7 +167,7 @@ Paladins use wisdom.
 | Sanctuary | Attempts to sleep adjacent monsters. |
 | Create Food | Creates food underfoot if the tile can accept it. |
 | Remove Curse | Removes ordinary curses from carried and equipped items. |
-| Resist Heat and Cold | Temporary heat/fire and cold resistance timers; current hostile fire-breath path is reduced by the heat/fire half. |
+| Resist Heat and Cold | Temporary heat/fire and cold resistance timers (`11..20` turns each); heat reduces hostile fire breath and fire attacks, and cold reduces frost breath and cold attacks (`1/3`, or `1/9` stacked with permanent resistance). |
 | Neutralize Poison | Clears poison. |
 | Orb of Draining | Targeted divine attack. |
 | Cure Serious Wounds | Strong heal. |
@@ -184,12 +184,30 @@ Paladins use wisdom.
 | Glyph of Warding | Creates a warding glyph underfoot when the tile is clear. |
 | Holy Word | Full major prayer: heals, cleanses fear/poison, restores stats, grants protection/invulnerability-style defense, and dispels evil. |
 
-## Commodore Notes
+## Platform Notes
+
+All seven platforms (**Commodore 64**, **Commodore 128**, **Commodore Plus/4**,
+**Apple IIe**, **Commander X16**, **Atari 8-bit**, and **Acorn BBC Master 128**)
+and all five cartridge editions share the exact same 31 mage spells, 31 priest
+prayers, 8 books, class eligibility tables, mana/fail formulas, overcasting
+penalties, and spell/prayer effects (`core/spell_data.s`,
+`core/spell_class_data.s`, `core/player_magic*.s`, `core/spell_effects*.s`).
 
 Moria8 intentionally does not print a generic success banner for every spell or
-prayer. Visible effects such as bolts, teleporting, terrain changes, and map
-reveals usually speak for themselves. Silent no-op cases are reduced where that
-would be misleading, but message behavior is not terminal-perfect Umoria.
+prayer. Visible effects such as bolts, balls, teleporting, terrain changes, and
+map reveals usually speak for themselves. Silent no-op cases are reduced where
+that would be misleading, and timed expiry text is leaner than desktop Umoria
+(with explicit onset feedback and row-21 status indicators where applicable).
 
-Timed expiry text is also leaner than historical desktop Umoria. In particular,
-some timed buffs have explicit onset feedback but no repeated rich status text.
+Key and display notes across platforms:
+
+- `F` studies a carried book to learn a spell or prayer when new slots are
+  pending, and opens the spellbook browser directly when none are pending; `M`
+  casts mage spells and `P` prays priest prayers.
+- On **C128**, spell execution lives in the resident `128.play` bank slot
+  (`$AF00-$CFFF`); on the other six ports (**C64**, **Plus/4**, **Apple IIe**,
+  **Commander X16**, **Atari 8-bit**, and **BBC Master 128**), cold spell
+  selection/execution runs through the shared `OVL_SPELL` overlay window.
+- Directional spells and area effects operate identically across both `80x48`
+  40-column maps (**C64**, **Plus/4**, **Atari 8-bit**) and `198x66` 80-column
+  maps (**C128**, **Apple IIe**, **Commander X16**, **BBC Master 128**).

@@ -266,9 +266,10 @@ a2_sfx_patterns:
 .macro CmdJamRestoreSegment() {
     .segment Default
 }
-// The locked-door pick roll needs the effective-disarm formula; it parks in
-// the chest overlay with chest_disarm_skill.
+// The locked-door pick roll needs the effective-disarm formula; co-located
+// with door_open_close_cold.s in ChestOverlay so lock-picking avoids floppy I/O swaps.
 #define DOOR_PICK_EXTERNAL
+#define DOOR_PICK_CO_LOCATED
 .macro DoorPickSegment() {
     .segment ChestOverlay
 }
@@ -673,31 +674,6 @@ tramp_load_resume_reset:
     lda #OVL_NONE
     sta current_overlay
 !tlrr_done:
-    rts
-
-// tramp_door_pick_roll — Load OVL.CHEST for door_pick_roll and restore caller
-// overlay (e.g. OVL_HELP from door_try_open) while preserving result carry C.
-tramp_door_pick_roll:
-    lda current_overlay
-    pha
-    lda #OVL_CHEST
-    jsr overlay_load
-    bcs !tdpr_fail+
-    jsr door_pick_roll
-    pla                     // A = caller overlay; leaves C from door_pick_roll intact
-    php                     // push flags (including C) across overlay restore
-    beq !tdpr_done+
-    cmp #OVL_CHEST
-    beq !tdpr_done+
-    jsr overlay_load
-    bcc !tdpr_done+
-    brk                     // caller continuation is inside overlay window
-!tdpr_done:
-    plp
-    rts
-!tdpr_fail:
-    pla
-    clc
     rts
 
 // Call an OVL.DEATH routine from OVL.SPELL, preserving A across the overlay
@@ -1199,8 +1175,6 @@ ovl_modal_misc_end:
 ovl_help_cmd_mark:
 #import "../../core/ui_help_cmd_cold.s"
 #import "../../core/ui_identify.s"
-ovl_help_door_mark:
-#import "../../core/door_open_close_cold.s"
 ovl_help_drop_mark:
 #import "../../core/item_drop_cold.s"
 ovl_help_end:
@@ -1489,6 +1463,8 @@ ovl_chest_trap_mark:
 #import "../../core/trap_trigger_cold.s"
 ovl_chest_trap_dmg_mark:
 #import "../../core/trap_damage_cold.s"
+ovl_chest_door_mark:
+#import "../../core/door_open_close_cold.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $a400) + " bytes"
 .assert "Chest overlay fits", ovl_chest_end <= $ba00, true
@@ -1652,4 +1628,4 @@ legal_code_end:
 a2_auxdata_end:
 .assert "A2AuxData fits below catalog", a2_auxdata_end <= A2_AUX_DATA_LIMIT, true
 .segment Default
-.assert "Wave 5.2 cold evictions land in exact target overlays", tramp_trap_trigger < $7c00 && tramp_door_pick_roll < $7c00 && tramp_load_resume_reset < $7c00 && trap_trigger == ovl_chest_trap_mark && trap_apply_damage == ovl_chest_trap_dmg_mark && ovl_chest_trap_dmg_mark < ovl_chest_end && store_init_all >= ovl_title_restock_mark && store_init_all < ovl_title_kit_mark && init_starting_kit == ovl_title_kit_mark && ovl_title_kit_mark < ovl_title_end && help_cmd_body == ovl_help_cmd_mark && door_try_open >= ovl_help_door_mark && door_try_open < ovl_help_drop_mark && item_drop == ovl_help_drop_mark && ovl_help_drop_mark < ovl_help_end && player_init == ovl_start_chargen_mark && ovl_start_chargen_mark < ovl_start_end && ui_char_draw_background >= ovl_ui_bg_mark && ui_char_draw_background < ovl_ui_end && item_refresh_fixed_known == ovl_storage_refresh_mark && load_resume_reset == ovl_storage_resume_mark && ovl_storage_resume_mark < ovl_storage_end, true
+.assert "Wave 5.2 cold evictions land in exact target overlays", tramp_trap_trigger < $7c00 && tramp_load_resume_reset < $7c00 && trap_trigger == ovl_chest_trap_mark && trap_apply_damage == ovl_chest_trap_dmg_mark && ovl_chest_trap_dmg_mark < ovl_chest_end && store_init_all >= ovl_title_restock_mark && store_init_all < ovl_title_kit_mark && init_starting_kit == ovl_title_kit_mark && ovl_title_kit_mark < ovl_title_end && help_cmd_body == ovl_help_cmd_mark && item_drop == ovl_help_drop_mark && ovl_help_drop_mark < ovl_help_end && door_try_open >= ovl_chest_door_mark && door_try_open < ovl_chest_end && door_try_close >= door_try_open && door_try_close < ovl_chest_end && player_init == ovl_start_chargen_mark && ovl_start_chargen_mark < ovl_start_end && ui_char_draw_background >= ovl_ui_bg_mark && ui_char_draw_background < ovl_ui_end && item_refresh_fixed_known == ovl_storage_refresh_mark && load_resume_reset == ovl_storage_resume_mark && ovl_storage_resume_mark < ovl_storage_end, true

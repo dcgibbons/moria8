@@ -2491,7 +2491,7 @@ another port; a suite records `"port"` and is named with it
 | Key feed | KERNAL buffer `$0277`/`$C6` | KERNAL buffer `$0527`/`$EF` | the game scans the matrix (no buffer): the driver stops in `input_get_key`'s or `input_get_key_fast`'s wait loop and returns the key through its `sta igk_key` exit |
 | Crash entries | `$FCE2`, `$FE66` with `$01` HIRAM set | `$FFF6` with TED `$FF13` bit 0 set | `$FF3D`, `$FF05` with MMU `$D500` bits 5-4 clear |
 | Screen, map | `$0400`, `$C000` | `$0C00`, `$C800` | VDC `$0000` (80 columns), Bank 1 `$4000` |
-| ROMs | optional JiffyDOS pair | JiffyDOS required (`PLAYTEST_PLUS4_KERNAL`, `PLAYTEST_DOS1541`) | optional JiffyDOS pair (`PLAYTEST_C128_KERNAL`, `PLAYTEST_DOS1571`), both or neither |
+| ROMs | optional JiffyDOS pair | optional JiffyDOS pair (`PLAYTEST_PLUS4_KERNAL`, `PLAYTEST_DOS1541`), both or neither | optional JiffyDOS pair (`PLAYTEST_C128_KERNAL`, `PLAYTEST_DOS1571`), both or neither |
 
 - **The Plus/4 plays under JiffyDOS** (maintainer, 2026-10-27: "definitely
   use the jiffydos kernal on plus/4, it's too slow otherwise"): with no

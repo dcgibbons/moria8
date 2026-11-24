@@ -353,36 +353,47 @@ uds_show_init_detail:
     jsr hal_storage_setup_status
     cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
     bne !check_full+
-    :UDSPrint(4, UDS_LINE_COL, uds_dos_write_protect_str)
-    rts
+    lda #<uds_dos_write_protect_str
+    ldy #>uds_dos_write_protect_str
+    jmp uds_print_row4_ay
 !check_full:
     cmp #HAL_STORAGE_STATUS_DISK_FULL
     bne !check_ready+
-    :UDSPrint(4, UDS_LINE_COL, uds_dos_full_str)
-    rts
+    lda #<uds_dos_full_str
+    ldy #>uds_dos_full_str
+    jmp uds_print_row4_ay
 !check_ready:
     cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
     bne !fallback+
-    :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
-    rts
+    lda #<uds_dos_not_ready_str
+    ldy #>uds_dos_not_ready_str
+    jmp uds_print_row4_ay
 !fallback:
 #if HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS
     lda hal_storage_diag_dos0
-    cmp #$ff
-    beq !generic+
-    cmp #$30
-    bne !show_c128_status_error+
+    eor #$30
+    cmp #10
+    bcs !generic+
     lda hal_storage_diag_dos1
-    cmp #$30
-    bne !show_c128_status_error+
-    jmp !generic+
-!show_c128_status_error:
+    eor #$30
+    cmp #10
+    bcs !generic+
+    lda hal_storage_diag_dos0
+    ora hal_storage_diag_dos1
+    cmp #$30                    // both '0' ($30 | $30 == $30)
+    beq !generic+
     jmp uds_show_c128_status_error
 !generic:
 #endif
 #if HAL_STORAGE_DISK_SETUP_DETAIL_DOS_DRIVE
     lda hal_storage_diag_dos0
-    beq !check_phase+
+    eor #$30
+    cmp #10
+    bcs !check_phase+
+    lda hal_storage_diag_dos1
+    eor #$30
+    cmp #10
+    bcs !check_phase+
     jmp uds_show_plus4_disk_error
 !check_phase:
 #if HAL_STORAGE_DISK_SETUP_DETAIL_STATUS_PHASE
@@ -393,18 +404,20 @@ uds_show_init_detail:
 #endif
 !generic:
 #endif
-    :UDSPrint(4, UDS_LINE_COL, uds_dos_generic_str)
-    rts
+    lda #<uds_dos_generic_str
+    ldy #>uds_dos_generic_str
+uds_print_row4_ay:
+    ldx #4
+    stx zp_cursor_row
+    ldx #UDS_LINE_COL
+    stx zp_cursor_col
+    jmp screen_put_string_ay
 
 #if HAL_STORAGE_DISK_SETUP_DETAIL_COMMAND_STATUS
 uds_show_c128_status_error:
-    lda #4
-    sta zp_cursor_row
-    lda #UDS_LINE_COL
-    sta zp_cursor_col
     lda #<uds_disk_code_str
     ldy #>uds_disk_code_str
-    jsr screen_put_string_ay
+    jsr uds_print_row4_ay
     lda hal_storage_diag_dos0
     jsr hal_screen_put_char
     lda hal_storage_diag_dos1
@@ -420,13 +433,9 @@ uds_show_c128_status_error:
 
 #if HAL_STORAGE_DISK_SETUP_DETAIL_DOS_DRIVE
 uds_show_plus4_disk_error:
-    lda #4
-    sta zp_cursor_row
-    lda #UDS_LINE_COL
-    sta zp_cursor_col
     lda #<uds_disk_error_str
     ldy #>uds_disk_error_str
-    jsr screen_put_string_ay
+    jsr uds_print_row4_ay
     lda hal_storage_diag_dos0
     jsr hal_screen_put_char
     lda hal_storage_diag_dos1
@@ -443,13 +452,9 @@ uds_show_plus4_disk_error:
 
 #if HAL_STORAGE_DISK_SETUP_DETAIL_STATUS_PHASE
 uds_show_plus4_status_error:
-    lda #4
-    sta zp_cursor_row
-    lda #UDS_LINE_COL
-    sta zp_cursor_col
     lda #<uds_disk_status_str
     ldy #>uds_disk_status_str
-    jsr screen_put_string_ay
+    jsr uds_print_row4_ay
     lda hal_storage_diag_readst
     jsr screen_put_hex
     lda #<uds_phase_str
