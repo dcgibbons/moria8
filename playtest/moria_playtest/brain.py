@@ -18,8 +18,9 @@ from dataclasses import dataclass, field
 from . import knowledge
 from .magic import BLIND, BOOK_LEVELS, book_of, store_name, CHANT, CREATE_FOOD, ORB, PORTAL, SANCTUARY, FIRST_BOOK, PRAYER_BOOKS, CURE_LIGHT, CURE_MEDIUM, CURE_SERIOUS, CURE_CRITICAL, HEAL, DETECT_DOORS, HEALS, REMOVE_FEAR, Magic
 from .magic import DETECT_EVIL, DETECT_MONSTERS, RESIST_HEAT_COLD, MAGIC_MISSILE, PHASE_DOOR, FIND_TRAPS, CURE_POISON, TELEPORT_SELF, MAGE_ATTACKS, MAGE_BOOKS, books_for
+from .magic import FIRE_BOLT, FIRE_BALL, FROST_BOLT, FROST_BALL, LIGHTNING_BOLT
 from .magic import BLESS, PRIEST_FIND_TRAPS, SLOW_POISON, NEUTRALIZE_POISON, LIGHT_SPELLS, DISPEL_EVIL, HOLY_WORD
-from .magic import AIMED, AT_CREATURES, ON_ITEM, CASTER_BOOK_LEVELS
+from .magic import AIMED, AT_CREATURES, ON_ITEM, CASTER_BOOK_LEVELS, MAGE_BOOK_PREFIX
 from .game import ITEM_PROMPT, KEY_RUNSTOP, KEY_SPACE, Game, Mode, Observation
 from .goals import CLASSES, RACE_KEYS, Goal
 from .view import (DIRS, WALL, TYPE_DOOR_CLOSED, TYPE_DOOR_OPEN, TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_TRAP, UNKNOWN, WALKABLE_TYPES,
@@ -134,6 +135,16 @@ CARRY_LEAST = 5          # ... and at least this many (Brain.carried_enough)
 WEIGHT_PER_STR = 130
 WEIGHT_CAP = 3000
 WEIGHT_HEADROOM = 100    # kept free in town for food, potions and Word of Recall (10 lb)
+# A trip's food before the rest of the weight: a natural STR 3 Gnome Mage's
+# 390 tenths held a Steel Helm, four spare torches and ten Cure Serious
+# Wounds, the headroom left room for two rations, and it climbed to town
+# about 290 times a run, never below DL2, dying to DL1 mice three times at
+# clvl 18 (C64 Balrog, 2026-11-23). Food's share of the headroom is at most
+# a tenth of the limit; under FOOD_TRIP rations' room, the heaviest worn
+# piece but the body armour goes (take_off_for_food) and nothing but food
+# is picked up into that room.
+FOOD_TRIP = 4
+FOOD_HEADROOM_SHARE = 10
 # A Potion of Restore Strength carried against strength darts, drunk where
 # the drain happens: a drained STR lowered the limit under what was worn,
 # the stores refused even the potion that would lift it, and a clvl 29
@@ -218,7 +229,7 @@ KEEP_PREFIXES = ("Ration", "Slime Mold", "Flask of Oil", "Wooden Torch", "Brass 
                  "Potion of Restore", "Mushroom of Restor")
 DROP_RETRY = 500         # steps before looking for junk again after finding none
 KEY_RETURN = 0x0D
-LOOK_RESULT = re.compile(r"You see (?:an? |\d+ )(.+?)\.")
+LOOK_RESULT = re.compile(r"You see (?:an? |\d+ )(.+?)(?:\.|\s*\||\s*-more-|\s*$)")   # or cut at the line's end
 SLAIN = re.compile(r"You have slain the (.+?)\.")
 HIT_NEWS = re.compile(r"hits|misses|slain|fails|dies|destroyed|resists|unaffected|unharmed|immune|shrugs")
 CASTS_A_SPELL = re.compile(r"[Tt]he (.+?) (?:casts a spell|frightens you)")
@@ -269,6 +280,9 @@ CROWD_RANGE, CROWD_COUNT = 3, 2   # this many creatures this close to a staircas
 CLEAR_WAY_CALM = 6       # no other creature this close before going to kill a blocker (M4 round 78)
 CLEAR_HOLD = 100         # steps a chosen blocker is waited for while something moves near it
 CLEAR_SKIP = 1000        # ... then it is not chosen again for this long
+CLEAR_APPROACHES = 100   # approaches to one paralysing blocker before it too is skipped: a clvl 19 Gnome
+                         # Mage walked up to a DL1 Floating Eye and back out of its reach 622 times in
+                         # 3,000 steps and starved there, twice (C64 Balrog, 2026-11-23)
 STILL_STEPS = 20         # steps a creature stays on one square before it counts as not coming (asleep)
 SLOW_MEMORY = 30         # steps a slow creature out of sight still counts as a hazard (M4 round 47)
 SLOW_AVOID = 300         # ... and is avoided as if seen, unless the player stands beside its empty tile
@@ -303,7 +317,8 @@ STALL_STEPS = 300        # steps without new map knowledge or XP before stair-sc
 # a level with no kill and nothing worth hunting for HUNT_QUIET_STEPS is left.
 HUNT_CLVL = 25
 HUNT_DLVL = 20
-HUNT_QUIET_STEPS = 1500
+HUNT_QUIET_STEPS = 500    # (1500 until 2026-11-24: a clvl 39 Mage on DL39 spent 37% exploring, 10% walking to stairs, 1.3% hunting)
+HUNT_MARK_STEPS = 200     # steps a creature worth hunting, seen or detected, is walked after once out of view
 GENERAL_STORE = 0        # store index (entrance "1")
 ARMOURY = 1              # store index (entrance "2")
 WEAPONSMITH = 2          # store index (entrance "3")
@@ -350,12 +365,25 @@ def str_code(base: str, extra: str) -> int:
     return 118 if extra in ("**", "00") else 18 + int(extra)
 
 
+STAT_ORDER = ("ST", "IN", "WI", "DX", "CO", "CH")
+
+
+def raw_stat_value(raw: int) -> int:
+    """A memory stat byte (3..118, where 18/xx is 18 + xx) on stat_value's 3..28 scale."""
+    return raw if raw <= 18 else 18 + (raw - 18) // 10
+
+
 def stat_value(base: str, extra: str) -> int:
     """A status-line stat as 18 + xx/10 for 18/xx. The game prints 18/100 as
     "18/00" (core/6502/stat_display.s), which read as a bare 18 until 2026-11-07."""
     if extra in ("**", "00"):
         return 28
     return int(base) + (int(extra) // 10 if extra else 0)
+
+
+def umoria_stat(val: int) -> int:
+    """Convert stat_value's 3..28 scale back to Umoria's 3..118 scale for combat_calc_blows."""
+    return val if val <= 18 else 18 + (val - 18) * 10
 # The equipment list ('E'): a worn armour slot, its name and [AC,+to-AC]
 # (wrapped onto the next line on 40 columns; padded to col 15 + trailing lb on 80-col CP/M).
 EQUIP_LINE = re.compile(
@@ -492,6 +520,9 @@ NEUTRALIZE = "Potion of Neutralize"   # Neutralize Poison (Temple, 75 gp VMS): a
 RESIST_HEAT = "Potion of Resist Heat"   # fire resistance for 10-19 turns (fire breath, monster_cast_breath)
 RESIST_COLD = "Potion of Resist Cold"   # ... and cold, against frost breath
 RESIST_RESERVE = 4       # carried from SCOUT_FROM deep, bought at the Black Market
+RESIST_SUSTAINED_POTIONS = 12   # Resist Heat stack kept for DL50 combat without the prayer (~5,400 damage)
+RESIST_SUSTAINED_STAY = 4       # stay on DL50 down to this stack before recalling to restock
+RESIST_SUSTAINED_RESERVE = 20   # bought before diving when the prayer is not known
 RESIST_UPKEEP_MANA = 0.9   # share of mana from which the Balrog's fire is kept resisted unseen
 HEROISM = "Potion of Heroism"   # +10 max and current HP for 25-49 turns (iq_effect_heroism)
 HEROISM_HP = 10          # ... the HP it adds
@@ -515,7 +546,9 @@ PROTECT_DLVL = 10        # from here an evil creature close is worth it (protect
 INVULNERABLE = "You feel invulnerable."
 PROTECTED = "You feel protected."
 RESTORE_MANA = "Potion of Restore Mana"   # all the mana back (iq_effect_restore_mana); found, or the Black Market's
-RESTORE_MANA_RESERVE = 3   # carried for the Balrog, bought rich
+RESTORE_MANA_RESERVE = 3   # carried for the Balrog, bought rich (restore_mana_reserve)
+RESTORE_MANA_MAX = 8       # ... at most, a Mage's bars to the Balrog's 3,000
+RESTORE_MANA_SPARE = 2     # bars carried that keep Resist Heat up at any mana (resist_sustained)
 # The potions of gain stat (VMS potions.inc; Moria8 since 2026-11-07) and the
 # status label of the stat each raises: drunk when carried, and, rich, bought
 # at the Black Market for a stat short of 18/100 (maintainer, 2026-11-07: "MAX
@@ -546,7 +579,16 @@ RESTORE_LIFE = "Potion of Restore Life Levels"
 LIFE = "XP"              # its pseudo-stat in Brain.drained
 LIFE_DRAINED = ("You feel your life draining away!", "You feel your memories fading")
 RESTORE_LIFE_LEVEL = 20  # carried from this clvl
-RESTORE_LIFE_RESERVE = 3
+DRAINS_TO_LEAVE = 2       # experience drains on one level that make it one to leave, potions or not
+SPELL_KILL_CASTS = 10      # casts a spell-judged fight may take (spell_kills)
+RESTORE_LIFE_DRAIN_STOCKED = 0.01   # ... with RESTORE_LIFE_RESERVE or more carried: at once, nearly
+RESTORE_LIFE_DRAIN = 0.05  # share of the peak experience drained before Restore Life Levels is drunk
+RESTORE_LIFE_RESERVE = 6   # (3 until 2026-11-24: the Temple stocks one or two a visit, and Balrog characters
+                           # restocked to 1-2 used them on DL37-39 drains within the hour and fell back to DL23)
+DRAIN_BARE_DLVL = 23     # deepest a fighter without Restore Life Levels goes past the margin (threat_ready):
+                         # above every walking drainer (Banshee and Forest Wight 24, White Wraith 26,
+                         # Vampire 27, Grave Wight 30, Ghost 31). At 32, clvl 33-34 Half-Elf and Dwarf
+                         # Warriors were drained back under checkpoints 5-7 hours old (C64 Balrog, 2026-11-24)
 RESTORERS = {**{name: (stat,) for name, stat in RESTORE_POTIONS.items()},
              "Mushroom of Restore Constitution": ("CO",),
              "Mushroom of Restoring": ("ST", "IN", "WI", "DX", "CO", "CH"),
@@ -576,6 +618,9 @@ HEALING_RESERVE = 10    # Potions of Healing bought at the Black Market, rich
 # Light Wounds and died to a Young Multi-Hued Dragon's breaths waiting for
 # Word of Recall (C64 Balrog, 2026-11-16). At most this many a visit.
 RESTOCK_SCUMS = 3
+RESTOCK_SCUMS_DEEP = 50     # rich deep (clvl < 40) fast scum cap for Restore Life Levels / Healing / Resist Heat
+RESTOCK_SCUMS_BALROG = 150  # clvl 40 unready for Balrog: full-town scums (ammo / Balrog weapons)
+RESTOCK_SCUMS_MARKET = 2000 # clvl 40 unready for Balrog: fast Black Market-only scums (Resist Heat / Healing)
 # Identify cast at an unknown wand fails this many times running: no more
 # casts for IDENTIFY_FAIL_WAIT steps (a Scroll of Identify still serves). A
 # clvl 29 Elf Rogue (Identify 95% to fail) cast it 750 times on DL1 between
@@ -603,6 +648,8 @@ PERILOUS = 0.3           # paths avoid squares whose melee danger exceeds this s
 REST_DANGER = 0.25       # rest only with danger here at most this share of HP
 BREEDER_REST = 10        # nor within this many squares of a breeder seen lately
 BREEDER_LEVEL = 15       # below this level, a level where BREEDERS_LEAVE breeders were seen is left
+BREEDER_MHP = 100        # ... or below this max HP: a clvl 19 Gnome Mage at 61 HP fought DL1-4 mice
+                         # and rats with its dagger and died to them five times in a day (C64 Balrog, 2026-11-23)
 FORGET_STEPS = 500       # steps without progress after which remembered creatures and blocks are forgotten
 MAGE_MELEE_LEVEL = 35    # a Mage walks to melee nothing before this level
 # Depth readiness beyond character level: from (depth) on,
@@ -636,7 +683,8 @@ TELEPORT_SCROLL = "Scroll of Teleportation"   # VMS teleport(100), at the Alchem
 TELEPORT_RESERVE = 5     # scrolls to carry from TELEPORT_FROM deep: a level-37 Priest out of Phase Door, its
 TELEPORT_FROM = 20       # staff spent, met an Earth Elemental with 10,000K gold and none (C64 Balrog, 2026-11-08)
 STRONG_PER_DLVL = 2      # strong potions: 5 + one per this many levels of the deepest, past STRONG_RESERVE
-RECALL_RESERVE_RICH = 6  # Word of Recall to carry once rich: two a round trip, and a level-34 Priest
+RECALL_RESERVE_RICH = 10  # Word of Recall to carry once rich (6 until 2026-11-24: a clvl 39 Mage ran out
+                         # leaving deadly DL39s): two a round trip, and a level-34 Priest
                          # with 4,000K gold recalled up every ~2,500 steps for more (2026-11-07)
 SCOUT_FROM = 20          # dungeon level from which a level is scouted with detection on arrival
 SCOUT_EVERY = 100        # ... and again every this many steps on it, or once the view has moved
@@ -676,7 +724,7 @@ DEEP_HEAL_HP = 0.75      # from SCOUT_FROM deep, below this share of HP: heal (p
 BREATHES = re.compile(r"\bbreathes\b")
 BREATHER_NAMED = re.compile(r"[Tt]he (.+?) breathes\b")   # the breather a breath message names
 BREATH_ELEMENT = re.compile(r"\bbreathes (lightning|gas|acid|frost|fire)\b")   # monster_cast_breath
-PARALYZES = re.compile(r"[Tt]he (.+?) paralyzes you")
+PARALYZES = re.compile(r"[Tt]he (.+?) paralyzes y")   # "you" cut by -more- too
 GRAVE_DANGER = 0.5       # the next turn's expected damage, as a share of HP, that no prayer but an escape answers
 PHASE_GOLD = 20          # gold worth an Alchemist trip for one (base 15 gp)
 TELEPORT_GOLD = 60       # ... and for a Scroll of Teleportation (base 40 gp)
@@ -752,6 +800,12 @@ REFUEL_AT = 300          # turns of light left at which a flask goes into the la
 # 25 on average (Half-Troll Priest, Dwarf Rogue, Halfling Paladin).
 MAIN_STAT = {"warrior": "STR", "mage": "INT", "priest": "WIS", "rogue": "DEX", "ranger": "INT", "paladin": "STR"}
 ROLL_LIMIT = 50          # rolls before taking whatever is shown
+# STR too, against the weight limit (STR x 130, core/inv_add.s): a natural
+# STR 3 Gnome Mage carried 39 lb, a helm, torches and potions left room for
+# two rations, and it died at clvl 19 on DL1-4 to mice, rats, lice and a
+# Floating Eye while starving, eight times in a day (C64 Balrog, 2026-11-23).
+# At least 6 (78 lb), or 2 below the best this race and class can have.
+STR_FLOOR = 6
 STAT_ROW = re.compile(r"\b(STR|INT|WIS|DEX|CON|CHR): *\d+(?:/\d+)? +\( *(\d+)(?:/(\d+))?\)")   # "STR:15 (15)", "DEX: 9 ( 9)"
 
 
@@ -768,11 +822,15 @@ def roll_good(rows: list[str], race: str, klass: str) -> bool:
     r, c = list(RACE_KEYS).index(race), CLASSES.index(klass)
     main, con = knowledge.STAT_NAMES.index(MAIN_STAT[klass]), knowledge.STAT_NAMES.index("CON")
     best_main = 17 + race_adj[r][main] + class_adj[c][main]
+    strength = knowledge.STAT_NAMES.index("STR")
+    best_str = 17 + race_adj[r][strength] + class_adj[c][strength]
     return (shown[MAIN_STAT[klass]] + class_adj[c][main] >= min(17, best_main - 2)
-            and shown["CON"] + class_adj[c][con] >= 13 + race_adj[r][con] + class_adj[c][con])
+            and shown["CON"] + class_adj[c][con] >= 13 + race_adj[r][con] + class_adj[c][con]
+            and shown["STR"] + class_adj[c][strength] >= min(STR_FLOOR, best_str - 2))
 
 
 MAX_CLVL = 40   # MAX_PLAYER_LEVEL (docs/FEATURE_MAP.md)
+BALROG_PREP_CLVL = MAX_CLVL - 1   # from clvl 39 on Balrog goal: collect the fire ring and Resist Heat stack
 DIVE_FROM_CLVL = MAX_CLVL   # the Balrog goal dives past one-breath killers from here (balrog_dive): from clvl 35
                             # to DL49 (2026-11-10) died six times to Ancient Multi-Hued Dragons in two hours for
                             # less experience an hour than DL39, and the maintainer: "let's not deep-dive then"
@@ -780,14 +838,73 @@ BALROG = "Balrog"     # dived for only once its breath is survivable (balrog_rea
 BALROG_DLVL = 50      # ... and no deeper: from here every level has it (core/6502/monster_catalog.s CAT_WIN_LEVEL)
 BALROG_NEAR_STEPS = 100  # steps since the Balrog was in view that its fire is kept resisted at any price (resist_fire)
 BALROG_FIGHT_TURNS = 2   # resisted turns of the Balrog's worst the HP covers to stand and fight it (balrog_fight)
+# A Mage's fight (maintainer, 2026-11-24: "we should expect some custom
+# planning for mages. they have very powerful spells"): Haste Self, then the
+# attack spell doing most a turn through the Balrog's resistance, the fire
+# spells a quarter against a fire breather (MON-034: eff_ball, eff_bolt);
+# readiness counts its bars as the Orb's. Until then a Mage counted nothing
+# of its spells and could be ready only by ~60 Drain Life charges.
+HASTE_SELF = "Haste Self"
+SPELL_ELEMENTS = {FIRE_BOLT: "fire", FIRE_BALL: "fire", FROST_BOLT: "frost", FROST_BALL: "frost",
+                  LIGHTNING_BOLT: "lightning", "Stinking Cloud": "poison",
+                  # and the wands: a Fire Balls wand (49) counted over Acid
+                  # Balls (40) at the Balrog, which takes a quarter of fire
+                  "Wand of Fire Balls": "fire", "Wand of Fire Bolts": "fire", "Wand of Cold Balls": "frost",
+                  "Wand of Frost": "frost", "Wand of Lightning Balls": "lightning", "Wand of Lightning": "lightning"}
 BALROG_HP = 3000      # 75d40 at its maximum (CR_MAX_HP; docs/FEATURE_MAP.md): what balrog_damage must cover
 BALROG_HEAT_POTIONS = 2   # Resist Heat carried to dive: with the ring its 1,000 breath is 111 (resist_fire)
 BALROG_SHOT_HITS = 0.5    # share of the launcher's shots counted as landing on its AC 125 (balrog_damage)
 BALROG_AMMO = 255     # shots carried once Balrog-bound, one stack (51 lb of bolts): AMMO_RESERVE before
 BALROG_FIRE_RING = 1100   # a Ring of Resist Fire at the top level on the Balrog goal: over a Ring of Speed's 1000
+# A Ring of Gain Constitution whose CON reaches the Balrog's HP line
+# (balrog_hp_short): over a Ring of Resist Cold's 800 and Speed's 1000, under
+# Resist Fire. Clvl 40 Elf and Half-Elf Priests at 361 and 362 HP waited all
+# night for Black Market Gain Constitution potions, six for one +40 HP step,
+# wearing Resist Cold (C64 Balrog, 2026-11-24).
+BALROG_CON_RING = 1050
+
+
+def con_hp_adj(con: int) -> int:
+    """HP a level for CON as played (core/player.s player_con_hp_adj)."""
+    if con < 7:
+        return con - 7
+    return 0 if con < 17 else 1 if con < 18 else 2 if con < 94 else 3 if con < 117 else 4
+
+
+def balrog_stand_hp(burst: int, mhp: int) -> int:
+    """The HP that stands and fights the Balrog (balrog_fight): BALROG_FIGHT_
+    TURNS of its turn, but never past halfway from one turn to full. Ready
+    through both fire resistances, a clvl 40 Half-Elf Priest at 362 HP stood
+    under a 444 two-turn line, drank Healing next to it every turn for 9,000
+    steps, cast nothing, and died when they ran out (C64 Balrog, 2026-11-24)."""
+    return min(BALROG_FIGHT_TURNS * burst, (burst + mhp) // 2)
+
+
+def ring_stat_after(stat: int, bonus: int) -> int:
+    """A stat with a ring's +bonus on, as VMS and Moria8 since MON-044 (460f8b8,
+    player_step_equip_stat_y) step it: +1 a point below 18, +10 from 18, at
+    most 118 (moria.inc change_stat -> misc.inc in_statt). Raw +1 a point
+    until then, which left a +5 ring at CON 18 at 18/05."""
+    for _ in range(max(0, bonus)):
+        stat = stat + 1 if stat < 18 else min(118, stat + 10)
+    return stat
 DIVE_REST_HP = 0.8    # on a dive level no rest above this share of HP; below it a potion first (rest)
 BREATH_REACH = 20     # squares a creature's breath or spell reaches (VMS max_sight, core/6502/monster_catalog.s)
 STORE_ITEM = re.compile(r"^\s*([a-p])\) (?:(?:\d+|an?) )?(\S.*?)\s+(\d+) GP")   # a stack shows its count (or article) first
+# A store row's name ends by this column, cut there (" d) Potion of Restore
+# Life Lev 400 GP"): Restore Life Levels, Gain Constitution and Intelligence
+# and the Restore potions past 26 letters were never bought; Warriors with
+# 7.9M gold were drained on DL20-32 with none, their checkpoints restarted
+# four times an hour (C64 Balrog, 2026-11-23). Column 29 if the cut fell on
+# a space (" k) Spellbook The Mages Guide  800 GP").
+STORE_NAME_END = 29
+
+
+def store_offers(match: re.Match[str], want: str) -> bool:
+    """A store row (STORE_ITEM) is ``want``: its name starts with it, or was
+    cut at STORE_NAME_END and ``want`` starts with what is shown."""
+    name = match.group(2)
+    return name.startswith(want) or (match.end(2) >= STORE_NAME_END and want.startswith(name))
 STORE_ROWS = slice(3, 19)   # 16 items a store (core/6502/store_data_defs.s)
 STORE_GOLD_ROW = 19         # the menu and the gold share the row below them
 PACK_ITEM = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*?)(?:\s+\d+\.\d+\s+lb)?\s*$")   # a stack shows its count first; CP/M adds trailing weight
@@ -847,6 +964,7 @@ def chebyshev(a: Pos, b: Pos) -> int:
 class LevelMemory:
     unseen_foe: tuple[Pos, str, int] | None = None   # an invisible creature's square, name and step found
     drained_bare: bool = False   # experience drained here with no Restore Life Levels carried: leave
+    drains: int = 0              # experience drains taken on this level (DRAINS_TO_LEAVE)
     stairs_sought: bool = False  # the stairs looked for with a one-breath killer out of sight (leave_deadly)
     deadly_drain: bool = False   # the level marked deadly by a drain alone, no breath (leave_deadly)
     runs_from: dict[tuple[Pos, tuple[int, int]], int] = field(default_factory=dict)   # (square, direction) of each explore run: step
@@ -892,18 +1010,21 @@ class LevelMemory:
     chest_action: tuple[Pos, str] | None = None   # the last chest command, read by its messages
     collect_walks: dict[Pos, int] = field(default_factory=dict)   # walk decisions toward each
     slow_seen: dict[Pos, int] = field(default_factory=dict)   # slow creature tile -> step last seen
+    drainers_seen: dict[Pos, int] = field(default_factory=dict)   # drainer tile -> step last seen
     loop_blocks: dict[Pos, int] = field(default_factory=dict)   # tile -> times it ended an oscillation here
     breeders_seen: dict[Pos, int] = field(default_factory=dict)   # breeding creature tile -> step last seen
     still: dict[Pos, tuple[str, int]] = field(default_factory=dict)   # creature tile -> (glyph, step first seen there)
     kinds: dict[str, float] = field(default_factory=dict)   # glyph -> worst creature_danger seen beside (Genocide)
     up_target: Pos | None = None   # the up staircase a walk up is committed to
     paid: int | None = None        # step of the last kill or creature worth hunting here (HUNT_QUIET_STEPS)
+    marks: dict[Pos, int] = field(default_factory=dict)   # where a creature worth hunting was last seen -> step (hunt)
     down_to_climb: bool = False    # no way up found here: the walk to the down stairs is kept
     route: list[Pos] = field(default_factory=list)   # the path a walk to a staircase keeps (committed_step)
     clear_target: Pos | None = None   # the blocker clear_way is walking to
     clear_waits: dict[Pos, int] = field(default_factory=dict)   # blocker tile -> steps waited for it
     lit_at: Pos | None = None         # where a light spell was last cast, lightless
     clear_skip: dict[Pos, int] = field(default_factory=dict)   # blocker tile -> step it may be chosen again
+    clear_approaches: dict[Pos, int] = field(default_factory=dict)   # paralysing blocker tile -> approaches
     casters: dict[tuple[str, int], int] = field(default_factory=dict)   # caster kind -> step last seen or heard
     scouted_at: int | None = None     # the step Detect Evil (or Detect Monsters) was last cast here
     scouted_view: Pos | None = None   # ... and the view's origin then (zp_view_x/y)
@@ -911,6 +1032,7 @@ class LevelMemory:
     deadly: Pos | None = None         # where a creature that could kill from full HP in one breath was seen
     deadly_jump: Pos | None = None    # the deadly creature already teleported away from (leave_deadly)
     balrog_seen: int | None = None    # step the Balrog was last in view on this level (resist_fire, balrog_fight)
+    balrog_pos: Pos | None = None     # where it was then, walked back to while the fight can go on (balrog_fight)
     breath: tuple[int, int] | None = None   # (step, HP lost) of the last breath taken
     breaths_taken: int = 0            # breaths taken on this level (BREATHS_TO_LEAVE)
     caught: int = 0                   # Teleport Selfs cast after a phase landed back in contact (CAUGHT_TO_LEAVE)
@@ -928,6 +1050,7 @@ class LevelMemory:
     rest_strikes: int = 0           # ... town rests since that gained nothing (TOWN_REST_STRIKES)
     last_threat: Pos | None = None   # where the nearest creature that could reach the player was last seen
     seen: list[int] | None = None    # tile types as last seen: the game forgets unlit floor
+    restock_done: bool = False       # restock scum cap spent on this town visit: leave town
 
 
 class Brain:
@@ -978,6 +1101,7 @@ class Brain:
         self.ammo = 0                          # shots for it carried
         self.magic = Magic(goal.klass)         # spells known and the cast in progress (M5b; Mage books M5d)
         self.clvl = 1                          # character level at the last command screen
+        self.max_clvl = 0                      # highest character level reached
         self.adjacent: list[Creature] = []     # creatures beside the player this step (fight_odds)
         self.armour = dict(STARTING_ARMOUR)    # armour slot -> AC worn or bought to wear
         self.to_wear: list[str] = []           # bought, not yet worn or wielded
@@ -993,6 +1117,7 @@ class Brain:
         self.listing_equipment = False         # the 'E' list is up: read it (prompt)
         self.armour_hits = 0                   # "is damaged!" messages since the armour was last read
         self.stat_max: dict[str, int] | None = None   # each stat's highest value seen; None: never read
+        self.stat_cur_max: dict[str, int] | None = None   # each raw stat byte's highest value seen
         self.gains: dict[str, int] = {}        # potions of gain stat carried, by name
         self.restores: dict[str, int] = {}     # Restore <stat> potions carried, by name
         self.drained: set[str] = set()         # stats read below their highest (track_stats)
@@ -1028,6 +1153,7 @@ class Brain:
         self.food = STARTING_FOOD              # foods carried, as a player counts them:
                                                # starting kit, +bought/picked up, -eaten
         self.buying: str | None = None         # store item named by the last B)uy
+        self.refused_item: str | None = None   # what the last full-pack refusal was for
         self.bought: str | None = None         # purchase counted, undone if the store objects
         self.typing: list[int] = []            # haggle offer keys still to type
         self.lamp = False                      # wearing a Brass Lantern
@@ -1066,6 +1192,7 @@ class Brain:
         self.gear_trip_gold = GEAR_TRIP_GOLD   # gold that makes a trip for armour and weapons worth it
         self.restock_trip_after = 0            # ... for strong potions and Phase Door alone
         self.restock_wait = GEAR_TRIP_WAIT     # ... doubled by each visit that left without them
+        self.trip_had_escape = False           # left town carrying Scroll or Staff of Teleportation
         self.gear_wait = GEAR_TRIP_WAIT        # gear_trip_after's wait, doubled by each visit that bought no gear
         self.gear_bought = False               # armour or a weapon bought on this town visit
         self.book_trip_after = 0               # ... for a prayer book alone
@@ -1092,6 +1219,9 @@ class Brain:
         self.nothing_to_shed = False           # the tiers left nothing to drop for the weight
         self.food_weight_refused = False       # food refused for the weight (store or floor)
         self.taking_off: str | None = None     # a worn piece being taken off (take_off_for_food)
+        self.takeoff_keep = False              # ... into the pack, not dropped: a ring swapped hands (wear)
+        self.con_cur: int | None = None        # CON as played, from memory (PL_CON_CUR)
+        self.balrog_hp_short = 0               # max HP short of the Balrog's line (balrog_ready), Balrog-bound
         self.drop_name: str | None = None      # ... then dropped by name (drop_prompt)
         self.refused_at: str | None = None     # the store whose sale the full pack refused
         self.dropping = False                  # a drop prompt is open for junk
@@ -1149,8 +1279,14 @@ class Brain:
                 self.magic.books = None   # the book prompt's order changed: read it again
             self.magic.lost_book = None
         self.magic.watch_cast(obs)
-        if "No charges left." in messages and self.last_aimed is not None:
+        if ("No charges left." in messages or "The staff is empty." in messages) and self.last_aimed is not None:
+            # A staff says so in its own words (core/huffman_data.s
+            # PIW_STAFF_EMPTY): a clvl 40 Half-Orc Priest at 26 HP used its
+            # empty Staff of Teleportation beside the Balrog, believed
+            # charged, and died before Word of Recall (C64 Balrog, 2026-11-23).
             self.wands[self.last_aimed] = 0
+        if "drains mana!" in messages:
+            self.pack_check_due = True
         if "You have nothing there." in messages and self.magic.last in ON_ITEM:
             # Recharge with no wand or staff: Mages cast Recharge Item I
             # 114,410 times for an effect it cannot show (C128, 2026-11-04).
@@ -1207,6 +1343,7 @@ class Brain:
                 self.drained.add(LIFE)
                 self.drainers.update(DRAIN_BLOW.findall(messages))
                 self.level.drained_bare = self.level.drained_bare or not self.restores.get(RESTORE_LIFE)
+                self.level.drains += 1
             if "You feel yourself moving faster." in messages:
                 self.hasted = True
             if "You feel yourself slow down." in messages:
@@ -1266,6 +1403,7 @@ class Brain:
             if "flies away" in messages or not HIT_NEWS.search(messages):
                 self.level.identified[target] = ("item", "nothing there")
         self.clvl = obs.clvl
+        self.max_clvl = max(getattr(self, "max_clvl", 0), obs.clvl)
         self.book_next = self.book_wanted(obs)
         self.standing = False
         self.track(obs, view)
@@ -1293,7 +1431,10 @@ class Brain:
             self.invulnerable_until = obs.step + INVULN_TURNS
         if PROTECTED in seen_messages:
             self.protect_until = obs.step + PROTECT_TURNS * max(obs.clvl, 1)
-        self.met.extend(knowledge.creatures_named(seen_messages))
+        named = knowledge.creatures_named(seen_messages)
+        self.met.extend(named)
+        if obs.dlvl >= BALROG_DLVL and BALROG in named:
+            self.level.balrog_seen = obs.step
         if BREATHES.search(seen_messages) and self.last_hp is not None and self.last_hp > obs.hp and obs.dlvl:
             element = BREATH_ELEMENT.search(seen_messages)
             self.note_breath(obs, view, self.last_hp - obs.hp, element.group(1) if element else None)
@@ -1306,8 +1447,14 @@ class Brain:
         self.identify(view, messages, attacker)
         self.remember_stationary(view)
         self.note_breathers(obs, view)
-        if self.last_pos is not None and chebyshev(self.last_pos, view.pos) > TELEPORT_JUMP:
-            # Teleported (Portal, a staff): the breath taken unseen is behind.
+        jumped = self.last_pos is not None and chebyshev(self.last_pos, view.pos) > TELEPORT_JUMP
+        short_teleport = (self.last_pos is not None and chebyshev(self.last_pos, view.pos) > 1
+                          and self.last_run is None
+                          and (self.magic.last in (TELEPORT_SELF, PORTAL) or self.last_aimed == TELEPORT_STAFF)
+                          and "Your spell fails." not in seen_messages
+                          and self.level.breath is not None and self.level.breath[0] < obs.step)
+        if jumped or short_teleport:
+            # Teleported (Portal, Teleport Self, a staff): the breath taken unseen is behind.
             # A level-36 Priest cast Portal five times running on its memory and
             # had no mana left for the dragon that found it (C64, 2026-11-08).
             self.level.breath = None
@@ -1325,6 +1472,13 @@ class Brain:
             del self.level.slow_seen[pos]   # beside it and nothing there: gone
         view.remembered = {p for p, seen in self.level.slow_seen.items()
                            if obs.step - seen < SLOW_AVOID and p not in view.creatures}
+        if (self.goal.threat_depth and obs.clvl >= RESTORE_LIFE_LEVEL
+                and not (self.balrog_bound() and obs.dlvl >= BALROG_DLVL)):
+            drainers = {p for p, c in view.creatures.items() if self.drainer(c)}
+            self.level.drainers_seen.update(dict.fromkeys(drainers, obs.step))
+            for pos in [p for p in self.level.drainers_seen
+                        if p not in view.creatures and chebyshev(p, view.pos) <= 1]:
+                del self.level.drainers_seen[pos]
         # How long each creature has stood where it is: one seen on a square
         # not recorded for its kind moved, and so may every one of its kind.
         moved = {c.glyph for p, c in view.creatures.items() if self.level.still.get(p, ("",))[0] != c.glyph}
@@ -1343,8 +1497,8 @@ class Brain:
                             if obs.step - seen < SLOW_AVOID and p not in view.creatures and chebyshev(p, view.pos) > 1}
         for c in view.creatures.values():   # what Genocide would wipe out (genocide_key)
             self.level.kinds[c.glyph] = max(self.level.kinds.get(c.glyph, 0.0), self.creature_danger(c, 1, obs))
-        if obs.clvl < BREEDER_LEVEL and len(self.level.breeders_seen) >= BREEDERS_LEAVE:
-            # A weak character (below clvl 15) leaves a breeding level.
+        if (obs.clvl < BREEDER_LEVEL or obs.mhp < BREEDER_MHP) and len(self.level.breeders_seen) >= BREEDERS_LEAVE:
+            # A weak character (below clvl 15, or 100 HP) leaves a breeding level.
             self.level.scum = True
         view.perilous = self.perilous(view, obs)
         if obs.dlvl and self.danger(view.pos, view, obs) > LEAVE_DANGER * max(obs.hp, 1):
@@ -1358,6 +1512,7 @@ class Brain:
             # stairs past it 100 times in 1,000 steps (C128, 2026-11-04). The
             # loop counts stay, so a loop that comes back is blocked longer.
             self.level.slow_seen.clear()
+            self.level.drainers_seen.clear()
             self.level.bumped.clear()
             view.remembered = set()
         if obs.mode == Mode.COMMAND and (not self.positions or self.positions[-1] != view.pos):
@@ -1368,7 +1523,8 @@ class Brain:
             + [kind for name in CASTS_A_SPELL.findall(messages)
                if (kind := knowledge.kinds_by_name().get(name)) is not None and burst.get(kind)], obs.step))
         view.hazards = set(self.level.stationary) | {
-            p for p, seen in self.level.slow_seen.items() if obs.step - seen < SLOW_MEMORY}
+            p for p, seen in self.level.slow_seen.items() if obs.step - seen < SLOW_MEMORY} | {
+            p for p, seen in self.level.drainers_seen.items() if obs.step - seen < SLOW_MEMORY}
         if any(self.dangerous(c, obs) for c in view.creatures.values()):
             self.level.scum = True
         if sum((c.glyph, c.level) in knowledge.breeder_kinds() for c in view.creatures.values()) >= BREEDERS_LEAVE:
@@ -1472,6 +1628,12 @@ class Brain:
         """A move that left the player in place found something unseen on the
         tile (an invisible creature): keep off it for a while (round 17)."""
         if self.last_move is not None and self.last_move[0] == view.pos:
+            if self.last_move[1] in view.stores or SLAIN.search(self.messages):
+                # Slaying a townsperson on a store door left the player in
+                # place; blocking the door sent a clvl 40 Human Mage down the
+                # stairs to DL28 mid-restock (C64 Balrog, 2026-11-25).
+                self.last_move = None
+                return
             blow = UNSEEN_BLOW.search(self.messages)
             kind = knowledge.kinds_by_name().get(blow.group(1)) if blow else None
             if kind is not None and self.last_move[1] not in view.creatures \
@@ -1512,7 +1674,7 @@ class Brain:
             self.level.blocked.clear()
             self.level.door_attempts.clear()
         last = (self.stair_scum, self.search) if self.food_low() else (self.search, self.stair_scum)
-        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.take_off_for_food, self.make_room_for_food, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.support_staffs, self.take_created_food, self.press_on, self.pray, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
+        for layer in (self.check_equipment, self.check_pack, self.read_enchantments, self.recharge, self.search_mode, self.take_off_for_food, self.make_room_for_food, self.drop_junk, self.swat, self.shake_paralyzer, self.resist_fire, self.balrog_fight, self.breath_guard, self.leave_deadly, self.protect_evil, self.quaff, self.balrog_teleport_hunt, self.support_staffs, self.take_created_food, self.press_on, self.pray, self.avoid_drainer, self.invoke, self.devices, self.aim, self.shoot, self.throw, self.crowded, self.shun, self.retreat, self.phase_door, self.swarm_recall, self.hurt_out, self.caution, self.look,
                       self.cornered_cast, self.unseen_foe_attack, self.fight, self.leave_caster, self.eat,
                       self.light,
                       self.wear,
@@ -1690,7 +1852,11 @@ class Brain:
         if kind != "Ring":
             return kind
         pending = any(self.gear.get(n, ("", None))[0] == "jewel" and self.gear[n][1][0] == "Ring" for n in self.to_wear)
-        return "Ring" if self.jewel_names.get("Ring", "(none)") == "(none)" and not pending else "Ring2"
+        if self.jewel_names.get("Ring", "(none)") == "(none)" and not pending:
+            return "Ring"
+        if self.jewel_names.get("Ring2", "(none)") != "(none)" and self.jewels.get("Ring", 0) < self.jewels.get("Ring2", 0):
+            return "Ring"   # both worn: the weaker, the right hand taken off first (wear)
+        return "Ring2"
 
     def jewel_value(self, name: str) -> int:
         """What a ring or amulet is worth to this character, as a player ranks
@@ -1707,10 +1873,14 @@ class Brain:
             return -1
         bonus = b2 if kind == "Increase Damage" and match.group(5) is not None else b1
         melee = self.goal.klass in MELEE_KLASSES
+        if kind == "Gain Constitution" and self.balrog_hp_short > 0 and self.con_cur is not None:
+            gain = (con_hp_adj(ring_stat_after(self.con_cur, bonus)) - con_hp_adj(self.con_cur)) * self.clvl
+            if gain >= self.balrog_hp_short:
+                return BALROG_CON_RING
         element = JEWEL_ELEMENTS.get(kind)
         if element is not None:
             lordly = 10 * LORDLY_AC if kind.startswith("Lordly") else 0
-            return lordly + (BALROG_FIRE_RING if element == "fire" and self.balrog_bound() else 800)
+            return lordly + (BALROG_FIRE_RING if element == "fire" and self.balrog_preparing() else 800)
         # The Magi over an amulet of resistance (800): Free Action is the
         # Balrog's Hold Person stopped (balrog_ready).
         # Increase Damage adds to every blow, Increase To-Hit 3 skill a point
@@ -1782,7 +1952,7 @@ class Brain:
         return (self.gold(obs) >= JEWEL_GOLD + self.gear_reserve(obs)
                 and (min(self.jewels.get("Ring", 0), self.jewels.get("Ring2", 0)) < 1000
                      or self.jewels.get("Amulet", 0) < 300
-                     or (self.balrog_bound() and not self.fire_ring_worn())))
+                     or (self.balrog_preparing() and not self.fire_ring_worn())))
 
     def jewel_pick(self, obs: Observation) -> tuple[str, str] | None:
         """At the Magic Shop or the Black Market, rich: the ring or amulet
@@ -1898,10 +2068,13 @@ class Brain:
     def restored(self, kind: str) -> None:
         """A restorer used: one fewer carried, its stats no longer drained."""
         self.restores[kind] = max(0, self.restores.get(kind, 0) - 1)
+        cur_max = getattr(self, "stat_cur_max", None)
         for stat in RESTORERS[kind]:
             self.drained.discard(stat)
             if self.stat_max is not None:
                 self.stat_max.pop(stat, None)   # read again as it now is
+            if cur_max is not None:
+                cur_max.pop(stat, None)
         self.restore_due = bool(self.drained)
 
     def restorer_wanted(self, name: str) -> bool:
@@ -1920,6 +2093,19 @@ class Brain:
         return (self.goal.klass != "mage" and self.weapon[1] < ENCHANT_WEAPON_MAX and self.weapon_scrolls < cap
                 and gold >= ENCHANT_GOLD + GEAR_RESERVE)
 
+    @staticmethod
+    def memory_stats(obs: Observation) -> tuple[dict[str, int], dict[str, int]] | None:
+        """Read the six current and base stats from obs.player when populated."""
+        if (obs.abi is None or "PL_STR_CUR" not in obs.abi.consts or "PL_STR_BASE" not in obs.abi.consts
+                or len(obs.player) < obs.abi.PL_STR_CUR + 6):
+            return None
+        cur_off, base_off = obs.abi.PL_STR_CUR, obs.abi.PL_STR_BASE
+        if not all(obs.player[cur_off + i] >= 3 for i in range(6)):
+            return None
+        cur = {k: obs.player[cur_off + i] for i, k in enumerate(STAT_ORDER)}
+        base = {k: obs.player[base_off + i] for i, k in enumerate(STAT_ORDER)}
+        return cur, base
+
     def track_stats(self, obs: Observation) -> None:
         """Each stat's highest value seen; one below it is drained, and that
         stat's Restore potion puts it back (the status line shows no drain:
@@ -1934,6 +2120,32 @@ class Brain:
             self.str_code = str_code(strength[1], strength[2])
         if obs.abi is not None and "PL_WEIGHT" in obs.abi.consts and len(obs.player) > obs.abi.PL_WEIGHT:
             self.body_weight = obs.player[obs.abi.PL_WEIGHT]
+        if obs.abi is not None and "PL_CON_CUR" in obs.abi.consts and len(obs.player) > obs.abi.PL_CON_CUR:
+            self.con_cur = obs.player[obs.abi.PL_CON_CUR]
+        if self.balrog_bound() and obs.mhp > 0:
+            if knowledge.kinds_by_name().get(BALROG) is not None:
+                burst = self.balrog_ready_burst(obs)
+                self.balrog_hp_short = max(0, math.floor(burst / BREATH_LETHAL) + 1 - obs.mhp)
+        mem = self.memory_stats(obs)
+        if mem is not None:
+            cur, base = mem
+            self.str_code = cur["ST"]
+            self.stat_now = {k: raw_stat_value(v) for k, v in cur.items()}
+            cur_max = getattr(self, "stat_cur_max", None)
+            if cur_max is None:
+                cur_max = {k: max(cur[k], base[k]) if base[k] >= 3 else cur[k] for k in STAT_ORDER}
+            else:
+                for k in STAT_ORDER:
+                    cur_max.setdefault(k, cur[k])
+            self.stat_cur_max = cur_max
+            self.drained = {k for k in STAT_ORDER if cur[k] < cur_max[k]} | (self.drained & {LIFE})
+            self.str_drained_ever = self.str_drained_ever or "ST" in self.drained
+            if self.drained:
+                self.restore_due = True
+            for k, v in cur.items():
+                cur_max[k] = max(cur_max[k], v)
+            self.stat_max = {k: raw_stat_value(v) for k, v in cur_max.items()}
+            return
         found = {name: stat_value(base, extra)
                  for row in obs.rows[19:24] for name, base, extra in STATS.findall(row)}
         if len(found) < 6:
@@ -2019,7 +2231,63 @@ class Brain:
         """Mana enough to keep the Balrog's fire resisted unseen: nearly
         full (RESIST_UPKEEP_MANA), and the prayer's cost spare beside the heal."""
         mp, mmp = self.magic.mana(obs)
-        return mmp > 0 and mp >= RESIST_UPKEEP_MANA * mmp and self.magic.spare(obs, RESIST_HEAT_COLD)
+        if self.restore_mana >= RESTORE_MANA_SPARE and self.magic.can(obs, RESIST_HEAT_COLD):
+            # Bars to spare in the pack: kept up at any mana. From nearly full
+            # only, the timer was down when the Balrog first breathed, and
+            # readiness through both resistances cost four clvl 40 Priests on
+            # DL50 in 90 minutes (2026-11-23); they now carry six Restore Mana.
+            return True
+        if mmp > 0 and mp >= RESIST_UPKEEP_MANA * mmp and self.magic.spare(obs, RESIST_HEAT_COLD):
+            return True
+        if obs.step >= self.blind_until and self.resist_heat >= BALROG_HEAT_POTIONS:
+            # Finite potions are only pre-drunk unseen on DL50 when a single
+            # ring-resisted Balrog turn (<= burst) could kill at current HP: a
+            # 361-HP Mage or 443-HP Rogue saves its potions for the fight
+            # itself instead of burning 12 potions in empty corridors, while
+            # sub-334 HP Mages and chipped characters stay protected.
+            kind = knowledge.kinds_by_name().get(BALROG)
+            if kind is not None and obs.hp <= self.turn_burst(Creature(*kind, BALROG), obs, lasting=True):
+                return True
+        return False
+
+    def resist_sustained(self, obs: Observation) -> bool:
+        """The Resist Heat timer kept up on the Balrog's levels (resist_upkeep
+        at any mana): the prayer known at this level and spare Restore Mana, or
+        a Resist Heat potion stack of RESIST_SUSTAINED_POTIONS (RESIST_SUSTAINED_RESERVE
+        when sub-334 HP forces unseen pre-drinking on DL50), staying down to
+        RESIST_SUSTAINED_STAY on DL49-50."""
+        known = self.magic.known.get(RESIST_HEAT_COLD)
+        if known is not None and known.level <= obs.clvl and self.restore_mana >= RESTORE_MANA_SPARE:
+            return True
+        on_balrog_trip = (obs.dlvl >= BALROG_DLVL
+                          or (obs.dlvl == BALROG_DLVL - 1 and self.max_dlvl >= BALROG_DLVL and self.fire_ring_worn()))
+        if on_balrog_trip:
+            need = RESIST_SUSTAINED_STAY
+        else:
+            kind = knowledge.kinds_by_name().get(BALROG)
+            ring_lethal = (kind is not None
+                           and obs.mhp <= self.turn_burst(Creature(*kind, BALROG), obs, lasting=True))
+            need = RESIST_SUSTAINED_RESERVE if ring_lethal else RESIST_SUSTAINED_POTIONS
+        return self.resist_heat >= need
+
+    def resist_heat_reserve(self) -> int:
+        """Potions of Resist Heat to carry: RESIST_SUSTAINED_RESERVE when
+        preparing for the Balrog without Resist Heat and Cold, else RESIST_RESERVE."""
+        if self.balrog_preparing() and RESIST_HEAT_COLD not in self.magic.known:
+            return RESIST_SUSTAINED_RESERVE
+        return RESIST_RESERVE
+
+    def balrog_ready_burst(self, obs: Observation) -> int:
+        """The Balrog's worst turn readiness weighs: through the ring alone, or
+        through both resistances when the timer is sustained (resist_sustained).
+        Clvl 40 Elf and Half-Elf Priests at 322 and 362 HP, six Restore Mana and
+        fifty Potions of Healing each, waited all day under the ring-alone line
+        (C64 Balrog, 2026-11-24)."""
+        kind = knowledge.kinds_by_name()[BALROG]
+        balrog = Creature(kind[0], kind[1], BALROG)
+        if self.resist_sustained(obs):
+            return self.turn_burst(balrog, obs, assume=frozenset({"fire"}))
+        return self.turn_burst(balrog, obs, lasting=True)
 
     def resist_fire(self, obs: Observation, view: View) -> Decision | None:
         """A breather in view whose breath, resisted as now, is RESIST_WORTH
@@ -2125,27 +2393,84 @@ class Brain:
             seen = self.level.balrog_seen
             burst = self.turn_burst(balrog, obs)
             if seen is not None and obs.step - seen <= BALROG_NEAR_STEPS and obs.hp <= burst:
+                resisted = self.turn_burst(balrog, obs, assume=frozenset({"fire"}))
+                if obs.hp > resisted and self.magic.can(obs, RESIST_HEAT_COLD):
+                    # Out of its reach only for want of the timer: a clvl 40
+                    # Half-Elf Priest at 322-329 of 362, its turn 333 through
+                    # the ring alone, cast Portal eight times with the Balrog
+                    # out of view (resist_fire silent for an Ancient Multi-
+                    # Hued Dragon's unresistable gas) and died to that gas
+                    # (C64 Balrog, 2026-11-24). The prayer, then the escapes.
+                    return Decision(*self.magic.pray(RESIST_HEAT_COLD, f"HP {obs.hp}/{obs.mhp}, the Balrog near, its turn {burst}: pray {RESIST_HEAT_COLD}"))
+                if obs.hp > resisted and self.resist_heat and obs.step >= self.blind_until:
+                    self.picking, self.listed = RESIST_HEAT, False
+                    return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}, the Balrog near, its turn {burst}: drink Resist Heat")
+                pos = self.level.balrog_pos
+                far = pos is not None and chebyshev(view.pos, pos) > DANGER_RANGE
+                if far and not self.resist_sustained(obs) and not self.recalling and self.recall and obs.step >= self.blind_until:
+                    self.picking, self.listed = RECALL, False
+                    return Decision(ord("R"), "recall",
+                                    f"HP {obs.hp}/{obs.mhp}, out of Resist Heat far from the Balrog: read Word of Recall")
+                if far and obs.mhp > burst and self.strong.get(HEALING, 0) and obs.step >= self.blind_until:
+                    self.picking, self.listed = HEALING, False
+                    return Decision(ord("Q"), "quaff",
+                                    f"HP {obs.hp}/{obs.mhp}, far from the Balrog, its turn {burst}: drink Healing")
                 # Out of sight, one more turn of it kills: away before any
                 # heal. A clvl 40 Half-Orc Rogue at 112/445, the Balrog just
                 # gone from view, cast Cure Light Wounds twice (+11 each)
                 # with a Staff of Teleportation in its pack, and its next
                 # breath killed it (C64 Balrog, 2026-11-14).
                 return self.balrog_escape(obs, f"HP {obs.hp}/{obs.mhp}, the Balrog near, its turn {burst}")
+            pos = self.level.balrog_pos
+            if pos is not None and obs.hp >= balrog_stand_hp(burst, obs.mhp) and (
+                    self.magic.can(obs, ORB) or self.restore_mana or self.balrog_spell(obs, castable=True) is not None):
+                # Gone from view mid-fight: after it, to where it was last
+                # seen, while the HP and the mana hold. A clvl 40 Half-Orc
+                # Priest's Orbs left it at 684 of 3,000; it walked away, the
+                # Priest explored and picked up gold for 2,000 steps, and it
+                # came back healed to 874 (C64 Balrog replay, 2026-11-23).
+                step = view.step_toward({pos}, avoid_monsters=True)
+                if step is not None and step != (0, 0) and pos != view.pos:
+                    return Decision(DIRS[step], "fight", f"the Balrog gone from view: after it, to {pos}")
+                self.level.balrog_pos = None   # there, and not in view: the scouting and exploring find it
             return None
         self.level.balrog_seen = obs.step
+        self.level.balrog_pos = min(spots, key=lambda p: chebyshev(p, view.pos))
         magic = self.magic
         if self.resist_div(obs, "fire") < 9:
             return None   # resist_fire (just before) brings the timer up; without it, the escapes
         burst = self.turn_burst(balrog, obs)
         invulnerable = obs.step < self.invulnerable_until
-        if obs.hp < BALROG_FIGHT_TURNS * burst and not invulnerable:
+        # Two of its turns, capped below full while a heal is left (balrog_
+        # stand_hp); with none, nothing to loop on: the two turns.
+        heal_left = self.strong.get(HEALING, 0) or self.extra[INVULNERABILITY] or any(
+            magic.can(obs, spell) for spell in (HOLY_WORD, HEAL))
+        stand = balrog_stand_hp(burst, obs.mhp) if heal_left else BALROG_FIGHT_TURNS * burst
+        if obs.hp < stand and not invulnerable:
+            if self.strong.get(HEALING, 0) and obs.step >= self.blind_until:
+                # A Potion of Healing first: Holy Word's 32 mana is five Orbs.
+                # A clvl 40 Half-Orc Priest healed by prayer, ran out of mana
+                # with the Balrog at 668 of 3,000, and the next level's was
+                # whole again (C64 Balrog, 2026-11-23).
+                self.picking, self.listed = HEALING, False
+                return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn: drink Healing")
+            if obs.hp <= burst:
+                # One more turn kills: a teleport that cannot fail before a
+                # prayer that can. The same Priest's Holy Word failed at 133
+                # and again at 83 HP (C64 Balrog, 2026-11-23).
+                far = self.far_escape(obs, f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn")
+                if far is not None:
+                    return far
             for spell in (HOLY_WORD, HEAL):
                 if magic.can(obs, spell):
                     return Decision(*magic.pray(spell, f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn: pray {spell}"))
             if self.extra[INVULNERABILITY]:
                 self.picking, self.listed = INVULNERABILITY, False
                 return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn: drink Invulnerability")
-            return None
+            # No heal left: away, not the blows. A clvl 40 Half-Orc Priest
+            # out of mana read Word of Recall and, waiting for it, struck the
+            # Balrog beside it from 331 HP to death (C64 Balrog, 2026-11-23).
+            return self.balrog_escape(obs, f"HP {obs.hp}/{obs.mhp}, the Balrog's {burst} a turn, no heal left")
         pos = min(spots, key=lambda p: chebyshev(p, view.pos))
         step = self.line_to(view, pos, missile=True)
         adjacent = chebyshev(pos, view.pos) == 1
@@ -2165,22 +2490,42 @@ class Brain:
             self.pending = DIRS[step]
             self.aimed = (pos, view.creatures[pos].glyph)
             return Decision(*magic.pray(ORB, "the Balrog in line, its fire resisted: pray Orb of Draining"))
-        for spell in (DISPEL_EVIL, HOLY_WORD):
+        mage = self.balrog_spell(obs, castable=True)
+        in_line = step is not None and chebyshev(pos, view.pos) <= FIRE_RANGE
+        best = self.balrog_spell(obs)
+        if best is not None and self.restore_mana and (mage is None or mage[1] < best[1] / 2) and in_line:
+            # The bar spent to Magic Missile's 7: another bar for Frost Ball's 33.
+            self.picking, self.listed = RESTORE_MANA, False
+            return Decision(ord("Q"), "quaff", f"mana short of {best[0]} at the Balrog: drink Restore Mana")
+        if mage is not None and in_line:
+            if not self.hasted and magic.can(obs, HASTE_SELF):
+                return Decision(*magic.pray(HASTE_SELF, "the Balrog in line: cast Haste Self, two turns to its one"))
+            charged = [w for w in ATTACK_WANDS if self.wands.get(w, 0) > 0]
+            if not charged or mage[1] >= max(self.balrog_hurt(w, ATTACK_WANDS[w]) for w in charged):
+                self.pending = DIRS[step]
+                self.aimed = (pos, view.creatures[pos].glyph)
+                return Decision(*magic.pray(mage[0], f"the Balrog in line, its fire resisted: cast {mage[0]} ({mage[1]:.0f})"))
+        for spell in (DISPEL_EVIL, HOLY_WORD) if not magic.can(obs, ORB) else ():
+            # Not while the Orb can be cast: Dispel Evil's 20 mana for ~60 is
+            # three Orbs' for fewer than one; into line instead (same fight).
             if magic.can(obs, spell):
                 return Decision(*magic.pray(spell, f"the Balrog in view, its fire resisted: pray {spell}"))
-        if any(magic.can(obs, spell) for spell in (ORB, DISPEL_EVIL, HOLY_WORD)):
-            return None   # mana for a prayer, the Balrog out of line: close in, wands
+        if any(magic.can(obs, spell) for spell in (ORB, DISPEL_EVIL, HOLY_WORD)) or (mage is not None and not in_line):
+            return None   # mana for a prayer or spell, the Balrog out of line: close in, wands
+        prays = any(spell in magic.known for spell in (ORB, DISPEL_EVIL, HOLY_WORD)) or self.balrog_spell(obs) is not None
+        if self.restore_mana and prays:
+            self.picking, self.listed = RESTORE_MANA, False
+            return Decision(ord("Q"), "quaff", "out of mana with the Balrog: drink Restore Mana")
         # No prayer for it, or none castable: the attack wands, the strongest
         # charged, as the Orb is aimed; a Rogue learns no attack spell, and
         # its wands and bolts are what balrog_damage counted. Out of line,
         # the launcher (shoot) and the closing in come after.
         wands = [w for w in ATTACK_WANDS if self.wands.get(w, 0) > 0]
         if wands and step is not None and chebyshev(pos, view.pos) <= FIRE_RANGE:
-            wand = max(wands, key=ATTACK_WANDS.get)
+            wand = max(wands, key=lambda w: self.balrog_hurt(w, ATTACK_WANDS[w]))
             self.picking, self.listed, self.pending, self.last_aimed = wand, False, DIRS[step], wand
             self.aimed = (pos, view.creatures[pos].glyph)
             return Decision(KEY_AIM, "aim", f"the Balrog in line, its fire resisted: aim the {wand} at it")
-        prays = any(spell in magic.known for spell in (ORB, DISPEL_EVIL, HOLY_WORD))
         if blows and adjacent:
             # A fighter's blows, which balrog_damage counted: a night of
             # Warriors and Rogues read Word of Recall once their wands were
@@ -2197,9 +2542,6 @@ class Brain:
         # 2026-11-12: "out of mana is ok if they don't have any gain mana
         # potions"). A clvl 40 Priest with 5 Words of Recall spent its mana,
         # fought on at 500-650 of 780 and died (C64 Balrog, 2026-11-12).
-        if self.restore_mana and prays:
-            self.picking, self.listed = RESTORE_MANA, False
-            return Decision(ord("Q"), "quaff", "out of mana with the Balrog: drink Restore Mana")
         if not self.recalling and self.recall and obs.step >= self.blind_until:
             self.picking, self.listed = RECALL, False
             return Decision(ord("R"), "recall", "out of mana with the Balrog: read Word of Recall")
@@ -2251,11 +2593,16 @@ class Brain:
     def paralyzers_in_view(self, view: View) -> list[Pos]:
         """Where the creatures in view whose touch has paralysed the bot are
         (by glyph); none with Free Action."""
-        if not self.paralyzers or self.free_action():
+        if self.free_action():
             return []
         glyphs = knowledge.glyphs_of()
         bad = {g for name in self.paralyzers for g in glyphs.get(name, ())}
-        return [p for p, c in view.creatures.items() if c.glyph in bad]
+        # And by the lore, before the first one: a clvl 34 Dwarf Priest with
+        # no Free Action was paralysed by an Iridescent Beetle's gaze on DL31
+        # again and again, its "paralyzes y" cut by -more- and never learned,
+        # and spent its one free turn on Resist Heat (C64 Balrog, 2026-11-24).
+        lore = knowledge.paralyzer_kinds()
+        return [p for p, c in view.creatures.items() if c.glyph in bad or (c.glyph, c.level) in lore]
 
     def shake_paralyzer(self, obs: Observation, view: View) -> None | Decision:
         """Beside a creature whose touch has paralysed the bot (learned from
@@ -2412,8 +2759,16 @@ class Brain:
                   and self.sees(view, view.pos, p)}
         breath = self.level.breath
         if lethal:
-            worst = max(lethal.values())
-            who = f"the '{view.creatures[max(lethal, key=lethal.get)].glyph}'"
+            top = max(lethal, key=lethal.get)
+            worst = lethal[top]
+            who = f"the '{view.creatures[top].glyph}'"
+            if (doubled and self.level.deadly is None and worst >= BREATH_LETHAL * obs.mhp
+                    and not any(self.magic.can(obs, s) for s in (HOLY_WORD, HEAL))):
+                # Fleeing a breather two breaths of which kill from full HP
+                # with no Potion of Healing: leave the level once out of sight,
+                # not collect gold and explore back into it (C64 Balrog,
+                # 2026-11-25: clvl 39 Half-Elf Rogue on DL39).
+                self.level.deadly = top
         elif breath is not None and obs.step - breath[0] < UNSEEN_BREATH_STEPS \
                 and UNSEEN_BREATHS * breath[1] >= BREATH_LETHAL * obs.hp:
             # Breathed on from out of sight: as big again, from who knows
@@ -2424,8 +2779,13 @@ class Brain:
             worst, who = UNSEEN_BREATHS * breath[1], "breaths unseen"
         else:
             return None
+        save_healing = (
+            obs.dlvl < BALROG_DLVL and self.balrog_preparing()
+            and self.goal.klass not in ("priest", "paladin")
+            and not any(s in self.magic.known for s in (HOLY_WORD, HEAL))
+        )
         for potion in sorted(POTION_HEAL, key=POTION_HEAL.get, reverse=True):
-            if not self.potion_ready(potion, obs):
+            if (potion == HEALING and save_healing) or not self.potion_ready(potion, obs):
                 continue
             if obs.hp + min(POTION_HEAL[potion], obs.mhp - obs.hp) > worst / BREATH_LETHAL \
                     and (potion == HEALING or obs.hp + POTION_HEAL[potion] <= obs.mhp):
@@ -2435,6 +2795,10 @@ class Brain:
         far = self.far_escape(obs, f"{who} could breathe {worst}")
         if far is not None:
             return far
+        if (save_healing and self.potion_ready(HEALING, obs) and obs.step >= self.blind_until
+                and obs.hp + min(POTION_HEAL[HEALING], obs.mhp - obs.hp) > worst / BREATH_LETHAL):
+            self.picking, self.listed = HEALING, False
+            return Decision(ord("Q"), "quaff", f"{who} could breathe {worst}: drink {drink_name(HEALING)}")
         for spell in (TELEPORT_SELF, PORTAL):
             if magic.can(obs, spell):
                 return Decision(*magic.pray(spell, f"{who} could breathe {worst}: cast {spell}"))
@@ -2445,7 +2809,17 @@ class Brain:
                 hidden.append((min(chebyshev(p, (x, y)) for p in lethal), key))
         if hidden:
             return Decision(max(hidden)[1], "retreat", f"{who} could breathe {worst}: out of its sight")
-        if not lethal and self.level.phased is not None and obs.step - self.level.phased < UNSEEN_BREATH_STEPS:
+        if len(lethal) == 1 and self.wands.get(TELEPORT_AWAY, 0) > 0 and obs.step >= self.blind_until:
+            target = next(iter(lethal))
+            balrog_kind = knowledge.kinds_by_name().get(BALROG)
+            creature = view.creatures[target]
+            is_balrog = self.balrog_bound() and obs.dlvl >= BALROG_DLVL and (creature.glyph, creature.level) == balrog_kind
+            step = self.line_to(view, target, missile=True) if not is_balrog else None
+            if step is not None and chebyshev(target, view.pos) <= FIRE_RANGE:
+                self.picking, self.listed, self.pending, self.last_aimed = TELEPORT_AWAY, False, DIRS[step], TELEPORT_AWAY
+                return Decision(KEY_AIM, "phase", f"{who} could breathe {worst}: aim the {TELEPORT_AWAY} at it")
+        if (not lethal and breath is not None and self.level.phased is not None
+                and self.level.phased >= breath[0] and obs.step - self.level.phased < UNSEEN_BREATH_STEPS):
             # Unseen, a Phase Door breaks no sight line: once a window, then
             # a heal, then leave_deadly's stairs or Word of Recall. A clvl 40
             # Priest at 190/410 read Phase Door twenty times running from an
@@ -2457,12 +2831,19 @@ class Brain:
             if obs.hp + POTION_HEAL[HEALING] > worst / BREATH_LETHAL and self.potion_ready(HEALING, obs):
                 return self.heal_now(obs, f"{who} could breathe {worst}")
             return None
+        def note_phase() -> None:
+            if self.level.phased is not None and obs.step - self.level.phased <= PHASE_AGAIN:
+                self.level.caught += 1
+                if self.level.caught >= CAUGHT_TO_LEAVE and self.level.deadly is None:
+                    self.level.deadly = view.pos
+            self.level.phased = obs.step
+
         if self.phase and obs.step >= self.blind_until:
             self.picking, self.listed = PHASE, False
-            self.level.phased = obs.step
+            note_phase()
             return Decision(ord("R"), "phase", f"{who} could breathe {worst}: read Phase Door")
         if magic.can(obs, PHASE_DOOR):
-            self.level.phased = obs.step
+            note_phase()
             return Decision(*magic.pray(PHASE_DOOR, f"{who} could breathe {worst}: cast Phase Door"))
         return None
 
@@ -2495,6 +2876,27 @@ class Brain:
         self.level.scouted_at, self.level.scouted_view = obs.step, origin
         self.level.heard_burst = False
         return Decision(*magic.pray(spell, f"scout the level: {spell}"))
+
+    def balrog_teleport_hunt(self, obs: Observation, view: View) -> Decision | None:
+        """On DL50 with double fire resistance up and Detect Monsters active,
+        use Teleport Self to scan fresh viewports for the Balrog in one turn
+        instead of burning finite Resist Heat potions walking empty corridors."""
+        if (not self.balrog_bound() or obs.dlvl < BALROG_DLVL
+                or self.level.balrog_pos is not None or self.level.deadly is not None
+                or self.recalling or self.adjacent or self.attacked):
+            return None
+        kind = knowledge.kinds_by_name().get(BALROG)
+        if kind is not None and any((c.glyph, c.level) == kind for c in view.creatures.values()):
+            return None
+        if (self.level.scouted_at is None or obs.step - self.level.scouted_at > 30
+                or self.resist_div(obs, "fire") < 9 or obs.hp < HUNT_HP * obs.mhp):
+            return None
+        if DETECT_MONSTERS not in self.magic.known or not self.magic.can(obs, TELEPORT_SELF):
+            return None
+        mp, mmp = self.magic.mana(obs)
+        if mmp <= 0 or mp < 0.75 * mmp:
+            return None
+        return Decision(*self.magic.pray(TELEPORT_SELF, "DL50 scouted without Balrog: cast Teleport Self to hunt it"))
 
     @staticmethod
     def view_origin(obs: Observation) -> Pos | None:
@@ -2556,8 +2958,17 @@ class Brain:
         on for 690 (C64 Balrog, 2026-11-10)."""
         if obs.dlvl == 0:
             return None
+        balrog_kind = knowledge.kinds_by_name().get(BALROG)
+
+        def burst_of(c: Creature) -> int:
+            if (self.balrog_bound() and obs.dlvl >= BALROG_DLVL and balrog_kind is not None
+                    and (c.glyph, c.level) == balrog_kind
+                    and (self.resist_sustained(obs) or self.resist_div(obs, "fire") >= 9)):
+                return self.turn_burst(c, obs, assume=frozenset({"fire"}))
+            return self.turn_burst(c, obs, lasting=True)
+
         for p, c in view.creatures.items():
-            if self.turn_burst(c, obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
+            if burst_of(c) >= BREATH_LETHAL * obs.mhp:
                 self.level.deadly, self.level.deadly_drain = p, False
         kinds = knowledge.kinds_by_name()
         for name in NAMED_ACT.findall(self.seen_messages):
@@ -2569,8 +2980,15 @@ class Brain:
             # spell" came behind -more-, and it explored on (same day).
             kind = kinds.get(name)
             if self.level.deadly is None and kind is not None \
-                    and self.turn_burst(Creature(*kind, name), obs, lasting=True) >= BREATH_LETHAL * obs.mhp:
+                    and burst_of(Creature(*kind, name)) >= BREATH_LETHAL * obs.mhp:
                 self.level.deadly, self.level.deadly_drain = view.pos, False
+        if self.level.deadly is None and self.level.drains >= DRAINS_TO_LEAVE:
+            # Drained again and again here, potions or not: something keeps
+            # finding it, unseen as often as not. A clvl 34 Dwarf Priest met a
+            # Banshee on DL31 and lost 35% of its experience, a level with it,
+            # in ten minutes, its Restore Life Levels gone (C64 Balrog,
+            # 2026-11-24).
+            self.level.deadly, self.level.deadly_drain = view.pos, True
         if not self.restores.get(RESTORE_LIFE) and self.level.deadly is None and (
                 self.level.drained_bare or any(self.drainer(c) for c in view.creatures.values())):
             # Drained with nothing to restore it, or a drainer in view: the
@@ -2630,7 +3048,8 @@ class Brain:
         # marked on the player's square, and is in reach.)
         # Seen or remembered, the line decides: a remembered dragon with an
         # open line to the player breathes as one in view (2026-11-08).
-        hidden = deadly != view.pos and chebyshev(deadly, view.pos) > LEAVE_HIDDEN_NEAR \
+        recent_breath = self.level.breath is not None and obs.step - self.level.breath[0] < UNSEEN_BREATH_STEPS
+        hidden = deadly != view.pos and not recent_breath and chebyshev(deadly, view.pos) > LEAVE_HIDDEN_NEAR \
             and self.line_to(view, deadly, missile=True) is None
         if hidden and far is None and not self.level.stairs_sought and obs.step >= self.blind_until:
             finder = next((name for name in (DETECT_DOORS, FIND_TRAPS) if self.magic.can(obs, name)), None)
@@ -2638,7 +3057,7 @@ class Brain:
                 self.level.stairs_sought = True
                 return Decision(*self.magic.pray(finder, f"a creature that could kill in one breath, out of sight: pray {finder} for the stairs"))
         walk = LEAVE_HIDDEN_WALK if hidden else LEAVE_WALK_STEPS
-        if self.level.deadly_drain and not self.level.drained_bare:
+        if self.level.deadly_drain and not self.level.drained_bare and self.level.drains < DRAINS_TO_LEAVE:
             # A drainer in view, not a breath and no touch yet: away by the
             # stairs when near, never home by Word of Recall. Marked so, clvl
             # 36-39 characters without Restore Life Levels recalled from DL37
@@ -2871,6 +3290,12 @@ class Brain:
                 if self.too_heavy and self.buying is not None and self.buying.startswith(FOODS):
                     self.food_weight_refused = True   # take_off_for_food, if nothing else goes
                 self.refused_at = self.at_store
+                self.refused_item = self.buying
+                # A fresh refusal is a reason to drop now: an older retry wait
+                # outlasted the visit, and 20 of 25 Balrog characters left town
+                # without the Restore Life Levels the Temple refused for a full
+                # pack (C64 Balrog, 2026-11-24). A cancelled drop waits again.
+                self.drop_after = min(self.drop_after, obs.step)
             if self.bought is not None:
                 self.credit(self.bought, -1)   # the counted purchase did not happen
             self.bought = None
@@ -2938,7 +3363,8 @@ class Brain:
             for want in self.shopping_list(int(gold.group(1)) if gold else None, obs):
                 for row in obs.rows[STORE_ROWS]:
                     match = STORE_ITEM.match(row)
-                    if match and match.group(2).startswith(want) and \
+                    if match and (store_offers(match, want) if not want.startswith(MAGE_BOOK_PREFIX)
+                                  else book_of(match.group(2)) == book_of(want)) and \
                             not (want == ENCHANT_WEAPON and match.group(2).startswith(ENCHANT_TO_HIT)) and \
                             (gold is None or int(match.group(3)) <= int(gold.group(1))) and \
                             not self.too_heavy_for(match.group(2), 1, 0 if match.group(2).startswith(ESSENTIAL_BUYS)
@@ -3031,7 +3457,7 @@ class Brain:
         # Early trips are shallow: eight rations, the gold for flasks and
         # potions (M5b round 49: with stores stocking five at a time, a
         # level-1 Dwarf left town with 15 rations and five flasks).
-        if self.shop_buys < FOOD_PER_VISIT and self.food < (self.food_reserve() if thrift else self.food_max()):
+        if self.shop_buys < FOOD_PER_VISIT and self.food < (self.food_reserve() if thrift else self.food_cap()):
             # A Slime Mold is a third of a ration in a whole slot: only near
             # the reserve (M4 round 57: rations only once the reserve was
             # made bought nothing when the store had none, and 8 starved).
@@ -3062,7 +3488,7 @@ class Brain:
             # lantern's flasks (M5b round 13: 8 of 13 deaths in melee on DL1-2,
             # about four flasks thrown a character).
             wants.append(OIL)
-        if self.clw < self.clw_reserve():
+        if self.clw < self.clw_reserve() and self.strong.get(HEALING, 0) < 5 and self.strong.get(CCW, 0) < 5:
             wants.append(CLW)
         if self.strong_wanted():
             wants += [CCW, CSW]   # the best the Temple has and the gold allows
@@ -3071,13 +3497,14 @@ class Brain:
         wants += self.restores_wanted()
         if self.life_restore_wanted():
             wants.append(RESTORE_LIFE)   # the Temple's
-        if self.max_dlvl >= SCOUT_FROM and self.resist_heat < RESIST_RESERVE:
+        if self.max_dlvl >= SCOUT_FROM and self.resist_heat < self.resist_heat_reserve():
             wants.append(RESIST_HEAT)
         if self.max_dlvl >= SCOUT_FROM and self.resist_cold < RESIST_RESERVE:
             wants.append(RESIST_COLD)   # frost breath since 2026-11-08 (white dragons)
         if self.max_dlvl >= SCOUT_FROM and self.heroism < HEROISM_RESERVE:
             wants.append(HEROISM)       # the 10 HP a one-breath killer's breath can lack (the Temple's)
-        if self.balrog_bound() and self.goal.klass in ("priest", "mage") and self.restore_mana < RESTORE_MANA_RESERVE:
+        if self.balrog_bound() and self.goal.klass in ("priest", "mage") and obs is not None \
+                and self.restore_mana < self.restore_mana_reserve(obs):
             wants.append(RESTORE_MANA)  # a second mana bar for the Balrog (the Black Market's, rich)
         if self.balrog_bound() and self.extra[INVULNERABILITY] < self.invuln_reserve(obs):
             wants.append(INVULNERABILITY)   # turns the Balrog cannot hurt (the Black Market's, rich)
@@ -3096,7 +3523,8 @@ class Brain:
             wants.append(PHASE)
         if self.teleports < self.teleport_reserve():
             wants.append(TELEPORT_SCROLL)
-        if self.recharge_scrolls < RECHARGE_RESERVE and any(w in self.wands for w in (*ATTACK_WANDS, *FIGHT_DEVICES)):
+        if self.recharge_scrolls < RECHARGE_RESERVE and not self.balrog_no_devices() \
+                and any(w in self.wands for w in (*ATTACK_WANDS, *FIGHT_DEVICES)):
             wants.append(RECHARGE_SCROLL)
         if self.launcher is not None and self.ammo < self.ammo_reserve():
             wants.extend(self.ammo_kinds())   # 1-2 gp a shot
@@ -3139,7 +3567,10 @@ class Brain:
         return wants
 
     def stats(self, obs: Observation) -> tuple[int, int]:
-        """Strength and dexterity from the status lines (18/xx as 18 + xx/10)."""
+        """Strength and dexterity from memory when live, else status lines (18/xx as 18 + xx/10)."""
+        if (mem := self.memory_stats(obs)) is not None:
+            self.last_stats = (raw_stat_value(mem[0]["ST"]), raw_stat_value(mem[0]["DX"]))
+            return self.last_stats
         found = {}
         for row in obs.rows[19:24]:
             for name, base, extra in STAT.findall(row):
@@ -3160,7 +3591,8 @@ class Brain:
             return 0.0
         strength, dexterity = self.stats(obs)
         hit = (kind.dice * (kind.sides + 1) / 2 + to_dam) * EGO_FACTOR.get(ego.group(2) if ego else "", 1.0)
-        return knowledge.blows(strength, dexterity, kind.weight) * (hit + EGO_FLAT.get(ego.group(2) if ego else "", 0.0))
+        return knowledge.blows(umoria_stat(strength), umoria_stat(dexterity), kind.weight) * (
+            hit + EGO_FLAT.get(ego.group(2) if ego else "", 0.0))
 
     def melee_skill(self, name: str, obs: Observation) -> int:
         """To-hit skill with weapon ``name``: the class's and race's melee
@@ -3441,6 +3873,15 @@ class Brain:
             # went out on DL50, then went home for light (C64 Balrog,
             # 2026-11-15).
             self.oil = held(OIL)
+            wands: dict[str, list[int | None]] = {}
+            for name, _ in listed:
+                if name.startswith(("Wand of", "Staff of")):
+                    base = name.split(" (")[0].strip()
+                    charges = CHARGES.search(name)
+                    wands.setdefault(base, []).append(int(charges.group(1)) if charges else None)
+            for base, counts in wands.items():
+                if all(c is not None for c in counts):
+                    self.wands[base] = sum(c for c in counts if c is not None)
         if scope in ("potions", "all"):
             self.clw, self.neutralize = held(CLW), held(NEUTRALIZE)
             self.resist_heat, self.resist_cold = held(RESIST_HEAT), held(RESIST_COLD)
@@ -3488,6 +3929,10 @@ class Brain:
             # Unknown flavours carry their article in the name ("a Blue Potion"):
             # the pick-up message's name has it stripped (2026-11-04).
             if match and re.sub(r"^an? ", "", match.group(2)).startswith(re.sub(r"^an? ", "", self.picking)):
+                if self.picking.startswith(("Wand of", "Staff of")) and self.picking != self.recharge_target:
+                    charges = CHARGES.search(row)
+                    if charges and int(charges.group(1)) == 0:
+                        continue
                 if self.picking == OIL:
                     self.oil = max(0, self.oil - 1)   # thrown: counted once actually picked
                 elif self.picking == CLW:
@@ -3578,6 +4023,12 @@ class Brain:
                     self.worn_listed.remove(name)
                     self.pack_listed = [*(self.pack_listed or []), (name, 1)]   # still carried, in the pack
                 self.taking_off = self.picking = None
+                if self.takeoff_keep:
+                    self.takeoff_keep = False
+                    for hand, worn in list(self.jewel_names.items()):
+                        if base_name(worn) == base_name(name):
+                            self.jewel_names[hand], self.jewels[hand] = "(none)", 0
+                    return Decision(ord(match.group(1).upper()), "prompt", f"take off {name}, kept")
                 self.drop_name, self.pack_full, self.drop_after = name, True, 0
                 return Decision(ord(match.group(1).upper()), "prompt", f"take off {name}")
         if not self.listed and ITEM_PROMPT.search(obs.rows[0]):
@@ -3658,6 +4109,12 @@ class Brain:
             # unknown wand, found none, cancelled and asked again, 30,000
             # steps (a C128 main-queue game, no level for 150,000 steps).
             self.identify_scrolls = 0
+        if self.launcher is not None and self.picking is not None and base_name(self.picking) == base_name(self.launcher):
+            # The launcher not in the pack nor wielded ("No ranged weapon."):
+            # gone. A clvl 39 Human Ranger tried to wield a Heavy Crossbow it
+            # no longer had and fired it, 3,012 times on DL3-4, about 160,000
+            # steps of its run (C64 Balrog, 2026-11-24).
+            self.launcher, self.wielding_launcher = None, False
         if self.picking in self.unknown:
             # An unknown flavour ("Cypress Staff") not listed: none carried.
             # A clvl 38 Human Mage cast Identify at one, cancelled the list
@@ -3892,6 +4349,12 @@ class Brain:
                 # is now emptied in town (``drop_junk``).
                 if self.recall:
                     self.recall_wait = RESTOCK_WAIT
+                elif self.recall_bounce(obs):
+                    # Town again restocks the shops (core/turn.s: on re-entry):
+                    # back up at once, not after a wait on DL1-5. A clvl 39
+                    # Human Mage wandered DL1-4 for 9,000 steps a wait (C64
+                    # Balrog, 2026-11-24).
+                    self.recall_trip_after = obs.step
                 else:
                     self.recall_trip_after = obs.step + self.recall_wait
                     self.recall_wait = min(2 * self.recall_wait, RECALL_WAIT_MAX)
@@ -3917,6 +4380,7 @@ class Brain:
                 else:
                     self.restock_wait = GEAR_TRIP_WAIT
                 self.restock_trip_after = obs.step + self.restock_wait
+                self.trip_had_escape = not self.no_escape()
             self.gear_bought = False
             self.last_dlvl = obs.dlvl
             self.level = LevelMemory()
@@ -3925,11 +4389,19 @@ class Brain:
                 self.gear_trip_after = obs.step + GEAR_TRIP_WAIT   # the stores restock slowly
                 self.restock_trip_after = obs.step + GEAR_TRIP_WAIT   # the Temple and Alchemist too
                 self.book_trip_after = obs.step + RESTOCK_WAIT     # the Temple may have none
+            was_scumming = self.restock_scumming
             self.shopped, self.shop_buys, self.potions_done, self.market_done = False, 0, False, False
             if obs.dlvl == 0:
                 self.restock_scumming = False   # back in town: the stores have restocked
-            self.magic_done = False
-            self.armoury_done = self.weapons_done = self.alchemist_done = False
+            if obs.dlvl == 0 and was_scumming and self.market_only_scum(obs):
+                self.shopped = self.potions_done = self.magic_done = True
+                self.armoury_done = self.weapons_done = self.alchemist_done = True
+            elif obs.dlvl == 0 and was_scumming and self.temple_market_scum(obs):
+                self.shopped = self.magic_done = True
+                self.armoury_done = self.weapons_done = self.alchemist_done = True
+            else:
+                self.magic_done = False
+                self.armoury_done = self.weapons_done = self.alchemist_done = False
             self.recalling = False
             self.max_dlvl = max(self.max_dlvl, obs.dlvl)
             self.trip_dlvl = max(self.trip_dlvl, obs.dlvl) if obs.dlvl else 0
@@ -3943,6 +4415,15 @@ class Brain:
         if self.level.paid is None or obs.xp > self.last_xp \
                 or any(self.engageable(c, obs) for c in view.creatures.values()):
             self.level.paid = obs.step
+        if self.hunting_deep(obs):
+            # Where each creature worth hunting was last seen, detection's
+            # flash included: walked to once out of view (hunt), as a player
+            # goes after what Detect Monsters showed rather than map the level.
+            for p, c in view.creatures.items():
+                if self.engageable(c, obs):
+                    self.level.marks[p] = obs.step
+            self.level.marks = {p: s for p, s in self.level.marks.items()
+                                if obs.step - s <= HUNT_MARK_STEPS and chebyshev(p, view.pos) > 1}
         if self.hunting_deep(obs) and not self.level.scum and obs.step - self.level.paid >= HUNT_QUIET_STEPS:
             # Stopped paying: a fresh level holds fresh creatures, as a
             # player takes the stairs rather than map the rest (HUNT_CLVL).
@@ -4036,8 +4517,10 @@ class Brain:
         # Not straight back after a visit: the stores seldom stock them, and
         # characters recalled up every 2,600 steps to find none (C128 catalog
         # cycle, 2026-11-02: 38 trips, 17 strong potions and 4 Phase Doors).
+        restock_ready = obs.step >= self.restock_trip_after or (
+            self.no_escape() and getattr(self, "trip_had_escape", False))
         restock = ("restock" in self.goal.tactics and self.restock_short()
-                   and obs.step >= self.restock_trip_after
+                   and restock_ready
                    and self.gold(obs) >= STRONG_RESERVE * STRONG_GOLD[CSW])
         # Gear, a book and the restock are worth a trip only when Word of
         # Recall brings the character back down (recall_returns), or when
@@ -4046,8 +4529,16 @@ class Brain:
         # nothing to buy at the gold cap, and walked down from town again, for
         # hours (C64 Balrog, 2026-11-14).
         optional = self.wants_gear(obs) or self.wants_book_trip(obs) or restock
+        balrog_resist_short = (self.balrog_bound() and self.max_dlvl == BALROG_DLVL
+                               and self.resist_heat < BALROG_HEAT_POTIONS
+                               and self.fire_ring_worn() and self.free_action()
+                               and self.balrog_damage(obs) >= BALROG_HP
+                               and obs.dlvl >= RECALL_FROM
+                               and self.gold(obs) >= MARKET_GEAR_GOLD and self.recall >= 3)
         return ((low and obs.step >= self.resupply_after) or self.wants_recall(obs)
-                or (optional and (obs.dlvl <= RECALL_WALK_LEVELS or self.recall_returns(obs))))
+                or (optional and (obs.dlvl <= RECALL_WALK_LEVELS or self.recall_returns(obs)))
+                or (restock and self.life_restore_short())   # the trip that lets Recall return
+                or balrog_resist_short)   # the trip that lets Recall return to DL50
 
     def recall_returns(self, obs: Observation) -> bool:
         """Word of Recall read in town comes back down: the deepest level it
@@ -4096,8 +4587,18 @@ class Brain:
         played 35,000 steps on DL1-2 and starved there in one (M5a round 2:
         about 7 such deaths)."""
         self.recall_trip_after = min(self.recall_trip_after, obs.step + RECALL_WAIT_MAX)   # a longer one saved before the cap
-        return (not self.recall and obs.dlvl > 0 and obs.step >= self.recall_trip_after
+        # Near town with a deep level to go back to, one is not enough: the
+        # way down is a read, and the way home another (recall_bounce).
+        need = 2 if obs.dlvl <= RECALL_WALK_LEVELS and self.recall_bounce(obs) else 1
+        return (self.recall < need and obs.dlvl > 0 and obs.step >= self.recall_trip_after
                 and self.gold(obs) >= RECALL_GOLD + GEAR_RESERVE)   # and the next trip's food and potions
+
+    def recall_bounce(self, obs: Observation) -> bool:
+        """Rich, with a deepest level far below and nothing refused for a full
+        pack: short of Word of Recall, straight back to town for it, the
+        shops restocking on each return."""
+        return (self.max_dlvl > RECALL_WALK_LEVELS + RECALL_FROM and self.gold(obs) >= MARKET_GEAR_GOLD
+                and self.refused_at is None)
 
     def wants_gear(self, obs: Observation) -> bool:
         """Gold enough for real armour and a while since the last town visit:
@@ -4160,6 +4661,42 @@ class Brain:
         IIe's 198x66 levels starved Half-Trolls carrying the C64's eight)."""
         food_max = FOOD_EARLY_MAX if self.clvl < EARLY_LEVELS else FOOD_MAX
         return math.ceil(food_max * self.map_scale)
+
+    def food_cap(self) -> int:
+        """Rations to carry at most (``food_max``), as many as fit with the
+        headroom kept and room for light (a torch and a flask) still free,
+        never under the reserve. A clvl 11 Gnome Mage carried 17 rations
+        (170 of its 390 tenths) on DL1 trips, could not buy a 2 GP torch,
+        and went to town in the dark 367 times in one run, its checkpoint
+        unmoved for a day (C64 Balrog, 2026-11-23)."""
+        most = self.food_max()
+        limit, carried = self.weight_limit(), self.carried_weight()
+        if limit is None or carried is None:
+            return most
+        ration = item_weight(FOODS[0])
+        rest = carried - int(self.food) * ration
+        headroom = min(WEIGHT_HEADROOM, limit // FOOD_HEADROOM_SHARE)
+        room = limit - headroom - rest - item_weight(TORCH) - item_weight(OIL)
+        return max(math.ceil(self.food_reserve()) + 1, min(most, room // ration))
+
+    def trip_food_short(self) -> bool:
+        """Room for fewer than FOOD_TRIP rations (``food_cap``), the weight
+        known: the rest of the load gives way to food."""
+        return self.weight_limit() is not None and self.carried_weight() is not None \
+            and self.food_cap() < min(FOOD_TRIP, self.food_max())
+
+    def trip_food_room(self) -> int:
+        """Tenths kept free for food at a pickup: the rations short of
+        FOOD_TRIP while ``trip_food_short``, else none."""
+        if not self.trip_food_short():
+            return 0
+        return max(0, FOOD_TRIP - math.ceil(self.food)) * item_weight(FOODS[0])
+
+    def no_light_carried(self) -> bool:
+        """No light carried at all, lit square or not: none left in the light
+        worn, no spare torch, no lantern with oil (``food_cap``'s rations go
+        first then; ``lightless`` is dark with nothing to light)."""
+        return self.light_left <= 0 and self.torches == 0 and not (self.lamp and self.oil) and not self.lamp_packed
 
     def food_low(self) -> bool:
         """Below the reserve, in rations."""
@@ -4266,6 +4803,33 @@ class Brain:
         deeper = obs.dlvl + 1
         return not self.depth_ready(obs, deeper) or not self.prepared(obs, deeper)
 
+    @staticmethod
+    def life_drained_enough(obs: Observation, held: int = 0) -> bool:
+        """RESTORE_LIFE_DRAIN of the peak gone: one potion for several 2%
+        touches, as a player drinks it, not one each. A clvl 39 Human Mage
+        drank five in 25 minutes on DL38-39, the Temple stocks one or two a
+        visit, and the drain limit held it on DL23 (C64 Balrog, 2026-11-24)."""
+        try:
+            peak = obs.max_xp
+        except (AssertionError, AttributeError):
+            return True
+        # Stocked (the reserve or more), at once: a clvl 39 Human Mage with
+        # nine went between 5.1M and 5.3M for two hours on DL41, up to 5%
+        # of its peak lying drained (C64 Balrog, 2026-11-24).
+        # Graded between: four held, a clvl 39 Human Mage sat 3.2% under its
+        # peak waiting for 5% (same day).
+        share = max(RESTORE_LIFE_DRAIN_STOCKED,
+                    RESTORE_LIFE_DRAIN * (RESTORE_LIFE_RESERVE - held) / RESTORE_LIFE_RESERVE)
+        return not peak or peak - obs.xp >= share * peak
+
+    def drain_bare_too_deep(self, dlvl: int) -> bool:
+        """Any character with no Restore Life Levels below DRAIN_BARE_DLVL,
+        where the drainers walk (threat_ready, depth_ready). Casters too: a
+        clvl 33 Dwarf Priest was drained back under its checkpoint three
+        times in four hours (C64 Balrog, 2026-11-24)."""
+        return (dlvl > DRAIN_BARE_DLVL and self.goal.threat_depth and self.clvl < MAX_CLVL
+                and not self.restores.get(RESTORE_LIFE, 0))   # at clvl 40, the Balrog's depth is its own
+
     def depth_ready(self, obs: Observation, dlvl: int, slack: int = 0) -> bool:
         """The character's level is enough for ``dlvl``: the goal's margin
         (``ready_level``, less ``slack``), or as deep as it survives
@@ -4274,6 +4838,11 @@ class Brain:
         DL36 and town refused Word of Recall down to DL37, so level-37
         Priests walked down from DL1 and recalled up from DL16 for light, over
         and over (C64 Balrog, 2026-11-09)."""
+        if self.drain_bare_too_deep(dlvl):
+            # Before the margin too: a clvl 33 Half-Elf Warrior with none
+            # played DL29-30 under the margin alone, met six kinds of drainer
+            # there and was drained again (C64 Balrog, 2026-11-24).
+            return False
         level = ready_level(dlvl, self.goal.ready_margin, self.goal.ready_taper)
         if self.goal.threat_depth and level >= MAX_CLVL:
             # Past the margin's reach (DL37 and on for three levels over),
@@ -4326,12 +4895,16 @@ class Brain:
         # each dive, one healing with a 15-HP spell (C64 Balrog, 2026-11-14).
         if self.resist_heat < BALROG_HEAT_POTIONS or self.balrog_damage(obs) < BALROG_HP:
             return False
-        # By the ring alone, not through Resist Heat too: tried so (maintainer,
-        # 2026-11-23), two clvl 40 Priests at 322 and 362 HP died four times
-        # on DL50 in 90 minutes, the Balrog first breathing 333 through the
-        # ring with the timer down (kept up unseen only from nearly full mana).
-        balrog = Creature(kind[0], kind[1], BALROG)
-        return self.turn_burst(balrog, obs, lasting=True) < BREATH_LETHAL * obs.mhp
+        if (self.goal.klass not in ("priest", "paladin")
+                and not any(s in self.magic.known for s in (HOLY_WORD, HEAL))
+                and self.strong.get(HEALING, 0) < HEALING_RESERVE):
+            return False
+        # By the ring alone unless the timer is sustained (balrog_ready_burst):
+        # through Resist Heat too with the timer kept up only from nearly full
+        # mana, two clvl 40 Priests at 322 and 362 HP died four times on DL50
+        # in 90 minutes, the Balrog first breathing 333 through the ring with
+        # the timer down (maintainer, 2026-11-23).
+        return self.balrog_ready_burst(obs) < BREATH_LETHAL * obs.mhp
 
     def balrog_damage(self, obs: Observation) -> float:
         """What one fight can do to the Balrog, counted as a player counts it
@@ -4351,8 +4924,16 @@ class Brain:
             casts = (self.magic.mana(obs)[1] // orb.mana) * (1 + self.restore_mana)
             total += casts * 2 * (10.5 + obs.clvl)
             actions += casts
+        spell = self.balrog_spell(obs)
+        if orb is None and spell is not None:
+            # A Mage's bars as the Orb's: the spell doing most a turn
+            # through the Balrog's resistance, each Restore Mana another bar.
+            name, each = spell
+            casts = (self.magic.mana(obs)[1] // self.magic.known[name].mana) * (1 + self.restore_mana)
+            total += casts * each
+            actions += casts
         charges = {wand: self.wands.get(wand, 0) for wand in ATTACK_WANDS}
-        total += sum(n * ATTACK_WANDS[wand] for wand, n in charges.items())
+        total += sum(n * self.balrog_hurt(wand, ATTACK_WANDS[wand]) for wand, n in charges.items())
         actions += sum(charges.values())
         if self.launcher is not None:
             ammo, mult, _ = LAUNCHERS[self.launcher]
@@ -4360,8 +4941,108 @@ class Brain:
             actions += self.ammo
         blows = self.balrog_melee(obs)
         if blows > 0:
-            total += blows * max(0.0, self.balrog_turns(obs) - actions)
+            turns = self.balrog_turns(obs)
+            return max(total + blows * max(0.0, turns - actions), self.balrog_melee_path(obs, turns))
         return total
+
+    def balrog_melee_path(self, obs: Observation, turns: float) -> float:
+        """Expected damage if a melee fighter skips weak bolts/wands and fights
+        primarily with melee blows (plus only wands beating one turn of melee)."""
+        blows = self.balrog_melee(obs)
+        if blows <= 0:
+            return 0.0
+        total = blows * turns
+        used = 0.0
+        wand_dmg = sorted(((self.balrog_hurt(w, ATTACK_WANDS[w]), self.wands.get(w, 0)) for w in ATTACK_WANDS),
+                          reverse=True)
+        for each, n in wand_dmg:
+            if n > 0 and each > blows:
+                take = min(float(n), max(0.0, turns - used))
+                total += take * (each - blows)
+                used += take
+        return total
+
+    def balrog_spell(self, obs: Observation, castable: bool = False) -> tuple[str, float] | None:
+        """The Mage attack known at this level (``castable``: with the mana
+        for it now) doing most a cast to the Balrog, and that damage: an
+        element it breathes a quarter (MON-034), as Fire Ball on its fire."""
+        best: tuple[str, float] | None = None
+        for name, damage in MAGE_ATTACKS.items():
+            known = self.magic.known.get(name)
+            if known is None or known.level > obs.clvl or known.mana <= 0:
+                continue
+            if castable and not self.magic.can(obs, name):
+                continue
+            each = self.balrog_hurt(name, damage)
+            if best is None or each > best[1]:
+                best = (name, each)
+        return best
+
+    def restore_mana_reserve(self, obs: Observation | None = None) -> int:
+        """Potions of Restore Mana to carry: RESTORE_MANA_RESERVE, and for a
+        Mage the bars its best spell needs for the Balrog's 3,000 (Frost
+        Ball, 13 a bar at 157 mana: 7 bars, 6 potions), at most
+        RESTORE_MANA_MAX. Three left a Mage at four bars, ~1,700. Without an
+        observation (a pickup), the last one counted."""
+        if obs is None:
+            return getattr(self, "mana_reserve_seen", RESTORE_MANA_RESERVE)
+        if ORB in self.magic.known:
+            return RESTORE_MANA_RESERVE
+        spell = self.balrog_spell(obs)
+        top = self.magic.mana(obs)[1]
+        if spell is None or top <= 0:
+            return RESTORE_MANA_RESERVE
+        per_bar = (top // self.magic.known[spell[0]].mana) * spell[1]
+        if per_bar <= 0:
+            return RESTORE_MANA_RESERVE
+        self.mana_reserve_seen = min(RESTORE_MANA_MAX, max(RESTORE_MANA_RESERVE, math.ceil(BALROG_HP / per_bar) - 1))
+        return self.mana_reserve_seen
+
+    @staticmethod
+    def spell_hurt(name: str, damage: float, creature: Creature) -> float:
+        """A spell's or wand's damage to ``creature`` by its element
+        (eff_scale_elem_damage): double to one hurt by it, a quarter to one
+        that breathes it. A clvl 39 Mage judged DL39 by its blows alone and
+        hunted none of its dragons (C64 Balrog, 2026-11-24)."""
+        element = SPELL_ELEMENTS.get(name)
+        if element is None:
+            return damage
+        key = (creature.glyph, creature.level)
+        if element in knowledge.hurt_kinds().get(key, frozenset()):
+            return damage * 2
+        if element in knowledge.breath_info().get(key, (0, frozenset(), 0))[1]:
+            return damage / 4
+        return damage
+
+    def spell_kills(self, obs: Observation, creature: Creature) -> bool:
+        """The mana now holds enough of the best castable Mage-book attack
+        (spell_hurt, spare) to kill ``creature`` by its lore HP, within
+        SPELL_KILL_CASTS casts: a clvl 37 Half-Elf Ranger counted 25 Lightning
+        Bolts (13.5 each) against a Mature White Dragon and died to its breath
+        and an Ancient Green Dragon's together (C64 Balrog, 2026-11-25)."""
+        hp = strength_of(creature)[0]
+        mp = self.magic.mana(obs)[0]
+        for name, damage in MAGE_ATTACKS.items():
+            if self.magic.spare(obs, name):
+                hurt = self.spell_hurt(name, damage, creature)
+                casts = min(mp // max(self.magic.known[name].mana, 1), SPELL_KILL_CASTS)
+                if hurt > 0 and hp <= hurt * casts:
+                    return True
+        return False
+
+    def spell_damage(self, obs: Observation, creature: Creature) -> float:
+        """The most a castable Mage-book attack does to ``creature`` a turn
+        (spell_hurt), with the mana for the heal and escape kept (spare)."""
+        return max((self.spell_hurt(n, d, creature) for n, d in MAGE_ATTACKS.items() if self.magic.spare(obs, n)),
+                   default=0.0)
+
+    @staticmethod
+    def balrog_hurt(name: str, damage: float) -> float:
+        """A spell's or wand's damage to the Balrog: a quarter of an element
+        it breathes (MON-034: eff_scale_elem_damage, ball_target_damage)."""
+        kind = knowledge.kinds_by_name().get(BALROG)
+        breathes = knowledge.breath_info().get(kind, (0, frozenset(), 0))[1] if kind else frozenset()
+        return damage / 4 if SPELL_ELEMENTS.get(name) in breathes else damage
 
     def invuln_reserve(self, obs: Observation | None = None) -> int:
         """Potions of Invulnerability to carry: INVULN_RESERVE, and for a
@@ -4374,7 +5055,8 @@ class Brain:
         short = BALROG_HP - self.balrog_damage(obs)
         if blows <= 0 or short <= 0:
             return min(self.extra[INVULNERABILITY], INVULN_MAX) if short <= 0 else INVULN_RESERVE
-        return min(INVULN_MAX, max(INVULN_RESERVE, self.extra[INVULNERABILITY] + math.ceil(short / (blows * INVULN_TURNS))))
+        melee_short = max(0.0, BALROG_HP - self.balrog_melee_path(obs, self.balrog_turns(obs)))
+        return min(INVULN_MAX, max(INVULN_RESERVE, self.extra[INVULNERABILITY] + math.ceil(melee_short / (blows * INVULN_TURNS))))
 
     def jewel_bonus(self, kind: str) -> int:
         """The bonus of the rings worn of ``kind`` ("Increase Damage",
@@ -4437,6 +5119,10 @@ class Brain:
         they are part of what it is killed with (balrog_damage)."""
         return BALROG_AMMO if self.balrog_bound() else AMMO_RESERVE
 
+    def balrog_preparing(self) -> bool:
+        """At clvl 39-40 on the Balrog goal: collect the ring and Resist Heat stack before clvl 40."""
+        return self.goal.threat_depth and self.clvl >= BALROG_PREP_CLVL
+
     def balrog_bound(self) -> bool:
         """At the top level on a goal that goes on to the Balrog."""
         return self.goal.threat_depth and self.clvl >= MAX_CLVL
@@ -4484,8 +5170,56 @@ class Brain:
         # DL39 sixteen runs were drained 5 times a run-hour (2% each, VMS
         # mon$drain_life) and netted -21k experience a run-hour: back to the
         # margin until drainers are fought at range and left.
-        ood = OUT_OF_DEPTH_FREE if self.free_action() else OUT_OF_DEPTH
-        return self.native_exchange(obs, dlvl + ood) < BREATH_LETHAL * obs.mhp
+        if self.drain_bare_too_deep(dlvl):
+            # A fighter with no Restore Life Levels: not where the strong
+            # drainers walk (Banshees and Forest Wights from DL24, Ghosts
+            # from DL31). Warriors and Rangers drained 10% within 7 minutes of
+            # each checkpoint restart on DL37 (C64 Balrog, 2026-11-23); at
+            # DL32 clvl 33-34 Warriors still were, five to seven hours without
+            # a checkpoint (2026-11-24). The margin decides.
+            return False
+        if self.free_action():
+            # As a player judges it (maintainer, 2026-11-24: "we are being
+            # overly cautious about the HP max to go hunting ... they might
+            # run away"): one breath of the depth's natives survived from full,
+            # then away (leave_deadly on sight), not a fast breather's two plus
+            # its blows under 90% of the HP. Not past a breath that kills from
+            # full, seen coming or not: allowed DL40-43 for detecting it, five
+            # clvl 38-40 characters at 392-443 HP died there to the Ancient
+            # Multi-Hued Dragon's one breath in ten minutes, three waiting for
+            # Word of Recall (C64 Balrog, 2026-11-24).
+            return self.native_single(obs, dlvl) < obs.mhp
+        return self.native_exchange(obs, dlvl + self.out_of_depth()) < BREATH_LETHAL * obs.mhp
+
+    def native_single(self, obs: Observation, dlvl: int) -> int:
+        """One breath or spell, the worst of the creatures native to ``dlvl``
+        or shallower, as the worn resistance leaves it (no second breath, no
+        blows: survived from full, the next turn is the escape)."""
+        return max((self.burst_now(key, obs, True, frozenset(), "")
+                    for key in knowledge.spell_burst() if key[1] <= dlvl), default=0)
+
+    def sees_ahead(self, obs: Observation) -> bool:
+        """Detect Monsters or Detect Evil known at its level: what breathes is
+        seen before it is met (scout), and left (leave_deadly)."""
+        known = self.magic.known
+        return any(s in known and known[s].level <= obs.clvl for s in (DETECT_MONSTERS, DETECT_EVIL))
+
+    def out_of_depth(self) -> int:
+        """Natives this much deeper counted (threat_ready): none with Free
+        Action and Restore Life Levels carried, the drains that made DL39
+        cost more than its kills undone by the potion. A clvl 39 Human Mage
+        at 352 HP with six of them farmed DL37 at 41k experience an hour,
+        44 hours short of clvl 40; DL39's natives do 240 to it, DL40's
+        Ancient Multi-Hued Dragon 693 (C64 Balrog, 2026-11-24)."""
+        if not self.free_action():
+            return OUT_OF_DEPTH
+        return 0 if self.restores.get(RESTORE_LIFE, 0) else OUT_OF_DEPTH_FREE
+
+    def balrog_fight_on(self, obs: Observation) -> bool:
+        """On the Balrog's levels with it in view or within BALROG_NEAR_STEPS
+        of it (balrog_fight's sighting): the battle the session records."""
+        seen = self.level.balrog_seen
+        return obs.dlvl >= BALROG_DLVL and seen is not None and obs.step - seen <= BALROG_NEAR_STEPS
 
     def short_escape(self, obs: Observation) -> bool:
         """Out of a breather's reach at once: a Phase Door or Teleportation
@@ -4545,6 +5279,11 @@ class Brain:
 
     def lore_strong(self, creature: Creature, obs: Observation) -> bool:
         hp, ac = strength_of(creature)
+        if self.spell_kills(obs, creature):
+            # Its spells wear it down from range whatever its armour: the
+            # blows' HP and AC bars judged a clvl 39 Mage's DL39 dragons out
+            # of reach (C64 Balrog, 2026-11-24).
+            return self.fight_odds(creature, obs) > FIGHT_ODDS
         return (hp > STRONG_HP_BASE + STRONG_HP_PER_LEVEL * obs.clvl
                 or ac > STRONG_AC_BASE + STRONG_AC_PER_LEVEL * obs.clvl
                 or self.fight_odds(creature, obs) > FIGHT_ODDS)
@@ -4632,6 +5371,45 @@ class Brain:
             return None
         return Decision(best[2], "caution", f"danger {here:.0f} at HP {obs.hp}: back away to {best[0]:.0f}")
 
+    def avoid_drainer(self, obs: Observation, view: View) -> Decision | None:
+        """Step away from or Phase Door past an adjacent XP drainer before casting."""
+        if (obs.dlvl == 0 or not self.goal.threat_depth or obs.clvl < RESTORE_LIFE_LEVEL
+                or (self.balrog_bound() and obs.dlvl >= BALROG_DLVL) or self.level.since_progress >= STALL_STEPS):
+            return None
+        adj = [p for p, c in view.creatures.items() if chebyshev(p, view.pos) == 1 and self.drainer(c)]
+        if not adj:
+            return None
+        moves = self.moves()
+        if all(moves.get((view.creatures[p].glyph, view.creatures[p].level), 1.0) < 1 for p in adj):
+            earlier = self.positions[-3] if len(self.positions) >= 3 else None
+            here = self.danger(view.pos, view, obs)
+            best: tuple[float, int, int] | None = None
+            for (dx, dy), key in sorted(DIRS.items()):
+                sq = (view.pos[0] + dx, view.pos[1] + dy)
+                if sq == earlier or not view.passable(*sq, avoid_monsters=True) or sq in view.hazards:
+                    continue
+                if any(chebyshev(sq, m) <= 1 for m in view.creatures):
+                    continue
+                there = self.danger(sq, view, obs)
+                if there > here:
+                    continue
+                dist = min(chebyshev(sq, p) for p in adj)
+                cand = (there, -dist, key)
+                if best is None or cand < best:
+                    best = cand
+            if best is not None:
+                return Decision(best[2], "caution", "drainer beside: step back")
+        can_phase = self.magic.can(obs, PHASE_DOOR)
+        if (self.phase and obs.step >= self.blind_until
+                and (not can_phase or "Your spell fails." in self.seen_messages)):
+            self.picking, self.listed = PHASE, False
+            self.level.phased = obs.step
+            return Decision(ord("R"), "phase", "drainer beside: read Phase Door")
+        if can_phase:
+            self.level.phased = obs.step
+            return Decision(*self.magic.pray(PHASE_DOOR, "drainer beside: cast Phase Door"))
+        return None
+
     def prepared(self, obs: Observation, dlvl: int) -> bool:
         """Ready for ``dlvl`` beyond character level (maintainer,
         2026-11-03): the class row's maximum HP and level, two cure
@@ -4662,6 +5440,10 @@ class Brain:
         if not hp:
             return 0.0
         mine = self.melee_score(*self.weapon, obs) * knowledge.hit_chance(self.melee_skill(self.weapon[0], obs), ac)
+        # A caster fights with its spells: a clvl 39 Mage's Fire Ball (49)
+        # against its blows left every DL39 dragon "too strong" (C64 Balrog,
+        # 2026-11-24; maintainer: "hunt like a human would").
+        mine = max(mine, self.spell_damage(obs, creature))
         damage = lambda c: self.incoming(c, obs)
         own = damage(creature)
         if not own:
@@ -4752,7 +5534,8 @@ class Brain:
         # run-hour as hunt walked them into its reach (C64 Balrog,
         # 2026-11-22); ranged attacks (Orb, wands) still take it.
         return (not self.avoided(creature) and not self.stationary(creature) and not self.drainer(creature)
-                and creature.glyph not in self.tough_glyphs(obs) and not self.too_strong(creature, obs)
+                and (creature.glyph not in self.tough_glyphs(obs) or self.spell_kills(obs, creature))
+                and not self.too_strong(creature, obs)
                 and (not self.slow(creature, by_glyph=True) or self.coins_worth_it(creature, obs))
                 and creature.level <= obs.clvl + 2
                 and (creature.glyph, creature.level) not in knowledge.breeder_kinds())   # never hunted: they multiply
@@ -4965,6 +5748,8 @@ class Brain:
         here = view.type_at(*view.pos)
         if obs.dlvl == 0 or here not in (TYPE_STAIRS_UP, TYPE_STAIRS_DN):
             return None
+        if self.recalling and obs.dlvl == 1 and here == TYPE_STAIRS_UP:
+            return None   # ascending to town leaves Word of Recall live and yanks to max_dlvl
         close = [c for p, c in view.creatures.items()
                  if chebyshev(p, view.pos) <= CROWD_RANGE and not self.stationary(c)]
         if len(close) >= CROWD_COUNT:
@@ -5264,7 +6049,10 @@ class Brain:
         wands = [w for w in ATTACK_WANDS if self.wands.get(w, 0) > 0]
         if obs.dlvl == 0 or not wands:
             return None
-        mana_out = self.magic.caster(obs) and not any(self.magic.spare(obs, n) for n in MAGE_ATTACKS)
+        mana_out = (self.goal.klass != "rogue" and self.magic.caster(obs)
+                    and not any(self.magic.spare(obs, n) for n in MAGE_ATTACKS))
+        saving_wands = (self.balrog_bound() and obs.clvl >= MAX_CLVL
+                        and obs.dlvl < BALROG_DLVL and self.goal.klass != "mage")
         for pos in sorted(self.threats(view), key=lambda p: chebyshev(p, view.pos)):
             creature = view.creatures[pos]
             step = self.line_to(view, pos, missile=True)
@@ -5272,6 +6060,8 @@ class Brain:
                 continue
             breeders = knowledge.breeder_kinds()
             if (creature.glyph, creature.level) in breeders:
+                if saving_wands and obs.hp >= RETREAT_HP * obs.mhp:
+                    continue
                 # A bolt on one breeder is a charge spent on what breeds back
                 # (Blue Worm masses, lice: 2026-11-04); a ball on a clump of
                 # them is what the ball is for (maintainer, 2026-11-04).
@@ -5284,6 +6074,8 @@ class Brain:
                 self.picking, self.listed, self.pending, self.last_aimed = wand, False, DIRS[step], wand
                 self.aimed = (pos, creature.glyph)
                 return Decision(KEY_AIM, "aim", f"aim the {wand} at {clump} '{creature.glyph}'")
+            if saving_wands and not (self.drainer(creature) or obs.hp < RETREAT_HP * obs.mhp):
+                continue
             if not (self.lore_strong(creature, obs) or self.dangerous(creature, obs) or mana_out
                     or obs.hp < RETREAT_HP * obs.mhp):
                 continue
@@ -5347,16 +6139,48 @@ class Brain:
         self.pending_item = ord("A")   # a scroll that asks for an item (Identify, an enchantment): the first
         return Decision(ord("R"), "try", f"try the {name}: read it to learn what it is")
 
+    def mage_has_balls(self) -> bool:
+        """A Mage with a ball spell already learned needs no attack wands."""
+        return self.goal.klass == "mage" and any(
+            s in self.magic.known for s in ("Frost Ball", "Fire Ball", "Cloud Kill", "Lightning Ball", "Acid Ball")
+        )
+
+    def balrog_mage_no_devices(self) -> bool:
+        """A clvl-40 Balrog-bound Mage with ball spells, Haste Self, and
+        Teleport Self carries no wands or staffs: the Balrog's AT_EAT_CHARGES
+        touch drains every charged device and heals cr_level * charges
+        (100 * charges, uncapped; core/monster_attack_effects.s:814-845)."""
+        return (self.balrog_bound() and self.clvl >= MAX_CLVL and self.mage_has_balls()
+                and HASTE_SELF in self.magic.known and TELEPORT_SELF in self.magic.known)
+
+    def balrog_fighter_no_devices(self) -> bool:
+        """A clvl-40 Balrog-bound melee fighter with Invulnerability potions and
+        non-device escapes drops charged wands and staffs before entering Balrog
+        melee: AT_EAT_CHARGES runs before eff_invuln_timer (core/monster_attack.s:248)
+        and heals the Balrog 100 HP/charge uncapped."""
+        return (self.balrog_bound() and self.clvl >= MAX_CLVL
+                and self.goal.klass in MELEE_KLASSES
+                and self.extra.get(INVULNERABILITY, 0) >= 5
+                and (self.teleports >= 3 or TELEPORT_SELF in self.magic.known))
+
+    def balrog_no_devices(self) -> bool:
+        return self.balrog_mage_no_devices() or self.balrog_fighter_no_devices()
+
     def wands_wanted(self) -> list[str]:
         """At the Magic Shop: each attack wand and fight staff not carried
         with charges, the best first, and a Staff of Teleportation while
         none has, or, rich, while its charges are under TELEPORT_CHARGES_RICH."""
+        if self.balrog_no_devices():
+            return []
         # Each kind not carried charged, the best first (maintainer,
         # 2026-11-11: "warriors should be using magic items like wands and
         # staves"): one Wand of Frost was half an Ancient Blue Dragon.
         # KEEP_ATTACK_WANDS kinds charged at most: drop_junk keeps no more.
-        charged = sum(1 for w in ATTACK_WANDS if self.wands.get(w, 0))
-        want = [w for w in WAND_BUYS if not self.wands.get(w, 0)][:max(0, KEEP_ATTACK_WANDS - charged)]
+        if self.mage_has_balls():
+            want = []
+        else:
+            charged = sum(1 for w in ATTACK_WANDS if self.wands.get(w, 0))
+            want = [w for w in WAND_BUYS if not self.wands.get(w, 0)][:max(0, KEEP_ATTACK_WANDS - charged)]
         want += [w for w in FIGHT_DEVICES if not self.wands.get(w, 0)]
         keep = TELEPORT_CHARGES_RICH if self.gold_seen >= MARKET_GEAR_GOLD else 1
         return want + ([TELEPORT_STAFF] if self.wands.get(TELEPORT_STAFF, 0) < keep else [])
@@ -5418,13 +6242,21 @@ class Brain:
             return Decision(KEY_WEAR, "shoot", f"{why}: wield the {self.weapon[0]}")
         if beside or self.ammo <= 0 or self.walking_down(obs):
             return None   # walking down (press_on): what lives up here is not worth a shot
+        saving_ammo = self.balrog_bound() and obs.dlvl < BALROG_DLVL and self.ammo <= self.ammo_reserve()
         breeders = knowledge.breeder_kinds()
+        balrog_kind = knowledge.kinds_by_name().get(BALROG)
+        shot_dmg = LAUNCHERS[self.launcher][1] * AMMO_AVERAGE[LAUNCHERS[self.launcher][0]] * BALROG_SHOT_HITS
+        prefer_melee = (obs.dlvl >= BALROG_DLVL and balrog_kind is not None
+                        and (obs.step < self.invulnerable_until or self.extra[INVULNERABILITY] > 0)
+                        and self.balrog_melee(obs) > shot_dmg)
         for pos in sorted(self.threats(view), key=lambda p: chebyshev(p, view.pos)):
             creature = view.creatures[pos]
             far = chebyshev(pos, view.pos)
             step = self.line_to(view, pos, missile=True)
             if step is None or far < 2 or far > min(FIRE_RANGE, LAUNCHERS[self.launcher][2]) \
-                    or self.stationary(creature) or (creature.glyph, creature.level) in breeders:
+                    or self.stationary(creature) or (creature.glyph, creature.level) in breeders \
+                    or (saving_ammo and not self.drainer(creature)) \
+                    or (prefer_melee and (creature.glyph, creature.level) == balrog_kind):
                 continue
             if not self.wielding_launcher:
                 if far < 3:
@@ -5573,7 +6405,8 @@ class Brain:
                 # killed it (C64 Balrog, 2026-11-21).
                 self.level.deadly = self.level.deadly or view.pos
                 return None
-            heal = self.heal_now(obs, f"HP {obs.hp}/{obs.mhp}: a breath of {breather[1]} about")
+            heal = self.heal_now(obs, f"HP {obs.hp}/{obs.mhp}: a breath of {breather[1]} about",
+                                 save_healing=self.breath_save_healing(obs, about))
             if heal is not None:
                 return heal
             return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp}: a breath of {breather[1]} about, rest first")
@@ -5591,7 +6424,7 @@ class Brain:
                 # does. A level-37 Priest phased from Black Oozes, explored on
                 # at 145/266 on DL34, and an Ancient White Dragon's breath
                 # (233) killed it (C64 Balrog, 2026-11-08).
-                heal = self.heal_now(obs, f"HP {obs.hp}/{obs.mhp} deep, no rest")
+                heal = self.heal_now(obs, f"HP {obs.hp}/{obs.mhp} deep, no rest", save_healing=True)
                 if heal is not None:
                     return heal
             # A slow creature follows into the dark while auto-rest waits for
@@ -5623,15 +6456,35 @@ class Brain:
             return None
         return Decision(KEY_AUTOREST, "rest", f"HP {obs.hp}/{obs.mhp} MP {mp}/{mmp} and nothing in view")
 
-    def heal_now(self, obs: Observation, why: str) -> Decision | None:
+    def breath_save_healing(self, obs: Observation, burst: int) -> bool:
+        """Whether pre-DL50 out-of-sight healing against ``burst`` can defer
+        Potion of Healing for weaker cures (False when ``mhp`` survives
+        ``burst`` and no weaker ready potion lifts HP past ``burst / BREATH_LETHAL``)."""
+        need = burst / BREATH_LETHAL
+        weaker_lifts = any(
+            k != HEALING and self.potion_ready(k, obs) and obs.hp + POTION_HEAL[k] > need
+            for k in POTION_HEAL
+        )
+        return not (obs.mhp > need and not weaker_lifts)
+
+    def heal_now(self, obs: Observation, why: str, save_healing: bool = False) -> Decision | None:
         """Hurt: the strongest healing potion carried, else a cure prayer;
-        None at full HP or with neither."""
+        None at full HP or with neither. Out of sight before DL50, save
+        Potions of Healing under HEALING_RESERVE when preparing for the Balrog."""
         if obs.hp >= obs.mhp:
             # A level-36 Priest drank Cure Serious at 259/259 against a 240
             # breath (2026-11-08).
             return None
-        potion = next((k for k in sorted(POTION_HEAL, key=POTION_HEAL.get, reverse=True)
-                       if self.potion_ready(k, obs)), None)
+        defer_healing = (
+            save_healing and obs.dlvl < BALROG_DLVL and self.balrog_preparing()
+            and self.goal.klass not in ("priest", "paladin")
+        )
+        potions = sorted(
+            POTION_HEAL,
+            key=(lambda k: (k != HEALING, POTION_HEAL[k])) if defer_healing else POTION_HEAL.get,
+            reverse=True,
+        )
+        potion = next((k for k in potions if self.potion_ready(k, obs)), None)
         if potion is not None and obs.step >= self.blind_until:
             self.picking, self.listed = potion, False
             return Decision(ord("Q"), "quaff", f"{why}: drink {drink_name(potion)}")
@@ -5734,28 +6587,34 @@ class Brain:
         keep_off = view.hazards | self.hazards(view)
         def worth(glyph: str, name: str) -> bool:
             if glyph == COIN_GLYPH:
-                return True
+                return not (self.balrog_bound() and obs.dlvl >= BALROG_DLVL)
             if self.carried_enough(name):
                 return False
             if name.startswith(FOODS):
                 return True
-            if self.too_heavy_for(name):
-                # The limit would refuse it: 736 such pickups were walked to
+            if self.too_heavy_for(name, 1, self.trip_food_room()):
+                # The limit would refuse it (or take a trip's food's room,
+                # trip_food_room): 736 such pickups were walked to
                 # and refused in the review epoch (C64 Balrog, 2026-11-19).
                 return False
             if self.launcher is not None and name.startswith(self.ammo_kinds()):
                 return True
             if (self.restorer_wanted(name) or name.startswith(RESTORE_LIFE)) and not self.pack_full:
                 return True   # Restore Life Levels up to its carry limit (carried_enough)
+            if self.book_next is not None and book_of(name) == self.book_next:
+                return True   # the next book, found: the Guide to Power is seldom in the Magic Shop
             if name.startswith(RESTORE_MANA) and self.mana_klass() and not self.pack_full:
                 # A second mana bar, found: no store sells one. Ready clvl 40
                 # Priests walked past 8-17 in an hour and fought the Balrog's
                 # 3,000 HP on one bar a visit (C64 Balrog, 2026-11-12).
                 return True
-            # A wand or staff already carried with charges is not taken twice.
+            # A wand or staff already carried with charges is not taken twice,
+            # and a Mage with ball spells skips attack wands.
             return not self.pack_full and (self.unknown_kept(name) or self.jewel_better(name) or self.gain_wanted(name)
                                            or self.armour_resist_better(name) is not None or (
-                name.startswith(PICKUPS) and not self.wands.get(name.split(" (")[0], 0)))
+                name.startswith(PICKUPS) and not self.wands.get(name.split(" (")[0], 0)
+                and not (self.mage_has_balls() and name.split(" (")[0] in ATTACK_WANDS)
+                and not (self.balrog_no_devices() and name.startswith(("Wand of", "Staff of")))))
         wanted = {p for p, (glyph, name) in self.items_seen.items()
                   if p not in self.level.collected and worth(glyph, name)
                   and all(chebyshev(p, h) > 1 for h in keep_off)}   # Yellow Jelly beside the gold
@@ -5785,7 +6644,8 @@ class Brain:
         names its state (CHEST_DESIGN.md step 14: "(empty)", "(trapped)",
         "(locked)", "(disarmed)"); each command's messages say how it went."""
         self.read_chest_messages()
-        if self.unseen_attack or obs.hp < CHEST_HP or obs.hp < CHEST_HP_SHARE * obs.mhp:
+        if (self.unseen_attack or obs.hp < CHEST_HP or obs.hp < CHEST_HP_SHARE * obs.mhp
+                or (self.balrog_bound() and obs.dlvl >= BALROG_DLVL)):
             return None
         if any(self.awake_near(p, obs, view) for p in self.threats(view)):
             return None
@@ -5860,11 +6720,12 @@ class Brain:
         held = [(CLW, self.clw, self.clw_reserve()), (NEUTRALIZE, self.neutralize, NEUTRALIZE_RESERVE),
                 (PHASE, self.phase, self.phase_reserve()), (TELEPORT_SCROLL, self.teleports, self.teleport_reserve()),
                 (RECALL, self.recall, self.recall_reserve()), (IDENTIFY_SCROLL, self.identify_scrolls, 1),
-                (RESTORE_MANA, self.restore_mana, RESTORE_MANA_RESERVE),
-                (RESIST_HEAT, self.resist_heat, RESIST_RESERVE), (RESIST_COLD, self.resist_cold, RESIST_RESERVE),
+                (RESTORE_MANA, self.restore_mana, self.restore_mana_reserve()),
+                (RESIST_HEAT, self.resist_heat, self.resist_heat_reserve()), (RESIST_COLD, self.resist_cold, RESIST_RESERVE),
                 (HEROISM, self.heroism, HEROISM_RESERVE), (TORCH, self.torches, self.torch_reserve()),
                 (SUPER_HEROISM, self.extra[SUPER_HEROISM], SUPER_HEROISM_RESERVE),
-                (INVULNERABILITY, self.extra[INVULNERABILITY], INVULN_RESERVE),
+                (INVULNERABILITY, self.extra[INVULNERABILITY],
+                 INVULN_MAX if self.balrog_bound() and self.goal.klass in MELEE_KLASSES else INVULN_RESERVE),
                 (PROTECT_SCROLL, self.extra[PROTECT_SCROLL], PROTECT_RESERVE),
                 (RESTORE_LIFE, self.restores.get(RESTORE_LIFE, 0), RESTORE_LIFE_RESERVE),
                 *((kind, count, self.strong_reserve()) for kind, count in self.strong.items())]
@@ -5940,6 +6801,14 @@ class Brain:
         is deeper than the character is ready for (``underleveled``)."""
         too_deep = not self.depth_ready(obs, obs.dlvl, slack=1) or (
             obs.dlvl > 1 and obs.clvl < ESCAPE_LEVEL and not self.prepared(obs, obs.dlvl))   # keep to a suitable level
+        if self.climb_from is not None and obs.dlvl > self.climb_from and not self.depth_ready(obs, obs.dlvl):
+            # Down only to climb back (down_to_climb_back), and not ready here:
+            # no slack. A clvl 34 Half-Elf Warrior hopped from DL39 to DL40 to
+            # find a way up, arrived in the dark off the stairs, explored DL40
+            # within its one level of slack and died there to an Ancient
+            # Multi-Hued Dragon's lightning, 520 at 414/414 (C64 Balrog,
+            # 2026-11-24).
+            too_deep = True
         if view.type_at(*view.pos) == TYPE_STAIRS_UP and not self.depth_ready(obs, obs.dlvl):
             # Standing on the way back, not ready for this depth: a crowd
             # escape down arrives on an up staircase, and a level-3 Paladin
@@ -6083,7 +6952,8 @@ class Brain:
             # "our priests should go buy some better armor right away").
             store, why = ARMOURY, "walk to the Armoury for better armour (a Priest's first stop)"
         elif early and (self.shopped or self.weapon == STARTING_WEAPON) and not self.weapons_done \
-                and len(view.stores) > WEAPONSMITH and self.gold(obs) > self.gear_reserve(obs):
+                and self.goal.klass != "mage" and len(view.stores) > WEAPONSMITH \
+                and self.gold(obs) > self.gear_reserve(obs):
             # With the starting Dagger, straight after the Armoury: the General
             # Store spent the weapon's price on a lantern, oil and potions, and
             # 14 of 17 deaths at level 1-3 still held the Dagger (M5b round 39).
@@ -6133,7 +7003,8 @@ class Brain:
                 and self.gold(obs) >= WAND_GOLD + self.gear_reserve(obs):
             # After the way home (Word of Recall), before more gear.
             store, why = MAGIC_SHOP, "walk to the Magic Shop for a wand or staff"
-        elif not self.weapons_done and len(view.stores) > WEAPONSMITH and self.gold(obs) > self.gear_reserve(obs):
+        elif not self.weapons_done and self.goal.klass != "mage" and len(view.stores) > WEAPONSMITH \
+                and self.gold(obs) > self.gear_reserve(obs):
             store, why = WEAPONSMITH, "walk to the Weaponsmith for a better weapon"
         elif not self.armoury_done and len(view.stores) > ARMOURY and self.gold(obs) > self.gear_reserve(obs):
             store, why = ARMOURY, "walk to the Armoury for better armour"
@@ -6143,6 +7014,68 @@ class Brain:
         door = view.stores[store]
         step = view.step_toward({door}, avoid_monsters=True) or view.step_toward({door}, avoid_monsters=False)
         return self.move(view, step, "shop", why)
+
+    def restock_needed(self, obs: Observation) -> str | None:
+        """Supply or Balrog-prep shortfall worth a town-DL1 restock trip when rich."""
+        if self.strong_wanted():
+            return "strong potions"
+        if (self.goal.threat_depth and "strong_potions" in self.goal.tactics
+                and self.clvl >= STRONG_LEVEL and self.goal.klass not in ("priest", "paladin")
+                and not any(s in self.magic.known for s in (HOLY_WORD, HEAL))
+                and self.strong.get(HEALING, 0) < HEALING_RESERVE):
+            return "Healing"
+        if self.drain_bare_too_deep(self.max_dlvl) and self.life_restore_wanted():
+            return "Restore Life Levels"
+        if (self.goal.klass == "warrior" and self.goal.threat_depth
+                and self.clvl >= RESTORE_LIFE_LEVEL and self.clvl < MAX_CLVL
+                and self.max_dlvl > DRAIN_BARE_DLVL and self.life_restore_wanted()):
+            return "Restore Life Levels"
+        if (self.goal.threat_depth and self.teleport_reserve() > 0 and not self.teleports
+                and self.wands.get(TELEPORT_STAFF, 0) <= 0
+                and self.goal.klass not in ("mage", "priest")
+                and PORTAL not in self.magic.known):
+            return "Teleportation"
+        if (self.balrog_preparing() and self.goal.klass not in ("priest", "paladin")
+                and not self.resist_sustained(obs) and self.resist_heat < self.resist_heat_reserve()):
+            return "Resist Heat"
+        if self.balrog_bound() and self.resist_heat < BALROG_HEAT_POTIONS:
+            return "Resist Heat"
+        if (self.balrog_bound() and obs.clvl >= MAX_CLVL and self.launcher is not None
+                and self.ammo < self.ammo_reserve() and self.balrog_damage(obs) < BALROG_HP):
+            return "ammunition"
+        if self.balrog_bound() and obs.clvl >= MAX_CLVL and self.balrog_damage(obs) < BALROG_HP:
+            return "Balrog weapons"
+        return None
+
+    def balrog_invuln_scum(self, obs: Observation) -> bool:
+        """Balrog-bound fighter only needing Black Market Potions of Invulnerability."""
+        return (self.balrog_bound() and obs.clvl >= MAX_CLVL
+                and self.goal.klass in MELEE_KLASSES
+                and self.balrog_damage(obs) < BALROG_HP
+                and (self.launcher is None or self.ammo >= self.ammo_reserve())
+                and self.extra[INVULNERABILITY] < self.invuln_reserve(obs))
+
+    def market_only_scum(self, obs: Observation) -> bool:
+        """Mid-scum return to town for a Black Market-only supply (Resist Heat,
+        Healing, or Invulnerability) with essentials full: skip the other five stores."""
+        need = self.restock_needed(obs)
+        restores = self.restores_wanted()
+        return (self.restock_scums > 0
+                and (need in ("Resist Heat", "Healing")
+                     or (need == "Balrog weapons" and self.balrog_invuln_scum(obs)))
+                and not self.supplies_low() and self.recall >= 3
+                and not self.drained and (not restores or (restores == [RESTORE_STR] and self.restores.get(RESTORE_STR, 0) >= 1))
+                and not self.poisoned and self.food >= FOOD_RESERVE and not self.to_wear)
+
+    def temple_market_scum(self, obs: Observation) -> bool:
+        """Mid-scum return to town for Restore Life Levels with essentials full:
+        visit only the Temple and Black Market."""
+        restores = self.restores_wanted()
+        return (self.restock_scums > 0
+                and self.restock_needed(obs) == "Restore Life Levels"
+                and not self.supplies_low() and self.recall >= 3
+                and not self.drained and (not restores or (restores == [RESTORE_STR] and self.restores.get(RESTORE_STR, 0) >= 1))
+                and not self.poisoned and self.food >= FOOD_RESERVE and not self.to_wear)
 
     def recall_trip(self, obs: Observation, view: View) -> Decision | None:
         """Word of Recall instead of the stairs (M4 round 44: reach_dl10 lost
@@ -6173,6 +7106,8 @@ class Brain:
             if obs.dlvl == 0 or not (self.stuck(view) or self.hopping_out()) or obs.step < self.recall_look_after:
                 return None
             self.recall_look_after = obs.step + STUCK_STEPS
+        if self.restock_scumming and obs.dlvl == 1 and view.type_at(*view.pos) == TYPE_STAIRS_UP:
+            return Decision(ord("<"), "restock", "back to town for the stores' restock: ascend the staircase")
         if self.restock_scumming and obs.dlvl > 0 and obs.step >= self.blind_until:
             self.picking, self.listed = RECALL, False
             return Decision(ord("R"), "recall", "back to town for the stores' restock: read Word of Recall")
@@ -6187,20 +7122,30 @@ class Brain:
                 self.magic_done or self.book_next not in MAGE_BOOKS or self.gold(obs) < BOOK_GOLD.get(self.book_next, 0)) and (
                 self.alchemist_done or self.recall >= self.recall_reserve() or self.gold(obs) < RECALL_GOLD) and (
                 self.market_done or not self.market_worth_it(obs)) and not self.to_wear and (
-                self.weapons_done or not spare) and (self.armoury_done or not spare)
+                self.weapons_done or self.goal.klass == "mage" or not spare) and (self.armoury_done or not spare)
             if not ready or self.max_dlvl < RECALL_FROM or self.supplies_low() or self.recall < 2:
                 # The last scroll is the way home, not the way down (M5a).
                 return None
-            if (self.strong_wanted() and self.gold(obs) >= MARKET_GEAR_GOLD and self.recall >= 3
-                    and (self.restock_scumming or self.restock_scums < RESTOCK_SCUMS)):
+            need = self.restock_needed(obs)
+            scum_cap = (RESTOCK_SCUMS_MARKET if (self.balrog_bound() and not self.balrog_ready(obs)
+                                                 and (need in ("Resist Heat", "Healing")
+                                                      or (need == "Balrog weapons" and self.balrog_invuln_scum(obs))))
+                        else RESTOCK_SCUMS_BALROG if (self.balrog_bound() and not self.balrog_ready(obs))
+                        else RESTOCK_SCUMS_DEEP if (self.goal.threat_depth
+                                                    and need in ("Restore Life Levels", "Healing", "Resist Heat"))
+                        else RESTOCK_SCUMS)
+            if (need is not None and self.gold(obs) >= MARKET_GEAR_GOLD and self.recall >= 3
+                    and not self.level.restock_done
+                    and (self.restock_scumming or self.restock_scums < scum_cap)):
                 down = self.descend(obs, view)
                 if down is not None:
                     if not self.restock_scumming:   # a trip begun, not each step to the stairs
                         self.restock_scums += 1
                     self.restock_scumming = True
-                    return Decision(down.key, "restock", f"short of strong potions with "
+                    return Decision(down.key, "restock", f"short of {need} with "
                                                          f"{self.gold(obs)} gold: {down.reason} for a restock")
             self.restock_scums = 0
+            self.level.restock_done = True
             if not self.recall_returns(obs):
                 # Recall goes back to the deepest level: not when that is too
                 # deep to stay (resupply's too_deep), or the bot climbs, recalls
@@ -6277,8 +7222,12 @@ class Brain:
         (PRESS_ON_HP), and ready for deeper: on the way down to where it
         hunts (press_on), where shots and Orbs at what lives there are
         wasted keys."""
+        # Not on its way home for Word of Recall: out of it, a clvl 39 Human
+        # Mage climbed for town from DL4, took each down staircase it arrived
+        # on from DL3, and went between the two for 9,000 steps a trip (C64
+        # Balrog, 2026-11-24). Town again restocks the shops.
         return (0 < obs.dlvl < self.max_dlvl - RECALL_WALK_LEVELS and obs.hp >= PRESS_ON_HP * obs.mhp
-                and self.deeper_ok(obs))
+                and self.deeper_ok(obs) and not self.wants_recall(obs))
 
     def far_above_deepest(self, obs: Observation) -> bool:
         """Many levels above a deepest level it may go back to, with the two
@@ -6323,6 +7272,15 @@ class Brain:
         found_below = JEWEL_NAME.match(self.to_wear[0].strip()) or EGO_RESIST.search(self.to_wear[0])
         if obs.dlvl != 0 and not (found_below and not self.close_threats(obs, view)):
             return None
+        ring = JEWEL_NAME.match(self.to_wear[0].strip())
+        right = self.jewel_names.get("Ring", "(none)")
+        if ring and ring.group(2) == "Ring" and right != "(none)" and self.jewel_names.get("Ring2", "(none)") != "(none)" \
+                and self.jewels.get("Ring", 0) < self.jewels.get("Ring2", 0):
+            # Both hands worn: the game puts a ring on the left (core/
+            # player_item_commands.s), so the weaker right ring comes off first.
+            self.taking_off = self.picking = right
+            self.takeoff_keep, self.listed = True, False
+            return Decision(KEY_TAKEOFF, "wear", f"take off the {right}: the {self.to_wear[0]} goes on in its place")
         self.picking, self.listed = self.to_wear.pop(0), False
         return Decision(KEY_WEAR, "wear", f"wear the {self.picking}")
 
@@ -6357,8 +7315,17 @@ class Brain:
         from death: drinking first at low levels (the prayer can fail) cost
         Gnome and Elf Priests 5 of 40 on reach_dl8 (M5f round 7 A/B)."""
         strong = next((k for k in self.strong if self.potion_ready(k, obs)), None)
+        try:
+            xp_drained = obs.dlvl == 0 and obs.max_xp > 0 and obs.xp < obs.max_xp
+        except (AssertionError, AttributeError):
+            xp_drained = False
+        drained = self.drained | ({LIFE} if xp_drained else set())
         restore = next((k for k, stats in RESTORERS.items()
-                        if self.drained.intersection(stats) and self.restores.get(k)), None)
+                        if drained.intersection(stats) and self.restores.get(k)
+                        and (k != RESTORE_LIFE
+                             or obs.dlvl == 0
+                             or (obs.clvl < MAX_CLVL and getattr(self, "max_clvl", 0) >= MAX_CLVL)
+                             or self.life_drained_enough(obs, self.restores.get(k, 0)))), None)
         if restore is not None and not self.close_threats(obs, view):
             self.picking, self.listed = restore, False
             stats = "/".join(s for s in RESTORERS[restore] if s in self.drained)
@@ -6405,6 +7372,26 @@ class Brain:
             for spell in (HOLY_WORD, HEAL):
                 if self.magic.can(obs, spell):
                     return Decision(*self.magic.pray(spell, f"HP {obs.hp}/{obs.mhp} under a breath of {burst}: pray {spell}"))
+        danger = self.danger(view.pos, view, obs)
+        breath = self.level.breath
+        active_breath = breath is not None and obs.step - breath[0] < UNSEEN_BREATH_STEPS
+        if obs.dlvl and danger == 0 and obs.hp < obs.mhp and (not active_breath or self.recalling or obs.hp < 0.2 * obs.mhp) and (
+                (burst >= BREATH_LETHAL * obs.hp
+                 and (burst < BREATH_LETHAL * obs.mhp or obs.hp < DEEP_HEAL_HP * obs.mhp))
+                or (obs.dlvl >= SCOUT_FROM and obs.hp < DEEP_HEAL_HP * obs.mhp
+                    and (self.unseen_attack or self.level.retreat_to is not None))):
+            # A lethal breath remembered on the level or a committed retreat
+            # deep: heal with a potion before ``retreat`` walks at single-digit
+            # HP (a clvl 39 Gnome Rogue at 8/355 HP holding 25 Cure Critical /
+            # Serious walked 13 steps for the stairs until an Ancient Blue
+            # Dragon killed it, C64 Balrog, 2026-11-25).
+            save_healing = not active_breath and (
+                burst < BREATH_LETHAL * obs.hp or self.breath_save_healing(obs, burst))
+            heal = self.heal_now(obs, f"HP {obs.hp}/{obs.mhp}: a breath of {burst} about"
+                                 if burst >= BREATH_LETHAL * obs.hp
+                                 else f"HP {obs.hp}/{obs.mhp} deep, retreating", save_healing=save_healing)
+            if heal is not None:
+                return heal
         if not (self.clw or strong) or (obs.hp >= QUAFF_HP * obs.mhp and not (
                 (self.under_spell(obs, view) or self.under_blow(obs, view)) and not self.magic.can(obs, CURE_LIGHT))):
             return None
@@ -6422,7 +7409,6 @@ class Brain:
         # hurt the character, rest instead; else only a potion that leaves it
         # alive after the next turn (danger under HP plus the heal) and heals
         # at least a third of the danger ("no rope-a-doping").
-        danger = self.danger(view.pos, view, obs)
         if danger == 0 and not (self.poisoned or self.draining):
             return None
         # Weakest that answers first, then the rest by strength: Healing when
@@ -6445,19 +7431,34 @@ class Brain:
         self.picking, self.listed = potion, False
         return Decision(ord("Q"), "quaff", f"HP {obs.hp}/{obs.mhp}: drink {drink_name(potion)}")
 
+    def no_escape(self) -> bool:
+        """Deep with no long escape left: no Scroll of Teleportation and no
+        charged Staff of Teleportation."""
+        return (self.teleport_reserve() > 0 and not self.teleports
+                and self.wands.get(TELEPORT_STAFF, 0) <= 0
+                and not (self.goal.klass == "mage" and TELEPORT_SELF in self.magic.known))
+
     def restock_short(self) -> bool:
         """Short enough of strong potions or Phase Door for a town trip (M7),
         or deep with no long escape left: no Scroll of Teleportation, no
         charged Staff of Teleportation, no Teleport Self. A clvl 39 Warrior
         read its last scroll on DL37 and met the Ancient White Dragon again
         with none (C64 Balrog, 2026-11-13)."""
-        no_escape = (self.teleport_reserve() > 0 and not self.teleports
-                     and self.wands.get(TELEPORT_STAFF, 0) <= 0 and TELEPORT_SELF not in self.magic.known)
-        return (self.strong_wanted() and (not any(self.strong.values()) or not self.phase)) or no_escape
+        return (self.strong_wanted() and (not any(self.strong.values()) or not self.phase)) or self.no_escape() \
+            or self.life_restore_short()
+
+    def life_restore_short(self) -> bool:
+        """Rich, its hunting depth below the drain limit, and no Restore Life
+        Levels: a town trip for them (restock). Out of them, a clvl 39 Human
+        Mage with 16M gold hunted DL23 under the limit until something else
+        sent it home (C64 Balrog, 2026-11-25)."""
+        return (self.goal.threat_depth and self.clvl < MAX_CLVL and not self.restores.get(RESTORE_LIFE, 0)
+                and self.max_dlvl > DRAIN_BARE_DLVL + RECALL_WALK_LEVELS and self.gold_seen >= MARKET_GEAR_GOLD)
 
     def strong_wanted(self) -> bool:
         """Fewer than ``strong_reserve`` stronger potions from STRONG_LEVEL (M7)."""
         return ("strong_potions" in self.goal.tactics and self.clvl >= STRONG_LEVEL
+                and self.strong.get(HEALING, 0) < HEALING_RESERVE
                 and sum(self.strong.values()) < self.strong_reserve())
 
     def strong_reserve(self) -> int:
@@ -6650,6 +7651,12 @@ class Brain:
             # last (C64 Balrog, 2026-11-19). drop_prompt sheds by its tiers,
             # once the fresh list confirms the estimate.
             self.pack_full = self.too_heavy = self.headroom_shed = True
+        if (obs.dlvl == 0 and not (self.pack_full or threats) and obs.step >= self.drop_after
+                and self.balrog_no_devices() and self.pack_listed is not None
+                and any(name.startswith(("Wand of", "Staff of")) for name, _ in self.pack_listed)):
+            # Dump wands and staffs in town before diving to DL50 so the Balrog
+            # cannot heal 100 HP/charge from AT_EAT_CHARGES.
+            self.pack_full = True
         if not (self.pack_full or self.more_junk) or obs.step < self.drop_after or threats:
             return None
         self.dropping, self.listed = True, False
@@ -6680,10 +7687,16 @@ class Brain:
         book, an empty crossbow and Word of Recall, strength darts had drained
         its STR until the AC 46 worn met the limit, and it starved with 1.1M
         gold (C64 Balrog, 2026-11-19)."""
-        if not (self.food_weight_refused and self.nothing_to_shed) or self.taking_off is not None:
+        if self.taking_off is not None:
+            return None
+        # In town with room for less than a trip's food (FOOD_TRIP) and
+        # nothing in the pack to shed: a worn piece but the body armour goes
+        # too, before the General Store.
+        trip_short = obs.dlvl == 0 and obs.mode == Mode.COMMAND and self.nothing_to_shed and self.trip_food_short()
+        if not (self.food_weight_refused and self.nothing_to_shed) and not trip_short:
             return None
         starving = any(word in status_states(obs) for word in ("Weak", "Faint")) or self.food <= 0
-        if not starving or self.close_threats(obs, view):
+        if not (starving or trip_short) or self.close_threats(obs, view):
             return None
         worn = [(item_weight(self.armour_names[slot]), slot) for slot in SHED_SLOTS
                 if self.armour_names.get(slot) and item_weight(self.armour_names[slot]) > 0]
@@ -6732,7 +7745,9 @@ class Brain:
             recharging = any(n in self.magic.known and not self.magic.confirmed(n) for n in RECHARGE_SPELLS)
             # Restore Mana for a caster: a half-troll Priest bought one for the
             # Balrog and dropped it as junk (C64 Balrog, 2026-11-12).
-            useful = (*ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *FIGHT_DEVICES, *FOUND_DEVICES,
+            devices = () if self.balrog_no_devices() else (
+                *ATTACK_WANDS, TELEPORT_STAFF, TELEPORT_AWAY, *FIGHT_DEVICES, *FOUND_DEVICES)
+            useful = (*devices,
                       *(RECHARGEABLE if recharging else ()),
                       *((RESTORE_MANA,) if self.mana_klass() else ()))
             keep = KEEP_PREFIXES + missiles + ((self.weapon[0],) if self.wielding_launcher else ()) + tuple(useful)
@@ -6782,6 +7797,8 @@ class Brain:
                     extra |= {i} if names[i] in books else set()
                     books.add(names[i])
 
+            to_wear = {w.strip() for w in self.to_wear if w.strip()}
+
             def junk(match: re.Match[str] | None) -> bool:
                 if match is not None and matches.index(match) in extra:
                     return True
@@ -6801,7 +7818,8 @@ class Brain:
                 spent |= (base.startswith(("Wand of", "Staff of")) and self.wands.get(base) == 0
                           and not self.recharge_scrolls)
                 return match is not None and (spent or not (name.startswith(keep) or self.unknown_kept(name))) \
-                    and name not in self.to_wear and raw not in self.to_wear
+                    and raw not in self.to_wear \
+                    and not any(name == w or name.startswith(w) or w.startswith(name) for w in to_wear)
             # Two stacks of one item: identified and unidentified ones did not
             # stack until 2026-11-09 (inv_add_item), and clvl 38 Priests kept
             # two each of Phase Door, Cure Light Wounds and Neutralize Poison
@@ -6835,9 +7853,16 @@ class Brain:
                         self.reopen_refused()
                     return Decision(ord(m.group(1).upper()), "prompt", f"drop {name}: to join its twin stack")
                 first.setdefault(name, i)
-            for match in matches:
+            for idx, match in enumerate(matches):
                 if junk(match):
                     assert match is not None
+                    name = match.group(2).strip()
+                    rest = [row for j, row in enumerate(obs.rows[1:]) if j != idx]
+                    self.sync_counts(rest, "all")
+                    base = name.split(" (")[0].strip()
+                    if base.startswith(("Wand of", "Staff of")) and not any(
+                            n.split(" (")[0].strip() == base for n, _ in (self.pack_listed or [])):
+                        self.wands[base] = 0
                     self.more_junk = sum(map(junk, matches)) > 1   # drop the rest next, one a step
                     self.dropping = self.pack_full = False
                     if obs.dlvl == 0:
@@ -6847,7 +7872,7 @@ class Brain:
                         # and to the store that refused for a full pack.
                         self.shopped = False
                         self.reopen_refused()
-                    return Decision(ord(match.group(1).upper()), "prompt", f"drop {match.group(2).strip()}")
+                    return Decision(ord(match.group(1).upper()), "prompt", f"drop {name}")
             if self.headroom_shed and (limit := self.weight_limit()) is not None \
                     and (carried := self.carried_weight()) is not None and carried <= limit - WEIGHT_HEADROOM:
                 # The fresh list says there is room: the estimate ran over.
@@ -6894,7 +7919,8 @@ class Brain:
                     # and Priests reached clvl 10 in 12-15% of games, 30%
                     # before, having dropped Cure Light Wounds, Phase Door and
                     # their Flasks of Oil at clvl 1 (build queue, 2026-11-19).
-                    keep = (*FOODS, RECALL, *ESSENTIAL_BUYS, PHASE, TELEPORT_SCROLL)
+                    keep = (*FOODS, RECALL, *ESSENTIAL_BUYS, PHASE, TELEPORT_SCROLL,
+                            *((INVULNERABILITY, RESIST_HEAT) if self.balrog_preparing() else ()))
                     emergency = not self.headroom_shed and (self.food_weight_refused or bool(self.restores_wanted()))
                     surplus = [w for w in weights if matches[w[1]] and names[w[1]].startswith(ammo)] or \
                         [w for w in weights if matches[w[1]] and self.spare_launcher(names[w[1]], matches)] or \
@@ -6904,7 +7930,9 @@ class Brain:
                         ([w for w in weights if matches[w[1]] and names[w[1]].startswith(STACKING)
                           and not names[w[1]].startswith((*FOODS, RECALL, TORCH, OIL))] if emergency else []) or \
                         ([w for w in weights if matches[w[1]] and names[w[1]].startswith((TORCH, OIL))]
-                         if emergency else [])
+                         if emergency else []) or \
+                        ([w for w in weights if matches[w[1]] and names[w[1]].startswith(FOODS[0])
+                          and w[0][1] > self.food_cap()] if self.no_light_carried() else [])
                 if surplus:
                     shed = max(surplus)[1]
                     heavy = matches[shed]
@@ -6919,7 +7947,57 @@ class Brain:
                     self.shopped = False
                     self.reopen_refused()
                     return Decision(ord(heavy.group(1).upper()), "prompt", f"drop {count} {name}: too heavy to buy")
-            if obs.dlvl == 0 and self.refused_at is not None and self.recall < self.recall_reserve():
+            # Restore Life Levels too: "Your pack is full." refused it at the
+            # Temple for 20 of 25 Balrog characters, none carried, and the
+            # drain limit held them at DL23, every Warrior at clvl 34-36 (C64
+            # Balrog, 2026-11-24).
+            def drop_slot(idx: int, reason: str) -> Decision:
+                slot = matches[idx]
+                assert slot is not None
+                rest = [row for i, row in enumerate(obs.rows[1:]) if i != idx]
+                self.sync_counts(rest, "all")
+                self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
+                                   for row in rest if (m := PACK_ITEM.match(row)) and strip_article(m.group(2)).startswith(TORCH))
+                self.dropping = self.pack_full = False
+                if obs.dlvl == 0:
+                    self.shopped = False
+                    self.reopen_refused()
+                return Decision(ord(slot.group(1).upper()), "prompt", reason)
+
+            room_for = ("Word of Recall" if self.recall < self.recall_reserve()
+                        else "Restore Life Levels" if (
+                            (self.refused_item or "").startswith(RESTORE_LIFE[:20]) and self.life_restore_wanted()
+                            and not self.restores.get(RESTORE_LIFE, 0))
+                        else "Resist Heat" if (
+                            (self.refused_item or "").startswith(RESIST_HEAT[:20]) and self.balrog_preparing()
+                            and self.resist_heat < self.resist_heat_reserve())
+                        else "Healing" if (
+                            (self.refused_item or "").startswith(HEALING) and self.strong.get(HEALING, 0) < HEALING_RESERVE)
+                        else self.ammo_kinds()[0] if (
+                            self.balrog_bound() and self.launcher is not None and self.ammo < self.ammo_reserve()
+                            and self.ammo_kinds() and (self.refused_item or "").startswith(self.ammo_kinds()))
+                        else self.refused_item if (self.refused_item and self.refused_item in self.gear)
+                        else "Restore Mana" if (
+                            (self.refused_item or "").startswith(RESTORE_MANA[:20]) and self.goal.klass in ("priest", "mage"))
+                        else "Invulnerability" if (
+                            (self.refused_item or "").startswith(INVULNERABILITY[:20]))
+                        else "Teleportation" if (
+                            (self.refused_item or "").startswith(TELEPORT_SCROLL[:20]) and self.teleports < self.teleport_reserve())
+                        else "Phase Door" if (
+                            (self.refused_item or "").startswith(PHASE[:20]) and self.phase < self.phase_reserve())
+                        else self.refused_item if (
+                            (self.refused_item or "").startswith((CCW[:20], CSW[:20])) and self.strong_wanted())
+                        else self.refused_item if (
+                            self.refused_item and any(self.refused_item.startswith(k[:20]) for k in GAIN_POTIONS))
+                        else self.refused_item if (
+                            self.refused_item and any(
+                                self.refused_item.startswith(w[:20])
+                                for w in (*ATTACK_WANDS, SPEED_STAFF, DISPEL_STAFF, TELEPORT_STAFF)))
+                        else self.refused_item if (
+                            self.refused_item and any(
+                                self.refused_item.startswith(k[:20]) for k, s in RESTORE_POTIONS.items() if s in self.drained))
+                        else None)
+            if obs.dlvl == 0 and self.refused_at is not None and room_for is not None:
                 # A full pack of keepers refused Word of Recall: the stack
                 # furthest past its pickup limit (carry_limit) makes the room.
                 # A clvl 39 Half-Elf Paladin's 22 slots held 255 Cure Light
@@ -6929,41 +8007,62 @@ class Brain:
                 # maintainer: "word of recall seems important").
                 past = [(counts[i] / held[1], i) for i, m in enumerate(matches)
                         if m and names[i].startswith(STACKING)
+                        and not names[i].startswith((RECALL, HEALING, INVULNERABILITY, RESIST_HEAT))
                         and (held := self.carry_limit(names[i])) is not None and counts[i] > held[1]]
                 if past:
                     shed = max(past)[1]
                     full = matches[shed]
                     assert full is not None
-                    name, count = names[shed], counts[shed]
-                    rest = [row for i, row in enumerate(obs.rows[1:]) if i != shed]
-                    self.sync_counts(rest, "all")
-                    self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
-                                       for row in rest if (m := PACK_ITEM.match(row)) and strip_article(m.group(2)).startswith(TORCH))
-                    self.dropping = self.pack_full = False
-                    self.shopped = False
-                    self.reopen_refused()
-                    return Decision(ord(full.group(1).upper()), "prompt", f"drop {count} {name}: room for Word of Recall")
+                    return drop_slot(shed, f"drop {counts[shed]} {names[shed]}: room for {room_for}")
                 # No stack past its limit: the least use of the 22 kinds goes,
                 # as a player drops one for the way home. A clvl 33 Human
                 # Paladin and a clvl 30 Half-Troll Priest held 22 kinds, none
                 # over its limit and no Word of Recall, and went between town
                 # and DL1-5 for 37 and 26 hours (C64 Balrog, 2026-11-21).
-                order = (*(() if self.lamp else (OIL,)), SLOW_WAND, RESIST_COLD, HEROISM)
+                order = (
+                    *(() if self.lamp else (OIL,)),
+                    SLOW_WAND, RESIST_COLD, HEROISM,
+                    *(("Slime Mold",) if self.food >= FOOD_RESERVE + 1 else ()),
+                    *((TORCH,) if self.lamp else ()),
+                    *((CLW,) if self.strong.get(HEALING, 0) >= 5 or self.strong.get(CCW, 0) >= 5 else ()),
+                    *((CSW,) if self.strong.get(HEALING, 0) >= 10 else ()),
+                    *((CCW,) if self.strong.get(HEALING, 0) >= 10 else ()),
+                    *((RESTORE_MANA,) if self.goal.klass not in ("priest", "mage") else ()),
+                    PROTECT_SCROLL,
+                    *((PHASE,) if PHASE_DOOR in self.magic.known else ()),
+                    "Staff of Door/Stair",
+                    SUPER_HEROISM,
+                    *(tuple(ATTACK_WANDS) if self.goal.klass == "mage" else ()),
+                    *(k for k, s in RESTORE_POTIONS.items() if k != RESTORE_STR and s not in self.drained),
+                    *(w for w in ("Wand of Magic Missile", "Wand of Stinking Cloud", "Wand of Lightning", "Wand of Frost")
+                      if self.balrog_bound()),
+                    TELEPORT_AWAY,
+                    *((DISPEL_STAFF,) if self.balrog_bound() else ()),
+                    *((TELEPORT_STAFF,) if self.balrog_bound() and (self.teleports > 0 or TELEPORT_SELF in self.magic.known) else ()),
+                    *(("Wand of Fire Balls",) if self.balrog_bound() else ()),
+                )
                 slots_full = sum(1 for m in matches if m) >= PACK_KINDS
                 spare_at = next((i for kind in order for i, m in enumerate(matches)
-                                 if m and names[i].startswith(kind)), None) if slots_full else None
+                                 if m and names[i].startswith(kind)
+                                 and not names[i].startswith(room_for)), None) if slots_full else None
                 if spare_at is not None:
                     spare = matches[spare_at]
                     assert spare is not None
-                    name = names[spare_at]
-                    rest = [row for i, row in enumerate(obs.rows[1:]) if i != spare_at]
-                    self.sync_counts(rest, "all")
-                    self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
-                                       for row in rest if (m := PACK_ITEM.match(row)) and strip_article(m.group(2)).startswith(TORCH))
-                    self.dropping = self.pack_full = False
-                    self.shopped = False
-                    self.reopen_refused()
-                    return Decision(ord(spare.group(1).upper()), "prompt", f"drop {name}: room for Word of Recall")
+                    return drop_slot(spare_at, f"drop {names[spare_at]}: room for {room_for}")
+            if obs.dlvl > 0 and sum(1 for m in matches if m) >= PACK_KINDS:
+                dungeon_order = (
+                    *((TORCH,) if self.lamp else ()),
+                    "Staff of Door/Stair",
+                    SUPER_HEROISM,
+                    *(tuple(ATTACK_WANDS) if self.mage_has_balls() else ()),
+                    *(k for k, s in RESTORE_POTIONS.items() if k != RESTORE_STR and s not in self.drained),
+                )
+                spare_at = next((i for kind in dungeon_order for i, m in enumerate(matches)
+                                 if m and names[i].startswith(kind)), None)
+                if spare_at is not None:
+                    spare = matches[spare_at]
+                    assert spare is not None
+                    return drop_slot(spare_at, f"drop {names[spare_at]}: room in full pack")
             # Nothing else spare: an unknown flavour goes before the food and
             # light a refused purchase was for (2026-11-05: a level-15 Mage with
             # 5,136 gold and a full pack had every purchase refused, 150,000
@@ -7221,8 +8320,13 @@ class Brain:
             # breath (333) prayed Cure Medium Wounds three times, Heal
             # known and 114 mana, and the next breath killed it (C64 Balrog,
             # 2026-11-11).
+            breather = max([*(self.turn_burst(c, obs) for c in view.creatures.values()),
+                            *self.remembered_bursts(obs, lasting=True)], default=0)
             average = MAGE_HEAL_AVERAGE if magic.mage else HEAL_AVERAGE
-            usable = [h for h in HEALS if magic.can(obs, h) and average.get(h, 0.0) > hitting]
+            usable = [h for h in HEALS if magic.can(obs, h) and average.get(h, 0.0) > hitting
+                      and (breather < BREATH_LETHAL * obs.hp
+                           or h in (HOLY_WORD, HEAL)
+                           or obs.hp + average.get(h, 0.0) > breather / BREATH_LETHAL)]
             heal = min((h for h in usable if average[h] >= obs.mhp - obs.hp), key=average.get,
                        default=usable[0] if usable else None)
             if heal is not None:
@@ -7306,7 +8410,8 @@ class Brain:
         usable = [name for name in MAGE_ATTACKS if self.magic.spare(obs, name)]
         if not usable:
             return None
-        return min(usable, key=lambda name: (math.ceil(hp / MAGE_ATTACKS[name]), self.magic.known[name].mana))
+        return min(usable, key=lambda name: (math.ceil(hp / max(self.spell_hurt(name, MAGE_ATTACKS[name], creature), 1.0)),
+                                             self.magic.known[name].mana))
 
     def leave_caster(self, obs: Observation, view: View) -> Decision | None:
         """A caster seen or heard on this level lately whose biggest spell
@@ -7355,13 +8460,15 @@ class Brain:
         if not exits:
             return None
         if not view.creatures and (far is None or far > LEAVE_WALK_STEPS):
-            # Not a long walk hurt in its reach: heal at once, then Word of
-            # Recall first. A level-37 Priest walked 25 steps toward stairs at
-            # 115-151/292 with an Ancient Blue Dragon (240) about, its hundred
-            # Cure Serious unused, and was breathed on (C64 Balrog, 2026-11-08).
-            heal = self.heal_now(obs, f"{why}, far from the stairs")
-            if heal is not None:
-                return heal
+            # Not a long walk hurt in its reach: heal at once when hurt past
+            # DEEP_HEAL_HP or in lethal single-cast range, then Word of Recall first.
+            # A level-37 Priest walked 25 steps toward stairs at 115-151/292 with
+            # an Ancient Blue Dragon (240) about, its hundred Cure Serious unused,
+            # and was breathed on (C64 Balrog, 2026-11-08).
+            if obs.hp < DEEP_HEAL_HP * obs.mhp or burst >= BREATH_LETHAL * obs.hp:
+                heal = self.heal_now(obs, f"{why}, far from the stairs", save_healing=True)
+                if heal is not None:
+                    return heal
             # Hurt, not at full HP: at 285/285 a level-37 Priest read Word of
             # Recall on DL35 at casters Detect Evil had shown across the
             # screen, bought more in town and came back, again and again (C64
@@ -7427,6 +8534,14 @@ class Brain:
         if self.goal.klass == "mage" and obs.clvl < MAGE_MELEE_LEVEL:
             return None   # a Mage walks to melee nothing before clvl 35
         targets = {p for p, c in view.creatures.items() if self.engageable(c, obs)}
+        if not targets and self.hunting_deep(obs) and self.level.marks and obs.hp >= HUNT_HP * obs.mhp \
+                and not self.under_spell(obs, view):
+            # Out of view: after it, to where it was last seen (Level.marks).
+            step = view.step_toward(set(self.level.marks), avoid_monsters=True)
+            if step is None:
+                self.level.marks.clear()   # none reachable
+                return None
+            return self.move(view, step, "hunt", "after a creature worth hunting, last seen nearby")
         if not targets or (obs.hp < HUNT_HP * obs.mhp and not self.standing) or self.under_spell(obs, view):
             self.waited = 0
             return None
@@ -7495,6 +8610,12 @@ class Brain:
                 # the torch's light it is remembered, not seen (round 85:
                 # seed 1002).
                 return None
+            if (self.goal.threat_depth and obs.clvl >= RESTORE_LIFE_LEVEL
+                    and not (self.balrog_bound() and obs.dlvl >= BALROG_DLVL)):
+                drainers = {p for p, c in view.creatures.items() if self.drainer(c)}
+                drainers |= {p for p, seen in self.level.drainers_seen.items() if obs.step - seen < SLOW_MEMORY}
+                if any(chebyshev(target, p) <= 1 for p in drainers):
+                    return None
         return self.run_or_move(obs, view, step, "explore", "path to the nearest unexplored edge")
 
     def run_or_move(self, obs: Observation, view: View, step: tuple[int, int] | None, layer: str,
@@ -7672,6 +8793,13 @@ class Brain:
                 self.last_attack = (committed, creature.glyph)
                 return Decision(DIRS[(committed[0] - view.pos[0], committed[1] - view.pos[1])], "fight",
                                 f"the '{creature.glyph}' blocks the only way on: attack it")
+            if self.avoided(creature):
+                tries = self.level.clear_approaches[committed] = self.level.clear_approaches.get(committed, 0) + 1
+                if tries > CLEAR_APPROACHES:
+                    self.level.clear_skip[committed] = obs.step + CLEAR_SKIP
+                    self.level.clear_approaches[committed] = 0
+                    self.level.clear_target = None
+                    return None
             beside = self.beside(view, committed)
             # The squares beside it are next to a monster, which an avoiding
             # path may refuse one step short of them (2026-11-06: a C128 game

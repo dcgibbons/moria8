@@ -294,6 +294,25 @@ def breath_info() -> dict[tuple[str, int], tuple[int, frozenset[str], int]]:
     return out
 
 
+CD_HURT = {0x01: "frost", 0x02: "fire", 0x04: "poison", 0x08: "acid", 0x10: "lightning"}   # cr_cdefense bits 0-4 (core/monster.s)
+
+
+@lru_cache(maxsize=1)
+def hurt_kinds() -> dict[tuple[str, int], frozenset[str]]:
+    """(screen glyph, creature level) -> the elements that do it double
+    (eff_scale_elem_damage: cr_cdefense's CD_FROST/FIRE/POISON/ACID/LIGHT),
+    for creatures drawn alike only those every one of them shares."""
+    out: dict[tuple[str, int], frozenset[str]] = {}
+    for _, tables in _tiers():
+        if "cdefense" not in tables:
+            continue
+        for code, level, bits in zip(tables["display"], tables["level"], tables["cdefense"]):
+            key = (screen_code_to_char(code), level)
+            hurt = frozenset(e for bit, e in CD_HURT.items() if bits & bit)
+            out[key] = out[key] & hurt if key in out else hurt
+    return out
+
+
 @lru_cache(maxsize=1)
 def strength_by_name() -> dict[str, tuple[float, int]]:
     """Creature name -> (average HP, AC) of that one creature: ``strength``

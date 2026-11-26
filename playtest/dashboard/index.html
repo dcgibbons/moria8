@@ -973,21 +973,31 @@ function renderQueue() {
     (cur ? ` · playing ${esc(ago(cur.start))}` : "") +
     (cstate.error ? ` · <span class="bad">build failed: ${esc(cstate.error.slice(-160))}</span>` : "");
   const none = {games: 0, reached: 0, died: 0, median_clvl: null, played: 0, findings: [], notes: []};
-  const det = p => (cur && cur.detail && cur.detail[p]) || none;
+  // A bot-only build (a new bot snapshot or commit) carries the game's
+  // coverage on: its counts are the newest build of this game that has
+  // games (maintainer, 2026-11-23: "shouldn't it be 31/31 for every port").
+  const recent = (q.builds || []).slice().sort((a, b) => (b.start || 0) - (a.start || 0));
+  const det = p => {
+    const own = cur && cur.detail && cur.detail[p];
+    if (own && own.games) return own;
+    const from = cur ? recent.indexOf(cur) : 0;
+    return recent.slice(Math.max(0, from)).map(b => b.detail && b.detail[p]).find(d => d && d.games) || own || none;
+  };
+  const covered = p => Math.max(det(p).played, Math.min((ci[p] || {}).next || 0, combos(p)));
   const combos = p => Object.keys((ci[p] || {}).items || {}).length || q.characters.length;
   const ctot = cports.map(det).reduce((t, d) => ({g: t.g + d.games, r: t.r + d.reached, f: t.f + d.findings.length}), {g: 0, r: 0, f: 0});
   $("cicount").textContent = cports.length ? `${cports.length} ports · ${ctot.g} games · ${ctot.r} reached · ` +
     `${ctot.f} finding${ctot.f === 1 ? "" : "s"}` : "";
   $("citable").innerHTML = cports.length ? `<tr><th>Port</th><th>Games</th><th>clvl ${esc(String(q.config.build_goal || "").replace(/\D/g, ""))}</th>` +
     `<th>Died</th><th>Findings</th><th>Bot notes</th><th>Median clvl</th><th>Coverage</th><th>Now</th></tr>` + cports.map(p => {
-      const d = det(p), n = combos(p), pct = n ? Math.min(100, Math.round(100 * d.played / n)) : 0;
+      const d = det(p), n = combos(p), done = covered(p), pct = n ? Math.min(100, Math.round(100 * done / n)) : 0;
       const live = q.live.find(r => r.queue === "build" && r.platform === p), w = (live && live.status) || {};
       const ftip = d.findings.map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n");
       return `<tr><td>${esc(PORT_NAMES[p] || p)}</td><td>${d.games}</td><td>${d.reached}</td><td>${d.died}</td>` +
         `<td class="${d.findings.length ? "bad" : "ok"}" title="${esc(ftip)}">${d.findings.length ? `${d.findings.length} ⚠` : "0"}</td>` +
         `<td class="dim" title="${esc((d.notes || []).map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n"))}">${(d.notes || []).length}</td>` +
         `<td>${d.median_clvl ?? "–"}</td>` +
-        `<td>${d.played}/${n}<span class="cov" role="img" aria-label="${pct}% of combinations played"><i style="width:${pct}%"></i></span></td>` +
+        `<td>${done}/${n}<span class="cov" role="img" aria-label="${pct}% of combinations played"><i style="width:${pct}%"></i></span></td>` +
         `<td>${live ? `▸ ${esc(cap(live.character))}${w.clvl != null ? ` L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}` : `<span class="dim">–</span>`}</td></tr>`;
     }).join("") : "";
   // Every combination (as M6's grid): a row per combination in cycle order,

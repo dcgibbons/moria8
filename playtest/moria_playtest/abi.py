@@ -65,6 +65,7 @@ CONSTS: dict[str, tuple[str, int]] = {
     "PL_MHP_LO": ("core/6502/player.s", 35),
     "PL_GOLD_0": ("core/6502/player.s", 43),
     "PL_XP_0": ("core/6502/player.s", 46),
+    "PL_MAX_XP_0": ("core/6502/player.s", 111),   # peak experience, what Restore Life Levels gives back
     "PL_MAP_X": ("core/6502/player.s", 49),
     "PL_MAP_Y": ("core/6502/player.s", 50),
     "PL_MAX_DLVL": ("core/6502/player.s", 56),
@@ -74,6 +75,9 @@ CONSTS: dict[str, tuple[str, int]] = {
     "PL_FOOD_LO": ("core/6502/player.s", 51),
     "PL_LIGHT_RAD": ("core/6502/player.s", 55),
     "PL_WEIGHT": ("core/6502/player.s", 59),      # body weight, lb (the character sheet's; the weight limit adds it)
+    "PL_STR_BASE": ("core/6502/player.s", 21),    # 6 contiguous base stats (ST..CH), 3..118 (undrained)
+    "PL_STR_CUR": ("core/6502/player.s", 27),     # 6 contiguous current stats (ST..CH), 3..118 (18/xx = 18 + xx)
+    "PL_CON_CUR": ("core/6502/player.s", 31),     # CON as played, 3..118 (18/xx = 18 + xx): its HP bonus steps (player_con_hp_adj)
     "PL_STRUCT_SIZE": ("core/6502/player.s", 114),
     "MAX_MONSTERS": ("core/6502/monster.s", 32),
     "TIER_DUNGEON_CREATURES": ("core/6502/monster.s", 57),      # dungeon creature rows, tier builds

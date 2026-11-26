@@ -116,6 +116,8 @@ ROTATE_POLL_STEPS = 500   # a Balrog run looks for a newer build this often (new
 # with 25 C64 graduates for 18 slots, 20M-step games (about 40 hours) and two
 # deaths in 2.5 hours, seven waited on (2026-11-15).
 BALROG_SLICE_S = 3 * 3600
+DRAIN_RESTART = 0.10   # a Balrog run this far below the checkpoint it started from restarts from it (drained_restart)
+DRAIN_RESTARTS_PER_HOUR = 2   # then it plays on drained: Warriors drained again within 7 minutes restarted 4 times an hour
 FOCUS_WAIT_S = 30           # a focus character waiting this long is short of a slot, not between two of its games
 FOCUS_YIELD_MIN_S = 15 * 60  # a game outside the focus plays this long before it yields for it
 # The build queue's runs play the default tactics, as the Balrog queue's do
@@ -219,6 +221,42 @@ def keep_victory(run_dir: Path, home: Path, record: dict[str, Any]) -> Path | No
     return None
 
 
+FIGHT_FRAME_MS = 350      # each decision of a Balrog battle in its GIF (keep_fight)
+FIGHT_LAST_MS = 4000      # ... and its last screen (or appended victory screens)
+FIGHT_VICTORY_MARKERS = ("Veni, Vidi, Vici!", "* Total Winner *")
+
+
+def keep_fight(run_dir: Path, home: Path, record: dict[str, Any]) -> Path | None:
+    """A run's Balrog battle (session.record_fight's pictures, every screen
+    while it was in view and the run's last), plus captured crown / summary
+    victory screens when reached, as an animated GIF in ``home``/balrog-fights,
+    <date>-<platform>-<character>-<outcome>.gif
+    (maintainer, 2026-11-24: "fun to replay as an animated gif"). None with
+    no battle, or no PIL to draw it with (the pictures stay in the run)."""
+    frames = sorted(run_dir.glob("w*/balrog_fight/*.png"))
+    if not frames:
+        return None
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    victory: list[Path] = []
+    if record.get("outcome") == "reached":
+        for text in sorted(run_dir.glob("w*/victory/*.txt")):
+            picture = text.with_suffix(".png")
+            body = text.read_text(errors="replace")
+            if picture.exists() and any(m in body for m in FIGHT_VICTORY_MARKERS):
+                victory.append(picture)
+    stamp = time.strftime("%Y%m%d-%H%M", time.localtime(frames[-1].stat().st_mtime))
+    kept = home / "balrog-fights" / f"{stamp}-{record.get('platform')}-{record.get('character')}-{record.get('outcome')}.gif"
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    images = [Image.open(p).convert("RGB") for p in frames + victory]
+    durations = ([FIGHT_FRAME_MS] * len(frames) + [FIGHT_LAST_MS] * len(victory)
+                 if victory else [FIGHT_FRAME_MS] * (len(images) - 1) + [FIGHT_LAST_MS])
+    images[0].save(kept, save_all=True, append_images=images[1:], duration=durations, loop=0, optimize=True)
+    return kept
+
+
 def now() -> float:
     return round(time.time(), 1)
 
@@ -272,6 +310,19 @@ def game_changed(old: str, new: str) -> bool:
     except (RuntimeError, OSError, subprocess.SubprocessError):
         return True
     return any(n and not n.startswith(NOT_GAME) and not ("/" not in n and n.endswith(".md")) for n in names)
+
+
+def fast_forward(upstream: str) -> str | None:
+    """Fast-forward HEAD to ``upstream``; None when it did, else git's reason.
+    The working tree's own changes stay: the bot comes from them (maintainer,
+    2026-11-23: "have the playtesting logic come from the working branch"),
+    and git refuses only when an incoming commit would overwrite one. A
+    clean tree was required until then, the bot's changes and the local
+    queue.json kept it dirty, and the build queue stayed on v2.0.0 when
+    c93302c came (C64 Balrog, 2026-11-23)."""
+    done = subprocess.run(["git", "merge", "--ff-only", "--quiet", upstream], cwd=ROOT,
+                          capture_output=True, text=True, timeout=120)
+    return None if done.returncode == 0 else (done.stderr.strip().splitlines() or ["refused"])[-1]
 
 
 def tree_state() -> dict[str, Any]:
@@ -357,6 +408,67 @@ def snapshot_build(platforms: list[str], source: str = "commit", home: Path = HO
     return build_id
 
 
+BOT_MARK = "-bot-"   # a build id's bot part: <game build>-bot-<bot snapshot>
+
+
+def snapshot_bot(home: Path = HOME) -> str:
+    """The working tree's playtest/ as it stands, edits and new files
+    included, copied to ``home``/bots/<hash> and made the bot every new run
+    plays (bot.json; ``python -m moria_playtest.queue bot``). The bot comes
+    from the working branch, the game from commits alone (maintainer,
+    2026-11-23: "have the playtesting logic come from the working branch,
+    and you can self-manage that. ONLY the build queue etc should come off
+    of game commits")."""
+    files = sorted(f for f in git("ls-files", "-co", "--exclude-standard", "-z", "playtest").split("\0")
+                   if f and "__pycache__" not in f and (ROOT / f).is_file())
+    digest = hashlib.sha256()
+    for name in files:
+        digest.update(name.encode() + b"\0" + (ROOT / name).read_bytes())
+    bot_id = digest.hexdigest()[:10]
+    out = home / "bots" / bot_id
+    if not out.is_dir():
+        part = out.with_name(bot_id + f".partial{os.getpid()}")
+        shutil.rmtree(part, ignore_errors=True)
+        for name in files:
+            (part / name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / name, part / name)
+        part.replace(out)
+    write_json(home / "bot.json", {"id": bot_id, "made": now(), "files": len(files)})
+    return bot_id
+
+
+def with_bot(build_id: str | None, home: Path = HOME) -> str | None:
+    """``build_id``'s game with the current bot (bot.json): a build of its
+    own, ``<game>-bot-<bot>``, its game files linked from the game build and
+    playtest/ the bot snapshot's, so a run, a Balrog start and its brain
+    check take it as any build. The game build itself with no bot made."""
+    bot = (read_json(home / "bot.json") or {}).get("id")
+    if not build_id or not bot:
+        return build_id
+    game = build_id.split(BOT_MARK)[0]
+    combined = f"{game}{BOT_MARK}{bot}"
+    out = home / "builds" / combined
+    if (out / "build.json").is_file():
+        return combined
+    source, bots = home / "builds" / game, home / "bots" / bot / "playtest"
+    meta = build_meta(game, home)
+    if not meta or not bots.is_dir():
+        return build_id
+    part = out.with_name(combined + f".partial{os.getpid()}")
+    shutil.rmtree(part, ignore_errors=True)
+    part.mkdir(parents=True)
+    for entry in source.iterdir():
+        if entry.name == "playtest":
+            shutil.copytree(bots, part / "playtest", copy_function=os.link)
+        elif entry.name != "build.json":
+            (part / entry.name).symlink_to(entry.resolve())
+    made = (read_json(home / "bot.json") or {}).get("made") or 0
+    # "built" stays the game's: builds order by game, then bot (build_order).
+    write_json(part / "build.json", {**meta, "id": combined, "game": game, "bot": bot, "bot_made": made})
+    part.replace(out)
+    return combined
+
+
 BRAIN_MODULES = ("brain.py", "magic.py", "view.py")   # the modules a saved brain's pickle names
 
 
@@ -364,13 +476,20 @@ def build_meta(build_id: str, home: Path = HOME) -> dict[str, Any]:
     return read_json(home / "builds" / build_id / "build.json") or {}
 
 
+def build_order(meta: dict[str, Any]) -> tuple[float, float]:
+    """How new a build is: its game's build time, then its bot's. A bot
+    build's own time once lifted a November 19 main-queue game, with the
+    new bot, over the build queue's (C64 Balrog, 2026-11-23)."""
+    return (meta.get("built") or 0, meta.get("bot_made") or 0)
+
+
 def newer_build(build: str, platform: str, home: Path = HOME) -> str | None:
     """A build made after ``build`` that has ``platform``: the service's
     main-queue snapshot or the build queue's, as ``Service.newest_build``
     picks a Balrog run's. None when ``build`` is the newest."""
     service = read_json(home / "service.json") or {}
-    mine = build_meta(build, home).get("built") or 0
-    found = [(meta.get("built") or 0, b) for b in (service.get("build"), service.get("build_queue_build"))
+    mine = build_order(build_meta(build, home))
+    found = [(build_order(meta), b) for b in (service.get("build"), service.get("build_queue_build"))
              if b and b != build and platform in (meta := build_meta(b, home)).get("platforms", [])]
     later = [f for f in found if f[0] > mine]
     return max(later)[1] if later else None
@@ -920,7 +1039,10 @@ def kit(brain: Any) -> dict[str, Any]:
 
 
 USE_PROMPT = re.compile(r"^(\w+) which ")   # "Quaff which potion (a-i)?": the game's item prompt
-USE_VERBS = frozenset({"Wear", "Read", "Aim", "Quaff", "Throw", "Use", "Study", "Recharge"})   # not Drop, Identify
+USE_VERBS = frozenset({"Wear", "Read", "Aim", "Quaff", "Throw", "Use", "Study", "Recharge", "Fire", "Eat"})   # not Drop, Identify
+BOOK_PROMPTS = {"Spell book": ("Spellbook ", "Cast"), "Prayer book": ("Holy Book of Prayers ", "Pray")}   # book: "the book X"
+FIRED = (("Crossbow", "Bolt"), ("Bow", "Arrow"), ("Sling", "Rock"))   # a launcher's ammunition: the game picks it, no prompt
+FIRED_SHOT = re.compile(r"\b(Iron Shot|Rock|Bolt|Arrow)")   # named in the messages the shot brings
 ITEM_DETAIL = re.compile(r"\s*(?:\((?:[+-]?\d+(?:,[+-]?\d+)?|\d+ (?:turns|charges))\)|\[[^\]]*\])")
 
 
@@ -938,6 +1060,7 @@ def features(trace: Path) -> dict[str, Any]:
     layers: dict[str, int] = {}
     uses: dict[str, dict[str, int]] = {}
     verb = None
+    fired: str | None = None
     try:
         with gzip.open(trace, "rt") as handle:
             for line in handle:
@@ -947,12 +1070,35 @@ def features(trace: Path) -> dict[str, Any]:
                     break
                 layer = decision.get("layer") or "?"
                 layers[layer] = layers.get(layer, 0) + 1
-                prompt = USE_PROMPT.match(decision.get("msg") or "")
+                msg = decision.get("msg") or ""
+                prompt = USE_PROMPT.match(msg)
+                book = next((kind for kind in BOOK_PROMPTS if msg.startswith(kind)), None)
                 if prompt:
                     verb = prompt.group(1)
+                elif book:
+                    verb = book
                 elif layer != "prompt":
                     verb = None
                 reason = decision.get("reason") or ""
+                if fired is not None:
+                    # The shot's ammunition, as the messages after it name it,
+                    # else the launcher's kind (a sling's Rock or Iron Shot).
+                    named = FIRED_SHOT.search(msg)
+                    ammo = named.group(1) if named and (named.group(1) in ("Rock", "Iron Shot")) == (fired == "Rock") \
+                        else fired
+                    counts = uses.setdefault(ammo, {})
+                    counts["Fire"] = counts.get("Fire", 0) + 1
+                    fired = None
+                if layer == "shoot" and reason.startswith("fire the "):
+                    launcher = reason[len("fire the "):].split(" at ")[0]
+                    fired = next((ammo for kind, ammo in FIRED if kind in launcher), None)
+                if layer == "prompt" and verb in BOOK_PROMPTS and reason.startswith("the book "):
+                    # Cast or prayed from: the book's pick ("Spell book (a-c)?").
+                    prefix, use = BOOK_PROMPTS[verb]
+                    counts = uses.setdefault(prefix + reason[len("the book "):].strip(), {})
+                    counts[use] = counts.get(use, 0) + 1
+                    verb = None
+                    continue
                 if layer == "prompt" and reason.startswith("pick ") and verb in USE_VERBS:
                     counts = uses.setdefault(item_name(reason[5:]), {})
                     counts[verb] = counts.get(verb, 0) + 1
@@ -1608,6 +1754,7 @@ class Service:
         self.build_state: dict[str, Any] = {}
         self.last_fetch = 0.0
         self.last_sweep = 0.0
+        self.drain_restarts: dict[str, list[float]] = {}   # character -> when drained_restart ended its runs
         self.stopping = False
         self.log_lines: list[str] = []
         self.backoff: dict[str, float] = {}   # platform (build/<platform>) -> time a stale build may be retried
@@ -1663,11 +1810,15 @@ class Service:
             ahead = int(git("rev-list", "--count", f"{upstream}..HEAD"))
             state.update({"head": tree["commit"], "dirty": tree["dirty"], "contained": contained,
                           "behind": behind, "ahead": ahead})
-            if behind and contained and not tree["dirty"]:
-                git("merge", "--ff-only", "--quiet", upstream)
-                self.log(f"fast-forwarded to {upstream} ({behind} commits)")
-                state.update({"head": git("rev-parse", "HEAD"), "behind": 0})
-                tree = tree_state()
+            if behind and contained:
+                refused = fast_forward(upstream)
+                if refused is None:
+                    self.log(f"fast-forwarded to {upstream} ({behind} commits)")
+                    state.update({"head": git("rev-parse", "HEAD"), "behind": 0})
+                    tree = tree_state()
+                elif state.get("ff_refused") != refused:
+                    self.log(f"fast-forward to {upstream} refused: {refused}")
+                state["ff_refused"] = refused
             current = build_meta(self.build_id, self.home) if self.build_id else {}
             # The Balrog queue's ports too: it plays this build when newest.
             ports = sorted(set(self.config["platforms"]) | set(self.config.get("balrog_platforms") or []))
@@ -1677,7 +1828,7 @@ class Service:
                 source = "tree" if tree["dirty"] or rebuild else "commit"
                 (self.home / "rebuild").unlink(missing_ok=True)
                 self.log(f"building {tree['commit'][:12]} ({source}) for {', '.join(ports)}")
-                self.build_id = snapshot_build(ports, source, self.home)
+                self.build_id = with_bot(snapshot_build(ports, source, self.home), self.home)
                 self.log(f"playing build {self.build_id}")
         except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
             state["error"] = str(exc)[-2000:]
@@ -1686,6 +1837,21 @@ class Service:
         state["playing"] = meta
         state["stale_build"] = bool(meta) and meta.get("commit") != state.get("head")
         self.build_state = state
+
+    def refresh_bot(self) -> None:
+        """A new bot snapshot (``snapshot_bot``): the main and build queues'
+        builds become their games with it, the build queue's coverage going
+        on (the same game), and Balrog runs hand over at their next town
+        visit as for a newer build (``newer_build``)."""
+        build, ci = with_bot(self.build_id, self.home), with_bot(self.ci_build, self.home)
+        if build != self.build_id:
+            self.log(f"bot: main build {build}")
+            self.build_id = build
+        if ci != self.ci_build:
+            self.log(f"bot: build queue plays {ci}, coverage goes on")
+            self.buildq.carry(self.ci_build, ci)
+            self.buildq.save()
+            self.ci_build = ci
 
     def refresh_ci(self) -> None:
         """The build queue's build: HEAD's commit for every port in
@@ -1709,14 +1875,14 @@ class Service:
                 # bot, while each port's coverage of the game goes on.
                 old = self.ci_build
                 self.log(f"build queue: {head[:12]} changes no game file: building it, coverage goes on")
-                self.ci_build = snapshot_build(platforms, "commit", self.home)
+                self.ci_build = with_bot(snapshot_build(platforms, "commit", self.home), self.home)
                 self.buildq.carry(old, self.ci_build)
                 self.buildq.save()
                 state["game_unchanged"] = head
                 self.log(f"build queue: playing build {self.ci_build}")
             elif current.get("commit") != head or not ported:
                 self.log(f"build queue: building {head[:12]} for {', '.join(platforms)}")
-                self.ci_build = snapshot_build(platforms, "commit", self.home)
+                self.ci_build = with_bot(snapshot_build(platforms, "commit", self.home), self.home)
                 self.log(f"build queue: playing build {self.ci_build}")
         except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
             state["error"] = str(exc)[-2000:]
@@ -1806,6 +1972,12 @@ class Service:
                     self.log(f"victory screen kept: {kept.name}")
             except OSError as exc:   # the win stands without its picture
                 self.log(f"victory screen not kept for {run_id}: {exc}")
+            try:
+                fight = keep_fight(run_dir, self.home, record)
+                if fight is not None:
+                    self.log(f"Balrog battle kept: {fight.name}")
+            except Exception as exc:   # noqa: BLE001 - the run stands without its replay
+                self.log(f"Balrog battle not kept for {run_id}: {exc}")
             if job["queue"] == "main":
                 if job["goal"] == queue.goal and job.get("epoch", "") == queue.epoch:
                     queue.finish(record, self.config["retry_cap"], parallel=bool(job.get("parallel")))
@@ -1896,6 +2068,35 @@ class Service:
         self.log(f"balrog queue: stop {len(hit)} runs of {', '.join(sorted(names))}")
         for run_id in hit:
             self.stop_run(run_id)
+
+    def drained_restart(self) -> None:
+        """A Balrog run drained DRAIN_RESTART below the checkpoint it started
+        from ends, and the character starts again from that checkpoint, its
+        experience whole: restoring it costs hours of town trips and Restore
+        Life Levels (maintainer, 2026-11-23: "just kill it and reload from
+        snapshot so we aren't wasting time with it"; a clvl 40 Half-Elf
+        Priest at 5.24M of its checkpoint's 6.63M). Only from a status the run
+        wrote itself, and from the experience it first showed: a checkpoint's
+        record is its maximum, and one saved drained (an Elf Ranger's 710,154
+        of 800,130) restarted three times in ten minutes (same day)."""
+        for run_id, job in list(self.running.items()):
+            if job["queue"] != "balrog" or job.get("cancelled") or not (job.get("resume") or {}).get("xp"):
+                continue
+            status = next((read_json(p) for p in sorted((self.home / "runs" / run_id).glob("status-w*.json"))), None)
+            if not status or (status.get("updated") or 0) <= (job.get("started") or 0) or status.get("xp") is None:
+                continue
+            xp = status["xp"]
+            if job.get("first_xp") is None:
+                job["first_xp"] = xp
+                self.save_running()
+                continue
+            start = job["first_xp"]
+            recent = [t for t in self.drain_restarts.get(job["character"], []) if t > time.time() - 3600]
+            if xp < start * (1 - DRAIN_RESTART) and len(recent) < DRAIN_RESTARTS_PER_HOUR:
+                self.drain_restarts[job["character"]] = [*recent, time.time()]
+                self.log(f"balrog queue: {run_id} drained to {xp:,} of its checkpoint's {start:,}: "
+                         f"it starts again from the checkpoint")
+                self.stop_run(run_id)
 
     def balrog_focus(self) -> tuple[tuple[str, ...], int]:
         """(characters, shared slots) of the Balrog focus: those named
@@ -2235,7 +2436,7 @@ class Service:
         """The newest build with ``platform``: the main queue's or the build
         queue's (HEAD's commit), by when it was made."""
         builds = [(build_meta(b, self.home), b) for b in (self.build_id, self.ci_build) if b]
-        made = [(meta.get("built") or 0, b) for meta, b in builds if platform in meta.get("platforms", [])]
+        made = [(build_order(meta), b) for meta, b in builds if platform in meta.get("platforms", [])]
         return max(made)[1] if made else None
 
     def start_balrog(self) -> bool:
@@ -2372,6 +2573,7 @@ class Service:
             if start_dir.name not in kept_starts:
                 shutil.rmtree(start_dir, ignore_errors=True)
                 self.log(f"retention: removed Balrog start {start_dir.name}")
+        kept_builds |= {b.split(BOT_MARK)[0] for b in kept_builds if b}   # a bot build's game files are links
         for build in (self.home / "builds").glob("*"):
             if build.is_dir() and build.name not in kept_builds and ".partial" not in build.name:
                 shutil.rmtree(build, ignore_errors=True)
@@ -2395,8 +2597,10 @@ class Service:
         self.refresh_build()
         self.restart_balrog()
         self.stop_balrog()
+        self.drained_restart()
         self.balrog_yield()
         self.refresh_ci()
+        self.refresh_bot()
         self.finish_subs(subs)
         subs = {name: sub for name, sub in subs.items() if not sub.get("done")}
         if not self.stopping:
@@ -2497,6 +2701,7 @@ def main(argv: list[str] | None = None) -> int:
     report = sub.add_parser("report", help="print a subqueue's report (an A/B subqueue's comparison)")
     report.add_argument("--name", required=True)
     sub.add_parser("status", help="print the main queue and subqueues")
+    sub.add_parser("bot", help="snapshot the working tree's playtest/ as the bot new runs play")
     stop = sub.add_parser("stop-balrog", help="end these characters' live Balrog runs now")
     stop.add_argument("--characters", required=True, help='comma-separated "character" or "platform/character"')
     rebuild = sub.add_parser("rebuild", help="play this working tree as it stands from the next run on")
@@ -2532,6 +2737,10 @@ def main(argv: list[str] | None = None) -> int:
         names = [c.strip() for c in args.characters.split(",") if c.strip()]
         write_json(HOME / "stop-balrog", names)
         print(f"the queue service ends the live Balrog runs of {', '.join(names)} on its next tick")
+        return 0
+    if args.command == "bot":
+        bot_id = snapshot_bot()
+        print(f"bot {bot_id}: new runs play it; Balrog runs hand over at their next town visit")
         return 0
     if args.command == "rebuild":
         HOME.mkdir(parents=True, exist_ok=True)
