@@ -2001,6 +2001,8 @@ def scenario_town_store_buy_sell(
         cli.write_mem(syms["inv_to_ac"] + pm_idx, b"\x00")
 
         # Walk from (27, 6) -> (27, 7) -> (32, 7) -> (32, 17) -> (39, 17) -> (39, 16) into Black Market '7'
+        # Clear any MON-039 ambient wanderer spawned during earlier store haggling before blind _walk_steps.
+        _clear_all_monsters(cli, syms)
         # Also verify 24-bit carry across 65,536 GP in ovl_town_add_p1_bonus on Black Market slot 0
         bm_slot0 = 6 * 16
         cli.write_mem(syms["si_item_id"] + bm_slot0, bytes([93]))      # Amulet of the Magi (Page 1)
@@ -2049,6 +2051,7 @@ def scenario_town_store_buy_sell(
 
         # Verify Weaponsmith (store 2) & Magic Shop (store 5) generate diverse category stock (ovl_town_check_cat preserves DE)
         # Black Market at (39, 16) -> Magic Shop at (27, 16) -> Weaponsmith at (39, 6)
+        _clear_all_monsters(cli, syms)
         _walk_steps(cli, "j" + "h" * 12 + "k")
         assert cli.read_z80_state()["current_overlay"] == OVL_TOWN
         mag_lines, _ = cli.screen_lines()
@@ -2064,6 +2067,7 @@ def scenario_town_store_buy_sell(
         cli.send_keys("q")
         cli.run_idle()
 
+        _clear_all_monsters(cli, syms)
         _walk_steps(cli, "j" + "l" * 5 + "k" * 10 + "l" * 7 + "k")
         assert cli.read_z80_state()["current_overlay"] == OVL_TOWN
         wep_lines, _ = cli.screen_lines()
@@ -4437,6 +4441,37 @@ def scenario_monster_ai_combat_and_drops(
         assert m_after[1] < px + 3 or m_after[2] != py, f"Awake monster did not step toward player: {m_after}"
         assert (_get_map_tile(cli, m_after[1], m_after[2]) & 0x01) != 0, "Monster AI failed to set new FLAG_OCCUPIED"
 
+        # Regression (MON-043): low-HP monster (HP=1) with non-zero reserved bytes 10..11 must NOT flee, and must melee player
+        _clear_all_monsters(cli, syms)
+        _write_mem(cli, syms["abi_rng_seed"], [0x11, 0x22, 0x33, 0x44])
+        _set_map_tile(cli, px + 1, py, 0x0C | 0x01)
+        _write_mem(cli, syms["cr_speed"] + cr_t, [1])
+        _write_mem(cli, syms["cr_mflags"] + cr_t, [0])
+        _write_mem(cli, syms["cr_spell_flags"] + cr_t, [0])
+        _write_mem(cli, syms["cr_spell_chance"] + cr_t, [0])
+        _write_mem(cli, syms["cr_atk0_type"] + cr_t, [1])
+        _write_mem(cli, syms["cr_atk0_dice"] + cr_t, [2])
+        _write_mem(cli, syms["cr_atk0_sides"] + cr_t, [6])
+        _write_mem(cli, syms["cr_atk1_type"] + cr_t, [0])
+        _write_mem(cli, syms["cr_atk2_type"] + cr_t, [0])
+        _write_mem(cli, syms["cr_atk3_type"] + cr_t, [0])
+        _write_mem(cli, syms["cr_level"] + cr_t, [60])
+        _write_mem(cli, syms["eff_invuln_timer"], [0])
+        _write_mem(cli, syms["zp_eff_poison"], [0])
+        _write_mem(cli, syms["player_data"] + 33, [200, 0, 200, 0])
+        _write_mem(cli, syms["abi_player_hp"], [200, 0, 200, 0])
+        _write_mem(cli, syms["monster_table"], [px + 1, py, cr_t, 1, 0, 0x09, 0, 0, 0, 0, 0xFF, 0x7F])
+        _write_mem(cli, syms["zp_mon_count"], [1])
+        _write_mem(cli, syms["abi_mon_count"], [1])
+        cli.send_keys("5")
+        cli.run_idle()
+        _dismiss_more(cli)
+        m_low = _read_monster_slots(cli, syms)[0]
+        assert (m_low[1], m_low[2]) == (px + 1, py), (
+            f"MON-043 low-HP monster fled instead of holding ground: {m_low}"
+        )
+        assert cli.read_z80_state()["hp"] < 200, "MON-043 adjacent low-HP monster failed to melee player"
+
         # Regression: CF_GROUP (0x20) wake preserves BC across _mc_cheb_dist_hl_de & wakes nearby groupmate
         _clear_all_monsters(cli, syms)
         _set_map_tile(cli, px + 1, py, 0x0C | 0x01)
@@ -5751,6 +5786,7 @@ def scenario_items_potions_scrolls_wands_staves(
         assert (cli.read_mem(syms["fi_meta_hi"] + 1, 1)[0] & 0x3F) == 48, "Wand of Disarm altered fi_meta_hi ego"
 
         # 7. Regression: Wand of Haste Monster & Staff of Slow Monsters set MX_SPEED_CNT properly
+        _write_mem(cli, syms["cr_cdefense"] + cr_t, [0])
         _write_mem(cli, syms["cr_atk0_type"] + cr_t, [0])
         _write_mem(cli, syms["cr_spell_chance"] + cr_t, [0])
         _set_map_tile(cli, px + 1, py, 0x0C | 0x01)

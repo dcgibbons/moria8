@@ -23,7 +23,7 @@ compendium, and platform gameplay previews.
 | Acorn BBC Master 128 | Released ([notes](docs/release_notes/release_notes-v2.0.0.md)) | [moria8-bbcmaster-v2.0.0.ssd](https://github.com/dcgibbons/moria8/releases/download/v2.0.0/moria8-bbcmaster-v2.0.0.ssd) |
 | Commodore PET | Unlikely | |
 | Commodore VIC-20 | Unlikely | |
-| CP/M (Z80) | Planned | |
+| CP/M (Z80) | In Progress | |
 | MSX | Planned | |
 | Nintendo Entertainment System | Planned | |
 | ZX Spectrum | Planned | |

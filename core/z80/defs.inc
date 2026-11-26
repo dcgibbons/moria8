@@ -631,8 +631,8 @@ MX_SPEED_CNT        EQU 6
 MX_SLEEP_CUR        EQU 7
 MX_STUN             EQU 8
 MX_CONFUSE          EQU 9
-MX_FLEE_LO          EQU 10
-MX_FLEE_HI          EQU 11
+MX_RESERVED_0       EQU 10      ; Reserved (unused; keeps 12-byte record & Save Format V2)
+MX_RESERVED_1       EQU 11      ; Reserved (unused; keeps 12-byte record & Save Format V2)
 
 ; Live monster MX_FLAGS bits
 MF_AWAKE            EQU 0x01

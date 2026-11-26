@@ -63,7 +63,7 @@
     ASSERT MX_X == 0 && MX_Y == 1 && MX_TYPE == 2, "MX head"
     ASSERT MX_HP_LO == 3 && MX_HP_HI == 4 && MX_FLAGS == 5, "MX hp/flags"
     ASSERT MX_SPEED_CNT == 6 && MX_SLEEP_CUR == 7 && MX_STUN == 8, "MX sleep/stun"
-    ASSERT MX_CONFUSE == 9 && MX_FLEE_LO == 10 && MX_FLEE_HI == 11, "MX flee"
+    ASSERT MX_CONFUSE == 9 && MX_RESERVED_0 == 10 && MX_RESERVED_1 == 11, "MX reserved"
     ASSERT MF_AWAKE == 0x01 && TILE_FLOOR == 0x00 && MD_QUEUE_MAX == 4, "defs"
     ASSERT abi_player_y == (abi_player_x + 1), "abi_player_x/y"
     ASSERT ms_spawn_y == (ms_spawn_x + 1) && mfa_y == (mfa_x + 1), "spawn/mfa pairs"
@@ -399,13 +399,9 @@ monster_spawn_one:
     INC  HL
     LD   (HL), A                ; MX_CONFUSE
     INC  HL
-    SRL  D
-    RR   E
-    SRL  D
-    RR   E
-    LD   (HL), E                ; MX_FLEE_LO
+    LD   (HL), A                ; MX_RESERVED_0
     INC  HL
-    LD   (HL), D                ; MX_FLEE_HI
+    LD   (HL), A                ; MX_RESERVED_1
 
     LD   BC, (ms_spawn_x)
     LD   A, FLAG_OCCUPIED

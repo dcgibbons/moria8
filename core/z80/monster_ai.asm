@@ -264,16 +264,7 @@ _mai_process_one:
     DJNZ .rand_lp
 
 .no_rand:
-    ; CF=0 -> flee (HP < flee), CF=1 -> chase
-    LD   A, (IX + MX_HP_LO)
-    SUB  (IX + MX_FLEE_LO)
-    LD   A, (IX + MX_HP_HI)
-    SBC  A, (IX + MX_FLEE_HI)
-    LD   A, 1
-    JR   C, .move_dir           ; HP < flee -> flee (A=1)
-    DEC  A                      ; HP >= flee -> chase (A=0)
-.move_dir:
-    CALL _mai_move_dir
+    CALL _mai_move_toward
     JR   NC, .writeback
     LD   A, 0x83
     JR   .set_act_wb
@@ -492,10 +483,9 @@ _mai_can_cast:
 ; Unified Toward / Away / Random Movement
 ; ============================================================================
 
-; _mai_move_dir — A=0 chase, A=1 flee. Output: CF=1 moved/attacked.
-; Keeps E = sign_dx, D = sign_dy across diagonal / H / V trials.
-_mai_move_dir:
-    LD   (_mai_fleeing), A
+; _mai_move_toward — Step toward player (diagonal first, randomized H/V fallback).
+; Output: CF=1 moved/attacked. Keeps E = sign_dx, D = sign_dy across trials.
+_mai_move_toward:
     LD   BC, (zp_mon_x)
     LD   A, (abi_player_x)
     CALL _mai_sgn_c
@@ -504,40 +494,21 @@ _mai_move_dir:
     LD   C, B
     CALL _mai_sgn_c
     LD   D, A
-    LD   A, (_mai_fleeing)
-    OR   A
-    JR   Z, .signs_ok
-    LD   A, E
-    NEG
-    LD   E, A
-    LD   A, D
-    NEG
-    LD   D, A
-.signs_ok:
-    LD   A, E
-    OR   D
-    JR   Z, .done_ret
+    OR   E
+    RET  Z
     CALL _mai_try_delta
-    JR   C, .done_ret
-    LD   A, (_mai_fleeing)
-    OR   A
-    JR   NZ, .h_first
+    RET  C
     CALL rng_next_u8
     AND  1
     JR   NZ, .v_first
 .h_first:
     CALL _mai_try_h
-    JR   C, .done_ret
-    CALL _mai_try_v
-    JR   .done_ret
+    RET  C
+    JP   _mai_try_v
 .v_first:
     CALL _mai_try_v
-    JR   C, .done_ret
-    CALL _mai_try_h
-.done_ret:
-    LD   HL, _mai_fleeing
-    LD   (HL), 0                ; preserves CF!
-    RET
+    RET  C
+    JP   _mai_try_h
 
 _mai_sgn_c:
     CP   C
@@ -605,10 +576,6 @@ monster_try_step:
 
     CALL _mc_is_player_bc
     JR   NZ, .not_player
-
-    LD   A, (_mai_fleeing)
-    OR   A
-    JR   NZ, .blocked
 
     CALL _mai_check_glyph_at
     JR   C, .blocked

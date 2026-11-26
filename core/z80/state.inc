@@ -951,7 +951,6 @@ _muv_old_flags:         DS 1
 _mai_stealth:           DS 1
 _mai_moves:             DS 1
 _mai_scene_dirty:       DS 1
-_mai_fleeing:           DS 1
 _mai_old_x:             DS 1
 _mai_old_y:             DS 1
 _mai_tgt_x:             DS 1
