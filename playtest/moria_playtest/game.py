@@ -31,16 +31,19 @@ STACK_PAGE = 0x0100
 PAL_CYCLES_PER_SECOND = C64.cycles_per_second
 
 KEY_RETURN = 0x0D
-ITEM_PROMPT = re.compile(r"which (?:item|potion|scroll|food|wand|staff) \(a-")   # "Quaff which potion (a-c)?"
-# Spells and prayers (core/huffman_data.s PM_YOU_PRAY/PM_YOU_CAST/IGS_PROMPT,
+ITEM_PROMPT = re.compile(
+    r"(?:which (?:item|potion|scroll|food|wand|staff|book)\?? \(a-|Which item\? \(a-[a-v], \?-list)"
+)   # "Quaff which potion (a-c)?" or CP/M "Wear which item (a-v)? (a-c, ?-list) "
+# Spells and prayers (core/6502/huffman_data.s PM_YOU_PRAY/PM_YOU_CAST/IGS_PROMPT,
 # PM_FOOTER_PRAY/PM_FOOTER_CAST): book choice, spell choice, and the "?" list.
-SPELL_BOOK_PROMPT = re.compile(r"^(?:Prayer book|Spell book|Study which book) \(a-")
-SPELL_WHICH_PROMPT = re.compile(r"^(?:Pray|Cast) which\? \(a-", re.I)
-SPELL_LIST_TITLES = ("Prayer Book", "Mage Book")   # core/player_magic_select_overlay.s
+SPELL_BOOK_PROMPT = re.compile(r"^(?:Prayer book|Spell book|Study which book|Use which (?:spell|prayer) book\?) \(a-")
+SPELL_WHICH_PROMPT = re.compile(r"^(?:Pray|Cast|Recite) which(?: (?:spell|prayer))?\?? \(a-", re.I)
+SPELL_LIST_TITLES = ("Prayer Book", "Mage Book")   # core/6502/player_magic_select_overlay.s
 SPELL_LEARN_TITLE, SPELL_LEARN_PROMPT = "Study", "Learn which? (a-"   # the Mage-book Study list (M5d)
+SPELL_LEARN_PROMPT_RE = re.compile(r"^Learn which spell \(a-")
 KEY_SPACE = 0x20
 KEY_RUNSTOP = 0x03
-GENOCIDE_PROMPT = "Type?"   # eff_genocide (core/player_magic_execute_overlay.s): the letter to wipe out
+GENOCIDE_PROMPT = "Type?"   # eff_genocide (core/6502/player_magic_execute_overlay.s): the letter to wipe out
 
 
 class Mode(str, Enum):
@@ -51,12 +54,13 @@ class Mode(str, Enum):
     DIRECTION = "DIRECTION"   # get_direction_target (added for M2 doors)
     STORE = "STORE"           # store screen (ui_store.s): menu and buy prompts
     ITEM = "ITEM"             # "Wear which item (a-v)?" and its "?" item list (M3 round 13)
-    SPELL = "SPELL"           # book prompt, "Pray which?" and its "?" list (core/player_magic.s, M5b)
+    SPELL = "SPELL"           # book prompt, "Pray which?" and its "?" list (core/6502/player_magic.s, M5b)
     GENOCIDE = "GENOCIDE"     # Genocide's "Type?": a creature letter, removed from the level (2026-11-05)
+    LOOK = "LOOK"             # CP/M interactive look cursor (ovl_ui_look)
     UNKNOWN = "UNKNOWN"
 
 
-# Store prompts (core/ui_store.s), checked in order; the menu is the default.
+# Store prompts (core/6502/ui_store.s), checked in order; the menu is the default.
 STORE_STAGES = (
     ("buy_confirm", "Buy? (Y/N)"),
     ("buy_which", "Buy which item?"),
@@ -173,6 +177,8 @@ def genocide_prompt(obs: Observation, abi: Abi) -> bool:
     under the read prompt it came from. Its key wait is eff_genocide's own
     (the return is its ``jsr hal_input_get_key``, +10), so a "Type?" left on
     the screen under a later prompt is not taken for it."""
+    if obs.rows[0].strip().startswith("Which type of monster?"):
+        return True
     if GENOCIDE_PROMPT not in (obs.rows[0].strip(), obs.rows[1].strip()):
         return False
     starts = abi.all_symbols.get("eff_genocide") or []
@@ -190,7 +196,7 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
     handle yet; they stay UNKNOWN (cancelled) but are labelled.
     """
     screen = "\n".join(obs.rows)
-    if "* You have died *" in screen or "* Total Winner *" in screen:
+    if "* You have died *" in screen or "* Total Winner *" in screen or "Rest In Peace" in screen:
         return Mode.DEATH, "tombstone"
     if obs.game_flags & abi.GAME_FLAG_OVER and "Disk Setup" in obs.rows[0]:
         return Mode.DEATH, "disk_setup"  # score save asks for a save drive
@@ -204,7 +210,7 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
             return Mode.COMMAND, "command"
         if any("LV:" in row and "DL:" in row for i, row in enumerate(obs.rows) if i != status_row):
             return Mode.UNKNOWN, "status_row_shifted"
-    if "-more-" in obs.rows[0] or "-more-" in obs.rows[1]:
+    if any(marker in row for row in obs.rows[:2] for marker in ("-more-", "--more--")):
         return Mode.DISMISS, "more"
     if "B)uy  S)ell  Q)uit" in screen:
         for stage, marker in STORE_STAGES:
@@ -222,21 +228,32 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.SPELL, "book"
     if SPELL_WHICH_PROMPT.search(obs.rows[0]):
         return Mode.SPELL, "which"
+    if SPELL_LEARN_PROMPT_RE.search(obs.rows[0]):
+        return Mode.SPELL, "learn_prompt"
     bottom = obs.rows[abi.hal_layout_screen_rows - 1]   # the list's prompt (player_magic_select_overlay.s)
     if obs.rows[0].strip() in SPELL_LIST_TITLES and SPELL_WHICH_PROMPT.search(bottom.strip()):
         return Mode.SPELL, "list"
     if obs.rows[0].strip() == SPELL_LEARN_TITLE and bottom.strip().startswith(SPELL_LEARN_PROMPT):
         return Mode.SPELL, "learn"
+    if "Lv    MP    Fail  Status" in obs.rows[1] and obs.rows[22].strip().startswith("Choose letter (a-"):
+        if any(row.rstrip().endswith("Available") for row in obs.rows[3:22]):
+            return Mode.SPELL, "learn"
+        return Mode.SPELL, "list"
     if genocide_prompt(obs, abi):
         return Mode.GENOCIDE, "type"
+    if obs.rows[0].strip().startswith(("Direction?", "Which direction?")):
+        return Mode.DIRECTION, "direction"
     if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
-    if obs.rows[0].strip() in ("Inventory", "Equipment"):
+    if obs.rows[0].strip() in ("Inventory", "Equipment") or obs.rows[0].startswith("Select an item (a-"):
         # The "?" list at an item prompt (no "Press any key"): Take off's is
         # the equipment's. As Mode.UNKNOWN, a drained clvl 27 Human Priest's
         # take-off for food was cancelled each time and it starved (C64
         # Balrog, 2026-11-21).
         return Mode.ITEM, "list"
+    row0 = obs.rows[0].strip()
+    if row0.startswith(("You (@) are here", "You see ", "Entrance to ")):
+        return Mode.LOOK, "look"
     if obs.game_flags & abi.GAME_FLAG_OVER:
         return Mode.DEATH, "other"
     stage = (resident_prompts or {}).get(obs.ret, "")
@@ -614,14 +631,20 @@ class Game:
 
     # -- seeding ----------------------------------------------------------
 
+    def rng_addr(self) -> int:
+        syms = getattr(self.abi, "all_symbols", None)
+        if syms and "zp_rng_0" in syms:
+            return syms["zp_rng_0"][0]
+        return self.abi.zp_rng_0
+
     def seed_title(self, seed: int) -> None:
         """At the title stop: seed the RNG used by chargen, and arm the new-game reseed."""
         self.seed = seed
-        self.mon.mem_set(self.abi.zp_rng_0, derive_rng(seed, 0), self.ram)
+        self.mon.mem_set(self.rng_addr(), derive_rng(seed, 0), self.ram)
         self.seed_cp = self.mon.checkpoint_set(self.seed_site)
 
     def _apply_seed(self) -> None:
-        self.mon.mem_set(self.abi.zp_rng_0, derive_rng(self.seed, 1), self.ram)
+        self.mon.mem_set(self.rng_addr(), derive_rng(self.seed, 1), self.ram)
         if self.seed_cp is not None:
             self.mon.checkpoint_delete(self.seed_cp)
         self.seed_cp = None

@@ -18,7 +18,7 @@ from .game import KEY_RETURN, KEY_RUNSTOP, KEY_SPACE, GameFault, Mode, Observati
 from .worker import Worker
 
 EXCLUDED = {0xD1, 0xD3, 0x17}
-# PETSCII command keys from core/input_tables.s, plus selection and cancel keys.
+# PETSCII command keys from core/6502/input_tables.s, plus selection and cancel keys.
 COMMAND_KEYS = [k for k in (
     0x4B, 0x4A, 0x48, 0x4C, 0x59, 0x55, 0x42, 0x4E, 0x91, 0x11, 0x9D, 0x1D,
     0x38, 0x32, 0x34, 0x36, 0x37, 0x39, 0x31, 0x33, 0x35,
@@ -98,7 +98,7 @@ class Fuzzer:
             return self.rand.choice(PROMPT_KEYS)  # explore the death flow briefly
         if obs.mode == Mode.DISMISS:
             return KEY_SPACE if self.rand.random() < 0.9 else KEY_RETURN
-        if obs.mode in (Mode.UNKNOWN, Mode.DIRECTION, Mode.ITEM):
+        if obs.mode in (Mode.UNKNOWN, Mode.DIRECTION, Mode.ITEM, Mode.LOOK):
             if self.pending_dir is not None:
                 key, self.pending_dir = self.pending_dir, None
                 return key

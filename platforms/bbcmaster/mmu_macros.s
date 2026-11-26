@@ -1,6 +1,6 @@
 #importonce
 // mmu_macros.s — BBC Master 128 map, BeebAuxData, and BeebHuffData access macros.
-// Required by core/ via -libdir shadowing. Dispatches to memory_bank.s (< $3000).
+// Required by core/6502/ via -libdir shadowing. Dispatches to memory_bank.s (< $3000).
 
 .macro MapRead_ptr0_y() {
     jsr mmu_safe_map_read_ptr0

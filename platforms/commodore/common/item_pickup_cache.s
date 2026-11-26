@@ -17,10 +17,10 @@
 //     or when the pool fills, and topped up (not reset) on level entry / save
 //     resume via item_pickup_cache_prewarm, with incremental floor-only warm on
 //     chest/monster drops via item_pickup_cache_warm_floor.
-//   callers: item_get_weight_x (core/item_tables.s), item_cat_decode_entry_at_dst
-//     (core/item_catalog.s), game_new_start / load_resume_game /
-//     level_change_generate_current (core/game_loop.s), chest_fulfill_loot
-//     (core/chest_loot.s), and port generation invalidation hooks. Hot lookup/
+//   callers: item_get_weight_x (core/6502/item_tables.s), item_cat_decode_entry_at_dst
+//     (core/6502/item_catalog.s), game_new_start / load_resume_game /
+//     level_change_generate_current (core/6502/game_loop.s), chest_fulfill_loot
+//     (core/6502/chest_loot.s), and port generation invalidation hooks. Hot lookup/
 //     insert callers may arrive with any overlay at $E000 or from banked runtime
 //     at $F000, so hot code and cursor BSS stay resident below MAP_BASE.
 //

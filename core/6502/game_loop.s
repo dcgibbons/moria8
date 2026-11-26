@@ -10,7 +10,7 @@
 #import "generation_busy_api.s"
 #import "platform_services_api.s"
 #import "input_ui_helpers.s"
-#import "../platforms/shared/item_catalog/item_ids.s"
+#import "../../platforms/shared/item_catalog/item_ids.s"
 
 // MsgPrintStr — Print a NUL-terminated message string through zp_ptr0.
 // On Apple II the string may live in AUX (platform-externalized strings);

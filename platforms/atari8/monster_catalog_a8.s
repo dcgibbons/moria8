@@ -1,6 +1,6 @@
 #importonce
 // monster_catalog_a8.s — The Atari 8-bit monster catalog as disk records
-// (docs/MONSTER_CATALOG_DESIGN.md "Atari 8-bit", core/monster_catalog.s;
+// (docs/MONSTER_CATALOG_DESIGN.md "Atari 8-bit", core/6502/monster_catalog.s;
 // docs/ATARI8_MEMORY_CONTRACT.md owns PORTB, SIOV and the 130XE slots).
 //
 // MONSTER.CAT holds the 49-byte records (platforms/commodore/common/

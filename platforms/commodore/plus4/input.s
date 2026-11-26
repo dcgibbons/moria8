@@ -1,8 +1,8 @@
 // input.s — Plus/4 keyboard input and command parsing
 
-#import "../../../core/input_contract.s"
-#import "../../../core/input_tables.s"
-#import "../../../core/input_run_cancel.s"
+#import "../../../core/6502/input_contract.s"
+#import "../../../core/6502/input_tables.s"
+#import "../../../core/6502/input_run_cancel.s"
 
 .const KERNAL_SCNKEY = $ff9f
 .const KERNAL_GETIN  = $ffe4

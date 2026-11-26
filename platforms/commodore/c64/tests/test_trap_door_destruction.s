@@ -31,71 +31,71 @@ test_finish:
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 .segmentdef TestUnusedMonsterMagic [start=$E100, min=$E100, max=$FFF9]
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/dungeon_gen.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestUnusedMonsterMagic
-#import "../../../../core/monster_ai.s"
+#import "../../../../core/6502/monster_ai.s"
 .segment Default
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 // Monster spells and breath are not exercised here: out of the way above
 // the I/O hole (the element touches, 2026-11-11, took the body past MAP_BASE).
 .segment TestUnusedMonsterMagic
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/6502/monster_magic.s"
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 hal_item_cat_read_byte:
     brk
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment TestCreateOverlay
-#import "../../../../core/ego_items.s"
+#import "../../../../core/6502/ego_items.s"
 .segment Default
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
 // spell_effects.s owns df_target_from_dir and adj_dir_idx, which
 // eff_destroy_traps_doors runs and writes: resident RAM, not parked.
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/spell_effects_overlay.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/spell_effects_overlay.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/player_magic.s"
 .segment TestCreateOverlay
 #import "../dungeon_render.s"
 .segment Default
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
 // combat.s runs: trap_apply_damage builds "You take N damage." with its
 // message helpers (huff_append_combat, combat_append_decimal,
 // cmb_term_and_print; 2026-11-16), so it is resident, not parked.
-#import "../../../../core/combat.s"
+#import "../../../../core/6502/combat.s"
 .segment TestUnusedMonsterMagic
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 .segment Default
 .segment TestCreateOverlay
 mad_dmg_hi: .byte 0
@@ -104,9 +104,9 @@ mon_atk_apply_damage_16:
 monster_attack_player:
 player_death_check:
     brk
-#import "../../../../core/turn.s"
+#import "../../../../core/6502/turn.s"
 .segment Default
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 store_init_all:
     rts

@@ -5,14 +5,14 @@
 // Huffman + non-recursive $80+ token strings via hal_item_cat_read_byte
 // using item_cat_off_lo/hi. Uses zero new zero-page variables.
 
-#import "../platforms/shared/item_catalog/item_cat_layout.s"
+#import "../../platforms/shared/item_catalog/item_cat_layout.s"
 
 // Byte offset interface for hal_item_cat_read_byte (16-bit offset into ITEM.CAT).
 item_cat_off_lo: .byte 0
 item_cat_off_hi: .byte 0
 
 #if !HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../platforms/shared/item_catalog/item_cat_data.s"
+#import "../../platforms/shared/item_catalog/item_cat_data.s"
 
 // hal_item_cat_read_byte — Default reader over in-binary item_cat_data.
 // Input: item_cat_off_lo/hi. Output: A = byte. Clobbers: A, Y (preserves X, ZP).

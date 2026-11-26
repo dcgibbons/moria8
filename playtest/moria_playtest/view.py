@@ -24,8 +24,8 @@ from .game import Game, Observation
 
 UNKNOWN = -1
 WALL = 0x1   # TILE_WALL_H type nibble; stands in for every blocking type
-WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xB, 0xE}   # walkable_table, core/player_move.s
-VEIN_TYPES = (0xC, 0xD)   # TILE_MAGMA, TILE_QUARTZ (core/dungeon_data.s): read as WALL, but a tunnel opens them
+WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xB, 0xE}   # walkable_table, core/6502/player_move.s
+VEIN_TYPES = (0xC, 0xD)   # TILE_MAGMA, TILE_QUARTZ (core/6502/dungeon_data.s): read as WALL, but a tunnel opens them
 TYPE_DOOR_OPEN, TYPE_DOOR_CLOSED = 0x7, 0x8
 TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_RUBBLE, TYPE_TRAP, TYPE_SECRET = 0x9, 0xA, 0xB, 0xE, 0xF
 # terrain_frontier's byte masks over tile types as signed bytes (UNKNOWN is 0xFF):
@@ -42,9 +42,9 @@ TRAP_COST = 25   # extra steps a path will walk to go around a known trap
 UNKNOWN_COST = TRAP_COST   # ... or past an unidentified glyph (twice that onto one)
 HAZARD_COST = 150   # ... or past a hazard: a Yellow Jelly's poison touch stacked on every
                     # pass of a corridor beside it (M4 round 48, seed 1009)
-# Screen characters that are terrain, not things (core/color.s tile_screen_codes;
-# the trap/rune glyph decodes as '·'; town store entrances are digits).
-TERRAIN_GLYPHS = set(".#'+><:%· ") | set("12345678")
+# Screen characters that are terrain, not things (core/6502/color.s tile_screen_codes;
+# the trap/rune glyph decodes as '·' on 6502 and '^' on CP/M Z80; town store entrances are digits).
+TERRAIN_GLYPHS = set(".#'+><:%·^ ") | set("12345678")
 
 
 # Screen characters build_view must look at: creatures (letters) and unknown
@@ -356,7 +356,7 @@ def catalog_slot_names(game: Game) -> dict[int, str]:
     """Creature type (``MX_TYPE``) -> its catalog name, empty on a port
     without the catalog. Dungeon types from the species table
     (``cat_slot_id_lo``/``_hi``, one read, filled by cat_fetch); town types,
-    which follow them, are catalog ids from 0 (core/recall.s
+    which follow them, are catalog ids from 0 (core/6502/recall.s
     recall_slot_to_cat_id)."""
     from . import knowledge
     catalog = knowledge.catalog_names()
@@ -410,7 +410,7 @@ def build_view(game: Game, obs: Observation, tiles: bytes, levels: bytes | None 
             else:
                 unknown[screen_to_map(game, obs, col, row)] = line[col]
     if creatures:
-        # The catalog's id of each live slot (core/monster_catalog.s): the
+        # The catalog's id of each live slot (core/6502/monster_catalog.s): the
         # creature's name, as a look shows it. An Ancient Red Dragon breathes
         # fire alone, though drawn as the Ancient Multi-Hued's D at level 40.
         names = catalog_slot_names(game)

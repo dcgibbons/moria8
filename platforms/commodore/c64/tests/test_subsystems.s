@@ -18,7 +18,7 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 .const PLATFORM_HD_DECODE_BUF_BASE = $033c
 .const PLATFORM_HD_DECODE_BUF_LIMIT = $0400
@@ -47,8 +47,8 @@ combat_append_str:
 msg_print:
     rts
 
-#import "../../../../core/huffman.s"
-#import "../../../../core/string_bank_banked.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/string_bank_banked.s"
 
 .const REU_COMMAND  = $df01
 .const REU_C64LO    = $df02
@@ -124,7 +124,7 @@ kernal_load_safe:
 
 #define ASSET_LOAD_PROMPT_EXTERNAL     // asset_load_ask_for_disk: the stub above
 #import "../../common/overlay.s"
-#import "../../../../core/string_bank.s"
+#import "../../../../core/6502/string_bank.s"
 
 tc_results: .fill 11, $ff
 retries_before: .byte 0

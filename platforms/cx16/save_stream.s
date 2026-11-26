@@ -1,6 +1,6 @@
 #importonce
 // save_stream.s — Commander X16 KERNAL byte-stream backend for the shared
-// save engine (platforms/shared/save.s, save_slot_menu.s, and core/score_io.s).
+// save engine (platforms/shared/save.s, save_slot_menu.s, and core/6502/score_io.s).
 //
 // All entry points reside in fixed low RAM ($0801-$9AFF) and save/restore
 // CX16_RAM_BANK_REG ($00) while selecting RAM Bank 0 (KVARSB0) and ROM Bank 0

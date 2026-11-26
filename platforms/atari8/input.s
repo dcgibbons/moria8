@@ -7,9 +7,9 @@
 // atari_kbdbuf / atari_kbdbuf_len.
 
 #import "memory.s"
-#import "../../core/input_contract.s"
-#import "../../core/input_tables.s"
-#import "../../core/input_run_cancel.s"
+#import "../../core/6502/input_contract.s"
+#import "../../core/6502/input_tables.s"
+#import "../../core/6502/input_run_cancel.s"
 
 .label hal_input_kbdbuf_count = atari_kbdbuf_len
 .const hal_input_modal_dismiss_uses_fast_key = false

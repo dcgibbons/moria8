@@ -1,5 +1,5 @@
 #importonce
-// reu_stub.s — Minimal inert symbols satisfying core/tier_manager.s REU hooks.
+// reu_stub.s — Minimal inert symbols satisfying core/6502/tier_manager.s REU hooks.
 // Commander X16 preloads monster tiers into native banked RAM (Banks 5-8).
 
 reu_present:

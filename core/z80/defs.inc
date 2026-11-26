@@ -1,0 +1,777 @@
+; defs.inc — Shared Z80/CP/M Moria8 gameplay, color, input, and screen constants.
+;
+; Note: Include platforms/z80/cpm/memory.inc before defs.inc when both are used.
+; Pure 0xNN hex syntax for sjasmplus v1.24.0.
+
+    IFNDEF CORE_Z80_DEFS_INC
+    DEFINE CORE_Z80_DEFS_INC 1
+
+; ============================================================
+; Logical Moria8 / C64 16-Color Palette Indices (0..15)
+; ============================================================
+COL_BLACK           EQU 0x00
+COL_WHITE           EQU 0x01
+COL_RED             EQU 0x02
+COL_CYAN            EQU 0x03
+COL_PURPLE          EQU 0x04
+COL_GREEN           EQU 0x05
+COL_BLUE            EQU 0x06
+COL_YELLOW          EQU 0x07
+COL_ORANGE          EQU 0x08
+COL_BROWN           EQU 0x09
+COL_LRED            EQU 0x0A
+COL_DGREY           EQU 0x0B
+COL_GREY            EQU 0x0C
+COL_LGREEN          EQU 0x0D
+COL_LBLUE           EQU 0x0E
+COL_LGREY           EQU 0x0F
+
+; UI semantic color aliases
+COL_MSG_TEXT        EQU COL_LGREY
+COL_STATUS          EQU COL_CYAN
+COL_PROMPT          EQU COL_WHITE
+COL_HP_OK           EQU COL_GREEN
+COL_HP_WARN         EQU COL_YELLOW
+COL_HP_CRIT         EQU COL_RED
+
+; ============================================================
+; Normalized Key Codes (input_csi.asm & Overlays)
+; ============================================================
+    IFNDEF CPM_MEMORY_INC
+KEY_BEL             EQU 0x07
+KEY_BS              EQU 0x08
+    ENDIF
+KEY_TAB             EQU 0x09
+KEY_LF              EQU 0x0A
+    IFNDEF CPM_MEMORY_INC
+KEY_CR              EQU 0x0D
+KEY_ESC             EQU 0x1B
+    ENDIF
+KEY_SPACE           EQU 0x20
+KEY_WAIT            EQU '.'
+KEY_DEL             EQU 0x7F
+KEY_CTRL_B          EQU 0x02
+KEY_CTRL_D          EQU 0x04
+KEY_CTRL_P          EQU 0x10
+KEY_CTRL_R          EQU 0x12
+KEY_CTRL_S          EQU 0x13
+KEY_CTRL_W          EQU 0x17
+
+; Non-ASCII normalized navigation codes (0x80..0x87)
+KEY_UP              EQU 0x80
+KEY_DOWN            EQU 0x81
+KEY_LEFT            EQU 0x82
+KEY_RIGHT           EQU 0x83
+KEY_HOME            EQU 0x84
+KEY_END             EQU 0x85
+KEY_PGUP            EQU 0x86
+KEY_PGDN            EQU 0x87
+
+; ============================================================
+; Game State Bitflags (abi_game_flags)
+; ============================================================
+GAME_FLAG_OVER      EQU 0x01
+GAME_FLAG_WIZARD    EQU 0x02
+GAME_FLAG_WINNER    EQU 0x04
+
+; ============================================================
+; 80x24 Terminal Screen Geometry
+; ============================================================
+VIEW_COLS           EQU 78
+VIEW_ROWS           EQU 18
+VIEWPORT_X          EQU 1
+VIEWPORT_Y          EQU 2
+VIEWPORT_W          EQU VIEW_COLS
+VIEWPORT_H          EQU VIEW_ROWS
+VIEW_SCROLL_MARGIN_X EQU 12
+VIEW_SCROLL_MARGIN_Y EQU 4
+MSG_ROW0            EQU 0
+MSG_ROW1            EQU 1
+STORE_MENU_ROW      EQU 19
+INPUT_ROW           EQU 20
+STATUS_ROW0         EQU 21
+STATUS_ROW1         EQU 22
+STATUS_ROW2         EQU 23
+STATUS_ROW          EQU STATUS_ROW0
+
+; ============================================================
+; Map, Town, Feature, Monster, and High-Score Constants
+; ============================================================
+    IFNDEF CPM_MEMORY_INC
+MAP_COLS            EQU 198
+MAP_ROWS            EQU 66
+MAP_SIZE            EQU (MAP_COLS * MAP_ROWS)
+    ENDIF
+
+TOWN_MAP_COLS       EQU 66
+TOWN_MAP_ROWS       EQU 22
+TOWN_STAIRS_X       EQU 32
+TOWN_STAIRS_Y       EQU 18
+TOWN_START_X        EQU 31
+TOWN_START_Y        EQU 18
+
+MAX_ROOMS           EQU 21
+MAX_TRAPS           EQU 16
+MAX_DOOR_STATES     EQU 16
+
+; Special room types (DGN-008..019)
+RT_NORMAL           EQU 0
+RT_PIT              EQU 1
+RT_VAULT            EQU 2
+RT_NEST             EQU 3
+
+; 18 dungeon trap IDs (DGN-019)
+TRAP_OPEN_PIT       EQU 0
+TRAP_ARROW          EQU 1
+TRAP_POISON_GAS     EQU 2
+TRAP_TELEPORT       EQU 3
+TRAP_POISON_DART    EQU 4
+TRAP_ROCKFALL       EQU 5
+TRAP_COVERED_PIT    EQU 6
+TRAP_STR_DART       EQU 7
+TRAP_TRAP_DOOR      EQU 8
+TRAP_CORRODE        EQU 9
+TRAP_FIRE           EQU 10
+TRAP_ACID           EQU 11
+TRAP_SLEEP_GAS      EQU 12
+TRAP_BLIND_GAS      EQU 13
+TRAP_CONFUSE_GAS    EQU 14
+TRAP_HIDDEN_OBJECT  EQU 15
+TRAP_SUMMON         EQU 16
+TRAP_AGGRAVATE      EQU 17
+TRAP_TYPE_COUNT     EQU 18
+
+; Chest p1 state flags (core/6502/item_defs.s)
+CHEST_P1_LOCKED     EQU 0x01
+CHEST_P1_TRAP_STR   EQU 0x02
+CHEST_P1_TRAP_POISON EQU 0x04
+CHEST_P1_TRAP_PARA  EQU 0x08
+CHEST_P1_TRAP_EXPL  EQU 0x10
+CHEST_P1_TRAP_SUMMON EQU 0x20
+CHEST_P1_TRAP_FOUND EQU 0x40
+CHEST_P1_OPENED     EQU 0x80
+CHEST_P1_TRAP_MASK  EQU 0x3E
+
+; Auto-run CJS flags (TRN-006)
+RUNF_OPEN           EQU 0x01
+RUNF_BREAK_RIGHT    EQU 0x02
+RUNF_BREAK_LEFT     EQU 0x04
+MAX_MONSTERS        EQU 32
+MONSTER_ENTRY_SIZE  EQU 12
+MAX_DUNGEON_CREATURES EQU 32
+MAX_TOWN_CREATURES  EQU 8
+MAX_CREATURES       EQU (MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES)
+TOWN_CREATURE_BASE  EQU MAX_DUNGEON_CREATURES
+TOWN_CREATURE_COUNT EQU 8
+CAT_SLOTS           EQU MAX_MONSTERS
+TIER_NAME_SIZE      EQU 26
+TIER_NAME_COUNT     EQU 32
+RECALL_COUNT        EQU 279
+RECALL_DATA_SIZE    EQU (RECALL_COUNT * 4)
+
+; Map tile type nibbles (bits 7..4 of MAP_BASE byte)
+TILE_FLOOR          EQU 0x00
+TILE_WALL_H         EQU 0x10
+TILE_WALL_V         EQU 0x20
+TILE_CORNER_TL      EQU 0x30
+TILE_CORNER_TR      EQU 0x40
+TILE_CORNER_BL      EQU 0x50
+TILE_CORNER_BR      EQU 0x60
+TILE_WALL           EQU TILE_WALL_H
+TILE_PERM_WALL      EQU TILE_WALL_H
+TILE_DOOR_OPEN      EQU 0x70
+TILE_DOOR_CLOSED    EQU 0x80
+TILE_STAIRS_DN      EQU 0x90
+TILE_STAIRS_UP      EQU 0xA0
+TILE_RUBBLE         EQU 0xB0
+TILE_MAGMA          EQU 0xC0
+TILE_QUARTZ         EQU 0xD0
+TILE_TRAP           EQU 0xE0
+TILE_SECRET         EQU 0xF0
+TILE_TYPE_MASK      EQU 0xF0
+TILE_FLAG_MASK      EQU 0x0F
+
+; Map cell lower-nibble flags (bits 3..0)
+FLAG_OCCUPIED       EQU 0x01
+FLAG_HAS_ITEM       EQU 0x02
+FLAG_VISITED        EQU 0x04
+FLAG_LIT            EQU 0x08
+TOWN_FLAGS          EQU (FLAG_LIT | FLAG_VISITED)
+DUNGEON_FLAGS       EQU FLAG_LIT
+
+; Pure ASCII display characters for Town buildings and special map symbols
+TILE_BUILDING_1     EQU '1'
+TILE_BUILDING_2     EQU '2'
+TILE_BUILDING_3     EQU '3'
+TILE_BUILDING_4     EQU '4'
+TILE_BUILDING_5     EQU '5'
+TILE_BUILDING_6     EQU '6'
+TILE_BUILDING_7     EQU '7'
+TILE_BUILDING_8     EQU '8'
+CH_PLAYER           EQU '@'
+CH_GLYPH            EQU '^'
+CH_GOLD             EQU '$'
+
+; ============================================================
+; Item System Constants (V2 361-Item Base-255 Paged Catalog)
+; ============================================================
+IF_CURSED           EQU 0x01
+IF_IDENTIFIED       EQU 0x02
+IF_TRIED            EQU 0x04
+IF_SENSED           EQU 0x08
+ITEM_META_FLAGS_MASK EQU 0x0F
+
+ITEM_PAGE_BIT       EQU 0x40
+EGO_ID_MASK         EQU 0x3F
+
+EGO_NONE            EQU 0
+EGO_SLAY_ANIMAL     EQU 1
+EGO_SLAY_EVIL       EQU 2
+EGO_SLAY_UNDEAD     EQU 3
+EGO_FLAME_TONGUE    EQU 4
+EGO_FROST_BRAND     EQU 5
+EGO_DEFENDER        EQU 6
+EGO_HOLY_AVENGER    EQU 7
+EGO_SLAY_DRAGON     EQU 8
+EGO_RESIST          EQU 9
+EGO_RESIST_ACID     EQU 10
+EGO_RESIST_FIRE     EQU 11
+EGO_RESIST_COLD     EQU 12
+EGO_RESIST_LIGHT    EQU 13
+EGO_MAGI            EQU 14
+EGO_FREE_ACTION     EQU 15
+EGO_SLAYING         EQU 16
+EGO_CLUMSINESS      EQU 17
+EGO_WEAKNESS        EQU 18
+EGO_SLOW_DESCENT    EQU 19
+EGO_SPEED           EQU 20
+EGO_STEALTH         EQU 21
+EGO_SLOWNESS        EQU 22
+EGO_NOISE           EQU 23
+EGO_GREAT_MASS      EQU 24
+EGO_INTELLIGENCE    EQU 25
+EGO_WISDOM          EQU 26
+EGO_INFRA_VISION    EQU 27
+EGO_MIGHT           EQU 28
+EGO_LORDLINESS      EQU 29
+EGO_BEAUTY          EQU 30
+EGO_SEEING          EQU 31
+EGO_REGENERATION    EQU 32
+EGO_STUPIDITY       EQU 33
+EGO_DULLNESS        EQU 34
+EGO_BLINDNESS       EQU 35
+EGO_TIMIDNESS       EQU 36
+EGO_TELEPORTATION   EQU 37
+EGO_UGLINESS        EQU 38
+EGO_PROTECTION      EQU 39
+EGO_IRRITATION      EQU 40
+EGO_VULNERABILITY   EQU 41
+EGO_ENVELOPING      EQU 42
+EGO_AMMO_FIRE       EQU 43
+EGO_AMMO_SLAY_EVIL  EQU 44
+EGO_DRAGON_SLAYING  EQU 45
+EGO_CHEST_EMPTY     EQU 46
+EGO_CHEST_LOCKED    EQU 47
+EGO_CHEST_POISON    EQU 48
+EGO_CHEST_GAS       EQU 49
+EGO_CHEST_EXPLOSION EQU 50
+EGO_CHEST_SUMMON    EQU 51
+EGO_CHEST_MULTI     EQU 52
+EGO_CHEST_DISARMED  EQU 53
+EGO_CHEST_UNLOCKED  EQU 54
+EGO_AMMO_SLAY_ANIMAL EQU 55
+EGO_TYPE_COUNT      EQU 56
+
+    IFNDEF ITEM_DEFS_CONSTS_INCLUDED
+    DEFINE ITEM_DEFS_CONSTS_INCLUDED 1
+ITEM_TYPE_COUNT     EQU 361
+ITEM_PAGE_SIZE      EQU 255
+EGO_COUNT           EQU 55
+FLAVOUR_COUNT       EQU 174
+FLAVOUR_POTION_COUNT EQU 46
+FLAVOUR_SCROLL_COUNT EQU 49
+FLAVOUR_RING_COUNT  EQU 30
+FLAVOUR_WAND_COUNT  EQU 24
+FLAVOUR_STAFF_COUNT EQU 25
+IT_AC_EXTRA_COUNT   EQU 9
+    ENDIF
+
+FLAVOUR_POTION_BASE EQU 0
+FLAVOUR_SCROLL_BASE EQU (FLAVOUR_POTION_BASE + FLAVOUR_POTION_COUNT)
+FLAVOUR_RING_BASE   EQU (FLAVOUR_SCROLL_BASE + FLAVOUR_SCROLL_COUNT)
+FLAVOUR_WAND_BASE   EQU (FLAVOUR_RING_BASE + FLAVOUR_RING_COUNT)
+FLAVOUR_STAFF_BASE  EQU (FLAVOUR_WAND_BASE + FLAVOUR_WAND_COUNT)
+
+ITEM_ID_CAPACITY    EQU 376
+ID_KNOWN_BYTES      EQU 47
+ITEM_NAME_DECODE_BUF_SIZE EQU 48
+LANTERN_MAX_CHARGES EQU 250
+
+MAX_FLOOR_ITEMS     EQU 42
+MAX_GLYPHS          EQU 4
+FI_EMPTY            EQU 0xFF
+
+; Unified inventory/equipment table indices (0..21 carried, 22..33 equipped)
+EQUIP_WEAPON        EQU 22
+EQUIP_BODY          EQU 23
+EQUIP_SHIELD        EQU 24
+EQUIP_HEAD          EQU 25
+EQUIP_HANDS         EQU 26
+EQUIP_FEET          EQU 27
+EQUIP_LIGHT         EQU 28
+EQUIP_RING          EQU 29
+EQUIP_AMULET        EQU 30
+EQUIP_RING2         EQU 31
+EQUIP_CLOAK         EQU 32
+EQUIP_SECONDARY     EQU 33
+EQUIP_LAST          EQU EQUIP_CLOAK
+EQUIP_END           EQU (EQUIP_LAST + 1)
+VISIBLE_EQUIP_LAST  EQU EQUIP_SECONDARY
+VISIBLE_EQUIP_END   EQU (VISIBLE_EQUIP_LAST + 1)
+
+MAX_INV_SLOTS       EQU 22
+TOTAL_INV_SLOTS     EQU 34
+MAX_EQUIP_SLOTS     EQU (TOTAL_INV_SLOTS - MAX_INV_SLOTS)
+
+; Item Categories (authoritative ICAT_* plus IC_* aliases)
+ICAT_DIGGING        EQU 0
+ICAT_NONE           EQU 0
+ICAT_GOLD           EQU 1
+ICAT_WEAPON         EQU 2
+ICAT_ARMOR          EQU 3
+ICAT_SHIELD         EQU 4
+ICAT_HELM           EQU 5
+ICAT_GLOVES         EQU 6
+ICAT_BOOTS          EQU 7
+ICAT_LIGHT          EQU 8
+ICAT_FOOD           EQU 9
+ICAT_POTION         EQU 10
+ICAT_SCROLL         EQU 11
+ICAT_RING           EQU 12
+ICAT_BOOK           EQU 13
+ICAT_WAND           EQU 14
+ICAT_STAFF          EQU 15
+ICAT_AMULET         EQU 16
+ICAT_CHEST          EQU 17
+ICAT_SPIKE          EQU 18
+ICAT_CLOAK          EQU 19
+ICAT_JUNK           EQU 20
+
+IC_DIGGING          EQU ICAT_DIGGING
+IC_NONE             EQU ICAT_NONE
+IC_GOLD             EQU ICAT_GOLD
+IC_WEAPON           EQU ICAT_WEAPON
+IC_ARMOR            EQU ICAT_ARMOR
+IC_SHIELD           EQU ICAT_SHIELD
+IC_HELM             EQU ICAT_HELM
+IC_GLOVES           EQU ICAT_GLOVES
+IC_BOOTS            EQU ICAT_BOOTS
+IC_LIGHT            EQU ICAT_LIGHT
+IC_FOOD             EQU ICAT_FOOD
+IC_POTION           EQU ICAT_POTION
+IC_SCROLL           EQU ICAT_SCROLL
+IC_RING             EQU ICAT_RING
+IC_BOOK             EQU ICAT_BOOK
+IC_WAND             EQU ICAT_WAND
+IC_STAFF            EQU ICAT_STAFF
+IC_AMULET           EQU ICAT_AMULET
+IC_CHEST            EQU ICAT_CHEST
+IC_SPIKE            EQU ICAT_SPIKE
+IC_CLOAK            EQU ICAT_CLOAK
+IC_JUNK             EQU ICAT_JUNK
+
+; Store Constants
+STORE_MAX_ITEMS     EQU 16
+STORE_TOTAL_SLOTS   EQU 128
+STORE_PICK_RETRIES  EQU 30
+STORE_MIN_KEEP      EQU 14
+STORE_MAX_KEEP      EQU 20
+STORE_TURN_AROUND   EQU 3
+STORE_STACK_MAX     EQU 24
+STORE_BM            EQU 6
+STORE_HOME          EQU 7
+STORE_COUNT         EQU 8
+
+; Passive Equipment Flags & ITEM.CAT TR_* Flag Masks
+PFLAG_RESIST_FIRE   EQU 0x01
+PFLAG_RESIST_COLD   EQU 0x02
+PFLAG_SPEED         EQU 0x04
+PFLAG_SEE_INVIS     EQU 0x08
+PFLAG_FREE_ACT      EQU 0x10
+PFLAG_RESIST_ACID   EQU 0x20
+PFLAG_RESIST_LIGHT  EQU 0x40
+PFLAG_FFALL         EQU 0x80
+
+PFLAG2_SLOW_DIGEST  EQU 0x01
+PFLAG2_REGEN        EQU 0x02
+PFLAG2_STEALTH      EQU 0x04
+PFLAG2_AGGRAVATE    EQU 0x08
+PFLAG2_TELEPORT     EQU 0x10
+PFLAG2_SEARCH       EQU 0x20
+PFLAG2_INFRA        EQU 0x40
+
+SUST_STR            EQU 0x01
+SUST_INT            EQU 0x02
+SUST_WIS            EQU 0x04
+SUST_DEX            EQU 0x08
+SUST_CON            EQU 0x10
+SUST_CHR            EQU 0x20
+SUST_ALL            EQU 0x3F
+
+ITR0_STR            EQU 0x01
+ITR0_DEX            EQU 0x02
+ITR0_CON            EQU 0x04
+ITR0_INT            EQU 0x08
+ITR0_WIS            EQU 0x10
+ITR0_CHR            EQU 0x20
+ITR0_SEARCH         EQU 0x40
+ITR0_SLOW_DIGEST    EQU 0x80
+ITR1_STEALTH        EQU 0x01
+ITR1_AGGRAVATE      EQU 0x02
+ITR1_TELEPORT       EQU 0x04
+ITR1_REGEN          EQU 0x08
+ITR1_SPEED          EQU 0x10
+ITR1_SLAY_DRAGON    EQU 0x20
+ITR1_SLAY_ANIMAL    EQU 0x40
+ITR1_SLAY_EVIL      EQU 0x80
+ITR2_SLAY_UNDEAD    EQU 0x01
+ITR2_FROST_BRAND    EQU 0x02
+ITR2_FLAME_TONGUE   EQU 0x04
+ITR2_RES_FIRE       EQU 0x08
+ITR2_RES_ACID       EQU 0x10
+ITR2_RES_COLD       EQU 0x20
+ITR2_SUST_STAT      EQU 0x40
+ITR2_FREE_ACT       EQU 0x80
+ITR3_SEE_INVIS      EQU 0x01
+ITR3_RES_LIGHT      EQU 0x02
+ITR3_FFALL          EQU 0x04
+ITR3_BLIND          EQU 0x08
+ITR3_TIMID          EQU 0x10
+ITR3_TUNNEL         EQU 0x20
+ITR3_INFRA          EQU 0x40
+ITR3_CURSED         EQU 0x80
+
+; ============================================================
+; Player Struct Offsets (matching core/6502/player.s, 114 B)
+; ============================================================
+PL_NAME             EQU 0
+PL_RACE             EQU 17
+PL_CLASS            EQU 18
+PL_LEVEL            EQU 19
+PL_DLEVEL           EQU 20
+PL_STR_BASE         EQU 21
+PL_INT_BASE         EQU 22
+PL_WIS_BASE         EQU 23
+PL_DEX_BASE         EQU 24
+PL_CON_BASE         EQU 25
+PL_CHR_BASE         EQU 26
+PL_STR_CUR          EQU 27
+PL_INT_CUR          EQU 28
+PL_WIS_CUR          EQU 29
+PL_DEX_CUR          EQU 30
+PL_CON_CUR          EQU 31
+PL_CHR_CUR          EQU 32
+PL_HP_LO            EQU 33
+PL_HP_HI            EQU 34
+PL_MHP_LO           EQU 35
+PL_MHP_HI           EQU 36
+PL_MANA             EQU 37
+PL_MAX_MANA         EQU 38
+PL_AC               EQU 39
+PL_TOHIT            EQU 40
+PL_TODMG            EQU 41
+PL_BLOWS            EQU 42
+PL_GOLD_0           EQU 43
+PL_GOLD_1           EQU 44
+PL_GOLD_2           EQU 45
+PL_XP_0             EQU 46
+PL_XP_1             EQU 47
+PL_XP_2             EQU 48
+PL_MAP_X            EQU 49
+PL_MAP_Y            EQU 50
+PL_FOOD_LO          EQU 51
+PL_FOOD_HI          EQU 52
+PL_HUNGER           EQU 53
+PL_FLAGS            EQU 54
+PL_LIGHT_RAD        EQU 55
+PL_MAX_DLVL         EQU 56
+PL_AGE              EQU 57
+PL_HEIGHT           EQU 58
+PL_WEIGHT           EQU 59
+PL_SPELL_TYPE       EQU 60
+PL_SPELLS_LEARNT_0  EQU 61
+PL_SPELLS_LEARNT_1  EQU 62
+PL_SPELLS_LEARNT_2  EQU 63
+PL_SPELLS_LEARNT_3  EQU 64
+PL_SPELLS_WORKED_0  EQU 65
+PL_SPELLS_WORKED_1  EQU 66
+PL_SPELLS_WORKED_2  EQU 67
+PL_SPELLS_WORKED_3  EQU 68
+PL_SPELLS_FORGOTTEN_0 EQU 69
+PL_SPELLS_FORGOTTEN_1 EQU 70
+PL_SPELLS_FORGOTTEN_2 EQU 71
+PL_SPELLS_FORGOTTEN_3 EQU 72
+PL_NEW_SPELLS       EQU 73
+PL_SPELL_ORDER      EQU 74
+PL_SPELL_ORDER_LAST EQU (PL_SPELL_ORDER + 31)
+PL_EXPFACT          EQU 106
+PL_RESERVED         EQU 107
+PL_SOCIAL_CLASS     EQU 108
+PL_XP_FRAC_LO       EQU 109
+PL_XP_FRAC_HI       EQU 110
+PL_MAX_XP_0         EQU 111
+PL_MAX_XP_1         EQU 112
+PL_MAX_XP_2         EQU 113
+PL_STRUCT_SIZE      EQU 114
+PL_NAME_MAX         EQU 16
+PL_BG_SIZE          EQU 160
+
+; Player flags (PL_FLAGS)
+PLF_MALE            EQU 0x01
+PLF_SEE_INV         EQU 0x02
+PLF_SLOW_DIG        EQU 0x08
+PLF_SEARCHING       EQU 0x10
+PLF_RESTING         EQU 0x20
+
+; Races, Classes, Stats, Hunger, Weight
+RACE_HUMAN          EQU 0
+RACE_HALF_ELF       EQU 1
+RACE_ELF            EQU 2
+RACE_HALFLING       EQU 3
+RACE_GNOME          EQU 4
+RACE_DWARF          EQU 5
+RACE_HALF_ORC       EQU 6
+RACE_HALF_TROLL     EQU 7
+RACE_COUNT          EQU 8
+
+CLASS_WARRIOR       EQU 0
+CLASS_MAGE          EQU 1
+CLASS_PRIEST        EQU 2
+CLASS_ROGUE         EQU 3
+CLASS_RANGER        EQU 4
+CLASS_PALADIN       EQU 5
+CLASS_COUNT         EQU 6
+
+STAT_STR            EQU 0
+STAT_INT            EQU 1
+STAT_WIS            EQU 2
+STAT_DEX            EQU 3
+STAT_CON            EQU 4
+STAT_CHR            EQU 5
+STAT_COUNT          EQU 6
+
+HUNGER_FULL         EQU 0
+HUNGER_HUNGRY       EQU 1
+HUNGER_WEAK         EQU 2
+HUNGER_FAINT        EQU 3
+PLAYER_WEIGHT_CAP   EQU 3000
+
+; ============================================================
+; Save State, UI Dirty/Message Flags, & High-Score Constants
+; ============================================================
+ZP_STATE_SIZE       EQU 32
+ZP_RNG_SIZE         EQU 4
+
+UI_DIRTY_STATUS     EQU 0x01
+UI_DIRTY_MAP        EQU 0x02
+UI_DIRTY_FORCE      EQU 0x80
+
+MSG_PENDING         EQU 0x01
+MSG_FULL            EQU 0x02
+MSG_HIST_COUNT      EQU 8
+MSG_HIST_LEN        EQU 80
+MSG_HIST_BYTES      EQU (MSG_HIST_COUNT * MSG_HIST_LEN)
+
+HISCORE_MAX_ENTRIES EQU 10
+HISCORE_ENTRY_SIZE  EQU 23
+HISCORE_HEADER_SIZE EQU 4
+HISCORE_TABLE_SIZE  EQU (HISCORE_MAX_ENTRIES * HISCORE_ENTRY_SIZE)
+
+; Death source codes (matching core/6502/score.s + config.s)
+DEATH_ALIVE           EQU 0x00
+DEATH_CHEST_NEEDLE    EQU 0xF7
+DEATH_CHEST_EXPLOSION EQU 0xF8
+DEATH_TRAP_PIT        EQU 0xF9
+DEATH_TRAP_ARROW      EQU 0xFA
+DEATH_TRAP_DART       EQU 0xFB
+DEATH_TRAP_ROCKFALL   EQU 0xFC
+DEATH_CURSED          EQU 0xFD
+DEATH_POISON          EQU 0xFE
+DEATH_STARVE          EQU 0xFF
+
+; HP regeneration 16.16 fixed-point rates (TRN-009)
+REGEN_NORMAL        EQU 197
+REGEN_WEAK          EQU 98
+REGEN_FAINT         EQU 33
+REGEN_HPBASE        EQU 1442
+
+; ============================================================
+; M4 Monster, Combat, Magic, & Item-Selection Constants
+; ============================================================
+EMPTY_SLOT          EQU 0xFF
+MONS_LEVEL_MAX      EQU 40
+MONS_MAX_SIGHT      EQU 20
+MON_MULT_ADJ        EQU 7
+CAT_MON_NASTY       EQU 50
+CAT_WIN_LEVEL       EQU 50
+CAT_MALLOC_CHANCE   EQU 160
+CAT_SUMMON_ADJ      EQU 2
+CAT_GEN_RESERVE     EQU 6
+MD_QUEUE_MAX        EQU 4
+DETECT_TIMER_TURNS  EQU 20
+
+; Active monster record offsets (12 bytes per entry)
+MX_X                EQU 0
+MX_Y                EQU 1
+MX_TYPE             EQU 2
+MX_HP_LO            EQU 3
+MX_HP_HI            EQU 4
+MX_FLAGS            EQU 5
+MX_SPEED_CNT        EQU 6
+MX_SLEEP_CUR        EQU 7
+MX_STUN             EQU 8
+MX_CONFUSE          EQU 9
+MX_RESERVED_0       EQU 10      ; Reserved (unused; keeps 12-byte record & Save Format V2)
+MX_RESERVED_1       EQU 11      ; Reserved (unused; keeps 12-byte record & Save Format V2)
+
+; Live monster MX_FLAGS bits
+MF_AWAKE            EQU 0x01
+MF_CONFUSED         EQU 0x02
+MF_PROVOKED         EQU 0x04
+MF_VISIBLE          EQU 0x08
+MF_DETECTED         EQU 0x10
+
+; Creature classification & speed/awareness bits
+CF_ATTACK_ONLY      EQU 0x01
+CF_UNDEAD           EQU 0x02
+CF_EVIL             EQU 0x04
+CF_ANIMAL           EQU 0x08
+CF_DRAGON           EQU 0x10
+CF_GROUP            EQU 0x20
+CF_BREEDER          EQU 0x40
+CF_INFRA            EQU 0x80
+CR_SPEED_MASK       EQU 0x03
+CM_RANDOM_MOVE      EQU 0x38
+CR_MAX_HP           EQU 0x80
+CD_OPEN_DOOR_BIT    EQU 0x80
+
+; Monster spell & extended trait flags
+MSF_WOUND_LIGHT     EQU 0x01
+MSF_BREATH          EQU 0x02
+MSF_SUMMON          EQU 0x04
+MSF_TELEPORT        EQU 0x08
+MSF_BLIND           EQU 0x10
+MSF_CONFUSE         EQU 0x20
+MSF_WOUND_SERIOUS   EQU 0x40
+MSF_FEAR            EQU 0x80
+
+MS_FREQ_MASK        EQU 0x0F
+MS_BREATH_SHIFT     EQU 4
+MS_BREATH_LIGHTNING EQU 1
+MS_BREATH_GAS       EQU 2
+MS_BREATH_ACID      EQU 3
+MS_BREATH_FROST     EQU 4
+MS_BREATH_FIRE      EQU 5
+MS_BREATH_ALL       EQU 6
+MS_HOLD             EQU 0x80
+
+MSF2_BLINK          EQU 0x01
+MSF2_TELE_SELF      EQU 0x02
+MSF2_SUMMON_UNDEAD  EQU 0x04
+MSF2_SLOW           EQU 0x08
+MSF2_DRAIN_MANA     EQU 0x10
+CM2_PHASE           EQU 0x20
+CM2_EATS_OTHER      EQU 0x40
+CM2_PICKS_UP        EQU 0x80
+
+CD_FROST            EQU 0x01
+CD_FIRE             EQU 0x02
+CD_POISON           EQU 0x04
+CD_ACID             EQU 0x08
+CD_LIGHT            EQU 0x10
+CD_STONE            EQU 0x20
+CD_NO_SLEEP         EQU 0x40
+CD_INVISIBLE        EQU 0x80
+
+; Monster melee attack types (VMS creature.inc 1..24, 99) & verb codes
+ATK_SIDES_MASK      EQU 0x0F
+ATK_TYPE_MASK       EQU 0x7F
+ATK_NONE            EQU 0
+ATK_NORMAL          EQU 1
+ATK_LOSE_STR        EQU 2
+ATK_CONFUSE         EQU 3
+ATK_FEAR            EQU 4
+ATK_FIRE            EQU 5
+ATK_ACID            EQU 6
+ATK_COLD            EQU 7
+ATK_LIGHT           EQU 8
+ATK_CORRODE         EQU 9
+ATK_BLIND           EQU 10
+ATK_PARALYZE        EQU 11
+ATK_STEAL_GOLD      EQU 12
+ATK_STEAL_ITEM      EQU 13
+ATK_POISON          EQU 14
+ATK_LOSE_DEX        EQU 15
+ATK_LOSE_CON        EQU 16
+ATK_LOSE_INT        EQU 17
+ATK_LOSE_WIS        EQU 18
+ATK_LOSE_EXP        EQU 19
+ATK_AGGRAVATE       EQU 20
+ATK_DISENCHANT      EQU 21
+ATK_EAT_FOOD        EQU 22
+ATK_EAT_LIGHT       EQU 23
+ATK_EAT_CHARGES     EQU 24
+ATK_BLANK           EQU 99
+
+ADESC_NONE          EQU 0
+ADESC_HITS          EQU 1
+ADESC_BITES         EQU 2
+ADESC_CLAWS         EQU 3
+ADESC_STINGS        EQU 4
+ADESC_TOUCHES       EQU 5
+ADESC_KICKS         EQU 6
+ADESC_GAZES         EQU 7
+ADESC_BREATHES      EQU 8
+ADESC_SPITS         EQU 9
+ADESC_WAILS         EQU 10
+ADESC_EMBRACES      EQU 11
+ADESC_CRAWLS        EQU 12
+ADESC_SPORES        EQU 13
+ADESC_BEGS          EQU 14
+ADESC_SLIMES        EQU 15
+ADESC_CRUSHES       EQU 16
+ADESC_TRAMPLES      EQU 17
+ADESC_DROOLS        EQU 18
+ADESC_INSULTS       EQU 19
+
+; Spells, elements, class/race strides, & item filter selectors
+SPELL_NONE          EQU 0
+SPELL_MAGE          EQU 1
+SPELL_PRIEST        EQU 2
+SPELL_CATALOG_COUNT EQU 31
+SPELL_MASK_BYTES    EQU 4
+BOOK_COUNT          EQU 8
+SPELL_LIST_MAX      EQU 9
+
+ELEM_NONE           EQU 0
+ELEM_LIGHTNING      EQU 1
+ELEM_POISON         EQU 2
+ELEM_ACID           EQU 3
+ELEM_FROST          EQU 4
+ELEM_FIRE           EQU 5
+ELEM_HOLY           EQU 6
+
+PIW_FILTER_ALL         EQU 0xFF
+PIW_FILTER_EQUIP       EQU 0xFE
+PIW_FILTER_IDENTIFY    EQU 0xFD
+PIW_FILTER_MAGE_BOOK   EQU 0xFC
+PIW_FILTER_PRAYER_BOOK EQU 0xFB
+PIW_FILTER_RECHARGE    EQU 0xFA
+PIW_FILTER_FUEL        EQU 0xF9
+PIW_FILTER_AMMO        EQU 0xF8
+
+RACE_PROP_SIZE      EQU 10
+CLASS_PROP_SIZE     EQU 10
+CLASS_LVL_SIZE      EQU 5
+
+    ENDIF

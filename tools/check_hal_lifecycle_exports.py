@@ -8,8 +8,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLATFORM_SERVICES = ROOT / "core/platform_services_api.s"
-COMMON_DIR = ROOT / "core"
+PLATFORM_SERVICES = ROOT / "core/6502/platform_services_api.s"
+COMMON_DIR = ROOT / "core/6502"
 OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
 PLATFORMS = {
     "c64": ROOT / "platforms/commodore/c64/hal/lifecycle_policy.s",
@@ -349,12 +349,12 @@ def main() -> int:
     )
     for name in wizard_policy_consumers:
         if name not in wizard_text:
-            policy_missing.append(f"core/wizard.s does not consume {name}")
+            policy_missing.append(f"core/6502/wizard.s does not consume {name}")
 
     ego_text = (COMMON_DIR / "ego_items.s").read_text(encoding="utf-8", errors="replace")
     if "HAL_PLATFORM_EGO_AC_BONUS_LOCAL" not in ego_text:
         policy_missing.append(
-            "core/ego_items.s does not consume HAL_PLATFORM_EGO_AC_BONUS_LOCAL"
+            "core/6502/ego_items.s does not consume HAL_PLATFORM_EGO_AC_BONUS_LOCAL"
         )
 
     spell_effects_text = (COMMON_DIR / "spell_effects.s").read_text(
@@ -362,7 +362,7 @@ def main() -> int:
     )
     if "HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL" not in spell_effects_text:
         policy_missing.append(
-            "core/spell_effects.s does not consume "
+            "core/6502/spell_effects.s does not consume "
             "HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL"
         )
 
@@ -371,12 +371,12 @@ def main() -> int:
     )
     if "hal_platform_character_sheet_begin" not in character_text:
         policy_missing.append(
-            "core/ui_character.s does not consume "
+            "core/6502/ui_character.s does not consume "
             "hal_platform_character_sheet_begin"
         )
 
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", ego_text):
-        policy_missing.append("core/ego_items.s still branches directly on C128")
+        policy_missing.append("core/6502/ego_items.s still branches directly on C128")
 
     player_create_text = (COMMON_DIR / "player_create.s").read_text(
         encoding="utf-8", errors="replace"
@@ -387,15 +387,15 @@ def main() -> int:
         player_create_text,
     ):
         policy_missing.append(
-            "core/player_create.s still gates chargen runtime resync on C128"
+            "core/6502/player_create.s still gates chargen runtime resync on C128"
         )
     if "C128_CHARGEN_CUTPOINT" in player_create_text:
         policy_missing.append(
-            "core/player_create.s still owns the C128 chargen cutpoint name"
+            "core/6502/player_create.s still owns the C128 chargen cutpoint name"
         )
 
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", spell_effects_text):
-        policy_missing.append("core/spell_effects.s still branches directly on C128")
+        policy_missing.append("core/6502/spell_effects.s still branches directly on C128")
 
     if missing or violations or policy_missing or direct_missing:
         if missing:

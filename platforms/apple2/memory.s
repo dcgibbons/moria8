@@ -5,7 +5,7 @@
 //
 // The dungeon map lives in AUXILIARY RAM at $0800-$3B0B; all access goes
 // through the MapRead/MapWrite thunks in memory_aux.s. MAP_BASE below is the
-// aux-space base used by core/dungeon_data.s row tables. The floor-item table
+// aux-space base used by core/6502/dungeon_data.s row tables. The floor-item table
 // and creature scratch share the same numeric addresses in MAIN RAM — legal
 // because RAMRD/RAMWRT keep the banks disjoint, and the contract checker
 // asserts every map access path is thunked.

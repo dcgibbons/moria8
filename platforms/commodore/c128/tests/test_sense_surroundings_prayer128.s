@@ -46,27 +46,27 @@ itn_17:
 itok_detect_monsters:
     .text "Detect Monsters" ; .byte 0
 
-#import "../../../../core/huffman_data.s"
-#import "../../../../core/input_contract.s"
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/huffman_data.s"
+#import "../../../../core/6502/input_contract.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/spell_names.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic.s"
-#import "../../../../core/player_magic_feedback.s"
-#import "../../../../core/player_magic_map.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/spell_names.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/player_magic.s"
+#import "../../../../core/6502/player_magic_feedback.s"
+#import "../../../../core/6502/player_magic_map.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -195,7 +195,7 @@ huff_print_msg:
 test_rng_range:
     ldx test_rng_idx
     inc test_rng_idx
-    lda test_rng_script,x       // N/Z from A, as core/rng.s rng_range: the
+    lda test_rng_script,x       // N/Z from A, as core/6502/rng.s rng_range: the
                                 // caller's bne saw the inc's flags
     rts
 

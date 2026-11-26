@@ -37,7 +37,7 @@
 #define HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK
 #define HAL_STORAGE_DISK_SETUP_ACCEPT_SAVE_FILE
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 
 .const SCREEN_COLS = 80
 .const STATUS_ROW = 23
@@ -216,7 +216,7 @@ save_file_exists:
     clc
     rts
 
-#import "../../../../core/runtime_ui_strings.s"
+#import "../../../../core/6502/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
 #import "../../common/disk_setup_banked.s"
 

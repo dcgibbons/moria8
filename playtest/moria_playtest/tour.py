@@ -48,20 +48,20 @@ from item_ids import (  # noqa: E402
 
 KEY_ESC = 0x1B
 SEED = 1004
-PL_GOLD = 43                       # core/player.s PL_GOLD_0..2
-WEAPONSMITH_DOOR = (39, 6)         # core/dungeon_data.s store_door_x/y[2]
+PL_GOLD = 43                       # core/6502/player.s PL_GOLD_0..2
+WEAPONSMITH_DOOR = (39, 6)         # core/6502/dungeon_data.s store_door_x/y[2]
 HOME_DOOR = (51, 16)               # store_door_x/y[STORE_HOME]
 INV_FIELDS = ("inv_item_id", "inv_qty", "inv_p1", "inv_to_hit", "inv_to_dam", "inv_to_ac", "inv_flags", "inv_ego")
 PACK_SLOTS = 22
 IF_KNOWN = 0x02
-EGO_ARROW_SLAY_EVIL = 44           # core/item_defs.s EGO_AMMO_SLAY_EVIL
-EQUIP_WEAPON = 22                  # core/item_defs.s
+EGO_ARROW_SLAY_EVIL = 44           # core/6502/item_defs.s EGO_AMMO_SLAY_EVIL
+EQUIP_WEAPON = 22                  # core/6502/item_defs.s
 KEY_FIRE = 0xC6                    # SHIFT+F: the wielded launcher at the first matching ammunition
 SHOT_RANGE = 2                     # squares to the townsperson
-STREET = (39, 8)                   # the street between the store rows (core/dungeon_data.s store_pos_y 2 and 12)
+STREET = (39, 8)                   # the street between the store rows (core/6502/dungeon_data.s store_pos_y 2 and 12)
 SHOTS = 20                         # tries for one hit: a seed of misses runs long (BBC, 2026-11-15)
 SHOT_TOHIT = 20                    # on the bow and the arrows
-MX_X, MX_Y, MX_TYPE, MX_HP_LO, MX_HP_HI, MX_SLEEP = 0, 1, 2, 3, 4, 7   # core/monster.s
+MX_X, MX_Y, MX_TYPE, MX_HP_LO, MX_HP_HI, MX_SLEEP = 0, 1, 2, 3, 4, 7   # core/6502/monster.s
 
 
 class TourFailed(Exception):
@@ -125,10 +125,17 @@ class Tour:
         self.settle()
         self.expect(what, lambda: self.obs.mode == Mode.COMMAND)
 
+    def _set_player_pos(self, x: int, y: int) -> None:
+        self.poke(self.sym("zp_player_x"), bytes([x]))
+        self.poke(self.sym("zp_player_y"), bytes([y]))
+        if self.game.port.backend == "cpm":
+            pl_addr = self.sym("player_data")
+            self.poke(pl_addr + 49, bytes([x]))   # PL_MAP_X
+            self.poke(pl_addr + 50, bytes([y]))   # PL_MAP_Y
+
     def walk_in(self, door: tuple[int, int]) -> None:
         """Stand south of a town door and step onto it."""
-        self.poke(self.sym("zp_player_x"), bytes([door[0]]))
-        self.poke(self.sym("zp_player_y"), bytes([door[1] + 1]))
+        self._set_player_pos(door[0], door[1] + 1)
         self.press(ord("K"))
 
     # -- the tour
@@ -148,7 +155,7 @@ class Tour:
         self.poke(self.sym("player_data") + PL_GOLD, (50000).to_bytes(3, "little"))
         self.walk_in(WEAPONSMITH_DOOR)
         self.expect("the Weaponsmith's menu", lambda: "B)uy" in self.text())
-        # Over 10 gp: the haggle (core/ui_store.s sells 10 gp and less at a
+        # Over 10 gp: the haggle (core/6502/ui_store.s sells 10 gp and less at a
         # fixed price; the BBC's first item was a 1 gp Broken Dagger).
         letter = next((row.strip()[0] for row in self.obs.rows[3:20]
                        if len(row.strip()) > 3 and row.strip()[1] == ")" and row.split()[-1:] == ["GP"]
@@ -181,7 +188,8 @@ class Tour:
             (ITEM_SLOT_SPELLBOOK_MAGICK_I, 1, 0, 0, 0, 0, IF_KNOWN, ITEM_PAGE_SPELLBOOK_MAGICK_I),
         )
         self.press(ord("M"))
-        self.expect("the two-book prompt", lambda: "Spell book (a-b)?" in self.text())
+        self.expect("the two-book prompt",
+                    lambda: "Spell book (a-b)?" in self.text() or "Use which spell book? (a-b" in self.text())
         self.press(ord("?"))
         self.expect("the book list", lambda: "Magick I" in self.text())
         self.press(ord("B"))
@@ -258,8 +266,7 @@ class Tour:
         )
         cols = abi.hal_layout_map_cols
         px, py = STREET   # out in the street: the Home's step left it on the doorway
-        self.poke(self.sym("zp_player_x"), bytes([px]))
-        self.poke(self.sym("zp_player_y"), bytes([py]))
+        self._set_player_pos(px, py)
         tiles = read_map(self.game)
         street = tiles[py * cols + px] >> 4
         line = next(((dx, dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -278,6 +285,13 @@ class Tour:
         record = table + town * size   # type: ignore[operator]
         hit = False
         for _ in range(SHOTS):
+            if self.game.port.backend == "cpm":
+                old = self.peek(record + MX_X, 2)
+                if (old[0], old[1]) != target and 0 <= old[0] < cols and 0 <= old[1] < abi.hal_layout_map_rows:
+                    old_addr = abi.MAP_BASE + old[1] * cols + old[0]
+                    self.poke(old_addr, bytes([self.peek(old_addr, 1)[0] & ~abi.FLAG_OCCUPIED]))
+                tgt_addr = abi.MAP_BASE + target[1] * cols + target[0]
+                self.poke(tgt_addr, bytes([self.peek(tgt_addr, 1)[0] | abi.FLAG_OCCUPIED]))
             self.poke(record + MX_X, bytes(target))
             self.poke(record + MX_HP_LO, bytes([200, 0]))
             self.poke(record + MX_SLEEP, b"\xff")
@@ -295,7 +309,8 @@ class Tour:
     def legal(self) -> None:
         self.press(ord("?"))
         self.expect("the Help screen lists L:License",
-                    lambda: "Command Reference" in self.text() and "L:License" in self.text())
+                    lambda: "Command Reference" in self.text()
+                    and ("L:License" in self.text() or "[L] License" in self.text()))
         self.press(ord("L"))
         self.expect("the legal viewer menu", lambda: "License & Source" in self.text())
         self.press(ord("1"))

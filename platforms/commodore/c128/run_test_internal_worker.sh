@@ -23,7 +23,7 @@ vs_file="${SRC%.s}.vs"
 if c128_target_is_stale "$prg_file" || c128_target_is_stale "$vs_file"; then
     # kickass_java.sh fails a build whose .assert failed (KickAssembler exits 0).
     asm_output=$("$REPO_ROOT/tools/kickass_java.sh" -jar "$KICKASS" "$SRC" -o "$prg_file" \
-        -libdir "$REPO_ROOT/core" \
+        -libdir "$REPO_ROOT/core/6502" \
         -libdir "$REPO_ROOT/platforms/commodore/common" \
         -libdir "$REPO_ROOT/platforms/commodore" \
         -afo -libdir ../c64 -define C128 -vicesymbols :OVL_OUT=../../../build/test/c128 2>&1)

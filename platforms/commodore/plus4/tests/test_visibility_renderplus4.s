@@ -8,13 +8,13 @@
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../hal/layout.s"
 #import "../hal/lifecycle_policy.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
 
 mmu_safe_map_read_ptr0:
     lda (zp_ptr0),y
@@ -48,13 +48,13 @@ mmu_safe_map_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/store_door_lookup.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/store_door_lookup.s"
 
 walkable_table:
     .byte 1,0,0,0,0,0,0,1,0,1,1,1,0,0,1,0
 
-#import "../../../../core/los_trace.s"
+#import "../../../../core/6502/los_trace.s"
 
 rng_range:
     lda #0
@@ -82,10 +82,10 @@ current_overlay: .byte 0
 dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1
 dir_dy: .byte -1,  1,  0, 0, -1,-1,  1, 1
 
-#import "../../../../core/monster.s"
+#import "../../../../core/6502/monster.s"
 
-#import "../../../../core/player_move_live_occupant.s"
-#import "../../../../core/dungeon_los.s"
+#import "../../../../core/6502/player_move_live_occupant.s"
+#import "../../../../core/6502/dungeon_los.s"
 
 // Production player_run.s shares the dungeon-feature command scratch block.
 df_target_x:        .byte 0
@@ -97,7 +97,7 @@ df_disarm_trap_idx: .byte 0
 df_disarm_total:    .byte 0
 df_disarm_base:     .byte 0
 
-#import "../../../../core/player_run.s"
+#import "../../../../core/6502/player_run.s"
 
 test_map_tile: .byte 0
 test_map_x:    .byte 0
@@ -149,12 +149,12 @@ player_get_infra_range:
     lda #0
     rts
 
-// A monster coming into sight ends search mode (core/monster.s); this render
-// test does not import core/player.s.
+// A monster coming into sight ends search mode (core/6502/monster.s); this render
+// test does not import core/6502/player.s.
 player_search_mode_off:
     rts
 
-#import "../../../../core/floor_item_page.s"
+#import "../../../../core/6502/floor_item_page.s"
 #import "../dungeon_render.s"
 
 test_plus4_irq_hidden_rom:

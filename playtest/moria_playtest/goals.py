@@ -18,21 +18,21 @@ from .ports import Port
 # Chargen keys for the scripted path (§6.4): race letter, class letter.
 HALF_TROLL_WARRIOR = ("H", "A")
 
-# Race menu letters, in race table order (core/player_create.s). The class
+# Race menu letters, in race table order (core/6502/player_create.s). The class
 # menu lists only the classes a race allows (race_class_flags), so a class's
 # letter depends on the race; Warrior, allowed to every race, is always A.
 RACE_KEYS = {"human": "A", "half-elf": "B", "elf": "C", "halfling": "D", "gnome": "E",
              "dwarf": "F", "half-orc": "G", "half-troll": "H"}
 DEFAULT_CHARACTER = "half-troll-warrior"
 CLASSES = ("warrior", "mage", "priest", "rogue", "ranger", "paladin")   # class table order
-# Classes each race allows, bit n = CLASSES[n] (core/tables.s race_class_flags).
+# Classes each race allows, bit n = CLASSES[n] (core/6502/tables.s race_class_flags).
 RACE_CLASS_FLAGS = {"human": 0b111111, "half-elf": 0b111111, "elf": 0b011111, "halfling": 0b001011,
                     "gnome": 0b001111, "dwarf": 0b000101, "half-orc": 0b001101, "half-troll": 0b000101}
 
 
 def class_key(race: str, klass: str) -> str:
     """The class menu lists only the classes the race allows, in table
-    order (core/player_create.s), so a class's letter depends on the race."""
+    order (core/6502/player_create.s), so a class's letter depends on the race."""
     allowed = [c for i, c in enumerate(CLASSES) if RACE_CLASS_FLAGS[race] >> i & 1]
     return chr(ord("A") + allowed.index(klass))
 
@@ -117,7 +117,7 @@ class Goal:
     threat_depth: bool = False
     exercise: bool = False  # cast every spell known until its effect is seen (M7 criterion 2)
     # Classes that buy a launcher and shoot (brain.missile_pick): the best bow
-    # skills (core/tables.s class_properties BOW: Ranger 72, Rogue 66).
+    # skills (core/6502/tables.s class_properties BOW: Ranger 72, Rogue 66).
     missile_classes: tuple[str, ...] = ("rogue", "ranger")
     # M7 tactics the brain plays (TACTICS names); a subqueue's variant can
     # turn each off or on (apply_variant, §23.10).
@@ -168,9 +168,9 @@ GOALS: dict[str, Goal] = {
         missile_classes=("rogue", "ranger", "warrior"), tactics=DEFAULT_TACTICS),
     # M8 (§23.9): the Balrog queue plays every combination that has met the
     # M7 bar (queue.Balrog), from where it met it. The game sets
-    # GAME_FLAG_WINNER on the kill (core/combat.s); the Balrog appears from
+    # GAME_FLAG_WINNER on the kill (core/6502/combat.s); the Balrog appears from
     # DL100 with the tiers, from DL50 with the monster catalog (VMS
-    # win_mon_appear, core/monster_catalog.s). Character level first
+    # win_mon_appear, core/6502/monster_catalog.s). Character level first
     # (maintainer, 2026-11-02: "the goal is to get to clevel 38 thru 40
     # (really 40) and THEN go tackle the balrog"): three levels over each
     # depth, no taper, up to the game's top level, 40 (brain.ready_level),

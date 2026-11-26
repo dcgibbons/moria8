@@ -18,7 +18,7 @@
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
 :AuxDataSegment()
 #endif
-#import "../platforms/shared/item_catalog/item_hot_tables.s"
+#import "../../platforms/shared/item_catalog/item_hot_tables.s"
 #if HAL_PLATFORM_AUX_PERSISTENT_DATA
 :ResidentItemsSegment()
 #endif

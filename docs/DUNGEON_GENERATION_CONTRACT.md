@@ -6,15 +6,21 @@ finished map does not require this contract.
 
 ## Authority And Goal
 
-- Shared production implementation: `core/dungeon_gen.s`
-- Dimensions and room-table capacity: `core/dungeon_data.s` through HAL layout
+- Shared 6502 production implementation: `core/6502/dungeon_gen.s`
+- Dimensions and room-table capacity (6502): `core/6502/dungeon_data.s` through HAL layout
+- Parallel Z80 production implementation (CP/M 2.2): `platforms/z80/cpm/ovl_gen.asm`
+  (reusing `cpm_char_shadow` `0x8E00–0x957F` as scan scratch and calling `screen_clear_hw`
+  before gameplay return; see `docs/CPM_MEMORY_CONTRACT.md` §2.3)
 - Default upstream oracle: pinned VMS Moria dungeon generation sources
 - Secondary oracle: pinned Umoria generation sources when VMS is unclear or
   divergent
 
-The algorithm is shared across C64, C128, and Plus/4. Platform conditionals may
-select dimensions and capacity constants. A platform-specific generation stage
-requires a documented hardware constraint and explicit design approval.
+The 6502 algorithm is shared across C64, C128, Plus/4, Apple IIe, CX16, Atari
+8-bit, and BBC Master 128, while CP/M 2.2 (Z80) implements the same stages and
+constants in `platforms/z80/cpm/ovl_gen.asm`. Platform conditionals may select
+dimensions and capacity constants (`80×48` `MAX_ROOMS=8` vs `198×66` `MAX_ROOMS=21`).
+A platform-specific generation stage requires a documented hardware constraint and
+explicit design approval.
 
 ## Production Pipeline
 
@@ -39,7 +45,7 @@ must be consumed before the stage that repurposes them.
 
 ## Observed Production Snapshot
 
-This table is a descriptive snapshot of `core/dungeon_gen.s`, checked
+This table is a descriptive snapshot of `core/6502/dungeon_gen.s`, checked
 2026-07-18. It is implementation evidence, not semantic authority. Determine
 intended behavior from accepted ledger decisions and the pinned upstream oracle
 before preserving or changing an observed formula. A deliberate change to a
@@ -143,7 +149,7 @@ delegated to the future-gate table do not block ordinary repairs.
 | Stairs | settled count policy and normal-placement legal terrain/reachability; record unchecked fallback as residual risk |
 | Streamers | count, continuity, and width for the changed fixture; aggregate density/distribution is a future gate |
 | Retry/termination | adversarial RNG termination when changing a retry loop; numeric runtime budgets are a future gate |
-| Shared algorithm | implementation review of stage entry/order on all platforms; platform constants tested separately |
+| Shared algorithm | implementation review of stage entry/order on all 7 6502 platforms plus parallel Z80 parity (`platforms/z80/cpm/ovl_gen.asm`) and `make testcpm`; platform constants tested separately |
 
 ## Future Acceptance Gates
 
@@ -167,6 +173,7 @@ must inspect generated map data.
 | C128 dungeon renderer color path | `platforms/commodore/c128/tests/test_dungeon128.s` | does not execute production generation |
 | Plus/4 generation entry | Plus/4 dungeon-entry smoke | `TEST_FILTER='^dungeon_entry_plus4$' make testplus4`; topology coverage incomplete |
 | Deferred chest-loot GEN overlay entry and return | C64 and Plus/4 scripted product smokes execute real Open dispatch, CHEST-to-GEN replacement, picker/ego path, placement, and runtime resync | `TEST_FILTER='chest_open_product_smoke' make test64`; `TEST_FILTER='chest_open_product_plus4' make testplus4` |
+| CP/M 2.2 (Z80) `198×66` generation topology, connectivity soak, and `cpm_char_shadow` dual-use cleanup (`ovl_gen.asm`) | `platforms/z80/cpm/harness_smoke.py` scenario `dungeon_gen_topology_soak` under `cpm_runner` / `RunCPM` | `make testcpm` |
 | Shared fixed seed corpus and permanent failure-seed registry | none | `NOT IMPLEMENTED` |
 | Aggregate topology/statistical validator with first failing seed/stage | none | `NOT IMPLEMENTED` |
 | Platform generation performance budget | none | `NOT IMPLEMENTED` |

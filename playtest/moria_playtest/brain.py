@@ -44,7 +44,7 @@ KEY_FIRE = 0xC6          # SHIFT+F: the wielded launcher at the first matching a
 KEY_DISARM = 0xC4        # SHIFT+D
 KEY_PICKUP = ord("G")
 KEY_DROP = ord("D")
-KEY_TUNNEL = ord("+")     # CMD_TUNNEL: then a direction (core/tunnel.s)
+KEY_TUNNEL = ord("+")     # CMD_TUNNEL: then a direction (core/6502/tunnel.s)
 # What the bot uses (the pack list names a stack without a plural): the rest
 # is junk once the pack fills (worn-out gear, burnt-out torches).
 # Something Recharge can work on, the cheapest first (Magic Shop, VMS prices):
@@ -54,7 +54,7 @@ RECHARGEABLE = ("Wand of Light", "Staff of Light")   # the Staff of Detect Monst
 # Wands and staffs (maintainer, 2026-11-04: "this is a big gap"): Mages out of
 # mana, out of Phase Door and in melee were the late deaths of the day. Damage
 # by the game's numbers, VMS's (wands.inc: bolts 3d8, 4d8, 6d8; balls 24, 32,
-# 40, 48; Drain Life 50; core/scroll_effects_p3.s, core/item_actions_overlay.s).
+# 40, 48; Drain Life 50; core/6502/scroll_effects_p3.s, core/6502/item_actions_overlay.s).
 # The Umoria figures FEATURE_MAP quotes (72, 48, 6d8) overrated them until
 # 2026-11-11.
 ATTACK_WANDS = {"Wand of Drain Life": 50.0, "Wand of Fire Balls": 49.0, "Wand of Acid Balls": 40.0,
@@ -101,7 +101,7 @@ RECHARGE_SCROLL = "Scroll of Recharging"    # recharge(60): charges back on an e
 RECHARGE_RESERVE = 2                        # carried while any fighting wand or staff is
 WAND_BUYS = tuple(sorted(ATTACK_WANDS, key=ATTACK_WANDS.get, reverse=True))   # the best first, as the gold allows
 WAND_GOLD = 600          # gold beyond the gear reserve for a Magic Shop trip for a wand or staff
-# Unidentified items by their flavours (core/item_identification.s): "Blue
+# Unidentified items by their flavours (core/6502/item_identification.s): "Blue
 # Potion", "White Scroll" or "Scroll of Lumen", "Iron Wand", "Birch Staff".
 # Tried when safe or identified (maintainer, 2026-11-04: identify spells and
 # scrolls, and found potions and scrolls, were never used).
@@ -126,7 +126,7 @@ PICKUPS = ("Potion of Cure", "Potion of Healing", "Potion of Neutralize", "Potio
            "Wand of Stinking Cloud", "Wand of Teleport Away", "Staff of Teleportation")
 CARRY_TIMES = 2          # a found supply is picked up until twice its reserve is carried ...
 CARRY_LEAST = 5          # ... and at least this many (Brain.carried_enough)
-# The weight limit (core/inv_add.s, VMS inven_check_weight): STR x 130 plus
+# The weight limit (core/6502/inv_add.s, VMS inven_check_weight): STR x 130 plus
 # the body weight, at most 3000, in tenths of a pound, pack and equipment.
 # Since the review build (57c0e67) counted the weight on loading, refusals
 # rose from 3-7 to 54 per 100,000 Balrog steps, and 15 of 23 Balrog deaths
@@ -156,6 +156,14 @@ IDENTIFY = "Identify"    # the Mage and Ranger spell (Magick I; magic.ON_ITEM)
 IDENTIFY_SCROLL = "Scroll of Identify"
 
 
+CPM_WEIGHT_TAIL = re.compile(r"\s+\d+\.\d+\s+lb\s*$")
+
+
+def strip_article(name: str) -> str:
+    """Remove a leading indefinite article ("a "/"an ") and trailing CP/M weight."""
+    return re.sub(r"^an? ", "", CPM_WEIGHT_TAIL.sub("", name.strip())).strip()
+
+
 def item_weight(name: str) -> int:
     """One item's weight in tenths of a pound, from the shipped item tables
     (the manual's weights, as a player knows them): the name before its
@@ -164,14 +172,14 @@ def item_weight(name: str) -> int:
     where the pack shows "Potion of Cure Light Wounds"); 0 for a name they
     do not hold (an unknown flavour)."""
     kinds = knowledge.item_kinds()
-    base = re.split(r" \(| \[", re.sub(r"^an? ", "", name.strip()))[0].strip()
+    base = re.split(r" \(| \[", strip_article(name))[0].strip()
     kind = kinds.get(base) or kinds.get(base.split(" of ", 1)[-1])
     return kind.weight if kind is not None else 0
 
 
 def base_name(name: str) -> str:
     """An item's name before its ego, plusses or AC, however the list shows them."""
-    return re.split(r" \(| \[| ·", re.sub(r"^an? ", "", name.strip()))[0].strip()
+    return re.split(r" \(| \[| ·", strip_article(name))[0].strip()
 
 
 def stack_weight(name: str, count: int) -> int:
@@ -181,7 +189,8 @@ def stack_weight(name: str, count: int) -> int:
 
 def unknown_kind(name: str) -> str | None:
     """"potion", "scroll", "wand", "staff" or "ring" for an unidentified flavour name, else None."""
-    name = re.sub(r"^(?:an? |\d+ )", "", name.strip())
+    name = CPM_WEIGHT_TAIL.sub("", name.strip())
+    name = re.sub(r"^(?:an? |\d+ )", "", name).strip()
     if name.endswith(" Potion"):
         return "potion"
     if name.endswith(" Scroll") or (name.startswith("Scroll of ") and name[len("Scroll of "):] in UNKNOWN_SCROLL_WORDS):
@@ -191,7 +200,7 @@ def unknown_kind(name: str) -> str | None:
             return kind
     return None
 CHARGES = re.compile(r"\((\d+) charges?\)")
-RECHARGED = re.compile(r"The ((?:Wand|Staff) of [A-Za-z' -]+?) glows briefly\.")   # core/player_magic_execute_overlay.s
+RECHARGED = re.compile(r"The ((?:Wand|Staff) of [A-Za-z' -]+?) glows briefly\.")   # core/6502/player_magic_execute_overlay.s
 # Any label after the name: "(5 charges)", or "(magik)" on one sensed but not
 # identified, which the stricter form missed, so found duplicates were picked
 # up again and again (2026-11-05: four Wands of Cold Balls).
@@ -209,7 +218,7 @@ KEEP_PREFIXES = ("Ration", "Slime Mold", "Flask of Oil", "Wooden Torch", "Brass 
                  "Potion of Restore", "Mushroom of Restor")
 DROP_RETRY = 500         # steps before looking for junk again after finding none
 KEY_RETURN = 0x0D
-LOOK_RESULT = re.compile(r"You see an? (.+?)\.")
+LOOK_RESULT = re.compile(r"You see (?:an? |\d+ )(.+?)\.")
 SLAIN = re.compile(r"You have slain the (.+?)\.")
 HIT_NEWS = re.compile(r"hits|misses|slain|fails|dies|destroyed|resists|unaffected|unharmed|immune|shrugs")
 CASTS_A_SPELL = re.compile(r"[Tt]he (.+?) (?:casts a spell|frightens you)")
@@ -243,14 +252,14 @@ EAT_CLEAR = 5            # a creature this close puts off a meal while only Hung
 COINS_ODDS = 0.5         # fight odds under which Creeping Coins are fought, not walked away from (M5a)
 FIGHT_ODDS = 0.6         # ... or more than this share of the turns it needs to kill the character: at
                          # 1.0 a fight is a coin flip (M5a round 7; 1.0 until round 6)
-# Melee skill: class base and per level (core/tables.s class_properties BTH,
+# Melee skill: class base and per level (core/6502/tables.s class_properties BTH,
 # class_level_adj BTH) plus the race's (race_properties BTH).
 CLASS_BTH = {"warrior": (70, 4), "mage": (34, 2), "priest": (48, 2), "rogue": (60, 3), "ranger": (56, 3),
              "paladin": (68, 3)}
 RACE_BTH = {"human": 0, "half-elf": -1, "elf": -5, "halfling": -10, "gnome": -8, "dwarf": 15, "half-orc": 12,
             "half-troll": 20}
 CLASS_BTHB = {"warrior": (55, 4), "mage": (20, 2), "priest": (35, 2), "rogue": (66, 4), "ranger": (72, 4),
-              "paladin": (40, 3)}   # missile skill and its gain a level (core/tables.s class_properties)
+              "paladin": (40, 3)}   # missile skill and its gain a level (core/6502/tables.s class_properties)
 RACE_BTHB = {"human": 0, "half-elf": 5, "elf": 15, "halfling": 20, "gnome": 12, "dwarf": 0, "half-orc": -5,
              "half-troll": -10}
 REFERENCE_AC = 20        # creature armour weapons are compared at (DL1-5 creatures: AC 10-30)
@@ -271,7 +280,7 @@ COLLECT_STEPS = 12       # farthest gold or food in view worth walking to (MON-0
 COLLECT_WALKS = 3 * COLLECT_STEPS   # walk decisions toward one item before giving it up
 OPEN_TRIES, BASH_TRIES = 3, 8
 DISARM_TRIES = 3         # disarm attempts on a known trap in the way, then walk over it
-# Chests (core/chest.s, docs/CHEST_DESIGN.md): searched, a found trap
+# Chests (core/6502/chest.s, docs/CHEST_DESIGN.md): searched, a found trap
 # disarmed, the lock picked; an explosion is 5d8 (40 at most), so only with
 # CHEST_HP to spare and CHEST_HP_SHARE of full health.
 CHEST_SEARCHES = 2       # searches beside a chest for a hidden trap before opening it
@@ -281,7 +290,7 @@ CHEST_HP, CHEST_HP_SHARE = 45, 0.6
 CHEST_STEPS = 2 * 12     # farthest chest in view worth walking to (COLLECT_STEPS twice)
 SEARCHES_PER_SPOT = 6
 SEALED_DIG_AFTER = 1500  # steps sealed in, searching, before tunnelling out
-DIG_COST = {0xD: 60, 0xC: 150}   # path cost of a quartz vein and a magma one (core/tunnel.s: quartz gives way more easily)
+DIG_COST = {0xD: 60, 0xC: 150}   # path cost of a quartz vein and a magma one (core/6502/tunnel.s: quartz gives way more easily)
 DIG_TRIES = 600          # tunnel turns at one square before it counts as too hard
 SEALED_SEARCHES = 25     # per spot when no exit is reachable: each search only
                          # sometimes finds an adjacent secret door (§14.3 round 7)
@@ -311,9 +320,9 @@ GEAR_TRIP_GOLD = 1000    # gold at which a town trip to spend it on armour and w
 GEAR_TRIP_WAIT = 5000    # steps after a town visit before gold alone is reason for another (M5a)
 STARTING_FOOD = 5        # rations in the starting kit (VMS player_init, Umoria class_base_provisions;
 STARTING_TORCHES = 4     # ... 1 each until the 2026-10-25 kit fix), and torches beyond the lit one
-STARTING_WEAPON = ("Dagger", 0)               # core/game_loop.s starting equipment: (name, to-dam)
-# Launchers (core/ranged_fire.s, MON-018): ammunition, damage multiplier and
-# range; the ammunition's dice average (core/item_tables.s: 1d5, 1d4, 1d2).
+STARTING_WEAPON = ("Dagger", 0)               # core/6502/game_loop.s starting equipment: (name, to-dam)
+# Launchers (core/6502/ranged_fire.s, MON-018): ammunition, damage multiplier and
+# range; the ammunition's dice average (core/6502/item_tables.s: 1d5, 1d4, 1d2).
 LAUNCHERS = {"Heavy Crossbow": ("Bolt", 4, 35), "Composite Bow": ("Arrow", 4, 35), "Long Bow": ("Arrow", 3, 30),
              "Light Crossbow": ("Bolt", 3, 25), "Short Bow": ("Arrow", 2, 25), "Sling": ("Rock", 2, 20)}
 AMMO_AVERAGE = {"Bolt": 3.0, "Arrow": 2.5, "Rock": 1.5, "Iron Shot": 2.0}
@@ -335,7 +344,7 @@ STATS = re.compile(r"\b(ST|IN|WI|DX|CO|CH):\s*(\d+)(?:/(\d+|\*\*))?")   # all si
 
 def str_code(base: str, extra: str) -> int:
     """A status-line stat as the game keeps it, 3-118: 18/xx is 18 + xx, and
-    "18/00" is 18/100 (core/stat_display.s), the weight limit's STR."""
+    "18/00" is 18/100 (core/6502/stat_display.s), the weight limit's STR."""
     if not extra:
         return int(base)
     return 118 if extra in ("**", "00") else 18 + int(extra)
@@ -343,19 +352,29 @@ def str_code(base: str, extra: str) -> int:
 
 def stat_value(base: str, extra: str) -> int:
     """A status-line stat as 18 + xx/10 for 18/xx. The game prints 18/100 as
-    "18/00" (core/stat_display.s), which read as a bare 18 until 2026-11-07."""
+    "18/00" (core/6502/stat_display.s), which read as a bare 18 until 2026-11-07."""
     if extra in ("**", "00"):
         return 28
     return int(base) + (int(extra) // 10 if extra else 0)
 # The equipment list ('E'): a worn armour slot, its name and [AC,+to-AC]
-# (wrapped onto the next line on 40 columns).
-EQUIP_LINE = re.compile(r"^\s*[a-z]\) (Body|Shield|Head|Hands|Feet|Cloak):\s+(.*)$")
+# (wrapped onto the next line on 40 columns; padded to col 15 + trailing lb on 80-col CP/M).
+EQUIP_LINE = re.compile(
+    r"^\s*[a-z]\) (Body Armor|Body|Shield|Head|Helm|Hands|Gloves|Feet|Boots|Cloak)\s*:\s+(?:an? )?(.+?)(?:\s+\d+\.\d+\s+lb)?\s*$"
+)
 # Every slot of the equipment list, for the weight carried: worn items count
-# toward the limit as the pack does (core/inv_add.s inven_weight).
-WORN_LINE = re.compile(r"^\s*(?:[a-z]\) )?(?:Weapon|Body|Shield|Head|Hands|Feet|Light|Ring|Amulet|Cloak|Second):"
-                       r"\s+(.*)$")
-EQUIP_SLOTS = {"Body": "ICAT_ARMOR", "Shield": "ICAT_SHIELD", "Head": "ICAT_HELM",
-               "Hands": "ICAT_GLOVES", "Feet": "ICAT_BOOTS", "Cloak": "ICAT_CLOAK"}
+# toward the limit as the pack does (core/6502/inv_add.s inven_weight).
+WORN_LINE = re.compile(
+    r"^\s*(?:[a-z]\) )?(?:Weapon|Wielding|Body Armor|Body|Shield|Head|Helm|Hands|Gloves|Feet|Boots|Light|Ring L|Ring R|Ring|Amulet|Cloak|Secondary|Second)\s*:"
+    r"\s+(?:an? )?(.+?)(?:\s+\d+\.\d+\s+lb)?\s*$"
+)
+EQUIP_SLOTS = {
+    "Body": "ICAT_ARMOR", "Body Armor": "ICAT_ARMOR",
+    "Shield": "ICAT_SHIELD",
+    "Head": "ICAT_HELM", "Helm": "ICAT_HELM",
+    "Hands": "ICAT_GLOVES", "Gloves": "ICAT_GLOVES",
+    "Feet": "ICAT_BOOTS", "Boots": "ICAT_BOOTS",
+    "Cloak": "ICAT_CLOAK",
+}
 # A ring or amulet (Magic Shop, Black Market), worn or for sale: its name and
 # the bonus shown, "[+5]" for Protection, "(+2)" for Strength and Wisdom,
 # "(+3,+4)" / "(+0,+6)" / "(+6,+0)" for Slaying / Increase Damage / To-Hit,
@@ -369,7 +388,9 @@ JEWEL_NAME = re.compile(
 )
 # The equipment list's ring and amulet rows, worn ("h) Ring: ...") or not
 # ("    Ring:   (none)"): both ring hands, the right first (VMS moria.inc:528).
-JEWEL_LINE = re.compile(r"^\s*(?:[a-z]\) )?(Ring|Amulet):\s+(.*)$")
+JEWEL_LINE = re.compile(
+    r"^\s*(?:[a-z]\) )?(Ring L|Ring R|Ring|Amulet)\s*:\s+(?:an? )?(.+?)(?:\s+\d+\.\d+\s+lb)?\s*$"
+)
 FLAG_RINGS = ("Resist Fire", "Resist Cold", "See Invisible")   # one flag each (player.s pf_bit_table): a second does nothing; Speed adds (MON-026)
 # The rings and the amulet that resist an element (player.s pf_bit_table and
 # pf_lordly_table, MON-029); the Lordly rings add LORDLY_AC besides, which a
@@ -380,7 +401,7 @@ JEWEL_ELEMENTS = {"Resist Fire": "fire", "Resist Cold": "frost", "Resist Acid": 
 LORDLY_AC = 5
 JEWEL_GOLD = 20000       # gold beyond the reserve before rings and amulets are shopped for
 MELEE_KLASSES = ("warrior", "paladin", "rogue", "ranger")
-# Ego weapons (core/ego_items.s): the name's suffix, and what it is worth on
+# Ego weapons (core/6502/ego_items.s): the name's suffix, and what it is worth on
 # the dice: a slay by how much of the deep dungeon it applies to (evil is
 # most of it, dragons among them), Flame's 2d4 a blow, Defender's +5 AC as
 # a couple of points a blow. Named "Dagger (Defender)", they were looked up
@@ -402,13 +423,15 @@ ENCHANT_WEAPON_MAX = 10  # to-dam the scrolls are bought for up to (VMS enchant(
 # Phase 5 (VMS stock): the Alchemist's two scrolls. Bought for to-dam, so not
 # the To-Hit one, which the name prefix also matched (2026-11-16).
 ENCHANT_TO_HIT = ENCHANT_WEAPON + " To-Hit"
-WEAPON_LINE = re.compile(r"^\s*[a-z]\) Weapon:\s+(.+?)\s*$")   # the equipment list's wielded weapon
+WEAPON_LINE = re.compile(
+    r"^\s*[a-z]\) (?:Weapon|Wielding)\s*:\s+(?:an? )?(.+?)(?:\s+\d+\.\d+\s+lb)?\s*$"
+)   # the equipment list's wielded weapon
 MARKET_GEAR_GOLD = 50000 # gold at which the Black Market is shopped for armour and weapons too
 HURT_OUT_HP = 0.35       # below this share of HP with no healing potion left: Word of Recall
 HURT_OUT_HP_NO_ESCAPE = 0.5   # ... with no escape at hand either: Recall takes 15-35 turns to come
 LIT_EVERY = 4            # squares walked, lightless, between light spells
 GEAR_ARMOUR = re.compile(r"^(.+?) \[(\d+)(?:,\s*([+-]\s*\d+))?")
-# Resistance armour and Defender weapons (core/ego_items.s, MON-027) and the
+# Resistance armour and Defender weapons (core/6502/ego_items.s, MON-027) and the
 # crowns of the Magi (MON-030): the elements of breath they resist
 # (monster_cast_breath). Not the Amulet of the Magi: a crown's suffix only.
 EGO_RESIST = re.compile(r" \((Resist(?: Acid| Fire| Cold| Lightning)?|Defender)\)|(?<=Crown) of (the Magi)")
@@ -628,7 +651,7 @@ UNSEEN_BREATH_STEPS = 40 # steps a breath from out of sight is remembered as the
 UNSEEN_BREATHS = 2       # ... and the breaths it is weighed as: no sight line to step out of
 THREAT_DEPTH_FROM = 30   # character level from which a threat_depth goal goes as deep as it survives
 OUT_OF_DEPTH = 2         # ... counting natives this much deeper: 1 in 50 picks is out of depth by
-                         # 1 + |randnor(0,4)| (VMS alloc_monster mon_nasty, core/monster_catalog.s)
+                         # 1 + |randnor(0,4)| (VMS alloc_monster mon_nasty, core/6502/monster_catalog.s)
 OUT_OF_DEPTH_FREE = 2    # ... with Free Action worn too (0 for 30 minutes on 2026-11-22: DL39's drainers
                          # cost more than its kills, -21k experience a run-hour against DL37's +180k)
 SUMMON_PEER_NUM, SUMMON_PEER_DEN = 2, 3   # after a summoning, contact with a creature of 2/3 the clvl is escaped
@@ -667,7 +690,7 @@ QUAFF_HP = 0.3           # below this fraction of max HP, drink one
 # maintainer, 2026-11-18).
 WAYBREAD = "Piece of Elvish Waybread"
 FOODS = ("Ration of Food", "Slime Mold", WAYBREAD)
-SLIME = 1 / 3            # a Slime Mold feeds 500 turns, a Ration 1,500 (core/player_items.s)
+SLIME = 1 / 3            # a Slime Mold feeds 500 turns, a Ration 1,500 (core/6502/player_items.s)
 FOOD_PER_DEPTH = 3       # one more ration of reserve per this many levels down (M4 round 42)
 FOOD_RESERVE = 2         # below this many known foods, head for town (§14.3 round 3)
 SHALLOW_DLVL = 2         # trips no deeper than this keep a smaller food reserve (M5b round 35)
@@ -686,7 +709,7 @@ LANTERN, OIL, TORCH = "Brass Lantern", "Flask of Oil", "Wooden Torch"
 PACK_KINDS = 22          # pack slots a-v: one more kind of item needs one of them free
 LIGHT_TURNS = re.compile(r"\((\d+) turns\)")   # a light's fuel, shown identified or not
 WORN_LIGHT = re.compile(r"You are wearing a (?:Wooden Torch|Brass Lantern) \((\d+) turns")
-LIGHT_CHARGE_TURNS = 30   # each charge the game shows as a "turn" (core/turn.s LIGHT_TICKS_PER_CHARGE)
+LIGHT_CHARGE_TURNS = 30   # each charge the game shows as a "turn" (core/6502/turn.s LIGHT_TICKS_PER_CHARGE)
 SPARE_TORCH_CHARGES = 34   # a spare torch worth counting: about a quarter of a new one's 134
 OIL_RESERVE = 3          # flasks to carry: each refills the lantern (§14.3 round 13)
 EARLY_LANTERN_OIL = 1    # ... of which only one is kept from throwing while early (EARLY_LEVELS)
@@ -707,7 +730,7 @@ THROW_RANGE = 5          # farthest in-line creature worth a thrown flask
 OIL_THROW = 7            # flasks carried to throw, beyond the lantern's reserve (M5a)
 OIL_EARLY = 10           # flasks to throw bought first while early, whatever else waits (M5b; 5 at 10 gp until round 48)
 OIL_WORTH_HP = 8         # lore HP at which an approaching creature is worth a flask (M5a)
-OIL_GOLD = 3             # a flask's base price (core/item_tables.s; VMS, 10 until M5b round 46)
+OIL_GOLD = 3             # a flask's base price (core/6502/item_tables.s; VMS, 10 until M5b round 46)
 SUPPLY_GOLD = 5          # gold below which a town trip for food or light buys nothing (a torch, a ration)
 ASSET_PROMPT = "Insert program disk"   # the game's prompt after a required load fails (asset_load_ask_for_disk)
 TORCH_RESERVE = 3        # spare torches to carry: the light, or the lantern's backup (M4; 2 until M5b round 46)
@@ -721,7 +744,7 @@ REFUEL_AT = 300          # turns of light left at which a flask goes into the la
 # Stat rolls (maintainer, 2026-10-25: "I like the general policy - but make
 # sure that would work"): reroll, as a player does, until the class's main
 # stat and CON are good for the race and class. Base stats are d3+d4+d5+5
-# (8-17) with a 73-84 total (core/player_create.s), so a fixed bar fails some
+# (8-17) with a 73-84 total (core/6502/player_create.s), so a fixed bar fails some
 # characters (a Half-Troll Mage's INT never reaches 17, an Elf Mage's CON never
 # 14). The bars: the main stat at least 17, or 2 below the best this race and
 # class can have if that is lower; CON at least the middle of its range (base
@@ -754,7 +777,7 @@ DIVE_FROM_CLVL = MAX_CLVL   # the Balrog goal dives past one-breath killers from
                             # to DL49 (2026-11-10) died six times to Ancient Multi-Hued Dragons in two hours for
                             # less experience an hour than DL39, and the maintainer: "let's not deep-dive then"
 BALROG = "Balrog"     # dived for only once its breath is survivable (balrog_ready)
-BALROG_DLVL = 50      # ... and no deeper: from here every level has it (core/monster_catalog.s CAT_WIN_LEVEL)
+BALROG_DLVL = 50      # ... and no deeper: from here every level has it (core/6502/monster_catalog.s CAT_WIN_LEVEL)
 BALROG_NEAR_STEPS = 100  # steps since the Balrog was in view that its fire is kept resisted at any price (resist_fire)
 BALROG_FIGHT_TURNS = 2   # resisted turns of the Balrog's worst the HP covers to stand and fight it (balrog_fight)
 BALROG_HP = 3000      # 75d40 at its maximum (CR_MAX_HP; docs/FEATURE_MAP.md): what balrog_damage must cover
@@ -763,11 +786,11 @@ BALROG_SHOT_HITS = 0.5    # share of the launcher's shots counted as landing on 
 BALROG_AMMO = 255     # shots carried once Balrog-bound, one stack (51 lb of bolts): AMMO_RESERVE before
 BALROG_FIRE_RING = 1100   # a Ring of Resist Fire at the top level on the Balrog goal: over a Ring of Speed's 1000
 DIVE_REST_HP = 0.8    # on a dive level no rest above this share of HP; below it a potion first (rest)
-BREATH_REACH = 20     # squares a creature's breath or spell reaches (VMS max_sight, core/monster_catalog.s)
-STORE_ITEM = re.compile(r"^\s*([a-p])\) (?:\d+ )?(\S.*?)\s+(\d+) GP")   # a stack shows its count first
-STORE_ROWS = slice(3, 19)   # 16 items a store (core/store_data_defs.s)
+BREATH_REACH = 20     # squares a creature's breath or spell reaches (VMS max_sight, core/6502/monster_catalog.s)
+STORE_ITEM = re.compile(r"^\s*([a-p])\) (?:(?:\d+|an?) )?(\S.*?)\s+(\d+) GP")   # a stack shows its count (or article) first
+STORE_ROWS = slice(3, 19)   # 16 items a store (core/6502/store_data_defs.s)
 STORE_GOLD_ROW = 19         # the menu and the gold share the row below them
-PACK_ITEM = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*)")   # a stack shows its count first
+PACK_ITEM = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*?)(?:\s+\d+\.\d+\s+lb)?\s*$")   # a stack shows its count first; CP/M adds trailing weight
 STACK_COUNT = re.compile(r"^\s*[a-v]\) (\d+) ")
 STACKING = ("Potion of", "Scroll of", "Ration", "Slime Mold", "Flask of Oil", "Wooden Torch")   # kinds inv_add_item stacks
 PACK_COUNT = re.compile(r"^\s*[a-v]\) (\d+) ")
@@ -933,7 +956,7 @@ class Brain:
         self.potions_done = False              # done at the Temple on this town visit
         self.magic_done = False                # done at the Magic Shop on this town visit
         self.poisoned = False                  # "You feel poisoned." until "You feel better." (M5f)
-        self.poison_shown = False              # the status line has shown "Poisoned" (core/ui_status.s, 2026-11-10)
+        self.poison_shown = False              # the status line has shown "Poisoned" (core/6502/ui_status.s, 2026-11-10)
         self.market_done = False               # done at the Black Market on this town visit
         self.restock_scums = 0                 # trips to DL1 and back for a restock (RESTOCK_SCUMS)
         self.identify_fails = 0                # Identify casts failed running (IDENTIFY_FAIL_STREAK)
@@ -998,6 +1021,9 @@ class Brain:
         self.shop_buys = 0                     # purchases started on this town visit
         self.store_letter: str | None = None   # item letter for the next "Buy which item?"
         self.pending_look: tuple[Pos, str] | None = None   # glyph the last look aimed at
+        self.look_cursor: Pos | None = None
+        self.look_steps = 0
+        self.look_message = ""
         self.aimed: tuple[Pos, str] | None = None   # glyph the last bolt, shot or flask was aimed at
         self.food = STARTING_FOOD              # foods carried, as a player counts them:
                                                # starting kit, +bought/picked up, -eaten
@@ -1142,7 +1168,7 @@ class Brain:
             self.poisoned = True
         elif not self.poison_shown and "You feel better." in messages and (self.last_hp is None or obs.hp <= self.last_hp):
             # The poison's end, not a heal: a 5-14 HP heal says "You feel
-            # better." too (core/player_heal_feedback.s, VMS hp_player), and
+            # better." too (core/6502/player_heal_feedback.s, VMS hp_player), and
             # Cure Light Wounds cures no poison. Poisoned characters drank or
             # prayed one, took themselves for cured, rested or walked on and
             # died holding potions (build queue, 2026-11-10: 6 of 9 poison
@@ -1212,13 +1238,16 @@ class Brain:
             # level-37 Priests took a Mature Red Dragon's 160 that way,
             # unresisted and unremembered, and died to the next (C64 Balrog,
             # 2026-11-09).
-            self.prompt_messages = (self.prompt_messages + " " + messages)[-PROMPT_MESSAGES_KEPT:]
+            if obs.mode != Mode.LOOK:
+                self.prompt_messages = (self.prompt_messages + " " + messages)[-PROMPT_MESSAGES_KEPT:]
             return self.prompt(obs)
         assert view is not None
         self.track_stats(obs)
         if obs.dlvl and "You create food." in messages:
             self.created_food = view.pos
         self.pending = self.pending_item = self.picking = None   # their prompts are past
+        self.look_cursor = None
+        self.look_steps = 0
         self.food_pickup = None                                   # its message is past too
         self.eat_listing = False
         self.magic.watch_cast(obs, (len(view.tiles_of(TYPE_TRAP)),
@@ -1561,7 +1590,7 @@ class Brain:
                 + sum(item_weight(name) for name in self.worn_listed or ()) + self.weight_added)
 
     def weight_limit(self) -> int | None:
-        """STR x 130 plus the body weight, at most 3000 (core/inv_add.s); None
+        """STR x 130 plus the body weight, at most 3000 (core/6502/inv_add.s); None
         before the status line showed STR."""
         if self.str_code is None:
             return None
@@ -1581,7 +1610,9 @@ class Brain:
             match = WEAPON_LINE.match(row)
             if match is None:
                 continue
-            text = match.group(1)
+            text = match.group(1).strip()
+            if text == "(none)":
+                return
             if not re.search(r"\([+-]\d+,", text) and i + 1 < len(rows) and rows[i + 1].strip().startswith("("):
                 text += " " + rows[i + 1].strip()   # the plusses wrapped on 40 columns
             weapon = GEAR_WEAPON.match(text)
@@ -1597,7 +1628,12 @@ class Brain:
             text = row + (rows[i + 1] if i + 1 < len(rows) else "")   # a suffix wrapped on 40 columns
             match = EQUIP_LINE.match(row)
             if match is not None:
-                self.armour_names[EQUIP_SLOTS[match.group(1)]] = match.group(2).strip()
+                slot = EQUIP_SLOTS[match.group(1)]
+                val = match.group(2).strip()
+                if val == "(none)":
+                    self.armour_names.pop(slot, None)
+                else:
+                    self.armour_names[slot] = val
             for ego in resist_egos(row) or resist_egos(text)[:1]:
                 resists |= EGO_ELEMENTS[ego]
         self.worn_resists = frozenset(resists)
@@ -1638,7 +1674,7 @@ class Brain:
             text = match.group(2).strip()
             if i + 1 < len(rows) and re.match(r"^\s*[\[(][+-]\d+(?:,\s*[+-]\d+)?[\])](?: \([+-]\d+\))?\s*$", rows[i + 1]):
                 text += " " + rows[i + 1].strip()   # wrapped onto the next line on 40 columns
-            slot = match.group(1)
+            slot = "Ring" if match.group(1).startswith("Ring") else match.group(1)
             if slot == "Ring" and "Ring" in worn:
                 slot = "Ring2"                      # the second ring row: the left hand
             self.jewel_names[slot] = text
@@ -1678,7 +1714,7 @@ class Brain:
         # The Magi over an amulet of resistance (800): Free Action is the
         # Balrog's Hold Person stopped (balrog_ready).
         # Increase Damage adds to every blow, Increase To-Hit 3 skill a point
-        # (the full item list, 708f3df; core/player_recalc_equipment.s).
+        # (the full item list, 708f3df; core/6502/player_recalc_equipment.s).
         return {"Speed": 1000, "the Magi": 900, "Protection": 10 * bonus,
                 "Strength": 15 * bonus if melee else 0, "Slaying": 60 if melee else 0,
                 "Increase Damage": 25 * bonus if melee else 0, "Increase To-Hit": 8 * bonus if melee else 0,
@@ -2172,7 +2208,7 @@ class Brain:
     def protect_evil(self, obs: Observation, view: View) -> Decision | None:
         """An evil creature close that strikes, at or below the character's
         level: Protection from Evil, its blows repelled with no roll (VMS
-        creature.inc make_attack; core/monster_attack.s), the prayer when
+        creature.inc make_attack; core/6502/monster_attack.s), the prayer when
         known and the mana spares it, else a scroll carried. Most of what
         kills on the way to level 40 is evil. Not the Balrog: its level is
         100. Not hurt or fleeing: the escape comes first."""
@@ -2770,6 +2806,34 @@ class Brain:
         if obs.mode == Mode.DIRECTION and self.pending is not None:
             key, self.pending = self.pending, None
             return Decision(key, "prompt", "direction for the pending action")
+        if obs.mode == Mode.LOOK:
+            if self.pending_look is None:
+                self.look_cursor, self.look_steps = None, 0
+                return Decision(KEY_RUNSTOP, "prompt", "exit look cursor")
+            target_pos, _ = self.pending_look
+            if self.look_cursor is None:
+                self.look_cursor, self.look_steps = obs.pos, 0
+            if obs.abi is not None and hasattr(obs.abi, "zp_view_x") and hasattr(obs.abi, "zp_view_y"):
+                vx, vy = obs.zp8("zp_view_x"), obs.zp8("zp_view_y")
+                vw = getattr(obs.abi, "hal_layout_viewport_w", 0)
+                vh = getattr(obs.abi, "hal_layout_viewport_h", 0)
+                if vw and vh and not (vx <= target_pos[0] < vx + vw and vy <= target_pos[1] < vy + vh):
+                    self.look_message = ""
+                    self.look_cursor, self.look_steps, self.pending = None, 0, None
+                    return Decision(KEY_RUNSTOP, "prompt", f"abort offscreen look {target_pos}")
+            if self.look_cursor == target_pos:
+                self.look_message = obs.rows[0].strip()
+                self.look_cursor, self.look_steps, self.pending = None, 0, None
+                return Decision(KEY_RUNSTOP, "prompt", f"finish look at {target_pos}")
+            if self.look_steps >= 80:
+                self.look_cursor, self.look_steps, self.pending = None, 0, None
+                return Decision(KEY_RUNSTOP, "prompt", "abort look cursor")
+            cx, cy = self.look_cursor
+            dx = (target_pos[0] > cx) - (target_pos[0] < cx)
+            dy = (target_pos[1] > cy) - (target_pos[1] < cy)
+            self.look_cursor = (cx + dx, cy + dy)
+            self.look_steps += 1
+            return Decision(DIRS[(dx, dy)], "prompt", f"move look cursor toward {target_pos}")
         if self.eat_listing and obs.mode == Mode.ITEM:
             return self.eat_prompt(obs)
         if self.pending_item is not None and "which" in obs.rows[0]:
@@ -2783,7 +2847,7 @@ class Brain:
         """Genocide's letter (2026-11-05: answered, not cancelled): the kind
         seen on this level that could do the most damage in a turn, as a
         player names what threatens them; 'p' when none was seen. The key is
-        the one core/game_loop_helpers.s recall_key_to_screen_code reads:
+        the one core/6502/game_loop_helpers.s recall_key_to_screen_code reads:
         a-z unshifted ($41-$5A), A-Z shifted ($C1-$DA)."""
         letters = {g: t for g, t in self.level.kinds.items() if g.isascii() and g.isalpha() and t > 0}
         letter = max(letters, key=lambda g: (letters[g], g)) if letters else "p"
@@ -3402,8 +3466,8 @@ class Brain:
             # message to come (M5b round 43, seeds 1020 and 1006). An empty
             # lantern can still be refueled; an empty torch is useless.
             fuelled = [(int(m.group(1)), row) for row in rows
-                       if (m := LIGHT_TURNS.search(row)) and PACK_ITEM.match(row)
-                       and PACK_ITEM.match(row).group(2).startswith(self.picking)
+                       if (m := LIGHT_TURNS.search(row)) and (pm := PACK_ITEM.match(row))
+                       and strip_article(pm.group(2)).startswith(strip_article(self.picking))
                        and (int(m.group(1)) > 0 or self.picking == LANTERN)]
             rows = [max(fuelled)[1]] if fuelled else []
             if fuelled:
@@ -3498,9 +3562,15 @@ class Brain:
         name = self.taking_off
         assert name is not None
         for row in obs.rows[1:]:
-            match = re.match(r"^\s*([a-z])\) (\w+):\s+(.*)$", row)
+            match = re.match(
+                r"^\s*([a-z])\) (?:(Weapon|Wielding|Body Armor|Body|Shield|Head|Helm|Hands|Gloves|Feet|Boots|Light|Ring L|Ring R|Ring|Amulet|Cloak|Secondary|Second)\s*:\s+)?(?:an? )?(.+?)(?:\s+\d+\.\d+\s+lb)?\s*$",
+                row,
+            )
             if match and base_name(match.group(3)) == base_name(name):
-                slot = EQUIP_SLOTS.get(match.group(2))
+                slot = EQUIP_SLOTS.get(match.group(2)) if match.group(2) else next(
+                    (s for s, worn_name in self.armour_names.items() if base_name(worn_name) == base_name(name)),
+                    None,
+                )
                 if slot is not None:
                     self.armour[slot] = 0
                     self.armour_names.pop(slot, None)
@@ -3609,9 +3679,10 @@ class Brain:
         """
         names = knowledge.creature_levels()
         self.follow_moved(view)
+        look_msg, self.look_message = self.look_message, ""
         if self.pending_look is not None:
             target, self.pending_look = self.pending_look, None
-            match = LOOK_RESULT.search(messages)
+            match = LOOK_RESULT.search(look_msg or messages)
             if match:
                 name = match.group(1)
                 self.level.identified[target] = ("creature" if name in names else "item", name)
@@ -4267,7 +4338,7 @@ class Brain:
         before going down: Orb of Draining's full bars ((3d6 + level) doubled
         on the evil, once more for each Restore Mana), each attack wand's
         charges at its average, and BALROG_SHOT_HITS of the launcher's
-        shots. A Rogue learns no attack spell (core/spell_class_data.s:
+        shots. A Rogue learns no attack spell (core/6502/spell_class_data.s:
         rogue_spell_level 99 for each): its wands and bolts are its Orb.
 
         A fighter's blows too, in the turns the fight leaves after those
@@ -4483,7 +4554,7 @@ class Brain:
         """Danger (maintainer, 2026-11-03): the most
         damage every creature in view could do to ``pos`` in the next turn.
         Melee at its maximum (dice x sides, no hit chance) from a creature
-        beside ``pos``, times its moves a turn (core/monster_ai.s: a fast one
+        beside ``pos``, times its moves a turn (core/6502/monster_ai.s: a fast one
         acts twice); one two squares off only when it is fast enough to step
         in and still strike. Below clvl 20 a breeder's counts 2.5 times. Each
         caster's biggest spell, scaled by how often it casts: x0.4 under
@@ -4977,6 +5048,8 @@ class Brain:
         """Look at the nearest unidentified glyph that is first on one of the
         eight lines from the player (free: no game turn). Once per spot."""
         for pos, glyph in sorted(view.unknown.items(), key=lambda kv: chebyshev(kv[0], view.pos)):
+            if not view.on_screen(pos):
+                continue
             step = self.line_to(view, pos)
             if step is None or (view.pos, pos) in self.level.looked:
                 continue
@@ -4990,6 +5063,7 @@ class Brain:
             self.level.looked.add((view.pos, pos))
             self.pending = DIRS[step]
             self.pending_look = (pos, glyph)
+            self.look_cursor, self.look_steps, self.look_message = None, 0, ""
             return Decision(KEY_LOOK, "look", f"identify '{glyph}' at {pos}")
         return None
 
@@ -6589,7 +6663,7 @@ class Brain:
         if launcher is None:
             return False
         ammo = AMMO_KINDS.get(LAUNCHERS[launcher][0], (LAUNCHERS[launcher][0],))
-        return not any(m and m.group(2).startswith(ammo) for m in matches)
+        return not any(m and strip_article(m.group(2)).startswith(ammo) for m in matches)
 
     def spare_weapon(self, name: str) -> bool:
         """A melee weapon in the pack, not the one the launcher wielded put there."""
@@ -6664,27 +6738,28 @@ class Brain:
             keep = KEEP_PREFIXES + missiles + ((self.weapon[0],) if self.wielding_launcher else ()) + tuple(useful)
 
             matches = [PACK_ITEM.match(row) for row in obs.rows[1:]]
+            names = [strip_article(m.group(2)) if m else "" for m in matches]
             # One of each wand or staff, the most charged: they do not stack,
             # and an Elf Rogue's four Wands of Lightning and four of Teleport
             # Away filled its pack (2026-11-05). The rest are spare.
             best: dict[str, tuple[int, int]] = {}
             for i, m in enumerate(matches):
-                if m and m.group(2).startswith(("Wand of", "Staff of")):
-                    charges = CHARGES.search(m.group(2))
+                if m and names[i].startswith(("Wand of", "Staff of")):
+                    charges = CHARGES.search(names[i])
                     key = (int(charges.group(1)) if charges else 0, -i)
-                    base = m.group(2).split(" (")[0].strip()
+                    base = names[i].split(" (")[0].strip()
                     best[base] = max(best.get(base, key), key)
-            extra = {i for i, m in enumerate(matches) if m and m.group(2).startswith(("Wand of", "Staff of"))
-                     and best[m.group(2).split(" (")[0].strip()][1] != -i}
+            extra = {i for i, m in enumerate(matches) if m and names[i].startswith(("Wand of", "Staff of"))
+                     and best[names[i].split(" (")[0].strip()][1] != -i}
             # The three strongest attack wands (2026-11-05: six kinds and five
             # part-burnt torches, one slot each, filled 22-slot packs).
-            kinds = sorted({m.group(2).split(" (")[0].strip() for i, m in enumerate(matches)
-                            if m and i not in extra and m.group(2).split(" (")[0].strip() in ATTACK_WANDS},
+            kinds = sorted({names[i].split(" (")[0].strip() for i, m in enumerate(matches)
+                            if m and i not in extra and names[i].split(" (")[0].strip() in ATTACK_WANDS},
                            key=ATTACK_WANDS.get, reverse=True)
-            extra |= {i for i, m in enumerate(matches) if m and m.group(2).split(" (")[0].strip() in kinds[KEEP_ATTACK_WANDS:]}
+            extra |= {i for i, m in enumerate(matches) if m and names[i].split(" (")[0].strip() in kinds[KEEP_ATTACK_WANDS:]}
             # The fullest spare torches only: one beside a lantern worn, else the reserve.
             torches = sorted(((int(t.group(1)), i) for i, m in enumerate(matches)
-                              if m and m.group(2).startswith(TORCH) and (t := LIGHT_TURNS.search(m.group(2)))),
+                              if m and names[i].startswith(TORCH) and (t := LIGHT_TURNS.search(names[i]))),
                              reverse=True)
             extra |= {i for _, i in torches[(1 if self.lamp else self.torch_reserve()):]}
             # The launcher's ammunition in its AMMO_STACKS fullest stacks only:
@@ -6695,7 +6770,7 @@ class Brain:
             if self.launcher is not None:
                 shot = LAUNCHERS[self.launcher][0]
                 stacks = sorted(((int(c.group(1)) if (c := STACK_COUNT.match(obs.rows[1 + i])) else 1, i)
-                                 for i, m in enumerate(matches) if m and m.group(2).startswith(shot)), reverse=True)
+                                 for i, m in enumerate(matches) if m and names[i].startswith(shot)), reverse=True)
                 extra |= {i for _, i in stacks[AMMO_STACKS:]}
             # One copy of each book: books do not stack, and a second
             # Beginners Handbook held the slot a full pack needed for Word of
@@ -6703,14 +6778,15 @@ class Brain:
             # between town and DL4 for 90 minutes).
             books: set[str] = set()
             for i, m in enumerate(matches):
-                if m and m.group(2).startswith(("Holy Book", "Spellbook")):
-                    extra |= {i} if m.group(2).strip() in books else set()
-                    books.add(m.group(2).strip())
+                if m and names[i].startswith(("Holy Book", "Spellbook")):
+                    extra |= {i} if names[i] in books else set()
+                    books.add(names[i])
 
             def junk(match: re.Match[str] | None) -> bool:
                 if match is not None and matches.index(match) in extra:
                     return True
-                name = match.group(2) if match else ""
+                raw = match.group(2).strip() if match else ""
+                name = strip_article(raw)
                 # A burnt-out torch or lantern, and an empty wand or staff: kept,
                 # empty wands filled a Warrior's pack one slot each until the
                 # stores refused even its food (2026-11-05: 1,254 refusals).
@@ -6725,7 +6801,7 @@ class Brain:
                 spent |= (base.startswith(("Wand of", "Staff of")) and self.wands.get(base) == 0
                           and not self.recharge_scrolls)
                 return match is not None and (spent or not (name.startswith(keep) or self.unknown_kept(name))) \
-                    and name not in self.to_wear
+                    and name not in self.to_wear and raw not in self.to_wear
             # Two stacks of one item: identified and unidentified ones did not
             # stack until 2026-11-09 (inv_add_item), and clvl 38 Priests kept
             # two each of Phase Door, Cure Light Wounds and Neutralize Poison
@@ -6733,9 +6809,9 @@ class Brain:
             counts = [int(c.group(1)) if (c := STACK_COUNT.match(row)) else 1 for row in obs.rows[1:]]
             first: dict[str, int] = {}
             for i, m in enumerate(matches):
-                if not m or not m.group(2).startswith(STACKING):
+                if not m or not names[i].startswith(STACKING):
                     continue
-                name = m.group(2).strip()
+                name = names[i]
                 if name in first and counts[first[name]] + counts[i] > 255:
                     # Too many to join: the smaller stack is surplus (a clvl 38
                     # Priest held 248 and 95 Cure Light Wounds, 255 and 78
@@ -6790,9 +6866,9 @@ class Brain:
                 # and DL1 with 6.3M gold, seven times in five hours (C64
                 # Balrog, 2026-11-14). In town only: a pickup refused below is
                 # no supply lost, and the stack there may be its only light.
-                surplus = [((stack_weight(m.group(2), counts[i]), counts[i]), i) for i, m in enumerate(matches)
-                           if m and m.group(2).startswith(STACKING)
-                           and (held := self.carry_limit(m.group(2).strip())) is not None and counts[i] >= held[1]]
+                surplus = [((stack_weight(names[i], counts[i]), counts[i]), i) for i, m in enumerate(matches)
+                           if m and names[i].startswith(STACKING)
+                           and (held := self.carry_limit(names[i])) is not None and counts[i] >= held[1]]
                 if not surplus and self.refused_at != WEAPONSMITH:
                     # Nothing past its limit: a drained STR lowered the limit
                     # (STR x 130) under what was carried, and every store
@@ -6809,8 +6885,8 @@ class Brain:
                     # them. Not for a refusal of ammunition, or the
                     # Weaponsmith and this would trade one stack of Bolts for
                     # another.
-                    weights = [((stack_weight(m.group(2), counts[i]), counts[i]), i) for i, m in enumerate(matches)
-                               if m and stack_weight(m.group(2), counts[i]) > 0]
+                    weights = [((stack_weight(names[i], counts[i]), counts[i]), i) for i, m in enumerate(matches)
+                               if m and stack_weight(names[i], counts[i]) > 0]
                     ammo = (*AMMO_AVERAGE, *self.ammo_kinds())
                     # The cures, the escapes, the oil and the light only for
                     # food or a Restore potion, never to keep room or for
@@ -6820,24 +6896,24 @@ class Brain:
                     # their Flasks of Oil at clvl 1 (build queue, 2026-11-19).
                     keep = (*FOODS, RECALL, *ESSENTIAL_BUYS, PHASE, TELEPORT_SCROLL)
                     emergency = not self.headroom_shed and (self.food_weight_refused or bool(self.restores_wanted()))
-                    surplus = [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(ammo)] or \
-                        [w for w in weights if (m := matches[w[1]]) and self.spare_launcher(m.group(2), matches)] or \
-                        [w for w in weights if (m := matches[w[1]]) and self.spare_weapon(m.group(2))] or \
-                        [w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(STACKING)
-                         and not m.group(2).startswith(keep)] or \
-                        ([w for w in weights if (m := matches[w[1]]) and m.group(2).startswith(STACKING)
-                          and not m.group(2).startswith((*FOODS, RECALL, TORCH, OIL))] if emergency else []) or \
-                        ([w for w in weights if (m := matches[w[1]]) and m.group(2).startswith((TORCH, OIL))]
+                    surplus = [w for w in weights if matches[w[1]] and names[w[1]].startswith(ammo)] or \
+                        [w for w in weights if matches[w[1]] and self.spare_launcher(names[w[1]], matches)] or \
+                        [w for w in weights if matches[w[1]] and self.spare_weapon(names[w[1]])] or \
+                        [w for w in weights if matches[w[1]] and names[w[1]].startswith(STACKING)
+                         and not names[w[1]].startswith(keep)] or \
+                        ([w for w in weights if matches[w[1]] and names[w[1]].startswith(STACKING)
+                          and not names[w[1]].startswith((*FOODS, RECALL, TORCH, OIL))] if emergency else []) or \
+                        ([w for w in weights if matches[w[1]] and names[w[1]].startswith((TORCH, OIL))]
                          if emergency else [])
                 if surplus:
                     shed = max(surplus)[1]
                     heavy = matches[shed]
                     assert heavy is not None
-                    name, count = heavy.group(2).strip(), counts[shed]
+                    name, count = names[shed], counts[shed]
                     rest = [row for i, row in enumerate(obs.rows[1:]) if i != shed]
                     self.sync_counts(rest, "all")
                     self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
-                                       for row in rest if (m := PACK_ITEM.match(row)) and m.group(2).startswith(TORCH))
+                                       for row in rest if (m := PACK_ITEM.match(row)) and strip_article(m.group(2)).startswith(TORCH))
                     self.too_heavy = self.dropping = self.pack_full = self.headroom_shed = False
                     self.nothing_to_shed = False
                     self.shopped = False
@@ -6852,17 +6928,17 @@ class Brain:
                 # a time, exploring each, for hours (C64 Balrog, 2026-11-14;
                 # maintainer: "word of recall seems important").
                 past = [(counts[i] / held[1], i) for i, m in enumerate(matches)
-                        if m and m.group(2).startswith(STACKING)
-                        and (held := self.carry_limit(m.group(2).strip())) is not None and counts[i] > held[1]]
+                        if m and names[i].startswith(STACKING)
+                        and (held := self.carry_limit(names[i])) is not None and counts[i] > held[1]]
                 if past:
                     shed = max(past)[1]
                     full = matches[shed]
                     assert full is not None
-                    name, count = full.group(2).strip(), counts[shed]
+                    name, count = names[shed], counts[shed]
                     rest = [row for i, row in enumerate(obs.rows[1:]) if i != shed]
                     self.sync_counts(rest, "all")
                     self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
-                                       for row in rest if (m := PACK_ITEM.match(row)) and m.group(2).startswith(TORCH))
+                                       for row in rest if (m := PACK_ITEM.match(row)) and strip_article(m.group(2)).startswith(TORCH))
                     self.dropping = self.pack_full = False
                     self.shopped = False
                     self.reopen_refused()
@@ -6875,15 +6951,15 @@ class Brain:
                 order = (*(() if self.lamp else (OIL,)), SLOW_WAND, RESIST_COLD, HEROISM)
                 slots_full = sum(1 for m in matches if m) >= PACK_KINDS
                 spare_at = next((i for kind in order for i, m in enumerate(matches)
-                                 if m and m.group(2).strip().startswith(kind)), None) if slots_full else None
+                                 if m and names[i].startswith(kind)), None) if slots_full else None
                 if spare_at is not None:
                     spare = matches[spare_at]
                     assert spare is not None
-                    name = spare.group(2).strip()
+                    name = names[spare_at]
                     rest = [row for i, row in enumerate(obs.rows[1:]) if i != spare_at]
                     self.sync_counts(rest, "all")
                     self.torches = sum(int(c.group(1)) if (c := PACK_COUNT.match(row)) else 1
-                                       for row in rest if (m := PACK_ITEM.match(row)) and m.group(2).startswith(TORCH))
+                                       for row in rest if (m := PACK_ITEM.match(row)) and strip_article(m.group(2)).startswith(TORCH))
                     self.dropping = self.pack_full = False
                     self.shopped = False
                     self.reopen_refused()
@@ -7434,7 +7510,7 @@ class Brain:
         rather than one a square: 53% of a clvl 39 Elf Priest's keys were
         single explore steps (C64 Balrog, 2026-11-22). The game stops a run
         at junctions, doors, room openings and whatever comes into view
-        (Umoria find_run, core/player_run.s). Never straight back the way
+        (Umoria find_run, core/6502/player_run.s). Never straight back the way
         the last run went: two runs could carry it to and fro past the
         oscillation guard, which watches single steps."""
         decision = self.move(view, step, layer, reason)
@@ -7680,7 +7756,7 @@ class Brain:
             self.level.sealed_since = None
             return None
         if "making no progress" in obs.rows[0] + obs.rows[1]:
-            self.level.dig_futile = True   # bare hands: core/calc_dig_ability gives 0
+            self.level.dig_futile = True   # bare hands: core/6502/calc_dig_ability gives 0
         if self.level.sealed_since is None:
             self.level.sealed_since = obs.step
         if self.level.dig_futile or obs.step - self.level.sealed_since < SEALED_DIG_AFTER:

@@ -1,7 +1,7 @@
 #importonce
 // test_memory128.s — C128 MMU smoke tests for C4.2
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #define C128_TEST_MAP_ROW_STORE_HELPER
 #import "../memory128.s"

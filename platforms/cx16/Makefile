@@ -39,7 +39,7 @@ OVL_OUTCX16  = $(abspath $(OUTCX16))
 CX16_PKG_OUT = $(BUILD)/cx16-pkg
 CARTCX16_OUT = $(abspath $(BUILD)/cx16-cart)
 
-KA_COMMON_FLAGS = -showmem -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -define CX16 -afo
+KA_COMMON_FLAGS = -showmem -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -define CX16 -afo
 KA_FLAGS        = $(KA_COMMON_FLAGS) -symbolfiledir "$(OVL_OUTCX16)"
 KA_CART_FLAGS   = $(KA_COMMON_FLAGS) -define CX16_CARTRIDGE -symbolfiledir "$(CARTCX16_OUT)"
 VERSION_FILE = ../../version.json
@@ -51,7 +51,7 @@ TRAMPOLINES_INC      = $(BUILD)/trampolines/cx16_trampolines.inc
 
 CX16_MAIN_SRC  = main.s
 CX16_TITLE_SRC = title_data_cx16.s
-CX16_SOURCES   = $(wildcard *.s *.inc hal/*.s hal/*.inc ../../core/*.s ../../core/*.inc ../../platforms/shared/*.s ../../platforms/shared/*.inc ../../platforms/shared/catalog/*.s ../../platforms/shared/catalog/*.inc ../../platforms/shared/item_catalog/*.s ../../platforms/shared/item_catalog/*.inc ../../platforms/commodore/common/*.s ../../platforms/commodore/common/*.inc) \
+CX16_SOURCES   = $(wildcard *.s *.inc hal/*.s hal/*.inc ../../core/6502/*.s ../../core/6502/*.inc ../../platforms/shared/*.s ../../platforms/shared/*.inc ../../platforms/shared/catalog/*.s ../../platforms/shared/catalog/*.inc ../../platforms/shared/item_catalog/*.s ../../platforms/shared/item_catalog/*.inc ../../platforms/commodore/common/*.s ../../platforms/commodore/common/*.inc) \
                  ../commodore/c128/ui_help_data_80.s
 
 CX16_MAIN_PRG  = $(OUTCX16)/MORIA8.PRG

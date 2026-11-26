@@ -25,14 +25,18 @@ class ItemCatalogPortsTest(cicp.CheckItemCatalogPortsSelfTest):
         self.assertEqual(rc, 0, f"Cross-port 0..360 item catalog check failed across {built}")
 
     def test_negative_item_cat_mutation_detected(self) -> None:
-        port = self._built_ports()[0]
+        built = self._built_ports()
+        targets = [built[0]]
+        if "cpm" in built and "cpm" not in targets:
+            targets.append("cpm")
         spec = json.loads(cicp.SPEC_PATH.read_text(encoding="utf-8"))
-        bad_icat = bytearray(cicp.read_port_item_cat(port))
-        # Corrupt non-gold item records starting at #20 (ITMCAT_HDR_SIZE=32 + 20*4 = 112)
-        for off in range(112, min(len(bad_icat), 112 + 100)):
-            bad_icat[off] ^= 0x3F
-        errs = cicp.verify_port(port, spec=spec, icat_override=bytes(bad_icat), max_errors=1)
-        self.assertTrue(errs, f"{port}: corrupt ITEM.CAT records unexpectedly passed")
+        for port in targets:
+            bad_icat = bytearray(cicp.read_port_item_cat(port))
+            # Corrupt non-gold item records starting at #20 (ITMCAT_HDR_SIZE=32 + 20*4 = 112)
+            for off in range(112, min(len(bad_icat), 112 + 100)):
+                bad_icat[off] ^= 0x3F
+            errs = cicp.verify_port(port, spec=spec, icat_override=bytes(bad_icat), max_errors=1)
+            self.assertTrue(errs, f"{port}: corrupt ITEM.CAT records unexpectedly passed")
 
     def test_skips_when_nothing_is_built(self) -> None:
         with tempfile.TemporaryDirectory() as td:

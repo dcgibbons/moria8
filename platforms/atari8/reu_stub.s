@@ -1,6 +1,6 @@
 #importonce
 // reu_stub.s — Atari 8-bit minimal inert stub for C64 REU symbols read by
-// main.s and core/tier_manager.s.
+// main.s and core/6502/tier_manager.s.
 //
 // Atari 130XE extended RAM caching is handled transparently inside
 // hal_asset_load_prg_header / hal_asset_load_title in storage.s.

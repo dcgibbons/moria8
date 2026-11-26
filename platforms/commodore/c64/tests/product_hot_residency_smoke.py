@@ -343,7 +343,7 @@ def main() -> int:
                 connector.poke(monster_table + base + MX_TYPE, EMPTY_SLOT)
         connector.poke(zp_mon_count, 0)
         # Pin the 32-bit Galois LFSR to a deterministic zero-free seed across
-        # the hot sequence so core/turn.s's 1-in-160 wanderer roll cannot
+        # the hot sequence so core/6502/turn.s's 1-in-160 wanderer roll cannot
         # trigger a cold catalog fetch.
         zp_rng_0 = int(symbols[".zp_rng_0"], 16)
         for offset, byte in enumerate((0x1C, 0x58, 0x3C, 0xA5)):

@@ -1,5 +1,5 @@
 #importonce
-#import "../hal/hal_contract.s"
+#import "../../platforms/commodore/hal/hal_contract.s"
 // Opt-in fail-loud stubs for isolated assemblies that have not wired a
 // platform HAL yet. Product builds must import platform adapters instead.
 

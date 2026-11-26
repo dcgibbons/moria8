@@ -199,7 +199,7 @@ def checkpoint_name(clvl: int, last_clvl: int | None, ac: int | None, xp: int = 
 
 
 def keep_victory(run_dir: Path, home: Path, record: dict[str, Any]) -> Path | None:
-    """A won run's crown screen ("Veni, Vidi, Vici!", core/royal.s:
+    """A won run's crown screen ("Veni, Vidi, Vici!", core/6502/royal.s:
     session.capture_victory, in the worker's victory directory) kept in
     ``home``/victories as <date>-<platform>-<character>.png, where the wins
     are looked for: the captures stayed in each run's directory, and the
@@ -245,7 +245,7 @@ def load_config(path: Path = CONFIG) -> dict[str, Any]:
 
 def combos(platform: str) -> list[str]:
     """The race/class items of one platform, in race then class table order."""
-    del platform   # every platform allows every combination (core/tables.s)
+    del platform   # every platform allows every combination (core/6502/tables.s)
     return list(CHARACTERS)
 
 
@@ -280,15 +280,21 @@ def tree_state() -> dict[str, Any]:
 
 
 def link_kickass(src: Path) -> None:
-    """The tree's Kick Assembler in a snapshot (downloads stay here), where
-    every port's Makefile finds it by default. Not by KICKASS: commits
+    """The tree's external toolchains in a snapshot (downloads stay here), where
+    every port's Makefile finds them by default. Not by KICKASS: commits
     before 2026-11-06 have Atari and BBC Makefiles that read it as a
     command, not the jar, and their Atari build tried to download it."""
-    tools = ROOT / "tools" / "kickass"
-    dest = src / "tools" / "kickass"
-    if (tools / "KickAss.jar").exists() and not dest.exists():
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.symlink_to(tools, target_is_directory=True)
+    for name, marker in (
+        ("kickass", "KickAss.jar"),
+        ("sjasmplus", "sjasmplus"),
+        ("runcpm", "RunCPM"),
+        ("ctools", "ctools"),
+    ):
+        tools = ROOT / "tools" / name
+        dest = src / "tools" / name
+        if (tools / marker).exists() and not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.symlink_to(tools, target_is_directory=True)
 
 
 def snapshot_build(platforms: list[str], source: str = "commit", home: Path = HOME) -> str:
@@ -789,7 +795,8 @@ def run_one(run_dir: Path) -> int:
             game = self.worker.game
             assert game is not None
             game.seed = self.seed
-            game.mon.mem_set(game.abi.zp_rng_0, derive_rng(self.seed, 1), game.ram)
+            rng_addr = game.rng_addr() if hasattr(game, "rng_addr") else game.abi.zp_rng_0
+            game.mon.mem_set(rng_addr, derive_rng(self.seed, 1), game.ram)
             self.brain = load_brain(local, self.goal)
             self.auditor.command_sp = snapshot.brain.get("auditor_command_sp")
             self.result.steps = int(resume["step"])
@@ -810,7 +817,8 @@ def run_one(run_dir: Path) -> int:
             game.step = int(resume["step"])   # the brain's timers go on from the graduate's steps
             obs = graduate.load(game, text)
             game.seed = self.seed
-            game.mon.mem_set(game.abi.zp_rng_0, derive_rng(self.seed, 1), game.ram)
+            rng_addr = game.rng_addr() if hasattr(game, "rng_addr") else game.abi.zp_rng_0
+            game.mon.mem_set(rng_addr, derive_rng(self.seed, 1), game.ram)
             start = run_dir / "start" / graduate.BRAIN
             self.brain = load_brain(start, self.goal)
             saved = read_json(start.with_suffix(".brain.json")) or {}

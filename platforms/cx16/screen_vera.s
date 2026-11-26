@@ -216,7 +216,7 @@ vera_set_addr_inc1:
     sta VERA_ADDR_H
     rts
 
-#import "../../core/numeric_format.s"
+#import "../../core/6502/numeric_format.s"
 
 // screen_flash_at — Briefly flash '*' at (X = row, Y = column), then restore
 // Used by bolt animation in spell_effects.s.

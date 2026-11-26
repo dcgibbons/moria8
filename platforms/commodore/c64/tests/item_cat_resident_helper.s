@@ -1,7 +1,7 @@
 #importonce
 // KERNAL-banked item_cat_data reader for C64 unit tests (loaded variant).
 // Same contract as item_cat_kernal_helper.s: define HAL_PLATFORM_ITEM_CAT_CUSTOM
-// before core/item.s, then import this file in Default after core/item.s.
+// before core/6502/item.s, then import this file in Default after core/6502/item.s.
 //
 // Unlike item_cat_kernal_helper.s, item_cat_data.s is emitted as a block of
 // the Default segment at $E100 (not a separate segment), so it is part of the

@@ -879,7 +879,7 @@ def write_engine_catalog(
     names = [
         head,
         "// Catalog names by catalog id: Huffman-coded with their own tree (huff_encoder format;",
-        "// leaves $80 | screen code), decoded by core/huffman.s with this tree swapped in.",
+        "// leaves $80 | screen code), decoded by core/6502/huffman.s with this tree swapped in.",
         "catn_tree_left:",
     ]
     names += [hexrow(left[k : k + 16]) for k in range(0, len(left), 16)]

@@ -158,7 +158,7 @@ test_wpsb_spy:
 winner_apply_retirement_bonus:
     rts
 
-wizard_reset_session_state:     // as core/wizard.s: game_new_start relies on it
+wizard_reset_session_state:     // as core/6502/wizard.s: game_new_start relies on it
     lda #0                      // to clear the unsaved invulnerability timer
     sta eff_invuln_timer
     rts
@@ -528,7 +528,7 @@ screen_unblank:
 status_draw:
     jmp test_status_draw
 
-msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+msg_print_ay:                       // as core/6502/ui_messages.s: A/Y = pointer
     sta zp_ptr0
     sty zp_ptr0_hi
 msg_print:
@@ -585,8 +585,8 @@ msg_clear:
 
 turn_post_action:
     jmp test_turn_post_action
-regen_frac_lo: .byte 0           // core/turn.s; HP regen fraction low byte (cleared on new game/load)
-md_count: .byte 0                // core/monster_death.s; staged monster drops (cleared on load)
+regen_frac_lo: .byte 0           // core/6502/turn.s; HP regen fraction low byte (cleared on new game/load)
+md_count: .byte 0                // core/6502/monster_death.s; staged monster drops (cleared on load)
 
 ui_help_clear_all:
     jmp test_ui_help_clear_all
@@ -793,7 +793,7 @@ recall_spells: .fill MAX_CREATURES, 0
 .label c128_kernal_irq_tail_runtime_owned = $03fd
 #define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory128.s"
 #import "../input128.s"
 // Aux-data accessors (recall counters) used by game_loop_helpers.s. On
@@ -816,7 +816,7 @@ recall_spells: .fill MAX_CREATURES, 0
 }
 .macro ChestRouteRestoreSegment() {
 }
-#import "../../../../core/game_loop.s"
+#import "../../../../core/6502/game_loop.s"
 // No chest items exist in these dispatch tests, so the deferred chest hooks
 // (whose real bodies live in chest_summons.s / chest_loot.s and need item,
 // monster, and dungeon_features deps this minimal suite does not import) are
@@ -825,8 +825,8 @@ chest_run_pending_summons:
 chest_run_deferred:
 chest_fulfill_loot:
     rts
-#import "../../../../core/scene_dirty.s"
-#import "../../../../core/scene_force.s"
+#import "../../../../core/6502/scene_dirty.s"
+#import "../../../../core/6502/scene_force.s"
 mat_scene_dirty: .byte 0
 
 item_init_inventory:
@@ -2928,7 +2928,7 @@ test_fail:
 test_pass:
     brk
 
-// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// As core/6502/ui_messages.s (not imported here): hal_screen_put_string with A/Y
 // = pointer
 screen_put_string_ay:
     sta zp_ptr0

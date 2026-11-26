@@ -50,78 +50,78 @@ magic_check_new_spells:
 #define TRAP_TRIGGER_EXTERNAL
 #define ITEM_SPAWN_EXTERNAL
 #define PICK_ITEM_TYPE_EXTERNAL
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL   // not exercised here; frees room below MAP_BASE (below)
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
 status_draw:
 status_mark_dirty:
     rts
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
-#import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/6502/monster_ai.s"
+#import "../../../../core/6502/recall.s"
+#import "../../../../core/6502/monster_magic.s"
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 #import "item_cat_resident_helper.s"
 .segment TestCreateOverlay
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment Default
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/projectile.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/projectile.s"
 #import "../dungeon_render.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
-#import "../../../../core/turn.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/scene_mat_tile.s"
+#import "../../../../core/6502/monster_attack.s"
+#import "../../../../core/6502/turn.s"
 ui_help_display:
 store_init_all:
 store_restock_all:
 store_enter:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // The suite is split in two (tests 1-22 here, 23-42 in
 // test_monster_magic2.s, which defines MONSTER_MAGIC_PART2) so that combat.s,
 // spell_effects.s (eff_teleport_apply_target), and turn.s (eff_fear_timer) are
 // loaded; player_items.s and item_actions_overlay.s stay parked.
-#import "../../../../core/combat.s"
-#import "../../../../core/spell_effects.s"
+#import "../../../../core/6502/combat.s"
+#import "../../../../core/6502/spell_effects.s"
 .segment TestCreateOverlay
-#import "../../../../core/item_actions_overlay.s"
+#import "../../../../core/6502/item_actions_overlay.s"
 .segment TestUnused
-#import "../../../../core/trap_trigger_cold.s"
-#import "../../../../core/player_chargen_cold.s"
-#import "../../../../core/item_spawn_cold.s"
-#import "../../../../core/pick_item_type_cold.s"
+#import "../../../../core/6502/trap_trigger_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
+#import "../../../../core/6502/item_spawn_cold.s"
+#import "../../../../core/6502/pick_item_type_cold.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s
@@ -1076,7 +1076,7 @@ test_start:
 #if MONSTER_MAGIC_PART2
     // ==========================================
     // Test 23: player_save_value = race save + class save + adjustment,
-    // clamped at 0 (core/tables.s values; MON-011).
+    // clamped at 0 (core/6502/tables.s values; MON-011).
     // ==========================================
 !t23:
     lda #1

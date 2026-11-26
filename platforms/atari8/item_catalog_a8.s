@@ -7,7 +7,7 @@
 // - Disk builds can call EnterSio / ExitSio (OS ROM $E459 at PORTB = $FF)
 //   without unmapping the reader or 125-byte DOS 2.5 sector cache.
 //
-// Interface (required by core/item_catalog.s when HAL_PLATFORM_ITEM_CAT_CUSTOM):
+// Interface (required by core/6502/item_catalog.s when HAL_PLATFORM_ITEM_CAT_CUSTOM):
 //   hal_item_cat_read_byte:
 //     Input:  item_cat_off_lo, item_cat_off_hi (in Default RAM < $C100)
 //     Output: A = byte at offset

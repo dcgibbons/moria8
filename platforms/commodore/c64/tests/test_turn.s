@@ -12,10 +12,10 @@ bootstrap:
 
 .pc = $0830 "Test Code"
 
-#import "../../../../core/zeropage.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/math.s"
+#import "../../../../core/6502/zeropage.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/math.s"
 
 .const FLAG_OCCUPIED       = $01
 .const FLAG_VISITED        = $04
@@ -74,7 +74,7 @@ vis_room_revealed:   .byte 0
 test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
-map_row_ptr0_x:                     // as core/dungeon_data.s
+map_row_ptr0_x:                     // as core/6502/dungeon_data.s
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
@@ -234,7 +234,7 @@ huff_print_msg:
     stx test_last_huff_id
     rts
 
-msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+msg_print_ay:                       // as core/6502/ui_messages.s: A/Y = pointer
     sta zp_ptr0
     sty zp_ptr0_hi
 msg_print:
@@ -270,11 +270,11 @@ inv_remove_item:
     sta inv_p1,x
     rts
 
-// Expose production ITR3_BLIND / ITR3_TIMID curse branches in core/turn.s.
+// Expose production ITR3_BLIND / ITR3_TIMID curse branches in core/6502/turn.s.
 #define CORE_PLAYER_IMPORTED
 player_curse_flags: .byte 0
-#import "../../../../core/turn.s"
-#import "../../../../core/scene_force.s"
+#import "../../../../core/6502/turn.s"
+#import "../../../../core/6502/scene_force.s"
 
 // monster_ai.s is not imported (monster_ai_tick is stubbed below), so the
 // test owns the aggregate scene_force_full_redraw clears.

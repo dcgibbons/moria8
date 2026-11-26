@@ -3,7 +3,7 @@
 
 #define C128
 #define C128_INPUT_TEST
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../input128.s"
 #import "../input_run_raw128.s"
 

@@ -2,8 +2,8 @@
 // test_item_desc128.s — C128 VDC coverage for real 361-item & 55-ego descriptions,
 // categories, base AC, display colors, and floor glyphs across Pages 0 & 1.
 
-#import "../../../../core/zeropage.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/zeropage.s"
+#import "../../../../core/6502/color.s"
 #import "mmu_macros.s"
 
 .pc = $0801 "BASIC Stub"
@@ -70,9 +70,9 @@ mmu_safe_db_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/item_defs.s"
 
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_qty:     .fill TOTAL_INV_SLOTS, 0
@@ -95,8 +95,8 @@ fi_meta_hi: .byte 0
 fi_add_flags: .byte 0
 fi_add_ego:   .byte 0
 
-#import "../../../../core/item_tables.s"
-#import "../../../../core/item_identification.s"
+#import "../../../../core/6502/item_tables.s"
+#import "../../../../core/6502/item_identification.s"
 
 banked_ego_put_suffix:
     and #EGO_ID_MASK
@@ -111,7 +111,7 @@ banked_ego_put_suffix:
 put_tool_ego_prefix:
     rts
 
-#import "../../../../core/item_desc_banked.s"
+#import "../../../../core/6502/item_desc_banked.s"
 
 test_main:
     sei
@@ -1327,7 +1327,7 @@ assert_idx: .byte 0
 assert_expected: .byte 0
 item_name_test_id: .byte 0
 
-// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// As core/6502/ui_messages.s (not imported here): hal_screen_put_string with A/Y
 // = pointer
 screen_put_string_ay:
     sta zp_ptr0

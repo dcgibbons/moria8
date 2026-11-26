@@ -25,7 +25,7 @@ test_finish:
 
 .pc = $0830 "Main"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 
 .const MAX_MONSTERS = 4
@@ -108,7 +108,7 @@ monster_get_ptr:
     rts
 
 #define PMX_DETECT_EFFECTS_EXTERNAL
-#import "../../../../core/player_magic_detect.s"
+#import "../../../../core/6502/player_magic_detect.s"
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 
 test_clear_monsters:

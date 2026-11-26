@@ -33,17 +33,17 @@ test_done_break:
 
 .segmentdef TestUnusedEgoArmour [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
 // The equipment flags, the resistance armour roll and its suffixes are not
 // exercised here (no equipping, no item spawns): out of the way above the
 // I/O hole (2026-11-11, the Lordly rings and the element touches).
@@ -57,38 +57,38 @@ test_done_break:
 // player_calc_stats ends in the flags routine, parked above: a stray call
 // stops here at a BRK (no results written) instead of running junk at $E1xx.
 #define PLAYER_RECALC_PFLAGS_EXTERNAL
-#import "../../../../core/player.s"
+#import "../../../../core/6502/player.s"
 hal_player_recalc_pflags:
     brk
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/ui_messages.s"
+#import "../../../../core/6502/ui_status.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segment TestCreateOverlay
-#import "../../../../core/ui_character.s"
+#import "../../../../core/6502/ui_character.s"
 .segment Default
 .segment TestUnusedEgoArmour
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/stat_display.s"
 .segment Default
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestUnusedEgoArmour
-#import "../../../../core/monster_ai.s"
+#import "../../../../core/6502/monster_ai.s"
 .segment Default
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 .segment TestUnusedEgoArmour
-#import "../../../../core/player_save.s"
-#import "../../../../core/element_resist.s"
+#import "../../../../core/6502/player_save.s"
+#import "../../../../core/6502/element_resist.s"
 monster_can_cast:
 monster_pick_spell:
     brk
@@ -99,16 +99,16 @@ monster_pick_spell:
 // the body past MAP_BASE).
 #define INV_ADD_EXTERNAL
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 hal_item_cat_read_byte:
     brk
 #undef INV_ADD_EXTERNAL
 
 .segment TestUnusedEgoArmour
-#import "../../../../core/inv_add.s"
+#import "../../../../core/6502/inv_add.s"
 .segment Default
 .segment TestUnusedEgoArmour
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment Default
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
@@ -125,23 +125,23 @@ hal_item_cat_read_byte:
     .segment Default
 }
 .segment TestUnusedEgoArmour
-#import "../../../../core/ego_items.s"
+#import "../../../../core/6502/ego_items.s"
 .segment Default
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
 .segment TestCreateOverlay
-#import "../../../../core/projectile.s"
+#import "../../../../core/6502/projectile.s"
 .segment Default
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/spell_effects_overlay.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/spell_effects_overlay.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/player_magic.s"
 // WoD devastation engine is not exercised by this suite; route the
 // destroy-area target to a stub.
 #define PMX_DESTROY_AREA_EXTERNAL
-#import "../../../../core/player_magic_utility.s"
+#import "../../../../core/6502/player_magic_utility.s"
 #undef PMX_DESTROY_AREA_EXTERNAL
 tramp_eff_destroy_area:
     rts
@@ -150,12 +150,12 @@ tramp_eff_destroy_area:
 #import "../dungeon_render.s"
 .segment Default
 .segment TestCreateOverlay
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
 .segment Default
-#import "../../../../core/combat.s"
+#import "../../../../core/6502/combat.s"
 .segment TestUnusedEgoArmour
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 monster_attack_player:
 mon_atk_acid_armour:
 mon_atk_apply_damage:
@@ -163,9 +163,9 @@ mon_atk_apply_damage_16:
 player_death_check:
     brk
 mad_dmg_hi: .byte 0
-#import "../../../../core/turn.s"
+#import "../../../../core/6502/turn.s"
 .segment Default
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 store_init_all:
     rts

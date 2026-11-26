@@ -62,7 +62,7 @@ screen_vectors:
     jmp screen_put_char     // +0: put char at cursor
     jmp screen_put_string   // +3: put string at (row,col)
 
-#import "../../core/ui_equipment_wrap.s"
+#import "../../core/6502/ui_equipment_wrap.s"
 
 .label hal_screen_init = screen_init
 .label hal_screen_clear = screen_clear
@@ -417,7 +417,7 @@ screen_put_char_at:
     sta zp_cursor_row
     rts
 
-#import "../../core/numeric_format.s"
+#import "../../core/6502/numeric_format.s"
 
 // screen_flash_at — Flash inverse-video '*' ($AA) at (X = row, Y = col)
 screen_flash_at:

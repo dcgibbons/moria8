@@ -19,7 +19,7 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 
 .const SCREEN_COLS = 40
@@ -80,7 +80,7 @@ test_exit_trampoline:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-#import "../../../../core/runtime_ui_strings.s"
+#import "../../../../core/6502/runtime_ui_strings.s"
 
 tc_results: .fill 4, $ff
 

@@ -33,82 +33,82 @@ test_finish:
 
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
+#import "../../../../core/6502/ui_status.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segment TestCreateOverlay
-#import "../../../../core/ui_character.s"
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/ui_character.s"
+#import "../../../../core/6502/stat_display.s"
 .segment Default
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/input_contract.s"
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/input_contract.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 // dungeon_gen removed for MAP_BASE headroom
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestUnused
-#import "../../../../core/monster_ai.s"
+#import "../../../../core/6502/monster_ai.s"
 .segment Default
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/6502/monster_magic.s"
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 hal_item_cat_read_byte:
     brk
 .segment TestCreateOverlay
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment Default
 .segment TestUnused
-#import "../../../../core/ego_items.s"
+#import "../../../../core/6502/ego_items.s"
 .segment Default
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
+#import "../../../../core/6502/spell_data.s"
 .segment TestUnused
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
 .segment Default
-#import "../../../../core/spell_effects_overlay.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
-#import "../../../../core/player_magic_feedback.s"
-#import "../../../../core/player_magic_slow_runtime.s"
-#import "../../../../core/player_magic_execute_overlay.s"
+#import "../../../../core/6502/spell_effects_overlay.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/player_magic.s"
+#import "../../../../core/6502/player_magic_feedback.s"
+#import "../../../../core/6502/player_magic_slow_runtime.s"
+#import "../../../../core/6502/player_magic_execute_overlay.s"
 viewport_update:
 render_viewport:
 render_single_tile:
 render_local_area:
     rts
-#import "../../../../core/dungeon_los.s"
+#import "../../../../core/6502/dungeon_los.s"
 .segment TestCreateOverlay
-#import "../../../../core/player_move.s"
+#import "../../../../core/6502/player_move.s"
 .segment Default
-#import "../../../../core/combat.s"
-#import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/turn_render_state.s"
+#import "../../../../core/6502/combat.s"
+#import "../../../../core/6502/scene_mat_tile.s"
+#import "../../../../core/6502/turn_render_state.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -343,7 +343,7 @@ ui_inv_display:
 ui_inv_select_display:
 ui_equip_display:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0

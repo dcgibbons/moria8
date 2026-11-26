@@ -3,11 +3,11 @@
 // Calls KERNAL GETIN ($FFE4) with RAM Bank 0 ($00 = 0) selected so the
 // KERNAL keyboard buffer variables ($A80A in KVARSB0) are visible, then
 // restores the caller's active RAM bank. Uses the full shared Moria8
-// PETSCII command table (core/input_tables.s).
+// PETSCII command table (core/6502/input_tables.s).
 
-#import "../../core/input_contract.s"
-#import "../../core/input_tables.s"
-#import "../../core/input_run_cancel.s"
+#import "../../core/6502/input_contract.s"
+#import "../../core/6502/input_tables.s"
+#import "../../core/6502/input_run_cancel.s"
 
 .const KERNAL_GETIN = $ffe4
 .const CX16_KEYHDL = $032e  // KERNAL key event vector: A = keynum, bit 7 set on key up

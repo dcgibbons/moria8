@@ -22,7 +22,7 @@
 // ============================================================
 // Platform-Owned Zero-Page ($0090-$00AF)
 // ============================================================
-// $90 is reserved as zp_kernal_status (defined in core/zeropage.s, cleared by title_screen.s).
+// $90 is reserved as zp_kernal_status (defined in core/6502/zeropage.s, cleared by title_screen.s).
 // $92-$AF holds named Atari storage, sector-chain, and 130XE bounce pointers
 // so SIOV / 130XE copies never touch core ZP ($02-$8F).
 .label atari_io_src     = $92

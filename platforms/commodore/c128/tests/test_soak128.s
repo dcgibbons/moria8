@@ -26,7 +26,7 @@
 c128_restore_runtime_state:
     rts
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 
@@ -47,10 +47,10 @@ mmu_safe_db_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/dungeon_data.s"
 
 // Minimal player struct surface required by dungeon_gen.s.
 // Bank 0 canaries at map-space addresses, above this test's code (asserted at the end).
@@ -100,15 +100,15 @@ mmu_safe_map_write_ptr1:
 
 // Real generation hooks, trimmed to generation-only sections so the soak tests
 // production topology without pulling in monster/item/trap gameplay.
-#import "../../../../core/dungeon_features.s"
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/dungeon_features.s"
+#import "../../../../core/6502/special_rooms.s"
 
 tramp_assign_special_room:
     jmp assign_special_room
 tramp_vault_seal_entrance:
     jmp vault_seal_entrance
 
-#import "../../../../core/dungeon_gen.s"
+#import "../../../../core/6502/dungeon_gen.s"
 #undef C128_PRODUCT_OVERLAY_RUNTIME
 #undef PLATFORM_PRODUCT_OVERLAY_RUNTIME
 

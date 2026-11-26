@@ -123,7 +123,7 @@ screen_vectors:
     jmp screen_put_string   // +3: put string at (row,col)
 
 #if !PLUS4_PRODUCT_OVERLAY_RUNTIME
-#import "../../../core/ui_equipment_wrap.s"
+#import "../../../core/6502/ui_equipment_wrap.s"
 #endif
 
 .label hal_screen_init = screen_noop
@@ -356,7 +356,7 @@ screen_put_char_at:
     sta zp_cursor_row
     rts
 
-#import "../../../core/numeric_format.s"
+#import "../../../core/6502/numeric_format.s"
 
 // screen_flash_at — Briefly flash a '*' in white at a screen position, then restore
 // Used by bolt animation in spell_effects.s.

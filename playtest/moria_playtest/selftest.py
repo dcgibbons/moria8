@@ -18,7 +18,7 @@ from .repro import reproduce
 
 BUILD_OUT = PLAYTEST_OUT / "selftest-build"
 SESSION = "selftest-stack-leak"
-KA_FLAGS64 = ("-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 "
+KA_FLAGS64 = ("-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 "
               "-define DEBUG_FEAT_DISK_TRACE=0 -define PLAYTEST_FAULT_STACK_LEAK")
 
 

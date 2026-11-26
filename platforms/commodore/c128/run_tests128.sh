@@ -18,7 +18,7 @@ java() {
             symdir_args=(-symbolfiledir "$TMPDIR")
         fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core/6502" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
         local rc=$? prev="" arg
         if [ "$rc" -ne 0 ]; then
             # The assembler still wrote its -o file; left behind, the
@@ -510,7 +510,7 @@ c128_target_is_stale() {
         return 0
     fi
     # Every directory a C128 build includes from: one left out lets a stale payload be reused.
-    if find . ../hal ../common ../c64 ../../shared ../../../core -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
+    if find . ../hal ../common ../c64 ../../shared ../../../core/6502 -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
         return 0
     fi
 
@@ -1479,7 +1479,7 @@ from pathlib import Path
 main_text = Path("main.s").read_text()
 common = Path("..") / "common"
 reu_text = (common / "reu.s").read_text()
-tier_text = Path("../../../core/tier_manager.s").read_text()
+tier_text = Path("../../../core/6502/tier_manager.s").read_text()
 overlay_text = (common / "overlay.s").read_text()
 storage_overlay_text = (Path("hal") / "storage_overlay_names.s").read_text()
 storage_tier_text = (Path("hal") / "storage_tier_names.s").read_text()
@@ -1547,7 +1547,7 @@ run_80col_layout_guard_check() {
 from pathlib import Path
 
 root = Path("..").resolve()
-core = root.parent.parent / "core"
+core = root.parent.parent / "core" / "6502"
 screen = (root / "c128" / "screen_vdc.s").read_text()
 render = (root / "c128" / "dungeon_render_vdc.s").read_text()
 main128 = (root / "c128" / "main.s").read_text()
@@ -1621,7 +1621,7 @@ from pathlib import Path
 import re
 
 root = Path("..").resolve()
-core = root.parent.parent / "core"
+core = root.parent.parent / "core" / "6502"
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 main_text = (root / "c128" / "main.s").read_text()
 items = (core / "player_items.s").read_text().splitlines()
@@ -1963,11 +1963,11 @@ if not has_ordered_chain(items, [
     "jsr overlay_load",
     "jsr hal_overlay_post_reload",
 ], window=35):
-    print("core/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
+    print("core/6502/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
     raise SystemExit(1)
 
 if any("$0102,x" in ln or "$0104,x" in ln for ln in items):
-    print("core/player_items.s must not hardcode $0102,x/$0104,x stack probing")
+    print("core/6502/player_items.s must not hardcode $0102,x/$0104,x stack probing")
     raise SystemExit(1)
 
 if not has_ordered_chain(main_text.splitlines(), [
@@ -2022,7 +2022,7 @@ run_item_overlay_key_guard_check() {
 from pathlib import Path
 
 root = Path("..").resolve()
-core = root.parent.parent / "core"
+core = root.parent.parent / "core" / "6502"
 items = (core / "item_actions_overlay.s").read_text().splitlines()
 c128_main = (root / "c128" / "main.s").read_text().splitlines()
 
@@ -2092,11 +2092,11 @@ if not has_ordered_chain(player_items, [
     "jsr overlay_load",
     "jsr hal_overlay_post_reload",
 ], window=35):
-    print("core/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
+    print("core/6502/player_items.s show_inv_and_select must call hal_overlay_post_reload after overlay_load")
     raise SystemExit(1)
 
 if any("$0102,x" in ln or "$0104,x" in ln for ln in player_items):
-    print("core/player_items.s must not hardcode $0102,x/$0104,x stack probing")
+    print("core/6502/player_items.s must not hardcode $0102,x/$0104,x stack probing")
     raise SystemExit(1)
 
 if not has_ordered_chain(c128_main, [
@@ -2256,7 +2256,7 @@ from pathlib import Path
 import re
 
 root = Path("..").resolve()
-common = root.parent.parent / "core"
+common = root.parent.parent / "core" / "6502"
 helper = common / "input_ui_helpers.s"
 
 runtime_exclusions = {}
@@ -4595,7 +4595,7 @@ run_retirement_royal_smoke() {
     if ! "${COMMODORE_MAKE[@]}" -B \
             KICKASS="$KICKASS" \
             OUT="$smoke_out" \
-            KA_FLAGS128="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define C128" \
+            KA_FLAGS128="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define C128" \
             build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL (retirement product build failed)"
         tail -40 "$build_log" | sed 's/^/    /'
@@ -4947,7 +4947,7 @@ run_boot_title_save_media_fail_product_smoke() {
         return
     fi
 
-    # A = HAL_STORAGE_STATUS_WRITE_PROTECTED (3, core/storage_status.s).
+    # A = HAL_STORAGE_STATUS_WRITE_PROTECTED (3, core/6502/storage_status.s).
     local stop_a
     stop_a=$(awk -v addr="$(printf '%s' "$fail_addr" | tr '[:upper:]' '[:lower:]')" '
         tolower($0) ~ "stop on[[:space:]]+exec[[:space:]]+" addr "\\)" { want = 1; next }
@@ -6549,7 +6549,7 @@ build_scripted_exchange_boot_assets() {
 
 # SHIFT+X through the real key map, dispatch, Items-overlay trampoline and
 # message path: a cursed primary is refused with no turn, then the swap takes
-# one turn and moves all 8 fields (fixture: core/game_loop.s cmd_exchange).
+# one turn and moves all 8 fields (fixture: core/6502/game_loop.s cmd_exchange).
 run_exchange_product_smoke128() {
     local name="exchange_product_smoke128"
     echo -n "  $name: "

@@ -19,10 +19,10 @@ test_finish:
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 
 test_key_calls: .byte 0
 tc_result:      .byte $ff
@@ -34,7 +34,7 @@ input_get_key:
     lda #$20
     rts
 
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/ui_messages.s"
 
 test_start:
     lda #COL_LGREY

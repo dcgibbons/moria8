@@ -22,7 +22,7 @@
 // main.s — Apple IIe moria8 linker script + entry
 //
 // Assemble from platforms/apple2 with:
-//   -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -define APPLE2
+//   -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -define APPLE2
 //
 // Memory authority: docs/APPLE2_MEMORY_POLICY.md.
 //   Default (resident): $0A00-$7BFF, entry pinned at $0A00 for boot.s
@@ -102,7 +102,7 @@
 #import "save_slot_policy.s"
 #import "vic_palette_consts.s"
 
-// SFX_* semantic sound IDs (keep in sync with core/sound.s, which this port
+// SFX_* semantic sound IDs (keep in sync with core/6502/sound.s, which this port
 // cannot import — it programs the SID directly).
 .const SFX_NONE     = $ff
 .const SFX_BUMP     = $00
@@ -152,7 +152,7 @@ tramp_dig_ability:
 // imports are NOT repeated here — core files pull their own parts
 // via libdir, and duplicate paths double-define symbols)
 // ============================================================
-#import "../../core/zeropage.s"
+#import "../../core/6502/zeropage.s"
 #import "hal/layout.s"
 #import "memory.s"
 #import "cache_layout.s"   // the aux spans: aux data, catalog fields, overlay cache
@@ -170,13 +170,13 @@ tramp_dig_ability:
 #define SAVE_SLOT_INDEX_EXTERNAL
 #import "reu_stub.s"
 #import "screen_a2.s"
-#import "../../core/color.s"
+#import "../../core/6502/color.s"
 #import "config.s"
 #import "input.s"
-#import "../../core/rng.s"
-#import "../../core/math.s"
-#import "../../core/tables.s"
-#import "../../core/item_defs.s"
+#import "../../core/6502/rng.s"
+#import "../../core/6502/math.s"
+#import "../../core/6502/tables.s"
+#import "../../core/6502/item_defs.s"
 #define PLAYER_RECALC_PFLAGS_EXTERNAL
 #define PFLAGS_SEGMENT_CUSTOM
 .macro PflagsSegment() {
@@ -185,7 +185,7 @@ tramp_dig_ability:
 .macro PflagsRestoreSegment() {
     .segment Default
 }
-#import "../../core/player.s"
+#import "../../core/6502/player.s"
 // The message-history ring buffer lives in aux data (the resident
 // always-region is full); writes go through mmu_safe_map_write_ptr1.
 #define MSG_HISTORY_IN_AUX
@@ -195,18 +195,18 @@ tramp_dig_ability:
 .macro MsgHistoryRestoreSegment() {
     .segment Default
 }
-#import "../../core/ui_messages.s"
-#import "../../core/ui_status.s"
-#import "../../core/runtime_ui_strings.s"
+#import "../../core/6502/ui_messages.s"
+#import "../../core/6502/ui_status.s"
+#import "../../core/6502/runtime_ui_strings.s"
 // Resident, not in the play slot: asset_load_ask_for_disk shows it when the
 // play slot's own load has failed.
 #define PRESS_KEY_STR_EXTERNAL
 press_key_str:
     .text "Press any key" ; .byte 0
-#import "../../core/generation_busy.s"
+#import "../../core/6502/generation_busy.s"
 #define SMALL_PLAY_EXTERNAL
-#import "../../core/stat_display.s"
-#import "../../core/huffman.s"
+#import "../../core/6502/stat_display.s"
+#import "../../core/6502/huffman.s"
 .segment A2HuffData
 #import "../shared/catalog/catalog_names.s"    // The catalog's names, read like the corpus
 // Read-only aux tables ride the corpus slot (boot-loaded, never evicted):
@@ -226,7 +226,7 @@ ovl_huffdata_end:
 // RAM since 2026-11-11 (the element touches' messages filled the corpus
 // slot; the resident image had room): one 16-byte slot
 // per SFX ID, as (period, toggles) pairs with period 0 = end. Period:
-// smaller = higher pitch. Shapes mirror the C64 SID intent (core/sound.s).
+// smaller = higher pitch. Shapes mirror the C64 SID intent (core/6502/sound.s).
 // Parked in A2AuxData and read via A2_ZP_THUNK_READ_P1 to save Default bytes.
 .segment A2AuxData
 a2_sfx_patterns:
@@ -242,7 +242,7 @@ a2_sfx_patterns:
     .byte $e8, 18, $d8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // HUNGER_FAINT: lower, harsher
 .assert "Sound patterns are 10 x 16-byte slots", * - a2_sfx_patterns, 160
 .segment Default
-#import "../../core/dungeon_data.s"
+#import "../../core/6502/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 // place_secrets runs only from dungeon generation, so on this port it lives
@@ -285,11 +285,11 @@ a2_sfx_patterns:
     // in the play slot.
     .segment A2PlaySlot
 }
-#import "../../core/dungeon_features.s"
-#import "../../core/chest_search.s"
+#import "../../core/6502/dungeon_features.s"
+#import "../../core/6502/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
-#import "../../core/monster.s"
+#import "../../core/6502/monster.s"
 // A2 play slot is full, so the door-close refusal helper lives resident near
 // its only caller (door_try_close). combat_msg_monster_suffix and friends
 // stay in the play slot; resident->play calls during the play phase are
@@ -304,7 +304,7 @@ combat_msg_monster_in_way:
     jmp combat_msg_monster_suffix
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
-#import "../../core/recall_defs.s"
+#import "../../core/6502/recall_defs.s"
 // The play payload's signature "M8P" (a2_require_play) comes first: the
 // catalog's placement code (CatalogWinBegin) is the first the slot receives.
 .segment A2PlaySlot
@@ -313,13 +313,13 @@ a2_play_start:
 a2_play_body:
 .segment Default
 #import "monster_catalog_a2.s"
-#import "../../core/monster_catalog.s"
-#import "../../core/tier_manager.s"
-#import "../../core/monster_ai.s"
-#import "../../core/scene_dirty.s"
+#import "../../core/6502/monster_catalog.s"
+#import "../../core/6502/tier_manager.s"
+#import "../../core/6502/monster_ai.s"
+#import "../../core/6502/scene_dirty.s"
 // scene_mat_tile lives in dungeon_render_a2.s (falls into render_single_tile).
-#import "../../core/scene_force.s"
-#import "../../core/monster_magic.s"
+#import "../../core/6502/scene_force.s"
+#import "../../core/6502/monster_magic.s"
 .macro ChestSummonsSegment() {
     .segment A2PlaySlot
 }
@@ -348,7 +348,7 @@ a2_play_body:
     .segment Default
 }
 .label re_equip_entry = tramp_re_equip
-#import "../../core/item.s"
+#import "../../core/6502/item.s"
 #define MON_ATK_ACID_EXTERNAL   // monster_acid.s rides the resident image (below)
 // Step-13 chest loot: latch + resident handoff stay in Default (play slot is
 // full); the generator parks in the GEN overlay with the picker it uses.
@@ -358,49 +358,49 @@ a2_play_body:
 .macro ChestLootRestoreSegment() {
     .segment Default
 }
-#import "../../core/chest_loot.s"
+#import "../../core/6502/chest_loot.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
 #define PLAYER_ITEM_SELECT_EXTERNAL
-#import "../../core/player_items.s"
+#import "../../core/6502/player_items.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #define EFF_FIND_DOORS_EXTERNAL
-#import "../../core/spell_effects.s"
+#import "../../core/6502/spell_effects.s"
 #undef EFF_FIND_DOORS_EXTERNAL
 #define EFF_DESTROY_TRAPS_DOORS_EXTERNAL
-#import "../../core/spell_effects_overlay.s"
+#import "../../core/6502/spell_effects_overlay.s"
 #undef EFF_DESTROY_TRAPS_DOORS_EXTERNAL
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 // turn.s's regen/poison tables in resident main RAM: the play slot has no
 // room (#importonce: turn.s's own import is then a no-op).
-#import "../../core/turn_data.s"
+#import "../../core/6502/turn_data.s"
 // Heal feedback (spell/potion heal + message) in resident main RAM too: the
 // play slot has no room. The potion heal/cure effects sit beside it, where
 // both the items overlay (Cure Light/Serious Wounds) and the spell overlay
 // (Healing, Cure Critical Wounds) reach.
-#import "../../core/player_heal_feedback.s"
-#import "../../core/eff_potion_cure.s"
+#import "../../core/6502/player_heal_feedback.s"
+#import "../../core/6502/eff_potion_cure.s"
 
 // Constants are needed by resident consumers before the data/code placement
 // later in A2PlaySlot and A2AuxData. These imports emit no bytes.
-#import "../../core/store_data_defs.s"
-#import "../../core/spell_data_defs.s"
+#import "../../core/6502/store_data_defs.s"
+#import "../../core/6502/spell_data_defs.s"
 
-#import "../../core/player_magic_state.s"
-#import "../../core/player_magic_state_ops.s"
-#import "../../core/player_magic.s"
+#import "../../core/6502/player_magic_state.s"
+#import "../../core/6502/player_magic_state_ops.s"
+#import "../../core/6502/player_magic.s"
 #import "dungeon_render_a2.s"
 // C64 $F000-banked content is ordinary resident bytes on this platform,
 // except the map/earthquake spell engines, which ride the death overlay
 // beside player_destroy_area.s behind tramp_eff_* overlay swaps.
-#import "../../core/item_desc_banked.s"
-#import "../../core/projectile.s"
+#import "../../core/6502/item_desc_banked.s"
+#import "../../core/6502/projectile.s"
 // The ball's per-creature damage and Orb of Draining's entry (resident: the
 // SPELL cache slot is full; called only from eff_ball in OVL.SPELL).
-#import "../../core/player_magic_ball_harm.s"
-#import "../../core/player_magic_ball_holy.s"
+#import "../../core/6502/player_magic_ball_harm.s"
+#import "../../core/6502/player_magic_ball_holy.s"
 #import "compat/io_kernal_consts.s"
-#import "../../core/storage_status.s"
+#import "../../core/6502/storage_status.s"
 #import "memory_aux.s"
 .assert "Recall Aux LC Bank 1 allocation fits below $E000", A2_LC_RECALL_BASE + RECALL_DATA_SIZE - 1 <= $dfff, true
 .assert "ITEM.CAT Aux LC High allocation fits before Aux vectors", A2_LC_ITEM_CAT_BASE + ITMCAT_TOTAL_SIZE - 1 <= A2_LC_MAX_DATA_END, true
@@ -521,7 +521,7 @@ title_load_game:
     jmp title_enter_menu
 
 // ============================================================
-// Platform services (indirect API slots in core/platform_services_api.s)
+// Platform services (indirect API slots in core/6502/platform_services_api.s)
 // ============================================================
 platform_services_install_a2:
     lda #$4c
@@ -831,20 +831,20 @@ hal_msg_print_indirect_aux:
 .segment A2PlaySlot
 // Chest summoning-trap runner is called only from game_loop.s (play), so it
 // parks here in the play slot rather than the full resident Default payload.
-#import "../../core/chest_summons.s"
+#import "../../core/6502/chest_summons.s"
 // Apple item commands call this resident routine while the item overlay is
 // active. Keep the stat transition code in the always-loaded play payload.
-#import "../../core/player_adjust_equipment_stat.s"
+#import "../../core/6502/player_adjust_equipment_stat.s"
 
 #define STORE_RUNTIME_DATA_EXTERNAL
 #define STORE_INVENTORY_DATA_EXTERNAL
-#import "../../core/store_data.s"
+#import "../../core/6502/store_data.s"
 #undef STORE_INVENTORY_DATA_EXTERNAL
 #undef STORE_RUNTIME_DATA_EXTERNAL
-#import "../../core/store_hot_data.s"
-#import "../../core/recall.s"
-#import "../../core/dungeon_los.s"
-#import "../../core/monster_attack.s"
+#import "../../core/6502/store_hot_data.s"
+#import "../../core/6502/recall.s"
+#import "../../core/6502/dungeon_los.s"
+#import "../../core/6502/monster_attack.s"
 
 .macro PlayerMoveRestoreResidentSegment() {
     .segment A2PlaySlot
@@ -887,7 +887,7 @@ hal_msg_print_indirect_aux:
     .segment A2PlaySlot
 }
 #define PLAYER_LOOK_EXTERNAL
-#import "../../core/player_move.s"
+#import "../../core/6502/player_move.s"
 #undef PLAYER_LOOK_EXTERNAL
 .macro PlayerRunInitializeSegment() {
     .segment ModalMiscOverlay
@@ -896,32 +896,32 @@ hal_msg_print_indirect_aux:
     .segment A2PlaySlot
 }
 #define PLAYER_RUN_INITIALIZE_EXTERNAL
-#import "../../core/player_run.s"
+#import "../../core/6502/player_run.s"
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #define CMB_WINNER_STR_EXTERNAL
 #define CMB_IN_WAY_EXTERNAL
-#import "../../core/combat.s"
+#import "../../core/6502/combat.s"
 #undef CMB_IN_WAY_EXTERNAL
 #undef CMB_WINNER_STR_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #define WIZARD_PROMPT_HELPERS_EXTERNAL
-#import "../../core/wizard.s"
+#import "../../core/6502/wizard.s"
 #undef WIZARD_PROMPT_HELPERS_EXTERNAL
 #define PLAYER_LOOK_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
 #define WELCOME_STR_EXTERNAL
 #define GAME_LOOP_NAV_STRINGS_EXTERNAL
 #define GAME_LOOP_NO_STAIRS_STR_EXTERNAL
-#import "../../core/game_loop.s"
+#import "../../core/6502/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #undef PLAYER_LOOK_EXTERNAL
 #import "dungeon_scroll_a2.s"
-#import "../../core/turn.s"
+#import "../../core/6502/turn.s"
 // Small play-resident modules (play is present in every gameplay phase).
-#import "../../core/ui_restore.s"
-#import "../../core/ui_help_clear.s"
-#import "../../core/stat_display.s"
+#import "../../core/6502/ui_restore.s"
+#import "../../core/6502/ui_help_clear.s"
+#import "../../core/6502/stat_display.s"
 
 // LOOK lives in the cold modal overlay; dispatch from the load-once play slot
 // so the call cannot enter whichever unrelated payload currently owns $A400.
@@ -938,16 +938,16 @@ tramp_do_look:
 // Data-only aux blocks. No labels in these files are executable, and all
 // runtime access is routed through the Apple II AuxRead/AuxWrite thunks.
 .segment A2AuxData
-#import "../../core/store_inventory_data.s"
-#import "../../core/spell_class_data.s"
+#import "../../core/6502/store_inventory_data.s"
+#import "../../core/6502/spell_class_data.s"
 #define STORE_HOT_DATA_EXTERNAL
-#import "../../core/store_runtime_data.s"
+#import "../../core/6502/store_runtime_data.s"
 #undef STORE_HOT_DATA_EXTERNAL
-#import "../../core/spell_helper_tables.s"
+#import "../../core/6502/spell_helper_tables.s"
 // Spell/prayer name pointer tables and strings. Consumed only by
 // spell_list_display (OVL.SPELL), so they cannot stay in OVL.UI; aux keeps
 // them readable through the map thunks regardless of the loaded overlay.
-#import "../../core/spell_names.s"
+#import "../../core/6502/spell_names.s"
 
 // Platform-externalized game_loop message strings (welcome, search toggle,
 // stairs). Staged to main RAM by a2_msg_print_indirect_aux at print time;
@@ -975,15 +975,15 @@ cmb_winner_str:
 // (MON_ATK_ACID_EXTERNAL). tramp_item_recalc saves/restores current_overlay
 // directly so monster_acid.s stays within 8-bit branch span.
 #undef TRAP_TRIGGER_EXTERNAL
-#import "../../core/monster_acid.s"
+#import "../../core/6502/monster_acid.s"
 #define TRAP_TRIGGER_EXTERNAL
 
 // ============================================================
 // Overlay segment blocks (C64 composition, adjusted)
 // ============================================================
 .segment TownOverlay
-#import "../../core/store.s"
-#import "../../core/ui_store.s"
+#import "../../core/6502/store.s"
+#import "../../core/6502/ui_store.s"
 inv_add_carried:                    // the store's (HAL_PLATFORM_INV_ADD_CARRIED_EXTERNAL)
     :InvAddCarriedBody()
 ovl_town_end:
@@ -991,18 +991,18 @@ ovl_town_end:
 .assert "Town overlay fits window code region", ovl_town_end <= $ba00, true
 
 .segment HomeOverlay
-#import "../../core/ui_home.s"
-#import "../../core/ui_home_text.s"
-#import "../../core/eff_item_p1.s"
+#import "../../core/6502/ui_home.s"
+#import "../../core/6502/ui_home_text.s"
+#import "../../core/6502/eff_item_p1.s"
 ovl_home_end:
 .print "Home overlay: " + (ovl_home_end - $a400) + " bytes"
 .assert "Home overlay fits window code region", ovl_home_end <= $ba00, true
 
 .segment StartupOverlay
-#import "../../core/background_data.s"
+#import "../../core/6502/background_data.s"
 ovl_start_chargen_mark:
-#import "../../core/player_chargen_cold.s"
-#import "../../core/player_create.s"
+#import "../../core/6502/player_chargen_cold.s"
+#import "../../core/6502/player_create.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $a400) + " bytes"
 .assert "Startup overlay fits", ovl_start_end <= $ba00, true
@@ -1044,7 +1044,7 @@ winner_apply_retirement_bonus_overlay:
     adc #$4c
     sta player_data + PL_XP_2
     rts
-#import "../../core/royal.s"
+#import "../../core/6502/royal.s"
 // game_restart_overlay — reset game state, return to title screen
 // (C64 main.s:2225 semantics, de-banked).
 game_restart_overlay:
@@ -1083,8 +1083,8 @@ game_restart_overlay:
     sta current_tier
     sta tier_loaded
     jmp title_enter_menu
-#import "../../core/score_io.s"
-#import "../../core/score.s"
+#import "../../core/6502/score_io.s"
+#import "../../core/6502/score.s"
 
 // tramp_game_over_run — Death orchestration tail, colocated in the death
 // overlay with its callees (score, hiscore, death screen). Both entry paths
@@ -1104,25 +1104,25 @@ tramp_game_over_run:
     jmp score_death_screen
     #define SCROLL_P3_NEW_OWNER
     #define SCROLL_P3_EXISTING_OWNER
-    #import "../../core/scroll_effects_p3.s"
+    #import "../../core/6502/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
     #undef SCROLL_P3_NEW_OWNER
     // Word of Destruction devastation engine: co-located with the scroll/
     // staff router here (direct jsr). The mage path reaches it via resident
     // tramp_eff_destroy_area (one disk load for a rare spell; OVL.SPELL
     // restore is an aux-cached RAM copy).
-    #import "../../core/player_destroy_area.s"
+    #import "../../core/6502/player_destroy_area.s"
     // Map Area and Earthquake engines: spell-execution engines relocated from
     // the resident image; reached via tramp_eff_map_area / tramp_eff_earthquake
     // (same OVL_DEATH swap + OVL.SPELL restore as Word of Destruction).
-    #import "../../core/player_magic_map.s"
-    #import "../../core/player_magic_earthquake.s"
+    #import "../../core/6502/player_magic_map.s"
+    #import "../../core/6502/player_magic_earthquake.s"
     // Cold spell effects and gain-stat potions relocated from Default /
     // A2PlaySlot into OVL.DEATH behind tramp_death_call_restore_spell.
-    #import "../../core/eff_gain_stat.s"
+    #import "../../core/6502/eff_gain_stat.s"
 
-#import "../../core/eff_doors_traps_cold.s"
-#import "../../core/ui_recall.s"
+#import "../../core/6502/eff_doors_traps_cold.s"
+#import "../../core/6502/ui_recall.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $a400) + " bytes"
 .assert "High-score I/O counter is owned by death overlay", hiscore_io_count_lo >= $a400 && hiscore_io_count_hi < ovl_death_end, true
@@ -1131,7 +1131,7 @@ ovl_death_end:
 .assert "Death overlay fits", ovl_death_end <= $ba00, true
 
 .segment ModalMiscOverlay
-#import "../../core/ui_wizard.s"
+#import "../../core/6502/ui_wizard.s"
 
 // Wizard prompt helpers ride the modal overlay (their remaining callers are
 // here; the resident image funds chest gameplay).
@@ -1169,32 +1169,32 @@ ovl_modal_misc_end:
 .assert "Modal misc overlay fits", ovl_modal_misc_end <= $ba00, true
 
 .segment HelpOverlay
-#import "../../core/ui_help_title.s"
+#import "../../core/6502/ui_help_title.s"
 #import "../../commodore/c128/ui_help_data_80.s"
-#import "../../core/ui_help.s"
+#import "../../core/6502/ui_help.s"
 ovl_help_cmd_mark:
-#import "../../core/ui_help_cmd_cold.s"
-#import "../../core/ui_identify.s"
+#import "../../core/6502/ui_help_cmd_cold.s"
+#import "../../core/6502/ui_identify.s"
 ovl_help_drop_mark:
-#import "../../core/item_drop_cold.s"
+#import "../../core/6502/item_drop_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $a400) + " bytes"
 .assert "Help overlay fits", ovl_help_end <= $ba00, true
 
 .segment UiOverlay
-#import "../../core/ui_character.s"
+#import "../../core/6502/ui_character.s"
 ovl_ui_bg_mark:
-#import "../../core/player_bg_draw_cold.s"
-#import "../../core/ui_inventory.s"
-#import "../../core/ui_equipment.s"
+#import "../../core/6502/player_bg_draw_cold.s"
+#import "../../core/6502/ui_inventory.s"
+#import "../../core/6502/ui_equipment.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a400) + " bytes"
 .assert "UI overlay fits", ovl_ui_end <= $ba00, true
 
 .segment ItemActionsOverlay
 #define SCROLL_P3_ROUTER_ENABLED
-    #import "../../core/item_actions_overlay.s"
-    #import "../../core/item_exchange.s"
+    #import "../../core/6502/item_actions_overlay.s"
+    #import "../../core/6502/item_exchange.s"
 inv_add_carried_items:              // the floor pickup's, through tramp_inv_add_carried
     :InvAddCarriedBody()
 .segment A2PlaySlot
@@ -1212,12 +1212,12 @@ tramp_inv_add_carried:
     rts
 .segment ItemActionsOverlay
 
-#import "../../core/player_item_commands.s"
-#import "../../core/ego_items.s"
-#import "../../core/ranged_fire.s"
-#import "../../core/throw.s"
-#import "../../core/bash.s"
-#import "../../core/tunnel.s"
+#import "../../core/6502/player_item_commands.s"
+#import "../../core/6502/ego_items.s"
+#import "../../core/6502/ranged_fire.s"
+#import "../../core/6502/throw.s"
+#import "../../core/6502/bash.s"
+#import "../../core/6502/tunnel.s"
 ovl_items_end:
 .print "Item actions overlay: " + (ovl_items_end - $a400) + " bytes"
 .assert "Item actions overlay fits", ovl_items_end <= $ba00, true
@@ -1225,7 +1225,7 @@ ovl_items_end:
 .segment SpellOverlay
 #define SPELL_CLASS_DATA_EXTERNAL
 #define SPELL_HELPER_TABLES_EXTERNAL
-#import "../../core/spell_data.s"
+#import "../../core/6502/spell_data.s"
 #undef SPELL_HELPER_TABLES_EXTERNAL
 #undef SPELL_CLASS_DATA_EXTERNAL
 #define PMX_EARTHQUAKE_EXTERNAL
@@ -1234,12 +1234,12 @@ ovl_items_end:
 #define PMX_DETECT_EFFECTS_EXTERNAL
 #define PMX_DESTROY_AREA_EXTERNAL
 #define BALL_HARM_EXTERNAL
-#import "../../core/player_magic_slow_runtime.s"
+#import "../../core/6502/player_magic_slow_runtime.s"
 #define PMU_TURN_FEEDBACK_ONLY
-#import "../../core/player_magic_turn_banked.s"
+#import "../../core/6502/player_magic_turn_banked.s"
 #undef PMU_TURN_FEEDBACK_ONLY
-#import "../../core/player_magic_execute_overlay.s"
-#import "../../core/wand_bolt_entries.s"   // the Fire Bolts and Drain Life entries (OVL.SPELL)
+#import "../../core/6502/player_magic_execute_overlay.s"
+#import "../../core/6502/wand_bolt_entries.s"   // the Fire Bolts and Drain Life entries (OVL.SPELL)
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL
@@ -1250,7 +1250,7 @@ ovl_items_end:
 // Phase 3 potion handlers live in the spell overlay on Apple IIe (the items
 // overlay is full). The quaff dispatch swaps here via OVL.SPELL.
     #define SCROLL_P3_EXISTING_OWNER
-    #import "../../core/scroll_effects_p3.s"
+    #import "../../core/6502/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
 
 iq_dispatch_p3_spell:
@@ -1309,12 +1309,12 @@ iqp3_neutralize:
     jmp huff_print_msg
 #undef PMX_DESTROY_AREA_EXTERNAL
 #undef PMX_EARTHQUAKE_EXTERNAL
-#import "../../core/player_magic_levelup.s"
-#import "../../core/player_magic_display.s"
-#import "../../core/player_magic_tail.s"
-#import "../../core/player_magic_select_overlay.s"
-#import "../../core/player_gain_spell_impl.s"
-#import "../../core/player_magic_learn_op.s"
+#import "../../core/6502/player_magic_levelup.s"
+#import "../../core/6502/player_magic_display.s"
+#import "../../core/6502/player_magic_tail.s"
+#import "../../core/6502/player_magic_select_overlay.s"
+#import "../../core/6502/player_gain_spell_impl.s"
+#import "../../core/6502/player_magic_learn_op.s"
 ovl_spell_end:
 .print "Spell overlay: " + (ovl_spell_end - $a400) + " bytes"
 .assert "Spell overlay fits", ovl_spell_end <= $ba00, true
@@ -1326,9 +1326,9 @@ ovl_spell_end:
 .assert "A2 cache MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= A2_AUX_CACHE_HUFF - A2_AUX_CACHE_MODAL, true
 
 .segment DungeonGenOverlay
-#import "../../core/special_rooms.s"
-#import "../../core/dungeon_tunnel_guard.s"
-#import "../../core/dungeon_gen.s"
+#import "../../core/6502/special_rooms.s"
+#import "../../core/6502/dungeon_tunnel_guard.s"
+#import "../../core/6502/dungeon_gen.s"
 ovl_gen_end:
 .print "Dungeon gen overlay: " + (ovl_gen_end - $a400) + " bytes"
 .assert "Dungeon gen overlay fits", ovl_gen_end <= $ba00, true
@@ -1418,9 +1418,9 @@ disk_prompt_game_impl:
 #import "save_slot_menu.s"
 #import "disk_setup_a2.s"
 ovl_storage_refresh_mark:
-#import "../../core/item_refresh_known_cold.s"
+#import "../../core/6502/item_refresh_known_cold.s"
 ovl_storage_resume_mark:
-#import "../../core/load_resume_reset_cold.s"
+#import "../../core/6502/load_resume_reset_cold.s"
 ovl_storage_end:
 .print "Storage overlay: " + (ovl_storage_end - $a400) + " bytes"
 .assert "Storage overlay fits", ovl_storage_end <= $ba00, true
@@ -1442,11 +1442,11 @@ title_str:
     .byte 0
 
 #import "title_screen.s"
-#import "../../core/title_sysinfo_banked.s"
+#import "../../core/6502/title_sysinfo_banked.s"
 ovl_title_restock_mark:
-#import "../../core/store_restock_overlay.s"
+#import "../../core/6502/store_restock_overlay.s"
 ovl_title_kit_mark:
-#import "../../core/starting_kit_cold.s"
+#import "../../core/6502/starting_kit_cold.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $a400) + " bytes"
 .assert "Title overlay fits", ovl_title_end <= $ba00, true
@@ -1455,16 +1455,16 @@ ovl_title_end:
 // trigger and damage engines (100% intra-overlay with disarm.s and chest.s).
 // Cold MLI load, like DEATH/HELP/STORAGE (docs/CHEST_DESIGN.md).
 .segment ChestOverlay
-#import "../../core/chest.s"
-#import "../../core/eff_item_extended.s"
-#import "../../core/disarm.s"
-#import "../../core/disarm_helpers.s"
+#import "../../core/6502/chest.s"
+#import "../../core/6502/eff_item_extended.s"
+#import "../../core/6502/disarm.s"
+#import "../../core/6502/disarm_helpers.s"
 ovl_chest_trap_mark:
-#import "../../core/trap_trigger_cold.s"
+#import "../../core/6502/trap_trigger_cold.s"
 ovl_chest_trap_dmg_mark:
-#import "../../core/trap_damage_cold.s"
+#import "../../core/6502/trap_damage_cold.s"
 ovl_chest_door_mark:
-#import "../../core/door_open_close_cold.s"
+#import "../../core/6502/door_open_close_cold.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $a400) + " bytes"
 .assert "Chest overlay fits", ovl_chest_end <= $ba00, true
@@ -1617,8 +1617,8 @@ program_end:
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
-#import "../../core/ui_legal.s"
-#import "../../core/ui_legal_sysinfo.s"
+#import "../../core/6502/ui_legal.s"
+#import "../../core/6502/ui_legal_sysinfo.s"
 #import "legal_sysinfo.s"
 #import "../shared/legal_disk_stream.s"
 legal_code_end:

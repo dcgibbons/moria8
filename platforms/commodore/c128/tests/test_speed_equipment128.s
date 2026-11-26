@@ -12,12 +12,12 @@ test_start:
     jmp test_main
 .assert "test_start stays below C128 BASIC ROM", test_start < $4000, true
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../hal/entropy_consts.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
 
 .const COL_WHITE = 1
 .const COL_LGREY = 15
@@ -30,7 +30,7 @@ test_start:
 
 map_row_lo: .fill 1, 0
 map_row_hi: .fill 1, 0
-map_row_ptr0_x:                     // as core/dungeon_data.s
+map_row_ptr0_x:                     // as core/6502/dungeon_data.s
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
@@ -53,8 +53,8 @@ fi_item_id:  .byte FI_EMPTY
 fi_meta_hi:  .byte 0
 si_meta_hi:  .byte 0
 
-#import "../../../../core/item_tables.s"
-#import "../../../../core/player.s"
+#import "../../../../core/6502/item_tables.s"
+#import "../../../../core/6502/player.s"
 
 tramp_ego_get_ac_bonus:
     lda #0
@@ -63,7 +63,7 @@ tramp_ego_get_ac_bonus:
 // Match the C128 product (hal/lifecycle_policy.s): the stat adjuster lives
 // outside player_recalc_equipment.s on C128, so it must not be pulled in here.
 #define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
-#import "../../../../core/player_recalc_equipment.s"
+#import "../../../../core/6502/player_recalc_equipment.s"
 
 test_main:
     sei
@@ -141,7 +141,7 @@ test_pass:
 test_fail:
     jmp test_fail
 
-// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// As core/6502/ui_messages.s (not imported here): hal_screen_put_string with A/Y
 // = pointer
 screen_put_string_ay:
     sta zp_ptr0

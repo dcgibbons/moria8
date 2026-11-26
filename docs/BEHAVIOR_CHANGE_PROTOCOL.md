@@ -1,7 +1,7 @@
 # Behavior Change Protocol
 
 Load this document only for gameplay, lifecycle, generation, rendering, or
-C128 memory/banking changes routed here by `AGENTS.md`.
+platform memory, banking, or TPA changes routed here by `AGENTS.md`.
 
 ## Risk Tier
 
@@ -37,8 +37,8 @@ For gameplay semantics:
 
 For platform mechanics, use hardware constraints, executable ownership/layout
 assertions, accepted Moria8 decisions, then implementation/runtime evidence.
-VMS Moria and Umoria are not authorities for Commodore banking, VDC, loaders or
-physical rendering.
+VMS Moria and Umoria are not authorities for platform banking, VDC/VERA/ANTIC/
+Mode 0/ADM-3A/ANSI rendering, loaders, or CP/M TPA/BDOS/BIOS layout.
 
 Pinned upstream revisions used by this repository:
 
@@ -113,8 +113,9 @@ time. Do not combine unrelated semantics merely because they share a module.
 - Select normal, boundary, negative, overflow/underflow and stale-state cases
   according to affected invariants. Explain omitted apparently relevant cases.
 - Assert transitions and invariants, not only messages or glyphs.
-- Shared code or shared-contract changes require affected-platform parity or an
-  evidence-based exemption.
+- Shared code (`core/6502/`, `core/z80/`) or shared-contract changes require
+  affected-platform parity across all 8 ports (including `core/6502/` ↔
+  `core/z80/` cross-ISA parity) or an evidence-based exemption.
 - Every assertion encoding changed semantics must cite a contract decision,
   upstream fixture/trace, or independent mathematical invariant. A captured
   production regression may prove execution and preserve a reproduction, but

@@ -22,7 +22,7 @@ SID_PLATFORM_FILES = {
     "c128": ROOT / "platforms/commodore/c128/hal/sound_consts.s",
 }
 SOUND_IMPL_FILES = {
-    "sid": ROOT / "core/sound.s",
+    "sid": ROOT / "core/6502/sound.s",
     "plus4": ROOT / "platforms/commodore/plus4/sound.s",
     "apple2": ROOT / "platforms/apple2/services.s",
     "cx16": ROOT / "platforms/cx16/services.s",
@@ -30,8 +30,8 @@ SOUND_IMPL_FILES = {
     "bbcmaster": ROOT / "platforms/bbcmaster/sound.s",
 }
 
-COMMON_SOUND = ROOT / "core/sound.s"
-COMMON_SOURCE_ROOT = ROOT / "core"
+COMMON_SOUND = ROOT / "core/6502/sound.s"
+COMMON_SOURCE_ROOT = ROOT / "core/6502"
 FORBIDDEN_COMMON_TOKENS = ("$d400",)
 FORBIDDEN_COMMON_CALLS = (
     "jsr sound_init",

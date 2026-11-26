@@ -20,7 +20,7 @@ MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
-RECALL_DATA_SIZE = 1116   # 279 creature rows x 4 (core/recall_defs.s)
+RECALL_DATA_SIZE = 1116   # 279 creature rows x 4 (core/6502/recall_defs.s)
 # Current Plus/4 product load gate consumes this many map bytes before reading
 # the checksum. Keep this explicit until the storage HAL owns per-platform
 # record layout instead of inheriting the C64 save shape implicitly.

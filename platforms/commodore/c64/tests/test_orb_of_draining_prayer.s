@@ -34,69 +34,69 @@ test_finish:
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 .segmentdef TestNameStreams [start=$E100, min=$E100, max=$FFF9]
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/input_contract.s"
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/input_contract.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/dungeon_gen.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestCreateOverlay
 mat_scene_dirty: .byte 0
 monster_ai_tick:
     brk
 .segment Default
-#import "../../../../core/recall.s"
-#import "../../../../core/los_trace.s"
+#import "../../../../core/6502/recall.s"
+#import "../../../../core/6502/los_trace.s"
 .segment TestCreateOverlay
 monster_can_cast:
 monster_pick_spell:
     brk
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 hal_item_cat_read_byte:
     brk
-#import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
+#import "../../../../core/6502/special_rooms.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
 .segment TestUnused
-#import "../../../../core/player_items.s"
+#import "../../../../core/6502/player_items.s"
 .segment Default
-#import "../../../../core/spell_data.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
-#import "../../../../core/player_magic_ball.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/player_magic.s"
+#import "../../../../core/6502/player_magic_ball.s"
 #import "../dungeon_render.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/combat.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 .segment TestCreateOverlay
-#import "../../../../core/element_resist.s"
+#import "../../../../core/6502/element_resist.s"
 mad_dmg_hi: .byte 0
 mon_atk_acid_armour:
 mon_atk_apply_damage_16:
@@ -104,7 +104,7 @@ monster_attack_player:
 player_death_check:
     brk
 .segment Default
-#import "../../../../core/turn.s"
+#import "../../../../core/6502/turn.s"
 
 store_init_all:
     rts
@@ -120,7 +120,7 @@ ui_help_display:
 help_draw_line:
 help_draw_hborder:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0

@@ -1,19 +1,20 @@
 # Moria8 Manual
 
-Moria8 is an assembly adaptation of the classic Moria roguelike for seven 8-bit
+Moria8 is an assembly adaptation of the classic Moria roguelike for eight 8-bit
 platforms: **Commodore 64**, **Commodore 128**, **Commodore Plus/4**, **Apple
-IIe** (128K), **Commander X16**, **Atari 8-bit** (`800XL`/`65XE`/`130XE`), and
-**Acorn BBC Master 128**. You create one adventurer, prepare in town, descend
-through the dungeon, grow stronger, and try to defeat the Balrog.
+IIe** (128K), **Commander X16**, **Atari 8-bit** (`800XL`/`65XE`/`130XE`),
+**Acorn BBC Master 128**, and **CP/M 2.2 (Z80)** *(in progress / source build)*.
+You create one adventurer, prepare in town, descend through the dungeon, grow
+stronger, and try to defeat the Balrog.
 
-This manual covers the current releases. Moria8 follows VMS Moria and Umoria
-closely in spirit, with two hardware-scaled map geometries sharing the same core
-rules:
+This manual covers all current platforms (including the in-progress CP/M 2.2 Z80
+source build). Moria8 follows VMS Moria and Umoria closely in spirit, with two
+hardware-scaled map geometries sharing the same core rules:
 
 - **40-column ports (`80x48` active map):** Commodore 64, Commodore Plus/4, and
   Atari 8-bit.
 - **80-column ports (`198x66` active map):** Commodore 128, Apple IIe, Commander
-  X16, and Acorn BBC Master 128.
+  X16, Acorn BBC Master 128, and CP/M 2.2 (Z80) *(in progress)*.
 
 ## Starting The Game
 
@@ -45,6 +46,14 @@ Choose the cartridge or disk/archive release for your machine:
 - **Acorn BBC Master 128:** `moria8-bbcmaster.ssd` (Acorn DFS 80-track disk;
   boot via `SHIFT+BREAK` or `*EXEC !BOOT`, using Mode 0 Shadow RAM `LYNNE`,
   `ANDY`, and Sideways RAM).
+- **CP/M 2.2 (Z80) *(in progress / source build)*:** Built by `make diskcpm` as
+  `moria8-cpm.zip`, `moria8-cpm-kaypro2.dsk`, `moria8-cpm-kaypro4.dsk`, and
+  `moria8-cpm-c128.d71` (run with `make runcpm` or on Z80 CP/M 2.2 / CP/M Plus
+  with `>= 52 KB` TPA, BDOS base `>= 0xD100`). Keep `MORIA8.COM` and
+  `MORIA8.DAT` on the same launch drive/user area. Launch with `MORIA8`
+  (ADM-3A monochrome default `/A`), `MORIA8 /V` (VT100/ANSI 16-color SGR), or
+  `MORIA8 /M` (VT100/ANSI monochrome), plus an optional `[A-P]:` save-drive
+  override (e.g., `MORIA8 /V B:`).
 
 On the title screen, choose:
 
@@ -53,14 +62,18 @@ On the title screen, choose:
 - `D` (`D)isk Setup`) to select and initialize save media.
 - `A` (`A)bout`) to open the About menu (`1` License, `2` Source Offer, `3`
   System Info).
+- *(CP/M 2.2 Z80 only)* `M` cycles terminal output mode (`[ADM-3A]` → `[Color]`
+  → `[Mono]`), and `Q` / `ESC` exits cleanly to CP/M.
 
 ### Save Media, Save Format V2 (`$22`), And Compatibility
 
-Program media and save media are deliberately separated; Moria8 refuses to
-write saves or markers onto a program disk. All five cartridge editions load
-game code, overlays, and catalogs directly from read-only ROM with zero program
-disk swaps, but still require writable save storage configured through
-`D)isk Setup`:
+On the floppy-swap 6502 ports (Commodore, Apple IIe, Atari 8-bit, BBC Master
+128), program media and save media are deliberately separated and Moria8 refuses
+to write saves or markers onto a program disk; on HostFS/SD and CP/M targets,
+saves can share the launch drive or target another mounted drive. All five
+cartridge editions load game code, overlays, and catalogs directly from
+read-only ROM with zero program disk swaps, but still require writable save
+storage configured through `D)isk Setup`:
 
 - **Commodore / Commander X16:** Supports IEC/HostFS devices `8`–`11`. Moria8
   writes `MORIA8.ID`, `THE.GAME`–`THE.GAME4`, and `HALL.OF.FAME`
@@ -72,9 +85,13 @@ disk swaps, but still require writable save storage configured through
   (`MORIA8.ID`, `SAVE0.SAV`–`SAVE3.SAV`, and `HISCORE.DAT`).
 - **Acorn BBC Master 128:** Supports DFS drives `:0`–`:3` (`MORIAID`,
   `SAVE0`–`SAVE3`, and `HISCORE`).
+- **CP/M 2.2 (Z80):** Supports drives `A:`–`P:` (defaulting to the active launch
+  drive, or selectable via `D)isk Setup` `1) Same as program` / `2) Pick save
+  drive` or CLI `[A-P]:`; no `MORIA8.ID` marker required), writing
+  `SAVE0.SAV`–`SAVE3.SAV` and `HISCORE.DAT` via safe `.TMP` atomic rename.
 
-Current releases use **Save Format V2** (`SAVE_VERSION = $22`) across all seven
-platforms:
+Current builds use **Save Format V2** (`SAVE_VERSION = $22`) across all eight
+active platforms:
 
 - **Pre-V2 saves are rejected:** Older saves (`< $22`) and incompatible future
   versions (`> $22`) are rejected cleanly with `Unsupported save.` without
@@ -86,7 +103,8 @@ platforms:
 - **Cross-geometry saves (`80x48` vs. `198x66`) are incompatible:** Saves from
   40-column `80x48` ports (**C64, Plus/4, Atari 8-bit**, `7,858` bytes) cannot
   be loaded on 80-column `198x66` ports (**C128, Apple IIe, Commander X16, BBC
-  Master 128**, `17,164` bytes) — or vice versa. In particular, C64 and C128
+  Master 128, CP/M 2.2 Z80**, `17,164` bytes; `135` CP/M 128 B records) — or
+  vice versa. In particular, C64 and C128
   share the `"MORIA01"` Save V2 header and Commodore filenames, so attempting to
   load a C64 save on a C128 (or a C128 save on a C64) will pass the header check
   and fail mid-stream with `Save file corrupt!`. Always keep separate save disks
@@ -121,14 +139,14 @@ maximum. Different races and classes advance at different rates; powerful
 combinations usually require more experience.
 
 Several non-human races have infravision. Infravision can show nearby warm
-monsters while you are in darkness across all seven ports. It does not reveal
+monsters while you are in darkness across all eight ports. It does not reveal
 terrain, items, traps, doors, or cold creatures, and blindness blocks it.
 Dwarves have the longest natural infravision; potions and helms of infravision
 temporarily or permanently add to the effective range.
 
 ## Main Commands
 
-Moria8 uses a unified keymap across all seven platforms. The in-game help screen
+Moria8 uses a unified keymap across all eight platforms. The in-game help screen
 is the authoritative quick reference: press `?` (and `L` inside Help to view the
 License and Source Offer).
 
@@ -154,8 +172,10 @@ Platform movement notes:
 
 - The C128 numeric keypad (`7 8 9 / 4 5 6 / 1 2 3`) also moves and rests (`5`).
 - On Atari 8-bit, `Ctrl` + `+` / `*` / `-` / `=` serve as directional arrows.
-- On pre-shifted ASCII keyboards (Apple IIe, Atari 8-bit, BBC Master 128),
-  uppercase `H J K L Y U B N` act as `SHIFT` + direction to run.
+- On pre-shifted ASCII keyboards (Apple IIe, Atari 8-bit, BBC Master 128, CP/M 2.2
+  Z80), uppercase `H J K L Y U B N` act as `SHIFT` + direction to run.
+- On CP/M 2.2 (Z80), VT100/ANSI `CSI` (`ESC [ A..D`) and `SS3` (`ESC O A..D`)
+  terminal arrow keys also move cardinally.
 
 ### Action And Information Keys
 
@@ -191,6 +211,7 @@ Platform movement notes:
 | `SHIFT+E` | Eat food. |
 | `SHIFT+R` | Refuel lantern with oil. |
 | `V` or `SHIFT+V` | Version and System Info (build version, Save V2 `$22`, geometry, drives, session info). |
+| `=` | *(CP/M 2.2 Z80 only)* Cycle terminal mode (`ADM-3A` / `ANSI Color` / `ANSI Mono`). |
 | `?` | Help command reference (`L` inside Help opens License / Source Offer). |
 | `SHIFT+S` | Save and quit after a successful save. |
 | `SHIFT+Q` | Quit without saving (prompts `Y/N`). |
@@ -240,10 +261,10 @@ Important dungeon habits:
 - Use run carefully; attacks, hazards, and interruptions stop a run.
 
 40-column ports (C64, Plus/4, Atari 8-bit) use `80x48` maps with `38x19`
-viewports. 80-column ports (C128, Apple IIe, Commander X16, BBC Master 128) use
-full `198x66` maps (`78x19` viewport on C128; `78x18` on Apple IIe, Commander
-X16, and BBC Master 128), matching classic terminal Moria geometry while sharing
-the same core rules.
+viewports. 80-column ports (C128, Apple IIe, Commander X16, BBC Master 128,
+CP/M 2.2 Z80) use full `198x66` maps (`78x19` viewport on C128; `78x18` on Apple
+IIe, Commander X16, BBC Master 128, and CP/M 2.2 Z80), matching classic terminal
+Moria geometry while sharing the same core rules.
 
 ### Chests
 
@@ -298,7 +319,7 @@ Some weapons and stat combinations give more than one melee blow in a single
 attack command. When a melee message ends with a count such as `(2/3)`, the
 first number is successful hits and the second number is total blows attempted.
 
-Moria8 ships all **279 classic monsters** across all seven platforms with
+Moria8 ships all **279 classic monsters** across all eight platforms with
 **persistent Monster Recall** (`/` followed by a monster symbol), saved across
 sessions in Save Format V2. See [MONSTERS.md](MONSTERS.md) for the full
 279-species roster and threat notes.
@@ -316,8 +337,9 @@ chance, drains mana to zero, can knock you unconscious, and can damage CON. See
 [SPELLS.md](SPELLS.md) for levels, mana costs, fail rates, book placement, and
 effect notes.
 
-*(Audio note: six of the seven platforms synthesize all 10 game sound effects;
-Commodore Plus/4 sound is currently silent.)*
+*(Audio note: six 6502 platforms synthesize all 10 game sound effects; CP/M
+2.2 Z80 emits terminal ASCII `BEL` (`0x07`) alerts on key events; Commodore
+Plus/4 sound is currently silent.)*
 
 ## Winning And Death
 

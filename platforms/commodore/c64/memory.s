@@ -34,7 +34,7 @@
 .const CREATURE_END     = $c0ff
 .const PLATFORM_TIER_NAME_POOL_BASE = $d000 // Hidden RAM under I/O; active tier names
 .const PLATFORM_TIER_NAME_POOL_END  = $d7ff
-// The monster catalog splits that hidden span (core/monster_catalog.s,
+// The monster catalog splits that hidden span (core/6502/monster_catalog.s,
 // common/catalog_fetch.s; maintainer, 2026-11-05): 32 species names of 32
 // bytes, then the level index and record-sector table MONSTER.IDX fills at boot.
 .const CATALOG_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE

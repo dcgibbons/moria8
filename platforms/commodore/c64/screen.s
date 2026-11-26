@@ -283,7 +283,7 @@ screen_put_char_at:
     sta zp_cursor_row
     rts
 
-#import "../../../core/numeric_format.s"
+#import "../../../core/6502/numeric_format.s"
 
 // screen_flash_at — Briefly flash a '*' in white at a screen position, then restore
 // Used by bolt animation in spell_effects.s.

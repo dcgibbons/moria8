@@ -47,57 +47,57 @@ test_finish:
 #define TRAP_TRIGGER_EXTERNAL
 #define ITEM_SPAWN_EXTERNAL
 #define PICK_ITEM_TYPE_EXTERNAL
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
 .segment TestCreateOverlay
 .segment Default
-#import "../../../../core/ui_status.s"
+#import "../../../../core/6502/ui_status.s"
 .segment TestCreateOverlay
 .segment Default
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segment TestCreateOverlay
-#import "../../../../core/ui_character.s"
+#import "../../../../core/6502/ui_character.s"
 .segment Default
 .segment TestCreateOverlay
 .segment Default
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/stat_display.s"
 .segment TestCreateOverlay
 .segment Default
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 // dungeon_gen removed for MAP_BASE headroom
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_ai.s"
+#import "../../../../core/6502/monster_ai.s"
 .segment Default
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 // Monster spells are not exercised here (no monster turn runs): out of the
 // way above the I/O hole, as player_create is (the faithful dragon breath of
 // 2026-11-08 took the body past MAP_BASE). Their imports, the shared saving
 // throw and line of sight, which the effects do run, stay below.
-#import "../../../../core/los_trace.s"
-#import "../../../../core/player_save.s"
-#import "../../../../core/element_resist.s"
+#import "../../../../core/6502/los_trace.s"
+#import "../../../../core/6502/player_save.s"
+#import "../../../../core/6502/element_resist.s"
 .segment TestCreateOverlay
 monster_can_cast:
 monster_pick_spell:
@@ -105,27 +105,27 @@ monster_pick_spell:
 .segment TestUnused
 // No item here rolls an ego (look test 31's gold is placed by hand): the ego
 // tables and rolls sit in TestUnused so TestCreateOverlay stays <= $DFFF.
-#import "../../../../core/ego_items.s"
+#import "../../../../core/6502/ego_items.s"
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 #import "item_cat_resident_helper.s"
 .segment TestCreateOverlay
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment Default
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
 .segment TestCreateOverlay
-#import "../../../../core/projectile.s"
+#import "../../../../core/6502/projectile.s"
 .segment Default
-#import "../../../../core/spell_effects.s"
-.segment TestCreateOverlay
-.segment Default
-#import "../../../../core/spell_data.s"
-#import "../../../../core/player_move.s"
+#import "../../../../core/6502/spell_effects.s"
 .segment TestCreateOverlay
 .segment Default
-#import "../../../../core/turn.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/player_move.s"
+.segment TestCreateOverlay
+.segment Default
+#import "../../../../core/6502/turn.s"
 .segment TestCreateOverlay
 .segment Default
 .segment TestCreateOverlay
@@ -133,17 +133,17 @@ monster_pick_spell:
 #import "../dungeon_render.s"
 .segment TestCreateOverlay
 .segment Default
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/combat.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/combat.s"
 .segment TestCreateOverlay
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 .segment TestUnused
-#import "../../../../core/trap_trigger_cold.s"
-#import "../../../../core/player_chargen_cold.s"
-#import "../../../../core/item_spawn_cold.s"
-#import "../../../../core/pick_item_type_cold.s"
+#import "../../../../core/6502/trap_trigger_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
+#import "../../../../core/6502/item_spawn_cold.s"
+#import "../../../../core/6502/pick_item_type_cold.s"
 .segment Default
-#import "../../../../core/monster_attack.s"
+#import "../../../../core/6502/monster_attack.s"
 magic_recalc_mana:
     rts
 
@@ -339,7 +339,7 @@ ui_inv_display:
 ui_inv_select_display:
 ui_equip_display:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

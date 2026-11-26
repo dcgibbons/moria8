@@ -2,7 +2,7 @@
 // LegalOverlay-only ROM stream for the Atari 8-bit cartridge build.
 // Owner: LegalOverlay ($E000-$EFFF in platforms/atari8/main.s).
 // Lifetime: one Title A)bout or Help L)icense modal invocation.
-// Callers: core/ui_legal.s (legal_document_start, legal_read_character, legal_menu).
+// Callers: core/6502/ui_legal.s (legal_document_start, legal_read_character, legal_menu).
 // Low-resident cart_read owns MaxFlash bank switching and NMI/IRQ masking and
 // writes 256-byte chunks into legal_input_cache ($E700), outside emitted code.
 

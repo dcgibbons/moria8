@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import abi as abimod
 from . import knowledge
+from .cpm import CpmGame, CpmProcess
 from .game import Game, Observation
 from .launch import (PLAYTEST_OUT, SHIPPING, Build, ViceProcess, allocate_port, check_disk,
                      prepare_worker, rom_args, sha256)
@@ -76,7 +77,7 @@ class Worker:
         self.abi = abimod.load(build.vs, port=build.target)
         knowledge.use_port(build.target.platform)
         self.cartridge = build.disk.parent / build.target.cartridge if build.target.cartridge else None
-        self.vp: ViceProcess | MameProcess | None = None
+        self.vp: ViceProcess | MameProcess | CpmProcess | None = None
         self.game: Game | None = None
         self.restarts = 0
 
@@ -85,6 +86,12 @@ class Worker:
     def _spawn(self, autostart: bool) -> Game:
         self.stop()
         port = self.build.target
+        if port.backend == "cpm":
+            process = CpmProcess(self.worker_id, self.workdir, self.disk, port, self.hang_emulated_seconds)
+            self.vp = process.start_cpm()
+            self.game = CpmGame(process, self.abi, self.workdir, port=port,
+                                hang_emulated_seconds=self.hang_emulated_seconds)
+            return self.game
         if port.backend == "mame":
             process = MameProcess(self.worker_id, self.workdir, self.disk, port,
                                   self.hang_emulated_seconds, cartridge=self.cartridge)

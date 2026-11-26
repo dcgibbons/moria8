@@ -8,7 +8,7 @@
 // strobe latch holds exactly one pending key, so buffer-flush semantics map
 // to a single strobe clear.
 //
-// ASCII -> normalized PETSCII translation feeds core/input_tables.s:
+// ASCII -> normalized PETSCII translation feeds core/6502/input_tables.s:
 //   lowercase ASCII $61-$7A -> unshifted PETSCII letters $41-$5A
 //   uppercase ASCII $41-$5A -> shifted PETSCII letters $C1-$DA
 //   arrows $08/$15/$0B/$0A  -> $9D/$1D/$91/$11 (cursor keys)
@@ -29,9 +29,9 @@
 //
 // IIe semantics are authoritative; IIc AKD behavior is verified separately.
 
-#import "../../core/input_contract.s"
-#import "../../core/input_tables.s"
-#import "../../core/input_run_cancel.s"
+#import "../../core/6502/input_contract.s"
+#import "../../core/6502/input_tables.s"
+#import "../../core/6502/input_run_cancel.s"
 #import "hal/entropy_consts.s"
 
 // Keyboard hardware registers
@@ -206,7 +206,7 @@ input_modal_prepare:
 
 // input_translate — ASCII (7-bit) -> normalized PETSCII
 // Input:  A = raw ASCII with high bit already cleared
-// Output: A = normalized PETSCII per core/input_tables.s conventions
+// Output: A = normalized PETSCII per core/6502/input_tables.s conventions
 // Preserves: Y
 input_translate:
     cmp #$61

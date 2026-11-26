@@ -91,8 +91,8 @@ MAP_SWR_BANK = 0x05
 
 
 def core_const(file: str, name: str) -> int:
-    """A ``.const NAME = value`` from core/<file>."""
-    match = re.search(rf"^\.const {name}\s*=\s*(\$?[0-9A-Fa-f]+)", (ROOT / "core" / file).read_text(), re.M)
+    """A ``.const NAME = value`` from core/6502/<file>."""
+    match = re.search(rf"^\.const {name}\s*=\s*(\$?[0-9A-Fa-f]+)", (ROOT / "core" / "6502" / file).read_text(), re.M)
     if match is None:
         raise KeyError(name)
     text = match.group(1)

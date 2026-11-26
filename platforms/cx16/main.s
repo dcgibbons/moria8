@@ -2,7 +2,7 @@
 // main.s — Commander X16 moria8 linker script + entry
 //
 // Assemble from platforms/cx16 with:
-//   -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../shared -define CX16
+//   -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -libdir ../shared -define CX16
 //
 // Memory authority: docs/CX16_MEMORY_CONTRACT.md.
 //   Default (unified Resident + Play): $0801-$9AFF (MORIA8.PRG)
@@ -96,7 +96,7 @@
 #import "save_slot_policy.s"
 #import "palette_consts.s"
 
-// SFX_* semantic sound IDs (kept in sync with core/sound.s).
+// SFX_* semantic sound IDs (kept in sync with core/6502/sound.s).
 .const SFX_NONE         = $ff
 .const SFX_BUMP         = $00
 .const SFX_HIT          = $01
@@ -141,7 +141,7 @@ save_slot_index:    .byte $ff
 // ============================================================
 // Resident import cascade
 // ============================================================
-#import "../../core/zeropage.s"
+#import "../../core/6502/zeropage.s"
 #import "hal/layout.s"
 #import "memory.s"
 // Cold/transient item and UI buffers share unused tail of the $0600-$06FF scratch
@@ -163,21 +163,21 @@ save_slot_index:    .byte $ff
 #define SAVE_SLOT_INDEX_EXTERNAL
 #import "reu_stub.s"
 #import "screen_vera.s"
-#import "../../core/color.s"
+#import "../../core/6502/color.s"
 #import "config.s"
 #import "input.s"
-#import "../../core/rng.s"
-#import "../../core/math.s"
-#import "../../core/tables.s"
-#import "../../core/item_defs.s"
-#import "../../core/recall_defs.s"
+#import "../../core/6502/rng.s"
+#import "../../core/6502/math.s"
+#import "../../core/6502/tables.s"
+#import "../../core/6502/item_defs.s"
+#import "../../core/6502/recall_defs.s"
 .macro PflagsSegment() {
     .segment ModalMiscOverlay
 }
 .macro PflagsRestoreSegment() {
     .segment Default
 }
-#import "../../core/player.s"
+#import "../../core/6502/player.s"
 #define MSG_HISTORY_IN_AUX
 .macro MsgHistorySegment() {
     .segment Cx16AuxData
@@ -185,19 +185,19 @@ save_slot_index:    .byte $ff
 .macro MsgHistoryRestoreSegment() {
     .segment Default
 }
-#import "../../core/ui_messages.s"
-#import "../../core/ui_status.s"
-#import "../../core/runtime_ui_strings.s"
-#import "../../core/generation_busy.s"
-#import "../../core/stat_display.s"
-#import "../../core/huffman.s"
+#import "../../core/6502/ui_messages.s"
+#import "../../core/6502/ui_status.s"
+#import "../../core/6502/runtime_ui_strings.s"
+#import "../../core/6502/generation_busy.s"
+#import "../../core/6502/stat_display.s"
+#import "../../core/6502/huffman.s"
 .segment Cx16HuffData
 #if HAL_PLATFORM_MONSTER_CATALOG
 #import "../shared/catalog/catalog_names.s"    // The catalog's names, read like the corpus
 #endif
 ovl_huffdata_end:
 .segment Default
-#import "../../core/dungeon_data.s"
+#import "../../core/6502/dungeon_data.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
 #define PLACE_SECRETS_EXTERNAL
@@ -230,11 +230,11 @@ ovl_huffdata_end:
 .macro CmdJamWrapperRestoreSegment() {
     .segment Default
 }
-#import "../../core/dungeon_features.s"
-#import "../../core/chest_search.s"
+#import "../../core/6502/dungeon_features.s"
+#import "../../core/6502/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
-#import "../../core/monster.s"
+#import "../../core/6502/monster.s"
 combat_msg_monster_in_way:
     jsr monster_get_ptr
     ldy #MX_TYPE
@@ -246,12 +246,12 @@ combat_msg_monster_in_way:
 cmb_in_way_str:
     .text " is in your way!" ; .byte 0
 #import "monster_catalog_bank.s"
-#import "../../core/monster_catalog.s"
-#import "../../core/tier_manager.s"
-#import "../../core/monster_ai.s"
-#import "../../core/scene_dirty.s"
-#import "../../core/scene_force.s"
-#import "../../core/monster_magic.s"
+#import "../../core/6502/monster_catalog.s"
+#import "../../core/6502/tier_manager.s"
+#import "../../core/6502/monster_ai.s"
+#import "../../core/6502/scene_dirty.s"
+#import "../../core/6502/scene_force.s"
+#import "../../core/6502/monster_magic.s"
 .macro ChestSummonsSegment() {
     .segment Default
 }
@@ -276,18 +276,18 @@ cmb_in_way_str:
 .macro ReEquipRestoreSegment() {
     .segment Default
 }
-#import "../../core/item.s"
+#import "../../core/6502/item.s"
 .macro ChestLootSegment() {
     .segment DungeonGenOverlay
 }
 .macro ChestLootRestoreSegment() {
     .segment Default
 }
-#import "../../core/chest_loot.s"
+#import "../../core/6502/chest_loot.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
 #define PLAYER_ITEM_SELECT_EXTERNAL
-#import "../../core/player_items.s"
+#import "../../core/6502/player_items.s"
 .macro WallToMudSegment() {
     .segment SpellOverlay
 }
@@ -295,19 +295,19 @@ cmb_in_way_str:
     .segment Default
 }
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
-#import "../../core/spell_effects.s"
+#import "../../core/6502/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 
-#import "../../core/store_data_defs.s"
-#import "../../core/spell_data_defs.s"
+#import "../../core/6502/store_data_defs.s"
+#import "../../core/6502/spell_data_defs.s"
 
-#import "../../core/player_magic_state.s"
-#import "../../core/player_magic_state_ops.s"
-#import "../../core/player_magic.s"
+#import "../../core/6502/player_magic_state.s"
+#import "../../core/6502/player_magic_state_ops.s"
+#import "../../core/6502/player_magic.s"
 #import "dungeon_render_vera.s"
-#import "../../core/item_desc_banked.s"
-#import "../../core/projectile.s"
-#import "../../core/storage_status.s"
+#import "../../core/6502/item_desc_banked.s"
+#import "../../core/6502/projectile.s"
+#import "../../core/6502/storage_status.s"
 #import "memory_bank.s"
 #import "mmu_macros.s"
 #import "save_stream.s"
@@ -516,18 +516,18 @@ game_over_prompt:
 // Play-phase modules (unified in Default segment on CX16)
 // ============================================================
 .segment Default
-#import "../../core/chest_summons.s"
+#import "../../core/6502/chest_summons.s"
 #define STORE_RUNTIME_DATA_EXTERNAL
 #define STORE_INVENTORY_DATA_EXTERNAL
-#import "../../core/store_data.s"
+#import "../../core/6502/store_data.s"
 #undef STORE_INVENTORY_DATA_EXTERNAL
 #undef STORE_RUNTIME_DATA_EXTERNAL
-#import "../../core/store_hot_data.s"
+#import "../../core/6502/store_hot_data.s"
 #define RECALL_ARRAY_DATA_EXTERNAL
-#import "../../core/recall.s"
+#import "../../core/6502/recall.s"
 #undef RECALL_ARRAY_DATA_EXTERNAL
-#import "../../core/dungeon_los.s"
-#import "../../core/monster_attack.s"
+#import "../../core/6502/dungeon_los.s"
+#import "../../core/6502/monster_attack.s"
 
 .macro PlayerMoveRestoreResidentSegment() {
     .segment Default
@@ -574,7 +574,7 @@ game_over_prompt:
     .segment Default
 }
 #define PLAYER_LOOK_EXTERNAL
-#import "../../core/player_move.s"
+#import "../../core/6502/player_move.s"
 #undef PLAYER_LOOK_EXTERNAL
 .macro PlayerRunInitializeSegment() {
     .segment ModalMiscOverlay
@@ -583,38 +583,38 @@ game_over_prompt:
     .segment Default
 }
 #define PLAYER_RUN_INITIALIZE_EXTERNAL
-#import "../../core/player_run.s"
+#import "../../core/6502/player_run.s"
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #define CMB_IN_WAY_EXTERNAL
-#import "../../core/combat.s"
+#import "../../core/6502/combat.s"
 #undef CMB_IN_WAY_EXTERNAL
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #define WIZARD_PROMPT_HELPERS_EXTERNAL
-#import "../../core/wizard.s"
+#import "../../core/6502/wizard.s"
 #undef WIZARD_PROMPT_HELPERS_EXTERNAL
 #define PLAYER_LOOK_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
-#import "../../core/game_loop.s"
+#import "../../core/6502/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #undef PLAYER_LOOK_EXTERNAL
 #import "dungeon_scroll_vera.s"
-#import "../../core/turn.s"
-#import "../../core/ui_restore.s"
-#import "../../core/ui_help_clear.s"
+#import "../../core/6502/turn.s"
+#import "../../core/6502/ui_restore.s"
+#import "../../core/6502/ui_help_clear.s"
 
 // ============================================================
 // Data-only Bank 3 (Cx16AuxData at virtual $6000-$7FFF)
 // ============================================================
 .segment Cx16AuxData
-#import "../../core/store_inventory_data.s"
-#import "../../core/recall_array_data.s"
-#import "../../core/spell_class_data.s"
+#import "../../core/6502/store_inventory_data.s"
+#import "../../core/6502/recall_array_data.s"
+#import "../../core/6502/spell_class_data.s"
 #define STORE_HOT_DATA_EXTERNAL
-#import "../../core/store_runtime_data.s"
+#import "../../core/6502/store_runtime_data.s"
 #undef STORE_HOT_DATA_EXTERNAL
-#import "../../core/spell_helper_tables.s"
-#import "../../core/spell_names.s"
+#import "../../core/6502/spell_helper_tables.s"
+#import "../../core/6502/spell_names.s"
 
 ovl_auxdata_end:
 .print "CX16 AuxData: " + (ovl_auxdata_end - $6000) + " bytes"
@@ -625,26 +625,26 @@ ovl_auxdata_end:
 // Overlay segment blocks (Banks 9-21 at $A000-$BFFF)
 // ============================================================
 .segment TownOverlay
-#import "../../core/store.s"
-#import "../../core/ui_store.s"
+#import "../../core/6502/store.s"
+#import "../../core/6502/ui_store.s"
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $a000) + " bytes"
 .assert "Town overlay fits 8KB bank", ovl_town_end <= $c000, true
 
 .segment HomeOverlay
-#import "../../core/ui_home.s"
-#import "../../core/ui_home_text.s"
-#import "../../core/eff_item_p1.s"
-#import "../../core/eff_item_extended.s"
+#import "../../core/6502/ui_home.s"
+#import "../../core/6502/ui_home_text.s"
+#import "../../core/6502/eff_item_p1.s"
+#import "../../core/6502/eff_item_extended.s"
 ovl_home_end:
 .print "Home overlay: " + (ovl_home_end - $a000) + " bytes"
 .assert "Home overlay fits 8KB bank", ovl_home_end <= $c000, true
 
 .segment StartupOverlay
-#import "../../core/background_data.s"
-#import "../../core/player_create.s"
-#import "../../core/player_chargen_cold.s"
-#import "../../core/starting_kit_cold.s"
+#import "../../core/6502/background_data.s"
+#import "../../core/6502/player_create.s"
+#import "../../core/6502/player_chargen_cold.s"
+#import "../../core/6502/starting_kit_cold.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $a000) + " bytes"
 .assert "Startup overlay fits 8KB bank", ovl_start_end <= $c000, true
@@ -718,8 +718,8 @@ game_restart_overlay:
     sta current_tier
     sta tier_loaded
     jmp title_enter_menu
-#import "../../core/score_io.s"
-#import "../../core/score.s"
+#import "../../core/6502/score_io.s"
+#import "../../core/6502/score.s"
 
 tramp_game_over_run:
     jsr score_calculate
@@ -733,9 +733,9 @@ tramp_game_over_run:
     lda death_source_saved
     sta zp_death_source
     jmp score_death_screen
-    #import "../../core/player_destroy_area.s"
-    #import "../../core/player_magic_map.s"
-    #import "../../core/player_magic_earthquake.s"
+    #import "../../core/6502/player_destroy_area.s"
+    #import "../../core/6502/player_magic_map.s"
+    #import "../../core/6502/player_magic_earthquake.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $a000) + " bytes"
 .assert "High-score I/O counter is owned by death overlay", hiscore_io_count_lo >= $a000 && hiscore_io_count_hi < ovl_death_end, true
@@ -743,9 +743,9 @@ ovl_death_end:
 .assert "Death overlay fits 8KB bank", ovl_death_end <= $c000, true
 
 .segment ModalMiscOverlay
-#import "../../core/royal.s"
-#import "../../core/ui_recall.s"
-#import "../../core/ui_wizard.s"
+#import "../../core/6502/royal.s"
+#import "../../core/6502/ui_recall.s"
+#import "../../core/6502/ui_wizard.s"
 
 wizard_prompt_clear_digits:
     lda #0
@@ -782,38 +782,38 @@ ovl_modal_misc_end:
 
 .segment HelpOverlay
 #import "../commodore/c128/ui_help_data_80.s"
-#import "../../core/ui_help_title.s"
-#import "../../core/ui_help.s"
-#import "../../core/ui_inventory.s"
-#import "../../core/ui_equipment.s"
-#import "../../core/door_open_close_cold.s"
-#import "../../core/item_drop_cold.s"
+#import "../../core/6502/ui_help_title.s"
+#import "../../core/6502/ui_help.s"
+#import "../../core/6502/ui_inventory.s"
+#import "../../core/6502/ui_equipment.s"
+#import "../../core/6502/door_open_close_cold.s"
+#import "../../core/6502/item_drop_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $a000) + " bytes"
 .assert "Help overlay fits 8KB bank", ovl_help_end <= $c000, true
 
 .segment UiOverlay
-#import "../../core/ui_character.s"
-#import "../../core/player_bg_draw_cold.s"
-#import "../../core/ui_identify.s"
+#import "../../core/6502/ui_character.s"
+#import "../../core/6502/player_bg_draw_cold.s"
+#import "../../core/6502/ui_identify.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a000) + " bytes"
 .assert "UI overlay fits 8KB bank", ovl_ui_end <= $c000, true
 
 .segment ItemActionsOverlay
 #define SCROLL_P3_ROUTER_ENABLED
-    #import "../../core/item_actions_overlay.s"
-    #import "../../core/item_exchange.s"
-#import "../../core/player_item_commands.s"
-#import "../../core/ego_items.s"
-#import "../../core/ranged_fire.s"
-#import "../../core/throw.s"
-#import "../../core/bash.s"
-#import "../../core/disarm.s"
-#import "../../core/disarm_helpers.s"
-#import "../../core/trap_trigger_cold.s"
-#import "../../core/tunnel.s"
-#import "../../core/calc_dig_cold.s"
+    #import "../../core/6502/item_actions_overlay.s"
+    #import "../../core/6502/item_exchange.s"
+#import "../../core/6502/player_item_commands.s"
+#import "../../core/6502/ego_items.s"
+#import "../../core/6502/ranged_fire.s"
+#import "../../core/6502/throw.s"
+#import "../../core/6502/bash.s"
+#import "../../core/6502/disarm.s"
+#import "../../core/6502/disarm_helpers.s"
+#import "../../core/6502/trap_trigger_cold.s"
+#import "../../core/6502/tunnel.s"
+#import "../../core/6502/calc_dig_cold.s"
 ovl_items_end:
 .print "Item actions overlay: " + (ovl_items_end - $a000) + " bytes"
 .assert "Item actions overlay fits 8KB bank", ovl_items_end <= $c000, true
@@ -821,7 +821,7 @@ ovl_items_end:
 .segment SpellOverlay
 #define SPELL_CLASS_DATA_EXTERNAL
 #define SPELL_HELPER_TABLES_EXTERNAL
-#import "../../core/spell_data.s"
+#import "../../core/6502/spell_data.s"
 #undef SPELL_HELPER_TABLES_EXTERNAL
 #undef SPELL_CLASS_DATA_EXTERNAL
 #define PMX_EARTHQUAKE_EXTERNAL
@@ -829,40 +829,40 @@ ovl_items_end:
 #define PMX_MAP_AREA_TRAMPOLINE
 #define PMX_DETECT_EFFECTS_EXTERNAL
 #define PMX_DESTROY_AREA_EXTERNAL
-#import "../../core/player_magic_slow_runtime.s"
+#import "../../core/6502/player_magic_slow_runtime.s"
 #define PMU_TURN_FEEDBACK_ONLY
-#import "../../core/player_magic_turn_banked.s"
+#import "../../core/6502/player_magic_turn_banked.s"
 #undef PMU_TURN_FEEDBACK_ONLY
-#import "../../core/player_magic_execute_overlay.s"
+#import "../../core/6502/player_magic_execute_overlay.s"
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 #undef PMX_MAP_AREA_TRAMPOLINE
 #undef PMX_MAP_AREA_EXTERNAL
 // Find Traps and Destroy Traps/Doors (2026-11-08): their only callers are
 // the spell dispatch above, so they run here, not resident (as on the C64).
-#import "../../core/spell_effects_overlay.s"
+#import "../../core/6502/spell_effects_overlay.s"
 .assert "The trap effects are in OVL.SPELL with their callers", eff_find_traps >= $a000 && eff_destroy_traps_doors >= $a000, true
 
     #define SCROLL_P3_NEW_OWNER
     #define SCROLL_P3_EXISTING_OWNER
-    #import "../../core/scroll_effects_p3.s"
+    #import "../../core/6502/scroll_effects_p3.s"
     #undef SCROLL_P3_EXISTING_OWNER
     #undef SCROLL_P3_NEW_OWNER
 #undef PMX_DESTROY_AREA_EXTERNAL
 #undef PMX_EARTHQUAKE_EXTERNAL
-#import "../../core/player_magic_levelup.s"
-#import "../../core/player_magic_display.s"
-#import "../../core/player_magic_tail.s"
-#import "../../core/player_magic_select_overlay.s"
-#import "../../core/player_gain_spell_impl.s"
-#import "../../core/player_magic_learn_op.s"
+#import "../../core/6502/player_magic_levelup.s"
+#import "../../core/6502/player_magic_display.s"
+#import "../../core/6502/player_magic_tail.s"
+#import "../../core/6502/player_magic_select_overlay.s"
+#import "../../core/6502/player_gain_spell_impl.s"
+#import "../../core/6502/player_magic_learn_op.s"
 ovl_spell_end:
 .print "Spell overlay: " + (ovl_spell_end - $a000) + " bytes"
 .assert "Spell overlay fits 8KB bank", ovl_spell_end <= $c000, true
 
 .segment DungeonGenOverlay
-#import "../../core/special_rooms.s"
-#import "../../core/dungeon_tunnel_guard.s"
-#import "../../core/dungeon_gen.s"
+#import "../../core/6502/special_rooms.s"
+#import "../../core/6502/dungeon_tunnel_guard.s"
+#import "../../core/6502/dungeon_gen.s"
 ovl_gen_end:
 .print "Dungeon gen overlay: " + (ovl_gen_end - $a000) + " bytes"
 .assert "Dungeon gen overlay fits 8KB bank", ovl_gen_end <= $c000, true
@@ -1085,8 +1085,8 @@ ovl_title_end:
 .assert "Title overlay fits 8KB bank", ovl_title_end <= $c000, true
 
 .segment ChestOverlay
-#import "../../core/chest.s"
-#import "../../core/store_restock_overlay.s"
+#import "../../core/6502/chest.s"
+#import "../../core/6502/store_restock_overlay.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $a000) + " bytes"
 .assert "Chest overlay fits 8KB bank", ovl_chest_end <= $c000, true
@@ -1217,8 +1217,8 @@ program_end:
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
-#import "../../core/ui_legal.s"
-#import "../../core/ui_legal_sysinfo.s"
+#import "../../core/6502/ui_legal.s"
+#import "../../core/6502/ui_legal_sysinfo.s"
 #import "legal_sysinfo.s"
 #if CX16_CARTRIDGE
 #import "legal_stream.s"

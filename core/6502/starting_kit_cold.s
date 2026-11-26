@@ -1,5 +1,5 @@
 #importonce
-#import "../platforms/shared/item_catalog/item_ids.s"
+#import "../../platforms/shared/item_catalog/item_ids.s"
 .assert "Starting provisions and books live on Page 0", ITEM_PAGE_WOODEN_TORCH == 0 && ITEM_PAGE_RATION_OF_FOOD == 0 && ITEM_PAGE_LEATHER_ARMOR == 0 && ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK == 0 && ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK == 0, true
 // starting_kit_cold.s — New-game base provisions and starting equipment (S5)
 //

@@ -265,7 +265,7 @@ a2_auxmove:
     rts
 
 // Plus/4 banking compatibility stub for shared core paths that select the
-// non-C64 branch (e.g. core/monster.s visibility): the Apple II runtime has
+// non-C64 branch (e.g. core/6502/monster.s visibility): the Apple II runtime has
 // no RAM/ROM bank to select, so the call is a genuine no-op.
 plus4_bank_ram:
     rts

@@ -4,12 +4,12 @@
 // Tests: monster_remove regression (Bug R4) where FLAG_OCCUPIED clear
 // clobbered map bytes by directly reading from Bank 0.
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../config128.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../../common/mmu_macros.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/dungeon_data.s"
 
 #define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 #define C128_UNIT_TEST
@@ -56,8 +56,8 @@ player_get_infra_range:
     lda test_infra_range
     rts
 
-// A monster coming into sight ends search mode (core/monster.s); this unit
-// test does not import core/player.s.
+// A monster coming into sight ends search mode (core/6502/monster.s); this unit
+// test does not import core/6502/player.s.
 player_search_mode_off:
     rts
 
@@ -71,8 +71,8 @@ mm_los_clear_to_target:
     clc
     rts
 
-#import "../../../../core/monster.s"
-#import "../../../../core/player_magic_detect_evil_effect.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/player_magic_detect_evil_effect.s"
 // Write one byte into Bank 1 through the common-RAM thunk: this code is not
 // in common RAM, so it cannot map Bank 1 and keep running.
 .macro Bank1Poke(addr, value) {

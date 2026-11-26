@@ -1,7 +1,7 @@
 #importonce
 // catalog_fetch.s — The monster catalog on the C64 and Plus/4: whole records
 // from the REU or the drive (docs/MONSTER_CATALOG_DESIGN.md, "C64 and
-// Plus/4"; core/monster_catalog.s calls catalog_fetch_record).
+// Plus/4"; core/6502/monster_catalog.s calls catalog_fetch_record).
 //
 // The port defines, before importing this file:
 // - CATALOG_HIDDEN_BASE/END: hidden RAM for the level index and the sector

@@ -152,7 +152,7 @@ def resolve_const(constants: dict[str, str], name: str) -> int | None:
 
 def main() -> int:
     errors: list[str] = []
-    dungeon_consts = parse_consts(ROOT / "core/dungeon_data.s")
+    dungeon_consts = parse_consts(ROOT / "core/6502/dungeon_data.s")
     for platform, paths in PLATFORMS.items():
         layout_path = paths["layout"]
         screen_path = paths["screen"]
@@ -187,7 +187,7 @@ def main() -> int:
                 errors.append(f"{platform}: missing {hal_name} in {layout_path.relative_to(ROOT)}")
                 continue
             if map_name not in dungeon_consts:
-                errors.append(f"{platform}: missing {map_name} in core/dungeon_data.s")
+                errors.append(f"{platform}: missing {map_name} in core/6502/dungeon_data.s")
                 continue
             hal_value = resolve_const(layout_consts, hal_name)
             map_value = resolve_const(dungeon_consts, map_name)
@@ -195,7 +195,7 @@ def main() -> int:
                 errors.append(f"{platform}: cannot resolve {hal_name} in {layout_path.relative_to(ROOT)}")
                 continue
             if map_value is None:
-                errors.append(f"{platform}: cannot resolve {map_name} in core/dungeon_data.s")
+                errors.append(f"{platform}: cannot resolve {map_name} in core/6502/dungeon_data.s")
                 continue
             if hal_value != map_value:
                 errors.append(

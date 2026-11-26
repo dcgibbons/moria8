@@ -8,9 +8,9 @@ test_bootstrap:
 
 .pc = $0828 "Main"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
-#import "../../../../core/sound.s"
+#import "../../../../core/6502/sound.s"
 
 reset_sid_window:
     lda #0

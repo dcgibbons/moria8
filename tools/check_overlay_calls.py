@@ -247,7 +247,7 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         entry="platforms/apple2/main.s",
         defines={"APPLE2": 1},
         libdirs=(
-            "core",
+            "core/6502",
             "platforms/apple2",
             "platforms/apple2/hal",
             "platforms/commodore/common",
@@ -259,7 +259,7 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         entry="platforms/bbcmaster/main.s",
         defines={"BBCMASTER": 1},
         libdirs=(
-            "core",
+            "core/6502",
             "platforms/bbcmaster",
             "platforms/bbcmaster/hal",
             "platforms/commodore/common",
@@ -273,7 +273,7 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         entry="platforms/cx16/main.s",
         defines={"CX16": 1},
         libdirs=(
-            "core",
+            "core/6502",
             "platforms/cx16",
             "platforms/cx16/hal",
             "platforms/commodore/common",
@@ -284,7 +284,7 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         entry="platforms/atari8/main.s",
         defines={"ATARI8": 1},
         libdirs=(
-            "core",
+            "core/6502",
             "platforms/atari8",
             "platforms/atari8/hal",
             "platforms/commodore/common",
@@ -297,19 +297,19 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         port="c64",
         entry="platforms/commodore/c64/main.s",
         defines={"DEBUG_FEAT_DISK_TRACE": 0},
-        libdirs=("core", "platforms/commodore/common", "platforms/commodore/c64"),
+        libdirs=("core/6502", "platforms/commodore/common", "platforms/commodore/c64"),
     ),
     "plus4": PortConfig(
         port="plus4",
         entry="platforms/commodore/plus4/main.s",
         defines={"PLUS4": 1},
-        libdirs=("core", "platforms/commodore/common", "platforms/commodore/c64"),
+        libdirs=("core/6502", "platforms/commodore/common", "platforms/commodore/c64"),
     ),
     "c128": PortConfig(
         port="c128",
         entry="platforms/commodore/c128/main.s",
         defines={"C128": 1},
-        libdirs=("core", "platforms/commodore/common", "platforms/commodore/c64"),
+        libdirs=("core/6502", "platforms/commodore/common", "platforms/commodore/c64"),
     ),
     # 5 shipping cartridge configurations
     "c64-cart": PortConfig(
@@ -317,21 +317,21 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         base_port="c64",
         entry="platforms/commodore/c64/main.s",
         defines={"DEBUG_FEAT_DISK_TRACE": 0, "C64_CARTRIDGE": 1},
-        libdirs=("core", "platforms/commodore/common", "platforms/commodore/c64"),
+        libdirs=("core/6502", "platforms/commodore/common", "platforms/commodore/c64"),
     ),
     "plus4-cart": PortConfig(
         port="plus4-cart",
         base_port="plus4",
         entry="platforms/commodore/plus4/main.s",
         defines={"PLUS4": 1, "PLUS4_CARTRIDGE": 1},
-        libdirs=("core", "platforms/commodore/common", "platforms/commodore/c64"),
+        libdirs=("core/6502", "platforms/commodore/common", "platforms/commodore/c64"),
     ),
     "c128-cart": PortConfig(
         port="c128-cart",
         base_port="c128",
         entry="platforms/commodore/c128/main.s",
         defines={"C128": 1, "C128_CARTRIDGE": 1},
-        libdirs=("core", "platforms/commodore/common", "platforms/commodore/c64"),
+        libdirs=("core/6502", "platforms/commodore/common", "platforms/commodore/c64"),
     ),
     "cx16-cart": PortConfig(
         port="cx16-cart",
@@ -339,7 +339,7 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         entry="platforms/cx16/main.s",
         defines={"CX16": 1, "CX16_CARTRIDGE": 1},
         libdirs=(
-            "core",
+            "core/6502",
             "platforms/cx16",
             "platforms/cx16/hal",
             "platforms/commodore/common",
@@ -351,7 +351,7 @@ PORT_CONFIGS: Dict[str, PortConfig] = {
         entry="platforms/atari8/main.s",
         defines={"ATARI8": 1, "ATARI8_CARTRIDGE": 1},
         libdirs=(
-            "core",
+            "core/6502",
             "platforms/atari8",
             "platforms/atari8/hal",
             "platforms/commodore/common",
@@ -1715,7 +1715,7 @@ def run_selftest() -> int:
         port="testport",
         entry="platforms/test/main.s",
         defines={"TESTPORT": 1},
-        libdirs=("core", "platforms/test"),
+        libdirs=("core/6502", "platforms/test"),
     )
 
     # 1. Clean: resident trampoline + explicit overlay_load + co-executed helper + intra-overlay + dual-defined
@@ -1749,7 +1749,7 @@ def run_selftest() -> int:
             "    rts",
             "#import \"shared.s\"",
         ]),
-        "core/shared.s": "shared_helper:\n    rts\n",
+        "core/6502/shared.s": "shared_helper:\n    rts\n",
     }
     res_clean = analyze_port(cfg, _make_reader(clean_files))
     assert not res_clean.import_errors, res_clean.import_errors

@@ -1,7 +1,7 @@
 #importonce
 // C64 cartridge catalog adapter. Owner: low resident RAM, session lifetime.
 // catalog_fetch_record is called unmapped from generation and summon paths;
-// it supplies the exact disk-record representation to core/monster_catalog.s.
+// it supplies the exact disk-record representation to core/6502/monster_catalog.s.
 #import "../common/catalog_records.s"
 .segmentdef CatalogHidden [start=CATALOG_HIDDEN_BASE, virtual]
 .segment CatalogHidden

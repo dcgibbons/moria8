@@ -14,9 +14,9 @@
 // Entropy: every poll loop mixes System VIA Timer 1 ($FE44-$FE45) into the
 // platform entropy counters at $90-$93.
 
-#import "../../core/input_contract.s"
-#import "../../core/input_tables.s"
-#import "../../core/input_run_cancel.s"
+#import "../../core/6502/input_contract.s"
+#import "../../core/6502/input_tables.s"
+#import "../../core/6502/input_run_cancel.s"
 #import "hal/entropy_consts.s"
 #import "memory.s"
 
@@ -150,7 +150,7 @@ input_wait_release:
 // OSBYTE $79, X=$10 scans keyboard from internal key 16 (skipping Shift/Ctrl/links);
 // returns X=$FF (N=1) if no key pressed, or X>=0 (N=0) if a key is pressed.
 // Output: A = nonzero if any key held, 0 if no key; Z/N set from A, as on
-//         every port: core/game_loop.s branches on them. Restoring X last
+//         every port: core/6502/game_loop.s branches on them. Restoring X last
 //         left Z from the caller's X, cancelling auto-rest and running at
 //         once whenever X was nonzero (M6 playtest).
 // Preserves: X, Y

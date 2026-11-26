@@ -154,10 +154,10 @@ OVERLAY_COMMON = ROOT / "platforms/commodore/common/overlay.s"
 # Disk asset loads go through asset_load_retry, which repeats the HAL load;
 # required ones through asset_load_required, which then asks for the disk.
 ASSET_LOAD_RETRY = ROOT / "platforms/commodore/common/asset_load_retry.s"
-STRING_BANK_COMMON = ROOT / "core/string_bank.s"
+STRING_BANK_COMMON = ROOT / "core/6502/string_bank.s"
 TITLE_SCREEN_COMMON = ROOT / "platforms/commodore/common/title_screen.s"
 C128_TITLE_CACHE = ROOT / "platforms/commodore/c128/title_cache_runtime.s"
-TIER_MANAGER_COMMON = ROOT / "core/tier_manager.s"
+TIER_MANAGER_COMMON = ROOT / "core/6502/tier_manager.s"
 OVERLAY_FORBIDDEN_TOKENS = (
     "$ffbd",
     "$ffba",
@@ -201,7 +201,7 @@ TIER_INIT_FORBIDDEN_TOKENS = (
     "$ffcc",
 )
 ASSEMBLY_ROOTS = (
-    ROOT / "core",
+    ROOT / "core/6502",
     ROOT / "platforms/commodore/c64",
     ROOT / "platforms/commodore/c128",
     ROOT / "platforms/commodore/plus4",

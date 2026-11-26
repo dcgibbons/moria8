@@ -36,6 +36,19 @@ product reason, and verify the rendered path on the affected target.
   `$C100-$CFFF` (`3,840` B), `$D000-$D7FF` is the immovable GTIA/POKEY/PIA/ANTIC
   I/O hole, overlays fit in `$E000-$EFFF`, and `RuntimeBanked` spans
   `$F000-$FFF9` (`docs/ATARI8_MEMORY_CONTRACT.md`).
+- BBC Master 128 low resident banking/blitter/MOS helpers end at or below
+  `$3000`, `Default` resident ends at or below `$8000`, 20 KB Shadow RAM `LYNNE`
+  (`$3000-$7FFF`) holds the font, scan scratch, `beeb_char_shadow`, and Mode 0
+  bitmap, 4 KB Private RAM `ANDY` (`$8000-$8FFF`) holds `BeebHuffData`, and
+  Sideways RAM Banks 4–7 (`$8000-$BFFF`) host `BeebPlaySlot`,
+  `PLATFORM_TIER_NAME_POOL_BASE`, the `$A800-$BFFF` overlay/tier window,
+  `MAP_BASE`, `BeebAuxData`, and cached overlays (`docs/BBCMASTER_MEMORY_CONTRACT.md`).
+- CP/M 2.2 Z80 requires a 52 KB minimum TPA (`BDOS_MIN_TOP = 0xD100`): resident
+  `MORIA8.COM` spans `0x0100-0x55FF`, 19 streamed overlays share the `0x5600-0x69FF`
+  window (`5,120` B), resident BSS occupies `0x6A00-0x8BFF` (`z80_state` at
+  `0x6A00-0x6A3F`), the 512 B stack spans `0x8C00-0x8DFF`, shadows + `MAP_BASE`
+  (`0x9D00-0xD00B`, `198x66` = `13,068` B) overwrite CCP, and the FCB pool +
+  `cpm_dma_buf` (`0xD00C-0xD0FF`) sit strictly below `0xD100` (`docs/CPM_MEMORY_CONTRACT.md`).
 - The C64 map owns `$C000-$CEFF`; the C64 floor-item table owns `$CF00-$CFFF`.
 - `$D000-$DFFF` is the Commodore I/O hole when I/O is visible and must not
   receive normal executable code or ordinary runtime payload data.
@@ -50,18 +63,19 @@ states in its header: its **owner** on each port (segment or overlay), its
 **lifetime** (one call, one cast, one level, the session; boot-only code that a
 restart runs again is not boot-only), and its **callers** that can arrive with
 another overlay loaded, and how that entry gets its owner back. Where a fact can
-be checked, an `.assert` beside the placement checks it (e.g. a routine called
-from another overlay lies outside the `$E000` window). Moving a module updates
-its header, the assert, and the port's memory contract row. Code whose only
-callers live in an overlay belongs in that overlay where it fits, on unshipped
-ports too: don't leave a misplacement for later. Keep three results apart:
-removing code (smaller product), moving it (pressure redistributed), and
-shortening a copy (less transfer, often no space freed).
+be checked, an `.assert` (or Z80 `ASSERT`) beside the placement checks it
+(e.g. a routine called from another overlay lies outside the `$E000` or
+`0x5600–0x69FF` overlay window). Moving a module updates its header, the assert,
+and the port's memory contract row. Code whose only callers live in an overlay
+belongs in that overlay where it fits, on unshipped ports too: don't leave a
+misplacement for later. Keep three results apart: removing code (smaller
+product), moving it (pressure redistributed), and shortening a copy (less
+transfer, often no space freed).
 
 After import reordering, segment movement, banking changes, or runtime payload
-layout changes, rebuild and inspect the assembler memory map and `.print`
-output. Existing boundary `.assert` statements are part of the contract; fix
-the layout when they fail.
+layout changes, rebuild and inspect the assembler memory map and `.print` /
+`.lst` output. Existing boundary `.assert` and Z80 `ASSERT` statements are part
+of the contract; fix the layout when they fail.
 
 ## Zero Page And KERNAL
 
@@ -107,9 +121,10 @@ Re-check the full contract before patching local logic near the newest crash.
 - Shared `platforms/commodore/common/` changes that affect
   platform-conditional code must be verified on C64, C128, and Plus/4 where the
   code is included.
-- Shared `core/` and `platforms/shared/` changes must be verified on all
-  shipping platforms: C64, C128, Plus/4, Apple IIe, Commander X16, and Atari
-  8-bit.
+- Shared `core/6502/` and `platforms/shared/` changes must be verified on all
+  seven 6502/65C02 platforms (C64, C128, Plus/4, Apple IIe, Commander X16,
+  Atari 8-bit, and BBC Master 128), and gameplay/catalog/formula changes must
+  maintain `core/6502/` ↔ `core/z80/` cross-ISA parity on CP/M 2.2 (Z80).
 
 ## Verification
 
@@ -124,7 +139,7 @@ Re-check the full contract before patching local logic near the newest crash.
 
 ## Commodore Storage And KERNAL I/O
 
-Changes touching `core/ui_disk_setup.s`, `platforms/shared/save.s`,
+Changes touching `core/6502/ui_disk_setup.s`, `platforms/shared/save.s`,
 `platforms/commodore/common/disk_*.s`, `save_slot_menu.s`, or
 `platforms/commodore/*/hal/storage*.s` must verify all three invariants:
 

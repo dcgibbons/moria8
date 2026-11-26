@@ -10,7 +10,7 @@
 
 #import "memory.s"
 
-// SFX_* semantic sound IDs (kept in sync with core/sound.s).
+// SFX_* semantic sound IDs (kept in sync with core/6502/sound.s).
 .const SFX_NONE         = $ff
 .const SFX_BUMP         = $00
 .const SFX_HIT          = $01

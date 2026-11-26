@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCAN_DIRS = ("core", "platforms")
+SCAN_DIRS = ("core/6502", "platforms")
 SKIP_PARTS = {"build", "var", "tools", "tests", ".git"}
 
 MACRO_START = re.compile(r"\s*\.macro\s+(\w+)\s*\(")
@@ -171,7 +171,7 @@ def _resolve_import(imp_target: str, cur_file: str, source_map: Dict[str, List[s
         return cand
     if norm in source_map:
         return norm
-    for prefix in ("core/", "platforms/commodore/common/", "platforms/shared/"):
+    for prefix in ("core/6502/", "platforms/commodore/common/", "platforms/shared/"):
         if prefix + norm in source_map:
             return prefix + norm
     return None

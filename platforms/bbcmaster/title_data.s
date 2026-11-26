@@ -1,6 +1,6 @@
 // title_data.s — BBC Master 128 title screen art data (loaded into Bank 5 MAP_BASE $8000)
 //
-// Format matches core/title_data.s: segments of [row, col, color, screen_codes..., $00]
+// Format matches core/6502/title_data.s: segments of [row, col, color, screen_codes..., $00]
 // Terminated by $FF end-of-data marker.
 
 .pc = $8000 "Title Art"

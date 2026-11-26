@@ -2,11 +2,11 @@
 // hal_platform_* lifecycle.
 //
 // Sound: synchronous shaped speaker patterns at $C030, one per semantic ID
-// (SFX_* IDs from core/sound.s, which this port does not import). Patterns
+// (SFX_* IDs from core/6502/sound.s, which this port does not import). Patterns
 // live in main resident RAM (a2_sfx_patterns): fixed 16-byte slots of
 // (period, toggles) pairs, period 0 = end. Period: smaller = higher pitch;
 // one toggle is one $C030 access (~5*period+12 cy). Shapes mirror the C64
-// SID intent (core/sound.s): bump = low double thud, hit = high-to-low
+// SID intent (core/6502/sound.s): bump = low double thud, hit = high-to-low
 // snap, miss = quick high blip, pickup = rising chirp, death = long
 // descent, levelup = arpeggio, spell = wobble, spell fail = low buzz,
 // hunger warn = single low tone, hunger faint = lower and harsher.

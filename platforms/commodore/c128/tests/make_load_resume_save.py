@@ -21,7 +21,7 @@ MAX_TRAPS = 16
 MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
-RECALL_DATA_SIZE = 1116          # 279 creature rows x 4 (core/recall_defs.s)
+RECALL_DATA_SIZE = 1116          # 279 creature rows x 4 (core/6502/recall_defs.s)
 MAP_SIZE = 13068
 TOTAL_INV_SLOTS = 34
 

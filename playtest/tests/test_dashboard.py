@@ -213,7 +213,7 @@ class DeathCauseTest(unittest.TestCase):
 
     def test_the_phase_4_traps_are_named(self) -> None:
         """2026-11-16: 10 of 45 deaths on 3e9fd0c were "unknown": the trap
-        door, blade, fire, acid and dart traps (core/trap_trigger_cold.s)
+        door, blade, fire, acid and dart traps (core/6502/trap_trigger_cold.s)
         were not named. The damage line itself is garbled on screen."""
         for message, cause in (("A trap door opens!", "trap: trap door"), ("A blade hits you!", "trap: blade"),
                                ("Flames hit you!", "trap: fire"), ("Acid hits you!", "trap: acid"),

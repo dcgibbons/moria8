@@ -3,7 +3,7 @@
 // AtariMax 128 KB cartridge catalog adapter.
 // Owner: platforms/atari8/ low resident RAM (< $4000, imported by monster_catalog_a8.s).
 // Lifetime: session-long.
-// Callers: core/monster_catalog.s (generation, summon, and UI inspection paths),
+// Callers: core/6502/monster_catalog.s (generation, summon, and UI inspection paths),
 // callable with overlays mapped at $E000 or unmapped, without disk I/O.
 // Note: catalog_index.s stays in RuntimeBanked ($F000-$FFF9) via monster_catalog_a8.s.
 

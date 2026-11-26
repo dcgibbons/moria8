@@ -1,6 +1,6 @@
 #importonce
 // mmu_macros.s — Commander X16 map, AuxData, and HuffData access macros.
-// Required by core/ via -libdir shadowing. Dispatches to memory_bank.s.
+// Required by core/6502/ via -libdir shadowing. Dispatches to memory_bank.s.
 
 .macro MapRead_ptr0_y() {
     jsr mmu_safe_map_read_ptr0

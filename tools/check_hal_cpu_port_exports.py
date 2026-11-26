@@ -18,18 +18,18 @@ PLATFORM_FILES = {
 }
 
 COMMON_CPU_PORT_USERS = {
-    "chest_loot.s": ROOT / "core/chest_loot.s",
+    "chest_loot.s": ROOT / "core/6502/chest_loot.s",
     "disk_swap.s": ROOT / "platforms/commodore/common/disk_swap.s",
     "disk_setup_banked.s": ROOT / "platforms/commodore/common/disk_setup_banked.s",
-    "monster.s": ROOT / "core/monster.s",
+    "monster.s": ROOT / "core/6502/monster.s",
     "overlay.s": ROOT / "platforms/commodore/common/overlay.s",
     "reu.s": ROOT / "platforms/commodore/common/reu.s",
     "save.s": ROOT / "platforms/shared/save.s",
-    "tier_manager.s": ROOT / "core/tier_manager.s",
+    "tier_manager.s": ROOT / "core/6502/tier_manager.s",
 }
 FORBIDDEN_CPU_PORT_USERS = {
-    "item_actions_overlay.s": ROOT / "core/item_actions_overlay.s",
-    "player_items.s": ROOT / "core/player_items.s",
+    "item_actions_overlay.s": ROOT / "core/6502/item_actions_overlay.s",
+    "player_items.s": ROOT / "core/6502/player_items.s",
 }
 
 
