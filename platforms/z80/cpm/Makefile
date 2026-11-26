@@ -33,14 +33,26 @@ ASSETS_STAMP = $(OUTCPM)/.assets.stamp
 
 ASSET_GEN = ../../../tools/build_z80_assets.py
 DAT_GEN   = ../../../tools/make_cpm_dat.py
+VERSION_FILE = ../../../version.json
+VERSION_INFO_TOOL = ../../../tools/version_info.py
+VERSION_STAMP = $(OUT)/.version.stamp
 HARNESS   = harness_smoke.py
+
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+_VERSION_STAMP_ERR := $(shell mkdir -p "$(OUT)" && python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$(VERSION_STAMP)" 2>&1)
+ifneq ($(strip $(_VERSION_STAMP_ERR)),)
+$(error $(_VERSION_STAMP_ERR))
+endif
+endif
 
 ASSET_INPUTS = ../../../data/huffman_strings.txt \
                ../../../platforms/shared/catalog/monster_catalog_spec.json \
                ../../../platforms/shared/item_catalog/item_catalog_spec.json \
                ../../../data/LICENSE \
                ../../../data/SOURCE-OFFER \
-               ../../../version.json \
+               $(VERSION_FILE) \
+               $(VERSION_STAMP) \
+               $(VERSION_INFO_TOOL) \
                $(ASSET_GEN) \
                $(DAT_GEN)
 
@@ -95,6 +107,10 @@ ifeq ($(origin CPM_RUNNER),file)
 else
 	@(test -x "$(CPM_RUNNER)" || command -v "$(CPM_RUNNER)" >/dev/null 2>&1) || { echo "ERROR: custom CPM_RUNNER not found or not executable: $(CPM_RUNNER)" >&2; exit 1; }
 endif
+
+$(VERSION_STAMP): $(VERSION_FILE) $(VERSION_INFO_TOOL)
+	@mkdir -p "$(OUT)"
+	python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$@"
 
 $(OUTCPM):
 	@mkdir -p "$(OUTCPM)"

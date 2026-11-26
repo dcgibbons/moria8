@@ -25,7 +25,15 @@ KA_CART_FLAGS = ":OVL_OUT=$(OVL_OUTATARI8_CART)" -afo -symbolfile -vicesymbols -
 
 VERSION_FILE         = ../../version.json
 VERSION_INC_TOOL     = ../../tools/make_version_include.py
+VERSION_INFO_TOOL    = ../../tools/version_info.py
+VERSION_STAMP        = $(OUT)/.version.stamp
 VERSION_INC          = $(OUT)/version_strings.inc
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+_VERSION_STAMP_ERR := $(shell mkdir -p "$(OUT)" && python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$(VERSION_STAMP)" 2>&1)
+ifneq ($(strip $(_VERSION_STAMP_ERR)),)
+$(error $(_VERSION_STAMP_ERR))
+endif
+endif
 TRAMPOLINES_INC_TOOL = ../../tools/gen_trampolines.py
 TRAMPOLINE_MANIFEST  = ../../tools/trampoline_manifest.py
 TRAMPOLINES_INC      = $(OUT)/trampolines/atari8_trampolines.inc
@@ -85,7 +93,11 @@ else
 	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR)" "$(KICKASS_JAR)"
 endif
 
-$(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL)
+$(VERSION_STAMP): $(VERSION_FILE) $(VERSION_INFO_TOOL)
+	@mkdir -p $(OUT)
+	python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$@"
+
+$(VERSION_INC): $(VERSION_FILE) $(VERSION_STAMP) $(VERSION_INC_TOOL) $(VERSION_INFO_TOOL)
 	@mkdir -p $(OUT)
 	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 

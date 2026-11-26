@@ -1,12 +1,40 @@
 # Release Checklist
 
-Replace `vX.Y.Z` below with the chosen release tag (verify `version.json`
-matches across all 8 ports before tagging).
+Replace `vX.Y.Z` below with the chosen base release version (verify
+`version.json` matches `X.Y.Z` across all 8 ports before tagging).
+
+## Build Channels (`dev` -> `rc` -> `release`)
+
+Version suffixes are resolved centrally by `tools/version_info.py` across all
+8 ports (`c64`, `c128`, `plus4`, `apple2`, `cx16`, `atari8`, `bbcmaster`, `cpm`)
+and all 5 cartridges:
+
+- `version.json` stores only the base `MAJOR.MINOR.PATCH` SemVer (`"X.Y.Z"`).
+- `BUILD_CHANNEL` selects the suffix (default `auto`):
+  - `auto`: clean exact Git tag `vX.Y.Z` -> `release` (`vX.Y.Z`); clean exact
+    Git tag `vX.Y.Z-rcN` -> `rc` (`vX.Y.Z-rcN`); untagged/dirty worktree -> `dev`
+    (`vX.Y.Z-dev`).
+  - `dev` (`BUILD_NUM` optional `0..999`): `vX.Y.Z-dev`, `vX.Y.Z-dev0`,
+    `vX.Y.Z-dev1`, …
+  - `rc` (`BUILD_NUM` required `0..999`): `vX.Y.Z-rc0`, `vX.Y.Z-rc1`, …
+  - `release` (no `BUILD_NUM`): `vX.Y.Z`
+- `VERSION_SUFFIX`: optional explicit override (must keep display string
+  `<= 16` chars for Commodore directory art in `tools/diskart.py`).
+- Run `make version-info` (with any overrides) to inspect the resolved string
+  before building.
+
+### Development Cycle (`dev [0..n]`)
+
+After shipping `vX.Y.Z` (or starting a new feature cycle), bump `version.json`
+to the next target version (`X.(Y+1).0`). Default local `make build` /
+`make disk` automatically stamps **`vX.(Y+1).0-dev`** across title screens,
+System Info, disk directory art, CX16 `manifest.json`, and CP/M `README.TXT`, or
+pass `BUILD_CHANNEL=dev BUILD_NUM=1` for numbered test builds (`[0..n]`).
 
 ## Pre-Tag Readiness
 
-- Confirm `version.json` matches the release tag across all 8 ports (`c64`,
-  `c128`, `plus4`, `apple2`, `cx16`, `atari8`, `bbcmaster`, `cpm`).
+- Confirm `version.json` matches the release target `X.Y.Z` across all 8 ports
+  (`c64`, `c128`, `plus4`, `apple2`, `cx16`, `atari8`, `bbcmaster`, `cpm`).
 - Add `docs/release_notes/release_notes-vX.Y.Z.md` and confirm versioned
   download URLs (`.../releases/download/vX.Y.Z/moria8-*-vX.Y.Z.<ext>`) and
   notes links in `README.md` and `docs/index.html` match `vX.Y.Z`.
@@ -17,7 +45,7 @@ matches across all 8 ports before tagging).
   `~/`) or non-empty ROM defaults in Makefiles, tools, harnesses, and workflows
   (`AGENTS.md` Rule 9).
 
-## Release Candidate Tag
+## Release Candidate Tag (`rc [0..n]`)
 
 Create an annotated release-candidate tag from the commit intended for release:
 
@@ -59,37 +87,46 @@ untracked files, unstaged edits, local planning docs, or generated leftovers.
 ## Clean Build
 
 ```sh
+make version-info
 make clean
-make artifacts
+make artifact-checksums   # or: make artifacts (runs check-release-clean + GPG signs)
 ```
 
-`make artifacts` signs with GPG and is intended to run from your own
-interactive terminal after preparing or unlocking the signing key. Use
-`make artifact-checksums` when you only need to rebuild all 18 unversioned
-images in `build/`, stage versioned copies under `build/release/`, and write
-`build/release/SHA256SUMS` without touching GPG.
+In a clean `vX.Y.Z-rc1` tag worktree, `BUILD_CHANNEL=auto` resolves
+`vX.Y.Z-rc1` automatically (embedding `vX.Y.Z-rc1` in binaries and staging
+`build/release/moria8-*-vX.Y.Z-rc1.*`). In a clean `vX.Y.Z` final tag worktree,
+`BUILD_CHANNEL=auto` resolves `vX.Y.Z`.
+
+`make artifacts` enforces `--check-release-clean` (requiring a clean Git tree on
+the matching `vX.Y.Z` or `vX.Y.Z-rcN` tag unless `ALLOW_DIRTY_RELEASE=1`), signs
+with GPG, and is intended to run from your own interactive terminal after
+preparing or unlocking the signing key. Use `make artifact-checksums` (with
+optional `BUILD_CHANNEL=dev|rc|release BUILD_NUM=N`) when you only need to
+rebuild all 18 unversioned images in `build/`, stage versioned copies under
+`build/release/`, and write `build/release/SHA256SUMS` without touching GPG.
 
 Expected staged release artifacts (`RELEASE_ARTIFACTS` under `build/release/`,
-built from `BUILD_ARTIFACTS` in `build/`):
+built from `BUILD_ARTIFACTS` in `build/`, where `<ver>` is `vX.Y.Z-rcN` for an RC
+or `vX.Y.Z` for final release):
 
-- `build/release/moria8-c64-vX.Y.Z.d64`
-- `build/release/moria8-c64-vX.Y.Z.crt` (C64 cartridge)
-- `build/release/moria8-c128-vX.Y.Z.d64`
-- `build/release/moria8-c128-vX.Y.Z.d71`
-- `build/release/moria8-c128-vX.Y.Z.d81`
-- `build/release/moria8-c128-vX.Y.Z.crt` (Magic Desk 128 cartridge)
-- `build/release/moria8-plus4-vX.Y.Z.d64`
-- `build/release/moria8-plus4-vX.Y.Z.crt` (c264 Magic Cart cartridge)
-- `build/release/moria8-apple2-vX.Y.Z.po`
-- `build/release/moria8-cx16-vX.Y.Z.zip`
-- `build/release/moria8-cx16-vX.Y.Z.crt` (Commander X16 cartridge)
-- `build/release/moria8-atari8-vX.Y.Z.atr`
-- `build/release/moria8-atari8-vX.Y.Z.car` (AtariMax 128 KB cartridge)
-- `build/release/moria8-bbcmaster-vX.Y.Z.ssd`
-- `build/release/moria8-cpm-vX.Y.Z.zip` (universal CP/M 2.2 Z80 bundle)
-- `build/release/moria8-cpm-kaypro2-vX.Y.Z.dsk` (Kaypro II SSDD disk)
-- `build/release/moria8-cpm-kaypro4-vX.Y.Z.dsk` (Kaypro 4 DSDD disk)
-- `build/release/moria8-cpm-c128-vX.Y.Z.d71` (Commodore 128 CP/M Plus 1571 disk)
+- `build/release/moria8-c64-<ver>.d64`
+- `build/release/moria8-c64-<ver>.crt` (C64 cartridge)
+- `build/release/moria8-c128-<ver>.d64`
+- `build/release/moria8-c128-<ver>.d71`
+- `build/release/moria8-c128-<ver>.d81`
+- `build/release/moria8-c128-<ver>.crt` (Magic Desk 128 cartridge)
+- `build/release/moria8-plus4-<ver>.d64`
+- `build/release/moria8-plus4-<ver>.crt` (c264 Magic Cart cartridge)
+- `build/release/moria8-apple2-<ver>.po`
+- `build/release/moria8-cx16-<ver>.zip`
+- `build/release/moria8-cx16-<ver>.crt` (Commander X16 cartridge)
+- `build/release/moria8-atari8-<ver>.atr`
+- `build/release/moria8-atari8-<ver>.car` (AtariMax 128 KB cartridge)
+- `build/release/moria8-bbcmaster-<ver>.ssd`
+- `build/release/moria8-cpm-<ver>.zip` (universal CP/M 2.2 Z80 bundle)
+- `build/release/moria8-cpm-kaypro2-<ver>.dsk` (Kaypro II SSDD disk)
+- `build/release/moria8-cpm-kaypro4-<ver>.dsk` (Kaypro 4 DSDD disk)
+- `build/release/moria8-cpm-c128-<ver>.d71` (Commodore 128 CP/M Plus 1571 disk)
 - `build/release/SHA256SUMS`
 - `build/release/*.asc` (detached GPG signatures for all 18 versioned artifacts and `SHA256SUMS`)
 
@@ -254,6 +291,18 @@ git rev-parse vX.Y.Z^{commit}
 git rev-parse vX.Y.Z-rc1^{commit}
 ```
 
-Those two commit hashes must match.
+Those two commit hashes must match. Check out a clean worktree on `vX.Y.Z`, run
+`make clean && make artifacts`, and verify the signed final `vX.Y.Z` artifacts
+and smoke checks before uploading.
 
 Do not force-move a public final release tag.
+
+## Post-Release Bugfix (`vX.Y.(Z+1)`)
+
+If a bug is discovered after `vX.Y.Z` is published:
+
+1. Leave the published `vX.Y.Z` tag untouched.
+2. Land the fix on `main` (or a `release/X.Y` branch if `main` has already
+   bumped to `X.(Y+1).0`).
+3. Bump `version.json` to `X.Y.(Z+1)` across all 8 ports.
+4. Optionally cut `vX.Y.(Z+1)-rc1`, validate, then tag and publish `vX.Y.(Z+1)`.

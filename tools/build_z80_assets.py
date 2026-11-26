@@ -42,6 +42,7 @@ import build_catalog as bc  # noqa: E402
 import build_item_catalog as bic  # noqa: E402
 import huff_encoder as huff  # noqa: E402
 import parse_creatures as pc  # noqa: E402
+import version_info  # noqa: E402
 
 DEFAULT_OUT_DIR = REPO_ROOT / "build" / "cpm"
 DEFAULT_HUFFMAN_TXT = REPO_ROOT / "data" / "huffman_strings.txt"
@@ -762,21 +763,23 @@ def build_item_ascii_assets(spec_path: Path) -> dict[str, object]:
 # (d) Title Art & (f) Version
 # ---------------------------------------------------------------------------
 
-def load_cpm_version(version_path: Path) -> tuple[str, str]:
-    """Load bare semver ('2.0.0') and display version ('v2.0.0') strictly from version.json['cpm']."""
-    raw = json.loads(version_path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError("version.json must be a JSON object")
-
-    val = raw.get("cpm")
-    if not isinstance(val, str) or not val.strip():
-        raise ValueError("version.json missing string version for cpm")
-
-    ver_clean = val.strip()
-    bare = ver_clean[1:] if ver_clean.lower().startswith("v") else ver_clean
-    prefixed = f"v{bare}"
-    assert_printable_ascii_text(prefixed, "version")
-    return bare, prefixed
+def load_cpm_version(
+    version_path: Path,
+    *,
+    channel: str | None = None,
+    build_num: str | None = None,
+    suffix: str | None = None,
+) -> tuple[str, str]:
+    """Load bare semver (e.g. '2.0.0-rc1') and display version ('v2.0.0-rc1') from version.json['cpm']."""
+    pv = version_info.resolve_port_version(
+        version_path,
+        "cpm",
+        channel=channel,
+        build_num=build_num,
+        suffix=suffix,
+    )
+    assert_printable_ascii_text(pv.display, "version")
+    return pv.bare, pv.display
 
 
 def build_version_z80_inc(bare_ver: str, prefixed_ver: str) -> str:
@@ -970,7 +973,7 @@ def generate_all(
 
     bare_ver, prefixed_ver = load_cpm_version(version_file)
     version_inc = build_version_z80_inc(bare_ver, prefixed_ver)
-    (out_dir / "version_z80.inc").write_text(version_inc, encoding="utf-8")
+    version_info.atomic_write_if_changed(out_dir / "version_z80.inc", version_inc)
 
     title_bin = build_title_art_bin(prefixed_ver)
     decode_title_art_bin(title_bin)
@@ -1048,6 +1051,12 @@ def run_selftest() -> int:
         except ValueError:
             ver_caught = True
         assert ver_caught, "Expected ValueError when version.json omits 'cpm'"
+
+        # Verify prerelease resolution retains base numeric MAJOR/MINOR/PATCH and emits full suffix.
+        rc_bare, rc_disp = load_cpm_version(DEFAULT_VERSION_JSON, channel="rc", build_num="1", suffix="")
+        assert rc_bare.endswith("-rc1") and rc_disp == f"v{rc_bare}"
+        rc_inc = build_version_z80_inc(rc_bare, rc_disp)
+        assert f'DB "{rc_disp}"' in rc_inc and f'DB "{rc_bare}"' in rc_inc
 
         # 3. Verify Huffman stream round-trip and confirm huff_data.bin is not emitted.
         assert not (tmp / "huff_data.bin").exists()

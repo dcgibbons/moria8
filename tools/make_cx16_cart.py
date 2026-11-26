@@ -10,6 +10,11 @@ from pathlib import Path
 import struct
 import sys
 
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+import version_info  # noqa: E402
+
 CART_ROM_BANK_SIZE = 0x4000
 CART_ROM_WINDOW_BASE = 0xC000
 CART_ROM_BANK_START = 32
@@ -244,12 +249,12 @@ def main() -> int:
 
     version_str = "0.0.0"
     if args.version_file.is_file():
-        raw_ver = args.version_file.read_text(encoding="utf-8").strip()
         if args.version_file.suffix == ".json":
-            ver_data = json.loads(raw_ver)
-            version_str = str(ver_data.get("cx16", version_str))
-        elif raw_ver:
-            version_str = raw_ver
+            version_str = version_info.resolve_port_version(args.version_file, "cx16").bare
+        else:
+            raw_ver = args.version_file.read_text(encoding="utf-8").strip()
+            if raw_ver:
+                version_str = raw_ver
 
     crt_bytes, bin_bytes, manifest = build_cartridge_images(
         build_dir=args.build_dir,

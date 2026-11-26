@@ -32,6 +32,10 @@ import unittest
 import zipfile
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+TOOLS_DIR = REPO_ROOT / "tools"
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+import version_info  # noqa: E402
 DEFAULT_BUILD_DIR = REPO_ROOT / "build" / "cpm"
 DEFAULT_OUT_DIR = REPO_ROOT / "build"
 DEFAULT_VERSION_FILE = REPO_ROOT / "version.json"
@@ -583,8 +587,12 @@ def load_release_inputs(
     version_file: Path,
     license_file: Path,
     source_offer_file: Path,
+    *,
+    channel: str | None = None,
+    build_num: str | None = None,
+    suffix: str | None = None,
 ) -> dict[str, bytes]:
-    """Load MORIA8.COM, MORIA8.DAT, LICENSE, SOURCE-OFFER, and version.json['cpm']."""
+    """Load MORIA8.COM, MORIA8.DAT, LICENSE, SOURCE-OFFER, and resolved CP/M version."""
     com_path = build_dir / "MORIA8.COM"
     dat_path = build_dir / "MORIA8.DAT"
     if not com_path.is_file():
@@ -595,8 +603,13 @@ def load_release_inputs(
         raise FileNotFoundError(f"Missing {license_file}")
     if not source_offer_file.is_file():
         raise FileNotFoundError(f"Missing {source_offer_file}")
-    versions = json.loads(version_file.read_text(encoding="utf-8"))
-    cpm_ver = str(versions["cpm"])
+    cpm_ver = version_info.resolve_port_version(
+        version_file,
+        "cpm",
+        channel=channel,
+        build_num=build_num,
+        suffix=suffix,
+    ).bare
 
     com_bytes = com_path.read_bytes()
     dat_bytes = dat_path.read_bytes()
@@ -627,9 +640,20 @@ def package_all(
     license_file: Path = DEFAULT_LICENSE_FILE,
     source_offer_file: Path = DEFAULT_SOURCE_OFFER_FILE,
     kaypro2_path: Path | None = None,
+    channel: str | None = None,
+    build_num: str | None = None,
+    suffix: str | None = None,
 ) -> dict[str, str]:
     """Build requested CP/M release packages and return human-readable status lines."""
-    inputs = load_release_inputs(build_dir, version_file, license_file, source_offer_file)
+    inputs = load_release_inputs(
+        build_dir,
+        version_file,
+        license_file,
+        source_offer_file,
+        channel=channel,
+        build_num=build_num,
+        suffix=suffix,
+    )
     results: dict[str, str] = {}
 
     if zip_path is not None:
@@ -681,6 +705,8 @@ class _MakeCpmDiskSelfTest(unittest.TestCase):
         readme = format_readme_txt("2.0.0")
         self.assertIn(b"MORIA8 FOR CP/M 2.2 (Z80) - v2.0.0\r\n", readme)
         self.assertNotIn(b"\n", readme.replace(b"\r\n", b""))
+        rc_readme = format_readme_txt("2.1.0-rc1")
+        self.assertIn(b"MORIA8 FOR CP/M 2.2 (Z80) - v2.1.0-rc1\r\n", rc_readme)
 
     def test_kaypro4_geometry_multi_extent_and_corruption_detection(self) -> None:
         com = bytes((i * 17 + 3) & 0xFF for i in range(21641))
@@ -781,6 +807,9 @@ class _MakeCpmDiskSelfTest(unittest.TestCase):
                 version_file=ver_file,
                 license_file=lic_file,
                 source_offer_file=src_file,
+                channel="release",
+                build_num="",
+                suffix="",
             )
             self.assertIn("zip", res)
             self.assertIn("kaypro2", res)

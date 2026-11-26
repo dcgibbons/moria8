@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 import check_item_catalog_ports  # noqa: E402
+import version_info  # noqa: E402
 BUILD = ROOT / "build" / "cx16"
 MEMORY_S = Path(__file__).resolve().parent / "memory.s"
 MAIN_SYM = BUILD / "main.sym"
@@ -185,6 +186,9 @@ def check_zip_bundle(
     build_dir: Path = BUILD,
     data_dir: Path = ROOT / "data",
     version_file: Path = ROOT / "version.json",
+    channel: str | None = None,
+    build_num: str | None = None,
+    suffix: str | None = None,
 ) -> int:
     """Validate shipping moria8-cx16.zip entries, AUTOBOOT.X16, manifest.json, and LF->CR compliance files."""
     if not zip_path.is_file():
@@ -273,8 +277,14 @@ def check_zip_bundle(
             if not version_file.is_file():
                 raise ContractViolation(f"missing version file: {version_file}")
             try:
-                want_ver = json.loads(version_file.read_text(encoding="utf-8"))["cx16"]
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+                want_ver = version_info.resolve_port_version(
+                    version_file,
+                    "cx16",
+                    channel=channel,
+                    build_num=build_num,
+                    suffix=suffix,
+                ).bare
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
                 raise ContractViolation(f"invalid version file {version_file}: {exc}") from exc
             if app_ver != want_ver:
                 raise ContractViolation(
@@ -654,8 +664,66 @@ def selftest() -> int:
             zf.writestr("manifest.json", good_manifest)
             zf.writestr("LICENSE", b"Line1\rLine2\r")
             zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
-        assert check_zip_bundle(good_zip, build_dir=bdir, data_dir=ddir, version_file=vfile) == 25
+        assert (
+            check_zip_bundle(
+                good_zip,
+                build_dir=bdir,
+                data_dir=ddir,
+                version_file=vfile,
+                channel="release",
+                build_num="",
+                suffix="",
+            )
+            == 25
+        )
         checks += 1
+
+        rc_manifest = json.dumps(
+            {
+                "manifest_version": "1.0.0",
+                "name": "Moria8",
+                "author": "Chad Gibbons",
+                "app_version": "2.0.0-rc1",
+                "license": "GPL-3.0-or-later",
+                "ram": "512",
+                "start_prg": "MORIA8.PRG",
+            }
+        )
+        rc_zip = tmp / "rc_moria8-cx16.zip"
+        with zipfile.ZipFile(rc_zip, "w") as zf:
+            for spec in PRG_SPECS:
+                zf.writestr(spec.filename, (bdir / spec.filename).read_bytes())
+            zf.writestr("AUTOBOOT.X16", (bdir / "MORIA8.PRG").read_bytes())
+            zf.writestr("manifest.json", rc_manifest)
+            zf.writestr("LICENSE", b"Line1\rLine2\r")
+            zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
+        assert (
+            check_zip_bundle(
+                rc_zip,
+                build_dir=bdir,
+                data_dir=ddir,
+                version_file=vfile,
+                channel="rc",
+                build_num="1",
+                suffix="",
+            )
+            == 25
+        )
+        checks += 1
+        try:
+            check_zip_bundle(
+                rc_zip,
+                build_dir=bdir,
+                data_dir=ddir,
+                version_file=vfile,
+                channel="release",
+                build_num="",
+                suffix="",
+            )
+        except ContractViolation:
+            checks += 1
+        else:
+            raise AssertionError("rc1 manifest unexpectedly passed release check")
 
         bad_zip_missing = tmp / "missing.zip"
         with zipfile.ZipFile(bad_zip_missing, "w") as zf:
@@ -667,7 +735,15 @@ def selftest() -> int:
             zf.writestr("LICENSE", b"Line1\rLine2\r")
             zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
         try:
-            check_zip_bundle(bad_zip_missing, build_dir=bdir, data_dir=ddir, version_file=vfile)
+            check_zip_bundle(
+                bad_zip_missing,
+                build_dir=bdir,
+                data_dir=ddir,
+                version_file=vfile,
+                channel="release",
+                build_num="",
+                suffix="",
+            )
         except ContractViolation:
             checks += 1
         else:
@@ -814,7 +890,15 @@ def selftest() -> int:
                 zf.writestr("LICENSE", b"Line1\rLine2\r")
                 zf.writestr("SOURCE-OFFER", b"Offer1\rOffer2\r")
             try:
-                check_zip_bundle(bad_case_zip, build_dir=bdir, data_dir=ddir, version_file=vfile)
+                check_zip_bundle(
+                    bad_case_zip,
+                    build_dir=bdir,
+                    data_dir=ddir,
+                    version_file=vfile,
+                    channel="release",
+                    build_num="",
+                    suffix="",
+                )
             except ContractViolation:
                 checks += 1
             else:
@@ -826,6 +910,9 @@ def selftest() -> int:
                 build_dir=bdir,
                 data_dir=ddir,
                 version_file=tmp / "missing_version.json",
+                channel="release",
+                build_num="",
+                suffix="",
             )
         except ContractViolation:
             checks += 1

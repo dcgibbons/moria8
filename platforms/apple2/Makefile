@@ -72,7 +72,15 @@ BUILD_CATALOG_TOOL = ../../tools/build_catalog.py
 MONSTER_SPEC = ../shared/catalog/monster_catalog_spec.json
 VERSION_FILE = ../../version.json
 VERSION_INC_TOOL = ../../tools/make_version_include.py
+VERSION_INFO_TOOL = ../../tools/version_info.py
+VERSION_STAMP = $(BUILD)/.version.stamp
 VERSION_INC = $(BUILD)/version_strings.inc
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+_VERSION_STAMP_ERR := $(shell mkdir -p "$(BUILD)" && python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$(VERSION_STAMP)" 2>&1)
+ifneq ($(strip $(_VERSION_STAMP_ERR)),)
+$(error $(_VERSION_STAMP_ERR))
+endif
+endif
 GEN_TRAMPOLINES_TOOL = ../../tools/gen_trampolines.py
 TRAMPOLINE_MANIFEST  = ../../tools/trampoline_manifest.py
 TRAMPOLINES_INC      = $(BUILD)/trampolines/apple2_trampolines.inc
@@ -197,7 +205,10 @@ ensure-prodos:
 	@test -f "$(PRODOS)" -a -f "$(BOOTBLOCKS)" || $(MAKE) --no-print-directory prodos
 
 # ── Assembly ──────────────────────────────────────────────
-$(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
+$(VERSION_STAMP): $(VERSION_FILE) $(VERSION_INFO_TOOL) | $(BUILD)
+	python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$@"
+
+$(VERSION_INC): $(VERSION_FILE) $(VERSION_STAMP) $(VERSION_INC_TOOL) $(VERSION_INFO_TOOL) | $(BUILD)
 	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(TRAMPOLINES_INC): $(GEN_TRAMPOLINES_TOOL) $(TRAMPOLINE_MANIFEST) | $(BUILD)
