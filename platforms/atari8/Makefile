@@ -20,8 +20,8 @@ OUTATARI8_CART = $(OUT)/atari8-cart
 OVL_OUTATARI8 = $(abspath $(OUTATARI8))
 OVL_OUTATARI8_CART = $(abspath $(OUTATARI8_CART))
 
-KA_FLAGS   = ":OVL_OUT=$(OVL_OUTATARI8)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8
-KA_CART_FLAGS = ":OVL_OUT=$(OVL_OUTATARI8_CART)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8_CART)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8 -define ATARI8_CARTRIDGE
+KA_FLAGS   = ":OVL_OUT=$(OVL_OUTATARI8)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8)" -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8
+KA_CART_FLAGS = ":OVL_OUT=$(OVL_OUTATARI8_CART)" -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTATARI8_CART)" -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define ATARI8 -define ATARI8_CARTRIDGE
 
 VERSION_FILE         = ../../version.json
 VERSION_INC_TOOL     = ../../tools/make_version_include.py
@@ -33,7 +33,7 @@ MAIN_SRC             = main.s
 BOOT_SRC         = boot.s
 TITLE_SRC        = title_data.s
 
-ATARI8_SOURCES := $(shell find . ../commodore/common ../shared ../../core -type f \( -name '*.s' -o -name '*.inc' \) -print)
+ATARI8_SOURCES := $(shell find . ../commodore/common ../shared ../../core/6502 -type f \( -name '*.s' -o -name '*.inc' \) -print)
 
 ATARI8_MAIN_PRG   = $(OUTATARI8)/MORIA8.RES
 ATARI8_MAIN_PKB   = $(OUTATARI8)/MORIA8.PKB
@@ -143,7 +143,7 @@ $(ATARI8_CART_MAIN_PRG) $(OUTATARI8_CART)/ATARI.BNK $(ATARI8_CART_OVL_PRGS) $(OU
 
 $(ATARI8_CART_BOOT_BIN): cartridge_boot.s cartridge_contract.s memory.s $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8_CART)
-	$(KA) ":CART_OUT=$(OVL_OUTATARI8_CART)" -afo -symbolfiledir "$(OVL_OUTATARI8_CART)" -libdir . -libdir ../../core cartridge_boot.s -o "$(OUTATARI8_CART)/cartridge_boot.prg"
+	$(KA) ":CART_OUT=$(OVL_OUTATARI8_CART)" -afo -symbolfiledir "$(OVL_OUTATARI8_CART)" -libdir . -libdir ../../core/6502 cartridge_boot.s -o "$(OUTATARI8_CART)/cartridge_boot.prg"
 
 $(ATARI8_CART_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8_CART)
@@ -151,7 +151,7 @@ $(ATARI8_CART_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS_JAR)
 
 $(ATARI8_CAT_TEST_PRG): $(ATARI8_CART_SYMS_INC) cartridge_test_catalog.s cartridge_contract.s ../commodore/common/catalog_records.s $(KICKASS_JAR)
 	@mkdir -p $(OUTATARI8_CART)
-	$(KA) -afo -symbolfiledir "$(OVL_OUTATARI8_CART)" -libdir "$(OVL_OUTATARI8_CART)" -libdir . -libdir ../commodore/common -libdir ../../core cartridge_test_catalog.s -o $(ATARI8_CAT_TEST_PRG)
+	$(KA) -afo -symbolfiledir "$(OVL_OUTATARI8_CART)" -libdir "$(OVL_OUTATARI8_CART)" -libdir . -libdir ../commodore/common -libdir ../../core/6502 cartridge_test_catalog.s -o $(ATARI8_CAT_TEST_PRG)
 
 cartridge: $(ATARI8_CAR)
 

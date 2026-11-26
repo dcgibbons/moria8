@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCAN_DIRS = (
-    ROOT / "core",
+    ROOT / "core" / "6502",
     ROOT / "platforms" / "commodore" / "c64",
     ROOT / "platforms" / "commodore" / "c128",
     ROOT / "platforms" / "commodore" / "plus4",
@@ -83,6 +83,8 @@ def iter_source_files(scan_roots: list[Path]) -> list[Path]:
     for root in scan_roots:
         for path in sorted(root.rglob("*.s")):
             rel = path.relative_to(ROOT)
+            if rel.parts[:2] == ("core", "z80"):
+                continue
             if any(part in SKIP_PATH_PARTS for part in rel.parts):
                 continue
             if rel in SKIP_FILES:
@@ -199,7 +201,7 @@ def scan_paths(scan_roots: list[Path]) -> tuple[list[Finding], list[Finding], in
 
 
 def run_self_test() -> int:
-    sample_path = ROOT / "core" / "demo_sample.s"
+    sample_path = ROOT / "core" / "6502" / "demo_sample.s"
     sample_lines = [
         "stx smc_prev + 1",
         "sta smc_same + 1",
@@ -278,7 +280,7 @@ def main() -> int:
         "paths",
         nargs="*",
         type=Path,
-        help="Optional roots or files to scan. Defaults to core, platforms/commodore/c64, platforms/commodore/c128.",
+        help="Optional roots or files to scan. Defaults to core/6502, platforms/commodore/c64, platforms/commodore/c128.",
     )
     parser.add_argument("--self-test", action="store_true", help="Run internal parser self-checks and exit.")
     parser.add_argument(

@@ -35,60 +35,60 @@ test_exit_trampoline:
 
 .segmentdef TestUnused [start=$D000, virtual]
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
+#import "../../../../core/6502/ui_status.s"
 .segment TestUnused
 player_create:
     brk
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/ui_character.s"
+#import "../../../../core/6502/ui_help_clear.s"
+#import "../../../../core/6502/ui_character.s"
 .segment Default
-#import "../../../../core/stat_display.s"
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/stat_display.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestUnused
-#import "../../../../core/monster_ai.s"
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/6502/monster_ai.s"
+#import "../../../../core/6502/monster_magic.s"
 .segment Default
-#import "../../../../core/recall.s"
-#import "../../../../core/item.s"
+#import "../../../../core/6502/recall.s"
+#import "../../../../core/6502/item.s"
 #import "item_cat_resident_helper.s"
-#import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
+#import "../../../../core/6502/special_rooms.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
 .segment TestUnused
-#import "../../../../core/trap_trigger_cold.s"
-#import "../../../../core/player_chargen_cold.s"
-#import "../../../../core/item_spawn_cold.s"
-#import "../../../../core/pick_item_type_cold.s"
+#import "../../../../core/6502/trap_trigger_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
+#import "../../../../core/6502/item_spawn_cold.s"
+#import "../../../../core/6502/pick_item_type_cold.s"
 #import "../dungeon_render.s"
 .segment Default
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
-#import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
-#import "../../../../core/turn.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/combat.s"
+#import "../../../../core/6502/scene_mat_tile.s"
+#import "../../../../core/6502/monster_attack.s"
+#import "../../../../core/6502/turn.s"
 
 store_init_all:
 store_restock_all:
@@ -124,7 +124,7 @@ piw_pick_filtered_inv_key:
 eff_detect_timer:     .byte 0
 eff_detect_evil_mode: .byte 0
 
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0

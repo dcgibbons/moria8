@@ -1,6 +1,6 @@
 // title_data.s — Atari 8-bit title screen art data (loaded into MAP_BASE $C100)
 //
-// Format matches core/title_data.s: segments of [row, col, color, screen_codes..., $00]
+// Format matches core/6502/title_data.s: segments of [row, col, color, screen_codes..., $00]
 // Terminated by $FF end-of-data marker.
 
 .pc = $c100 "Title Art"

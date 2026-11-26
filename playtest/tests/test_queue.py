@@ -253,7 +253,7 @@ class ScheduleTest(unittest.TestCase):
             self.assertEqual(service.ci_build, "b2")
             self.assertEqual(service.buildq.take("c64", "b2"), queue.combos("c64")[7])   # goes on
             self.assertEqual(service.buildq.platform("c64")["cycle"], 1)
-            changed["files"] = "playtest/moria_playtest/brain.py\ncore/turn.s"
+            changed["files"] = "playtest/moria_playtest/brain.py\ncore/6502/turn.s"
             service.last_ci = 0
             service.refresh_ci()
             self.assertEqual(service.ci_build, "b3")
@@ -2844,7 +2844,7 @@ class CatalogNamesTest(unittest.TestCase):
         self.assertEqual((got[3], got[7]), ("Ancient Red Dragon", "Ancient Multi-Hued Dragon"))
         self.assertNotIn(9, got)                                          # past the catalog: unnamed
         # Town creature types follow the dungeon's: catalog id = type - base
-        # (core/recall.s recall_slot_to_cat_id). Unnamed, the town's 'p' took
+        # (core/6502/recall.s recall_slot_to_cat_id). Unnamed, the town's 'p' took
         # a dungeon type's name, "Grey Mushroom patch", which never moves, and
         # the squares it walked walled a Plus/4 Paladin off the stairs.
         self.assertEqual((got[count], got[count + 7]), (names[0], names[7]))

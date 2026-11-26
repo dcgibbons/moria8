@@ -26,7 +26,7 @@ PLATFORM_FILES = {
     "bbcmaster": ROOT / "platforms/bbcmaster/hal/entropy_consts.s",
 }
 
-RNG_COMMON = ROOT / "core/rng.s"
+RNG_COMMON = ROOT / "core/6502/rng.s"
 FORBIDDEN_RNG_TOKENS = (
     "$dc04",
     "$dc05",

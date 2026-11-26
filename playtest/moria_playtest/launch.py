@@ -124,6 +124,13 @@ def check_disk(build: Build) -> None:
             raise StaleDisk(f"{build.disk} is missing; "
                             f"rebuild it with `make {build.target.disk_target}`")
         return
+    if build.target.backend == "cpm":
+        dat = build.disk / "MORIA8.DAT"
+        if (not build.prg.is_file() or not dat.is_file() or not build.vs.is_file()
+                or dat.stat().st_mtime < build.prg.stat().st_mtime):
+            raise StaleDisk(f"{build.disk} is missing MORIA8.COM/MORIA8.DAT/main.sym or MORIA8.DAT is stale; "
+                            f"rebuild it with `make {build.target.disk_target}`")
+        return
     if build.disk.is_dir():   # the X16's -fsroot: the build output itself
         return
     if not build.target.disk_files:
@@ -283,9 +290,9 @@ def prepare_worker(run_dir: Path, worker: int, disk_template: Path = C64_DISK) -
     workdir = run_dir / f"w{worker}"
     workdir.mkdir(parents=True, exist_ok=True)
     disk = workdir / disk_template.name
-    if disk_template.is_dir():   # the X16 boots from a directory (-fsroot)
+    if disk_template.is_dir():   # the X16 or CP/M boots from a directory
         shutil.copytree(disk_template, disk, dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns("*.sym", "*.vs", "mame"))
+                        ignore=shutil.ignore_patterns("*.sym", "*.vs", "*.lst", "*.ovl", "*.inc", "cpm_runner", "mame"))
     else:
         shutil.copyfile(disk_template, disk)
     return workdir, disk
@@ -322,9 +329,14 @@ def allocate_port(worker: int, attempts: int = 20) -> int:
 
 
 def build_identity(build: Build = SHIPPING) -> dict[str, str]:
+    if build.target.backend == "cpm":
+        dat = build.disk / "MORIA8.DAT"
+        disk_target = dat if dat.is_file() else build.prg
+    else:
+        disk_target = build.disk if build.disk.is_file() else build.prg
     return {
         "disk": str(build.disk.relative_to(ROOT)) if build.disk.is_relative_to(ROOT) else str(build.disk),
-        "disk_sha256": sha256(build.disk if build.disk.is_file() else build.prg),
+        "disk_sha256": sha256(disk_target),
         "program_sha256": sha256(build.prg),
         "symbols_sha256": sha256(build.vs),
     }

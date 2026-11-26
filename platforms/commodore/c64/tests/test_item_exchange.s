@@ -1,5 +1,5 @@
-// test_item_exchange.s — SHIFT+X weapon exchange (core/item_exchange.s) and
-// the `w` cursed-target refusal (core/player_item_commands.s item_wear).
+// test_item_exchange.s — SHIFT+X weapon exchange (core/6502/item_exchange.s) and
+// the `w` cursed-target refusal (core/6502/player_item_commands.s item_wear).
 //
 // Oracle: VMS Moria 4.8 moria.inc switch_weapon (:616-648), inven_command
 // 'x' (:699-706) and wear (:539-552); docs/X_WEAPON_SWAP_DESIGN.md §4, §11.
@@ -33,74 +33,74 @@ test_exit_trampoline:
 .encoding "screencode_mixed"
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
+#import "../../../../core/6502/ui_status.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segment TestCreateOverlay
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/stat_display.s"
 .segment Default
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
-#import "../../../../core/huffman.s"
+#import "../../../../core/6502/huffman.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_ai.s"
+#import "../../../../core/6502/monster_ai.s"
 .segment Default
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/6502/monster_magic.s"
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 #import "item_cat_resident_helper.s"
-#import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/item_exchange.s"
-#import "../../../../core/spell_data.s"
+#import "../../../../core/6502/special_rooms.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
+#import "../../../../core/6502/item_exchange.s"
+#import "../../../../core/6502/spell_data.s"
 .segment TestCreateOverlay
-#import "../../../../core/projectile.s"
+#import "../../../../core/6502/projectile.s"
 .segment Default
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
-#import "../../../../core/spell_effects.s"
+#import "../../../../core/6502/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/player_magic.s"
 .segment Default
 #import "../dungeon_render.s"
 .segment Default
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/combat.s"
 .segment TestCreateOverlay
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 .segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
@@ -149,14 +149,14 @@ player_death_check:
 #define C64_TEST_FULL_ITEMDESC_STUB
 ui_help_display:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // Store modules are never executed here; item_cat_data takes the $E100 window
 // (item_cat_kernal_helper.s), so only the store inventory arrays that
 // ui_trampoline_stubs.s references are linked (data, parked).
 .segment Default
-#import "../../../../core/store_data_defs.s"
-#import "../../../../core/store_inventory_data.s"
+#import "../../../../core/6502/store_data_defs.s"
+#import "../../../../core/6502/store_inventory_data.s"
 .segment Default
 
 // Strings referenced by imported modules but defined in main.s

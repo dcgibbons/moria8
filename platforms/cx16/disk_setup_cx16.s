@@ -2,7 +2,7 @@
 // disk_setup_cx16.s — Commander X16 Disk Setup UI (OVL.STORAGE).
 //
 // Uses the same menu layout and "Save drive (8-11): " picker flow as the
-// Commodore ports (core/ui_disk_setup.s):
+// Commodore ports (core/6502/ui_disk_setup.s):
 //   Row 0: "Disk Setup"
 //   Row 2: "Program:  8" (COL_CYAN)
 //   Row 3: "Save:     8" (COL_CYAN)

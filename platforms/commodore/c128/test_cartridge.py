@@ -469,8 +469,8 @@ def blank_d71(args: argparse.Namespace, name: str) -> Path:
 
 
 def snapshot(exp: Experiment) -> dict[str, bytes]:
-    player = catalog_disk.consts(ROOT / "core/player.s")
-    slots = catalog_disk.consts(ROOT / "core/item_defs.s")["TOTAL_INV_SLOTS"]
+    player = catalog_disk.consts(ROOT / "core/6502/player.s")
+    slots = catalog_disk.consts(ROOT / "core/6502/item_defs.s")["TOTAL_INV_SLOTS"]
     map_base = exp.sym["MAP_BASE"] if "MAP_BASE" in exp.sym else 0x4000
     data = {
         "player": exp.memory(exp.sym["player_data"], player["PL_STRUCT_SIZE"]),

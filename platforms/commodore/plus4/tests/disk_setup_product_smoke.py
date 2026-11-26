@@ -129,7 +129,7 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[Monito
             # Prologue validation per pass/fail symbol: both UI handlers
             # begin with `jsr ui_clear_full_screen_safe` and
             # disk_setup_commit_initialized begins with
-            # `jmp disk_setup_commit_ready` (see core/ui_disk_setup.s and
+            # `jmp disk_setup_commit_ready` (see core/6502/ui_disk_setup.s and
             # platforms/commodore/common/disk_setup_banked.s).
             prologues = {
                 resolved["commit_initialized"]: (0x4C, "commit_ready"),

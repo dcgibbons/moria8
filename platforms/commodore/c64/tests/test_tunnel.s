@@ -29,12 +29,12 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
 
 .const CF_UNDEAD = $02
 .const CF_EVIL   = $04
@@ -43,7 +43,7 @@ test_exit_trampoline:
 .const PL_TODMG    = 41
 .const PL_RESERVED = 107
 
-#import "../../../../core/item_tables.s"
+#import "../../../../core/6502/item_tables.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -93,7 +93,7 @@ roll_tool_ego_check:
     lda #1
     rts
 
-#import "../../../../core/ego_items.s"
+#import "../../../../core/6502/ego_items.s"
 
 // ============================================================
 // tramp_dig_ability — stub for test context

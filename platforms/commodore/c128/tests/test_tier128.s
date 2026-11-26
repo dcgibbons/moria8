@@ -1,7 +1,7 @@
 #importonce
 // test_tier128.s — C128 tier transition/state regression checks for 10.2.5
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
@@ -43,7 +43,7 @@ reu_render_progress: rts
 c128_prepare_cache_loading_screen: rts
 reu_load_all_tiers: rts
 reu_stash_overlays: rts
-msg_print_ay:                       // as core/ui_messages.s (a stub here)
+msg_print_ay:                       // as core/6502/ui_messages.s (a stub here)
 msg_print: rts
 overlay_invalidate: rts
 reu_fetch_tier: rts
@@ -63,7 +63,7 @@ rng_range:
     lda #0
     rts
 
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/tier_manager.s"
 #define ASSET_LOAD_PROMPT_EXTERNAL
 #import "../../common/asset_load_retry.s"   // the tier loads' loader
 asset_load_ask_for_disk:            // a required load failed here: a test fault

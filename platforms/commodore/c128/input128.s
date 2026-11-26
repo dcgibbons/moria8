@@ -4,9 +4,9 @@
 // Reads CIA1 keyboard matrix directly — bypasses Screen Editor entirely.
 // Does NOT call SCNKEY ($FF9F) or GETIN ($FFE4).
 
-#import "../../../core/input_contract.s"
-#import "../../../core/input_tables.s"
-#import "../../../core/input_run_cancel.s"
+#import "../../../core/6502/input_contract.s"
+#import "../../../core/6502/input_tables.s"
+#import "../../../core/6502/input_run_cancel.s"
 //
 // Problem: SCNKEY invokes the Screen Editor, which reinitializes
 // $0314/$0315 to its own IRQ handler on every call. The Screen Editor's

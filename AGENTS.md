@@ -54,13 +54,19 @@ If the quote does not name the action, stop and ask.
    directories.
 7. Release compliance: every shipping disk and cartridge image must include
    `data/LICENSE` and `data/SOURCE-OFFER` (LF→CR converted, LF→`$9B` ATASCII
-   EOL on Atari 8-bit disk, or raw/NUL-padded ROM assets in cartridges).
-   Commodore disk images carry them as SEQ files `license,s`/`source-offer,s`;
-   the Apple IIe image carries ProDOS TXT files `LICENSE`/`SOURCE.OFFER`; the
-   Commander X16 `.zip` bundle carries `LICENSE` and `SOURCE-OFFER`; the Atari
-   8-bit `.atr` image carries DOS 2.5 files `LICENSE.TXT` and `SRCOFFER.TXT`;
-   the BBC Master 128 `.ssd` image carries DFS files `LICENSE` and `SRCOFFR`;
-   and the five shipping cartridges (`moria8-c64.crt`, `moria8-c128.crt`,
+   EOL on Atari 8-bit disk, `LF→CRLF` + `0x1A` EOF padded to 128 B CP/M
+   records on CP/M disk images, `LF→CRLF` in the CP/M `.zip` bundle, or
+   raw/NUL-padded ROM assets in cartridges). Commodore disk images carry them
+   as SEQ files `license,s`/`source-offer,s`; the Apple IIe image carries
+   ProDOS TXT files `LICENSE`/`SOURCE.OFFER`; the Commander X16 `.zip` bundle
+   carries `LICENSE` and `SOURCE-OFFER`; the Atari 8-bit `.atr` image carries
+   DOS 2.5 files `LICENSE.TXT` and `SRCOFFER.TXT`; the BBC Master 128 `.ssd`
+   image carries DFS files `LICENSE` and `SRCOFFR`; `build/moria8-cpm.zip`
+   carries `LICENSE` and `SOURCE-OFFER` (plus `README.TXT`), while
+   `build/moria8-cpm-kaypro2.dsk`, `build/moria8-cpm-kaypro4.dsk`, and
+   `build/moria8-cpm-c128.d71` carry `LICENSE.TXT` and `SRCOFFR.TXT`;
+   `build/cpm/MORIA8.DAT` (`'M8CP'`) embeds both (`DAT_ID_LICENSE`,
+   `DAT_ID_SRCOFFR`) for Title `A` (`About`) and Help `L`; and the five shipping cartridges (`moria8-c64.crt`, `moria8-c128.crt`,
    `moria8-plus4.crt`, `moria8-cx16.crt`, `moria8-atari8.car`) embed both
    documents in ROM for Title `A` (`About`) and Help `L`. New platform ports and
    cartridges must do the same.
@@ -105,6 +111,7 @@ load `docs/BEHAVIOR_CHANGE_PROTOCOL.md`, then every matching domain contract:
 | Commander X16 addresses, RAM banks, overlays, VERA access | `docs/CX16_MEMORY_CONTRACT.md` |
 | Atari 8-bit addresses, `PORTB` / 130XE banking, overlays, `SIOV` bounce, ANTIC/POKEY/GTIA access | `docs/ATARI8_MEMORY_CONTRACT.md` |
 | BBC Master 128 addresses, `ROMSEL` / `ACCCON` / `LYNNE` / `ANDY` banking, overlays, MOS/DFS calls | `docs/BBCMASTER_MEMORY_CONTRACT.md` |
+| CP/M 2.2 Z80 addresses, TPA map, overlays, BDOS/BIOS calls, ANSI terminal HAL, `MORIA8.DAT` container | `docs/CPM_MEMORY_CONTRACT.md` |
 | None of the above | No contract load required |
 
 Before editing a matched domain, output one line:
@@ -180,6 +187,18 @@ Hard boundaries:
   (`$A400-$A7FF`), the `$A800-$BFFF` overlay/tier window (Bank 4), `MAP_BASE`
   (`$8000-$B30B`, Bank 5), `BeebAuxData` (`$8000-$96FF`, Bank 6), and cached
   hot overlays/tier 1 (Banks 5–7)
+- CP/M 2.2 Z80 ownership comes from `docs/CPM_MEMORY_CONTRACT.md` and
+  `platforms/z80/cpm/memory.inc`: 52 KB TPA minimum (`BDOS_MIN_TOP = 0xD100`),
+  resident `MORIA8.COM` (`0x0100-0x55FF`), shared overlay window `0x5600-0x69FF`
+  (`5,120` B = `40 × 128` B records, 19 overlays streamed from `'M8CP'`
+  `MORIA8.DAT`), resident BSS `0x6A00-0x8BFF` (`z80_state` 64 B pinned at
+  `0x6A00-0x6A3F`), 512 B stack `0x8C00-0x8DFF` (`'M8SK'` canary at
+  `0x8C00-0x8C03`, `SP = 0x8E00`), `cpm_char_shadow` `0x8E00-0x957F` (reused as
+  `GEN_SCAN_SCRATCH_BASE` inside `ovl_gen.asm`), `cpm_color_shadow`
+  `0x9580-0x9CFF`, `MAP_BASE` `0x9D00-0xD00B` (`198×66` = `13,068` B;
+  overwrites CCP so exit MUST use `BDOS 0` / `JP 0x0000`), FCB pool
+  `0xD00C-0xD07F`, and 128 B `cpm_dma_buf` `0xD080-0xD0FF` strictly below
+  `0xD100`
 
 After C128 layout, banking, runtime-loaded, copied, or trampolined-code changes,
 verify linked address, PRG load header, load destination bank, visible execution
@@ -217,9 +236,14 @@ unsandboxed localhost access): commands that invoke `x64sc`, `x128`, `xplus4`,
 `make playtest-disk`; `make playtest-selftest`; `make playtest-queue`;
 `make playtest-ab`; direct `harness128.py`, `harness128_batch.py`,
 `harnessplus4.py`, or `harness_smoke.py` runs; and filtered runtime harness
-targets. Static/build-only checks stay sandboxed: `make build`, `make
-check-hal-boundaries`, Python static checkers, `git diff`, and similar commands
-that do not launch an emulator. Before running one of these, output one line:
+targets (except CP/M `platforms/z80/cpm/harness_smoke.py`). Static/build-only
+checks and CP/M `cpm_runner` / `RunCPM` runs stay sandboxed: `make build`,
+`make check-hal-boundaries`, Python static checkers, `git diff`, `make buildcpm`,
+`make diskcpm`, `make testcpm`, `tools/cpm_runner`,
+`platforms/z80/cpm/harness_smoke.py`, and similar commands that require zero
+sockets and do not launch VICE/MAME/`x16emu` (note `ensure-sjasmplus`,
+`ensure-runcpm`, and `ensure-ctools` only need network on initial toolchain
+download when absent from `tools/`). Before running one of these, output one line:
 `ESCALATE: <command> launches VICE/MAME.`
 
 Root-Makefile emulator test targets and playtest runs execute inside a private
@@ -238,7 +262,12 @@ drives headless `x16emu -testbench` when `X16EMU` and `X16ROM` are available
 drives headless MAME `a800xl` and `a130xe` when `ATARI8ROMS` is set (16
 `a800xl` scenarios plus 5 `a130xe` scenarios = 21 total). The BBC Master 128
 harness (`platforms/bbcmaster/harness_smoke.py`) drives headless MAME `bbcm`
-when `BBCMROMS` is set (18 scenarios).
+when `BBCMROMS` is set (18 scenarios). The CP/M 2.2 Z80 harness
+(`platforms/z80/cpm/harness_smoke.py`, 27 scenarios) drives `tools/cpm_runner`
+and `RunCPM` over stdio with zero sockets; `make diskcpm` packages
+`build/moria8-cpm.zip`, `build/moria8-cpm-kaypro2.dsk`,
+`build/moria8-cpm-kaypro4.dsk`, and `build/moria8-cpm-c128.d71` via
+`tools/make_cpm_disk.py` using `tools/ctools/` (or `CTOOLS`/`CFORMAT`).
 
 ## Working Style
 
@@ -319,8 +348,9 @@ reported. Before declaring done, confirm in your reply:
 ## Reference
 
 This is a Commodore 64 / Commodore 128 / Plus/4 / Apple IIe / Commander X16 /
-Atari 8-bit / Acorn BBC Master 128 6502/65C02 assembly project built with Kick
-Assembler and tested with VICE, MAME, and `x16emu` headless harnesses.
+Atari 8-bit / Acorn BBC Master 128 / CP/M 2.2 (Z80) assembly project built with
+Kick Assembler (`core/`) and `sjasmplus` (`core/z80/`) and tested with VICE,
+MAME, `x16emu`, and `cpm_runner`/`RunCPM` headless harnesses.
 
 Primary entry points:
 
@@ -331,10 +361,12 @@ Primary entry points:
 - `platforms/cx16/main.s`
 - `platforms/atari8/main.s`
 - `platforms/bbcmaster/main.s`
+- `platforms/z80/cpm/main.asm`
 
 Source layout:
 
-- `core/`: platform-agnostic gameplay, UI, data, and shared logic.
+- `core/`: platform-agnostic 6502/65C02 gameplay, UI, data, and shared logic.
+- `core/z80/`: platform-agnostic Z80 gameplay, UI, and catalog logic.
 - `platforms/commodore/hal/`: shared Commodore HAL interfaces.
 - `platforms/commodore/common/`: shared Commodore implementation code.
 - `platforms/commodore/c64/`: C64 platform code, tests, and harness scripts.
@@ -349,20 +381,20 @@ Source layout:
   harness scripts, and memory-contract checker.
 - `platforms/bbcmaster/`: Acorn BBC Master 128 platform code, MAME harness
   scripts, and memory-contract checker.
+- `platforms/z80/cpm/`: CP/M 2.2 Z80 HAL, 19 overlays, `cpm_runner` / `RunCPM`
+  harness, and memory-contract checker.
 - `build/`: generated binaries, disk images, symbols, snapshots, and test
   scratch output.
 
 Build and test (run from the repository root):
 
 - `make` or `make build`: build C64, C128, Plus/4, Apple IIe, CX16, Atari
-  8-bit, and BBC Master 128 payloads
+  8-bit, BBC Master 128, and CP/M 2.2 Z80 payloads
 - `make test`: default regression mix, including the full C128 suite
-  (`make test128`); also runs the Apple IIe MAME runtime
-  suite when `A2ROMS` is set, the Commander X16 `x16emu` runtime suite when
-  `X16EMU`/`X16ROM` are available, the Atari 8-bit MAME runtime suite when
-  `ATARI8ROMS` is set, and the BBC Master 128 MAME runtime suite when
-  `BBCMROMS` is set. `make -j7 -O test` runs its seven isolated platform
-  stages in parallel after one shared build
+  (`make test128`), `test-stage-cpm` (CP/M contract + `cpm_runner`/`RunCPM`
+  runtime), and MAME/`x16emu` stages when `A2ROMS`, `X16EMU`/`X16ROM`,
+  `ATARI8ROMS`, and `BBCMROMS` are set. `make -j8 -O test` runs its eight
+  isolated platform stages in parallel after `test-prebuild`
 - `make test64`: C64 tests
 - `make testplus4`: Plus/4 tests
 - `make test128-fast`: stable C128 unit batch
@@ -374,25 +406,33 @@ Build and test (run from the repository root):
 - `make testcx16`: Commander X16 memory-contract gate + `x16emu` runtime suite
 - `make testatari8`: Atari 8-bit memory-contract gate + MAME runtime suite
 - `make testbbcmaster`: BBC Master 128 memory-contract gate + MAME runtime suite
+- `make buildcpm`: build `MORIA8.COM`, 19 overlays, and `'M8CP'` `MORIA8.DAT`
+- `make diskcpm`: package `moria8-cpm.zip`, Kaypro 4 `.dsk`, and C128 `.d71`
+- `make testcpm-memory-contract`: CP/M static + built memory-contract gate
+- `make testcpm` (`testcpm-runtime`, `testcpm-smoke`): CP/M memory-contract
+  gate + `cpm_runner` / `RunCPM` 26-scenario runtime suite
 - `make disk`: build shipping C64, C128, Plus/4, Apple IIe, CX16, Atari
-  8-bit, and BBC Master 128 packages
+  8-bit, BBC Master 128, and CP/M 2.2 Z80 packages
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
 - `make runapple2`: launch under MAME apple2ee (requires `A2ROMS`)
 - `make runcx16`: launch under `x16emu`
 - `make runatari8`: launch under MAME a800xl (requires `ATARI8ROMS`)
 - `make runbbcmaster`: launch under MAME bbcm (requires `BBCMROMS`)
+- `make runcpm`: launch `MORIA8.COM` under `tools/cpm_runner`
 - `make clean`: remove build artifacts
 
-Kick Assembler downloads into `tools/kickass/` unless the `KICKASS` env var is
-set.
+Kick Assembler downloads into `tools/kickass/` unless `KICKASS` is set;
+`sjasmplus`, `RunCPM`, and `ctools`/`cformat` download/build into `tools/`
+unless `SJASMPLUS`, `RUNCPM`, `CTOOLS`, and `CFORMAT` are supplied.
 
 Architecture notes:
 
-- Display is character-cell based (PETSCII screen codes; the Apple IIe
-  translates to Apple display codes at write time; the Atari 8-bit and BBC
-  Master 128 ports build a 1 KB C64-screen-code-ordered RAM font at boot).
+- Display is character-cell based (PETSCII screen codes on Commodore; the Apple
+  IIe translates to Apple display codes at write time; Atari 8-bit and BBC
+  Master 128 build a 1 KB C64-screen-code-ordered RAM font at boot; CP/M 2.2
+  Z80 outputs ASCII cells with ANSI SGR 16-color escapes or `/M` monochrome).
 - C64, Plus/4, and Atari 8-bit gameplay are 40-column. C128, Apple IIe,
-  Commander X16, and BBC Master 128 gameplay are 80-column.
+  Commander X16, BBC Master 128, and CP/M 2.2 Z80 gameplay are 80-column.
 - BASIC is used for the loader stub only; do not rely on BASIC routines after
   machine-code startup. KERNAL routines are allowed where appropriate.
 - Preserve intentional disk-loading and memory-ownership boundaries.

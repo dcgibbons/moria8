@@ -837,7 +837,7 @@ def format_audit_report(creatures: list[dict], audit: dict) -> str:
         f"  9. VMS 5-rate speed (-1..+3) collapsed to 3 rates: speed=-1 ({len(audit['speed_collapsed_very_slow'])}): {audit['speed_collapsed_very_slow']}; speed=+3 ({len(audit['speed_collapsed_very_fast'])})",
         f" 10. Random-only movers (cmove has random bits without CM_MOVE_NORMAL 0x02, so CF_ATTACK_ONLY=0 lets Moria8 pathfind on non-random rolls): {audit['random_only_movers']}",
         f" 11. Duplicate moria8_name via ALIASES['Large Grey Snake']: {audit['duplicate_alias_names']} (#46 DL3 & #57 DL4 both named 'Large Green Snake' in catalog_names.s)",
-        f" 12. CM_INVISIBLE (0x10000): {len(audit['cm_invisible_species'])} species; NOTE cr_mflags $02 is CF_UNDEAD in core/monster.s:147, whereas cr_cdefense bit 7 ($80) is unused!",
+        f" 12. CM_INVISIBLE (0x10000): {len(audit['cm_invisible_species'])} species; NOTE cr_mflags $02 is CF_UNDEAD in core/6502/monster.s:147, whereas cr_cdefense bit 7 ($80) is unused!",
         f" 13. Extended cmove counts: CM_PHASE={len(audit['cm_phase_species'])}, CM_EATS_OTHER={len(audit['cm_eats_other_species'])}, CM_PICKS_UP={len(audit['cm_picks_up_species'])}, unused_0x80={audit['cm_unused_bit_species']}",
     ]
     return "\n".join(lines)

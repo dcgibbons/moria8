@@ -42,39 +42,39 @@ test_finish:
 #define TRAP_TRIGGER_EXTERNAL
 #define ITEM_SPAWN_EXTERNAL
 #define PICK_ITEM_TYPE_EXTERNAL
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL              // not exercised here; frees room below MAP_BASE
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL   // player item commands never run here
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
 // ui_status.s is not imported: these tests never render the status line and
 // its ~1 KB would push the test body past MAP_BASE (assert at the end).
 // status_draw is its only referenced entry point.
 status_mark_dirty:
 status_draw:
     rts
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segment TestCreateOverlay
 // stat_display.s: its callers (status line, character sheet, creation) never
 // run here, and the second ring hand (2026-11-08) left the body 7 bytes over.
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/stat_display.s"
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
-#import "../../../../core/huffman.s"
+#import "../../../../core/6502/huffman.s"
 // Park the jam handler (player command; never called by monster tests) in
 // the $D000 test overlay so the body stays below MAP_BASE.
 #define CMD_JAM_SEGMENT_CUSTOM
@@ -84,19 +84,19 @@ player_create:
 .macro CmdJamRestoreSegment() {
     .segment Default
 }
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/monster_ai.s"
-#import "../../../../core/recall.s"
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/6502/monster_ai.s"
+#import "../../../../core/6502/recall.s"
+#import "../../../../core/6502/monster_magic.s"
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 hal_item_cat_read_byte:
     brk
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 // The resistance armour roll and its suffixes are not exercised here (no
 // item spawns): parked in the $D000 I/O hole so no symbol shares an address
 // with KERNAL ROM.
@@ -114,29 +114,29 @@ hal_item_cat_read_byte:
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
 .segment TestCreateOverlay
-#import "../../../../core/player_items.s"
+#import "../../../../core/6502/player_items.s"
 .segment Default
-#import "../../../../core/spell_data.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/player_magic.s"
 .segment TestUnusedEgoArmour
-#import "../../../../core/trap_trigger_cold.s"
-#import "../../../../core/player_chargen_cold.s"
-#import "../../../../core/item_spawn_cold.s"
-#import "../../../../core/pick_item_type_cold.s"
-#import "../../../../core/item_actions_overlay.s"
+#import "../../../../core/6502/trap_trigger_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
+#import "../../../../core/6502/item_spawn_cold.s"
+#import "../../../../core/6502/pick_item_type_cold.s"
+#import "../../../../core/6502/item_actions_overlay.s"
 .segment Default
 #import "../dungeon_render.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/combat.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 eff_fear_timer: .byte 0
 monster_attack_player:
 player_update_hunger_state:
@@ -199,7 +199,7 @@ ui_inv_select_display:
 ui_equip_display:
 ui_char_display:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

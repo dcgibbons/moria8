@@ -43,7 +43,7 @@ PLATFORM_FILES = {
 }
 
 COMMON_ALIAS_FILE = ROOT / "platforms/commodore/common/bank_port_consts.s"
-COMMON_HUFFMAN_FILE = ROOT / "core/huffman.s"
+COMMON_HUFFMAN_FILE = ROOT / "core/6502/huffman.s"
 FORBIDDEN_COMMON_TOKENS = (
     "#if",
     "$30",
@@ -91,7 +91,7 @@ def main() -> int:
             and "HAL_HUFFMAN_PRINT_USES_CACHED_MSG" not in huffman_text):
         errors.append("huffman.s: common decoder does not consume hal_huffman_print_uses_cached_msg")
 
-    dungeon_los_text = (ROOT / "core/dungeon_los.s").read_text(
+    dungeon_los_text = (ROOT / "core/6502/dungeon_los.s").read_text(
         encoding="utf-8", errors="replace"
     )
     if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", dungeon_los_text):

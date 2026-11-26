@@ -1293,7 +1293,7 @@ class LightTest(unittest.TestCase):
 
     def test_a_heal_saying_you_feel_better_is_no_cure_for_poison(self) -> None:
         """Build queue, 2026-11-10: "You feel better." is both the poison's
-        end and a 5-14 HP heal (core/player_heal_feedback.s); poisoned
+        end and a 5-14 HP heal (core/6502/player_heal_feedback.s); poisoned
         characters drank Cure Light Wounds, took themselves for cured and
         died holding potions."""
         brain = Brain(GOALS["reach_dl8"])
@@ -3959,11 +3959,11 @@ class ResistFireTest(unittest.TestCase):
         brain.extra[INVULNERABILITY] = 0
         brain.heroic_until = o.step + 25
         self.assertIsNone(brain.balrog_fight(o, view))                 # close in: no Word of Recall
-        self.assertEqual(INVULNERABLE, "You feel invulnerable.")   # core/eff_item_extended.s ee_msg_invuln
+        self.assertEqual(INVULNERABLE, "You feel invulnerable.")   # core/6502/eff_item_extended.s ee_msg_invuln
 
     def test_rings_of_increase_damage_and_to_hit_are_worth_wearing_for_a_fighter(self) -> None:
         """708f3df's full item list: Rings of Increase Damage and To-Hit
-        (core/player_recalc_equipment.s) were worth nothing to the bot and
+        (core/6502/player_recalc_equipment.s) were worth nothing to the bot and
         never worn. A fighter values them by the bonus; a Mage does not."""
         warrior = self.warrior()
         self.assertGreater(warrior.jewel_value("Ring of Increase Damage (+6)"), warrior.jewel_value("Ring of Strength (+2)"))
@@ -6002,7 +6002,7 @@ class GearTest(unittest.TestCase):
     def test_a_weak_character_buys_a_weapon_it_can_swing(self) -> None:
         """M5b round 16: a Human Priest (ST 10) bought by damage alone; a
         Two-Handed Sword (20 lb) over STR x 15 costs 3 to-hit a point
-        (core/combat.s), and it hit DL1 Kobolds 42% of the time."""
+        (core/6502/combat.s), and it hit DL1 Kobolds 42% of the time."""
         brain = Brain(GOALS["reach_dl8"])
         o = self.store(brain, 2, [("Mace", 130), ("Two-Handed Sword", 230)], 900)
         o.rows[22] = "ST:10  IN: 9  WI:16  DX:10  CO:12  CH:12"
@@ -8734,7 +8734,7 @@ class RunSeedsTest(unittest.TestCase):
 
 
 class PrayerTest(unittest.TestCase):
-    """M5b: the cast layer through the game's own prompts (core/player_magic.s)."""
+    """M5b: the cast layer through the game's own prompts (core/6502/player_magic.s)."""
 
     PRIEST = {23: "HP:6/14  MP:6/6   AC:4  AU:32    Full"}
 
@@ -9704,7 +9704,7 @@ class FightOddsTest(unittest.TestCase):
 
     def test_class_and_race_set_the_melee_skill(self) -> None:
         """M5b: a Priest's melee skill is 48 + 2 a level (a Warrior's 70 + 4),
-        and the race adds its own (core/tables.s); the Warrior's skill made a
+        and the race adds its own (core/6502/tables.s); the Warrior's skill made a
         level-1 Priest take on DL1 Kobolds it lost to."""
         from moria_playtest import goals
         o = self.obs(14, 1, "15")
@@ -9864,7 +9864,7 @@ class CharacterTest(unittest.TestCase):
         import re
         from moria_playtest import goals
         from moria_playtest.launch import ROOT
-        text = (ROOT / "core/tables.s").read_text().split("race_class_flags:", 1)[1]
+        text = (ROOT / "core/6502/tables.s").read_text().split("race_class_flags:", 1)[1]
         masks = [int(m, 2) for m in re.findall(r"\.byte\s+%([01]+)", text)[:8]]
         self.assertEqual(masks, list(goals.RACE_CLASS_FLAGS.values()))
         self.assertEqual(len(goals.CHARACTERS), 31)
@@ -10069,7 +10069,7 @@ class StatRollTest(unittest.TestCase):
         self.assertEqual(key, KEY_RETURN)   # the cap takes what is shown
 
     def test_every_character_can_pass(self) -> None:
-        # The game's roll (core/player_create.s): d3+d4+d5+5 a stat, totals
+        # The game's roll (core/6502/player_create.s): d3+d4+d5+5 a stat, totals
         # 73-84; the race's adjustment is on the screen. Every race/class the
         # game allows must pass at least 1 roll in 30 on average.
         import random

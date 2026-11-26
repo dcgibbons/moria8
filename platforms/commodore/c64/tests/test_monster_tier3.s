@@ -32,7 +32,7 @@ test_finish:
 
 .pc = * "Test Body"
 
-// core/monster.s values (this suite links no code)
+// core/6502/monster.s values (this suite links no code)
 .const T3_ATK_NORMAL     = 1
 .const T3_CF_ATTACK_ONLY = $01
 .const T3_CR_MAX_HP      = $80

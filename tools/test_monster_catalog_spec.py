@@ -253,8 +253,8 @@ class TestMonsterCatalogSpec(unittest.TestCase):
             self.assertEqual(bit_set, bool(c["cdefense"] & evc.VMS_CD_UNDEAD))
 
     def test_core_monster_and_recall_defs_constants_match_spec(self) -> None:
-        monster_s = (REPO_ROOT / "core" / "monster.s").read_text(encoding="utf-8")
-        recall_defs_s = (REPO_ROOT / "core" / "recall_defs.s").read_text(encoding="utf-8")
+        monster_s = (REPO_ROOT / "core" / "6502" / "monster.s").read_text(encoding="utf-8")
+        recall_defs_s = (REPO_ROOT / "core" / "6502" / "recall_defs.s").read_text(encoding="utf-8")
         consts = {
             m.group(1): (int(m.group(2)[1:], 16) if m.group(2).startswith("$") else int(m.group(2)))
             for m in re.finditer(r"^\.const\s+(\w+)\s*=\s*(\$[0-9A-Fa-f]+|\d+)", monster_s, re.M)

@@ -21,7 +21,7 @@
 #define STORAGE_STATUS_HELPER
 #define BYPASS_SLOT_PROMPT
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../hal/storage_policy.s"
 #import "../../../shared/item_catalog/item_ids.s"
 
@@ -55,7 +55,7 @@
 .const hal_memory_bank_no_kernal = $35
 .const hal_memory_bank_no_roms   = $34
 
-// Huffman string IDs from core/huffman_data.s (verified by exact values)
+// Huffman string IDs from core/6502/huffman_data.s (verified by exact values)
 .const HSTR_SAVE_SAVING          = 184
 .const HSTR_SAVE_DONE            = 185
 .const HSTR_SAVE_LOADING         = 186
@@ -316,7 +316,7 @@ t_read_cmd_status:
     sta (zp_ptr0),y
 }
 
-#import "../../../../core/runtime_ui_strings.s"
+#import "../../../../core/6502/runtime_ui_strings.s"
 #import "../../../shared/save.s"
 #import "../../common/disk_swap.s"
 

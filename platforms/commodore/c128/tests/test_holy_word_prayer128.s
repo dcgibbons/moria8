@@ -69,30 +69,30 @@ itn_17:
 itok_detect_monsters:
     .text "Detect Monsters" ; .byte 0
 
-#import "../../../../core/huffman_data.s"
-#import "../../../../core/input_contract.s"
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/huffman_data.s"
+#import "../../../../core/6502/input_contract.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/spell_names.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/spell_effects_overlay.s"
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/spell_names.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/spell_effects_overlay.s"
+#import "../../../../core/6502/player_magic.s"
 // WoD devastation engine is not exercised by this suite; route the
 // destroy-area target to a stub.
 #define PMX_DESTROY_AREA_EXTERNAL
-#import "../../../../core/player_magic_utility.s"
+#import "../../../../core/6502/player_magic_utility.s"
 #undef PMX_DESTROY_AREA_EXTERNAL
 tramp_eff_destroy_area:
     rts
@@ -249,7 +249,7 @@ eff_remove_fear:
     sta eff_fear_timer
     rts
 
-// player_calc_stats as production runs it (core/player.s): the base copied to
+// player_calc_stats as production runs it (core/6502/player.s): the base copied to
 // the current stats, and the ZP mirrors refreshed from them (2026-11-11).
 player_calc_stats:
     ldx #0
@@ -301,7 +301,7 @@ monster_get_ptr:
     rts
 
 monster_find_at:
-    sta zp_temp0                // A = x, Y = y, as core/monster.s monster_find_at
+    sta zp_temp0                // A = x, Y = y, as core/6502/monster.s monster_find_at
     sty zp_temp1
     ldx #0
 !mfa_loop:

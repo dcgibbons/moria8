@@ -2,7 +2,7 @@
 // test_wrapper_irq128.s — verify representative C128 KERNAL wrappers
 // preserve the caller IRQ state and restore MMU/runtime invariants.
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 

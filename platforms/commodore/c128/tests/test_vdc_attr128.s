@@ -4,7 +4,7 @@
 // Verifies that attribute writes keep bit 7 set (alternate charset mode),
 // which is required for the expected mixed-case/screen-code glyph mapping.
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../screen_vdc.s"
 
 .const COL_WHITE = 1

@@ -23,7 +23,7 @@ class Port:
     resource_args: tuple[str, ...]
     rom_env: tuple[tuple[str, str], ...]   # (environment variable, VICE option)
     required_roms: tuple[str, ...]         # rom_env variables a session refuses to run without
-    consts: dict[str, tuple[str, int]]     # port-owned .const values (abi.CONSTS)
+    consts: dict[str, tuple[str, int] | tuple[str, int, str]]     # port-owned .const values (abi.CONSTS)
     labels: dict[str, str]                 # port-owned labels' defining files (abi.LABELS)
     kernal: dict[str, int]    # KERNAL addresses, fixed by the ROM, not the game
     cycles_per_second: int    # the CPU clock a snapshot's MAINCPU counts
@@ -91,6 +91,9 @@ class Port:
     key_wait_end: str = ""    # the label just past input_get_key: the taps' PC window ends there
     screen_decoder: str = ""
     symbols: str = "main.vs"  # in build/<out>/
+    base_labels: dict[str, str] | None = None
+    base_consts: dict[str, tuple[str, int] | tuple[str, int, str]] | None = None
+    zp_aliases: tuple[tuple[str, int, str], ...] = ()
 
     @property
     def platform(self) -> str:
@@ -477,6 +480,147 @@ CX16_CART = replace(CX16, name="cx16-cart", source="cx16", out="cx16-cart", disk
                     disk_target="buildcx16", cartridge="moria8-cx16.crt",
                     labels={**CX16.labels, "cx16_preload_banks": "platforms/cx16/overlay_storage.s"})
 
+CPM = Port(
+    name="cpm", emulator="cpm_runner", out="cpm", program="MORIA8.COM", disk="cpm",
+    disk_target="diskcpm cpm-runner", disk_files={}, resource_args=(), rom_env=(), required_roms=(),
+    consts={
+        "MAP_BASE": ("platforms/z80/cpm/memory.inc", 0x9D00),
+        "SCREEN_RAM": ("platforms/z80/cpm/memory.inc", 0x8E00, "CPM_CHAR_SHADOW_BASE"),
+        "COLOR_RAM": ("platforms/z80/cpm/memory.inc", 0x9580, "CPM_COLOR_SHADOW_BASE"),
+        **{name: (file, value, sym) for name, file, value, sym in (
+            ("hal_layout_map_cols", "platforms/z80/cpm/memory.inc", 198, "MAP_COLS"),
+            ("hal_layout_map_rows", "platforms/z80/cpm/memory.inc", 66, "MAP_ROWS"),
+            ("hal_layout_viewport_x", "core/z80/defs.inc", 1, "VIEWPORT_X"),
+            ("hal_layout_viewport_y", "core/z80/defs.inc", 2, "VIEWPORT_Y"),
+            ("hal_layout_viewport_w", "core/z80/defs.inc", 78, "VIEW_COLS"),
+            ("hal_layout_viewport_h", "core/z80/defs.inc", 18, "VIEW_ROWS"),
+            ("hal_layout_status_row", "core/z80/defs.inc", 21, "STATUS_ROW0"),
+            ("hal_layout_screen_rows", "platforms/z80/cpm/memory.inc", 24, "SCREEN_ROWS"),
+            ("hal_layout_input_row", "core/z80/defs.inc", 20, "INPUT_ROW"),
+        )},
+    },
+    labels={
+        "input_get_key": "platforms/z80/cpm/hal/input_csi.asm",
+        "game_loop_cmd_ret": "core/z80/game_loop.asm",
+        "game_loop_run_dir_ret": "core/z80/game_loop.asm",
+    },
+    kernal={},
+    cycles_per_second=4_000_000,
+    crash_entries=(),
+    rom_status="",
+    screen_bank="ram",
+    screen_const="SCREEN_RAM",
+    screen_cols=80,
+    map_bank="ram",
+    color_bank="ram",
+    color_const="COLOR_RAM",
+    color_table="",
+    color_mask=0x0F,
+    snapshots=False,
+    backend="cpm",
+    symbols="main.sym",
+    base_labels={
+        "player_data": "core/z80/state.inc",
+        "monster_table": "core/z80/state.inc",
+        "cr_level": "core/z80/state.inc",
+        "store_door_x": "core/z80/viewport.asm",
+        "store_door_y": "core/z80/viewport.asm",
+        "z80_state": "core/z80/state.inc",
+        "abi_current_overlay": "core/z80/state.inc",
+        "abi_rng_seed": "core/z80/state.inc",
+        "abi_entropy_poll": "core/z80/state.inc",
+        "abi_turn": "core/z80/state.inc",
+        "abi_game_flags": "core/z80/state.inc",
+        "abi_player_x": "core/z80/state.inc",
+        "abi_player_y": "core/z80/state.inc",
+        "abi_player_dlvl": "core/z80/state.inc",
+        "abi_player_lvl": "core/z80/state.inc",
+        "abi_player_hp": "core/z80/state.inc",
+        "abi_player_mhp": "core/z80/state.inc",
+        "abi_player_mp": "core/z80/state.inc",
+        "abi_player_mmp": "core/z80/state.inc",
+        "abi_hunger_state": "core/z80/state.inc",
+        "abi_mon_count": "core/z80/state.inc",
+        "abi_item_count": "core/z80/state.inc",
+        "abi_view_x": "core/z80/state.inc",
+        "abi_view_y": "core/z80/state.inc",
+        "abi_light_rad": "core/z80/state.inc",
+        "zp_eff_resist": "core/z80/state.inc",
+        "eff_resist_cold_timer": "core/z80/state.inc",
+        "stack_canary": "core/z80/state.inc",
+        "cpm_char_shadow": "core/z80/state.inc",
+        "cpm_color_shadow": "core/z80/state.inc",
+    },
+    base_consts={
+        "GAME_FLAG_OVER": ("core/z80/defs.inc", 0x01),
+        "GAME_FLAG_WIZARD": ("core/z80/defs.inc", 0x02),
+        "GAME_FLAG_WINNER": ("core/z80/defs.inc", 0x04),
+        "STORE_COUNT": ("core/z80/defs.inc", 8),
+        "PL_RACE": ("core/z80/defs.inc", 17),
+        "PL_CLASS": ("core/z80/defs.inc", 18),
+        "PL_LEVEL": ("core/z80/defs.inc", 19),
+        "PL_DLEVEL": ("core/z80/defs.inc", 20),
+        "PL_HP_LO": ("core/z80/defs.inc", 33),
+        "PL_MHP_LO": ("core/z80/defs.inc", 35),
+        "PL_MANA": ("core/z80/defs.inc", 37),
+        "PL_MAX_MANA": ("core/z80/defs.inc", 38),
+        "PL_AC": ("core/z80/defs.inc", 39),
+        "PL_GOLD_0": ("core/z80/defs.inc", 43),
+        "PL_XP_0": ("core/z80/defs.inc", 46),
+        "PL_MAP_X": ("core/z80/defs.inc", 49),
+        "PL_MAP_Y": ("core/z80/defs.inc", 50),
+        "PL_FOOD_LO": ("core/z80/defs.inc", 51),
+        "PL_LIGHT_RAD": ("core/z80/defs.inc", 55),
+        "PL_MAX_DLVL": ("core/z80/defs.inc", 56),
+        "PL_WEIGHT": ("core/z80/defs.inc", 59),
+        "PL_STRUCT_SIZE": ("core/z80/defs.inc", 114),
+        "MAX_MONSTERS": ("core/z80/defs.inc", 32),
+        "CATALOG_DUNGEON_CREATURES": ("core/z80/defs.inc", 32, "MAX_DUNGEON_CREATURES"),
+        "MAX_TOWN_CREATURES": ("core/z80/defs.inc", 8),
+        "MONSTER_ENTRY_SIZE": ("core/z80/defs.inc", 12),
+        "EMPTY_SLOT": ("core/z80/defs.inc", 0xFF),
+        "MX_X": ("core/z80/defs.inc", 0),
+        "MX_Y": ("core/z80/defs.inc", 1),
+        "MX_TYPE": ("core/z80/defs.inc", 2),
+        "MX_HP_LO": ("core/z80/defs.inc", 3),
+        "MX_FLAGS": ("core/z80/defs.inc", 5),
+        "MF_VISIBLE": ("core/z80/defs.inc", 0x08),
+        "MF_DETECTED": ("core/z80/defs.inc", 0x10),
+        "TILE_TYPE_MASK": ("core/z80/defs.inc", 0xF0),
+        "TILE_FLOOR": ("core/z80/defs.inc", 0x00),
+        "TILE_DOOR_OPEN": ("core/z80/defs.inc", 0x70),
+        "TILE_DOOR_CLOSED": ("core/z80/defs.inc", 0x80),
+        "TILE_STAIRS_DN": ("core/z80/defs.inc", 0x90),
+        "TILE_STAIRS_UP": ("core/z80/defs.inc", 0xA0),
+        "TILE_SECRET": ("core/z80/defs.inc", 0xF0),
+        "FLAG_OCCUPIED": ("core/z80/defs.inc", 0x01),
+        "FLAG_VISITED": ("core/z80/defs.inc", 0x04),
+        "FLAG_LIT": ("core/z80/defs.inc", 0x08),
+    },
+    zp_aliases=(
+        ("zp_rng_0", 0x08, "abi_rng_seed"),
+        ("zp_entropy", 0x0C, "abi_entropy_poll"),
+        ("zp_turn_lo", 0x10, "abi_turn"),
+        ("zp_game_flags", 0x12, "abi_game_flags"),
+        ("zp_player_x", 0x13, "abi_player_x"),
+        ("zp_player_y", 0x14, "abi_player_y"),
+        ("zp_player_dlvl", 0x15, "abi_player_dlvl"),
+        ("zp_player_lvl", 0x16, "abi_player_lvl"),
+        ("zp_player_hp_lo", 0x17, "abi_player_hp"),
+        ("zp_player_mhp_lo", 0x19, "abi_player_mhp"),
+        ("zp_player_mp", 0x1B, "abi_player_mp"),
+        ("zp_player_mmp", 0x1C, "abi_player_mmp"),
+        ("zp_hunger_state", 0x1D, "abi_hunger_state"),
+        ("zp_mon_count", 0x1E, "abi_mon_count"),
+        ("zp_item_count", 0x1F, "abi_item_count"),
+        ("zp_view_x", 0x20, "abi_view_x"),
+        ("zp_view_y", 0x21, "abi_view_y"),
+        ("zp_light_radius", 0x22, "abi_light_rad"),
+        ("zp_eff_resist", 0x40, "zp_eff_resist"),
+        ("eff_resist_cold_timer", 0x41, "eff_resist_cold_timer"),
+    ),
+)
+
 PORTS: dict[str, Port] = {port.name: port for port in
                           (C64, C64_NOREU, C64_CART, PLUS4, PLUS4_CART, C128, C128_CART, APPLE2, ATARI8,
-                           ATARI8_CART, BBCMASTER, CX16, CX16_CART)}
+                           ATARI8_CART, BBCMASTER, CX16, CX16_CART, CPM)}

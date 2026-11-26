@@ -1082,3 +1082,70 @@ audit call sites of `rng_range` where the upstream oracle uses
 `randint(n)` with n > 255 (or products like `(hp+1)*80`) and convert the
 ones where fidelity matters. Started from the door-bash design discussion
 (2026-09-02).
+
+## Cross-Platform UI & QoL
+
+### Port the 5 CP/M-originated UI/QoL features cleanly across all 8 ports
+
+During M2–M5 development of the CP/M 2.2 Z80 port, five UI/QoL additions were
+built in Z80 overlays ahead of the 7 6502 ports. They were reverted from CP/M
+Z80 (2026-11-24) to restore strict 100% UI/behavior parity with the 6502 ports,
+with full design notes and exact Z80 reference implementations preserved in
+`docs/CROSS_PLATFORM_UI_QOL_DESIGN.md`:
+
+1. **Race Selection Bonus Reference Table** (`ST..CH`, `HD`, `XP%`, `Infra` on
+   `Choose your race`, with 40-col preview layout vs 80-col table).
+2. **Age / Height / Weight Generation & Expanded Character Sheet** (`Curr`/`Base`
+   stats, `Title`, `Blows`/`ToHit`/`ToDam`, `Burden`, active `Flags`, `Age`/
+   `Height`/`Weight` — requires explicit parity decision on whether `PL_WEIGHT`
+   feeds `player_weight_limit` or stays purely aesthetic across all 8 ports).
+3. **Inventory, Equipment, & Home Weight/Burden Displays** (`Burden: X/Y lb`,
+   per-item `N.N lb` column on 80-col screens, Home `Wt: X/Y lb`).
+4. **`Ctrl+P` Message History Viewer** (overlay-hosted viewer reading the
+   existing 8-line `msg_history` ring buffer across resident & aux/banked RAM).
+5. **Help Map Terrain & Item/Creature Symbol Legend Page** (add as Help Page
+   3/3 without displacing existing 40-col/80-col command bindings).
+
+Required work:
+
+- Make the `PL_WEIGHT` weight-limit and 40-col layout design decisions in
+  `docs/CROSS_PLATFORM_UI_QOL_DESIGN.md`, verifying overlay/resident headroom
+  across all 8 ports (especially C64/C128 `UiOverlay`, `StartupOverlay`, and
+  `HelpOverlay`) and updating `docs/FEATURE_MAP.md`.
+- Implement each feature simultaneously in shared `core/6502/` and `core/z80/`
+  + `platforms/z80/cpm/` (preserving exact parity across all 8 ports and 5
+  cartridges) and cover each with per-port smoke/playtest checks.
+
+Acceptance target:
+
+- All 8 hardware ports and 5 cartridges expose identical UX (modulo documented
+  40-col vs 80-col wrapping/pagination), pass `make test`, and pass
+  `make playtest-gate`.
+
+## Shared 6502 Core
+
+### Bug: 6502 Mass Genocide ignores 20-tile MAX_SIGHT range cap
+
+`core/6502/scroll_effects_p3.s:511-513` sets `lda #20 : sta zp_los_step` before
+`jsr mm_los_clear_to_target` intending VMS Moria's `MAX_SIGHT = 20` cap, but
+`core/6502/los_trace.s:60-67` immediately overwrites `zp_los_step` with
+`max(|dx|, |dy|)` before stepping. As a result, Mass Genocide kills any
+non-Balrog monster in unobstructed LOS at any distance across all seven 6502
+ports (whereas CP/M Z80 `platforms/z80/cpm/ovl_spell_eff.asm:1300-1308`
+enforces `<= 20` Chebyshev distance before `los_check`).
+
+Required work:
+
+- Enforce a `<= 20` Chebyshev distance check (`max(|mx - px|, |my - py|) <= 20`)
+  in `core/6502/scroll_effects_p3.s` before calling `mm_los_clear_to_target`
+  (and remove the dead `lda #20 : sta zp_los_step` store), verifying overlay
+  headroom across all seven 6502 ports (C64, C128, Plus/4, Apple IIe, CX16,
+  Atari 8-bit, BBC Master 128) and five cartridges.
+- Add a 6502 unit/runtime test verifying Mass Genocide removes a non-Balrog
+  monster in LOS at distance 20 and spares one in LOS at distance 21 (matching
+  `platforms/z80/cpm/harness_smoke.py`).
+
+Acceptance target:
+
+- Mass Genocide enforces the `<= 20` tile LOS cap identically across all 8
+  ports and 5 cartridges, and `make test` + `make playtest-gate` pass.

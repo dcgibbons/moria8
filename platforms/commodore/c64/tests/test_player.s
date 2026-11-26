@@ -10,19 +10,19 @@
 
 .pc = $0810 "Test Code"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/player.s"
-#import "../../../../core/player_recalc_equipment.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/player_recalc_equipment.s"
 
 piw_equip:    .byte 0
 tp_base_hit:  .byte 0
@@ -32,7 +32,7 @@ tramp_ego_get_ac_bonus:
     lda #0
     rts
 
-// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// As core/6502/ui_messages.s (not imported here): hal_screen_put_string with A/Y
 // = pointer
 screen_put_string_ay:
     sta zp_ptr0

@@ -23,7 +23,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CHECK_INPUT = REPO_ROOT / 'data' / 'huffman_strings.txt'
-DEFAULT_CHECK_OUTPUT = REPO_ROOT / 'core' / 'huffman_data.s'
+DEFAULT_CHECK_OUTPUT = REPO_ROOT / 'core' / '6502' / 'huffman_data.s'
 
 
 def ascii_to_screencode(ch):
@@ -341,7 +341,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Huffman encoder for C64 Moria')
     parser.add_argument('input', nargs='?', help='Input text file (one string per line)')
     parser.add_argument('-o', '--output', default=None,
-                        help='Output assembly file (default: huffman_data.s, or core/huffman_data.s with --check)')
+                        help='Output assembly file (default: huffman_data.s, or core/6502/huffman_data.s with --check)')
     parser.add_argument('--check', action='store_true',
                         help='Verify output assembly file matches input text without writing')
     args = parser.parse_args(argv)
@@ -361,7 +361,7 @@ def main(argv=None):
         if actual != expected:
             print(
                 f'FAIL huff_encoder --check: {out_path} is out of sync with {in_path} '
-                f'(run: python3 tools/huff_encoder.py data/huffman_strings.txt -o core/huffman_data.s)',
+                f'(run: python3 tools/huff_encoder.py data/huffman_strings.txt -o core/6502/huffman_data.s)',
                 file=sys.stderr,
             )
             return 1

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Static linter forbidding raw numeric item IDs in assembly, Python, and shell tests.
 
-Scans core/**/*.s, platforms/**/*.{s,py,sh} (excluding generated item_catalog and
+Scans core/6502/**/*.s, platforms/**/*.{s,py,sh} (excluding generated item_catalog and
 monster catalog payloads), playtest/**/*.py, and tools/check_wizard_doc.py for:
   - Raw numeric item IDs stored into inv_item_id, fi_item_id, si_item_id,
     fi_add_id, piw_item_id, icat_sel_lo, and related item-ID holders
@@ -1018,7 +1018,7 @@ def iter_target_files(root: Path, paths: list[Path]) -> list[Path]:
                     if sub.is_file() and sub.suffix in (".s", ".py", ".sh"):
                         candidates.append(sub)
     else:
-        for d in ("core", "platforms", "playtest"):
+        for d in ("core/6502", "platforms", "playtest"):
             base = root / d
             if base.is_dir():
                 for sub in sorted(base.rglob("*")):
@@ -1040,6 +1040,8 @@ def iter_target_files(root: Path, paths: list[Path]) -> list[Path]:
         except ValueError:
             rel = p.as_posix()
         if rel.startswith("build/") or "/build/" in rel or "/__pycache__/" in rel:
+            continue
+        if rel.startswith("core/z80/") or "/core/z80/" in rel:
             continue
         if rel in EXCLUDED_S_REL or any(rel.endswith("/" + ex) for ex in EXCLUDED_S_REL):
             continue
@@ -1289,7 +1291,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAILED: {len(findings)} raw numeric item ID violation(s) found.", file=sys.stderr)
         return 1
 
-    scope = ", ".join(str(p) for p in args.paths) if args.paths else "core, platforms, playtest, tools"
+    scope = ", ".join(str(p) for p in args.paths) if args.paths else "core/6502, platforms, playtest, tools"
     print(f"check_raw_item_ids PASSED: 0 raw numeric item IDs across {scope}.")
     return 0
 

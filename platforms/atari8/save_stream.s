@@ -1,6 +1,6 @@
 #importonce
 // save_stream.s — Atari 8-bit buffered DOS 2.5 sector stream & storage HAL
-// implementation for platforms/shared/save.s and core/score_io.s.
+// implementation for platforms/shared/save.s and core/6502/score_io.s.
 //
 // Linked below $4000 so all sector reads/writes route directly through
 // EnterSio / ExitSio while preserving caller A, X, Y, and core ZP ($02-$8F).
@@ -9,7 +9,7 @@
 #import "storage.s"
 #import "hal/hal_contract.s"
 #import "hal/storage_policy.s"
-#import "../../core/storage_status.s"
+#import "../../core/6502/storage_status.s"
 
 // ============================================================
 // HAL Storage Symbol Exports

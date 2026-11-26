@@ -23,7 +23,7 @@
 .const CREATURE_END     = $c8ff
 .const PLATFORM_TIER_NAME_POOL_BASE = $d800
 .const PLATFORM_TIER_NAME_POOL_END  = $dfff
-// The monster catalog splits the $D800-$DFFF hidden span (core/monster_catalog.s,
+// The monster catalog splits the $D800-$DFFF hidden span (core/6502/monster_catalog.s,
 // common/catalog_fetch.s; maintainer, 2026-11-05):
 //   $D800-$DBFF (1,024 B): CATALOG_NAME_POOL — 32 active species names x 32 B
 //   $DC00-$DCFF   (256 B): CATALOG_HIDDEN — level index & record-sector table

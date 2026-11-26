@@ -1,7 +1,7 @@
 #importonce
 // test_config128.s — C128 config contract smoke test
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 
 mmu_common_map_read_ptr0: rts
 mmu_common_map_write_ptr0: rts

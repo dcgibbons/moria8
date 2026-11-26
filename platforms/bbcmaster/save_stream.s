@@ -1,6 +1,6 @@
 #importonce
 // save_stream.s — BBC Master 128 Acorn DFS buffered byte-stream backend &
-// storage HAL implementation (< $3000) for platforms/shared/save.s and core/score_io.s.
+// storage HAL implementation (< $3000) for platforms/shared/save.s and core/6502/score_io.s.
 //
 // Authority: docs/BBCMASTER_MEMORY_CONTRACT.md.
 // Linked below $3000 so all DFS file operations route through EnterMos / ExitMos
@@ -10,7 +10,7 @@
 #import "storage.s"
 #import "hal/hal_contract.s"
 #import "hal/storage_policy.s"
-#import "../../core/storage_status.s"
+#import "../../core/6502/storage_status.s"
 
 // ============================================================
 // HAL Storage Symbol Exports

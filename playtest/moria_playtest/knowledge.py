@@ -29,7 +29,7 @@ CATALOG_PORTS = {"cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
 CATALOG_DIR = ROOT / "platforms/shared/catalog"
 CATALOG_FLAG = "#define HAL_PLATFORM_MONSTER_CATALOG"
 _catalog_dir: Path | None = None
-MONSTER_ATTACK = ROOT / "core/monster_attack.s"
+MONSTER_ATTACK = ROOT / "core/6502/monster_attack.s"
 TIER_LINE = re.compile(r"^//\s+\d+: \[\s*\d+\] DL\s*(\d+) (.+?)\s*$")
 TIER_TABLE = re.compile(r"^tier\d+_cr_(\w+):\n((?:[ \t]*\.byte[^\n]*\n)+)", re.M)
 CF_ATTACK_ONLY = 0x01   # cr_mflags: moves only to attack (tools/parse_creatures.py)
@@ -38,9 +38,9 @@ SPEED_SLOW = 0
 SPEED_NORMAL = 1
 SPEED_MASK = 0x03         # cr_speed bits 3-5 hold random-move flags (MON-013)
 RANDOM_MASK = 0x38
-ATK_TYPE_MASK = 0x7F      # cr_atk*_type bit 7 holds ADESC verb bit 0 (core/monster_attack.s)
+ATK_TYPE_MASK = 0x7F      # cr_atk*_type bit 7 holds ADESC verb bit 0 (core/6502/monster_attack.s)
 ATK_SIDES_MASK = 0x0F     # cr_atk*_sides bits 4-7 hold ADESC verb bits 1-4
-ATK_BLANK = 99            # core/monster.s: blank / repelled attack slot
+ATK_BLANK = 99            # core/6502/monster.s: blank / repelled attack slot
 
 
 def use_port(name: str) -> None:
@@ -49,7 +49,7 @@ def use_port(name: str) -> None:
     the tiers."""
     global _catalog_dir
     policy = CATALOG_PORTS.get(name)
-    catalog = CATALOG_DIR if policy and CATALOG_FLAG in policy.read_text() else None
+    catalog = CATALOG_DIR if (name == "cpm" or (policy and CATALOG_FLAG in policy.read_text())) else None
     if catalog != _catalog_dir:
         _catalog_dir = catalog
         for value in list(globals().values()):
@@ -234,7 +234,7 @@ def attack_tohit() -> list[int]:
 
 
 SPELL_WOUND_LIGHT, SPELL_BREATH, SPELL_WOUND_SERIOUS = 0x01, 0x02, 0x40   # cr_spell_flags (mm_spell_handlers)
-# cr_spell_chance (core/monster.s MS_*): the 1-in-N cast frequency in bits 0-3,
+# cr_spell_chance (core/6502/monster.s MS_*): the 1-in-N cast frequency in bits 0-3,
 # the breath element in bits 4-6 (all five: 6), Hold Person in bit 7.
 SPELL_FREQ_MASK = 0x0F
 BREATH_ELEMENTS = {1: "lightning", 2: "gas", 3: "acid", 4: "frost", 5: "fire"}
@@ -346,7 +346,7 @@ def spell_rate() -> dict[tuple[str, int], float]:
 def spell_max(depth: int) -> int:
     """Most damage one spell can do from a shipped caster native to ``depth``
     or shallower: Cause Light Wounds 3d8, Cause Serious Wounds 8d8, breath
-    (``breath_damage``; ``core/monster_magic.s``)."""
+    (``breath_damage``; ``core/6502/monster_magic.s``)."""
     most = 0
     for _, tables in _tiers():
         for level, flags, chance, num, sides in zip(tables["level"], tables["spell_flags"], tables["spell_chance"],
@@ -375,7 +375,7 @@ def ranged_kinds() -> frozenset[tuple[str, int]]:
                      if chance)
 
 
-ATK_PARALYZE = 11   # core/monster.s: the paralysing touch or gaze (mon_atk_effect_paralyze)
+ATK_PARALYZE = 11   # core/6502/monster.s: the paralysing touch or gaze (mon_atk_effect_paralyze)
 ATK_POISON = 14     # ... and the poisoning one
 ATK_LOSE_EXP = 19   # ... and the experience-draining one (mae_lose_exp, 2% a touch)
 
@@ -543,7 +543,7 @@ def slow_kinds() -> frozenset[tuple[str, int]]:
     return frozenset(kind for kind, slow in by_kind.items() if all(slow))
 
 
-CF_BREEDER = 0x40   # cr_mflags: multiplies (core/monster.s; Umoria CM_MULTIPLY)
+CF_BREEDER = 0x40   # cr_mflags: multiplies (core/6502/monster.s; Umoria CM_MULTIPLY)
 
 
 @lru_cache(maxsize=1)
@@ -555,7 +555,7 @@ def breeder_kinds() -> frozenset[tuple[str, int]]:
                      if flags & CF_BREEDER)
 
 
-CF_EVIL = 0x04   # cr_mflags: evil (core/monster.s; VMS cdefense $0004): Dispel Evil hurts it
+CF_EVIL = 0x04   # cr_mflags: evil (core/6502/monster.s; VMS cdefense $0004): Dispel Evil hurts it
 
 
 @lru_cache(maxsize=1)
@@ -574,7 +574,7 @@ def evil_kinds() -> frozenset[tuple[str, int]]:
                      if flags & CF_EVIL)
 
 
-CF_UNDEAD = 0x02   # cr_mflags: undead (core/monster.s; VMS cdefense $0008): Drain Life passes it by
+CF_UNDEAD = 0x02   # cr_mflags: undead (core/6502/monster.s; VMS cdefense $0008): Drain Life passes it by
 
 
 @lru_cache(maxsize=1)
@@ -593,14 +593,14 @@ def undead_kinds() -> frozenset[tuple[str, int]]:
                      if flags & CF_UNDEAD)
 
 
-MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0}   # a turn's moves by speed code (core/monster_ai.s)
+MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0}   # a turn's moves by speed code (core/6502/monster_ai.s)
 
 
 @lru_cache(maxsize=1)
 def moves() -> dict[tuple[str, int], float]:
     """(screen glyph, creature level) -> moves (so rounds of attacks) a
     player turn, of the fastest shipped creature drawn that way at that
-    level: a fast one acts twice (core/monster_ai.s)."""
+    level: a fast one acts twice (core/6502/monster_ai.s)."""
     out: dict[tuple[str, int], float] = {}
     for _, tables in _tiers():
         for code, level, speed in zip(tables["display"], tables["level"], tables["speed"]):
@@ -741,7 +741,7 @@ def attacker(messages: str) -> str | None:
     return match.group(1) if match else None
 
 
-CD_INVISIBLE = 0x80   # cdefense bit 7: VMS CM_INVISIBLE (core/monster.s)
+CD_INVISIBLE = 0x80   # cdefense bit 7: VMS CM_INVISIBLE (core/6502/monster.s)
 
 
 @lru_cache(maxsize=1)
@@ -761,7 +761,7 @@ def blow(messages: str) -> bool:
                for m in _attack_pattern().finditer(messages))
 
 
-GAME_TABLES = ROOT / "core/tables.s"
+GAME_TABLES = ROOT / "core/6502/tables.s"
 STAT_NAMES = ("STR", "INT", "WIS", "DEX", "CON", "CHR")   # stat table order
 
 
@@ -782,13 +782,13 @@ def _signed_rows(text: str, label: str) -> list[tuple[int, ...]]:
 @lru_cache(maxsize=1)
 def stat_adjustments() -> tuple[list[tuple[int, ...]], list[tuple[int, ...]]]:
     """Race and class stat adjustments (STR, INT, WIS, DEX, CON, CHR), in
-    race and class table order: the manual's tables, from core/tables.s."""
+    race and class table order: the manual's tables, from core/6502/tables.s."""
     text = GAME_TABLES.read_text()
     return _signed_rows(text, "race_stat_adj"), _signed_rows(text, "class_stat_adj")
 
 
-SPELL_NAMES = ROOT / "core/spell_names.s"
-SPELL_CLASS_DATA = ROOT / "core/spell_class_data.s"
+SPELL_NAMES = ROOT / "core/6502/spell_names.s"
+SPELL_CLASS_DATA = ROOT / "core/6502/spell_class_data.s"
 NAME_LINE = re.compile(r'^(msn|psn)_(\d+):\s*\.text "([^"]+)"', re.M)
 NAME_ALIAS = re.compile(r"^\.label (msn|psn)_(\d+) = (\w+)", re.M)
 LABEL_TEXT = re.compile(r'^(\w+):\s*\n?\s*\.text "([^"]+)"', re.M)
@@ -798,8 +798,8 @@ SPELL_LIST = {"mage": "msn", "rogue": "msn", "ranger": "msn", "priest": "psn", "
 @lru_cache(maxsize=None)
 def spells(klass: str) -> dict[str, int]:
     """Spell or prayer name -> the character level ``klass`` learns it at,
-    for every one the class can learn (core/spell_names.s,
-    core/spell_class_data.s; 99 marks one it cannot)."""
+    for every one the class can learn (core/6502/spell_names.s,
+    core/6502/spell_class_data.s; 99 marks one it cannot)."""
     if klass not in SPELL_LIST:
         return {}
     text = SPELL_NAMES.read_text()

@@ -2,7 +2,7 @@
 """Keep the item docs in step with the item catalog.
 
 docs/WIZARD.md: the ID range it quotes (the wizard's ``ITEM 0-N`` prompt,
-which core/wizard.s derives from ITEM_TYPE_COUNT) is ``0-(ITEM_TYPE_COUNT-1)``,
+which core/6502/wizard.s derives from ITEM_TYPE_COUNT) is ``0-(ITEM_TYPE_COUNT-1)``,
 and its Item IDs table has one row per item, named as the game shows it.
 The names come from the C64 item-description test's ``ein_<id>`` table, which
 the test checks against the production formatter for every item.
@@ -10,14 +10,14 @@ the test checks against the production formatter for every item.
 docs/FEATURE_MAP.md: the Moria8 master item table (section 8.3.1) has a row
 for every item ID and its heading counts them.
 
-Both ``core/item_defs.s`` (``ITEM_TYPE_COUNT = 361``) and
+Both ``core/6502/item_defs.s`` (``ITEM_TYPE_COUNT = 361``) and
 ``platforms/commodore/c64/tests/test_item_desc.s`` (``ein_0..ein_360``)
 implement the full ``361``-item catalog defined in
 ``platforms/shared/item_catalog/item_catalog_spec.json`` (``0..360``). When
 ``item_catalog_spec.json`` is present, ``main()`` verifies that
-``core/item_defs.s``, ``test_item_desc.s``, ``docs/WIZARD.md``, and
+``core/6502/item_defs.s``, ``test_item_desc.s``, ``docs/WIZARD.md``, and
 ``docs/FEATURE_MAP.md`` section 8.3.1 all match those ``361`` items exactly;
-otherwise it falls back to ``check()`` directly against ``core/item_defs.s``
+otherwise it falls back to ``check()`` directly against ``core/6502/item_defs.s``
 and ``test_item_desc.s``.
 
 An item added without its doc rows fails here, naming the IDs (maintainer,
@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ITEM_DEFS = ROOT / "core" / "item_defs.s"
+ITEM_DEFS = ROOT / "core" / "6502" / "item_defs.s"
 NAMES = ROOT / "platforms" / "commodore" / "c64" / "tests" / "test_item_desc.s"
 SPEC = ROOT / "platforms" / "shared" / "item_catalog" / "item_catalog_spec.json"
 WIZARD = ROOT / "docs" / "WIZARD.md"
@@ -51,7 +51,7 @@ MASTER_HEADING = re.compile(r"All (\d+) Item Templates, IDs `0\.\.(\d+)`")
 def item_count(defs: str) -> int:
     match = COUNT.search(defs)
     if match is None:
-        raise SystemExit("check_wizard_doc: no ITEM_TYPE_COUNT in core/item_defs.s")
+        raise SystemExit("check_wizard_doc: no ITEM_TYPE_COUNT in core/6502/item_defs.s")
     return int(match.group(1))
 
 
@@ -155,7 +155,7 @@ def main(argv: list[str]) -> int:
         errors: list[str] = []
         if core_count != spec_count:
             errors.append(
-                f"core/item_defs.s: ITEM_TYPE_COUNT is {core_count}, "
+                f"core/6502/item_defs.s: ITEM_TYPE_COUNT is {core_count}, "
                 f"item_catalog_spec.json has {spec_count}"
             )
         for idx in range(spec_count):

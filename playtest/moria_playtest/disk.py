@@ -76,7 +76,7 @@ SAVE_PREFIX = "the.game"   # slot files (platforms/commodore/*/hal/storage.s)
 DISK_SEED = 1003   # a seed whose Human Warrior reaches DL2 quickly (any seed works)
 
 
-# core/player.s player_sync_from_zp: zero-page label -> (PL_ constant, byte)
+# core/6502/player.s player_sync_from_zp: zero-page label -> (PL_ constant, byte)
 ZP_PLAYER_FIELDS = (
     ("zp_player_x", ("PL_MAP_X", 0)), ("zp_player_y", ("PL_MAP_Y", 0)),
     ("zp_player_hp_lo", ("PL_HP_LO", 0)), ("zp_player_hp_hi", ("PL_HP_LO", 1)),

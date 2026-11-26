@@ -8,15 +8,15 @@
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../hal/layout.s"
 #import "../hal/lifecycle_policy.s"
 #import "../../common/mmu_macros.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/dungeon_data.s"
 
 .const PL_MAP_X = 49
 .const PL_MAP_Y = 50
@@ -55,8 +55,8 @@ mmu_safe_db_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-#import "../../../../core/dungeon_features.s"
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/dungeon_features.s"
+#import "../../../../core/6502/special_rooms.s"
 
 tramp_assign_special_room:
     jmp assign_special_room
@@ -64,7 +64,7 @@ tramp_assign_special_room:
 tramp_vault_seal_entrance:
     jmp vault_seal_entrance
 
-#import "../../../../core/dungeon_gen.s"
+#import "../../../../core/6502/dungeon_gen.s"
 
 test_seed_idx: .byte 0
 audit_door_x: .byte 0

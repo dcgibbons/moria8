@@ -22,7 +22,7 @@ CHECKS = (
         ),
     ),
     (
-        ROOT / "core" / "dungeon_data.s",
+        ROOT / "core" / "6502" / "dungeon_data.s",
         (
             "C64_MAP_COLS",
             "C64_MAP_ROWS",
@@ -42,7 +42,7 @@ CHECKS = (
         ),
     ),
     (
-        ROOT / "core" / "player_items.s",
+        ROOT / "core" / "6502" / "player_items.s",
         (
             "c64_install_ram_irq_vectors",
             "C64_PRODUCT_OVERLAY_RUNTIME",

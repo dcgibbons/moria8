@@ -2,7 +2,7 @@
 // save_stream.s — Buffered byte-stream backend for the shared save engine.
 //
 // Implements the KERNAL-shaped storage primitives consumed by
-// platforms/shared/save.s and core/score_io.s (SAVE_SETNAM..SAVE_READST
+// platforms/shared/save.s and core/6502/score_io.s (SAVE_SETNAM..SAVE_READST
 // aliases) on top of the ProDOS 8 MLI helpers in storage_mli.s. ProDOS files
 // are byte-addressable, so the stream is a permanent, ordinary buffered
 // design: one open MLI ref_num, a 256-byte staging buffer in main RAM,

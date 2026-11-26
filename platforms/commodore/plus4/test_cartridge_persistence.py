@@ -71,8 +71,8 @@ def create_character(exp: Experiment) -> None:
 
 
 def snapshot(exp: Experiment) -> dict[str, bytes]:
-    player = catalog_disk.consts(ROOT / "core/player.s")
-    slots = catalog_disk.consts(ROOT / "core/item_defs.s")["TOTAL_INV_SLOTS"]
+    player = catalog_disk.consts(ROOT / "core/6502/player.s")
+    slots = catalog_disk.consts(ROOT / "core/6502/item_defs.s")["TOTAL_INV_SLOTS"]
     ram = exp.memory(0x0400, 0xFC00)
 
     def span(address: int, size: int) -> bytes:

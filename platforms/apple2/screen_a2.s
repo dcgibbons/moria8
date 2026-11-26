@@ -10,7 +10,7 @@
 // most 40 bytes per half-row can never touch the firmware/ProDOS screen
 // holes at $x78-$x7F.
 //
-// Colorless policy: set_color records the logical color (core/color.s IDs)
+// Colorless policy: set_color records the logical color (core/6502/color.s IDs)
 // and nothing else; inverse video is reserved for the title reverse-space
 // attribute. Display codes come from a2_char_map (C64 screen code -> Apple):
 //   sc $00-$1F -> (sc+$40)|$80   ('@', A-Z, ...)
@@ -341,7 +341,7 @@ screen_set_color:
     sta zp_text_color
     rts
 
-#import "../../../core/numeric_format.s"
+#import "../../../core/6502/numeric_format.s"
 
 // screen_flash_at — Briefly flash '*' at (X = row, Y = column), then restore
 // Used by bolt animation in spell_effects.s.

@@ -85,7 +85,7 @@
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL
 // The win creature's placement lives in the $F000 runtime: call it through
-// tramp_catalog_place_win (ROMs out). Defined here, before core/monster.s is
+// tramp_catalog_place_win (ROMs out). Defined here, before core/6502/monster.s is
 // assembled: defined only in monster_catalog64.s, after it, monster_spawn_level
 // called $F000 with the KERNAL in and ran KERNAL bytes; at $F124 they were
 // LSR $A044, which zeroed save_magic's version byte and every later save

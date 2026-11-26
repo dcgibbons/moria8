@@ -10,7 +10,7 @@ from collections import deque
 
 from .game import Game
 
-# Mirrors walkable_table in core/player_move.s (tile type = high nibble).
+# Mirrors walkable_table in core/6502/player_move.s (tile type = high nibble).
 WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xB, 0xE}
 TYPE_DOOR_OPEN = 0x7
 TYPE_DOOR_CLOSED = 0x8

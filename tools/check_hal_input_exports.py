@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON_DIR = ROOT / "core"
+COMMON_DIR = ROOT / "core/6502"
 
 PLATFORM_FILES = {
     "c64": ROOT / "platforms/commodore/c64/input.s",
@@ -111,7 +111,7 @@ def helper_policy_violations() -> list[str]:
     if ("hal_input_help_footer_uses_esc_stop" not in help_text
             and "HAL_INPUT_HELP_FOOTER_USES_ESC_STOP" not in help_text):
         errors.append(
-            "core/ui_help.s does not consume hal_input_help_footer_uses_esc_stop"
+            "core/6502/ui_help.s does not consume hal_input_help_footer_uses_esc_stop"
         )
     return errors
 

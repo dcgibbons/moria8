@@ -34,9 +34,11 @@ CANONICAL_PORTS = (
     "cx16",
     "atari8",
     "bbcmaster",
+    "cpm",
 )
 
 SYM_LINE_RE = re.compile(r"^\s*\.label\s+([A-Za-z0-9_]+)\s*=\s*\$([0-9a-fA-F]+)\b")
+SYM_SJASM_RE = re.compile(r"^\s*([A-Za-z_@.][A-Za-z0-9_@.]*):\s*EQU\s+(?:0x|\$)([0-9a-fA-F]+)\b")
 VS_LINE_RE = re.compile(r"^\s*al\s+(?:[A-Za-z]:)?([0-9a-fA-F]+)\s+\.([A-Za-z0-9_]+)\b")
 TMP_RUN_SEG_RE = re.compile(r"tmp/run\.[^/]+/")
 MKTEMP_SUFFIX_RE = re.compile(r"\.[A-Za-z0-9_]{6}(?=/|$)")
@@ -141,9 +143,9 @@ def display_path(path: Path, anchor: Path = REPO_ROOT) -> str:
 def parse_sym_text(text: str) -> dict[str, int]:
     labels: dict[str, int] = {}
     for line in text.splitlines():
-        m = SYM_LINE_RE.match(line)
+        m = SYM_LINE_RE.match(line) or SYM_SJASM_RE.match(line)
         if m:
-            labels[m.group(1)] = int(m.group(2), 16)
+            labels[m.group(1).lstrip("@")] = int(m.group(2), 16)
     return labels
 
 
@@ -676,6 +678,36 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
         beeb_specs.append(SegmentSpec(fname, "overlay", 0xA800, 0xC000, end_sym=sym_name, prg_file=fname, note=ovl_note))
     specs[("bbcmaster", "disk")] = beeb_specs
 
+    # CP/M 2.2 Z80 (52 KB TPA)
+    cpm_overlays = (
+        "ovl_start.ovl",
+        "ovl_town.ovl",
+        "ovl_death.ovl",
+        "ovl_gen.ovl",
+        "ovl_help.ovl",
+        "ovl_ui.ovl",
+        "ovl_items.ovl",
+        "ovl_spell.ovl",
+        "ovl_modal.ovl",
+        "ovl_chest.ovl",
+        "ovl_home.ovl",
+        "ovl_storage.ovl",
+        "ovl_title.ovl",
+        "ovl_legal.ovl",
+        "ovl_items_eff.ovl",
+        "ovl_spell_eff.ovl",
+        "ovl_actions.ovl",
+        "ovl_mon_ext.ovl",
+        "ovl_item_mgt.ovl",
+    )
+    cpm_specs = [
+        SegmentSpec("Resident (MORIA8.COM)", "resident", 0x0100, 0x5600, end_sym="resident_end", prg_file="MORIA8.COM", measure="raw_bin", note="52 KB TPA resident <= OVL_WINDOW_BASE (0x5600)"),
+        SegmentSpec("Resident BSS", "aux", 0x6A00, 0x8C00, end_sym="bss_end", measure="sym", note="0x6A00-0x8BFF BSS <= stack canary (0x8C00)"),
+    ]
+    for fname in cpm_overlays:
+        cpm_specs.append(SegmentSpec(fname, "overlay", 0x5600, 0x6A00, prg_file=fname, measure="raw_bin", note="5,120 B overlay window (0x5600-0x69FF)"))
+    specs[("cpm", "disk")] = cpm_specs
+
     return specs
 
 
@@ -999,6 +1031,30 @@ def collect_bank_summaries(port: str, variant: str, build_dir: Path, syms: dict[
             free_units=0,
             note=f"Banks 4/5/6/7 = 64/64 each; BeebLynneAux active ({lynne_used:,}/1,152 B used, {lynne_free:,} B free)",
         ))
+    elif port == "cpm":
+        dat_path = build_dir / "MORIA8.DAT"
+        if dat_path.is_file():
+            try:
+                dat = dat_path.read_bytes()
+                if len(dat) >= 256 and dat[:4] == b"M8CP":
+                    entry_count = dat[5]
+                    populated = 0
+                    for idx in range(min(entry_count, 41)):
+                        _srec, rcnt, blen = struct.unpack_from("<HHH", dat, 6 + idx * 6)
+                        if rcnt > 0 and blen > 0:
+                            populated += 1
+                    out.append(BankSummary(
+                        port=port,
+                        variant=variant,
+                        name="MORIA8.DAT ('M8CP' TOC)",
+                        used_units=populated,
+                        total_units=41,
+                        unit_label="TOC slots",
+                        free_units=max(0, 41 - entry_count),
+                        note=f"{len(dat):,} B ({len(dat) // 128} x 128 B recs; {populated}/{entry_count} active slots)",
+                    ))
+            except OSError:
+                pass
     return out
 
 
@@ -1186,6 +1242,102 @@ def parse_bbc_ssd(path: Path, port: str = "bbcmaster") -> MediaBudget:
     )
 
 
+def _parse_kaypro_dsk(
+    path: Path, port: str, *, expected_size: int, block_size: int, total_blocks: int, unit_label: str, label: str
+) -> MediaBudget:
+    data = path.read_bytes()
+    if len(data) != expected_size:
+        raise ValueError(f"Unexpected {label} image size {len(data)} in {path.name}")
+    dir_off = 5120
+    max_blk = total_blocks - 1
+    used_blocks: set[int] = set()
+    files: set[tuple[int, str, str]] = set()
+    entries_used = 0
+    for idx in range(64):
+        ent = data[dir_off + idx * 32 : dir_off + (idx + 1) * 32]
+        if ent[0] == 0xE5:
+            continue
+        entries_used += 1
+        name = bytes(b & 0x7F for b in ent[1:9]).decode("ascii", errors="replace").rstrip(" ")
+        ext = bytes(b & 0x7F for b in ent[9:12]).decode("ascii", errors="replace").rstrip(" ")
+        files.add((ent[0], name, ext))
+        for blk in ent[16:32]:
+            if 2 <= blk <= max_blk:
+                used_blocks.add(blk)
+    used_units = 2 + len(used_blocks)
+    free_units = max(0, total_blocks - used_units)
+    return MediaBudget(
+        port=port,
+        kind="dsk",
+        path="",
+        used_units=used_units,
+        total_units=total_blocks,
+        free_units=free_units,
+        unit_label=unit_label,
+        used_bytes=used_units * block_size,
+        capacity_bytes=total_blocks * block_size,
+        free_bytes=free_units * block_size,
+        entries_used=entries_used,
+        entries_total=64,
+        note=f"{label} ({len(files)} files, {entries_used}/64 dir entries)",
+    )
+
+
+def parse_kaypro2_dsk(path: Path, port: str = "cpm") -> MediaBudget:
+    return _parse_kaypro_dsk(
+        path, port, expected_size=204800, block_size=1024, total_blocks=195, unit_label="1KB blocks", label="Kaypro II kpii"
+    )
+
+
+def parse_kaypro4_dsk(path: Path, port: str = "cpm") -> MediaBudget:
+    return _parse_kaypro_dsk(
+        path, port, expected_size=409600, block_size=2048, total_blocks=197, unit_label="2KB blocks", label="Kaypro 4 kpiv"
+    )
+
+
+C128_D71_DIR_SECTORS = (1, 2, 3, 4, 7, 8, 9, 10, 12, 13, 14, 15, 17, 18, 19, 20)
+
+
+def parse_cpm_d71(path: Path, port: str = "cpm") -> MediaBudget:
+    data = path.read_bytes()
+    if len(data) != 349696:
+        raise ValueError(f"Unexpected C128 CP/M .d71 size {len(data)} in {path.name}")
+    used_blocks: set[int] = set()
+    files: set[tuple[int, str, str]] = set()
+    entries_used = 0
+    for sec in C128_D71_DIR_SECTORS:
+        sec_bytes = data[sec * 256 : (sec + 1) * 256]
+        for i in range(8):
+            sl = sec_bytes[i * 32 : (i + 1) * 32]
+            if sl[0] == 0xE5:
+                continue
+            entries_used += 1
+            name = bytes(b & 0x7F for b in sl[1:9]).decode("ascii").rstrip(" ")
+            ext = bytes(b & 0x7F for b in sl[9:12]).decode("ascii").rstrip(" ")
+            files.add((sl[0], name, ext))
+            for blk in sl[16:32]:
+                if 2 <= blk <= 169:
+                    used_blocks.add(blk)
+    total_blocks = 170
+    used_units = 2 + len(used_blocks)
+    free_units = max(0, total_blocks - used_units)
+    return MediaBudget(
+        port=port,
+        kind="d71",
+        path="",
+        used_units=used_units,
+        total_units=total_blocks,
+        free_units=free_units,
+        unit_label="2KB blocks",
+        used_bytes=used_units * 2048,
+        capacity_bytes=total_blocks * 2048,
+        free_bytes=free_units * 2048,
+        entries_used=entries_used,
+        entries_total=128,
+        note=f"C128 CP/M Plus 1571 ({len(files)} files, {entries_used} dir entries, {free_units * 2} KB free)",
+    )
+
+
 def _read_cart_manifest_info(json_manifest: Path | None) -> tuple[int | None, int | None, int | None]:
     """Return (asset_count, asset_bytes_sum, roml_bytes_used) from a cartridge JSON manifest."""
     if not json_manifest or not json_manifest.is_file():
@@ -1356,6 +1508,10 @@ def collect_shipping_media(build_dir: Path, port_filter: str | None) -> list[Med
         ("atari8", "moria8-atari8.atr", "atr"),
         ("atari8", "moria8-atari8.car", "cart"),
         ("bbcmaster", "moria8-bbcmaster.ssd", "ssd"),
+        ("cpm", "moria8-cpm.zip", "zip"),
+        ("cpm", "moria8-cpm-kaypro2.dsk", "kp2"),
+        ("cpm", "moria8-cpm-kaypro4.dsk", "kp4"),
+        ("cpm", "moria8-cpm-c128.d71", "cpm_d71"),
     ]
     filter_port = port_filter.split("-")[0] if port_filter else None
     results: list[MediaBudget] = []
@@ -1373,6 +1529,12 @@ def collect_shipping_media(build_dir: Path, port_filter: str | None) -> list[Med
             mb = parse_atari_atr(p, port)
         elif parser_kind == "ssd":
             mb = parse_bbc_ssd(p, port)
+        elif parser_kind == "kp2":
+            mb = parse_kaypro2_dsk(p, port)
+        elif parser_kind == "kp4":
+            mb = parse_kaypro4_dsk(p, port)
+        elif parser_kind == "cpm_d71":
+            mb = parse_cpm_d71(p, port)
         elif parser_kind == "cart":
             jpath = next(
                 (
@@ -1807,6 +1969,7 @@ def collect_report(
         ("atari8", "disk"),
         ("atari8", "cart"),
         ("bbcmaster", "disk"),
+        ("cpm", "disk"),
     ]
     if port_filter:
         if "-" in port_filter:
@@ -2879,6 +3042,76 @@ class _BudgetSelfTests(unittest.TestCase):
             self.assertEqual(segs["bbcmaster"]["MONEXT (DFS)"]["used_bytes"], 2232)
             self.assertEqual(segs["bbcmaster"]["MONEXT (DFS)"]["free_bytes"], 72)
 
+    def test_cpm_port_budgets_and_media(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bdir = root / "build"
+            tdir = bdir / "test"
+            cpm = bdir / "cpm"
+            cpm.mkdir(parents=True)
+            (cpm / "main.sym").write_text("resident_end: EQU 0x00005589\nbss_end: EQU 0x00008AD5\n")
+            (cpm / "MORIA8.COM").write_bytes(b"\x00" * 21641)
+            for ovl in (
+                "ovl_start", "ovl_town", "ovl_death", "ovl_gen", "ovl_help", "ovl_ui",
+                "ovl_items", "ovl_spell", "ovl_modal", "ovl_chest", "ovl_home",
+                "ovl_storage", "ovl_title", "ovl_legal", "ovl_items_eff",
+                "ovl_spell_eff", "ovl_actions", "ovl_mon_ext", "ovl_item_mgt",
+            ):
+                (cpm / f"{ovl}.ovl").write_bytes(b"\xC9" * 1024)
+            dat_hdr = bytearray(256)
+            dat_hdr[0:4] = b"M8CP"
+            dat_hdr[4] = 1
+            dat_hdr[5] = 25
+            for idx in range(25):
+                struct.pack_into("<HHH", dat_hdr, 6 + idx * 6, 2 + idx, 1, 128)
+            (cpm / "MORIA8.DAT").write_bytes(bytes(dat_hdr) + b"\x00" * (25 * 128))
+            with zipfile.ZipFile(bdir / "moria8-cpm.zip", "w") as zf:
+                zf.writestr("MORIA8.COM", b"\x00" * 100)
+                zf.writestr("LICENSE", b"GPL\r\n")
+            kp2 = bytearray(204800)
+            kp2[5120 : 5120 + 2048] = b"\xe5" * 2048
+            kp2[5120 : 5120 + 32] = b"\x00" * 32
+            kp2[5120 : 5120 + 12] = b"\x00MORIA8  COM"
+            kp2[5120 + 15] = 48
+            kp2[5120 + 16 : 5120 + 22] = bytes([2, 3, 4, 5, 6, 7])
+            (bdir / "moria8-cpm-kaypro2.dsk").write_bytes(bytes(kp2))
+            kp4 = bytearray(409600)
+            kp4[5120 : 5120 + 4096] = b"\xe5" * 4096
+            kp4[5120 : 5120 + 32] = b"\x00" * 32
+            kp4[5120 : 5120 + 12] = b"\x00MORIA8  COM"
+            kp4[5120 + 15] = 48
+            kp4[5120 + 16 : 5120 + 20] = bytes([2, 3, 4, 0])
+            (bdir / "moria8-cpm-kaypro4.dsk").write_bytes(bytes(kp4))
+            d71 = bytearray(349696)
+            for sec in C128_D71_DIR_SECTORS:
+                d71[sec * 256 : (sec + 1) * 256] = b"\xe5" * 256
+            d71[0x0100 : 0x0120] = b"\x00" * 32
+            d71[0x0100 : 0x010C] = b"\x00LICENSE TXT"
+            d71[0x010F] = 3
+            d71[0x0110 : 0x0114] = bytes([5, 0, 0, 0])
+            d71[0x0A00 : 0x0A20] = b"\x00" * 32
+            d71[0x0A00 : 0x0A0C] = b"\x00MORIA8  COM"
+            d71[0x0A0F] = 48
+            d71[0x0A10 : 0x0A14] = bytes([2, 3, 4, 0])
+            (bdir / "moria8-cpm-c128.d71").write_bytes(bytes(d71))
+
+            rep = collect_report(bdir, tdir, port_filter="cpm")
+            self.assertEqual(len(rep["ports"]), 1)
+            segs = {s["name"]: s for s in rep["ports"][0]["segments"]}
+            banks = {b["name"]: b for b in rep["ports"][0]["banks"]}
+            media = {Path(m["path"]).name: m for m in rep["media"]}
+            self.assertEqual(segs["Resident (MORIA8.COM)"]["used_bytes"], 21641)
+            self.assertEqual(segs["Resident (MORIA8.COM)"]["free_bytes"], 119)
+            self.assertEqual(segs["Resident BSS"]["used_bytes"], 0x8AD5 - 0x6A00)
+            self.assertEqual(segs["ovl_item_mgt.ovl"]["free_bytes"], 4096)
+            self.assertEqual(banks["MORIA8.DAT ('M8CP' TOC)"]["used_units"], 25)
+            self.assertEqual(banks["MORIA8.DAT ('M8CP' TOC)"]["free_units"], 16)
+            self.assertEqual(media["moria8-cpm.zip"]["entries_used"], 2)
+            self.assertEqual(media["moria8-cpm-kaypro2.dsk"]["free_units"], 187)
+            self.assertEqual(media["moria8-cpm-kaypro4.dsk"]["free_units"], 192)
+            self.assertEqual(media["moria8-cpm-c128.d71"]["entries_used"], 2)
+            self.assertEqual(media["moria8-cpm-c128.d71"]["free_units"], 164)
+
 
 def run_selftest() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(_BudgetSelfTests)
@@ -2890,7 +3123,7 @@ def run_selftest() -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report Moria8 product, shipping media, and test variant memory budgets.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")
-    parser.add_argument("--port", default=None, help="Filter to a port (e.g. c64, c64-cart, plus4, c128, apple2, cx16, atari8, bbcmaster)")
+    parser.add_argument("--port", default=None, help="Filter to a port (e.g. c64, c64-cart, plus4, c128, apple2, cx16, atari8, bbcmaster, cpm)")
     parser.add_argument("--build-dir", type=Path, default=DEFAULT_BUILD_DIR, help="Build directory root (default: build/)")
     parser.add_argument("--test-dir", type=Path, default=None, help="Test artifact root (default: <build-dir>/test)")
     parser.add_argument("--selftest", action="store_true", help="Run synthetic parser and boundary unit tests")

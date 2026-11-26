@@ -4,13 +4,13 @@
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../hal/layout.s"
 #import "../hal/lifecycle_policy.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
 
 mmu_safe_map_read_ptr0:
     lda (zp_ptr0),y
@@ -44,12 +44,12 @@ mmu_safe_db_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/dungeon_data.s"
 
 walkable_table:
     .byte 1,0,0,0,0,0,0,1,0,1,1,1,0,0,1,0
 
-#import "../../../../core/los_trace.s"
+#import "../../../../core/6502/los_trace.s"
 
 map_set_tile:
     pha
@@ -166,9 +166,9 @@ glyph_find_at:
     clc
     rts
 
-#import "../../../../core/floor_item_page.s"
+#import "../../../../core/6502/floor_item_page.s"
 #import "../dungeon_render.s"
-#import "../../../../core/player_magic_detect_evil_effect.s"
+#import "../../../../core/6502/player_magic_detect_evil_effect.s"
 
 test_start:
     sei

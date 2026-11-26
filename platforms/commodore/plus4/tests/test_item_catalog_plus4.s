@@ -6,15 +6,15 @@
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../hal/layout.s"
 #import "../hal/lifecycle_policy.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/item_defs.s"
 
 test_start:
     sei
@@ -55,8 +55,8 @@ inv_ego:     .fill TOTAL_INV_SLOTS, 0
 fi_item_id:  .byte FI_EMPTY
 fi_meta_hi:  .byte 0
 
-#import "../../../../core/item_tables.s"
-#import "../../../../core/item_identification.s"
+#import "../../../../core/6502/item_tables.s"
+#import "../../../../core/6502/item_identification.s"
 
 // Minimal player_data & stubs for eff_potion_gain_stat verification
 .const PL_STR_BASE = 21
@@ -93,7 +93,7 @@ eff_heal_full:
     sta zp_player_hp_hi
     rts
 
-#import "../../../../core/eff_gain_stat.s"
+#import "../../../../core/6502/eff_gain_stat.s"
 
 test_main:
     jsr item_refresh_fixed_known

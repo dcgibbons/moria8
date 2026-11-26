@@ -5,7 +5,7 @@
 // can reference equipment slot indices and inventory constants.
 // Imported before player.s in the build order.
 
-#import "../platforms/shared/item_catalog/item_ids.s"
+#import "../../platforms/shared/item_catalog/item_ids.s"
 
 // Item Instance Flags
 .const IF_CURSED     = $01

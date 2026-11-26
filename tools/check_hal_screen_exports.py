@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON_DIR = ROOT / "core"
+COMMON_DIR = ROOT / "core/6502"
 
 PLATFORM_FILES = {
     "c64": ROOT / "platforms/commodore/c64/screen.s",
@@ -113,17 +113,17 @@ def common_policy_violations() -> list[str]:
             f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)} does not consume hal_screen_full_clear_uses_bulk"
         )
     if "hal_screen_box_vertical_char" not in help_text:
-        errors.append("core/ui_help.s does not consume hal_screen_box_vertical_char")
+        errors.append("core/6502/ui_help.s does not consume hal_screen_box_vertical_char")
     if "HAL_SCREEN_HELP_LINE_USES_API" not in help_text:
-        errors.append("core/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_API")
+        errors.append("core/6502/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_API")
     if "HAL_SCREEN_HELP_LINE_USES_COLOR_MAP" not in help_text:
         errors.append(
-            "core/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_COLOR_MAP"
+            "core/6502/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_COLOR_MAP"
         )
     if ("hal_screen_spell_bolt_flash_sets_color" not in spell_effects_text
             and "HAL_SCREEN_SPELL_BOLT_FLASH_SETS_COLOR" not in spell_effects_text):
         errors.append(
-            "core/spell_effects.s does not consume hal_screen_spell_bolt_flash_sets_color"
+            "core/6502/spell_effects.s does not consume hal_screen_spell_bolt_flash_sets_color"
         )
     flash_policy = re.compile(
         r"(?s)#if\s+HAL_SCREEN_SPELL_BOLT_FLASH_SETS_COLOR.*?"
@@ -134,7 +134,7 @@ def common_policy_violations() -> list[str]:
     )
     if not flash_policy.search(spell_effects_text):
         errors.append(
-            "core/spell_effects.s does not gate bolt flash color with "
+            "core/6502/spell_effects.s does not gate bolt flash color with "
             "hal_screen_spell_bolt_flash_sets_color"
         )
     c128_flash_policy = re.compile(

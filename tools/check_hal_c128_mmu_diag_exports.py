@@ -18,8 +18,8 @@ C128_MEMORY_CONSTS = ROOT / "platforms/commodore/c128/hal/memory_bank_consts.s"
 COMMON_REU = ROOT / "platforms/commodore/common/reu.s"
 # The preload transaction traps moved from common/reu.s to c128/preload128.s.
 C128_PRELOAD = ROOT / "platforms/commodore/c128/preload128.s"
-COMMON_ITEM_ACTIONS = ROOT / "core/item_actions_overlay.s"
-COMMON_PLAYER_ITEMS = ROOT / "core/player_items.s"
+COMMON_ITEM_ACTIONS = ROOT / "core/6502/item_actions_overlay.s"
+COMMON_PLAYER_ITEMS = ROOT / "core/6502/player_items.s"
 FORBIDDEN_COMMON_TOKENS = ("$ff00", "$d501")
 
 

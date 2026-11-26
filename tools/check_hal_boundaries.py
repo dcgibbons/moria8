@@ -64,6 +64,8 @@ def find_violations(root: Path) -> set[Finding]:
         if any(part in DEFAULT_SKIP_NAMES for part in source.parts):
             continue
         rel = source.as_posix()
+        if rel.startswith("core/z80/") or "/core/z80/" in rel:
+            continue
         for raw_line in source.read_text(encoding="utf-8", errors="replace").splitlines():
             line = strip_comment(raw_line)
             for rule_name, pattern in RULES:
@@ -100,13 +102,13 @@ def write_baseline(path: Path, findings: set[Finding]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", default="core", type=Path)
+    parser.add_argument("--root", default="core/6502", type=Path)
     parser.add_argument("--baseline", default="docs/hal_boundary_allowlist.txt", type=Path)
     parser.add_argument("--write-baseline", action="store_true")
     args = parser.parse_args()
 
     findings = find_violations(args.root)
-    if args.root == Path("core"):
+    if args.root == Path("core/6502"):
         for shared_dir in SHARED_TARGET_CONDITIONAL_DIRS:
             if not shared_dir.exists():
                 continue

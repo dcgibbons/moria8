@@ -566,7 +566,7 @@ screen_set_color:
     sta zp_text_color
     rts
 
-#import "../../core/numeric_format.s"
+#import "../../core/6502/numeric_format.s"
 
 // screen_flash_at — Briefly flash inverse-video '*' ($AA) at (X = row, Y = col).
 screen_flash_at:

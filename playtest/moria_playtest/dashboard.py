@@ -347,7 +347,7 @@ def trace_tail(trace: Path, count: int) -> list[dict[str, Any]]:
     return rows
 
 
-# The Phase 4 traps' messages (core/trap_trigger_cold.s, huffman DF_DART_HITS):
+# The Phase 4 traps' messages (core/6502/trap_trigger_cold.s, huffman DF_DART_HITS):
 # unnamed, their deaths were "unknown" (2026-11-16: 10 of 45 on 3e9fd0c).
 TRAP_MESSAGES = {"A trap door opens!": "trap: trap door", "A blade hits you!": "trap: blade",
                  "Flames hit you!": "trap: fire", "Acid hits you!": "trap: acid", "A dart hits you!": "trap: dart"}
@@ -386,7 +386,7 @@ def death(trace: Path) -> dict[str, Any]:
         cause = "poison"
     elif not found and any(word in (last.get("states") or "") + (last.get("status") or "")
                            for word in ("Weak", "Faint")):
-        # Starving prints no message; the tombstone says "Starvation" (core/
+        # Starving prints no message; the tombstone says "Starvation" (core/6502/
         # score.s). Recorded as "unknown" until 2026-11-10: Apple IIe, BBC
         # and CX16 build-queue characters lost on no-way-up levels.
         cause = "starvation"

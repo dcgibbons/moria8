@@ -2,7 +2,7 @@
 // vic_palette_consts.s — Apple IIe logical color constants.
 //
 // The Apple IIe text screen is colorless; these are logical IDs consumed by
-// core/color.s. screen_a2.s records the logical color and maps only the
+// core/6502/color.s. screen_a2.s records the logical color and maps only the
 // title reverse-space attribute to inverse video. Values match the Commodore
 // palette so shared color logic is unchanged.
 

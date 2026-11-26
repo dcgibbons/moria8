@@ -9,7 +9,7 @@
 // does; the overlay IDs as platforms/commodore/common/overlay.s numbers them.
 #define HAL_PLATFORM_PLAYER_MAGIC_RESTORE_BEFORE_RETURN
 .const OVL_NONE = 0
-.const MONS_LEVEL_MAX = 40       // core/monster.s (Polymorph Other's roll)
+.const MONS_LEVEL_MAX = 40       // core/6502/monster.s (Polymorph Other's roll)
 .const OVL_DEATH = 3
 .const OVL_UI = 6
 .const OVL_SPELL = 8
@@ -76,29 +76,29 @@ itn_17:
 itok_detect_monsters:
     .text "Detect Monsters" ; .byte 0
 
-#import "../../../../core/huffman_data.s"
-#import "../../../../core/input_contract.s"
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/huffman_data.s"
+#import "../../../../core/6502/input_contract.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/spell_names.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/spell_effects_overlay.s"
-#import "../../../../core/player_magic.s"
-#import "../../../../core/player_magic_slow_runtime.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/spell_names.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/spell_effects_overlay.s"
+#import "../../../../core/6502/player_magic.s"
+#import "../../../../core/6502/player_magic_slow_runtime.s"
 #define PMX_DETECT_EFFECTS_EXTERNAL
-#import "../../../../core/player_magic_execute_overlay.s"
+#import "../../../../core/6502/player_magic_execute_overlay.s"
 #undef PMX_DETECT_EFFECTS_EXTERNAL
 
 .pc = $0801 "BASIC Stub"
@@ -194,7 +194,7 @@ viewport_update:
 render_viewport:
 status_draw:
 msg_clear:
-msg_print_ay:                       // as core/ui_messages.s: A/Y = pointer
+msg_print_ay:                       // as core/6502/ui_messages.s: A/Y = pointer
     sta zp_ptr0
     sty zp_ptr0_hi
 msg_print:
@@ -290,7 +290,7 @@ los_is_visible:
 inv_remove_item:
     rts
 
-// Polymorph Other (core/monster_polymorph.s) links these; genocide never runs it.
+// Polymorph Other (core/6502/monster_polymorph.s) links these; genocide never runs it.
 pick_any_creature_type:
 pick_creature_type:
     lda #1
@@ -326,7 +326,7 @@ test_rng_range:
     rts
 
 monster_find_at:
-    sta zp_temp0                // A = x, Y = y, as core/monster.s monster_find_at
+    sta zp_temp0                // A = x, Y = y, as core/6502/monster.s monster_find_at
     sty zp_temp1
     ldx #0
 !mfa_loop:

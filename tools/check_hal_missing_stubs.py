@@ -13,7 +13,7 @@ CONTRACTS = [
     "hal_input.s",
     "hal_sound.s",
 ]
-STUB_FILE = ROOT / "core" / "hal_missing_service_stubs.s"
+STUB_FILE = ROOT / "core" / "6502" / "hal_missing_service_stubs.s"
 
 
 def required_exports(path):

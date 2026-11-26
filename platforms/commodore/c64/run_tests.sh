@@ -42,7 +42,7 @@ java() {
             symdir_args=(-symbolfiledir "$TMPDIR")
         fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core/6502" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
     else
         command java "$@"
     fi
@@ -1296,7 +1296,7 @@ run_scripted_spell_list_overlay_smoke() {
 }
 
 # Kills one of each of the first 16 monster types only (c64_test_dungeon_spell_goal,
-# core/game_loop.s): all of them ran past the 30-second rule.
+# core/6502/game_loop.s): all of them ran past the 30-second rule.
 run_scripted_dungeon_target_spell_smoke() {
     local name="scripted_dungeon_target_spell_smoke"
     echo -n "  $name: "
@@ -2713,7 +2713,7 @@ run_exchange_product_smoke() {
     if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
             KICKASS="$KICKASS" \
             OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_EXCHANGE_PRODUCT" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_EXCHANGE_PRODUCT" \
             build64 >"$build_log" 2>&1; then
         echo "FAIL (product build)"
         tail -80 "$build_log"
@@ -2811,7 +2811,7 @@ run_chest_open_product_smoke() {
     if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
             KICKASS="$KICKASS" \
             OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
             build64 >"$build_log" 2>&1; then
         echo "FAIL (product build)"
         tail -80 "$build_log"
@@ -2901,7 +2901,7 @@ run_chest_open_product_reu_smoke() {
     if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
             KICKASS="$KICKASS" \
             OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
             build64 >"$build_log" 2>&1; then
         echo "FAIL (product build)"
         tail -80 "$build_log"
@@ -3003,7 +3003,7 @@ run_chest_open_product_genfail_smoke() {
     if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
             KICKASS="$KICKASS" \
             OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
             build64 >"$build_log" 2>&1; then
         echo "FAIL (product build)"
         tail -80 "$build_log"
@@ -3235,7 +3235,7 @@ run_retirement_royal_product_smoke() {
     if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
             KICKASS="$KICKASS" \
             OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_RETIREMENT_PRODUCT" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_RETIREMENT_PRODUCT" \
             build64 >"$build_log" 2>&1; then
         echo "FAIL (product build)"
         tail -80 "$build_log"
@@ -3314,7 +3314,7 @@ run_game_over_product_smoke() {
     if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
             KICKASS="$KICKASS" \
             OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_GAME_OVER_PRODUCT" \
+            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_GAME_OVER_PRODUCT" \
             build64 >"$build_log" 2>&1; then
         echo "FAIL (product build)"
         tail -80 "$build_log"
@@ -5646,29 +5646,29 @@ else
 fi
 TOTAL=$((TOTAL + 1))
 
-check_static_contract "wizard_heal_contract" "../../../core/ui_wizard.s" \
+check_static_contract "wizard_heal_contract" "../../../core/6502/ui_wizard.s" \
     "ui_wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
-check_static_contract "wizard_footer_full_copy_contract" "../../../core/ui_wizard.s" \
+check_static_contract "wizard_footer_full_copy_contract" "../../../core/6502/ui_wizard.s" \
     "wiz_footer_str:|||.text \"Q to cancel\""
-check_static_contract "wizard_cancel_text_contract" "../../../core/ui_wizard.s" \
+check_static_contract "wizard_cancel_text_contract" "../../../core/6502/ui_wizard.s" \
     "wiz_row4_str:|||.text \"Q to cancel\""
-check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/ui_wizard.s" \
+check_static_contract "wizard_menu_aligned_rows_contract" "../../../core/6502/ui_wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
-check_static_contract "wizard_item_prompt_range_contract" "../../../core/ui_wizard.s" \
+check_static_contract "wizard_item_prompt_range_contract" "../../../core/6502/ui_wizard.s" \
     "wiz_item_prompt_str:|||.text \"ITEM 0-\" + toIntString(ITEM_TYPE_COUNT - 1) + \": \""
 check_static_contract "wizard_bad_prompt_cleanup_contract" "main.s" \
     "wizard_prompt_bad_value:|||jsr msg_print_ay|||jmp wizard_prompt_clear_digits"
-check_static_contract "wizard_bad_prompt_loop_contract" "../../../core/ui_wizard.s" \
+check_static_contract "wizard_bad_prompt_loop_contract" "../../../core/6502/ui_wizard.s" \
     "ui_wizard_prompt_two_digit:|||jsr wizard_prompt_bad_value|||jmp !wiz_num_loop-"
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
     "disk_prompt:|||jsr hal_input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr hal_storage_init_selected_drive"
-check_static_contract "disk_setup_insert_dismiss_clears_modal_contract" "../../../core/ui_disk_setup.s" \
+check_static_contract "disk_setup_insert_dismiss_clears_modal_contract" "../../../core/6502/ui_disk_setup.s" \
     "uds_show_insert_prompt:|||jsr input_get_modal_dismiss_key|||lda #DISK_UI_RES_OK|||sta disk_ui_result|||jsr uds_clear_after_modal"
-check_static_contract "load_resume_suppresses_tier_loading_message_contract" "../../../core/game_loop.s" \
+check_static_contract "load_resume_suppresses_tier_loading_message_contract" "../../../core/6502/game_loop.s" \
     "load_resume_game:|||jsr tier_invalidate_state|||jsr tier_restore_after_overlay"
-check_static_contract "learn_spell_followup_contract" "../../../core/player_gain_spell_impl.s" \
+check_static_contract "learn_spell_followup_contract" "../../../core/6502/player_gain_spell_impl.s" \
     "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr hal_input_get_key|||jsr pm_pick_visible_spell"
-check_static_contract "book_prompt_fresh_key_contract" "../../../core/player_item_select.s" \
+check_static_contract "book_prompt_fresh_key_contract" "../../../core/6502/player_item_select.s" \
     "piw_select_filtered_inv:|||jsr piw_prompt_filtered_inv|||jsr input_prepare_followup_key|||jsr hal_input_get_key|||piw_select_filtered_inv_key:|||jsr piw_pick_filtered_inv_key"
 check_static_contract "c64_wait_release_physical_key_contract" "input.s" \
     "input_wait_release:|||!iwr_wait:|||lda KBDBUF_COUNT|||bne !iwr_drain-|||jsr input_run_key_held|||bne !iwr_wait-|||lda KBDBUF_COUNT"
@@ -5686,63 +5686,63 @@ check_static_contract "special_room_monsters_restore_generation_overlay_contract
     "tramp_spawn_special_room_monsters:|||lda #OVL_DUNGEON_GEN|||jsr overlay_load|||jsr spawn_special_room_monsters"
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
-check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/player_items.s" \
+check_static_contract "inventory_overlay_fresh_key_contract" "../../../core/6502/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
-check_static_contract "inventory_overlay_items_reload_contract" "../../../core/player_items.s" \
+check_static_contract "inventory_overlay_items_reload_contract" "../../../core/6502/player_items.s" \
     "show_inv_and_select:|||jsr ui_view_restore_modal_overlay|||ldx piw_return_overlay|||lda #OVL_NONE|||sta piw_return_overlay|||txa|||beq !sias_no_overlay_reload+|||jsr overlay_load|||brk|||!sias_overlay_loaded:|||jsr hal_overlay_post_reload"
-check_static_absence_contract "inventory_overlay_no_stack_probe_contract" "../../../core/player_items.s" \
+check_static_absence_contract "inventory_overlay_no_stack_probe_contract" "../../../core/6502/player_items.s" \
     "\$0102,x|||\$0104,x"
 check_static_contract "c64_hal_overlay_post_reload_contract" "main.s" \
     "hal_overlay_post_reload:|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port|||rts"
-check_static_contract "levelup_magic_deferred_contract" "../../../core/combat.s" \
+check_static_contract "levelup_magic_deferred_contract" "../../../core/6502/combat.s" \
     "combat_apply_levelup:|||#if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE|||lda #1|||sta levelup_magic_pending|||#else|||jsr magic_recalc_mana|||jmp msg_build_levelup"
-check_static_contract "levelup_magic_main_loop_contract" "../../../core/game_loop.s" \
+check_static_contract "levelup_magic_main_loop_contract" "../../../core/6502/game_loop.s" \
     "main_loop:|||lsr levelup_magic_pending|||bcc !no_levelup_magic+|||jsr tramp_magic_recalc_mana|||jsr tramp_magic_check_new_spells|||jsr status_draw|||!no_levelup_magic:"
-check_static_contract "item_action_inventory_overlay_hint_contract" "../../../core/item_actions_overlay.s" \
+check_static_contract "item_action_inventory_overlay_hint_contract" "../../../core/6502/item_actions_overlay.s" \
     "item_action_select_filtered_inv:|||jsr item_action_get_key|||cmp #\$3f|||lda #OVL_ITEMS|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
-check_static_contract "orb_of_draining_holy_orb_contract" "../../../core/player_magic_execute_overlay.s" \
+check_static_contract "orb_of_draining_holy_orb_contract" "../../../core/6502/player_magic_execute_overlay.s" \
     "ped_s17:|||jsr math_dice|||jmp eff_ball_holy"
-check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../../../core/player_magic_execute_overlay.s" \
+check_static_contract "spell_recharge_inventory_overlay_hint_contract" "../../../core/6502/player_magic_execute_overlay.s" \
     "pmx_pick_recharge_item:|||jsr hal_input_get_key|||cmp #\$3f|||lda current_overlay|||sta piw_return_overlay|||jmp piw_select_filtered_inv_key"
-check_static_contract "identify_scroll_resident_completion_contract" "../../../core/item_actions_overlay.s" \
+check_static_contract "identify_scroll_resident_completion_contract" "../../../core/6502/item_actions_overlay.s" \
     "irs_effect_identify:|||jmp eff_identify_scroll_resident"
-check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../../../core/item_desc_banked.s" \
+check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../../../core/6502/item_desc_banked.s" \
     "!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring_p1:"
 check_static_contract "save_split_item_stats_contract" "../../shared/save.s" \
     "save_block_table_pre_inventory:|||save_block_desc_inventory:|||:save_block_desc(inv_item_id, 8 * TOTAL_INV_SLOTS)|||save_block_table_pre_inventory_end:|||:save_block_desc(si_item_id, 8 * STORE_TOTAL_SLOTS)|||save_block_table_floor_items_direct:|||:save_block_desc(fi_qty, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_meta_hi, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block_desc(fi_to_ac, MAX_FLOOR_ITEMS)|||save_write_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr save_write_block_table|||jsr floor_item_get_qty_hi_x|||jsr floor_item_get_p1_x|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr save_write_block_table|||load_read_floor_items:|||lda #<save_block_table_floor_items_direct|||jsr load_read_block_table|||lda #<SAVE_BLOCK_FLOOR_ITEMS_STAT_TABLE|||jsr load_read_block_table|||jmp save_sanitize_floor_ids"
-check_static_contract "item_action_messages_stat_desc_contract" "../../../core/item.s" \
+check_static_contract "item_action_messages_stat_desc_contract" "../../../core/6502/item.s" \
     "Build message: \"You picked up a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||Build message: \"You drop a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||item_append_desc:|||jsr item_append_name|||and #IF_IDENTIFIED"
-check_static_contract "equip_action_messages_stat_desc_contract" "../../../core/player_item_commands.s" \
+check_static_contract "equip_action_messages_stat_desc_contract" "../../../core/6502/player_item_commands.s" \
     "Build message: \"YOU ARE WIELDING A <name>.\"|||jmp piw_report_item_use|||piw_report_item_use:|||lda piw_item_id|||jsr item_append_desc|||Build message: \"YOU TAKE OFF THE <name>.\"|||jmp piw_report_item_use"
-check_static_contract "throw_action_messages_stat_desc_contract" "../../../core/throw.s" \
+check_static_contract "throw_action_messages_stat_desc_contract" "../../../core/6502/throw.s" \
     "tw_msg_item_prefix:|||jsr tw_stage_saved_item_fields|||lda tw_item_id|||jsr item_append_desc|||tw_stage_saved_item_fields:|||lda tw_save_to_hit|||sta fi_add_to_hit|||lda tw_save_to_dam|||sta fi_add_to_dam|||lda tw_save_flags|||sta fi_add_flags"
-check_static_contract "equip_overlay_fresh_key_contract" "../../../core/player_items.s" \
+check_static_contract "equip_overlay_fresh_key_contract" "../../../core/6502/player_items.s" \
     "show_equip_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_equip_select_display|||jsr input_get_followup_key"
-check_static_contract "spell_list_overlay_fresh_key_contract" "../../../core/player_magic.s" \
+check_static_contract "spell_list_overlay_fresh_key_contract" "../../../core/6502/player_magic.s" \
     "!pm_psc_show_list:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_spell_list_display|||jsr input_get_followup_key"
-check_static_contract "overcast_faint_more_contract" "../../../core/player_magic.s" \
+check_static_contract "overcast_faint_more_contract" "../../../core/6502/player_magic.s" \
     "ldx #HSTR_PM_NO_MANA|||jsr huff_print_msg|||jsr msg_show_more|||jsr hal_input_get_key"
-check_static_contract "paralysis_final_tick_message_contract" "../../../core/game_loop.s" \
+check_static_contract "paralysis_final_tick_message_contract" "../../../core/6502/game_loop.s" \
     "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
     "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||jmp c64_banked_ret|||tramp_item_exchange:"
 check_static_contract "c64_banked_ret_restores_bank_contract" "main.s" \
     "c64_banked_ret:|||pla|||sta \$01|||plp|||rts"
-check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/chest_loot.s" \
+check_static_contract "chest_loot_gen_overlay_no_hidden_kernal_contract" "../../../core/6502/chest_loot.s" \
     "chest_fulfill_loot:|||lda #OVL_DUNGEON_GEN|||#if HAL_PLATFORM_CHEST_LOOT_LOAD_NO_KERNAL|||jsr overlay_load_no_kernal|||jsr hal_platform_runtime_resync|||!cfl_loaded:|||jsr loot_generate_pending|||jsr hal_platform_runtime_resync"
-check_static_contract "monster_drops_before_turn_contract" "../../../core/game_loop_helpers.s" \
+check_static_contract "monster_drops_before_turn_contract" "../../../core/6502/game_loop_helpers.s" \
     "turn_post_action_searchable_or_die:|||jsr chest_fulfill_loot|||jsr turn_post_action"
-check_static_contract "monster_drops_staged_on_kill_contract" "../../../core/combat.s" \
+check_static_contract "monster_drops_staged_on_kill_contract" "../../../core/6502/combat.s" \
     "combat_note_kill:|||ldx cmb_type|||jsr monster_death_stage|||lda zp_game_flags"
-check_static_contract "chest_loot_c64_ego_overlay_return_contract" "../../../core/chest_loot.s" \
+check_static_contract "chest_loot_c64_ego_overlay_return_contract" "../../../core/6502/chest_loot.s" \
     "jsr roll_enchantment|||#if HAL_PLATFORM_CHEST_LOOT_EGO_MODAL_TRAMP|||jsr tramp_roll_ego_type_modal|||sta fi_add_ego"
-check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../core/chest_loot.s" \
+check_static_contract "chest_loot_object_drop_marks_redraw_contract" "../../../core/6502/chest_loot.s" \
     "!clpo_qty_done:|||jsr floor_item_add|||bcc !clpo_object_done+|||inc zp_dirty_count|||!clpo_object_done:|||jsr floor_item_add|||bcc !clpo_gold_done+|||inc zp_dirty_count|||!clpo_gold_done:"
-check_static_contract "chest_search_vms_discovery_only_contract" "../../../core/chest_search.s" \
+check_static_contract "chest_search_vms_discovery_only_contract" "../../../core/6502/chest_search.s" \
     "and #CHEST_P1_TRAP_FOUND|||bne !csr_found+|||ldx #HSTR_CHEST_FOUND_TRAP|||jsr huff_print_msg|||!csr_found:"
 check_static_contract "spell_execute_dedicated_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
     "tramp_spell_execute_selected:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||jmp tramp_sr_epilogue"
-check_static_contract "priest_sense_surroundings_dispatch_contract" "../../../core/player_magic_execute_overlay.s" \
+check_static_contract "priest_sense_surroundings_dispatch_contract" "../../../core/6502/player_magic_execute_overlay.s" \
     "ped_tbl_lo:|||.byte <(ped_s20-1), <(PMX_EARTHQUAKE_TARGET-1), <(ped_s22-1), <(ped_s23-1)|||ped_tbl_hi:|||.byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s22-1), >(ped_s23-1)|||ped_s22:|||jmp PMX_MAP_AREA_TARGET"
 check_static_contract "wizard_reveal_uses_spell_overlay_contract" "../../../build/trampolines/c64_trampolines.inc" \
     "tramp_reveal_floorplan:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr eff_reveal_floorplan|||jmp tramp_sr_epilogue"
@@ -5754,7 +5754,7 @@ check_static_contract "c64_title_enter_menu_calls_trampoline_contract" "main.s" 
     "title_enter_menu:|||jsr tramp_title_draw_screen|||jsr msg_init|||jsr title_show_sysinfo|||jsr title_draw_menu"
 check_static_contract "c64_title_reentry_uses_owned_clear_contract" "main.s" \
     "c64_title_draw_entry:|||jsr title_clear_full_screen|||jsr title_load_and_draw|||jmp title_clear_below_menu"
-check_static_contract "modal_restore_uses_safe_full_clear_contract" "../../../core/ui_restore.s" \
+check_static_contract "modal_restore_uses_safe_full_clear_contract" "../../../core/6502/ui_restore.s" \
     "ui_view_redraw_gameplay_view:|||jsr ui_reset_message_state|||#if HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY|||jsr tier_restore_after_overlay|||#endif|||jsr ui_clear_full_screen_safe|||jsr viewport_update|||jsr render_viewport|||jmp status_draw"
 check_static_contract "c64_look_overlay_cleanup_contract" "look_trampoline.s" \
     "tramp_do_look:|||lda #OVL_MODAL_MISC|||jsr overlay_load_no_kernal|||bcs !done+|||jsr do_look|||!done:|||jmp tramp_sr_epilogue"

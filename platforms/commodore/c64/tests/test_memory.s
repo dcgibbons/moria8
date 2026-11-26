@@ -12,7 +12,7 @@
 
 .pc = $0810 "Test Code"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #define C64_TEST_HIDDEN_MAP
 #import "../config.s"

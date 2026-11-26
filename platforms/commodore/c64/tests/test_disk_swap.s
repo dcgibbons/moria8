@@ -25,7 +25,7 @@
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../hal/memory_bank_consts.s"
 
 .const SCREEN_COLS = 40
@@ -175,7 +175,7 @@ c64_disk_marker_present:
     clc
     rts
 
-#import "../../../../core/runtime_ui_strings.s"
+#import "../../../../core/6502/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
 
 tc_results: .fill 15, $ff

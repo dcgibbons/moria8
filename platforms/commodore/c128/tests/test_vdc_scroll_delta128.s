@@ -5,11 +5,11 @@
 // including VDC block copy and exposed-strip redraw. This closes the current
 // coverage gap where `test_main_loop128.s` stubs the delta routine entirely.
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/item_defs.s"
 
 .const EMPTY_SLOT = $ff
 .const MX_X = 0
@@ -21,7 +21,7 @@
 .const MAX_MONSTERS = 32
 .const TEST_DETECT_TIMER_ACTIVE = 2
 
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/dungeon_data.s"
 
 // Test-only map write helper. Product code no longer exposes map_set_tile.
 map_set_tile:
@@ -36,9 +36,9 @@ map_set_tile:
     :MapWrite_ptr0_y()
     rts
 
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../screen_vdc.s"
-#import "../../../../core/floor_item_page.s"
+#import "../../../../core/6502/floor_item_page.s"
 #import "../dungeon_render_vdc.s"
 
 .pc = $0801 "BASIC Stub"

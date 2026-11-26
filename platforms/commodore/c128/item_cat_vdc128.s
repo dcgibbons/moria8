@@ -8,7 +8,7 @@
 //     c128_load_core_residents after any $FF62 JDLCHR font restore; survives
 //     all dungeon generation, overlay swaps, and game_restart cycles).
 //   callers: c128_load_core_residents (c128_load_item_cat_vdc) and
-//     core/item_catalog.s (hal_item_cat_read_byte).
+//     core/6502/item_catalog.s (hal_item_cat_read_byte).
 //
 // Cartridge builds (#if C128_CARTRIDGE):
 //   - Delegate hal_item_cat_read_byte to hal_item_cat_cart_read_byte in

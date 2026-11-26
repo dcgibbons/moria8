@@ -701,7 +701,7 @@ sfa_flash_attr: .byte VDC_WHITE
 // ============================================================
 // Shared numeric display functions — call backend screen_put_char internally
 // ============================================================
-#import "../../../core/numeric_format.s"
+#import "../../../core/6502/numeric_format.s"
 
 // ============================================================
 // Compile-time validation

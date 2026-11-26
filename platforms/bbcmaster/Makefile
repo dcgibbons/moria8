@@ -18,7 +18,7 @@ OUT         ?= ../../build
 OUTBEEB     = $(OUT)/bbcmaster
 OVL_OUTBEEB = $(abspath $(OUTBEEB))
 
-KA_FLAGS    = ":OVL_OUT=$(OVL_OUTBEEB)" -showmem -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTBEEB)" -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define BBCMASTER
+KA_FLAGS    = ":OVL_OUT=$(OVL_OUTBEEB)" -showmem -afo -symbolfile -vicesymbols -symbolfiledir "$(OVL_OUTBEEB)" -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -libdir ../commodore/c64 -libdir .. -libdir ../.. -define BBCMASTER
 PRG2BIN     = python3 -B ../../tools/prg_to_bin.py
 
 VERSION_FILE     = ../../version.json
@@ -29,7 +29,7 @@ MAIN_SRC         = main.s
 BOOT_SRC         = boot.s
 TITLE_SRC        = title_data.s
 
-BEEB_SOURCES := $(shell find . ../commodore/common ../shared ../../core -type f \( -name '*.s' -o -name '*.inc' \) -print) \
+BEEB_SOURCES := $(shell find . ../commodore/common ../shared ../../core/6502 -type f \( -name '*.s' -o -name '*.inc' \) -print) \
                 ../commodore/c128/ui_help_data_80.s
 
 BEEB_MAIN_PRG   = $(OUTBEEB)/moria8.res.prg

@@ -255,20 +255,20 @@ tun_dig_ability: .byte 0
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 #define PLAYER_CHARGEN_EXTERNAL
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
 // ui_status.s and stat_display.s never run here; status_draw is patched by
 // install_jump_patch (3-byte JMP slot) and status_mark_dirty is a no-op.
 status_draw:
@@ -277,20 +277,20 @@ status_draw:
     rts
 status_mark_dirty:
     rts
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/ui_help_clear.s"
 // Modules this test never executes sit in the $D000 I/O hole so they neither
 // push Default past MAP_BASE ($C000) nor overlap Test Bodies ($E700+).
 .segment TestCreateOverlay
-#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/store_door_lookup.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/store_door_lookup.s"
 dg_idx: .byte 0
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 // monster_ai.s never runs here (turn_post_action is patched to
 // test_turn_post_action); game_loop.s reads mat_scene_dirty and turn.s
@@ -298,10 +298,10 @@ dg_idx: .byte 0
 mat_scene_dirty: .byte 0
 monster_ai_tick:
     jmp test_finish
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 .segment TestCreateOverlay
-#import "../../../../core/player_save.s"
-#import "../../../../core/element_resist.s"
+#import "../../../../core/6502/player_save.s"
+#import "../../../../core/6502/element_resist.s"
 monster_can_cast:
 monster_pick_spell:
     brk
@@ -313,24 +313,24 @@ monster_pick_spell:
     .segment Default
 }
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 // Test 56 calls load_resume_game -> player_recalc_pflags_equipment on a
 // Long sword and Plate Mail at STR 10 (no heavy-weapon penalty, no flags).
 hal_item_cat_read_byte:
     lda #0
     rts
-#import "../../../../core/chest_summons.s"
+#import "../../../../core/6502/chest_summons.s"
 .macro ChestLootSegment() {
 }
 .macro ChestLootRestoreSegment() {
 }
-#import "../../../../core/chest_loot.s"
+#import "../../../../core/6502/chest_loot.s"
 random_floor_in_room:
     lda #0
     tay
     rts
 .segment TestCreateOverlay
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment Default
 #define EGO_ARMOUR_SEGMENT_CUSTOM
 .macro EgoArmourSegment() {
@@ -346,22 +346,22 @@ random_floor_in_room:
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
+#import "../../../../core/6502/spell_data.s"
 .segment TestCreateOverlay
-#import "../../../../core/projectile.s"
+#import "../../../../core/6502/projectile.s"
 .segment Default
-#import "../../../../core/spell_effects.s"
+#import "../../../../core/6502/spell_effects.s"
 #import "../dungeon_render.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/player_run.s"
-#import "../../../../core/combat.s"
-#import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/scene_force.s"
-#import "../../../../core/scene_dirty.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/player_run.s"
+#import "../../../../core/6502/combat.s"
+#import "../../../../core/6502/scene_mat_tile.s"
+#import "../../../../core/6502/scene_force.s"
+#import "../../../../core/6502/scene_dirty.s"
 .segment TestCreateOverlay
 monster_attack_player:
 mon_atk_acid_armour:
@@ -371,13 +371,13 @@ player_death_check:
     brk
 mad_dmg_hi: .byte 0
 .segment Default
-#import "../../../../core/turn.s"
-#import "../../../../core/generation_busy.s"
+#import "../../../../core/6502/turn.s"
+#import "../../../../core/6502/generation_busy.s"
 .macro ChestRouteSegment() {
 }
 .macro ChestRouteRestoreSegment() {
 }
-#import "../../../../core/game_loop.s"
+#import "../../../../core/6502/game_loop.s"
 
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0

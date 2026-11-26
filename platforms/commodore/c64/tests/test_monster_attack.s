@@ -42,39 +42,39 @@ test_exit_trampoline:
 
 .segmentdef TestUnused [start=$E100, min=$E100, max=$FFF9]
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/dungeon_gen.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/dungeon_gen.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
 .segment TestUnused
-#import "../../../../core/trap_trigger_cold.s"
-#import "../../../../core/player_chargen_cold.s"
+#import "../../../../core/6502/trap_trigger_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
 .segment Default
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 viewport_update:
 render_viewport:
 render_single_tile:
 render_local_area:
     rts
-#import "../../../../core/monster_attack.s"
+#import "../../../../core/6502/monster_attack.s"
 
 combat_append_str:
 combat_append_decimal:

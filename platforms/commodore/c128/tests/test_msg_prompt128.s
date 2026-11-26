@@ -5,7 +5,7 @@
 // IRQ that clobbers zp_ptr0 while prompts are rendered. The vulnerable window
 // is in screen_put_string before IRQs are masked.
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../screen_vdc.s"
 
 .const MACHINE_C128 = $80
@@ -49,10 +49,10 @@ input_get_key:
 combat_append_str:
     rts
 
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/ui_messages.s"
 .const PLATFORM_HD_DECODE_BUF_BASE = $0400
 .const PLATFORM_HD_DECODE_BUF_LIMIT = $0800
-#import "../../../../core/huffman.s"
+#import "../../../../core/6502/huffman.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)

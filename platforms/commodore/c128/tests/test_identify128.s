@@ -46,14 +46,14 @@ itn_17:
 itok_detect_monsters:
     .text "Detect Monsters" ; .byte 0
 
-#import "../../../../core/huffman_data.s"
-#import "../../../../core/input_contract.s"
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/huffman_data.s"
+#import "../../../../core/6502/input_contract.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
 // id_known_clear — Mark item type X as unknown (item_defs.s ships it only to
 // the C64/C128 unit-test builds; this test does not define C128_UNIT_TEST).
 // Clobbers: A, Y (X preserved)
@@ -64,19 +64,19 @@ id_known_clear:
     and id_known_bits,y
     sta id_known_bits,y
     rts
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/spell_names.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/projectile.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/spell_names.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/projectile.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
-#import "../../../../core/spell_effects.s"
+#import "../../../../core/6502/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/player_magic.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -368,7 +368,7 @@ test_fail:
 test_pass:
     jmp test_pass_loop
 
-// Fixtures for the core/player_items.s pickers: eff_identify_prompt needs a
+// Fixtures for the core/6502/player_items.s pickers: eff_identify_prompt needs a
 // picker that offers an item. The test stocks its one unidentified item in
 // slot 1 and scripts the key 'A' for it.
 piw_prompt_filtered_inv:

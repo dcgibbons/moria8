@@ -51,25 +51,25 @@ itn_17:
 itok_detect_monsters:
     .text "Detect Monsters" ; .byte 0
 
-#import "../../../../core/huffman_data.s"
-#import "../../../../core/input_contract.s"
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/huffman_data.s"
+#import "../../../../core/6502/input_contract.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
-#import "../../../../core/color.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/spell_data.s"
-#import "../../../../core/spell_names.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/projectile.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/color.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/spell_data.s"
+#import "../../../../core/6502/spell_names.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/player_magic.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -182,7 +182,7 @@ monster_get_ptr:
     rts
 
 monster_find_at:
-    sta zp_temp0                // A = x, Y = y, as core/monster.s monster_find_at
+    sta zp_temp0                // A = x, Y = y, as core/6502/monster.s monster_find_at
     sty zp_temp1
     ldx #0
 !mfa_loop:
@@ -413,7 +413,7 @@ test_clear_monsters:
 test_place_target_monster:
     ldx #0
     jsr monster_get_ptr
-    // MX_X/MX_Y/MX_TYPE/MX_HP_LO/MX_HP_HI (core/monster.s): this wrote x and y
+    // MX_X/MX_Y/MX_TYPE/MX_HP_LO/MX_HP_HI (core/6502/monster.s): this wrote x and y
     // into the HP bytes, so no creature stood at the target.
     ldy #MX_X
     lda #23

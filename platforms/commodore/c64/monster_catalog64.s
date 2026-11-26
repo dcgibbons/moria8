@@ -1,6 +1,6 @@
 #importonce
 // monster_catalog64.s — C64 monster catalog placement
-// (docs/MONSTER_CATALOG_DESIGN.md, core/monster_catalog.s,
+// (docs/MONSTER_CATALOG_DESIGN.md, core/6502/monster_catalog.s,
 // common/catalog_fetch.s; memory.s owns the hidden spans).
 //
 // The name pool, the level index and the record-sector table are hidden RAM

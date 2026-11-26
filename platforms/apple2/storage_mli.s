@@ -1437,7 +1437,7 @@ hal_storage_save_read_name:
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
     .byte $52                                   // spare suffix byte for "THE.GAME2"
 
-// High-score filenames (sole consumer core/score_io.s lives in DeathOverlay).
+// High-score filenames (sole consumer core/6502/score_io.s lives in DeathOverlay).
 .segment DeathOverlay
 hal_storage_score_read_name:
     .byte $30, $3a                              // "0:"

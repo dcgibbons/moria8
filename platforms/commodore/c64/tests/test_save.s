@@ -80,62 +80,62 @@ mat_scene_dirty: .byte 0
 #define TRAP_TRIGGER_EXTERNAL
 #define ITEM_SPAWN_EXTERNAL
 #define PICK_ITEM_TYPE_EXTERNAL
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
 .segmentdef TestUnusedStatus [start=$D000, min=$D000, max=$DFFF]
 .segment TestUnusedStatus
-#import "../../../../core/ui_status.s"
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/ui_status.s"
+#import "../../../../core/6502/stat_display.s"
 .segment Default
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segmentdef TestNameStreams [start=$E100]
 .segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestCreateOverlay
-#import "../../../../core/background_data.s"
-#import "../../../../core/player_create.s"
+#import "../../../../core/6502/background_data.s"
+#import "../../../../core/6502/player_create.s"
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 dg_idx: .byte 0
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 .segmentdef TestUnusedCombat [start=$d000, min=$d000, max=$dfff]
 .segment TestUnusedCombat
-#import "../../../../core/monster_magic.s"
+#import "../../../../core/6502/monster_magic.s"
 .segment Default
 // Adding to the pack (inv_add.s) is not exercised here: parked out of
 // reach, the runner's tripwire (tools/parked_tripwire.py) failing the
 // suite if it is ever called (the VMS weight limit, 2026-11-13, took
 // the body past MAP_BASE).
 #define INV_ADD_EXTERNAL
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 #undef INV_ADD_EXTERNAL
 .segmentdef TestParkedInvAdd [start=$f200]
 .segment TestParkedInvAdd
-#import "../../../../core/inv_add.s"
+#import "../../../../core/6502/inv_add.s"
 .segment TestUnusedCombat
 random_floor_in_room:
     lda #0
     tay
     rts
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment Default
 // The resistance armour and crown roll and its data are not exercised here
 // (no item spawns): out of the way with the store code past $D000.
@@ -154,42 +154,42 @@ random_floor_in_room:
     .segment Default
 }
 .segment TestStoreOverlay
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
 .segment Default
-#import "../../../../core/spell_data.s"
+#import "../../../../core/6502/spell_data.s"
 .segmentdef TestUnusedPlay [start=$d000, min=$d000, max=$fff9]
 .segment TestUnusedPlay
-#import "../../../../core/projectile.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
-#import "../../../../core/scene_mat_tile.s"
-#import "../../../../core/monster_attack.s"
-#import "../../../../core/turn.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/combat.s"
+#import "../../../../core/6502/scene_mat_tile.s"
+#import "../../../../core/6502/monster_attack.s"
+#import "../../../../core/6502/turn.s"
 .segment TestUnused
-#import "../../../../core/trap_trigger_cold.s"
-#import "../../../../core/player_chargen_cold.s"
-#import "../../../../core/item_spawn_cold.s"
-#import "../../../../core/pick_item_type_cold.s"
+#import "../../../../core/6502/trap_trigger_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
+#import "../../../../core/6502/item_spawn_cold.s"
+#import "../../../../core/6502/pick_item_type_cold.s"
 .segment Default
-#import "../../../../core/store_data.s"
+#import "../../../../core/6502/store_data.s"
 // Store code goes in a dummy overlay segment so it doesn't bloat the test body.
 // test_save.s doesn't test store code, but turn.s→tramp_store_restock_all
 // needs these symbols. Placing them past $D000 avoids overlapping MAP_BASE.
 .segment TestStoreOverlay
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+#import "../../../../core/6502/store.s"
+#import "../../../../core/6502/ui_store.s"
 // spell_effects.s only links here (no save test casts): 16-item stores
 // grew the store arrays in the test body.
-#import "../../../../core/spell_effects.s"
+#import "../../../../core/6502/spell_effects.s"
 #import "../dungeon_render.s"
 .segment Default
 
 #define C64_TEST_NO_SPELL_NAME_STUBS
-#import "../../../../core/ui_trampoline_stubs.s"
-#import "../../../../core/runtime_ui_strings.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
+#import "../../../../core/6502/runtime_ui_strings.s"
 .const SAVE_DEVICE    = 8
 .const hal_storage_save_file_num  = 2
 .const hal_storage_check_file_num = 3

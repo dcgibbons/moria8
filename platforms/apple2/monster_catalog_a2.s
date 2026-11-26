@@ -1,6 +1,6 @@
 #importonce
 // monster_catalog_a2.s — Apple IIe monster catalog placement
-// (docs/MONSTER_CATALOG_DESIGN.md, core/monster_catalog.s;
+// (docs/MONSTER_CATALOG_DESIGN.md, core/6502/monster_catalog.s;
 // docs/APPLE2_MEMORY_POLICY.md and cache_layout.s own the aux spans).
 //
 // The fields (A2.CATALOG) load into aux RAM at A2_AUX_CATALOG with the boot

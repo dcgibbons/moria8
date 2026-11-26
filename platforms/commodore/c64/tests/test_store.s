@@ -26,52 +26,52 @@ test_exit_trampoline:
 .const T53_STORE = 0        // the General Store (test 53)
 
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
+#import "../../../../core/6502/ui_status.s"
+#import "../../../../core/6502/ui_help_clear.s"
+#import "../../../../core/6502/stat_display.s"
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
-#import "../../../../core/huffman.s"
+#import "../../../../core/6502/huffman.s"
 #define DISARM_COMMAND_EXTERNAL
 #define DISARM_HELPERS_EXTERNAL
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 #import "item_cat_resident_helper.s"
-#import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
+#import "../../../../core/6502/special_rooms.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
+#import "../../../../core/6502/spell_data.s"
 .segment TestCreateOverlay
 #import "../dungeon_render.s"
 .segment Default
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 // Monster spells, the player's magic, missiles, sight lines, movement and
 // melee are not exercised by the stores: parked out of reach, the runner's
 // tripwire (tools/parked_tripwire.py) failing the suite if any is called.
@@ -79,16 +79,16 @@ player_create:
 // item_cat_data now owns the $E100 window (item_cat_kernal_helper.s), so
 // monster_ai and combat are link stubs below and the rest share $D000.
 .segment TestCreateOverlay
-#import "../../../../core/los_trace.s"
-#import "../../../../core/element_resist.s"
+#import "../../../../core/6502/los_trace.s"
+#import "../../../../core/6502/element_resist.s"
 monster_can_cast:
 monster_pick_spell:
     brk
-#import "../../../../core/projectile.s"
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/spell_effects.s"
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
+#import "../../../../core/6502/projectile.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/spell_effects.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
 player_cast_spell:
 player_pray:
 pm_consume_mana:
@@ -98,7 +98,7 @@ pm_setup_active_tables:
 magic_recalc_mana:
 magic_check_new_spells:
     brk
-#import "../../../../core/player_move.s"
+#import "../../../../core/6502/player_move.s"
 .segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
@@ -168,10 +168,10 @@ cmb_buf_idx: .byte 0
 cmb_type: .byte 0
 cmb_damage: .byte 0
 cmb_period: .byte 0
-#import "../../../../core/store_data.s"
-#import "../../../../core/store_restock_overlay.s"
-#import "../../../../core/store.s"
-#import "../../../../core/ui_store.s"
+#import "../../../../core/6502/store_data.s"
+#import "../../../../core/6502/store_restock_overlay.s"
+#import "../../../../core/6502/store.s"
+#import "../../../../core/6502/ui_store.s"
 .segment TestCreateOverlay
 ui_help_show_paged:
 ui_help_display:
@@ -179,7 +179,7 @@ help_draw_line:
 help_draw_hborder:
     brk
 .segment Default
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

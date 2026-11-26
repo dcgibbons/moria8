@@ -153,7 +153,7 @@ SPEED_MASK = 0x03
 # its full hit dice, N * S, not a roll (VMS misc.inc place_monster max_hp;
 # Umoria monster_manager.cpp maxDiceRoll). Kept in cr_speed bit 7, which the
 # speed (CR_SPEED_MASK) and random-move (CM_RANDOM_MOVE) readers mask out;
-# monster_spawn_one (core/monster.s) tests it.
+# monster_spawn_one (core/6502/monster.s) tests it.
 CD_MAX_HP = 0x4000
 CR_MAX_HP = 0x80
 
@@ -257,7 +257,7 @@ CF_UNDEAD      = 0x02  # Our undead flag
 CF_EVIL        = 0x04  # Evil creature (ego slay)
 CF_ANIMAL      = 0x08  # Animal creature (ego slay)
 CF_DRAGON      = 0x10  # Dragon creature (future ego slay)
-CF_BREEDER     = 0x40  # Multiplying creature (core/monster.s)
+CF_BREEDER     = 0x40  # Multiplying creature (core/6502/monster.s)
 CF_INFRA      = 0x80  # Warm creature visible to infravision
 
 # Umoria config.cpp flag bits (pinned revision 2a2a6b79).
@@ -327,7 +327,7 @@ MSF_FEAR          = 0x80
 # cr_spell_chance (2026-11-08, maintainer: "do your limited but faithful
 # version"): bits 0-3 the upstream 1-in-N cast frequency (VMS creature.inc
 # cast_spell: randint(N) = 1 casts), bits 4-6 the breath element, bit 7 Hold
-# Person (core/monster_magic.s). Until then a percentage, int(100 / N).
+# Person (core/6502/monster_magic.s). Until then a percentage, int(100 / N).
 MS_FREQ_MASK = 0x0F
 MS_BREATH_SHIFT = 4
 BREATH_KINDS = ((0x080000, 1), (0x100000, 2), (0x200000, 3), (0x400000, 4), (0x800000, 5))  # lightning, gas, acid, frost, fire

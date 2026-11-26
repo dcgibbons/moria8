@@ -13,7 +13,7 @@
 
 #define STORAGE_STATUS_HELPER
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../../common/compat/io_kernal_consts.s"
 #import "../hal/memory_bank_consts.s"
 #import "../hal/storage_policy.s"

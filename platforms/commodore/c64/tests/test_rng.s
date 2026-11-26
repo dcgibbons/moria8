@@ -20,10 +20,10 @@
 
 .pc = $0810 "Test Code"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
 
 seed_test_state_a:
     lda #$12

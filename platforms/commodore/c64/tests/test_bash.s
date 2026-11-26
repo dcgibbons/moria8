@@ -33,77 +33,77 @@ test_exit_trampoline:
 .segmentdef TestCreateOverlay [start=$D000, min=$D000, max=$DFFF]
 .segmentdef TestNameStreams [start=$E100, min=$E100, max=$FFF9]
 .segmentdef TestUnusedMonsterMagic [start=$E100, min=$E100, max=$FFF9]
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
-#import "../../../../core/player.s"
-#import "../../../../core/ui_messages.s"
-#import "../../../../core/ui_status.s"
-#import "../../../../core/ui_help_clear.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
+#import "../../../../core/6502/player.s"
+#import "../../../../core/6502/ui_messages.s"
+#import "../../../../core/6502/ui_status.s"
+#import "../../../../core/6502/ui_help_clear.s"
 .segment Default
-#import "../../../../core/stat_display.s"
+#import "../../../../core/6502/stat_display.s"
 .segment Default
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
 #import "dungeon_gen_stubs.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment Default
-#import "../../../../core/monster_ai.s"
+#import "../../../../core/6502/monster_ai.s"
 .segment Default
-#import "../../../../core/recall.s"
+#import "../../../../core/6502/recall.s"
 // Monster spells and breath are not exercised here: stubbed in the $D000 test
 // overlay so accidental execution hits BRK / parked_tripwire.
-#import "../../../../core/element_resist.s"
+#import "../../../../core/6502/element_resist.s"
 .segment TestCreateOverlay
 monster_can_cast:
 monster_pick_spell:
     brk
 .segment Default
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 #import "item_cat_resident_helper.s"
-#import "../../../../core/special_rooms.s"
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
-#import "../../../../core/player_items.s"
-#import "../../../../core/spell_data.s"
+#import "../../../../core/6502/special_rooms.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
+#import "../../../../core/6502/player_items.s"
+#import "../../../../core/6502/spell_data.s"
 .segment Default
-#import "../../../../core/projectile.s"
+#import "../../../../core/6502/projectile.s"
 .segment Default
 .segment TestCreateOverlay
-#import "../../../../core/spell_effects.s"
+#import "../../../../core/6502/spell_effects.s"
 .segment Default
-#import "../../../../core/player_magic_state.s"
-#import "../../../../core/player_magic_state_ops.s"
-#import "../../../../core/player_magic.s"
+#import "../../../../core/6502/player_magic_state.s"
+#import "../../../../core/6502/player_magic_state_ops.s"
+#import "../../../../core/6502/player_magic.s"
 .segment TestCreateOverlay
 #import "../dungeon_render.s"
 .segment Default
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/combat.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/combat.s"
 .segment Default
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 .segment Default
-#import "../../../../core/bash.s"
-#import "../../../../core/turn_render_state.s"
+#import "../../../../core/6502/bash.s"
+#import "../../../../core/6502/turn_render_state.s"
 // This stub lives in the $D000 test overlay so Main stays below MAP_BASE.
 .segment TestCreateOverlay
 // The production damage entries' shape (monster_attack.s): 8-bit, or 16-bit
@@ -163,14 +163,14 @@ player_death_check:
     ora #$01
     sta zp_game_flags
     rts
-#import "../../../../core/store_data.s"
+#import "../../../../core/6502/store_data.s"
 store_init_all:
     rts
 store_restock_all:
     rts
 store_enter:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

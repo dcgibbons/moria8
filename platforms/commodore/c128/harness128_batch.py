@@ -256,7 +256,7 @@ def assemble_if_stale(
         str(kickass),
         str(source),
         "-libdir",
-        str(REPO_ROOT / "core"),
+        str(REPO_ROOT / "core/6502"),
         "-libdir",
         str(REPO_ROOT / "platforms/commodore/common"),
         "-libdir",

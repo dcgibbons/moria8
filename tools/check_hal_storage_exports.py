@@ -169,7 +169,7 @@ OVERLAY_NAMES = {
 }
 
 TIER_NAMES = ("1", "2", "3", "4")
-COMMON_DISK_SETUP_UI_FILE = ROOT / "core/ui_disk_setup.s"
+COMMON_DISK_SETUP_UI_FILE = ROOT / "core/6502/ui_disk_setup.s"
 COMMON_DISK_SETUP_UI_POLICIES = (
     "hal_storage_disk_setup_detail_command_status",
     "hal_storage_disk_setup_detail_dos_drive",

@@ -48,10 +48,10 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 
 // Thunks from config.s, which is not imported by tests (main.s-only file).
 mmu_safe_db_read_ptr0:
@@ -83,7 +83,7 @@ mmu_safe_map_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-#import "../../../../core/dungeon_data.s"
+#import "../../../../core/6502/dungeon_data.s"
 
 // Test-only map write helper. Product code no longer exposes map_set_tile.
 map_set_tile:
@@ -166,7 +166,7 @@ item_cur_page:      .byte 0
 .const ITEM_PAGE_BIT = $40
 it_display: .fill 2, 0
 it_display_p1: .fill 2, 0       // the Page 1 item with the same slot
-// Page-aware, as core/item_tables.s item_get_display_char is.
+// Page-aware, as core/6502/item_tables.s item_get_display_char is.
 item_get_display_char:
     bit item_cur_page
     bvs !p1+
@@ -312,7 +312,7 @@ monster_is_infra_visible_at:
     clc
     rts
 
-#import "../../../../core/floor_item_page.s"
+#import "../../../../core/6502/floor_item_page.s"
 #import "../dungeon_render.s"
 
 test_start:

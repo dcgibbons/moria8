@@ -462,7 +462,7 @@ class Character:
                         break   # a budget-out too: the queue resumes it from its checkpoint
                 view = None
                 if tiles is not None:
-                    # Catalog builds keep 32 dungeon rows, tier builds 57 (core/monster.s).
+                    # Catalog builds keep 32 dungeon rows, tier builds 57 (core/6502/monster.s).
                     rows = (game.abi.CATALOG_DUNGEON_CREATURES if knowledge.uses_catalog()
                             else game.abi.TIER_DUNGEON_CREATURES)
                     levels = game.mon.mem_get(game.abi.cr_level, rows + game.abi.MAX_TOWN_CREATURES, game.ram)

@@ -115,7 +115,7 @@ OFF_RECALL_198X66 = 2978
 OFF_MAP_198X66 = 4094
 OFF_CKSUM_198X66 = 17162
 
-# Town layout constants (core/dungeon_data.s & core/dungeon_gen.s)
+# Town layout constants (core/6502/dungeon_data.s & core/6502/dungeon_gen.s)
 TOWN_MAP_COLS = 66
 TOWN_MAP_ROWS = 22
 TOWN_STAIRS_X = 32
@@ -319,7 +319,7 @@ def verify_save(data: bytes, *, expected_magic: bytes | None = None) -> dict:
 
 
 def build_clean_town_map_198x66() -> bytes:
-    """Build the exact 198x66 Town backing map matching ``core/dungeon_gen.s:town_generate``."""
+    """Build the exact 198x66 Town backing map matching ``core/6502/dungeon_gen.s:town_generate``."""
     m = bytearray([TILE_WALL_H] * LEN_MAP_198X66)
 
     def put(x: int, y: int, val: int) -> None:

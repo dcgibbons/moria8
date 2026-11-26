@@ -79,11 +79,11 @@ VICE_SOUND_ARGS ?=
 RUN_FLAGS64  = -autostartprgmode 1 -sound $(VICE_SOUND_ARGS)
 RUN_FLAGS128 = -80col -VDC16KB -sound $(VICE_SOUND_ARGS)
 RUN_FLAGSPLUS4 = -autostartprgmode 1 -sound $(VICE_SOUND_ARGS)
-KA_FLAGS     = -showmem -vicesymbols -libdir ../../core -libdir common -afo
+KA_FLAGS     = -showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo
 KA_FLAGS64   = $(KA_FLAGS) -libdir c64
 KA_FLAGSPLUS4 = $(KA_FLAGS) -libdir c64 -define PLUS4
 ifeq ($(filter -afo,$(KA_FLAGSPLUS4)),)
-override KA_FLAGSPLUS4 += -libdir ../../core -libdir common -afo
+override KA_FLAGSPLUS4 += -libdir ../../core/6502 -libdir common -afo
 endif
 DEBUG_FEAT_DISK_TRACE ?= 0
 ifeq ($(DEBUG_FEAT_DISK_TRACE),1)
@@ -117,14 +117,14 @@ C128_BOOT_SRC      = c128/boot128.s
 C128_BOOTSECT_SRC  = c128/bootsect128.s
 C128_CHARSET_DEMO_SRC = c128/vdc_charset_poster_demo.s
 C128_BOOTART_SRC   = c128/bootart128.s
-TITLE_SRC          = ../../core/title_data.s
+TITLE_SRC          = ../../core/6502/title_data.s
 C64_TIER_DIR       = c64/creature_data
 PLUS4_MAIN_SRC     = plus4/main.s
 PLUS4_BOOT_SRC     = plus4/boot.s
 
-C64_SOURCES        := $(shell find c64 common hal ../shared ../../core -type f -name '*.s' -print)
-C128_SOURCES       := $(shell find c128 common c64 hal ../shared ../../core -type f -name '*.s' -print)
-PLUS4_SOURCES      := $(shell find plus4 common hal ../shared ../../core -type f -name '*.s' -print)
+C64_SOURCES        := $(shell find c64 common hal ../shared ../../core/6502 -type f -name '*.s' -print)
+C128_SOURCES       := $(shell find c128 common c64 hal ../shared ../../core/6502 -type f -name '*.s' -print)
+PLUS4_SOURCES      := $(shell find plus4 common hal ../shared ../../core/6502 -type f -name '*.s' -print)
 
 # ── C64 artifacts ─────────────────────────────────────────
 C64_MAIN_PRG       = $(OUT64)/moria8.prg
@@ -766,14 +766,14 @@ cleanup-source-symbols-plus4:
 	rm -f plus4/*.sym plus4/*.vs
 
 cleanup-source-symbols: cleanup-source-symbols-c64 cleanup-source-symbols-c128 cleanup-source-symbols-plus4
-	rm -f ../../core/*.sym ../../core/*.vs
+	rm -f ../../core/6502/*.sym ../../core/6502/*.vs
 
 clean:
 	rm -rf "$(BUILD)" ../build
 	rm -f c64/*.prg c64/*.sym c64/*.vs c64/creature_data/*.sym c64/creature_data/*.vs c64/tests/*.prg c64/tests/*.vs c64/tests/*.sym
 	rm -f c128/*.prg c128/*.sym c128/*.vs c128/tests/*.prg c128/tests/*.vs c128/tests/*.sym
 	rm -f plus4/*.prg plus4/*.sym plus4/*.vs plus4/tests/*.prg plus4/tests/*.vs plus4/tests/*.sym
-	rm -f ../../core/*.sym ../../core/*.vs
+	rm -f ../../core/6502/*.sym ../../core/6502/*.vs
 
 # The C64 EasyFlash cartridge (a shipping package, built by `make disk`): its own
 # output directory and compile define.

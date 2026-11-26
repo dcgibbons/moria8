@@ -1,11 +1,12 @@
 .PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 	test test64-legal test128-legal testplus4-legal test-disk test-disk-static test-disk-debt test64 test64-cartridge test64-cartridge-persistence test128 test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
-	check-zp check-6502-lint check-hal-boundaries check-item-docs report-budgets ensure-kickass kickass tools-ready tools-ready-apple2 \
-	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 test-stage-atari8 test-stage-bbcmaster FORCE \
+	check-zp check-6502-lint check-hal-boundaries check-item-docs report-budgets ensure-kickass kickass tools-ready tools-ready-apple2 tools-ready-cpm \
+	test-prebuild test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 test-stage-atari8 test-stage-bbcmaster test-stage-cpm FORCE \
 	buildapple2 diskapple2 runapple2 testapple2 testapple2-smoke testapple2-runtime testapple2-memory-contract testapple2-memory-contract-selftest \
 	buildcx16 diskcx16 cartridgecx16 runcx16 runcx16-cart testcx16 testcx16-smoke testcx16-runtime testcx16-cartridge testcx16-memory-contract testcx16-memory-contract-selftest \
 	buildatari8 diskatari8 cartridgeatari8 runatari8 runatari8-130xe runatari8-cart runatari8-cart-130xe testatari8 testatari8-smoke testatari8-fast-smoke testatari8-runtime testatari8-cartridge testatari8-memory-contract testatari8-memory-contract-selftest \
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
+	buildcpm diskcpm cpm-runner runcpm testcpm testcpm-smoke testcpm-runtime testcpm-memory-contract testcpm-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
 	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-stop-balrog playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-gate playtest-m0-report playtest-session playtest-qualify playtest-disk \
 	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
@@ -33,6 +34,7 @@ all:
 	$(MAKE) -C platforms/cx16 build
 	$(MAKE) -C platforms/atari8 build
 	$(MAKE) -C platforms/bbcmaster build
+	$(MAKE) -C platforms/z80/cpm build
 
 build:
 	$(MAKE) -C platforms/commodore build
@@ -40,6 +42,7 @@ build:
 	$(MAKE) -C platforms/cx16 build
 	$(MAKE) -C platforms/atari8 build
 	$(MAKE) -C platforms/bbcmaster build
+	$(MAKE) -C platforms/z80/cpm build
 
 disk:
 	$(MAKE) -C platforms/commodore disk
@@ -47,6 +50,7 @@ disk:
 	$(MAKE) -C platforms/cx16 disk
 	$(MAKE) -C platforms/atari8 disk
 	$(MAKE) -C platforms/bbcmaster disk
+	$(MAKE) -C platforms/z80/cpm disk
 
 build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk64 disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass:
@@ -63,20 +67,24 @@ tools-ready:
 tools-ready-apple2: tools-ready
 	$(MAKE) -C platforms/apple2 ensure-ac ensure-prodos
 
+tools-ready-cpm:
+	$(MAKE) -C platforms/z80/cpm ensure-sjasmplus ensure-runcpm ensure-ctools
+
 clean:
 	$(MAKE) -C platforms/commodore clean
 	$(MAKE) -C platforms/apple2 clean
 	$(MAKE) -C platforms/cx16 clean
 	$(MAKE) -C platforms/atari8 clean
 	$(MAKE) -C platforms/bbcmaster clean
+	$(MAKE) -C platforms/z80/cpm clean
 
-# `make test` runs one up-front build, then seven isolated stages. They are
+# `make test` runs one up-front build, then eight isolated stages. They are
 # independent (each writes only its own build/test/<platform> scratch), so
-# `make -j7 -O test` runs them in parallel; plain `make test` runs them in
+# `make -j8 -O test` runs them in parallel; plain `make test` runs them in
 # order. The C64 and Plus/4 stages run test64 and testplus4; the C128 stage
 # runs the full test128 suite, not the test128-fast subsets.
 TEST_STAGES = test-stage-c64 test-stage-c128 test-stage-plus4 test-stage-apple2 test-stage-cx16 \
-	test-stage-atari8 test-stage-bbcmaster
+	test-stage-atari8 test-stage-bbcmaster test-stage-cpm
 
 test: $(TEST_STAGES)
 
@@ -90,7 +98,7 @@ check-item-docs:
 report-budgets:
 	python3 tools/report_memory_budgets.py
 
-test-prebuild: tools-ready-apple2
+test-prebuild: tools-ready-apple2 tools-ready-cpm
 	$(MAKE) check-item-docs
 	$(MAKE) check-hal-boundaries
 	$(MAKE) check-zp
@@ -107,6 +115,8 @@ test-prebuild: tools-ready-apple2
 	$(MAKE) -C platforms/atari8 disk
 	$(MAKE) -C platforms/bbcmaster test-memory-contract
 	$(MAKE) -C platforms/bbcmaster disk
+	$(MAKE) -C platforms/z80/cpm test-memory-contract
+	$(MAKE) -C platforms/z80/cpm disk
 	python3 -B tools/check_item_catalog_ports.py --selftest
 	python3 -B tools/check_item_catalog_ports.py
 	$(MAKE) playtest-check
@@ -135,6 +145,9 @@ test-stage-atari8: test-prebuild
 
 test-stage-bbcmaster: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/bbcmaster test-runtime
+
+test-stage-cpm: test-prebuild
+	$(MAKE) -C platforms/z80/cpm test-runtime
 
 # AI playtester (docs/AI_PLAYTEST_DESIGN.md). playtest-check and
 # playtest-dashboard do not launch an emulator; every other playtest-* target
@@ -167,9 +180,10 @@ PLAYTEST_DISK_atari8-cart = diskatari8 cartridgeatari8
 PLAYTEST_DISK_bbcmaster = diskbbcmaster
 PLAYTEST_DISK_cx16 = buildcx16
 PLAYTEST_DISK_cx16-cart = cartridgecx16
+PLAYTEST_DISK_cpm = diskcpm cpm-runner
 PLAYTEST_PORT = --port $(PORT)
 
-playtest-check: build64 cartridge64 buildplus4 cartridgeplus4 build128 cartridge128 buildapple2 buildatari8 cartridgeatari8 buildbbcmaster buildcx16 cartridgecx16
+playtest-check: build64 cartridge64 buildplus4 cartridgeplus4 build128 cartridge128 buildapple2 buildatari8 cartridgeatari8 buildbbcmaster buildcx16 cartridgecx16 buildcpm
 	$(PLAYTEST_PY) -m moria_playtest.check
 
 playtest-smoke: disk64
@@ -179,7 +193,7 @@ playtest-smoke: disk64
 # commit: a game finding or a run error fails it (moria_playtest/gate.py).
 # Each run isolates itself, as the queue's do. Minutes, not seconds.
 playtest-gate: disk64 cartridge64 diskplus4 cartridgeplus4 disk128 cartridge128 diskapple2 diskatari8 \
-		cartridgeatari8 diskbbcmaster buildcx16 cartridgecx16
+		cartridgeatari8 diskbbcmaster buildcx16 cartridgecx16 diskcpm cpm-runner
 	$(PLAYTEST_PY) -m moria_playtest.gate $(if $(GATE_WORKERS),--workers $(GATE_WORKERS)) \
 		$(if $(TARGETS),--targets $(TARGETS)) $(if $(GATE_ALLOW_SKIP),--allow-skip)
 
@@ -385,7 +399,33 @@ testbbcmaster-memory-contract: tools-ready
 testbbcmaster-memory-contract-selftest:
 	$(MAKE) -C platforms/bbcmaster test-memory-contract-selftest
 
-# ── Release artifacts (all seven ports) ────────────────────
+buildcpm:
+	$(MAKE) -C platforms/z80/cpm build
+
+diskcpm:
+	$(MAKE) -C platforms/z80/cpm disk
+
+cpm-runner:
+	$(MAKE) -C platforms/z80/cpm cpm-runner
+
+runcpm:
+	$(MAKE) -C platforms/z80/cpm run
+
+testcpm: testcpm-memory-contract
+	$(MAKE) -C platforms/z80/cpm test-runtime
+
+testcpm-smoke: testcpm-runtime
+
+testcpm-runtime: testcpm-memory-contract
+	$(MAKE) -C platforms/z80/cpm test-runtime
+
+testcpm-memory-contract:
+	$(MAKE) -C platforms/z80/cpm test-memory-contract
+
+testcpm-memory-contract-selftest:
+	$(MAKE) -C platforms/z80/cpm test-memory-contract-selftest
+
+# ── Release artifacts (all eight ports) ────────────────────
 # Image freshness is owned by the sub-makefiles; these rules always delegate.
 GPG         ?= gpg
 GPG_SIGN_FLAGS ?= --armor --detach-sign
@@ -407,9 +447,13 @@ CARTCX16_IMAGE     = $(BUILD)/moria8-cx16.crt
 DISKATARI8_IMAGE   = $(BUILD)/moria8-atari8.atr
 CARTATARI8_IMAGE   = $(BUILD)/moria8-atari8.car
 DISKBBCMASTER_IMAGE = $(BUILD)/moria8-bbcmaster.ssd
+DISKCPM_ZIP_IMAGE   = $(BUILD)/moria8-cpm.zip
+DISKCPM_KAYPRO2_IMAGE = $(BUILD)/moria8-cpm-kaypro2.dsk
+DISKCPM_KAYPRO4_IMAGE = $(BUILD)/moria8-cpm-kaypro4.dsk
+DISKCPM_C128_IMAGE  = $(BUILD)/moria8-cpm-c128.d71
 RELEASE_DIR        = $(BUILD)/release
 _RELEASE_VERSION  := $(or $(RELEASE_VERSION),$(shell python3 -B -c "import json; vs=sorted(set(json.load(open('version.json')).values())); print('v'+vs[0] if len(vs)==1 else '')"))
-BUILD_ARTIFACTS    = $(DISK64_IMAGE) $(CART64_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(CART128_IMAGE) $(DISKPLUS4_IMAGE) $(CARTPLUS4_IMAGE) $(DISKAPPLE2_IMAGE) $(DISKCX16_IMAGE) $(CARTCX16_IMAGE) $(DISKATARI8_IMAGE) $(CARTATARI8_IMAGE) $(DISKBBCMASTER_IMAGE)
+BUILD_ARTIFACTS    = $(DISK64_IMAGE) $(CART64_IMAGE) $(DISK128_D64_IMAGE) $(DISK128_D71_IMAGE) $(DISK128_D81_IMAGE) $(CART128_IMAGE) $(DISKPLUS4_IMAGE) $(CARTPLUS4_IMAGE) $(DISKAPPLE2_IMAGE) $(DISKCX16_IMAGE) $(CARTCX16_IMAGE) $(DISKATARI8_IMAGE) $(CARTATARI8_IMAGE) $(DISKBBCMASTER_IMAGE) $(DISKCPM_ZIP_IMAGE) $(DISKCPM_KAYPRO2_IMAGE) $(DISKCPM_KAYPRO4_IMAGE) $(DISKCPM_C128_IMAGE)
 RELEASE_ARTIFACTS  = $(foreach f,$(notdir $(BUILD_ARTIFACTS)),$(RELEASE_DIR)/$(basename $(f))-$(_RELEASE_VERSION)$(suffix $(f)))
 ARTIFACT_MANIFEST  = $(RELEASE_DIR)/SHA256SUMS
 ARTIFACT_SIGNATURES = $(addsuffix .asc,$(RELEASE_ARTIFACTS) $(ARTIFACT_MANIFEST))
@@ -447,6 +491,9 @@ $(DISKATARI8_IMAGE) $(CARTATARI8_IMAGE) &: FORCE
 
 $(DISKBBCMASTER_IMAGE): FORCE
 	$(MAKE) -C platforms/bbcmaster disk
+
+$(DISKCPM_ZIP_IMAGE) $(DISKCPM_KAYPRO2_IMAGE) $(DISKCPM_KAYPRO4_IMAGE) $(DISKCPM_C128_IMAGE) &: FORCE
+	$(MAKE) -C platforms/z80/cpm disk
 
 $(RELEASE_ARTIFACTS): $(BUILD_ARTIFACTS)
 	@test -n "$(_RELEASE_VERSION)" || { echo "ERROR: version.json versions disagree; set RELEASE_VERSION=vX.Y.Z" >&2; exit 1; }

@@ -3,7 +3,7 @@
 Only what the goals need (maintainer decision §16.4 item 3): healing, fear,
 finding the way out, and food, added as the traces call for them.
 
-The game's flow (core/player_magic.s): ``P`` asks "Prayer book (a-v)?", then
+The game's flow (core/6502/player_magic.s): ``P`` asks "Prayer book (a-v)?", then
 "Pray which? (a-c, ESC)"; ``?`` there shows the list of known prayers with
 their mana and level, and a letter prays one. ``F`` asks "Study which book
 (a-v)?" and a priest learns a random prayer it is ready for from that book
@@ -20,7 +20,7 @@ Mage-book casters (Mage, Rogue, Ranger; M5d) cast with ``m`` through "Spell
 book (a-v)?" and "Cast which? (a-p, ESC)", whose ``?`` list is titled "Mage
 Book". Studying, they choose: after the book prompt the game shows the spells
 that book can teach under "Study", with "Learn which? (a-c, esc)"
-(``item_gain_spell``, core/player_gain_spell_impl.s), and the bot picks by
+(``item_gain_spell``, core/6502/player_gain_spell_impl.s), and the bot picks by
 ``LEARN_ORDER``.
 """
 
@@ -34,7 +34,8 @@ from .game import Mode, Observation
 KEY_PRAY, KEY_CAST, KEY_STUDY, KEY_LIST, KEY_ESC = ord("P"), ord("M"), ord("F"), ord("?"), 0x1B
 STATUS_MP = re.compile(r"MP:\s*(\d+)/(\d+)")
 LIST_ROW = re.compile(r"^ ([a-z])\) (.+?)\s+(\d+)\s+(\d+)\s*$")   # " b) Cure Light Wounds   2    1"
-BOOK_RANGE = re.compile(r"\(a-([a-v])\)")
+CPM_LIST_ROW = re.compile(r"^\s+([a-z])\) (.+?)\s+(\d+)\s+(\d+)\s+\d+%\s+\S.*$")
+BOOK_RANGE = re.compile(r"\(a-([a-v])(?:,\s*\?-list)?\)")
 PACK_ROW = re.compile(r"^\s*([a-v])\) (?:\d+ )?(\S.*?)\s*$")
 
 CURE_LIGHT, CURE_MEDIUM = "Cure Light Wounds", "Cure Medium Wounds"
@@ -60,12 +61,12 @@ TELEPORT_SELF, FROST_BOLT = "Teleport Self", "Frost Bolt"   # Magick I, level 7
 # 2026-11-16).
 ESCAPE_MANA_DLVL = 20
 FIRE_BOLT, FROST_BALL, FIRE_BALL = "Fire Bolt", "Frost Ball", "Fire Ball"   # Magick II 15; Guide to Power 19, 29
-# A Mage's attacks and their average damage (core/spell_effects.s; docs/
+# A Mage's attacks and their average damage (core/6502/spell_effects.s; docs/
 # FEATURE_MAP.md §7.2): bolts 2d6, 3d8, 4d8 and 6d8; balls 9, 33 and 49.
 MAGE_ATTACKS = {MAGIC_MISSILE: 7.0, STINKING_CLOUD: 9.0, LIGHTNING_BOLT: 13.5, FROST_BOLT: 18.0,
                 FIRE_BOLT: 27.0, FROST_BALL: 33.0, FIRE_BALL: 49.0}
 
-# How each spell is cast (core/player_magic_execute_overlay.s, the dispatch
+# How each spell is cast (core/6502/player_magic_execute_overlay.s, the dispatch
 # tables): at a direction, on a pack item, or on the caster and what is
 # around it. M7 criterion 2 asks for every spell and prayer a class learns
 # below level 25, so can cast before reaching it, cast with its effect seen (§23.2).
@@ -83,42 +84,44 @@ NOT_EXERCISED = frozenset({"Word of Destruction", "Genocide"})
 # VMS's overcast messages: spells and prayers (the game since 2026-11-18;
 # "You faint from fatigue." before).
 FAINTS = ("You faint from the effort", "You faint from fatigue")
-NO_EFFECT = ("Your spell fails.", "fizzles out", *FAINTS, "You're not experienced enough.",
-             "You don't know that spell.", "You have nothing there.")
+NO_EFFECT = ("Your spell fails.", "You lost your concentration!", "fizzles out", *FAINTS,
+             "You're not experienced enough.", "You don't know that spell.", "You have nothing there.")
 # A creature's own doing in the same messages is not the spell's effect (a
 # Magic Missile's "evidence" was "the White Icky-Thing hits you", M7).
 CREATURE_ACT = re.compile(r"[Tt]he [^.!|]*? (?:hits|misses|bites|touches|stings|claws|crushes|kicks|casts|"
                           r"breathes|gazes|spits|butts|crawls|frightens|confuses|teleports|tries|shrieks)"
                           r"[^.!|]*[.!]?")
 # Screen text that is the cast's own prompts, not its effect.
-PROMPT_TEXT = re.compile(r"(Spell|Prayer) book \(a-.\)\?|Cast which\?.*|Pray which\?.*|Direction\?.*|"
-                         r"-more-|\(a-., ESC\)|ESC")
+PROMPT_TEXT = re.compile(
+    r"(?:Use which )?(?:Spell|Prayer|spell|prayer) book\?? \(a-[a-v](?:, \?-list)?\)\??|"
+    r"(?:Cast|Pray|Recite) which[^?]*\?.*|(?:Which )?[Dd]irection\?.*|--?more--|\(a-., ESC\)|ESC"
+)
 
-# The prayer books in order (core/item_tables.s itn_48, itn_58-60), and the
+# The prayer books in order (core/6502/item_tables.s itn_48, itn_58-60), and the
 # character level of each book's first prayer for a Priest and a Paladin
 # (docs/FEATURE_MAP.md §7.3): a book is worth buying from then on.
 PRAYER_BOOKS = ("Beginners Handbook", "Words of Wisdom", "Chants and Blessings", "Exorcism")
 # Rogues and Rangers cast from the Mage books too; the first spell of each
-# book at their levels (core/spell_class_data.s; 99: none to learn there).
+# book at their levels (core/6502/spell_class_data.s; 99: none to learn there).
 # Without them they never bought past Beginners-Magick: 5 of 11 Rogue and 7 of
 # 24 Ranger spells seen in the M7 queue (2026-11-01). Tactic "class_books".
 CASTER_BOOK_LEVELS = {"rogue": (5, 15, 25, 99), "ranger": (3, 7, 17, 27)}
 BOOK_LEVELS = {"priest": (1, 5, 9, 15), "paladin": (1, 9, 15, 29),
-               # A Mage's first spell in each book (core/spell_class_data.s
+               # A Mage's first spell in each book (core/6502/spell_class_data.s
                # mage_spell_level: spells 7, 16 and 24; M5f)
                "mage": (1, 3, 9, 19)}
-FIRST_BOOK = PRAYER_BOOKS[0]   # every Priest and Paladin starts with it (core/player_create.s)
+FIRST_BOOK = PRAYER_BOOKS[0]   # every Priest and Paladin starts with it (core/6502/player_create.s)
 # The store and pack show "Holy Book of Prayers <title>", cut to the line's
 # width: "Holy Book of Prayers Words" at the C64 Temple (M5b round 22, seed
 # 1003 replay: no book was ever bought under the bare title).
 BOOK_PREFIX = "Holy Book of Prayers "
 
 
-# The Mage books in order (core/item_tables.s itn_47, itn_55-57); the classes
-# that cast from them (core/tables.s class_properties, spell type 1).
+# The Mage books in order (core/6502/item_tables.s itn_47, itn_55-57); the classes
+# that cast from them (core/6502/tables.s class_properties, spell type 1).
 MAGE_BOOKS = ("Beginners-Magick", "Magick I", "Magick II", "The Mages Guide to Power")
 MAGE_CLASSES = ("mage", "rogue", "ranger")
-MAGE_BOOK_PREFIX = "Spellbook "   # the store and pack name (core/item_identification.s)
+MAGE_BOOK_PREFIX = "Spellbook "   # the store and pack name (core/6502/item_identification.s)
 # Spells to learn first when the Study list offers a choice: the attack, the
 # escape, then the traps that kill 6-9 HP Mages on DL1 and healing, then the
 # second book's bolts, poison cure and long escape (M5f: Mages learned their
@@ -170,7 +173,7 @@ class Magic:
     def __init__(self, klass: str = "priest") -> None:
         self.mage = klass in MAGE_CLASSES
         self.book_names = MAGE_BOOKS if self.mage else PRAYER_BOOKS
-        self.first_book = self.book_names[0]   # every caster starts with its first book (core/game_loop.s)
+        self.first_book = self.book_names[0]   # every caster starts with its first book (core/6502/game_loop.s)
         self.ever_books: set[str] = set()      # every book ever listed or read: only grows (prompt's shortcut)
         self.carried_books: list[str] | None = None   # the last book list as read, for the brain's books owned
         self.key = KEY_CAST if self.mage else KEY_PRAY
@@ -268,13 +271,13 @@ class Magic:
             self.listed_books.add(self.reading)
             self.listed = self.books is not None and all(b in self.listed_books for b in self.books)
         self.reading = None
-        if "You learn from the book!" in messages:
+        if "You learn from the book!" in messages or "You have learned the " in messages:
             if self.study_book is not None:
                 self.listed_books.discard(self.study_book)   # a new prayer there: read its list again
             self.listed = False
             self.study_due = True    # perhaps another
             self.study_book = None
-        if "No new spells to learn." in messages:
+        if "No new spells to learn." in messages or "No learnable spells in that book." in messages:
             if self.study_book is not None:
                 # Nothing more in this book: the next one, if any.
                 self.study_done.add(self.study_book)
@@ -407,6 +410,8 @@ class Magic:
                     return KEY_LIST, "prompt", "list the prayer books"
             return self.choose_book({b: chr(ord("a") + i) for i, b in enumerate(self.books)})
         book = self.current or self.first_book
+        if obs.stage == "learn_prompt":
+            return KEY_LIST, "prompt", "show the study spell list"
         if obs.stage == "learn":
             return self.learn(obs)
         if obs.stage == "list":
@@ -415,6 +420,10 @@ class Magic:
                 if match:
                     self.known[match.group(2)] = Prayer(match.group(1), int(match.group(3)), int(match.group(4)), book)
                     self.refused.discard(match.group(2))   # in a book carried: castable again
+                elif (cpm := CPM_LIST_ROW.match(row)):
+                    name = cpm.group(2).strip()
+                    self.known[name] = Prayer(cpm.group(1), int(cpm.group(4)), int(cpm.group(3)), book)
+                    self.refused.discard(name)
             self.listed_books.add(book)
             self.ever_books.add(book)
             self.listed = self.books is not None and all(b in self.listed_books for b in self.books)
@@ -487,6 +496,8 @@ class Magic:
             match = LIST_ROW.match(row)
             if match:
                 offered.setdefault(match.group(2), match.group(1))
+            elif (cpm := CPM_LIST_ROW.match(row)):
+                offered.setdefault(cpm.group(2).strip(), cpm.group(1))
         if not offered:
             self.study_book = None
             return KEY_ESC, "prompt", "nothing offered to learn: cancel"

@@ -66,7 +66,7 @@ OVL_OUTA2    = $(abspath $(OUTA2))
 A2ROMS      ?=
 REQUIRE_ALL_ROMS ?= 0
 
-KA_FLAGS     = -showmem -vicesymbols -libdir ../../core -libdir . -libdir hal -libdir ../commodore/common -define APPLE2 -afo
+KA_FLAGS     = -showmem -vicesymbols -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -define APPLE2 -afo
 PRG2BIN      = python3 -B ../../tools/prg_to_bin.py
 BUILD_CATALOG_TOOL = ../../tools/build_catalog.py
 MONSTER_SPEC = ../shared/catalog/monster_catalog_spec.json
@@ -79,8 +79,8 @@ TRAMPOLINES_INC      = $(BUILD)/trampolines/apple2_trampolines.inc
 
 A2_MAIN_SRC  = main.s
 A2_BOOT_SRC  = boot.s
-TITLE_SRC    = ../../core/title_data.s
-A2_SOURCES   := $(shell find . ../../core ../../platforms/shared ../../platforms/commodore/common -type f -name '*.s' -print) \
+TITLE_SRC    = ../../core/6502/title_data.s
+A2_SOURCES   := $(shell find . ../../core/6502 ../../platforms/shared ../../platforms/commodore/common -type f -name '*.s' -print) \
                 ../commodore/c128/ui_help_data_80.s
 
 # Payloads (PRG with 2-byte header, straight from Kick)

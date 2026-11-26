@@ -589,7 +589,7 @@ def scenario_priest_map_area(tb: X16Bench) -> None:
 
 
 def scenario_priest_find_traps(tb: X16Bench) -> None:
-    """Find Traps runs from OVL.SPELL (core/spell_effects_overlay.s, moved
+    """Find Traps runs from OVL.SPELL (core/6502/spell_effects_overlay.s, moved
     out of resident RAM 2026-11-08): a seeded trap is revealed on the map in
     Banks 1-2 and the game returns to the town view."""
     tb.chargen("C")
@@ -868,7 +868,7 @@ def scenario_wizard_summon_town(tb: X16Bench) -> None:
                 adjacent = True
     tb.assert_line("summon_spawned", found, "no new live monster slot after summon")
     # The catalog build keeps 32 dungeon rows, so the town roster is rows 32-39
-    # (core/monster.s TOWN_CREATURE_BASE).
+    # (core/6502/monster.s TOWN_CREATURE_BASE).
     tb.assert_line("summon_town_roster", 32 <= new_type <= 39, f"summoned type {new_type} outside town roster")
     tb.assert_line(
         "summon_glyph",
@@ -1266,7 +1266,7 @@ def scenario_dungeon_descend(tb: X16Bench) -> None:
 STUB_BASE = 0x0700
 STUB_DATA = 0x0730
 STUB_COUNT = 0x07F8
-MAX_SIGHT = 20          # VMS max_sight (core/monster_catalog.s CAT_MAX_SIGHT)
+MAX_SIGHT = 20          # VMS max_sight (core/6502/monster_catalog.s CAT_MAX_SIGHT)
 GEN_RESERVE_FROM = 26   # MAX_MONSTERS - CAT_GEN_RESERVE: no wanderer from here
 
 

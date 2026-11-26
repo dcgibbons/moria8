@@ -1,6 +1,6 @@
 #importonce
 // monster_catalog128.s — C128 monster catalog placement
-// (docs/MONSTER_CATALOG_DESIGN.md, core/monster_catalog.s; memory128.s and
+// (docs/MONSTER_CATALOG_DESIGN.md, core/6502/monster_catalog.s; memory128.s and
 // C128M-007 own the Bank 1 spans).
 //
 // The level index is resident (here, in the world payload): the picker reads

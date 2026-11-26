@@ -1,6 +1,6 @@
 #importonce
 // monster_catalog_bank.s — Commander X16 monster catalog placement
-// (docs/MONSTER_CATALOG_DESIGN.md, core/monster_catalog.s).
+// (docs/MONSTER_CATALOG_DESIGN.md, core/6502/monster_catalog.s).
 //
 // Bank 22 (MONSTER.CAT) holds the catalog's engine fields and its level
 // index; cx16_preload_banks loads it at boot. The names ride in Bank 4 after

@@ -1,7 +1,7 @@
 #importonce
 // Plus/4 cartridge catalog adapter. Owner: low resident RAM, session lifetime.
 // catalog_fetch_record supplies the exact disk-record representation to
-// core/monster_catalog.s from C1LO cartridge ROM.
+// core/6502/monster_catalog.s from C1LO cartridge ROM.
 #import "../common/catalog_records.s"
 .const CATALOG_EXT_RECORD_SIZE = 8
 .segmentdef CatalogHidden [start=CATALOG_HIDDEN_BASE, virtual]

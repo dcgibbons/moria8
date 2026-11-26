@@ -5,7 +5,7 @@
 
 .const hal_memory_has_cpu_port     = 0
 // Dummy port address for shared code that writes the port anyway (e.g.
-// core/player_items.s reload path): $0001 is unused RAM on this platform,
+// core/6502/player_items.s reload path): $0001 is unused RAM on this platform,
 // so the write is harmless. The BANK_* values are never consumed.
 .const hal_memory_cpu_port         = $01
 .const hal_memory_bank_all_ram     = $00

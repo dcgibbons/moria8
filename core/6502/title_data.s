@@ -17,7 +17,7 @@
 #endif
 .encoding "screencode_mixed"
 
-#import "../build/version_strings.inc"
+#import "../../build/version_strings.inc"
 
 .const TITLE_BORDER_COL = 1
 .const TITLE_INNER_COL = TITLE_BORDER_COL + 1

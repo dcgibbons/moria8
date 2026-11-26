@@ -25,9 +25,9 @@ test_finish:
 
 .pc = $0830 "Main"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
-#import "../../../../core/input_contract.s"
+#import "../../../../core/6502/input_contract.s"
 
 .const HSTR_PIQ_SPEED = 0
 .const HSTR_PIQ_PROTECTED = 1
@@ -122,7 +122,7 @@ rng_range:
     lda test_rng_result
     rts
 
-#import "../../../../core/player_magic_feedback.s"
+#import "../../../../core/6502/player_magic_feedback.s"
 
 test_start:
     lda #10

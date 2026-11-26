@@ -1,13 +1,13 @@
 #importonce
 // test_dungeon128.s — Dungeon render color-path regression checks (C128)
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
 #import "../hal/lifecycle_policy.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/store_door_lookup.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/store_door_lookup.s"
+#import "../../../../core/6502/color.s"
 #import "../screen_vdc.s"
 #import "../monster_threat_vdc.s"
 
@@ -19,8 +19,8 @@
 walkable_table:
     .byte 1,0,0,0,0,0,0,1,0,1,1,1,0,0,1,0
 
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/monster.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/monster.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -36,8 +36,8 @@ player_get_infra_range:
     lda #0
     rts
 
-// A monster coming into sight ends search mode (core/monster.s); this unit
-// test does not import core/player.s.
+// A monster coming into sight ends search mode (core/6502/monster.s); this unit
+// test does not import core/6502/player.s.
 player_search_mode_off:
     rts
 
@@ -93,8 +93,8 @@ df_disarm_chance:   .byte 0
 df_disarm_trap_idx: .byte 0
 df_disarm_total:    .byte 0
 df_disarm_base:     .byte 0
-#import "../../../../core/player_move_live_occupant.s"
-#import "../../../../core/player_run.s"
+#import "../../../../core/6502/player_move_live_occupant.s"
+#import "../../../../core/6502/player_run.s"
 
 test_map_tile: .byte 0
 test_map_x:    .byte 0

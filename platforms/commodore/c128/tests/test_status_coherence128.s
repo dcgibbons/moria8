@@ -6,7 +6,7 @@
 // - status-row clear must request forced status redraw
 // - non-status row clear must not set status redraw bits
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../screen_vdc.s"
 
 .const COL_WHITE = 1

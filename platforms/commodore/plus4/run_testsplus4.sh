@@ -18,7 +18,7 @@ java() {
             symdir_args=(-symbolfiledir "$TMPDIR")
         fi
         # The product builds' wrapper: KickAssembler exits 0 on a failed .assert.
-        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
+        "$REPO_ROOT/tools/kickass_java.sh" -jar "$jar_path" -libdir "$REPO_ROOT/core/6502" -libdir "$REPO_ROOT/platforms/commodore/common" -libdir "$REPO_ROOT/platforms/commodore" -afo "${symdir_args[@]}" "$@"
     else
         command java "$@"
     fi
@@ -261,8 +261,8 @@ run_plus4_static_contracts() {
 from pathlib import Path
 
 root = Path("../../..").resolve()
-player_items = (root / "core" / "player_items.s").read_text().splitlines()
-item_actions_overlay = (root / "core" / "item_actions_overlay.s").read_text().splitlines()
+player_items = (root / "core" / "6502" / "player_items.s").read_text().splitlines()
+item_actions_overlay = (root / "core" / "6502" / "item_actions_overlay.s").read_text().splitlines()
 main = (root / "platforms" / "commodore" / "plus4" / "main.s").read_text().splitlines()
 look_trampoline = (root / "platforms" / "commodore" / "plus4" / "look_trampoline.s").read_text().splitlines()
 
@@ -283,7 +283,7 @@ def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 40) -> 
     return False
 
 if any("$0102,x" in line or "$0104,x" in line for line in player_items):
-    print("core/player_items.s must not probe raw 6502 return addresses ($0102,x / $0104,x)")
+    print("core/6502/player_items.s must not probe raw 6502 return addresses ($0102,x / $0104,x)")
     raise SystemExit(1)
 
 if not has_ordered_chain(player_items, [
@@ -296,7 +296,7 @@ if not has_ordered_chain(player_items, [
     "#if !HAL_PLATFORM_AUX_PERSISTENT_DATA",
     "jsr hal_overlay_post_reload",
 ], window=40):
-    print("core/player_items.s inventory selector must return to outer overlays and call hal_overlay_post_reload after reloading the caller overlay")
+    print("core/6502/player_items.s inventory selector must return to outer overlays and call hal_overlay_post_reload after reloading the caller overlay")
     raise SystemExit(1)
 
 if not has_ordered_chain(main, [
@@ -3777,7 +3777,7 @@ check_static_contract "nest_gold_restores_generation_overlay_contract" "main.s" 
 check_static_contract "special_room_monsters_restore_generation_overlay_contract" "../../../build/trampolines/plus4_trampolines.inc" \
     "tramp_spawn_special_room_monsters:|||ldx #OVL_DUNGEON_GEN - 1|||jsr overlay_load_disk|||jsr spawn_special_room_monsters"
 check_static_contract "disarm_command_external_import_contract" "main.s" \
-    "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"
+    "#define DISARM_COMMAND_EXTERNAL|||#import \"../../../core/6502/game_loop.s\"|||#undef DISARM_COMMAND_EXTERNAL"
 run_disarm_smoke
 run_overlay_load_smoke
 run_retirement_royal_smoke

@@ -10,6 +10,7 @@ build/
 *.sym
 *.vs
 *.dbg
+*.exp
 
 # Disk and cartridge images
 *.d64
@@ -20,6 +21,8 @@ build/
 *.ssd
 *.crt
 *.car
+*.dsk
+*.com
 
 # Virtual ][ state
 *.viisnapshot
@@ -68,6 +71,11 @@ tools/kickass/
 # Apple II tooling (downloaded or user-supplied; do not vendor)
 tools/applecommander/
 tools/prodos/
+
+# CP/M Z80 tooling (downloaded or built; do not vendor)
+tools/sjasmplus/
+tools/runcpm/
+tools/ctools/
 
 # Python cache
 __pycache__/

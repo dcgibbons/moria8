@@ -22,10 +22,10 @@ test_finish:
 
 .encoding "screencode_mixed"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "mmu_macros.s"
 
 // Thunks from config.s, which is not imported by tests (main.s-only file).
@@ -54,14 +54,14 @@ mmu_safe_db_write_ptr1:
     sta (zp_ptr1),y
     rts
 
-#import "../../../../core/rng.s"
-#import "../../../../core/numeric_format.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/numeric_format.s"
+#import "../../../../core/6502/item_defs.s"
 .const HD_DECODE_BUF_SIZE = 64
 hd_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
 
-#import "../../../../core/item_tables.s"
-#import "../../../../core/item_identification.s"
+#import "../../../../core/6502/item_tables.s"
+#import "../../../../core/6502/item_identification.s"
 
 banked_ego_put_suffix:
     rts
@@ -89,7 +89,7 @@ fi_meta_hi: .byte 0
 fi_add_flags: .byte 0
 fi_add_ego:   .byte 0
 
-#import "../../../../core/item_desc_banked.s"
+#import "../../../../core/6502/item_desc_banked.s"
 
 test_start:
     jsr screen_clear
@@ -1226,7 +1226,7 @@ tc_results: .fill 12, $ff
 tc_results_end:
 
 
-// As core/ui_messages.s (not imported here): hal_screen_put_string with A/Y
+// As core/6502/ui_messages.s (not imported here): hal_screen_put_string with A/Y
 // = pointer
 screen_put_string_ay:
     sta zp_ptr0

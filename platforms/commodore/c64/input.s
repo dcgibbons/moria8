@@ -6,9 +6,9 @@
 // Numeric repeat prefixes are intentionally unimplemented.
 // `zp_input_count` is currently fixed to 1 for all commands.
 
-#import "../../../core/input_contract.s"
-#import "../../../core/input_tables.s"
-#import "../../../core/input_run_cancel.s"
+#import "../../../core/6502/input_contract.s"
+#import "../../../core/6502/input_tables.s"
+#import "../../../core/6502/input_run_cancel.s"
 #import "../../shared/item_catalog/item_ids.s"
 //
 // Note: GETIN returns PETSCII codes. We convert to command IDs

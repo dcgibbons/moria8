@@ -75,7 +75,7 @@
 .segmentdef HighResident       [start=$ddce, min=$ddce, max=$dfff, virtual]
 
 #import "hal/hal_contract.s"
-#import "../../core/zeropage.s"
+#import "../../core/6502/zeropage.s"
 #import "../commodore/common/vic_palette_consts.s"
 #import "memory.s"
 #import "hal/layout.s"
@@ -225,11 +225,11 @@ entry_main:
 .segment RuntimeBanked
 #import "legal.s"
 .segment Default
-#import "../../core/ui_help_command.s"
+#import "../../core/6502/ui_help_command.s"
 #import "monster_catalog_a8.s"
 // find_special_room only: item placement calls it with OVL.CHEST loaded
 // (the rest of special_rooms.s is in OVL.GEN, 2026-11-08).
-#import "../../core/special_rooms_find.s"
+#import "../../core/6502/special_rooms_find.s"
 
 // ============================================================
 // atari_install_vectors & exit_trampoline (< $4000)
@@ -356,11 +356,11 @@ low_helpers_end:
 // ============================================================
 // Resident Core Gameplay Modules ($1400-$C0FF)
 // ============================================================
-#import "../../core/color.s"
-#import "../../core/rng.s"
-#import "../../core/math.s"
-#import "../../core/tables.s"
-#import "../../core/item_defs.s"
+#import "../../core/6502/color.s"
+#import "../../core/6502/rng.s"
+#import "../../core/6502/math.s"
+#import "../../core/6502/tables.s"
+#import "../../core/6502/item_defs.s"
 // Equipment effect flags ride OVL.DTH behind hal_player_recalc_pflags
 // (Phase 4, frees ~400 B from RuntimeBanked $F000-$FFFA). OVL.DTH hosts
 // item_exchange, whose recalculation then needs no overlay swap on an 800XL
@@ -385,8 +385,8 @@ low_helpers_end:
     .segment Default
 }
 .label re_equip_entry = tramp_re_equip
-#import "../../core/player.s"
-#import "../../core/ui_messages.s"
+#import "../../core/6502/player.s"
+#import "../../core/6502/ui_messages.s"
 .segment HighResident
 .pc = PLATFORM_ITEM_NAME_DECODE_BUF_BASE "item_name_decode_buf"
 atari_item_name_decode_buf: .fill 48, 0     // core item_name_decode_buf (config.s)
@@ -403,16 +403,16 @@ high_resident_end:
 .macro StatusTextRestoreSegment() {
     .segment Default
 }
-#import "../../core/ui_status.s"
-#import "../../core/ui_help_clear.s"
+#import "../../core/6502/ui_status.s"
+#import "../../core/6502/ui_help_clear.s"
 .segment RuntimeBanked
-#import "../../core/generation_busy.s"
+#import "../../core/6502/generation_busy.s"
 .segment Default
 // put_stat_val in Default, where the low buffers moved to PRNBUF and high
 // RAM (memory.s, config.s) left room; the $F000 runtime is full.
-#import "../../core/stat_display.s"
-#import "../../core/huffman.s"
-#import "../../core/dungeon_data.s"
+#import "../../core/6502/stat_display.s"
+#import "../../core/6502/huffman.s"
+#import "../../core/6502/dungeon_data.s"
 #define CMD_JAM_EXTERNAL
 #define CMD_JAM_SEGMENT_CUSTOM
 .macro CmdJamSegment() {
@@ -439,22 +439,22 @@ high_resident_end:
 #define CHEST_ROUTING_ENABLED
 #define PLACE_SECRETS_EXTERNAL
 #define PICKER_IN_CHEST_OVERLAY
-#import "../../core/dungeon_features.s"
-#import "../../core/chest_search.s"
+#import "../../core/6502/dungeon_features.s"
+#import "../../core/6502/chest_search.s"
 #undef DISARM_HELPERS_EXTERNAL
 #undef DISARM_COMMAND_EXTERNAL
-#import "../../core/monster.s"
-#import "../../core/recall_defs.s"
-#import "../../core/monster_catalog.s"
-#import "../../core/tier_manager.s"
+#import "../../core/6502/monster.s"
+#import "../../core/6502/recall_defs.s"
+#import "../../core/6502/monster_catalog.s"
+#import "../../core/6502/tier_manager.s"
 #define ASSET_LOAD_PROMPT_EXTERNAL  // in RuntimeBanked below: Default is full
 #import "../commodore/common/overlay.s"
 #undef ASSET_LOAD_PROMPT_EXTERNAL
-#import "../../core/monster_ai.s"
-#import "../../core/scene_dirty.s"
-#import "../../core/scene_mat_tile.s"
-#import "../../core/scene_force.s"
-#import "../../core/recall.s"
+#import "../../core/6502/monster_ai.s"
+#import "../../core/6502/scene_dirty.s"
+#import "../../core/6502/scene_mat_tile.s"
+#import "../../core/6502/scene_force.s"
+#import "../../core/6502/recall.s"
 // The summoned undead's picker sits in ATARI.BNK beside cat_undead (RAM in the
 // game's banking, like the level index): Default has no room.
 #define UNDEAD_PICK_SEGMENT_CUSTOM
@@ -464,7 +464,7 @@ high_resident_end:
 .macro UndeadPickRestoreSegment() {
     .segment Default
 }
-#import "../../core/monster_magic.s"
+#import "../../core/6502/monster_magic.s"
 .macro ChestSummonsSegment() {
     .segment Default
 }
@@ -486,8 +486,8 @@ high_resident_end:
 .macro ItemSpawnRestoreSegment() {
     .segment Default
 }
-#import "../../core/item.s"
-#import "../../core/chest_summons.s"
+#import "../../core/6502/item.s"
+#import "../../core/6502/chest_summons.s"
 .macro ChestLootSegment() {
     .segment ChestOverlay
 }
@@ -500,20 +500,20 @@ high_resident_end:
 .macro ChestFixtureRestoreSegment() {
     .segment Default
 }
-#import "../../core/chest_loot.s"
+#import "../../core/6502/chest_loot.s"
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 // Potions of gain stat: imported here first (#importonce) so the quaff
 // dispatch's own import is empty and the code stays out of a full Default.
 .segment RuntimeBanked
-#import "../../core/eff_gain_stat.s"
+#import "../../core/6502/eff_gain_stat.s"
 .segment Default
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL
-#import "../../core/player_items.s"
-#import "../../core/player_recalc_equipment.s"
+#import "../../core/6502/player_items.s"
+#import "../../core/6502/player_recalc_equipment.s"
 #undef PLAYER_ITEM_COMMANDS_EXTERNAL
 #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
-#import "../../core/spell_data.s"
+#import "../../core/6502/spell_data.s"
 #define SPELL_EFFECTS_INCLUDE_IDENTIFY
 // Stone-to-Mud rides OVL.SPELL beside its only callers, the spell table and the
 // Phase 3 wand dispatch (2026-11-11: the VMS wands left Default 10 bytes past
@@ -525,18 +525,18 @@ high_resident_end:
 .macro WallToMudRestoreSegment() {
     .segment Default
 }
-#import "../../core/spell_effects.s"
+#import "../../core/6502/spell_effects.s"
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
-#import "../../core/player_magic_state.s"
-#import "../../core/player_magic_state_ops.s"
+#import "../../core/6502/player_magic_state.s"
+#import "../../core/6502/player_magic_state_ops.s"
 .segment ModalMiscOverlay
-#import "../../core/player_magic_levelup.s"
-#import "../../core/player_magic_tail.s"
+#import "../../core/6502/player_magic_levelup.s"
+#import "../../core/6502/player_magic_tail.s"
 .segment Default
-#import "../../core/player_magic.s"
+#import "../../core/6502/player_magic.s"
 
 #import "dungeon_render.s"
-#import "../../core/dungeon_los.s"
+#import "../../core/6502/dungeon_los.s"
 .macro PlayerMoveRestoreResidentSegment() {
     .segment Default
 }
@@ -544,7 +544,7 @@ high_resident_end:
     .segment ModalMiscOverlay
 }
 #define PLAYER_LOOK_EXTERNAL
-#import "../../core/player_move.s"
+#import "../../core/6502/player_move.s"
 .macro PlayerRunInitializeSegment() {
     .segment RuntimeBanked
 }
@@ -552,7 +552,7 @@ high_resident_end:
     .segment Default
 }
 #define PLAYER_RUN_INITIALIZE_EXTERNAL
-#import "../../core/player_run.s"
+#import "../../core/6502/player_run.s"
 #undef PLAYER_RUN_INITIALIZE_EXTERNAL
 
 run_initialize:
@@ -561,17 +561,17 @@ run_initialize:
 .assert "Atari 8-bit runner initialization entry stays resident", run_initialize < MAP_BASE, true
 
 #define PMU_TURN_FEEDBACK_EXTERNAL
-#import "../../core/combat.s"
+#import "../../core/6502/combat.s"
 #undef PMU_TURN_FEEDBACK_EXTERNAL
-#import "../../core/projectile.s"
+#import "../../core/6502/projectile.s"
 #define MON_ATK_ACID_EXTERNAL
-#import "../../core/monster_attack.s"
+#import "../../core/6502/monster_attack.s"
 #undef MON_ATK_ACID_EXTERNAL
-#import "../../core/turn.s"
+#import "../../core/6502/turn.s"
 .segment RuntimeBanked
-#import "../../core/store_data.s"
-#import "../../core/runtime_ui_strings.s"
-#import "../../core/monster_acid.s"
+#import "../../core/6502/store_data.s"
+#import "../../core/6502/runtime_ui_strings.s"
+#import "../../core/6502/monster_acid.s"
 .segment Default
 #import "../commodore/common/compat/io_kernal_consts.s"
 #define SAVE_STATE_SEGMENT_CUSTOM
@@ -593,10 +593,10 @@ run_initialize:
 .segment Default
 #import "hal/storage_policy.s"
 #define WIZARD_PROMPT_HELPERS_EXTERNAL
-#import "../../core/wizard.s"
+#import "../../core/6502/wizard.s"
 #undef WIZARD_PROMPT_HELPERS_EXTERNAL
 #define DISARM_COMMAND_EXTERNAL
-#import "../../core/game_loop.s"
+#import "../../core/6502/game_loop.s"
 #undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
 
@@ -1275,10 +1275,10 @@ program_end:
     .macro EgoArmourDataRestoreSegment() {
         .segment RuntimeBanked
     }
-    #import "../../core/ego_items.s"
+    #import "../../core/6502/ego_items.s"
     #undef EGO_ARMOUR_DATA_SEGMENT_CUSTOM
     #undef EGO_ARMOUR_SEGMENT_CUSTOM
-    #import "../../core/item_desc_banked.s"
+    #import "../../core/6502/item_desc_banked.s"
 
 // ============================================================
 // disk_prompt_save / disk_prompt_game — 1-drive swap prompts in RuntimeBanked
@@ -1354,8 +1354,8 @@ banked_code_end:
 // Overlays ($E000-$EFFF)
 // ============================================================
 .segment TownOverlay
-    #import "../../core/store.s"
-    #import "../../core/ui_store.s"
+    #import "../../core/6502/store.s"
+    #import "../../core/6502/ui_store.s"
 inv_add_carried:
     :InvAddCarriedBody()
 ovl_town_end:
@@ -1363,15 +1363,15 @@ ovl_town_end:
 .assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $f000, true
 
 .segment StartupOverlay
-    #import "../../core/background_data.s"
-    #import "../../core/player_create.s"
+    #import "../../core/6502/background_data.s"
+    #import "../../core/6502/player_create.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $e000) + " bytes at $E000-$" + toHexString(ovl_start_end)
 .assert "Startup overlay fits in $E000-$EFFF", ovl_start_end <= $f000, true
 
 .segment DeathOverlay
-    #import "../../core/score_io.s"
-    #import "../../core/score.s"
+    #import "../../core/6502/score_io.s"
+    #import "../../core/6502/score.s"
 tramp_game_over_run:
     jsr score_calculate
     jsr hiscore_load
@@ -1384,11 +1384,11 @@ tramp_game_over_run:
     lda death_source_saved
     sta zp_death_source
     jmp score_death_screen
-    #import "../../core/ui_recall.s"
-    #import "../../core/player_magic_earthquake.s"
-    #import "../../core/item_exchange.s"
-    #import "../../core/item_drop_cold.s"
-    #import "../../core/load_resume_reset_cold.s"
+    #import "../../core/6502/ui_recall.s"
+    #import "../../core/6502/player_magic_earthquake.s"
+    #import "../../core/6502/item_exchange.s"
+    #import "../../core/6502/item_drop_cold.s"
+    #import "../../core/6502/load_resume_reset_cold.s"
 ovl_death_end:
 .assert "Game-over tail runs in OVL.DTH", tramp_game_over_run >= $e000 && tramp_game_over_run < ovl_death_end, true
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
@@ -1426,8 +1426,8 @@ winner_apply_retirement_bonus_overlay:
     adc #$4c
     sta player_data + PL_XP_2
     rts
-    #import "../../core/royal.s"
-    #import "../../core/ui_wizard.s"
+    #import "../../core/6502/royal.s"
+    #import "../../core/6502/ui_wizard.s"
 wizard_prompt_clear_digits:
     lda #0
     sta wizard_num_digits
@@ -1455,7 +1455,7 @@ wizard_prompt_bad_value:
 
 wizard_bad_value_str:
     .text "BAD" ; .byte 0
-    #import "../../core/player_destroy_area.s"
+    #import "../../core/6502/player_destroy_area.s"
 ovl_modal_misc_end:
 .assert "Wizard prompt helpers run in OVL.MDL", wizard_prompt_clear_digits >= $e000 && wizard_bad_value_str < ovl_modal_misc_end, true
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
@@ -1467,23 +1467,23 @@ ovl_modal_misc_end:
     #define PMX_DESTROY_AREA_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
     #define PMX_MAP_AREA_TRAMPOLINE
-    #import "../../core/player_magic_slow_runtime.s"
+    #import "../../core/6502/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY
-    #import "../../core/player_magic_turn_banked.s"
+    #import "../../core/6502/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
-    #import "../../core/player_magic_execute_overlay.s"
+    #import "../../core/6502/player_magic_execute_overlay.s"
     #undef PMX_MAP_AREA_TRAMPOLINE
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_DESTROY_AREA_EXTERNAL
     #undef PMX_DETECT_EFFECTS_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
-    #import "../../core/player_magic_display.s"
-    #import "../../core/spell_effects_overlay.s"
-    #import "../../core/eff_identify_prompt_cold.s"
-    #import "../../core/eff_detect_evil_cold.s"
+    #import "../../core/6502/player_magic_display.s"
+    #import "../../core/6502/spell_effects_overlay.s"
+    #import "../../core/6502/eff_identify_prompt_cold.s"
+    #import "../../core/6502/eff_detect_evil_cold.s"
     #define SCROLL_P3_EXISTING_OWNER
     #define SCROLL_P3_NEW_OWNER
-    #import "../../core/scroll_effects_p3.s"
+    #import "../../core/6502/scroll_effects_p3.s"
     #undef SCROLL_P3_NEW_OWNER
     #undef SCROLL_P3_EXISTING_OWNER
 ovl_spell_end:
@@ -1491,41 +1491,41 @@ ovl_spell_end:
 .assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $f000, true
 
 .segment HelpOverlay
-    #import "../../core/ui_help_title.s"
-    #import "../../core/ui_help_data.s"
-    #import "../../core/ui_help_page2_data.s"
-    #import "../../core/ui_help.s"
-    #import "../../core/ui_help_cmd_cold.s"
-    #import "../../core/ui_character.s"
-    #import "../../core/ui_equipment.s"
+    #import "../../core/6502/ui_help_title.s"
+    #import "../../core/6502/ui_help_data.s"
+    #import "../../core/6502/ui_help_page2_data.s"
+    #import "../../core/6502/ui_help.s"
+    #import "../../core/6502/ui_help_cmd_cold.s"
+    #import "../../core/6502/ui_character.s"
+    #import "../../core/6502/ui_equipment.s"
     #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
-    #import "../../core/player_item_commands.s"
+    #import "../../core/6502/player_item_commands.s"
     #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
 
 .segment UiOverlay
-    #import "../../core/ui_identify.s"
-    #import "../../core/ui_inventory.s"
-    #import "../../core/spell_names.s"
-    #import "../../core/player_magic_select_overlay.s"
-    #import "../../core/player_gain_spell_impl.s"
-    #import "../../core/player_magic_browse_cold.s"
-    #import "../../core/player_magic_learn_op.s"
+    #import "../../core/6502/ui_identify.s"
+    #import "../../core/6502/ui_inventory.s"
+    #import "../../core/6502/spell_names.s"
+    #import "../../core/6502/player_magic_select_overlay.s"
+    #import "../../core/6502/player_gain_spell_impl.s"
+    #import "../../core/6502/player_magic_browse_cold.s"
+    #import "../../core/6502/player_magic_learn_op.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
 
 .segment ItemActionsOverlay
     #define SCROLL_P3_ROUTER_ENABLED
-    #import "../../core/item_actions_overlay.s"
-    #import "../../core/ranged_fire.s"
-    #import "../../core/throw.s"
-    #import "../../core/bash.s"
-    #import "../../core/calc_dig_cold.s"
-    #import "../../core/tunnel.s"
-    #import "../../core/door_open_close_cold.s"
+    #import "../../core/6502/item_actions_overlay.s"
+    #import "../../core/6502/ranged_fire.s"
+    #import "../../core/6502/throw.s"
+    #import "../../core/6502/bash.s"
+    #import "../../core/6502/calc_dig_cold.s"
+    #import "../../core/6502/tunnel.s"
+    #import "../../core/6502/door_open_close_cold.s"
 inv_add_carried_items:
     :InvAddCarriedBody()
 ovl_items_end:
@@ -1534,8 +1534,8 @@ ovl_items_end:
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $f000, true
 
 .segment DungeonGenOverlay
-    #import "../../core/special_rooms.s"
-    #import "../../core/dungeon_gen.s"
+    #import "../../core/6502/special_rooms.s"
+    #import "../../core/6502/dungeon_gen.s"
 ovl_gen_end:
 .assert "Special rooms run in OVL.GEN", assign_special_room >= $e000 && spawn_nest_gold < ovl_gen_end, true
 .assert "find_special_room is outside the $E000 window (the CHEST-loaded picker calls it)", find_special_room < MAP_BASE, true
@@ -1543,17 +1543,17 @@ ovl_gen_end:
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true
 
 .segment ChestOverlay
-    #import "../../core/chest.s"
-    #import "../../core/disarm.s"
-    #import "../../core/disarm_helpers.s"
+    #import "../../core/6502/chest.s"
+    #import "../../core/6502/disarm.s"
+    #import "../../core/6502/disarm_helpers.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $f000, true
 
 .segment HomeOverlay
-    #import "../../core/ui_home_text.s"
-    #import "../../core/ui_home.s"
-    #import "../../core/eff_item_p1.s"
+    #import "../../core/6502/ui_home_text.s"
+    #import "../../core/6502/ui_home.s"
+    #import "../../core/6502/eff_item_p1.s"
 ovl_home_end:
 .assert "Home overlay runs home_enter in $E000-$EFFF", home_enter >= $e000 && home_enter < ovl_home_end && home_draw_screen >= $e000 && home_draw_screen < ovl_home_end, true
 .print "Home overlay: " + (ovl_home_end - $e000) + " bytes at $E000-$" + toHexString(ovl_home_end)
@@ -1562,7 +1562,7 @@ ovl_home_end:
 .segment StorageOverlay
     #import "../commodore/common/save_slot_menu.s"
     #import "disk_setup_atari.s"
-    #import "../../core/item_refresh_known_cold.s"
+    #import "../../core/6502/item_refresh_known_cold.s"
 ovl_storage_end:
 .assert "Storage overlay hosts save/load, slot menu, and disk setup", save_game_impl >= $e000 && save_game_impl < ovl_storage_end && load_game_impl >= $e000 && load_game_impl < ovl_storage_end && save_select_slot_prompt_impl >= $e000 && save_select_slot_prompt_impl < ovl_storage_end && disk_setup_menu >= $e000 && disk_setup_menu < ovl_storage_end, true
 .print "Storage overlay: " + (ovl_storage_end - $e000) + " bytes at $E000-$" + toHexString(ovl_storage_end)
@@ -1572,10 +1572,10 @@ ovl_storage_end:
 title_str:
     .text "MORIA8 ATARI XL/XE" ; .byte 0
     #import "../commodore/common/title_screen.s"
-    #import "../../core/eff_item_extended.s"
-    #import "../../core/store_restock_overlay.s"
-    #import "../../core/player_magic_map.s"
-    #import "../../core/starting_kit_cold.s"
+    #import "../../core/6502/eff_item_extended.s"
+    #import "../../core/6502/store_restock_overlay.s"
+    #import "../../core/6502/player_magic_map.s"
+    #import "../../core/6502/starting_kit_cold.s"
 title_show_sysinfo:
     lda #COL_DGREY
     sta zp_text_color
@@ -1625,8 +1625,8 @@ ovl_title_end:
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay
-#import "../../core/ui_legal.s"
-#import "../../core/ui_legal_sysinfo.s"
+#import "../../core/6502/ui_legal.s"
+#import "../../core/6502/ui_legal_sysinfo.s"
 #import "legal_sysinfo.s"
 #if ATARI8_CARTRIDGE
 #import "legal_stream.s"

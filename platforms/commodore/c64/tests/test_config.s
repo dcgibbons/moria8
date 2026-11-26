@@ -1,6 +1,6 @@
 // test_config.s — C64 machine-detection contract smoke test
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../config.s"
 
 .pc = $0801 "BASIC Stub"

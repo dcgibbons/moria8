@@ -42,21 +42,21 @@ test_exit_trampoline:
 #define PLAYER_CHARGEN_EXTERNAL
 #define ITEM_SPAWN_EXTERNAL
 #define PICK_ITEM_TYPE_EXTERNAL
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #define REU_DETECT_EXTERNAL      // not exercised here; frees room below MAP_BASE
 #import "../../common/reu.s"
 #import "../screen.s"
-#import "../../../../core/color.s"
+#import "../../../../core/6502/color.s"
 #import "../config.s"
 // Product layout: scratch buffers in free page-2 RAM, keeping the test body
 // below MAP_BASE now that the acid attack's helpers are in item.s.
 #define PLATFORM_SCRATCH_BUFS_IN_PAGE2
 #import "../input.s"
-#import "../../../../core/rng.s"
-#import "../../../../core/math.s"
-#import "../../../../core/tables.s"
-#import "../../../../core/item_defs.s"
+#import "../../../../core/6502/rng.s"
+#import "../../../../core/6502/math.s"
+#import "../../../../core/6502/tables.s"
+#import "../../../../core/6502/item_defs.s"
 // The resistance armour roll, its suffixes and the equipment flags are not
 // exercised here (no item spawns, no equipping): out of the way above the
 // I/O hole (2026-11-11, which took the body past MAP_BASE).
@@ -73,28 +73,28 @@ test_exit_trampoline:
 // player_calc_stats ends in the flags routine, parked above: a stray call
 // stops here at a BRK (no results written) instead of running junk at $E1xx.
 #define PLAYER_RECALC_PFLAGS_EXTERNAL
-#import "../../../../core/player.s"
+#import "../../../../core/6502/player.s"
 hal_player_recalc_pflags:
     brk
-#import "../../../../core/ui_messages.s"
+#import "../../../../core/6502/ui_messages.s"
 .segment TestCreateOverlay
 player_create:
     brk
 .segment Default
-#import "../../../../core/sound.s"
-#import "../../../../core/dungeon_data.s"
-#import "../../../../core/store_door_lookup.s"
-#import "../../../../core/huffman.s"
-#import "../../../../core/dungeon_features.s"
+#import "../../../../core/6502/sound.s"
+#import "../../../../core/6502/dungeon_data.s"
+#import "../../../../core/6502/store_door_lookup.s"
+#import "../../../../core/6502/huffman.s"
+#import "../../../../core/6502/dungeon_features.s"
 #import "chest_summons_stubs.s"
 #define DUNGEON_TEST_TUNNEL_HOOK
-#import "../../../../core/dungeon_gen.s"
+#import "../../../../core/6502/dungeon_gen.s"
 #undef DUNGEON_TEST_TUNNEL_HOOK
-#import "../../../../core/monster.s"
-#import "../../../../core/tier_manager.s"
+#import "../../../../core/6502/monster.s"
+#import "../../../../core/6502/tier_manager.s"
 #import "../../common/overlay.s"
 .segment TestCreateOverlay
-#import "../../../../core/monster_ai.s"
+#import "../../../../core/6502/monster_ai.s"
 .segment Default
 // Recall stubs — minimal footprint to keep test below MAP_BASE ($C000).
 // Full recall.s adds 267 bytes; stubs save ~260 bytes.
@@ -135,16 +135,16 @@ mm_element_divisor_entry:
     sta mm_divisor
     rts
 #define HAL_PLATFORM_ITEM_CAT_CUSTOM
-#import "../../../../core/item.s"
+#import "../../../../core/6502/item.s"
 #import "item_cat_resident_helper.s"
 .segment TestUnusedEgoArmour
-#import "../../../../core/player_chargen_cold.s"
-#import "../../../../core/item_spawn_cold.s"
-#import "../../../../core/pick_item_type_cold.s"
+#import "../../../../core/6502/player_chargen_cold.s"
+#import "../../../../core/6502/item_spawn_cold.s"
+#import "../../../../core/6502/pick_item_type_cold.s"
 .segment Default
 .segment TestCreateOverlay
 .segment Default
-#import "../../../../core/special_rooms.s"
+#import "../../../../core/6502/special_rooms.s"
 .segment TestCreateOverlay
 .segment Default
 #define EGO_ARMOUR_SEGMENT_CUSTOM
@@ -161,24 +161,24 @@ mm_element_divisor_entry:
 .macro EgoArmourDataRestoreSegment() {
     .segment Default
 }
-#import "../../../../core/ego_items.s"
-#import "../../../../core/special_rooms_stubs.s"
+#import "../../../../core/6502/ego_items.s"
+#import "../../../../core/6502/special_rooms_stubs.s"
 .segment TestCreateOverlay
 #import "../dungeon_render.s"
 .segment Default
-#import "../../../../core/dungeon_los.s"
-#import "../../../../core/player_move.s"
-#import "../../../../core/player_run.s"
-#import "../../../../core/combat.s"
+#import "../../../../core/6502/dungeon_los.s"
+#import "../../../../core/6502/player_move.s"
+#import "../../../../core/6502/player_run.s"
+#import "../../../../core/6502/combat.s"
 // Exercise the production tunnel transition; deterministic maximum digging
 // ability keeps its focused door-state regression independent of equipment.
 tramp_dig_ability:
     lda #$ff
     sta tun_dig_ability
     rts
-#import "../../../../core/tunnel.s"
+#import "../../../../core/6502/tunnel.s"
 .segment TestCreateOverlay
-#import "../../../../core/scene_mat_tile.s"
+#import "../../../../core/6502/scene_mat_tile.s"
 .segment Default
 eff_fear_timer: .byte 0
 monster_attack_player:
@@ -245,7 +245,7 @@ ui_help_display:
 help_draw_line:
 help_draw_hborder:
     rts
-#import "../../../../core/ui_trampoline_stubs.s"
+#import "../../../../core/6502/ui_trampoline_stubs.s"
 
 audit_coord_passable:
     ldx audit_check_y

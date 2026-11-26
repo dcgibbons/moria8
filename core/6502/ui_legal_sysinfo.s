@@ -3,7 +3,7 @@
 // Reads live session ZP telemetry only from legal_zp_save so neither active
 // zero-page state nor LegalRestore() is ever disturbed.
 
-#import "../build/version_strings.inc"
+#import "../../build/version_strings.inc"
 
 .assert "SysInfo ZP snapshot bounds", zp_rng_0 >= LEGAL_ZP_SNAPSHOT_BASE && zp_rng_3 <= $8f && zp_turn_lo >= LEGAL_ZP_SNAPSHOT_BASE && zp_turn_hi <= $8f && zp_player_dlvl >= LEGAL_ZP_SNAPSHOT_BASE && zp_game_flags <= $8f && zp_mon_count >= LEGAL_ZP_SNAPSHOT_BASE && zp_item_count <= $8f, true
 .assert "RNG bytes contiguous", zp_rng_1 == zp_rng_0 + 1 && zp_rng_2 == zp_rng_0 + 2 && zp_rng_3 == zp_rng_0 + 3, true

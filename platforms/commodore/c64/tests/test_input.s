@@ -5,7 +5,7 @@
 
 .pc = $0810 "Test Code"
 
-#import "../../../../core/zeropage.s"
+#import "../../../../core/6502/zeropage.s"
 #import "../memory.s"
 #import "../input.s"
 

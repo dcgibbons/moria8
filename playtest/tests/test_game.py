@@ -145,10 +145,10 @@ class RoyalCrownTest(unittest.TestCase):
     def test_every_row_of_the_winners_crown_shares_one_center(self) -> None:
         """Maintainer, 2026-11-14: the victory crown's bottom row
         (*#######*#######*) sat a column left of the rest. Every row of
-        core/royal.s's crown is centered on the same column, as VMS
+        core/6502/royal.s's crown is centered on the same column, as VMS
         death.inc's crown is, and keeps the rows' common width."""
         import re
-        text = (launch.ROOT / "core" / "royal.s").read_text()
+        text = (launch.ROOT / "core" / "6502" / "royal.s").read_text()
         rows = re.findall(r'^royal_crown_\d+: \.text "([^"]*)"', text, re.M)
         self.assertEqual(len(rows), 7)
         self.assertEqual({len(row) for row in rows}, {len(rows[0])})
@@ -507,7 +507,7 @@ class CreatureFlagTest(unittest.TestCase):
     breeding. Until 2026-10-25 animal came from CD_FROST, dragon from
     CD_ANIMAL, and nothing bred."""
 
-    CF_ANIMAL, CF_DRAGON, CF_GROUP, CF_BREEDER = 0x08, 0x10, 0x20, 0x40   # core/monster.s
+    CF_ANIMAL, CF_DRAGON, CF_GROUP, CF_BREEDER = 0x08, 0x10, 0x20, 0x40   # core/6502/monster.s
 
     def flags(self) -> dict[str, int]:
         from moria_playtest import knowledge

@@ -15,7 +15,7 @@
 // file (IEC: a CHKIN on a file the drive refused can hang the KERNAL).
 #define HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE
 // hiscore_load asks the drive before reading HALL.OF.FAME (the probe is
-// resident here; core/score_io.s).
+// resident here; core/6502/score_io.s).
 #define HAL_STORAGE_SCORE_PROBES_FILE
 .const hal_storage_marker_file_num = 6
 .const hal_storage_marker_sec_read = 2
