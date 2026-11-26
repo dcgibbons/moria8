@@ -2456,7 +2456,7 @@ build_boot_assets() {
     c128_disk_payload_files "../../../build/test/c128"
     if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
             ../../../build/test/c128/boot128.prg ../../../build/test/c128/boot128.chain.prg ../../../build/test/c128/bootsect128.prg ../../../build/test/c128/bootart128.prg ../../../build/test/c128/moria128.prg ../../../build/test/c128/moria128.d71 "${C128_DISK_PAYLOAD_FILES[@]}" ../../../build/test/c128/main.vs -- \
-            main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json ../artwork/moria8_C128loadingart_tile_native.png ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py ../common/*.s ../c64/*.s; then
+            main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json ../../../build/.version.stamp ../artwork/moria8_C128loadingart_tile_native.png ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/version_info.py ../tools/ppm_to_c128_bootart.py ../common/*.s ../c64/*.s; then
         BOOT_ASSETS_BUILT=1
         return
     fi

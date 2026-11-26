@@ -3,27 +3,21 @@
 
 from __future__ import annotations
 
-import json
-import os
 import sys
-import tempfile
 from pathlib import Path
+
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+import version_info  # noqa: E402
 
 
 def load_versions(path: Path) -> dict[str, str]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError("version.json must be a JSON object")
-    versions: dict[str, str] = {}
-    for platform in ("c64", "c128", "plus4", "apple2", "cx16", "atari8", "bbcmaster"):
-        value = raw.get(platform)
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"version.json missing string version for {platform}")
-        version = value.strip()
-        if not version.lower().startswith("v"):
-            version = f"v{version}"
-        versions[platform] = version
-    return versions
+    resolved = version_info.resolve_versions(
+        path,
+        ports=("c64", "c128", "plus4", "apple2", "cx16", "atari8", "bbcmaster"),
+    )
+    return {p: pv.display for p, pv in resolved.ports.items()}
 
 
 def emit_include(dst: Path, versions: dict[str, str]) -> None:
@@ -69,26 +63,7 @@ def emit_include(dst: Path, versions: dict[str, str]) -> None:
 #endif
 #endif
 """
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    if dst.exists() and dst.read_text(encoding="utf-8") == text:
-        return
-    tmp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=dst.parent,
-            prefix=f".{dst.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as tmp:
-            tmp.write(text)
-            tmp_path = Path(tmp.name)
-        os.replace(tmp_path, dst)
-    except BaseException:
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
-        raise
+    version_info.atomic_write_if_changed(dst, text)
 
 
 def main() -> int:

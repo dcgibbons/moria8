@@ -33,6 +33,7 @@ ROOT = CPM_SRC_DIR.parents[2]
 if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 import item_ids  # noqa: E402
+import version_info  # noqa: E402
 DEFAULT_BUILD_DIR = ROOT / "build" / "cpm"
 DEFAULT_RUNNER = DEFAULT_BUILD_DIR / "cpm_runner"
 DEFAULT_RUNCPM = ROOT / "tools" / "runcpm" / "RunCPM"
@@ -126,9 +127,7 @@ def _resolve_tool(explicit: Path | None, env_name: str, default_path: Path) -> P
 
 
 def _load_expected_version() -> str:
-    raw = json.loads(VERSION_JSON.read_text(encoding="utf-8"))
-    ver = str(raw["cpm"]).strip()
-    return ver if ver.lower().startswith("v") else f"v{ver}"
+    return version_info.resolve_port_version(VERSION_JSON, "cpm").display
 
 
 def _load_huffman_corpus() -> list[str]:

@@ -9,9 +9,13 @@ listing.
 Usage: python3 tools/diskart.py <disk-file> <platform>
 """
 
-import json
 import sys
 from pathlib import Path
+
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+import version_info  # noqa: E402
 
 SECTORS_1541 = [0] + [21]*17 + [19]*7 + [18]*6 + [17]*5
 SECTORS_1571 = SECTORS_1541 + SECTORS_1541[1:]
@@ -64,20 +68,14 @@ def centered_art_line(text):
 
 
 def load_versions():
-    raw = json.loads(VERSION_FILE.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError("version.json must be a JSON object")
-    versions = {}
-    for platform in ("c64", "c128", "plus4"):
-        value = raw.get(platform)
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"version.json missing string version for {platform}")
-        versions[platform] = value.strip()
-    return versions
+    resolved = version_info.resolve_versions(VERSION_FILE, ports=("c64", "c128", "plus4"))
+    return {p: pv.bare for p, pv in resolved.ports.items()}
 
 
 def build_art(platform, version):
     display_version = version if version.lower().startswith("v") else f"v{version}"
+    if len(display_version) > 16:
+        raise ValueError(f"Directory art version {display_version!r} exceeds 16 chars")
     return [
         HLINE,
         centered_art_line("dungeons of"),

@@ -44,7 +44,15 @@ KA_FLAGS        = $(KA_COMMON_FLAGS) -symbolfiledir "$(OVL_OUTCX16)"
 KA_CART_FLAGS   = $(KA_COMMON_FLAGS) -define CX16_CARTRIDGE -symbolfiledir "$(CARTCX16_OUT)"
 VERSION_FILE = ../../version.json
 VERSION_INC_TOOL = ../../tools/make_version_include.py
+VERSION_INFO_TOOL = ../../tools/version_info.py
+VERSION_STAMP = $(BUILD)/.version.stamp
 VERSION_INC  = $(BUILD)/version_strings.inc
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+_VERSION_STAMP_ERR := $(shell mkdir -p "$(BUILD)" && python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$(VERSION_STAMP)" 2>&1)
+ifneq ($(strip $(_VERSION_STAMP_ERR)),)
+$(error $(_VERSION_STAMP_ERR))
+endif
+endif
 GEN_TRAMPOLINES_TOOL = ../../tools/gen_trampolines.py
 TRAMPOLINE_MANIFEST  = ../../tools/trampoline_manifest.py
 TRAMPOLINES_INC      = $(BUILD)/trampolines/cx16_trampolines.inc
@@ -171,7 +179,10 @@ else
 	@../../tools/ensure_kickass.sh --custom "$(KICKASS_DIR)" "$(KICKASS_RESOLVED)"
 endif
 
-$(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(BUILD)
+$(VERSION_STAMP): $(VERSION_FILE) $(VERSION_INFO_TOOL) | $(BUILD)
+	python3 -B "$(VERSION_INFO_TOOL)" --version-file "$(VERSION_FILE)" --write-stamp "$@"
+
+$(VERSION_INC): $(VERSION_FILE) $(VERSION_STAMP) $(VERSION_INC_TOOL) $(VERSION_INFO_TOOL) | $(BUILD)
 	python3 -B "$(VERSION_INC_TOOL)" "$(VERSION_FILE)" "$(VERSION_INC)"
 
 $(TRAMPOLINES_INC): $(GEN_TRAMPOLINES_TOOL) $(TRAMPOLINE_MANIFEST) | $(BUILD)
@@ -214,8 +225,8 @@ $(CX16_PKG_OUT):
 $(CX16_AUTOBOOT): $(CX16_MAIN_PRG) | $(CX16_PKG_OUT)
 	cp "$<" "$@"
 
-$(CX16_MANIFEST): $(VERSION_FILE) Makefile | $(CX16_PKG_OUT)
-	python3 -B -c "import json, pathlib; v = json.loads(pathlib.Path('$<').read_text(encoding='utf-8'))['cx16']; pathlib.Path('$@').write_text(json.dumps({'manifest_version': '1.0.0', 'name': 'Moria8', 'author': 'Chad Gibbons', 'app_version': v, 'license': 'GPL-3.0-or-later', 'ram': '512', 'start_prg': 'MORIA8.PRG'}, indent=2) + '\n', encoding='utf-8')"
+$(CX16_MANIFEST): $(VERSION_FILE) $(VERSION_STAMP) $(VERSION_INFO_TOOL) Makefile | $(CX16_PKG_OUT)
+	python3 -B -c "import json, pathlib, sys; sys.path.insert(0, '../../tools'); import version_info; v = version_info.resolve_port_version(pathlib.Path('$<'), 'cx16').bare; pathlib.Path('$@').write_text(json.dumps({'manifest_version': '1.0.0', 'name': 'Moria8', 'author': 'Chad Gibbons', 'app_version': v, 'license': 'GPL-3.0-or-later', 'ram': '512', 'start_prg': 'MORIA8.PRG'}, indent=2) + '\n', encoding='utf-8')"
 
 $(CX16_ZIP_IMAGE): $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_MONSTER_EXT_PRG) $(CX16_ITEM_CAT_PRG) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER) $(CX16_AUTOBOOT) $(CX16_MANIFEST)
 	rm -f "$@"
@@ -247,7 +258,7 @@ $(CX16_CART_LIVE_TEST_PRG): cartridge_test_live.s $(CARTCX16_OUT)/main.sym | ens
 	cp "$(CARTCX16_OUT)/main.sym" "$(CARTCX16_OUT)/cartridge_product_symbols.inc"
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" cartridge_test_live.s -libdir "$(CARTCX16_OUT)" -symbolfiledir "$(CARTCX16_OUT)" -symbolfile -o "$@"
 
-$(CX16_CART_IMAGE) $(CX16_CART_BIN) $(CX16_CART_MANIFEST) &: $(CX16_CART_PRGS) $(CARTCX16_OUT)/main.sym $(CX16_CART_BOOT_BIN) $(CARTCX16_OUT)/cartridge_boot.sym $(CX16_CART_TITLE_PRG) $(CX16_CART_MONSTER_EXT_PRG) $(CX16_CART_ITEM_CAT_PRG) $(LICENSE_FILE) $(SOURCE_OFFER) $(VERSION_FILE) ../../tools/make_cx16_cart.py
+$(CX16_CART_IMAGE) $(CX16_CART_BIN) $(CX16_CART_MANIFEST) &: $(CX16_CART_PRGS) $(CARTCX16_OUT)/main.sym $(CX16_CART_BOOT_BIN) $(CARTCX16_OUT)/cartridge_boot.sym $(CX16_CART_TITLE_PRG) $(CX16_CART_MONSTER_EXT_PRG) $(CX16_CART_ITEM_CAT_PRG) $(LICENSE_FILE) $(SOURCE_OFFER) $(VERSION_FILE) $(VERSION_STAMP) $(VERSION_INFO_TOOL) ../../tools/make_cx16_cart.py
 	python3 -B ../../tools/make_cx16_cart.py \
 		--build-dir "$(CARTCX16_OUT)" \
 		--data-dir ../../data \
