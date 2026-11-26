@@ -2,8 +2,8 @@
 
 Moria8 is a port of the classic roguelike game, Moria, for 8-bit platforms
 written in platform-specific assembly. It targets the Commodore 64, Plus/4, and
-128 systems, the Apple II, the Commander X16, Atari 8-bit systems, and the
-Acorn BBC Master 128.
+128 systems, the Apple II, the Commander X16, Atari 8-bit systems, the
+Acorn BBC Master 128, and CP/M 2.2 Z80 systems (in progress).
 
 Visit **[moria8.org](https://moria8.org)** for downloads, guides, the monster
 compendium, and platform gameplay previews.
@@ -57,6 +57,11 @@ Want a real floppy disk of Moria8? Please fill out the
   supplied in `A2ROMS`, `ATARI8ROMS`, and `BBCMROMS` (MAME runtime suites warn
   and skip when the matching env var is unset)
 - **Commander X16 emulation:** `x16emu` (`X16EMU`, optional `X16ROM`)
+- **CP/M 2.2 (Z80) build, packaging & testing:** C/C++ compiler (`g++` / `clang++`
+  for `tools/cpm_runner`), `sjasmplus` (auto-downloads/builds into
+  `tools/sjasmplus/`, override with `SJASMPLUS`), `RunCPM` (auto-downloads/builds
+  into `tools/runcpm/`, override with `RUNCPM`), and `ctools` / `cformat`
+  (auto-downloads/builds into `tools/ctools/`, override with `CTOOLS` / `CFORMAT`)
 - **Optional tools:** `Pillow`, `numpy`, and `ffmpeg` for gameplay GIF capture
   (`tools/gifcapture/`); `gpg` (`GPG`) and `sha256sum` or `shasum` (`SHA256`) for release
   packaging (`make artifacts`, `make artifact-checksums`)
@@ -65,11 +70,11 @@ Want a real floppy disk of Moria8? Please fill out the
 
 ```sh
 make build              # Build binaries and cartridges for all platforms under build/
-make disk               # Build all 14 shipping disks, archives, and cartridges under build/
+make disk               # Build all 18 shipping disks, archives, and cartridges under build/
 make run                # Launch the Commodore 64 disk in VICE
-make test               # Run the regression suite (`make -j7 -O test` runs all 7 stages)
-make artifact-checksums # Build all 14 versioned release artifacts and build/release/SHA256SUMS
-make artifacts          # Build, checksum, and GPG-sign all 14 release artifacts
+make test               # Run the regression suite (`make -j8 -O test` runs all 8 stages)
+make artifact-checksums # Build all 18 versioned release artifacts and build/release/SHA256SUMS
+make artifacts          # Build, checksum, and GPG-sign all 18 release artifacts
 make clean              # Remove build/ artifacts
 ```
 
@@ -84,6 +89,7 @@ make clean              # Remove build/ artifacts
 | Commander X16 | `make diskcx16` | `make cartridgecx16` | `make runcx16` (`runcx16-cart`) | `make testcx16` (`testcx16-runtime`, `testcx16-cartridge`) | `moria8-cx16.zip`, `moria8-cx16.crt` |
 | Atari 8-bit | `make diskatari8` | `make cartridgeatari8` | `make runatari8` (`runatari8-130xe`, `runatari8-cart`, `runatari8-cart-130xe`) | `make testatari8` (`testatari8-fast-smoke`, `testatari8-cartridge`) | `moria8-atari8.atr`, `moria8-atari8.car` |
 | BBC Master 128 | `make diskbbcmaster` | — | `make runbbcmaster` | `make testbbcmaster` (`testbbcmaster-fast-smoke`, `testbbcmaster-runtime`) | `moria8-bbcmaster.ssd` |
+| CP/M 2.2 (Z80) *(in progress)* | `make diskcpm` | — | `make runcpm` | `make testcpm` (`testcpm-memory-contract`) | `moria8-cpm.zip`, `moria8-cpm-kaypro2.dsk`, `moria8-cpm-kaypro4.dsk`, `moria8-cpm-c128.d71` |
 
 ## Documentation
 

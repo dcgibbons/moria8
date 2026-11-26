@@ -43,7 +43,7 @@ address at or above `0x5600` or moving `SP`:
 2. Load `LD HL, (0x0006)` (`CPM_BDOS_VEC`) and verify `HL >= 0xD100` (`BDOS_MIN_TOP`,
    i.e., `LD A, H : CP 0xD1`).
 3. If `HL < 0xD100`, keep the CP/M CCP stack intact, print an informative message
-   via `BDOS 9` (`"Insufficient TPA: requires 52K ($D100+).\r\n$"`) and exit
+   via `BDOS 9` (`"Insufficient TPA: requires 52K (0xD100+).\r\n$"`) and exit
    cleanly via `LD C, 0 : CALL 0x0005` (`BDOS 0`).
 4. Once `HL >= 0xD100` is confirmed, switch `LD SP, STACK_TOP` (`0x8E00`), write
    the 4-byte stack canary at `STACK_BOTTOM` (`0x8C00–0x8C03`), zero-fill BSS
@@ -69,7 +69,7 @@ zero dynamic heap allocation and zero bank switching in the CP/M 2.2 baseline.
 | --- | ---: | --- | --- |
 | `0x0000–0x00FF` | `256` B | **CP/M Page Zero** | `0x0000` warm boot (`JP BIOS+3`), `0x0003` IOBYTE, `0x0004` current disk/user, `0x0005–0x0007` BDOS vector (`>= 0xD100`), `0x005C–0x007F` default FCB, `0x0080–0x00FF` CLI tail / initial DMA (saved/parsed at startup, then DMA moves to `0xD080`). |
 | `0x0100–0x55FF` | `21,760` B | **`MORIA8.COM` Resident Code & RO Data** | Loaded by CP/M CCP from `0x0100` (measured M5 build: **`21,598` B**, `0x0100–0x555E`, **`162` B headroom**). Hosts boot/TPA guard, BDOS HAL, ADM-3A/ANSI diff renderer, CSI input, RNG, `MORIA8.DAT` loader, Huffman & `ITEM.CAT` decoders + `item_desc` core, hot walk/turn/LOS/combat/monster AI engine, measured built RO tables (`2,403` B incl. `ALIGN 256` page-tail), and 6-byte inline-descriptor `tramp_*` dispatchers (§2.2). **Guard:** `ASSERT resident_end <= OVL_WINDOW_BASE` (`<= 0x5600`). |
-| `0x5600–0x69FF` | `5,120` B | **`OVL_WINDOW_BASE` (Shared Overlay Slot)** | `40 × 128` B CP/M records (`OVL_WINDOW_SIZE = 0x1400`). Uninitialized in `MORIA8.COM` (never padded into `.COM`). All `19` overlays link with `ORG 0x5600` (`626`–`4,805` B built) and stream directly on demand from `MORIA8.DAT` via `BDOS 33`, resolving Finding 1 (`+1,024` B over 4 KB 6502 overlays, §2.2). **Guard:** `ASSERT ovl_start == 0x5600 && ovl_end <= 0x6A00`. |
+| `0x5600–0x69FF` | `5,120` B | **`OVL_WINDOW_BASE` (Shared Overlay Slot)** | `40 × 128` B CP/M records (`OVL_WINDOW_SIZE = 0x1400`). Uninitialized in `MORIA8.COM` (never padded into `.COM`). All `19` overlays link with `ORG 0x5600` (`626`–`4,810` B built; largest `ovl_modal.ovl` = `4,810` B) and stream directly on demand from `MORIA8.DAT` via `BDOS 33`, resolving Finding 1 (`+1,024` B over 4 KB 6502 overlays, §2.2). **Guard:** `ASSERT ovl_start == 0x5600 && ovl_end <= 0x6A00`. |
 | `0x6A00–0x8BFF` | `8,704` B | **Resident BSS & Game State** | Zeroed at boot after TPA check (`BSS_BASE = 0x6A00`, `BSS_LIMIT = 0x8C00`). Starts with the fixed 64-byte ABI block `z80_state` at `0x6A00–0x6A3F`, followed by `8,332` B static game state and caches (**`8,396` B** total measured M5 BSS allocated, `0x6A00–0x8ACC`, **`308` B slack**, §2.1). **Guard:** `ASSERT bss_end <= STACK_BOTTOM` (`<= 0x8C00`). |
 | `0x8C00–0x8DFF` | `512` B | **Application & BDOS Stack** | `STACK_BOTTOM = 0x8C00`, `STACK_TOP = 0x8E00`. Bottom 4 bytes (`0x8C00–0x8C03`) hold `stack_canary` (`'M','8','S','K'` / `0x4D, 0x38, 0x53, 0x4B`), leaving `508` B (`254` words) for game call frames + BDOS/BIOS calls. |
 | `0x8E00–0x957F` | `1,920` B | **`cpm_char_shadow` (`80 × 24` ASCII)** | `CPM_CHAR_SHADOW_BASE = 0x8E00 .. 0x957F`. Stores 7-bit ASCII screen cells (`row * 80 + col`). **Dual-use:** temporarily reused as `OVL_GEN` scan scratch during dungeon generation (§2.3). |
@@ -112,7 +112,7 @@ To keep `MORIA8.COM` within `21,760` B (`0x5600`) while keeping the hot turn/wal
 | --- | ---: | --- |
 | **Built RO Data Tables (`build/cpm/*.inc`)** | **`2,403` B** (`2.35 KB`) | `256` B `ALIGN 256` `huff_tree_page` (`0x0E00–0x0EFF`: `120` B `huff_tree` + `117` B `monster_idx_z80` + `16` B `sgr_lut` + `3` B pad) + `496` B `huff_str_index` + `367` B `item_cat_pinned_z80` + `1,284` B `item_hot_tables_z80` |
 | **Boot, HAL, Core Engine & Huffman/Catalog Code** | **`18,667` B** | Boot/TPA guard, `bdos_io`, `screen_ansi` (ADM-3A/ANSI), `input_csi`, `sound_bel`, `rng`, `dat_loader`, Huffman & `ITEM.CAT` LRU decoders, `item_desc`, `game_loop`, LOS, viewport, combat, monster AI, math, `player_core`, `status_bar`, `messages`, plus final exit/error tail strings |
-| **Compact `tramp_*` Dispatchers (`0x5355–0x5564`)** | **`528` B** | `88` 6-byte inline-descriptor `tramp_*` entry stubs (`CALL overlay_trampoline : DB ovl_id : DW target`) at the tail of code before final strings |
+| **Compact `tramp_*` Dispatchers (`0x5312–0x5521`)** | **`528` B** | `88` 6-byte inline-descriptor `tramp_*` entry stubs (`CALL overlay_trampoline : DB ovl_id : DW target`) ending at `0x5522`, before final code/string tail (`resident_end = 0x555E`) |
 | **Total M5 Resident Footprint (`MORIA8.COM`)** | **`21,598` B** | **`0x0100–0x555E`**; leaves **`162` B free slack** below `OVL_WINDOW_BASE` (`0x5600`) |
 
 * **CX16 `Default` Cold-Code Eviction & Platform-Elimination Accounting:**
@@ -122,7 +122,7 @@ To keep `MORIA8.COM` within `21,760` B (`0x5600`) while keeping the hot turn/wal
   * `inven_calc` / `inv_add` / `roll_enchant` -> `OVL_ITEM_MGT` / `OVL_GEN` / `OVL_CHEST`
   * `door` / `trap` / `search` commands -> `OVL_ACTIONS`
   * `race` / `class` creation tables -> `OVL_START` / `OVL_UI`
-* **M3–M4 Resident Overflow Fallback:** If late-milestone feature additions ever pressure the `0x5600` ceiling, remaining cold helpers can be evicted into the `5,120` B overlays or spare TOC slots `25..40` at only **`6` B** per resident `tramp_*` stub.
+* **Resident Ceiling Policy (`0x5600`):** Post-M5 `MORIA8.COM` stands at `21,598` B (`162` B below `0x5600`). If future features pressure the `0x5600` ceiling, move cold helpers into the `5,120` B overlays or spare TOC slots `25..40` at only **`6` B** per resident `tramp_*` stub.
 * **Why `5,120` B (`40` Records) Resolves Finding 1:** Expanding `OVL_WINDOW_SIZE` from `4,096` B / `4,608` B to **`5,120` B (`40 × 128` B records)** adds **`+1,024` B** over C64/Plus4/C128/Atari8 `4,096` B overlays (where all 13 fit `<= 4,048` B). With Z80 code density, `5,120` B holds **`~5.7–6.0 KB` of 6502 code**, fitting unsplit 80-column overlays cleanly without floppy double-reload thrashing.
 
 * **`huff_ascii` `ALIGN 256` Page-Tail Packing (`253 / 256` B usable inside `256` B page):**
@@ -148,12 +148,13 @@ BSS. Therefore:
    `GEN_SCAN_SCRATCH_SIZE = 1920`).
 2. During `OVL_GEN` execution, no screen flush (`screen_flush`) may be called
    while `cpm_char_shadow` holds scratch bytes.
-3. **Mandatory Exit Cleanliness (`ESC[0m` + `ESC[2J` + Clean Shadows):** before
+3. **Mandatory Exit Cleanliness (Terminal Clear + Clean Shadows):** before
    returning to gameplay, `OVL_GEN`'s exit path **must**:
-   * Emit **`ESC[0m` followed by `ESC[2J`** via `BDOS 6` so terminal SGR color /
-     reverse-video state is explicitly reset before clearing the physical
-     terminal screen (preventing reverse/color bleed across cleared background
-     cells and avoiding a slow 1,920-space serial flood).
+   * Call `screen_clear_hw` via `BDOS 6` so the physical terminal resets cleanly
+     without a slow 1,920-space serial flood: ADM-3A mode (`abi_term_mode == 0`)
+     emits `0x1A` (`SUB`), while VT100/ANSI modes (`/V`, `/M`) emit **`ESC[0m`
+     followed by `ESC[2J`** so terminal SGR color / reverse-video state is
+     explicitly cleared.
    * Fill `cpm_char_shadow` (`0x8E00–0x957F`) with `' '` (`0x20`) and clear
      `cpm_color_shadow` (`0x9580–0x9CFF`) to clean default state (**`dirty = 0`**,
      not `0x80`), invalidating `screen_flush`'s tracked cursor/SGR state.
@@ -194,7 +195,7 @@ chasing shifting symbol addresses across builds.
 | ---: | --- | ---: | --- | --- |
 | `+0x00` | `0x6A00` | `4` B | `abi_magic` | ASCII `'M','8','Z','0'` written after BSS zero-fill |
 | `+0x04` | `0x6A04` | `1` B | `abi_version` | ABI struct version (`0x01`) |
-| `+0x05` | `0x6A05` | `1` B | `abi_monochrome` | `0` = 16-color ANSI SGR, `1` = `/M` monochrome mode |
+| `+0x05` | `0x6A05` | `1` B | `abi_monochrome` | `0` = 16-color ANSI SGR (`/V`), `1` = monochrome (`/M` ANSI mono or `/A` ADM-3A default) |
 | `+0x06` | `0x6A06` | `1` B | `abi_current_overlay` | Currently loaded overlay ID (`0` = `OVL_NONE`, `1..19` = `OVL_START..OVL_ITEM_MGT`) |
 | `+0x07` | `0x6A07` | `1` B | `abi_overlay_depth` | Current nested overlay trampoline stack depth (`0..8`) |
 | `+0x08` | `0x6A08` | `4` B | `abi_rng_seed` | 32-bit PRNG state (`rng_0..rng_3`, little-endian) |

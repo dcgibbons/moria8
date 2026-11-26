@@ -4,21 +4,23 @@
 
 | Path | Purpose |
 | --- | --- |
-| `Makefile` | Root build, disk, cartridge, run, and test wrapper across all seven platform ports |
-| `core/` | Platform-agnostic 6502 gameplay, UI, data, and utility modules |
+| `Makefile` | Root build, disk, cartridge, run, and test wrapper across all eight platform ports |
+| `core/6502/` | Platform-agnostic 6502/65C02 gameplay, UI, data, and utility modules |
+| `core/z80/` | Platform-agnostic Z80 gameplay, UI, and catalog logic (parallel core for CP/M 2.2) |
 | `platforms/commodore/Makefile` | Commodore build, disk, cartridge, run, and test orchestration |
 | `platforms/commodore/c64/` | C64 entry, platform code, cartridge builder glue, tests, and harness scripts |
 | `platforms/commodore/c128/` | C128 boot, VDC/MMU, dual-bank runtime, cartridge builder glue, tests, and harness scripts |
 | `platforms/commodore/plus4/` | Plus/4 entry, TED platform code, cartridge builder glue, tests, and harness scripts |
 | `platforms/commodore/common/` | Shared Commodore KERNAL, disk, overlay, catalog, REU, and compatibility modules |
-| `platforms/shared/` | Cross-architecture modules shared by all seven ports (`save.s`, `save_slot_menu.s`, `legal_disk_stream.s`, `legal_entry.s`, shared catalog/item generators) |
+| `platforms/shared/` | Cross-architecture modules shared by the seven 6502 ports (`save.s`, `save_slot_menu.s`, `legal_disk_stream.s`, `legal_entry.s`, shared catalog/item generators) |
 | `platforms/apple2/` | Apple IIe entry, ProDOS/aux/LC platform code, MAME harness, and memory-contract checker |
 | `platforms/cx16/` | Commander X16 entry, VERA/banked-RAM platform code, cartridge loader, `x16emu` TestBench harness, and memory-contract checker |
 | `platforms/atari8/` | Atari 8-bit (800XL/65XE/130XE) entry, ANTIC/POKEY/SIO/130XE platform code, cartridge loader, MAME harness, and memory-contract checker |
 | `platforms/bbcmaster/` | Acorn BBC Master 128 entry, Mode 0 `LYNNE`/Sideways RAM/DFS platform code, MAME harness, and memory-contract checker |
+| `platforms/z80/cpm/` | CP/M 2.2 Z80 entry, BDOS HAL, ADM-3A/ANSI shadow diff renderer, 19 overlays, `MORIA8.DAT` loader, `cpm_runner` / `RunCPM` harness, and memory-contract checker |
 | `build/` | Generated payloads, disk images, cartridge images, checksums, and test scratch output |
 | `data/` | Source data consumed by generators (`LICENSE`, `SOURCE-OFFER`, item/monster/title assets) |
-| `tools/` | Build-time conversion, catalog/Huffman/cartridge generation, lint, and budget checkers |
+| `tools/` | Build tools, asset converters, `cpm_runner`, packaging scripts, catalog/Huffman/cartridge generation, lint, and budget checkers |
 | `artwork/` | Source artwork and public art credits |
 
 Primary entry points are `platforms/commodore/c64/main.s`,
@@ -26,8 +28,9 @@ Primary entry points are `platforms/commodore/c64/main.s`,
 `platforms/commodore/plus4/main.s`,
 `platforms/apple2/main.s`,
 `platforms/cx16/main.s`,
-`platforms/atari8/main.s`, and
-`platforms/bbcmaster/main.s`.
+`platforms/atari8/main.s`,
+`platforms/bbcmaster/main.s`, and
+`platforms/z80/cpm/main.asm`.
 
 ## Shared Runtime Modules
 
@@ -62,6 +65,7 @@ exclusive overlays.
 | Commander X16 | 48,749 bytes | 15,686 bytes | 54,225 bytes (13) | 7,109 bytes | 102,974 B (100.6 KiB) / 118,660 B (115.9 KiB) |
 | Atari 8-bit | 50,292 bytes | 23,381 bytes | 48,338 bytes (13) | 4,024 bytes | 98,630 B (96.3 KiB) / 122,011 B (119.2 KiB) |
 | BBC Master 128 | 46,773 bytes | 18,949 bytes | 53,424 bytes (13) | 5,744 bytes | 100,197 B (97.8 KiB) / 119,146 B (116.4 KiB) |
+| CP/M 2.2 (Z80) | 21,598 bytes | 25,398 bytes | 65,806 bytes (19) | 4,810 bytes | 87,404 B (85.4 KiB) / 112,802 B (110.2 KiB) |
 
 Notes on the disk payload sums:
 
@@ -75,6 +79,12 @@ Notes on the disk payload sums:
 - **Atari 8-bit**: Catalog sum reflects `279 × 57 B` Phase 5 monster records
   (`15,903` B) + `'ITM2'` `ITEM.CAT` (`7,478` B); on DOS 2.5 `.atr` disk,
   `MONSTER.CAT` is padded to 2 records per 125-byte sector (`17,432` B raw).
+- **CP/M 2.2 (Z80)**: Resident `MORIA8.COM` is `21,598` B (`0x0100–0x555E`);
+  all `19` `.ovl` payloads (sum `65,806` B incl. `ovl_legal` `1,770` B), the
+  packed `MONSTER.CAT` (`17,920` B, 2×57 B per 128 B record), `'ITM2'`
+  `ITEM.CAT` (`7,478` B), Huffman bitstream, title art, `LICENSE`, and
+  `SOURCE-OFFER` are packed into the single random-access `'M8CP'` container
+  `MORIA8.DAT` (`97,280` B = `760 × 128` B records).
 
 The overlay and banked-catalog architecture is therefore load-bearing: every
 port would far exceed a flat 64 KB address space if all resident code,
@@ -535,12 +545,43 @@ Current product payloads (`build/bbcmaster/`):
 | `ovl.start..ovl.title` (13 overlays) | Bank 4 `$A800-$BE70` window | 1,515–5,744 bytes each |
 | `legalui` (cold legal screen) | Bank 4 `$A800-$B063` | 2,147 bytes |
 
+## CP/M 2.2 (Z80) Runtime Model
+
+The CP/M 2.2 Z80 port runs `core/z80/` and `platforms/z80/cpm/` in a flat 52 KB
+minimum TPA (`0x0100–0xD0FF`, checked at boot against `LD HL, (0x0006) >= 0xD100`),
+with full address/BDOS invariants documented in `docs/CPM_MEMORY_CONTRACT.md`.
+
+- `MORIA8.COM` (`0x0100–0x555E`, `21,598` B, asserted `<= 0x5600`): hosts boot/TPA
+  guard, BDOS HAL (saving `IX`/`IY`), ADM-3A/ANSI diff renderer, CSI/SS3 input,
+  RNG, `MORIA8.DAT` loader, Huffman/`ITEM.CAT` LRU decoders, hot turn/walk/LOS/AI
+  engine, aligned RO tables (`2,403` B), and 88 `6`-byte `tramp_*` dispatchers.
+- `0x5600–0x69FF` (`5,120` B = `40 × 128` B records): shared unpadded overlay slot
+  hosting `19` overlays streamed on demand from `MORIA8.DAT` via `BDOS 33`.
+- `0x6A00–0x8ACC` (`8,396` B BSS <= `0x8C00`): `z80_state` fixed ABI block
+  (`0x6A00–0x6A3F`), player/inventory/store/monster/recall state, 2-rec Huffman LRU,
+  3-rec `ITEM.CAT` LRU, and 127 B `DAT` TOC cache.
+- `0x8C00–0x8DFF` (`512` B stack with `'M8SK'` canary at `0x8C00`, `SP = 0x8E00`).
+- `0x8E00–0x9CFF`: `cpm_char_shadow` (`1,920` B, dual-used as `ovl_gen` scratch)
+  and `cpm_color_shadow` (`1,920` B logical palette + dirty bit).
+- `0x9D00–0xD0FF`: `MAP_BASE` (`198×66` = `13,068` B, overwrites CCP so exits must
+  warm-boot via `BDOS 0` / `JP 0x0000`), FCBs (`0xD00C–0xD07F`), and `128` B
+  `cpm_dma_buf` (`0xD080–0xD0FF`).
+
+Current product payloads (`build/cpm/`):
+
+| Payload | Linked / TPA range | Size |
+| --- | ---: | ---: |
+| `MORIA8.COM` | `0x0100–0x555E` (`tramp_*` `0x5312–0x5521`) | 21,598 bytes |
+| `ovl_*.ovl` (19 overlays) | `0x5600–0x69FF` window | 626–4,810 bytes each (65,806 B sum) |
+| `MORIA8.DAT` (`'M8CP'` container) | Streamed via `BDOS 33` (`760 × 128` B records) | 97,280 bytes |
+
 ## Test Harnesses
 
 Runtime tests assemble target-specific binaries and execute under VICE headless
 (`x64sc`, `x128`, `xplus4`), MAME headless (`apple2ee`, `a800xl`, `a130xe`,
-`bbcm`), and `x16emu -testbench`. The non-Commodore ports each pair a static
-memory-contract checker with a headless runtime scenario harness:
+`bbcm`), `x16emu -testbench`, and CP/M `tools/cpm_runner` / `RunCPM`. The
+non-Commodore ports each pair a static memory-contract checker with a headless
+runtime scenario harness:
 
 - Apple IIe: `platforms/apple2/harness_smoke.py` (27 scenarios under `apple2ee`,
   requires `A2ROMS`) + `make testapple2-memory-contract` (verifies `moria8-apple2.po`)
@@ -552,8 +593,11 @@ memory-contract checker with a headless runtime scenario harness:
   `make testatari8-cartridge`
 - Acorn BBC Master 128: `platforms/bbcmaster/harness_smoke.py` (19 `bbcm`
   scenarios, requires `BBCMROMS`) + `make testbbcmaster-memory-contract`
-- Playtester & unit suite: `make playtest-check` (`885` Python unit tests in
-  `playtest/tests/`), `make playtest-gate` (automated bot across all 7 disk ports
+- CP/M 2.2 (Z80): `platforms/z80/cpm/harness_smoke.py` (`27` scenarios under
+  `tools/cpm_runner` and `RunCPM` over stdio with zero sockets) +
+  `make testcpm-memory-contract` + `make diskcpm`
+- Playtester & unit suite: `make playtest-check` (`918` Python unit tests in
+  `playtest/tests/`), `make playtest-gate` (automated bot across all 8 ports
   + 5 cartridges), plus Commodore VICE suites (`make test64`, `make testplus4`,
   `make test128` + `-cartridge` / `-cartridge-persistence` targets).
 
@@ -564,7 +608,7 @@ make check-item-docs
 make check-hal-boundaries
 make check-zp && make check-6502-lint
 make report-budgets
-make -j7 -O test               # default regression + cart suites (set REQUIRE_ALL_ROMS=1 in release gates)
+make -j8 -O test               # default regression + cart + CP/M suites (set REQUIRE_ALL_ROMS=1 in release gates)
 make test64 test64-cartridge
 make testplus4 testplus4-cartridge
 make test128-fast test128-fast-smoke test128 test128-cartridge
@@ -572,6 +616,7 @@ make testapple2 testapple2-runtime
 make testcx16 testcx16-cartridge
 make testatari8 testatari8-cartridge
 make testbbcmaster
+make testcpm
 ```
 
 Tests that cross `$A000` on C64 need a bootstrap trampoline below the BASIC ROM

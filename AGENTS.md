@@ -50,8 +50,8 @@ If the quote does not name the action, stop and ask.
    verified": looping applies only while the blocker is in product code.
 6. Do not commit credentials, secrets, private environment files, generated
    build outputs, VICE snapshots, downloaded toolchains, or monitor logs. Do
-   not leave generated `.prg`, `.sym`, `.vs`, or `out/` artifacts in source
-   directories.
+   not leave generated `.prg`, `.sym`, `.vs`, `.ovl`, `.lst`, `.com`, or `out/`
+   artifacts in source directories.
 7. Release compliance: every shipping disk and cartridge image must include
    `data/LICENSE` and `data/SOURCE-OFFER` (LF→CR converted, LF→`$9B` ATASCII
    EOL on Atari 8-bit disk, `LF→CRLF` + `0x1A` EOF padded to 128 B CP/M
@@ -98,8 +98,9 @@ work.
 
 ## Behavioral Change Protocol
 
-For gameplay, lifecycle, generation, rendering, or C128 memory changes, first
-load `docs/BEHAVIOR_CHANGE_PROTOCOL.md`, then every matching domain contract:
+For gameplay, lifecycle, generation, rendering, or platform memory/banking/TPA
+changes, first load `docs/BEHAVIOR_CHANGE_PROTOCOL.md`, then every matching
+domain contract:
 
 | Change touches | Load |
 | --- | --- |
@@ -111,7 +112,7 @@ load `docs/BEHAVIOR_CHANGE_PROTOCOL.md`, then every matching domain contract:
 | Commander X16 addresses, RAM banks, overlays, VERA access | `docs/CX16_MEMORY_CONTRACT.md` |
 | Atari 8-bit addresses, `PORTB` / 130XE banking, overlays, `SIOV` bounce, ANTIC/POKEY/GTIA access | `docs/ATARI8_MEMORY_CONTRACT.md` |
 | BBC Master 128 addresses, `ROMSEL` / `ACCCON` / `LYNNE` / `ANDY` banking, overlays, MOS/DFS calls | `docs/BBCMASTER_MEMORY_CONTRACT.md` |
-| CP/M 2.2 Z80 addresses, TPA map, overlays, BDOS/BIOS calls, ANSI terminal HAL, `MORIA8.DAT` container | `docs/CPM_MEMORY_CONTRACT.md` |
+| CP/M 2.2 Z80 addresses, TPA map, overlays, BDOS/BIOS calls, ADM-3A/ANSI terminal HAL, `MORIA8.DAT` container | `docs/CPM_MEMORY_CONTRACT.md` |
 | None of the above | No contract load required |
 
 Before editing a matched domain, output one line:
@@ -302,11 +303,12 @@ Operational rules:
   obviously connect to the change, read the failing test and harness
   before running anything. Never burn gate cycles on repeated blind
   reruns: two identical failures means stop and analyze, not rerun.
-- Before committing a product-code change (`core/`, `platforms/`), run
+- Before committing a product-code change (`core/6502/`, `core/z80/`,
+  `platforms/`), run
   `make playtest-gate` after the verification gate: the bot plays every port
   and cartridge from fixed seeds, and a game finding fails it. Unit and
   harness suites passed builds whose first store buy crashed two ports.
-- Changes touching Commodore storage or disk-setup UI (`core/ui_disk_setup.s`,
+- Changes touching Commodore storage or disk-setup UI (`core/6502/ui_disk_setup.s`,
   `platforms/shared/save.s`, `platforms/commodore/common/disk_*.s`,
   `save_slot_menu.s`, `platforms/commodore/*/hal/storage*.s`) must satisfy the
   Commodore Storage And KERNAL I/O checklist in `docs/INTERNAL_MANDATES.md` and
@@ -329,8 +331,12 @@ with file:line, severity and a concrete failure scenario:
 2. **Worried engineering manager.** Weighs reliability, maintainability and
    cost: what breaks next, who can maintain it, what the gates and runtime
    cost, and what is left unverified.
-3. **6502 performance guru.** Cycle counts, byte budgets, zero-page and stack
-   use, banking/MMU overhead, page-crossing penalties, and memory layout.
+3. **6502 / Z80 performance guru.** Adapt focus to the target ISA(s) in the
+   diff (6502, Z80, or both for cross-ISA work): for 6502/65C02, audit cycle
+   counts, byte budgets, zero-page and stack use, banking/MMU overhead,
+   page-crossing penalties, and memory layout; for Z80/CP/M, audit T-states,
+   register pressure, `IX`/`IY` and stack cost, `MORIA8.COM`/BSS TPA budgets,
+   overlay reload thrashing, BDOS/BIOS call overhead, and `0xD100` ceilings.
 
 ## Finishing A Task
 
@@ -349,7 +355,7 @@ reported. Before declaring done, confirm in your reply:
 
 This is a Commodore 64 / Commodore 128 / Plus/4 / Apple IIe / Commander X16 /
 Atari 8-bit / Acorn BBC Master 128 / CP/M 2.2 (Z80) assembly project built with
-Kick Assembler (`core/`) and `sjasmplus` (`core/z80/`) and tested with VICE,
+Kick Assembler (`core/6502/`) and `sjasmplus` (`core/z80/`) and tested with VICE,
 MAME, `x16emu`, and `cpm_runner`/`RunCPM` headless harnesses.
 
 Primary entry points:
@@ -365,7 +371,7 @@ Primary entry points:
 
 Source layout:
 
-- `core/`: platform-agnostic 6502/65C02 gameplay, UI, data, and shared logic.
+- `core/6502/`: platform-agnostic 6502/65C02 gameplay, UI, data, and shared logic.
 - `core/z80/`: platform-agnostic Z80 gameplay, UI, and catalog logic.
 - `platforms/commodore/hal/`: shared Commodore HAL interfaces.
 - `platforms/commodore/common/`: shared Commodore implementation code.
@@ -407,10 +413,10 @@ Build and test (run from the repository root):
 - `make testatari8`: Atari 8-bit memory-contract gate + MAME runtime suite
 - `make testbbcmaster`: BBC Master 128 memory-contract gate + MAME runtime suite
 - `make buildcpm`: build `MORIA8.COM`, 19 overlays, and `'M8CP'` `MORIA8.DAT`
-- `make diskcpm`: package `moria8-cpm.zip`, Kaypro 4 `.dsk`, and C128 `.d71`
+- `make diskcpm`: package `moria8-cpm.zip`, Kaypro II `.dsk`, Kaypro 4 `.dsk`, and C128 `.d71`
 - `make testcpm-memory-contract`: CP/M static + built memory-contract gate
 - `make testcpm` (`testcpm-runtime`, `testcpm-smoke`): CP/M memory-contract
-  gate + `cpm_runner` / `RunCPM` 26-scenario runtime suite
+  gate + `cpm_runner` / `RunCPM` 27-scenario runtime suite
 - `make disk`: build shipping C64, C128, Plus/4, Apple IIe, CX16, Atari
   8-bit, BBC Master 128, and CP/M 2.2 Z80 packages
 - `make run`, `make run64`, `make run128`, `make runplus4`: launch under VICE
@@ -430,16 +436,19 @@ Architecture notes:
 - Display is character-cell based (PETSCII screen codes on Commodore; the Apple
   IIe translates to Apple display codes at write time; Atari 8-bit and BBC
   Master 128 build a 1 KB C64-screen-code-ordered RAM font at boot; CP/M 2.2
-  Z80 outputs ASCII cells with ANSI SGR 16-color escapes or `/M` monochrome).
+  Z80 outputs ASCII cells defaulting to ADM-3A monochrome (`/A`), with `/V`
+  VT100/ANSI SGR 16-color, `/M` ANSI monochrome, and runtime `M`/`=` switching).
 - C64, Plus/4, and Atari 8-bit gameplay are 40-column. C128, Apple IIe,
   Commander X16, BBC Master 128, and CP/M 2.2 Z80 gameplay are 80-column.
 - BASIC is used for the loader stub only; do not rely on BASIC routines after
   machine-code startup. KERNAL routines are allowed where appropriate.
 - Preserve intentional disk-loading and memory-ownership boundaries.
 
-Coding standards: use canonical 6502 / Kick Assembler conventions already
-present in nearby code. Add or update `.assert` guards and runtime tests for
-behavior or memory-contract changes.
+Coding standards: use canonical 6502 / Kick Assembler conventions in `core/6502/`
+and 6502 platforms, and canonical Z80 / `sjasmplus` conventions (`0xNN` hex
+literals, `DEVICE NOSLOT64K`, `ASSERT` guards) in `core/z80/` and
+`platforms/z80/cpm/`. Add or update `.assert` / `ASSERT` guards and runtime
+tests for behavior or memory-contract changes.
 
 Future platforms: treat current C64/C128 code as the active implementation, not
 the final architecture for every port. Do not add new hardware assumptions to

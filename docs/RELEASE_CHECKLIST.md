@@ -1,12 +1,12 @@
 # Release Checklist
 
 Replace `vX.Y.Z` below with the chosen release tag (verify `version.json`
-matches across all 7 ports before tagging).
+matches across all 8 ports before tagging).
 
 ## Pre-Tag Readiness
 
-- Confirm `version.json` matches the release tag across all 7 ports (`c64`,
-  `c128`, `plus4`, `apple2`, `cx16`, `atari8`, `bbcmaster`).
+- Confirm `version.json` matches the release tag across all 8 ports (`c64`,
+  `c128`, `plus4`, `apple2`, `cx16`, `atari8`, `bbcmaster`, `cpm`).
 - Add `docs/release_notes/release_notes-vX.Y.Z.md` and confirm versioned
   download URLs (`.../releases/download/vX.Y.Z/moria8-*-vX.Y.Z.<ext>`) and
   notes links in `README.md` and `docs/index.html` match `vX.Y.Z`.
@@ -65,7 +65,7 @@ make artifacts
 
 `make artifacts` signs with GPG and is intended to run from your own
 interactive terminal after preparing or unlocking the signing key. Use
-`make artifact-checksums` when you only need to rebuild all 14 unversioned
+`make artifact-checksums` when you only need to rebuild all 18 unversioned
 images in `build/`, stage versioned copies under `build/release/`, and write
 `build/release/SHA256SUMS` without touching GPG.
 
@@ -86,8 +86,12 @@ built from `BUILD_ARTIFACTS` in `build/`):
 - `build/release/moria8-atari8-vX.Y.Z.atr`
 - `build/release/moria8-atari8-vX.Y.Z.car` (AtariMax 128 KB cartridge)
 - `build/release/moria8-bbcmaster-vX.Y.Z.ssd`
+- `build/release/moria8-cpm-vX.Y.Z.zip` (universal CP/M 2.2 Z80 bundle)
+- `build/release/moria8-cpm-kaypro2-vX.Y.Z.dsk` (Kaypro II SSDD disk)
+- `build/release/moria8-cpm-kaypro4-vX.Y.Z.dsk` (Kaypro 4 DSDD disk)
+- `build/release/moria8-cpm-c128-vX.Y.Z.d71` (Commodore 128 CP/M Plus 1571 disk)
 - `build/release/SHA256SUMS`
-- `build/release/*.asc` (detached GPG signatures for all 14 versioned artifacts and `SHA256SUMS`)
+- `build/release/*.asc` (detached GPG signatures for all 18 versioned artifacts and `SHA256SUMS`)
 
 ## License & Source-Offer Compliance (`AGENTS.md` Rule 7)
 
@@ -130,6 +134,13 @@ assert "$.LICENSE" in names_ssd and "$.SRCOFFR" in names_ssd, names_ssd
 print("ATR and SSD legal files verified.")
 EOF
 
+# CP/M 2.2 Z80 zip bundle, disk images, and MORIA8.DAT container
+unzip -l build/moria8-cpm.zip | grep -E 'LICENSE|SOURCE-OFFER|README\.TXT'
+for d in build/moria8-cpm-kaypro2.dsk build/moria8-cpm-kaypro4.dsk build/moria8-cpm-c128.d71; do
+  echo "=== $d ==="
+  tools/ctools/ctools "$d" d | grep -E 'LICENSE\.TXT|SRCOFFR\.TXT'
+done
+
 # All 5 cartridges (verifies embedded ROM assets including LICENSE & SOURCE-OFFER)
 python3 -B tools/check_easyflash.py build/moria8-c64.crt build/c64-cart
 python3 -B tools/check_c128_md128.py build/moria8-c128.crt build/c128-cart
@@ -153,7 +164,7 @@ export X16ROM=/path/to/cx16/rom.bin
 make check-item-docs
 make check-hal-boundaries
 make check-zp && make check-6502-lint
-REQUIRE_ALL_ROMS=1 make -j7 -O test
+REQUIRE_ALL_ROMS=1 make -j8 -O test
 make playtest-gate
 ```
 
@@ -166,8 +177,9 @@ For focused iteration during candidate fixes:
 - `make testcx16`
 - `make testatari8`
 - `make testbbcmaster`
+- `make testcpm` (`make testcpm-memory-contract`)
 
-`make check-zp && make check-6502-lint`, `REQUIRE_ALL_ROMS=1 make -j7 -O test`
+`make check-zp && make check-6502-lint`, `REQUIRE_ALL_ROMS=1 make -j8 -O test`
 (failing non-zero if any required ROM/emulator env var is missing), and
 `make playtest-gate` (with zero skipped targets) remain the mandatory release
 gates.
@@ -177,8 +189,9 @@ gates.
 - **Cross-Geometry Save Compatibility Check:** Confirm pre-`$22` saves fail
   cleanly with `Unsupported save.` and note that `80x48` (**C64**, **Plus/4**,
   **Atari 8-bit**) saves are incompatible with `198x66` (**C128**, **Apple
-  IIe**, **Commander X16**, **BBC Master 128**) saves (`Save file corrupt!`
-  across C64/C128 shared `"MORIA01"` disks; `Unsupported save.` on Plus/4).
+  IIe**, **Commander X16**, **BBC Master 128**, **CP/M 2.2 Z80**) saves
+  (`Save file corrupt!` across C64/C128 shared `"MORIA01"` disks;
+  `Unsupported save.` on Plus/4).
 
 - **Commodore 64 (`.crt`, Disk):** Boot `moria8-c64.crt` and `moria8-c64.d64`
   in VICE or on hardware; confirm title screen, Title `A` (`About`) / Help `L`,
@@ -204,18 +217,23 @@ gates.
   / Shift-Break); confirm Mode 0 80-column display, Title `A` / Help `L`, Disk
   Setup separate save disk (`:0`/`:1`), town entry, dungeon descent, and
   save/reload.
+- **CP/M 2.2 Z80 (`.zip`, Kaypro II/4 `.dsk`, C128 `.d71`):** Boot under
+  `tools/cpm_runner` / `RunCPM` or ≥52 KB TPA hardware (`MORIA8`, `MORIA8 /V`,
+  `MORIA8 /M`); confirm TPA check, ADM-3A default and ANSI color/mono modes
+  (`M` / `=`), Title `A` / Help `L`, Disk Setup (`A:`–`P:`), town entry,
+  dungeon descent, and atomic save/reload.
 
 ## Artifact Review
 
-- Verify all 14 unversioned `BUILD_ARTIFACTS` (`build/moria8-<port>.<ext>`) and
-  all 14 versioned `RELEASE_ARTIFACTS` (`build/release/moria8-<port>-vX.Y.Z.<ext>`)
+- Verify all 18 unversioned `BUILD_ARTIFACTS` (`build/moria8-<port>.<ext>`) and
+  all 18 versioned `RELEASE_ARTIFACTS` (`build/release/moria8-<port>-vX.Y.Z.<ext>`)
   plus `version.json` version strings on title screens.
-- Verify `build/release/SHA256SUMS` covers all 14 uploaded artifacts.
-- Verify detached GPG signatures (`build/release/*.asc`) for all 14 versioned
+- Verify `build/release/SHA256SUMS` covers all 18 uploaded artifacts.
+- Verify detached GPG signatures (`build/release/*.asc`) for all 18 versioned
   artifacts and `SHA256SUMS`.
 - Confirm generated outputs are not staged as source (`git status --ignored -s`
-  shows clean source directories with no stray `.prg`, `.sym`, `.vs`,
-  `__pycache__`, or root MAME dirs).
+  shows clean source directories with no stray `.prg`, `.sym`, `.vs`, `.ovl`,
+  `.lst`, `.com`, `__pycache__`, or root MAME dirs).
 - Confirm no monitor logs, external paths, private planning notes, or agent
   process files are present in the public tree.
 

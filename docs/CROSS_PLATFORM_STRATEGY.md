@@ -14,7 +14,7 @@ ensure native performance and idiomatic hardware utilization.
 
 ```text
 /
-├── core/                  # Platform-agnostic 6502/65C02 game logic
+├── core/6502/             # Platform-agnostic 6502/65C02 game logic
 │                          # No hardware registers allowed here.
 ├── core/z80/              # Platform-agnostic Z80 game logic (parallel core for CP/M & Z80 ports)
 ├── platforms/
@@ -25,7 +25,7 @@ ensure native performance and idiomatic hardware utilization.
 │   │   ├── plus4/         # TED chip, 64KB RAM
 │   │   └── common/        # Shared KERNAL/VIC-II/SID/TED logic
 │   ├── z80/               # Zilog Z80 machines
-│   │   ├── cpm/           # CP/M 2.2 Z80 (52 KB TPA, ANSI/VT100 terminal, BDOS 6/33/34)
+│   │   ├── cpm/           # CP/M 2.2 Z80 (52 KB TPA, ADM-3A/ANSI terminal, BDOS 6/33/34)
 │   │   ├── zxspectrum/    # ZX Spectrum (future: 48K/128K bitmapped)
 │   │   └── msx/           # MSX/MSX2 (future: VDP)
 │   ├── cx16/              # Commander X16 (65C02, VERA, FAT32/SD)
@@ -45,8 +45,8 @@ ensure native performance and idiomatic hardware utilization.
   Commander X16, Atari 8-bit, BBC Master 128) retain Kick Assembler per in-tree
   precedent; the earlier `ca65` migration note is superseded. Platform-specific
   configurations and segmenting are handled with Kick Assembler segment
-  directives. The `core/` game logic targets the standard 6502/65C02.
-* **The Z80 Track:** Shipped parallel Z80 implementation in `core/z80/` and
+  directives. The `core/6502/` game logic targets the standard 6502/65C02.
+* **The Z80 Track:** Parallel Z80 implementation in `core/z80/` and
   `platforms/z80/cpm/`, assembled with `sjasmplus` v1.24.0 (`--nologo`, pure
   `0xNN` hex syntax, `DEVICE NOSLOT64K`). The `z88dk` option from early planning
   was superseded by `sjasmplus` for exact overlay origin control (`0x5600-0x69FF`)
@@ -61,8 +61,9 @@ The HAL must provide zero-overhead interfaces for Video, Audio, and I/O.
 
 * **8-bit Character Mapping:** Character-mapped or indirect character-mapped
   paradigms for Commodore and Atari.
-* **CP/M Terminal:** ANSI/VT100 serial terminal escape codes for text rendering
-  on business machines.
+* **CP/M Terminal:** ADM-3A (default `/A`) and VT100/ANSI (`/V` 16-color SGR,
+  `/M` monochrome, runtime `M` / `=`) terminal control sequences for business
+  machines.
 * **Z80 VDP/Bitmap:** Bitmapped rendering for ZX Spectrum and
   hardware-accelerated tile rendering for MSX.
 
@@ -94,9 +95,9 @@ Moria8 uses architectural tiers based on available address space and memory spee
 ## 5. Plus/4 Release Track
 
 The Plus/4 port was implemented pragmatically during the Commodore HAL work and
-now lives in the current `core/`/`platforms/` layout.
+now lives in the current `core/6502/`/`platforms/` layout.
 
-* Source lives under `platforms/commodore/plus4/` and reuses `core/` plus
+* Source lives under `platforms/commodore/plus4/` and reuses `core/6502/` plus
   `platforms/commodore/common/` and the C64 40-column gameplay layout.
 * The release target is stock 64K Plus/4 using standard Commodore DOS disk I/O
   with a 1541-compatible 35-track D64 artifact. The port must not require a
@@ -108,10 +109,10 @@ now lives in the current `core/`/`platforms/` layout.
 
 ## 6. Apple IIe Release Track
 
-The Apple IIe port lives in the current `core/`/`platforms/` layout and is
+The Apple IIe port lives in the current `core/6502/`/`platforms/` layout and is
 the second 128K-class target after the C128.
 
-* Source lives under `platforms/apple2/` and reuses `core/` with the shared
+* Source lives under `platforms/apple2/` and reuses `core/6502/` with the shared
   Commodore HAL interfaces where they fit; platform code owns soft-switches,
   80-column text, ProDOS MLI storage, and the aux-memory mechanics.
 * The release target is a stock 128K Apple IIe (extended 80-column card)
@@ -150,7 +151,7 @@ The Commander X16 port lives under `platforms/cx16/` and is the third
 128K+-class target (512 KB banked RAM + 38.6 KB unbanked low RAM) after the
 C128 and Apple IIe.
 
-* Source lives under `platforms/cx16/` and links the shared `core/` and
+* Source lives under `platforms/cx16/` and links the shared `core/6502/` and
   `platforms/shared/` modules through semantic HAL policy contracts (`hal/layout.s`,
   `hal/lifecycle_policy.s`, `hal/storage_policy.s`, `hal/memory_bank_consts.s`,
   `hal/entropy_consts.s`, `screen_vera.s`, `input.s`) and a 12-overlay +
@@ -188,7 +189,7 @@ C128 and Apple IIe.
 The Atari 8-bit port lives under `platforms/atari8/` (design & execution plan:
 `docs/ATARI8_PORT_PLAN.md`; memory authority: `docs/ATARI8_MEMORY_CONTRACT.md`).
 
-* Source lives under `platforms/atari8/` and links the unmodified `core/` and
+* Source lives under `platforms/atari8/` and links the unmodified `core/6502/` and
   `platforms/shared/` modules through the semantic HAL policy contracts with
   40×25 gameplay geometry (`80×48` map = `3,840` B, identical to C64 and Plus/4).
 * The release target is a stock **64 KB Atari 800XL / 65XE** baseline (PIA
@@ -243,7 +244,7 @@ The Acorn BBC Master 128 port lives under `platforms/bbcmaster/` (design &
 execution plan: `docs/BBCMASTER_PORT_PLAN.md`; memory authority:
 `docs/BBCMASTER_MEMORY_CONTRACT.md`).
 
-* Source lives under `platforms/bbcmaster/` and links the unmodified `core/`
+* Source lives under `platforms/bbcmaster/` and links the unmodified `core/6502/`
   and `platforms/shared/` modules with `80×24` gameplay geometry (`198×66` map =
   `13,068` B, identical to C128, Apple IIe, and Commander X16).
 * The release target is a stock **128 KB Acorn BBC Master 128** (2 MHz 65C12,
@@ -295,53 +296,57 @@ execution plan: `docs/BBCMASTER_PORT_PLAN.md`; memory authority:
 * Testing uses headless MAME (`bbcm`) driven by
   `platforms/bbcmaster/harness_smoke.py` (gated by `BBCMROMS`).
 
-## 10. CP/M 2.2 Z80 Release Track
+## 10. CP/M 2.2 Z80 Track
 
-The CP/M 2.2 Z80 port is the **8th active shipping port** (`core/z80/` +
+The CP/M 2.2 Z80 port is the **8th active port** (`core/z80/` +
 `platforms/z80/cpm/`, memory contract in `docs/CPM_MEMORY_CONTRACT.md`):
 
 * **Architecture & Assembly:** Pure Z80 assembly built with `sjasmplus` v1.24.0
-  into a flat `MORIA8.COM` transient program (`0x0100-0x5589`, `21,641 B`) paired
+  into a flat `MORIA8.COM` transient program (`0x0100-0x555E`, `21,598 B`) paired
   with a single random-access asset container **`MORIA8.DAT`** (`'M8CP'` v1,
-  `100,224 B`, `25` active slots covering all `19` overlays, the `279`-creature
+  `97,280 B`, `25` active slots covering all `19` overlays, the `279`-creature
   ASCII `MONSTER.CAT`, the `'ITM2'` `361`-item `ITEM.CAT`, Huffman string tables,
   title art, and embedded `LICENSE` / `SOURCE-OFFER`).
 * **TPA & Overlay Model:** Targets any Z80 CP/M 2.2 or CP/M Plus system with at
   least a **52 KB TPA (`BDOS >= 0xD100`)**. All `19` overlays share one fixed
   `5,120 B` (`40 × 128 B` record) window at `0x5600-0x69FF` streamed on demand
-  via `BDOS 33`, backed by resident BSS (`0x6A00-0x8AD5`), a `512 B` stack with
+  via `BDOS 33`, backed by resident BSS (`0x6A00-0x8ACC`), a `512 B` stack with
   `'M8SK'` canary (`0x8C00-0x8DFF`), `80×24` char/color shadows (`0x8E00-0x9CFF`),
   and a full VMS `198×66` map (`0x9D00-0xD00B`).
-* **Terminal, Input & Storage:** Renders `80×24` (`78×18` dungeon viewport) over
-  ANSI/VT100 SGR 16-color escapes (or `/M` monochrome mode) with ASCII `BEL`
+* **Terminal, Input & Storage:** Renders `80×24` (`78×18` dungeon viewport)
+  defaulting to ADM-3A (`/A` monochrome), with VT100/ANSI `/V` 16-color SGR and
+  `/M` mono modes (runtime toggle via Title `M` or in-game `=`) and ASCII `BEL`
   (`0x07`) alerts, polls raw console I/O (`BDOS 6 E=0xFF`) with CSI/SS3 arrow
   decoding, and writes `Save Format V2` (`0x22`) `SAVE0.SAV`–`SAVE3.SAV` and
-  `HISCORE.DAT` across CP/M drives `A:`–`P:` via `BDOS 33/34`.
+  `HISCORE.DAT` across CP/M drives `A:`–`P:` via `BDOS 33/34` using atomic
+  `.TMP` -> `bdos_rename`.
 * **Packaging (`tools/make_cpm_disk.py`, `tools/ensure_ctools.sh`):** `make diskcpm`
-  produces three verified release deliverables:
+  produces four verified release deliverables:
   1. `build/moria8-cpm.zip`: RunCPM / generic CP/M 2.2 bundle (`MORIA8.COM`,
      `MORIA8.DAT`, CRLF `LICENSE`, `SOURCE-OFFER`, `README.TXT`).
-  2. `build/moria8-cpm-kaypro4.dsk`: `409,600 B` Kaypro 4 DS/DD (`kpiv`) CP/M 2.2
+  2. `build/moria8-cpm-kaypro2.dsk`: `204,800 B` Kaypro II SS/DD (`kpii`) CP/M 2.2
      image (`MORIA8.COM`, `MORIA8.DAT`, CRLF+`0x1A` `LICENSE.TXT`, `SRCOFFR.TXT`).
-  3. `build/moria8-cpm-c128.d71`: `349,696 B` Commodore 128 CP/M Plus 1571
+  3. `build/moria8-cpm-kaypro4.dsk`: `409,600 B` Kaypro 4 DS/DD (`kpiv`) CP/M 2.2
+     image (`MORIA8.COM`, `MORIA8.DAT`, CRLF+`0x1A` `LICENSE.TXT`, `SRCOFFR.TXT`).
+  4. `build/moria8-cpm-c128.d71`: `349,696 B` Commodore 128 CP/M Plus 1571
      image built and round-trip verified via pinned `cformat` + `ctools`.
 * **Testing & Playtest:** Verified completely offline without sockets via
   `platforms/z80/cpm/check_memory_contract.py` (`--milestone m5`), the custom C
-  Z80/BDOS/ANSI emulator **`tools/cpm_runner`** (`harness_smoke.py` 26 scenarios
+  Z80/BDOS/ANSI emulator **`tools/cpm_runner`** (`harness_smoke.py` `27` scenarios
   + `RunCPM` boot parity), and the `cpm` AI playtest backend
-  (`playtest/moria_playtest/cpm.py`).
+  (`playtest/moria_playtest/ports.py` / `cpm.py`).
 
 ## 11. Current Codebase Assessment & Next Steps
 
-Moria8 now spans **8 active ports** (7 on 6502/65C02 via `core/` and 1 on Z80
+Moria8 now spans **8 active ports** (7 on 6502/65C02 via `core/6502/` and 1 on Z80
 CP/M 2.2 via `core/z80/`) with verified 100% gameplay parity.
 
 **Strategic Phasing:**
 
-1. **6502 Shared Core:** Maintain shared 6502/65C02 gameplay rules in `core/`
+1. **6502 Shared Core:** Maintain shared 6502/65C02 gameplay rules in `core/6502/`
    across all 7 MOS-era ports behind thin platform HALs.
-2. **Z80 Parallel Core:** Maintain parity between `core/` and the shipped
-   `core/z80/` engine (`platforms/z80/cpm/`).
+2. **Z80 Parallel Core:** Maintain parity between `core/6502/` and
+   `core/z80/` (`platforms/z80/cpm/`).
 3. **Future Z80 Targets:** New Z80 platforms (`platforms/z80/zxspectrum/`,
    `platforms/z80/msx/`) reuse `core/z80/` and add bitmapped/VDP terminal and
    storage HALs without rewriting dungeon, combat, magic, or catalog mechanics.

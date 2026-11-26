@@ -2,8 +2,8 @@
 
 ## Save Format Compatibility
 
-Current builds use **Save Format V2** (`SAVE_VERSION = $22`) across all seven
-platforms.
+Current builds use **Save Format V2** (`SAVE_VERSION = $22`) across all eight
+active platforms.
 
 - **`Unsupported save.`:** Older saves from prior releases (`< $22`, including
   Save Format V1) and saves from newer/incompatible builds (`> $22`) are
@@ -15,9 +15,9 @@ platforms.
 - **Cross-geometry saves (`80x48` vs. `198x66`) are NOT compatible:** Save Format
   V2 (`$22`) writes the full active map (`80x48` = `3,840` bytes on **C64,
   Plus/4, and Atari 8-bit** [`7,858` bytes total]; `198x66` = `13,068` bytes on
-  **C128, Apple IIe, Commander X16, and BBC Master 128** [`17,164` bytes
-  total]). **Never share save disks between 40-column (`80x48`) and 80-column
-  (`198x66`) machines:**
+  **C128, Apple IIe, Commander X16, BBC Master 128, and CP/M 2.2 Z80**
+  [`17,164` bytes total]). **Never share save disks between 40-column (`80x48`)
+  and 80-column (`198x66`) machines:**
   - C64 (`80x48`) and C128 (`198x66`) share the `"MORIA01"` V2 header and
     Commodore filenames (`MORIA8.ID`, `THE.GAME`–`THE.GAME4`). Loading a C64 save
     in C128 (or a C128 save in C64) passes the version check and fails
@@ -109,6 +109,33 @@ protected by `BRKV`.
   initialize it.
 - **`Disk error.`:** Acorn DFS raised a `BRK` disk fault (drive not ready,
   write-protected, or disk full) during save, load, or disk initialization.
+
+## CP/M 2.2 (Z80) Boot, Terminal & Storage Errors
+
+The CP/M 2.2 (Z80) port *(in progress / source build)* runs inside a flat
+52 KB minimum TPA (`0x0100–0xD0FF`) using `MORIA8.COM` and `'M8CP'` container
+`MORIA8.DAT`, and saves via `BDOS 20/21/23` (`SAVE0.SAV`–`SAVE3.SAV` and
+`HISCORE.DAT` on `A:`–`P:`).
+
+- **`Insufficient TPA: requires 52K (0xD100+).`:** `LD HL, (0x0006)` reported a
+  BDOS base below `0xD100`. Run on a CP/M 2.2 / CP/M Plus system with at least
+  52 KB free TPA (`MORIA8.COM` exits cleanly without clobbering CCP).
+- **`Error: MORIA8.DAT missing or invalid.`:** `MORIA8.DAT` could not be
+  opened on the launch drive/user area or failed the `'M8CP'` container check.
+  Keep `MORIA8.COM` and `MORIA8.DAT` together in the same drive and user area.
+- **Garbled display or raw `ESC` sequences:** By default, CP/M launches in
+  **ADM-3A** monochrome mode (`/A`). Launch `MORIA8 /V` for VT100/ANSI 16-color
+  or `MORIA8 /M` for VT100/ANSI monochrome, or cycle modes at runtime with Title
+  `M` or in-game `=`.
+- **`Drive is not ready.`:** BIOS `SELDSK` probe or `BDOS 13` reset detected an
+  unmounted or non-ready CP/M drive `A:`–`P:`. Mount valid media or choose a
+  different drive in `D)isk Setup`.
+- **`Disk is full.`:** Directory or data extent exhaustion aborted the atomic
+  `.TMP` save write before rename; your previous `SAVE<n>.SAV` remains intact.
+- **`Save file not found.` / `Unsupported save.` / `Save file corrupt!` /
+  `Disk error!`:** Save slot is empty (`not found`), pre-`$22` or wrong
+  header (`Unsupported`), checksum/bounds mismatch (`corrupt`, e.g. loading an
+  `80x48` 40-column save), or a BDOS read/write/rename failure (`Disk error!`).
 
 ## Commodore I/O Errors
 

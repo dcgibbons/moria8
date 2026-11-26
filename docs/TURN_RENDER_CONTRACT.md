@@ -7,11 +7,15 @@ or banking changes.
 
 ## Authority
 
-- Command/repeat lifecycle: `core/game_loop.s`
-- Consumed-turn processing: `core/turn.s::turn_post_action`
-- Shared redraw event storage: `core/turn_render_state.s`
-- Terrain visibility: `core/dungeon_los.s`
-- Monster visibility: monster visibility producer in shared monster code
+- Command/repeat lifecycle (6502): `core/6502/game_loop.s`
+- Consumed-turn processing (6502): `core/6502/turn.s::turn_post_action`
+- Shared redraw event storage (6502): `core/6502/turn_render_state.s`
+- Terrain visibility (6502): `core/6502/dungeon_los.s`
+- Parallel Z80 production implementation (CP/M 2.2): `core/z80/game_loop.asm`,
+  `core/z80/turn.asm`, `core/z80/los.asm`, `core/z80/viewport.asm`,
+  `core/z80/monster_core.asm`, and `platforms/z80/cpm/hal/screen_ansi.asm`
+- Monster visibility: monster visibility producer in shared 6502 (`core/6502/monster.s`)
+  and parallel Z80 (`core/z80/monster_core.asm`) monster code
 - Physical rendering: platform-owned renderers
 
 ## Production Event Order
@@ -82,10 +86,13 @@ Required lifecycle cases when repeat logic changes:
 
 ## Platform Contract
 
-C64 and Plus/4 use their 40-column renderers. C128 uses the 80-column VDC and
-may use block-copy/scroll-delta paths. Optimizations may differ, but final state
-must agree. C128 horizontal and vertical movement, copied interiors and stale
-dynamic-tile clearing require distinct production-path coverage.
+C64, Plus/4, and Atari 8-bit use 40-column (`80×48` map) renderers. C128 (VDC),
+Apple IIe, Commander X16 (VERA), BBC Master 128 (Mode 0), and CP/M 2.2 Z80
+(ADM-3A default / ANSI SGR diffing via `screen_ansi.asm`) use 80-column
+(`198×66` map) renderers. Optimizations may differ, but final visible state
+must agree. C128 horizontal and vertical movement, copied interiors, and stale
+dynamic-tile clearing require distinct production-path coverage; CP/M Z80
+changes require parallel `core/z80/` + `screen_ansi.asm` parity and `make testcpm`.
 
 ## Conditional Verification Matrix
 
@@ -96,7 +103,7 @@ dynamic-tile clearing require distinct production-path coverage.
 | Renderer consumer | visible-only, detected-only, neither; local and full redraw convergence |
 | Repeat commands | first iteration, continuation, new stop event, cancellation |
 | Re-entry | teleport and modal return before movement |
-| Shared behavior | production producer through each affected platform renderer |
+| Shared behavior | production producer through each affected platform renderer, plus parallel `core/z80/` / `platforms/z80/cpm/` parity and `make testcpm` when shared turn/render rules change |
 
 Tests that seed final flags prove renderer consumption only. They do not prove
 the production visibility producer.
@@ -147,6 +154,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | Overcast arcane/divine faint messages, overcast CON-drain feedback before `-MORE-`, `magic_recalc_mana` non-clobber of `pm_cost_tmp`, and `player_calc_hp` ZP `zp_player_mhp` sync & `HP <= MHP` clamp across CON mutations (TRN-013) | C64 `test_overcast_ordering.s`, `test_player.s` t7, `test_ego.s` t22, and C128 `test_prayer_prayer128.s` t3 | `TEST_FILTER='^(overcast_ordering\|player\|ego)$' make test64`; `TEST_FILTER='^prayer_prayer128$' make test128-fast` |
 | Search two-turn dirty aggregation with dirty/clean and clean/dirty orderings | none | `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
+| CP/M 2.2 (Z80) turn regen/poison/repeat, LOS/stairs exploration, and dirty-cell ADM-3A/ANSI diff flush (`core/z80/{game_loop,turn,los,viewport}.asm`, `screen_ansi.asm`) | `platforms/z80/cpm/harness_smoke.py` scenarios `turn_regen_poison_repeat`, `los_stairs_and_exploration`, `legal_viewer_nested_trampoline` | `make testcpm` |
 
 ## License/source modal repair verification (2026-11-11)
 

@@ -186,12 +186,15 @@ Paladins use wisdom.
 
 ## Platform Notes
 
-All seven platforms (**Commodore 64**, **Commodore 128**, **Commodore Plus/4**,
-**Apple IIe**, **Commander X16**, **Atari 8-bit**, and **Acorn BBC Master 128**)
-and all five cartridge editions share the exact same 31 mage spells, 31 priest
-prayers, 8 books, class eligibility tables, mana/fail formulas, overcasting
-penalties, and spell/prayer effects (`core/spell_data.s`,
-`core/spell_class_data.s`, `core/player_magic*.s`, `core/spell_effects*.s`).
+All eight active platforms (**Commodore 64**, **Commodore 128**, **Commodore Plus/4**,
+**Apple IIe**, **Commander X16**, **Atari 8-bit**, **Acorn BBC Master 128**, and
+**CP/M 2.2 (Z80)** *(in progress)*) and all five cartridge editions share the
+exact same 31 mage spells, 31 priest prayers, 8 books, class eligibility tables,
+mana/fail formulas, overcasting penalties, and spell/prayer effects
+(`core/6502/spell_data.s`, `core/6502/spell_class_data.s`,
+`core/6502/player_magic*.s`, `core/6502/spell_effects*.s`; parallel Z80
+implementation in `platforms/z80/cpm/ovl_spell*.asm` and
+`core/z80/item_tables.asm`).
 
 Moria8 intentionally does not print a generic success banner for every spell or
 prayer. Visible effects such as bolts, balls, teleporting, terrain changes, and
@@ -205,9 +208,12 @@ Key and display notes across platforms:
   pending, and opens the spellbook browser directly when none are pending; `M`
   casts mage spells and `P` prays priest prayers.
 - On **C128**, spell execution lives in the resident `128.play` bank slot
-  (`$AF00-$CFFF`); on the other six ports (**C64**, **Plus/4**, **Apple IIe**,
-  **Commander X16**, **Atari 8-bit**, and **BBC Master 128**), cold spell
-  selection/execution runs through the shared `OVL_SPELL` overlay window.
+  (`$AF00-$CFFF`); on the six remaining 6502 ports (**C64**, **Plus/4**,
+  **Apple IIe**, **Commander X16**, **Atari 8-bit**, and **BBC Master 128**),
+  cold spell selection/execution runs through the shared `OVL_SPELL` overlay
+  window; on **CP/M 2.2 (Z80)**, `ovl_spell` and `ovl_spell_eff` execute in the
+  shared `0x5600–0x69FF` overlay window streamed from `MORIA8.DAT`.
 - Directional spells and area effects operate identically across both `80x48`
   40-column maps (**C64**, **Plus/4**, **Atari 8-bit**) and `198x66` 80-column
-  maps (**C128**, **Apple IIe**, **Commander X16**, **BBC Master 128**).
+  maps (**C128**, **Apple IIe**, **Commander X16**, **BBC Master 128**, and
+  **CP/M 2.2 (Z80)**).

@@ -1,8 +1,8 @@
 # Moria8 Monster Reference
 
-All seven Moria8 ports (Commodore 64, Commodore 128, Plus/4, Apple IIe, Commander X16, Atari 8-bit, and BBC Master 128) and all five shipping cartridges (`moria8-c64.crt`, `moria8-c128.crt`, `moria8-plus4.crt`, `moria8-cx16.crt`, `moria8-atari8.car`) ship the full **279-species** VMS Moria 4.8 monster catalog (`platforms/shared/catalog/monster_catalog_spec.json`).
+All eight Moria8 ports (Commodore 64, Commodore 128, Plus/4, Apple IIe, Commander X16, Atari 8-bit, BBC Master 128, and CP/M 2.2 Z80 *(in progress)*) and all five shipping cartridges (`moria8-c64.crt`, `moria8-c128.crt`, `moria8-plus4.crt`, `moria8-cx16.crt`, `moria8-atari8.car`) ship the full **279-species** VMS Moria 4.8 monster catalog (`platforms/shared/catalog/monster_catalog_spec.json`).
 
-Species are ordered natively by dungeon level (`DL 0–100`) and backed per platform via disk, banked/auxiliary RAM, REU, or cartridge ROM (`29` SoA/record bytes per species plus variable-length Huffman/screen-code names). Town species (`#0–#7`, `DL 0`) stay resident at town slots, while dungeon monsters (`#8–#278`) are paged into active level tables as needed and inspected in full via Monster Recall (`/`).
+Species are ordered natively by dungeon level (`DL 0–100`) and backed per platform via disk, `MORIA8.DAT` (`BDOS 33` on CP/M), banked/auxiliary RAM, REU, or cartridge ROM (`29` SoA/record bytes per species plus variable-length Huffman/screen-code or pure ASCII names). Town species (`#0–#7`, `DL 0`) stay resident at town slots, while dungeon monsters (`#8–#278`) are paged into active level tables as needed and inspected in full via Monster Recall (`/`).
 
 ## How To Read Monsters
 
@@ -14,7 +14,7 @@ Moria8 tracks 29 packed fields per species (`21` core fields + `8` Phase 5 exten
 - **AC / Sleep / AAF / XP**: Armor class, initial sleep timer (`0` = always awake), Area Awareness Factor (`1–127` tiles + `CD_OPEN_DOOR`), and 16-bit XP award.
 - **Attacks (`atk0..atk3`)**: Up to **4** melee attack slots with 19 VMS verbs (`ADESC_*`) and all 24 effect types (`ATK_*`: normal damage, stat drains, elemental touches, acid/corrosion, fear, blindness, confusion, paralysis, gold/item theft, EXP drain, aggravate, disenchant, and eating food/light/charges).
 - **Spells & Breath (`spell_chance`, `spell_flags`, `spell_flags2`)**: 1-in-N cast frequency (`MS_FREQ_MASK`), 6 breath element encodings, `Hold Person`, 8 primary spell flags (`CLW`, `Breath`, `Summon`, `Teleport-To`, `Blind`, `Confuse`, `CSW`, `Fear`), and 5 extended spells (`Blink`, `Teleport Self`, `Summon Undead`, `Slow Person`, `Drain Mana`), plus `CM2_PHASE`, `CM2_EATS_OTHER`, and `CM2_PICKS_UP`.
-- **Defenses & Traits (`cdefense`, `mflags`)**: Elemental/stone vulnerabilities (`FIR`, `CLD`, `ACD`, `PSN`, `LIT`, `STN`), `CD_NO_SLEEP`, `CD_INVISIBLE`, `CF_UNDEAD`, `CF_EVIL`, `CF_ANIMAL`, `CF_DRAGON`, `CF_BREEDER`, `CF_ATTACK_ONLY`, and `CF_INFRA` (visible via infravision in darkness on all 7 ports).
+- **Defenses & Traits (`cdefense`, `mflags`)**: Elemental/stone vulnerabilities (`FIR`, `CLD`, `ACD`, `PSN`, `LIT`, `STN`), `CD_NO_SLEEP`, `CD_INVISIBLE`, `CF_UNDEAD`, `CF_EVIL`, `CF_ANIMAL`, `CF_DRAGON`, `CF_BREEDER`, `CF_ATTACK_ONLY`, and `CF_INFRA` (visible via infravision in darkness on all 8 ports).
 
 You can also search, filter, and simulate encounters and Phase 5 recall screens interactively in the [Monster Compendium](monsters.html).
 

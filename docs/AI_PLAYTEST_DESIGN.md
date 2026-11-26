@@ -141,7 +141,8 @@ reinforcement learning a non-goal. The learning loop lives in development
   - `playtest-gate [TARGETS=a,b] [GATE_WORKERS=n]`: before a product commit
     (AGENTS.md; added 2026-11-15 after unit and harness suites passed a build
     whose first store buy crashed the BBC and Apple IIe). On every port and
-    cartridge whose ROMs are set, the bot plays four characters—Human Warrior,
+    cartridge (including zero-ROM/zero-socket `cpm` via `tools/cpm_runner`, plus
+    each MAME/`x16emu` target whose ROMs are set), the bot plays four characters—Human Warrior,
     Elf Mage, Dwarf Priest, and Half-Elf Ranger (`half-elf-ranger`, added for
     bow/launcher coverage)—from fixed seeds for 3,000 steps each (`gate.py`, as
     the build queue plays a run), and a scripted tour (`tour.py`) buys from the
@@ -153,7 +154,8 @@ reinforcement learning a non-goal. The learning loop lives in development
     deaths and the bot's own findings do not. A target skipped because its ROMs
     are not set fails it too, unless `GATE_ALLOW_SKIP=1`: without the Plus/4's
     JiffyDOS ROMs it reported "55 passed, 0 failed" over a build whose every
-    Plus/4 disk game hung at its first store (2026-11-16). About 10 minutes at
+    Plus/4 disk game hung at its first store (2026-11-16). Currently `70`
+    targets (every disk/CP/M port + 5 cartridges). About 10 minutes at
     12 workers.
   - `playtest-session GOAL=<name> [SEEDS=…] [WORKERS=n]`: launches VICE,
     unbounded.
@@ -1143,19 +1145,22 @@ combination.
 
 ### 12.7 Other platforms
 
-The brain, model, goals, and recorder are intended to be platform-neutral,
-because `core/` structures are shared. The map size is a platform layout
-constant (`hal_layout_map_cols/rows`): 80×48 on C64 and Plus/4, 198×66 on
-C128. The
-backend interface is **extracted when platform #2 starts**, not designed in
-advance.
+The brain, model, goals, and recorder are platform-neutral, reading 6502 shared
+structures (`core/6502/`) or the parallel Z80 ABI (`core/z80/`, `z80_state`).
+The map size is a platform layout
+constant (`hal_layout_map_cols/rows`): 80×48 on C64, Plus/4, and Atari 8-bit;
+198×66 on C128, Apple IIe, CX16, BBC Master 128, and CP/M 2.2 (Z80). The
+backend interface (`playtest/moria_playtest/ports.py`) handles all eight ports:
 
-| Platform | Likely backend | Known differences |
+| Platform | Backend | Key / state / screen notes |
 |---|---|---|
 | C128 | VICE binary monitor (`x128`) | VDC 80-col screen; banked reads (load `C128_MEMORY_CONTRACT.md`) |
 | Plus/4 | VICE binary monitor (`xplus4`) | TED screen base; its own layout assertions |
 | Apple IIe | MAME Lua plugin with a socket | Map in aux RAM (`$0800-$3B0B`); interleaved text pages; ROMs via `A2ROMS` |
 | Commander X16 | `x16emu -testbench` | No breakpoints or snapshots; the existing `input_get_key_testbench_resume` sync pattern; map in banks 1–2 |
+| Atari 8-bit | MAME Lua plugin (`a800xl` / `a130xe`) | `PORTB` banked high RAM, `SIOV`, ROMs via `ATARI8ROMS` |
+| BBC Master 128 | MAME Lua plugin (`bbcm`) | `LYNNE`/`ANDY`/Sideways RAM, Mode 0, ROMs via `BBCMROMS` |
+| CP/M 2.2 (Z80) | `tools/cpm_runner --control` (`cpm.py`, stdio JSON) | Zero sockets, zero external ROMs; `z80_state` pinned at `0x6A00`, `'M8SK'` stack canary at `0x8C00`, 80×24 shadow + `MAP_BASE` `0x9D00–0xD00B` |
 
 ### 12.8 Capacity (inference)
 
@@ -2477,13 +2482,15 @@ deeper goals are clvl 25 and DL 30; the Balrog is M8.
 ### 21.6 The port layer (from 2026-10-27)
 
 `playtest/moria_playtest/ports.py` describes each port to the driver: its
-emulator, disk and symbols, the source constants and labels the ABI table
-checks (`abi.tables(port)`), its KERNAL addresses, how a crash entry is
-told from banked RAM code, where the screen, colours and map are read, and
-how a key is fed. `make playtest-qualify PORT=plus4` (or `c128`) plays
-another port; a suite records `"port"` and is named with it
+emulator/runner, disk and symbols, the source constants and labels the ABI table
+checks (`abi.tables(port)`), how crashes are caught, where the screen, colours
+and map are read, and how a key is fed. `make playtest-qualify PORT=plus4` (or
+`c128`, `cpm`, etc.) plays another port; a suite records `"port"` and is named with it
 (`clvl5-human-mage-plus4.json`), and `--regress` runs one port's suites.
-`make playtest-check` checks every port's ABI table against its build.
+`make playtest-check` checks every port's ABI table against its build (8 ports,
+including CP/M `cpm.py` / `tools/cpm_runner --control`, pinned `z80_state` at
+`0x6A00`, `'M8SK'` canary at `0x8C00`, and stdio key injection without sockets or
+external ROMs).
 
 | | C64 | Plus/4 | C128 |
 |---|---|---|---|
@@ -2544,8 +2551,9 @@ should retry before giving up.
 
 ### 21.8 Bigger maps (from 2026-10-27)
 
-The four 80-column ports (C128, Apple IIe, BBC Master, Commander X16) play
-Umoria's own 198x66 level, 3.4 times the C64's 80x48 (`Port.map_scale`).
+The five 80-column ports (C128, Apple IIe, BBC Master, Commander X16, and
+CP/M 2.2 Z80) play Umoria's own 198x66 level, 3.4 times the C64's 80x48
+(`Port.map_scale`).
 
 - **Budgets** (maintainer, 2026-10-27: "they can be different"): a port's
   goals get the C64 budget times its map scale (`goals.for_port`):
@@ -3260,7 +3268,7 @@ rebuild`) re-creates the database from it.
 **Builds.** A run plays a build snapshot, never this working tree directly:
 `builds/<id>/` is a `git archive` of a commit (or, for a subqueue testing a
 change, a copy of the tree as it stands) with its own `build/`, made there by
-`make disk64` with the tree's Kick Assembler. The game, the bot and the
+`make` using the tree's assemblers (`KickAss.jar` / `sjasmplus`). The game, the bot and the
 sources the bot reads (`knowledge.py`, `abi.py`) all come from the snapshot,
 so editing or rebuilding this tree never changes a run in flight or the
 main queue's build. Every ten minutes the service fetches `origin/main`
