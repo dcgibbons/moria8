@@ -107,7 +107,7 @@ ix_adj_weapon_c:
     jsr equip_stat_index                // resident: C=1 & Y=stat if any
     pla
     bcc !ix_skip-
-    jmp player_apply_stat_delta_y
+    jmp player_step_equip_stat_y
 
 ix_no_weapons_str: .text "No weapons to exchange." ; .byte 0
 ix_primary_str:    .text "Primary: " ; .byte 0

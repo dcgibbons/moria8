@@ -39,6 +39,7 @@
              color: var(--paper); font-size: 12px; }
   .nowline b { color: var(--gold); letter-spacing: .12em; text-transform: uppercase; font-size: 11px; margin-right: 8px; }
   .tag { font-size: 10px; color: var(--blue); border: 1px solid rgba(119,121,220,.5); border-radius: 8px; padding: 0 5px; margin-left: 4px; }
+  .vtag { font-size: 10px; color: var(--gold); background: rgba(255,217,61,.1); border: 1px solid rgba(255,217,61,.45); border-radius: 8px; padding: 0 5px; margin-left: 5px; }
   .pill { padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
   .pill b { color: var(--gold); font-weight: normal; }
   select, button {
@@ -399,7 +400,8 @@ const BAND_COLORS = ["#e0603c", "#c57900", "#ffd93d", "#9ad284", "#7779dc"];
 let current = null, data = null, mile = null, cover = null, diskData = null, watching = null;
 const PORT_NAMES = {c64: "C64", "c64-noreu": "C64 (no REU)", "c64-cart": "C64 Cartridge", "atari8-cart": "Atari 8-bit Cartridge", plus4: "Plus/4", c128: "C128", apple2: "Apple IIe", atari8: "Atari 8-bit",
                     bbcmaster: "BBC Master", cx16: "Commander X16", "plus4-cart": "Plus/4 Cartridge",
-                    "c128-cart": "C128 Cartridge", "cx16-cart": "Commander X16 Cartridge"};
+                    "c128-cart": "C128 Cartridge", "cx16-cart": "Commander X16 Cartridge",
+                    cpm: "CP/M", "cpm-c128": "C128 CP/M"};
 const $ = id => document.getElementById(id);
 // Published (make playtest-publish): static data files, refreshed every 30 s.
 const STATIC = !!document.querySelector('meta[name="playtest-static"]');
@@ -969,25 +971,36 @@ function renderQueue() {
   const onBuild = c => !!(cbuild && c && String(c).slice(0, 12) === cbuild.slice(0, 12));
   $("ciline").innerHTML = `goal <b>${esc(q.config.build_goal)}</b> · one run per port, every combination in turn · ` +
     `build <b>${esc(cbuild ? cbuild.slice(0, 12) : cid || "–")}</b>` +
+    ((cur && cur.tags && cur.tags.length) ? cur.tags.map(t => `<span class="vtag">${esc(t)}</span>`).join("") : "") +
     (cur && cur.subject ? ` <span class="muted">“${esc(cur.subject)}”</span>` : "") +
     (cur ? ` · playing ${esc(ago(cur.start))}` : "") +
     (cstate.error ? ` · <span class="bad">build failed: ${esc(cstate.error.slice(-160))}</span>` : "");
   const none = {games: 0, reached: 0, died: 0, median_clvl: null, played: 0, findings: [], notes: []};
-  const det = p => (cur && cur.detail && cur.detail[p]) || none;
+  // A bot-only build (a new bot snapshot or commit) carries the game's
+  // coverage on: its counts are the newest build of this game that has
+  // games (maintainer, 2026-11-23: "shouldn't it be 31/31 for every port").
+  const recent = (q.builds || []).slice().sort((a, b) => (b.start || 0) - (a.start || 0));
+  const det = p => {
+    const own = cur && cur.detail && cur.detail[p];
+    if (own && own.games) return own;
+    const from = cur ? recent.indexOf(cur) : 0;
+    return recent.slice(Math.max(0, from)).map(b => b.detail && b.detail[p]).find(d => d && d.games) || own || none;
+  };
+  const covered = p => Math.max(det(p).played, Math.min((ci[p] || {}).next || 0, combos(p)));
   const combos = p => Object.keys((ci[p] || {}).items || {}).length || q.characters.length;
   const ctot = cports.map(det).reduce((t, d) => ({g: t.g + d.games, r: t.r + d.reached, f: t.f + d.findings.length}), {g: 0, r: 0, f: 0});
   $("cicount").textContent = cports.length ? `${cports.length} ports · ${ctot.g} games · ${ctot.r} reached · ` +
     `${ctot.f} finding${ctot.f === 1 ? "" : "s"}` : "";
   $("citable").innerHTML = cports.length ? `<tr><th>Port</th><th>Games</th><th>clvl ${esc(String(q.config.build_goal || "").replace(/\D/g, ""))}</th>` +
     `<th>Died</th><th>Findings</th><th>Bot notes</th><th>Median clvl</th><th>Coverage</th><th>Now</th></tr>` + cports.map(p => {
-      const d = det(p), n = combos(p), pct = n ? Math.min(100, Math.round(100 * d.played / n)) : 0;
+      const d = det(p), n = combos(p), done = covered(p), pct = n ? Math.min(100, Math.round(100 * done / n)) : 0;
       const live = q.live.find(r => r.queue === "build" && r.platform === p), w = (live && live.status) || {};
       const ftip = d.findings.map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n");
       return `<tr><td>${esc(PORT_NAMES[p] || p)}</td><td>${d.games}</td><td>${d.reached}</td><td>${d.died}</td>` +
         `<td class="${d.findings.length ? "bad" : "ok"}" title="${esc(ftip)}">${d.findings.length ? `${d.findings.length} ⚠` : "0"}</td>` +
         `<td class="dim" title="${esc((d.notes || []).map(f => `${f.id}: ${cap(f.character || "")} — ${f.text}`).join("\n"))}">${(d.notes || []).length}</td>` +
         `<td>${d.median_clvl ?? "–"}</td>` +
-        `<td>${d.played}/${n}<span class="cov" role="img" aria-label="${pct}% of combinations played"><i style="width:${pct}%"></i></span></td>` +
+        `<td>${done}/${n}<span class="cov" role="img" aria-label="${pct}% of combinations played"><i style="width:${pct}%"></i></span></td>` +
         `<td>${live ? `▸ ${esc(cap(live.character))}${w.clvl != null ? ` L${w.clvl} DL${w.dlvl}` : ""}${live.paused ? " (paused)" : ""}` : `<span class="dim">–</span>`}</td></tr>`;
     }).join("") : "";
   // Every combination (as M6's grid): a row per combination in cycle order,
@@ -1017,6 +1030,7 @@ function renderQueue() {
       cgrid += `<div class="box ${cls}" title="${esc(tip)}">${esc(label)}</div>`;
     });
   });
+  $("buildq").style.gridTemplateColumns = cports.length ? `8rem repeat(${cports.length}, minmax(0, 1fr))` : "";
   $("buildq").innerHTML = cports.length ? cgrid : `<span class="muted">no ports in build_platforms</span>`;
   $("subq").innerHTML = q.subqueues.map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
   $("archq").innerHTML = (q.archived || []).map(s => subCard(q, s)).join("") || `<span class="muted">none</span>`;
@@ -1167,7 +1181,7 @@ function renderBuilds(q) {
     svg += `<rect x="${x0}" y="${T}" width="${Math.max(1, w - 2)}" height="${H - T - B}" fill="${c}" fill-opacity=".2"/>` +
       `<rect x="${x0}" y="${T}" width="${Math.max(1, w - 2)}" height="5" fill="${c}"/>`;
     if (w > 46) svg += `<circle cx="${x0 + 7}" cy="${T - 9}" r="4" fill="${c}"/>` +
-      `<text x="${x0 + 14}" y="${T - 6}" style="fill:var(--muted)">${esc(b.commit.slice(0, 7))}</text>`;
+      `<text x="${x0 + 14}" y="${T - 6}" style="fill:${b.tags && b.tags.length ? "var(--gold)" : "var(--muted)"}">${esc((b.tags && b.tags[0]) || b.commit.slice(0, 7))}</text>`;
   });
   [0, 0.5, 1].forEach(f => svg += `<line class="${f ? "grid" : "base"}" x1="${L}" x2="${W - R}" y1="${Y(f)}" y2="${Y(f)}"/>` +
     `<text x="${L - 4}" y="${Y(f) + 3}" text-anchor="end">${f * 100}%</text>`);
@@ -1184,7 +1198,7 @@ function renderBuilds(q) {
       svg += `<rect x="${x0 + 1}" y="${Y(b.hi)}" width="${Math.max(1, x1 - x0 - 3)}" height="${Math.max(1, Y(b.lo) - Y(b.hi))}" fill="${buildColor(b)}" fill-opacity=".6"${op}/>` +
         `<line x1="${x0 + 1}" x2="${Math.max(x0 + 2, x1 - 1)}" y1="${Y(rate)}" y2="${Y(rate)}" stroke="var(--paper)" stroke-width="2" stroke-linecap="round"${op}/>`;
     }
-    const tip = `${b.commit.slice(0, 7)} · ${b.subject || "(no subject)"}\n` +
+    const tip = `${b.commit.slice(0, 7)}${b.tags && b.tags.length ? ` (${b.tags.join(", ")})` : ""} · ${b.subject || "(no subject)"}\n` +
       `live ${new Date(b.start * 1000).toLocaleString()} for ${fmtTime(b.end - b.start)}${b.end === now ? " (playing now)" : ""}\n` +
       (b.games ? `${b.reached} of ${b.games} games reached clvl10: ${pct(b.reached, b.games)}% (range ${Math.round(b.lo * 100)}–${Math.round(b.hi * 100)}%)`
                : "no counted games") +
@@ -1196,7 +1210,7 @@ function renderBuilds(q) {
     (buildPort === "all" ? "" : ` on ${PORT_NAMES[buildPort] || buildPort}`);
   $("btable").innerHTML = `<tr><th>Build</th><th>Commit</th><th>Live</th><th>Games</th><th>Reached</th><th>95% range</th><th>Median clvl</th><th>Findings</th><th>Bot notes</th></tr>` +
     rows.slice().reverse().map(b => `<tr class="${b.games < 10 ? "thin" : ""}">` +
-      `<td><i class="bchip" style="background:${buildColor(b)}"></i>${esc(b.commit.slice(0, 7))}</td>` +
+      `<td><i class="bchip" style="background:${buildColor(b)}"></i>${esc(b.commit.slice(0, 7))}${(b.tags || []).map(t => `<span class="vtag">${esc(t)}</span>`).join("")}</td>` +
       `<td class="subj">${esc(b.subject || "")}</td><td>${fmtTime(b.end - b.start)}${b.end === now ? " ▸" : ""}</td>` +
       `<td>${b.games}</td><td>${b.games ? pct(b.reached, b.games) + "%" : "–"}</td>` +
       `<td>${b.games ? Math.round(b.lo * 100) + "–" + Math.round(b.hi * 100) + "%" : "–"}</td>` +

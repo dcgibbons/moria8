@@ -214,17 +214,17 @@ player_sync_from_zp:
 // Preserves: nothing
 player_calc_stats:
     ldy #STAT_COUNT - 1
+    lda #0
 !stat_loop:
-    lda player_data + PL_STR_BASE,y
     sta player_stat_res,y
     dey
     bpl !stat_loop-
 
 !pcs_equipment:
-    // The equipment's stat bonuses (equip_stat_mask_x) use p1 as a signed
-    // modifier. Equipment bonuses must be exact: apply_modifier's randomized
-    // chargen steps would ratchet stats upward on every save/load rebuild,
-    // while wear/takeoff apply p1 as raw arithmetic.
+    // Sum each stat's signed equipment p1 across worn items into
+    // player_stat_res,y, then apply per-point VMS 18/xx stepping
+    // (in_statt/de_statt) from PL_STR_BASE,y so load/restoration rebuilds
+    // deterministically match wear/takeoff.
     ldx #EQUIP_CLOAK
 !pcs_eq:                        // the weapon slot through the cloak
     lda inv_item_id,x
@@ -254,12 +254,17 @@ player_calc_stats:
     cpx #EQUIP_WEAPON
     bcs !pcs_eq-
 
-    // Clamp effective stats to [3, 118], sync ZP mirrors, and store signed
-    // (unclamped - clamped) residuals in player_stat_res for reversible takeoff.
+    // Clamp base stats to [3, 118], sync ZP mirrors, and apply accumulated
+    // signed equipment steps via VMS 18/xx stepping (preserving residuals
+    // in player_stat_res,y for reversible takeoff and drains).
     ldy #STAT_COUNT - 1
 !pcs_zp:
     lda player_stat_res,y
+    pha
+    lda player_data + PL_STR_BASE,y
     jsr player_store_clamped_stat_y
+    pla
+    jsr player_step_equip_stat_y
     dey
     bpl !pcs_zp-
 .assert "The ZP stat mirrors follow PL_*_CUR order", zp_player_chr - zp_player_str == PL_CHR_CUR - PL_STR_CUR && STAT_COUNT == 6, true
@@ -359,32 +364,149 @@ equip_stat_index:
     rts
 .assert "The stat items' slots run from the head to the left hand", EQUIP_HEAD < EQUIP_RING && EQUIP_RING < EQUIP_AMULET && EQUIP_AMULET < EQUIP_RING2, true
 
-// Working byte for stat modification (survives across increment/decrement calls)
+// Working bytes for stat modification (survive across increment/decrement calls)
 stat_work: .byte 0
+stat_step_cnt: .byte 0
 // Signed (unclamped - clamped) residual per stat when clamped at 3 or 118.
 player_stat_res: .fill STAT_COUNT, 0
 
-// player_apply_stat_delta_y — Add signed delta A to stat Y (0..5), clamp
-// PL_STR_CUR,y & zp_player_str,y to [3, 118], and update player_stat_res,y.
+// player_step_equip_stat_y — Apply signed equipment bonus A (-128..+127)
+// one point at a time to stat Y (0..5) via VMS in_statt/de_statt (moria.inc:33,
+// misc.inc:2194: +1 below 18, +10 from 18 capped at 118; 27/18 rules on remove).
+// Residual invariant (preserved by all stat mutators here):
+// cur == 3 => res <= 0; 4..117 => res == 0; cur == 118 => res >= 0.
+// Preserves: X, Y. Clobbers: A, stat_step_cnt.
+player_step_equip_stat_y:
+    cmp #0
+    beq !pses_ret+
+    bmi !pses_dec_init+
+    sta stat_step_cnt
+    lda player_data + PL_STR_CUR,y
+!pses_inc_lp:
+    cmp #18
+    bcs !pses_inc_18+
+    cmp #3
+    bne !pses_inc_add1+
+    lda player_stat_res,y
+    beq !pses_inc_from3+
+    clc
+    adc #1
+    sta player_stat_res,y
+    lda #3
+    bne !pses_inc_next+
+!pses_inc_from3:
+    lda #3
+!pses_inc_add1:
+    clc
+    adc #1
+    bne !pses_inc_next+
+!pses_inc_18:
+    cmp #118
+    beq !pses_inc_at118+
+    adc #10
+    cmp #119
+    bcc !pses_inc_next+
+    sbc #118
+    bcs !pses_inc_st118+
+!pses_inc_at118:
+    lda player_stat_res,y
+    clc
+    adc #10
+    bpl !pses_inc_st118+
+    lda #127
+!pses_inc_st118:
+    sta player_stat_res,y
+    lda #118
+!pses_inc_next:
+    dec stat_step_cnt
+    bne !pses_inc_lp-
+    beq pses_write_cur_y
+!pses_ret:
+    rts
+
+pses_zero_res_write_y:
+    pha
+    lda #0
+    sta player_stat_res,y
+    pla
+pses_write_cur_y:
+    sta player_data + PL_STR_CUR,y
+    sta zp_player_str,y
+    rts
+
+!pses_dec_init:
+    eor #$ff
+    clc
+    adc #1
+    sta stat_step_cnt
+    lda player_data + PL_STR_CUR,y
+!pses_dec_lp:
+    cmp #118
+    bne !pses_dec_not118+
+    lda player_stat_res,y
+    cmp #10
+    bcc !pses_dec_drop118+
+    sbc #10
+    sta player_stat_res,y
+    lda #118
+    bne !pses_dec_next+
+!pses_dec_drop118:
+    clc
+    adc #108
+    jsr pses_zero_res_write_y
+    bne !pses_dec_next+
+!pses_dec_not118:
+    cmp #28
+    bcc !pses_dec_chk19+
+    sbc #10
+    bcs !pses_dec_next+
+!pses_dec_chk19:
+    cmp #19
+    bcc !pses_dec_chk4+
+    lda #18
+    bne !pses_dec_next+
+!pses_dec_chk4:
+    cmp #4
+    bcc !pses_dec_at3+
+    sbc #1
+    bne !pses_dec_next+
+!pses_dec_at3:
+    lda player_stat_res,y
+    cmp #$80
+    beq !pses_dec_at3_st+
+    sec
+    sbc #1
+    sta player_stat_res,y
+!pses_dec_at3_st:
+    lda #3
+!pses_dec_next:
+    dec stat_step_cnt
+    bne !pses_dec_lp-
+    beq pses_write_cur_y
+
+// player_apply_stat_delta_y — Add unsigned delta A (0..25 from eff_gain_stat)
+// to stat Y (0..5), clamp PL_STR_CUR,y & zp_player_str,y to [3, 118], and
+// update player_stat_res,y (saturating positive cap residuals at +127).
 // Preserves: X, Y. Clobbers: A.
 player_apply_stat_delta_y:
+    cmp #0
+    beq !pasd_ret+
     pha
     lda player_data + PL_STR_CUR,y
-    cmp #3
-    beq !pasd_low+
     cmp #118
-    bne !pasd_no_res+
-    lda player_stat_res,y
-    bpl !pasd_have_res+
-    bmi !pasd_no_res+
-!pasd_low:
-    lda player_stat_res,y
-    bmi !pasd_have_res+
-!pasd_no_res:
-    lda #0
-!pasd_have_res:
+    bne !pasd_add+
+    pla
     clc
-    adc player_data + PL_STR_CUR,y
+    adc player_stat_res,y
+    bpl !pasd_hi_store+
+    lda #$7f
+!pasd_hi_store:
+    sta player_stat_res,y
+!pasd_ret:
+    rts
+!pasd_add:
+    clc
+    adc player_stat_res,y
     sta player_stat_res,y
     pla
     clc
@@ -403,8 +525,7 @@ player_store_clamped_stat_y:
     bcc !pscs_set+
     lda #118
 !pscs_set:
-    sta player_data + PL_STR_CUR,y
-    sta zp_player_str,y
+    jsr pses_write_cur_y
     pla
     sec
     sbc player_data + PL_STR_CUR,y
@@ -506,12 +627,12 @@ player_apply_slaying_bonuses:
     rts
 #endif
 
-// player_drain_stat_y — Drain stat Y (0..5 = STAT_STR..STAT_CHR) by one
-// Umoria decrement_stat step, consuming positive player_stat_res,y at 118
+// player_drain_stat_y — Drain stat Y (0..5 = STAT_STR..STAT_CHR) by one VMS
+// de_statp step, consuming positive player_stat_res,y at 118 (randint(3))
 // before lowering PL_STR_CUR,y / zp_player_str,y.
 // Input: Y = stat index (0..5)
 // Output: C = 1 if stat was >= 4 (drained), C = 0 if stat < 4 (unchanged).
-// Preserves: Y. Clobbers: A, X, stat_work, zp_temp3, zp_temp4, zp_math*.
+// Preserves: Y. Clobbers: A, X, zp_temp3, zp_temp4, zp_math_a.
 player_drain_stat_y:
     lda player_data + PL_STR_CUR,y
     cmp #4
@@ -519,61 +640,60 @@ player_drain_stat_y:
     cmp #118
     bne !pds_dec_cur+
     lda player_stat_res,y
-    bmi !pds_reload_cur+
     beq !pds_reload_cur+
-    sec
-    sbc #1
+    lda #3
+    jsr rng_range               // 0..2, preserves Y
+    sta zp_math_a
+    lda player_stat_res,y
+    clc
+    sbc zp_math_a               // res - randint(3); C=1 if >= 0
+    bcc !pds_below_118+
     sta player_stat_res,y
 !pds_done:
     rts
+!pds_below_118:
+    adc #118                    // C=0 -> cur drops into 116..117, residual cleared
+    bne !pds_store+
 !pds_reload_cur:
     lda #118
 !pds_dec_cur:
-    sty stat_work
     jsr decrement_stat
-    ldy stat_work
-    sta player_data + PL_STR_CUR,y
-    sta zp_player_str,y
-    lda #0
-    sta player_stat_res,y
+!pds_store:
+    jsr pses_zero_res_write_y
     sec
     rts
 
-// decrement_stat — Decrement a stat using umoria's randomized step logic
+// decrement_stat — Decrement a stat using VMS Moria's de_statp (misc.inc:2177)
 // Input: A = current stat value (3-118)
 // Output: A = new stat value
-// Clobbers: zp_temp3, zp_temp4, zp_math* (via math_dice)
+// Preserves: Y. Clobbers: X, zp_temp3, zp_temp4, zp_math_a.
 decrement_stat:
     cmp #109
-    bcs !dec_sub1+
-    cmp #88
-    bcs !range_88_108+
+    bcs !range_109_118+
     cmp #19
-    bcs !range_19_87+
-    // stat <= 18
+    bcs !range_19_108+
     cmp #4
-    bcc !dec_done+          // stat <= 3: no change
-    // stat 4-18 or > 108: simple -1 (C = 1)
-!dec_sub1:
-    sbc #1
+    bcc !dec_done+              // stat <= 3: no change
+    sbc #1                      // stat 4..18: -1 (C = 1)
     rts
-!range_88_108:
-    // stat 88-108: subtract rng(6)+2 = 3-8 (result >= 80 >= 19)
-    ldx #6
-    ldy #2
-    bne !dec_roll+
-!range_19_87:
-    // stat 19-87: subtract rng(15)+5 = 6-20
-    ldx #15
-    ldy #5
-!dec_roll:
+!range_109_118:
+    // stat > 108 (109-118): subtract randint(3) = 1-3
     pha
-    lda #1
-    jsr math_dice
+    lda #3
+    jsr rng_range
+    bpl !dec_sub+
+!range_19_108:
+    // stat 19-108: subtract randint(10)+5 = 6-15, floor 18
+    pha
+    lda #10
+    jsr rng_range
+    clc
+    adc #5
+!dec_sub:
+    sta zp_math_a
     pla
-    sec
+    clc
     sbc zp_math_a
-    // If result < 19, clamp to 18
     cmp #19
     bcs !dec_done+
     lda #18

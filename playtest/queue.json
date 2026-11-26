@@ -1,9 +1,7 @@
 {
- "workers": 28,
+ "workers": 30,
  "min_per_platform": 1,
- "platforms": [
-  "c128"
- ],
+ "platforms": [],
  "goal": "deep",
  "retry_cap": 3,
  "start_budget": 2000000,
@@ -15,8 +13,8 @@
  "branch": "main",
  "fetch_url": "https://github.com/dcgibbons/moria8.git",
  "paused": false,
- "epoch": "2026-11-04-c128-catalog",
- "balrog_workers": 24,
+ "epoch": "2026-11-18-review",
+ "balrog_workers": 30,
  "balrog_budget": 20000000,
  "parallel_cap": 12,
  "main_characters": [
@@ -39,18 +37,19 @@
   "atari8",
   "atari8-cart",
   "bbcmaster",
-  "cx16-cart"
+  "cx16-cart",
+  "cpm",
+  "cpm-c128"
  ],
  "build_goal": "clvl10",
  "balrog_platforms": [
   "c64"
  ],
- "balrog_characters": [
-  "gnome-mage",
-  "human-mage",
-  "half-elf-mage",
-  "halfling-mage"
- ],
+ "balrog_characters": [],
  "balrog_copies": 1,
- "balrog_focus_workers": 8
+ "balrog_focus_workers": 0,
+ "stats_since": "20261124-004230",
+ "build_per_port": 2,
+ "build_workers": 4,
+ "balrog_focus_min_clvl": 36
 }

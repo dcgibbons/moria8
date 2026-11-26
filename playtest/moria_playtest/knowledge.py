@@ -29,7 +29,13 @@ CATALOG_PORTS = {"cx16": ROOT / "platforms/cx16/hal/lifecycle_policy.s",
 CATALOG_DIR = ROOT / "platforms/shared/catalog"
 CATALOG_FLAG = "#define HAL_PLATFORM_MONSTER_CATALOG"
 _catalog_dir: Path | None = None
-MONSTER_ATTACK = ROOT / "core/6502/monster_attack.s"
+def _core_path(name: str) -> Path:
+    """Resolve a 6502 core source file, falling back to pre-reorg core/ builds."""
+    path = ROOT / "core/6502" / name
+    return path if path.exists() else ROOT / "core" / name
+
+
+MONSTER_ATTACK = _core_path("monster_attack.s")
 TIER_LINE = re.compile(r"^//\s+\d+: \[\s*\d+\] DL\s*(\d+) (.+?)\s*$")
 TIER_TABLE = re.compile(r"^tier\d+_cr_(\w+):\n((?:[ \t]*\.byte[^\n]*\n)+)", re.M)
 CF_ATTACK_ONLY = 0x01   # cr_mflags: moves only to attack (tools/parse_creatures.py)
@@ -291,6 +297,25 @@ def breath_info() -> dict[tuple[str, int], tuple[int, frozenset[str], int]]:
                 held = out.get(key, (0, frozenset(), 0))
                 out[key] = (max(held[0], breath_damage(chance, num, sides)), held[1] | breath_elements(chance),
                             max(held[2], wound_burst(flags)))
+    return out
+
+
+CD_HURT = {0x01: "frost", 0x02: "fire", 0x04: "poison", 0x08: "acid", 0x10: "lightning"}   # cr_cdefense bits 0-4 (core/6502/monster.s)
+
+
+@lru_cache(maxsize=1)
+def hurt_kinds() -> dict[tuple[str, int], frozenset[str]]:
+    """(screen glyph, creature level) -> the elements that do it double
+    (eff_scale_elem_damage: cr_cdefense's CD_FROST/FIRE/POISON/ACID/LIGHT),
+    for creatures drawn alike only those every one of them shares."""
+    out: dict[tuple[str, int], frozenset[str]] = {}
+    for _, tables in _tiers():
+        if "cdefense" not in tables:
+            continue
+        for code, level, bits in zip(tables["display"], tables["level"], tables["cdefense"]):
+            key = (screen_code_to_char(code), level)
+            hurt = frozenset(e for bit, e in CD_HURT.items() if bits & bit)
+            out[key] = out[key] & hurt if key in out else hurt
     return out
 
 
@@ -761,7 +786,7 @@ def blow(messages: str) -> bool:
                for m in _attack_pattern().finditer(messages))
 
 
-GAME_TABLES = ROOT / "core/6502/tables.s"
+GAME_TABLES = _core_path("tables.s")
 STAT_NAMES = ("STR", "INT", "WIS", "DEX", "CON", "CHR")   # stat table order
 
 
@@ -787,8 +812,8 @@ def stat_adjustments() -> tuple[list[tuple[int, ...]], list[tuple[int, ...]]]:
     return _signed_rows(text, "race_stat_adj"), _signed_rows(text, "class_stat_adj")
 
 
-SPELL_NAMES = ROOT / "core/6502/spell_names.s"
-SPELL_CLASS_DATA = ROOT / "core/6502/spell_class_data.s"
+SPELL_NAMES = _core_path("spell_names.s")
+SPELL_CLASS_DATA = _core_path("spell_class_data.s")
 NAME_LINE = re.compile(r'^(msn|psn)_(\d+):\s*\.text "([^"]+)"', re.M)
 NAME_ALIAS = re.compile(r"^\.label (msn|psn)_(\d+) = (\w+)", re.M)
 LABEL_TEXT = re.compile(r'^(\w+):\s*\n?\s*\.text "([^"]+)"', re.M)

@@ -144,8 +144,18 @@ def books_for(klass: str) -> tuple[str, ...]:
 
 def mage_book_of(name: str) -> str | None:
     """The Mage book a store or pack line names: the longest title first,
-    since "Magick I" is the start of "Magick II"."""
-    return next((book for book in sorted(MAGE_BOOKS, key=len, reverse=True) if book in name), None)
+    since "Magick I" is the start of "Magick II". A title cut short by a
+    40-column line ("You see a Spellbook The Mages Guide to P") is the one
+    book it is the start of: Mages walked to the Magic Shop 585 times a
+    run for the Guide to Power, saw it on the floor and passed it by (C64
+    Balrog, 2026-11-23), and Fire Ball, Word of Destruction and Genocide
+    were never cast."""
+    full = next((book for book in sorted(MAGE_BOOKS, key=len, reverse=True) if book in name), None)
+    if full is not None or MAGE_BOOK_PREFIX not in name:
+        return full
+    rest = name.split(MAGE_BOOK_PREFIX, 1)[1].rstrip(". ")
+    cut = [book for book in MAGE_BOOKS if rest and book.startswith(rest)]
+    return cut[0] if len(cut) == 1 else None
 
 
 def book_of(name: str) -> str | None:

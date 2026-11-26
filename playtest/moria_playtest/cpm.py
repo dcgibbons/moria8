@@ -24,6 +24,9 @@ SCREEN_ROWS_VISIBLE = 24
 Z80_STATE_SIZE = 64
 STACK_CANARY_MAGIC = b"M8SK"
 RUN_MAX_STEPS = 50_000_000
+C128_CPM_KEYBUF = 0x2471
+C128_CPM_STACK_LO = 0x8C00
+C128_CPM_STACK_HI = 0x8E00
 
 CPM_SPECIAL_KEYS: dict[int, bytes] = {
     0x9D: b"\x1b[D",   # left arrow -> CSI D
@@ -220,7 +223,61 @@ class CpmMonitor:
         return self.pending.pop(request_id)
 
 
-class CpmGame(Game):
+class _CpmZ80Base(Game):
+    """Shared Z80 CP/M observation, color, seed, and RAM-hash helpers."""
+
+    def resolve_sites(self) -> None:
+        self.command_ret = self.abi.game_loop_cmd_ret
+        self.resident_prompts = {self.abi.game_loop_run_dir_ret: "run_direction"}
+
+    def _build_z80_obs(self, pc: int, sp: int) -> Observation:
+        abi, mon = self.abi, self.mon
+        canary = mon.mem_get(abi.stack_canary, len(STACK_CANARY_MAGIC), self.ram)
+        if canary != STACK_CANARY_MAGIC:
+            raise GameFault("stack", f"Z80 stack canary corrupted: {canary!r}", pc)
+
+        state = mon.mem_get(abi.z80_state, Z80_STATE_SIZE, self.ram)
+        zp = bytearray(256)
+        zp[:Z80_STATE_SIZE] = state
+        zp[abi.zp_eff_resist] = mon.mem_get(abi.all_symbols["zp_eff_resist"][0], 1, self.ram)[0]
+        zp[abi.eff_resist_cold_timer] = mon.mem_get(abi.all_symbols["eff_resist_cold_timer"][0], 1, self.ram)[0]
+
+        ret_bytes = mon.mem_get(sp, 2, self.ram)
+        ret = ret_bytes[0] | (ret_bytes[1] << 8)
+        player = mon.mem_get(abi.player_data, abi.PL_STRUCT_SIZE, self.ram)
+        monsters = mon.mem_get(abi.monster_table, abi.MAX_MONSTERS * abi.MONSTER_ENTRY_SIZE, self.ram)
+        overlay = state[abi.abi_current_overlay - abi.z80_state]
+        raw_screen = mon.mem_get(abi.cpm_char_shadow, self.port.screen_cols * SCREEN_ROWS_VISIBLE, self.ram)
+        rows = _decode_cpm_rows(raw_screen, self.port.screen_cols)
+        screen = raw_screen + (b" " * self.port.screen_cols)
+
+        obs = Observation(
+            self.step, pc, sp, 0, ret, overlay, bytes(zp), player, monsters, screen, rows, abi=abi
+        )
+        obs.mode, obs.stage = classify(obs, abi, self.command_ret, self.resident_prompts)
+        self.last = obs
+        return obs
+
+    def colors(self) -> bytes:
+        raw = self.mon.mem_get(self.abi.cpm_color_shadow, self.port.screen_cols * SCREEN_ROWS_VISIBLE, self.ram)
+        return bytes(c & self.port.color_mask for c in raw) + (b"\x01" * self.port.screen_cols)
+
+    def seed_title(self, seed: int) -> None:
+        self.seed = seed
+        self.mon.mem_set(self.rng_addr(), derive_rng(seed, 0), self.ram)
+        self.mon.mem_set(self.abi.all_symbols["abi_entropy_poll"][0], b"\x00\x00\x00\x00", self.ram)
+
+    def ram_hash(self) -> str:
+        return hashlib.sha256(self.mon.mem_get(0x0000, 65536, self.ram)).hexdigest()
+
+    def dump(self, path: Path) -> None:
+        raise NotImplementedError("CP/M Z80 runs without snapshots")
+
+    def undump(self, path: Path) -> Observation:
+        raise NotImplementedError("CP/M Z80 runs without snapshots")
+
+
+class CpmGame(_CpmZ80Base):
     """``Game`` over ``cpm_runner --control`` (Z80 CP/M 2.2)."""
 
     def __init__(self, process: CpmProcess, abi: Abi, workdir: Path, *, port: Port,
@@ -241,10 +298,6 @@ class CpmGame(Game):
         self.input_cps = {1: self.abi.input_get_key}
         self.input_cp = 1
         self.crash_cps = {}
-
-    def resolve_sites(self) -> None:
-        self.command_ret = self.abi.game_loop_cmd_ret
-        self.resident_prompts = {self.abi.game_loop_run_dir_ret: "run_direction"}
 
     def _run_to_input(self, wall0: float) -> Observation:
         self.stats["resumes"] += 1
@@ -274,44 +327,14 @@ class CpmGame(Game):
         return obs
 
     def observe(self, stop: StopInfo) -> Observation:
-        abi, mon = self.abi, self.cpm_mon
         if not self._last_regs or self._last_regs.get("pc") != stop.pc:
-            regs = mon.call({"cmd": "regs"})
+            regs = self.cpm_mon.call({"cmd": "regs"})
             pc = int(regs["pc"])
             sp = int(regs["sp"])
         else:
             pc = self._last_regs["pc"]
             sp = self._last_regs["sp"]
-
-        canary = mon.mem_get(abi.stack_canary, len(STACK_CANARY_MAGIC), self.ram)
-        if canary != STACK_CANARY_MAGIC:
-            raise GameFault("stack", f"Z80 stack canary corrupted: {canary!r}", pc)
-
-        state = mon.mem_get(abi.z80_state, Z80_STATE_SIZE, self.ram)
-        zp = bytearray(256)
-        zp[:Z80_STATE_SIZE] = state
-        zp[abi.zp_eff_resist] = mon.mem_get(abi.all_symbols["zp_eff_resist"][0], 1, self.ram)[0]
-        zp[abi.eff_resist_cold_timer] = mon.mem_get(abi.all_symbols["eff_resist_cold_timer"][0], 1, self.ram)[0]
-
-        ret_bytes = mon.mem_get(sp, 2, self.ram)
-        ret = ret_bytes[0] | (ret_bytes[1] << 8)
-        player = mon.mem_get(abi.player_data, abi.PL_STRUCT_SIZE, self.ram)
-        monsters = mon.mem_get(abi.monster_table, abi.MAX_MONSTERS * abi.MONSTER_ENTRY_SIZE, self.ram)
-        overlay = state[abi.abi_current_overlay - abi.z80_state]
-        raw_screen = mon.mem_get(abi.cpm_char_shadow, self.port.screen_cols * SCREEN_ROWS_VISIBLE, self.ram)
-        rows = _decode_cpm_rows(raw_screen, self.port.screen_cols)
-        screen = raw_screen + (b" " * self.port.screen_cols)
-
-        obs = Observation(
-            self.step, pc, sp, 0, ret, overlay, bytes(zp), player, monsters, screen, rows, abi=abi
-        )
-        obs.mode, obs.stage = classify(obs, abi, self.command_ret, self.resident_prompts)
-        self.last = obs
-        return obs
-
-    def colors(self) -> bytes:
-        raw = self.cpm_mon.mem_get(self.abi.cpm_color_shadow, self.port.screen_cols * SCREEN_ROWS_VISIBLE, self.ram)
-        return bytes(c & self.port.color_mask for c in raw) + (b"\x01" * self.port.screen_cols)
+        return self._build_z80_obs(pc, sp)
 
     def press(self, key: int) -> Observation:
         wall0 = time.monotonic()
@@ -319,16 +342,104 @@ class CpmGame(Game):
         self.keylog.append(key)
         return self._run_to_input(wall0)
 
-    def seed_title(self, seed: int) -> None:
-        self.seed = seed
-        self.cpm_mon.mem_set(self.rng_addr(), derive_rng(seed, 0), self.ram)
-        self.cpm_mon.mem_set(self.abi.all_symbols["abi_entropy_poll"][0], b"\x00\x00\x00\x00", self.ram)
 
-    def ram_hash(self) -> str:
-        return hashlib.sha256(self.cpm_mon.mem_get(0x0000, 65536, self.ram)).hexdigest()
+class CpmC128Game(_CpmZ80Base):
+    """``Game`` running CP/M Z80 ``MORIA8.COM`` on Commodore 128 under ``x128``."""
 
-    def dump(self, path: Path) -> None:
-        raise NotImplementedError("CP/M Z80 runs without snapshots")
+    def arm(self, crash: bool = True) -> None:
+        self.ram = self.mon.bank("ram01")
+        self.ram00 = self.mon.bank("ram00")
+        self.vdc_bank = self.mon.bank("vdc")
+        self.screen_bank = self.ram
+        self.map_bank = self.ram
+        self.io = self.ram
+        for cp in self.mon.checkpoint_list():
+            self.mon.checkpoint_delete(cp.number)
+        cp = self.mon.checkpoint_set(self.abi.input_get_key)
+        self.input_cp = cp
+        self.input_cps = {cp: self.abi.input_get_key}
+        self.crash_cps = {}
 
-    def undump(self, path: Path) -> Observation:
-        raise NotImplementedError("CP/M Z80 runs without snapshots")
+    def _feed_keybuf_byte(self, byte: int, wait_empty_s: float = 10.0) -> None:
+        deadline = time.monotonic() + wait_empty_s
+        while self.mon.mem_get(C128_CPM_KEYBUF, 1, self.ram00)[0] != 0:
+            if time.monotonic() >= deadline:
+                raise EmulatorUnresponsive("C128 CP/M KEYBUF remained full")
+            self.mon.resume()
+            time.sleep(0.02)
+        self.mon.mem_set(C128_CPM_KEYBUF, bytes([byte]), self.ram00)
+
+    def _pc_sp(self, stop: StopInfo) -> tuple[int, int]:
+        if "HL" not in self.mon.register_ids:
+            self.mon.load_register_ids()
+        regs = stop.registers or self.mon.registers()
+        pc_id = self.mon.register_ids.get("PC", 3)
+        sp_id = self.mon.register_ids.get("SP", 4)
+        pc = regs.get(pc_id)
+        sp = regs.get(sp_id)
+        if pc is None or sp is None:
+            regs = self.mon.registers()
+            pc, sp = regs[pc_id], regs[sp_id]
+        return pc, sp
+
+    def _run_to_input(self, wall0: float) -> Observation:
+        pc = 0
+        for _ in range(32):
+            self.stats["resumes"] += 1
+            self.mon.resume()
+            stop = self.mon.wait_stop(timeout=self.resume_budget)
+            if stop.jam:
+                raise GameFault("jam", f"CPU JAM at {stop.pc:#06x}", stop.pc)
+            pc, sp = self._pc_sp(stop)
+            if C128_CPM_STACK_LO <= sp <= C128_CPM_STACK_HI:
+                self.step += 1
+                obs = self._build_z80_obs(pc, sp)
+                self.stats["max_resume_wall"] = max(self.stats["max_resume_wall"], time.monotonic() - wall0)
+                return obs
+        raise GameFault("hang", "repeated non-TPA hits at input_get_key", pc)
+
+    def boot(self) -> Observation:
+        self.mon.load_bank_ids()
+        self.ram = self.mon.bank("ram01")
+        self.ram00 = self.mon.bank("ram00")
+        self.vdc_bank = self.mon.bank("vdc")
+        self.mon.resume()
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            time.sleep(0.2)
+            vdc = self.mon.mem_get(0x0000, 2000, self.vdc_bank)
+            if b"\x01>" in vdc or b"A>" in vdc:
+                break
+            self.mon.resume()
+        else:
+            raise EmulatorUnresponsive("x128 CP/M 3.0 did not reach A> prompt")
+        for ch in b"B:\rMORIA8\r":
+            self._feed_keybuf_byte(ch)
+            self.mon.resume()
+            time.sleep(0.05)
+        self.arm()
+        wall0 = time.monotonic()
+        obs = self._run_to_input(wall0)
+        self.resolve_sites()
+        obs.mode, obs.stage = classify(obs, self.abi, self.command_ret, self.resident_prompts)
+        self.last = obs
+        return obs
+
+    def observe(self, stop: StopInfo) -> Observation:
+        pc, sp = self._pc_sp(stop)
+        return self._build_z80_obs(pc, sp)
+
+    def press(self, key: int) -> Observation:
+        wall0 = time.monotonic()
+        seq = cpm_keys(key)
+        for ch in seq[:-1]:
+            self._feed_keybuf_byte(ch)
+            self.mon.resume()
+            time.sleep(0.01)
+        self._feed_keybuf_byte(seq[-1])
+        self.keylog.append(key)
+        return self._run_to_input(wall0)
+
+    def screenshot(self, path: Path) -> bool:
+        self.mon.screenshot(path, vdc=True)
+        return True

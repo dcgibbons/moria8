@@ -159,6 +159,73 @@ class VictoryKeptTest(unittest.TestCase):
             self.assertIsNone(queue.keep_victory(home / "runs" / "none", home, record))
 
 
+class KeepFightTest(unittest.TestCase):
+    def test_a_balrog_battle_becomes_an_animated_gif(self) -> None:
+        """Maintainer, 2026-11-24: the battle's pictures (session.record_fight)
+        as one animated GIF in balrog-fights, <date>-<platform>-<character>-
+        <outcome>.gif, the last screen held; nothing for a run with none."""
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            run_dir = home / "runs" / "20261124-150000-balrog-c64-human-mage-1"
+            frames = run_dir / "w13" / "balrog_fight"
+            frames.mkdir(parents=True)
+            for n, colour in enumerate(("red", "green", "blue")):
+                Image.new("RGB", (8, 8), colour).save(frames / f"{n:05d}.png")
+            record = {"outcome": "reached", "platform": "c64", "character": "human-mage"}
+            kept = queue.keep_fight(run_dir, home, record)
+            assert kept is not None
+            self.assertEqual(kept.parent, home / "balrog-fights")
+            self.assertTrue(kept.name.endswith("-c64-human-mage-reached.gif"))
+            with Image.open(kept) as gif:
+                self.assertEqual(gif.n_frames, 3)
+                gif.seek(2)
+                self.assertEqual(gif.info["duration"], queue.FIGHT_LAST_MS)
+            self.assertIsNone(queue.keep_fight(home / "runs" / "none", home, record))
+
+    def test_reached_fight_appends_crown_and_winner_screens(self) -> None:
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            run_dir = home / "runs" / "20261124-150100-balrog-c64-half-elf-priest-2"
+            frames = run_dir / "w13" / "balrog_fight"
+            victory = run_dir / "w13" / "victory"
+            frames.mkdir(parents=True)
+            victory.mkdir(parents=True)
+            for n, colour in enumerate(("red", "green")):
+                Image.new("RGB", (8, 8), colour).save(frames / f"{n:05d}.png")
+            screens = [
+                ("00", "You feel yourself yanked away!", (0, 0, 0)),
+                ("01", "Veni, Vidi, Vici!", (255, 215, 0)),
+                ("02", "* Total Winner *", (255, 255, 255)),
+                ("03", "The Dungeons of Moria", (100, 100, 100)),
+            ]
+            for stem, text, colour in screens:
+                (victory / f"{stem}.txt").write_text(text + "\n")
+                Image.new("RGB", (8, 8), colour).save(victory / f"{stem}.png")
+
+            reached = queue.keep_fight(
+                run_dir, home, {"outcome": "reached", "platform": "c64", "character": "half-elf-priest"})
+            assert reached is not None
+            with Image.open(reached) as gif:
+                self.assertEqual(gif.n_frames, 4)
+                durs = []
+                for idx in range(gif.n_frames):
+                    gif.seek(idx)
+                    durs.append(gif.info["duration"])
+                self.assertEqual(durs, [queue.FIGHT_FRAME_MS, queue.FIGHT_FRAME_MS, queue.FIGHT_LAST_MS, queue.FIGHT_LAST_MS])
+                gif.seek(2)
+                self.assertEqual(gif.convert("RGB").getpixel((0, 0)), (255, 215, 0))
+                gif.seek(3)
+                self.assertEqual(gif.convert("RGB").getpixel((0, 0)), (255, 255, 255))
+
+            died = queue.keep_fight(
+                run_dir, home, {"outcome": "died", "platform": "c64", "character": "half-elf-priest"})
+            assert died is not None
+            with Image.open(died) as gif:
+                self.assertEqual(gif.n_frames, 2)
+
+
 class ScheduleTest(unittest.TestCase):
     """§23.5: subqueues borrow workers; the main queue keeps its minimum,
     pausing its newest runs rather than losing them."""
@@ -357,6 +424,42 @@ class ScheduleTest(unittest.TestCase):
         service.stop_balrog()
         self.assertEqual(stopped, ["a", "e"])                             # the Balrog queue's, not yet cancelled
         self.assertFalse((service.home / "stop-balrog").exists())         # once
+
+    def test_a_drained_balrog_run_starts_again_from_its_checkpoint(self) -> None:
+        """Maintainer, 2026-11-23: "just kill it and reload from snapshot so we
+        aren't wasting time with it": a clvl 40 Half-Elf Priest played on at
+        5.24M of its checkpoint's 6.63M. A run DRAIN_RESTART below the
+        checkpoint it started from ends; a stale status, a run with no
+        checkpoint and one drained a little play on."""
+        service = self.service(4)
+        service.running = {r: {"queue": "balrog", "platform": "c64", "character": c, "started": 100.0, **x}
+                           for r, c, x in (("drained", "half-elf-priest", {"resume": {"xp": 6_632_203}}),
+                                           ("little", "elf-priest", {"resume": {"xp": 8_704_512}}),
+                                           ("stale", "human-mage", {"resume": {"xp": 3_524_182}}),
+                                           ("fresh", "gnome-mage", {}))}
+        stopped = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        service.save_running = lambda: None   # type: ignore[method-assign]
+        for run_id, xp, updated in (("drained", 5_243_205, 200.0), ("little", 8_600_000, 200.0),
+                                    ("stale", 1_000_000, 50.0), ("fresh", 10, 200.0)):
+            queue.write_json(service.home / "runs" / run_id / "status-w1.json", {"xp": xp, "updated": updated})
+        service.drained_restart()                                         # each run's first experience seen
+        self.assertEqual(stopped, [])
+        self.assertEqual(service.running["drained"]["first_xp"], 5_243_205)
+        # A checkpoint saved drained (an Elf Ranger's 710,154 of its record's
+        # 800,130) plays on from where it loaded: no restart loop.
+        queue.write_json(service.home / "runs" / "drained" / "status-w1.json", {"xp": 5_250_000, "updated": 300.0})
+        service.drained_restart()
+        self.assertEqual(stopped, [])
+        queue.write_json(service.home / "runs" / "drained" / "status-w1.json", {"xp": 4_700_000, "updated": 400.0})
+        service.drained_restart()                                         # drained again, 10% below that
+        self.assertEqual(stopped, ["drained"])
+        # Twice an hour at most: Warriors drained again within 7 minutes of
+        # each restart restarted four times an hour (C64 Balrog, 2026-11-23).
+        service.drain_restarts["half-elf-priest"].append(time.time())
+        service.running["drained"].pop("cancelled", None)
+        service.drained_restart()
+        self.assertEqual(stopped, ["drained"])                            # a third this hour: plays on
 
     def test_a_subqueue_plays_beside_a_focus(self) -> None:
         """2026-11-10: an A/B subqueue's 64 games were all stopped within five
@@ -1448,6 +1551,54 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertEqual(GOALS["deep"].level_steps, 150_000)
         self.assertEqual(GOALS["balrog"].level_steps, 0)
 
+    def test_the_bot_comes_from_its_own_snapshot_the_game_from_its_build(self) -> None:
+        """Maintainer, 2026-11-23: "have the playtesting logic come from the
+        working branch ... ONLY the build queue etc should come off of game
+        commits". A bot snapshot joins a game build as a build of its own:
+        the game's files linked, playtest/ the bot's, newer than both, and
+        the build queue's coverage goes on with it."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            game = home / "builds" / "abc123"
+            (game / "build").mkdir(parents=True)
+            (game / "build" / "moria8-c64.d64").write_text("disk")
+            (game / "playtest" / "moria_playtest").mkdir(parents=True)
+            (game / "playtest" / "moria_playtest" / "brain.py").write_text("old bot")
+            queue.write_json(game / "build.json", {"id": "abc123", "commit": "c", "platforms": ["c64"], "built": 100.0})
+            self.assertEqual(queue.with_bot("abc123", home), "abc123")             # no bot made: the game build
+            bot = home / "bots" / "b1" / "playtest" / "moria_playtest"
+            bot.mkdir(parents=True)
+            (bot / "brain.py").write_text("new bot")
+            queue.write_json(home / "bot.json", {"id": "b1", "made": 200.0})
+            combined = queue.with_bot("abc123", home)
+            self.assertEqual(combined, "abc123-bot-b1")
+            out = home / "builds" / combined
+            self.assertEqual((out / "playtest" / "moria_playtest" / "brain.py").read_text(), "new bot")
+            self.assertEqual((out / "build" / "moria8-c64.d64").read_text(), "disk")   # the game's, linked
+            self.assertTrue((out / "build").is_symlink())
+            meta = queue.build_meta(combined, home)
+            self.assertEqual((meta["game"], meta["bot"], meta["built"], meta["platforms"]), ("abc123", "b1", 100.0, ["c64"]))
+            # Ordered by game, then bot: an older game with the new bot is not newer.
+            old = home / "builds" / "old999"
+            (old / "build").mkdir(parents=True)
+            (old / "playtest").mkdir()
+            queue.write_json(old / "build.json", {"id": "old999", "commit": "o", "platforms": ["c64"], "built": 50.0})
+            stale = queue.with_bot("old999", home)
+            self.assertLess(queue.build_order(queue.build_meta(stale, home)), queue.build_order(meta))
+            self.assertLess(queue.build_order(queue.build_meta("abc123", home)), queue.build_order(meta))
+            self.assertEqual(queue.with_bot(combined, home), combined)            # made once
+            queue.write_json(home / "bot.json", {"id": "b2", "made": 300.0})
+            (home / "bots" / "b2" / "playtest").mkdir(parents=True)
+            self.assertEqual(queue.with_bot(combined, home), "abc123-bot-b2")     # the same game, the next bot
+            service = self.service(4, 2)
+            service.home = home
+            service.ci_build = service.build_id = combined
+            service.buildq.platform("c64")["build"] = combined
+            service.refresh_bot()
+            self.assertEqual((service.ci_build, service.build_id), ("abc123-bot-b2", "abc123-bot-b2"))
+            self.assertEqual(service.buildq.platform("c64")["build"], "abc123-bot-b2")   # coverage goes on
+
     def test_features_count_each_item_used_by_its_verb(self) -> None:
         """Maintainer, 2026-11-23: "I want to know that every spell/prayer has
         been used, every item, and every monster has been encountered". The
@@ -1463,6 +1614,15 @@ class BalrogQueueTest(unittest.TestCase):
             {"layer": "prompt", "reason": "pick Heavy Crossbow (+4,+7)", "msg": "Inventory"},
             {"layer": "aim", "reason": "aim", "msg": "Aim which wand (a-a)?"},
             {"layer": "prompt", "reason": "pick Wand of Lightning Balls (5 charges)", "msg": ""},
+            {"layer": "pray", "reason": "pray Magic Missile", "msg": "Spell book (a-c)?"},
+            {"layer": "prompt", "reason": "the book Beginners-Magick", "msg": "Spell book (a-c)?"},
+            {"layer": "prompt", "reason": "pray Magic Missile", "msg": "Cast which? (a-e, ESC)"},
+            {"layer": "pray", "reason": "pray Bless", "msg": "Prayer book (a-d)?"},
+            {"layer": "prompt", "reason": "the book Words of Wisdom", "msg": "Prayer book (a-d)?"},
+            {"layer": "shoot", "reason": "fire the Heavy Crossbow at 'p'", "msg": ""},
+            {"layer": "prompt", "reason": "direction for the pending action", "msg": "Direction?"},
+            {"layer": "shoot", "reason": "fire the Sling at 'k'", "msg": ""},
+            {"layer": "prompt", "reason": "direction", "msg": "Direction? | the Iron Shot hits the Kobold"},
             {"layer": "drop", "reason": "drop junk", "msg": "Drop which item (a-c)?"},
             {"layer": "prompt", "reason": "pick Rusty Chain Mail [32,-5]", "msg": ""},
         ]
@@ -1472,7 +1632,9 @@ class BalrogQueueTest(unittest.TestCase):
                 handle.writelines(json.dumps(r) + "\n" for r in rows)
             uses = queue.features(trace)["uses"]
         self.assertEqual(uses, {"Potion of Healing": {"Quaff": 1}, "Heavy Crossbow": {"Wear": 1},
-                                "Wand of Lightning Balls": {"Aim": 1}})
+                                "Wand of Lightning Balls": {"Aim": 1}, "Spellbook Beginners-Magick": {"Cast": 1},
+                                "Holy Book of Prayers Words of Wisdom": {"Pray": 1}, "Bolt": {"Fire": 1},
+                                "Iron Shot": {"Fire": 1}})
 
     def test_a_balrog_game_with_neither_xp_nor_depth_changed_ends(self) -> None:
         """C64 Balrog, 2026-11-23: a clvl 37 Paladin walked one 20-square lap
@@ -2960,3 +3122,47 @@ class NewerBuildTest(unittest.TestCase):
             self.assertIsNone(queue.rotate_due("balrog", 0, poll * 3 + 1, "old", "c64", home))  # between polls
             self.assertIsNone(queue.rotate_due("deep", 0, poll * 3, "old", "c64", home))        # not a Balrog run
             self.assertIsNone(queue.rotate_due("balrog", 0, poll * 3, "new", "c64", home))      # already the newest
+
+
+class FastForwardTest(unittest.TestCase):
+    """2026-11-23: the service fast-forwarded only a clean tree; the bot's
+    uncommitted changes and the local queue.json kept it dirty, and the
+    build queue never saw c93302c. A dirty tree fast-forwards too, keeping
+    its changes; git refuses only a commit that would overwrite one."""
+
+    def repo(self, root: Path) -> None:
+        import subprocess
+        def run(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+        run("init", "-q", "-b", "main")
+        run("config", "user.email", "t@example.com")
+        run("config", "user.name", "t")
+        (root / "game.s").write_text("v1\n")
+        (root / "bot.py").write_text("bot v1\n")
+        run("add", ".")
+        run("commit", "-q", "-m", "one")
+        run("branch", "upstream")
+        run("checkout", "-q", "upstream")
+        (root / "game.s").write_text("v2\n")
+        run("commit", "-q", "-am", "two")
+        run("checkout", "-q", "main")
+
+    def test_a_dirty_tree_fast_forwards_and_keeps_its_changes(self) -> None:
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.repo(root)
+            (root / "bot.py").write_text("bot, uncommitted\n")           # the working tree's bot
+            with mock.patch.object(queue, "ROOT", root):
+                self.assertIsNone(queue.fast_forward("upstream"))
+            self.assertEqual((root / "game.s").read_text(), "v2\n")       # the new game
+            self.assertEqual((root / "bot.py").read_text(), "bot, uncommitted\n")
+
+    def test_a_commit_that_would_overwrite_a_change_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.repo(root)
+            (root / "game.s").write_text("local edit\n")
+            with mock.patch.object(queue, "ROOT", root):
+                self.assertIsNotNone(queue.fast_forward("upstream"))
+            self.assertEqual((root / "game.s").read_text(), "local edit\n")

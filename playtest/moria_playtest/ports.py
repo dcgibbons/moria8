@@ -567,12 +567,16 @@ CPM = Port(
         "PL_AC": ("core/z80/defs.inc", 39),
         "PL_GOLD_0": ("core/z80/defs.inc", 43),
         "PL_XP_0": ("core/z80/defs.inc", 46),
+        "PL_MAX_XP_0": ("core/z80/defs.inc", 111),
         "PL_MAP_X": ("core/z80/defs.inc", 49),
         "PL_MAP_Y": ("core/z80/defs.inc", 50),
         "PL_FOOD_LO": ("core/z80/defs.inc", 51),
         "PL_LIGHT_RAD": ("core/z80/defs.inc", 55),
         "PL_MAX_DLVL": ("core/z80/defs.inc", 56),
         "PL_WEIGHT": ("core/z80/defs.inc", 59),
+        "PL_STR_BASE": ("core/z80/defs.inc", 21),
+        "PL_STR_CUR": ("core/z80/defs.inc", 27),
+        "PL_CON_CUR": ("core/z80/defs.inc", 31),
         "PL_STRUCT_SIZE": ("core/z80/defs.inc", 114),
         "MAX_MONSTERS": ("core/z80/defs.inc", 32),
         "CATALOG_DUNGEON_CREATURES": ("core/z80/defs.inc", 32, "MAX_DUNGEON_CREATURES"),
@@ -621,6 +625,28 @@ CPM = Port(
     ),
 )
 
+CPM_C128 = replace(
+    CPM,
+    name="cpm-c128",
+    emulator="x128",
+    disk="moria8-cpm-c128.d71",
+    disk_target="diskcpm",
+    resource_args=(
+        "-default", "-config", "VICE_CONFIG", "+saveres", "-VDC16KB",
+        "-console", "+sound", "-sounddev", "dummy",
+        "-warp", "-pal", "-seed", "1", "-80col",
+        "-drive8type", "1571", "-drive8truedrive",
+        "-drive9type", "1571", "-drive9truedrive",
+    ),
+    rom_env=(("PLAYTEST_CPM_C128_DISK", "-8"),),
+    required_roms=("PLAYTEST_CPM_C128_DISK",),
+    screen_bank="ram01",
+    map_bank="ram01",
+    color_bank="ram01",
+    source="cpm",
+    backend="cpm_c128",
+)
+
 PORTS: dict[str, Port] = {port.name: port for port in
                           (C64, C64_NOREU, C64_CART, PLUS4, PLUS4_CART, C128, C128_CART, APPLE2, ATARI8,
-                           ATARI8_CART, BBCMASTER, CX16, CX16_CART, CPM)}
+                           ATARI8_CART, BBCMASTER, CX16, CX16_CART, CPM, CPM_C128)}

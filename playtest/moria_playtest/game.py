@@ -165,6 +165,13 @@ class Observation:
         base = self.abi.PL_XP_0
         return int.from_bytes(self.player[base:base + 3], "little")
 
+    @property
+    def max_xp(self) -> int:
+        """The peak experience (PL_MAX_XP), which Restore Life Levels restores."""
+        assert self.abi is not None
+        base = self.abi.PL_MAX_XP_0
+        return int.from_bytes(self.player[base:base + 3], "little")
+
     def summary(self) -> dict[str, object]:
         return {"step": self.step, "mode": self.mode.value, "stage": self.stage,
                 "dlvl": self.dlvl, "clvl": self.clvl, "hp": self.hp, "mhp": self.mhp,

@@ -859,12 +859,12 @@ test_start:
     sta inv_p1 + EQUIP_RING2
     lda #1
     sta inv_qty + EQUIP_RING2
-    jsr player_calc_stats               // Both 117 + 4 -> cur=118, res=+3
+    jsr player_calc_stats               // Both 117 + 4*10 -> cur=118, res=+39
     lda #ITEM_SLOT_POTION_OF_WEAKNESS
     jsr run_quaff_keep_a
     lda #ITEM_SLOT_POTION_OF_LOSE_INTELLIGENCE
     jsr run_quaff_keep_a
-    // Restore ONLY Intelligence: INT residual returns to +3, STR stays at +2
+    // Restore ONLY Intelligence: INT residual returns to +39, STR stays drained (+36..+38)
     lda #ITEM_SLOT_POTION_OF_RESTORE_INTELLIGENCE
     jsr run_quaff_keep_a
     lda player_data + PL_INT_CUR
@@ -872,27 +872,33 @@ test_start:
     beq !+
     jmp !t3_fail+
 !:  lda player_stat_res + 1
-    cmp #3
+    cmp #39
     beq !+
     jmp !t3_fail+
 !:  lda player_stat_res + 0
-    cmp #2
-    beq !+
+    cmp #36
+    bcc !t3_fail_3e+
+    cmp #39
+    bcc !+
+!t3_fail_3e:
     jmp !t3_fail+
-!:  lda #EQUIP_RING
+!:  pha                             // keep drained STR residual across unequip
+    lda #EQUIP_RING
     sta piw_equip
     tax
     clc
-    jsr player_adjust_equipment_stat    // Unequip +4 STR ring: 118 + 2 - 4 = 116
-    lda player_data + PL_STR_CUR
-    cmp #116
+    jsr player_adjust_equipment_stat    // Unequip +4 STR ring: 118 + res - 40 = 78 + res
+    pla
+    clc
+    adc #78
+    cmp player_data + PL_STR_CUR
     beq !+
     jmp !t3_fail+
 !:  lda #EQUIP_RING
     sta piw_equip
     tax
     sec
-    jsr player_adjust_equipment_stat    // Re-equip +4 STR ring (cur=118, res=+2) and restore STR
+    jsr player_adjust_equipment_stat    // Re-equip +4 STR ring and restore STR
     lda #ITEM_SLOT_POTION_OF_RESTORE_STRENGTH
     jsr run_quaff_keep_a
     lda #EQUIP_RING

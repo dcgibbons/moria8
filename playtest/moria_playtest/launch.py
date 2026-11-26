@@ -237,10 +237,20 @@ class ViceProcess:
               response_timeout: float = 60.0) -> ViceMonitor:
         exe = find_vice(self.emulator)
         config = str(write_vice_config(exe, self.workdir))
+        roms = rom_args(port=self.target)
+        if self.target.backend == "cpm_c128":
+            for i in range(0, len(roms) - 1, 2):
+                if roms[i] == "-8":
+                    src = Path(roms[i + 1])
+                    boot_copy = self.workdir / f"cpm-boot{src.suffix}"
+                    shutil.copyfile(src, boot_copy)
+                    roms[i + 1] = str(boot_copy)
         self.args = [exe, *(config if a == "VICE_CONFIG" else a for a in self.target.resource_args),
-                     *rom_args(port=self.target), *self.extra_args,
+                     *roms, *self.extra_args,
                      "-binarymonitor", "-binarymonitoraddress", f"127.0.0.1:{self.port}"]
-        if self.cartridge is not None:
+        if self.target.backend == "cpm_c128":
+            self.args += ["-9", str(self.disk)]
+        elif self.cartridge is not None:
             self.args += ["-cartcrt", str(self.cartridge), "-8", str(self.disk)]
         elif autostart:
             self.args += ["-autostart", str(self.disk)]

@@ -1085,7 +1085,7 @@ player_adjust_equipment_stat_play:
     bcc !paes_skip+
     pha
     lda stat_work
-    jsr player_apply_stat_delta_y
+    jsr player_step_equip_stat_y
     cpy #PL_CON_CUR - PL_STR_CUR
     bne !paes_pop+
     txa

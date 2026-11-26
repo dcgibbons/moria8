@@ -47,6 +47,7 @@ WIND_DOWN_SECONDS = 5   # a failed run waits this long per worker before SIGTERM
 MAX_RESTARTS_PER_STEP = 2
 KEY_CLAIM_VICTORY = 0xD1   # Shift+Q: a winner retires (game_loop CMD_QUIT, player_retired)
 VICTORY_SCREENS = 8        # screens kept from the win to the title (capture_victory)
+FIGHT_FRAMES = 4000        # Balrog battle pictures kept a run (record_fight)
 ASSET_PROMPT = "Insert program disk"   # asset_load_ask_for_disk: every attempt at a required load failed
 ASSET_PROMPT_LIMIT = 20  # that prompt this many steps running: the game is stuck under it (Plus/4, 2026-11-09)
 
@@ -230,6 +231,7 @@ class Character:
         self.load_retries: int | None = None   # asset_load_retries at the last level entry
         self.loops = LoopWatch()
         self.met: set[str] = set()   # creatures this run has logged a met event for
+        self.fight_frames = 0        # Balrog battle pictures taken this run (record_fight)
 
     # -- snapshots and findings ------------------------------------------------
 
@@ -412,6 +414,27 @@ class Character:
         except Exception as exc:   # noqa: BLE001 - never at the win's cost
             self.session.event("victory_capture_failed", seed=self.seed, error=f"{type(exc).__name__}: {exc}")
 
+    def record_fight(self, obs: Observation, final: bool = False) -> None:
+        """Each screen of a Balrog battle (Brain.balrog_fight_on) as a PNG in
+        the worker's ``balrog_fight`` directory, and the run's last screen
+        once there is one, for the queue's animated GIF (queue.keep_fight;
+        maintainer, 2026-11-24: "record the screenshots / steps of the entire
+        Balrog battle"). A picture that cannot be taken costs the run
+        nothing and ends the recording."""
+        if self.fight_frames >= FIGHT_FRAMES or not (self.fight_frames if final else self.brain.balrog_fight_on(obs)):
+            return
+        game = self.worker.game
+        try:
+            out = self.worker.workdir / "balrog_fight"
+            out.mkdir(parents=True, exist_ok=True)
+            if game is None or not game.screenshot(out / f"{self.fight_frames:05d}.png"):
+                self.fight_frames = FIGHT_FRAMES   # a port with no pictures
+                return
+            self.fight_frames += 1
+        except Exception as exc:   # noqa: BLE001 - never at the run's cost
+            self.fight_frames = FIGHT_FRAMES
+            self.session.event("fight_frame_failed", seed=self.seed, error=f"{type(exc).__name__}: {exc}")
+
     def play(self) -> Result:
         started = time.monotonic()
         try:
@@ -437,10 +460,12 @@ class Character:
                     self.result.outcome = "reached"
                     self.reached_kills(obs)
                     if obs.game_flags & CONSTS["GAME_FLAG_WINNER"][1]:
+                        self.record_fight(obs, final=True)
                         self.capture_victory(obs)
                     break
                 if obs.mode == Mode.DEATH:
                     self.result.outcome = "died"
+                    self.record_fight(obs, final=True)
                     break
                 asset_prompts = asset_prompts + 1 if obs.mode == Mode.DISMISS and any(
                     ASSET_PROMPT in row for row in obs.rows) else 0
@@ -489,6 +514,7 @@ class Character:
                 # The brain's kit beside each decision: whether a death came
                 # with potions or oil left (M5f).
                 self.log.decision(obs, {**decision.as_dict(), "clw": self.brain.clw, "oil": self.brain.oil})
+                self.record_fight(obs)
                 if self.result.steps % CharacterLog.STATUS_EVERY == 0:
                     self.log.status(game, obs, self.result.steps, {"character_seed": self.seed})
                 obs = self.press(decision.key)

@@ -128,7 +128,7 @@ class Tour:
     def _set_player_pos(self, x: int, y: int) -> None:
         self.poke(self.sym("zp_player_x"), bytes([x]))
         self.poke(self.sym("zp_player_y"), bytes([y]))
-        if self.game.port.backend == "cpm":
+        if self.game.port.platform == "cpm":
             pl_addr = self.sym("player_data")
             self.poke(pl_addr + 49, bytes([x]))   # PL_MAP_X
             self.poke(pl_addr + 50, bytes([y]))   # PL_MAP_Y
@@ -285,7 +285,7 @@ class Tour:
         record = table + town * size   # type: ignore[operator]
         hit = False
         for _ in range(SHOTS):
-            if self.game.port.backend == "cpm":
+            if self.game.port.platform == "cpm":
                 old = self.peek(record + MX_X, 2)
                 if (old[0], old[1]) != target and 0 <= old[0] < cols and 0 <= old[1] < abi.hal_layout_map_rows:
                     old_addr = abi.MAP_BASE + old[1] * cols + old[0]

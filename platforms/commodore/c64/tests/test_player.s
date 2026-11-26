@@ -27,6 +27,8 @@
 piw_equip:    .byte 0
 tp_base_hit:  .byte 0
 tp_base_dam:  .byte 0
+tp_loop:      .byte 0
+tp_seen:      .byte 0
 
 tramp_ego_get_ac_bonus:
     lda #0
@@ -563,6 +565,602 @@ test_start:
     lda #$00
     sta $0409
 !t10_done:
+
+    // ==========================================
+    // Test 11: Equipment stat 18/xx stepping (VMS in_statt / de_statt)
+    // ==========================================
+    jsr player_init
+    lda #RACE_HUMAN
+    sta player_data + PL_RACE
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #5
+    sta player_data + PL_LEVEL
+    ldx #5
+    lda #12
+!t11_set12:
+    sta player_data + PL_STR_BASE,x
+    dex
+    bpl !t11_set12-
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    lda #0
+    sta inv_ego + EQUIP_RING
+    sta inv_p1 + EQUIP_RING
+
+    // 11a: CON 18 + Ring of Gain Constitution (+5) -> 68 (18/50) and back to 18
+    lda #18
+    sta player_data + PL_CON_BASE
+    jsr player_calc_stats
+    jsr player_calc_hp
+    lda #ITEM_SLOT_RING_OF_GAIN_CONSTITUTION
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_GAIN_CONSTITUTION
+    sta inv_ego + EQUIP_RING
+    lda #5
+    sta inv_p1 + EQUIP_RING
+    lda #EQUIP_RING
+    sta piw_equip
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_CON_CUR
+    cmp #68
+    bne !t11_fail_jmp+
+    lda zp_player_con
+    cmp #68
+    bne !t11_fail_jmp+
+    lda player_stat_res + 4
+    bne !t11_fail_jmp+
+    jsr player_calc_stats
+    lda player_data + PL_CON_CUR
+    cmp #68
+    bne !t11_fail_jmp+
+    lda zp_player_con
+    cmp #68
+    bne !t11_fail_jmp+
+    lda player_stat_res + 4
+    bne !t11_fail_jmp+
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_CON_CUR
+    cmp #18
+    bne !t11_fail_jmp+
+    lda zp_player_con
+    cmp #18
+    bne !t11_fail_jmp+
+    lda player_stat_res + 4
+    bne !t11_fail_jmp+
+    jmp !t11b+
+!t11_fail_jmp:
+    jmp !t11_fail+
+
+!t11b:
+    // 11b: Stat 15 + 5 crossing 18 -> 38 (18/20) and back to 15; 17/18/19 edges
+    lda #0
+    sta inv_p1 + EQUIP_RING
+    lda #15
+    sta player_data + PL_STR_BASE
+    jsr player_calc_stats
+    lda #ITEM_SLOT_RING_OF_STRENGTH
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_STRENGTH
+    sta inv_ego + EQUIP_RING
+    lda #5
+    sta inv_p1 + EQUIP_RING
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #38
+    bne !t11_fail_jmp-
+    lda zp_player_str
+    cmp #38
+    bne !t11_fail_jmp-
+    lda player_stat_res + 0
+    bne !t11_fail_jmp-
+    jsr player_calc_stats
+    lda player_data + PL_STR_CUR
+    cmp #38
+    bne !t11_fail_jmp-
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #15
+    bne !t11_fail_jmp-
+    lda zp_player_str
+    cmp #15
+    bne !t11_fail_jmp-
+    lda player_stat_res + 0
+    bne !t11_fail_jmp-
+    // Boundaries: 17+1 -> 18, 18+1 -> 28, and 19 take-off (-1) -> 18
+    lda #0
+    sta inv_p1 + EQUIP_RING
+    lda #17
+    sta player_data + PL_STR_BASE
+    jsr player_calc_stats
+    lda #1
+    sta inv_p1 + EQUIP_RING
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #18
+    bne !t11b_fail+
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #28
+    bne !t11b_fail+
+    lda #19
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #0
+    sta player_stat_res + 0
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #18
+    bne !t11b_fail+
+    lda zp_player_str
+    cmp #18
+    bne !t11b_fail+
+    lda player_stat_res + 0
+    beq !t11c+
+!t11b_fail:
+    jmp !t11_fail+
+
+!t11c:
+
+    // 11c: 18/95 (113) + 5 cap at 118 (res=45), CON MHP sync + HP clamp, & 117/118
+    lda #0
+    sta inv_p1 + EQUIP_RING
+    lda #113
+    sta player_data + PL_CON_BASE
+    jsr player_calc_stats
+    jsr player_calc_hp
+    lda player_data + PL_MHP_LO
+    cmp #67
+    bne !t11c_fail1+
+    lda zp_player_mhp_lo
+    cmp #67
+    bne !t11c_fail1+
+    lda #ITEM_SLOT_RING_OF_GAIN_CONSTITUTION
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_GAIN_CONSTITUTION
+    sta inv_ego + EQUIP_RING
+    lda #5
+    sta inv_p1 + EQUIP_RING
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_CON_CUR
+    cmp #118
+    bne !t11c_fail1+
+    lda zp_player_con
+    cmp #118
+    bne !t11c_fail1+
+    lda player_stat_res + 4
+    cmp #45
+    bne !t11c_fail1+
+    lda player_data + PL_MHP_LO
+    cmp #71
+    bne !t11c_fail1+
+    lda zp_player_mhp_lo
+    cmp #71
+    bne !t11c_fail1+
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    jsr player_calc_stats
+    lda player_data + PL_CON_CUR
+    cmp #118
+    bne !t11c_fail1+
+    lda player_stat_res + 4
+    cmp #45
+    beq !t11c_part2+
+!t11c_fail1:
+    jmp !t11_fail+
+!t11c_part2:
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_CON_CUR
+    cmp #113
+    bne !t11_fail_jmp2+
+    lda zp_player_con
+    cmp #113
+    bne !t11_fail_jmp2+
+    lda player_stat_res + 4
+    bne !t11_fail_jmp2+
+    lda player_data + PL_MHP_LO
+    cmp #67
+    bne !t11_fail_jmp2+
+    lda zp_player_mhp_lo
+    cmp #67
+    bne !t11_fail_jmp2+
+    lda zp_player_hp_lo
+    cmp #67
+    bne !t11_fail_jmp2+
+    lda player_data + PL_HP_LO
+    cmp #67
+    bne !t11_fail_jmp2+
+    // 117 + 1 -> cur=118, res=9 -> back to 117
+    lda #0
+    sta inv_p1 + EQUIP_RING
+    lda #117
+    sta player_data + PL_CON_BASE
+    jsr player_calc_stats
+    lda #1
+    sta inv_p1 + EQUIP_RING
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_CON_CUR
+    cmp #118
+    bne !t11_fail_jmp2+
+    lda player_stat_res + 4
+    cmp #9
+    bne !t11_fail_jmp2+
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_CON_CUR
+    cmp #117
+    bne !t11_fail_jmp2+
+    lda player_stat_res + 4
+    bne !t11_fail_jmp2+
+    jmp !t11d+
+!t11_fail_jmp2:
+    jmp !t11_fail+
+
+!t11d:
+    // 11d: Drain at 18/95 (113) + Ring +5 (cur=118, res=45) via de_statp
+    lda #$37
+    sta zp_rng_0
+    lda #$a5
+    sta zp_rng_1
+    lda #$5c
+    sta zp_rng_2
+    lda #$91
+    sta zp_rng_3
+    lda #0
+    sta inv_p1 + EQUIP_RING
+    lda #113
+    sta player_data + PL_STR_BASE
+    jsr player_calc_stats
+    lda #ITEM_SLOT_RING_OF_STRENGTH
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_STRENGTH
+    sta inv_ego + EQUIP_RING
+    lda #5
+    sta inv_p1 + EQUIP_RING
+    lda #EQUIP_RING
+    sta piw_equip
+    sec
+    jsr player_adjust_equipment_stat
+    ldy #0
+    jsr player_drain_stat_y
+    bcc !t11_fail_jmp2-
+    lda player_data + PL_STR_CUR
+    cmp #118
+    bne !t11_fail_jmp2-
+    lda player_stat_res + 0
+    cmp #42
+    bcc !t11_fail_jmp2-
+    cmp #45
+    bcs !t11_fail_jmp2-
+    sta tp_base_hit
+    clc
+    jsr player_adjust_equipment_stat
+    lda tp_base_hit
+    clc
+    adc #68                             // 113 - (45 - res)
+    cmp player_data + PL_STR_CUR
+    bne !t11_fail_jmp2-
+    cmp zp_player_str
+    bne !t11_fail_jmp2-
+    lda player_stat_res + 0
+    bne !t11d_fail+
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_STR_CUR
+    cmp #118
+    bne !t11d_fail+
+    lda player_stat_res + 0
+    cmp tp_base_hit
+    beq !t11e+
+!t11d_fail:
+    jmp !t11_fail+
+
+!t11e:
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    lda #0
+    sta inv_ego + EQUIP_RING
+    sta inv_p1 + EQUIP_RING
+
+    // 11e: Crown of the Magi (18 + 3 -> 48) and Amulet of Wisdom (17 + 3 -> 38)
+    lda #18
+    sta player_data + PL_INT_BASE
+    lda #17
+    sta player_data + PL_WIS_BASE
+    jsr player_calc_stats
+    lda #ITEM_SLOT_GOLDEN_CROWN
+    sta inv_item_id + EQUIP_HEAD
+    lda #(ITEM_PAGE_GOLDEN_CROWN | EGO_MAGI)
+    sta inv_ego + EQUIP_HEAD
+    lda #3
+    sta inv_p1 + EQUIP_HEAD
+    lda #EQUIP_HEAD
+    sta piw_equip
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_INT_CUR
+    cmp #48
+    bne !t11d_fail-
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_INT_CUR
+    cmp #18
+    bne !t11d_fail-
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_HEAD
+    lda #0
+    sta inv_ego + EQUIP_HEAD
+    sta inv_p1 + EQUIP_HEAD
+
+    lda #ITEM_SLOT_AMULET_OF_WISDOM
+    sta inv_item_id + EQUIP_AMULET
+    lda #ITEM_PAGE_AMULET_OF_WISDOM
+    sta inv_ego + EQUIP_AMULET
+    lda #3
+    sta inv_p1 + EQUIP_AMULET
+    lda #EQUIP_AMULET
+    sta piw_equip
+    sec
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_WIS_CUR
+    cmp #38
+    bne !t11d_fail-
+    clc
+    jsr player_adjust_equipment_stat
+    lda player_data + PL_WIS_CUR
+    cmp #17
+    bne !t11d_fail-
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_AMULET
+    lda #0
+    sta inv_ego + EQUIP_AMULET
+    sta inv_p1 + EQUIP_AMULET
+
+    // 11f: Boundary regressions for cur == 3 (+1) and cur == 118, res == 0 (-1)
+    ldy #0
+    lda #3
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #0
+    sta player_stat_res + 0
+    lda #1
+    jsr player_step_equip_stat_y
+    lda player_data + PL_STR_CUR
+    cmp #4
+    bne !t11_fail+
+    lda zp_player_str
+    cmp #4
+    bne !t11_fail+
+    lda player_stat_res + 0
+    bne !t11_fail+
+    lda #3
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #$fe
+    sta player_stat_res + 0
+    lda #1
+    jsr player_step_equip_stat_y
+    lda player_data + PL_STR_CUR
+    cmp #3
+    bne !t11_fail+
+    lda player_stat_res + 0
+    cmp #$ff
+    bne !t11_fail+
+    lda #118
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #0
+    sta player_stat_res + 0
+    lda #$ff
+    jsr player_step_equip_stat_y
+    lda player_data + PL_STR_CUR
+    cmp #108
+    bne !t11_fail+
+    lda zp_player_str
+    cmp #108
+    bne !t11_fail+
+    lda player_stat_res + 0
+    bne !t11_fail+
+
+    lda #$01
+    .byte $2c
+!t11_fail:
+    lda #$00
+    sta $040a
+
+    // ==========================================
+    // Test 12: Runtime decrement_stat (VMS de_statp) vs chargen apply_modifier
+    // ==========================================
+    lda #$37
+    sta zp_rng_0
+    lda #$a5
+    sta zp_rng_1
+    lda #$5c
+    sta zp_rng_2
+    lda #$91
+    sta zp_rng_3
+
+    // < 19: -1, floored at 3
+    lda #3
+    jsr decrement_stat
+    cmp #3
+    bne !t12_fail_jmp+
+    lda #4
+    jsr decrement_stat
+    cmp #3
+    bne !t12_fail_jmp+
+    lda #17
+    jsr decrement_stat
+    cmp #16
+    bne !t12_fail_jmp+
+    lda #18
+    jsr decrement_stat
+    cmp #17
+    bne !t12_fail_jmp+
+    lda #8
+    sta tp_loop
+!t12_19:
+    lda #19
+    jsr decrement_stat
+    cmp #18
+    bne !t12_fail_jmp+
+    dec tp_loop
+    bne !t12_19-
+
+    // 87 & 88 both in 19..108 -> -(1d10+5) = -6..-15 (no 88 boundary split)
+    lda #32
+    sta tp_loop
+!t12_87:
+    lda #87
+    jsr decrement_stat
+    cmp #72
+    bcc !t12_fail_jmp+
+    cmp #82
+    bcs !t12_fail_jmp+
+    dec tp_loop
+    bne !t12_87-
+
+    lda #0
+    sta tp_seen
+    lda #32
+    sta tp_loop
+!t12_88:
+    lda #88
+    jsr decrement_stat
+    cmp #73
+    bcc !t12_fail_jmp+
+    cmp #83
+    bcs !t12_fail_jmp+
+    cmp #80
+    bcs !+
+    inc tp_seen
+!:  dec tp_loop
+    bne !t12_88-
+    lda tp_seen
+    bne !t12_108+
+!t12_fail_jmp:
+    jmp !t12_fail+
+
+!t12_108:
+    // 108/109 boundary: 108 loses 6..15, 109 loses 1..3
+    lda #0
+    sta tp_seen
+    lda #32
+    sta tp_loop
+!t12_108_lp:
+    lda #108
+    jsr decrement_stat
+    cmp #93
+    bcc !t12_fail_jmp-
+    cmp #103
+    bcs !t12_fail_jmp-
+    cmp #100
+    bcs !+
+    inc tp_seen
+!:  dec tp_loop
+    bne !t12_108_lp-
+    lda tp_seen
+    beq !t12_108_fail+
+    jmp !t12_109+
+!t12_108_fail:
+    jmp !t12_fail+
+
+!t12_109:
+    lda #0
+    sta tp_seen
+    lda #32
+    sta tp_loop
+!t12_109_lp:
+    lda #109
+    jsr decrement_stat
+    cmp #106
+    bcc !t12_108_fail-
+    cmp #109
+    bcs !t12_108_fail-
+    cmp #108
+    bcs !+
+    inc tp_seen
+!:  dec tp_loop
+    bne !t12_109_lp-
+    lda tp_seen
+    beq !t12_109_fail+
+    jmp !t12_117+
+!t12_109_fail:
+    jmp !t12_fail+
+
+!t12_117:
+
+    // 117/118 boundary: both lose randint(3) = 1..3
+    lda #0
+    sta tp_seen
+    lda #32
+    sta tp_loop
+!t12_117_lp:
+    lda #117
+    jsr decrement_stat
+    cmp #114
+    bcc !t12_fail+
+    cmp #117
+    bcs !t12_fail+
+    cmp #116
+    bcs !+
+    inc tp_seen
+!:  dec tp_loop
+    bne !t12_117_lp-
+    lda tp_seen
+    beq !t12_fail+
+
+    lda #0
+    sta tp_seen
+    lda #32
+    sta tp_loop
+!t12_118_lp:
+    lda #118
+    jsr decrement_stat
+    cmp #115
+    bcc !t12_fail+
+    cmp #118
+    bcs !t12_fail+
+    cmp #117
+    bcs !+
+    inc tp_seen
+!:  dec tp_loop
+    bne !t12_118_lp-
+    lda tp_seen
+    beq !t12_fail+
+
+    // Chargen apply_modifier still uses create.inc bands (-1 above 108)
+    lda #16
+    sta tp_loop
+!t12_cg_lp:
+    lda #117
+    sta stat_work
+    lda #$ff
+    jsr apply_modifier
+    lda stat_work
+    cmp #116
+    bne !t12_fail+
+    dec tp_loop
+    bne !t12_cg_lp-
+
+    lda #$01
+    .byte $2c
+!t12_fail:
+    lda #$00
+    sta $040b
 
     brk
 

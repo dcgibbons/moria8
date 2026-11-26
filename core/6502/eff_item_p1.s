@@ -748,7 +748,7 @@ ep1_curse_slot_common:
     bcc !ep1_csc_stat_nx+
     pha
     lda stat_work
-    jsr player_apply_stat_delta_y   // preserves X, Y
+    jsr player_step_equip_stat_y    // preserves X, Y
     cpy #PL_CON_CUR - PL_STR_CUR
     bne !ep1_csc_stat_pop+
     stx ep1_tmp
