@@ -2515,11 +2515,6 @@ c128_test_force_dungeon_melee:
     ldy #MX_HP_HI
     lda #0
     sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    lda #0
-    sta (zp_ptr0),y
-    ldy #MX_FLEE_HI
-    sta (zp_ptr0),y
 !ctfdm_done:
     rts
 

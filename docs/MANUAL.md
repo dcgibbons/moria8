@@ -30,9 +30,14 @@ Choose the cartridge or disk/archive release for your machine:
 - **Apple IIe (128K, ProDOS):** `moria8-apple2.po` (also runs on Apple IIc and
   Apple IIgs; caches hot overlays and catalogs in auxiliary / Language Card RAM
   and streams cold overlays from ProDOS on demand).
-- **Commander X16:** `moria8-cx16.crt` (cartridge) or `moria8-cx16.zip` (extract
-  to an SD card or pass `-fsroot <dir>` in `x16emu` and run `MORIA8.PRG`;
-  preloads overlays and catalogs into banked HiRAM at boot).
+- **Commander X16:** `moria8-cx16.zip` (extract into a dedicated SD card
+  subfolder such as `MORIA8/`, then `DOS"CD:MORIA8"` and `BOOT` to launch
+  `AUTOBOOT.X16`, or `LOAD"MORIA8.PRG"` / `RUN` — do not extract to the SD root
+  if you already have an `AUTOBOOT.X16` launcher; also supports uploading the
+  `.zip` directly to the CX16 WebEmulator via `manifest.json`, or passing
+  `-fsroot <dir>` in `x16emu` and running `MORIA8.PRG`; preloads overlays and
+  catalogs into banked HiRAM at boot) or `moria8-cx16.crt` (128 KB cartridge ROM
+  for `x16emu -cart` or hardware ROM cards).
 - **Atari 8-bit (`800XL`/`65XE`/`130XE`):** `moria8-atari8.car` (AtariMax 128
   KB cartridge) or `moria8-atari8.atr` (DOS 2.5 Enhanced Density disk). A
   `130XE` automatically caches overlays and catalogs in extended RAM at boot;

@@ -154,8 +154,8 @@
   section.collapsed > :not(h2) { display: none; }
   section.collapsed > h2 { margin-bottom: 0; }
   .tabs button { border-radius: 3px 3px 0 0; } .tabs button.on { color: var(--black); background: var(--gold); }
-  #qmain { grid-template-areas: "qwall qwall" "balrog balrog" "monsters monsters" "buildq buildq" "builds builds" "subs subs" "recent qlog"; }
-  @media (max-width: 1100px) { #qmain { grid-template-areas: "qwall" "balrog" "monsters" "buildq" "builds" "subs" "recent" "qlog"; } }
+  #qmain { grid-template-areas: "qwall qwall" "balrog balrog" "coverage coverage" "monsters monsters" "buildq buildq" "builds builds" "subs subs" "recent qlog"; }
+  @media (max-width: 1100px) { #qmain { grid-template-areas: "qwall" "balrog" "coverage" "monsters" "buildq" "builds" "subs" "recent" "qlog"; } }
   /* Difficulty charts (§23.6): amber and blue are the page's own tokens,
      validated as a pair on the panel (dataviz validate_palette, dark). */
   .bfilter { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -237,6 +237,11 @@
       <span><i style="background:var(--black-soft)"></i>waiting for its turn (last game shown)</span>
       <span class="dim">each cell: best clvl and depth; where the next game starts (a save, or L1) and runs; now, or the last game's end</span>
     </div>
+  </section>
+  <section style="grid-area: coverage" id="covsec" hidden>
+    <h2><span>Coverage</span><small id="covcount"></small></h2>
+    <div id="coverage"></div>
+    <div class="mlegend"><span class="dim">over the build and Balrog queues' runs. Spells and prayers: the runs that cast it, and that saw its effect. Items: uses at the game's prompts (wear, read, aim, quaff, throw, use, study, recharge), bonuses and charges left off; food is eaten without being named, so it shows unused. Monsters: the runs that met the creature (named in a message or looked at) or slew it. Gaps first, in red; click a heading for every entry</span></div>
   </section>
   <section style="grid-area: monsters">
     <h2><span>Monsters</span><small id="moncount"></small></h2>
@@ -900,6 +905,35 @@ function renderQueue() {
   // since kill logging began; runs since 2026-11-12), how many runs met it (met events, since
   // 2026-11-12) and how many characters it killed (every run recorded), by
   // queue: the Balrog queue, the build queue, the rest.
+  // Coverage (maintainer, 2026-11-23: every spell/prayer used, every item,
+  // every monster encountered, in that priority).
+  const cov = q.coverage;
+  $("covsec").hidden = !cov;
+  if (cov) {
+    const block = (title, rows, gapOf, head, cells) => {
+      const gaps = rows.filter(gapOf);
+      const done = rows.length - gaps.length;
+      return `<details><summary><b>${title}</b> <span class="${gaps.length ? "warn" : "ok"}">${done} of ${rows.length}</span>` +
+        (gaps.length ? ` · <span class="bad">never: ${gaps.map(r => esc(r.name)).join(", ")}</span>` : ` · <span class="ok">every one</span>`) +
+        `</summary><table class="btable"><thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
+        rows.map(r => `<tr${gapOf(r) ? ' class="bad"' : ""}>${cells(r).map(c => `<td>${c}</td>`).join("")}</tr>`).join("") +
+        `</tbody></table></details>`;
+    };
+    const num = n => n ? Number(n).toLocaleString() : `<span class="dim">0</span>`;
+    const spells = Object.entries(cov.spells).map(([name, s]) => ({name, ...s,
+      first: Math.min(...Object.values(s.classes))})).sort((a, b) => a.first - b.first || a.name.localeCompare(b.name));
+    const items = Object.entries(cov.items).map(([name, it]) => ({name, ...it,
+      total: Object.values(it.uses).reduce((a, b) => a + b, 0)})).sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+    const monsters = Object.entries(cov.monsters).map(([name, m]) => ({name, ...m}));
+    $("covcount").textContent = `${cov.runs_with_uses.toLocaleString()} runs with item uses logged`;
+    $("coverage").innerHTML =
+      block("Spells and prayers", spells, r => !r.cast, ["spell or prayer", "classes (level)", "cast (runs)", "effect seen (runs)"],
+            r => [esc(r.name), esc(Object.entries(r.classes).map(([c, l]) => `${c} ${l}`).join(", ")), num(r.cast), num(r.effect)]) +
+      block("Items", items, r => !r.total, ["item", "kind", "uses", "by verb"],
+            r => [esc(r.name), esc(r.category), num(r.total), esc(Object.entries(r.uses).map(([v, n]) => `${v.toLowerCase()} ${n}`).join(", "))]) +
+      block("Monsters", monsters, r => !r.met && !r.slain, ["creature", "met (runs)", "slain (runs)"],
+            r => [esc(r.name), num(r.met), num(r.slain)]);
+  }
   const mon = q.monsters || {creatures: {}, runs: 0, since: ""};
   const msum = o => Object.values(o || {}).reduce((a, b) => a + b, 0);
   const mpinned = ["Balrog", "Evil Iggy", "Ancient Multi-Hued Dragon"], mgroups = ["balrog", "build", "other"];

@@ -153,6 +153,8 @@ def prepare_fsroot(fsroot: Path, save_path: Path | None) -> None:
     zip_path = BUILD / "moria8-cx16.zip"
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(fsroot)
+    for pkg_only in ("AUTOBOOT.X16", "manifest.json"):
+        (fsroot / pkg_only).unlink(missing_ok=True)
     if save_path is not None:
         shutil.copy2(save_path, fsroot / "THE.GAME")
         (fsroot / "MORIA8.ID").write_bytes(b"M8SAVE")

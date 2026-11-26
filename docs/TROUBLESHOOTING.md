@@ -66,6 +66,12 @@ runtime disk reads occur only for save/load and high scores.
 
 - **`Drive not found.`:** `D)isk Setup` only accepts IEC/HostFS device numbers
   `8`–`11`.
+- **SD card installation:** Extract `build/moria8-cx16.zip` into a dedicated
+  subfolder on your SD card (e.g. `MORIA8/`) rather than the SD root so you do
+  not overwrite an existing root `AUTOBOOT.X16` launcher. From BASIC, run
+  `DOS"CD:MORIA8"` then `BOOT` (or `LOAD"MORIA8.PRG"` and `RUN`).
+- **CX16 WebEmulator:** Upload `moria8-cx16.zip` directly; it includes
+  `manifest.json` (`512` KB RAM, `MORIA8.PRG`).
 - When launching `build/moria8-cx16.zip` in `x16emu`, extract the archive and
   pass `-fsroot <extracted_dir>` so `MORIA8.PRG` can preload all companion files.
 

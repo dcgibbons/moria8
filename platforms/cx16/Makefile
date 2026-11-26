@@ -36,6 +36,7 @@ SOURCE_OFFER  = ../../data/SOURCE-OFFER
 BUILD       ?= ../../build
 OUTCX16      = $(BUILD)/cx16
 OVL_OUTCX16  = $(abspath $(OUTCX16))
+CX16_PKG_OUT = $(BUILD)/cx16-pkg
 CARTCX16_OUT = $(abspath $(BUILD)/cx16-cart)
 
 KA_COMMON_FLAGS = -showmem -libdir ../../core/6502 -libdir . -libdir hal -libdir ../commodore/common -define CX16 -afo
@@ -66,6 +67,8 @@ CX16_ITEM_CAT_PRG = $(OUTCX16)/ITEM.CAT
 CX16_TITLE_PRG = $(OUTCX16)/TITLE
 CX16_LICENSE   = $(OUTCX16)/LICENSE
 CX16_SOURCE_OFFER = $(OUTCX16)/SOURCE-OFFER
+CX16_AUTOBOOT  = $(CX16_PKG_OUT)/AUTOBOOT.X16
+CX16_MANIFEST  = $(CX16_PKG_OUT)/manifest.json
 
 CX16_ZIP_IMAGE = $(BUILD)/moria8-cx16.zip
 CX16_MAIN_STAMP = $(OUTCX16)/.main.stamp
@@ -158,7 +161,7 @@ test-runtime: build test-memory-contract
 	fi
 
 clean:
-	rm -rf "$(OUTCX16)" "$(CARTCX16_OUT)" "$(CX16_ZIP_IMAGE)" "$(CX16_CART_IMAGE)" "$(BUILD)/test/cx16-cartridge" __pycache__
+	rm -rf "$(OUTCX16)" "$(CX16_PKG_OUT)" "$(CARTCX16_OUT)" "$(CX16_ZIP_IMAGE)" "$(CX16_CART_IMAGE)" "$(BUILD)/test/cx16-cartridge" __pycache__
 
 kickass: ensure-kickass
 ensure-kickass:
@@ -205,7 +208,16 @@ $(CX16_ITEM_CAT_PRG): ../../platforms/shared/item_catalog/item_cat_data.s ../../
 $(CX16_CART_ITEM_CAT_PRG): ../../platforms/shared/item_catalog/item_cat_data.s ../../platforms/shared/item_catalog/item_cat_layout.s ../../tools/catalog_disk.py | $(CARTCX16_OUT)
 	python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0, '../../tools'); import catalog_disk; p = Path('$@'); p.write_bytes(b'\x00\xa0' + catalog_disk.item_catalog_bytes())"
 
-$(CX16_ZIP_IMAGE): $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_MONSTER_EXT_PRG) $(CX16_ITEM_CAT_PRG) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER)
+$(CX16_PKG_OUT):
+	mkdir -p "$(CX16_PKG_OUT)"
+
+$(CX16_AUTOBOOT): $(CX16_MAIN_PRG) | $(CX16_PKG_OUT)
+	cp "$<" "$@"
+
+$(CX16_MANIFEST): $(VERSION_FILE) Makefile | $(CX16_PKG_OUT)
+	python3 -B -c "import json, pathlib; v = json.loads(pathlib.Path('$<').read_text(encoding='utf-8'))['cx16']; pathlib.Path('$@').write_text(json.dumps({'manifest_version': '1.0.0', 'name': 'Moria8', 'author': 'Chad Gibbons', 'app_version': v, 'license': 'GPL-3.0-or-later', 'ram': '512', 'start_prg': 'MORIA8.PRG'}, indent=2) + '\n', encoding='utf-8')"
+
+$(CX16_ZIP_IMAGE): $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_PRGS) $(CX16_CATALOG_PRGS) $(CX16_MONSTER_EXT_PRG) $(CX16_ITEM_CAT_PRG) $(CX16_TITLE_PRG) $(CX16_LICENSE) $(CX16_SOURCE_OFFER) $(CX16_AUTOBOOT) $(CX16_MANIFEST)
 	rm -f "$@"
 	cd "$(OUTCX16)" && zip -q "$(abspath $(CX16_ZIP_IMAGE))" \
 		MORIA8.PRG CX16.AUXDATA CX16.HUFFDATA \
@@ -213,6 +225,7 @@ $(CX16_ZIP_IMAGE): $(CX16_MAIN_PRG) $(CX16_AUX_PRG) $(CX16_HUFF_PRG) $(CX16_OVL_
 		OVL.UI OVL.ITEMS OVL.SPELL OVL.CHEST OVL.HOME OVL.STORAGE OVL.TITLE \
 		MONSTER.CAT MONSTER.EXT ITEM.CAT \
 		TITLE LICENSE SOURCE-OFFER LEGALUI
+	cd "$(CX16_PKG_OUT)" && zip -q "$(abspath $(CX16_ZIP_IMAGE))" AUTOBOOT.X16 manifest.json
 	python3 -B check_memory_contract.py --zip "$@" --build-dir "$(OUTCX16)" || { rm -f "$@"; exit 1; }
 
 $(CARTCX16_OUT):

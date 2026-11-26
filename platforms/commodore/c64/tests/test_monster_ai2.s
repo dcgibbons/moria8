@@ -314,7 +314,7 @@ get_tile:
     lda (zp_ptr0),y
     rts
 
-// spawn_awake — Spawn species A at (X=col, Y=row), awake with zero flee threshold
+// spawn_awake — Spawn species A at (X=col, Y=row), awake
 // Returns: X = monster slot
 spawn_awake:
     pha
@@ -326,25 +326,20 @@ spawn_awake:
     ldy #MX_FLAGS
     lda #MF_AWAKE
     sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    lda #0
-    sta (zp_ptr0),y
-    iny
-    sta (zp_ptr0),y
     rts
 
-// force_flee_slot0 — Put slot 0 at 1 HP with flee threshold 50 so it flees
-force_flee_slot0:
-    ldx #0
+// spawn_asleep_blocker — Spawn T_M2 asleep at (X=col, Y=row) with sleep 200
+spawn_asleep_blocker:
+    stx ms_spawn_x
+    sty ms_spawn_y
+    lda #T_M2
+    jsr monster_spawn_one
     jsr monster_get_ptr
-    ldy #MX_HP_LO
-    lda #1
-    sta (zp_ptr0),y
-    ldy #MX_HP_HI
+    ldy #MX_FLAGS
     lda #0
     sta (zp_ptr0),y
-    ldy #MX_FLEE_LO
-    lda #50
+    ldy #MX_SLEEP_CUR
+    lda #200
     sta (zp_ptr0),y
     rts
 
@@ -758,19 +753,21 @@ test_start:
     // Test 6: CM2_PHASE is blocked by all 4 outer permanent boundary walls
     // (x=0, x=MAP_COLS-1, y=0, y=MAP_ROWS-1) AND town permanent walls.
     // ----------------------------------------------------------
-    // West boundary: monster at (1,10) fleeing west from player at (3,10)
+    // West boundary: monster at (1,10) moving toward player at (0,12), blocker at (1,11)
     jsr reset_box
     lda #CM2_PHASE
     sta cr_spell_flags2 + T_M1
-    lda #3
+    lda #0
     sta zp_player_x
-    lda #10
+    lda #12
     sta zp_player_y
     ldx #1
     ldy #10
     lda #T_M1
     jsr spawn_awake
-    jsr force_flee_slot0
+    ldx #1
+    ldy #11
+    jsr spawn_asleep_blocker
     jsr monster_ai_tick
     ldx #0
     jsr monster_get_ptr
@@ -780,17 +777,25 @@ test_start:
     beq !+
     jmp !t6_done+
 !:
-    // East boundary: monster at (MAP_COLS-2, 10) fleeing east from player at (MAP_COLS-4, 10)
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #10
+    beq !+
+    jmp !t6_done+
+!:
+    // East boundary: monster at (MAP_COLS-2, 10), player at (MAP_COLS-1, 12), blocker at (MAP_COLS-2, 11)
     jsr monster_init_table
-    lda #MAP_COLS - 4
+    lda #MAP_COLS - 1
     sta zp_player_x
-    lda #10
+    lda #12
     sta zp_player_y
     ldx #MAP_COLS - 2
     ldy #10
     lda #T_M1
     jsr spawn_awake
-    jsr force_flee_slot0
+    ldx #MAP_COLS - 2
+    ldy #11
+    jsr spawn_asleep_blocker
     jsr monster_ai_tick
     ldx #0
     jsr monster_get_ptr
@@ -800,44 +805,68 @@ test_start:
     beq !+
     jmp !t6_done+
 !:
-    // North boundary: monster at (10, 1) fleeing north from player at (10, 3)
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #10
+    beq !+
+    jmp !t6_done+
+!:
+    // North boundary: monster at (10, 1), player at (12, 0), blocker at (11, 1)
     jsr monster_init_table
-    lda #10
+    lda #12
     sta zp_player_x
-    lda #3
+    lda #0
     sta zp_player_y
     ldx #10
     ldy #1
     lda #T_M1
     jsr spawn_awake
-    jsr force_flee_slot0
+    ldx #11
+    ldy #1
+    jsr spawn_asleep_blocker
     jsr monster_ai_tick
     ldx #0
     jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #10
+    beq !+
+    jmp !t6_done+
+!:
     ldy #MX_Y
     lda (zp_ptr0),y
     cmp #1
     beq !+
     jmp !t6_done+
 !:
-    // South boundary: monster at (10, MAP_ROWS-2) fleeing south from player at (10, MAP_ROWS-4)
+    // South boundary: monster at (10, MAP_ROWS-2), player at (12, MAP_ROWS-1), blocker at (11, MAP_ROWS-2)
     jsr monster_init_table
-    lda #10
+    lda #12
     sta zp_player_x
-    lda #MAP_ROWS - 4
+    lda #MAP_ROWS - 1
     sta zp_player_y
     ldx #10
     ldy #MAP_ROWS - 2
     lda #T_M1
     jsr spawn_awake
-    jsr force_flee_slot0
+    ldx #11
+    ldy #MAP_ROWS - 2
+    jsr spawn_asleep_blocker
     jsr monster_ai_tick
     ldx #0
     jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #10
+    beq !+
+    jmp !t6_done+
+!:
     ldy #MX_Y
     lda (zp_ptr0),y
     cmp #MAP_ROWS - 2
-    bne !t6_done+
+    beq !+
+    jmp !t6_done+
+!:
 
     // Town permanent wall block (zp_player_dlvl = 0): enclosed by walls around (15,10)
     jsr reset_box

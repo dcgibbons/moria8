@@ -1275,6 +1275,32 @@ class BalrogQueueTest(unittest.TestCase):
         service.balrog_yield()
         self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # the focus plays: no yield
 
+    def test_a_focus_game_between_two_of_its_own_or_a_game_just_begun_makes_no_yield(self) -> None:
+        """C64 Balrog, 2026-11-23: a clvl 32 Half-Elf Warrior's games ended in
+        town 7 seconds after each start, as focus games ended and restarted
+        around it (26 ends in 12 minutes), and its checkpoint stood 28 hours.
+        A focus character a tick from its next game is not short, and a game
+        outside the focus plays FOCUS_YIELD_MIN_S before it yields."""
+        service = self.service(4, 2)
+        service.config.update(balrog_characters=["elf-priest"], balrog_focus_workers=1)
+        balrog = service.balrog
+        for combo in ("human-paladin", "half-elf-warrior", "elf-priest"):
+            balrog.graduate("c64", combo, {})
+        t = time.time()
+        balrog.state["items"]["c64/elf-priest"]["last"] = {"ended": t - 5}   # its game just ended
+        service.running = {
+            "old": {"queue": "balrog", "platform": "c64", "character": "human-paladin", "started": t - 1200},
+            "new": {"queue": "balrog", "platform": "c64", "character": "half-elf-warrior", "started": t - 7}}
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "old" / queue.YIELD).exists())   # a tick from its next game
+        balrog.state["items"]["c64/elf-priest"]["last"] = {"ended": t - 120}  # short for two minutes
+        del service.running["old"]
+        service.balrog_yield()
+        self.assertFalse((service.home / "runs" / "new" / queue.YIELD).exists())   # 7 seconds in: plays on
+        service.running["new"]["started"] = t - queue.FOCUS_YIELD_MIN_S - 1
+        service.balrog_yield()
+        self.assertTrue((service.home / "runs" / "new" / queue.YIELD).exists())
+
     def test_characters_at_the_focus_level_join_the_focus_on_their_own(self) -> None:
         """Maintainer, 2026-11-21: "putting the higher level games at the
         head of the queue is important for forward progress with limited
@@ -1421,6 +1447,32 @@ class BalrogQueueTest(unittest.TestCase):
         self.assertIsNone(LevelWatch().note(10**7, 18, 2, 0))           # 0: never
         self.assertEqual(GOALS["deep"].level_steps, 150_000)
         self.assertEqual(GOALS["balrog"].level_steps, 0)
+
+    def test_features_count_each_item_used_by_its_verb(self) -> None:
+        """Maintainer, 2026-11-23: "I want to know that every spell/prayer has
+        been used, every item, and every monster has been encountered". The
+        trace names each item picked at a use prompt: counted by verb, its
+        bonuses and charges left off; a drop is not a use."""
+        import gzip, json, tempfile
+        rows = [
+            {"layer": "quaff", "reason": "hurt: drink Healing", "msg": ""},
+            {"layer": "prompt", "reason": "list the items", "msg": "Quaff which potion (a-i)?"},
+            {"layer": "prompt", "reason": "pick Potion of Healing", "msg": "Inventory | ---------"},
+            {"layer": "gear", "reason": "wield it", "msg": ""},
+            {"layer": "prompt", "reason": "list", "msg": "Wear which item (a-c)?"},
+            {"layer": "prompt", "reason": "pick Heavy Crossbow (+4,+7)", "msg": "Inventory"},
+            {"layer": "aim", "reason": "aim", "msg": "Aim which wand (a-a)?"},
+            {"layer": "prompt", "reason": "pick Wand of Lightning Balls (5 charges)", "msg": ""},
+            {"layer": "drop", "reason": "drop junk", "msg": "Drop which item (a-c)?"},
+            {"layer": "prompt", "reason": "pick Rusty Chain Mail [32,-5]", "msg": ""},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = Path(tmp) / "trace.jsonl.gz"
+            with gzip.open(trace, "wt") as handle:
+                handle.writelines(json.dumps(r) + "\n" for r in rows)
+            uses = queue.features(trace)["uses"]
+        self.assertEqual(uses, {"Potion of Healing": {"Quaff": 1}, "Heavy Crossbow": {"Wear": 1},
+                                "Wand of Lightning Balls": {"Aim": 1}})
 
     def test_a_balrog_game_with_neither_xp_nor_depth_changed_ends(self) -> None:
         """C64 Balrog, 2026-11-23: a clvl 37 Paladin walked one 20-square lap
