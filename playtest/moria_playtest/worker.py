@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import abi as abimod
 from . import knowledge
-from .cpm import CpmGame, CpmProcess
+from .cpm import CpmC128Game, CpmGame, CpmProcess
 from .game import Game, Observation
 from .launch import (PLAYTEST_OUT, SHIPPING, Build, ViceProcess, allocate_port, check_disk,
                      prepare_worker, rom_args, sha256)
@@ -91,6 +91,14 @@ class Worker:
             self.vp = process.start_cpm()
             self.game = CpmGame(process, self.abi, self.workdir, port=port,
                                 hang_emulated_seconds=self.hang_emulated_seconds)
+            return self.game
+        if port.backend == "cpm_c128":
+            self.vp = ViceProcess(self.worker_id, self.workdir, self.disk,
+                                  allocate_port(self.worker_id), self.emulator, port,
+                                  extra_args=self.extra_args)
+            monitor = self.vp.start(autostart=False)
+            self.game = CpmC128Game(monitor, self.abi, self.workdir, port=port,
+                                    hang_emulated_seconds=self.hang_emulated_seconds)
             return self.game
         if port.backend == "mame":
             process = MameProcess(self.worker_id, self.workdir, self.disk, port,

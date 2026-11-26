@@ -14,12 +14,13 @@ from moria_playtest import abi as abimod
 from moria_playtest import knowledge, launch, magic
 from moria_playtest.auditor import Auditor
 from moria_playtest.brain import Brain
-from moria_playtest.cpm import CpmGame, CpmProcess, cpm_keys
+from moria_playtest.cpm import C128_CPM_KEYBUF, CpmC128Game, CpmGame, CpmProcess, cpm_keys
 from moria_playtest.game import KEY_RUNSTOP, Mode, Observation, classify
 from moria_playtest.goals import GOALS
 from moria_playtest.launch import ROOT, Build
 from moria_playtest.magic import Magic
-from moria_playtest.ports import CPM
+from moria_playtest.ports import CPM, CPM_C128, PORTS
+from moria_playtest.vice import StopInfo
 from moria_playtest.tour import Tour
 from moria_playtest.view import DIRS, NOTABLE_GLYPH, TERRAIN_GLYPHS, View
 
@@ -115,6 +116,24 @@ class CpmAbiTest(unittest.TestCase):
         if not sym.exists():
             self.skipTest(f"{sym} not built yet")
         self.assertEqual(abimod.check(sym, ROOT, CPM), [])
+
+    def test_cpm_player_stat_and_max_xp_consts_match_defs(self) -> None:
+        _, consts = abimod.tables(CPM)
+        expected = {
+            "PL_STR_BASE": 21,
+            "PL_STR_CUR": 27,
+            "PL_CON_CUR": 31,
+            "PL_MAX_XP_0": 111,
+        }
+        for name, value in expected.items():
+            self.assertIn(name, consts)
+            self.assertEqual(consts[name], (str(consts[name][0]), value))
+            self.assertEqual(abimod.const_value(ROOT, "core/z80/defs.inc", name), value)
+        obs = _make_obs(abi=_cpm_abi())
+        player = bytearray(obs.player)
+        player[111:114] = (123456).to_bytes(3, "little")
+        obs = Observation(**{**obs.__dict__, "player": bytes(player)})
+        self.assertEqual(obs.max_xp, 123456)
 
 
 class CpmAdapterTest(unittest.TestCase):
@@ -474,6 +493,105 @@ class CpmAdapterTest(unittest.TestCase):
         self.assertEqual(brain.look_message, "")
         brain.decide(make_cmd_obs(11, row0=""), off_view)
         self.assertNotIn((off_pos, ","), brain.level.identified)
+
+    def test_cpm_c128_port_and_game_backend(self) -> None:
+        self.assertIs(PORTS["cpm-c128"], CPM_C128)
+        self.assertEqual(CPM_C128.source, "cpm")
+        self.assertEqual(CPM_C128.platform, "cpm")
+        self.assertEqual(CPM_C128.emulator, "x128")
+        self.assertEqual(CPM_C128.disk, "moria8-cpm-c128.d71")
+        self.assertEqual(CPM_C128.backend, "cpm_c128")
+        self.assertEqual(CPM_C128.required_roms, ("PLAYTEST_CPM_C128_DISK",))
+
+        sym = Build.shipping(CPM_C128).vs
+        if sym.exists():
+            self.assertEqual(abimod.check(sym, ROOT, CPM_C128), [])
+
+        abi = _cpm_abi()
+        abi.all_symbols["zp_eff_resist"] = [0x6A40]
+        abi.all_symbols["eff_resist_cold_timer"] = [0x6A41]
+        abi.all_symbols["abi_entropy_poll"] = [0x6A0C]
+        abi.labels.update({
+            "stack_canary": 0x8C00,
+            "z80_state": 0x6A00,
+            "abi_current_overlay": 0x6A06,
+            "cpm_char_shadow": 0x8E00,
+            "cpm_color_shadow": 0x9580,
+            "input_get_key": 0x0784,
+            "game_loop_cmd_ret": 0x4CAB,
+            "game_loop_run_dir_ret": 0x4CBC,
+        })
+
+        state = bytearray(64)
+        state[0x12] = 0
+        screen_rows = bytearray(b" " * (80 * 24))
+        line0 = b"Adventurer   Human Mage                 LV: 1 DL: 0"
+        screen_rows[21 * 80:21 * 80 + len(line0)] = line0
+
+        class FakeViceMon:
+            def __init__(self) -> None:
+                self.register_ids = {"PC": 3, "SP": 4, "HL": 9}
+                self.stops = [
+                    StopInfo(pc=0x0784, checkpoint=1, registers={3: 0x0784, 4: 0xF3DB}),
+                    StopInfo(pc=0x0784, checkpoint=1, registers={3: 0x0784, 4: 0x8DFA}),
+                ]
+                self.writes: list[tuple[int, bytes, tuple[str, int]]] = []
+                self.screenshots: list[tuple[Path, bool]] = []
+                self.resumed = 0
+
+            def bank(self, name: str) -> tuple[str, int]:
+                return (name, 0)
+
+            def checkpoint_list(self) -> list[object]:
+                return []
+
+            def checkpoint_set(self, addr: int) -> int:
+                return 1
+
+            def resume(self) -> None:
+                self.resumed += 1
+
+            def wait_stop(self, timeout: float = 60.0) -> StopInfo:
+                return self.stops.pop(0)
+
+            def mem_get(self, start: int, length: int, bank: tuple[str, int] = ("ram", 0)) -> bytes:
+                if bank == ("ram00", 0) and start == C128_CPM_KEYBUF:
+                    return b"\x00"
+                if bank == ("ram01", 0):
+                    if start == 0x8C00:
+                        return b"M8SK"
+                    if start == 0x6A00:
+                        return bytes(state)
+                    if start in (0x6A40, 0x6A41):
+                        return b"\x00"
+                    if start == 0x8DFA:
+                        return (0x4CAB).to_bytes(2, "little")
+                    if start == 0x6D6B:
+                        return b"\x00" * 114
+                    if start == 0x7542:
+                        return b"\xff" * (32 * 12)
+                    if start == 0x8E00:
+                        return bytes(screen_rows)
+                raise AssertionError(f"unexpected read: {bank} {start:#06x}+{length}")
+
+            def mem_set(self, start: int, data: bytes, bank: tuple[str, int] = ("ram", 0)) -> None:
+                self.writes.append((start, data, bank))
+
+            def screenshot(self, path: Path, vdc: bool = False) -> None:
+                self.screenshots.append((path, vdc))
+
+        mon = FakeViceMon()
+        with tempfile.TemporaryDirectory() as tmp:
+            game = CpmC128Game(mon, abi, Path(tmp), port=CPM_C128)  # type: ignore[arg-type]
+            game.arm()
+            game.resolve_sites()
+            obs = game.press(ord("N"))
+            self.assertEqual(mon.resumed, 2)
+            self.assertEqual(obs.sp, 0x8DFA)
+            self.assertEqual(obs.mode, Mode.COMMAND)
+            self.assertIn((C128_CPM_KEYBUF, b"n", ("ram00", 0)), mon.writes)
+            self.assertTrue(game.screenshot(Path(tmp) / "shot.png"))
+            self.assertEqual(mon.screenshots, [(Path(tmp) / "shot.png", True)])
 
 
 if __name__ == "__main__":

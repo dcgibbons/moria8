@@ -377,6 +377,40 @@ class BuildHistoryTest(unittest.TestCase):
         self.assertEqual([f["text"] for f in build["detail"]["c64"]["findings"]], ["hang: no key wait"])
         self.assertEqual(len(build["detail"]["c64"]["notes"]), 4)
 
+    def test_commit_tags_and_build_history(self) -> None:
+        import subprocess
+        from unittest import mock
+
+        full_ann = "6b3301513b5db6ad02409b229df837c5be175a69"
+        full_lw = "deadbeef1234567890abcdef1234567890abcdef"
+        stdout = (
+            f"{full_ann}|371606d11348bd4542004eb1801911caf1408e9a|v2.0.0\n"
+            f"|{full_lw}|v2.0.1\n"
+        )
+        ok_proc = mock.Mock(returncode=0, stdout=stdout)
+        old_cache = dashboard._tags_cache
+        try:
+            dashboard._tags_cache = (0.0, {})
+            with mock.patch.object(dashboard.subprocess, "run", return_value=ok_proc):
+                self.assertEqual(dashboard.commit_tags(full_ann), ["v2.0.0"])
+                self.assertEqual(dashboard.commit_tags(full_ann[:12]), ["v2.0.0"])
+                self.assertEqual(dashboard.commit_tags(full_lw[:12]), ["v2.0.1"])
+                self.assertEqual(dashboard.commit_tags("000000000000"), [])
+                self.assertEqual(dashboard.commit_tags(""), [])
+
+            records = [{"queue": "build", "build": "b1", "commit": full_ann[:12], "started": 100,
+                        "platform": "c64", "outcome": "reached", "clvl": 10, "id": "r1",
+                        "character": "human-warrior", "findings": []}]
+            with mock.patch.object(dashboard, "commit_subject", lambda c: "release"):
+                builds = dashboard.build_history(records, ("reached",))
+            self.assertEqual(builds[0]["tags"], ["v2.0.0"])
+
+            dashboard._tags_cache = (0.0, {})
+            with mock.patch.object(dashboard.subprocess, "run", side_effect=OSError("no git")):
+                self.assertEqual(dashboard.commit_tags(full_ann), [])
+        finally:
+            dashboard._tags_cache = old_cache
+
 
 class BalrogKillsTest(unittest.TestCase):
     """The Balrog panel's kill tally (2026-11-11): whether an Ancient

@@ -178,10 +178,20 @@ class Abi:
         raise AttributeError(name)
 
 
+def _resolve_source(root: Path, file: str) -> Path:
+    """Resolve a 6502 core source path, falling back to archived core/ layouts."""
+    path = root / file
+    if not path.exists() and file.startswith("core/6502/"):
+        legacy = root / "core" / file.removeprefix("core/6502/")
+        if legacy.exists():
+            return legacy
+    return path
+
+
 def const_value(root: Path, file: str, name: str) -> int | None:
     pattern = re.compile(rf"^\s*\.const\s+{re.escape(name)}\s*=\s*(\$[0-9A-Fa-f]+|%[01]+|\d+)\b")
     equ_pattern = re.compile(rf"^\s*{re.escape(name)}\s+EQU\s+(0x[0-9A-Fa-f]+|%[01]+|\d+)\b")
-    for line in (root / file).read_text(encoding="utf-8").splitlines():
+    for line in _resolve_source(root, file).read_text(encoding="utf-8").splitlines():
         match = pattern.match(line)
         if match:
             return parse_value(match.group(1))

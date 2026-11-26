@@ -37,7 +37,9 @@
   "atari8",
   "atari8-cart",
   "bbcmaster",
-  "cx16-cart"
+  "cx16-cart",
+  "cpm",
+  "cpm-c128"
  ],
  "build_goal": "clvl10",
  "balrog_platforms": [

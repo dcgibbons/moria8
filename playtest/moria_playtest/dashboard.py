@@ -789,6 +789,8 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 
 _subjects: dict[str, str] = {}
+TAGS_TTL = 60.0
+_tags_cache: tuple[float, dict[str, list[str]]] = (0.0, {})
 
 
 def commit_subject(commit: str) -> str:
@@ -801,6 +803,52 @@ def commit_subject(commit: str) -> str:
         except (OSError, subprocess.SubprocessError):
             _subjects[commit] = ""
     return _subjects.get(commit, "")
+
+
+def commit_tags(commit: str) -> list[str]:
+    """Git tags pointing directly at ``commit`` (full or >=7-char SHA prefix)."""
+    global _tags_cache
+    if not commit:
+        return []
+    now = time.monotonic()
+    cached_at, by_sha = _tags_cache
+    if cached_at == 0.0 or now - cached_at >= TAGS_TTL:
+        fresh: dict[str, list[str]] = {}
+        try:
+            done = subprocess.run(
+                ["git", "for-each-ref", "--format=%(*objectname)|%(objectname)|%(refname:short)", "refs/tags"],
+                cwd=ROOT, capture_output=True, text=True, timeout=10)
+            if done.returncode == 0:
+                for line in done.stdout.splitlines():
+                    if "|" not in line:
+                        continue
+                    deref, obj, name = line.split("|", 2)
+                    sha = (deref or obj).strip()
+                    tag = name.strip()
+                    if sha and tag:
+                        tags = fresh.setdefault(sha, [])
+                        if tag not in tags:
+                            tags.append(tag)
+                for tags in fresh.values():
+                    tags.sort()
+        except (OSError, subprocess.SubprocessError):
+            fresh = {}
+        _tags_cache = (now, fresh)
+        by_sha = fresh
+    exact = by_sha.get(commit)
+    if exact:
+        return list(exact)
+    if len(commit) >= 7:
+        matched: list[str] = []
+        for sha, tags in by_sha.items():
+            if sha.startswith(commit):
+                for tag in tags:
+                    if tag not in matched:
+                        matched.append(tag)
+        if matched:
+            matched.sort()
+            return matched
+    return []
 
 
 def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> list[dict[str, Any]]:
@@ -853,7 +901,7 @@ def build_history(records: list[dict[str, Any]], counted: tuple[str, ...]) -> li
         lo, hi = wilson(reached, len(games))
         commit = runs[0].get("commit") or ""
         out.append({"build": build, "ordinal": first + i,   # its place in the whole history: its colour
-                    "commit": commit[:12], "subject": commit_subject(commit),
+                    "commit": commit[:12], "tags": commit_tags(commit), "subject": commit_subject(commit),
                     "start": min(r.get("started") or 0 for r in runs),
                     "end": min(r.get("started") or 0 for r in builds[i + 1][1]) if i + 1 < len(builds) else None,
                     "games": len(games), "reached": reached, "lo": round(lo, 3), "hi": round(hi, 3),
