@@ -477,7 +477,9 @@ plus4_storage_marker_present:
 #import "../../../core/6502/item_defs.s"
 // Equipment effect flags park in ModalMiscOverlay ($E000) behind
 // hal_player_recalc_pflags, which saves and restores current_overlay.
+#define PLAYER_GAIN_STAT_HELPERS_EXTERNAL
 #import "../../../core/6502/player.s"
+#undef PLAYER_GAIN_STAT_HELPERS_EXTERNAL
 #import "../../../core/6502/ui_messages.s"
 #import "../../../core/6502/ui_status.s"
 #define GENERATION_BUSY_INSTALL_EXTERNAL
@@ -2730,11 +2732,13 @@ ovl_ui_end:
     #import "../../../core/6502/ranged_fire.s"
     #import "../../../core/6502/throw.s"
     #import "../../../core/6502/player_item_commands.s"
+    #import "../../../core/6502/player_gain_stat_helpers.s"
     #import "../../../core/6502/player_adjust_equipment_stat.s"
     #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $F000, true
+.assert "Gain-stat helpers co-locate with eff_gain_stat in ItemActionsOverlay", eff_potion_gain_stat >= $e000 && eff_potion_gain_stat < ovl_items_end && player_step_healthy_sum_y >= $e000 && player_step_healthy_sum_y < ovl_items_end && player_apply_stat_delta_y >= $e000 && player_apply_stat_delta_y < ovl_items_end, true
 
 // ============================================================
 // Dungeon generation overlay — town + dungeon generation at $E000

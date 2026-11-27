@@ -68,8 +68,8 @@ zero dynamic heap allocation and zero bank switching in the CP/M 2.2 baseline.
 | Address Range | Size | Owner / Symbol | Lifecycle & `ASSERT` Guard |
 | --- | ---: | --- | --- |
 | `0x0000–0x00FF` | `256` B | **CP/M Page Zero** | `0x0000` warm boot (`JP BIOS+3`), `0x0003` IOBYTE, `0x0004` current disk/user, `0x0005–0x0007` BDOS vector (`>= 0xD100`), `0x005C–0x007F` default FCB, `0x0080–0x00FF` CLI tail / initial DMA (saved/parsed at startup, then DMA moves to `0xD080`). |
-| `0x0100–0x55FF` | `21,760` B | **`MORIA8.COM` Resident Code & RO Data** | Loaded by CP/M CCP from `0x0100` (measured M5 build: **`21,598` B**, `0x0100–0x555E`, **`162` B headroom**). Hosts boot/TPA guard, BDOS HAL, ADM-3A/ANSI diff renderer, CSI input, RNG, `MORIA8.DAT` loader, Huffman & `ITEM.CAT` decoders + `item_desc` core, hot walk/turn/LOS/combat/monster AI engine, measured built RO tables (`2,403` B incl. `ALIGN 256` page-tail), and 6-byte inline-descriptor `tramp_*` dispatchers (§2.2). **Guard:** `ASSERT resident_end <= OVL_WINDOW_BASE` (`<= 0x5600`). |
-| `0x5600–0x69FF` | `5,120` B | **`OVL_WINDOW_BASE` (Shared Overlay Slot)** | `40 × 128` B CP/M records (`OVL_WINDOW_SIZE = 0x1400`). Uninitialized in `MORIA8.COM` (never padded into `.COM`). All `19` overlays link with `ORG 0x5600` (`626`–`4,810` B built; largest `ovl_modal.ovl` = `4,810` B) and stream directly on demand from `MORIA8.DAT` via `BDOS 33`, resolving Finding 1 (`+1,024` B over 4 KB 6502 overlays, §2.2). **Guard:** `ASSERT ovl_start == 0x5600 && ovl_end <= 0x6A00`. |
+| `0x0100–0x55FF` | `21,760` B | **`MORIA8.COM` Resident Code & RO Data** | Loaded by CP/M CCP from `0x0100` (measured M5 build: **`21,663` B**, `0x0100–0x559F`, **`97` B headroom**). Hosts boot/TPA guard, BDOS HAL, ADM-3A/ANSI diff renderer, CSI input, RNG, `MORIA8.DAT` loader, Huffman & `ITEM.CAT` decoders + `item_desc` core, hot walk/turn/LOS/combat/monster AI engine, `player_drain_stat_a` (`de_statp`) + `player_restore_stat_a`, measured built RO tables (`2,403` B incl. `ALIGN 256` page-tail), and 6-byte inline-descriptor `tramp_*` dispatchers (§2.2). **Guard:** `ASSERT resident_end <= OVL_WINDOW_BASE` (`<= 0x5600`). |
+| `0x5600–0x69FF` | `5,120` B | **`OVL_WINDOW_BASE` (Shared Overlay Slot)** | `40 × 128` B CP/M records (`OVL_WINDOW_SIZE = 0x1400`). Uninitialized in `MORIA8.COM` (never padded into `.COM`). All `19` overlays link with `ORG 0x5600` (`626`–`4,821` B built; largest `ovl_modal.ovl` = `4,821` B) and stream directly on demand from `MORIA8.DAT` via `BDOS 33`, resolving Finding 1 (`+1,024` B over 4 KB 6502 overlays, §2.2). **Guard:** `ASSERT ovl_start == 0x5600 && ovl_end <= 0x6A00`. |
 | `0x6A00–0x8BFF` | `8,704` B | **Resident BSS & Game State** | Zeroed at boot after TPA check (`BSS_BASE = 0x6A00`, `BSS_LIMIT = 0x8C00`). Starts with the fixed 64-byte ABI block `z80_state` at `0x6A00–0x6A3F`, followed by `8,332` B static game state and caches (**`8,396` B** total measured M5 BSS allocated, `0x6A00–0x8ACC`, **`308` B slack**, §2.1). **Guard:** `ASSERT bss_end <= STACK_BOTTOM` (`<= 0x8C00`). |
 | `0x8C00–0x8DFF` | `512` B | **Application & BDOS Stack** | `STACK_BOTTOM = 0x8C00`, `STACK_TOP = 0x8E00`. Bottom 4 bytes (`0x8C00–0x8C03`) hold `stack_canary` (`'M','8','S','K'` / `0x4D, 0x38, 0x53, 0x4B`), leaving `508` B (`254` words) for game call frames + BDOS/BIOS calls. |
 | `0x8E00–0x957F` | `1,920` B | **`cpm_char_shadow` (`80 × 24` ASCII)** | `CPM_CHAR_SHADOW_BASE = 0x8E00 .. 0x957F`. Stores 7-bit ASCII screen cells (`row * 80 + col`). **Dual-use:** temporarily reused as `OVL_GEN` scan scratch during dungeon generation (§2.3). |
@@ -104,16 +104,16 @@ zero dynamic heap allocation and zero bank switching in the CP/M 2.2 baseline.
 | Core Decode / Combat / Turn / UI Buffers | `616` | `item_name_decode_buf..chest_loot_flags` (`0x8864–0x8ACB`): line/temp formatting, `icat_*` decode, `player_pflags`, status cache, turn/LOS/combat/AI/`me_any_hit`/`me_hit_verb`/spell/chest scalars |
 | **Total M5 BSS Allocated** | **`8,396` B** | **`0x6A00–0x8ACC`**; leaves **`308` B free slack** below `STACK_BOTTOM` (`0x8C00`) |
 
-### 2.2 Resident Ownership, Built RO Tables, & `5,120` B Overlay Sizing (`0x0100–0x555E`, `21,598` B Measured M5)
+### 2.2 Resident Ownership, Built RO Tables, & `5,120` B Overlay Sizing (`0x0100–0x559F`, `21,663` B Measured M5)
 
-To keep `MORIA8.COM` within `21,760` B (`0x5600`) while keeping the hot turn/walk path free of disk I/O and giving overlays generous `5,120` B (`40`-record) headroom, resident and overlay ownership are partitioned cleanly:
+To keep `MORIA8.COM` within `21,760` B (`0x5600`) while keeping the hot turn/walk/combat path free of disk I/O and giving overlays generous `5,120` B (`40`-record) headroom, resident and overlay ownership are partitioned cleanly:
 
-| Resident Subsystem (`MORIA8.COM`) | Measured M5 Size | Contents (`0x0100–0x555E`) |
+| Resident Subsystem (`MORIA8.COM`) | Measured M5 Size | Contents (`0x0100–0x559F`) |
 | --- | ---: | --- |
 | **Built RO Data Tables (`build/cpm/*.inc`)** | **`2,403` B** (`2.35 KB`) | `256` B `ALIGN 256` `huff_tree_page` (`0x0E00–0x0EFF`: `120` B `huff_tree` + `117` B `monster_idx_z80` + `16` B `sgr_lut` + `3` B pad) + `496` B `huff_str_index` + `367` B `item_cat_pinned_z80` + `1,284` B `item_hot_tables_z80` |
-| **Boot, HAL, Core Engine & Huffman/Catalog Code** | **`18,667` B** | Boot/TPA guard, `bdos_io`, `screen_ansi` (ADM-3A/ANSI), `input_csi`, `sound_bel`, `rng`, `dat_loader`, Huffman & `ITEM.CAT` LRU decoders, `item_desc`, `game_loop`, LOS, viewport, combat, monster AI, math, `player_core`, `status_bar`, `messages`, plus final exit/error tail strings |
-| **Compact `tramp_*` Dispatchers (`0x5312–0x5521`)** | **`528` B** | `88` 6-byte inline-descriptor `tramp_*` entry stubs (`CALL overlay_trampoline : DB ovl_id : DW target`) ending at `0x5522`, before final code/string tail (`resident_end = 0x555E`) |
-| **Total M5 Resident Footprint (`MORIA8.COM`)** | **`21,598` B** | **`0x0100–0x555E`**; leaves **`162` B free slack** below `OVL_WINDOW_BASE` (`0x5600`) |
+| **Boot, HAL, Core Engine & Huffman/Catalog Code** | **`18,732` B** | Boot/TPA guard, `bdos_io`, `screen_ansi` (ADM-3A/ANSI), `input_csi`, `sound_bel`, `rng`, `dat_loader`, Huffman & `ITEM.CAT` LRU decoders, `item_desc`, `game_loop`, LOS, viewport, combat, monster AI, math, `player_core` (`player_step_equip_stat_c`, `player_healthy_c`, `player_drain_stat_a`, `player_restore_stat_a`), `status_bar`, `messages`, plus final exit/error tail strings |
+| **Compact `tramp_*` Dispatchers (`0x5353–0x5562`)** | **`528` B** | `88` 6-byte inline-descriptor `tramp_*` entry stubs (`CALL overlay_trampoline : DB ovl_id : DW target`) ending at `0x5563`, before final code/string tail (`resident_end = 0x559F`) |
+| **Total M5 Resident Footprint (`MORIA8.COM`)** | **`21,663` B** | **`0x0100–0x559F`**; leaves **`97` B free slack** below `OVL_WINDOW_BASE` (`0x5600`) |
 
 * **CX16 `Default` Cold-Code Eviction & Platform-Elimination Accounting:**
   Compared against Commander X16 `Default` resident code, the CP/M hot core reaches `~12.2 KB` (`~12,500` B) by placing `~12.5 KB` of cold subsystems cleanly into overlays while already accounting for `~2.7 KB` of CX16 BSS (`0x6A00–0x8BFF`) and eliminating `~3 KB` of VERA/PETSCII/bank-switching logic:
@@ -121,8 +121,8 @@ To keep `MORIA8.COM` within `21,760` B (`0x5600`) while keeping the hot turn/wal
   * `eff_*` (potion/scroll/wand/staff & spell effects) -> `OVL_ITEMS_EFF` / `OVL_SPELL_EFF`
   * `inven_calc` / `inv_add` / `roll_enchant` -> `OVL_ITEM_MGT` / `OVL_GEN` / `OVL_CHEST`
   * `door` / `trap` / `search` commands -> `OVL_ACTIONS`
-  * `race` / `class` creation tables -> `OVL_START` / `OVL_UI`
-* **Resident Ceiling Policy (`0x5600`):** Post-M5 `MORIA8.COM` stands at `21,598` B (`162` B below `0x5600`). If future features pressure the `0x5600` ceiling, move cold helpers into the `5,120` B overlays or spare TOC slots `25..40` at only **`6` B** per resident `tramp_*` stub.
+  * `race` / `class` creation + chargen flavour-init (`id_init_flavours`) -> `OVL_START` / `OVL_UI`
+* **Resident Ceiling Policy (`0x5600`):** Post-M5 `MORIA8.COM` stands at `21,663` B (`97` B below `0x5600`). If future features pressure the `0x5600` ceiling, move cold helpers into the `5,120` B overlays or spare TOC slots `25..40` at only **`6` B** per resident `tramp_*` stub.
 * **Why `5,120` B (`40` Records) Resolves Finding 1:** Expanding `OVL_WINDOW_SIZE` from `4,096` B / `4,608` B to **`5,120` B (`40 × 128` B records)** adds **`+1,024` B** over C64/Plus4/C128/Atari8 `4,096` B overlays (where all 13 fit `<= 4,048` B). With Z80 code density, `5,120` B holds **`~5.7–6.0 KB` of 6502 code**, fitting unsplit 80-column overlays cleanly without floppy double-reload thrashing.
 
 * **`huff_ascii` `ALIGN 256` Page-Tail Packing (`253 / 256` B usable inside `256` B page):**
@@ -332,20 +332,20 @@ available if any overlay later needs further splitting below `5,120` B:
 | Overlay ID | Constant | `MORIA8.DAT` Slot (`DAT_ID_*`) | Binary Filename | Measured Size (`< 5,120` B) | End Address (`< 0x6A00`) | Free Slack | Role |
 | ---: | --- | ---: | --- | ---: | ---: | ---: | --- |
 | `0` | `OVL_NONE` | — | — | — | — | — | No overlay mapped (startup/initial BSS state) |
-| `1` | `OVL_START` | `0` (`DAT_ID_OVL_START`) | `ovl_start.ovl` | `3,819` B | `0x64EB` | `1,301` B | Character creation & new-game startup |
+| `1` | `OVL_START` | `0` (`DAT_ID_OVL_START`) | `ovl_start.ovl` | `3,906` B | `0x6542` | `1,214` B | Character creation, chargen flavour-init (`id_init_flavours`), & new-game startup |
 | `2` | `OVL_TOWN` | `1` (`DAT_ID_OVL_TOWN`) | `ovl_town.ovl` | `4,662` B | `0x6836` | `458` B | Town stores 0–6 & town services |
 | `3` | `OVL_DEATH` | `2` (`DAT_ID_OVL_DEATH`) | `ovl_death.ovl` | `3,311` B | `0x62EF` | `1,809` B | Death/victory/royal/monster recall & high-score UI |
 | `4` | `OVL_GEN` | `3` (`DAT_ID_OVL_GEN`) | `ovl_gen.ovl` | `4,451` B | `0x6763` | `669` B | Town & dungeon level generation (`cpm_char_shadow` reuse) |
 | `5` | `OVL_HELP` | `4` (`DAT_ID_OVL_HELP`) | `ovl_help.ovl` | `3,029` B | `0x61D5` | `2,091` B | In-game help & wizard screens |
 | `6` | `OVL_UI` | `5` (`DAT_ID_OVL_UI`) | `ovl_ui.ovl` | `3,061` B | `0x61F5` | `2,059` B | Character sheet, equipment/inventory view, look/inspect, `+15` `tramp_ui_select_display` (`OVL_ENTRY_VEC_5`) |
-| `7` | `OVL_ITEMS` | `6` (`DAT_ID_OVL_ITEMS`) | `ovl_items.ovl` | `3,433` B | `0x6369` | `1,687` B | Consumables dispatch, 45 potion handlers, `+18` `tramp_items_world_cold` (`OVL_ENTRY_VEC_6`: Word of Destruction & Earthquake) |
+| `7` | `OVL_ITEMS` | `6` (`DAT_ID_OVL_ITEMS`) | `ovl_items.ovl` | `3,495` B | `0x63A7` | `1,625` B | Consumables dispatch, 45 potion handlers, `+18` `tramp_items_world_cold` (`OVL_ENTRY_VEC_6`: Word of Destruction & Earthquake) |
 | `8` | `OVL_SPELL` | `7` (`DAT_ID_OVL_SPELL`) | `ovl_spell.ovl` | `3,462` B | `0x6386` | `1,658` B | Mage/priest spell selection (`?` modal), study (`f`) & casting core |
-| `9` | `OVL_MODAL` | `8` (`DAT_ID_OVL_MODAL`) | `ovl_modal.ovl` | `4,810` B | `0x68CA` | `310` B | Modal helpers (`re_equip`, `pflags`, `run_init`, melee, XP, level pop) |
+| `9` | `OVL_MODAL` | `8` (`DAT_ID_OVL_MODAL`) | `ovl_modal.ovl` | `4,821` B | `0x68D5` | `299` B | Modal helpers (`re_equip`, `pflags`, `run_init`, melee, XP, level pop) |
 | `10` | `OVL_CHEST` | `9` (`DAT_ID_OVL_CHEST`) | `ovl_chest.ovl` | `2,670` B | `0x606E` | `2,450` B | Chest disarm, unlock, loot generation |
 | `11` | `OVL_HOME` | `10` (`DAT_ID_OVL_HOME`) | `ovl_home.ovl` | `855` B | `0x5957` | `4,265` B | Player Home storage (`STORE_HOME`) |
-| `12` | `OVL_STORAGE` | `11` (`DAT_ID_OVL_STORAGE`) | `ovl_storage.ovl` | `3,089` B | `0x6211` | `2,031` B | Save/load menus & Disk Setup (`A:`–`P:`) |
+| `12` | `OVL_STORAGE` | `11` (`DAT_ID_OVL_STORAGE`) | `ovl_storage.ovl` | `3,078` B | `0x6206` | `2,042` B | Save/load menus & Disk Setup (`A:`–`P:`) |
 | `13` | `OVL_TITLE` | `12` (`DAT_ID_OVL_TITLE`) | `ovl_title.ovl` | `626` B | `0x5872` | `4,494` B | Title menu & artwork streaming |
-| `14` | `OVL_LEGAL` | `13` (`DAT_ID_OVL_LEGAL`) | `ovl_legal.ovl` | `1,770` B | `0x5CEA` | `3,350` B | License & source-offer viewer (Title `A` / Help `L` / `v`) |
+| `14` | `OVL_LEGAL` | `13` (`DAT_ID_OVL_LEGAL`) | `ovl_legal.ovl` | `1,774` B | `0x5CEE` | `3,346` B | License & source-offer viewer (Title `A` / Help `L` / `v`) |
 | `15` | `OVL_ITEMS_EFF` | `20` (`DAT_ID_OVL_ITEMS_EFF`) | `ovl_items_eff.ovl` | `4,805` B | `0x68C5` | `315` B | Scroll/wand/staff effects, level spawn, identify, teleport & summon |
 | `16` | `OVL_SPELL_EFF` | `21` (`DAT_ID_OVL_SPELL_EFF`) | `ovl_spell_eff.ovl` | `4,735` B | `0x687F` | `385` B | All 62 spell/prayer effects & area/bolt/ball magic |
 | `17` | `OVL_ACTIONS` | `22` (`DAT_ID_OVL_ACTIONS`) | `ovl_actions.ovl` | `4,648` B | `0x6828` | `472` B | Dungeon feature/door/trap/bash/tunnel actions & 18 traps |
@@ -464,8 +464,8 @@ contiguous record-aligned file opened once on `fcb_dat` (pinned to
     all 19 overlay slots (`0..13`, `20..24`) satisfy `byte_len <= 5,120`
     (`rec_count <= 40`).
   * RO asset slots `14..19` are mandatory across all milestones (`m0..all`).
-  * **Measured M5 `MORIA8.DAT` Container (`build/cpm/MORIA8.DAT`):** **`97,280` B**
-  (`760 × 128` B CP/M records: `2` header records + `758` payload records across
+  * **Measured M5 `MORIA8.DAT` Container (`build/cpm/MORIA8.DAT`):** **`97,536` B**
+  (`762 × 128` B CP/M records: `2` header records + `760` payload records across
   `25/25` active slots; `16/41` TOC slots free). Data asset slots `14..19`:
   `14` `MONSTER.CAT` (`17,920` B / `140` recs), `15` `ITEM.CAT` (`7,478` B / `59` recs),
   `16` `HUFF_STREAM` (`3,216` B / `26` recs), `17` `TITLE.ART` (`617` B / `5` recs),
@@ -475,13 +475,13 @@ contiguous record-aligned file opened once on `fcb_dat` (pinned to
 
 `make diskcpm` (`make -C platforms/z80/cpm disk`) runs `tools/make_cpm_disk.py`
 and produces four verified release media images from `build/cpm/MORIA8.COM`
-(`21,598` B), `build/cpm/MORIA8.DAT` (`97,280` B), `data/LICENSE`,
+(`21,663` B), `build/cpm/MORIA8.DAT` (`97,536` B), `data/LICENSE`,
 `data/SOURCE-OFFER`, and `version.json['cpm']`:
 
 | Deliverable | Format / Target | Measured M5 Size | Contents & Free Space | Round-Trip Verification |
 | --- | --- | ---: | --- | --- |
-| `build/moria8-cpm.zip` | RunCPM / generic CP/M 2.2 bundle | **`79,562` B** (`121,341` B raw) | `5` files: `MORIA8.COM` (`21,598` B), `MORIA8.DAT` (`97,280` B), CRLF `LICENSE` (`359` B), CRLF `SOURCE-OFFER` (`521` B), CRLF `README.TXT` (`1,583` B) | CRC (`testzip`) + byte-for-byte extraction check |
-| `build/moria8-cpm-kaypro2.dsk` | Kaypro II SS/DD CP/M 2.2 (`kpii`: 40 tracks × 10×512 B, zero Track 0, 1 KB blocks, 64 dir entries) | **`204,800` B** | `4` files (`10/64` dir entries): `MORIA8.COM`, `MORIA8.DAT`, CRLF+`0x1A` `LICENSE.TXT`, `SRCOFFR.TXT`; `121/195` blocks used, **`74` blocks (`75,776` B) free** | Pure-Python independent `kpii` reader checks extents, zeroed Track 0, directory blocks 0–1 (`0xE5`), no duplicate blocks, `>= 60` free blocks |
+| `build/moria8-cpm.zip` | RunCPM / generic CP/M 2.2 bundle | **`79,751` B** (`121,666` B raw) | `5` files: `MORIA8.COM` (`21,663` B), `MORIA8.DAT` (`97,536` B), CRLF `LICENSE` (`359` B), CRLF `SOURCE-OFFER` (`521` B), CRLF `README.TXT` (`1,587` B) | CRC (`testzip`) + byte-for-byte extraction check |
+| `build/moria8-cpm-kaypro2.dsk` | Kaypro II SS/DD CP/M 2.2 (`kpii`: 40 tracks × 10×512 B, zero Track 0, 1 KB blocks, 64 dir entries) | **`204,800` B** | `4` files (`10/64` dir entries): `MORIA8.COM`, `MORIA8.DAT`, CRLF+`0x1A` `LICENSE.TXT`, `SRCOFFR.TXT`; `122/195` blocks used, **`73` blocks (`74,752` B) free** | Pure-Python independent `kpii` reader checks extents, zeroed Track 0, directory blocks 0–1 (`0xE5`), no duplicate blocks, `>= 60` free blocks |
 | `build/moria8-cpm-kaypro4.dsk` | Kaypro 4 DS/DD CP/M 2.2 (`kpiv`: 80 tracks × 10×512 B, zero Track 0, 2 KB blocks, 64 dir entries) | **`409,600` B** | `4` files (`6/64` dir entries): `MORIA8.COM`, `MORIA8.DAT`, CRLF+`0x1A` `LICENSE.TXT`, `SRCOFFR.TXT`; `63/197` blocks used, **`134` blocks (`274,432` B) free** | Pure-Python independent `kpiv` reader checks extents, zeroed Track 0, directory block 1 (`0xE5`), no duplicate blocks, `>= 120` free blocks |
 | `build/moria8-cpm-c128.d71` | Commodore 128 CP/M Plus 1571 DS/DD | **`349,696` B** | `4` files (`6` dir entries): `MORIA8.COM`, `MORIA8.DAT`, CRLF+`0x1A` `LICENSE.TXT`, `SRCOFFR.TXT`; `63/170` 2 KB blocks used, **`107` blocks (`214 KB`) free** | Formatted with `cformat -2`, populated with pinned `mist64/ctools` (`tools/ensure_ctools.sh` sha256 `317f84c4...`), and verified via `ctools g` byte extraction |
 
@@ -495,5 +495,5 @@ and produces four verified release media images from `build/cpm/MORIA8.COM`
 | **Built Memory Contract Gate** | `make testcpm-memory-contract` (`make -C platforms/z80/cpm test-memory-contract`) | Verifies `MORIA8.COM`, `main.sym`, all `19` built `ovl_*.ovl` + `ovl_*.sym`, `MORIA8.DAT` 25-slot TOC parity, and Z80 `INCLUDE` / cross-overlay rules for `CPM_MILESTONE ?= m5` |
 | **Shipping Packaging Gate** | `make diskcpm` (`make -C platforms/z80/cpm disk`) | Builds `MORIA8.COM` + `MORIA8.DAT`, ensures `ctools`/`cformat`, packages `.zip` / `kaypro2.dsk` / `kaypro4.dsk` / `c128.d71`, and verifies all four round-trips |
 | **Headless Runner & 27-Scenario Suite** | `make testcpm` (`make testcpm-runtime`, `make testcpm-smoke`) | Runs `testcpm-memory-contract`, `make -C tools/cpm_runner test` (`sjasmplus` + `RunCPM` + `cpm_runner` dual parity, strict BDOS `IX`/`IY` clobber + stack probe, `0xD100` TPA guard, ADM-3A screen parser), and all `27` scenarios in `platforms/z80/cpm/harness_smoke.py` |
-| **Catalog & Memory Budget Reports** | `python3 -B tools/check_item_catalog_ports.py --port cpm`<br>`python3 -B tools/report_memory_budgets.py --port cpm` | Verifies all `361/361` `'ITM2'` items in `MORIA8.DAT` (`ITEM.CAT`) + built resident tables and reports TPA/overlay/media headroom (`MORIA8.COM` `162` B free; `Resident BSS` `308` B free; zero tight-budget `< 64` B watchlist warnings) |
+| **Catalog & Memory Budget Reports** | `python3 -B tools/check_item_catalog_ports.py --port cpm`<br>`python3 -B tools/report_memory_budgets.py --port cpm` | Verifies all `361/361` `'ITM2'` items in `MORIA8.DAT` (`ITEM.CAT`) + built resident tables and reports TPA/overlay/media headroom (`MORIA8.COM` `97` B free; `Resident BSS` `308` B free; `ovl_home.ovl` `4,265` B free; zero tight-budget `< 64` B watchlist warnings) |
 | **Root Full Regression & Playtest** | `make test` (`test-stage-cpm`), `make playtest-check`, `make playtest-gate TARGETS=cpm` | Includes CP/M contract + runtime (`testcpm`) alongside the 7 6502 ports in `make test`, ABI/unit parity in `playtest-check`, and live Z80 bot runs over `cpm_runner --control` in `playtest-gate TARGETS=cpm` |

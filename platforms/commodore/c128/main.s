@@ -3276,7 +3276,9 @@ c128_stack_guard_substage:  .byte 0
 #import "../../../core/6502/math.s"
 #import "../../../core/6502/dungeon_tunnel_guard.s"
 #define PLAYER_STAT_HELPERS_EXTERNAL
+#define PLAYER_GAIN_STAT_HELPERS_EXTERNAL
 #import "../../../core/6502/player.s"
+#undef PLAYER_GAIN_STAT_HELPERS_EXTERNAL
 #undef PLAYER_STAT_HELPERS_EXTERNAL
 #import "../../../core/6502/ui_messages.s"
 .segment C128Bank1MsgHistory
@@ -4099,6 +4101,7 @@ recall_prompt_str:
     .text "Recall which? " ; .byte 0
 #import "../../../core/6502/player_adjust_equipment_stat.s"
 .segment C128ResidentPlay
+#import "../../../core/6502/player_gain_stat_helpers.s"
 #import "../../../core/6502/turn.s"
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_assert:
@@ -4794,6 +4797,7 @@ program_end:
 .assert "Ego AC table stays in Bank 0 resident image below $AF00", ego_ac_bonus >= $1c01 && ego_ac_bonus < program_end && program_end <= $AF00, true
 .assert "Digging-tool ego tail stays in resident PLAY payload", roll_tool_ego_check >= c128_resident_play_body && roll_tool_ego_check < c128_resident_play_end, true
 .assert "Tool ego prefix printer stays in resident PLAY payload", put_tool_ego_prefix >= c128_resident_play_body && put_tool_ego_prefix < c128_resident_play_end, true
+.assert "Gain-stat helpers stay in resident PLAY payload", player_step_healthy_sum_y >= c128_resident_play_body && player_step_healthy_sum_y < c128_resident_play_end && player_apply_stat_delta_y >= c128_resident_play_body && player_apply_stat_delta_y < c128_resident_play_end, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 .assert "Overlay state block starts in resident Bank0 RAM", overlay_state_block_start >= c128_cache_state_start && overlay_state_block_start < $e000, true

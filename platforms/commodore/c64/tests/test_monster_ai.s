@@ -519,9 +519,13 @@ test_start:
     sta $027d
     sta $027e
 
-    // Set player dungeon level to 1
+    // Set player dungeon level to 1 and mark tier 1 active (embedded roster;
+    // leaving current_tier=0 makes Test 22's summon call tier_load_disk against
+    // an unattached drive, whose serial timeout is cycle-phase sensitive — see
+    // test_monster_magic.s:179-184).
     lda #1
     sta zp_player_dlvl
+    sta current_tier
 
     // Clear player speed state read by the AI tick's player-speed fold:
     // haste/slow timer (signed, 0 = inactive) and equipment pflags.

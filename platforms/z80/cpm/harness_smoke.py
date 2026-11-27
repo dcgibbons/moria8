@@ -2245,6 +2245,19 @@ def scenario_save_v2_roundtrip_and_checksum(
             assert cli1.read_z80_state()["current_overlay"] == OVL_TITLE
             assert list(workdir.glob("*.TMP")) == []
 
+            # Reload slot 2, then save slot 4 (SAVE3.SAV) at base=3 + cursed Ring of Weakness (-2) -> res=0xFE (-2)
+            cli1.send_keys("L2")
+            cli1.run_idle()
+            cli1.write_mem(syms["player_data"] + 54, bytes([cur_plf]))
+            _write_mem(cli1, syms["player_data"] + 21, [3])
+            _write_mem(cli1, syms["player_data"] + 27, [3])
+            _write_mem(cli1, syms["player_stat_res"], [0])
+            _set_inv_item(cli1, syms, 29, 67, qty=1, p1=(-2) & 0xFF, flags=0x02, ego=0x40)
+            cli1.send_keys("S4")
+            cli1.run_idle()
+            assert cli1.read_z80_state()["current_overlay"] == OVL_TITLE
+            assert list(workdir.glob("*.TMP")) == []
+
             # Already at Title -> create Char B ("Other", Mage) at same LV:1 DL:0 -> kick Armory -> same-session Load Char A
             _create_human_warrior(cli1, name="Other", class_key="b")
             _clear_all_monsters(cli1, syms)
@@ -2374,13 +2387,13 @@ def scenario_save_v2_roundtrip_and_checksum(
             assert (cli2.read_mem(syms["player_data"] + 54, 1)[0] & 0x30) == 0, "PLF_SEARCHING|RESTING not cleared"
             assert cli2.read_mem(syms["zp_run_dir"], 1)[0] == 0xFF, "zp_run_dir not reset to 0xFF"
 
-            # Load slot 3 (SAVE2.SAV) -> verify 118-cap residual +5 reconstructed so removing Ring keeps STR=118
+            # Load slot 3 (SAVE2.SAV) -> verify 118-cap +50 MON-044 residual reconstructed so removing Ring keeps STR=118
             cli2.send_keys("QY")
             cli2.run_idle()
             cli2.send_keys("L3")
             cli2.run_idle()
-            assert cli2.read_mem(syms["player_stat_res"], 1)[0] == 5, (
-                f"Save V2 load failed to reconstruct STR +5 residual: res={cli2.read_mem(syms['player_stat_res'], 1)[0]}"
+            assert cli2.read_mem(syms["player_stat_res"], 1)[0] == 50, (
+                f"Save V2 load failed to reconstruct STR +50 MON-044 residual: res={cli2.read_mem(syms['player_stat_res'], 1)[0]}"
             )
             eq_ids = cli2.read_mem(syms["inv_item_id"] + 22, 11)
             ring_ord = sum(1 for i in range(7) if eq_ids[i] != 0xFF)
@@ -2389,6 +2402,32 @@ def scenario_save_v2_roundtrip_and_checksum(
             _dismiss_more(cli2)
             assert cli2.read_mem(syms["player_data"] + 27, 1)[0] == 118, (
                 "Removing +5 STR ring at 118 cap dropped PL_STR_CUR below 118"
+            )
+            assert cli2.read_mem(syms["player_stat_res"], 1)[0] == 0, (
+                f"Removing +5 STR ring left non-zero residual: {cli2.read_mem(syms['player_stat_res'], 1)[0]}"
+            )
+
+            # Load slot 4 (SAVE3.SAV) -> verify floor-3 cursed Ring (-2) reconstructs res=0xFE and takeoff clears to (3, 0)
+            cli2.send_keys("QY")
+            cli2.run_idle()
+            cli2.send_keys("L4")
+            cli2.run_idle()
+            assert cli2.read_mem(syms["player_data"] + 27, 1)[0] == 3, (
+                f"Save V2 load corrupted floor-3 PL_STR_CUR: {cli2.read_mem(syms['player_data'] + 27, 1)[0]}"
+            )
+            assert cli2.read_mem(syms["player_stat_res"], 1)[0] == 0xFE, (
+                f"Save V2 load failed to reconstruct floor-3 -2 MON-044 residual: res={cli2.read_mem(syms['player_stat_res'], 1)[0]}"
+            )
+            eq_ids = cli2.read_mem(syms["inv_item_id"] + 22, 11)
+            ring_ord = sum(1 for i in range(7) if eq_ids[i] != 0xFF)
+            cli2.send_keys("t" + chr(ord("a") + ring_ord))
+            cli2.run_idle()
+            _dismiss_more(cli2)
+            assert cli2.read_mem(syms["player_data"] + 27, 1)[0] == 3, (
+                "Removing cursed -2 STR ring at floor 3 altered PL_STR_CUR"
+            )
+            assert cli2.read_mem(syms["player_stat_res"], 1)[0] == 0, (
+                f"Removing cursed -2 STR ring left non-zero residual: {cli2.read_mem(syms['player_stat_res'], 1)[0]}"
             )
 
             _quit_game_and_title(cli2)
@@ -3495,6 +3534,7 @@ def scenario_turn_regen_poison_repeat(
 
         # 5. TRN-006 CJS Auto-Run in Town (West from (31,18) along open row y=18) + rendered '@' check!
         _clear_all_monsters(cli, syms)
+        _write_mem(cli, syms["zp_mon_count"], [26])  # >= MAX_MONSTERS - CAT_GEN_RESERVE: prevent 1-in-160 MON-039 wanderer interrupting deterministic auto-run
         _write_mem(cli, syms["abi_rng_seed"], [0x11, 0x22, 0x33, 0x44])
         st_r0 = cli.read_z80_state()
         t_r0 = st_r0["turn"]
@@ -3512,6 +3552,7 @@ def scenario_turn_regen_poison_repeat(
 
         # 5b. TRN-006 Round 2 regressions: cardinal 45-deg side stop, diagonal NE flank break, & blind run
         _clear_all_monsters(cli, syms)
+        _write_mem(cli, syms["zp_mon_count"], [26])  # >= MAX_MONSTERS - CAT_GEN_RESERVE: prevent 1-in-160 MON-039 wanderer interrupting deterministic auto-run
         _write_mem(cli, syms["abi_rng_seed"], [0x11, 0x22, 0x33, 0x44])
         # (a) Cardinal corridor at y=18 flanked by walls at y=17,19 with North side opening at (7,17): must stop at (6,18)
         for rx in range(2, 12):
@@ -3550,6 +3591,8 @@ def scenario_turn_regen_poison_repeat(
         assert (cli.read_z80_state()["player_x"], cli.read_z80_state()["player_y"]) == (5, 18), (
             f"diagonal NE open run must stop at exact (5,18) on -2 NW flank break: {cli.read_z80_state()}"
         )
+        _clear_all_monsters(cli, syms)
+        _write_mem(cli, syms["zp_mon_count"], [26])  # >= MAX_MONSTERS - CAT_GEN_RESERVE: prevent 1-in-160 MON-039 wanderer interrupting NE auto-run
         # Adding (4,17) wall extends NE run cleanly to (6,17) where NW=(5,16)/N=(6,16) open
         _set_map_tile(cli, 4, 17, 0x10 | 0x08 | 0x04)
         _write_mem(cli, syms["abi_player_x"], [4, 19])
@@ -3561,6 +3604,7 @@ def scenario_turn_regen_poison_repeat(
         )
         # Restore player at (20, 18) on clean floor for TRN-002 & 'X' swap checks
         _clear_all_monsters(cli, syms)
+        _write_mem(cli, syms["zp_mon_count"], [26])  # >= MAX_MONSTERS - CAT_GEN_RESERVE: prevent 1-in-160 MON-039 wanderer interrupting search mode
         _write_mem(cli, syms["abi_rng_seed"], [0x11, 0x22, 0x33, 0x44])
         _write_mem(cli, syms["abi_player_x"], [20, 18])
         _write_mem(cli, pl + 49, [20, 18])
@@ -4462,13 +4506,16 @@ def scenario_monster_ai_combat_and_drops(
         _write_mem(cli, syms["monster_table"], [px + 1, py, cr_t, 1, 0, 0x09, 0, 0, 0, 0, 0xFF, 0x7F])
         _write_mem(cli, syms["zp_mon_count"], [1])
         _write_mem(cli, syms["abi_mon_count"], [1])
-        cli.send_keys("5")
-        cli.run_idle()
-        _dismiss_more(cli)
-        m_low = _read_monster_slots(cli, syms)[0]
-        assert (m_low[1], m_low[2]) == (px + 1, py), (
-            f"MON-043 low-HP monster fled instead of holding ground: {m_low}"
-        )
+        for _ in range(8):
+            cli.send_keys("5")
+            cli.run_idle()
+            _dismiss_more(cli)
+            m_low = _read_monster_slots(cli, syms)[0]
+            assert (m_low[1], m_low[2]) == (px + 1, py), (
+                f"MON-043 low-HP monster fled instead of holding ground: {m_low}"
+            )
+            if cli.read_z80_state()["hp"] < 200:
+                break
         assert cli.read_z80_state()["hp"] < 200, "MON-043 adjacent low-HP monster failed to melee player"
 
         # Regression: CF_GROUP (0x20) wake preserves BC across _mc_cheb_dist_hl_de & wakes nearby groupmate
@@ -5158,6 +5205,204 @@ me_probe_start:
     LD   A, (cat_slot_id_lo)
     LD   (res_cat_full_id0), A
 
+    ; 3l. MON-044 VMS 18/xx equipment stepping, restore with gear, and de_statp drain bands
+    ; Case 1: 17 +3 -> 38 (18/20), -3 -> 17
+    LD   A, 17
+    LD   (player_data + PL_STR_CUR), A
+    XOR  A
+    LD   (player_stat_res), A
+    LD   C, STAT_STR
+    LD   A, 3
+    CALL player_step_equip_stat_c
+    LD   (res_m44_17p3), A
+    LD   A, (-3) & 0xFF
+    CALL player_step_equip_stat_c
+    LD   (res_m44_38m3), A
+
+    ; Case 2: 23 (18/05) - 1 -> 18 (19..27 -> 18 rule)
+    LD   A, 23
+    LD   (player_data + PL_STR_CUR), A
+    XOR  A
+    LD   (player_stat_res), A
+    LD   A, (-1) & 0xFF
+    CALL player_step_equip_stat_c
+    LD   (res_m44_23m1), A
+
+    ; Case 3: cap 118 +3 -> (118, res=30), -3 -> (118, res=0), +15 -> (118, res=127 sat)
+    LD   A, 118
+    LD   (player_data + PL_STR_CUR), A
+    XOR  A
+    LD   (player_stat_res), A
+    LD   A, 3
+    CALL player_step_equip_stat_c
+    LD   A, (player_stat_res)
+    LD   (res_m44_cap_p3_res), A
+    LD   A, (-3) & 0xFF
+    CALL player_step_equip_stat_c
+    LD   (res_m44_cap_m3_cur), A
+    LD   A, (player_stat_res)
+    LD   (res_m44_cap_m3_res), A
+    LD   A, 15
+    CALL player_step_equip_stat_c
+    LD   (res_m44_cap_sat_cur), A
+    LD   A, (player_stat_res)
+    LD   (res_m44_cap_sat_res), A
+
+    ; Case 3b: floor 3 res=-127 + (-5) saturates at 0x80 (-128)
+    LD   A, 3
+    LD   (player_data + PL_STR_CUR), A
+    LD   A, 0x81
+    LD   (player_stat_res), A
+    LD   A, (-5) & 0xFF
+    CALL player_step_equip_stat_c
+    LD   (res_m44_min_sat_cur), A
+    LD   A, (player_stat_res)
+    LD   (res_m44_min_sat_res), A
+
+    ; Case 4: restore with equipped +3 mod: base 18 -> (48, 0), base 118 -> (118, 30)
+    LD   A, 18
+    LD   (player_data + PL_STR_BASE), A
+    LD   A, 15
+    LD   (player_data + PL_STR_CUR), A
+    XOR  A
+    LD   (player_stat_res), A
+    LD   A, 3
+    LD   (player_eq_stat_mod), A
+    LD   A, STAT_STR
+    CALL player_restore_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    LD   (res_m44_rst18_cur), A
+    LD   A, (player_stat_res)
+    LD   (res_m44_rst18_res), A
+
+    LD   A, 118
+    LD   (player_data + PL_STR_BASE), A
+    LD   A, 116
+    LD   (player_data + PL_STR_CUR), A
+    XOR  A
+    LD   (player_stat_res), A
+    LD   A, STAT_STR
+    CALL player_restore_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    LD   (res_m44_rst118_cur), A
+    LD   A, (player_stat_res)
+    LD   (res_m44_rst118_res), A
+    XOR  A
+    LD   (player_eq_stat_mod), A
+
+    ; Case 5: de_statp cur==3 -> CF=0 unchanged; cur==18 -> cur=17 CF=1
+    LD   A, 3
+    LD   (player_data + PL_STR_CUR), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    RLA
+    AND  1
+    LD   (res_m44_d3_cf), A
+    LD   A, 18
+    LD   (player_data + PL_STR_CUR), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    LD   (res_m44_d18_cur), A
+
+    ; Case 6: de_statp 19..108 -> 4 trials at cur=100 (85..94) and cur=20 -> 18 floor
+    LD   B, 4
+    LD   HL, res_m44_d100
+.d100_lp:
+    PUSH BC
+    PUSH HL
+    LD   A, 100
+    LD   (player_data + PL_STR_CUR), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    POP  HL
+    LD   (HL), A
+    INC  HL
+    POP  BC
+    DJNZ .d100_lp
+
+    LD   A, 20
+    LD   (player_data + PL_STR_CUR), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    LD   (res_m44_d20_cur), A
+
+    ; Case 7: de_statp 109..118 (res=0) -> 4 trials at cur=115 (112..114) and cur=118 (115..117)
+    LD   B, 4
+    LD   HL, res_m44_d115
+.d115_lp:
+    PUSH BC
+    PUSH HL
+    LD   A, 115
+    LD   (player_data + PL_STR_CUR), A
+    XOR  A
+    LD   (player_stat_res), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    POP  HL
+    LD   (HL), A
+    INC  HL
+    POP  BC
+    DJNZ .d115_lp
+
+    LD   B, 4
+    LD   HL, res_m44_d118z
+.d118z_lp:
+    PUSH BC
+    PUSH HL
+    LD   A, 118
+    LD   (player_data + PL_STR_CUR), A
+    XOR  A
+    LD   (player_stat_res), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    POP  HL
+    LD   (HL), A
+    INC  HL
+    POP  BC
+    DJNZ .d118z_lp
+
+    ; Case 8: de_statp at cur=118, res=10 -> stays 118, res in 7..9
+    LD   A, 118
+    LD   (player_data + PL_STR_CUR), A
+    LD   A, 10
+    LD   (player_stat_res), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    LD   (res_m44_r10_cur), A
+    LD   A, (player_stat_res)
+    LD   (res_m44_r10_res), A
+
+    ; Case 9: de_statp at cur=118, res=1 -> loop up to 16 attempts until roll > 1 spills to 116..117, res=0
+    LD   B, 16
+.r1_lp:
+    PUSH BC
+    LD   A, 118
+    LD   (player_data + PL_STR_CUR), A
+    LD   A, 1
+    LD   (player_stat_res), A
+    LD   A, STAT_STR
+    CALL player_drain_stat_a
+    LD   A, (player_data + PL_STR_CUR)
+    CP   118
+    JR   C, .r1_spilled
+    POP  BC
+    DJNZ .r1_lp
+    XOR  A
+    LD   (res_m44_r1_cur), A
+    JR   .r1_done
+.r1_spilled:
+    POP  BC
+    LD   (res_m44_r1_cur), A
+    LD   A, (player_stat_res)
+    LD   (res_m44_r1_res), A
+.r1_done:
+
     LD   A, 0xAA
     LD   (res_me_ok), A
     JR   me_exit
@@ -5199,6 +5444,30 @@ res_fatal_flags:  DB 0
 res_halfling_war_fos: DB 0
 res_halfling_war_stl: DB 0
 res_cat_full_id0: DB 0
+res_m44_17p3:     DB 0
+res_m44_38m3:     DB 0
+res_m44_23m1:     DB 0
+res_m44_cap_p3_res: DB 0
+res_m44_cap_m3_cur: DB 0
+res_m44_cap_m3_res: DB 0
+res_m44_cap_sat_cur: DB 0
+res_m44_cap_sat_res: DB 0
+res_m44_min_sat_cur: DB 0
+res_m44_min_sat_res: DB 0
+res_m44_rst18_cur: DB 0
+res_m44_rst18_res: DB 0
+res_m44_rst118_cur: DB 0
+res_m44_rst118_res: DB 0
+res_m44_d3_cf:    DB 0
+res_m44_d18_cur:  DB 0
+res_m44_d100:     DS 4, 0
+res_m44_d20_cur:  DB 0
+res_m44_d115:     DS 4, 0
+res_m44_d118z:    DS 4, 0
+res_m44_r10_cur:  DB 0
+res_m44_r10_res:  DB 0
+res_m44_r1_cur:   DB 0
+res_m44_r1_res:   DB 0
 
     SAVEBIN "{probe_com}", RESIDENT_BASE, $ - RESIDENT_BASE
 """,
@@ -5254,6 +5523,28 @@ res_cat_full_id0: DB 0
             assert (cli.read_mem(psyms["res_fatal_flags"], 1)[0] & 0x01) != 0, "1-HP player survived Dragon breath"
             cause = cli.read_mem(psyms["death_cause_buf"], 32).split(b"\x00", 1)[0].decode("ascii", "replace")
             assert "Dragon" in cause, f"Expected Dragon in death_cause_buf, got {cause!r}"
+            # MON-044 Z80 assertions
+            assert cli.read_mem(psyms["res_m44_17p3"], 1)[0] == 38, "MON-044 17+3 expected 38 (18/20)"
+            assert cli.read_mem(psyms["res_m44_38m3"], 1)[0] == 17, "MON-044 38-3 expected 17"
+            assert cli.read_mem(psyms["res_m44_23m1"], 1)[0] == 18, "MON-044 18/05 (23)-1 expected 18 (19..27 rule)"
+            assert cli.read_mem(psyms["res_m44_cap_p3_res"], 1)[0] == 30, "MON-044 cap 118+3 expected res=30"
+            assert cli.read_mem(psyms["res_m44_cap_m3_cur"], 1)[0] == 118 and cli.read_mem(psyms["res_m44_cap_m3_res"], 1)[0] == 0
+            assert cli.read_mem(psyms["res_m44_cap_sat_cur"], 1)[0] == 118 and cli.read_mem(psyms["res_m44_cap_sat_res"], 1)[0] == 127
+            assert cli.read_mem(psyms["res_m44_min_sat_cur"], 1)[0] == 3 and cli.read_mem(psyms["res_m44_min_sat_res"], 1)[0] == 0x80
+            assert cli.read_mem(psyms["res_m44_rst18_cur"], 1)[0] == 48 and cli.read_mem(psyms["res_m44_rst18_res"], 1)[0] == 0
+            assert cli.read_mem(psyms["res_m44_rst118_cur"], 1)[0] == 118 and cli.read_mem(psyms["res_m44_rst118_res"], 1)[0] == 30
+            assert cli.read_mem(psyms["res_m44_d3_cf"], 1)[0] == 0, "de_statp at cur=3 must return CF=0"
+            assert cli.read_mem(psyms["res_m44_d18_cur"], 1)[0] == 17, "de_statp at cur=18 expected 17"
+            d100 = list(cli.read_mem(psyms["res_m44_d100"], 4))
+            assert all(85 <= v <= 94 for v in d100), f"de_statp at 100 out of [85..94]: {d100}"
+            assert cli.read_mem(psyms["res_m44_d20_cur"], 1)[0] == 18, "de_statp at cur=20 must floor at 18"
+            d115 = list(cli.read_mem(psyms["res_m44_d115"], 4))
+            assert all(112 <= v <= 114 for v in d115), f"de_statp at 115 out of [112..114]: {d115}"
+            d118z = list(cli.read_mem(psyms["res_m44_d118z"], 4))
+            assert all(115 <= v <= 117 for v in d118z), f"de_statp at 118 (res=0) out of [115..117]: {d118z}"
+            assert cli.read_mem(psyms["res_m44_r10_cur"], 1)[0] == 118 and 7 <= cli.read_mem(psyms["res_m44_r10_res"], 1)[0] <= 9
+            r1_cur = cli.read_mem(psyms["res_m44_r1_cur"], 1)[0]
+            assert r1_cur in (116, 117) and cli.read_mem(psyms["res_m44_r1_res"], 1)[0] == 0, f"de_statp res=1 spill bad: cur={r1_cur}"
             assert cli.read_stack_canary() == STACK_CANARY_BYTES
             assert cli.close() == 0
         finally:
@@ -5626,6 +5917,82 @@ def scenario_item_mgt_ranged_throw_and_egos(
         cli.run_idle()
         assert cli.read_z80_state()["light_rad"] == 1, "Equipped Brass Lantern must set light_rad == 1"
 
+        # MON-044 live production wear/takeoff test via OVL_ITEM_MGT -> OVL_MODAL -> player_step_equip_stat_c:
+        # Clear rings, verify STR 17 +3 -> 38 (18/20), CON 18 +8 -> 98 (18/80) crossing con_adj>=94 (+MHP),
+        # takeoff back to (17, 18) lowering MHP, and floor 3 -2 -> (cur=3, res=0xFE) -> takeoff (cur=3, res=0).
+        cli.write_mem(syms["inv_item_id"], bytes([0xFF] * 22))
+        _write_mem(cli, syms["inv_item_id"] + 29, [0xFF])
+        _write_mem(cli, syms["inv_item_id"] + 31, [0xFF])
+        _write_mem(cli, syms["player_eq_stat_mod"], [0] * 6)
+        _write_mem(cli, syms["player_stat_res"], [0] * 6)
+        _write_mem(cli, syms["player_data"] + 21, [17, 12, 12, 12, 18, 12])  # BASE: STR=17, CON=18
+        _write_mem(cli, syms["player_data"] + 27, [17, 12, 12, 12, 18, 12])  # CUR:  STR=17, CON=18
+        _set_inv_item(cli, syms, 0, 54, qty=1, p1=3, flags=0x02, ego=0x40)   # Ring of Strength (+3) at 'a'
+        _set_inv_item(cli, syms, 1, 56, qty=1, p1=8, flags=0x02, ego=0x40)   # Ring of Gain CON (+8) at 'b'
+        _set_inv_item(cli, syms, 2, 67, qty=1, p1=((-2) & 0xFF), flags=0x02, ego=0x40)  # Ring of Weakness (-2)
+        cli.send_keys("wa")  # wear Ring of Strength (+3) -> recalcs MHP at CON=18, STR 17 -> 38
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(syms["player_data"] + 27, 1)[0] == 38, "MON-044 live wear Ring+3 from STR 17 expected 38"
+        mhp_con18 = cli.read_z80_state()["mhp"]
+        cli.send_keys("wa")  # wear Ring of Gain CON (+8) -> CON 18 -> 98 (con_adj 2->3) & MHP rises
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(syms["player_data"] + 31, 1)[0] == 98, "MON-044 live wear Ring+8 from CON 18 expected 98"
+        mhp_con98 = cli.read_z80_state()["mhp"]
+        assert mhp_con98 > mhp_con18, f"MON-044 live CON 18->98 did not raise MHP: {mhp_con18} -> {mhp_con98}"
+        # Take off both rings
+        eq_now = cli.read_mem(syms["inv_item_id"] + 22, 11)
+        r2_ord = sum(1 for i in range(9) if eq_now[i] != 0xFF)
+        r1_ord = sum(1 for i in range(7) if eq_now[i] != 0xFF)
+        cli.send_keys("t" + chr(ord("a") + r2_ord))
+        cli.run_idle()
+        _dismiss_more(cli)
+        cli.send_keys("t" + chr(ord("a") + r1_ord))
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(syms["player_data"] + 27, 1)[0] == 17 and cli.read_mem(syms["player_stat_res"], 1)[0] == 0
+        assert (
+            cli.read_mem(syms["player_data"] + 31, 1)[0] == 18
+            and cli.read_mem(syms["player_stat_res"] + 4, 1)[0] == 0
+            and mhp_con98 - cli.read_z80_state()["mhp"] == 19
+        )
+        # Floor 3 -2 -> (3, 0xFE) -> takeoff -> (3, 0)
+        _write_mem(cli, syms["player_data"] + 21, [3])
+        _write_mem(cli, syms["player_data"] + 27, [3])
+        _write_mem(cli, syms["player_stat_res"], [0])
+        cli.send_keys("wa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(syms["player_data"] + 27, 1)[0] == 3 and cli.read_mem(syms["player_stat_res"], 1)[0] == 0xFE
+        cli.send_keys("t" + chr(ord("a") + sum(1 for i in range(7) if cli.read_mem(syms["inv_item_id"] + 22, 11)[i] != 0xFF)))
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(syms["player_data"] + 27, 1)[0] == 3 and cli.read_mem(syms["player_stat_res"], 1)[0] == 0
+
+        # Regression (ovl_modal JP PO overflow recovery): old_mod == -128 (0x80) at base=118 -> cur=3, res=-103;
+        # equipping +5 STR ring makes new - old overflow signed 8-bit, undoing -128 in two +64 steps + 5 -> (118, 50)
+        cli.write_mem(syms["inv_item_id"], bytes([0xFF] * 22))
+        _set_inv_item(cli, syms, 0, 54, qty=1, p1=5, flags=0x02, ego=0x40)  # Ring of Strength (+5) at 'a'
+        _write_mem(cli, syms["player_data"] + 21, [118])
+        _write_mem(cli, syms["player_data"] + 27, [3])
+        _write_mem(cli, syms["player_stat_res"], [0x99])     # -103 residual from -128 stepping off 118
+        _write_mem(cli, syms["player_eq_stat_mod"], [0x80])  # -128
+        cli.send_keys("wa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert (
+            cli.read_mem(syms["player_data"] + 27, 1)[0] == 118
+            and cli.read_mem(syms["player_stat_res"], 1)[0] == 50
+            and cli.read_mem(syms["player_eq_stat_mod"], 1)[0] == 5
+        ), (
+            "ovl_modal JP PO old_mod=-128 overflow recovery failed: "
+            f"cur={cli.read_mem(syms['player_data'] + 27, 1)[0]} res={cli.read_mem(syms['player_stat_res'], 1)[0]}"
+        )
+        _write_mem(cli, syms["inv_item_id"] + 29, [0xFF])
+        _write_mem(cli, syms["player_eq_stat_mod"], [0] * 6)
+        _write_mem(cli, syms["player_stat_res"], [0] * 6)
+
         # Stage Arrow (240) at slot 0 and test 'd' drop ('da')
         _set_inv_item(cli, syms, 0, 240, qty=2, flags=0x02, ego=0)
         cli.send_keys("da")
@@ -5835,6 +6202,140 @@ def scenario_items_potions_scrolls_wands_staves(
         cli.run_idle()
         _dismiss_more(cli)
         assert cli.read_mem(syms["player_stat_res"], 1)[0] > 2, "Gain Strength ignored player_stat_res residual"
+        _write_mem(cli, pl_it + 21, [100])
+        _write_mem(cli, pl_it + 27, [118])
+        _write_mem(cli, syms["player_stat_res"], [126])
+        _set_inv_item(cli, syms, 0, 50, qty=1, flags=0x02)
+        cli.send_keys("qa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(pl_it + 27, 1)[0] == 118 and cli.read_mem(syms["player_stat_res"], 1)[0] == 127, (
+            f"Gain Strength wrapped instead of saturating at +127: res={cli.read_mem(syms['player_stat_res'], 1)[0]}"
+        )
+        # Resident player_restore_stat_a via Potion of Restore Strength (52) on residual-only drain at cur=118 (res 10 -> 50)
+        _set_inv_item(cli, syms, 29, 54, qty=1, p1=5, flags=0x02, ego=0x40)  # worn Ring of Strength (+5)
+        _write_mem(cli, syms["player_eq_stat_mod"], [5, 0, 0, 0, 0, 0])
+        _write_mem(cli, pl_it + 21, [118])
+        _write_mem(cli, pl_it + 27, [118])
+        _write_mem(cli, syms["player_stat_res"], [10])
+        _set_inv_item(cli, syms, 0, 52, qty=1, flags=0x02)  # Potion of Restore Strength
+        cli.send_keys("qa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(pl_it + 27, 1)[0] == 118 and cli.read_mem(syms["player_stat_res"], 1)[0] == 50, (
+            f"Resident Restore Strength failed 118 residual restore: res={cli.read_mem(syms['player_stat_res'], 1)[0]}"
+        )
+        # MON-044 Gain Strength (50) with worn stat-modifying equipment (5 cases)
+        def _mon044_healthy(base: int, eq_mod: int) -> tuple[int, int]:
+            c = max(3, min(118, base))
+            r = 0
+            if eq_mod > 0:
+                for _ in range(eq_mod):
+                    if c == 3 and r < 0:
+                        r += 1
+                    elif c < 18:
+                        c += 1
+                    elif c < 118:
+                        c += 10
+                        if c > 118:
+                            r = c - 118
+                            c = 118
+                    else:
+                        r = min(127, r + 10)
+            elif eq_mod < 0:
+                for _ in range(-eq_mod):
+                    if c == 118:
+                        if r >= 10:
+                            r -= 10
+                        else:
+                            c = 108 + r
+                            r = 0
+                    elif c >= 28:
+                        c -= 10
+                    elif c >= 19:
+                        c = 18
+                    elif c >= 4:
+                        c -= 1
+                    else:
+                        if r > -128:
+                            r -= 1
+            return c, r
+
+        # Case A: base=16 + Ring (+3) [healthy 28] -> Gain STR -> base=17 -> cur=38 (18/20), res=0
+        _set_inv_item(cli, syms, 29, 54, qty=1, p1=3, flags=0x02, ego=0x40)
+        _write_mem(cli, syms["player_eq_stat_mod"], [3, 0, 0, 0, 0, 0])
+        _write_mem(cli, pl_it + 21, [16])
+        _write_mem(cli, pl_it + 27, [28])
+        _write_mem(cli, syms["player_stat_res"], [0])
+        _set_inv_item(cli, syms, 0, 50, qty=1, flags=0x02)
+        cli.send_keys("qa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(pl_it + 21, 1)[0] == 17 and cli.read_mem(pl_it + 27, 1)[0] == 38 and cli.read_mem(syms["player_stat_res"], 1)[0] == 0, (
+            f"Gain STR base 16 +3 ring mismatch: base={cli.read_mem(pl_it + 21, 1)[0]} cur={cli.read_mem(pl_it + 27, 1)[0]} res={cli.read_mem(syms['player_stat_res'], 1)[0]}"
+        )
+        # Case B: base=17 + Ring (+12) [healthy 118 + res 10] -> Gain STR -> base=18 -> cur=118, res=20
+        _set_inv_item(cli, syms, 29, 54, qty=1, p1=12, flags=0x02, ego=0x40)
+        _write_mem(cli, syms["player_eq_stat_mod"], [12, 0, 0, 0, 0, 0])
+        _write_mem(cli, pl_it + 21, [17])
+        _write_mem(cli, pl_it + 27, [118])
+        _write_mem(cli, syms["player_stat_res"], [10])
+        _set_inv_item(cli, syms, 0, 50, qty=1, flags=0x02)
+        cli.send_keys("qa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(pl_it + 21, 1)[0] == 18 and cli.read_mem(pl_it + 27, 1)[0] == 118 and cli.read_mem(syms["player_stat_res"], 1)[0] == 20, (
+            f"Gain STR base 17 +12 ring mismatch: base={cli.read_mem(pl_it + 21, 1)[0]} cur={cli.read_mem(pl_it + 27, 1)[0]} res={cli.read_mem(syms['player_stat_res'], 1)[0]}"
+        )
+        # Case C: drained base=16 + Ring (+3) [healthy 28, cur 22] -> Gain STR -> base=17 -> cur=32 (drain -6 kept)
+        _set_inv_item(cli, syms, 29, 54, qty=1, p1=3, flags=0x02, ego=0x40)
+        _write_mem(cli, syms["player_eq_stat_mod"], [3, 0, 0, 0, 0, 0])
+        _write_mem(cli, pl_it + 21, [16])
+        _write_mem(cli, pl_it + 27, [22])
+        _write_mem(cli, syms["player_stat_res"], [0])
+        _set_inv_item(cli, syms, 0, 50, qty=1, flags=0x02)
+        cli.send_keys("qa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        assert cli.read_mem(pl_it + 21, 1)[0] == 17 and cli.read_mem(pl_it + 27, 1)[0] == 32 and cli.read_mem(syms["player_stat_res"], 1)[0] == 0, (
+            f"Gain STR drained base 16 +3 ring mismatch: base={cli.read_mem(pl_it + 21, 1)[0]} cur={cli.read_mem(pl_it + 27, 1)[0]} res={cli.read_mem(syms['player_stat_res'], 1)[0]}"
+        )
+        # Case D: base=18 + cursed Ring (-2) [healthy 16] -> Gain STR -> matches _mon044_healthy(new_base, -2)
+        _set_inv_item(cli, syms, 29, 67, qty=1, p1=(-2) & 0xFF, flags=0x02, ego=0x40)
+        _write_mem(cli, syms["player_eq_stat_mod"], [(-2) & 0xFF, 0, 0, 0, 0, 0])
+        _write_mem(cli, pl_it + 21, [18])
+        _write_mem(cli, pl_it + 27, [16])
+        _write_mem(cli, syms["player_stat_res"], [0])
+        _set_inv_item(cli, syms, 0, 50, qty=1, flags=0x02)
+        cli.send_keys("qa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        new_base_d = cli.read_mem(pl_it + 21, 1)[0]
+        exp_cur_d, exp_res_d = _mon044_healthy(new_base_d, -2)
+        assert new_base_d > 18 and cli.read_mem(pl_it + 27, 1)[0] == exp_cur_d and cli.read_mem(syms["player_stat_res"], 1)[0] == (exp_res_d & 0xFF), (
+            f"Gain STR base 18 -2 ring mismatch: new_base={new_base_d} cur={cli.read_mem(pl_it + 27, 1)[0]} res={cli.read_mem(syms['player_stat_res'], 1)[0]} exp=({exp_cur_d}, {exp_res_d})"
+        )
+        # Case E: saturated gear (+17 STR: two +6 rings + +5 HA), base=100, drained cur=90, res=0 -> must apply full (new_base - 100) delta
+        _set_inv_item(cli, syms, 29, 54, qty=1, p1=6, flags=0x02, ego=0x40)
+        _set_inv_item(cli, syms, 31, 54, qty=1, p1=6, flags=0x02, ego=0x40)
+        _set_inv_item(cli, syms, 22, 6, qty=1, p1=5, flags=0x02, ego=0x07)  # weapon Holy Avenger (+5)
+        _write_mem(cli, syms["player_eq_stat_mod"], [17, 0, 0, 0, 0, 0])
+        _write_mem(cli, pl_it + 21, [100])
+        _write_mem(cli, pl_it + 27, [90])
+        _write_mem(cli, syms["player_stat_res"], [0])
+        _set_inv_item(cli, syms, 0, 50, qty=1, flags=0x02)
+        cli.send_keys("qa")
+        cli.run_idle()
+        _dismiss_more(cli)
+        new_base_e = cli.read_mem(pl_it + 21, 1)[0]
+        assert 100 < new_base_e <= 110 and cli.read_mem(pl_it + 27, 1)[0] == 90 + (new_base_e - 100) and cli.read_mem(syms["player_stat_res"], 1)[0] == 0, (
+            f"Gain STR saturated +17 gear mismatch: new_base={new_base_e} cur={cli.read_mem(pl_it + 27, 1)[0]} res={cli.read_mem(syms['player_stat_res'], 1)[0]}"
+        )
+        _write_mem(cli, syms["inv_item_id"] + 22, [0xFF])
+        _write_mem(cli, syms["inv_item_id"] + 31, [0xFF])
+        _write_mem(cli, syms["inv_item_id"] + 29, [0xFF])
+        _write_mem(cli, syms["player_eq_stat_mod"], [0] * 6)
+        _write_mem(cli, syms["player_stat_res"], [0] * 6)
         _set_inv_item(cli, syms, 0, 82, qty=1, flags=0x02)   # Potion of Salt Water
         _write_mem(cli, syms["zp_eff_poison"], [10])
         cli.send_keys("qa")
@@ -6114,8 +6615,11 @@ def scenario_spells_prayers_and_detect_lifecycle(
         for _ in range(3):
             _write_mem(cli, pl + 37, [20, 20])
             _write_mem(cli, syms["abi_player_mp"], [20, 20])
-            cli.send_keys("maah")
+            cli.send_keys("maa")
             cli.run_idle()
+            if "Dir" in cli.screen_lines()[0][0]:
+                cli.send_keys("h")
+                cli.run_idle()
             _dismiss_more(cli)
         assert _read_monster_slots(cli, syms)[sidx][4] == 200, "Magic Missile exceeded max range 19 (hit at dist 20)"
         _set_map_tile(cli, px - 20, py, 0x0C)
@@ -6124,8 +6628,11 @@ def scenario_spells_prayers_and_detect_lifecycle(
         for _ in range(5):
             _write_mem(cli, pl + 37, [20, 20])
             _write_mem(cli, syms["abi_player_mp"], [20, 20])
-            cli.send_keys("maah")
+            cli.send_keys("maa")
             cli.run_idle()
+            if "Dir" in cli.screen_lines()[0][0]:
+                cli.send_keys("h")
+                cli.run_idle()
             _dismiss_more(cli)
             if _read_monster_slots(cli, syms)[sidx][4] < 200:
                 break
@@ -6151,9 +6658,16 @@ def scenario_spells_prayers_and_detect_lifecycle(
         _write_mem(cli, pl + 61, [0x0F])  # first 4 mage spells learnt
         _write_mem(cli, pl + 74, [0, 1, 2, 3])
         _write_mem(cli, syms["room_count"], [0])
-        cli.send_keys("mad")  # Light Area in corridor
-        cli.run_idle()
-        _dismiss_more(cli)
+        for _ in range(5):
+            _write_mem(cli, pl + 37, [20, 20])
+            _write_mem(cli, syms["abi_player_mp"], [20, 20])
+            cli.send_keys("mad")  # Light Area in corridor
+            cli.run_idle()
+            la_msg = cli.screen_lines()[0][0]
+            _dismiss_more(cli)
+            if "fails" not in la_msg.lower():
+                break
+        assert "fails" not in la_msg.lower(), f"Light Area in corridor kept failing: {la_msg!r}"
         assert (_get_map_tile(cli, px - 1, py - 1) & 0x08) == 0, "Light Area improperly set FLAG_LIT in corridor"
         assert (_get_map_tile(cli, 1, 1) & 0x08) == 0, "Light Area bugged onto (0..2, 0..2)"
         _write_mem(cli, syms["room_count"], [1])
@@ -6162,9 +6676,16 @@ def scenario_spells_prayers_and_detect_lifecycle(
         _write_mem(cli, syms["room_w"], [1])
         _write_mem(cli, syms["room_h"], [1])
         _write_mem(cli, syms["room_lit"], [0])
-        cli.send_keys("mad")  # Light Area inside room
-        cli.run_idle()
-        _dismiss_more(cli)
+        for _ in range(5):
+            _write_mem(cli, pl + 37, [20, 20])
+            _write_mem(cli, syms["abi_player_mp"], [20, 20])
+            cli.send_keys("mad")  # Light Area inside room
+            cli.run_idle()
+            la_msg = cli.screen_lines()[0][0]
+            _dismiss_more(cli)
+            if "fails" not in la_msg.lower():
+                break
+        assert "fails" not in la_msg.lower(), f"Light Area in room kept failing: {la_msg!r}"
         assert cli.read_mem(syms["room_lit"], 1)[0] == 1, "Light Area failed to set room_lit[0]"
         assert (_get_map_tile(cli, px - 1, py - 1) & 0x08) != 0, "Light Area failed to light player room perimeter"
         assert (_get_map_tile(cli, 1, 1) & 0x08) == 0, "Light Area bugged onto (0..2, 0..2)"
@@ -6173,8 +6694,11 @@ def scenario_spells_prayers_and_detect_lifecycle(
         _write_mem(cli, pl + 37, [0])
         _write_mem(cli, syms["abi_player_mp"], [0])
         _write_mem(cli, syms["abi_rng_seed"], [0x55, 0x66, 0x77, 0x88])
-        cli.send_keys("maal")
+        cli.send_keys("maa")
         cli.run_idle()
+        if "Dir" in cli.screen_lines()[0][0]:
+            cli.send_keys("l")
+            cli.run_idle()
         _dismiss_more(cli)
         assert cli.read_z80_state()["overlay_depth"] == 0
         assert cli.read_mem(syms["zp_eff_paralyze"], 1)[0] == 0, "Overcast paralyze failed to expire cleanly"
@@ -6203,6 +6727,8 @@ def scenario_spells_prayers_and_detect_lifecycle(
 
         # Regression: Wall to Mud on FLAG_HAS_ITEM mineral vein spawns ITEM_SLOT_GOLD_LARGE OR clears ghost FLAG_HAS_ITEM when full
         _clear_all_monsters(cli, syms)
+        st_wm = cli.read_z80_state()
+        px, py = st_wm["player_x"], st_wm["player_y"]
         _set_inv_item(cli, syms, 1, 187, qty=1, flags=0x02)  # Magick I
         _write_mem(cli, pl + 19, [25])
         _write_mem(cli, syms["abi_player_lvl"], [25])
@@ -6257,11 +6783,16 @@ def scenario_spells_prayers_and_detect_lifecycle(
             _write_mem(cli, pl + 49, [px])
             _set_map_tile(cli, px, py, 0x0C)
         _clear_all_monsters(cli, syms)
+        _write_mem(cli, syms["cr_mflags"] + cr_t, [0])
+        _write_mem(cli, syms["cr_spell_flags"] + cr_t, [0])
+        _write_mem(cli, syms["cr_spell_chance"] + cr_t, [0])
+        _write_mem(cli, syms["cr_cdefense"] + cr_t, [0])
         for dx_r in range(1, 22):
             _set_map_tile(cli, px - dx_r, py, 0x0C)
         _set_map_tile(cli, px - 20, py, 0x0C | 0x01)
-        _write_mem(cli, syms["monster_table"] + sidx * 12, [px - 20, py, cr_t, 50, 0, 0x08, 0, 0, 0, 0, 0, 0])
-        _write_mem(cli, syms["cr_cdefense"] + cr_t, [0])
+        _write_mem(cli, syms["monster_table"] + sidx * 12, [px - 20, py, cr_t, 50, 0, 0x00, 0, 0, 0, 0, 0, 0])
+        _write_mem(cli, syms["zp_mon_count"], [1])
+        _write_mem(cli, syms["abi_mon_count"], [1])
         cli.write_mem(syms["inv_item_id"], bytes([0xFF] * 22))
         _set_inv_item(cli, syms, 0, 145, qty=1, p1=3, flags=2)  # Wand of Slow Monster -> ovl_spell_eff_trace_mon
         cli.send_keys("aah")
@@ -6271,16 +6802,20 @@ def scenario_spells_prayers_and_detect_lifecycle(
             "ovl_spell_eff_trace_mon failed to reach dist 20"
         )
         # Scroll of Mass Genocide (115): hits dist 20, spares dist 21 (20-tile cap)
+        _clear_all_monsters(cli, syms)
+        _set_map_tile(cli, px - 20, py, 0x0C | 0x01)
         _set_map_tile(cli, px - 21, py, 0x0C | 0x01)
-        _write_mem(cli, syms["monster_table"] + 12, [px - 21, py, cr_t, 50, 0, 0x08, 0, 0, 0, 0, 0, 0])
+        _write_mem(cli, syms["monster_table"], [px - 20, py, cr_t, 50, 0, 0x00, 0, 0, 0, 0, 0, 0])
+        _write_mem(cli, syms["monster_table"] + 12, [px - 21, py, cr_t, 50, 0, 0x00, 0, 0, 0, 0, 0, 0])
         _write_mem(cli, syms["zp_mon_count"], [2])
+        _write_mem(cli, syms["abi_mon_count"], [2])
         _set_inv_item(cli, syms, 1, 115, qty=1, flags=2)
         cli.send_keys("ra")
         cli.run_idle()
         _dismiss_more(cli)
         mg_slots = _read_monster_slots(cli, syms)
-        assert mg_slots[sidx][3] == 0xFF and mg_slots[1][3] != 0xFF, (
-            f"Mass Genocide violated 20-tile LOS cap: dist20={mg_slots[sidx]}, dist21={mg_slots[1]}"
+        assert mg_slots[0][3] == 0xFF and mg_slots[1][3] != 0xFF, (
+            f"Mass Genocide violated 20-tile LOS cap: dist20={mg_slots[0]}, dist21={mg_slots[1]}"
         )
         _clear_all_monsters(cli, syms)
         # M9 Trap/Door Destruction (spell 9 = index 9) keeps trap on player's own tile (px, py) while removing adjacent

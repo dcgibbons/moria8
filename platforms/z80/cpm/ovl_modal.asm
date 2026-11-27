@@ -103,9 +103,8 @@ ovl_modal_dir_key_tbl:
 ;   player_pflags, player_pflags2, player_curse_flags, player_sust_mask,
 ;   wield_weight_lo/hi, wield_dmg_packed, wield_missile_type, wield_flags_0..3,
 ;   pcc_eq_tohit/todam/ac, player_eq_stat_mod[6], player_stat_res[6].
-; Calls: player_sync_eq_stat_mod, player_clamp_stat_a, player_calc_combat,
-;        inv_calc_weight, player_sync_to_abi.
-;        player_sync_to_abi.
+; Calls: player_sync_eq_stat_mod, player_step_equip_stat_c, player_calc_hp,
+;        player_calc_combat, inv_calc_weight, player_sync_to_abi.
 ; Triggers INC zp_disturb on ITR3_BLIND | ITR3_TIMID 0->1 onset (TRN-014).
 ; Preserves: IX, IY
 ; ============================================================================
@@ -421,30 +420,35 @@ ovl_modal_recalc_equipment:
     LD   BC, STAT_COUNT
     LDIR
     CALL player_sync_eq_stat_mod
-    LD   C, 0
+    LD   BC, 0
 .eqd_lp:
-    LD   B, 0
     LD   HL, bss_scratch
     ADD  HL, BC
-    LD   D, (HL)
+    LD   D, (HL)                ; D = old eq_stat_mod[C]
+    LD   HL, player_eq_stat_mod
+    ADD  HL, BC
+    LD   A, (HL)                ; A = new eq_stat_mod[C]
+    SUB  D                      ; A = signed delta (new - old)
+    JR   Z, .eqd_nx
+    JP   PO, .eqd_step
+    ; Signed delta overflowed (-128..+127): undo old_mod cleanly then apply new_mod
+    LD   A, D
+    CP   0x80
+    JR   NZ, .eqd_neg_ok
+    LD   A, 64
+    CALL player_step_equip_stat_c
+    LD   A, 64
+    CALL player_step_equip_stat_c
+    JR   .eqd_apply_new
+.eqd_neg_ok:
+    NEG
+    CALL player_step_equip_stat_c
+.eqd_apply_new:
     LD   HL, player_eq_stat_mod
     ADD  HL, BC
     LD   A, (HL)
-    SUB  D
-    JR   Z, .eqd_nx
-    LD   D, A
-    LD   HL, player_stat_res
-    ADD  HL, BC
-    LD   A, (HL)
-    ADD  A, D
-    LD   HL, player_data + PL_STR_CUR
-    ADD  HL, BC
-    ADD  A, (HL)
-    CALL player_clamp_stat_a
-    LD   (HL), A
-    LD   HL, player_stat_res
-    ADD  HL, BC
-    LD   (HL), E
+.eqd_step:
+    CALL player_step_equip_stat_c
 .eqd_nx:
     INC  C
     LD   A, C

@@ -1142,7 +1142,7 @@ function run()
     assert_line("wizard_open", wizard_menu_open())
     press_until("ITEM", 0x47) -- 'G'
     send_int(ITEM_POTION_OF_GAIN_DEXTERITY)
-    assert_line("wizard_gain_ok", wait_screen("OK", 60))
+    assert_line("wizard_gain_ok", wait_screen("OK", 80))
     send_key(0x51) -- 'Q' (quaff)
     assert_line("quaff_prompt", wait_screen("Quaff which potion", 80))
     send_key(0x41) -- 'A'

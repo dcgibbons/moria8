@@ -686,7 +686,9 @@ reu_size_kb: .word 0
 #import "../../../core/6502/item_defs.s"
 // Equipment-derived effect flags park in TitleOverlay (PLAYER_PFLAGS_EXTERNAL)
 // behind hal_player_recalc_pflags, freeing 64.bank headroom.
+#define PLAYER_GAIN_STAT_HELPERS_EXTERNAL
 #import "../../../core/6502/player.s"
+#undef PLAYER_GAIN_STAT_HELPERS_EXTERNAL
 // The element divisor too (breath and the element touches).
 #define ELEMENT_RESIST_SEGMENT_CUSTOM
 .macro ElementResistSegment() {
@@ -4024,12 +4026,14 @@ title_draw_menu_ovl:
     sta zp_ptr0_hi
     jmp screen_put_string
     #import "../../../core/6502/player_item_commands.s"
+    #import "../../../core/6502/player_gain_stat_helpers.s"
     #import "../../../core/6502/player_adjust_equipment_stat.s"
     #import "../../../core/6502/player_pflags_cold.s"
     #import "../../../core/6502/starting_kit_cold.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $e000) + " bytes at $E000-$" + toHexString(ovl_title_end)
 .assert "Title overlay fits in $E000-$EFFF", ovl_title_end <= $F000, true
+.assert "Gain-stat helpers co-locate with eff_gain_stat in TitleOverlay", eff_potion_gain_stat >= $e000 && eff_potion_gain_stat < ovl_title_end && player_step_healthy_sum_y >= $e000 && player_step_healthy_sum_y < ovl_title_end && player_apply_stat_delta_y >= $e000 && player_apply_stat_delta_y < ovl_title_end, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

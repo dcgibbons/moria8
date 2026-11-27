@@ -1242,6 +1242,27 @@ game_over_prompt:
     jsr disk_prompt_game_required
     jmp restart_entry
 
+#if !ATARI8_CARTRIDGE
+disk_prompt_save:
+    lda disk_mode
+    cmp #1
+    bne !dps_done+
+    lda disk_setup_done
+    cmp #2
+    bcc !dps_prompt+
+    lda #1
+    sta disk_setup_done
+    clc
+    rts
+!dps_prompt:
+    lda #<ds_save_str
+    ldy #>ds_save_str
+    jmp dsm_show_swap_prompt
+!dps_done:
+    clc
+    rts
+#endif
+
 program_end:
 .print "Atari 8-bit Resident Default: " + (program_end - $0c00) + " bytes at $0C00-$" + toHexString(program_end)
 .assert "Program fits below MAP_BASE ($C100)", program_end <= MAP_BASE, true
@@ -1281,7 +1302,8 @@ program_end:
     #import "../../core/6502/item_desc_banked.s"
 
 // ============================================================
-// disk_prompt_save / disk_prompt_game — 1-drive swap prompts in RuntimeBanked
+// Swap prompts: disk_prompt_save rides Default (#if !ATARI8_CARTRIDGE) while
+// disk_prompt_game / dsm_show_swap_prompt (and cart stubs) ride RuntimeBanked
 // ============================================================
 #if ATARI8_CARTRIDGE
 disk_prompt_save:
@@ -1289,25 +1311,6 @@ disk_prompt_game:
     clc
     rts
 #else
-disk_prompt_save:
-    lda disk_mode
-    cmp #1
-    bne !dps_done+
-    lda disk_setup_done
-    cmp #2
-    bcc !dps_prompt+
-    lda #1
-    sta disk_setup_done
-    clc
-    rts
-!dps_prompt:
-    lda #<ds_save_str
-    ldy #>ds_save_str
-    jmp dsm_show_swap_prompt
-!dps_done:
-    clc
-    rts
-
 disk_prompt_game:
     lda disk_mode
     cmp #1

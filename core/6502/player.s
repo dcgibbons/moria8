@@ -205,6 +205,52 @@ player_sync_from_zp:
     sta player_data + PL_LIGHT_RAD
     rts
 
+// player_sum_eq_y — Sum signed inv_p1 across worn gear affecting stat Y (0..5).
+// Overlay-safe (never calls pflags recalc or modifies player stats).
+// Output: A = stat_work = signed eq_mod[Y] (N/Z reflect A).
+// Preserves: Y. Clobbers: X, stat_step_cnt.
+player_sum_eq_y:
+    tya
+    pha
+    lda #1
+!pseq_bit:
+    dey
+    bmi !pseq_mask+
+    asl
+    bne !pseq_bit-
+!pseq_mask:
+    sta stat_step_cnt
+    lda #0
+    sta stat_work
+    ldx #EQUIP_CLOAK
+!pseq_lp:
+    ldy inv_item_id,x
+    iny
+    beq !pseq_nx+
+    jsr equip_stat_mask_x       // A = 6-bit PL_STR..PL_CHR mask, preserves X
+    and stat_step_cnt
+    beq !pseq_nx+
+    lda stat_work
+    clc
+    adc inv_p1,x
+    bvc !pseq_st+
+    bmi !pseq_pos_sat+          // V=1, N=1 => positive overflow -> +127
+    lda #$80                    // V=1, N=0 => negative overflow -> -128
+    bne !pseq_st+
+!pseq_pos_sat:
+    lda #$7f
+!pseq_st:
+    sta stat_work
+!pseq_nx:
+    dex
+    cpx #EQUIP_WEAPON
+    bcs !pseq_lp-
+    pla
+    tay
+    lda stat_work
+    rts
+.assert "FI_EMPTY == $ff for iny empty check", FI_EMPTY, $ff
+
 // player_calc_stats — Recalculate current stats from the baked base plus
 // equipment. Race/class modifiers are folded into the base once at character
 // creation (player_bake_creation_stats), so this routine must be deterministic:
@@ -213,62 +259,32 @@ player_sync_from_zp:
 // Stats use single-byte encoding: 3-18 literal, 19-118 = 18/01 to 18/100.
 // Preserves: nothing
 player_calc_stats:
-    ldy #STAT_COUNT - 1
-    lda #0
-!stat_loop:
-    sta player_stat_res,y
-    dey
-    bpl !stat_loop-
-
-!pcs_equipment:
-    // Sum each stat's signed equipment p1 across worn items into
-    // player_stat_res,y, then apply per-point VMS 18/xx stepping
-    // (in_statt/de_statt) from PL_STR_BASE,y so load/restoration rebuilds
-    // deterministically match wear/takeoff.
-    ldx #EQUIP_CLOAK
-!pcs_eq:                        // the weapon slot through the cloak
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !pcs_eq_next+
-    lda inv_p1,x
-    beq !pcs_eq_next+
-    jsr equip_stat_mask_x       // A = 6-bit PL_STR..PL_CHR mask, preserves X
-    beq !pcs_eq_next+
-    ldy #0
-!pcs_eq_bit:
-    lsr
-    bcc !pcs_eq_skip+
-    pha
-    lda player_stat_res,y
-    clc
-    adc inv_p1,x
-    sta player_stat_res,y
-    pla
-!pcs_eq_skip:
-    beq !pcs_eq_next+
-    iny
-    cpy #STAT_COUNT
-    bcc !pcs_eq_bit-
-!pcs_eq_next:
-    dex
-    cpx #EQUIP_WEAPON
-    bcs !pcs_eq-
-
-    // Clamp base stats to [3, 118], sync ZP mirrors, and apply accumulated
-    // signed equipment steps via VMS 18/xx stepping (preserving residuals
-    // in player_stat_res,y for reversible takeoff and drains).
+    // Sum each stat's signed equipment p1 across worn items and apply per-point
+    // VMS 18/xx stepping (in_statt/de_statt) from PL_STR_BASE,y so
+    // load/restoration rebuilds deterministically match wear/takeoff.
     ldy #STAT_COUNT - 1
 !pcs_zp:
-    lda player_stat_res,y
+    jsr player_sum_eq_y
     pha
     lda player_data + PL_STR_BASE,y
-    jsr player_store_clamped_stat_y
+    cmp #$c0
+    bcs !pcs_min+
+    cmp #3
+    bcs !pcs_max+
+!pcs_min:
+    lda #3
+    bne !pcs_set+
+!pcs_max:
+    cmp #119
+    bcc !pcs_set+
+    lda #118
+!pcs_set:
+    jsr pses_zero_res_write_y
     pla
     jsr player_step_equip_stat_y
     dey
     bpl !pcs_zp-
 .assert "The ZP stat mirrors follow PL_*_CUR order", zp_player_chr - zp_player_str == PL_CHR_CUR - PL_STR_CUR && STAT_COUNT == 6, true
-
     // Persistent effect flags from the equipment: the routine below, by
     // falling through, or by a jump where a port places it elsewhere.
 #if PLAYER_RECALC_PFLAGS_EXTERNAL || PLAYER_PFLAGS_EXTERNAL
@@ -389,8 +405,7 @@ player_step_equip_stat_y:
     bne !pses_inc_add1+
     lda player_stat_res,y
     beq !pses_inc_from3+
-    clc
-    adc #1
+    adc #0                      // C=1 from cmp #3 equal above
     sta player_stat_res,y
     lda #3
     bne !pses_inc_next+
@@ -410,9 +425,10 @@ player_step_equip_stat_y:
     bcs !pses_inc_st118+
 !pses_inc_at118:
     lda player_stat_res,y
-    clc
-    adc #10
+    adc #9                      // C=1 from cmp #118 equal above
     bpl !pses_inc_st118+
+    lda #1
+    sta stat_step_cnt           // Saturated at (118, +127): exit loop after store
     lda #127
 !pses_inc_st118:
     sta player_stat_res,y
@@ -451,8 +467,7 @@ pses_write_cur_y:
     lda #118
     bne !pses_dec_next+
 !pses_dec_drop118:
-    clc
-    adc #108
+    adc #108                    // C=0 from bcc above
     jsr pses_zero_res_write_y
     bne !pses_dec_next+
 !pses_dec_not118:
@@ -473,64 +488,22 @@ pses_write_cur_y:
 !pses_dec_at3:
     lda player_stat_res,y
     cmp #$80
-    beq !pses_dec_at3_st+
+    beq !pses_dec_sat+
     sec
     sbc #1
     sta player_stat_res,y
-!pses_dec_at3_st:
     lda #3
 !pses_dec_next:
     dec stat_step_cnt
     bne !pses_dec_lp-
     beq pses_write_cur_y
-
-// player_apply_stat_delta_y — Add unsigned delta A (0..25 from eff_gain_stat)
-// to stat Y (0..5), clamp PL_STR_CUR,y & zp_player_str,y to [3, 118], and
-// update player_stat_res,y (saturating positive cap residuals at +127).
-// Preserves: X, Y. Clobbers: A.
-player_apply_stat_delta_y:
-    cmp #0
-    beq !pasd_ret+
-    pha
-    lda player_data + PL_STR_CUR,y
-    cmp #118
-    bne !pasd_add+
-    pla
-    clc
-    adc player_stat_res,y
-    bpl !pasd_hi_store+
-    lda #$7f
-!pasd_hi_store:
-    sta player_stat_res,y
-!pasd_ret:
-    rts
-!pasd_add:
-    clc
-    adc player_stat_res,y
-    sta player_stat_res,y
-    pla
-    clc
-    adc player_stat_res,y
-player_store_clamped_stat_y:
-    pha
-    cmp #$c0
-    bcs !pscs_min+
-    cmp #3
-    bcs !pscs_max+
-!pscs_min:
+!pses_dec_sat:
     lda #3
-    bne !pscs_set+
-!pscs_max:
-    cmp #119
-    bcc !pscs_set+
-    lda #118
-!pscs_set:
-    jsr pses_write_cur_y
-    pla
-    sec
-    sbc player_data + PL_STR_CUR,y
-    sta player_stat_res,y
-    rts
+    bne pses_write_cur_y        // Saturated at (3, -128): early-exit
+
+#if !PLAYER_GAIN_STAT_HELPERS_EXTERNAL
+#import "player_gain_stat_helpers.s"
+#endif
 
 // player_award_xp_a — Add 8-bit A to 24-bit PL_XP and ratchet PL_MAX_XP.
 // Preserves: X, Y. Clobbers: A.

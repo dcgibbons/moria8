@@ -908,7 +908,120 @@ test_start:
     jsr player_adjust_equipment_stat
     lda player_data + PL_STR_CUR
     cmp #117
+    beq !+
+    jmp !t3_fail+
+
+    // 3F: MON-044 Gain Strength with worn stat-modifying rings preserves 18/xx
+    // stepping across thresholds and preserves existing drains.
+!:  jsr reset_player_baseline
+    lda #16
+    sta player_data + PL_STR_BASE
+    lda #ITEM_SLOT_RING_OF_STRENGTH
+    sta inv_item_id + EQUIP_RING
+    lda #ITEM_PAGE_RING_OF_STRENGTH
+    sta inv_ego + EQUIP_RING
+    lda #3
+    sta inv_p1 + EQUIP_RING
+    lda #1
+    sta inv_qty + EQUIP_RING
+    jsr player_calc_stats               // healthy = 28 (18/10)
+    lda #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    jsr run_quaff_keep_a
+    lda player_data + PL_STR_BASE
+    cmp #17
+    bne !t3_fail_3f_mid+
+    lda player_data + PL_STR_CUR
+    cmp #38
+    bne !t3_fail_3f_mid+
+    lda player_stat_res + 0
+    bne !t3_fail_3f_mid+
+
+    // Drained base=16 +3 ring (healthy 28, cur 22) -> cur=32 (drain -6 kept)
+    lda #16
+    sta player_data + PL_STR_BASE
+    lda #22
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #0
+    sta player_stat_res + 0
+    lda #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    jsr run_quaff_keep_a
+    lda player_data + PL_STR_BASE
+    cmp #17
+    bne !t3_fail_3f_mid+
+    lda player_data + PL_STR_CUR
+    cmp #32
+    bne !t3_fail_3f_mid+
+    lda player_stat_res + 0
+    bne !t3_fail_3f_mid+
+
+    // Base=17 +12 ring (healthy 118, res +10) -> base=18, cur=118, res=+20
+    lda #12
+    sta inv_p1 + EQUIP_RING
+    jsr player_calc_stats
+    lda #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    jsr run_quaff_keep_a
+    lda player_data + PL_STR_BASE
+    cmp #18
+    bne !t3_fail_3f_mid+
+    lda player_data + PL_STR_CUR
+    cmp #118
+    bne !t3_fail_3f_mid+
+    lda player_stat_res + 0
+    cmp #20
+    beq !+
+!t3_fail_3f_mid:
+    jmp !t3_fail+
+
+    // Base=18 + cursed -2 ring -> matches healthy(new_base, -2) from player_calc_stats
+!:  lda #(-2) & $ff
+    sta inv_p1 + EQUIP_RING
+    jsr player_calc_stats
+    lda #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    jsr run_quaff_keep_a
+    lda player_data + PL_STR_BASE
+    cmp #19
+    bcc !t3_fail_3f+
+    lda player_data + PL_STR_CUR
+    pha
+    lda player_stat_res + 0
+    pha
+    jsr player_calc_stats
+    pla
+    cmp player_stat_res + 0
+    bne !t3_fail_3f_pop+
+    pla
+    cmp player_data + PL_STR_CUR
+    bne !t3_fail_3f+
+
+    // Saturated gear (+17 STR ring already equipped on Page 1), base=100,
+    // drained cur=90, res=0 -> must apply full (new_base - 100) delta
+    lda #17
+    sta inv_p1 + EQUIP_RING
+    lda #100
+    sta player_data + PL_STR_BASE
+    lda #90
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #0
+    sta player_stat_res + 0
+    lda #ITEM_SLOT_POTION_OF_GAIN_STRENGTH
+    jsr run_quaff_keep_a
+    lda player_data + PL_STR_BASE
+    sec
+    sbc #100
+    beq !t3_fail_3f+
+    cmp #11
+    bcs !t3_fail_3f+
+    clc
+    adc #90
+    cmp player_data + PL_STR_CUR
+    bne !t3_fail_3f+
+    lda player_stat_res + 0
     beq !t3_pass+
+!t3_fail_3f_pop:
+    pla
+!t3_fail_3f:
     jmp !t3_fail+
 
 !t3_pass:
