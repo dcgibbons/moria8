@@ -1778,6 +1778,87 @@ ovl_start_bg_strings:
     DB   "Sha", 0x9A, 0 ; 59
     DB   "Cl", 0x93, " C", 0xA4, 0 ; 60
 
+; ===========================================================================
+; id_init_flavours — Reset id_known_bits, refresh fixed known items, and
+; Fisher-Yates shuffle all 5 randomized appearance tables (174 entries).
+; Preserves: IX, IY (clobbers AF, BC, DE, HL)
+; ===========================================================================
+id_init_flavours:
+    LD   HL, id_known_bits
+    LD   DE, id_known_bits + 1
+    LD   BC, ID_KNOWN_BYTES - 1
+    LD   (HL), 0
+    LDIR
+    CALL id_refresh_fixed_known
+
+    ; Shuffle 5 contiguous flavour tables via (potion_shuffle, count)
+    LD   HL, potion_shuffle
+    LD   DE, .cls_counts
+    LD   B, 5
+.cls_loop:
+    PUSH BC
+    LD   A, (DE)                ; A = count
+    INC  DE
+    PUSH DE
+    PUSH HL
+    ; Initialize 0..count-1
+    LD   C, A                   ; C = count
+    LD   B, A
+    XOR  A
+.init_seq:
+    LD   (HL), A
+    INC  HL
+    INC  A
+    DJNZ .init_seq
+
+    ; Fisher-Yates from i = count-1 down to 1
+    POP  HL                     ; HL = base of class shuffle table
+    DEC  C                      ; C = i
+.fy_loop:
+    LD   A, C
+    INC  A                      ; N = i + 1
+    PUSH HL
+    PUSH BC
+    CALL rng_range              ; A = rand in [0..i]
+    POP  BC
+    POP  HL
+    ; Swap table[i] <-> table[A]
+    LD   E, C
+    LD   D, 0
+    PUSH HL
+    ADD  HL, DE
+    LD   B, (HL)                ; B = table[i]
+    EX   DE, HL                 ; DE = &table[i]
+    POP  HL
+    PUSH HL
+    PUSH BC
+    LD   C, A
+    LD   B, 0
+    ADD  HL, BC                 ; HL = &table[j]
+    LD   A, (HL)                ; A = table[j]
+    LD   (DE), A                ; table[i] = old table[j]
+    POP  BC
+    LD   (HL), B                ; table[j] = old table[i]
+    POP  HL
+    DEC  C
+    JR   NZ, .fy_loop
+
+    ; Advance HL past this class table
+    LD   B, 0
+    POP  DE
+    DEC  DE
+    LD   A, (DE)
+    INC  DE
+    LD   C, A
+    ADD  HL, BC
+    POP  BC
+    DJNZ .cls_loop
+    RET
+
+.cls_counts:
+    DB   FLAVOUR_POTION_COUNT, FLAVOUR_SCROLL_COUNT, FLAVOUR_RING_COUNT
+    DB   FLAVOUR_WAND_COUNT, FLAVOUR_STAFF_COUNT
+
 ovl_end:
     ASSERT_OVL_FIT ovl_start, ovl_end
 

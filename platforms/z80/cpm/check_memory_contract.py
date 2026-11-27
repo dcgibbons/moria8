@@ -94,6 +94,27 @@ OVERLAY_SLOT_MAP: dict[int, str] = {
     24: "ovl_item_mgt",
 }
 OVERLAY_NAMES: tuple[str, ...] = tuple(OVERLAY_SLOT_MAP.values())
+OVL_ID_TO_NAME: dict[int, str] = {
+    1: "ovl_start",
+    2: "ovl_town",
+    3: "ovl_death",
+    4: "ovl_gen",
+    5: "ovl_help",
+    6: "ovl_ui",
+    7: "ovl_items",
+    8: "ovl_spell",
+    9: "ovl_modal",
+    10: "ovl_chest",
+    11: "ovl_home",
+    12: "ovl_storage",
+    13: "ovl_title",
+    14: "ovl_legal",
+    15: "ovl_items_eff",
+    16: "ovl_spell_eff",
+    17: "ovl_actions",
+    18: "ovl_mon_ext",
+    19: "ovl_item_mgt",
+}
 M1_REQUIRED_OVERLAYS: tuple[str, ...] = ("ovl_title", "ovl_legal")
 M2_REQUIRED_OVERLAYS: tuple[str, ...] = (
     "ovl_title",
@@ -977,6 +998,72 @@ def validate_listing_files(
     return errors
 
 
+def validate_trampolines(
+    main_syms: dict[str, int],
+    com_bytes: bytes,
+    built_ovl_bytes: dict[str, bytes],
+) -> list[str]:
+    """Validate every resident tramp_* stub decodes to an overlay JP vector."""
+    errors: list[str] = []
+    tramp_syms = sorted(
+        (sym_name, addr)
+        for sym_name, addr in main_syms.items()
+        if sym_name.lstrip("@").startswith("tramp_")
+    )
+    if not tramp_syms:
+        return errors
+    if "overlay_trampoline" not in main_syms:
+        return ["main.sym defines tramp_* stubs without 'overlay_trampoline'"]
+    dispatch_addr = main_syms["overlay_trampoline"]
+
+    for sym_name, addr in tramp_syms:
+        off = addr - RESIDENT_BASE
+        if off < 0 or off + 6 > len(com_bytes):
+            errors.append(
+                f"trampoline '{sym_name}' at 0x{addr:04X} lies outside MORIA8.COM ({len(com_bytes)} B)"
+            )
+            continue
+        call_op, call_dst, ovl_id, vec_addr = struct.unpack_from("<BHBH", com_bytes, off)
+        if call_op != 0xCD or call_dst != dispatch_addr:
+            errors.append(
+                f"trampoline '{sym_name}' at 0x{addr:04X}: expected CALL 0x{dispatch_addr:04X}, got 0x{call_op:02X} 0x{call_dst:04X}"
+            )
+            continue
+        if ovl_id not in OVL_ID_TO_NAME:
+            errors.append(
+                f"trampoline '{sym_name}' at 0x{addr:04X}: invalid overlay ID {ovl_id}"
+            )
+            continue
+        if not (OVL_WINDOW_BASE <= vec_addr < OVL_WINDOW_LIMIT):
+            errors.append(
+                f"trampoline '{sym_name}' target 0x{vec_addr:04X} lies outside [0x{OVL_WINDOW_BASE:04X}, 0x{OVL_WINDOW_LIMIT:04X})"
+            )
+            continue
+        ovl_name = OVL_ID_TO_NAME[ovl_id]
+        ovl_bytes = built_ovl_bytes.get(ovl_name)
+        if ovl_bytes is None:
+            continue
+        vec_off = vec_addr - OVL_WINDOW_BASE
+        if vec_off % 3 != 0:
+            errors.append(
+                f"trampoline '{sym_name}' -> {ovl_name}+0x{vec_off:04X} (0x{vec_addr:04X}) is not 3-byte JP-vector aligned"
+            )
+            continue
+        if vec_off < 0 or vec_off + 3 > len(ovl_bytes):
+            errors.append(
+                f"trampoline '{sym_name}' -> {ovl_name}+0x{vec_off:04X} (0x{vec_addr:04X}) exceeds overlay size ({len(ovl_bytes)} B)"
+            )
+            continue
+        jp_op, jp_dst = struct.unpack_from("<BH", ovl_bytes, vec_off)
+        ovl_end = OVL_WINDOW_BASE + len(ovl_bytes)
+        if jp_op != 0xC3 or not (OVL_WINDOW_BASE <= jp_dst < ovl_end):
+            errors.append(
+                f"trampoline '{sym_name}' -> {ovl_name} vector 0x{vec_addr:04X}: expected JP into [0x{OVL_WINDOW_BASE:04X}, 0x{ovl_end:04X}), got 0x{jp_op:02X} 0x{jp_dst:04X}"
+            )
+
+    return errors
+
+
 def validate_build(
     build_dir: Path,
     milestone: str = "all",
@@ -1019,6 +1106,7 @@ def validate_build(
         return [str(exc)]
 
     # 1. MORIA8.COM resident binary & symbol checks (0x0100 <= resident_end <= 0x5600)
+    com_bytes: bytes | None = None
     if "resident_end" not in main_syms:
         errors.append("main.sym missing required symbol 'resident_end'")
     else:
@@ -1028,7 +1116,8 @@ def validate_build(
                 f"resident_end at 0x{res_end:04X} violates [0x{RESIDENT_BASE:04X}, 0x{RESIDENT_LIMIT:04X}]"
             )
         if com_path.exists():
-            com_size = len(com_path.read_bytes())
+            com_bytes = com_path.read_bytes()
+            com_size = len(com_bytes)
             if com_size == 0:
                 errors.append("MORIA8.COM is empty (0 bytes)")
             elif com_size > RESIDENT_MAX_SIZE:
@@ -1150,6 +1239,10 @@ def validate_build(
                     f"{ovl_sym.name}: cross-overlay symbol '{sym_name}' (0x{addr:04X}) owned by {owner}"
                 )
 
+    # 4b. Static trampoline-to-overlay vector verification
+    if com_bytes is not None:
+        errors.extend(validate_trampolines(main_syms, com_bytes, built_ovl_bytes))
+
     # 5. Cross-overlay Z80 source & listing audit
     if src_dirs is None:
         src_dirs = [CPM_SRC_DIR, CORE_Z80_DIR]
@@ -1254,7 +1347,11 @@ def _create_valid_fixture(bdir: Path, sdir: Path) -> None:
             shutil.rmtree(target_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
     res_size = 0x1000
-    (bdir / "MORIA8.COM").write_bytes(b"\x00" * res_size)
+    com_buf = bytearray(res_size)
+    dispatch_addr = RESIDENT_BASE + 0x080
+    for stub_off, ovl_id in ((0x100, 2), (0x110, 7), (0x120, 15), (0x130, 2)):
+        struct.pack_into("<BHBH", com_buf, stub_off, 0xCD, dispatch_addr, ovl_id, OVL_WINDOW_BASE)
+    (bdir / "MORIA8.COM").write_bytes(bytes(com_buf))
     (bdir / "main.sym").write_text(
         "\n".join([
             f"resident_start: EQU 0x{RESIDENT_BASE:08X}",
@@ -1302,7 +1399,8 @@ def _create_valid_fixture(bdir: Path, sdir: Path) -> None:
     dat_payloads: dict[int, bytes] = {}
     for slot_id, ovl_name in OVERLAY_SLOT_MAP.items():
         ovl_len = 0x0200
-        blob = bytes([(slot_id + 1) & 0xFF]) * ovl_len
+        vec_hdr = struct.pack("<BH", 0xC3, OVL_WINDOW_BASE + 0x20)
+        blob = vec_hdr + bytes([(slot_id + 1) & 0xFF]) * (ovl_len - len(vec_hdr))
         (bdir / f"{ovl_name}.ovl").write_bytes(blob)
         dat_payloads[slot_id] = blob
         (bdir / f"{ovl_name}.sym").write_text(
@@ -2072,6 +2170,38 @@ def run_selftest() -> int:
             errs = validate_build(sj_out, milestone="m3", src_dirs=[])
             if errs:
                 print(f"FAIL: sjasmplus-assembled memory.inc failed m3 contract: {errs}", file=sys.stderr)
+                return 1
+
+            # Trampoline-to-overlay vector negative checks against synthetic sjasmplus build
+            sj_main_syms = parse_sym_file(sj_out / "main.sym")
+            sj_com_bytes = (sj_out / "MORIA8.COM").read_bytes()
+            sj_ovl_bytes = {
+                ovl_name: sj_dat[slot_id]
+                for slot_id, ovl_name in sj_ovls
+            }
+            if validate_trampolines(sj_main_syms, sj_com_bytes, sj_ovl_bytes):
+                print("FAIL: valid synthetic trampolines triggered errors", file=sys.stderr)
+                return 1
+            bad_vec_ovls = dict(sj_ovl_bytes)
+            bad_vec_ovls["ovl_title"] = b"\x18" + sj_ovl_bytes["ovl_title"][1:]
+            if not validate_trampolines(sj_main_syms, sj_com_bytes, bad_vec_ovls):
+                print("FAIL: validate_trampolines missed non-JP vector opcode 0x18", file=sys.stderr)
+                return 1
+            tramp_off = sj_main_syms["tramp_title_menu"] - RESIDENT_BASE
+            bad_id_com = bytearray(sj_com_bytes)
+            bad_id_com[tramp_off + 3] = 99
+            if not validate_trampolines(sj_main_syms, bytes(bad_id_com), sj_ovl_bytes):
+                print("FAIL: validate_trampolines missed out-of-range overlay ID 99", file=sys.stderr)
+                return 1
+            bad_tgt_com = bytearray(sj_com_bytes)
+            struct.pack_into("<H", bad_tgt_com, tramp_off + 4, OVL_WINDOW_BASE - 1)
+            if not validate_trampolines(sj_main_syms, bytes(bad_tgt_com), sj_ovl_bytes):
+                print("FAIL: validate_trampolines missed below-window target address", file=sys.stderr)
+                return 1
+            unaligned_tgt_com = bytearray(sj_com_bytes)
+            struct.pack_into("<H", unaligned_tgt_com, tramp_off + 4, OVL_WINDOW_BASE + 1)
+            if not validate_trampolines(sj_main_syms, bytes(unaligned_tgt_com), sj_ovl_bytes):
+                print("FAIL: validate_trampolines missed unaligned vector target OVL_WINDOW_BASE+1", file=sys.stderr)
                 return 1
 
             # Real sjasmplus --lst multi-statement pass/fail checks

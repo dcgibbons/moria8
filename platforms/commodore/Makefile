@@ -268,7 +268,7 @@ C128_MAIN_OUTPUTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
 
 .PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
 	bootart128-charset-demo \
-	test test-disk test-disk-static test-disk-debt test64 test64-legal test128-legal testplus4-legal test-legal-harness test-scripted-smoke-harness \
+	test test-disk test-disk-static test-disk-debt test64 test64-legal test128-legal testplus4-legal test64-gain-stat test128-gain-stat testplus4-gain-stat test-legal-harness test-scripted-smoke-harness \
 	test64-cartridge test64-cartridge-assets test64-cartridge-persistence \
 	test128 check128-payloads test128-guards test128-units test128-boot test128-town test128-cache test128-diag test128-fast test128-fast-smoke test128-soak-long test128-cartridge \
 	testplus4 testplus4-build testplus4-runtime testplus4-cartridge testplus4-cartridge-assets testplus4-cartridge-persistence clean \
@@ -318,7 +318,7 @@ runplus4-cart: cartridgeplus4
 
 bootart128-charset-demo: $(C128_CHARSET_DEMO_PRG)
 
-test: test64 test64-cartridge test128-fast test128-fast-smoke test128-legal test128-cartridge testplus4 testplus4-cartridge
+test: test64 test64-cartridge test128-fast test128-fast-smoke test128-legal test128-gain-stat test128-cartridge testplus4 testplus4-cartridge
 
 test-disk: ensure-kickass
 	python3 -u disk_test_matrix.py \
@@ -339,10 +339,10 @@ test-disk-debt:
 test-scripted-smoke-harness:
 	python3 -B plus4/tests/test_product_scripted_smoke.py
 
-test64: ensure-kickass test64-legal test-scripted-smoke-harness
+test64: ensure-kickass test64-legal test64-gain-stat test-scripted-smoke-harness
 	cd c64 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests.sh
 
-test128: ensure-kickass check128-payloads test128-legal test-scripted-smoke-harness test128-cartridge
+test128: ensure-kickass check128-payloads test128-legal test128-gain-stat test-scripted-smoke-harness test128-cartridge
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests128.sh
 
 # The bytes each payload emits, not labels beside them (docs/C128_MEMORY_CONTRACT.md).
@@ -371,7 +371,7 @@ test128-fast-smoke: ensure-kickass check128-payloads
 testplus4-build: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
 	@echo "Plus/4 build artifacts assembled; runtime smoke is make testplus4-runtime."
 
-testplus4: ensure-kickass testplus4-legal test-scripted-smoke-harness
+testplus4: ensure-kickass testplus4-legal testplus4-gain-stat test-scripted-smoke-harness
 	cd plus4 && KICKASS="$(KICKASS_RESOLVED)" VICEPLUS4="$(VICEPLUS4)" ./run_testsplus4.sh
 
 testplus4-runtime: ensure-kickass
@@ -839,6 +839,12 @@ test128-legal: disk128 test-legal-harness
 	python3 -B test_legal.py c128 --symbols "$(OUT128)/main.sym" --disk-image "$(DISK128_IMAGE)" --vice "$(VICE128)" --c1541 "$(C1541)" --output "$(OUT)/test/c128-legal"
 testplus4-legal: diskplus4 test-legal-harness
 	python3 -B test_legal.py plus4 --symbols "$(OUTPLUS4)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --vice "$(VICEPLUS4)" --c1541 "$(C1541)" --output "$(OUT)/test/plus4-legal"
+test64-gain-stat: disk64
+	python3 -B test_gain_stat_product.py c64 --symbols "$(OUT64)/main.sym" --disk-image "$(DISK64_IMAGE)" --program "$(C64_MAIN_PRG)" --vice "$(VICE64)" --output "$(OUT)/test/c64-gain-stat"
+test128-gain-stat: disk128
+	python3 -B test_gain_stat_product.py c128 --symbols "$(OUT128)/main.sym" --disk-image "$(DISK128_IMAGE)" --vice "$(VICE128)" --output "$(OUT)/test/c128-gain-stat"
+testplus4-gain-stat: diskplus4
+	python3 -B test_gain_stat_product.py plus4 --symbols "$(OUTPLUS4)/main.sym" --disk-image "$(DISKPLUS4_IMAGE)" --vice "$(VICEPLUS4)" --output "$(OUT)/test/plus4-gain-stat"
 
 $(CART64_OUT)/legalui: $(CART64_OUT)/.main.stamp
 	@test -f "$@" || { rm -f "$(CART64_OUT)/.main.stamp"; $(MAKE) "$(CART64_OUT)/.main.stamp"; }

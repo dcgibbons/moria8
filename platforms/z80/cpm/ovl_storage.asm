@@ -295,21 +295,14 @@ ovl_storage_load_menu:
     DJNZ .chk_cat
     CALL catalog_refetch_slots
 
-    ; Recompute PL_*_CUR & 118/3 cap residuals from base + equipment (matching 6502 load_resume_game player_calc_stats)
+    ; Recompute PL_*_CUR & residuals via VMS 18/xx equipment stepping from base + equipment (matching 6502 load_resume_game player_calc_stats)
     CALL msg_init
     CALL id_refresh_fixed_known
     CALL inv_calc_weight
     CALL player_sync_eq_stat_mod
-    LD   C, 0
+    LD   BC, 0
 .res_lp:
-    LD   B, 0
-    LD   HL, player_data + PL_STR_BASE
-    ADD  HL, BC
-    LD   A, (HL)
-    LD   HL, player_eq_stat_mod
-    ADD  HL, BC
-    ADD  A, (HL)
-    CALL player_clamp_stat_a        ; A = clamped [3..118], E = signed residual
+    CALL player_healthy_c           ; A = stepped healthy [3..118], E = signed residual (preserves BC)
     LD   HL, player_data + PL_STR_CUR
     ADD  HL, BC
     LD   (HL), A

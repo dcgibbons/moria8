@@ -718,7 +718,7 @@ emu.wait(2)
 assert_line("help_close", in_town(), "help did not return to the town view")
 legal_press("V")
 for i = 1, 100 do
-    if screen_has("Moria 8 - System Info") then break end
+    if screen_has("Moria 8 - System Info") and screen_has("Turn 0  Town") and screen_has("RNG:") then break end
     emu.wait(0.1)
 end
 assert_line("gameplay_sysinfo", screen_has("Moria 8 - System Info") and screen_has("Turn 0  Town") and screen_has("RNG:"), "V did not open gameplay System Info")

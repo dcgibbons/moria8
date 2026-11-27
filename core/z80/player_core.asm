@@ -14,7 +14,8 @@
     EXPORT player_weight_limit
     EXPORT player_calc_hp
     EXPORT player_sync_eq_stat_mod
-    EXPORT player_clamp_stat_a
+    EXPORT player_step_equip_stat_c
+    EXPORT player_healthy_c
     EXPORT player_drain_stat_a
     EXPORT player_restore_stat_a
     EXPORT player_calc_combat
@@ -33,7 +34,6 @@
     EXPORT id_is_known
     EXPORT id_mark_known
     EXPORT id_refresh_fixed_known
-    EXPORT id_init_flavours
     EXPORT store_check_category
     EXPORT si_match_inv
     EXPORT si_find_match
@@ -326,31 +326,144 @@ player_calc_hp:
     DB   9, 0, 2, 6, 4, 6
 
 ; ============================================================
-; player_clamp_stat_a — Clamp raw stat byte A to [3..118] & return residual.
-; Input:  A = raw stat value (0xC0..0xFF treated as negative underflow)
-; Output: A = clamped stat [3..118], E = signed residual (raw - clamped)
+; _player_step_equip_ae — VMS 18/xx in_statt/de_statt stepping loop (MON-044).
+; Input:  A = cur stat [3..118], E = signed residual [-128..+127], D = signed steps (-128..+127)
+; Output: A = new cur stat [3..118], E = new signed residual [-128..+127]
 ; Preserves: BC, HL, IX, IY (clobbers AF, D, E)
 ; ============================================================
-player_clamp_stat_a:
-    LD   D, A
-    CP   0xC0
-    JR   NC, .c_min
+_player_step_equip_ae:
+    INC  D
+    DEC  D
+    RET  Z
+    JP   M, .dec_lp
+.inc_lp:
+    CP   18
+    JR   NC, .inc_18
     CP   3
-    JR   NC, .c_chkmax
-.c_min:
-    LD   A, 3
-    JR   .c_done
-.c_chkmax:
+    JR   NZ, .inc_add1
+    BIT  7, E
+    JR   Z, .inc_add1
+    INC  E                      ; cur == 3 with negative res -> burn residual first
+    JR   .inc_next
+.inc_add1:
+    INC  A
+    JR   .inc_next
+.inc_18:
+    CP   118
+    JR   Z, .inc_at118
+    ADD  A, 10
     CP   119
-    JR   C, .c_done
+    JR   C, .inc_next
+    SUB  118
+    JR   .inc_st118
+.inc_at118:
+    LD   A, E
+    ADD  A, 10
+    JP   P, .inc_st118
+    LD   E, 127
     LD   A, 118
-.c_done:
+    RET
+.inc_st118:
     LD   E, A
-    LD   A, D
-    SUB  E
-    LD   D, E
+    LD   A, 118
+.inc_next:
+    DEC  D
+    JR   NZ, .inc_lp
+    RET
+
+.dec_lp:
+    CP   118
+    JR   NZ, .dec_not118
+    LD   A, E
+    CP   10
+    JR   C, .dec_drop118
+    SUB  10
     LD   E, A
-    LD   A, D
+    LD   A, 118
+    JR   .dec_next
+.dec_drop118:
+    ADD  A, 108
+    LD   E, 0
+    JR   .dec_next
+.dec_not118:
+    CP   28
+    JR   C, .dec_chk19
+    SUB  10
+    JR   .dec_next
+.dec_chk19:
+    CP   19
+    JR   C, .dec_chk4
+    LD   A, 18                  ; VMS 19..27 -> 18 on negative step
+    JR   .dec_next
+.dec_chk4:
+    CP   4
+    JR   C, .dec_at3
+    DEC  A
+.dec_next:
+    INC  D
+    JR   NZ, .dec_lp
+    RET
+.dec_at3:
+    LD   A, E
+    ADD  A, D
+    JP   PO, .dec_at3_ok
+    LD   A, 0x80
+.dec_at3_ok:
+    LD   E, A
+    LD   A, 3
+    RET
+
+; ============================================================
+; player_step_equip_stat_c — Apply signed equipment step delta A to stat C (0..5).
+; Input:  C = stat index (0..5), A = signed delta (-128..+127)
+; Output: A = new PL_STR_CUR[C], E = new player_stat_res[C]
+; Preserves: BC, IX, IY (clobbers AF, D, E, HL)
+; ============================================================
+player_step_equip_stat_c:
+    PUSH BC
+    LD   B, 0
+    LD   D, A
+    LD   HL, player_stat_res
+    ADD  HL, BC
+    LD   E, (HL)
+    PUSH HL
+    LD   HL, player_data + PL_STR_CUR
+    ADD  HL, BC
+    LD   A, (HL)
+    CALL _player_step_equip_ae
+    LD   (HL), A
+    POP  HL
+    LD   (HL), E
+    POP  BC
+    RET
+
+; ============================================================
+; player_healthy_c — Compute healthy (PL_*_BASE[C] stepped by player_eq_stat_mod[C]).
+; Input:  C = stat index (0..5)
+; Output: A = stepped healthy stat [3..118], E = signed healthy residual
+; Preserves: BC, IX, IY (clobbers AF, D, E, HL)
+; ============================================================
+player_healthy_c:
+    PUSH BC
+    LD   B, 0
+    LD   HL, player_eq_stat_mod
+    ADD  HL, BC
+    LD   D, (HL)
+    LD   HL, player_data + PL_STR_BASE
+    ADD  HL, BC
+    LD   A, (HL)
+    CP   3
+    JR   NC, .chkmax
+    LD   A, 3
+    JR   .clamped
+.chkmax:
+    CP   119
+    JR   C, .clamped
+    LD   A, 118
+.clamped:
+    LD   E, 0
+    CALL _player_step_equip_ae
+    POP  BC
     RET
 
 ; ============================================================
@@ -392,6 +505,10 @@ player_sync_eq_stat_mod:
     JR   NC, .bit_skip
     LD   A, (HL)
     ADD  A, D
+    JP   PO, .mod_ok
+    LD   A, 0x7F
+    ADC  A, 0
+.mod_ok:
     LD   (HL), A
 .bit_skip:
     INC  HL
@@ -404,24 +521,10 @@ player_sync_eq_stat_mod:
     JR   C, .eq_loop
     RET
 
-; _player_healthy_c — Compute healthy (PL_*_BASE[C] + player_eq_stat_mod[C]).
-; Output: A = clamped healthy stat, E = healthy signed residual. Preserves BC, IX, IY.
-_player_healthy_c:
-    LD   E, C
-    LD   D, 0
-    LD   HL, player_data + PL_STR_BASE
-    ADD  HL, DE
-    LD   A, (HL)
-    LD   HL, player_eq_stat_mod
-    ADD  HL, DE
-    ADD  A, (HL)
-    JR   player_clamp_stat_a
-
 ; ============================================================
-; player_drain_stat_a — Drain PL_*_CUR[A] (0..5) by one Umoria step without
-; touching PL_*_BASE. Updates combat/HP/ABI/status when lowered.
+; player_drain_stat_a — VMS de_statp runtime stat drain on PL_*_CUR[A] (MON-044).
 ; Input:  A = stat index (0..5)
-; Output: CF = 1 if drained, CF = 0 if unchanged (< 4)
+; Output: CF = 1 if drained, CF = 0 if already < 4
 ; Preserves: IX, IY (clobbers AF, BC, DE, HL)
 ; ============================================================
 player_drain_stat_a:
@@ -440,51 +543,64 @@ player_drain_stat_a:
     PUSH HL
     LD   HL, player_stat_res
     ADD  HL, BC
-    LD   A, (HL)
-    BIT  7, A
-    JR   NZ, .reload
-    OR   A
-    JR   Z, .reload
-    DEC  (HL)
+    LD   E, (HL)
+    LD   A, E
+    DEC  A
+    CP   127                    ; 1..127 -> 0..126 (< 127 -> CF=1)
+    JR   NC, .reload
+    LD   A, 3
+    CALL rng_range              ; 0..2
+    INC  A                      ; r = 1..3
+    LD   D, A
+    LD   A, E
+    SUB  D                      ; res - r; NC if res >= r
+    JR   C, .spill_118
+    LD   (HL), A
     POP  HL
     JR   .sync
+.spill_118:
+    ADD  A, 118                 ; 118 + (res - r) -> 116 or 117
+    LD   (HL), 0
+    POP  HL
+    JR   .wr_cur_only
 .reload:
     POP  HL
-    LD   A, 118
+    LD   A, (HL)                ; == 118
 .dec_cur:
-    CP   109
-    JR   NC, .sub1
-    CP   88
-    JR   NC, .hi88
     CP   19
     JR   C, .sub1
+    CP   109
+    JR   NC, .hi109
     LD   D, A
-    LD   A, 15
-    CALL rng_range
-    ADD  A, 6
-    JR   .sub_chk
-.hi88:
-    LD   D, A
-    LD   A, 6
-    CALL rng_range
-    ADD  A, 3
-.sub_chk:
+    LD   A, 10
+    CALL rng_range              ; 0..9
+    ADD  A, 6                   ; 1d10 + 5 (6..15)
     LD   E, A
     LD   A, D
     SUB  E
-    JR   C, .clamp18
     CP   19
     JR   NC, .wr
-.clamp18:
     LD   A, 18
+    JR   .wr
+.hi109:
+    LD   D, A
+    LD   A, 3
+    CALL rng_range              ; 0..2
+    INC  A                      ; randint(3) = 1..3
+    LD   E, A
+    LD   A, D
+    SUB  E
     JR   .wr
 .sub1:
     DEC  A
 .wr:
-    LD   (HL), A
+    PUSH HL
     LD   HL, player_stat_res
     ADD  HL, BC
     LD   (HL), 0
+    POP  HL
+.wr_cur_only:
+    LD   (HL), A
 .sync:
     LD   A, C
     CP   STAT_CON
@@ -496,14 +612,14 @@ player_drain_stat_a:
 
 ; ============================================================
 ; player_restore_stat_a — Restore PL_*_CUR[A] (0..5, or 0xFF = all) to
-; healthy max (PL_*_BASE + player_eq_stat_mod) without wiping other drains.
+; stepped 18/xx healthy max (player_healthy_c) without wiping other drains.
 ; Output: CF = 1 if any stat raised, CF = 0 if none needed restore.
 ; Preserves: IX, IY (clobbers AF, BC, DE, HL)
 ; ============================================================
 player_restore_stat_a:
     LD   B, A                   ; B = target (0..5 or 0xFF)
     LD   C, 0                   ; C = loop stat index 0..5
-    LD   D, 0                   ; D = restored_any (0 or 1)
+    LD   D, 0                   ; D = restored_any bitmask
 .lp:
     LD   A, B
     CP   0xFF
@@ -512,7 +628,7 @@ player_restore_stat_a:
     JR   NZ, .nx
 .chk_one:
     PUSH DE                     ; save D = restored_any
-    CALL _player_healthy_c      ; A = healthy_cur, E = healthy_res (B, C preserved)
+    CALL player_healthy_c       ; A = healthy_cur, E = healthy_res (B, C preserved)
     LD   D, A                   ; D = healthy_cur, E = healthy_res
     PUSH BC                     ; save target B and idx C
     LD   B, 0
@@ -524,22 +640,19 @@ player_restore_stat_a:
     JR   NZ, .skip_wr
     LD   HL, player_stat_res
     ADD  HL, BC
-    LD   A, (HL)
-    XOR  0x80
-    LD   B, A
     LD   A, E
     XOR  0x80
+    LD   B, A
+    LD   A, (HL)
+    XOR  0x80
     CP   B
-    JR   C, .skip_wr
-    JR   Z, .skip_wr
-    LD   B, 0
-    LD   HL, player_data + PL_STR_CUR
-    ADD  HL, BC
+    JR   NC, .skip_wr           ; cur_res >= healthy_res -> skip
+    JR   .wr_res_only           ; HL = player_stat_res[C], cur already == D
 .do_wr:
     LD   (HL), D
-    LD   B, 0
     LD   HL, player_stat_res
     ADD  HL, BC
+.wr_res_only:
     LD   (HL), E
     POP  BC
     POP  DE
@@ -566,7 +679,6 @@ player_restore_stat_a:
     CALL status_mark_dirty
     SCF
     RET
-
 
 ; _equip_stat_mask_c — Slot C -> A = 6-bit stat mask. Preserves BC, DE.
 _equip_stat_mask_c:
@@ -884,8 +996,10 @@ _inv_slot_weight:
 
 ; inv_calc_weight — Recompute 16-bit inven_weight_lo/hi across all 34 slots.
 ; Output: HL = total weight (0.1 lb, saturated at 0xFFFF)
-; Preserves: IX, IY (clobbers AF, BC, DE, HL)
+; Preserves: item_cur_page, IX, IY (clobbers AF, BC, DE, HL)
 inv_calc_weight:
+    LD   A, (item_cur_page)
+    PUSH AF
     LD   HL, 0
     LD   (inven_weight_lo), HL
     LD   C, 0
@@ -924,12 +1038,15 @@ inv_calc_weight:
     CP   TOTAL_INV_SLOTS
     JR   C, .loop
     LD   HL, (inven_weight_lo)
+.ret:
+    POP  AF
+    LD   (item_cur_page), A
     RET
 .sat:
     POP  BC
     LD   HL, 0xFFFF
     LD   (inven_weight_lo), HL
-    RET
+    JR   .ret
 
 ; inv_compact — Compact carried pack slots 0..MAX_INV_SLOTS-1 preserving order.
 ; Clobbers: AF, BC, DE, HL (preserves IX, IY)
@@ -1307,85 +1424,6 @@ id_refresh_fixed_known:
     INC  C
     DJNZ .sp_loop
     RET
-
-; id_init_flavours — Reset id_known_bits, refresh fixed known items, and
-; Fisher-Yates shuffle all 5 randomized appearance tables (174 entries).
-; Preserves: IX, IY (clobbers AF, BC, DE, HL)
-id_init_flavours:
-    LD   HL, id_known_bits
-    LD   DE, id_known_bits + 1
-    LD   BC, ID_KNOWN_BYTES - 1
-    LD   (HL), 0
-    LDIR
-    CALL id_refresh_fixed_known
-
-    ; Shuffle 5 contiguous flavour tables via (potion_shuffle, count)
-    LD   HL, potion_shuffle
-    LD   DE, .cls_counts
-    LD   B, 5
-.cls_loop:
-    PUSH BC
-    LD   A, (DE)                ; A = count
-    INC  DE
-    PUSH DE
-    PUSH HL
-    ; Initialize 0..count-1
-    LD   C, A                   ; C = count
-    LD   B, A
-    XOR  A
-.init_seq:
-    LD   (HL), A
-    INC  HL
-    INC  A
-    DJNZ .init_seq
-
-    ; Fisher-Yates from i = count-1 down to 1
-    POP  HL                     ; HL = base of class shuffle table
-    DEC  C                      ; C = i
-.fy_loop:
-    LD   A, C
-    INC  A                      ; N = i + 1
-    PUSH HL
-    PUSH BC
-    CALL rng_range              ; A = rand in [0..i]
-    POP  BC
-    POP  HL
-    ; Swap table[i] <-> table[A]
-    LD   E, C
-    LD   D, 0
-    PUSH HL
-    ADD  HL, DE
-    LD   B, (HL)                ; B = table[i]
-    EX   DE, HL                 ; DE = &table[i]
-    POP  HL
-    PUSH HL
-    PUSH BC
-    LD   C, A
-    LD   B, 0
-    ADD  HL, BC                 ; HL = &table[j]
-    LD   A, (HL)                ; A = table[j]
-    LD   (DE), A                ; table[i] = old table[j]
-    POP  BC
-    LD   (HL), B                ; table[j] = old table[i]
-    POP  HL
-    DEC  C
-    JR   NZ, .fy_loop
-
-    ; Advance HL past this class table
-    LD   B, 0
-    POP  DE                     ; DE -> next count? Wait, need current count!
-    DEC  DE
-    LD   A, (DE)
-    INC  DE
-    LD   C, A
-    ADD  HL, BC
-    POP  BC
-    DJNZ .cls_loop
-    RET
-
-.cls_counts:
-    DB   FLAVOUR_POTION_COUNT, FLAVOUR_SCROLL_COUNT, FLAVOUR_RING_COUNT
-    DB   FLAVOUR_WAND_COUNT, FLAVOUR_STAFF_COUNT
 
 ; ============================================================
 ; store_check_category — Check whether store accepts/carries ICAT category.

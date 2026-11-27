@@ -122,7 +122,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | MON-041 | Accepted | Project maintainer, 2026-11-20 ("a Moria8 vs VMS difference is usually an early accident: fix it") | Summons, breeding and clones follow pinned VMS Moria: (1) counts: Scroll of Summon Monster `randint(3)` (`scrolls.inc:147-153`), Scroll of Summon Undead `randint(3)` (`scrolls.inc:329-335`), Staff of Summoning `randint(4)` (`staffs.inc:46-52`); the summoning rune `2 + randint(3)` (`moria.inc:1885`) and the chest trap's `3` (`moria.inc:2655`) were already VMS. (2) Summon Undead (scroll and `MSF2_SUMMON_UNDEAD`) picks any undead of the catalog through one `pick_undead_creature_type` (`misc.inc:648-670` `summon_undead`; MON-033's `cat_undead[35]` pick). (3) A monster's summons land beside the player (`creature.inc:986-1001`: `summon_monster(char_row, char_col, ..)`; `find_adjacent_empty_player`), not beside the caster. (4) Every summon, clone (`spells.inc:1192`) and breeder's child (`creature.inc:1080`) is placed awake: `monster_spawn_awake` = `monster_spawn_one` + `monster_wake` (`slp = false`: `csleep := 0`, `misc.inc:529-534`). (5) In town, summons pick townspeople (`pick_creature_type` / `pick_summon_creature_type` return one of the 8 town rows: VMS `randint(m_level[0])`). | pinned VMS sources cited; C64 `test_monster_magic3.s` t23-t26, `test_monster_ai.s` t61 (clones awake); all fail at 312cd3c | scroll `1`, staff `2..4`, undead scroll `2` from the level's mix, summons beside the caster and asleep, clones asleep |
 | MON-042 | Accepted | Project maintainer, 2026-11-20 (same direction) | Polymorph follows pinned VMS `spells.inc`: `poly_monster` (Wand of Polymorph `wands.inc:71`, Polymorph Other `magic.inc:72-73`) changes the first monster along the bolt when `randint(max_mons_level) > level` (`rng_range(40) >= cr_level`), else prints "The `<name>` is unaffected." (`combat_msg_monster_suffix`); `mass_poly` (Staff of Mass Polymorph, `staffs.inc:72`) changes every creature with `cdis < max_sight` except the win creatures (`cdefense` bit 31: Moria8 `cr_level > MONS_LEVEL_MAX`), seen or not, with no roll. The new creature is `randint(m_level[max_mons_level]) + m_level[0]`: any level `1..40` (`pick_any_creature_type`, `cat_level_adj = $ff`), placed awake on the same square, in town as well. One body (`core/monster_polymorph.s` `PolymorphResist`/`PolymorphReplace`) is emitted in the item and spell overlays. Adaptation: `cdis` is Chebyshev | pinned VMS `spells.inc:1113-1147, 1397-1421`; C64 `test_monster_magic3.s` t27-t28; CX16 `harness_smoke.py monster_catalog` `poly_any_level`; t27-t28 fail at 312cd3c | polymorph always succeeding (the Balrog silently refused), a depth-limited replacement placed asleep, Mass Polymorph on seen monsters only, none in town |
 | MON-043 | Accepted | Project maintainer, 2026-11-23 ("make this act like VMS moria") | Monsters never flee at low HP: after confusion and spell/random-move checks, `monster_process_one` calls `monster_move_toward` unconditionally (matching pinned VMS Moria `mon_move` and Umoria `monsterMove`/`monsterDoMove`, where Turn Undead retreating in `monsterMoveUndead` is separate and out of scope). Removed `monster_check_flee`, `monster_move_away`, `mat_fleeing` (and its melee suppression in `monster_try_step`), and the spawn-time `HP / 4` flee threshold in `monster_spawn_one`. Kept the 12-byte monster record (`MONSTER_ENTRY_SIZE = 12`) and Save Format V2 (`$22`) intact by leaving bytes 10–11 as zeroed, unused `MX_RESERVED_0`/`MX_RESERVED_1` | explicit maintainer direction 2026-11-23; pinned VMS `source/include/creature.inc:1061-1135` (`mon_move`); pinned Umoria `src/monster.cpp:1101-1119, 1167-1232` (`monsterDoMove`, `monsterMove`); C64 `test_monster_ai.s` t17–t18 (fail pre-fix) and `test_monster_ai2.s` t6 through production `monster_ai_tick`; Z80 parity in `core/z80/{defs.inc,state.inc,monster_core.asm,monster_ai.asm}` + CP/M `scenario_monster_ai_combat_and_drops`; 8-port `make -j8 -O test` and 70-target `make playtest-gate` | commit `74700dc` (2026-02-15, `R3.4` low-HP fleeing) and MON-024's flee-threshold note |
-| MON-044 | Accepted | Project maintainer, 2026-11-24 (VMS `18/xx` equipment stepping + `de_statp` stat drains) | (1) Equipment stat bonuses/penalties (`p1` on rings, amulets, crowns, weapons, gloves, helms) step one point at a time via `player_step_equip_stat_y` (`core/6502/player.s`) matching VMS `py_bonuses`/`change_stat` -> `in_statt`/`de_statt` (`moria.inc:33-45, 68-140`, `misc.inc:2194-2222`): `+1` below `18`, `+10` from `18` capped at `118` (`18/100`), and reversed on take-off (`-10` down to `28`, `19..27 -> 18`, `-1` below `19`, floor `3`). Invoked by `player_calc_stats`, `player_adjust_equipment_stat`, BBC Master `player_adjust_equipment_stat_play`, `item_exchange.s`, and `eff_item_p1.s` (`ep1_curse_slot_common`). Signed residuals in `player_stat_res` preserve floor-3/cap-118 saturation across drains and reversible take-off, CON changes recompute max HP (`player_calc_hp`, TRN-013), and `player_apply_stat_delta_y` (still used by `eff_gain_stat.s`) saturates positive cap-118 residuals at `+127`. (2) Runtime stat drains (`player_drain_stat_y` and `decrement_stat` in `core/6502/player.s`) implement VMS `de_statp` (`misc.inc:2177-2191`): `-1` below `19`, `-(randint(10)+5)` floored at `18` in `19..108`, and `-randint(3)` above `108` (including positive `player_stat_res` at `118`), floored at `3`. Character-creation race/class baking (`apply_modifier` -> `chargen_decrement_stat` in `core/6502/player_chargen_cold.s`) retains VMS `create.inc` bands as its own routine. Save Format V2 (`$22`) and `PL_STRUCT_SIZE = 114` unchanged. (6502 ports; Z80 `core/z80/` parity tracked separately.) | explicit maintainer brief 2026-11-24; pinned VMS `moria.inc:33-45, 68-140`, `misc.inc:2177-2222`, `umoria/src/player_stats.cpp:240-265`; C64 `test_player.s` Tests 4, 10, 11, 12 (Tests 11–12 fail pre-fix), `test_item.s` t51, `test_item_effects_vms.s` t3E, `test_ego.s` t22/t24, `test_monster_attack2.s` t17–t20; 7-port `make -j7 -O test` and `make playtest-gate` | raw `+1`/`-1` equipment `p1` addition in `player_adjust_equipment_stat` / `player_calc_stats`; 4-band chargen `decrement_stat` (`1d15+5` / `1d6+2` / `1`) on runtime drains |
+| MON-044 | Accepted | Project maintainer, 2026-11-24 / Z80 parity 2026-11-26 | (1) Equipment stat bonuses/penalties (`p1` on rings, amulets, crowns, weapons, gloves, helms) step one point at a time via `player_step_equip_stat_y` (`core/6502/player.s`) / `player_step_equip_stat_c` (`core/z80/player_core.asm`) matching VMS `py_bonuses`/`change_stat` -> `in_statt`/`de_statt` (`moria.inc:33-45, 68-140`, `misc.inc:2194-2222`): `+1` below `18`, `+10` from `18` capped at `118` (`18/100`), and reversed on take-off (`-10` down to `28`, `19..27 -> 18`, `-1` below `19`, floor `3`). Signed residuals in `player_stat_res[0..5]` preserve floor-3 (`-128` sat)/cap-118 (`+127` sat) across drains, Gain Stat, Restore, Load, and reversible take-off; CON changes recompute max HP (`player_calc_hp`, TRN-013). (2) Runtime stat drains (`player_drain_stat_y` / `decrement_stat` in `core/6502/player.s` and `player_drain_stat_a` in `core/z80/player_core.asm`) implement VMS `de_statp` (`misc.inc:2177-2191`): `-1` below `19`, `-(randint(10)+5)` floored at `18` in `19..108`, and `-randint(3)` above `108` (including positive `player_stat_res` at `118` with remainder spilling into `116..117`), floored at `3`. Chargen baking (`create.inc`) and Save Format V2 (`$22`) stay unchanged across all 8 active ports. | explicit maintainer brief 2026-11-24 / Z80 parity 2026-11-26; pinned VMS `moria.inc:33-45, 68-140`, `misc.inc:2177-2222`, `umoria/src/player_stats.cpp:240-265`; C64 `test_player.s`, `test_item.s`, `test_item_effects_vms.s`, `test_ego.s`, `test_monster_attack2.s`; CP/M `platforms/z80/cpm/harness_smoke.py`; `make -j7 -O test`, `make testcpm`, `make playtest-gate` | raw `+1`/`-1` equipment `p1` addition and 4-band chargen `decrement_stat` on runtime drains |
 
 ## Conditional Verification Matrix
 
@@ -200,7 +200,8 @@ execute the changed production routine through its real dispatch/overlay path.
 | Polymorph roll, any-level awake replacement, Mass Polymorph reach (MON-042) | C64 `test_monster_magic3.s` t27-t28; CX16 `monster_catalog` `poly_any_level` | `TEST_FILTER='monster_magic3' make test64`; `make testcx16` |
 | No low-HP monster fleeing; `MX_RESERVED_0/1` zeroed at spawn, ignored if nonzero in older saves; low-HP mobile and `CF_ATTACK_ONLY` monsters advance/attack normally (MON-043) | C64 `test_monster_ai.s` t16–t19 (`t17`–`t18` fail pre-fix) and `test_monster_ai2.s` t6 (`CM2_PHASE` outer-boundary walls) through production `monster_spawn_one` and `monster_ai_tick`; CP/M `scenario_monster_ai_combat_and_drops` | `TEST_FILTER='monster_ai\|monster_ai2\|monster_magic' make test64`; all 7 6502 ports + 5 cartridges compile identical `core/6502/monster.s` and `core/6502/monster_ai.s`; CP/M parity verified via `make testcpm`; `make -j8 -O test`; `make playtest-gate` |
 | CP/M 2.2 (Z80) monster catalog spawn, visibility (`CD_INVISIBLE`), AI/combat/drops, extended attacks/magic, and recall parity (`core/z80/monster_{core,ai}.asm`, `platforms/z80/cpm/ovl_mon_ext.asm`) | `platforms/z80/cpm/harness_smoke.py` scenarios `monster_catalog_spawn_and_visibility`, `monster_ai_combat_and_drops`, `monster_attacks_and_magic`, `recall_and_balrog_victory` under `cpm_runner` / `RunCPM` | `make testcpm` |
-| Equipment `18/xx` stat stepping (`in_statt`/`de_statt` via `player_step_equip_stat_y`) & runtime `de_statp` stat drains (`player_drain_stat_y` / `decrement_stat` vs chargen `chargen_decrement_stat`) across `17/18/19`, `87/88`, `108/109`, `117/118`, ring at `18` and `18/95`, `player_stat_res` drains, and `player_calc_hp` CON sync (MON-044, 6502 ports) | C64 `test_player.s` Tests 4, 10, 11, 12 (Tests 11–12 fail pre-fix), `test_item.s` t51, `test_item_effects_vms.s` t3E, `test_ego.s` t22/t24, `test_item_exchange.s`, and `test_monster_attack2.s` t17–t20 | `TEST_FILTER='^(player\|ego\|item\|item_effects_vms\|item_exchange\|monster_attack2)$' make test64`; all 7 6502 ports + 5 cartridges build & pass `make -j7 -O test` and `make playtest-gate` |
+| Equipment `18/xx` stat stepping (`in_statt`/`de_statt` via `player_step_equip_stat_y`) & runtime `de_statp` stat drains (`player_drain_stat_y` / `decrement_stat` vs chargen `chargen_decrement_stat`) across `17/18/19`, `87/88`, `108/109`, `117/118`, ring at `18` and `18/95`, `player_stat_res` drains, Gain Stat w/ worn gear, and `player_calc_hp` CON sync (MON-044, 6502 ports) | C64 `test_player.s` Tests 4, 10, 11 (incl. `11g`), 12 (Tests 11–12 fail pre-fix), `test_item.s` t51, `test_item_effects_vms.s` t3E/t3F, `test_ego.s` t22/t24, `test_item_exchange.s`, and `test_monster_attack2.s` t17–t20; shipped product overlay smokes `platforms/commodore/test_gain_stat_product.py` (`c64`, `c128`, `plus4`) | `TEST_FILTER='^(player\|ego\|item\|item_effects_vms\|item_exchange\|monster_attack2)$' make test64`; `make -C platforms/commodore test64-gain-stat test128-gain-stat testplus4-gain-stat`; all 7 6502 ports + 5 cartridges build & pass `make test` and `make playtest-gate` |
+| Z80/CP/M `18/xx` equipment stat stepping (`player_step_equip_stat_c`, `player_healthy_c`), `de_statp` runtime stat drains (`player_drain_stat_a`), restore w/ gear (`player_restore_stat_a`), Gain Stat w/ gear (`_p_gain_stat`), and residual saturation (`MON-044`) | `platforms/z80/cpm/harness_smoke.py` scenarios `save_v2_roundtrip_and_checksum` (`res=50` at `118`, `res=0xFE` at `3`), `monster_attacks_and_magic`, `item_mgt_ranged_throw_and_egos`, `items_potions_scrolls_wands_staves` | `make testcpm`; `make testcpm-memory-contract`; `python3 -B tools/report_memory_budgets.py --port cpm` |
 
 ## Change Record — Phase 5 Full 279-Species VMS Monster Parity (2026-11-16)
 
@@ -551,12 +552,25 @@ Problem and success criteria:
   de_statp for runtime drains while keeping chargen baking (create.inc) and
   Save Format V2 ($22) unchanged.
 State being changed:
-  - core/6502/player.s: added stat_step_cnt and player_step_equip_stat_y (+ helper
-    pses_zero_res_write_y / pses_write_cur_y); updated player_calc_stats to sum
-    equipment p1 and step via player_step_equip_stat_y; guarded
-    player_apply_stat_delta_y against uint8 >= $C0 wrap at 118 + res; updated
-    player_drain_stat_y (1d3 drain on positive 118 residual) and decrement_stat
-    to VMS de_statp.
+  - core/6502/player.s: added stat_step_cnt and player_step_equip_stat_y (with O(1)
+    saturation early-exit at (118, +127) and (3, -128), plus pses_zero_res_write_y /
+    pses_write_cur_y); added overlay-safe player_sum_eq_y (with signed [-128, +127]
+    saturation matching Z80 player_sync_eq_stat_mod) and split
+    player_step_healthy_sum_y + player_apply_stat_delta_y into
+    core/6502/player_gain_stat_helpers.s for Gain Stat evaluation/application without
+    clobbering player_data, inline in Default via player.s or external under
+    PLAYER_GAIN_STAT_HELPERS_EXTERNAL on C64 TitleOverlay, Plus/4 ItemActionsOverlay,
+    and C128 C128ResidentPlay); updated player_calc_stats to sum equipment p1 per stat
+    and step via player_step_equip_stat_y (with inline [3, 118] base clamp); fixed
+    player_apply_stat_delta_y floor-3 negative residual wrap (no $C0 wrap) and guarded
+    uint8 >= $C0 wrap; updated player_drain_stat_y (1d3 drain on positive 118 residual)
+    and decrement_stat to VMS de_statp.
+  - core/6502/eff_gain_stat.s & platforms/atari8/main.s: computes exact MON-044
+    unclamped delta for Gain Stat across worn stat-modifying gear (closed-form
+    for eq_mod >= 0 so saturated +127 cap gear still yields full new_base - old_base
+    / +10 threshold delta on drained stats; player_step_healthy_sum_y delta for
+    eq_mod < 0) while preserving drains (disk_prompt_save moved to Default on
+    Atari 8-bit disk to keep eff_gain_stat.s in RuntimeBanked).
   - core/6502/player_chargen_cold.s: moved create.inc 4-band decrement logic into
     chargen_decrement_stat and pointed apply_modifier at it.
   - core/6502/player_adjust_equipment_stat.s, platforms/bbcmaster/main.s,
@@ -569,10 +583,9 @@ Search scope and terms:
 Relevant readers/writers found and known exclusions:
   All equipment stat sites (player_adjust_equipment_stat, BBC Master
   player_adjust_equipment_stat_play, item_exchange.s, eff_item_p1.s,
-  player_calc_stats) and runtime drain callers (monster_attack_effects.s,
-  trap_trigger_cold.s, player_magic.s, chest.s, eff_item_extended.s) converge
-  on core/6502/player.s. Excluded (intentionally kept separate): eff_gain_stat.s
-  (already uses VMS in_statp via player_apply_stat_delta_y) and chargen
+  player_calc_stats), Gain Stat (eff_gain_stat.s), and runtime drain callers
+  (monster_attack_effects.s, trap_trigger_cold.s, player_magic.s, chest.s,
+  eff_item_extended.s) converge on core/6502/player.s. Excluded: chargen
   player_bake_creation_stats (create.inc apply_modifier).
 Initialization, reset and persistence points:
   player_stat_res[0..5] and stat_step_cnt live in RAM; player_calc_stats
@@ -603,18 +616,91 @@ RNG reduction and bias, if applicable:
 Affected platforms, overlays, banks and owners:
   All 7 6502 ports (C64, C128, Plus/4, Apple IIe, CX16, Atari 8-bit, BBC Master 128)
   and all 5 cartridges via shared core/6502/*.s and platforms/bbcmaster/main.s
-  (BeebPlaySlot); Z80 core/z80/ parity tracked separately. StartupOverlay (ovl.start) adds 46 B for chargen_decrement_stat.
+  (BeebPlaySlot); Z80 core/z80/ parity tracked below. StartupOverlay (ovl.start) adds 46 B for chargen_decrement_stat.
 Required production-path tests:
-  C64 test_player.s Tests 4, 10, 11, 12 (Tests 11-12 fail pre-fix), test_item.s
-  t51, test_item_effects_vms.s t3E, test_ego.s t22/t24, test_item_exchange.s,
-  test_monster_attack2.s t17-t20, make build && make check-item-docs,
+  C64 test_player.s, test_item.s t51, test_item_effects_vms.s t3E, test_ego.s t22/t24,
+  test_item_exchange.s, test_monster_attack2.s t17-t20, make build && make check-item-docs,
   make -j7 -O test, make playtest-gate.
 Known behavior explicitly out of scope:
-  Save Format V2 layout; randomized in_statp gain potions (already compliant);
-  chargen randomized 18/xx stat baking.
+  Save Format V2 layout; chargen randomized 18/xx stat baking.
 Unresolved uncertainty and risk:
-  Tight ovl.start headroom (C128 had 68 B free before +46 B) verified via
-  make build boundary assertions across all 7 ports.
+  Tight ovl.start headroom (C128) verified via make build boundary assertions across all 7 ports.
+```
+
+## Change Record — Z80/CP/M VMS 18/xx Equipment Stat Stepping & de_statp Drains (MON-044 Parity, 2026-11-26)
+
+```text
+Problem and success criteria:
+  Bring Z80/CP/M (`core/z80/`, `platforms/z80/cpm/`) to exact MON-044 parity with
+  canonical 6502:
+  (1) Equipment stat bonuses/penalties (`ovl_modal_recalc_equipment`,
+  `ovl_storage` load rebuild, `player_restore_stat_a`, and Gain Stat `_p_gain_stat`
+  with worn gear) step through VMS `in_statt`/`de_statt` (+1 below 18, +10 per
+  point at/above 18 capped at 118 with signed residuals, and 19..27 -> 18 on negative step).
+  (2) `player_drain_stat_a` implements VMS `de_statp` (`-1` on `4..18`,
+  `-(1d10+5)` floor `18` on `19..108`, `-1d3` on `109..118` and positive `118`
+  residual with spill to `116..117`).
+State being changed:
+  - `core/z80/player_core.asm`: removed dead `player_clamp_stat_a`; added
+    saturated addition in `player_sync_eq_stat_mod`; added register-shared
+    `_player_step_equip_ae` (with bounded saturation early-exit at `+127`/`-128`),
+    exported `player_step_equip_stat_c`, `player_healthy_c`, `player_drain_stat_a`,
+    and `player_restore_stat_a` (all resident — zero overlay thrashing); moved
+    chargen-only `id_init_flavours` to `platforms/z80/cpm/ovl_start.asm`;
+    preserved `item_cur_page` across `inv_calc_weight`.
+  - `platforms/z80/cpm/ovl_modal.asm`: `ovl_modal_recalc_equipment` steps via
+    `player_step_equip_stat_c` (handling signed `new - old` overflow cleanly) and
+    calls `player_calc_hp` when `PL_CON_CUR` changes.
+  - `platforms/z80/cpm/ovl_storage.asm`: Save V2 load rebuild steps each stat via
+    `player_healthy_c`, then calls `player_calc_hp` and `player_calc_combat`.
+  - `platforms/z80/cpm/ovl_items.asm`: `_p_gain_stat` uses closed-form unclamped
+    VMS `in_statt` scaling when `player_eq_stat_mod[C] >= 0` (preventing `+127`
+    residual saturation collapse on drained stats) and `player_healthy_c` difference
+    when `player_eq_stat_mod[C] < 0`, preserving drains.
+Search scope and terms:
+  `grep -rnE 'player_clamp_stat_a|player_sync_eq_stat_mod|player_healthy_c|player_drain_stat_a|player_restore_stat_a'`
+  across `core/z80/`, `platforms/z80/`, `docs/`.
+Relevant readers/writers found and known exclusions:
+  Equipment wear/takeoff/exchange/curse converge on `ovl_modal_recalc_equipment`;
+  Save V2 load converges on `ovl_storage.asm`; Gain Stat on `ovl_items.asm`;
+  drain/restore callers across `ovl_chest`, `ovl_actions`, `ovl_spell`,
+  `ovl_spell_eff`, `ovl_mon_ext`, `ovl_items` call resident `player_drain_stat_a` /
+  `player_restore_stat_a` directly. Chargen stat baking (`ovl_start.asm`) and Save
+  Format V2 (`PL_STRUCT_SIZE = 114`) are intentionally unchanged.
+Initialization, reset and persistence points:
+  Save V2 saves `PL_*_BASE` + worn equipment; `ovl_storage.asm` deterministically
+  reconstructs `18/xx`-stepped `PL_*_CUR` and `player_stat_res` on load.
+Affected production sequence through the changed transition:
+  `ovl_item_mgt` / `ovl_modal` / `ovl_items` / `ovl_storage` -> `player_step_equip_stat_c` /
+  `player_healthy_c` -> `(on CON)` `player_calc_hp` -> `player_calc_combat` -> `status_draw`;
+  drains & restores -> resident `player_drain_stat_a` / `player_restore_stat_a`.
+Contract decision or selected upstream oracle with source locations:
+  MON-044; VMS `moria.inc:33-45, 68-140`, `misc.inc:2177-2222`; Umoria `src/player_stats.cpp:240-265`.
+Intentional Moria8 deviations:
+  None for equipment stepping, `de_statp` drains, or Gain Stat w/ gear; chargen `18/xx`
+  baking (`ovl_start.asm`) remains unchanged.
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  `player_eq_stat_mod[0..5]` sums saturate to signed `[-128..+127]`;
+  `ovl_modal_recalc_equipment` splits deltas whose `new - old` overflows signed
+  8-bit; `player_stat_res[0..5]` saturates to `[-128, +127]` (`cur==3 => res<=0`,
+  `4..117 => res==0`, `cur==118 => res>=0`).
+RNG reduction and bias, if applicable:
+  Uses unbiased `rng_range(10)` (`1d10+5`) and `rng_range(3)` (`1d3`) in `core/z80/rng.asm`.
+Affected platforms, overlays, banks and owners:
+  CP/M 2.2 Z80: `MORIA8.COM` `21,663` B (`97` B free < `0x5600`), `88` trampolines
+  (`528` B), `ovl_start.ovl` `3,906` B, `ovl_home.ovl` `855` B, `ovl_items.ovl` `3,495` B,
+  `MORIA8.DAT` `97,536` B (`762` recs). See `docs/CPM_MEMORY_CONTRACT.md`.
+Required production-path tests:
+  `platforms/z80/cpm/harness_smoke.py` (`save_v2_roundtrip_and_checksum` incl. +50/+5
+  cap & 0xFE/-2 floor-3 round-trips, `monster_attacks_and_magic`,
+  `item_mgt_ranged_throw_and_egos`, `items_potions_scrolls_wands_staves` incl.
+  5 MON-044 Gain Strength w/ gear cases), `make build && make testcpm-memory-contract`,
+  `python3 -B tools/report_memory_budgets.py --port cpm`, `make diskcpm`, `make testcpm`,
+  and C64 `test_player.s` (`11g`) + `test_item_effects_vms.s` (`3F`).
+Known behavior explicitly out of scope:
+  Save Format V2 layout; chargen `ovl_start.asm` stat baking.
+Unresolved uncertainty and risk:
+  None in MON-044 semantics or TPA/overlay budgets.
 ```
 
 

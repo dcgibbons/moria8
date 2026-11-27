@@ -940,12 +940,12 @@ test_start:
     jsr player_step_equip_stat_y
     lda player_data + PL_STR_CUR
     cmp #4
-    bne !t11_fail+
+    bne !t11f_fail+
     lda zp_player_str
     cmp #4
-    bne !t11_fail+
+    bne !t11f_fail+
     lda player_stat_res + 0
-    bne !t11_fail+
+    bne !t11f_fail+
     lda #3
     sta player_data + PL_STR_CUR
     sta zp_player_str
@@ -955,10 +955,10 @@ test_start:
     jsr player_step_equip_stat_y
     lda player_data + PL_STR_CUR
     cmp #3
-    bne !t11_fail+
+    bne !t11f_fail+
     lda player_stat_res + 0
     cmp #$ff
-    bne !t11_fail+
+    bne !t11f_fail+
     lda #118
     sta player_data + PL_STR_CUR
     sta zp_player_str
@@ -968,12 +968,107 @@ test_start:
     jsr player_step_equip_stat_y
     lda player_data + PL_STR_CUR
     cmp #108
-    bne !t11_fail+
+    bne !t11f_fail+
     lda zp_player_str
     cmp #108
-    bne !t11_fail+
+    bne !t11f_fail+
     lda player_stat_res + 0
+    beq !t11g+
+!t11f_fail:
+    jmp !t11_fail+
+!t11g:
+
+    // 11g: player_apply_stat_delta_y negative-res cur==3 ($C0 wrap guard) & saturation O(1) exit
+    ldy #0
+    lda #3
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #$80
+    sta player_stat_res + 0
+    lda #1
+    jsr player_apply_stat_delta_y
+    lda player_data + PL_STR_CUR
+    cmp #3
+    bne !t11g_relay+
+    lda zp_player_str
+    cmp #3
+    bne !t11g_relay+
+    lda player_stat_res + 0
+    cmp #$81
+    bne !t11g_relay+
+
+    lda #$fe
+    sta player_stat_res + 0
+    lda #5
+    jsr player_apply_stat_delta_y
+    lda player_data + PL_STR_CUR
+    cmp #6
+    bne !t11g_relay+
+    lda zp_player_str
+    cmp #6
+    bne !t11g_relay+
+    lda player_stat_res + 0
+    bne !t11g_relay+
+
+    lda #118
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #127
+    sta player_stat_res + 0
+    lda #50
+    jsr player_step_equip_stat_y
+    lda player_data + PL_STR_CUR
+    cmp #118
+    bne !t11g_relay+
+    lda player_stat_res + 0
+    cmp #127
+    bne !t11g_relay+
+
+    lda #3
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
+    lda #$80
+    sta player_stat_res + 0
+    lda #(-50) & $ff
+    jsr player_step_equip_stat_y
+    lda player_data + PL_STR_CUR
+    cmp #3
+    bne !t11g_relay+
+    lda player_stat_res + 0
+    cmp #$80
+    beq !t11g_sat+
+!t11g_relay:
+    jmp !t11_fail+
+!t11g_sat:
+    // Signed 8-bit saturation [-128, +127] in player_sum_eq_y
+    lda #ITEM_SLOT_RING_OF_STRENGTH
+    sta inv_item_id + EQUIP_RING
+    sta inv_item_id + EQUIP_RING2
+    lda #ITEM_PAGE_RING_OF_STRENGTH
+    sta inv_ego + EQUIP_RING
+    sta inv_ego + EQUIP_RING2
+    lda #70
+    sta inv_p1 + EQUIP_RING
+    sta inv_p1 + EQUIP_RING2
+    ldy #0
+    jsr player_sum_eq_y
+    cmp #127
     bne !t11_fail+
+    lda #(-70) & $ff
+    sta inv_p1 + EQUIP_RING
+    sta inv_p1 + EQUIP_RING2
+    ldy #0
+    jsr player_sum_eq_y
+    cmp #$80
+    bne !t11_fail+
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    sta inv_item_id + EQUIP_RING2
+    lda #0
+    sta inv_ego + EQUIP_RING
+    sta inv_ego + EQUIP_RING2
+    sta inv_p1 + EQUIP_RING
+    sta inv_p1 + EQUIP_RING2
 
     lda #$01
     .byte $2c

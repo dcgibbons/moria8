@@ -372,9 +372,59 @@ _p_gain_stat:
     JR   C, .cap_ok
     LD   A, 118
 .cap_ok:
-    LD   (HL), A
-    SUB  E                          ; step = new_base - old_base
+    LD   D, A                       ; D = new_base
+    SUB  E                          ; 0 if base unchanged (already 118)
+    JR   NZ, .chk_eq
+    LD   E, 0
+    JR   .gs_apply
+.chk_eq:
+    PUSH DE                         ; D = new_base, E = old_base
+    LD   (HL), D
+    PUSH HL                         ; &PL_STR_BASE[C]
+    LD   HL, player_eq_stat_mod
+    ADD  HL, BC
+    LD   A, (HL)                    ; A = signed eq_mod
+    POP  HL
+    POP  DE
+    BIT  7, A
+    JR   NZ, .neg_eq
+    ; eq_mod >= 0: exact unclamped VMS in_statt delta without +127 cap
+    LD   H, A                       ; H = eq_mod (0..127)
+    LD   A, E                       ; old_base
+    CP   18
+    JR   C, .pos_lo
+    LD   A, D                       ; new_base
+    SUB  E                          ; base_step (1..25)
     LD   E, A
+    JR   .gs_apply
+.pos_lo:
+    ; old_base < 18 (base_step == 1): +10 iff old_base + eq_mod >= 18
+    ADD  A, H                       ; old_base (3..17) + eq_mod (0..127) <= 144
+    LD   E, 10
+    CP   18
+    JR   NC, .gs_apply
+    LD   E, 1
+    JR   .gs_apply
+.neg_eq:
+    ; eq_mod < 0: healthy never approaches +127; step via player_healthy_c
+    LD   (HL), E                    ; temporarily restore old_base
+    PUSH HL                         ; &PL_STR_BASE[C]
+    PUSH DE                         ; D = new_base
+    CALL player_healthy_c           ; A = h_old_cur, E = h_old_res (preserves BC)
+    ADD  A, E
+    POP  DE                         ; D = new_base
+    POP  HL                         ; &PL_STR_BASE[C]
+    LD   (HL), D                    ; restore new_base
+    PUSH AF
+    CALL player_healthy_c           ; A = h_new_cur, E = h_new_res (preserves BC)
+    ADD  A, E
+    LD   D, A
+    POP  AF
+    LD   E, A
+    LD   A, D
+    SUB  E                          ; exact negative-gear healthy delta
+    LD   E, A
+.gs_apply:
     LD   HL, player_data + PL_STR_CUR
     ADD  HL, BC
     LD   L, (HL)

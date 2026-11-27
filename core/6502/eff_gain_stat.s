@@ -11,14 +11,18 @@
 // Constitution adds 1 to max HP as VMS does; VMS then adds max HP to HP,
 // which can pass the maximum, so Moria8 heals to full instead.
 //
-// Owner: Default resident on C64, Plus/4, and C128; RuntimeBanked (ATARI.BNK)
-// on Atari 8-bit; DeathOverlay (ovl.death) on Apple IIe; ItemActionsOverlay
-// (OVL.ITEMS) on CX16; SpellOverlay (OVL.SPELL) on BBC Master 128.
+// Owner: TitleOverlay (ovl.title) on C64, ItemActionsOverlay (ovl.items) on
+// Plus/4 and CX16, StorageOverlay (ovl.storage, with player_gain_stat_helpers.s
+// in C128ResidentPlay) on C128, RuntimeBanked (ATARI.BNK) on Atari 8-bit,
+// DeathOverlay (ovl.death) on Apple IIe, and SpellOverlay (OVL.SPELL) on
+// BBC Master 128.
 // Lifetime: one potion quaff (ITEM_POTION_OF_GAIN_STRENGTH..ITEM_POTION_OF_CHARISMA).
 // Callers: Phase 3 quaff dispatch (iq_dispatch_p3 in player_item_commands.s on
-// C64/Plus/4/CX16/Atari, resident c128_quaff_p3_dispatch on C128, or
+// C64/Plus/4/CX16/Atari, c128_quaff_p3_dispatch in C128 StorageOverlay, or
 // iq_dispatch_p3_spell in OVL.SPELL on Apple IIe and BBC Master, where the
-// items-overlay router reloads OVL.ITEMS on return). Calls only resident helpers.
+// items-overlay router reloads OVL.ITEMS on return). Calls resident player.s
+// helpers plus player_gain_stat_helpers.s (inline in Default or co-located /
+// C128ResidentPlay).
 
 // eff_potion_gain_stat — Raise the stat of potion type A and say so.
 // Input: A = Page-0 slot_lo of one of the 6 gain-stat potions (unmatched -> rts)
@@ -55,11 +59,48 @@ eff_potion_gain_stat:
     bcc !egs_base_ok+
     lda #118
 !egs_base_ok:
-    sta player_data + PL_STR_BASE,y
-    sec
-    sbc egs_old                 // the step taken
 #if CORE_PLAYER_IMPORTED
+    cmp egs_old                     // A = new_base; egs_old = old_base
+    beq !egs_no_delta+
+    sta player_data + PL_STR_BASE,y
+    jsr player_sum_eq_y             // A = stat_work = signed eq_mod, preserves Y
+    bmi !egs_neg+
+    // eq_mod >= 0: exact unclamped VMS in_statt delta (never collapses at +127 res)
+    lda egs_old                     // old_base
+    cmp #18
+    bcc !egs_pos_lo+
+    lda player_data + PL_STR_BASE,y // new_base
+    sbc egs_old                     // C=1 guaranteed -> new_base - old_base
+    bne !egs_apply+                 // Always taken (new_base != old_base)
+!egs_pos_lo:
+    // old_base < 18 (C=0, Gain Stat rolled +1): +10 iff old_base + eq_mod >= 18
+    adc stat_work                   // old_base (3..17) + eq_mod (0..127) <= 144
+    cmp #18
+    lda #10
+    bcs !egs_apply+
+    lda #1
+    bne !egs_apply+
+!egs_neg:
+    // eq_mod < 0: healthy never approaches +127; step single stat Y preserving X
+    lda player_data + PL_STR_CUR,y
+    pha
+    lda player_stat_res,y
+    pha
+    ldx #0
+    lda egs_old
+    jsr player_step_healthy_sum_y   // A = h_old, preserves X, Y
+    tax
+    lda player_data + PL_STR_BASE,y
+    jsr player_step_healthy_sum_y   // A = (h_new - h_old) & $FF
+    tax
+    pla
+    sta player_stat_res,y
+    pla
+    jsr pses_write_cur_y            // Restores cur[Y] & zp_player_str[Y], preserves X, Y
+    txa
+!egs_apply:
     jsr player_apply_stat_delta_y
+!egs_no_delta:
     tya
     pha
     cpy #PL_CON_BASE - PL_STR_BASE
@@ -75,9 +116,11 @@ eff_potion_gain_stat:
     jsr magic_recalc_mana
     jsr magic_check_new_spells
 #endif
-    pla
-    tay
+    pla                             // A = saved stat index (0..5)
 #else
+    sta player_data + PL_STR_BASE,y
+    sec
+    sbc egs_old
     clc
     adc player_data + PL_STR_CUR,y
     cmp #119
@@ -97,9 +140,9 @@ eff_potion_gain_stat:
     lda zp_player_mhp_hi
     sta player_data + PL_MHP_HI
     jsr eff_heal_full
-#endif
 !egs_msg:
     tya
+#endif
     clc
     adc #HSTR_PIQ_GAIN_STR
     tax
