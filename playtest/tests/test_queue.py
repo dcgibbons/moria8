@@ -3166,3 +3166,17 @@ class FastForwardTest(unittest.TestCase):
             with mock.patch.object(queue, "ROOT", root):
                 self.assertIsNotNone(queue.fast_forward("upstream"))
             self.assertEqual((root / "game.s").read_text(), "local edit\n")
+
+
+class BotSnapshotTest(unittest.TestCase):
+    def test_snapshot_bot_falls_back_to_filesystem_when_git_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            with mock.patch.object(queue, "git", side_effect=RuntimeError("gitfile unavailable")):
+                bot_id = queue.snapshot_bot(home=home)
+            self.assertEqual(len(bot_id), 10)
+            self.assertTrue((home / "bot.json").is_file())
+            out = home / "bots" / bot_id
+            self.assertTrue((out / "playtest" / "moria_playtest" / "brain.py").is_file())
+            self.assertFalse(any(p.suffix == ".pyc" or "__pycache__" in p.parts for p in out.rglob("*")))
+

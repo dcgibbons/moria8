@@ -419,8 +419,18 @@ def snapshot_bot(home: Path = HOME) -> str:
     2026-11-23: "have the playtesting logic come from the working branch,
     and you can self-manage that. ONLY the build queue etc should come off
     of game commits")."""
-    files = sorted(f for f in git("ls-files", "-co", "--exclude-standard", "-z", "playtest").split("\0")
-                   if f and "__pycache__" not in f and (ROOT / f).is_file())
+    try:
+        listed = git("ls-files", "-co", "--exclude-standard", "-z", "playtest").split("\0")
+    except RuntimeError:
+        skip = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+        listed = [
+            p.relative_to(ROOT).as_posix()
+            for p in (ROOT / "playtest").rglob("*")
+            if p.is_file()
+            and not any(part in skip or part.startswith(".") for part in p.relative_to(ROOT).parts)
+            and p.suffix not in (".pyc", ".pyo")
+        ]
+    files = sorted(f for f in listed if f and "__pycache__" not in f and (ROOT / f).is_file())
     digest = hashlib.sha256()
     for name in files:
         digest.update(name.encode() + b"\0" + (ROOT / name).read_bytes())

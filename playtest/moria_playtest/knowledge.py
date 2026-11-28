@@ -39,7 +39,8 @@ MONSTER_ATTACK = _core_path("monster_attack.s")
 TIER_LINE = re.compile(r"^//\s+\d+: \[\s*\d+\] DL\s*(\d+) (.+?)\s*$")
 TIER_TABLE = re.compile(r"^tier\d+_cr_(\w+):\n((?:[ \t]*\.byte[^\n]*\n)+)", re.M)
 CF_ATTACK_ONLY = 0x01   # cr_mflags: moves only to attack (tools/parse_creatures.py)
-SPEED_FAST = 2          # cr_speed: 0 slow, 1 normal, 2 fast (tools/parse_creatures.py)
+SPEED_FAST = 2          # cr_speed: 0 slow, 1 normal, 2 fast, 3 very fast (tools/parse_creatures.py)
+SPEED_VERY_FAST = 3
 SPEED_SLOW = 0
 SPEED_NORMAL = 1
 SPEED_MASK = 0x03         # cr_speed bits 3-5 hold random-move flags (MON-013)
@@ -618,7 +619,7 @@ def undead_kinds() -> frozenset[tuple[str, int]]:
                      if flags & CF_UNDEAD)
 
 
-MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0}   # a turn's moves by speed code (core/6502/monster_ai.s)
+MOVES = {SPEED_SLOW: 0.5, SPEED_NORMAL: 1.0, SPEED_FAST: 2.0, SPEED_VERY_FAST: 3.0}   # a turn's moves by speed code (core/6502/monster_ai.s)
 
 
 @lru_cache(maxsize=1)

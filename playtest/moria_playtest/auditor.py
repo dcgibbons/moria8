@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 
 from .game import Mode, Observation
-from .view import WALKABLE_TYPES
+from .view import TYPE_RUBBLE, WALKABLE_TYPES
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,7 @@ class Auditor:
             return out
         cols = abi.hal_layout_map_cols
         x, y = obs.pos
-        if tiles[y * cols + x] >> 4 not in WALKABLE_TYPES:
+        if tiles[y * cols + x] >> 4 not in WALKABLE_TYPES | {TYPE_RUBBLE}:
             out.append(Finding("state_invariant", "game",
                                f"player on non-walkable tile ${tiles[y * cols + x]:02X} at {obs.pos}"))
         monsters = monster_positions(obs)

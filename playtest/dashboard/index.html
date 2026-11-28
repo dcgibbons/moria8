@@ -976,18 +976,42 @@ function renderQueue() {
     (cur ? ` · playing ${esc(ago(cur.start))}` : "") +
     (cstate.error ? ` · <span class="bad">build failed: ${esc(cstate.error.slice(-160))}</span>` : "");
   const none = {games: 0, reached: 0, died: 0, median_clvl: null, played: 0, findings: [], notes: []};
-  // A bot-only build (a new bot snapshot or commit) carries the game's
-  // coverage on: its counts are the newest build of this game that has
-  // games (maintainer, 2026-11-23: "shouldn't it be 31/31 for every port").
-  const recent = (q.builds || []).slice().sort((a, b) => (b.start || 0) - (a.start || 0));
-  const det = p => {
-    const own = cur && cur.detail && cur.detail[p];
-    if (own && own.games) return own;
-    const from = cur ? recent.indexOf(cur) : 0;
-    return recent.slice(Math.max(0, from)).map(b => b.detail && b.detail[p]).find(d => d && d.games) || own || none;
-  };
-  const covered = p => Math.max(det(p).played, Math.min((ci[p] || {}).next || 0, combos(p)));
   const combos = p => Object.keys((ci[p] || {}).items || {}).length || q.characters.length;
+  // A bot-only build (new bot snapshot on the same game commit, or a non-game
+  // commit flagged game_unchanged) carries the game's coverage on; a new game
+  // commit resets every port's table and coverage counts to 0 (maintainer,
+  // 2026-11-08, 2026-11-23, 2026-11-26).
+  const sameGame = b => (cid && b.build === cid) || onBuild(b.commit);
+  const sameBuilds = (q.builds || []).filter(sameGame).sort((a, b) => (b.start || 0) - (a.start || 0));
+  const recentAll = (q.builds || []).slice().sort((a, b) => (b.start || 0) - (a.start || 0));
+  const det = p => {
+    const ds = sameBuilds.map(b => b.detail && b.detail[p]).filter(
+      d => d && (d.games || (d.findings && d.findings.length) || (d.notes && d.notes.length)));
+    if (ds.length === 1) return ds[0];
+    if (ds.length > 1) return {
+      games: ds.reduce((n, d) => n + d.games, 0),
+      reached: ds.reduce((n, d) => n + d.reached, 0),
+      died: ds.reduce((n, d) => n + d.died, 0),
+      median_clvl: (ds.find(d => d.median_clvl != null) || {}).median_clvl ?? null,
+      played: Math.min(combos(p), ds.reduce((n, d) => n + d.played, 0)),
+      findings: ds.flatMap(d => d.findings || []),
+      notes: ds.flatMap(d => d.notes || []),
+    };
+    if (cstate.game_unchanged) {
+      const from = cur ? recentAll.indexOf(cur) : 0;
+      return recentAll.slice(Math.max(0, from)).map(b => b.detail && b.detail[p]).find(d => d && d.games) || none;
+    }
+    return none;
+  };
+  const ciOnBuild = p => !!(ci[p] && (!cid || ci[p].build === cid));
+  const ciNext = p => ciOnBuild(p) ? (ci[p].next || 0) : 0;
+  const ciRetry = p => {
+    const r = ciOnBuild(p) && ci[p].retry;
+    return Array.isArray(r) ? r.length : (r ? 1 : 0);
+  };
+  const liveOnBuild = p => q.live.filter(
+    r => r.queue === "build" && r.platform === p && (!cid || r.build === cid)).length;
+  const covered = p => Math.max(det(p).played, Math.min(Math.max(0, ciNext(p) - liveOnBuild(p) - ciRetry(p)), combos(p)));
   const ctot = cports.map(det).reduce((t, d) => ({g: t.g + d.games, r: t.r + d.reached, f: t.f + d.findings.length}), {g: 0, r: 0, f: 0});
   $("cicount").textContent = cports.length ? `${cports.length} ports · ${ctot.g} games · ${ctot.r} reached · ` +
     `${ctot.f} finding${ctot.f === 1 ? "" : "s"}` : "";

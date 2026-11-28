@@ -411,6 +411,38 @@ class BuildHistoryTest(unittest.TestCase):
         finally:
             dashboard._tags_cache = old_cache
 
+    def test_build_queue_panel_resets_for_new_game_commit(self) -> None:
+        """Maintainer, 2026-11-26: switching to a new game commit must reset
+        build-queue table counts and coverage rather than falling back to the
+        previous game commit's detail or stale BuildQueue next index."""
+        from unittest import mock
+
+        page = dashboard.INDEX.read_text()
+        self.assertIn("const sameGame = b => (cid && b.build === cid) || onBuild(b.commit);", page)
+        self.assertIn("if (cstate.game_unchanged)", page)
+        self.assertIn("const ciOnBuild = p => !!(ci[p] && (!cid || ci[p].build === cid));", page)
+
+        records = [
+            {"queue": "build", "build": "old111-bot-a", "commit": "111111111111", "started": 100,
+             "platform": "c64", "outcome": "reached", "clvl": 10, "id": "o1",
+             "character": "human-warrior", "findings": []},
+            {"queue": "build", "build": "new222-bot-a", "commit": "222222222222", "started": 200,
+             "platform": "c64", "outcome": "reached", "clvl": 10, "id": "n1",
+             "character": "human-warrior", "findings": []},
+            {"queue": "build", "build": "new222-bot-b", "commit": "222222222222", "started": 300,
+             "platform": "plus4", "outcome": "died", "clvl": 4, "id": "n2",
+             "character": "human-warrior", "findings": []},
+        ]
+        with mock.patch.object(dashboard, "commit_subject", lambda c: "msg"), \
+                mock.patch.object(dashboard, "commit_tags", lambda c: []):
+            builds = dashboard.build_history(records, ("reached", "died"))
+        by_id = {b["build"]: b for b in builds}
+        self.assertEqual(by_id["old111-bot-a"]["commit"], "111111111111")
+        self.assertEqual(by_id["new222-bot-a"]["commit"], "222222222222")
+        self.assertEqual(by_id["new222-bot-b"]["commit"], "222222222222")
+        self.assertNotIn("atari8", by_id["new222-bot-b"]["detail"])
+        self.assertNotIn("atari8", by_id["new222-bot-a"]["detail"])
+
 
 class BalrogKillsTest(unittest.TestCase):
     """The Balrog panel's kill tally (2026-11-11): whether an Ancient

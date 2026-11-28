@@ -252,7 +252,8 @@ def classify(obs: Observation, abi: Abi, command_ret: int,
         return Mode.DIRECTION, "direction"
     if ITEM_PROMPT.search(obs.rows[0]):
         return Mode.ITEM, "which"
-    if obs.rows[0].strip() in ("Inventory", "Equipment") or obs.rows[0].startswith("Select an item (a-"):
+    row0 = obs.rows[0].strip()
+    if row0.startswith(("Inventory", "Equipment", "Select an item (a-")):
         # The "?" list at an item prompt (no "Press any key"): Take off's is
         # the equipment's. As Mode.UNKNOWN, a drained clvl 27 Human Priest's
         # take-off for food was cancelled each time and it starved (C64

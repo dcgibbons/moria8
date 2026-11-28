@@ -14,7 +14,7 @@
  "fetch_url": "https://github.com/dcgibbons/moria8.git",
  "paused": false,
  "epoch": "2026-11-18-review",
- "balrog_workers": 30,
+ "balrog_workers": 16,
  "balrog_budget": 20000000,
  "parallel_cap": 12,
  "main_characters": [
@@ -50,6 +50,6 @@
  "balrog_focus_workers": 0,
  "stats_since": "20261124-004230",
  "build_per_port": 2,
- "build_workers": 4,
+ "build_workers": 14,
  "balrog_focus_min_clvl": 36
 }

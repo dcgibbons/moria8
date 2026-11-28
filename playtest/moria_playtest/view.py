@@ -24,20 +24,21 @@ from .game import Game, Observation
 
 UNKNOWN = -1
 WALL = 0x1   # TILE_WALL_H type nibble; stands in for every blocking type
-WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xB, 0xE}   # walkable_table, core/6502/player_move.s
+WALKABLE_TYPES = {0x0, 0x7, 0x9, 0xA, 0xE}   # walkable_table, core/6502/player_move.s (rubble 0xB blocks movement)
 VEIN_TYPES = (0xC, 0xD)   # TILE_MAGMA, TILE_QUARTZ (core/6502/dungeon_data.s): read as WALL, but a tunnel opens them
 TYPE_DOOR_OPEN, TYPE_DOOR_CLOSED = 0x7, 0x8
 TYPE_STAIRS_DN, TYPE_STAIRS_UP, TYPE_RUBBLE, TYPE_TRAP, TYPE_SECRET = 0x9, 0xA, 0xB, 0xE, 0xF
 # terrain_frontier's byte masks over tile types as signed bytes (UNKNOWN is 0xFF):
 # unknown tiles, and the tiles a frontier holds without and with known traps.
 _UNKNOWN_MASK = bytes(int(b == UNKNOWN & 0xFF) for b in range(256))
-_FRONTIER_MASK = {traps: bytes(int(b in WALKABLE_TYPES | {TYPE_DOOR_CLOSED} and (traps or b != TYPE_TRAP))
+_FRONTIER_MASK = {traps: bytes(int(b in WALKABLE_TYPES | {TYPE_DOOR_CLOSED, TYPE_RUBBLE} and (traps or b != TYPE_TRAP))
                                for b in range(256)) for traps in (False, True)}
 
 DIRS = {(0, -1): ord("K"), (0, 1): ord("J"), (-1, 0): ord("H"), (1, 0): ord("L"),
         (-1, -1): ord("Y"), (1, -1): ord("U"), (-1, 1): ord("B"), (1, 1): ord("N")}
 
 Pos = tuple[int, int]
+RUBBLE_COST = 10   # extra steps a path will walk around blocking rubble before tunnelling it
 TRAP_COST = 25   # extra steps a path will walk to go around a known trap
 UNKNOWN_COST = TRAP_COST   # ... or past an unidentified glyph (twice that onto one)
 HAZARD_COST = 150   # ... or past a hazard: a Yellow Jelly's poison touch stacked on every
@@ -122,7 +123,7 @@ class View:
         t = self.type_at(x, y)
         if t == TYPE_DOOR_OPEN and self.dlvl == 0:
             return False  # town store entrance
-        return t in WALKABLE_TYPES or (doors and t == TYPE_DOOR_CLOSED)
+        return t in WALKABLE_TYPES or (doors and t in (TYPE_DOOR_CLOSED, TYPE_RUBBLE))
 
     def neighbors(self, x: int, y: int):  # type: ignore[no-untyped-def]
         for dx, dy in DIRS:
@@ -222,9 +223,11 @@ class View:
                         continue
                     if t == TYPE_DOOR_OPEN and town:
                         continue   # town store entrance
-                    if t not in walkable and not (doors and t == TYPE_DOOR_CLOSED):
+                    if t not in walkable and not (doors and t in (TYPE_DOOR_CLOSED, TYPE_RUBBLE)):
                         continue
                 step = 1
+                if t == TYPE_RUBBLE:
+                    step += RUBBLE_COST
                 if t == TYPE_TRAP:
                     step += TRAP_COST
                 if nxt in near_unknown:
