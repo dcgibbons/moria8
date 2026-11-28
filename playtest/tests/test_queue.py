@@ -3152,9 +3152,12 @@ class FastForwardTest(unittest.TestCase):
     its changes; git refuses only a commit that would overwrite one."""
 
     def repo(self, root: Path) -> None:
+        import os
         import subprocess
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
         def run(*args: str) -> None:
-            subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=root, check=True,
+                           capture_output=True, env=env)
         run("init", "-q", "-b", "main")
         run("config", "user.email", "t@example.com")
         run("config", "user.name", "t")
