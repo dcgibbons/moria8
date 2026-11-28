@@ -473,6 +473,8 @@ PLUS4_CART = replace(PLUS4, name="plus4-cart", source="plus4", out="plus4-cart",
                      snapshots=False)   # xplus4 3.10 exits restoring a snapshot taken with it attached
 C128_CART = replace(C128, name="c128-cart", source="c128", out="c128-cart", disk_target="disk128 cartridge128",
                     disk_files={}, cartridge="moria8-c128.crt", resource_args=without_reu(C128.resource_args))
+C128_256K = replace(C128, name="c128-256k", source="c128",
+                    resource_args=without_reu(C128.resource_args) + ("-c128fullbanks",))
 
 # The Commander X16 cartridge (make -C platforms/cx16 cartridge,
 # build/cx16-cart): the X16's only build from 2026-11-13 (maintainer). x16emu
@@ -649,5 +651,5 @@ CPM_C128 = replace(
 )
 
 PORTS: dict[str, Port] = {port.name: port for port in
-                          (C64, C64_NOREU, C64_CART, PLUS4, PLUS4_CART, C128, C128_CART, APPLE2, ATARI8,
+                          (C64, C64_NOREU, C64_CART, PLUS4, PLUS4_CART, C128, C128_256K, C128_CART, APPLE2, ATARI8,
                            ATARI8_CART, BBCMASTER, CX16, CX16_CART, CPM, CPM_C128)}

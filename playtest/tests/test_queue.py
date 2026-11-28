@@ -409,6 +409,27 @@ class ScheduleTest(unittest.TestCase):
         self.assertEqual(stopped, ["a", "d"])
         self.assertFalse((service.home / "restart-balrog").exists())      # once
 
+    def test_stale_and_disabled_build_runs_are_stopped(self) -> None:
+        """2026-11-28: 14 cpm-c128 runs from earlier commits pinned all build
+        workers and blocked newer game builds; disabled ports and superseded
+        game builds end, while same-game bot/doc updates keep playing."""
+        service = self.service(6)
+        service.config.update(build_platforms=["c64", "c128"])
+        service.ci_build = "newgame-bot-b2"
+        service.ci_state = {"playing": {"commit": "c_new"}}
+        service.running = {
+            "dis": {"queue": "build", "platform": "cpm-c128", "build": "newgame-bot-b2", "commit": "c_new"},
+            "old_game": {"queue": "build", "platform": "c128", "build": "oldgame-bot-b1", "commit": "c_old"},
+            "same_game_bot": {"queue": "build", "platform": "c64", "build": "newgame-bot-b1", "commit": "c_new"},
+            "doc_only": {"queue": "build", "platform": "c128", "build": "docgame-bot-b1", "commit": "c_docs"},
+            "balrog_old": {"queue": "balrog", "platform": "cpm-c128", "build": "oldgame-bot-b1", "commit": "c_old"},
+        }
+        stopped: list[str] = []
+        service.stop_run = stopped.append   # type: ignore[method-assign]
+        with mock.patch.object(queue, "game_changed", side_effect=lambda old, new: old == "c_old"):
+            service.stop_stale_build()
+        self.assertEqual(stopped, ["dis", "old_game"])
+
     def test_stop_balrog_ends_only_the_named_characters_live_runs(self) -> None:
         """2026-11-13: a combination that had won twice played on in six slots."""
         service = self.service(4)
@@ -3024,7 +3045,7 @@ class VdcSizeTest(unittest.TestCase):
 
     def test_the_c128_plays_a_16kb_vdc(self) -> None:
         from moria_playtest.ports import PORTS
-        for name in ("c128", "c128-cart"):
+        for name in ("c128", "c128-cart", "c128-256k"):
             args = PORTS[name].resource_args
             self.assertIn("-VDC16KB", args, name)
             self.assertGreater(args.index("-VDC16KB"), args.index("-default"), name)   # -default resets it
