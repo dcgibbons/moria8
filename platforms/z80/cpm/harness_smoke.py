@@ -1501,11 +1501,38 @@ def scenario_chargen_and_town_render(
     """Create Human Warrior in OVL_START, render 198x66 Town, verify buildings, depth=0 & hard-clear status bars."""
     syms = _load_main_syms(build_dir)
     with _staged_runner(runner, build_dir) as cli:
-        _create_human_warrior(cli, name="Conan", reroll=True)
+        # Verify Race selection displays VMS race stat/HD/XP%/Infra bonus table before creating character
+        cli.run_idle()
+        cli.send_keys("N")
+        cli.run_idle()
+        race_blob = "\n".join(cli.screen_lines()[0])
+        assert "ST IN WI DX CO CH  HD XP%  Infra" in race_blob and "+4 -4 -2 -4 +3 -6" in race_blob, (
+            f"Race bonus table missing on chargen Race screen:\n{race_blob}"
+        )
+        cli.send_keys("a")
+        cli.run_idle()
+        cli.send_keys("r")
+        cli.run_idle()
+        cli.send_keys("\r")
+        cli.run_idle()
+        cli.send_keys("a")
+        cli.run_idle()
+        cli.send_keys("Conan\r")
+        cli.run_idle()
+        cli.send_keys("a")
+        cli.run_idle()
+        assert "Character Info" in "\n".join(cli.screen_lines()[0])
+        cli.send_keys(" ")
+        cli.run_idle()
 
         st = cli.read_z80_state()
         assert st["current_overlay"] == OVL_NONE and st["overlay_depth"] == 0, (
             f"expected Town at OVL_NONE / depth 0, got {st}"
+        )
+        # Verify rolled PL_AGE (Human 15..20) and race PL_HEIGHT (72) / PL_WEIGHT (180)
+        ahw = cli.read_mem(syms["player_data"] + 57, 3)
+        assert 15 <= ahw[0] <= 20 and ahw[1] == 72 and ahw[2] == 180, (
+            f"expected Human Age 15..20, Ht 72, Wt 180; got age={ahw[0]} ht={ahw[1]} wt={ahw[2]}"
         )
         assert st["player_dlvl"] == 0, f"expected Town dlvl=0, got {st}"
         assert st["player_lvl"] == 1
@@ -1532,6 +1559,13 @@ def scenario_chargen_and_town_render(
         # Verify player background in BSS is populated
         bg = cli.read_mem(syms["player_background"], 160).split(b"\x00", 1)[0]
         assert len(bg) > 0, "expected generated player_background text"
+        # Verify Human Warrior starting kit (VMS): Soft Leather Armor in EQUIP_BODY (23) + Cloak in EQUIP_CLOAK (32)
+        assert cli.read_mem(syms["inv_item_id"] + 23, 1)[0] == item_ids.ITEM_SLOT_LEATHER_ARMOR, (
+            "expected Soft Leather Armor in EQUIP_BODY"
+        )
+        assert cli.read_mem(syms["inv_item_id"] + 32, 1)[0] == item_ids.ITEM_SLOT_CLOAK, (
+            "expected Cloak in EQUIP_CLOAK"
+        )
 
         # Verify status bar survives '=' 3-state cycle & 'v' Legal Viewer hard clears in Town
         cli.send_keys("=")
@@ -2102,7 +2136,33 @@ def scenario_town_home_deposit_withdraw(
         st_h = cli.read_z80_state()
         assert st_h["current_overlay"] == OVL_HOME and st_h["overlay_depth"] == 1
         home0, _ = cli.screen_lines()
-        assert "Home" in "\n".join(home0)
+        assert "Home" in "\n".join(home0) and "Burden:" in home0[0], (
+            f"Home missing title/Burden header:\n" + "\n".join(home0)
+        )
+
+        # Verify full 22-item Home Deposit starts at row 1 so slot v) stays on row 22 above row 23 prompt
+        inv_fields = ("inv_item_id", "inv_qty", "inv_p1", "inv_to_hit", "inv_to_dam", "inv_to_ac", "inv_flags", "inv_ego")
+        saved_inv = {k: cli.read_mem(syms[k], 22) for k in inv_fields}
+        for s in range(22):
+            _set_inv_item(
+                cli, syms, s, saved_inv["inv_item_id"][0], qty=1,
+                p1=saved_inv["inv_p1"][0], to_hit=saved_inv["inv_to_hit"][0],
+                to_dam=saved_inv["inv_to_dam"][0], to_ac=saved_inv["inv_to_ac"][0],
+                flags=saved_inv["inv_flags"][0], ego=saved_inv["inv_ego"][0],
+            )
+        cli.send_keys("d")
+        cli.run_idle()
+        dep_lines, _ = cli.screen_lines()
+        assert "a)" in dep_lines[1] and "v)" in dep_lines[22] and " lb" in dep_lines[22], (
+            f"22-item Home deposit list misplaced:\n" + "\n".join(dep_lines)
+        )
+        assert "Which item?" in dep_lines[23] and "v)" not in dep_lines[23], (
+            f"22-item Home deposit prompt collided with row 23:\n" + "\n".join(dep_lines)
+        )
+        cli.send_keys("q")
+        cli.run_idle()
+        for k, data in saved_inv.items():
+            _write_mem(cli, syms[k], data)
 
         # Deposit slot 'a'
         cli.send_keys("da")
@@ -2122,7 +2182,9 @@ def scenario_town_home_deposit_withdraw(
         _walk_steps(cli, "jk")
         assert cli.read_z80_state()["current_overlay"] == OVL_HOME
         home2, _ = cli.screen_lines()
-        assert "a)" in "\n".join(home2)
+        assert "a)" in "\n".join(home2) and any("a)" in row and " lb" in row for row in home2), (
+            f"Home missing persistent item weight:\n" + "\n".join(home2)
+        )
 
         # Withdraw slot 'a' back cleanly
         cli.send_keys("ra")
@@ -2654,10 +2716,93 @@ hs_probe_start:
     CALL tramp_gen_dungeon
     JP   C, hs_fail
 
+    ; 7. CP/M 3.0+ (BDOS 12 = 0x31) mock-BDOS probe test:
+    ;    Install fake WBOOT+24 SELDSK -> hs_fail and mock BDOS (VERS=0x31, ERRMODE=45, SELDSK=14).
+    ;    Verifies mounted B: loads HISCORE.DAT (10 entries) without hitting BIOS SELDSK,
+    ;    and unmounted C: fails with CF=1, abi_last_bdos_err=0xFF, and restores A:.
+    LD   HL, (CPM_WARM_BOOT + 1)
+    LD   (hs_orig_wboot), HL
+    LD   HL, (CPM_BDOS_VEC)
+    LD   (hs_orig_bdos), HL
+
+    LD   HL, hs_fake_bios
+    LD   (CPM_WARM_BOOT + 1), HL
+    LD   HL, hs_mock_bdos3
+    LD   (CPM_BDOS_VEC), HL
+
+    ; 7a. Mounted drive B: (abi_save_drive = 1, prog = A:) must call BDOS 45 then
+    ;     BDOS 14(B:) -> BDOS 14(A:) (cnt=2), and read all 10 entries without BIOS trap
+    CALL .cpm3_reset_rec
+    XOR  A
+    LD   (hiscore_count), A
+    INC  A                      ; A = 1 (B:)
+    LD   (abi_save_drive), A
+    CALL tramp_hiscore_load
+    JP   C, hs_restore_fail
+    LD   A, (hiscore_count)
+    LD   (res_cpm3_mounted_cnt), A
+    LD   A, (res_cpm3_errmode)
+    LD   (res_cpm3_err_a), A
+    LD   A, (res_cpm3_first_drv)
+    LD   (res_cpm3_first_a), A
+    LD   A, (res_cpm3_last_drv)
+    LD   (res_cpm3_drv_after_ok), A
+    LD   A, (res_cpm3_sel_cnt)
+    LD   (res_cpm3_cnt_a), A
+
+    ; 7b. Unmounted drive C: (abi_save_drive = 2, prog = A:) must fail cleanly (CF=1,
+    ;     abi_last_bdos_err=0xFF) after BDOS 14(C:) -> BDOS 14(A:) (cnt=2)
+    CALL .cpm3_reset_rec
+    LD   A, 2
+    LD   (abi_save_drive), A
+    CALL tramp_hiscore_load
+    LD   A, 0
+    JR   NC, .cpm3_no_cf
+    INC  A
+.cpm3_no_cf:
+    LD   (res_cpm3_unmounted_cf), A
+    LD   A, (abi_last_bdos_err)
+    LD   (res_cpm3_unmounted_err), A
+    LD   A, (res_cpm3_first_drv)
+    LD   (res_cpm3_first_b), A
+    LD   A, (res_cpm3_last_drv)
+    LD   (res_cpm3_drv_after_err), A
+    LD   A, (res_cpm3_sel_cnt)
+    LD   (res_cpm3_cnt_b), A
+
+    ; 7c. Same-drive probe A: (abi_save_drive == abi_program_drive == 0) must call
+    ;     BDOS 14(A:) only ONCE (skipping redundant restore, cnt=1)
+    CALL .cpm3_reset_rec
+    LD   A, 99
+    LD   (hiscore_count), A
+    XOR  A
+    LD   (abi_save_drive), A
+    CALL tramp_hiscore_load
+    JP   C, hs_restore_fail
+    LD   A, (hiscore_count)
+    LD   (res_cpm3_same_cnt), A
+    LD   A, (res_cpm3_first_drv)
+    LD   (res_cpm3_first_c), A
+    LD   A, (res_cpm3_sel_cnt)
+    LD   (res_cpm3_cnt_c), A
+
+    CALL hs_restore_vectors
+
     LD   A, 0x55
     LD   (res_hs_ok), A
     JR   hs_exit
 
+.cpm3_reset_rec:
+    XOR  A
+    LD   (res_cpm3_errmode), A
+    LD   (res_cpm3_sel_cnt), A
+    DEC  A
+    LD   (res_cpm3_first_drv), A
+    LD   (res_cpm3_last_drv), A
+    RET
+
+hs_restore_fail:
+    CALL hs_restore_vectors
 hs_fail:
     LD   A, 0xEE
     LD   (res_hs_ok), A
@@ -2667,6 +2812,78 @@ hs_exit:
     CALL bdos_call
     JP   CPM_WARM_BOOT
 
+hs_restore_vectors:
+    LD   HL, (hs_orig_wboot)
+    LD   A, H
+    OR   L
+    JR   Z, .skip_wb
+    LD   (CPM_WARM_BOOT + 1), HL
+.skip_wb:
+    LD   HL, (hs_orig_bdos)
+    LD   A, H
+    OR   L
+    RET  Z
+    LD   (CPM_BDOS_VEC), HL
+    RET
+
+hs_mock_bdos3:
+    LD   A, C
+    CP   BDOS_VERS
+    JR   Z, .bdos_ver31
+    CP   BDOS_ERRMODE
+    JR   Z, .bdos_errmode
+    CP   BDOS_SELDSK
+    JR   Z, .bdos_seldsk3
+    LD   HL, (hs_orig_bdos)
+    JP   (HL)
+.bdos_ver31:
+    LD   HL, 0x0031
+    LD   A, L
+    RET
+.bdos_errmode:
+    LD   A, E
+    LD   (res_cpm3_errmode), A
+    XOR  A
+    LD   L, A
+    LD   H, A
+    RET
+.bdos_seldsk3:
+    ; Enforce ordering invariant: BDOS 45 (E=0xFF) MUST run before BDOS 14
+    LD   A, (res_cpm3_errmode)
+    CP   0xFF
+    JP   NZ, hs_restore_fail
+    LD   HL, res_cpm3_sel_cnt
+    INC  (HL)
+    LD   A, (res_cpm3_first_drv)
+    CP   0xFF
+    LD   A, E
+    JR   NZ, .not_first_sel
+    LD   (res_cpm3_first_drv), A
+.not_first_sel:
+    LD   (res_cpm3_last_drv), A
+    CP   2                      ; A: (0) and B: (1) mounted; C:+ (2+) unmounted
+    JR   C, .sel_ok
+    LD   HL, 0x04FF             ; A = 0xFF error, H = 0x04 invalid drive
+    LD   A, L
+    RET
+.sel_ok:
+    LD   HL, 0
+    XOR  A
+    RET
+
+hs_fake_bios:
+    JP   hs_restore_fail        ; +0  WBOOT
+    JP   hs_restore_fail        ; +3  CONST
+    JP   hs_restore_fail        ; +6  CONIN
+    JP   hs_restore_fail        ; +9  CONOUT
+    JP   hs_restore_fail        ; +12 LIST
+    JP   hs_restore_fail        ; +15 AUXOUT
+    JP   hs_restore_fail        ; +18 AUXIN
+    JP   hs_restore_fail        ; +21 HOME
+    JP   hs_restore_fail        ; +24 SELDSK (must NEVER be called under CP/M 3.0+)
+
+hs_orig_wboot:          DW 0
+hs_orig_bdos:           DW 0
 hs_canary: DB STACK_CANARY_B0, STACK_CANARY_B1, STACK_CANARY_B2, STACK_CANARY_B3
 hs_magic:  DB "M8Z0"
 hs_seed_entries:
@@ -2683,12 +2900,29 @@ hs_seed_10_entries:
     DB "Hero08          ",  6, 0x2C, 0x01, 0x00, 0x03, 0x07, 0x01
     DB "Hero09          ",  4, 0xC8, 0x00, 0x00, 0x02, 0x00, 0x02
     DB "Hero10          ",  2, 0x64, 0x00, 0x00, 0x01, 0x01, 0x03
-res_hs_ok:            DB 0
-res_miss_cnt:         DB 0xFF
-res_load_cnt:         DB 0xFF
-res_load10_cnt:       DB 0xFF
-res_loaded_entries:   DS 46, 0
-res_loaded10_entries: DS 230, 0
+res_hs_ok:              DB 0
+res_miss_cnt:           DB 0xFF
+res_load_cnt:           DB 0xFF
+res_load10_cnt:         DB 0xFF
+res_cpm3_errmode:       DB 0
+res_cpm3_sel_cnt:       DB 0
+res_cpm3_first_drv:     DB 0xFF
+res_cpm3_last_drv:      DB 0xFF
+res_cpm3_err_a:         DB 0
+res_cpm3_mounted_cnt:   DB 0xFF
+res_cpm3_first_a:       DB 0xFF
+res_cpm3_drv_after_ok:  DB 0xFF
+res_cpm3_cnt_a:         DB 0
+res_cpm3_unmounted_cf:  DB 0xFF
+res_cpm3_unmounted_err: DB 0
+res_cpm3_first_b:       DB 0xFF
+res_cpm3_drv_after_err: DB 0xFF
+res_cpm3_cnt_b:         DB 0
+res_cpm3_same_cnt:      DB 0xFF
+res_cpm3_first_c:       DB 0xFF
+res_cpm3_cnt_c:         DB 0
+res_loaded_entries:     DS 46, 0
+res_loaded10_entries:   DS 230, 0
 
     SAVEBIN "{probe_com}", RESIDENT_BASE, $ - RESIDENT_BASE
 """,
@@ -2717,6 +2951,19 @@ res_loaded10_entries: DS 230, 0
             assert cli.read_mem(syms["res_miss_cnt"], 1)[0] == 0
             assert cli.read_mem(syms["res_load_cnt"], 1)[0] == 2
             assert cli.read_mem(syms["res_load10_cnt"], 1)[0] == 10
+            assert cli.read_mem(syms["res_cpm3_err_a"], 1)[0] == 0xFF
+            assert cli.read_mem(syms["res_cpm3_mounted_cnt"], 1)[0] == 10
+            assert cli.read_mem(syms["res_cpm3_first_a"], 1)[0] == 1
+            assert cli.read_mem(syms["res_cpm3_drv_after_ok"], 1)[0] == 0
+            assert cli.read_mem(syms["res_cpm3_cnt_a"], 1)[0] == 2
+            assert cli.read_mem(syms["res_cpm3_unmounted_cf"], 1)[0] == 1
+            assert cli.read_mem(syms["res_cpm3_unmounted_err"], 1)[0] == 0xFF
+            assert cli.read_mem(syms["res_cpm3_first_b"], 1)[0] == 2
+            assert cli.read_mem(syms["res_cpm3_drv_after_err"], 1)[0] == 0
+            assert cli.read_mem(syms["res_cpm3_cnt_b"], 1)[0] == 2
+            assert cli.read_mem(syms["res_cpm3_same_cnt"], 1)[0] == 0
+            assert cli.read_mem(syms["res_cpm3_first_c"], 1)[0] == 0
+            assert cli.read_mem(syms["res_cpm3_cnt_c"], 1)[0] == 1
             hs_disk = (drv_b / "HISCORE.DAT").read_bytes()
             assert len(hs_disk) == 256, f"expected 256 B (2 CP/M records) for 10 entries, got {len(hs_disk)}"
             assert hs_disk[:4] == b"MH\x01\x0a", f"bad HISCORE.DAT 10-entry header: {hs_disk[:8]!r}"
@@ -3067,7 +3314,29 @@ def scenario_los_stairs_and_exploration(
         cli.run_idle()
         assert (_get_map_tile(cli, px + 2 * sx_dir, py) & 0x04) == 0, "cell behind wall must remain unvisited"
 
+        # Synthetic rubble keeps LOS transparent while blocking movement
+        saved_mon0 = cli.read_mem(syms["monster_table"], 12)
+        saved_mc_zp = cli.read_mem(syms["zp_mon_count"], 1)[0]
+        saved_mc_abi = cli.read_mem(syms["abi_mon_count"], 1)[0]
+        _set_map_tile(cli, px + sx_dir, py, 0xB0 | 0x08 | 0x04)      # visited lit rubble
+        _set_map_tile(cli, px + 2 * sx_dir, py, 0x00 | 0x08 | 0x04 | 0x01)
+        cli.write_mem(
+            syms["monster_table"],
+            bytes([px + 2 * sx_dir, py, 4, 10, 0, 0, 0, 100, 0, 0, 0, 0]),
+        )
+        _write_mem(cli, syms["zp_mon_count"], [max(saved_mc_zp, 1)])
+        _write_mem(cli, syms["abi_mon_count"], [max(saved_mc_abi, 1)])
+        cli.send_keys("5")
+        cli.run_idle()
+        _dismiss_more(cli)
+        mon0_flags = cli.read_mem(syms["monster_table"] + 5, 1)[0]
+        assert (mon0_flags & 0x08) != 0, "LOS across rubble must set MF_VISIBLE on monster behind it"
+        cli.write_mem(syms["monster_table"], saved_mon0)
+        _write_mem(cli, syms["zp_mon_count"], [saved_mc_zp])
+        _write_mem(cli, syms["abi_mon_count"], [saved_mc_abi])
+
         # Clear synthetic wall -> move 1 step toward it -> LOS reveals cell beyond
+        _set_map_tile(cli, px + 2 * sx_dir, py, 0x00)
         _set_map_tile(cli, px + sx_dir, py, 0x00)
         cli.send_keys(step_dir)
         cli.run_idle()
@@ -3206,14 +3475,37 @@ def scenario_features_doors_traps_chests(
         _write_mem(cli, syms["abi_player_y"], [py])
         _write_mem(cli, syms["player_data"] + 50, [py])
 
-        # 2. Tunnel South rubble (px, py+1): '+' 'j' -> TILE_FLOOR
+        # 2. Rubble blocks movement ('j') with message, and bare-handed '+' 'j' clears rubble -> TILE_FLOOR
         _set_map_tile(cli, px, py + 1, 0xB0 | 0x08 | 0x04)
-        for _ in range(8):
+        cli.send_keys("j")
+        cli.run_idle()
+        st_bump = cli.read_z80_state()
+        assert (st_bump["player_x"], st_bump["player_y"]) == (px, py), "Rubble must block movement"
+        bump_lines, _ = cli.screen_lines()
+        assert "There is rubble blocking your way." in bump_lines[0], (
+            f"Expected rubble bump message on row 0, got {bump_lines[0]!r}"
+        )
+
+        orig_wpn = cli.read_mem(syms["inv_item_id"] + 22, 1)[0]
+        orig_wpn_ego = cli.read_mem(syms["inv_ego"] + 22, 1)[0]
+        orig_str_dig = cli.read_mem(syms["player_data"] + 27, 1)[0]
+        _write_mem(cli, syms["inv_item_id"] + 22, [0xFF])  # FI_EMPTY (bare hands)
+        _write_mem(cli, syms["inv_ego"] + 22, [0])
+        _write_mem(cli, syms["player_data"] + 27, [18])     # STR=18 -> ability = 4
+        for _ in range(60):
             if (_get_map_tile(cli, px, py + 1) & 0xF0) == 0x00:
                 break
             cli.send_keys("+j")
             cli.run_idle()
-        assert (_get_map_tile(cli, px, py + 1) & 0xF0) == 0x00, "'+' j must clear rubble to floor"
+            _dismiss_more(cli)
+            tun_lines, _ = cli.screen_lines()
+            assert "making no progress" not in tun_lines[0], (
+                f"Bare-handed tunneling must not refuse: {tun_lines[0]!r}"
+            )
+        _write_mem(cli, syms["inv_item_id"] + 22, [orig_wpn])
+        _write_mem(cli, syms["inv_ego"] + 22, [orig_wpn_ego])
+        _write_mem(cli, syms["player_data"] + 27, [orig_str_dig])
+        assert (_get_map_tile(cli, px, py + 1) & 0xF0) == 0x00, "bare-handed '+' j must clear rubble to floor"
 
         # 3. Search ('s') secret door West (px-1, py) + hidden TRAP_ARROW North (px, py-1) + adjacent chest at (px+1, py-1)
         _set_map_tile(cli, px - 1, py, 0xF0 | 0x08)       # secret door West
@@ -3478,6 +3770,85 @@ def scenario_turn_regen_poison_repeat(
         assert cli.read_mem(syms["regen_frac_lo"], 1)[0] == 0xFC
         assert cli.read_mem(syms["zp_regen_frac"], 1)[0] == 0xD8
 
+        # 1b. TRN-016: retired zp_eff_regen ignored/preserved; PFLAG2_REGEN x1.5 HP/MP +3 food & 0-clamp
+        _write_mem(cli, syms["zp_mon_count"], [26])
+        _write_mem(cli, pl + 33, [200, 0, 44, 1])   # HP=200, MHP=300
+        _write_mem(cli, pl + 51, [0x88, 0x13, 0])   # FOOD=5000, FULL
+        _write_mem(cli, pl + 60, [1])               # PL_SPELL_TYPE = SPELL_MAGE
+        _write_mem(cli, pl + 37, [5, 20])           # PL_MANA=5, PL_MAX_MANA=20
+        _write_mem(cli, syms["regen_frac_lo"], [0])
+        _write_mem(cli, syms["zp_regen_frac"], [0])
+        _write_mem(cli, syms["zp_eff_regen"], [7])
+        _write_mem(cli, syms["player_pflags2"], [0])
+        _write_mem(cli, syms["abi_turn"], [1, 0])
+        _write_mem(cli, syms["zp_turn_lo"], [1, 0])
+        cli.send_keys("5")
+        cli.run_idle()
+        assert cli.read_z80_state()["hp"] == 200
+        assert cli.read_mem(syms["regen_frac_lo"], 1)[0] == 0x7E
+        assert cli.read_mem(syms["zp_regen_frac"], 1)[0] == 0xEC
+        assert cli.read_mem(pl + 37, 1)[0] == 5, "retired zp_eff_regen must not regen MP on odd turn"
+        assert cli.read_mem(syms["zp_eff_regen"], 1)[0] == 7, "retired zp_eff_regen must not decrement"
+        assert list(cli.read_mem(pl + 51, 2)) == [0x87, 0x13], "normal food drain must stay -1 (5000->4999)"
+
+        # PFLAG2_REGEN (0x02): 300*197*1.5 + 1442 = 90092 (0x015FEC) per turn; MP regens turns 0,1,2 of 4; food -4/turn
+        _write_mem(cli, syms["zp_eff_regen"], [0])
+        _write_mem(cli, syms["player_pflags2"], [0x02])
+        _write_mem(cli, pl + 33, [200, 0, 44, 1])
+        _write_mem(cli, pl + 51, [0x88, 0x13, 0])
+        _write_mem(cli, pl + 37, [5, 20])
+        _write_mem(cli, syms["regen_frac_lo"], [0])
+        _write_mem(cli, syms["zp_regen_frac"], [0])
+        _write_mem(cli, syms["abi_turn"], [0, 0])
+        _write_mem(cli, syms["zp_turn_lo"], [0, 0])
+        for exp_hp, exp_lo, exp_hi, exp_mp, exp_food in (
+            (201, 0xEC, 0x5F, 6, 4996),
+            (202, 0xD8, 0xBF, 7, 4992),
+            (204, 0xC4, 0x1F, 8, 4988),
+            (205, 0xB0, 0x7F, 8, 4984),
+        ):
+            cli.send_keys("5")
+            cli.run_idle()
+            assert cli.read_z80_state()["hp"] == exp_hp
+            assert cli.read_mem(syms["regen_frac_lo"], 1)[0] == exp_lo
+            assert cli.read_mem(syms["zp_regen_frac"], 1)[0] == exp_hi
+            assert cli.read_mem(pl + 37, 1)[0] == exp_mp
+            got_food = int.from_bytes(bytes(cli.read_mem(pl + 51, 2)), "little")
+            assert got_food == exp_food, f"expected food={exp_food}, got {got_food}"
+
+        # Food 0-clamp under PFLAG2_REGEN + starvation damage only after reaching 0
+        _write_mem(cli, pl + 33, [44, 1, 44, 1])    # HP=300, MHP=300
+        _write_mem(cli, pl + 51, [2, 0, 3])         # FOOD=2, FAINT
+        cli.send_keys("5")
+        cli.run_idle()
+        assert list(cli.read_mem(pl + 51, 2)) == [0, 0], "PFLAG2_REGEN food=2 must clamp at 0 without underflow"
+        assert cli.read_z80_state()["hp"] == 300 and (cli.read_z80_state()["game_flags"] & 1) == 0
+        cli.send_keys("5")
+        cli.run_idle()
+        assert list(cli.read_mem(pl + 51, 2)) == [0, 0]
+        assert cli.read_z80_state()["hp"] == 299, "starving at food=0 must still deal 1 damage"
+
+        # PFLAG2_REGEN | PFLAG2_SLOW_DIGEST (0x03): odd turn -3, even turn -4
+        _write_mem(cli, syms["player_pflags2"], [0x03])
+        _write_mem(cli, pl + 33, [44, 1, 44, 1])
+        _write_mem(cli, pl + 51, [20, 0, 0])
+        _write_mem(cli, syms["abi_turn"], [1, 0])
+        _write_mem(cli, syms["zp_turn_lo"], [1, 0])
+        cli.send_keys("5")
+        cli.run_idle()
+        assert list(cli.read_mem(pl + 51, 2)) == [17, 0]
+        cli.send_keys("5")
+        cli.run_idle()
+        assert list(cli.read_mem(pl + 51, 2)) == [13, 0]
+
+        _write_mem(cli, syms["player_pflags2"], [0])
+        _write_mem(cli, pl + 60, [0])
+        _write_mem(cli, pl + 37, [0, 0])
+        _write_mem(cli, syms["regen_frac_lo"], [0])
+        _write_mem(cli, syms["zp_regen_frac"], [0])
+        _write_mem(cli, syms["zp_mon_count"], [0])
+        _write_mem(cli, pl + 51, [0x88, 0x13, 0])
+
         # Trigger exact HUNGER=1 threshold (150 -> 149): silent message row + status bar indicator
         _write_mem(cli, pl + 51, [150, 0, 0])
         cli.send_keys("5")
@@ -3686,16 +4057,42 @@ def scenario_ui_help_wizard_death_hiscore(
             _write_mem(cli1, syms["player_data"] + 27, [68])   # STR = 18/50
             _write_mem(cli1, syms["player_data"] + 30, [118])  # DEX = 18/00
             _write_mem(cli1, syms["zp_ui_dirty"], [0x81])
-            # UI screens C, i, e, x, /@, /D
-            for key, expect in (("C", "18/50"), ("C", "18/00"), ("i", "Inventory"), ("e", "Equipment")):
+            # UI screens C (expanded 80-col sheet), i/e (Burden + per-item weights), Ctrl+P msg history
+            for key, expect in (
+                ("C", "18/50"),
+                ("C", "Age:"),
+                ("C", "Fighting   :"),
+                ("C", "Next:"),
+                ("C", "18/00"),
+                ("i", "Burden:"),
+                ("e", "Burden:"),
+            ):
                 cli1.send_keys(key)
                 cli1.run_idle()
                 assert cli1.read_z80_state()["current_overlay"] == OVL_UI
                 scr_u, _ = cli1.screen_lines()
-                assert expect in "\n".join(scr_u), f"UI key {key!r} missing {expect!r}:\n" + "\n".join(scr_u)
+                scr_blob = "\n".join(scr_u)
+                assert expect in scr_blob, f"UI key {key!r} missing {expect!r}:\n{scr_blob}"
+                if key in ("i", "e"):
+                    assert any(")" in row and " lb" in row for row in scr_u), (
+                        f"UI key {key!r} missing per-item lb weight:\n{scr_blob}"
+                    )
                 cli1.send_keys("Q")
                 cli1.run_idle()
                 assert cli1.read_z80_state()["overlay_depth"] == 0
+            # Trigger a message then verify Ctrl+P Message History viewer
+            cli1.send_keys(">")
+            cli1.run_idle()
+            cli1.send_keys("\x10")
+            cli1.run_idle()
+            assert cli1.read_z80_state()["current_overlay"] == OVL_UI
+            mh_blob = "\n".join(cli1.screen_lines()[0])
+            assert "Message History" in mh_blob and "You see no stairs here." in mh_blob, (
+                f"Ctrl+P Message History viewer missing expected text:\n{mh_blob}"
+            )
+            cli1.send_keys(" ")
+            cli1.run_idle()
+            assert cli1.read_z80_state()["overlay_depth"] == 0
             assert "18/" not in cli1.screen_lines()[0][22], (
                 f"Status line row 22 leaked 18/xx instead of capping to 18: {cli1.screen_lines()[0][22]!r}"
             )
@@ -3905,7 +4302,7 @@ def scenario_ui_help_wizard_death_hiscore(
                 f"'/' Recall cancel left prompt on Row 0: {cli1.screen_lines()[0][0]!r}"
             )
 
-            # Help Pg1 -> Pg2 -> 'L' Legal -> 'Q' Legal -> must return to Help Pg2! -> 'Q' Town
+            # Help Pg1 -> Pg2 -> 'L' Legal -> 'Q' Legal -> must return to Help Pg2! -> SPACE -> Pg3 Legend -> SPACE Town
             cli1.send_keys("?")
             cli1.run_idle()
             assert cli1.read_z80_state()["current_overlay"] == OVL_HELP
@@ -3921,7 +4318,7 @@ def scenario_ui_help_wizard_death_hiscore(
             cli1.send_keys(" ")
             cli1.run_idle()
             pg2_blob = "\n".join(cli1.screen_lines()[0])
-            assert "Magic" in pg2_blob and "CTRL+W" in pg2_blob, (
+            assert "Magic" in pg2_blob and "CTRL+W" in pg2_blob and "CTRL+P" in pg2_blob, (
                 f"Help Page 2 layout unexpected:\n{pg2_blob}"
             )
             cli1.send_keys("L")
@@ -3931,7 +4328,19 @@ def scenario_ui_help_wizard_death_hiscore(
             cli1.run_idle()
             assert cli1.read_z80_state()["current_overlay"] == OVL_HELP and cli1.read_z80_state()["overlay_depth"] == 1
             assert "CTRL+W" in "\n".join(cli1.screen_lines()[0]), "Help Page 2 not preserved across nested Legal!"
-            cli1.send_keys("Q")
+            cli1.send_keys(" ")
+            cli1.run_idle()
+            pg3_blob = "\n".join(cli1.screen_lines()[0])
+            assert (
+                "Map Terrain" in pg3_blob
+                and "Items & Monsters" in pg3_blob
+                and "] / { } Helm" in pg3_blob
+                and "a-z/A-Z Monsters" in pg3_blob
+                and "Town shops (8=Home)" in pg3_blob
+            ), (
+                f"Help Page 3 Legend layout unexpected:\n{pg3_blob}"
+            )
+            cli1.send_keys(" ")
             cli1.run_idle()
             assert cli1.read_z80_state()["overlay_depth"] == 0
             _assert_status_bar(cli1.screen_lines()[0], "WizTest")
@@ -4483,6 +4892,33 @@ def scenario_monster_ai_combat_and_drops(
         m_after = _read_monster_slots(cli, syms)[0]
         assert m_after[1] < px + 3 or m_after[2] != py, f"Awake monster did not step toward player: {m_after}"
         assert (_get_map_tile(cli, m_after[1], m_after[2]) & 0x01) != 0, "Monster AI failed to set new FLAG_OCCUPIED"
+
+        # Regression (MON-045): speed code 3 moves 3 tiles/turn (or 2 tiles/turn vs +1 player speed)
+        _clear_all_monsters(cli, syms)
+        for fx in range(px + 1, px + 6):
+            _set_map_tile(cli, fx, py, 0x0C)
+        _set_map_tile(cli, px + 5, py, 0x0C | 0x01)
+        _write_mem(cli, syms["monster_table"], [px + 5, py, cr_t, 50, 0, 0x09, 0, 0, 0, 0, 0, 0])
+        _write_mem(cli, syms["cr_speed"] + cr_t, [3])
+        _write_mem(cli, syms["zp_mon_count"], [1])
+        _write_mem(cli, syms["abi_mon_count"], [1])
+        cli.send_keys("5")
+        cli.run_idle()
+        m_s3 = _read_monster_slots(cli, syms)[0]
+        assert m_s3[1] == px + 2, f"Speed-3 monster expected at px+2 after 3 steps, got {m_s3}"
+        _clear_all_monsters(cli, syms)
+        for fx in range(px + 1, px + 6):
+            _set_map_tile(cli, fx, py, 0x0C)
+        _set_map_tile(cli, px + 5, py, 0x0C | 0x01)
+        _write_mem(cli, syms["monster_table"], [px + 5, py, cr_t, 50, 0, 0x09, 0, 0, 0, 0, 0, 0])
+        _write_mem(cli, syms["zp_eff_speed"], [5])  # temporary player haste (+1 step)
+        _write_mem(cli, syms["zp_mon_count"], [1])
+        _write_mem(cli, syms["abi_mon_count"], [1])
+        cli.send_keys("5")
+        cli.run_idle()
+        m_s3_haste = _read_monster_slots(cli, syms)[0]
+        assert m_s3_haste[1] == px + 3, f"Speed-3 vs +1 player haste expected at px+3, got {m_s3_haste}"
+        _write_mem(cli, syms["zp_eff_speed"], [0])
 
         # Regression (MON-043): low-HP monster (HP=1) with non-zero reserved bytes 10..11 must NOT flee, and must melee player
         _clear_all_monsters(cli, syms)
@@ -6814,8 +7250,9 @@ def scenario_spells_prayers_and_detect_lifecycle(
         cli.run_idle()
         _dismiss_more(cli)
         mg_slots = _read_monster_slots(cli, syms)
-        assert mg_slots[0][3] == 0xFF and mg_slots[1][3] != 0xFF, (
-            f"Mass Genocide violated 20-tile LOS cap: dist20={mg_slots[0]}, dist21={mg_slots[1]}"
+        dist20_alive = [s for s in mg_slots if s[3] != 0xFF and (s[1], s[2]) == (px - 20, py)]
+        assert not dist20_alive and mg_slots[1][3] != 0xFF and (mg_slots[1][1], mg_slots[1][2]) == (px - 21, py), (
+            f"Mass Genocide violated 20-tile LOS cap: dist20={dist20_alive}, dist21={mg_slots[1]}"
         )
         _clear_all_monsters(cli, syms)
         # M9 Trap/Door Destruction (spell 9 = index 9) keeps trap on player's own tile (px, py) while removing adjacent

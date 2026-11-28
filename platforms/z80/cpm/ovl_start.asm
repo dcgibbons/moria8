@@ -78,6 +78,12 @@ ovl_start_select_race:
     LD   HL, ovl_start_str_race_title
     CALL screen_put_str
 
+    LD   B, 1
+    LD   C, 22
+    LD   E, COL_LGREY
+    LD   HL, ovl_start_str_race_hdr
+    CALL screen_put_str
+
     LD   D, 0                   ; race index 0..7
 .race_row:
     LD   A, D
@@ -105,6 +111,8 @@ ovl_start_select_race:
     LD   C, 6
     LD   E, COL_WHITE
     CALL ovl_start_put_str
+
+    CALL ovl_start_draw_race_cols
 
     INC  D
     LD   A, D
@@ -970,12 +978,42 @@ ovl_start_bake_and_vitals:
     CP   STAT_COUNT
     JR   C, .bake_lp
 
-    ; Combined Level-1 HP = race_HD + class_HD (PL_AGE/HEIGHT/WEIGHT remain 0, matching 6502)
+    ; Roll VMS age and assign race height/weight (used by player_weight_limit)
     CALL ovl_start_calc_level1_vitals
     RET
 
-; Compute Level-1 MHP=HP and Mana/SpellType (also usable by init_new_world fallback)
+; Compute Level-1 Age/Ht/Wt (if unset), MHP=HP and Mana/SpellType
 ovl_start_calc_level1_vitals:
+    LD   A, (player_data + PL_RACE)
+    CP   RACE_COUNT
+    JR   C, .vital_race_ok
+    XOR  A
+.vital_race_ok:
+    LD   E, A
+    LD   D, 0
+    LD   A, (player_data + PL_AGE)
+    OR   A
+    JR   NZ, .vital_ahw_done
+    LD   HL, ovl_start_race_age_var
+    ADD  HL, DE
+    LD   A, (HL)
+    PUSH DE
+    CALL rng_range
+    POP  DE
+    INC  A
+    LD   HL, ovl_start_race_age_base
+    ADD  HL, DE
+    ADD  A, (HL)
+    LD   (player_data + PL_AGE), A
+    LD   HL, ovl_start_race_height
+    ADD  HL, DE
+    LD   A, (HL)
+    LD   (player_data + PL_HEIGHT), A
+    LD   HL, ovl_start_race_weight
+    ADD  HL, DE
+    LD   A, (HL)
+    LD   (player_data + PL_WEIGHT), A
+.vital_ahw_done:
     LD   A, (player_data + PL_RACE)
     LD   H, 0
     LD   L, A
@@ -1225,7 +1263,7 @@ ovl_start_init_new_world:
     LD   A, 134
     LD   (inv_p1 + 2), A
 
-    ; Equipment: Torch (EQUIP_LIGHT), Dagger (EQUIP_WEAPON), Leather Armor (EQUIP_BODY)
+    ; Equipment: Torch (EQUIP_LIGHT), Dagger (EQUIP_WEAPON), per-class Cloak/Armor
     LD   A, ITEM_SLOT_WOODEN_TORCH
     LD   (inv_item_id + EQUIP_LIGHT), A
     LD   A, 1
@@ -1240,10 +1278,23 @@ ovl_start_init_new_world:
     LD   A, ITEM_PAGE_DAGGER
     LD   (inv_ego + EQUIP_WEAPON), A
 
+    ; Cloak [1] in EQUIP_CLOAK for every class except Rogue (VMS player_init)
+    LD   A, (player_data + PL_CLASS)
+    CP   CLASS_ROGUE
+    JR   Z, .kit_armor
+    LD   HL, inv_item_id + EQUIP_CLOAK
+    LD   (HL), ITEM_SLOT_CLOAK
+    LD   HL, inv_qty + EQUIP_CLOAK
+    LD   (HL), 1
+    CP   CLASS_WARRIOR
+    JR   NZ, .kit_done
+.kit_armor:
+    ; Soft Leather Armor [4] in EQUIP_BODY for Warrior and Rogue only (VMS)
     LD   A, ITEM_SLOT_LEATHER_ARMOR
     LD   (inv_item_id + EQUIP_BODY), A
     LD   A, 1
     LD   (inv_qty + EQUIP_BODY), A
+.kit_done:
 
     ; Flavour shuffles & fixed known items (id_init_flavours calls id_refresh_fixed_known)
     CALL id_init_flavours
@@ -1456,6 +1507,149 @@ ovl_start_calc_gold:
 ; ===========================================================================
 ; Small Formatting & Table Helpers
 ; ===========================================================================
+; Draw ST/IN/WI/DX/CO/CH/HD/XP%/Infra columns for race D on row D+2 col 22.
+; Preserves: D
+ovl_start_draw_race_cols:
+    PUSH DE
+    LD   B, D                   ; B = race index 0..7
+    LD   A, D
+    ADD  A, A
+    ADD  A, D
+    ADD  A, A                   ; A = race * 6
+    LD   E, A
+    LD   D, 0
+    LD   HL, ovl_start_race_stat_adj
+    ADD  HL, DE
+    LD   DE, line_buf
+    LD   C, STAT_COUNT
+.rcol_stat:
+    LD   A, (HL)
+    INC  HL
+    OR   A
+    JR   NZ, .rcol_nz
+    LD   A, ' '
+    LD   (DE), A
+    INC  DE
+    LD   A, '0'
+    JR   .rcol_d
+.rcol_nz:
+    BIT  7, A
+    JR   Z, .rcol_pos
+    NEG
+    PUSH AF
+    LD   A, '-'
+    JR   .rcol_sign
+.rcol_pos:
+    PUSH AF
+    LD   A, '+'
+.rcol_sign:
+    LD   (DE), A
+    INC  DE
+    POP  AF
+    ADD  A, '0'
+.rcol_d:
+    LD   (DE), A
+    INC  DE
+    LD   A, ' '
+    LD   (DE), A
+    INC  DE
+    DEC  C
+    JR   NZ, .rcol_stat
+
+    LD   A, ' '
+    LD   (DE), A
+    INC  DE
+
+    ; Compute race * 10 into HL -> ovl_start_race_props
+    LD   H, 0
+    LD   L, B
+    LD   A, RACE_PROP_SIZE
+    PUSH DE
+    CALL mul_hl_a
+    POP  DE
+    LD   BC, ovl_start_race_props
+    ADD  HL, BC
+    PUSH HL                     ; save &props[race]
+
+    ; Hit die (right-aligned 2 chars: 6..12)
+    LD   A, (HL)
+    CP   10
+    JR   NC, .rcol_hd2
+    LD   C, A
+    LD   A, ' '
+    LD   (DE), A
+    INC  DE
+    LD   A, C
+    ADD  A, '0'
+    JR   .rcol_hd_d
+.rcol_hd2:
+    SUB  10
+    LD   C, A
+    LD   A, '1'
+    LD   (DE), A
+    INC  DE
+    LD   A, C
+    ADD  A, '0'
+.rcol_hd_d:
+    LD   (DE), A
+    INC  DE
+    LD   A, ' '
+    LD   (DE), A
+    INC  DE
+
+    ; XP% (byte +2, 3 digits + '%')
+    POP  HL
+    PUSH HL
+    INC  HL
+    INC  HL
+    LD   L, (HL)
+    LD   H, 0
+    CALL fmt_u16_dec            ; advances DE to NUL
+    LD   A, '%'
+    LD   (DE), A
+    INC  DE
+    LD   A, ' '
+    LD   (DE), A
+    INC  DE
+    LD   (DE), A
+    INC  DE
+
+    ; Infravision (byte +1: 0 -> "None", N -> "N0'")
+    POP  HL
+    INC  HL
+    LD   A, (HL)
+    OR   A
+    JR   NZ, .rcol_inf_val
+    LD   HL, .rcol_none_str
+    LD   BC, 5
+    LDIR
+    JR   .rcol_put
+.rcol_inf_val:
+    ADD  A, '0'
+    LD   (DE), A
+    INC  DE
+    LD   A, '0'
+    LD   (DE), A
+    INC  DE
+    LD   A, 0x27
+    LD   (DE), A
+    INC  DE
+    XOR  A
+    LD   (DE), A
+.rcol_put:
+    POP  DE
+    LD   A, D
+    ADD  A, 2
+    LD   B, A
+    LD   C, 22
+    PUSH DE
+    LD   E, COL_LGREY
+    LD   HL, line_buf
+    CALL screen_put_str
+    POP  DE
+    RET
+.rcol_none_str: DB "None", 0
+
 ovl_start_put_char:
     PUSH BC
     PUSH DE
@@ -1535,6 +1729,11 @@ ovl_start_race_props:
     DB   10,  3, 110, -3,  0, -1,  3, 12, -5, -3
     DB   12,  3, 120, -5, -1, -2,  5, 20,-10, -8
 
+ovl_start_race_age_base: DB 14, 24, 75, 21, 50, 35, 11, 20
+ovl_start_race_age_var:  DB  6, 16, 75, 12, 40, 15,  4, 10
+ovl_start_race_height:   DB 72, 66, 60, 36, 42, 48, 66, 96
+ovl_start_race_weight:   DB 180, 130, 100, 60, 90, 150, 150, 250
+
 ovl_start_race_class_flags:
     DB   0x3F, 0x3F, 0x1F, 0x0B, 0x0F, 0x05, 0x0D, 0x05
 
@@ -1584,6 +1783,7 @@ ovl_start_stat_names:
 
 ; UI Strings
 ovl_start_str_race_title:   DB "Choose your race", 0
+ovl_start_str_race_hdr:     DB "ST IN WI DX CO CH  HD XP%  Infra", 0
 ovl_start_str_choose_race:  DB "Choose (a-h)", 0
 ovl_start_str_stats_title:  DB "Roll Statistics", 0
 ovl_start_str_reroll:       DB "r) Reroll  RETURN) Accept", 0

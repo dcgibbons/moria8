@@ -3,18 +3,17 @@
 Moria8 is an assembly adaptation of the classic Moria roguelike for eight 8-bit
 platforms: **Commodore 64**, **Commodore 128**, **Commodore Plus/4**, **Apple
 IIe** (128K), **Commander X16**, **Atari 8-bit** (`800XL`/`65XE`/`130XE`),
-**Acorn BBC Master 128**, and **CP/M 2.2 (Z80)** *(in progress / source build)*.
+**Acorn BBC Master 128**, and **CP/M 2.2 (Z80)**.
 You create one adventurer, prepare in town, descend through the dungeon, grow
 stronger, and try to defeat the Balrog.
 
-This manual covers all current platforms (including the in-progress CP/M 2.2 Z80
-source build). Moria8 follows VMS Moria and Umoria closely in spirit, with two
+This manual covers all eight current platforms. Moria8 follows VMS Moria and Umoria closely in spirit, with two
 hardware-scaled map geometries sharing the same core rules:
 
 - **40-column ports (`80x48` active map):** Commodore 64, Commodore Plus/4, and
   Atari 8-bit.
 - **80-column ports (`198x66` active map):** Commodore 128, Apple IIe, Commander
-  X16, Acorn BBC Master 128, and CP/M 2.2 (Z80) *(in progress)*.
+  X16, Acorn BBC Master 128, and CP/M 2.2 (Z80).
 
 ## Starting The Game
 
@@ -46,7 +45,7 @@ Choose the cartridge or disk/archive release for your machine:
 - **Acorn BBC Master 128:** `moria8-bbcmaster.ssd` (Acorn DFS 80-track disk;
   boot via `SHIFT+BREAK` or `*EXEC !BOOT`, using Mode 0 Shadow RAM `LYNNE`,
   `ANDY`, and Sideways RAM).
-- **CP/M 2.2 (Z80) *(in progress / source build)*:** Built by `make diskcpm` as
+- **CP/M 2.2 (Z80):** Built by `make diskcpm` as
   `moria8-cpm.zip`, `moria8-cpm-kaypro2.dsk`, `moria8-cpm-kaypro4.dsk`, and
   `moria8-cpm-c128.d71` (run with `make runcpm` or on Z80 CP/M 2.2 / CP/M Plus
   with `>= 52 KB` TPA, BDOS base `>= 0xD100`). Keep `MORIA8.COM` and
@@ -212,6 +211,7 @@ Platform movement notes:
 | `SHIFT+R` | Refuel lantern with oil. |
 | `V` or `SHIFT+V` | Version and System Info (build version, Save V2 `$22`, geometry, drives, session info). |
 | `=` | *(CP/M 2.2 Z80 only)* Cycle terminal mode (`ADM-3A` / `ANSI Color` / `ANSI Mono`). |
+| `CTRL+P` | Message history (last 8 messages). |
 | `?` | Help command reference (`L` inside Help opens License / Source Offer). |
 | `SHIFT+S` | Save and quit after a successful save. |
 | `SHIFT+Q` | Quit without saving (prompts `Y/N`). |
@@ -235,7 +235,7 @@ Moria8 extensions:
 | Alchemy Shop | Utility scrolls (Word of Recall, Identify, Light, Magic Mapping, enchanting) and Restoration. |
 | Magic Shop | Wands, staffs, rings, amulets, mage spellbooks. |
 | Black Market | Expensive mixed goods, often outside normal shop limits. |
-| Home | Storage (`12` slots), not a normal buying/selling shop. |
+| Home | Storage (`16` slots, `A`–`P`), not a normal buying/selling shop. |
 
 Charisma affects ordinary store prices. The Black Market uses harsher special
 pricing. Stores restock when you return to town.

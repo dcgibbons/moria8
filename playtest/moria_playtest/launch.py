@@ -251,7 +251,12 @@ class ViceProcess:
         if self.target.backend == "cpm_c128":
             self.args += ["-9", str(self.disk)]
         elif self.cartridge is not None:
-            self.args += ["-cartcrt", str(self.cartridge), "-8", str(self.disk)]
+            cart_copy = self.workdir / f"cartridge{self.cartridge.suffix}"
+            if cart_copy.resolve() != self.cartridge.resolve():
+                shutil.copyfile(self.cartridge, cart_copy)
+            if (self.target.platform == "c64" or self.emulator == "x64sc") and "+easyflashcrtwrite" not in self.args:
+                self.args += ["+easyflashcrtwrite"]
+            self.args += ["-cartcrt", str(cart_copy), "-8", str(self.disk)]
         elif autostart:
             self.args += ["-autostart", str(self.disk)]
         else:

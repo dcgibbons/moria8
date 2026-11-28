@@ -87,6 +87,20 @@ create_select_race:
     ldy #>create_race_title
     jsr screen_put_string_ay
 
+    lda #0
+    sta create_race_cur
+.if (SCREEN_COLS >= 80) {
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #1
+    sta zp_cursor_row
+    lda #22
+    sta zp_cursor_col
+    lda #<create_race_hdr_or_hint
+    ldy #>create_race_hdr_or_hint
+    jsr screen_put_string_ay
+}
+
     // List races with letter keys a-h
     ldx #0                  // Race index
 !race_loop:
@@ -127,6 +141,15 @@ create_select_race:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
+.if (SCREEN_COLS >= 80) {
+    pla
+    pha
+    sta create_race_cur
+    lda #22
+    sta zp_cursor_col
+    jsr create_draw_race_cols
+}
+
     pla
     tax
     inx
@@ -147,15 +170,59 @@ create_select_race:
     lda #RACE_COUNT         // 8 options → last letter = 'H'
     jsr put_choose_suffix
 
-    // Wait for valid key (A-H = PETSCII $41-$48)
-!race_key:
+.if (SCREEN_COLS < 80) {
+    lda #12
+    sta zp_cursor_row
+    lda #17
+    sta zp_cursor_col
+    lda #<create_race_hdr_or_hint
+    ldy #>create_race_hdr_or_hint
+    jsr screen_put_string_ay
+    jsr create_draw_race_cols
+}
+
+    // Wait for valid key (A-H = PETSCII $41-$48, or preview cycling on 40-col)
+create_race_key:
     jsr hal_input_get_key
+.if (SCREEN_COLS < 80) {
+    cmp #$0d                // RETURN — accept highlighted race
+    bne !not_race_ret+
+    lda create_race_cur
+    jmp create_race_selected
+!not_race_ret:
+    cmp #$11                // CRSR-DN
+    beq !race_next+
+    cmp #$4a                // 'J'
+    bne !not_race_next+
+!race_next:
+    inc create_race_cur
+    lda create_race_cur
+    cmp #RACE_COUNT
+    bcc !race_upd+
+    lda #0
+    sta create_race_cur
+!race_upd:
+    jsr create_draw_race_cols
+    jmp create_race_key
+!not_race_next:
+    cmp #$91                // CRSR-UP
+    beq !race_prev+
+    cmp #$4b                // 'K'
+    bne !not_race_prev+
+!race_prev:
+    dec create_race_cur
+    bpl !race_upd-
+    lda #RACE_COUNT - 1
+    sta create_race_cur
+    bpl !race_upd-
+!not_race_prev:
+}
     sec
     sbc #$41                // Convert PETSCII 'A' to index 0
-    bmi !race_key-          // < 'A'
+    bmi create_race_key     // < 'A'
     cmp #RACE_COUNT
-    bcs !race_key-          // >= RACE_COUNT
-
+    bcs create_race_key     // >= RACE_COUNT
+create_race_selected:
     sta player_data + PL_RACE
     rts
 
@@ -627,6 +694,20 @@ create_init_character:
     lda player_data + PL_MHP_HI
     sta player_data + PL_HP_HI
 
+    // Roll VMS age and assign race height/weight (used by player_weight_limit)
+    ldx player_data + PL_RACE
+    lda race_age_var,x
+    jsr rng_range               // A = 0..(age_var - 1)
+    clc
+    adc #1
+    ldx player_data + PL_RACE
+    adc race_age_base,x
+    sta player_data + PL_AGE
+    lda race_height_table,x
+    sta player_data + PL_HEIGHT
+    lda race_weight_table,x
+    sta player_data + PL_WEIGHT
+
     // Calculate mana (for spell-casting classes)
     lda player_data + PL_CLASS
     tax
@@ -801,6 +882,264 @@ put_choose_suffix:
     jmp hal_screen_put_char              // tail call
 
 // ============================================================
+// Race stat / property helpers (80-col table & 40-col preview)
+// ============================================================
+create_race_cur:      .byte 0
+create_race_stat_idx: .byte 0
+create_race_stat_base:.byte 0
+create_race_prop_off: .byte 0
+
+race_age_base:     .byte  14,  24,  75,  21,  50,  35,  11,  20
+race_age_var:      .byte   6,  16,  75,  12,  40,  15,   4,  10
+race_height_table: .byte  72,  66,  60,  36,  42,  48,  66,  96
+race_weight_table: .byte 180, 130, 100,  60,  90, 150, 150, 250
+
+create_race_compute_bases:
+    lda create_race_cur
+    asl                     // 2r
+    sta create_race_stat_base
+    sta create_race_prop_off
+    asl                     // 4r
+    clc
+    adc create_race_stat_base
+    sta create_race_stat_base // 6r
+    lda create_race_prop_off
+    asl
+    asl                     // 8r
+    clc
+    adc create_race_prop_off
+    sta create_race_prop_off // 10r
+    rts
+
+// create_race_put_signed2 — Print signed single-digit delta as 2 chars ("+1", "-2", " 0")
+create_race_put_signed2:
+    cmp #0
+    bne !nonzero+
+    lda #$20                // ' '
+    jsr hal_screen_put_char
+    lda #$30                // '0'
+    jmp hal_screen_put_char
+!nonzero:
+    bpl !pos+
+    eor #$ff
+    clc
+    adc #1
+    pha
+    lda #$2d                // '-'
+    bne !emit_sign+
+!pos:
+    pha
+    lda #$2b                // '+'
+!emit_sign:
+    jsr hal_screen_put_char
+    pla
+    ora #$30
+    jmp hal_screen_put_char
+
+create_draw_race_infra:
+    ldx create_race_prop_off
+    lda race_properties + 1,x
+    beq !no_infra+
+    ora #$30                // 2..5 -> '2'..'5'
+    jsr hal_screen_put_char
+    lda #<create_race_infra_unit
+    ldy #>create_race_infra_unit
+    jmp screen_put_string_ay
+!no_infra:
+    lda #<create_race_none_str
+    ldy #>create_race_none_str
+    jmp screen_put_string_ay
+
+create_race_hdr_or_hint:
+.if (SCREEN_COLS >= 80) {
+    .text "ST IN WI DX CO CH  HD XP%  Infra" ; .byte $00
+} else {
+    .text "(CRSR/jk, RET)" ; .byte $00
+}
+
+create_draw_race_cols:
+.if (SCREEN_COLS >= 80) {
+    jsr create_race_compute_bases
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #0
+    sta create_race_stat_idx
+!stat_lp:
+    lda create_race_stat_base
+    clc
+    adc create_race_stat_idx
+    tax
+    lda race_stat_adj,x
+    jsr create_race_put_signed2
+    lda #$20
+    jsr hal_screen_put_char
+    inc create_race_stat_idx
+    lda create_race_stat_idx
+    cmp #STAT_COUNT
+    bcc !stat_lp-
+    lda #$20
+    jsr hal_screen_put_char
+    ldx create_race_prop_off
+    lda race_properties + 0,x   // HD
+    jsr screen_put_decimal_rj2
+    lda #$20
+    jsr hal_screen_put_char
+    ldx create_race_prop_off
+    lda race_properties + 2,x   // XP%
+    jsr screen_put_decimal
+    lda #$25                    // '%'
+    jsr hal_screen_put_char
+    lda #$20
+    jsr hal_screen_put_char
+    lda #$20
+    jsr hal_screen_put_char
+    jmp create_draw_race_infra
+} else {
+    // Update '>' selection marker in col 2 across rows 2..9
+    lda #COL_WHITE
+    sta zp_text_color
+    ldx #0
+!cur_lp:
+    txa
+    clc
+    adc #2
+    sta zp_cursor_row
+    lda #2
+    sta zp_cursor_col
+    lda #$20
+    cpx create_race_cur
+    bne !put_cur+
+    lda #$3e                // '>'
+!put_cur:
+    stx create_race_stat_idx
+    jsr hal_screen_put_char
+    ldx create_race_stat_idx
+    inx
+    cpx #RACE_COUNT
+    bcc !cur_lp-
+
+    // Clear preview rows 14..16
+    ldx #14
+!clr_p:
+    txa
+    jsr hal_screen_clear_row
+    inx
+    cpx #17
+    bcc !clr_p-
+
+    jsr create_race_compute_bases
+
+    // Row 14: "> <Race>:"
+    lda #14
+    jsr !p40_row_col2+
+    lda #COL_CYAN
+    sta zp_text_color
+    lda #$3e
+    jsr hal_screen_put_char
+    lda #$20
+    jsr hal_screen_put_char
+    lda #COL_WHITE
+    sta zp_text_color
+    ldx create_race_cur
+    lda race_name_ptrs_lo,x
+    sta zp_ptr0
+    lda race_name_ptrs_hi,x
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda #$3a                // ':'
+    jsr hal_screen_put_char
+
+    // Row 15: "ST:XX IN:XX WI:XX DX:XX CO:XX CH:XX"
+    lda #15
+    jsr !p40_row_col2+
+    lda #0
+    sta create_race_stat_idx
+!p40_stat:
+    lda #COL_LGREY
+    sta zp_text_color
+    lda create_race_stat_idx
+    asl
+    tax
+    lda create_race_stat_abbr,x
+    jsr hal_screen_put_char
+    lda create_race_stat_idx
+    asl
+    tax
+    lda create_race_stat_abbr + 1,x
+    jsr hal_screen_put_char
+    lda #$3a                // ':'
+    jsr hal_screen_put_char
+    lda #COL_WHITE
+    sta zp_text_color
+    lda create_race_stat_base
+    clc
+    adc create_race_stat_idx
+    tax
+    lda race_stat_adj,x
+    jsr create_race_put_signed2
+    inc create_race_stat_idx
+    lda create_race_stat_idx
+    cmp #STAT_COUNT
+    bcs !p40_stats_done+
+    lda #$20
+    jsr hal_screen_put_char
+    jmp !p40_stat-
+!p40_stats_done:
+
+    // Row 16: "HD:NN  XP:NNN%  Inf:None/NNft"
+    lda #16
+    jsr !p40_row_col2+
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #<create_race_lbl_hd
+    ldy #>create_race_lbl_hd
+    jsr screen_put_string_ay
+    lda #COL_WHITE
+    sta zp_text_color
+    ldx create_race_prop_off
+    lda race_properties + 0,x
+    jsr screen_put_decimal_rj2
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #<create_race_lbl_xp
+    ldy #>create_race_lbl_xp
+    jsr screen_put_string_ay
+    lda #COL_WHITE
+    sta zp_text_color
+    ldx create_race_prop_off
+    lda race_properties + 2,x
+    jsr screen_put_decimal
+    lda #$25
+    jsr hal_screen_put_char
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #<create_race_lbl_inf
+    ldy #>create_race_lbl_inf
+    jsr screen_put_string_ay
+    lda #COL_WHITE
+    sta zp_text_color
+    jmp create_draw_race_infra
+!p40_row_col2:
+    sta zp_cursor_row
+    lda #2
+    sta zp_cursor_col
+    rts
+
+create_race_stat_abbr:
+    .text "STINWIDXCOCH"
+create_race_lbl_hd:
+    .text "HD:" ; .byte $00
+create_race_lbl_xp:
+    .text "  XP:" ; .byte $00
+create_race_lbl_inf:
+    .text "  Inf:" ; .byte $00
+}
+create_race_infra_unit:
+    .text "0ft" ; .byte $00
+create_race_none_str:
+    .text "None" ; .byte $00
+
+// ============================================================
 // String data (screen codes)
 // ============================================================
 create_race_title:
@@ -946,25 +1285,45 @@ create_gen_background:
     jmp !bg_roll_scan-      // Always terminates — last entry in chart has roll=100
 
 !bg_roll_match:
-    // Append string at bg_str[x] to bg_text_buf
+    // Append compressed string at bg_str[x] to bg_text_buf
     stx bg_scan_idx         // Save matched index
     lda bg_str_lo,x
     sta zp_ptr0
     lda bg_str_hi,x
     sta zp_ptr0_hi
-    ldx bg_text_len
     ldy #0
+    sty bg_src_y
 !bg_copy_str:
+    ldy bg_src_y
     lda (zp_ptr0),y
     beq !bg_copy_done+
-    cpx #199                // Reserve final byte for null terminator
-    bcs !bg_copy_done+
-    sta bg_text_buf,x
-    inx
-    iny
+    inc bg_src_y
+    jsr bg_emit_byte
     jmp !bg_copy_str-
+
+bg_src_y: .byte 0
+bg_emit_byte:
+    cmp #$80
+    bcs !bg_tok+
+    ldx bg_text_len
+    cpx #199                // Reserve final byte for null terminator
+    bcs !bg_emit_ret+
+    sta bg_text_buf,x
+    inc bg_text_len
+!bg_emit_ret:
+    rts
+!bg_tok:
+    sec
+    sbc #$80
+    tax
+    lda bg_dict_r,x
+    pha
+    lda bg_dict_l,x
+    jsr bg_emit_byte
+    pla
+    jmp bg_emit_byte
+
 !bg_copy_done:
-    stx bg_text_len
 
     // Accumulate social class: sc += bonus[idx] - 50
     ldx bg_scan_idx

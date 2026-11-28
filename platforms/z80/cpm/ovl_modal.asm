@@ -1099,16 +1099,21 @@ ovl_modal_step_passable:
 ; ============================================================================
 ; +6: ovl_modal_calc_dig
 ; Compute digging power in A (0..255) matching 6502 core/calc_dig_cold.s:
-;   Bare hands (FI_EMPTY) -> 0
+;   Bare hands (FI_EMPTY) -> STR >> 2
 ;   ICAT_DIGGING tool     -> min(255, (STR>>2) + dig_base_table[0..5] + ego*12)
 ;   Other weapon          -> min(255, (STR>>2) + max(0, PL_TODMG >> 1))
 ; Preserves: IX, IY
 ; ============================================================================
 ovl_modal_calc_dig:
+    LD   A, (player_data + PL_STR_CUR)
+    SRL  A
+    SRL  A
+    LD   C, A                   ; C = STR >> 2
+
     LD   A, (inv_item_id + EQUIP_WEAPON)
     CP   FI_EMPTY
     JR   NZ, .has_weapon
-    XOR  A
+    LD   A, C
     RET
 
 .has_weapon:
@@ -1118,14 +1123,6 @@ ovl_modal_calc_dig:
     LD   (item_cur_page), A
     LD   A, B
     CALL item_get_category_a
-    LD   D, A                   ; D = category
-
-    LD   A, (player_data + PL_STR_CUR)
-    SRL  A
-    SRL  A
-    LD   C, A                   ; C = STR >> 2
-
-    LD   A, D
     CP   ICAT_DIGGING
     JR   Z, .is_digger
 

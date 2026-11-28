@@ -37,8 +37,10 @@ HELP_TOK_DESC       EQU 0x04    ; description color (COL_LGREY)
 HELP_TOK_NL         EQU 0x05    ; next screen row, col 2
 
 ; ============================================================================
-; +0: ovl_help_screen — 2-page 80-col ui_help_data_80.s parity + [L:License]
+; +0: ovl_help_screen — 3-page 80-col ui_help_data_80.s parity + [L:License]
 ; ============================================================================
+HELP_PAGE_COUNT     EQU 3
+
 ovl_help_screen:
     PUSH IX
     PUSH IY
@@ -58,19 +60,28 @@ ovl_help_screen:
     CALL screen_put_str
 
     LD   A, (ovl_help_page)
-    OR   A
-    LD   HL, ovl_help_page1_data
-    JR   Z, .have_page
-    LD   HL, ovl_help_page2_data
-.have_page:
+    CP   HELP_PAGE_COUNT
+    JR   C, .pg_ok
+    XOR  A
+    LD   (ovl_help_page), A
+.pg_ok:
+    ADD  A, A
+    LD   E, A
+    LD   D, 0
+    LD   HL, .page_tbl
+    ADD  HL, DE
+    LD   E, (HL)
+    INC  HL
+    LD   D, (HL)
+    EX   DE, HL
     CALL ovl_help_render_stream
 
     ; Row 23 footer centered in COL_WHITE
     LD   A, (ovl_help_page)
-    OR   A
+    CP   HELP_PAGE_COUNT - 1
     LD   HL, ovl_help_ftr_more
     LD   C, 26
-    JR   Z, .put_ftr
+    JR   C, .put_ftr
     LD   HL, ovl_help_ftr_done
     LD   C, 28
 .put_ftr:
@@ -87,6 +98,8 @@ ovl_help_screen:
     CALL input_get_key
     CP   KEY_ESC
     JR   Z, .exit
+    CP   '?'
+    JR   Z, .exit
     CP   'q'
     JR   Z, .exit
     CP   'Q'
@@ -102,20 +115,48 @@ ovl_help_screen:
     CP   KEY_CR
     JR   Z, .advance_page
     CP   KEY_PGDN
-    JR   Z, .flip_page
+    JR   Z, .next_page
+    CP   '>'
+    JR   Z, .next_page
+    CP   'p'
+    JR   Z, .next_page
+    CP   'P'
+    JR   Z, .next_page
     CP   KEY_PGUP
-    JR   Z, .flip_page
+    JR   Z, .prev_page
+    CP   '<'
+    JR   Z, .prev_page
     JR   .wait_key
 
 .advance_page:
     LD   A, (ovl_help_page)
-    OR   A
-    JR   NZ, .exit
-.flip_page:
-    LD   A, (ovl_help_page)
-    XOR  1
+    INC  A
+    CP   HELP_PAGE_COUNT
+    JR   NC, .exit
     LD   (ovl_help_page), A
-    JR   .redraw
+    JP   .redraw
+.next_page:
+    LD   A, (ovl_help_page)
+    INC  A
+    CP   HELP_PAGE_COUNT
+    JR   C, .set_page
+    XOR  A
+    JR   .set_page
+.prev_page:
+    LD   A, (ovl_help_page)
+    OR   A
+    JR   NZ, .dec_page
+    LD   A, HELP_PAGE_COUNT - 1
+    JR   .set_page
+.dec_page:
+    DEC  A
+.set_page:
+    LD   (ovl_help_page), A
+    JP   .redraw
+.page_tbl:
+    DW   ovl_help_page1_data
+    DW   ovl_help_page2_data
+    DW   ovl_help_page3_data
 
 .open_legal:
     LD   A, (ovl_help_page)
@@ -1071,7 +1112,21 @@ ovl_help_page2_data:
     DB HELP_TOK_DESC, "SPACE Continue", HELP_TOK_TAB2, HELP_TOK_KEY, "L", HELP_TOK_DESC, " License / Source", HELP_TOK_NL
     DB HELP_TOK_DESC, "RETURN Accept", HELP_TOK_TAB2, "Inventory letters act directly", HELP_TOK_NL
     DB HELP_TOK_DESC, "/ Identify then symbol", HELP_TOK_TAB2, "S searches, # toggles Search mode", HELP_TOK_NL
-    DB HELP_TOK_TAB2, "* Rest until healed", HELP_TOK_END
+    DB HELP_TOK_KEY, "CTRL+P ", HELP_TOK_DESC, "Msg History", HELP_TOK_TAB2, "* Rest until healed", HELP_TOK_END
+
+ovl_help_page3_data:
+    DB HELP_TOK_CYAN, "Map Terrain", HELP_TOK_TAB2, "Items & Monsters", HELP_TOK_NL
+    DB HELP_TOK_KEY, "@   ", HELP_TOK_DESC, "Player", HELP_TOK_TAB2, HELP_TOK_KEY, "$ / &   ", HELP_TOK_DESC, "Gold / Chest", HELP_TOK_NL
+    DB HELP_TOK_KEY, ".   ", HELP_TOK_DESC, "Open floor", HELP_TOK_TAB2, HELP_TOK_KEY, "! / ?   ", HELP_TOK_DESC, "Potion,Oil / Scroll,Book", HELP_TOK_NL
+    DB HELP_TOK_KEY, "#   ", HELP_TOK_DESC, "Wall / secret door", HELP_TOK_TAB2, HELP_TOK_KEY, "= / ", 0x22, "   ", HELP_TOK_DESC, "Ring / Amulet", HELP_TOK_NL
+    DB HELP_TOK_KEY, "%   ", HELP_TOK_DESC, "Magma or Quartz vein", HELP_TOK_TAB2, HELP_TOK_KEY, "- / /   ", HELP_TOK_DESC, "Wand / Weapon,Staff", HELP_TOK_NL
+    DB HELP_TOK_KEY, ":   ", HELP_TOK_DESC, "Pile of rubble", HELP_TOK_TAB2, HELP_TOK_KEY, 0x5C, " / ,   ", HELP_TOK_DESC, "Pick,Spike / Food", HELP_TOK_NL
+    DB HELP_TOK_KEY, "+   ", HELP_TOK_DESC, "Closed / locked door", HELP_TOK_TAB2, HELP_TOK_KEY, "* / (   ", HELP_TOK_DESC, "Light / Cloak", HELP_TOK_NL
+    DB HELP_TOK_KEY, "'   ", HELP_TOK_DESC, "Open / broken door", HELP_TOK_TAB2, HELP_TOK_KEY, "[ / )   ", HELP_TOK_DESC, "Armor / Shield", HELP_TOK_NL
+    DB HELP_TOK_KEY, "<   ", HELP_TOK_DESC, "Stairs up", HELP_TOK_TAB2, HELP_TOK_KEY, "] / { } ", HELP_TOK_DESC, "Helm,Glv,Bt / Ammo,Bow", HELP_TOK_NL
+    DB HELP_TOK_KEY, ">   ", HELP_TOK_DESC, "Stairs down", HELP_TOK_TAB2, HELP_TOK_KEY, "a-z/A-Z ", HELP_TOK_DESC, "Monsters (/ identifies)", HELP_TOK_NL
+    DB HELP_TOK_KEY, "^   ", HELP_TOK_DESC, "Trap / Rune", HELP_TOK_TAB2, HELP_TOK_KEY, "t       ", HELP_TOK_DESC, "Townsperson", HELP_TOK_NL
+    DB HELP_TOK_KEY, "1-8 ", HELP_TOK_DESC, "Town shops (8=Home)", HELP_TOK_END
 
 ovl_help_wiz_confirm:     DB "WIZARD? (Y/N)", 0
 ovl_help_wiz_enabled:     DB "WIZARD ON", 0

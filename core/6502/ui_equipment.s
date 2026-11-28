@@ -4,6 +4,7 @@
 // Full-screen equipment view for currently visible slots.
 
 #import "ui_equipment_wrap.s"
+#import "ui_weight_helpers.s"
 
 .const UEQ_TITLE_COL = hal_layout_equipment_title_col
 .const UEQ_FOOTER_COL = hal_layout_equipment_footer_col
@@ -40,6 +41,15 @@ ui_equip_display_common:
     ldy #>ueq_title_str
     jsr screen_put_string_ay
 
+.if (SCREEN_COLS >= 80) {
+    lda #0
+    ldx #55
+#if UI_EQUIP_SHARE_INV_WEIGHTS
+    jsr uwt_shared_draw_burden_header
+#else
+    jsr uwt_eq_draw_burden_header
+#endif
+
     // Separator
     lda #1
     sta zp_cursor_row
@@ -48,6 +58,11 @@ ui_equip_display_common:
     lda #<ueq_sep_str
     ldy #>ueq_sep_str
     jsr screen_put_string_ay
+} else {
+    lda #1
+    ldx #9
+    jsr uwt_eq_draw_burden_header
+}
 
 #if HAL_LAYOUT_EQUIPMENT_WRAP
     jsr ueq_wrap_enable
@@ -136,6 +151,18 @@ ui_equip_display_common:
     sta ueq_pending_space
 #endif
     jsr itemdesc_put_inv_slot
+.if (SCREEN_COLS >= 80) {
+    lda ueq_cur_row
+    sta zp_cursor_row
+    ldx ueq_equip_idx
+    lda inv_qty,x
+    jsr inven_mul_slot_x
+#if UI_EQUIP_SHARE_INV_WEIGHTS
+    jsr uwt_shared_put_col69
+#else
+    jsr uwt_eq_put_col69
+#endif
+}
     jmp !ueq_next+
 
 !ueq_none:
@@ -170,6 +197,33 @@ ui_equip_display_common:
     jmp hal_screen_put_string              // tail call
 
 
+uwt_eq_draw_burden_header:
+#if !UI_EQUIP_SHARE_INV_WEIGHTS
+    :UiWeightDrawBurdenHeaderBody(uwt_eq_put_tenths, uwt_eq_burden_str, uwt_eq_lb_str)
+#endif
+uwt_eq_put_tenths:
+#if !UI_EQUIP_SHARE_INV_WEIGHTS
+    :UiWeightPutTenthsBody()
+#endif
+uwt_eq_put_tenths_from_buf:
+#if !UI_EQUIP_SHARE_INV_WEIGHTS
+    :UiWeightPutTenthsFromBufBody()
+#endif
+uwt_eq_put_col69:
+.if (SCREEN_COLS >= 80) {
+#if !UI_EQUIP_SHARE_INV_WEIGHTS
+    :UiWeightPutCol69Body(uwt_eq_put_tenths_from_buf, uwt_eq_lb_str)
+#endif
+}
+uwt_eq_burden_str:
+#if !UI_EQUIP_SHARE_INV_WEIGHTS
+    .text "Burden: " ; .byte 0
+#endif
+uwt_eq_lb_str:
+#if !UI_EQUIP_SHARE_INV_WEIGHTS
+    .text " lb" ; .byte 0
+#endif
+
 // ============================================================
 // Scratch
 // ============================================================
@@ -190,7 +244,10 @@ ueq_footer_hi: .byte 0
 // String data (screen codes via inherited encoding)
 // ============================================================
 ueq_title_str: .text "Equipment" ; .byte 0
-ueq_sep_str:   .text "---------" ; .byte 0
+ueq_sep_str:
+.if (SCREEN_COLS >= 80) {
+    .text "---------" ; .byte 0
+}
 ueq_none_str:  .text "(none)" ; .byte 0
 ueq_select_str: .text "Select item" ; .byte 0
 

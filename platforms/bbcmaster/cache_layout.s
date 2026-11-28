@@ -4,13 +4,14 @@
 //
 // Bank 5 ($8000-$BFFF):
 //   $8000-$B30B  Live 198x66 Map (13,068 B)
-//   $B400-$BFFF  Cached OVL.MODAL (12 pages = 3,072 B)
+//   $B400-$BDFF  Cached OVL.MODAL (10 pages = 2,560 B)
+//   $BE00-$BFFF  Cached OVL.TITLE (2 pages = 512 B)
 //
 // Bank 6 ($8000-$BFFF):
 //   $8000-$92FF  BeebAuxData (19 pages = 4,864 B, virtual $6000-$72FF)
 //   $9300-$94FF  ITEMCAT page cache Slots 4..5 (2 pages: records & flags/egos)
 //   $9500-$B9FF  The monster catalog: fields, then Huffman names (37 pages)
-//   $BA00-$BFFF  Cached OVL.UI (6 pages = 1,536 B)
+//   $BA00-$BFFF  Cached OVL.UI    (6 pages = 1,536 B: store_restock_overlay)
 //
 // The monster catalog (2026-11-05, docs/MONSTER_CATALOG_DESIGN.md) took
 // OVL.TOWN's pages: TOWN loads from disk (the maintainer: the town overlay
@@ -25,7 +26,11 @@
 
 .const BEEB_CACHE_MODAL_BANK  = $05
 .const BEEB_CACHE_MODAL_ADDR  = $b400
-.const BEEB_CACHE_MODAL_PAGES = 12
+.const BEEB_CACHE_MODAL_PAGES = 10
+
+.const BEEB_CACHE_TITLE_BANK  = $05
+.const BEEB_CACHE_TITLE_ADDR  = $be00
+.const BEEB_CACHE_TITLE_PAGES = 2
 
 .const BEEB_CACHE_AUX_BANK   = $06
 .const BEEB_CACHE_AUX_ADDR   = $8000
@@ -39,9 +44,9 @@
 .const BEEB_CATALOG_ADDR     = $9500
 .const BEEB_CATALOG_PAGES    = 37
 
-.const BEEB_CACHE_UI_BANK    = $06
-.const BEEB_CACHE_UI_ADDR    = $ba00
-.const BEEB_CACHE_UI_PAGES   = 6
+.const BEEB_CACHE_UI_BANK     = $06
+.const BEEB_CACHE_UI_ADDR     = $ba00
+.const BEEB_CACHE_UI_PAGES    = 6
 
 
 .const BEEB_CACHE_SPELL_BANK  = $07
@@ -59,6 +64,10 @@
 .const BEEB_ICAT_CACHE_BANK  = $07
 .const BEEB_ICAT_CACHE_ADDR  = $bc00
 .const BEEB_ICAT_CACHE_PAGES = 4
+
+.const BEEB_SWR_BANK_TITLE   = BEEB_CACHE_TITLE_BANK
+.const BEEB_SWR_ADDR_TITLE   = BEEB_CACHE_TITLE_ADDR
+.const BEEB_SWR_PAGES_TITLE  = BEEB_CACHE_TITLE_PAGES
 
 .const BEEB_SWR_BANK_UI      = BEEB_CACHE_UI_BANK
 .const BEEB_SWR_ADDR_UI      = BEEB_CACHE_UI_ADDR
@@ -82,7 +91,7 @@
 .const BEEB_SWR_PAGES_GEN    = BEEB_CACHE_GEN_PAGES
 
 .assert "Bank 5 MODAL cache starts after MAP_END ($B30B)", BEEB_CACHE_MODAL_ADDR > $b30b, true
-.assert "Bank 5 MODAL cache fits below $C000", BEEB_CACHE_MODAL_ADDR + BEEB_CACHE_MODAL_PAGES * $100 <= $c000, true
-.assert "Bank 6 slots are contiguous and fit below $C000", BEEB_CACHE_AUX_ADDR + BEEB_CACHE_AUX_PAGES * $100 == BEEB_ICAT_B6_ADDR && BEEB_ICAT_B6_ADDR + BEEB_ICAT_B6_PAGES * $100 == BEEB_CATALOG_ADDR && BEEB_CATALOG_ADDR + BEEB_CATALOG_PAGES * $100 == BEEB_CACHE_UI_ADDR && BEEB_CACHE_UI_ADDR + BEEB_CACHE_UI_PAGES * $100 <= $c000, true
+.assert "Bank 5 slots are contiguous and end at $C000", BEEB_CACHE_MODAL_ADDR + BEEB_CACHE_MODAL_PAGES * $100 == BEEB_CACHE_TITLE_ADDR && BEEB_CACHE_TITLE_ADDR + BEEB_CACHE_TITLE_PAGES * $100 == $c000, true
+.assert "Bank 6 slots are contiguous and fit below $C000", BEEB_CACHE_AUX_ADDR + BEEB_CACHE_AUX_PAGES * $100 == BEEB_ICAT_B6_ADDR && BEEB_ICAT_B6_ADDR + BEEB_ICAT_B6_PAGES * $100 == BEEB_CATALOG_ADDR && BEEB_CATALOG_ADDR + BEEB_CATALOG_PAGES * $100 == BEEB_CACHE_UI_ADDR && BEEB_CACHE_UI_ADDR + BEEB_CACHE_UI_PAGES * $100 == $c000, true
 .assert "The catalog sits above ANDY's span (the Huffman reads select Bank 6 from $9000)", BEEB_CATALOG_ADDR >= $9000, true
 .assert "Bank 7 slots are contiguous and fit below $C000", BEEB_CACHE_SPELL_ADDR + BEEB_CACHE_SPELL_PAGES * $100 == BEEB_CACHE_ITEMS_ADDR && BEEB_CACHE_ITEMS_ADDR + BEEB_CACHE_ITEMS_PAGES * $100 == BEEB_CACHE_GEN_ADDR && BEEB_CACHE_GEN_ADDR + BEEB_CACHE_GEN_PAGES * $100 == BEEB_ICAT_CACHE_ADDR && BEEB_ICAT_CACHE_ADDR + BEEB_ICAT_CACHE_PAGES * $100 == $c000, true

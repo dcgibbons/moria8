@@ -37,6 +37,9 @@ cmd_show_help_view:
 !help_key_loop:
     jsr input_prepare_modal_dismiss_key
     jsr hal_input_get_key
+    ldx zp_input_cmd
+    cpx #CMD_MSG_HISTORY
+    beq !help_done+
 #if HAL_PLATFORM_LEGAL_VIEWER
     cmp #$4c                    // License/source viewer is a free Help modal.
     bne !not_legal+

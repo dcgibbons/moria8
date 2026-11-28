@@ -3,7 +3,7 @@
 // Tests: dispatch routing, object detection reveal, mass genocide LOS filter,
 // teleport level depth change (VMS Moria scrolls.inc case 10).
 //
-// Results at $0400-$0411: $01 = pass, $00 = fail per test
+// Results at $0400-$0412: $01 = pass, $00 = fail per test
 
 #define C64_TEST_NAME_STREAMS_A000
 
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #17
+    ldx #18
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -96,9 +96,7 @@ hal_item_cat_read_byte:
 .segment Default
 .segment TestUnused
 #import "../../../../core/6502/turn.s"
-.segment Default
 #import "../../../../core/6502/store_data.s"
-.segment TestUnused
 #import "../../../../core/6502/store.s"
 #import "../../../../core/6502/ui_store.s"
 .segment Default
@@ -155,7 +153,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer
-tc_results: .fill 18, $ff
+tc_results: .fill 19, $ff
 tc_loop_ctr: .byte 0
 tl_ok: .byte 0
 t7_slot_a: .byte 0
@@ -193,7 +191,7 @@ status_mark_dirty:
     rts
 
 test_start:
-    ldx #14
+    ldx #18
     lda #$ff
 !clr:
     sta tc_results,x
@@ -770,6 +768,113 @@ test_start:
     lda #0
     sta cr_mflags + 1
 
+    // ==========================================
+    // Test 20: Mass Genocide enforces 20-tile MAX_SIGHT Chebyshev cap
+    // (removes clear-LOS non-Balrog at dist 20, spares clear-LOS at dist 21)
+    // ==========================================
+    // Clear (10..31, 9..30) to lit floor so both horizontal and diagonal LOS are open.
+    ldx #9
+!t20_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT
+!t20_col:
+    sta (zp_ptr0),y
+    iny
+    cpy #32
+    bcc !t20_col-
+    inx
+    cpx #31
+    bcc !t20_row-
+
+    // Case A (+X): player (10, 10), dist 20 at (30, 10), dist 21 at (31, 10)
+    jsr monster_init_table
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    lda #30
+    sta ms_spawn_x
+    lda #10
+    sta ms_spawn_y
+    lda #1
+    jsr monster_spawn_one
+    bcc !t20_fail_a+
+    stx t7_slot_a
+    lda #31
+    sta ms_spawn_x
+    lda #10
+    sta ms_spawn_y
+    lda #1
+    jsr monster_spawn_one
+    bcc !t20_fail_a+
+    stx t7_slot_b
+
+    lda #ITEM_SLOT_SCROLL_OF_MASS_GENOCIDE
+    jsr irs_dispatch_p3_overlay
+
+    ldx t7_slot_a
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !t20_fail_a+
+    ldx t7_slot_b
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !t20_case_b+
+!t20_fail_a:
+    jmp !t20_fail+
+!t20_case_b:
+
+    // Case B (-X/-Y diagonal dist 20 and -Y dist 21): player (30, 30),
+    // dist 20 at (10, 10), dist 21 at (30, 9)
+    jsr monster_init_table
+    lda #30
+    sta zp_player_x
+    sta zp_player_y
+    lda #10
+    sta ms_spawn_x
+    sta ms_spawn_y
+    lda #1
+    jsr monster_spawn_one
+    bcc !t20_fail+
+    stx t7_slot_a
+    lda #30
+    sta ms_spawn_x
+    lda #9
+    sta ms_spawn_y
+    lda #1
+    jsr monster_spawn_one
+    bcc !t20_fail+
+    stx t7_slot_b
+
+    lda #ITEM_SLOT_SCROLL_OF_MASS_GENOCIDE
+    jsr irs_dispatch_p3_overlay
+
+    ldx t7_slot_a
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !t20_fail+
+    ldx t7_slot_b
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !t20_fail+
+
+    lda #$01
+    .byte $2c
+!t20_fail:
+    lda #$00
+    sta tc_results + 18
+
 !tests_done:
     jmp test_exit_trampoline
 
@@ -849,6 +954,7 @@ tsp_slot: .byte 0
 
 // dungeon_render.s lives in TestCreateOverlay ($D000+) so the test body stays
 // below MAP_BASE; it must come after dungeon_data.s defines MAP_COLS.
+.assert "Test body stays below MAP_BASE", * <= MAP_BASE, true
 .segment TestCreateOverlay
 #import "../dungeon_render.s"
 .segment Default

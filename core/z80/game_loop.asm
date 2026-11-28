@@ -269,6 +269,7 @@ _gl_ui_tbl:
     DB   'C'        : DW tramp_ui_character
     DB   'i'        : DW tramp_ui_inventory
     DB   'e'        : DW tramp_ui_equipment
+    DB   KEY_CTRL_P : DW tramp_ui_msg_history
     DB   '?'        : DW tramp_help_screen
     DB   'v'        : DW tramp_legal_sysinfo
     DB   'V'        : DW tramp_legal_sysinfo
@@ -709,20 +710,35 @@ _gl_try_move:
     JR   C, .step_ok
     LD   A, (abi_game_flags)
     AND  GAME_FLAG_WIZARD
-    JR   Z, .blk
+    JR   Z, .blk_terrain
     LD   A, (wizard_wall_walk_active)
     OR   A
-    JR   Z, .blk
+    JR   Z, .blk_terrain
 .step_ok:
     LD   A, 1
     LD   (gl_move_relocated), A
     CALL _gl_set_player_pos
     SCF
     RET
+.blk_terrain:
+    LD   A, (zp_run_dir)
+    CP   0xFF
+    JR   NZ, .blk_nobell
+    LD   A, D
+    AND  TILE_TYPE_MASK
+    CP   TILE_RUBBLE
+    JR   NZ, .blk_bell
+    LD   A, HSTR_RUBBLE_BLOCKS
+    CALL msg_print_huff
+.blk_bell:
+    CALL sound_bell
+.blk_nobell:
+    OR   A
+    RET
 .blk:
     LD   A, (zp_run_dir)
     CP   0xFF
-    CALL Z, sound_bell
+    JR   Z, .blk_bell
     OR   A
     RET
 

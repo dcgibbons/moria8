@@ -53,10 +53,9 @@ test_exit_trampoline:
 .segment Default
 #import "../../../../core/6502/ui_help_clear.s"
 .segment Default
-#import "../../../../core/6502/ui_character.s"
-.segment Default
 #import "../../../../core/6502/stat_display.s"
 .segment TestCreateOverlay
+ui_char_display:
 player_create:
     brk
 .segment Default
@@ -1167,4 +1166,4 @@ t_store_eq:
     rts
 
 ego_test_body_end:
-.assert "Ego test body stays below the create overlay ($D000)", ego_test_body_end <= $d000, true
+.assert "Ego test body stays below MAP_BASE ($C000)", ego_test_body_end <= MAP_BASE, true

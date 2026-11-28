@@ -155,7 +155,7 @@ player_tunnel_resolved_target:
     cmp #TILE_QUARTZ
     beq !tun_quartz+
 
-    // Rubble — always succeeds
+    // Rubble — resistance check with rng(40)
     cmp #TILE_RUBBLE
     beq !tun_rubble+
 
@@ -225,14 +225,6 @@ player_tunnel_resolved_target:
     jsr tramp_dig_ability
 #endif
 
-    // Bare-hands check: ability=0 means no tool
-    lda tun_dig_ability
-    bne !tun_rubble_check+
-    ldx #HSTR_TUN_NO_TOOL
-    jsr huff_print_msg
-    sec                         // Turn consumed
-    rts
-
 !tun_rubble_check:
     // Resistance: rng(40) → [0,39]
     lda #40
@@ -282,15 +274,6 @@ player_tunnel_resolved_target:
 #else
     jsr tramp_dig_ability
 #endif
-
-    // Bare-hands check: ability=0 means no tool (R14)
-    lda tun_dig_ability
-    bne !tun_has_tool+
-    ldx #HSTR_TUN_NO_TOOL
-    jsr huff_print_msg
-    sec                         // Turn consumed
-    rts
-!tun_has_tool:
 
     // Success check: digging_ability > resistance
     lda tun_dig_ability

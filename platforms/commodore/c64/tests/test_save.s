@@ -238,6 +238,10 @@ random_floor_in_room:
 .label hal_storage_save_stream_status = save_stream_status
 .label hal_storage_load_stream_status = load_stream_status
 .label hal_storage_read_command_status = test_save_read_command_status
+.label hal_storage_open_cmd_channel = test_save_setnam
+.label hal_storage_read_open_cmd_status = test_save_read_command_status
+.label hal_storage_close_cmd_channel = test_save_setnam
+.label hal_storage_status_lost = test_save_status_lost
 .label hal_storage_dos_code_status = disk_dos_code_status
 .label hal_storage_marker_present = c64_disk_marker_present
 .label hal_storage_marker_write_resident = c64_disk_marker_write_resident
@@ -422,6 +426,7 @@ test_save_open_fail: .byte 0
 test_save_chkin_fail: .byte 0
 test_save_cmd_status: .byte 0
 test_save_cmd_calls: .byte 0
+test_save_status_lost: .byte 0
 test_save_magic_readst: .byte 0
 test_save_eof_lo:       .byte 0
 test_save_eof_hi:       .byte 0

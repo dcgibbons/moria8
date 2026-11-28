@@ -123,13 +123,15 @@ work16 behavior review; this ledger is their durable approval provenance.
 | TRN-007 | Superseded | Project maintainer, 2026-10-21 | Auto-rest also stops when its own rest turn damages the player or worsens hunger. `turn_rest_disturbed` is an auto-rest-scoped latch, not a per-turn event: set only by `turn_apply_one_damage` (poison, starvation) and by `turn_maybe_play_hunger_alert` on a worse hunger state, cleared on auto-rest entry (`cmd_autorest`, stale handling as TRN-003), and read only by `auto_rest_should_stop`, so a nonzero value always means auto-rest's own turns disturbed the player. Apple IIe keeps the byte in resident RAM (`TURN_REST_DISTURBED_EXTERNAL`). Other damage already prints a message. | explicit maintainer direction 2026-10-21 to fix playtest finding F-M2-1 (a CTRL+R rest from 8/21 HP starved to death); pinned VMS Moria `take_hit` calls `rest_off`, and the hunger alerts interrupt resting; C64 `test_main_loop.s` t45-t46, `test_turn.s` t30-t33 | TRN-003 stop set; superseded by TRN-014 |
 | TRN-006 | Accepted | Project maintainer, 2026-07-15 | Auto-run uses UMoria's complete CJS state machine and default options: cut known corners, examine potential corners, and stop for visible open-door objects. Doorless openings are ordinary open topology, not stop objects. Running tracks open-area and left/right wall breaks, scans the three or five newly adjacent squares after each successful move, stops for visible objects or monsters, follows unambiguous corridor turns, and stops when open-area topology changes. Moria8 initializes all runner state deterministically rather than retaining UMoria's process-static values. | explicit maintainer direction; upstream `umoria/src/player_run.cpp` and default configuration; production C64 runner fixtures; C64/C128 command-loop tests | TRN-004 and TRN-005 hybrid behavior |
 | TRN-008 | Accepted | Project maintainer, 2026-10-22 | On platforms defining `HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE` (all seven), a level-up applies level, HP, combat bonuses, sound and "Welcome to level N." at once, but the mana recalculation and new-spell check run at the top of the next `main_loop` pass, followed by `status_draw`. `levelup_magic_pending` is a flag (1 = owed), set by `combat_apply_levelup`, tested and cleared by `lsr` in `main_loop`, and cleared on new game and load. Reason: the magic trampolines load an overlay over the window, which stranded level-ups made by overlay code (thrown/fired missile, bash, spell) and hung wizard level-up. Effect: the new maximum mana and any "new spells" message appear after the monsters' turn of the levelling action rather than with the level-up message. | maintainer choice 2026-10-22 ("defer magic recalc") for playtest finding §14.10 item 3 in `docs/AI_PLAYTEST_DESIGN.md`; C64 static contracts `levelup_magic_deferred_contract`, `levelup_magic_main_loop_contract`; `make playtest-smoke` (C64 product build: throw via the `?` list, then wizard level-up and one more turn; fails on the pre-change build) | immediate in-command magic recalc |
-| TRN-009 | Accepted | Project maintainer, 2026-10-22 | HP regeneration follows pinned VMS Moria `regenhp` (`moria.inc`, constants `player$regen_*` in `constants.inc`) in Umoria's 16.16 fixed point (`game_run.cpp` `playerRegenerateHitPoints`, `config.cpp` `PLAYER_REGEN_*`; identical at the pinned revision): each consumed turn, unless poisoned or at max HP, HP.fraction += max HP x rate + 1442, where rate is 197 full or hungry, 98 weak, 33 faint, 0 starving (food counter 0, Moria8's starvation-damage condition), doubled while auto-resting (`auto_rest_active`, VMS `rest > 0`; the base is not doubled); reaching max HP clears the fraction. `turn_tick_regen` runs first in `turn_post_action`, so the rate uses the turn's starting hunger, poison and rest state as upstream does. The fraction is `zp_regen_frac` (high byte, ZP `$42`, saved with the game) plus resident `regen_frac_lo` (cleared on new game and load, not saved). Whole HP are added through `eff_heal` (`core/eff_heal.s`). Deviations: the low fraction byte is not saved (a load loses under 1/256 HP); `zp_eff_regen` no longer affects HP regeneration (VMS x1.5; no Moria8 item or spell sets that timer); Umoria's search-mode doubling is not applied (VMS doubles only for rest). Old saves reuse `$42` (the former countdown) as the fraction high byte: under 1 HP once. Max HP must stay at or below 42,410 (24-bit product; at most 255 whole HP per turn). | explicit maintainer direction 2026-10-22 ("fix the overflow ... the formula would be ideal") after `docs/AI_PLAYTEST_DESIGN.md` §14.5; pinned VMS/Umoria sources; C64 `test_effects.s` 1-5, 32-38 (hand-computed from the upstream constants), `test_turn.s` t1 (order) and t2, `test_main_loop.s` t47 (real auto-rest flag) | CON-indexed `regen_rate` countdown (1 HP per 8-50 turns), which read past its 16-entry table for CON 18/01 and above |
+| TRN-009 | Superseded in part | Project maintainer, 2026-10-22 | HP regeneration follows pinned VMS Moria `regenhp` (`moria.inc`, constants `player$regen_*` in `constants.inc`) in Umoria's 16.16 fixed point (`game_run.cpp` `playerRegenerateHitPoints`, `config.cpp` `PLAYER_REGEN_*`; identical at the pinned revision): each consumed turn, unless poisoned or at max HP, HP.fraction += max HP x rate + 1442, where rate is 197 full or hungry, 98 weak, 33 faint, 0 starving (food counter 0, Moria8's starvation-damage condition), doubled while auto-resting (`auto_rest_active`, VMS `rest > 0`; the base is not doubled); reaching max HP clears the fraction. `turn_tick_regen` runs first in `turn_post_action`, so the rate uses the turn's starting hunger, poison and rest state as upstream does. The fraction is `zp_regen_frac` (high byte, ZP `$42`, saved with the game) plus resident `regen_frac_lo` (cleared on new game and load, not saved). Whole HP are added through `eff_heal` (`core/eff_heal.s`). Deviations: the low fraction byte is not saved (a load loses under 1/256 HP); `zp_eff_regen` no longer affects HP regeneration (VMS x1.5; no Moria8 item or spell sets that timer); Umoria's search-mode doubling is not applied (VMS doubles only for rest). Old saves reuse `$42` (the former countdown) as the fraction high byte: under 1 HP once. Max HP must stay at or below 42,410 (24-bit product; at most 255 whole HP per turn). | explicit maintainer direction 2026-10-22 ("fix the overflow ... the formula would be ideal") after `docs/AI_PLAYTEST_DESIGN.md` §14.5; pinned VMS/Umoria sources; C64 `test_effects.s` 1-5, 32-38 (hand-computed from the upstream constants), `test_turn.s` t1 (order) and t2, `test_main_loop.s` t47 (real auto-rest flag) | CON-indexed `regen_rate` countdown (1 HP per 8-50 turns), which read past its 16-entry table for CON 18/01 and above; equipment `PFLAG2_REGEN` & `zp_eff_regen` rule superseded by TRN-016 |
 | TRN-010 | Accepted | Project maintainer, 2026-10-22 | Poison damage follows pinned VMS Moria (`moria.inc` poisoned tick; Umoria `playerUpdatePoisonedState` identical): each turn the poison timer stays above 0, the player takes damage by `con_adj` (`player_con_hp_adj`, VMS `con_adj`): -4: 4 HP; -3 and -2: 3; -1: 2; 0 (CON 7-16): 1; 1-3 (CON 17 to 18/75 and 18/76-18/98): 1 HP on turns where `turn mod 2 = 0`; 4 (18/99+): 1 HP when `turn mod 3 = 0`, using the 16-bit turn counter before `turn_post_action` advances it. The expiry turn does no damage. Table `poison_damage` lives in `core/turn_data.s` (Apple IIe: resident main RAM, imported before the play slot). | explicit maintainer direction 2026-10-22 ("yes align the poison") after the M4 baseline found poison deaths (`docs/AI_PLAYTEST_DESIGN.md` §15); pinned VMS/Umoria sources; C64 `test_effects.s` 39-46 (production `turn_tick_effects` and `player_con_hp_adj`; mutation-checked), `test_turn.s` t9 | 1 HP every poisoned turn at any CON |
 | TRN-011 | Accepted | Project maintainer, 2026-10-22 | The last paralyzed turn follows pinned VMS Moria (`moria.inc`: the turn's counter update runs `paralysis := paralysis - 1`, then "Accept a command?" when `paralysis < 1`, then creatures move) and Umoria `playDungeon` (`playerUpdateParalysis`, then `executeInputCommands`, then `updateMonsters`): when the main loop finds `zp_eff_paralyze` = 1, it clears it, prints the paralysis-end message and reads a command; the command's own `turn_post_action` then runs the timers and the monsters. Paralysis above 1 still spends whole turns (`turn_post_action`, which counts it down). Before, the expiring turn ran `turn_post_action`, so monsters acted between expiry and the player's first command, and a paralyzing attacker (White Mushroom patch) could re-paralyze the player forever. | explicit maintainer direction 2026-10-22 ("yes") after the M4 baseline (`docs/AI_PLAYTEST_DESIGN.md` §15.2: 8 of 32 deaths); pinned VMS/Umoria sources; C64 `test_main_loop.s` t48 (real main-loop paralysis dispatch; fails on the old order) | expiring paralysis as a monster turn |
 | TRN-012 | Accepted | Project maintainer, 2026-11-16 (Phase 5 `CD_INVISIBLE` & `CM2_*` redraw rules) | (1) `muvo_apply_visible` (`core/monster.s`) clears `MF_VISIBLE` on `CD_INVISIBLE ($80)` creatures unless `(player_pflags & PFLAG_SEE_INVIS) \| zp_eff_see_inv \| zp_eff_invis` is nonzero; a creature newly gaining `MF_VISIBLE` turns off search mode (`player_search_mode_off`), whereas an unseen `CD_INVISIBLE` mover neither sets `MF_VISIBLE` nor triggers search-off until it attacks or becomes visible (`MF_DETECTED` continues to render under Detect Monsters per TRN-001). (2) `CM2_PHASE ($20)` creatures traverse interior walls/veins/rubble/doors without mutating tile or `door_state` bytes; when a visible or detected phasing creature steps into or out of a non-local viewport wall/door tile, `mat_mark_move_dirty` (`scene_render_mat_tile`) redraws both the vacated wall/door glyph and the newly occupied tile immediately. (3) When an unseen mover (`MF_VISIBLE == 0 && MF_DETECTED == 0`) mutates its destination tile by breaking a glyph, eating a `MF_VISIBLE \| MF_DETECTED` creature (`CM2_EATS_OTHER $40`), or removing a floor item (`CM2_PICKS_UP $80`), `monster_try_step` sets `mat_force_new_dirty` so `mat_mark_tile_dirty_if_nonlocal` still redraws the destination tile to erase the stale glyph, monster, or item glyph. | pinned VMS `creature.inc` (`update_mon`, `make_move`); C64 `test_monster_ai2.s` through production `monster_update_visibility_all` and `monster_ai_tick`; `make playtest-gate` | unconditional `MF_VISIBLE` in LOS; non-local redraw gated solely on mover `MF_VISIBLE \| MF_DETECTED` |
 | TRN-013 | Accepted | Project maintainer, 2026-11-18 (Bugs A & B: overcast mana/faint/CON parity & Umoria-style CON max-HP sync) | (1) `player_calc_hp` (`core/player.s`) always writes both `player_data + PL_MHP_LO/HI` and `zp_player_mhp_lo/hi` and clamps `zp_player_hp_lo/hi` + `player_data + PL_HP_LO/HI` when `HP > MHP`, and every `CON` mutation site (`pm_consume_mana`, `mae_lose_stat`, `mae_lose_exp`, `trap_do_dart`, `ee_op_drain`, `ee_op_restore`, `eff_holy_word`, `player_adjust_equipment_stat` / Apple2 & BBC Master `player_adjust_equipment_stat_play`, stepping equipment via VMS `in_statt`/`de_statt` and draining via `de_statp` per `MON-044`) updates `zp_player_str,y` and calls `player_calc_hp` when `CON` changes so status-bar Row 22/23 (`status_draw` diffing `zp_player_con` and `zp_player_mhp_lo/hi`) never stays stale. (2) `pm_consume_mana` (`core/player_magic.s`) prints `"You faint from the effort!"` (`SPELL_MAGE`) vs `"You faint from fatigue!"` (`SPELL_PRIEST`) and, on the `1/3` CON-drain roll, prints `"You have damaged your health!"` before `-MORE-` acknowledgement. (3) `magic_recalc_mana` (`core/player_magic_tail.s`) uses `zp_temp1` rather than `pm_cost_tmp` so an in-cast `magic_recalc_mana` cannot overwrite the active spell's mana cost. | explicit maintainer bug report 2026-11-18 (Bugs A & B); pinned VMS `magic.inc:106-120`, `prayer.inc:99-113`, Umoria `player_stats.cpp:275-277`; C64 `test_overcast_ordering.s`, `test_player.s`, `test_ego.s`, C128 `test_prayer_prayer128.s` | `player_calc_hp` leaving `zp_player_mhp` stale; silent overcast CON drain; `magic_recalc_mana` clobbering `pm_cost_tmp` |
 | TRN-014 | Accepted | Project maintainer, 2026-11-19 (GitHub Issue #21: complete auto-rest disturbance model) | (1) Unified disturbance latch `zp_disturb = $69` (repurposing unused `zp_dirty_lo` in the unsaved `$60-$8F` safe zone, preserved by `zp_save_buf`/`LegalSnapshot`, aliased as `turn_rest_disturbed`), retiring resident `turn_rest_disturbed` and `TURN_REST_DISTURBED_EXTERNAL`. (2) `turn_scene_dirty` is decoupled from both auto-rest and auto-run and becomes pure render dirtiness: `cmd_autorest` and `run_step` clear `zp_disturb` on entry/step to discard stale prior-turn events, while `auto_rest_should_stop` (after recovery check) and `!run_active_post` stop on `zp_msg_flags \| zp_disturb` (auto-rest also stops on full HP & MP recovery and cancel input; auto-run keeps TRN-006 CJS topology/object/monster rules). (3) Every dangerous or attention-worthy event runs `inc zp_disturb` (`2 B`, preserves A/X/Y/C): `MF_VISIBLE` `0 -> 1` sighting (`muvo_apply_visible`), visible hostile monster actions at any distance including moves inside `<= zp_light_radius + 1`, spells, silent `MSF2_BLINK`/`MSF2_TELE_SELF`, door opens, glyph breaks, and visible breeding (`!mpo_done` checking `(mat_action_dirty & $02) && (zp_mon_flags & MF_VISIBLE)` per MON-038), monster door bursts (`!mts_stuck`/`!mts_bash`), monster melee (`monster_attack_player` past `ATK_NONE`), poison/starvation HP loss (`turn_apply_one_damage`), worsening hunger (`turn_maybe_play_hunger_alert`), player displacement (`eff_teleport_apply_target`, Word of Recall arrival), silent dangerous transitions (cursed `ITR3_BLIND`/`ITR3_TIMID` onset `0 -> 1`, `zp_eff_hero` expiry MHP `-10` clamp, `eff_invuln_timer` expiry), and secret/trap discovery (`!ds_found_common` and fresh `chest_search_reveal`). Sleeping monsters (MON-005), unprovoked townies (`mat_action_dirty = $81`), detected-only monsters behind walls (`MF_DETECTED` without `MF_VISIBLE`), unseen `CD_INVISIBLE` creatures (TRN-012), and benign silent buff timers (`protect`, `invis`, `infra`, `resist`, `resist_cold`, `see_inv`, `eff_detect_timer`) stay quiet. (4) Auto-rest sets `PLF_RESTING ($20)` in `player_data + PL_FLAGS` (`cmd_autorest`), rendering `"Rest*"` in `COL_YELLOW` on Row 21 mutually exclusively with `"Search*"` (`core/ui_status.s`); consolidated `!auto_rest_stop` clears `auto_rest_active` and `PLF_RESTING` and calls `status_draw` immediately on stop or cancel, and new game (`game_new_start`) and load resume (`load_resume_reset_cold.s`) clear both `zp_disturb` and `PLF_RESTING`. | explicit maintainer direction 2026-11-19 (all 4 policy choices approved for GitHub Issue #21); pinned VMS `creature.inc:42-55, 697-757, 1191-1202` and Umoria `src/monster.cpp:54-60, 477-540, 610-613`; C64 `test_main_loop.s` t27/t34-t35/t37/t45-t46/t57-t59, `test_turn.s` t30-t39, `test_monster_ai2.s` t16-t23, `test_monster_attack.s` t55, `test_chest_disarm.s` t7, `test_ui_views.s` t25; C128 `test_main_loop128.s` t30/t39-t41 | TRN-003 and TRN-007 stop sets; resident `turn_rest_disturbed` / `TURN_REST_DISTURBED_EXTERNAL`; `turn_scene_dirty` coupling in auto-rest and auto-run |
 | TRN-015 | Accepted | Project maintainer, 2026-11-20 (VMS ambient spawning, MON-039) | `turn_post_action` rolls `rng_range(160)` after the pseudo-ID tick and before `monster_ai_tick` on every catalog port (all 7; unit-test builds without the catalog compile it out), as VMS `moria.inc` checks creature generation before the creatures move; a placed wanderer raises `zp_dirty_count`, which the same turn folds into `turn_scene_dirty`. It does not touch `zp_disturb`: a wanderer that comes into view disturbs auto-rest and auto-run through `muvo_apply_visible` (MON-038), never by being placed. The roll adds one RNG draw per consumed turn, shifting later draws. | pinned VMS `moria.inc:3633-3635`; CX16 `harness_smoke.py monster_catalog` `turn_wanderer` (production `turn_post_action` from an empty table) | none |
+| TRN-016 | Accepted | Project maintainer, 2026-11-27 (Backlog #3: Regeneration equipment parity & `zp_eff_regen` retirement) | When `PFLAG2_REGEN` is worn across all 8 ports (`core/6502/turn.s` and `core/z80/turn.asm`): (1) HP regeneration scales the 24-bit `max HP * rate` product (after any auto-rest `x2`) by `x1.5` via `mul_result += (mul_result >> 1)` before adding `REGEN_HPBASE` (`1442`); (2) mana regeneration scales `x1.5` from `1 MP / 2 turns` (`(turn & 1) == 0`) to `3` of every `4` turns (`(turn_lo & $03) != $03`); (3) food digestion adds `+3` per turn when not already starving at `food == 0`, saturating at `0` without underflow or starvation damage on the drop turn (`PFLAG2_SLOW_DIGEST` still skips only the base `1`-point decrement on odd turns, netting `-3` odd / `-4` even). (4) `zp_eff_regen` (`$5B` on 6502, `zp_eff_regen` in `core/z80/state.inc`) is retired: neither `turn_tick_effects` nor HP/MP regen reads or decrements it, while the byte remains reserved/zeroed in Save V2 `$22` with no save-format bump. | explicit maintainer approval 2026-11-27 (Backlog #3); pinned VMS `moria.inc`/`misc.inc` (`regenhp`, `regenmana`, `food_digested`); C64 `test_effects.s` t5/t7/t20, `test_turn.s` t8/t10/t39; CP/M `harness_smoke.py` `turn_regen_poison_repeat` | `TRN-009` `zp_eff_regen` / `x2` equipment scaling and unconditional MP regen |
+| TRN-017 | Accepted | Project maintainer, 2026-11-27 (Wave 4 UI QoL & cross-port parity) | Non-turn modal & status/UI additions across all 8 ports: (1) Chargen displays race stat/HD/XP%/Infra modifiers (`create_draw_race_cols` 80-col table & 40-col live preview; CP/M `ovl_start_draw_race_cols`) and sets `PL_AGE` (`rng_range(race_age_var)+1+race_age_base`) + race `PL_HEIGHT`/`PL_WEIGHT`. (2) `CTRL+P` (`$10`, `CMD_MSG_HISTORY` -> `ui_msg_history_draw` on 6502, `ovl_ui_msg_history` on CP/M Z80) opens the non-turn 8-slot `msg_history` modal and redraws gameplay viewport/status on dismiss. (3) Help (`?`) expands to 3 pages (Page 3 Symbol Legend), while expanded Character Sheet (`C`, 40-col 2-page & 80-col 1-page) and `Burden: X/Y lb` / per-item weights (`ui_weight_helpers.s`, `ui_inventory.s`, `ui_equipment.s`, `ui_home.s`, CP/M `ovl_ui.asm`, `ovl_home.asm`) render read-only without advancing game turns. | `docs/CROSS_PLATFORM_UI_QOL_DESIGN.md`; C64 `test_ui_views.s`, `test_background.s`, `test_input.s`; C128 `test_input128.s`; CP/M `harness_smoke.py`; `tools/bpe_text.py --check` | 2-page help; unpopulated `PL_AGE`/`PL_HEIGHT`/`PL_WEIGHT`; compact char sheet without skills/age/ht/wt |
 
 ## Executable Enforcement
 
@@ -155,6 +157,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | Search two-turn dirty aggregation with dirty/clean and clean/dirty orderings | none | `NOT IMPLEMENTED` |
 | Detected-only production free-look inspection | none | `NOT IMPLEMENTED` |
 | CP/M 2.2 (Z80) turn regen/poison/repeat, LOS/stairs exploration, and dirty-cell ADM-3A/ANSI diff flush (`core/z80/{game_loop,turn,los,viewport}.asm`, `screen_ansi.asm`) | `platforms/z80/cpm/harness_smoke.py` scenarios `turn_regen_poison_repeat`, `los_stairs_and_exploration`, `legal_viewer_nested_trampoline` | `make testcpm` |
+| Regeneration equipment (`PFLAG2_REGEN`) `x1.5` HP/MP scaling, `+3` food digestion with `0` clamp & `PFLAG2_SLOW_DIGEST` interaction, and retired `zp_eff_regen` non-decrement/ignore (TRN-016) | C64 `test_effects.s` t5 (`16-bit` & `24-bit` `x1.5` HP), t7 (`+3` hunger, 256-borrow, `0` clamp, `PFLAG2_SLOW_DIGEST`), t20 (`zp_eff_regen` ignored/preserved & `3/4` MP regen); `test_turn.s` t8, t10, t39; CP/M `harness_smoke.py` `turn_regen_poison_repeat` | `TEST_FILTER='^(effects\|turn)$' make test64`; `make testcpm` |
 
 ## License/source modal repair verification (2026-11-11)
 
@@ -449,6 +452,196 @@ Unresolved uncertainty and risk:
   test64-legal help hitting its 30s wall-clock cap on the very last post-return
   bsave (memory(0xC000, 3840) after key("Q") returned to gameplay $AD22) under
   sustained external host load 32.81-43.85 (title passed; not a product hang).
+```
+
+## Regeneration Equipment `x1.5` & Hunger Parity + `zp_eff_regen` Retirement (TRN-016, 2026-11-27)
+
+```text
+Problem and success criteria:
+  Implement Backlog Item #3 across all 8 ports (6502 + Z80): scale both HP
+  and MP regeneration by x1.5 when PFLAG2_REGEN is worn, add +3 food digestion
+  per turn (clamped at 0, preserving PFLAG2_SLOW_DIGEST odd-turn skip on the
+  base 1-point decrement), and retire dead timer zp_eff_regen ($5B / Save V2
+  slot preserved as reserved/zeroed).
+State being changed:
+  - core/6502/turn.s & core/z80/turn.asm: remove zp_eff_regen decrement in
+    turn_tick_effects / _turn_tick_effects and its branches in HP/MP regen;
+    replace x2 HP regen scaling with 24-bit x1.5 (product += product >> 1);
+    replace unconditional MP regen with 3-of-4-turns ((turn & 3) != 3); add +3
+    food digestion saturated at 0 when PFLAG2_REGEN is worn (when food != 0
+    at entry); compact player_update_hunger_state and !tse_loop on 6502 to stay
+    within atari8 Default headroom.
+  - core/6502/zeropage.s ($5B) & core/z80/state.inc (zp_eff_regen): marked
+    reserved/retired without shifting ZP or Save V2 offsets.
+Search scope and terms:
+  rg across core/ and platforms/ for zp_eff_regen, PFLAG2_REGEN, player_pflags2.
+Relevant readers/writers found and known exclusions:
+  No production code writes zp_eff_regen; unit tests (test_effects_magic.s,
+  test_phase_door.s) clear zp_eff_regen at startup, so the symbol remains
+  defined at its reserved slot.
+Initialization, reset and persistence points:
+  Save V2 $22 keeps $5B / zp_eff_regen reserved/zeroed with zero format bump.
+Affected production sequence through the changed transition:
+  turn_post_action -> turn_tick_regen (x1.5 product on PFLAG2_REGEN) ->
+  turn_tick_effects (skips $5B; 3/4 MP regen on PFLAG2_REGEN) ->
+  turn_tick_hunger (+3 food drain on PFLAG2_REGEN, clamped at 0).
+Contract decision or selected upstream oracle with source locations:
+  TRN-016 above; pinned VMS Moria moria.inc / misc.inc (regenhp, regenmana,
+  food_digested).
+Intentional Moria8 deviations:
+  On Moria8, PFLAG2_SLOW_DIGEST skips only the base 1-point food decrement on
+  odd turns while PFLAG2_REGEN still adds +3/turn (netting -3 odd / -4 even).
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  24-bit unsigned mul_result += (mul_result >> 1) with carry propagation;
+  16-bit unsigned food subtraction saturated at 0 (no $FFFF wrap).
+RNG reduction and bias, if applicable:
+  N/A (no RNG changes).
+Affected platforms, overlays, banks and owners:
+  All 7 6502 ports + 5 cartridges + CP/M 2.2 Z80 port.
+Required production-path tests:
+  C64 test_effects.s (t5, t7, t20), C64 test_turn.s (t8, t10, t39), and CP/M
+  harness_smoke.py (turn_regen_poison_repeat) via make testcpm.
+Known behavior explicitly out of scope:
+  No new item/spell producer for temporary regen timers.
+Unresolved uncertainty and risk:
+  None; C64 suite (`make test64` PASS), `make testcpm`, and `GATE_ALLOW_SKIP=1 make playtest-gate` (`70/70`) subsequently **Verified PASS**.
+```
+
+## Rubble Blocking, LOS Transparency & Bare-Handed Tunneling (Backlog #17, 2026-11-27)
+
+```text
+Problem and success criteria:
+  Make TILE_RUBBLE ($B0) block player/non-phasing-monster movement and
+  projectiles across all 8 ports while keeping line-of-sight transparent, emit
+  "There is rubble blocking your way." when bumping into rubble while walking
+  (silent when running), and allow bare-handed tunneling with ability STR >> 2
+  so players cannot be stranded by rubble without a tool.
+State being changed:
+  - data/huffman_strings.txt & core/6502/huffman_data.s (slot 176): replace
+    HSTR_TUN_NO_TOOL in-place with HSTR_RUBBLE_BLOCKS ("There is rubble blocking your way.").
+  - core/6502/player_move.s: encode walkable_table as bit 0 = walkable ($01),
+    bit 1 = LOS-open ($02) with TILE_RUBBLE = $02; in player_try_move, print
+    HSTR_RUBBLE_BLOCKS on blocked non-running moves onto TILE_RUBBLE (bounds
+    checks clear zp_temp0 via stx zp_temp0 before jumping to !blocked).
+  - core/6502/projectile.s (trace_step) & eff_item_p1.s (breeder clone spawn):
+    check bit 0 / tile_is_walkable so projectiles and non-phasing spawns treat
+    rubble as blocked; los_trace.s (mlos_tile_open) keeps nonzero walkable_table
+    entries ($02) LOS-open.
+  - core/6502/calc_dig_cold.s & tunnel.s: hoist STR >> 2 as bare-hands ability
+    and remove both HSTR_TUN_NO_TOOL refusals.
+  - core/z80/monster_core.asm (tile_is_walkable_a), core/z80/game_loop.asm
+    (_gl_try_move), platforms/z80/cpm/ovl_modal.asm (ovl_modal_calc_dig), and
+    ovl_actions.asm (ovl_actions_tunnel_resolved): parallel Z80 parity.
+Search scope and terms:
+  rg across core/, platforms/, playtest/, data/, tools/ for HSTR_TUN_NO_TOOL,
+  TILE_RUBBLE, walkable_table, tile_is_walkable, calc_dig_ability.
+Relevant readers/writers found and known exclusions:
+  core/6502/los_trace.s reads walkable_table directly (nonzero = LOS-open);
+  core/z80/los.asm (_los_is_transparent) preserves bit 11 in 0x4E;
+  core/6502/dungeon_gen.s (vc_tile_is_passable) & ovl_gen.asm retain rubble
+  connectivity; CM2_PHASE creatures continue crossing rubble per MON-035.
+Initialization, reset and persistence points:
+  No save-format or ZP layout changes; TRAP_ROCKFALL continues leaving the
+  player on the resulting TILE_RUBBLE tile as in VMS.
+Affected production sequence through the changed transition:
+  player_try_move / _gl_try_move -> tile_is_walkable / tile_is_walkable_a (C=0)
+  -> wizard_wall_walk_active == 0 -> zp_run_dir == $FF && TILE_RUBBLE ->
+  HSTR_RUBBLE_BLOCKS; '+' -> calc_dig_ability (STR >> 2) -> tunnel vs rng(40).
+Contract decision or selected upstream oracle with source locations:
+  Pinned VMS Moria / Umoria rubble semantics (impassable to movement/projectiles,
+  LOS-open); bare-handed STR >> 2 tunneling per Backlog #17 / maintainer spec.
+Intentional Moria8 deviations:
+  Bare hands dig with STR >> 2 (0 at STR 3 still attempts rng(40) == 0 with
+  50% tie-break rather than refusing); rubble is runtime-only (Rockfall/Earthquake).
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  8-bit unsigned STR >> 2 in 0..29 (STR 3..118); 8-bit walkable_table bitmask.
+RNG reduction and bias, if applicable:
+  Unchanged (rng_range(40) for rubble resistance).
+Affected platforms, overlays, banks and owners:
+  All 7 6502 ports + 5 cartridges + CP/M 2.2 Z80 (`MORIA8.COM`, `ovl_modal`,
+  `ovl_actions`, `MORIA8.DAT`).
+Required production-path tests:
+  C64 test_dungeon.s t70-t72, test_tunnel.s, test_monster_ai.s t72,
+  test_subsystems.s; CP/M harness_smoke.py; playtest test_m1.py.
+Known behavior explicitly out of scope:
+  Dungeon-creation place_rubble generation.
+Unresolved uncertainty and risk:
+  Full C64 suite (`make test64`), `make playtest-gate`, and `playtest-check` **Verified PASS**.
+```
+
+## Wave 4 UI QoL: Chargen Race Preview & Age/Ht/Wt, `Ctrl+P` Message History, & Help Page 3 (`TRN-017`, 2026-11-27)
+
+```text
+Problem and success criteria:
+  Bring 6502 ports into parity with CP/M Z80 for Item #10 Features #1, #2a, #4,
+  and #5 without exceeding tight Default ($C100 Atari8 / $C000 C64) or overlay
+  ($E000-$EFFF) budgets: reclaim StartupOverlay space via BPE background text,
+  display 80-col race bonus table / 40-col live race detail preview, roll VMS
+  PL_AGE/PL_HEIGHT/PL_WEIGHT at character creation, route Ctrl+P ($10) via
+  CMD_MSG_HISTORY reusing HelpOverlay dispatch, and add 3-page Symbol Legend
+  help (Pages 1/3..3/3).
+State being changed:
+  - core/6502/background_data.s & player_create.s: $80+ BPE compression of
+    bg_s* strings + stack-safe decoder; create_draw_race_cols (80-col table /
+    40-col live preview using resident race_stat_adj and race_properties);
+    create_init_character rolls PL_AGE and sets race PL_HEIGHT/PL_WEIGHT.
+  - core/6502/input_contract.s, input_tables.s, platforms/commodore/c128/input128.s,
+    core/6502/game_loop.s: CMD_MSG_HISTORY ($38) on $10 (Ctrl+P, plus C128
+    P/SHIFT+P Ctrl chord normalization) dispatched via existing Help cmd path
+    (cmd_show_help_view) with zero extra resident trampoline.
+  - core/6502/ui_help_cmd_cold.s, ui_help_command.s, ui_help.s, platforms/cx16/main.s:
+    ui_msg_history_draw reads 8-slot msg_history ring oldest->newest (supporting
+    MSG_HISTORY_IN_AUX via mmu_safe_map_read_ptr0) with ZP state only (ROM-safe),
+    3-page help dispatch, HTYPE_END ($03), 1-byte tab codes ($f9/$fa/$fb), and
+    BPE help decoder (help_emit_byte).
+  - platforms/commodore/c128/ui_help_data_80.s, core/6502/ui_help_data.s,
+    ui_help_page2_data.s, ui_help_page3_data.s: BPE 3-page help data including
+    CTRL+P Msg History (Page 2) and Symbol Legend (Page 3).
+Search scope and terms:
+  rg across core/6502/, platforms/, playtest/, docs/ for CMD_MSG_HISTORY,
+  ui_msg_history_draw, help_pages, create_draw_race_cols, PL_AGE, PL_HEIGHT,
+  PL_WEIGHT.
+Relevant readers/writers found and known exclusions:
+  core/6502/inv_add.s and core/z80/player_core.asm already add PL_WEIGHT to
+  carrying limit; Wave 4 also updated ui_character.s, ui_inventory.s,
+  ui_equipment.s, ui_home.s, and ui_weight_helpers.s (plus CP/M ovl_start.asm,
+  ovl_ui.asm, ovl_home.asm, ovl_help.asm) to render Age/Ht/Wt, skills, Burden
+  headers, and per-item weights; HelpOverlay and UiOverlay modals pause gameplay
+  input without advancing game turns and redraw viewport/status on exit.
+Initialization, reset and persistence points:
+  PL_AGE/PL_HEIGHT/PL_WEIGHT written once in create_init_character; msg_history
+  cleared by msg_init ($20 space sentinel) and read-only in ui_msg_history_draw
+  using zp_temp0..3 and zp_ptr0 (cartridge ROM safe).
+Affected production sequence through the changed transition:
+  Ctrl+P ($10) -> petscii_to_command / input -> CMD_MSG_HISTORY ->
+  cmd_show_help_view -> help_cmd_body / ui_help_display -> ui_msg_history_draw ->
+  dismiss key -> status/viewport restore (0 turns elapsed); '?' -> 3-page loop.
+Contract decision or selected upstream oracle with source locations:
+  docs/CROSS_PLATFORM_UI_QOL_DESIGN.md & platforms/z80/cpm/ovl_start.asm /
+  ovl_help.asm; Section "Redraw Lifecycle" preserved (modal clears screen and
+  re-renders gameplay view on return).
+Intentional Moria8 deviations:
+  40-col ports display a live race preview box beside/below the race list rather
+  than a full 80-col horizontal bonus matrix; ui_msg_history_draw shares
+  HelpOverlay modal framing and exits on any dismiss key.
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  race_stat_adj signed 8-bit formatted +/-N; PL_AGE/PL_HEIGHT/PL_WEIGHT unsigned
+  8-bit (weight 60..250); BPE token range $80..$f8 / $fa checked against
+  HTYPE_END/color/tab codes; msg_history walks MSG_HIST_COUNT (8) slots capped at
+  SCREEN_COLS - 2 columns.
+RNG reduction and bias, if applicable:
+  PL_AGE uses existing rng_range(race_age_var) + 1 + race_age_base.
+Affected platforms, overlays, banks and owners:
+  All 7 6502 ports + 5 cartridges (plus C128 128.persist relocation and Atari8
+  130XE Bank 3 slot swap).
+Required production-path tests:
+  C64 test_ui_views.s, test_background.s, test_input.s (`make test64` PASS); C128 test_input128.s (`make test128` PASS);
+  plus all 8-port runtime suites (`make test64`, `test128`, `testplus4`, `test-stage-apple2`, `test-stage-cx16`, `test-stage-atari8`, `test-stage-bbcmaster`, `testcpm`) and `make playtest-gate` (`70/70`) **Verified PASS**.
+Known behavior explicitly out of scope:
+  None (Wave 4 Part 1 and Part 2 complete across all 8 ports).
+Unresolved uncertainty and risk:
+  Atari8 Default (`13 B` free `< $C100`), `ATARI.BNK` (`4 B` free `< $FFFA`),
+  `apple2` `ovl.death` (`0 B` free `<= $BA00`), and `bbcmaster` `Default` (`54 B` free `< $8000`) are enforced at link/contract time; all 8 emulator runtime suites and `make playtest-gate` passed (`0` failures).
 ```
 
 

@@ -34,19 +34,13 @@ disk_setup_menu:
     sta zp_text_color
     lda #<dsm_prog_str
     ldy #>dsm_prog_str
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    lda #5
-    ldx #4
-    jsr dsm_put_at
+    ldx #5
+    jsr dsm_put_col4
 
     lda #<dsm_save_str
     ldy #>dsm_save_str
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    lda #6
-    ldx #4
-    jsr dsm_put_at
+    ldx #6
+    jsr dsm_put_col4
     lda save_device
     sec
     sbc #7
@@ -59,35 +53,23 @@ disk_setup_menu:
     sta zp_text_color
     lda #<dsm_opt1_str
     ldy #>dsm_opt1_str
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    lda #9
-    ldx #4
-    jsr dsm_put_at
+    ldx #9
+    jsr dsm_put_col4
 
     lda #<dsm_opt2_str
     ldy #>dsm_opt2_str
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    lda #11
-    ldx #4
-    jsr dsm_put_at
+    ldx #11
+    jsr dsm_put_col4
 
     lda #<dsm_opt3_str
     ldy #>dsm_opt3_str
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    lda #13
-    ldx #4
-    jsr dsm_put_at
+    ldx #13
+    jsr dsm_put_col4
 
     lda #<dsm_optq_str
     ldy #>dsm_optq_str
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    lda #15
-    ldx #4
-    jsr dsm_put_at
+    ldx #15
+    jsr dsm_put_col4
 
 !wait_choice:
     jsr input_get_modal_dismiss_key
@@ -138,11 +120,8 @@ dsm_orig_disk_mode: .byte 0
     sta zp_text_color
     lda #<dsm_pick_str
     ldy #>dsm_pick_str
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    lda #18
-    ldx #4
-    jsr dsm_put_at
+    ldx #18
+    jsr dsm_put_col4
 
 !wait_drv:
     jsr input_get_modal_dismiss_key
@@ -374,6 +353,11 @@ dsm_zero_sio_buf:
 // ============================================================
 // UI Helpers
 // ============================================================
+dsm_put_col4:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    txa
+    ldx #4
 dsm_put_at:
     sta zp_cursor_row
     stx zp_cursor_col

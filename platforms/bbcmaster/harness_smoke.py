@@ -281,7 +281,9 @@ local function sc_to_ascii(b)
     b = b & 0x7F
     if b == 0x00 then return "@" end
     if b >= 0x01 and b <= 0x1A then return string.char(0x60 + b) end
-    if b >= 0x1B and b <= 0x1F then return string.char(0x40 + b) end
+    if (b >= 0x1B and b <= 0x1F) or (b >= 0x5B and b <= 0x5F) then
+        return string.char(0x40 + (b & 0x1F))
+    end
     if b >= 0x20 and b <= 0x3F then return string.char(b) end
     if b == 0x40 then return "-" end
     if b >= 0x41 and b <= 0x5A then return string.char(b) end
@@ -531,7 +533,7 @@ local function wait_title()
     end
     for _ = 1, 1000 do
         emu.wait(0.1)
-        if can_read_shadow() and screen_has("N)ew") and screen_has("L)oad") then
+        if can_read_shadow() and screen_has("N)ew") and screen_has("L)oad") and screen_has("A)bout") then
             return true
         end
     end
@@ -1026,6 +1028,7 @@ function run()
     send_key(0x4C) -- 'L' (east)
     local saw_lock = wait_screen("lock.", 120)
     drain_more(2)
+    wait_frames(15)
     assert_line("door_pick_returned", saw_lock and prog:read_u8(TURN_ADDR) ~= turn_d)
     assert_line("door_pick_ovl_chest", prog:read_u8(CURRENT_OVL) == 10)
     write_map_u8(px + 1, py, 0x80) -- Re-arm locked door for retry regression
@@ -1043,6 +1046,7 @@ function run()
     send_key(0x4C) -- 'L' (east)
     local saw_lock2 = wait_screen("lock.", 120)
     drain_more(2)
+    wait_frames(15)
     prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR, dfs_b0)
     prog:write_u8(BEEB_DFS_LOAD_TO_BANK_ADDR + 1, dfs_b1)
     assert_line("door_pick_retry_zero_dfs", saw_lock2 and prog:read_u8(TURN_ADDR) ~= turn_d2 and prog:read_u8(CURRENT_OVL) == 10)
@@ -1149,7 +1153,9 @@ function run()
     assert_line("chargen_town_ready", ok)
     send_key(0x3F) -- '?' (help)
     assert_line("help_opened", wait_screen("Command Reference", 80))
-    assert_line("help_license_hint", screen_has("L:License"))
+    assert_line("help_license_hint", wait_screen("L:License", 20))
+    assert_line("help_fire_look_keys",
+                wait_screen("SHIFT+F Fire", 20) and wait_screen("X Look", 20) and wait_screen("Z Use Staff", 40))
     send_key(0x20)
     assert_line("help_license_entry", wait_screen("L License / Source", 80))
     assert_line("legal_help_mount_save", legal_mount("LEGAL_SAVE_IMAGE") == nil)
@@ -1216,6 +1222,11 @@ function run()
     assert_line("legal_sysinfo_menu_back", wait_screen("1 License", 60))
     send_key(0x51)
     assert_line("legal_help_return", wait_screen("Command Reference", 100))
+    send_key(0x20) -- SPACE -> Help Page 2
+    wait_screen("L License / Source", 60)
+    send_key(0x20) -- SPACE -> Help Page 3 Legend
+    assert_line("help_page3_legend",
+                wait_screen("Map Terrain", 60) and wait_screen("] / [ \\\\ Helm", 20) and wait_screen("a-z/A-Z Monsters", 20))
     send_key(0x51) -- 'Q'
     wait_frames(40)
     assert_line("help_closed", in_town())
@@ -1234,17 +1245,41 @@ function run()
     assert_line("chargen_town_ready", ok)
     send_key(0x49) -- 'I' (inventory)
     assert_line("inventory_modal", wait_screen("Inventory", 80))
+    assert_line("inventory_burden", wait_screen("Burden:", 40))
     send_key(0x20)
     wait_frames(40)
     send_key(0x45) -- 'E' (equipment)
     assert_line("equipment_modal", wait_screen("Equipment", 80))
+    assert_line("equipment_burden", wait_screen("Burden:", 40))
     send_key(0x20)
     wait_frames(40)
     send_key(0xC3) -- SHIFT+C (character sheet)
     assert_line("charsheet_modal", wait_screen("Character", 80))
+    assert_line("charsheet_age", wait_screen("Age:", 40))
+    send_key(0x20)
+    wait_frames(40)
+    send_key(0x10) -- CTRL+P (message history)
+    assert_line("msg_history_modal", wait_screen("Message History", 80))
     send_key(0x20)
     wait_frames(40)
     assert_line("ui_modals_returned", in_town())
+    -- 22-item full pack on 24-row 80-col screen skips row-1 separator so v) fits above row-23 footer.
+    local saved_inv = {}
+    for s = 0, 21 do
+        local f = {}
+        for k = 0, 7 do f[k + 1] = inv_field(s, k) end
+        saved_inv[s] = f
+    end
+    for s = 0, 21 do inv_seed(s, saved_inv[0]) end
+    send_key(0x49) -- 'I'
+    local full_v = wait_screen("v)", 80) and wait_screen("Press any key", 40)
+    local r1, r22, r23 = rowtext(1), rowtext(22), rowtext(23)
+    assert_line("inv_22_row1_a", full_v and string.find(r1, "a)", 1, true) ~= nil)
+    assert_line("inv_22_row22_v_wt", full_v and string.find(r22, "v)", 1, true) ~= nil and string.find(r22, "lb", 1, true) ~= nil)
+    assert_line("inv_22_row23_footer", full_v and string.find(r23, "Press any key", 1, true) ~= nil and string.find(r23, "v)", 1, true) == nil)
+    send_key(0x20)
+    wait_frames(40)
+    for s = 0, 21 do inv_seed(s, saved_inv[s]) end
     -- Real keys through MOS: SHIFT+Q, Q let go with SHIFT still down, then a
     -- Y meanwhile (a shifted Y, which would say no). The prompt waits for
     -- SHIFT too, so the Y does not answer.
@@ -1371,7 +1406,7 @@ function run()
         inv_field(22, 0) == ITEM_SLOT_DAGGER and inv_field(22, 3) == 3 and inv_field(22, 7) == (ITEM_PAGE_DAGGER | 6)
         and inv_field(33, 0) == ITEM_SLOT_MACE and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
         and inv_field(33, 7) == ITEM_PAGE_MACE
-        and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF)
+        and inv_field(32, 0) == ITEM_SLOT_CLOAK and inv_field(31, 0) == 0xFF)
     assert_line("exchange_one_turn", prog:read_u8(TURN_ADDR) == (turn0 + 1) % 256)
     -- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it
     -- in the death overlay and must return to the resident caller with no
@@ -1867,8 +1902,10 @@ function run()
         end
         tap:remove()
     end
-    local body = INV_TO_AC_ADDR + 23            -- EQUIP_BODY: the warrior's only armour
-    local to_ac0 = prog:read_u8(body)
+    local body = INV_TO_AC_ADDR + 23            -- EQUIP_BODY (Soft Leather Armor [4])
+    local cloak = INV_TO_AC_ADDR + 32           -- EQUIP_CLOAK (Cloak [1])
+    local to_ac_b0 = prog:read_u8(body)
+    local to_ac_c0 = prog:read_u8(cloak)
     local ac0 = prog:read_u8(ZP_PLAYER_AC_ADDR)
     for _ = 1, 40 do
         send_key(0x53)                          -- 's' search (PETSCII): a turn passes
@@ -1878,12 +1915,12 @@ function run()
             send_key(0x20)
             wait_turn_idle()
         end
-        if prog:read_u8(body) ~= to_ac0 then break end
+        if prog:read_u8(body) ~= to_ac_b0 or prog:read_u8(cloak) ~= to_ac_c0 then break end
     end
-    local drop = (to_ac0 - prog:read_u8(body)) & 0xFF
+    local drop = ((to_ac_b0 - prog:read_u8(body)) & 0xFF) + ((to_ac_c0 - prog:read_u8(cloak)) & 0xFF)
     local ac1 = prog:read_u8(ZP_PLAYER_AC_ADDR)
     if ac1 ~= ((ac0 - drop) & 0xFF) then
-        print("DIAG acid: ac0=" .. ac0 .. " ac1=" .. ac1 .. " to_ac0=" .. to_ac0 .. " to_ac1=" .. prog:read_u8(body) .. " drop=" .. drop)
+        print("DIAG acid: ac0=" .. ac0 .. " ac1=" .. ac1 .. " body=" .. to_ac_b0 .. "->" .. prog:read_u8(body) .. " cloak=" .. to_ac_c0 .. "->" .. prog:read_u8(cloak) .. " drop=" .. drop)
     end
     assert_line("acid_damaged", drop >= 1 and drop <= 3)
     assert_line("acid_ac_recalc", ac1 == ((ac0 - drop) & 0xFF))

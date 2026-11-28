@@ -62,6 +62,7 @@
     .byte $c4   // SHIFT+D — disarm trap
     .byte $02   // CTRL+B — bash
     .byte $04   // CTRL+D — jam door with spike (CTRL+J is the down-arrow key on Apple IIe)
+    .byte $10   // CTRL+P — message history
     .byte $12   // CTRL+R — rest until recovered
     .byte $23   // # — toggle search mode
     .byte $2b   // + — tunnel
@@ -96,7 +97,7 @@
     .byte CMD_LOOK, CMD_GAIN, CMD_GAIN
     .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_SAVE
     .byte CMD_FIRE, CMD_THROW, CMD_REFUEL, CMD_DISARM, CMD_BASH
-    .byte CMD_JAM
+    .byte CMD_JAM, CMD_MSG_HISTORY
     .byte CMD_AUTOREST, CMD_SEARCH_MODE
     .byte CMD_TUNNEL, CMD_RECALL, CMD_WIZARD, CMD_EXCHANGE
     .byte CMD_VERSION, CMD_VERSION

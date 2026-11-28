@@ -4,6 +4,8 @@
 // Full-screen inventory view.
 // CMD_INVENTORY shows carried items (slots 0-21).
 
+#import "ui_weight_helpers.s"
+
 .const UINV_TITLE_COL = hal_layout_inventory_title_col
 .const UINV_FOOTER_COL = hal_layout_inventory_footer_col
 .const UINV_SELECT_COL = hal_layout_inventory_select_col
@@ -56,6 +58,48 @@ ui_inv_display_common:
     ldy #>uinv_title_str
     jsr screen_put_string_ay
 
+.if (SCREEN_COLS >= 80 && SCREEN_ROWS < 25) {
+    lda #0
+    ldx #55
+    jsr uwt_shared_draw_burden_header
+
+    // Count matching items; 24-row screens omit the row-1 separator when all 22 rows are used.
+    lda #0
+    sta uinv_slot
+    sta uinv_visible
+!uinv_cnt_loop:
+    ldx uinv_slot
+    cpx #MAX_INV_SLOTS
+    bcs !uinv_cnt_done+
+    jsr piw_inv_slot_matches_filter
+    bcc !uinv_cnt_next+
+    inc uinv_visible
+!uinv_cnt_next:
+    inc uinv_slot
+    bne !uinv_cnt_loop-
+!uinv_cnt_done:
+    lda uinv_visible
+    cmp #MAX_INV_SLOTS
+    bcc !uinv_draw_sep+
+    lda #1
+    bne !uinv_row_set+
+!uinv_draw_sep:
+    lda #1
+    sta zp_cursor_row
+    lda #UINV_TITLE_COL
+    sta zp_cursor_col
+    lda #<uinv_sep_str
+    ldy #>uinv_sep_str
+    jsr screen_put_string_ay
+    lda #2
+!uinv_row_set:
+    sta uinv_row
+} else {
+.if (SCREEN_COLS >= 80) {
+    lda #0
+    ldx #55
+    jsr uwt_shared_draw_burden_header
+
     // Separator
     lda #1
     sta zp_cursor_row
@@ -64,6 +108,14 @@ ui_inv_display_common:
     lda #<uinv_sep_str
     ldy #>uinv_sep_str
     jsr screen_put_string_ay
+} else {
+    lda #1
+    ldx #9
+    jsr uwt_inv_draw_burden_header
+}
+    lda #2                      // Start at row 2
+    sta uinv_row
+}
 
     lda #COL_LGREY
     sta zp_text_color
@@ -71,9 +123,6 @@ ui_inv_display_common:
     // Iterate carried slots 0-21
     lda #0
     sta uinv_slot
-    lda #2                      // Start at row 2
-    sta uinv_row
-    lda #0
     sta uinv_any                // Track if any items shown
     sta uinv_visible            // Visible ordinal for filtered relabeling
 !uinv_loop:
@@ -107,6 +156,15 @@ ui_inv_display_common:
     // Item description with ego/status/stat suffixes
     ldx uinv_slot
     jsr itemdesc_put_inv_slot
+
+.if (SCREEN_COLS >= 80) {
+    lda uinv_row
+    sta zp_cursor_row
+    ldx uinv_slot
+    lda inv_qty,x
+    jsr inven_mul_slot_x
+    jsr uwt_shared_put_col69
+}
 
     inc uinv_row
     lda #1
@@ -153,6 +211,35 @@ ui_inv_display_common:
     jmp hal_screen_put_string              // tail call
 
 
+uwt_shared_draw_burden_header:
+.if (SCREEN_COLS >= 80) {
+    :UiWeightDrawBurdenHeaderBody(uwt_shared_put_tenths, uwt_inv_burden_str, uwt_inv_lb_str)
+}
+uwt_shared_put_tenths:
+.if (SCREEN_COLS >= 80) {
+    :UiWeightPutTenthsBody()
+}
+uwt_shared_put_tenths_from_buf:
+.if (SCREEN_COLS >= 80) {
+    :UiWeightPutTenthsFromBufBody()
+}
+uwt_shared_put_col69:
+.if (SCREEN_COLS >= 80) {
+    :UiWeightPutCol69Body(uwt_shared_put_tenths_from_buf, uwt_inv_lb_str)
+}
+uwt_inv_draw_burden_header:
+.if (SCREEN_COLS < 80) {
+    :UiWeightDrawBurdenHeaderBody(uwt_inv_put_tenths, uwt_inv_burden_str, uwt_inv_lb_str)
+}
+uwt_inv_put_tenths:
+.if (SCREEN_COLS < 80) {
+    :UiWeightPutTenthsBody()
+}
+uwt_inv_put_tenths_from_buf:
+.if (SCREEN_COLS < 80) {
+    :UiWeightPutTenthsFromBufBody()
+}
+
 // ============================================================
 // Scratch
 // ============================================================
@@ -175,8 +262,13 @@ uinv_footer_hi:  .byte 0
 // ============================================================
 #if !UI_INVENTORY_HEADER_STRINGS_EXTERNAL
 uinv_title_str:   .text "Inventory" ; .byte 0
-uinv_sep_str:     .text "---------" ; .byte 0
+uinv_sep_str:
+.if (SCREEN_COLS >= 80) {
+    .text "---------" ; .byte 0
+}
 #endif
+uwt_inv_burden_str: .text "Burden: " ; .byte 0
+uwt_inv_lb_str:     .text " lb" ; .byte 0
 uinv_nothing_str: .text "Nothing." ; .byte 0
 uinv_select_str:  .text "Select item" ; .byte 0
 uinv_identify_footer_str:  .text "Identify which item (a-"

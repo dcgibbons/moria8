@@ -371,7 +371,16 @@ overlay_fetch_reu:
     sta REU_REULO
     lda ovl_reu_start_hi,x
     sta REU_REUHI
+#if HAL_PLATFORM_OVERLAY_REU_BANK1_TITLE
+    cpx #OVL_TITLE
+    bcc !ofr_b0+
+    lda #1
+    .byte $2c
+!ofr_b0:
     lda #0
+#else
+    lda #0
+#endif
     sta REU_BANK
 
     lda #0
@@ -438,6 +447,8 @@ c128_preload_all_overlays:
     beq cpao_next
 #if !HAL_PLATFORM_MAP_GET_TILE_USES_SUBROUTINE
     // Phase 2 cold overlays have no Bank 1 cache slot either; load on demand.
+    cpx #OVL_MODAL_MISC
+    beq cpao_next
     cpx #OVL_HOME
     beq cpao_next
     cpx #OVL_STORAGE

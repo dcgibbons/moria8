@@ -36,6 +36,7 @@ import item_ids  # noqa: E402
 
 
 LUA_ITEM_CONSTS = item_ids.lua_item_consts(
+    "CLOAK",
     "DAGGER",
     "MACE",
     "RING_OF_PROTECTION",
@@ -594,12 +595,17 @@ LUA_HELP_BODY = r"""
 legal_wait_input()
 shift("/")
 for i = 1, 100 do
-    if screen_has("Command Reference") and screen_has("L:License") then break end
+    if screen_has("Command Reference") and screen_has("L:License")
+       and screen_has("SHIFT+F Fire") and screen_has("X Look")
+       and screen_has("Z Use Staff") then break end
     emu.wait(0.1)
 end
 assert_line("help_open", screen_has("Command Reference"),
             "'?' did not open the help overlay")
 assert_line("help_license_hint", screen_has("L:License"), "Help shortcut is not visible")
+assert_line("help_fire_look_keys",
+            screen_has("SHIFT+F Fire") and screen_has("X Look") and screen_has("Z Use Staff"),
+            "Help Page 1 keybinds missing SHIFT+F Fire / X Look / Z Use Staff")
 legal_press(" ")
 for i = 1, 100 do
     if screen_has("L License / Source") then break end
@@ -713,6 +719,19 @@ for i = 1, 100 do
     emu.wait(0.1)
 end
 assert_line("legal_help_return", screen_has("Command Reference"), "Help owner was not restored")
+legal_press(" ")
+for i = 1, 100 do
+    if screen_has("L License / Source") then break end
+    emu.wait(0.1)
+end
+legal_press(" ")
+for i = 1, 100 do
+    if screen_has("Map Terrain") and screen_has("] / [ \\ Helm") and screen_has("a-z/A-Z Monsters") then break end
+    emu.wait(0.1)
+end
+assert_line("help_page3_legend",
+            screen_has("Map Terrain") and screen_has("] / [ \\ Helm") and screen_has("a-z/A-Z Monsters"),
+            "Help Page 3 legend did not render expected aligned glyphs")
 legal_press("Q")
 emu.wait(2)
 assert_line("help_close", in_town(), "help did not return to the town view")
@@ -1933,7 +1952,7 @@ assert_line("exchange_swapped",
             inv_field(22, 0) == ITEM_SLOT_DAGGER and inv_field(22, 3) == 3 and inv_field(22, 7) == (ITEM_PAGE_DAGGER | 6)
             and inv_field(33, 0) == ITEM_SLOT_MACE and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
             and inv_field(33, 7) == ITEM_PAGE_MACE
-            and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF, "records not exchanged")
+            and inv_field(32, 0) == ITEM_SLOT_CLOAK and inv_field(31, 0) == 0xFF, "records not exchanged")
 assert_line("exchange_one_turn", prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256,
             "turn " .. prog:read_u8(TURN_LO_ADDR) .. " from " .. turn0)
 -- A Wand of Stinking Cloud aimed at nothing: the Phase 3 router runs it in
@@ -2228,7 +2247,7 @@ end
 assert_line("loaded", loaded, "reboot load did not resume the saved game")
 assert_line("stats_restored", screen_has("test") and prog:read_u8(0x3c) == 0,
             "the restored character: name on the status line, race Human (zp_player_race; off the status line since 2026-11-12)")
-local sec_ok = inv_field(31, 0) == 0xFF and inv_field(32, 0) == 0xFF
+local sec_ok = inv_field(31, 0) == 0xFF and inv_field(32, 0) == ITEM_SLOT_CLOAK
 local expect = {ITEM_SLOT_DAGGER, 1, 0, 3, 4, 0, 2, ITEM_PAGE_DAGGER | 6}
 for k = 0, 7 do
     if inv_field(33, k) ~= expect[k + 1] then sec_ok = false end
@@ -2990,8 +3009,10 @@ prog:write_u8(CR_SPEED_ADDR + kind, 1)
 prog:write_u8(CR_LEVEL_ADDR + kind, 40)    -- its blows land
 prog:write_u8(PLAYER_DATA_ADDR + 40, 127)
 
-local body = INV_TO_AC_ADDR + 23           -- EQUIP_BODY: the warrior's only armour
-local to_ac0 = prog:read_u8(body)
+local body = INV_TO_AC_ADDR + 23           -- EQUIP_BODY (Soft Leather Armor [4])
+local cloak = INV_TO_AC_ADDR + 32          -- EQUIP_CLOAK (Cloak [1])
+local to_ac_b0 = prog:read_u8(body)
+local to_ac_c0 = prog:read_u8(cloak)
 local ac0 = prog:read_u8(PLAYER_AC_ADDR)
 for i = 1, 40 do
     if screen_has("-more-") then press(" ") emu.wait(0.4) end
@@ -2999,11 +3020,11 @@ for i = 1, 40 do
     emu.wait(0.5)
     prog:write_u8(0xc002, 0)
     prog:write_u8(0xc004, 0)
-    if prog:read_u8(body) ~= to_ac0 then break end
+    if prog:read_u8(body) ~= to_ac_b0 or prog:read_u8(cloak) ~= to_ac_c0 then break end
 end
 emu.wait(1)
-local drop = (to_ac0 - prog:read_u8(body)) & 0xff
-assert_line("acid_damaged", drop >= 1 and drop <= 3, "to-AC " .. to_ac0 .. " -> " .. prog:read_u8(body))
+local drop = ((to_ac_b0 - prog:read_u8(body)) & 0xff) + ((to_ac_c0 - prog:read_u8(cloak)) & 0xff)
+assert_line("acid_damaged", drop >= 1 and drop <= 3, "to-AC drop=" .. drop)
 assert_line("acid_ac_recalc", prog:read_u8(PLAYER_AC_ADDR) == (ac0 - drop) & 0xff,
             "AC " .. ac0 .. " -> " .. prog:read_u8(PLAYER_AC_ADDR))
 local px, py = prog:read_u8(PLAYER_X_ADDR), prog:read_u8(PLAYER_Y_ADDR)

@@ -209,7 +209,7 @@ cr_speed:
 #else
     .fill MAX_DUNGEON_CREATURES, 0                           // 0-56: loaded from tier data
 #endif
-    .byte 1, 1, 1, 1, 1, 1, 1, 1                             // 57-64: town
+    .byte $09, $09, $09, $09, $01, $39, $09, $09             // 57-64: town (tier0.s)
 
 // Movement/classification flags
 .const CF_ATTACK_ONLY = $01

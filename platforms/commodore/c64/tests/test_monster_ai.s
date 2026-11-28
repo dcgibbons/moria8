@@ -3,7 +3,7 @@
 // Tests: monster_ai_tick, wake check, movement, speed, FLAG_OCCUPIED,
 //        confused movement, a never-moving creature, Teleport To.
 //
-// Results at $0400-$0446: $01 = pass, $00 = fail per test (71 tests)
+// Results at $0400-$0447: $01 = pass, $00 = fail per test (72 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -26,7 +26,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #70
+    ldx #71
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -223,7 +223,7 @@ tai_rng_values:   .fill 4, 0
 tai_rng_idx:      .byte 0
 tai_distance:     .byte 0
 auto_rest_active: .byte 0
-tc_results: .fill 71, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 72, $ff      // Result buffer (copied to $0400 at end)
 t59_toward: .byte 0
 t59_left:   .byte 0
 t60_n:      .byte 0             // neighbours around the breeder (MON-016)
@@ -4016,7 +4016,9 @@ test_start:
     sta inv_item_id + EQUIP_RING2
 
     // Test 71: player +4 speed (2 Rings of Speed + Boots of Speed + Haste) vs
-    // speed-0 monster (s = -4) clamps s + 3 to 0 (mod 5 cadence, no OOB read).
+    // speed-0 monster (s = -4) clamps s + 3 to 0 (mod 5 cadence, no OOB read);
+    // plus MON-045 speed code 3 (3 moves normal, 2 vs +1 haste, hasted
+    // speed-2 -> 3, triple-move cap) and resident town cr_speed parity.
     lda #ITEM_SLOT_RING_OF_SPEED
     sta inv_item_id + EQUIP_RING
     sta inv_item_id + EQUIP_RING2
@@ -4039,24 +4041,109 @@ test_start:
     lda #4                      // 4 mod 5 != 0 -> skipped
     jsr t69_kobold_turn
     cmp #20
-    bne !t71_fail+
+    bne !t71_fail_a+
     lda mat_fast
     cmp #4
-    bne !t71_fail+
+    bne !t71_fail_a+
     lda #5                      // 5 mod 5 == 0 -> acts once
     jsr t69_kobold_turn
     cmp #21
-    bne !t71_fail+
+    bne !t71_fail_a+
     lda #1
     sta zp_turn_hi
     lda #3                      // 259 mod 5 == 4 -> skipped
     jsr t69_kobold_turn
     cmp #20
-    bne !t71_fail+
+    bne !t71_fail_a+
     lda #4                      // 260 mod 5 == 0 -> acts once
     jsr t69_kobold_turn
     cmp #21
+    beq !t71_spd3+
+!t71_fail_a:
+    jmp !t71_fail+
+
+!t71_spd3:
+    // Clear player speed items/timer before speed-3 checks
+    lda #0
+    sta zp_turn_hi
+    sta zp_eff_speed
+    .if (ITEM_PAGE_RING_OF_SPEED != 0) {
+        sta inv_ego + EQUIP_RING
+        sta inv_ego + EQUIP_RING2
+    }
+    sta inv_ego + EQUIP_FEET
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_RING
+    sta inv_item_id + EQUIP_RING2
+    sta inv_item_id + EQUIP_FEET
+
+    // Speed code 3 at normal player speed -> 3 moves/turn (x: 20 -> 23)
+    lda #3
+    sta cr_speed + 4
+    lda #0
+    jsr t71_speed_turn
+    cmp #23
     bne !t71_fail+
+
+    // Speed code 3 vs +1 player haste -> 2 moves/turn (x: 20 -> 22)
+    lda #10
+    sta zp_eff_speed
+    lda #0
+    jsr t71_speed_turn
+    cmp #22
+    bne !t71_fail+
+
+    // Hasted speed-2 monster (MX_SPEED_CNT = 1) at normal player speed -> 3 moves/turn
+    lda #0
+    sta zp_eff_speed
+    lda #2
+    sta cr_speed + 4
+    lda #1
+    jsr t71_speed_turn
+    cmp #23
+    bne !t71_fail+
+
+    // Triple-move cap: hasted speed-3 monster (MX_SPEED_CNT = 1) -> 3 moves/turn
+    lda #3
+    sta cr_speed + 4
+    lda #1
+    jsr t71_speed_turn
+    cmp #23
+    bne !t71_fail+
+
+    // Triple-move cap: speed-3 monster vs slowed player (s = 4) -> 3 moves/turn
+    lda #$f6                    // -10: slowed
+    sta zp_eff_speed
+    lda #0
+    jsr t71_speed_turn
+    cmp #23
+    bne !t71_fail+
+
+    // Town cr_speed parity: all 8 resident bytes match tier0_cr_speed
+    ldx #TOWN_CREATURE_COUNT - 1
+!t71_town_chk:
+    lda cr_speed + TOWN_CREATURE_BASE,x
+    cmp t71_town_speeds,x
+    bne !t71_fail+
+    dex
+    bpl !t71_town_chk-
+
+    // Provoked townie with random-move bits ($39) takes at most 1 move (CR_SPEED_MASK)
+    lda #0
+    sta zp_eff_speed
+    lda #TOWN_CREATURE_BASE + 5
+    jsr t71_town_provoked_turn
+    cmp #22
+    bcs !t71_fail+
+    cmp #19
+    bcc !t71_fail+
+
+    // Provoked Squint-Eyed Rogue ($01) moves deterministically 1 tile (20 -> 21)
+    lda #TOWN_CREATURE_BASE + 4
+    jsr t71_town_provoked_turn
+    cmp #21
+    bne !t71_fail+
+
     lda #$01
     .byte $2c
 !t71_fail:
@@ -4077,8 +4164,171 @@ test_start:
     sta inv_item_id + EQUIP_RING2
     sta inv_item_id + EQUIP_FEET
 
+    // Test 72: non-wall-passing monster (Kobold, CM2_PHASE == 0) is blocked by TILE_RUBBLE.
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_speed
+    sta zp_turn_hi
+    lda #1
+    sta zp_turn_lo
+    ldx #14
+!t72_wall_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+    lda #TILE_WALL_H | FLAG_LIT
+!t72_wall_col:
+    sta (zp_ptr0),y
+    iny
+    cpy #26
+    bne !t72_wall_col-
+    inx
+    cpx #17
+    bne !t72_wall_row-
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_RUBBLE | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #22
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #23
+    sta (zp_ptr0),y
+    ldy #24
+    sta (zp_ptr0),y
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold (CM2_PHASE == 0)
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    lda #24
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #20
+    bne !t72_fail+
+    lda #$01
+    .byte $2c
+!t72_fail:
+    lda #$00
+    sta tc_results + 71
+
 !tests_done:
     jmp test_finish
+
+t71_town_speeds:
+    .byte $09, $09, $09, $09, $01, $39, $09, $09
+
+// t71_speed_turn — Awake Kobold (cr_speed + 4 as set) at (20,15) with
+// MX_SPEED_CNT = A, player at (30,15), one monster_ai_tick on turn 1.
+// Output: A = slot 0 MX_X.
+t71_speed_turn:
+    pha
+    lda #1
+    sta zp_turn_lo
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t71s_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t71s_fill-
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    pla
+    ldy #MX_SPEED_CNT
+    sta (zp_ptr0),y
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    rts
+
+// t71_town_provoked_turn — Provoked town creature A at (20,15), player at
+// (24,15), one monster_ai_tick on turn 1. Output: A = slot 0 MX_X.
+t71_town_provoked_turn:
+    pha
+    lda #1
+    sta zp_turn_lo
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+!t71t_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #26
+    bne !t71t_fill-
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    pla
+    jsr monster_spawn_one
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #(MF_AWAKE | MF_PROVOKED | MF_VISIBLE)
+    sta (zp_ptr0),y
+    lda #24
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    jsr monster_ai_tick
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    rts
 
 // t69_kobold_turn — An awake Kobold (speed 1) at (20,15) on a lit floor
 // row, the player at (30,15), one production monster_ai_tick on turn A

@@ -85,15 +85,13 @@ trace_step:
     sta zp_ptr0_hi
     ldy proj_cx
     :MapRead_ptr0_y()
-    and #TILE_TYPE_MASK
     lsr
     lsr
     lsr
     lsr
     tax
     lda walkable_table,x
-    beq !ts_blocked+
-    sec                             // Walkable
+    lsr                             // Bit 0 = walkable (rubble $02 blocks projectiles)
     rts
 !ts_blocked:
     clc                             // Blocked

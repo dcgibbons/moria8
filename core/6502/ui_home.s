@@ -3,10 +3,11 @@
 //
 // Module ownership:
 //   owner:
-//     !HOME_OVERLAY_SEPARATE: RuntimeBanked on C64/C128 ($F000), TownOverlay on
-//       Plus4/Atari8/Apple2/CX16/BBC Master.
-//     HOME_OVERLAY_SEPARATE: self-contained HomeOverlay (`ovl.home`) with no
-//       calls or data reads into TownOverlay (store.s / ui_store.s).
+//     !HOME_OVERLAY_SEPARATE: RuntimeBanked on C64/C128 ($F000), or TownOverlay
+//       for standalone unit-test harnesses that omit HOME_OVERLAY_SEPARATE.
+//     HOME_OVERLAY_SEPARATE (all 7 6502 ports: C64, C128, Plus/4, Apple IIe,
+//       CX16, Atari 8-bit, BBC Master): self-contained HomeOverlay (`ovl.home`)
+//       with no calls or data reads into TownOverlay (store.s / ui_store.s).
 //   lifetime:
 //     !HOME_OVERLAY_SEPARATE: persistent in RuntimeBanked or transient in TownOverlay.
 //     HOME_OVERLAY_SEPARATE: transient overlay; loaded on Home entry, released on exit.
@@ -21,6 +22,7 @@
 
 #import "input_ui_helpers.s"
 #import "store_meta_macros.s"
+#import "ui_weight_helpers.s"
 #define UI_HOME_TEXT_MACROS_ONLY
 #import "ui_home_text.s"
 #undef UI_HOME_TEXT_MACROS_ONLY
@@ -42,6 +44,11 @@ hm_store_slot: .byte 0     // Store slot for retrieve
 hm_row:        .byte 0     // Current screen row
 hm_save_x:     .byte 0     // Saved index register
 
+home_put_white_col1:
+    pha
+    lda #COL_WHITE
+    sta zp_text_color
+    pla
 home_put_col1_string:
     sta zp_cursor_row
     lda #1
@@ -49,6 +56,24 @@ home_put_col1_string:
     stx zp_ptr0
     sty zp_ptr0_hi
     jmp hal_screen_put_string
+
+hm_clear_and_title:
+    txa
+    pha
+    tya
+    pha
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    pla
+    tay
+    pla
+    tax
+    lda #0
+    jmp home_put_white_col1
+
+home_put_letter:
+    :StorePutLetterBody(hm_save_x)
 
 #if HOME_OVERLAY_SEPARATE
 .const HOME_GOLD_COL = 21
@@ -62,17 +87,17 @@ home_inv_add_carried:
 
 // Self-contained Home screen renderer when HomeOverlay is separate from TownOverlay.
 home_draw_screen:
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-
-    // Row 0: Home title (white); row 1 remains blank (Home has no shopkeeper).
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #0
     ldx #<hm_title_str
     ldy #>hm_title_str
-    jsr home_put_col1_string
+    jsr hm_clear_and_title
+.if (SCREEN_COLS >= 80) {
+    lda #0
+    ldx #55
+} else {
+    lda #1
+    ldx #1
+}
+    jsr uwt_hm_draw_burden_header
 
     // Row 2: Separator
     lda #COL_DGREY
@@ -80,20 +105,19 @@ home_draw_screen:
     lda #2
     jsr home_draw_separator_at_a
 
-    // Rows 3-18: Item list (no prices)
+    // Rows 3-18: Item list (no prices; per-item weights on 80-col)
+    .const HM_SHOW_ROW_WEIGHTS = (SCREEN_COLS >= 80) ? 1 : 0
 #if ITEMDESC_STORE_SLOT_DUPLICATED
-    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, itemdesc_put_store_slot_home, 0, 0)
+    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, itemdesc_put_store_slot_home, HM_SHOW_ROW_WEIGHTS, home_put_slot_weight)
 #else
-    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, itemdesc_put_store_slot, 0, 0)
+    :StoreDrawSlotListBody(hm_store_slot, hm_row, hm_save_x, home_put_letter, itemdesc_put_store_slot, HM_SHOW_ROW_WEIGHTS, home_put_slot_weight)
 #endif
 
     // Row 19: Home menu, then the gold to its right
-    lda #COL_WHITE
-    sta zp_text_color
     lda #STORE_MENU_ROW
     ldx #<hm_menu_str
     ldy #>hm_menu_str
-    jsr home_put_col1_string
+    jsr home_put_white_col1
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -102,19 +126,30 @@ home_draw_screen:
     lda #HOME_GOLD_COL
     sta zp_cursor_col
     lda #<hm_gold_str
-    ldy #>hm_gold_str
     sta zp_ptr0
-    sty zp_ptr0_hi
+    lda #>hm_gold_str
+    sta zp_ptr0_hi
     jsr hal_screen_put_string
 
     :StorePutGoldValueBody()
 
+home_put_slot_weight:
+.if (SCREEN_COLS >= 80) {
+    lda hm_row
+    sta zp_cursor_row
+    ldy hm_store_slot
+    :AuxReadY(si_qty)
+    sta iw_qty
+    :AuxReadY(si_meta_hi)
+    sta iw_mc_2
+    :AuxReadY(si_item_id)
+    jsr inven_mul_ego_a
+    jmp uwt_hm_put_col69
+}
+
 home_draw_separator_at_a:
     sta zp_cursor_row
     :StoreDrawSeparatorBody()
-
-home_put_letter:
-    :StorePutLetterBody(hm_save_x)
 
 home_clear_msg_area:
     :StoreClearMsgAreaBody()
@@ -139,6 +174,9 @@ home_enter:
     jsr home_draw_screen
 #else
     jsr store_draw_screen       // Reuses overlay's draw (skips prices for home)
+    lda #1
+    ldx #1
+    jsr uwt_hm_draw_burden_header
 
     // Overwrite the store menu with the home menu (the gold stays beside it)
     lda #COL_WHITE
@@ -167,11 +205,7 @@ home_enter:
 !he_not_ret:
 
     // Q, ESC, or space = exit
-    cmp #PETSCII_HM_Q
-    beq !he_exit+
-    jsr input_is_modal_escape_key
-    beq !he_exit+
-    cmp #PETSCII_HM_SPACE
+    jsr hm_is_cancel_key
     beq !he_exit+
 
     // Unknown key — ignore
@@ -192,44 +226,22 @@ home_retrieve:
 #else
     jsr store_clear_msg_area
 #endif
-    lda #COL_WHITE
-    sta zp_text_color
     lda #20
     ldx #<hm_retrieve_str
     ldy #>hm_retrieve_str
-    jsr home_put_col1_string
+    jsr home_put_white_col1
 
-    jsr input_prepare_followup_key
-    jsr hal_input_get_key
-
-    // Q/ESC/space = cancel
-    cmp #PETSCII_HM_Q
-    beq !hr_cancel_relay+
-    jsr input_is_modal_escape_key
-    beq !hr_cancel_relay+
-    cmp #PETSCII_HM_SPACE
-    beq !hr_cancel_relay+
-
-    // Convert PETSCII letter to slot index (A=0, P=15)
-    sec
-    sbc #PETSCII_HM_A
-    bcc !hr_cancel_relay+       // Below 'A'
-    cmp #STORE_MAX_ITEMS
-    bcs !hr_cancel_relay+       // Above 'P'
-
-    jmp !hr_valid_slot+
-!hr_cancel_relay:
-    rts                         // Early return relay
+    lda #STORE_MAX_ITEMS
+    jsr hm_prompt_slot_key
+    bcs !hr_valid_slot+
+    rts
 
 !hr_valid_slot:
-    sta hm_store_slot
-
-    // Get absolute slot
+    // Compute absolute slot = store_base_idx[zp_store_idx] + key_offset
     ldx zp_store_idx
-    lda store_base_idx,x
     clc
-    adc hm_store_slot
-    sta hm_store_slot           // Now absolute slot
+    adc store_base_idx,x
+    sta hm_store_slot
 
     // Check if slot occupied
     tax
@@ -241,9 +253,7 @@ home_retrieve:
 
     // Copy item from store to inventory: a full pack still takes one that
     // stacks (VMS inven_check_num, Umoria inventoryCanCarryItemCount)
-    ldx hm_store_slot
-    :AuxReadX(si_item_id)
-    sta fi_add_id
+    sta fi_add_id               // A = item_id, X = hm_store_slot
     :AuxReadX(si_qty)
     sta fi_add_qty
     :AuxReadX(si_p1)
@@ -266,8 +276,6 @@ home_retrieve:
     bcs !hr_has_room+
 
     // Inventory full, or too heavy (X = the refusal)
-    lda #COL_RED
-    sta zp_text_color
     cpx #HSTR_UIS_TOO_HEAVY
     bne !hr_full+
     jsr huff_decode_string          // "You can't carry that much weight."
@@ -278,9 +286,7 @@ home_retrieve:
     ldx #<hm_inv_full_str
     ldy #>hm_inv_full_str
 !hr_refusal:
-    lda #22
-    jsr home_put_col1_string
-    jmp hal_input_get_key           // Wait, tail call
+    jmp hm_show_red_row22_wait
 
 !hr_has_room:
     // Clear store slot
@@ -297,36 +303,26 @@ home_retrieve:
     :AuxWriteX(si_meta_hi)
 
     // Success message
-    lda #COL_LGREEN
-    sta zp_text_color
-    lda #22
     ldx #<hm_retrieved_str
     ldy #>hm_retrieved_str
-    jsr home_put_col1_string
-
-    lda #SFX_PICKUP
-    jsr hal_sound_play
-!hr_cancel:
-    rts
+    jmp hm_show_ok_row22_sfx
 
 // ============================================================
 // home_deposit — Store an item from inventory into home
 // ============================================================
 home_deposit:
     // Draw inventory list
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #0
     ldx #<hm_deposit_title
     ldy #>hm_deposit_title
-    jsr home_put_col1_string
+    jsr hm_clear_and_title
+.if (SCREEN_COLS >= 80) {
+    lda #0
+    ldx #55
+    jsr uwt_hm_draw_burden_header
+}
 
-    // List inventory items
-    lda #2
+    // List inventory items (row 1 is unused, so start at row 1 to keep slot 21 above row 23 prompt)
+    lda #1
     sta hm_row
     lda #0
     sta hm_save_x              // Slot counter
@@ -351,18 +347,21 @@ home_deposit:
     sta zp_text_color
 
     // Letter
-    lda hm_save_x
-    clc
-    adc #$01                    // Screen code 'A'
-    jsr hal_screen_put_char
-    lda #$29                    // ')'
-    jsr hal_screen_put_char
+    jsr home_put_letter
     lda #$20                    // Space
     jsr hal_screen_put_char
 
     // Item description with ego/status/stat suffixes
     ldx hm_save_x
     jsr itemdesc_put_inv_slot
+.if (SCREEN_COLS >= 80) {
+    lda hm_row
+    sta zp_cursor_row
+    ldx hm_save_x
+    lda inv_qty,x
+    jsr inven_mul_slot_x
+    jsr uwt_hm_put_col69
+}
 
     inc hm_row
 
@@ -372,34 +371,15 @@ home_deposit:
 
 !hd_inv_done:
     // Prompt
-    lda #COL_WHITE
-    sta zp_text_color
     lda #23
     ldx #<hm_which_str
     ldy #>hm_which_str
-    jsr home_put_col1_string
+    jsr home_put_white_col1
 
-    jsr input_prepare_followup_key
-    jsr hal_input_get_key
-
-    // Q/escape-equivalent/space = cancel
-    cmp #PETSCII_HM_Q
-    beq !hd_cancel_relay+
-    jsr input_is_modal_escape_key
-    beq !hd_cancel_relay+
-    cmp #PETSCII_HM_SPACE
-    beq !hd_cancel_relay+
-
-    // Convert PETSCII to slot (A=0, V=21)
-    sec
-    sbc #PETSCII_HM_A
-    bcc !hd_cancel_relay+
-    cmp #MAX_INV_SLOTS
-    bcs !hd_cancel_relay+
-
-    jmp !hd_valid_slot+
-!hd_cancel_relay:
-    rts                         // Early return relay
+    lda #MAX_INV_SLOTS
+    jsr hm_prompt_slot_key
+    bcs !hd_valid_slot+
+    rts
 
 !hd_valid_slot:
     sta hm_inv_slot
@@ -421,11 +401,12 @@ home_deposit:
     bcs !hd_has_slot+
 
     // Home full
+    ldx #<hm_home_full_str
+    ldy #>hm_home_full_str
+hm_show_red_row22_wait:
     lda #COL_RED
     sta zp_text_color
     lda #22
-    ldx #<hm_home_full_str
-    ldy #>hm_home_full_str
     jsr home_put_col1_string
     jmp hal_input_get_key           // Wait, tail call
 
@@ -454,14 +435,54 @@ home_deposit:
     jsr inv_remove_item
 
     // Success message
+    ldx #<hm_deposited_str
+    ldy #>hm_deposited_str
+hm_show_ok_row22_sfx:
     lda #COL_LGREEN
     sta zp_text_color
     lda #22
-    ldx #<hm_deposited_str
-    ldy #>hm_deposited_str
     jsr home_put_col1_string
 
     lda #SFX_PICKUP
-    jsr hal_sound_play
+    jmp hal_sound_play
 !hd_cancel:
     rts
+
+hm_prompt_slot_key:
+    sta zp_temp4
+    jsr input_prepare_followup_key
+    jsr hal_input_get_key
+    jsr hm_is_cancel_key
+    beq !hpsk_cancel+
+    sec
+    sbc #PETSCII_HM_A
+    bcc !hpsk_cancel+
+    cmp zp_temp4
+    bcs !hpsk_cancel+
+    sec
+    rts
+!hpsk_cancel:
+    clc
+    rts
+
+hm_is_cancel_key:
+    cmp #PETSCII_HM_Q
+    beq !hik_yes+
+    jsr input_is_modal_escape_key
+    beq !hik_yes+
+    cmp #PETSCII_HM_SPACE
+!hik_yes:
+    rts
+
+uwt_hm_draw_burden_header:
+    :UiWeightDrawBurdenHeaderBody(uwt_hm_put_tenths, uwt_hm_burden_str, uwt_hm_lb_str)
+uwt_hm_put_tenths:
+    :UiWeightPutTenthsBody()
+uwt_hm_put_tenths_from_buf:
+    :UiWeightPutTenthsFromBufBody()
+uwt_hm_put_col69:
+.if (SCREEN_COLS >= 80) {
+    :UiWeightPutCol69Body(uwt_hm_put_tenths_from_buf, uwt_hm_lb_str)
+}
+uwt_hm_burden_str: .text "Burden: " ; .byte 0
+uwt_hm_lb_str:     .text " lb" ; .byte 0

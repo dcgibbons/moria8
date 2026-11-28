@@ -103,7 +103,7 @@ monster_ai_tick:
     BIT  7, A
     JR   NZ, .mon_slow
     LD   A, C
-    CP   2
+    CP   3
     JR   NC, .spd_ready
     INC  C
     JR   .spd_ready
@@ -120,9 +120,9 @@ monster_ai_tick:
     JR   Z, .cadence_slow
     BIT  7, A
     JR   NZ, .cadence_slow
-    CP   3
+    CP   4
     JR   C, .moves_ok
-    LD   A, 2
+    LD   A, 3
     JR   .moves_ok
 .cadence_slow:
     ADD  A, 3
@@ -137,13 +137,12 @@ monster_ai_tick:
     LD   A, 1
 .moves_ok:
     LD   (_mai_moves), A
+.move_lp:
     CALL _mai_act_if_alive
     JR   C, .done
-    LD   A, (_mai_moves)
-    DEC  A
-    JR   Z, .next_slot
-    CALL _mai_act_if_alive
-    JR   C, .done
+    LD   HL, _mai_moves
+    DEC  (HL)
+    JR   NZ, .move_lp
 
 .next_slot:
     LD   DE, MONSTER_ENTRY_SIZE

@@ -229,9 +229,9 @@ def verify(vs_text_or_path, log_text: str) -> None:
         raise ValueError(
             f"c128_cache_overlay_bits={ovl_bits:#04x}, expected 0xfe (all except STARTUP)"
         )
-    if ovl_bits_hi != 0x01:
+    if ovl_bits_hi != 0x00:
         raise ValueError(
-            f"c128_cache_overlay_bits_hi={ovl_bits_hi:#04x}, expected 0x01 (modal-misc)"
+            f"c128_cache_overlay_bits_hi={ovl_bits_hi:#04x}, expected 0x00 (modal-misc uncached)"
         )
     if cache_failed != 0:
         raise ValueError(f"c128_cache_failed={cache_failed:#04x} at town entry")
@@ -314,6 +314,7 @@ def _selftest() -> None:
         extra_sheet: bool = False,
         omit_sheet: bool = False,
         ovl_bits: int = 0xFE,
+        ovl_bits_hi: int = 0x00,
         tier_bits: int = 0x00,
         mutate_probe: int | None = None,
         disk_load: bool = False,
@@ -332,7 +333,7 @@ def _selftest() -> None:
         if extra_sheet:
             lines.append("#4 (Stop on  exec 2d7d)")
         lines.append("#5 (Stop on  exec c248)")
-        lines.append(fmt_span(0x89E3, [0x01, 0x00, 0x01, 0x00, tier_bits, ovl_bits, 0x01]))
+        lines.append(fmt_span(0x89E3, [0x01, 0x00, 0x01, 0x00, tier_bits, ovl_bits, ovl_bits_hi]))
         for addr in [0x0C06, *[a for _, a in BANK1_PROBES]]:
             vals = list(probe_data[addr])
             if mutate_probe == addr:
@@ -359,6 +360,7 @@ def _selftest() -> None:
         ("duplicate summary sheet", dict(extra_sheet=True)),
         ("missing summary sheet", dict(omit_sheet=True)),
         ("wrong overlay bits", dict(ovl_bits=0xFC)),
+        ("unexpected modal-misc cache bit", dict(ovl_bits_hi=0x01)),
         ("non-catalog tier bits", dict(tier_bits=0x0F)),
         ("mutated common helper", dict(mutate_probe=0x0C06)),
         ("mutated catalog fields", dict(mutate_probe=0x7E60)),

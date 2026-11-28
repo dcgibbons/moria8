@@ -102,81 +102,7 @@ roll_tool_ego_check:
 tramp_dig_ability:
     jmp calc_dig_ability
 
-// ============================================================
-// calc_dig_ability — Calculate digging ability (STR + tool/weapon bonus)
-// Copied from main.s — needed because main.s is not imported in tests.
-// ============================================================
-calc_dig_ability:
-    // Check equipped weapon
-    ldx inv_item_id + EQUIP_WEAPON
-    cpx #$FF
-    bne !cda_has_weapon+
-
-    // Bare hands: ability = 0
-    lda #0
-    sta tun_dig_ability
-    rts
-
-!cda_has_weapon:
-    lda it_category,x
-    cmp #ICAT_DIGGING
-    beq !cda_dig_tool+
-
-    // Regular weapon: ability = (STR >> 2) + max(0, PL_TODMG >> 1)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
-    lda player_data + PL_TODMG
-    bmi !cda_done+              // Negative TODMG → skip
-    lsr                         // TODMG >> 1
-    clc
-    adc tun_dig_ability
-    bcc !cda_ok+
-    lda #$FF                    // Cap at 255
-!cda_ok:
-    sta tun_dig_ability
-!cda_done:
-    rts
-
-!cda_dig_tool:
-    // Digging tool: ability = (STR >> 2) + dig_base_table[type-62] + (ego * 12)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
-
-    // Add base bonus from table
-    txa
-    sec
-    sbc #ITEM_SLOT_PICK                       // Index into dig_base_table (0=Pick, 1=Shovel)
-    tax
-    lda dig_base_table,x
-    clc
-    adc tun_dig_ability
-    sta tun_dig_ability
-
-    // Add ego bonus: ego * 12
-    lda inv_ego + EQUIP_WEAPON
-    beq !cda_done-              // ego=0, no bonus
-    // Multiply ego (1 or 2) by 12
-    sta zp_temp2                // save ego
-    asl                         // *2
-    asl                         // *4
-    sta zp_temp3                // ego*4
-    asl                         // *8
-    clc
-    adc zp_temp3                // *8 + *4 = *12
-    clc
-    adc tun_dig_ability
-    bcc !cda_ego_ok+
-    lda #$FF                    // Cap at 255
-!cda_ego_ok:
-    sta tun_dig_ability
-    rts
-
-dig_base_table:
-    .byte 20, 6                 // Pick base=20, Shovel base=6
+#import "../../../../core/6502/calc_dig_cold.s"
 
 // ============================================================
 // Test scratch
@@ -202,7 +128,7 @@ test_start:
     jsr hal_sound_init
 
     // ============================================================
-    // Test 1: Bare hands (no weapon) → tun_dig_ability = 0
+    // Test 1: Bare hands (no weapon) → tun_dig_ability = STR >> 2
     // ============================================================
     lda #$FF
     sta inv_item_id + EQUIP_WEAPON
@@ -211,8 +137,14 @@ test_start:
 
     jsr calc_dig_ability
     lda tun_dig_ability
-    cmp #0
+    cmp #4
+    bne !t1_fail+
+    lda #3
+    sta zp_player_str
+    jsr calc_dig_ability
+    lda tun_dig_ability
     beq !t1_pass+
+!t1_fail:
     lda #$00
     jmp !t1_store+
 !t1_pass:

@@ -827,6 +827,7 @@ class _KickAssAnalyzer:
         brace_depth = 0
         capture_macro: Optional[Tuple[str, Tuple[str, ...], int, List[Tuple[int, str, str]]]] = None
         skip_dot_if_depth: Optional[int] = None
+        dot_if_taken: Dict[int, bool] = {}
 
         for lineno, raw_line in lines:
             stripped = raw_line.strip()
@@ -862,9 +863,14 @@ class _KickAssAnalyzer:
                 continue
 
             if skip_dot_if_depth is not None:
-                brace_depth += _brace_delta(raw_line)
+                delta = _brace_delta(raw_line)
+                brace_depth += delta
                 if brace_depth <= skip_dot_if_depth:
+                    dot_if_taken.pop(skip_dot_if_depth, None)
                     skip_dot_if_depth = None
+                elif delta == 0 and stripped.startswith("}") and (brace_depth - 1) <= skip_dot_if_depth:
+                    if re.match(r"^\}\s*else\s*\{", stripped) and not dot_if_taken.pop(skip_dot_if_depth, False):
+                        skip_dot_if_depth = None
                 continue
 
             if _FUNC_HEADER_RE.match(raw_line):
@@ -911,10 +917,20 @@ class _KickAssAnalyzer:
                     m_if = re.match(r"^\s*\.if\s*\(([^)]+)\)\s*\{(.*)$", stripped)
                     if m_if:
                         cond_ok = _eval_if_expr(m_if.group(1), self.defines)
+                        entry_depth = brace_depth - _brace_delta(raw_line)
                         if not cond_ok:
                             if "}" not in m_if.group(2):
-                                skip_dot_if_depth = brace_depth - _brace_delta(raw_line)
+                                skip_dot_if_depth = entry_depth
+                                dot_if_taken[entry_depth] = False
                             continue
+                        if "}" not in m_if.group(2):
+                            dot_if_taken[entry_depth] = True
+                continue
+
+            if re.match(r"^\}\s*else\s*\{", stripped):
+                entry_depth = brace_depth - 1
+                if dot_if_taken.pop(entry_depth, False) and "}" not in stripped.split("{", 1)[1]:
+                    skip_dot_if_depth = entry_depth
                 continue
 
             if self._apply_define(raw_line):
@@ -1041,6 +1057,13 @@ class _KickAssAnalyzer:
                 self.defines[const_name] = val
             elif _PLAIN_IDENT_RE.match(rhs):
                 self.symbol_defines[const_name] = rhs
+                cur = rhs
+                seen: Set[str] = set()
+                while cur in self.symbol_defines and cur not in seen:
+                    seen.add(cur)
+                    cur = self.symbol_defines[cur]
+                if cur in self.defines:
+                    self.defines[const_name] = self.defines[cur]
             return
 
         m_dot_lbl = _DOT_LABEL_RE.match(stmt)
@@ -1222,14 +1245,15 @@ def _resolve_ovl_token(tok: str, analysis: PortAnalysis) -> Optional[str]:
     for _ in range(4):
         if cur in OVL_CONST_TO_SEGMENT:
             return OVL_CONST_TO_SEGMENT[cur]
+        nxt = analysis.symbol_defines.get(cur)
+        if nxt and nxt != cur:
+            cur = nxt
+            continue
         if cur in analysis.defines:
             val_str = str(analysis.defines[cur])
             if val_str in OVL_CONST_TO_SEGMENT:
                 return OVL_CONST_TO_SEGMENT[val_str]
-        nxt = analysis.symbol_defines.get(cur)
-        if not nxt or nxt == cur:
-            break
-        cur = nxt
+        break
     return None
 
 
@@ -2014,9 +2038,29 @@ def run_selftest() -> int:
     res_missing = analyze_port(cfg, _make_reader(missing_files))
     assert any("nonexistent_foo.s" in e for e in res_missing.import_errors), res_missing.import_errors
 
+    const_if_files = {
+        "platforms/test/main.s": "\n".join([
+            ".const hal_layout_screen_cols = 80",
+            ".const SCREEN_COLS = hal_layout_screen_cols",
+            ".segment UiOverlay",
+            "equip_fn:",
+            ".if (SCREEN_COLS >= 80) {",
+            "    jsr help_only_fn",
+            "} else {",
+            "    jsr other_ok_fn",
+            "}",
+            "other_ok_fn: rts",
+            ".segment HelpOverlay",
+            "help_only_fn: rts",
+        ])
+    }
+    res_const_if = analyze_port(cfg, _make_reader(const_if_files))
+    v_const_if = {(v.symbol, v.caller_segment) for v in find_cross_overlay_violations(res_const_if)}
+    assert v_const_if == {("help_only_fn", "UiOverlay")}, v_const_if
+
     print(
         "check_overlay_calls selftest passed "
-        "(C5a non-ovl->ovl, C5b mem ops, C5c macro #if, C5d sym ranges, C5e cart configs, swap dispatchers)"
+        "(C5a non-ovl->ovl, C5b mem ops, C5c macro #if, C5d sym ranges, C5e cart configs, swap dispatchers, .const .if)"
     )
     return 0
 

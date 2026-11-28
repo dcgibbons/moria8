@@ -69,7 +69,6 @@ test_finish:
 #import "../../../../core/6502/ui_status.s"
 #import "../../../../core/6502/ui_help_clear.s"
 .segment TestCreateOverlay
-#import "../../../../core/6502/ui_character.s"
 #import "../../../../core/6502/stat_display.s"
 player_create:
     brk
@@ -129,7 +128,10 @@ help_draw_hborder:
 ui_inv_display:
 ui_inv_select_display:
 ui_equip_display:
+ui_char_display:
     rts
+count_spells_known:
+    jmp spell_mask_count_ptr
 #import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s

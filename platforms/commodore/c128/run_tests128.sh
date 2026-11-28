@@ -1581,7 +1581,8 @@ must_contain(status, ".const STS_ROW21_NAME_COL = hal_layout_status_row21_name_c
 must_contain(help_s, ".const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1", "ui_help border must use SCREEN_COLS")
 must_contain(swap, ".const DS_PROMPT_COL = (SCREEN_COLS - 19) / 2", "disk_swap prompt centering must use SCREEN_COLS math")
 must_contain(main128, "lda #TITLE_MENU_COL", "title menu must use TITLE_MENU_COL")
-must_contain(char_s, "lda #10\n    sta zp_cursor_row", "ui_character gold/xp row must stay at row 10")
+must_contain(char_s, ".byte 10 | UCF_ALIGN9, 2, <char_gold_label,   >char_gold_label,   UC_OP_GOLD", "ui_character 80-col gold row must stay at row 10")
+must_contain(char_s, ".byte 10, UCHAR_COL_L,   <char_gold_label,   >char_gold_label,   UC_OP_GOLD", "ui_character 40-col gold row must stay at row 10")
 must_contain(char_s, ".const UCHAR_COL_L = hal_layout_character_col_l", "ui_character C128 columns must stay centered for 80-col")
 must_contain(sysinfo, "ldx #((SCREEN_COLS - 15) / 2)", "title sysinfo baseline must be centered on C128")
 must_contain(status, "lda #STS_ROW21_NAME_COL\n    sta zp_cursor_col", "status row 21 name must use dedicated C128 anchor")
@@ -5764,14 +5765,16 @@ run_boot_title_load_resume_smoke() {
     build_load_resume_boot_assets || return
 
     local main_vs="../../../build/test/c128/main.vs"
-    local load_resume_game
+    local load_resume_game player_data pl_flags_addr
     load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${load_resume_game:-}" ]; then
-        echo "FAIL (missing load_resume_game in ../../../build/test/c128/main.vs)"
+    player_data=$(awk '/\.player_data$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${load_resume_game:-}" ] || [ -z "${player_data:-}" ]; then
+        echo "FAIL (missing load_resume_game/player_data in ../../../build/test/c128/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
+    pl_flags_addr=$(printf '%04X' $((16#${player_data} + 54)))
     local abs_d64
     abs_d64="$(cd ../../../build/test/c128 && pwd)/moria128_loadresume.d64"
     local abs_save_d64
@@ -5785,6 +5788,7 @@ run_boot_title_load_resume_smoke() {
     {
         c128_key_feed_cmds $'L3 1'    # L = load; 3 = Disk Setup done (program 8, save 9); insert prompt; slot 1
         echo "until \$${load_resume_game}"
+        echo "m \$${pl_flags_addr} \$${pl_flags_addr}"
         echo "g"
         echo "quit"     # at the next stop: a stop after the last command waited forever
     } > "$mon_file"
@@ -5798,6 +5802,13 @@ run_boot_title_load_resume_smoke() {
 
     if ! boot_log_has_stop_at "$log_file" "${load_resume_game}"; then
         boot_log_report_failure "did not reach load_resume_game from title load flow" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! grep -qiE "^>C:${pl_flags_addr}[[:space:]]+00([[:space:]]|$)" "$log_file"; then
+        boot_log_report_failure "PL_FLAGS did not clear PLF_SEARCHING before load_resume_game" "$log_file" "pl_flags" "$pl_flags_addr" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -7582,15 +7593,25 @@ try:
     exp.key(" ")
     exp.until(exp.sym["title_menu_loop"])
     assert exp.memory(exp.sym["c128_media_state"], 1) == b"\x02", "c128_media_state poisoned after game_over"
-
-    # Verify all 12 overlays (including Bank 2 START, CHEST, HOME, STORAGE) load without disk.
-    ovl_consts = catalog_disk.consts(repo_root / "platforms/commodore/common/overlay.s")
-    for symbol, ovl_name in make_c128_md128.OVERLAYS:
-        exp.call_overlay_load(ovl_consts["OVL_" + symbol])
-        expected = (build_dir / f"ovl.{ovl_name}").read_bytes()[2:]
-        assert exp.memory(0xE000, len(expected)) == expected, ovl_name
 finally:
     exp.close()
+
+exp2 = tc.Experiment(args, name="disk-256k-overlays", disk_build=True, fullbanks=True)
+try:
+    exp2.cmd("detach 8")
+    exp2.forbidden.update({
+        exp2.sym["overlay_load_disk"],
+        exp2.sym["c128_require_program_media"],
+        exp2.sym["disk_prompt_game"],
+    })
+    # Verify all 12 overlays (including Bank 2 MODAL_MISC, START, CHEST, HOME, STORAGE) load without disk.
+    ovl_consts = catalog_disk.consts(repo_root / "platforms/commodore/common/overlay.s")
+    for symbol, ovl_name in make_c128_md128.OVERLAYS:
+        exp2.call_overlay_load(ovl_consts["OVL_" + symbol])
+        expected = (build_dir / f"ovl.{ovl_name}").read_bytes()[2:]
+        assert exp2.memory(0xE000, len(expected)) == expected, ovl_name
+finally:
+    exp2.close()
 PY
     then
         echo "FAIL ($(tail -n 1 "$check_log"))"

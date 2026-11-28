@@ -25,9 +25,9 @@
 //   BeebPlaySlot:       Bank 4 ($04) $8000-$A3FF (play payload, boot-preloaded)
 //   Name pool:          Bank 4 ($04) $A400-$A7FF (the catalog's species names)
 //   Overlay window:     Bank 4 ($04) $A800-$BFFF (6,144 B)
-//   Live 198x66 Map:    Bank 5 ($05) $8000-$B30B + cached OVL.MODAL ($B400-$BFFF)
-//   BeebAuxData:        Bank 6 ($06) $8000-$94FF (virt $6000-$74FF), the monster
-//                       catalog ($9500-$B9FF) and cached OVL.UI ($BA00-$BFFF)
+//   Live 198x66 Map:    Bank 5 ($05) $8000-$B30B + cached OVL.MODAL ($B400-$BDFF) + OVL.TITLE ($BE00-$BFFF)
+//   BeebAuxData:        Bank 6 ($06) $8000-$92FF (virt $6000-$72FF), ITEMCAT ($9300-$94FF),
+//                       the monster catalog ($9500-$B9FF), and cached OVL.UI ($BA00-$BFFF).
 //   Hot Cache Bank 7:   Bank 7 ($07) cached SPELL/ITEMS/GEN
 //   BeebHuffData:       ANDY ($84) $8000-$8D93 (4 KB private RAM)
 //   LYNNE Shadow RAM:   ACCCON=$05 $3000-$7FFF (1KB font, 1KB gen scratch, char shadow, Mode 0)
@@ -442,11 +442,6 @@ chest_dispatch:
 help_dispatch:
     pha
     lda #OVL_HELP
-    bne ovl_dispatch_ay
-
-title_dispatch:
-    pha
-    lda #OVL_TITLE
     bne ovl_dispatch_ay
 
 tramp_items_dispatch:
@@ -886,6 +881,8 @@ ovl_home_end:
 #import "../../core/6502/background_data.s"
 #import "../../core/6502/player_create.s"
 #import "../../core/6502/player_chargen_cold.s"
+#import "../../core/6502/ui_character.s"
+#import "../../core/6502/player_bg_draw_cold.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $a800) + " bytes"
 .assert "Startup overlay fits", ovl_start_end <= $c000, true
@@ -1043,10 +1040,7 @@ ovl_help_end:
 .assert "Help overlay fits", ovl_help_end <= $c000, true
 
 .segment UiOverlay
-#import "../../core/6502/ui_character.s"
-#import "../../core/6502/player_bg_draw_cold.s"
-#import "../../core/6502/ui_inventory.s"
-#import "../../core/6502/ui_equipment.s"
+#import "../../core/6502/store_restock_overlay.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a800) + " bytes"
 .assert "UI overlay fits", ovl_ui_end <= $c000, true
@@ -1118,9 +1112,10 @@ player_adjust_equipment_stat:
 #import "../../core/6502/ego_items.s"
 #import "../../core/6502/ranged_fire.s"
 #import "../../core/6502/throw.s"
-#import "../../core/6502/bash.s"
-#import "../../core/6502/tunnel.s"
-#import "../../core/6502/calc_dig_cold.s"
+#import "../../core/6502/ui_inventory.s"
+#define UI_EQUIP_SHARE_INV_WEIGHTS
+#import "../../core/6502/ui_equipment.s"
+#undef UI_EQUIP_SHARE_INV_WEIGHTS
 
 ovl_items_end:
 .print "Item actions overlay: " + (ovl_items_end - $a800) + " bytes"
@@ -1226,6 +1221,7 @@ ovl_gen_end:
 .assert "Dungeon gen overlay fits", ovl_gen_end <= $c000, true
 
 // Sideways RAM cache slot fit assertions
+.assert "Beeb SWR TITLE slot fits payload", ovl_title_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_TITLE * 256, true
 .assert "Beeb SWR UI slot fits payload", ovl_ui_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_UI * 256, true
 .assert "Beeb SWR MODAL slot fits payload", ovl_modal_misc_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_MODAL * 256, true
 .assert "Beeb SWR SPELL slot fits payload", ovl_spell_end - BANKED_DATA_BASE <= BEEB_SWR_PAGES_SPELL * 256, true
@@ -1269,7 +1265,6 @@ ovl_storage_end:
 
 .segment TitleOverlay
 #import "title_screen.s"
-#import "../../core/6502/store_restock_overlay.s"
 generation_busy_install:
     lda #$4c
     sta generation_busy_begin_api
@@ -1363,6 +1358,9 @@ ovl_title_end:
 #import "../../core/6502/trap_trigger_cold.s"
 #import "../../core/6502/trap_damage_cold.s"
 #import "../../core/6502/door_open_close_cold.s"
+#import "../../core/6502/bash.s"
+#import "../../core/6502/tunnel.s"
+#import "../../core/6502/calc_dig_cold.s"
 ovl_chest_end:
 .print "Chest overlay: " + (ovl_chest_end - $a800) + " bytes"
 .assert "Chest overlay fits", ovl_chest_end <= $c000, true
@@ -1514,7 +1512,7 @@ program_end:
 .assert "Home overlay owns home_enter separately from TownOverlay", home_enter >= $a800 && home_enter < ovl_home_end && home_inv_add_carried >= $a800 && home_inv_add_carried < ovl_home_end && store_enter >= $a800 && store_enter < ovl_town_end && inv_add_carried >= $a800 && inv_add_carried < ovl_town_end, true
 .assert "Death overlay owns royal_screen", royal_screen >= $a800 && royal_screen < ovl_death_end, true
 .assert "Phase 2 evicted trampolines stay resident while targets live in overlays", re_equip_entry < $8000 && re_equip >= $a800 && re_equip < ovl_modal_misc_end && hal_player_recalc_pflags < $8000 && player_recalc_pflags_equipment >= $a800 && player_recalc_pflags_equipment < ovl_modal_misc_end && run_initialize < $8000 && run_initialize_impl >= $a800 && run_initialize_impl < ovl_modal_misc_end && title_load_game_ovl >= $a800 && title_load_game_ovl < ovl_storage_end && title_enter_menu_ovl >= $a800 && title_enter_menu_ovl < ovl_title_end, true
-.assert "Phase 5 cold evictions and MONEXT helper stay within target segments", catalog_fetch_ext < $3000 && cat_ext_record + 8 <= $3000 && tramp_trap_trigger < $8000 && store_init_all >= title_load_and_draw && store_init_all < generation_busy_install && init_starting_kit >= level_generate && init_starting_kit < ovl_gen_end && trap_trigger >= disarm_command && trap_apply_damage >= trap_trigger && trap_apply_damage < door_try_open && door_try_open < door_try_close && door_try_close < ovl_chest_end && player_init >= player_create && player_init < ovl_start_end && ui_char_draw_background >= ui_char_display && ui_char_draw_background < ui_inv_display && item_drop >= ui_identify_print && help_cmd_body >= item_drop && help_cmd_body < eff_find_doors_impl && calc_dig_ability >= player_tunnel && calc_dig_ability < ovl_items_end && eff_detect_evil_only >= item_gain_spell && eff_detect_evil_only < ovl_spell_end && item_refresh_fixed_known < $8000 && load_resume_reset >= beeb_disk_setup_run && load_resume_reset < title_load_game_ovl, true
+.assert "Phase 5 cold evictions and MONEXT helper stay within target segments", catalog_fetch_ext < $3000 && cat_ext_record + 8 <= $3000 && tramp_trap_trigger < $8000 && store_init_all >= $a800 && store_init_all < ovl_ui_end && init_starting_kit >= level_generate && init_starting_kit < ovl_gen_end && trap_trigger >= disarm_command && trap_apply_damage >= trap_trigger && trap_apply_damage < door_try_open && door_try_open < door_try_close && door_try_close < ovl_chest_end && player_init >= player_create && player_init < ovl_start_end && ui_char_display >= player_create && ui_char_draw_background >= ui_char_display && ui_char_draw_background < ovl_start_end && item_drop >= ui_identify_print && help_cmd_body >= item_drop && help_cmd_body < eff_find_doors_impl && calc_dig_ability >= player_tunnel && calc_dig_ability < ovl_chest_end && eff_detect_evil_only >= item_gain_spell && eff_detect_evil_only < ovl_spell_end && item_refresh_fixed_known < $8000 && load_resume_reset >= beeb_disk_setup_run && load_resume_reset < title_load_game_ovl, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

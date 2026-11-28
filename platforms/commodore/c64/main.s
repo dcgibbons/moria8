@@ -33,6 +33,7 @@
 #define PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
 #define HOME_OVERLAY_SEPARATE
 #define SAVE_IN_STORAGE_OVERLAY
+#define STORAGE_STATUS_HELPER
 #define HAL_PLATFORM_RECALL_CUSTOM
 #define HAL_STORAGE_RECALL_CUSTOM
 #define RECALL_ARRAY_DATA_EXTERNAL
@@ -48,6 +49,7 @@
 #define CALC_DIG_CO_LOCATED
 #define HAL_PLATFORM_ADJUST_EQUIPMENT_STAT_EXTERNAL
 #define UI_CHAR_BG_EXTERNAL
+#define UI_CHAR_MODAL_EXTERNAL
 #define PLAYER_MAGIC_BROWSE_EXTERNAL
 #define PLAYER_CAST_RESIDENT
 #define BALL_HARM_EXTERNAL
@@ -131,9 +133,9 @@
     .segment Default
 }
 .macro WizardGenExecSegment() {
-    // wizard_generate_item_execute's only caller is ui_wizard.s in ModalMiscOverlay;
+    // wizard_generate_item_execute's only caller is ui_wizard.s in HelpOverlay;
     // parking it there frees 92 B of resident Default headroom for test variants.
-    .segment ModalMiscOverlay
+    .segment HelpOverlay
 }
 .macro WizardGenExecRestoreSegment() {
     .segment Default
@@ -794,6 +796,9 @@ ovl_reu_start_hi: .fill hal_platform_overlay_count + 1, 0
 ol_target:        .byte 0
 
 #define OVERLAY_LOAD_PROMPT_GAME
+#if !C64_CARTRIDGE
+#define HAL_PLATFORM_OVERLAY_REU_BANK1_TITLE
+#endif
 #import "../common/overlay.s"
 #if C64_CARTRIDGE
 .assert "Cartridge overlay count ABI", hal_platform_overlay_count, CART_OVERLAY_COUNT
@@ -988,10 +993,10 @@ c64_item_cat_saved_port: .byte 0
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../../core/6502/player_magic_state.s"
 #import "../../../core/6502/player_magic_state_ops.s"
-// Park level-up magic recomputation (cold, level-up-only) in ModalMisc:
+// Park level-up magic recomputation (cold, level-up-only) in ItemActionsOverlay:
 // pre-importing here makes player_magic.s's own tail imports no-ops.
 // combat.s reaches them via tramp_magic_* (HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE).
-.segment ModalMiscOverlay
+.segment ItemActionsOverlay
 #import "../../../core/6502/player_magic_levelup.s"
 #import "../../../core/6502/player_magic_tail.s"
 .segment Default
@@ -1071,43 +1076,63 @@ c64_save_resident_state_probe_end:
 #undef DISARM_COMMAND_EXTERNAL
 #import "hal/storage.s"
 
-c64_storage_read_command_status:
+c64_open_empty_cmd_channel:
     ldx save_device
-c64_storage_read_command_status_x:
+c64_open_empty_cmd_channel_x:
     txa
     pha
-    // A read that times out (ST bit 1) before any digit came lost its byte
-    // on the bus (JiffyDOS, playtest-disk): cdrs_lost says so, for a caller
-    // that can ask again with a fresh OPEN. Reading this channel again would
-    // only go on mid-message. A digit with that bit set is the drive's answer
-    // (save_write_product_smoke) and stands.
     // Start with no channel selected, as the Plus/4 reader must (after a write
     // the drive refused, its JiffyDOS KERNAL never completed the CHKIN).
     jsr c64_disk_clrchn
-    lda #2
-    sta disk_status
     lda #0
     sta KERNAL_STATUS           // empty-name OPEN skips STA $90; clear stale bit 7
-    sta cdrs_lost
     tax
     tay
     jsr c64_disk_setnam
     pla
     tax
-    jsr c64_open_cmd_channel_x
-    bcs !cdrs_close+
+    jmp c64_open_cmd_channel_x
+
+c64_clear_cmd_status:
+    lda #2
+    sta disk_status
+    lda #0
+    sta cdrs_lost
+    rts
+
+// Keep c64_storage_read_command_status immediately above c64_read_open_cmd_status
+// so playtest/moria_playtest/disk.py's [reader, +0x100) READST span includes it.
+c64_storage_read_command_status:
+    ldx save_device
+c64_storage_read_command_status_x:
+    jsr c64_clear_cmd_status
+    jsr c64_open_empty_cmd_channel_x
+    bcs c64_close_cmd_channel
+    jsr c64_read_open_cmd_status_cleared
+c64_close_cmd_channel:
+    jsr c64_disk_clrchn
+    lda #15
+    jsr c64_disk_close
+    jmp c64_restore_vic_bank0_after_serial   // serial I/O moved the VIC bank
+
+c64_read_open_cmd_status:
+    jsr c64_clear_cmd_status
+c64_read_open_cmd_status_cleared:
+    // A read that times out (ST bit 1) before any digit came lost its byte
+    // on the bus (JiffyDOS, playtest-disk): cdrs_lost says so, for a caller
+    // that can ask again with a fresh OPEN. Reading this channel again would
+    // only go on mid-message. A digit with that bit set is the drive's answer
+    // (save_write_product_smoke) and stands.
     // Stock C64 CHKIN/TKSA hangs in talker turnaround ($EDD6) on an absent
     // device after empty-name OPEN. Probe with CHKOUT (LISTEN+SECOND) first;
     // zero bytes written + CLRCHN preserves any pending 1541 DOS message.
     ldx #15
     jsr c64_disk_chkout
-    bcs !cdrs_close+
+    bcs !crocs_done+
     jsr c64_disk_clrchn
     ldx #15
     jsr c64_disk_chkin
-    bcs !cdrs_close+
-    // The DOS policy of core/6502/storage_status.s, kept inline here until the
-    // drive-hang backlog item lets C64 share it (docs/BACKLOG.md).
+    bcs !crocs_done+
     jsr c64_disk_chrin
     pha
     jsr c64_disk_readst
@@ -1115,67 +1140,35 @@ c64_storage_read_command_status_x:
     sta cdrs_lost
     pla
     cmp #$30
-    bcc !cdrs_close+            // no digit
+    bcc !crocs_done+            // no digit
     cmp #$3a
-    bcs !cdrs_close+
+    bcs !crocs_done+
     ldx #0
     stx cdrs_lost               // a digit: the drive answered
-    cmp #$32                    // 00-19 are informational (01 FILES SCRATCHED)
-    bcc !cdrs_ok+
-    beq !cdrs_check_26+
-    cmp #$36
-    beq !cdrs_check_62+
-    cmp #$37
-    beq !cdrs_check_7x+
-    bne !cdrs_close+
-!cdrs_check_26:
-    jsr c64_cdrs_chrin_checked
-    cmp #$36
-    bne !cdrs_close+
-    lda #26
-    bne !cdrs_set+
-!cdrs_check_62:
-    jsr c64_cdrs_chrin_checked
-    cmp #$32
-    bne !cdrs_close+
-    lda #1
-    bne !cdrs_set+
-!cdrs_check_7x:
-    jsr c64_cdrs_chrin_checked
-    cmp #$32
-    beq !cdrs_disk_full+
-    cmp #$33                    // 73, the DOS banner after a reset: no error
-    beq !cdrs_ok+
-    cmp #$34
-    bne !cdrs_close+
-    lda #74
-    bne !cdrs_set+
-!cdrs_disk_full:
-    lda #72
-    bne !cdrs_set+
-!cdrs_ok:
-    lda #0
-!cdrs_set:
-    sta disk_status
-!cdrs_close:
-    jsr c64_disk_clrchn
-    lda #15
-    jsr c64_disk_close
-    jmp c64_restore_vic_bank0_after_serial   // serial I/O moved the VIC bank
-
-c64_cdrs_chrin_checked:
+    pha                         // save digit 0
     jsr c64_disk_chrin
-    pha
+    pha                         // save digit 1
     jsr c64_disk_readst
     and #$02                    // read timeout on byte 1
-    beq !cdrs_byte_ok+
+    beq !crocs_d1_ok+
     sta cdrs_lost
     pla
-    lda #0                      // cannot match '2','3','4','6'; caller exits via !cdrs_close+
-    rts
-!cdrs_byte_ok:
     pla
-    rts
+    jmp !crocs_done+
+!crocs_d1_ok:
+    pla
+    tax                         // X = digit 1
+    pla                         // A = digit 0
+    jsr storage_status_from_dos_digits
+    bmi !crocs_done+            // HAL_STORAGE_STATUS_UNKNOWN ($ff) keeps disk_status = 2
+    tax
+    lda c64_dos_status_codes,x
+    sta disk_status
+!crocs_done:
+    jmp c64_disk_clrchn
+
+c64_dos_status_codes:
+    .fill HAL_STORAGE_STATUS_DEVICE_NOT_READY + 1, i == HAL_STORAGE_STATUS_OK ? 0 : i == HAL_STORAGE_STATUS_NOT_FOUND ? 1 : i == HAL_STORAGE_STATUS_WRITE_PROTECTED ? 26 : i == HAL_STORAGE_STATUS_DISK_FULL ? 72 : i == HAL_STORAGE_STATUS_DEVICE_NOT_READY ? 74 : 2
 
 cdrs_lost: .byte 0              // nonzero: the status byte was lost (above)
 // ============================================================
@@ -2159,7 +2152,7 @@ c64_caller_ovl_restore: .byte 0
 c64_title_piw_dispatch:
     sta !ctpd_jsr+ + 1
     sty !ctpd_jsr+ + 2
-    lda #OVL_TITLE
+    lda #OVL_MODAL_MISC
     sta c64_caller_ovl_restore
     jsr overlay_load_no_kernal
     bcs !ctpd_fail+
@@ -2187,7 +2180,7 @@ tramp_ui_inv_select_display:
     jmp tramp_sr_epilogue
 
 tramp_ui_equip_select_display:
-    lda #OVL_HELP
+    lda #OVL_CHEST
     jsr overlay_load_no_kernal
     bcs !tuesd_epilogue+
     jsr ui_equip_select_display
@@ -2584,9 +2577,9 @@ tramp_winner_royal:
     lda #BANK_NO_BASIC
     sta $01
     cli
-    lda #hal_storage_modal_misc_name_len
-    ldx #<hal_storage_modal_misc_name
-    ldy #>hal_storage_modal_misc_name
+    lda #hal_storage_overlay_help_name_len
+    ldx #<hal_storage_overlay_help_name
+    ldy #>hal_storage_overlay_help_name
     jsr asset_load_required     // asks for the program disk until it loads
     lda #0
     sta current_overlay
@@ -3117,11 +3110,20 @@ reu_load_all_tiers:
 #endif
 
 #if !C64_CARTRIDGE
+.const OVL_TITLE_REU_BANK1_BASE = $3000
+
 reu_stash_overlays:
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
     stx reu_ovl_idx
 
+    cpx #OVL_TITLE
+    bne !rso_bank0+
+    lda #<OVL_TITLE_REU_BANK1_BASE
+    sta reu_tier_offset_lo
+    lda #>OVL_TITLE_REU_BANK1_BASE
+    sta reu_tier_offset_hi
+!rso_bank0:
     // Record REU start offset for this overlay
     lda reu_tier_offset_lo
     sta ovl_reu_start_lo,x
@@ -3158,7 +3160,12 @@ reu_stash_overlays:
     lda ovl_reu_start_hi,x
     sta REU_REUHI
     lda #0
+    cpx #OVL_TITLE
+    bcc !rso_stash_b0+
+    lda #1
+!rso_stash_b0:
     sta REU_BANK
+    lda #0
     sta REU_LENLO               // Length lo = $00
     lda ovl_reu_pages,x         // Page-rounded overlay size (fits REU Bank 0)
     sta REU_LENHI
@@ -3184,7 +3191,9 @@ reu_stash_overlays:
     ldx reu_ovl_idx
     inx
     cpx #(REU_OVERLAY_COUNT + 1)
-    bne !rso_loop-
+    beq !rso_done+
+    jmp !rso_loop-
+!rso_done:
 
     // Preload ITEM.CAT sequentially into REU Bank 1 ($0000) in one stream
     // rather than 30x U1/B-P command-channel sessions.
@@ -3361,6 +3370,7 @@ reu_item_cat_name:
 .const OVL_STORAGE_PAGES    = ((ovl_storage_end - $e000 + $ff) >> 8)
 .const OVL_TITLE_PAGES      = ((ovl_title_end - $e000 + $ff) >> 8)
 .const OVL_REU_TOTAL_PAGES  = OVL_START_PAGES + OVL_TOWN_PAGES + OVL_DEATH_PAGES + OVL_GEN_PAGES + OVL_HELP_PAGES + OVL_UI_PAGES + OVL_ITEMS_PAGES + OVL_SPELL_PAGES + OVL_MODAL_MISC_PAGES + OVL_CHEST_PAGES + OVL_HOME_PAGES + OVL_STORAGE_PAGES + OVL_TITLE_PAGES
+.const OVL_REU_BANK0_PAGES  = OVL_REU_TOTAL_PAGES - OVL_TITLE_PAGES
 
 ovl_reu_pages:
     .byte 0
@@ -3369,8 +3379,8 @@ ovl_reu_pages:
     .byte OVL_MODAL_MISC_PAGES, OVL_CHEST_PAGES, OVL_HOME_PAGES
     .byte OVL_STORAGE_PAGES, OVL_TITLE_PAGES
 .assert "REU overlay page table matches overlay count", * - ovl_reu_pages, hal_platform_overlay_count + 1
-.assert "Packed overlays + catalog fit REU Bank 0", ((CATALOG_RECORD_FILES * $1000) >> 8) + OVL_REU_TOTAL_PAGES <= $100, true
-.assert "Last REU overlay fetch ($1000 B) stays within Bank 0", ((CATALOG_RECORD_FILES * $1000) >> 8) + OVL_REU_TOTAL_PAGES - OVL_TITLE_PAGES + $10 <= $100, true
+.assert "Packed Bank 0 overlays + catalog fit REU Bank 0", ((CATALOG_RECORD_FILES * $1000) >> 8) + OVL_REU_BANK0_PAGES <= $100, true
+.assert "REU Bank 1 title overlay fits after MONSTER.EXT", CATALOG_EXT_REU_BASE + (CATALOG_EXT_SECTORS * 254 - CATALOG_SECTOR_HEADER) <= OVL_TITLE_REU_BANK1_BASE && (OVL_TITLE_REU_BANK1_BASE >> 8) + OVL_TITLE_PAGES <= $100, true
 
 // ultimate_detect — One-shot C64 Ultimate / Ultimate-family title marker.
 // Full UCI model queries do not fit the current resident/banked layout. This
@@ -3798,9 +3808,59 @@ ovl_death_end:
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
 
 // ============================================================
-// Modal-misc overlay — winner retirement art at $E000
+// Modal-misc overlay — item commands & gain-stat helpers at $E000
 // ============================================================
 .segment ModalMiscOverlay
+    #import "../../../core/6502/player_item_commands.s"
+    #import "../../../core/6502/player_gain_stat_helpers.s"
+    #import "../../../core/6502/player_adjust_equipment_stat.s"
+ovl_modal_misc_end:
+.print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
+.assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
+.assert "Gain-stat helpers co-locate with eff_gain_stat in ModalMiscOverlay", eff_potion_gain_stat >= $e000 && eff_potion_gain_stat < ovl_modal_misc_end && player_step_healthy_sum_y >= $e000 && player_step_healthy_sum_y < ovl_modal_misc_end && player_apply_stat_delta_y >= $e000 && player_apply_stat_delta_y < ovl_modal_misc_end, true
+
+// ============================================================
+// Spell overlay — spell/prayer execution at $E000
+// ============================================================
+.segment SpellOverlay
+    #define PMX_EARTHQUAKE_EXTERNAL
+    #define PMX_MAP_AREA_EXTERNAL
+    #define PMX_MAP_AREA_TRAMPOLINE
+    #define PMX_DESTROY_AREA_EXTERNAL
+    #define PMX_DETECT_EFFECTS_EXTERNAL
+    #import "../../../core/6502/player_magic_slow_runtime.s"
+    #define PMU_TURN_FEEDBACK_ONLY
+    #import "../../../core/6502/player_magic_turn_banked.s"
+    #undef PMU_TURN_FEEDBACK_ONLY
+    #import "../../../core/6502/player_magic_execute_overlay.s"
+    #undef PMX_DETECT_EFFECTS_EXTERNAL
+    #undef PMX_DESTROY_AREA_EXTERNAL
+    #undef PMX_MAP_AREA_TRAMPOLINE
+    #undef PMX_MAP_AREA_EXTERNAL
+    #undef PMX_EARTHQUAKE_EXTERNAL
+    #import "../../../core/6502/player_magic_display.s"
+    #import "../../../core/6502/eff_identify_prompt_cold.s"
+    #import "../../../core/6502/eff_detect_evil_cold.s"
+    #define HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE
+    #define SCROLL_P3_EXISTING_OWNER
+    #define SCROLL_P3_NEW_OWNER
+    #import "../../../core/6502/scroll_effects_p3.s"
+    #undef SCROLL_P3_NEW_OWNER
+    #undef SCROLL_P3_EXISTING_OWNER
+    #undef HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE
+ovl_spell_end:
+.print "Spell overlay: " + (ovl_spell_end - $e000) + " bytes at $E000-$" + toHexString(ovl_spell_end)
+.assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $F000, true
+
+// ============================================================
+// Help overlay — dedicated help modal screen at $E000
+// ============================================================
+.segment HelpOverlay
+    #import "../../../core/6502/ui_help_data.s"
+    #import "../../../core/6502/ui_help_page2_data.s"
+    #import "../../../core/6502/ui_help_page3_data.s"
+    #import "../../../core/6502/ui_help.s"
+    #import "../../../core/6502/ui_help_cmd_cold.s"
 winner_apply_retirement_bonus_overlay:
     lda player_data + PL_LEVEL
     cmp #41
@@ -3861,55 +3921,6 @@ wizard_prompt_bad_value:
 
 wizard_bad_value_str:
     .text "BAD" ; .byte 0
-    #import "../../../core/6502/store_restock_overlay.s"
-ovl_modal_misc_end:
-.print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
-.assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $F000, true
-
-// ============================================================
-// Spell overlay — spell/prayer execution at $E000
-// ============================================================
-.segment SpellOverlay
-    #define PMX_EARTHQUAKE_EXTERNAL
-    #define PMX_MAP_AREA_EXTERNAL
-    #define PMX_MAP_AREA_TRAMPOLINE
-    #define PMX_DESTROY_AREA_EXTERNAL
-    #define PMX_DETECT_EFFECTS_EXTERNAL
-    #import "../../../core/6502/player_magic_slow_runtime.s"
-    #define PMU_TURN_FEEDBACK_ONLY
-    #import "../../../core/6502/player_magic_turn_banked.s"
-    #undef PMU_TURN_FEEDBACK_ONLY
-    #import "../../../core/6502/player_magic_execute_overlay.s"
-    #undef PMX_DETECT_EFFECTS_EXTERNAL
-    #undef PMX_DESTROY_AREA_EXTERNAL
-    #undef PMX_MAP_AREA_TRAMPOLINE
-    #undef PMX_MAP_AREA_EXTERNAL
-    #undef PMX_EARTHQUAKE_EXTERNAL
-    #import "../../../core/6502/player_magic_display.s"
-    #import "../../../core/6502/eff_identify_prompt_cold.s"
-    #import "../../../core/6502/eff_detect_evil_cold.s"
-    #define HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE
-    #define SCROLL_P3_EXISTING_OWNER
-    #define SCROLL_P3_NEW_OWNER
-    #import "../../../core/6502/scroll_effects_p3.s"
-    #undef SCROLL_P3_NEW_OWNER
-    #undef SCROLL_P3_EXISTING_OWNER
-    #undef HAL_PLATFORM_EFF_EARTHQUAKE_USE_TRAMPOLINE
-ovl_spell_end:
-.print "Spell overlay: " + (ovl_spell_end - $e000) + " bytes at $E000-$" + toHexString(ovl_spell_end)
-.assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $F000, true
-
-// ============================================================
-// Help overlay — dedicated help modal screen at $E000
-// ============================================================
-.segment HelpOverlay
-    #import "../../../core/6502/ui_help_data.s"
-    #import "../../../core/6502/ui_help_page2_data.s"
-    #import "../../../core/6502/ui_help.s"
-    #import "../../../core/6502/ui_help_cmd_cold.s"
-    #import "../../../core/6502/ui_equipment.s"
-    #import "../../../core/6502/ui_character.s"
-    #import "../../../core/6502/player_bg_draw_cold.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
@@ -3970,9 +3981,10 @@ ovl_gen_end:
 .segment ChestOverlay
     #import "../../../core/6502/chest.s"
     #import "../../../core/6502/item_spawn_cold.s"
+    #import "../../../core/6502/ui_equipment.s"
 ovl_chest_end:
-.assert "Store restock runs in OVL.MODAL", store_init_all >= $e000 && store_restock_all < ovl_modal_misc_end, true
-.assert "Wizard item generation runs in OVL.MODAL", wizard_generate_item_execute >= $e000 && wizard_generate_item_execute < ovl_modal_misc_end, true
+.assert "Store restock runs in OVL.TITLE", store_init_all >= $e000 && store_restock_all < ovl_title_end, true
+.assert "Wizard item generation runs in OVL.HELP", wizard_generate_item_execute >= $e000 && wizard_generate_item_execute < ovl_help_end, true
 .print "Chest overlay: " + (ovl_chest_end - $e000) + " bytes at $E000-$" + toHexString(ovl_chest_end)
 .assert "Chest overlay fits in $E000-$EFFF", ovl_chest_end <= $F000, true
 .assert "irq_no_blink begins with CLD", irq_no_blink_after_cld == irq_no_blink + 1, true
@@ -4025,15 +4037,14 @@ title_draw_menu_ovl:
     lda #>title_menu_str
     sta zp_ptr0_hi
     jmp screen_put_string
-    #import "../../../core/6502/player_item_commands.s"
-    #import "../../../core/6502/player_gain_stat_helpers.s"
-    #import "../../../core/6502/player_adjust_equipment_stat.s"
+    #import "../../../core/6502/ui_character.s"
+    #import "../../../core/6502/player_bg_draw_cold.s"
+    #import "../../../core/6502/store_restock_overlay.s"
     #import "../../../core/6502/player_pflags_cold.s"
     #import "../../../core/6502/starting_kit_cold.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $e000) + " bytes at $E000-$" + toHexString(ovl_title_end)
 .assert "Title overlay fits in $E000-$EFFF", ovl_title_end <= $F000, true
-.assert "Gain-stat helpers co-locate with eff_gain_stat in TitleOverlay", eff_potion_gain_stat >= $e000 && eff_potion_gain_stat < ovl_title_end && player_step_healthy_sum_y >= $e000 && player_step_healthy_sum_y < ovl_title_end && player_apply_stat_delta_y >= $e000 && player_apply_stat_delta_y < ovl_title_end, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

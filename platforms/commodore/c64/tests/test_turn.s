@@ -270,9 +270,11 @@ inv_remove_item:
     sta inv_p1,x
     rts
 
-// Expose production ITR3_BLIND / ITR3_TIMID curse branches in core/6502/turn.s.
+// Expose production ITR3_BLIND / ITR3_TIMID curse branches and PFLAG2_REGEN in core/6502/turn.s.
 #define CORE_PLAYER_IMPORTED
+#define TURN_PRODUCTION_PFLAGS2
 player_curse_flags: .byte 0
+player_pflags2:     .byte 0
 #import "../../../../core/6502/turn.s"
 #import "../../../../core/6502/scene_force.s"
 
@@ -355,6 +357,7 @@ reset_state:
     sta eff_invuln_timer
     sta eff_detect_timer
     sta player_curse_flags
+    sta player_pflags2
     sta zp_disturb
     sta zp_player_mp
     sta player_data + PL_MANA
@@ -675,11 +678,12 @@ test_start:
     sta tc_results + 6
 !t7_done:
 
-    // Test 8: mana regen ticks every other turn for casters.
+    // Test 8: mana regen ticks every other turn normally, ignores retired
+    // zp_eff_regen, and ticks 3 of every 4 turns under PFLAG2_REGEN.
     jsr reset_state
     lda #1
     sta player_data + PL_SPELL_TYPE
-    lda #2
+    lda #10
     sta zp_player_mmp
     lda #0
     sta zp_player_mp
@@ -687,6 +691,47 @@ test_start:
     jsr turn_tick_effects
     lda zp_player_mp
     cmp #1
+    bne !t8_fail+
+    // Odd turn with retired zp_eff_regen=5 must not regen MP or decrement timer
+    lda #5
+    sta zp_eff_regen
+    lda #1
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #1
+    bne !t8_fail+
+    lda zp_eff_regen
+    cmp #5
+    bne !t8_fail+
+    // PFLAG2_REGEN: turns 0, 1, 2 regen (+1 each); turn 3 skips
+    lda #0
+    sta zp_eff_regen
+    lda #PFLAG2_REGEN
+    sta player_pflags2
+    lda #0
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #2
+    bne !t8_fail+
+    lda #1
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #3
+    bne !t8_fail+
+    lda #2
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #4
+    bne !t8_fail+
+    lda #3
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #4
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
@@ -751,6 +796,33 @@ test_start:
     bne !t10_fail+
     lda test_player_death_calls
     cmp #1
+    bne !t10_fail+
+    // PFLAG2_REGEN +3 food drain saturates at 0 without starvation on drop
+    lda #0
+    sta test_player_death_calls
+    lda #PFLAG2_REGEN
+    sta player_pflags2
+    lda #20
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+    lda #10
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    jsr turn_tick_hunger
+    lda zp_player_food
+    cmp #16
+    bne !t10_fail+
+    lda #2
+    sta zp_player_food
+    jsr turn_tick_hunger
+    lda zp_player_food
+    ora zp_player_food_hi
+    bne !t10_fail+
+    lda zp_player_hp_lo
+    cmp #10
+    bne !t10_fail+
+    lda test_player_death_calls
     bne !t10_fail+
     lda #$01
     sta tc_results + 9
@@ -1318,27 +1390,30 @@ t21_test:
 
 !t39:
     // Test 39: benign silent timers in !tse_loop (protect, invis, infra,
-    // resist, regen, resist_cold, see_inv) and eff_detect_timer stay quiet
-    // when expiring (1->0).
+    // resist, resist_cold, see_inv) and eff_detect_timer expire silently,
+    // while retired zp_eff_regen ($5B) is untouched and never decremented.
     jsr reset_state
     lda #1
     sta zp_eff_protect
     sta zp_eff_invis
     sta zp_eff_infra
     sta zp_eff_resist
-    sta zp_eff_regen
     sta eff_resist_cold_timer
     sta zp_eff_see_inv
     sta eff_detect_timer
+    lda #5
+    sta zp_eff_regen
     jsr turn_tick_effects
     lda zp_eff_protect
     ora zp_eff_invis
     ora zp_eff_infra
     ora zp_eff_resist
-    ora zp_eff_regen
     ora eff_resist_cold_timer
     ora zp_eff_see_inv
     ora eff_detect_timer
+    bne !t39_fail+
+    lda zp_eff_regen
+    cmp #5
     bne !t39_fail+
     lda zp_disturb
     bne !t39_fail+

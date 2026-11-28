@@ -274,176 +274,147 @@ bg_str_hi:
 // ============================================================
 
 // --- Shared strings (used by multiple entries) ---
+// BPE dictionary ($80+ tokens expand recursively to bg_dict_l, bg_dict_r)
+bg_dict_l:
+    .byte $20, $2e, $81, $05, $80, $59, $85, $05, $14, $0f, $09, $89, $17, $04, $86, $8e
+    .byte $8c, $88, $91, $92, $86, $94, $03, $96, $8f, $93, $0e, $12, $0c, $0c, $88, $45
+    .byte $2d, $06, $98, $97, $87, $0f, $0c, $95, $95, $a8, $0c, $01, $a9, $a7, $a0, $54
+    .byte $af, $b0, $47, $2d, $14, $0e, $09, $97, $89, $07, $03, $01, $ba, $bc, $bd, $be
+    .byte $bf, $b7, $c1, $b4, $ab, $a5, $c5, $a5, $c7, $c8, $c9, $a2, $98, $50, $16, $16
+    .byte $0d, $09, $d1, $01, $01, $d3, $ce, $cc, $b6, $b2, $b2, $da, $a0, $9a, $8d, $8b
+    .byte $8b, $8a, $17, $15, $e3, $e4, $14, $0d, $0c, $09, $09, $06, $04, $02
+bg_dict_r:
+    .byte $01, $20, $20, $20, $20, $0f, $15, $12, $08, $06, $0c, $84, $01, $20, $80, $12
+    .byte $13, $87, $20, $90, $12, $20, $08, $8a, $83, $84, $20, $05, $20, $06, $83, $9d
+    .byte $9f, $01, $9e, $8d, $82, $0e, $05, $a1, $0d, $0f, $9c, $0e, $99, $99, $82, $12
+    .byte $0f, $aa, $9b, $b1, $20, $0f, $0e, $04, $20, $05, $0b, $12, $b5, $17, $a6, $04
+    .byte $b9, $9b, $9a, $09, $82, $83, $b8, $0c, $19, $20, $a3, $ca, $c6, $12, $87, $05
+    .byte $c4, $07, $08, $9c, $14, $c2, $d5, $13, $07, $19, $05, $0e, $20, $4f, $a3, $48
+    .byte $47, $0c, $0e, $0e, $01, $c0, $82, $83, $01, $14, $05, $82, $82, $15
+
+// Compressed background fragment strings (screen codes + $80+ BPE tokens, NUL terminated)
 bg_s_warrior:
-    .text "Warrior.  " ; .byte 0
+    .byte $57, $bb, $12, $09, $0f, $12, $82, $00 // "Warrior.  "
 bg_s_mage:
-    .text "Mage.  " ; .byte 0
+    .byte $4d, $01, $b9, $82, $00 // "Mage.  "
 bg_s_king:
-    .text "King.  " ; .byte 0
-
-// --- Chart 1: Parentage ---
+    .byte $4b, $d8, $82, $00 // "King.  "
 bg_s00:
-    .text "You are the illegitimate and unacknowledged child " ; .byte 0
+    .byte $a2, $8a, $a6, $07, $e9, $09, $0d, $d4, $05, $80, $0e, $8d, $e5, $de, $00 // "You are the illegitimate and unacknowledged child "
 bg_s01:
-    .text "You are the illegitimate but acknowledged child " ; .byte 0
+    .byte $a2, $8a, $a6, $07, $e9, $09, $0d, $d4, $83, $ed, $14, $80, $c0, $de, $00 // "You are the illegitimate but acknowledged child "
 bg_s02:
-    .text "You are one of several children " ; .byte 0
+    .byte $d7, $05, $d6, $00 // "You are one of several children "
 bg_s03:
-    .text "You are the first child " ; .byte 0
-
-// --- Chart 2: Social class ---
+    .byte $a2, $06, $09, $12, $13, $b4, $a3, $00 // "You are the first child "
 bg_s04:
-    .text "of a Serf.  " ; .byte 0
+    .byte $8b, $53, $87, $eb, $00 // "of a Serf.  "
 bg_s05:
-    .text "of a Yeoman.  " ; .byte 0
+    .byte $8b, $59, $05, $0f, $d0, $00 // "of a Yeoman.  "
 bg_s06:
-    .text "of a Townsman.  " ; .byte 0
+    .byte $8b, $54, $0f, $e2, $13, $d0, $00 // "of a Townsman.  "
 bg_s07:
-    .text "of a Guildsman.  " ; .byte 0
+    .byte $e0, $15, $8a, $04, $13, $d0, $00 // "of a Guildsman.  "
 bg_s08:
-    .text "of a Landed Knight.  " ; .byte 0
+    .byte $8b, $4c, $ab, $04, $05, $8d, $4b, $0e, $d2, $e6, $00 // "of a Landed Knight.  "
 bg_s09:
-    .text "of a Titled Noble.  " ; .byte 0
+    .byte $8b, $54, $e9, $a6, $8d, $4e, $0f, $02, $a6, $82, $00 // "of a Titled Noble.  "
 bg_s10:
-    .text "of a Royal Blood Line.  " ; .byte 0
-
-// --- Chart 3/18: Early life (shared between Human and Dwarf paths) ---
+    .byte $8b, $52, $0f, $19, $d3, $42, $0c, $0f, $0f, $8d, $4c, $b6, $05, $82, $00 // "of a Royal Blood Line.  "
 bg_s11:
-    .text "You are the black sheep of the family.  " ; .byte 0
+    .byte $a2, $02, $e8, $ba, $20, $13, $08, $05, $05, $10, $20, $b8, $9e, $a1, $0d, $8a, $19, $82, $00 // "You are the black sheep of the family.  "
 bg_s12:
-    .text "You are a credit to the family.  " ; .byte 0
+    .byte $8f, $05, $84, $03, $9b, $04, $09, $b4, $14, $0f, $20, $9e, $a1, $0d, $8a, $19, $82, $00 // "You are a credit to the family.  "
 bg_s13:
-    .text "You are a well liked child.  " ; .byte 0
-
-// --- Chart 4: Half-Elf parental race ---
+    .byte $8f, $05, $84, $17, $05, $aa, $0c, $09, $0b, $05, $8d, $b7, $82, $00 // "You are a well liked child.  "
 bg_s14:
-    .text "Your mother was a Green-Elf.  " ; .byte 0
+    .byte $ac, $db, $ae, $00 // "Your mother was a Green-Elf.  "
 bg_s15:
-    .text "Your father was a Green-Elf.  " ; .byte 0
+    .byte $ad, $db, $ae, $00 // "Your father was a Green-Elf.  "
 bg_s16:
-    .text "Your mother was a Grey-Elf.  " ; .byte 0
+    .byte $ac, $d9, $ae, $00 // "Your mother was a Grey-Elf.  "
 bg_s17:
-    .text "Your father was a Grey-Elf.  " ; .byte 0
+    .byte $ad, $d9, $ae, $00 // "Your father was a Grey-Elf.  "
 bg_s18:
-    .text "Your mother was a High-Elf.  " ; .byte 0
+    .byte $ac, $48, $d2, $ae, $00 // "Your mother was a High-Elf.  "
 bg_s19:
-    .text "Your father was a High-Elf.  " ; .byte 0
-
-// --- Chart 7: Elf siblings ---
-// bg_s02 reused for "You are one of several children "
+    .byte $ad, $48, $d2, $ae, $00 // "Your father was a High-Elf.  "
 bg_s20:
-    .text "You are the only child " ; .byte 0
-
-// --- Chart 8: Elf parental race ---
+    .byte $cb, $00 // "You are the only child "
 bg_s21:
-    .text "of a Green-Elf " ; .byte 0
+    .byte $8b, $db, $dc, $00 // "of a Green-Elf "
 bg_s22:
-    .text "of a Grey-Elf " ; .byte 0
+    .byte $8b, $d9, $dc, $00 // "of a Grey-Elf "
 bg_s23:
-    .text "of a High-Elf " ; .byte 0
-
-// --- Chart 9: Elf parent profession ---
+    .byte $df, $d2, $dc, $00 // "of a High-Elf "
 bg_s24:
-    .text "Ranger.  " ; .byte 0
+    .byte $52, $ab, $07, $a4, $00 // "Ranger.  "
 bg_s25:
-    .text "Archer.  " ; .byte 0
-// bg_s_warrior reused for "Warrior.  "
-// bg_s_mage reused for "Mage.  "
+    .byte $41, $12, $96, $a4, $00 // "Archer.  "
 bg_s26:
-    .text "Prince.  " ; .byte 0
-// bg_s_king reused for "King.  "
-
-// --- Chart 10: Halfling siblings ---
+    .byte $cd, $b6, $03, $05, $82, $00 // "Prince.  "
 bg_s27:
-    .text "You are one of several children of a Halfling " ; .byte 0
+    .byte $d7, $05, $d6, $df, $01, $9d, $0c, $d8, $20, $00 // "You are one of several children of a Halfling "
 bg_s28:
-    .text "You are the only child of a Halfling " ; .byte 0
-
-// --- Chart 11: Halfling parent profession ---
+    .byte $cb, $df, $01, $9d, $0c, $d8, $20, $00 // "You are the only child of a Halfling "
 bg_s29:
-    .text "Bum.  " ; .byte 0
+    .byte $42, $15, $0d, $82, $00 // "Bum.  "
 bg_s30:
-    .text "Tavern Owner.  " ; .byte 0
+    .byte $54, $01, $ce, $dd, $e2, $a4, $00 // "Tavern Owner.  "
 bg_s31:
-    .text "Miller.  " ; .byte 0
+    .byte $4d, $e1, $a4, $00 // "Miller.  "
 bg_s32:
-    .text "Home Owner.  " ; .byte 0
+    .byte $48, $0f, $e7, $4f, $e2, $a4, $00 // "Home Owner.  "
 bg_s33:
-    .text "Burglar.  " ; .byte 0
-// bg_s_warrior and bg_s_mage reused
+    .byte $42, $15, $12, $07, $0c, $bb, $82, $00 // "Burglar.  "
 bg_s34:
-    .text "Clan Elder.  " ; .byte 0
-
-// --- Chart 13: Gnome siblings ---
+    .byte $43, $e8, $9a, $45, $0c, $04, $a4, $00 // "Clan Elder.  "
 bg_s35:
-    .text "You are one of several children of a Gnome " ; .byte 0
+    .byte $d7, $05, $d6, $e0, $b5, $e7, $00 // "You are one of several children of a Gnome "
 bg_s36:
-    .text "You are the only child of a Gnome " ; .byte 0
-
-// --- Chart 14: Gnome parent profession ---
+    .byte $cb, $e0, $b5, $e7, $00 // "You are the only child of a Gnome "
 bg_s37:
-    .text "Beggar.  " ; .byte 0
+    .byte $42, $05, $07, $07, $bb, $82, $00 // "Beggar.  "
 bg_s38:
-    .text "Braggart.  " ; .byte 0
+    .byte $42, $12, $01, $07, $07, $bb, $e6, $00 // "Braggart.  "
 bg_s39:
-    .text "Prankster.  " ; .byte 0
-// bg_s_warrior and bg_s_mage reused
-
-// --- Chart 16: Dwarf siblings ---
+    .byte $cd, $ab, $0b, $13, $14, $a4, $00 // "Prankster.  "
 bg_s40:
-    .text "You are one of two children of a Dwarven " ; .byte 0
+    .byte $cc, $14, $17, $0f, $20, $c2, $8b, $44, $8c, $12, $cf, $9a, $00 // "You are one of two children of a Dwarven "
 bg_s41:
-    .text "You are the only child of a Dwarven " ; .byte 0
-
-// --- Chart 17: Dwarf parent profession ---
+    .byte $cb, $8b, $44, $8c, $12, $cf, $9a, $00 // "You are the only child of a Dwarven "
 bg_s42:
-    .text "Thief.  " ; .byte 0
+    .byte $54, $08, $ea, $eb, $00 // "Thief.  "
 bg_s43:
-    .text "Prison Guard.  " ; .byte 0
+    .byte $cd, $09, $13, $0f, $9a, $47, $15, $bb, $ec, $00 // "Prison Guard.  "
 bg_s44:
-    .text "Miner.  " ; .byte 0
-// bg_s_warrior reused
+    .byte $4d, $b6, $a4, $00 // "Miner.  "
 bg_s45:
-    .text "Priest.  " ; .byte 0
-// bg_s_king reused
-
-// --- Chart 18: Dwarf early life (reuses chart 3 strings bg_s11-bg_s13) ---
-
-// --- Chart 19: Half-Orc parental race ---
+    .byte $cd, $ea, $13, $e6, $00 // "Priest.  "
 bg_s46:
-    .text "Your mother was an Orc, but it is unacknowledged.  " ; .byte 0
+    .byte $a9, $93, $80, $dd, $12, $03, $2c, $20, $ed, $c3, $c3, $13, $20, $e5, $ec, $00 // "Your mother was an Orc, but it is unacknowledged.  "
 bg_s47:
-    .text "Your father was an Orc, but it is unacknowledged.  " ; .byte 0
-
-// --- Chart 20: Half-Orc adoption ---
+    .byte $a7, $93, $80, $dd, $12, $03, $2c, $20, $ed, $c3, $c3, $13, $20, $e5, $ec, $00 // "Your father was an Orc, but it is unacknowledged.  "
 bg_s48:
-    .text "You are the adopted child " ; .byte 0
-
-// --- Chart 22: Half-Troll parental race ---
+    .byte $98, $88, $05, $80, $04, $0f, $10, $14, $05, $de, $00 // "You are the adopted child "
 bg_s49:
-    .text "Your mother was a Cave-Troll " ; .byte 0
+    .byte $ac, $43, $01, $cf, $b3, $00 // "Your mother was a Cave-Troll "
 bg_s50:
-    .text "Your father was a Cave-Troll " ; .byte 0
+    .byte $ad, $43, $01, $cf, $b3, $00 // "Your father was a Cave-Troll "
 bg_s51:
-    .text "Your mother was a Hill-Troll " ; .byte 0
+    .byte $ac, $48, $e1, $b3, $00 // "Your mother was a Hill-Troll "
 bg_s52:
-    .text "Your father was a Hill-Troll " ; .byte 0
+    .byte $ad, $48, $e1, $b3, $00 // "Your father was a Hill-Troll "
 bg_s53:
-    .text "Your mother was a Water-Troll " ; .byte 0
+    .byte $ac, $57, $d4, $87, $b3, $00 // "Your mother was a Water-Troll "
 bg_s54:
-    .text "Your father was a Water-Troll " ; .byte 0
-
-// --- Chart 23: Troll parent profession ---
+    .byte $ad, $57, $d4, $87, $b3, $00 // "Your father was a Water-Troll "
 bg_s55:
-    .text "Cook.  " ; .byte 0
-// bg_s_warrior reused
+    .byte $43, $0f, $0f, $0b, $82, $00 // "Cook.  "
 bg_s56:
-    .text "Shaman.  " ; .byte 0
+    .byte $53, $08, $01, $d0, $00 // "Shaman.  "
 bg_s57:
-    .text "Clan Chief.  " ; .byte 0
+    .byte $43, $e8, $9a, $43, $08, $ea, $eb, $00 // "Clan Chief.  "
 
-// ============================================================
-// Scratch buffer for text accumulation (overlay-only, temporary)
-// ============================================================
 bg_text_buf:
     .fill 200, 0

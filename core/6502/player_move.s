@@ -9,25 +9,26 @@
 
 // ============================================================
 // Walkable tile table
-// Indexed by tile type (0-15). 1 = walkable, 0 = blocked.
+// Indexed by tile type (0-15).
+//   bit 0 = walkable ($01), bit 1 = LOS-transparent ($02)
 // ============================================================
 walkable_table:
-    .byte 1     // 0: Floor — walkable
-    .byte 0     // 1: Wall horizontal — blocked
-    .byte 0     // 2: Wall vertical — blocked
-    .byte 0     // 3: Corner TL — blocked
-    .byte 0     // 4: Corner TR — blocked
-    .byte 0     // 5: Corner BL — blocked
-    .byte 0     // 6: Corner BR — blocked
-    .byte 1     // 7: Door open — walkable
-    .byte 0     // 8: Door closed — blocked
-    .byte 1     // 9: Stairs down — walkable
-    .byte 1     // 10: Stairs up — walkable
-    .byte 1     // 11: Rubble — walkable
-    .byte 0     // 12: Magma — blocked
-    .byte 0     // 13: Quartz — blocked
-    .byte 1     // 14: Trap — walkable
-    .byte 0     // 15: Secret door — blocked
+    .byte $03   // 0: Floor — walkable + LOS-open
+    .byte $00   // 1: Wall horizontal — blocked
+    .byte $00   // 2: Wall vertical — blocked
+    .byte $00   // 3: Corner TL — blocked
+    .byte $00   // 4: Corner TR — blocked
+    .byte $00   // 5: Corner BL — blocked
+    .byte $00   // 6: Corner BR — blocked
+    .byte $03   // 7: Door open — walkable + LOS-open
+    .byte $00   // 8: Door closed — blocked
+    .byte $03   // 9: Stairs down — walkable + LOS-open
+    .byte $03   // 10: Stairs up — walkable + LOS-open
+    .byte $02   // 11: Rubble — blocked, LOS-open
+    .byte $00   // 12: Magma — blocked
+    .byte $00   // 13: Quartz — blocked
+    .byte $03   // 14: Trap — walkable + LOS-open
+    .byte $00   // 15: Secret door — blocked
 
 // ============================================================
 // Subroutines
@@ -63,6 +64,7 @@ player_try_move:
     jsr rng_range           // A = random [0,7]
     tax
 !not_confused:
+    stx zp_temp0            // Clear upper tile-type nibble (X = 0..7) before bounds jumps
 
     // Compute target position
     lda zp_player_x
@@ -78,9 +80,7 @@ player_try_move:
     // Bounds check: target_x must be in [1, MAP_COLS-2]
     // (can't walk into boundary walls)
     lda zp_temp3
-    bne !target_x_nonzero+
-    jmp !blocked+           // x = 0
-!target_x_nonzero:
+    beq !blocked+           // x = 0
     cmp #MAP_COLS - 1
     bcs !blocked+           // x >= 79
 
@@ -190,10 +190,17 @@ c128_town_move_diag_move_success:
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_move_blocked:
 #endif
-    // Suppress bump sound during running
+    // Suppress bump sound and rubble message during running
     lda zp_run_dir
     cmp #$ff
     bne !no_bump+
+    lda zp_temp0
+    and #TILE_TYPE_MASK
+    cmp #TILE_RUBBLE
+    bne !bump_sfx+
+    ldx #HSTR_RUBBLE_BLOCKS
+    jsr huff_print_msg
+!bump_sfx:
     lda #SFX_BUMP
     jsr hal_sound_play
 !no_bump:

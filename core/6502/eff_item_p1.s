@@ -1237,9 +1237,8 @@ ep1_wand_clone:
     lsr
     lsr
     lsr
-    tax
-    lda walkable_table,x
-    beq !ep1_wc_next+
+    jsr tile_is_walkable
+    bcc !ep1_wc_next+
     lda ep1_x
     sta ms_spawn_x
     lda ep1_y

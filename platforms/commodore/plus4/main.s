@@ -29,6 +29,7 @@
 // for Phase 5 full monster parity while leaving Plus4HighBss ($DF00) untouched.
 #define PLAYER_PFLAGS_EXTERNAL
 #define UI_CHAR_BG_EXTERNAL
+#define UI_CHAR_MODAL_EXTERNAL
 #define TRAP_TRIGGER_EXTERNAL
 #define CALC_DIG_EXTERNAL
 #define CALC_DIG_CO_LOCATED
@@ -777,53 +778,72 @@ plus4_storage_marker_write_resident:
 !cdmw_status_done:
     jmp !cdmp_status_done-
 
+plus4_open_empty_cmd_channel:
+    ldx save_device
+plus4_open_empty_cmd_channel_x:
+    txa
+    pha
+    // Start with no channel selected: after a write the drive refused, the
+    // JiffyDOS Plus/4 KERNAL never completed the CHKIN below (playtest-disk
+    // full_disk).
+    jsr plus4_kernal_clrchn
+    lda #0                      // no command: just read the channel
+    tax
+    tay
+    jsr plus4_kernal_setnam
+    pla
+    tax
+    jmp plus4_open_cmd_channel_x
+
+// Keep plus4_disk_read_command_status immediately above plus4_read_open_cmd_status
+// so playtest/moria_playtest/disk.py's [reader, +0x100) READST span includes it.
 plus4_disk_read_command_status:
     ldx save_device
 plus4_disk_read_command_status_x:
-    txa
+    jsr plus4_open_empty_cmd_channel_x
+    bcc !p4dcs_open_ok+
     pha
+    jsr p4_reset_cmd_status
+    pla
+    sta disk_error_readst
+    rts
+!p4dcs_open_ok:
+    jsr plus4_read_open_cmd_status
+    jmp plus4_close_cmd_channel
+
+p4_reset_cmd_status:
+    lda #2
+    sta disk_status
+    lda #$ff                    // no digits read
+    sta disk_error_dos0
+    sta disk_error_dos1
+    lda #0
+    sta p4dcs_lost
+    rts
+
+plus4_read_open_cmd_status:
     // A read that times out (ST bit 1) before any digit came is a lost
     // transfer, not an answer: under JiffyDOS a byte the drive sends while
     // its disk-controller IRQ runs can arrive cut short, as $58 (playtest-disk
     // save_overwrite). p4dcs_lost says so, for a caller that can ask again
     // with a fresh OPEN: reading this channel again goes on mid-message. A
     // digit is the drive's answer and stands.
-    // Start with no channel selected: after a write the drive refused, the
-    // JiffyDOS Plus/4 KERNAL never completed the CHKIN below (playtest-disk
-    // full_disk).
-    jsr plus4_kernal_clrchn
     // Failed until the drive answers, as on C64 and C128: a channel that
     // never opens, or a code not mapped below, must not read as OK.
-    lda #2
-    sta disk_status
-    lda #$ff                    // no digits read
-    sta disk_error_dos0
-    sta disk_error_dos1
-    lda #0                      // no command: just read the channel
-    sta p4dcs_lost
-    tax
-    tay
-    jsr plus4_kernal_setnam
-    pla
-    tax
-    jsr plus4_open_cmd_channel_x
-    bcc !p4dcs_open_ok+
-    sta disk_error_readst
-    rts
-!p4dcs_open_ok:
+    jsr p4_reset_cmd_status
     ldx #hal_storage_cmd_channel
     jsr plus4_kernal_chkin
     bcc !p4dcs_chkin_ok+
     sta disk_error_readst       // KERNAL error code (e.g. $05 = device not present)
     jsr plus4_kernal_readst
-    beq !p4dcs_close+           // keep KERNAL error if bus ST == 0
+    beq !p4dcs_done+            // keep KERNAL error if bus ST == 0
     sta disk_error_readst       // prefer bus ST (e.g. $80 = device not present)
-    bne !p4dcs_close+
+    bne !p4dcs_done+
 !p4dcs_chkin_ok:
     jsr plus4_kernal_readst
     sta disk_error_readst
     and #$fe
-    bne !p4dcs_close+
+    bne !p4dcs_done+
     jsr plus4_kernal_chrin
     sta disk_error_dos0
     jsr plus4_kernal_readst
@@ -837,24 +857,22 @@ plus4_disk_read_command_status_x:
     and #$fe
     bne !p4dcs_second_failed+
     jsr plus4_disk_status_to_disk_status
-!p4dcs_close:
-    jmp plus4_close_cmd_channel
+!p4dcs_done:
+    jmp plus4_kernal_clrchn
 !p4dcs_first_failed:
     and #$02                    // read timeout
-    beq !p4dcs_close-
+    beq !p4dcs_done-
     lda disk_error_dos0
     eor #$30
     cmp #10                     // a digit: the drive answered
-    bcc !p4dcs_close-
+    bcc !p4dcs_done-
     bcs !p4dcs_lost+            // C = 1 from cmp
 !p4dcs_second_failed:
     and #$02                    // read timeout on byte 1
-    beq !p4dcs_close-
+    beq !p4dcs_done-
 !p4dcs_lost:
     inc p4dcs_lost
-    bne !p4dcs_close-
-!p4dcs_done:
-    rts
+    bne !p4dcs_done-
 
 p4dcs_lost: .byte 0             // nonzero: the last status read lost its byte
 
@@ -2642,6 +2660,7 @@ wizard_bad_value_str:
     // spell overlay; resident tramp_eff_destroy_area restores OVL_SPELL.
     #import "../../../core/6502/player_destroy_area.s"
     #import "../../../core/6502/player_pflags_cold.s"
+    #import "../../../core/6502/player_magic_earthquake.s"
 ovl_modal_misc_end:
 .assert "Wizard prompt helpers run in OVL.MODAL", wizard_prompt_clear_digits >= $e000 && wizard_bad_value_str < ovl_modal_misc_end, true
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
@@ -2688,6 +2707,7 @@ ovl_spell_end:
     #import "../../../core/6502/ui_help_title.s"
     #import "../../../core/6502/ui_help_data.s"
     #import "../../../core/6502/ui_help_page2_data.s"
+    #import "../../../core/6502/ui_help_page3_data.s"
     #import "../../../core/6502/ui_help.s"
     #import "../../../core/6502/ui_equipment.s"
 plus4_help_cmd_body:
@@ -2921,12 +2941,11 @@ plus4_title_finish_menu_ovl:
     #import "../../../core/6502/disarm.s"
     #import "../../../core/6502/tunnel.s"
     #import "../../../core/6502/calc_dig_cold.s"
-    #import "../../../core/6502/player_magic_earthquake.s"
     #import "../../../core/6502/player_magic_map.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $e000) + " bytes at $E000-$" + toHexString(ovl_title_end)
 .assert "Title overlay fits in $E000-$EFFF", ovl_title_end <= $F000, true
-.assert "Plus/4 hot gameplay entries stay resident (< MAP_BASE / $F000-$FBFF) while cold bodies live in $E000 overlays", run_initialize < MAP_BASE && door_try_open < MAP_BASE && door_try_close < MAP_BASE && door_pick_roll < MAP_BASE && player_disarm_get_effective_chance < MAP_BASE && item_pickup < MAP_BASE && tramp_trap_trigger < MAP_BASE && trap_trigger >= $f000 && trap_trigger < banked_code_end && hal_player_recalc_pflags < MAP_BASE && player_recalc_pflags_equipment >= $e000 && player_recalc_pflags_equipment < ovl_modal_misc_end && tramp_load_resume_reset < MAP_BASE && load_resume_reset >= $e000 && load_resume_reset < ovl_storage_end && calc_dig_ability >= $e000 && calc_dig_ability < ovl_title_end && eff_earthquake >= $e000 && eff_earthquake < ovl_title_end && eff_map_area >= $e000 && eff_map_area < ovl_title_end && player_cast_spell < MAP_BASE && player_pray < MAP_BASE && pm_build_known_list_from_book < MAP_BASE && calc_spell_failure >= $e000 && calc_spell_failure < ovl_spell_end && ui_inv_select_display >= $e000 && ui_inv_select_display < ovl_ui_end && eff_wall_to_mud >= $e000 && eff_wall_to_mud < ovl_spell_end && eff_find_traps >= $e000 && eff_find_traps < ovl_spell_end && eff_destroy_traps_doors >= $e000 && eff_destroy_traps_doors < ovl_spell_end && eff_identify_prompt >= $e000 && eff_identify_prompt < ovl_spell_end && eff_detect_evil_only >= $e000 && eff_detect_evil_only < ovl_spell_end && item_spawn_level < MAP_BASE && item_spawn_level_gen >= $e000 && item_spawn_level_gen < ovl_chest_end && re_equip >= $e000 && re_equip < ovl_chest_end && roll_armour_ego >= $e000 && roll_armour_ego < ovl_chest_end && tramp_item_drop < MAP_BASE && item_drop >= $e000 && item_drop < ovl_help_end && tramp_help_cmd_body < MAP_BASE && plus4_help_cmd_body >= $e000 && plus4_help_cmd_body < ovl_help_end, true
+.assert "Plus/4 hot gameplay entries stay resident (< MAP_BASE / $F000-$FBFF) while cold bodies live in $E000 overlays", run_initialize < MAP_BASE && door_try_open < MAP_BASE && door_try_close < MAP_BASE && door_pick_roll < MAP_BASE && player_disarm_get_effective_chance < MAP_BASE && item_pickup < MAP_BASE && tramp_trap_trigger < MAP_BASE && trap_trigger >= $f000 && trap_trigger < banked_code_end && hal_player_recalc_pflags < MAP_BASE && player_recalc_pflags_equipment >= $e000 && player_recalc_pflags_equipment < ovl_modal_misc_end && tramp_load_resume_reset < MAP_BASE && load_resume_reset >= $e000 && load_resume_reset < ovl_storage_end && calc_dig_ability >= $e000 && calc_dig_ability < ovl_title_end && eff_earthquake >= $e000 && eff_earthquake < ovl_modal_misc_end && eff_map_area >= $e000 && eff_map_area < ovl_title_end && player_cast_spell < MAP_BASE && player_pray < MAP_BASE && pm_build_known_list_from_book < MAP_BASE && calc_spell_failure >= $e000 && calc_spell_failure < ovl_spell_end && ui_inv_select_display >= $e000 && ui_inv_select_display < ovl_ui_end && eff_wall_to_mud >= $e000 && eff_wall_to_mud < ovl_spell_end && eff_find_traps >= $e000 && eff_find_traps < ovl_spell_end && eff_destroy_traps_doors >= $e000 && eff_destroy_traps_doors < ovl_spell_end && eff_identify_prompt >= $e000 && eff_identify_prompt < ovl_spell_end && eff_detect_evil_only >= $e000 && eff_detect_evil_only < ovl_spell_end && item_spawn_level < MAP_BASE && item_spawn_level_gen >= $e000 && item_spawn_level_gen < ovl_chest_end && re_equip >= $e000 && re_equip < ovl_chest_end && roll_armour_ego >= $e000 && roll_armour_ego < ovl_chest_end && tramp_item_drop < MAP_BASE && item_drop >= $e000 && item_drop < ovl_help_end && tramp_help_cmd_body < MAP_BASE && plus4_help_cmd_body >= $e000 && plus4_help_cmd_body < ovl_help_end, true
 
 // Cold legal modal: workspace is reserved but not emitted to disk.
 .segment LegalOverlay

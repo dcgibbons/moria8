@@ -119,15 +119,20 @@ the second 128K-class target after the C128.
   running ProDOS 8 from a 140 KB `.po` disk image. Fixed machine identity:
   no IIc/IIgs variants, no RAM cards beyond the standard 64K aux bank.
 * Memory model (authority: `docs/APPLE2_MEMORY_POLICY.md`): the 198x66
-  dungeon map, the auxdata payload (Huffman data, item names, lookup
-  tables), and the hot overlay cache live in aux RAM; resident code and the
-  load-once play payload fill main RAM to `$9FFF`; 11 overlay classes share
-  one `$A400-$B9FF` window. Cold classes (start, death, help, storage,
-  title) stay on disk — the aux cache is a partial manifest, not a full
-  preload.
-* Boot is a ProDOS `.SYSTEM` file that streams a single-open container
-  (`MORIA8.PAK`: resident + auxdata + six hot overlays) with an on-screen
-  `n/8` progress line. The single sequential container replaces per-file
+  dungeon map, `A2.AUXDATA`, `A2.CATALOG`, and `A2.HUFFDATA` live in aux RAM,
+  while Aux Language Card hosts `recall[279]`, `A2.CATEXT`, and `'ITM2'`
+  `ITEM.CAT`; resident code (`$0A00-$7BFF`) and the on-demand `A2.PLAY` slot
+  fill main RAM to `$9FFF`; `13` overlay classes (+ cold `LEGALUI`) share one
+  `$A400-$B9FF` window; `4` hot overlays (`UI`, `ITEMS`, `SPELL`, `MODAL`)
+  cache in aux RAM while `9` cold overlays (`OVL.START`, `OVL.TOWN`, `OVL.DEATH`, `OVL.GEN`,
+  `OVL.HELP`, `OVL.CHEST`, `OVL.HOME`, `OVL.STORAGE`, `OVL.TITLE`), `A2.PLAY`, `LEGALUI`, and
+  `TITLE` artwork stream from `MORIA8.PAK` on demand.
+* Boot (`MORIA8.SYSTEM`) sequentially reads `6` LZ4-compressed boot-prefix
+  entries (`MORIA8.RES`, `OVL.UI`, `OVL.ITEMS`, `OVL.SPELL`, `OVL.MODAL`,
+  `A2.HUFFDATA`) from the single-open `22`-entry `MORIA8.PAK` container with an
+  on-screen `n/6` progress line, then `TitleOverlay:a2_boot_preload_aux_lc`
+  unpacks/preloads `A2.AUXDATA`, `A2.CATALOG`, `A2.CATEXT`, and `ITEM.CAT` into
+  aux RAM / aux LC. The single sequential container replaces per-file
   open/read/close cycles, which seek-thrashed the directory and could lose
   the head under ProDOS 2.4.3 — the pattern to copy on any future target
   with a fragile DOS driver.
@@ -138,8 +143,9 @@ the second 128K-class target after the C128.
 * The 80STORE main/aux text interleave drives renderer design: row staging
   in main RAM, then burst writes with two soft-switch toggles per row —
   never per-cell toggling.
-* Testing is headless MAME (apple2ee) with a Lua harness asserting RAM
-  contracts (never pixels) across 14 permanent scenarios. Two harness
+* Testing is headless MAME (`apple2ee`) with a Lua harness asserting RAM
+  contracts (never pixels) across `27` permanent scenarios
+  (`platforms/apple2/harness_smoke.py`). Two harness
   lessons are portable: entropy-from-input-timing makes dungeons
   timing-sensitive, so strict scenarios must pin the RNG; and
   heuristic screen sniffing (e.g. "in town") must tolerate legitimate
@@ -154,11 +160,13 @@ C128 and Apple IIe.
 * Source lives under `platforms/cx16/` and links the shared `core/6502/` and
   `platforms/shared/` modules through semantic HAL policy contracts (`hal/layout.s`,
   `hal/lifecycle_policy.s`, `hal/storage_policy.s`, `hal/memory_bank_consts.s`,
-  `hal/entropy_consts.s`, `screen_vera.s`, `input.s`) and a 12-overlay +
-  banked-data layout (`Cx16AuxData`, `Cx16HuffData`).
+  `hal/entropy_consts.s`, `screen_vera.s`, `input.s`) and a `13`-overlay (+ cold
+  `LEGALUI`) + banked-data layout (`Cx16AuxData`, `Cx16HuffData`, `MONSTER.CAT`,
+  `MONSTER.EXT`, `ITEM.CAT`).
 * The release target is a stock 512 KB Commander X16 (65C02, VERA video,
-  CX16 KERNAL R47/R48) running from a host/SD filesystem directory or
-  shipping `.zip` bundle (`build/moria8-cx16.zip`).
+  CX16 KERNAL R47/R48) running from a host/SD filesystem directory, shipping
+  `.zip` bundle (`build/moria8-cx16.zip`), or `128 KB` cartridge
+  (`build/moria8-cx16.crt`).
 * Memory model (authority: `docs/CX16_MEMORY_CONTRACT.md`):
   * Unbanked low RAM (`$0801-$9AFF`) holds the unified Resident + Play image;
     `$9B00-$9EFF` holds the active monster tier name pool (`1,024` B);
@@ -169,11 +177,16 @@ C128 and Apple IIe.
     * Bank 0: reserved for CX16 KERNAL (`KVARSB0`)
     * Banks 1–2: live 198×66 dungeon map (virtual `$2000-$530B`)
     * Bank 3: `Cx16AuxData` (`CX16.AUXDATA`, virtual `$6000-$7FFF`)
-    * Bank 4: `Cx16HuffData` (`CX16.HUFFDATA`, virtual `$8000-$9FFF`)
-    * Banks 5–8: preloaded monster tiers 1–4 (`MONSTER.DB.1..4`)
-    * Banks 9–20: preloaded 12 code overlays (`OVL.START`..`OVL.TITLE`),
+    * Bank 4: `Cx16HuffData` (`CX16.HUFFDATA`, virtual `$8000-$9FFF`, incl. Huffman catalog names)
+    * Bank 5: `MONSTER.EXT` (`2,232` B extended monster catalog)
+    * Bank 6: `ITEM.CAT` (`7,478` B `'ITM2'` item catalog)
+    * Banks 7–8: reserved extension banks
+    * Banks 9–21: `13` preloaded code overlays (`OVL.START`..`OVL.TITLE`),
       executing directly in-place at `$A000-$BFFF` via `$00` bank selection
-    * Bank 21: preloaded title screen artwork (`TITLE`).
+    * Bank 22: preloaded title screen artwork (`TITLE`, `626` B)
+    * Bank 23: `MONSTER.CAT` (`5,976` B)
+    * Bank 24: cold `LEGALUI` (`2,060` B)
+    * Banks 25–63: free / warm pool.
 * Unlike the Apple IIe, switching ZP `$00` on CX16 banks *only* `$A000-$BFFF`
   and never affects `$0000-$9EFF`, so resident map/aux/huffman accessors in
   fixed low RAM switch `$00`, perform the access in `$A000-$BFFF`, and restore
@@ -182,7 +195,7 @@ C128 and Apple IIe.
   interleaved screen code + attribute bytes) streamed via `VERA_DATA0`
   auto-increment (`VERA_INC_1`).
 * Testing is headless `x16emu -testbench` driven by `platforms/cx16/harness_smoke.py`
-  across 20 permanent runtime scenarios.
+  across `28` permanent runtime scenarios + `make testcx16-cartridge`.
 
 ## 8. Atari 8-Bit Release Track
 
@@ -195,9 +208,10 @@ The Atari 8-bit port lives under `platforms/atari8/` (design & execution plan:
 * The release target is a stock **64 KB Atari 800XL / 65XE** baseline (PIA
   `PORTB` `$D301` banking RAM under OS ROM at `$C000-$CFFF` and `$D800-$FFFF`)
   with automatic runtime detection of **128 KB Atari 130XE** extended RAM (`4 ×
-  16 KB` banks at `$4000-$7FFF`, preloading hot overlays, Tier 1, and title art
-  at boot and write-allocating cold overlays/tiers on first load across 15 of
-  the 16 available 4 KB slots).
+  16 KB` banks at `$4000-$7FFF`, `256/256` pages allocated across `18`
+  page-packed slots `0..17`, preloading `12` gameplay overlays and
+  `MONSTER.CAT` [`57 B/rec`] at boot, caching `TITLE.DAT` on first title
+  draw, and leaving cold `OVL.TTL` uncached `$FF`).
 * Memory model (authority: `docs/ATARI8_MEMORY_CONTRACT.md`):
   * `$D000-$D7FF` (`GTIA`, `POKEY`, `PIA`, `ANTIC`) is an immovable 2 KB hardware
     I/O hole, and `$0200-$031A` is preserved untouched for Atari OS vectors,
@@ -218,8 +232,10 @@ The Atari 8-bit port lives under `platforms/atari8/` (design & execution plan:
     RAM under OS ROM (`$D800-$FFFF`) holds `PLATFORM_TIER_NAME_POOL_BASE`
     (`$D800-$DBFF`), `FLOOR_ITEM_BASE` (`$DC00-$DCFF`),
     `PLATFORM_HD_DECODE_BUF_BASE` (`$DD00-$DD3F`), `zp_save_buf`
-    (`$DD40-$DDCD`), `msg_history` (`$DDCE-$DF0D`), the shared `$E000-$EFFF`
-    overlay/tier window, `RuntimeBanked` (`$F000-$FFF9`), and RAM CPU vectors
+    (`$DD40-$DDCD`), `HighResident` (`$DDCE-$DF3D`, `msg_history` +
+    `item_name_decode_buf`), `HighRAM Tail` (`$DF3E-$DFC3`), the shared
+    `$E000-$EFFF` overlay window (`13` overlays + cold `legalui`),
+    `RuntimeBanked` (`ATARI.BNK`, `$F000-$FFF9`), and RAM CPU vectors
     (`$FFFA-$FFFF`).
 * Display uses a custom 40×25 ANTIC Mode 2 Display List (`200` scanlines),
   zero-translation screen-code rendering via the C64-ordered 1 KB RAM font at
@@ -230,13 +246,16 @@ The Atari 8-bit port lives under `platforms/atari8/` (design & execution plan:
   overruns).
 * Shipping media is a self-contained **130 KB Enhanced Density (`1,040 × 128 B`
   sectors) Atari DOS 2.5 compatible `.atr`** (`build/moria8-atari8.atr`) built
-  by `tools/make_atr.py`, booted without resident `DOS.SYS` using ROM `SIOV`
+  by `tools/make_atr.py` — paired with `build/moria8-atari8.car` (`128 KB`
+  AtariMax cartridge) — booted without resident `DOS.SYS` using ROM `SIOV`
   (`$E459`) 10-bit sector-link reads (`$7D` byte count, `$7E` `(file_index << 2) | link_hi`,
-  `$7F` `link_lo`) and contiguous pre-allocated 56-sector (`7,000` B) save slots
-  (`SAVE0.SAV`..`SAVE3.SAV`), `MORIA8.ID`, `HISCORE.DAT`, `LICENSE.TXT`, and
-  `SRCOFFER.TXT` on `D1:`.
-* Testing uses headless MAME (`a800xl` 15-scenario behavioral suite + `a130xe`
-  3-scenario cache/SIO suite) driven by `platforms/atari8/harness_smoke.py`.
+  `$7F` `link_lo`) for PackBits-compressed `MORIA8.PKB`, `MONSTER.CAT`, and
+  `ITEM.CAT`, with contiguous pre-allocated `68`-sector (`8,500` B) save slots
+  (`SAVE0.SAV`..`SAVE3.SAV` for `SAVE_VERSION = $22` `7,858` B stream),
+  `MORIA8.ID`, `HISCORE.DAT`, `LICENSE.TXT`, and `SRCOFFER.TXT` on `D1:`.
+* Testing uses headless MAME (`a800xl` `17` scenarios + `a130xe` `5` scenarios
+  = `22` scenarios) driven by `platforms/atari8/harness_smoke.py`, plus a
+  `4`-scenario (`7`-MAME-run) `.car` suite (`make testatari8-cartridge`).
 
 ## 9. Acorn BBC Master 128 Release Track
 
@@ -265,25 +284,29 @@ execution plan: `docs/BBCMASTER_PORT_PLAN.md`; memory authority:
     hosts `beeb_font_table` (`$3000-$33FF`, 1 KB C64-ordered font),
     `DUNGEON_GEN_SCAN_SCRATCH_BASE` (`$3400-$37FF`), `beeb_char_shadow`
     (`$3800-$3F7F`, `80×24` C64 screen-code shadow buffer for dirty-cell skipping
-    and MAME Lua harness inspection), and the active `80×24` Mode 0 bitmap
+    and MAME Lua harness inspection), `BeebLynneAux` (`$3F80-$43DB`,
+    `recall[279]` `1,116` B), and the active `80×24` Mode 0 bitmap
     (`$4400-$7FFF`, `15,360` B, CRTC `R12=$08, R13=$80`).
   * 4 KB Private RAM `ANDY` (`$8000-$8FFF`, `ROMSEL` bit 7 = `1`) hosts
-    `BeebHuffData` linked directly at physical `$8000-$8D93` and decoded under
-    `HAL_HUFFMAN_LOCK_IRQ_DURING_DECODE = 1` (`ROMSEL = $84`) with zero per-byte
-    bank-switch thunks.
-  * 64 KB Sideways RAM (`$8000-$BFFF`, `ROMSEL = 4..7`) hosts:
+    `BeebHuffData` (`$8000-$8EEA`, `3,819` B) + `zp_save_buf` (`$8F00-$8FAD`,
+    `174` B), decoded under `HAL_HUFFMAN_LOCK_IRQ_DURING_DECODE = 1`
+    (`ROMSEL = $84`) with zero per-byte bank-switch thunks.
+  * 64 KB Sideways RAM (`$8000-$BFFF`, `ROMSEL = 4..7`, `256/256` pages allocated,
+    `0` free):
     * Bank 4 (`$04`): Active execution bank (`BeebPlaySlot` `$8000-$A3FF`,
-      `PLATFORM_TIER_NAME_POOL_BASE` `$A400-$A7FF`, and the active Overlay/Tier
-      window `$A800-$BFFF`).
-    * Bank 5 (`$05`): Live 198×66 Dungeon Map (`$8000-$B30B`) plus cached
-      `OVL.UI` (`$B400-$BDFF`, with `512` B free slack at `$BE00-$BFFF`).
-    * Bank 6 (`$06`): `BeebAuxData` (`$8000-$96FF`, `5,888` B budget = `718` B
-      slack, virtual `$6000-$76FF`) plus cached `OVL.TOWN`, `OVL.MODAL`, and
-      `MONSTER.DB1` (`512` B free slack at `$BE00-$BFFF`).
-    * Bank 7 (`$07`): Cached `OVL.SPELL`, `OVL.ITEMS`, and `OVL.GEN` (`512` B
-      free slack at `$BE00-$BFFF`), with cold modal overlays (`OVL.START`,
-      `OVL.DEATH`, `OVL.HELP`, `OVL.CHEST`, `OVL.STORAGE`, `OVL.TITLE`),
-      `MONSTER.DB.2..4`, and `TITLE` loaded on demand via MOS `OSFILE`.
+      `PLATFORM_TIER_NAME_POOL_BASE` `$A400-$A7FF`, and the `$A800-$BFFF` active
+      overlay window for all `13` gameplay overlays + cold `legalui`).
+    * Bank 5 (`$05`): Live `198×66` Dungeon Map (`$8000-$B30B`) plus cached
+      `OVL.MODAL` (`$B400-$BDFF`) and cached `OVL.TITLE` (`$BE00-$BFFF`).
+    * Bank 6 (`$06`): `BeebAuxData` (`$8000-$92FF`, virtual `$6000-$72FF`),
+      `ITEMCAT` cache (`$9300-$94FF`, `2` pages), `beeb.catalog` (`$9500-$B9FF`),
+      and cached `OVL.UI` (`$BA00-$BFFF`).
+    * Bank 7 (`$07`): Cached `OVL.SPELL` (`$8000-$94FF`), `OVL.ITEMS`
+      (`$9500-$ABFF`), `OVL.GEN` (`$AC00-$BBFF`), and `ITEMCAT` cache
+      (`$BC00-$BFFF`, `4` pages); cold overlays (`OVL.START`, `OVL.TOWN`,
+      `OVL.DEATH`, `OVL.HELP`, `OVL.CHEST`, `OVL.HOME`, `OVL.STORAGE`,
+      `legalui`), `MONEXT`, `ITEMCAT`, and `TITLE` stream from DFS via MOS
+      `OSFILE`/`OSGBPB`.
 * Shipping media is a self-contained **200 KB 80-track single-sided Acorn DFS
   `.ssd` Program Disk** (`build/moria8-bbcmaster.ssd`, `*OPT 4, 3`) built by
   `tools/make_ssd.py`, booted via `!BOOT` -> `MORIA8` (`boot.s`) streaming
@@ -291,10 +314,11 @@ execution plan: `docs/BBCMASTER_PORT_PLAN.md`; memory authority:
   the Program Disk; Disk Setup (`disk_setup_beeb.s`) supports 1-drive swap (`:0`)
   and 2-drive (`:0`..`:3`) modes, rejects the Program Disk (`TITLE` check), and
   initializes a separate Save Disk with `MORIAID` (`"M8SAVE"`), `HISCORE`, and 4
-  pre-allocated contiguous 64-sector (`16,384` B) save slots (`SAVE0`..`SAVE3`)
-  updated in place via `OSFIND A=$C0`.
-* Testing uses headless MAME (`bbcm`) driven by
-  `platforms/bbcmaster/harness_smoke.py` (gated by `BBCMROMS`).
+  pre-allocated contiguous `68`-sector (`17,408` B) save slots (`SAVE0`..`SAVE3`
+  for `SAVE_VERSION = $22` `17,164` B stream) updated in place via `OSFIND A=$C0`.
+* Testing uses `20` headless MAME (`bbcm`) scenarios driven by
+  `platforms/bbcmaster/harness_smoke.py` + `make testbbcmaster-memory-contract`
+  (gated by `BBCMROMS`).
 
 ## 10. CP/M 2.2 Z80 Track
 
@@ -302,15 +326,15 @@ The CP/M 2.2 Z80 port is the **8th active port** (`core/z80/` +
 `platforms/z80/cpm/`, memory contract in `docs/CPM_MEMORY_CONTRACT.md`):
 
 * **Architecture & Assembly:** Pure Z80 assembly built with `sjasmplus` v1.24.0
-  into a flat `MORIA8.COM` transient program (`0x0100-0x555E`, `21,598 B`) paired
+  into a flat `MORIA8.COM` transient program (`0x0100-0x55DE`, `21,727 B`) paired
   with a single random-access asset container **`MORIA8.DAT`** (`'M8CP'` v1,
-  `97,280 B`, `25` active slots covering all `19` overlays, the `279`-creature
+  `100,736 B`, `25` active slots covering all `19` overlays, the `279`-creature
   ASCII `MONSTER.CAT`, the `'ITM2'` `361`-item `ITEM.CAT`, Huffman string tables,
   title art, and embedded `LICENSE` / `SOURCE-OFFER`).
 * **TPA & Overlay Model:** Targets any Z80 CP/M 2.2 or CP/M Plus system with at
   least a **52 KB TPA (`BDOS >= 0xD100`)**. All `19` overlays share one fixed
   `5,120 B` (`40 × 128 B` record) window at `0x5600-0x69FF` streamed on demand
-  via `BDOS 33`, backed by resident BSS (`0x6A00-0x8ACC`), a `512 B` stack with
+  via `BDOS 33`, backed by resident BSS (`0x6A00-0x8ACB`, `8,396 B`), a `512 B` stack with
   `'M8SK'` canary (`0x8C00-0x8DFF`), `80×24` char/color shadows (`0x8E00-0x9CFF`),
   and a full VMS `198×66` map (`0x9D00-0xD00B`).
 * **Terminal, Input & Storage:** Renders `80×24` (`78×18` dungeon viewport)

@@ -218,7 +218,7 @@ zp_eff_bless:           DS 1
     EXPORT zp_eff_hero
 zp_eff_hero:            DS 1
     EXPORT zp_eff_regen
-zp_eff_regen:           DS 1
+zp_eff_regen:           DS 1    ; Reserved/retired (Save V2 slot; always 0)
     EXPORT eff_resist_cold_timer
 eff_resist_cold_timer:  DS 1
     EXPORT zp_eff_see_inv
@@ -670,7 +670,9 @@ player_stat_res:        DS STAT_COUNT
 player_eq_stat_mod:     DS STAT_COUNT
 
 ; Message & status bar working state
+    EXPORT msg_hist_idx
 msg_hist_idx:           DS 1
+    EXPORT msg_hist_count_used
 msg_hist_count_used:    DS 1
 msg_row1_col:           DS 1
     EXPORT status_cache_valid

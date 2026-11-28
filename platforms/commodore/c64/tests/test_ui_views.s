@@ -134,6 +134,16 @@ eff_heal_sync:
 #import "../../../../core/6502/ui_status.s"
 #import "../../../../core/6502/ui_help_clear.s"
 #import "../../../../core/6502/ui_character.s"
+combat_compute_level_threshold:
+    lda #0
+    sta ccl_adj_1
+    sta ccl_adj_2
+    lda #10
+    sta ccl_adj_0
+    rts
+ccl_adj_0: .byte 0
+ccl_adj_1: .byte 0
+ccl_adj_2: .byte 0
 #import "../../../../core/6502/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -162,6 +172,7 @@ eff_heal_sync:
 #import "../../../../core/6502/ui_home_text.s"
 #import "../../../../core/6502/ui_help_data.s"
 #import "../../../../core/6502/ui_help_page2_data.s"
+#import "../../../../core/6502/ui_help_page3_data.s"
 #import "../../../../core/6502/ui_help.s"
 #define C64_TEST_FULL_ITEMDESC_STUB
 #define C64_TEST_REAL_ITEMDESC
@@ -322,6 +333,14 @@ reset_shared_state:
     sta player_data + PL_RACE
     sta player_data + PL_CLASS
     sta player_data + PL_AC
+    sta player_data + PL_AGE
+    sta player_data + PL_HEIGHT
+    sta player_data + PL_WEIGHT
+    sta player_data + PL_TOHIT
+    sta player_data + PL_TODMG
+    sta player_data + PL_BLOWS
+    sta inven_weight_lo
+    sta inven_weight_hi
     lda #$ff
     sta piw_filter
 
@@ -418,6 +437,17 @@ test_character_view:
     sta player_data + PL_FLAGS
     lda #42
     sta player_data + PL_SOCIAL_CLASS
+    lda #15
+    sta player_data + PL_AGE
+    lda #68
+    sta player_data + PL_HEIGHT
+    lda #160
+    sta player_data + PL_WEIGHT
+    lda #3
+    sta player_data + PL_TOHIT
+    lda #2
+    sta player_data + PL_TODMG
+    sta player_data + PL_BLOWS
 
     lda #<test_player_name
     sta zp_ptr0
@@ -431,31 +461,23 @@ test_character_view:
 
     jsr ui_char_display
 
-    lda #<char_title_str
-    sta zp_ptr0
-    lda #>char_title_str
-    sta zp_ptr0_hi
-    lda #0
-    ldx #12
-    jsr assert_screen_string
+    lda #<char_p1_checks
+    sta zp_ptr1
+    lda #>char_p1_checks
+    sta zp_ptr1_hi
+    jsr assert_screen_table
     bcc !fail+
 
-    lda #<test_player_name
-    sta zp_ptr0
-    lda #>test_player_name
-    sta zp_ptr0_hi
-    lda #2
-    ldx #7
-    jsr assert_screen_string
-    bcc !fail+
+    // Switch to Page 2/2 and verify abilities & hint
+    lda #1
+    sta uchar_page
+    jsr ui_char_draw_current_page
 
-    lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    lda #18
-    ldx #10
-    jsr assert_screen_string
+    lda #<char_p2_checks
+    sta zp_ptr1
+    lda #>char_p2_checks
+    sta zp_ptr1_hi
+    jsr assert_screen_table
     bcc !fail+
 
     lda #$01
@@ -465,6 +487,59 @@ test_character_view:
 !store:
     sta tc_results + 0
     rts
+
+// Table-driven screen check: entries (row, col, <str, >str), terminated by $ff.
+assert_screen_table:
+    lda #0
+!ast_loop:
+    sta ast_idx
+    tay
+    lda (zp_ptr1),y
+    cmp #$ff
+    beq !ast_ok+
+    pha
+    iny
+    lda (zp_ptr1),y
+    tax
+    iny
+    lda (zp_ptr1),y
+    sta zp_ptr0
+    iny
+    lda (zp_ptr1),y
+    sta zp_ptr0_hi
+    pla
+    jsr assert_screen_string
+    bcc !ast_fail+
+    lda ast_idx
+    clc
+    adc #4
+    bne !ast_loop-
+!ast_ok:
+    sec
+!ast_fail:
+    rts
+ast_idx: .byte 0
+
+char_p1_checks:
+    .byte 0,  12, <char_title_str,           >char_title_str
+    .byte 2,  7,  <test_player_name,         >test_player_name
+    .byte 2,  25, <expected_char_sex_male,   >expected_char_sex_male
+    .byte 4,  13, <expected_char_title_init, >expected_char_title_init
+    .byte 12, 1,  <expected_char_age15,      >expected_char_age15
+    .byte 12, 18, <expected_char_wt160,      >expected_char_wt160
+    .byte 13, 9,  <expected_char_hit3,       >expected_char_hit3
+    .byte 14, 1,  <expected_char_hunger_full,>expected_char_hunger_full
+    .byte 18, 10, <press_key_str,            >press_key_str
+    .byte 19, 10, <char_p1_hint_str,         >char_p1_hint_str
+    .byte $ff
+
+char_p2_checks:
+    .byte 2,  1,  <char_abilities_hdr,       >char_abilities_hdr
+    .byte 3,  1,  <char_fight_lbl,           >char_fight_lbl
+    .byte 9,  1,  <char_infra_lbl,           >char_infra_lbl
+    .byte 18, 10, <press_key_str,            >press_key_str
+    .byte 19, 10, <char_p2_hint_str,         >char_p2_hint_str
+    .byte $ff
 
 test_help_view:
     jsr reset_shared_state
@@ -528,13 +603,19 @@ test_help_view:
     jsr assert_screen_string
     bcc !fail+
 
-    lda #<uh_press_key_str
+    lda #<uh_next_key_str
     sta zp_ptr0
-    lda #>uh_press_key_str
+    lda #>uh_next_key_str
     sta zp_ptr0_hi
     lda #24
-    ldx #5
+    ldx #3
     jsr assert_screen_string
+    bcc !fail+
+
+    jsr test_help_page2_sub
+    bcc !fail+
+
+    jsr test_msg_history_sub
     bcc !fail+
 
     lda #$01
@@ -543,6 +624,115 @@ test_help_view:
     lda #$00
 !store:
     sta tc_results + 1
+    rts
+
+test_help_page2_sub:
+    lda #2
+    sta help_page_idx
+    jsr ui_help_display
+
+    lda #<expected_help_legend
+    sta zp_ptr0
+    lda #>expected_help_legend
+    sta zp_ptr0_hi
+    lda #1
+    ldx #2
+    jsr assert_screen_string
+    bcc !hp2_fail+
+
+    lda #<expected_help_legend_r12_armor
+    sta zp_ptr0
+    lda #>expected_help_legend_r12_armor
+    sta zp_ptr0_hi
+    lda #12
+    ldx #2
+    jsr assert_screen_string
+    bcc !hp2_fail+
+
+    lda #<expected_help_legend_r12_helm
+    sta zp_ptr0
+    lda #>expected_help_legend_r12_helm
+    sta zp_ptr0_hi
+    lda #12
+    ldx #27
+    jsr assert_screen_string
+    bcc !hp2_fail+
+
+    lda #<expected_help_legend_r13_ammo
+    sta zp_ptr0
+    lda #>expected_help_legend_r13_ammo
+    sta zp_ptr0_hi
+    lda #13
+    ldx #2
+    jsr assert_screen_string
+    bcc !hp2_fail+
+
+    lda #<expected_help_legend_r13_bow
+    sta zp_ptr0
+    lda #>expected_help_legend_r13_bow
+    sta zp_ptr0_hi
+    lda #13
+    ldx #15
+    jsr assert_screen_string
+    bcc !hp2_fail+
+
+    lda #<uh_press_key_str
+    sta zp_ptr0
+    lda #>uh_press_key_str
+    sta zp_ptr0_hi
+    lda #24
+    ldx #5
+    jmp assert_screen_string
+!hp2_fail:
+    clc
+    rts
+
+test_msg_history_sub:
+    jsr msg_init
+    jsr ui_msg_history_draw
+    lda #<uh_msg_hist_title
+    sta zp_ptr0
+    lda #>uh_msg_hist_title
+    sta zp_ptr0_hi
+    lda #0
+    ldx #MSG_HIST_TITLE_COL
+    jsr assert_screen_string
+    bcc !mh_fail+
+    lda #<uh_msg_hist_none
+    sta zp_ptr0
+    lda #>uh_msg_hist_none
+    sta zp_ptr0_hi
+    lda #2
+    ldx #2
+    jsr assert_screen_string
+    bcc !mh_fail+
+
+    lda #<hist_msg_one
+    ldy #>hist_msg_one
+    jsr msg_print_ay
+    lda #0
+    sta zp_msg_flags
+    lda #<hist_msg_two
+    ldy #>hist_msg_two
+    jsr msg_print_ay
+    jsr ui_msg_history_draw
+    lda #<hist_msg_one
+    sta zp_ptr0
+    lda #>hist_msg_one
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !mh_fail+
+    lda #<hist_msg_two
+    sta zp_ptr0
+    lda #>hist_msg_two
+    sta zp_ptr0_hi
+    lda #3
+    ldx #1
+    jmp assert_screen_string
+!mh_fail:
+    clc
     rts
 
 test_inventory_view:
@@ -556,6 +746,8 @@ test_inventory_view:
     sta inv_ego + 0
     lda #IF_SENSED
     sta inv_flags + 0
+    lda #130
+    sta inven_weight_lo
 
     jsr ui_inv_display
 
@@ -565,6 +757,15 @@ test_inventory_view:
     sta zp_ptr0_hi
     lda #0
     ldx #15
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_burden_13_130
+    sta zp_ptr0
+    lda #>expected_burden_13_130
+    sta zp_ptr0_hi
+    lda #1
+    ldx #9
     jsr assert_screen_string
     bcc !fail+
 
@@ -740,6 +941,15 @@ test_equipment_view:
     sta zp_ptr0_hi
     lda #0
     ldx #15
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_burden_0_130
+    sta zp_ptr0
+    lda #>expected_burden_0_130
+    sta zp_ptr0_hi
+    lda #1
+    ldx #9
     jsr assert_screen_string
     bcc !fail+
 
@@ -1135,6 +1345,15 @@ test_home_view:
     lda #>sn_home
     sta zp_ptr0_hi
     lda #0
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_burden_0_130
+    sta zp_ptr0
+    lda #>expected_burden_0_130
+    sta zp_ptr0_hi
+    lda #1
     ldx #1
     jsr assert_screen_string
     bcc !fail+
@@ -1936,6 +2155,16 @@ expected_help_more_keys:
     .text "Keypad" ; .byte 0
 expected_help_notes:
     .text "Letters" ; .byte 0
+expected_help_legend:
+    .text "Map Terrain" ; .byte 0
+expected_help_legend_r12_armor:
+    .byte $5b, $20, 0
+expected_help_legend_r12_helm:
+    .byte $5d, $20, 0
+expected_help_legend_r13_ammo:
+    .byte $1b, $20, 0
+expected_help_legend_r13_bow:
+    .byte $1c, $20, 0
 expected_inventory_line:
     .byte $01
     .text ") Long Sword (Slay Evil) (magik)" ; .byte 0
@@ -2029,6 +2258,22 @@ expected_char_gold_65547:
     .text "Gold: 65547 " ; .byte 0
 expected_char_exp_70000:
     .text "EXP:70000" ; .byte 0
+expected_char_sex_male:
+    .text "Sex: Male" ; .byte 0
+expected_char_title_init:
+    .text "Title: Initiate" ; .byte 0
+expected_char_age15:
+    .text "Age:15" ; .byte 0
+expected_char_wt160:
+    .text "Wt:160lb" ; .byte 0
+expected_char_hit3:
+    .text "Hit:+3" ; .byte 0
+expected_char_hunger_full:
+    .text "Hunger: Full" ; .byte 0
+expected_burden_13_130:
+    .text "Burden: 13.0/130.0 lb" ; .byte 0
+expected_burden_0_130:
+    .text "Burden: 0.0/130.0 lb" ; .byte 0
 long_row_string:
     .text "1234567890123456789012345678901234567890" ; .byte 0
 

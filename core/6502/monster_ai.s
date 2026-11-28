@@ -4,7 +4,8 @@
 // Called once per turn from turn_post_action. Iterates all 32 monster
 // slots, performs wake checks, and moves awake monsters toward the
 // player (greedy movement) or randomly if confused. Speed 0 = slow
-// (every other turn), speed 1 = normal, speed 2 = fast (two moves).
+// (every other turn), speed 1 = normal, speed 2 = fast (two moves),
+// speed 3 = very fast (three moves).
 // CF_ATTACK_ONLY creatures can attack adjacent player but not move.
 //
 // Combat handled via monster_attack_player when adjacent (Phase 5.4).
@@ -30,7 +31,7 @@ mat_turn_mod: .byte 0, 0, 0, 0   // this turn mod 5, 4, 3, 2: a monster at caden
 // ============================================================
 // monster_ai_tick — Main AI loop
 // Iterates all 32 slots. Skips empty. Speed 0 = slow (every other turn).
-// Speed 2 monsters get processed twice.
+// Speed 2 monsters get processed twice, speed 3 three times.
 // Clobbers: everything
 // ============================================================
 monster_ai_tick:
@@ -164,22 +165,23 @@ monster_ai_tick:
     jmp !mat_apply_base+
 !mat_speed_up:
     lda zp_mon_speed
-    cmp #2
+    cmp #3
     bcs !mat_apply_base+
     inc zp_mon_speed
 !mat_apply_base:
     // Fold the player's speed steps into this monster's cadence (MON-026,
-    // Umoria playerChangeSpeed and monsterMovementRate), per tick, so no
-    // stored monster state is mutated: two moves at 2 or more (the cap),
-    // one at 1, and at s <= 0 one on turns divisible by 2 - s.
+    // extended by MON-045 to speed code 3; Umoria playerChangeSpeed and
+    // monsterMovementRate), per tick, so no stored monster state is mutated:
+    // three moves at 3 or more (the cap), two at 2, one at 1, and at s <= 0
+    // one on turns divisible by 2 - s.
     lda zp_mon_speed
     sec
-    sbc mat_fast                // -4..4
+    sbc mat_fast                // -4..5
     beq !mat_pc_slow+
     bmi !mat_pc_slow+
-    cmp #3
+    cmp #4
     bcc !mat_not_slow+
-    lda #2                      // the double-move cap
+    lda #3                      // the triple-move cap
     bne !mat_not_slow+          // always
 !mat_pc_slow:
     clc
@@ -193,32 +195,27 @@ monster_ai_tick:
     lda #1                      // one move this turn
 
 !mat_not_slow:
-    sta zp_mon_speed            // Save speed for double-move check
+    sta zp_mon_speed            // Remaining moves this turn (1..3)
 
-    // Process once
+!mat_move_loop:
     jsr monster_process_one
-    bcc !mat_no_move1+
-    rol mat_any_moved          // Carry is set; only zero/nonzero is observed.
-!mat_no_move1:
+    bcc !mat_no_move+
+    rol mat_any_moved           // Carry is set; only zero/nonzero is observed.
+!mat_no_move:
 
     // Check if player died
     lda zp_game_flags
     and #$01
     bne !mat_done+
 
-    // Speed 2 → process again
-    lda zp_mon_speed
-    cmp #2
-    bne !mat_next+
-    jsr monster_process_one
-    bcc !mat_no_move2+
-    rol mat_any_moved          // Preserve the nonzero moved invariant.
-!mat_no_move2:
-
-    // Check if player died on second move
-    lda zp_game_flags
-    and #$01
-    bne !mat_done+
+    dec zp_mon_speed
+    beq !mat_next+
+    ldx zp_mon_idx
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !mat_move_loop-
 
 !mat_next:
     inc zp_mon_idx

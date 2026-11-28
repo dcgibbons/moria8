@@ -1538,8 +1538,6 @@ tile_is_walkable_a:
     JR   Z, .yes
     CP   TILE_STAIRS_UP
     JR   Z, .yes
-    CP   TILE_RUBBLE
-    JR   Z, .yes
     CP   TILE_TRAP
     JR   Z, .yes
     OR   A

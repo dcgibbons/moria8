@@ -580,6 +580,7 @@ class C64VariantTest(unittest.TestCase):
             self.assertNotIn("-reusize", port.resource_args)
             self.assertEqual(port.platform, "c64")              # the C64's sources and policies
             self.assertIn(port.name, PORTS)
+        self.assertIn("+easyflashcrtwrite", C64_CART.resource_args)
         self.assertEqual(C64.platform, "c64")
         self.assertEqual((C64_NOREU.out, C64_NOREU.disk, C64_NOREU.cartridge), (C64.out, C64.disk, ""))
         self.assertEqual((C64_CART.out, C64_CART.disk, C64_CART.cartridge), ("c64-cart", C64.disk, "moria8-c64.crt"))
@@ -589,6 +590,9 @@ class C64VariantTest(unittest.TestCase):
         from unittest import mock
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            w0, w1 = root / "w0", root / "w1"
+            w0.mkdir()
+            w1.mkdir()
             disk, cart = root / "moria8-c64.d64", root / "moria8-c64.crt"
             disk.write_bytes(b"d"), cart.write_bytes(b"c")
             launched: list[list[str]] = []
@@ -600,14 +604,54 @@ class C64VariantTest(unittest.TestCase):
                     mock.patch.object(launch, "write_vice_config", return_value=root / "vicerc"), \
                     mock.patch.object(launch.subprocess, "Popen", side_effect=popen), \
                     mock.patch.object(launch, "ViceMonitor"):
-                launch.ViceProcess(0, root, disk, 6600, target=C64_CART, cartridge=cart).start(autostart=True)
-                launch.ViceProcess(1, root, disk, 6601, target=C64_NOREU).start(autostart=True)
+                launch.ViceProcess(0, w0, disk, 6600, target=C64_CART, cartridge=cart).start(autostart=True)
+                launch.ViceProcess(1, w1, disk, 6601, target=C64_NOREU).start(autostart=True)
             ef, noreu = launched
-            self.assertEqual(ef[-4:], ["-cartcrt", str(cart), "-8", str(disk)])
+            scratch_cart = w0 / "cartridge.crt"
+            self.assertIn("+easyflashcrtwrite", ef)
+            self.assertEqual(ef.count("+easyflashcrtwrite"), 1)
+            self.assertEqual(ef[-4:], ["-cartcrt", str(scratch_cart), "-8", str(disk)])
+            self.assertNotEqual(ef[ef.index("-cartcrt") + 1], str(cart))
+            self.assertEqual(scratch_cart.read_bytes(), b"c")
             self.assertNotIn("-autostart", ef)                       # the cartridge boots, the disk waits in drive 8
             self.assertNotIn("-reu", ef)
             self.assertEqual(noreu[-2:], ["-autostart", str(disk)])
             self.assertNotIn("-reu", noreu)
+
+    def test_c64_cart_guard_adds_easyflashcrtwrite_and_isolates_crt(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            w0, w1, w2 = root / "w0", root / "w1", root / "w2"
+            for d in (w0, w1, w2):
+                d.mkdir()
+            disk, cart = root / "moria8-c64.d64", root / "moria8-c64.crt"
+            disk.write_bytes(b"d"), cart.write_bytes(b"c")
+            self_cart = w2 / "cartridge.crt"
+            self_cart.write_bytes(b"c2")
+            launched: list[list[str]] = []
+
+            def popen(args, **kw):
+                launched.append(list(args))
+                return mock.Mock(poll=lambda: None)
+            with mock.patch.object(launch, "find_vice", return_value="vice"), \
+                    mock.patch.object(launch, "write_vice_config", return_value=root / "vicerc"), \
+                    mock.patch.object(launch.subprocess, "Popen", side_effect=popen), \
+                    mock.patch.object(launch, "ViceMonitor"):
+                # Even without C64_CART resource_args, a C64 cartridge launch gets +easyflashcrtwrite and a scratch copy.
+                launch.ViceProcess(0, w0, disk, 6600, target=C64, cartridge=cart).start(autostart=True)
+                # Non-C64 cartridges get a scratch copy without C64-only +easyflashcrtwrite.
+                launch.ViceProcess(1, w1, disk, 6601, emulator="x128", target=C128_CART, cartridge=cart).start(autostart=True)
+                # Reusing an existing scratch copy in workdir does not raise SameFileError.
+                launch.ViceProcess(2, w2, disk, 6602, target=C64_CART, cartridge=self_cart).start(autostart=True)
+            c64_args, c128_args, same_args = launched
+            self.assertIn("+easyflashcrtwrite", c64_args)
+            self.assertEqual(c64_args[-4:], ["-cartcrt", str(w0 / "cartridge.crt"), "-8", str(disk)])
+            self.assertNotIn("+easyflashcrtwrite", c128_args)
+            self.assertEqual(c128_args[-4:], ["-cartcrt", str(w1 / "cartridge.crt"), "-8", str(disk)])
+            self.assertIn("+easyflashcrtwrite", same_args)
+            self.assertEqual(same_args[-4:], ["-cartcrt", str(self_cart), "-8", str(disk)])
+            self.assertEqual(self_cart.read_bytes(), b"c2")
 
     def test_a_stale_cartridge_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

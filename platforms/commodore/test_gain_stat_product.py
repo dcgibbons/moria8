@@ -116,20 +116,24 @@ def run_port(args: argparse.Namespace, output: Path) -> None:
             resp = cmd("g")
             assert re.search(rf"(?:C:|PC:|PC=)\$?{addr:04x}", resp, re.I), resp
 
-        def read_ram(addr: int, count: int) -> bytes:
+        def read_ram(addr: int, count: int, switch_bank: bool = True) -> bytes:
             target = output / "memory.bin"
             target.unlink(missing_ok=True)
-            cmd("bank ram")
+            if switch_bank:
+                cmd("bank ram")
             cmd(f'bsave "{target}" 0 ${addr:04x} ${addr + count - 1:04x}')
-            cmd("bank cpu")
+            if switch_bank:
+                cmd("bank cpu")
             data = target.read_bytes()
             assert len(data) == count
             return data
 
-        def write_ram(addr: int, values: list[int]) -> None:
-            cmd("bank ram")
+        def write_ram(addr: int, values: list[int], switch_bank: bool = True) -> None:
+            if switch_bank:
+                cmd("bank ram")
             cmd(f"> {addr:04x} " + " ".join(f"{b & 0xFF:02x}" for b in values))
-            cmd("bank cpu")
+            if switch_bank:
+                cmd("bank cpu")
 
         def wait_key_entry() -> str:
             if port == "c128":
@@ -148,8 +152,13 @@ def run_port(args: argparse.Namespace, output: Path) -> None:
         def return_key(ch: str, regs: str) -> None:
             row = next(ln for ln in regs.splitlines() if ln.strip().startswith(".;"))
             sp = int(row.split()[4], 16)
-            lo = read_ram(0x100 + ((sp + 1) & 0xFF), 1)[0]
-            hi = read_ram(0x100 + ((sp + 2) & 0xFF), 1)[0]
+            if sp <= 0xFD:
+                lo, hi = read_ram(0x100 + sp + 1, 2)
+            else:
+                cmd("bank ram")
+                lo = read_ram(0x100 + ((sp + 1) & 0xFF), 1, switch_bank=False)[0]
+                hi = read_ram(0x100 + ((sp + 2) & 0xFF), 1, switch_bank=False)[0]
+                cmd("bank cpu")
             ret = (((hi << 8) | lo) + 1) & 0xFFFF
             cmd(f"r a={ord(ch):02x}")
             cmd(f"r sp={(sp + 2) & 0xFF:02x}")
@@ -181,26 +190,31 @@ def run_port(args: argparse.Namespace, output: Path) -> None:
             for arr in ("inv_qty", "inv_ego", "inv_p1"):
                 cmd(f"f {sym[arr]:04x} {sym[arr] + EQUIP_CLOAK:04x} 00")
             # Slot 0: Potion of Gain Strength
-            write_ram(sym["inv_item_id"], [ITEM_SLOT_POTION_OF_GAIN_STRENGTH])
-            write_ram(sym["inv_qty"], [1])
-            write_ram(sym["inv_ego"], [0])
-            write_ram(sym["inv_p1"], [0])
             assert PACK_SLOTS <= EQUIP_RING <= EQUIP_CLOAK and EQUIP_WEAPON == PACK_SLOTS
-            write_ram(sym["inv_item_id"] + EQUIP_RING, [slot_id])
-            write_ram(sym["inv_qty"] + EQUIP_RING, [1])
-            write_ram(sym["inv_ego"] + EQUIP_RING, [ego])
-            write_ram(sym["inv_p1"] + EQUIP_RING, [p1 & 0xFF])
-            write_ram(sym["player_data"] + PL_STR_BASE, [base_str])
-            write_ram(sym["player_data"] + PL_STR_CUR, [cur_str])
-            write_ram(sym["zp_player_str"], [cur_str])
-            write_ram(sym["player_stat_res"], [res_str & 0xFF])
+            cmd("bank ram")
+            write_ram(sym["inv_item_id"], [ITEM_SLOT_POTION_OF_GAIN_STRENGTH], switch_bank=False)
+            write_ram(sym["inv_qty"], [1], switch_bank=False)
+            write_ram(sym["inv_ego"], [0], switch_bank=False)
+            write_ram(sym["inv_p1"], [0], switch_bank=False)
+            write_ram(sym["inv_item_id"] + EQUIP_RING, [slot_id], switch_bank=False)
+            write_ram(sym["inv_qty"] + EQUIP_RING, [1], switch_bank=False)
+            write_ram(sym["inv_ego"] + EQUIP_RING, [ego], switch_bank=False)
+            write_ram(sym["inv_p1"] + EQUIP_RING, [p1 & 0xFF], switch_bank=False)
+            write_ram(sym["player_data"] + PL_STR_BASE, [base_str], switch_bank=False)
+            write_ram(sym["player_data"] + PL_STR_CUR, [cur_str], switch_bank=False)
+            write_ram(sym["zp_player_str"], [cur_str], switch_bank=False)
+            write_ram(sym["player_stat_res"], [res_str & 0xFF], switch_bank=False)
+            cmd("bank cpu")
 
         def read_str_state() -> tuple[int, int, int, int, int]:
-            b = read_ram(sym["player_data"] + PL_STR_BASE, 1)[0]
-            c = read_ram(sym["player_data"] + PL_STR_CUR, 1)[0]
-            z = read_ram(sym["zp_player_str"], 1)[0]
-            r = read_ram(sym["player_stat_res"], 1)[0]
-            s0 = read_ram(sym["inv_item_id"], 1)[0]
+            cmd("bank ram")
+            stats = read_ram(sym["player_data"] + PL_STR_BASE, PL_STR_CUR - PL_STR_BASE + 1, switch_bank=False)
+            b = stats[0]
+            c = stats[PL_STR_CUR - PL_STR_BASE]
+            z = read_ram(sym["zp_player_str"], 1, switch_bank=False)[0]
+            r = read_ram(sym["player_stat_res"], 1, switch_bank=False)[0]
+            s0 = read_ram(sym["inv_item_id"], 1, switch_bank=False)[0]
+            cmd("bank cpu")
             return b, c, z, r, s0
 
         try:

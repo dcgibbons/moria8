@@ -50,18 +50,18 @@ design record; current ownership is enforced by `platforms/apple2/memory.s`,
 | main `$02E0-$02F3` | `A2_LC_BOUNCE` (`16 B`) + `A2_LC_SAVED_X` / arg registers (`4 B`) for ZP-free `ALTZP=1` Aux LC bounce |
 | main `$0301-$033A` | Relocated uninitialized/boot-zeroed resident scratch (`58 B`, strictly `> $0300` and `< $033C` door scan; cleared by `a2_reset_session_state`) |
 | main `$033C-$037B` | `DUNGEON_GEN_DOOR_SCAN_BASE` / `PLATFORM_HD_DECODE_BUF_BASE` (`64 B`) |
-| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7BCA` (**29,131 / 29,184 B, 53 B free** after Phase 5 `279/279` VMS monster catalog + Wave 5.2 cold evictions, 2026-11-16; see Phase 5 section below) |
-| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9F6D` (**9,070 / 9,216 B, 146 B free** including signature; 2026-11-16) |
+| main `$0A00-$7BFF` | Always-resident image; current payload `$0A00-$7B9D` (`program_end = $7B9E`, **29,086 / 29,184 B, 98 B free**; see Phase 5 section below) |
+| main `$7C00-$9FFF` | Load-once `A2.PLAY`; current payload `$7C00-$9FC4` (`a2_play_end = $9FC5`, **9,157 / 9,216 B, 59 B free** including signature) |
 | main `$A000-$A3FF` | Name pool (1,024 B): the monster catalog's 32 species names |
-| main `$A400-$B9FF` | All 13 code overlays, mutually exclusive (`OVL.START` 4,283 B, `OVL.TOWN` 4,297 B, `OVL.DEATH` 5,592 B [**40 B free**, owns `ui_recall.s`], `OVL.MODAL` 2,453 B, `OVL.GEN` 5,554 B, `OVL.HELP` 4,332 B, `OVL.UI` 1,515 B, `OVL.ITEMS` 5,597 B, `OVL.SPELL` 5,044 B, `OVL.CHEST` 4,307 B, `OVL.HOME` 4,076 B, `OVL.STORAGE` 5,396 B, `OVL.TITLE` 2,882 B [owns `a2_boot_preload_aux_lc` + `store_restock_overlay.s` + `starting_kit_cold.s`]); window 5,632 B |
+| main `$A400-$B9FF` | All 13 code overlays, mutually exclusive (`OVL.START` [owns `player_chargen_cold.s`, `player_create.s`, `store_restock_overlay.s`, `starting_kit_cold.s`], `OVL.TOWN`, `OVL.DEATH` [owns `ui_recall.s`], `OVL.MODAL`, `OVL.GEN`, `OVL.HELP`, `OVL.UI`, `OVL.ITEMS`, `OVL.SPELL`, `OVL.CHEST`, `OVL.HOME`, `OVL.STORAGE`, `OVL.TITLE` [owns `a2_boot_preload_aux_lc`, `ui_character.s`, `player_bg_draw_cold.s`]); window 5,632 B |
 | main `$BA00-$BAFF` | Window tail reserved; tier data may use through `$BAFF` |
 | main `$BB00-$BEFF` | ProDOS MLI I/O/staging buffer |
 | main `$BF00-$BFFF` | ProDOS global page |
 | aux `$0200-$03FF` | Relocated persistent tables (`512 B`): `id_known_bits[47]` + `potion_shuffle..staff_shuffle` (`174 B`) + `si_meta_hi[128]` + `fi_meta_hi[42]` (`391 / 512 B` used, `121 B` free) |
 | aux `$0800-$3B0B` | Live 198x66 map |
-| aux `$3B0C-$4FFF` | Current immutable/mutable aux data payload (ends `$4F0B`, `5,120 / 5,364 B`, **244 B free**; stored PackBits-compressed in `MORIA8.PAK` as `A2.AUXDATA.PB` [`2,781 -> 5,120 B`] and unpacked at cold boot by `TitleOverlay:a2_boot_preload_aux_lc`): store inventory, class-spell tables, spell names, externalized message strings, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`) |
-| aux `$5000-$66FF` | Monster catalog fields (`A2.CATALOG`, 5,859 B, **29 B free**; stored PackBits-compressed in `MORIA8.PAK` as `A2.CATALOG.PB` [`4,682 -> 5,859 B`] and unpacked at cold boot by `TitleOverlay:a2_boot_preload_aux_lc`) |
-| aux `$6700-$BFFF` | Cache manifest v8: UI `$6700` (`1,515 / 1,536 B`, **21 B free**), SPELL `$6D00` (`5,044 / 5,120 B`, **76 B free**), MODAL `$8100` (`2,453 / 3,072 B`, **619 B free** — `ui_recall.s` relocated to `OVL.DEATH`), the Huffman corpus with the catalog's names + read-only screen-code char-map table `$8D00` (`$8D00-$A990`, `7,313 / 7,424 B`, **111 B free**), ITEMS `$AA00` (`5,597 / 5,632 B`, **35 B free**). Cold overlays (`OVL.START`, `OVL.TOWN`, `OVL.DEATH`, `OVL.GEN`, `OVL.HELP`, `OVL.CHEST`, `OVL.HOME`, `OVL.STORAGE`, `OVL.TITLE`) load on demand from `MORIA8.PAK` |
+| aux `$3B0C-$4FFF` | Current immutable/mutable aux data payload (`$3B0C-$4EF0`, `a2_auxdata_end = $4EF1`, `5,093 / 5,364 B`, **271 B free**; stored PackBits-compressed in `MORIA8.PAK` as `A2.AUXDATA.PB` and unpacked at cold boot by `TitleOverlay:a2_boot_preload_aux_lc`): store inventory, class-spell tables, spell names, externalized message strings, and the message-history ring buffer (`MSG_HISTORY_IN_AUX`; writes execute only via the ZP thunk `mmu_safe_map_write_ptr1`) |
+| aux `$5000-$66FF` | Monster catalog fields (`A2.CATALOG`, 5,859 B, **29 B free**; stored PackBits-compressed in `MORIA8.PAK` as `A2.CATALOG.PB` [`4,683 -> 5,859 B`] and unpacked at cold boot by `TitleOverlay:a2_boot_preload_aux_lc`) |
+| aux `$6700-$BFFF` | Cache manifest v8: UI `$6700` (8 pages `$6700-$6EFF`, `2,048 B` cap), SPELL `$6F00` (20 pages `$6F00-$82FF`, `5,120 B` cap), MODAL `$8300` (10 pages `$8300-$8CFF`, `2,560 B` cap — `ui_recall.s` relocated to `OVL.DEATH`), the Huffman corpus with the catalog's names + read-only screen-code char-map table `$8D00` (`$8D00-$A99E`, `7,327 / 7,424 B`, **97 B free**), ITEMS `$AA00` (`5,474 / 5,632 B`, **158 B free**). Cold overlays (`OVL.START`, `OVL.TOWN`, `OVL.DEATH`, `OVL.GEN`, `OVL.HELP`, `OVL.CHEST`, `OVL.HOME`, `OVL.STORAGE`, `OVL.TITLE`) load on demand from `MORIA8.PAK` |
 | aux LC `$D000-$FFF9` | Auxiliary Language Card (`16,378 B`, **10,826 B used / 5,552 B free**, accessed via `SEI` + ZP-free `ALTZP=1` bounce at `$02E0-$02F4` with port-owned Aux interrupt vectors at `$FFFA-$FFFF`): Aux LC Bank 1 `$D000-$D45B` holds `recall[279]` (`1,116 B`, `2,980 B` free in Bank 1), Aux LC Bank 2 `$D000-$D8B7` holds Phase 5 extended monster catalog `A2.CATEXT` (`2,232 B`, `1,864 B` free in Bank 2; unpacked from `A2.CATEXT.PB` [`1,228 -> 2,232 B`] by `TitleOverlay:a2_boot_preload_aux_lc` and read via `catalog_fetch_ext`), and Aux LC High RAM `$E000-$FD35` holds preloaded `'ITM2'` `ITEM.CAT` (`7,478 B` across `361` VMS items, `708 B` free in High RAM; Save Format V2 `SAVE_VERSION = $22`) |
 
 `A2.PLAY` is not a modal swap slot in the implementation: every overlay,
@@ -775,3 +775,16 @@ sequential boot entries of `MORIA8.PAK` (`MORIA8.RES`, `OVL.UI`, `OVL.ITEMS`,
   blocks (`9,728 B` / `19` blocks free) prior to the System Info expansion, and
   now sits at `264/280` blocks (`8,192 B` / `16` blocks free) with `legalui`
   (`$A400-$AD03`, `2,307 B`, `1,277 B` free below `+$E00`).
+
+---
+
+## Aux Overlay Cache Rebalance & `ui_character.s` in `TitleOverlay` (2026-11-27)
+
+To accommodate the 80-col expanded Character Sheet (`core/6502/ui_character.s`) and Burden / per-item weight UI (`core/6502/ui_inventory.s`, `ui_equipment.s`, `ui_weight_helpers.s`) within Aux RAM (`$6700-$BFFF`) without shrinking `A2PlaySlot` or `Default`:
+
+- **Aux Cache Resize (`platforms/apple2/cache_layout.s`, `main.s`, `check_memory_contract.py`, `tools/report_memory_budgets.py`):**
+  - `cache.ovl.ui`: `6 -> 8` pages (`$6700-$6EFF`, `2,048 B` cap)
+  - `cache.ovl.spell`: shifted `+2` pages to `$6F00-$82FF` (`20` pages, `5,120 B` cap)
+  - `cache.ovl.modal`: `12 -> 10` pages (`$8300-$8CFF`, `2,560 B` cap)
+- **Cold Relocation (`platforms/apple2/main.s`, `tools/trampoline_manifest.py`):** Moved `core/6502/ui_character.s` and `core/6502/player_bg_draw_cold.s` from `UiOverlay` (`OVL.UI`) to cold `TitleOverlay` (`OVL.TITLE`, which loads on demand from `MORIA8.PAK` on character creation summary and `'C'` character sheet).
+- **Verification:** `make -C platforms/apple2 build`, `python3 platforms/apple2/check_memory_contract.py --selftest`, `python3 platforms/apple2/check_memory_contract.py`, `python3 -B tools/report_memory_budgets.py` (`0` overflows; `ovl.death` `0 B` free `<= $BA00`), `make test-stage-apple2` (`27/27` MAME scenarios PASS), and `GATE_ALLOW_SKIP=1 make playtest-gate` (`apple2-tour` + 4 bot runs PASS) **Verified PASS**.

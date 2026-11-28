@@ -123,6 +123,7 @@ work16 behavior review; this ledger is their durable approval provenance.
 | MON-042 | Accepted | Project maintainer, 2026-11-20 (same direction) | Polymorph follows pinned VMS `spells.inc`: `poly_monster` (Wand of Polymorph `wands.inc:71`, Polymorph Other `magic.inc:72-73`) changes the first monster along the bolt when `randint(max_mons_level) > level` (`rng_range(40) >= cr_level`), else prints "The `<name>` is unaffected." (`combat_msg_monster_suffix`); `mass_poly` (Staff of Mass Polymorph, `staffs.inc:72`) changes every creature with `cdis < max_sight` except the win creatures (`cdefense` bit 31: Moria8 `cr_level > MONS_LEVEL_MAX`), seen or not, with no roll. The new creature is `randint(m_level[max_mons_level]) + m_level[0]`: any level `1..40` (`pick_any_creature_type`, `cat_level_adj = $ff`), placed awake on the same square, in town as well. One body (`core/monster_polymorph.s` `PolymorphResist`/`PolymorphReplace`) is emitted in the item and spell overlays. Adaptation: `cdis` is Chebyshev | pinned VMS `spells.inc:1113-1147, 1397-1421`; C64 `test_monster_magic3.s` t27-t28; CX16 `harness_smoke.py monster_catalog` `poly_any_level`; t27-t28 fail at 312cd3c | polymorph always succeeding (the Balrog silently refused), a depth-limited replacement placed asleep, Mass Polymorph on seen monsters only, none in town |
 | MON-043 | Accepted | Project maintainer, 2026-11-23 ("make this act like VMS moria") | Monsters never flee at low HP: after confusion and spell/random-move checks, `monster_process_one` calls `monster_move_toward` unconditionally (matching pinned VMS Moria `mon_move` and Umoria `monsterMove`/`monsterDoMove`, where Turn Undead retreating in `monsterMoveUndead` is separate and out of scope). Removed `monster_check_flee`, `monster_move_away`, `mat_fleeing` (and its melee suppression in `monster_try_step`), and the spawn-time `HP / 4` flee threshold in `monster_spawn_one`. Kept the 12-byte monster record (`MONSTER_ENTRY_SIZE = 12`) and Save Format V2 (`$22`) intact by leaving bytes 10–11 as zeroed, unused `MX_RESERVED_0`/`MX_RESERVED_1` | explicit maintainer direction 2026-11-23; pinned VMS `source/include/creature.inc:1061-1135` (`mon_move`); pinned Umoria `src/monster.cpp:1101-1119, 1167-1232` (`monsterDoMove`, `monsterMove`); C64 `test_monster_ai.s` t17–t18 (fail pre-fix) and `test_monster_ai2.s` t6 through production `monster_ai_tick`; Z80 parity in `core/z80/{defs.inc,state.inc,monster_core.asm,monster_ai.asm}` + CP/M `scenario_monster_ai_combat_and_drops`; 8-port `make -j8 -O test` and 70-target `make playtest-gate` | commit `74700dc` (2026-02-15, `R3.4` low-HP fleeing) and MON-024's flee-threshold note |
 | MON-044 | Accepted | Project maintainer, 2026-11-24 / Z80 parity 2026-11-26 | (1) Equipment stat bonuses/penalties (`p1` on rings, amulets, crowns, weapons, gloves, helms) step one point at a time via `player_step_equip_stat_y` (`core/6502/player.s`) / `player_step_equip_stat_c` (`core/z80/player_core.asm`) matching VMS `py_bonuses`/`change_stat` -> `in_statt`/`de_statt` (`moria.inc:33-45, 68-140`, `misc.inc:2194-2222`): `+1` below `18`, `+10` from `18` capped at `118` (`18/100`), and reversed on take-off (`-10` down to `28`, `19..27 -> 18`, `-1` below `19`, floor `3`). Signed residuals in `player_stat_res[0..5]` preserve floor-3 (`-128` sat)/cap-118 (`+127` sat) across drains, Gain Stat, Restore, Load, and reversible take-off; CON changes recompute max HP (`player_calc_hp`, TRN-013). (2) Runtime stat drains (`player_drain_stat_y` / `decrement_stat` in `core/6502/player.s` and `player_drain_stat_a` in `core/z80/player_core.asm`) implement VMS `de_statp` (`misc.inc:2177-2191`): `-1` below `19`, `-(randint(10)+5)` floored at `18` in `19..108`, and `-randint(3)` above `108` (including positive `player_stat_res` at `118` with remainder spilling into `116..117`), floored at `3`. Chargen baking (`create.inc`) and Save Format V2 (`$22`) stay unchanged across all 8 active ports. | explicit maintainer brief 2026-11-24 / Z80 parity 2026-11-26; pinned VMS `moria.inc:33-45, 68-140`, `misc.inc:2177-2222`, `umoria/src/player_stats.cpp:240-265`; C64 `test_player.s`, `test_item.s`, `test_item_effects_vms.s`, `test_ego.s`, `test_monster_attack2.s`; CP/M `platforms/z80/cpm/harness_smoke.py`; `make -j7 -O test`, `make testcpm`, `make playtest-gate` | raw `+1`/`-1` equipment `p1` addition and 4-band chargen `decrement_stat` on runtime drains |
+| MON-045 | Accepted | Project maintainer, 2026-11-27 (Backlog #5) | Extends `MON-026` to 2-bit speed code `3` (`CR_SPEED_MASK = $03`, `0..3` — Iron Golem remains `1/2` at speed `0`, no 3-bit speed codes) and aligns 6502 resident town `cr_speed` with VMS/Z80: (1) `tools/parse_creatures.py::map_speed` maps upstream speed `>= 13` (VMS `+2`, 19 catalog species incl. Poltergeist, Huge Brown Bat, Invisible Stalker, Balrog) to speed code `3`, propagated to `monster_catalog_spec.json`, `catalog_fields.s`, `docs/monsters.html`, and `tier1.s`/`tier4.s`. (2) Both `core/6502/monster_ai.s` and `core/z80/monster_ai.asm` raise the `MX_SPEED_CNT > 0` monster-haste cap from `2` to `3` and raise the final per-turn moves cap (`s = speed - mat_fast` in `-4..+5`) from `2` to `3` (`s >= 3 -> 3` moves, `s == 2 -> 2`, `s == 1 -> 1`, `s <= 0 -> mat_turn_mod` floored at `mod 5`). (3) `core/6502/monster.s` resident town `cr_speed` (`57..64` / `32..39`) matches `tier0_cr_speed` and Z80 `MONSTER.CAT` (`$09, $09, $09, $09, $01, $39, $09, $09`, preserving `CM_RANDOM_MOVE` bits 3–5). | explicit maintainer brief 2026-11-27 (Backlog #5); pinned VMS `values.inc` `c_list` speeds (`speed = 3` / `+2`); C64 `test_monster_ai.s` t71 (speed 3 normal/hasted player/hasted monster/triple-move cap + town `cr_speed` parity); `tools/test_monster_catalog_spec.py`; `make build`, `make buildcpm` | MON-026 double-move cap (`2` -> `3`); `core/6502/monster.s` uniform `1` town `cr_speed` |
 
 ## Conditional Verification Matrix
 
@@ -168,7 +169,7 @@ execute the changed production routine through its real dispatch/overlay path.
 | Plus/4 shared sleep/wake/aggravation producer | `platforms/commodore/plus4/tests/test_visibility_renderplus4.s` | `TEST_FILTER='visibility_renderplus4' make testplus4` |
 | Fresh-game invulnerability reset | `platforms/commodore/c128/tests/test_main_loop128.s` seeds `$FF` and calls production `game_new_start` | `TEST_FILTER='main_loop128' make test128`; C64, Plus/4, and Apple use the identical shared initializer, with runtime Apple combat confirmation still required |
 | One-byte sleep arithmetic maximum boundary | `platforms/commodore/c64/tests/test_monster.s` | `TEST_FILTER='monster' make test64`; exhaustive byte-domain gate remains `NOT IMPLEMENTED` |
-| Player-speed cadence fold (MON-026: haste, slow, each Ring of Speed, Boots of Speed/Slowness, stacked steps `-2..4`, every `2 - s` turns clamped to `mod 5` at `s = -4`, the double-move cap) | `platforms/commodore/c64/tests/test_monster_ai.s` t36-t40 (single steps), t69 (two rings: every 3rd turn across the turn's high byte), t70 (haste and two rings: every 4th), t71 (`+4` player speed via two rings + Boots of Speed + haste vs speed-0 monster: `s = -4` clamped to `mod 5`) exercise the production `monster_ai_tick` directly; t69-t70 fail on the MON-008 code | `TEST_FILTER='monster_ai' make test64`; C128/Plus4/Apple2 compile identical shared source and rely on product layout gates plus Apple2 runtime scenarios |
+| Player-speed cadence fold & speed code 3 (MON-026 extended by MON-045: speed code `3` = 3 moves/turn, monster-haste cap `3`, haste/slow/rings/boots stacked steps `-2..4`, `s` in `-4..+5` capped at `3` moves, `mod 5` floor at `s = -4`) and 6502 town `cr_speed` random-move parity | `platforms/commodore/c64/tests/test_monster_ai.s` t36-t40 (single steps), t69 (two rings: every 3rd turn across the turn's high byte), t70 (haste and two rings: every 4th), t71 (`+4` player speed `s = -4` clamped to `mod 5`, speed code 3 normal/hasted player/hasted speed-2/triple cap, town `cr_speed` `$09..$39` parity); `tools/test_monster_catalog_spec.py` | `TEST_FILTER='monster_ai' make test64` (full `make test64` PASS); C128/Plus4/Apple2/CX16/Atari8/BBC compile identical shared `core/6502/` source and pass all stage suites; Z80 `core/z80/monster_ai.asm` passes `make testcpm` (`27/27`) and `make playtest-gate` (`70/70`) |
 | One melee attack per monster action, no move after attacking (orthogonal and diagonal adjacency; VMS `make_move` ends the turn after `make_attack`) | `platforms/commodore/c64/tests/test_monster_ai.s` t57-t58 through production `monster_ai_tick` | `TEST_FILTER='monster_ai' make test64` |
 | Adjacent monster within light is `MF_VISIBLE` even diagonally across a wall corner; blindness still hides it; distance 2 behind a wall stays hidden (MON-010) | `platforms/commodore/c64/tests/test_monster.s` t20-t22 through production `monster_update_visibility_all`; `test_effects.s` Test 35 through production `update_visibility` | `TEST_FILTER='monster|effects' make test64` |
 | Monster spells and player saving throw (MON-011): wound dice, effect timers and stacking, resist path, heroism vs fear, spell bit dispatch incl. bits 6-7, save value/clamp, wis_adj thresholds, save extremes, paralysis con_adj | `platforms/commodore/c64/tests/test_monster_magic.s` t5, t7, t8, t15-t26 through production handlers and `monster_pick_spell`; `test_monster_ai.s` t15 | `TEST_FILTER='monster_magic|monster_ai' make test64` |
@@ -702,6 +703,87 @@ Known behavior explicitly out of scope:
 Unresolved uncertainty and risk:
   None in MON-044 semantics or TPA/overlay budgets.
 ```
+
+## Change Record — Speed Code 3 & 6502 Town `cr_speed` Parity (MON-045, 2026-11-27)
+
+```text
+Problem and success criteria:
+  (1) `tools/parse_creatures.py::map_speed` collapsed upstream speed >= 13 (VMS
+  `+2` = 3 moves/turn, e.g. Balrog, Invisible Stalker, Poltergeist, Huge Brown
+  Bat) to speed code 2, and `monster_ai` capped monster haste and per-turn
+  moves at 2. (2) Resident 6502 town `cr_speed` (`core/6502/monster.s:212`)
+  used uniform `1` instead of `tier0_cr_speed` / `MONSTER.CAT` random-move bits.
+  Success: enable speed code `3` (3 moves/turn, monster-haste cap `3`, per-turn
+  cap `3`) across 6502 and Z80 while keeping 2-bit `CR_SPEED_MASK = $03` (Iron
+  Golem stays `1/2`), and align 6502 resident town `cr_speed` with Z80/VMS.
+State being changed:
+  - `tools/parse_creatures.py`: `map_speed(umoria_speed >= 13) -> 3`, updated
+    `print_stats` and `SOA_FIELDS` comments.
+  - `platforms/shared/catalog/monster_catalog_spec.json`,
+    `platforms/shared/catalog/catalog_fields.s`, `docs/monsters.html`: updated
+    the 19 `speed == 3` species (`speed_byte` low bits `2 -> 3`) and synced web
+    catalog.
+  - `platforms/commodore/c64/creature_data/{tier1,tier4}.s`: updated the 4
+    matching `speed == 3` entries (Poltergeist `$3a->$3b`, Huge Brown Bat
+    `$22->$23`, Invisible Stalker `$22->$23`, Balrog `$82->$83`).
+  - `core/6502/monster_ai.s`: raised `MX_SPEED_CNT > 0` cap `2 -> 3`, raised
+    `s = zp_mon_speed - mat_fast` (`-4..+5`) cap `2 -> 3` (`cmp #4` / `lda #3`),
+    replaced unrolled 2-move check with `dec zp_mon_speed` loop + `EMPTY_SLOT`
+    guard on moves 2..3.
+  - `core/z80/monster_ai.asm`: raised `MX_SPEED_CNT > 0` cap `2 -> 3`, raised
+    `s` cap `2 -> 3` (`CP 4` / `LD A, 3`), replaced unrolled 2-move check with
+    `_mai_moves` loop.
+  - `core/6502/monster.s:212`: replaced town `cr_speed` row with
+    `$09, $09, $09, $09, $01, $39, $09, $09`.
+Search scope and terms:
+  `rg -n "map_speed|cr_speed|CR_SPEED_MASK|monster_catalog_spec|zp_mon_speed|_mai_moves"`
+  across `tools/`, `core/`, `platforms/`.
+Relevant readers/writers found and known exclusions:
+  `cr_speed` low 2 bits read via `CR_SPEED_MASK` in `core/6502/monster_ai.s`
+  and `core/z80/monster_ai.asm`; random-move bits (`$38`) read via
+  `CM_RANDOM_MOVE`; bit 7 (`CR_MAX_HP`) read in `monster_spawn_one`. Embedded
+  test roster in `core/6502/monster.s:205-208` kept unchanged so existing
+  `test_monster_ai.s` tests using slot #14 (`speed = 2`) stay invariant.
+Initialization, reset and persistence points:
+  Catalog species load from `catalog_fields.s` / `MONSTER.CAT` on level spawn
+  and game load (`catalog_refetch_slots`); 6502 town rows are resident literal
+  bytes; Save Format V2 (`$22`) is unchanged.
+Affected production sequence through the changed transition:
+  `monster_ai_tick` -> `cr_speed & CR_SPEED_MASK` (`0..3`) -> `MX_SPEED_CNT`
+  adjust (slow `max(0, spd-1)`, haste `min(3, spd+1)`) -> `s = spd - mat_fast`
+  (`-4..+5`) -> `s >= 3 => 3` moves, `2 => 2`, `1 => 1`, `<= 0 => mat_turn_mod`
+  (floored at `mod 5`) -> `1..3` calls to `monster_process_one` (with player
+  death and `EMPTY_SLOT` guards).
+Contract decision or selected upstream oracle with source locations:
+  MON-045 (Accepted, 2026-11-27, extending MON-026); pinned VMS `values.inc`
+  `c_list` speeds (`speed = 3` / `+2`); Umoria `monsterMovementRate`.
+Intentional Moria8 deviations:
+  2-bit `CR_SPEED_MASK` (`0..3`) retained (Iron Golem stays `1/2` at code 0;
+  VMS `-1` slow cadence stays `0`).
+Input/intermediate widths, signedness, carry, range and overflow policy:
+  `zp_mon_speed` in `0..3`; `mat_fast` in `-2..+4`; signed 8-bit `s = spd -
+  mat_fast` in `-4..+5` (`$FC..$05`, no signed overflow); `s <= 0` maps `s + 3`
+  clamped at `0` (`mod 5`).
+RNG reduction and bias, if applicable:
+  N/A (no RNG changes).
+Affected platforms, overlays, banks and owners:
+  All 7 6502 ports (C64, C128, Plus/4, Apple IIe, CX16, Atari 8-bit, BBC Master
+  128), all 5 cartridges, and CP/M 2.2 Z80 (`core/z80/monster_ai.asm` +
+  `MORIA8.DAT` via `monster_catalog_spec.json`).
+Required production-path tests:
+  `platforms/commodore/c64/tests/test_monster_ai.s` t71 (speed 3 normal/hasted
+  player/hasted speed-2/triple-move cap + town `cr_speed` parity),
+  `python3 tools/test_monster_catalog_spec.py`, `python3 tools/parse_creatures.py --check-web`,
+  `make build`, `make buildcpm`, `python3 tools/report_memory_budgets.py`.
+Known behavior explicitly out of scope:
+  3-bit speed codes (`Iron Golem` `-1` cadence).
+Unresolved uncertainty and risk:
+  All 8 runtime emulator suites (`c64`, `c128`, `plus4`, `apple2`, `cx16`, `atari8`, `bbcmaster`, `cpm`) + 5 cartridges + `make playtest-gate` (`70/70`) **Verified PASS**.
+```
+
+## Rubble Walkability & AI Parity (Backlog #17, 2026-11-27)
+
+- `walkable_table[11]` (`TILE_RUBBLE`, `core/6502/player_move.s`) is `$02` (`tile_is_walkable` returns `C=0` blocked) and `core/z80/monster_core.asm::tile_is_walkable_a` omits `TILE_RUBBLE`: non-wall-passing monsters (`CM2_PHASE == 0`) are blocked by rubble (`monster_try_step`), `eff_item_p1.s` breeder clones do not spawn on rubble, while `CM2_PHASE` creatures continue traversing rubble (`MON-035`) and `los_trace.s` / `core/z80/los.asm` keep rubble LOS-transparent. Covered by C64 `test_monster_ai.s` t72, `test_monster_ai2.s` t4 (`CM2_PHASE`), `test_dungeon.s` t70–t72, and CP/M `harness_smoke.py`.
 
 
 

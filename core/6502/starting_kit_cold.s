@@ -1,6 +1,6 @@
 #importonce
 #import "../../platforms/shared/item_catalog/item_ids.s"
-.assert "Starting provisions and books live on Page 0", ITEM_PAGE_WOODEN_TORCH == 0 && ITEM_PAGE_RATION_OF_FOOD == 0 && ITEM_PAGE_LEATHER_ARMOR == 0 && ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK == 0 && ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK == 0, true
+.assert "Starting provisions and books live on Page 0", ITEM_PAGE_WOODEN_TORCH == 0 && ITEM_PAGE_RATION_OF_FOOD == 0 && ITEM_PAGE_LEATHER_ARMOR == 0 && ITEM_PAGE_CLOAK == 0 && ITEM_PAGE_SPELLBOOK_BEGINNERS_MAGICK == 0 && ITEM_PAGE_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK == 0, true
 // starting_kit_cold.s — New-game base provisions and starting equipment (S5)
 //
 // Module ownership:
@@ -58,7 +58,21 @@ init_starting_kit:
     sta inv_p1 + EQUIP_WEAPON
     sta inv_flags + EQUIP_WEAPON
 
-    // Leather armor in EQUIP_BODY
+    // Cloak [1] in EQUIP_CLOAK for every class except Rogue (VMS player_init)
+    lda player_data + PL_CLASS
+    cmp #CLASS_ROGUE
+    beq !give_armor+        // Rogue skips Cloak and gets Soft Leather Armor
+    ldx #ITEM_SLOT_CLOAK
+    stx inv_item_id + EQUIP_CLOAK
+    ldx #1
+    stx inv_qty + EQUIP_CLOAK
+    ldx #0
+    stx inv_p1 + EQUIP_CLOAK
+    stx inv_flags + EQUIP_CLOAK
+    cmp #CLASS_WARRIOR
+    bne !done_armour+
+!give_armor:
+    // Soft Leather Armor [4] in EQUIP_BODY for Warrior and Rogue only (VMS)
     lda #ITEM_SLOT_LEATHER_ARMOR
     sta inv_item_id + EQUIP_BODY
     lda #1
@@ -66,6 +80,7 @@ init_starting_kit:
     lda #0
     sta inv_p1 + EQUIP_BODY
     sta inv_flags + EQUIP_BODY
+!done_armour:
 
     // Starting spellbook for casters (carried slot 1)
     lda player_data + PL_SPELL_TYPE

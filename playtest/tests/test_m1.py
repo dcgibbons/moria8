@@ -410,7 +410,11 @@ class BrainM2Test(unittest.TestCase):
         self.assertEqual(brain.collect(seen, view).layer, "collect")
         brain.drained = {"CO"}
         brain.credit("Mushroom of Restore Constitution", 1)
-        decision = brain.quaff(seen, view)
+        # In Moria8, item_eat consumes the first ICAT_FOOD slot without prompting, so
+        # keep restorer mushrooms un-eaten deep while carrying food; eat in town or hungry.
+        self.assertIsNone(brain.quaff(seen, view))
+        town_seen = command_obs(pos=(5, 5), dlvl=0, clvl=18, hp=46, mhp=46)
+        decision = brain.quaff(town_seen, view)
         self.assertEqual((decision.key, decision.reason, brain.picking),
                          (KEY_EAT, "CO drained: eat Mushroom of Restore Constitution",
                           "Mushroom of Restore Constitution"))
@@ -422,7 +426,7 @@ class BrainM2Test(unittest.TestCase):
         brain.count_food("You eat the Mushroom of Restore Constitution.")   # with or without a prompt
         self.assertEqual((brain.food, brain.drained, brain.restores.get("Mushroom of Restore Constitution")),
                          (food, set(), 0))                           # no ration eaten; restored
-        self.assertNotEqual(brain.quaff(seen, view).reason if brain.quaff(seen, view) else "",
+        self.assertNotEqual(brain.quaff(town_seen, view).reason if brain.quaff(town_seen, view) else "",
                             "CO drained: eat Mushroom of Restore Constitution")   # not eaten again
 
     def test_store_buys_food_then_leaves(self) -> None:
@@ -1914,6 +1918,32 @@ class UnstuckTest(unittest.TestCase):
         self.assertIsNotNone(brain.leave_deadly(o, view))
         self.assertTrue(brain.level.deadly_drain)
 
+    def test_drainer_uses_stairs_not_recall_when_recall_cannot_return_and_restores_held(self) -> None:
+        """Warriors trapped at max_dlvl=42 recalled home over drainers even with
+        Restore Life Levels stocked and recall_returns False, costing a 35-level climb."""
+        from moria_playtest.brain import RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        brain.clvl, brain.max_dlvl, brain.recall = 39, 42, 10
+        brain.restores[RESTORE_LIFE] = 5
+        brain.jewel_names["Amulet"] = "Amulet of the Magi"
+        brain.phase, brain.teleports = 5, 5
+        brain.level.drains = 2
+        o = command_obs(pos=(5, 5), dlvl=35, clvl=39, hp=510, mhp=513)
+        self.assertFalse(brain.recall_returns(o))
+        view = town_view((5, 5), (40, 40), dlvl=35, stairs_type=0xA)
+        jump = brain.leave_deadly(o, view)
+        self.assertIsNotNone(jump)
+        self.assertEqual(jump.layer, "phase")
+        dec = brain.leave_deadly(o, view)
+        self.assertIsNotNone(dec)
+        self.assertEqual(dec.layer, "leave")
+        self.assertTrue(brain.level.scum)
+        no_stairs = town_view((5, 5), (5, 5), dlvl=35, stairs_type=0)
+        brain.level.scum = False
+        self.assertIsNone(brain.leave_deadly(o, no_stairs))
+        self.assertTrue(brain.level.scum)
+
     def test_out_of_restore_life_levels_and_rich_it_goes_home_for_more(self) -> None:
         """C64 Balrog, 2026-11-25: out of Restore Life Levels, a clvl 39 Human
         Mage with 16M gold hunted DL23 under the drain limit until something
@@ -2820,6 +2850,7 @@ class BalrogConRingTest(unittest.TestCase):
         through both resistances; with none, through the ring alone."""
         from moria_playtest.magic import RESIST_HEAT_COLD, Prayer
         brain = self.priest()
+        brain.jewel_names["Ring"] = "Ring of Speed"
         brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
         brain.magic.can = lambda obs, name: name == RESIST_HEAT_COLD   # type: ignore[method-assign]
         brain.magic.known[RESIST_HEAT_COLD] = Prayer("d", 6, 20, "Words of Wisdom")
@@ -3269,6 +3300,39 @@ class ThreatDepthTest(unittest.TestCase):
         brain.wants_recall = lambda obs: True                              # type: ignore[method-assign]
         self.assertIsNone(brain.press_on(o, view))
 
+    def test_walking_down_skips_search_mode_rich_gold_hunt_and_wall_search(self) -> None:
+        """Rich L38-39 Warriors trapped at max_dlvl=42 walk down DL1..39:
+        transit skips Search Mode, rich-gold look/collect, shallow hunt, and
+        DL1..19 dead-end wall searching (while forced sealed search stays)."""
+        from moria_playtest.brain import KEY_SEARCH
+        from moria_playtest.goals import for_character
+        brain = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        brain.max_dlvl, brain.food, brain.recall = 42, 20, 10
+        brain.deeper_ok = lambda obs: True                                 # type: ignore[method-assign]
+        o = command_obs(
+            pos=(5, 5), dlvl=12, clvl=39, hp=513, mhp=513,
+            rows={21: "bot Half-Orc           LV:39 DL:12",
+                  23: "HP:513/513  MP:0/0   AC:54  AU:16776K"},
+        )
+        o.step = 1000
+        self.assertTrue(brain.walking_down(o))
+        view = town_view((5, 5), (20, 5), dlvl=12)
+        view.unknown = {(6, 5): "$", (5, 6): "!"}
+        self.assertIsNone(brain.search_mode(o, view))
+        look_dec = brain.look(o, view)
+        self.assertIsNotNone(look_dec)
+        self.assertEqual(brain.pending_look, ((5, 6), "!"))
+        brain.items_seen = {(6, 5): ("$", "Gold (small)")}
+        self.assertIsNone(brain.collect(o, view))
+        view.creatures = {(9, 5): Creature("k", 1)}
+        brain.standing = False
+        self.assertIsNone(brain.hunt(o, view))
+        dead_end = UnstuckTest.corridor(UnstuckTest(), 12, (40, 40), unknown_behind=True)
+        self.assertIsNone(brain.search(o, dead_end))
+        sealed = brain.search(o, dead_end, forced=True)
+        self.assertIsNotNone(sealed)
+        self.assertEqual((sealed.layer, sealed.key), ("search", KEY_SEARCH))
+
     def test_with_free_action_the_out_of_depth_margin_stays(self) -> None:
         """C64 Balrog, 2026-11-22: with Free Action counting natives alone,
         sixteen clvl 36-39 runs went to DL39, were drained 5 times a
@@ -3392,7 +3456,9 @@ class ThreatDepthTest(unittest.TestCase):
         """Maintainer, 2026-11-10: at clvl 40 the old margin passed every
         depth blindly; now the dive needs a way out, and level by level the
         bot detects and leaves what could kill it in one breath."""
+        from moria_playtest.brain import RESIST_SUSTAINED_RESERVE
         brain = self.priest()
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")   # ready (balrog_ready)
         self.assertTrue(self.deeper(brain, 45, clvl=40, mhp=420))    # Word of Recall carried
         self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=420))    # on to DL50
@@ -3423,15 +3489,15 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertTrue(brain.depth_ready(command_obs(pos=(10, 10), dlvl=37, clvl=40, hp=405, mhp=405), 37))
         speed[3] = " j) Ring:   Ring of Resist Fire"
         brain.jewels = brain.read_jewels(speed)
-        self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=405))    # a third: 333 of 405
-        self.assertFalse(self.deeper(brain, 50, clvl=40, mhp=405))   # no deeper than DL50: it is on every level
-        self.assertFalse(self.deeper(brain, 69, clvl=40, mhp=405))   # (2026-11-11: dived on to DL70 and DL100)
+        self.assertTrue(self.deeper(brain, 49, clvl=40, mhp=750))    # two moves of 333: 666 of 750
+        self.assertFalse(self.deeper(brain, 50, clvl=40, mhp=750))   # no deeper than DL50: it is on every level
+        self.assertFalse(self.deeper(brain, 69, clvl=40, mhp=750))   # (2026-11-11: dived on to DL70 and DL100)
         # By the ring alone: weighed through Resist Heat too (111), clvl 40
         # Priests at 322 and 362 HP died four times on DL50 in 90 minutes,
         # its first breath through the ring with the timer down (C64 Balrog,
         # 2026-11-23; maintainer: revert).
-        self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=360))   # 333 is too much of 360
-        self.assertFalse(self.deeper(brain, 49, clvl=39, mhp=405))   # the top level first
+        self.assertFalse(self.deeper(brain, 49, clvl=40, mhp=730))   # 666 is too much of 730
+        self.assertFalse(self.deeper(brain, 49, clvl=39, mhp=750))   # the top level first
 
     def test_a_fighter_without_restore_life_levels_stays_above_the_strong_drainers(self) -> None:
         """C64 Balrog, 2026-11-23: Warriors and Rangers with no Restore Life
@@ -3474,8 +3540,10 @@ class ThreatDepthTest(unittest.TestCase):
         and breathed on to death in three of seven fights in an hour
         (maintainer: fix it). Onto DL50 only with Free Action worn: the
         Amulet of the Magi or a Defender weapon."""
+        from moria_playtest.brain import RESIST_SUSTAINED_RESERVE
         self.assertIn(knowledge.kinds_by_name()["Balrog"], knowledge.paralyzer_kinds())
         brain = self.priest()
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of Resist Acid")
         o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=405, mhp=405)
         self.assertFalse(brain.free_action())
@@ -3498,16 +3566,17 @@ class ThreatDepthTest(unittest.TestCase):
         dive. Ready takes both fire resistances, as a Priest goes, and what
         kills its 3,000 HP: Orb bars (Restore Mana each once more), wand
         charges, and half the launcher's shots. A Rogue has no attack spell."""
-        from moria_playtest.brain import BALROG_HP
+        from moria_playtest.brain import BALROG_HP, RESIST_SUSTAINED_RESERVE
         from moria_playtest.magic import ORB, Prayer
         brain = self.priest()
         brain.clvl = 40
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=445, mhp=445)
         self.assertTrue(brain.balrog_ready(o))
         brain.resist_heat = 1
         self.assertFalse(brain.balrog_ready(o))                      # one potion: not both resistances for long
-        brain.resist_heat = 4
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         # The Half-Orc Rogue's kit: two weak wands, its bolts uncounted.
         del brain.wands["Wand of Drain Life"]
         brain.wands.update({"Wand of Lightning Balls": 8, "Wand of Cold Balls": 6})
@@ -3567,8 +3636,9 @@ class ThreatDepthTest(unittest.TestCase):
         rests to full first; townspeople in view cut each rest short and it
         rests on (kept for none in view it rested once in 35 reads), but not
         beside one, and not past TOWN_REST_STRIKES rests that gained nothing."""
-        from moria_playtest.brain import TOWN_REST_STRIKES
+        from moria_playtest.brain import RESIST_SUSTAINED_RESERVE, TOWN_REST_STRIKES
         brain = self.priest()
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         brain.food, brain.max_dlvl, brain.clvl = 20, 50, 40
         brain.lamp, brain.light_left, brain.oil = True, 9000, 5
@@ -3740,14 +3810,16 @@ class ThreatDepthTest(unittest.TestCase):
         town explored DL40 and picked up gold, and an Ancient Multi-Hued
         Dragon's breath did 520 at 477/477. On a level it does not survive,
         diving: the down stairs first, else Detect Doors/Stairs."""
+        from moria_playtest.brain import RESIST_SUSTAINED_RESERVE
         from moria_playtest.magic import DETECT_DOORS
         brain = self.priest()
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         brain.magic.caster = lambda obs: True                      # type: ignore[method-assign]
         brain.magic.can = lambda obs, name: name == DETECT_DOORS   # type: ignore[method-assign]
         o = command_obs(pos=(10, 10), dlvl=42, clvl=40, hp=477, mhp=477)
         decision = brain.dive_down(o, town_view((10, 10), (20, 10), dlvl=42))
-        self.assertEqual((decision.layer, decision.reason), ("descend", "path to known down staircase"))
+        self.assertEqual((decision.layer, decision.reason), ("descend", "path to known down staircase: run"))
         none = town_view((10, 10), (20, 10), dlvl=42, stairs_type=0xA)   # only up stairs known
         self.assertIn(DETECT_DOORS, brain.dive_down(o, none).reason)
         self.assertIsNone(brain.dive_down(o, none))                        # not again at once
@@ -3755,7 +3827,7 @@ class ThreatDepthTest(unittest.TestCase):
         self.assertIsNone(brain.dive_down(survived, town_view((10, 10), (20, 10), dlvl=36)))
         bottom = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=477, mhp=477)
         self.assertIsNone(brain.dive_down(bottom, town_view((10, 10), (20, 10), dlvl=50)))   # its level
-        brain.jewel_names["Ring2"] = "Ring of Speed"                       # not ready: no dive at all
+        brain.jewel_names["Ring2"] = "Ring of Resist Cold"                 # not ready: no fire resistance
         self.assertIsNone(brain.dive_down(o, town_view((10, 10), (20, 10), dlvl=42)))
 
     def test_an_unseen_caster_named_that_could_kill_is_left(self) -> None:
@@ -3763,7 +3835,10 @@ class ThreatDepthTest(unittest.TestCase):
         Ancient Multi-Hued Dragon's spell from out of sight, explored on for
         gold, and its gas breath did 693 from full HP. The Balrog's own
         spells, its breath survivable through the ring, are not a reason."""
+        from moria_playtest.brain import RESIST_SUSTAINED_RESERVE
         brain = self.priest()
+        brain.clvl = 40
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
         view = town_view((10, 10), (40, 40), dlvl=50)
         view.creatures = {}
@@ -3780,12 +3855,14 @@ class ThreatDepthTest(unittest.TestCase):
         brain.seen_messages = "the Ancient Multi-Hued Dragon confuses you!"
         self.assertIsNotNone(brain.leave_deadly(o, view))
         brain = self.priest()
+        brain.clvl = 40
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
-        more = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=463, mhp=463,
+        more = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=700, mhp=700,
                            rows={0: "the Ancient Multi-Hued Dragon casts a sp", 1: "-more-"})
         more.mode = Mode.DISMISS
         brain.decide(more, None)
-        after = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=463, mhp=463,
+        after = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=700, mhp=700,
                             rows={0: "You resist the effects of the spell."})
         brain.decide(after, view)
         self.assertEqual(brain.level.deadly, (10, 10))
@@ -4013,7 +4090,9 @@ class ThreatDepthTest(unittest.TestCase):
         its mana on DL49 and an Ancient Multi-Hued Dragon from beyond Detect
         Evil's panel breathed 690. On a dive level it walks on, and hurt it
         drinks rather than rests."""
+        from moria_playtest.brain import RESIST_SUSTAINED_RESERVE
         brain = self.priest()
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")   # ready: diving
         view = town_view((10, 10), (40, 40), dlvl=49)
         o = command_obs(pos=(10, 10), dlvl=49, clvl=40, hp=391, mhp=394)
@@ -4276,8 +4355,8 @@ class ResistFireTest(unittest.TestCase):
         brain.clvl, brain.resist_heat = 40, 2                          # potions carried
         view = town_view((10, 10), (40, 40), dlvl=50)
         view.creatures = {}
-        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=413, mhp=413,
-                        rows={23: "HP:413/413 MP:100/161 AC:52 AU:9999 Full"})
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=700, mhp=700,
+                        rows={23: "HP:700/700 MP:100/161 AC:52 AU:9999 Full"})
         o.step = 5000
         brain.level.balrog_seen = o.step - BALROG_NEAR_STEPS             # long ago
         self.assertIsNone(brain.resist_fire(o, view))
@@ -4451,6 +4530,7 @@ class ResistFireTest(unittest.TestCase):
         from moria_playtest.goals import for_character
         brain = Brain(for_character(GOALS["balrog"], "half-orc-rogue"))
         brain.clvl = 40
+        brain.jewel_names["Ring"] = "Ring of Speed"
         brain.resist_div = lambda obs, element, lasting=False, assume=frozenset(): 9   # type: ignore[method-assign]
         brain.wands.update({"Wand of Lightning Balls": 8, "Wand of Drain Life": 5, "Wand of Cold Balls": 0})
         kind = knowledge.kinds_by_name()["Balrog"]
@@ -4615,6 +4695,7 @@ class ResistFireTest(unittest.TestCase):
         from moria_playtest.brain import HASTE_SELF
         brain = Brain(for_character(GOALS["balrog"], "human-mage"))
         brain.clvl = 40
+        brain.jewel_names["Ring"] = "Ring of Speed"
         for name, letter, mana, level, book in ((MAGIC_MISSILE, "a", 1, 1, "Beginners-Magick"),
                                                 (LIGHTNING_BOLT, "b", 4, 5, "Magick I"),
                                                 (FROST_BOLT, "h", 6, 7, "Magick I"),
@@ -4850,6 +4931,7 @@ class ResistFireTest(unittest.TestCase):
         from moria_playtest.magic import Prayer, HOLY_WORD, DISPEL_EVIL, ORB
         brain = Brain(for_character(GOALS["balrog"], "half-troll-priest"))
         brain.clvl = 40
+        brain.jewel_names["Ring"] = "Ring of Speed"
         known = {HOLY_WORD, ORB, DISPEL_EVIL, "Heal"}
         brain.magic.known.update({name: Prayer("a", 7, 25) for name in known})   # learned
         brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
@@ -4998,7 +5080,7 @@ class ResistFireTest(unittest.TestCase):
         from moria_playtest.magic import RESIST_HEAT_COLD
         infos, moves = knowledge.breath_info(), knowledge.moves()
         fast = max((k for k, (b, e, _) in infos.items() if "fire" in e and e <= {"fire", "frost"}
-                    and moves.get(k, 1.0) == 2.0), key=lambda k: infos[k][0])
+                    and moves.get(k, 1.0) >= 2.0), key=lambda k: infos[k][0])
         one_resisted = infos[fast][0] // 3
         brain = Brain(for_character(GOALS["deep"], "half-troll-priest"))
         brain.magic.caster = lambda obs: True                          # type: ignore[method-assign]
@@ -5111,6 +5193,17 @@ class ResistFireTest(unittest.TestCase):
         self.assertIsNone(brain.level.deadly)                          # one breath: not yet
         brain.note_breath(o, view, 82, "frost")
         self.assertEqual(brain.level.deadly, (10, 10))                 # the second: leave the level
+
+    def test_trivial_dragon_bat_breaths_do_not_mark_level_deadly(self) -> None:
+        """Dragon Bat 3-6 HP puffs on DL34-39 must not increment breaths_taken
+        to trigger BREATHS_TO_LEAVE and force Word of Recall home."""
+        brain = Brain(GOALS["deep"])
+        view = town_view((10, 10), (40, 40), dlvl=35)
+        o = command_obs(pos=(10, 10), dlvl=35, clvl=39, hp=510, mhp=513)
+        brain.note_breath(o, view, 3, "lightning")
+        brain.note_breath(o, view, 6, "frost")
+        self.assertIsNone(brain.level.deadly)
+        self.assertEqual(brain.level.breaths_taken, 0)
 
     def test_a_caster_that_kills_in_two_casts_is_teleported_from_not_walked_from(self) -> None:
         """C64 Balrog, 2026-11-21: a clvl 33 Half-Elf Mage at 265/265 walked
@@ -6360,6 +6453,17 @@ class PotionTest(unittest.TestCase):
         self.assertTrue(brain.food_low())
         brain.track(command_obs(pos=(5, 5), dlvl=0, clvl=5), town_view((5, 5), (40, 40), dlvl=0))
         self.assertEqual(brain.food_reserve(), 1)            # back to the shallow reserve (M5b round 35)
+
+    def test_food_reserve_drops_climb_margin_when_carrying_word_of_recall(self) -> None:
+        """Deep characters with Word of Recall don't need 15 rations for a 39-level climb."""
+        brain = Brain(GOALS["balrog"])
+        brain.trip_dlvl = 39
+        brain.recall = 0
+        self.assertEqual(brain.food_reserve(), 15)
+        brain.recall = 10
+        self.assertEqual(brain.food_reserve(), 2)
+        brain.food = 14
+        self.assertFalse(brain.food_low())
 
     def test_a_bigger_map_keeps_more_food(self) -> None:
         """M6: on the 80-column ports' 198x66 maps the walk home is longer;
@@ -8452,8 +8556,41 @@ class SealedResupplyTest(unittest.TestCase):
         self.assertEqual((decision.layer, decision.key, brain.pending), ("dig", KEY_TUNNEL, DIRS[(1, 0)]))
         far = brain.dig_out(o, View(cols, rows, list(types), (1, 2), 1, veins=veins))
         self.assertEqual((far.layer, far.key), ("dig", DIRS[(1, 0)]))          # walks to the quartz
-        o.rows[0] = "You dig with your hands, making no progress.".ljust(40)
-        self.assertIsNone(brain.dig_out(o, View(cols, rows, list(types), (3, 2), 1, veins=veins)))   # no weapon
+        brain.level.dig_tries[(4, 2)] = 600
+        brain.level.dig_tries[(4, 1)] = 600
+        self.assertIsNone(brain.dig_out(o, View(cols, rows, list(types), (3, 2), 1, veins=veins)))   # gave up after DIG_TRIES
+
+    def test_rubble_blocking_path_tunnels_without_tool(self) -> None:
+        """Backlog #17: rubble blocks movement while keeping LOS transparent, and
+        the bot tunnels through blocking rubble with '+' + direction even without
+        a digging tool."""
+        from moria_playtest.auditor import Auditor
+        from moria_playtest.brain import KEY_TUNNEL
+        from moria_playtest.view import TYPE_RUBBLE, TYPE_STAIRS_DN, WALKABLE_TYPES, View
+
+        self.assertNotIn(TYPE_RUBBLE, WALKABLE_TYPES)
+        cols, rows = 10, 5
+        types = [WALL] * (cols * rows)
+        for x in range(1, 8):
+            types[2 * cols + x] = 0x0
+        types[2 * cols + 4] = TYPE_RUBBLE
+        types[2 * cols + 7] = TYPE_STAIRS_DN
+        view = View(cols, rows, list(types), (3, 2), 1)
+        self.assertFalse(view.passable(4, 2, avoid_monsters=False, doors=False))
+        self.assertTrue(view.passable(4, 2, avoid_monsters=False, doors=True))
+        self.assertTrue(Brain.sees(view, (3, 2), (6, 2)))
+
+        brain = Brain(GOALS["reach_dl5"])
+        brain.food = 4
+        o = command_obs(pos=(3, 2), dlvl=1, clvl=1)
+        decision = brain.decide(o, view)
+        self.assertEqual((decision.key, brain.pending), (KEY_TUNNEL, DIRS[(1, 0)]))
+
+        # Standing on rubble after a rockfall trap is not flagged as a game fault.
+        tiles = bytearray([0x14] * (80 * 48))
+        tiles[2 * 80 + 4] = 0xB4
+        rockfall_obs = command_obs(pos=(4, 2), dlvl=1, clvl=1)
+        self.assertEqual(Auditor().state_invariants(rockfall_obs, bytes(tiles)), [])
 
     def test_the_walk_to_the_down_stairs_is_kept(self) -> None:
         """Atari, 2026-11-09: explore's walk to an edge and resupply's walk
@@ -11147,41 +11284,42 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         brain.resist_heat = 3
         o = command_obs(pos=(5, 5), dlvl=0, clvl=40, hp=352, mhp=352)
         self.assertFalse(brain.resist_sustained(o))
-        self.assertEqual(brain.balrog_ready_burst(o), 333)
+        self.assertEqual(brain.balrog_ready_burst(o), 666)
         self.assertFalse(brain.balrog_ready(o))
         self.assertEqual(RESIST_SUSTAINED_POTIONS, 12)
         self.assertEqual(RESIST_SUSTAINED_STAY, 4)
-        brain.resist_heat = RESIST_SUSTAINED_POTIONS
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         self.assertTrue(brain.resist_sustained(o))
-        self.assertEqual(brain.balrog_ready_burst(o), 111)
+        self.assertEqual(brain.balrog_ready_burst(o), 222)
         self.assertTrue(brain.balrog_ready(o))
         brain.track_stats(o)
         self.assertEqual(brain.balrog_hp_short, 0)
-        # On DL50 unseen, a 352-HP or 361-HP Mage at full HP (> 333 ring-alone burst)
+        # On DL50 unseen, a character whose HP exceeds the ring-alone burst (666)
         # saves finite Resist Heat potions for the Balrog fight itself.
-        dl50 = command_obs(pos=(5, 5), dlvl=50, clvl=40, hp=361, mhp=361)
+        dl50 = command_obs(pos=(5, 5), dlvl=50, clvl=40, hp=700, mhp=700)
         brain.resist_heat = RESIST_SUSTAINED_POTIONS
+        self.assertTrue(brain.resist_sustained(dl50))
         self.assertFalse(brain.resist_upkeep(dl50))
-        self.assertFalse(brain.resist_upkeep(command_obs(pos=(5, 5), dlvl=50, clvl=40, hp=352, mhp=352)))
-        # Chipped to <= 333 HP (or a <= 333 HP Mage), finite potions protect unseen down to 5
-        chipped = command_obs(pos=(5, 5), dlvl=50, clvl=40, hp=333, mhp=361)
+        # Chipped to <= 666 HP (or a <= 666 HP Mage), finite potions protect unseen down to BALROG_HEAT_POTIONS
+        chipped = command_obs(pos=(5, 5), dlvl=50, clvl=40, hp=666, mhp=700)
         brain.resist_heat = BALROG_HEAT_POTIONS
         self.assertTrue(brain.resist_upkeep(chipped))
         brain.resist_heat = BALROG_HEAT_POTIONS - 1
         self.assertFalse(brain.resist_upkeep(chipped))
         # Even an unseen Balrog message ("The Balrog breathes fire.") marks balrog_seen
-        brain.resist_heat = RESIST_SUSTAINED_POTIONS
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         view50 = town_view((5, 5), (40, 40), dlvl=50)
         unseen_msg = command_obs(pos=(5, 5), dlvl=50, clvl=40, hp=361, mhp=361,
                                  rows={0: "The Balrog breathes fire."})
         unseen_msg.step = 123
         brain.decide(unseen_msg, view50)
         self.assertEqual(brain.level.balrog_seen, 123)
-        # A 443-HP Rogue (survives ring-alone 333) does not burn a large stack unseen either
+        # A 443-HP Rogue with worn fire resistance + 2 speed steps (ring-alone 333) does not burn a large stack unseen either
         from moria_playtest.goals import for_character
         rogue = Brain(for_character(GOALS["balrog"], "elf-rogue"))
         rogue.clvl = 40
-        rogue.jewel_names = {"Ring": "Ring of Resist Fire", "Amulet": "Amulet of the Magi (+1)",
+        rogue.worn_resists = frozenset({"fire"})
+        rogue.jewel_names = {"Ring": "Ring of Speed", "Amulet": "Amulet of the Magi (+1)",
                              "Ring2": "Ring of Speed"}
         rogue.resist_heat = RESIST_SUSTAINED_POTIONS + 10
         self.assertFalse(rogue.resist_upkeep(command_obs(pos=(5, 5), dlvl=50, clvl=40, hp=443, mhp=443)))
@@ -11195,10 +11333,10 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         self.assertEqual(priest.resist_heat_reserve(), RESIST_RESERVE)
 
     def test_mage_drinks_resist_heat_out_of_view_chases_with_spell_and_stays_at_dl50(self) -> None:
-        from moria_playtest.brain import RESIST_HEAT, RESIST_SUSTAINED_POTIONS
+        from moria_playtest.brain import RESIST_HEAT, RESIST_SUSTAINED_RESERVE
         from moria_playtest.magic import FROST_BALL
         brain = self.mage(clvl=40)
-        brain.resist_heat = RESIST_SUSTAINED_POTIONS
+        brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.restore_mana = 0
         kind = knowledge.kinds_by_name()["Balrog"]
         view = town_view((10, 10), (40, 40), dlvl=50)
@@ -11414,7 +11552,7 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         rogue.phase, rogue.teleports = 10, 10
         rogue.lamp, rogue.light_left, rogue.oil = True, 9000, 5
         rogue.strong[HEALING] = 40
-        rogue.resist_heat = 16
+        rogue.resist_heat = 20
         rogue.launcher, rogue.ammo = "Heavy Crossbow", 0
         rogue.jewel_names = {"Ring": "Ring of Speed", "Ring2": "Ring of Resist Fire",
                              "Amulet": "Amulet of the Magi (+1)"}
@@ -11566,14 +11704,14 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         self.assertIsNone(brain.collect(o2, view_away))
 
     def test_non_healer_restocks_and_waits_for_healing_potions_before_balrog(self) -> None:
-        from moria_playtest.brain import CSW, HEALING, HEALING_RESERVE, RESTORE_LIFE, RESIST_SUSTAINED_RESERVE
+        from moria_playtest.brain import CSW, HEALING, HEALING_DEEP_SCUM, HEALING_RESERVE, RESTORE_LIFE, RESIST_SUSTAINED_RESERVE
         brain = self.mage(clvl=39)
         brain.food, brain.max_dlvl, brain.recall = 20, 40, 9
         brain.lamp, brain.light_left, brain.oil = True, 9000, 5
         brain.resist_heat = RESIST_SUSTAINED_RESERVE
         brain.restores = {RESTORE_LIFE: 2}
         brain.strong[CSW] = 25
-        brain.strong[HEALING] = 2
+        brain.strong[HEALING] = HEALING_DEEP_SCUM - 1
         brain.shopped = brain.potions_done = brain.magic_done = brain.alchemist_done = True
         brain.market_done = brain.weapons_done = brain.armoury_done = True
         on_stairs = town_view((5, 5), (5, 5))
@@ -11971,7 +12109,7 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
             12: " k) 6 Potion of Restore Life Levels", 13: " l) 15 Ration of Food",
             14: " m) 5 Flask of Oil (250 turns)", 15: " n) 10 Scroll of Phase Door",
             16: " o) 10 Scroll of Teleportation", 17: " p) 10 Scroll of Word of Recall",
-            18: " q) 17 Potion of Resist Heat", 19: " r) 4 Potion of Invulnerability",
+            18: " q) 20 Potion of Resist Heat", 19: " r) 4 Potion of Invulnerability",
             20: " s) Heavy Crossbow (+3,+1)", 21: " t) 255 Bolt",
             22: " u) Wooden Torch (134 turns)", 23: " v) Wand of Slow Monster (2 charges)",
         }
@@ -12592,6 +12730,8 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         self.assertIsNone(mage40.drop_junk(o_town, town_view((5, 5), (38, 18), dlvl=0)))
 
         mage_fight = self.mage(clvl=40)
+        mage_fight.worn_resists = frozenset({"fire"})
+        mage_fight.jewel_names["Ring"] = "Ring of Speed"
         mage_fight.magic.known[TELEPORT_SELF] = Prayer("c", 8, 17, "Magick II")
         mage_fight.resist_heat = 0
         mage_fight.recall = 10
@@ -12898,8 +13038,8 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         self.assertIn("Wand of Stinking Cloud", d_phase.reason)
 
     def test_rich_deep_warrior_scums_restore_life_and_healing_past_normal_cap(self) -> None:
-        from moria_playtest.brain import (CCW, HEALING, RESTORE_LIFE, RESTORE_LIFE_RESERVE,
-                                          RESTORE_STR, RESTOCK_SCUMS, RESTOCK_SCUMS_DEEP)
+        from moria_playtest.brain import (CCW, HEALING, HEALING_DEEP_SCUM, RESTORE_LIFE,
+                                          RESTORE_LIFE_RESERVE, RESTORE_STR, RESTOCK_SCUMS, RESTOCK_SCUMS_DEEP)
         from moria_playtest.goals import for_character
         self.assertGreaterEqual(RESTOCK_SCUMS_DEEP, 50)
         warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
@@ -12941,8 +13081,8 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         warrior.restores = {RESTORE_LIFE: RESTORE_LIFE_RESERVE, RESTORE_STR: 2}
         self.assertIsNone(warrior.restock_needed(town))
 
-        # Short of Healing (< HEALING_RESERVE): scums via Black Market only up to RESTOCK_SCUMS_DEEP
-        warrior.strong = {HEALING: 4, CCW: 52}
+        # Short of Healing (< HEALING_DEEP_SCUM): scums via Black Market only up to RESTOCK_SCUMS_DEEP
+        warrior.strong = {HEALING: HEALING_DEEP_SCUM - 1, CCW: 52}
         self.assertEqual(warrior.restock_needed(town), "Healing")
         warrior.shopped = warrior.potions_done = warrior.magic_done = warrior.alchemist_done = True
         warrior.market_done = warrior.weapons_done = warrior.armoury_done = True
@@ -13148,7 +13288,7 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         self.assertEqual(d_melee.layer, "fight", d_melee.reason)
 
     def test_ranger_drinks_healing_before_teleport_self_and_restocks_teleportation(self) -> None:
-        from moria_playtest.brain import CSW, HEALING, RESTORE_LIFE
+        from moria_playtest.brain import CSW, HEALING, RESTORE_LIFE, RESTORE_LIFE_DEEP_SCUM
         from moria_playtest.goals import for_character
         from moria_playtest.magic import TELEPORT_SELF, Prayer
 
@@ -13158,7 +13298,7 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         ranger.clvl, ranger.max_dlvl = 39, 40
         ranger.teleports, ranger.phase, ranger.wands = 0, 4, {}
         ranger.strong = {HEALING: 51, CSW: 3}
-        ranger.restores = {RESTORE_LIFE: 3}
+        ranger.restores = {RESTORE_LIFE: RESTORE_LIFE_DEEP_SCUM}
         ranger.resist_heat = 40
         ranger.gold_seen = 16_000_000
         ranger.jewel_names.update(Ring="Ring of Speed", Ring2="Ring of Resist Fire", Amulet="Amulet of the Magi")
@@ -13294,7 +13434,7 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         mage.resist_heat = RESIST_SUSTAINED_STAY - 1
         self.assertFalse(mage.resist_sustained(dl49))
 
-        town_ok = command_obs(pos=(5, 5), dlvl=0, clvl=40, hp=361, mhp=361)
+        town_ok = command_obs(pos=(5, 5), dlvl=0, clvl=40, hp=700, mhp=700)
         mage.resist_heat = RESIST_SUSTAINED_POTIONS
         self.assertTrue(mage.resist_sustained(town_ok))
 
@@ -13333,6 +13473,2196 @@ class HumanMageBalrogPrepTest(unittest.TestCase):
         mage.magic.mana = lambda o: (157, 157)  # type: ignore[method-assign]
         mage.adjacent = [Creature("k", 1)]
         self.assertIsNone(mage.balrog_teleport_hunt(obs, view))
+
+    def test_non_oneshot_breather_uses_stairs_not_recall_when_recall_cannot_return(self) -> None:
+        from moria_playtest.brain import DIRS, HEALING, RECALL
+        from moria_playtest.goals import for_character
+        warrior = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.recall, warrior.teleports = 39, 42, 10, 5
+        warrior.strong[HEALING] = 10
+        warrior.jewel_names = {"Amulet": "Amulet of the Magi (+1)"}
+        warrior.restores = {"Potion of Restore Life Levels": 5}
+        warrior.depth_ready = lambda obs, dlvl, slack=0: dlvl <= 39          # type: ignore[method-assign]
+        view = town_view((10, 10), (30, 10), dlvl=39, stairs_type=0xA)       # stairs 20 steps away (> LEAVE_WALK_STEPS)
+        obs = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=513, mhp=513)
+
+        # Two survivable breaths trigger BREATHS_TO_LEAVE -> after initial escape jump, stairs, not Word of Recall home
+        warrior.note_breath(obs, view, 180, "frost")
+        warrior.note_breath(obs, view, 180, "frost")
+        self.assertFalse(warrior.level.deadly_oneshot)
+        warrior.level.deadly_jump = (10, 10)
+        d = warrior.leave_deadly(obs, view)
+        self.assertIsNotNone(d)
+        self.assertEqual((d.layer, d.key), ("leave", DIRS[(1, 0)] | 0x80), d.reason)
+        self.assertTrue(warrior.level.scum)
+
+        # A true one-shot AMHD still recalls out at far stairs (once past initial escape jump)
+        kind = knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"]
+        view.creatures[(18, 10)] = Creature(*kind, "Ancient Multi-Hued Dragon")
+        warrior.level.deadly_jump = (18, 10)
+        d_amhd = warrior.leave_deadly(obs, view)
+        self.assertIsNotNone(d_amhd)
+        self.assertTrue(warrior.level.deadly_oneshot)
+        self.assertEqual((d_amhd.layer, d_amhd.key, warrior.picking), ("recall", ord("R"), RECALL), d_amhd.reason)
+
+    def test_clvl39_restock_scum_floors_avoid_50_scum_town_loops_when_stocked(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, HEALING_DEEP_SCUM, RESTORE_LIFE,
+                                          RESTORE_LIFE_DEEP_SCUM, RESTOCK_SCUMS, RESTOCK_SCUMS_DEEP)
+        from moria_playtest.goals import for_character
+
+        def shopped(b: Brain) -> None:
+            b.shopped = b.potions_done = b.magic_done = b.alchemist_done = True
+            b.market_done = b.weapons_done = b.armoury_done = True
+
+        on_stairs = town_view((5, 5), (5, 5))
+        town_w = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=513, mhp=513,
+                             rows={23: "HP:513/513 MP:0/0 AC:55 AU:16777K"})
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.food, warrior.max_dlvl, warrior.recall, warrior.teleports = 39, 20.0, 42, 10, 5
+        warrior.gold_seen = 16_000_000
+        warrior.resist_heat = 30
+        warrior.strong = {CCW: 25, HEALING: HEALING_DEEP_SCUM}
+        warrior.restores = {RESTORE_LIFE: RESTORE_LIFE_DEEP_SCUM}
+        self.assertIsNone(warrior.restock_needed(town_w))
+        warrior.restores = {RESTORE_LIFE: RESTORE_LIFE_DEEP_SCUM - 1}
+        self.assertEqual(warrior.restock_needed(town_w), "Restore Life Levels")
+
+        ranger = Brain(for_character(GOALS["balrog"], "half-elf-ranger"))
+        ranger.clvl, ranger.food, ranger.max_dlvl, ranger.recall, ranger.teleports = 39, 20.0, 42, 10, 5
+        ranger.gold_seen = 16_000_000
+        ranger.restores = {RESTORE_LIFE: RESTORE_LIFE_DEEP_SCUM}
+        ranger.strong = {CCW: 25, HEALING: HEALING_DEEP_SCUM}
+        ranger.resist_heat = 30
+        self.assertIsNone(ranger.restock_needed(town_w))
+        ranger.strong[HEALING] = HEALING_DEEP_SCUM - 1
+        self.assertEqual(ranger.restock_needed(town_w), "Healing")
+
+        # clvl 39 short only on Resist Heat caps scums at RESTOCK_SCUMS (3), not 50
+        ranger.strong[HEALING] = HEALING_DEEP_SCUM
+        ranger.resist_heat = 5
+        self.assertEqual(ranger.restock_needed(town_w), "Resist Heat")
+        shopped(ranger)
+        ranger.restock_scums = RESTOCK_SCUMS
+        ranger.restock_scumming = False
+        d_stop = ranger.recall_trip(town_w, on_stairs)
+        self.assertTrue(d_stop is None or d_stop.layer != "restock")
+        self.assertLess(RESTOCK_SCUMS, RESTOCK_SCUMS_DEEP)
+
+    def test_mushroom_of_restoring_not_eaten_in_dungeon_while_carrying_food(self) -> None:
+        from moria_playtest.brain import KEY_EAT
+        from moria_playtest.goals import for_character
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.food, warrior.drained = 39, 6.0, {"ST"}
+        warrior.restores = {"Mushroom of Restoring": 1}
+        view = town_view((10, 10), (40, 40), dlvl=36)
+        dl36 = command_obs(pos=(10, 10), dlvl=36, clvl=39, hp=513, mhp=513)
+        self.assertIsNone(warrior.quaff(dl36, view))
+
+        # No food left, or safely in town: Mushroom of Restoring may be eaten
+        warrior.food = 0.0
+        d_hungry = warrior.quaff(dl36, view)
+        self.assertIsNotNone(d_hungry)
+        self.assertEqual(d_hungry.key, KEY_EAT)
+
+        warrior.food = 6.0
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=513, mhp=513)
+        d_town = warrior.quaff(town, town_view((5, 5), (2, 2)))
+        self.assertIsNotNone(d_town)
+        self.assertEqual(d_town.key, KEY_EAT)
+
+    def test_way_on_takes_safe_down_stairs_when_max_dlvl_already_deeper(self) -> None:
+        from moria_playtest.goals import for_character
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.food, warrior.max_dlvl, warrior.recall = 39, 20.0, 42, 10
+        warrior.deeper_ok = lambda obs: False                               # type: ignore[method-assign]
+        warrior.depth_ready = lambda obs, dlvl, slack=0: dlvl <= 39         # type: ignore[method-assign]
+        down = town_view((5, 5), (9, 9), walls=[(6, 5)], dlvl=36)
+        o36 = command_obs(pos=(5, 5), dlvl=36, clvl=39, hp=513, mhp=513)
+        d_ok = warrior.way_on(o36, down)
+        self.assertIsNotNone(d_ok)
+        self.assertEqual(d_ok.reason, "no way up: path to the down stairs")
+
+        o39 = command_obs(pos=(5, 5), dlvl=39, clvl=39, hp=513, mhp=513)
+        self.assertIsNone(warrior.way_on(o39, down))                        # DL40 not depth_ready -> refused
+
+    def test_walking_down_skips_shallow_find_traps_and_safe_scout(self) -> None:
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import DETECT_MONSTERS, FIND_TRAPS, Prayer
+        ranger = Brain(for_character(GOALS["balrog"], "half-elf-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.recall = 39, 42, 10
+        ranger.magic.known[FIND_TRAPS] = Prayer("a", 1, 1, "Beginners-Magick")
+        ranger.magic.known[DETECT_MONSTERS] = Prayer("b", 1, 1, "Beginners-Magick")
+        ranger.magic.can = lambda obs, name: True                           # type: ignore[method-assign]
+        ranger.magic.spare = lambda obs, name: True                         # type: ignore[method-assign]
+        ranger.deeper_ok = lambda obs: True                                 # type: ignore[method-assign]
+        ranger.native_single = lambda obs, dlvl: 100 if dlvl < 25 else 240  # type: ignore[method-assign]
+
+        view15 = town_view((10, 10), (40, 40), dlvl=15)
+        o15 = command_obs(pos=(10, 10), dlvl=15, clvl=39, hp=393, mhp=393,
+                          rows={23: "HP:393/393 MP:100/100 AC:55 AU:16777K"})
+        self.assertIsNone(ranger.find_traps(o15, view15))
+        self.assertIsNone(ranger.scout(o15, view15))
+
+        view37 = town_view((10, 10), (40, 40), dlvl=37)
+        o37 = command_obs(pos=(10, 10), dlvl=37, clvl=39, hp=393, mhp=393,
+                          rows={23: "HP:393/393 MP:100/100 AC:55 AU:16777K"})
+        self.assertIsNotNone(ranger.find_traps(o37, view37))
+        self.assertIsNotNone(ranger.scout(o37, view37))
+
+    def test_leave_deadly_heals_before_walking_to_stairs_under_remembered_breather(self) -> None:
+        from moria_playtest.brain import HEALING
+        from moria_playtest.goals import for_character
+        mage = Brain(for_character(GOALS["balrog"], "elf-mage"))
+        mage.clvl, mage.max_dlvl, mage.recall = 39, 42, 20
+        mage.strong[HEALING] = 34
+        mage.jewel_names = {"Amulet": "Amulet of the Magi (+1)"}
+        mage.magic.can = lambda obs, name: name == "Phase Door"              # type: ignore[method-assign]
+        view = town_view((10, 10), (30, 10), dlvl=39, stairs_type=0xA)
+        obs = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=69, mhp=312)
+        mage.level.deadly = (10, 10)
+        mage.level.deadly_jump = (10, 10)
+        mage.level.deadly_oneshot = False
+        mage.level.breather = (obs.step, 468)
+        d = mage.leave_deadly(obs, view)
+        self.assertIsNotNone(d)
+        self.assertEqual((d.layer, mage.picking), ("quaff", HEALING), d.reason)
+
+    def test_heavy_breath_on_drainer_level_clears_deadly_drain_and_heals_then_recalls_without_escape(self) -> None:
+        from moria_playtest.brain import HEALING, RECALL
+        from moria_playtest.goals import for_character
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.recall = 39, 42, 14
+        warrior.phase, warrior.teleports = 0, 0
+        warrior.strong[HEALING] = 50
+        warrior.restores = {"Potion of Restore Life Levels": 5}
+        view = town_view((10, 10), (30, 10), dlvl=39, stairs_type=0xA)
+        obs = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=176, mhp=435)
+        warrior.level.deadly, warrior.level.deadly_drain = (10, 10), True
+        warrior.note_breath(obs, view, 233, "frost")
+        self.assertFalse(warrior.level.deadly_drain)
+        d_heal = warrior.leave_deadly(obs, view)
+        self.assertIsNotNone(d_heal)
+        self.assertEqual((d_heal.layer, warrior.picking), ("quaff", HEALING), d_heal.reason)
+
+        obs_full = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=435, mhp=435)
+        obs_full.step = obs.step + 1
+        d_recall = warrior.leave_deadly(obs_full, view)
+        self.assertIsNotNone(d_recall)
+        self.assertEqual((d_recall.layer, d_recall.key, warrior.picking), ("recall", ord("R"), RECALL), d_recall.reason)
+
+    def test_drop_slot_for_weaponsmith_does_not_reopen_general_store(self) -> None:
+        from moria_playtest.brain import WEAPONSMITH
+        from moria_playtest.goals import for_character
+        rogue = Brain(for_character(GOALS["balrog"], "half-elf-rogue"))
+        rogue.clvl, rogue.max_dlvl, rogue.gold_seen = 40, 40, 16_000_000
+        rogue.lamp, rogue.light_left, rogue.oil = True, 9000, 10
+        rogue.launcher, rogue.ammo, rogue.recall, rogue.food = "Heavy Crossbow", 0, 10, 18.0
+        rogue.shopped = rogue.potions_done = rogue.alchemist_done = True
+        rogue.market_done = rogue.magic_done = rogue.armoury_done = True
+        rogue.weapons_done = False
+
+        rogue.at_store, rogue.buying = WEAPONSMITH, "Bolt (+2,+2)"
+        refused = command_obs(pos=(5, 5), dlvl=0, clvl=40, rows={23: " Your pack is full."})
+        refused.stage = "message"
+        rogue.store(refused)
+        self.assertTrue(rogue.weapons_done)
+
+        pack = {
+            2: " a) Spellbook Beginners-Magick", 3: " b) Spellbook Magick I",
+            4: " c) Spellbook Magick II", 5: " d) 10 Scroll of Word of Recall",
+            6: " e) 20 Potion of Resist Heat", 7: " f) 15 Potion of Healing",
+            8: " g) 5 Potion of Neutralize Poison", 9: " h) 2 Potion of Restore Strength",
+            10: " i) 4 Potion of Restore Life Levels", 11: " j) 18 Ration of Food",
+            12: " k) Heavy Crossbow", 13: " l) 10 Flask of Oil (250 turns)",
+            14: " m) 10 Scroll of Phase Door", 15: " n) 5 Scroll of Teleportation",
+            16: " o) 15 Potion of Cure Critical Wounds", 17: " p) 10 Potion of Cure Serious Wounds",
+            18: " q) Potion of Invulnerability", 19: " r) Staff of Teleportation (6 charges)",
+            20: " s) Wand of Acid Balls (6 charges)", 21: " t) Wand of Cold Balls (4 charges)",
+            22: " u) Wand of Fire Balls (8 charges)", 23: " v) Wooden Torch (134 turns)",
+        }
+        rogue.dropping, rogue.listed = True, True
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=40, rows=pack)
+        listing.stage = "list"
+        d_drop = rogue.drop_prompt(listing)
+        self.assertEqual(d_drop.key, ord("V"), d_drop.reason)
+        self.assertIn("room for Bolt", d_drop.reason)
+        self.assertTrue(rogue.shopped)
+        self.assertFalse(rogue.weapons_done)
+
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=40, hp=444, mhp=444,
+                           rows={23: "HP:444/444 MP:100/100 AC:60 AU:16777K"})
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        d_shop = rogue.shop(town, view_town)
+        self.assertIsNotNone(d_shop)
+        self.assertIn("Weaponsmith", d_shop.reason)
+        self.assertNotIn("General Store", d_shop.reason)
+
+    def test_full_pack_skips_unstackable_optional_buys_in_store(self) -> None:
+        from moria_playtest.brain import BLACK_MARKET, GENERAL_STORE
+        mage = self.mage(clvl=40)
+        mage.max_dlvl, mage.gold_seen = 40, 16_000_000
+        mage.recall, mage.lamp, mage.light_left, mage.oil, mage.torches, mage.food = 5, True, 9000, 2, 0, 20.0
+        mage.ac_worn = 40
+        base_pack = [
+            ("Spellbook Beginners-Magick", 1), ("Spellbook Magick I", 1),
+            ("Spellbook Magick II", 1), ("Spellbook The Mages Guide to Power", 1),
+            ("Scroll of Word of Recall", 5), ("Flask of Oil (250 turns)", 2),
+            ("Potion of Resist Heat", 3), ("Potion of Healing", 10),
+            ("Potion of Restore Mana", 6), ("Potion of Neutralize Poison", 4),
+            ("Potion of Restore Strength", 2), ("Potion of Restore Life Levels", 4),
+            ("Ration of Food", 20), ("Scroll of Phase Door", 8),
+            ("Scroll of Teleportation", 4), ("Potion of Cure Critical Wounds", 10),
+            ("Potion of Cure Serious Wounds", 8), ("Potion of Invulnerability", 2),
+            ("Potion of Restore Intelligence", 2), ("Potion of Restore Dexterity", 2),
+            ("Potion of Cure Light Wounds", 5), ("Staff of Teleportation (5 charges)", 1),
+        ]
+        mage.pack_listed = list(base_pack)
+        mage.at_store = BLACK_MARKET
+        bm_obs = BrainM2Test.store_obs(BrainM2Test(), "menu", {
+            0: " Black Market | THE FENCE",
+            3: " a) Scroll of Enchant Armor      500 GP",
+            4: " b) Scroll of Protect from Evil  200 GP",
+            5: " c) Scroll of Word of Recall     150 GP",
+            19: " B)uy  S)ell  Q)uit  Gold: 16000000",
+        })
+        d_bm = mage.store(bm_obs)
+        self.assertIn("Scroll of Word of Recall", d_bm.reason)
+        self.assertNotIn("Enchant Armor", d_bm.reason)
+
+        mage.recall = mage.recall_reserve()
+        mage.pack_listed[-1] = ("Scroll of Protect from Evil", 1)
+        d_stack = mage.store(bm_obs)
+        self.assertIn("Scroll of Protect from Evil", d_stack.reason)
+
+        mage.pack_listed = list(base_pack)
+        mage.at_store = GENERAL_STORE
+        gs_obs = BrainM2Test.store_obs(BrainM2Test(), "menu", {
+            0: " General Store | BILBO THE FRIENDLY",
+            3: " a) Wooden Torch (134 turns)       2 GP",
+            4: " b) Flask of Oil (250 turns)      10 GP",
+            19: " B)uy  S)ell  Q)uit  Gold: 16000000",
+        })
+        d_gs = mage.store(gs_obs)
+        self.assertIn("Flask of Oil", d_gs.reason)
+        self.assertNotIn("Wooden Torch", d_gs.reason)
+
+    def test_leave_caster_uses_resisted_burst(self) -> None:
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+        awd = knowledge.kinds_by_name()["Ancient White Dragon"]
+        ranger = Brain(for_character(GOALS["balrog"], "elf-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.teleports = 39, 42, 5
+        ranger.jewel_names = {"Ring": "Ring of Resist Cold"}
+        view = town_view((10, 10), (30, 10), dlvl=39, stairs_type=TYPE_STAIRS_UP)
+        o = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=392, mhp=392)
+        ranger.level.casters[awd] = o.step
+        self.assertIsNone(ranger.leave_caster(o, view))
+
+        ranger.jewel_names = {}
+        d_unresisted = ranger.leave_caster(o, view)
+        self.assertIsNotNone(d_unresisted)
+
+    def test_find_traps_uses_longer_deep_cooldown(self) -> None:
+        from moria_playtest.brain import FIND_TRAPS_EVERY, FIND_TRAPS_EVERY_DEEP
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import FIND_TRAPS, Prayer
+        ranger = Brain(for_character(GOALS["balrog"], "elf-ranger"))
+        ranger.clvl = 39
+        ranger.magic.known[FIND_TRAPS] = Prayer("a", 1, 1, "Beginners-Magick")
+        ranger.magic.spare = lambda obs, name: name == FIND_TRAPS           # type: ignore[method-assign]
+        view = town_view((10, 10), (40, 40), dlvl=39)
+        o1 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=392, mhp=392)
+        o1.step = 1000
+        d1 = ranger.find_traps(o1, view)
+        self.assertIsNotNone(d1)
+        o2 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=392, mhp=392)
+        o2.step = 1000 + FIND_TRAPS_EVERY
+        self.assertIsNone(ranger.find_traps(o2, view))
+        o3 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=392, mhp=392)
+        o3.step = 1000 + FIND_TRAPS_EVERY_DEEP
+        self.assertIsNotNone(ranger.find_traps(o3, view))
+
+    def test_drained_deep_scum_skips_non_alchemist_stores(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE, RESTORE_STR
+        from moria_playtest.goals import for_character
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.food, warrior.max_dlvl, warrior.recall = 39, 20.0, 42, 10
+        warrior.phase, warrior.teleports = 10, 5
+        warrior.lamp, warrior.light_left, warrior.oil = True, 9000, 5
+        warrior.gold_seen = 16_000_000
+        warrior.strong = {HEALING: 15, CCW: 52}
+        warrior.restores = {RESTORE_LIFE: 1, RESTORE_STR: 1}
+        warrior.drained = {"DX"}
+        warrior.restock_scums = 5
+        warrior.restock_scumming = True
+        warrior.last_dlvl = 1
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=449, mhp=449,
+                           rows={23: "HP:449/449 MP:0/0 AC:55 AU:16777K"})
+        self.assertTrue(warrior.temple_market_scum(town))
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        warrior.track(town, view_town)
+        self.assertTrue(warrior.shopped)
+        self.assertTrue(warrior.magic_done)
+        self.assertTrue(warrior.armoury_done)
+        self.assertTrue(warrior.weapons_done)
+        self.assertFalse(warrior.potions_done)
+        self.assertFalse(warrior.market_done)
+        self.assertFalse(warrior.alchemist_done)
+
+    def test_restock_needed_prioritizes_drain_bare_restore_life_before_healing(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, HEALING_DEEP_SCUM, RESTORE_LIFE, RESTORE_LIFE_DEEP_SCUM
+        from moria_playtest.goals import for_character
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.food, warrior.max_dlvl, warrior.recall = 39, 20.0, 42, 10
+        warrior.phase, warrior.teleports = 10, 5
+        warrior.lamp, warrior.light_left, warrior.oil = True, 9000, 5
+        warrior.gold_seen = 15_000_000
+        warrior.strong = {CCW: 52, HEALING: HEALING_DEEP_SCUM - 1}
+        warrior.restores = {RESTORE_LIFE: 0}
+        warrior.restock_scums = 1
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=433, mhp=433,
+                           rows={23: "HP:433/433 MP:0/0 AC:55 AU:15000K"})
+        self.assertEqual(warrior.restock_needed(town), "Restore Life Levels")
+        self.assertTrue(warrior.temple_market_scum(town))
+
+        warrior.restores[RESTORE_LIFE] = RESTORE_LIFE_DEEP_SCUM
+        self.assertEqual(warrior.restock_needed(town), "Healing")
+
+    def test_leave_caster_ignores_balrog_on_dl50_when_fire_resisted(self) -> None:
+        from moria_playtest.brain import TELEPORT_STAFF
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+        balrog = knowledge.kinds_by_name()["Balrog"]
+        amhd = knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"]
+        rogue = Brain(for_character(GOALS["balrog"], "gnome-rogue"))
+        rogue.clvl, rogue.max_dlvl, rogue.resist_heat = 40, 50, 28
+        rogue.jewel_names = {"Ring": "Ring of Resist Fire"}
+        rogue.wands[TELEPORT_STAFF] = 6
+        view = town_view((10, 10), (30, 10), dlvl=50, stairs_type=TYPE_STAIRS_UP)
+        o = command_obs(pos=(10, 10), dlvl=50, clvl=40, hp=403, mhp=403)
+        rogue.level.casters[balrog] = o.step
+        self.assertIsNone(rogue.leave_caster(o, view))
+
+        rogue.level.casters[amhd] = o.step
+        d_amhd = rogue.leave_caster(o, view)
+        self.assertIsNotNone(d_amhd)
+
+    def test_stair_scum_teleports_out_of_sealed_dl39_wing_after_search_budget(self) -> None:
+        from moria_playtest.brain import RECALL, SEARCH_BUDGET, TELEPORT_SCROLL
+        from moria_playtest.goals import for_character
+        warrior = Brain(for_character(GOALS["balrog"], "half-troll-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.teleports, warrior.recall = 39, 42, 5, 10
+        walls = [(10 + dx, 10 + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx, dy) != (0, 0)]
+        view = town_view((10, 10), (30, 30), dlvl=39, walls=walls)
+        view.types[30 * COLS + 30] = WALL
+        o = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=553, mhp=553)
+        warrior.level.searches[(10, 10)] = SEARCH_BUDGET
+        d_tp = warrior.stair_scum(o, view)
+        self.assertIsNotNone(d_tp)
+        self.assertEqual((d_tp.layer, warrior.picking), ("phase", TELEPORT_SCROLL), d_tp.reason)
+        self.assertEqual(warrior.level.sealed_teleports, 1)
+        self.assertEqual(warrior.level.searches, {})
+
+        warrior.picking = None
+        warrior.level.sealed_teleports = 2
+        warrior.level.searches[(10, 10)] = 2 * SEARCH_BUDGET
+        d_tp3 = warrior.stair_scum(o, view)
+        self.assertIsNotNone(d_tp3)
+        self.assertEqual((d_tp3.layer, warrior.picking), ("phase", TELEPORT_SCROLL), d_tp3.reason)
+        self.assertEqual(warrior.level.sealed_teleports, 3)
+
+        warrior.picking = None
+        warrior.level.sealed_teleports = 6
+        warrior.level.searches[(10, 10)] = 2 * SEARCH_BUDGET
+        d_rec = warrior.stair_scum(o, view)
+        self.assertIsNotNone(d_rec)
+        self.assertEqual((d_rec.layer, d_rec.key, warrior.picking), ("recall", ord("R"), RECALL), d_rec.reason)
+
+    def test_full_pack_skips_undrained_restore_strength_and_alchemist_mid_scum(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE, RESTORE_STR
+        from moria_playtest.goals import for_character
+        ranger = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.gold_seen = 39, 42, 16_000_000
+        ranger.recall, ranger.food, ranger.lamp, ranger.light_left, ranger.oil = 10, 20.0, True, 9000, 5
+        ranger.phase, ranger.teleports = 10, 5
+        ranger.drained = set()
+        ranger.restores = {RESTORE_LIFE: 2, RESTORE_STR: 0}
+        ranger.strong = {CCW: 25, HEALING: 1}
+        ranger.restock_scums = 3
+        ranger.restock_scumming = True
+        ranger.last_dlvl = 1
+        pack = [(f"Dummy Item {i}", 1) for i in range(21)] + [("Scroll of Word of Recall", 10)]
+        ranger.pack_listed = list(pack)
+
+        self.assertTrue(ranger.pack_blocks_optional_buy(RESTORE_STR, RESTORE_STR))
+        ranger.drained = {"ST"}
+        self.assertFalse(ranger.pack_blocks_optional_buy(RESTORE_STR, RESTORE_STR))
+        ranger.drained = set()
+        ranger.pack_listed[-2] = (RESTORE_STR, 1)
+        self.assertFalse(ranger.pack_blocks_optional_buy(RESTORE_STR, RESTORE_STR))
+
+        ranger.pack_listed = list(pack)
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=432, mhp=432,
+                           rows={23: "HP:432/432 MP:100/100 AC:55 AU:16777K"})
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        ranger.track(town, view_town)
+        self.assertTrue(ranger.alchemist_done)
+
+    def test_restock_scum_cooldown_survives_dl1_stair_bounce(self) -> None:
+        from moria_playtest.brain import CCW, RESTORE_LIFE, RESTOCK_SCUMS_DEEP
+        from moria_playtest.goals import for_character
+
+        def shopped(b: Brain) -> None:
+            b.shopped = b.potions_done = b.magic_done = b.alchemist_done = True
+            b.market_done = b.weapons_done = b.armoury_done = True
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.recall, warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 10, 20.0, True, 9000, 5
+        warrior.strong = {CCW: 50, "Potion of Healing": 0}
+        warrior.restores = {RESTORE_LIFE: 2}
+        shopped(warrior)
+        warrior.restock_scums = RESTOCK_SCUMS_DEEP
+        warrior.restock_scumming = False
+
+        on_stairs = town_view((5, 5), (5, 5))
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=512, mhp=512,
+                           rows={23: "HP:512/512 MP:0/0 AC:55 AU:16777K"})
+        town.step = 1000
+        d = warrior.recall_trip(town, on_stairs)
+        self.assertTrue(d is None or d.layer != "restock")
+        self.assertEqual(warrior.restock_scums, 0)
+        self.assertTrue(warrior.level.restock_done)
+        self.assertGreater(warrior.restock_scum_after, 1000)
+
+        dl1 = command_obs(pos=(5, 5), dlvl=1, clvl=39, hp=512, mhp=512,
+                          rows={23: "HP:512/512 MP:0/0 AC:55 AU:16777K"})
+        dl1.step = 1005
+        warrior.track(dl1, town_view((5, 5), (2, 2), dlvl=1))
+        dl0_back = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=512, mhp=512,
+                               rows={23: "HP:512/512 MP:0/0 AC:55 AU:16777K"})
+        dl0_back.step = 1080
+        warrior.track(dl0_back, view_town)
+        shopped(warrior)
+        d_back = warrior.recall_trip(dl0_back, on_stairs)
+        self.assertTrue(d_back is None or d_back.layer != "restock")
+
+        dl2 = command_obs(pos=(5, 5), dlvl=2, clvl=39, hp=512, mhp=512,
+                          rows={23: "HP:512/512 MP:0/0 AC:55 AU:16777K"})
+        dl2.step = 1100
+        warrior.track(dl2, town_view((5, 5), (2, 2), dlvl=2))
+        self.assertEqual(warrior.restock_scum_after, 0)
+        dl0_later = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=512, mhp=512,
+                                rows={23: "HP:512/512 MP:0/0 AC:55 AU:16777K"})
+        dl0_later.step = 1200
+        warrior.track(dl0_later, view_town)
+        shopped(warrior)
+        d_later = warrior.recall_trip(dl0_later, on_stairs)
+        self.assertIsNotNone(d_later)
+        self.assertEqual(d_later.layer, "restock", d_later.reason)
+
+    def test_restock_scumming_does_not_double_restock_wait_and_life_restore_loss_recalls(self) -> None:
+        from moria_playtest.brain import CCW, CSW, GEAR_TRIP_WAIT, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+
+        ranger = Brain(for_character(GOALS["balrog"], "elf-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.gold_seen = 39, 42, 16_000_000
+        ranger.food, ranger.lamp, ranger.light_left, ranger.oil = 20.0, True, 3000, 6
+        ranger.recall, ranger.teleports = 10, 0
+        ranger.strong = {CCW: 5, CSW: 10, HEALING: 8}
+        ranger.restores = {}
+
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=392, mhp=392,
+                           rows={23: "HP:392/392 MP:140/140 AC:58 AU:16775K"})
+        town.step = 100
+        ranger.track(town, view_town)
+        ranger.restock_scumming = True
+        dl1 = command_obs(pos=(5, 5), dlvl=1, clvl=39, hp=392, mhp=392,
+                          rows={23: "HP:392/392 MP:140/140 AC:58 AU:16775K"})
+        dl1.step = 150
+        ranger.track(dl1, town_view((5, 5), (2, 2), dlvl=1))
+        self.assertEqual(ranger.restock_wait, GEAR_TRIP_WAIT)
+
+        town.step = 200
+        ranger.track(town, view_town)
+        ranger.restores = {RESTORE_LIFE: 1}
+        ranger.restock_scumming = False
+        dl1.step = 300
+        ranger.track(dl1, town_view((5, 5), (2, 2), dlvl=1))
+        self.assertTrue(ranger.trip_had_life_restore)
+
+        dl23 = command_obs(pos=(5, 5), dlvl=23, clvl=39, hp=392, mhp=392,
+                           rows={23: "HP:392/392 MP:140/140 AC:58 AU:16775K"})
+        dl23.step = 1000
+        self.assertLess(dl23.step, ranger.restock_trip_after)
+        ranger.restores = {}
+        self.assertTrue(ranger.needs_resupply(dl23))
+
+        town.step = 2000
+        ranger.track(town, view_town)
+        ranger.restock_wait = 80_000
+        ranger.restores = {}
+        ranger.restock_scumming = False
+        dl1.step = 2100
+        ranger.track(dl1, town_view((5, 5), (2, 2), dlvl=1))
+        self.assertFalse(ranger.trip_had_life_restore)
+        self.assertEqual(ranger.restock_trip_after, 2100 + GEAR_TRIP_WAIT)
+
+        dl23.step = 3000
+        ranger.restock_trip_after = 43_000
+        ranger.track(dl23, town_view((5, 5), (2, 2), dlvl=23))
+        self.assertEqual(ranger.restock_trip_after, 3000 + GEAR_TRIP_WAIT)
+
+    def test_zero_short_escape_warrior_fast_scums_alchemist_past_three_scums(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE, RESTORE_LIFE_DEEP_SCUM, RESTOCK_SCUMS
+        from moria_playtest.goals import for_character
+
+        def shopped(b: Brain) -> None:
+            b.shopped = b.potions_done = b.magic_done = b.alchemist_done = True
+            b.market_done = b.weapons_done = b.armoury_done = True
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.recall, warrior.phase, warrior.teleports = 10, 0, 0
+        warrior.strong = {CCW: 25, HEALING: 5}
+        warrior.restores = {RESTORE_LIFE: RESTORE_LIFE_DEEP_SCUM}
+
+        on_stairs = town_view((5, 5), (5, 5))
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=474, mhp=474,
+                           rows={23: "HP:474/474 MP:0/0 AC:55 AU:16777K"})
+        town.step = 100
+        self.assertEqual(warrior.restock_needed(town), "Teleportation")
+        self.assertFalse(warrior.short_escape(town))
+
+        shopped(warrior)
+        warrior.restock_scums = RESTOCK_SCUMS
+        warrior.restock_scumming = False
+        d = warrior.recall_trip(town, on_stairs)
+        self.assertIsNotNone(d)
+        self.assertEqual(d.layer, "restock", d.reason)
+
+        dl1 = command_obs(pos=(5, 5), dlvl=1, clvl=39, hp=474, mhp=474,
+                          rows={23: "HP:474/474 MP:0/0 AC:55 AU:16777K"})
+        dl1.step = 150
+        warrior.track(dl1, town_view((5, 5), (2, 2), dlvl=1))
+        town.step = 200
+        warrior.restock_scumming = True
+        self.assertTrue(warrior.alchemist_market_scum(town))
+        warrior.track(town, view_town)
+        self.assertTrue(warrior.shopped)
+        self.assertTrue(warrior.magic_done)
+        self.assertTrue(warrior.armoury_done)
+        self.assertTrue(warrior.weapons_done)
+        self.assertTrue(warrior.potions_done)
+        self.assertFalse(warrior.alchemist_done)
+        self.assertFalse(warrior.market_done)
+
+        warrior.phase = 4
+        self.assertTrue(warrior.short_escape(town))
+        shopped(warrior)
+        warrior.restock_scums = RESTOCK_SCUMS
+        warrior.restock_scumming = False
+        d_done = warrior.recall_trip(town, on_stairs)
+        self.assertTrue(d_done is None or d_done.layer != "restock")
+
+    def test_trap_hit_messages_do_not_trigger_unseen_attack_or_poison(self) -> None:
+        from moria_playtest.brain import SEALED_SEARCHES, UNKNOWN
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import WALL
+
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl = 39, 42
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.gold_seen = 16_000_000
+
+        sealed = town_view((5, 5), (10, 10), dlvl=39)
+        for x in range(10):
+            for y in range(10):
+                sealed.types[y * sealed.cols + x] = UNKNOWN
+        for x in range(4, 7):
+            for y in range(3, 8):
+                sealed.types[y * sealed.cols + x] = WALL
+        for y in range(4, 7):
+            sealed.types[y * sealed.cols + 5] = 0x0
+        sealed.pos = (5, 5)
+
+        for i, msg in enumerate(("An arrow hits you! | You take 6 damage.",
+                                 "A dart hits you! | You take 2 damage.",
+                                 "Acid hits you! | You take 5 damage.")):
+            hp = 435 - (i + 1) * 6
+            o = command_obs(pos=(5, 5), dlvl=39, clvl=39, hp=hp, mhp=435,
+                            rows={0: msg, 23: f"HP:{hp}/435 MP:0/0 AC:55 AU:16777K"})
+            o.step = 1000 + i
+            warrior.decide(o, sealed)
+            self.assertFalse(warrior.unseen_attack, msg)
+            self.assertEqual(warrior.level.unseen_until, 0, msg)
+        self.assertFalse(warrior.poisoned)
+        self.assertEqual(warrior.draining, 0)
+
+        d_search = warrior.search(o, sealed, forced=True, per_spot=SEALED_SEARCHES)
+        self.assertIsNotNone(d_search)
+        self.assertEqual(d_search.layer, "search", d_search.reason)
+
+        combo = command_obs(pos=(5, 5), dlvl=39, clvl=39, hp=410, mhp=435,
+                            rows={0: "the Orc hits you. | An arrow hits you!",
+                                  23: "HP:410/435 MP:0/0 AC:55 AU:16777K"})
+        combo.step = 1010
+        warrior.decide(combo, sealed)
+        self.assertTrue(warrior.attacked)
+        self.assertTrue(warrior.unseen_attack)
+
+    def test_stair_scum_uses_phase_door_out_of_sealed_deep_wing_when_low_on_teleports(self) -> None:
+        from moria_playtest.brain import PHASE, RECALL, SEARCH_BUDGET
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.teleports, warrior.phase, warrior.recall = 39, 42, 0, 5, 10
+        walls = [(10 + dx, 10 + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx, dy) != (0, 0)]
+        view = town_view((10, 10), (30, 30), dlvl=28, walls=walls)
+        view.types[30 * COLS + 30] = WALL
+        o = command_obs(pos=(10, 10), dlvl=28, clvl=39, hp=472, mhp=472)
+        warrior.level.searches[(10, 10)] = SEARCH_BUDGET
+
+        d_phase = warrior.stair_scum(o, view)
+        self.assertIsNotNone(d_phase)
+        self.assertEqual((d_phase.layer, d_phase.key, warrior.picking), ("phase", ord("R"), PHASE), d_phase.reason)
+        self.assertEqual(warrior.level.sealed_teleports, 1)
+        self.assertEqual(warrior.level.searches, {})
+
+        warrior.picking = None
+        warrior.phase = 1
+        warrior.level.searches[(10, 10)] = 2 * SEARCH_BUDGET
+        d_rec = warrior.stair_scum(o, view)
+        self.assertIsNotNone(d_rec)
+        self.assertEqual((d_rec.layer, d_rec.key, warrior.picking), ("recall", ord("R"), RECALL), d_rec.reason)
+
+    def test_walking_down_dl19_and_non_returning_recall_phase_door_escape(self) -> None:
+        from moria_playtest.brain import PHASE, RECALL, SEARCH_BUDGET
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-orc-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.phase, warrior.teleports, warrior.recall = 39, 42, 10, 0, 10
+        warrior.deeper_ok = lambda o: True  # type: ignore[method-assign]
+        walls = [(10 + dx, 10 + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx, dy) != (0, 0)]
+        view19 = town_view((10, 10), (30, 30), dlvl=19, walls=walls)
+        view19.types[30 * COLS + 30] = WALL
+        o19 = command_obs(pos=(10, 10), dlvl=19, clvl=39, hp=513, mhp=513)
+        warrior.level.searches[(10, 10)] = SEARCH_BUDGET
+
+        d_p19 = warrior.stair_scum(o19, view19)
+        self.assertIsNotNone(d_p19)
+        self.assertEqual((d_p19.layer, d_p19.key, warrior.picking), ("phase", ord("R"), PHASE), d_p19.reason)
+        self.assertEqual(warrior.level.sealed_teleports, 1)
+        self.assertEqual(warrior.level.searches, {})
+
+        warrior.picking = None
+        warrior.level.sealed_teleports = 6
+        warrior.level.searches[(10, 10)] = 2 * SEARCH_BUDGET
+        d_no_rec = warrior.stair_scum(o19, view19)
+        self.assertFalse(d_no_rec is not None and warrior.picking == RECALL)
+
+        view36 = town_view((10, 10), (30, 30), dlvl=36, walls=walls)
+        view36.types[30 * COLS + 30] = WALL
+        o36 = command_obs(pos=(10, 10), dlvl=36, clvl=39, hp=513, mhp=513)
+        warrior.picking = None
+        warrior.level.sealed_teleports = 2
+        warrior.level.searches = {(10, 10): SEARCH_BUDGET // 3}
+        d_p36 = warrior.stair_scum(o36, view36)
+        self.assertIsNotNone(d_p36)
+        self.assertEqual((d_p36.layer, d_p36.key, warrior.picking), ("phase", ord("R"), PHASE), d_p36.reason)
+        self.assertEqual(warrior.level.sealed_teleports, 3)
+
+    def test_life_drained_temple_scum_skips_alchemist_and_caps_nonzero_rll_at_soft_cap(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, LIFE, RESTORE_LIFE, RESTORE_STR,
+                                          RESTOCK_SCUMS_DEEP_SOFT)
+        from moria_playtest.goals import for_character
+
+        def shopped(b: Brain) -> None:
+            b.shopped = b.potions_done = b.magic_done = b.alchemist_done = True
+            b.market_done = b.weapons_done = b.armoury_done = True
+
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.recall, warrior.phase, warrior.teleports = 10, 10, 5
+        warrior.strong = {CCW: 30, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 1, RESTORE_STR: 2}
+        warrior.drained = {LIFE}
+        warrior.last_dlvl = 1
+        warrior.restock_scums = 5
+        warrior.restock_scumming = True
+
+        on_stairs = town_view((5, 5), (5, 5))
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=473, mhp=473,
+                           rows={23: "HP:473/473 MP:0/0 AC:55 AU:16777K"})
+        town.step = 500
+        warrior.track(town, view_town)
+        self.assertTrue(warrior.alchemist_done)
+
+        shopped(warrior)
+        warrior.restock_scums = RESTOCK_SCUMS_DEEP_SOFT
+        warrior.restock_scumming = False
+        d_stop = warrior.recall_trip(town, on_stairs)
+        self.assertTrue(d_stop is None or d_stop.layer != "restock")
+
+        warrior.restores[RESTORE_LIFE] = 0
+        warrior.restock_scums = RESTOCK_SCUMS_DEEP_SOFT
+        warrior.restock_scumming = False
+        warrior.level.restock_done = False
+        warrior.restock_scum_after = 0
+        d_go = warrior.recall_trip(town, on_stairs)
+        self.assertIsNotNone(d_go)
+        self.assertEqual(d_go.layer, "restock", d_go.reason)
+
+    def test_clvl39_ranger_scums_restore_life_to_deep_floor_with_soft_cap(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, RESTORE_LIFE, RESTORE_LIFE_DEEP_SCUM,
+                                          RESTORE_STR, RESTOCK_SCUMS_DEEP_SOFT)
+        from moria_playtest.goals import for_character
+
+        def shopped(b: Brain) -> None:
+            b.shopped = b.potions_done = b.magic_done = b.alchemist_done = True
+            b.market_done = b.weapons_done = b.armoury_done = True
+
+        ranger = Brain(for_character(GOALS["balrog"], "elf-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.gold_seen = 39, 42, 16_000_000
+        ranger.food, ranger.lamp, ranger.light_left, ranger.oil = 20.0, True, 3000, 6
+        ranger.recall, ranger.phase, ranger.teleports = 10, 10, 5
+        ranger.strong = {CCW: 25, HEALING: 10}
+        ranger.restores = {RESTORE_LIFE: 1, RESTORE_STR: 2}
+        ranger.resist_heat = 40
+
+        on_stairs = town_view((5, 5), (5, 5))
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=392, mhp=392,
+                           rows={23: "HP:392/392 MP:140/140 AC:58 AU:16777K"})
+        town.step = 500
+        self.assertEqual(ranger.restock_needed(town), "Restore Life Levels")
+
+        shopped(ranger)
+        ranger.restock_scums = RESTOCK_SCUMS_DEEP_SOFT - 1
+        ranger.restock_scumming = False
+        d_go = ranger.recall_trip(town, on_stairs)
+        self.assertIsNotNone(d_go)
+        self.assertEqual(d_go.layer, "restock", d_go.reason)
+
+        shopped(ranger)
+        ranger.restock_scumming = False
+        ranger.restock_scums = RESTOCK_SCUMS_DEEP_SOFT
+        d_stop = ranger.recall_trip(town, on_stairs)
+        self.assertTrue(d_stop is None or d_stop.layer != "restock")
+
+        ranger.restores[RESTORE_LIFE] = RESTORE_LIFE_DEEP_SCUM
+        self.assertIsNone(ranger.restock_needed(town))
+
+    def test_clvl39_nonzero_healing_caps_scums_at_soft_cap(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, RESTORE_LIFE, RESTORE_STR,
+                                          RESTOCK_SCUMS_DEEP_SOFT)
+        from moria_playtest.goals import for_character
+
+        def shopped(b: Brain) -> None:
+            b.shopped = b.potions_done = b.magic_done = b.alchemist_done = True
+            b.market_done = b.weapons_done = b.armoury_done = True
+
+        ranger = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.gold_seen = 39, 42, 16_000_000
+        ranger.food, ranger.lamp, ranger.light_left, ranger.oil = 20.0, True, 3000, 6
+        ranger.recall, ranger.phase, ranger.teleports = 10, 10, 5
+        ranger.restores = {RESTORE_LIFE: 2, RESTORE_STR: 2}
+        ranger.strong = {CCW: 26, HEALING: 1}
+        ranger.resist_heat = 30
+
+        on_stairs = town_view((5, 5), (5, 5))
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=432, mhp=432,
+                           rows={23: "HP:432/432 MP:140/140 AC:58 AU:16777K"})
+        town.step = 500
+        self.assertEqual(ranger.restock_needed(town), "Healing")
+
+        shopped(ranger)
+        ranger.restock_scums = RESTOCK_SCUMS_DEEP_SOFT
+        ranger.restock_scumming = False
+        d_stop = ranger.recall_trip(town, on_stairs)
+        self.assertTrue(d_stop is None or d_stop.layer != "restock")
+
+        ranger.strong[HEALING] = 0
+        ranger.restock_scums = RESTOCK_SCUMS_DEEP_SOFT
+        ranger.restock_scumming = False
+        ranger.level.restock_done = False
+        ranger.restock_scum_after = 0
+        d_go = ranger.recall_trip(town, on_stairs)
+        self.assertIsNotNone(d_go)
+        self.assertEqual(d_go.layer, "restock", d_go.reason)
+
+    def test_temple_scum_skips_stocked_black_market_and_opens_alchemist_when_no_short_escape(self):
+        from moria_playtest.brain import (CCW, HEALING, LIFE,
+                                          RESTORE_LIFE, RESTORE_STR)
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl = 39
+        warrior.max_dlvl = 42
+        warrior.gold_seen = 16_000_000
+        warrior.food = 20.0
+        warrior.lamp = True
+        warrior.light_left = 3000
+        warrior.oil = 6
+        warrior.recall = 10
+        warrior.strong = {CCW: 26, HEALING: 12}
+        warrior.restores = {RESTORE_LIFE: 0, RESTORE_STR: 2}
+        warrior.resist_heat = 25
+        warrior.jewels = {"Ring": 1000, "Ring2": 800, "Amulet": 900}
+        warrior.jewel_names = {
+            "Ring": "Ring of Speed (+1)",
+            "Ring2": "Ring of Resist Fire",
+            "Amulet": "Amulet of the Magi",
+        }
+        warrior.phase = 10
+        warrior.teleports = 5
+        warrior.last_dlvl = 1
+        warrior.restock_scums = 5
+        warrior.restock_scumming = True
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=513, mhp=513,
+                           rows={23: "HP:513/513 MP:0/0 AC:55 AU:16777K"})
+
+        warrior.track(town, view_town)
+
+        self.assertTrue(warrior.temple_market_scum(town))
+        self.assertFalse(warrior.potions_done)
+        self.assertTrue(warrior.market_done)
+        self.assertTrue(warrior.alchemist_done)
+
+        warrior.last_dlvl = 1
+        warrior.restock_scumming = True
+        warrior.phase = 0
+        warrior.teleports = 0
+
+        warrior.track(town, view_town)
+
+        self.assertFalse(warrior.alchemist_done)
+        self.assertTrue(warrior.market_done)
+
+    def test_stair_scum_recalls_at_search_cap_after_sealed_teleports_exhausted(self) -> None:
+        from moria_playtest.brain import RECALL, RESTORE_LIFE, SEARCH_BUDGET
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.teleports, warrior.phase, warrior.recall = 39, 36, 5, 5, 10
+        warrior.restores = {RESTORE_LIFE: 2}
+        walls = [(10 + dx, 10 + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx, dy) != (0, 0)]
+        view = town_view((10, 10), (30, 30), dlvl=36, walls=walls)
+        view.types[30 * COLS + 30] = WALL
+        o36 = command_obs(pos=(10, 10), dlvl=36, clvl=39, hp=433, mhp=433)
+        warrior.level.sealed_teleports = 2
+        warrior.level.searches = {(10, 10): SEARCH_BUDGET // 3}
+
+        d_rec = warrior.stair_scum(o36, view)
+        self.assertIsNotNone(d_rec)
+        self.assertEqual((d_rec.layer, d_rec.key, warrior.picking), ("recall", ord("R"), RECALL), d_rec.reason)
+
+        warrior.max_dlvl = 42
+        warrior.teleports = 0
+        warrior.phase = 0
+        warrior.picking = None
+        warrior.level.sealed_teleports = 0
+        warrior.level.searches = {(10, 10): SEARCH_BUDGET}
+        d_rec2 = warrior.stair_scum(o36, view)
+        self.assertIsNotNone(d_rec2)
+        self.assertEqual((d_rec2.layer, d_rec2.key, warrior.picking), ("recall", ord("R"), RECALL), d_rec2.reason)
+
+    def test_walking_down_skips_trash_look_bolts_minor_mana_rest_and_runs_to_stairs(self) -> None:
+        from moria_playtest.brain import CCW, DIRS, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import FROST_BOLT, Prayer
+        from moria_playtest.view import Creature
+
+        ranger = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.gold_seen, ranger.recall = 39, 42, 16_000_000, 10
+        ranger.food, ranger.lamp, ranger.light_left, ranger.oil = 20.0, True, 9000, 5
+        ranger.phase, ranger.teleports = 10, 5
+        ranger.strong = {CCW: 25, HEALING: 10}
+        ranger.restores = {RESTORE_LIFE: 2}
+        ranger.book_next = None
+        ranger.magic.known[FROST_BOLT] = Prayer("a", 1, 1, "Beginners-Magick")
+        ranger.magic.ledger[FROST_BOLT] = {"effect": 1}
+        o22 = command_obs(pos=(5, 5), dlvl=22, clvl=39, hp=432, mhp=432,
+                          rows={23: "HP:432/432 MP:130/149 AC:55 AU:16000K"})
+        o22.step = 1000
+        self.assertTrue(ranger.walking_down(o22))
+
+        view_look = town_view((5, 5), (20, 5), dlvl=22)
+        view_look.unknown = {(6, 5): "?", (7, 5): ",", (8, 5): "-", (5, 7): "!"}
+        d_look = ranger.look(o22, view_look)
+        self.assertIsNotNone(d_look)
+        self.assertIn("(5, 7)", d_look.reason)
+
+        view_chest = town_view((5, 5), (20, 5), dlvl=22)
+        ranger.items_seen = {(6, 5): ("&", "Small wooden chest (locked)")}
+        self.assertIsNone(ranger.chest(o22, view_chest))
+
+        view_mon = town_view((5, 5), (20, 5), dlvl=22)
+        view_mon.creatures[(8, 5)] = Creature("p", 1)
+        self.assertIsNone(ranger.invoke(o22, view_mon))
+
+        view_rest = town_view((5, 5), (20, 5), dlvl=22)
+        self.assertIsNone(ranger.rest(o22, view_rest))
+        o22_low_mp = command_obs(pos=(5, 5), dlvl=22, clvl=39, hp=432, mhp=432,
+                                 rows={23: "HP:432/432 MP:50/149 AC:55 AU:16000K"})
+        self.assertIsNotNone(ranger.rest(o22_low_mp, view_rest))
+
+        view_dn = town_view((5, 5), (15, 5), dlvl=22)
+        d_dn = ranger.descend(o22, view_dn)
+        self.assertIsNotNone(d_dn)
+        self.assertEqual(d_dn.key, DIRS[(1, 0)] | 0x80, d_dn.reason)
+
+        view_up = town_view((5, 5), (15, 5), dlvl=39, stairs_type=0xA)
+        ranger.deeper_ok = lambda o: False  # type: ignore[method-assign]
+        ranger.level.runs_from.clear()
+        o39 = command_obs(pos=(5, 5), dlvl=39, clvl=39, hp=432, mhp=432,
+                          rows={23: "HP:432/432 MP:130/149 AC:55 AU:16000K"})
+        o39.step = 1001
+        d_ss1 = ranger.stair_scum(o39, view_up)
+        self.assertIsNotNone(d_ss1)
+        self.assertEqual(d_ss1.key, DIRS[(1, 0)] | 0x80, d_ss1.reason)
+
+        view_up2 = town_view((10, 5), (15, 5), dlvl=39, stairs_type=0xA)
+        o39_mid = command_obs(pos=(10, 5), dlvl=39, clvl=39, hp=432, mhp=432,
+                              rows={23: "HP:432/432 MP:130/149 AC:55 AU:16000K"})
+        o39_mid.step = 1002
+        d_ss2 = ranger.stair_scum(o39_mid, view_up2)
+        self.assertIsNotNone(d_ss2)
+        self.assertEqual(d_ss2.key, DIRS[(1, 0)] | 0x80, d_ss2.reason)
+
+    def test_temple_scum_skips_bm_at_half_recall_and_fallback_skips_dark_walls(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, HEALING_DEEP_SCUM,
+                                          RESTORE_LIFE, RESTORE_STR)
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 14_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.recall, warrior.phase, warrior.teleports = 8, 5, 5
+        warrior.strong = {CCW: 25, HEALING: HEALING_DEEP_SCUM}
+        warrior.restores = {RESTORE_LIFE: 0, RESTORE_STR: 2}
+        warrior.resist_heat = 25
+        warrior.jewels = {"Ring": 1000, "Ring2": 800, "Amulet": 900}
+        warrior.jewel_names = {
+            "Ring": "Ring of Speed (+1)",
+            "Ring2": "Ring of Resist Fire",
+            "Amulet": "Amulet of the Magi",
+        }
+        view_town = town_view((5, 5), (2, 2), dlvl=0)
+        view_town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (5, 9)]
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=433, mhp=433,
+                           rows={23: "HP:433/433 MP:0/0 AC:55 AU:14000K"})
+        warrior.last_dlvl, warrior.restock_scums, warrior.restock_scumming = 1, 5, True
+        warrior.track(town, view_town)
+        self.assertTrue(warrior.market_done)
+
+        warrior.last_dlvl, warrior.restock_scumming, warrior.recall = 1, True, 3
+        warrior.track(town, view_town)
+        self.assertFalse(warrior.market_done)
+
+        walls = [(5 + dx, 5 + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                 if (dx, dy) not in ((0, 0), (0, 1))]
+        dark_view = town_view((5, 5), (20, 20), dlvl=38, walls=walls)
+        dark_view.types[6 * COLS + 5] = UNKNOWN
+        o38 = command_obs(pos=(5, 5), dlvl=38, clvl=39, hp=433, mhp=433)
+        o38.step = 500
+        warrior.track(o38, dark_view)
+        warrior.last_move = ((5, 5), (5, 6))
+        warrior.messages = ""
+        warrior.note_bump(o38, dark_view)
+        self.assertIn((5, 6), warrior.level.felt)
+        warrior.level.unseen_until = o38.step + 5
+        d_fb = warrior.choose(o38, dark_view)
+        self.assertNotEqual(d_fb.reason, "attacked unseen, hemmed in: strike where it was felt")
+
+    def test_leave_deadly_runs_to_stairs_when_clear(self) -> None:
+        from moria_playtest.brain import CCW, DIRS, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.recall, warrior.phase = 39, 42, 10, 5
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 2}
+        warrior.level.deadly = (40, 40)
+        warrior.level.deadly_drain = True
+        warrior.level.deadly_oneshot = False
+        warrior.level.drained_bare = False
+        view = town_view((5, 5), (15, 5), dlvl=36, stairs_type=0xA)
+        o36 = command_obs(pos=(5, 5), dlvl=36, clvl=39, hp=473, mhp=473)
+        o36.step = 1000
+
+        d_lv = warrior.leave_deadly(o36, view)
+        self.assertIsNotNone(d_lv)
+        self.assertEqual((d_lv.layer, d_lv.key), ("leave", DIRS[(1, 0)] | 0x80), d_lv.reason)
+
+    def test_shake_paralyzer_skips_committed_stationary_blocker(self) -> None:
+        from moria_playtest import knowledge
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import ORB, PORTAL, Prayer
+        from moria_playtest.view import Creature
+
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+        kind = knowledge.kinds_by_name()["Floating Eye"]
+        priest = Brain(for_character(GOALS["balrog"], "dwarf-priest"))
+        priest.clvl, priest.max_dlvl, priest.teleports, priest.phase = 38, 35, 0, 0
+        priest.magic.known[PORTAL] = Prayer("b", 1, 1, "Words of Wisdom")
+        priest.magic.known[ORB] = Prayer("c", 3, 2, "Words of Wisdom")
+        view = town_view((10, 10), (20, 10), dlvl=35, walls=[(11, 9), (11, 11)])
+        view.creatures[(11, 10)] = Creature(*kind, "Floating Eye")
+        o35 = command_obs(pos=(10, 10), dlvl=35, clvl=38, hp=344, mhp=344,
+                          rows={23: "HP:344/344 MP:80/80 AC:45 AU:10000K"})
+        priest.level.clear_target = (11, 10)
+
+        self.assertIsNone(priest.shake_paralyzer(o35, view))
+        d_clr = priest.chosen_blocker(o35, view)
+        self.assertIsNotNone(d_clr)
+        self.assertIn(d_clr.layer, ("pray", "fight"), d_clr.reason)
+
+        priest.level.clear_target = None
+        d_esc = priest.shake_paralyzer(o35, view)
+        self.assertIsNotNone(d_esc)
+        self.assertIn(PORTAL, d_esc.reason)
+
+    def test_deep_warrior_hunts_and_stands_against_high_hp_dragons_past_tough_glyphs(self) -> None:
+        from moria_playtest.brain import HEALING
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import Creature
+
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+        mrd = Creature(*knowledge.kinds_by_name()["Mature Red Dragon"], "Mature Red Dragon")
+        awd = Creature(*knowledge.kinds_by_name()["Ancient White Dragon"], "Ancient White Dragon")
+        amhd = Creature(*knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"], "Ancient Multi-Hued Dragon")
+        lich = Creature(*knowledge.kinds_by_name()["King Lich"], "King Lich")
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.food, warrior.recall, warrior.phase = 39, 42, 10.0, 10, 5
+        warrior.weapon = ("Two-Handed Sword (Espadon)", 10)
+        warrior.strong = {HEALING: 10}
+        warrior.jewel_names = {"Ring": "Ring of Resist Fire", "Ring2": "Ring of Speed"}
+        warrior.tough = {"Mature Red Dragon": 39, "Ancient White Dragon": 39}
+
+        stats = {19: "ST:18/80 DX:18/50", 23: "HP:512/512 MP:0/0 AC:55 AU:10000K"}
+        o39 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=512, mhp=512, rows=stats)
+        for dragon in (mrd, awd):
+            self.assertTrue(warrior.melee_kills(o39, dragon))
+            self.assertFalse(warrior.lore_strong(dragon, o39))
+            self.assertTrue(warrior.engageable(dragon, o39))
+
+        # Standing adjacent at 75% HP beside a tough-marked Mature Red Dragon does not retreat
+        o39_75 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=384, mhp=512,
+                             rows={19: "ST:18/80 DX:18/50", 23: "HP:384/512 MP:0/0 AC:55 AU:10000K"})
+        view = town_view((10, 10), (30, 10), dlvl=39, stairs_type=TYPE_STAIRS_UP)
+        view.creatures[(11, 10)] = mrd
+        self.assertIsNone(warrior.retreat(o39_75, view))
+
+        # One-shot breath (AMHD) and XP drainers (King Lich) stay blocked
+        self.assertTrue(warrior.lore_strong(amhd, o39))
+        self.assertFalse(warrior.engageable(amhd, o39))
+        self.assertFalse(warrior.engageable(lich, o39))
+
+        # Without Healing potions, doubled breath guard allows resisted MRD but blocks AWD at 393 MHP
+        ranger = Brain(for_character(GOALS["balrog"], "half-elf-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.food = 39, 42, 10.0
+        ranger.weapon = ("Two-Handed Sword", 10)
+        ranger.strong = {}
+        ranger.jewel_names = {"Ring": "Ring of Resist Fire"}
+        o_r = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=393, mhp=393,
+                          rows={19: "ST:18/80 DX:18/50", 23: "HP:393/393 MP:100/100 AC:55 AU:10000K"})
+        self.assertTrue(ranger.melee_kills(o_r, mrd))
+        self.assertFalse(ranger.melee_kills(o_r, awd))
+
+    def test_restock_needed_prioritizes_zero_short_escape_over_nonzero_rll_and_healing(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.phase, warrior.teleports = 0, 0
+        warrior.restores = {RESTORE_LIFE: 1}
+        warrior.strong = {CCW: 25, HEALING: 1}
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=512, mhp=512,
+                           rows={23: "HP:512/512 MP:0/0 AC:55 AU:16000K"})
+        self.assertEqual(warrior.restock_needed(town), "Teleportation")
+
+        warrior.restores = {RESTORE_LIFE: 0}
+        self.assertEqual(warrior.restock_needed(town), "Restore Life Levels")
+
+    def test_walking_down_dl30_does_not_quiet_scum_and_explore_routes_around_drainer(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, HUNT_QUIET_STEPS, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import Creature
+
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+        ghost = Creature(*knowledge.kinds_by_name()["Ghost"], "Ghost")
+
+        warrior = Brain(for_character(GOALS["balrog"], "dwarf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.food, warrior.recall, warrior.phase = 39, 42, 20.0, 10, 5
+        warrior.lamp, warrior.light_left, warrior.oil = True, 9000, 5
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 4}
+
+        view = town_view((20, 10), (5, 10), dlvl=30)
+        view.types[10 * COLS + 35] = UNKNOWN   # frontier to the east
+        view.types[10 * COLS + 5] = UNKNOWN    # frontier to the west
+        o30 = command_obs(pos=(20, 10), dlvl=30, clvl=39, hp=512, mhp=512)
+        o30.step = 100
+        warrior.track(o30, view)
+        o30_late = command_obs(pos=(20, 10), dlvl=30, clvl=39, hp=512, mhp=512)
+        o30_late.step = 100 + HUNT_QUIET_STEPS + 10
+        warrior.track(o30_late, view)
+        self.assertFalse(warrior.level.scum)
+
+        # Put a Ghost just east on the path toward the eastern frontier; explore detours west while walking_down
+        view_block = town_view((20, 10), (5, 10), dlvl=30, walls=[(x, y) for x in range(18, 25) for y in (9, 11)])
+        view_block.types[10 * COLS + 25] = UNKNOWN   # closer frontier to the east (blocked by Ghost)
+        view_block.types[10 * COLS + 5] = UNKNOWN    # alternate frontier to the west
+        view_block.creatures[(22, 10)] = ghost
+        d_detour = warrior.explore(o30_late, view_block)
+        self.assertIsNotNone(d_detour)
+        self.assertEqual(d_detour.key, DIRS[(-1, 0)], d_detour.reason)
+
+    def test_leave_deadly_does_not_drink_weak_potions_at_healthy_hp_against_lethal_breath(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.recall, warrior.recalling = 39, 42, 10, True
+        warrior.clw = 10
+        warrior.strong = {CCW: 5, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 2}
+        warrior.level.deadly = (11, 10)
+        warrior.level.deadly_oneshot = True
+        view = town_view((10, 10), (30, 30), dlvl=38)
+        o_hi = command_obs(pos=(10, 10), dlvl=38, clvl=39, hp=454, mhp=472)
+        o_hi.step = 500
+        warrior.remember_burst(o_hi, frozenset(), 693)
+
+        # At 454/472 HP (>= QUAFF_HP * mhp), no potion can lift HP past 693/0.9: do not waste turns quaffing
+        self.assertIsNone(warrior.leave_deadly(o_hi, view))
+
+        # Below QUAFF_HP * mhp (e.g. 200/472), leave_deadly still heals before continuing
+        o_lo = command_obs(pos=(10, 10), dlvl=38, clvl=39, hp=200, mhp=472)
+        o_lo.step = 501
+        d_heal = warrior.leave_deadly(o_lo, view)
+        self.assertIsNotNone(d_heal)
+        self.assertEqual(d_heal.layer, "quaff", d_heal.reason)
+
+    def test_resupply_recalls_when_too_deep_without_short_escape_and_no_up_stairs(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RECALL, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.food, warrior.recall = 39, 42, 20.0, 10
+        warrior.lamp, warrior.light_left, warrior.oil = True, 9000, 5
+        warrior.phase, warrior.teleports = 0, 0
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 2}
+        warrior.gold_seen = 16_000_000
+        o38 = command_obs(pos=(10, 10), dlvl=38, clvl=39, hp=472, mhp=472)
+        o38.step = 500
+
+        # On DL38 without any short_escape and no up staircase known: read Word of Recall instead of wandering blindly
+        no_stairs = town_view((10, 10), (30, 30), dlvl=38)
+        d_rec = warrior.resupply(o38, no_stairs)
+        self.assertIsNotNone(d_rec)
+        self.assertEqual((d_rec.layer, d_rec.key, warrior.picking), ("recall", ord("R"), RECALL), d_rec.reason)
+
+        # With an up staircase known, still walks to the up staircase to climb back to safe DL36
+        warrior.picking = None
+        has_up = town_view((10, 10), (15, 10), dlvl=38, stairs_type=TYPE_STAIRS_UP)
+        d_up = warrior.resupply(o38, has_up)
+        self.assertIsNotNone(d_up)
+        self.assertEqual(d_up.layer, "resupply", d_up.reason)
+
+    def test_avoid_drainer_keeps_phase_door_reserve_and_caps_per_level(self) -> None:
+        from moria_playtest.brain import DRAINER_PHASE_CAP, PHASE_DRAINER_KEEP
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        wraith = knowledge.kinds_by_name()["Nether Wraith"]
+        view = town_view((10, 10), (40, 40), dlvl=38)
+        for dx, dy in DIRS:
+            if (dx, dy) not in ((0, 0), (1, 0)):
+                view.types[(10 + dy) * COLS + (10 + dx)] = WALL
+        view.creatures = {(11, 10): Creature(*wraith, "Nether Wraith")}
+        o38 = command_obs(pos=(10, 10), dlvl=38, clvl=39, hp=450, mhp=450)
+        o38.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.phase = 39, 42, PHASE_DRAINER_KEEP
+        self.assertIsNone(warrior.avoid_drainer(o38, view))
+        self.assertTrue(warrior.level.scum)
+
+        warrior2 = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior2.clvl, warrior2.max_dlvl, warrior2.phase = 39, 42, 10
+        warrior2.level.drainer_phases = 0
+        for expected in range(1, DRAINER_PHASE_CAP + 1):
+            o38.step += 1
+            d = warrior2.avoid_drainer(o38, view)
+            self.assertIsNotNone(d)
+            self.assertEqual((d.layer, d.key), ("phase", ord("R")), d.reason)
+            self.assertEqual(warrior2.level.drainer_phases, expected)
+        o38.step += 1
+        self.assertIsNone(warrior2.avoid_drainer(o38, view))
+        self.assertTrue(warrior2.level.scum)
+
+    def test_avoid_drainer_melees_one_turn_drainer_for_noncaster_with_restore(self) -> None:
+        from moria_playtest.brain import RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        banshee = knowledge.kinds_by_name()["Banshee"]
+        wraith = knowledge.kinds_by_name()["Nether Wraith"]
+        view = town_view((10, 10), (40, 40), dlvl=28)
+        for dx, dy in DIRS:
+            if (dx, dy) not in ((0, 0), (1, 0)):
+                view.types[(10 + dy) * COLS + (10 + dx)] = WALL
+        o28 = command_obs(pos=(10, 10), dlvl=28, clvl=39, hp=450, mhp=450)
+        o28.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.phase = 39, 42, 10
+        warrior.restores = {RESTORE_LIFE: 2}
+        warrior.weapon = ("Two-Handed Sword", 10)
+        warrior.last_stats = (28, 28)
+
+        # 1-turn Banshee with Restore Life Levels carried: do not waste Phase Door, let fight() 1-shot it
+        view.creatures = {(11, 10): Creature(*banshee, "Banshee")}
+        self.assertIsNone(warrior.avoid_drainer(o28, view))
+
+        # Without Restore Life Levels carried: still Phase Doors away even from a weak drainer
+        warrior.restores = {}
+        d_no_rll = warrior.avoid_drainer(o28, view)
+        self.assertIsNotNone(d_no_rll)
+        self.assertEqual((d_no_rll.layer, d_no_rll.key), ("phase", ord("R")), d_no_rll.reason)
+
+        # Multi-turn Nether Wraith even with Restore Life Levels: still Phase Doors away
+        warrior.restores = {RESTORE_LIFE: 2}
+        warrior.level.drainer_phases = 0
+        view.creatures = {(11, 10): Creature(*wraith, "Nether Wraith")}
+        d_wraith = warrior.avoid_drainer(o28, view)
+        self.assertIsNotNone(d_wraith)
+        self.assertEqual((d_wraith.layer, d_wraith.key), ("phase", ord("R")), d_wraith.reason)
+
+    def test_leave_deadly_non_oneshot_breather_takes_stairs_with_ccw_when_healthy(self) -> None:
+        from moria_playtest.brain import CCW, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.recall, warrior.phase = 39, 42, 10, 5
+        warrior.strong = {CCW: 15}
+        warrior.restores = {RESTORE_LIFE: 2}
+        warrior.jewel_names = {"Amulet": "Amulet of the Magi (+1)"}
+        warrior.level.deadly = (20, 10)
+        warrior.level.deadly_oneshot = False
+        warrior.level.deadly_drain = False
+        view = town_view((10, 10), (30, 10), dlvl=36, stairs_type=TYPE_STAIRS_UP)
+
+        o_hi = command_obs(pos=(10, 10), dlvl=36, clvl=39, hp=435, mhp=435)
+        o_hi.step = 500
+        d_hi = warrior.leave_deadly(o_hi, view)
+        self.assertIsNotNone(d_hi)
+        self.assertEqual(d_hi.layer, "leave", d_hi.reason)
+        self.assertIn("to the stairs", d_hi.reason)
+
+        # Hurt (< DEEP_HEAL_HP * mhp) without Healing potions does not take the healthy-CCW stair shortcut
+        warrior.level.scum = False
+        o_lo = command_obs(pos=(10, 10), dlvl=36, clvl=39, hp=200, mhp=435)
+        o_lo.step = 501
+        d_lo = warrior.leave_deadly(o_lo, view)
+        self.assertFalse(d_lo is not None and d_lo.layer == "leave" and "a breather here" in d_lo.reason)
+
+    def test_avoid_drainer_requires_double_hp_margin_and_escapes_when_afraid(self) -> None:
+        from moria_playtest.brain import (DRAINER_PHASE_CAP, PHASE_DRAINER_KEEP,
+                                          RESTORE_LIFE, TELEPORT_SCROLL)
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        ghost = knowledge.kinds_by_name()["Ghost"]
+        view = town_view((10, 10), (40, 40), dlvl=32)
+        for dx, dy in DIRS:
+            if (dx, dy) not in ((0, 0), (1, 0)):
+                view.types[(10 + dy) * COLS + (10 + dx)] = WALL
+        view.creatures = {(11, 10): Creature(*ghost, "Ghost")}
+        o32 = command_obs(pos=(10, 10), dlvl=32, clvl=39, hp=450, mhp=450)
+        o32.step = 500
+
+        # Ghost avg HP 58.5 (< 65-80 melee/t), but 2*58.5=117 (> melee/t): do NOT risk melee, Phase Door!
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.phase = 39, 42, 10
+        warrior.restores = {RESTORE_LIFE: 3}
+        warrior.weapon = ("Two-Handed Sword", 10)
+        warrior.last_stats = (28, 28)
+        d_ghost = warrior.avoid_drainer(o32, view)
+        self.assertIsNotNone(d_ghost)
+        self.assertEqual((d_ghost.layer, d_ghost.key), ("phase", ord("R")), d_ghost.reason)
+
+        # Afraid beside drainer bypasses PHASE_DRAINER_KEEP and DRAINER_PHASE_CAP while keeping 1 scroll
+        warrior.afraid = True
+        warrior.phase = PHASE_DRAINER_KEEP
+        warrior.level.drainer_phases = DRAINER_PHASE_CAP
+        o32.step += 1
+        d_afraid_pd = warrior.avoid_drainer(o32, view)
+        self.assertIsNotNone(d_afraid_pd)
+        self.assertEqual((d_afraid_pd.layer, d_afraid_pd.key), ("phase", ord("R")), d_afraid_pd.reason)
+
+        # Afraid beside drainer with only 1 Phase Door left falls back to far_escape (Teleportation)
+        warrior.phase = 1
+        warrior.teleports = 2
+        warrior.picking = None
+        o32.step += 1
+        d_afraid_tp = warrior.avoid_drainer(o32, view)
+        self.assertIsNotNone(d_afraid_tp)
+        self.assertEqual((d_afraid_tp.layer, d_afraid_tp.key, warrior.picking),
+                         ("phase", ord("R"), TELEPORT_SCROLL), d_afraid_tp.reason)
+
+    def test_deep_warrior_ghost_attack_does_not_arm_summoned_or_burn_phase_door(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import View
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        def make_warrior(restores: dict[str, int]) -> Brain:
+            b = Brain(for_character(GOALS["balrog"], "dwarf-warrior"))
+            b.clvl, b.max_dlvl, b.gold_seen = 39, 42, 16_000_000
+            b.food, b.lamp, b.light_left, b.oil = 20.0, True, 9000, 5
+            b.recall, b.phase, b.teleports = 10, 4, 2
+            b.strong = {CCW: 25, HEALING: 5}
+            b.restores = restores
+            b.weapon = ("Bastard Sword", 10)
+            b.last_stats = (28, 28)
+            return b
+
+        view = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 39, {})
+        obs = command_obs(pos=(5, 5), dlvl=39, clvl=39, hp=512, mhp=512,
+                          rows={0: "the Ghost touches you.", 23: "HP:512/512 MP:0/0 AC:55 AU:16000K"})
+        obs.step = 500
+
+        warrior = make_warrior({RESTORE_LIFE: 3})
+        dec = warrior.decide(obs, view)
+        self.assertIsNone(warrior.level.summoned)
+        self.assertNotEqual(dec.layer, "recall", dec.reason)
+
+        # Without Restore Life Levels, ghost still marks summoned for safety
+        bare = make_warrior({})
+        bare.decide(obs, view)
+        self.assertEqual(bare.level.summoned, obs.step)
+
+    def test_summon_phase_skips_melee_kills_and_healthy_no_return_summoner_does_not_recall(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import View
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 9000, 5
+        warrior.recall, warrior.phase = 10, 4
+        warrior.strong = {CCW: 25, HEALING: 5}
+        warrior.restores = {RESTORE_LIFE: 3}
+        warrior.weapon = ("Bastard Sword", 10)
+        warrior.last_stats = (28, 28)
+
+        o38 = command_obs(pos=(5, 5), dlvl=38, clvl=39, hp=472, mhp=472,
+                          rows={23: "HP:472/472 MP:0/0 AC:55 AU:16000K"})
+        o38.step = 500
+        warrior.level.summoned = o38.step
+
+        tick = knowledge.kinds_by_name()["Giant Fire Tick"]
+        warrior.adjacent = [Creature(*tick, "Giant Fire Tick")]
+        self.assertFalse(warrior.phase_due(o38))
+
+        wraith = knowledge.kinds_by_name()["Nether Wraith"]
+        warrior.adjacent = [Creature(*wraith, "Nether Wraith")]
+        self.assertTrue(warrior.phase_due(o38))
+
+        no_stairs = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 38, {})
+        self.assertFalse(warrior.recall_returns(o38))
+        self.assertIsNone(warrior.recall_trip(o38, no_stairs))
+
+        o38_hurt = command_obs(pos=(5, 5), dlvl=38, clvl=39, hp=250, mhp=472,
+                               rows={23: "HP:250/472 MP:0/0 AC:55 AU:16000K"})
+        o38_hurt.step = 500
+        d_rec = warrior.recall_trip(o38_hurt, no_stairs)
+        self.assertIsNotNone(d_rec)
+        self.assertEqual((d_rec.layer, d_rec.key), ("recall", ord("R")), d_rec.reason)
+
+    def test_magic_mapping_bought_kept_tracked_and_read_in_transit_and_way_on(self) -> None:
+        from moria_playtest.brain import (ALCHEMIST, BLACK_MARKET, CCW, HEALING, KEEP_PREFIXES,
+                                          MAGIC_MAPPING, MAPPING_DEEP_KEEP, MAPPING_RESERVE,
+                                          RESTORE_LIFE)
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import View
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 9000, 5
+        warrior.recall, warrior.phase, warrior.teleports = 10, 10, 5
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 6}
+
+        self.assertTrue(any(MAGIC_MAPPING.startswith(p) for p in KEEP_PREFIXES))
+        self.assertEqual(warrior.mapping_reserve(), MAPPING_RESERVE)
+        town_obs = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=473, mhp=473,
+                               rows={23: "HP:473/473 MP:0/0 AC:55 AU:16000K"})
+        warrior.at_store = ALCHEMIST
+        self.assertIn(MAGIC_MAPPING, warrior.shopping_list(16_000_000, town_obs))
+        warrior.at_store = BLACK_MARKET
+        self.assertIn(MAGIC_MAPPING, warrior.shopping_list(16_000_000, town_obs))
+
+        warrior.shopped = True
+        warrior.potions_done = warrior.magic_done = warrior.market_done = True
+        warrior.weapons_done = warrior.armoury_done = True
+        town = town_view((5, 5), (40, 40), dlvl=0)
+        town.stores = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2)]
+        d_shop = warrior.shop(town_obs, town)
+        self.assertIsNotNone(d_shop)
+        self.assertEqual((d_shop.layer, warrior.at_store), ("shop", ALCHEMIST), d_shop.reason)
+
+        warrior.credit(MAGIC_MAPPING, 5)
+        self.assertEqual(warrior.mapping_scrolls, 5)
+        warrior.sync_counts([" a) 7 Scroll of Magic Mapping"], "scrolls")
+        self.assertEqual(warrior.mapping_scrolls, 7)
+        warrior.picking = MAGIC_MAPPING
+        warrior.forget_picking()
+        self.assertEqual(warrior.mapping_scrolls, 0)
+        warrior.mapping_scrolls = 4
+        warrior.picking = MAGIC_MAPPING
+        warrior.nothing_carried()
+        self.assertEqual(warrior.mapping_scrolls, 0)
+
+        warrior.recall, warrior.phase, warrior.teleports = 10, 10, 5
+        warrior.mapping_scrolls = MAPPING_DEEP_KEEP + 3
+        no_stairs = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 34, {})
+        o34 = command_obs(pos=(5, 5), dlvl=34, clvl=39, hp=473, mhp=473,
+                          rows={23: "HP:473/473 MP:0/0 AC:55 AU:16000K"})
+        o34.step = 500
+        self.assertTrue(warrior.walking_down(o34))
+        d_tr = warrior.press_on(o34, no_stairs)
+        self.assertIsNotNone(d_tr)
+        self.assertEqual((d_tr.layer, d_tr.key, warrior.picking, warrior.level.mapped),
+                         ("scout", ord("R"), MAGIC_MAPPING, True), d_tr.reason)
+        self.assertIsNone(warrior.press_on(o34, no_stairs))
+
+        warrior.level.mapped = False
+        warrior.mapping_scrolls = MAPPING_DEEP_KEEP
+        self.assertIsNone(warrior.press_on(o34, no_stairs))
+
+        warrior.level.mapped = False
+        warrior.mapping_scrolls = 1
+        o39 = command_obs(pos=(5, 5), dlvl=39, clvl=39, hp=473, mhp=473,
+                          rows={23: "HP:473/473 MP:0/0 AC:55 AU:16000K"})
+        o39.step = 600
+        no_stairs_39 = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 39, {})
+        d_deep = warrior.way_on(o39, no_stairs_39)
+        self.assertIsNotNone(d_deep)
+        self.assertEqual((d_deep.layer, d_deep.key, warrior.picking, warrior.level.mapped),
+                         ("scout", ord("R"), MAGIC_MAPPING, True), d_deep.reason)
+
+    def test_deep_restore_life_scum_targets_full_reserve_with_higher_soft_cap(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, RESTORE_LIFE, RESTORE_LIFE_DEEP_SCUM,
+                                          RESTORE_STR, RESTOCK_SCUMS_DEEP_SOFT)
+        from moria_playtest.goals import for_character
+
+        self.assertEqual(RESTORE_LIFE_DEEP_SCUM, 3)
+        self.assertEqual(RESTOCK_SCUMS_DEEP_SOFT, 12)
+
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.recall, warrior.phase, warrior.teleports = 10, 10, 5
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 2, RESTORE_STR: 2}
+        warrior.resist_heat = 40
+
+        on_stairs = town_view((5, 5), (5, 5))
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=513, mhp=513,
+                           rows={23: "HP:513/513 MP:0/0 AC:55 AU:16777K"})
+        town.step = 500
+        self.assertEqual(warrior.restock_needed(town), "Restore Life Levels")
+
+        warrior.shopped = warrior.potions_done = warrior.magic_done = warrior.alchemist_done = True
+        warrior.market_done = warrior.weapons_done = warrior.armoury_done = True
+        warrior.restock_scums = 8
+        warrior.restock_scumming = False
+        d_go = warrior.recall_trip(town, on_stairs)
+        self.assertIsNotNone(d_go)
+        self.assertEqual(d_go.layer, "restock", d_go.reason)
+
+        warrior.restores[RESTORE_LIFE] = 3
+        self.assertIsNone(warrior.restock_needed(town))
+
+    def test_town_full_pack_sheds_obsolete_clutter_even_without_room_for(self) -> None:
+        from moria_playtest.brain import (ALCHEMIST, BLACK_MARKET, CCW, HEALING, KEY_RUNSTOP,
+                                          MAGIC_MAPPING, PHASE_DOOR, RESTORE_LIFE)
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer
+
+        pack = {
+            0: "Inventory",
+            1: " a) Spellbook Beginners-Magick",
+            2: " b) Spellbook Magick I",
+            3: " c) Spellbook Magick II",
+            4: " d) Spellbook The Mages Guide to Power",
+            5: " e) 10 Scroll of Word of Recall",
+            6: " f) Heavy Crossbow (+1,+0)",
+            7: " g) 5 Potion of Resist Heat",
+            8: " h) 2 Potion of Neutralize Poison",
+            9: " i) 18 Ration of Food",
+            10: " j) 5 Potion of Cure Light Wounds",
+            11: " k) 30 Bolt (+2,+2)",
+            12: " l) 10 Potion of Cure Serious Wounds",
+            13: " m) 5 Potion of Healing",
+            14: " n) 5 Flask of Oil (250 turns)",
+            15: " o) 2 Potion of Restore Strength",
+            16: " p) Wand of Fire Balls (4 charges)",
+            17: " q) 20 Bolt",
+            18: " r) 10 Potion of Cure Critical Wounds",
+            19: " s) 5 Scroll of Phase Door",
+            20: " t) Wand of Slow Monster (5 charges)",
+            21: " u) Wooden Torch (134 turns)",
+            22: " v) Potion of Restore Life Levels",
+        }
+        ranger = Brain(for_character(GOALS["balrog"], "human-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.gold_seen = 39, 42, 16_000_000
+        ranger.lamp, ranger.recall, ranger.phase = True, 10, 5
+        ranger.food, ranger.strong = 18.0, {CCW: 10, HEALING: 10}
+        ranger.magic.known[PHASE_DOOR] = Prayer("c", 3, 3, "Beginners-Magick")
+        ranger.at_store, ranger.buying = BLACK_MARKET, "Potion of Resist Cold"
+        refused = command_obs(pos=(5, 5), dlvl=0, clvl=39, rows={23: " Your pack is full."})
+        refused.stage = "message"
+        ranger.store(refused)
+        ranger.dropping, ranger.listed = True, True
+        listing = command_obs(pos=(5, 5), dlvl=0, clvl=39, rows=pack)
+        listing.stage = "list"
+        dec = ranger.drop_prompt(listing)
+        self.assertNotEqual(dec.key, KEY_RUNSTOP, dec.reason)
+        self.assertIn(dec.key, (ord("U"), ord("T"), ord("S"), ord("J")), dec.reason)
+
+        # room_for also covers Restore Life Levels when already carrying >= 1 but short of reserve,
+        # and Scroll of Magic Mapping when short of reserve.
+        ranger.restores[RESTORE_LIFE] = 1
+        ranger.buying = RESTORE_LIFE[:26]
+        ranger.at_store = BLACK_MARKET
+        ranger.store(refused)
+        ranger.dropping, ranger.listed = True, True
+        dec_rl = ranger.drop_prompt(listing)
+        self.assertNotEqual(dec_rl.key, KEY_RUNSTOP, dec_rl.reason)
+
+        ranger.at_store = ALCHEMIST
+        ranger.buying = MAGIC_MAPPING[:26]
+        ranger.store(refused)
+        ranger.dropping, ranger.listed = True, True
+        dec_mm = ranger.drop_prompt(listing)
+        self.assertNotEqual(dec_mm.key, KEY_RUNSTOP, dec_mm.reason)
+
+    def test_walking_down_and_press_on_yield_while_restock_scumming_or_recalling(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import TYPE_STAIRS_UP, View
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 9000, 5
+        warrior.recall, warrior.phase, warrior.teleports, warrior.mapping_scrolls = 10, 10, 5, 20
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 6}
+        warrior.gear_trip_after = 10_000
+        warrior.restock_trip_after = 10_000
+
+        o1 = command_obs(pos=(5, 5), dlvl=1, clvl=39, hp=513, mhp=513,
+                         rows={23: "HP:513/513 MP:0/0 AC:55 AU:16000K"})
+        o1.step = 500
+        no_stairs = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 1, {})
+        on_down_stairs = town_view((5, 5), (5, 5), dlvl=1)
+        on_down_stairs.creatures = {}
+        on_up_stairs = town_view((5, 5), (5, 5), dlvl=1, stairs_type=TYPE_STAIRS_UP)
+        on_up_stairs.creatures = {}
+
+        self.assertTrue(warrior.walking_down(o1))
+
+        warrior.restock_scumming = True
+        self.assertFalse(warrior.walking_down(o1))
+        self.assertIsNone(warrior.press_on(o1, no_stairs))
+        d_dn = warrior.decide(o1, on_down_stairs)
+        self.assertEqual((d_dn.layer, d_dn.key), ("recall", ord("R")), d_dn.reason)
+        warrior.recalling = False
+        d_up = warrior.decide(o1, on_up_stairs)
+        self.assertEqual((d_up.layer, d_up.key), ("restock", ord("<")), d_up.reason)
+
+        warrior.restock_scumming = False
+        warrior.recalling = True
+        self.assertFalse(warrior.walking_down(o1))
+        self.assertIsNone(warrior.press_on(o1, no_stairs))
+        d_wait = warrior.decide(o1, on_down_stairs)
+        self.assertEqual((d_wait.layer, d_wait.key), ("recall", ord("5")), d_wait.reason)
+
+    def test_dungeon_full_pack_drops_redundant_phase_door_when_spell_known(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, KEY_RUNSTOP, PHASE_DOOR
+        from moria_playtest.goals import for_character
+        from moria_playtest.magic import Prayer
+
+        pack = {
+            0: "Inventory",
+            1: " a) Spellbook Beginners-Magick",
+            2: " b) Spellbook Magick I",
+            3: " c) Spellbook Magick II",
+            4: " d) Spellbook The Mages Guide to Power",
+            5: " e) 10 Scroll of Word of Recall",
+            6: " f) Heavy Crossbow (+7,+7)",
+            7: " g) 5 Potion of Resist Heat",
+            8: " h) 2 Potion of Neutralize Poison",
+            9: " i) 18 Ration of Food",
+            10: " j) 5 Potion of Cure Light Wounds",
+            11: " k) 30 Bolt (+2,+2)",
+            12: " l) 10 Potion of Cure Serious Wounds",
+            13: " m) 5 Potion of Healing",
+            14: " n) 5 Flask of Oil (250 turns)",
+            15: " o) 2 Potion of Restore Strength",
+            16: " p) Staff of Curing (5 charges)",
+            17: " q) 20 Bolt",
+            18: " r) 10 Potion of Cure Critical Wounds",
+            19: " s) 5 Scroll of Phase Door",
+            20: " t) Wand of Teleport Away (4 charges)",
+            21: " u) Potion of Resist Cold",
+            22: " v) Potion of Restore Life Levels",
+        }
+        ranger = Brain(for_character(GOALS["balrog"], "half-elf-ranger"))
+        ranger.clvl, ranger.max_dlvl, ranger.gold_seen = 39, 42, 16_000_000
+        ranger.lamp, ranger.recall, ranger.phase = True, 10, 5
+        ranger.food, ranger.strong = 18.0, {CCW: 10, HEALING: 10}
+        ranger.magic.known[PHASE_DOOR] = Prayer("c", 3, 3, "Beginners-Magick")
+        ranger.dropping, ranger.listed = True, True
+        listing = command_obs(pos=(5, 5), dlvl=39, clvl=39, rows=pack)
+        listing.stage = "list"
+        dec = ranger.drop_prompt(listing)
+        self.assertEqual(dec.key, ord("S"), dec.reason)
+        self.assertIn("room in full pack", dec.reason)
+
+    def test_press_on_conserves_magic_mapping_for_dl15_plus_when_low(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, MAGIC_MAPPING, MAPPING_DEEP_KEEP, RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import View
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "dwarf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 9000, 5
+        warrior.recall, warrior.phase, warrior.teleports = 10, 10, 5
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 6}
+        warrior.gear_trip_after = 10_000
+        warrior.restock_trip_after = 10_000
+
+        o5 = command_obs(pos=(5, 5), dlvl=5, clvl=39, hp=512, mhp=512,
+                         rows={23: "HP:512/512 MP:0/0 AC:55 AU:16000K"})
+        o5.step = 500
+        no_stairs_5 = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 5, {})
+
+        o15 = command_obs(pos=(5, 5), dlvl=15, clvl=39, hp=512, mhp=512,
+                          rows={23: "HP:512/512 MP:0/0 AC:55 AU:16000K"})
+        o15.step = 500
+        no_stairs_15 = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 15, {})
+        warrior.mapping_scrolls = MAPPING_DEEP_KEEP + 5
+        self.assertIsNone(warrior.press_on(o15, no_stairs_15))
+
+        warrior.level.mapped = False
+        warrior.mapping_scrolls = MAPPING_DEEP_KEEP + 32
+        d_extra = warrior.press_on(o5, no_stairs_5)
+        self.assertIsNotNone(d_extra)
+        self.assertEqual((d_extra.layer, d_extra.key, warrior.picking), ("scout", ord("R"), MAGIC_MAPPING), d_extra.reason)
+
+        warrior.level.mapped = False
+        warrior.mapping_scrolls = MAPPING_DEEP_KEEP + 5
+        o32 = command_obs(pos=(5, 5), dlvl=32, clvl=39, hp=512, mhp=512,
+                          rows={23: "HP:512/512 MP:0/0 AC:55 AU:16000K"})
+        o32.step = 500
+        no_stairs_32 = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 32, {})
+        d_deep = warrior.press_on(o32, no_stairs_32)
+        self.assertIsNotNone(d_deep)
+        self.assertEqual((d_deep.layer, d_deep.key, warrior.picking), ("scout", ord("R"), MAGIC_MAPPING), d_deep.reason)
+
+    def test_grope_does_not_step_back_into_drainer_reach(self) -> None:
+        from moria_playtest.brain import WALL
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import UNKNOWN, View
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl = 39, 42
+        o36 = command_obs(pos=(10, 10), dlvl=36, clvl=39, hp=473, mhp=473,
+                          rows={23: "HP:473/473 MP:0/0 AC:55 AU:16000K"})
+        o36.step = 500
+
+        types = [WALL] * (COLS * ROWS)
+        types[10 * COLS + 10] = 0
+        types[10 * COLS + 11] = UNKNOWN
+        view = View(COLS, ROWS, types, (10, 10), 36, {})
+        warrior.level.drainers_seen[(12, 10)] = 499
+        self.assertIsNone(warrior.grope(view, o36))
+
+    def test_avoid_drainer_uses_2_5x_margin_to_reject_ghost_melee_with_strong_weapon(self) -> None:
+        from moria_playtest.brain import RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        ghost = knowledge.kinds_by_name()["Ghost"]
+        view = town_view((10, 10), (40, 40), dlvl=33)
+        for dx, dy in DIRS:
+            if (dx, dy) not in ((0, 0), (1, 0)):
+                view.types[(10 + dy) * COLS + (10 + dx)] = WALL
+        view.creatures = {(11, 10): Creature(*ghost, "Ghost")}
+        o33 = command_obs(pos=(10, 10), dlvl=33, clvl=39, hp=553, mhp=553)
+        o33.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-troll-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.phase = 39, 42, 10
+        warrior.restores = {RESTORE_LIFE: 3}
+        warrior.weapon = ("Two-Handed Sword", 30)
+        warrior.last_stats = (28, 28)
+        d_ghost = warrior.avoid_drainer(o33, view)
+        self.assertIsNotNone(d_ghost)
+        self.assertEqual((d_ghost.layer, d_ghost.key), ("phase", ord("R")), d_ghost.reason)
+
+    def test_leave_deadly_drainer_beside_escapes_within_phase_again(self) -> None:
+        from moria_playtest.brain import PHASE, PHASE_AGAIN, RESTORE_LIFE, TELEPORT_SCROLL
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        ghost = knowledge.kinds_by_name()["Ghost"]
+        view = town_view((48, 30), (20, 30), dlvl=39, stairs_type=TYPE_STAIRS_UP)
+        view.creatures = {(49, 30): Creature(*ghost, "Ghost")}
+        o39 = command_obs(pos=(48, 30), view=(40, 20), dlvl=39, clvl=39, hp=450, mhp=450)
+        o39.step = 500
+        self.assertLessEqual(o39.step - 481, PHASE_AGAIN)
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl = 39, 42
+        warrior.phase, warrior.teleports = 5, 3
+        warrior.restores = {RESTORE_LIFE: 2}
+        warrior.level.deadly = (10, 10)
+        warrior.level.deadly_drain = True
+        warrior.level.drains = 2
+        warrior.level.phased = 481
+
+        d_tp = warrior.leave_deadly(o39, view)
+        self.assertIsNotNone(d_tp)
+        self.assertEqual((d_tp.layer, d_tp.key, warrior.picking), ("phase", ord("R"), TELEPORT_SCROLL), d_tp.reason)
+
+        warrior.picking = None
+        warrior.teleports = 1
+        warrior.level.phased = 481
+        d_ph = warrior.leave_deadly(o39, view)
+        self.assertIsNotNone(d_ph)
+        self.assertEqual((d_ph.layer, d_ph.key, warrior.picking, warrior.level.phased),
+                         ("phase", ord("R"), PHASE, 500), d_ph.reason)
+
+    def test_avoid_drainer_uses_far_escape_at_phase_cap_when_spare_teleports_carried(self) -> None:
+        from moria_playtest.brain import DRAINER_PHASE_CAP, RESTORE_LIFE, TELEPORT_SCROLL
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        wight = knowledge.kinds_by_name()["Emperor Wight"]
+        view = town_view((10, 10), (40, 40), dlvl=39)
+        for dx, dy in DIRS:
+            if (dx, dy) not in ((0, 0), (1, 0)):
+                view.types[(10 + dy) * COLS + (10 + dx)] = WALL
+        view.creatures = {(11, 10): Creature(*wight, "Emperor Wight")}
+        o39 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=450, mhp=450)
+        o39.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.phase = 39, 42, 5
+        warrior.level.drainer_phases = DRAINER_PHASE_CAP
+        warrior.restores = {RESTORE_LIFE: 3}
+        warrior.teleports = 3
+
+        d_tp = warrior.avoid_drainer(o39, view)
+        self.assertIsNotNone(d_tp)
+        self.assertEqual((d_tp.layer, d_tp.key, warrior.picking), ("phase", ord("R"), TELEPORT_SCROLL), d_tp.reason)
+        self.assertTrue(warrior.level.scum)
+
+        warrior.picking = None
+        warrior.level.scum = False
+        warrior.teleports = 2
+        self.assertIsNone(warrior.avoid_drainer(o39, view))
+        self.assertTrue(warrior.level.scum)
+
+    def test_recall_trip_waits_for_alchemist_during_alchemist_market_scum(self) -> None:
+        from moria_playtest.brain import ALCHEMIST, CCW, HEALING, RESTORE_LIFE, RESTORE_STR
+        from moria_playtest.goals import for_character
+
+        warrior = Brain(for_character(GOALS["balrog"], "gnome-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.recall, warrior.phase, warrior.teleports, warrior.mapping_scrolls = 10, 0, 0, 35
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 4, RESTORE_STR: 2}
+        warrior.resist_heat = 40
+        warrior.ac_seen = 200
+        warrior.shopped = warrior.potions_done = warrior.magic_done = True
+        warrior.market_done = warrior.weapons_done = warrior.armoury_done = True
+        warrior.alchemist_done = False
+        warrior.restock_scums = 5
+        warrior.restock_scumming = False
+
+        town_with_stores = town_view((31, 18), (32, 18))
+        town_with_stores.stores = [(10 + 3 * i, 2) for i in range(8)]
+        town = command_obs(pos=(31, 18), view=(20, 10), dlvl=0, clvl=39, hp=472, mhp=472,
+                           rows={23: "HP:472/472 MP:0/0 AC:200 AU:16773K"})
+        town.step = 500
+
+        self.assertGreater(len(town_with_stores.stores), ALCHEMIST)
+        self.assertIsNone(warrior.recall_trip(town, town_with_stores))
+        d_shop = warrior.shop(town, town_with_stores)
+        self.assertIsNotNone(d_shop)
+        self.assertEqual(d_shop.layer, "shop", d_shop.reason)
+        self.assertIn("Alchemy", d_shop.reason)
+
+        warrior.alchemist_done = True
+        d_scum = warrior.recall_trip(town, town_with_stores)
+        self.assertIsNotNone(d_scum)
+        self.assertEqual(d_scum.layer, "restock", d_scum.reason)
+
+        warrior.alchemist_done = False
+        warrior.phase, warrior.teleports = 20, 5
+        self.assertFalse(warrior.alchemist_worth_it(town))
+
+    def test_avoid_drainer_never_melees_ghost_even_with_max_slaying_damage(self) -> None:
+        from moria_playtest.brain import RESTORE_LIFE
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        ghost = knowledge.kinds_by_name()["Ghost"]
+        view = town_view((10, 10), (40, 40), dlvl=39)
+        for dx, dy in DIRS:
+            if (dx, dy) not in ((0, 0), (1, 0)):
+                view.types[(10 + dy) * COLS + (10 + dx)] = WALL
+        view.creatures = {(11, 10): Creature(*ghost, "Ghost")}
+        o39 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=513, mhp=513)
+        o39.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "human-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.phase = 39, 42, 10
+        warrior.restores = {RESTORE_LIFE: 3}
+        warrior.weapon = ("Two-Handed Sword", 30)
+        warrior.last_stats = (28, 28)
+        warrior.jewel_names.update(Ring="Ring of Slaying (+15,+15)", Ring2="Ring of Increase Damage (+15)")
+
+        d_ghost = warrior.avoid_drainer(o39, view)
+        self.assertIsNotNone(d_ghost)
+        self.assertEqual((d_ghost.layer, d_ghost.key), ("phase", ord("R")), d_ghost.reason)
+
+    def test_hurt_out_recalls_with_no_potions_or_escapes_when_breather_remembered(self) -> None:
+        from moria_playtest.brain import HEALING, HURT_OUT_HP_NO_ESCAPE, RECALL
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl = 39, 42
+        warrior.clw, warrior.strong, warrior.phase, warrior.teleports = 0, {}, 0, 0
+        warrior.recall, warrior.recalling = 5, False
+        warrior.level.breathers[frozenset({"lightning"})] = (490, 174)
+
+        o39 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=230, mhp=395)
+        o39.step = 500
+        self.assertGreaterEqual(o39.hp, HURT_OUT_HP_NO_ESCAPE * o39.mhp)
+        view = town_view((10, 10), (40, 40), dlvl=39)
+
+        d_rec = warrior.hurt_out(o39, view)
+        self.assertIsNotNone(d_rec)
+        self.assertEqual((d_rec.layer, d_rec.key, warrior.picking), ("recall", ord("R"), RECALL), d_rec.reason)
+
+        warrior.picking = None
+        warrior.strong = {HEALING: 1}
+        self.assertIsNone(warrior.hurt_out(o39, view))
+
+    def test_breath_guard_steps_out_of_adjacent_dragon_melee_while_recalling_without_escapes(self) -> None:
+        from moria_playtest.brain import chebyshev
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        dragon = knowledge.kinds_by_name()["Ancient Blue Dragon"]
+        view = town_view((47, 25), (20, 25), dlvl=39)
+        view.creatures = {(46, 25): Creature(*dragon, "Ancient Blue Dragon")}
+        o39 = command_obs(pos=(47, 25), view=(40, 20), dlvl=39, clvl=39, hp=169, mhp=395)
+        o39.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl = 39, 42
+        warrior.clw, warrior.strong, warrior.phase, warrior.teleports = 0, {}, 0, 0
+        warrior.recall, warrior.recalling = 5, True
+
+        d_step = warrior.breath_guard(o39, view)
+        self.assertIsNotNone(d_step)
+        self.assertEqual(d_step.layer, "retreat", d_step.reason)
+        dx, dy = next(d for d, k in DIRS.items() if k == d_step.key)
+        dest = (47 + dx, 25 + dy)
+        self.assertGreater(chebyshev(dest, (46, 25)), 1)
+
+        view_stairs = town_view((47, 25), (47, 25), dlvl=39, stairs_type=TYPE_STAIRS_UP)
+        view_stairs.creatures = {(46, 25): Creature(*dragon, "Ancient Blue Dragon")}
+        d_up = warrior.breath_guard(o39, view_stairs)
+        self.assertIsNotNone(d_up)
+        self.assertEqual((d_up.layer, d_up.key), ("retreat", ord("<")), d_up.reason)
+
+    def test_warrior_with_no_teleports_and_low_phase_recalls_home_and_scums_alchemist_to_soft_cap(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, PHASE_DRAINER_KEEP, RESTORE_LIFE,
+                                          RESTORE_STR, RESTOCK_SCUMS, RESTOCK_SCUMS_DEEP_SOFT)
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-elf-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.recall, warrior.teleports, warrior.phase = 10, 0, PHASE_DRAINER_KEEP
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 3, RESTORE_STR: 2}
+        warrior.resist_heat = 40
+        warrior.trip_had_escape = True
+        warrior.restock_trip_after = 10_000
+
+        o38 = command_obs(pos=(10, 10), dlvl=38, clvl=39, hp=512, mhp=512,
+                          rows={23: "HP:512/512 MP:0/0 AC:55 AU:16000K"})
+        o38.step = 500
+        self.assertTrue(warrior.needs_resupply(o38))
+
+        warrior.phase = PHASE_DRAINER_KEEP + 1
+        self.assertFalse(warrior.needs_resupply(o38))
+
+        warrior.phase = PHASE_DRAINER_KEEP
+        on_stairs = town_view((5, 5), (5, 5))
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=512, mhp=512,
+                           rows={23: "HP:512/512 MP:0/0 AC:55 AU:16000K"})
+        town.step = 600
+        warrior.shopped = warrior.potions_done = warrior.magic_done = warrior.alchemist_done = True
+        warrior.market_done = warrior.weapons_done = warrior.armoury_done = True
+        warrior.restock_scums = RESTOCK_SCUMS
+        warrior.restock_scumming = False
+        d_go = warrior.recall_trip(town, on_stairs)
+        self.assertIsNotNone(d_go)
+        self.assertEqual(d_go.layer, "restock", d_go.reason)
+
+        warrior.shopped = warrior.potions_done = warrior.magic_done = warrior.alchemist_done = True
+        warrior.market_done = warrior.weapons_done = warrior.armoury_done = True
+        warrior.restock_scums = RESTOCK_SCUMS_DEEP_SOFT
+        warrior.restock_scumming = False
+        d_stop = warrior.recall_trip(town, on_stairs)
+        self.assertTrue(d_stop is None or d_stop.layer != "restock")
+
+    def test_breath_guard_adjacent_fallback_ignores_harmless_bystander_to_escape_amhd(self) -> None:
+        from moria_playtest.brain import chebyshev
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        kinds = knowledge.kinds_by_name()
+        amhd = kinds["Ancient Multi-Hued Dragon"]
+        skel = kinds["Skeleton Hobgoblin"]
+        view = town_view((50, 17), (30, 17), dlvl=38)
+        for x in range(48, 54):
+            view.types[16 * COLS + x] = WALL
+            view.types[18 * COLS + x] = WALL
+        view.creatures = {
+            (49, 17): Creature(*amhd, "Ancient Multi-Hued Dragon"),
+            (52, 17): Creature(*skel, "Skeleton Hobgoblin"),
+        }
+        o38 = command_obs(pos=(50, 17), view=(40, 10), dlvl=38, clvl=39, hp=512, mhp=512)
+        o38.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "half-elf-warrior"))
+        warrior.clvl, warrior.max_dlvl = 39, 42
+        warrior.clw, warrior.strong, warrior.phase, warrior.teleports = 0, {}, 0, 0
+        warrior.recall, warrior.recalling = 5, True
+
+        d_step = warrior.breath_guard(o38, view)
+        self.assertIsNotNone(d_step)
+        self.assertEqual(d_step.layer, "retreat", d_step.reason)
+        dx, dy = next(d for d, k in DIRS.items() if k == d_step.key)
+        self.assertEqual((50 + dx, 17 + dy), (51, 17))
+        self.assertGreater(chebyshev((51, 17), (49, 17)), 1)
+
+    def test_warrior_leaving_town_without_teleports_recalls_when_phase_drops_to_reserve(self) -> None:
+        from moria_playtest.brain import CCW, HEALING, PHASE_DRAINER_KEEP, RESTORE_LIFE, RESTORE_STR
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 3000, 6
+        warrior.recall, warrior.teleports, warrior.phase = 10, 0, 10
+        warrior.strong = {CCW: 25, HEALING: 10}
+        warrior.restores = {RESTORE_LIFE: 3, RESTORE_STR: 2}
+        warrior.resist_heat = 40
+        warrior.last_dlvl = 0
+        warrior.restock_scumming = False
+
+        dl1 = command_obs(pos=(5, 5), dlvl=1, clvl=39, hp=433, mhp=433,
+                          rows={23: "HP:433/433 MP:0/0 AC:55 AU:16000K"})
+        dl1.step = 100
+        warrior.track(dl1, town_view((5, 5), (5, 5), dlvl=1))
+        self.assertFalse(warrior.trip_had_escape)
+        self.assertTrue(warrior.trip_had_phase)
+
+        o39 = command_obs(pos=(10, 10), dlvl=39, clvl=39, hp=433, mhp=433,
+                          rows={23: "HP:433/433 MP:0/0 AC:55 AU:16000K"})
+        o39.step = 500
+        warrior.phase = PHASE_DRAINER_KEEP
+        self.assertLess(o39.step, warrior.restock_trip_after)
+        self.assertTrue(warrior.needs_resupply(o39))
+
+        warrior2 = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior2.clvl, warrior2.max_dlvl, warrior2.gold_seen = 39, 42, 16_000_000
+        warrior2.food, warrior2.lamp, warrior2.light_left, warrior2.oil = 20.0, True, 3000, 6
+        warrior2.recall, warrior2.teleports, warrior2.phase = 10, 0, PHASE_DRAINER_KEEP
+        warrior2.strong = {CCW: 25, HEALING: 10}
+        warrior2.restores = {RESTORE_LIFE: 3, RESTORE_STR: 2}
+        warrior2.resist_heat = 40
+        warrior2.last_dlvl = 0
+        warrior2.restock_scumming = False
+        warrior2.track(dl1, town_view((5, 5), (5, 5), dlvl=1))
+        self.assertFalse(warrior2.trip_had_phase)
+        self.assertFalse(warrior2.needs_resupply(o39))
+
+    def test_breath_guard_retreats_from_distance_two_amhd_while_recalling_instead_of_aiming(self) -> None:
+        from moria_playtest.brain import chebyshev
+        from moria_playtest.goals import for_character
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        amhd = knowledge.kinds_by_name()["Ancient Multi-Hued Dragon"]
+        view = town_view((44, 4), (10, 10), dlvl=39)
+        view.creatures = {(46, 4): Creature(*amhd, "Ancient Multi-Hued Dragon")}
+        o39 = command_obs(pos=(44, 4), view=(35, 0), dlvl=39, clvl=39, hp=365, mhp=433)
+        o39.step = 500
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl = 39, 42
+        warrior.clw, warrior.strong, warrior.phase, warrior.teleports = 0, {}, 0, 0
+        warrior.recall, warrior.recalling = 5, True
+
+        d_ret = warrior.breath_guard(o39, view)
+        self.assertIsNotNone(d_ret)
+        self.assertEqual(d_ret.layer, "retreat", d_ret.reason)
+        dx, dy = next(d for d, k in DIRS.items() if k == d_ret.key)
+        dest = (44 + dx, 4 + dy)
+        self.assertGreater(chebyshev(dest, (46, 4)), 2)
+
+    def test_mapped_recall_climb_returns_warriors_to_dl42_and_maps_to_up_stairs(self) -> None:
+        from moria_playtest.brain import (CCW, HEALING, MAGIC_MAPPING, RECALL,
+                                          RECALL_CLIMB, RESTORE_LIFE, TELEPORT_SCROLL)
+        from moria_playtest.goals import for_character
+        from moria_playtest.view import View
+        knowledge.use_port("c64")
+        self.addCleanup(knowledge.use_port, "")
+
+        warrior = Brain(for_character(GOALS["balrog"], "halfling-warrior"))
+        warrior.clvl, warrior.max_dlvl, warrior.gold_seen = 39, 42, 16_000_000
+        warrior.food, warrior.lamp, warrior.light_left, warrior.oil = 20.0, True, 9000, 5
+        warrior.recall, warrior.phase, warrior.teleports = 10, 10, 5
+        warrior.restores = {RESTORE_LIFE: 3}
+        warrior.strong = {HEALING: 10, CCW: 25}
+        warrior.resist_heat = 40
+        warrior.jewel_names["Amulet"] = "Amulet of the Magi"
+
+        town = command_obs(pos=(5, 5), dlvl=0, clvl=39, hp=433, mhp=433,
+                           rows={23: "HP:433/433  MP:0/0   AC:55  AU:16000K"})
+        town.step = 500
+        dl24 = command_obs(pos=(5, 5), dlvl=24, clvl=39, hp=433, mhp=433,
+                           rows={23: "HP:433/433  MP:0/0   AC:55  AU:16000K"})
+        dl24.step = 500
+
+        # With < RECALL_CLIMB + 1 mapping scrolls: still refuses recall_returns and scums Alchemy+BM.
+        warrior.mapping_scrolls = RECALL_CLIMB
+        self.assertFalse(warrior.recall_returns(town))
+        self.assertEqual(warrior.restock_needed(town), "Magic Mapping")
+        warrior.restock_scums = 1
+        self.assertTrue(warrior.alchemist_market_scum(town))
+
+        # With RECALL_CLIMB + 1 (= 3) mapping scrolls: recalls straight down from town and mid-dungeon.
+        warrior.mapping_scrolls = RECALL_CLIMB + 1
+        self.assertTrue(warrior.recall_returns(town))
+        self.assertIsNone(warrior.restock_needed(town))
+        self.assertTrue(warrior.far_above_deepest(dl24))
+        warrior.shopped = warrior.potions_done = warrior.magic_done = warrior.alchemist_done = True
+        warrior.market_done = warrior.weapons_done = warrior.armoury_done = True
+        d_town = warrior.recall_trip(town, town_view((5, 5), (2, 2)))
+        self.assertIsNotNone(d_town)
+        self.assertEqual((d_town.layer, d_town.key), ("recall", ord("R")), d_town.reason)
+
+        # Never pushes max_dlvl past 42 via way_on / recall_keeps.
+        self.assertFalse(warrior.recall_keeps(town, 43))
+
+        # On too_deep DL42 without '<' in sight, resupply maps straight to '<'.
+        o42 = command_obs(pos=(5, 5), dlvl=42, clvl=39, hp=433, mhp=433,
+                          rows={23: "HP:433/433  MP:0/0   AC:55  AU:16000K"})
+        o42.step = 500
+        no_stairs = View(COLS, ROWS, [0] * (COLS * ROWS), (5, 5), 42, {})
+        d_map = warrior.resupply(o42, no_stairs)
+        self.assertIsNotNone(d_map)
+        self.assertEqual((d_map.layer, d_map.key, warrior.picking), ("scout", ord("R"), MAGIC_MAPPING), d_map.reason)
+
+        # Even if '<' is unreachable on DL42 with '>' underfoot, resupply teleports instead of descending to DL43.
+        warrior.level.mapped = True
+        warrior.level.down_to_climb = True
+        down_underfoot = town_view((5, 5), (5, 5), dlvl=42)
+        d_esc = warrior.resupply(o42, down_underfoot)
+        self.assertIsNotNone(d_esc)
+        self.assertNotEqual(d_esc.key, ord(">"), d_esc.reason)
+        self.assertIn(d_esc.layer, ("phase", "teleport", "recall"), d_esc.reason)
+        if d_esc.key == ord("R"):
+            self.assertIn(warrior.picking, (TELEPORT_SCROLL, RECALL))
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

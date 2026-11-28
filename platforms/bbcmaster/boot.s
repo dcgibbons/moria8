@@ -5,18 +5,19 @@
 // $0E00-$7FFF (covering $1900), boot_start first relocates the loader to
 // $0400-$05FF and jumps there.
 //
-// Opens MORIA8P (MORIA8.PAK) once and streams 10 entries sequentially:
+// Opens MORIA8P (MORIA8.PAK) once and streams 11 entries sequentially:
 //   0: MORIA8.RES    -> Main RAM $0E00
 //   1: BEEB.PLAY     -> Sideways Bank 4 ($04) $8000
 //   2: BEEB.HUFFDATA -> Private RAM ANDY ($84) $8000
 //   3: BEEB.AUXDATA  -> Sideways Bank 6 ($06) $8000
-//   4: OVL.UI        -> Sideways Bank 6 ($06) $BA00
-//   5: BEEB.CATALOG  -> Sideways Bank 6 ($06) $9500 (the monster catalog)
-//   6: OVL.MODAL     -> Sideways Bank 5 ($05) $B400
-//   7: OVL.SPELL     -> Sideways Bank 7 ($07) $8000
-//   8: OVL.ITEMS     -> Sideways Bank 7 ($07) $9600
-//   9: OVL.GEN       -> Sideways Bank 7 ($07) $B000
-// OVL.TOWN loads from DFS: the monster catalog took its pages (2026-11-05).
+//   4: BEEB.CATALOG  -> Sideways Bank 6 ($06) $9500 (the monster catalog)
+//   5: OVL.TITLE     -> Sideways Bank 5 ($05) $BE00
+//   6: OVL.UI        -> Sideways Bank 6 ($06) $BA00
+//   7: OVL.MODAL     -> Sideways Bank 5 ($05) $B400
+//   8: OVL.SPELL     -> Sideways Bank 7 ($07) $8000
+//   9: OVL.ITEMS     -> Sideways Bank 7 ($07) $9500
+//  10: OVL.GEN       -> Sideways Bank 7 ($07) $AC00
+// OVL.TOWN loads from DFS (uncached).
 
 .cpu _65c02
 .pc = $1900 "Boot"
@@ -34,7 +35,7 @@
 .const HDR_BUF         = $0600
 .const GBPB_CTRL       = $0680
 .const BOUNCE_BUF      = $0700
-.const PAK_COUNT       = 10
+.const PAK_COUNT       = 11
 
 boot_start:
     cld
@@ -292,24 +293,26 @@ pak_name:
     .text "MORIA8P"
     .byte $0d
 
-// 10 entries in MORIA8P order:
+// 11 entries in MORIA8P order:
 //   0: MORIA8.RES    ($00, $0E00)
 //   1: BEEB.PLAY     ($04, $8000)
 //   2: BEEB.HUFFDATA ($84, $8000)
 //   3: BEEB.AUXDATA  ($06, $8000)
-//   4: OVL.UI        ($06, $BA00)
-//   5: BEEB.CATALOG  ($06, $9500)
-//   6: OVL.MODAL     ($05, $B400)
-//   7: OVL.SPELL     ($07, $8000)
-//   8: OVL.ITEMS     ($07, $9600)
-//   9: OVL.GEN       ($07, $B000)
+//   4: BEEB.CATALOG  ($06, $9500)
+//   5: OVL.TITLE     ($05, $BE00)
+//   6: OVL.UI        ($06, $BA00)
+//   7: OVL.MODAL     ($05, $B400)
+//   8: OVL.SPELL     ($07, $8000)
+//   9: OVL.ITEMS     ($07, $9500)
+//  10: OVL.GEN       ($07, $AC00)
 file_bank_table:
     .byte $00
     .byte $04
     .byte $84
     .byte $06
-    .byte BEEB_SWR_BANK_UI
     .byte BEEB_CATALOG_BANK
+    .byte BEEB_SWR_BANK_TITLE
+    .byte BEEB_SWR_BANK_UI
     .byte BEEB_SWR_BANK_MODAL
     .byte BEEB_SWR_BANK_SPELL
     .byte BEEB_SWR_BANK_ITEMS
@@ -320,8 +323,9 @@ file_hi_table:
     .byte $80
     .byte $80
     .byte $80
-    .byte >BEEB_SWR_ADDR_UI
     .byte >BEEB_CATALOG_ADDR
+    .byte >BEEB_SWR_ADDR_TITLE
+    .byte >BEEB_SWR_ADDR_UI
     .byte >BEEB_SWR_ADDR_MODAL
     .byte >BEEB_SWR_ADDR_SPELL
     .byte >BEEB_SWR_ADDR_ITEMS

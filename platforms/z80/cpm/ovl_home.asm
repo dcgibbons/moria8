@@ -100,12 +100,13 @@ ovl_home_clear_msg:
 ovl_home_draw:
     CALL screen_clear
 
-    ; Row 0 col 1: "Home" (COL_WHITE)
+    ; Row 0 col 1: "Home" (COL_WHITE) + col 55: "Burden: X/Y lb"
     LD   B, 0
     LD   C, 1
     LD   E, COL_WHITE
     LD   HL, ovl_home_str_title
     CALL screen_put_str
+    CALL ovl_home_draw_burden
 
     ; Row 2: separator dashes across cols 0..79
     LD   B, 2
@@ -148,20 +149,48 @@ ovl_home_draw:
     LD   A, 1
     CALL ovl_home_put_hdr_sp
 
-    ; Format description cleanly clipped to cols 4..78
+    ; Format description cleanly clipped to cols 4..66 + right-aligned weight col 69
     PUSH BC
     LD   A, C
     ADD  A, OVL_HOME_BASE_SLOT
     LD   DE, line_buf
     CALL item_format_store_slot ; HL = line_buf
     XOR  A
-    LD   (line_buf + 75), A
+    LD   (line_buf + 63), A
     POP  BC
     PUSH BC
     LD   C, 4
     LD   E, COL_LGREY
     LD   HL, line_buf
     CALL screen_put_str
+    POP  BC
+
+    ; Store-slot weight at col 69 on row B (C = 0..15)
+    PUSH BC
+    LD   A, C
+    ADD  A, OVL_HOME_BASE_SLOT
+    LD   E, A
+    LD   D, 0
+    LD   HL, si_item_id
+    ADD  HL, DE
+    LD   D, (HL)                ; D = item_id
+    LD   A, B                   ; A = screen row
+    LD   BC, STORE_TOTAL_SLOTS
+    ADD  HL, BC                 ; si_qty
+    LD   E, (HL)                ; E = qty
+    ADD  HL, BC                 ; si_p1
+    ADD  HL, BC                 ; si_to_hit
+    ADD  HL, BC                 ; si_to_dam
+    ADD  HL, BC                 ; si_to_ac
+    ADD  HL, BC                 ; si_meta
+    ADD  HL, BC                 ; si_meta_hi
+    LD   C, (HL)                ; C = ego/page byte
+    LD   B, E                   ; B = qty
+    PUSH AF                     ; save screen row
+    LD   A, D
+    CALL inv_slot_weight        ; HL = tenths of lb
+    POP  BC                     ; B = screen row
+    CALL ovl_home_put_col69
     POP  BC
 
 .slot_next:
@@ -250,8 +279,9 @@ ovl_home_deposit:
     LD   E, COL_WHITE
     LD   HL, ovl_home_str_dep_title
     CALL screen_put_str
+    CALL ovl_home_draw_burden
 
-    LD   A, 2
+    LD   A, 1
     LD   (ovl_home_disp_row), A
     LD   C, 0                   ; C = pack slot 0..21
 .dep_list:
@@ -264,7 +294,7 @@ ovl_home_deposit:
     JR   Z, .dep_list_next
 
     LD   A, (ovl_home_disp_row)
-    LD   B, A                   ; B = compact screen row (2..)
+    LD   B, A                   ; B = compact screen row (1..22)
     INC  A
     LD   (ovl_home_disp_row), A
     LD   D, COL_LGREY
@@ -276,13 +306,34 @@ ovl_home_deposit:
     LD   DE, line_buf
     CALL item_format_inv_slot
     XOR  A
-    LD   (line_buf + 75), A
+    LD   (line_buf + 63), A
     POP  BC
     PUSH BC
     LD   C, 4
     LD   E, COL_LGREY
     LD   HL, line_buf
     CALL screen_put_str
+    POP  BC
+
+    PUSH BC
+    LD   D, 0
+    LD   E, C                   ; slot 0..21
+    LD   A, B                   ; screen row
+    LD   HL, inv_item_id
+    ADD  HL, DE
+    LD   D, (HL)
+    LD   HL, inv_qty
+    LD   B, 0
+    ADD  HL, DE
+    LD   B, (HL)
+    LD   HL, inv_ego
+    ADD  HL, DE
+    LD   C, (HL)
+    PUSH AF                     ; save screen row
+    LD   A, D
+    CALL inv_slot_weight
+    POP  BC                     ; B = screen row
+    CALL ovl_home_put_col69
     POP  BC
 
 .dep_list_next:
@@ -523,9 +574,85 @@ ovl_home_to_lower:
     RET
 
 ; ============================================================================
+; Burden Header & Per-Item Weight Helpers (80-col)
+; ============================================================================
+ovl_home_draw_burden:
+    LD   B, 0
+    LD   C, 55
+    LD   E, COL_LGREY
+    LD   HL, ovl_home_str_burden
+    CALL screen_put_str
+
+    LD   HL, (inven_weight_lo)
+    LD   DE, line_buf
+    CALL ovl_home_fmt_tenths
+    LD   A, '/'
+    LD   (DE), A
+    INC  DE
+    PUSH DE
+    CALL player_weight_limit    ; HL = weight limit (0..3000)
+    POP  DE
+    CALL ovl_home_fmt_tenths
+    LD   HL, ovl_home_str_lb
+    LD   BC, 4
+    LDIR
+    LD   B, 0
+    LD   C, 63
+    LD   E, COL_WHITE
+    LD   HL, line_buf
+    JP   screen_put_str
+
+; Input: B = row, HL = weight in tenths of lb
+ovl_home_put_col69:
+    PUSH BC
+    LD   DE, temp_str_buf
+    CALL ovl_home_fmt_tenths    ; DE at NUL
+    LD   A, E
+    SUB  LOW temp_str_buf
+    LD   C, A                   ; length of "N.N" (3..6)
+    LD   HL, ovl_home_str_lb
+    PUSH BC
+    LD   BC, 4
+    LDIR                        ; append " lb\0"
+    POP  BC
+    POP  DE                     ; D = row
+    LD   A, 74
+    SUB  C
+    CP   69
+    JR   C, .col_clamp
+    JR   .col_ok
+.col_clamp:
+    LD   A, 69
+.col_ok:
+    LD   B, D
+    LD   C, A
+    LD   E, COL_LGREY
+    LD   HL, temp_str_buf
+    JP   screen_put_str
+
+; Format HL (tenths of lb) into DE as "N.N" + NUL, leaving DE at NUL.
+ovl_home_fmt_tenths:
+    LD   C, 10
+    CALL div_hl_c               ; HL = integer part, A = tenths digit 0..9
+    PUSH AF
+    CALL fmt_u16_dec            ; writes decimal integer at DE, advances DE to NUL
+    POP  AF
+    EX   DE, HL
+    LD   (HL), '.'
+    INC  HL
+    ADD  A, '0'
+    LD   (HL), A
+    INC  HL
+    LD   (HL), 0
+    EX   DE, HL
+    RET
+
+; ============================================================================
 ; Strings
 ; ============================================================================
 ovl_home_str_title:     DB "Home", 0
+ovl_home_str_burden:    DB "Burden: ", 0
+ovl_home_str_lb:        DB " lb", 0
 ovl_home_str_menu:      DB "D)ep R)et Q)uit   ", 0
 ovl_home_str_gold:      DB "Gold: ", 0
 ovl_home_str_dep_title: DB "Deposit", 0

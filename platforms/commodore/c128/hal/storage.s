@@ -33,6 +33,9 @@
 .label hal_storage_readst = KERNAL_READST
 .label hal_storage_load = KERNAL_LOAD
 .label hal_storage_read_command_status = c128_storage_read_command_status
+.label hal_storage_open_cmd_channel = c128_open_cmd_channel
+.label hal_storage_read_open_cmd_status = c128_read_open_cmd_status
+.label hal_storage_close_cmd_channel = c128_close_cmd_channel
 .label hal_storage_status_lost = c128_status_lost
 .label hal_storage_command_status = disk_command_status
 .label hal_storage_diag_code = disk_status
@@ -44,48 +47,70 @@
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
 
-c128_storage_read_command_status:
+c128_open_cmd_channel:
+    ldx save_device
+c128_open_cmd_channel_x:
+    txa
+    pha
     // Start with no channel selected, as the Plus/4 reader must (after a write
     // the drive refused, its JiffyDOS KERNAL never completed the CHKIN).
     jsr KERNAL_CLRCHN
+    lda #0
+    tax
+    tay
+    jsr KERNAL_SETNAM
+    pla
+    tax
+    lda #hal_storage_cmd_channel
+    ldy #hal_storage_cmd_channel
+    jsr KERNAL_SETLFS
+    jmp KERNAL_OPEN
+
+c128_clear_cmd_status_diag:
     lda #$ff
     sta disk_diag_cmd_status0
     sta disk_diag_cmd_status1
     lda #0
     sta disk_diag_readst        // this read's, not the last one's
     sta c128_status_lost
-    tax
-    tay
-    jsr KERNAL_SETNAM
-    lda #hal_storage_cmd_channel
+    rts
+
+// Keep c128_storage_read_command_status immediately above c128_read_open_cmd_status
+// so playtest/moria_playtest/disk.py's [reader, +0x100) READST span includes it.
+c128_storage_read_command_status:
     ldx save_device
-    ldy #hal_storage_cmd_channel
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
-    bcs !cs_done+
+c128_storage_read_command_status_x:
+    jsr c128_clear_cmd_status_diag
+    jsr c128_open_cmd_channel_x
+    bcs !cs_open_fail+
+    jsr c128_read_open_cmd_status_cleared
+    jmp c128_close_cmd_channel
+!cs_open_fail:
+    rts
+
+c128_read_open_cmd_status:
+    jsr c128_clear_cmd_status_diag
+c128_read_open_cmd_status_cleared:
     ldx #hal_storage_cmd_channel
     jsr KERNAL_CHKIN
-    bcs !cs_close+
+    bcs !cs_done+
     jsr KERNAL_READST
-    bne !cs_close+
+    bne !cs_done+
     jsr KERNAL_CHRIN
     sta disk_diag_cmd_status0
     jsr KERNAL_READST
     sta disk_diag_readst
-    bne !cs_close+
+    bne !cs_check_lost+
     jsr KERNAL_CHRIN
     sta disk_diag_cmd_status1
     jsr KERNAL_READST
     sta disk_diag_readst
     and #$02
-    beq !cs_close+
+    beq !cs_done+
     lda #$ff
     sta disk_diag_cmd_status1
     inc c128_status_lost
-!cs_close:
-    jsr KERNAL_CLRCHN
-    lda #hal_storage_cmd_channel
-    jsr KERNAL_CLOSE
+!cs_check_lost:
     // A read that timed out (ST bit 1) before any digit came lost its byte
     // on the bus: c128_status_lost says so, for a caller that can ask again
     // with a fresh OPEN (reading this channel again goes on mid-message).
@@ -100,7 +125,12 @@ c128_storage_read_command_status:
     bcc !cs_done+
     inc c128_status_lost
 !cs_done:
-    rts
+    jmp KERNAL_CLRCHN
+
+c128_close_cmd_channel:
+    jsr KERNAL_CLRCHN
+    lda #hal_storage_cmd_channel
+    jmp KERNAL_CLOSE
 
 c128_status_lost: .byte 0       // nonzero: the last status read lost its byte
 

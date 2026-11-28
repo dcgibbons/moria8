@@ -4,7 +4,9 @@
 # Usage: ./run_tests.sh
 # Requires: Kick Assembler, VICE (x64sc)
 
-REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+RUN_TESTS64_DIR="${RUN_TESTS64_DIR:-$REPO_ROOT/platforms/commodore/c64}"
+export PYTHONDONTWRITEBYTECODE=1
 
 # c64_break_cmd <addr>: a monitor breakpoint on game code. Code under the BASIC
 # ROM ($A000-$BFFF) or KERNAL ROM ($E000-$FFFF) shares its address with ROM
@@ -47,6 +49,7 @@ java() {
         command java "$@"
     fi
 }
+
 mktemp() {
     if [ "$1" = "-t" ] && [ $# -eq 2 ]; then
         case "$2" in
@@ -57,6 +60,7 @@ mktemp() {
         command mktemp "$@"
     fi
 }
+
 script() {
     if [ "$(uname -s)" = "Linux" ] && [ "$1" = "-q" ] && [ $# -ge 3 ] && [ "$2" != "-c" ]; then
         local log_path="$2"
@@ -71,66 +75,41 @@ script() {
         command script "$@"
     fi
 }
-RUN_TESTS64_DIR="${RUN_TESTS64_DIR:-$REPO_ROOT/platforms/commodore/c64}"
-cd "$RUN_TESTS64_DIR"
-C64_TEST_OUT="${C64_TEST_OUT:-../../../build/test/c64}"
-C64_BUILD_OUT="${C64_BUILD_OUT:-../../../build/c64}"
-mkdir -p "$C64_TEST_OUT"
-# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
-# gets its own directory, and runs older than six hours are cleared here, so
-# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
-mkdir -p ../../../build/test/c64/tmp
-find ../../../build/test/c64/tmp -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
-TMPDIR=$(cd ../../../build/test/c64/tmp && mktemp -d "$(pwd)/run.XXXXXX")
-export TMPDIR
-if [ -d "$C64_BUILD_OUT" ]; then
-    cp -p "$C64_BUILD_OUT"/* "$C64_TEST_OUT"/ 2>/dev/null || true
-fi
+
 cleanup() {
     rm -f ./*.prg ./*.sym ./*.vs tests/*.prg tests/*.sym tests/*.vs
     if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
         rm -rf "$TMPDIR"
     fi
 }
-trap cleanup EXIT
-COMMODORE_MAKE=(make -s -C "$REPO_ROOT/platforms/commodore")
-KICKASS_WAS_SET="${KICKASS+x}"
-KICKASS="${KICKASS:-$REPO_ROOT/tools/kickass/KickAss.jar}"
-case "$KICKASS" in
-    /*) ;;
-    *) KICKASS="$(pwd)/$KICKASS" ;;
-esac
-if [ -n "$KICKASS_WAS_SET" ]; then
-    kickass_status=0
-    "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" ensure-kickass || kickass_status=$?
-else
-    kickass_status=0
-    "${COMMODORE_MAKE[@]}" ensure-kickass || kickass_status=$?
-fi
-if [ "$kickass_status" -ne 0 ]; then
-    exit 1
-fi
-KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
-mkdir -p ../../../build/trampolines
-python3 -B ../../../tools/gen_trampolines.py --port c64 --output ../../../build/trampolines/c64_trampolines.inc || exit 1
-DEBUG_FEAT_DISK_TRACE="${DEBUG_FEAT_DISK_TRACE:-0}"
-if [ "$DEBUG_FEAT_DISK_TRACE" = "1" ]; then
-    KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE)
-else
-    KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
-fi
-VICE="${VICE:-x64sc}"
-# VICE reads this config (with the installed version tag) instead of the
-# user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
-VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
-C1541="${C1541:-c1541}"
+
+resolve_test_jobs() {
+    local requested="$1"
+    local detected
+
+    if [ "$requested" = "auto" ]; then
+        detected="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+        if [ -z "$detected" ] || ! [[ "$detected" =~ ^[0-9]+$ ]] || [ "$detected" -lt 1 ]; then
+            detected="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+        fi
+        if [ -z "$detected" ] || ! [[ "$detected" =~ ^[0-9]+$ ]] || [ "$detected" -lt 1 ]; then
+            detected=4
+        fi
+        printf '%s\n' "$detected"
+        return
+    fi
+
+    if [[ "$requested" =~ ^[0-9]+$ ]] && [ "$requested" -ge 1 ]; then
+        printf '%s\n' "$requested"
+        return
+    fi
+
+    printf '4\n'
+}
 
 # Images with the monster catalog: MONSTER.IDX's sector table for where
 # MONSTER.CAT1-4 landed on this image (tools/catalog_disk.py fix).
 c1541_catalog() {
-    if [ -d "$C64_BUILD_OUT" ]; then
-        cp -p "$C64_BUILD_OUT"/monster.* "$C64_BUILD_OUT"/item.* "$C64_TEST_OUT"/ 2>/dev/null || true
-    fi
     "$C1541" "$@" || return
     local img="" prev="" arg
     for arg in "$@"; do
@@ -139,10 +118,6 @@ c1541_catalog() {
     done
     [ -n "$img" ] && python3 -B "$REPO_ROOT/tools/catalog_disk.py" fix "$img" && python3 -B "$REPO_ROOT/tools/catalog_disk.py" item-fix "$img"
 }
-TEST_FILTER="${TEST_FILTER:-}"
-PASS=0
-FAIL=0
-TOTAL=0
 
 suite_selected() {
     local name="$1"
@@ -159,6 +134,174 @@ suite_selected_any() {
     return 1
 }
 
+c64_suite_dir() {
+    local name="$1"
+    local dir="$C64_TEST_OUT/$name"
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    printf '%s\n' "$dir"
+}
+
+c64_variant_defines() {
+    local key="$1"
+    case "$key" in
+        spell) printf '%s\n' -define C64_TEST_SCRIPTED_SPELL ;;
+        book_overlay) printf '%s\n' -define C64_TEST_SCRIPTED_BOOK_OVERLAY ;;
+        scroll_selector) printf '%s\n' -define C64_TEST_SCRIPTED_SCROLL_SELECTOR ;;
+        spell_list_overlay) printf '%s\n' -define C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY ;;
+        dungeon_spell) printf '%s\n' -define C64_TEST_SCRIPTED_DUNGEON_SPELL ;;
+        element_divisor) printf '%s\n' -define C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT ;;
+        ego_damage) printf '%s\n' -define C64_TEST_SCRIPTED_EGO_DAMAGE_PRODUCT ;;
+        detect_evil) printf '%s\n' -define C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT ;;
+        dungeon_ascent) printf '%s\n' -define C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT ;;
+        wizard_reveal) printf '%s\n' -define C64_TEST_SCRIPTED_WIZARD_REVEAL_PRODUCT ;;
+        wizard_item) printf '%s\n' -define C64_TEST_SCRIPTED_WIZARD_ITEM_PRODUCT ;;
+        exchange) printf '%s\n' -define C64_TEST_SCRIPTED_EXCHANGE_PRODUCT ;;
+        chest_open) printf '%s\n' -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT ;;
+        retirement) printf '%s\n' -define C64_TEST_SCRIPTED_RETIREMENT_PRODUCT ;;
+        game_over) printf '%s\n' -define C64_TEST_SCRIPTED_GAME_OVER_PRODUCT ;;
+        disk_setup) printf '%s\n' -define C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT ;;
+        disk_setup_single_drive_return) printf '%s\n' -define C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT ;;
+        disk_setup_then_load) printf '%s\n' -define C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT ;;
+        slot2_load) printf '%s\n' -define C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT ;;
+        single_drive_load_return) printf '%s\n' -define C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT ;;
+        load_then_save_new_empty) printf '%s\n' -define C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT ;;
+        change_save_drive) printf '%s\n' -define C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT ;;
+        single_drive_save_wrong_media) printf '%s\n' -define C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT ;;
+        single_drive_load_wrong_media) printf '%s\n' -define C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT ;;
+        single_drive_load_corrupt) printf '%s\n' -define C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT ;;
+        single_drive_fresh_save) printf '%s\n' -define C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT ;;
+        single_drive_fresh_save_no_init) printf '%s\n' -define C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT -define C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT ;;
+        load_missing_save) printf '%s\n' -define C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT ;;
+        save_media_fail) printf '%s\n' -define C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT ;;
+        save_write) printf '%s\n' -define C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT ;;
+        slot2_save) printf '%s\n' -define C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT ;;
+        *)
+            echo "Unknown C64 variant key: $key" >&2
+            return 1
+            ;;
+    esac
+}
+
+c64_variant_spec_for_fn() {
+    local fn="$1"
+    case "$fn" in
+        run_scripted_spell_cast_smoke) echo "spell" ;;
+        run_scripted_book_overlay_smoke) echo "book_overlay" ;;
+        run_scripted_scroll_selector_smoke) echo "scroll_selector" ;;
+        run_scripted_spell_list_overlay_smoke) echo "spell_list_overlay" ;;
+        run_scripted_dungeon_target_spell_smoke) echo "dungeon_spell" ;;
+        run_scripted_element_divisor_smoke) echo "element_divisor" ;;
+        run_scripted_ego_damage_smoke) echo "ego_damage" ;;
+        run_scripted_detect_evil_smoke) echo "detect_evil" ;;
+        run_dungeon_ascent_product_smoke|run_catalog_spawn_product_smoke|run_catalog_spawn_product_reu_smoke) echo "dungeon_ascent" ;;
+        run_wizard_reveal_product_smoke) echo "wizard_reveal" ;;
+        run_wizard_item_product_smoke) echo "wizard_item" ;;
+        run_exchange_product_smoke) echo "exchange" ;;
+        run_chest_open_product_smoke|run_chest_open_product_reu_smoke|run_chest_open_product_genfail_smoke) echo "chest_open" ;;
+        run_retirement_royal_product_smoke) echo "retirement" ;;
+        run_game_over_product_smoke) echo "game_over" ;;
+        run_disk_setup_product_smoke) echo "disk_setup" ;;
+        run_disk_setup_single_drive_return_product_smoke) echo "disk_setup_single_drive_return" ;;
+        run_disk_setup_then_load_prompts_save_product_smoke) echo "disk_setup_then_load" ;;
+        run_load_resume_product_smoke) echo "slot2_load" ;;
+        run_single_drive_load_return_product_smoke) echo "single_drive_load_return" ;;
+        run_load_then_save_new_empty_product_smoke) echo "load_then_save_new_empty" ;;
+        run_change_save_drive_product_smoke) echo "change_save_drive" ;;
+        run_single_drive_save_wrong_media_product_smoke) echo "single_drive_save_wrong_media" ;;
+        run_single_drive_load_wrong_media_product_smoke) echo "single_drive_load_wrong_media" ;;
+        run_single_drive_load_corrupt_product_smoke) echo "single_drive_load_corrupt" ;;
+        run_single_drive_fresh_save_product_smoke) echo "single_drive_fresh_save" ;;
+        run_single_drive_fresh_save_no_init_product_smoke) echo "single_drive_fresh_save_no_init" ;;
+        run_load_missing_savefile_product_smoke) echo "load_missing_save" ;;
+        run_save_media_fail_product_smoke) echo "save_media_fail" ;;
+        run_save_write_product_smoke) echo "save_write" ;;
+        run_slot2_save_product_smoke) echo "slot2_save slot2_load" ;;
+        *) ;;
+    esac
+}
+
+c64_suite_needs_disk64() {
+    local fn="$1"
+    case "$fn" in
+        run_hot_residency_product_smoke|run_item_cat_level_entry_product_smoke)
+            return 0
+            ;;
+        run_item_cat_level_entry_jiffydos1541_product_smoke)
+            [ -n "${PLAYTEST_DOS1541:-}" ]
+            return
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+c64_build_smoke_disk() {
+    local variant_dir="$1"
+    local out_d64="$2"
+    local log_file="$3"
+    local assets_dir="$C64_SHARED_ASSETS_DIR"
+    rm -f "$out_d64"
+    c1541_catalog -format "moria8 c64,m8" d64 "$out_d64"         -attach "$out_d64"         -write "$assets_dir/boot.prg" "moria8"         -write "$assets_dir/boot.prg" "boot64"         -write "$assets_dir/bootart64.prg" "bootart64"         -write "$variant_dir/moria.prg" "moria64"         -write "$variant_dir/64.bank" "64.bank"         -write "$assets_dir/title" "t64"         -write "$assets_dir/monster.cat1" "monster.cat1"         -write "$assets_dir/monster.cat2" "monster.cat2"         -write "$assets_dir/monster.cat3" "monster.cat3"         -write "$assets_dir/monster.cat4" "monster.cat4"         -write "$assets_dir/monster.ext" "monster.ext"         -write "$assets_dir/monster.idx" "monster.idx"         -write "$assets_dir/item.cat" "item.cat"         -write "$assets_dir/item.idx" "item.idx"         -write "$variant_dir/ovl.start" "64.start"         -write "$variant_dir/ovl.town" "64.town"         -write "$variant_dir/ovl.death" "64.death"         -write "$variant_dir/ovl.modal" "64.modal"         -write "$variant_dir/ovl.gen" "64.gen"         -write "$variant_dir/ovl.help" "64.help"         -write "$variant_dir/ovl.ui" "64.ui"         -write "$variant_dir/ovl.items" "64.items"         -write "$variant_dir/ovl.spell" "64.spell"         -write "$variant_dir/ovl.chest" "64.chest"         -write "$variant_dir/ovl.home" "64.home"         -write "$variant_dir/ovl.storage" "64.storage"         -write "$variant_dir/ovl.title" "64.title" >>"$log_file" 2>&1
+}
+
+c64_prebuild_variant() {
+    local key="$1"
+    local variant_dir="$C64_VARIANTS_DIR/$key"
+    local build_log="$variant_dir/build.log"
+    local -a defines=()
+    local tok
+    while IFS= read -r tok; do
+        [ -n "$tok" ] && defines+=("$tok")
+    done < <(c64_variant_defines "$key")
+
+    rm -rf "$variant_dir"
+    mkdir -p "$variant_dir"
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s ":OVL_OUT=$variant_dir" -showmem -vicesymbols -symbolfiledir "$variant_dir" "${defines[@]}" -o "$variant_dir/moria.prg" >"$build_log" 2>&1; then
+        echo "assembly" >"$variant_dir/build.failed"
+        return 0
+    fi
+
+    if ! c64_build_smoke_disk "$variant_dir" "$variant_dir/base.d64" "$build_log"; then
+        echo "disk" >"$variant_dir/build.failed"
+        return 0
+    fi
+}
+
+c64_prepare_smoke_suite() {
+    local suite_name="$1"
+    local key="$2"
+    SUITE_DIR="$(c64_suite_dir "$suite_name")"
+    VARIANT_DIR="$C64_VARIANTS_DIR/$key"
+    MAIN_VS="$VARIANT_DIR/main.vs"
+    SCRIPTED_D64="$SUITE_DIR/${suite_name}.d64"
+
+    if [ -f "$VARIANT_DIR/build.failed" ]; then
+        local reason
+        reason="$(cat "$VARIANT_DIR/build.failed")"
+        if [ "$reason" = "assembly" ]; then
+            echo "FAIL (assembly error)"
+            grep -i error "$VARIANT_DIR/build.log" | head -5
+        else
+            echo "FAIL (disk build error)"
+            tail -20 "$VARIANT_DIR/build.log"
+        fi
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! cp "$VARIANT_DIR/base.d64" "$SCRIPTED_D64"; then
+        echo "FAIL (disk copy error)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+    return 0
+}
+
 run_suite_function() {
     local name="$1"
     local fn="$2"
@@ -166,14 +309,20 @@ run_suite_function() {
     if ! suite_selected_any "$name" "$@"; then
         return
     fi
+    if [ "${C64_COLLECT_MODE:-0}" = "1" ]; then
+        C64_SMOKE_SPECS+=("${name}|${fn}")
+        return
+    fi
     "$fn"
 }
 
 run_disk_media_probe() {
     local name="$1"
+    local suite_dir
+    suite_dir="$(c64_suite_dir "$name")"
 
     echo -n "  $name: "
-    if python3 -u ../disk_media_probe.py --scenario "$name" --platform c64 --c1541 "$C1541"; then
+    if TMPDIR="$suite_dir" python3 -u ../disk_media_probe.py --scenario "$name" --platform c64 --c1541 "$C1541"; then
         PASS=$((PASS + 1))
     else
         FAIL=$((FAIL + 1))
@@ -195,9 +344,11 @@ run_media_drive10_11_device_probe() {
 
 run_boot_error_smoke() {
     local name="boot_error_smoke"
+    local suite_dir
+    suite_dir="$(c64_suite_dir "$name")"
 
     echo -n "  $name: "
-    if python3 -B -u "$RUN_TESTS64_DIR/tests/boot_error_smoke.py" --vice "$VICE" --c1541 "$C1541" --kickass "$KICKASS"; then
+    if python3 -B -u "$RUN_TESTS64_DIR/tests/boot_error_smoke.py" --vice "$VICE" --c1541 "$C1541" --kickass "$KICKASS" --work-dir "$suite_dir"; then
         PASS=$((PASS + 1))
     else
         FAIL=$((FAIL + 1))
@@ -335,15 +486,31 @@ run_test() {
     if ! suite_selected "$1"; then
         return
     fi
-    # A directory of its own: -vicesymbols writes <source>.vs beside the PRG,
-    # and with a shared /tmp name two runs at once (other worktrees or agents)
-    # deleted or read each other's symbols, so a suite broke at the wrong
-    # bootstrap and returned no result (docs/BACKLOG.md).
+    if [ "${C64_COLLECT_MODE:-0}" = "1" ]; then
+        local idx="${#C64_UNIT_SPECS[@]}"
+        local spec_file="$C64_UNIT_COLLECT_DIR/job_${idx}.spec"
+        {
+            printf 'JOB_KIND=unit\n'
+            printf 'JOB_NAME=%q\n' "$1"
+            printf 'JOB_ARGS=('
+            local a
+            for a in "$@"; do
+                printf ' %q' "$a"
+            done
+            printf ' )\n'
+        } > "$spec_file"
+        C64_UNIT_SPECS+=("$1")
+        return
+    fi
     local prg_dir
-    prg_dir=$(mktemp -d -t "test_${1}.XXXXXX")
+    prg_dir="$(c64_suite_dir "$1")"
+    local rc_before_fail="$FAIL"
     run_test_in "$prg_dir" "$@"
-    rm -f -- "$prg_dir/test.prg" "$prg_dir/$(basename "${2%.s}").vs" "$prg_dir/mon" "$prg_dir/tty.log"
-    rmdir -- "$prg_dir"
+    rm -f -- "$prg_dir/test.prg" "$prg_dir/$(basename "${2%.s}").vs" "$prg_dir/$(basename "${2%.s}").sym"
+    if [ "$FAIL" -eq "$rc_before_fail" ]; then
+        rm -f -- "$prg_dir/mon" "$prg_dir/tty.log"
+        rmdir -- "$prg_dir" 2>/dev/null || true
+    fi
 }
 
 run_test_in() {
@@ -360,7 +527,7 @@ run_test_in() {
 
     # Assemble and capture output
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -o "$prg_file" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -symbolfiledir "$prg_dir" -o "$prg_file" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -524,26 +691,23 @@ run_sound_monitor_test() {
     echo -n "  $name: "
 
     local prg_dir prg_file sym_file
-    prg_dir=$(mktemp -d -t "test_${name}.XXXXXX")
+    prg_dir="$(c64_suite_dir "$name")"
     prg_file="$prg_dir/test_sound_monitor.prg"
     sym_file="$prg_dir/test_sound_monitor.vs"
 
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -o "$prg_file" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" -define C64_UNIT_TEST "$src" -showmem -vicesymbols -symbolfiledir "$prg_dir" -o "$prg_file" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
         echo "$asm_output" | grep -i error | head -3
-        rm -rf -- "$prg_dir"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    local mon_file
-    local log_file
-    mon_file=$(mktemp -t "test_${name}_mon.XXXXXX")
-    log_file=$(mktemp -t "test_${name}_log.XXXXXX")
+    local mon_file="$prg_dir/mon"
+    local log_file="$prg_dir/tty.log"
 
     lookup_label() {
         local label="$1"
@@ -641,8 +805,7 @@ PY
     else
         FAIL=$((FAIL + 1))
     fi
-    rm -f -- "$mon_file" "$log_file"
-    rm -rf -- "$prg_dir"
+    rm -f -- "$prg_file" "$sym_file" "$prg_dir/test_sound_monitor.sym"
     TOTAL=$((TOTAL + 1))
 }
 
@@ -650,67 +813,12 @@ run_scripted_spell_cast_smoke() {
     local name="scripted_spell_cast_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "spell" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols -define C64_TEST_SCRIPTED_SPELL -o ../../../build/test/c64/moria_spell_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_spell_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_spell_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c64_test_spell_fail_no_cast_sym"
@@ -727,7 +835,7 @@ run_scripted_spell_cast_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in ../../../build/test/c64/main.vs)"
+            echo "FAIL (missing ${label} in $main_vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -735,16 +843,16 @@ run_scripted_spell_cast_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted spell pass symbol in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing scripted spell pass symbol in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
@@ -810,73 +918,17 @@ run_scripted_spell_cast_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_scripted_book_overlay_smoke() {
     local name="scripted_book_overlay_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "book_overlay" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_BOOK_OVERLAY \
-            -o ../../../build/test/c64/moria_book_overlay_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_book_overlay_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_book_overlay_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c64_test_book_overlay_fail_sym"
@@ -889,7 +941,7 @@ run_scripted_book_overlay_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in ../../../build/test/c64/main.vs)"
+            echo "FAIL (missing ${label} in $main_vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -897,16 +949,16 @@ run_scripted_book_overlay_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted book overlay pass symbol in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing scripted book overlay pass symbol in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
@@ -972,73 +1024,17 @@ run_scripted_book_overlay_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_scripted_scroll_selector_smoke() {
     local name="scripted_scroll_selector_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "scroll_selector" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SCROLL_SELECTOR \
-            -o ../../../build/test/c64/moria_scroll_selector_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_scroll_selector_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_scroll_selector_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c64_test_scroll_selector_fail_sym"
@@ -1051,7 +1047,7 @@ run_scripted_scroll_selector_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in ../../../build/test/c64/main.vs)"
+            echo "FAIL (missing ${label} in $main_vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -1059,16 +1055,16 @@ run_scripted_scroll_selector_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted scroll selector pass symbol in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing scripted scroll selector pass symbol in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
@@ -1133,73 +1129,17 @@ run_scripted_scroll_selector_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_scripted_spell_list_overlay_smoke() {
     local name="scripted_spell_list_overlay_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "spell_list_overlay" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY \
-            -o ../../../build/test/c64/moria_spell_list_overlay_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_spell_list_overlay_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_spell_list_overlay_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c64_test_spell_list_overlay_fail_sym"
@@ -1212,7 +1152,7 @@ run_scripted_spell_list_overlay_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in ../../../build/test/c64/main.vs)"
+            echo "FAIL (missing ${label} in $main_vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -1220,16 +1160,16 @@ run_scripted_spell_list_overlay_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted spell list overlay pass symbol in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing scripted spell list overlay pass symbol in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
@@ -1297,73 +1237,17 @@ run_scripted_spell_list_overlay_smoke() {
 
 # Kills one of each of the first 16 monster types only (c64_test_dungeon_spell_goal,
 # core/6502/game_loop.s): all of them ran past the 30-second rule.
+
 run_scripted_dungeon_target_spell_smoke() {
     local name="scripted_dungeon_target_spell_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "dungeon_spell" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_DUNGEON_SPELL \
-            -o ../../../build/test/c64/moria_dungeon_spell_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_dungeon_spell_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_dungeon_spell_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c64_test_spell_fail_no_cast_sym"
@@ -1380,7 +1264,7 @@ run_scripted_dungeon_target_spell_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in ../../../build/test/c64/main.vs)"
+            echo "FAIL (missing ${label} in $main_vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -1388,23 +1272,23 @@ run_scripted_dungeon_target_spell_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted spell pass symbol in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing scripted spell pass symbol in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
 
     # The seed (a level-50 Mage) is monitor writes at c64_test_seed_point,
     # assembled into dungeon_spell_seed.mon: no seed code in the image.
-    local seed_addr seed_file="../../../build/test/c64/dungeon_spell_seed.mon"
+    local seed_addr seed_file="$VARIANT_DIR/dungeon_spell_seed.mon"
     seed_addr=$(awk '$3 == ".c64_test_seed_point" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${seed_addr:-}" ] || [ ! -s "$seed_file" ]; then
         echo "FAIL (missing c64_test_seed_point or $seed_file)"
@@ -1425,13 +1309,13 @@ run_scripted_dungeon_target_spell_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    rm -f "../../../build/test/c64/${name}_exit.png"    # never name a stale screen
+    rm -f "$SUITE_DIR/${name}_exit.png"    # never name a stale screen
     script -q "$tty_log" \
         "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -reu -reusize 512 \
         -autostart "$scripted_d64" -moncommands "$mon_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor -exitscreenshot "../../../build/test/c64/${name}_exit.png" > /dev/null 2>&1
+        +remotemonitor +binarymonitor -exitscreenshot "$SUITE_DIR/${name}_exit.png" > /dev/null 2>&1
 
     pass_hit=0
     if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
@@ -1467,7 +1351,7 @@ run_scripted_dungeon_target_spell_smoke() {
     if grep -qi "cycle limit reached" "$tty_log"; then
         echo "FAIL (scripted dungeon spell flow timed out)"
         echo "    Log: $tty_log"
-        c64_exit_screen_note "../../../build/test/c64/${name}_exit.png"
+        c64_exit_screen_note "$SUITE_DIR/${name}_exit.png"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -1479,6 +1363,7 @@ run_scripted_dungeon_target_spell_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_scripted_element_divisor_smoke() {
     # The product's element divisor entry (tramp_element_divisor into the
     # $F000 runtime, MON-028): fire resisted twice is divided by 9, lightning
@@ -1487,69 +1372,12 @@ run_scripted_element_divisor_smoke() {
     local name="scripted_element_divisor_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "element_divisor" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_ELEMENT_DIVISOR_PRODUCT \
-            -o ../../../build/test/c64/moria_element_divisor_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_element_divisor_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_element_divisor_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local call_addr after_addr pflags_addr eff_resist_addr divisor_addr
     local k_resist_fire k_breath_fire k_breath_lightning
     call_addr=$(awk '$3 == ".c64_test_element_call_sym" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -1570,8 +1398,8 @@ run_scripted_element_divisor_smoke() {
     fi
 
     local mon_file tty_log
-    mon_file=$(mktemp -t "test_${name}_mon")
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    mon_file="$SUITE_DIR/mon"
+    tty_log="$SUITE_DIR/tty.log"
     {
         c64_break_cmd "${call_addr}"          # breakpoint 1: entry after cli
         c64_break_cmd "${after_addr}"         # breakpoint 2: post-trampoline return
@@ -1709,6 +1537,7 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_scripted_ego_damage_smoke() {
     # The product's ego damage entry (tramp_ego_apply_damage into the $F000
     # runtime), called from $E000 as OVL.ITEMS calls it for ego ammunition:
@@ -1718,69 +1547,12 @@ run_scripted_ego_damage_smoke() {
     local name="scripted_ego_damage_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "ego_damage" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_EGO_DAMAGE_PRODUCT \
-            -o ../../../build/test/c64/moria_ego_damage_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_ego_damage_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_ego_damage_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr fail_addr
     pass_addr=$(awk '/\.c64_test_ego_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_ego_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -1792,8 +1564,8 @@ run_scripted_ego_damage_smoke() {
     fi
 
     local mon_file tty_log
-    mon_file=$(mktemp -t "test_${name}_mon")
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    mon_file="$SUITE_DIR/mon"
+    tty_log="$SUITE_DIR/tty.log"
     {
         c64_break_cmd "${fail_addr}"
         c64_break_cmd "${pass_addr}"
@@ -1826,73 +1598,17 @@ run_scripted_ego_damage_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_scripted_detect_evil_smoke() {
     local name="scripted_detect_evil_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "detect_evil" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT \
-            -o ../../../build/test/c64/moria_detect_evil_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_detect_evil_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_detect_evil_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr
     local -a fail_labels=(
         "c64_test_spell_fail_no_cast_sym"
@@ -1909,7 +1625,7 @@ run_scripted_detect_evil_smoke() {
     for label in "${fail_labels[@]}"; do
         addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
         if [ -z "${addr:-}" ]; then
-            echo "FAIL (missing ${label} in ../../../build/test/c64/main.vs)"
+            echo "FAIL (missing ${label} in $main_vs)"
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
@@ -1917,16 +1633,16 @@ run_scripted_detect_evil_smoke() {
         fail_addrs+=("$addr")
     done
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing scripted spell pass symbol in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing scripted spell pass symbol in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc
     local pass_hit
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
@@ -1935,7 +1651,7 @@ run_scripted_detect_evil_smoke() {
     # and the detection checks are the runner's: the monster table and the
     # creature flags dumped at c64_test_detect_check_point (after the first
     # successful prayer) and at the pass, read by tools/c64_detect_evil_check.py.
-    local seed_addr check_addr seed_file="../../../build/test/c64/detect_evil_seed.mon"
+    local seed_addr check_addr seed_file="$VARIANT_DIR/detect_evil_seed.mon"
     local table_addr mflags_addr table_end mflags_end
     seed_addr=$(awk '$3 == ".c64_test_seed_point" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     check_addr=$(awk '$3 == ".c64_test_detect_check_point" { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -2030,87 +1746,31 @@ run_scripted_detect_evil_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_dungeon_ascent_product_smoke() {
     local name="dungeon_ascent_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "dungeon_ascent" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_DUNGEON_ASCENT_PRODUCT \
-            -o ../../../build/test/c64/moria_dungeon_ascent_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_dungeon_ascent_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_dungeon_ascent_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr fail_addr
     pass_addr=$(awk '/\.tramp_store_restock_all$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_dungeon_ascent_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
-        echo "FAIL (missing dungeon-ascent smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing dungeon-ascent smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc fail_lc swap_lc
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
@@ -2175,19 +1835,16 @@ run_dungeon_ascent_product_smoke() {
 # records preloaded at boot), else the drive (direct sector reads). Then the
 # turn's wanderer through tramp_catalog_place_wanderer (the $F000 runtime):
 # one more monster, awake, beyond max_sight (VMS alloc_monster).
+
 run_catalog_spawn_product_smoke() {
     local reu="${1:-0}"
     local name="catalog_spawn_product_smoke"
     [ "$reu" = 1 ] && name="catalog_spawn_product_reu_smoke"
     echo -n "  $name: "
-    local scripted_d64="../../../build/test/c64/moria_dungeon_ascent_smoke.d64"
-    local main_vs="../../../build/test/c64/main.vs" sym
-    if [ ! -f "$scripted_d64" ] || ! grep -q "c64_test_dungeon_ascent_fail_input_sym" "$main_vs"; then
-        echo "FAIL (needs the dungeon_ascent_product_smoke build)"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64 sym
+    c64_prepare_smoke_suite "$name" "dungeon_ascent" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
     local item_spawn_level monster_table cat_slot_id_lo cr_level cr_name_lo cr_name_hi
     local catalog_fetch_ext cat_id_lo cat_ext_record
     local tramp_catalog_place_wanderer zp_player_x zp_player_y zp_mon_count
@@ -2202,9 +1859,9 @@ run_catalog_spawn_product_smoke() {
         fi
     done
     local mon_file log_file check_log ext_id
-    mon_file=$(mktemp -t "test_${name}_mon.XXXXXX")
-    log_file=$(mktemp -t "test_${name}_log.XXXXXX")
-    check_log=$(mktemp -t "test_${name}_check.XXXXXX")
+    mon_file="$SUITE_DIR/mon"
+    log_file="$SUITE_DIR/tty.log"
+    check_log="$SUITE_DIR/check.log"
     local cfe_lo=$(( 16#$catalog_fetch_ext & 0xff ))
     local cfe_hi=$(( (16#$catalog_fetch_ext >> 8) & 0xff ))
     local cer_end
@@ -2223,22 +1880,22 @@ run_catalog_spawn_product_smoke() {
         echo "bank cpu"
         printf '> 033c 20 %02x %02x ea\n' "$cfe_lo" "$cfe_hi"
         for ext_id in 0 31 255 256 278; do
-            rm -f "$TMPDIR/ext_${name}_${ext_id}.bin"
+            rm -f "$SUITE_DIR/ext_${name}_${ext_id}.bin"
             printf '> %s %02x %02x\n' "$cat_id_lo" $(( ext_id & 0xff )) $(( ext_id >> 8 ))
             echo "r pc=033c"
             echo "until \$033f"
-            echo "bsave \"$TMPDIR/ext_${name}_${ext_id}.bin\" 0 \$${cat_ext_record} \$${cer_end}"
+            echo "bsave \"$SUITE_DIR/ext_${name}_${ext_id}.bin\" 0 \$${cat_ext_record} \$${cer_end}"
         done
         local mt_end
         mt_end=$(printf '%04x' $(( 16#$monster_table + 32 * 12 - 1 )))
-        rm -f "$TMPDIR"/wand_"${name}"_*.bin
-        echo "bsave \"$TMPDIR/wand_${name}_before.bin\" 0 \$${monster_table} \$${mt_end}"
-        echo "bsave \"$TMPDIR/wand_${name}_zp.bin\" 0 \$0000 \$00ff"
+        rm -f "$SUITE_DIR"/wand_"${name}"_*.bin
+        echo "bsave \"$SUITE_DIR/wand_${name}_before.bin\" 0 \$${monster_table} \$${mt_end}"
+        echo "bsave \"$SUITE_DIR/wand_${name}_zp.bin\" 0 \$0000 \$00ff"
         printf '> 033c 20 %02x %02x ea\n' $(( 16#$tramp_catalog_place_wanderer & 0xff )) $(( 16#$tramp_catalog_place_wanderer >> 8 ))
         echo "r pc=033c"
         echo "until \$033f"
-        echo "bsave \"$TMPDIR/wand_${name}_after.bin\" 0 \$${monster_table} \$${mt_end}"
-        echo "bsave \"$TMPDIR/wand_${name}_zp_after.bin\" 0 \$0000 \$00ff"
+        echo "bsave \"$SUITE_DIR/wand_${name}_after.bin\" 0 \$${monster_table} \$${mt_end}"
+        echo "bsave \"$SUITE_DIR/wand_${name}_zp_after.bin\" 0 \$0000 \$00ff"
         echo "quit"
     } > "$mon_file"
     local reu_args=()
@@ -2256,7 +1913,7 @@ run_catalog_spawn_product_smoke() {
         TOTAL=$((TOTAL + 1))
         return
     fi
-    if ! python3 -B - "$REPO_ROOT" "$TMPDIR" "$name" >>"$check_log" 2>&1 <<'PY'
+    if ! python3 -B - "$REPO_ROOT" "$SUITE_DIR" "$name" >>"$check_log" 2>&1 <<'PY'
 import sys
 from pathlib import Path
 repo, tmpdir, name = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
@@ -2274,7 +1931,7 @@ PY
         TOTAL=$((TOTAL + 1))
         return
     fi
-    if ! python3 -B - "$TMPDIR" "$name" $(( 16#$zp_player_x )) $(( 16#$zp_player_y )) $(( 16#$zp_mon_count )) >>"$check_log" 2>&1 <<'PY'
+    if ! python3 -B - "$SUITE_DIR" "$name" $(( 16#$zp_player_x )) $(( 16#$zp_player_y )) $(( 16#$zp_mon_count )) >>"$check_log" 2>&1 <<'PY'
 import sys
 from pathlib import Path
 tmpdir, name = Path(sys.argv[1]), sys.argv[2]
@@ -2301,84 +1958,29 @@ PY
         TOTAL=$((TOTAL + 1))
         return
     fi
-    rm -f "$TMPDIR"/ext_"${name}"_*.bin "$TMPDIR"/wand_"${name}"_*.bin
+    rm -f "$SUITE_DIR"/ext_"${name}"_*.bin "$SUITE_DIR"/wand_"${name}"_*.bin
     echo "PASS ($(tail -2 "$check_log" | head -1 | sed 's/^PASS: //'); $(tail -1 "$check_log" | sed 's/^PASS: //'))"
-    rm -f -- "$mon_file" "$log_file" "$check_log"
+    rm -f -- "$mon_file" "$log_file" "$check_log" "$scripted_d64"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
 }
+
 
 run_catalog_spawn_product_reu_smoke() {
     run_catalog_spawn_product_smoke 1
 }
 
+
 run_wizard_reveal_product_smoke() {
     local name="wizard_reveal_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "wizard_reveal" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_WIZARD_REVEAL_PRODUCT \
-            -o ../../../build/test/c64/moria_wizard_reveal_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_wizard_reveal_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_wizard_reveal_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local fail_addr dlvl_addr vis_addr ovl_addr arm_addr
     fail_addr=$(awk '/\.c64_test_wizard_reveal_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     dlvl_addr=$(awk '/\.zp_player_dlvl$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -2386,7 +1988,7 @@ run_wizard_reveal_product_smoke() {
     ovl_addr=$(awk '/\.current_overlay$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     arm_addr=$(awk '/\.item_init_identification$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${fail_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${vis_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ]; then
-        echo "FAIL (missing wizard-reveal smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing wizard-reveal smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -2398,9 +2000,9 @@ run_wizard_reveal_product_smoke() {
     arm_addr=$(printf '%04X' "$((16#$arm_addr))")
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local fail_lc
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
 
@@ -2474,78 +2076,24 @@ run_wizard_reveal_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_wizard_item_product_smoke() {
     local name="wizard_item_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "wizard_item" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_WIZARD_ITEM_PRODUCT \
-            -o ../../../build/test/c64/moria_wizard_item_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_wizard_item_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_wizard_item_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
     # Wizard generate item (G 128, G 96, then G 127) exercises the modal flow
     # whose ego roll banks the $F000 runtime while returning through $E000.
     # The resident post-ego breakpoint arms the overlay-address redraw probe
     # only after the target item roll, avoiding earlier hits at the same
     # $E000 address during dungeon generation.
-    local main_vs="../../../build/test/c64/main.vs"
+    # main_vs set by c64_prepare_smoke_suite
     local fail_addr redraw_addr ego_addr dlvl_addr ovl_addr arm_addr inv_addr
     fail_addr=$(awk '/\.c64_test_wizard_reveal_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     redraw_addr=$(awk '/\.c64_test_wizard_item_redraw_done_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -2555,7 +2103,7 @@ run_wizard_item_product_smoke() {
     inv_addr=$(awk '/\.inv_item_id$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     ego_addr=$(awk '/\.c64_test_wizard_ego_bank_restored_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${fail_addr:-}" ] || [ -z "${redraw_addr:-}" ] || [ -z "${ego_addr:-}" ] || [ -z "${dlvl_addr:-}" ] || [ -z "${ovl_addr:-}" ] || [ -z "${arm_addr:-}" ] || [ -z "${inv_addr:-}" ]; then
-        echo "FAIL (missing wizard-item smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing wizard-item smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -2570,9 +2118,9 @@ run_wizard_item_product_smoke() {
     inv_end=$(printf '%04X' "$((16#$inv_addr + 5))")   # rations, book, spare torches, then the grants
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local fail_lc
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
 
@@ -2699,64 +2247,16 @@ print(f"{I.ITEM_SLOT_SMALL_WOODEN_CHEST:02x} {I.ITEM_SLOT_POTION_OF_HEALING:02x}
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_exchange_product_smoke() {
     local name="exchange_product_smoke"
     echo -n "  $name: "
 
-    local smoke_out build_log smoke_c64 boot_d64 main_vs
-    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-exchange.XXXXXX")
-    smoke_c64="$smoke_out/c64"
-    boot_d64="$smoke_out/moria8-c64.d64"
-    main_vs="$smoke_c64/main.vs"
-    build_log=$(mktemp -t "build_${name}_log")
-
-    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
-            KICKASS="$KICKASS" \
-            OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_EXCHANGE_PRODUCT" \
-            build64 >"$build_log" 2>&1; then
-        echo "FAIL (product build)"
-        tail -80 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
-            -attach "$boot_d64" \
-            -write "$smoke_c64/boot.prg" "moria8" \
-            -write "$smoke_c64/boot.prg" "boot64" \
-            -write "$smoke_c64/bootart64.prg" "bootart64" \
-            -write "$smoke_c64/moria8.prg" "moria64" \
-            -write "$smoke_c64/64.bank" "64.bank" \
-            -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.cat1" "monster.cat1" \
-            -write "$smoke_c64/monster.cat2" "monster.cat2" \
-            -write "$smoke_c64/monster.cat3" "monster.cat3" \
-            -write "$smoke_c64/monster.cat4" "monster.cat4" \
-            -write "$smoke_c64/monster.ext" "monster.ext" \
-            -write "$smoke_c64/monster.idx" "monster.idx" \
-            -write "$smoke_c64/item.cat" "item.cat" \
-            -write "$smoke_c64/item.idx" "item.idx" \
-            -write "$smoke_c64/ovl.start" "64.start" \
-            -write "$smoke_c64/ovl.town" "64.town" \
-            -write "$smoke_c64/ovl.death" "64.death" \
-            -write "$smoke_c64/ovl.modal" "64.modal" \
-            -write "$smoke_c64/ovl.gen" "64.gen" \
-            -write "$smoke_c64/ovl.help" "64.help" \
-            -write "$smoke_c64/ovl.ui" "64.ui" \
-            -write "$smoke_c64/ovl.items" "64.items" \
-            -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" \
-            -write "$smoke_c64/ovl.home" "64.home" \
-            -write "$smoke_c64/ovl.storage" "64.storage" \
-            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
-        echo "FAIL (product disk image)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "exchange" || return
+    local boot_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
     local exch_mace_slot exch_dagger_slot exch_dagger_ego
     read -r exch_mace_slot exch_dagger_slot exch_dagger_ego < <(
@@ -2769,7 +2269,7 @@ print(f"0x{I.ITEM_SLOT_MACE:02x} 0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".msg_init" \
             --until-pass \
@@ -2797,71 +2297,23 @@ print(f"0x{I.ITEM_SLOT_MACE:02x} 0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.
     fi
     TOTAL=$((TOTAL + 1))
 }
+
 run_chest_open_product_smoke() {
     local name="chest_open_product_smoke"
     echo -n "  $name: "
 
-    local smoke_out build_log smoke_c64 boot_d64 main_vs
-    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open.XXXXXX")
-    smoke_c64="$smoke_out/c64"
-    boot_d64="$smoke_out/moria8-c64.d64"
-    main_vs="$smoke_c64/main.vs"
-    build_log=$(mktemp -t "build_${name}_log")
-
-    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
-            KICKASS="$KICKASS" \
-            OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
-            build64 >"$build_log" 2>&1; then
-        echo "FAIL (product build)"
-        tail -80 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
-            -attach "$boot_d64" \
-            -write "$smoke_c64/boot.prg" "moria8" \
-            -write "$smoke_c64/boot.prg" "boot64" \
-            -write "$smoke_c64/bootart64.prg" "bootart64" \
-            -write "$smoke_c64/moria8.prg" "moria64" \
-            -write "$smoke_c64/64.bank" "64.bank" \
-            -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.cat1" "monster.cat1" \
-            -write "$smoke_c64/monster.cat2" "monster.cat2" \
-            -write "$smoke_c64/monster.cat3" "monster.cat3" \
-            -write "$smoke_c64/monster.cat4" "monster.cat4" \
-            -write "$smoke_c64/monster.ext" "monster.ext" \
-            -write "$smoke_c64/monster.idx" "monster.idx" \
-            -write "$smoke_c64/item.cat" "item.cat" \
-            -write "$smoke_c64/item.idx" "item.idx" \
-            -write "$smoke_c64/ovl.start" "64.start" \
-            -write "$smoke_c64/ovl.town" "64.town" \
-            -write "$smoke_c64/ovl.death" "64.death" \
-            -write "$smoke_c64/ovl.modal" "64.modal" \
-            -write "$smoke_c64/ovl.gen" "64.gen" \
-            -write "$smoke_c64/ovl.help" "64.help" \
-            -write "$smoke_c64/ovl.ui" "64.ui" \
-            -write "$smoke_c64/ovl.items" "64.items" \
-            -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" \
-            -write "$smoke_c64/ovl.home" "64.home" \
-            -write "$smoke_c64/ovl.storage" "64.storage" \
-            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
-        echo "FAIL (product disk image)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "chest_open" || return
+    local boot_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
     local chest_lw_slot
     chest_lw_slot=$(PYTHONPATH="$REPO_ROOT/tools" python3 -B -c 'import item_ids as I; print(f"0x{I.ITEM_SLOT_LARGE_WOODEN_CHEST:02x}")')
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".msg_init" \
             --until-pass \
@@ -2888,63 +2340,16 @@ run_chest_open_product_smoke() {
     fi
     TOTAL=$((TOTAL + 1))
 }
+
 run_chest_open_product_reu_smoke() {
     local name="chest_open_product_reu_smoke"
     echo -n "  $name: "
 
-    local smoke_out build_log boot_d64 main_vs
-    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open-reu.XXXXXX")
-    boot_d64="$smoke_out/moria8-c64.d64"
-    main_vs="$smoke_out/c64/main.vs"
-    build_log=$(mktemp -t "build_${name}_log")
-
-    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
-            KICKASS="$KICKASS" \
-            OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
-            build64 >"$build_log" 2>&1; then
-        echo "FAIL (product build)"
-        tail -80 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
-            -attach "$boot_d64" \
-            -write "$smoke_out/c64/boot.prg" "moria8" \
-            -write "$smoke_out/c64/boot.prg" "boot64" \
-            -write "$smoke_out/c64/bootart64.prg" "bootart64" \
-            -write "$smoke_out/c64/moria8.prg" "moria64" \
-            -write "$smoke_out/c64/64.bank" "64.bank" \
-            -write "$smoke_out/c64/title" "t64" \
-            -write "$smoke_out/c64/monster.cat1" "monster.cat1" \
-            -write "$smoke_out/c64/monster.cat2" "monster.cat2" \
-            -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
-            -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
-            -write "$smoke_out/c64/monster.ext" "monster.ext" \
-            -write "$smoke_out/c64/monster.idx" "monster.idx" \
-            -write "$smoke_out/c64/item.cat" "item.cat" \
-            -write "$smoke_out/c64/item.idx" "item.idx" \
-            -write "$smoke_out/c64/ovl.start" "64.start" \
-            -write "$smoke_out/c64/ovl.town" "64.town" \
-            -write "$smoke_out/c64/ovl.death" "64.death" \
-            -write "$smoke_out/c64/ovl.modal" "64.modal" \
-            -write "$smoke_out/c64/ovl.gen" "64.gen" \
-            -write "$smoke_out/c64/ovl.help" "64.help" \
-            -write "$smoke_out/c64/ovl.ui" "64.ui" \
-            -write "$smoke_out/c64/ovl.items" "64.items" \
-            -write "$smoke_out/c64/ovl.spell" "64.spell" \
-            -write "$smoke_out/c64/ovl.chest" "64.chest" \
-            -write "$smoke_out/c64/ovl.home" "64.home" \
-            -write "$smoke_out/c64/ovl.storage" "64.storage" \
-            -write "$smoke_out/c64/ovl.title" "64.title" >"$build_log" 2>&1; then
-        echo "FAIL (product disk image)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "chest_open" || return
+    local boot_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
     local chest_lw_slot
     chest_lw_slot=$(PYTHONPATH="$REPO_ROOT/tools" python3 -B -c 'import item_ids as I; print(f"0x{I.ITEM_SLOT_LARGE_WOODEN_CHEST:02x}")')
@@ -2956,7 +2361,7 @@ run_chest_open_product_reu_smoke() {
     # stash+REU gameplay each stay well under the 30s per-phase cap under load.
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".reu_stash_overlays" \
             --until-pass \
@@ -2989,64 +2394,17 @@ run_chest_open_product_reu_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_chest_open_product_genfail_smoke() {
     local name="chest_open_product_genfail_smoke"
     echo -n "  $name: "
 
-    local smoke_out build_log boot_d64 nogen_d64 main_vs
-    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-chest-open-genfail.XXXXXX")
-    boot_d64="$smoke_out/moria8-c64.d64"
-    nogen_d64="$smoke_out/moria8-c64-nogen.d64"
-    main_vs="$smoke_out/c64/main.vs"
-    build_log=$(mktemp -t "build_${name}_log")
-
-    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
-            KICKASS="$KICKASS" \
-            OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_CHEST_OPEN_PRODUCT" \
-            build64 >"$build_log" 2>&1; then
-        echo "FAIL (product build)"
-        tail -80 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
-            -attach "$boot_d64" \
-            -write "$smoke_out/c64/boot.prg" "moria8" \
-            -write "$smoke_out/c64/boot.prg" "boot64" \
-            -write "$smoke_out/c64/bootart64.prg" "bootart64" \
-            -write "$smoke_out/c64/moria8.prg" "moria64" \
-            -write "$smoke_out/c64/64.bank" "64.bank" \
-            -write "$smoke_out/c64/title" "t64" \
-            -write "$smoke_out/c64/monster.cat1" "monster.cat1" \
-            -write "$smoke_out/c64/monster.cat2" "monster.cat2" \
-            -write "$smoke_out/c64/monster.cat3" "monster.cat3" \
-            -write "$smoke_out/c64/monster.cat4" "monster.cat4" \
-            -write "$smoke_out/c64/monster.ext" "monster.ext" \
-            -write "$smoke_out/c64/monster.idx" "monster.idx" \
-            -write "$smoke_out/c64/item.cat" "item.cat" \
-            -write "$smoke_out/c64/item.idx" "item.idx" \
-            -write "$smoke_out/c64/ovl.start" "64.start" \
-            -write "$smoke_out/c64/ovl.town" "64.town" \
-            -write "$smoke_out/c64/ovl.death" "64.death" \
-            -write "$smoke_out/c64/ovl.modal" "64.modal" \
-            -write "$smoke_out/c64/ovl.gen" "64.gen" \
-            -write "$smoke_out/c64/ovl.help" "64.help" \
-            -write "$smoke_out/c64/ovl.ui" "64.ui" \
-            -write "$smoke_out/c64/ovl.items" "64.items" \
-            -write "$smoke_out/c64/ovl.spell" "64.spell" \
-            -write "$smoke_out/c64/ovl.chest" "64.chest" \
-            -write "$smoke_out/c64/ovl.home" "64.home" \
-            -write "$smoke_out/c64/ovl.storage" "64.storage" \
-            -write "$smoke_out/c64/ovl.title" "64.title" >"$build_log" 2>&1; then
-        echo "FAIL (product disk image)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "chest_open" || return
+    local boot_d64="$SCRIPTED_D64"
+    local nogen_d64="$SUITE_DIR/moria8-c64-nogen.d64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
     # Swap target: every file except 64.gen. Under PICKER_IN_CHEST_OVERLAY
     # (c64/main.s), chest_open_command and deferred chest_fulfill_loot + picker
@@ -3067,7 +2425,7 @@ run_chest_open_product_genfail_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --pass-symbol ".c64_test_script_exhausted_wait" \
             --start-symbol ".msg_init" \
             --until-pass \
@@ -3098,77 +2456,19 @@ run_chest_open_product_genfail_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_disk_setup_product_smoke() {
     local name="disk_setup_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
-
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT \
-            -o ../../../build/test/c64/moria_disk_setup_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_disk_setup_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_disk_setup_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_d64="../../../build/test/c64/moria_disk_setup_save.d64"
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "disk_setup" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
+    local save_d64="$SUITE_DIR/moria_disk_setup_save.d64"
     rm -f "$save_d64"
-    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
-            -attach "$save_d64" \
-            -write "$marker_blob" "moria8.id,s" >"$build_log" 2>&1; then
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3176,11 +2476,10 @@ run_disk_setup_product_smoke() {
         return
     fi
 
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr
     pass_addr=$(awk '/\.c64_test_after_disk_setup_product$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ]; then
-        echo "FAIL (missing disk-setup smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing disk-setup smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3188,7 +2487,7 @@ run_disk_setup_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --save-d64 "$save_d64" \
@@ -3221,68 +2520,20 @@ run_disk_setup_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_retirement_royal_product_smoke() {
     local name="retirement_royal_product_smoke"
     echo -n "  $name: "
 
-    local smoke_out build_log smoke_c64 boot_d64 main_vs
-    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-retirement.XXXXXX")
-    smoke_c64="$smoke_out/c64"
-    boot_d64="$smoke_out/moria8-c64.d64"
-    main_vs="$smoke_c64/main.vs"
-    build_log=$(mktemp -t "build_${name}_log")
-
-    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
-            KICKASS="$KICKASS" \
-            OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_RETIREMENT_PRODUCT" \
-            build64 >"$build_log" 2>&1; then
-        echo "FAIL (product build)"
-        tail -80 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
-            -attach "$boot_d64" \
-            -write "$smoke_c64/boot.prg" "moria8" \
-            -write "$smoke_c64/boot.prg" "boot64" \
-            -write "$smoke_c64/bootart64.prg" "bootart64" \
-            -write "$smoke_c64/moria8.prg" "moria64" \
-            -write "$smoke_c64/64.bank" "64.bank" \
-            -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.cat1" "monster.cat1" \
-            -write "$smoke_c64/monster.cat2" "monster.cat2" \
-            -write "$smoke_c64/monster.cat3" "monster.cat3" \
-            -write "$smoke_c64/monster.cat4" "monster.cat4" \
-            -write "$smoke_c64/monster.ext" "monster.ext" \
-            -write "$smoke_c64/monster.idx" "monster.idx" \
-            -write "$smoke_c64/item.cat" "item.cat" \
-            -write "$smoke_c64/item.idx" "item.idx" \
-            -write "$smoke_c64/ovl.start" "64.start" \
-            -write "$smoke_c64/ovl.town" "64.town" \
-            -write "$smoke_c64/ovl.death" "64.death" \
-            -write "$smoke_c64/ovl.modal" "64.modal" \
-            -write "$smoke_c64/ovl.gen" "64.gen" \
-            -write "$smoke_c64/ovl.help" "64.help" \
-            -write "$smoke_c64/ovl.ui" "64.ui" \
-            -write "$smoke_c64/ovl.items" "64.items" \
-            -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" \
-            -write "$smoke_c64/ovl.home" "64.home" \
-            -write "$smoke_c64/ovl.storage" "64.storage" \
-            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
-        echo "FAIL (product disk image)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "retirement" || return
+    local boot_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --pass-symbol ".c64_test_retirement_pass_sym" \
             --fail-symbol ".c64_test_retirement_fail_sym" \
             --main-vs "$main_vs" \
@@ -3299,67 +2550,19 @@ run_retirement_royal_product_smoke() {
 # Production game over (death overlay + high-score I/O) from the title: first
 # with no save media configured (the Disk Setup "Back" path), then with a
 # separate save disk in drive 9 that must receive HALL.OF.FAME.
+
 run_game_over_product_smoke() {
     local name="game_over_product_smoke"
     echo -n "  $name: "
 
-    local smoke_out build_log smoke_c64 boot_d64 save_d64 main_vs
-    smoke_out=$(mktemp -d "$TMPDIR/moria8-c64-game-over.XXXXXX")
-    smoke_c64="$smoke_out/c64"
-    boot_d64="$smoke_out/moria8-c64.d64"
-    save_d64="$smoke_out/moria8-save.d64"
-    main_vs="$smoke_c64/main.vs"
-    build_log=$(mktemp -t "build_${name}_log")
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "game_over" || return
+    local boot_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local save_d64="$SUITE_DIR/moria8-save.d64"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -B -C "$REPO_ROOT/platforms/commodore" \
-            KICKASS="$KICKASS" \
-            OUT="$smoke_out" \
-            KA_FLAGS64="-showmem -vicesymbols -libdir ../../core/6502 -libdir common -afo -libdir c64 -define DEBUG_FEAT_DISK_TRACE=0 -define C64_TEST_SCRIPTED_GAME_OVER_PRODUCT" \
-            build64 >"$build_log" 2>&1; then
-        echo "FAIL (product build)"
-        tail -80 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$boot_d64" \
-            -attach "$boot_d64" \
-            -write "$smoke_c64/boot.prg" "moria8" \
-            -write "$smoke_c64/boot.prg" "boot64" \
-            -write "$smoke_c64/bootart64.prg" "bootart64" \
-            -write "$smoke_c64/moria8.prg" "moria64" \
-            -write "$smoke_c64/64.bank" "64.bank" \
-            -write "$smoke_c64/title" "t64" \
-            -write "$smoke_c64/monster.cat1" "monster.cat1" \
-            -write "$smoke_c64/monster.cat2" "monster.cat2" \
-            -write "$smoke_c64/monster.cat3" "monster.cat3" \
-            -write "$smoke_c64/monster.cat4" "monster.cat4" \
-            -write "$smoke_c64/monster.ext" "monster.ext" \
-            -write "$smoke_c64/monster.idx" "monster.idx" \
-            -write "$smoke_c64/item.cat" "item.cat" \
-            -write "$smoke_c64/item.idx" "item.idx" \
-            -write "$smoke_c64/ovl.start" "64.start" \
-            -write "$smoke_c64/ovl.town" "64.town" \
-            -write "$smoke_c64/ovl.death" "64.death" \
-            -write "$smoke_c64/ovl.modal" "64.modal" \
-            -write "$smoke_c64/ovl.gen" "64.gen" \
-            -write "$smoke_c64/ovl.help" "64.help" \
-            -write "$smoke_c64/ovl.ui" "64.ui" \
-            -write "$smoke_c64/ovl.items" "64.items" \
-            -write "$smoke_c64/ovl.spell" "64.spell" \
-            -write "$smoke_c64/ovl.chest" "64.chest" \
-            -write "$smoke_c64/ovl.home" "64.home" \
-            -write "$smoke_c64/ovl.storage" "64.storage" \
-            -write "$smoke_c64/ovl.title" "64.title" >"$build_log" 2>&1; then
-        echo "FAIL (product disk image)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local marker_blob="$smoke_out/MORIA8.ID"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
     printf 'M8SAVE' >"$marker_blob"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
@@ -3373,7 +2576,7 @@ run_game_over_product_smoke() {
 
     if ! python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --pass-symbol ".c64_test_game_over_pass_sym" \
             --fail-symbol ".c64_test_game_over_fail_sym" \
             --main-vs "$main_vs" \
@@ -3396,12 +2599,14 @@ run_game_over_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_save_write_product_smoke() {
     run_save_write_product_smoke_impl "save_write_product_smoke" \
         "C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT" \
         "the.game,s" \
         '"THE.GAME".*SEQ'
 }
+
 
 run_slot2_save_product_smoke() {
     run_save_write_product_smoke_impl "slot2_save_product_smoke" \
@@ -3413,53 +2618,24 @@ run_slot2_save_product_smoke() {
 # c64_load_written_save_check <name> <save_d64>: boot the slot-2 load build
 # against a product-written save and check the secondary weapon came back
 # through the 34-slot Save V2 loader.
+
 c64_load_written_save_check() {
-    local name="$1" save_d64="$2"
-    local build_log
-    build_log=$(mktemp -t "build_${name}_load_log")
-    local load_ovl="../../../build/test/c64/${name}_load"
-    local load_prg="$load_ovl/main.prg"     # main.vs lands beside it
-    local load_d64="../../../build/test/c64/${name}_load.d64"
-    mkdir -p "$load_ovl"
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s ":OVL_OUT=$load_ovl" -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT -symbolfiledir "$load_ovl" \
-            -o "$load_prg" >"$build_log" 2>&1; then
-        echo "FAIL (load build assembly error)"
-        grep -i error "$build_log" | head -5
+    local name="$1" save_d64="$2" suite_dir="$3"
+    local load_ovl="$C64_VARIANTS_DIR/slot2_load"
+    local build_log="$suite_dir/${name}_load.log"
+    local load_d64="$suite_dir/${name}_load.d64"
+    if [ -f "$load_ovl/build.failed" ]; then
+        if [ "$(cat "$load_ovl/build.failed")" = "assembly" ]; then
+            echo "FAIL (load build assembly error)"
+            grep -i error "$load_ovl/build.log" | head -5
+        else
+            echo "FAIL (load disk build error)"
+            tail -20 "$load_ovl/build.log"
+        fi
         return 1
     fi
-    rm -f "$load_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$load_d64" \
-            -attach "$load_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write "$load_prg" "moria64" \
-            -write "$load_ovl/64.bank" "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write "$load_ovl/ovl.start" "64.start" \
-            -write "$load_ovl/ovl.town" "64.town" \
-            -write "$load_ovl/ovl.death" "64.death" \
-            -write "$load_ovl/ovl.modal" "64.modal" \
-            -write "$load_ovl/ovl.gen" "64.gen" \
-            -write "$load_ovl/ovl.help" "64.help" \
-            -write "$load_ovl/ovl.ui" "64.ui" \
-            -write "$load_ovl/ovl.items" "64.items" \
-            -write "$load_ovl/ovl.spell" "64.spell" \
-            -write "$load_ovl/ovl.chest" "64.chest" \
-            -write "$load_ovl/ovl.home" "64.home" \
-            -write "$load_ovl/ovl.storage" "64.storage" \
-            -write "$load_ovl/ovl.title" "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (load disk build error)"
-        tail -20 "$build_log"
+    if ! cp "$load_ovl/base.d64" "$load_d64"; then
+        echo "FAIL (load disk copy error)"
         return 1
     fi
     local save_sec_id save_sec_ego
@@ -3472,6 +2648,7 @@ print(f"0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.ITEM_PAGE_DAGGER:02x}")
     )
     if ! python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "${name}_load" \
+            --exit-screenshot "$suite_dir/${name}_load_exit.png" \
             --pass-symbol ".c64_test_after_load_resume_game" \
             --fail-symbol ".c64_test_load_resume_fail_input_sym" \
             --main-vs "$load_ovl/main.vs" \
@@ -3494,6 +2671,7 @@ print(f"0x{I.ITEM_SLOT_DAGGER:02x} 0x{EGO_DEFENDER | I.ITEM_PAGE_DAGGER:02x}")
     return 0
 }
 
+
 run_save_write_product_smoke_impl() {
     local name="$1"
     local test_define="$2"
@@ -3501,71 +2679,16 @@ run_save_write_product_smoke_impl() {
     local expected_save_re="$4"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local vkey="save_write"
+    [ "$test_define" = "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" ] && vkey="slot2_save"
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "$vkey" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define "$test_define" \
-            -o "../../../build/test/c64/${name}.prg" >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/${name}.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write "../../../build/test/c64/${name}.prg" "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_blob="../../../build/test/c64/THE.GAME"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/${name}_save.d64"
+    local save_blob="$SUITE_DIR/THE.GAME"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
+    local save_d64="$SUITE_DIR/${name}_save.d64"
     if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL (save generation error)"
         tail -20 "$build_log"
@@ -3595,22 +2718,22 @@ run_save_write_product_smoke_impl() {
         return
     fi
 
-    local main_vs="../../../build/test/c64/main.vs"
+    local main_vs="$MAIN_VS"
     local pass_addr fail_addr prompt_addr
     pass_addr=$(awk '/\.c64_test_after_save_restart_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_save_write_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     prompt_addr=$(awk '/\.disk_prompt_game_required_error_shown$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ] || [ -z "${prompt_addr:-}" ]; then
-        echo "FAIL (missing save-write smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing save-write smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc fail_lc prompt_lc
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
@@ -3624,13 +2747,13 @@ run_save_write_product_smoke_impl() {
         echo "quit"
     } > "$mon_file"
 
-    rm -f "../../../build/test/c64/${name}_exit.png"    # never name a stale screen
+    rm -f "$SUITE_DIR/${name}_exit.png"    # never name a stale screen
     script -q "$tty_log" \
         "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor -exitscreenshot "../../../build/test/c64/${name}_exit.png" > /dev/null 2>&1
+        +remotemonitor +binarymonitor -exitscreenshot "$SUITE_DIR/${name}_exit.png" > /dev/null 2>&1
 
     if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         local dir_list
@@ -3645,7 +2768,7 @@ run_save_write_product_smoke_impl() {
             # The written save carries the 34-slot Save V2 inventory with the
             # seeded secondary weapon (save_product_seed_secondary); slot 2's
             # save is then loaded back by the product loader.
-            local save_seq="../../../build/test/c64/${name}_the_game.seq"
+            local save_seq="$SUITE_DIR/${name}_the_game.seq"
             rm -f "$save_seq"
             if ! "$C1541" -attach "$save_d64" -read "$save_filename" "$save_seq" >>"$build_log" 2>&1 \
                     || ! python3 -B tests/check_save_secondary.py "$save_seq" 0x22 >>"$build_log" 2>&1; then
@@ -3655,7 +2778,7 @@ run_save_write_product_smoke_impl() {
                 TOTAL=$((TOTAL + 1))
                 return
             fi
-            if [ "$test_define" = "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" ] && ! c64_load_written_save_check "$name" "$save_d64"; then
+            if [ "$test_define" = "C64_TEST_SCRIPTED_SLOT2_SAVE_PRODUCT" ] && ! c64_load_written_save_check "$name" "$save_d64" "$SUITE_DIR"; then
                 FAIL=$((FAIL + 1))
                 TOTAL=$((TOTAL + 1))
                 return
@@ -3698,7 +2821,7 @@ run_save_write_product_smoke_impl() {
     if grep -qi "cycle limit reached" "$tty_log"; then
         echo "FAIL (save-write flow timed out)"
         echo "    Log: $tty_log"
-        c64_exit_screen_note "../../../build/test/c64/${name}_exit.png"
+        c64_exit_screen_note "$SUITE_DIR/${name}_exit.png"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3710,88 +2833,19 @@ run_save_write_product_smoke_impl() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_save_media_fail_product_smoke() {
     local name="save_media_fail_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
-
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT \
-            -o ../../../build/test/c64/moria_save_media_fail_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_save_media_fail_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_save_media_fail_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_blob="../../../build/test/c64/THE.GAME"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/moria_save_media_fail_save.d64"
-    if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
-        echo "FAIL (save generation error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "save_media_fail" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
+    local save_d64="$SUITE_DIR/moria_save_media_fail_save.d64"
     rm -f "$save_d64"
-    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
-            -attach "$save_d64" \
-            -write "$marker_blob" "moria8.id,s" \
-            -write "$save_blob" "the.game,s" >"$build_log" 2>&1; then
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -3799,29 +2853,11 @@ run_save_media_fail_product_smoke() {
         return
     fi
 
-    local dir_type_offset0=$(((357 + 1) * 256 + 2))
-    local dir_type_offset1=$((dir_type_offset0 + 32))
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset0" conv=notrunc status=none 2>>"$build_log"; then
-        echo "FAIL (marker directory patch error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset1" conv=notrunc status=none 2>>"$build_log"; then
-        echo "FAIL (savefile directory patch error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr fail_addr
     pass_addr=$(awk '/\.c64_test_after_save_media_fail$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.save_select_output_name_c64$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
-        echo "FAIL (missing save-media-fail smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing save-media-fail smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3829,7 +2865,7 @@ run_save_media_fail_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --save-d64 "$save_d64" \
@@ -3847,74 +2883,20 @@ run_save_media_fail_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_change_save_drive_product_smoke() {
     local name="change_save_drive_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "change_save_drive" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_CHANGE_SAVE_DRIVE_PRODUCT \
-            -o ../../../build/test/c64/moria_change_save_drive_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_change_save_drive_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_change_save_drive_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save10_d64="../../../build/test/c64/moria_change_save_drive_save10.d64"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
+    local save10_d64="$SUITE_DIR/moria_change_save_drive_save10.d64"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
     if ! printf 'M8SAVE' > "$marker_blob"; then
         echo "FAIL (marker generation error)"
         FAIL=$((FAIL + 1))
@@ -3934,11 +2916,11 @@ run_change_save_drive_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --save10-d64 "$save10_d64" \
-            --main-vs ../../../build/test/c64/main.vs \
+            --main-vs "$main_vs" \
             --start-symbol ".c64_test_change_save_drive_wait_for_harness" \
             --resume-symbol ".c64_test_change_save_drive_before_save" \
             --pass-symbol ".c64_test_change_save_drive_pass" \
@@ -3963,75 +2945,21 @@ run_change_save_drive_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_disk_setup_single_drive_return_product_smoke() {
     local name="disk_setup_single_drive_return_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "disk_setup_single_drive_return" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT \
-            -o ../../../build/test/c64/moria_disk_setup_single_drive_return.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_disk_setup_single_drive_return.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_disk_setup_single_drive_return.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_d64="../../../build/test/c64/moria_disk_setup_single_drive_return_save.d64"
-    local program_d64="../../../build/test/c64/moria_disk_setup_single_drive_return_program.d64"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
+    local save_d64="$SUITE_DIR/moria_disk_setup_single_drive_return_save.d64"
+    local program_d64="$SUITE_DIR/moria_disk_setup_single_drive_return_program.d64"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
     rm -f "$save_d64" "$program_d64"
     if ! printf 'M8SAVE' > "$marker_blob"; then
         echo "FAIL (marker generation error)"
@@ -4048,10 +2976,10 @@ run_disk_setup_single_drive_return_product_smoke() {
     fi
     cp "$scripted_d64" "$program_d64"
 
-    local main_vs="../../../build/test/c64/main.vs"
+    # main_vs set by c64_prepare_smoke_suite
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
@@ -4085,74 +3013,20 @@ run_disk_setup_single_drive_return_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_disk_setup_then_load_prompts_save_product_smoke() {
     local name="disk_setup_then_load_prompts_save_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "disk_setup_then_load" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_DISK_SETUP_THEN_LOAD_PRODUCT \
-            -o ../../../build/test/c64/moria_disk_setup_then_load.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_disk_setup_then_load.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_disk_setup_then_load.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_d64="../../../build/test/c64/moria_disk_setup_then_load_save.d64"
-    local program_d64="../../../build/test/c64/moria_disk_setup_then_load_program.d64"
+    local save_d64="$SUITE_DIR/moria_disk_setup_then_load_save.d64"
+    local program_d64="$SUITE_DIR/moria_disk_setup_then_load_program.d64"
     rm -f "$save_d64" "$program_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
@@ -4163,10 +3037,10 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
     fi
     cp "$scripted_d64" "$program_d64"
 
-    local main_vs="../../../build/test/c64/main.vs"
+    # main_vs set by c64_prepare_smoke_suite
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
@@ -4185,75 +3059,19 @@ run_disk_setup_then_load_prompts_save_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_load_resume_product_smoke() {
     local name="load_resume_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
-
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SLOT2_LOAD_PRODUCT \
-            -o ../../../build/test/c64/moria_load_resume_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_load_resume_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_load_resume_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_blob="../../../build/test/c64/THE.GAME"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/moria_load_resume_save.d64"
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "slot2_load" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
+    local save_blob="$SUITE_DIR/THE.GAME2"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
+    local save_d64="$SUITE_DIR/moria_load_resume_save.d64"
     if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL (save generation error)"
         tail -20 "$build_log"
@@ -4261,12 +3079,11 @@ run_load_resume_product_smoke() {
         TOTAL=$((TOTAL + 1))
         return
     fi
-
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
             -write "$marker_blob" "moria8.id,s" \
-            -write "$save_blob" "the.game2,s" >"$build_log" 2>&1; then
+            -write "$save_blob" "the.game2,s" >>"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -4274,39 +3091,21 @@ run_load_resume_product_smoke() {
         return
     fi
 
-    local dir_type_offset0=$(((357 + 1) * 256 + 2))
-    local dir_type_offset1=$((dir_type_offset0 + 32))
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset0" conv=notrunc status=none 2>>"$build_log"; then
-        echo "FAIL (marker directory patch error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset1" conv=notrunc status=none 2>>"$build_log"; then
-        echo "FAIL (savefile directory patch error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr fail_addr prompt_fail_addr
     pass_addr=$(awk '/\.c64_test_after_load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_load_resume_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     prompt_fail_addr=$(awk '/\.disk_prompt_game_required_error_shown$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ] || [ -z "${prompt_fail_addr:-}" ]; then
-        echo "FAIL (missing load-resume smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing load-resume smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc fail_lc prompt_fail_lc
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
@@ -4320,13 +3119,13 @@ run_load_resume_product_smoke() {
         echo "quit"
     } > "$mon_file"
 
-    rm -f "../../../build/test/c64/${name}_exit.png"    # never name a stale screen
+    rm -f "$SUITE_DIR/${name}_exit.png"    # never name a stale screen
     script -q "$tty_log" \
         "$VICE" -warp -config "$VICE_CONFIG" -default +saveres +autostart-delay-random -console -nativemonitor -autostartprgmode 1 \
         -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor -exitscreenshot "../../../build/test/c64/${name}_exit.png" > /dev/null 2>&1
+        +remotemonitor +binarymonitor -exitscreenshot "$SUITE_DIR/${name}_exit.png" > /dev/null 2>&1
 
     if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log"; then
         echo "PASS"
@@ -4362,7 +3161,7 @@ run_load_resume_product_smoke() {
     if grep -qi "cycle limit reached" "$tty_log"; then
         echo "FAIL (load-resume flow timed out)"
         echo "    Log: $tty_log"
-        c64_exit_screen_note "../../../build/test/c64/${name}_exit.png"
+        c64_exit_screen_note "$SUITE_DIR/${name}_exit.png"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -4374,75 +3173,21 @@ run_load_resume_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_single_drive_load_return_product_smoke() {
     local name="single_drive_load_return_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "single_drive_load_return" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_RETURN_PRODUCT \
-            -o ../../../build/test/c64/moria_single_drive_load_return_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_single_drive_load_return_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_single_drive_load_return_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_blob="../../../build/test/c64/THE.GAME"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/moria_single_drive_load_return_save.d64"
+    local save_blob="$SUITE_DIR/THE.GAME"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
+    local save_d64="$SUITE_DIR/moria_single_drive_load_return_save.d64"
     if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL (save generation error)"
         tail -20 "$build_log"
@@ -4475,10 +3220,10 @@ run_single_drive_load_return_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
-            --main-vs "../../../build/test/c64/main.vs" \
+            --main-vs "$main_vs" \
             --start-symbol ".c64_test_single_drive_load_return_wait_for_harness" \
             --resume-symbol ".c64_test_single_drive_load_return_resume_low" \
             --pass-symbol ".c64_test_single_drive_load_return_loaded_low" \
@@ -4491,77 +3236,23 @@ run_single_drive_load_return_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_load_then_save_new_empty_product_smoke() {
     local name="load_then_save_new_empty_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "load_then_save_new_empty" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT \
-            -o ../../../build/test/c64/moria_load_then_save_new_empty.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_load_then_save_new_empty.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_load_then_save_new_empty.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_blob="../../../build/test/c64/THE.GAME"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local load_save_d64="$C64_TEST_OUT/lts_load.d64"
-    local new_save_d64="$C64_TEST_OUT/lts_new.d64"
-    local swap_program_d64="$C64_TEST_OUT/lts_prog.d64"
+    local save_blob="$SUITE_DIR/THE.GAME"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
+    local load_save_d64="$SUITE_DIR/lts_load.d64"
+    local new_save_d64="$SUITE_DIR/lts_new.d64"
+    local swap_program_d64="$SUITE_DIR/lts_prog.d64"
     if ! python3 tests/make_load_resume_save64.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL (save generation error)"
         tail -20 "$build_log"
@@ -4598,10 +3289,10 @@ run_load_then_save_new_empty_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
-            --main-vs "../../../build/test/c64/main.vs" \
+            --main-vs "$main_vs" \
             --start-symbol ".c64_test_load_then_save_new_empty_wait_for_harness" \
             --resume-symbol ".c64_test_load_then_save_new_empty_resume_low" \
             --attach8-at-start-d64 "$load_save_d64" \
@@ -4636,78 +3327,24 @@ run_load_then_save_new_empty_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_single_drive_save_wrong_media_product_smoke() {
     local name="single_drive_save_wrong_media_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "single_drive_save_wrong_media" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SINGLE_DRIVE_SAVE_WRONG_MEDIA_PRODUCT \
-            -o ../../../build/test/c64/moria_single_drive_save_wrong_media_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_single_drive_save_wrong_media_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_single_drive_save_wrong_media_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
-            --main-vs "../../../build/test/c64/main.vs" \
+            --main-vs "$main_vs" \
             --start-symbol ".c64_test_single_drive_save_wrong_media_wait_for_harness" \
             --resume-symbol ".c64_test_single_drive_save_wrong_media_before_save" \
             --pass-symbol ".title_menu_loop" \
@@ -4724,78 +3361,24 @@ run_single_drive_save_wrong_media_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_single_drive_load_wrong_media_product_smoke() {
     local name="single_drive_load_wrong_media_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "single_drive_load_wrong_media" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_WRONG_MEDIA_PRODUCT \
-            -o ../../../build/test/c64/moria_single_drive_load_wrong_media_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_single_drive_load_wrong_media_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_single_drive_load_wrong_media_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
-            --main-vs "../../../build/test/c64/main.vs" \
+            --main-vs "$main_vs" \
             --start-symbol ".c64_test_single_drive_load_wrong_media_wait_for_harness" \
             --resume-symbol ".c64_test_single_drive_load_wrong_media_before_load" \
             --pass-symbol ".title_menu_loop" \
@@ -4811,76 +3394,22 @@ run_single_drive_load_wrong_media_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_single_drive_load_corrupt_product_smoke() {
     local name="single_drive_load_corrupt_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "single_drive_load_corrupt" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SINGLE_DRIVE_LOAD_CORRUPT_PRODUCT \
-            -o ../../../build/test/c64/moria_single_drive_load_corrupt_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_single_drive_load_corrupt_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_single_drive_load_corrupt_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_blob="../../../build/test/c64/THE.GAME"
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/moria_single_drive_load_corrupt_save.d64"
-    local program_d64="../../../build/test/c64/moria_single_drive_load_corrupt_program.d64"
+    local save_blob="$SUITE_DIR/THE.GAME"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
+    local save_d64="$SUITE_DIR/moria_single_drive_load_corrupt_save.d64"
+    local program_d64="$SUITE_DIR/moria_single_drive_load_corrupt_program.d64"
     if ! python3 ../c128/tests/make_load_resume_save.py "$save_blob" >"$build_log" 2>&1; then
         echo "FAIL (c128 save generation error)"
         tail -20 "$build_log"
@@ -4905,10 +3434,10 @@ run_single_drive_load_corrupt_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
-            --main-vs "../../../build/test/c64/main.vs" \
+            --main-vs "$main_vs" \
             --start-symbol ".c64_test_single_drive_load_corrupt_wait_for_harness" \
             --resume-symbol ".c64_test_single_drive_load_corrupt_before_load" \
             --pass-symbol ".title_menu_loop" \
@@ -4926,75 +3455,19 @@ run_single_drive_load_corrupt_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_single_drive_fresh_save_product_smoke() {
     local name="single_drive_fresh_save_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
-
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT \
-            -o ../../../build/test/c64/moria_single_drive_fresh_save_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_single_drive_fresh_save_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_single_drive_fresh_save_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_d64="$C64_TEST_OUT/moria_single_drive_fresh_save.d64"
-    local swap_program_d64="$C64_TEST_OUT/moria_single_drive_fresh_program.d64"
-    rm -f "$save_d64"
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "single_drive_fresh_save" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
+    local save_d64="$SUITE_DIR/moria_single_drive_fresh_save.d64"
+    local swap_program_d64="$SUITE_DIR/moria_single_drive_fresh_save_prog.d64"
+    rm -f "$save_d64" "$swap_program_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
         tail -20 "$build_log"
@@ -5003,13 +3476,12 @@ run_single_drive_fresh_save_product_smoke() {
         return
     fi
     if ! cp "$scripted_d64" "$swap_program_d64"; then
-        echo "FAIL (program disk swap copy error)"
+        echo "FAIL (program disk copy error)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    local main_vs="../../../build/test/c64/main.vs"
     local start_addr resume_addr swap_addr pass_addr fail_addr
     start_addr=$(awk '/\.c64_test_single_drive_fresh_save_wait_for_harness$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     resume_addr=$(awk '/\.c64_test_single_drive_fresh_save_resume_low$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
@@ -5018,7 +3490,7 @@ run_single_drive_fresh_save_product_smoke() {
     fail_addr=$(awk '/\.c64_test_single_drive_fresh_save_unexpected_return$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${start_addr:-}" ] || [ -z "${resume_addr:-}" ] || [ -z "${swap_addr:-}" ] || \
             [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
-        echo "FAIL (missing fresh-save smoke symbols in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing fresh-save smoke symbols in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -5026,7 +3498,7 @@ run_single_drive_fresh_save_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
             --main-vs "$main_vs" \
@@ -5063,74 +3535,19 @@ run_single_drive_fresh_save_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_single_drive_fresh_save_no_init_product_smoke() {
     local name="single_drive_fresh_save_no_init_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "single_drive_fresh_save_no_init" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
 
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT \
-            -define C64_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_NO_INIT \
-            -o ../../../build/test/c64/moria_single_drive_fresh_save_no_init_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_single_drive_fresh_save_no_init_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_single_drive_fresh_save_no_init_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local save_d64="$C64_TEST_OUT/moria_single_drive_fresh_save_no_init.d64"
+    local save_d64="$SUITE_DIR/moria_single_drive_fresh_save_no_init.d64"
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
         echo "FAIL (save disk build error)"
@@ -5142,10 +3559,10 @@ run_single_drive_fresh_save_no_init_product_smoke() {
 
     if python3 -u ../plus4/tests/product_scripted_smoke.py \
             --name "$name" \
-            --exit-screenshot "../../../build/test/c64/${name}_exit.png" \
+            --exit-screenshot "$SUITE_DIR/${name}_exit.png" \
             --vice "$VICE" \
             --boot-d64 "$scripted_d64" \
-            --main-vs ../../../build/test/c64/main.vs \
+            --main-vs "$main_vs" \
             --start-symbol ".c64_test_single_drive_fresh_save_wait_for_harness" \
             --resume-symbol ".c64_test_single_drive_fresh_save_resume_low" \
             --swap-symbol ".c64_test_single_drive_fresh_save_before_save" \
@@ -5176,81 +3593,19 @@ run_single_drive_fresh_save_no_init_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_load_missing_savefile_product_smoke() {
     local name="load_missing_savefile_product_smoke"
     echo -n "  $name: "
 
-    local build_log
-    build_log=$(mktemp -t "build_${name}_log")
-    mkdir -p ../../../build/test/c64
-
-    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title \
-            ../../build/c64/monster.cat.stamp \
-            >"$build_log" 2>&1; then
-        echo "FAIL (asset build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -showmem -vicesymbols \
-            -define C64_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT \
-            -o ../../../build/test/c64/moria_load_missing_save_smoke.prg >"$build_log" 2>&1; then
-        echo "FAIL (assembly error)"
-        grep -i error "$build_log" | head -5
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local scripted_d64="../../../build/test/c64/moria_load_missing_save_smoke.d64"
-    rm -f "$scripted_d64"
-    if ! c1541_catalog -format "moria8 c64,m8" d64 "$scripted_d64" \
-            -attach "$scripted_d64" \
-            -write ../../../build/test/c64/boot.prg "moria8" \
-            -write ../../../build/test/c64/boot.prg "boot64" \
-            -write ../../../build/test/c64/bootart64.prg "bootart64" \
-            -write ../../../build/test/c64/moria_load_missing_save_smoke.prg "moria64" \
-            -write ../../../build/test/c64/64.bank "64.bank" \
-            -write ../../../build/test/c64/title "t64" \
-            -write ../../../build/test/c64/monster.cat1 "monster.cat1" \
-            -write ../../../build/test/c64/monster.cat2 "monster.cat2" \
-            -write ../../../build/test/c64/monster.cat3 "monster.cat3" \
-            -write ../../../build/test/c64/monster.cat4 "monster.cat4" \
-            -write ../../../build/test/c64/monster.ext "monster.ext" \
-            -write ../../../build/test/c64/monster.idx "monster.idx" \
-            -write ../../../build/test/c64/item.cat "item.cat" \
-            -write ../../../build/test/c64/item.idx "item.idx" \
-            -write ../../../build/test/c64/ovl.start "64.start" \
-            -write ../../../build/test/c64/ovl.town "64.town" \
-            -write ../../../build/test/c64/ovl.death "64.death" \
-            -write ../../../build/test/c64/ovl.modal "64.modal" \
-            -write ../../../build/test/c64/ovl.gen "64.gen" \
-            -write ../../../build/test/c64/ovl.help "64.help" \
-            -write ../../../build/test/c64/ovl.ui "64.ui" \
-            -write ../../../build/test/c64/ovl.items "64.items" \
-            -write ../../../build/test/c64/ovl.spell "64.spell" \
-            -write ../../../build/test/c64/ovl.chest "64.chest" \
-            -write ../../../build/test/c64/ovl.home "64.home" \
-            -write ../../../build/test/c64/ovl.storage "64.storage" \
-            -write ../../../build/test/c64/ovl.title "64.title" >>"$build_log" 2>&1; then
-        echo "FAIL (disk build error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local marker_blob="../../../build/test/c64/MORIA8.ID"
-    local save_d64="../../../build/test/c64/moria_load_missing_save.d64"
-    if ! printf 'M8SAVE' > "$marker_blob"; then
-        echo "FAIL (marker generation error)"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
+    local SUITE_DIR VARIANT_DIR MAIN_VS SCRIPTED_D64
+    c64_prepare_smoke_suite "$name" "load_missing_save" || return
+    local scripted_d64="$SCRIPTED_D64"
+    local main_vs="$MAIN_VS"
+    local build_log="$SUITE_DIR/build.log"
+    local marker_blob="$SUITE_DIR/MORIA8.ID"
+    local save_d64="$SUITE_DIR/moria_load_missing_save.d64"
+    printf 'M8SAVE' >"$marker_blob"
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
             -attach "$save_d64" \
@@ -5262,30 +3617,20 @@ run_load_missing_savefile_product_smoke() {
         return
     fi
 
-    local dir_type_offset=$(((357 + 1) * 256 + 2))
-    if ! printf '\201' | dd of="$save_d64" bs=1 seek="$dir_type_offset" conv=notrunc status=none 2>>"$build_log"; then
-        echo "FAIL (marker directory patch error)"
-        tail -20 "$build_log"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    local main_vs="../../../build/test/c64/main.vs"
     local pass_addr fail_addr
     pass_addr=$(awk '/\.c64_test_after_load_missing_save_return$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_load_missing_save_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
-        echo "FAIL (missing load-missing-save smoke symbol in ../../../build/test/c64/main.vs)"
+        echo "FAIL (missing load-missing-save smoke symbol in $main_vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local mon_file
-    mon_file=$(mktemp -t "test_${name}_mon")
+    mon_file="$SUITE_DIR/mon"
     local tty_log
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    tty_log="$SUITE_DIR/tty.log"
     local pass_lc fail_lc
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
     fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
@@ -5341,28 +3686,29 @@ run_load_missing_savefile_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_hot_residency_product_smoke() {
     local name="hot_residency_product_smoke"
     echo -n "  $name: "
 
-    local build_log smoke_log
-    build_log=$(mktemp -t "build_${name}_log")
-    smoke_log=$(mktemp -t "test_${name}_log")
-
-    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
-        echo "FAIL (disk64 build error)"
-        tail -20 "$build_log"
+    local suite_dir smoke_log suite_d64
+    suite_dir="$(c64_suite_dir "$name")"
+    smoke_log="$suite_dir/smoke.log"
+    suite_d64="$suite_dir/moria8-c64.d64"
+    if [ ! -f "$REPO_ROOT/build/moria8-c64.d64" ] || [ ! -f "$C64_BUILD_OUT/main.vs" ]; then
+        echo "FAIL (missing prebuilt disk64 artifacts)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
+    cp "$REPO_ROOT/build/moria8-c64.d64" "$suite_d64"
 
     if python3 -u "$RUN_TESTS64_DIR/tests/product_hot_residency_smoke.py" \
             --vice "$VICE" \
-            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
-            --vs "$REPO_ROOT/build/c64/main.vs" >"$smoke_log" 2>&1; then
+            --boot-d64 "$suite_d64" \
+            --vs "$C64_BUILD_OUT/main.vs" >"$smoke_log" 2>&1; then
         echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
-        rm -f -- "$build_log" "$smoke_log"
+        rm -f -- "$smoke_log" "$suite_d64"
         PASS=$((PASS + 1))
     else
         echo "FAIL"
@@ -5375,29 +3721,30 @@ run_hot_residency_product_smoke() {
 # item_cat_level_entry_product_smoke — ITEM.CAT on the stock disk path (no
 # REU): each miss reads at most ICR_WINDOW bytes, and a stairs level change keeps
 # the item pickup cache (tests/item_cat_level_entry_smoke.py).
+
 run_item_cat_level_entry_product_smoke() {
     local name="item_cat_level_entry_product_smoke"
     echo -n "  $name: "
 
-    local build_log smoke_log
-    build_log=$(mktemp -t "build_${name}_log")
-    smoke_log=$(mktemp -t "test_${name}_log")
-
-    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
-        echo "FAIL (disk64 build error)"
-        tail -20 "$build_log"
+    local suite_dir smoke_log suite_d64
+    suite_dir="$(c64_suite_dir "$name")"
+    smoke_log="$suite_dir/smoke.log"
+    suite_d64="$suite_dir/moria8-c64.d64"
+    if [ ! -f "$REPO_ROOT/build/moria8-c64.d64" ] || [ ! -f "$C64_BUILD_OUT/main.vs" ]; then
+        echo "FAIL (missing prebuilt disk64 artifacts)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
+    cp "$REPO_ROOT/build/moria8-c64.d64" "$suite_d64"
 
     if python3 -B -u "$RUN_TESTS64_DIR/tests/item_cat_level_entry_smoke.py" \
             --vice "$VICE" \
             --c1541 "$C1541" \
-            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
-            --vs "$REPO_ROOT/build/c64/main.vs" >"$smoke_log" 2>&1; then
+            --boot-d64 "$suite_d64" \
+            --vs "$C64_BUILD_OUT/main.vs" >"$smoke_log" 2>&1; then
         echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
-        rm -f -- "$build_log" "$smoke_log"
+        rm -f -- "$smoke_log" "$suite_d64"
         PASS=$((PASS + 1))
     else
         echo "FAIL"
@@ -5409,6 +3756,7 @@ run_item_cat_level_entry_product_smoke() {
 
 # item_cat_level_entry_jiffydos1541_product_smoke — Optional stock-KERNAL +
 # JiffyDOS-1541 parity check when PLAYTEST_DOS1541 is supplied by caller env.
+
 run_item_cat_level_entry_jiffydos1541_product_smoke() {
     local name="item_cat_level_entry_jiffydos1541_product_smoke"
     echo -n "  $name: "
@@ -5424,26 +3772,26 @@ run_item_cat_level_entry_jiffydos1541_product_smoke() {
         return
     fi
 
-    local build_log smoke_log
-    build_log=$(mktemp -t "build_${name}_log")
-    smoke_log=$(mktemp -t "test_${name}_log")
-
-    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$build_log" 2>&1; then
-        echo "FAIL (disk64 build error)"
-        tail -20 "$build_log"
+    local suite_dir smoke_log suite_d64
+    suite_dir="$(c64_suite_dir "$name")"
+    smoke_log="$suite_dir/smoke.log"
+    suite_d64="$suite_dir/moria8-c64.d64"
+    if [ ! -f "$REPO_ROOT/build/moria8-c64.d64" ] || [ ! -f "$C64_BUILD_OUT/main.vs" ]; then
+        echo "FAIL (missing prebuilt disk64 artifacts)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
+    cp "$REPO_ROOT/build/moria8-c64.d64" "$suite_d64"
 
     if python3 -B -u "$RUN_TESTS64_DIR/tests/item_cat_level_entry_smoke.py" \
             --vice "$VICE" \
             --c1541 "$C1541" \
-            --boot-d64 "$REPO_ROOT/build/moria8-c64.d64" \
-            --vs "$REPO_ROOT/build/c64/main.vs" \
+            --boot-d64 "$suite_d64" \
+            --vs "$C64_BUILD_OUT/main.vs" \
             --dos1541 "$PLAYTEST_DOS1541" >"$smoke_log" 2>&1; then
         echo "PASS ($(tail -1 "$smoke_log" | sed 's/^PASS: //'))"
-        rm -f -- "$build_log" "$smoke_log"
+        rm -f -- "$smoke_log" "$suite_d64"
         PASS=$((PASS + 1))
     else
         echo "FAIL"
@@ -5453,22 +3801,24 @@ run_item_cat_level_entry_jiffydos1541_product_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+
 run_c64_command_status_byte1_timeout_smoke() {
     local name="c64_command_status_byte1_timeout_smoke"
     echo -n "  $name: "
 
-    local main_vs="$TMPDIR/main.vs"
-    local main_prg="$TMPDIR/moria.prg"
+    local main_vs="$C64_MAIN_ASM_DIR/main.vs"
+    local main_prg="$C64_MAIN_ASM_DIR/moria.prg"
     if [ ! -s "$main_vs" ] || [ ! -s "$main_prg" ]; then
-        echo "FAIL (missing compiled main.prg/main.vs in $TMPDIR)"
+        echo "FAIL (missing compiled moria.prg/main.vs in $C64_MAIN_ASM_DIR)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    local mon_file tty_log
-    mon_file=$(mktemp -t "test_${name}_mon")
-    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local suite_dir mon_file tty_log
+    suite_dir="$(c64_suite_dir "$name")"
+    mon_file="$suite_dir/mon"
+    tty_log="$suite_dir/tty.log"
 
     if ! python3 - "$main_vs" "$mon_file" <<'PY'
 import sys
@@ -5627,14 +3977,310 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+
+c64_run_worker_job() {
+    local jobs_dir="$1"
+    local job_idx="$2"
+    local spec_file="$jobs_dir/job_${job_idx}.spec"
+    local out_file="$jobs_dir/job_${job_idx}.out"
+    local counts_file="$jobs_dir/job_${job_idx}.counts"
+
+    if [ ! -f "$spec_file" ]; then
+        exit 1
+    fi
+
+    local JOB_KIND="" JOB_NAME="" JOB_FN=""
+    local -a JOB_ARGS=()
+    # shellcheck disable=SC1090
+    source "$spec_file"
+
+    PASS=0
+    FAIL=0
+    TOTAL=0
+    C64_COLLECT_MODE=0
+    if [ "$JOB_KIND" = "unit" ]; then
+        run_test "${JOB_ARGS[@]}" >"$out_file" 2>&1
+    else
+        "$JOB_FN" >"$out_file" 2>&1
+    fi
+    printf '%s %s %s\n' "$PASS" "$FAIL" "$TOTAL" >"$counts_file"
+}
+
+register_all_suites() {
+# Runtime tests
+# Args: name, source, result memory range, expected pass count
+run_test "math"   "tests/test_math.s"   "0400 040f" 16
+run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
+run_test "memory" "tests/test_memory.s" "0400 0406" 7
+run_test "config" "tests/test_config.s" "0400 0400" 1
+run_test "input"  "tests/test_input.s"  "0400 040e" 15
+run_test "main_loop" "tests/test_main_loop.s" "0400 043a" 59 500000000
+run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
+run_test "turn" "tests/test_turn.s" "0400 0426" 39 500000000
+run_test "player" "tests/test_player.s" "0400 040b" 12
+run_test "dungeon" "tests/test_dungeon.s" "0400 0447" 72 500000000
+run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0447" 72 500000000
+run_test "monster_ai2" "tests/test_monster_ai2.s" "0400 0417" 24 500000000
+run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
+run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
+run_test "monster_attack" "tests/test_monster_attack.s" "0400 0436" 55 500000000
+run_test "monster_attack2" "tests/test_monster_attack2.s" "0400 0421" 34 500000000
+run_test "monster_tier3" "tests/test_monster_tier3.s" "0400 0403" 4 20000000
+run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
+run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
+run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
+run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
+run_test "lightning_bolt" "tests/test_lightning_bolt.s" "0400 0402" 3 500000000
+run_test "frost_bolt" "tests/test_frost_bolt.s" "0400 0402" 3 500000000
+run_test "turn_stone_to_mud" "tests/test_turn_stone_to_mud.s" "0400 0402" 3 500000000
+run_test "create_food" "tests/test_create_food.s" "0400 0402" 3 500000000
+run_test "recharge_item_i" "tests/test_recharge_item_i.s" "0400 0403" 4 500000000
+run_test "recharge_item_ii" "tests/test_recharge_item_ii.s" "0400 0403" 4 500000000
+run_test "trap_door_destruction" "tests/test_trap_door_destruction.s" "0400 0404" 5 500000000
+run_test "sleep_i" "tests/test_sleep_i.s" "0400 0402" 3 500000000
+run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0404" 5 500000000
+run_test "sleep_iii" "tests/test_sleep_iii.s" "0400 0402" 3 500000000
+run_test "cure_poison" "tests/test_cure_poison.s" "0400 0402" 3 500000000
+run_test "fire_bolt" "tests/test_fire_bolt.s" "0400 0402" 3 500000000
+run_test "slow_monster" "tests/test_slow_monster.s" "0400 0402" 3 500000000
+run_test "polymorph_other" "tests/test_polymorph_other.s" "0400 0402" 3 500000000
+run_test "identify_spell" "tests/test_identify_spell.s" "0400 0403" 4 500000000
+run_test "teleport_self" "tests/test_teleport_self.s" "0400 0401" 2 500000000
+run_test "remove_curse" "tests/test_remove_curse.s" "0400 0402" 3 500000000
+run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0408" 9 500000000
+run_test "chest_open" "tests/test_chest_open.s" "0400 040D" 14 500000000
+run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0407" 8 500000000
+run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
+run_test "chest_loot" "tests/test_chest_loot.s" "0400 0410" 17 500000000
+run_test "balrog_victory" "tests/test_balrog_victory.s" "0400 0405" 6 500000000
+run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
+run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
+run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000
+run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
+run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
+run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0406" 7 500000000
+run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
+run_test "phase_door" "tests/test_phase_door.s" "0400 0406" 7 500000000
+run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
+run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
+run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
+run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
+run_test "utility_effects" "tests/test_utility_effects.s" "0400 040c" 13 500000000
+run_test "detect_evil" "tests/test_detect_evil.s" "0400 0403" 4 500000000
+run_test "cure_light_wounds_prayer" "tests/test_cure_light_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "bless_prayer" "tests/test_bless_prayer.s" "0400 0402" 3 500000000
+run_test "remove_fear_prayer" "tests/test_remove_fear_prayer.s" "0400 0402" 3 500000000
+run_test "call_light_prayer" "tests/test_call_light_prayer.s" "0400 0401" 2 500000000
+run_test "find_traps_prayer" "tests/test_find_traps_prayer.s" "0400 0402" 3 500000000
+run_test "detect_doors_stairs_prayer" "tests/test_detect_doors_stairs_prayer.s" "0400 0402" 3 500000000
+run_test "slow_poison_prayer" "tests/test_slow_poison_prayer.s" "0400 0402" 3 500000000
+run_test "blind_creature_prayer" "tests/test_blind_creature_prayer.s" "0400 0402" 3 500000000
+run_test "portal_prayer" "tests/test_portal_prayer.s" "0400 0401" 2 500000000
+run_test "cure_medium_wounds_prayer" "tests/test_cure_medium_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "cure_serious_wounds_prayer" "tests/test_cure_serious_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "sense_invisible_prayer" "tests/test_sense_invisible_prayer.s" "0400 0402" 3 500000000
+run_test "protection_from_evil_prayer" "tests/test_protection_from_evil_prayer.s" "0400 0402" 3 500000000
+run_test "earthquake_prayer" "tests/test_earthquake_prayer.s" "0400 0402" 3 500000000
+run_test "sense_surroundings_prayer" "tests/test_sense_surroundings_prayer.s" "0400 0402" 3 500000000
+run_test "cure_critical_wounds_prayer" "tests/test_cure_critical_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0404" 5 500000000
+run_test "prayer_prayer" "tests/test_prayer_prayer.s" "0400 0402" 3 500000000
+run_test "dispel_undead_prayer" "tests/test_dispel_undead_prayer.s" "0400 0402" 3 500000000
+run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0404" 5 500000000
+run_test "glyph_of_warding_prayer" "tests/test_glyph_of_warding_prayer.s" "0400 0402" 3 500000000
+run_test "holy_word_prayer" "tests/test_holy_word_prayer.s" "0400 0401" 2 500000000
+run_test "heal_prayer" "tests/test_heal_prayer.s" "0400 0402" 3 500000000
+run_test "chant_prayer" "tests/test_chant_prayer.s" "0400 0402" 3 500000000
+run_test "sanctuary_prayer" "tests/test_sanctuary_prayer.s" "0400 0403" 4 500000000
+run_test "neutralize_poison_prayer" "tests/test_neutralize_poison_prayer.s" "0400 0402" 3 500000000
+run_test "create_food_prayer" "tests/test_create_food_prayer.s" "0400 0402" 3 500000000
+run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 500000000
+run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0405" 6 500000000
+    run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
+run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
+run_test "item" "tests/test_item.s" "0400 0449" 37 1000000000
+run_test "item2" "tests/test_item2.s" "0400 0449" 37 1000000000
+run_test "item_weight" "tests/test_item_weight.s" "0400 0404" 5 1000000000
+run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
+run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 0412" 19 1000000000
+run_test "item_desc" "tests/test_item_desc.s" "0400 040b" 12 500000000
+run_test "item_catalog_vms" "tests/test_item_catalog_vms.s" "0400 0404" 5 1000000000
+run_test "item_effects_vms" "tests/test_item_effects_vms.s" "0400 0404" 5 1000000000
+run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
+run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000
+run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
+run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0418" 25 500000000
+run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
+run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
+run_suite_function "sound" run_sound_monitor_test
+run_test "save"  "tests/test_save.s"  "0400 042c" 45 1000000000
+run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
+run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
+run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
+run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 041E" 31 50000000
+run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
+run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
+run_test "render" "tests/test_render.s" "0400 0418" 25 500000000
+run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
+run_test "ego" "tests/test_ego.s" "0400 0418" 25 500000000
+run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000
+run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
+run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
+run_test "background" "tests/test_background.s" "0400 0407" 8
+run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2
+run_suite_function "media_drive8_attach_read_write" run_media_drive8_attach_read_write
+run_suite_function "media_drive9_attach_read_write" run_media_drive9_attach_read_write
+run_suite_function "media_drive10_11_device_probe" run_media_drive10_11_device_probe "alternate_drive10_11_save_load_smoke"
+run_suite_function "boot_error_smoke" run_boot_error_smoke
+run_suite_function "scripted_spell_cast_smoke" run_scripted_spell_cast_smoke
+run_suite_function "scripted_book_overlay_smoke" run_scripted_book_overlay_smoke
+run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector_smoke
+run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_overlay_smoke
+run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
+run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
+run_suite_function "scripted_element_divisor_smoke" run_scripted_element_divisor_smoke
+run_suite_function "scripted_ego_damage_smoke" run_scripted_ego_damage_smoke
+# The catalog spawn smokes reuse the dungeon-ascent build and disk.
+run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke catalog_spawn_product_smoke catalog_spawn_product_reu_smoke
+run_suite_function "catalog_spawn_product_smoke" run_catalog_spawn_product_smoke
+run_suite_function "catalog_spawn_product_reu_smoke" run_catalog_spawn_product_reu_smoke
+run_suite_function "wizard_reveal_product_smoke" run_wizard_reveal_product_smoke
+run_suite_function "wizard_item_product_smoke" run_wizard_item_product_smoke
+run_suite_function "exchange_product_smoke" run_exchange_product_smoke
+run_suite_function "chest_open_product_smoke" run_chest_open_product_smoke
+run_suite_function "chest_open_product_reu_smoke" run_chest_open_product_reu_smoke
+run_suite_function "chest_open_product_genfail_smoke" run_chest_open_product_genfail_smoke
+run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
+run_suite_function "game_over_product_smoke" run_game_over_product_smoke
+run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
+run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"
+run_suite_function "disk_setup_then_load_prompts_save_disk" run_disk_setup_then_load_prompts_save_product_smoke "disk_setup_then_load_prompts_save_product_smoke"
+run_suite_function "load_initialized_save" run_load_resume_product_smoke "load_resume_product_smoke"
+run_suite_function "prompt_sequence_no_repeat" run_single_drive_load_return_product_smoke "single_drive_load_return_product_smoke"
+run_suite_function "load_then_save_new_empty_disk" run_load_then_save_new_empty_product_smoke "load_then_save_new_empty_product_smoke"
+run_suite_function "change_save_drive_after_save" run_change_save_drive_product_smoke "change_save_drive_product_smoke" "alternate_drive_change_smoke" "alternate_drive_prompt_no_repeat"
+run_suite_function "single_drive_save_program_disk_rejected" run_single_drive_save_wrong_media_product_smoke "single_drive_save_wrong_media_product_smoke" "wrong_media_recovery"
+run_suite_function "single_drive_load_program_disk_rejected" run_single_drive_load_wrong_media_product_smoke "single_drive_load_wrong_media_product_smoke" "wrong_media_recovery" "wrong_media_detection_selected_devices"
+run_suite_function "single_drive_corrupt_save_recovery_requires_program_disk" run_single_drive_load_corrupt_product_smoke "single_drive_load_corrupt_product_smoke" "corrupt_save_file"
+run_suite_function "new_save_empty_init_writes" run_single_drive_fresh_save_product_smoke "single_drive_fresh_save_product_smoke"
+run_suite_function "new_save_empty_no_init_returns_setup" run_single_drive_fresh_save_no_init_product_smoke "single_drive_fresh_save_no_init_product_smoke" "cancel_supported_prompts"
+run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefile_product_smoke "missing_device_or_no_disk"
+run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke "wrong_media_detection_selected_devices" "write_protected_or_forced_write_error"
+run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
+run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
+run_suite_function "hot_residency_product_smoke" run_hot_residency_product_smoke
+run_suite_function "item_cat_level_entry_product_smoke" run_item_cat_level_entry_product_smoke
+run_suite_function "item_cat_level_entry_jiffydos1541_product_smoke" run_item_cat_level_entry_jiffydos1541_product_smoke
+run_suite_function "c64_command_status_byte1_timeout_smoke" run_c64_command_status_byte1_timeout_smoke
+}
+
+# Worker / prebuild fast entrypoints (skip top-level setup and traps)
+if [ "${1:-}" = "--worker" ]; then
+    cd "$RUN_TESTS64_DIR"
+    if [ "${DEBUG_FEAT_DISK_TRACE:-0}" = "1" ]; then
+        KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE)
+    else
+        KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
+    fi
+    c64_run_worker_job "$2" "$3"
+    exit 0
+elif [ "${1:-}" = "--prebuild-variant" ]; then
+    cd "$RUN_TESTS64_DIR"
+    if [ "${DEBUG_FEAT_DISK_TRACE:-0}" = "1" ]; then
+        KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE)
+    else
+        KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
+    fi
+    c64_prebuild_variant "$2"
+    exit 0
+fi
+
+cd "$RUN_TESTS64_DIR"
+C64_TEST_OUT="${C64_TEST_OUT:-../../../build/test/c64}"
+mkdir -p "$C64_TEST_OUT"
+C64_TEST_OUT="$(cd "$C64_TEST_OUT" && pwd)"
+C64_BUILD_OUT="${C64_BUILD_OUT:-../../../build/c64}"
+if [ -d "$C64_BUILD_OUT" ]; then
+    C64_BUILD_OUT="$(cd "$C64_BUILD_OUT" && pwd)"
+else
+    C64_BUILD_OUT="$REPO_ROOT/build/c64"
+fi
+C64_SHARED_ASSETS_DIR="${C64_SHARED_ASSETS_DIR:-$C64_TEST_OUT/_shared_assets}"
+C64_VARIANTS_DIR="${C64_VARIANTS_DIR:-$C64_TEST_OUT/_variants}"
+C64_MAIN_ASM_DIR="${C64_MAIN_ASM_DIR:-$C64_TEST_OUT/_main_asm}"
+
+# Temp files under build/, never the shared /tmp (AGENTS.md rule 9): each run
+# gets its own directory, and runs older than six hours are cleared here, so
+# leftovers cannot pile up (2026-11-01: /tmp held thousands of test images).
+mkdir -p "$C64_TEST_OUT/tmp"
+find "$C64_TEST_OUT/tmp" -mindepth 1 -maxdepth 1 -mmin +360 -exec rm -rf {} +
+TMPDIR=$(cd "$C64_TEST_OUT/tmp" && mktemp -d "$(pwd)/run.XXXXXX")
+export TMPDIR
+trap cleanup EXIT
+
+COMMODORE_MAKE=(make -s -C "$REPO_ROOT/platforms/commodore")
+KICKASS_WAS_SET="${KICKASS+x}"
+KICKASS="${KICKASS:-$REPO_ROOT/tools/kickass/KickAss.jar}"
+case "$KICKASS" in
+    /*) ;;
+    *) KICKASS="$(pwd)/$KICKASS" ;;
+esac
+if [ -n "$KICKASS_WAS_SET" ]; then
+    kickass_status=0
+    "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" ensure-kickass || kickass_status=$?
+else
+    kickass_status=0
+    "${COMMODORE_MAKE[@]}" ensure-kickass || kickass_status=$?
+fi
+if [ "$kickass_status" -ne 0 ]; then
+    exit 1
+fi
+KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
+
+mkdir -p ../../../build/trampolines
+python3 -B ../../../tools/gen_trampolines.py --port c64 --output ../../../build/trampolines/c64_trampolines.inc || exit 1
+python3 -B ../../../tools/make_version_include.py ../../../version.json ../../../build/version_strings.inc || exit 1
+
+DEBUG_FEAT_DISK_TRACE="${DEBUG_FEAT_DISK_TRACE:-0}"
+if [ "$DEBUG_FEAT_DISK_TRACE" = "1" ]; then
+    KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE)
+else
+    KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
+fi
+
+VICE="${VICE:-x64sc}"
+# VICE reads this config (with the installed version tag) instead of the
+# user's vicerc; /dev/null made VICE pop up "No version tag found" dialogs.
+VICE_CONFIG="$(python3 "$REPO_ROOT/tools/vice_config.py" "$VICE")"
+C1541="${C1541:-c1541}"
+TEST_FILTER="${TEST_FILTER:-}"
+TEST_JOBS="${TEST_JOBS:-4}"
+TEST_JOBS_RESOLVED="$(resolve_test_jobs "$TEST_JOBS")"
+
+export REPO_ROOT RUN_TESTS64_DIR C64_TEST_OUT C64_BUILD_OUT C64_SHARED_ASSETS_DIR C64_VARIANTS_DIR C64_MAIN_ASM_DIR
+export TMPDIR KICKASS VICE VICE_CONFIG C1541 DEBUG_FEAT_DISK_TRACE PLAYTEST_DOS1541
+
+PASS=0
+FAIL=0
+TOTAL=0
+
 echo "=== Moria Phase 1 Tests ==="
+if [ "$TEST_JOBS" = "auto" ]; then
+    echo "  jobs: auto -> $TEST_JOBS_RESOLVED"
+else
+    echo "  jobs: $TEST_JOBS_RESOLVED"
+fi
 echo ""
 
-# Build main program first (compile-time asserts)
+# Build main program first (compile-time asserts, also used by c64_command_status_byte1_timeout_smoke)
 echo -n "  main.s assembly: "
 cd "$RUN_TESTS64_DIR"
-mkdir -p ../../../build/test/c64
-asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s :OVL_OUT=../../../build/test/c64 -vicesymbols -o "$TMPDIR/moria.prg" 2>&1)
+rm -rf "$C64_MAIN_ASM_DIR"
+mkdir -p "$C64_MAIN_ASM_DIR"
+asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s ":OVL_OUT=$C64_MAIN_ASM_DIR" -vicesymbols -symbolfiledir "$C64_MAIN_ASM_DIR" -o "$C64_MAIN_ASM_DIR/moria.prg" 2>&1)
 assert_info=$(echo "$asm_out" | grep "asserts")
 if echo "$asm_out" | grep -q "0 failed"; then
     echo "PASS ($assert_info)"
@@ -5781,183 +4427,157 @@ check_static_contract "c64_save_stream_overlay_safe_io_contract" "hal/storage.s"
 check_static_contract "c64_save_trampoline_overlay_contract" "main.s" \
     "save_game:|||lda #OVL_STORAGE|||jsr overlay_load_no_kernal|||jsr save_game_impl|||load_game:|||lda #OVL_STORAGE|||jsr overlay_load_no_kernal|||jsr load_game_impl"
 check_static_contract "c64_command_status_byte1_timeout_contract" "main.s" \
-    "c64_storage_read_command_status:|||jsr c64_disk_chrin|||pha|||jsr c64_disk_readst|||and #\$02|||sta cdrs_lost|||pla|||!cdrs_check_26:|||jsr c64_cdrs_chrin_checked|||!cdrs_check_62:|||jsr c64_cdrs_chrin_checked|||!cdrs_check_7x:|||jsr c64_cdrs_chrin_checked|||c64_cdrs_chrin_checked:|||jsr c64_disk_chrin|||pha|||jsr c64_disk_readst|||and #\$02|||beq !cdrs_byte_ok+|||sta cdrs_lost|||pla|||lda #0|||rts"
+    "c64_read_open_cmd_status_cleared:|||jsr c64_disk_chrin|||pha|||jsr c64_disk_readst|||and #\$02|||sta cdrs_lost|||pla|||jsr c64_disk_chrin|||pha|||jsr c64_disk_readst|||and #\$02|||beq !crocs_d1_ok+|||sta cdrs_lost|||pla|||pla|||jmp !crocs_done+|||!crocs_d1_ok:|||jsr storage_status_from_dos_digits"
 check_static_contract "save_slot_read_name_drains_cmd_status_contract" "../common/save_slot_menu.s" \
     "save_slot_read_name:|||lda #3|||sta save_slot_probe_tries|||jsr SAVE_CHRIN|||pha|||jsr SAVE_READST|||tax|||and #\$02|||sta save_slot_probe_lost|||txa|||bne !drained+|||!drain:|||jsr SAVE_CHRIN|||cmp #\$0d|||beq !drained+|||jsr SAVE_READST|||beq !drain-|||!drained:|||jsr save_restore_channels|||pla"
 check_static_contract "c64_iload_safe_timeout_cleanup_contract" "main.s" \
     "c64_iload_safe:|||jsr c64_acptr_safe|||sta KERNAL_EAL|||lda #\$02|||bit KERNAL_STATUS|||bne !cis_fnf+|||jsr c64_acptr_safe|||sta KERNAL_EAH|||lda #\$02|||bit KERNAL_STATUS|||bne !cis_fnf+|||!cis_next:|||lda #8|||sta c64_iload_retries|||!cis_loop:|||jsr c64_acptr_safe|||bit KERNAL_STATUS|||beq !cis_store+|||dec c64_iload_retries|||bne !cis_loop-|||beq !cis_fnf+|||!cis_fnf:|||jsr \$edef|||jsr \$f642|||jmp \$f704"
 run_vice_resource_contract
 
-# Runtime tests
-# Args: name, source, result memory range, expected pass count
-run_test "math"   "tests/test_math.s"   "0400 040f" 16
-run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
-run_test "memory" "tests/test_memory.s" "0400 0406" 7
-run_test "config" "tests/test_config.s" "0400 0400" 1
-run_test "input"  "tests/test_input.s"  "0400 040e" 15
-run_test "main_loop" "tests/test_main_loop.s" "0400 043a" 59 500000000
-run_test "run_visibility_bank" "tests/test_run_visibility_bank.s" "0400 0400" 1 500000000
-run_test "turn" "tests/test_turn.s" "0400 0426" 39 500000000
-run_test "player" "tests/test_player.s" "0400 040b" 12
-run_test "dungeon" "tests/test_dungeon.s" "0400 0444" 69 500000000
-run_test "monster" "tests/test_monster.s" "0400 0417" 24 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0446" 71 500000000
-run_test "monster_ai2" "tests/test_monster_ai2.s" "0400 0417" 24 500000000
-run_test "combat" "tests/test_combat.s" "0400 0429" 42 500000000
-run_test "msg_long" "tests/test_msg_long.s" "0400 0400" 1 20000000
-run_test "monster_attack" "tests/test_monster_attack.s" "0400 0436" 55 500000000
-run_test "monster_attack2" "tests/test_monster_attack2.s" "0400 0421" 34 500000000
-run_test "monster_tier3" "tests/test_monster_tier3.s" "0400 0403" 4 20000000
-run_test "effects" "tests/test_effects.s" "0400 042d" 46 1000000000
-run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 29 1000000000
-run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
-run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
-run_test "lightning_bolt" "tests/test_lightning_bolt.s" "0400 0402" 3 500000000
-run_test "frost_bolt" "tests/test_frost_bolt.s" "0400 0402" 3 500000000
-run_test "turn_stone_to_mud" "tests/test_turn_stone_to_mud.s" "0400 0402" 3 500000000
-run_test "create_food" "tests/test_create_food.s" "0400 0402" 3 500000000
-run_test "recharge_item_i" "tests/test_recharge_item_i.s" "0400 0403" 4 500000000
-run_test "recharge_item_ii" "tests/test_recharge_item_ii.s" "0400 0403" 4 500000000
-run_test "trap_door_destruction" "tests/test_trap_door_destruction.s" "0400 0404" 5 500000000
-run_test "sleep_i" "tests/test_sleep_i.s" "0400 0402" 3 500000000
-run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0404" 5 500000000
-run_test "sleep_iii" "tests/test_sleep_iii.s" "0400 0402" 3 500000000
-run_test "cure_poison" "tests/test_cure_poison.s" "0400 0402" 3 500000000
-run_test "fire_bolt" "tests/test_fire_bolt.s" "0400 0402" 3 500000000
-run_test "slow_monster" "tests/test_slow_monster.s" "0400 0402" 3 500000000
-run_test "polymorph_other" "tests/test_polymorph_other.s" "0400 0402" 3 500000000
-run_test "identify_spell" "tests/test_identify_spell.s" "0400 0403" 4 500000000
-run_test "teleport_self" "tests/test_teleport_self.s" "0400 0401" 2 500000000
-run_test "remove_curse" "tests/test_remove_curse.s" "0400 0402" 3 500000000
-run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0408" 9 500000000
-run_test "chest_open" "tests/test_chest_open.s" "0400 040D" 14 500000000
-run_test "chest_disarm" "tests/test_chest_disarm.s" "0400 0407" 8 500000000
-run_test "chest_bash" "tests/test_chest_bash.s" "0400 0404" 5 500000000
-run_test "chest_loot" "tests/test_chest_loot.s" "0400 0410" 17 500000000
-run_test "balrog_victory" "tests/test_balrog_victory.s" "0400 0405" 6 500000000
-run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
-run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
-run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000
-run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
-run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
-run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0406" 7 500000000
-run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
-run_test "phase_door" "tests/test_phase_door.s" "0400 0406" 7 500000000
-run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
-run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
-run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
-run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
-run_test "utility_effects" "tests/test_utility_effects.s" "0400 040c" 13 500000000
-run_test "detect_evil" "tests/test_detect_evil.s" "0400 0403" 4 500000000
-run_test "cure_light_wounds_prayer" "tests/test_cure_light_wounds_prayer.s" "0400 0402" 3 500000000
-run_test "bless_prayer" "tests/test_bless_prayer.s" "0400 0402" 3 500000000
-run_test "remove_fear_prayer" "tests/test_remove_fear_prayer.s" "0400 0402" 3 500000000
-run_test "call_light_prayer" "tests/test_call_light_prayer.s" "0400 0401" 2 500000000
-run_test "find_traps_prayer" "tests/test_find_traps_prayer.s" "0400 0402" 3 500000000
-run_test "detect_doors_stairs_prayer" "tests/test_detect_doors_stairs_prayer.s" "0400 0402" 3 500000000
-run_test "slow_poison_prayer" "tests/test_slow_poison_prayer.s" "0400 0402" 3 500000000
-run_test "blind_creature_prayer" "tests/test_blind_creature_prayer.s" "0400 0402" 3 500000000
-run_test "portal_prayer" "tests/test_portal_prayer.s" "0400 0401" 2 500000000
-run_test "cure_medium_wounds_prayer" "tests/test_cure_medium_wounds_prayer.s" "0400 0402" 3 500000000
-run_test "cure_serious_wounds_prayer" "tests/test_cure_serious_wounds_prayer.s" "0400 0402" 3 500000000
-run_test "sense_invisible_prayer" "tests/test_sense_invisible_prayer.s" "0400 0402" 3 500000000
-run_test "protection_from_evil_prayer" "tests/test_protection_from_evil_prayer.s" "0400 0402" 3 500000000
-run_test "earthquake_prayer" "tests/test_earthquake_prayer.s" "0400 0402" 3 500000000
-run_test "sense_surroundings_prayer" "tests/test_sense_surroundings_prayer.s" "0400 0402" 3 500000000
-run_test "cure_critical_wounds_prayer" "tests/test_cure_critical_wounds_prayer.s" "0400 0402" 3 500000000
-run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0404" 5 500000000
-run_test "prayer_prayer" "tests/test_prayer_prayer.s" "0400 0402" 3 500000000
-run_test "dispel_undead_prayer" "tests/test_dispel_undead_prayer.s" "0400 0402" 3 500000000
-run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0404" 5 500000000
-run_test "glyph_of_warding_prayer" "tests/test_glyph_of_warding_prayer.s" "0400 0402" 3 500000000
-run_test "holy_word_prayer" "tests/test_holy_word_prayer.s" "0400 0401" 2 500000000
-run_test "heal_prayer" "tests/test_heal_prayer.s" "0400 0402" 3 500000000
-run_test "chant_prayer" "tests/test_chant_prayer.s" "0400 0402" 3 500000000
-run_test "sanctuary_prayer" "tests/test_sanctuary_prayer.s" "0400 0403" 4 500000000
-run_test "neutralize_poison_prayer" "tests/test_neutralize_poison_prayer.s" "0400 0402" 3 500000000
-run_test "create_food_prayer" "tests/test_create_food_prayer.s" "0400 0402" 3 500000000
-run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 500000000
-run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0405" 6 500000000
-    run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
-run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 0449" 37 1000000000
-run_test "item2" "tests/test_item2.s" "0400 0449" 37 1000000000
-run_test "item_weight" "tests/test_item_weight.s" "0400 0404" 5 1000000000
-run_test "item_exchange" "tests/test_item_exchange.s" "0400 040d" 14 1000000000
-run_test "scroll_p3" "tests/test_scroll_p3.s" "0400 0411" 18 1000000000
-run_test "item_desc" "tests/test_item_desc.s" "0400 040b" 12 500000000
-run_test "item_catalog_vms" "tests/test_item_catalog_vms.s" "0400 0404" 5 1000000000
-run_test "item_effects_vms" "tests/test_item_effects_vms.s" "0400 0404" 5 1000000000
-run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "potion_cures" "tests/test_potion_cures.s" "0400 0410" 17 1000000000
-run_test "timed_buffs" "tests/test_timed_buffs.s" "0400 0409" 10 1000000000
-run_test "store" "tests/test_store.s" "0400 0437" 56 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0418" 25 500000000
-run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
-run_test "subsystems" "tests/test_subsystems.s" "0400 040a" 11
-run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 042c" 45 1000000000
-run_test "score" "tests/test_score.s" "0400 040f" 16 500000000
-run_test "wands_staves" "tests/test_wands_staves.s" "0400 0407" 8 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 0429" 22 500000000
-run_test "monster_magic2" "tests/test_monster_magic2.s" "0400 0429" 20 500000000
-run_test "monster_magic3" "tests/test_monster_magic3.s" "0400 041E" 31 50000000
-run_test "tier" "tests/test_tier.s" "0400 0410" 17 500000000
-run_test "disk_swap" "tests/test_disk_swap.s" "0400 040e" 15 500000000
-run_test "render" "tests/test_render.s" "0400 0418" 25 500000000
-run_test "ranged" "tests/test_ranged.s" "0400 040f" 16 500000000
-run_test "ego" "tests/test_ego.s" "0400 0418" 25 500000000
-run_test "throw" "tests/test_throw.s" "0400 040f" 16 500000000
-run_test "bash" "tests/test_bash.s" "0400 040c" 13 500000000
-run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
-run_test "background" "tests/test_background.s" "0400 0407" 8
-run_test "look_trampoline" "tests/test_look_trampoline.s" "0400 0401" 2
-run_suite_function "media_drive8_attach_read_write" run_media_drive8_attach_read_write
-run_suite_function "media_drive9_attach_read_write" run_media_drive9_attach_read_write
-run_suite_function "media_drive10_11_device_probe" run_media_drive10_11_device_probe "alternate_drive10_11_save_load_smoke"
-run_suite_function "boot_error_smoke" run_boot_error_smoke
-run_suite_function "scripted_spell_cast_smoke" run_scripted_spell_cast_smoke
-run_suite_function "scripted_book_overlay_smoke" run_scripted_book_overlay_smoke
-run_suite_function "scripted_scroll_selector_smoke" run_scripted_scroll_selector_smoke
-run_suite_function "scripted_spell_list_overlay_smoke" run_scripted_spell_list_overlay_smoke
-run_suite_function "scripted_dungeon_target_spell_smoke" run_scripted_dungeon_target_spell_smoke
-run_suite_function "scripted_detect_evil_smoke" run_scripted_detect_evil_smoke
-run_suite_function "scripted_element_divisor_smoke" run_scripted_element_divisor_smoke
-run_suite_function "scripted_ego_damage_smoke" run_scripted_ego_damage_smoke
-# The catalog spawn smokes reuse the dungeon-ascent build and disk.
-run_suite_function "dungeon_ascent_product_smoke" run_dungeon_ascent_product_smoke catalog_spawn_product_smoke catalog_spawn_product_reu_smoke
-run_suite_function "catalog_spawn_product_smoke" run_catalog_spawn_product_smoke
-run_suite_function "catalog_spawn_product_reu_smoke" run_catalog_spawn_product_reu_smoke
-run_suite_function "wizard_reveal_product_smoke" run_wizard_reveal_product_smoke
-run_suite_function "wizard_item_product_smoke" run_wizard_item_product_smoke
-run_suite_function "exchange_product_smoke" run_exchange_product_smoke
-run_suite_function "chest_open_product_smoke" run_chest_open_product_smoke
-run_suite_function "chest_open_product_reu_smoke" run_chest_open_product_reu_smoke
-run_suite_function "chest_open_product_genfail_smoke" run_chest_open_product_genfail_smoke
-run_suite_function "retirement_royal_product_smoke" run_retirement_royal_product_smoke "retirement_flow_product_smoke"
-run_suite_function "game_over_product_smoke" run_game_over_product_smoke
-run_suite_function "disk_setup_product_smoke" run_disk_setup_product_smoke
-run_suite_function "title_disk_setup_single_drive_returns_program_prompt" run_disk_setup_single_drive_return_product_smoke "disk_setup_single_drive_return_product_smoke"
-run_suite_function "disk_setup_then_load_prompts_save_disk" run_disk_setup_then_load_prompts_save_product_smoke "disk_setup_then_load_prompts_save_product_smoke"
-run_suite_function "load_initialized_save" run_load_resume_product_smoke "load_resume_product_smoke"
-run_suite_function "prompt_sequence_no_repeat" run_single_drive_load_return_product_smoke "single_drive_load_return_product_smoke"
-run_suite_function "load_then_save_new_empty_disk" run_load_then_save_new_empty_product_smoke "load_then_save_new_empty_product_smoke"
-run_suite_function "change_save_drive_after_save" run_change_save_drive_product_smoke "change_save_drive_product_smoke" "alternate_drive_change_smoke" "alternate_drive_prompt_no_repeat"
-run_suite_function "single_drive_save_program_disk_rejected" run_single_drive_save_wrong_media_product_smoke "single_drive_save_wrong_media_product_smoke" "wrong_media_recovery"
-run_suite_function "single_drive_load_program_disk_rejected" run_single_drive_load_wrong_media_product_smoke "single_drive_load_wrong_media_product_smoke" "wrong_media_recovery" "wrong_media_detection_selected_devices"
-run_suite_function "single_drive_corrupt_save_recovery_requires_program_disk" run_single_drive_load_corrupt_product_smoke "single_drive_load_corrupt_product_smoke" "corrupt_save_file"
-run_suite_function "new_save_empty_init_writes" run_single_drive_fresh_save_product_smoke "single_drive_fresh_save_product_smoke"
-run_suite_function "new_save_empty_no_init_returns_setup" run_single_drive_fresh_save_no_init_product_smoke "single_drive_fresh_save_no_init_product_smoke" "cancel_supported_prompts"
-run_suite_function "load_missing_savefile_product_smoke" run_load_missing_savefile_product_smoke "missing_device_or_no_disk"
-run_suite_function "save_media_fail_product_smoke" run_save_media_fail_product_smoke "wrong_media_detection_selected_devices" "write_protected_or_forced_write_error"
-run_suite_function "dual_drive_load_then_save_no_program_prompt" run_save_write_product_smoke "save_existing_overwrite" "save_write_product_smoke"
-run_suite_function "slot2_save_product_smoke" run_slot2_save_product_smoke
-run_suite_function "hot_residency_product_smoke" run_hot_residency_product_smoke
-run_suite_function "item_cat_level_entry_product_smoke" run_item_cat_level_entry_product_smoke
-run_suite_function "item_cat_level_entry_jiffydos1541_product_smoke" run_item_cat_level_entry_jiffydos1541_product_smoke
-run_suite_function "c64_command_status_byte1_timeout_smoke" run_c64_command_status_byte1_timeout_smoke
+# Collect selected unit and smoke suites (respecting TEST_FILTER)
+C64_UNIT_SPECS=()
+C64_SMOKE_SPECS=()
+C64_UNIT_COLLECT_DIR="$TMPDIR/unit_jobs"
+mkdir -p "$C64_UNIT_COLLECT_DIR"
+C64_COLLECT_MODE=1
+register_all_suites
+C64_COLLECT_MODE=0
+
+# Pre-build shared C64 assets and deduplicated product variants needed by selected smokes
+need_disk64=0
+need_shared_assets=0
+needed_variants=()
+has_variant_key() {
+    local needle="$1" v
+    for v in "${needed_variants[@]}"; do
+        [ "$v" = "$needle" ] && return 0
+    done
+    return 1
+}
+
+for spec in "${C64_SMOKE_SPECS[@]}"; do
+    fn="${spec#*|}"
+    if c64_suite_needs_disk64 "$fn"; then
+        need_disk64=1
+    fi
+    for vkey in $(c64_variant_spec_for_fn "$fn"); do
+        need_shared_assets=1
+        if ! has_variant_key "$vkey"; then
+            needed_variants+=("$vkey")
+        fi
+    done
+done
+
+if [ "$need_disk64" -eq 1 ]; then
+    prebuild_log="$TMPDIR/prebuild_disk64.log"
+    if ! make -s -C "$REPO_ROOT/platforms/commodore" KICKASS="$KICKASS" disk64 >"$prebuild_log" 2>&1; then
+        echo "FAIL (prebuild disk64 error)"
+        tail -30 "$prebuild_log"
+        exit 1
+    fi
+elif [ "$need_shared_assets" -eq 1 ]; then
+    prebuild_log="$TMPDIR/prebuild_assets.log"
+    if ! make -s -C .. ../../build/c64/boot.prg ../../build/c64/bootart64.prg ../../build/c64/title ../../build/c64/monster.cat.stamp >"$prebuild_log" 2>&1; then
+        echo "FAIL (prebuild shared C64 asset error)"
+        tail -30 "$prebuild_log"
+        exit 1
+    fi
+fi
+
+if [ "$need_shared_assets" -eq 1 ]; then
+    rm -rf "$C64_SHARED_ASSETS_DIR"
+    mkdir -p "$C64_SHARED_ASSETS_DIR"
+    cp -p "$C64_BUILD_OUT"/boot.prg "$C64_BUILD_OUT"/bootart64.prg "$C64_BUILD_OUT"/title "$C64_BUILD_OUT"/monster.* "$C64_BUILD_OUT"/item.* "$C64_SHARED_ASSETS_DIR"/
+fi
+
+if [ "${#needed_variants[@]}" -gt 0 ]; then
+    mkdir -p "$C64_VARIANTS_DIR"
+    if [ "$TEST_JOBS_RESOLVED" -eq 1 ] || [ "${#needed_variants[@]}" -eq 1 ]; then
+        for vkey in "${needed_variants[@]}"; do
+            c64_prebuild_variant "$vkey"
+        done
+    else
+        if ! printf '%s\n' "${needed_variants[@]}" | xargs -P "$TEST_JOBS_RESOLVED" -n 1 bash "$RUN_TESTS64_DIR/run_tests.sh" --prebuild-variant; then
+            echo "FAIL (prebuild variant worker aborted)"
+            exit 1
+        fi
+    fi
+fi
+
+# Run unit tests
+if [ "${#C64_UNIT_SPECS[@]}" -gt 0 ]; then
+    if [ "$TEST_JOBS_RESOLVED" -eq 1 ]; then
+        for ((idx = 0; idx < ${#C64_UNIT_SPECS[@]}; idx++)); do
+            JOB_ARGS=()
+            # shellcheck disable=SC1090
+            source "$C64_UNIT_COLLECT_DIR/job_${idx}.spec"
+            run_test "${JOB_ARGS[@]}"
+        done
+    else
+        echo "  running ${#C64_UNIT_SPECS[@]} unit suites (jobs=$TEST_JOBS_RESOLVED)..."
+        seq 0 $((${#C64_UNIT_SPECS[@]} - 1)) | xargs -P "$TEST_JOBS_RESOLVED" -n 1 bash "$RUN_TESTS64_DIR/run_tests.sh" --worker "$C64_UNIT_COLLECT_DIR"
+        for ((idx = 0; idx < ${#C64_UNIT_SPECS[@]}; idx++)); do
+            if [ -f "$C64_UNIT_COLLECT_DIR/job_${idx}.out" ]; then
+                cat "$C64_UNIT_COLLECT_DIR/job_${idx}.out"
+            fi
+            if [ -s "$C64_UNIT_COLLECT_DIR/job_${idx}.counts" ]; then
+                read -r w_pass w_fail w_total < "$C64_UNIT_COLLECT_DIR/job_${idx}.counts"
+                PASS=$((PASS + w_pass))
+                FAIL=$((FAIL + w_fail))
+                TOTAL=$((TOTAL + w_total))
+            else
+                echo "  ${C64_UNIT_SPECS[$idx]}: FAIL (worker produced no result)"
+                FAIL=$((FAIL + 1))
+                TOTAL=$((TOTAL + 1))
+            fi
+        done
+    fi
+fi
+
+# Run smoke tests
+if [ "${#C64_SMOKE_SPECS[@]}" -gt 0 ]; then
+    C64_SMOKE_COLLECT_DIR="$TMPDIR/smoke_jobs"
+    mkdir -p "$C64_SMOKE_COLLECT_DIR"
+    if [ "$TEST_JOBS_RESOLVED" -eq 1 ]; then
+        for spec in "${C64_SMOKE_SPECS[@]}"; do
+            fn="${spec#*|}"
+            "$fn"
+        done
+    else
+        for ((idx = 0; idx < ${#C64_SMOKE_SPECS[@]}; idx++)); do
+            spec="${C64_SMOKE_SPECS[$idx]}"
+            sname="${spec%%|*}"
+            fn="${spec#*|}"
+            {
+                printf 'JOB_KIND=smoke\n'
+                printf 'JOB_NAME=%q\n' "$sname"
+                printf 'JOB_FN=%q\n' "$fn"
+            } > "$C64_SMOKE_COLLECT_DIR/job_${idx}.spec"
+        done
+        echo "  running ${#C64_SMOKE_SPECS[@]} smoke suites (jobs=$TEST_JOBS_RESOLVED)..."
+        seq 0 $((${#C64_SMOKE_SPECS[@]} - 1)) | xargs -P "$TEST_JOBS_RESOLVED" -n 1 bash "$RUN_TESTS64_DIR/run_tests.sh" --worker "$C64_SMOKE_COLLECT_DIR"
+        for ((idx = 0; idx < ${#C64_SMOKE_SPECS[@]}; idx++)); do
+            spec="${C64_SMOKE_SPECS[$idx]}"
+            sname="${spec%%|*}"
+            if [ -f "$C64_SMOKE_COLLECT_DIR/job_${idx}.out" ]; then
+                cat "$C64_SMOKE_COLLECT_DIR/job_${idx}.out"
+            fi
+            if [ -s "$C64_SMOKE_COLLECT_DIR/job_${idx}.counts" ]; then
+                read -r w_pass w_fail w_total < "$C64_SMOKE_COLLECT_DIR/job_${idx}.counts"
+                PASS=$((PASS + w_pass))
+                FAIL=$((FAIL + w_fail))
+                TOTAL=$((TOTAL + w_total))
+            else
+                echo "  $sname: FAIL (worker produced no result)"
+                FAIL=$((FAIL + 1))
+                TOTAL=$((TOTAL + 1))
+            fi
+        done
+    fi
+fi
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
-if [ $FAIL -gt 0 ]; then
+if [ "$FAIL" -gt 0 ]; then
     exit 1
 fi

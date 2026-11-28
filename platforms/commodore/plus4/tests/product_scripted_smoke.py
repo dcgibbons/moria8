@@ -15,7 +15,7 @@ C128_TESTS_DIR = REPO_ROOT / "platforms" / "commodore" / "c128" / "tests"
 if str(C128_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(C128_TESTS_DIR))
 
-from vice_connector import MonitorTestResult, VICEConnector, normalize_addr, parse_vs_symbols
+from vice_connector import MonitorTestResult, VICEConnector, allocate_free_port, normalize_addr, parse_vs_symbols
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
 from vice_config import vice_config  # noqa: E402  (VICE -config file with a version tag)
 
@@ -41,7 +41,9 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-sounddev",
         "dummy",
         "-remotemonitor",
-        "-binarymonitor",
+        "-remotemonitoraddress",
+        f"ip4://{args.host}:{args.port}",
+        "+binarymonitor",
     ]
     if args.vice_extra_arg:
         command.extend(args.vice_extra_arg)
@@ -320,27 +322,32 @@ def configure_breakpoints(connector: VICEConnector, args: argparse.Namespace) ->
 
 
 def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
+    run_port = args.port or allocate_free_port(args.host)
+    ns_kwargs = vars(args).copy()
+    ns_kwargs["port"] = run_port
+    run_args = argparse.Namespace(**ns_kwargs)
     process: subprocess.Popen[bytes] | None = None
-    connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
-    configure_breakpoints(connector, args)
+    connector = VICEConnector(host=run_args.host, port=run_port, timeout=run_args.socket_timeout)
+    configure_breakpoints(connector, run_args)
     dumps: list[str] = []
     native_tmp_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
-        if args.native_start:
+        if run_args.native_start:
             native_tmp_dir = tempfile.TemporaryDirectory(prefix="moria-product-smoke-")
-            args.native_start_moncommands = Path(native_tmp_dir.name) / "native-start.mon"
-            args.native_start_log = Path(native_tmp_dir.name) / "native-start.log"
-            args.native_start_moncommands.write_text(f"until ${args.start_addr}\n")
+            run_args.native_start_moncommands = Path(native_tmp_dir.name) / "native-start.mon"
+            run_args.native_start_log = Path(native_tmp_dir.name) / "native-start.log"
+            run_args.native_start_moncommands.write_text(f"until ${run_args.start_addr}\n")
         else:
-            args.native_start_moncommands = None
-            args.native_start_log = None
-        if args.exit_screenshot:
-            args.exit_screenshot.unlink(missing_ok=True)   # never name a stale screen
+            run_args.native_start_moncommands = None
+            run_args.native_start_log = None
+        if run_args.exit_screenshot:
+            run_args.exit_screenshot.unlink(missing_ok=True)   # never name a stale screen
         process = subprocess.Popen(
-            build_vice_command(args),
+            build_vice_command(run_args),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        args = run_args
         try:
             if args.startup_delay > 0:
                 time.sleep(args.startup_delay)
@@ -647,7 +654,7 @@ def main() -> int:
     parser.add_argument("--require-hit-symbol")
     parser.add_argument("--until-pass", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=6510)
+    parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--retry-timeouts", type=int, default=2)
     parser.add_argument("--connect-timeout", type=float, default=12.0)

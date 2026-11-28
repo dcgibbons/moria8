@@ -31,6 +31,9 @@
 .label hal_storage_readst = c64_disk_readst
 .label hal_storage_load = c64_disk_load
 .label hal_storage_read_command_status = c64_storage_read_command_status
+.label hal_storage_open_cmd_channel = c64_open_empty_cmd_channel
+.label hal_storage_read_open_cmd_status = c64_read_open_cmd_status
+.label hal_storage_close_cmd_channel = c64_close_cmd_channel
 .label hal_storage_status_lost = cdrs_lost   // nonzero: the last status read lost its byte
 .label hal_storage_command_status = disk_save_media_status
 .label c64_storage_dos_code_status = disk_dos_code_status

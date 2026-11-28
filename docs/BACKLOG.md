@@ -56,21 +56,17 @@ Required work:
 ### Synchronise the C64 disk-swap smoke's image swaps
 
 `load_then_save_new_empty_product_smoke` (`platforms/commodore/c64/run_tests.sh`)
-swaps drive 8's image five times from the harness
-(`platforms/commodore/plus4/tests/product_scripted_smoke.py` `attach_drive8`)
-on a timing basis, not at a known program stop: anything that changes how long
-an attach takes moves a swap relative to the C64. With the images under
-`build/test/c64` under their long names the smoke timed out every time; under
-short names (`lts_*.d64`) or the old `/tmp` names it passes (2026-11-01). The
-root-cause pass for the C64 program-media hang also saw a swap breakpoint used
-at the wrong point.
+now synchronizes all three drive-8 swaps on monitor breakpoints in
+`platforms/commodore/plus4/tests/product_scripted_smoke.py` (`--start-symbol`,
+`--swap-symbol`, `--swap2-symbol`). However, `run_tests.sh` still copies images
+to short workaround names (`lts_load.d64`, `lts_new.d64`, `lts_prog.d64`) in
+`build/test/c64`, `--swap-symbol` still fires before `save_game` rather than at
+the insert-save-disk prompt itself, and `attach_drive8` still sleeps 0.5 s.
 
 Required work:
 
-- Make each swap wait for the program stop it belongs to (a checkpoint the
-  scripted test reaches) before attaching, as the other disk smokes do.
-- Then the image names and paths no longer matter; keep a regression that
-  runs the smoke with long paths.
+- Move `--swap-symbol` to the insert-save-disk prompt checkpoint if needed and
+  drop the short `lts_*.d64` name workaround in favor of a long-path regression.
 
 ### Add the VMS `x` weapon swap (secondary weapon slot)
 
@@ -97,28 +93,6 @@ Acceptance target:
 - A playtest Rogue or Ranger with a launcher keeps its alternate weapon in
   `EQUIP_SECONDARY`, swaps via `SHIFT+X` without spending pack slots, and keeps
   frozen suites green.
-
-### Align per-class starting armour and cloak kits with VMS
-
-Phase 4 shipped `EQUIP_CLOAK` (`32`), `ICAT_CLOAK` (`19`), `Cloak` (`#82`) slot
-routing, and 34-slot Save V2 across all seven ports, but `init_starting_kit`
-(`core/starting_kit_cold.s:55-63`) still equips every class with `Soft Leather
-Armor` (`#7`) in `EQUIP_BODY` and no `Cloak` in `EQUIP_CLOAK` (`docs/FEATURE_MAP.md`
-§2.7), and `playtest/moria_playtest/brain.py` (`STARTING_ARMOUR = {"ICAT_ARMOR": 4}`)
-still assumes starting Leather Armor on all classes.
-
-Maintainer direction (2026-10-25): match VMS Moria 4.8 `player_init` — equip
-`Cloak [1]` (`#82`) in `EQUIP_CLOAK` for every class except Rogue, and equip
-`Soft Leather Armor [4]` (`#7`) in `EQUIP_BODY` only for Warrior and Rogue (so
-Mage, Priest, Ranger, and Paladin buy body armour at the Armoury).
-
-Required work:
-
-- Update `init_starting_kit` (`core/starting_kit_cold.s`) per class as above.
-- Update `STARTING_ARMOUR` in `playtest/moria_playtest/brain.py` and re-check
-  early Armoury shopping and frozen playtest suites.
-- Update `docs/FEATURE_MAP.md` §2.7 (`Starting Weapons & Armor`) and starting-kit
-  tests.
 
 ### Sweep platform-specific inlines in core/ behind HAL macros
 
@@ -235,28 +209,6 @@ Acceptance target:
 - Numeric prefixes work for supported repeatable commands without changing
   single-key command behavior or prompt input semantics.
 
-### Monster data design decisions from the creature audit
-
-Remaining differences from VMS 4.8 and Umoria 5.7.15 that need a design
-decision before any fix (maintainer: backlog them):
-
-- Speed: capped at two moves a turn (`map_speed`, `core/monster_ai.s`); the
-  Balrog, Invisible Stalker, Poltergeist and Huge Brown Bat lose a third of
-  their actions, the Iron Golem (upstream 1/3) moves 1/2. Speed code 3 is
-  unused. (The maintainer accepted extending the cadence to speed code 3 on
-  2026-11-08; it was left out of the limited breath work and is still open,
-  changing MON-008.)
-- Summons: monster summons (`core/monster_magic.s` `find_adjacent_empty_mon`)
-  appear beside the caster rather than beside the player (VMS `creature.inc`
-  ~991).
-- Fleeing: every monster flees below 25% HP (`core/monster_ai.s`
-  `monster_check_flee`), a rule neither upstream has.
-- Town creatures: `core/monster.s` (`cr_speed` town rows) sets every resident
-  town creature's speed byte to `1`, dropping their random-move bits.
-
-Each: decide faithful vs deliberate 8-bit choice, then implement with tests
-and the byte budget, or record it in `docs/FEATURE_MAP.md` as intentional.
-
 ### Armour reduction above AC 200
 
 `mon_atk_ac_reduce` (`core/monster_attack.s` ~281-304) computes damage −
@@ -354,71 +306,6 @@ about 900 B a port. Each is also a row in `docs/FEATURE_MAP.md`.
 Acceptance target: each item decided as faithful (then implemented with tests
 and a measured byte cost) or recorded as an intentional 8-bit difference.
 
-### Align Regeneration equipment with VMS `x1.5` rate and hunger cost
-
-Phase 4 added `"of Regeneration"` (`EGO_REGENERATION = 32`), `Ring of
-Regeneration`, and `PFLAG2_REGEN` (`core/player_pflags_cold.s`). Three gaps
-remain against pinned VMS Moria (`misc.inc`, `moria.inc`):
-
-- `turn_tick_regen` (`core/turn.s`) currently doubles HP regeneration (`x2` via
-  `asl`/`rol`) instead of VMS's `x1.5` (`regen_amount * 1.5`).
-- `turn_tick_hunger` (`core/turn.s`) applies no faster food digestion while
-  `PFLAG2_REGEN` is worn (VMS adds `+3` to `food_digested`).
-- The status timer `zp_eff_regen` (ZP `$5B`) is still counted down and read by
-  mana/HP regeneration, with no item, potion, scroll, or spell ever setting it.
-
-Required work:
-
-- HP regeneration: rate `x1.5` while `PFLAG2_REGEN` is set (product + product/2
-  on `mul_result`), and decide whether mana follows VMS too.
-- Food: faster digestion per turn while `PFLAG2_REGEN` is worn.
-- Retire `zp_eff_regen` or give it a producer, so no dead state remains.
-
-Acceptance target:
-
-- A worn Regeneration item heals at `1.5x` the TRN-009 rate and digests food
-  faster, with C64 tests computed from the VMS formula; no unread or unset
-  regeneration state remains.
-
-### Rubble blocks movement, and tunnelling needs no tool
-
-Found 2026-11-05 (C64 play): the player walks over rubble. Since the first
-movement code, `core/player_move.s` `walkable_table` marks rubble (tile 11)
-walkable. VMS Moria blocks it: `place_rubble` sets `fopen := false`
-(`misc.inc:1502`), and a move into it prints "There is rubble blocking your
-way." (`moria.inc:2588`); Umoria's rubble is `TILE_BLOCKED_FLOOR`, which
-`MAX_OPEN_SPACE` excludes. In both, rubble does not block sight
-(`MAX_CAVE_FLOOR` includes it); `docs/FEATURE_MAP.md`'s rubble row wrongly
-says it blocks LOS.
-
-It cannot be flipped alone. VMS tunnels with any weapon or bare hands: the
-digging ability is the player's strength plus a digging tool's bonus
-(`tabil := py.stat.cstr`, plus `25 + p1 * 50` for a digger; rubble falls when
-`tabil > randint(180)`, `moria.inc:2868-2935`). Moria8's `core/tunnel.s`
-refuses without a digging tool ("You have no tool to dig with."). VMS places
-rubble in corridors, so blocking rubble with Moria8's tunnelling could shut a
-character without a shovel off from the stairs.
-
-Required work:
-
-- Rubble blocks the player, with VMS's message, and blocks monsters (VMS:
-  only wall-passing kinds cross it); keep it see-through for the player's
-  and the monsters' line of sight (`los_trace.s` `mlos_tile_open` reads the
-  walkable table today).
-- Tunnelling with no digging tool uses the VMS strength-based ability, for
-  rubble and walls alike, scaled as `core/tunnel.s` scales the resistances.
-- Generation's connectivity check and stair reachability treat rubble as
-  passable only by tunnelling, or place it where VMS does.
-- The playtest bot tunnels through rubble that blocks its path.
-- Correct the FEATURE_MAP rubble and tunnelling rows.
-
-Acceptance target:
-
-- Walking into rubble prints the VMS message and does not move; tunnelling
-  rubble bare-handed clears it within a few turns at ordinary strength; no
-  generated level strands a character without a digging tool; the bot's
-  frozen suites hold.
-
 ### Align shared monster distance with upstream
 
 Moria8's shared `monster_distance_to_player` currently returns Chebyshev
@@ -496,92 +383,6 @@ Acceptance target:
   footer in product or unit-test builds, and `!HOME_OVERLAY_SEPARATE` is
   retired.
 
-### Friendlier Commodore I/O error messages
-
-Saves are done (2026-10-30): on C64, C128 and Plus/4 a save the drive refuses
-says "Disk is write-protected." (`26`), "Disk is full." (`72`) or "Drive is
-not ready." (`74`), from the drive's own status (`platforms/shared/save.s`);
-anything else stays "Disk error!" (the Plus/4 adds its detail code). Loads still map only
-not-found and unsupported saves (`load_stream_status_message`): a drive that
-is not ready while loading shows the generic "Disk error!".
-
-The C64 bootloader has an even earlier version of this problem: it hardcodes
-the program disk to device 8, so booting with the disk attached as drive 9 can
-fall back to BASIC with no useful explanation before the main game's disk setup
-or storage diagnostics exist.
-
-Required work:
-
-- Add a compact C64 bootloader error path for main-program load failure that
-  tells the player to attach the boot disk as drive 8, or otherwise reports a
-  clear load failure before returning to BASIC.
-- Keep raw diagnostic bytes available: DOS status, KERNAL `$ST`, phase, and
-  device number.
-- Map the load path's failures through the same messages as saves.
-- Preserve the raw fallback for unmapped failures so debugging does not regress.
-- Avoid bloating resident code or destabilizing C64/C128 storage behavior.
-- Cover C64, C128, and Plus/4 with storage-error tests or smoke cases.
-
-Acceptance target:
-
-- Common failures such as no disk/drive not ready, write protect, disk full,
-  missing file, and wrong save disk show clear end-user messages while retaining
-  enough diagnostic detail for debugging.
-
-### CHKIN on a file the drive refused can hang the Commodore ports
-
-Seven places OPENed a file that may not exist, then CHKIN it without asking
-the drive whether the OPEN worked. Six are fixed
-(`HAL_STORAGE_SAVE_PROBE_ASKS_DRIVE`, `HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE`):
-the save-slot probe (`common/save_slot_menu.s`) opens channel 15 first and
-reads the status before any CHKIN (asking again when the read times out before
-a digit comes: `status_retry_slot`); `save_file_exists`, now
-`storage_file_exists` for any name (`platforms/shared/save.s`), asks the drive
-instead of reading the file; the C64 program-media probe
-(`common/disk_setup_banked.s` `disk_program_media_present`) asks via
-`storage_file_exists`; and the save-disk marker reads ask it first on all three
-ports (2026-10-31: C64 `c64_disk_marker_present` and Plus/4
-`plus4_storage_marker_present` through `storage_file_exists`, C128
-`disk_marker_present` with channel 15 open, as the slot probe).
-`slot2_save_product_smoke` and `single_drive_fresh_save_no_init_product_smoke`,
-which hung as code moved, pass with 0-12 and 0-8 bytes of padding ahead of
-them. One remains: `load_game` (`platforms/shared/save.s`), plus non-C64
-`!HAL_STORAGE_PROGRAM_MEDIA_ASKS_DRIVE` callers if enabled.
-If the drive has already failed the OPEN (`62 FILE NOT FOUND`) when CHKIN's
-TALK arrives, it stays idle and the KERNAL's talker turnaround waits for it
-forever (no timeout).
-
-Found 2026-10-29 in VICE true-drive emulation: `slot2_save_product_smoke` hung
-probing the empty slot 3 on drive 9 (C64 in the turnaround loop at
-`$EDD6`-`$EEB7`, drive 9 idle at `$EC17`). Whether the TALK wins the race
-depends on timing, so the hang comes and goes with code layout: a C64 change
-that moved code failed the smoke in some layouts and passed it in others.
-Shipping builds and the current tests pass. Not yet seen on real hardware.
-
-The obvious fix does not work: reading the drive status opens and closes the
-command channel, and closing channel 15 closes every file on the drive,
-including the one about to be read (the C64 KERNAL sends that close even for a
-nameless channel-15 OPEN).
-
-Required work:
-
-- Keep the command channel open around `load_game`'s OPEN: open 15, OPEN the
-  file, read the status on the open channel, CHKIN only on `00`-`19`, then
-  close the file and 15. Split each port's status reader into open/read/close
-  steps.
-- Fit the C128 `C128ResidentDiskIo` and `StorageOverlay` budgets.
-- Then move `c64_storage_read_command_status` onto the shared
-  `storage_status_from_dos_digits`, as C128 and Plus/4 already are; it was
-  reverted because the timing shift exposed this hang. Until then C64 keeps an
-  inline copy of the same DOS policy.
-
-Acceptance target:
-
-- No CHKIN reaches a file the drive did not open, on C64, C128, and Plus/4.
-- `slot2_save_product_smoke` passes when code ahead of the probe is padded by
-  several different byte counts.
-- One DOS-status classifier on all three ports.
-
 ### Optional: drop the SHIFT+Q quit confirmation to recover memory
 
 `SHIFT+Q` asks "Do you really want to quit? Y/N" (added 2026-10-30 so the
@@ -622,13 +423,6 @@ disk by name and tries again (`asset_load_required`, resident
   end at `$BFF9`/`$BFFA`, six or seven bytes under `MAP_BASE`, and the
   Plus/4's (wand-selector, chest-open) at `$C7F7`/`$C7F3` (2026-10-31).
 
-### C128: the program-media prompt can retry silently forever
-
-`c128_modal_require_persist` loops on `c128_program_media_error_prompt`,
-which reaches `disk_prompt` through `disk_prompt_game`; with `disk_mode`
-other than 1 that prints nothing and returns, so a persist payload that
-keeps failing to load spins with no message.
-
 ### Plus/4: why did the 1541 miss a LOAD handshake?
 
 M6's Plus/4 round restarted two games: a KERNAL LOAD of `4.GEN` returned
@@ -653,38 +447,6 @@ the Plus/4 KERNAL call wrapper now clear carry: with it set, CLOSE leaves a
 command channel open in the drive. Still open: whether JiffyDOS on real
 hardware loses these bytes too. `C128ResidentDiskIo` has 60 bytes free after
 `combat_append_blow_summary` moved to Default (2026-10-30).
-
-### Promote `F8` to an in-game Version/System Info command
-
-The C64 product currently has a hidden diagnostic command for proving C64
-Ultimate turbo behavior. The polished player-facing command should use `F8` and
-map to the dormant `CMD_VERSION` command slot. This should eventually become a
-real cross-platform Version/System Info command instead of a one-off C64U probe.
-
-The command is likely text-heavy enough to justify a platform-owned overlay or
-paged modal rather than forcing all details into resident message-line code.
-
-Required work:
-
-- Define the shared `F8` command behavior across C64, C128, and Plus/4.
-- Show game version/build identity, platform, save-format version, and relevant
-  runtime hardware details.
-- On C64, include machine identity, KERNAL revision, REU size, C64 Ultimate
-  detection, turbo-register availability, and optionally the measured turbo
-  probe result.
-- On C128 and Plus/4, show platform-appropriate equivalents without implying
-  unsupported C64U/REU capabilities.
-- Decide whether the implementation lives in an existing UI overlay or a new
-  dedicated diagnostics/version overlay.
-- Preserve the current hidden C64U timing probe until it is replaced by the
-  polished command.
-- Add focused tests for command routing and platform-specific displayed fields.
-
-Acceptance target:
-
-- Pressing `F8` in gameplay opens a clear Version/System Info view on every
-  supported Commodore platform, with enough diagnostic detail for user support
-  and hardware-feature verification.
 
 ### Byte recovery held back for speed or disk loads (2026-11-07)
 
@@ -821,60 +583,28 @@ Acceptance target:
 
 ### Document build dependencies and test a fresh-machine build
 
-No file lists what a build and a full `make test` need on the host. A
-reinstalled Arch machine (2026-10-26) found them one at a time, each as a
-gate failure: Java for Kick Assembler (`tools/kickass_java.sh`), MAME for
-the Apple IIe, Atari 8-bit and BBC Master runtime suites, and Pillow for the
-title-art PNG decode in the C64 and C128 product builds (`error: need Pillow
-(pip install pillow) or macOS sips to decode PNG`). Already present, so not
-yet exercised: VICE (`x64sc`, `x128`, `xplus4`, `c1541`, `petcat`), Python 3
-and make. The ROM and emulator variables (`A2ROMS`, `X16EMU`, `X16ROM`,
-`ATARI8ROMS`, `BBCMROMS`) are documented only in `AGENTS.md`.
+`README.md` now lists the required build tools, auto-downloaded toolchains, and
+ROM/emulator environment variables (`A2ROMS`, `X16EMU`, `X16ROM`, `ATARI8ROMS`,
+`BBCMROMS`). However, it still lacks per-host package names/minimum versions,
+fresh-machine `make test` verification, and lists `Pillow` under "Optional tools"
+even though `tools/png_to_ppm.py` requires Pillow on Linux for C64/C128 boot art.
+No `docs/BUILDING.md` or `make check-deps` target exists yet.
 
 Required work:
 
-- Build and run `make -j7 -O test` on an empty install of each supported host
-  (at least Arch, Debian/Ubuntu and macOS), recording every package each one
-  needs, including what `make` downloads itself (Kick Assembler, AppleCommander,
-  ProDOS) and the `x16emu` and `x16-rom` builds.
-- Write the list into the README, or a new `docs/BUILDING.md` it links to,
-  with per-host package names, minimum versions where one matters, and the
-  ROM and emulator variables with what each one enables.
+- Build and run `make -j8 -O test` on an empty install of each supported host
+  (at least Arch, Debian/Ubuntu and macOS), recording every package and minimum
+  version each one needs (including moving Pillow out of optional on Linux).
+- Put per-host package names and minimum versions into `README.md` or a linked
+  `docs/BUILDING.md`.
 - Consider a `make check-deps` target that names each missing tool and its
   package up front, instead of failing midway through a gate.
 
 Acceptance target:
 
 - A fresh machine with only the documented packages installed and the ROM
-  variables set builds every port and passes `make -j7 -O test` with no
+  variables set builds every port and passes `make -j8 -O test` with no
   undocumented step.
-
-### Run the C64 suite in parallel
-
-`make -j5 -O test` runs the five platform stages in parallel (each in a private
-network namespace via `tools/isolated.sh`), cutting a full run from about 20
-to about 8.5 minutes. The C64 stage (`platforms/commodore/c64/run_tests.sh`,
-196 suites) still runs one suite at a time and is likely the long pole. C128
-already runs its units in parallel (`TEST_JOBS`, default 8, in
-`run_tests128.sh`).
-
-Required work:
-
-- Measure per-stage wall time to confirm C64 is the long pole.
-- Add a `TEST_JOBS`-style worker pool to `run_tests.sh`, keeping per-suite
-  results and the existing pass/fail summary format.
-- Build every product variant that tests currently make on demand (24
-  `make -s -C ..` calls inside tests) before starting workers, so parallel
-  suites never rebuild shared `build/c64` outputs.
-- Audit remaining shared scratch paths in `build/test/c64` and `/tmp` (fixed
-  `/tmp` names already include `$$`) and give each suite unique names.
-- Keep `TEST_FILTER` and serial runs (`TEST_JOBS=1`) working, and watch the
-  save-flow smokes that have flaked under load.
-
-Acceptance target:
-
-- `make -j5 -O test` wall time drops further with no new flakes across
-  repeated runs, and serial C64 runs still pass.
 
 ### Playtester: learn creature speed and stationarity by observation
 
@@ -1027,23 +757,6 @@ filesystem) and fault injection at their `hal_asset_load_prg_header`, with
 each port's save-disk flow. Also missing on every port: the hall of fame
 written on death or retirement.
 
-### Guard C64 CRT against interactive VICE writeback
-
-`bbcm:item_actions` was split into `item_actions` and `equip_flags`
-(`platforms/bbcmaster/harness_smoke.py`), and `tools/make_easyflash.py` /
-`tools/check_easyflash.py` now emit and verify sparse EasyFlash CHIP blocks
-(`4180dcd`). However, running `build/moria8-c64.crt` directly in VICE without
-`+easyflashcrtwrite` (`playtest/moria_playtest/launch.py:236` or interactive
-`x64sc -cartcrt`) still allows VICE to rewrite `build/moria8-c64.crt` in-place
-on exit and advance its mtime past `build/c64-cart/.main.stamp`.
-
-Required work:
-
-- Guard `build/moria8-c64.crt` against interactive/playtest VICE writeback
-  (e.g. pass `+easyflashcrtwrite` in `playtest/moria_playtest/launch.py`, run
-  interactive cartridge targets against a scratch copy, or rebuild when the
-  `.crt` does not match `build/c64-cart`).
-
 ## Rendering Performance (Px)
 
 Tracked candidates from the 2026-07-25 cross-platform render performance
@@ -1083,69 +796,3 @@ audit call sites of `rng_range` where the upstream oracle uses
 ones where fidelity matters. Started from the door-bash design discussion
 (2026-09-02).
 
-## Cross-Platform UI & QoL
-
-### Port the 5 CP/M-originated UI/QoL features cleanly across all 8 ports
-
-During M2–M5 development of the CP/M 2.2 Z80 port, five UI/QoL additions were
-built in Z80 overlays ahead of the 7 6502 ports. They were reverted from CP/M
-Z80 (2026-11-24) to restore strict 100% UI/behavior parity with the 6502 ports,
-with full design notes and exact Z80 reference implementations preserved in
-`docs/CROSS_PLATFORM_UI_QOL_DESIGN.md`:
-
-1. **Race Selection Bonus Reference Table** (`ST..CH`, `HD`, `XP%`, `Infra` on
-   `Choose your race`, with 40-col preview layout vs 80-col table).
-2. **Age / Height / Weight Generation & Expanded Character Sheet** (`Curr`/`Base`
-   stats, `Title`, `Blows`/`ToHit`/`ToDam`, `Burden`, active `Flags`, `Age`/
-   `Height`/`Weight` — requires explicit parity decision on whether `PL_WEIGHT`
-   feeds `player_weight_limit` or stays purely aesthetic across all 8 ports).
-3. **Inventory, Equipment, & Home Weight/Burden Displays** (`Burden: X/Y lb`,
-   per-item `N.N lb` column on 80-col screens, Home `Wt: X/Y lb`).
-4. **`Ctrl+P` Message History Viewer** (overlay-hosted viewer reading the
-   existing 8-line `msg_history` ring buffer across resident & aux/banked RAM).
-5. **Help Map Terrain & Item/Creature Symbol Legend Page** (add as Help Page
-   3/3 without displacing existing 40-col/80-col command bindings).
-
-Required work:
-
-- Make the `PL_WEIGHT` weight-limit and 40-col layout design decisions in
-  `docs/CROSS_PLATFORM_UI_QOL_DESIGN.md`, verifying overlay/resident headroom
-  across all 8 ports (especially C64/C128 `UiOverlay`, `StartupOverlay`, and
-  `HelpOverlay`) and updating `docs/FEATURE_MAP.md`.
-- Implement each feature simultaneously in shared `core/6502/` and `core/z80/`
-  + `platforms/z80/cpm/` (preserving exact parity across all 8 ports and 5
-  cartridges) and cover each with per-port smoke/playtest checks.
-
-Acceptance target:
-
-- All 8 hardware ports and 5 cartridges expose identical UX (modulo documented
-  40-col vs 80-col wrapping/pagination), pass `make test`, and pass
-  `make playtest-gate`.
-
-## Shared 6502 Core
-
-### Bug: 6502 Mass Genocide ignores 20-tile MAX_SIGHT range cap
-
-`core/6502/scroll_effects_p3.s:511-513` sets `lda #20 : sta zp_los_step` before
-`jsr mm_los_clear_to_target` intending VMS Moria's `MAX_SIGHT = 20` cap, but
-`core/6502/los_trace.s:60-67` immediately overwrites `zp_los_step` with
-`max(|dx|, |dy|)` before stepping. As a result, Mass Genocide kills any
-non-Balrog monster in unobstructed LOS at any distance across all seven 6502
-ports (whereas CP/M Z80 `platforms/z80/cpm/ovl_spell_eff.asm:1300-1308`
-enforces `<= 20` Chebyshev distance before `los_check`).
-
-Required work:
-
-- Enforce a `<= 20` Chebyshev distance check (`max(|mx - px|, |my - py|) <= 20`)
-  in `core/6502/scroll_effects_p3.s` before calling `mm_los_clear_to_target`
-  (and remove the dead `lda #20 : sta zp_los_step` store), verifying overlay
-  headroom across all seven 6502 ports (C64, C128, Plus/4, Apple IIe, CX16,
-  Atari 8-bit, BBC Master 128) and five cartridges.
-- Add a 6502 unit/runtime test verifying Mass Genocide removes a non-Balrog
-  monster in LOS at distance 20 and spares one in LOS at distance 21 (matching
-  `platforms/z80/cpm/harness_smoke.py`).
-
-Acceptance target:
-
-- Mass Genocide enforces the `<= 20` tile LOS cap identically across all 8
-  ports and 5 cartridges, and `make test` + `make playtest-gate` pass.

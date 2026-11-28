@@ -1,6 +1,6 @@
 # Moria8 Monster Reference
 
-All eight Moria8 ports (Commodore 64, Commodore 128, Plus/4, Apple IIe, Commander X16, Atari 8-bit, BBC Master 128, and CP/M 2.2 Z80 *(in progress)*) and all five shipping cartridges (`moria8-c64.crt`, `moria8-c128.crt`, `moria8-plus4.crt`, `moria8-cx16.crt`, `moria8-atari8.car`) ship the full **279-species** VMS Moria 4.8 monster catalog (`platforms/shared/catalog/monster_catalog_spec.json`).
+All eight Moria8 ports (Commodore 64, Commodore 128, Plus/4, Apple IIe, Commander X16, Atari 8-bit, BBC Master 128, and CP/M 2.2 Z80) and all five shipping cartridges (`moria8-c64.crt`, `moria8-c128.crt`, `moria8-plus4.crt`, `moria8-cx16.crt`, `moria8-atari8.car`) ship the full **279-species** VMS Moria 4.8 monster catalog (`platforms/shared/catalog/monster_catalog_spec.json`).
 
 Species are ordered natively by dungeon level (`DL 0–100`) and backed per platform via disk, `MORIA8.DAT` (`BDOS 33` on CP/M), banked/auxiliary RAM, REU, or cartridge ROM (`29` SoA/record bytes per species plus variable-length Huffman/screen-code or pure ASCII names). Town species (`#0–#7`, `DL 0`) stay resident at town slots, while dungeon monsters (`#8–#278`) are paged into active level tables as needed and inspected in full via Monster Recall (`/`).
 
@@ -9,7 +9,7 @@ Species are ordered natively by dungeon level (`DL 0–100`) and backed per plat
 Moria8 tracks 29 packed fields per species (`21` core fields + `8` Phase 5 extended fields):
 
 - **Catalog ID (`#0–#278`) & `DL`**: Stable index in `monster_catalog_spec.json` and native dungeon depth.
-- **Speed**: `Slow` (acts on even turns), `Normal` (1 action/turn), or `Fast` (extra actions/turn), plus upstream `CM_20/40/75_RANDOM` erratic movement flags.
+- **Speed**: `Slow` (acts on even turns), `Normal` (1 action/turn), `Fast` (extra actions/turn), or `Very Fast` (`3` actions/turn, e.g. Balrog, Death Quasit), plus upstream `CM_20/40/75_RANDOM` erratic movement flags.
 - **HD**: Hit dice (`NdS`). Species with `CD_MAX_HP` (`41` in all, including Quylthulgs, mature/ancient dragons, greater undead, Evil Iggy, and the Balrog) always spawn with maximum `N * S` hit points (up to the Balrog's `125d24` = `3,000` HP).
 - **AC / Sleep / AAF / XP**: Armor class, initial sleep timer (`0` = always awake), Area Awareness Factor (`1–127` tiles + `CD_OPEN_DOOR`), and 16-bit XP award.
 - **Attacks (`atk0..atk3`)**: Up to **4** melee attack slots with 19 VMS verbs (`ADESC_*`) and all 24 effect types (`ATK_*`: normal damage, stat drains, elemental touches, acid/corrosion, fear, blindness, confusion, paralysis, gold/item theft, EXP drain, aggravate, disenchant, and eating food/light/charges).
@@ -346,7 +346,7 @@ The two winning endgame threats: Evil Iggy (DL 50) and the Balrog (DL 100). (2 s
 - **Fast movers**: Fast monsters act extra times per turn and erase walking retreat margins; keep Phase Door or Teleport ready.
 - **Spellcasters & summoners**: Break line of sight (`MAX_CAST_RANGE = 8`) around corridor corners. Deep liches and sorcerers pair `Cause Serious Wounds` (`8d8`), `Hold Person`, `Slow Person`, `Drain Mana`, and `Summon Undead`.
 - **Dragon & Balrog breath**: Breath deals **16-bit uncapped** `current_HP / 4` (lightning) or `current_HP / 3` (all other elements), ignoring AC. Lowering a dragon's HP immediately shrinks its breath.
-- **The Balrog (`#278`)**: The endgame target at `DL 100` (`3,000` HP, `125` AC, Fast, fire breath up to `1,000` damage, `4d12` + `2d6` + `CHG`). Prepare fire resistance, healing, and Free Action before engaging.
+- **The Balrog (`#278`)**: The endgame target at `DL 100` (`3,000` HP, `125` AC, Very Fast `3x/turn`, fire breath up to `1,000` damage, `10d12` fire + `8d12` + `CHG`). Prepare fire resistance, healing, and Free Action before engaging.
 
 ## Deep Threat Stats
 
@@ -365,4 +365,4 @@ Exact catalog values from `platforms/shared/catalog/monster_catalog_spec.json` f
 | 40 | Emperor Lich | Fast | 190d8 | 1,520 | 75 | 10,000 | 50% (`1/2`) |
 | 40 | Ancient Multi-Hued Dragon | Fast | 130d16 | 2,080 | 100 | 12,000 | 20% (`1/5`) |
 | 50 | Evil Iggy | Fast | 150d16 | 2,400 | 80 | 18,000 | 33% (`1/3`) |
-| 100 | Balrog | Fast | 125d24 | 3,000 | 125 | 55,000 | 33% (`1/3`) |
+| 100 | Balrog | Very Fast | 125d24 | 3,000 | 125 | 55,000 | 33% (`1/3`) |

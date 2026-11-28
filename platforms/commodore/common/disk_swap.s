@@ -506,6 +506,7 @@ c64_test_disk_setup_then_load_save_prompt_seen:
 
 disk_prompt_game:
 #if HAL_STORAGE_PROGRAM_MEDIA_ALWAYS_AVAILABLE
+disk_prompt_game_force:
 disk_note_program_media_current:
     clc
     rts
@@ -526,6 +527,7 @@ disk_note_program_media_current:
     lda #<ds_game_str
     ldx #>ds_game_str
     jsr disk_prompt
+!dpg_after_prompt:
     bcs !dpg_done+
 #if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda #C128_MEDIA_PROGRAM
@@ -545,6 +547,16 @@ disk_note_program_media_current:
 #endif
 !dpg_done:
     rts
+
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
+disk_prompt_game_force:
+    lda program_device
+    sta disk_prompt_device
+    lda #<ds_game_str
+    ldx #>ds_game_str
+    jsr disk_prompt_force
+    jmp !dpg_after_prompt-
+#endif
 #endif
 
 disk_prompt:
@@ -555,6 +567,9 @@ disk_prompt:
     beq !dp_show+
     clc
     rts
+disk_prompt_force:
+    sta zp_ptr0
+    stx zp_ptr0_hi
 !dp_show:
 #if HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
     jsr ui_clear_full_screen_safe

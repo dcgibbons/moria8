@@ -74,6 +74,7 @@ OVL_ENTRY_VEC_11        EQU OVL_WINDOW_BASE + 33
     EXPORT tramp_ui_look
     EXPORT tramp_ui_identify_sym
     EXPORT tramp_ui_select_display
+    EXPORT tramp_ui_msg_history
     EXPORT tramp_help_screen
     EXPORT tramp_help_wizard
     EXPORT tramp_death_screen
@@ -544,6 +545,12 @@ tramp_ui_select_display:
     DB   OVL_UI
     DW   OVL_ENTRY_VEC_5
     ASSERT ($ - tramp_ui_select_display) == 6
+
+tramp_ui_msg_history:
+    CALL overlay_trampoline
+    DB   OVL_UI
+    DW   OVL_ENTRY_VEC_6
+    ASSERT ($ - tramp_ui_msg_history) == 6
 
 tramp_help_screen:
     CALL overlay_trampoline

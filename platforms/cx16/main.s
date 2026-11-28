@@ -783,9 +783,13 @@ ovl_modal_misc_end:
 .segment HelpOverlay
 #import "../commodore/c128/ui_help_data_80.s"
 #import "../../core/6502/ui_help_title.s"
+#define HELP_UI_DISPATCH_MSG_HIST
 #import "../../core/6502/ui_help.s"
+#undef HELP_UI_DISPATCH_MSG_HIST
 #import "../../core/6502/ui_inventory.s"
+#define UI_EQUIP_SHARE_INV_WEIGHTS
 #import "../../core/6502/ui_equipment.s"
+#undef UI_EQUIP_SHARE_INV_WEIGHTS
 #import "../../core/6502/door_open_close_cold.s"
 #import "../../core/6502/item_drop_cold.s"
 ovl_help_end:

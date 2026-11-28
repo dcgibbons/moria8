@@ -638,6 +638,11 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     left = [tb.read_u8(tb.syms["cx16_key_down"] + i) for i in range(16)]
     tb.assert_line("lost_key_up_forgotten", not any(left), f"down={bytes(left).hex()}")
     tb.assert_line("help_license_hint", tb.screen_has("L:License"), "Help shortcut is not visible")
+    tb.assert_line(
+        "help_fire_look_keys",
+        tb.screen_has("SHIFT+F Fire") and tb.screen_has("X Look") and tb.screen_has("Z Use Staff"),
+        "Help Page 1 keybinds missing SHIFT+F Fire / X Look / Z Use Staff",
+    )
     tb.press(" ")
     tb.assert_line("help_license_entry", tb.screen_has("L License / Source"), "Help does not list the reader")
     before = bytes(tb.read_u8(tb.syms["player_data"] + i) for i in range(64))
@@ -684,6 +689,12 @@ def scenario_help_overlay(tb: X16Bench) -> None:
     tb.assert_line("legal_help_return", tb.screen_has("Command Reference"), "Help owner was not restored")
     after = bytes(tb.read_u8(tb.syms["player_data"] + i) for i in range(64))
     tb.assert_line("legal_player_preserved", after == before, "legal viewer changed player state")
+    tb.press(" ")
+    tb.assert_line(
+        "help_page3_legend",
+        tb.screen_has("Map Terrain") and tb.screen_has("Items & Monsters") and tb.screen_has("a-z/A-Z Monsters"),
+        "Help Page 3 legend did not render expected sections/alignment",
+    )
     tb.press("Q")
     tb.assert_line("help_close", tb.in_town(), "help did not return to the town view")
     check_run_cancel_flush(tb)
@@ -825,6 +836,38 @@ def scenario_wizard_flow(tb: X16Bench) -> None:
             tb.drain_more()
             tb.assert_line(f"{label}_entered", tb.screen_has(expect_text), f"missing {expect_text!r}")
             if roundtrip_home:
+                inv_keys = (
+                    "inv_item_id", "inv_qty", "inv_p1", "inv_to_hit",
+                    "inv_to_dam", "inv_to_ac", "inv_flags", "inv_ego",
+                )
+                saved_inv = {
+                    k: [tb.read_u8(tb.syms[k] + s) for s in range(22)]
+                    for k in inv_keys
+                }
+                for s in range(22):
+                    for k in inv_keys:
+                        val = 1 if k == "inv_qty" else saved_inv[k][0]
+                        tb.write_u8(tb.syms[k] + s, val)
+                tb.press("D")
+                tb.assert_line(
+                    "home_deposit_22_row1_a",
+                    "a) " in tb.rowtext(1),
+                    f"22-item Home deposit missing a) on row 1: {tb.rowtext(1)!r}",
+                )
+                tb.assert_line(
+                    "home_deposit_22_row22_v_wt",
+                    "v) " in tb.rowtext(22) and "lb" in tb.rowtext(22),
+                    f"22-item Home deposit missing v)/weight on row 22: {tb.rowtext(22)!r}",
+                )
+                tb.assert_line(
+                    "home_deposit_22_row23_prompt",
+                    "Which item?" in tb.rowtext(23) and "v)" not in tb.rowtext(23),
+                    f"22-item Home deposit prompt collided on row 23: {tb.rowtext(23)!r}",
+                )
+                tb.press("Q")
+                for s in range(22):
+                    for k in inv_keys:
+                        tb.write_u8(tb.syms[k] + s, saved_inv[k][s])
                 row3_empty = tb.rowtext(3).strip()
                 tb.press("D")
                 tb.press("A")
@@ -1465,8 +1508,10 @@ def scenario_acid_armour(tb: X16Bench) -> None:
     _descend_to_dl1(tb)
     mt = tb.syms["monster_table"]
     px, py = tb.read_u8(tb.syms["zp_player_x"]), tb.read_u8(tb.syms["zp_player_y"])
-    body = tb.syms["inv_to_ac"] + 23                     # EQUIP_BODY: the warrior's only armour
-    to_ac0 = tb.read_u8(body)
+    body = tb.syms["inv_to_ac"] + 23                     # EQUIP_BODY (Soft Leather Armor [4])
+    cloak = tb.syms["inv_to_ac"] + EQUIP_CLOAK           # EQUIP_CLOAK (Cloak [1])
+    to_ac_b0 = tb.read_u8(body)
+    to_ac_c0 = tb.read_u8(cloak)
     ac0 = tb.read_u8(tb.syms["zp_player_ac"])
     base = next(mt + i * 12 for i in range(32) if tb.read_u8(mt + i * 12 + 2) != 0xFF)
     kind = tb.read_u8(base + 2)
@@ -1490,10 +1535,10 @@ def scenario_acid_armour(tb: X16Bench) -> None:
     for _ in range(40):
         tb.press("s")
         tb.drain_more()
-        if tb.read_u8(body) != to_ac0:
+        if tb.read_u8(body) != to_ac_b0 or tb.read_u8(cloak) != to_ac_c0:
             break
-    drop = (to_ac0 - tb.read_u8(body)) & 0xFF
-    tb.assert_line("acid_damaged", 1 <= drop <= 3, f"to-AC {to_ac0} -> {tb.read_u8(body)}")
+    drop = ((to_ac_b0 - tb.read_u8(body)) & 0xFF) + ((to_ac_c0 - tb.read_u8(cloak)) & 0xFF)
+    tb.assert_line("acid_damaged", 1 <= drop <= 3, f"to-AC drop={drop}")
     tb.assert_line("acid_ac_recalc", tb.read_u8(tb.syms["zp_player_ac"]) == (ac0 - drop) & 0xFF,
                    f"AC {ac0} -> {tb.read_u8(tb.syms['zp_player_ac'])} after to-AC -{drop}")
     here = (tb.read_u8(tb.syms["zp_player_x"]), tb.read_u8(tb.syms["zp_player_y"]))
@@ -1714,7 +1759,7 @@ def scenario_weapon_exchange(tb: X16Bench) -> None:
         and _inv_field(tb, EQUIP_SECONDARY, 3) == 1
         and _inv_field(tb, EQUIP_SECONDARY, 6) == 2
         and _inv_field(tb, EQUIP_SECONDARY, 7) == ITEM_PAGE_MACE
-        and _inv_field(tb, EQUIP_CLOAK, 0) == 0xFF,
+        and _inv_field(tb, EQUIP_CLOAK, 0) == ITEM_SLOT_CLOAK,
         "records not exchanged",
     )
     tb.assert_line("exchange_one_turn", tb.read_u8(turn) == (turn0 + 1) & 0xFF,

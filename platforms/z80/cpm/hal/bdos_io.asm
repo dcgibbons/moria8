@@ -18,7 +18,6 @@
     EXPORT bdos_read_rand
     EXPORT bdos_open_dat
     EXPORT bdos_reset_disk_recover
-    EXPORT bdos_probe_drive
     EXPORT dat_filename_83
 
 ; ---------------------------------------------------------------------------
@@ -242,64 +241,6 @@ bdos_reset_disk_recover:
     POP  AF
     LD   (abi_last_bdos_err), A
     SCF
-    RET
-
-; ---------------------------------------------------------------------------
-; _bdos_bios_seldsk — Tail-call BIOS SELDSK ((CPM_WARM_BOOT + 1) + 24).
-; Input:  C = drive (0..15), DE = login flag (E=0 probe, E=1 logged)
-; Output: HL = DPH pointer (!= 0 if mounted) or 0x0000 (unmounted/invalid)
-; ---------------------------------------------------------------------------
-_bdos_bios_seldsk:
-    LD   HL, (CPM_WARM_BOOT + 1)
-    LD   A, L
-    ADD  A, 24                  ; SELDSK is 8 jump slots (8*3 = 24 B) past WBOOT
-    LD   L, A
-    JR   NC, .call
-    INC  H
-.call:
-    JP   (HL)
-
-; ---------------------------------------------------------------------------
-; bdos_probe_drive — Non-fatal CP/M 2.2 drive mount check via BIOS SELDSK.
-; Avoids BDOS 14 because real CP/M 2.2 / RunCPM traps unmounted BDOS 14 with
-; "Bdos Err on X: Select" and warm-boots instead of returning A=0xFF.
-; Input:  A = drive index (0..15 = A:..P:)
-; Output: CF = 0 if mounted (cur_drive restored to abi_program_drive & fcb_dat open)
-;         CF = 1 if unmounted/invalid (abi_last_bdos_err = 0xFF)
-; Clobbers: AF, BC, DE, HL (preserves IX, IY)
-; ---------------------------------------------------------------------------
-bdos_probe_drive:
-    CP   16
-    JR   C, .drv_ok
-    LD   A, 0xFF
-    LD   (abi_last_bdos_err), A
-    SCF
-    RET
-.drv_ok:
-    PUSH IX
-    PUSH IY
-    LD   C, A                   ; C = target drive 0..15
-    LD   DE, 0                  ; E = 0: first-select probe
-    CALL _bdos_bios_seldsk      ; HL = DPH (!= 0) or 0
-    LD   A, H
-    OR   L
-    PUSH AF                     ; Z=1 unmounted, Z=0 mounted
-    LD   A, (abi_program_drive)
-    LD   C, A
-    LD   DE, 1                  ; E = 1: restore BIOS latch to program drive
-    CALL _bdos_bios_seldsk
-    POP  AF
-    JR   Z, .unmounted
-    LD   A, (abi_program_drive) ; Mounted probe may alter BIOS state: reconcile BDOS
-    CALL bdos_reset_disk_recover
-    JR   .done
-.unmounted:
-    LD   A, 0xFF
-    LD   (abi_last_bdos_err), A
-    SCF
-.done:
-    POP  IY
-    POP  IX
     RET
 
 dat_filename_83:

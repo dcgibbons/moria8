@@ -66,8 +66,6 @@ test_finish:
 .segment TestCreateOverlay
 .segment Default
 #import "../../../../core/6502/ui_help_clear.s"
-.segment TestCreateOverlay
-#import "../../../../core/6502/ui_character.s"
 .segment Default
 .segment TestCreateOverlay
 .segment Default
@@ -125,6 +123,7 @@ monster_pick_spell:
 #import "../../../../core/6502/player_move.s"
 .segment TestCreateOverlay
 .segment Default
+#define TURN_PRODUCTION_PFLAGS2
 #import "../../../../core/6502/turn.s"
 .segment TestCreateOverlay
 .segment Default
@@ -338,7 +337,10 @@ help_draw_hborder:
 ui_inv_display:
 ui_inv_select_display:
 ui_equip_display:
+ui_char_display:
     rts
+count_spells_known:
+    jmp spell_mask_count_ptr
 #import "../../../../core/6502/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -547,6 +549,7 @@ test_start:
     sta zp_eff_confuse
     sta zp_eff_paralyze
     sta zp_eff_regen
+    sta player_pflags2
     sta zp_game_flags
 
     // Set reasonable player stats for testing
@@ -569,8 +572,31 @@ test_start:
     :RegenCase(2, 20, 20, $1234, 1000, HUNGER_FULL, 0, 0, 0, 20, $1234)
     // 4: poison suppresses regeneration
     :RegenCase(3, 10, 20, $1234, 1000, HUNGER_FULL, 5, 0, 0, 10, $1234)
-    // 5: the regeneration timer no longer changes HP regen (TRN-009)
+    // 5: zp_eff_regen no longer changes HP regen; PFLAG2_REGEN scales rate x1.5
     :RegenCase(4, 10, 20, $0000, 1000, HUNGER_FULL, 0, 0, 10, 10, $1506)
+    lda tc_results + 4
+    bne !+
+    jmp !t5_done+
+!:
+    // PFLAG2_REGEN x1.5 (16-bit): 20 x 197 = 3940 -> x1.5 = 5910 + 1442 = 7352 = $1CB8
+    lda #PFLAG2_REGEN
+    sta player_pflags2
+    :RegenCase(4, 10, 20, $0000, 1000, HUNGER_FULL, 0, 0, 0, 10, $1cb8)
+    lda tc_results + 4
+    bne !+
+    jmp !t5_done+
+!:
+    // PFLAG2_REGEN x1.5 (24-bit carry): 500 x 197 = 98500 ($0180C4) -> x1.5 = 147750 ($024126) + 1442 = 149192 ($0246C8) -> +2 HP
+    :RegenCase(4, 255, 500, $0000, 1000, HUNGER_FULL, 0, 0, 0, 257, $46c8)
+    lda tc_results + 4
+    bne !+
+    jmp !t5_done+
+!:
+    // PFLAG2_REGEN x1.5 + resting x2 (24-bit): 500 x 197 x 2 = 197000 ($030188) -> x1.5 = 295500 ($04824C) + 1442 = 296942 ($0487EE) -> +4 HP
+    :RegenCase(4, 255, 500, $0000, 1000, HUNGER_FULL, 0, 1, 0, 259, $87ee)
+!t5_done:
+    lda #0
+    sta player_pflags2
     // 32: auto-resting doubles the rate, not the base: 3940 x 2 + 1442 = $246A
     :RegenCase(31, 10, 20, $0000, 1000, HUNGER_FULL, 0, 1, 0, 10, $246a)
     // 33: hungry keeps the full rate
@@ -688,12 +714,12 @@ test_start:
     sta tc_results + 5
 
     // ==========================================
-    // Test 7: Starvation deals damage
-    // Set food=0, call turn_tick_hunger, verify HP decreased
+    // Test 7: Starvation deals damage + PFLAG2_REGEN +3 food drain & 0-clamp
     // ==========================================
 !t7:
     lda #0
     sta zp_eff_confuse         // Clear confusion
+    sta player_pflags2
     lda #50
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
@@ -708,11 +734,88 @@ test_start:
 
     lda zp_player_hp_lo
     cmp #49
+    bne !t7_fail_early+
+
+    // PFLAG2_REGEN adds +3 digestion/turn (total -4)
+    lda #PFLAG2_REGEN
+    sta player_pflags2
+    lda #20
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+    jsr turn_tick_hunger
+    lda zp_player_food
+    cmp #16
+    bne !t7_fail_early+
+    lda zp_player_food_hi
+    bne !t7_fail_early+
+
+    // 16-bit borrow across 256 boundary: 258 ($0102) -> 254 ($00FE)
+    lda #$02
+    sta zp_player_food
+    lda #$01
+    sta zp_player_food_hi
+    jsr turn_tick_hunger
+    lda zp_player_food
+    cmp #$fe
+    bne !t7_fail_early+
+    lda zp_player_food_hi
+    beq !t7_part2+
+!t7_fail_early:
+    jmp !t7_fail+
+!t7_part2:
+
+    // Clamp at 0 without underflowing to $FFFF or dealing starvation damage on drop
+    lda #2
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+    lda #49
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    jsr turn_tick_hunger
+    lda zp_player_food
+    ora zp_player_food_hi
     bne !t7_fail+
+    lda zp_player_hp_lo
+    cmp #49
+    bne !t7_fail+
+
+    // Already starving at food == 0 with PFLAG2_REGEN still deals 1 HP and stays 0
+    jsr turn_tick_hunger
+    lda zp_player_food
+    ora zp_player_food_hi
+    bne !t7_fail+
+    lda zp_player_hp_lo
+    cmp #48
+    bne !t7_fail+
+
+    // PFLAG2_REGEN | PFLAG2_SLOW_DIGEST: odd turn -3 (20->17), even turn -4 (17->13)
+    lda #PFLAG2_REGEN | PFLAG2_SLOW_DIGEST
+    sta player_pflags2
+    lda #20
+    sta zp_player_food
+    lda #1
+    sta zp_turn_lo
+    jsr turn_tick_hunger
+    lda zp_player_food
+    cmp #17
+    bne !t7_fail+
+    lda #0
+    sta zp_turn_lo
+    jsr turn_tick_hunger
+    lda zp_player_food
+    cmp #13
+    bne !t7_fail+
+
+    lda #0
+    sta player_pflags2
     lda #$01
     sta tc_results + 6
     jmp !t8+
 !t7_fail:
+    lda #0
+    sta player_pflags2
     lda #$00
     sta tc_results + 6
 
@@ -1091,9 +1194,8 @@ test_start:
     sta tc_results + 13
 
     // ==========================================
-    // Test 20: Extra regen on odd turn increases mana
-    // Set zp_eff_regen=5, zp_turn_lo=1 (odd), mage MP=5/20
-    // Extra regen bypasses even-turn check → MP should become 6
+    // Test 20: Retired zp_eff_regen is ignored/not decremented;
+    // PFLAG2_REGEN regenerates MP on 3 of every 4 turns ((turn & 3) != 3).
     // ==========================================
 !t20:
     // Clear all effects
@@ -1110,27 +1212,66 @@ test_start:
     sta zp_eff_hero
     sta zp_eff_word_recall
     sta zp_game_flags
+    sta player_pflags2
 
     lda #SPELL_MAGE
     sta player_data + PL_SPELL_TYPE
     lda #5
     sta zp_player_mp
     sta player_data + PL_MANA
-    sta zp_eff_regen                 // Extra regen active!
+    sta zp_eff_regen                 // Retired timer must be ignored & preserved
     lda #20
     sta zp_player_mmp
     lda #1
-    sta zp_turn_lo                   // Odd turn
+    sta zp_turn_lo                   // Odd turn without PFLAG2_REGEN -> no MP regen
 
     jsr turn_tick_effects
 
     lda zp_player_mp
+    cmp #5
+    bne !t20_fail+
+    lda zp_eff_regen
+    cmp #5
+    bne !t20_fail+
+
+    // With PFLAG2_REGEN: turns 0, 1, 2 of 4 regen; turn 3 skips
+    lda #0
+    sta zp_eff_regen
+    lda #PFLAG2_REGEN
+    sta player_pflags2
+    lda #0
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
     cmp #6
     bne !t20_fail+
+    lda #1
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #7
+    bne !t20_fail+
+    lda #2
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #8
+    bne !t20_fail+
+    lda #3
+    sta zp_turn_lo
+    jsr turn_tick_effects
+    lda zp_player_mp
+    cmp #8
+    bne !t20_fail+
+
+    lda #0
+    sta player_pflags2
     lda #$01
     sta tc_results + 14
     jmp !t21+
 !t20_fail:
+    lda #0
+    sta player_pflags2
     lda #$00
     sta tc_results + 14
 

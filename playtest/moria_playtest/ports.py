@@ -455,7 +455,8 @@ C64_NOREU = replace(C64, name="c64-noreu", source="c64", resource_args=without_r
 # The EasyFlash cartridge (make cartridge64, build/c64-cart): booted from the
 # .crt with the disk build's disk in drive 8 for saves, no REU.
 C64_CART = replace(C64, name="c64-cart", source="c64", out="c64-cart", disk_target="disk64 cartridge64",
-                   disk_files={}, cartridge="moria8-c64.crt", resource_args=without_reu(C64.resource_args),
+                   disk_files={}, cartridge="moria8-c64.crt",
+                   resource_args=without_reu(C64.resource_args) + ("+easyflashcrtwrite",),
                    boot_emulated_seconds=0.0)
 
 # The AtariMax MaxFlash cartridge (make cartridgeatari8, build/atari8-cart):
