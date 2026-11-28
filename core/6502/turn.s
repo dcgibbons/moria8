@@ -20,31 +20,22 @@
 // Output: zp_hunger_state updated to FULL / HUNGRY / WEAK / FAINT
 // Preserves: nothing
 player_update_hunger_state:
+    ldx #HUNGER_FULL
     lda zp_player_food_hi
-    bne !full+              // Hi byte > 0 means plenty of food
+    bne !done+              // Hi byte > 0 means plenty of food
 
     lda zp_player_food
-    cmp #FOOD_FAINT_AT
-    bcc !faint+
-    cmp #FOOD_WEAK_AT
-    bcc !weak+
     cmp #FOOD_HUNGRY_AT
-    bcc !hungry+
-!full:
-    lda #HUNGER_FULL
-    sta zp_hunger_state
-    rts
-!hungry:
-    lda #HUNGER_HUNGRY
-    sta zp_hunger_state
-    rts
-!weak:
-    lda #HUNGER_WEAK
-    sta zp_hunger_state
-    rts
-!faint:
-    lda #HUNGER_FAINT
-    sta zp_hunger_state
+    bcs !done+
+    inx                     // HUNGER_HUNGRY (1)
+    cmp #FOOD_WEAK_AT
+    bcs !done+
+    inx                     // HUNGER_WEAK (2)
+    cmp #FOOD_FAINT_AT
+    bcs !done+
+    inx                     // HUNGER_FAINT (3)
+!done:
+    stx zp_hunger_state
     rts
 
 // turn_maybe_play_hunger_alert — Alert only when hunger gets worse.
@@ -212,31 +203,29 @@ turn_tick_effects:
 !no_speed:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),
-    // heat/fire resist($58), [skip bless($59)], [skip hero($5a)], regen($5b),
-    // cold resist($5c), see invisible($5d)
+    // heat/fire resist($58), [skip bless($59)], [skip hero($5a)],
+    // [skip retired/reserved $5b], cold resist($5c), see invisible($5d)
     .assert "Simple-dec range", zp_eff_see_inv - zp_eff_protect, 8
-    ldy #zp_eff_protect
+    ldx #zp_eff_protect
 !tse_loop:
-    cpy #zp_eff_bless
+    cpx #zp_eff_bless
     beq !tse_next+
-    cpy #zp_eff_hero
+    cpx #zp_eff_hero
     beq !tse_next+
-    lda $00,y
+    cpx #zp_eff_regen
     beq !tse_next+
-    sec
-    sbc #1
-    sta $00,y
+    lda $00,x
+    beq !tse_next+
+    dec $00,x
 !tse_next:
-    iny
-    cpy #zp_eff_see_inv + 1
+    inx
+    cpx #zp_eff_see_inv + 1
     bne !tse_loop-
 
     // Blessed / Prayer
     lda zp_eff_bless
     beq !no_bless+
-    sec
-    sbc #1
-    sta zp_eff_bless
+    dec zp_eff_bless
     bne !no_bless+
     lda #<turn_prayer_off_msg
     ldy #>turn_prayer_off_msg
@@ -246,9 +235,7 @@ turn_tick_effects:
     // Heroism: expiration removes the temporary +10 HP granted on activation.
     lda zp_eff_hero
     beq !no_hero+
-    sec
-    sbc #1
-    sta zp_eff_hero
+    dec zp_eff_hero
     bne !no_hero+
     inc zp_disturb
 
@@ -332,8 +319,8 @@ turn_tick_effects:
     jsr monster_update_visibility_all
 !no_detect:
 
-    // Mana regen: spell-casting classes recover 1 MP per 2 turns
-    // Extra regen (zp_eff_regen > 0): recover 1 MP every turn
+    // Mana regen: spell-casting classes recover 1 MP per 2 turns;
+    // with PFLAG2_REGEN, 3 of every 4 turns ((turn & 3) != 3, x1.5).
     lda player_data + PL_SPELL_TYPE
     beq !no_mana_regen+              // Warriors (type 0) don't regen mana
 
@@ -341,19 +328,18 @@ turn_tick_effects:
     cmp zp_player_mmp
     bcs !no_mana_regen+              // Already at max
 
-    // Extra regen: skip turn check, always regen
-    lda zp_eff_regen
-    bne !do_mana_regen+
-#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE
+    lda zp_turn_lo
+    lsr
+    bcc !do_mana_regen+              // Even turns (0, 2 mod 4) always regen
+#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE || TURN_PRODUCTION_PFLAGS2
+    lsr
+    bcs !no_mana_regen+              // Turn & 3 == 3 skips; turn & 3 == 1 regens
     lda player_pflags2
     and #PFLAG2_REGEN
-    bne !do_mana_regen+
+    beq !no_mana_regen+
+#else
+    bcs !no_mana_regen+
 #endif
-
-    // Normal rate: every 2 turns
-    lda zp_turn_lo
-    and #$01
-    bne !no_mana_regen+
 
 !do_mana_regen:
     inc zp_player_mp
@@ -369,27 +355,47 @@ turn_tick_hunger:
     lda zp_hunger_state
     pha
 
-#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE
-    lda player_pflags2
-    and #PFLAG2_SLOW_DIGEST
-    beq !tth_dec+
-    lda zp_turn_lo
-    and #$01
-    beq !tth_dec+
     lda zp_player_food
     ora zp_player_food_hi
-    beq !starving+              // Starving still damages at food 0
-    bne !tth_update+            // Skip food decrement every other turn
-!tth_dec:
+    beq !starving+              // Already at 0 — take starvation damage
+
+    ldx #1                      // Base digestion: 1 food/turn
+#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE || TURN_PRODUCTION_PFLAGS2
+    .assert "PFLAG2_SLOW_DIGEST bit 0", PFLAG2_SLOW_DIGEST, $01
+    .assert "PFLAG2_REGEN bit 1", PFLAG2_REGEN, $02
+    lda player_pflags2
+    lsr                         // C = PFLAG2_SLOW_DIGEST; bit 0 = PFLAG2_REGEN
+    bcc !tth_chk_regen+
+    tay                         // Preserve shifted flags across turn-parity check
+    lda zp_turn_lo
+    lsr
+    bcc !tth_restore_flags+
+    dex                         // Slow digestion skips base 1 on odd turns
+!tth_restore_flags:
+    tya
+!tth_chk_regen:
+    lsr                         // C = PFLAG2_REGEN
+    bcc !tth_sub+
+    inx
+    inx
+    inx                         // Regeneration adds +3 digestion/turn
+!tth_sub:
+    txa
+    beq !tth_update+
 #endif
-    // Decrement 16-bit food counter
+    // Subtract X (1, 3, or 4) from 16-bit food counter, clamped at 0.
+    stx zp_temp0
     lda zp_player_food
-    bne !no_borrow+
+    sec
+    sbc zp_temp0
+    sta zp_player_food
     lda zp_player_food_hi
-    beq !starving+          // Already at 0
-    dec zp_player_food_hi
-!no_borrow:
-    dec zp_player_food
+    sbc #0
+    bcs !tth_hi_ok+
+    lda #0
+    sta zp_player_food
+!tth_hi_ok:
+    sta zp_player_food_hi
 
 !tth_update:
     jsr player_update_hunger_state
@@ -438,12 +444,15 @@ turn_apply_one_damage:
 // Preserves: nothing
 turn_tick_regen:
     lda zp_eff_poison
-    bne !ttr_done+
+    bne !ttr_ret+
     lda zp_player_hp_lo
     cmp zp_player_mhp_lo
     lda zp_player_hp_hi
     sbc zp_player_mhp_hi
-    bcs !ttr_done+              // HP >= max HP (unsigned)
+    bcc !ttr_do+                // HP < max HP (unsigned)
+!ttr_ret:
+    rts
+!ttr_do:
 
     lda zp_player_food
     ora zp_player_food_hi
@@ -463,17 +472,29 @@ turn_tick_regen:
     rol mul_result_1
     rol mul_result_2
 !ttr_not_resting:
-#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE
-    lda zp_eff_regen
-    bne !ttr_regen_double+
+#if !(C64_UNIT_TEST || C128_UNIT_TEST) || TURN_PRODUCTION_REST_STATE || TURN_PRODUCTION_PFLAGS2
     lda player_pflags2
     and #PFLAG2_REGEN
-    beq !ttr_no_regen_double+
-!ttr_regen_double:
-    asl mul_result_0
-    rol mul_result_1
-    rol mul_result_2
-!ttr_no_regen_double:
+    beq !ttr_no_regen_scale+
+    // Scale 24-bit mul_result x1.5: mul_result += (mul_result >> 1)
+    lda mul_result_2
+    lsr
+    pha
+    lda mul_result_1
+    ror
+    tay
+    lda mul_result_0
+    ror
+    clc
+    adc mul_result_0
+    sta mul_result_0
+    tya
+    adc mul_result_1
+    sta mul_result_1
+    pla
+    adc mul_result_2
+    sta mul_result_2
+!ttr_no_regen_scale:
 #endif
 
     // fraction += mul_result + REGEN_HPBASE; whole HP go to eff_heal

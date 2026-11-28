@@ -157,6 +157,11 @@ player_death_check:
 #import "../../../../core/6502/ui_status.s"
 #import "../../../../core/6502/ui_help_clear.s"
 #import "../../../../core/6502/ui_character.s"
+combat_compute_level_threshold:
+    rts
+ccl_adj_0: .byte 0
+ccl_adj_1: .byte 0
+ccl_adj_2: .byte 0
 #import "../../../../core/6502/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay

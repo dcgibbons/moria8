@@ -1,312 +1,44 @@
 #importonce
-// ui_help_data.s — Help screen string data (main RAM)
-//
-// Packed page format:
-//   help_pages = [page_count] [page_ptr_lo/hi]...
-//   each page  = [type_byte] [string_data...] [$00] repeated for 23 lines.
-// The banked renderer walks the selected page sequentially.
-// Border strings are drawn procedurally by ui_help.s.
-//
-// Type bytes: 0=CONTENT 1=HEADER 2=BLANK
-// Control codes: $fc=TAB(col) $fd=CH(cyan) $fe=CK(white) $ff=CD(lgrey)
-
-// Title string (stays in main RAM, referenced from banked code)
+// ui_help_data.s — 40-column help page 1 + shared BPE dictionary
+#define HELP_DATA_BPE
 help_title_str:
     .text "Command Reference" ; .byte 0
 
-// ============================================================
-// Packed content lines (rows 1-23, type byte + string + null)
-// ============================================================
+help_dict_l:
+    .byte $00, $ff, $20, $20, $fb, $83, $0f, $fa, $84, $54, $49, $8a, $48, $f9, $88, $13
+    .byte $05, $12, $0e, $81, $44, $81, $0f, $01, $94, $81, $54, $9a, $9b, $43, $16, $14
+    .byte $0e, $05, $01, $fe, $fb, $92, $81, $53, $52, $13, $12, $0f, $05, $fe, $ab, $a7
+    .byte $a2, $9f, $82, $82, $82, $82, $81, $81, $4d, $49, $44, $15, $14, $bc, $12, $0f
+    .byte $0f, $0f, $0c, $09, $09, $06, $05, $05, $05, $04, $03, $01
+help_dict_r:
+    .byte $20, $20, $ff, $20, $fe, $20, $12, $fe, $53, $2b, $46, $89, $8b, $fe, $8c, $14
+    .byte $0c, $13, $14, $52, $0f, $53, $0e, $12, $86, $43, $52, $4c, $2b, $9c, $05, $05
+    .byte $20, $8f, $0e, $9d, $85, $09, $54, $14, $93, $20, $0f, $0f, $14, $53, $0b, $01
+    .byte $04, $0d, $57, $54, $52, $41, $55, $45, $96, $b1, $81, $0e, $09, $96, $01, $9e
+    .byte $17, $0d, $0f, $0e, $07, $06, $a0, $97, $20, $05, $08, $0c
+
 help_lines:
-
-// Row 1: Section headers (HEADER)
-    .byte 1
-    .text "Movement" ; .byte $fc, 20 ; .text "Actions" ; .byte 0
-
-// Row 2: Movement keys + Open door (CONTENT)
-    .byte 0
-    .byte $fe
-    .text "H"
-    .byte $ff
-    .text " Left  "
-    .byte $fe
-    .text "L"
-    .byte $ff
-    .text " Right   "
-    .byte $fe
-    .text "O"
-    .byte $ff
-    .text " Open Door"
-    .byte 0
-
-// Row 3: Movement keys + Close door
-    .byte 0
-    .byte $fe
-    .text "K"
-    .byte $ff
-    .text " Up"
-    .byte $fc, 10
-    .byte $fe
-    .text "J"
-    .byte $ff
-    .text " Down"
-    .byte $fc, 20
-    .byte $fe
-    .text "C"
-    .byte $ff
-    .text " Close Door"
-    .byte 0
-
-// Row 4: Diagonal movement + Search
-    .byte 0
-    .byte $fe
-    .text "Y"
-    .byte $ff
-    .text " NW"
-    .byte $fc, 10
-    .byte $fe
-    .text "U"
-    .byte $ff
-    .text " NE"
-    .byte $fc, 20
-    .byte $fe
-    .text "S"
-    .byte $ff
-    .text " Search"
-    .byte 0
-
-// Row 5: Diagonal movement + Rest / Run prefix
-    .byte 0
-    .byte $fe
-    .text "B"
-    .byte $ff
-    .text " SW"
-    .byte $fc, 10
-    .byte $fe
-    .text "N"
-    .byte $ff
-    .text " SE"
-    .byte $fc, 20
-    .byte $fe
-    .text "5"
-    .byte $ff
-    .text " Rest  "
-    .byte $fe
-    .text "."
-    .byte $ff
-    .text " Run"
-    .byte 0
-
-// Row 6: Cursor/digit info + Stairs
-    .byte 0
-    .text "Cursors, 1-9 move"
-    .byte $fc, 20
-    .byte $fe
-    .text ">"
-    .byte $ff
-    .text " Down "
-    .byte $fe
-    .text "<"
-    .byte $ff
-    .text " Up"
-    .byte 0
-
-// Row 7: Running + Rest-until-recovered
-    .byte 0
-    .byte $fe
-    .text "SHIFT+DIR"
-    .byte $ff
-    .text " Run"
-    .byte $fc, 20
-    .byte $fe
-    .text "CTRL+R"
-    .byte $ff
-    .text " Rest*"
-    .byte 0
-
-// Row 8: Jam door + Tunnel
-    .byte 0
-    .byte $fe
-    .text "CTRL+D"
-    .byte $ff
-    .text " Jam Door"
-    .byte $fc, 20
-    .byte $fe
-    .text "+"
-    .byte $ff
-    .text " Tunnel"
-    .byte 0
-
-// Row 9: blank separator before next section
-    .byte 2
-    .byte 0
-
-// Row 10: Section headers (HEADER)
-    .byte 1
-    .text "Commands" ; .byte $fc, 20 ; .text "Combat" ; .byte 0
-
-// Row 11: Get item + Walk into monster
-    .byte 0
-    .byte $fe
-    .text "G"
-    .byte $ff
-    .text " Get Item"
-    .byte $fc, 20
-    .text "Walk into Mon"
-    .byte 0
-
-// Row 12: Drop item + Fire
-    .byte 0
-    .byte $fe
-    .text "D"
-    .byte $ff
-    .text " Drop Item"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+F"
-    .byte $ff
-    .text " Fire"
-    .byte 0
-
-// Row 13: Inventory + Throw
-    .byte 0
-    .byte $fe
-    .text "I"
-    .byte $ff
-    .text " Inventory"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+T"
-    .byte $ff
-    .text " Throw"
-    .byte 0
-
-// Row 14: Equipment + Eat
-    .byte 0
-    .byte $fe
-    .text "E"
-    .byte $ff
-    .text " Equipment"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+E"
-    .byte $ff
-    .text " Eat"
-    .byte 0
-
-// Row 15: Wear/Wield + Disarm
-    .byte 0
-    .byte $fe
-    .text "W"
-    .byte $ff
-    .text " Wear/Wield"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+D"
-    .byte $ff
-    .text " Disarm"
-    .byte 0
-
-// Row 16: Take off + Refuel
-    .byte 0
-    .byte $fe
-    .text "T"
-    .byte $ff
-    .text " Take Off"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+R"
-    .byte $ff
-    .text " Refuel"
-    .byte 0
-
-// Row 17: Quaff potion + Character
-    .byte 0
-    .byte $fe
-    .text "Q"
-    .byte $ff
-    .text " Quaff Potion"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+C"
-    .byte $ff
-    .text " Char"
-    .byte 0
-
-// Row 18: Read scroll + Look
-    .byte 0
-    .byte $fe
-    .text "R"
-    .byte $ff
-    .text " Read Scroll"
-    .byte $fc, 20
-    .byte $fe
-    .text "X"
-    .byte $ff
-    .text " Look"
-    .byte 0
-
-// Row 19: Aim wand + This help
-    .byte 0
-    .byte $fe
-    .text "A"
-    .byte $ff
-    .text " Aim Wand"
-    .byte $fc, 20
-    .byte $fe
-    .text "?"
-    .byte $ff
-    .text " This Help"
-    .byte 0
-
-// Row 20: Use staff + Pray
-    .byte 0
-    .byte $fe
-    .text "Z"
-    .byte $ff
-    .text " Use Staff"
-    .byte $fc, 20
-    .byte $fe
-    .text "P"
-    .byte $ff
-    .text " Pray"
-    .byte 0
-
-// Row 21: Cast spell + Search mode
-    .byte 0
-    .byte $fe
-    .text "M"
-    .byte $ff
-    .text " Cast Spell"
-    .byte $fc, 20
-    .byte $fe
-    .text "#"
-    .byte $ff
-    .text " SearchMode"
-    .byte 0
-
-// Row 22: Study book + Save
-    .byte 0
-    .byte $fe
-    .text "F"
-    .byte $ff
-    .text " Study Book"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+S"
-    .byte $ff
-    .text " Save"
-    .byte 0
-
-// Row 23: Bash + Quit
-    .byte 0
-    .byte $fe
-    .text "CTRL+B"
-    .byte $ff
-    .text " Bash"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+Q"
-    .byte $ff
-    .text " Quit"
-    .byte 0
+    .byte $01, $4d, $bf, $0d, $05, $92, $fb, $41, $03, $bd, $13, $00
+    .byte $00, $fe, $48, $81, $4c, $05, $06, $14, $83, $fe, $4c, $93, $c4, $08, $14, $85, $fe, $4f, $81, $4f, $10, $c6, $98, $00
+    .byte $00, $fe, $4b, $b6, $10, $fc, $0a, $fe, $4a, $81, $94, $17, $0e, $84, $43, $99, $c2, $13, $c8, $98, $00
+    .byte $00, $fe, $59, $81, $4e, $57, $fc, $0a, $fe, $55, $81, $4e, $45, $88, $95, $c7, $ca, $00
+    .byte $00, $fe, $42, $95, $57, $fc, $0a, $fe, $4e, $95, $45, $84, $35, $93, $a1, $83, $fe, $2e, $93, $bb, $00
+    .byte $00, $43, $15, $91, $86, $13, $2c, $20, $31, $2d, $39, $20, $0d, $bf, $84, $3e, $81, $94, $17, $a0, $fe, $3c, $b6, $10, $00
+    .byte $00, $ad, $8c, $44, $49, $a8, $bb, $84, $9d, $a8, $a1, $2a, $00
+    .byte $00, $a3, $ba, $4a, $01, $0d, $20, $98, $84, $2b, $a6, $bb, $0e, $90, $00
+    .byte $02, $00
+    .byte $01, $43, $c1, $0d, $b0, $13, $fb, $43, $c1, $02, $01, $14, $00
+    .byte $00, $fe, $47, $81, $47, $ac, $20, $b9, $fb, $57, $cb, $0b, $20, $09, $92, $0f, $20, $b8, $00
+    .byte $00, $fe, $ba, $44, $aa, $10, $20, $b9, $8e, $46, $81, $46, $09, $12, $05, $00
+    .byte $00, $fe, $49, $81, $49, $0e, $9e, $92, $86, $19, $8e, $54, $a6, $08, $aa, $17, $00
+    .byte $00, $fe, $45, $b7, $11, $15, $09, $10, $0d, $05, $92, $8e, $45, $b7, $01, $14, $00
+    .byte $00, $fe, $57, $81, $57, $c7, $2f, $57, $09, $90, $04, $8e, $ba, $44, $09, $13, $97, $0d, $00
+    .byte $00, $fe, $54, $a6, $01, $0b, $c8, $4f, $c5, $8e, $a8, $05, $06, $15, $90, $00
+    .byte $00, $fe, $51, $81, $51, $15, $01, $c5, $20, $50, $0f, $bd, $8e, $43, $99, $08, $97, $00
+    .byte $00, $fe, $a8, $05, $01, $04, $20, $53, $03, $aa, $0c, $0c, $84, $58, $81, $4c, $ae, $00
+    .byte $00, $fe, $41, $81, $41, $09, $0d, $20, $57, $b0, $84, $3f, $a6, $08, $09, $a9, $48, $90, $10, $00
+    .byte $00, $fe, $5a, $b6, $13, $c8, $af, $c5, $84, $50, $81, $50, $be, $19, $00
+    .byte $00, $fe, $4d, $99, $01, $8f, $20, $53, $10, $90, $0c, $84, $23, $95, $c7, $ca, $4d, $0f, $c9, $00
+    .byte $00, $fe, $46, $95, $14, $15, $04, $19, $20, $42, $ae, $8e, $53, $95, $01, $9e, $00
+    .byte $00, $a3, $42, $81, $42, $01, $13, $08, $8e, $51, $81, $51, $15, $09, $14, $00
+    .byte $03 // HTYPE_END

@@ -1003,6 +1003,10 @@ ovl_home_end:
 ovl_start_chargen_mark:
 #import "../../core/6502/player_chargen_cold.s"
 #import "../../core/6502/player_create.s"
+ovl_title_restock_mark:
+#import "../../core/6502/store_restock_overlay.s"
+ovl_title_kit_mark:
+#import "../../core/6502/starting_kit_cold.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $a400) + " bytes"
 .assert "Startup overlay fits", ovl_start_end <= $ba00, true
@@ -1182,11 +1186,10 @@ ovl_help_end:
 .assert "Help overlay fits", ovl_help_end <= $ba00, true
 
 .segment UiOverlay
-#import "../../core/6502/ui_character.s"
-ovl_ui_bg_mark:
-#import "../../core/6502/player_bg_draw_cold.s"
 #import "../../core/6502/ui_inventory.s"
+#define UI_EQUIP_SHARE_INV_WEIGHTS
 #import "../../core/6502/ui_equipment.s"
+#undef UI_EQUIP_SHARE_INV_WEIGHTS
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $a400) + " bytes"
 .assert "UI overlay fits", ovl_ui_end <= $ba00, true
@@ -1443,10 +1446,9 @@ title_str:
 
 #import "title_screen.s"
 #import "../../core/6502/title_sysinfo_banked.s"
-ovl_title_restock_mark:
-#import "../../core/6502/store_restock_overlay.s"
-ovl_title_kit_mark:
-#import "../../core/6502/starting_kit_cold.s"
+#import "../../core/6502/ui_character.s"
+ovl_ui_bg_mark:
+#import "../../core/6502/player_bg_draw_cold.s"
 ovl_title_end:
 .print "Title overlay: " + (ovl_title_end - $a400) + " bytes"
 .assert "Title overlay fits", ovl_title_end <= $ba00, true
@@ -1628,4 +1630,4 @@ legal_code_end:
 a2_auxdata_end:
 .assert "A2AuxData fits below catalog", a2_auxdata_end <= A2_AUX_DATA_LIMIT, true
 .segment Default
-.assert "Wave 5.2 cold evictions land in exact target overlays", tramp_trap_trigger < $7c00 && tramp_load_resume_reset < $7c00 && trap_trigger == ovl_chest_trap_mark && trap_apply_damage == ovl_chest_trap_dmg_mark && ovl_chest_trap_dmg_mark < ovl_chest_end && store_init_all >= ovl_title_restock_mark && store_init_all < ovl_title_kit_mark && init_starting_kit == ovl_title_kit_mark && ovl_title_kit_mark < ovl_title_end && help_cmd_body == ovl_help_cmd_mark && item_drop == ovl_help_drop_mark && ovl_help_drop_mark < ovl_help_end && door_try_open >= ovl_chest_door_mark && door_try_open < ovl_chest_end && door_try_close >= door_try_open && door_try_close < ovl_chest_end && player_init == ovl_start_chargen_mark && ovl_start_chargen_mark < ovl_start_end && ui_char_draw_background >= ovl_ui_bg_mark && ui_char_draw_background < ovl_ui_end && item_refresh_fixed_known == ovl_storage_refresh_mark && load_resume_reset == ovl_storage_resume_mark && ovl_storage_resume_mark < ovl_storage_end, true
+.assert "Wave 5.2 cold evictions land in exact target overlays", tramp_trap_trigger < $7c00 && tramp_load_resume_reset < $7c00 && trap_trigger == ovl_chest_trap_mark && trap_apply_damage == ovl_chest_trap_dmg_mark && ovl_chest_trap_dmg_mark < ovl_chest_end && store_init_all >= ovl_title_restock_mark && store_init_all < ovl_title_kit_mark && init_starting_kit == ovl_title_kit_mark && ovl_title_kit_mark < ovl_start_end && help_cmd_body == ovl_help_cmd_mark && item_drop == ovl_help_drop_mark && ovl_help_drop_mark < ovl_help_end && door_try_open >= ovl_chest_door_mark && door_try_open < ovl_chest_end && door_try_close >= door_try_open && door_try_close < ovl_chest_end && player_init == ovl_start_chargen_mark && ovl_start_chargen_mark < ovl_start_end && ui_char_draw_background >= ovl_ui_bg_mark && ui_char_draw_background < ovl_title_end && item_refresh_fixed_known == ovl_storage_refresh_mark && load_resume_reset == ovl_storage_resume_mark && ovl_storage_resume_mark < ovl_storage_end, true

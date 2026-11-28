@@ -860,36 +860,28 @@ input_get_command:
 input_normalize_ctrl_chords_with_state:
     cpy #0
     beq !inct_done+
-    cmp #$57
-    beq !inct_ctrl_w+
-    cmp #$d7
-    beq !inct_ctrl_w+
-    cmp #$42
-    beq !inct_ctrl_b+
-    cmp #$c2
-    beq !inct_ctrl_b+
-    cmp #$52
-    beq !inct_ctrl_r+
-    cmp #$d2
-    beq !inct_ctrl_r+
-    cmp #$44                    // D
-    beq !inct_ctrl_d+
-    cmp #$c4                    // SHIFT+D
-    beq !inct_ctrl_d+
-    rts
-!inct_ctrl_w:
-    lda #$17
-    rts
-!inct_ctrl_b:
-    lda #$02
-    rts
-!inct_ctrl_r:
-    lda #$12
-    rts
-!inct_ctrl_d:
-    lda #$04
+    stx inct_save_x
+    pha
+    and #$7f
+    ldx #4
+!inct_loop:
+    cmp inct_keys,x
+    beq !inct_hit+
+    dex
+    bpl !inct_loop-
+    pla
+    ldx inct_save_x
 !inct_done:
     rts
+!inct_hit:
+    pla
+    and #$1f
+    ldx inct_save_x
+    rts
+inct_keys:
+    .byte $57, $42, $52, $44, $50
+inct_save_x:
+    .byte 0
 #endif
 
 #if C128_INPUT_TEST

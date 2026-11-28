@@ -12,8 +12,8 @@
 ; - Pure 0xNN hex constants (sjasmplus v1.24.0, DEVICE NOSLOT64K).
 ; - Zero static DS 128 buffers inside .ovl: LDIR-chunked streaming directly
 ;   through CPM_DMA_BUF_BASE (0xD080), UI formatting via line_buf/temp_str_buf.
-; - Strict CP/M 2.2 FCB discipline:
-;   * bdos_probe_drive(abi_save_drive) before BDOS open/delete/make so
+; - Strict CP/M 2.2 / CP/M 3.0 FCB discipline:
+;   * ovl_storage_probe_drive(abi_save_drive) before BDOS open/delete/make so
 ;     unmounted drives never trip BDOS 14 "Bdos Err on X: Select".
 ;   * Atomic writes via FCB_TMP_ADDR (.TMP): delete stale .TMP -> BDOS 22 make
 ;     -> write & zero-pad -> BDOS 16 close -> BDOS 19 delete target ->
@@ -54,7 +54,7 @@ ovl_storage_save_game:
     CALL player_sync_from_abi
 
     LD   A, (abi_save_drive)
-    CALL bdos_probe_drive
+    CALL ovl_storage_probe_drive
     JR   NC, .save_drv_ok
     LD   A, HSTR_SAVE_NOT_READY
     LD   (ovl_storage_last_huff), A
@@ -160,7 +160,7 @@ ovl_storage_load_menu:
     PUSH IY
 
     LD   A, (abi_save_drive)
-    CALL bdos_probe_drive
+    CALL ovl_storage_probe_drive
     JR   NC, .load_drv_ok
     LD   A, HSTR_SAVE_NOT_READY
     LD   (ovl_storage_last_huff), A
@@ -457,8 +457,8 @@ ovl_storage_disk_setup:
     SUB  'A'
     LD   (ovl_storage_tmp_drv), A
 
-    ; Non-fatal BIOS SELDSK probe (restores abi_program_drive & fcb_dat cleanly)
-    CALL bdos_probe_drive
+    ; Non-fatal CP/M 2.2 / CP/M 3.0+ drive probe (restores abi_program_drive cleanly)
+    CALL ovl_storage_probe_drive
     JR   NC, .drv_valid
 
     LD   A, HSTR_SAVE_NOT_READY
@@ -510,7 +510,7 @@ ovl_storage_hiscore_load:
     CALL ovl_storage_clear_hiscore_tbl
 
     LD   A, (abi_save_drive)
-    CALL bdos_probe_drive
+    CALL ovl_storage_probe_drive
     JR   NC, .hs_drv_ok
     SCF
     POP  IY
@@ -601,7 +601,7 @@ ovl_storage_hiscore_save:
     PUSH IY
 
     LD   A, (abi_save_drive)
-    CALL bdos_probe_drive
+    CALL ovl_storage_probe_drive
     JR   NC, .hs_wr_drv_ok
     SCF
     POP  IY
@@ -842,7 +842,7 @@ ovl_storage_write_slot:
     LD   (ovl_storage_last_huff), A
 
     LD   A, (abi_save_drive)
-    CALL bdos_probe_drive
+    CALL ovl_storage_probe_drive
     JR   NC, .wr_drv_ok
     LD   A, HSTR_SAVE_NOT_READY
     LD   (ovl_storage_last_huff), A
@@ -1699,6 +1699,97 @@ ovl_storage_init_hs_fcb:
     LD   A, (abi_save_drive)
     INC  A
     JP   bdos_init_fcb_name
+
+; ---------------------------------------------------------------------------
+; _ovl_storage_bios_seldsk — CP/M 2.2 unbanked BIOS SELDSK ((WBOOT+1) + 24).
+; NEVER called on CP/M 3.0+ (where BIOS SELDSK is banked in Bank 0).
+; ---------------------------------------------------------------------------
+_ovl_storage_bios_seldsk:
+    LD   HL, (CPM_WARM_BOOT + 1)
+    LD   A, L
+    ADD  A, 24                  ; SELDSK is 8 jump slots (8*3 = 24 B) past WBOOT
+    LD   L, A
+    JR   NC, .call
+    INC  H
+.call:
+    JP   (HL)
+
+; ---------------------------------------------------------------------------
+; ovl_storage_probe_drive — Non-fatal CP/M 2.2 & CP/M 3.0+ drive mount probe.
+; Input:  A = drive index (0..15 = A:..P:)
+; Output: CF = 0 if mounted (abi_program_drive selected & fcb_dat usable)
+;         CF = 1 if unmounted/invalid (abi_last_bdos_err = 0xFF)
+; Clobbers: AF, BC, DE, HL (preserves IX, IY)
+; ---------------------------------------------------------------------------
+ovl_storage_probe_drive:
+    CP   16
+    JR   C, .drv_ok
+.probe_unmounted:
+    LD   A, 0xFF
+    LD   (abi_last_bdos_err), A
+    SCF
+    RET
+.drv_ok:
+    PUSH AF                     ; save target drive (0..15)
+    LD   C, BDOS_VERS
+    LD   DE, 0
+    CALL bdos_call
+    CP   0x30                   ; CP/M 3.0 / CP/M Plus (0x31) vs CP/M 2.2 (0x22)
+    JR   C, .cpm22_probe
+
+    ; CP/M 3.0+ path: enable Return Error Mode (BDOS 45 E=0xFF) so BDOS 14
+    ; returns A=0xFF without printing "BDOS ERR" or warm-booting, and never
+    ; jump directly into banked Bank 0 BIOS SELDSK.
+    LD   C, BDOS_ERRMODE
+    LD   DE, 0x00FF
+    CALL bdos_call
+    POP  AF                     ; A = target drive (0..15)
+    PUSH AF                     ; keep target drive in D across BDOS 14
+    LD   E, A
+    LD   D, 0
+    LD   C, BDOS_SELDSK
+    CALL bdos_call              ; A = 0x00 mounted, 0xFF error (H = ext err)
+    POP  DE                     ; D = target drive
+    PUSH AF
+    LD   A, (abi_program_drive)
+    CP   D
+    JR   Z, .cpm3_restored      ; skip redundant SELDSK when probing program drive
+    LD   E, A
+    LD   D, 0
+    LD   C, BDOS_SELDSK
+    CALL bdos_call              ; restore program drive
+.cpm3_restored:
+    POP  AF
+    OR   A
+    JR   NZ, .probe_unmounted
+    LD   (abi_last_bdos_err), A ; A == 0, CF == 0
+    RET
+
+.cpm22_probe:
+    POP  AF                     ; A = target drive (0..15)
+    PUSH IX
+    PUSH IY
+    LD   C, A                   ; C = target drive 0..15
+    LD   DE, 0                  ; E = 0: first-select probe
+    CALL _ovl_storage_bios_seldsk ; HL = DPH (!= 0) or 0
+    LD   A, H
+    OR   L
+    PUSH AF                     ; Z=1 unmounted, Z=0 mounted
+    LD   A, (abi_program_drive)
+    LD   C, A
+    LD   DE, 1                  ; E = 1: restore BIOS latch to program drive
+    CALL _ovl_storage_bios_seldsk
+    POP  AF
+    JR   Z, .cpm22_unmounted
+    LD   A, (abi_program_drive) ; Mounted probe may alter BIOS state: reconcile BDOS
+    CALL bdos_reset_disk_recover
+    POP  IY
+    POP  IX
+    RET
+.cpm22_unmounted:
+    POP  IY
+    POP  IX
+    JR   .probe_unmounted
 
 ; Clamp *(HL) <= B
 ovl_storage_clamp_u8:

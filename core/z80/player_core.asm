@@ -30,6 +30,7 @@
     EXPORT inv_remove_item
     EXPORT inv_consume_one
     EXPORT inv_calc_weight
+    EXPORT inv_slot_weight
     EXPORT inv_compact
     EXPORT id_is_known
     EXPORT id_mark_known
@@ -946,8 +947,9 @@ inv_init:
     DJNZ .zr
     RET
 
-; Helper: _inv_slot_weight(A = id, B = qty, C = ego_byte) -> HL = 16-bit weight,
+; Helper: inv_slot_weight(A = id, B = qty, C = ego_byte) -> HL = 16-bit weight,
 ; CF = 1 if >= 65536 (or catalog error). Preserves IX, IY.
+inv_slot_weight:
 _inv_slot_weight:
     PUSH BC
     LD   D, A                   ; D = slot_lo

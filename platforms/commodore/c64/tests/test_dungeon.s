@@ -22,7 +22,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #68                     // tc_results' 69 bytes
+    ldx #71                     // tc_results' 72 bytes
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -170,10 +170,11 @@ mm_element_divisor_entry:
 #import "../../../../core/6502/player_move.s"
 #import "../../../../core/6502/player_run.s"
 #import "../../../../core/6502/combat.s"
-// Exercise the production tunnel transition; deterministic maximum digging
-// ability keeps its focused door-state regression independent of equipment.
+// Exercise the production tunnel transition; deterministic digging ability
+// defaults to $ff for door-state tests and can be set to STR>>2 for rubble.
+td_dig_ability: .byte $ff
 tramp_dig_ability:
-    lda #$ff
+    lda td_dig_ability
     sta tun_dig_ability
     rts
 #import "../../../../core/6502/tunnel.s"
@@ -406,7 +407,7 @@ audit_door_y:  .byte 0
 audit_check_x: .byte 0
 audit_check_y: .byte 0
 audit_pair_count: .byte 0
-tc_results: .fill 69, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 72, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 t67_trials: .byte 0
 run_cycle_expected:
@@ -433,7 +434,7 @@ count_spells_known:
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #44
+    ldx #71
     lda #$ff
 !clr:
     sta tc_results,x
@@ -5008,8 +5009,205 @@ test_start:
     sta tc_results + 68
 !t69_done:
 
+    // ============================================================
+    // Test 70: Rubble blocks player movement and prints
+    // "There is rubble blocking your way." when walking (silent when running).
+    // ============================================================
+    jsr fill_map_rock
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_VISITED
+    sta (zp_ptr0),y
+    ldy #21
+    lda #TILE_RUBBLE | FLAG_VISITED
+    sta (zp_ptr0),y
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #0
+    sta zp_eff_confuse
+    sta zp_msg_flags
+    lda #$ff
+    sta zp_run_dir
+
+    lda #CMD_MOVE_E
+    jsr player_try_move
+    bcs !t70_fail+              // Blocked: carry must be clear
+    lda zp_player_x
+    cmp #20
+    bne !t70_fail+
+    lda zp_player_y
+    cmp #20
+    bne !t70_fail+
+    lda zp_msg_flags
+    beq !t70_fail+
+    ldy #0
+!t70_cmp:
+    lda hd_decode_buf,y
+    cmp t70_rubble_msg,y
+    bne !t70_fail+
+    lda t70_rubble_msg,y
+    beq !t70_run_silent+
+    iny
+    bne !t70_cmp-
+!t70_run_silent:
+    lda #0
+    sta zp_msg_flags
+    lda #3                      // DIR_E
+    sta zp_run_dir
+    lda #CMD_MOVE_E
+    jsr player_try_move
+    bcs !t70_fail+
+    lda zp_msg_flags
+    bne !t70_fail+
+    lda #$01
+    .byte $2c
+!t70_fail:
+    lda #$00
+    sta tc_results + 69
+    lda #$ff
+    sta zp_run_dir
+
+    // ============================================================
+    // Test 71: Line-of-sight is clear across TILE_RUBBLE (blocked by wall).
+    // ============================================================
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_VISITED
+    sta (zp_ptr0),y
+    iny
+    sta (zp_ptr0),y             // (21,20) floor
+    ldy #22
+    lda #TILE_RUBBLE | FLAG_VISITED
+    sta (zp_ptr0),y             // (22,20) rubble
+    ldy #23
+    lda #TILE_FLOOR | FLAG_VISITED
+    sta (zp_ptr0),y             // (23,20) floor
+    iny
+    sta (zp_ptr0),y             // (24,20) floor
+
+    lda #20
+    sta mm_los_cx
+    sta mm_los_cy
+    lda #24
+    sta zp_los_dx
+    lda #20
+    sta zp_los_dy
+    jsr mm_los_clear_to_target
+    bcc !t71_fail+              // Rubble must be LOS-transparent
+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_WALL_H | FLAG_VISITED
+    sta (zp_ptr0),y
+    lda #20
+    sta mm_los_cx
+    sta mm_los_cy
+    jsr mm_los_clear_to_target
+    bcs !t71_fail+              // Wall must block LOS
+    lda #$01
+    .byte $2c
+!t71_fail:
+    lda #$00
+    sta tc_results + 70
+
+    // ============================================================
+    // Test 72: Bare-handed tunneling clears rubble with STR >> 2
+    // and never refuses with a no-tool message (even at ability=0).
+    // ============================================================
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda #TILE_RUBBLE | FLAG_VISITED
+    sta (zp_ptr0),y
+    lda #22
+    sta df_target_x
+    lda #20
+    sta df_target_y
+    lda #4                      // STR=18 >> 2
+    sta td_dig_ability
+    lda #0
+    sta vis_room_revealed
+    sta zp_msg_flags
+    sta test_rng_idx
+    lda #3                      // resistance 3 < ability 4 -> clear
+    sta test_rng_script
+    jsr td_patch_rng
+    jsr player_tunnel_resolved_target
+    php
+    jsr td_restore_rng
+    plp
+    bcc !t72_fail+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    bne !t72_fail+              // Must become TILE_FLOOR (0)
+    lda vis_room_revealed
+    cmp #1
+    bne !t72_fail+
+
+    // With ability=0 (e.g. STR=3) and resistance=10, turn is consumed and
+    // tile stays rubble without printing HSTR_RUBBLE_BLOCKS.
+    ldy #22
+    lda #TILE_RUBBLE | FLAG_VISITED
+    sta (zp_ptr0),y
+    lda #0
+    sta td_dig_ability
+    sta test_rng_idx
+    sta zp_msg_flags
+    lda #10
+    sta test_rng_script
+    jsr td_patch_rng
+    jsr player_tunnel_resolved_target
+    php
+    jsr td_restore_rng
+    plp
+    bcc !t72_fail+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #22
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_RUBBLE
+    bne !t72_fail+
+    lda hd_decode_buf
+    cmp t70_rubble_msg          // Failed dig must not print rubble-blocks string
+    beq !t72_fail+
+    lda #$01
+    .byte $2c
+!t72_fail:
+    lda #$00
+    sta tc_results + 71
+    lda #$ff
+    sta td_dig_ability
+
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline
+
+t70_rubble_msg: .text "There is rubble blocking your way." ; .byte 0
 
 // td_one_stair_per_room — C = 0 when no room's interior holds two stairs.
 // t68_room_x: test 68's six rooms, 5 wide and apart.

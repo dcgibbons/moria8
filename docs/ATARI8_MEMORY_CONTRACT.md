@@ -79,7 +79,7 @@ Memory visibility is controlled through PIA `PORTB` (`$D301`):
      `atari_write_sio_sector`), `exit_trampoline`, interrupt (`atari_nmi_handler`,
      `atari_irq_handler`), and 130XE routines (`xe_detect`, `xe_cache_stash`,
      `xe_cache_fetch`) **must link and execute below `$4000`** (at the start of
-     `Default` in `$0C00-$225A`, `low_helpers_end = $225B`), enforced by link-time `.assert` guards and
+     `Default` in `$0C00-$23BC`, `low_helpers_end = $23BD`), enforced by link-time `.assert` guards and
      `platforms/atari8/check_memory_contract.py`.
    * `atari_nmi_handler` preserves `A`, `X`, and `Y` (`PHA/TXA/PHA/TYA/PHA`) and
      inspects `NMIST` (`$D40F`): if bit 5 (`$20`, physical `SYSTEM RESET` button
@@ -166,9 +166,9 @@ Memory visibility is controlled through PIA `PORTB` (`$D301`):
 | `$03C0-$03E7` | 40 B | OS printer buffer `PRNBUF` (game-owned) | Only the `P:` handler uses it and the game never opens `P:`; SIOV never touches it (2026-11-11, out of a full `Default`): `atari_fn_83` (11 B, every writer fills all 11), `atari_kbdbuf_len` + `atari_kbdbuf` (9 B, `input_init` clears the length before the IRQ runs), `atari_dir_count_lo/hi`, `xe_present`, `xe_saved_main` (4 B, each written before it is read); 16 B spare. `xe_slot_populated` (`18` B) stays in low resident (`check_memory_contract.py` requires `$0C00-$3FFF`). |
 | `$03E8-$03FF` | 24 B | XL OS variables | **Never touch:** `GINTLK` (`$03FA`), `BASICF` (`$03F8`) and others the OS reads (the cartridge check); the file name there broke the `a800xl` save (2026-11-11). |
 | `$0400-$07FF` | 1,024 B | `ATARI_CHARSET_BASE` (`CHBASE = $04`) | 1 KB RAM character set ordered by Moria8/C64 screen codes (`$00-$7F`), built at boot by `atari_font_init` (executing in `< $4000`) from the Atari OS ROM font (`$E000-$E3FF`). 1 KB-aligned as required by ANTIC. |
-| `$0800-$0BFF` | 1,024 B | `SCREEN_RAM` & `DUNGEON_GEN_SCAN_SCRATCH_BASE` | During OS disk boot, 3-sector `boot.s` (`<= $0980`, `384` B) loads at `$0800-$097F` (`boot_entry` at `$0806` runs `SEI : CLD : LDX #$FF : TXS : STX $D301` to disable BASIC ROM at `$A000-$BFFF` while keeping OS ROM visible), activates a centered black-screen ANTIC Mode 6 banner (`"  LOADING MORIA8... "`), stages 128-byte sectors at `$0980-$09FF`, and streams & **PackBits-unpacks** `MORIA8.RES` (`MORIA8.PKB`, `45,886 -> 40,776 B` payload, `-5,110 B`) into `$0C00-$C0FF` (keeping `PORTB = $FF` until `atari_io_dst_hi >= $BF` and switching `PORTB = $FE` for `$BF00-$C0FF` and handoff) before jumping to `entry_main` (`$0C00`). On `.car`, `cartridge_boot.s` (`Bank 0` `$A000`, copied to `$0800` with 256-byte ROM page prefetch at `$0900-$09FF` and `$D510` cart disable between pages) PackBits-unpacks `MORIA8.PKB` directly into `$0C00-$C0FF`. Once `entry_main` activates the custom Display List, `$0800-$0BE7` (`1,000` B) is the 40×25 ANTIC Mode 2 screen buffer, and `$0800-$0BFF` (`1,024` B) doubles as page-aligned `DUNGEON_GEN_SCAN_SCRATCH_BASE` during level generation. |
-| `$0C00-$23BA` | 6,075 B | Low Resident Banking, Boot Init, Interrupt, & I/O Helpers (`< $4000`) | Guaranteed below `$4000` (`low_helpers_end = $23BB` disk [`7,237 B` free] / `$219F` cart [`7,777 B` free]): `entry_main` boot init, `atari_font_init`, `EnterSio`/`ExitSio`, `save_zp`/`restore_zp`, `sio_sector_buf` (`128` B), `hal_asset_load_prg_header` (caches overlays via `atari_ovl_xe_slot` across Slots `0..17`, `OVL.TTL` `$FF` uncached), `hal_asset_load_title`, `hal_storage_probe_media`, `atari_write_sio_sector`, `hal_storage_open`/`chrin`/`chrout`/`close`, legal DOS 8.3 filenames, Help controller `cmd_show_help_view`, **57-byte/record `MONSTER.CAT` reader + `catalog_fetch_ext`** (`monster_catalog_a8.s`, `cat_record[57]` with `cat_ext_record` at `+49`), `'ITM2'` item-catalog (`item_catalog_a8.s`), `find_special_room`, `xe_detect`, `xe_cache_stash`/`xe_cache_fetch`, `xe_slot_populated` (`18` B), `exit_trampoline`, `atari_nmi_handler`, `atari_irq_handler`, and banked/exit trampolines. |
-| `$23BB-$C0E2` | 40,232 B | Resident `Default` Segment (`program_end = $C0E3 <= $C100`) | Core gameplay (`29` SoA `cr_*` fields, `4` attacks, `19` `ADESC_*` verbs, hot `ATK_*` effects, `5` `MSF2_*` spells, `CD_*`/`CM2_*`), resident `player_cast_spell`/`player_pray` selection shell + `player_magic_cast_cold.s` (`PLAYER_CAST_RESIDENT`), UI, `40`-col recall tables (`recall_defs.s`), `item_hot_tables.s`, `recall[279]` (`1,116` B), `id_known_bits[47]`, `potion_shuffle..staff_shuffle` (`174` B), `si_meta_hi[128]`, `fi_meta_hi[42]`, town roster, shared save-state arrays/magic, `disk_prompt_save` (`#if !ATARI8_CARTRIDGE`, relocated from `RuntimeBanked` after MON-044 `eff_gain_stat.s`), `hal_overlay_post_reload`, generated overlay trampolines (`build/trampolines/atari8_trampolines.inc`), and custom resident trampolines. `46,307` B total span in `$0C00-$C0E2` (**`29` B free** below `$C100` on disk; `$0C00-$BDE9`, `45,546` B, **`790` B free** on cartridge). |
+| `$0800-$0BFF` | 1,024 B | `SCREEN_RAM` & `DUNGEON_GEN_SCAN_SCRATCH_BASE` | During OS disk boot, 3-sector `boot.s` (`<= $0980`, `384` B) loads at `$0800-$097F` (`boot_entry` at `$0806` runs `SEI : CLD : LDX #$FF : TXS : STX $D301` to disable BASIC ROM at `$A000-$BFFF` while keeping OS ROM visible), activates a centered black-screen ANTIC Mode 6 banner (`"  LOADING MORIA8... "`), stages 128-byte sectors at `$0980-$09FF`, and streams & **PackBits-unpacks** `MORIA8.RES` (`MORIA8.PKB`, `46,323 -> 41,147 B` payload, `-5,176 B`) into `$0C00-$C0FF` (keeping `PORTB = $FF` until `atari_io_dst_hi >= $BF` and switching `PORTB = $FE` for `$BF00-$C0FF` and handoff) before jumping to `entry_main` (`$0C00`). On `.car`, `cartridge_boot.s` (`Bank 0` `$A000`, copied to `$0800` with 256-byte ROM page prefetch at `$0900-$09FF` and `$D510` cart disable between pages) PackBits-unpacks `MORIA8.PKB` directly into `$0C00-$C0FF`. Once `entry_main` activates the custom Display List, `$0800-$0BE7` (`1,000` B) is the 40×25 ANTIC Mode 2 screen buffer, and `$0800-$0BFF` (`1,024` B) doubles as page-aligned `DUNGEON_GEN_SCAN_SCRATCH_BASE` during level generation. |
+| `$0C00-$23BC` | 6,077 B | Low Resident Banking, Boot Init, Interrupt, & I/O Helpers (`< $4000`) | Guaranteed below `$4000` (`low_helpers_end = $23BD` disk [`7,235 B` free] / `$21A1` cart [`7,775 B` free]): `entry_main` boot init, `atari_font_init`, `EnterSio`/`ExitSio`, `save_zp`/`restore_zp`, `sio_sector_buf` (`128` B), `hal_asset_load_prg_header` (caches overlays via `atari_ovl_xe_slot` across Slots `0..17`, `OVL.TTL` `$FF` uncached), `hal_asset_load_title`, `hal_storage_probe_media`, `atari_write_sio_sector`, `hal_storage_open`/`chrin`/`chrout`/`close`, legal DOS 8.3 filenames, Help controller `cmd_show_help_view`, **57-byte/record `MONSTER.CAT` reader + `catalog_fetch_ext`** (`monster_catalog_a8.s`, `cat_record[57]` with `cat_ext_record` at `+49`), `'ITM2'` item-catalog (`item_catalog_a8.s`), `find_special_room`, `xe_detect`, `xe_cache_stash`/`xe_cache_fetch`, `xe_slot_populated` (`18` B), `exit_trampoline`, `atari_nmi_handler`, `atari_irq_handler`, and banked/exit trampolines. |
+| `$23BD-$C0F2` | 40,246 B | Resident `Default` Segment (`program_end = $C0F3 <= $C100`) | Core gameplay (`29` SoA `cr_*` fields, `4` attacks, `19` `ADESC_*` verbs, hot `ATK_*` effects, `5` `MSF2_*` spells, `CD_*`/`CM2_*`), resident `player_cast_spell`/`player_pray` selection shell + `player_magic_cast_cold.s` (`PLAYER_CAST_RESIDENT`), UI, `40`-col recall tables (`recall_defs.s`), `item_hot_tables.s`, `recall[279]` (`1,116` B), `id_known_bits[47]`, `potion_shuffle..staff_shuffle` (`174` B), `si_meta_hi[128]`, `fi_meta_hi[42]`, town roster, shared save-state arrays/magic, `disk_prompt_save` (`#if !ATARI8_CARTRIDGE`, relocated from `RuntimeBanked` after MON-044 `eff_gain_stat.s`), `hal_overlay_post_reload`, generated overlay trampolines (`build/trampolines/atari8_trampolines.inc`), and custom resident trampolines. `46,323` B total span in `$0C00-$C0F2` (**`13` B free** below `$C100` on disk; `$0C00-$BDF9`, `45,562` B, **`774` B free** on cartridge). |
 | `$C100-$CFFF` | 3,840 B | `MAP_BASE` (`$C100-$CFFF`) | Live 80×48 dungeon map (`15` pages = `3,840` B = `$0F00` B), ending immediately below the `$D000` hardware I/O window. `CREATURE_BASE` (`$C120-$C1FF`) aliases map scratch during save/game-over, matching C64/Plus/4. `TITLE.DAT` links at `.pc = $C100` (`platforms/atari8/title_data.s`) and copies `3` pages (`768` B) into `$C100-$C3FF`. No executable code is ever linked into `$C100-$CFFF`. |
 | `$D000-$D7FF` | 2,048 B | **Hardware I/O Hole (Forbidden to Code/Data)** | `GTIA` (`$D000-$D0FF`), `POKEY` (`$D200-$D2FF`), `PIA` (`$D300-$D3FF`), `ANTIC` (`$D400-$D4FF`). |
 | `$D800-$DBFF` | 1,024 B | `PLATFORM_TIER_NAME_POOL_BASE` | The level's monster catalog names, 32 B per species slot (asserted in `core/monster_catalog.s`), in RAM under OS ROM. |
@@ -180,14 +180,14 @@ Memory visibility is controlled through PIA `PORTB` (`$D301`):
 | `$DF3E-$DFC3` | 134 B | Scratch buffers, `nf_digit_buf`, `consol_released` (`HighRAM Tail`) | `combat_msg_buf`, the creature-name buffer, `pm_spell_list`, the tier-loader counters, the inventory picker's visible slots, the monster-death queue, the chest-loot scratch, `nf_digit_buf` (`8` B), and `consol_released` (`1` B at `$DFC3`). `potion_shuffle..staff_shuffle` (`174` B) and `id_known_bits` (`47` B) moved back to `Default` in Phase 4 (`2026-11-15`), leaving **`60` B free** in `$DFC4-$DFFF`. |
 | `$DFC4-$DFFF` | 60 B | `HighRAM Tail` Uninitialized BSS Spare | Uninitialized RAM under OS ROM (`PORTB = $FE`; `virtual` segment, never emitted to `MORIA8.RES`). |
 | `$E000-$EFFF` | 4,096 B | `BANKED_DATA_BASE` (Overlay & Tier Window) | Shared 4 KB execution/staging window for the 13 code overlays (`OVL.STA`..`OVL.GEN`, `OVL.HOM`, `OVL.STO`, cold `OVL.TTL`), uncached `LEGALUI`, and, at 130XE boot only, the staging of `MONSTER.CAT` sectors, identical to C64 and Plus/4. |
-| `$F000-$FFF9` | 4,090 B | `RuntimeBanked` Segment | Load-once banked runtime (`$F000-$FFF0` used = `4,081` B, **`9` B free** on disk; `$F000-$FF2C` = `3,885` B, **`205` B free** on cartridge): `generation_busy.s`, `catalog_index.s` (including `cat_undead[35]`), `pick_undead_creature_type` (`core/monster_magic.s` `:UndeadPickSegment()`, beside `cat_undead`; 2026-11-20, MON-041), `mae_cold_body` (zero-HP cold melee attack effects), `run_initialize_impl`, `store_data.s`, `runtime_ui_strings.s`, `ego_items.s`, `item_desc_banked.s`, `ui_help_clear.s`, `legal.s` (`tramp_ui_legal_display`), `ui_status.s` (`:StatusTextSegment()`), equipment flags (`player.s` `:PflagsSegment()`), `disk_prompt_game`/`disk_prompt_game_required` (`disk_prompt_save` rides `Default` on disk), and `eff_gain_stat.s`. |
+| `$F000-$FFF9` | 4,090 B | `RuntimeBanked` Segment | Load-once banked runtime (`$F000-$FFF5` used = `4,086` B, **`4` B free** on disk; `$F000-$FF31` = `3,890` B, **`200` B free** on cartridge): `generation_busy.s`, `catalog_index.s` (including `cat_undead[35]`), `pick_undead_creature_type` (`core/monster_magic.s` `:UndeadPickSegment()`, beside `cat_undead`; 2026-11-20, MON-041), `mae_cold_body` (zero-HP cold melee attack effects), `run_initialize_impl`, `store_data.s`, `runtime_ui_strings.s`, `ego_items.s`, `item_desc_banked.s`, `ui_help_clear.s`, `legal.s` (`tramp_ui_legal_display`), `ui_status.s` (`:StatusTextSegment()`), equipment flags (`player.s` `:PflagsSegment()`), `disk_prompt_game`/`disk_prompt_game_required` (`disk_prompt_save` rides `Default` on disk), and `eff_gain_stat.s`. |
 | `$FFFA-$FFFF` | 6 B | Hardware CPU Vectors (`NMI`, `RESET`, `IRQ`) | Installed in RAM under OS ROM (`$FFFA` -> `atari_nmi_handler`, `$FFFC` -> `exit_trampoline` in `< $4000`, `$FFFE` -> `atari_irq_handler`) for execution while `PORTB = $FE`. |
 
 ---
 
 ## 3. 130XE Extended RAM Cache Contract (`64 KB` = 4 × 16 KB Banks at `$4000-$7FFF`)
 
-When `xe_detect` (linked and executed strictly below `$4000` in `$0C00-$225D`)
+When `xe_detect` (linked and executed strictly below `$4000` in `$0C00-$23BC`)
 confirms 130XE extended RAM at boot (non-aliasing probe across banks `0..3` at
 `$4000` with Main RAM preserved), the `64 KB` extended-RAM pool (`4` banks ×
 `64` pages/bank = `256` pages total, defined by `XE_WIN_BASE_HI = $40`,
@@ -207,23 +207,23 @@ gameplay overlays, `57 B/record` `MONSTER.CAT`, and `TITLE.DAT` stay RAM-cached:
 
 | 130XE Bank | `PORTB` | Slot ID | Window Range | Pages (Bytes) | Cached Payload | Copy Span / Dest | Boot Policy |
 | --- | --- | ---: | --- | ---: | --- | --- | --- |
-| Bank 0 (`64/64` p, `0` free) | `$E2` | `0` | `$4000-$4FFF` | `16` (`4,096` B max; `4,024` B) | `OVL.STA` (`OVL_STARTUP = 1`) | `16` pages -> `$E000` | Preloaded |
-| Bank 0 | `$E2` | `5` | `$5000-$5FFF` | `16` (`4,096` B max; `3,795` B) | `OVL.UI` (`OVL_UI = 6`, owns `ui_inventory.s` + spell names/list/study) | `16` pages -> `$E000` | Preloaded |
+| Bank 0 (`64/64` p, `0` free) | `$E2` | `0` | `$4000-$4FFF` | `16` (`4,096` B max; `3,853` B) | `OVL.STA` (`OVL_STARTUP = 1`) | `16` pages -> `$E000` | Preloaded |
+| Bank 0 | `$E2` | `5` | `$5000-$5FFF` | `16` (`4,096` B max; `4,055` B; `41` B free) | `OVL.UI` (`OVL_UI = 6`, owns `ui_inventory.s` + spell names/list/study) | `16` pages -> `$E000` | Preloaded |
 | Bank 0 | `$E2` | `9` | `$6000-$6FFF` | `16` (`4,096` B max; `3,990` B) | `OVL.CHS` (`OVL_CHEST = 10`) | `16` pages -> `$E000` | Preloaded |
 | Bank 0 | `$E2` | `10` | `$7000-$7FFF` | `16` (`4,096` B) | `MONSTER.CAT` secs 0–31 (cat slot 0) | `32 × 128` B secs, **57 B** -> `cat_record` | Preloaded |
 | Bank 1 (`64/64` p, `0` free) | `$E6` | `11` | `$4000-$4FFF` | `16` (`4,096` B) | `MONSTER.CAT` secs 32–63 (cat slot 1) | `32 × 128` B secs, **57 B** -> `cat_record` | Preloaded |
 | Bank 1 | `$E6` | `12` | `$5000-$5FFF` | `16` (`4,096` B) | `MONSTER.CAT` secs 64–95 (cat slot 2) | `32 × 128` B secs, **57 B** -> `cat_record` | Preloaded |
 | Bank 1 | `$E6` | `13` | `$6000-$6FFF` | `16` (`4,096` B) | `MONSTER.CAT` secs 96–127 (cat slot 3) | `32 × 128` B secs, **57 B** -> `cat_record` | Preloaded |
-| Bank 1 | `$E6` | `16` | `$7000-$7FFF` | `16` (`4,096` B max; `3,918` B; `178` B free) | `OVL.HOM` (`OVL_HOME = 11`) | `16` pages -> `$E000` | Preloaded |
+| Bank 1 | `$E6` | `16` | `$7000-$7FFF` | `16` (`4,096` B max; `3,936` B; `160` B free) | `OVL.HOM` (`OVL_HOME = 11`) | `16` pages -> `$E000` | Preloaded |
 | Bank 2 (`64/64` p, `0` free) | `$EA` | `1` | `$4000-$4EFF` | `15` (`3,840` B max; `3,779` B) | `OVL.TWN` (`OVL_TOWN = 2`) | `15` pages -> `$E000` | Preloaded |
 | Bank 2 | `$EA` | `3` | `$4F00-$5DFF` | `15` (`3,840` B max; `3,838` B) | `OVL.GEN` (`OVL_DUNGEON_GEN = 4`) | `15` pages -> `$E000` | Preloaded |
-| Bank 2 | `$EA` | `7` | `$5E00-$6DFF` | `16` (`4,096` B max; `3,933` B) | `OVL.SPL` (`OVL_SPELL = 8`, owns `calc_spell_failure` + `spell_execute_selected`) | `16` pages -> `$E000` | Preloaded |
-| Bank 2 | `$EA` | `17` | `$6E00-$7CFF` | `15` (`3,840` B max; `3,645` B disk / `3,641` B cart) | `OVL.STO` (`OVL_STORAGE = 12`) | `15` pages -> `$E000` | Preloaded |
-| Bank 2 | `$EA` | `14` | `$7D00-$7FFF` | `3` (`768` B max; `621` B) | `TITLE.DAT` (Title Artwork) | **3 pages (`768` B) -> `MAP_BASE` (`$C100`)** | Cached on title draw |
-| Bank 3 (`64/64` p, `0` free) | `$EE` | `2` | `$4000-$4DFF` | `14` (`3,584` B max; `3,565` B) | `OVL.DTH` (`OVL_DEATH = 3`, owns `ui_recall.s`) | `14` pages -> `$E000` | Preloaded |
-| Bank 3 | `$EE` | `4` | `$4E00-$5CFF` | `15` (`3,840` B max; `3,755` B) | `OVL.HLP` (`OVL_HELP = 5`, owns `ui_character.s` + `ui_equipment.s` + `player_item_commands.s`) | `15` pages -> `$E000` | Preloaded |
-| Bank 3 | `$EE` | `6` | `$5D00-$6BFF` | `15` (`3,840` B max; `3,450` B; `390` B free in Slot 6 / `646` B free `< $F000`) | `OVL.ITM` (`OVL_ITEMS = 7`, owns `door_open_close_cold.s`) | `15` pages -> `$E000` | Preloaded |
-| Bank 3 | `$EE` | `8` | `$6C00-$79FF` | `14` (`3,584` B max; `3,317` B) | `OVL.MDL` (`OVL_MODAL_MISC = 9`) | `14` pages -> `$E000` | Preloaded |
+| Bank 2 | `$EA` | `7` | `$5E00-$6DFF` | `16` (`4,096` B max; `3,955` B) | `OVL.SPL` (`OVL_SPELL = 8`, owns `calc_spell_failure` + `spell_execute_selected`) | `16` pages -> `$E000` | Preloaded |
+| Bank 2 | `$EA` | `4` | `$6E00-$7CFF` | `15` (`3,840` B max; `3,802` B) | `OVL.HLP` (`OVL_HELP = 5`, owns `player_magic_map.s`) | `15` pages -> `$E000` | Preloaded |
+| Bank 2 | `$EA` | `14` | `$7D00-$7FFF` | `3` (`768` B max; `625` B) | `TITLE.DAT` (Title Artwork) | **3 pages (`768` B) -> `MAP_BASE` (`$C100`)** | Cached on title draw |
+| Bank 3 (`64/64` p, `0` free) | `$EE` | `2` | `$4000-$4DFF` | `14` (`3,584` B max; `3,430` B) | `OVL.DTH` (`OVL_DEATH = 3`, owns `ui_recall.s` + `item_exchange.s`) | `14` pages -> `$E000` | Preloaded |
+| Bank 3 | `$EE` | `17` | `$4E00-$5BFF` | `14` (`3,584` B max; `3,575` B disk / `3,571` B cart) | `OVL.STO` (`OVL_STORAGE = 12`) | `14` pages -> `$E000` | Preloaded |
+| Bank 3 | `$EE` | `6` | `$5C00-$69FF` | `14` (`3,584` B max; `3,575` B) | `OVL.ITM` (`OVL_ITEMS = 7`, owns `door_open_close_cold.s`) | `14` pages -> `$E000` | Preloaded |
+| Bank 3 | `$EE` | `8` | `$6A00-$79FF` | `16` (`4,096` B max; `4,013` B) | `OVL.MDL` (`OVL_MODAL_MISC = 9`, owns `eff_item_extended.s`) | `16` pages -> `$E000` | Preloaded |
 | Bank 3 | `$EE` | `15` | `$7A00-$7FFF` | `6` (`1,536` B) | `MONSTER.CAT` secs 128–139 (cat slot 4) | `12 × 128` B secs, **57 B** -> `cat_record` | Preloaded |
 
 - **Slot-ID Reference Order:** `0..9` remain `OVL.STA`..`OVL.CHS`, `10..13` and `15` hold `MONSTER.CAT` (`a8_cat_xe_slots = [10, 11, 12, 13, 15]`, `140` sectors @ `57 B/record`), `14` holds `TITLE.DAT`, and `16..17` hold `OVL.HOM` and `OVL.STO` (`atari_ovl_xe_slot = [0..9, 16, 17, $FF]` in `platforms/atari8/storage.s`; cold `OVL.TTL` is `$FF` uncached).
@@ -275,7 +275,7 @@ gameplay overlays, `57 B/record` `MONSTER.CAT`, and `TITLE.DAT` stay RAM-cached:
    * `make testatari8-memory-contract` and `make testatari8-memory-contract-selftest` (13 tests including 8 negative 130XE slot-packing/bounds/overflow tests)
    * Verifies symbol extents from `build/atari8/main.sym` (and `build/atari8-cart/main.sym` when built), rejects any symbol or segment overlap with `$0200-$031A` (OS Page 2 / DCB), `$C100-$CFFF` (`MAP_BASE`), or `$D000-$D7FF` (Hardware I/O), verifies `< $4000` residency of all banking/SIO/130XE/interrupt/exit/font helpers, checks all PRG payload spans, and reads `xe_slot_portb`/`xe_slot_win_hi`/`xe_slot_ram_hi`/`xe_slot_pages` directly from `MORIA8.RES` to assert valid `PORTB` banks, `$4000-$7FFF` bounds, per-bank non-overlap, `TITLE.DAT` `$D000` safety, and `actual_pages <= xe_slot_pages[slot]` against built `OVL.*`, `TITLE.DAT`, and `MONSTER.CAT` payloads.
 3. **Runtime MAME Verification (`platforms/atari8/harness_smoke.py`):**
-   * `make testatari8-runtime` runs headless MAME across the 16-scenario behavioral suite on `a800xl` (64 KB disk-overlay baseline) plus 5 130XE cache/SIO/legal scenarios on `a130xe` (checking `xe_all_18_slots_preloaded` for slots `0..17`) when `ATARI8ROMS` is set (and warns/skips gracefully when `ATARI8ROMS` is unset); `make testatari8-cartridge` runs the 4-scenario (`6`-MAME-run) AtariMax `.car` (`ATARI8_CARTRIDGE`) suite across `a800xl` and `a130xe`.
+   * `make testatari8-runtime` runs headless MAME across the 17-scenario behavioral suite on `a800xl` (64 KB disk-overlay baseline) plus 5 130XE cache/SIO/legal scenarios on `a130xe` (checking `xe_all_18_slots_preloaded` for slots `0..17`) when `ATARI8ROMS` is set (and warns/skips gracefully when `ATARI8ROMS` is unset); `make testatari8-cartridge` runs the 4-scenario (`7`-MAME-run) AtariMax `.car` (`ATARI8_CARTRIDGE`) suite across `a800xl` and `a130xe`.
 
 ## AtariMax 128 KB Cartridge Mode (`ATARI8_CARTRIDGE`, 2026-11-12)
 
@@ -466,5 +466,71 @@ Unresolved uncertainty and risk: HighResident has 0 B free ($DDCE-$DF3E exact 36
 - **Gate 1 (Link-Time Assertions & Budgets):** `boot.s <= $0980` (`384 B`), `low_helpers_end = $23C5` disk / `$213D` cart (`< $4000`), `Default` `$0C00-$BF3E` (`450 B` free) disk / `$0C00-$BBF7` (`1,289 B` free) cart, `ATARI.BNK` `$F000-$FFA1` (`89 B` free) disk / `$F000-$FEBF` (`315 B` free) cart, `130XE` `256/256` pages (`Slots 0..17`), `.atr` **`35` free sectors** (`988/1,023`, `LICENSE.TXT` & `SRCOFFER.TXT` intact), `.car` **`4,715 B` free** (`21` assets).
 - **Gate 2 (Static Checkers & HAL Audits):** `make testatari8-memory-contract`, `check_atari8_car.py`, `make check-hal-boundaries`, and `report_memory_budgets.py` (`0` overflows) all PASS.
 - **Gate 3 (Runtime MAME & Playtest Verification):** `make testatari8` (`a800xl` + `a130xe` + `.car`) and `make playtest-gate` (`atari8` + `atari8-cart`) PASS (`0` findings).
+
+---
+
+## Bank 3 & Overlay Rebalance for Wave 4 UI QoL, Expanded Character Sheet, & Burden (`2026-11-27`)
+
+### 1. Change Record (`docs/BEHAVIOR_CHANGE_PROTOCOL.md`)
+
+```text
+Problem and success criteria: Wave 4 UI QoL (Ctrl+P Message History Viewer in
+  OVL.HLP, Help Page 3/3 Legend, expanded 2-page Character Sheet in ui_character.s,
+  Burden header helpers in ui_weight_helpers.s) requires fitting all 13 Atari 8-bit
+  overlays <= $F000 (with 12 cached slots inside 256/256 130XE extended RAM pages)
+  without overflowing Default (< $C100).
+State being changed:
+  - platforms/atari8/storage.s: XE_SLOT2_PAGES (OVL.DTH) = 14p (3,584 B),
+    XE_SLOT17_PAGES (OVL.STO) = 14p (3,584 B), XE_SLOT6_PAGES (OVL.ITM) = 14p
+    (3,584 B), XE_SLOT8_PAGES (OVL.MDL) = 16p (4,096 B), XE_SLOT15_PAGES
+    (MONSTER.CAT slot 4) = 6p (1,536 B), totaling 64/64 pages in 130XE Bank 3
+    ($EE); Bank 2 ($EA) packs Slots 1 (15p OVL.TWN), 3 (15p OVL.GEN), 7 (16p
+    OVL.SPL), 4 (15p OVL.HLP), and 14 (3p TITLE.DAT) = 64/64 pages; OVL.TTL stays
+    uncached ($FF). Total 130XE extended RAM: 256/256 pages (0 free).
+  - platforms/atari8/main.s & tools/trampoline_manifest.py:
+    - item_exchange.s -> OVL.DTH (3,430 B <= 14p)
+    - eff_item_extended.s -> OVL.MDL (4,013 B <= 16p)
+    - player_magic_map.s + ui_help*.s -> OVL.HLP (3,802 B <= 15p)
+    - ui_inventory.s + item_drop_cold.s -> OVL.UI (4,055 B, 41 B free <= 16p)
+    - starting_kit_cold.s + door_open_close_cold.s -> OVL.ITM (3,575 B <= 14p)
+    - item_refresh_known_cold.s -> OVL.STO (3,575 B <= 14p)
+    - ui_character.s, ui_equipment.s, store_restock_overlay.s -> OVL.TTL
+      (4,071 B disk, 25 B free <= $F000; dispatched via a8_swap_ttl)
+Search scope and terms: rg across platforms/atari8/ and tools/trampoline_manifest.py
+  for XE_SLOT*_PAGES, OVL_TITLE, OVL_HELP, OVL_MODAL_MISC, OVL_STORAGE, a8_swap_ttl,
+  tramp_ui_equip_select_display.
+Relevant readers/writers found and known exclusions: xe_slot_pages / xe_slot_win_hi
+  in platforms/atari8/storage.s consume XE_SLOT*_PAGES directly; all moved UI
+  trampolines (including tramp_ui_equip_select_display -> a8_swap_ttl preserving
+  caller overlay across take-off '?' prompt) route through generated stubs in
+  build/trampolines/atari8_trampolines.inc.
+Initialization, reset and persistence points: N/A (boot-time 130XE slot preload).
+Affected production sequence through the changed transition: 130XE preload caches
+  all 18 slots cleanly across Banks 0..3 (64/64/64/64p); cold OVL.TTL loads from
+  disk/.car via existing overlay_load / a8_swap_ttl paths.
+Contract decision or selected upstream oracle with source locations: Sections 2-4
+  above ($E000-$EFFF overlay bounds and 256-page 130XE Bank 0-3 layout).
+Intentional Moria8 deviations: N/A.
+Input/intermediate widths, signedness, carry, range and overflow policy: Enforced by
+  all .assert statements in platforms/atari8/{main.s,storage.s} and
+  platforms/atari8/check_memory_contract.py.
+RNG reduction and bias, if applicable: N/A.
+Affected platforms, overlays, banks and owners: Atari 8-bit 130XE Banks 2 & 3 (64/64p
+  each), Default ($0C00-$C0F3, 13 B free disk / 774 B free cart), ATARI.BNK
+  ($F000-$FFF6, 4 B free disk), OVL.UI (4,055 B, 41 B free), OVL.TTL (4,071 B,
+  25 B free disk).
+Required production-path tests: platforms/atari8/check_memory_contract.py,
+  tools/check_overlay_calls.py, tools/report_memory_budgets.py, and MAME
+  make testatari8 (unsandboxed).
+Known behavior explicitly out of scope: Banks 0..1 slot sizes unchanged.
+Unresolved uncertainty and risk: HighResident 0 B free, ATARI.BNK 4 B free, Default
+  13 B free, OVL.TTL 25 B free, OVL.UI 41 B free (all link-time asserted);
+  MAME runtime verification below.
+```
+
+### 2. Verification Status (`2026-11-27`)
+
+- **Gate 1 & Gate 2 (Build, Link Asserts & Contract Check):** `make build`, `make disk`, `make check-hal-boundaries`, `platforms/atari8/check_memory_contract.py`, `tools/check_overlay_calls.py`, and `tools/report_memory_budgets.py` PASS (`0` overflows, `0` overlay violations; `Default` `$0C00-$C0F3` `13 B` free, `ATARI.BNK` `$F000-$FFF6` `4 B` free, `OVL.UI` `41 B` free, `OVL.TTL` `25 B` free).
+- **Gate 3 (MAME & Playtest Gate):** `make test-stage-atari8` (`17` a800xl + `5` a130xe runtime scenarios PASS), `make testatari8-cartridge` (`4` scenarios / `7` MAME runs PASS), and `GATE_ALLOW_SKIP=1 make playtest-gate` (`atari8-tour`, `atari8-cart-tour`, and all disk/cart bot runs PASS) **Verified PASS**.
 
 

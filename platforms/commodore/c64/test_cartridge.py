@@ -13,6 +13,7 @@ import errno
 import pty
 from pathlib import Path
 import re
+import struct
 import subprocess
 import sys
 import time
@@ -357,10 +358,16 @@ def run(args):
         records = catalog_disk.records()
         record_size = catalog_disk.layout()["CATALOG_RECORD_SIZE"]
         catalog_offset = manifest["assets"][make_easyflash.CONTRACT["CART_ASSET_CATALOG"]]["rom_offset"]
+        start_bank = catalog_offset // make_easyflash.BANK_SIZE
+        end_bank = (catalog_offset + len(records) * record_size - 1) // make_easyflash.BANK_SIZE
+        assert start_bank != end_bank, "Fixture catalog must span a ROM bank boundary"
         crossing_ids = [i for i in range(len(records))
                         if (catalog_offset + i * record_size) % make_easyflash.BANK_SIZE + record_size > make_easyflash.BANK_SIZE]
-        assert crossing_ids, "Fixture must exercise a record across a ROM bank"
-        for record_id in sorted({0, 1, 255, 256, len(records)-1, *crossing_ids}):
+        seam_ids = [idx for i in range(1, len(records))
+                    if (catalog_offset + i * record_size) % make_easyflash.BANK_SIZE == 0
+                    for idx in (i - 1, i)]
+        assert crossing_ids or seam_ids, "Fixture must exercise a bank crossing or bank seam"
+        for record_id in sorted({0, 1, 255, 256, len(records)-1, *crossing_ids, *seam_ids}):
             exp.write(exp.sym["cat_id_lo"], record_id.to_bytes(2, "little"))
             cycles = exp.call(exp.sym["catalog_fetch_record"], port=0x34)
             assert cycles < 2000, (record_id, cycles)
@@ -433,6 +440,54 @@ def run_zero_length(args):
         exp.call(exp.sym["cart_load_asset"], make_easyflash.CONTRACT["CART_ASSET_CHEST"])
         assert exp.memory(0xE000, 0x1000) == original
         exp.check("zero-length descriptor leaves its destination untouched")
+        return exp.count
+    finally:
+        exp.close()
+
+
+def run_catalog_bank_crossing(args):
+    # When production packing aligns catalog records cleanly at an 8 KB bank
+    # seam, exercise mid-record bank crossing via a private CRT fixture.
+    manifest = json.loads(args.crt.with_suffix(".json").read_text())
+    records = catalog_disk.records()
+    record_size = catalog_disk.layout()["CATALOG_RECORD_SIZE"]
+    catalog_offset = manifest["assets"][make_easyflash.CONTRACT["CART_ASSET_CATALOG"]]["rom_offset"]
+    if any((catalog_offset + i * record_size) % make_easyflash.BANK_SIZE + record_size > make_easyflash.BANK_SIZE
+           for i in range(len(records))):
+        return 0
+    used_banks = {
+        bank
+        for asset in manifest["assets"]
+        for bank in range(asset["rom_offset"] // make_easyflash.BANK_SIZE,
+                          (asset["rom_offset"] + asset["size"] - 1) // make_easyflash.BANK_SIZE + 1)
+    }
+    assert 60 not in used_banks and 61 not in used_banks, "Synthetic bank-crossing banks collide with manifest assets"
+    fixture = args.output.resolve() / "catalog-crossing.crt"
+    raw = bytearray(args.crt.read_bytes())
+    within = make_easyflash.BANK_SIZE - record_size // 2
+    pair = records[0] + records[1]
+    split = record_size // 2
+    bank60 = bytearray(b"\xff" * make_easyflash.BANK_SIZE)
+    bank61 = bytearray(b"\xff" * make_easyflash.BANK_SIZE)
+    bank60[within:] = pair[:split]
+    bank61[:len(pair) - split] = pair[split:]
+    raw.extend(struct.pack(">4sIHHHH", b"CHIP", make_easyflash.BANK_SIZE + 16, 2, 60, 0x8000, make_easyflash.BANK_SIZE))
+    raw.extend(bank60)
+    raw.extend(struct.pack(">4sIHHHH", b"CHIP", make_easyflash.BANK_SIZE + 16, 2, 61, 0x8000, make_easyflash.BANK_SIZE))
+    raw.extend(bank61)
+    desc = (0x40 + 16 + make_easyflash.CONTRACT["CART_DIRECTORY"] - 0x8000
+            + make_easyflash.CONTRACT["CART_ASSET_CATALOG"] * make_easyflash.CONTRACT["CART_DESCRIPTOR_SIZE"])
+    raw[desc:desc + 3] = struct.pack("<BH", 60, 0x8000 + within)
+    fixture.write_bytes(raw)
+    exp = Experiment(SimpleNamespace(**{**vars(args), "crt": fixture}), name="catalog-crossing")
+    try:
+        exp.until(exp.sym["title_menu_loop"])
+        for record_id in (0, 1):
+            exp.write(exp.sym["cat_id_lo"], record_id.to_bytes(2, "little"))
+            cycles = exp.call(exp.sym["catalog_fetch_record"], port=0x34)
+            assert cycles < 2000, (record_id, cycles)
+            assert exp.memory(exp.sym["cat_record"], record_size) == records[record_id]
+        exp.check("synthetic catalog fixture exercises a record straddling an 8 KB ROM bank")
         return exp.count
     finally:
         exp.close()
@@ -734,6 +789,7 @@ if __name__ == "__main__":
     options = parser.parse_args()
     prepare_run(options)
     count = (run_turbo(options) + run_boot_workspace(options) + run(options)
-             + run_catalog(options) + run_nmi(options) + run_gameplay(options)
+             + run_catalog(options) + run_catalog_bank_crossing(options)
+             + run_nmi(options) + run_gameplay(options)
              + run_gameplay(options, turbo=True) + run_zero_length(options))
     print(f"Cartridge experiment: {count} checks passed")

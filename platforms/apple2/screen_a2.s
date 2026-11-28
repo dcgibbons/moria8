@@ -125,9 +125,7 @@ a2_map_char:
     rts
 !mc_brackets:
     txa
-    clc
-    adc #$40                    // $1B-$1F, $5B-$5F -> $DB-$DF
-    ora #$80
+    ora #$c0                    // $1B-$1F, $5B-$5F -> $DB-$DF
     rts
 !mc_punct:
     txa                         // $20-$3F -> $A0-$BF

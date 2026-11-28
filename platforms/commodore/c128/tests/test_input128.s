@@ -25,7 +25,7 @@ input_tree_keys:
     .byte $44, $49, $45, $57, $54, $51, $52, $41
     .byte $5a, $4d, $50, $3f, $58, $46, $66
     .byte $c3, $d1, $c5, $d3, $c6, $d4, $d2, $c4, $02
-    .byte $12, $23, $2b, $2f, $17
+    .byte $12, $23, $2b, $2f, $17, $10
     .byte $cb, $ca, $c8, $cc, $d9, $d5, $c2, $ce
     .byte KEY_ESC
     .byte KEY_KP_MINUS, KEY_KP0, KEY_ALT, KEY_LF
@@ -45,7 +45,7 @@ input_tree_cmds:
     .byte CMD_LOOK, CMD_GAIN, CMD_GAIN
     .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_SAVE
     .byte CMD_FIRE, CMD_THROW, CMD_REFUEL, CMD_DISARM, CMD_BASH
-    .byte CMD_AUTOREST, CMD_SEARCH_MODE, CMD_TUNNEL, CMD_RECALL, CMD_WIZARD
+    .byte CMD_AUTOREST, CMD_SEARCH_MODE, CMD_TUNNEL, CMD_RECALL, CMD_WIZARD, CMD_MSG_HISTORY
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
     .byte CMD_QUIT
@@ -846,7 +846,7 @@ test_scan_restore_checks:
     cmp #CMD_VERSION
     bne !scan_restore_fail+
 
-    jmp test_pass
+    jmp test_ctrl_p_checks
 !scan_restore_fail:
     jmp test_fail3
 
@@ -855,6 +855,34 @@ test_fail_loop:
 
 test_pass:
     jmp test_pass
+
+test_ctrl_p_checks:
+    lda #$50               // P
+    ldy #1                 // Ctrl held
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$10
+    bne !ctrl_p_fail+
+
+    lda #$d0               // SHIFT+P
+    ldy #1                 // Ctrl held
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$10
+    bne !ctrl_p_fail+
+
+    lda #$50               // Plain P still prays
+    ldy #0
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$50
+    bne !ctrl_p_fail+
+
+    lda #$10               // Normalized CTRL+P should map to message history
+    jsr petscii_to_command
+    cmp #CMD_MSG_HISTORY
+    bne !ctrl_p_fail+
+
+    jmp test_pass
+!ctrl_p_fail:
+    jmp test_fail_loop
 
 test_ext_orig:
     .byte 0

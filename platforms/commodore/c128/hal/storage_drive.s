@@ -52,7 +52,8 @@ hal_storage_init_selected_drive:
     lda #hal_storage_cmd_channel
     jsr w_close
     jsr w_clrchn
-    jsr c128_storage_read_command_status
+    ldx disk_prompt_device
+    jsr c128_storage_read_command_status_x
     jsr disk_command_status
     cmp #HAL_STORAGE_STATUS_OK
     beq !ok+

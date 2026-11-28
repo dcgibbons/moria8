@@ -1199,7 +1199,7 @@ tramp_ui_equip_common:
     sta !equip_target+ + 1
     stx !equip_target+ + 2
     jsr tramp_ui_enter
-    lda #C128_HELP_OVERLAY_ID
+    lda #9
     jsr overlay_load
     bcs !done+
 !equip_target:
@@ -1608,18 +1608,18 @@ c128_prepare_startup_loading_screen:
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
     jsr hal_screen_clear
-    // Total = 12 startup/catalog files + 8 Bank 1 overlays on 128KB (20 total);
-    // 256KB disk adds OVL_STARTUP, CHEST, HOME, STORAGE, 128.PERSIST, and
-    // LEGALUI cached into Bank 2 (26 total). Keep initial count static before
+    // Total = 12 startup/catalog files + 7 Bank 1 overlays on 128KB (19 total);
+    // 256KB disk adds OVL_STARTUP, MODAL_MISC, CHEST, HOME, STORAGE, 128.PERSIST,
+    // and LEGALUI cached into Bank 2 (26 total). Keep initial count static before
     // preload mutates overlay state.
 #if HAL_PLATFORM_MONSTER_CATALOG
 #if !C128_CARTRIDGE
-    lda #20
+    lda #19
     ldx c128_ram_256k
     beq !total_ready+
     lda #26
 #else
-    lda #20
+    lda #19
 #endif
 #else
     lda #22
@@ -2125,26 +2125,7 @@ c128_test_load_then_save_new_empty_save:
     lda #1
     sta c128_test_load_then_save_new_empty_stage
     jsr c128_modal_require_persist
-c128_test_load_then_save_new_empty_save_media_ready:
-    jsr disk_marker_init
-    bcs c128_test_load_then_save_new_empty_fail
-    jsr disk_init_drive
-    bcs c128_test_load_then_save_new_empty_fail
-    lda #C128_MEDIA_SAVE
-    sta c128_media_state
-    jsr save_game
-    bcc c128_test_load_then_save_new_empty_fail
-    jsr c128_test_load_then_save_new_empty_write_proof
-    bcc c128_test_load_then_save_new_empty_fail
-    lda #2
-    sta c128_test_load_then_save_new_empty_stage
-c128_test_load_then_save_new_empty_after_save_wait:
-    jmp c128_test_load_then_save_new_empty_after_save_wait
-c128_test_load_then_save_new_empty_restore_program:
-    lda #3
-    sta c128_test_load_then_save_new_empty_stage
-c128_test_load_then_save_new_empty_done:
-    jmp c128_test_load_then_save_new_empty_done
+    jmp c128_test_load_then_save_new_empty_save_media_ready
 c128_test_load_then_save_new_empty_fail:
     jmp c128_test_load_then_save_new_empty_fail
 
@@ -2678,7 +2659,7 @@ c128_program_media_error_prompt:
     sta c128_media_state
 c128_program_media_error_shown:
     jsr c128_restore_runtime_guards
-    jmp disk_prompt_game
+    jmp disk_prompt_game_force
 
 #if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 c128_test_unexpected_post_save_program_prompt:
@@ -2780,6 +2761,10 @@ c128_modal_load_game:
     bcc !load_done+
     lda save_slot_index
     sta c128_active_save_slot
+    jsr load_resume_reset
+    lda #1
+    sta c128_resume_reset_done
+    sec                         // restore C=1 after player_search_mode_off cmp
 !load_done:
     rts
 !load_fail:
@@ -2820,6 +2805,20 @@ c128_modal_require_play:
     sta c128_modal_slot_state
     rts
 
+tramp_title_load_and_draw:
+    jsr c128_modal_require_persist
+    jsr c128_restore_runtime_guards
+    jmp title_load_and_draw
+
+tramp_load_resume_reset:
+    lsr c128_resume_reset_done
+    bcs !tlrr_done+
+    jsr c128_modal_require_persist
+    jsr load_resume_reset
+    jmp c128_modal_require_play
+!tlrr_done:
+    rts
+c128_resume_reset_done: .byte 0
 
 // ============================================================
 // Dungeon gen overlay trampoline — overlays now at $0400 (Safe Zone)
@@ -3495,7 +3494,7 @@ ovl_cache_pages:   .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000, 0, 0, 0, 0
 ovl_ready_mask_hi:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, %00000001, %00000010, %00000100, %00001000 // ID 9 = modal-misc (Bank 1); IDs 10..12 = chest/home/storage (Bank 2 on 256KB)
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, %00000001, %00000010, %00000100, %00001000 // IDs 9..12 = modal-misc/chest/home/storage (Bank 2 on 256KB; cold on 128KB)
 c128_cache_state_end:
 .assert "Overlay ready-mask tables cover all overlays", (ovl_ready_mask_hi - ovl_ready_mask) == hal_platform_overlay_count + 1 && (c128_cache_state_end - ovl_ready_mask_hi) == hal_platform_overlay_count + 1, true
 #import "../../../core/6502/dungeon_room_center_helpers.s"
@@ -4019,7 +4018,96 @@ c128_bank2_stage_persist_and_legal:
 !bsp_done:
     rts
 #endif
+#import "../../../core/6502/load_resume_reset_cold.s"
+#import "../common/title_screen.s"
+#if C128_TEST_TITLE_ART_CONTENT
+c128_test_title_art_assert:
+    lda #<MAP_BASE
+    sta zp_ptr1
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    ldy #0
+    jsr mmu_safe_map_read_ptr1
+    cmp #1
+    beq !check_screen+
+    sta c128_test_title_art_fail_code
+    lda #$10
+    sta c128_test_title_art_substage
+    jmp c128_test_title_art_fail_sym
+!check_screen:
+    lda #1
+    sta zp_cursor_row
+    lda #21
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #$2b
+    beq !check_logo+
+    sta c128_test_title_art_fail_code
+    lda #1
+    sta c128_test_title_art_substage
+    jmp c128_test_title_art_fail_sym
+!check_logo:
+
+    lda #3
+    sta zp_cursor_row
+    lda #24
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #$20
+    bne !block_fail+
+    lda zp_color_hi
+    ldy zp_color_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #(VDC_WHITE | $40)
+    beq !pass+
+!block_fail:
+    sta c128_test_title_art_fail_code
+    lda #2
+    sta c128_test_title_art_substage
+    jmp c128_test_title_art_fail_sym
+
+!pass:
+    jmp c128_test_title_art_pass_sym
+#endif
+#if C128_TEST_SCRIPTED_LOAD_THEN_SAVE_NEW_EMPTY_PRODUCT
+c128_test_load_then_save_new_empty_save_media_ready:
+    jsr disk_marker_init
+    bcs !fail+
+    jsr disk_init_drive
+    bcs !fail+
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    jsr save_game
+    bcc !fail+
+    jsr c128_test_load_then_save_new_empty_write_proof
+    bcs !ok+
+!fail:
+    jmp c128_test_load_then_save_new_empty_fail
+!ok:
+    lda #2
+    sta c128_test_load_then_save_new_empty_stage
+c128_test_load_then_save_new_empty_after_save_wait:
+    jmp c128_test_load_then_save_new_empty_after_save_wait
+c128_test_load_then_save_new_empty_restore_program:
+    lda #3
+    sta c128_test_load_then_save_new_empty_stage
+c128_test_load_then_save_new_empty_done:
+    jmp c128_test_load_then_save_new_empty_done
+#endif
 c128_resident_persist_end:
+.assert "C128 title_load_and_draw and load_resume_reset stay in 128.persist", title_load_and_draw >= c128_resident_persist_start && title_load_and_draw < c128_resident_persist_end && load_resume_reset >= c128_resident_persist_start && load_resume_reset < c128_resident_persist_end, true
 
 #define PRESS_KEY_STR_EXTERNAL
 #define WELCOME_STR_EXTERNAL
@@ -4134,67 +4222,6 @@ recall_prompt_str:
 #define EFF_FEAR_TIMER_EXTERNAL
 #import "../../../core/6502/turn.s"
 #undef EFF_FEAR_TIMER_EXTERNAL
-#if C128_TEST_TITLE_ART_CONTENT
-c128_test_title_art_assert:
-    lda #<MAP_BASE
-    sta zp_ptr1
-    lda #>MAP_BASE
-    sta zp_ptr1_hi
-    ldy #0
-    jsr mmu_safe_map_read_ptr1
-    cmp #1
-    beq !check_screen+
-    sta c128_test_title_art_fail_code
-    lda #$10
-    sta c128_test_title_art_substage
-    jmp c128_test_title_art_fail_sym
-!check_screen:
-    lda #1
-    sta zp_cursor_row
-    lda #21
-    sta zp_cursor_col
-    jsr screen_set_cursor
-    lda zp_screen_hi
-    ldy zp_screen_lo
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_read_reg
-    cmp #$2b
-    beq !check_logo+
-    sta c128_test_title_art_fail_code
-    lda #1
-    sta c128_test_title_art_substage
-    jmp c128_test_title_art_fail_sym
-!check_logo:
-
-    lda #3
-    sta zp_cursor_row
-    lda #24
-    sta zp_cursor_col
-    jsr screen_set_cursor
-    lda zp_screen_hi
-    ldy zp_screen_lo
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_read_reg
-    cmp #$20
-    bne !block_fail+
-    lda zp_color_hi
-    ldy zp_color_lo
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_read_reg
-    cmp #(VDC_WHITE | $40)
-    beq !pass+
-!block_fail:
-    sta c128_test_title_art_fail_code
-    lda #2
-    sta c128_test_title_art_substage
-    jmp c128_test_title_art_fail_sym
-
-!pass:
-    jmp c128_test_title_art_pass_sym
-#endif
 #if C128_CACHE_TEST_SKIP_TIER || C128_CACHE_TEST_SKIP_OVERLAY
 c128_test_expected_tier_bits:
 #if HAL_PLATFORM_MONSTER_CATALOG
@@ -4225,7 +4252,11 @@ c128_test_expected_overlay_bits:
     rts
 
 c128_test_expected_overlay_bits_hi:
-    lda #%00000001
+    .if (C128_OVERLAY_MODAL_CACHE_PAGES > 0) {
+        lda #%00000001
+    } else {
+        lda #0
+    }
 #if C128_CACHE_TEST_SKIP_OVERLAY
     ldx c128_cache_test_skip_overlay
     beq !cteo_hi_done+
@@ -4453,7 +4484,7 @@ c128_preload_bank2_extras:
     bcc !pb2_ok+
     lda c128_load_progress_total
     sec
-    sbc #6                      // Skip 128.PERSIST, LEGALUI, and 4 Bank 2 overlays
+    sbc #7                      // Skip 128.PERSIST, LEGALUI, and 5 Bank 2 overlays
     sta c128_load_progress_total
 !pb2_skip:
     rts
@@ -4547,6 +4578,7 @@ tramp_p3_death_items:
     bcs !tpdi_fail+
     lda tpdi_arg
     jsr tpdi_target
+!tpdi_restore:
     lda #OVL_ITEMS
     jsr overlay_load
     sec
@@ -4564,7 +4596,7 @@ tpdi_target:
 tramp_p3_death_cloud:
     lda #OVL_DEATH
     jsr overlay_load
-    bcs !tpdc_fail+
+    bcs !tpdi_fail-
     jsr eff_directional_monster
     bcc !tpdc_miss+
     jsr monster_get_ptr
@@ -4572,35 +4604,22 @@ tramp_p3_death_cloud:
     lda #10
     sta (zp_ptr0),y
     ldx #HSTR_PIW_WAND_CLOUD
-    jmp !tpdc_msg+
+    jmp !tpdi_msg+
 !tpdc_miss:
     ldx #HSTR_PIW_WAND_MISS
-!tpdc_msg:
+!tpdi_msg:
     jsr huff_print_msg
-    lda #OVL_ITEMS
-    jsr overlay_load
-    sec
-    rts
-!tpdc_fail:
-    clc
-    rts
+    jmp !tpdi_restore-
 
 // tramp_p3_death_remove_curse — Staff of Remove Curse: death-overlay effect
 // plus the cleansed report, all resident-safe.
 tramp_p3_death_remove_curse:
     lda #OVL_DEATH
     jsr overlay_load
-    bcs !tpdr_fail+
+    bcs !tpdi_fail-
     jsr eff_remove_curse
     ldx #HSTR_PIQ_CLEANSED
-    jsr huff_print_msg
-    lda #OVL_ITEMS
-    jsr overlay_load
-    sec
-    rts
-!tpdr_fail:
-    clc
-    rts
+    jmp !tpdi_msg-
 
 // RuntimeProjectileData segment — shared projectile helpers loaded below
 // runtime.input so the $F000 banked payload stays below the MMU register page.
@@ -4993,6 +5012,7 @@ ovl_town_end:
 .segment StartupOverlay
     #import "../../../core/6502/background_data.s"
     #import "../../../core/6502/player_create.s"
+    #import "../../../core/6502/starting_kit_cold.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $e000) + " bytes at $E000-$" + toHexString(ovl_start_end)
 .assert "Startup overlay fits in $E000-$EFFF", ovl_start_end <= $f000, true
@@ -5067,11 +5087,22 @@ winner_apply_retirement_bonus_storage:
     sta player_data + WIN_PL_XP_2
     rts
     #import "../../../core/6502/royal.s"
-    #define SCROLL_P3_NEW_OWNER
-    #define SCROLL_P3_EXISTING_OWNER
-    #import "../../../core/6502/scroll_effects_p3.s"
-    #undef SCROLL_P3_EXISTING_OWNER
-    #undef SCROLL_P3_NEW_OWNER
+#define SCROLL_P3_NEW_OWNER
+#define SCROLL_P3_EXISTING_OWNER
+#import "../../../core/6502/scroll_effects_p3.s"
+#undef SCROLL_P3_EXISTING_OWNER
+#undef SCROLL_P3_NEW_OWNER
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+ui_wizard_display:
+    rts
+#else
+    #import "../../../core/6502/ui_wizard.s"
+#endif
+    .macro UiEquipmentScratchSegment() { .segment RuntimeLowData }
+    .macro UiEquipmentCodeSegment() { .segment ModalMiscOverlay }
+    #define UI_EQUIPMENT_SCRATCH_RESIDENT
+    #import "../../../core/6502/ui_equipment.s"
+    #undef UI_EQUIPMENT_SCRATCH_RESIDENT
 ovl_modal_misc_end:
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
 .assert "Modal-misc overlay fits in $E000-$EFFF", ovl_modal_misc_end <= $f000, true
@@ -5085,14 +5116,9 @@ ovl_modal_misc_end:
     #import "../../../core/6502/ui_help.s"
     .macro UiInventoryScratchSegment() { .segment RuntimeLowData }
     .macro UiInventoryCodeSegment() { .segment HelpOverlay }
-    .macro UiEquipmentScratchSegment() { .segment RuntimeLowData }
-    .macro UiEquipmentCodeSegment() { .segment HelpOverlay }
     #define UI_INVENTORY_SCRATCH_RESIDENT
     #define UI_INVENTORY_HEADER_STRINGS_EXTERNAL
-    #define UI_EQUIPMENT_SCRATCH_RESIDENT
     #import "../../../core/6502/ui_inventory.s"
-    #import "../../../core/6502/ui_equipment.s"
-    #undef UI_EQUIPMENT_SCRATCH_RESIDENT
     #undef UI_INVENTORY_HEADER_STRINGS_EXTERNAL
     #undef UI_INVENTORY_SCRATCH_RESIDENT
     .segment RuntimeLowData
@@ -5102,8 +5128,6 @@ c128_ui_scratch_end:
     #import "../../../core/6502/door_open_close_cold.s"
     #import "../../../core/6502/item_drop_cold.s"
     #import "../../../core/6502/item_spawn_cold.s"
-    #import "../../../core/6502/load_resume_reset_cold.s"
-    #import "../common/title_screen.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
@@ -5115,14 +5139,6 @@ ovl_help_end:
 .segment UiOverlay
     #import "../../../core/6502/ui_character.s"
     #import "../../../core/6502/ui_recall.s"
-#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
-// Scripted/diag test variants exclude the wizard UI with wizard mode (see
-// Play payload).
-ui_wizard_display:
-    rts
-#else
-    #import "../../../core/6502/ui_wizard.s"
-#endif
     #import "../../../core/6502/spell_names.s"
     #import "../../../core/6502/player_magic_select_overlay.s"
     #import "../../../core/6502/player_magic_browse_cold.s"
@@ -5164,7 +5180,6 @@ ovl_disarm_end:
 .print "Disarm overlay: " + (ovl_disarm_end - $e000) + " bytes at $E000-$" + toHexString(ovl_disarm_end)
 .assert "Disarm overlay fits in $E000-$EFFF", ovl_disarm_end <= $f000, true
 .assert "Disarm overlay fits in small Bank 1 cache pages", (ovl_disarm_end - $e000) <= (C128_OVERLAY_DISARM_CACHE_PAGES * $100), true
-.assert "Modal-misc overlay fits in its Bank 1 cache slot", (ovl_modal_misc_end - $e000) <= (C128_OVERLAY_MODAL_CACHE_PAGES * $100), true
 .assert "Disarm small cache pages fit non-common Bank 1 region", (BANK1_OVERLAY_DISARM_BASE + (C128_OVERLAY_DISARM_CACHE_PAGES * $100) - 1) <= BANK1_OVERLAY_DISARM_END, true
 
 // ============================================================
@@ -5192,7 +5207,6 @@ ovl_chest_end:
     #import "../../../core/6502/ui_home_text.s"
     #import "../../../core/6502/ui_home.s"
     #import "../../../core/6502/eff_item_p1.s"
-    #import "../../../core/6502/starting_kit_cold.s"
 ovl_home_end:
 .print "Home overlay: " + (ovl_home_end - $e000) + " bytes at $E000-$" + toHexString(ovl_home_end)
 .assert "Home overlay fits in $E000-$EFFF", ovl_home_end <= $f000, true

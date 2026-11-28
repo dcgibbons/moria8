@@ -22,6 +22,7 @@
 #define HOME_OVERLAY_SEPARATE
 #define SAVE_IN_STORAGE_OVERLAY
 #define HELP_CMD_BODY_EXTERNAL
+#define UI_CHAR_MODAL_EXTERNAL
 #define DOOR_OPEN_CLOSE_EXTERNAL
 #define ITEM_DROP_EXTERNAL
 #define ITEM_REFRESH_KNOWN_EXTERNAL
@@ -529,7 +530,7 @@ high_resident_end:
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../core/6502/player_magic_state.s"
 #import "../../core/6502/player_magic_state_ops.s"
-.segment ModalMiscOverlay
+.segment TitleOverlay
 #import "../../core/6502/player_magic_levelup.s"
 #import "../../core/6502/player_magic_tail.s"
 .segment Default
@@ -541,7 +542,7 @@ high_resident_end:
     .segment Default
 }
 .macro PlayerMoveLookSegment() {
-    .segment ModalMiscOverlay
+    .segment HelpOverlay
 }
 #define PLAYER_LOOK_EXTERNAL
 #import "../../core/6502/player_move.s"
@@ -1090,7 +1091,7 @@ tramp_eff_ext_quaff:
     sty !teeg_jsr+ + 2
     lda current_overlay
     pha
-    lda #OVL_TITLE
+    lda #OVL_MODAL_MISC
     jsr overlay_load_no_kernal
     bcs !teeg_fail+
 !teeg_jsr:
@@ -1389,9 +1390,8 @@ tramp_game_over_run:
     jmp score_death_screen
     #import "../../core/6502/ui_recall.s"
     #import "../../core/6502/player_magic_earthquake.s"
-    #import "../../core/6502/item_exchange.s"
-    #import "../../core/6502/item_drop_cold.s"
     #import "../../core/6502/load_resume_reset_cold.s"
+    #import "../../core/6502/item_exchange.s"
 ovl_death_end:
 .assert "Game-over tail runs in OVL.DTH", tramp_game_over_run >= $e000 && tramp_game_over_run < ovl_death_end, true
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
@@ -1459,6 +1459,7 @@ wizard_prompt_bad_value:
 wizard_bad_value_str:
     .text "BAD" ; .byte 0
     #import "../../core/6502/player_destroy_area.s"
+    #import "../../core/6502/eff_item_extended.s"
 ovl_modal_misc_end:
 .assert "Wizard prompt helpers run in OVL.MDL", wizard_prompt_clear_digits >= $e000 && wizard_bad_value_str < ovl_modal_misc_end, true
 .print "Modal-misc overlay: " + (ovl_modal_misc_end - $e000) + " bytes at $E000-$" + toHexString(ovl_modal_misc_end)
@@ -1497,13 +1498,13 @@ ovl_spell_end:
     #import "../../core/6502/ui_help_title.s"
     #import "../../core/6502/ui_help_data.s"
     #import "../../core/6502/ui_help_page2_data.s"
+    #import "../../core/6502/ui_help_page3_data.s"
     #import "../../core/6502/ui_help.s"
     #import "../../core/6502/ui_help_cmd_cold.s"
-    #import "../../core/6502/ui_character.s"
-    #import "../../core/6502/ui_equipment.s"
     #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
     #import "../../core/6502/player_item_commands.s"
     #undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
+    #import "../../core/6502/player_magic_map.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
@@ -1516,6 +1517,7 @@ ovl_help_end:
     #import "../../core/6502/player_gain_spell_impl.s"
     #import "../../core/6502/player_magic_browse_cold.s"
     #import "../../core/6502/player_magic_learn_op.s"
+    #import "../../core/6502/item_drop_cold.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
@@ -1529,6 +1531,7 @@ ovl_ui_end:
     #import "../../core/6502/calc_dig_cold.s"
     #import "../../core/6502/tunnel.s"
     #import "../../core/6502/door_open_close_cold.s"
+    #import "../../core/6502/starting_kit_cold.s"
 inv_add_carried_items:
     :InvAddCarriedBody()
 ovl_items_end:
@@ -1575,10 +1578,9 @@ ovl_storage_end:
 title_str:
     .text "MORIA8 ATARI XL/XE" ; .byte 0
     #import "../commodore/common/title_screen.s"
-    #import "../../core/6502/eff_item_extended.s"
+    #import "../../core/6502/ui_character.s"
+    #import "../../core/6502/ui_equipment.s"
     #import "../../core/6502/store_restock_overlay.s"
-    #import "../../core/6502/player_magic_map.s"
-    #import "../../core/6502/starting_kit_cold.s"
 title_show_sysinfo:
     lda #COL_DGREY
     sta zp_text_color
@@ -1640,7 +1642,7 @@ legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
 .segment Default
-.assert "Atari 8-bit cast/pray shell stays resident (< MAP_BASE) while spell failure and inventory '?' co-locate in OVL.SPL / OVL.UI", player_cast_spell < MAP_BASE && player_pray < MAP_BASE && pm_build_known_list_from_book < MAP_BASE && calc_spell_failure >= $e000 && calc_spell_failure < ovl_spell_end && ui_inv_select_display >= $e000 && ui_inv_select_display < ovl_ui_end && ui_char_display >= $e000 && ui_char_display < ovl_help_end, true
+.assert "Atari 8-bit cast/pray shell stays resident (< MAP_BASE) while spell failure and inventory '?' co-locate in OVL.SPL / OVL.UI", player_cast_spell < MAP_BASE && player_pray < MAP_BASE && pm_build_known_list_from_book < MAP_BASE && calc_spell_failure >= $e000 && calc_spell_failure < ovl_spell_end && ui_inv_select_display >= $e000 && ui_inv_select_display < ovl_ui_end && ui_char_display >= $e000 && ui_char_display < ovl_title_end, true
 #if !ATARI8_CARTRIDGE
 .assert "130XE Slot 0 covers OVL.STA", (ovl_start_end - $e000) <= XE_SLOT0_PAGES * 256, true
 .assert "130XE Slot 1 covers OVL.TWN", (ovl_town_end - $e000) <= XE_SLOT1_PAGES * 256, true

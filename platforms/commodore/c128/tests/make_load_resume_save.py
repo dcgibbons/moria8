@@ -29,8 +29,10 @@ PL_LEVEL = 19
 PL_DLEVEL = 20
 PL_MAP_X = 49
 PL_MAP_Y = 50
+PL_FLAGS = 54
 PL_LIGHT_RAD = 55
 PL_MAX_DLVL = 56
+PLF_SEARCHING = 0x10
 
 
 def block(size: int, value: int = 0) -> bytearray:
@@ -49,6 +51,8 @@ def main() -> int:
     player[PL_DLEVEL] = 0
     player[PL_MAP_X] = 10
     player[PL_MAP_Y] = 10
+    # Exercise c128_modal_load_game clearing PLF_SEARCHING cleanly (C=1 preserved)
+    player[PL_FLAGS] = PLF_SEARCHING
     player[PL_LIGHT_RAD] = 1
     player[PL_MAX_DLVL] = 1
 

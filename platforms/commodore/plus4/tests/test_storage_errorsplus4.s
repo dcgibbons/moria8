@@ -145,6 +145,9 @@ t_probe_exists:    .byte 0
 .label hal_storage_clrchn = t_clrchn
 .label hal_storage_readst = t_readst
 .label hal_storage_read_command_status = t_read_cmd_status
+.label hal_storage_open_cmd_channel = t_noop
+.label hal_storage_read_open_cmd_status = t_read_cmd_status
+.label hal_storage_close_cmd_channel = t_noop
 .label hal_storage_status_lost = t_status_lost
 .label hal_storage_command_status = disk_command_status
 .label hal_storage_save_media_status = disk_save_media_status
@@ -588,13 +591,44 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // 9. Load CHKIN fail ($05) + detached ($ff) -> LOAD_RESULT_IOERR + HSTR_SAVE_IOERR + detail ($05/$b2)
+    // 9. Refused OPEN ($ff DOS) stops BEFORE CHKIN -> LOAD_RESULT_IOERR + HSTR_SAVE_IOERR + detail ($00/$00)
     jsr t_reset
     lda #1
     sta t_chkin_fail
     lda #$05
     sta t_chkin_err
     lda #$ff
+    sta t_cmd_dos0
+    sta t_cmd_dos1
+    jsr load_game
+    bcc *+5
+    jmp test_fail
+    lda load_result
+    cmp #LOAD_RESULT_IOERR
+    beq *+5
+    jmp test_fail
+    lda t_last_msg
+    cmp #HSTR_SAVE_IOERR
+    beq *+5
+    jmp test_fail
+    lda t_in_magic
+    beq *+5
+    jmp test_fail
+    lda t_detail_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda t_detail_phase
+    beq *+5
+    jmp test_fail
+
+    // 9b. Load CHKIN fail ($05) after DOS 00 -> LOAD_RESULT_IOERR + HSTR_SAVE_IOERR + detail ($05/$b2)
+    jsr t_reset
+    lda #1
+    sta t_chkin_fail
+    lda #$05
+    sta t_chkin_err
+    lda #$30
     sta t_cmd_dos0
     sta t_cmd_dos1
     jsr load_game

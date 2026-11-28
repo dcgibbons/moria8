@@ -13,8 +13,8 @@
 .const A2_AUX_DATA_LIMIT    = $5000       // first byte after aux data
 .const A2_AUX_CATALOG       = $5000       // catalog_fields (5,859 B)
 .const A2_AUX_CACHE_UI      = $6700
-.const A2_AUX_CACHE_SPELL   = $6d00
-.const A2_AUX_CACHE_MODAL   = $8100
+.const A2_AUX_CACHE_SPELL   = $6f00
+.const A2_AUX_CACHE_MODAL   = $8300
 .const A2_AUX_CACHE_HUFF    = $8d00       // Huffman corpus, then the catalog's names
 .const A2_AUX_CACHE_ITEMS   = $aa00
 .const A2_AUX_CACHE_END     = $c000       // first byte after items payload slot

@@ -11,7 +11,7 @@
 // Constitution adds 1 to max HP as VMS does; VMS then adds max HP to HP,
 // which can pass the maximum, so Moria8 heals to full instead.
 //
-// Owner: TitleOverlay (ovl.title) on C64, ItemActionsOverlay (ovl.items) on
+// Owner: ModalMiscOverlay (ovl.modal) on C64, ItemActionsOverlay (ovl.items) on
 // Plus/4 and CX16, StorageOverlay (ovl.storage, with player_gain_stat_helpers.s
 // in C128ResidentPlay) on C128, RuntimeBanked (ATARI.BNK) on Atari 8-bit,
 // DeathOverlay (ovl.death) on Apple IIe, and SpellOverlay (OVL.SPELL) on
@@ -110,13 +110,24 @@ eff_potion_gain_stat:
 !egs_combat:
     jsr player_calc_combat
 #if HAL_PLATFORM_LEVELUP_MAGIC_USES_TRAMPOLINE
-    lda #1
-    sta levelup_magic_pending
+    pla                             // A = saved stat index (0..5)
+    beq !egs_no_magic+              // STR (0) never changes mana/spells
+    cmp player_data + PL_SPELL_TYPE // INT(1)==SPELL_MAGE, WIS(2)==SPELL_PRIEST; C=1 on match
+    bne !egs_no_magic+
+    rol levelup_magic_pending       // C=1 sets bit 0 (pending is 0 at cmd entry; preserves A)
+!egs_no_magic:
 #else
+    pla                             // A = saved stat index (0..5)
+    pha
+    beq !egs_no_magic+
+    cmp player_data + PL_SPELL_TYPE
+    bne !egs_no_magic+
     jsr magic_recalc_mana
     jsr magic_check_new_spells
-#endif
+!egs_no_magic:
     pla                             // A = saved stat index (0..5)
+#endif
+.assert "Gain-stat magic guard relies on INT==SPELL_MAGE and WIS==SPELL_PRIEST", (PL_INT_BASE - PL_STR_BASE) == SPELL_MAGE && (PL_WIS_BASE - PL_STR_BASE) == SPELL_PRIEST, true
 #else
     sta player_data + PL_STR_BASE,y
     sec

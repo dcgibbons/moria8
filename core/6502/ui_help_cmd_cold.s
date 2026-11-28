@@ -17,6 +17,17 @@
 #endif
 
 help_cmd_body:
+    lda zp_input_cmd
+    cmp #CMD_MSG_HISTORY
+    bne !help_page_loop+
+    jsr ui_msg_history_draw
+    jsr input_prepare_modal_dismiss_key
+    jsr hal_input_get_key
+#if HAL_PLATFORM_ITEM_ACTION_KEY_RESTORES_BANK
+    jsr hal_platform_item_action_restore_bank
+#endif
+    clc
+    rts
 !help_page_loop:
     jsr ui_help_display
 !help_key_loop:
@@ -42,12 +53,11 @@ help_cmd_body:
     beq !help_advance+
     jmp !help_key_loop-
 !help_advance:
-    lda help_page_idx
-    clc
-    adc #1
-    cmp help_page_count
+    ldx help_page_idx
+    inx
+    cpx help_page_count
     bcs !help_exit+
-    inc help_page_idx
+    stx help_page_idx
     jmp !help_page_loop-
 !help_exit:
     clc

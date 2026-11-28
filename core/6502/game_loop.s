@@ -348,7 +348,6 @@ c64_test_spell_path_offset: .byte 0
 .encoding "ascii"
 :C64TestMonPoke(c64_test_spell_success_count, 0)
 :C64TestMonPoke(c64_test_spell_return_pending, 0)
-:C64TestMonPoke(c64_test_spell_return_count, 0)
 :C64TestMonPoke(zp_player_mp, 20)           // mana for prayers retried after a fizzle
 :C64TestMonPoke(player_data + PL_MANA, 20)
 .encoding "screencode_mixed"
@@ -425,7 +424,9 @@ c64_test_detect_try_cell:
     beq !ctdtc_skip+
 !ctdtc_not_player:
     lda c64_test_detect_col
+    sta ms_spawn_x
     ldy c64_test_detect_row
+    sty ms_spawn_y
     jsr monster_find_at         // clobbers zp_ptr0: before the row pointer
     bcs !ctdtc_skip+
     ldy c64_test_detect_row
@@ -449,10 +450,6 @@ c64_test_detect_try_cell:
     :MapRead_ptr0_y()           // Y = column still; C64 map access keeps X and Y
     and #(TILE_TYPE_MASK | FLAG_LIT)
     :MapWrite_ptr0_y()
-    lda c64_test_detect_col
-    sta ms_spawn_x
-    lda c64_test_detect_row
-    sta ms_spawn_y
     txa
     inx
     stx c64_test_detect_type
@@ -529,7 +526,9 @@ game_new_start:
     // The modal helper flushes the gender-selection key on C64 and waits for
     // key release on C128 so the summary is not dismissed immediately.
     jsr tramp_ui_char_display
+#if !UI_CHAR_MODAL_EXTERNAL
     jsr input_get_modal_dismiss_key
+#endif
     jsr hal_screen_clear
 
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
@@ -581,10 +580,10 @@ c64_test_seed_point:                // the runner writes the seed here (*_seed.m
 
     // --- Main game loop ---
     // Initialize dungeon level and generate map (new game only)
-    lda #0
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
-    clc
-    adc #10
+    lda #10
+#else
+    lda #0
 #endif
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
@@ -914,10 +913,7 @@ c128_town_move_diag_loop_top:
     lda c64_test_spell_return_pending
     beq !c64_test_detect_return_done+
     dec c64_test_spell_return_pending
-    inc c64_test_spell_return_count
-    lda c64_test_spell_return_count
-    cmp #20
-    bcc !c64_test_detect_return_done+
+    bne !c64_test_detect_return_done+
     jmp c64_test_spell_pass_sym     // the runner checks the marks are cleared here
 !c64_test_detect_return_done:
 #endif
@@ -1291,7 +1287,7 @@ c128_town_move_diag_after_status_draw:
 !dispatch_discrete:
     cmp #CMD_STAIRS_DN
     bcc !unknown_command+
-    cmp #CMD_JAM + 1
+    cmp #CMD_MSG_HISTORY + 1
     bcs !unknown_command+
     sec
     sbc #CMD_STAIRS_DN
@@ -1418,6 +1414,8 @@ command_dispatch_lo_autorest:
     .byte <cmd_autorest
 command_dispatch_lo_jam:
     .byte <cmd_jam
+command_dispatch_lo_msg_history:
+    .byte <cmd_show_help_view
 command_dispatch_lo_end:
 command_dispatch_hi:
 command_dispatch_hi_stairs_dn:
@@ -1518,10 +1516,12 @@ command_dispatch_hi_autorest:
     .byte >cmd_autorest
 command_dispatch_hi_jam:
     .byte >cmd_jam
+command_dispatch_hi_msg_history:
+    .byte >cmd_show_help_view
 command_dispatch_hi_end:
 
-.assert "command dispatch lo count", command_dispatch_lo_end - command_dispatch_lo, CMD_JAM - CMD_STAIRS_DN + 1
-.assert "command dispatch hi count", command_dispatch_hi_end - command_dispatch_hi, CMD_JAM - CMD_STAIRS_DN + 1
+.assert "command dispatch lo count", command_dispatch_lo_end - command_dispatch_lo, CMD_MSG_HISTORY - CMD_STAIRS_DN + 1
+.assert "command dispatch hi count", command_dispatch_hi_end - command_dispatch_hi, CMD_MSG_HISTORY - CMD_STAIRS_DN + 1
 .assert "CMD_STAIRS_DN dispatch index", command_dispatch_lo_stairs_dn - command_dispatch_lo, CMD_STAIRS_DN - CMD_STAIRS_DN
 .assert "CMD_STAIRS_UP dispatch index", command_dispatch_lo_stairs_up - command_dispatch_lo, CMD_STAIRS_UP - CMD_STAIRS_DN
 .assert "CMD_REST dispatch index", command_dispatch_lo_rest - command_dispatch_lo, CMD_REST - CMD_STAIRS_DN
@@ -1569,6 +1569,7 @@ command_dispatch_hi_end:
 .assert "CMD_DISARM dispatch index", command_dispatch_lo_disarm - command_dispatch_lo, CMD_DISARM - CMD_STAIRS_DN
 .assert "CMD_AUTOREST dispatch index", command_dispatch_lo_autorest - command_dispatch_lo, CMD_AUTOREST - CMD_STAIRS_DN
 .assert "CMD_JAM dispatch index", command_dispatch_lo_jam - command_dispatch_lo, CMD_JAM - CMD_STAIRS_DN
+.assert "CMD_MSG_HISTORY dispatch index", command_dispatch_lo_msg_history - command_dispatch_lo, CMD_MSG_HISTORY - CMD_STAIRS_DN
 .assert "CMD_STAIRS_DN hi dispatch index", command_dispatch_hi_stairs_dn - command_dispatch_hi, CMD_STAIRS_DN - CMD_STAIRS_DN
 .assert "CMD_STAIRS_UP hi dispatch index", command_dispatch_hi_stairs_up - command_dispatch_hi, CMD_STAIRS_UP - CMD_STAIRS_DN
 .assert "CMD_REST hi dispatch index", command_dispatch_hi_rest - command_dispatch_hi, CMD_REST - CMD_STAIRS_DN
@@ -1616,6 +1617,7 @@ command_dispatch_hi_end:
 .assert "CMD_DISARM hi dispatch index", command_dispatch_hi_disarm - command_dispatch_hi, CMD_DISARM - CMD_STAIRS_DN
 .assert "CMD_AUTOREST hi dispatch index", command_dispatch_hi_autorest - command_dispatch_hi, CMD_AUTOREST - CMD_STAIRS_DN
 .assert "CMD_JAM hi dispatch index", command_dispatch_hi_jam - command_dispatch_hi, CMD_JAM - CMD_STAIRS_DN
+.assert "CMD_MSG_HISTORY hi dispatch index", command_dispatch_hi_msg_history - command_dispatch_hi, CMD_MSG_HISTORY - CMD_STAIRS_DN
 
 cmd_dispatch_ignore:
     jmp main_loop

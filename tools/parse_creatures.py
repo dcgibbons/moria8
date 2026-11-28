@@ -131,7 +131,7 @@ def select_attack_slots(atks):
     return kept
 
 # ============================================================
-# Umoria speed mapping → our C64 speed (0=slow, 1=normal, 2=fast)
+# Umoria speed mapping → our C64 speed (0=slow, 1=normal, 2=fast, 3=very fast)
 # ============================================================
 # Umoria: speed + 10. So 9=very slow, 10=slow, 11=normal, 12=fast, 13=very fast
 def map_speed(umoria_speed):
@@ -139,8 +139,10 @@ def map_speed(umoria_speed):
         return 0  # slow (every other turn)
     elif umoria_speed == 11:
         return 1  # normal
+    elif umoria_speed == 12:
+        return 2  # fast (two moves)
     else:
-        return 2  # fast
+        return 3  # very fast (three moves; speed >= 13 / VMS +2)
 
 # Umoria CMOVE random-movement bits, kept in place in cr_speed bits 3-5 above
 # the speed code (MON-013): CM_20_RANDOM 0x08, CM_40_RANDOM 0x10, CM_75_RANDOM
@@ -978,10 +980,10 @@ def print_stats(creatures, selected_indices):
         print(f"  {t}: {ATK_NAMES.get(t, '?')}")
 
     # Speed distribution
-    speeds = {0: 0, 1: 0, 2: 0}
+    speeds = {0: 0, 1: 0, 2: 0, 3: 0}
     for idx, cr in selected:
         speeds[cr['c64_speed'] & SPEED_MASK] += 1
-    print(f"\nSpeed distribution: slow={speeds[0]}, normal={speeds[1]}, fast={speeds[2]}")
+    print(f"\nSpeed distribution: slow={speeds[0]}, normal={speeds[1]}, fast={speeds[2]}, very_fast={speeds[3]}")
 
     # Flag distribution
     flag_counts = {'ATTACK_ONLY': 0, 'UNDEAD': 0, 'INFRA': 0}
@@ -1016,7 +1018,7 @@ def print_stats(creatures, selected_indices):
 SOA_FIELDS = [
     ("cr_display",      "c64_display",      "Display character (screen code)"),
     ("cr_color",        "c64_color",        "Color code"),
-    ("cr_speed",        "c64_speed",        "Speed (bits 0-1: 0=slow, 1=normal, 2=fast) | random-move bits 3-5 | max HP bit 7"),
+    ("cr_speed",        "c64_speed",        "Speed (bits 0-1: 0=slow, 1=normal, 2=fast, 3=very fast) | random-move bits 3-5 | max HP bit 7"),
     ("cr_mflags",       "c64_mflags",       "Monster flags"),
     ("cr_level",        "dlvl",             "Dungeon level"),
     ("cr_hd_num",       "hd_num",           "Hit dice count"),

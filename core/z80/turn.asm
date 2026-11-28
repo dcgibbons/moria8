@@ -156,14 +156,15 @@ turn_post_action:
     RET
 
 _turn_tick_regen:
-    ; B flags: bit0=resting, bit1=regen
+    ; B flags: bit0=resting, bit1=PFLAG2_REGEN
     LD   B, 0
     LD   A, (auto_rest_active)
     OR   A
     JR   Z, .nr
     SET  0, B
 .nr:
-    CALL _turn_is_regen_active
+    LD   A, (player_pflags2)
+    AND  PFLAG2_REGEN
     JR   Z, .chk_hp
     SET  1, B
 
@@ -177,7 +178,7 @@ _turn_tick_regen:
     XOR  A
     LD   (regen_frac_lo), A
     LD   (zp_regen_frac), A
-    JR   .pop_hp_ret
+    JP   .pop_hp_ret
 .try_hp:
     LD   A, (zp_eff_poison)
     OR   A
@@ -206,10 +207,6 @@ _turn_tick_regen:
     JR   Z, .nrd
     ADD  HL, HL
 .nrd:
-    BIT  1, B
-    JR   Z, .nrg
-    ADD  HL, HL
-.nrg:
     ; 24-bit E:HL = DE (MHP) * HL (rate) using IX (preserves IX)
     PUSH IX
     LD   B, H
@@ -232,6 +229,28 @@ _turn_tick_regen:
     PUSH IX
     POP  HL
     POP  IX
+
+    ; Scale 24-bit product x1.5 (E:HL += E:HL >> 1) when PFLAG2_REGEN is worn
+    POP  BC
+    PUSH BC
+    BIT  1, B
+    JR   Z, .add_base
+    LD   A, E
+    SRL  A
+    LD   B, A                   ; B = half byte 2
+    LD   A, H
+    RRA
+    LD   C, A                   ; C = half byte 1
+    LD   A, L
+    RRA                         ; A = half byte 0
+    ADD  A, L
+    LD   L, A
+    LD   A, H
+    ADC  A, C
+    LD   H, A
+    LD   A, E
+    ADC  A, B
+    LD   E, A
 
 .add_base:
     LD   BC, REGEN_HPBASE
@@ -266,11 +285,14 @@ _turn_tick_mana:
     RET  Z
     RET  C
 
-    CALL _turn_is_regen_active
-    JR   NZ, .inc_mp
     LD   A, (abi_turn)
     RRA
-    RET  C
+    JR   NC, .inc_mp            ; Even turns (0, 2 mod 4) always regen
+    RRA
+    RET  C                      ; Turn & 3 == 3 -> skip (regens on 0, 1, 2 of 4 = x1.5)
+    LD   A, (player_pflags2)
+    AND  PFLAG2_REGEN
+    RET  Z                      ; Odd turn without PFLAG2_REGEN -> skip
 .inc_mp:
     INC  (HL)
     LD   A, (HL)
@@ -397,11 +419,14 @@ _turn_tick_effects:
     POP  HL
 
 .blk:
-    ; HL+1 is zp_eff_protect..zp_eff_see_inv (9 bytes), with +4=bless, +5=hero
+    ; HL+1 is zp_eff_protect..zp_eff_see_inv (9 bytes), with +4=bless, +5=hero, +6=retired zp_eff_regen
     INC  HL
     LD   B, 9
     LD   C, 0
 .blp:
+    LD   A, C
+    CP   6                      ; zp_eff_regen is reserved/retired (never decremented)
+    JR   Z, .bnx
     LD   A, (HL)
     OR   A
     JR   Z, .bnx
@@ -477,15 +502,6 @@ _turn_tick_effects:
     RET  C
     JP   _turn_tick_light
 
-_turn_is_regen_active:
-    LD   A, (player_pflags2)
-    LD   D, A
-    AND  PFLAG2_REGEN
-    RET  NZ
-    LD   A, (zp_eff_regen)
-    OR   A
-    RET
-
 _turn_dec_hstr:
     LD   B, A
     LD   A, (HL)
@@ -542,14 +558,30 @@ _turn_tick_hunger:
     LD   A, H
     OR   L
     JR   Z, .starve_chk         ; Already 0 at entry -> starve after state update
+    LD   E, 1                   ; Base digestion: 1 food/turn
     LD   A, (player_pflags2)
-    BIT  0, A                   ; PFLAG2_SLOW_DIGEST
-    JR   Z, .sub1
+    LD   D, A
+    BIT  0, D                   ; PFLAG2_SLOW_DIGEST
+    JR   Z, .chk_regen_food
     LD   A, (abi_turn)
     RRA
-    JR   C, .skip_starve        ; Odd turn with slow digest -> no dec, no starve
-.sub1:
-    DEC  HL
+    JR   NC, .chk_regen_food
+    DEC  E                      ; Slow digestion skips base 1 on odd turns
+.chk_regen_food:
+    BIT  1, D                   ; PFLAG2_REGEN
+    JR   Z, .sub_food
+    INC  E
+    INC  E
+    INC  E                      ; Regeneration adds +3 digestion/turn
+.sub_food:
+    LD   A, E
+    OR   A
+    JR   Z, .skip_starve
+    LD   D, 0                   ; DE = 1, 3, or 4 (CF=0 from OR A)
+    SBC  HL, DE
+    JR   NC, .store_food
+    LD   HL, 0                  ; Saturate at 0
+.store_food:
     LD   (player_data + PL_FOOD_LO), HL
 .skip_starve:
     LD   A, 1                   ; suppress starvation damage on decrement / 1->0 turn

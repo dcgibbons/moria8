@@ -16,17 +16,17 @@
 // Clobbers: A, X
 // ============================================================
 calc_dig_ability:
+    // Bare hands and baseline: STR >> 2
+    lda zp_player_str
+    lsr
+    lsr
+    sta tun_dig_ability
+
     // Check equipped weapon
     ldx inv_item_id + EQUIP_WEAPON
     cpx #$FF
-    bne !cda_has_weapon+
+    beq !cda_done+
 
-    // Bare hands: ability = 0
-    lda #0
-    sta tun_dig_ability
-    rts
-
-!cda_has_weapon:
     stx zp_temp0                // Save weapon slot_lo
     ldx #EQUIP_WEAPON
     jsr item_get_category_inv_x // Sets item_cur_page, A = it_category
@@ -35,10 +35,6 @@ calc_dig_ability:
     beq !cda_dig_tool+
 
     // Regular weapon: ability = (STR >> 2) + max(0, PL_TODMG >> 1)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
     lda player_data + PL_TODMG
     bmi !cda_done+              // Negative TODMG -> skip (leave ability = STR>>2)
     lsr                         // TODMG >> 1
@@ -53,11 +49,6 @@ calc_dig_ability:
 
 !cda_dig_tool:
     // Digging tool: ability = (STR >> 2) + base_bonus + (ego * 12)
-    lda zp_player_str
-    lsr
-    lsr                         // STR >> 2
-    sta tun_dig_ability
-
     lda item_cur_page
     bne !cda_done-              // All digging tools are Page 0
     .assert "Digging tools 198..203 contiguous on Page 0", ITEM_SHOVEL == ITEM_PICK + 1 && ITEM_ORCISH_PICK == ITEM_PICK + 2 && ITEM_DWARVEN_PICK == ITEM_PICK + 3 && ITEM_GNOMISH_SHOVEL == ITEM_PICK + 4 && ITEM_DWARVEN_SHOVEL == ITEM_PICK + 5 && ITEM_PAGE_DWARVEN_SHOVEL == 0, true

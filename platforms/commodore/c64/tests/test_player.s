@@ -44,10 +44,12 @@ screen_put_string_ay:
 // Stubs for item data arrays referenced by player_calc_combat.
 // Only need enough entries to cover equipment slot indices (22-29).
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
+inv_qty:     .fill TOTAL_INV_SLOTS, 0
 inv_p1:      .fill TOTAL_INV_SLOTS, 0
 inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
 inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
 inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
+inv_flags:   .fill TOTAL_INV_SLOTS, 0
 inv_ego:     .fill TOTAL_INV_SLOTS, 0   // the equipment flags read worn egos (MON-027)
 it_color_ac: .fill 62, 0
 icat_flags_0:  .byte 0
@@ -557,6 +559,9 @@ test_start:
     sta inv_ego + EQUIP_CLOAK
     sta inv_to_hit + EQUIP_CLOAK
     sta inv_to_dam + EQUIP_CLOAK
+
+    jsr test_starting_kit_all_classes
+    bcs !t10_fail+
 
     lda #$01
     sta $0409
@@ -1257,6 +1262,118 @@ test_start:
     lda #$00
     sta $040b
 
+    jmp test_finish
+
+#define STARTING_KIT_EXTERNAL
+#import "../../../../core/6502/starting_kit_cold.s"
+
+sk_class_spell_type:
+    .byte SPELL_NONE, SPELL_MAGE, SPELL_PRIEST, SPELL_MAGE, SPELL_MAGE, SPELL_PRIEST
+sk_expect_cloak_id:
+    .byte ITEM_SLOT_CLOAK, ITEM_SLOT_CLOAK, ITEM_SLOT_CLOAK, FI_EMPTY, ITEM_SLOT_CLOAK, ITEM_SLOT_CLOAK
+sk_expect_cloak_qty:
+    .byte 1, 1, 1, 0, 1, 1
+sk_expect_cloak_ego:
+    .byte ITEM_PAGE_CLOAK, ITEM_PAGE_CLOAK, ITEM_PAGE_CLOAK, 0, ITEM_PAGE_CLOAK, ITEM_PAGE_CLOAK
+sk_expect_body_id:
+    .byte ITEM_SLOT_LEATHER_ARMOR, FI_EMPTY, FI_EMPTY, ITEM_SLOT_LEATHER_ARMOR, FI_EMPTY, FI_EMPTY
+sk_expect_body_qty:
+    .byte 1, 0, 0, 1, 0, 0
+sk_expect_book_id:
+    .byte FI_EMPTY, ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
+    .byte ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK, ITEM_SLOT_SPELLBOOK_BEGINNERS_MAGICK, ITEM_SLOT_HOLY_BOOK_OF_PRAYERS_BEGINNERS_HANDBOOK
+
+// Verify init_starting_kit across all 6 classes (VMS player_init parity):
+// Cloak in EQUIP_CLOAK for all except Rogue; Leather Armor in EQUIP_BODY
+// for Warrior & Rogue only; common provisions and caster books preserved.
+// Returns carry clear on pass, carry set on failure.
+test_starting_kit_all_classes:
+    lda #0
+    sta tp_loop
+!sk_cls_lp:
+    ldx #TOTAL_INV_SLOTS - 1
+!sk_clr_inv:
+    lda #FI_EMPTY
+    sta inv_item_id,x
+    lda #0
+    sta inv_qty,x
+    sta inv_p1,x
+    sta inv_flags,x
+    sta inv_ego,x
+    dex
+    bpl !sk_clr_inv-
+
+    jsr player_init
+    ldx tp_loop
+    stx player_data + PL_CLASS
+    lda sk_class_spell_type,x
+    sta player_data + PL_SPELL_TYPE
+    jsr init_starting_kit
+
+    // Common provisions & gear
+    lda inv_item_id + EQUIP_LIGHT
+    cmp #ITEM_SLOT_WOODEN_TORCH
+    bne !sk_fail+
+    lda inv_qty + EQUIP_LIGHT
+    cmp #1
+    bne !sk_fail+
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #ITEM_SLOT_DAGGER
+    bne !sk_fail+
+    lda inv_ego + EQUIP_WEAPON
+    cmp #ITEM_PAGE_DAGGER
+    bne !sk_fail+
+    lda inv_item_id + 0
+    cmp #ITEM_SLOT_RATION_OF_FOOD
+    bne !sk_fail+
+    lda inv_qty + 0
+    cmp #5
+    bne !sk_fail+
+    lda inv_item_id + 2
+    cmp #ITEM_SLOT_WOODEN_TORCH
+    bne !sk_fail+
+    lda inv_qty + 2
+    cmp #4
+    bne !sk_fail+
+
+    ldx tp_loop
+    // Cloak check
+    lda inv_item_id + EQUIP_CLOAK
+    cmp sk_expect_cloak_id,x
+    bne !sk_fail+
+    lda inv_qty + EQUIP_CLOAK
+    cmp sk_expect_cloak_qty,x
+    bne !sk_fail+
+    lda inv_ego + EQUIP_CLOAK
+    cmp sk_expect_cloak_ego,x
+    bne !sk_fail+
+
+    // Body armor check
+    lda inv_item_id + EQUIP_BODY
+    cmp sk_expect_body_id,x
+    bne !sk_fail+
+    lda inv_qty + EQUIP_BODY
+    cmp sk_expect_body_qty,x
+    bne !sk_fail+
+
+    // Spellbook check
+    lda inv_item_id + 1
+    cmp sk_expect_book_id,x
+    bne !sk_fail+
+
+    inc tp_loop
+    lda tp_loop
+    cmp #CLASS_COUNT
+    bcs !sk_done+
+    jmp !sk_cls_lp-
+!sk_done:
+    clc
+    rts
+!sk_fail:
+    sec
+    rts
+
+test_finish:
     brk
 
 player_test_end:

@@ -1,4 +1,7 @@
-# Cross-Platform UI & Quality-of-Life Enhancements Design (Backlog)
+# Cross-Platform UI & Quality-of-Life Enhancements Design
+
+> [!NOTE]
+> Status: **Implemented across all 8 ports (2026-11-27)** — see `docs/TURN_RENDER_CONTRACT.md` (`TRN-017`) and `docs/FEATURE_MAP.md`. The body below preserves the original design specification and initial CP/M Z80 baseline capture.
 
 This document preserves five UI and QoL features that were built opportunistically in the CP/M 2.2 Z80 M2–M5 overlays before full parity review. They were reverted from CP/M Z80 so all 8 active ports (`C64`, `C128`, `Plus/4`, `Apple IIe`, `Commander X16`, `Atari 8-bit`, `BBC Master 128`, and `CP/M 2.2 Z80`) share identical 6502/VMS UI behavior first, and are packaged here with their Z80 reference implementations so they can be designed and shipped uniformly across all 8 ports later.
 

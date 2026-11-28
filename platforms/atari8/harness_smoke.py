@@ -206,7 +206,9 @@ local function sc_to_ascii(b)
     b = b & 0x7F
     if b == 0x00 then return "@" end
     if b >= 0x01 and b <= 0x1A then return string.char(0x60 + b) end
-    if b >= 0x1B and b <= 0x1F then return string.char(0x40 + b) end
+    if (b >= 0x1B and b <= 0x1F) or (b >= 0x5B and b <= 0x5F) then
+        return string.char(0x40 + (b & 0x1F))
+    end
     if b >= 0x20 and b <= 0x3F then return string.char(b) end
     if b == 0x40 then return "-" end
     if b >= 0x41 and b <= 0x5A then return string.char(b) end
@@ -1028,6 +1030,15 @@ function run()
     assert_line("legal_sysinfo_menu_back", wait_screen("1 License", 60))
     send_key(0x51)
     assert_line("legal_help_return", wait_screen("Command Reference", 100))
+    send_key(0x20) -- SPACE -> Help Page 2
+    wait_screen("L License / Source", 60)
+    send_key(0x20) -- SPACE -> Help Page 3 Legend
+    assert_line("help_page3_legend",
+                wait_screen("Map Terrain", 60)
+                and wait_screen("[ Armor", 20)
+                and wait_screen("] Helm/Bt", 20)
+                and wait_screen("[ Ammo", 20)
+                and wait_screen("\\\\ Bow", 20))
     send_key(0x51) -- 'Q'
     wait_frames(40)
     assert_line("help_closed", in_town())
@@ -1046,14 +1057,21 @@ function run()
     assert_line("chargen_town_ready", ok)
     send_key(0x49) -- 'I' (inventory)
     assert_line("inventory_modal", wait_screen("Inventory", 80))
+    assert_line("inventory_burden", wait_screen("Burden:", 40))
     send_key(0x20)
     wait_frames(40)
     send_key(0x45) -- 'E' (equipment)
     assert_line("equipment_modal", wait_screen("Equipment", 80))
+    assert_line("equipment_burden", wait_screen("Burden:", 40))
     send_key(0x20)
     wait_frames(40)
     send_key(0xC3) -- SHIFT+C (character sheet)
     assert_line("charsheet_modal", wait_screen("Character", 80))
+    assert_line("charsheet_age", wait_screen("Age:", 40))
+    send_key(0x20)
+    wait_frames(40)
+    send_key(0x10) -- CTRL+P (message history)
+    assert_line("msg_history_modal", wait_screen("Message History", 80))
     send_key(0x20)
     wait_frames(40)
     assert_line("ui_modals_returned", in_town())
@@ -1203,7 +1221,7 @@ function run()
         inv_field(22, 0) == ITEM_SLOT_DAGGER and inv_field(22, 3) == 3 and inv_field(22, 7) == (ITEM_PAGE_DAGGER | 6)
         and inv_field(33, 0) == ITEM_SLOT_MACE and inv_field(33, 3) == 1 and inv_field(33, 6) == 2
         and inv_field(33, 7) == ITEM_PAGE_MACE
-        and inv_field(32, 0) == 0xFF and inv_field(31, 0) == 0xFF)
+        and inv_field(32, 0) == ITEM_SLOT_CLOAK and inv_field(31, 0) == 0xFF)
     for _ = 1, 60 do
         if prog:read_u8(TURN_LO_ADDR) == (turn0 + 1) % 256 then break end
         emu.wait(0.1)

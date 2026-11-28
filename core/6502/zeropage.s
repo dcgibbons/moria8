@@ -160,7 +160,7 @@
 .label zp_eff_resist   = $58   // Resist heat/fire timer
 .label zp_eff_bless    = $59   // Bless timer
 .label zp_eff_hero     = $5a   // Heroism timer
-.label zp_eff_regen    = $5b   // Extra regeneration timer
+.label zp_eff_regen    = $5b   // Reserved/retired (Save V2 $22 slot; always 0)
 .label eff_resist_cold_timer = $5c // Resist cold timer
 .label zp_eff_see_inv  = $5d   // See invisible timer
 .label zp_eff_word_recall = $5e // Word of recall timer

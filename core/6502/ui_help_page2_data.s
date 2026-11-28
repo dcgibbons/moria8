@@ -1,108 +1,22 @@
 #importonce
-// ui_help_page2_data.s — C64/Plus4 40-column second help page payload
-//
-// Page 2 carries no page-1 command duplicates: movement-key diagrams,
-// prompt/selection keys, and the wizard-mode key (unique to this page).
+// ui_help_page2_data.s — 40-column second help page payload (BPE compressed)
 
-// ============================================================
-// Page 2: movement diagrams + prompt notes (rows 1-23)
-// ============================================================
 help_more_lines:
-
-// Row 1: headers
-    .byte 1
-    .text "Keypad" ; .byte $fc, 20 ; .text "Letters" ; .byte 0
-
-// Row 2
-    .byte 0
-    .text "   7 8 9"
-    .byte $fc, 20
-    .text "   Y K U"
-    .byte 0
-
-// Row 3
-    .byte 0
-    .text "   4 5 6"
-    .byte $fc, 20
-    .text "   H   L"
-    .byte 0
-
-// Row 4
-    .byte 0
-    .text "   1 2 3"
-    .byte $fc, 20
-    .text "   B J N"
-    .byte 0
-
-// Row 5
-    .byte 0
-    .text "   5 = Rest"
-    .byte $fc, 20
-    .text "   Cursors move"
-    .byte 0
-
-// Row 6: the reader is available while either Help page is open.
+    .byte $01, $4b, $05, $19, $10, $01, $04, $fb, $4c, $ac, $9f, $91, $00
+    .byte $00, $85, $37, $20, $38, $20, $39, $a4, $59, $20, $4b, $20, $55, $00
+    .byte $00, $85, $34, $20, $35, $20, $36, $a4, $48, $85, $4c, $00
+    .byte $00, $85, $31, $20, $32, $20, $33, $a4, $42, $20, $4a, $20, $4e, $00
+    .byte $00, $85, $35, $20, $3d, $20, $52, $a1, $a4, $43, $15, $91, $86, $a9, $0d, $bf, $00
 #if HAL_PLATFORM_LEGAL_VIEWER
-    .byte 0, $fe
-    .text "L" ; .byte $ff ; .text " License / Source" ; .byte 0
+    .byte $00, $fe, $4c, $81, $4c, $09, $03, $05, $0e, $13, $c8, $2f, $20, $53, $0f, $15, $12, $03, $05, $00
 #else
     .byte 2, 0
 #endif
-
-// Row 7: headers
-    .byte 1
-    .text "Prompts" ; .byte $fc, 20 ; .text "Selection" ; .byte 0
-
-// Row 8
-    .byte 0
-    .byte $fe
-    .text "STOP/Q"
-    .byte $ff
-    .text " Cancel"
-    .byte $fc, 20
-    .text "Letters Pick"
-    .byte 0
-
-// Row 9
-    .byte 0
-    .byte $fe
-    .text "SPACE"
-    .byte $ff
-    .text " Continue"
-    .byte $fc, 20
-    .text "RETURN Accept"
-    .byte 0
-
-// Row 10
-    .byte 0
-    .byte $fe
-    .text "/"
-    .byte $ff
-    .text " Identify"
-    .byte $fc, 20
-    .text "then symbol"
-    .byte 0
-
-// Row 11: wizard mode (only listed on this page), weapon exchange
-    .byte 0
-    .byte $fe
-    .text "CTRL+W"
-    .byte $ff
-    .text " Wizard"
-    .byte $fc, 20
-    .byte $fe
-    .text "SHIFT+X"
-    .byte $ff
-    .text " Exchange"
-    .byte 0
-
-// Rows 12-23: reserved blank lines to keep the frame layout fixed
-    .for (var i = 0; i < 12; i++) {
-        .byte 2
-        .byte 0
-    }
-
-help_pages:
-    .byte 2
-    .word help_lines
-    .word help_more_lines
+    .byte $01, $50, $aa, $0d, $10, $14, $13, $fb, $53, $90, $05, $03, $bd, $00
+    .byte $00, $ad, $54, $4f, $50, $2f, $51, $99, $a2, $03, $90, $fb, $4c, $ac, $9f, $91, $20, $50, $09, $03, $0b, $00
+    .byte $00, $ad, $50, $41, $43, $45, $99, $0f, $a5, $0e, $15, $05, $fb, $52, $45, $54, $55, $52, $4e, $20, $41, $03, $03, $05, $10, $14, $00
+    .byte $00, $fe, $2f, $81, $49, $c9, $a5, $06, $19, $fb, $14, $08, $c6, $13, $19, $0d, $02, $0f, $0c, $00
+    .byte $00, $a3, $57, $81, $57, $09, $1a, $97, $04, $8e, $58, $b7, $18, $ca, $a2, $07, $05, $00
+    .byte $00, $a3, $50, $82, $4d, $13, $07, $20, $48, $09, $8f, $86, $19, $00
+    .byte $00, $fe, $2a, $83, $85, $b4, $a1, $20, $15, $a5, $0c, $20, $08, $05, $cb, $05, $04, $00
+    .byte $03 // HTYPE_END

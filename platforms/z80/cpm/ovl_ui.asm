@@ -8,6 +8,7 @@
 ;   +9:  JP ovl_ui_look
 ;   +12: JP ovl_ui_identify_sym
 ;   +15: JP ovl_ui_select_display
+;   +18: JP ovl_ui_msg_history
 ;
 ; Assembled with sjasmplus v1.24.0 (pure 0xNN hex syntax, DEVICE NOSLOT64K).
 ; All public entry vectors preserve IX and IY.
@@ -35,21 +36,21 @@ ovl_start:
     JP   ovl_ui_look
     JP   ovl_ui_identify_sym
     JP   ovl_ui_select_display
+    JP   ovl_ui_msg_history
 
 UCHAR_TITLE_COL     EQU 33
 UCHAR_WIZARD_COL    EQU 71
 UCHAR_FOOTER_COL    EQU 33
-UCHAR_COL_L         EQU 22
-UCHAR_COL_NAME      EQU 28
-UCHAR_COL_MID       EQU 39
-UCHAR_COL_R         EQU 43
-UCHAR_STAT_COL0     EQU 22
-UCHAR_STAT_COL1     EQU 35
-UCHAR_STAT_COL2     EQU 48
+UCHAR_COL_L         EQU 2
+UCHAR_COL_NAME      EQU 11
+UCHAR_COL_MID       EQU 29
+UCHAR_COL_MID_VAL   EQU 38
+UCHAR_COL_R         EQU 53
 UINV_TITLE_COL      EQU 35
 UINV_FOOTER_COL     EQU 33
 UEQ_TITLE_COL       EQU 35
 UEQ_FOOTER_COL      EQU 33
+MSG_HIST_TITLE_COL  EQU 32
 
 ; ============================================================================
 ; +0: ovl_ui_character — Character Info Sheet (80-col 6502 layout parity)
@@ -79,7 +80,7 @@ ovl_ui_character:
     CALL ovl_ui_put_cstr
 .hdr_done:
 
-    ; Row 2: Name
+    ; Row 2: Name / Age
     LD   B, 2
     LD   C, UCHAR_COL_L
     LD   HL, ovl_ui_str_lbl_name
@@ -92,7 +93,18 @@ ovl_ui_character:
     LD   C, UCHAR_COL_NAME
     CALL ovl_ui_put_linebuf_w
 
-    ; Row 3: Race / Class
+    LD   B, 2
+    LD   C, UCHAR_COL_MID
+    LD   HL, ovl_ui_str_lbl_age
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_AGE)
+    LD   DE, line_buf
+    CALL fmt_u8_dec
+    LD   B, 2
+    LD   C, UCHAR_COL_MID_VAL
+    CALL ovl_ui_put_linebuf_w
+
+    ; Row 3: Race / Height
     LD   B, 3
     LD   C, UCHAR_COL_L
     LD   HL, ovl_ui_str_lbl_race
@@ -109,7 +121,24 @@ ovl_ui_character:
     CALL ovl_ui_put_cstr_w
 
     LD   B, 3
-    LD   C, UCHAR_COL_R
+    LD   C, UCHAR_COL_MID
+    LD   HL, ovl_ui_str_lbl_ht
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_HEIGHT)
+    LD   DE, line_buf
+    CALL fmt_u8_dec
+    LD   A, '"'
+    LD   (DE), A
+    INC  DE
+    XOR  A
+    LD   (DE), A
+    LD   B, 3
+    LD   C, UCHAR_COL_MID_VAL
+    CALL ovl_ui_put_linebuf_w
+
+    ; Row 4: Class / Weight
+    LD   B, 4
+    LD   C, UCHAR_COL_L
     LD   HL, ovl_ui_str_lbl_class
     CALL ovl_ui_put_lgrey_cstr
     LD   A, (player_data + PL_CLASS)
@@ -119,79 +148,223 @@ ovl_ui_character:
 .cls_ok:
     LD   HL, ovl_ui_class_names
     CALL ovl_ui_nth_str
-    LD   B, 3
-    LD   C, UCHAR_COL_R + 7
+    LD   B, 4
+    LD   C, UCHAR_COL_NAME
     CALL ovl_ui_put_cstr_w
 
-    ; Row 4: Level / AC
     LD   B, 4
+    LD   C, UCHAR_COL_MID
+    LD   HL, ovl_ui_str_lbl_wt
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_WEIGHT)
+    LD   DE, line_buf
+    CALL fmt_u8_dec
+    LD   HL, ovl_ui_str_lb
+    CALL ovl_ui_append_str
+    LD   B, 4
+    LD   C, UCHAR_COL_MID_VAL
+    CALL ovl_ui_put_linebuf_w
+
+    ; Row 5: Title / Depth
+    LD   B, 5
+    LD   C, UCHAR_COL_L
+    LD   HL, ovl_ui_str_lbl_title
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_LEVEL)
+    OR   A
+    JR   Z, .title_l0
+    DEC  A
+.title_l0:
+    LD   B, 0
+.title_d5:
+    CP   5
+    JR   C, .title_emit
+    SUB  5
+    INC  B
+    LD   C, A
+    LD   A, B
+    CP   7
+    LD   A, C
+    JR   C, .title_d5
+.title_emit:
+    LD   A, B
+    LD   HL, ovl_ui_rank_names
+    CALL ovl_ui_nth_str
+    LD   B, 5
+    LD   C, UCHAR_COL_NAME
+    LD   E, COL_WHITE
+    CALL screen_put_str
+
+    LD   B, 5
+    LD   C, UCHAR_COL_MID
+    LD   HL, ovl_ui_str_lbl_depth
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_DLEVEL)
+    OR   A
+    JR   NZ, .depth_deep
+    LD   HL, ovl_ui_str_town
+    LD   B, 5
+    LD   C, UCHAR_COL_MID_VAL
+    LD   E, COL_WHITE
+    CALL screen_put_str
+    JR   .row5_done
+.depth_deep:
+    LD   L, A
+    LD   H, 0
+    LD   A, 50
+    CALL mul_hl_a
+    LD   DE, line_buf
+    CALL fmt_u16_dec
+    LD   A, 0x27
+    LD   (DE), A
+    INC  DE
+    XOR  A
+    LD   (DE), A
+    LD   B, 5
+    LD   C, UCHAR_COL_MID_VAL
+    CALL ovl_ui_put_linebuf_w
+.row5_done:
+
+    ; Row 6: Hunger / Blows
+    LD   B, 6
+    LD   C, UCHAR_COL_L
+    LD   HL, ovl_ui_str_lbl_hunger
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_HUNGER)
+    CP   4
+    JR   C, .hung_ok
+    XOR  A
+.hung_ok:
+    LD   HL, ovl_ui_hunger_names
+    CALL ovl_ui_nth_str
+    LD   B, 6
+    LD   C, UCHAR_COL_NAME
+    LD   E, COL_WHITE
+    CALL screen_put_str
+
+    LD   B, 6
+    LD   C, UCHAR_COL_MID
+    LD   HL, ovl_ui_str_lbl_blows
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_BLOWS)
+    LD   DE, line_buf
+    CALL fmt_u8_dec
+    LD   HL, ovl_ui_str_rnd
+    CALL ovl_ui_append_str
+    LD   B, 6
+    LD   C, UCHAR_COL_MID_VAL
+    CALL ovl_ui_put_linebuf_w
+
+    ; Row 7: Level / AC
+    LD   B, 7
     LD   C, UCHAR_COL_L
     LD   HL, ovl_ui_str_lbl_level
     CALL ovl_ui_put_lgrey_cstr
     LD   A, (player_data + PL_LEVEL)
     LD   DE, line_buf
     CALL fmt_u8_dec
-    LD   B, 4
-    LD   C, UCHAR_COL_L + 7
+    LD   B, 7
+    LD   C, UCHAR_COL_NAME
     CALL ovl_ui_put_linebuf_w
 
-    LD   B, 4
-    LD   C, UCHAR_COL_R
+    LD   B, 7
+    LD   C, UCHAR_COL_MID
     LD   HL, ovl_ui_str_lbl_ac
     CALL ovl_ui_put_lgrey_cstr
     LD   A, (player_data + PL_AC)
     LD   DE, line_buf
     CALL fmt_u8_dec
-    LD   B, 4
-    LD   C, UCHAR_COL_R + 3
+    LD   B, 7
+    LD   C, UCHAR_COL_MID_VAL
     CALL ovl_ui_put_linebuf_w
 
-    ; Rows 6-7: 6 Stats (Row 6: STR, INT, WIS; Row 7: DEX, CON, CHR)
+    ; Rows 2..7 Right col (col 53): 6 Stats "CUR (BASE)"
     LD   B, 0
 .stat_loop:
+    PUSH BC                     ; B = stat index 0..5
     LD   A, B
-    CP   3
-    JR   C, .st_row6
-    SUB  3
-    LD   D, 7
-    JR   .st_col
-.st_row6:
-    LD   D, 6
-.st_col:
-    LD   C, UCHAR_STAT_COL0
-    OR   A
-    JR   Z, .st_have_pos
-    LD   C, UCHAR_STAT_COL1
-    DEC  A
-    JR   Z, .st_have_pos
-    LD   C, UCHAR_STAT_COL2
-.st_have_pos:
-    PUSH BC                     ; save stat index B
-    LD   E, B
+    ADD  A, 2
+    LD   D, A                   ; D = row 2..7
     LD   A, B
-    LD   B, D                   ; B = screen row
-    PUSH BC
+    LD   B, D
+    LD   C, UCHAR_COL_R
     PUSH DE
     LD   HL, ovl_ui_stat_names
-    CALL ovl_ui_nth_str         ; HL = "STR:", etc.
+    CALL ovl_ui_nth_str
     CALL ovl_ui_put_lgrey_cstr
-    POP  DE
-    POP  BC                     ; B = row, C = start col
-    LD   A, C
-    ADD  A, 4
-    LD   C, A
+    POP  DE                     ; D = row
+    POP  BC                     ; B = stat index
+    PUSH BC
+    LD   E, B
+    LD   C, UCHAR_COL_R + 5
+    LD   B, D
     LD   D, 0
     LD   HL, player_data + PL_STR_CUR
     ADD  HL, DE
+    LD   A, (HL)
+    PUSH HL
+    PUSH BC
+    PUSH DE
+    LD   DE, line_buf
+    CALL status_put_stat_val_full
+    POP  DE
+    POP  BC
+    POP  HL
     LD   E, COL_WHITE
-    CALL ovl_ui_put_stat_at
+    PUSH BC
+    PUSH DE
+    PUSH HL
+    CALL ovl_ui_put_linebuf
+    POP  HL
+    POP  DE
+    POP  BC                     ; B = row, C = start col (58)
+    ; Check cur != base
+    LD   A, (HL)
+    LD   DE, -STAT_COUNT
+    ADD  HL, DE
+    CP   (HL)
+    JR   Z, .stat_next
+    LD   DE, line_buf
+    EX   DE, HL                 ; HL = line_buf, DE = &base_stat
+.st_len:
+    LD   A, (HL)
+    OR   A
+    JR   Z, .st_len_done
+    INC  HL
+    INC  C
+    JR   .st_len
+.st_len_done:
+    PUSH BC                     ; B = row, C = col right after cur stat
+    LD   A, (DE)                ; base stat
+    LD   HL, line_buf
+    LD   (HL), ' '
+    INC  HL
+    LD   (HL), '('
+    INC  HL
+    EX   DE, HL
+    CALL status_put_stat_val_full
+    LD   HL, line_buf
+    XOR  A
+.st_end:
+    CP   (HL)
+    JR   Z, .st_close
+    INC  HL
+    JR   .st_end
+.st_close:
+    LD   (HL), ')'
+    INC  HL
+    LD   (HL), 0
+    POP  BC                     ; B = row, C = col right after cur
+    LD   E, COL_LGREY
+    CALL ovl_ui_put_linebuf
+.stat_next:
     POP  BC
     INC  B
     LD   A, B
     CP   STAT_COUNT
     JR   C, .stat_loop
 
-    ; Row 9: HP / Mana
+    ; Row 9: HP / Mana / Hit/Dam
     LD   B, 9
     LD   C, UCHAR_COL_L
     LD   HL, ovl_ui_str_lbl_hp
@@ -205,7 +378,7 @@ ovl_ui_character:
     LD   HL, (player_data + PL_MHP_LO)
     CALL fmt_u16_dec
     LD   B, 9
-    LD   C, UCHAR_COL_L + 3
+    LD   C, UCHAR_COL_NAME
     CALL ovl_ui_put_linebuf_w
 
     LD   B, 9
@@ -221,16 +394,32 @@ ovl_ui_character:
     LD   A, (player_data + PL_MAX_MANA)
     CALL fmt_u8_dec
     LD   B, 9
-    LD   C, UCHAR_COL_MID + 6
+    LD   C, UCHAR_COL_MID_VAL
     CALL ovl_ui_put_linebuf_w
 
-    ; Row 10: Gold / EXP
+    LD   B, 9
+    LD   C, UCHAR_COL_R
+    LD   HL, ovl_ui_str_lbl_hitdam
+    CALL ovl_ui_put_lgrey_s
+    LD   DE, line_buf
+    LD   A, (player_data + PL_TOHIT)
+    CALL ovl_ui_fmt_signed8
+    LD   A, '/'
+    LD   (DE), A
+    INC  DE
+    LD   A, (player_data + PL_TODMG)
+    CALL ovl_ui_fmt_signed8
+    LD   B, 9
+    LD   C, UCHAR_COL_R + 9
+    CALL ovl_ui_put_linebuf_w
+
+    ; Row 10: Gold / EXP / Spells
     LD   B, 10
     LD   C, UCHAR_COL_L
     LD   HL, ovl_ui_str_lbl_gold
     CALL ovl_ui_put_lgrey_cstr
     LD   B, 10
-    LD   C, UCHAR_COL_L + 6
+    LD   C, UCHAR_COL_NAME
     LD   E, COL_YELLOW
     LD   HL, player_data + PL_GOLD_0
     CALL ovl_ui_put_u24_at
@@ -240,17 +429,17 @@ ovl_ui_character:
     LD   HL, ovl_ui_str_lbl_exp
     CALL ovl_ui_put_lgrey_cstr
     LD   B, 10
-    LD   C, UCHAR_COL_MID + 4
+    LD   C, UCHAR_COL_MID_VAL
     LD   E, COL_WHITE
     LD   HL, player_data + PL_XP_0
     CALL ovl_ui_put_u24_at
 
-    ; Row 11: Spells (spellcasters only)
+    ; Row 10 col 53: Spells (spellcasters only)
     LD   A, (player_data + PL_SPELL_TYPE)
     OR   A
     JR   Z, .no_spells
-    LD   B, 11
-    LD   C, UCHAR_COL_L
+    LD   B, 10
+    LD   C, UCHAR_COL_R
     LD   HL, ovl_ui_str_lbl_spells
     CALL ovl_ui_put_lgrey_cstr
 
@@ -287,14 +476,14 @@ ovl_ui_character:
     ADD  HL, BC
     LD   A, (HL)
     CALL fmt_u8_dec
-    LD   B, 11
-    LD   C, UCHAR_COL_L + 8
+    LD   B, 10
+    LD   C, UCHAR_COL_R + 8
     CALL ovl_ui_put_linebuf_w
 .no_spells:
 
-    ; Row 12: Sex / SC
+    ; Row 12: Sex / SC (col 22, matching existing CP/M layout cleanly between row 10 & row 18)
     LD   B, 12
-    LD   C, UCHAR_COL_L
+    LD   C, 22
     LD   HL, ovl_ui_str_lbl_sex
     CALL ovl_ui_put_lgrey_cstr
     LD   A, (player_data + PL_FLAGS)
@@ -306,15 +495,14 @@ ovl_ui_character:
     LD   DE, line_buf
     CALL ovl_ui_append_str
     LD   B, 12
-    LD   C, UCHAR_COL_L + 5
+    LD   C, 22 + 5
     CALL ovl_ui_put_linebuf_w
 
-    ; Advance col cleanly right after "Male" (4) or "Female" (6)
     LD   A, (player_data + PL_FLAGS)
     AND  PLF_MALE
-    LD   C, UCHAR_COL_L + 5 + 4
+    LD   C, 22 + 5 + 4
     JR   NZ, .sc_col_ok
-    LD   C, UCHAR_COL_L + 5 + 6
+    LD   C, 22 + 5 + 6
 .sc_col_ok:
     PUSH BC
     LD   B, 12
@@ -322,7 +510,7 @@ ovl_ui_character:
     CALL ovl_ui_put_lgrey_cstr
     POP  BC
     LD   A, C
-    ADD  A, 6                   ; len("  SC: ")
+    ADD  A, 6
     LD   C, A
     PUSH BC
     LD   A, (player_data + PL_SOCIAL_CLASS)
@@ -344,7 +532,7 @@ ovl_ui_character:
     LD   A, C
     ADD  A, 13
     LD   B, A
-    LD   C, UCHAR_COL_L
+    LD   C, 22
     LD   E, COL_LGREY
     CALL ovl_ui_put_linebuf
     POP  HL
@@ -356,12 +544,15 @@ ovl_ui_character:
     CP   4
     JR   C, .bg_loop
 
-    ; Row 18: "Press any key"
-    LD   B, 18
+    ; Rows 18..20: 7 Derived Skills + Next XP
+    CALL ovl_ui_draw_skills
+
+    ; Row 22: "Press any key"
+    LD   B, 22
     LD   C, UCHAR_FOOTER_COL
     LD   HL, ovl_ui_str_press_key
     CALL ovl_ui_put_lgrey_cstr
-    LD   B, 18
+    LD   B, 22
     LD   C, UCHAR_FOOTER_COL + 13
     JP   ovl_ui_wait_exit
 
@@ -405,6 +596,7 @@ ovl_ui_inventory:
     LD   E, COL_WHITE
     LD   HL, ovl_ui_str_inv_hdr
     CALL ovl_ui_put_cstr
+    CALL ovl_ui_draw_burden
 
     XOR  A
     LD   (ovl_ui_tmp0), A       ; visible ordinal (0..21)
@@ -437,13 +629,19 @@ ovl_ui_inventory:
     LD   DE, line_buf
     CALL item_format_inv_slot
     XOR  A
-    LD   (line_buf + 74), A
+    LD   (line_buf + 63), A
     POP  BC
     PUSH BC
     LD   E, COL_LGREY
     LD   C, 4
     LD   HL, line_buf
     CALL screen_put_str
+    POP  BC
+    PUSH BC
+    LD   A, B
+    LD   B, C                   ; slot 0..21
+    LD   C, A                   ; screen row
+    CALL ovl_ui_put_slot_col69
     POP  BC
 
 .inv_next:
@@ -483,6 +681,7 @@ ovl_ui_equipment:
     LD   E, COL_WHITE
     LD   HL, ovl_ui_str_eq_hdr
     CALL ovl_ui_put_cstr
+    CALL ovl_ui_draw_burden
     LD   B, 1
     LD   C, UEQ_TITLE_COL
     LD   E, COL_WHITE
@@ -545,11 +744,20 @@ ovl_ui_equipment:
     LD   DE, line_buf
     CALL item_format_inv_slot
     XOR  A
-    LD   (line_buf + 66), A
+    LD   (line_buf + 55), A
     POP  BC
     PUSH BC
     LD   C, 12
     CALL ovl_ui_put_linebuf_w
+    POP  BC
+    PUSH BC
+    LD   A, B                   ; screen row
+    LD   B, C
+    LD   C, A                   ; C = screen row
+    LD   A, B
+    ADD  A, EQUIP_WEAPON
+    LD   B, A                   ; B = slot index
+    CALL ovl_ui_put_slot_col69
     POP  BC
 
 .eq_next:
@@ -1162,7 +1370,7 @@ ovl_ui_select_display:
     CALL screen_hard_clear
     LD   A, (piw_filter)
     CP   PIW_FILTER_EQUIP
-    JR   NZ, .sel_inv
+    JP   NZ, .sel_inv
 
     ; Equipment view with all 12 labeled slots and "(none)" for empties
     LD   B, 0
@@ -1170,6 +1378,7 @@ ovl_ui_select_display:
     LD   E, COL_WHITE
     LD   HL, ovl_ui_str_eq_hdr
     CALL ovl_ui_put_cstr
+    CALL ovl_ui_draw_burden
     LD   B, 1
     LD   C, UEQ_TITLE_COL
     LD   E, COL_WHITE
@@ -1226,11 +1435,20 @@ ovl_ui_select_display:
     LD   DE, line_buf
     CALL item_format_inv_slot
     XOR  A
-    LD   (line_buf + 66), A
+    LD   (line_buf + 55), A
     POP  BC
     PUSH BC
     LD   C, 12
     CALL ovl_ui_put_linebuf_w
+    POP  BC
+    PUSH BC
+    LD   A, B                   ; screen row
+    LD   B, C
+    LD   C, A                   ; C = screen row
+    LD   A, B
+    ADD  A, EQUIP_WEAPON
+    LD   B, A                   ; B = slot index
+    CALL ovl_ui_put_slot_col69
     POP  BC
 .seq_nx:
     INC  C
@@ -1245,6 +1463,7 @@ ovl_ui_select_display:
     LD   E, COL_WHITE
     LD   HL, ovl_ui_str_inv_hdr
     CALL ovl_ui_put_cstr
+    CALL ovl_ui_draw_burden
     LD   A, (piw_visible_count)
     OR   A
     JR   NZ, .sinv_nonempty
@@ -1298,12 +1517,15 @@ ovl_ui_select_display:
     LD   HL, piw_visible_slots
     ADD  HL, DE
     LD   A, (HL)
+    PUSH AF                     ; save slot id
     LD   DE, line_buf
     CALL item_format_inv_slot
     XOR  A
-    LD   (line_buf + 74), A
+    LD   (line_buf + 63), A
+    POP  DE                     ; D = slot id
     POP  BC
     PUSH BC
+    PUSH DE
     LD   A, C
     LD   HL, ovl_ui_base_row
     ADD  A, (HL)
@@ -1312,6 +1534,15 @@ ovl_ui_select_display:
     LD   E, COL_LGREY
     LD   HL, line_buf
     CALL screen_put_str
+    POP  DE                     ; D = slot id
+    POP  BC
+    PUSH BC
+    LD   A, C
+    LD   HL, ovl_ui_base_row
+    ADD  A, (HL)
+    LD   C, A                   ; C = screen row
+    LD   B, D                   ; B = slot id
+    CALL ovl_ui_put_slot_col69
     POP  BC
     INC  C
     JR   .sinv_lp
@@ -1363,6 +1594,131 @@ ovl_ui_select_display:
     RET
 
 ; ============================================================================
+; +18: ovl_ui_msg_history — Ctrl+P 8-slot message history viewer
+; ============================================================================
+ovl_ui_msg_history:
+    PUSH IX
+    PUSH IY
+
+    CALL screen_hard_clear
+    ; Draw '+'/'-'/'|' 80x24 border box in COL_GREY
+    LD   B, 0
+    CALL .mh_hborder
+    LD   B, SCREEN_ROWS - 1
+    CALL .mh_hborder
+    LD   B, 1
+.mh_vloop:
+    PUSH BC
+    LD   C, 0
+    LD   A, '|'
+    LD   E, COL_GREY
+    CALL screen_put_char
+    POP  BC
+    PUSH BC
+    LD   C, SCREEN_COLS - 1
+    LD   A, '|'
+    LD   E, COL_GREY
+    CALL screen_put_char
+    POP  BC
+    INC  B
+    LD   A, B
+    CP   SCREEN_ROWS - 1
+    JR   C, .mh_vloop
+
+    LD   B, 0
+    LD   C, MSG_HIST_TITLE_COL
+    LD   E, COL_WHITE
+    LD   HL, ovl_ui_str_msg_hist
+    CALL screen_put_str
+
+    LD   B, SCREEN_ROWS - 1
+    LD   C, UCHAR_FOOTER_COL
+    LD   E, COL_WHITE
+    LD   HL, ovl_ui_str_press_key
+    CALL screen_put_str
+
+    ; Walk 8 ring slots oldest -> newest starting from msg_hist_idx
+    LD   A, (msg_hist_idx)
+    AND  MSG_HIST_COUNT - 1
+    LD   C, A                   ; C = slot index (0..7)
+    LD   B, 2                   ; B = output row (2..)
+    LD   D, MSG_HIST_COUNT      ; D = remaining slots
+.mh_slot_loop:
+    PUSH BC
+    PUSH DE
+    LD   L, C
+    LD   H, 0
+    LD   A, MSG_HIST_LEN
+    CALL mul_hl_a               ; HL = slot * 80
+    LD   DE, msg_history
+    ADD  HL, DE
+    LD   A, (HL)
+    OR   A
+    JR   Z, .mh_skip
+    CP   ' '
+    JR   Z, .mh_skip
+    LD   DE, line_buf
+    LD   B, SCREEN_COLS - 2
+    CALL ovl_ui_copy_bounded
+    POP  DE
+    POP  BC
+    PUSH BC
+    PUSH DE
+    LD   C, 1
+    LD   E, COL_LGREY
+    CALL ovl_ui_put_linebuf
+    POP  DE
+    POP  BC
+    INC  B
+    JR   .mh_next
+.mh_skip:
+    POP  DE
+    POP  BC
+.mh_next:
+    INC  C
+    LD   A, C
+    AND  MSG_HIST_COUNT - 1
+    LD   C, A
+    DEC  D
+    JR   NZ, .mh_slot_loop
+
+    LD   A, B
+    CP   2
+    JR   NZ, .mh_wait
+    LD   B, 2
+    LD   C, 2
+    LD   E, COL_GREY
+    LD   HL, ovl_ui_str_no_msgs
+    CALL screen_put_str
+.mh_wait:
+    LD   B, SCREEN_ROWS - 1
+    LD   C, UCHAR_FOOTER_COL + 13
+    JP   ovl_ui_wait_exit
+
+.mh_hborder:
+    LD   C, 0
+.mh_hlp:
+    LD   A, C
+    OR   A
+    JR   Z, .mh_crn
+    CP   SCREEN_COLS - 1
+    JR   Z, .mh_crn
+    LD   A, '-'
+    JR   .mh_pch
+.mh_crn:
+    LD   A, '+'
+.mh_pch:
+    PUSH BC
+    LD   E, COL_GREY
+    CALL screen_put_char
+    POP  BC
+    INC  C
+    LD   A, C
+    CP   SCREEN_COLS
+    JR   C, .mh_hlp
+    RET
+
+; ============================================================================
 ; Shared Local Helpers
 ; ============================================================================
 ovl_ui_wait_exit:
@@ -1379,9 +1735,505 @@ ovl_ui_wait_exit:
     POP  IX
     RET
 
+ovl_ui_put_lgrey_s:
+    LD   E, COL_LGREY
+    JP   screen_put_str
+
 ovl_ui_put_lgrey_cstr:
     LD   E, COL_LGREY
-    JR   ovl_ui_put_cstr
+    JP   ovl_ui_put_cstr
+
+; Format signed 8-bit A into (DE) as "+N"/"-N" + NUL, advancing DE past digits.
+ovl_ui_fmt_signed8:
+    BIT  7, A
+    JR   Z, .pos
+    NEG
+    LD   C, A
+    LD   A, '-'
+    JR   .go
+.pos:
+    LD   C, A
+    LD   A, '+'
+.go:
+    LD   (DE), A
+    INC  DE
+    LD   A, C
+    JP   fmt_u8_dec
+
+; ============================================================================
+; Burden Header & Per-Item Weight Helpers (80-col)
+; ============================================================================
+ovl_ui_draw_burden:
+    LD   B, 0
+    LD   C, 55
+    LD   HL, ovl_ui_str_burden
+    CALL ovl_ui_put_lgrey_s
+    LD   HL, (inven_weight_lo)
+    LD   DE, line_buf
+    CALL ovl_ui_fmt_tenths
+    LD   A, '/'
+    LD   (DE), A
+    INC  DE
+    PUSH DE
+    CALL player_weight_limit
+    POP  DE
+    CALL ovl_ui_fmt_tenths
+    LD   HL, ovl_ui_str_lb
+    CALL ovl_ui_append_str
+    LD   B, 0
+    LD   C, 63
+    JP   ovl_ui_put_linebuf_w
+
+; Input: B = inv/equip slot (0..TOTAL_INV_SLOTS-1), C = screen row
+ovl_ui_put_slot_col69:
+    PUSH BC                     ; C = row in C
+    LD   E, B
+    LD   D, 0
+    LD   HL, inv_item_id
+    ADD  HL, DE
+    LD   A, (HL)
+    LD   HL, inv_qty
+    ADD  HL, DE
+    LD   B, (HL)
+    LD   HL, inv_ego
+    ADD  HL, DE
+    LD   C, (HL)
+    CALL inv_slot_weight        ; HL = tenths of lb
+    LD   DE, temp_str_buf
+    CALL ovl_ui_fmt_tenths      ; DE at NUL
+    LD   A, E
+    SUB  LOW temp_str_buf
+    PUSH AF                     ; save number width
+    LD   HL, ovl_ui_str_lb
+    CALL ovl_ui_append_str
+    POP  AF                     ; A = number width
+    POP  BC                     ; C = screen row
+    LD   B, A                   ; B = number width
+    LD   A, 74
+    SUB  B
+    CP   69
+    JR   NC, .col_ok
+    LD   A, 69
+.col_ok:
+    LD   B, C                   ; row
+    LD   C, A                   ; col
+    LD   E, COL_LGREY
+    LD   HL, temp_str_buf
+    JP   screen_put_str
+
+ovl_ui_fmt_tenths:
+    LD   C, 10
+    CALL div_hl_c
+    PUSH AF
+    CALL fmt_u16_dec
+    POP  AF
+    EX   DE, HL
+    LD   (HL), '.'
+    INC  HL
+    ADD  A, '0'
+    LD   (HL), A
+    INC  HL
+    LD   (HL), 0
+    EX   DE, HL
+    RET
+
+; ============================================================================
+; Derived Skills & Next XP Drawer (80-col Character Sheet Rows 18..20)
+; ============================================================================
+ovl_ui_draw_skills:
+    ; Fighting (row 18, col 2)
+    LD   B, 18
+    LD   C, 2
+    LD   HL, ovl_ui_str_fight
+    CALL ovl_ui_put_lgrey_s
+    LD   A, 0
+    CALL ovl_ui_calc_bth_skill
+    LD   B, 18
+    LD   C, 15
+    CALL ovl_ui_put_rating
+
+    ; Bows/Throw (row 19, col 2)
+    LD   B, 19
+    LD   C, 2
+    LD   HL, ovl_ui_str_bows
+    CALL ovl_ui_put_lgrey_s
+    LD   A, 1
+    CALL ovl_ui_calc_bth_skill
+    LD   B, 19
+    LD   C, 15
+    CALL ovl_ui_put_rating
+
+    ; Saving Thrw (row 20, col 2)
+    LD   B, 20
+    LD   C, 2
+    LD   HL, ovl_ui_str_save
+    CALL ovl_ui_put_lgrey_s
+    LD   A, 2
+    CALL ovl_ui_calc_prop_skill
+    LD   B, 20
+    LD   C, 15
+    CALL ovl_ui_put_rating
+
+    ; Stealth (row 18, col 29)
+    LD   B, 18
+    LD   C, 29
+    LD   HL, ovl_ui_str_stealth
+    CALL ovl_ui_put_lgrey_s
+    CALL player_get_stealth     ; 0..9
+    ADD  A, A
+    ADD  A, A
+    ADD  A, A
+    ADD  A, A                   ; * 16 (0..144)
+    LD   B, 18
+    LD   C, 42
+    CALL ovl_ui_put_rating
+
+    ; Searching (row 19, col 29): class[8] + race[4]
+    LD   B, 19
+    LD   C, 29
+    LD   HL, ovl_ui_str_search
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_CLASS)
+    CP   CLASS_COUNT
+    JR   C, .sr_cls_ok
+    XOR  A
+.sr_cls_ok:
+    LD   L, A
+    LD   H, 0
+    LD   A, CLASS_PROP_SIZE
+    CALL mul_hl_a
+    LD   DE, class_properties + 8
+    ADD  HL, DE
+    LD   C, (HL)
+    LD   A, (player_data + PL_RACE)
+    CP   RACE_COUNT
+    JR   C, .sr_rc_ok
+    XOR  A
+.sr_rc_ok:
+    LD   L, A
+    LD   H, 0
+    LD   A, RACE_PROP_SIZE
+    CALL mul_hl_a
+    LD   DE, race_properties + 4
+    ADD  HL, DE
+    LD   A, (HL)
+    ADD  A, C
+    BIT  7, A
+    JR   Z, .sr_put
+    XOR  A
+.sr_put:
+    LD   DE, line_buf
+    CALL fmt_u8_dec
+    LD   A, '%'
+    LD   (DE), A
+    INC  DE
+    XOR  A
+    LD   (DE), A
+    LD   B, 19
+    LD   C, 42
+    CALL ovl_ui_put_linebuf_w
+
+    ; Next XP (row 20, col 29 -> value col 38)
+    LD   B, 20
+    LD   C, 29
+    LD   HL, ovl_ui_str_next
+    CALL ovl_ui_put_lgrey_s
+    LD   A, (player_data + PL_LEVEL)
+    OR   A
+    JR   Z, .nxt_max
+    CP   40
+    JR   NC, .nxt_max
+    CALL ovl_ui_calc_xp_thresh  ; E:HL = 24-bit threshold
+    LD   BC, line_buf
+    CALL status_fmt_u24
+    LD   B, 20
+    LD   C, 38
+    LD   E, COL_WHITE
+    CALL screen_put_str
+    JR   .nxt_done
+.nxt_max:
+    LD   B, 20
+    LD   C, 38
+    LD   E, COL_WHITE
+    LD   HL, ovl_ui_str_max
+    CALL screen_put_str
+.nxt_done:
+
+    ; Disarming (row 18, col 56)
+    LD   B, 18
+    LD   C, 56
+    LD   HL, ovl_ui_str_disarm
+    CALL ovl_ui_put_lgrey_s
+    LD   A, 3
+    CALL ovl_ui_calc_prop_skill
+    LD   C, A                   ; C = prop skill (0..255)
+    LD   A, (player_data + PL_DEX_CUR)
+    CP   18
+    JR   C, .dx_lo
+    LD   A, 18
+.dx_lo:
+    CP   3
+    JR   NC, .dx_ok
+    LD   A, 3
+.dx_ok:
+    SUB  3
+    LD   E, A
+    LD   D, 0
+    LD   HL, ovl_ui_dex_disarm_bonus
+    ADD  HL, DE
+    LD   A, (HL)
+    CALL ovl_ui_add_signed_c    ; A = clamped 0..255
+    LD   B, 18
+    LD   C, 69
+    CALL ovl_ui_put_rating
+
+    ; Infravision (row 19, col 56)
+    LD   B, 19
+    LD   C, 56
+    LD   HL, ovl_ui_str_infra
+    CALL ovl_ui_put_lgrey_s
+    CALL player_get_infra_range
+    OR   A
+    JR   NZ, .inf_val
+    LD   B, 19
+    LD   C, 69
+    LD   E, COL_WHITE
+    LD   HL, ovl_ui_str_none
+    JP   screen_put_str
+.inf_val:
+    LD   DE, line_buf
+    CALL fmt_u8_dec
+    LD   HL, ovl_ui_str_ft
+    CALL ovl_ui_append_str
+    LD   B, 19
+    LD   C, 69
+    JP   ovl_ui_put_linebuf_w
+
+; Input: A = skill idx 0 (Fight) or 1 (Bows) -> A (0..255)
+ovl_ui_calc_bth_skill:
+    CALL ovl_ui_calc_prop_skill
+    LD   C, A                   ; C = base (0..255)
+    LD   A, (player_data + PL_TOHIT)
+    BIT  7, A
+    JR   NZ, .neg_th
+    LD   L, A
+    LD   H, 0
+    LD   E, L
+    LD   D, H
+    ADD  HL, HL
+    ADD  HL, DE                 ; 3 * tohit
+    LD   E, C
+    LD   D, 0
+    ADD  HL, DE
+    LD   A, H
+    OR   A
+    LD   A, L
+    RET  Z
+    LD   A, 255
+    RET
+.neg_th:
+    NEG
+    LD   L, A
+    LD   H, 0
+    LD   E, L
+    LD   D, H
+    ADD  HL, HL
+    ADD  HL, DE                 ; 3 * |tohit|
+    EX   DE, HL                 ; DE = subtrahend
+    LD   L, C
+    LD   H, 0
+    OR   A
+    SBC  HL, DE
+    LD   A, 0
+    RET  C
+    LD   A, L
+    RET
+
+; Input: A = skill idx 0..3 -> A (0..255)
+ovl_ui_calc_prop_skill:
+    LD   (ovl_ui_tmp0), A
+    LD   E, A
+    LD   D, 0
+    LD   HL, ovl_ui_ucp_cls_off
+    ADD  HL, DE
+    LD   C, (HL)                ; class_properties offset
+    LD   A, (player_data + PL_CLASS)
+    CP   CLASS_COUNT
+    JR   C, .cls_ok
+    XOR  A
+.cls_ok:
+    LD   L, A
+    LD   H, 0
+    LD   A, CLASS_PROP_SIZE
+    CALL mul_hl_a
+    LD   B, 0
+    ADD  HL, BC
+    LD   DE, class_properties
+    ADD  HL, DE
+    LD   C, (HL)                ; C = class base
+
+    LD   A, (ovl_ui_tmp0)
+    LD   E, A
+    LD   D, 0
+    LD   HL, ovl_ui_ucp_lvl_off
+    ADD  HL, DE
+    LD   E, (HL)
+    LD   A, (player_data + PL_CLASS)
+    CP   CLASS_COUNT
+    JR   C, .cls2_ok
+    XOR  A
+.cls2_ok:
+    LD   L, A
+    LD   H, 0
+    LD   A, 5                   ; CLASS_LVL_SIZE
+    PUSH DE
+    CALL mul_hl_a
+    POP  DE
+    ADD  HL, DE
+    LD   DE, class_level_adj
+    ADD  HL, DE
+    LD   L, (HL)
+    LD   H, 0
+    LD   A, (player_data + PL_LEVEL)
+    PUSH BC
+    CALL mul_hl_a               ; HL = lvl * adj
+    POP  BC
+    LD   A, H
+    OR   A
+    JR   NZ, .cap255
+    LD   A, C
+    ADD  A, L
+    JR   NC, .have_lvl
+.cap255:
+    LD   A, 255
+.have_lvl:
+    LD   C, A                   ; C = clamped subtotal
+
+    LD   A, (ovl_ui_tmp0)
+    LD   E, A
+    LD   D, 0
+    LD   HL, ovl_ui_ucp_race_off
+    ADD  HL, DE
+    LD   E, (HL)
+    LD   A, (player_data + PL_RACE)
+    CP   RACE_COUNT
+    JR   C, .rc_ok
+    XOR  A
+.rc_ok:
+    LD   L, A
+    LD   H, 0
+    LD   A, RACE_PROP_SIZE
+    PUSH DE
+    CALL mul_hl_a
+    POP  DE
+    ADD  HL, DE
+    LD   DE, race_properties
+    ADD  HL, DE
+    LD   A, (HL)                ; signed race mod
+ovl_ui_add_signed_c:
+    BIT  7, A
+    JR   NZ, .neg
+    ADD  A, C
+    RET  NC
+    LD   A, 255
+    RET
+.neg:
+    NEG
+    LD   E, A
+    LD   A, C
+    SUB  E
+    RET  NC
+    XOR  A
+    RET
+
+; Input: A = skill score (0..255), B = row, C = col -> prints rating in COL_WHITE
+ovl_ui_put_rating:
+    LD   E, 0
+.lp:
+    CP   18
+    JR   C, .emit
+    SUB  18
+    INC  E
+    LD   D, A
+    LD   A, E
+    CP   7
+    LD   A, D
+    JR   C, .lp
+.emit:
+    LD   A, E
+    LD   HL, ovl_ui_rating_names
+    CALL ovl_ui_nth_str
+    LD   E, COL_WHITE
+    JP   screen_put_str
+
+; Compute 24-bit XP threshold in E:HL (1 <= level <= 39)
+ovl_ui_calc_xp_thresh:
+    LD   A, (player_data + PL_EXPFACT)
+    OR   A
+    JR   NZ, .ef_ok
+    LD   A, 100
+.ef_ok:
+    LD   (ovl_ui_tmp0), A
+    LD   A, (player_data + PL_LEVEL)
+    CP   29
+    JR   NC, .late
+    DEC  A
+    ADD  A, A
+    LD   E, A
+    LD   D, 0
+    LD   HL, ovl_ui_xp_early
+    ADD  HL, DE
+    LD   E, (HL)
+    INC  HL
+    LD   D, (HL)
+    CALL .mul_de_ef
+    LD   B, 24
+    XOR  A
+.d24:
+    ADD  HL, HL
+    RL   C
+    RLA
+    JR   C, .d_sub
+    CP   100
+    JR   C, .d_nx
+.d_sub:
+    SUB  100
+    INC  L
+.d_nx:
+    DJNZ .d24
+    LD   E, C
+    RET
+.late:
+    SUB  29
+    ADD  A, A
+    LD   E, A
+    LD   D, 0
+    LD   HL, ovl_ui_xp_late
+    ADD  HL, DE
+    LD   E, (HL)
+    INC  HL
+    LD   D, (HL)
+    CALL .mul_de_ef
+    LD   E, C
+    RET
+.mul_de_ef:
+    LD   HL, 0
+    LD   C, 0
+    LD   A, (ovl_ui_tmp0)
+    OR   A
+    RET  Z
+    LD   B, 8
+.mlp:
+    ADD  HL, HL
+    RL   C
+    RLCA
+    JR   NC, .mskp
+    ADD  HL, DE
+    JR   NC, .mskp
+    INC  C
+.mskp:
+    DJNZ .mlp
+    RET
 
 ovl_ui_put_cstr_w:
     LD   E, COL_WHITE
@@ -1665,6 +2517,52 @@ ovl_ui_str_lbl_exp:    DB "EXP:", 0
 ovl_ui_str_lbl_spells: DB "Spells: ", 0
 ovl_ui_str_lbl_sex:    DB "Sex: ", 0
 ovl_ui_str_lbl_sc:     DB "  SC: ", 0
+ovl_ui_str_lbl_age:    DB "Age: ", 0
+ovl_ui_str_lbl_ht:     DB "Height: ", 0
+ovl_ui_str_lbl_wt:     DB "Weight: ", 0
+ovl_ui_str_lbl_title:  DB "Title: ", 0
+ovl_ui_str_lbl_depth:  DB "Depth: ", 0
+ovl_ui_str_lbl_hunger: DB "Hunger: ", 0
+ovl_ui_str_lbl_blows:  DB "Blows: ", 0
+ovl_ui_str_lbl_hitdam: DB "Hit/Dam: ", 0
+ovl_ui_str_burden:     DB "Burden: ", 0
+ovl_ui_str_lb:         DB " lb", 0
+ovl_ui_str_town:       DB "Town", 0
+ovl_ui_str_rnd:        DB "/rnd", 0
+ovl_ui_str_fight:      DB "Fighting   : ", 0
+ovl_ui_str_bows:       DB "Bows/Throw : ", 0
+ovl_ui_str_save:       DB "Saving Thrw: ", 0
+ovl_ui_str_stealth:    DB "Stealth    : ", 0
+ovl_ui_str_search:     DB "Searching  : ", 0
+ovl_ui_str_disarm:     DB "Disarming  : ", 0
+ovl_ui_str_infra:      DB "Infravision: ", 0
+ovl_ui_str_next:       DB "Next: ", 0
+ovl_ui_str_max:        DB "Max", 0
+ovl_ui_str_none:       DB "None", 0
+ovl_ui_str_ft:         DB "0 ft", 0
+ovl_ui_str_msg_hist:   DB "Message History", 0
+ovl_ui_str_no_msgs:    DB "(No messages)", 0
+
+ovl_ui_hunger_names:
+    DB   "Full", 0, "Hungry", 0, "Weak", 0, "Faint", 0
+ovl_ui_rank_names:
+    DB   "Novice", 0, "Initiate", 0, "Apprentice", 0, "Journeyman", 0
+    DB   "Veteran", 0, "Hero", 0, "Master", 0, "Grand Master", 0
+ovl_ui_rating_names:
+    DB   "Bad", 0, "Poor", 0, "Fair", 0, "Good", 0
+    DB   "Very Good", 0, "Superb", 0, "Heroic", 0, "Legendary", 0
+ovl_ui_ucp_cls_off:  DB 3, 4, 6, 5
+ovl_ui_ucp_race_off: DB 7, 8, 9, 3
+ovl_ui_ucp_lvl_off:  DB 0, 1, 4, 3
+ovl_ui_dex_disarm_bonus:
+    DB   -8, -6, -4, -2, -1, 0, 0, 0
+    DB   0, 0, 1, 1, 1, 2, 2, 4
+ovl_ui_xp_early:
+    DW   10, 25, 45, 70, 100, 140, 200, 280, 380, 500
+    DW   650, 850, 1100, 1400, 1800, 2300, 2900, 3600, 4400, 5400
+    DW   6800, 8400, 10200, 12500, 17500, 25000, 35000, 50000
+ovl_ui_xp_late:
+    DW   750, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 15000, 25000, 50000
 ovl_ui_stat_names:
     DB   "STR:", 0, "INT:", 0, "WIS:", 0
     DB   "DEX:", 0, "CON:", 0, "CHR:", 0

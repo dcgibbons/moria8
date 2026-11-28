@@ -50,6 +50,7 @@ BDOS_READRAND       EQU 33
 BDOS_WRITERAND      EQU 34
 BDOS_FSIZE          EQU 35
 BDOS_SETRAND        EQU 36
+BDOS_ERRMODE        EQU 45      ; CP/M 3.0+ Set Hardware Error Mode (E=0xFF return errors; guarded by BDOS 12 >= 0x30)
 
 BDOS_RAWIO_POLL     EQU 0xFF
 

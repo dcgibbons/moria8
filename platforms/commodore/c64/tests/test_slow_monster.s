@@ -11,6 +11,7 @@ tc_results: .fill 3, $ff
 .encoding "screencode_mixed"
 
 test_bootstrap:
+    sei
     :BankOutBasic()
     jmp test_start
 

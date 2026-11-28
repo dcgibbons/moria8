@@ -48,8 +48,9 @@ CATALOG_BASE = 0x9500         # the monster catalog's fields and names, Bank 6
 CATALOG_LIMIT = 0xBA00        # cached OVL.UI follows
 
 SWR_CACHE_CAPS = {
+    "ovl.title": 2 * 256,
     "ovl.ui": 6 * 256,
-    "ovl.modal": 12 * 256,
+    "ovl.modal": 10 * 256,
     "ovl.spell": 21 * 256,
     "ovl.items": 23 * 256,
     "ovl.gen": 16 * 256,      # $BC00-$BFFF holds ITEMCAT Slots 2..5 (4 pages)
@@ -602,7 +603,7 @@ def validate_build(build_dir: Path, src_dir: Path | None = BEEB_SRC_DIR) -> list
             errors.append(f"{name} size {size} B exceeds Sideways RAM cache cap {SWR_CACHE_CAPS[name]} B")
 
     # Verify aggregate Sideways RAM bank page sums (<= 64 pages = 16,384 B per 16 KB bank)
-    bank5_items = ("ovl.modal",)   # after the 52 pages of map and guard
+    bank5_items = ("ovl.modal", "ovl.title")   # after the 52 pages of map and guard
     if all(k in sizes for k in bank5_items):
         bank5_pages = 52 + sum((sizes[k] + 255) // 256 for k in bank5_items)
         if bank5_pages > 64:
@@ -803,7 +804,7 @@ def run_selftest() -> int:
         write_synthetic_prg(bdir / "title.prg", 0x8000, 620)
         write_synthetic_prg(bdir / "boot.prg", 0x1900, 320)
         for name in OVERLAY_FILES:
-            write_synthetic_prg(bdir / name, OVERLAY_BASE, 0x0400)
+            write_synthetic_prg(bdir / name, OVERLAY_BASE, min(0x0400, SWR_CACHE_CAPS.get(name, 0x0400)))
 
         errs = validate_build(bdir, src_dir=BEEB_SRC_DIR)
         if errs:

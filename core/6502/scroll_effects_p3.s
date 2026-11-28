@@ -296,7 +296,8 @@ irs_re_id_tab:
 !irs_re_fire:
     // Fire Ball spell damage (49)
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    :CompactReCallArg(eff_ball, 49)
+    lda #49
+    bne !irs_re_ball_a+
 #else
     lda #49
     jsr eff_ball
@@ -305,7 +306,8 @@ irs_re_id_tab:
 !irs_re_cold:
     // Frost Ball spell damage (33)
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    :CompactReCallArg(eff_ball, 33)
+    lda #33
+    bne !irs_re_ball_a+
 #else
     lda #33
     jsr eff_ball
@@ -329,9 +331,13 @@ irs_re_id_tab:
 .assert "The four VMS attack wands live on Page 0", ITEM_PAGE_WAND_OF_FIRE_BOLTS == 0 && ITEM_PAGE_WAND_OF_DRAIN_LIFE == 0 && ITEM_PAGE_WAND_OF_LIGHTNING_BALLS == 0 && ITEM_PAGE_WAND_OF_ACID_BALLS == 0, true
 !irs_re_aball:
 #if HAL_PLATFORM_COMPACT_PLAY_SLOT
-    :CompactReCallArg(eff_ball, 40)          // Acid Balls
+    lda #40                         // Acid Balls
+    .byte $2c                       // BIT abs: skips the lda #24
 !irs_re_lball:
-    :CompactReCallArg(eff_ball, 24)
+    lda #24
+!irs_re_ball_a:
+    sta hal_tsci_arg
+    :CompactReCall(eff_ball)
 !irs_re_drain:
     :CompactReCall(eff_wand_drain_life)
 !irs_re_fbolt:
@@ -477,7 +483,7 @@ irs_p3_object_detect:
     ldy #>irs_p3_od_msg
     jmp irs_p3_report
 
-// Mass Genocide: remove every monster with clear LOS to the player.
+// Mass Genocide: remove every monster within MAX_SIGHT (20) with clear LOS.
 irs_p3_mass_genocide:
     ldx #0
 !irs_mg_loop:
@@ -501,15 +507,29 @@ irs_p3_mass_genocide:
     ldy #MX_X
     lda (zp_ptr0),y
     sta zp_los_dx
+    sec
+    sbc zp_player_x
+    bcs !irs_mg_dx_pos+
+    eor #$ff
+    adc #1                  // C=0
+!irs_mg_dx_pos:
+    cmp #21
+    bcs !irs_mg_next+
     ldy #MX_Y
     lda (zp_ptr0),y
     sta zp_los_dy
+    sec
+    sbc zp_player_y
+    bcs !irs_mg_dy_pos+
+    eor #$ff
+    adc #1                  // C=0
+!irs_mg_dy_pos:
+    cmp #21
+    bcs !irs_mg_next+
     lda zp_player_x
     sta mm_los_cx
     lda zp_player_y
     sta mm_los_cy
-    lda #20
-    sta zp_los_step
     jsr mm_los_clear_to_target
     bcc !irs_mg_next+
     ldx irs_mg_idx

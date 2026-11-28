@@ -737,6 +737,9 @@ ovl_ready_mask:
 .const PL_LIGHT_RAD = 55
 .const PL_SPELL_TYPE = 60
 .const PL_TODMG = 41
+.const PL_CLASS = 18
+.const CLASS_WARRIOR = 0
+.const CLASS_ROGUE = 3
 .const PLF_MALE = $01
 .const PLF_SEARCHING = $10
 .const PLF_RESTING = $20

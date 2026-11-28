@@ -266,7 +266,7 @@ PLUS4_BUILD_ARTIFACTS += $(OUTPLUS4)/legalui $(PLUS4_EXTRA_OVERLAYS)
 C128_BUILD_ARTIFACTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
 C128_MAIN_OUTPUTS += $(OUT128)/legalui $(C128_EXTRA_OVERLAYS)
 
-.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 disk128 diskplus4 run run64 run128 run128-cart runplus4 runplus4-cart \
+.PHONY: all build build64 build128 buildplus4 cartridge64 cartridge128 cartridgeplus4 disk disk64 disk128 diskplus4 run run64 run64-cart run128 run128-cart runplus4 runplus4-cart \
 	bootart128-charset-demo \
 	test test-disk test-disk-static test-disk-debt test64 test64-legal test128-legal testplus4-legal test64-gain-stat test128-gain-stat testplus4-gain-stat test-legal-harness test-scripted-smoke-harness \
 	test64-cartridge test64-cartridge-assets test64-cartridge-persistence \
@@ -303,6 +303,11 @@ run: $(DISK64_IMAGE)
 	$(VICE64) -drive8truedrive -drive8type 1541 +busdevice8 $(RUN_FLAGS64) -autostart $(DISK64_IMAGE)
 
 run64: run
+
+run64-cart: cartridge64
+	mkdir -p "$(OUT)/test/c64"
+	cp -f "$(OUT)/moria8-c64.crt" "$(OUT)/test/c64/moria8-c64.crt"
+	$(VICE64) +easyflashcrtwrite -sound $(VICE_SOUND_ARGS) -cartcrt "$(OUT)/test/c64/moria8-c64.crt"
 
 run128: $(DISK128_IMAGE)
 	$(VICE128) -drive8truedrive -drive8type 1571 +busdevice8 $(RUN_FLAGS128) $(DISK128_IMAGE)
@@ -416,6 +421,7 @@ check-hal-boundaries:
 	cd ../.. && python3 -B tools/check_raw_item_ids.py
 	cd ../.. && python3 -B tools/build_item_catalog.py --selftest
 	cd ../.. && python3 -B tools/huff_encoder.py --check
+	cd ../.. && python3 -B tools/bpe_text.py --selftest && python3 -B tools/bpe_text.py --check
 	cd ../.. && python3 -B -m unittest discover -s tools -p 'test_*catalog*.py'
 	cd ../.. && python3 -B tools/check_item_catalog_ports.py --selftest
 	cd ../.. && python3 -B tools/report_memory_budgets.py --selftest
@@ -790,6 +796,10 @@ clean:
 # output directory and compile define.
 CART64_OUT = $(abspath $(OUT)/c64-cart)
 cartridge64: $(OUT)/moria8-c64.crt
+	@python3 -B ../../tools/check_easyflash.py "$<" "$(CART64_OUT)" >/dev/null 2>&1 || { \
+		echo "Rebuilding $< (does not match $(CART64_OUT))..."; \
+		python3 -B ../../tools/make_easyflash.py "$(CART64_OUT)" "$<"; \
+	}
 
 $(CART64_OUT)/.main.stamp: $(C64_SOURCES) $(VERSION_INC) $(C64_TRAMPOLINES_INC) | ensure-kickass
 	mkdir -p "$(CART64_OUT)"

@@ -983,8 +983,6 @@ ovl_actions_tunnel_resolved:
     PUSH DE
     CALL tramp_modal_calc_dig
     LD   (ovl_actions_dig_pow), A
-    OR   A
-    JR   Z, .no_tool_pop
     LD   A, 40
     CALL rng_range              ; [0, 39]
     LD   H, HSTR_TUN_DIG_GRANITE
@@ -996,8 +994,6 @@ ovl_actions_tunnel_resolved:
     PUSH DE
     CALL tramp_modal_calc_dig
     LD   (ovl_actions_dig_pow), A
-    OR   A
-    JR   Z, .no_tool_pop
     LD   A, 240
     CALL rng_range
     ADD  A, 16                  ; 16..255
@@ -1010,8 +1006,6 @@ ovl_actions_tunnel_resolved:
     PUSH DE
     CALL tramp_modal_calc_dig
     LD   (ovl_actions_dig_pow), A
-    OR   A
-    JR   Z, .no_tool_pop
     LD   A, 120
     CALL rng_range
     ADD  A, 5                   ; 5..124
@@ -1024,8 +1018,6 @@ ovl_actions_tunnel_resolved:
     PUSH DE
     CALL tramp_modal_calc_dig
     LD   (ovl_actions_dig_pow), A
-    OR   A
-    JR   Z, .no_tool_pop
     LD   A, 80
     CALL rng_range
     ADD  A, 3                   ; 3..82
@@ -1047,14 +1039,6 @@ ovl_actions_tunnel_resolved:
     CALL msg_print_huff
     POP  DE
     POP  BC
-    SCF
-    RET
-
-.no_tool_pop:
-    POP  DE
-    POP  BC
-    LD   A, HSTR_TUN_NO_TOOL
-    CALL msg_print_huff
     SCF
     RET
 

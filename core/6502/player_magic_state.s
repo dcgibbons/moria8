@@ -49,7 +49,6 @@ c64_test_spell_return_count: .byte 0
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
 c64_test_spell_success_count: .byte 0
 c64_test_spell_return_pending: .byte 0
-c64_test_spell_return_count: .byte 0
 #endif
 #endif
 #endif

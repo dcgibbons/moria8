@@ -60,6 +60,7 @@
 .const CMD_DISARM    = $35
 .const CMD_AUTOREST  = $36
 .const CMD_JAM       = $37
+.const CMD_MSG_HISTORY = $38
 
 // Index = CMD_MOVE_x - CMD_MOVE_N
 dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1

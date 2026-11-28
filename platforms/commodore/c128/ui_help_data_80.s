@@ -1,258 +1,97 @@
 #importonce
-// ui_help_data_80.s — C128-specific 80-column help content
-//
-// The C128 help screen has a dedicated overlay, so use a real 80-column
-// two-page layout instead of stretching the compact 40-column help data.
-
-// Packed page format:
-//   help_pages = [page_count] [page_ptr_lo/hi]...
-//   each page  = [type_byte] [string_data...] [$00] repeated for 23 lines.
-// Type bytes: 0=CONTENT 1=HEADER 2=BLANK
-// Control codes: $fc=TAB(col) $fd=CH(cyan) $fe=CK(white) $ff=CD(lgrey)
-
+// ui_help_data_80.s — 80-column 3-page BPE-compressed help content
+#define HELP_DATA_BPE
 .const HELP80_COL2 = 44
 
 help_title_str:
     .text "Command Reference" ; .byte 0
 
+help_dict_l:
+    .byte $00, $20, $ff, $fb, $81, $2f, $20, $81, $0f, $05, $05, $84, $81, $54, $53, $8e
+    .byte $8f, $90, $13, $05, $13, $0f, $05, $82, $0f, $0f, $8a, $89, $83, $82, $0c, $09
+    .byte $01, $99, $54, $a2, $a3, $43, $15, $12, $05, $03, $9a, $98, $89, $57, $53, $ae
+    .byte $3d, $3d, $16, $14, $13, $12, $0f, $0c, $06, $fe, $fb, $b6, $b3, $93, $8c, $88
+    .byte $83, $82, $82, $82, $82, $52, $51, $4f, $4d, $4d, $47, $44, $2c, $26, $20, $14
+    .byte $0c, $0b, $09, $09, $04, $03, $01, $01
+help_dict_r:
+    .byte $20, $20, $20, $fe, $20, $20, $85, $81, $12, $0e, $01, $ff, $ff, $2b, $48, $49
+    .byte $46, $8d, $14, $12, $20, $0e, $0c, $52, $88, $17, $12, $14, $91, $53, $05, $12
+    .byte $0e, $0e, $52, $4c, $2b, $a4, $0e, $0f, $92, $08, $a9, $83, $20, $87, $14, $01
+    .byte $53, $4e, $05, $09, $05, $01, $0f, $0f, $06, $91, $87, $0b, $95, $13, $50, $19
+    .byte $a5, $54, $45, $44, $43, $97, $15, $10, $0f, $01, $0f, $98, $42, $20, $04, $05
+    .byte $0c, $05, $0e, $03, $86, $14, $12, $04
+
 help_lines:
-    .byte 1
-    .text "Movement" ; .byte $fc, HELP80_COL2 ; .text "Actions" ; .byte 0
-
-    .byte 0
-    .byte $fe ; .text "H" ; .byte $ff ; .text " Left"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "O" ; .byte $ff ; .text " Open Door"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "L" ; .byte $ff ; .text " Right"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "C" ; .byte $ff ; .text " Close Door"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "K" ; .byte $ff ; .text " Up"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "S" ; .byte $ff ; .text " Search"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "J" ; .byte $ff ; .text " Down"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "5" ; .byte $ff ; .text " Rest  "
-    .byte $fe ; .text "CTRL+R" ; .byte $ff ; .text " Rest*"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "Y" ; .byte $ff ; .text " NW"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "<" ; .byte $ff ; .text " Go Up"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "U" ; .byte $ff ; .text " NE"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text ">" ; .byte $ff ; .text " Go Down"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "B" ; .byte $ff ; .text " SW"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "/" ; .byte $ff ; .text " Identify"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "N" ; .byte $ff ; .text " SE"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "X" ; .byte $ff ; .text " Look"
-    .byte 0
-
-    .byte 0
-    .text "Cursors also move"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+DIR/." ; .byte $ff ; .text " Run"
-    .byte 0
-
-    .byte 0
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "CTRL+D" ; .byte $ff ; .text " Jam"
-    .byte 0
-
-    .byte 2 ; .byte 0
-
-    .byte 1
-    .text "Items" ; .byte $fc, HELP80_COL2 ; .text "Combat" ; .byte 0
-
-    .byte 0
-    .byte $fe ; .text "G" ; .byte $ff ; .text " Get Item"
-    .byte $fc, HELP80_COL2
-    .text "Walk into monster"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "D" ; .byte $ff ; .text " Drop Item"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+F" ; .byte $ff ; .text " Fire"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "I" ; .byte $ff ; .text " Inventory"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+T" ; .byte $ff ; .text " Throw"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "E" ; .byte $ff ; .text " Equipment"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+D" ; .byte $ff ; .text " Disarm"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "W" ; .byte $ff ; .text " Wear/Wield"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "CTRL+B" ; .byte $ff ; .text " Bash"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "T" ; .byte $ff ; .text " Take Off"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "+" ; .byte $ff ; .text " Tunnel"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "Q" ; .byte $ff ; .text " Quaff Potion"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+X" ; .byte $ff ; .text " Exchange Weapons"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "R" ; .byte $ff ; .text " Read Scroll"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "A" ; .byte $ff ; .text " Aim Wand"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "Z" ; .byte $ff ; .text " Use Staff"
-    .byte 0
+    .byte $01, $c8, $b2, $0d, $9b, $fb, $41, $03, $bc, $13, $00
+    .byte $00, $fe, $48, $82, $4c, $05, $06, $14, $83, $4f, $82, $c7, $ac, $cb, $00
+    .byte $00, $fe, $4c, $97, $09, $07, $08, $14, $83, $43, $c4, $b7, $b4, $20, $cb, $00
+    .byte $00, $fe, $4b, $82, $55, $10, $83, $53, $9d, $aa, $00
+    .byte $00, $fe, $4a, $c3, $a1, $83, $35, $97, $a8, $81, $fe, $a5, $c5, $a8, $2a, $00
+    .byte $00, $fe, $59, $82, $4e, $57, $83, $3c, $82, $ca, $20, $55, $10, $00
+    .byte $00, $fe, $55, $82, $4e, $45, $83, $3e, $82, $ca, $20, $44, $a1, $00
+    .byte $00, $fe, $42, $9d, $57, $83, $47, $82, $50, $d3, $0b, $15, $10, $00
+    .byte $00, $fe, $4e, $9d, $45, $83, $44, $c3, $a7, $10, $00
+    .byte $00, $fe, $43, $15, $12, $13, $88, $13, $82, $c8, $b2, $9c, $44, $c3, $09, $13, $d6, $0d, $00
+    .byte $00, $fe, $31, $2d, $39, $82, $4b, $05, $19, $10, $d7, $83, $23, $9d, $aa, $20, $c8, $04, $05, $00
+    .byte $00, $b9, $44, $9f, $97, $a6, $83, $2b, $c1, $a6, $0e, $96, $00
+    .byte $00, $fe, $2e, $2b, $44, $9f, $97, $a6, $c0, $42, $82, $42, $01, $13, $08, $00
+    .byte $01, $49, $cf, $0d, $94, $cd, $47, $9a, $fb, $52, $a0, $07, $05, $04, $20, $cd, $4d, $09, $13, $03, $00
+    .byte $00, $fe, $49, $82, $49, $0e, $16, $9b, $bf, $9c, $46, $82, $46, $9f, $05, $00
+    .byte $00, $fe, $45, $c2, $11, $15, $09, $10, $0d, $9b, $9c, $54, $c1, $08, $12, $99, $00
+    .byte $00, $fe, $57, $82, $57, $9a, $2f, $57, $09, $96, $04, $c0, $44, $82, $4a, $01, $0d, $20, $cb, $00
+    .byte $00, $fe, $54, $c1, $01, $d1, $20, $4f, $b8, $83, $58, $82, $4c, $bb, $00
+    .byte $00, $fe, $51, $82, $c6, $01, $b8, $20, $50, $0f, $bc, $9c, $58, $c2, $18, $a9, $a0, $07, $05, $20, $57, $8a, $10, $95, $13, $00
+    .byte $00, $fe, $c5, $8a, $04, $20, $53, $03, $a7, $d0, $00
+    .byte $00, $fe, $41, $82, $41, $09, $0d, $20, $57, $a0, $04, $00
+    .byte $00, $fe, $5a, $82, $55, $b4, $20, $af, $b8, $00
+    .byte $03 // HTYPE_END
 
 help_more_lines:
-    .byte 1
-    .text "Magic" ; .byte $fc, HELP80_COL2 ; .text "Other" ; .byte 0
-
-    .byte 0
-    .byte $fe ; .text "M" ; .byte $ff ; .text " Cast Spell"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+C" ; .byte $ff ; .text " Character"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "P" ; .byte $ff ; .text " Pray"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "?" ; .byte $ff ; .text " Help"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "F" ; .byte $ff ; .text " Study Book"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+S" ; .byte $ff ; .text " Save"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "SHIFT+E" ; .byte $ff ; .text " Eat"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+Q" ; .byte $ff ; .text " Quit"
-    .byte 0
-
-    .byte 0
-    .byte $fe ; .text "SHIFT+R" ; .byte $ff ; .text " Refuel"
-    .byte $fc, HELP80_COL2
-    .byte $fe ; .text "CTRL+W" ; .byte $ff ; .text " Wizard"
-    .byte 0
-
-    .byte 2 ; .byte 0
-
-    .byte 1
-    .text "Keypad" ; .byte $fc, HELP80_COL2 ; .text "Letters" ; .byte 0
-
-    .byte 0
-    .text "    7   8   9"
-    .byte $fc, HELP80_COL2
-    .text "    Y   K   U"
-    .byte 0
-
-    .byte 0
-    .text "    4   5   6"
-    .byte $fc, HELP80_COL2
-    .text "    H       L"
-    .byte 0
-
-    .byte 0
-    .text "    1   2   3"
-    .byte $fc, HELP80_COL2
-    .text "    B   J   N"
-    .byte 0
-
-    .byte 2 ; .byte 0
-
-    .byte 0
-    .text "    5 = Rest"
-    .byte 0
-
-    .byte 0
-    .text "   7=NW    9=NE"
-    .byte $fc, HELP80_COL2
-    .text "   Y=NW    U=NE"
-    .byte 0
-
-    .byte 0
-    .text "   1=SW    3=SE"
-    .byte $fc, HELP80_COL2
-    .text "   B=SW    N=SE"
-    .byte 0
-
-    .byte 2 ; .byte 0
-
-    .byte 1
-    .text "Prompts" ; .byte $fc, HELP80_COL2 ; .text "Notes" ; .byte 0
-
-    .byte 0
-    .text "ESC/Q Cancel"
-    .byte $fc, HELP80_COL2
-    .text "SPACE/RETURN advance"
-    .byte 0
-
-    .byte 0
-    .text "SPACE Continue"
+    .byte $01, $c9, $07, $d3, $fb, $4f, $14, $08, $93, $00
+    .byte $00, $fe, $4d, $c4, $01, $92, $20, $53, $10, $96, $0c, $9c, $43, $c4, $08, $01, $b5, $d5, $93, $00
+    .byte $00, $fe, $50, $82, $50, $b5, $19, $83, $3f, $82, $48, $96, $10, $00
+    .byte $00, $fe, $46, $9d, $14, $15, $04, $19, $20, $42, $bb, $9c, $53, $9d, $01, $b2, $00
+    .byte $00, $b9, $45, $c2, $01, $14, $9c, $51, $82, $c6, $09, $14, $00
+    .byte $00, $b9, $c5, $05, $06, $15, $96, $c0, $57, $82, $57, $09, $1a, $d6, $04, $00
+    .byte $02, $00
+    .byte $01, $4b, $05, $19, $10, $d7, $fb, $4c, $05, $14, $14, $bd, $00
+    .byte $00, $87, $37, $84, $38, $84, $39, $ba, $59, $84, $4b, $84, $55, $00
+    .byte $00, $87, $34, $84, $35, $84, $36, $ba, $48, $87, $84, $4c, $00
+    .byte $00, $87, $31, $84, $32, $84, $33, $ba, $42, $84, $4a, $84, $4e, $00
+    .byte $02, $00
+    .byte $00, $87, $35, $20, $3d, $20, $52, $a8, $00
+    .byte $00, $84, $37, $b1, $ad, $39, $b1, $45, $fb, $84, $59, $b1, $ad, $55, $b1, $45, $00
+    .byte $00, $84, $31, $b0, $ad, $33, $b0, $45, $fb, $84, $42, $b0, $ad, $4e, $b0, $45, $00
+    .byte $02, $00
+    .byte $01, $50, $a7, $0d, $10, $14, $13, $fb, $4e, $0f, $cf, $13, $00
+    .byte $00, $45, $53, $43, $2f, $51, $20, $43, $a0, $03, $96, $fb, $53, $50, $41, $43, $45, $2f, $52, $45, $54, $55, $52, $4e, $20, $d7, $16, $a0, $03, $05, $00
 #if HAL_PLATFORM_LEGAL_VIEWER
-    .byte $fc, HELP80_COL2, $fe
-    .text "L" ; .byte $ff ; .text " License / Source"
+    .byte $00, $53, $50, $41, $43, $45, $20, $43, $95, $b3, $0e, $15, $05, $83, $4c, $82, $4c, $d3, $89, $b4, $86, $53, $0f, $15, $12, $03, $05, $00
+#else
+    .byte $00, $53, $50, $41, $43, $45, $20, $43, $95, $b3, $0e, $15, $05, $00
 #endif
-    .byte 0
+    .byte $00, $52, $45, $54, $55, $52, $4e, $20, $41, $03, $03, $05, $10, $14, $fb, $49, $0e, $16, $9b, $bf, $20, $9e, $14, $14, $93, $94, $01, $d5, $ce, $9f, $05, $d5, $0c, $19, $00
+    .byte $00, $85, $49, $04, $9b, $09, $06, $19, $20, $14, $08, $ac, $13, $19, $0d, $02, $0f, $0c, $fb, $53, $20, $13, $aa, $05, $13, $2c, $20, $23, $20, $14, $0f, $07, $07, $9e, $94, $53, $aa, $20, $0d, $0f, $04, $05, $00
+    .byte $00, $fe, $a5, $50, $20, $ff, $4d, $13, $07, $20, $48, $09, $92, $bf, $fb, $2a, $20, $52, $a8, $20, $a6, $b3, $0c, $20, $08, $8a, $9e, $04, $00
+    .byte $03 // HTYPE_END
 
-    .byte 0
-    .text "RETURN Accept"
-    .byte $fc, HELP80_COL2
-    .text "Inventory letters act directly"
-    .byte 0
-
-    .byte 0
-    .text "/ Identify then symbol"
-    .byte $fc, HELP80_COL2
-    .text "S searches, # toggles Search mode"
-    .byte 0
-
-    .byte 0
-    .byte $fc, HELP80_COL2
-    .text "* Rest until healed"
-    .byte 0
-
-// The 25-row screen needs one more blank than the 24-row ports.
-    .byte 2, 0
+help_legend_lines:
+    .byte $01, $c9, $10, $20, $54, $93, $b5, $d2, $fb, $49, $cf, $0d, $94, $cd, $4d, $95, $92, $bd, $00
+    .byte $00, $fe, $80, $be, $0c, $01, $19, $93, $83, $24, $86, $26, $8c, $20, $ca, $0c, $d4, $43, $08, $a8, $00
+    .byte $00, $fe, $2e, $8b, $c7, $ac, $06, $0c, $ab, $21, $86, $3f, $8c, $20, $50, $0f, $bc, $2c, $4f, $09, $0c, $86, $53, $03, $a7, $d0, $cc, $bb, $00
+    .byte $00, $fe, $23, $8b, $57, $01, $d0, $86, $b4, $03, $12, $05, $14, $ce, $ab, $3d, $86, $22, $8c, $20, $52, $d2, $07, $86, $41, $0d, $15, $9e, $14, $00
+    .byte $00, $fe, $25, $8b, $c9, $07, $0d, $01, $20, $88, $20, $c6, $d6, $14, $1a, $20, $b2, $d2, $83, $2d, $86, $2f, $8c, $20, $57, $a0, $d4, $57, $8a, $10, $95, $2c, $af, $b8, $00
+    .byte $00, $fe, $3a, $8b, $50, $09, $9e, $20, $0f, $06, $20, $12, $15, $02, $02, $9e, $83, $5c, $86, $2c, $8c, $20, $50, $d3, $0b, $2c, $53, $10, $09, $d1, $86, $46, $b6, $04, $00
+    .byte $00, $fe, $2b, $8b, $43, $b7, $b4, $d4, $b7, $03, $d1, $04, $ce, $ab, $2a, $86, $28, $8c, $20, $4c, $09, $07, $08, $14, $86, $43, $b7, $01, $0b, $00
+    .byte $00, $fe, $27, $8b, $c7, $89, $86, $02, $a7, $0b, $ac, $04, $ab, $5b, $86, $29, $8c, $20, $41, $12, $0d, $88, $86, $53, $08, $09, $96, $04, $00
+    .byte $00, $fe, $3c, $8b, $af, $9f, $94, $15, $10, $83, $5d, $86, $1b, $20, $1c, $82, $48, $96, $0d, $2c, $47, $0c, $16, $cc, $14, $86, $41, $0d, $0d, $0f, $cc, $99, $00
+    .byte $00, $fe, $3e, $8b, $af, $9f, $94, $04, $a1, $83, $01, $2d, $1a, $2f, $41, $2d, $5a, $82, $4d, $95, $92, $93, $94, $28, $85, $09, $04, $9b, $09, $06, $09, $05, $13, $29, $00
+    .byte $00, $fe, $1e, $8b, $54, $b5, $10, $86, $52, $a6, $05, $83, $14, $87, $8c, $20, $54, $a1, $13, $10, $bd, $95, $00
+    .byte $00, $fe, $31, $2d, $38, $20, $ff, $54, $a1, $20, $13, $08, $0f, $10, $94, $28, $38, $3d, $48, $0f, $0d, $05, $29, $00
+    .byte $03 // HTYPE_END
 
 help_pages:
-    .byte 2
+    .byte 3
     .word help_lines
     .word help_more_lines
+    .word help_legend_lines

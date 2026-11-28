@@ -185,6 +185,28 @@ test_start:
     bcc !t1_fail+
     cmp #101
     bcs !t1_fail+
+
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #10
+    ldx #STAT_COUNT - 1
+!t1_set_stats:
+    sta player_data + PL_STR_CUR,x
+    dex
+    bpl !t1_set_stats-
+    jsr create_init_character
+    lda player_data + PL_AGE
+    cmp #15
+    bcc !t1_fail+
+    cmp #21
+    bcs !t1_fail+
+    lda player_data + PL_HEIGHT
+    cmp #72
+    bne !t1_fail+
+    lda player_data + PL_WEIGHT
+    cmp #180
+    bne !t1_fail+
+
     lda #$01
     jmp !t1_store+
 !t1_fail:

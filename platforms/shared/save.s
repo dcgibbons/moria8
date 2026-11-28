@@ -907,6 +907,12 @@ plus4_test_load_media_fail:
 #endif
 
     // Open save file for sequential read via CHKIN/CHRIN
+#if HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    lda #3
+    sta zp_temp2
+!load_open_retry:
+    jsr hal_storage_open_cmd_channel
+#endif
 load_open_read_len:
 #if SAVE_IN_STORAGE_OVERLAY
     lda save_active_read_name_len
@@ -931,6 +937,9 @@ load_open_read_len:
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
+#if HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    jsr hal_storage_close_cmd_channel
+#endif
     jmp !load_notfound+
 !load_open_ok:
 #if HAL_STORAGE_READST_AFTER_LOAD_OPEN
@@ -946,6 +955,32 @@ load_open_read_len:
     jmp !load_close_notfound+
 !load_open_status_ok:
 #endif
+#if HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    // Ask the drive on the already-open command channel BEFORE CHKIN:
+    // on a file the drive refused (62 FILE NOT FOUND, 74 NOT READY), CHKIN
+    // can wait forever in the KERNAL's talker turnaround. Keep channel 15
+    // open while reading the file, because closing 15 closes all files on a 1541.
+    jsr hal_storage_read_open_cmd_status
+    lda hal_storage_status_lost
+    beq !load_dos_answered+
+    jsr load_close_file_restore
+    dec zp_temp2
+    bne !load_open_retry-
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+    jmp !load_fail_status+
+!load_dos_answered:
+    :SaveDriveStatus()          // A = HAL_STORAGE_STATUS_* (0 = OK)
+    beq !load_dos_ok+
+    pha
+    jsr load_close_file_restore
+    pla
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    bne !load_not_found_fail+
+    jmp !load_notfound_msg+
+!load_not_found_fail:
+    jmp !load_fail_status+
+!load_dos_ok:
+#endif
     ldx #hal_storage_save_file_num
     jsr SAVE_CHKIN
     bcc !load_chkin_ok+
@@ -954,11 +989,7 @@ load_open_read_len:
     ldx #$b2                    // DISK_ERR_LOAD_CHKIN
     jsr save_record_error_phase
 #endif
-    lda #hal_storage_save_file_num
-    jsr SAVE_CLOSE
-#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
-    jsr c64_restore_vic_bank0_after_serial
-#endif
+    jsr load_close_file_restore
     jmp !load_fail+
 !load_chkin_ok:
 
@@ -1199,6 +1230,7 @@ plus4_test_load_unsupported:
     cmp #2                      // OK (0) or NOT_FOUND (1) -> missing save file
     bcs !load_fail_status+      // Drive/device failure -> friendly I/O error
 #endif
+!load_notfound_msg:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_MISSING_SAVE_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_load_notfound:
 #endif
@@ -1331,6 +1363,9 @@ load_close_file_restore:
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
+#if HAL_STORAGE_SAVE_CHECKS_DOS_STATUS
+    jsr hal_storage_close_cmd_channel
+#endif
 #if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
@@ -1428,52 +1463,14 @@ save_write_block:
 // Clobbers: flags
 // ============================================================
 save_write_byte:
-#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
-    sta zp_temp0
-    txa
     pha
-    lda zp_temp0
-#else
-    pha
-#endif
-    // Accumulate checksum
     clc
     adc save_cksum_lo
     sta save_cksum_lo
     bcc !swby_no_carry+
     inc save_cksum_hi
 !swby_no_carry:
-#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
-    lda zp_temp0
-#else
     pla
-#endif
-    jsr SAVE_CHROUT
-    pha
-    jsr SAVE_READST
-    sta zp_temp0
-    and #$03
-    beq !swby_ok+
-    inc save_io_error
-#if HAL_STORAGE_APPEND_DISK_DETAIL
-    lda zp_temp0
-    ldx #$a3                    // DISK_ERR_SAVE_WRITE
-    jsr save_record_error_phase
-#endif
-!swby_ok:
-    pla
-#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
-    sta zp_temp0
-    pla
-    tax
-    lda zp_temp0
-#endif
-    rts
-
-// ============================================================
-// save_write_byte_raw — Write byte without checksum accumulation
-// Input: A = byte to write
-// ============================================================
 save_write_byte_raw:
 #if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     sta zp_temp0
@@ -1827,14 +1824,7 @@ save_prepare_chunk_len_c128:
     sta save_chunk_len
     rts
 
-save_stage_from_ptr0_c128:
-    ldy #0
-    ldx #0
-!stage_loop:
-    cpx save_chunk_len
-    bcs !stage_done+
-    lda (zp_ptr0),y
-    sta save_stage_buf,x
+save_c128_step_cksum_ptr_count:
     clc
     adc save_cksum_lo
     sta save_cksum_lo
@@ -1853,6 +1843,17 @@ save_stage_from_ptr0_c128:
     dec save_count_hi
 !count_ok:
     inx
+    rts
+
+save_stage_from_ptr0_c128:
+    ldy #0
+    ldx #0
+!stage_loop:
+    cpx save_chunk_len
+    bcs !stage_done+
+    lda (zp_ptr0),y
+    sta save_stage_buf,x
+    jsr save_c128_step_cksum_ptr_count
     jmp !stage_loop-
 !stage_done:
     rts
@@ -1865,24 +1866,7 @@ load_unstage_to_ptr0_c128:
     bcs !unstage_done+
     lda save_stage_buf,x
     sta (zp_ptr0),y
-    clc
-    adc save_cksum_lo
-    sta save_cksum_lo
-    bcc !no_carry+
-    inc save_cksum_hi
-!no_carry:
-    inc zp_ptr0
-    bne !ptr_ok+
-    inc zp_ptr0_hi
-!ptr_ok:
-    lda save_count_lo
-    sec
-    sbc #1
-    sta save_count_lo
-    bcs !count_ok+
-    dec save_count_hi
-!count_ok:
-    inx
+    jsr save_c128_step_cksum_ptr_count
     jmp !unstage_loop-
 !unstage_done:
     rts
@@ -2099,24 +2083,7 @@ save_stage_map_c128:
     bcs !stage_done+
     jsr mmu_safe_map_read_ptr0
     sta save_stage_buf,x
-    clc
-    adc save_cksum_lo
-    sta save_cksum_lo
-    bcc !no_carry+
-    inc save_cksum_hi
-!no_carry:
-    inc zp_ptr0
-    bne !ptr_ok+
-    inc zp_ptr0_hi
-!ptr_ok:
-    lda save_count_lo
-    sec
-    sbc #1
-    sta save_count_lo
-    bcs !count_ok+
-    dec save_count_hi
-!count_ok:
-    inx
+    jsr save_c128_step_cksum_ptr_count
     jmp !stage_loop-
 !stage_done:
     rts
@@ -2130,24 +2097,7 @@ load_unstage_map_c128:
     lda save_stage_buf,x
     jsr mmu_safe_map_write_ptr0
     lda save_stage_buf,x
-    clc
-    adc save_cksum_lo
-    sta save_cksum_lo
-    bcc !no_carry+
-    inc save_cksum_hi
-!no_carry:
-    inc zp_ptr0
-    bne !ptr_ok+
-    inc zp_ptr0_hi
-!ptr_ok:
-    lda save_count_lo
-    sec
-    sbc #1
-    sta save_count_lo
-    bcs !count_ok+
-    dec save_count_hi
-!count_ok:
-    inx
+    jsr save_c128_step_cksum_ptr_count
     jmp !unstage_loop-
 !unstage_done:
     rts

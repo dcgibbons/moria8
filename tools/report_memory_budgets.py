@@ -213,7 +213,7 @@ def measure_segment(
         sym_end = syms[spec.end_sym] + spec.sym_plus_bytes
     elif spec.name == "Plus4HighBss" and variant == "cart":
         sym_end = base_addr
-        note = "$DF00-$DFFF hidden RAM (unused on cart; disk item.cat 254B sector LRU cache omitted)"
+        note = "$DF00-$DFFF hidden RAM (unused on cart; disk 64B item_cat_sec_buf + 63B item_cat_idx_data omitted)"
 
     prg_load: int | None = None
     prg_end: int | None = None
@@ -390,7 +390,7 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
                 0xE000,
                 end_sym="plus4_high_bss_end",
                 measure="sym",
-                note="$DF00-$DFFF hidden RAM (item.cat 254B sector LRU cache on disk); non-gen $0400-$04FF (256B) monster catalog LRU + $0600-$07AF (432B) pickup cache ($0500-$05FF & $07B0-$07FF KERNAL reserved)",
+                note="$DF00-$DFFF hidden RAM (64B item_cat_sec_buf + 63B item_cat_idx_data = 127B on disk); non-gen $0400-$04FF (256B) monster catalog LRU + $0600-$07AF (432B) pickup cache ($0500-$05FF & $07B0-$07FF KERNAL reserved)",
             ),
             SegmentSpec("4.bank", "banked", 0xF000, 0xFC00, end_sym="banked_code_end", prg_file="4.bank", note="HARD ceiling < $FC00 (not $FDFF)"),
             SegmentSpec("legalui", "overlay", 0xE000, 0xEE00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
@@ -467,7 +467,6 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
             SegmentSpec("128.huff (Bank1)", "aux", 0xF000, 0xFF00, prg_file="128.huff.prg", measure="prg", note="Bank 1 Huffman corpus"),
             SegmentSpec("legalui", "overlay", 0xE000, 0xEE00, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
             SegmentSpec("cache.ovl.disarm (Bank1)", "cache", 0xE000, 0xE300, prg_file="ovl.disarm", end_sym="ovl_disarm_end", note="Bank 1 cache cap (3 pages = 768 B)"),
-            SegmentSpec("cache.ovl.modal (Bank1)", "cache", 0xE000, 0xE500, prg_file="ovl.modal", end_sym="ovl_modal_misc_end", note="Bank 1 cache cap (5 pages = 1,280 B)"),
         ])
         for fname, sym_name in c128_overlays:
             s.append(SegmentSpec(fname, "overlay", 0xE000, 0xF000, end_sym=sym_name, prg_file=fname))
@@ -539,9 +538,9 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
             note="Aux LC Bank 2 $D000-$D8B7 extended monster catalog (2,232 B; PackBits A2.CATEXT.PB)",
         ),
         SegmentSpec("BANKED_DATA_END guard", "aux", 0xBA00, 0xBB00, end_sym="BANKED_DATA_END", prg_file=None, measure="sym", optional=True, note="256 B data/tier tail ($BA00-$BAFF); excluded from code cap"),
-        SegmentSpec("cache.ovl.ui (Aux)", "cache", 0x0000, 0x0600, prg_file="ovl.ui", measure="cache_prg", note="Aux cache $6700-$6CFF (6 pages)"),
-        SegmentSpec("cache.ovl.spell (Aux)", "cache", 0x0000, 0x1400, prg_file="ovl.spell", measure="cache_prg", note="Aux cache $6D00-$80FF (20 pages)"),
-        SegmentSpec("cache.ovl.modal (Aux)", "cache", 0x0000, 0x0C00, prg_file="ovl.modal", measure="cache_prg", note="Aux cache $8100-$8CFF (12 pages)"),
+        SegmentSpec("cache.ovl.ui (Aux)", "cache", 0x0000, 0x0800, prg_file="ovl.ui", measure="cache_prg", note="Aux cache $6700-$6EFF (8 pages)"),
+        SegmentSpec("cache.ovl.spell (Aux)", "cache", 0x0000, 0x1400, prg_file="ovl.spell", measure="cache_prg", note="Aux cache $6F00-$82FF (20 pages)"),
+        SegmentSpec("cache.ovl.modal (Aux)", "cache", 0x0000, 0x0A00, prg_file="ovl.modal", measure="cache_prg", note="Aux cache $8300-$8CFF (10 pages)"),
         SegmentSpec("cache.ovl.items (Aux)", "cache", 0x0000, 0x1600, prg_file="ovl.items", measure="cache_prg", note="Aux cache $AA00-$BFFF (22 pages)"),
         SegmentSpec("legalui", "overlay", 0xA400, 0xB200, end_sym="legal_code_end", prg_file="legalui", dynamic_ceil_sym="legal_zp_save", note="<= legal_zp_save"),
     ]
@@ -666,7 +665,8 @@ def build_port_specs() -> dict[tuple[str, str], list[SegmentSpec]]:
             optional=True,
             note="DFS MONEXT (279 x 8 B = 2,232 B in 9 sectors; streamed 8 B/species via < $3000 OSGBPB A=3)",
         ),
-        SegmentSpec("cache.ovl.modal (Bank 5)", "cache", 0x0000, 12 * 256, prg_file="ovl.modal", measure="cache_prg", note="SWR Bank 5 $B400-$BFFF (12 pages)"),
+        SegmentSpec("cache.ovl.modal (Bank 5)", "cache", 0x0000, 10 * 256, prg_file="ovl.modal", measure="cache_prg", note="SWR Bank 5 $B400-$BDFF (10 pages)"),
+        SegmentSpec("cache.ovl.title (Bank 5)", "cache", 0x0000, 2 * 256, prg_file="ovl.title", measure="cache_prg", note="SWR Bank 5 $BE00-$BFFF (2 pages)"),
         SegmentSpec("cache.ovl.ui (Bank 6)", "cache", 0x0000, 6 * 256, prg_file="ovl.ui", measure="cache_prg", note="SWR Bank 6 $BA00-$BFFF (6 pages)"),
         SegmentSpec("cache.ovl.spell (Bank 7)", "cache", 0x0000, 21 * 256, prg_file="ovl.spell", measure="cache_prg", note="SWR Bank 7 $8000-$94FF (21 pages)"),
         SegmentSpec("cache.ovl.items (Bank 7)", "cache", 0x0000, 23 * 256, prg_file="ovl.items", measure="cache_prg", note="SWR Bank 7 $9500-$ABFF (23 pages)"),
@@ -1011,7 +1011,7 @@ def collect_bank_summaries(port: str, variant: str, build_dir: Path, syms: dict[
                 ))
     elif port == "bbcmaster":
         # SWR Banks 5-7 layout per cache_layout.s:
-        # Bank 5: Map ($8000-$B30B -> 52 pages) + OVL.MODAL (12 pages) = 64/64 pages
+        # Bank 5: Map ($8000-$B30B -> 52 pages) + OVL.MODAL (10 pages) + OVL.TITLE (2 pages) = 64/64 pages
         # Bank 6: BeebAuxData (19 pages) + ITEMCAT (2 pages) + BeebCatalog (37 pages) + OVL.UI (6 pages) = 64/64 pages
         # Bank 7: OVL.SPELL (21) + OVL.ITEMS (23) + OVL.GEN (16) + ITEMCAT (4) = 64/64 pages
         # Bank 4: BeebPlaySlot (36 pages $8000-$A3FF) + TierNamePool (4 pages $A400-$A7FF) + Window (24 pages $A800-$BFFF) = 64/64 pages
@@ -2637,7 +2637,7 @@ class _BudgetSelfTests(unittest.TestCase):
             # Assertions: Plus/4
             self.assertEqual(segs["plus4"]["Plus4HighBss"]["used_bytes"], 160)
             self.assertEqual(segs["plus4"]["Plus4HighBss"]["free_bytes"], 96)
-            self.assertIn("LRU cache", segs["plus4"]["Plus4HighBss"]["note"])
+            self.assertIn("item_cat_sec_buf", segs["plus4"]["Plus4HighBss"]["note"])
             self.assertEqual(segs["plus4-cart"]["Plus4HighBss"]["free_bytes"], 96)
 
             # Assertions: C128

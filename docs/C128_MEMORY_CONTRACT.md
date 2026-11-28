@@ -48,14 +48,14 @@ overlap assertions are the executable authority; never edit this table alone.
 | `$7400-$7a5f` | DB/data region (`Bank1DB`, `1,632 B`, `C128M-013`/`C128M-015`): `recall[279]` (`1,116 B` at `$7400-$785b`) + `zp_save_buf` (`142 B` at `$785c-$78e9`, `bank1_db_end = $78ea`, `374 B` free to `$7a5f`), accessed through `mmu_safe_db_read/write_ptr0/1`. Replaces the retired `128.names` payload (`ITEM.CAT` serves all `361` VMS item templates and `55` ego names directly from 16 KB VDC RAM on disk builds or MD128 cartridge ROM on `.crt` builds; C128 does not use REU, `reu_present = 0`) |
 | `$7a60-$9567` | the monster catalog (C128M-007): `$7a60-$7e5f` the name pool, 32 species slots x 32 B written at species fetch; `$7e60-$9542` `128.cat`, the catalog's 21 fields x 279 creatures, loaded at boot; 37 B spare. Until 2026-11-02 the tier cache, 6920 bytes |
 | `$9568-$97ff` | title marker/data cache (663 data bytes; the title art needs 593-624) |
-| `$9800-$9cff` | MODAL small-overlay cache (`BANK1_OVERLAY_MODAL`, `5` pages = `1,280 B`; caches `ModalMiscOverlay` `ovl.modal` ID `9`, `$e000-$e473` = `1,139 B` code / `1,141 B` PRG incl. 2 B header, `141 B` free, including `winner_apply_retirement_bonus_storage`) |
+| `$9800-$9cff` | Reserved (`BANK1_OVERLAY_MODAL`, `5` pages = `1,280 B`; `ModalMiscOverlay` `ovl.modal` ID `9` is cold/uncached with `C128_OVERLAY_MODAL_CACHE_PAGES = 0` since Wave 4 moved `ui_equipment.s` and `ui_wizard.s` into it, growing `ovl.modal` to `2,884 B`) |
 | `$9d00-$9fff` | DISARM small-overlay cache |
 | `$a000-$afff` | `128.cnm`, the catalog's Huffman-coded names (tree, pointers, bitstreams; 3380 B), loaded at boot (C128M-007). Until 2026-11-02 the STARTUP overlay cache: STARTUP now loads from disk |
 | `$b000-$bfff` | TOWN overlay cache |
 | `$c000-$cfff` | DEATH overlay cache (`OVL_DEATH` remains cached in Bank 1) |
 | `$d000-$dfff` | Bank 1 High Data Window (`4,096 B`, `C128M-014`): `$d000-$d8b7` `128.cex` (`2,232 B`, `279 x 8 B` Phase 5 extended monster catalog rows, loaded at boot from `128.CEX` / `CART_ASSET_CEX`), `$d8b8-$dcb7` `BANK1_STORE_INV_RESERVED` (`1,024 B` reserved), `$dcb8-$df37` `msg_history` (`640 B`, `8 x 80 B` message ring buffer), and `$df38-$dfff` (`200 B` free); accessed strictly via bottom-common `< $4000` `SEI` + `MMU_RAM_BANK1_NOIO ($7f)` helpers (`mmu_common_b1_noio_read/write_ptr0/1`) |
 | `$e000-$efff` | DUNGEON overlay cache |
-| `$f000-$feff` | runtime top-common view shared with Bank 0; physical Bank 1 `$f000-$fd3a` owns the read-only Huffman corpus, exposed only by the atomic Huffman helpers |
+| `$f000-$feff` | runtime top-common view shared with Bank 0; physical Bank 1 `$f000-$feea` (`3,819 B`, `21 B` free `< $ff00`) owns the read-only Huffman corpus, exposed only by the atomic Huffman helpers |
 | `$fffa-$fffb` | physical Bank 1 NMI vector bridge used only during transient Huffman reads with top common disabled |
 
 ### Bank 2 Ownership Snapshot (256KB MMU Expansion, Disk Builds, `MMU_RAM_BANK2 = $be`)
@@ -73,7 +73,8 @@ When `c128_detect_256k` detects 4 independent 64 KB MMU RAM banks (`c128_ram_256
 | `$5a00-$5fff` | `1,536 B` | Reserve above `LEGALUI` |
 | `$6000-$80ff` | `8,448 B` | `128.PLAY` (`BANK2_PLAY_PAGES = $21` pages = full `$af00-$cfff` modal window; tracked by `C128_BANK2_PLAY_BIT`) |
 | `$8100-$92ff` | `4,608 B` | `128.PERSIST` (`BANK2_PERSIST_PAGES = $12` pages covering `$af00-$c0ff`, strictly below `128.PLAY` live state; tracked by `C128_BANK2_PERSIST_BIT`) |
-| `$9300-$cfff` | `15,616 B` | Free Bank 2 RAM |
+| `$9300-$a2ff` | `4,096 B` | `OVL_MODAL_MISC` (`128.MODAL`, ID `9`) cache slot |
+| `$a300-$cfff` | `11,520 B` | Free Bank 2 RAM |
 | `$d000-$dfff` | `4,096 B` | I/O window visible under `MMU_RAM_BANK2 = $be` |
 | `$e000-$efff` | `4,096 B` | Free Bank 2 RAM (includes `$e000` hardware probe address) |
 | `$f000-$ffff` | `4,096 B` | Top common RAM shared with Bank 0 (`$d506=$0d`) |
@@ -93,11 +94,12 @@ Important Bank 0 ownership includes the consolidated resident image
 `C128M-011` and keeping the modal footer `press_key_str`, `slain_str`, and
 cartridge reader `cart_read`/`cart_desc_buf < $8000` resident), `$af00-$cfff`
 (`128.persist` / `128.play`), floor items at `$1a00-$1aff`, runtime scratch at
-`$1b00-$1bff`, the overlay window at `$e000-$efff` (hosting `ovl.modal` ID `9`
-`ModalMiscOverlay` `$e000-$e473` [`1,139 B` payload / `1,141 B` PRG incl. 2 B header,
-`141 B` free in `1,280 B` `BANK1_OVERLAY_MODAL`] with
-`winner_apply_retirement_bonus_storage`, and uncached `HomeOverlay` ID `11`
-`ovl.home` `$e000-$efcd` [`4,045 B`, `51 B` free]), and reloadable banked
+`$1b00-$1bff`, the overlay window at `$e000-$efff` (hosting cold/uncached
+`ovl.modal` ID `9` `ModalMiscOverlay` `$e000-$eb44` [`2,884 B` payload,
+`C128_OVERLAY_MODAL_CACHE_PAGES = 0`] with
+`winner_apply_retirement_bonus_storage`, `ui_wizard.s`, and `ui_equipment.s`,
+and uncached `HomeOverlay` ID `11`
+`ovl.home` `$e000-$efd2` [`4,050 B`, `46 B` free]), and reloadable banked
 code at `$f000` below `$ff00`. `main.s` and `cartridge_copy.s` assertions are
 authoritative for resident bounds and the `< $8000` cartridge-bank-safe
 boundary (`item_pickup`, `run_initialize`, `hal_item_cat_read_byte`, and
@@ -197,7 +199,7 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-001 | Accepted | Project maintainer, 2026-07-09 | `memory128.s` constants/assertions are executable ownership authority | `make build`, `test_memory128.s` | prose-only ownership |
 | C128M-002 | Superseded in part by C128M-014 | Project maintainer, 2026-07-09 | After boot staging is scrubbed, `$d000-$dfff` remained an I/O-visible reserved runtime/cache gap in Bank 1 until Phase 5 (`C128M-014`) adopted guarded `< $4000` `SEI` + `$7f` runtime data ownership; Bank 1 overlay page-copier cache slots still avoid `$d000-$dfff` | maintainer decision; overlap assertions; boot-copy mode review | none |
 | C128M-003 | Accepted | Project maintainer, 2026-07-09 | New cache/map/common-RAM use requires a separate layout design and overlap assertions | build assertions and authoritative `make test128` | none |
-| C128M-004 | Accepted | Project maintainer, 2026-08-12 | Modal-misc overlay gets a Bank 1 cache slot at `$9800-$9CFF`, carved from title-cache slack (title art needs 593-624 B of the former 1928 B cache); overlay cache covers IDs 1-9 with a second ready-bit byte | maintainer direction this session; `memory128.s` overlap asserts; `cache_survival_smoke` and partial-failure smokes | none |
+| C128M-004 | Superseded in part by C128M-019 | Project maintainer, 2026-08-12 | Modal-misc overlay gets a Bank 1 cache slot at `$9800-$9CFF`, carved from title-cache slack (title art needs 593-624 B of the former 1928 B cache); overlay cache covers IDs 1-9 with a second ready-bit byte | maintainer direction this session; `memory128.s` overlap asserts; `cache_survival_smoke` and partial-failure smokes | none |
 | C128M-005 | Accepted | Project maintainer, 2026-10-25 | Store init/restock (`store_restock_overlay.s`) moves from the items overlay (ID 7, full after store stacking) to the cold chest overlay (ID 10); `tramp_store_init_all`/`tramp_store_restock_all` load ID 10, a disk load at new game and town re-entry. Bank 1 has no free slot to cache ID 10 (largest free span: 244 B at `$730C`). Maintainer: "I don't want the load, but let's do it for now." | `main.s` ID assert and overlay-fit asserts; `make test128` | cache ID 10 if Bank 1 space is found |
 | C128M-007 | Accepted | Project maintainer, 2026-11-02 | The monster catalog replaces the tiers (`docs/MONSTER_CATALOG_DESIGN.md`): it takes the tier cache window (name pool, then `128.cat` fields) and the STARTUP overlay slot (`128.cnm` names, Huffman-coded with their own tree). STARTUP is no longer cached: New Game loads it from disk. The level index is resident in `128.world`; the fetch reads Bank 1 through the safe DB and Huffman helpers. Names on disk were declined unless needed. Maintainer: "let's not cache the start overlay. and then huffman-code the names, but avoid #2 unless we need to." | `memory128.s` catalog spans and overlap asserts; `main.s` segment asserts; `make check128-payloads`; `catalog_spawn_smoke`, `cache_survival_smoke`; `make test128` | C128M-004's STARTUP cache slot; the tier cache |
 | C128M-006 | Accepted | Project maintainer, 2026-10-31 | `slain_str` ("You have been slain.", 21 B, read-only, read only by Bank 0 `core/game_loop.s`) moves from `128.item` to the always-resident `128.diskio`, beside `press_key_str`, because the 33-slot inventory arrays (+16 B) would overflow `128.item` by 3 B. `128.item` keeps 18 B free; `128.diskio` 30 B (21 B in the tightest test variant) | `docs/X_WEAPON_SWAP_DESIGN.md` §3.5 and §14 answer 1; `main.s` asserts `slain_str` lies inside the disk-I/O payload; `make check128-payloads`; `make test128` | none |
@@ -211,7 +213,9 @@ work16 C128 memory review; this ledger is their durable approval provenance.
 | C128M-015 | Proposed (awaiting maintainer review) | 2026-11-16 | Eliminate all runtime floppy disk seeks on C128 disk builds across `ITEM.CAT` reads, `g` item pickup, `Shift+dir` running, `o`/`c` plain + locked doors, and floor traps using native C128 Bank 0 + 16 KB VDC RAM only (C128 never uses REU): (1) replace `ITEM.IDX` + `item_catalog_records.s` sector streaming on disk builds with `platforms/commodore/c128/item_cat_vdc128.s`, which loads `ITEM.CAT` (`7,478 B` in current 361-item catalog) at boot (`c128_load_core_residents`, strictly after any `$ff62` `JDLCHR` font restore, keeping `20/20` startup load count unchanged) via `crl_sa = 0` into Bank 1 `MAP_BASE` (`$4000-$5d35`), verifies `'ITM2'`, and streams `ITEM.CAT[0..3839]` into VDC `$1100-$1fff` (`3,840 B`) and `ITEM.CAT[3840..7477]` into the unused scanlines `8..15` of `455` character cells in VDC `$2008-$3c6d` (`4,096 B` capacity, `458 B` spare, leaving all Set 0 `$2000` and Set 1 `$3000` scanlines `0..7` untouched); `C128_CARTRIDGE` retains `hal_item_cat_cart_read_byte` (`< $8000`); (2) promote `item_pickup` (`220 B`, out of uncached `StorageOverlay`, retiring `HAL_PLATFORM_ITEM_PICKUP_OVERLAY` and `tramp_item_pickup`) and `run_initialize` (`166 B`, out of `ModalMiscOverlay`) into Bank 0 `Default` (`moria128.prg` `$1c01-$adb2`, raising disk `Default` headroom `155 -> 334 B`, `128.play` `233 -> 268 B`, `cache.ovl.modal` `39 -> 205 B`, and `ovl.storage` `3 -> 223 B`); keep `door_try_open`/`close` in cached `OVL_HELP` and `door_pick_roll` in cached `OVL_DISARM`. | `memory128.s`, `dungeon_render_vdc.s`, & `main.s` VDC/resident `.assert`s; `io_contracts.s`; `check_c128_payloads.py --both`; `check_c128_md128.py`; `check_overlay_calls.py --port c128 --check-sym`; `item_desc128`, `cache_survival_smoke`, `hot_path_zero_disk_smoke`; `make test128` & `make test128-legal` | `C128M-013` runtime `ITEM.IDX`/`U1` sector streaming on C128 disk builds; `item_pickup` in `ovl.storage`; `run_initialize` in `ovl.modal` |
 | C128M-016 | Proposed (awaiting maintainer review) | 2026-11-20 | `catalog_place_far` (`core/monster_catalog.s`: the win creature at generation and the turn's VMS wanderer, MON-039; `catalog_place_win_creature` / `catalog_place_wanderer` entries, 105 B) moves from Bank 0 `Default` to the head of `128.play` (`C128ResidentPlay`, `$af03-$af6b`) through `:CatalogWinBegin()`/`:CatalogWinEnd()` in `monster_catalog128.s`, because 920c0c0 left the product image 64 B below `$af00` and put the `C128_TEST_TITLE_ART_CONTENT` variant 66 B over it. The play signature (`c128_resident_play_sig0..2`) is now emitted before `monster_catalog128.s` so it stays the payload's first three bytes. Callers: `monster_spawn_level` (Bank 0, called only from `game_loop.s` in `128.play`) and `turn_post_action` (`128.play`); the modal `128.persist` that shares `$af00` calls neither | `main.s` asserts (program image `<= $af00`, play signature at `$af00`, play `<= $d000`, persist below `main_loop`/`player_died`), `monster.s` assert `catalog_place_win_creature < $e000`, `check_c128_payloads.py`; `make test128` | none |
 | C128M-017 | Proposed (awaiting maintainer review) | 2026-11-26 | Extract MON-044 Gain-Stat helpers (`core/6502/player_gain_stat_helpers.s`: `player_step_healthy_sum_y`, `player_apply_stat_delta_y`, behind `PLAYER_GAIN_STAT_HELPERS_EXTERNAL`) from Bank 0 `Default` (`player.s`) into `C128ResidentPlay` (`128.play`), freeing `Default` headroom (`program_end = $ae83`, `125 B` free `< $af00` disk; `$ac54`, `684 B` free cart) while leaving `128.play` at `$cf74` (`140 B` free `< $d000`). Sole caller `eff_gain_stat.s` runs from `ovl.storage` during gameplay when `128.play` is mapped (`$af00-$cfff`), and the helpers jump only to Bank 0 `Default` (`pses_zero_res_write_y`, `pses_write_cur_y`, `player_step_equip_stat_y`) | `main.s` `player_step_healthy_sum_y >= c128_resident_play_body && player_step_healthy_sum_y < c128_resident_play_end && player_apply_stat_delta_y >= c128_resident_play_body && player_apply_stat_delta_y < c128_resident_play_end`, `check_c128_payloads.py --both`, `make test128` | `player_step_healthy_sum_y`/`player_apply_stat_delta_y` in `Default` |
-| C128M-018 | Proposed (awaiting maintainer review) | 2026-11-27 | Detect, report, and utilize internal 256KB C128 MMU RAM upgrades (4×64KB banks via `$FF00` bits 7–6, `MMU_RAM_BANK2=$BE` / `MMU_RAM_BANK3=$FE`): (1) `c128_detect_256k` (`memory128.s`) runs a non-destructive 2-pass 4-bank isolation probe at `$E000` (unowned in Bank 2 `$E000-$EFFF`, keeping I/O mapped with `MMU_RAM_BANK1=$7E` and saving/restoring Bank 0/1 `$E000` and IRQ state) and sets `c128_ram_256k` (`hal_platform_256k_present`); (2) `legal_sysinfo.s` reports `"256KB (4x64KB Banks)"` vs `"128KB (2x64KB Banks)"` and `title_sysinfo_banked.s` (`#if HAL_PLATFORM_TITLE_SYSINFO_256K_PROBE`) centers `"C128  KERNAL R1  256KB"` on the Title bottom sysinfo line (both disk and `moria8-c128.crt`); (3) on 256KB disk builds (`HAL_PLATFORM_OVERLAY_CACHE_EXTENDED_256K`), boot preload rises from `20` to `26` files to cache `OVL_STARTUP` (`$1000`), `OVL_CHEST` (`$2000`), `OVL_HOME` (`$3000`), `OVL_STORAGE` (`$4000`), `LEGALUI` (`$5000`, `10` pages), `128.PLAY` (`$6000`, `33` pages), and `128.PERSIST` (`$8100`, `18` pages `< wizard_wall_walk_enabled`/`main_loop`/`player_died`) in Bank 2 via fast 29 cyc/B common-RAM page helpers (`mmu_common_xbank_{read,write}_page`) and `mmu_common_bank_{read,write}_ptr1`, eliminating Program Disk swaps across gameplay, `Shift+V`, Disk Setup, Save, Load, and Game Over/Retirement (Title `A` / `? -> L` still prompts for Program Disk when reading uncached `LICENSE`/`SOURCE-OFFER`) | `memory128.s` Bank 2, `BANK2_PERSIST_PAGES`, `BANK2_LEGALUI_PAGES`, & `bank_overlay_cache_mmu` `.assert`s; `test_memory128.s` `test6_256k_probe_and_banks`; `c128_256k_cache_smoke` (`-c128fullbanks` blank Drive 8 zero-swap incl. Load & Game Over); `test_cartridge.py` `run_256k_cartridge_check`; `make test128-fast-smoke`, `make test128` | C128 128KB-only cold status for `OVL_STARTUP`, `OVL_CHEST`, `OVL_HOME`, `OVL_STORAGE`, `LEGALUI`, `128.PLAY`/`128.PERSIST` on 256KB systems |
+| C128M-018 | Proposed (awaiting maintainer review) | 2026-11-27 | Detect, report, and utilize internal 256KB C128 MMU RAM upgrades (4×64KB banks via `$FF00` bits 7–6, `MMU_RAM_BANK2=$BE` / `MMU_RAM_BANK3=$FE`): (1) `c128_detect_256k` (`memory128.s`) runs a non-destructive 2-pass 4-bank isolation probe at `$E000` (unowned in Bank 2 `$E000-$EFFF`, keeping I/O mapped with `MMU_RAM_BANK1=$7E` and saving/restoring Bank 0/1 `$E000` and IRQ state) and sets `c128_ram_256k` (`hal_platform_256k_present`); (2) `legal_sysinfo.s` reports `"256KB (4x64KB Banks)"` vs `"128KB (2x64KB Banks)"` and `title_sysinfo_banked.s` (`#if HAL_PLATFORM_TITLE_SYSINFO_256K_PROBE`) centers `"C128  KERNAL R1  256KB"` on the Title bottom sysinfo line (both disk and `moria8-c128.crt`); (3) on 256KB disk builds (`HAL_PLATFORM_OVERLAY_CACHE_EXTENDED_256K`), boot preload rises to `26` files to cache `OVL_STARTUP` (`$1000`), `OVL_CHEST` (`$2000`), `OVL_HOME` (`$3000`), `OVL_STORAGE` (`$4000`), `LEGALUI` (`$5000`, `10` pages), `128.PLAY` (`$6000`, `33` pages), `128.PERSIST` (`$8100`), and `OVL_MODAL_MISC` (`$9300`, under `C128M-019`) in Bank 2 via fast 29 cyc/B common-RAM page helpers (`mmu_common_xbank_{read,write}_page`) and `mmu_common_bank_{read,write}_ptr1`, eliminating Program Disk swaps across gameplay, `Shift+V`, Disk Setup, Save, Load, and Game Over/Retirement (Title `A` / `? -> L` still prompts for Program Disk when reading uncached `LICENSE`/`SOURCE-OFFER`) | `memory128.s` Bank 2, `BANK2_PERSIST_PAGES`, `BANK2_LEGALUI_PAGES`, & `bank_overlay_cache_mmu` `.assert`s; `test_memory128.s` `test6_256k_probe_and_banks`; `c128_256k_cache_smoke` (`-c128fullbanks` blank Drive 8 zero-swap incl. Load & Game Over); `test_cartridge.py` `run_256k_cartridge_check`; `make test128-fast-smoke`, `make test128` | C128 128KB-only cold status for `OVL_STARTUP`, `OVL_MODAL_MISC`, `OVL_CHEST`, `OVL_HOME`, `OVL_STORAGE`, `LEGALUI`, `128.PLAY`/`128.PERSIST` on 256KB systems |
+| C128M-019 | Proposed (awaiting maintainer review) | 2026-11-27 | Relocate `starting_kit_cold.s` into `StartupOverlay` (`128.start`), `ui_inventory.s` into `HelpOverlay` (`ovl.help`), and `ui_wizard.s` + `ui_equipment.s` into `ModalMiscOverlay` (`ovl.modal`), retiring the Bank 1 modal cache (`C128_OVERLAY_MODAL_CACHE_PAGES = 0`, `$9800-$9cff` reserved) so `ovl.modal` loads on demand from disk or cartridge into Bank 0 `$e000-$efff` on 128KB systems while Bank 2 caches `ovl.modal` (`$9300-$a2ff`, `16` pages) on 256KB disk systems | `memory128.s`, `overlay.s`, `main.s`, `io_contracts.s`; `check_overlay_calls.py`, `check_c128_payloads.py`, `report_memory_budgets.py`; `make test128-fast-smoke`, `make test128` | `C128M-004` modal Bank 1 cache slot |
+| C128M-020 | Proposed (awaiting maintainer review) | 2026-11-27 | Relocate `title_screen.s` (`title_load_and_draw`) and `load_resume_reset_cold.s` (`load_resume_reset`) from `HelpOverlay` (`ovl.help`) into `C128ResidentPersist` (`128.persist`, `$af00-$c088+`), freeing `ovl.help` capacity while preserving `128.play`/`128.persist` mutual exclusion at `$af00` via `c128_modal_require_persist` / `c128_modal_require_play` | `main.s` persist/overlay `.assert`s; `io_contracts.s` (`C128AuditBelowIo`); `check_c128_payloads.py --both`; `make test128-fast-smoke`, `make test128` | `ovl.help` placement of `title_screen.s` / `load_resume_reset_cold.s` |
 
 ## License/source modal ownership (2026-11-10)
 
@@ -1431,8 +1435,8 @@ Problem and success criteria:
 State being changed:
   c128_ram_256k (hal_platform_256k_present), c128_xbank_cr, c128_bank2_flags,
   bank_overlay_cache_mmu, 13-entry bank1_overlay_cache_slot_{lo,hi} /
-  bank1_overlay_cache_pages, ovl_ready_mask_hi bits 1-3 for IDs 10-12,
-  c128_load_progress_total (20 vs 26), and title/sysinfo VDC display lines. No
+  bank1_overlay_cache_pages, ovl_ready_mask_hi bits 0-3 for IDs 9-12,
+  c128_load_progress_total (19 vs 26), and title/sysinfo VDC display lines. No
   save-file format, monster/item schema, RNG, or Bank 1 allocation changes.
 Search scope and terms:
   Searched platforms/commodore/c128/, platforms/commodore/common/, core/6502/,
@@ -1451,7 +1455,7 @@ Initialization, reset and persistence points:
   title screen preload populates Bank 1/2 overlay caches and calls
   c128_preload_bank2_extras; warm restart (restart128.s -> game_restart) jumps
   straight to title_enter_menu, preserving the boot-detected Bank 2 caches.
-  Probe address $E000 lies outside Bank 2's allocated $1000-$92FF region.
+  Probe address $E000 lies outside Bank 2's allocated $1000-$a2ff region.
 Affected production sequence through the changed transition:
   Boot -> restart_entry (c128_detect_256k) -> c128_load_core_residents ->
   c128_preload_bank2_extras -> c128_preload_all_overlays (IDs 1..12, graceful
@@ -1472,31 +1476,26 @@ symbol/payload and linked segment:
     mmu_common_{select_bank_a,bank_read_ptr1,bank_write_ptr1}, and (disk only)
     mmu_common_xbank_{read,write}_page inside mmu_common_helpers_blob ($0c06+);
   - main.s Default + C128ResidentPlay + game_loop.s HAL hook:
-    Default ($1c01-$aeac disk, 84 B free < $af00; $1c01-$ac67 cart, 665 B free)
-    hosts c128_rt_tbl_* / c128_load_runtime_table_x, c128_all_runtime_cached,
+    Default hosts c128_rt_tbl_* / c128_load_runtime_table_x, c128_all_runtime_cached,
     c128_b2_setup_play, c128_bank2_setup_ptrs, c128_copy_from_bank2,
     c128_b2_load_persist_and_restore_play, c128_b2_restore_and_verify_play,
     eff_fear_timer, light_tick_counter, and wizard_wall_walk_enabled (moved out
     of C128ResidentPlay via EFF_FEAR_TIMER_EXTERNAL/WIZARD_WALL_WALK_EXTERNAL);
-  - RuntimeCommonData ($0d60-$0ff7 disk, 9 B free < $1000; $0d60-$0fa3 cart, 13 B free < MMU_COMMON_CART_BASE):
-    hosts c128_preload_bank2_extras (disk only);
-  - RuntimeBankedCode ($f000-$fefe disk, 2 B free < $ff00; $f000-$fef2 cart, 14 B free):
-    hosts tramp_winner_royal;
-  - C128ResidentPersist ($af00-$c04f, 4,017 B free): c128_stage_to_bank2 and
-    c128_bank2_stage_persist_and_legal;
-  - C128ResidentPlay ($af00-$cf7b disk, 133 B free; $af00-$cf71 cart, 143 B free):
-    hal_storage_game_over_disk_prompt_game;
-  - legalui ($e000-$e8ac, 1,364 B free < $ee00): legal_sysinfo.s 128KB/256KB +
-    legal_os_prompt_program_media;
-  - ovl.town ($e000-$efad, 83 B free): title_sysinfo_banked.s "  256KB" suffix.
+  - RuntimeCommonData: hosts c128_preload_bank2_extras (disk only);
+  - RuntimeBankedCode: hosts tramp_winner_royal;
+  - C128ResidentPersist: c128_stage_to_bank2 and c128_bank2_stage_persist_and_legal;
+  - C128ResidentPlay: hal_storage_game_over_disk_prompt_game;
+  - legalui: legal_sysinfo.s 128KB/256KB + legal_os_prompt_program_media;
+  - ovl.town: title_sysinfo_banked.s "  256KB" suffix.
 PRG load header:
   moria128.prg $01 $1c; 128.persist.prg $00 $af; 128.play.prg $00 $af;
   legalui $00 $e0; overlays $00 $e0.
 source and destination spans:
   Bank 0 -> Bank 2 under MMU_RAM_BANK2 ($be):
   - $e000-$efff -> Bank 2 $1000-$1fff (OVL_STARTUP), $2000-$2fff (OVL_CHEST),
-    $3000-$3fff (OVL_HOME), $4000-$4fff (OVL_STORAGE), and $e000-$e9ff ->
-    Bank 2 $5000-$59ff (LEGALUI, 10 pages, below legal_zp_save $ee00);
+    $3000-$3fff (OVL_HOME), $4000-$4fff (OVL_STORAGE), $9300-$a2ff
+    (OVL_MODAL_MISC, C128M-019), and $e000-$e9ff -> Bank 2 $5000-$59ff
+    (LEGALUI, 10 pages, below legal_zp_save $ee00);
   - $af00-$cfff -> Bank 2 $6000-$80ff (128.PLAY, 33 pages) and
     $af00-$c0ff -> Bank 2 $8100-$92ff (128.PERSIST, 18 pages, strictly below
     128.PLAY mutable state at wizard_num_digits/main_loop/player_died).
@@ -1517,7 +1516,7 @@ KERNAL transition path:
   before staging to Bank 2 and restoring 128.play from Bank 2 with signature check.
 overlapping owners and guarding assertions:
   memory128.s asserts BANK1_COMMON_END < BANK2_OVERLAY_STARTUP_BASE, pairwise
-  disjoint Bank 2 spans through BANK2_PERSIST_END < BANK1_RESERVED_IO_BASE,
+  disjoint Bank 2 spans through BANK2_OVERLAY_MODAL_END < BANK1_RESERVED_IO_BASE,
   33-page PLAY coverage, and 13-entry overlay table lengths (including
   bank_overlay_cache_mmu); main.s asserts Default < $af00, PERSIST pages
   <= wizard_num_digits/main_loop/player_died, Default residency for
@@ -1532,4 +1531,65 @@ production runtime test:
   test128-cartridge PAL+NTSC (incl. -c128fullbanks check), and make test128.
 ```
 
+## Change Record — `title_screen.s` + `load_resume_reset_cold.s` Into `128.persist` (`C128M-020`, 2026-11-27)
 
+```text
+symbol/payload and linked segment: load_resume_reset $bfb8 ($bfb8..$bfe3),
+  title_load_and_draw $bfe4 ($bfe4..$c087) relocated from HelpOverlay (ovl.help)
+  into C128ResidentPersist (128.persist.prg, $af00-$c088+, within BANK2_PERSIST_PAGES)
+PRG load header: build/c128/128.persist.prg loads at $af00; ovl.help loads at $e000
+  ($e000-$ef5e, 3,934 B, 162 B free < $f000 post-C128M-019; was $e000-$effb, 5 B free prior)
+source and destination spans: 128.persist.prg $af00-$c088+ loaded to Bank 0 $af00
+  on modal persist entry; ovl.help $e000-$ef5e loaded to Bank 0 $e000 when
+  HelpOverlay runs
+source/destination bank and lifetime: Bank 0; 128.persist stays resident only
+  across title/save/resume/disk-setup modal windows (c128_modal_require_persist),
+  then c128_modal_require_play restores 128.play before active gameplay resumes
+MMU/$01 configuration at load, copy, execution and return: Operational Bank 0
+  (MMU_ALL_RAM $3e); tramp_title_load_and_draw calls
+  c128_modal_require_persist + c128_restore_runtime_guards -> title_load_and_draw;
+  tramp_load_resume_reset calls c128_modal_require_persist ->
+  load_resume_reset -> c128_modal_require_play
+common-RAM and interrupt/vector assumptions: N/A (zero common-RAM or vector change)
+KERNAL transition path: title_load_and_draw calls existing resident title_load_art
+  / screen helpers under existing persist banking rules
+overlapping owners and guarding assertions: 128.play shares $af00 with
+  128.persist, so tramp_title_load_and_draw runs only in title flow (before
+  128.play gameplay) and tramp_load_resume_reset reloads 128.play on return;
+  main.s asserts c128_resident_persist_start/end contain load_resume_reset and
+  title_load_and_draw; io_contracts.s updates both to C128AuditBelowIo;
+  tools/trampoline_manifest.py updated for ovl.help/persist ownership
+production runtime test: check_c128_payloads.py PASS (24 payloads); `make test-stage-c128` (`make test128` unit/guard/smoke suites, `test128-legal`, `test128-gain-stat`, `test128-cartridge`), `make playtest-disk PORT=c128 SCENARIOS=absent_save_drive,empty_drive,status_lost_save` (`3/3`), and `GATE_ALLOW_SKIP=1 make playtest-gate` **Verified PASS**
+```
+
+## Change Record — Expanded Character Sheet & Burden Rebalance (`C128M-019`, 2026-11-27)
+
+```text
+symbol/payload and linked segment:
+  - core/6502/starting_kit_cold.s relocated from UiOverlay (ovl.ui) into
+    StartupOverlay (128.start)
+  - core/6502/ui_wizard.s + core/6502/ui_equipment.s relocated into
+    ModalMiscOverlay (ovl.modal), uncached on Bank 1 via
+    C128_OVERLAY_MODAL_CACHE_PAGES = 0 and cached in Bank 2 ($9300-$a2ff) on
+    256KB disk systems (platforms/commodore/c128/memory128.s &
+    platforms/commodore/common/overlay.s)
+  - core/6502/ui_inventory.s relocated from UiOverlay (ovl.ui) into
+    HelpOverlay (ovl.help)
+PRG load header: all C128 overlays load at $e000 (<= $f000)
+source and destination spans: ovl.modal loads on demand from disk / cartridge
+  on 128KB ($e000-$efff, C128_OVERLAY_MODAL_CACHE_PAGES = 0) and caches in
+  Bank 2 ($9300-$a2ff, $10 pages) on 256KB disk builds; ovl.ui / ovl.help /
+  ovl.home / 128.start fit strictly <= $f000
+source/destination bank and lifetime: Bank 0 (cached in Bank 2 on 256KB);
+  loads into Bank 0 $e000-$efff under existing overlay_load / tramp_sr_epilogue
+MMU/$01 configuration at load, copy, execution and return: Operational Bank 0
+  (MMU_ALL_RAM $3e); existing Bank 0 overlay load & restore path
+common-RAM and interrupt/vector assumptions: N/A
+KERNAL transition path: Existing overlay_load disk / cartridge asset loader
+overlapping owners and guarding assertions: main.s overlay end <= $f000
+  assertions; io_contracts.s updated for moved symbols;
+  tools/trampoline_manifest.py, tools/check_overlay_calls.py,
+  tools/check_c128_payloads.py, and tools/report_memory_budgets.py updated
+production runtime test: check_overlay_calls.py, check128-payloads,
+  report_memory_budgets.py, make test128-fast-smoke, make test128
+```
