@@ -224,9 +224,9 @@
 //   $5000-$59FF  LEGALUI (10 pages covering $E000-$E9FF; below legal_zp_save $EE00)
 //   $5A00-$5FFF  1.5 KB reserve
 //   $6000-$80FF  128.PLAY (33 pages = full $AF00-$CFFF modal window)
-//   $8100-$92FF  128.PERSIST (18 pages covering $AF00-$C0FF; below 128.PLAY live state)
-//   $9300-$A2FF  OVL_MODAL_MISC (ID 9)
-//   $A300-$CFFF  11.25 KB free; $D000-$DFFF I/O visible ($BE); $E000-$EFFF 4 KB free
+//   $8100-$93FF  128.PERSIST (19 pages covering $AF00-$C1FF; below 128.PLAY live state)
+//   $9400-$A3FF  OVL_MODAL_MISC (ID 9)
+//   $A400-$CFFF  11.0 KB free; $D000-$DFFF I/O visible ($BE); $E000-$EFFF 4 KB free
 .const BANK2_OVERLAY_STARTUP_BASE = $1000
 .const BANK2_OVERLAY_STARTUP_END  = $1fff
 .const BANK2_OVERLAY_CHEST_BASE   = $2000
@@ -242,10 +242,10 @@
 .const BANK2_PLAY_PAGES           = $21
 .const BANK2_PLAY_END             = BANK2_PLAY_BASE + (BANK2_PLAY_PAGES * $100) - 1
 .const BANK2_PERSIST_BASE         = $8100
-.const BANK2_PERSIST_PAGES        = $12
+.const BANK2_PERSIST_PAGES        = $13
 .const BANK2_PERSIST_END          = BANK2_PERSIST_BASE + (BANK2_PERSIST_PAGES * $100) - 1
-.const BANK2_OVERLAY_MODAL_BASE   = $9300
-.const BANK2_OVERLAY_MODAL_END    = $a2ff
+.const BANK2_OVERLAY_MODAL_BASE   = $9400
+.const BANK2_OVERLAY_MODAL_END    = $a3ff
 .const C128_BANK2_PLAY_BIT        = $01
 .const C128_BANK2_PERSIST_BIT     = $02
 .const C128_BANK2_LEGALUI_BIT     = $04

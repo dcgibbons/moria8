@@ -161,3 +161,50 @@ Changes touching `core/6502/ui_disk_setup.s`, `platforms/shared/save.s`,
    a shared `disk_prompt_device` global. Also run the targeted
    `make playtest-disk` fault scenarios (`absent_save_drive`, `empty_drive`,
    `status_lost_save`, etc.) when changing Commodore storage or setup UI code.
+
+## Release Compliance Matrix
+
+Every shipping disk image, archive, container, and cartridge must include
+`data/LICENSE` and `data/SOURCE-OFFER` (viewable via Title `A` (`About`) and
+Help `L`):
+
+| Shipping Target | Embedded Names / Assets | Format / EOL |
+| --- | --- | --- |
+| Commodore disk (`c64`, `c128`, `plus4`) | SEQ files `license,s`, `source-offer,s` | `LF -> CR` |
+| Apple IIe disk | ProDOS TXT files `LICENSE`, `SOURCE.OFFER` | `LF -> CR` |
+| Commander X16 `.zip` | `LICENSE`, `SOURCE-OFFER` | `LF -> CR` |
+| Atari 8-bit `.atr` | DOS 2.5 files `LICENSE.TXT`, `SRCOFFER.TXT` | `LF -> $9B` (ATASCII) |
+| BBC Master 128 `.ssd` | DFS files `LICENSE`, `SRCOFFR` | `LF -> CR` |
+| CP/M `.zip` (`build/moria8-cpm.zip`) | `LICENSE`, `SOURCE-OFFER`, `README.TXT` | `LF -> CRLF` |
+| CP/M `.dsk`/`.d71` (`kaypro2`, `kaypro4`, `c128`) | `LICENSE.TXT`, `SRCOFFR.TXT` | `LF -> CRLF` + `0x1A` EOF, 128 B padded |
+| CP/M `MORIA8.DAT` (`'M8CP'`) | `DAT_ID_LICENSE`, `DAT_ID_SRCOFFR` | Embedded in container |
+| Cartridges (`c64`, `c128`, `plus4`, `cx16`, `atari8`) | Embedded ROM assets | Raw / NUL-padded ROM |
+
+## Platform Harnesses & External Toolchains
+
+- **Port isolation (`tools/isolated.sh`):** Root-Makefile emulator test targets
+  and playtest runs execute in a private network namespace (`ISOLATE=auto|1|0`,
+  default `auto`) so concurrent runs do not collide on monitor ports. Prefix
+  direct `make -C platforms/...` or harness runs with `tools/isolated.sh` when
+  other agents may be testing.
+- **Toolchains (`tools/` defaults):** Kick Assembler installs into
+  `tools/kickass/` unless `KICKASS` is set; `sjasmplus`, `RunCPM`, and
+  `ctools`/`cformat` install/build into `tools/` unless `SJASMPLUS`, `RUNCPM`,
+  `CTOOLS`, and `CFORMAT` are supplied. Initial downloads need network outside
+  sandboxed execution when absent from `tools/`.
+- **Commodore runtime tests:** A new C64 test hang after a layout change is
+  usually a memory overlap—inspect the assembler map and asserts first. Tests
+  with `test_start >= $A000` must use a bootstrap stub below BASIC ROM to bank
+  RAM visible first.
+- **Non-Commodore harnesses & caller-supplied ROM env vars (`?=`):**
+  - Apple IIe (`platforms/apple2/harness_smoke.py`): headless MAME `apple2ee`
+    (requires `A2ROMS` / `--rompath`; 1 scenario per invocation).
+  - Commander X16 (`platforms/cx16/harness_smoke.py`): headless `x16emu
+    -testbench` (requires `X16EMU`, `X16ROM`).
+  - Atari 8-bit (`platforms/atari8/harness_smoke.py`): headless MAME `a800xl`
+    and `a130xe` (requires `ATARI8ROMS`).
+  - BBC Master 128 (`platforms/bbcmaster/harness_smoke.py`): headless MAME
+    `bbcm` (requires `BBCMROMS`).
+  - CP/M 2.2 Z80 (`platforms/z80/cpm/harness_smoke.py`): drives
+    `tools/cpm_runner` and `RunCPM` over stdio (0 sockets; `make diskcpm` uses
+    `tools/make_cpm_disk.py` + `tools/ctools/`).

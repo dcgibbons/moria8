@@ -3554,7 +3554,7 @@ tool_ego_prefix_hi:
 // the play payload has no headroom for the chest summon hooks. Scripted/diag
 // builds omit wizard.s and provide their own stub below, so only assemble the
 // real one in normal builds (else it double-defines against the stub).
-#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT && !C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 wizard_wall_walk_enabled: .byte 0
 wizard_wall_walk_active:
     lda zp_game_flags
@@ -4158,7 +4158,8 @@ c128_resident_persist_end:
 #define HELP_TITLE_EXTERNAL
 #import "../../../core/6502/ui_help_clear.s"
 #undef HELP_TITLE_EXTERNAL
-#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#import "../../../core/6502/player_gain_stat_helpers.s"
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 // Scripted/diag test variants exclude wizard mode: those scenarios never enter
 // wizard commands, and the test instrumentation needs the Play payload bytes.
 // Stubs keep the command-dispatch and game-loop references linkable.
@@ -4218,7 +4219,6 @@ recall_prompt_str:
     .text "Recall which? " ; .byte 0
 #import "../../../core/6502/player_adjust_equipment_stat.s"
 .segment C128ResidentPlay
-#import "../../../core/6502/player_gain_stat_helpers.s"
 #define EFF_FEAR_TIMER_EXTERNAL
 #import "../../../core/6502/turn.s"
 #undef EFF_FEAR_TIMER_EXTERNAL
@@ -4853,7 +4853,7 @@ program_end:
 .assert "Bank2 PERSIST cache covers 128.PERSIST payload", c128_resident_persist_end <= $AF00 + BANK2_PERSIST_PAGES * $100, true
 .assert "Bank2 PERSIST cache stays below player_died in Play slot", $AF00 + BANK2_PERSIST_PAGES * $100 <= player_died, true
 .assert "eff_fear_timer and light_tick_counter stay in Default resident image (< $AF00)", eff_fear_timer >= $1c01 && light_tick_counter < program_end, true
-#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT && !C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 .assert "wizard_wall_walk_enabled stays in Default resident image (< $AF00)", wizard_wall_walk_enabled >= $1c01 && wizard_wall_walk_enabled < program_end, true
 .assert "Bank2 PERSIST cache stays below wizard_num_digits in Play slot", $AF00 + BANK2_PERSIST_PAGES * $100 <= wizard_num_digits, true
 .assert "C128 modal persist stays below main_loop in Play slot", c128_resident_persist_end <= main_loop, true
@@ -5092,7 +5092,7 @@ winner_apply_retirement_bonus_storage:
 #import "../../../core/6502/scroll_effects_p3.s"
 #undef SCROLL_P3_EXISTING_OWNER
 #undef SCROLL_P3_NEW_OWNER
-#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+#if C128_REAL_BOOT_DIAG || C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_EXCHANGE_PRODUCT || C128_TEST_SCRIPTED_CHEST_OPEN_PRODUCT
 ui_wizard_display:
     rts
 #else

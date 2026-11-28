@@ -2079,6 +2079,31 @@ class Service:
         for run_id in hit:
             self.stop_run(run_id)
 
+    def stop_stale_build(self) -> None:
+        """End build-queue runs for disabled ports or superseded game builds.
+        Otherwise a slow port's runs from an earlier commit hold every build
+        worker and block newer builds from starting (2026-11-28: 14 cpm-c128
+        runs from older commits held all 14 build slots for 30+ hours)."""
+        active_ports = set(self.config.get("build_platforms") or [])
+        ci_game = self.ci_build.split(BOT_MARK)[0] if self.ci_build else None
+        ci_commit = (self.ci_state.get("playing") or {}).get("commit") or (
+            build_meta(self.ci_build, self.home).get("commit") if self.ci_build else None
+        )
+        for run_id, job in list(self.running.items()):
+            if job["queue"] != "build" or job.get("cancelled"):
+                continue
+            if job["platform"] not in active_ports:
+                self.log(f"build queue: stop {run_id} ({job['platform']} disabled)")
+                self.stop_run(run_id)
+                continue
+            if not ci_game or job["build"].split(BOT_MARK)[0] == ci_game:
+                continue
+            job_commit = job.get("commit") or build_meta(job["build"], self.home).get("commit")
+            if job_commit and ci_commit and (job_commit == ci_commit or not game_changed(job_commit, ci_commit)):
+                continue
+            self.log(f"build queue: stop {run_id} (superseded by {self.ci_build})")
+            self.stop_run(run_id)
+
     def drained_restart(self) -> None:
         """A Balrog run drained DRAIN_RESTART below the checkpoint it started
         from ends, and the character starts again from that checkpoint, its
@@ -2611,6 +2636,7 @@ class Service:
         self.balrog_yield()
         self.refresh_ci()
         self.refresh_bot()
+        self.stop_stale_build()
         self.finish_subs(subs)
         subs = {name: sub for name, sub in subs.items() if not sub.get("done")}
         if not self.stopping:

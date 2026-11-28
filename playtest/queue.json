@@ -12,7 +12,7 @@
  "remote": "origin",
  "branch": "main",
  "fetch_url": "https://github.com/dcgibbons/moria8.git",
- "paused": false,
+ "paused": true,
  "epoch": "2026-11-18-review",
  "balrog_workers": 16,
  "balrog_budget": 20000000,
@@ -32,14 +32,14 @@
   "plus4",
   "plus4-cart",
   "c128",
+  "c128-256k",
   "c128-cart",
   "apple2",
   "atari8",
   "atari8-cart",
   "bbcmaster",
   "cx16-cart",
-  "cpm",
-  "cpm-c128"
+  "cpm"
  ],
  "build_goal": "clvl10",
  "balrog_platforms": [

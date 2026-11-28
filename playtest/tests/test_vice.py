@@ -165,7 +165,7 @@ class RomArgsTest(unittest.TestCase):
         import tempfile
         from pathlib import Path
         from moria_playtest.launch import rom_args
-        from moria_playtest.ports import C128, C128_CART
+        from moria_playtest.ports import C128, C128_256K, C128_CART
         self.assertEqual(rom_args({"PLAYTEST_KERNAL": "/the/c64/kernal.bin",
                                    "PLAYTEST_DOS1541": "/the/1541.bin"}, C128), [])
         with tempfile.TemporaryDirectory() as tmp:
@@ -174,7 +174,7 @@ class RomArgsTest(unittest.TestCase):
             drive.write_bytes(b"\0" * 32768)
             env = {"PLAYTEST_C128_KERNAL": str(kernal), "PLAYTEST_DOS1571": str(drive),
                    "PLAYTEST_KERNAL": "/the/c64/kernal.bin"}
-            for port in (C128, C128_CART):
+            for port in (C128, C128_CART, C128_256K):
                 self.assertEqual(rom_args(env, port),
                                  ["-kernal", str(kernal.resolve()), "-dos1571", str(drive.resolve())])
             # JiffyDOS works only as a pair: half of one is refused, never

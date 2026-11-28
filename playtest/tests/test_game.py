@@ -9,7 +9,7 @@ from moria_playtest import launch
 from moria_playtest import nav
 from moria_playtest.game import (Mode, Observation, classify, derive_rng, find_jsr,
                                  snapshot_cpu_clock)
-from moria_playtest.ports import (APPLE2, ATARI8, ATARI8_CART, BBCMASTER, C64, C64_CART, C64_NOREU, C128, C128_CART,
+from moria_playtest.ports import (APPLE2, ATARI8, ATARI8_CART, BBCMASTER, C64, C64_CART, C64_NOREU, C128, C128_256K, C128_CART,
                                    CX16, CX16_CART, PLUS4, PLUS4_CART, PORTS)
 from moria_playtest.screen import decode_rows, screen_code_to_char
 
@@ -705,6 +705,14 @@ class CommodoreAndX16CartridgeTest(unittest.TestCase):
         self.assertFalse(PLUS4_CART.snapshots)
         self.assertIn("-reu", C128.resource_args)
         self.assertNotIn("-reu", C128_CART.resource_args)                 # the cartridge holds the overlays
+        self.assertIn(C128_256K.name, PORTS)
+        self.assertEqual(C128_256K.platform, C128.name)
+        self.assertEqual((C128_256K.out, C128_256K.disk, C128_256K.disk_target, C128_256K.cartridge),
+                         ("c128", C128.disk, "disk128", ""))
+        self.assertIn("-c128fullbanks", C128_256K.resource_args)
+        self.assertGreater(C128_256K.resource_args.index("-c128fullbanks"),
+                           C128_256K.resource_args.index("-default"))
+        self.assertNotIn("-reu", C128_256K.resource_args)
         self.assertEqual((CX16_CART.platform, CX16_CART.backend, CX16_CART.cartridge), ("cx16", "x16", "moria8-cx16.crt"))
         self.assertIn("cx16_preload_banks", CX16_CART.labels)
 

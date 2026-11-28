@@ -8,7 +8,7 @@
 	buildbbcmaster diskbbcmaster runbbcmaster testbbcmaster testbbcmaster-smoke testbbcmaster-fast-smoke testbbcmaster-runtime testbbcmaster-memory-contract testbbcmaster-memory-contract-selftest \
 	buildcpm diskcpm cpm-runner runcpm testcpm testcpm-smoke testcpm-runtime testcpm-memory-contract testcpm-memory-contract-selftest \
 	artifact artifact-checksums artifacts \
-	playtest-check playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-stop-balrog playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-gate playtest-m0-report playtest-session playtest-qualify playtest-disk \
+	playtest-check playtest-check-only playtest-queue playtest-queue-status playtest-queue-rebuild playtest-queue-stop-balrog playtest-queue-records-rebuild playtest-subqueue playtest-subqueue-cancel playtest-strategy-evidence playtest-ab playtest-smoke playtest-tour playtest-gate playtest-m0-report playtest-session playtest-qualify playtest-disk \
 	playtest-regress playtest-repro playtest-dashboard playtest-publish playtest-selftest
 
 # Python tools and harnesses must not leave __pycache__ in source directories.
@@ -128,7 +128,7 @@ test-prebuild: tools-ready-apple2 tools-ready-cpm
 	$(MAKE) -C platforms/z80/cpm disk
 	python3 -B tools/check_item_catalog_ports.py --selftest
 	python3 -B tools/check_item_catalog_ports.py
-	$(MAKE) playtest-check
+	$(MAKE) playtest-check-only
 
 test-stage-c64: test-prebuild
 	$(ISOLATED) $(MAKE) -C platforms/commodore test64
@@ -178,10 +178,13 @@ PLAYTEST_CHARACTER = $(if $(CHARACTER),--character $(CHARACTER))
 # reads the X16 a block at a time, with an x16emu patched for it (docs/BACKLOG.md).
 PORT ?= c64
 PLAYTEST_DISK = $(or $(PLAYTEST_DISK_$(PORT)),disk64)
+PLAYTEST_DISK_c64 = disk64
+PLAYTEST_DISK_c64-noreu = disk64
 PLAYTEST_DISK_c64-cart = disk64 cartridge64
 PLAYTEST_DISK_plus4 = diskplus4
 PLAYTEST_DISK_plus4-cart = diskplus4 cartridgeplus4
 PLAYTEST_DISK_c128 = disk128
+PLAYTEST_DISK_c128-256k = disk128
 PLAYTEST_DISK_c128-cart = disk128 cartridge128
 PLAYTEST_DISK_apple2 = diskapple2
 PLAYTEST_DISK_atari8 = diskatari8
@@ -190,19 +193,30 @@ PLAYTEST_DISK_bbcmaster = diskbbcmaster
 PLAYTEST_DISK_cx16 = buildcx16
 PLAYTEST_DISK_cx16-cart = cartridgecx16
 PLAYTEST_DISK_cpm = diskcpm cpm-runner
+PLAYTEST_DISK_cpm-c128 = diskcpm
 PLAYTEST_PORT = --port $(PORT)
 
 playtest-check: build64 cartridge64 buildplus4 cartridgeplus4 build128 cartridge128 buildapple2 buildatari8 cartridgeatari8 buildbbcmaster buildcx16 cartridgecx16 buildcpm
 	$(PLAYTEST_PY) -m moria_playtest.check
 
+playtest-check-only:
+	$(PLAYTEST_PY) -m moria_playtest.check
+
 playtest-smoke: disk64
 	$(PLAYTEST_RUN) -m moria_playtest.smoke
 
-# The bot on every port and cartridge from fixed seeds, before a product
-# commit: a game finding or a run error fails it (moria_playtest/gate.py).
-# Each run isolates itself, as the queue's do. Minutes, not seconds.
-playtest-gate: disk64 cartridge64 diskplus4 cartridgeplus4 disk128 cartridge128 diskapple2 diskatari8 \
+playtest-tour: $(PLAYTEST_DISK)
+	rm -rf build/playtest/tour-$(PORT)
+	$(PLAYTEST_RUN) -m moria_playtest.tour $(PORT) build/playtest/tour-$(PORT)
+
+# The bot on every port and cartridge from fixed seeds, before a pre-PR/release
+# merge: a game finding or a run error fails it (moria_playtest/gate.py).
+# When TARGETS=... is given, only build those ports' media instead of all 14.
+PLAYTEST_GATE_COMMA := ,
+PLAYTEST_GATE_ALL_DEPS = disk64 cartridge64 diskplus4 cartridgeplus4 disk128 cartridge128 diskapple2 diskatari8 \
 		cartridgeatari8 diskbbcmaster buildcx16 cartridgecx16 diskcpm cpm-runner
+PLAYTEST_GATE_DEPS = $(if $(TARGETS),$(sort $(foreach t,$(subst $(PLAYTEST_GATE_COMMA), ,$(TARGETS)),$(or $(PLAYTEST_DISK_$(t)),disk64))),$(PLAYTEST_GATE_ALL_DEPS))
+playtest-gate: $(PLAYTEST_GATE_DEPS)
 	$(PLAYTEST_PY) -m moria_playtest.gate $(if $(GATE_WORKERS),--workers $(GATE_WORKERS)) \
 		$(if $(TARGETS),--targets $(TARGETS)) $(if $(GATE_ALLOW_SKIP),--allow-skip)
 
