@@ -2394,7 +2394,11 @@ game_over_save_and_show:
 #endif
     jsr tramp_game_over_run     // Score, hiscore load/insert/save, death screen
     jsr input_get_modal_dismiss_key
+#if HAL_PLATFORM_GAME_OVER_SKIP_DISK_PROMPT_WHEN_CACHED
+    jmp hal_storage_game_over_disk_prompt_game
+#else
     jmp disk_prompt_game        // Swap back to game disk if dual
+#endif
 
 winner_print_save_blocked:
     lda #<winner_save_blocked_str

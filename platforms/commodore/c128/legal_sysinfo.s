@@ -55,8 +55,15 @@ legal_sysinfo_draw_platform:
     lda #<legal_sysinfo_lbl_mem
     ldy #>legal_sysinfo_lbl_mem
     jsr legal_sysinfo_begin_row
+    lda c128_ram_256k
+    bne !mem_256k+
     lda #<legal_sysinfo_mem_128k
     ldy #>legal_sysinfo_mem_128k
+    bne !put_mem+
+!mem_256k:
+    lda #<legal_sysinfo_mem_256k
+    ldy #>legal_sysinfo_mem_256k
+!put_mem:
     jsr screen_put_string_ay
     lda reu_present
     beq !drives+
@@ -101,5 +108,6 @@ legal_sysinfo_kernal_str:   .text "KERNAL R"; .byte 0
 legal_sysinfo_pal_str:      .text "  PAL"; .byte 0
 legal_sysinfo_ntsc_str:     .text "  NTSC"; .byte 0
 legal_sysinfo_mem_128k:     .text "128KB (2x64KB Banks)"; .byte 0
+legal_sysinfo_mem_256k:     .text "256KB (4x64KB Banks)"; .byte 0
 legal_sysinfo_mem_reu:      .text " + REU "; .byte 0
 legal_sysinfo_kb_str:       .text "KB"; .byte 0

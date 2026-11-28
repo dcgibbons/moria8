@@ -3,6 +3,10 @@
 // OS bindings, OPEN validation and any low-resident burst reader.
 .const LEGAL_DISK_CHUNK = 128
 legal_stream_open:
+#if HAL_STORAGE_LEGAL_PROMPT_PROGRAM_MEDIA
+    jsr legal_os_prompt_program_media
+    bcs !done+
+#endif
     lda #0
     sta legal_eof
     sta legal_selected

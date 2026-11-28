@@ -366,7 +366,7 @@ test128-soak-long: ensure-kickass
 	cd c128 && python3 -u ./harness128.py --name soak128_long --prg "$(abspath $(SOAK128_LONG_DIR))/test_soak128.prg" --vs "$(abspath $(SOAK128_LONG_DIR))/test_soak128.vs" --vice $(VICE128) --timeout 7200 --connect-timeout 12
 
 test128-fast-smoke: ensure-kickass check128-payloads
-	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|marker_init_d64_smoke|boot_title_save_write_product_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
+	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|marker_init_d64_smoke|boot_title_save_write_product_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke|memory128_256k|c128_256k_cache_smoke' ./run_tests128.sh
 
 testplus4-build: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
 	@echo "Plus/4 build artifacts assembled; runtime smoke is make testplus4-runtime."

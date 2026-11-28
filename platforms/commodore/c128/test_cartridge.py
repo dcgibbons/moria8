@@ -72,8 +72,11 @@ def build_vice_command(
     drive8_ro: bool = False,
     drive9: Path | None = None,
     autostart: Path | None = None,
+    fullbanks: bool = False,
 ) -> list[str]:
     media: list[str] = []
+    if fullbanks:
+        media.append("-c128fullbanks")
     if crt is not None:
         media += ["-cartcrt", str(crt)]
     if raw_bin is not None:
@@ -124,6 +127,7 @@ class Experiment:
         drive8: Path | None = None,
         drive9: Path | None = None,
         disk_build: bool = False,
+        fullbanks: bool = False,
     ) -> None:
         self.args = args
         self.disk_build = disk_build
@@ -187,6 +191,7 @@ class Experiment:
             drive8_ro=disk_build,
             drive9=drive9,
             autostart=autostart_path,
+            fullbanks=fullbanks,
         )
         self.event(
             "launch",
@@ -912,10 +917,29 @@ def run_persistence_and_interchange(args: argparse.Namespace) -> int:
         exp9.close()
 
 
+def run_256k_cartridge_check(args: argparse.Namespace) -> int:
+    exp = Experiment(args, name="crt-256k-sysinfo", fullbanks=True)
+    try:
+        exp.until(exp.sym["title_menu_loop"])
+        assert exp.memory(exp.sym["c128_ram_256k"], 1) == b"\x01", "256KB probe did not detect 4 banks"
+        exp.vdc_has("C128  KERNAL R1  256KB")
+        exp.key("A")
+        exp.until(exp.sym["legal_menu_wait"])
+        exp.key("3")
+        exp.until(exp.sym["legal_sysinfo_wait"])
+        exp.vdc_has("256KB (4x64KB Banks)")
+        exp.check("cartridge detected 256KB (4x64KB Banks) on Title and System Info")
+        return exp.count
+    finally:
+        exp.close()
+
+
 def run_selftest() -> None:
     cmd_crt = build_vice_command("x128", 6510, crt=Path("build/moria8-c128.crt"))
-    assert "-80col" in cmd_crt and "-cartcrt" in cmd_crt and "-pal" in cmd_crt
+    assert "-80col" in cmd_crt and "-cartcrt" in cmd_crt and "-pal" in cmd_crt and "-c128fullbanks" not in cmd_crt
     assert cmd_crt.index("-VDC16KB") > cmd_crt.index("-default")   # -default would reset it
+    cmd_full = build_vice_command("x128", 6510, crt=Path("build/moria8-c128.crt"), fullbanks=True)
+    assert "-c128fullbanks" in cmd_full and cmd_full.index("-c128fullbanks") > cmd_full.index("-default")
     cmd_bin = build_vice_command(
         "x128", 6510, ntsc=True, raw_bin=Path("build/c128-cart/moria8-c128.bin"), drive8=Path("save.d71")
     )
@@ -954,6 +978,7 @@ def main() -> None:
         run_cartridge_boot_and_assets(args)
         + run_md128_gameplay_and_reset(args)
         + run_persistence_and_interchange(args)
+        + run_256k_cartridge_check(args)
     )
     mode = "NTSC" if args.ntsc else "PAL"
     print(f"C128 cartridge ({mode}): {total} checks passed", flush=True)

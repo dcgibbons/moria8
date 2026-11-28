@@ -641,8 +641,10 @@ turn_tick_light:
     rts
 
 // Strings migrated to Huffman compression (HSTR_EFF_*, HSTR_TTL_*, HSTR_RECALL_* in huffman_data.s)
+#if !EFF_FEAR_TIMER_EXTERNAL
 light_tick_counter: .byte 0
-eff_fear_timer:   .byte 0
+eff_fear_timer:     .byte 0
+#endif
 
 // ============================================================
 // Pseudo-identification system

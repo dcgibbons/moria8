@@ -43,6 +43,7 @@
 .const hal_platform_overlay_window_hi_min = $e0
 .const hal_platform_overlay_window_hi_max_exclusive = $f0
 #define HAL_PLATFORM_TITLE_SYSINFO_80COL
+#define HAL_PLATFORM_TITLE_SYSINFO_256K_PROBE
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1
 #define HAL_PLATFORM_ITEM_ACTIONS_RESTORE_BEFORE_RETURN
@@ -107,3 +108,6 @@
 #define HAL_PLATFORM_PLAYER_ITEM_COMMANDS_SPLIT_SELECT
 #define HAL_PLATFORM_PLAYER_MOVE_RESTORE_VECTORS_ON_OPEN
 #define HAL_PLATFORM_SPELL_EFFECTS_BANK1_MONSTER_NAMES
+#if !C128_CARTRIDGE
+#define HAL_PLATFORM_OVERLAY_CACHE_EXTENDED_256K
+#endif

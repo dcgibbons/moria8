@@ -8,9 +8,7 @@
 // contracts.
 
 // Resident Bank 0 / common entrypoints that must remain below the I/O hole.
-:C128AuditBelowIo("c128_load_runtime_low_prg", c128_load_runtime_low_prg)
-:C128AuditBelowIo("c128_load_runtime_input_prg", c128_load_runtime_input_prg)
-:C128AuditBelowIo("c128_load_runtime_common_prg", c128_load_runtime_common_prg)
+:C128AuditBelowIo("c128_load_runtime_table_x", c128_load_runtime_table_x)
 :C128AuditBelowIo("c128_load_resident_persist_prg", c128_load_resident_persist_prg)
 :C128AuditBelowIo("c128_load_resident_play_prg", c128_load_resident_play_prg)
 :C128AuditBelowIo("c128_require_program_media", c128_require_program_media)
@@ -19,7 +17,6 @@
 :C128AuditBelowIo("c128_modal_save_game", c128_modal_save_game)
 :C128AuditBelowIo("c128_modal_load_game", c128_modal_load_game)
 :C128AuditBelowIo("c128_modal_require_play", c128_modal_require_play)
-:C128AuditBelowIo("c128_load_runtime_banked_prg", c128_load_runtime_banked_prg)
 :C128AuditBelowIo("title_show_sysinfo", title_show_sysinfo)
 :C128AuditBelowIo("tramp_player_create", tramp_player_create)
 :C128AuditBelowIo("tramp_game_over", tramp_game_over)

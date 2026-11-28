@@ -935,16 +935,6 @@ tramp_game_over_run:
     // 7. Display death screen (death overlay code at $E000)
     jmp score_death_screen
 
-tramp_winner_royal:
-    jsr disk_prompt_game
-    lda #hal_storage_modal_misc_name_len
-    ldx #<hal_storage_modal_misc_name
-    ldy #>hal_storage_modal_misc_name
-    jsr asset_load_required     // asks for the program disk until it loads
-    lda #0
-    sta current_overlay
-    jmp royal_screen
-
 winner_apply_retirement_bonus:
     :C128OverlayComputeTrampoline(9, winner_apply_retirement_bonus_storage)
 
@@ -1603,7 +1593,7 @@ c128_prepare_cache_loading_screen:
     sta zp_screen_editor_state
     jsr hal_screen_clear
 #if HAL_PLATFORM_MONSTER_CATALOG
-    lda #7                      // 12 less the four tiers and STARTUP
+    lda #7                      // 12 overlays less STARTUP (catalog name slot) and 4 cold/Bank 2 overlays (MODAL_MISC, CHEST, HOME, STORAGE)
 #else
     lda #12
 #endif
@@ -1618,13 +1608,19 @@ c128_prepare_startup_loading_screen:
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
     jsr hal_screen_clear
-    // Total = 9 startup files + 13 cache files (4 tiers + 9 overlays);
-    // with the monster catalog, 12 startup files (128.cat, 128.cnm, 128.cex)
-    // + 8 overlays (no tiers, no STARTUP). c128_cache_enabled lives in Default
-    // RAM (moria128.prg, C128M-011), and keeping the count static avoids coupling
-    // preload initialization to later state.
+    // Total = 12 startup/catalog files + 8 Bank 1 overlays on 128KB (20 total);
+    // 256KB disk adds OVL_STARTUP, CHEST, HOME, STORAGE, 128.PERSIST, and
+    // LEGALUI cached into Bank 2 (26 total). Keep initial count static before
+    // preload mutates overlay state.
 #if HAL_PLATFORM_MONSTER_CATALOG
+#if !C128_CARTRIDGE
     lda #20
+    ldx c128_ram_256k
+    beq !total_ready+
+    lda #26
+#else
+    lda #20
+#endif
 #else
     lda #22
 #endif
@@ -1634,8 +1630,7 @@ c128_prepare_startup_loading_screen:
     sta c128_load_progress_count
     lda #1
     sta c128_startup_preload_display
-    jsr c128_render_load_progress
-    rts
+    jmp c128_render_load_progress
 
 c128_show_load_progress:
     inc c128_load_progress_count
@@ -1783,6 +1778,7 @@ restart_entry:
     lda KERNAL_REV              // $FF80 — in KERNAL ROM
     sta tsi_krev_cached
     :MachineRestoreAllRam()     // Stable runtime invariant: Top Common ON ($D506=$0D)
+    jsr c128_detect_256k
 
     jsr hal_sound_init
     jsr rng_seed
@@ -1816,36 +1812,22 @@ restart_entry:
     // Use one visible list for every startup resident and cache load.
     jsr c128_prepare_startup_loading_screen
 
-    lda #5
+    ldx #0
+!rt_boot_loop:
+    txa
+    pha
+    lda c128_rt_boot_stages,x
     sta c128_runtime_load_stage
-    jsr c128_load_runtime_low_prg
-    bcc !runtime_low_loaded+
+    jsr c128_load_runtime_table_x
+    bcc !rt_boot_next+
+    pla
     jmp runtime_load_failed
-!runtime_low_loaded:
-    lda #6
-    sta c128_runtime_load_stage
-    jsr c128_load_runtime_input_prg
-    bcc !runtime_input_loaded+
-    jmp runtime_load_failed
-!runtime_input_loaded:
-    lda #7
-    sta c128_runtime_load_stage
-    jsr c128_load_runtime_projectile_prg
-    bcc !runtime_projectile_loaded+
-    jmp runtime_load_failed
-!runtime_projectile_loaded:
-    lda #8
-    sta c128_runtime_load_stage
-    jsr c128_load_runtime_common_prg
-    bcc !runtime_common_loaded+
-    jmp runtime_load_failed
-!runtime_common_loaded:
-    lda #10
-    sta c128_runtime_load_stage
-    jsr c128_load_runtime_banked_prg
-    bcc !runtime_banked_loaded+
-    jmp runtime_load_failed
-!runtime_banked_loaded:
+!rt_boot_next:
+    pla
+    tax
+    inx
+    cpx #5
+    bne !rt_boot_loop-
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     jsr screen_clear_for_font_restore
     jsr c128_restore_vdc_rom_font
@@ -1860,6 +1842,9 @@ restart_entry:
     bcc !resident_play_loaded+
     jmp runtime_load_failed
 !resident_play_loaded:
+#if !C128_CARTRIDGE
+    jsr c128_preload_bank2_extras
+#endif
 #if C128_TEST_SCRIPTED_SINGLE_DRIVE_FRESH_SAVE_PRODUCT || C128_TEST_SCRIPTED_DISK_SETUP_SINGLE_DRIVE_RETURN_PRODUCT
     jsr hal_screen_clear
 #endif
@@ -2256,7 +2241,32 @@ c128_test_single_drive_load_return_loaded:
     jsr input_get_modal_dismiss_key
     jmp c128_title_require_program_media
 
+#if !C128_CARTRIDGE
+// Returns Z=1 (beq) iff PLAY, PERSIST, and all 12 overlays are cached in Banks 1+2.
+// Clobbers: A.
+c128_all_runtime_cached:
+    lda c128_bank2_flags
+    and #(C128_BANK2_PLAY_BIT | C128_BANK2_PERSIST_BIT)
+    cmp #(C128_BANK2_PLAY_BIT | C128_BANK2_PERSIST_BIT)
+    bne !arc_no+
+    lda c128_cache_overlays_ready
+    cmp #1
+    bne !arc_no+
+    lda c128_cache_overlay_bits
+    cmp #$ff
+    bne !arc_no+
+    lda c128_cache_overlay_bits_hi
+    and #$0f
+    cmp #$0f
+!arc_no:
+    rts
+#endif
+
 c128_title_require_program_media:
+#if !C128_CARTRIDGE
+    jsr c128_all_runtime_cached
+    beq !title_program_ready+
+#endif
     jsr c128_require_program_media
     bcc !title_program_ready+
     jsr c128_program_media_error_prompt
@@ -2276,10 +2286,6 @@ runtime_load_failed:
     lda c128_runtime_load_stage
     jmp !loop-
 
-// ============================================================
-// c128_load_runtime_low_prg — Load low-RAM resident runtime code to $1000 in Bank 0
-// Output: carry clear = success, carry set = error
-// ============================================================
 .const RUNTIME_LOW_FILE_NUM = 2
 runtime_low_filename:
 runtime_low_display_str:
@@ -2347,24 +2353,30 @@ runtime_banked_filename_end:
 // Repeated on failure as asset_load_retry repeats the HAL loads (a drive can
 // miss a handshake). The inputs are kept: the load clears the bank, and the
 // progress display may use the pointers.
+c128_rt_boot_stages:
+    .byte 5, 6, 7, 8, 10
+c128_rt_boot_stages_end:
+.assert "c128_rt_boot_stages has 5 boot stages", c128_rt_boot_stages_end - c128_rt_boot_stages, 5
+
 #if C128_CARTRIDGE
-c128_load_runtime_low_prg:
-    lda #CART_ASSET_RUNTIME_LOW
-    jmp cart_load_asset
-c128_load_runtime_input_prg:
-    lda #CART_ASSET_RUNTIME_INPUT
-    jmp cart_load_asset
-c128_load_runtime_projectile_prg:
-    lda #CART_ASSET_RUNTIME_PROJ
-    jmp cart_load_asset
-c128_load_runtime_common_prg:
-    lda #CART_ASSET_RUNTIME_COMMON
+c128_rt_cart_assets:
+    .byte CART_ASSET_RUNTIME_LOW, CART_ASSET_RUNTIME_INPUT, CART_ASSET_RUNTIME_PROJ, CART_ASSET_RUNTIME_COMMON, CART_ASSET_BANKED
+c128_rt_cart_assets_end:
+.assert "c128_rt_cart_assets matches boot stages", c128_rt_cart_assets_end - c128_rt_cart_assets, 5
+c128_load_runtime_table_x:
+    lda c128_rt_cart_assets,x
     jmp cart_load_asset
 c128_load_resident_huffman_prg:
     lda #CART_ASSET_HUFF
     jmp cart_load_asset
 c128_load_resident_huffman_vector_prg:
     lda #CART_ASSET_HVEC
+    jmp cart_load_asset
+c128_load_resident_persist_prg:
+    lda #CART_ASSET_PERSIST
+    jmp cart_load_asset
+c128_load_resident_play_prg:
+    lda #CART_ASSET_PLAY
     jmp cart_load_asset
 #else
 c128_load_runtime_prg:
@@ -2374,14 +2386,12 @@ c128_load_runtime_prg:
     sta crl_file
     lda disk_status
     sta crl_name_len
-    lda zp_ptr0
-    sta crl_name
-    lda zp_ptr0_hi
-    sta crl_name + 1
-    lda zp_ptr1
-    sta crl_dest
-    lda zp_ptr1_hi
-    sta crl_dest + 1
+    ldx #3
+!crl_save:
+    lda zp_ptr0,x
+    sta crl_name,x
+    dex
+    bpl !crl_save-
     lda #ASSET_LOAD_ATTEMPTS
     sta crl_left
 !crl_try:
@@ -2391,14 +2401,12 @@ c128_load_runtime_prg:
     sta disk_temp
     lda crl_name_len
     sta disk_status
-    lda crl_name
-    sta zp_ptr0
-    lda crl_name + 1
-    sta zp_ptr0_hi
-    lda crl_dest
-    sta zp_ptr1
-    lda crl_dest + 1
-    sta zp_ptr1_hi
+    ldx #3
+!crl_rest:
+    lda crl_name,x
+    sta zp_ptr0,x
+    dex
+    bpl !crl_rest-
     jsr crl_load_once
     bcc !crl_done+
     dec crl_left                // carry stays set
@@ -2420,6 +2428,7 @@ crl_file:     .byte 0
 crl_name_len: .byte 0
 crl_name:     .word 0
 crl_dest:     .word 0
+.assert "c128_load_runtime_prg ZP/save layout contiguous", zp_ptr0_hi == zp_ptr0 + 1 && zp_ptr1 == zp_ptr0 + 2 && zp_ptr1_hi == zp_ptr0 + 3 && crl_dest == crl_name + 2, true
 crl_left:     .byte 0
 crl_sa:       .byte 1
 
@@ -2470,117 +2479,41 @@ crl_load_once:
 !done:
     rts
 
-c128_load_runtime_low_prg:
-    lda #RUNTIME_LOW_FILE_NUM
-    sta disk_temp
-    lda #RUNTIME_LOW_FILENAME_LEN
-    sta disk_status
-    lda #<runtime_low_filename
-    sta zp_ptr0
-    lda #>runtime_low_filename
-    sta zp_ptr0_hi
-    lda #$00
-    sta zp_ptr1
-    lda #$10
-    sta zp_ptr1_hi
-    jmp c128_load_runtime_prg
+c128_rt_tbl_bank:
+    .byte 0, 0, 0, 0, 0, 1, 1, 0, 0
+c128_rt_tbl_file:
+    .byte RUNTIME_LOW_FILE_NUM, RUNTIME_INPUT_FILE_NUM, RUNTIME_PROJECTILE_FILE_NUM, RUNTIME_COMMON_FILE_NUM, RUNTIME_BANKED_FILE_NUM, RESIDENT_HUFFMAN_FILE_NUM, RESIDENT_HUFFMAN_VECTOR_FILE_NUM, RESIDENT_PERSIST_FILE_NUM, RESIDENT_PLAY_FILE_NUM
+c128_rt_tbl_len:
+    .byte RUNTIME_LOW_FILENAME_LEN, RUNTIME_INPUT_FILENAME_LEN, RUNTIME_PROJECTILE_FILENAME_LEN, RUNTIME_COMMON_FILENAME_LEN, RUNTIME_BANKED_FILENAME_LEN, RESIDENT_HUFFMAN_FILENAME_LEN, RESIDENT_HUFFMAN_VECTOR_FILENAME_LEN, RESIDENT_PERSIST_FILENAME_LEN, RESIDENT_PLAY_FILENAME_LEN
+c128_rt_tbl_name_lo:
+    .byte <runtime_low_filename, <runtime_input_filename, <runtime_projectile_filename, <runtime_common_filename, <runtime_banked_filename, <resident_huffman_filename, <resident_huffman_vector_filename, <resident_persist_filename, <resident_play_filename
+c128_rt_tbl_name_hi:
+    .byte >runtime_low_filename, >runtime_input_filename, >runtime_projectile_filename, >runtime_common_filename, >runtime_banked_filename, >resident_huffman_filename, >resident_huffman_vector_filename, >resident_persist_filename, >resident_play_filename
+c128_rt_tbl_end:
+.assert "c128_rt_tbl arrays all have 9 entries", (c128_rt_tbl_file - c128_rt_tbl_bank) == 9 && (c128_rt_tbl_len - c128_rt_tbl_file) == 9 && (c128_rt_tbl_name_lo - c128_rt_tbl_len) == 9 && (c128_rt_tbl_name_hi - c128_rt_tbl_name_lo) == 9 && (c128_rt_tbl_end - c128_rt_tbl_name_hi) == 9, true
 
-c128_load_runtime_input_prg:
-    lda #RUNTIME_INPUT_FILE_NUM
-    sta disk_temp
-    lda #RUNTIME_INPUT_FILENAME_LEN
-    sta disk_status
-    lda #<runtime_input_filename
-    sta zp_ptr0
-    lda #>runtime_input_filename
-    sta zp_ptr0_hi
-    lda #$00
-    sta zp_ptr1
-    lda #$0b
-    sta zp_ptr1_hi
-    jmp c128_load_runtime_prg
-
-c128_load_runtime_projectile_prg:
-    lda #RUNTIME_PROJECTILE_FILE_NUM
-    sta disk_temp
-    lda #RUNTIME_PROJECTILE_FILENAME_LEN
-    sta disk_status
-    lda #<runtime_projectile_filename
-    sta zp_ptr0
-    lda #>runtime_projectile_filename
-    sta zp_ptr0_hi
-    lda #$70
-    sta zp_ptr1
-    lda #$0a
-    sta zp_ptr1_hi
-    jmp c128_load_runtime_prg
-
-c128_load_runtime_common_prg:
-    lda #RUNTIME_COMMON_FILE_NUM
-    sta disk_temp
-    lda #RUNTIME_COMMON_FILENAME_LEN
-    sta disk_status
-    lda #<runtime_common_filename
-    sta zp_ptr0
-    lda #>runtime_common_filename
-    sta zp_ptr0_hi
-    lda #$20
-    sta zp_ptr1
-    lda #$0d
-    sta zp_ptr1_hi
-    jmp c128_load_runtime_prg
-
-.macro C128RuntimeLoadFile(file_num, filename_len, filename, load_hi) {
-    lda #file_num
-    sta disk_temp
-    lda #filename_len
-    sta disk_status
-    lda #<filename
-    sta zp_ptr0
-    lda #>filename
-    sta zp_ptr0_hi
-    lda #$00
-    sta zp_ptr1
-    lda #load_hi
-    sta zp_ptr1_hi
-    jmp c128_load_runtime_prg
-}
-
-// Load the Huffman corpus into the Bank 1 $F000 region.
 c128_load_resident_huffman_prg:
-    lda #RESIDENT_HUFFMAN_FILE_NUM
-    sta disk_temp
-    lda #RESIDENT_HUFFMAN_FILENAME_LEN
-    sta disk_status
-    lda #<resident_huffman_filename
-    sta zp_ptr0
-    lda #>resident_huffman_filename
-    sta zp_ptr0_hi
-    lda #<BANK1_HUFFMAN_BASE
-    sta zp_ptr1
-    lda #>BANK1_HUFFMAN_BASE
-    sta zp_ptr1_hi
-    lda #1
-    sta c128_runtime_load_bank
-    jmp c128_load_runtime_prg
-
-// Load the Bank 1 NMI bridge separately so no PRG crosses the MMU register at
-// $FF00. The Huffman read helpers require this bridge before first use.
+    ldx #5
+    .byte $2c
 c128_load_resident_huffman_vector_prg:
-    lda #RESIDENT_HUFFMAN_VECTOR_FILE_NUM
-    sta disk_temp
-    lda #RESIDENT_HUFFMAN_VECTOR_FILENAME_LEN
-    sta disk_status
-    lda #<resident_huffman_vector_filename
-    sta zp_ptr0
-    lda #>resident_huffman_vector_filename
-    sta zp_ptr0_hi
-    lda #<BANK1_HUFFMAN_NMI_VECTOR_BASE
-    sta zp_ptr1
-    lda #>BANK1_HUFFMAN_NMI_VECTOR_BASE
-    sta zp_ptr1_hi
-    lda #1
+    ldx #6
+    .byte $2c
+c128_load_resident_persist_prg:
+    ldx #7
+    .byte $2c
+c128_load_resident_play_prg:
+    ldx #8
+c128_load_runtime_table_x:
+    lda c128_rt_tbl_bank,x
     sta c128_runtime_load_bank
+    lda c128_rt_tbl_file,x
+    sta disk_temp
+    lda c128_rt_tbl_len,x
+    sta disk_status
+    lda c128_rt_tbl_name_lo,x
+    sta zp_ptr0
+    lda c128_rt_tbl_name_hi,x
+    sta zp_ptr0_hi
     jmp c128_load_runtime_prg
 #endif
 
@@ -2633,22 +2566,6 @@ c128_load_core_residents:
 #endif
     rts
 
-c128_load_resident_persist_prg:
-#if C128_CARTRIDGE
-    lda #CART_ASSET_PERSIST
-    jmp cart_load_asset
-#else
-    :C128RuntimeLoadFile(RESIDENT_PERSIST_FILE_NUM, RESIDENT_PERSIST_FILENAME_LEN, resident_persist_filename, $af)
-#endif
-
-c128_load_resident_play_prg:
-#if C128_CARTRIDGE
-    lda #CART_ASSET_PLAY
-    jmp cart_load_asset
-#else
-    :C128RuntimeLoadFile(RESIDENT_PLAY_FILE_NUM, RESIDENT_PLAY_FILENAME_LEN, resident_play_filename, $af)
-#endif
-
 .const C128_MODAL_UNKNOWN = 0
 .const C128_MODAL_PLAY    = 1
 .const C128_MODAL_PERSIST = 2
@@ -2656,18 +2573,33 @@ c128_load_resident_play_prg:
 .const C128_RESIDENT_PLAY_SIG1 = $38
 .const C128_RESIDENT_PLAY_SIG2 = $50
 
+c128_play_sig_expected:
+    .byte C128_RESIDENT_PLAY_SIG0, C128_RESIDENT_PLAY_SIG1, C128_RESIDENT_PLAY_SIG2
+
+#if !C128_CARTRIDGE
+c128_b2_restore_and_verify_play:
+    jsr c128_b2_setup_play
+    jsr c128_copy_from_xbank
+#endif
+c128_verify_play_sig:
+    ldx #2
+!sig_loop:
+    lda c128_resident_play_sig0,x
+    cmp c128_play_sig_expected,x
+    bne !sig_fail+
+    dex
+    bpl !sig_loop-
+    clc
+    rts
+!sig_fail:
+    sec
+    rts
+
 c128_preload_resident_play:
     jsr c128_load_resident_play_prg
     bcs !play_preload_failed+
-    lda c128_resident_play_sig0
-    cmp #C128_RESIDENT_PLAY_SIG0
-    bne !play_preload_failed+
-    lda c128_resident_play_sig1
-    cmp #C128_RESIDENT_PLAY_SIG1
-    bne !play_preload_failed+
-    lda c128_resident_play_sig2
-    cmp #C128_RESIDENT_PLAY_SIG2
-    bne !play_preload_failed+
+    jsr c128_verify_play_sig
+    bcs !play_preload_failed+
     lda #C128_MODAL_PLAY
     sta c128_modal_slot_state
     clc
@@ -2675,6 +2607,44 @@ c128_preload_resident_play:
 !play_preload_failed:
     sec
     rts
+
+#if !C128_CARTRIDGE
+c128_b2_setup_play:
+    lda #>$af00
+    ldx #>BANK2_PLAY_BASE
+    ldy #BANK2_PLAY_PAGES
+c128_bank2_setup_ptrs:
+    sta zp_ptr0_hi
+    stx zp_ptr1_hi
+    sty zp_temp1
+    lda #0
+    sta zp_ptr0
+    sta zp_ptr1
+    lda #MMU_RAM_BANK2
+    sta c128_xbank_cr
+    rts
+
+c128_copy_from_bank2:
+    jsr c128_bank2_setup_ptrs
+    jmp c128_copy_from_xbank
+
+c128_b2_load_persist_and_restore_play:
+    lda #12
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc !pb2_stage_pl+
+    dec c128_load_progress_total // Skip LEGALUI when 128.PERSIST load fails
+    bcs !pb2_restore_play+
+!pb2_stage_pl:
+    jsr c128_bank2_stage_persist_and_legal
+
+!pb2_restore_play:
+    jsr c128_b2_restore_and_verify_play
+    bcc !pb2_done+
+    jmp runtime_load_failed
+!pb2_done:
+    rts
+#endif
 
 c128_require_program_media:
 #if C128_CARTRIDGE
@@ -2744,6 +2714,17 @@ c128_modal_require_persist:
     lda c128_modal_slot_state
     cmp #C128_MODAL_PERSIST
     beq !persist_loaded+
+#if !C128_CARTRIDGE
+    lda c128_bank2_flags
+    and #C128_BANK2_PERSIST_BIT
+    beq !persist_disk+
+    lda #>$af00
+    ldx #>BANK2_PERSIST_BASE
+    ldy #BANK2_PERSIST_PAGES
+    jsr c128_copy_from_bank2
+    bcc !persist_loaded+        // c128_copy_from_bank2 unconditionally returns C=0 after boot verify
+!persist_disk:
+#endif
     jsr c128_require_program_media
     bcs !persist_load_failed+
     lda #10
@@ -2810,21 +2791,27 @@ c128_modal_require_play:
     lda c128_modal_slot_state
     cmp #C128_MODAL_PLAY
     beq !play_loaded+
+#if !C128_CARTRIDGE
+    lda c128_bank2_flags
+    and #C128_BANK2_PLAY_BIT
+    beq !play_disk+
+    jsr c128_b2_restore_and_verify_play
+    bcc !play_loaded+
+    lda c128_bank2_flags
+    and #($ff ^ C128_BANK2_PLAY_BIT)
+    sta c128_bank2_flags
+    lda #C128_MODAL_UNKNOWN
+    sta c128_modal_slot_state
+!play_disk:
+#endif
     jsr c128_require_program_media
     bcs !play_load_failed+
     lda #11
     sta c128_runtime_load_stage
     jsr c128_load_resident_play_prg
     bcs !play_load_failed+
-    lda c128_resident_play_sig0
-    cmp #C128_RESIDENT_PLAY_SIG0
-    bne !play_load_failed+
-    lda c128_resident_play_sig1
-    cmp #C128_RESIDENT_PLAY_SIG1
-    bne !play_load_failed+
-    lda c128_resident_play_sig2
-    cmp #C128_RESIDENT_PLAY_SIG2
-    beq !play_loaded+
+    jsr c128_verify_play_sig
+    bcc !play_loaded+
 !play_load_failed:
     jsr c128_program_media_error_prompt
     jmp !retry-
@@ -2832,26 +2819,6 @@ c128_modal_require_play:
     lda #C128_MODAL_PLAY
     sta c128_modal_slot_state
     rts
-
-c128_load_runtime_banked_prg:
-#if C128_CARTRIDGE
-    lda #CART_ASSET_BANKED
-    jmp cart_load_asset
-#else
-    lda #RUNTIME_BANKED_FILE_NUM
-    sta disk_temp
-    lda #RUNTIME_BANKED_FILENAME_LEN
-    sta disk_status
-    lda #<runtime_banked_filename
-    sta zp_ptr0
-    lda #>runtime_banked_filename
-    sta zp_ptr0_hi
-    lda #$00
-    sta zp_ptr1
-    lda #$f0
-    sta zp_ptr1_hi
-    jmp c128_load_runtime_prg
-#endif
 
 
 // ============================================================
@@ -3447,6 +3414,8 @@ player_get_infra_range:
 // turn.s's regen/poison tables in bank-0 World RAM: C128ResidentPlay has no
 // room (#importonce: turn.s's own import is then a no-op).
 #import "../../../core/6502/turn_data.s"
+eff_fear_timer:     .byte 0
+light_tick_counter: .byte 0
 #undef FULL_DETECT_EVIL_EFFECT
 #undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 cmb_you_str:     .text "You " ; .byte 0
@@ -3526,7 +3495,7 @@ ovl_cache_pages:   .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000, 0, 0, 0, 0
 ovl_ready_mask_hi:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, %00000001, 0, 0, 0 // ID 9 = modal-misc; IDs 10..12 = chest/home/storage (cold)
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, %00000001, %00000010, %00000100, %00001000 // ID 9 = modal-misc (Bank 1); IDs 10..12 = chest/home/storage (Bank 2 on 256KB)
 c128_cache_state_end:
 .assert "Overlay ready-mask tables cover all overlays", (ovl_ready_mask_hi - ovl_ready_mask) == hal_platform_overlay_count + 1 && (c128_cache_state_end - ovl_ready_mask_hi) == hal_platform_overlay_count + 1, true
 #import "../../../core/6502/dungeon_room_center_helpers.s"
@@ -3587,6 +3556,7 @@ tool_ego_prefix_hi:
 // builds omit wizard.s and provide their own stub below, so only assemble the
 // real one in normal builds (else it double-defines against the stub).
 #if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+wizard_wall_walk_enabled: .byte 0
 wizard_wall_walk_active:
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
@@ -4005,6 +3975,50 @@ save_prepare_slot_prompt:
     rts
 #import "../common/save_slot_menu.s"
 #import "../../../core/6502/ui_disk_setup.s"
+#if !C128_CARTRIDGE
+c128_b2_src_hi: .byte 0
+c128_b2_dst_hi: .byte 0
+c128_b2_pages:  .byte 0
+
+c128_stage_to_bank2:
+    sta c128_b2_src_hi
+    stx c128_b2_dst_hi
+    sty c128_b2_pages
+    jsr c128_bank2_setup_ptrs
+    jsr c128_copy_to_xbank
+    lda c128_b2_src_hi
+    ldx c128_b2_dst_hi
+    ldy c128_b2_pages
+    jsr c128_bank2_setup_ptrs
+    jmp c128_verify_xbank
+
+c128_bank2_stage_persist_and_legal:
+    lda #>$af00
+    ldx #>BANK2_PERSIST_BASE
+    ldy #BANK2_PERSIST_PAGES
+    jsr c128_stage_to_bank2
+    bcs !bsp_legal+
+    lda c128_bank2_flags
+    ora #C128_BANK2_PERSIST_BIT
+    sta c128_bank2_flags
+!bsp_legal:
+    jsr c128_show_load_progress
+    lda #7
+    ldx #<legal_ui_filename
+    ldy #>legal_ui_filename
+    jsr asset_load_retry
+    bcs !bsp_done+
+    lda #>$e000
+    ldx #>BANK2_LEGALUI_BASE
+    ldy #BANK2_LEGALUI_PAGES
+    jsr c128_stage_to_bank2
+    bcs !bsp_done+
+    lda c128_bank2_flags
+    ora #C128_BANK2_LEGALUI_BIT
+    sta c128_bank2_flags
+!bsp_done:
+    rts
+#endif
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL
@@ -4088,10 +4102,25 @@ scroll_teleport_level_exec:
 .macro CmdJamWrapperRestoreSegment() {
     .segment C128ResidentPlay
 }
+#if !C128_CARTRIDGE
+#define HAL_PLATFORM_GAME_OVER_SKIP_DISK_PROMPT_WHEN_CACHED
+#endif
 #import "../../../core/6502/game_loop.s"
+#if HAL_PLATFORM_GAME_OVER_SKIP_DISK_PROMPT_WHEN_CACHED
+#undef HAL_PLATFORM_GAME_OVER_SKIP_DISK_PROMPT_WHEN_CACHED
+#endif
 #undef CMD_JAM_WRAPPER_CUSTOM
 #undef DISARM_COMMAND_EXTERNAL
 #undef C128_SCRIPTED_SPELL_SEED_EXTERNAL
+#if !C128_CARTRIDGE
+hal_storage_game_over_disk_prompt_game:
+    jsr c128_all_runtime_cached
+    beq !godp_skip+
+    jmp disk_prompt_game
+!godp_skip:
+    clc
+    rts
+#endif
 // The items payload's end label is at the end of this file: the chest open
 // pre-dispatch (ChestRouteSegment) and later imports add to it past here.
 .segment Default
@@ -4102,7 +4131,9 @@ recall_prompt_str:
 #import "../../../core/6502/player_adjust_equipment_stat.s"
 .segment C128ResidentPlay
 #import "../../../core/6502/player_gain_stat_helpers.s"
+#define EFF_FEAR_TIMER_EXTERNAL
 #import "../../../core/6502/turn.s"
+#undef EFF_FEAR_TIMER_EXTERNAL
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_assert:
     lda #<MAP_BASE
@@ -4411,6 +4442,27 @@ combat_add_damage_bonus:
 
     #import "../../../core/6502/special_rooms_find.s"
 
+#if !C128_CARTRIDGE
+c128_preload_bank2_extras:
+    lda c128_ram_256k
+    beq !pb2_skip+
+    jsr c128_b2_setup_play
+    jsr c128_copy_to_xbank
+    jsr c128_b2_setup_play
+    jsr c128_verify_xbank
+    bcc !pb2_ok+
+    lda c128_load_progress_total
+    sec
+    sbc #6                      // Skip 128.PERSIST, LEGALUI, and 4 Bank 2 overlays
+    sta c128_load_progress_total
+!pb2_skip:
+    rts
+!pb2_ok:
+    lda #C128_BANK2_PLAY_BIT
+    sta c128_bank2_flags
+    jmp c128_b2_load_persist_and_restore_play
+#endif
+
 runtime_common_data_end:
 }
 .segment Default
@@ -4670,6 +4722,29 @@ combat_calc_melee_total_tohit_bonus:
 !ccmt_done:
     rts
 
+tramp_winner_royal:
+#if !C128_CARTRIDGE
+    jsr c128_all_runtime_cached
+    bne !twr_disk+
+    lda #9                      // OVL_MODAL_MISC
+    jsr overlay_load
+!twr_done:
+    jmp royal_screen
+!twr_disk:
+#endif
+    jsr disk_prompt_game
+    lda #hal_storage_modal_misc_name_len
+    ldx #<hal_storage_modal_misc_name
+    ldy #>hal_storage_modal_misc_name
+    jsr asset_load_required
+    lda #0
+    sta current_overlay
+#if !C128_CARTRIDGE
+    beq !twr_done-              // Z=1 from lda #0 -> tail-jump royal_screen
+#else
+    jmp royal_screen
+#endif
+
 banked_code_end:
 banked_payload_end:
 .segment Default
@@ -4756,8 +4831,14 @@ program_end:
 .assert "C128 save staging buffer lives in persist payload", save_stage_buf >= c128_resident_persist_start && save_stage_buf_end <= c128_resident_persist_end, true
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 modal persist stays below player_died/game-over in Play slot", c128_resident_persist_end <= player_died, true
+.assert "Bank2 PERSIST cache covers 128.PERSIST payload", c128_resident_persist_end <= $AF00 + BANK2_PERSIST_PAGES * $100, true
+.assert "Bank2 PERSIST cache stays below player_died in Play slot", $AF00 + BANK2_PERSIST_PAGES * $100 <= player_died, true
+.assert "eff_fear_timer and light_tick_counter stay in Default resident image (< $AF00)", eff_fear_timer >= $1c01 && light_tick_counter < program_end, true
 #if !C128_REAL_BOOT_DIAG && !C128_TEST_SCRIPTED_INPUT && !C128_TEST_SCRIPTED_SPELL && !C128_TEST_SCRIPTED_SPELL_CANCEL && !C128_TEST_SCRIPTED_BOOK_OVERLAY && !C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY && !C128_TEST_SCRIPTED_PRAYER && !C128_TEST_SCRIPTED_EXCHANGE_PRODUCT
+.assert "wizard_wall_walk_enabled stays in Default resident image (< $AF00)", wizard_wall_walk_enabled >= $1c01 && wizard_wall_walk_enabled < program_end, true
+.assert "Bank2 PERSIST cache stays below wizard_num_digits in Play slot", $AF00 + BANK2_PERSIST_PAGES * $100 <= wizard_num_digits, true
 .assert "C128 modal persist stays below main_loop in Play slot", c128_resident_persist_end <= main_loop, true
+.assert "Bank2 PERSIST cache stays below main_loop in Play slot", $AF00 + BANK2_PERSIST_PAGES * $100 <= main_loop, true
 .assert "Wizard item generation lives in banked payload", wizard_generate_item_execute >= banked_payload && wizard_generate_item_execute < banked_code_end, true
 #endif
 .assert "VDC ITEM.CAT capacity covers full ITEM.CAT payload", ITMCAT_TOTAL_SIZE <= VDC_ITEM_CAT_TOTAL_CAP, true
@@ -5214,6 +5295,8 @@ ovl_gen_end:
 #endif
 legal_code_end:
 .assert "Legal code stays below its modal workspace", legal_code_end <= legal_zp_save, true
+.assert "Bank2 LEGALUI cache covers legal code", legal_code_end <= $e000 + BANK2_LEGALUI_PAGES * $100, true
+.assert "Bank2 LEGALUI cache stays at or below legal_zp_save", $e000 + BANK2_LEGALUI_PAGES * $100 <= legal_zp_save, true
 .assert "Legal ZP snapshot stays below input cache", legal_zp_save + $8e <= legal_input_cache, true
 .segment Default
 .assert "No Default bytes emitted after program_end", * == program_end, true

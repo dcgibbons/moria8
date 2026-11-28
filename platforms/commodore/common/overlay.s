@@ -423,7 +423,15 @@ c128_preload_all_overlays:
 !cpao_loop:
     stx ol_target
 
-    // The chest overlay is cold on C128 (docs/CHEST_DESIGN.md): no Bank 1
+#if HAL_PLATFORM_OVERLAY_CACHE_EXTENDED_256K
+    // 256KB C128 caches all 12 overlays when Bank 2 PLAY is healthy (IDs 1 &
+    // 10-12 in Bank 2, 2-9 in Bank 1). If Bank 2 PLAY verification failed,
+    // skip Bank 2 overlays cleanly and keep all Bank 1 hot overlays cached.
+    lda c128_bank2_flags
+    and #C128_BANK2_PLAY_BIT
+    bne !cpao_keep+
+#endif
+    // The chest overlay is cold on 128KB C128 (docs/CHEST_DESIGN.md): no Bank 1
     // cache slot exists for it, so boot preload must not stage it. Its
     // ready-mask bits stay clear and overlay_load falls through to disk.
     cpx #OVL_CHEST
@@ -434,15 +442,14 @@ c128_preload_all_overlays:
     beq cpao_next
     cpx #OVL_STORAGE
     beq cpao_next
-    cpx #OVL_TITLE
-    beq cpao_next
 #endif
 #if HAL_PLATFORM_MONSTER_CATALOG
-    // STARTUP is not cached either: its slot holds the monster catalog's
-    // names (memory128.s, C128M-007). New Game loads it from disk.
+    // STARTUP is not cached in Bank 1 either: its slot holds the monster
+    // catalog's names (memory128.s, C128M-007). New Game loads it from disk.
     cpx #OVL_STARTUP
     beq cpao_next
 #endif
+!cpao_keep:
 
 #if C128_CACHE_TEST_SKIP_OVERLAY
     txa
@@ -471,11 +478,22 @@ c128_preload_all_overlays:
     tax
     pla
     jsr asset_load_retry
-    bcs !cpao_fail+
+    bcs !cpao_check_b2_fail+
 
     ldx ol_target
     jsr c128_stage_overlay_to_cache
-    bcs !cpao_fail+
+    bcc !cpao_mark_ready+
+!cpao_check_b2_fail:
+#if HAL_PLATFORM_OVERLAY_CACHE_EXTENDED_256K
+    ldx ol_target
+    lda bank_overlay_cache_mmu,x
+    cmp #MMU_RAM_BANK2
+    bne !cpao_fail+
+    beq cpao_next
+#else
+    jmp !cpao_fail+
+#endif
+!cpao_mark_ready:
 
     ldx ol_target
     lda ovl_ready_mask,x
@@ -534,112 +552,128 @@ c128_select_overlay_cache_slot:
     sta ovl_cache_base_hi
     lda bank1_overlay_cache_pages,x
     sta ovl_cache_pages
+    lda bank_overlay_cache_mmu,x
+    sta c128_xbank_cr
+    rts
+
+c128_setup_overlay_xbank_ptrs:
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda ovl_cache_base_lo
+    sta zp_ptr1
+    lda ovl_cache_base_hi
+    sta zp_ptr1_hi
+    lda ovl_cache_pages
+    sta zp_temp1
+    rts
+
+#if HAL_PLATFORM_OVERLAY_CACHE_EXTENDED_256K
+// Copy zp_temp1 (>=1) pages between Bank 0 zp_ptr0 and c128_xbank_cr zp_ptr1 (29 cyc/B).
+// Preserves caller IRQ state. Clobbers A, X, Y, zp_ptr0_hi, zp_ptr1_hi, zp_temp1, zp_temp2.
+c128_copy_to_xbank:
+    sec
+    .byte $24                   // BIT zp — skips clc
+c128_copy_from_xbank:
+    clc
+    php
+    sei
+    ldy #0
+    ldx c128_xbank_cr
+    stx zp_temp2
+!cx_page:
+    bcs !cx_write+
+    jsr mmu_common_xbank_read_page
+    bcc !cx_next+               // mmu_common_xbank_read_page preserves C=0
+!cx_write:
+    jsr mmu_common_xbank_write_page
+!cx_next:
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    bne !cx_page-
+    plp
+    clc
+    rts
+#else
+// Copy zp_temp1 (>=1) pages from Bank 0 zp_ptr0 into c128_xbank_cr zp_ptr1.
+// Preserves caller IRQ state. Clobbers A, X, Y, zp_ptr0_hi, zp_ptr1_hi, zp_temp1.
+c128_copy_to_xbank:
+    php
+    sei
+    ldy #0
+    ldx c128_xbank_cr
+!cxw_byte:
+    lda (zp_ptr0),y
+    jsr mmu_common_bank_write_ptr1
+    iny
+    bne !cxw_byte-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    bne !cxw_byte-
+    plp
+    clc
+    rts
+
+// Copy zp_temp1 (>=1) pages from c128_xbank_cr zp_ptr1 into Bank 0 zp_ptr0.
+// Preserves caller IRQ state. Clobbers A, X, Y, zp_ptr0_hi, zp_ptr1_hi, zp_temp1.
+c128_copy_from_xbank:
+    php
+    sei
+    ldy #0
+!cxr_byte:
+    lda c128_xbank_cr
+    jsr mmu_common_bank_read_ptr1
+    sta (zp_ptr0),y
+    iny
+    bne !cxr_byte-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    bne !cxr_byte-
+    plp
+    clc
+    rts
+#endif
+
+// Verify zp_temp1 (>=1) pages between Bank 0 zp_ptr0 and c128_xbank_cr zp_ptr1.
+// Output: carry clear = match, carry set = mismatch.
+c128_verify_xbank:
+    php
+    sei
+    ldy #0
+!cxv_byte:
+    lda c128_xbank_cr
+    jsr mmu_common_bank_read_ptr1
+    cmp (zp_ptr0),y
+    bne !cxv_fail+
+    iny
+    bne !cxv_byte-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    bne !cxv_byte-
+    plp
+    clc
+    rts
+!cxv_fail:
+    plp
+    sec
     rts
 
 c128_stage_overlay_to_cache:
-    php
-    sei
     jsr c128_select_overlay_cache_slot
-    lda #<$e000
-    sta zp_ptr0
-    lda #>$e000
-    sta zp_ptr0_hi
-    lda ovl_cache_base_lo
-    sta zp_ptr1
-    lda ovl_cache_base_hi
-    sta zp_ptr1_hi
-    lda #$00
-    sta zp_temp0
-    lda ovl_cache_pages
-    sta zp_temp1
-    ldy #0
-!csoc_page_loop:
-    lda zp_temp1
-    beq !csoc_done+
-!csoc_page:
-    lda (zp_ptr0),y
-    jsr mmu_safe_db_write_ptr1
-    iny
-    bne !csoc_page-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dec zp_temp1
-    jmp !csoc_page_loop-
-!csoc_done:
-    jsr c128_verify_overlay_cache_slot
-    bcc !csoc_ok+
-    plp
-    sec
-    rts
-!csoc_ok:
-    plp
-    clc
-    rts
-
+    jsr c128_setup_overlay_xbank_ptrs
+    jsr c128_copy_to_xbank
 c128_verify_overlay_cache_slot:
-    lda #<$e000
-    sta zp_ptr0
-    lda #>$e000
-    sta zp_ptr0_hi
-    lda ovl_cache_base_lo
-    sta zp_ptr1
-    lda ovl_cache_base_hi
-    sta zp_ptr1_hi
-    lda ovl_cache_pages
-    sta zp_temp1
-    ldy #0
-!cvoc_page_loop:
-    lda zp_temp1
-    beq !cvoc_ok+
-!cvoc_page:
-    lda (zp_ptr0),y
-    sta zp_temp2
-    jsr mmu_safe_db_read_ptr1
-    cmp zp_temp2
-    bne !cvoc_fail+
-    iny
-    bne !cvoc_page-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dec zp_temp1
-    jmp !cvoc_page_loop-
-!cvoc_ok:
-    clc
-    rts
-!cvoc_fail:
-    sec
-    rts
+    jsr c128_setup_overlay_xbank_ptrs
+    jmp c128_verify_xbank
 
 c128_fetch_overlay_from_cache:
-    php
-    sei
     ldx ol_target
     jsr c128_select_overlay_cache_slot
-    lda ovl_cache_base_lo
-    sta zp_ptr1
-    lda ovl_cache_base_hi
-    sta zp_ptr1_hi
-    lda #<$e000
-    sta zp_ptr0
-    lda #>$e000
-    sta zp_ptr0_hi
-    lda ovl_cache_pages
-    sta zp_temp1
-    ldy #0
-!cfoc_page_loop:
-    lda zp_temp1
-    beq !cfoc_ok+
-!cfoc_page:
-    jsr mmu_safe_db_read_ptr1
-    sta (zp_ptr0),y
-    iny
-    bne !cfoc_page-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dec zp_temp1
-    jmp !cfoc_page_loop-
-!cfoc_ok:
-    plp
-    clc
-    rts
+    jsr c128_setup_overlay_xbank_ptrs
+    jmp c128_copy_from_xbank
 #endif

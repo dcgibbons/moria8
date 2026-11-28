@@ -617,8 +617,144 @@ test5_b1_d000_spike:
 !top_still_ok:
     jsr spike_verify_all_state
     jsr test_production_b1_noio_and_catalog_ext
+    jsr test6_256k_probe_and_banks
 
     jmp test_pass
+
+// Test 6: c128_detect_256k non-destructive probe + multi-bank common thunks
+test6_256k_probe_and_banks:
+    // Plant sentinels at $E000 in Bank 0 and Bank 1, run probe with CLI, verify
+    // IRQ enabled state and both sentinels survive untouched.
+    sei
+    lda #$42
+    sta $e000
+    ldx #MMU_RAM_BANK1
+    lda #$00
+    sta zp_ptr1
+    lda #$e0
+    sta zp_ptr1_hi
+    ldy #0
+    lda #$24
+    jsr mmu_common_bank_write_ptr1
+
+    cli
+    jsr c128_detect_256k
+    php
+    sei
+    pla
+    and #$04
+    beq !t6_cli_ok+
+    jmp test_fail
+!t6_cli_ok:
+    lda $e000
+    cmp #$42
+    beq !t6_b0_ok+
+    jmp test_fail
+!t6_b0_ok:
+    lda #MMU_RAM_BANK1
+    jsr mmu_common_bank_read_ptr1
+    cmp #$24
+    beq !t6_b1_ok+
+    jmp test_fail
+!t6_b1_ok:
+
+#if C128_TEST_EXPECT_256K
+    lda c128_ram_256k
+    cmp #1
+    beq !t6_flag_ok+
+    jmp test_fail
+!t6_flag_ok:
+    // Verify 4-bank isolation across Banks 0, 1, 2, 3 at $1000 and $6000
+    // using mmu_common_bank_{write,read}_ptr1 without corrupting Bank 0/1.
+    lda #>$1000
+    jsr !t6_check_4bank_page+
+    lda #>$6000
+    jsr !t6_check_4bank_page+
+
+    // Verify fast 29-cyc/B page helpers across full 256-byte page in Bank 2 ($6000).
+    ldy #0
+!t6_fill_src:
+    tya
+    eor #$a5
+    sta $7000,y
+    iny
+    bne !t6_fill_src-
+
+    lda #$00
+    sta zp_ptr0
+    sta zp_ptr1
+    lda #>$7000
+    sta zp_ptr0_hi
+    lda #>$6000
+    sta zp_ptr1_hi
+    ldx #MMU_RAM_BANK2
+    stx zp_temp2
+    jsr mmu_common_xbank_write_page
+
+    lda #$00
+    sta zp_ptr0
+    sta zp_ptr1
+    lda #>$7100
+    sta zp_ptr0_hi
+    lda #>$6000
+    sta zp_ptr1_hi
+    ldy #0
+    ldx #MMU_RAM_BANK2
+    stx zp_temp2
+    jsr mmu_common_xbank_read_page
+
+    ldy #0
+!t6_cmp_page:
+    lda $7100,y
+    cmp $7000,y
+    beq !t6_cmp_ok+
+    jmp test_fail
+!t6_cmp_ok:
+    iny
+    bne !t6_cmp_page-
+    rts
+
+!t6_check_4bank_page:
+    sta zp_ptr1_hi
+    lda #0
+    sta zp_ptr1
+    ldy #0
+    ldx #3
+!t6_w4:
+    lda t6_bank_vals,x
+    pha
+    lda t6_mmu_banks,x
+    stx zp_temp1
+    tax
+    pla
+    jsr mmu_common_bank_write_ptr1
+    ldx zp_temp1
+    dex
+    bpl !t6_w4-
+
+    ldx #3
+!t6_r4:
+    lda t6_mmu_banks,x
+    jsr mmu_common_bank_read_ptr1
+    cmp t6_bank_vals,x
+    beq !t6_r_ok+
+    jmp test_fail
+!t6_r_ok:
+    dex
+    bpl !t6_r4-
+    rts
+
+t6_mmu_banks:
+    .byte MMU_ALL_RAM, MMU_RAM_BANK1, MMU_RAM_BANK2, MMU_RAM_BANK3
+t6_bank_vals:
+    .byte $11, $22, $33, $44
+#else
+    lda c128_ram_256k
+    beq !t6_128_ok+
+    jmp test_fail
+!t6_128_ok:
+    rts
+#endif
 
 // Helper: verify VIC $D020, Bank 0 RAM $D020, VDC $07FF, CIA1/2 latches,
 // and all 12 Bank 1 $D000-$DFFF bytes.

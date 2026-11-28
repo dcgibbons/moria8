@@ -6,7 +6,9 @@
 .const WIZARD_MAX_DLVL  = 99
 .const WIZARD_MAX_ITEM  = ITEM_TYPE_COUNT - 1
 
+#if !WIZARD_WALL_WALK_EXTERNAL
 wizard_wall_walk_enabled: .byte 0
+#endif
 wizard_num_digits:        .byte 0
 wizard_num_buf0:          .byte 0
 wizard_num_buf1:          .byte 0

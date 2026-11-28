@@ -66,6 +66,8 @@
                                 // ($E000-$FFFF) via MMU.  I/O still visible at $D000.
                                 // Used as permanent operational mode after init; JMP stubs
                                 // at $FFB7-$FFD5 in Bank 0 RAM handle KERNAL calls.
+.const MMU_RAM_BANK2      = $BE // Bank 2, all RAM, I/O visible at $D000-$DFFF
+.const MMU_RAM_BANK3      = $FE // Bank 3, all RAM, I/O visible at $D000-$DFFF
 
 // ============================================================
 // Processor port constants — same values as C64 (used by $01)
@@ -212,6 +214,38 @@
 .const BANK1_MSG_HISTORY_END         = $df37
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
+
+// Bank 2 ownership (256KB C128 MMU expansion, disk builds, MMU_RAM_BANK2 = $BE):
+//   $0000-$0FFF  Bottom common RAM (Bank 0, $D506=$0D)
+//   $1000-$1FFF  OVL_STARTUP (ID 1)
+//   $2000-$2FFF  OVL_CHEST (ID 10)
+//   $3000-$3FFF  OVL_HOME (ID 11)
+//   $4000-$4FFF  OVL_STORAGE (ID 12)
+//   $5000-$59FF  LEGALUI (10 pages covering $E000-$E9FF; below legal_zp_save $EE00)
+//   $5A00-$5FFF  1.5 KB reserve
+//   $6000-$80FF  128.PLAY (33 pages = full $AF00-$CFFF modal window)
+//   $8100-$92FF  128.PERSIST (18 pages covering $AF00-$C0FF; below 128.PLAY live state)
+//   $9300-$CFFF  15.25 KB free; $D000-$DFFF I/O visible ($BE); $E000-$EFFF 4 KB free
+.const BANK2_OVERLAY_STARTUP_BASE = $1000
+.const BANK2_OVERLAY_STARTUP_END  = $1fff
+.const BANK2_OVERLAY_CHEST_BASE   = $2000
+.const BANK2_OVERLAY_CHEST_END    = $2fff
+.const BANK2_OVERLAY_HOME_BASE    = $3000
+.const BANK2_OVERLAY_HOME_END     = $3fff
+.const BANK2_OVERLAY_STORAGE_BASE = $4000
+.const BANK2_OVERLAY_STORAGE_END  = $4fff
+.const BANK2_LEGALUI_BASE         = $5000
+.const BANK2_LEGALUI_PAGES        = $0a
+.const BANK2_LEGALUI_END          = BANK2_LEGALUI_BASE + (BANK2_LEGALUI_PAGES * $100) - 1
+.const BANK2_PLAY_BASE            = $6000
+.const BANK2_PLAY_PAGES           = $21
+.const BANK2_PLAY_END             = BANK2_PLAY_BASE + (BANK2_PLAY_PAGES * $100) - 1
+.const BANK2_PERSIST_BASE         = $8100
+.const BANK2_PERSIST_PAGES        = $12
+.const BANK2_PERSIST_END          = BANK2_PERSIST_BASE + (BANK2_PERSIST_PAGES * $100) - 1
+.const C128_BANK2_PLAY_BIT        = $01
+.const C128_BANK2_PERSIST_BIT     = $02
+.const C128_BANK2_LEGALUI_BIT     = $04
 
 .const MMU_SAVE_01           = $0c00
 .const MMU_SAVE_FF00         = $0c01
@@ -700,12 +734,100 @@ c128_vdc_wait:
 c128_vdc_reg25_cached: .byte $40
 c128_vdc_reg26_cached: .byte $f0
 
+// 256KB MMU expansion state (populated by c128_detect_256k; read from Bank 0).
+c128_ram_256k:    .byte 0
+.label hal_platform_256k_present = c128_ram_256k
+c128_xbank_cr:    .byte MMU_RAM_BANK1
+c128_bank2_flags: .byte 0
+
+c128_probe_mmu: .byte MMU_ALL_RAM, MMU_RAM_BANK1, MMU_RAM_BANK2, MMU_RAM_BANK3
+c128_probe_pat: .byte $a5, $5a, $c3, $3c
+
+// c128_detect_256k — Non-destructive 2-pass probe for 256KB MMU RAM (Banks 0-3).
+// Requires init_common_mmu_helpers and $D506=$0D (4KB bottom/top common RAM).
+// Output: c128_ram_256k = 1 if Banks 2 & 3 are independent R/W RAM, else 0;
+//         c128_bank2_flags = 0.
+// Clobbers: A, X, Y, zp_ptr1, zp_temp0, zp_temp1. Preserves caller IRQ state.
+c128_detect_256k:
+    php
+    sei
+
+    ldy #0
+    sty zp_ptr1
+    sty c128_ram_256k
+    sty c128_bank2_flags
+    sty zp_temp0
+    lda #$e0
+    sta zp_ptr1_hi
+
+    lda $e000
+    pha
+    lda #MMU_RAM_BANK1
+    jsr mmu_common_bank_read_ptr1
+    pha
+
+!pass:
+    ldx #3
+!wr:
+    lda c128_probe_pat,x
+    eor zp_temp0
+    pha
+    lda c128_probe_mmu,x
+    stx zp_temp1
+    tax
+    pla
+    jsr mmu_common_bank_write_ptr1
+    ldx zp_temp1
+    dex
+    bpl !wr-
+
+    ldx #3
+!rd:
+    lda c128_probe_mmu,x
+    jsr mmu_common_bank_read_ptr1
+    eor zp_temp0
+    cmp c128_probe_pat,x
+    bne !done+
+    dex
+    bpl !rd-
+
+    lda zp_temp0
+    eor #$ff
+    sta zp_temp0
+    bne !pass-
+    inc c128_ram_256k
+
+!done:
+    ldx #MMU_RAM_BANK1
+    pla                         // Y is 0 from !pass/!wr or !rd mismatch
+    jsr mmu_common_bank_write_ptr1
+    pla
+    sta $e000
+
+    plp
+    rts
+
 bank1_overlay_cache_slot_lo:
-    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE, <BANK1_OVERLAY_DISARM_BASE, <BANK1_OVERLAY_MODAL_BASE
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .byte 0, <BANK2_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE, <BANK1_OVERLAY_DISARM_BASE, <BANK1_OVERLAY_MODAL_BASE, <BANK2_OVERLAY_CHEST_BASE, <BANK2_OVERLAY_HOME_BASE, <BANK2_OVERLAY_STORAGE_BASE
+#else
+    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE, <BANK1_OVERLAY_DISARM_BASE, <BANK1_OVERLAY_MODAL_BASE, <BANK2_OVERLAY_CHEST_BASE, <BANK2_OVERLAY_HOME_BASE, <BANK2_OVERLAY_STORAGE_BASE
+#endif
 bank1_overlay_cache_slot_hi:
-    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE, >BANK1_OVERLAY_DISARM_BASE, >BANK1_OVERLAY_MODAL_BASE
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .byte 0, >BANK2_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE, >BANK1_OVERLAY_DISARM_BASE, >BANK1_OVERLAY_MODAL_BASE, >BANK2_OVERLAY_CHEST_BASE, >BANK2_OVERLAY_HOME_BASE, >BANK2_OVERLAY_STORAGE_BASE
+#else
+    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE, >BANK1_OVERLAY_DISARM_BASE, >BANK1_OVERLAY_MODAL_BASE, >BANK2_OVERLAY_CHEST_BASE, >BANK2_OVERLAY_HOME_BASE, >BANK2_OVERLAY_STORAGE_BASE
+#endif
 bank1_overlay_cache_pages:
-    .byte 0, $10, $10, $10, $10, $10, $10, $10, C128_OVERLAY_DISARM_CACHE_PAGES, C128_OVERLAY_MODAL_CACHE_PAGES
+    .byte 0, $10, $10, $10, $10, $10, $10, $10, C128_OVERLAY_DISARM_CACHE_PAGES, C128_OVERLAY_MODAL_CACHE_PAGES, $10, $10, $10
+bank_overlay_cache_mmu:
+#if HAL_PLATFORM_MONSTER_CATALOG
+    .byte 0, MMU_RAM_BANK2, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK2, MMU_RAM_BANK2, MMU_RAM_BANK2
+#else
+    .byte 0, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK1, MMU_RAM_BANK2, MMU_RAM_BANK2, MMU_RAM_BANK2
+#endif
+bank_overlay_cache_mmu_end:
 
 // Common-RAM MMU helpers copied to $0C06 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
@@ -787,17 +909,29 @@ mmu_common_map_write_ptr0:
     pla
     rts
 
+// Input: zp_ptr1 + Y = address, A = non-zero MMU CR (I/O visibility optional; NMI safe with bit 0 = 0).
+// Output: A = byte read. Preserves X, Y.
 mmu_common_map_read_ptr1:
-    jsr mmu_common_select_bank1
+    lda #MMU_RAM_BANK1_NOIO
+mmu_common_bank_read_ptr1:
+    jsr mmu_common_select_bank_a
     lda (zp_ptr1),y
     pha
     jsr mmu_common_select_bank0
     pla
     rts
 
+// Input: zp_ptr1 + Y = address, A = byte to write, X = non-zero MMU CR (for bank_write).
+// Preserves Y, returns written byte in A.
 mmu_common_map_write_ptr1:
     pha
-    jsr mmu_common_select_bank1
+    lda #MMU_RAM_BANK1_NOIO
+    bne !mcw1_go+
+mmu_common_bank_write_ptr1:
+    pha
+    txa
+!mcw1_go:
+    jsr mmu_common_select_bank_a
     pla
     sta (zp_ptr1),y
     pha
@@ -912,12 +1046,13 @@ mmu_common_copy_map_row:
     rts
 
 mmu_common_select_bank1:
+    lda #MMU_RAM_BANK1_NOIO
+mmu_common_select_bank_a:
     php
     sei
+    sta MMU_CR
     pla
     sta mmu_common_save_p
-    lda #MMU_RAM_BANK1_NOIO
-    sta MMU_CR
     rts
 
 mmu_common_select_bank0:
@@ -927,6 +1062,32 @@ mmu_common_select_bank0:
     pha
     plp
     rts
+
+#if !C128_CARTRIDGE
+// Fast 1-page Bank X -> Bank 0 copy (29 cyc/B). Caller holds SEI, Y=0, X=zp_temp2=MMU_CR (bit 0 = 0 so NMI can ack $DD0D).
+mmu_common_xbank_read_page:
+    stx MMU_CR
+    lda (zp_ptr1),y
+    ldx #MMU_ALL_RAM
+    stx MMU_CR
+    sta (zp_ptr0),y
+    ldx zp_temp2
+    iny
+    bne mmu_common_xbank_read_page
+    rts
+
+// Fast 1-page Bank 0 -> Bank X copy (29 cyc/B). Caller holds SEI, Y=0, X=zp_temp2=MMU_CR.
+mmu_common_xbank_write_page:
+    lda (zp_ptr0),y
+    stx MMU_CR
+    sta (zp_ptr1),y
+    ldx #MMU_ALL_RAM
+    stx MMU_CR
+    ldx zp_temp2
+    iny
+    bne mmu_common_xbank_write_page
+    rts
+#endif
 
 mmu_common_save_p:
     .byte 0
@@ -1086,3 +1247,17 @@ mmu_common_cart_blob_end:
 :AssertRegionBefore("VDC ITEM.CAT low span ends before VDC charset base", VDC_ITEM_CAT_LO_END, VDC_CHARSET_BASE)
 .assert "VDC ITEM.CAT cell tail stays in unused scanlines 8..15", VDC_ITEM_CAT_CELL_OFFSET == 8 && VDC_ITEM_CAT_CELL_OFFSET + VDC_ITEM_CAT_CELL_BYTES == VDC_ITEM_CAT_CELL_STRIDE, true
 .assert "VDC charset ends at top of 16 KB VDC RAM", VDC_CHARSET_END == VDC_RAM_SIZE - 1, true
+
+.assert "Overlay cache slot lo table covers all overlays", bank1_overlay_cache_slot_hi - bank1_overlay_cache_slot_lo, hal_platform_overlay_count + 1
+.assert "Overlay cache slot hi table covers all overlays", bank1_overlay_cache_pages - bank1_overlay_cache_slot_hi, hal_platform_overlay_count + 1
+.assert "Overlay cache pages table covers all overlays", bank_overlay_cache_mmu - bank1_overlay_cache_pages, hal_platform_overlay_count + 1
+.assert "Overlay cache MMU table covers all overlays", bank_overlay_cache_mmu_end - bank_overlay_cache_mmu, hal_platform_overlay_count + 1
+:AssertRegionBefore("Bank2 STARTUP cache clears bottom common RAM", BANK1_COMMON_END, BANK2_OVERLAY_STARTUP_BASE)
+:AssertRegionBefore("Bank2 STARTUP cache ends before CHEST cache", BANK2_OVERLAY_STARTUP_END, BANK2_OVERLAY_CHEST_BASE)
+:AssertRegionBefore("Bank2 CHEST cache ends before HOME cache", BANK2_OVERLAY_CHEST_END, BANK2_OVERLAY_HOME_BASE)
+:AssertRegionBefore("Bank2 HOME cache ends before STORAGE cache", BANK2_OVERLAY_HOME_END, BANK2_OVERLAY_STORAGE_BASE)
+:AssertRegionBefore("Bank2 STORAGE cache ends before LEGALUI cache", BANK2_OVERLAY_STORAGE_END, BANK2_LEGALUI_BASE)
+:AssertRegionBefore("Bank2 LEGALUI cache ends before PLAY cache", BANK2_LEGALUI_END, BANK2_PLAY_BASE)
+:AssertRegionBefore("Bank2 PLAY cache ends before PERSIST cache", BANK2_PLAY_END, BANK2_PERSIST_BASE)
+:AssertRegionBefore("Bank2 PERSIST cache ends below I/O window", BANK2_PERSIST_END, BANK1_RESERVED_IO_BASE)
+.assert "Bank2 PLAY cache covers full $AF00-$CFFF window", BANK2_PLAY_PAGES * $100, $D000 - $AF00

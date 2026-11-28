@@ -3,11 +3,17 @@
 // Bank 0 resident below $6000; all code survives the KERNAL transition.
 tramp_ui_sysinfo_display:
     lda #1
-    .byte $2c                   // BIT abs — skip lda #0
+    bne !store+
 tramp_ui_legal_display:
     lda #0
+!store:
     sta legal_entry_mode
 #if !C128_CARTRIDGE
+    beq !prompt_disk+
+    lda c128_bank2_flags
+    and #C128_BANK2_LEGALUI_BIT
+    bne !load+
+!prompt_disk:
     jsr disk_prompt_game
     bcc !load+
     rts
@@ -16,10 +22,22 @@ tramp_ui_legal_display:
     :LegalSnapshot()
     lda #0
     sta current_overlay
+#if !C128_CARTRIDGE
+    lda c128_bank2_flags
+    and #C128_BANK2_LEGALUI_BIT
+    beq !disk_load+
+    lda #>$e000
+    ldx #>BANK2_LEGALUI_BASE
+    ldy #BANK2_LEGALUI_PAGES
+    jsr c128_copy_from_bank2
+    bcc !enter+
+!disk_load:
+#endif
     lda #7
     ldx #<legal_ui_filename
     ldy #>legal_ui_filename
     jsr asset_load_required
+!enter:
     jsr tramp_ui_enter
     jsr legal_viewer
 !done:
@@ -65,6 +83,13 @@ legal_os_read_open_status:
     rts
 !answered:
     jsr disk_command_status
+    clc
+    rts
+legal_os_prompt_program_media:
+    lda legal_entry_mode
+    beq !ok+
+    jmp disk_prompt_game
+!ok:
     clc
     rts
 .segment Default

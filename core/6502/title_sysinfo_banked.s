@@ -75,6 +75,12 @@ tsi_digit:
     // Start column: compact 40-column centering.
 #if HAL_PLATFORM_TITLE_SYSINFO_80COL
     ldx #((SCREEN_COLS - 15) / 2)   // "C128  KERNAL R1"
+#if HAL_PLATFORM_TITLE_SYSINFO_256K_PROBE
+    lda hal_platform_256k_present
+    beq !+
+    ldx #((SCREEN_COLS - 22) / 2)   // "C128  KERNAL R1  256KB"
+!:
+#endif
 #else
     ldx #16
 #endif
@@ -133,6 +139,15 @@ tsi_digit:
 !kf: lda tsi_krev_chars,x
 !kp: jsr hal_screen_put_char
 
+#if HAL_PLATFORM_TITLE_SYSINFO_256K_PROBE
+    lda hal_platform_256k_present
+    beq !chk_reu+
+    lda #<tsi_256k_str
+    ldy #>tsi_256k_str
+    jsr tsi_print
+!chk_reu:
+#endif
+
     // REU info if present
     lda reu_present
     beq !done+
@@ -179,6 +194,9 @@ tsi_c64_str:    .text "C64" ; .byte 0
 tsi_c64u_str:   .text "C64U" ; .byte 0
 #if HAL_PLATFORM_TITLE_SYSINFO_80COL
 tsi_c128_str:   .text "C128" ; .byte 0
+#if HAL_PLATFORM_TITLE_SYSINFO_256K_PROBE
+tsi_256k_str:   .text "  256KB" ; .byte 0
+#endif
 #endif
 #if HAL_PLATFORM_TITLE_SYSINFO_SX64_PROBE
 tsi_sx64_str:   .text "SX-64" ; .byte 0
